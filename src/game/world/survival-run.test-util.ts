@@ -73,9 +73,9 @@ const wedge = new WeakMap<World, { still: number; back: number }>();
 
 /**
  * The scripted player's pedals for this frame: steer at (tx, tz), hold `cap` m/s (null: flat out). A player wedged against a wall
- * or a prop for a second backs out for a second and a bit, as a human would.
+ * or a car for a second backs out for a second and a bit, as a human would, no faster than `backCap` (null: flat out).
  */
-export function steerAt(w: World, tx: number, tz: number, cap: number | null): void {
+export function steerAt(w: World, tx: number, tz: number, cap: number | null, backCap: number | null = null): void {
   const car = w.cars[0]!;
   const p = car.group.position;
   const racing = w.race.phase === "racing";
@@ -99,7 +99,7 @@ export function steerAt(w: World, tx: number, tz: number, cap: number | null): v
     st.back -= FRAME;
     seat.intent.wheel = -Math.max(-1, Math.min(1, a * 3));
     seat.intent.gas = 0;
-    seat.intent.brake = 1;
+    seat.intent.brake = backCap === null || speed < backCap ? 1 : 0;
     return;
   }
   seat.intent.wheel = racing ? Math.max(-1, Math.min(1, a * 3)) : 0;

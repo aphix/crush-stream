@@ -1,11 +1,13 @@
 import { Obstacles } from "../ai/hunter.ts";
 import { clamp, hash01, wrapPi } from "../kernel/scalar.ts";
 import { placeProps, propColliders } from "./placements.ts";
-import type { CopBrain } from "../ai/cop-brain.ts";
+import type { CopBrain, HunterWorld } from "../ai/cop-brain.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { holdLine, leaveSurvival, liveCops, play, steerAt, survivalWorld, type Play } from "./survival-run.test-util.ts";
 import type { World } from "./race-world.test-util.ts";
 import { Track } from "./track.ts";
+import { activeGround } from "./ground.ts";
+import { crestLimit } from "../ai/race-ai.ts";
 import { HAVANA } from "./tracks/havana.ts";
 
 /**
@@ -15,7 +17,7 @@ import { HAVANA } from "./tracks/havana.ts";
  *   flee: holds the throttle and its heading and steers only to keep clear of solids (no lifting, no turning back): the owner's "holds W";
  *   ring: down the boulevard, then laps the D ring (the lawn island's road) at 22 m/s, steering at a point ahead on it;
  *   held: the set piece's driver: holds the boulevard line (x = −6 ± 1.5, looking 25–40 m ahead) flat out over the hill, then flees;
- *   evade: for the closed arena (`survival-arena.test-util.ts`): runs straight away from the nearest cop, round solids and round cops, lifting for a wall it cannot stop before; it never stops.
+ *   evade: for the closed arena (`survival-arena.test-util.ts`): runs straight away from the nearest cop, round solids and round cops, lifting for a wall it cannot stop before and for a crest it would fly; it never stops.
  *   corner: for the closed arena: runs for the corner opposite its start, round solids, lifting for a wall, then creeps there at 3 m/s for good: a player boxed in with nowhere left to run.
  */
 export type Fleer = "straight" | "flee" | "ring" | "held" | "evade" | "corner";
@@ -23,10 +25,14 @@ export type Fleer = "straight" | "flee" | "ring" | "held" | "evade" | "corner";
 /** The player's pedals for one frame. */
 type Driver = (w: World) => void;
 
-/** A driver stops within the clear run less `MARGIN` m at `BRAKE` m/s²: the speed (m/s) it may carry with `run` m clear ahead. */
+/**
+ * A driver stops within the clear run less `MARGIN` m at `BRAKE` m/s²: the speed (m/s) it may carry with `run` m clear ahead, at least
+ * 8 to keep turning, and only `CREEP` under `MARGIN` while it turns off (any touch of a wall crashes a car; a brake held at a standstill
+ * is the reverse).
+ */
 const BRAKE = 7;
 const MARGIN = 14;
-const safe = (run: number): number => Math.max(8, Math.sqrt(2 * BRAKE * Math.max(0, run - MARGIN)));
+const safe = (run: number): number => (run < MARGIN ? CREEP : Math.max(8, Math.sqrt(2 * BRAKE * (run - MARGIN))));
 /** A fleeing driver looks `LOOK_TIME` s of road ahead for a clear way (at least `LOOK_MIN` m: a car at 38 m/s needs 160 m to turn round), and the speed (m/s) the ring's bends allow. */
 const LOOK_TIME = 5;
 const LOOK_MIN = 60;
@@ -51,12 +57,32 @@ function copRun(cops: readonly { x: number; z: number }[], x: number, z: number,
   return run;
 }
 
+/** Metres between the ground samples a driver reads crests at along its nose, and the span it reads their curvature over: a lawn bump 3 m across kicked the evader into the air at 20 m/s past a 6 m read. */
+const CREST_STEP = 2;
+/** The speed (m/s) it may carry from (x, z) along heading `h` to stay planted over every crest within `len` m (`crestLimit`), braking at `BRAKE` (a landing at 30 m/s crashed the evader). */
+function crestCap(x: number, z: number, h: number, len: number): number {
+  const g = activeGround();
+  const dx = Math.sin(h);
+  const dz = Math.cos(h);
+  let cap = Infinity;
+  for (let d = 0; d <= len; d += CREST_STEP) {
+    const back = g.heightAt(x + dx * (d - CREST_STEP), z + dz * (d - CREST_STEP));
+    const ahead = g.heightAt(x + dx * (d + CREST_STEP), z + dz * (d + CREST_STEP));
+    const lim = crestLimit(back, g.heightAt(x + dx * d, z + dz * d), ahead, CREST_STEP);
+    cap = Math.min(cap, Math.sqrt(lim * lim + 2 * BRAKE * d));
+  }
+  return cap;
+}
+
 /**
  * Holds the heading it has at the first call, bends to the nearest one with `LOOK` m clear (else the longest run). `evade`: wants the heading
- * straight away from the nearest cop, cops block a heading like a wall does, and it lifts for what is ahead (`safe`).
+ * straight away from the nearest cop, cops block a heading like a wall does, it lifts for what is ahead (`safe`), it keeps bending to the
+ * side it bent to last (re-deciding it every frame swung it back into a wall), and it bends only to headings ahead of its nose: a heading
+ * behind it is turned to through whatever is beside the car, which at a wall was the wall.
  */
 function fleeing(obstacles: Obstacles, evade = false, goal: { x: number; z: number } | null = null): Driver {
   let want: number | null = null;
+  let side = 1;
   return (w) => {
     const car = w.cars[0]!;
     const c = car.group.position;
@@ -70,21 +96,26 @@ function fleeing(obstacles: Obstacles, evade = false, goal: { x: number; z: numb
     want ??= Math.atan2(car.fwdFlat.x, car.fwdFlat.z);
     const look = Math.max(LOOK_MIN, car.velocity.length() * LOOK_TIME);
     const clear = (h: number, len: number): number => Math.min(obstacles.run(c.x, c.z, h, len), copRun(cops, c.x, c.z, h, len));
-    let h = want;
+    const nose = Math.atan2(car.fwdFlat.x, car.fwdFlat.z);
+    const aim = evade ? nose + clamp(wrapPi(want - nose), -Math.PI / 2, Math.PI / 2) : want;
+    let h = aim;
     let best = -1;
     for (let d = 0; d <= Math.PI / 2 + 1e-9 && best < look; d += 0.15) {
-      for (const s of d === 0 ? [1] : [1, -1]) {
-        const run = clear(want + s * d, look);
+      for (const s of d === 0 ? [1] : [side, -side]) {
+        if (evade && Math.abs(wrapPi(aim + s * d - nose)) > Math.PI / 2) continue;
+        const run = clear(aim + s * d, look);
         if (run > best) {
           best = run;
-          h = want + s * d;
+          h = aim + s * d;
         }
       }
     }
+    if (evade && h !== aim) side = Math.sign(h - aim);
     // The cap follows what the car itself faces, not the heading it is bending to: it cannot turn 40° in a few metres at 38 m/s.
     const arrived = goal !== null && Math.hypot(goal.x - c.x, goal.z - c.z) < ARRIVE;
-    const cap = arrived ? CREEP : evade || goal ? safe(clear(Math.atan2(car.fwdFlat.x, car.fwdFlat.z), look)) : null;
-    steerAt(w, c.x + Math.sin(h) * look, c.z + Math.cos(h) * look, cap);
+    const cap = arrived ? CREEP : evade || goal ? Math.min(safe(clear(nose, look)), crestCap(c.x, c.z, nose, look)) : null;
+    // A boxed-in player reversing at 11 m/s off a pinning cop broke the bust's hold; the evader needs the full reverse to leave a wall.
+    steerAt(w, c.x + Math.sin(h) * look, c.z + Math.cos(h) * look, cap, arrived ? CREEP : null);
   };
 }
 
@@ -164,10 +195,12 @@ export type Chase = {
 export type CopTamper = (input: DriveInput) => void;
 
 /**
- * Controls on the pack: `tamper` its pedals, and `release` it that many seconds after the green (see `chase`). Watchers: `each` once per
- * frame before the physics with the race clock, `pair` on every car pair the slice's contact passes find touching (the player's and the pack's own).
+ * Controls on the pack: `tamper` its pedals, `release` it that many seconds after the green (see `chase`), and `aimless`: every cop
+ * dropped in faces along its road away from the player (a drop-in facing the player is aimed once, at its spawn). Watchers: `each`
+ * once per frame before the physics with the race clock, `pair` on every car pair the slice's contact passes find touching (the player's
+ * and the pack's own).
  */
-type ChaseOpts = { tamper?: CopTamper; release?: number; each?: (w: World, time: number) => void; pair?: (a: number, b: number) => void };
+type ChaseOpts = { tamper?: CopTamper; release?: number; aimless?: boolean; each?: (w: World, time: number) => void; pair?: (a: number, b: number) => void };
 
 /**
  * One Survival run on `course` (Havana) with `fleer` at the wheel, `seed` pinning the field's dice, for at most `seconds` of game time.
@@ -175,7 +208,7 @@ type ChaseOpts = { tamper?: CopTamper; release?: number; each?: (w: World, time:
  * green, until race second `release`; from then on it is the real pack on the real rules. Cop contacts count only from the release.
  * `Chase.time` stays on the race clock.
  */
-export function chase(fleer: Fleer, seed: number, seconds: number, course?: unknown, { tamper, release = 0, each, pair }: ChaseOpts = {}): Chase {
+export function chase(fleer: Fleer, seed: number, seconds: number, course?: unknown, { tamper, release = 0, aimless = false, each, pair }: ChaseOpts = {}): Chase {
   const w = survivalWorld(course, seed);
   try {
     // The race's brain is a protected field of the engine class; a control has to reach it to change what the cops decide.
@@ -195,7 +228,11 @@ export function chase(fleer: Fleer, seed: number, seconds: number, course?: unkn
           return input;
         };
         const update = brain.update.bind(brain);
-        brain.update = (time, dt2, cars, hunt, lead, world) => update(time - release, dt2, cars, hunt, lead, world);
+        let away: HunterWorld | null = null;
+        brain.update = (time, dt2, cars, hunt, lead, world) => {
+          if (aimless) away ??= { ...world, park: (id, x, y, z, yaw) => world.park(id, x, y, z, yaw + Math.PI) };
+          update(time - release, dt2, cars, hunt, lead, away ?? world);
+        };
         tampered = brain;
       }
       orig(dt);

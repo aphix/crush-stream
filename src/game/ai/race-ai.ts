@@ -178,11 +178,20 @@ export function surfaceAt(path: TrackPath, k: number): Surface {
 const G = 9.6;
 const CREST_SPAN = 6;
 
-/** Highest speed (m/s) a car stays planted over the road `s` m along `path`: over a crest of vertical curvature κ the road falls away faster than gravity pulls the car down above √(g/κ), and an airborne car can neither steer nor brake for the bend after it. Infinity in a dip or on the level. */
+/**
+ * Highest speed (m/s) a car stays planted over ground at heights `back`, `at`, `ahead` (m), `span` m apart: over a crest of vertical
+ * curvature κ the ground falls away faster than gravity pulls the car down above √(g/κ), and an airborne car can neither steer nor brake
+ * for the bend after it. Infinity in a dip or on the level.
+ */
+export function crestLimit(back: number, at: number, ahead: number, span = CREST_SPAN): number {
+  const k = (back - 2 * at + ahead) / (span * span);
+  return k < -1e-4 ? Math.sqrt(G / -k) : Infinity;
+}
+
+/** `crestLimit` over the road `s` m along `path`. */
 function crestSpeed(path: TrackPath, s: number): number {
   const y = path.y;
-  const k = (y[sampleAt(path, s - CREST_SPAN)]! - 2 * y[sampleAt(path, s)]! + y[sampleAt(path, s + CREST_SPAN)]!) / (CREST_SPAN * CREST_SPAN);
-  return k < -1e-4 ? Math.sqrt(G / -k) : Infinity;
+  return crestLimit(y[sampleAt(path, s - CREST_SPAN)]!, y[sampleAt(path, s)]!, y[sampleAt(path, s + CREST_SPAN)]!);
 }
 
 type RaceAiState = {
