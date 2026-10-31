@@ -13,6 +13,7 @@ import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
+import { raceOn, stage } from "../engine/reel-view.test-util.ts";
 
 /**
  * Owner-facing symptom (TurnSmooth, 10-04): on the city course a car "jumps along the road". The course wall pushed a car up to
@@ -364,4 +365,32 @@ describe("given the city course's inner wall at the top of the bend past the cou
       }
     });
   }
+});
+
+describe("given the city race's staged wall hit at 0.88 of the lap (the reel's), driven by its AI into the end of wall piece 187 where a side street opens", () => {
+  it("when it hits the end at about 22 m/s, then the hit crashes it as any hit as hard: a crash armed, the nose crushed", () => {
+    const w = raceOn("city", 8, 1);
+    try {
+      const track = new Track(TRACKS.find((j) => parseTrack(j).id === "city"));
+      const state = { acc: 0 };
+      while (w.race.time < 1) frame(w, state);
+      const car = w.live()[1]!;
+      // The street traffic 2 km away: on main a traffic car stands 1.9 m from the staged spot, and the two crash into each other there.
+      for (const c of w.live().slice(2)) c.spawnFacing(c.group.position.x + 2000, c.group.position.z + 2000, 0, 0);
+      stage(track, car, car, { kind: "wall", at: track.length * 0.88, speed: 24, side: -1 });
+      let hardest = 0;
+      w.race.onWallHit = (i, closing) => {
+        if (i === 1) hardest = Math.max(hardest, closing);
+      };
+      for (let f = 0; f < 1.5 / FRAME; f++) frame(w, state);
+      const crush = car.deform.masses.reduce((m, mass) => Math.max(m, mass.rest.z - mass.local.z), 0);
+      const note = `hit the wall at ${hardest.toFixed(1)} m/s, crash armed at ${car.deform.hitSpeedValue.toFixed(1)} m/s, nose crushed ${crush.toFixed(3)} m`;
+      expect(hardest, `the control: the car hit the wall hard (${note})`).toBeGreaterThan(15);
+      expect(car.deform.hitSpeedValue, note).toBeGreaterThan(0);
+      expect(crush, note).toBeGreaterThan(0);
+    } finally {
+      w.race.exit();
+      setGround(null);
+    }
+  });
 });

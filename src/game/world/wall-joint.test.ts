@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { solidsOf, type PropCollider } from "./placements.ts";
+import type { Surface } from "./surfaces.ts";
 import { propContact, type PropHits } from "../contact/prop-contact.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
@@ -113,37 +114,62 @@ describe("given a wall of two pieces bending at a joint, and a sedan aimed at th
     it(testCase.it, (t) => {
       const walls = bentWall(testCase.bend);
       const prisms = solidsOf(walls, []);
-      const knocked = new Uint8Array(0);
       const car = makeCar("sedan");
       const side = testCase.fromRoad ? 1 : -1;
       // The face normal the car comes along, away from the wall on its own side: its nose points the other way.
       const n = faceBisector(testCase.bend);
       const back = 8;
       car.spawnFacing(n.x * side * back, n.z * side * back, Math.atan2(-n.x * side, -n.z * side), testCase.speed);
-      const world = newWorld([car]);
-      world.fine = 1 / FINE_HZ;
       let hardest = 0;
       const hits: PropHits = { ...NO_HITS, wall: (_k, _i, closing) => (hardest = Math.max(hardest, closing)) };
-      world.collide = (c, i, h) => propContact(c, i, prisms, knocked, hits, h);
-      let acc = 0;
       let past = 0;
-      for (let f = 0; f < 3 / FRAME; f++) {
-        acc = Math.min(0.05, acc + FRAME);
-        while (acc > 1e-5) {
-          const h = Math.fround(physicsSlice(acc, sliceSpeed(world.cars)));
-          stepWorld(world, h);
-          settleStep(world.cars, h, false);
-          acc -= h;
-        }
-        car.updateSkin();
-        past = Math.max(past, reach(car, walls, side).past);
-      }
+      coast(car, prisms, hits, 3, () => (past = Math.max(past, reach(car, walls, side).past)));
       const { inside } = reach(car, walls, side);
       const note = `hit the wall at ${hardest.toFixed(1)} m/s, ${past.toFixed(3)} m past the far face, ${inside.toFixed(3)} m in the wall, ended at ${(Math.hypot(car.velocity.x, car.velocity.z) * 3.6).toFixed(1)} km/h`;
       t.annotate(note);
       expect(hardest, `the car hit the wall hard (${note})`).toBeGreaterThan(0.8 * testCase.speed);
       expect(past, note).toBeLessThanOrEqual(PAST);
       expect(inside, note).toBeLessThanOrEqual(INSIDE);
+    });
+  }
+});
+
+/** `car` alone among `prisms` (the course's walls) for `seconds`, stepped as the engine steps a frame; `each` after every frame. */
+function coast(car: DeformableCar, prisms: Surface, hits: PropHits, seconds: number, each: () => void): void {
+  const world = newWorld([car]);
+  world.fine = 1 / FINE_HZ;
+  const knocked = new Uint8Array(0);
+  world.collide = (c, i, h) => propContact(c, i, prisms, knocked, hits, h);
+  let acc = 0;
+  for (let f = 0; f < seconds / FRAME; f++) {
+    acc = Math.min(0.05, acc + FRAME);
+    while (acc > 1e-5) {
+      const h = Math.fround(physicsSlice(acc, sliceSpeed(world.cars)));
+      stepWorld(world, h);
+      settleStep(world.cars, h, false);
+      acc -= h;
+    }
+    car.updateSkin();
+    each();
+  }
+}
+
+// The city's piece 187 (x 105, z −68.3), where a wall ends at a side street: a staged 22 m/s hit on its end came back at 3 m/s, no crash.
+describe("given a lone 4 m wall piece, 0.6 m thick, whose end is the wall's free end, and a sedan coasting at 22 m/s into that end, 9° off its line", () => {
+  // 0.2 m: the footprint enters by the end's own axis; 0.6 m: by the nose's (the end's corner pokes into the bumper).
+  for (const off of [0.2, 0.6]) {
+    it(`when it hits the end ${off} m off its nose's middle, then the hit crashes it as any hit as hard: a crash armed, the nose crushed`, (t) => {
+      const end: PropCollider = { index: 0, prefab: null, body: "solid", x: 0, z: 0, yaw: 0, kind: "box", r: Math.hypot(0.3, 2), hx: 0.3, hz: 2, mass: 0, base: -0.3, top: 1.1, ends: 3 };
+      const car = makeCar("sedan");
+      car.spawnFacing(off, 8, Math.PI + 0.15, 22);
+      let hardest = 0;
+      coast(car, solidsOf([end], []), { ...NO_HITS, wall: (_k, _i, closing) => (hardest = Math.max(hardest, closing)) }, 1, () => {});
+      const crush = car.deform.masses.reduce((m, mass) => Math.max(m, mass.rest.z - mass.local.z), 0);
+      const note = `hit the end at ${hardest.toFixed(1)} m/s, crash armed at ${car.deform.hitSpeedValue.toFixed(1)} m/s, nose crushed ${crush.toFixed(3)} m, ended at ${Math.hypot(car.velocity.x, car.velocity.z).toFixed(1)} m/s`;
+      t.annotate(note);
+      expect(hardest, `the control: the car hit the end hard (${note})`).toBeGreaterThan(0.8 * 22);
+      expect(car.deform.hitSpeedValue, note).toBeGreaterThan(0);
+      expect(crush, note).toBeGreaterThan(0);
     });
   }
 });

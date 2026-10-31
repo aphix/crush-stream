@@ -297,7 +297,8 @@ own overlap with the face, a fresh hard one re-arms a wreck's hit, the masses ar
 a wall's end is the joint to the next panel) and the crush force spends the hit's stroke. A light touch of a whole car pushes
 out and bounces by 0.15 as before. A rigid car whose footprint is `WALL_HOLD` (0.4 m) in with its hull not on the face yet, and a
 wreck whose footprint is `WALL_REACH` (1.2 m) in (rammed by another car), are put back by the push. The prop's face is its own
-(`PropFace`): a long thin one (a wall panel) on its wide side, a circle's tangent; a course wall is a 6 m slab at the line.
+(`PropFace`): a box's face of the axis the footprint entered by, else one a body axis lies along, else the one it is least deep along
+(a wall panel's free end too; met always on its wide side, a 22 m/s nose-on hit there bounced with no crash), a circle's tangent; a course wall is a 6 m slab at the line.
 
 A wreck's crush hulls are wider than the masses held on the face (the cabin hull spans the least crushed door on both sides, a nose
 hull is 0.34 m either side of 0.85 of its bumper), so a wreck a cop rams against a 0.6 m panel sat 0.2-0.3 m in it, or reached past

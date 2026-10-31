@@ -34,8 +34,6 @@ export const PR_ENDS = 12;
 export const PR_ID = 13;
 /** 1: a piece of a course wall; 2: a prop that is knocked off its spot by a hit (it is no floor and no wall to a tyre). */
 export const PR_WALL = 14;
-/** `PR_WALL` of a race wall's piece (`WALL` in `surfaces.ts`, which imports this file). */
-const ROLE_WALL = 1;
 /** Velocity (m/s, plan) of a prism that moves: a press plate, the slab. */
 export const PR_VX = 23;
 export const PR_VZ = 24;
@@ -537,14 +535,11 @@ export function footFace(P: Float64Array, o: number, foot: Float64Array, vx: num
   out[FF_NX] = nx;
   out[FF_NZ] = nz;
   deepestPoint(foot, nx, nz, out);
-  // The prism's own face. A race wall's panel (a long thin one) is met on its wide side, never its end, which is the joint to the next
-  // panel (a wall's start under a car already past the line pushes it along the wall, not back down it). Any other prism is met on the one
-  // of its own axes the body entered by, else the one a body axis lies along: a star arm's tip is met on its end, where the car came in,
-  // not on the flank beside it (the face's normal then agreed with the push's, and the slab's crush law applied); else the side it is least deep along.
+  // The face of the axis the body entered by, else of one a body axis lies along, else the one it is least deep along. No wide-side
+  // default for a long box: its normal then lay across the push, and a 22 m/s nose-on hit on a wall's free end bounced with no crash.
   const alignU = Math.abs(nx * c - nz * s);
   const alignW = Math.abs(nx * s + nz * c);
-  const panel = P[o + PR_WALL] === ROLE_WALL;
-  const wide = panel && hx * 2 < hz ? true : k < 2 ? k === 0 : Math.max(alignU, alignW) > PARALLEL ? alignU > alignW : hx * 2 < hz ? true : hz * 2 < hx ? false : oU <= oW;
+  const wide = k < 2 ? k === 0 : Math.max(alignU, alignW) > PARALLEL ? alignU > alignW : oU <= oW;
   setFace(P, o, wide ? sign(du) * c : sign(dw) * s, wide ? -sign(du) * s : sign(dw) * c, !wide, out);
   return true;
 }
