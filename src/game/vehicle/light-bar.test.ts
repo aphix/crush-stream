@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
-import { LIGHT_BAR_FOOT, LIGHT_BAR_LENS, makeLightBar, withPushBar } from "./car-materials.ts";
+import { LIGHT_BAR_FOOT, LIGHT_BAR_LENS, LIGHT_BAR_PLAN, makeLightBar, withPushBar } from "./car-materials.ts";
 import { makeBumperGeometry } from "./car-mesh.ts";
 import { withRearFittings } from "./car-fittings-mesh.ts";
 import { withSeamCover } from "./part-variants.ts";
@@ -15,8 +15,8 @@ import { DT, paint } from "./test-support.ts";
 const SEAT_M = 0.03;
 /** The most the free edge may stand over the skin: the seat plus the fold at the last hinge value (0.95) the crash target reaches. */
 const FREE_M = SEAT_M + 2 * LIGHT_BAR_FOOT.z * Math.sin(BAR_FOLD * 0.95) + 0.005;
-/** The roof mass sinks this far (m) before the bar shears off (`BAR_TEAR_SINK`). */
-const TEAR_SINK = 0.12;
+/** The load (N) the bar's mounts hold pressed onto the roof before they shear (`BAR_HOLD_N`: a gutter mount's rated 100 kg). */
+const HOLD_N = 100 * 9.81;
 
 /** The bar's feet's sole vertices (rest y on the sole, off the housing) with their rest z: the feet's front or back edge. */
 const SOLE = (() => {
@@ -36,6 +36,7 @@ interface Gaps {
 class Probe extends DeformableCar {
   readonly samples: Gaps[] = [];
   private frames = 0;
+  private slices = 0;
   get bar(): DetachPart {
     return this.parts.find((p) => p.name === "lightBar")!;
   }
@@ -73,6 +74,13 @@ class Probe extends DeformableCar {
       (z > 0 ? out.hinge : out.free).push(v.y - top);
     }
     return out;
+  }
+  /** A press of `down` N into the roof at car-local plan (`dx`, `dz`) off the bar's middle, as `rows` equal contacts of one slice, then the step's breakage rules run on it. */
+  pressRoof(dx: number, dz: number, down: number, rows = 1): void {
+    this.slices++;
+    for (let i = 0; i < rows; i++) this.pressBar(this.lightBarOrigin.x + dx, this.lightBarOrigin.z + dz, down / rows, this.slices);
+    this.evaluateBreakage(0, DT);
+    this.barForce = 0;
   }
   /** The roof mass pushed down to `sink` m under its rest height, then the step's breakage rules run on it. */
   sinkRoof(sink: number): void {
@@ -143,18 +151,22 @@ describe("given the police light bar on its base hinge", () => {
     expect(Math.abs(car.bar.object.rotation.x) > 0.05 && car.bar.object.rotation.z === 0 && car.bar.object.rotation.y === 0, "the bar did not turn about x alone").toBeTruthy();
   });
 
-  it("when the roof mass sinks to just under and just over the shear depth, then the bar stays on and then goes, with its sirens dark", () => {
+  it("when the roof sinks 0.2 m, then a load beside the bar and one just under its mounts' hold leave it on, and one just over, spread over a slice's rows, tears it, with its sirens dark", () => {
     const car = cop();
     runWall(30, 1, "front", { car });
     expect(!car.bar.detached, "the bar went at 30 km/h").toBe(true);
-    car.sinkRoof(TEAR_SINK - 0.005);
-    expect(!car.bar.detached, "the bar sheared before its depth").toBe(true);
+    car.sinkRoof(0.2);
+    expect(!car.bar.detached, "the roof's sink alone tore the bar").toBe(true);
+    car.pressRoof(LIGHT_BAR_PLAN.x + 0.05, 0, 10 * HOLD_N);
+    expect(!car.bar.detached, "a load on the roof beside the bar tore it").toBe(true);
+    car.pressRoof(0, LIGHT_BAR_PLAN.z - 0.01, HOLD_N - 10);
+    expect(!car.bar.detached, "the bar sheared under its mounts' hold").toBe(true);
     car.setSirens(true);
     car.flashSirens(0.1);
     const lit = car.lampWorld(car.lampCount - 2, new THREE.Vector3(), new THREE.Vector3());
     expect(lit, "the siren was dark on an attached, hinged bar").toBe("red");
-    car.sinkRoof(TEAR_SINK + 0.005);
-    expect(car.bar.detached, "the bar held past its depth").toBeTruthy();
+    car.pressRoof(0, LIGHT_BAR_PLAN.z - 0.01, HOLD_N + 10, 4);
+    expect(car.bar.detached, "the bar held past its mounts' hold, borne by four rows of one slice").toBeTruthy();
     car.flashSirens(0.1);
     for (let i = car.lampCount - 2; i < car.lampCount; i++) expect(car.lampWorld(i, new THREE.Vector3(), new THREE.Vector3()), `siren ${i} lit off a torn bar`).toBe(null);
   });

@@ -521,6 +521,8 @@ const SIREN_U = [1 / 6, 3 / 6, 5 / 6] as const;
 
 /** The light bar's two feet in bar space: at ±`x`, their soles `sole` below the origin, `2z` deep (front to back). They rest on the roof. */
 export const LIGHT_BAR_FOOT = { x: 0.4, sole: -0.03, z: 0.09 } as const;
+/** The light bar's housing in bar space: `x` either side of its middle, `z` front and back (m): its lenses stand within it, so it is the bar's plan. */
+export const LIGHT_BAR_PLAN = { x: 0.52, z: 0.13 } as const;
 
 /** A light bar part in bar space at (`x`, `y`, 0): one tone, every vertex on its `sirenEmissiveMap` texel. */
 function lightBarPart(g: THREE.BufferGeometry, x: number, y: number, tone: number, texel: 0 | 1 | 2): THREE.BufferGeometry {
@@ -567,7 +569,7 @@ export function makeLightBar(source: BodySource = "drawn"): THREE.BufferGeometry
         ];
   return mergeToned(
     [
-      box(1.04, 0.045, 0.26, 0, 0.04, 0x16181c, 0),
+      box(2 * LIGHT_BAR_PLAN.x, 0.045, 2 * LIGHT_BAR_PLAN.z, 0, 0.04, 0x16181c, 0),
       box(0.16, 0.07, 0.22, 0, 0.1, 0xd8dce2, 0),
       box(0.08, -2 * LIGHT_BAR_FOOT.sole, 2 * LIGHT_BAR_FOOT.z, -LIGHT_BAR_FOOT.x, 0, 0x16181c, 0),
       box(0.08, -2 * LIGHT_BAR_FOOT.sole, 2 * LIGHT_BAR_FOOT.z, LIGHT_BAR_FOOT.x, 0, 0x16181c, 0),

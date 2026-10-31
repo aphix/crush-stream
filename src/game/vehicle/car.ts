@@ -660,6 +660,7 @@ export class DeformableCar extends CarParts {
       this.syncAttachedParts(dt);
       this.evaluateBreakage(this.deform.impulseValue, dt);
     }
+    this.barForce = 0;
     // The cage takes the bake of this step with the parts as this step left them: a pure function of the sim's state.
     if (this.deform.cageDue && this.deform.skinBaked) this.fitCage();
   }

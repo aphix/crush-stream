@@ -14,7 +14,7 @@ import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, be
 import { centreLift, centreY } from "./car-cage-rig.ts";
 import { store3d } from "../kernel/store.ts";
 import { rigidPress, SCRATCH_MIN_SLIP } from "./paint-scrapes.ts";
-import { BORNE_STATE } from "./car-surfaces.ts";
+import { BORNE_STATE, type CarSurfaces } from "./car-surfaces.ts";
 
 /** Crossings `wreckTop` let a wreck skip since `takeCrossingsSkipped` last read (a field of a const: the bench's work counter reads and zeroes it once a slice). */
 const prune = { skipped: 0 };
@@ -145,6 +145,27 @@ function standsOnGround(c: number): boolean {
 function bodyAtRest(): boolean {
   const { v, w, part } = body;
   return !part && v.lengthSq() < REST_SPEED * REST_SPEED && w.lengthSq() < REST_SPEED * REST_SPEED;
+}
+
+/** Counts `solveRows` calls (a field of a const, as `prune`): a slice's presses on a light bar add up (`pressBar`). */
+const barTick = { n: 0 };
+const _barAt = new THREE.Vector3();
+const _barN = new THREE.Vector3();
+const _barQ = new THREE.Quaternion();
+/** Row `c` pressing `f` (N) bears on a light bar at its point: the stepping car's own (`self`; a part has none) pressed into its roof by what it meets, and the bar of the car whose top it meets. */
+function bearOnBars(c: number, self: DeformableCar | null, f: number, surf: CarSurfaces, q: THREE.Quaternion): void {
+  if (self?.style.lightBar) {
+    _barQ.copy(q).invert();
+    _barAt.copy(R[c]!).applyQuaternion(_barQ).add(body.centre);
+    self.pressBar(_barAt.x, _barAt.z, -f * _barN.copy(DIR[c]!).applyQuaternion(_barQ).y, barTick.n);
+  }
+  const own = OWN[c]!;
+  const o = own >= 0 ? surf.cars[own]! : null;
+  if (o?.style.lightBar) {
+    _barQ.copy(o.group.quaternion).invert();
+    _barAt.copy(R[c]!).add(centreOfMass).sub(o.group.position).applyQuaternion(_barQ);
+    o.pressBar(_barAt.x, _barAt.z, f * _barN.copy(DIR[c]!).applyQuaternion(_barQ).y, barTick.n);
+  }
 }
 
 /**
@@ -305,9 +326,13 @@ export function solveRows(n: number): void {
       give(c, v, w, q, _fd, surf);
     }
   }
+  const self = body.part ? null : (surf.cars[body.owner] ?? null);
+  barTick.n++;
   for (let c = 0; c < n; c++) {
     if (FIRST[c] === c) surf.take(SLOT[c]!, DEMAND[c]!, G, dt);
     if (!SOFT[c] && OWN[c]! >= 0 && CLOSING[c]! < WALL_CRUSH) surf.press(OWN[c]!, ACC[c]! * DIR[c]!.y);
+    const f = ((SOFT[c] ? ASK[c]! : ACC[c]!) * body.mass) / dt;
+    if (f > 0) bearOnBars(c, self, f, surf, q);
   }
   // The deepest point the surface can still hold up lifts the body out (a face that yields sinks instead). The belly over the
   // world's ground only resists (impulse, no bounce, no lift while it moves): lifting a moving body out by a belly point's

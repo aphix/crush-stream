@@ -39,6 +39,7 @@ import {
 } from "./car-wear.ts";
 import { LOOSE_BODIES, looseState, partState, PART_SLOTS } from "./part-state.ts";
 import { PART_KIND, PartSeat, looseOnCamera, partGeometry } from "./part-geometry.ts";
+import { LIGHT_BAR_PLAN } from "./car-materials.ts";
 
 const _interior = new Float64Array(4);
 const _rel = new THREE.Matrix4();
@@ -165,10 +166,9 @@ const GLASS_LAMINATED = 0.03;
 /** A popped wheel's mass per m³ of its disk: a sedan's 20 kg wheel and tyre on its 0.081 m³ disk (a monster's 44" set, about 110 kg, comes out near 100). */
 const WHEEL_KG_PER_M3 = 247;
 
-/** Police light bar: shears off once the roof mass under it sinks this far (m below its rest height; a
- *  56 km/h frontal sinks it ~0.07), or on any hit at or above this EBS (60 km/h, arcade: a big crash throws
- *  it). Guessed, tuned by eye. (The roof sensor's compression is no measure: a 20 km/h frontal reads 0.36.) */
-const BAR_TEAR_SINK = 0.12;
+/** Police light bar: its mounts hold this load pressed onto the roof (N): a gutter mount kit's rated 100 kg (Yakima's gutter legs). */
+const BAR_HOLD_N = 100 * 9.81;
+/** The bar is thrown on any hit at or above this EBS (60 km/h, arcade: a big crash throws it). */
 const BAR_TEAR_MPS = 60 / 3.6;
 /**
  * Quarter panels and arch flares hinge by the crush under them, `(crush - on) / range`, and tear off once the hinge value
@@ -275,6 +275,11 @@ export abstract class CarParts extends CarGlass {
   /** The flap clock (rad) turns with speed: it shakes every hinged panel and bumper (`flapAngle`) and beats the wind on an open door or lid (`windPush`). */
   flapClock = 0;
   flapSpeed = 0;
+  /** The hardest press on the light bar this step (N, `pressBar`); `stepBreakage` clears it. */
+  protected barForce = 0;
+  /** The slice (`pressBar`'s `tick`) whose presses on the light bar `barSlice` sums (N). */
+  private barTick = -1;
+  private barSlice = 0;
   /** Seconds since the last contact, as of the last frame: tells a fresh touch from a continuing one (`evaluateBreakage`). */
   quietPrev = 0;
   /** The car's velocity (x, z), yaw rate and vertical velocity at the last door-swing sample: their change is the pendulum's drive. */
@@ -1181,8 +1186,7 @@ export abstract class CarParts extends CarGlass {
         }
       }
       if (p.hinge === "bar") {
-        const sink = this.roofRestY - this.deform.massLocal("roof").y;
-        if (sink > BAR_TEAR_SINK || (ebs >= BAR_TEAR_MPS && this.deform.crushElapsed > 0.05)) this.detachPart(p, impulse);
+        if (this.barForce > BAR_HOLD_N || (ebs >= BAR_TEAR_MPS && this.deform.crushElapsed > 0.05)) this.detachPart(p, impulse);
         continue;
       }
       if ((p.region || p.bumper) && this.wornOff(p, dt, touched)) {
@@ -1344,9 +1348,20 @@ export abstract class CarParts extends CarGlass {
     return this.frame.rig.masses.find((m) => m.name === "roof")!.rest[1];
   }
 
-  /** 0 to 1 and over: how near the roof's sinking, or a hit this fast, is to shearing the light bar's mounts (`evaluateBreakage` tears it at 1). */
+  /** 0 to 1 and over: how near this step's press on the light bar, or a hit this fast, is to shearing its mounts (`evaluateBreakage` tears it at 1). */
   private barLoad(): number {
-    return Math.max((this.roofRestY - this.deform.massLocal("roof").y) / BAR_TEAR_SINK, this.deform.hitSpeedValue / BAR_TEAR_MPS);
+    return Math.max(this.barForce / BAR_HOLD_N, this.deform.hitSpeedValue / BAR_TEAR_MPS);
+  }
+
+  /** A contact of slice `tick` pressing `down` (N) into the roof at car-local plan (`x`, `z`): the light bar's mounts bear the sum of a slice's presses on it. */
+  pressBar(x: number, z: number, down: number, tick: number): void {
+    if (Math.abs(x - this.lightBarOrigin.x) > LIGHT_BAR_PLAN.x || Math.abs(z - this.lightBarOrigin.z) > LIGHT_BAR_PLAN.z) return;
+    if (this.barTick !== tick) {
+      this.barTick = tick;
+      this.barSlice = 0;
+    }
+    this.barSlice += down;
+    this.barForce = Math.max(this.barForce, this.barSlice);
   }
 
   /** A panel's shell, built if need be and bent to its hinge value on the current skin: attached (`onRoad`), its drop rests on the road under it. */
