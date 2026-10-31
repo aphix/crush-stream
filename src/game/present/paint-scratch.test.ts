@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { fleetClass, fleetStyle } from "../scenes/fleet.ts";
@@ -13,7 +13,7 @@ import { bootEngine, runSeconds, stubBrowser } from "../engine/engine-headless.t
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { applyScratch, DENT_FLOOR, DENT_REBUILD_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
+import { applyScratch, DENT_FLOOR, DENT_REBUILD_S, DENT_SETTLE_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
 import { channelTexels, sampledScratch, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
@@ -256,6 +256,31 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     };
     const perFrame = untilQuiet(() => allocatedBytes(() => frames(DENT_FRAMES)) / DENT_FRAMES, FRAME_BOUND_B);
     expect(perFrame, `${perFrame.toFixed(1)} B a frame`).toBeLessThanOrEqual(FRAME_BOUND_B);
+  });
+
+  it(`when it goes untouched while its skin keeps moving (a wreck at rest: the tyre hold, the sag), then once a draw is made ${DENT_SETTLE_S} s after its last touch its dents are not redrawn, and a new touch redraws them`, () => {
+    // The car's quiet as its sim keeps it, stepped here with the frames: the row's sedan stands still in sim time.
+    let quiet = 0;
+    const clock = vi.spyOn(crushed.deform, "quietTime").mockImplementation(() => quiet);
+    const redrawsOver = (seconds: number): number => {
+      let redraws = 0;
+      for (let i = 0; i < Math.round(seconds * FRAME_HZ); i++) {
+        const uploads = mask().version;
+        skinWritten(crushed);
+        quiet += 1 / FRAME_HZ;
+        view.frame(cars, 1 / FRAME_HZ);
+        if (mask().version > uploads) redraws++;
+      }
+      return redraws;
+    };
+    try {
+      expect(redrawsOver(DENT_SETTLE_S + 2 * DENT_REBUILD_S), "the control: redrawn while the crush plays out").toBeGreaterThan(1);
+      expect(redrawsOver(2), "redraws over 2 s untouched").toBe(0);
+      quiet = 0;
+      expect(redrawsOver(2 * DENT_REBUILD_S), "redraws after a new touch").toBeGreaterThan(0);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("when the crushed car is put on a spot again (repaired) and a frame runs, then it samples no mask, and the mask it handed back is clean", () => {

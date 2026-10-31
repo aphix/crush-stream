@@ -63,6 +63,12 @@ const DENT_MIN = 0.03;
 const DENT_FULL = 0.08;
 /** Seconds between two rebuilds of one car's dents while its skin keeps moving: a crush plays out over a few tenths. */
 export const DENT_REBUILD_S = 0.25;
+/**
+ * Seconds after a car's last contact by which its crush has played out (`DeformHit.quietTime`; a resting face is no contact): one
+ * dent draw after that is its last until it is touched again. The drawn skin keeps moving on a wreck at rest (the tyre hold, the sag),
+ * and redrawing for that ran a 5-car fleet's dents 11-19 times a second at 5 ms each.
+ */
+export const DENT_SETTLE_S = 1.5;
 /** Texels a triangle is grown by as it is laid on the mask: closes the seams between neighbours and across the box's edges. */
 const DENT_GROW_TEXELS = 0.75;
 /** A triangle facing a box face less than this (its unit normal's share on the face's axis) is not laid on it: edge-on, it would smear its far corners' sinks across the face. */
@@ -201,6 +207,9 @@ type Wear = {
   skin: number;
   /** `PaintScratches`' clock (s) when the dents were last drawn. */
   dentAt: number;
+  /** The car's `quietTime` at the last frame, and `PaintScratches`' clock when it was last touched (its quiet went down). */
+  quiet: number;
+  touchedAt: number;
   /** Per face: the texel rect (x0, y0, x1, y1) G is up in; x1 < x0 is none. */
   readonly dents: Int32Array;
   dented: boolean;
@@ -238,6 +247,8 @@ export function applyScratch(car: DeformableCar): void {
       places: shells.map(() => null),
       skin: -1,
       dentAt: -Infinity,
+      quiet: Infinity,
+      touchedAt: -Infinity,
       dents,
       dented: false,
     };
@@ -421,6 +432,9 @@ export class PaintScratches {
       }
       // An undamaged car's skin is its rest: a repaired one's dents go at once.
       if (!car.panelsFollow && wear.dented) this.dent(wear, false);
+      const quiet = car.deform.quietTime();
+      if (quiet < wear.quiet || quiet === 0) wear.touchedAt = this.clock;
+      wear.quiet = quiet;
     }
     // One dent draw a frame, the cars taking turns: a pile-up's crushes spread over frames and none waits on the ones before it.
     for (let k = 0; k < cars.length; k++) {
@@ -431,10 +445,14 @@ export class PaintScratches {
     }
   }
 
-  /** `car`'s dents drawn if they are due: it is crashed or load-crushed, its skin moved since its last draw, `DENT_REBUILD_S` ago at least. */
+  /**
+   * `car`'s dents drawn if they are due: it is crashed or load-crushed, its skin moved since its last draw, `DENT_REBUILD_S` ago at least,
+   * and its crush has not settled behind a draw made since (`DENT_SETTLE_S` after its last touch).
+   */
   private dentDue(car: DeformableCar): boolean {
     const wear = wears.get(car);
     if (wear === undefined || !car.panelsFollow) return false;
+    if (wear.dentAt > wear.touchedAt + DENT_SETTLE_S) return false;
     let skin = 0;
     for (let k = 0; k < wear.positions.length; k++) skin += wear.positions[k]!.version;
     if (skin === wear.skin || this.clock < wear.dentAt + DENT_REBUILD_S) return false;
