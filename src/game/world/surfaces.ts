@@ -282,6 +282,8 @@ export class Surface {
   cellTops: Float64Array[] = [];
   /** Per patch whose heights never change: a lower bound on the y of the normal in each cell (`cellNyOf`), in 1/255s; empty otherwise. */
   cellNy: Uint8Array[] = [];
+  /** Per patch whose heights never change: per cell how far its slope turns over its 3×3 neighbourhood (`cellBendOf`); empty otherwise. */
+  cellBend: Float32Array[] = [];
   /** Per patch of a lattice (`GridSpec.lattice`): each cell's side in nodes of the triangle pair it reads when it is not on the road's crease (`Lattice.sides`); empty: bilinear all over. */
   latticeCells: Uint8Array[] = [];
   /** The cell index (built by `seal`, read by the query): per cell the patches listed, and the patches every query tests (`always[0 .. nAlways)`). */
@@ -372,6 +374,7 @@ export class Surface {
     this.hillFar[i] = EMPTY64;
     this.cellTops[i] = EMPTY64;
     this.cellNy[i] = EMPTY8;
+    this.cellBend[i] = EMPTY32;
     this.latticeCells[i] = EMPTY8;
     this.sealed = false;
     this.rasterBuilt = false;
@@ -431,6 +434,7 @@ export class Surface {
     if (g.hmax === undefined) {
       this.cellTops[i] = cellTopsOf(g.nu, g.nv, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!, g.lattice, this.latticeCells[i]!);
       this.cellNy[i] = cellNyOf(g.nu, g.nv, g.step, g.stepV, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!, g.lattice, this.latticeCells[i]!);
+      this.cellBend[i] = cellBendOf(g.nu, g.nv, g.step, g.stepV, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!, g.lattice, this.latticeCells[i]!);
       this.cellsBounded += (g.nu - 1) * (g.nv - 1);
     }
     this.setFrame(i, g.ox, g.oy, g.oz, g.axes ?? YAW0);
@@ -811,6 +815,7 @@ export class Surface {
     this.auxs[i] = aux;
     this.cellTops[i] = EMPTY64;
     this.cellNy[i] = EMPTY8;
+    this.cellBend[i] = EMPTY32;
     this.latticeCells[i] = EMPTY8;
     this.box(i);
   }
@@ -2030,8 +2035,8 @@ function look(s: Surface, q: Float64Array, need: number): number {
 // (`TYRE_PROFILE`, car-materials.ts: the crown, its two edges and both shoulders), each over its lower half in `STEPS` arcs a side. A
 // tyre rolling off a face's edge rests on the edge with whichever ring and arc still reach it, up to its hub's height, so its hub comes
 // down that arc as the drawn tyre does. The whole tyre turns with the body, so a rolled or pitched car's tread meets the ground where
-// the drawn tyre does. Where no patch ends within the tyre's reach (`edgeIn`) the rings' bottoms, turned to face the surface, are the
-// whole footprint (`BASE`): over one patch's surface the arcs add nothing but queries.
+// the drawn tyre does. Where no patch ends within the tyre's reach and the one under it turns too little there for an arc to rise over
+// its ring bottom (`edgeIn`) the rings' bottoms, turned to face the surface, are the whole footprint (`BASE`).
 const RINGS: readonly (readonly [number, number])[] = [
   [0, PLATFORM_TYRE.r],
   [0.082, 0.314],
@@ -2080,7 +2085,7 @@ const FOOT_REACH = 0.4;
 
 /**
  * Whether patch `i` of `s` ends within the tyre's reach (`FOOT_REACH` at the `_foot` scale, m plan) of the query point `q` (`skip`: the
- * asking car's slot, as `offer`).
+ * asking car's slot, as `offer`), or turns there enough for an arc to rise over its ring bottom (`cellBend`; a grid whose heights change always does).
  */
 function endsNear(s: Surface, i: number, q: Float64Array, skip: number): boolean {
   const x = q[PQ_X]!;
@@ -2114,7 +2119,22 @@ function endsNear(s: Surface, i: number, q: Float64Array, skip: number): boolean
   const u1 = u0 + (s.q[qo + Q_NU]! - 1) * P[o + P_STEP]!;
   const v1 = v0 + (s.q[qo + Q_NV]! - 1) * P[o + P_STEPV]!;
   if (lu < u0 - r || lu > u1 + r || lv < v0 - r || lv > v1 + r) return false;
-  return lu < u0 + r || lu > u1 - r || lv < v0 + r || lv > v1 - r;
+  if (lu < u0 + r || lu > u1 - r || lv < v0 + r || lv > v1 - r) return true;
+  // Where the slope turns g under the tread, an arc of radius R rises over its ring bottom by up to g²·R/2: the whole footprint asks, as on a car's top.
+  const bend = s.cellBend[i]!;
+  if (bend.length === 0) return true;
+  const step = P[o + P_STEP]!;
+  const stepV = P[o + P_STEPV]!;
+  const cu = s.q[qo + Q_NU]! - 1;
+  const lim = (2 * TREAD_MISS) / (PLATFORM_TYRE.r * _foot[FOOT_SCALE]!);
+  // Within one cell's step of the hub its cell's neighbourhood holds the whole reach; a wider tyre asks every cell under it.
+  if (r <= step && r <= stepV) return !(bend[Math.floor((lv - v0) / stepV) * cu + Math.floor((lu - u0) / step)]! <= lim);
+  const i0 = Math.floor((lu - r - u0) / step);
+  const i1 = Math.min(cu - 1, Math.floor((lu + r - u0) / step));
+  const j0 = Math.floor((lv - r - v0) / stepV);
+  const j1 = Math.min(s.q[qo + Q_NV]! - 2, Math.floor((lv + r - v0) / stepV));
+  for (let j = j0; j <= j1; j++) for (let k = j * cu + i0; k <= j * cu + i1; k++) if (!(bend[k]! <= lim)) return true;
+  return false;
 }
 
 /** Whether any patch of `s` ends within the tyre's reach of the query point `q` (`endsNear`): every cell the reach spans, and the patches every query tests. */
@@ -2205,6 +2225,102 @@ function cellTopsOf(nu: number, nv: number, nodes: Float32Array, centre: Float32
     }
   }
   return tops;
+}
+
+/** The most (m) a tread's ring bottoms may read under its arcs where they stand for the whole footprint: a tenth of a tread's millimetre. */
+const TREAD_MISS = 1e-4;
+
+/**
+ * Per cell of a static grid (`cellTopsOf`'s layout) the square of how far (m/m) the slope turns over it and its eight neighbours: the spread of
+ * every partial they read (`slopeSpans`), NaN with a NaN node. A surface whose slope turns by g within reach rises over the tangent at the hub
+ * by at most g·x at plan distance x, an arc of radius R by x²/2R, so no arc point rises over the ring bottom by more than g²·R/2.
+ */
+function cellBendOf(nu: number, nv: number, step: number, stepV: number, nodes: Float32Array, centre: Float32Array, lat: Float32Array, drop: Float32Array, lattice: Lattice | undefined, cells: Uint8Array): Float32Array {
+  const cu = nu - 1;
+  const cv = nv - 1;
+  const spans = slopeSpans(nu, nv, step, stepV, nodes, centre, lat, drop, lattice, cells);
+  const bend = new Float32Array(cu * cv);
+  for (let cj = 0; cj < cv; cj++) {
+    for (let ci = 0; ci < cu; ci++) {
+      let uLo = Infinity;
+      let uHi = -Infinity;
+      let vLo = Infinity;
+      let vHi = -Infinity;
+      for (let j = Math.max(0, cj - 1); j <= Math.min(cv - 1, cj + 1); j++) {
+        for (let i = Math.max(0, ci - 1); i <= Math.min(cu - 1, ci + 1); i++) {
+          const k = 4 * (j * cu + i);
+          uLo = Math.min(uLo, spans[k]!);
+          uHi = Math.max(uHi, spans[k + 1]!);
+          vLo = Math.min(vLo, spans[k + 2]!);
+          vHi = Math.max(vHi, spans[k + 3]!);
+        }
+      }
+      bend[cj * cu + ci] = (uHi - uLo) * (uHi - uLo) + (vHi - vLo) * (vHi - vLo);
+    }
+  }
+  return bend;
+}
+
+/**
+ * Per cell (`cellTopsOf`'s layout) the least and greatest of each partial (m/m) `cellSlopes` reads anywhere in it: u low, u high, v low, v high. Off the
+ * road a bilinear's and its drawn triangle pair's are both their corner differences; on the crease (centre - k·drop, k the clamped lateral, plus the
+ * lateral's own slope times the drop where |lateral| < 1) the same terms' bounds over the corners, by intervals.
+ */
+function slopeSpans(nu: number, nv: number, step: number, stepV: number, nodes: Float32Array, centre: Float32Array, lat: Float32Array, drop: Float32Array, lattice: Lattice | undefined, cells: Uint8Array): Float64Array {
+  const cu = nu - 1;
+  const spans = new Float64Array(4 * cu * (nv - 1));
+  for (let cj = 0; cj < nv - 1; cj++) {
+    for (let ci = 0; ci < cu; ci++) {
+      const c = cj * nu + ci;
+      const k = 4 * (cj * cu + ci);
+      if (!creased(lat, c, nu)) {
+        const side = cells[cj * cu + ci] === 2 ? TERRAIN_SPAN : 1;
+        const a = side === 1 ? c : drawnCornerOf(ci, cj, nu, side, lattice!.fromU, lattice!.fromV);
+        const far = a + side * nu;
+        spanInto(spans, k, nodes[a + side]! - nodes[a]!, nodes[far + side]! - nodes[far]!, side * step);
+        spanInto(spans, k + 2, nodes[far]! - nodes[a]!, nodes[far + side]! - nodes[a + side]!, side * stepV);
+        continue;
+      }
+      const d = c + nu;
+      const lLo = Math.min(lat[c]!, lat[c + 1]!, lat[d]!, lat[d + 1]!);
+      const lHi = Math.max(lat[c]!, lat[c + 1]!, lat[d]!, lat[d + 1]!);
+      const kLo = Math.max(-1, Math.min(1, lLo));
+      const kHi = Math.max(-1, Math.min(1, lHi));
+      const dLo = Math.min(drop[c]!, drop[c + 1]!, drop[d]!, drop[d + 1]!);
+      const dHi = Math.max(drop[c]!, drop[c + 1]!, drop[d]!, drop[d + 1]!);
+      // The lateral's slope term is on where |lateral| < 1 somewhere in the cell, off where it is ≥ 1 somewhere.
+      const on = lHi > -1 && lLo < 1;
+      const off = lLo <= -1 || lHi >= 1;
+      for (let axis = 0; axis < 2; axis++) {
+        const e = axis === 0 ? 1 : nu;
+        const f = axis === 0 ? nu : 1;
+        const cA = centre[c + e]! - centre[c]!;
+        const cB = centre[c + e + f]! - centre[c + f]!;
+        const pA = drop[c + e]! - drop[c]!;
+        const pB = drop[c + e + f]! - drop[c + f]!;
+        const qA = lat[c + e]! - lat[c]!;
+        const qB = lat[c + e + f]! - lat[c + f]!;
+        const pLo = Math.min(pA, pB);
+        const pHi = Math.max(pA, pB);
+        const qLo = Math.min(qA, qB);
+        const qHi = Math.max(qA, qB);
+        const kpLo = Math.min(kLo * pLo, kLo * pHi, kHi * pLo, kHi * pHi);
+        const kpHi = Math.max(kLo * pLo, kLo * pHi, kHi * pLo, kHi * pHi);
+        const dqLo = on ? Math.min(dLo * qLo, dLo * qHi, dHi * qLo, dHi * qHi, off ? 0 : Infinity) : 0;
+        const dqHi = on ? Math.max(dLo * qLo, dLo * qHi, dHi * qLo, dHi * qHi, off ? 0 : -Infinity) : 0;
+        const unit = axis === 0 ? step : stepV;
+        spans[k + 2 * axis] = (Math.min(cA, cB) - kpHi - dqHi) / unit;
+        spans[k + 2 * axis + 1] = (Math.max(cA, cB) - kpLo - dqLo) / unit;
+      }
+    }
+  }
+  return spans;
+}
+
+/** The low and high (into `spans` at `k`, `k + 1`) of a partial that lies between corner differences `a` and `b` over `unit` m; NaN with a NaN node. */
+function spanInto(spans: Float64Array, k: number, a: number, b: number, unit: number): void {
+  spans[k] = Math.min(a, b) / unit;
+  spans[k + 1] = Math.max(a, b) / unit;
 }
 
 /** The unit `cellNyOf` stores a cell's normal bound in (a byte: 255 is straight up), and the margin its bound keeps against the rounding of `normalOf`'s hypot and quotient. */
