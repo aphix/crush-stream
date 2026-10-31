@@ -960,8 +960,8 @@ export class RaceBrain {
     let raw = Math.sign(curv) * Math.min(1, Math.abs(curv) * 30) * half * (0.45 * (open ? this.apexK[i]! : 1)) + p.side * LINE_SIDE_BIAS;
     if (open && this.wobble[i]! !== 0) raw += this.wobble[i]! * detSin(WOBBLE_K * s + this.phase[i]!);
     let want = clamp(raw, -room, room);
-    // A driver who can't see far enough round the bend to meet oncoming traffic in time keeps to its own half of the road.
-    if (this.routeNow < 0 && sightArc < (driveAlong + this.oncomingSpeed) * seconds) want = clamp(want, Math.max(-room, this.blindMin), Math.min(room, this.blindMax));
+    // Blind round a bend with oncoming traffic in the field (ids `racers` up to `guarded`): keep to our own half; with none there is nothing to meet.
+    if (this.guarded > this.racers && this.routeNow < 0 && sightArc < (driveAlong + this.oncomingSpeed) * seconds) want = clamp(want, Math.max(-room, this.blindMin), Math.min(room, this.blindMax));
     const aggr = this.aggression[i]!;
     let blocker = -1;
     let blockerAhead = Infinity;

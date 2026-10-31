@@ -105,19 +105,23 @@ describe("given a racer doing 25 m/s on a straight with a side street's car cros
 });
 
 describe("given a racer doing 25 m/s 25 m short of the city course's first corner, a blind 90° bend", () => {
-  const lineInto = (json: typeof city): number => {
+  const lineInto = (json: typeof city, traffic = true): number => {
     const track = new Track(json);
     const p = track.pointAt(10, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
     const yaw = Math.atan2(p.tx, p.tz);
     const me = { ...blankAiCar(0), x: p.x, z: p.z, yaw, vx: Math.sin(yaw) * RACER_SPEED, vz: Math.cos(yaw) * RACER_SPEED, alive: true };
     const brain = new RaceBrain(track, 1);
+    // Field slots past the one racer are traffic (as `RaceField` sets it); the traffic cars are out of view.
+    if (traffic) brain.guarded = 2;
     for (let k = 0; k < 1 / DT; k++) brain.think(me, [me], RACE, DT);
     return want(brain);
   };
-  it("when the loop's traffic drives both ways, then its line keeps to its own half of the road, out of the oncoming lane round the bend; with one-way traffic it takes the apex across the middle", () => {
+  it("when the loop's traffic drives both ways, then its line keeps to its own half of the road, out of the oncoming lane round the bend; with one-way traffic, or no traffic in the field, it takes the apex across the middle", () => {
     const twoWay = lineInto(city);
     const oneWay = lineInto({ ...city, traffic: { ...city.traffic, lanes: city.traffic.lanes.map((lane) => ({ ...lane, dir: 1 as const })) } });
+    const none = lineInto(city, false);
     expect(twoWay, `two-way line ${twoWay.toFixed(2)} m`).toBeLessThanOrEqual(-1.5);
     expect(oneWay, `one-way line ${oneWay.toFixed(2)} m`).toBeGreaterThan(0);
+    expect(none, `line with no traffic in the field ${none.toFixed(2)} m`).toBeGreaterThan(0);
   });
 });
