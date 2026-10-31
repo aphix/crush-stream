@@ -20,8 +20,28 @@ import { clamp, hash01, wrapPi } from "../kernel/scalar.ts";
 const _assist: Assists = { grip: 1, slipCap: 0, catchRate: 0, scrub: 0, selfRight: 0 };
 
 /** Steering authority on a surface: `applyDrive` scales the yaw rate by this (front-axle grip). */
-export function steerGrip(grip: number): number {
+function steerGrip(grip: number): number {
   return 0.45 + 0.55 * grip;
+}
+
+/** A class's full-lock yaw rate (rad/s) at `speed` on `surf` under its tyres, as `applyDrive` turns the car: less below 8 m/s, and scaled by the grip there (`steerGrip`). */
+export function turnRate(cls: ClassStats, speed: number, surf: Surface): number {
+  return cls.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(tyreGrip(cls.tyre, surf));
+}
+
+/** The fastest (m/s) a class drives the arc a pure pursuit asks for, aimed `reach` m ahead at `alpha` rad off its nose, on `surf` under its tyres (`cornerSpeed`). */
+export function arcSpeed(cls: ClassStats, reach: number, alpha: number, surf: Surface): number {
+  return cornerSpeed(cls, reach / (2 * Math.abs(detSin(alpha))), tyreGrip(cls.tyre, surf));
+}
+
+/** The sideways grip (m/s²) a class's tyres hold on `surf` with the assists on (`GUARD_GRIP_IDX`): what caps its yaw rate at a speed (`GRIP_YAW_CAP`). */
+export function tyreHold(cls: ClassStats, surf: Surface): number {
+  return cls.grip * tyreGrip(cls.tyre, surf) * assists(HANDLING.realism, _assist).grip;
+}
+
+/** The brake for a speed `excess` (m/s) over a target, by car `i`'s latch in `pedals` (on `BRAKE_ON` over, off `BRAKE_HOLD` under): 0 while the latch is off. */
+export function brakeOver(pedals: Pedals, i: number, excess: number): number {
+  return pedals.latch(i, excess, BRAKE_ON, -BRAKE_HOLD) ? clamp(excess / BRAKE_SPAN, BRAKE_MIN, 1) : 0;
 }
 
 /** `from`'s six fields into `to` (a brain's scratch output kept as a held input between thinks). */
@@ -522,7 +542,7 @@ export class RaceBrain {
     this.path = path;
     this.routeNow = route;
     this.surf = surfaceAt(path, proj.k);
-    this.turnMax = this.cls[i]!.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(tyreGrip(this.cls[i]!.tyre, this.surf));
+    this.turnMax = turnRate(this.cls[i]!, speed, this.surf);
     const fx = detSin(self.yaw);
     const fz = detCos(self.yaw);
     this.along = self.vx * fx + self.vz * fz;
@@ -614,7 +634,7 @@ export class RaceBrain {
   /** Off the road, a pursuit asking for more than full lock is a corner the plan does not see: the speed the car can turn back onto the line at (Infinity: none). */
   private offRoadArc(i: number): number {
     if (Math.abs(this.proj.lateral) <= this.path.half[this.proj.k]! || Math.abs(this.omega) <= this.turnMax) return Infinity;
-    return cornerSpeed(this.cls[i]!, this.reach / (2 * Math.abs(detSin(this.alpha))), tyreGrip(this.cls[i]!.tyre, this.surf));
+    return arcSpeed(this.cls[i]!, this.reach, this.alpha, this.surf);
   }
 
   /** Boost button: asked for on a clear run while the plan at the boosted top wants more speed, held for a minimum burst, let go at once when boxed in, braking, off the road or out of meter. */
@@ -638,15 +658,15 @@ export class RaceBrain {
     out.boost = boost;
     const target = Math.min(Number.isNaN(follow) ? (boost ? this.planBoosted[i]! : this.planTarget[i]!) : Math.min(this.planTarget[i]!, Math.max(0, follow - 0.5)), arc);
     const excess = this.along - target;
-    const braking = this.pedals.latch(i, excess, BRAKE_ON, -BRAKE_HOLD);
+    const brake = brakeOver(this.pedals, i, excess);
     if (Math.abs(this.alpha) > 1.9 && speed < 6) {
       out.throttle = TURN_ROUND_THROTTLE;
       out.steer = Math.sign(this.alpha) || this.traits[i]!.side;
-    } else if (!braking) {
+    } else if (brake === 0) {
       // A soft surface's drag is the drive's own: a target over its terminal is simply not reached (`plan` caps the targets at it), and one under it needs no more
       // throttle than its share of the top (the push is the full engine whenever the car is under `want`).
       out.throttle = clamp(target / (cls.topSpeed * (boost ? cls.boostTop : 1)), excess < -0.4 ? 0.35 : 0, 1);
-    } else out.brake = clamp(excess / BRAKE_SPAN, BRAKE_MIN, 1);
+    } else out.brake = brake;
     this.pedals.shape(i, out, dt);
   }
 
@@ -689,7 +709,7 @@ export class RaceBrain {
     g[GUARD_BRAKE_IDX] = cls.brake * BRAKE_SHARE;
     g[GUARD_LEAD_IDX] = cls.brake;
     g[GUARD_TURN_IDX] = this.turnMax;
-    g[GUARD_GRIP_IDX] = cls.grip * tyreGrip(cls.tyre, this.surf) * assists(HANDLING.realism, _assist).grip;
+    g[GUARD_GRIP_IDX] = tyreHold(cls, this.surf);
     g[GUARD_DT_IDX] = dt;
   }
 

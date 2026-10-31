@@ -13,6 +13,9 @@ import { blankProjection, projectPath } from "../world/track.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 import { BEAT, FAR, rig, spec, track } from "./hunter-rig.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { turnRate } from "./race-ai.ts";
+import { assignClass, classStats } from "../vehicle/vehicle-classes.ts";
+import { SURFACES } from "../world/catalog.ts";
 
 describe("given the Survival schedule of how many cops are wanted as the heat goes on, with a starting formation of cops", () => {
   it("when the wanted count is read at different times, then it starts at the formation size, grows by one every 12 s, stops at the cap of 12 and adds nothing before the green", () => {
@@ -180,25 +183,28 @@ describe("given the Survival hunter pack (the cops that chase the player) on a s
   });
 });
 
-describe("given one cop at the origin facing +z, driven by the hunter brain, with its target ahead", () => {
-  /** One cop at the origin facing +z, its quarry `dist` m ahead, optionally behind a wall of `hx` × `hz` m at `z = wallZ`. */
+/** A flat paved stretch of Havana (the paseo) running along +z: the hunter reads the crests and the grip of the ground it drives on. */
+const PASEO = -200;
+
+describe("given one cop on the paseo facing +z, driven by the hunter brain, with its target ahead", () => {
+  /** One cop on the paseo facing +z, its quarry `dist` m ahead, optionally behind a wall of `hx` × `hz` m `wall.z` m ahead. */
   function drive(dist: number, wall?: { hx: number; hz: number; z: number }) {
     const colliders: PropCollider[] = wall
-      ? [{ index: 0, prefab: "building", body: "solid", x: 0, z: wall.z, yaw: 0, kind: "box", r: Math.hypot(wall.hx, wall.hz), hx: wall.hx, hz: wall.hz, mass: 0, base: 0, top: 14, ends: 3 }]
+      ? [{ index: 0, prefab: "building", body: "solid", x: 0, z: PASEO + wall.z, yaw: 0, kind: "box", r: Math.hypot(wall.hx, wall.hz), hx: wall.hx, hz: wall.hz, mass: 0, base: 0, top: 14, ends: 3 }]
       : [];
     const r = rig({ colliders });
     r.run(0.25);
     const cop = r.cars[1]!;
     const tg = r.cars[0]!;
-    Object.assign(cop, { x: 0, z: 0, yaw: 0, vx: 0, vz: 12 });
-    Object.assign(tg, { x: 0, z: dist, yaw: 0, vx: 0, vz: 0 });
+    Object.assign(cop, { x: 0, z: PASEO, yaw: 0, vx: 0, vz: 12 });
+    Object.assign(tg, { x: 0, z: PASEO + dist, yaw: 0, vx: 0, vz: 0 });
     return { r, cop, tg, out: () => r.brain.think(cop, r.cars, 1 / FRAME_HZ) };
   }
 
   it("when the heat is before the green and then the green comes, then the cop is held on the brake until the green and drives once it comes", () => {
     const r = rig();
-    Object.assign(r.cars[1]!, { x: 0, z: 0, yaw: 0, vx: 0, vz: 10 });
-    Object.assign(r.cars[0]!, { x: 0, z: 100 });
+    Object.assign(r.cars[1]!, { x: 0, z: PASEO, yaw: 0, vx: 0, vz: 10 });
+    Object.assign(r.cars[0]!, { x: 0, z: PASEO + 100 });
     expect(r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ).brake).toBe(1);
     r.run(0.25);
     let out = r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
@@ -241,7 +247,7 @@ describe("given one cop at the origin facing +z, driven by the hunter brain, wit
     const got = { ...d.out() };
     const want = idleDrive();
     want.brake = 0;
-    attackTarget(d.cop, d.tg, 0, 1.5, 12, ATTACK - 10, false, want, false);
+    attackTarget(d.cop, d.tg, 0, turnRate(classStats("sedan"), 12, SURFACES.asphalt), 12, ATTACK - 10, false, want, false);
     expect(got.throttle).toBe(want.throttle);
     expect(got.brake).toBe(want.brake);
     expect(got.boost).toBe(want.boost);
@@ -271,14 +277,14 @@ describe("given one cop at the origin facing +z, driven by the hunter brain, wit
   it("when it sits 4 m behind and 2.6 m beside a target at the target's own speed, then at 30 m/s it holds its row instead of closing up and at 10 m/s it presses on with its PIT (the nudge that spins the target out)", () => {
     // The cop 4 m behind the target and 2.6 m to one side, at the target's own speed: inside the first row (6 m).
     const fast = drive(4);
-    Object.assign(fast.tg, { x: 0, z: 4, vx: 0, vz: 30 });
-    Object.assign(fast.cop, { x: 2.6, z: 0, vx: 0, vz: 30 });
+    Object.assign(fast.tg, { x: 0, z: PASEO + 4, vx: 0, vz: 30 });
+    Object.assign(fast.cop, { x: 2.6, z: PASEO, vx: 0, vz: 30 });
     const held = { ...fast.out() };
     expect(held.throttle, "closed up on a fast target it was already inside the row of").toBe(0);
     expect(held.brake, "did not ease back to its row").toBeGreaterThan(0);
     const slow = drive(4);
-    Object.assign(slow.tg, { x: 0, z: 4, vx: 0, vz: 10 });
-    Object.assign(slow.cop, { x: 2.6, z: 0, vx: 0, vz: 10 });
+    Object.assign(slow.tg, { x: 0, z: PASEO + 4, vx: 0, vz: 10 });
+    Object.assign(slow.cop, { x: 2.6, z: PASEO, vx: 0, vz: 10 });
     const pit = { ...slow.out() };
     expect(pit.throttle, "did not press its PIT on a slow target").toBe(1);
   });
@@ -286,12 +292,12 @@ describe("given one cop at the origin facing +z, driven by the hunter brain, wit
   it("when it closes at 20 m/s on a stopped target 13 m ahead, then it brakes fully without steering, in the target's lane and one lane over", () => {
     // A stopped target 13 m ahead, the cop at 20 m/s: 20² > 16 × 13.
     const inLine = drive(13);
-    Object.assign(inLine.cop, { x: 0, z: 0, vx: 0, vz: 20 });
+    Object.assign(inLine.cop, { x: 0, z: PASEO, vx: 0, vz: 20 });
     const hit = { ...inLine.out() };
     expect(hit.brake, "did not brake for a stopped car in its lane").toBe(1);
     expect(hit.steer, "turned into it").toBe(0);
     const beside = drive(13);
-    Object.assign(beside.cop, { x: 3, z: 0, vx: 0, vz: 20 });
+    Object.assign(beside.cop, { x: 3, z: PASEO, vx: 0, vz: 20 });
     const past = { ...beside.out() };
     expect(past.steer, "turned into a target it was passing").toBe(0);
     expect(past.brake, "did not brake for a stopped car one lane over").toBe(1);
@@ -333,6 +339,52 @@ describe("given a hunter at 35 m/s heading at a stopped player car 40 m away, dr
       const v = arrival(side);
       expect(v, `${v.toFixed(1)} m/s within ${SETTLE} m of the player car, ${side} m off its line`).toBeLessThan(BLOCKABLE);
     }
+  });
+});
+
+/**
+ * Police hunters as real cars on Havana's ground, driven by the hunter brain toward a parked quarry: each starts at `speed` m/s from its
+ * `spot`; `each` sees every car after every step for `seconds` s.
+ */
+function hunt(spots: readonly { x: number; z: number; yaw: number }[], speed: number, quarry: { x: number; z: number }, seconds: number, each: (k: number, car: DeformableCar) => void): void {
+  const r = rig();
+  r.run(0.25);
+  setGround(track.ground());
+  const cars = spots.map((s, k) => {
+    const car = new DeformableCar({ body: 0x808080, accent: 0x404040, name: "cop" }, new THREE.Scene());
+    assignClass(car, "police");
+    r.brain.setClass(1 + k, classStats("police"));
+    car.spawnFacing(s.x, s.z, s.yaw, speed);
+    return car;
+  });
+  for (let k = spots.length + 1; k < r.cars.length; k++) Object.assign(r.cars[k]!, { x: FAR, z: FAR });
+  Object.assign(r.cars[0]!, { x: quarry.x, z: quarry.z, vx: 0, vz: 0 });
+  const dt = 1 / FRAME_HZ;
+  for (let step = 0; step < seconds * FRAME_HZ; step++) {
+    for (let k = 0; k < cars.length; k++) snapshotAiCar(r.cars[1 + k]!, 1 + k, cars[k]!, true);
+    for (let k = 0; k < cars.length; k++) applyAiDrive(cars[k]!, r.brain.think(r.cars[1 + k]!, r.cars, dt), dt);
+    for (let k = 0; k < cars.length; k++) {
+      cars[k]!.integrate(dt);
+      each(k, cars[k]!);
+    }
+  }
+  setGround(null);
+}
+
+describe("given a police hunter at 30 m/s on the south lawn's grass, its quarry parked 60 m off at 50° to its right", () => {
+  it("when it turns for its quarry, then it runs no more than 2 m outside the arc to it (the circle tangent to its nose through the quarry)", () => {
+    const alpha = (50 * Math.PI) / 180;
+    const start = { x: -40, z: -200 };
+    const quarry = { x: start.x + 60 * Math.sin(alpha), z: start.z + 60 * Math.cos(alpha) };
+    expect(track.ground().surfaceAt(start.x, start.z), "the scenario is on loose ground").toBe("grass");
+    // The arc's widest point off the chord from the start to the quarry, on the side its nose starts on (the left of the chord).
+    const sagitta = (60 / (2 * Math.sin(alpha))) * (1 - Math.cos(alpha));
+    let wide = 0;
+    hunt([{ ...start, yaw: 0 }], 30, quarry, 4, (_, car) => {
+      const p = car.group.position;
+      wide = Math.max(wide, ((p.z - start.z) * (quarry.x - start.x) - (p.x - start.x) * (quarry.z - start.z)) / 60);
+    });
+    expect(wide, `${wide.toFixed(1)} m left of the chord; the arc to the quarry is ${sagitta.toFixed(1)} m`).toBeLessThanOrEqual(sagitta + 2);
   });
 });
 

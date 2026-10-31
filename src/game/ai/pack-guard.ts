@@ -3,6 +3,8 @@ import type { DriveInput } from "../vehicle/car-drive.ts";
 import type { AiCar } from "./derby-ai.ts";
 import { clamp } from "../kernel/scalar.ts";
 import { classStats } from "../vehicle/vehicle-classes.ts";
+import { SURFACES, type Surface } from "../world/catalog.ts";
+import { turnRate, tyreHold } from "./race-ai.ts";
 import { GRIP_YAW_CAP } from "../vehicle/constants.ts";
 
 /** Seconds ahead a police car looks for a pack-mate on its path; the guard has the wheel from half of it on. */
@@ -32,7 +34,7 @@ const SEDAN = classStats("sedan");
  * when it is ahead, braked for, the boost dropped. A mate the steer already on the wheel (held `STEER_HOLD` s) takes the car clear of
  * is not read. A car that is stopped or reversing is left alone; a braking one still rolling forward is not. No allocation.
  */
-export function guardMates(self: AiCar, cars: readonly AiCar[], first: number, count: number, out: DriveInput, pullsOut: (unit: number) => boolean, turn = SEDAN.turn, grip = SEDAN.grip): void {
+export function guardMates(self: AiCar, cars: readonly AiCar[], first: number, count: number, out: DriveInput, pullsOut: (unit: number) => boolean, cls = SEDAN, surf: Surface = SURFACES.asphalt): void {
   const fx = detSin(self.yaw);
   const fz = detCos(self.yaw);
   // A car that is reversing, or stopped (parked, knocked out), is left alone; one that is braking while still rolling forward is not: a lifted
@@ -41,10 +43,10 @@ export function guardMates(self: AiCar, cars: readonly AiCar[], first: number, c
   const speed = hypot2(self.vx, self.vz);
   const vx = speed < MOVING ? fx * MOVING : self.vx;
   const vz = speed < MOVING ? fz * MOVING : self.vz;
-  // The car's yaw rate under the steer the drive asked for, as `applyDrive` turns it (full lock at `turn`, less below 8 m/s; tyres cap it at `GRIP_YAW_CAP` grip / v).
+  // The car's yaw rate under the steer the drive asked for, as `applyDrive` turns it on `surf` (`turnRate`; tyres cap it at `GRIP_YAW_CAP` grip / v).
   const v = hypot2(vx, vz);
-  const cap = (GRIP_YAW_CAP * grip) / v;
-  const omega = clamp(out.steer * turn * (0.35 + 0.65 * Math.min(1, v / 8)), -cap, cap);
+  const cap = (GRIP_YAW_CAP * tyreHold(cls, surf)) / v;
+  const omega = clamp(out.steer * turnRate(cls, v, surf), -cap, cap);
   // The mate it reaches soonest steers it away; but one passing alongside or behind cannot be braked for, and read alone it hid the
   // mate dead ahead (the steer went away from the graze, straight into the one ahead), so a mate ahead is read first and the
   // soonest of all only when none is ahead.

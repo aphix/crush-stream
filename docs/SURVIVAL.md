@@ -98,6 +98,9 @@ than 20 m behind).
 - **Queueing.** A target faster than `PIT_MAX` = 20 m/s is queued behind (a lane `TAIL_LANE` = 2.6 m either side, a row every
   `ROW` = 8 m), and a unit closing faster than it can brake goes straight on.
 - **Beyond `ATTACK`** it aims at where the player will be, bent round solid props on a 16 m grid.
+- **Grip.** A hunter reads the surface under it and its class's tyre there as a racer does (`race-ai.ts`: `turnRate` for its
+  steering, `arcSpeed` for the arc to its aim, the racer's brake latch `brakeOver` over that speed), so it corners on grass
+  within its grip. It does not lift for the plateau's crest: the pack flying it is the set piece.
 - **Escalation:** `copsWanted(time, formation, humans)` = the formation plus one every `HUNT.every` = 12 s, up to `HUNT.cap` = 12
   hunting at once, for one human (more humans scale it: see **Co-op**). `HUNT.units` = 16 cars are built; the rest are wrecks
   waiting to be put away. One drop-in per `HUNT.gap` = 1.5 s.
@@ -145,7 +148,7 @@ Not built: rescue (ramming the cop that is busting a teammate cancels the bust) 
 | Rule | Test |
 |---|---|
 | bust at 12 s held, not a step before; 20 m, 20 km/h; the hold restarts; no laps | `match/survival.test.ts` |
-| the schedule, drop-ins only where hidden, wreck / lost put away only unseen and replaced, drop spot on a road in the band, steering round a wall, attack geometry, wedge back-off | `ai/hunter.test.ts` |
+| the schedule, drop-ins only where hidden, wreck / lost put away only unseen and replaced, drop spot on a road in the band, steering round a wall, attack geometry, wedge back-off; a real police car turning on grass within 2 m of the arc to its quarry | `ai/hunter.test.ts` |
 | start, countdown, bust through the real stack (the hold shortened to 3 s), wrecked ends the run, best-time store (new / worse / blocked), Retry, Quit, schedule on the HUD (first two steps) | `world/survival.test.ts` |
 | a cop dropped in with the chase camera at 12 places round the course, the player driving on at 16 m/s: never in the camera's view, never within `dropMin` | `world/survival.test.ts` |
 | `scene=survival` round trip, never with a room; `scene=survival&track=national-mall` decodes and encodes back | `hud/share-url.test.ts` |

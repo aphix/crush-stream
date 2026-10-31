@@ -1,10 +1,10 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { clearDrive, DRIVE, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
-import { classStats, tyreGrip, type ClassStats } from "../vehicle/vehicle-classes.ts";
+import { classStats, type ClassStats } from "../vehicle/vehicle-classes.ts";
 import type { AiCar } from "./derby-ai.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { closingSpeed, lookDistance, SEEN_BEHIND, SEEN_NEAR, Sighting, visibleStretch } from "./sight.ts";
-import { steerGrip } from "./race-ai.ts";
+import { turnRate } from "./race-ai.ts";
 import { Backoff } from "./cop-brain.ts";
 import { Pedals } from "./pedals.ts";
 import { PlanClock } from "./plan-clock.ts";
@@ -273,7 +273,7 @@ export class TrafficBrain {
     const alpha = wrapPi(detAtan2(tx - self.x, tz - self.z) - self.yaw);
     const surf = SURFACES[SURFACE_IDS[path.surface[proj.k]!]!];
     const cls = this.cls[i]!;
-    const turnMax = cls.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(tyreGrip(cls.tyre, surf));
+    const turnMax = turnRate(cls, speed, surf);
     out.steer = clamp((2 * Math.max(speed, 3) * detSin(alpha)) / ld / Math.max(0.2, turnMax), -1, 1);
     const curv = Math.abs(path.curv[proj.k]!);
     let target = Math.min(this.speed, curv > STRAIGHT_CURV ? (cls.turn * 0.6) / curv : Infinity);

@@ -7,6 +7,7 @@ import type { SurvivalSpec } from "../world/track-schema.ts";
 import type { Track } from "../world/track.ts";
 import { ATTACK, attackTarget, CATCH_UP, CopBrain, HEAD_ON, PULL_OUT, pursuitSteer, RAM_TIME, TAIL_LANE, WAIT_BEHIND, type HunterWorld } from "./cop-brain.ts";
 import { BRAKE_RISE } from "./pedals.ts";
+import { arcSpeed, brakeOver } from "./race-ai.ts";
 
 /** Survival's pack (docs/SURVIVAL.md): how many cops, how fast more come, where a cop that is lost or wrecked is put back. */
 export const HUNT = {
@@ -207,7 +208,7 @@ export class HunterBrain extends CopBrain {
 
   /** `racers` cars (ids 0 …) are hunted; the units follow them from `first`. */
   constructor(track: Track, colliders: readonly PropCollider[], racers: number, first: number, count: number, seed: number) {
-    super(first, count, seed);
+    super(track, first, count, seed);
     const spec = track.survival;
     if (!spec) throw new Error(`${track.id} has no survival anchors`);
     this.racers = racers;
@@ -300,7 +301,7 @@ export class HunterBrain extends CopBrain {
     const reach = along > 0 ? Math.max(ATTACK, tv * (headOn ? RAM_TIME : PULL_OUT)) : ATTACK;
     if (dist <= reach) {
       this.slot(u, self, tg, dist, cars);
-      attackTarget(self, tg, this.role[u]!, this.turn[self.id]!, speed, dist, headOn, out, tv > BLOCKABLE, this.lane, this.row, this.pedals.isBraking(self.id));
+      attackTarget(self, tg, this.role[u]!, this.turnMax, speed, dist, headOn, out, tv > BLOCKABLE, this.lane, this.row, this.pedals.isBraking(self.id));
       this.dodge(u, self, tg, speed, dist, out);
     } else this.chase(u, self, tg, speed, dist, out);
     // A ram throws a stopped player car over the bust's 20 km/h and restarts its hold, so the unit brakes in time to arrive slowly.
@@ -343,11 +344,11 @@ export class HunterBrain extends CopBrain {
     const clear = this.obstacles.run(self.x, self.z, self.yaw, len);
     if (clear >= len || clear >= dist - 3) return;
     const h = this.openHeading(u, self, detAtan2(tg.x - self.x, tg.z - self.z), speed, dist);
-    out.steer = pursuitSteer(wrapPi(h - self.yaw), clamp(speed * 0.8, 8, 24), speed, this.turn[self.id]!);
+    out.steer = pursuitSteer(wrapPi(h - self.yaw), clamp(speed * 0.8, 8, 24), speed, this.turnMax);
     if (speed > DODGE_SPEED && clear < speed * 0.35) out.throttle = Math.min(out.throttle, 0.3);
   }
 
-  /** Beyond `ATTACK`: flat out at where the target will be, round any solid in the way, boosting when far behind. */
+  /** Beyond `ATTACK`: flat out at where the target will be, round any solid in the way, boosting when far behind, held to the speed the turn to its aim allows. */
   private chase(u: number, self: AiCar, tg: AiCar, speed: number, dist: number, out: DriveInput): void {
     const lead = Math.min(2, dist / Math.max(8, speed));
     const ax = tg.x + tg.vx * lead;
@@ -356,9 +357,19 @@ export class HunterBrain extends CopBrain {
     const h = this.openHeading(u, self, detAtan2(ax - self.x, az - self.z), speed, aimDist);
     const alpha = wrapPi(h - self.yaw);
     // Pure pursuit looks a speed-scaled way ahead, so a heading bent round a solid is followed as sharply as it was asked.
-    out.steer = pursuitSteer(alpha, Math.min(aimDist, clamp(speed * 0.8, 8, 24)), speed, this.turn[self.id]!);
+    out.steer = pursuitSteer(alpha, Math.min(aimDist, clamp(speed * 0.8, 8, 24)), speed, this.turnMax);
     out.throttle = Math.abs(alpha) > 1.3 && speed > 6 ? 0.2 : 1;
     out.boost = out.throttle > 0.5 && dist > CATCH_UP && Math.abs(alpha) < 0.35;
+    // The turn it must make is the arc to its aim (tangent to its nose; an aim past the shoulder is a right angle), on the grip under it: over that
+    // speed it brakes on a racer's latch (`brakeOver`), under it it asks no more throttle than that speed's share of its top.
+    const cls = this.cls[self.id]!;
+    const arc = arcSpeed(cls, Math.max(4, aimDist), Math.min(Math.abs(alpha), Math.PI / 2), this.surf);
+    const brake = brakeOver(this.pedals, self.id, speed - arc);
+    if (brake > 0) {
+      out.throttle = 0;
+      out.brake = brake;
+    } else out.throttle = Math.min(out.throttle, arc / cls.topSpeed);
+    if (arc < cls.topSpeed) out.boost = false;
   }
 
   /** The heading nearest `want` whose way is clear of solids for the next stretch; else the one with the longest clear run, a bend costing `TURN_COST` m per radian. */

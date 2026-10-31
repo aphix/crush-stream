@@ -92,7 +92,6 @@ const LINE_STATE = { next: -1, lap: 0 };
 export class PoliceBrain extends CopBrain {
   /** This race: stakeouts parked, pursuits started (stakeouts woken), the largest pack in pursuit, units knocked out. */
   readonly stats = { stakeouts: 0, pursuits: 0, maxPack: 0, disabled: 0 };
-  private readonly track: Track;
   private readonly line: RaceBrain;
   /** Driving, so a slow one may be pulling out (not parked at a stakeout, knocked out or stored: those are stopped obstacles). */
   protected readonly pullsOut = (u: number): boolean => this.state[u] === "pursuit";
@@ -132,8 +131,7 @@ export class PoliceBrain extends CopBrain {
   private nearD = Infinity;
 
   constructor(track: Track, line: RaceBrain, first: number, count: number, seed: number, peers = new Uint8Array(0)) {
-    super(first, count, seed);
-    this.track = track;
+    super(track, first, count, seed);
     this.line = line;
     this.pack = new Int16Array(count).fill(-1);
     this.dropped = new Int16Array(count).fill(-1);
@@ -243,7 +241,7 @@ export class PoliceBrain extends CopBrain {
       out.boost = arc > CATCH_UP && line.throttle > 0.5;
       return out;
     }
-    attackTarget(self, tg, this.role[u]!, this.turn[self.id]!, speed, dist, headOn, out, true, undefined, undefined, this.pedals.isBraking(self.id));
+    attackTarget(self, tg, this.role[u]!, this.turnMax, speed, dist, headOn, out, true, undefined, undefined, this.pedals.isBraking(self.id));
     // Wedged (against its target on a wall, or a car): back off for another run.
     this.wedge.watch(u, self.x, self.z, dt, out);
     return out;
@@ -260,7 +258,7 @@ export class PoliceBrain extends CopBrain {
     const reach = hypot2(pt.x - self.x, pt.z - self.z);
     // An aim behind its shoulder (the stakeout car facing the oncoming racers): full lock, half throttle.
     const behind = Math.abs(alpha) > BEHIND;
-    out.steer = behind ? Math.sign(alpha) : pursuitSteer(alpha, reach, speed, this.turn[self.id]!);
+    out.steer = behind ? Math.sign(alpha) : pursuitSteer(alpha, reach, speed, this.turnMax);
     out.throttle = behind ? 0.5 : 1;
     out.boost = Math.abs(alpha) < 0.35;
   }

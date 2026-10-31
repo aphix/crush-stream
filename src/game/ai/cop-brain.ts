@@ -7,6 +7,9 @@ import type { AiCar } from "./derby-ai.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { clamp, hash01, wrapPi } from "../kernel/scalar.ts";
 import { REVERSE_THROTTLE } from "./constants.ts";
+import { turnRate } from "./race-ai.ts";
+import { SURFACES, type Surface } from "../world/catalog.ts";
+import type { Track } from "../world/track.ts";
 
 /** Closer than this (m), on the same stretch of road, a unit attacks; beyond it it drives the racing line. */
 export const ATTACK = 35;
@@ -64,12 +67,11 @@ export const BEHIND = 1.5;
 
 /**
  * The one steering rule of every police drive (lead-in, attack, open-ground hunt): pure pursuit. Lock for the heading error
- * `alpha` to an aim `reach` m ahead at `speed`, on a class whose full-lock yaw rate is `turn`.
+ * `alpha` to an aim `reach` m ahead at `speed`, on a car whose full-lock yaw rate there is `turnMax` (`turnRate`).
  */
-export function pursuitSteer(alpha: number, reach: number, speed: number, turn: number): number {
+export function pursuitSteer(alpha: number, reach: number, speed: number, turnMax: number): number {
   // An aim behind the shoulder: sin(alpha) fades to nothing as it nears dead astern, which drove a unit straight away from it. Full lock toward it.
   if (Math.abs(alpha) > BEHIND) return Math.sign(alpha);
-  const turnMax = turn * (0.35 + 0.65 * Math.min(1, speed / 8));
   return clamp((2 * Math.max(speed, 4) * detSin(alpha)) / Math.max(4, reach) / Math.max(0.2, turnMax), -1, 1);
 }
 
@@ -129,9 +131,9 @@ export class Backoff {
  * Within `ATTACK` m of its target: ram head-on or block from ahead, PIT or slam from alongside, line up by `role` (its
  * place in the pack) from behind; queue behind a target too fast for any of that (`PIT_MAX`) in the `lane` and `row` the caller
  * gives (by `role` by default); go straight on when it closes faster than it can brake (`OVERRUN`). The one attack geometry of every
- * police drive; `turn` is the class's full-lock yaw rate. `block` false drops the getting-ahead-and-braking part, for a stopped target.
+ * police drive; `turnMax` is the car's full-lock yaw rate there (`turnRate`). `block` false drops the getting-ahead-and-braking part, for a stopped target.
  */
-export function attackTarget(self: AiCar, tg: AiCar, role: number, turn: number, speed: number, dist: number, headOn: boolean, out: DriveInput, block = true, lane = (role % 3) - 1, row = role % 5, braking = false): void {
+export function attackTarget(self: AiCar, tg: AiCar, role: number, turnMax: number, speed: number, dist: number, headOn: boolean, out: DriveInput, block = true, lane = (role % 3) - 1, row = role % 5, braking = false): void {
   const tfx = detSin(tg.yaw);
   const tfz = detCos(tg.yaw);
   // Left of the target's travel = (fz, −fx).
@@ -194,7 +196,7 @@ export function attackTarget(self: AiCar, tg: AiCar, role: number, turn: number,
   const az = tg.z + tg.vz * lead + tfz * fwd + tlz * lat;
   if (queue) want = tv + clamp(-(TAIL + ROW * row) - along, -tv, 8);
   const alpha = wrapPi(detAtan2(ax - self.x, az - self.z) - self.yaw);
-  out.steer = straight ? 0 : pursuitSteer(alpha, hypot2(ax - self.x, az - self.z), speed, turn);
+  out.steer = straight ? 0 : pursuitSteer(alpha, hypot2(ax - self.x, az - self.z), speed, turnMax);
   if (brakeCheck) {
     out.brake = 1;
     return;
@@ -240,15 +242,18 @@ export abstract class CopBrain {
   protected readonly pedals = new Pedals();
   /** Set by `drive` when the unit really drove this step (not parked, waiting for the green or knocked out): only that output goes through the hands. */
   protected driven = false;
-  /** Per car id: a class's full-lock yaw rate and grip. */
-  protected readonly turn = new Float64Array(MAX_CARS).fill(1.5);
-  protected readonly grip = new Float64Array(MAX_CARS).fill(classStats("sedan").grip);
+  /** Per car id: its class; per think, the surface under the unit and its full-lock yaw rate there (`turnRate`). */
+  protected readonly cls: ClassStats[] = Array.from({ length: MAX_CARS }, () => classStats("sedan"));
+  protected surf: Surface = SURFACES.asphalt;
+  protected turnMax = 0;
+  protected readonly track: Track;
   /** The pack-mate guard's view of a unit: driving, so a slow one may be pulling out (bound once: no allocation per call). */
   protected abstract readonly pullsOut: (u: number) => boolean;
   private readonly seed: number;
   private dice = 0;
 
-  constructor(first: number, count: number, seed: number) {
+  constructor(track: Track, first: number, count: number, seed: number) {
+    this.track = track;
     this.first = first;
     this.count = count;
     this.seed = seed;
@@ -257,10 +262,9 @@ export abstract class CopBrain {
     this.wedge = new Backoff(count);
   }
 
-  /** Unit `id`'s class figures for its own steering. */
+  /** Unit `id`'s class figures for its own driving. */
   setClass(id: number, s: ClassStats): void {
-    this.turn[id] = s.turn;
-    this.grip[id] = s.grip;
+    this.cls[id] = s;
   }
 
   /** Racer `id` respawned at race time `time` (a brain that leaves it alone for a while). */
@@ -291,12 +295,15 @@ export abstract class CopBrain {
   /** A unit's input for this physics slice (scratch output: apply it before the next call): its drive through the hands (a parked or held unit's is as it is), then the pack-mate guard. */
   think(self: AiCar, cars: readonly AiCar[], dt: number): DriveInput {
     this.driven = false;
+    const cls = this.cls[self.id]!;
+    this.surf = SURFACES[this.track.ground().surfaceAt(self.x, self.z)];
+    this.turnMax = turnRate(cls, hypot2(self.vx, self.vz), this.surf);
     const out = this.drive(self, cars, dt);
     if (this.driven) {
       this.pedals.shape(self.id, out, dt);
       out.boost = this.pedals.holdBoost(self.id, out.boost, dt, false);
     } else this.pedals.follow(self.id, out);
-    guardMates(self, cars, this.first, this.count, out, this.pullsOut, this.turn[self.id]!, this.grip[self.id]!);
+    guardMates(self, cars, this.first, this.count, out, this.pullsOut, cls, this.surf);
     return out;
   }
 
