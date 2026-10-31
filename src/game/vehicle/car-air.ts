@@ -797,6 +797,8 @@ export function stepFree(car: DeformableCar, dt: number): boolean {
 
 /** A push's arm at the body's centre of mass: no spin. */
 const AT_CENTRE = new THREE.Vector3();
+/** Run once a slice between the faces' plan pull and the rows' passes (a field of a const, as `prune`): its test reads the body and the car under it there, before the tyres' grip acts on either. */
+export const planPulled = { probe: null as (() => void) | null };
 
 function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const q = car.group.quaternion;
@@ -1106,6 +1108,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     _s[S_JD] = ((ASK[c]! - Math.min(ASK[c]!, REST[c]!)) / N[c]!.y) * along;
     give(c, v, w, q, _vp.set(N[c]!.x / along, 0, N[c]!.z / along), surf, driven ? AT_CENTRE : R[c]!);
   }
+  planPulled.probe?.();
   snapshotRows(car, n);
   noteTyreSides(tyres, tyreSides);
   solveRows(n);
