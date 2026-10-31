@@ -329,8 +329,11 @@ type PlayerOutcome = {
   samples: number;
 };
 
-/** The scripted player's top speed (m/s) on a detour: faster, it missed the grass line's tight bottom and wall-pinned. */
-const DETOUR_SPEED = 15;
+/**
+ * The scripted player's top speed (m/s) on a detour: faster, it missed the grass line's tight bottom and wall-pinned. 14 is the 15 it was
+ * staged at on the sedan's old grass grip, times √0.9: its road tyre grips 0.9 of that on grass, and at 15 the wreck orbited a point it could not reach.
+ */
+const DETOUR_SPEED = 14;
 
 /**
  * One race with the PLAYER slot driven through the real seat (analog wheel and gas → `shapeDrive`

@@ -10,7 +10,7 @@ import oval from "./tracks/oval.json" with { type: "json" };
  * through the open infield; before the fix a car beside the dirt or straight across the infield
  * crossed the shortcut's mouth gate, missed the next one and lost the whole lap without a word.
  */
-// 2 laps: a detour lap at the scripted 15 m/s costs ~9 s against the AI's ~17 s laps at 200 km/h, so over
+// 2 laps: a detour lap at the scripted 14 m/s costs ~9 s against the AI's ~17 s laps at 200 km/h, so over
 // 3 laps the grass line was flagged home a lap down ("+1 lap", scored right) instead of on the AI's count.
 const LAPS = 2;
 const track = new Track(oval);

@@ -235,6 +235,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
         }
       }
       t.annotate(`mean hold (wall s): impact ${(sums.impact[0]! / sums.impact[1]!).toFixed(2)} over ${sums.impact[1]}, later hit ${(sums.hit[0]! / sums.hit[1]!).toFixed(2)} over ${sums.hit[1]}, throw ${(sums.throw[0]! / sums.throw[1]!).toFixed(2)} over ${sums.throw[1]}; ${late} throws after the hand-back`);
+      for (const b of bad) t.annotate(b);
       expect(sums.impact[1]! >= bars.impact && sums.throw[1]! >= bars.throw, `too few holds to test: ${sums.impact[1]} impacts, ${sums.throw[1]} throws`).toBeTruthy();
       expect(bad).toHaveLength(0);
     });

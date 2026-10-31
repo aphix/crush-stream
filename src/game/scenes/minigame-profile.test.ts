@@ -431,8 +431,8 @@ describe("given each of the 7 car types released at full throttle from the long 
   const FAST_ENOUGH_CAP = 18.5;
   const MONSTER_SLOW_CAP = 22.4;
   const MONSTER_FAST_CAP = 23.2;
-  /** Held to `MONSTER_FAST_CAP` the monster arrives within this (m/s) and is thrown at every phase: its flying speed now lies over the top of it (22.5 before the monster's springs damped at 0.42), locked here so a later change shows. */
-  const MONSTER_HELD_ARRIVAL = { low: 22.7, high: 22.85 };
+  /** Held to `MONSTER_FAST_CAP` the monster arrives within this (m/s), thrown at every phase; locked so a later change shows (measured 22.66-22.71: its 160 km/h top pulls less here than 190's 22.74-22.77). */
+  const MONSTER_HELD_ARRIVAL = { low: 22.62, high: 22.73 };
   /** The pre-retune approach: the start hill 24 m, the run-up 36 m, the incline 24 m and the crest's radius 180 m. */
   const PRE_RETUNE: LongJumpDesign = { hillLength: 24, runUp: 36, inclineLength: 24, crestRadius: 180 };
   const shipped: LongJumpDesign = { hillLength: START_HILL_LENGTH.longJump, runUp: RUN_UP_LENGTH.longJump, inclineLength: LONG_JUMP_INCLINE.length, crestRadius: LONG_JUMP_INCLINE.crestRadius };
@@ -473,7 +473,7 @@ describe("given each of the 7 car types released at full throttle from the long 
     expect(fastest(old), `the old fastest arrival ${fastest(old)}`).toBeGreaterThan(ARRIVAL_CEILING);
   });
 
-  it("when the monster is held to 22.4 m/s and to 23.2 m/s on the shipped approach, then it arrives under its old flying speed at the first and at 22.7-22.85 m/s at the second, and is thrown once at every phase at both: its flying speed now lies over 22.85 m/s (a stiffer damper there, 0.42 against 0.35)", () => {
+  it(`when the monster is held to 22.4 m/s and to 23.2 m/s on the shipped approach, then it arrives under its old flying speed at the first and at ${MONSTER_HELD_ARRIVAL.low}-${MONSTER_HELD_ARRIVAL.high} m/s at the second, and is thrown once at every phase at both: its flying speed lies over that (a stiffer damper there, 0.42 against 0.35)`, () => {
     const slow = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, MONSTER_SLOW_CAP));
     const fast = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, MONSTER_FAST_CAP));
     const read = (hits: readonly BarrierHit[]): string => hits.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections} at x ${hit.endX.toFixed(1)}`).join(" ");

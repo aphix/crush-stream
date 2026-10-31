@@ -46,9 +46,11 @@ function swing(lost: readonly number[], cls: VehicleClassId, input: Partial<Driv
 
 describe("given a car missing wheels (their hubs popped off)", () => {
   for (const cls of CLASS_IDS) {
-    it(`when a ${cls} has both front wheels gone and is steered full lock either way, then it turns about 0 (under 0.02 rad in 1 s) where the intact car turns over 1 rad, and with a rear wheel gone as well it still does not steer`, () => {
+    // The intact bar is two thirds of the class's full-lock yaw in the second (the sedan's 1 rad of its 1.5): the monster turns 0.9 rad/s.
+    const turns = (2 / 3) * CLASSES[cls].turn;
+    it(`when a ${cls} has both front wheels gone and is steered full lock either way, then it turns about 0 (under 0.02 rad in 1 s) where the intact car turns over ${turns.toFixed(2)} rad (two thirds of its full lock), and with a rear wheel gone as well it still does not steer`, () => {
       const intact = swing([], cls, { steer: 1 });
-      expect(intact, `intact ${intact.toFixed(2)} rad`).toBeGreaterThan(1);
+      expect(intact, `intact ${intact.toFixed(2)} rad`).toBeGreaterThan(turns);
       for (const steer of [1, -1]) {
         const none = swing([0, 1], cls, { steer });
         expect(Math.abs(none), `front pair gone, steer ${steer}: turned ${none.toFixed(3)} rad in 1 s`).toBeLessThan(0.02);
