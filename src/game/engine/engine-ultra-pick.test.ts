@@ -244,4 +244,32 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     expect(engine["cine"].tier, "tier after the pick").toBe("ultra");
     expect(drawFrames(1).made, "programs the first Ultra frame linked").toBe(0);
   });
+
+  it("when a surface's program key changes before every frame the pick runs through (a race: cars scratched and dressed between its steps), then the pick still settles within two passes over the scene and switches to Ultra", { timeout: HANG_GUARD_MS }, async () => {
+    await engine.setFxTier("low");
+    await engine.warmsIdle();
+    const churned = surface("ultra-pick-churn");
+    let mark = 0;
+    churned.material.customProgramCacheKey = () => `ultra-pick-churn${mark}`;
+    engine["scene"].add(churned);
+    engine["scene"].children.unshift(engine["scene"].children.pop()!);
+    drawFrames(1);
+    engine["loopDraws"] = true;
+    let frames = 0;
+    // Two passes over a scene of this size: well under this many frames. A pick that re-passes until a pass links nothing never ends.
+    const FRAMES_CAP = 60;
+    const picked = engine.setFxTier("ultra");
+    try {
+      await framesUntilSettled(picked, [], () => {
+        // Past the cap the pick is called off (`ultraWanted`), so a never-settling pick ends the row, not the run.
+        if (++frames > FRAMES_CAP) engine["ultraWanted"] = false;
+        mark++;
+        churned.material.needsUpdate = true;
+      });
+    } finally {
+      engine["loopDraws"] = false;
+    }
+    expect(frames, `frames the pick ran through (${FRAMES_CAP} is the cap: the pick never settled)`).toBeLessThanOrEqual(FRAMES_CAP);
+    expect(engine["cine"].tier, "tier after the pick").toBe("ultra");
+  });
 });

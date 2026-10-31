@@ -20,6 +20,12 @@ const isLinked = (program: unknown): boolean =>
 const ULTRA_STEP_PROGRAMS = 3;
 /** Frames the loop draws after a step's draws before the next step: that GPU work lands in them, not in the next step's or the switch's. */
 const ULTRA_STEP_FRAMES = 2;
+/**
+ * Passes an Ultra warm-up makes over the scene: the first, and one more for a key changed in the frames between its steps (a car's
+ * first scratch). Not until a pass links nothing: in a race, cars scratch and are dressed between every pass, so that never came, and
+ * the bench sat in its warm-up with the race never started (the strip's lights dark, 0:00.000).
+ */
+const ULTRA_PASSES = 2;
 
 /**
  * Shader warm-up: links every program before the loop runs, then warms new scene content as it appears.
@@ -245,9 +251,9 @@ export abstract class EngineWarm extends EngineCore {
    * Link and draw `ultra`'s programs (its sky as the environment, its dressed surfaces, the car finish its tier draws) into the HDR target,
    * the only output its tier draws the scene into, while the frames still draw the current look: a few programs a step, with frames
    * between (`ULTRA_STEP_PROGRAMS`), so neither a step nor the switch after the last stalls a frame. The frames between steps run the
-   * race, so a mesh added or a program key changed there (a car's first scratch) after its step went by is linked by another pass over
-   * the scene; the warm-up ends on a pass that links nothing, which draws no frame, so the switch follows it. Stops once `wanted` reads
-   * false, or once a context restore disposes `ultra` (the restore's pick loads another).
+   * race, so a mesh added or a program key changed there (a car's first scratch) after its step went by is linked by a second pass over
+   * the scene (`ULTRA_PASSES`); a pass that links nothing draws no frame, so the switch follows it. What changes after the last pass
+   * the first Ultra frame links. Stops once `wanted` reads false, or once a context restore disposes `ultra` (the restore's pick loads another).
    */
   protected async warmUltra(ultra: Ultra, wanted: () => boolean): Promise<void> {
     this.warmsInFlight++;
@@ -258,7 +264,7 @@ export abstract class EngineWarm extends EngineCore {
 
   private async warmUltraSteps(ultra: Ultra, going: () => boolean): Promise<void> {
     const hdr = this.cine.post.sceneRT;
-    for (let linked = true; linked && going(); ) {
+    for (let pass = 0, linked = true; pass < ULTRA_PASSES && linked && going(); pass++) {
       linked = false;
       this.scene.unparkAll();
       const drawn: THREE.Object3D[] = [];
