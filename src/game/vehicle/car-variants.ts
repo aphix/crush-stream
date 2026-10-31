@@ -437,8 +437,6 @@ export interface BodyStyle {
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;
-  /** The cage's rear header box (a stand-in over the rear glass's top corner): its centre stands this far (m) over the glass's top (absent `REAR_HEADER_RISE`); a roof that ends at the glass's top sets its box's top onto the glass's, so the box never stands over the drawn deck there. */
-  rearHeaderRise?: number;
   /** Side glass behind the B-pillar: rear edge z at the belt and at the top. `drawn` (drawn only): the drawn pane, sail and trim's own; the cage's post and rail and the dummies' pane keep these. */
   quarter: { zRearBot: number; zRearTop: number; drawn?: { zRearBot: number; zRearTop: number } };
   /** Extra pillar splitting the quarter glass (wagon C-pillar), or null. */

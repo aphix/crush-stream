@@ -303,8 +303,6 @@ export const SEDAN: BodyStyle = {
   roofZ: [-1.159, 0.15],
   windshieldTop: [1.285, 0.15],
   rearGlass: { base: [1.02, -1.68], top: [1.235, -1.159], wBase: 1.05, wTop: 1.0 },
-  /** The sedan's roof ends at the rear glass's top, the deck running on from it: its cage's rear header box (6 cm tall) puts its top on the glass's, not 7 cm over the drawn deck there. */
-  rearHeaderRise: -0.03,
   /**
    * The reference's quarter glass narrows to a point on the belt at -1.26, its top rounding over into the rear door's glass top (`cPillar.pinch`).
    * Drawn only: the cage's C-post stands at -0.88, where the dummies' windshield rows hold.

@@ -81,7 +81,8 @@ The hardpoints place the openings and the lower body, each per car:
 `car-styles/platform.ts` exports the values the first bodies shared as `PLATFORM_HARDPOINTS`; a table spreads it and overrides
 what its car changes. Every hardpoint but a push bar, tow hitch and exhaust tip reaches the collision cage or a sim reader (the greenhouse pillars,
 the sill, the arches, the hood's pose, the bumpers' fascia, the front doors' slab, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
-The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends. The drawn
+The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends, and the cage's
+two header boxes (it draws no bars) put their tops on their glass's top edge, front and rear alike. The drawn
 A-pillar is a rounded post along the windshield's edge, 6 cm wide in side view whatever `aPillarFoot` / `aPillarTop` say, its top
 held under the roof skin; where the door glass's front edge lies further back, a sail panel fills the gap at the same height (the
 cage keeps its box between the windshield and the door glass).
@@ -129,7 +130,6 @@ new mesh: each is merged into the mesh it stands on and moves with it.
 | `cPillar.rollShare` | Drawn only (0..1, absent 1): the share of the roof end's roll a flat sail's rings behind the roof end carry (the `blend` run's weight scaled by it); less keeps a widened roof end's bulge off the haunch. Rings at and ahead of the roof end are unchanged |
 | `cPillar.reachLip` | Drawn only (0..1, absent 0), a flat sail on a `roofSection`: ahead of the roof end the sail's outer face takes the roll end's own section, carried from its foot, cant lip and head onto each ring's foot, the roof's cant point at that z and its head, so it reaches the cant lip at the cant line instead of a chord to a head tucked under the roof's edge |
 | `cPillar.cageSail` | `true`: the cage's C-post is the sail's own loft (the drawn post's corners), not the flat box between them, so a tyre above stands on the bulge it sees; the decimation keeps the sail's two outer crown points per ring (`userData.hold`, taken through `cageSourceOf`), and their count raises the hull's vertex target (`CAGE_KEPT_VERTICES` in the vehicle point capacity), so they cost the rest of the hull nothing. Absent, the flat box. The sedan sets it (the police inherits it) |
-| `rearHeaderRise` | Optional (m), the cage's rear header box (the stand-in over the rear glass's top corner): its centre stands this far over the glass's top, absent 0.04, so it covers the glass's frame there. A roof that ends at the glass's top, the deck running on from it, sets it so the box's top lands on the glass's, not over the drawn deck: the sedan's -0.03 (the police inherits it) |
 | `bumpers.front.trim`, `bumpers.rear.trim` | `"body"` (its body colour, painted finish), `"chrome"` or `"black"`; unset, the car's accent trim. A player's bumper colour still recolours it |
 | `bumpers.rear.hitch` | Black tow-hitch receiver under the rear bumper's middle |
 | `bumpers.rear.plate` | The number plate's centre height (m, car frame; drawn only); absent, `PLATE_RISE` (3 cm) over the bumper's seat. `plateFace` {`out`, `color`}: the plate's rear face (m, as `fascia`'s out) and colour; absent the platform plate's (0.09, cream) |

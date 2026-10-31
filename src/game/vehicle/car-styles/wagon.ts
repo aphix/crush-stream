@@ -149,7 +149,6 @@ export const WAGON: BodyStyle = {
   rearHeaderWidth: 1.2,
   // The cage's tail is the drawn boot cut (cargo floor through the face), so a rolled wagon's gone rear glass leaves the floor, not a closed deck.
   cageTailCut: true,
-  rearHeaderRise: -0.03,
   windshieldTop: [1.45, 0.3],
   // The A-post upright and even as its reference side plate's band (drawn twin: the windshield's side edge bows back in plan to the roof's square front, the cage keeps the style's own).
   drawn: {

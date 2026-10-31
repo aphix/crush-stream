@@ -762,8 +762,6 @@ export function makeBox(w: number, h: number, d: number, x: number, y: number, z
 const HEADER_HALF_HEIGHT = 0.03;
 /** The cage's header bars are this deep (m) along z. */
 const HEADER_DEPTH = 0.08;
-/** The cage's rear header box's centre stands this far (m) over the rear glass's top corner, so it covers the glass's frame there. */
-const REAR_HEADER_RISE = 0.04;
 
 /** The painted fill between a side glass top dropped under the cant line and the cant line is this thick (m), like a pillar. */
 const GLASS_FILL_THICK = 0.05;
@@ -1366,9 +1364,10 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     rail.name = BELT_RAIL;
   }
   // The cage keeps its header boxes until the rig derives the cabin cage; the drawn roof covers both glass tops, so it draws none.
+  // Each box's top is its glass's top: higher, it is a cage-only ridge over the drawn roof that a tyre or a belly lands on.
   if (source === "cage") {
-    parts.push(makeBox(ws.wTop + 0.1, 2 * HEADER_HALF_HEIGHT, HEADER_DEPTH, 0, wsY + 0.03, wsZ - 0.02));
-    parts.push(makeBox(style.rearHeaderWidth ?? rg.wTop + REAR_HEADER_MARGIN, 2 * HEADER_HALF_HEIGHT, HEADER_DEPTH, 0, rg.top[0] + (style.rearHeaderRise ?? REAR_HEADER_RISE), rg.top[1] - 0.02));
+    parts.push(makeBox(ws.wTop + 0.1, 2 * HEADER_HALF_HEIGHT, HEADER_DEPTH, 0, wsY - HEADER_HALF_HEIGHT, wsZ - 0.02));
+    parts.push(makeBox(style.rearHeaderWidth ?? rg.wTop + REAR_HEADER_MARGIN, 2 * HEADER_HALF_HEIGHT, HEADER_DEPTH, 0, rg.top[0] - HEADER_HALF_HEIGHT, rg.top[1] - 0.02));
   }
   return parts;
 }

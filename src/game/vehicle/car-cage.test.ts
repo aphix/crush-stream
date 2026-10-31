@@ -152,6 +152,29 @@ for (const body of BODIES) {
   }
 }
 
+/** How far (m) the cage's top may stand over the drawn top along a glass's top edge: a box on the glass's top stands up to 2.6 cm over a domed roof rolling down to the glass's corners (the coupe's); one 6 cm box over it, 4 cm or more. */
+const HEADER_OVER_M = 0.03;
+
+describe("given every style's untouched car, its cage carrying a header box along each glass's top edge (the drawn roof covers both, the drawn build draws none)", () => {
+  it(`when the cage's top is read along the windshield's and the rear glass's top edges, then it stands within ${HEADER_OVER_M * 100} cm over the drawn top: no cage-only ridge for a tyre or a belly to meet`, (t) => {
+    const wrong: string[] = [];
+    for (const id of CAR_STYLE_IDS) {
+      const car = buildCar(id, STYLE_CLASS[id]);
+      const cage = cageOf(car);
+      const field = drawnField(car);
+      const { windshield, windshieldTop, rearGlass } = car.style;
+      const edges = { front: { half: windshield.wTop / 2, z: windshieldTop[1] }, rear: { half: rearGlass.wTop / 2, z: rearGlass.top[1] } };
+      for (const [edge, { half, z }] of Object.entries(edges)) {
+        const g = cageGaps(car, cage, field, { x0: -half, x1: half, z0: z - 0.06, z1: z + 0.02 });
+        t.annotate(`${id} ${edge}: up ${g.worstUp.toFixed(3)} m`);
+        if (g.worstUp > HEADER_OVER_M) wrong.push(`${id} ${edge}: the cage stands ${g.worstUp.toFixed(3)} m over the drawn top (${g.worst})`);
+      }
+      car.dispose();
+    }
+    expect(wrong).toEqual([]);
+  });
+});
+
 /** The head-on speeds (km/h) the nose-wrapped hoods are read at: the drawn lid's front, which the crash puts at another place against the 5 cm lattice at each. */
 const HOOD_SPEEDS = [40, 44, 48, 50, 52];
 
