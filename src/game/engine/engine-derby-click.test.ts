@@ -112,18 +112,28 @@ describe("given the real engine in a running derby, and a canvas that carries po
     camera.lookAt(look);
     frameCamera();
     const spots = engine["live"]().map((_, i) => screenSpot(i));
-    const index = spots.findIndex((s) => s !== null);
-    const spot = spots[index]!;
-    // The nearest pixel to the car's centre, 6-20 px out, that crosses no hull (3% of the canvas width is 24 px).
+    /** The nearest pixel to car `index`'s centre, 6-20 px out, that crosses no hull and stands 24 px (3% of the canvas width) or more from every other car's centre. */
+    const offHullOf = (index: number, spot: { x: number; y: number }): { x: number; y: number } | null => {
+      for (let r = 6; r <= 20; r += 2) {
+        for (let a = 0; a < 360; a += 15) {
+          const x = spot.x + r * Math.cos((a * Math.PI) / 180);
+          const y = spot.y + r * Math.sin((a * Math.PI) / 180);
+          if (!onHull(x, y) && !spots.some((o, i) => i !== index && o && Math.hypot(o.x - x, o.y - y) < 24)) return { x, y };
+        }
+      }
+      return null;
+    };
+    // The first car on screen with such a pixel: the layout is random, and a car with another a few pixels from it has none.
+    let index = -1;
     let off: { x: number; y: number } | null = null;
-    for (let r = 6; r <= 20 && !off; r += 2) {
-      for (let a = 0; a < 360 && !off; a += 15) {
-        const x = spot.x + r * Math.cos((a * Math.PI) / 180);
-        const y = spot.y + r * Math.sin((a * Math.PI) / 180);
-        if (!onHull(x, y) && !spots.some((o, i) => i !== index && o && Math.hypot(o.x - x, o.y - y) < 24)) off = { x, y };
+    for (const [i, spot] of spots.entries()) {
+      off = spot && offHullOf(i, spot);
+      if (off) {
+        index = i;
+        break;
       }
     }
-    must(off, "a pixel just off the hull exists");
+    must(off, "a pixel just off a hull exists");
     expect(engine["carAt"](off.x, off.y), "a miss within 3% of the width follows the nearest car").toBe(index);
     let far: { x: number; y: number } | null = null;
     for (let x = 10; x < CANVAS_W && !far; x += 20) {
