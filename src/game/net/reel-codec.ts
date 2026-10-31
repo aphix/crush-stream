@@ -537,9 +537,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 188: the cage (a car's contact shape) refits when a cluster map or a cage corner has changed enough to move one of its vertices more than 1 cm, not only when a mass or hub has moved that far (`movedSince`): a wreck whose maps kept turning while its masses stood rested on a cage up to 8 cm off its drawn body; a clip of 187 or before no longer reads.
  * 189: traffic waits for crossing traffic at junctions, stops for any car in its path (one facing it included), backs up for room before it edges round a stopped car, and steers and corners on its class's turn and tyre grip; a wrecked traffic car stops; racers yield to traffic crossing their way and keep to their own half round a blind bend only with traffic on the course; the contact guard acts from 0.1 m/s (`ARM_CLOSING` / 2), so a clean driver meets no car closing fast enough to arm a crash; the stall rule, not the still rule, resets a still AI racer in a reset race; so a replayed race's traffic and racers move differently; a clip of 188 or before no longer reads.
  * 190: Survival hunters and race police read the tyre and surface grip under them as racers do (shared turnRate/arcSpeed/tyreHold/brakeOver): steering lock, the pack guard's yaw cap and a hunter's arc speed change off pavement and wherever a class's turn differs from 1.5; Survival's pack recalls a crashed cop as a wrecked one and a drop-in replaces it, so a replayed Survival pack or race police moves differently; a clip of 189 or before no longer reads.
+ * 191: a squeezed wreck's body seats on its cell's rest, where its clamp measures the cell from (`seatOffset`), not on the rest plus its earlier hits' damage: a dented, squeezed wreck whose seat stood past the squeeze's length cap walked its body 1 m/s through its own masses while it rode it, bent its shape by up to 1.2 m with no contact, and the next contact's shape match pulled it back 0.4 m a slice (a derby wreck's 10 cm zip); a clip of 190 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 190;
+const REPLAY_VERSION = 191;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
