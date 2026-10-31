@@ -17,8 +17,8 @@ import { ClipSim } from "./engine-replay.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { applyScratch, PaintScratches } from "../present/paint-scratch.ts";
-import { wearTexels } from "../present/paint-scratch.test-util.ts";
+import { applyScratch, DENT_REBUILD_S, PaintScratches } from "../present/paint-scratch.ts";
+import { channelTexels, scratchTexels } from "../present/paint-scratch.test-util.ts";
 
 /**
  * A head-on makes the clip; one of its cars carries scratches from before the run and nothing else until it crashes, after the clip's
@@ -50,12 +50,25 @@ const strokesOf = (car: DeformableCar) => [car.scratches.count, ...car.scratches
 const sliding = (track: readonly number[]) => track.some((v, i) => i % TRACK_FACE === 0 && v !== 0);
 /** A car's pose: position and orientation. */
 const poseOf = (car: DeformableCar) => [...car.group.position.toArray(), ...car.group.quaternion.toArray()];
+/** The viewer that draws the head-on cars' dents, live and replayed: one clock, so each draw is a whole throttle (`DENT_REBUILD_S`) after the last. */
+const dentView = new PaintScratches();
+/** The dents (G) `dentView` draws of each of `shown` as it stands: skinned as a frame skins it, then its mask redrawn. */
+function dentsOf(shown: readonly DeformableCar[]): number[][] {
+  return shown.map((car) => {
+    applyScratch(car);
+    car.updateSkin();
+    dentView.frame([car], DENT_REBUILD_S);
+    return channelTexels(car, 1);
+  });
+}
 
 interface Recorded {
   clip: HighlightClip;
   cars: DeformableCar[];
   /** After each live step: every pair's grinder's and parked car's strokes, poses and trackers, and the head-on car's pose and strokes and whether it carries solver state. */
   trace: { strokes: number[][]; poses: number[][]; tracks: number[][]; marked: number[]; markedStrokes: number[]; markedSolver: boolean }[];
+  /** After each of the steps the run was asked to read dents at: the head-on cars' (`dentsOf`). */
+  dents: number[][][];
   dress: (car: DeformableCar) => void;
 }
 
@@ -85,8 +98,8 @@ function cast(): { cars: DeformableCar[]; dress: (car: DeformableCar) => void } 
   return { cars, dress };
 }
 
-/** The run, each grinder `k` set off `leads[k]` steps before `keyStep` (-1 while it is not known: a first pass finds it): its velocity set, not a spawn, which a recorder files as a placement. */
-function record(keyStep: number, leads: readonly number[]): Recorded {
+/** The run, each grinder `k` set off `leads[k]` steps before `keyStep` (-1 while it is not known: a first pass finds it): its velocity set, not a spawn, which a recorder files as a placement. The head-on cars' dents are read after each step of `dentSteps`. */
+function record(keyStep: number, leads: readonly number[], dentSteps: readonly number[] = []): Recorded {
   const { cars, dress } = cast();
   const rec = new CrashRecorder({ recall: (_i, out) => out.set([-1]), knocks: () => new Uint8Array(16) });
   rec.begin("flat", HANDLING.realism, false, cars.length, (i) => `c${i}`, 1);
@@ -95,6 +108,7 @@ function record(keyStep: number, leads: readonly number[]): Recorded {
   world.partTouch = (a, b) => rec.touch(a, b);
   world.partMet = (own, top) => rec.partMet(own, top);
   const trace: Recorded["trace"] = [];
+  const dents: Recorded["dents"] = [];
   const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
   const pair = (of: (car: DeformableCar) => number[]) => Array.from({ length: PAIRS }, (_, k) => [of(cars[grinderOf(k)]!), of(cars[groundOf(k)]!)]).flat();
   const a = cars[A]!;
@@ -121,13 +135,14 @@ function record(keyStep: number, leads: readonly number[]): Recorded {
       markedStrokes: strokesOf(a),
       markedSolver: a.crashed || a.hasLoosePart() || a.deform.loadCrushed(),
     });
+    if (dentSteps.includes(s)) dents.push(dentsOf([cars[A]!, cars[B]!]));
   }
   rec.end();
   const kept = rec.ledger.kept[0];
   expect(kept, "the head-on's clip").toBeDefined();
   const w = new Writer(clipBytes(kept!));
   writeClip(w, kept!);
-  return { clip: readClip(new Reader().reset(w.done()), carLayout(cars[0]!)), cars, trace, dress };
+  return { clip: readClip(new Reader().reset(w.done()), carLayout(cars[0]!)), cars, trace, dents, dress };
 }
 
 /** Steps from pair `k`'s set-off (step `setOff` of `trace`) that put the keyframe in the middle of its sliders' longest open scratch episode. */
@@ -155,7 +170,9 @@ const first = record(-1, PROBE_LEADS);
 const keyStep = Math.round(first.clip.t0 / H);
 const probe = record(keyStep, PROBE_LEADS);
 const leads = PROBE_LEADS.map((lead, k) => episodeLead(probe.trace, k, keyStep - lead) ?? lead);
-const { clip, cars, trace, dress } = record(keyStep, leads);
+/** The live steps the head-on cars' dents are read after: the clip's first step's start and its last step (its length the probe's, which the replay checks). */
+const dentSteps = [keyStep - 1, keyStep + probe.clip.h.length - 1];
+const { clip, cars, trace, dents, dress } = record(keyStep, leads, dentSteps);
 /** The sideswiping cars, in `trace.strokes` order. */
 const sliders = PROBE_LEADS.flatMap((_, k) => [grinderOf(k), groundOf(k)]);
 
@@ -182,34 +199,47 @@ describe("given a head-on's clip whose keyframe falls mid-sideswipe beside the h
     for (const [slot, i] of shown) expect(firstMismatch(strokesOf(cars[slot]!), last.strokes[i]!), `car ${slot} at the clip's end`).toBeUndefined();
   });
 
-  it("when the clip is replayed over masks drawn at the end of the live run, then each scratched car's wear mask is the one its keyframe strokes draw at the clip's first step, and its live strokes' at the last", () => {
+  it("when the clip is replayed over masks drawn at the end of the live run, then each scratched car's wear mask scratches (R) are the ones its keyframe strokes draw at the clip's first step, and its live strokes' at the last", () => {
     const drawn = [A, ...sliders.filter((slot) => clip.cars.some((c) => c.slot === slot))].map((slot) => cars[slot]!);
     const strokesAt = (row: Recorded["trace"][number], car: DeformableCar) => (car === cars[A] ? row.markedStrokes : row.strokes[sliders.indexOf(cars.indexOf(car))]!);
     const end = trace.at(-1)!;
     const ref = new DeformableCar({ body: 0x808080, accent: 0, name: "ref" }, new THREE.Scene(), null, "sedan");
     const refView = new PaintScratches();
     applyScratch(ref);
-    /** The mask a fresh viewer draws from `strokes` (count, then bytes). */
+    /** The scratches a fresh viewer draws from `strokes` (count, then bytes). */
     const maskOf = (strokes: number[]) => {
       ref.scratches.load(Uint8Array.from(strokes.slice(1)), strokes[0]!);
-      refView.frame([ref]);
-      return Array.from(wearTexels(ref));
+      refView.frame([ref], H);
+      return scratchTexels(ref);
     };
     const view = new PaintScratches();
     for (const car of drawn) {
       applyScratch(car);
       car.scratches.load(Uint8Array.from(strokesAt(end, car).slice(1)), strokesAt(end, car)[0]!);
     }
-    view.frame(drawn);
+    view.frame(drawn, H);
     const sim = new ClipSim(clip, clip.cars.map((c) => cars[c.slot]!), { dress, collide: () => {}, blend: new PoseBlend() });
     sim.restart();
-    view.frame(drawn);
+    view.frame(drawn, H);
     const atKey = trace[keyStep - 1]!;
     expect(drawn.some((car) => strokesAt(end, car)[0]! > strokesAt(atKey, car)[0]!), "the control: a car had more strokes at the run's end than at the keyframe").toBe(true);
-    for (const car of drawn) expect(firstMismatch(Array.from(wearTexels(car)), maskOf(strokesAt(atKey, car))), `${car.paint.name}'s mask at the clip's start`).toBeUndefined();
+    for (const car of drawn) expect(firstMismatch(scratchTexels(car), maskOf(strokesAt(atKey, car))), `${car.paint.name}'s scratches at the clip's start`).toBeUndefined();
     while (!sim.done) sim.advanceTo(sim.time + 1e-6);
-    view.frame(drawn);
+    view.frame(drawn, H);
     const last = trace[keyStep + sim.step - 1]!;
-    for (const car of drawn) expect(firstMismatch(Array.from(wearTexels(car)), maskOf(strokesAt(last, car))), `${car.paint.name}'s mask at the clip's end`).toBeUndefined();
+    for (const car of drawn) expect(firstMismatch(scratchTexels(car), maskOf(strokesAt(last, car))), `${car.paint.name}'s scratches at the clip's end`).toBeUndefined();
+  });
+
+  it("when the clip is replayed, then the head-on cars' dents (G) are the live ones at its first step and at its last", () => {
+    const shown = [cars[A]!, cars[B]!];
+    expect(dents[1]!.some((g) => g.some((v) => v > 0)), "the control: the head-on cars are dented at the clip's end").toBe(true);
+    const sim = new ClipSim(clip, clip.cars.map((c) => cars[c.slot]!), { dress, collide: () => {}, blend: new PoseBlend() });
+    sim.restart();
+    const start = dentsOf(shown);
+    for (const [i, car] of shown.entries()) expect(firstMismatch(start[i], dents[0]![i]!), `${car.paint.name}'s dents at the clip's start`).toBeUndefined();
+    while (!sim.done) sim.advanceTo(sim.time + 1e-6);
+    expect(keyStep + sim.step - 1, "the control: the live dents were read at the clip's last step").toBe(dentSteps[1]);
+    const end = dentsOf(shown);
+    for (const [i, car] of shown.entries()) expect(firstMismatch(end[i], dents[1]![i]!), `${car.paint.name}'s dents at the clip's end`).toBeUndefined();
   });
 });

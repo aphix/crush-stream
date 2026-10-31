@@ -32,7 +32,7 @@ import { carLayout, readCarPose } from "./car-pose.ts";
 import { tyreClearance } from "../vehicle/tyre-clearance.test-util.ts";
 import { drawnTriangles } from "../vehicle/drawn-body.test-util.ts";
 import { applyScratch, PaintScratches } from "../present/paint-scratch.ts";
-import { wearTexels } from "../present/paint-scratch.test-util.ts";
+import { channelTexels, wearTexels } from "../present/paint-scratch.test-util.ts";
 import { drawSnapshots } from "./net-view.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { SCRAPE_MAX } from "../vehicle/paint-scrapes.ts";
@@ -47,6 +47,8 @@ function simSkin(car: DeformableCar): ArrayLike<number> {
 
 /** The clearance (m) a drawn tyre top keeps under the drawn skin (`tyre-hood.test.ts`). */
 const TYRE_CLEARANCE_M = 0.005;
+/** Steps of 255 a dent texel may differ between peers: the client's skin is the host's within 2 mm (the wire's quantization), 6.4 steps of `DENT_FULL`. */
+const DENT_WIRE_STEPS = 7;
 
 /** The host car's frame after a trip through the wire (`writeSnapshot` → `readSnapshot`). */
 function wire(host: DeformableCar): CarFrame {
@@ -614,16 +616,39 @@ describe("given a host car whose paint a slide scratched, and nothing else: not 
     const clientView = new PaintScratches();
     applyScratch(host);
     applyScratch(client);
-    hostView.frame([host]);
-    clientView.frame([client]);
+    hostView.frame([host], 1 / FRAME_HZ);
+    clientView.frame([client], 1 / FRAME_HZ);
     expect(wearTexels(host).some((v) => v > 0), "the control: the host's mask is marked").toBe(true);
     expect(firstMismatch(wearTexels(client), wearTexels(host)), "the client's wear mask").toBeUndefined();
     const clientMask = wearTexels(client);
     host.spawnFacing(0, 0, 0, 0);
     drawSnapshots([hostSnapshot(6)], [2], applied, [client], 6, 1 / FRAME_HZ, game, -1);
     expect(client.scratches.count, "repaired on the client").toBe(0);
-    clientView.frame([client]);
+    clientView.frame([client], 1 / FRAME_HZ);
     expect(wearTexels(client).length, "the repaired car samples no mask").toBeLessThan(clientMask.length);
     expect(clientMask.some((v) => v > 0), "its old mask, back in the pool, is clean").toBe(false);
+  });
+});
+
+describe("given a host sedan whose nose hit a wall at 50 km/h, and a client that applies its state from the wire", () => {
+  it("when each peer draws its own wear mask as it draws the car, the host's skin held over its tyres and the client's not, then the client's dents (G) are the host's within a few steps of 255: they need no wire of their own", () => {
+    const host = makeCar();
+    runWall(50, 1, "front", { car: host, after: 1 });
+    host.updateSkin();
+    host.flushDeferredSkin();
+    const client = apply(makeCar(), wire(host));
+    const written = host["bodyTyres"]!["written"];
+    const drawnBody = host.lookMeshes().body.geometry.getAttribute("position").array;
+    expect(firstMismatch(drawnBody, written), "the control: the host draws its body held off its tyres, not as written").toBeDefined();
+    applyScratch(host);
+    applyScratch(client);
+    new PaintScratches().frame([host], 1 / FRAME_HZ);
+    new PaintScratches().frame([client], 1 / FRAME_HZ);
+    const hostDents = channelTexels(host, 1);
+    const clientDents = channelTexels(client, 1);
+    expect(hostDents.some((v) => v > 0), "the control: the host's nose is dented").toBe(true);
+    expect(clientDents.length, "the client draws a mask").toBe(hostDents.length);
+    const worst = hostDents.reduce((m, v, i) => Math.max(m, Math.abs(v - clientDents[i]!)), 0);
+    expect(worst, "the most a texel's dent differs").toBeLessThanOrEqual(DENT_WIRE_STEPS);
   });
 });

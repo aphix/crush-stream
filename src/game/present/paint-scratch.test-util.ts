@@ -28,3 +28,13 @@ export function sampledScratch(material: THREE.Material, p: THREE.Vector3, n: TH
   // Clamped to the edge texel, as the mask wraps.
   return data[(Math.min(height - 1, Math.floor((rect.y + v * rect.w) * height)) * width + Math.min(width - 1, Math.floor((rect.x + u * rect.z) * width))) * 2]!;
 }
+
+/** Car `car`'s wear mask channel `channel` (0 R scratches, 1 G dents), texel by texel. */
+export function channelTexels(car: DeformableCar, channel: 0 | 1): number[] {
+  return Array.from(wearTexels(car)).filter((_, i) => i % 2 === channel);
+}
+
+/** Car `car`'s scratches (R), texel by texel. */
+export function scratchTexels(car: DeformableCar): number[] {
+  return channelTexels(car, 0);
+}

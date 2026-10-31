@@ -13,13 +13,17 @@ import { bootEngine, runSeconds, stubBrowser } from "../engine/engine-headless.t
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { applyScratch, PaintScratches } from "./paint-scratch.ts";
-import { sampledScratch, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
+import { applyScratch, DENT_FLOOR, DENT_REBUILD_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
+import { channelTexels, sampledScratch, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
+import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** Bytes a frame may allocate: one boxed double, as the other allocation rows hold. */
 const FRAME_BOUND_B = 16;
 const FRAMES = 10_000;
+/** Frames a dent allocation read runs, each a full redraw of a crushed nose. */
+const DENT_FRAMES = 300;
 
 /** A hard shove along a car's left flank at each rest point (-0.85, y, z) of `at`, each episode committed and closed: one stroke each. */
 function scraped(car: DeformableCar, at: readonly (readonly [number, number])[]): void {
@@ -47,7 +51,7 @@ describe("given a car with a full stroke list whose list changes before every fr
     for (let i = 0; i < count; i++) {
       list[(i % SCRAPE_MAX) * STROKE_BYTES + SEVERITY]! ^= 1;
       car.scratches.version++;
-      view.frame(cars);
+      view.frame(cars, 1 / FRAME_HZ);
     }
   };
 
@@ -88,7 +92,7 @@ describe("given a pickup whose left flank, flared arches and the recessed panels
   }
   car.scratches.load(bytes, GRIND_ROWS.length);
   applyScratch(car);
-  new PaintScratches().frame([car]);
+  new PaintScratches().frame([car], 1 / FRAME_HZ);
 
   it("when its wear mask is drawn, then the proud paint and the arch lips take the grind and paint recessed 3 cm behind them takes under a third of it", () => {
     const cover = car.scratches.cover;
@@ -117,6 +121,150 @@ describe("given a pickup whose left flank, flared arches and the recessed panels
     expect(Math.min(sums.proud[1]!, sums.lip[1]!, sums.recessed[1]!), `the control: each kind of paint lies under the grind; ${note}`).toBeGreaterThan(20);
     expect(mean("recessed") * 3, note).toBeLessThan(mean("proud"));
     expect(mean("recessed") * 3, note).toBeLessThan(mean("lip"));
+  });
+});
+
+/** A sedan whose nose hit a wall at 50 km/h, its crushed skin drawn. */
+function crushedSedan(): DeformableCar {
+  const car = makeCar();
+  runWall(50, 1, "front", { car, after: 1 });
+  car.updateSkin();
+  car.flushDeferredSkin();
+  return car;
+}
+
+/** G of `car`'s wear mask over `face`, texel by texel; with `share`, only the first share of the face's texels along u. */
+function dentsOn(car: DeformableCar, face: number, share = 1): number[] {
+  const data = wearTexels(car);
+  const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!;
+  const out: number[] = [];
+  for (let y = fy; y < fy + fh; y++) for (let x = fx; x < fx + Math.round(fw * share); x++) out.push(data[(y * CAR_SPRAY.w + x) * 2 + 1]!);
+  return out;
+}
+
+/** A crush step's skin write on `car`'s body. */
+function skinWritten(car: DeformableCar): void {
+  car.lookMeshes().body.geometry.getAttribute("position").needsUpdate = true;
+}
+
+/**
+ * Distinct crease ridges one face of a 50 km/h nose crush may draw: a crush crumples ≤ 0.6 m of a panel into lobes 10-20 cm long
+ * (sheet steel buckling), ≤ 4 folds, and a face shows two crushed panels at most (the roof face the bonnet and the scuttle, the nose
+ * the bumper skin and the grille panel): 8. A crinkle draws one per fold-pattern cell, dozens.
+ */
+const CREASE_RIDGES_MAX = 8;
+/** G at which a texel is on a crease ridge: its crease half drawn past the dulled floor. */
+const RIDGE_G = Math.ceil(255 * (DENT_FLOOR + (1 - DENT_FLOOR) / 2));
+
+/** The 8-connected runs of texels on `face` of `car`'s mask whose G reaches `RIDGE_G`. */
+function creaseRidges(car: DeformableCar, face: number): number {
+  const data = wearTexels(car);
+  const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!;
+  const ridge = (x: number, y: number) => x >= 0 && y >= 0 && x < fw && y < fh && data[((fy + y) * CAR_SPRAY.w + fx + x) * 2 + 1]! >= RIDGE_G;
+  const seen = new Uint8Array(fw * fh);
+  let ridges = 0;
+  for (let s = 0; s < fw * fh; s++) {
+    if (seen[s] || !ridge(s % fw, Math.floor(s / fw))) continue;
+    ridges++;
+    seen[s] = 1;
+    const open = [s];
+    while (open.length > 0) {
+      const p = open.pop()!;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const x = (p % fw) + dx;
+          const y = Math.floor(p / fw) + dy;
+          if (!ridge(x, y) || seen[y * fw + x]) continue;
+          seen[y * fw + x] = 1;
+          open.push(y * fw + x);
+        }
+      }
+    }
+  }
+  return ridges;
+}
+
+describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never crashed, and each one's wear mask drawn", () => {
+  const crushed = crushedSedan();
+  const intact = makeCar();
+  applyScratch(crushed);
+  applyScratch(intact);
+  const view = new PaintScratches();
+  const cars = [crushed, intact];
+  view.frame(cars, 1 / FRAME_HZ);
+  const mask = () => wearOf(crushed.lookMeshes().bodyPaint);
+
+  it("when the masks are drawn, then the crushed car's dents (G) are up on its nose and nowhere on its tail or the rear of its flanks, and the car that never crashed samples no mask", () => {
+    expect(Math.max(...dentsOn(crushed, SPRAY_FACE.front)), "the nose").toBeGreaterThan(0);
+    expect(Math.max(...dentsOn(crushed, SPRAY_FACE.back)), "the tail").toBe(0);
+    for (const flank of [SPRAY_FACE.left, SPRAY_FACE.right]) expect(Math.max(...dentsOn(crushed, flank, 0.4)), `the rear of flank ${flank}`).toBe(0);
+    expect(wearOf(intact.lookMeshes().bodyPaint).image.width, "the intact car's mask").toBe(1);
+  });
+
+  it(`when the masks are drawn, then each face draws at most ${CREASE_RIDGES_MAX} crease ridges, and every texel shaded lies on skin that moved`, () => {
+    const depths = view["depths"];
+    const data = wearTexels(crushed);
+    const shaded = Array.from({ length: CAR_SPRAY.w * CAR_SPRAY.h }, (_, i) => i).filter((i) => data[i * 2 + 1]! > 0);
+    expect(shaded.length, "the control: the nose is shaded").toBeGreaterThan(0);
+    expect(creaseRidges(crushed, SPRAY_FACE.front), "the control: the nose draws a crease").toBeGreaterThan(0);
+    expect(shaded.find((i) => !(depths[i]! > 0)), "a shaded texel whose skin did not move").toBeUndefined();
+    const ridges = CAR_SPRAY.faces.map((_, face) => creaseRidges(crushed, face));
+    expect(Math.max(...ridges), `ridges per face: ${ridges.join(" ")}`).toBeLessThanOrEqual(CREASE_RIDGES_MAX);
+  });
+
+  it("when the crushed car's skin is written again and its dents are redrawn, then its scratches (R) are untouched", () => {
+    // One steel band along the left flank's middle, across the nose's dents.
+    const stroke = new Uint8Array(STROKE_BYTES);
+    stroke[FACE_WIDTH] = SPRAY_FACE.left | (20 << FACE_BITS);
+    stroke[U0] = 40;
+    stroke[U1] = 250;
+    stroke[V0] = 30;
+    stroke[V1] = 30;
+    stroke[SEVERITY] = 255;
+    crushed.scratches.load(stroke, 1);
+    view.frame(cars, DENT_REBUILD_S);
+    const scratches = channelTexels(crushed, 0);
+    const uploads = mask().version;
+    skinWritten(crushed);
+    view.frame(cars, DENT_REBUILD_S);
+    expect(mask().version, "the control: the dents were redrawn").toBeGreaterThan(uploads);
+    expect(scratches.some((v) => v > 0), "the control: the car is scratched").toBe(true);
+    expect(firstMismatch(channelTexels(crushed, 0), scratches), "R").toBeUndefined();
+  });
+
+  it(`when its skin is written every frame for 1 s, then its dents are redrawn at most every ${DENT_REBUILD_S} s`, () => {
+    view.frame(cars, DENT_REBUILD_S);
+    let redraws = 0;
+    for (let i = 0; i < FRAME_HZ; i++) {
+      const uploads = mask().version;
+      skinWritten(crushed);
+      view.frame(cars, 1 / FRAME_HZ);
+      if (mask().version > uploads) redraws++;
+    }
+    expect(redraws, "the control: redrawn").toBeGreaterThan(1);
+    expect(redraws, "redraws in 1 s").toBeLessThanOrEqual(1 / DENT_REBUILD_S + 1);
+  });
+
+  it(`when its skin is written and its dents redrawn every frame, then a frame allocates at most ${FRAME_BOUND_B} B`, () => {
+    // The skin write as the skin makes it: the attribute's version, not a `lookMeshes()` read (its arrays are the row's, not the frame's).
+    const skin = crushed.lookMeshes().body.geometry.getAttribute("position");
+    const frames = (count: number) => {
+      for (let i = 0; i < count; i++) {
+        skin.needsUpdate = true;
+        view.frame(cars, DENT_REBUILD_S);
+      }
+    };
+    const perFrame = untilQuiet(() => allocatedBytes(() => frames(DENT_FRAMES)) / DENT_FRAMES, FRAME_BOUND_B);
+    expect(perFrame, `${perFrame.toFixed(1)} B a frame`).toBeLessThanOrEqual(FRAME_BOUND_B);
+  });
+
+  it("when the crushed car is put on a spot again (repaired) and a frame runs, then it samples no mask, and the mask it handed back is clean", () => {
+    const old = wearTexels(crushed);
+    expect(old.some((v, i) => i % 2 === 1 && v > 0), "the control: dented").toBe(true);
+    crushed.spawnFacing(0, 0, 0, 0);
+    view.frame(cars, 1 / FRAME_HZ);
+    expect(wearOf(crushed.lookMeshes().bodyPaint).image.width, "the repaired car's mask").toBe(1);
+    expect(old.some((v) => v > 0), "its old mask, back in the pool").toBe(false);
   });
 });
 
@@ -153,12 +301,23 @@ describe("given the real engine with its cars on the screen", () => {
     expect(wearOf(other!.lookMeshes().bodyPaint).image.width, "the unscraped car's mask").toBe(1);
   });
 
-  it("when the FX tier goes off and back to minimal, then the scratches go off and come back on", () => {
+  it("when the FX tier goes off, minimal, low and high, then the wear is off, flat, flat, and in relief", () => {
     const paint = engine["live"]()[0]!.lookMeshes().bodyPaint;
-    engine.setFxTier("off");
-    expect(compileHooks(paint).uniforms.scratchTier!.value, "off").toBe(0);
-    engine.setFxTier("minimal");
-    expect(compileHooks(paint).uniforms.scratchTier!.value, "minimal").toBe(1);
+    for (const [tier, share] of [["off", 0], ["minimal", 1], ["low", 1], ["high", 2]] as const) {
+      engine.setFxTier(tier);
+      expect(compileHooks(paint).uniforms.scratchTier!.value, tier).toBe(share);
+    }
+  });
+
+  it("when the wear goes from flat to relief alone, then a car paint compiles the same shader and program key: the relief is no program variant", () => {
+    const paint = engine["live"]()[0]!.lookMeshes().bodyPaint;
+    SCRATCH_TIER.value = 1;
+    const flat = { ...compileHooks(paint), key: paint.customProgramCacheKey() };
+    SCRATCH_TIER.value = 2;
+    const relief = { ...compileHooks(paint), key: paint.customProgramCacheKey() };
+    expect(flat.fragmentShader.includes("dentPerturbedNormal(normal"), "the control: the relief is in the shader").toBe(true);
+    expect(relief.fragmentShader, "the fragment shader").toBe(flat.fragmentShader);
+    expect(relief.key, "the program key").toBe(flat.key);
   });
 
   it("when a fleet car that wears no spray has its left flank scraped and a frame runs, then its paint's program samples the stroke where it lies", () => {
