@@ -337,7 +337,7 @@ export function invInertia(x: THREE.Vector3, q: THREE.Quaternion, qi: THREE.Quat
 }
 
 /** Impulse `_s[S_J]` along unit `dir` at `r` (from the centre of mass) on unit mass `v`, `w`. */
-export function push(v: THREE.Vector3, w: THREE.Vector3, q: THREE.Quaternion, r: THREE.Vector3, dir: THREE.Vector3): void {
+function push(v: THREE.Vector3, w: THREE.Vector3, q: THREE.Quaternion, r: THREE.Vector3, dir: THREE.Vector3): void {
   const j = _s[S_J]!;
   v.addScaledVector(dir, j);
   w.addScaledVector(invInertia(_rn.crossVectors(r, dir), q, _qi, body.invI), j);
