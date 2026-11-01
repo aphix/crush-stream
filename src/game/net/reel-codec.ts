@@ -547,9 +547,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 198: a wreck's own faces never yield to the ground or a wall (a wreck takes no load crush): a wreck landing on its roof or flank no longer records a crush its body never shows and sinks its points into the ground, or has its push off a wall cut short; a clip of 197 or before no longer reads.
  * 199: withdrawn (a squeezed body's set kept its height, and a free shape step took the cloud's net roll out): it went live with four rows red; a clip of 198 or before no longer reads.
  * 200: 199 taken back, the simulation of 198 again; a clip of 199 or before no longer reads.
+ * 201: a squeezed body's mass that strays from its set distance to the cell (a crush springing back, or nearer the cell than a zero or bowed-out set once quiet) is put back on it in plan, its height kept (clampMass), not radially toward the cell: a wing or bumper under the cell no longer climbs toward the cell's height with every spring-back and pull-in; the roof, nearly over the cell, keeps the radial pull; a clip of 200 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 200;
+const REPLAY_VERSION = 201;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
