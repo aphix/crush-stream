@@ -287,12 +287,22 @@ export abstract class DeformHit extends DeformRig {
     const ox = group.position.x;
     const oy = group.position.y;
     const oz = group.position.z;
+    // No baked crush (every intact car, every slice): `offsetByCrush` adds nothing (loadW is finite).
+    let crushed = false;
+    for (let f = 0; f < FACES; f++) crushed ||= this.crushBaked[f] !== 0;
+    // `applyMatrix4` inlined: a group's world matrix is affine (e3 = e7 = e11 = 0, e15 = 1), so its divide by w is by exactly 1.
+    const e = group.matrixWorld.elements;
     for (let i = 0; i < this.masses.length; i++) {
       const m = this.masses[i]!;
       m.local.copy(m.rest);
       this.skinRest[i]!.copy(m.rest);
-      this.offsetByCrush(i, m.local, this.crushBaked);
-      m.world.copy(m.local).applyMatrix4(group.matrixWorld);
+      if (crushed) this.offsetByCrush(i, m.local, this.crushBaked);
+      const lx = m.local.x,
+        ly = m.local.y,
+        lz = m.local.z;
+      m.world.x = e[0]! * lx + e[4]! * ly + e[8]! * lz + e[12]!;
+      m.world.y = e[1]! * lx + e[5]! * ly + e[9]! * lz + e[13]!;
+      m.world.z = e[2]! * lx + e[6]! * ly + e[10]! * lz + e[14]!;
       m.vel.copy(worldVel);
       // v = ω × r, the body's whole rigid field (as `armMasses`): the masses' mean is the velocity `seatVelocity` carries to their centroid.
       const rx = m.world.x - ox;
