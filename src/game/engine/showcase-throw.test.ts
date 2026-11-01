@@ -230,8 +230,9 @@ describe("given a thrown dummy whose mark lies behind a parked car", () => {
 
   it("when he walks into the car's flank and cannot get past, then he keeps his mark until the give-up, takes another then, and keeps that one", () => {
     settle();
+    // Every pick lies out at 28 m, on alternate sides (angle 0.25, then 0.75: x = +28, then -28): a pick that is repeated every frame moves the mark, so "keeps the new one" can fail.
     let draws = 0;
-    engine["showcase"]!["walks"]["random"] = () => (draws++ % 2 === 0 ? 0.999 : 0.25);
+    engine["showcase"]!["walks"]["random"] = () => (draws++ % 2 === 0 ? 0.999 : draws % 4 === 2 ? 0.25 : 0.75);
     const car = engine["showcase"]!.cars[1]!;
     const across = new THREE.Vector3(Math.cos(car.group.rotation.y), 0, -Math.sin(car.group.rotation.y));
     const near = car.group.position.clone().addScaledVector(across, 6);
