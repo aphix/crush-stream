@@ -5,6 +5,9 @@ import { SCRATCH_MIN_SLIP } from "../vehicle/paint-scrapes.ts";
 import { armPairWithRows, rewindRows, wreckCentre, wreckInvI } from "../vehicle/car-air.ts";
 import { invInertia, MU_BODY, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { leftoverCrumple, satPushCap, hypot2, CRASH } from "../deform/physics-util.ts";
+import { CAGE_STEP } from "../vehicle/car-cage.ts";
+import { barReach } from "../deform/deform-rig.ts";
+import { PUSH_BAR_REACH } from "../vehicle/car-materials.ts";
 import { patch, satCars } from "./sat.ts";
 import { bandsMeet, OUTLINE_REACH } from "./cage-outline.ts";
 import { strikeCar, faceDepth, faceExit, carRow, takeRow, moveAsOneBody, bodyHit, type ContactBox } from "./external-contact.ts";
@@ -550,9 +553,19 @@ function momentumAlong(car: DeformableCar, nx: number, nz: number): number {
   return p;
 }
 
-/** How far (m) a car's structure has crushed in the hit that is still on (`crushing`: a contact within the last 0.28 s), 0 for a car with none. */
-function crushedSoFar(d: DeformableCar["deform"]): number {
-  return d.massActive && d.crushing ? d.hitStroke() * d.strokeUsed() : 0;
+/** How far (m) a push bar's box has folded back from its rest reach at its bumper's crush (`barBoxZ`), up to the cage lattice's next step (the outline stands on it): 0 for a car with no bar standing. */
+function barFolded(car: DeformableCar): number {
+  const style = car.cage.style;
+  if (style.barGroup === 0 || !car.panelsFollow || car.cage.fields.panelOn[style.barGroup - 1] === 0) return 0;
+  const d = car.deform;
+  const crush = Math.max(d.massRest("bumperFL").z - d.massLocal("bumperFL").z, d.massRest("bumperFR").z - d.massLocal("bumperFR").z);
+  return Math.ceil((PUSH_BAR_REACH - barReach(PUSH_BAR_REACH, crush)) / CAGE_STEP) * CAGE_STEP;
+}
+
+/** How far (m) a car's front has backed off in the hit that is still on (`crushing`: a contact within the last 0.28 s): its structure's crush and its push bar's fold, 0 for a car with none. */
+function crushedSoFar(car: DeformableCar): number {
+  const d = car.deform;
+  return d.massActive && d.crushing ? d.hitStroke() * d.strokeUsed() + barFolded(car) : 0;
 }
 
 /**
@@ -647,7 +660,7 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // The contact begins before the overlap, as the rigs' does (`strikeCar`): while the bodies are apart by less than the travel the
   // pair closes in this slice, and, once the hit is on, by less than the crush has taken both faces back (a crush that keeps up with
   // the closing leaves the faces apart by what it has eaten: the contact does not end where it works), the hit goes on.
-  const eaten = crushedSoFar(carA.deform) + crushedSoFar(carB.deform);
+  const eaten = crushedSoFar(carA) + crushedSoFar(carB);
   const hit = satCars(carA, carB, _n, _p, hypot2(carA.velocity.x - carB.velocity.x, carA.velocity.z - carB.velocity.z) * dt + eaten);
   const half = patch.half;
   _band.set(patch.low, patch.high);

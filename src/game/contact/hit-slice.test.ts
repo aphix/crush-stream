@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SimPacer } from "../engine/sim-pace.ts";
 import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import { stepWorld } from "../engine/world-step.ts";
+import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { FREEWHEEL, launch, makeWorld, tickWorld } from "./crash-scenarios.test-util.ts";
 import { classCar } from "../vehicle/ejection.test-util.ts";
 import * as THREE from "three";
@@ -143,5 +144,36 @@ describe("given a sedan's nose closing on a parked sedan's right door, read 1 mm
       expect(first, "the sweep never met the contact").toBeGreaterThan(0);
       expect(worst, `the patch's centre moved ${worst.toFixed(4)} m in 1 mm of closing, ${worstAt} mm into the contact`).toBeLessThanOrEqual(PATCH_STEP);
     });
+  }
+});
+
+/** Both cars' speed (m/s) in a tap, and the closing speeds (m/s) the striker catches the other at: a cop's first touch on a runner is a tap, not a crash. A cruiser's push bar folds back as its bumper crushes, so its outline backs off from the other car by that fold as well (the contact reads it, `crushedSoFar`). */
+const TAP_CRUISE = 28;
+const TAPS = [3, 4.4];
+
+/** The slices in which the pair contact reports a hit while a `striker` at `closing` m/s faster than a sedan ahead of it, both on the road, taps its tail. */
+function tapSlices(striker: VehicleClassId, closing: number): number {
+  const s = classCar(striker);
+  const struck = classCar("sedan");
+  launch(struck, 0, 0, Math.PI / 2, TAP_CRUISE, 0);
+  launch(s, -6, 0, Math.PI / 2, TAP_CRUISE + closing, 0);
+  const w = makeWorld([s, struck], false, false, null);
+  let slices = 0;
+  w.world.pairHit = () => void slices++;
+  for (let f = 0; f < FRAME_HZ * 1.5; f++) tickWorld(w);
+  s.dispose();
+  struck.dispose();
+  return slices;
+}
+
+describe("given a car tapping the tail of a sedan 3 and 4.4 m/s slower than itself", () => {
+  for (const closing of TAPS) {
+    for (const striker of ["sedan", "police"] as const) {
+      it(`when a ${striker} taps it at ${closing} m/s, then the pair contact reports the hit`, (t) => {
+        const slices = tapSlices(striker, closing);
+        t.annotate(`${striker} at ${closing} m/s: ${slices} slices of pair contact`);
+        expect(slices, `the pair contact never reported the ${striker}'s tap`).toBeGreaterThan(0);
+      });
+    }
   }
 });

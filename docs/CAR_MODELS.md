@@ -85,6 +85,7 @@ A push bar's box in the cage and its drawn tubes fold back onto its bumper's fac
 (`barReach`): a stated estimate, since no fold stroke or load is published for any police push bar
 (`.extraResearch/perplexity/2026-10-31-push-bar-fold-frontal.md`); its tube and brackets are taken to yield at about a quarter of the crush-can load.
 Both read the crush between the bumper's two corner masses along the car, and the cage's box stands on its bumper's face read at the box's own x, so an offset hit that draws one end of the face back draws that end of the bar with it; a reset puts the drawn bar back at its rest reach.
+The pair contact's reach past the outlines (`crushedSoFar`, how far a car's faces have backed off in the hit) counts the bar's fold as well, rounded up to the cage lattice's step: a cruiser that taps a car at a few m/s folds its bar 9 cm in one slice, and without that reach the outline stood further off than the contact looked, so the tap was only the rows' hit (no pair contact, no push-apart, no highlight touch).
 The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends, and the cage's
 two header boxes (it draws no bars) put their tops on their glass's top edge, front and rear alike. The drawn
 A-pillar is a rounded post along the windshield's edge, 6 cm wide in side view whatever `aPillarFoot` / `aPillarTop` say, its top
