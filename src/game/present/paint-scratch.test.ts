@@ -191,10 +191,13 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
   applyScratch(intact);
   const view = new PaintScratches();
   const cars = [crushed, intact];
-  SCRATCH_TIER.value = 2;
-  view.frame(cars, 1 / FRAME_HZ);
-  const mask = () => wearOf(crushed.lookMeshes().bodyPaint);
+  // In beforeAll, not the describe body: the body runs while the file is collected, before every describe's tests.
+  beforeAll(() => {
+    SCRATCH_TIER.value = 2;
+    view.frame(cars, 1 / FRAME_HZ);
+  });
   afterAll(() => void (SCRATCH_TIER.value = 1));
+  const mask = () => wearOf(crushed.lookMeshes().bodyPaint);
 
   it("when the masks are drawn, then the crushed car's dents (G) are up on its nose and nowhere on its tail or the rear of its flanks, and the car that never crashed samples no mask", () => {
     expect(Math.max(...dentsOn(crushed, SPRAY_FACE.front)), "the nose").toBeGreaterThan(0);
