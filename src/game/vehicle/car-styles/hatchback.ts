@@ -76,7 +76,7 @@ export const HATCHBACK: BodyStyle = {
   bPillar: { rear: -0.27, front: -0.19 },
   belt: { x: 0.75, y: [[-1.174, 0.881], [-0.939, 0.877], [-0.935, 0.856], [0.128, 0.838], [0.381, 0.809], [0.58, 0.824], [0.584, 0.852], [0.88, 0.852]] },
   rocker: { y: 0.2 },
-  arch: { radius: 0.35, lip: { flare: 0.009, width: 0.035 } },
+  arch: { radius: 0.35, lip: { flare: 0.018, width: 0.055 } },
   hood: { z0: 0.86, z1: 1.66, origin: [0.75, 0.84], followGlass: -0.043, calmPan: true },
   bumpers: {
     front: {
@@ -208,8 +208,6 @@ export const HATCHBACK: BodyStyle = {
       { view: "side", points: [[0.6, 0.47], [-0.2, 0.46], [-0.8, 0.45]], width: 0.02, depth: 0.003, profile: "u", cavity: 0 },
       { view: "side", points: [[0.74, 0.25], [-0.1, 0.23], [-0.82, 0.22]], width: 0.02, depth: -0.004, profile: "step", cavity: 0 },
       { view: "side", points: [[1.62, 0.62], [1.35, 0.68], [0.95, 0.75], [0.65, 0.77], [0, 0.78], [-0.6, 0.79], [-1.1, 0.8], [-1.45, 0.81], [-1.62, 0.8]], width: 0.02, depth: 0.003, profile: "u", cavity: 0 },
-      { view: "side", points: [[1.4225, 0.27], [1.381, 0.425], [1.2675, 0.538], [1.1125, 0.58], [0.9575, 0.538], [0.844, 0.425], [0.8025, 0.27]], width: 0.02, depth: 0.006, profile: "u", cavity: 0 },
-      { view: "side", points: [[-0.8025, 0.27], [-0.844, 0.425], [-0.9575, 0.538], [-1.1125, 0.58], [-1.2675, 0.538], [-1.381, 0.425], [-1.4225, 0.27]], width: 0.02, depth: 0.006, profile: "u", cavity: 0 },
       { view: "side", points: [[-1.28, 0.8], [-1.43, 0.8], [-1.43, 0.64], [-1.28, 0.64]], closed: true, width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[0.56, 0.875], [-0.26, 0.875], [-0.89, 0.875], [-1.17, 0.875]], width: 0.015, depth: 0.003, profile: "u", cavity: 0.7 },
       { view: "side", points: [[0.52, 0.875], [0.37, 1.05], [0.22, 1.21], [0, 1.23], [-0.26, 1.23], [-0.26, 0.875]], width: 0.02, depth: 0.003, profile: "u", cavity: 0.7 },

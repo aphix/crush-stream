@@ -19,6 +19,9 @@ const SHARED_LINES: readonly Line[] = [
   { view: "side", points: [[0.71, 0.245], [0.4, 0.25], [0, 0.25], [-0.22, 0.25]], ...GAP },
   { view: "side", points: [[-1.05, 0.95], [-1.086, 0.86], [-1.085, 0.8], [-1.056, 0.75], [-1, 0.66], [-0.94, 0.59], [-0.9, 0.505], [-0.84, 0.4], [-0.795, 0.3], [-0.77, 0.26]], ...GAP },
   { view: "side", points: [[-0.77, 0.255], [-0.5, 0.252], [-0.22, 0.25]], ...GAP },
+  // The front door's cut ends (aperture -0.26 .. 0.74, hinge y 0.57 +- 0.33): the shut lines are grooves in the map as well as the body's own gap.
+  { view: "side", points: [[0.74, 0.27], [0.74, 0.57], [0.74, 0.87]], ...GAP },
+  { view: "side", points: [[-0.26, 0.27], [-0.26, 0.57], [-0.26, 0.87]], ...GAP },
   { view: "side", points: [[1.52, 0.7], [1.37, 0.742], [1.2, 0.786], [1.02, 0.816], [0.84, 0.83], [0.73, 0.835]], ...CREASE },
   // The shoulder along both doors: the reference's highlight peaks at y ~0.82, level from the front door to the rear one (silver-sedan-1.png,
   // 70.1 px/m), 8 cm under the glass; it meets the front fender's crease at the door's front edge and the quarter's behind the rear door.
@@ -28,8 +31,6 @@ const SHARED_LINES: readonly Line[] = [
   // The lower doors' character line: the reference's crisp highlight along both doors at y ~0.37-0.42 (silver-sedan-1.png, from the front
   // handle's 0.762), the side turning under below it; a step 6 mm in so it reads at the iso's distance (3 mm did not).
   { view: "side", points: [[0.72, 0.405], [0.4, 0.395], [0, 0.385], [-0.22, 0.385], [-0.5, 0.385], [-0.75, 0.39]], ...CREASE, profile: "step", depth: -0.006 },
-  { view: "side", points: [[1.61, 0.16], [1.605, 0.335], [1.593, 0.427], [1.557, 0.513], [1.501, 0.586], [1.428, 0.642], [1.342, 0.678], [1.25, 0.69], [1.158, 0.678], [1.073, 0.642], [0.999, 0.586], [0.943, 0.513], [0.907, 0.427], [0.895, 0.335], [0.89, 0.16]], ...CREASE },
-  { view: "side", points: [[-0.89, 0.16], [-0.895, 0.335], [-0.907, 0.427], [-0.943, 0.513], [-0.999, 0.586], [-1.073, 0.642], [-1.158, 0.678], [-1.25, 0.69], [-1.342, 0.678], [-1.428, 0.642], [-1.501, 0.586], [-1.557, 0.513], [-1.593, 0.427], [-1.605, 0.335], [-1.61, 0.16]], ...CREASE },
   { view: "top", points: [[0.28, 0.52], [0.1, 0.505], [-0.2, 0.5], [-0.5, 0.495], [-0.8, 0.495], [-1, 0.495], [-1.1, 0.49]], ...CREASE, depth: -0.003 },
   { view: "side", points: [[0.66, 0.885], [0.6, 0.93], [0.52, 0.985], [0.43, 1.04], [0.32, 1.1], [0.21, 1.16], [0.1, 1.2], [0, 1.225], [-0.12, 1.235], [-0.285, 1.24], [-0.4, 1.24], [-0.67, 1.235], [-0.885, 1.2], [-1, 1.18], [-1.12, 1.13], [-1.205, 1.085], [-1.26, 1.045]], ...SEAL },
   { view: "side", points: [[0.66, 0.885], [0.4, 0.895], [0, 0.905], [-0.22, 0.915], [-0.5, 0.93], [-0.9, 0.945], [-1.02, 0.965], [-1.12, 0.99], [-1.2, 1.02], [-1.26, 1.045]], ...SEAL },

@@ -4658,7 +4658,7 @@ describe("given every style's doors and the shared door card", () => {
     return [...outerAt].map(([y, x]) => ({ x, y })).sort((a, b) => b.y - a.y);
   };
 
-  it("when a door skin is built, then its face meets the drawn body side (its ring's chords over the ring rows it carries, the side's curve past them) at both cut ends (hinge and latch slices: a shut line, not a step) and stands its style's proud (3 mm unless the style sets its own) 2 cm inside them", () => {
+  it("when a door skin is built, then its face meets the drawn body side (its ring's chords over the ring rows it carries, the side's curve past them) at both cut ends (hinge and latch slices: a shut line, not a step) and stands its style's proud (2 mm unless the style sets its own) 2 cm inside them", () => {
     /** The face's stand-off (m) over the body side at a cut end, and 2 cm inside it (null: the style's `door.proud`, else `DOOR_PROUD`). */
     const WANT = [[0, 0], [0.02, null]] as const;
     /** Rows this near (m) the skin's top or bottom roll over its edge: left out. */
@@ -4686,7 +4686,7 @@ describe("given every style's doors and the shared door card", () => {
             const body = sideX(p.y, sl.hw, sl.yBelt, rockerAt(zCar, style), crestDrop) + drawnSideX(zCar, held, style) - sideX(held, sl.hw, sl.yBelt, rockerAt(zCar, style), crestDrop);
             proud = Math.max(proud, p.x - body);
           }
-          const stand = want ?? d.proud ?? 0.003;
+          const stand = want ?? d.proud ?? 0.002;
           expect(Math.abs(proud - stand), `${id}: ${inside * 100} cm inside the ${end > 0 ? "hinge" : "latch"} end the skin stands ${proud * 1000} mm proud, want ${stand * 1000}`).toBeLessThan(1e-5);
         }
       }

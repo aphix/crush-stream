@@ -84,6 +84,8 @@ export const POLICE: BodyStyle = {
   details: POLICE_DETAILS,
   /** The cruiser's mirrors are black plastic: a body-colour cap would take the white door paint. */
   door: { ...SEDAN.door, mirror: { ...SEDAN_MIRROR, finish: "black" } },
+  /** The cruiser's arches wear a black rim in both references, 3 cm past the lip's toe (it shows on the white quarter). */
+  arch: { ...SEDAN.arch, lip: { ...SEDAN.arch.lip!, cladding: 0.03 } },
   /**
    * The cruiser's bumpers are black plastic, front and rear (both references). The sedan's seams frame its own lamps; the cop's sit lower,
    * inside its bumper corners, so its bumpers draw no seam of the sedan's, and no diffuser band on the black. Its plate sits on the lid's

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { once } from "../kernel/scalar.ts";
-import { depthCode, PERSON_SPRAY, type SpraySurface } from "../match/look-data.ts";
+import { DEPTH_STEPS, depthCode, PERSON_SPRAY, SPRAY_FINE_STEPS, SPRAY_PART_RANGE, type SpraySurface } from "../match/look-data.ts";
 import { carSprayLayout, SPRAY_FACE, sprayPlace, type SprayLayout } from "../vehicle/spray-box.ts";
 import { BONES_ATTRIBUTE } from "./dummy-rig.ts";
 import { PARTS } from "./ragdoll-body.ts";
@@ -18,7 +18,7 @@ import { dummyGeometry } from "./dummy-skin.ts";
 const EDGE_SLACK = 0.1;
 /** A car's depth map: `CAR_SPRAY`'s faces at 4x its side (5 mm texels on the flanks), so a door's jamb under its outline is told from the belt beside it. */
 const CAR_DEPTH = carSprayLayout(1024);
-/** A car's band (m): over half an end face's depth step (4.7 m / 254), under the 13 mm a door's seam lies inboard of its skin. */
+/** A car's band (m): over half an end face's depth step (4.7 m / 254), under the 12 mm a door's seam lies inboard of its skin (a 2 mm skin over a 10 mm groove). */
 export const CAR_SPRAY_DEPTH_BAND = 0.01;
 /** A gap in the covers seen from above narrower than twice this (texels) is closed: the 1-3 cm slot between a door's skin and its glass, over the sill. */
 const GAP_CLOSE = 3;
@@ -31,7 +31,7 @@ export type RestTriangles = { readonly positions: ArrayLike<number>; readonly in
 export type SprayCover = { readonly triangles: readonly RestTriangles[]; readonly flat: boolean };
 
 type Rect = readonly [number, number, number, number];
-type Triangle = { readonly corner: readonly [Float64Array, Float64Array, Float64Array]; readonly depth: readonly [number, number, number]; readonly part: number };
+type Triangle = { readonly corner: readonly [Float64Array, Float64Array, Float64Array]; readonly depth: readonly [number, number, number]; readonly part: number; readonly fine: boolean };
 
 /** The part (a `PARTS` index + 1) vertex `vertex` of the dummy rides: the bone it is weighted to most. */
 export function personSprayPartOf(vertex: number): number {
@@ -53,7 +53,8 @@ function buildPersonSpraySurface(): SpraySurface {
 /**
  * Per texel of `layout`'s faces, the depth (`depthCode`) and part (`partOf` its triangle's first vertex) of the outermost of the triangles
  * `index` of the vertices `rest` (xyz each); 0 where none is. Not `exact` (the dummy's), a triangle covers `EDGE_SLACK` past its edges
- * and a bare texel beside a surface takes it; `exact` (a car's covers), a texel is covered only where its centre is.
+ * and a bare texel beside a surface takes it; `exact` (a car's covers), a texel is covered only where its centre is, and its part byte carries
+ * the depth's remainder within its step too (`SPRAY_FINE_STEPS`).
  */
 function spraySurfaceOf(layout: SprayLayout, rest: ArrayLike<number>, index: ArrayLike<number>, partOf: (vertex: number) => number, exact = false): SpraySurface {
   const { w, h } = layout;
@@ -70,7 +71,7 @@ function spraySurfaceOf(layout: SprayLayout, rest: ArrayLike<number>, index: Arr
         corner[c]![0] = fx + corner[c]![0]! * fw;
         corner[c]![1] = fy + corner[c]![1]! * fh;
       }
-      rasterise(surface, w, rect, { corner, depth, part: partOf(index[t]!) }, exact ? 0 : EDGE_SLACK);
+      rasterise(surface, w, rect, { corner, depth, part: partOf(index[t]!), fine: exact }, exact ? 0 : EDGE_SLACK);
     }
     if (!exact) spreadToBareNeighbours(surface, w, rect);
   }
@@ -78,7 +79,7 @@ function spraySurfaceOf(layout: SprayLayout, rest: ArrayLike<number>, index: Arr
 }
 
 /** The triangle's texels of `rect` into `surface`, keeping the outer surface where two overlap. */
-function rasterise(surface: SpraySurface, width: number, rect: Rect, { corner, depth, part }: Triangle, slack: number): void {
+function rasterise(surface: SpraySurface, width: number, rect: Rect, { corner, depth, part, fine }: Triangle, slack: number): void {
   const [fx, fy, fw, fh] = rect;
   const [a, b, c] = corner;
   const area = (b[0]! - a[0]!) * (c[1]! - a[1]!) - (c[0]! - a[0]!) * (b[1]! - a[1]!);
@@ -97,10 +98,20 @@ function rasterise(surface: SpraySurface, width: number, rect: Rect, { corner, d
       const wc = ((b[0]! - a[0]!) * (py - a[1]!) - (px - a[0]!) * (b[1]! - a[1]!)) / area;
       const wa = 1 - wb - wc;
       if (wa < -slack || wb < -slack || wc < -slack) continue;
-      const code = depthCode(Math.min(outermost, Math.max(nearest, wa * depth[0] + wb * depth[1] + wc * depth[2])));
-      if (code <= surface.depth[y * width + x]!) continue;
-      surface.depth[y * width + x] = code;
-      surface.part[y * width + x] = part;
+      const place = Math.min(outermost, Math.max(nearest, wa * depth[0] + wb * depth[1] + wc * depth[2]));
+      const code = depthCode(place);
+      const at = y * width + x;
+      if (!fine) {
+        if (code <= surface.depth[at]!) continue;
+        surface.depth[at] = code;
+        surface.part[at] = part;
+        continue;
+      }
+      // The remainder within the step, 0..SPRAY_FINE_STEPS, above the part's low bits (`SPRAY_PART_RANGE`): a cover's outer one wins by code, then by remainder.
+      const remainder = Math.round((place * DEPTH_STEPS - Math.round(place * DEPTH_STEPS) + 0.5) * SPRAY_FINE_STEPS);
+      if (code * (SPRAY_FINE_STEPS + 1) + remainder <= surface.depth[at]! * (SPRAY_FINE_STEPS + 1) + Math.floor(surface.part[at]! / SPRAY_PART_RANGE)) continue;
+      surface.depth[at] = code;
+      surface.part[at] = part + remainder * SPRAY_PART_RANGE;
     }
   }
 }

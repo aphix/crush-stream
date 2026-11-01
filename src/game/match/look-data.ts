@@ -29,8 +29,19 @@ export const PERSON_SPRAY = gridLayout(SPRAY_SIDE, [-0.4, 0, -0.25], [0.4, 1.85,
   [40, 0, 40, 92],
 ]);
 
-/** A depth map's byte for `depth` (0..1 along the face's axis); 0 is a texel with no surface, so a map texel is 1..255. The shader's `sprayDepth` decodes it: `(code - 1) / 254`. */
-export const depthCode = (depth: number): number => Math.round(depth * 254) + 1;
+/** The steps a depth map's byte holds along a face's axis (its codes are 1..255). */
+export const DEPTH_STEPS = 254;
+
+/** A depth map's byte for `depth` (0..1 along the face's axis); 0 is a texel with no surface, so a map texel is 1..255. The shader's `sprayDepth` decodes it: `(code - 1) / DEPTH_STEPS`. */
+export const depthCode = (depth: number): number => Math.round(depth * DEPTH_STEPS) + 1;
+
+/**
+ * A car's depth map keeps what its 254 steps drop: its second byte is the cover's index (1..4, in the low bits, `SPRAY_PART_RANGE` values)
+ * over the depth's remainder within its step (`SPRAY_FINE_STEPS` + 1 values), so a cover's depth reads to 1/31 of a step (0.24 mm on the flanks)
+ * where the byte alone is off by up to half of it (3.7 mm): a door's seam 12 mm inboard of its skin reads outside the band the skin round it reads in.
+ */
+export const SPRAY_PART_RANGE = 8;
+export const SPRAY_FINE_STEPS = 31;
 
 /** A fragment this much (m) behind its texel's outermost surface is under another surface and takes no paint; also one quantisation step and a 45 degree slope across a texel. */
 export const SPRAY_DEPTH_BAND = 0.02;

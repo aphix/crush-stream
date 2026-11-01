@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { hypot3 } from "../kernel/physics-core.js";
-import { SPRAY_DEPTH_BAND, SPRAY_PALETTE, type SprayPaint, type SpraySurface } from "../match/look-data.ts";
+import { SPRAY_DEPTH_BAND, SPRAY_FINE_STEPS, SPRAY_PALETTE, SPRAY_PART_RANGE, type SprayPaint, type SpraySurface } from "../match/look-data.ts";
 import { SPRAY_FACE, sprayFace, type SprayLayout } from "../vehicle/spray-box.ts";
 
 /**
@@ -209,10 +209,17 @@ vec4 sprayTexel() {
 #ifdef SPRAY_DEPTH
   vec4 cover = texture2D(sprayDepth, st);
   float code = floor(cover.r * 255.0 + 0.5);
-  float under = (code - 1.0) / 254.0 - face.z;
+#ifdef SPRAY_TORN
+  float coverByte = floor(cover.g * 255.0 + 0.5);
+  float coverPart = mod(coverByte, ${SPRAY_PART_RANGE.toFixed(1)});
+  float coverFine = (floor(coverByte / ${SPRAY_PART_RANGE.toFixed(1)}) / ${SPRAY_FINE_STEPS.toFixed(1)} - 0.5) / 254.0;
+#else
+  float coverFine = 0.0;
+#endif
+  float under = (code - 1.0) / 254.0 + coverFine - face.z;
   bool hidden = code > 0.0 && under > sprayBand / face.w;
 #ifdef SPRAY_TORN
-  hidden = hidden && dot(sprayTorn, vec4(equal(vec4(floor(cover.g * 255.0 + 0.5)), vec4(1.0, 2.0, 3.0, 4.0)))) > 0.5;
+  hidden = hidden && dot(sprayTorn, vec4(equal(vec4(coverPart), vec4(1.0, 2.0, 3.0, 4.0)))) > 0.5;
 #endif
   if (hidden) return vec4(0.0);
 #endif

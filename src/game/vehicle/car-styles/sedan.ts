@@ -146,7 +146,7 @@ export const SEDAN: BodyStyle = {
   },
   rocker: { y: 0.21 },
   /** The wheel opening about its hub as the reference's (.371, its top at .685); the lip overhangs it 1.5 cm so the dark well shows a thin gap. */
-  arch: { radius: 0.375, lip: { flare: 0.008, width: 0.035, inset: 0.015 }, feet: true },
+  arch: { radius: 0.375, lip: { flare: 0.01, width: 0.04, inset: 0.015 }, feet: true },
   /** The flank under the feature line lifts onto the front arch's flare hardest over z 1.39-1.58, between 9-10 cm stations: split those two gaps. */
   ringSplit: [1.4, 1.57],
   /** The front door's cut is bare sill under its skin: its rings pay for the arches' straight legs (`arch.feet`). */

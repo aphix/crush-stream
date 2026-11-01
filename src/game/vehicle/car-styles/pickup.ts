@@ -97,7 +97,7 @@ export const PICKUP: BodyStyle = {
   // The regular cab's door runs back to the side plate's seam; its glass ends at the plate's -0.29 / -0.265 behind a slim 4 cm post band; the C-post's foot meets the cab-back shoulder, as the hatchback's.
   // The A-post's face is rounder than the default (owner: a slab, not a post): its edge normals fan 45°, not 27°, from the side glass to the windshield.
   pillars: { aCrown: 0.25, b: { z: [-0.31, -0.275], width: [0.04, 0.04] }, rearFoot: [0.718, 1.173] },
-  arch: { radius: 0.46, lip: { flare: 0.024, width: 0.065, square: true } },
+  arch: { radius: 0.46, lip: { flare: 0.024, width: 0.07, square: true } },
   hood: { z0: 1.03, z1: 1.92, origin: [1.2, 1.01], nose: [0.034, 0.02] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.55, z: 1.88 }, span: 0.73, wrap: { from: 0.55, back: 0.12 }, fascia: TRUCK_FRONT_FASCIA, trim: "chrome", band: [0.41, 0.51] },
@@ -153,6 +153,7 @@ export const PICKUP: BodyStyle = {
     lines: [
       { view: "side", points: [[0.706, 1.128], [0.699, 0.461]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[0.699, 0.462], [-0.374, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.38, 1.1], [-0.38, 0.78], [-0.38, 0.47]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.388, 0.462], [-0.556, 0.462]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
       { view: "side", points: [[-0.592, 1.142], [-0.599, 0.446]], width: 0.025, depth: -0.006, profile: "v", cavity: 0.95 },
       { view: "side", points: [[0.627, 1.121], [-0.342, 1.121]], width: 0.021, depth: 0.002, profile: "u", cavity: 0.1 },
@@ -192,6 +193,8 @@ export const PICKUP: BodyStyle = {
     ],
     patches: [
       ...DOOR_PULL.patches,
+      // The bed floor sits in the walls' shade in the reference: a dull dark floor under the ribs, not a bright clear-coated plate.
+      { view: "top", points: [[-0.707, 0], [-2.041, 0], [-2.041, 0.5], [-0.707, 0.5]], depth: 0, rim: 0.025, cavity: 0.45 },
       { view: "side", points: [[0.841, 0.891], [0.777, 0.891], [0.777, 0.863], [0.841, 0.863]], depth: -0.002, rim: 0.003, cavity: 0.3 },
       { view: "front", points: [[0.15, 0.42], [0.35, 0.42], [0.35, 0.48], [0.15, 0.48]], depth: -0.005, rim: 0.004, cavity: 0.7 },
       { view: "front", points: [[0.62, 0.43], [0.7, 0.43], [0.7, 0.49], [0.62, 0.49]], depth: -0.004, rim: 0.003, cavity: 0.6 },

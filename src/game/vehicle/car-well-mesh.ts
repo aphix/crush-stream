@@ -195,6 +195,8 @@ const LIP_ROLL = 0.01;
 const LIP_RETURN = 0.035;
 /** A box flare's face steps out over its outer `STEP` (m). */
 const LIP_STEP = 0.016;
+/** The lip's crown stands this share of its width out from the opening's edge. */
+const LIP_CROWN_SHARE = 0.1;
 
 /**
  * The lip's section (m) as [out from the opening's edge, off the skin, primer tone]: its toe faired into the skin (a `stepped` face
@@ -202,7 +204,7 @@ const LIP_STEP = 0.016;
  * as the well (`WELL_PANEL`) from the roll's underside so the edge reads over a dark gap.
  */
 function lipSection(flare: number, width: number, stepped: boolean): (readonly [number, number, number])[] {
-  const crown = 0.1 * width;
+  const crown = LIP_CROWN_SHARE * width;
   const section: (readonly [number, number, number])[] = stepped
     ? [
         [width, -LIP_SINK, 0],
@@ -251,7 +253,7 @@ function skinX(loft: THREE.BufferGeometry, side: number, y: number, z: number): 
 }
 
 /** A lip's stations round the opening of the wheel at (`wy`, `wz`): [z, y] on its edge and the outward unit [uz, uy] there, rear foot to front foot (its crown `arch.rise` × radius over the hub). */
-function lipPath(style: BodyStyle, wy: number, wz: number, square: boolean): [number, number, number, number][] {
+export function lipPath(style: BodyStyle, wy: number, wz: number, square: boolean): [number, number, number, number][] {
   const r = style.arch.radius;
   const rise = style.arch.rise ?? 1;
   const foot = (sign: number) => rockerAt(wz + sign * r, style);

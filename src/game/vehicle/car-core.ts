@@ -635,7 +635,8 @@ export abstract class CarCore {
     this.restCaster = this.styleRestCaster();
     this.addLamps();
 
-    const seatX = mirrorSeatX(this.style);
+    // The cage stand, not the drawn skin's: the mirror's base and a torn mirror's start pose (its world position at detach) are sim; the drawn skin's 1 mm lower stand leaves the arm root that far off it.
+    const seatX = mirrorSeatX(this.style, true);
     this.mirrorBaseX = door.hingeX + seatX;
     this.mirrorL = this.partSeats[PART_KIND.mirrorL]!;
     this.mirrorR = this.partSeats[PART_KIND.mirrorR]!;

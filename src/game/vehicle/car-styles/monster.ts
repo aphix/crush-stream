@@ -80,7 +80,7 @@ export const MONSTER: BodyStyle = {
   bPillar: { rear: -0.19, front: -0.12 },
   // The side plate's B-post stands upright between the door glasses, z -.214 to -.128.
   pillars: { b: { width: [0.086, 0.086], z: [-0.171, -0.171] } },
-  arch: { radius: 0.47, rise: 0.83, lip: { flare: 0.028, width: 0.085, square: true, inset: 0.03 }, wellWall: 0.56 },
+  arch: { radius: 0.47, rise: 0.83, lip: { flare: 0.028, width: 0.09, square: true, inset: 0.03 }, wellWall: 0.56 },
   hood: { z0: 0.94, z1: 2.1, origin: [0.96, 0.92], nose: [0.022, 0.02] },
   bumpers: {
     front: { ...bumpers.front, seat: { y: 0.39, z: 2.05 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },
@@ -168,6 +168,8 @@ export const MONSTER: BodyStyle = {
     ],
     patches: [
       ...DOOR_PULLS.flatMap((h) => h.patches),
+      // The bed floor sits in the walls' shade in the reference: a dull dark floor under the ribs, not a bright clear-coated plate.
+      { view: "top", points: [[-0.915, 0], [-2.242, 0], [-2.242, 0.6], [-0.915, 0.6]], depth: 0, rim: 0.025, cavity: 0.45 },
       { view: "side", points: [[0.848, 0.763], [0.78, 0.763], [0.78, 0.724], [0.848, 0.724]], depth: -0.002, rim: 0.003, cavity: 0.3 },
       { view: "side", points: [[-1.953, 0.814], [-2.045, 0.814], [-2.045, 0.761], [-1.953, 0.761]], depth: -0.002, rim: 0.003, cavity: 0.3 },
       { view: "front", points: [[0.62, 0.36], [0.72, 0.36], [0.72, 0.42], [0.62, 0.42]], depth: -0.005, rim: 0.003, cavity: 0.5 },

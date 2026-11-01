@@ -292,6 +292,8 @@ interface ArchLip {
   band?: boolean;
   /** The whole lip stands this far (m) in from the opening's edge, over it, so the opening reads smaller than the arch it covers (drawn only). */
   inset?: number;
+  /** Black plastic arch trim: the paint darkens this far (m) past the lip's toe (detail map only). */
+  cladding?: number;
 }
 
 /** A chase eye: `dist` behind and `height` over the car's origin, aimed `aimUp` over it (m). */
@@ -396,7 +398,7 @@ export interface BodyStyle {
     hingeTop?: number;
     /** Drawn only: with `hingeTop`, the run (m) back from the hinge cut over which the top rows close down to it (absent: the hinge end's slope, 0.11); a longer run turns the closing's two bends gentler, so the skin's rim shows no wave there. */
     hingeRun?: number;
-    /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
+    /** The door skin's outer face stands this far (m) over the body side inside its cut, in the drawn skin and the cage's slab alike when set (absent: the drawn skin's `DOOR_PROUD`, 2 mm; the cage's slab 3 mm, the sim's face); 0: flush, the shut line a groove only. */
     proud?: number;
     /** Drawn only: under the lowest body-ring row the skin carries, its outer face stands no less than this far (m) over the body side, easing in from `proud` at that row to this at the door's bottom edge and tapering in over the cut's ends like `proud`; those cells turn their diagonal on the hinge half so the lift reaches both end cells alike. The cut's ramp barely leaves the side down there (the rocker point never drops), so a flush skin lies within a millimetre of it and z-fights; absent: the skin holds `proud` all the way down. */
     lowProud?: number;

@@ -9,15 +9,17 @@ import { MIRROR_REACH, MIRROR_ROOT } from "./part-geometry.ts";
 import { doorCardGeometry } from "./interior-geometry.ts";
 import { CABIN_TRIM, PRIMER_ATTRIBUTE } from "./constants.ts";
 
-/** Door skin over the body side at its outer face (m). */
-const DOOR_PROUD = 0.003;
+/** The drawn door skin's stand over the body side inside its cut (m): flush to within 2 mm of its surround, the shut line a groove not a step. */
+const DOOR_PROUD = 0.002;
+/** The cage's door slab stands this far (m) over the body side where its style sets no `door.proud`: the sim's door face, which the drawn stand never moves. */
+const CAGE_DOOR_PROUD = 0.003;
 /** The door skin is a slab this thick (m) on average: its flat inner face stands this far inboard of the outer face's mean x, so it carries none of the side's waves. */
 const DOOR_THICKNESS = 0.05;
 /** The cage's door slab (m): thick enough that its inner face reaches inside the cage's own side at door heights, so no gap lies behind the face a side hit meets. */
 export const CAGE_DOOR_THICKNESS = 0.25;
 /** The skin covers the door cut with this much (m) past each end. */
 const DOOR_SKIN_OVERLAP = 0.02;
-/** The skin's face meets the body side at each cut end and stands `DOOR_PROUD` proud this far (m) inside it, so the hinge and latch slices read as shut lines, not steps. */
+/** The skin's face meets the body side at each cut end and stands its proud (`DOOR_PROUD`) this far (m) inside it, so the hinge and latch slices read as shut lines, not steps. */
 const DOOR_TAPER = 0.02;
 
 /** The door skin's centre along z in hinge space: the door cut's middle. */
@@ -29,13 +31,13 @@ export function doorSkinZ(style: BodyStyle): number {
 /**
  * The mirror's seat in door space: x on the drawn door skin (the vertex grid's flat triangles) where the mirror is inside the door cut and the
  * face's height, else on the body side, or on the door glass's plane for a glass mount, less the arm root's offset at the mirror's x-scale, so
- * the arm starts on the surface.
+ * the arm starts on the surface. `cage` takes the skin at the sim's slab stand (`CAGE_DOOR_PROUD`): the sim's mirror base and a torn mirror's pose read that seat, which the drawn stand never moves.
  */
-export function mirrorSeatX(style: BodyStyle): number {
+export function mirrorSeatX(style: BodyStyle, cage = false): number {
   const d = style.door;
   const armRoot = MIRROR_ROOT * (d.mirrorReach / MIRROR_REACH);
   if (d.mirror?.mount === "glass") return glassX(d.hingeZ - (d.mirrorZ ?? 0), d.hingeY + d.mirrorY, style) - d.hingeX - armRoot;
-  const grid = doorGrid(style);
+  const grid = doorGrid(style, cage);
   const zl = -(d.mirrorZ ?? 0) - doorSkinZ(style);
   const { columns } = grid;
   const cutHalf = grid.halfLength - DOOR_SKIN_OVERLAP;
@@ -47,7 +49,7 @@ export function mirrorSeatX(style: BodyStyle): number {
   if (!Number.isNaN(onDoor)) return onDoor - armRoot;
   const z = d.hingeZ - (d.mirrorZ ?? 0);
   const sl = sampleSlice(z, style.profile);
-  return sideX(d.hingeY + d.mirrorY, sl.hw, sl.yBelt, rockerAt(z, style), shoulderDrop(z, style)) + (d.proud ?? DOOR_PROUD) - d.hingeX - armRoot;
+  return sideX(d.hingeY + d.mirrorY, sl.hw, sl.yBelt, rockerAt(z, style), shoulderDrop(z, style)) + (d.proud ?? (cage ? CAGE_DOOR_PROUD : DOOR_PROUD)) - d.hingeX - armRoot;
 }
 /**
  * Outer-face columns before the edge rolls are added. The face's rows between its edge rolls are the body ring's side rows, and over
@@ -94,6 +96,8 @@ type DoorRow = number | { ring: number };
 
 interface DoorGrid {
   h: number;
+  /** The skin's stand-off (m) over the body side inside its cut: the style's `door.proud`, else `DOOR_PROUD` (`CAGE_DOOR_PROUD` for the cage's slab). */
+  proud: number;
   /** How far (m) the skin's top row comes down at the hinge cut, past the hinge end's slope: 0 unless the style sets `hingeTop`. */
   hingeDrop: number;
   halfLength: number;
@@ -104,8 +108,8 @@ interface DoorGrid {
   cutRingYs: readonly [rear: number[], front: number[]];
 }
 
-/** The door skin's rows and column stations (door space) and the extents they span. */
-function doorGrid(style: BodyStyle): DoorGrid {
+/** The door skin's rows and column stations (door space) and the extents they span; `cage` gives the sim's slab its own stand-off. */
+function doorGrid(style: BodyStyle, cage = false): DoorGrid {
   const d = style.door;
   const h = d.halfHeight;
   const [z0, z1] = d.aperture;
@@ -123,7 +127,7 @@ function doorGrid(style: BodyStyle): DoorGrid {
   const edges = doorStations(h, []);
   const [bottom, top] = [edges.slice(0, DOOR_EDGE_STEPS + 1), edges.slice(DOOR_EDGE_STEPS + 1)];
   const ringYsAtCut = (end: number) => drawnSideRing(d.hingeZ + doorSkinZ(style) + end * (halfLength - DOOR_SKIN_OVERLAP), style).map(([, y]) => y - d.hingeY);
-  const rolls: DoorGrid = { h, hingeDrop, halfLength, skinLength, rows: edges, columns, cutRingYs: [ringYsAtCut(-1), ringYsAtCut(1)] };
+  const rolls: DoorGrid = { h, proud: d.proud ?? (cage ? CAGE_DOOR_PROUD : DOOR_PROUD), hingeDrop, halfLength, skinLength, rows: edges, columns, cutRingYs: [ringYsAtCut(-1), ringYsAtCut(1)] };
   const cuts = [-(halfLength - DOOR_SKIN_OVERLAP), halfLength - DOOR_SKIN_OVERLAP];
   // A ring row stays clear of the bottom roll everywhere and of the top roll at both cuts: one squeezed under the top roll folds the corner.
   const rings = drawnSideRing(0, style)
@@ -151,9 +155,8 @@ function ringRowY(grid: DoorGrid, ring: number, z: number): number {
   return THREE.MathUtils.lerp(rear[ring]!, front[ring]!, THREE.MathUtils.clamp((z + cut) / (2 * cut), 0, 1));
 }
 
-/** The skin's stand-off (m) over the body side at car height `yCar`, before the cut-end taper: its `proud` (`DOOR_PROUD` default) and, with `door.lowProud`, no less than that easing in below the lowest ring row it carries (`ringY`, car y; undefined: none) to the door's bottom edge. */
-function doorStand(d: BodyStyle["door"], ringY: number | undefined, yCar: number): number {
-  const proud = d.proud ?? DOOR_PROUD;
+/** The skin's stand-off (m) over the body side at car height `yCar`, before the cut-end taper: `proud` and, with `door.lowProud`, no less than that easing in below the lowest ring row it carries (`ringY`, car y; undefined: none) to the door's bottom edge. */
+function doorStand(d: BodyStyle["door"], proud: number, ringY: number | undefined, yCar: number): number {
   if (d.lowProud === undefined || ringY === undefined) return proud;
   return Math.max(proud, d.lowProud * THREE.MathUtils.clamp((ringY - yCar) / (ringY - (d.hingeY - d.halfHeight)), 0, 1));
 }
@@ -174,7 +177,7 @@ export function doorSkinStand(style: BodyStyle): (z: number, y: number) => numbe
   const grid = doorGrid(style);
   return (z, y) => {
     const local = z - style.door.hingeZ - doorSkinZ(style);
-    return doorStand(style.door, lowestRingY(style, grid, local), y) * cutTaper(grid, local);
+    return doorStand(style.door, grid.proud, lowestRingY(style, grid, local), y) * cutTaper(grid, local);
   };
 }
 
@@ -216,7 +219,7 @@ function doorFaceVertex(style: BodyStyle, grid: DoorGrid, row: DoorRow, z: numbe
   // curve, held continuous at the span's ends.
   const ringRows = grid.rows.filter((r): r is { ring: number } => typeof r !== "number");
   const bottom = lowestRingY(style, grid, z);
-  const proud = doorStand(d, bottom, yCar) * cutTaper(grid, z);
+  const proud = doorStand(d, grid.proud, bottom, yCar) * cutTaper(grid, z);
   let side = sideX(yCar, sl.hw, sl.yBelt, rockerY, crestDrop);
   if (bottom !== undefined) {
     const top = d.hingeY + ringRowY(grid, ringRows[ringRows.length - 1]!.ring, z);
@@ -327,7 +330,7 @@ export function doorCardDent(face: Int32Array, sign: number, rest: ArrayLike<num
  * as its grid gives it, whatever the drawn door does with its inner face and its cells' diagonals.
  */
 export function makeDoorGeometry(sign: number, style: BodyStyle = SEDAN, cageThickness?: number): THREE.BufferGeometry {
-  const grid = doorGrid(style);
+  const grid = doorGrid(style, cageThickness !== undefined);
   const { h, halfLength, skinLength, rows, columns } = grid;
   const positions: number[] = [];
   const uvs: number[] = [];

@@ -3,6 +3,8 @@ import { detSin, hypot2 } from "../kernel/physics-core.js";
 import { clamp, clamp01 } from "../kernel/scalar.ts";
 import { finishOn, glslFloat, MAP_ANISOTROPY } from "./car-finish.ts";
 import { CLASS_LIFT } from "./constants.ts";
+import { carFrame } from "./car-rig.ts";
+import { lipPath } from "./car-well-mesh.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
 /**
@@ -138,6 +140,34 @@ function panDetails(style: BodyStyle): Details {
   };
 }
 
+/** A bezel's three strokes along each arch lip, at these shares of the lip's width out from the opening's edge: the dark roll at the edge, a bright bead on the crown's face, a soft seam where the lip fairs into the skin. Cavity carries the dark edge to 80 m, where the bump has faded (25 m). */
+const BEZEL_STROKES = [
+  [0, 0.012, -0.003, 0.85],
+  [0.35, 0.012, 0.005, 0],
+  [0.9, 0.01, -0.002, 0.3],
+] as const;
+/** How dark a style's arch cladding (`arch.lip.cladding`) paints the band from the opening out past the lip. */
+const CLADDING_DARKNESS = 0.7;
+
+/** Every arch lip's bezel as side-view strokes on the lip's own path and section (`archLipGeometry`): the lip carries the shape, these carry the edges the shape alone leaves too soft to read. Empty for a style with no lip. */
+function archBezels(style: BodyStyle): Details {
+  const lip = style.arch.lip;
+  if (!lip) return { lines: [], patches: [] };
+  const cladWidth = lip.width + (lip.cladding ?? 0);
+  const strokes = lip.cladding === undefined ? BEZEL_STROKES : [...BEZEL_STROKES, [cladWidth / 2 / lip.width, cladWidth, 0, CLADDING_DARKNESS] as const];
+  const lines: DetailLine[] = [];
+  for (const [wx, wy, wz] of carFrame(style).wheels) {
+    if (wx < 0) continue;
+    const path = lipPath(style, wy, wz, lip.square === true);
+    for (const [share, width, depth, cavity] of strokes) {
+      const out = share * lip.width - (lip.inset ?? 0);
+      const points = path.map(([z, y, uz, uy]) => [z + uz * out, y + uy * out] as const);
+      lines.push({ view: "side", points, width, depth, profile: "u", cavity });
+    }
+  }
+  return { lines, patches: [] };
+}
+
 /** The bake's float heights (m) and cavities (0..1), one per atlas texel, and the atlas width. */
 type Canvas = { heights: Float32Array; cavities: Float32Array; width: number };
 
@@ -171,11 +201,11 @@ function sectionOverTexel(d: number, half: number, rounded: boolean): number {
   return (sectionIntegral(d + h, half, rounded) - sectionIntegral(d - h, half, rounded)) / DETAIL_TEXEL_M;
 }
 
-/** A "step" at signed distance `s` (m, + on the left of travel): ramps from 0 to 1 across the stroke, then falls back over the shoulder. */
+/** A "step" at signed distance `s` (m, + on the left of travel): eases from 0 to 1 across the stroke, then eases back over the shoulder. Both ends are level (a smoothstep), so no kink in the slope draws a bead along the line. */
 function stepSection(s: number, half: number): number {
   if (s <= -half) return 0;
-  if (s < half) return (s + half) / (2 * half);
-  return Math.max(0, 1 - (s - half) / (STEP_SHOULDER_WIDTHS * 2 * half));
+  if (s < half) return THREE.MathUtils.smoothstep(s, -half, half);
+  return 1 - THREE.MathUtils.smoothstep(s, half, half + STEP_SHOULDER_WIDTHS * 2 * half);
 }
 
 /** One stroke into `canvas`, segment by segment, each only over its own box grown by its reach. */
@@ -297,7 +327,8 @@ function bakeDetailAtlas(style: BodyStyle, details: Details, tiles: readonly THR
   const { width, height } = layout;
   const canvas: Canvas = { heights: new Float32Array(width * height), cavities: new Float32Array(width * height), width };
   const pan = panDetails(style);
-  for (const line of [...details.lines, ...pan.lines]) drawLine(canvas, layout.tiles[VIEWS.indexOf(line.view)]!, line);
+  const bezels = archBezels(style);
+  for (const line of [...details.lines, ...pan.lines, ...bezels.lines]) drawLine(canvas, layout.tiles[VIEWS.indexOf(line.view)]!, line);
   for (const patch of [...details.patches, ...pan.patches]) drawPatch(canvas, layout.tiles[VIEWS.indexOf(patch.view)]!, patch);
   const texels = new Uint8Array(width * height * DETAIL_CHANNELS);
   const h = canvas.heights;

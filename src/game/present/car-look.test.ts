@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { NO_CAR_PICK } from "../match/look-data.ts";
+import { DEPTH_STEPS, NO_CAR_PICK, SPRAY_FINE_STEPS, SPRAY_PART_RANGE } from "../match/look-data.ts";
 import { CAR_SPRAY, sprayFace, sprayPlace, SPRAY_FACE } from "../vehicle/spray-box.ts";
 import { REST_POSITION } from "../vehicle/car-detail-map.ts";
 import { compileHooks } from "../vehicle/car-detail-map.test-util.ts";
@@ -17,8 +17,6 @@ const INK = 4;
 const SAMPLES = [1, 2, 3, 4].flatMap((i) => [1, 2, 3, 4].filter((j) => i + j < 6).map((j) => [i / 6, j / 6, (6 - i - j) / 6]));
 /** A painted fragment's `primer` lies within this of 0: past it the bare steel, the well, the black trim or the cabin's take over the spray. */
 const PAINTED = 0.3;
-/** The shader's decode of a depth code: `(code - 1) / DEPTH_STEPS` along the face's axis. */
-const DEPTH_STEPS = 254;
 /** A ray cast from this far (m) out meets its fragment first when it lands within this of it (m). */
 const RAY_START = 3;
 const SURFACE_HIT = 0.005;
@@ -99,8 +97,10 @@ function drawsPaint(f: Fragment, uniforms: Record<string, THREE.IUniform>): bool
   const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!.map((v) => (v * width) / CAR_SPRAY.w) as [number, number, number, number];
   const texel = (fy + Math.min(fh - 1, Math.floor(_uv[1]! * fh))) * width + fx + Math.min(fw - 1, Math.floor(_uv[0]! * fw));
   const code = data[2 * texel]!;
-  const under = ((code - 1) / DEPTH_STEPS - sprayPlace(CAR_SPRAY, face, f.p, _uv)) * axisSpan(face);
-  const cover = data[2 * texel + 1]!;
+  const byte = data[2 * texel + 1]!;
+  const cover = byte % SPRAY_PART_RANGE;
+  const fine = (Math.floor(byte / SPRAY_PART_RANGE) / SPRAY_FINE_STEPS - 0.5) / DEPTH_STEPS;
+  const under = ((code - 1) / DEPTH_STEPS + fine - sprayPlace(CAR_SPRAY, face, f.p, _uv)) * axisSpan(face);
   const torn = uniforms.sprayTorn?.value as THREE.Vector4 | undefined;
   return code === 0 || under <= (uniforms.sprayBand!.value as number) || (torn !== undefined && torn.getComponent(cover - 1) < 0.5);
 }
