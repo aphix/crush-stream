@@ -5,6 +5,7 @@ import { perturbedNormalGlsl } from "../vehicle/car-finish.ts";
 import { FACE_BITS, FACE_MASK, FACE_METRES, FACE_WIDTH, SCRAPE_MAX, SEVERITY, STROKE_BYTES, U0, U1, V0, V1, WIDTH_STEP } from "../vehicle/paint-scrapes.ts";
 import { CAR_SPRAY, SPRAY_FACE, sprayFace, sprayPlace } from "../vehicle/spray-box.ts";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
+import { bookTierWork } from "../kernel/tier-work.ts";
 import { declareSprayFace, sprayFaceUniforms } from "./spray.ts";
 
 /** The FX tier's share of the paint wear, shared by every car's paint: 0 at `off`, 1 the flat wear (scratches, dent darkening and dulling) at `minimal` and `low`, 2 with the dents' relief where the finish draws (`high`, `ultra`). */
@@ -858,8 +859,11 @@ function creaseFace(data: Uint8Array, depths: Float32Array, blurs: Blurs, rects:
   const box = CAR_SPRAY.faces[face]!;
   const base = box[1] * SIDE + box[0];
   if (creased) {
+    // Run only on the relief's tiers: the governors read it as render, which a tier changes, not as sim (`bookTierWork`).
+    const t0 = performance.now();
     blurFace(blurs.near, depths, blurs.pass, box, rects, o, NEAR_KERNEL);
     blurFace(blurs.far, depths, blurs.pass, box, rects, o, FAR_KERNEL);
+    bookTierWork(performance.now() - t0);
   }
   for (let y = rects[o + 1]!; y <= rects[o + 3]!; y++) {
     for (let x = rects[o]!; x <= rects[o + 2]!; x++) {

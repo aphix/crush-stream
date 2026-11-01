@@ -1,4 +1,5 @@
 import type * as THREE from "three";
+import { bookTierWork } from "../kernel/tier-work.ts";
 
 /**
  * The HUD's Car contour strength (0 off, 1 the default, 2 the most): how many passes pull a vertex normal toward its neighbours' mean (3 at
@@ -201,5 +202,8 @@ export function smoothNormals(geometry: THREE.BufferGeometry, rest: ArrayLike<nu
   const graph = neighboursOf(index.array, rest, attr.count);
   const count = gatherMoved(pos, rest, graph.moved, nor, restNormals);
   if (count === 0 || strength <= 0) return;
+  // Run only on the tiers that smooth (`SMOOTHING_TIER`): the governors read it as render, which a tier changes, not as sim.
+  const t0 = performance.now();
   relax(nor, graph, count, passesFor(strength));
+  bookTierWork(performance.now() - t0);
 }

@@ -1,5 +1,6 @@
 // First: every quaternion built from here on, constants at load included, takes the engine-identical trig (kernel/three-trig.ts).
 import "../kernel/three-trig.ts";
+import { takeTierWork } from "../kernel/tier-work.ts";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { PISTON_ORBIT_RATE, PistonBank } from "../present/engine-pistons.ts";
@@ -718,7 +719,8 @@ export class CrashEngine extends EngineGarage {
       this.cine.render(this.scene, this.camera, wallDt, this.markFocus());
       this.frameDrawn();
     }
-    this.renderMs = performance.now() - drawAt;
+    // The tier-gated present work this frame did before the draw (contour relax, crease blur) is what a tier changes too: the governors read it as render.
+    this.renderMs = performance.now() - drawAt + takeTierWork();
     this.blend.restore();
     this.race.readFinish(); // after the restore: the blend draws skins between two steps, and the finish keeps the sim's
     this.hudAcc += wallDt;
