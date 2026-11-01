@@ -107,11 +107,12 @@ than 20 m behind).
   `RAM_HIT` = 10 m. Once the wait is up, leaving the box no longer clears the clock (the units backing off for their run-up are
   the ones that boxed the human in); only a drive-off over `ESCAPED`, the human's hunt ending, or `CALM_END` = 3 s of sitting
   still clears it: the human has stopped squirming, the pack is back to PIT, slam and queue, and the bust gets its chance.
+  On the aggression ramp (below) only the units that seek a hit ram, from a run-up of 15 m at the floor of a (`RUN_UP` at full), turning back once they touch (5.5 m; `RAM_HIT` at full), closing no faster than the ramp's cap.
 - **Beyond `ATTACK`** it aims at where the player will be, bent round solid props on a 16 m grid.
 - **Grip.** A hunter reads the surface under it and its class's tyre there as a racer does (`race-ai.ts`: `turnRate` for its
   steering, `arcSpeed` for the arc to its aim, the racer's brake latch `brakeOver` over that speed), so it corners on grass
   within its grip. It does not lift for the plateau's crest: the pack flying it is the set piece.
-- **Escalation:** `copsWanted(time, formation, humans)` = the formation plus one every `HUNT.every` = 12 s, up to `HUNT.cap` = 12
+- **Escalation:** `copsWanted(time, formation, humans)` = the formation plus, every `HUNT.every` = 12 s, one more weighted by the aggression a(t) (**The aggression ramp** below), up to `HUNT.cap` = 12
   hunting at once, for one human (more humans scale it: see **Co-op**). `HUNT.units` = 16 cars are built; the rest are wrecks
   waiting to be put away. One drop-in per `HUNT.gap` = 1.5 s.
 - **Drop-in:** a cop wrecked (`judge`), crashed (it drives no more once crashed, so it is down for the pack too) or lost (more than `HUNT.far` = 140 m from the player and hidden for `HUNT.farTime` =
@@ -122,6 +123,40 @@ than 20 m behind).
   (past `wreckStore`) the camera still sees, so a pile of wrecks in view cannot leave the pack empty (measured: with every cop
   in view wrecked and the humans parked, the pack went 78 s without a drop-in for one human before, 1.5 s now).
 - Cops are as tough as the race's police (`police` class, durability 1.3).
+
+## The aggression ramp (`ai/hunter.ts`: `RAMP`, `aggression`)
+
+Owner's design: the pack starts mean enough to feel dangerous and get the player damaged, by reasons the player caused, and *probably* lets it survive 30 s at about
+a quarter as mean or ram-seeking; then it eases in, cubically, to today's full aggression. One number a(t) per run, read from the green on the hunters' clock
+(`HunterBrain.update`), that every choice making the pack mean reads; no physics is scaled, only what the AI chooses.
+
+- **Schedule.** a = `RAMP.floor` = 0.25 until `RAMP.hold` = 30 s; then a = 0.25 + 0.75 × u³, u = (t − 30) / `RAMP.full`, reaching 1 at 30 + `RAMP.full` = 90 s and
+  staying there: 0.26 at 45 s, 0.34 at 60 s, 0.51 at 72 s, 0.79 at 84 s, 1 at 90 s. a = 1 is the pack as it was before the ramp (the opening rows' mutation
+  is `RAMP.hold` pushed far into the past: the old pack, measured below).
+- **Why `RAMP.full` = 60 s.** The old schedule reaches its cap of 12 cops at 84 s (5 in the formation and one more every 12 s), so full aggression at 90 s arrives with
+  the full pack. A cubic is flat at the start: a stays under 0.35 for the first minute, so the pack grows and bites for a minute before its lethal choices open (a ≥ 0.5, at
+  72 s). Shorter would make the pack lethal inside the minute the owner wants it forgiving; longer would put the full pack past the 2 minutes a real player rarely outlasts.
+- **What a scales** (`ramped(a, floor, full)` is linear in a between its values at 0.25 and at 1):
+
+| Choice | a = 0.25 | a = 1 | How a scales it |
+|---|---|---|---|
+| cops wanted (`copsWanted`) | the formation, none added before 48 s | one more every `HUNT.every` = 12 s up to `HUNT.cap` | the added cops are floor(a × floor(t / 12)) |
+| units that seek a hit (`pickSeekers`) | 2 of 5, the nearest to the human (pick held 3 s) | every unit | the nearest ceil(a × n) of the n hunting a human; a stopped or creeping human is contained by every unit whatever a is, so the bust is as before |
+| units that do not seek (`shadow`) | hold a slot 12 m behind a moving human, 7 m more for each unit queued nearer, close on it at 8 m/s over its pace at most | none | the rest of the units |
+| attack reach (`ATTACK` = 35 m, and the head-on's `RAM_TIME` and `PULL_OUT` reach) | × 0.5 | × 1 | linear |
+| lethal choices: head-on ram, brake-check block ahead, the slam roles of the pack | off: every unit lines up for the rear-quarter PIT | on | from a ≥ 0.5 (`LETHAL_FROM`) |
+| closing speed into a hit (`CLOSE_FLOOR`…`CLOSE_FULL`) | 9 m/s | 60 m/s (no limit) | linear; a unit lifts and brakes from `HIT_ZONE` = 6 m plus its braking distance so it meets its target no faster, a ram's charge included |
+| the squirm ram (`RUN_UP`, `RAM_HIT`) | run-up 15 m, turns back once it has touched (5.5 m) | 60 m, 10 m | linear: at the floor it is a shove, at full the 28 m/s hit that kills |
+| the bump (`BUMP_ABOVE` = 20 m/s) | a seeker behind a target faster than the police's PIT cap drives on into its tail boosting, held to the closing cap | queues behind it as the police do | on under a = 0.5 |
+
+  Not scaled: the cars and their grip, the bust rule (12 s within 20 m under 20 km/h), the settle ring round a stopped player, the drop-in's hiding, spacing and pace, the pack guard.
+- **Driver 2's version** (REDRIVER2 `Game/C/cop_ai.c`, `felony.c`): the pack's power and desired speed are the base 4596/4096 (about 1.12 ×) plus the felony meter × `autoMaxPowerScaleLimit` / 4096,
+  up to another 25 % (`cop_ai.c` 286–294 sets the Survival scales and limits, 713 applies them); the meter rises by 1 every 32 frames while a cop sees the player, as long as it is over the pursuit minimum
+  (`felony.c` 257–266, `FelonyIncreaseTime` = 31 at 426), so the pack's pace climbs smoothly with the time the player survives in sight, no switch; the wanted count steps with the meter (`InitCopData`, triggers 0x333 apart,
+  `cop_ai.c` 237–255); a lost cop is replaced at once (`gCopRespawnTime` = 0, 282–284). The ramp is that shape with a softer start and a count that follows it.
+- **Measured** (worker, the real course and the closed arena, `evade`). Real course from the green, first cop contact and dent (crumple compression of 0.2 m or more within 2 s of a powered contact): ramp 3.1 s and 3.1 s in all 12 seeds (crush 0.29 m and
+  engine health 0.92 at 10 s); pack at full aggression from the green 13.3–14.7 s and 20–45 s or never. Still going at 30 s: ramp 12 of 12 seeds (1–12) and 4 of 5 of seeds 13, 5, 20, 9, 17; full aggression from the green 10 of 12. Closed arena, ends in seconds after the release (seeds 13, 5, 20, 9, 17): ramp
+  41.7, 115.7, 80.2, 97.9, 76.2 (seeds 1, 2, 3, 4, 6, 7: 85.9, 22.3, 61.8, 85.6, 76.4, 93.3); full aggression from the release 10.9, 18.6, 26.2, 15.9, 16.7.
 
 ## Co-op
 
@@ -158,14 +193,16 @@ Not built: rescue (ramming the cop that is busting a teammate cancels the bust) 
 | Rule | Test |
 |---|---|
 | bust at 12 s held, not a step before; 20 m, 20 km/h; the hold restarts; no laps | `match/survival.test.ts` |
-| the schedule, drop-ins only where hidden, wreck / lost put away only unseen and replaced, drop spot on a road in the band, steering round a wall, attack geometry, wedge back-off; a real police car turning on grass within 2 m of the arc to its quarry | `ai/hunter.test.ts` |
-| a player boxed in by walls and wrecks: squirming over 20 km/h for `RAM_AFTER`, a real police car backs off to the run-up and charges in at 28 m/s or more, and before it the car comes in under 28 m/s; a player sitting still is never rammed, a drive-off over 14 m/s starts the wait over, and a squirm on open ground is not rammed; the clock: once the wait is up, a unit leaving the box leaves it running, mid-wait the wait starts over, `CALM_END` s of sitting still after the wait ends the ram; a cop's next ram starts with a back-off even if its last one ended mid-charge | `ai/hunter.test.ts` |
-| start, countdown, bust through the real stack (the hold shortened to 3 s), wrecked ends the run, best-time store (new / worse / blocked), Retry, Quit, schedule on the HUD (first two steps) | `world/survival.test.ts` |
+| the schedule at full aggression, drop-ins only where hidden, wreck / lost put away only unseen and replaced, drop spot on a road in the band, steering round a wall, attack geometry, wedge back-off; a real police car turning on grass within 2 m of the arc to its quarry | `ai/hunter.test.ts` |
+| the aggression ramp: `aggression(t)` is 0.25 to 30 s and eases in cubically to 1 at 90 s; the cops wanted on it (none added in the first 48 s, then a of the old steps, the cap at 90 s); ceil(a × units) seek a hit; a seeker lifts and brakes for a hit over the closing cap and goes straight on at full aggression, and a unit moving away from a faster human never brakes for it; under a = 0.5 a seeker drives on into the tail of a player over 20 m/s boosting; a unit that does not seek holds off a moving player; at the floor a squirm ram's run-up is short and it arrives under the kill bar | `ai/hunter.test.ts` |
+| a player boxed in by walls and wrecks (the pack at full aggression): squirming over 20 km/h for `RAM_AFTER`, a real police car backs off to the run-up and charges in at 28 m/s or more, and before it the car comes in under 28 m/s; a player sitting still is never rammed, a drive-off over 14 m/s starts the wait over, and a squirm on open ground is not rammed; the clock: once the wait is up, a unit leaving the box leaves it running, mid-wait the wait starts over, `CALM_END` s of sitting still after the wait ends the ram; a cop's next ram starts with a back-off even if its last one ended mid-charge | `ai/hunter.test.ts` |
+| start, countdown, bust through the real stack (the hold shortened to 3 s), wrecked ends the run, best-time store (new / worse / blocked), Retry, Quit, schedule on the HUD at full aggression (first two steps) | `world/survival.test.ts` |
 | a cop dropped in with the chase camera at 12 places round the course, the player driving on at 16 m/s: never in the camera's view, never within `dropMin` | `world/survival.test.ts` |
 | `scene=survival` round trip, never with a room; `scene=survival&track=national-mall` decodes and encodes back | `hud/share-url.test.ts` |
 | the real engine booted on `#scene=survival&track=national-mall` is in a Survival run on the Mall with no menu; the scene bar's Survival opens Survival's menu with no run, no clock, a pick moving the course behind it and Start running the picked course; Change course from a run (and its results card) is the menu again; the address follows the pick and the run; an edited `track=` restarts the run on it | `engine/engine-survival-pick.test.ts` |
 | the map is closed: no gap in the solids, no seam of the rim lets a car at 60 m/s through | `world/survival-chase.test.ts` |
-| a fleeing player's run ends. In the closed arena, with the formation held to each seed's release second (seeds 13, 5, 20, 9 and 17), the pack ends the evading player's run within 30 s with a cop touching (13 to 27 s: an evader over 20 m/s is queued behind until it slows, `PIT_MAX`), and hunters with no aim (they never steer, and each drop-in faces along its road away from the player) do not; the evading player stops short of a wall and creeps round it, and lifts for a crest or a bump it would fly, so its run never ends on its own crash; a player cornered at 3 m/s is busted by the pack released at 9.7 s (seed 10), and by cops that never move it is not; a player flat out for 120 s stays on the map (the full-sanity suite, `npm run test:ai-long-run`) | `world/survival-pursuit.ai-long-run.ts`, `world/survival-bust.ai-long-run.ts`, `world/survival-chase.ai-long-run.ts` |
+| a fleeing player's run ends. In the closed arena, with the formation held to each seed's release second (seeds 13, 5, 20, 9 and 17), the pack ends the evading player's run within 120 s of its release (30 s after the ramp's full aggression) with a cop touching (41.7, 115.7, 80.2, 97.9 and 76.2 s on the ramp; 10.9, 18.6, 26.2, 15.9 and 16.7 s with the pack at full aggression from the release, the claim before the ramp), and hunters with no aim (they never steer, and each drop-in faces along its road away from the player) do not; the evading player stops short of a wall and creeps round it, and lifts for a crest or a bump it would fly, so its run never ends on its own crash; a player cornered at 3 m/s is busted by the pack released at 9.7 s (seed 10), and by cops that never move it is not; a player flat out for 120 s stays on the map (the full-sanity suite, `npm run test:ai-long-run`) | `world/survival-pursuit.ai-long-run.ts`, `world/survival-bust.ai-long-run.ts`, `world/survival-chase.ai-long-run.ts` |
+| the opening of a run on the real course (five scripted players): within 10 s of the green a cop has hit the player and dented it (3.1 s on the ramp, 14.7 s or never with the pack at full aggression from the green) and the run is still going; the player that keeps running is still going at 30 s in at least 4 of 5 situations (seeds 13, 5, 20, 9, 17) | `world/survival-opening.ai-long-run.ts` |
 | the opening set piece on the real course: the cops reach the foot behind the player and leave the ground at the crest (seed 1) | `world/survival-setpiece.test.ts` |
 | wheels on the grass and the crest: drop matrix and drive matrix over the face, plaza, crest and alley | `vehicle/havana-fit.test.ts` |
 | a team's pack: the cops wanted, the cap and the units grow with the humans (1, 2, 4), never past the car list; each cop's quarry is the nearest free human; no drop-in within `dropMin` of any human | `ai/hunter-team.test.ts` |

@@ -47,6 +47,27 @@ export const HUNT = {
 } as const;
 
 /**
+ * Survival's aggression a(t), from the green: `floor` until `hold` s, then a cubic ease-in to 1 over `full` s. 1 is the whole pack's meanness
+ * (the pack as it was before the ramp); every choice that makes the pack mean is gated or scaled by it, no physics is.
+ */
+export const RAMP = {
+  floor: 0.25,
+  hold: 30,
+  full: 60,
+} as const;
+
+/** The aggression `time` s after the green (the countdown, time under 0, is the floor). */
+export function aggression(time: number): number {
+  const u = clamp((time - RAMP.hold) / RAMP.full, 0, 1);
+  return RAMP.floor + (1 - RAMP.floor) * u * u * u;
+}
+
+/** A quantity that is `atFloor` at the floor of a and `atFull` at 1, linear between. */
+function ramped(a: number, atFloor: number, atFull: number): number {
+  return atFloor + ((atFull - atFloor) * (a - RAMP.floor)) / (1 - RAMP.floor);
+}
+
+/**
  * The pack a run grows for `humans` free humans: `perHuman` more of everything (the cops wanted, the cap, the units built) for each human
  * beyond the first, so a team of any size is pressed per head as one human is.
  */
@@ -64,9 +85,13 @@ export function huntCap(humans: number, units: number): number {
   return Math.min(units - (HUNT.units - HUNT.cap), Math.ceil(HUNT.cap * packScale(humans)));
 }
 
-/** The cops the run wants `time` s after the green for `humans` free humans (`units` built), from the `formation` at the start: one more every `HUNT.every` s up to the cap. */
+/**
+ * The cops the run wants `time` s after the green for `humans` free humans (`units` built), from the `formation` at the start: one more every
+ * `HUNT.every` s at full aggression, up to the cap. Before that the extra cops are a(t) of that schedule, so the ramp adds them.
+ */
 export function copsWanted(time: number, formation: number, humans = 1, units: number = HUNT.units): number {
-  return Math.min(huntCap(humans, units), Math.ceil((formation + Math.floor(Math.max(0, time) / HUNT.every)) * packScale(humans)));
+  const extra = Math.floor(aggression(time) * Math.floor(Math.max(0, time) / HUNT.every));
+  return Math.min(huntCap(humans, units), Math.ceil((formation + extra) * packScale(humans)));
 }
 
 const STORED = 0;
@@ -97,6 +122,32 @@ export const CALM_END = 3;
 /** A ramming unit charges from this far (m): a hit at 28 m/s or more is what kills, and a car needs a run this long to reach it. It has hit once it is under `RAM_HIT` m, and backs off for the next run. */
 export const RUN_UP = 60;
 const RAM_HIT = 10;
+/** At the floor of a a ramming unit has hit only once it touches (a car's length), not at the full ram's `RAM_HIT`: a shove from a short run-up has no momentum to carry it through a turn away. */
+const RAM_HIT_FLOOR = 5.5;
+/** The units that seek a hit are the nearest ceil(a × n) of the n after one human; a unit picked stays picked this long (s), so units trading places do not flicker. */
+const SEEK_HOLD = 3;
+/** A seeker attacks from this share of its reach at the floor of a (1 at full). */
+const REACH_FLOOR = 0.5;
+/** From this a the pack opens its lethal choices: the head-on ram, the brake-check block ahead, the door slam. Under it units PIT from behind only. */
+const LETHAL_FROM = 0.5;
+/** The closing speed (m/s) a unit allows itself into a hit, reached `HIT_ZONE` m out: at the floor of a under the 16 m/s that throws a sedan's driver, at 1 a car's top speed (no limit). */
+const CLOSE_FLOOR = 9;
+const CLOSE_FULL = 60;
+const HIT_ZONE = 6;
+/** The squirm ram's run-up (m) at the floor of a: a hit from it is a shove, where the full run makes the kill. */
+const RUN_UP_FLOOR = 15;
+/**
+ * A unit that does not seek holds `SHADOW_GAP` m behind a moving human, `SHADOW_ROW` m more for each unit queued nearer in its lane (at most `SHADOW_ROWS`), closing on that slot at
+ * `SHADOW_PACE` m/s per metre of slack and at most `SHADOW_CATCH` m/s over the human's pace, and braking at `SHADOW_BRAKE` when over it.
+ */
+const SHADOW_GAP = 12;
+const SHADOW_ROW = 7;
+const SHADOW_ROWS = 3;
+const SHADOW_PACE = 0.5;
+const SHADOW_CATCH = 8;
+const SHADOW_BRAKE = 0.5;
+/** The target speed (m/s) above which the police queue behind a target (their PIT cap). */
+const BUMP_ABOVE = 20;
 /** Above this speed (m/s) a unit lifts when a solid is close ahead; below it, easing off only wedges it. */
 const DODGE_SPEED = 8;
 /** With no heading clear for the whole stretch, a bend of one radian is worth this many metres of clear run. */
@@ -216,6 +267,13 @@ export class HunterBrain extends CopBrain {
   private readonly calm: Float64Array;
   /** Per unit: charging its target from the run-up (1), or backing off to the run-up (0). */
   private readonly charging: Uint8Array;
+  /** Per unit: it seeks a hit (1) or shadows (0), its pick held until this race second, and the human it was ranked against (−1 none) and its distance (m) to that human. */
+  private readonly seeks: Uint8Array;
+  private readonly seekUntil: Float64Array;
+  private readonly rankedOn: Int16Array;
+  private readonly rankedAt: Float64Array;
+  /** The aggression `update` last read: a(t). */
+  private mean: number = RAMP.floor;
   /** The distance (m) `nearestHunted` found. */
   private nearGap = Infinity;
   private go = false;
@@ -240,6 +298,10 @@ export class HunterBrain extends CopBrain {
     this.pinned = new Float64Array(racers);
     this.calm = new Float64Array(racers);
     this.charging = new Uint8Array(count);
+    this.seeks = new Uint8Array(count);
+    this.seekUntil = new Float64Array(count).fill(-Infinity);
+    this.rankedOn = new Int16Array(count).fill(-1);
+    this.rankedAt = new Float64Array(count);
     this.lost = new Float64Array(count);
     this.queued = new Int8Array(count);
     this.side = new Int8Array(count).fill(1);
@@ -266,6 +328,9 @@ export class HunterBrain extends CopBrain {
     this.go = false;
     this.aim.fill(-1);
     this.pinned.fill(0);
+    this.seeks.fill(0);
+    this.seekUntil.fill(-Infinity);
+    this.mean = aggression(0);
     this.nextDrop = 0;
     for (let u = 0; u < this.count; u++) this.state[u] = STORED;
     for (const [k, f] of this.formation.entries()) {
@@ -322,16 +387,26 @@ export class HunterBrain extends CopBrain {
     // A unit leaving a ram starts the next one from a back-off: a charge flag kept from the last would hit with no run-up.
     if (!ramming) this.charging[u] = 0;
     this.settled[u] = !ramming && tv <= BLOCKABLE && dist < SETTLE ? 1 : 0;
+    const mean = this.mean;
+    const lethal = mean >= LETHAL_FROM;
+    // A stopped or creeping human is contained by the whole pack (the bust), whatever a is.
+    const seeking = this.seeks[u] === 1 || tv <= BLOCKABLE;
     // How far the unit stands ahead of its target along the target's travel (+), and whether it faces it from there.
     const along = -(dx * detSin(tg.yaw) + dz * detCos(tg.yaw));
-    const headOn = along > WAIT_BEHIND && detSin(self.yaw) * dx + detCos(self.yaw) * dz > dist * HEAD_ON;
-    const reach = along > 0 ? Math.max(ATTACK, tv * (headOn ? RAM_TIME : PULL_OUT)) : ATTACK;
-    if (ramming) this.ram(u, self, tg, speed, dist, out);
-    else if (dist <= reach) {
+    const headOn = lethal && along > WAIT_BEHIND && detSin(self.yaw) * dx + detCos(self.yaw) * dz > dist * HEAD_ON;
+    const reach = (along > 0 ? Math.max(ATTACK, tv * (headOn ? RAM_TIME : PULL_OUT)) : ATTACK) * ramped(mean, REACH_FLOOR, 1);
+    // Behind a target too fast to PIT the police queue; a seeker that is not yet lethal drives on into its tail, boosting, and lifts for its closing cap.
+    const bump = !lethal && along < 0 && tv > BUMP_ABOVE;
+    if (ramming && seeking) this.ram(u, self, tg, speed, dist, out);
+    else if (!seeking && dist <= ATTACK) {
       this.slot(u, self, tg, dist, cars);
-      attackTarget(self, tg, this.role[u]!, this.turnMax, speed, dist, headOn, out, tv > BLOCKABLE, this.lane, this.row, this.pedals.isBraking(self.id));
+      this.shadow(self, tg, speed, tv, out);
       this.dodge(u, self, tg, speed, dist, out);
-    } else this.chase(u, self, tg, speed, dist, out);
+    } else if (dist <= reach && !bump) {
+      this.slot(u, self, tg, dist, cars);
+      attackTarget(self, tg, lethal ? this.role[u]! : 0, this.turnMax, speed, dist, headOn, out, tv > BLOCKABLE && lethal, this.lane, this.row, this.pedals.isBraking(self.id));
+      this.dodge(u, self, tg, speed, dist, out);
+    } else this.chase(u, self, tg, speed, dist, out, bump ? 0 : CATCH_UP);
     // A ram throws a stopped player car over the bust's 20 km/h and restarts its hold, so the unit brakes in time to arrive slowly.
     const closing = Math.max(0, (self.vx * dx + self.vz * dz) / Math.max(dist, 1));
     if (!ramming && tv <= BLOCKABLE && speed > CREEP && dist < SETTLE + (closing * closing) / (2 * DRIVE.brake) + closing / BRAKE_RISE) {
@@ -339,17 +414,28 @@ export class HunterBrain extends CopBrain {
       out.brake = 1;
       out.boost = false;
     }
+    // Under full aggression a unit lifts in time to meet its target no faster than `CLOSE_FLOOR…CLOSE_FULL` allows, a ram included.
+    if (mean < 1) {
+      const rel = ((self.vx - tg.vx) * dx + (self.vz - tg.vz) * dz) / Math.max(dist, 1);
+      const cap = ramped(mean, CLOSE_FLOOR, CLOSE_FULL);
+      if (rel > cap && dist < HIT_ZONE + (rel * rel - cap * cap) / (2 * DRIVE.brake) + rel / BRAKE_RISE) {
+        out.throttle = 0;
+        out.brake = 1;
+        out.boost = false;
+      }
+    }
     this.wedge.watch(u, self.x, self.z, dt, out);
     return out;
   }
 
-  /** A ram: from `RUN_UP` m flat out at where the target will be, boosting, no braking for the turn in; once it has hit, or from nearer than the run-up, back off along the line out from the target until the run-up is made. */
+  /** A ram: from the run-up flat out at where the target will be, boosting, no braking for the turn in; once it has hit, or from nearer than the run-up, back off along the line out from the target until the run-up is made. */
   private ram(u: number, self: AiCar, tg: AiCar, speed: number, dist: number, out: DriveInput): void {
-    if (dist >= RUN_UP) this.charging[u] = 1;
-    else if (dist < RAM_HIT) this.charging[u] = 0;
+    const runUp = ramped(this.mean, RUN_UP_FLOOR, RUN_UP);
+    if (dist >= runUp) this.charging[u] = 1;
+    else if (dist < ramped(this.mean, RAM_HIT_FLOOR, RAM_HIT)) this.charging[u] = 0;
     const charge = this.charging[u] === 1;
     const lead = charge ? Math.min(2, dist / Math.max(8, speed)) : 0;
-    const back = (RUN_UP * 1.5) / Math.max(dist, 1);
+    const back = (runUp * 1.5) / Math.max(dist, 1);
     const ax = charge ? tg.x + tg.vx * lead : tg.x + (self.x - tg.x) * back;
     const az = charge ? tg.z + tg.vz * lead : tg.z + (self.z - tg.z) * back;
     const aimDist = hypot2(ax - self.x, az - self.z);
@@ -357,6 +443,21 @@ export class HunterBrain extends CopBrain {
     out.steer = pursuitSteer(alpha, clamp(speed * 0.8, 8, 24), speed, this.turnMax);
     out.throttle = Math.abs(alpha) > 1.3 && speed > 6 ? 0.2 : 1;
     out.boost = out.throttle > 0.5 && Math.abs(alpha) < 0.35;
+  }
+
+  /** A unit that does not seek, near a moving human: onto its queue lane's slot behind it, closing on it at a pace no more than `SHADOW_CATCH` over the human's. */
+  private shadow(self: AiCar, tg: AiCar, speed: number, tv: number, out: DriveInput): void {
+    const fx = tv > 1 ? tg.vx / tv : detSin(tg.yaw);
+    const fz = tv > 1 ? tg.vz / tv : detCos(tg.yaw);
+    const gap = SHADOW_GAP + SHADOW_ROW * Math.min(this.row, SHADOW_ROWS);
+    const ax = tg.x - fx * gap + fz * this.lane * TAIL_LANE;
+    const az = tg.z - fz * gap - fx * this.lane * TAIL_LANE;
+    const slack = (ax - self.x) * fx + (az - self.z) * fz;
+    const alpha = wrapPi(detAtan2(ax - self.x, az - self.z) - self.yaw);
+    out.steer = pursuitSteer(alpha, Math.max(8, hypot2(ax - self.x, az - self.z)), speed, this.turnMax);
+    const want = tv + clamp(slack * SHADOW_PACE, -tv, SHADOW_CATCH);
+    if (speed > want + 1) out.brake = SHADOW_BRAKE;
+    else out.throttle = 1;
   }
 
   /**
@@ -393,7 +494,7 @@ export class HunterBrain extends CopBrain {
   }
 
   /** Beyond `ATTACK`: flat out at where the target will be, round any solid in the way, boosting when far behind, held to the speed the turn to its aim allows. */
-  private chase(u: number, self: AiCar, tg: AiCar, speed: number, dist: number, out: DriveInput): void {
+  private chase(u: number, self: AiCar, tg: AiCar, speed: number, dist: number, out: DriveInput, boostFrom: number): void {
     const lead = Math.min(2, dist / Math.max(8, speed));
     const ax = tg.x + tg.vx * lead;
     const az = tg.z + tg.vz * lead;
@@ -403,7 +504,7 @@ export class HunterBrain extends CopBrain {
     // Pure pursuit looks a speed-scaled way ahead, so a heading bent round a solid is followed as sharply as it was asked.
     out.steer = pursuitSteer(alpha, Math.min(aimDist, clamp(speed * 0.8, 8, 24)), speed, this.turnMax);
     out.throttle = Math.abs(alpha) > 1.3 && speed > 6 ? 0.2 : 1;
-    out.boost = out.throttle > 0.5 && dist > CATCH_UP && Math.abs(alpha) < 0.35;
+    out.boost = out.throttle > 0.5 && dist > boostFrom && Math.abs(alpha) < 0.35;
     // The turn it must make is the arc to its aim (tangent to its nose; an aim past the shoulder is a right angle), on the grip under it: over that
     // speed it brakes on a racer's latch (`brakeOver`), under it it asks no more throttle than that speed's share of its top.
     const cls = this.cls[self.id]!;
@@ -476,6 +577,8 @@ export class HunterBrain extends CopBrain {
       hunting++;
     }
     this.stats.peak = Math.max(this.stats.peak, hunting);
+    this.mean = aggression(time);
+    this.pickSeekers(time, cars);
     if (!this.go || humans === 0 || time < this.nextDrop || hunting >= copsWanted(time, this.formation.length, humans, this.count)) return;
     const u = this.vacant();
     const tg = this.dropTarget(cars);
@@ -507,6 +610,31 @@ export class HunterBrain extends CopBrain {
         this.pinned[i] = 0;
         this.calm[i] = 0;
       }
+    }
+  }
+
+  /** Each hunting unit seeks a hit while it is among the nearest `ceil(a × n)` of the `n` units after the human it is ranked against; the pick is held `SEEK_HOLD` s. */
+  private pickSeekers(time: number, cars: readonly AiCar[]): void {
+    for (let u = 0; u < this.count; u++) {
+      if (this.state[u] !== HUNTING) continue;
+      const car = cars[this.first + u]!;
+      this.rankedOn[u] = this.nearestHunted(car.x, car.z, cars);
+      this.rankedAt[u] = this.nearGap;
+    }
+    for (let u = 0; u < this.count; u++) {
+      if (this.state[u] !== HUNTING) {
+        this.seeks[u] = 0;
+        continue;
+      }
+      let n = 0;
+      let nearer = 0;
+      for (let v = 0; v < this.count; v++) {
+        if (this.state[v] !== HUNTING || this.rankedOn[v] !== this.rankedOn[u]) continue;
+        n++;
+        if (this.rankedAt[v]! < this.rankedAt[u]! || (this.rankedAt[v] === this.rankedAt[u] && v < u)) nearer++;
+      }
+      if (nearer < Math.ceil(this.mean * n)) this.seekUntil[u] = time + SEEK_HOLD;
+      this.seeks[u] = time < this.seekUntil[u]! ? 1 : 0;
     }
   }
 
@@ -577,6 +705,7 @@ export class HunterBrain extends CopBrain {
     this.role[u] = u;
     this.queued[u] = 0;
     this.charging[u] = 0;
+    this.seekUntil[u] = -Infinity;
     this.wedge.reset(u);
     world.sirens(this.first + u, true);
   }

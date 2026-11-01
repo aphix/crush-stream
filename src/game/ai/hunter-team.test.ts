@@ -4,6 +4,9 @@ import { humanSlot } from "../match/survival.ts";
 import { copsWanted, HUNT, huntCap, huntUnits } from "./hunter.ts";
 import type { AiCar } from "./derby-ai.ts";
 import { BEAT, FAR, rig, spec } from "./hunter-rig.test-util.ts";
+import { atFullAggression } from "./ramp.test-util.ts";
+
+atFullAggression();
 
 describe("given the pack a Survival run builds for its humans", () => {
   const n = spec.formation.length;

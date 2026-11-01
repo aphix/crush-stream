@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { RESULTS_DELAY } from "../engine/engine-race.ts";
 import { copsWanted, HUNT } from "../ai/hunter.ts";
+import { fullAggression } from "../ai/ramp.test-util.ts";
 import { COUNTDOWN, GRID_TIME } from "../match/session.ts";
 import { SURVIVAL } from "../match/survival.ts";
 import type { RaceHud } from "../match/types.ts";
@@ -236,7 +237,8 @@ describe("given a Survival run on the Havana course (the player against a pack o
     }
   });
 
-  it("when the player lasts through the first two schedule steps, then the HUD's pack count follows the schedule (the cap and the long run are the hunter unit test's)", () => {
+  it("when the player lasts through the first two schedule steps at full aggression, then the HUD's pack count follows the schedule (the cap, the ramp and the long run are the hunter unit test's)", (t) => {
+    fullAggression(t);
     const w = survivalWorld();
     try {
       // The evading driver (`drivers("evade")`): a player out to stay alive. The ring tour at a fixed 16 m/s lasted to step 1 only while the pack's

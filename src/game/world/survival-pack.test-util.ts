@@ -12,11 +12,14 @@ const RELEASE_SPREAD = 24;
 /** The race second seed `seed`'s formation is let go. */
 export const release = (seed: number): number => RELEASE_FIRST + ((RELEASE_LAST - RELEASE_FIRST) * (seed - 1)) / (RELEASE_SPREAD - 1);
 
-/** Why `c` is not a run the pack ended (null: it is): still running, ended by something else (or by anything but `only`), or, when `packWins`, a run that ended itself with no powered cop touching. */
-export function miss(c: Chase, packWins: boolean, by: number, only: string | null = null): string | null {
+/**
+ * Why `c` is not a run the pack ended (null: it is): still running, ended by something else (or by anything but `only`), or, when `packWins`, a run that ended itself with no powered cop
+ * touching. `bustHolds`: a bust is the pack's by the rules' own hold (a chasing cop within 20 m, under 20 km/h, unbroken for the bust time), which a settled ring keeps without touching, so it is not asked for a touch.
+ */
+export function miss(c: Chase, packWins: boolean, by: number, only: string | null = null, bustHolds = false): string | null {
   if (!c.ended) return `still running after ${by} s (${c.touches} cop contacts, the last at ${c.lastTouch.toFixed(0)} s)`;
   if (c.cause !== "busted" && c.cause !== "wrecked") return `ended by ${c.cause}`;
   if (only !== null && c.cause !== only) return `ended ${c.cause}, not ${only}`;
-  if (packWins && c.time - c.lastTouch >= 2) return `no cop touched the player in the last ${(c.time - c.lastTouch).toFixed(1)} s: it ended itself`;
+  if (packWins && !(bustHolds && c.cause === "busted") && c.time - c.lastTouch >= 2) return `no cop touched the player in the last ${(c.time - c.lastTouch).toFixed(1)} s: it ended itself`;
   return null;
 }

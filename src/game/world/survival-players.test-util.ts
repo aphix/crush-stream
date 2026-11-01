@@ -40,6 +40,9 @@ const LOOK_MIN = 60;
 const RING_SPEED = 22;
 /** A cop contact counts as the pack's when that cop had the throttle down within this many seconds (`chase`). */
 const POWERED = 1;
+/** The player is hurt when its crumple zone is compressed this far (m) within `HURT_WITHIN` s of a powered cop contact: a dent the driver sees, not a scrape. */
+const HURT = 0.2;
+const HURT_WITHIN = 2;
 /** `corner`: it makes for the arena corner opposite its start, `CORNER` m from each axis, and within `ARRIVE` m of it holds `CREEP` m/s (under the bust's 20 km/h). */
 const CORNER = 70;
 const ARRIVE = 15;
@@ -180,6 +183,12 @@ export type Chase = {
   /** Cop contacts with the player before the end (a new one after half a second apart), and the race second of the last. */
   touches: number;
   lastTouch: number;
+  /** Race second of the first powered cop contact (−1 none), and of the player first hurt by a cop (−1 never): `HURT`. */
+  firstTouch: number;
+  hurtAt: number;
+  /** The most the player's crumple zone was compressed (m), and the least its engine's health (1 untouched, 0 dead) over the run. */
+  crush: number;
+  health: number;
   /** The player's speed at the end (m/s), the rectangle it drove over, and the most cops live at once. */
   speed: number;
   reach: { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -241,6 +250,7 @@ export function chase(fleer: Fleer, seed: number, seconds: number, course?: unkn
     };
     const drive = drivers(fleer, seed, course);
     let touches = 0;
+    let firstTouch = -1;
     let lastTouch = -1;
     const reach = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
     if (pair) {
@@ -253,10 +263,14 @@ export function chase(fleer: Fleer, seed: number, seconds: number, course?: unkn
     w.onPairContact = (a, b) => {
       if (a !== 0 && b !== 0) return;
       if (w.race.time < release || w.race.time - (drivenAt.get(a === 0 ? b : a) ?? -Infinity) > POWERED) return;
+      if (firstTouch < 0) firstTouch = w.race.time;
       if (w.race.time - lastTouch > 0.5) touches++;
       lastTouch = w.race.time;
     };
     let speed = 0;
+    let hurtAt = -1;
+    let crush = 0;
+    let health = 1;
     let gap = -1;
     const played = play(w, {
       seconds: GRID_TIME + COUNTDOWN + seconds,
@@ -264,6 +278,9 @@ export function chase(fleer: Fleer, seed: number, seconds: number, course?: unkn
       player: (ww) => {
         each?.(ww, ww.race.time);
         const car = ww.cars[0]!;
+        crush = Math.max(crush, car.deform.crushAmount);
+        health = Math.min(health, car.deform.drivetrainHealth);
+        if (hurtAt < 0 && lastTouch >= 0 && car.deform.crushAmount >= HURT && ww.race.time - lastTouch <= HURT_WITHIN) hurtAt = ww.race.time;
         speed = car.velocity.length();
         const p = car.group.position;
         const cops = liveCops(ww);
@@ -276,7 +293,7 @@ export function chase(fleer: Fleer, seed: number, seconds: number, course?: unkn
       },
     });
     const end = played.ends[0];
-    return { fleer, seed, ended: end !== undefined, cause: end?.cause ?? "none", time: end?.time ?? w.race.time, touches, lastTouch, speed, reach, peak: played.peak, gap, played };
+    return { fleer, seed, ended: end !== undefined, cause: end?.cause ?? "none", time: end?.time ?? w.race.time, touches, lastTouch, firstTouch, hurtAt, crush, health, speed, reach, peak: played.peak, gap, played };
   } finally {
     leaveSurvival(w);
   }

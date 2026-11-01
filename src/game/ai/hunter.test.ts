@@ -5,7 +5,7 @@ import { DRIVE, idleDrive } from "../vehicle/car-drive.ts";
 import { applyAiDrive } from "./input-fade.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { snapshotAiCar } from "../match/derby.ts";
-import { BLOCKABLE, CALM_END, copsWanted, HUNT, RAM_AFTER, RUN_UP, SETTLE } from "./hunter.ts";
+import { aggression, BLOCKABLE, CALM_END, copsWanted, HUNT, RAM_AFTER, RAMP, RUN_UP, SETTLE } from "./hunter.ts";
 import { humanSlot } from "../match/survival.ts";
 import { ATTACK, attackTarget } from "./cop-brain.ts";
 import { setGround } from "../world/ground.ts";
@@ -13,10 +13,14 @@ import type { PropCollider } from "../world/placements.ts";
 import { blankProjection, projectPath } from "../world/track.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 import { BEAT, FAR, rig, spec, track } from "./hunter-rig.test-util.ts";
+import { atFullAggression, onRamp } from "./ramp.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { turnRate } from "./race-ai.ts";
 import { assignClass, classStats } from "../vehicle/vehicle-classes.ts";
 import { SURFACES } from "../world/catalog.ts";
+
+// The rows below pin the pack at full aggression (the end of the ramp, today's pack from the green); the ramp's own rows call `onRamp`.
+atFullAggression();
 
 describe("given the Survival schedule of how many cops are wanted as the heat goes on, with a starting formation of cops", () => {
   it("when the wanted count is read at different times, then it starts at the formation size, grows by one every 12 s, stops at the cap of 12 and adds nothing before the green", () => {
@@ -27,6 +31,45 @@ describe("given the Survival schedule of how many cops are wanted as the heat go
     expect(copsWanted(HUNT.every * 3 + 1, n)).toBe(n + 3);
     expect(copsWanted(10_000, n)).toBe(HUNT.cap);
     expect(copsWanted(-5, n), "before the green nothing is added").toBe(n);
+  });
+});
+
+describe("given Survival's aggression a(t), the pack's meanness as one number a run reads from the green", () => {
+  it("when a is read before the green and up to 30 s in, then it is 0.25, from there it eases in cubically to 1 at 90 s and stays there", () => {
+    onRamp();
+    const floor = aggression(0);
+    expect(floor).toBe(0.25);
+    for (const t of [-5, 0, 15, 30]) expect(aggression(t), `at ${t} s`).toBe(floor);
+    expect(aggression(60), "half way along the ramp it has gone an eighth of the way up").toBeCloseTo(0.25 + 0.75 / 8, 12);
+    expect(aggression(90)).toBe(1);
+    expect(aggression(500)).toBe(1);
+    let last = floor;
+    for (let t = 31; t <= 90; t++) {
+      expect(aggression(t), `at ${t} s`).toBeGreaterThan(last);
+      last = aggression(t);
+    }
+  });
+
+  it("when the wanted count is read on the ramp, then no cop is added in the first 48 s, the schedule's steps are a of the full ones after that, and the cap is met at 90 s", () => {
+    onRamp();
+    const n = spec.formation.length;
+    const added = (t: number): number => copsWanted(t, n) - n;
+    expect([0, 12, 24, 36, 47.9].map(added)).toEqual([0, 0, 0, 0, 0]);
+    expect([48, 60, 72, 84].map(added)).toEqual([1, 1, 3, 5]);
+    expect(copsWanted(90, n)).toBe(HUNT.cap);
+    expect(copsWanted(-5, n), "before the green nothing is added").toBe(n);
+  });
+
+  it("when the pack hunts a human on the ramp, then at the green ceil(a × units) of the units seek a hit, and at the top every unit does", () => {
+    onRamp();
+    const r = rig();
+    const seeking = (): number => r.brain["seeks"].reduce((n, s) => n + s, 0);
+    r.run(1);
+    expect(r.brain.hunting).toBe(spec.formation.length);
+    expect(seeking(), "units seeking at the green").toBe(Math.ceil(RAMP.floor * spec.formation.length));
+    r.run(100);
+    expect(r.brain.hunting, "the pack at the cap").toBe(HUNT.cap);
+    expect(seeking(), "units seeking at the top").toBe(HUNT.cap);
   });
 });
 
@@ -317,6 +360,45 @@ describe("given one cop on the paseo facing +z, driven by the hunter brain, with
     expect(past.steer, "turned into a target it was passing").toBe(0);
     expect(past.brake, "did not brake for a stopped car one lane over").toBe(1);
   });
+
+  /** The cop's pedals after a second of one scene: the target `gap` m ahead on the cop's heading doing `tv`, the cop `offset` m to one side doing `v`, a seeker or not. */
+  function pedalsIn(gap: number, seeks: 0 | 1, tv: number, offset: number, v: number): { throttle: number; brake: number; boost: boolean } {
+    const d = drive(gap);
+    d.r.brain["seeks"][0] = seeks;
+    Object.assign(d.tg, { x: 0, z: PASEO + gap, vx: 0, vz: tv });
+    Object.assign(d.cop, { x: offset, z: PASEO, vx: 0, vz: v });
+    let o = d.out();
+    for (let k = 0; k < FRAME_HZ; k++) o = d.out();
+    return { throttle: o.throttle, brake: o.brake, boost: o.boost };
+  }
+
+  it("when a seeker closes at 20 m/s on a moving target 11 m ahead, one lane over, then at the floor of a it lifts and brakes for a hit it can take, and at full aggression it goes straight on", () => {
+    onRamp();
+    const floor = pedalsIn(11, 1, 12, 3, 32);
+    expect(floor.throttle, "kept the gas on into a hit over the floor's closing cap").toBe(0);
+    expect(floor.brake, "did not brake for it").toBe(1);
+    Reflect.set(RAMP, "hold", -Infinity);
+    const full = pedalsIn(11, 1, 12, 3, 32);
+    expect(full.throttle, "lifted at full aggression").toBe(1);
+    expect(full.brake).toBe(0);
+  });
+
+  it("when a seeker is 10 m behind a target doing 30 m/s, then under a of 0.5 it drives on into its tail boosting, and at full aggression it holds its queue row without boost", () => {
+    onRamp();
+    const floor = pedalsIn(10, 1, 30, 0, 30);
+    expect(floor.throttle, "no gas into the tail").toBe(1);
+    expect(floor.boost, "no boost into the tail").toBeTruthy();
+    Reflect.set(RAMP, "hold", -Infinity);
+    expect(pedalsIn(10, 1, 30, 0, 30).boost, "boosting in the queue at full aggression").toBeFalsy();
+  });
+
+  it("when a unit that does not seek is 8 m behind a target doing 15 m/s at its own speed, then it brakes back to its slot 12 m behind, and 30 m behind it closes on it", () => {
+    onRamp();
+    expect(pedalsIn(8, 0, 15, 0, 15).brake, "held its place 8 m off a target it was not to hit").toBeGreaterThan(0);
+    const far = pedalsIn(30, 0, 15, 0, 15);
+    expect(far.throttle, "did not close up to its slot").toBeGreaterThan(0);
+    expect(far.brake).toBe(0);
+  });
 });
 
 describe("given a hunter at 35 m/s heading at a stopped player car 40 m away, driven by the hunter brain on the course's ground", () => {
@@ -417,8 +499,8 @@ function playerScene(boxed: boolean) {
   return { r, x, z };
 }
 
-/** One real police cop 25 m south of the scene's player car, driven for `seconds` s: each frame the cop's speed and its distance to the player car. */
-function copRun(seconds: number, speedAt: (t: number) => number): { t: number; v: number; d: number }[] {
+/** One real police cop 25 m south of the scene's player car, driven for `seconds` s: each frame the cop's speed, its speed toward the player car (`c`) and its distance to it. */
+function copRun(seconds: number, speedAt: (t: number) => number): { t: number; v: number; c: number; d: number }[] {
   const { r, x, z } = playerScene(true);
   const player = r.cars[0]!;
   setGround(track.ground());
@@ -427,7 +509,7 @@ function copRun(seconds: number, speedAt: (t: number) => number): { t: number; v
   r.brain.setClass(1, classStats("police"));
   car.spawnFacing(x, z - 25, 0, 20);
   const cop = r.cars[1]!;
-  const out: { t: number; v: number; d: number }[] = [];
+  const out: { t: number; v: number; c: number; d: number }[] = [];
   const dt = 1 / FRAME_HZ;
   r.run(seconds, (t) => {
     Object.assign(player, { vx: 0, vz: -speedAt(t) });
@@ -435,7 +517,8 @@ function copRun(seconds: number, speedAt: (t: number) => number): { t: number; v
       snapshotAiCar(cop, 1, car, true);
       applyAiDrive(car, r.brain.think(cop, r.cars, dt), dt);
       car.integrate(dt);
-      out.push({ t: t + step * dt, v: Math.hypot(cop.vx, cop.vz), d: Math.hypot(player.x - cop.x, player.z - cop.z) });
+      const d = Math.hypot(player.x - cop.x, player.z - cop.z);
+      out.push({ t: t + step * dt, v: Math.hypot(cop.vx, cop.vz), c: (cop.vx * (player.x - cop.x) + cop.vz * (player.z - cop.z)) / d, d });
     }
   });
   setGround(null);
@@ -453,7 +536,19 @@ function backsOff(seconds: number, boxed: boolean, speedAt: (t: number) => numbe
   return out.throttle < 0.5 && Math.abs(out.steer) > 0.5;
 }
 
+/** Centre distance (m) inside which a cop at the player car has hit it (a car is 4.6 m long). */
+const CONTACT = 6;
+
 describe("given a player car boxed in by walls on three sides and two wrecks, and a police cop on the open side", () => {
+  it("when the same squirm runs at the floor of a, then the cop backs off to no more than a short run-up and arrives at the player car under the kill bar, not at 28 m/s", () => {
+    onRamp();
+    const run = copRun(RAM_AFTER + 14, () => 8);
+    const far = Math.max(...run.filter((f) => f.t > RAM_AFTER).map((f) => f.d));
+    const hit = Math.max(0, ...run.filter((f) => f.t > RAM_AFTER && f.d < CONTACT).map((f) => f.c));
+    expect(far, `${far.toFixed(0)} m the cop backed off to`).toBeLessThan(RUN_UP - 10);
+    expect(hit, `${hit.toFixed(1)} m/s closing on the player car`).toBeGreaterThan(0);
+    expect(hit, `${hit.toFixed(1)} m/s closing on the player car`).toBeLessThan(16);
+  });
   it("when the player squirms over the bust's 20 km/h for the wait, then a real cop backs off to a run-up and charges in at 28 m/s or more (its speed within 12 m of the player car), and before the wait is up it comes in under 28 m/s", () => {
     const run = copRun(RAM_AFTER + 14, () => 8);
     const early = Math.max(0, ...run.filter((f) => f.t < RAM_AFTER).map((f) => f.v));

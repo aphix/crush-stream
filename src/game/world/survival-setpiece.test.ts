@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hash01 } from "../kernel/scalar.ts";
+import { fullAggression } from "../ai/ramp.test-util.ts";
 import { holdLine, leaveSurvival, play, survivalWorld } from "./survival-run.test-util.ts";
 import type { World } from "./race-world.test-util.ts";
 
@@ -9,6 +10,9 @@ import type { World } from "./race-world.test-util.ts";
  * The friend's spec: several cops reach the embankment's foot within about half a second of each other and leave the ground at the
  * crest; and a player who brakes hard near the crest's left makes them overshoot and fly past. The seed rolls the human's
  * line (x = −6 ± 1.5 m) and how far ahead it looks (25–40 m), and pins the field's dice.
+ *
+ * Re-staged onto the aggression ramp: this is the opening of the full pack (aggression 1 from the green). On the ramp a cop taps the player at about 3 s (`survival-opening`) and
+ * the tap crashes it, so the foot is crossed one cop at a time from 15 s and none leaves the ground at the crest; the ramp's own opening is the rows of that file.
  */
 const SEED = 1;
 
@@ -78,6 +82,7 @@ function together(foot: readonly number[]): number {
 
 describe(`given Survival's opening scene on the Havana course (five cops in a staggered formation behind the player), rolled with seed ${SEED}`, () => {
   it("when the player holds the boulevard line at full throttle, then three cops reach the embankment's foot within half a second of each other and leave the ground at the crest", (t) => {
+    fullAggression(t);
     const p = setPiece(SEED, false);
     t.annotate(`foot ${p.foot.map((x) => x.toFixed(2)).join(" ")}; ${together(p.foot)} within ${WINDOW} s; ${p.takeoffs.length} took off; the player strayed ${p.stray.toFixed(1)} m, clean ${p.clean}`);
     expect(p.foot.length, "the pack never reached the foot").toBe(5);
@@ -88,6 +93,7 @@ describe(`given Survival's opening scene on the Havana course (five cops in a st
   });
 
   it("when the player brakes hard near the crest's left, then the cops overshoot and fly past", (t) => {
+    fullAggression(t);
     const p = setPiece(SEED, true);
     t.annotate(`${p.passed} passed the player; ${p.takeoffs.length} took off at the crest`);
     expect(p.passed, `only ${p.passed} cops overshot the braking player`).toBeGreaterThanOrEqual(3);
