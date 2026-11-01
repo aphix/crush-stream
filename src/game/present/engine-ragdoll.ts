@@ -61,6 +61,7 @@ export class RagdollSystem extends RagdollThrower {
     this.tumble?.reset();
     for (const c of this.statics) this.world?.removeCollider(c, false);
     this.statics.length = 0;
+    this.freeScenePatch();
   }
 
   /**

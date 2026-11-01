@@ -267,14 +267,13 @@ export abstract class RagdollThrower extends RagdollStepper {
 
   /**
    * A scene's own solids (the Lab's wall, brackets and solid props) a dummy collides with while `ground` is the active one,
-   * as a course's are, and its knockable props (`placed`, drawn by `props`), all back on their spots. Their one patch goes
-   * into the world now when it can, so no throw pays for it.
+   * as a course's are, and its knockable props (`placed`, drawn by `props`), all back on their spots. Their one patch goes into
+   * the world with the scene's first frame (`stepWorld`), not here: the scene has hidden what it hides (the sandbox's posts) by then.
    */
   setSolids(ground: Ground, solids: readonly Solid[], placed: readonly Placed[], props: PropDraw | null): void {
     this.course = { ground, track: null, placed };
     this.solids = solids;
     this.freeScenePatch();
-    if (this.world && activeGround() === ground) this.buildScenePatch();
     this.props.set(placed, props);
     this.tumble = props;
     if (this.live === 0) this.mode = null;

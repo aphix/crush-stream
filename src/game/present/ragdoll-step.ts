@@ -72,6 +72,12 @@ export abstract class RagdollStepper extends RagdollPool {
     return false;
   }
 
+  /** A scene's one patch (`setSolids`) is in the world while its ground is the active one, and out when it is not: built on the first frame after the scene is set, which has hidden its posts by then. */
+  private keepScenePatch(on: boolean): void {
+    if (!on) this.freeScenePatch();
+    else if (this.course!.track === null) this.buildScenePatch();
+  }
+
   /** The frame's physics and its draw, here: what `update` does in this thread and the world's worker does for each posted frame. `loose`: the frame's loose car bodies (`recordLoose`). */
   stepWorld(dt: number, cars: readonly RagCar[], authority: boolean, sandbox: boolean, barrier: THREE.Object3D | null, loose: Float64Array): void {
     this.authority = authority;
@@ -82,7 +88,9 @@ export abstract class RagdollStepper extends RagdollPool {
     for (const t of this.pending) if (t.age <= PENDING_MAX) this.spawn(t);
     this.pending.length = 0;
     this.wake();
-    this.props.here(this.course !== null && activeGround() === this.course.ground);
+    const sceneOn = this.course !== null && activeGround() === this.course.ground;
+    this.props.here(sceneOn);
+    this.keepScenePatch(sceneOn);
     if (this.live === 0 && this.props.count === 0 && this.boxes.asleep()) {
       this.loose.clear();
       for (let i = 0; i < MAX_CARS; i++) this.proxies.follow(i, null);

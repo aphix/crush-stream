@@ -7,6 +7,7 @@ import { DISC_GROUND, setGround } from "../world/ground.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { PARTS } from "./ragdoll-body.ts";
 import { BASE_SLOTS, SLOTS } from "./ragdoll-config.ts";
+import type { Pole } from "./ragdoll-ground.ts";
 import { PURSE_BODIES } from "./ragdoll-purse.ts";
 import { driverLook } from "./driver-look.ts";
 import { WALKER_SLOT } from "./ragdoll-pool.ts";
@@ -37,8 +38,8 @@ describe("given the showcase's world: its disc, its props and room for 32 dummie
     sys.setCapacity(SLOTS);
     const bare = sys.stats.colliders;
     sys.setSolids(DISC_GROUND, [], SHOWCASE_PROPS, null);
-    expect(sys.stats.colliders - bare, "colliders the scene's ground added when it was set").toBeGreaterThan(0);
     sys.update(FRAME, [], true, false, null);
+    expect(sys.stats.colliders - bare, "colliders the scene's ground and props added in its first frame").toBeGreaterThan(0);
     const idle = sys.stats.colliders;
     throwDummy(0);
     expect(sys.stats.colliders - idle, "colliders the first dummy added: his slot was built at load").toBe(0);
@@ -62,6 +63,44 @@ describe("given the player's walker standing in a scene", () => {
     sys["dolls"][WALKER_SLOT]!.cur[0] = 30;
     sys.update(FRAME, [], true, false, null);
     expect(sys.stats.colliders - before, "colliders his walk added").toBe(0);
+  });
+});
+
+describe("given the world of a scene whose solids stand in it (the Lab's, the showcase's)", () => {
+  /** A world holding nothing of the scene's but its ground (no knockable props): what it holds past a bare world is its one patch. `poles` stand as it is set, and `beforeFrame` runs before its first frame, as the showcase hides the posts. Returns the bare world's colliders. */
+  async function enter(poles: readonly Pole[], beforeFrame: () => void): Promise<number> {
+    setGround(DISC_GROUND);
+    sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await sys.preload();
+    const bare = sys.stats.colliders;
+    sys.poles = poles;
+    sys.setSolids(DISC_GROUND, [], [], null);
+    beforeFrame();
+    sys.update(FRAME, [], true, false, null);
+    return bare;
+  }
+
+  it("when the run is reset, then the scene's patch is out of the world: leaving the Lab leaves none of its walls behind", async () => {
+    const bare = await enter([], () => {});
+    expect(sys.stats.colliders - bare, "the control: the scene's ground is in").toBeGreaterThan(0);
+    sys.reset();
+    expect(sys.stats.colliders, "colliders after the reset").toBe(bare);
+  });
+
+  it("when the scene's ground is no longer the active one, then its patch is out of the world after the next frame", async () => {
+    const bare = await enter([], () => {});
+    setGround(null);
+    sys.update(FRAME, [], true, false, null);
+    expect(sys.stats.colliders, "colliders after the frame").toBe(bare);
+  });
+
+  it("when a post stands as the scene is set and is hidden before its first frame, then the patch holds no post", async () => {
+    const bare = await enter([], () => {});
+    const bareScene = sys.stats.colliders - bare;
+    sys.dispose();
+    const post: Pole = { group: { position: { x: 16, z: 0 }, visible: true }, intact: true, radius: 0.15 };
+    const bare2 = await enter([post], () => (post.group.visible = false));
+    expect(sys.stats.colliders - bare2, "colliders of the scene entered with a post it hid").toBe(bareScene);
   });
 });
 
