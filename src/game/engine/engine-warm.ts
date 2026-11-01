@@ -219,7 +219,10 @@ export abstract class EngineWarm extends EngineCore {
     r.setScissorTest(true);
     hdr.scissor.set(0, 0, 0, 0);
     hdr.scissorTest = true;
+    // The cover lanes hide themselves in `scene.onBeforeRender` while no car is cut: this keeps them drawn for the warm's draws.
+    this.coverBatch.warm = true;
     draw();
+    this.coverBatch.warm = false;
     hdr.scissorTest = false;
     r.setScissorTest(false);
     for (const o of shown) o.visible = false;

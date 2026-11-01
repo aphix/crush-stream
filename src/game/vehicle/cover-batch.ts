@@ -76,9 +76,9 @@ class CoverLane {
     cover.bone.matrixWorld.copy(part.matrixWorld);
   }
 
-  /** Collapse what this frame did not draw; the lane draws nothing while it covers nothing. */
-  end(): void {
-    let shown = false;
+  /** Collapse what this frame did not draw; the lane draws nothing while it covers nothing, unless `keep` (the warm draws it: every bone collapsed, nothing lands). */
+  end(keep: boolean): void {
+    let shown = keep;
     for (let i = 0; i < this.covers.length; i++) {
       const cover = this.covers[i]!;
       if (cover.seen === this.frame) shown = true;
@@ -215,6 +215,8 @@ export class CoverBatch {
   readonly group = new THREE.Group();
   private readonly paint: CoverLane;
   private readonly glass: CoverLane;
+  /** Set while the warm draws: both lanes stay drawn, so each program's first draw (uniform fetch, bone texture upload) is the warm's and not the first cut car's frame. */
+  warm = false;
 
   constructor(cars: number) {
     this.paint = new CoverLane(makePaintMaterial(0xffffff), cars * CLOSERS, PART_VERTICES, PART_INDICES);
@@ -232,8 +234,8 @@ export class CoverBatch {
       for (const part of car.apertureParts) if (cut(car, part)) this.paint.add(part);
       for (const pane of car.glassPanes) if (cut(car, pane.mesh)) this.glass.add(pane.mesh);
     }
-    this.paint.end();
-    this.glass.end();
+    this.paint.end(this.warm);
+    this.glass.end(this.warm);
   }
 
   dispose(): void {

@@ -51,6 +51,8 @@ describe("given the engine warming its programs before the loop starts", () => {
   const render = (scene: THREE.Scene): void => {
     const main = scene === engine["scene"];
     if (main) drawnPasses.add(pass());
+    // The real renderer runs this at the start of every render: the batches' own syncs hide what no car shows.
+    if (main) (scene.onBeforeRender as (renderer: THREE.WebGLRenderer) => void)(engine["renderer"]);
     scene.traverse((object) => {
       if (!isDrawn(object)) return;
       if (object.parent?.name === "ragdoll-debug") drawnDebugViews.add(object.type);
@@ -82,6 +84,12 @@ describe("given the engine warming its programs before the loop starts", () => {
   it("when the boot warm-up draws the scene, then the thrown dummies' rig lines and particle spheres are drawn too, and both views are off again after", () => {
     expect(firstMismatch([...drawnDebugViews].sort(), ["LineSegments", "Mesh"])).toBeUndefined();
     expect(engine["ragdolls"].debug.on).toBe(false);
+  });
+
+  it("when the boot warm-up draws the scene with no car cut, then both cover lanes (cut doors, lids and panes) are drawn and hidden again after: a cut car's first frame links nothing", () => {
+    const lanes = engine["coverBatch"].meshes;
+    expect(lanes.filter((mesh) => !drawnMaterials.has(mesh.material as THREE.Material)).map((mesh) => (mesh.material as THREE.Material).name), "lanes the warm-up never drew").toEqual([]);
+    expect(lanes.map((mesh) => mesh.visible).join(), "hidden again after").toBe("false,false");
   });
 
   it("when the boot warm-up runs on a tier without the finish, then car paint is linked and drawn plain for both outputs and finished for the HDR target only, and is plain again after", () => {
