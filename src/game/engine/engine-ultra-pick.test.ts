@@ -9,6 +9,7 @@ import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { PageWorker } from "./page-worker.test-util.ts";
+import { cloneOfFinished, scraped } from "../present/paint-scratch.test-util.ts";
 import { servePublic } from "./page-files.test-util.ts";
 
 /** The extension that links programs off the main thread, and its query (three's `WebGLProgram.isReady`). */
@@ -27,6 +28,8 @@ const STEP_PROGRAMS = 3;
 const STEP_FRAMES = 2;
 /** Course surfaces Ultra never wore, added before the stepped pick: more new programs than two steps link. */
 const FRESH_SURFACES = 8;
+/** What a finish program's key carries (`applyFinish`). */
+const FINISH_KEY_MARK = "|finish-";
 
 /**
  * The headless context with parallel linking: a program made while `hold(true)` is on reads as still linking (`COMPLETION_STATUS_KHR`
@@ -242,6 +245,31 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     }
     expect(mark, "the key changed while the pick ran").toBe("|scratch");
     expect(engine["cine"].tier, "tier after the pick").toBe("ultra");
+    expect(drawFrames(1).made, "programs the first Ultra frame linked").toBe(0);
+  });
+
+  it("when every car was scratched at Low and Ultra is picked, then each bumper's own trim wears the finish at Ultra, its program linked by the pick, and the first Ultra frame links nothing", { timeout: HANG_GUARD_MS }, async () => {
+    await engine.setFxTier("low");
+    await engine.warmsIdle();
+    for (const car of engine["live"]()) scraped(car, [[0.5, -0.5]]);
+    drawFrames(1);
+    engine["loopDraws"] = true;
+    try {
+      await framesUntilSettled(engine.setFxTier("ultra"), []);
+    } finally {
+      engine["loopDraws"] = false;
+    }
+    let finishable = 0;
+    for (const car of engine["live"]()) {
+      for (const mesh of car.lookMeshes().bumpers) {
+        const material = mesh.material as THREE.Material;
+        expect(material.userData.shared, "the control: the bumper wears its own trim").toBe(false);
+        const wears = cloneOfFinished(material);
+        if (wears) finishable++;
+        expect(material.customProgramCacheKey().includes(FINISH_KEY_MARK), "the bumper's program key: finished only where its trim has a finish").toBe(wears);
+      }
+    }
+    expect(finishable, "the control: some bumper wears a finishing trim").toBeGreaterThan(0);
     expect(drawFrames(1).made, "programs the first Ultra frame linked").toBe(0);
   });
 

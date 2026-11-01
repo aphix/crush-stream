@@ -43,6 +43,10 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
   draws only at `high` and `ultra`) for the HDR target alone, so it has no canvas twin. A tier switch that changes the
   finish queues the same warm-up, which finds every program linked and drawn and skips its draws. When a switch only
   compiled them, its first frame drew 6 new programs and took 162–194 ms (`check:programs`, headless ANGLE/GL).
+- A scratched car's bumpers draw in trims of their own (`ownTrim`), which key and compile the finish by their own state
+  (`asFinishOf`): the shared trim they were cloned from is switched by no draw once every bumper of its colour is a copy, so a
+  copy keyed by it kept the finish of the tier it was made at (a finish program for the canvas after a step down, a bare
+  bumper at High) and linked that variant on the first frame that drew it.
 - Hidden direct children of the scene (a rig, the arena, a pooled car) are parked out of its graph while no warm-up runs
   (`ParkingScene.sync`, once a frame before the draw): the matrix pass and traversals skip them. Every warm-up starts by
   putting them all back (`unparkAll`), so a hidden mode's programs link with the rest.
@@ -61,9 +65,10 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
   that field steps down to Minimal and back up; booted at Low, it climbs to High and drops back. A program is its id with its
   key, so one freed and linked again counts. The check fails if any program links after the boot warm-up (with the purse
   pool's background warm once Rapier is in) or between a race's green light and its end, if a tier switch links a program
-  or draws one for the first time inside a frame, or if a finish program exists for the canvas. It prints each switch's
-  first three frames' draw ms, the programs held per tier and the finish programs by key. Ultra is not stepped: its pick
-  links and draws its programs before it switches, a few a step with frames between ([`CINEMATIC.md`](CINEMATIC.md)).
+  or draws one for the first time inside a frame (it names the programs by key), or if a finish program exists for the canvas.
+  It prints each switch's first three frames' draw ms, the programs held per tier and the finish programs by key. Ultra is not
+  stepped: its pick links and draws its programs before it switches, a few a step with frames between
+  ([`CINEMATIC.md`](CINEMATIC.md)).
 
 **The `minimal` tier** (the default, `INITIAL_HUD.fxTier`; `?fx=` sets it) renders straight to the canvas: no HDR target,
 bloom, grade, vignette, grain or blur. It keeps every effect that needs no post (tyre marks, tyre smoke, slip sparks, shake,

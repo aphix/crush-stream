@@ -352,11 +352,11 @@ export function finishOn(material: THREE.Material): boolean {
 /**
  * Patch `material` to draw the finish when it is switched on (`applyCarFinish`): it starts off, compiling and keyed exactly as it
  * was. On, its program key gains `|finish-<kind>` after whatever key it had (so a spray applied later, which chains this key,
- * follows the switch) and its shader samples the `kind` map. Chains the earlier compile hook, like `applySpray`.
+ * follows the switch) and its shader samples the `kind` map. Chains the earlier compile hook, like `applySpray`. The hook and the key read the
+ * material's own state when they run (`finishOn`), so `asFinishOf` can run them for a clone.
  */
 export function applyFinish<T extends THREE.MeshStandardMaterial>(material: T, kind: "paint" | "trim"): T {
-  const state: CarFinishState = { on: false };
-  material.userData.carFinish = state;
+  material.userData.carFinish = { on: false } satisfies CarFinishState;
   const previousHook = material.onBeforeCompile;
   const previousKey = material.customProgramCacheKey;
   const finishMap: THREE.IUniform<THREE.DataTexture | null> = { value: null };
@@ -365,7 +365,7 @@ export function applyFinish<T extends THREE.MeshStandardMaterial>(material: T, k
     // three binds a material's latest compile's uniforms to every program it returns to, so an off compile carries the map too: without it the
     // finish sampler keeps its last unit (0, the sun's shadow sampler's, if never set) and every draw on that program fails.
     shader.uniforms.finishMap = finishMap;
-    if (!state.on) return;
+    if (!finishOn(material)) return;
     finishMap.value ??= kind === "paint" ? paintFinishMap() : trimGrainMap();
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vFinishPos;\nvarying vec3 vFinishNormal;")
@@ -374,8 +374,22 @@ export function applyFinish<T extends THREE.MeshStandardMaterial>(material: T, k
       .replace("#include <common>", `#include <common>\n${FINISH_FUNCTIONS}${kind === "paint" ? PAINT_HEIGHTS : TRIM_HEIGHTS}`)
       .replace("#include <clearcoat_normal_fragment_maps>", `#include <clearcoat_normal_fragment_maps>\n${FINISH_NORMALS}${kind === "paint" ? FINISH_COAT_NORMAL : ""}\n}`);
   };
-  material.customProgramCacheKey = () => (state.on ? `${previousKey.call(material)}|finish-${kind}` : previousKey.call(material));
+  material.customProgramCacheKey = () => (finishOn(material) ? `${previousKey.call(material)}|finish-${kind}` : previousKey.call(material));
   return material;
+}
+
+/**
+ * Run `read` (a compile hook or program key chained on `trim`) as `copy`, a `clone()` of `trim`, wears the finish: the clone keeps `trim`'s hooks,
+ * which read `trim`'s state while `applyCarFinish` switches the clone's own, so `copy`'s state stands in for `trim`'s while `read` runs.
+ */
+export function asFinishOf<T>(copy: THREE.Material, trim: THREE.Material, read: () => T): T {
+  const own: unknown = trim.userData.carFinish;
+  trim.userData.carFinish = copy.userData.carFinish;
+  try {
+    return read();
+  } finally {
+    trim.userData.carFinish = own;
+  }
 }
 
 /**

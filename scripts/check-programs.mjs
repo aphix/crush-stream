@@ -71,11 +71,14 @@ const watchDraws = () =>
   page.evaluate(() => {
     const e = window.__crush;
     const gl = e.renderer.getContext();
-    const probe = { inFrame: false, firstDraws: 0, watch: 0, since: 0, frameMs: [], startMs: [] };
+    const probe = { inFrame: false, firstDraws: 0, firstPrograms: new Set(), watch: 0, since: 0, frameMs: [], startMs: [] };
     window.__drawProbe = probe;
     const getUniformLocation = gl.getUniformLocation.bind(gl);
     gl.getUniformLocation = (program, name) => {
-      if (probe.inFrame) probe.firstDraws++;
+      if (probe.inFrame) {
+        probe.firstDraws++;
+        probe.firstPrograms.add(program);
+      }
       return getUniformLocation(program, name);
     };
     const render = e.cine.render.bind(e.cine);
@@ -103,7 +106,7 @@ async function tierSwitch(label, tier, late) {
   const before = new Set((await programs()).map(programId));
   await page.evaluate(
     ([t, frames]) => {
-      Object.assign(window.__drawProbe, { firstDraws: 0, watch: frames, since: performance.now(), frameMs: [], startMs: [] });
+      Object.assign(window.__drawProbe, { firstDraws: 0, firstPrograms: new Set(), watch: frames, since: performance.now(), frameMs: [], startMs: [] });
       window.__crush.setFxTier(t);
     },
     [tier, SWITCH_FRAMES],
@@ -112,11 +115,17 @@ async function tierSwitch(label, tier, late) {
   const now = await programs();
   const linked = now.filter((p) => !before.has(programId(p)));
   perTier.set(tier, now.length);
-  const { firstDraws, frameMs, startMs } = await page.evaluate(() => window.__drawProbe);
+  const { firstDraws, firstKeys, frameMs, startMs } = await page.evaluate(() => {
+    const probe = window.__drawProbe;
+    const held = window.__crush.renderer.info.programs ?? [];
+    const keyOf = (handle) => String(held.find((p) => p.program === handle)?.cacheKey ?? "freed program");
+    return { firstDraws: probe.firstDraws, firstKeys: [...probe.firstPrograms].map(keyOf), frameMs: probe.frameMs, startMs: probe.startMs };
+  });
   const ms = (list) => list.map((t) => t.toFixed(1)).join(" / ");
   console.log(`- ${label}: ${linked.length} programs linked (${now.length} held), ${firstDraws} uniform fetches of first draws inside frames`);
   console.log(`  first ${SWITCH_FRAMES} frames: draw ${ms(frameMs)} ms, started ${ms(startMs)} ms after the switch`);
   for (const p of linked) console.log(`  linked after the switch: ${p.type} …${p.key.slice(-80).replace(/\s+/g, " ")}`);
+  for (const key of firstKeys) console.log(`  first drawn inside a frame: …${key.slice(-80).replace(/\s+/g, " ")}`);
   late.push(...linked);
   if (firstDraws > 0) late.push({ type: "first draw inside a frame", key: label });
 }

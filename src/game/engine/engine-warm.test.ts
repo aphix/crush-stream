@@ -4,8 +4,10 @@ import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import { element, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { cloneOfFinished, scraped } from "../present/paint-scratch.test-util.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import { must } from "../kernel/must.test-util.ts";
 
 /** What a finish program's key carries (`applyFinish`). */
@@ -17,6 +19,8 @@ const PURSE_KEY = "purse-shapes|surf";
 const OUTPUTS = 2;
 /** One frame longer than any load window's settle: the window under way is past it. */
 const PAST_SETTLE_MS = 60_000;
+/** The FX tiers that draw into the HDR target. */
+const POST_TIERS: readonly string[] = ["low", "high", "ultra"];
 
 const isDrawn = (object: THREE.Object3D): boolean => {
   for (let node: THREE.Object3D | null = object; node; node = node.parent) if (!node.visible) return false;
@@ -142,6 +146,32 @@ describe("given the engine warming its programs before the loop starts", () => {
     await engine.warmsIdle();
     expect([...compiledPasses].sort().join()).toBe(FINISH_PASSES);
     expect(paintKey().includes(FINISH_KEY_MARK), `key ${paintKey()}`).toBeTruthy();
+  });
+
+  it("when every car is scratched at High and the tier steps down to Minimal and back up, then the scratch and each step's first frame link nothing, and no finish program is linked for the canvas", async () => {
+    const framed = (): number => {
+      const r = engine["renderer"];
+      const before = (r.info.programs ?? []).length;
+      r.setRenderTarget(POST_TIERS.includes(engine["cine"].tier) ? engine["cine"].post.sceneRT : null);
+      r.compile(engine["scene"], engine["camera"]);
+      r.setRenderTarget(null);
+      return (r.info.programs ?? []).length - before;
+    };
+    await engine.setFxTier("high");
+    await engine.warmsIdle();
+    framed();
+    for (const car of engine["live"]()) scraped(car, [[0.5, -0.5]]);
+    runSeconds(engine, 1 / FRAME_HZ);
+    for (const car of engine["live"]()) for (const mesh of car.lookMeshes().bumpers) expect((mesh.material as THREE.Material).userData.shared, "the control: a bumper wears its own trim").toBe(false);
+    expect(engine["live"]().flatMap((car) => car.lookMeshes().bumpers).filter((mesh) => cloneOfFinished(mesh.material as THREE.Material)).length, "the control: some bumper wears a finishing trim").toBeGreaterThan(0);
+    expect(framed(), "programs the first frame after the scratch links").toBe(0);
+    for (const tier of ["minimal", "high"] as const) {
+      await engine.setFxTier(tier);
+      await engine.warmsIdle();
+      expect(framed(), `programs the first ${tier} frame links`).toBe(0);
+    }
+    const canvasFinish = (engine["renderer"].info.programs ?? []).map((p) => String(p.cacheKey)).filter((key) => key.includes(FINISH_KEY_MARK) && !key.includes(",srgb-linear,"));
+    expect(canvasFinish, "finish programs for the canvas").toEqual([]);
   });
 
   it("when the context is lost and restored, then the warm-up links and draws the whole scene again, every load window starts over (FX tier, distance detail, Auto render scale) and the player's quality knobs stay in force", async () => {

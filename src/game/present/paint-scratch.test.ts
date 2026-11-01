@@ -14,7 +14,7 @@ import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { applyScratch, DENT_FLOOR, DENT_REBUILD_S, DENT_SETTLE_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
-import { channelTexels, sampledScratch, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
+import { channelTexels, cloneOfFinished, sampledScratch, scraped, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -24,19 +24,9 @@ const FRAME_BOUND_B = 16;
 const FRAMES = 10_000;
 /** Frames a dent allocation read runs, each a full redraw of a crushed nose. */
 const DENT_FRAMES = 300;
-
-/** A hard shove along a car's left flank at each rest point (-0.85, y, z) of `at`, each episode committed and closed: one stroke each. */
-function scraped(car: DeformableCar, at: readonly (readonly [number, number])[]): void {
-  car.group.updateMatrixWorld(true);
-  const q = car.group.quaternion;
-  const inward = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
-  const slide = new THREE.Vector3(0, 0, 8).applyQuaternion(q);
-  for (const [y, z] of at) {
-    car.scrape(car.group.localToWorld(new THREE.Vector3(-0.85, y, z)), inward, slide, 0.3, 3, 1);
-    car.scratches.slice(0.25);
-    car.scratches.slice(0.25);
-  }
-}
+/** What a finish program's key carries (`applyFinish`), and a function only its shader declares. */
+const FINISH_KEY_MARK = "|finish-";
+const FINISH_FUNCTION = "finishMeshNear()";
 
 describe("given a car with a full stroke list whose list changes before every frame", () => {
   const car = new DeformableCar({ body: 0x808080, accent: 0, name: "a" }, new THREE.Scene(), null, fleetStyle(0));
@@ -391,5 +381,26 @@ describe("given the real engine with its cars on the screen", () => {
         expect(compileHooks(material).fragmentShader.split("#define PAINT_SCRATCH").length - 1, `round ${round}: scratch compiles`).toBe(1);
       }
     }
+  });
+
+  it("when every car is scraped and the FX tier steps high, low and high, then each bumper's own trim keys and compiles the finish by its own state: finished at High only, and never on a chrome trim", async () => {
+    for (const car of engine["live"]()) scraped(car, [[0.5, -0.5]]);
+    runSeconds(engine, 1 / FRAME_HZ);
+    let finishable = 0;
+    for (const [tier, finished] of [["high", true], ["low", false], ["high", true]] as const) {
+      await engine.setFxTier(tier);
+      for (const car of engine["live"]()) {
+        for (const mesh of car.lookMeshes().bumpers) {
+          const material = mesh.material as THREE.Material;
+          expect(material.userData.shared, `${tier}: the control: the bumper wears its own copy`).toBe(false);
+          const wears = cloneOfFinished(material);
+          if (wears) finishable++;
+          expect(material.userData.carFinish !== undefined, `${tier}: the copy has a finish state exactly where its trim has one (a chrome trim has none)`).toBe(wears);
+          expect(material.customProgramCacheKey().includes(FINISH_KEY_MARK), `${tier}: key ${material.customProgramCacheKey()}`).toBe(finished && wears);
+          expect(compileHooks(material).fragmentShader.includes(FINISH_FUNCTION), `${tier}: compile`).toBe(finished && wears);
+        }
+      }
+    }
+    expect(finishable, "the control: some bumper wears a finishing trim").toBeGreaterThan(0);
   });
 });

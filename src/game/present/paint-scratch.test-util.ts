@@ -3,6 +3,19 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { compileHooks } from "../vehicle/car-detail-map.test-util.ts";
 import { CAR_SPRAY, SPRAY_FACE, sprayFace } from "../vehicle/spray-box.ts";
 
+/** A hard shove along a car's left flank at each rest point (-0.85, y, z) of `at`, each episode committed and closed: one stroke each. */
+export function scraped(car: DeformableCar, at: readonly (readonly [number, number])[]): void {
+  car.group.updateMatrixWorld(true);
+  const q = car.group.quaternion;
+  const inward = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+  const slide = new THREE.Vector3(0, 0, 8).applyQuaternion(q);
+  for (const [y, z] of at) {
+    car.scrape(car.group.localToWorld(new THREE.Vector3(-0.85, y, z)), inward, slide, 0.3, 3, 1);
+    car.scratches.slice(0.25);
+    car.scratches.slice(0.25);
+  }
+}
+
 /** The wear mask `material` hands its program, read through its compile hooks as three builds it: R scratch, G dents (RG8). */
 export function wearOf(material: THREE.Material): THREE.DataTexture {
   return compileHooks(material).uniforms.wearMap!.value as THREE.DataTexture;
@@ -37,4 +50,10 @@ export function channelTexels(car: DeformableCar, channel: 0 | 1): number[] {
 /** Car `car`'s scratches (R), texel by texel. */
 export function scratchTexels(car: DeformableCar): number[] {
   return channelTexels(car, 0);
+}
+
+/** Whether `own`, a car's own bumper trim copy, was cloned from a trim that wears the car finish (a chrome one does not). */
+export function cloneOfFinished(own: THREE.Material): boolean {
+  const trim = own.userData.sharedTrim as THREE.Material | undefined;
+  return trim !== undefined && trim.userData.carFinish !== undefined;
 }

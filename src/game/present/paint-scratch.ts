@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { ensureRestFrame, REST_FRAME_ATTRIBUTES, REST_NORMAL, REST_POSITION } from "../vehicle/car-detail-map.ts";
-import { perturbedNormalGlsl } from "../vehicle/car-finish.ts";
+import { asFinishOf, finishOn, perturbedNormalGlsl } from "../vehicle/car-finish.ts";
 import { FACE_BITS, FACE_MASK, FACE_METRES, FACE_WIDTH, SCRAPE_MAX, SEVERITY, STROKE_BYTES, U0, U1, V0, V1, WIDTH_STEP } from "../vehicle/paint-scrapes.ts";
 import { CAR_SPRAY, SPRAY_FACE, sprayFace, sprayPlace } from "../vehicle/spray-box.ts";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
@@ -333,11 +333,13 @@ function ownTrim(wear: Wear, i: number): void {
   own.userData.sharedTrim = trim;
   const compile = trimCompile.get(trim)!;
   const uniforms = { ...trimScuff.get(trim), ...wear.uniforms };
+  // The clone starts with the shared trim's finish state, which nothing switches once every bumper wears its own copy: the bumper's state now is the tier's. A trim with no finish (chrome) keeps none.
+  if (own.userData.carFinish !== undefined) own.userData.carFinish = { on: finishOn(worn) };
   own.onBeforeCompile = (shader, renderer) => {
-    compile(shader, renderer);
+    asFinishOf(own, trim, () => compile(shader, renderer));
     Object.assign(shader.uniforms, uniforms);
   };
-  own.customProgramCacheKey = trim.customProgramCacheKey;
+  own.customProgramCacheKey = () => asFinishOf(own, trim, () => trim.customProgramCacheKey());
   wear.bumperOwn[i]?.dispose();
   wear.bumperOwn[i] = own;
   mesh.material = own;
