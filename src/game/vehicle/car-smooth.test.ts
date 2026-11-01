@@ -1683,7 +1683,8 @@ const SIM_DIGEST_BY_STYLE = [
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
   // Again for its push bar's box in the cage and the wall's hold on its bumper's particles a bar's reach back (`noseReach`): 2691a219... -> 30a73a14...; the other six unchanged.
-  { id: "police", digest: "d36c7cb05380c5a7d9e56b27bcafee7d4f0e82a2a556eb4a62f23ba279076ac4" },
+  // Again for its push bar folding onto its bumper as the bumper crushes, in the cage and in what the wall holds (`barReach`, no `noseReach`): d36c7cb0... -> 11db57b4...; the other six unchanged.
+  { id: "police", digest: "11db57b42143a8b88394225be9e9609154ee0df704d4750940e54f0d093e2b11" },
   // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
   // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): the other six unchanged.
   // Again when a point of a body at rest inside a solid left by the side its body stands on, not the nearest (CarRig rig-entry): the monster's front

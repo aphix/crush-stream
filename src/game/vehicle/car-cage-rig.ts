@@ -64,7 +64,7 @@ function partPanel(part: DetachPart, on: () => boolean): Panel {
 /** How far (m) behind a bumper's face its plan ends may stand: its first corner ring (a sedan's 9.8 mm back) reaches 10 cm wider than the face's flat. */
 const FACE_RING = 0.01;
 
-/** The masses a cruiser's push bar rides: its front bumper's two, so the bar's box keeps its reach from the bumper's face as the bumper crushes. */
+/** The masses a cruiser's push bar rides: its front bumper's two, so the bar's box folds with the bumper's crush as the drawn bar does. */
 const BAR_MASSES = ["bumperFL", "bumperFR"] as const;
 
 /** A bumper's held points (`Panel.held`): its face's middle, the two ends of its face with its first corner ring (`FACE_RING`), frontmost (`front`) or rearmost, and its two bottom corners (`bumperCorner`, where `frame.hullUnder` stands). Decimated freely, the face went 1-1.5 cm back and a rolled car's corner sank into a flank. */
@@ -356,7 +356,11 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   const interiorMass = Int32Array.from(INTERIOR_MASSES, (name) => rig.masses.findIndex((m) => m.name === name) * 3);
   const loft = cageBody.userData.loft as { ring: number; slices: number };
   const sill = sillSamples(bodyTables, bodyCount, rig.masses, car.style, loft);
-  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, held, apart, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill, lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY, tubs: cageBody.userData.tubs as CageSource["tubs"], loft: loft.ring * loft.slices };
+  const bar = panels.findIndex((p) => p.bar === true);
+  // The box's back face stands on its bumper's face (`pushBarBox`).
+  let barFace = 0;
+  if (bar >= 0) barFace = panels[bar]!.origin.z + Math.min(...panels[bar]!.rest.filter((_, k) => k % 3 === 2));
+  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, held, apart, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill, lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY, tubs: cageBody.userData.tubs as CageSource["tubs"], loft: loft.ring * loft.slices, barGroup: bar + 1, barFace };
 }
 
 /** A car's cage on the lattice (or `step`), its style's build shared by every car of the style. */

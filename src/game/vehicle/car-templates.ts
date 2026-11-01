@@ -21,8 +21,12 @@ export type StyleProduct = (typeof STYLE_PRODUCTS)[number];
 function bumperGeometry(front: boolean, style: BodyStyle): THREE.BufferGeometry {
   const fascia = makeBumperGeometry(front, style);
   // A push bar is merged into the front bumper: it follows the bumper's masses and tears off with it (its flying box is the bumper's as drawn); the cage carries its box.
-  const drawn = front ? withFrontBand(style.pushBar ? withPushBar(fascia) : fascia, style) : withRearFittings(fascia, style);
-  return withSeamCover(drawn, style, front);
+  const barred = front && style.pushBar ? withPushBar(fascia) : fascia;
+  const drawn = front ? withFrontBand(barred, style) : withRearFittings(fascia, style);
+  const out = withSeamCover(drawn, style, front);
+  // The bar's vertices follow the fascia's in every merge after it: the range the bar's fold moves (`DeformableCar.foldBar`), and the face it folds onto.
+  if (barred !== fascia) out.userData.bar = { from: fascia.getAttribute("position").count, to: barred.getAttribute("position").count, face: fascia.boundingBox!.max.z };
+  return out;
 }
 
 function hoodGeometry(style: BodyStyle): THREE.BufferGeometry {

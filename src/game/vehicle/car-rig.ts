@@ -14,7 +14,6 @@ import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
 import { floorY, REAR_GLASS_BOW, rockerAt, wheelsOf, WINDSHIELD_BOW } from "./car-lines.ts";
 import { makeBumperGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { bumperCorner } from "./car-bumper-corner.ts";
-import { PUSH_BAR_REACH } from "./car-materials.ts";
 
 type V3 = readonly [number, number, number];
 type Dims = BodyStyle["dims"];
@@ -254,7 +253,6 @@ function rigOf(style: BodyStyle, w: Warp, wheels: readonly V3[]): RigTables {
     roofSkin: [roofRest[0], roofRest[1], roofZ + roof.dz(roofZ)],
     faceBands: bandsOf(w, cages, masses),
     tyreReach: P.tyreReach + (r - PLATFORM_TYRE.r),
-    noseReach: style.pushBar ? PUSH_BAR_REACH : 0,
     packGap: P.packGap + (named(masses, "bumperFL").rest[2] - named(P.masses, "bumperFL").rest[2]) - (named(masses, "engineL").rest[2] - named(P.masses, "engineL").rest[2]),
     hubHoldMps: CLASSES[STYLE_CLASS[style.id]].hubHoldMps,
     wheelScale: CLASSES[STYLE_CLASS[style.id]].wheelScale,

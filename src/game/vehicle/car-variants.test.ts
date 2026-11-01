@@ -835,7 +835,7 @@ describe("given the police cruiser", () => {
     expect(moved > 0.005 && moved < 0.3, `bar skin moved ${moved.toFixed(3)} m with the roof`).toBeTruthy();
   });
 
-  it("when it hits a wall square-on at 56 km/h, then its front wings crush as far as a sedan's do, within 3 cm: its push bar's box stands ahead of its bumper's particles, which the wall holds a bar's reach further back", (t) => {
+  it("when it hits a wall square-on at 56 km/h, then its front wings crush as far as a sedan's do, within 3 cm: its push bar folds back onto its bumper as the bumper crushes (`barReach`)", (t) => {
     const wingCrush = (id: "police" | "sedan"): number => {
       const car = new DeformableCar(PAINT, new THREE.Scene(), null, id);
       car.deform.setMode("shape");

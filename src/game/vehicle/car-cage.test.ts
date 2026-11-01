@@ -3,9 +3,11 @@ import * as THREE from "three";
 import { CAGE_PART_VERTICES, CAGE_STEP, CAGE_VERTICES, type CageLive, type CageSource, CarCage } from "./car-cage.ts";
 import { CageRig, cageLift, cageOf, cageSourceOf } from "./car-cage-rig.ts";
 import { rasterise } from "./cage-fields.ts";
-import { IMPRINT_NONE } from "../deform/load-crush.ts";
+import { FACE_NOSE, IMPRINT_NONE } from "../deform/load-crush.ts";
+import { barReach, PUSH_BAR_FOLD } from "../deform/deform-rig.ts";
 import { BODIES, buildCar, carInState, cellI, cellJ, cellX, cellZ, type DrawnField, drawnField, drawnTriangles, NX, type Region, reliefGap, STATES, stepFrames, TOP_P95_M, TOP_WORST_M, type TopGaps, topGapsOff, topParts, WorstCells } from "./drawn-body.test-util.ts";
 import { makeBumperGeometry } from "./car-mesh.ts";
+import { freshGeometry } from "./car-templates.ts";
 import { type BodyStyle, CAR_STYLE_IDS } from "./car-variants.ts";
 import { CLASSES, carClass, STYLE_CLASS } from "./vehicle-classes.ts";
 import { PUSH_BAR_REACH } from "./car-materials.ts";
@@ -322,13 +324,15 @@ describe("given a cruiser with its push bar", () => {
 const BAR_CRASH_KMH = 18;
 /** How far (m) a crashed cruiser's cage bar may stand off its place on the bumper (the drawn bar's, or its rest place). */
 const BAR_FOLLOW_M = 0.01;
+/** How far (m) the second car's centre stands to the side of the cruiser's in the offset head-on: the cars overlap by 40 % of their width. */
+const BAR_OFFSET_M = 1.05;
 
-/** A cruiser after a head-on crash with a sedan, 5 s on, its front bumper still on, posed upright at the origin. */
-function crashedCruiser(): DeformableCar {
+/** A cruiser after a head-on crash with a sedan (`offset` m to the side of it), 5 s on, its front bumper still on, posed upright at the origin. */
+function crashedCruiser(offset = 0): DeformableCar {
   const car = buildCar("police", "sedan");
   const other = buildCar("sedan", "sedan");
   launch(car, -5, 0, Math.PI / 2, BAR_CRASH_KMH / 3.6, 0);
-  launch(other, 5, 0, -Math.PI / 2, -BAR_CRASH_KMH / 3.6, 0);
+  launch(other, 5, offset, -Math.PI / 2, -BAR_CRASH_KMH / 3.6, 0);
   stepFrames(makeWorld([car, other], false, false, null), 5);
   car.group.position.set(0, 0, 0);
   car.group.rotation.set(0, 0, 0, "YXZ");
@@ -357,7 +361,7 @@ function cageBarPlace(style: CarCage["style"], pos: ArrayLike<number>): BarPlace
 
 /** How far (m) a drawn vertex may stand off the bumper's face and still be the fascia's own (the bar's vertices stand past it). */
 const FASCIA_EPS = 0.005;
-/** The drawn bar's pads' face ahead of the drawn bumper's face, at the crash: the bar's vertices are the drawn bumper mesh's past its fascia's face (`makeBumperGeometry`). */
+/** The drawn bar's pads' face ahead of the drawn bumper's face: the bar's vertices are the drawn bumper mesh's past its fascia's face at rest (`makeBumperGeometry`, `freshGeometry`). */
 function drawnBarAhead(car: DeformableCar): number {
   drawnTriangles(car);
   const fascia = makeBumperGeometry(true, car.style);
@@ -365,17 +369,88 @@ function drawnBarAhead(car: DeformableCar): number {
   const face = fascia.boundingBox!.max.z;
   const mesh = car.lookMeshes().bumpers[0]!;
   const at = mesh.geometry.getAttribute("position");
+  const restAt = freshGeometry(car.style, "bumperFront").getAttribute("position");
   const v = new THREE.Vector3();
   let pads = -Infinity;
   let front = -Infinity;
   for (let i = 0; i < at.count; i++) {
     v.fromBufferAttribute(at, i);
-    const rest = v.z;
+    const rest = restAt.getZ(i);
     car.group.worldToLocal(v.applyMatrix4(mesh.matrixWorld));
     if (rest > face + FASCIA_EPS) pads = Math.max(pads, v.z);
     else if (rest > face - FASCIA_EPS) front = Math.max(front, v.z);
   }
   return pads - front;
+}
+
+/** How far (m) a cruiser's bar should stand ahead of its bumper's face as its bumper's less crushed corner stands (`barReach`'s rule, written out). */
+function barLeft(car: DeformableCar): { crush: number; left: number } {
+  const crush = Math.min(...(["bumperFL", "bumperFR"] as const).map((n) => car.deform.massRest(n).z - car.deform.massLocal(n).z));
+  return { crush, left: Math.max(0, PUSH_BAR_REACH - PUSH_BAR_FOLD * crush) };
+}
+
+/** The row the fold reads on a crushed cruiser: its bar stands ahead of its bumper's face what the fold leaves, in the cage and drawn. */
+function expectBarFolded(car: DeformableCar, cageAhead: number, t: { annotate: (note: string) => void }): void {
+  const { crush, left } = barLeft(car);
+  const drawn = drawnBarAhead(car);
+  t.annotate(`bumper crushed ${crush.toFixed(3)} m: bar ${left.toFixed(3)} m left, cage ${cageAhead.toFixed(3)} m ahead of its bumper's face, drawn ${drawn.toFixed(3)} m`);
+  expect(left, "the control: the crush folds the bar by over 2 cm").toBeLessThan(PUSH_BAR_REACH - 0.02);
+  expect(Math.abs(cageAhead - left), `the cage's bar stands ${cageAhead.toFixed(3)} m ahead of its bumper's face, its fold leaves ${left.toFixed(3)} m`).toBeLessThanOrEqual(BAR_FOLLOW_M);
+  expect(Math.abs(drawn - left), `the drawn bar stands ${drawn.toFixed(3)} m ahead of its bumper's face, its fold leaves ${left.toFixed(3)} m`).toBeLessThanOrEqual(BAR_FOLLOW_M);
+}
+
+/** How far (m) a bumper's face vertex may stand behind its face at rest and still be on it: the face's two ends stand 1 cm back, where its corners begin. */
+const FACE_FLAT_M = 0.02;
+
+type FacePoint = { x: number; z: number };
+
+/** The cage bumper's face vertices as `at` (the style's rest or a fitted `pos`) holds them, left to right. */
+function bumperFace(style: CarCage["style"], at: ArrayLike<number>): FacePoint[] {
+  const face: FacePoint[] = [];
+  for (let k = 0; k < style.vertexCount; k++) {
+    if (style.vertexGroup[k] === style.barGroup - 1 && style.rest[k * 3 + 2]! >= style.barFace - FACE_FLAT_M) face.push({ x: at[k * 3]!, z: at[k * 3 + 2]! });
+  }
+  return face.sort((a, b) => a.x - b.x);
+}
+
+/** The z of the face between its vertices at x, the end ones held beyond. */
+function faceAt(face: FacePoint[], x: number): number {
+  if (x <= face[0]!.x) return face[0]!.z;
+  for (let i = 1; i < face.length; i++) {
+    const a = face[i - 1]!;
+    const b = face[i]!;
+    if (x <= b.x) return b.x === a.x ? b.z : a.z + ((b.z - a.z) * (x - a.x)) / (b.x - a.x);
+  }
+  return face[face.length - 1]!.z;
+}
+
+/**
+ * The push bar's pads (the box vertices at its front face) in the cage's vertices `pos`: each one's rest x and how far (m) it has folded back toward the cage bumper's face, its
+ * standoff from the face at its own x at rest less its standoff in `pos` (the face read between the bumper's face vertices, so the step at its ends cancels); `faceSpread` is how
+ * far apart the face's own vertices have moved back from each other (an offset hit draws one end back).
+ */
+function cagePadsFolded(style: CarCage["style"], pos: ArrayLike<number>): { pads: { x: number; folded: number }[]; faceSpread: number } {
+  const restFace = bumperFace(style, style.rest);
+  const nowFace = bumperFace(style, pos);
+  const pads: { x: number; folded: number }[] = [];
+  for (let k = 0; k < style.vertexCount; k++) {
+    if (style.vertexGroup[k] !== style.barGroup || style.rest[k * 3 + 2]! < style.barFace + PUSH_BAR_REACH - FACE_FLAT_M) continue;
+    const atRest = style.rest[k * 3 + 2]! - faceAt(restFace, style.rest[k * 3]!);
+    const now = pos[k * 3 + 2]! - faceAt(nowFace, pos[k * 3]!);
+    pads.push({ x: style.rest[k * 3]!, folded: atRest - now });
+  }
+  const moved = restFace.map((f, i) => nowFace[i]!.z - f.z);
+  return { pads, faceSpread: Math.max(...moved) - Math.min(...moved) };
+}
+
+/** How far (m) a cruiser's bar should have folded back at rest x `x`: the reach less what `barReach` leaves of it at the bumper's crush there, read between its two corners as the drawn bar reads it. */
+function barFoldedAt(car: DeformableCar, x: number): number {
+  const restL = car.deform.massRest("bumperFL");
+  const restR = car.deform.massRest("bumperFR");
+  const crushL = restL.z - car.deform.massLocal("bumperFL").z;
+  const crushR = restR.z - car.deform.massLocal("bumperFR").z;
+  const t = THREE.MathUtils.clamp((x - restL.x) / (restR.x - restL.x), 0, 1);
+  return PUSH_BAR_REACH - barReach(PUSH_BAR_REACH, crushL + (crushR - crushL) * t);
 }
 
 /** The crashed cruiser, its cage fitted, and the bar's place in the cage at rest and after the crash (built once, by the first row that reads it). */
@@ -411,6 +486,54 @@ describe("given a cruiser after an 18 km/h head-on crash that leaves its front b
     const { rest, crashed } = barAfterCrash();
     t.annotate(`cage ${crashed.over.toFixed(3)} m over its bumper's top, ${rest.over.toFixed(3)} m at rest`);
     expect(Math.abs(crashed.over - rest.over), `the cage's bar top stands ${crashed.over.toFixed(3)} m over its bumper's, ${rest.over.toFixed(3)} m at rest`).toBeLessThanOrEqual(BAR_FOLLOW_M);
+  });
+
+  it("when the bar is read against its bumper's crush, then it stands ahead of the bumper's face only what its fold leaves (max(0, reach − PUSH_BAR_FOLD × crush)), in the cage and drawn, within 1 cm", (t) => {
+    const { car, crashed } = barAfterCrash();
+    expectBarFolded(car, crashed.ahead, t);
+  });
+});
+
+describe("given a cruiser after an 18 km/h head-on crash that leaves its front bumper on, then reset", () => {
+  it("when the car is reset, then its drawn bar stands at its rest reach again, within 1 cm", (t) => {
+    const car = crashedCruiser();
+    const crashed = drawnBarAhead(car);
+    car.resetVisual();
+    const reset = drawnBarAhead(car);
+    t.annotate(`drawn bar ${crashed.toFixed(3)} m ahead of its bumper's face crashed, ${reset.toFixed(3)} m after the reset`);
+    expect(crashed, "the control: the crash folds the drawn bar by over 2 cm").toBeLessThan(PUSH_BAR_REACH - 0.02);
+    expect(Math.abs(reset - PUSH_BAR_REACH), `the drawn bar stands ${reset.toFixed(3)} m ahead of its bumper's face after the reset, its rest reach ${PUSH_BAR_REACH}`).toBeLessThanOrEqual(BAR_FOLLOW_M);
+  });
+});
+
+describe("given a cruiser after a 40 % offset head-on crash that leaves its front bumper on", () => {
+  it("when the bar's pads are read against the cage bumper's face at their own x, then each has folded back by what its bumper's crush there folds it, within 1 cm", (t) => {
+    const car = crashedCruiser(BAR_OFFSET_M);
+    const cage = cageOf(car);
+    fitToDrawn(car, cage);
+    const { pads, faceSpread } = cagePadsFolded(cage.style, cage.fields.pos);
+    const read = pads.map((p) => `x ${p.x.toFixed(2)}: ${p.folded.toFixed(3)} of ${barFoldedAt(car, p.x).toFixed(3)}`).join(", ");
+    t.annotate(`face ends ${faceSpread.toFixed(3)} m apart in how far they moved back; pads folded ${read}`);
+    expect(pads.length, "the bar has pads").toBeGreaterThan(1);
+    expect(faceSpread, "the control: the offset hit draws one end of the bumper's face back by over 2 cm more than the other").toBeGreaterThan(0.02);
+    for (const p of pads) {
+      expect(Math.abs(p.folded - barFoldedAt(car, p.x)), `the pad at x ${p.x.toFixed(2)} has folded back ${p.folded.toFixed(3)} m toward the bumper's face, its crush folds it ${barFoldedAt(car, p.x).toFixed(3)} m`).toBeLessThanOrEqual(BAR_FOLLOW_M);
+    }
+  });
+});
+
+/** The nose crush (m) a load leaves on the cruiser below: under the bar's fold, a car carrying it is no wreck. */
+const BAR_LOAD_M = 0.012;
+
+describe("given a cruiser whose nose a load crushes 1.2 cm, which leaves it no wreck", () => {
+  it("when the bar is read against its bumper's crush, then it stands ahead of the bumper's face only what its fold leaves, in the cage and drawn, within 1 cm", (t) => {
+    const car = carInState("untouched", "police", "sedan");
+    car.deform.crush[FACE_NOSE] = BAR_LOAD_M;
+    car.deform.bakeLoadCrush();
+    expect(car.crashed, "the control: the load leaves the cruiser no wreck").toBe(false);
+    const cage = cageOf(car);
+    fitToDrawn(car, cage);
+    expectBarFolded(car, cageBarPlace(cage.style, cage.fields.pos).ahead, t);
   });
 });
 

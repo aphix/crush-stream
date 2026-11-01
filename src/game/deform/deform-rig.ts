@@ -62,8 +62,6 @@ export interface RigTables {
   readonly faceBands: FaceBands;
   /** Plan reach (m) from its hub at which a crushed corner has hit the tyre: tyre radius plus the packed bumper beam. */
   readonly tyreReach: number;
-  /** How far (m) the front bumper's particles stand behind the nose a solid's face meets: a push bar's reach, which the hold on a face (`faceHits`) adds to those particles' own. */
-  readonly noseReach: number;
   /** Packed bumper-to-block-centre length (m): bumper beam and radiator crushed flat ahead of the block. The nose's rest gap less this is its crumple, 0.30 m on every body; crush past it shoves the engine back. */
   readonly packGap: number;
   /** The hit speed (m/s EBS) under which no hit takes a wheel off, whatever the crush: 0 on the platform (the gates of `clampMass` stand alone), more where the hub hardware is built for heavier wheels. */
@@ -94,7 +92,6 @@ export const PLATFORM_RIG: RigTables = {
     side: [0.4, 0.4],
   },
   tyreReach: 0.42,
-  noseReach: 0,
   packGap: 0.54,
   hubHoldMps: 0,
   wheelScale: 1,
@@ -132,6 +129,14 @@ const ROCKER_LINE_EPS = 0.005;
 /** The share `keep` of an arch vertex's pull onto its plant, as it stands `dx`, `dz` (m) off it: whole at the plant, none from `ARCH_YIELD` on (the skin kernel's `skin_shape` mirrors it). */
 export function archKeep(keep: number, dx: number, dz: number): number {
   return keep * Math.max(0, 1 - Math.sqrt(dx * dx + dz * dz) / ARCH_YIELD);
+}
+
+/** How many times as far as its bumper crushes a push bar folds: its tube and brackets yield at about a quarter of its bumper's crush-can load (an estimate; no fold data is published), so most of its reach is gone before the beam crushes much. */
+export const PUSH_BAR_FOLD = 4;
+
+/** How far (m) a push bar of rest reach `reach` still stands ahead of its bumper's face once the bumper has crushed `crush` (m) along the car: the bar's box in the cage and the drawn bar both read it. */
+export function barReach(reach: number, crush: number): number {
+  return Math.max(0, reach - PUSH_BAR_FOLD * Math.max(0, crush));
 }
 
 export interface Cage {

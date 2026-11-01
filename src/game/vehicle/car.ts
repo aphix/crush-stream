@@ -229,6 +229,7 @@ export class DeformableCar extends CarParts {
     this.scratches.clear();
     // Before the rest restores below: a dent's saved copy may be a crumpled skin the rest restore then overwrites.
     for (const p of this.parts) if (!keepTorn || !p.detached) clearDents(p.dent);
+    this.unfoldBar(keepTorn);
     this.deform.restoreRest(this.body.geometry, this.drawnRest("body"));
     this.skinRewritten();
     this.restoreRest(this.hood.geometry, this.hoodRest, this.drawnRest("hood"));

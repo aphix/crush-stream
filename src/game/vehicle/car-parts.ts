@@ -2,6 +2,8 @@ import { hypot2, detSin, detCos, detAtan2, PART_FAMILY } from "../kernel/physics
 import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F } from "./constants.ts";
+import { barReach } from "../deform/deform-rig.ts";
+import { PUSH_BAR_REACH } from "./car-materials.ts";
 import { bootPivot, lidAccel } from "./hinge-spec.ts";
 import { cellIsOver, clearanceCellsOf } from "./clearance-cells.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose, notePosed, posesFromOwnState, standsAsPosed } from "./part-pose.ts";
@@ -263,6 +265,8 @@ export abstract class CarParts extends CarGlass {
   private readonly liveShells: DetachPart[] = [];
   /** Each mirror's box on its rest seat in the car's frame (`mirrorRestBox`), built when first asked. */
   private readonly mirrorRestBoxes: THREE.Box3[] = [];
+  /** The drawn push bar: its front bumper part, the bar's vertex range in that bumper's mesh (`bumperGeometry`'s `bar`), their rest z, its bumper's face, and the corner crushes it was last folded at; null without a bar. */
+  private drawnBar?: { part: DetachPart; mesh: THREE.Mesh; from: number; to: number; face: number; restZ: Float32Array; crush: Float64Array } | null;
   /**
    * Per loose body (a part by its slot, then a popped wheel by its hub, `LOOSE_BODIES`): the slices of the step `stepWorld` last ran in which a stir woke it from sleep (bit i: slice i; `stepLoose`).
    * A replay without the car that stirred it wakes it there (`wakeBody`); the recorder keeps it (`HighlightClip.partStirs`). `stepWorld` clears it each step.
@@ -401,14 +405,21 @@ export abstract class CarParts extends CarGlass {
 
   /** Every attached part posed from its current state, if a step moved any (`updateSkin`, before lamps, panels and glass follow). */
   protected poseParts(): void {
-    if (!this.partsDirty) return;
-    this.partsDirty = false;
-    // A car reset since the step that set the flag has its parts back at rest: nothing to pose (and the last signature no longer describes them).
-    if (!this.crashed) {
-      this.poseSig = null;
-      return;
+    // A load crush moves the masses with no crash step (`syncAttachedParts`): its parts are posed on them whenever what a pose reads moved, as a wreck's are.
+    const loaded = !this.crashed && this.deform.loadCrushed();
+    if (loaded) {
+      this.partsDirty = false;
+      if (!this.poseInputsChanged()) return;
+    } else {
+      if (!this.partsDirty) return;
+      this.partsDirty = false;
+      // A car reset since the step that set the flag has its parts back at rest: nothing to pose (and the last signature no longer describes them).
+      if (!this.crashed) {
+        this.poseSig = null;
+        return;
+      }
+      if (EPICENTER.presentSkip === 1 && !this.deform.skinnedThisFrame && !this.poseInputsChanged()) return;
     }
-    if (EPICENTER.presentSkip === 1 && !this.deform.skinnedThisFrame && !this.poseInputsChanged()) return;
     const parts = this.parts;
     for (let pi = 0; pi < parts.length; pi++) if (!parts[pi]!.detached) this.posePart(parts[pi]!);
   }
@@ -439,6 +450,7 @@ export abstract class CarParts extends CarGlass {
         // corner seats, so it turns by the corners' gap over its own width: its ends move as far as their corners, not further.
         p.object.rotation.y = detAtan2(fl.z - fr.z, 2 * bumperHalfWidth(p.object));
         const front = p.name === BUMPER_F;
+        if (front) this.foldBar(p, fl, fr);
         const seatZ = (front ? this.style.bumpers.front : this.style.bumpers.rear).seat.z;
         // Squashed by the more-pushed corner: a hit on either corner squashes it alike (it read the left corner alone).
         const span = Math.max(Math.abs(fl.z - (front ? seatZ : -seatZ)), Math.abs(fr.z - (front ? seatZ : -seatZ)));
@@ -481,6 +493,46 @@ export abstract class CarParts extends CarGlass {
       } else if (p.open) this.closePanel(p);
     }
     if (fromOwnState) notePosed(p);
+  }
+
+  /** The drawn push bar folded back onto its bumper's face as the cage's box and the face's hold fold it (`barReach`): each point by the crush of the bumper corners either side of it. */
+  private foldBar(p: DetachPart, fl: THREE.Vector3, fr: THREE.Vector3): void {
+    if (this.drawnBar === undefined) {
+      const mesh = p.object.children[0] as THREE.Mesh;
+      const bar = mesh.geometry.userData.bar as { from: number; to: number; face: number } | undefined;
+      const pos = mesh.geometry.getAttribute("position").array;
+      this.drawnBar = bar ? { ...bar, part: p, mesh, restZ: Float32Array.from({ length: bar.to - bar.from }, (_, k) => pos[(bar.from + k) * 3 + 2]!), crush: new Float64Array(2).fill(NaN) } : null;
+    }
+    const bar = this.drawnBar;
+    if (bar === null) return;
+    const mesh = bar.mesh;
+    const restL = this.deform.massRest("bumperFL");
+    const restR = this.deform.massRest("bumperFR");
+    const left = restL.z - fl.z;
+    const right = restR.z - fr.z;
+    if (left === bar.crush[0] && right === bar.crush[1]) return;
+    bar.crush[0] = left;
+    bar.crush[1] = right;
+    const attr = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    // shortcut: the folded tubes keep their rest normals; recompute them if a folded bar reads wrong in the light.
+    for (let v = bar.from; v < bar.to; v++) {
+      const t = THREE.MathUtils.clamp((arr[v * 3]! - restL.x) / (restR.x - restL.x), 0, 1);
+      const z = bar.restZ[v - bar.from]!;
+      arr[v * 3 + 2] = z - ((PUSH_BAR_REACH - barReach(PUSH_BAR_REACH, left + (right - left) * t)) * Math.max(0, z - bar.face)) / PUSH_BAR_REACH;
+    }
+    attr.needsUpdate = true;
+  }
+
+  /** The drawn push bar back at its rest reach (`resetVisual`), its folds forgotten; a held reset leaves a torn bumper's bar as it lies. */
+  protected unfoldBar(keepTorn: boolean): void {
+    const bar = this.drawnBar;
+    if (!bar || (keepTorn && bar.part.detached)) return;
+    const attr = bar.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    for (let v = bar.from; v < bar.to; v++) arr[v * 3 + 2] = bar.restZ[v - bar.from]!;
+    attr.needsUpdate = true;
+    bar.crush.fill(NaN);
   }
 
   /**

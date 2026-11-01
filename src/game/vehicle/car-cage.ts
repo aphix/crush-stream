@@ -2,7 +2,8 @@ import { detAcos, hypot3 } from "../kernel/physics-core.js";
 import { IMPRINT_NONE } from "../deform/load-crush.ts";
 import { INF_K } from "../deform/deform-build.ts";
 import { cageAxis } from "../deform/deform-state.ts";
-import { archKeep, RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS } from "../deform/deform-rig.ts";
+import { archKeep, barReach, RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS } from "../deform/deform-rig.ts";
+import { PUSH_BAR_REACH } from "./car-materials.ts";
 import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
@@ -91,6 +92,8 @@ const ARCH_ON = 0.82;
 const ARCH_OFF = 0.15;
 /** `SkinDynamic.hubs`: 5 numbers per mass. */
 const HUB_STRIDE = 5;
+/** How far (m) behind its bumper's face a cage bumper vertex may stand at rest and still be on the face: the face's two ends stand one `FACE_RING` (1 cm) back, where the corners begin. */
+const FACE_FLAT = 0.02;
 
 /** What the rig hands the cage once per style: the drawn body's rest mesh and the skin's rest-only tables over it. */
 export interface CageSource {
@@ -143,6 +146,9 @@ export interface CageSource {
   readonly tubs: { readonly from: number; readonly count: number };
   /** The body loft's vertices: the first `loft` of `rest`, one ring a station (the underside the decimation holds where it rises). */
   readonly loft: number;
+  /** The push bar's box: its panel group (0 without a bar) and the car-frame z of its back face, on its bumper's face. */
+  readonly barGroup: number;
+  readonly barFace: number;
 }
 
 /** What a fit reads of the car now: a `SkinDynamic`, less its lattice coefficients (the cage is the shape-mode skin). */
@@ -258,9 +264,65 @@ export interface CageStyle {
   readonly cellRest: readonly [y: number, z: number];
   /** The fields of a pristine car, shared by every car of the style. */
   readonly pristine: CageFields;
+  /** `CageSource.barGroup`, `CageSource.barFace`. */
+  readonly barGroup: number;
+  readonly barFace: number;
 }
 
 // ---- the skin over the cage's vertices -----------------------------------------------------------------------------
+
+/**
+ * The car-frame z of vertex `i` (rest x `rx`, z `rz`) of the push bar's box. It stands ahead of its bumper's face as far as the bar has not folded: the bar folds by the crush of the two
+ * masses its points ride, read between them along the car at the vertex's x as the drawn bar reads it (`barReach`). The face is the bumper's own face vertices (its panel is the one before
+ * the bar's, skinned already in `out`) moved back by what each has moved, read at the vertex's x, so the box stands on the face where an offset hit drew one end back.
+ */
+function barBoxZ(style: CageStyle, hubs: CageLive["hubs"], out: CageFields, i: number, rx: number, rz: number): number {
+  const { rest, resJ, resW, vertexGroup } = style;
+  const bar = style.barGroup;
+  let loX = -Infinity;
+  let loBack = 0;
+  let hiX = Infinity;
+  let hiBack = 0;
+  for (let j = i - 1; j >= 0; j--) {
+    const gj = vertexGroup[j]!;
+    if (gj === bar) continue;
+    if (gj !== bar - 1) break;
+    if (rest[j * 3 + 2]! < style.barFace - FACE_FLAT) continue;
+    const xj = rest[j * 3]!;
+    const back = out.pos[j * 3 + 2]! - rest[j * 3 + 2]!;
+    if (xj <= rx && xj > loX) {
+      loX = xj;
+      loBack = back;
+    }
+    if (xj >= rx && xj < hiX) {
+      hiX = xj;
+      hiBack = back;
+    }
+  }
+  let slide = 0;
+  if (loX === -Infinity) slide = hiX === Infinity ? 0 : hiBack;
+  else if (hiX === Infinity || hiX === loX) slide = loBack;
+  else slide = loBack + ((hiBack - loBack) * (rx - loX)) / (hiX - loX);
+  let aX = Infinity;
+  let aCrush = 0;
+  let bX = -Infinity;
+  let bCrush = 0;
+  for (let k = i * RES_SLOTS, e = k + RES_SLOTS; k < e; k++) {
+    if (resW[k]! <= 0) continue;
+    const h = (resJ[k]! / 3) * HUB_STRIDE;
+    const crushed = hubs[h + 4]! - hubs[h + 3]!;
+    if (hubs[h + 2]! < aX) {
+      aX = hubs[h + 2]!;
+      aCrush = crushed;
+    }
+    if (hubs[h + 2]! > bX) {
+      bX = hubs[h + 2]!;
+      bCrush = crushed;
+    }
+  }
+  const crush = bX > aX ? aCrush + (bCrush - aCrush) * Math.min(Math.max((rx - aX) / (bX - aX), 0), 1) : aCrush;
+  return style.barFace + slide + (barReach(PUSH_BAR_REACH, crush) * (rz - style.barFace)) / PUSH_BAR_REACH;
+}
 
 /**
  * The cage's vertices skinned from `live` into `out` (x, y, z each): `StreamedDeformation.skin`'s shape-mode loop over these
@@ -336,6 +398,7 @@ function skinCage(style: CageStyle, live: CageLive, out: CageFields): void {
         out.rawY[i] = ry;
         continue;
       }
+      if (follow && g === style.barGroup) pz = barBoxZ(style, hubs, out, i, rx, rz);
       // A panel's skin (`skinPanel`) is its lattice alone, and runs only for a crashed car (the cap, the clamp and the cut are the
       // body's); the mesh then stands where its own pose puts it (a bonnet's hinge): that pose about the panel's origin.
       const o = (g - 1) * 7;
@@ -902,6 +965,8 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     panelReach: panelReachOf(src.panelCount, src.panelOrigin, tables.rest, Uint8Array.from(source, (v) => src.group[v]!)),
     panelOrigin: src.panelOrigin,
     roofClampY: src.roofClampY,
+    barGroup: src.barGroup,
+    barFace: src.barFace,
   };
   style.pristine.pos.set(tables.rest);
   style.pristine.panelOn.fill(1);

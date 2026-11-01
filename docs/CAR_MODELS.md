@@ -79,8 +79,12 @@ The hardpoints place the openings and the lower body, each per car:
 | `seats` | The driver's H-point `front` `[x, y, z]` (he sits on −x, the passenger mirrors him) and the rear bench's `rear` `[y, z]` on the centre line, or `null` with no rear row (the regular-cab truck). The drawn seats, the seated driver and the sim's seat read it |
 
 `car-styles/platform.ts` exports the values the first bodies shared as `PLATFORM_HARDPOINTS`; a table spreads it and overrides
-what its car changes. Every hardpoint but a push bar, tow hitch and exhaust tip reaches the collision cage or a sim reader (the greenhouse pillars,
-the sill, the arches, the hood's pose, the bumpers' fascia, the front doors' slab, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
+what its car changes. Every hardpoint but a tow hitch and exhaust tip reaches the collision cage or a sim reader (the greenhouse pillars,
+the sill, the arches, the hood's pose, the bumpers' fascia, a push bar's box, the front doors' slab, a torn bumper's box), so moving one moves the sim: re-pin and bump `REPLAY_VERSION`.
+A push bar's box in the cage and its drawn tubes fold back onto its bumper's face as the bumper crushes, `PUSH_BAR_FOLD` (4) times as far
+(`barReach`): a stated estimate, since no fold stroke or load is published for any police push bar
+(`.extraResearch/perplexity/2026-10-31-push-bar-fold-frontal.md`); its tube and brackets are taken to yield at about a quarter of the crush-can load.
+Both read the crush between the bumper's two corner masses along the car, and the cage's box stands on its bumper's face read at the box's own x, so an offset hit that draws one end of the face back draws that end of the bar with it; a reset puts the drawn bar back at its rest reach.
 The greenhouse header bars follow the roof: a drawn header bar's top never stands above the roof skin over its ends, and the cage's
 two header boxes (it draws no bars) put their tops on their glass's top edge, front and rear alike. The drawn
 A-pillar is a rounded post along the windshield's edge, 6 cm wide in side view whatever `aPillarFoot` / `aPillarTop` say, its top
