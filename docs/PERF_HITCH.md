@@ -31,6 +31,11 @@ no hitching ([`DESIGN_PILLARS.md`](DESIGN_PILLARS.md)).
   stand-in and the debug views (the cars' helpers and the thrown dummies' rig lines and particle spheres) added; the scene is drawn with every mesh shown and unculled through a zero-area scissor, so
   shadow-depth variants link, every uniform location is fetched and every texture uploads. The loop reads input from
   `start()` but only simulates and draws after `ready`.
+  An instanced pool with nothing out (`count` 0: the thrown dummies', the purses') is drawn with one instance in those draws
+  (`EngineWarm.staged`): three issues no draw for none, so its first real draw, the first throw of a page, stalled that
+  frame 200-400 ms in Chromium on the host GPU (ANGLE D3D12; native time outside any script in the CPU profile), a frame long
+  enough (over 34 ms) to set the walkers' foot locks wrong. A fresh showcase page's first throws now draw no frame over 50 ms
+  (a cone, a man, a woman: 125-133 frames in 2.5 s, against 18-22 frames and a 350-400 ms first one).
 - New scene content warms where it appears: a race course's art (`buildArt`), new cars (`buildCar`) and the thrown dummies'
   purse pool (it joins the scene once Rapier is in, after boot) queue the same warm-up, so it runs in the setup menu, the
   countdown or the sandbox's first seconds. After boot a warm-up draws only the meshes whose material gained a program.

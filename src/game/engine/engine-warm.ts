@@ -166,11 +166,13 @@ export abstract class EngineWarm extends EngineCore {
   /**
    * Run `draw` with a zero scissor on the canvas and the HDR target and every mesh shown and unculled, or with `only`, just the meshes
    * wearing one of those materials (the rest are muted by material, not object, so a drawn mesh under a muted one, the purse pool under
-   * the dummies, still draws); then put it all back.
+   * the dummies, still draws); then put it all back. An instanced pool with nothing out (the dummies', the purses') draws one instance:
+   * three issues no draw for none, and the pool's first real draw then stalled its frame 200-400 ms (the showcase's first throw).
    */
   private staged(only: ReadonlySet<THREE.Material> | null, draw: () => void): void {
     const shown: THREE.Object3D[] = [];
     const culled: THREE.Object3D[] = [];
+    const emptyPools: THREE.InstancedMesh[] = [];
     const hiddenMats: THREE.Material[] = [];
     const mutedMats: THREE.Material[] = [];
     this.scene.traverse((o) => {
@@ -182,6 +184,11 @@ export abstract class EngineWarm extends EngineCore {
       if (o.frustumCulled) {
         o.frustumCulled = false;
         culled.push(o);
+      }
+      const pool = o as THREE.InstancedMesh;
+      if (pool.isInstancedMesh && pool.count === 0 && pool.instanceMatrix.count > 0) {
+        pool.count = 1;
+        emptyPools.push(pool);
       }
       for (const m of [(o as THREE.Mesh).material ?? []].flat()) {
         const draws = only === null || only.has(m);
@@ -201,6 +208,7 @@ export abstract class EngineWarm extends EngineCore {
     r.setScissorTest(false);
     for (const o of shown) o.visible = false;
     for (const o of culled) o.frustumCulled = true;
+    for (const pool of emptyPools) pool.count = 0;
     for (const m of hiddenMats) m.visible = false;
     for (const m of mutedMats) m.visible = true;
   }

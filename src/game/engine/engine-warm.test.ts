@@ -41,6 +41,8 @@ describe("given the engine warming its programs before the loop starts", () => {
   const compiledPasses = new Set<string>();
   const drawnPasses = new Set<string>();
   const drawnMaterials = new Set<THREE.Material>();
+  /** Instanced meshes the main scene's draws issued an instance of (three issues no draw for none). */
+  const drawnPools = new Set<THREE.Object3D>();
   const paintKey = (): string => engine["live"]()[0]!.lookMeshes().bodyPaint.customProgramCacheKey();
   /** The output the renderer is on and whether car 0's paint wears the finish now, e.g. "hdr finish". */
   const pass = (): string => `${engine["renderer"].getRenderTarget() === null ? "canvas" : "hdr"} ${paintKey().includes(FINISH_KEY_MARK) ? "finish" : "plain"}`;
@@ -51,6 +53,7 @@ describe("given the engine warming its programs before the loop starts", () => {
       if (!isDrawn(object)) return;
       if (object.parent?.name === "ragdoll-debug") drawnDebugViews.add(object.type);
       if (main) for (const m of [(object as THREE.Mesh).material ?? []].flat()) if (m.visible) drawnMaterials.add(m);
+      if (main && (object as THREE.InstancedMesh).isInstancedMesh && (object as THREE.InstancedMesh).count > 0) drawnPools.add(object);
     });
   };
   beforeAll(async () => {
@@ -92,6 +95,13 @@ describe("given the engine warming its programs before the loop starts", () => {
     const keys = (engine["renderer"].info.programs ?? []).map((p) => String(p.cacheKey)).filter((k) => k.endsWith(PURSE_KEY));
     expect(keys.length, "purse programs").toBe(OUTPUTS);
     expect(drawnMaterials.has([purses.mesh.material].flat()[0]!), "the purse pool was not drawn").toBe(true);
+    expect(drawnPools.has(purses.mesh), "the purse pool was drawn with no instance: three issues no draw").toBe(true);
+    expect(purses.mesh.count, "the purse pool is empty again after the warm-up").toBe(0);
+  });
+
+  it("when the boot warm-up draws the scene, then the dummies' pool is drawn with an instance, and is empty again after", () => {
+    expect(drawnPools.has(engine["ragdolls"].pickMesh), "the dummies' pool was drawn with no instance: its first real draw stalled the first throw").toBe(true);
+    expect(engine["ragdolls"].pickMesh.count, "the dummies' pool is empty again after the warm-up").toBe(0);
   });
 
   it("when content with a new program joins the scene after boot, then the warm-up draws only the meshes wearing it", async () => {
