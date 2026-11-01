@@ -113,7 +113,7 @@ describe("given the engine warming its programs before the loop starts", () => {
       if ((o as THREE.Points).isPoints) systems.push(o as THREE.Points);
     });
     expect(systems.length, "the control: the scene holds particle systems").toBeGreaterThan(0);
-    expect(systems.filter((p) => !drawnPoints.has(p)).map((p) => p.material.type), "particle systems the warm-up never drew").toEqual([]);
+    expect(systems.filter((p) => !drawnPoints.has(p)).map((p) => [p.material].flat()[0]!.type), "particle systems the warm-up never drew").toEqual([]);
   });
 
   it("when content with a new program joins the scene after boot, then the warm-up draws only the meshes wearing it", async () => {
