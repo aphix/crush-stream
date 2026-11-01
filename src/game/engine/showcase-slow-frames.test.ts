@@ -17,10 +17,14 @@ const THROWS = SLOTS + 8;
 /** The wander circle's radius (m) and what a dummy landing in it may be past it (a lob's own overshoot). */
 const CIRCLE_M = 30;
 const LANDED_M = 4;
+/** A standing walker's parts swing at up to 6 m/s; his torso goes his walking pace (1.6 m/s). Flung dummies reached 40 to 130 m/s. */
 const SETTLED_MPS = 6;
+const TORSO_MPS = 3;
+/** Seconds after the last throw for the last dummy to have landed, lain and got up (measured: 7). */
+const LANDED_S = 8;
 const CHEST_Y = 1.2;
 
-type Out = { slot: number; x: number; y: number; z: number; speed: number };
+type Out = { slot: number; x: number; y: number; z: number; speed: number; torsoSpeed: number };
 
 let engine: CrashEngine;
 const art = () => engine["showcase"]!.art;
@@ -56,15 +60,16 @@ function settle(): void {
   run(2 * FRAME);
 }
 
-/** Every dummy out now: his slot, torso (m) and the fastest of his parts (m/s). */
+/** Every dummy out now: his slot, torso (m), the fastest of his parts and his torso's speed (m/s). */
 function dummiesOut(): Out[] {
   const out: Out[] = [];
   for (const [slot, d] of ragdolls()["dolls"].entries()) {
     if (!d.live) continue;
     const torso = d.bodies[0]!.translation();
+    const v = d.bodies[0]!.linvel();
     let speed = 0;
     for (const body of d.bodies) speed = Math.max(speed, Math.hypot(body.linvel().x, body.linvel().y, body.linvel().z));
-    out.push({ slot, x: torso.x, y: torso.y, z: torso.z, speed });
+    out.push({ slot, x: torso.x, y: torso.y, z: torso.z, speed, torsoSpeed: Math.hypot(v.x, v.y, v.z) });
   }
   return out;
 }
@@ -112,10 +117,10 @@ describe("given the showcase at 20 fps", () => {
       run(FRAME);
     }
     expect(ragdolls().builtSlots, "the control: every slot is built").toBe(SLOTS);
-    run(5);
+    run(LANDED_S);
     for (const d of dummiesOut()) {
       expect(Math.hypot(d.x, d.z), `slot ${d.slot} is at ${d.x.toFixed(1)}, ${d.z.toFixed(1)}`).toBeLessThan(CIRCLE_M + LANDED_M);
-      expect(d.speed, `slot ${d.slot} moves ${d.speed.toFixed(1)} m/s`).toBeLessThan(SETTLED_MPS);
+      expect(d.torsoSpeed, `slot ${d.slot}'s torso moves ${d.torsoSpeed.toFixed(1)} m/s`).toBeLessThan(TORSO_MPS);
     }
   });
 });
