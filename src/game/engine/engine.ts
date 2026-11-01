@@ -292,6 +292,7 @@ export class CrashEngine extends EngineGarage {
       sparks: this.sparks,
       smoke: this.smoke,
       debris: this.debris,
+      ragdolls: this.ragdolls,
     });
     this.impactLight = new THREE.PointLight(0xffc27a, 0, 22, 2);
     this.scene.add(this.impactLight);

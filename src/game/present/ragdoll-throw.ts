@@ -8,7 +8,7 @@ import type { DriverLook } from "./driver-look.ts";
 import { VIP_LOOK } from "./dummy-dress.ts";
 import { guardDress, passengerThrow } from "./people.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
-import type { PropDraw } from "./ragdoll-props.ts";
+import type { PropDraw, PropTrace } from "./ragdoll-props.ts";
 import { NO_RELEASE_SCALE, type ReleaseScale } from "./ragdoll-boxes.ts";
 import { BASE_SLOTS, thrownGroups } from "./ragdoll-config.ts";
 import { ARM, blendPose, MASS, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
@@ -19,6 +19,9 @@ import { DOLL_CAR, DOLL_FLOATS, DOLL_HEADER, DOLL_LIVE, DOLL_RIDES, DOLL_SETTLED
 import { LIFE, STEP_LOG, type Throw, WALKER_SLOT } from "./ragdoll-pool.ts";
 import { RagdollStepper } from "./ragdoll-step.ts";
 import { PATCH_HALF, STATICS_HALF, terrainColliders } from "./ragdoll-ground.ts";
+
+/** A dummy out as the capture trace has it: pool slot, his walker's state (null: thrown limp, no motors), sim s out, torso (m) and its velocity (m/s). */
+export type DummyTrace = { slot: number; state: string | null; age: number; x: number; y: number; z: number; vx: number; vy: number; vz: number };
 
 /** The walker's ground patch is built again when he is this far (m) from its middle: half of what it reaches, so he is never near its edge. */
 const WALKER_FOLLOW = PATCH_HALF / 2;
@@ -320,6 +323,17 @@ export abstract class RagdollThrower extends RagdollStepper {
   /** Knocked prop `i`'s middle after the last step into `p`, and its velocity into `v`; false while it is not out. */
   propAt(i: number, p: THREE.Vector3, v: THREE.Vector3): boolean {
     return this.props.centre(i, p, v);
+  }
+
+  /** What is out now, for the capture trace: each dummy (pool slot, his walker's state while its motors hold him up, sim s out, torso as last stepped and its velocity) and each knocked prop. */
+  outNow(): { dummies: DummyTrace[]; props: PropTrace[] } {
+    const dummies: DummyTrace[] = [];
+    for (let s = 0; s < this.dolls.length; s++) {
+      const d = this.dolls[s]!;
+      if (!d.live) continue;
+      dummies.push({ slot: s, state: d.driven ? this.walkers[s]!.state : null, age: d.age, x: d.cur[0]!, y: d.cur[1]!, z: d.cur[2]!, vx: d.vel[0]!, vy: d.vel[1]!, vz: d.vel[2]! });
+    }
+    return { dummies, props: this.props.outNow() };
   }
 
   /** Dummies launched from now on lie about until `releaseThrown`, not `LIFE` s (a minigame's score is read while he lies). */

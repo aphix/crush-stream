@@ -53,15 +53,6 @@ export class FootLocks {
     }
     this.grip.fill(0);
     this.pivots.fill(HEEL);
-    // A lock's anchor starts at its foot, not the world's origin: a foot that is not held (limp, in the air) is pulled to its anchor by the motors' floor.
-    for (let f = 0; f < 2; f++) {
-      this.rollOnto(f, HEEL);
-      const at = this.feet[f]!.translation();
-      _spot.x = this.held[f * 2]!;
-      _spot.y = at.y;
-      _spot.z = this.held[f * 2 + 1]!;
-      this.anchors[f]!.setTranslation(_spot, false);
-    }
     this.release();
   }
 
@@ -82,7 +73,7 @@ export class FootLocks {
       const touchdown = this.grip[f] === 0;
       this.grip[f] = down ? Math.min(1, this.grip[f]! + dt / FOOT_LOCK.rampSeconds) : 0;
       if (down) {
-        // A frame as long as the ramp (34 ms: 29 fps and slower) grips fully at once: the touchdown itself still takes the foot's own spot, not the last one held.
+        // A frame longer than the ramp grips fully at once: the touchdown still takes the foot's own spot, not the one held last (or the origin).
         if (touchdown || this.grip[f]! < 1 || gait.pivot[f]! !== this.pivots[f]!) this.rollOnto(f, gait.pivot[f]!);
         _spot.x = this.held[f * 2]! - this.drift[0]! * dt;
         _spot.y = gait.plant[f * 3 + 1]! + gait.hop - this.drift[1]! * dt;

@@ -13,6 +13,9 @@ import { knocksDown } from "../scenes/figure-strike.ts";
 /** What the props' world needs of their drawing: where one is placed, and all back on their spots. */
 export type PropDraw = Pick<PropTumble, "place" | "reset">;
 
+/** A knocked-out prop as the capture trace has it: its placement index and prefab, its middle (m) and its velocity (m/s). */
+export type PropTrace = { index: number; prefab: string; x: number; y: number; z: number; vx: number; vy: number; vz: number };
+
 /**
  * The knockable props (cones, crates, tyre stacks, hay bales) as bodies in the dummies' world (cosmetic, like the purses:
  * `RagdollSystem` owns the world and steps it). A standing one is a fixed body on its spot whose collider is the footprint
@@ -550,6 +553,17 @@ export class PropBodies {
     const u = this.bodies[i]!.linvel();
     v.set(u.x, u.y, u.z);
     return true;
+  }
+
+  /** The props knocked out now, for the capture trace: placement index, prefab, middle (m) after the last step and velocity (m/s). */
+  outNow(): PropTrace[] {
+    const rows: PropTrace[] = [];
+    for (let k = 0; k < this.count; k++) {
+      const i = this.out[k]!;
+      this.centre(i, _p, _b);
+      rows.push({ index: i, prefab: this.placed[i]!.prefab, x: _p.x, y: _p.y, z: _p.z, vx: _b.x, vy: _b.y, vz: _b.z });
+    }
+    return rows;
   }
 
   /** Is a knocked prop flying (`FLYING_MPS`) within `r` m of `p`, plus its reach and how far it travels in `dt` s (as last stepped)? */

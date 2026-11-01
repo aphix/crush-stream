@@ -6,6 +6,8 @@ import type { CrashPhase } from "../match/phase.ts";
 import { leftoverCrumple, round4, vec3 } from "../deform/physics-util.ts";
 import { BARRIER_MASS } from "../contact/sat.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
+import type { DummyTrace } from "../present/ragdoll-throw.ts";
+import type { PropTrace } from "../present/ragdoll-props.ts";
 
 type TraceRecord = Record<string, unknown>;
 
@@ -113,6 +115,8 @@ type TraceScene = {
   sparks: Snapshot;
   smoke: Snapshot;
   debris: Snapshot;
+  /** The dummies and knocked props out now (`RagdollSystem.outNow`). */
+  ragdolls: { outNow(): { dummies: DummyTrace[]; props: PropTrace[] } };
 };
 
 const MAX_SAMPLES = 96;
@@ -200,7 +204,8 @@ export class TraceRecorder {
 
   sample(setup: TraceSetup, cars: readonly DeformableCar[], clock: TraceClock): void {
     if (this.samples.length >= MAX_SAMPLES) return;
-    const { barrier, balls, sparks, smoke, debris } = this.scene;
+    const { barrier, balls, sparks, smoke, debris, ragdolls } = this.scene;
+    const out = ragdolls.outNow();
     this.samples.push({
       t: Math.round(clock.wall * 1000) / 1000,
       sim: Math.round(clock.sim * 1000) / 1000,
@@ -241,6 +246,8 @@ export class TraceRecorder {
         debris: debris.snapshot(),
       },
       cars: cars.map((c) => c.snapshot()),
+      dummies: out.dummies.map((d) => ({ slot: d.slot, state: d.state, age: round4(d.age), pos: { x: round4(d.x), y: round4(d.y), z: round4(d.z) }, vel: { x: round4(d.vx), y: round4(d.vy), z: round4(d.vz) } })),
+      props: out.props.map((p) => ({ index: p.index, prefab: p.prefab, pos: { x: round4(p.x), y: round4(p.y), z: round4(p.z) }, vel: { x: round4(p.vx), y: round4(p.vy), z: round4(p.vz) } })),
     });
   }
 

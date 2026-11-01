@@ -40,6 +40,11 @@ const setup: TraceSetup = {
 };
 
 const none = { snapshot: () => ({ count: 0, items: [] }) };
+/** What the dummies' world has out: one dummy lying limp 12 m from the middle at 5 m/s and one knocked cone. */
+const out = {
+  dummies: [{ slot: 5, state: "down", age: 1.25, x: 12.00004, y: 0.3, z: -2, vx: 5, vy: 0, vz: 0.5 }],
+  props: [{ index: 7, prefab: "cone", x: 3, y: 0.2, z: 1.5, vx: -1, vy: 0, vz: 0 }],
+};
 
 function rig() {
   const scene = new THREE.Scene();
@@ -54,6 +59,7 @@ function rig() {
     sparks: none,
     smoke: none,
     debris: none,
+    ragdolls: { outNow: () => out },
   });
   const clock: TraceClock = { wall: 1, sim: 0.5, phase: "approach", timeScale: 0.35, closing: 8, barrierHit: false, camera, rig: "orbit", follow: "c1" };
   return { cars, camera, trace, clock };
@@ -110,5 +116,13 @@ describe("given the trace recorder (the debug recording of a crash run) begun on
     trace.begin(setup, cars, clock);
     const shown = JSON.stringify(JSON.parse(trace.traceJson(setup)).samples[0].cars.map((c: { scratches: unknown }) => c.scratches));
     expect(shown).toBe(JSON.stringify([{ count: 0, bytes: "" }, { count, bytes: Buffer.from(car.scratches.list.subarray(0, count * STROKE_BYTES)).toString("hex") }]));
+  });
+
+  it("when dummies and a knocked prop are out at a sample, then it lists each dummy's slot, state, torso and velocity and the prop's index, prefab, middle and velocity", () => {
+    const { cars, trace, clock } = rig();
+    trace.begin(setup, cars, clock);
+    const sample = trace.samples[0]!;
+    expect(sample.dummies).toEqual([{ slot: 5, state: "down", age: 1.25, pos: { x: 12, y: 0.3, z: -2 }, vel: { x: 5, y: 0, z: 0.5 } }]);
+    expect(sample.props).toEqual([{ index: 7, prefab: "cone", pos: { x: 3, y: 0.2, z: 1.5 }, vel: { x: -1, y: 0, z: 0 } }]);
   });
 });
