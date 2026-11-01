@@ -151,4 +151,11 @@ describe("given the spray patch on a material", () => {
     expect(dummy.includes("#define SPRAY_DEPTH") && dummy.includes("sprayBand"), "the dummy's patch has the depth test").toBeTruthy();
     expect(!plain.includes("#define SPRAY_DEPTH"), "a patch with no map has none").toBe(true);
   });
+
+  it("when it is compiled, then an instance past the atlas's rows draws no spray: the fragment returns before it samples the atlas", () => {
+    const fragment = compileHooks(patched(null, "rows")).fragmentShader;
+    const guard = fragment.indexOf("vSprayRow > sprayRows - 0.5");
+    expect(guard, "the guard is in the fragment").toBeGreaterThan(-1);
+    expect(guard, "and comes before the atlas is sampled").toBeLessThan(fragment.indexOf("texture2D(sprayMap"));
+  });
 });

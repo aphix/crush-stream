@@ -356,6 +356,9 @@ export class Purses {
         }
       }
     }
+    // Only the instances the draw takes (`count`): the pool's capacity is 32 sets, a race draws four.
+    this.mesh.instanceMatrix.clearUpdateRanges();
+    this.mesh.instanceMatrix.addUpdateRange(0, this.mesh.count * 16);
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 

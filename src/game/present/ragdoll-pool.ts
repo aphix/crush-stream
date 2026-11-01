@@ -236,7 +236,7 @@ export abstract class RagdollPool {
     for (const b of d.bodies) disable(b);
   }
 
-  /** Builds the next slot at the end of the pool: ten parts and their joints parked disabled far below the world, its purse set, its place in the draw's spray atlas. */
+  /** Builds the next slot at the end of the pool: ten parts and their joints parked disabled far below the world, its walker and its purse set. A slot past `BASE_SLOTS` wears no spray (`DummyMesh`'s atlas holds the first four). */
   private buildDoll(): void {
     const R = this.R!;
     const world = this.world!;
@@ -261,7 +261,6 @@ export abstract class RagdollPool {
     this.dolls.push({ bodies, joints, loose: false, braced: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3), driven: false });
     if (this.walkerList.length <= s) this.walkerList.push(new Walker());
     this.purses?.build();
-    this.mesh.holdSprays(this.dolls.length);
   }
 
   /** Part `k` of `d` as drawn: `alpha` of the way from its pose one step before the last to the last. */

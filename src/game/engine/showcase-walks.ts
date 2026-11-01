@@ -10,7 +10,7 @@ import { wrapAngle } from "../present/walker-math.ts";
 /** Within this far (m) of his mark he has arrived; he then turns to his old facing, to within this much (rad), and goes back on the set. */
 const ARRIVED = 0.25;
 const FACING_BACK = 0.12;
-/** A walker that has not got home by then (s) is put back on his mark where he is not: stuck on something, or lost off the set. */
+/** A walker that has not got home by then (s) is put back on his mark where he is not: stuck on something, or lost off the set; a thrown one that has not reached his mark takes another. */
 const GIVE_UP = 30;
 /** He slows over the last metres: the pace (m/s) never falls under this until he arrives. */
 const SLOWEST = 0.5;
@@ -23,7 +23,7 @@ const WANDER_EDGE = 2;
 /** The `figure` of a dummy that was thrown: no figure of the set stands for him. */
 const THROWN = -1;
 
-/** A dummy the ragdoll world has: which figure of the set he is (`THROWN`: none), the pool slot, how long he has been away (s), and the mark (x, z) a thrown one walks to, null for a set figure walking home. */
+/** A dummy the ragdoll world has: which figure of the set he is (`THROWN`: none), the pool slot, how long he has been away (s; a thrown one's: since he picked his mark), and the mark (x, z) a thrown one walks to, null for a set figure walking home. */
 type Away = { figure: number; slot: number; seconds: number; wander: { x: number; z: number } | null };
 
 const _mark = new THREE.Vector3();
@@ -132,7 +132,9 @@ export class ShowcaseWalks {
       if (walker.state === "down") walker.ask();
       if (walker.state !== "stand") continue;
       if (away.wander !== null) {
-        this.wander(away.wander, walker);
+        // Not at his mark by then: something holds him (a parked car in his way), so he takes another.
+        if (away.seconds > GIVE_UP) away.wander.x = Infinity;
+        if (this.wander(away.wander, walker)) away.seconds = 0;
         continue;
       }
       this.art.markOf(away.figure, _mark);
@@ -155,9 +157,10 @@ export class ShowcaseWalks {
     this.art.stand();
   }
 
-  /** He walks to his mark; arrived, the next is a random point inside the wander circle. */
-  private wander(mark: { x: number; z: number }, walker: Walker): void {
-    if (hypot2(mark.x - _torso.x, mark.z - _torso.z) < ARRIVED || hypot2(mark.x, mark.z) > WANDER_RADIUS - WANDER_EDGE) {
+  /** He walks to his mark; arrived (or with none yet), the next is a random point inside the wander circle. Whether a new mark was picked. */
+  private wander(mark: { x: number; z: number }, walker: Walker): boolean {
+    const next = hypot2(mark.x - _torso.x, mark.z - _torso.z) < ARRIVED || hypot2(mark.x, mark.z) > WANDER_RADIUS - WANDER_EDGE;
+    if (next) {
       const radius = (WANDER_RADIUS - WANDER_EDGE) * Math.sqrt(this.random());
       const angle = 2 * Math.PI * this.random();
       mark.x = radius * detSin(angle);
@@ -165,6 +168,7 @@ export class ShowcaseWalks {
     }
     walker.heading = detAtan2(mark.x - _torso.x, mark.z - _torso.z);
     walker.command = WALK_SPEED;
+    return next;
   }
 
   /** `away`'s dummy leaves the pool and the figure stands on his mark again; the slot it freed. */

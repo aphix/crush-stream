@@ -21,6 +21,7 @@
  * the point x,y,z (default the origin), looking at it. The showcase's own `cam=` (the owner's link, the same six numbers) in `--hash`
  * puts the eye there with no `--camera`, which wins when both are given.
  * `--keys Digit5*8,Digit8*4` presses those keys (a code, `*n` times) before the drawn frames, the cursor swept across the lower view: the showcase's throws. The JSON's `frameMs` is the drawn frames' mean wall ms, each synced by a 1 px read (CPU sim and draw, and the GPU's).
+ * `--uploads` tallies the bytes the drawn frames upload to the GPU (buffer and texture sub-uploads, the bytes a call sends, not the array it reads from) and runs the page's upload check (`?debug=uploads`, `upload-check.ts`): the JSON's `uploadKBPerFrame`, `uploadCallsPerFrame`, and `dummiesOut`, the most dummies out at once in a drawn frame.
  * `--sirens` flashes every light bar (with `night=1` in the hash: the lamps as seen in a night pursuit). `--break headL,headR,tailL,tailR`
  * breaks those lamps on every car, as a corner crush does. `--smash rear,windshield,...` shatters those panes (`GLASS_NAMES`) on every car. `--brake` holds every car's brake pedal down (its brake lamps lit).
  * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
@@ -98,6 +99,7 @@ const { values } = parseArgs({
     scale: { type: "string" },
     shadow: { type: "string" },
     keys: { type: "string" },
+    uploads: { type: "boolean" },
   },
 });
 const root = resolve(values.root);
@@ -172,11 +174,15 @@ const yardstickContext = webgl2({});
 const yardstickMs = yardstick(yardstickContext);
 const gl = webgl2({ antialias: false, alpha: false });
 const renderer = nativeRenderer(gl);
+/** `--uploads`: what the page sends the GPU in buffer and texture uploads, tallied over the drawn frames (`uploads`). */
+const uploads = { bytes: 0, calls: 0 };
+if (values.uploads) tallyUploads(gl, uploads);
 
 stubBrowser();
 const page = new URL(location.href);
 const q = new URLSearchParams({ fx: tier });
 for (const k of ["draw", "scale", "shadow"]) if (values[k] !== undefined) q.set(k, values[k]);
+if (values.uploads) q.set("debug", "uploads");
 location.search = `?${q}`;
 if (values.hash !== undefined) location.hash = `#${values.hash.replace(/^#/, "")}`;
 const stubElement = document.createElement;
@@ -379,6 +385,9 @@ await settle();
 // Each drawn frame is synced by a 1 px read, so `frameMs` is the frame's wall time including the GPU's.
 const frameTimes = [];
 const syncPixel = new Uint8Array(4);
+uploads.bytes = 0;
+uploads.calls = 0;
+let dummiesOut = 0;
 for (let f = 0; f < frames; f++) {
   hideQuirkMeshes();
   three.info.reset();
@@ -387,6 +396,7 @@ for (let f = 0; f < frames; f++) {
   await settle();
   gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, syncPixel);
   frameTimes.push(performance.now() - began);
+  dummiesOut = Math.max(dummiesOut, engine["ragdolls"]["live"]);
 }
 const frameMs = frameTimes.length === 0 ? null : Math.round((frameTimes.reduce((sum, ms) => sum + ms, 0) / frameTimes.length) * 100) / 100;
 const glError = gl.getError();
@@ -408,9 +418,47 @@ writeFileSync(out, await shot.encode("png"));
 const wheelsPx = shooting?.camera ? wheelMarks(shooting, w, h) : null;
 const boostZoom = values.boost === undefined ? null : { seat: engine.seat.mode, strength: engine.cine.post.radial, boostK: engine.followedCar()?.drive.boostK ?? null, kph: Math.round((engine.followedCar()?.speed ?? 0) * 3.6) };
 engine.dispose();
-const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, frameMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
+const uploaded = values.uploads ? { uploadKBPerFrame: Math.round((uploads.bytes / frames / 1024) * 100) / 100, uploadCallsPerFrame: Math.round((uploads.calls / frames) * 10) / 10, dummiesOut } : {};
+const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, frameMs, ...counts, ...uploaded, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
 process.stdout.write(`${JSON.stringify({ ...result, boostZoom })}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
+
+/**
+ * `--uploads`: `gl`'s buffer and texture uploads add the bytes they send to `uploads` (a call's own count: a partial texture upload
+ * counts its rectangle, an array uploaded from an offset its length). Texture storage and null-data allocations send nothing.
+ */
+function tallyUploads(gl, uploads) {
+  const components = { [gl.RGBA]: 4, [gl.RGB]: 3, [gl.RG]: 2, [gl.RED]: 1, [gl.RGBA_INTEGER]: 4, [gl.RGB_INTEGER]: 3, [gl.RG_INTEGER]: 2, [gl.RED_INTEGER]: 1, [gl.LUMINANCE_ALPHA]: 2, [gl.LUMINANCE]: 1, [gl.ALPHA]: 1, [gl.DEPTH_COMPONENT]: 1, [gl.DEPTH_STENCIL]: 1 };
+  const typeBytes = { [gl.UNSIGNED_BYTE]: 1, [gl.BYTE]: 1, [gl.UNSIGNED_SHORT]: 2, [gl.SHORT]: 2, [gl.HALF_FLOAT]: 2, [gl.FLOAT]: 4, [gl.UNSIGNED_INT]: 4, [gl.INT]: 4 };
+  const packed = [gl.UNSIGNED_SHORT_4_4_4_4, gl.UNSIGNED_SHORT_5_5_5_1, gl.UNSIGNED_SHORT_5_6_5, gl.UNSIGNED_INT_2_10_10_10_REV, gl.UNSIGNED_INT_24_8, gl.UNSIGNED_INT_10F_11F_11F_REV, gl.UNSIGNED_INT_5_9_9_9_REV];
+  const packedBytes = { [gl.UNSIGNED_SHORT_4_4_4_4]: 2, [gl.UNSIGNED_SHORT_5_5_5_1]: 2, [gl.UNSIGNED_SHORT_5_6_5]: 2 };
+  const pixelBytes = (format, type) => (packed.includes(type) ? (packedBytes[type] ?? 4) : (components[format] ?? 0) * (typeBytes[type] ?? 0));
+  const viewBytes = (data, offset = 0, length = 0) => {
+    if (!ArrayBuffer.isView(data)) return 0;
+    const size = data instanceof DataView ? 1 : data.BYTES_PER_ELEMENT;
+    return (length > 0 ? length : data.byteLength / size - offset) * size;
+  };
+  const tally = (name, bytesOf) => {
+    const call = gl[name].bind(gl);
+    gl[name] = (...args) => {
+      const bytes = bytesOf(...args);
+      if (bytes > 0) {
+        uploads.bytes += bytes;
+        uploads.calls++;
+      }
+      return call(...args);
+    };
+  };
+  tally("bufferSubData", (_target, _at, data, offset, length) => viewBytes(data, offset, length));
+  tally("bufferData", (_target, data, _usage, offset, length) => viewBytes(data, offset, length));
+  // (target, level, x, y, width, height, format, type, pixels[, offset]) or (target, level, x, y, format, type, source).
+  tally("texSubImage2D", (...a) => (a.length >= 9 ? (a[8] === null ? 0 : a[4] * a[5] * pixelBytes(a[6], a[7])) : a[6].width * a[6].height * pixelBytes(a[4], a[5])));
+  // (target, level, internalformat, width, height, border, format, type, pixels[, offset]) or (target, level, internalformat, format, type, source).
+  tally("texImage2D", (...a) => (a.length >= 9 ? (a[8] === null ? 0 : a[3] * a[4] * pixelBytes(a[6], a[7])) : a[5].width * a[5].height * pixelBytes(a[3], a[4])));
+  // (target, level, x, y, z, width, height, depth, format, type, pixels) and (target, level, internalformat, width, height, depth, border, format, type, pixels).
+  tally("texSubImage3D", (...a) => (a[10] === null || a[10] === undefined ? 0 : a[5] * a[6] * a[7] * pixelBytes(a[8], a[9])));
+  tally("texImage3D", (...a) => (a[9] === null || a[9] === undefined ? 0 : a[3] * a[4] * a[5] * pixelBytes(a[7], a[8])));
+}
 
 /**
  * `--paint`: one colour (hex) for the hash's car, or `<style>=<colour>` pairs; a car whose style fixes its paint (a livery) keeps

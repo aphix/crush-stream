@@ -154,13 +154,12 @@ export function sprayFaceUniforms(layout: SprayLayout): Record<string, THREE.IUn
   };
 }
 
-/** The shader's spray uniforms for a bitmap of `layout` sampled from `map`, `rows` bitmaps stacked up each of its `columns` (slot 0 lowest in the first), with `depth`'s test. */
-export function sprayUniforms(layout: SprayLayout, map: THREE.Texture, rows: number, depth: SprayDepth | null = null, columns = 1): Record<string, THREE.IUniform> {
+/** The shader's spray uniforms for a bitmap of `layout` sampled from `map`, `rows` bitmaps stacked up it (one per dummy slot), with `depth`'s test. */
+export function sprayUniforms(layout: SprayLayout, map: THREE.Texture, rows: number, depth: SprayDepth | null = null): Record<string, THREE.IUniform> {
   return {
     sprayMap: { value: map },
     ...sprayFaceUniforms(layout),
     sprayRows: { value: rows },
-    sprayColumns: { value: columns },
     ...(depth && { sprayDepth: { value: depth.map }, sprayBand: { value: depth.band ?? SPRAY_DEPTH_BAND } }),
     ...(depth?.torn && { sprayTorn: { value: depth.torn } }),
   };
@@ -190,11 +189,10 @@ vec4 sprayFaceAt() {
   return vec4(f.xy + uv * f.zw, depth, axis);
 }`;
 
-/** `sprayDraws` on the GPU: the premultiplied spray over this fragment (none off the box's painted faces, or with no rest normal). */
+/** `sprayDraws` on the GPU: the premultiplied spray over this fragment (none off the box's painted faces, with no rest normal, or on an instance past the atlas's rows: the dummy pool's slots past the ones it holds sprays of). */
 const SPRAY_FRAGMENT = /* glsl */ `
 uniform sampler2D sprayMap;
 uniform float sprayRows;
-uniform float sprayColumns;
 #ifdef SPRAY_DEPTH
 uniform sampler2D sprayDepth;
 uniform float sprayBand;
@@ -204,6 +202,7 @@ uniform vec4 sprayTorn;
 #endif
 varying float vSprayRow;
 vec4 sprayTexel() {
+  if (vSprayRow > sprayRows - 0.5) return vec4(0.0);
   vec4 face = sprayFaceAt();
   if (face.x < 0.0) return vec4(0.0);
   vec2 st = face.xy;
@@ -217,8 +216,7 @@ vec4 sprayTexel() {
 #endif
   if (hidden) return vec4(0.0);
 #endif
-  float column = floor(vSprayRow / sprayRows);
-  return texture2D(sprayMap, vec2((column + st.x) / sprayColumns, (vSprayRow - column * sprayRows + st.y) / sprayRows));
+  return texture2D(sprayMap, vec2(st.x, (vSprayRow + st.y) / sprayRows));
 }`;
 
 /** The face mapping declared in `shader` (and its rest-frame `attributes` in the vertex) unless an earlier patch did; a patch's own functions go in before `main`, after it. */

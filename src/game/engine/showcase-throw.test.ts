@@ -20,7 +20,7 @@ const FRAME = 1 / FRAME_HZ;
 const CHEST_Y = 1.2;
 /** The owner's bound (m): a thrown dummy wanders within this far of the showcase's middle. */
 const WITHIN = 30;
-type Away = { figure: number; slot: number; wander: unknown };
+type Away = { figure: number; slot: number; seconds: number; wander: unknown };
 
 let engine: CrashEngine;
 const art = () => engine["showcase"]!.art;
@@ -219,6 +219,51 @@ describe("given the showcase's keys 8 and 9", () => {
     const run = watched("Digit9", new THREE.Vector3(0, 0, 4), 10);
     expect(run.states).toContain("getUp");
     expect(run.shirt).toBe(new THREE.Color(art().figureOf(1).look.shirt).getHexString());
+  });
+});
+
+describe("given a thrown dummy whose mark lies behind a parked car", () => {
+  /** His clock (s since he picked his mark) set half a second short of the give-up (30 s): the wait itself is not run. */
+  const NEARLY_GIVEN_UP_S = 29.5;
+  /** His torso's distance (m) from the car's middle once he is against its flank (0.9 m measured: the plan box is 0.78 m to a side). */
+  const AT_THE_FLANK_M = 1.5;
+
+  it("when he walks into the car's flank and cannot get past, then he keeps his mark until the give-up, takes another then, and keeps that one", () => {
+    settle();
+    let draws = 0;
+    engine["showcase"]!["walks"]["random"] = () => (draws++ % 2 === 0 ? 0.999 : 0.25);
+    const car = engine["showcase"]!.cars[1]!;
+    const across = new THREE.Vector3(Math.cos(car.group.rotation.y), 0, -Math.sin(car.group.rotation.y));
+    const near = car.group.position.clone().addScaledVector(across, 6);
+    const behind = car.group.position.clone().addScaledVector(across, -6);
+    expect(Math.hypot(behind.x, behind.z), "the blocked mark is inside the wander circle").toBeLessThan(WITHIN - 2);
+    expect(engine["showcase"]!["walks"].throwFigure(0, new THREE.Vector3(near.x, 1.5, near.z), new THREE.Vector3()), "he is thrown").toBeGreaterThanOrEqual(0);
+    const him = thrownDummies()[0]!;
+    const walker = ragdolls().walkers[him.slot]!;
+    for (let t = 0; t < 10 && walker.state !== "stand"; t += 0.1) runSeconds(engine, 0.1);
+    expect(walker.state, "he got up").toBe("stand");
+    const mark = him.wander as { x: number; z: number };
+    mark.x = behind.x;
+    mark.z = behind.z;
+    him.seconds = 0;
+    const keepsHisMark = (): boolean => Math.hypot(mark.x - behind.x, mark.z - behind.z) < 1;
+    const torso = new THREE.Vector3();
+    const toCar = (): number => (ragdolls().walkerTorso(torso, him.slot) ? Math.hypot(torso.x - car.group.position.x, torso.z - car.group.position.z) : Infinity);
+    // He may fall again as he sets out; the walk to the car's flank takes 4 s once he is up.
+    for (let t = 0; t < 20 && toCar() > AT_THE_FLANK_M; t += 0.5) runSeconds(engine, 0.5);
+    expect(toCar(), "he walked up to the car's flank").toBeLessThan(AT_THE_FLANK_M);
+    runSeconds(engine, 2);
+    expect(toCar(), "and is held there, not past it").toBeLessThan(AT_THE_FLANK_M);
+    expect(keepsHisMark(), "held there, he has not arrived and keeps his mark").toBe(true);
+    him.seconds = NEARLY_GIVEN_UP_S;
+    runSeconds(engine, 0.3);
+    expect(keepsHisMark(), "short of the give-up he keeps it").toBe(true);
+    runSeconds(engine, 0.6);
+    expect(keepsHisMark(), "past the give-up he has taken another").toBe(false);
+    const taken = { x: mark.x, z: mark.z };
+    runSeconds(engine, 2);
+    expect(Math.hypot(mark.x - taken.x, mark.z - taken.z), "he kept the new one for the next 2 s").toBe(0);
+    expect(him.seconds, "counting from the new mark").toBeLessThan(5);
   });
 });
 

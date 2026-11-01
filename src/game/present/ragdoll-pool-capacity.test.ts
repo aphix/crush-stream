@@ -72,8 +72,8 @@ describe("given a ragdoll pool whose capacity is raised to SLOTS", () => {
     expect(throwDummy(SLOTS), "the 33rd's slot").toBe(0);
     expect(sys.builtSlots, "slots built after the 33rd").toBe(SLOTS);
     const atlas = sys.pickMesh["sprayAtlas"].image;
-    expect(atlas.width / PERSON_SPRAY.w, "columns of bitmaps the spray atlas holds").toBe(4);
-    expect(atlas.height / PERSON_SPRAY.h, "rows of bitmaps the spray atlas holds").toBe(8);
+    expect(atlas.width / PERSON_SPRAY.w, "columns of bitmaps the spray atlas holds with 32 slots built").toBe(1);
+    expect(atlas.height / PERSON_SPRAY.h, "rows of bitmaps the spray atlas holds with 32 slots built").toBe(BASE_SLOTS);
   });
 
   it("when the capacity is lowered again, then a dummy past it goes, the next throw takes the oldest within it, and the slots built stay", async () => {
