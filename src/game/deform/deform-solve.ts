@@ -226,10 +226,16 @@ export abstract class DeformSolve extends DeformFreeze {
         if (kept > Math.abs(set)) m.crushSet = Math.sign(dev) * kept;
         // A bowed-out set holds only out of contact: a face still pressing may push the panel back in.
         else if (len > 1e-6 && (set > 0 ? dev < set : dev > set && this.quietTime() > 0.025)) {
-          const k = (restLen - set) / len;
+          // The set is held in plan, the mass's height kept: pulled straight at the cell, a mass under it climbed toward its height with every
+          // push out and pull in. The pull stays radial where plan would scale a height error up (a mass nearly over or under the cell, as the
+          // roof is: plan moves it by the error times its height over its plan distance) or cannot carry the distance at all.
+          const plan = (restLen - set) ** 2 - ry * ry;
+          const hz = hypot2(rx, rz);
+          const radial = !(plan > 0 && hz > Math.abs(ry));
+          const k = radial ? (restLen - set) / len : Math.sqrt(plan) / hz;
           dx = c.local.x + rx * k - m.rest.x;
-          dy = c.local.y + ry * k - m.rest.y;
           dz = c.local.z + rz * k - m.rest.z;
+          if (radial) dy = c.local.y + ry * k - m.rest.y;
         }
       }
     } else {
