@@ -2,7 +2,7 @@
  * What the quality governors (`AutoFx`, `DetailGovernor`) read: frame-WORK time against a budget, not the frame rate.
  * Under vsync the frame rate is pinned at the display's refresh whatever the headroom (a 60 Hz screen shows 60 fps at 3 ms of work
  * and at 16 ms), so a window counts, per frame, the main thread's own time (sim + draw submit, `Engine.workMs`), the part of it
- * that a tier changes (`Engine.renderMs`: the draw submit plus the tier-gated present work before it, `kernel/tier-work.ts`) and, where
+ * that is the render (`Engine.renderMs`, the draw submit; for Auto FX also the tier-gated present work before it, `kernel/tier-work.ts`) and, where
  * the browser has a GPU timer, the draw's GPU time. A window is JUDGED on
  * one of three bases: `work`, the main thread's total (sim included) and the GPU against the whole 60 fps frame; `render`, the
  * render ms and the GPU's against `RENDER_BUDGET_MS`, the part of the frame the render may take (a tier changes the

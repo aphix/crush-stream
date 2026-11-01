@@ -297,7 +297,8 @@ export abstract class EngineInput extends EngineRigs {
         this.emitHud();
       }
     }
-    const tier = this.autoFx.frame(wallDt * 1000, this.workMs, this.renderMs, gpuMs, matchTime);
+    // The FX tier alone switches the tier-gated present work on (`tierWorkMs`), so it alone is judged with it as render; the detail and scale governors read the draw.
+    const tier = this.autoFx.frame(wallDt * 1000, this.workMs, this.renderMs + this.tierWorkMs, gpuMs, matchTime);
     if (tier === null) return;
     const fx = this.autoFx;
     console.info(`Crush Stream FX auto: ${tier} (last window ${fx.fps.toFixed(1)} fps, ${(fx.busy * 100).toFixed(0)} % of the render budget; render ${(fx.renderShare * 100).toFixed(0)} % and sim ${(fx.simShare * 100).toFixed(0)} % of the frame budget)`);

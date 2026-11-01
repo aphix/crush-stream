@@ -719,8 +719,8 @@ export class CrashEngine extends EngineGarage {
       this.cine.render(this.scene, this.camera, wallDt, this.markFocus());
       this.frameDrawn();
     }
-    // The tier-gated present work this frame did before the draw (contour relax, crease blur) is what a tier changes too: the governors read it as render.
-    this.renderMs = performance.now() - drawAt + takeTierWork();
+    this.renderMs = performance.now() - drawAt;
+    this.tierWorkMs = takeTierWork();
     this.blend.restore();
     this.race.readFinish(); // after the restore: the blend draws skins between two steps, and the finish keeps the sim's
     this.hudAcc += wallDt;

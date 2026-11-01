@@ -225,8 +225,10 @@ export abstract class EngineCore {
   protected fps = 0;
   /** Main-thread ms the last `tickInner` took (sim, camera, FX, draw submit): what the quality governors read as frame work. */
   protected workMs = 0;
-  /** The part of `workMs` that an FX tier changes: the draw (`scene.sync` and `Cinematics.render`'s submit; 0 on a silent frame) and the tier-gated present work before it (`takeTierWork`: contour relax, crease blur). */
+  /** The part of `workMs` that is the draw (`scene.sync` and `Cinematics.render`'s submit; 0 on a silent frame): what the detail and render-scale governors change. */
   protected renderMs = 0;
+  /** The tier-gated present work of the last frame (`takeTierWork`: contour relax, crease blur): Auto FX reads it as render, since its tier switches it on. */
+  protected tierWorkMs = 0;
   protected impactKph: number | null = null;
   protected elapsedWall = 0;
   protected elapsedSim = 0;
