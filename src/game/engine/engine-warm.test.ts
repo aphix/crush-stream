@@ -43,6 +43,8 @@ describe("given the engine warming its programs before the loop starts", () => {
   const drawnMaterials = new Set<THREE.Material>();
   /** Instanced meshes the main scene's draws issued an instance of (three issues no draw for none). */
   const drawnPools = new Set<THREE.Object3D>();
+  /** Particle systems the main scene's draws issued vertices of. */
+  const drawnPoints = new Set<THREE.Object3D>();
   const paintKey = (): string => engine["live"]()[0]!.lookMeshes().bodyPaint.customProgramCacheKey();
   /** The output the renderer is on and whether car 0's paint wears the finish now, e.g. "hdr finish". */
   const pass = (): string => `${engine["renderer"].getRenderTarget() === null ? "canvas" : "hdr"} ${paintKey().includes(FINISH_KEY_MARK) ? "finish" : "plain"}`;
@@ -54,6 +56,7 @@ describe("given the engine warming its programs before the loop starts", () => {
       if (object.parent?.name === "ragdoll-debug") drawnDebugViews.add(object.type);
       if (main) for (const m of [(object as THREE.Mesh).material ?? []].flat()) if (m.visible) drawnMaterials.add(m);
       if (main && (object as THREE.InstancedMesh).isInstancedMesh && (object as THREE.InstancedMesh).count > 0) drawnPools.add(object);
+      if (main && (object as THREE.Points).isPoints && (object as THREE.Points).geometry.drawRange.count > 0) drawnPoints.add(object);
     });
   };
   beforeAll(async () => {
@@ -102,6 +105,15 @@ describe("given the engine warming its programs before the loop starts", () => {
   it("when the boot warm-up draws the scene, then the dummies' pool is drawn with an instance, and is empty again after", () => {
     expect(drawnPools.has(engine["ragdolls"].pickMesh), "the dummies' pool was drawn with no instance: its first real draw stalled the first throw").toBe(true);
     expect(engine["ragdolls"].pickMesh.count, "the dummies' pool is empty again after the warm-up").toBe(0);
+  });
+
+  it("when the boot warm-up draws the scene, then every particle system's points (sparks, smoke, glass dots) are drawn with vertices: none is skipped for an empty draw range", () => {
+    const systems: THREE.Points[] = [];
+    engine["scene"].traverse((o) => {
+      if ((o as THREE.Points).isPoints) systems.push(o as THREE.Points);
+    });
+    expect(systems.length, "the control: the scene holds particle systems").toBeGreaterThan(0);
+    expect(systems.filter((p) => !drawnPoints.has(p)).map((p) => p.material.type), "particle systems the warm-up never drew").toEqual([]);
   });
 
   it("when content with a new program joins the scene after boot, then the warm-up draws only the meshes wearing it", async () => {

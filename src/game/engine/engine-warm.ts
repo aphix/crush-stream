@@ -26,6 +26,27 @@ const ULTRA_STEP_FRAMES = 2;
  * the bench sat in its warm-up with the race never started (the strip's lights dark, 0:00.000).
  */
 const ULTRA_PASSES = 2;
+/** The fewest vertices any primitive draws (a triangle's): what an idle particle system's geometry draws in the warm-up. */
+const EMPTY_DRAW_VERTICES = 3;
+
+/**
+ * Gives what three would not draw at all (an instanced pool with none out, a geometry whose draw range is 0: the dummies' and the
+ * purses' pools, the sparks, smoke and glass dots between crashes) one instance or a triangle's vertices, and pushes how to put it back
+ * onto `undo`. A pool's first real draw stalled its frame 200-400 ms (the showcase's first throw, in Chromium on the host GPU).
+ */
+function fillEmpty(o: THREE.Object3D, undo: (() => void)[]): void {
+  const pool = o as THREE.InstancedMesh;
+  if (pool.isInstancedMesh && pool.count === 0 && pool.instanceMatrix.count > 0) {
+    pool.count = 1;
+    undo.push(() => (pool.count = 0));
+  }
+  const g = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
+  if (g === undefined || g.drawRange.count !== 0) return;
+  if ((g.index?.count ?? g.getAttribute("position")?.count ?? 0) < EMPTY_DRAW_VERTICES) return;
+  g.setDrawRange(g.drawRange.start, EMPTY_DRAW_VERTICES);
+  undo.push(() => g.setDrawRange(g.drawRange.start, 0));
+}
+
 
 /**
  * Shader warm-up: links every program before the loop runs, then warms new scene content as it appears.
@@ -166,13 +187,12 @@ export abstract class EngineWarm extends EngineCore {
   /**
    * Run `draw` with a zero scissor on the canvas and the HDR target and every mesh shown and unculled, or with `only`, just the meshes
    * wearing one of those materials (the rest are muted by material, not object, so a drawn mesh under a muted one, the purse pool under
-   * the dummies, still draws); then put it all back. An instanced pool with nothing out (the dummies', the purses') draws one instance:
-   * three issues no draw for none, and the pool's first real draw then stalled its frame 200-400 ms (the showcase's first throw).
+   * the dummies, still draws); then put it all back. A pool or particle system with nothing out draws something small (`fillEmpty`).
    */
   private staged(only: ReadonlySet<THREE.Material> | null, draw: () => void): void {
     const shown: THREE.Object3D[] = [];
     const culled: THREE.Object3D[] = [];
-    const emptyPools: THREE.InstancedMesh[] = [];
+    const filled: (() => void)[] = [];
     const hiddenMats: THREE.Material[] = [];
     const mutedMats: THREE.Material[] = [];
     this.scene.traverse((o) => {
@@ -185,11 +205,7 @@ export abstract class EngineWarm extends EngineCore {
         o.frustumCulled = false;
         culled.push(o);
       }
-      const pool = o as THREE.InstancedMesh;
-      if (pool.isInstancedMesh && pool.count === 0 && pool.instanceMatrix.count > 0) {
-        pool.count = 1;
-        emptyPools.push(pool);
-      }
+      fillEmpty(o, filled);
       for (const m of [(o as THREE.Mesh).material ?? []].flat()) {
         const draws = only === null || only.has(m);
         if (m.visible === draws) continue;
@@ -208,7 +224,7 @@ export abstract class EngineWarm extends EngineCore {
     r.setScissorTest(false);
     for (const o of shown) o.visible = false;
     for (const o of culled) o.frustumCulled = true;
-    for (const pool of emptyPools) pool.count = 0;
+    for (const restore of filled) restore();
     for (const m of hiddenMats) m.visible = false;
     for (const m of mutedMats) m.visible = true;
   }
