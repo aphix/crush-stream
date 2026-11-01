@@ -125,8 +125,12 @@ export const THROWN_KINDS = [PREFAB.cone, PREFAB.crate, PREFAB.tyreStack, PREFAB
 export const THROWN_PER_KIND = 32;
 /** Where the thrown props stand until thrown (m under the disc's floor): out of sight and out of reach of everything. */
 const THROWN_DEPTH = 20;
-/** The showcase's thrown props, kind by kind (`THROWN_KINDS`), `THROWN_PER_KIND` each, standing under the floor until a key throws one. */
-export const SHOWCASE_THROWN: readonly Placed[] = THROWN_KINDS.flatMap((prefab) => Array.from({ length: THROWN_PER_KIND }, () => ({ prefab, x: 0, y: -THROWN_DEPTH, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 })));
+/** The gap (m) between neighbouring parked props: over the longest of them (1.5 m), so none stands in another's broad-phase box (props stacked on one spot made every step pair them all). */
+const THROWN_SPACING = 3;
+/** The showcase's thrown props, kind by kind (`THROWN_KINDS`), `THROWN_PER_KIND` each, standing under the floor until a key throws one: a kind a row, its props along it. */
+export const SHOWCASE_THROWN: readonly Placed[] = THROWN_KINDS.flatMap((prefab, row) =>
+  Array.from({ length: THROWN_PER_KIND }, (_, n) => ({ prefab, x: (n - (THROWN_PER_KIND - 1) / 2) * THROWN_SPACING, y: -THROWN_DEPTH, z: (row - (THROWN_KINDS.length - 1) / 2) * THROWN_SPACING, yaw: 0, sx: 1, sy: 1, sz: 1 })),
+);
 /** Every prop the dummies' world holds: the thrown ones first (their index is `kind * THROWN_PER_KIND + n`), then the gallery, whose knockable pieces a dummy or a thrown prop knocks about. */
 export const SHOWCASE_PROPS: readonly Placed[] = [...SHOWCASE_THROWN, ...SHOWCASE_GALLERY];
 

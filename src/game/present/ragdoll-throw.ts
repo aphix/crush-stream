@@ -189,16 +189,17 @@ export abstract class RagdollThrower extends RagdollStepper {
     if (this.walkers[slot]!.active) this.despawn(slot);
   }
 
-  /** The player's walker has walked `WALKER_FOLLOW` m from the middle of the ground patch he stands on: it is built again round him (a heightfield 96 m across reaches no further than 48 m). */
+  /** The player's walker has walked `WALKER_FOLLOW` m from the middle of the ground patch he stands on: it is built again round him (a heightfield 96 m across reaches no further than 48 m). A scene's one patch is under every walker. */
   protected followWalkerGround(): void {
     const d = this.dolls[WALKER_SLOT];
     if (!d?.live || !d.driven || !this.R || !this.world) return;
+    const c = this.course;
+    if (c !== null && activeGround() === c.ground && c.track === null) return;
     const x = d.cur[0]!;
     const z = d.cur[2]!;
     if (hypot2(x - this.walkerPatchX, z - this.walkerPatchZ) < WALKER_FOLLOW) return;
-    for (const c of d.patch) this.world.removeCollider(c, false);
+    for (const k of d.patch) this.world.removeCollider(k, false);
     d.patch.length = 0;
-    const c = this.course;
     if (c !== null && activeGround() === c.ground) d.patch.push(...this.patchAt(x, z, d.cur[1]!, PATCH_HALF));
     else d.patch.push(...terrainColliders(this.R, this.world, x, z, d.cur[1]!, PATCH_HALF));
     this.walkerPatchX = x;
@@ -257,6 +258,7 @@ export abstract class RagdollThrower extends RagdollStepper {
   setCourse(track: Track, placed: readonly Placed[], props: PropDraw | null): void {
     this.course = { ground: track.ground(), track, placed };
     this.solids = null;
+    this.freeScenePatch();
     this.props.set(placed, props);
     this.tumble = props;
     if (this.live === 0) this.mode = null;
@@ -265,11 +267,14 @@ export abstract class RagdollThrower extends RagdollStepper {
 
   /**
    * A scene's own solids (the Lab's wall, brackets and solid props) a dummy collides with while `ground` is the active one,
-   * as a course's are, and its knockable props (`placed`, drawn by `props`), all back on their spots.
+   * as a course's are, and its knockable props (`placed`, drawn by `props`), all back on their spots. Their one patch goes
+   * into the world now when it can, so no throw pays for it.
    */
   setSolids(ground: Ground, solids: readonly Solid[], placed: readonly Placed[], props: PropDraw | null): void {
     this.course = { ground, track: null, placed };
     this.solids = solids;
+    this.freeScenePatch();
+    if (this.world && activeGround() === ground) this.buildScenePatch();
     this.props.set(placed, props);
     this.tumble = props;
     if (this.live === 0) this.mode = null;
@@ -279,6 +284,7 @@ export abstract class RagdollThrower extends RagdollStepper {
   clearScene(): void {
     this.course = null;
     this.solids = null;
+    this.freeScenePatch();
     this.props.set([], null);
     this.tumble = null;
     this.setCapacity(BASE_SLOTS);

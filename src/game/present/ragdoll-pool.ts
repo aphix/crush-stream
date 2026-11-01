@@ -25,7 +25,7 @@ import { AIR_ANGULAR, AIR_LINEAR, ARM, blendPose, type Doll, JOINTS, limp, PARTS
 import { brace, joinUp, loosen } from "./ragdoll-joints.ts";
 import { Walker } from "./ragdoll-walker.ts";
 import { Untangle } from "./ragdoll-untangle.ts";
-import { groundColliders, PATCH_AHEAD, PATCH_HALF, type Pole } from "./ragdoll-ground.ts";
+import { groundColliders, PATCH_AHEAD, PATCH_HALF, SCENE_HALF, type Pole } from "./ragdoll-ground.ts";
 import { courseSolids, type Solid } from "./ragdoll-solids.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { GRAVITY } from "../kernel/constants.ts";
@@ -133,6 +133,8 @@ export abstract class RagdollPool {
   protected readonly figure: Throw = { car: 0, p: new THREE.Vector3(), q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: false, purse: false, armsDown: true };
   /** Fixed colliders every dummy shares off a course (pad or disc with its ramps, corkscrew, poles), built at the run's first throw: Rapier's step allocates per collider (0.31 KB, RapierEval). */
   protected readonly statics: Collider[] = [];
+  /** A scene's ground and every solid of it (`setSolids`), built once for every dummy there: a scene's solids stand where they do whoever is thrown, and a patch of the same floor per dummy made 32 dummies cost twice what the first one did. Empty until a dummy is out. */
+  private scenePatch: Collider[] = [];
   protected disposed = false;
   /** Rapier's load, started once: a second `preload` while it runs (the engine's, a test's) is the same one. */
   protected loading: Promise<void> | null = null;
@@ -480,11 +482,23 @@ export abstract class RagdollPool {
     this.proxies.teleport = true;
   }
 
-  /** The ground under a throw (`groundColliders`): the active surface's solids (pad, disc and ramps, corkscrew) built once, its terrain's heightfield patch per dummy on a course or a scene's solids. */
+  /** The ground under a throw (`groundColliders`): the active surface's solids (pad, disc and ramps, corkscrew) built once; on a course its heightfield patch per dummy; in a scene its one patch (`buildScenePatch`). */
   protected buildPatch(d: Doll, cx: number, cz: number, y: number): void {
     const c = this.course;
-    if (c !== null && activeGround() === c.ground) d.patch.push(...this.patchAt(cx, cz, y, PATCH_HALF));
-    else this.buildStatics(cx, cz, y, PATCH_HALF);
+    if (c === null || activeGround() !== c.ground) this.buildStatics(cx, cz, y, PATCH_HALF);
+    else if (c.track !== null) d.patch.push(...this.patchAt(cx, cz, y, PATCH_HALF));
+    else this.buildScenePatch();
+  }
+
+  /** The scene's ground and solids (`setSolids`) in the world once, whoever stands on them. */
+  protected buildScenePatch(): void {
+    if (this.scenePatch.length === 0) this.scenePatch = this.patchAt(0, 0, 0, SCENE_HALF);
+  }
+
+  /** The scene's patch out of the world (its solids changed, or the scene is left); the next dummy builds it again. */
+  protected freeScenePatch(): void {
+    for (const c of this.scenePatch) this.world?.removeCollider(c, false);
+    this.scenePatch = [];
   }
 
   /** The run's fixed colliders off a course, built once round (`cx`, `cz`): the first dummy of the run builds them. */

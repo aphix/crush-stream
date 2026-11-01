@@ -27,6 +27,8 @@ export const STATICS_HALF = 2 * PATCH_HALF;
 export const PATCH_AHEAD = 24;
 /** Half-size (m) of the sandbox's flat pad collider: past any spot a car reaches. */
 const FLAT_HALF = 1000;
+/** Half-size (m) a scene's one patch is built over (`groundColliders`' `half`): past every solid a scene has, which no throw out-ranges. */
+export const SCENE_HALF = FLAT_HALF;
 /**
  * The dummies' grip on the ground he lands on (pad, the range's sand, road, ramps, terrain; Max rule, over his own low `SLIDE`, which still holds
  * on cars, glass and props): clothing or skin sliding on asphalt, not a toy skating on it (owner, 2026-10-18). A sand of 3 spun a forearm planted
