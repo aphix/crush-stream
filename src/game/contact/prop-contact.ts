@@ -10,6 +10,7 @@ import { HIT_AHEAD, impulseCar, markApproach, wallBounce } from "./pair-contact.
 import { BELLY_ABSENT, POINT_X, POINT_Y, POINT_Z, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { loadPoints } from "../vehicle/car-air-points.ts";
 import { cageLift, centreY } from "../vehicle/car-cage-rig.ts";
+import type { CageFields } from "../vehicle/car-cage.ts";
 import { rigidPress } from "../vehicle/paint-scrapes.ts";
 
 /** What a scene does with a car's prop contacts (`propContact`): the race records and draws them, the Lab reads them back. */
@@ -145,6 +146,56 @@ function footprint(car: DeformableCar): void {
   }
 }
 
+/** Slack (m) on `footprintBound` for the rounding of the two rotations `bodySpan` applies. */
+const BOUND_SLACK = 1e-3;
+const _radii = new WeakMap<DeformableCar, { fields: CageFields; serial: number; radius: number }>();
+
+/** The farthest (m) a hull vertex of `car`'s cage stands from the car's origin, kept per fit. */
+function hullRadius(car: DeformableCar): number {
+  const { fields, serial } = car.cage;
+  let memo = _radii.get(car);
+  if (memo === undefined || memo.fields !== fields || memo.serial !== serial) {
+    const pos = fields.pos;
+    let r2 = 0;
+    for (let k = 0; k < car.cage.style.vertexCount; k++) r2 = Math.max(r2, pos[k * 3]! * pos[k * 3]! + pos[k * 3 + 1]! * pos[k * 3 + 1]! + pos[k * 3 + 2]! * pos[k * 3 + 2]!);
+    memo = { fields, serial, radius: Math.sqrt(r2) };
+    _radii.set(car, memo);
+  }
+  return memo.radius;
+}
+
+/**
+ * A distance (m) from the car's origin that `measure`'s `reach` never passes: the farthest of the drawn body's vertices (its plan box at any
+ * tilt stays within that on both axes), the body-frame plan box, and for a wreck its masses with their half radii; times the root of two (the
+ * box's corner). Asked first, so the prisms are queried before the body is measured at all.
+ */
+export function footprintBound(car: DeformableCar): number {
+  const pb = car.cage.fields.planBox;
+  let d = Math.max(hullRadius(car) + Math.abs(cageLift(car)), Math.abs(pb[0]!), Math.abs(pb[1]!), Math.abs(pb[2]!), Math.abs(pb[3]!));
+  const deform = car.deform;
+  if (deform.massActive) {
+    const pos = car.group.position;
+    for (let i = 0; i < deform.masses.length; i++) {
+      const m = deform.masses[i]!;
+      if (!m.dynamic || (m.hub && !m.popped)) continue;
+      d = Math.max(d, hypot2(m.world.x - pos.x, m.world.z - pos.z) + m.radius * 0.5);
+    }
+  }
+  return Math.SQRT2 * d + BOUND_SLACK;
+}
+
+/** The reach (m) `measure` finds for `car` now (its bound's tests read it). */
+export function footprintReach(car: DeformableCar): number {
+  measure(car);
+  return _span.reach;
+}
+
+/** How far ahead (m) a hard-driving car is still asked about (`markApproach`); 0 below `WALL_CRUSH`. */
+function aheadOf(car: DeformableCar): number {
+  const v = car.velocity;
+  return v.x * v.x + v.z * v.z > WALL_CRUSH * WALL_CRUSH ? hypot2(v.x, v.z) * HIT_AHEAD : 0;
+}
+
 /** The car as every solid meets it this slice: `_span` filled from its drawn body (`bodySpan`) and its footprint (`footprint`). */
 function measure(car: DeformableCar): void {
   const v = car.velocity;
@@ -156,7 +207,7 @@ function measure(car: DeformableCar): void {
   _span.hw = (plan[1]! - plan[0]!) / 2;
   _span.hl = (plan[3]! - plan[2]!) / 2;
   _span.reach = hypot2(Math.max(-plan[0]!, plan[1]!), Math.max(-plan[2]!, plan[3]!));
-  _span.ahead = v.x * v.x + v.z * v.z > WALL_CRUSH * WALL_CRUSH ? hypot2(v.x, v.z) * HIT_AHEAD : 0;
+  _span.ahead = aheadOf(car);
   _span.braked = false;
   _span.fall = v.y;
   _span.wreck = car.deform.massActive;
@@ -353,10 +404,12 @@ function scrapeSide(car: DeformableCar, s: Surface, k: number, closing: number):
  * a road beneath its deck, clears it. The race's walls and props, the fleet's rigs and the Lab's room share it.
  */
 export function propContact(car: DeformableCar, i: number, solids: Surface, knocked: Uint8Array, hits: PropHits, dt: number): void {
-  measure(car);
   const pos = car.group.position;
-  const count = solids.prismsNear(pos.x, pos.z, _span.reach + DOOR_REACH + _span.ahead);
   solids.prismQueries++;
+  // No prism within the bound is none within the reach: most slices of most cars end here without measuring the body.
+  if (solids.prismsNear(pos.x, pos.z, footprintBound(car) + DOOR_REACH + aheadOf(car)) === 0) return;
+  measure(car);
+  const count = solids.prismsNear(pos.x, pos.z, _span.reach + DOOR_REACH + _span.ahead);
   solids.prismsVisited += count;
   const list = solids.nearList;
   for (let n = 0; n < count; n++) solidContact(car, i, solids, list[n]!, knocked, hits, dt);
