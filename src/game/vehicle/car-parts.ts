@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F } from "./constants.ts";
 import { barReach } from "../deform/deform-rig.ts";
-import { PUSH_BAR_REACH } from "./car-materials.ts";
+import { PUSH_BAR_DRAWN_MIN, PUSH_BAR_REACH } from "./car-materials.ts";
 import { bootPivot, lidAccel } from "./hinge-spec.ts";
 import { cellIsOver, clearanceCellsOf } from "./clearance-cells.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose, notePosed, posesFromOwnState, standsAsPosed } from "./part-pose.ts";
@@ -68,6 +68,7 @@ const _box = new THREE.Box3();
 const _lampQ = new THREE.Quaternion();
 const _q = new THREE.Quaternion();
 const _doorW = new THREE.Vector3();
+const _probe = new THREE.Vector3();
 const _c = new THREE.Vector3();
 const _com = new THREE.Vector3();
 const _drawn = new THREE.Box3();
@@ -244,7 +245,9 @@ function lidSwings(p: DetachPart): boolean {
 
 /** The bumpers' masses `posePart` reads, and the signature of a pose being built (`poseInputsChanged`; a car has at most 20 attached parts). */
 const POSE_BUMPERS = ["bumperFL", "bumperFR", "bumperRL", "bumperRR"] as const;
-const _poseSig = new Float64Array(7 * 20 + 20);
+const _poseSig = new Float64Array(7 * 20 + 24);
+/** The ground-height signature slot of a plan corner with no ground under it (`poseInputsChanged`). */
+const POSE_NO_FLOOR = -1e6;
 /** An input moved less than this (m, rad or the unit of the value) from what the parts were last posed at is no change: a resting wreck's masses are re-derived through the frame's inverse each slice and differ by 1e-13. A nanometre moves no pixel; a slow creep is seen once it adds up, as the comparison is against the last pose, not the last slice. */
 const POSE_EPSILON = 1e-9;
 const _hinge = new Float64Array(7);
@@ -356,16 +359,19 @@ export abstract class CarParts extends CarGlass {
   protected partsDirty = false;
 
 /** What the parts were last posed from (`poseInputsChanged`): null before the first pose of a crash. */
-  private poseSig: Float64Array | null = null;
+  protected poseSig: Float64Array | null = null;
+
+  /** Whether the last pose lifted a door or a bumper off the ground under it (`liftDoor`, `hangBumper`): while one stands lifted, a car that is no wreck keeps its own pose in the signature, so it is re-posed once it drives off that ground. */
+  private poseLifted = false;
 
   /**
-   * Whether anything `posePart` reads differs from the last pose: each part's hinge, swing, flap and attach sensors, the car's own position and turn (the ground the
-   * doors and bumpers clear, the world matrix), the struck direction, the bumpers' masses. The crush skin the panels bend over is the caller's check (`skinnedThisFrame`).
+   * Whether anything `posePart` reads differs from the last pose: each part's hinge, swing, flap and attach sensors, a wreck's own position and turn (the ground the
+   * doors and bumpers clear, the world matrix; a car that is no wreck rides its wheels and has none while nothing stands lifted off the ground, but reads the road under its plan corners, to 1 cm), the struck direction, the bumpers' masses. The crush skin the panels bend over is the caller's check (`skinnedThisFrame`).
    * Inputs within `POSE_EPSILON` of the last pose are the same; it records the inputs it read when they differ.
    */
   private poseInputsChanged(): boolean {
     const parts = this.parts;
-    const n = parts.length * 7 + 20;
+    const n = parts.length * 7 + 24;
     const now = _poseSig;
     let k = 0;
     for (let pi = 0; pi < parts.length; pi++) {
@@ -386,6 +392,19 @@ export abstract class CarParts extends CarGlass {
     now[k++] = g.quaternion.y;
     now[k++] = g.quaternion.z;
     now[k++] = g.quaternion.w;
+    // A car that is no wreck rides its wheels: the road its doors and bumpers clear moves with it, so its own pose is no input (a driven, load-crushed car re-posed every part every frame) — unless a part stands lifted off the ground (`poseLifted`): then the pose is an input until a pose finds nothing to lift. What it does read is the road under its plan corners, to 1 cm: a car posed clear on flat ground that drives on to a ramp or kerb is re-posed, so its door and bumper lift off it. A wreck's pose is its input, so its ground slots are 0.
+    if (!this.crashed && !this.poseLifted) now.fill(0, k - 7, k);
+    if (this.crashed) {
+      now.fill(0, k, k + 4);
+      k += 4;
+    } else {
+      const half = this.frame.half;
+      for (let c = 0; c < 4; c++) {
+        _probe.set(c & 1 ? half.x : -half.x, half.y, c & 2 ? half.z : -half.z).applyQuaternion(g.quaternion).add(g.position);
+        const y = activeGround().heightAt(_probe.x, _probe.z, _probe.y);
+        now[k++] = y === NO_FLOOR ? POSE_NO_FLOOR : Math.round(y * 100) / 100;
+      }
+    }
     now[k++] = this.deform.impactInward.z;
     for (let m = 0; m < 4; m++) {
       const l = this.deform.massLocal(POSE_BUMPERS[m]!);
@@ -398,7 +417,8 @@ export abstract class CarParts extends CarGlass {
     if (same) for (let i = 0; i < n; i++) if (Math.abs(last![i]! - now[i]!) > POSE_EPSILON) same = false;
     if (!same) {
       if (last === null || last.length !== n) this.poseSig = new Float64Array(n);
-      this.poseSig!.set(now.subarray(0, n));
+      const sig = this.poseSig!;
+      for (let i = 0; i < n; i++) sig[i] = now[i]!;
     }
     return !same;
   }
@@ -420,6 +440,7 @@ export abstract class CarParts extends CarGlass {
       }
       if (EPICENTER.presentSkip === 1 && !this.deform.skinnedThisFrame && !this.poseInputsChanged()) return;
     }
+    this.poseLifted = false;
     const parts = this.parts;
     for (let pi = 0; pi < parts.length; pi++) if (!parts[pi]!.detached) this.posePart(parts[pi]!);
   }
@@ -495,7 +516,7 @@ export abstract class CarParts extends CarGlass {
     if (fromOwnState) notePosed(p);
   }
 
-  /** The drawn push bar folded back onto its bumper's face as the cage's box and the face's hold fold it (`barReach`): each point by the crush of the bumper corners either side of it. */
+  /** The drawn push bar folded back onto its bumper's face as the cage's box and the face's hold fold it (`barReach`, but never flatter than `PUSH_BAR_DRAWN_MIN`): each point by the crush of the bumper corners either side of it. */
   private foldBar(p: DetachPart, fl: THREE.Vector3, fr: THREE.Vector3): void {
     if (this.drawnBar === undefined) {
       const mesh = p.object.children[0] as THREE.Mesh;
@@ -519,7 +540,7 @@ export abstract class CarParts extends CarGlass {
     for (let v = bar.from; v < bar.to; v++) {
       const t = THREE.MathUtils.clamp((arr[v * 3]! - restL.x) / (restR.x - restL.x), 0, 1);
       const z = bar.restZ[v - bar.from]!;
-      arr[v * 3 + 2] = z - ((PUSH_BAR_REACH - barReach(PUSH_BAR_REACH, left + (right - left) * t)) * Math.max(0, z - bar.face)) / PUSH_BAR_REACH;
+      arr[v * 3 + 2] = z - ((PUSH_BAR_REACH - Math.max(PUSH_BAR_DRAWN_MIN, barReach(PUSH_BAR_REACH, left + (right - left) * t))) * Math.max(0, z - bar.face)) / PUSH_BAR_REACH;
     }
     attr.needsUpdate = true;
   }
@@ -550,6 +571,7 @@ export abstract class CarParts extends CarGlass {
     // The ancestors' matrices do not change while the roll is searched: brought up to date once, each probe then poses `o` alone.
     o.parent?.updateWorldMatrix(true, false);
     if (!this.hungLow(o, x0, y0, px, roll) || this.group.matrixWorld.elements[5]! < UPRIGHT_UP_Y) return;
+    this.poseLifted = true;
     const flat = this.hungLack(o, x0, y0, px, 0);
     if (flat > 0) {
       o.position.y += flat;
@@ -577,6 +599,7 @@ export abstract class CarParts extends CarGlass {
     const g = _doorW.setFromMatrixPosition(o.matrixWorld);
     const gy = upright ? activeGround().heightAt(g.x, g.z, g.y) : groundUnderBox(_box);
     if (gy === NO_FLOOR || _box.min.y >= gy + DOOR_CLEAR) return;
+    this.poseLifted = true;
     const lift = gy + DOOR_CLEAR - _box.min.y;
     if (upright) {
       o.position.y += lift;

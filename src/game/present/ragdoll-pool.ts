@@ -497,6 +497,7 @@ export abstract class RagdollPool {
 
   /** The scene's patch out of the world (its solids changed, or the scene is left); the next dummy builds it again. */
   protected freeScenePatch(): void {
+    if (this.scenePatch.length === 0) return;
     for (const c of this.scenePatch) this.world?.removeCollider(c, false);
     this.scenePatch = [];
   }

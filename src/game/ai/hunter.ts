@@ -456,10 +456,10 @@ export class HunterBrain extends CopBrain {
     out.boost = out.throttle > 0.5 && Math.abs(alpha) < 0.35;
   }
 
-  /** A unit that does not seek, near a moving human: onto its queue lane's slot behind it, closing on it at a pace no more than `SHADOW_CATCH` over the human's. */
+  /** A unit that does not seek, near a moving human: onto its queue lane's slot behind it, closing on it at a pace no more than `SHADOW_CATCH` over the human's. Only a target faster than `BLOCKABLE` (6 m/s) reaches it (`drive`'s `seeking`), so `tv` is never near zero. */
   private shadow(self: AiCar, tg: AiCar, speed: number, tv: number, out: DriveInput): void {
-    const fx = tv > 1 ? tg.vx / tv : detSin(tg.yaw);
-    const fz = tv > 1 ? tg.vz / tv : detCos(tg.yaw);
+    const fx = tg.vx / tv;
+    const fz = tg.vz / tv;
     const gap = SHADOW_GAP + SHADOW_ROW * Math.min(this.row, SHADOW_ROWS);
     const ax = tg.x - fx * gap + fz * this.lane * TAIL_LANE;
     const az = tg.z - fz * gap - fx * this.lane * TAIL_LANE;

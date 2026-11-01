@@ -270,6 +270,7 @@ export class DeformableCar extends CarParts {
     this.endAgo.fill(9);
     this.endReach = Infinity;
     this.partWrites++;
+    this.poseSig = null;
     this.endSqueeze = false;
     for (const p of this.parts) {
       if (keepTorn && p.detached) continue;

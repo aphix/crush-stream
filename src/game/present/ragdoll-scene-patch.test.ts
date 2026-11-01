@@ -94,6 +94,18 @@ describe("given the world of a scene whose solids stand in it (the Lab's, the sh
     expect(sys.stats.colliders, "colliders after the frame").toBe(bare);
   });
 
+  it("when frames pass with the scene's ground not the active one, then its empty patch list is the same list: a frame allocates no array", async () => {
+    await enter([], () => {});
+    expect(sys["scenePatch"].length, "the control: the scene's patch is in the world").toBeGreaterThan(0);
+    setGround(null);
+    sys.update(FRAME, [], true, false, null);
+    const out = sys["scenePatch"];
+    expect(out, "the patch after the frame it went out").toHaveLength(0);
+    sys.update(FRAME, [], true, false, null);
+    sys.update(FRAME, [], true, false, null);
+    expect(sys["scenePatch"], "the list after two more frames").toBe(out);
+  });
+
   it("when a post stands as the scene is set and is hidden before its first frame, then the patch holds no post", async () => {
     const bare = await enter([], () => {});
     const bareScene = sys.stats.colliders - bare;

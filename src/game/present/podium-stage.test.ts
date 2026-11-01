@@ -121,4 +121,20 @@ describe("given a podium lettered for Ayla, Bo and Cy on Brickyard Oval", () => 
       expect(box.max.y, `place ${block.place}: top edge ${box.max.y} against the block's ${block.top}`).toBeLessThanOrEqual(block.top - FACE_MARGIN_M);
     }
   });
+
+  it("when a stage is built and not yet lettered, then its plates and banner are one texel and the decals are drawn; lettering grows them once", () => {
+    canvases.length = 0;
+    const fresh = new PodiumStage();
+    const sizes = (): string => canvases.map((c) => `${c.w}x${c.h}`).join(" ");
+    expect(sizes(), "decal, plate, decal, plate, decal, plate, banner").toBe("512x256 1x1 512x256 1x1 512x256 1x1 1x1");
+    const banner = (fresh["banner"].material as THREE.MeshStandardMaterial).map!;
+    let disposed = 0;
+    banner.addEventListener("dispose", () => disposed++);
+    fresh.setNames(PLACES, "Brickyard Oval");
+    expect(sizes()).toBe("512x256 1024x240 512x256 1024x240 512x256 1024x240 1536x580");
+    expect(disposed, "the GL texture is let go before the canvas grows").toBe(1);
+    fresh.setNames(PLACES, "Championship");
+    expect(disposed, "a second raise keeps its texture").toBe(1);
+    fresh.dispose();
+  });
 });

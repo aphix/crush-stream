@@ -10,7 +10,7 @@ import { makeBumperGeometry } from "./car-mesh.ts";
 import { freshGeometry } from "./car-templates.ts";
 import { type BodyStyle, CAR_STYLE_IDS } from "./car-variants.ts";
 import { CLASSES, carClass, STYLE_CLASS } from "./vehicle-classes.ts";
-import { PUSH_BAR_REACH } from "./car-materials.ts";
+import { PUSH_BAR_DRAWN_MIN, PUSH_BAR_REACH } from "./car-materials.ts";
 import { doorSkinZ, makeDoorGeometry } from "./car-door-mesh.ts";
 import { OUTLINE_REACH, VERTICAL_CLEAR } from "../contact/cage-outline.ts";
 import type { DeformableCar } from "./car.ts";
@@ -534,6 +534,28 @@ describe("given a cruiser whose nose a load crushes 1.2 cm, which leaves it no w
     const cage = cageOf(car);
     fitToDrawn(car, cage);
     expectBarFolded(car, cageBarPlace(cage.style, cage.fields.pos).ahead, t);
+  });
+});
+
+/** The nose crush (m) a load leaves on the cruiser below: past the bar's whole fold (`PUSH_BAR_REACH / PUSH_BAR_FOLD`, 2.25 cm), where the cage's box lies flat on the face. */
+const BAR_FLAT_LOAD_M = 0.05;
+
+describe("given a cruiser whose nose a load crushes past its push bar's whole fold", () => {
+  it("when the bar is read against its bumper's face, then the cage's box lies flat on it and the drawn bar still stands `PUSH_BAR_DRAWN_MIN` ahead of it, never flat in its plane", (t) => {
+    const car = carInState("untouched", "police", "sedan");
+    car.deform.crush[FACE_NOSE] = BAR_FLAT_LOAD_M;
+    car.deform.bakeLoadCrush();
+    const cage = cageOf(car);
+    fitToDrawn(car, cage);
+    const { crush, left } = barLeft(car);
+    const cageAhead = cageBarPlace(cage.style, cage.fields.pos).ahead;
+    const drawn = drawnBarAhead(car);
+    t.annotate(`bumper crushed ${crush.toFixed(3)} m: bar ${left.toFixed(3)} m left, cage ${cageAhead.toFixed(4)} m ahead of its bumper's face, drawn ${drawn.toFixed(4)} m`);
+    expect(crush, "the control: both corners crush the bar's whole fold").toBeGreaterThanOrEqual(PUSH_BAR_REACH / PUSH_BAR_FOLD);
+    expect(left, "the control: the fold leaves the bar no reach").toBe(0);
+    expect(Math.abs(cageAhead), `the cage's bar box stands ${cageAhead.toFixed(4)} m ahead of its bumper's face, flat on it`).toBeLessThanOrEqual(BAR_FOLLOW_M);
+    expect(drawn, `the drawn bar stands ${drawn.toFixed(4)} m ahead of its bumper's face`).toBeGreaterThanOrEqual(PUSH_BAR_DRAWN_MIN * 0.9);
+    expect(drawn).toBeLessThanOrEqual(PUSH_BAR_DRAWN_MIN + 0.001);
   });
 });
 

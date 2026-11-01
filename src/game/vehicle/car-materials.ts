@@ -599,6 +599,9 @@ const PUSH_BAR_SIDES = 10;
 /** How far (m) a push bar's pads stand ahead of its bumper's face: a car's length spec leaves it off, as its height leaves off the light bar. */
 export const PUSH_BAR_REACH = PUSH_BAR.gap + PUSH_BAR.tube + PUSH_BAR.plate;
 
+/** The least reach (m) the DRAWN push bar keeps ahead of its bumper's face when the crush folds it flat (the cage's box still folds to 0): flat, its tubes and pads lie in the face's plane and flicker against it. */
+export const PUSH_BAR_DRAWN_MIN = 0.004;
+
 /** Front bumper `bumper` (bumper space, +z forward, indexed) with a push bar in front of its face: one geometry, so the bar
  *  draws in the bumper's trim and tears off with it. */
 export function withPushBar(bumper: THREE.BufferGeometry): THREE.BufferGeometry {

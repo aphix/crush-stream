@@ -53,6 +53,11 @@ function clamped(tex: THREE.CanvasTexture): THREE.CanvasTexture {
   return tex;
 }
 
+/** A plate's or the banner's texture before `setNames` letters it: one texel, so the boot warm-up uploads nothing the raise overwrites (`redraw` grows the canvas to its layout size). */
+function unlettered(): THREE.CanvasTexture {
+  return clamped(canvasTexture(1, 1, () => {}));
+}
+
 /** A trophy cup centred at (`cx`, `cy`), `s` px tall: bowl, two handles, stem and foot. */
 function drawCup(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, paint: string): void {
   const u = s / 10;
@@ -198,7 +203,7 @@ export class PodiumStage {
       const decalTex = clamped(canvasTexture(DECAL_PX.w, DECAL_PX.h, (ctx) => drawDecal(ctx, block.place)));
       const decal = sign(decalTex, decalH * (DECAL_PX.w / DECAL_PX.h), decalH, true);
       decal.position.set(block.x, block.top / 2, BLOCK_DEPTH / 2 + 0.02);
-      const plateTex = clamped(canvasTexture(PLATE_PX.w, PLATE_PX.h, (ctx) => drawPlate(ctx, block.place, "")));
+      const plateTex = unlettered();
       const plate = sign(plateTex, PLATE_WIDTH, PLATE_HEIGHT, false);
       plate.position.set(block.x, PLATE_HEIGHT / 2 + 0.1, BLOCK_DEPTH / 2 + PLATE_AHEAD);
       plate.rotation.x = -PLATE_LEAN;
@@ -208,7 +213,7 @@ export class PodiumStage {
       this.owned.push(body.geometry, body.material as THREE.Material, decal.geometry, decal.material as THREE.Material, decalTex, plate.geometry, plate.material as THREE.Material, plateTex);
     }
 
-    const bannerTex = clamped(canvasTexture(BANNER_PX.w, BANNER_PX.h, (ctx) => drawBanner(ctx, "")));
+    const bannerTex = unlettered();
     this.banner = sign(bannerTex, BANNER_WIDTH, BANNER_HEIGHT, false);
     const bannerZ = -BLOCK_DEPTH / 2 - BANNER_BEHIND;
     this.banner.position.set(0, BANNER_HEIGHT / 2 + 0.1, bannerZ);
@@ -239,14 +244,21 @@ export class PodiumStage {
       const racer = places[k];
       this.plates[k]!.visible = racer !== undefined;
       this.decals[k]!.visible = racer !== undefined;
-      if (racer) this.redraw(this.plates[k]!, (ctx) => drawPlate(ctx, racer.place, racer.name));
+      if (racer) this.redraw(this.plates[k]!, PLATE_PX, (ctx) => drawPlate(ctx, racer.place, racer.name));
     }
-    this.redraw(this.banner, (ctx) => drawBanner(ctx, title));
+    this.redraw(this.banner, BANNER_PX, (ctx) => drawBanner(ctx, title));
   }
 
-  private redraw(mesh: THREE.Mesh, draw: (ctx: CanvasRenderingContext2D) => void): void {
+  private redraw(mesh: THREE.Mesh, size: { w: number; h: number }, draw: (ctx: CanvasRenderingContext2D) => void): void {
     const tex = (mesh.material as THREE.MeshStandardMaterial).map as THREE.CanvasTexture;
-    draw((tex.image as HTMLCanvasElement).getContext("2d")!);
+    const canvas = tex.image as HTMLCanvasElement;
+    if (canvas.width !== size.w) {
+      // three allocates a texture's storage once: a new size needs a new GL texture, so let this one go before the canvas grows.
+      tex.dispose();
+      canvas.width = size.w;
+      canvas.height = size.h;
+    }
+    draw(canvas.getContext("2d")!);
     tex.needsUpdate = true;
   }
 
