@@ -4,6 +4,7 @@ import "../kernel/rapier-node.test-util.ts";
 import { SHOWCASE_EYE } from "../present/showcase-art.ts";
 import { SLOTS } from "../present/ragdoll-config.ts";
 import { setGround } from "../world/ground.ts";
+import { mulberry32 } from "../world/placements.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, pressKey, stubBrowser } from "./engine-headless.test-util.ts";
 
@@ -17,11 +18,16 @@ const THROWS = SLOTS + 8;
 /** The wander circle's radius (m) and what a dummy landing in it may be past it (a lob's own overshoot). */
 const CIRCLE_M = 30;
 const LANDED_M = 4;
-/** A standing walker's parts swing at up to 6 m/s; his torso goes his walking pace (1.6 m/s). Flung dummies reached 40 to 130 m/s. */
-const SETTLED_MPS = 6;
-const TORSO_MPS = 3;
+/** Standing figures' parts move under 0.6 m/s after a cone (measured: 0.57); the foot locks' pull flung them at 11.7. */
+const STANDING_PART_MPS = 3;
+/** A torso over this (m/s) is flung, not walked: a walker goes 1.5 m/s and, shoved about by 39 others, his torso peaked at 5.3 over the watched seconds; the locks' pull took torsos to 40-130. */
+const FLUNG_MPS = 15;
 /** Seconds after the last throw for the last dummy to have landed, lain and got up (measured: 7). */
 const LANDED_S = 8;
+/** The seconds after that whose every frame is judged. */
+const WATCHED_S = 4;
+/** Seed of the wanderers' marks. */
+const MARKS_SEED = 0x5eed;
 const CHEST_Y = 1.2;
 
 type Out = { slot: number; x: number; y: number; z: number; speed: number; torsoSpeed: number };
@@ -54,8 +60,10 @@ function throwAt(at: THREE.Vector3, code: string): void {
   pressKey(engine, code);
 }
 
+/** A clean showcase with the wanderers' marks drawn from a fixed stream, so the rows replay exactly. */
 function settle(): void {
   engine.reset();
+  engine["showcase"]!["walks"]["random"] = mulberry32(MARKS_SEED);
   lookAtSet();
   run(2 * FRAME);
 }
@@ -105,11 +113,11 @@ describe("given the showcase at 20 fps", () => {
       }
     });
     expect(stoodIn, "the control: figures stepped in").toBeGreaterThan(0);
-    expect(peak, `the fastest part moved ${peak.toFixed(1)} m/s`).toBeLessThan(SETTLED_MPS);
+    expect(peak, `the fastest part moved ${peak.toFixed(1)} m/s`).toBeLessThan(STANDING_PART_MPS);
     expect(strayed, `a figure got ${strayed.toFixed(1)} m from his mark`).toBeLessThan(1);
   });
 
-  it(`when ${THROWS} men and women are thrown at the floor, then every dummy lands within ${CIRCLE_M + LANDED_M} m of the middle and none moves fast once they have landed`, () => {
+  it(`when ${THROWS} men and women are thrown at the floor, then every dummy lands within ${CIRCLE_M + LANDED_M} m of the middle and no torso is flung in the ${WATCHED_S} s after they have landed`, () => {
     settle();
     for (let n = 0; n < THROWS; n++) {
       lookAtSet();
@@ -118,9 +126,11 @@ describe("given the showcase at 20 fps", () => {
     }
     expect(ragdolls().builtSlots, "the control: every slot is built").toBe(SLOTS);
     run(LANDED_S);
-    for (const d of dummiesOut()) {
-      expect(Math.hypot(d.x, d.z), `slot ${d.slot} is at ${d.x.toFixed(1)}, ${d.z.toFixed(1)}`).toBeLessThan(CIRCLE_M + LANDED_M);
-      expect(d.torsoSpeed, `slot ${d.slot}'s torso moves ${d.torsoSpeed.toFixed(1)} m/s`).toBeLessThan(TORSO_MPS);
-    }
+    let fastest = { slot: -1, speed: 0 };
+    run(WATCHED_S, () => {
+      for (const d of dummiesOut()) if (d.torsoSpeed > fastest.speed) fastest = { slot: d.slot, speed: d.torsoSpeed };
+    });
+    expect(fastest.speed, `slot ${fastest.slot}'s torso reached ${fastest.speed.toFixed(1)} m/s`).toBeLessThan(FLUNG_MPS);
+    for (const d of dummiesOut()) expect(Math.hypot(d.x, d.z), `slot ${d.slot} is at ${d.x.toFixed(1)}, ${d.z.toFixed(1)}`).toBeLessThan(CIRCLE_M + LANDED_M);
   });
 });
