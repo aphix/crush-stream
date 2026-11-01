@@ -3,7 +3,7 @@ import { todoRow } from "../kernel/todo-row.test-util.ts";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { paint } from "../vehicle/test-support.ts";
-import { DRIVER_CARS } from "../match/types.ts";
+import { DRIVER_CARS, type DriverCar } from "../match/types.ts";
 import { makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { fleetClass, fleetStyle, slotType, type CarType } from "./fleet.ts";
 import { armKill, assignClass, carClass, HANDLING, killClass, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
@@ -165,6 +165,50 @@ describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), run 
       expect(moved, `a car moved ${(moved * 1000).toFixed(1)} mm in 5 s at rest`).toBeLessThan(0.005);
     },
   );
+});
+
+/** How far (m) each drop's start is raised for the repeat rows: the owner's three starts, 0, 0.5 and 1 mm higher. */
+const REPEAT_LIFTS = [0, 0.0005, 0.001] as const;
+
+/**
+ * The most (mm) a roof's crush may differ across `REPEAT_LIFTS`, per `DRIVER_CARS` id, with the worst roof spread over five starts (those
+ * three and 0.25, 0.75 mm) it was set from: 7 where the class holds it on the three (muscle reads 9.6 over five, the nearest to failing),
+ * else 1.5 x the five-start spread, rounded up. The bottom roof's crush is the plastic history of the drop, so a millimetre of start moves
+ * it by a slice of landing and coast. Truck and monster read far above the rest: their column keeps creeping down at 2-17 cm/s after the
+ * landing (truck for 0.2 s, monster for 1 s) with a roof yielding, then halts within one frame, and where it halts decides the bottom
+ * roof (truck 135-150 mm, monster 176-196): open defects, their bars pin today's spread. SUV's 15 mm covers a landing scatter (third roof
+ * 58.8 vs 66.2 mm) with a second open defect no row asserts: its top three cars slide 7.7-10.3 cm from their set-down spot in the first 0.4 s
+ * (every other class under 7 cm; sedan 3.7-6.6). Re-stage a bar only with its five-start number re-measured.
+ */
+const REPEAT_BARS: Record<string, { barMm: number; fiveStartMm: number }> = {
+  sedan: { barMm: 12, fiveStartMm: 8.0 },
+  muscle: { barMm: 7, fiveStartMm: 9.6 },
+  truck: { barMm: 23, fiveStartMm: 15.3 },
+  monster: { barMm: 31, fiveStartMm: 20.4 },
+  police: { barMm: 7, fiveStartMm: 5.9 },
+  hatch: { barMm: 7, fiveStartMm: 6.6 },
+  suv: { barMm: 15, fiveStartMm: 9.8 },
+};
+
+/** Each roof's crush (mm, bottom first) of a `type` column at the defaults, each drop started `lift` m higher. */
+function liftedColumn(type: DriverCar, lift: number): number[] {
+  const { cars, rig } = makeColumn({ ...DEFAULTS, drop: DEFAULTS.drop + lift }, { selected: type });
+  runStack(cars, rig, makeWorld(cars, false, false), DEFAULTS_S);
+  return stackLoads(cars, rig.dropped).crushMm;
+}
+
+describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), each drop started 0, 0.5 or 1 mm higher", () => {
+  for (const type of DRIVER_CARS) {
+    const bar = REPEAT_BARS[type.id];
+    it(`when the ${type.label} column settles, then each roof's crush is the same within its bar (${bar?.barMm} mm)`, () => {
+      expect(bar, `${type.id} has no repeat bar`).toBeDefined();
+      const runs = REPEAT_LIFTS.map((lift) => liftedColumn(type, lift));
+      const said = runs.map((r) => r.map((m) => m.toFixed(1)).join("/")).join(" | ");
+      expect(Math.min(...runs.map((r) => r[0]!)), `the bottom roof was crushed (${said})`).toBeGreaterThan(100);
+      const worst = Math.max(...runs[0]!.map((_, k) => Math.max(...runs.map((r) => r[k]!)) - Math.min(...runs.map((r) => r[k]!))));
+      expect(worst, `${said} (the bar was set from ${bar!.fiveStartMm} mm over five starts)`).toBeLessThan(bar!.barMm);
+    });
+  }
 });
 
 describe("given the owner's drops (11 cars, 0.15 m, one a second) of the mixed fleet", () => {
