@@ -77,11 +77,11 @@ const JET_COLOURS = [0xffd34d, 0xff5a5f, 0x5aa9ff, 0xffffff].map((hex) => new TH
 /**
  * The podium (docs/PODIUM.md): the top three of a finished race or campaign, their cars as the race left them (`CarDamage`: the dents, the torn parts and lost wheels) standing on a stage that floats over
  * the course, with a slow camera swing and fountains. It owns three cars of its own (built beside the field, never in it): the field's cars are the reel's to respawn, and a race that goes on after the podium
- * finds them as it left them.
+ * finds them as it left them. The stage is built with the engine, hidden in the scene, so the boot warm-up links its programs and raising it links none (a link on the click freezes it).
  */
 export class PodiumDirector {
   private readonly host: PodiumHost;
-  private stage: PodiumStage | null = null;
+  private readonly stage = new PodiumStage();
   private readonly built: (DeformableCar | null)[] = PODIUM_BLOCKS.map(() => null);
   /** The cars standing now (the winner's first), in place of a place nobody holds. */
   private readonly standing: DeformableCar[] = [];
@@ -102,6 +102,7 @@ export class PodiumDirector {
 
   constructor(host: PodiumHost) {
     this.host = host;
+    host.scene.add(this.stage.group);
   }
 
   get open(): boolean {
@@ -112,10 +113,6 @@ export class PodiumDirector {
   raise(places: readonly PodiumPlace[], kind: PodiumHud["kind"], title: string): boolean {
     const spot = this.host.spot();
     if (!spot || places.length === 0) return false;
-    if (!this.stage) {
-      this.stage = new PodiumStage();
-      this.host.scene.add(this.stage.group);
-    }
     this.spot.set(spot.x, spot.y, spot.z);
     this.stage.group.position.copy(this.spot);
     this.stage.group.visible = true;
@@ -143,7 +140,7 @@ export class PodiumDirector {
   /** The stage and its cars go away. */
   lower(): void {
     this.up = false;
-    if (this.stage) this.stage.group.visible = false;
+    this.stage.group.visible = false;
     for (const car of this.built) if (car) car.group.visible = false;
     this.standing.length = 0;
   }
@@ -153,8 +150,7 @@ export class PodiumDirector {
     this.lower();
     for (const car of this.built) if (car) this.host.discard(car);
     this.built.fill(null);
-    this.stage?.dispose();
-    this.stage = null;
+    this.stage.dispose();
   }
 
   /** What the HUD draws while the stage is up; `reel` is the campaign reel option's clip count (`RaceHud.campaignReel`). */
