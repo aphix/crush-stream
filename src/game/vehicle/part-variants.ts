@@ -266,13 +266,40 @@ function frontFittings(style: BodyStyle): THREE.BufferGeometry {
 
 /** The platform plate's rear face (m) behind its seat: `tailTrim`'s centre 0.08 back plus half its 0.02 depth. */
 const PLATFORM_PLATE_OUT = 0.09;
+/** A plate on the fascia stands this far (m) off it, as the sedan's stands off its lid's recess. */
+const PLATE_PROUD = 0.006;
 /** The platform plate's roughness and metalness: a recoloured plate keeps its sheen. */
 const [, PLATE_ROUGHNESS, PLATE_METALNESS] = carTone(MAT.LICENCE_PLATE);
 
+/** The farthest (m) the fascia stands out, over bumper-space heights `y0` to `y1`. */
+function fasciaOut(fascia: BodyStyle["bumpers"]["rear"]["fascia"], y0: number, y1: number): number {
+  let out = -Infinity;
+  for (let i = 0; i + 1 < fascia.length; i++) {
+    const [ya, outA] = fascia[i]!;
+    const [yb, outB] = fascia[i + 1]!;
+    const [lo, hi] = [Math.max(y0, Math.min(ya, yb)), Math.min(y1, Math.max(ya, yb))];
+    if (lo > hi) continue;
+    for (const y of [lo, hi]) out = Math.max(out, yb === ya ? Math.max(outA, outB) : outA + ((outB - outA) * (y - ya)) / (yb - ya));
+  }
+  return out;
+}
+
+/** How far (m) the style's plate stands above the platform plate's seat: its bumper's `plate` height. */
+const plateLift = ({ bumpers: { rear } }: BodyStyle): number => (rear.plate === undefined ? 0 : rear.plate - rear.seat.y - PLATE_RISE);
+
+/** The rear plate's face (m) behind the seat: the style's `plateFace.out`, else the platform's, or `PLATE_PROUD` past the fascia where that stands out beyond it. */
+function plateOut(style: BodyStyle): number {
+  const { plateFace, fascia } = style.bumpers.rear;
+  if (plateFace?.out !== undefined) return plateFace.out;
+  const { min, max } = new THREE.Box3().setFromBufferAttribute(partGeometry(PART_KIND.tailTrim).getAttribute("position") as THREE.BufferAttribute);
+  const lift = plateLift(style);
+  return Math.max(PLATFORM_PLATE_OUT, fasciaOut(fascia, min.y + lift, max.y + lift) + PLATE_PROUD);
+}
+
 /** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height, its face and colour seated by `plateFace`; none on a `plateless` bumper) and the style's rear bumper lamps. */
 function rearFittings(style: BodyStyle): THREE.BufferGeometry {
-  const { seat, plate, plateFace, plateless } = style.bumpers.rear;
-  const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plate === undefined ? 0 : plate - seat.y - PLATE_RISE, plateFace?.out === undefined ? 0 : PLATFORM_PLATE_OUT - plateFace.out);
+  const { seat, plateFace, plateless } = style.bumpers.rear;
+  const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plateLift(style), PLATFORM_PLATE_OUT - plateOut(style));
   if (plateFace?.color !== undefined) toned(trim, plateFace.color, PLATE_ROUGHNESS, PLATE_METALNESS);
   if (!style.lamps.shapes?.rear) return trim;
   const lamps = bothSides(builtLamp(style, "rear").body).translate(0, -seat.y, seat.z);
@@ -281,8 +308,9 @@ function rearFittings(style: BodyStyle): THREE.BufferGeometry {
 
 const frontKey = (style: BodyStyle): string | null =>
   style.grille || style.lamps.shapes?.front ? `${style.id}|${JSON.stringify(style.grille)}|${JSON.stringify(style.lamps.shapes?.front)}|${JSON.stringify(style.bumpers.front)}` : null;
+/** A rear variant is built where the style seats its plate or lamps, or where its fascia stands out past the platform plate's face. */
 const rearKey = (style: BodyStyle): string | null =>
-  style.lamps.shapes?.rear || style.bumpers.rear.plate !== undefined || style.bumpers.rear.plateFace ? `${style.id}|${JSON.stringify(style.lamps.shapes?.rear)}|${JSON.stringify(style.bumpers.rear)}` : null;
+  style.lamps.shapes?.rear || style.bumpers.rear.plate !== undefined || style.bumpers.rear.plateFace || plateOut(style) !== PLATFORM_PLATE_OUT ? `${style.id}|${JSON.stringify(style.lamps.shapes?.rear)}|${JSON.stringify(style.bumpers.rear)}` : null;
 
 // ---- lamps -----------------------------------------------------------------------------------------------------------------
 

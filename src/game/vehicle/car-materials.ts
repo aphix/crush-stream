@@ -272,7 +272,9 @@ export function trimMaterial(color: number, finish: keyof typeof TRIM_FINISH = "
   const key = `${finish}:${color}`;
   let m = trimByKey.get(key);
   if (m === undefined) {
-    m = classed(applyFinish(withFittings(capHighlights(new THREE.MeshStandardMaterial({ color, ...TRIM_FINISH[finish] }))), "trim"), DRAW_CLASS.trim);
+    const base = withFittings(capHighlights(new THREE.MeshStandardMaterial({ color, ...TRIM_FINISH[finish] })));
+    // The grain is rubber's stipple: on polished chrome its 5 mm cells alias to a speckle that crawls as the camera moves.
+    m = classed(finish === "chrome" ? base : applyFinish(base, "trim"), DRAW_CLASS.trim);
     m.userData.shared = true;
     m.userData.materialId = FINISH_MATERIAL[finish];
     trimByKey.set(key, m);

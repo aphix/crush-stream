@@ -3702,7 +3702,8 @@ describe("given a body style's mirrors, grille, badges and lamps", () => {
     const sedan = CAR_STYLES.sedan;
     const plain: BodyStyle = { ...sedan, lamps: { ...sedan.lamps, shapes: undefined }, bumpers: { ...sedan.bumpers, rear: { ...sedan.bumpers.rear, plate: undefined, plateFace: undefined } } };
     const plateFace = { out: 0.015, color: 0x1c1e22 };
-    const rear = { ...plain.bumpers.rear, plate: 0.4 };
+    // At 0.3 the plate sits where the sedan's fascia stands 0.06 m out, short of the platform's 0.09 face (higher, at 0.4, it reaches 0.086 and a plate stands 6 mm off it).
+    const rear = { ...plain.bumpers.rear, plate: 0.3 };
     const style: BodyStyle = { ...plain, bumpers: { ...plain.bumpers, rear: { ...rear, plateFace } } };
     const box = partBox(drawnPart(PART_KIND.tailTrim, style).geometry);
     assertSameNumbers([box.min.z, box.max.z - box.min.z], [-plateFace.out, 0.02], "the plate's rear face (bumper space z) and depth", POSITION_TOL);

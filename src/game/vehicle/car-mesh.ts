@@ -1351,16 +1351,34 @@ const END_SEGMENTS = { face: 2, corner: 5, run: 1 } as const;
 /** A lofted end's section thins to this share of its corner's tightest radius, so its hidden back never folds through itself. */
 const END_DEPTH_SHARE = 0.9;
 
+/** Each fascia row's unit normal as [y, out]: perpendicular to the chord between its neighbours (the fascia runs over the top, down the face and back along the underside). */
+function fasciaNormals(fascia: BodyStyle["bumpers"]["front"]["fascia"]): (readonly [number, number])[] {
+  const normals: (readonly [number, number])[] = [];
+  for (let i = 0; i < fascia.length; i++) {
+    const [y0, out0] = fascia[Math.max(0, i - 1)]!;
+    const [y1, out1] = fascia[Math.min(fascia.length - 1, i + 1)]!;
+    const length = hypot2(out1 - out0, y1 - y0);
+    normals.push([(out1 - out0) / length, (y0 - y1) / length]);
+  }
+  return normals;
+}
+
 /**
- * Bumper fascia: rounded top, intake recess, splitter lip, wrapped corners, the corners held inside `style`'s body side (or a lofted `wrap.end`). `rows` [first, last] lofts only those fascia rows, `proud` (m) out from the face, along the same path: an inlay;
- * `reach` (m): with lofted ends, the inlay stops at the last ring whose face point stands within |x| `reach`.
+ * Bumper fascia: rounded top, intake recess, splitter lip, wrapped corners, the corners held inside `style`'s body side (or a lofted `wrap.end`). `rows` [first, last] lofts only those fascia rows, `proud` (m) off the face along its normal, so a
+ * horizontal run stands off too: an inlay; `reach` (m): with lofted ends, the inlay stops at the last ring whose face point stands within |x| `reach`.
  */
 export function makeBumperGeometry(front: boolean, style: BodyStyle, rows?: readonly [first: number, last: number], proud = 0, reach = Infinity): THREE.BufferGeometry {
   const s = front ? 1 : -1;
   const spec = front ? style.bumpers.front : style.bumpers.rear;
   const { seat, fascia, span, wrap } = spec;
-  const section = rows ? fascia.slice(rows[0], rows[1] + 1).map(([y, out]) => [y, out + proud] as const) : fascia;
-  if (wrap.end) return makeBumperWithEnds(s, spec, wrap.end, style, section, reach);
+  const normals = rows ? fasciaNormals(fascia) : [];
+  const section = rows
+    ? fascia.slice(rows[0], rows[1] + 1).map(([y, out], k) => {
+        const [ny, nOut] = normals[rows[0] + k]!;
+        return [y + ny * proud, out + nOut * proud] as const;
+      })
+    : fascia;
+  if (wrap.end) return makeBumperWithEnds(s, spec, wrap.end, style, section, reach, rows ? proud : 0);
   const wrapAt = (x: number) => Math.max(0, Math.abs(x) - wrap.from) / (span - wrap.from);
   const stations = 16;
   const rings: Pt[][] = [];
@@ -1403,6 +1421,8 @@ function makeBumperWithEnds(
   style: BodyStyle,
   section: BodyStyle["bumpers"]["front"]["fascia"],
   reach: number,
+  /** An inlay's run stops this far (m) short of the bumper's own end, so its end cap stands inside the bumper's and never shares its plane. */
+  shortBy: number,
 ): THREE.BufferGeometry {
   const outMax = Math.max(...fascia.map(([, out]) => out));
   const depth = outMax - Math.min(...fascia.map(([, out]) => out));
@@ -1429,7 +1449,7 @@ function makeBumperWithEnds(
       const len = hypot2(b * sin, a * cos);
       path.push({ x: wrap.from + a * sin, d: b * (1 - cos), nx: (b * sin) / len, nd: (-a * cos) / len, k: 1 - (1 - thin) * sin * sin });
     } else {
-      const d = lerp(b, wrap.back, (m - face - corner) / run);
+      const d = lerp(b, wrap.back - shortBy, (m - face - corner) / run);
       path.push({ x: skinAt(d) + end.stand, d, nx: 1, nd: 0, k: thin });
     }
   }
