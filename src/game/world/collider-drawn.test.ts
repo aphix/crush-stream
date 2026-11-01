@@ -44,6 +44,11 @@ const KIND_TOL: Partial<Record<PrefabId, number>> = {
   crate: 0.03,
   // The jersey profile's slope against three steps.
   "barrier-block": 0.09,
+  // A wrapped bar's ends reach back from the box that holds its plan; the box's far corners stand off the drawn shape.
+  "muscle-bumper": 0.12,
+  // A lathed tyre's rounded shoulders and lugs against a cylinder of its radius and width.
+  "monster-wheel": 0.06,
+  "car-wheel": 0.04,
   // An irregular dome against four rings: the top ring's corners.
   rock: 0.36,
   // A hexagonal crown's corners and flats against one circle per step, halfway between them.

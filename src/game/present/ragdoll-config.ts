@@ -1,7 +1,9 @@
 /** What `RagdollSystem` and its collaborators (`CarProxies`, `RideAlong`) share: the slot count, the step and the collision groups. */
 
-/** Live dummies at once; a fifth throw recycles the oldest. */
-export const SLOTS = 4;
+/** The most dummies a pool can ever hold: what its slot-indexed arrays are sized for. Only the showcase raises the pool to it. */
+export const SLOTS = 32;
+/** The dummies every world builds at load and recycles within unless its scene raises the pool's capacity. */
+export const BASE_SLOTS = 4;
 /**
  * Rapier's step (sim s) while a dummy is out, the same at any display rate: `update` takes whole steps out of an accumulator and the draw
  * blends the last two (it once stepped per frame, and Rapier warm-starts with the last step's impulse: landings 25.6–58.1 m).
@@ -13,14 +15,16 @@ export const STEP = 1 / 480;
 export const MAX_ACC = 0.05;
 
 /**
- * Collision groups (membership << 16 | filter), 16 bits: the world; each dummy slot; each car (its lower box, bumper
+ * Collision groups (membership << 16 | filter), 16 bits: the world; each dummy slot in one of `DOLL_BUCKETS` bits (slot `s` in bit `s % 4`: every
+ * dummy hits every dummy, but a query that skips its own dummy by his bit skips his bucket's too); each car (its lower box, bumper
  * to bonnet line, fitted to its crushed length, and its cabin's slabs), in 10 buckets of car index; the props. Out of
  * the car a dummy hits everything but its own jointed neighbours (`setContactsEnabled(false)`) and the purses. For
  * `GRACE` s after the throw it ignores its own car (it starts inside it) and the dummies thrown from that car still in
  * theirs (a passenger starts beside his driver); every other car and dummy it hits from the first frame.
  */
 const G_STATIC = 1;
-const dollBit = (s: number) => 2 << s;
+const DOLL_BUCKETS = 4;
+const dollBit = (s: number) => 2 << s % DOLL_BUCKETS;
 const G_DOLLS = 0x1e;
 /** Car i's bit; a dummy with no car of his own (`place`, car -1) has none, so he hits every car from the first frame. */
 const carBit = (i: number) => (i < 0 ? 0 : 0x40 << i % 10);

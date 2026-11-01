@@ -3,13 +3,13 @@ import * as THREE from "three";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { driverLook } from "./driver-look.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
-import { SLOTS } from "./ragdoll-config.ts";
+import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
 /** The pool slot the walker takes. */
-const WALKER = SLOTS - 1;
+const WALKER = WALKER_SLOT;
 const SETTLE_SECONDS = 1;
 
 type Shove = "none" | "tipForward" | "tipSideways" | "tipHard" | "carHit";

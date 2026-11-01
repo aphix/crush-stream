@@ -10,7 +10,7 @@ import { guardDress, passengerThrow } from "./people.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { PropDraw } from "./ragdoll-props.ts";
 import { NO_RELEASE_SCALE, type ReleaseScale } from "./ragdoll-boxes.ts";
-import { SLOTS, thrownGroups } from "./ragdoll-config.ts";
+import { BASE_SLOTS, thrownGroups } from "./ragdoll-config.ts";
 import { ARM, blendPose, MASS, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
 import { strikeAt } from "./ragdoll-hit.ts";
 import type { Solid } from "./ragdoll-solids.ts";
@@ -153,10 +153,10 @@ export abstract class RagdollThrower extends RagdollStepper {
   }
 
   /**
-   * A dummy in `dress` stands with his feet at `at` facing `yaw`, held up and walked by the walker of his pool slot (`slot`: the player's, or a free one); his slot, or -1 while Rapier is still loading.
+   * A dummy in `dress` stands with his feet at `at` facing `yaw`, held up and walked by the walker of his pool slot (`slot`: the player's, or a free one), leaving at `v` m/s; his slot, or -1 while Rapier is still loading.
    * He lives in this thread's world, so a run the worker holds is begun again here, and a bounded ground gets its fixed colliders wide enough for everyone after him.
    */
-  startWalker(at: THREE.Vector3, yaw: number, dress: { cop: boolean; look: DriverLook }, slot = WALKER_SLOT): number {
+  startWalker(at: THREE.Vector3, yaw: number, dress: { cop: boolean; look: DriverLook }, slot = WALKER_SLOT, v: THREE.Vector3 = NO_MOTION): number {
     if (!this.R || !this.world) return -1;
     if (this.mode === "remote") this.reset();
     this.mode = "inline";
@@ -164,13 +164,20 @@ export abstract class RagdollThrower extends RagdollStepper {
     if (c === null || activeGround() !== c.ground) this.buildStatics(at.x, at.z, at.y, STATICS_HALF);
     _p.set(at.x, at.y + PARTS[0].c[1], at.z);
     _q.setFromAxisAngle(Y, yaw);
-    const placed = this.place(_p, _q, NO_MOTION, NO_MOTION, Infinity, slot, dress);
+    const placed = this.place(_p, _q, v, NO_MOTION, Infinity, slot, dress);
     if (placed < 0) return placed;
     this.walkers[placed]!.attach(this.R, this.world, this.dolls[placed]!, yaw);
     if (placed === WALKER_SLOT) {
       this.walkerPatchX = at.x;
       this.walkerPatchZ = at.z;
     }
+    return placed;
+  }
+
+  /** A dummy in `dress` thrown from his feet at `at` at `v` m/s (`startWalker`), limp from the first step: a ragdoll in flight that gets up once asked (`Walker.ask`). */
+  throwWalker(at: THREE.Vector3, yaw: number, v: THREE.Vector3, dress: { cop: boolean; look: DriverLook }, slot = -1): number {
+    const placed = this.startWalker(at, yaw, dress, slot, v);
+    if (placed >= 0) this.walkers[placed]!.struck();
     return placed;
   }
 
@@ -265,12 +272,13 @@ export abstract class RagdollThrower extends RagdollStepper {
     if (this.live === 0) this.mode = null;
   }
 
-  /** No scene's solids or props any more: leaving the showcase, whose ground (the fleet's disc) the other sandbox scenes share. */
+  /** No scene's solids or props any more, and the pool back to its base capacity: leaving the showcase, whose ground (the fleet's disc) the other sandbox scenes share. */
   clearScene(): void {
     this.course = null;
     this.solids = null;
     this.props.set([], null);
     this.tumble = null;
+    this.setCapacity(BASE_SLOTS);
     if (this.live === 0) this.mode = null;
   }
 
@@ -297,6 +305,11 @@ export abstract class RagdollThrower extends RagdollStepper {
     if (this.mode === "remote") return false;
     this.wake();
     return this.props.throwFrom(i, at, v.x, v.y, v.z);
+  }
+
+  /** Every prop of the scene back on its spot, the dummies as they are. */
+  clearProps(): void {
+    this.props.clear();
   }
 
   /** Is a knocked prop flying within `r` m of `p`, plus its reach and how far it travels in `dt` s? */
@@ -353,9 +366,9 @@ export abstract class RagdollThrower extends RagdollStepper {
     return this.alpha;
   }
 
-  /** Every dummy's and purse set's state after the last frame into `dolls` and `purses` (`DOLL_FLOATS` and `PURSE_BLOCK` floats a slot), for the main thread to draw. Returns the latest throw's slot. */
+  /** Every dummy's and purse set's state after the last frame into `dolls` and `purses` (`DOLL_FLOATS` and `PURSE_BLOCK` floats a built slot, `builtSlots` of them), for the main thread to draw. Returns the latest throw's slot. */
   snapshot(dolls: Float32Array, purses: Float32Array): number {
-    for (let s = 0; s < SLOTS; s++) {
+    for (let s = 0; s < this.dolls.length; s++) {
       const d = this.dolls[s]!;
       const o = s * DOLL_FLOATS;
       dolls[o + DOLL_LIVE] = d.live ? 1 : 0;
@@ -385,7 +398,8 @@ export abstract class RagdollThrower extends RagdollStepper {
     this.lastSlot = r.lastSlot;
     for (const { id, slot } of r.spawned) this.dress(id, slot);
     let live = 0;
-    for (let s = 0; s < SLOTS; s++) {
+    // A slot only this thread built lies past the worker's records: reads undefined, not live.
+    for (let s = 0; s < this.dolls.length; s++) {
       const d = this.dolls[s]!;
       const o = s * DOLL_FLOATS;
       if (r.dolls[o + DOLL_LIVE] !== 1) {

@@ -5,7 +5,7 @@ import { BARRIER_HALF } from "../contact/sat.ts";
 import { CAR_BOX } from "./ragdoll-props.ts";
 import { DOLL_REACH, NEAR_HOLD, NEAR_MARGIN, PURSE_REACH } from "./ragdoll-cars.ts";
 import type { RagCar } from "./ragdoll-car-view.ts";
-import { dollGroups, MAX_ACC, SLOTS, STEP } from "./ragdoll-config.ts";
+import { dollGroups, MAX_ACC, STEP } from "./ragdoll-config.ts";
 import { CALM_FOR, type Doll, GROUND_ANGULAR, GROUND_LINEAR, give, isCalm, limit, lowestPoint, PARTS, SETTLE_AFTER, SETTLE_ANGULAR, SETTLE_LINEAR } from "./ragdoll-body.ts";
 import { brace } from "./ragdoll-joints.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
@@ -122,7 +122,7 @@ export abstract class RagdollStepper extends RagdollPool {
       this.step = step;
       world.timestep = step;
     }
-    if (steps > 0) for (let s = 0; s < SLOTS; s++) this.walkers[s]!.control(steps * step, this.untangle.carry, s * 3);
+    if (steps > 0) for (let s = 0; s < this.dolls.length; s++) this.walkers[s]!.control(steps * step, this.untangle.carry, s * 3);
     if (steps > 0) {
       const thrown = this.thrownOut();
       world.numSolverIterations = thrown ? THROWN_ITERATIONS : ITERATIONS;
@@ -149,7 +149,7 @@ export abstract class RagdollStepper extends RagdollPool {
       this.stepMs[this.steps++ % STEP_LOG] = performance.now() - stepAt;
       if (++this.tick % WATCH_EVERY !== 0) continue;
       this.purses?.advance(WATCH_EVERY * STEP);
-      for (let s = 0; s < SLOTS; s++) {
+      for (let s = 0; s < this.dolls.length; s++) {
         const d = this.dolls[s]!;
         if (!d.live) continue;
         if (!d.driven) this.hits(s, d);
@@ -163,7 +163,7 @@ export abstract class RagdollStepper extends RagdollPool {
     if (steps > 0) this.purses?.capture(true);
     if (steps > 0) this.props.capture(true);
     if (steps > 0) this.boxes.capture();
-    for (let s = 0; s < SLOTS; s++) {
+    for (let s = 0; s < this.dolls.length; s++) {
       const d = this.dolls[s]!;
       if (!d.live) continue;
       const before = d.age;
@@ -249,7 +249,7 @@ export abstract class RagdollStepper extends RagdollPool {
     const b = i * CAR_BOX;
     const boxed = boxes[b + 2]! > 0;
     if (boxed) _cq.copy(car.group.quaternion).invert();
-    for (let s = 0; s < SLOTS; s++) {
+    for (let s = 0; s < this.dolls.length; s++) {
       const d = this.dolls[s]!;
       if (!d.live) continue;
       const r = DOLL_REACH + NEAR_MARGIN + hold + 2 * (speed + d.speed) * frame;

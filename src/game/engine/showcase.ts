@@ -1,11 +1,14 @@
 import * as THREE from "three";
 import { GRAVITY } from "../kernel/constants.ts";
-import { hypot2 } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { SLOTS } from "../present/ragdoll-config.ts";
+import { colliderSolids, type Solid } from "../present/ragdoll-solids.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
-import { SHOWCASE_THROWN, ShowcaseArt, THROWN_KINDS, THROWN_PER_KIND } from "../present/showcase-art.ts";
+import { SHOWCASE_PROPS, ShowcaseArt, THROWN_KINDS, THROWN_PER_KIND } from "../present/showcase-art.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { DISC_GROUND } from "../world/ground.ts";
+import { propColliders, solidsOf, type PropCollider } from "../world/placements.ts";
 import { ShowcaseWalks } from "./showcase-walks.ts";
 
 /** The screen box the pointer's client coordinates are read in (the canvas's `getBoundingClientRect`). */
@@ -64,13 +67,48 @@ export class Showcase {
   }
 
   /**
-   * Number key `kind` (`THROWN_KINDS`: 0 the cone, 1 the crate, 2 the tyre stack, 3 the hay bale) throws that prop, its kind's oldest,
-   * at what is under the cursor at (`x`, `y`, client px; NaN: the view's middle): the first figure, car or piece of the set the
-   * cursor's ray meets, else the floor. It leaves `THROW_AHEAD` m out along that ray at `THROW_MPS` level, lobbed to land there.
-   * Whether it flew (not while Rapier loads, nor at the sky).
+   * Number key `digit` (the row's or the pad's): 1 to 7 throw `THROWN_KINDS`' props in order (the cone, crate, tyre stack, hay bale,
+   * the muscle car's bumper, the monster truck's wheel, a car's wheel), 8 a man and 9 a woman, each at what is under the cursor at
+   * (`x`, `y`, client px; NaN: the view's middle); 0 clears everything thrown. Whether anything flew.
+   */
+  key(digit: number, x: number, y: number): boolean {
+    if (digit === 0) {
+      this.clear();
+      return true;
+    }
+    const n = digit - 1;
+    return n < THROWN_KINDS.length ? this.throwProp(n, x, y) : this.throwFigure(n - THROWN_KINDS.length, x, y);
+  }
+
+  /**
+   * Prop `kind` (`THROWN_KINDS`), its kind's oldest, flies at what is under the cursor (`aimThrow`): through the dummies' world, as a
+   * car-knocked prop does. Whether it flew (not while Rapier loads, nor at the sky).
    */
   throwProp(kind: number, x: number, y: number): boolean {
-    if (kind < 0 || kind >= THROWN_KINDS.length) return false;
+    if (kind < 0 || kind >= THROWN_KINDS.length || !this.aimThrow(x, y)) return false;
+    const index = kind * THROWN_PER_KIND + this.next[kind]!;
+    if (!this.ragdolls.throwProp(index, _at, _v)) return false;
+    this.next[kind] = (this.next[kind]! + 1) % THROWN_PER_KIND;
+    return true;
+  }
+
+  /** Figure `which` of the set (0 the man, 1 the woman) is thrown at what is under the cursor as a new dummy (`ShowcaseWalks.throwFigure`). Whether he flew. */
+  throwFigure(which: number, x: number, y: number): boolean {
+    return (which === 0 || which === 1) && this.aimThrow(x, y) && this.walks.throwFigure(which, _at, _v) >= 0;
+  }
+
+  /** Every thrown prop is back under the floor, every thrown dummy gone, and the next throw of each kind is the first again. */
+  clear(): void {
+    this.next.fill(0);
+    this.ragdolls.clearProps();
+    this.walks.clearThrown();
+  }
+
+  /**
+   * Into `_at` where a throw at client point (`x`, `y`) leaves (`THROW_AHEAD` m out along the cursor's ray from the eye) and into `_v` its velocity: at
+   * `THROW_MPS` level, lobbed to land on what the ray meets first, a figure, a car or a piece of the set, else the floor. False at the sky.
+   */
+  private aimThrow(x: number, y: number): boolean {
     this.aim(x, y);
     const ray = this.ray.ray;
     const hit = this.ray.intersectObjects([this.art.group, this.ragdolls.pickMesh, ...this.cars.map((c) => c.group)], true)[0];
@@ -83,9 +121,6 @@ export class Showcase {
     // Level at THROW_MPS and up by half its fall over that time: it is at the point when it gets there.
     _v.multiplyScalar(1 / t);
     _v.y += (GRAVITY * t) / 2;
-    const index = kind * THROWN_PER_KIND + this.next[kind]!;
-    if (!this.ragdolls.throwProp(index, _at, _v)) return false;
-    this.next[kind] = (this.next[kind]! + 1) % THROWN_PER_KIND;
     return true;
   }
 
@@ -99,11 +134,41 @@ export class Showcase {
     this.walks.step(wallDt);
   }
 
-  /** Everyone stands on his mark, and every thrown prop is back under the floor, the set's props the dummies' world holds. */
+  /** Everyone stands on his mark, every thrown prop is back under the floor and no dummy is thrown. The dummies' world holds the set's props and what stands in it: the gallery's solids and the cars, and room for `SLOTS` dummies (the pool builds them as throws fill it). */
   reset(): void {
     this.walks.reset();
     this.next.fill(0);
-    this.ragdolls.setSolids(DISC_GROUND, [], SHOWCASE_THROWN, this.art.thrown);
+    this.ragdolls.setCapacity(SLOTS);
+    this.ragdolls.setSolids(DISC_GROUND, this.solids(), SHOWCASE_PROPS, this.art.props);
+  }
+
+  /** What a dummy or a thrown prop meets in the set, as a car meets it: the gallery's solid prefabs and each parked car's plan box over its height. */
+  private solids(): Solid[] {
+    const cars = this.cars.map((car, k): PropCollider => {
+      const [left, right, rear, front] = car.cage.fields.planBox;
+      const yaw = car.group.rotation.y;
+      const across = (left! + right!) / 2;
+      const ahead = (rear! + front!) / 2;
+      const hx = (right! - left!) / 2;
+      const hz = (front! - rear!) / 2;
+      return {
+        index: SHOWCASE_PROPS.length + k,
+        prefab: null,
+        body: "solid",
+        x: car.group.position.x + across * detCos(yaw) + ahead * detSin(yaw),
+        z: car.group.position.z - across * detSin(yaw) + ahead * detCos(yaw),
+        yaw,
+        kind: "box",
+        r: hypot2(hx, hz),
+        hx,
+        hz,
+        mass: 0,
+        base: 0,
+        top: car.style.dims.height,
+        ends: 3,
+      };
+    });
+    return colliderSolids(solidsOf([], [...propColliders(SHOWCASE_PROPS), ...cars]), []);
   }
 
   move(): void {}

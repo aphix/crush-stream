@@ -142,7 +142,7 @@ export class LooseProxies {
   private readonly kg = new Float32Array(MAX_LOOSE);
   private readonly fast = new Uint8Array(MAX_LOOSE);
   private readonly swept = new Float32Array(MAX_LOOSE * 7);
-  private readonly struck = new Uint8Array(MAX_LOOSE);
+  private readonly struck = new Uint32Array(MAX_LOOSE);
   /** Per slot, the `HIT_PARTS` code of the part on its car it stands in for (-1: a loose body). */
   private readonly part = new Int8Array(MAX_LOOSE).fill(-1);
   /** Slot × other body touching a stand-in as of the last step, and this step: a touch strikes once (`partTouch`). */

@@ -4,14 +4,14 @@ import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { driverLook } from "./driver-look.ts";
 import { PARTS } from "./ragdoll-body.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
-import { SLOTS } from "./ragdoll-config.ts";
+import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { RUN_SPEED, SPRINT_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { wrapAngle } from "./walker-math.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
-const WALKER = SLOTS - 1;
+const WALKER = WALKER_SLOT;
 /** The feet's parts, left then right (`PARTS`): where a foot is. */
 const FEET = [10, 11] as const;
 /** A walker slower than this (m/s) has stopped for the eye. */

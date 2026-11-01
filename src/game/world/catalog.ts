@@ -48,6 +48,9 @@ export const PREFAB_IDS = [
   PREFAB.tyreStack,
   PREFAB.hayBale,
   PREFAB.crate,
+  PREFAB.muscleBumper,
+  PREFAB.monsterWheel,
+  PREFAB.carWheel,
   PREFAB.barrierBlock,
   PREFAB.rock,
   PREFAB.tree,
@@ -351,6 +354,9 @@ function monumentSpec(bricks: readonly Brick[]): PrefabSpec {
   return { body: "solid", collider: bricks.map(brickCollider), foot: hypot2(hx, hz), size: [2 * hx, bricksTop(bricks), 2 * hz], mass: 0, material: MAT.MARBLE };
 }
 
+/** The muscle coupe's front bumper bar's depth (m): its bounds from front to back. */
+const MUSCLE_BUMPER_DEPTH = 0.24;
+
 export const PREFABS: Record<PrefabId, PrefabSpec> = {
   cone: {
     body: "knock",
@@ -368,6 +374,11 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.hayBale]: { body: "knock", collider: [{ kind: "box", hx: 0.6, hz: 0.45 }], foot: 0.75, size: [1.2, 0.9, 0.9], mass: 180, material: MAT.HAY },
   // 30 kg: shuts a sprung hatch dropped 1 m on it (18 kg is the least) and costs a car 2.1 % (`KNOCK_CAR_MASS`); its drawn build, 9 mm softwood ply (4.95 kg/m², a 2440×1220 sheet is 14.74 kg) over 5.53 m² plus 0.03 m³ of pine posts, is ~43 kg, a 3 % cost.
   crate: { body: "knock", collider: [{ kind: "box", hx: 0.5, hz: 0.5 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 30, material: MAT.CRATE_WOOD },
+  // The muscle coupe's front bumper bar (`bumperFront`'s bounds), at `CLASSES.muscle.bumperKg[0]`.
+  [PREFAB.muscleBumper]: { body: "knock", collider: [{ kind: "box", hx: 0.757, hz: MUSCLE_BUMPER_DEPTH / 2 }], foot: 0.77, size: [1.514, 0.237, MUSCLE_BUMPER_DEPTH], mass: 27, material: MAT.BUMPER_CHROME },
+  // Wheels lie on their face at a popped wheel's weight (`WHEEL_KG_PER_M3` of the disk): the sedan's tyre, and the monster's (radius and width x `wheelScale` 1.73).
+  [PREFAB.monsterWheel]: { body: "knock", collider: [{ kind: "circle", r: 0.614 }], foot: 0.62, size: [1.228, 0.63, 1.228], mass: 184, material: MAT.TYRE },
+  [PREFAB.carWheel]: { body: "knock", collider: [{ kind: "circle", r: 0.342 }], foot: 0.35, size: [0.684, 0.22, 0.684], mass: 20, material: MAT.TYRE },
   [PREFAB.barrierBlock]: {
     body: "solid",
     collider: [

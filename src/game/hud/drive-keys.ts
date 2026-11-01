@@ -20,3 +20,11 @@ export function driveKeys(pad: boolean, boostable: boolean): string {
     : ["W gas", "S brake, then reverse", "A/D steer", "Space handbrake", ...boost, "drag look", "V view", "` look back", "R recover", "Esc watch"];
   return parts.join(" · ");
 }
+
+/** The showcase's number keys (`Showcase.key`: `THROWN_KINDS` in key order, then a man and a woman, then 0 to clear): each throws at the point under the cursor. */
+export const SHOWCASE_THROW_KEYS = "1 cone · 2 crate · 3 tyres · 4 hay bale · 5 bumper · 6 monster wheel · 7 wheel · 8 man · 9 woman: thrown at the cursor · 0 clears them";
+
+/** `keys` (a seat's key line) with the showcase's throw keys after it: only in the showcase, and only for a keyboard (a controller has no number keys). */
+export function withShowcaseKeys(keys: string, showcase: boolean, pad: boolean): string {
+  return showcase && !pad ? `${keys} · ${SHOWCASE_THROW_KEYS}` : keys;
+}

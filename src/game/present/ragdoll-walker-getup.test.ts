@@ -6,7 +6,7 @@ import { blankStrike, fell, runsDown } from "../scenes/figure-strike.ts";
 import { type RagdollSystem } from "./engine-ragdoll.ts";
 import { driverLook } from "./driver-look.ts";
 import { PARTS } from "./ragdoll-body.ts";
-import { SLOTS } from "./ragdoll-config.ts";
+import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import { chooseRoute, type GetUpRoute, standingBearing } from "./walker-getup.ts";
 import { wrapAngle } from "./walker-math.ts";
@@ -14,7 +14,7 @@ import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
-const WALKER = SLOTS - 1;
+const WALKER = WALKER_SLOT;
 const AXES = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) } as const;
 type Turn = readonly [axis: "x" | "y" | "z", radians: number];
 

@@ -133,7 +133,7 @@ export interface ResultMessage {
   type: "result";
   seq: number;
   epoch: number;
-  /** `SLOTS` dummy records. */
+  /** One dummy record per slot the worker has built. */
   dolls: Float32Array;
   alpha: number;
   lastSlot: number;

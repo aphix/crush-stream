@@ -6,7 +6,7 @@
  * PNG, with one JSON line on stdout: the GPU, a yardstick shader's ms (a CPU rasterizer shows here), the frame's counts, and every
  * program that failed to link. Exit 1 on a link failure or a GL error. Not a frame-time judge: the browser bench is.
  *
- *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
+ *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png] [--keys Digit5*8,Digit8*4]
  *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--view hood] [--at 8] [--tear hood,bumperF]
  *     [--view side|top|iso|rear-iso --view-camera <json>] [--backdrop '#ffffff'] [--detail 2] [--paint '#8b8a8d' | --paint coupe=#2a313e,...] [--state intact|open|stripped] [--boost 1.5]
  *
@@ -20,6 +20,7 @@
  * `--state` poses the hash's cars (`showPose`); `--camera r,pitch,angle[,x,y,z]` in a free-eye scene (the showcase) sets the eye about
  * the point x,y,z (default the origin), looking at it. The showcase's own `cam=` (the owner's link, the same six numbers) in `--hash`
  * puts the eye there with no `--camera`, which wins when both are given.
+ * `--keys Digit5*8,Digit8*4` presses those keys (a code, `*n` times) before the drawn frames, the cursor swept across the lower view: the showcase's throws. The JSON's `frameMs` is the drawn frames' mean wall ms, each synced by a 1 px read (CPU sim and draw, and the GPU's).
  * `--sirens` flashes every light bar (with `night=1` in the hash: the lamps as seen in a night pursuit). `--break headL,headR,tailL,tailR`
  * breaks those lamps on every car, as a corner crush does. `--smash rear,windshield,...` shatters those panes (`GLASS_NAMES`) on every car. `--brake` holds every car's brake pedal down (its brake lamps lit).
  * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
@@ -96,6 +97,7 @@ const { values } = parseArgs({
     draw: { type: "string" },
     scale: { type: "string" },
     shadow: { type: "string" },
+    keys: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -358,12 +360,35 @@ if (quirkPrograms.size > 0) {
 }
 // The counts are the last frame whole (the mark map and every post pass): the reader brackets renderer.info, as the bench does.
 three.info.autoReset = false;
+// `--keys`: key presses (`Digit5*8,Digit8*4`: a code, `*n` times) with the cursor swept across the lower view, each followed by a frame of sim: the showcase's throws.
+const pressed = (values.keys?.split(",") ?? []).flatMap((entry) => {
+  const [code, times = "1"] = entry.split("*");
+  return Array.from({ length: Number(times) }, () => code);
+});
+// The ragdoll world loads in the background after boot: a throw before it is in is dropped.
+if (pressed.length > 0) {
+  await engine["ragdolls"].preload();
+  engine.advance(2 * FRAME, { frameDt: FRAME });
+}
+for (const [i, code] of pressed.entries()) {
+  Object.assign(engine.view, { hoverX: CSS_W * (0.2 + (0.6 * i) / Math.max(1, pressed.length - 1)), hoverY: CSS_H * 0.65 });
+  engine["onKey"](Object.assign(new Event("keydown"), { code, repeat: false, ctrlKey: false, metaKey: false, altKey: false }));
+  engine.advance(FRAME, { frameDt: FRAME });
+}
+await settle();
+// Each drawn frame is synced by a 1 px read, so `frameMs` is the frame's wall time including the GPU's.
+const frameTimes = [];
+const syncPixel = new Uint8Array(4);
 for (let f = 0; f < frames; f++) {
   hideQuirkMeshes();
   three.info.reset();
+  const began = performance.now();
   engine.advance(FRAME, { frameDt: FRAME });
   await settle();
+  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, syncPixel);
+  frameTimes.push(performance.now() - began);
 }
+const frameMs = frameTimes.length === 0 ? null : Math.round((frameTimes.reduce((sum, ms) => sum + ms, 0) / frameTimes.length) * 100) / 100;
 const glError = gl.getError();
 const { render, memory, programs } = three.info;
 const counts = { calls: render.calls, triangles: render.triangles, programs: programs.length, textures: memory.textures, geometries: memory.geometries };
@@ -383,7 +408,7 @@ writeFileSync(out, await shot.encode("png"));
 const wheelsPx = shooting?.camera ? wheelMarks(shooting, w, h) : null;
 const boostZoom = values.boost === undefined ? null : { seat: engine.seat.mode, strength: engine.cine.post.radial, boostK: engine.followedCar()?.drive.boostK ?? null, kph: Math.round((engine.followedCar()?.speed ?? 0) * 3.6) };
 engine.dispose();
-const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
+const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, frameMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
 process.stdout.write(`${JSON.stringify({ ...result, boostZoom })}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 

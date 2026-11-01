@@ -18,11 +18,11 @@ import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { type Doll, PARTS, TOTAL_MASS } from "./ragdoll-body.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
-import { SLOTS } from "./ragdoll-config.ts";
+import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { WALK_SPEED } from "./walker-locomotion.ts";
 
 const FRAME = 1 / FRAME_HZ;
-const WALKER = SLOTS - 1;
+const WALKER = WALKER_SLOT;
 const TORSO = 0;
 const HEAD = 1;
 /** The walker stands this many frames before the part is let go, and the run is this many after. */

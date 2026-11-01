@@ -3,6 +3,7 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
 import { ROLE, ROW_TEXELS } from "../present/dummy-rig.ts";
+import { BASE_SLOTS, SLOTS } from "../present/ragdoll-config.ts";
 import { SHOWCASE_EYE, SHOWCASE_LIGHT } from "../present/showcase-art.ts";
 import { ELDER_LOOK } from "../present/dummy-dress.ts";
 import { OUTFIT, type DriverLook } from "../present/driver-look.ts";
@@ -219,5 +220,11 @@ describe("given the real engine booted on #scene=showcase", () => {
     const cone = hit(1);
     expect(crate, "the crate (30 kg at 15 m/s: 3.4 m/s into his 101 kg)").toEqual({ down: true, met: true });
     expect(cone, "the cone (4 kg: 0.6 m/s, under the 1 m/s that knocks a man down)").toEqual({ down: false, met: true });
+  });
+
+  it("when the showcase is the scene, then the dummy pool holds 32, and when the next scene is entered, then it holds the base four again", () => {
+    expect(engine["ragdolls"]["capacity"], "in the showcase").toBe(SLOTS);
+    engine["applyScene"]("fleet");
+    expect(engine["ragdolls"]["capacity"], "in the fleet").toBe(BASE_SLOTS);
   });
 });

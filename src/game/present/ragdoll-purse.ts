@@ -147,7 +147,7 @@ export const PURSE_BLOCK = 1 + 2 * BODIES * 7;
 
 export class Purses {
   readonly mesh: PropMesh;
-  /** Per set: the purse then each item, disabled until used. */
+  /** Per built set: the purse then each item, disabled until used. */
   private readonly bodies: RigidBody[][] = [];
   private readonly colliders: Collider[][] = [];
   /** Per set: the bodies in use (bit 0 the purse, bit 1 + j item j), the ones lying on the ground, sim seconds since the launch, the car it left, the throw's random stream. */
@@ -160,26 +160,39 @@ export class Purses {
   /** The same for each body: pose after the step before the last and after the last, 7 numbers. */
   private readonly prev: Float32Array;
   private readonly cur: Float32Array;
-  private readonly sets: number;
+  private readonly R: Rapier;
+  private readonly world: World;
   private readonly groups: (car: number) => number;
   private readonly grace: number;
 
   /**
-   * `groups(car)`: the collision groups of a prop that ignores car `car` (-1: none ignored); they are held for `grace`
-   * sim seconds after a launch (it starts beside its own car).
+   * Room for `capacity` sets, `sets` of them built (`build` adds one). `groups(car)`: the collision groups of a prop that ignores
+   * car `car` (-1: none ignored); they are held for `grace` sim seconds after a launch (it starts beside its own car).
    */
-  constructor(R: Rapier, world: World, sets: number, groups: (car: number) => number, grace: number) {
-    this.sets = sets;
+  constructor(R: Rapier, world: World, capacity: number, sets: number, groups: (car: number) => number, grace: number) {
+    this.R = R;
+    this.world = world;
     this.groups = groups;
     this.grace = grace;
-    this.mesh = new PropMesh(sets);
-    this.on = new Uint16Array(sets);
-    this.down = new Uint16Array(sets);
-    this.age = new Float32Array(sets);
-    this.car = new Int16Array(sets).fill(-1);
-    this.burstAt = new Uint8Array(sets);
-    this.prev = new Float32Array(sets * BODIES * 7);
-    this.cur = new Float32Array(sets * BODIES * 7);
+    this.mesh = new PropMesh(capacity);
+    this.on = new Uint16Array(capacity);
+    this.down = new Uint16Array(capacity);
+    this.age = new Float32Array(capacity);
+    this.car = new Int16Array(capacity).fill(-1);
+    this.burstAt = new Uint8Array(capacity);
+    this.prev = new Float32Array(capacity * BODIES * 7);
+    this.cur = new Float32Array(capacity * BODIES * 7);
+    for (let s = 0; s < sets; s++) this.build();
+  }
+
+  /** The sets built. */
+  get sets(): number {
+    return this.bodies.length;
+  }
+
+  /** Builds the next set: its purse and items, disabled. */
+  build(): void {
+    const { R, world } = this;
     const half = (h: readonly number[], density: number, k: number) => {
       const body = world.createRigidBody(
         R.RigidBodyDesc.dynamic().setTranslation(0, -300 - k, 0).setLinearDamping(AIR_LINEAR).setAngularDamping(AIR_ANGULAR).setEnabled(false),
@@ -190,16 +203,16 @@ export class Purses {
       );
       return [body, collider] as const;
     };
-    for (let s = 0; s < sets; s++) {
-      const [pb, pc] = half(PURSE_H, 400, 0);
-      this.bodies.push([pb]);
-      this.colliders.push([pc]);
-      for (const [j, it] of ITEMS.entries()) {
-        const [b, c] = half(it.h, 800, 1 + j);
-        this.bodies[s]!.push(b);
-        this.colliders[s]!.push(c);
-      }
+    const [pb, pc] = half(PURSE_H, 400, 0);
+    const bodies = [pb];
+    const colliders = [pc];
+    for (const [j, it] of ITEMS.entries()) {
+      const [b, c] = half(it.h, 800, 1 + j);
+      bodies.push(b);
+      colliders.push(c);
     }
+    this.bodies.push(bodies);
+    this.colliders.push(colliders);
   }
 
   /** Is set `s` out? */
@@ -357,13 +370,13 @@ export class Purses {
     }
   }
 
-  /** The sets as the world's thread has them (`exportPoses`): the bodies in use and their poses, for `pose` to draw. A thing newly out is coloured; a set gone is hidden. */
+  /** The sets as the world's thread has them (`exportPoses`; a set past the ones it built reads as not in use): the bodies in use and their poses, for `pose` to draw. A thing newly out is coloured; a set gone is hidden. */
   importPoses(from: Float32Array): void {
     for (let s = 0; s < this.sets; s++) {
       const o = s * PURSE_BLOCK;
       const first = s * BODIES * 7;
       const was = this.on[s]!;
-      const now = from[o]!;
+      const now = from[o] ?? 0;
       for (let b = 1; b < BODIES; b++) if (now & (1 << b) && !(was & (1 << b))) this.mesh.colorAt(s * PIECES + STRAP.length + b, ITEMS[b - 1]!.color);
       if (was !== 0 && now === 0) for (let i = 0; i < PIECES; i++) this.mesh.hide(s * PIECES + i);
       this.on[s] = now;

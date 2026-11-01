@@ -12,6 +12,7 @@ import { makePrefabMaterials, raceTextures } from "./prefabs.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { PropTumble } from "./prop-tumble.ts";
 import { DEPTH_INSTANCED } from "./track-mesh.ts";
+import { STYLE_WHEELS } from "../vehicle/wheel-batch.ts";
 import { ELDER_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { FACE } from "./dummy-faces.ts";
 import { JEANS, OUTFIT, type DriverLook } from "./driver-look.ts";
@@ -118,14 +119,16 @@ export const SHOWCASE_GALLERY: readonly Placed[] = [
   ...galleryRow(38, [PREFAB.building, PREFAB.stucco], 2),
 ];
 
-/** The number keys' props, in key order (Digit1 the first): every knockable prefab (`body: "knock"`); a carton is the high-jump pile's, not a prefab. */
-export const THROWN_KINDS = [PREFAB.cone, PREFAB.crate, PREFAB.tyreStack, PREFAB.hayBale] as const;
-/** Props of each kind out at once: a key past them throws its kind's oldest again. Four kinds of four: 16 bodies in the world at most. */
-export const THROWN_PER_KIND = 4;
+/** The number keys' props, in key order (Digit1 the first): every knockable prefab (`body: "knock"`) but a carton (the high-jump pile's), then the car parts a car's own parts weigh as. */
+export const THROWN_KINDS = [PREFAB.cone, PREFAB.crate, PREFAB.tyreStack, PREFAB.hayBale, PREFAB.muscleBumper, PREFAB.monsterWheel, PREFAB.carWheel] as const;
+/** Props of each kind out at once: a key past them throws its kind's oldest again. Seven kinds of 32: 224 bodies in the world at most. */
+export const THROWN_PER_KIND = 32;
 /** Where the thrown props stand until thrown (m under the disc's floor): out of sight and out of reach of everything. */
 const THROWN_DEPTH = 20;
 /** The showcase's thrown props, kind by kind (`THROWN_KINDS`), `THROWN_PER_KIND` each, standing under the floor until a key throws one. */
 export const SHOWCASE_THROWN: readonly Placed[] = THROWN_KINDS.flatMap((prefab) => Array.from({ length: THROWN_PER_KIND }, () => ({ prefab, x: 0, y: -THROWN_DEPTH, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 })));
+/** Every prop the dummies' world holds: the thrown ones first (their index is `kind * THROWN_PER_KIND + n`), then the gallery, whose knockable pieces a dummy or a thrown prop knocks about. */
+export const SHOWCASE_PROPS: readonly Placed[] = [...SHOWCASE_THROWN, ...SHOWCASE_GALLERY];
 
 /** The light posts' feet (x, z; m) and where each spot aims (x, z; m): the front pair flank the people (out of the opening frame), the back pair the car rows. */
 const POSTS: readonly { x: number; z: number; aimX: number; aimZ: number }[] = [
@@ -139,6 +142,13 @@ const POST_LIGHT = { color: 0xffe2b0, intensity: 260, distance: 55, angle: 0.8, 
 
 const _mark = new THREE.Vector3();
 
+/** The monster's rims are gunmetal as its batched wheels' are (`STYLE_WHEELS`); the other wheel is untinted. */
+function wheelTint(id: PrefabId, _i: number, out: THREE.Color): boolean {
+  if (id !== PREFAB.monsterWheel) return false;
+  out.copy(STYLE_WHEELS.monster.tint);
+  return true;
+}
+
 export class ShowcaseArt {
   readonly group = new THREE.Group();
   readonly people = new People(SLOTS);
@@ -149,22 +159,21 @@ export class ShowcaseArt {
   private readonly floor = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), tagMaterial(new THREE.MeshStandardMaterial({ color: STUDIO_FLOOR, roughness: 1, metalness: 0 }), MAT.STUDIO_FLOOR, FLOOR_WET_SHARE), GROUND_LEVEL.runoff);
   /** The posts' spots, in the set whenever it stands (a light shown or hidden relinks every lit shader) and dark by day (`setNight`). */
   private readonly postLights: THREE.SpotLight[] = [];
-  /** The number keys' props (`SHOWCASE_THROWN`), drawn where the dummies' world has them. */
-  readonly thrown: PropTumble;
+  /** Every prop the dummies' world holds (`SHOWCASE_PROPS`), drawn where it has them. */
+  readonly props: PropTumble;
 
   constructor() {
     this.group.name = "showcase";
     this.group.visible = false;
     this.group.add(this.floor, this.people.group, this.gallery);
     this.galleryMaterials = makePrefabMaterials(raceTextures());
-    const add = (mesh: THREE.InstancedMesh, into: THREE.Group, shared: THREE.Material | null): void => {
+    const add = (mesh: THREE.InstancedMesh, shared: THREE.Material | null): void => {
       mesh.castShadow = !shared;
       mesh.receiveShadow = true;
       mesh.customDepthMaterial = DEPTH_INSTANCED;
-      into.add(mesh);
+      this.gallery.add(mesh);
     };
-    new PropTumble(SHOWCASE_GALLERY, this.galleryMaterials, (mesh, _id, shared) => add(mesh, this.gallery, shared));
-    this.thrown = new PropTumble(SHOWCASE_THROWN, this.galleryMaterials, (mesh, _id, shared) => add(mesh, this.group, shared));
+    this.props = new PropTumble(SHOWCASE_PROPS, this.galleryMaterials, (mesh, _id, shared) => add(mesh, shared), wheelTint);
     this.erectPosts();
     this.floor.rotation.x = -Math.PI / 2;
     this.floor.receiveShadow = true;

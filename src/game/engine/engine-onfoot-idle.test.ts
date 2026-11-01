@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { NO_PERSON_PICK } from "../match/look-data.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
-import { SLOTS } from "../present/ragdoll-config.ts";
+import { WALKER_SLOT } from "../present/ragdoll-pool.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
-const WALKER = SLOTS - 1;
+const WALKER = WALKER_SLOT;
 /** The feet's parts, left then right (`PARTS`). */
 const FEET = [10, 11] as const;
 /** The far cars wait this far out (m), clear of his walk. */

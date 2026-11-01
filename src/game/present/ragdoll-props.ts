@@ -91,6 +91,8 @@ const _n = new THREE.Vector3();
 const _v = { x: 0, y: 0, z: 0 };
 const _rot = { x: 0, y: 0, z: 0, w: 1 };
 const Y = new THREE.Vector3(0, 1, 0);
+/** The knockable props whose own shape is an upright cylinder about their middle: a tyre stack, and a wheel lying on its face. */
+const ROUND: ReadonlySet<string> = new Set([PREFAB.tyreStack, PREFAB.monsterWheel, PREFAB.carWheel]);
 
 /** A knockable prop's own shape about its middle (the middle of its size box), and the shape's volume (m³). Sizes are its prefab's art (`prefabs.ts`). */
 function shapes(R: Rapier, p: Placed): { descs: ColliderDesc[]; volume: number } {
@@ -105,7 +107,7 @@ function shapes(R: Rapier, p: Placed): { descs: ColliderDesc[]; volume: number }
       volume: 8 * plate[0] * plate[1] * plate[2] + (2 * Math.PI * cone[1] * cone[1] * cone[0]) / 3,
     };
   }
-  if (p.prefab === PREFAB.tyreStack) {
+  if (ROUND.has(p.prefab)) {
     const r = (w / 2) * Math.max(p.sx, p.sz);
     return { descs: [R.ColliderDesc.cylinder(hy, r)], volume: 2 * Math.PI * r * r * hy };
   }
@@ -233,7 +235,7 @@ export class PropBodies {
   private half = new Float32Array(0);
   private out = new Int32Array(0);
   /** Per placement: a bit per pool slot, the dummies it has struck and that are not clear of it yet (`strikeDolls`). */
-  private met = new Uint8Array(0);
+  private met = new Uint32Array(0);
   /** Pose (position xyz of the middle, rotation xyzw) after the step before the last and after the last; `drawn`: drawn at rest since it slept. */
   private prev = new Float32Array(0);
   private cur = new Float32Array(0);
@@ -301,7 +303,7 @@ export class PropBodies {
     this.prev = new Float32Array(n * 7);
     this.cur = new Float32Array(n * 7);
     this.drawn = new Uint8Array(n);
-    this.met = new Uint8Array(n);
+    this.met = new Uint32Array(n);
     this.settled = new Uint8Array(n);
     this.speed = new Float32Array(n);
     this.sweep = new Float32Array(n);

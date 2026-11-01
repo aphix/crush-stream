@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { type RagdollSystem } from "./engine-ragdoll.ts";
 import { driverLook } from "./driver-look.ts";
-import { SLOTS } from "./ragdoll-config.ts";
+import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 
-const WALKER = SLOTS - 1;
+const WALKER = WALKER_SLOT;
 const SPEED = 6;
 /** Part indices (`PARTS` order) the rows name. */
 const TORSO = 0;

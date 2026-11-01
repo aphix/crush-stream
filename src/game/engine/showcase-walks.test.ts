@@ -166,12 +166,24 @@ describe("given the real engine booted on #scene=showcase", () => {
     });
   }
 
-  it("when a fifth figure is knocked while four are away, then the one longest away is sent home at once and four dummies are out", () => {
+  it("when all twelve figures step into the ragdoll world, then twelve dummies are out and every one is away from the set", () => {
     settle();
-    for (const slot of [0, 1, 2, 3, 4]) expect(press(slot, 1.2), `figure ${slot} pressed`).toBe(true);
-    expect(standing(0), "the first is back on his mark").toBe(true);
-    for (const slot of [1, 2, 3, 4]) expect(standing(slot), `figure ${slot} is away`).toBe(false);
-    expect(live(), "four dummies are out").toBe(4);
+    for (let slot = 0; slot < art().slots; slot++) expect(engine["showcase"]!["walks"].stepIn(slot), `figure ${slot} steps in`).toBeGreaterThanOrEqual(0);
+    for (let slot = 0; slot < art().slots; slot++) expect(standing(slot), `figure ${slot} is away`).toBe(false);
+    expect(live(), "twelve dummies are out").toBe(art().slots);
+  });
+
+  it("when the pool is full (32 dummies out) and another is thrown, then the one longest away is sent home at once and 32 are still out", () => {
+    settle();
+    const walks = engine["showcase"]!["walks"];
+    const throwMan = (n: number): number => walks.throwFigure(0, new THREE.Vector3(-14 + n, 1.5, 4), new THREE.Vector3(0, 0, 0));
+    for (let slot = 0; slot < art().slots; slot++) expect(walks.stepIn(slot), `figure ${slot} steps in`).toBeGreaterThanOrEqual(0);
+    for (let n = 0; n < 32 - art().slots; n++) expect(throwMan(n), `man ${n} thrown`).toBeGreaterThanOrEqual(0);
+    expect(live(), "the pool is full").toBe(32);
+    expect(standing(0), "the first figure is still away").toBe(false);
+    expect(throwMan(25), "another is thrown").toBeGreaterThanOrEqual(0);
+    expect(standing(0), "the one longest away is back on his mark").toBe(true);
+    expect(live(), "32 are still out").toBe(32);
   });
 
   const againCases: readonly { it: string; waitFor: string }[] = [

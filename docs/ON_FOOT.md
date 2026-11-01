@@ -139,7 +139,7 @@ the spin of the lever from its centre to the click, so a high shove on one shoul
 under him (`ragdoll-hit.ts`, rows in `ragdoll-hit.test.ts`). He goes limp, lies for a second, gets up, walks back to his mark, turns to his old
 facing, and the set takes him back as he stood (`engine/showcase-walks.ts`). A press on a dummy that is already away (in the air, lying, getting up or
 walking home) knocks him again where he is, and his way home starts over. A press picks the body as it is drawn (`DummyMesh.raycast` skins the
-triangles a slot draws from its part poses, so a swung arm or a flung leg is picked where you see it, and the garage's spray can reads the same hit). The pool holds four: a fifth press sends the one longest away home
+triangles a slot draws from its part poses, so a swung arm or a flung leg is picked where you see it, and the garage's spray can reads the same hit). The pool holds four (32 in the showcase): a fifth dummy (a press, or in the showcase one thrown with 8 or 9) sends the one longest away home
 at once. A reset (R) stands everyone up as before. The scene's old self-reset (its parked car, off the rim, left the sim and the Fleet's
 "disc is empty" rule rerolled the scene a few seconds later, standing everybody up) no longer fires there.
 

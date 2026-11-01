@@ -4,7 +4,6 @@ import { setGround } from "../world/ground.ts";
 import { Track } from "../world/track.ts";
 import { RagdollSystem, type Throw } from "./engine-ragdoll.ts";
 import { RemoteCar } from "./ragdoll-car-view.ts";
-import { SLOTS } from "./ragdoll-config.ts";
 import { PURSE_BLOCK } from "./ragdoll-purse.ts";
 import { DOLL_FLOATS, type FromWorker, type ResultMessage, type ToWorker } from "./ragdoll-wire.ts";
 
@@ -48,8 +47,8 @@ function post(message: FromWorker, transfer: Transferable[] = []): void {
 }
 
 function answer(world: RagdollSystem, seq: number): void {
-  const dolls = new Float32Array(SLOTS * DOLL_FLOATS);
-  const purses = new Float32Array(SLOTS * PURSE_BLOCK);
+  const dolls = new Float32Array(world.builtSlots * DOLL_FLOATS);
+  const purses = new Float32Array(world.builtSlots * PURSE_BLOCK);
   const lastSlot = world.snapshot(dolls, purses);
   const props = recorder.take();
   const stats = world.stats;

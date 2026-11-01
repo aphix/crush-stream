@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { driveKeys, footKeys } from "./drive-keys.ts";
+import { driveKeys, footKeys, SHOWCASE_THROW_KEYS, withShowcaseKeys } from "./drive-keys.ts";
 import { boostPadButton } from "../vehicle/drive-input.ts";
 import { padButtonName } from "../vehicle/gamepad.ts";
 import { must } from "../kernel/must.test-util.ts";
@@ -37,5 +37,24 @@ describe("given the pad button the drive input binds to Boost", () => {
     must(button !== null, "a pad button boosts");
     const name = padButtonName("generic", button);
     expect(driveKeys(true, true).split(" · ").includes(`${name} boost`), `no "${name} boost" in: ${driveKeys(true, true)}`).toBeTruthy();
+  });
+});
+
+describe("given the key line a seat shows in the showcase", () => {
+  const seat = driveKeys(false, true);
+  const testCases = [
+    { it: "when a keyboard is in the showcase, then the seat's keys are followed by the throw keys", showcase: true, pad: false, expectedKeys: `${seat} · ${SHOWCASE_THROW_KEYS}` },
+    { it: "when a keyboard is in the fleet, then the line carries no throw keys", showcase: false, pad: false, expectedKeys: seat },
+    { it: "when a controller is in the showcase, then the line carries no throw keys: it has no number keys", showcase: true, pad: true, expectedKeys: seat },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      expect(withShowcaseKeys(seat, testCase.showcase, testCase.pad)).toBe(testCase.expectedKeys);
+    });
+  }
+
+  it("when the throw keys are read, then each of 1 to 9 and 0 is named, with what it throws or clears", () => {
+    const named = SHOWCASE_THROW_KEYS.split(" · ").map((key) => key.split(":")[0]!);
+    expect(named, "one entry per key, 1 to 9 then 0").toEqual(["1 cone", "2 crate", "3 tyres", "4 hay bale", "5 bumper", "6 monster wheel", "7 wheel", "8 man", "9 woman", "0 clears them"]);
   });
 });

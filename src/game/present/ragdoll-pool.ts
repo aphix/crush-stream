@@ -7,6 +7,7 @@ import type { Track } from "../world/track.ts";
 import type { Placed } from "../world/placements.ts";
 import { disable, loadRapier, type Rapier } from "../kernel/rapier.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
+import { dummyGeometry } from "./dummy-skin.ts";
 import { type DriverLook, driverLook, ownLook } from "./driver-look.ts";
 import type { PersonPick } from "../match/look-data.ts";
 import type { SprayBitmap } from "./spray.ts";
@@ -16,7 +17,7 @@ import { BoxPile } from "./ragdoll-boxes.ts";
 import { CarProxies, PROP_BAND_HIGH, PROP_BAND_LOW } from "./ragdoll-cars.ts";
 import type { PartHeard, PartHit } from "./ragdoll-wire.ts";
 import { LooseProxies } from "./ragdoll-loose.ts";
-import { dollGroups, FIXED_GROUPS, knockedGroups, propGroups, SLOTS, STEP, thrownGroups } from "./ragdoll-config.ts";
+import { BASE_SLOTS, dollGroups, FIXED_GROUPS, knockedGroups, propGroups, SLOTS, STEP, thrownGroups } from "./ragdoll-config.ts";
 import { RagdollDebug } from "./ragdoll-debug.ts";
 import { RagdollRemote, type PostTraffic } from "./ragdoll-remote.ts";
 import { RideAlong } from "./ragdoll-ride.ts";
@@ -47,8 +48,8 @@ export const LIFE = 10;
 export const GRACE = 0.35;
 /** Dummy friction against anything (the lower of the pair counts): low, so it slides a good way (owner, 2026-10-02). */
 const SLIDE = 0.12;
-/** The pool slot the player's walker takes: the last, so a throw that takes the oldest slot finds him driven and passes him by. */
-export const WALKER_SLOT = SLOTS - 1;
+/** The pool slot the player's walker takes: the last of the base pool, so a throw that takes the oldest slot finds him driven and passes him by, and the draw ends after his slot when he is the only one out. */
+export const WALKER_SLOT = BASE_SLOTS - 1;
 /** Rapier's solver iterations (default 4); no CCD on the parts (it tears the joints: 11–28 cm apart vs 0.9 cm at 8 iterations of 1/120). At 1/960 four hold a joint to 0.1 cm; two kicked one to 125 rad/s. */
 export const ITERATIONS = 4;
 /** Rapier's internal solver passes per iteration (default 1): at the first touch of a 29 m/s throw one pass rose energy 75–325 J in a frame at 1/120 and 26–30 J (1 of 5 runs) at 1/480 and 1/960; two at most 0.6 J over 60 runs (60/144/240 Hz). */
@@ -118,7 +119,10 @@ export abstract class RagdollPool {
     return this.mode ?? "none";
   }
 
+  /** The slots built so far (`BASE_SLOTS` at load, then one more whenever every one is live and the capacity allows). */
   protected readonly dolls: Doll[] = [];
+  /** The most dummies out at once (`setCapacity`). */
+  protected capacity = BASE_SLOTS;
   protected live = 0;
   /** Throws judged before Rapier was in (`PENDING_MAX`). */
   protected readonly pending: Throw[] = [];
@@ -175,8 +179,9 @@ export abstract class RagdollPool {
   protected readonly loose = new LooseProxies(this.goLimp, this.proxies.strikes, (x, y, z, r) => this.props.touches(_near.set(x, y, z), r, 0, 0) || this.boxes.touches(_near, r));
   /** The ride-along camera over the dummies (`follow`, `frameCamera`). */
   protected readonly ride = new RideAlong();
-  /** One walker per pool slot: a dummy of the pool (`startWalker`) held up and walked by motors, in this world with the cars and the ground. The player on foot is the one in `WALKER_SLOT`. */
-  readonly walkers: readonly Walker[] = Array.from({ length: SLOTS }, () => new Walker());
+  /** One walker per slot: a dummy of the pool (`startWalker`) held up and walked by motors, in this world with the cars and the ground. The player on foot is the one in `WALKER_SLOT`. The base slots' exist from construction; a slot built later (`buildDoll`) brings its own. */
+  private readonly walkerList: Walker[] = Array.from({ length: BASE_SLOTS }, () => new Walker());
+  readonly walkers: readonly Walker[] = this.walkerList;
   /** Where the ground patch under the player's walker is centred (`followWalkerGround`). */
   protected walkerPatchX = 0;
   protected walkerPatchZ = 0;
@@ -189,7 +194,7 @@ export abstract class RagdollPool {
   constructor(scene: THREE.Scene, onThrow: (car: number) => void, onExit: (at: THREE.Vector3, frame: THREE.Quaternion, inherit: THREE.Vector3) => void) {
     this.onThrow = onThrow;
     this.onExit = onExit;
-    this.mesh = new DummyMesh(SLOTS, true);
+    this.mesh = new DummyMesh(SLOTS, true, dummyGeometry(), BASE_SLOTS);
     this.debug = new RagdollDebug(scene, PARTS, JOINTS, SLOTS);
     this.mesh.name = "ragdolls";
     this.mesh.castShadow = true;
@@ -219,28 +224,9 @@ export abstract class RagdollPool {
     this.untangle.load(R);
     this.proxies.load(R, world);
     this.loose.load(R, world);
-    for (let s = 0; s < SLOTS; s++) {
-      const bodies = PARTS.map((p, k) => {
-        const body = world.createRigidBody(
-          R.RigidBodyDesc.dynamic().setTranslation(p.c[0], p.c[1] - 200, p.c[2]).setLinearDamping(AIR_LINEAR).setAngularDamping(AIR_ANGULAR).setEnabled(false),
-        );
-        world.createCollider(
-          R.ColliderDesc.cuboid(p.h[0], p.h[1], p.h[2])
-            .setDensity(partDensity(k))
-            .setFriction(SLIDE)
-            .setFrictionCombineRule(R.CoefficientCombineRule.Min)
-            .setRestitution(0)
-            .setRestitutionCombineRule(R.CoefficientCombineRule.Min)
-            .setCollisionGroups(dollGroups(s)),
-          body,
-        );
-        return body;
-      });
-      const joints = joinUp(R, world, bodies);
-      this.dolls.push({ bodies, joints, loose: false, braced: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3), driven: false });
-    }
+    for (let s = 0; s < BASE_SLOTS; s++) this.buildDoll();
     // A child of the dummies' mesh, so the scene root keeps its one `ragdolls` child and the props draw only while a dummy is out.
-    this.mesh.add((this.purses = this.proxies.purses = new Purses(R, world, SLOTS, propGroups, GRACE)).mesh);
+    this.mesh.add((this.purses = this.proxies.purses = new Purses(R, world, SLOTS, this.dolls.length, propGroups, GRACE)).mesh);
     this.props.load(R, world);
     this.boxes.load(R, world);
     // One step with a dummy out, far below the world: links the step path before a crash needs it.
@@ -248,6 +234,34 @@ export abstract class RagdollPool {
     for (const b of d.bodies) b.setEnabled(true);
     world.step();
     for (const b of d.bodies) disable(b);
+  }
+
+  /** Builds the next slot at the end of the pool: ten parts and their joints parked disabled far below the world, its purse set, its place in the draw's spray atlas. */
+  private buildDoll(): void {
+    const R = this.R!;
+    const world = this.world!;
+    const s = this.dolls.length;
+    const bodies = PARTS.map((p, k) => {
+      const body = world.createRigidBody(
+        R.RigidBodyDesc.dynamic().setTranslation(p.c[0], p.c[1] - 200, p.c[2]).setLinearDamping(AIR_LINEAR).setAngularDamping(AIR_ANGULAR).setEnabled(false),
+      );
+      world.createCollider(
+        R.ColliderDesc.cuboid(p.h[0], p.h[1], p.h[2])
+          .setDensity(partDensity(k))
+          .setFriction(SLIDE)
+          .setFrictionCombineRule(R.CoefficientCombineRule.Min)
+          .setRestitution(0)
+          .setRestitutionCombineRule(R.CoefficientCombineRule.Min)
+          .setCollisionGroups(dollGroups(s)),
+        body,
+      );
+      return body;
+    });
+    const joints = joinUp(R, world, bodies);
+    this.dolls.push({ bodies, joints, loose: false, braced: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3), driven: false });
+    if (this.walkerList.length <= s) this.walkerList.push(new Walker());
+    this.purses?.build();
+    this.mesh.holdSprays(this.dolls.length);
   }
 
   /** Part `k` of `d` as drawn: `alpha` of the way from its pose one step before the last to the last. */
@@ -327,15 +341,44 @@ export abstract class RagdollPool {
     return this.walkers[WALKER_SLOT]!;
   }
 
-  /** The first slot no dummy is out in, or -1. */
+  /** How many slots are built: a snapshot's records (`snapshot`). */
+  get builtSlots(): number {
+    return this.dolls.length;
+  }
+
+  /** The first slot no dummy is out in, within the capacity, or -1. A slot not built yet counts: `spawn` builds it. */
   freeSlot(): number {
-    return this.dolls.findIndex((d) => !d.live);
+    const dead = this.dolls.findIndex((d) => !d.live);
+    if (dead >= 0 && dead < this.capacity) return dead;
+    return this.dolls.length < this.capacity ? this.dolls.length : -1;
+  }
+
+  /**
+   * The most dummies the pool holds, `BASE_SLOTS` to `SLOTS`: a scene that wants more (the showcase) raises it and the pool builds slots as throws fill it.
+   * A dummy out past a lowered capacity goes. shortcut: the slots built stay built (disabled), until the world is freed.
+   */
+  setCapacity(slots: number): void {
+    if (!Number.isInteger(slots) || slots < BASE_SLOTS || slots > SLOTS) throw new RangeError(`a dummy pool holds ${BASE_SLOTS} to ${SLOTS} dummies, not ${slots}`);
+    this.capacity = slots;
+    for (let s = slots; s < this.dolls.length; s++) if (this.dolls[s]!.live) this.despawn(s);
+  }
+
+  /** The slot a throw takes when none is free: the oldest dummy out that no walker's motors hold up (slot 0 when all are). */
+  private oldestSlot(): number {
+    let oldest = 0;
+    for (let s = 1; s < this.dolls.length && s < this.capacity; s++) {
+      const d = this.dolls[s]!;
+      if (!d.driven && (this.dolls[oldest]!.driven || d.age > this.dolls[oldest]!.age)) oldest = s;
+    }
+    return oldest;
   }
 
   /** Throw `t`'s dummy into slot `at` (-1: a free slot, else the oldest one's), to lie about `life` sim s, in `dressed` (none: his car's driver's look); returns the slot. */
   spawn(t: Throw, at = -1, life = this.thrownLife, dressed: DriverLook | null = null): number {
-    let slot = at >= 0 ? at : this.dolls.findIndex((d) => !d.live);
-    if (slot < 0) slot = this.dolls.reduce((o, d, s) => (!d.driven && (this.dolls[o]!.driven || d.age > this.dolls[o]!.age) ? s : o), 0);
+    let slot = at >= 0 ? at : this.freeSlot();
+    if (slot < 0) slot = this.oldestSlot();
+    if (slot >= this.capacity) throw new RangeError(`dummy slot ${slot} is past the pool's capacity of ${this.capacity}`);
+    while (this.dolls.length <= slot) this.buildDoll();
     this.despawn(slot);
     const d = this.dolls[slot]!;
     const t0 = PARTS[0]!.c;

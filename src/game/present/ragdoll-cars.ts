@@ -375,7 +375,7 @@ export class CarProxies {
       const frame = this.frames[i]!;
       _cq.copy(frame.quaternion).invert();
       const speed = cars[i]!.velocity.length();
-      for (let s = 0; s < SLOTS; s++) {
+      for (let s = 0; s < this.dolls.length; s++) {
         const d = this.dolls[s]!;
         if (!d.live) continue;
         _c.set(d.cur[0]! - frame.position.x, d.cur[1]! - frame.position.y, d.cur[2]! - frame.position.z).applyQuaternion(_cq);
@@ -500,7 +500,7 @@ export class CarProxies {
   /** Per dummy, the cars (never his own) with a pane standing that his torso may reach within this frame: `glassTouch` tries only those. */
   glassNear(cars: readonly RagCar[], dt: number): void {
     const a = this.aim;
-    for (let s = 0; s < SLOTS; s++) {
+    for (let s = 0; s < this.dolls.length; s++) {
       const d = this.dolls[s]!;
       let n = 0;
       for (let i = 0; d.live && i < cars.length && i < MAX_CARS; i++) {
@@ -525,7 +525,7 @@ export class CarProxies {
    * `unreachable` on a fresh torso collider.
    */
   glassTouch(cars: readonly RagCar[], authority: boolean): void {
-    for (let s = 0; s < SLOTS; s++) {
+    for (let s = 0; s < this.dolls.length; s++) {
       const n = this.nearN[s]!;
       if (n === 0) continue;
       const d = this.dolls[s]!;

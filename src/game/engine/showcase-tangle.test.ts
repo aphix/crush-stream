@@ -3,7 +3,6 @@ import * as THREE from "three";
 import type { RigidBody } from "@dimforge/rapier3d-simd";
 import "../kernel/rapier-node.test-util.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
-import { SLOTS } from "../present/ragdoll-config.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
@@ -39,8 +38,8 @@ describe("given the real engine booted on #scene=showcase", () => {
   /** Whether any limb of one live dummy is through another live dummy's torso. */
   const tangled = (): boolean => {
     const all = dolls();
-    for (let a = 0; a < SLOTS; a++) {
-      for (let b = 0; b < SLOTS; b++) {
+    for (let a = 0; a < all.length; a++) {
+      for (let b = 0; b < all.length; b++) {
         if (a === b || !all[a]!.live || !all[b]!.live) continue;
         for (let k = 2; k < PARTS.length; k++) if (limbThrough(all[a]!.bodies[k]!, k, all[b]!.bodies[0]!)) return true;
       }

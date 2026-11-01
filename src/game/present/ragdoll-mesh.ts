@@ -34,30 +34,35 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
   /** The sim's share of wall time (the engine sets it each frame): in slow-mo the bust moves as slowly as the body. */
   timeScale = 1;
   private readonly dolls: THREE.DataTexture;
-  /** Every slot's spray (`PERSON_SPRAY`), one bitmap's rows per slot, slot 0 lowest; null on a mesh whose slots wear none, which samples `BARE_SPRAY`. */
-  private readonly sprayRgba: Uint8Array | null;
-  private readonly sprayAtlas: THREE.DataTexture;
+  /** Every slot's spray (`PERSON_SPRAY`) in the atlas `sprayStack` lays out (`holdSprays` grows it); null on a mesh whose slots wear none, which samples `BARE_SPRAY`. */
+  private sprayRgba: Uint8Array | null;
+  private sprayAtlas: THREE.DataTexture;
+  private sprayStack: SprayStack;
+  private readonly sprayUniform: Record<string, THREE.IUniform>;
   /** What a pick skins a slot's vertices into, and which of them the slot draws (made at the first pick). */
   private pickPoints: Float32Array | null = null;
   private pickDrawn: Uint8Array | null = null;
 
   /**
    * `sprayed`: its slots wear sprays (`spray`: the thrown drivers, the garage's); the course's figures wear none and hold no atlas.
+   * `sprayedSlots`: how many of its slots the atlas holds sprays of at first (`holdSprays` grows it): a pool that rarely fills all of its slots need not pay for every bitmap.
    * `geometry`: `dummyGeometry` or a view of it on the same attributes (`seatedGeometry`).
    */
-  constructor(slots: number, sprayed = false, geometry: THREE.BufferGeometry = dummyGeometry()) {
+  constructor(slots: number, sprayed = false, geometry: THREE.BufferGeometry = dummyGeometry(), sprayedSlots = slots) {
     super(geometry, new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0 }), slots);
     this.rows = new Float32Array(slots * ROW_TEXELS * 4);
     this.bust = new BustSprings(slots);
     this.dolls = new THREE.DataTexture(this.rows, ROW_TEXELS, slots, THREE.RGBAFormat, THREE.FloatType);
-    this.sprayRgba = sprayed ? new Uint8Array(PERSON_SPRAY.w * PERSON_SPRAY.h * 4 * slots) : null;
-    this.sprayAtlas = this.sprayRgba ? sprayAtlas(this.sprayRgba, slots) : BARE_SPRAY;
+    this.sprayStack = sprayed ? sprayStackOf(sprayedSlots) : { rows: 1, columns: 1 };
+    this.sprayRgba = sprayed ? new Uint8Array(PERSON_SPRAY.w * this.sprayStack.columns * PERSON_SPRAY.h * this.sprayStack.rows * 4) : null;
+    this.sprayAtlas = this.sprayRgba ? sprayAtlas(this.sprayRgba, this.sprayStack) : BARE_SPRAY;
     this.customDepthMaterial = new THREE.MeshDepthMaterial();
     applyDolls(this.customDepthMaterial, this.dolls, false);
     applyDolls(this.material, this.dolls, true);
     // The posed body is wherever its parts are: nothing to cull against, and the instance transforms only hide.
     this.frustumCulled = false;
-    applySpray(this.material, sprayUniforms(PERSON_SPRAY, this.sprayAtlas, this.sprayRgba ? slots : 1, sprayed ? { map: personSprayDepthTexture() } : null), "", "vSprayP = position;\nvSprayN = normal;\nvSprayRow = float(gl_InstanceID);", sprayed ? "dummy-depth" : "dummy");
+    this.sprayUniform = sprayUniforms(PERSON_SPRAY, this.sprayAtlas, this.sprayStack.rows, sprayed ? { map: personSprayDepthTexture() } : null, this.sprayStack.columns);
+    applySpray(this.material, this.sprayUniform, "", "vSprayP = position;\nvSprayN = normal;\nvSprayRow = float(gl_InstanceID);", sprayed ? "dummy-depth" : "dummy");
     this.material.addEventListener("dispose", () => {
       if (this.sprayAtlas !== BARE_SPRAY) this.sprayAtlas.dispose();
       this.dolls.dispose();
@@ -99,13 +104,37 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     this.dolls.needsUpdate = true;
   }
 
-  /** Slot `s` wears `spray`'s paint (a `PERSON_SPRAY` bitmap), or none. Only a `sprayed` mesh's slots wear any. */
+  /** Slot `s` wears `spray`'s paint (a `PERSON_SPRAY` bitmap), or none. Only a `sprayed` mesh's slots wear any, and only up to the `holdSprays` count. */
   spray(s: number, spray: SprayBitmap | null): void {
     if (!this.sprayRgba) throw new Error("DummyMesh.spray on a mesh built without sprays");
-    const at = s * PERSON_SPRAY.w * PERSON_SPRAY.h * 4;
-    if (spray) this.sprayRgba.set(spray.rgba, at);
-    else this.sprayRgba.fill(0, at, at + PERSON_SPRAY.w * PERSON_SPRAY.h * 4);
+    const { w, h } = PERSON_SPRAY;
+    for (let y = 0; y < h; y++) {
+      const at = sprayOffset(this.sprayStack, s, y);
+      if (spray) this.sprayRgba.set(spray.rgba.subarray(y * w * 4, (y + 1) * w * 4), at);
+      else this.sprayRgba.fill(0, at, at + w * 4);
+    }
     this.sprayAtlas.needsUpdate = true;
+  }
+
+  /** The atlas holds the sprays of the first `slots` slots (a smaller count changes nothing): a bigger one is laid out again and the bitmaps it held stay. */
+  holdSprays(slots: number): void {
+    const was = this.sprayStack;
+    if (!this.sprayRgba || slots <= was.rows * was.columns) return;
+    const stack = sprayStackOf(slots);
+    const rgba = new Uint8Array(PERSON_SPRAY.w * stack.columns * PERSON_SPRAY.h * stack.rows * 4);
+    for (let s = 0; s < was.rows * was.columns; s++) {
+      for (let y = 0; y < PERSON_SPRAY.h; y++) {
+        const from = sprayOffset(was, s, y);
+        rgba.set(this.sprayRgba.subarray(from, from + PERSON_SPRAY.w * 4), sprayOffset(stack, s, y));
+      }
+    }
+    this.sprayAtlas.dispose();
+    this.sprayRgba = rgba;
+    this.sprayStack = stack;
+    this.sprayAtlas = sprayAtlas(rgba, stack);
+    this.sprayUniform.sprayMap!.value = this.sprayAtlas;
+    this.sprayUniform.sprayRows!.value = stack.rows;
+    this.sprayUniform.sprayColumns!.value = stack.columns;
   }
 
   /** Slot `s`'s body part `k` at pose `p`, `q`: the bone the skin blends its vertices from (translation `p - q c`, so the part's centre `c` standing lands on `p`). */
@@ -203,11 +232,26 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
   }
 }
 
-/** `rgba` as the atlas of `slots` sprays stacked up it; throws past `MAX_ATLAS_SIDE` (pack slots in columns too before raising a sprayed mesh's slots that far). */
-function sprayAtlas(rgba: Uint8Array, slots: number): THREE.DataTexture {
-  const height = PERSON_SPRAY.h * slots;
-  if (height > MAX_ATLAS_SIDE) throw new Error(`${slots} sprayed dummies need a ${height} px atlas, past ${MAX_ATLAS_SIDE}`);
-  const atlas = new THREE.DataTexture(rgba, PERSON_SPRAY.w, height);
+/** How a sprayed mesh's bitmaps lie in its atlas: `rows` stacked up a column (slot 0 lowest), `columns` side by side. */
+type SprayStack = { rows: number; columns: number };
+
+/** `slots` bitmaps packed into columns as tall as WebGL2's guaranteed texture side takes; throws past `MAX_ATLAS_SIDE` across too. */
+function sprayStackOf(slots: number): SprayStack {
+  const rows = Math.min(slots, Math.floor(MAX_ATLAS_SIDE / PERSON_SPRAY.h));
+  const columns = Math.ceil(slots / rows);
+  if (columns * PERSON_SPRAY.w > MAX_ATLAS_SIDE) throw new Error(`${slots} sprayed dummies need a ${columns * PERSON_SPRAY.w} px wide atlas, past ${MAX_ATLAS_SIDE}`);
+  return { rows, columns };
+}
+
+/** Where, in the rgba `stack` lays out, row `y` of slot `s`'s bitmap begins. */
+function sprayOffset(stack: SprayStack, s: number, y: number): number {
+  const { w, h } = PERSON_SPRAY;
+  return (((s % stack.rows) * h + y) * stack.columns * w + Math.floor(s / stack.rows) * w) * 4;
+}
+
+/** `rgba` as the atlas `stack` lays its bitmaps out in. */
+function sprayAtlas(rgba: Uint8Array, stack: SprayStack): THREE.DataTexture {
+  const atlas = new THREE.DataTexture(rgba, PERSON_SPRAY.w * stack.columns, PERSON_SPRAY.h * stack.rows);
   atlas.colorSpace = THREE.SRGBColorSpace;
   atlas.magFilter = THREE.LinearFilter;
   atlas.minFilter = THREE.LinearFilter;

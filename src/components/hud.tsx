@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import type { CrashEngine } from "@/game/engine/engine";
 import { SCENE_KEY_BINDINGS } from "@/game/engine/engine-keys";
 import { audioLevels } from "@/game/hud/audio-levels";
-import { driveKeys, footKeys } from "@/game/hud/drive-keys";
+import { driveKeys, footKeys, withShowcaseKeys } from "@/game/hud/drive-keys";
 import { showsPrevNext } from "@/game/hud/watch-cycle";
 import { freeHelp } from "@/game/hud/free-help";
 import { watchCalm, type CalmWatch } from "@/game/hud/hud-collapse";
@@ -110,6 +110,7 @@ const CAMERA_KEYS: [string, string][] = [
   [";", "Mouse look (Esc ends it)"],
   ["V", "Camera view (also C, T): chase, far, hood / trackside, wheel, orbit, auto, free fly"],
   ["Free fly · V", "Detached camera: W A S D · Space or PgUp up · Ctrl or PgDn down · Shift fast · wheel speed · drag look · V or Esc back"],
+  ["Showcase · 1 to 9 · 0", "Throw a cone, crate, tyre stack, hay bale, muscle car bumper, monster truck wheel, car wheel, man or woman at the point under the cursor (the number pad too); 0 clears everything thrown"],
 ];
 
 function seatHint(state: CrashHudState): { title: string; keys: string } {
@@ -555,7 +556,10 @@ function BoostBar({ state }: { state: CrashHudState }) {
 
 /** Desktop only: seat keys and the controller label, inked straight onto the view above the dock so it never covers a control. Watching shows the View button: the camera cycle, named for the view it shows. (A phone's buttons carry captions; its free-view line and boost bar are `PhoneHud`'s.) */
 function DriveHint({ state, engine }: { state: CrashHudState; engine: HudProps["engine"] }) {
-  const { title, keys } = seatHint(state);
+  const hint = seatHint(state);
+  const title = hint.title;
+  // The showcase throws a prop at the cursor from any seat: its keys join whatever the seat shows.
+  const keys = withShowcaseKeys(hint.keys, state.showcase, state.pad !== null);
   const glow = resetGlow(state);
   return (
     <div className="hud-ink w-full max-w-md" role="status">

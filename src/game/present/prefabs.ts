@@ -6,6 +6,7 @@ import { tagSurface } from "./ultra/surface-tag.ts";
 import { CHEVRON, FENCE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, WINDOW_BAY, type PrefabId } from "../world/catalog.ts";
 import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, squareFrustum } from "./prefab-pieces.ts";
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
+import { frontBumper, lyingWheel } from "./prefabs-car.ts";
 import { PREFAB } from "../world/constants.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
@@ -536,6 +537,12 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
       return one(hayBale(), mats.plain);
     case PREFAB.crate:
       return one(crate(), mats.plain);
+    case PREFAB.muscleBumper:
+      return frontBumper("coupe");
+    case PREFAB.monsterWheel:
+      return lyingWheel("monster");
+    case PREFAB.carWheel:
+      return lyingWheel("sedan");
     case PREFAB.barrierBlock:
       return one(barrierBlock(), mats.concrete);
     case PREFAB.rock:

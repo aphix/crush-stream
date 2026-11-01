@@ -3,12 +3,12 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
-import { SLOTS } from "./ragdoll-config.ts";
+import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
-const WALKER = SLOTS - 1;
+const WALKER = WALKER_SLOT;
 
 let system: RagdollSystem | null = null;
 
