@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hash01 } from "../kernel/scalar.ts";
-import { fullAggression } from "../ai/ramp.test-util.ts";
+import { HunterBrain } from "../ai/hunter.ts";
 import { holdLine, leaveSurvival, play, survivalWorld } from "./survival-run.test-util.ts";
 import type { World } from "./race-world.test-util.ts";
 
@@ -11,8 +11,8 @@ import type { World } from "./race-world.test-util.ts";
  * crest; and a player who brakes hard near the crest's left makes them overshoot and fly past. The seed rolls the human's
  * line (x = −6 ± 1.5 m) and how far ahead it looks (25–40 m), and pins the field's dice.
  *
- * Re-staged onto the aggression ramp: this is the opening of the full pack (aggression 1 from the green). On the ramp a cop taps the player at about 3 s (`survival-opening`) and
- * the tap crashes it, so the foot is crossed one cop at a time from 15 s and none leaves the ground at the crest; the ramp's own opening is the rows of that file.
+ * On the aggression ramp the opening is two-part: the nearest two cops tap the player first (about 3 s in, `survival-opening`), and the other cops of the formation
+ * (the flyers, `HUNT.opening`) fly the launch at full aggression, so the spec above holds for them; the tap is part of the scene.
  */
 const SEED = 1;
 
@@ -23,19 +23,37 @@ const CREST: readonly [number, number] = [10, 35];
 const BRAKE_AT = 85;
 const LEFT = -9;
 const WINDOW = 0.5;
+/** A cop at a z over this (m) is put away (the pack stores a wrecked cop far off the course): its car, dropped in again elsewhere, is not one of the formation any more. */
+const PARKED = 1000;
+/** Race second the flyers are read at: the formation splits at the green. */
+const SPLIT_READ = 2;
+
+type Crossing = { car: number; t: number };
 
 type Piece = {
-  /** Seconds each of the five cops first crossed the foot, in order. */
-  foot: number[];
+  /** Race second each formation cop that drove there first crossed the foot, in order. */
+  foot: Crossing[];
+  /** The formation's cars that fly the opening at full aggression (the brain's `flies`). */
+  flyers: number[];
   /** The cops that left the ground at the crest. */
   takeoffs: number[];
   /** Cops that got ahead of the player by 5 m or more. */
   passed: number;
   /** The player's farthest stray from his line before the foot (m). */
   stray: number;
-  /** The player was never touched before the foot. */
-  clean: boolean;
+  /** A cop hit the player before the foot (its car is crashed). */
+  tapped: boolean;
 };
+
+/** The cars that fly the opening at full aggression now. */
+function flyersOf(w: World): number[] {
+  const brain: unknown = Reflect.get(w.race, "police");
+  if (!(brain instanceof HunterBrain)) return [];
+  const flies = brain["flies"];
+  const cars: number[] = [];
+  for (let u = 0; u < flies.length; u++) if (flies[u] === 1) cars.push(brain.first + u);
+  return cars;
+}
 
 function setPiece(seed: number, brake: boolean): Piece {
   const w = survivalWorld(undefined, seed);
@@ -46,19 +64,23 @@ function setPiece(seed: number, brake: boolean): Piece {
     const takeoffs = new Set<number>();
     const passed = new Set<number>();
     const flying = new Set<number>();
-    const piece: Piece = { foot: [], takeoffs: [], passed: 0, stray: 0, clean: true };
-    const player = (ww: World, t: number): void => {
+    const away = new Set<number>();
+    const piece: Piece = { foot: [], flyers: [], takeoffs: [], passed: 0, stray: 0, tapped: false };
+    const player = (ww: World): void => {
       const me = ww.cars[0]!;
       const z = me.group.position.z;
       if (brake && z < BRAKE_AT) holdLine(ww, LEFT, look, 0);
       else holdLine(ww, line, look, null);
+      if (piece.flyers.length === 0 && ww.race.time > SPLIT_READ) piece.flyers = flyersOf(ww);
       // From the 300 m mark on: the first stretch is the player getting from the start (x 0) onto his line.
       if (z > FOOT && z < 300) piece.stray = Math.max(piece.stray, Math.abs(me.group.position.x - line));
-      if (z > FOOT && me.crashed) piece.clean = false;
+      if (z > FOOT && me.crashed) piece.tapped = true;
       for (let i = 1; i <= 5; i++) {
         const c = ww.cars[i]!;
         const cz = c.group.position.z;
-        if (!foot.has(i) && cz < FOOT) foot.set(i, t);
+        if (cz > PARKED) away.add(i);
+        if (away.has(i)) continue;
+        if (!foot.has(i) && cz < FOOT) foot.set(i, ww.race.time);
         if (c.airborne && !flying.has(i) && cz > CREST[0] && cz < CREST[1]) takeoffs.add(i);
         if (c.airborne) flying.add(i);
         else flying.delete(i);
@@ -66,7 +88,7 @@ function setPiece(seed: number, brake: boolean): Piece {
       }
     };
     play(w, { seconds: 20, player, retry: false });
-    piece.foot = [...foot.values()].sort((a, b) => a - b);
+    piece.foot = [...foot.entries()].map(([car, t]) => ({ car, t })).sort((a, b) => a.t - b.t);
     piece.takeoffs = [...takeoffs];
     piece.passed = passed.size;
     return piece;
@@ -76,24 +98,25 @@ function setPiece(seed: number, brake: boolean): Piece {
 }
 
 /** The most cops that crossed the foot within `WINDOW` s of each other. */
-function together(foot: readonly number[]): number {
-  return Math.max(0, ...foot.map((t) => foot.filter((u) => u >= t && u < t + WINDOW).length));
+function together(foot: readonly Crossing[]): number {
+  return Math.max(0, ...foot.map((a) => foot.filter((b) => b.t >= a.t && b.t < a.t + WINDOW).length));
 }
 
 describe(`given Survival's opening scene on the Havana course (five cops in a staggered formation behind the player), rolled with seed ${SEED}`, () => {
-  it("when the player holds the boulevard line at full throttle, then three cops reach the embankment's foot within half a second of each other and leave the ground at the crest", (t) => {
-    fullAggression(t);
+  it("when the player holds the boulevard line at full throttle, then the flyers all reach the embankment's foot, three cops of the pack within half a second of each other, and three leave the ground at the crest", (t) => {
     const p = setPiece(SEED, false);
-    t.annotate(`foot ${p.foot.map((x) => x.toFixed(2)).join(" ")}; ${together(p.foot)} within ${WINDOW} s; ${p.takeoffs.length} took off; the player strayed ${p.stray.toFixed(1)} m, clean ${p.clean}`);
-    expect(p.foot.length, "the pack never reached the foot").toBe(5);
-    expect(together(p.foot), `only ${together(p.foot)} cops within ${WINDOW} s at the foot (${p.foot.map((x) => x.toFixed(2)).join(" ")})`).toBeGreaterThanOrEqual(3);
+    const flyers = p.foot.filter((f) => p.flyers.includes(f.car));
+    const times = (cs: readonly Crossing[]): string => cs.map((f) => `${f.car}@${f.t.toFixed(2)}`).join(" ");
+    t.annotate(`flyers ${p.flyers.join(",")}; at the foot, in race seconds: flyers ${times(flyers)}; all that drove there ${times(p.foot)}; ${together(flyers)} flyers and ${together(p.foot)} cops within ${WINDOW} s; ${p.takeoffs.length} took off; the player strayed ${p.stray.toFixed(1)} m, tapped ${p.tapped}`);
+    expect(p.flyers.length, `only ${p.flyers.length} formation cops fly the opening`).toBeGreaterThanOrEqual(3);
+    expect(flyers.length, `${flyers.length} of the ${p.flyers.length} flyers reached the foot (${times(p.foot)})`).toBe(p.flyers.length);
+    expect(together(p.foot), `only ${together(p.foot)} cops within ${WINDOW} s at the foot (${times(p.foot)})`).toBeGreaterThanOrEqual(3);
     expect(p.takeoffs.length, `only ${p.takeoffs.length} cops left the ground at the crest`).toBeGreaterThanOrEqual(3);
     expect(p.stray, `the pack shoved the player ${p.stray.toFixed(1)} m off his line`).toBeLessThan(6);
-    expect(p.clean, "the pack touched the player before the foot").toBeTruthy();
+    expect(p.tapped, "no cop tapped the player before the foot: the ramp's opening lands a hit").toBeTruthy();
   });
 
   it("when the player brakes hard near the crest's left, then the cops overshoot and fly past", (t) => {
-    fullAggression(t);
     const p = setPiece(SEED, true);
     t.annotate(`${p.passed} passed the player; ${p.takeoffs.length} took off at the crest`);
     expect(p.passed, `only ${p.passed} cops overshot the braking player`).toBeGreaterThanOrEqual(3);

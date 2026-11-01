@@ -71,6 +71,31 @@ describe("given Survival's aggression a(t), the pack's meanness as one number a 
     expect(r.brain.hunting, "the pack at the cap").toBe(HUNT.cap);
     expect(seeking(), "units seeking at the top").toBe(HUNT.cap);
   });
+
+  it("when the formation goes in on the ramp, then the units that do not seek a hit fly the opening at full aggression (a closing speed the floor's cap brakes for is driven straight on), and once the opening is over they follow a(t)", () => {
+    onRamp();
+    const r = rig();
+    r.run(5);
+    const flyers = [...r.brain["flies"]].flatMap((f, u) => (f === 1 ? [u] : []));
+    expect(flyers.length, "the formation's units that do not seek a hit").toBe(spec.formation.length - Math.ceil(RAMP.floor * spec.formation.length));
+    expect(
+      flyers.some((u) => r.brain["seeks"][u] === 1),
+      "a unit that seeks a hit flies",
+    ).toBe(false);
+    const u = flyers[0]!;
+    const closeOn = (): { throttle: number; brake: number } => {
+      Object.assign(r.cars[0]!, { x: 0, z: PASEO + 11, vx: 0, vz: 12 });
+      Object.assign(r.cars[1 + u]!, { x: 3, z: PASEO, yaw: 0, vx: 0, vz: 32 });
+      let o = r.brain.think(r.cars[1 + u]!, r.cars, 1 / FRAME_HZ);
+      for (let k = 0; k < FRAME_HZ; k++) o = r.brain.think(r.cars[1 + u]!, r.cars, 1 / FRAME_HZ);
+      return { throttle: o.throttle, brake: o.brake };
+    };
+    const flying = closeOn();
+    expect(flying.throttle, "a flyer lifted for a hit in the opening").toBe(1);
+    expect(flying.brake, "a flyer braked for a hit in the opening").toBe(0);
+    r.run(HUNT.opening + 1);
+    expect(closeOn().brake, "a unit still flew after the opening").toBe(1);
+  });
 });
 
 describe("given the Survival hunter pack (the cops that chase the player) on a stub world, the player on the start line and the cops in their start formation", () => {
@@ -398,6 +423,13 @@ describe("given one cop on the paseo facing +z, driven by the hunter brain, with
     const far = pedalsIn(30, 0, 15, 0, 15);
     expect(far.throttle, "did not close up to its slot").toBeGreaterThan(0);
     expect(far.brake).toBe(0);
+  });
+
+  it("when a human doing 35 m/s is 10 m behind a unit doing 20 m/s, then at the floor of a the unit does not brake for it: the closing cap is for a unit driving at its target, not a brake-check in front of a faster human", () => {
+    onRamp();
+    const ahead = pedalsIn(-10, 0, 35, 0, 20);
+    expect(ahead.brake, "braked in front of a faster human").toBe(0);
+    expect(ahead.throttle, "lifted in front of a faster human").toBeGreaterThan(0);
   });
 });
 
