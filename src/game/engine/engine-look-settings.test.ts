@@ -51,11 +51,14 @@ type StrengthCase = {
   field: keyof CrashHudState;
   setter: "setMaterialStrength" | "setContourStrength";
   uniform: { value: number };
+  /** The slider's default. */
+  base: number;
 };
 
 const strengthCases = [
-  { it: "material strength", id: "materials", key: "mat", field: "materialStrength", setter: "setMaterialStrength", uniform: MATERIAL_STRENGTH },
-  { it: "car contour strength", id: "contours", key: "cont", field: "contourStrength", setter: "setContourStrength", uniform: CONTOUR_SMOOTHING },
+  { it: "material strength", id: "materials", key: "mat", field: "materialStrength", setter: "setMaterialStrength", uniform: MATERIAL_STRENGTH, base: 1 },
+  // Re-pin: the contour's default was 1 (three relax passes). At 1 the door skins' rest normals turned up to 27 degrees and the lower door edges and the pickup's bed rail read as dips (owner, 2026-11-01); the default is a quarter, one pass, which turns them 14-18.
+  { it: "car contour strength", id: "contours", key: "cont", field: "contourStrength", setter: "setContourStrength", uniform: CONTOUR_SMOOTHING, base: 0.25 },
 ] as const satisfies readonly StrengthCase[];
 
 describe("given the real engine and the look sliders under Cel in the Playback section", () => {
@@ -123,8 +126,8 @@ describe("given the real engine and the look sliders under Cel in the Playback s
 
   for (const testCase of strengthCases) {
     it(`when the ${testCase.it} is set, then the HUD, the shared shader uniform, the changed dot and the share key follow, a value past the range clamps to 2, and its reset puts the default back`, () => {
-      expect(hud.get()[testCase.field], "the default is full strength").toBe(1);
-      expect(testCase.uniform.value, "the uniform at the start").toBe(1);
+      expect(hud.get()[testCase.field], "the default").toBe(testCase.base);
+      expect(testCase.uniform.value, "the uniform at the start").toBe(testCase.base);
       engine[testCase.setter](0.6);
       expect(hud.get()[testCase.field], "the HUD field").toBe(0.6);
       expect(testCase.uniform.value, "the shader's uniform").toBe(0.6);
@@ -137,8 +140,8 @@ describe("given the real engine and the look sliders under Cel in the Playback s
       engine["applyShare"](decodeShare(`#${testCase.key}=1.5`), false);
       expect(testCase.uniform.value, "a link's value reaches the uniform").toBe(1.5);
       engine.resetSetting(testCase.id);
-      expect(testCase.uniform.value, "reset: the uniform").toBe(1);
-      expect(hud.get()[testCase.field], "reset: the HUD field").toBe(1);
+      expect(testCase.uniform.value, "reset: the uniform").toBe(testCase.base);
+      expect(hud.get()[testCase.field], "reset: the HUD field").toBe(testCase.base);
       expect(isChanged(hud.get(), testCase.id), "reset: not changed").toBe(false);
       expect(keyOf(testCase.key), "reset: the key is dropped").toHaveLength(0);
     });

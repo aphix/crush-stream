@@ -283,15 +283,16 @@ for (const c of LOOK_KEYS) {
 }
 
 const STRENGTH_KEYS = [
-  { it: "the material strength", key: "mat", range: KNOB_RANGES.material, fallback: INITIAL_HUD.materialStrength },
-  { it: "the car contour strength", key: "cont", range: KNOB_RANGES.contour, fallback: INITIAL_HUD.contourStrength },
+  { it: "the material strength", key: "mat", range: KNOB_RANGES.material, fallback: INITIAL_HUD.materialStrength, base: 1 },
+  // Re-pin: the contour's default was 1 (three relax passes). At 1 the door skins' rest normals turned up to 27 degrees and the lower door edges and the pickup's bed rail read as dips (owner, 2026-11-01); the default is a quarter, one pass, which turns them 14-18.
+  { it: "the car contour strength", key: "cont", range: KNOB_RANGES.contour, fallback: INITIAL_HUD.contourStrength, base: 0.25 },
 ] as const;
 
 for (const c of STRENGTH_KEYS) {
-  describe(`given ${c.it} (${c.key}), which is full strength by default`, () => {
+  describe(`given ${c.it} (${c.key}), which has its own default strength`, () => {
     it("when it is at its default, moved, or decoded from an out-of-range or unreadable value, then the default writes nothing, a strength is written after the rim key, 0 is a real value, and out-of-range values clamp", () => {
       expect(DEFAULTS[c.key]).toBe(c.fallback);
-      expect(c.fallback, "the default is the current look").toBe(1);
+      expect(c.fallback, "the default is the current look").toBe(c.base);
       expect(encodeShare(DEFAULTS)).toBe("");
       expect(encodeShare({ ...DEFAULTS, [c.key]: 0.5 })).toBe(`${c.key}=0.5`);
       expect(encodeShare({ ...DEFAULTS, rim: 0.4, [c.key]: 1.5 })).toBe(`rim=0.4&${c.key}=1.5`);

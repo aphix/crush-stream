@@ -5,6 +5,7 @@ import type { SceneId } from "../scenes/scene-id.ts";
 import type { StackConfig } from "../scenes/stack-rig.ts";
 import type { LabPresetId } from "../scenes/lab.ts";
 import { crushStroke } from "../kernel/physics-core.js";
+import { DEFAULT_CONTOUR_STRENGTH } from "../vehicle/normal-smooth.ts";
 import { DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { NO_DRIFT, type DriftView } from "../vehicle/car-drive.ts";
 import { DRIVER_CARS, type RaceHud, type RaceView } from "../match/types.ts";
@@ -146,7 +147,7 @@ export type CrashHudState = {
   rimLight: number | null;
   /** Material classes' strength (0 = the old uniform reflections and no grain, 1 = the default look, up to 2); scales every class's reflection cut and grain. */
   materialStrength: number;
-  /** Car contour smoothing (0 = off, 1 = the default, 2 = twice the passes): how round a car's facets are drawn, intact or crushed; creases and panel edges stay. */
+  /** Car contour smoothing (0 = off, 0.25 = the default, one relax pass; 1 = three, 2 = six): how round a car's facets are drawn, intact or crushed; creases and panel edges stay. */
   contourStrength: number;
   /** Candy paint on car exteriors (0 = the plain paint, 1 = the default, up to 2): deeper colour, a full sharp clear coat and, on high and ultra, a thin-film hue shift. Scaled by Materials strength. */
   candyStrength: number;
@@ -306,7 +307,7 @@ export const INITIAL_HUD: CrashHudState = {
   hatching: null,
   rimLight: null,
   materialStrength: 1,
-  contourStrength: 1,
+  contourStrength: DEFAULT_CONTOUR_STRENGTH,
   candyStrength: 1,
   night: false,
   wet: false,

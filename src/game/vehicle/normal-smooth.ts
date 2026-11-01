@@ -1,12 +1,15 @@
 import type * as THREE from "three";
 import { bookTierWork } from "../kernel/tier-work.ts";
 
+/** The default Car contour strength: one relax pass, a third of the three the first default ran (the owner found doors dipped and the truck bed rounded at three). */
+export const DEFAULT_CONTOUR_STRENGTH = 0.25;
+
 /**
- * The HUD's Car contour strength (0 off, 1 the default, 2 the most): how many passes pull a vertex normal toward its neighbours' mean (3 at
- * the default, 6 at the most). One object every car reads. A car's rest shells are relaxed once per style (`bakeRestNormals`), a crushed
+ * The HUD's Car contour strength (0 off, 0.25 the default, 2 the most): how many passes pull a vertex normal toward its neighbours' mean (1 at
+ * the default, 3 at strength 1, 6 at the most). One object every car reads. A car's rest shells are relaxed once per style (`bakeRestNormals`), a crushed
  * skin's moved vertices every skin (`smoothNormals`); a change of passes re-paints the cars (`DeformableCar.followContourStrength`).
  */
-export const CONTOUR_SMOOTHING = { value: 1 };
+export const CONTOUR_SMOOTHING = { value: DEFAULT_CONTOUR_STRENGTH };
 
 /** 1 on the tiers that draw the finish (high, ultra), 0 elsewhere: low and minimal draw the sim's own normals, and pay nothing for the pass. */
 export const SMOOTHING_TIER = { value: 0 };
@@ -23,6 +26,8 @@ export function passesFor(strength: number): number {
 
 /** A neighbour joins a vertex's average only when its normal is within this angle (cos 65 degrees): a real shoulder line or panel edge keeps its step. */
 const CREASE_COS = 0.42;
+/** A first relax pass joins only neighbours within this angle (cos 30 degrees): a door's edge roll, a bed's rail chamfer and a shut line's ramp are designed steps of 35-60 degrees that three passes at 65 degrees rounded into dips. */
+const FIRST_PASS_CREASE_COS = 0.87;
 /** The share of the neighbours' mean one pass blends in, and how many passes strength 1 runs (strength 2 runs twice as many). */
 const BLEND_PER_PASS = 0.9;
 const PASSES_AT_ONE = 3;
@@ -30,6 +35,11 @@ const PASSES_AT_ONE = 3;
 const MOVED_SQ = 1e-6;
 /** A vertex with no neighbour inside the crease angle, or a zero mean, keeps its own normal. */
 const MIN_LENGTH_SQ = 1e-12;
+
+/** The cosine of the widest step a relax of `passes` passes joins across: the first pass holds 30 degrees (`FIRST_PASS_CREASE_COS`), easing to 65 (`CREASE_COS`) by the third, so the default's single pass keeps a door's roll or a bed's rail crisp, intact or crushed. */
+function creaseFor(passes: number): number {
+  return FIRST_PASS_CREASE_COS + (CREASE_COS - FIRST_PASS_CREASE_COS) * Math.min(1, (passes - 1) / (PASSES_AT_ONE - 1));
+}
 
 type Neighbours = { start: Int32Array; to: Int32Array; scratch: Float32Array; moved: Int32Array; frozen: Uint8Array };
 
@@ -110,7 +120,7 @@ function gatherMoved(pos: ArrayLike<number>, rest: ArrayLike<number>, moved: Int
 }
 
 /** One Jacobi pass over the moved vertices (the ones on an open edge keep their normal): each normal moves `BLEND_PER_PASS` of the way to the mean of its own and its in-angle neighbours' normals, written to `out` (the others' entries are `from`'s own). */
-function smoothPass(from: Float32Array, graph: Neighbours, count: number, out: Float32Array): void {
+function smoothPass(from: Float32Array, graph: Neighbours, count: number, out: Float32Array, creaseCos: number): void {
   const { start, to, moved, frozen } = graph;
   for (let m = 0; m < count; m++) {
     const v = moved[m]!;
@@ -128,7 +138,7 @@ function smoothPass(from: Float32Array, graph: Neighbours, count: number, out: F
       const mx = from[j]!;
       const my = from[j + 1]!;
       const mz = from[j + 2]!;
-      if (nx * mx + ny * my + nz * mz < CREASE_COS) continue;
+      if (nx * mx + ny * my + nz * mz < creaseCos) continue;
       sx += mx;
       sy += my;
       sz += mz;
@@ -153,13 +163,13 @@ function smoothPass(from: Float32Array, graph: Neighbours, count: number, out: F
 }
 
 /** `passes` Jacobi passes over the first `count` vertices listed in `graph.moved`, in place in `nor`. */
-function relax(nor: Float32Array, graph: Neighbours, count: number, passes: number): void {
+function relax(nor: Float32Array, graph: Neighbours, count: number, passes: number, creaseCos: number): void {
   const other = graph.scratch;
   other.set(nor);
   let from = nor;
   let into = other;
   for (let pass = 0; pass < passes; pass++) {
-    smoothPass(from, graph, count, into);
+    smoothPass(from, graph, count, into, creaseCos);
     const done = from;
     from = into;
     into = done;
@@ -169,7 +179,7 @@ function relax(nor: Float32Array, graph: Neighbours, count: number, passes: numb
 
 /**
  * A style product's rest normals relaxed at `strength`: the built (faceted) normals with every vertex pulled toward its in-angle
- * neighbours', so a soft facet edge (under about 55 degrees) rounds and a crease of `CREASE_COS` or more keeps its step. A vertex on an
+ * neighbours', so a soft facet edge (under about 55 degrees) rounds and a step over `creaseFor(passes)` keeps its edge. A vertex on an
  * open edge (a window or door opening's lip) keeps its built normal, so it matches the glass and trim it meets. Strength 0 gives the
  * built normals themselves (shared: never written). Null for a mesh the pass cannot index or whose normals are not floats.
  */
@@ -181,13 +191,14 @@ export function bakeRestNormals(template: THREE.BufferGeometry, strength: number
   const graph = neighboursOf(index.array, template.getAttribute("position").array, attr.count);
   for (let v = 0; v < attr.count; v++) graph.moved[v] = v;
   const baked = attr.array.slice();
-  relax(baked, graph, attr.count, passesFor(strength));
+  const passes = passesFor(strength);
+  relax(baked, graph, attr.count, passes, creaseFor(passes));
   return baked;
 }
 
 /**
  * Round the facets of a crushed skin: the vertex normals of the vertices that have left their `rest` place are pulled toward their
- * neighbours' (never across a crease sharper than `CREASE_COS`, and never across a split crease copy, which shares no edge); the others
+ * neighbours' (never across a step sharper than `creaseFor(passes)`, and never across a split crease copy, which shares no edge); the others
  * take their baked `restNormals` (null: the sim's own, as just computed), so an uncrushed panel stays as smooth as the car was built.
  * Reads and writes only the drawn `normal` attribute; a mesh the pass cannot index or whose normals are not floats is left alone.
  * Allocation-free once a mesh's graph is built.
@@ -204,6 +215,7 @@ export function smoothNormals(geometry: THREE.BufferGeometry, rest: ArrayLike<nu
   if (count === 0 || strength <= 0) return;
   // Run only on the tiers that smooth (`SMOOTHING_TIER`): the governors read it as render, which a tier changes, not as sim.
   const t0 = performance.now();
-  relax(nor, graph, count, passesFor(strength));
+  const passes = passesFor(strength);
+  relax(nor, graph, count, passes, creaseFor(passes));
   bookTierWork(performance.now() - t0);
 }

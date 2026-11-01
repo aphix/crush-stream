@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import * as THREE from "three";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { DeformableCar } from "./car.ts";
-import { bakeRestNormals, CONTOUR_SMOOTHING, SMOOTHING_TIER, smoothNormals } from "./normal-smooth.ts";
+import { bakeRestNormals, CONTOUR_SMOOTHING, DEFAULT_CONTOUR_STRENGTH, passesFor, SMOOTHING_TIER, smoothNormals } from "./normal-smooth.ts";
 import { takeTierWork } from "../kernel/tier-work.ts";
 import { freshGeometry, ownGeometry, restNormalsOf, type StyleProduct } from "./car-templates.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
@@ -166,6 +166,29 @@ describe("given two flat faces meeting at a right angle with noisy normals", () 
   });
 });
 
+/** A designed step (degrees) a door's edge roll or a bed's rail chamfer has: between the default's 30 and strength 1's 65 degree creases. */
+const DESIGNED_STEP_DEG = 45;
+
+/** The angle (degrees) between the normals either side of a `DESIGNED_STEP_DEG` step, after a patch with every vertex moved (crushed) is smoothed at `strength`. */
+function crushedStepAfter(strength: number): number {
+  const [columns, rows] = [8, 4];
+  const { geometry, positions } = flatPatch(columns, rows, [UP]);
+  const normals = geometry.getAttribute("normal") as THREE.BufferAttribute;
+  const tilt = (DESIGNED_STEP_DEG * Math.PI) / 180;
+  for (let r = 0; r < rows; r++) for (let c = columns / 2; c < columns; c++) normals.setXYZ(r * columns + c, Math.sin(tilt), 0, Math.cos(tilt));
+  smoothNormals(geometry, positions.map((value) => value + 1), strength);
+  const [a, b] = [columns + columns / 2 - 1, columns + columns / 2];
+  const dot = normals.getX(a) * normals.getX(b) + normals.getY(a) * normals.getY(b) + normals.getZ(a) * normals.getZ(b);
+  return (Math.acos(Math.min(1, dot)) * 180) / Math.PI;
+}
+
+describe("given a crushed skin with a designed 45 degree step across it", () => {
+  it("when it is smoothed at the default, then the step stays as designed, and at strength 1 it is rounded", () => {
+    expect(crushedStepAfter(DEFAULT_CONTOUR_STRENGTH), "the default's single pass at 30 degrees leaves the step").toBeGreaterThan(DESIGNED_STEP_DEG - 0.1);
+    expect(crushedStepAfter(1), "strength 1's three passes at 65 degrees round it").toBeLessThan(DESIGNED_STEP_DEG - 5);
+  });
+});
+
 /** The sedan and the muscle car (`coupe`): the two bodies the owner looks at. */
 const INTACT_STYLES: readonly CarStyleId[] = ["sedan", "coupe"];
 /** The body, bonnet, boot lid and the two door skins: the meshes a car draws round. */
@@ -202,7 +225,7 @@ for (const style of INTACT_STYLES) {
     const laterOff = intactCar(style, 0);
     const angles = { off: shellsOf(off).map(edgeAngles), normal: shellsOf(normal).map(edgeAngles), twice: shellsOf(twice).map(edgeAngles) };
 
-    it("when the body's soft facet steps are measured, then the default's mean angle across them is under 80% of off's and strength 2's lower still", () => {
+    it("when the body's soft facet steps are measured, then strength 1's mean angle across them is under 80% of off's and strength 2's lower still", () => {
       const soft = meanOver(angles.off[0]!, angles.normal[0]!, SOFT_FROM, SOFT_TO);
       const softTwice = meanOver(angles.off[0]!, angles.twice[0]!, SOFT_FROM, SOFT_TO);
       expect(soft.edges, `the body has ${soft.edges} soft edges to round`).toBeGreaterThan(1000);
@@ -210,14 +233,14 @@ for (const style of INTACT_STYLES) {
       expect(softTwice.after, `strength 2: ${softTwice.after.toFixed(1)} against ${soft.after.toFixed(1)} degrees`).toBeLessThan(soft.after * 0.95);
     });
 
-    it("when each shell's soft facet steps are measured, then the default rounds every one of them", () => {
+    it("when each shell's soft facet steps are measured, then strength 1 rounds every one of them", () => {
       for (let shell = 0; shell < SHELL_COUNT; shell++) {
         const soft = meanOver(angles.off[shell]!, angles.normal[shell]!, SOFT_FROM, SOFT_TO);
         expect(soft.edges > 0 && soft.after < soft.before * 0.95, `shell ${shell}: ${soft.after.toFixed(1)} against ${soft.before.toFixed(1)} degrees over ${soft.edges} edges`).toBeTruthy();
       }
     });
 
-    it("when the body's hard edges are measured, then the default keeps at least 70% of their mean angle", () => {
+    it("when the body's hard edges are measured, then strength 1 keeps at least 70% of their mean angle", () => {
       const hard = meanOver(angles.off[0]!, angles.normal[0]!, HARD_FROM, 181);
       expect(hard.edges, `the body has ${hard.edges} hard edges`).toBeGreaterThan(100);
       expect(hard.after, `hard edges ${hard.after.toFixed(1)} against ${hard.before.toFixed(1)} degrees`).toBeGreaterThan(hard.before * 0.7);
@@ -382,4 +405,32 @@ describe("given a style whose door is replaced by a taller one after its first c
       CAR_STYLES.sedan.door = original;
     }
   });
+});
+
+/** The most a door skin's rest normal may turn (degrees) at the default strength; strength 1 turns door skins 27, the owner's "dips between doors". */
+const DEFAULT_DOOR_TURN_MAX = 20;
+
+describe("given each style's door skins baked at the default Car contour", () => {
+  it("when the default is read, then it is a quarter: one relax pass, where strength 1 runs three", () => {
+    // Re-pin: was 1 (3 passes). At 1 the door skins' rest normals turned up to 27 degrees and the lower door edge and the pickup's bed rail read as dips (owner, 2026-11-01); 0.25 turns them 14-18.
+    expect(DEFAULT_CONTOUR_STRENGTH).toBe(0.25);
+    expect(passesFor(DEFAULT_CONTOUR_STRENGTH)).toBe(1);
+    expect(passesFor(1)).toBe(3);
+  });
+
+  for (const id of CAR_STYLE_IDS) {
+    it(`when the ${id}'s door skins' rest normals are read against the built ones, then none turned more than ${DEFAULT_DOOR_TURN_MAX} degrees`, () => {
+      let turned = 0;
+      for (const product of ["doorLeft", "doorRight"] as const) {
+        const built = freshGeometry(CAR_STYLES[id], product);
+        const baked = bakeRestNormals(built, DEFAULT_CONTOUR_STRENGTH)!;
+        const was = built.getAttribute("normal").array as Float32Array;
+        for (let v = 0; v < was.length; v += 3) {
+          const dot = was[v]! * baked[v]! + was[v + 1]! * baked[v + 1]! + was[v + 2]! * baked[v + 2]!;
+          turned = Math.max(turned, (Math.acos(Math.min(1, Math.max(-1, dot))) * 180) / Math.PI);
+        }
+      }
+      expect(turned, `${id}: a door normal turned ${turned.toFixed(1)} degrees`).toBeLessThanOrEqual(DEFAULT_DOOR_TURN_MAX);
+    });
+  }
 });
