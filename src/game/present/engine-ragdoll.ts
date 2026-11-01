@@ -84,7 +84,9 @@ export class RagdollSystem extends RagdollThrower {
     this.followWalkerGround();
     this.applyStruck(cars);
     this.stepWorld(dt, cars, authority, sandbox, barrier, this.live > 0 || this.props.count > 0 || this.boxes.count > 0 ? recordLoose(cars, this.wanted) : NO_LOOSE);
-    for (const hit of this.proxies.strikes.splice(0)) this.struck.push({ frame: this.frameNo, ...hit });
+    const hits = this.proxies.strikes;
+    for (let k = 0; k < hits.length; k++) this.struck.push({ frame: this.frameNo, ...hits[k]! });
+    hits.length = 0;
   }
 
   /**
