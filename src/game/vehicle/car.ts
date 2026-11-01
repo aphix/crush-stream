@@ -26,6 +26,8 @@ import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
 import { passesFor, smoothingNow, smoothNormals } from "./normal-smooth.ts";
 import { SCRATCH_MIN_SLIP } from "./paint-scrapes.ts";
 import { rideSkin } from "./trim-ride.ts";
+import { computeNormalsFast } from "../deform/fast-normals.ts";
+import { CREASE_STRIDE, creaseStations, raiseRidge, ridgeHeight } from "./lid-fold.ts";
 
 const _p = new THREE.Vector3();
 const _m = new THREE.Matrix4();
@@ -169,6 +171,9 @@ export class DeformableCar extends CarParts {
   private hoodTyres: TyreSkin | null = null;
   /** The parts the bonnet folds down onto, which its hold keeps under it: the cabin shell (its dash) and the engine bay. */
   private underHood: readonly PartSeat[] | null = null;
+  /** The hood's crease line and edges (`creaseStations`), and the hinge value its skin was last written with its ridge at (`skinHood`): a skin written at another is stale. */
+  private readonly hoodStations = new Float64Array(CREASE_STRIDE);
+  private hoodRidgeAt = 0;
   private classBody: THREE.Object3D | null = null;
 
   spawn(x: number, z: number, speed: number): void {
@@ -678,6 +683,7 @@ export class DeformableCar extends CarParts {
   updateSkin(): void {
     if (this.vaporized || this.falling) return;
     this.followContourStrength();
+    if (this.panelsFollow && !this.hoodPart.detached && this.hoodPart.hingeT !== this.hoodRidgeAt) this.deform.skinOwed = true;
     this.deform.update(this.body.geometry);
     if (this.deform.skinnedThisFrame) this.poseLamps();
     // A load crushes the roof's skin with the masses at rest: the headliner follows it too. Before the panels: the bonnet's hold reads the shell and the bay.
@@ -753,6 +759,7 @@ export class DeformableCar extends CarParts {
 
   /** The skins were rewritten outside `updateSkin` (a reset, a net or replay state): the tyre holds start their next hold from them. */
   private skinRewritten(): void {
+    this.hoodRidgeAt = 0;
     this.bodyTyres?.rewritten();
     this.hoodTyres?.rewritten();
   }
@@ -768,6 +775,18 @@ export class DeformableCar extends CarParts {
     if (this.skinFollows("doorR")) smoothNormals(this.doorMeshR.geometry, this.doorRRest, strength, this.drawnRest("doorR"));
   }
 
+  /** The bonnet on the body's lattice, buckled into its ridge at the crease line by the crush its hinge value holds (`ridgeHeight`); the cage's hood stands the same (`readCageLive`). */
+  private skinHood(): void {
+    this.deform.skinPanel(this.hood.geometry, this.hoodRest, "bonnet", this.hoodOrigin);
+    const spec = this.hoodPart.swing!.spec;
+    this.hoodRidgeAt = this.hoodPart.hingeT;
+    const height = ridgeHeight(spec, this.hoodRidgeAt);
+    if (height <= 0) return;
+    creaseStations(spec, this.hoodOrigin.z, this.hoodStations, 0);
+    raiseRidge((this.hood.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array, this.hoodRest, this.hoodOrigin.z, this.hoodStations, height);
+    computeNormalsFast(this.hood.geometry);
+  }
+
   /** Bonnet, boot lid, door skins, the police light bar, the skinned glass and the chrome trims follow the body skin; a door's hinge pose turns its skin after. */
   private skinPanels(): void {
     let hood = true;
@@ -777,7 +796,7 @@ export class DeformableCar extends CarParts {
       if (p.name === LID.hood) hood = false;
       else if (p.name === LID.trunk) trunk = false;
     }
-    if (hood) this.deform.skinPanel(this.hood.geometry, this.hoodRest, "bonnet", this.hoodOrigin);
+    if (hood) this.skinHood();
     if (trunk) {
       // The gate's frame and spoiler (from `surround`) dent with the rear glass; the boot cage's ±15 % clamp would flatten them.
       const surround = this.trunk.geometry.userData.surround as number | undefined;

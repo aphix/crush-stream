@@ -380,7 +380,8 @@ describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, it
 
   const skinCases = [
     { which: 0, label: "body", sagLifts: true },
-    { which: 1, label: "bonnet", sagLifts: false },
+    // The folded bonnet's ridge (`HingeSpec.fold`) leaves a triangle over a tyre short in this wall hit, so the sag pass lifts a corner of it as of the body (1 of 5 passes, measured).
+    { which: 1, label: "bonnet", sagLifts: true },
   ] as const;
   for (const { which, label, sagLifts } of skinCases) {
     it(`when its ${label} is held in JS and in the kernel, then every lift, drawn position and normal is the same bit for bit`, () => {

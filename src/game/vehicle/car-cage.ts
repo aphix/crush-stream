@@ -4,6 +4,7 @@ import { INF_K } from "../deform/deform-build.ts";
 import { cageAxis } from "../deform/deform-state.ts";
 import { archKeep, barReach, RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS } from "../deform/deform-rig.ts";
 import { PUSH_BAR_REACH } from "./car-materials.ts";
+import { CREASE_STRIDE, ridgeAt } from "./lid-fold.ts";
 import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
@@ -130,6 +131,8 @@ export interface CageSource {
   readonly roofClampY: number;
   /** Per panel: 1 for a glass pane, 0 for a lid, the light bar, a bumper or a door. */
   readonly panelGlass: Uint8Array;
+  /** Per panel: the car z of its hinge edge, its crease line and its free edge (`creaseStations`), zeros for a panel that does not fold. */
+  readonly panelCrease: Float64Array;
   /** The interior mesh's rest positions (x, y, z per vertex) and triangle indices: seen through a gone pane, so part of the body drawn. */
   readonly interiorRest: Float32Array;
   readonly interiorIndex: ArrayLike<number>;
@@ -169,6 +172,8 @@ export interface CageLive {
   panelsFollow: number;
   /** Per panel, where its mesh stands: position (x, y, z), then rotation (x, y, z, w) about it (a bonnet's hinge). */
   readonly panelPose: Float64Array;
+  /** Per panel: how far (m) its crease line stands over its lattice skin, the ridge a crushed lid buckles into (`ridgeHeight`). */
+  readonly panelRidge: Float64Array;
 }
 
 /** One fit's results: what a pristine style shares among its cars and a crushed car owns. */
@@ -244,6 +249,8 @@ export interface CageStyle {
   readonly partGroup: number;
   /** Per panel, the origin its mesh is skinned about (`skinPanel`'s), x, y, z. */
   readonly panelOrigin: Float64Array;
+  /** `CageSource.panelCrease`. */
+  readonly panelCrease: Float64Array;
   /** Every panel on, the fit of a pristine car. */
   readonly panelsOn: Uint8Array;
   /** Per panel: 1 for a glass pane, 0 for a lid, a bumper or a door (`CageSource.panelGlass`). */
@@ -400,12 +407,12 @@ function skinCage(style: CageStyle, live: CageLive, out: CageFields): void {
       }
       if (follow && g === style.barGroup) pz = barBoxZ(style, hubs, out, i, rx, rz);
       // A panel's skin (`skinPanel`) is its lattice alone, and runs only for a crashed car (the cap, the clamp and the cut are the
-      // body's); the mesh then stands where its own pose puts it (a bonnet's hinge): that pose about the panel's origin.
+      // body's); a lid that folds stands its ridge over it (`skinHood`); the mesh then stands where its own pose puts it (a bonnet's hinge): that pose about the panel's origin.
       const o = (g - 1) * 7;
       const pose = live.panelPose;
       const pivot = (g - 1) * 3;
       const lx = (follow ? px : rx) - panelOrigin[pivot]!;
-      const ly = (follow ? py : ry) - panelOrigin[pivot + 1]!;
+      const ly = (follow ? py + live.panelRidge[g - 1]! * ridgeAt(rz, style.panelCrease, (g - 1) * CREASE_STRIDE) : ry) - panelOrigin[pivot + 1]!;
       const lz = (follow ? pz : rz) - panelOrigin[pivot + 2]!;
       const qx = pose[o + 3]!;
       const qy = pose[o + 4]!;
@@ -498,6 +505,7 @@ function packInputs(live: CageLive, into: Float64Array): void {
   for (let k = 0; k < live.co.length; k++) into[o++] = Math.fround(live.co[k]!);
   for (let k = 0; k < live.panelOn.length; k++) into[o++] = live.panelOn[k]!;
   for (let k = 0; k < live.panelPose.length; k++) into[o++] = Math.fround(live.panelPose[k]!);
+  for (let k = 0; k < live.panelRidge.length; k++) into[o++] = Math.fround(live.panelRidge[k]!);
   into[o++] = live.panelsFollow;
   into[o++] = Math.fround(live.params[P_CAP]!);
   into[o++] = Math.fround(live.params[P_ROOF_CLAMP]!);
@@ -515,10 +523,11 @@ function allocateLive(style: CageStyle): CageLive {
     pos: new Float64Array(n * 3),
     hubs: new Float64Array(n * HUB_STRIDE),
     params: new Float64Array(P_CUT_Z + 1),
-    co: new Float64Array(style.restInputs.length - (n * 3 + style.clusterCount * 9 + n * HUB_STRIDE + p * 8 + 6)),
+    co: new Float64Array(style.restInputs.length - (n * 3 + style.clusterCount * 9 + n * HUB_STRIDE + p * 9 + 6)),
     panelOn: new Uint8Array(p),
     panelsFollow: 0,
     panelPose: new Float64Array(p * 7),
+    panelRidge: new Float64Array(p),
   };
 }
 
@@ -531,6 +540,7 @@ function unpackInputs(inputs: Float64Array, out: CageLive): void {
   for (let k = 0; k < out.co.length; k++) out.co[k] = inputs[o++]!;
   for (let k = 0; k < out.panelOn.length; k++) out.panelOn[k] = inputs[o++]!;
   for (let k = 0; k < out.panelPose.length; k++) out.panelPose[k] = inputs[o++]!;
+  for (let k = 0; k < out.panelRidge.length; k++) out.panelRidge[k] = inputs[o++]!;
   out.panelsFollow = inputs[o++]!;
   out.params[P_CAP] = inputs[o++]!;
   out.params[P_ROOF_CLAMP] = inputs[o++]!;
@@ -554,7 +564,7 @@ const POSE_QUATERNION = 3;
  * Whether `now` differs from `last` (same layout) enough to refit: a mass or a hub more than `epsilon` away, a cluster map or a cage's
  * coefficients changed by enough to move a vertex more than `epsilon` (`mapReach`, `coReach`: a map carries its fit's past turns, so it moves
  * with every mass standing), a panel whose tip (its farthest vertex, `panelReach` from the pivot) has moved more than `epsilon` by its pose's
- * shift and turn together, or any panel flag, roof clamp or imprint cut at all. A torn-off or shattered pane's pose is none of the cage's
+ * shift and turn together, a panel's ridge by more than `epsilon`, or any panel flag, roof clamp or imprint cut at all. A torn-off or shattered pane's pose is none of the cage's
  * (`skinCage` leaves its vertices at rest), so it never counts. With no `epsilon` (an exact fit) every input counts as it is.
  */
 function movedSince(style: CageStyle, last: Float64Array, now: Float64Array, epsilon: number): boolean {
@@ -562,7 +572,7 @@ function movedSince(style: CageStyle, last: Float64Array, now: Float64Array, eps
   const hubStart = massEnd + style.clusterCount * 9;
   const hubEnd = hubStart + style.massCount * HUB_STRIDE;
   const panels = style.panelCount;
-  const flagsStart = last.length - (panels * (POSE_STRIDE + 1) + 6);
+  const flagsStart = last.length - (panels * (POSE_STRIDE + 2) + 6);
   const poseStart = flagsStart + panels;
   const poseEnd = poseStart + panels * POSE_STRIDE;
   for (let k = 0; k < massEnd; k++) if (Math.abs(now[k]! - last[k]!) > epsilon) return true;
@@ -589,7 +599,8 @@ function movedSince(style: CageStyle, last: Float64Array, now: Float64Array, eps
     const turn = 2 * detAcos(Math.min(1, agree));
     if (shift + turn * style.panelReach[panel]! > epsilon) return true;
   }
-  for (let k = poseEnd; k < last.length; k++) if (now[k] !== last[k]) return true;
+  for (let k = poseEnd + panels; k < last.length; k++) if (now[k] !== last[k]) return true;
+  for (let k = poseEnd; k < poseEnd + panels; k++) if (Math.abs(now[k]! - last[k]!) > epsilon) return true;
   return false;
 }
 
@@ -774,7 +785,7 @@ function vertexTables(src: CageSource, source: Int32Array): VertexTables {
 /** The inputs of a pristine car of `src`, laid out as `Fit.last`: the masses at rest, identity cluster maps, the hubs at rest, the cages at rest, every panel on at its origin, no roof imprint. */
 function restInputsOf(src: CageSource): Float64Array {
   const massCount = src.massRest.length / 3;
-  const restInputs = new Float64Array(massCount * 3 + src.clusterCount * 9 + massCount * HUB_STRIDE + src.restCo.length + src.panelCount * 8 + 1 + 5);
+  const restInputs = new Float64Array(massCount * 3 + src.clusterCount * 9 + massCount * HUB_STRIDE + src.restCo.length + src.panelCount * 9 + 1 + 5);
   let o = 0;
   for (let k = 0; k < src.massRest.length; k++) restInputs[o++] = src.massRest[k]!;
   for (let c = 0; c < src.clusterCount; c++) {
@@ -800,7 +811,7 @@ function restInputsOf(src: CageSource): Float64Array {
     restInputs[o + 6] = 1;
     o += 7;
   }
-  o += 1;
+  o += src.panelCount + 1;
   restInputs[o + 2] = IMPRINT_NONE;
   return restInputs;
 }
@@ -964,6 +975,7 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     panelGlass: src.panelGlass,
     panelReach: panelReachOf(src.panelCount, src.panelOrigin, tables.rest, Uint8Array.from(source, (v) => src.group[v]!)),
     panelOrigin: src.panelOrigin,
+    panelCrease: src.panelCrease,
     roofClampY: src.roofClampY,
     barGroup: src.barGroup,
     barFace: src.barFace,

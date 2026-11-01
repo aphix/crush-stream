@@ -32,17 +32,21 @@ export function hingePose(p: DetachPart, deform: StreamedDeformation, out: Float
   let z = p.restPos.z;
   let turn: number;
   if (p.hinge === "cowl" || p.hinge === "tail") {
-    const cowl = p.hinge === "cowl";
-    z += cowl ? -t * 0.08 : t * 0.08;
-    y += t * (cowl ? 0.26 : 0.22);
-    // The crash's jam or (`withSwing`: the drawn part, not the cage) the free swing, whichever holds it further open, the way its hinge opens.
     const s = p.swing!;
     const jam = t * s.spec.jam;
+    // A lid that folds (the hood) takes its crash as a fold of the panel (`ridgeHeight`), no turn and no lift of the whole of it; the swing past its jam turns it.
+    const folds = s.spec.fold !== undefined;
+    const held = folds ? 0 : jam;
     const theta = withSwing ? s.theta : 0;
-    turn = s.spec.dir * Math.max(jam, theta);
-    // The swing past the jam turns about the hinge line (`py`, `pz`; the boot's origin is on it): its place moved by the crash's turn, less by the whole turn.
-    if (theta > jam) {
-      const crash = s.spec.dir * jam;
+    const open = folds ? Math.max(0, theta - jam) : theta;
+    if (!folds) {
+      z += p.hinge === "cowl" ? -t * 0.08 : t * 0.08;
+      y += t * (p.hinge === "cowl" ? 0.26 : 0.22);
+    }
+    turn = s.spec.dir * Math.max(held, open);
+    // The turn past the held one turns about the hinge line (`py`, `pz`; the boot's origin is on it): its place moved by the held turn, less by the whole turn.
+    if (open > held) {
+      const crash = s.spec.dir * held;
       const { py, pz } = s.spec;
       y += py * detCos(crash) - pz * detSin(crash) - (py * detCos(turn) - pz * detSin(turn));
       z += py * detSin(crash) + pz * detCos(crash) - (py * detSin(turn) + pz * detCos(turn));

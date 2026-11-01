@@ -2,6 +2,16 @@ import { GRAVITY } from "../kernel/constants.ts";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { BootSpec, YZ } from "./car-variants.ts";
 
+/**
+ * How a crushed lid buckles (`ridgeHeight`): `range` is the crush (m) its hinge value runs over, `share` the part of the length the crush takes off
+ * its chord that buckles out of its plane (the rest crumples in it), `crease` where along the lid from its hinge edge (0 to 1) the fold's apex stands.
+ */
+interface LidFold {
+  range: number;
+  share: number;
+  crease: number;
+}
+
 /** What one car's door or lid swings within (`DoorHinge.spec`): static, never netted. */
 export interface HingeSpec {
   /** Hinge line to free edge (m). */
@@ -41,6 +51,8 @@ export interface HingeSpec {
   pz: number;
   /** Lids with a safety catch (the hood): how far (rad) past its crash jam the catch lets an unlatched one rise; absent, none. */
   catch?: number;
+  /** Lids that buckle (the hood): the crash is a fold of the panel, not a turn of the whole of it about its hinge; absent, the crash jams the whole lid open by `jam`. */
+  fold?: LidFold;
 }
 
 /** A style's lid (`BodyStyle.boot.swing`): a new car picks a preset or writes its own. */
@@ -131,6 +143,12 @@ const HOOD_CATCH_M = 0.04;
  */
 const HOOD: Omit<LidSwing, "rise"> = { kg: 16, lift: 1.2, taper: 0, ajar: 0.05, tearT: 0.5, tearMps: 12.5, tearJ: 150, slamJ: 250 };
 
+/** The hood's hinge value runs on the bonnet cage's crush (m): none under `HOOD_CRUSH_ON`, full `HOOD_CRUSH_RANGE` past it (`CarParts.syncAttachedParts`). */
+export const HOOD_CRUSH_ON = 0.1;
+export const HOOD_CRUSH_RANGE = 0.6;
+/** A quarter of the length a crush takes off the hood buckles it out of its plane, the rest crumples in it; the fold's apex is at its middle, where its inner panel is weakest. */
+const HOOD_FOLD: LidFold = { range: HOOD_CRUSH_RANGE, share: 0.25, crease: 0.5 };
+
 /** The hood's hinge from its mesh's own vertices (x, y, z triples): it turns about its rear edge's top, nose up, to `HOOD_OPEN`. */
 export function hoodSpec(position: ArrayLike<number>): HingeSpec {
   let zMin = Infinity;
@@ -146,7 +164,7 @@ export function hoodSpec(position: ArrayLike<number>): HingeSpec {
     if (position[i + 2]! > zMax - HOOD_EDGE_BAND) fy = Math.max(fy, position[i + 1]!);
   }
   const length = hypot2(fy - py, zMax - zMin);
-  return { ...lidSlab(HOOD, length, -1, (fy - py) / length, (zMax - zMin) / length, HOOD_OPEN, py, zMin), catch: HOOD_CATCH_M / length };
+  return { ...lidSlab(HOOD, length, -1, (fy - py) / length, (zMax - zMin) / length, HOOD_OPEN, py, zMin), catch: HOOD_CATCH_M / length, fold: HOOD_FOLD };
 }
 
 /** A lid's uniform slab on `s`: `length` from its hinge line (`py`, `pz` in its own frame) along the chord (`uy`, `uz`), opening the way `dir` turns it to `stop`. */

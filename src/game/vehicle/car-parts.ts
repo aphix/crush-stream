@@ -4,7 +4,7 @@ import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F } from "./constants.ts";
 import { barReach } from "../deform/deform-rig.ts";
 import { PUSH_BAR_DRAWN_MIN, PUSH_BAR_REACH } from "./car-materials.ts";
-import { bootPivot, lidAccel } from "./hinge-spec.ts";
+import { bootPivot, HOOD_CRUSH_ON, HOOD_CRUSH_RANGE, lidAccel } from "./hinge-spec.ts";
 import { cellIsOver, clearanceCellsOf } from "./clearance-cells.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose, notePosed, posesFromOwnState, standsAsPosed } from "./part-pose.ts";
 import { activeGround, groundTopOver, NO_FLOOR } from "../world/ground.ts";
@@ -338,7 +338,7 @@ export abstract class CarParts extends CarGlass {
         target = Math.min(this.barLoad(), 0.95);
       } else if (onHit) {
         if (p.hinge === "two-point") target = THREE.MathUtils.clamp((crush - 0.04) / 0.55, 0, 1);
-        else if (p.hinge === "cowl") target = THREE.MathUtils.clamp((crush - 0.1) / 0.6, 0, 1);
+        else if (p.hinge === "cowl") target = THREE.MathUtils.clamp((crush - HOOD_CRUSH_ON) / HOOD_CRUSH_RANGE, 0, 1);
         else if (p.hinge === "tail") target = THREE.MathUtils.clamp((this.deform.partCompression("bumperRear") - LID_CRUSH_ON) / LID_CRUSH_RANGE, 0, 1);
         else if (p.region) target = THREE.MathUtils.clamp((crush - PANEL_HINGE[p.region.kind].on) / PANEL_HINGE[p.region.kind].range, 0, 1);
       }

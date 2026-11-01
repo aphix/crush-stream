@@ -7,6 +7,7 @@ import type { BodyPartName } from "../kernel/rig-spec.ts";
 import { CarCage, type CageLive, type CageSource, P_CAP, P_CUT_X, P_CUT_Y, P_CUT_Z, P_ROOF_CLAMP } from "./car-cage.ts";
 import type { DeformableCar } from "./car.ts";
 import { hingePose, INTERIOR_MASSES } from "./part-pose.ts";
+import { CREASE_LINE, CREASE_STRIDE, creaseStations, ridgeHeight } from "./lid-fold.ts";
 import { CAGE_DOOR_THICKNESS, doorSkinZ, makeDoorGeometry } from "./car-door-mesh.ts";
 import { cageGateHold, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { bumperCorner } from "./car-bumper-corner.ts";
@@ -135,6 +136,20 @@ function panelsOf(car: DeformableCar): Panel[] {
   return panels;
 }
 
+/** A lid's cage mesh vertices on the ring nearest its fold's crease line (1), the rest 0: held, the decimation keeps the ridge's apex; none for a lid that does not fold. */
+function creaseRing(geometry: THREE.BufferGeometry, panel: Panel): Uint8Array {
+  const position = geometry.getAttribute("position");
+  const held = new Uint8Array(position.count);
+  const spec = panel.hinged?.swing?.spec;
+  if (spec?.fold === undefined) return held;
+  const stations = new Float64Array(CREASE_STRIDE);
+  creaseStations(spec, panel.origin.z, stations, 0);
+  let nearest = Infinity;
+  for (let i = 0; i < position.count; i++) nearest = Math.min(nearest, Math.abs(position.getZ(i) + panel.origin.z - stations[CREASE_LINE]!));
+  for (let i = 0; i < position.count; i++) held[i] = Math.abs(position.getZ(i) + panel.origin.z - stations[CREASE_LINE]!) < nearest + 1e-4 ? 1 : 0;
+  return held;
+}
+
 /**
  * `panelsOf(car)` with the lids', light bar's, windshield's, bumpers' and doors' meshes and rest shapes the cage build draws (`makeHoodGeometry`,
  * `makeTrunkGeometry`, `makeLightBar`; the style's own windshield, not its `drawn` twin; each bumper's plain fascia, not its drawn add-ons;
@@ -143,7 +158,10 @@ function panelsOf(car: DeformableCar): Panel[] {
 function cagePanelsOf(car: DeformableCar): Panel[] {
   const cageLid = (panel: Panel, geometry: THREE.BufferGeometry, held?: Uint8Array): Panel => ({ ...panel, mesh: new THREE.Mesh(geometry), rest: Float32Array.from(geometry.getAttribute("position").array), held });
   return panelsOf(car).map((panel) => {
-    if (panel.part === "bonnet") return cageLid(panel, makeHoodGeometry(car.style, "cage"));
+    if (panel.part === "bonnet") {
+      const hood = makeHoodGeometry(car.style, "cage");
+      return cageLid(panel, hood, creaseRing(hood, panel));
+    }
     if (panel.part === "boot") {
       const gate = makeTrunkGeometry(car.style, "cage");
       const held = new Uint8Array(gate.getAttribute("position").count);
@@ -340,6 +358,11 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   }
   const panelOrigin = new Float64Array(panels.length * 3);
   for (const [k, panel] of panels.entries()) panel.origin.toArray(panelOrigin, k * 3);
+  const panelCrease = new Float64Array(panels.length * CREASE_STRIDE);
+  for (const [k, panel] of panels.entries()) {
+    const spec = panel.hinged?.swing?.spec;
+    if (spec !== undefined) creaseStations(spec, panel.origin.z, panelCrease, k * CREASE_STRIDE);
+  }
   const massRest = new Float64Array(rig.masses.length * 3);
   for (let j = 0; j < rig.masses.length; j++) {
     const massAt = rig.masses[j]!.rest;
@@ -360,7 +383,7 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   // The box's back face stands on its bumper's face (`pushBarBox`).
   let barFace = 0;
   if (bar >= 0) barFace = panels[bar]!.origin.z + Math.min(...panels[bar]!.rest.filter((_, k) => k % 3 === 2));
-  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, held, apart, panelCount: panels.length, panelOrigin, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill, lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY, tubs: cageBody.userData.tubs as CageSource["tubs"], loft: loft.ring * loft.slices, barGroup: bar + 1, barFace };
+  return { rest, index, skinN, skinXf, skinW, resJ, resW, resC, skinHub, massRest, clusterCount: rig["clusters"].length, restCo, infN, infCo, infUvw, group, held, apart, panelCount: panels.length, panelOrigin, panelCrease, panelGlass, interiorRest: Float32Array.from(interior.getAttribute("position").array), interiorIndex: interiorIndex.array, interiorMass, sill, lattice: car.frame.lattice, roofClampY: car.frame.rig.roofClampY, tubs: cageBody.userData.tubs as CageSource["tubs"], loft: loft.ring * loft.slices, barGroup: bar + 1, barFace };
 }
 
 /** A car's cage on the lattice (or `step`), its style's build shared by every car of the style. */
@@ -381,6 +404,9 @@ function readCageLive(car: DeformableCar, panels: readonly Panel[], live: CageLi
   for (let k = 0; k < panels.length; k++) {
     const panel = panels[k]!;
     live.panelOn[k] = panel.on() ? 1 : 0;
+    const hinged = panel.hinged;
+    const spec = hinged?.swing?.spec;
+    live.panelRidge[k] = hinged !== null && spec !== undefined && car.panelsFollow ? ridgeHeight(spec, hinged.hingeT) : 0;
     if (panel.hinged !== null) hingePose(panel.hinged, rig, live.panelPose, k * 7, false);
     else {
       panel.seat.toArray(live.panelPose, k * 7);
@@ -416,6 +442,7 @@ export class CageRig {
       panelOn: new Uint8Array(this.panels.length),
       panelsFollow: 0,
       panelPose: new Float64Array(this.panels.length * 7),
+      panelRidge: new Float64Array(this.panels.length),
     };
   }
 

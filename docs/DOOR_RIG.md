@@ -122,6 +122,15 @@ The trunk lid, hatch, SUV liftgate and pickup/monster drop gate (part slot 3, `L
   real hoods do (FMVSS 113's second latch position; in 56-64 km/h frontals a hood stays latched or on its catch and buckles). Opened by
   hand above the catch it swings to its stop. Same re-latch (a hand's 50 N latches the 44 km/h one), stop tear and slam rules as the boot;
   its crash tear (crush past `hingeT` 0.78) is unchanged. A two-sedan head-on springs it from 48 km/h each (46 leaves it latched).
+- **Crash fold (`lid-fold.ts`, `HingeSpec.fold`; the hood):** a crush does not turn the whole hood about its cowl. Its hinge value `hingeT` is the crush
+  past `HOOD_CRUSH_ON` (0.10 m) over `HOOD_CRUSH_RANGE` (0.6 m), so `HOOD_CRUSH_RANGE · hingeT` is the length the crash took off its chord; sheet steel
+  keeps its length, so `share` (0.25) of that buckles the hood out of its plane: a V on its crease line (`crease` 0.5, the middle) of height
+  `½·√(L² − (L − share·range·hingeT)²)` over the lattice skin (`ridgeHeight`, L the chord from its hinge edge to its free edge), straight lines to its two edges.
+  `DeformableCar.skinHood` writes it on the bonnet's skin after `skinPanel`, and the cage's hood panel (`CageLive.panelRidge`, `skinCage`) stands the same
+  height on the same lattice, so the surface other cars stand on is the buckled hood. No whole-lid turn or lift: the hood's crash pose is its fold, and
+  the swing past its jam (the catch, a hand's opening) turns it about the cowl. The boot lid keeps its rigid jam (it has no `fold`). A 56 km/h wall folds the
+  hood 13 cm over the line between its ends (its rear third turning up 16°, its front third down 25° from rest), 20 km/h none (under its yield).
+  Rows: `hood-fold.test.ts`.
 - **Tear:** stop energy past `tearJ`; crush past `hingeT` 0.78; or an open lid hit past `tearT` 0.5 at EBS ≥ 12.5 m/s. A torn lid
   flies as a loose part at its own mass and tumbles the way it opens. A door or lid already resting on its stop takes no strap
   load from the push holding it there (else a drop gate on its cables would tear off on its own).

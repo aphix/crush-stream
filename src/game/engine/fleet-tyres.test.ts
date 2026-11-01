@@ -32,6 +32,8 @@ describe("given the real engine running the owner's five-car fleet crash with th
   let engine: CrashEngine;
   /** Over the window, every frame: the least clearance of a front tyre under the drawn hood, and the deepest the drawn sill stands in one. */
   let least = { clearance: Infinity, sim: 0 };
+  /** Tyre-frames measured under a hood still on the car. */
+  let hoodFrames = 0;
   let sill = { depth: 0, sim: 0 };
 
   beforeAll(async () => {
@@ -62,8 +64,12 @@ describe("given the real engine running the owner's five-car fleet crash with th
       const tris = drawnTriangles(car);
       for (const wheel of FRONT_WHEELS) {
         if (car["looseWheels"][wheel]!.loose) continue;
-        const clearance = tyreClearance(car, wheel, tris);
-        if (clearance < least.clearance) least = { clearance, sim: engine["elapsedSim"] };
+        // A hood torn off (the fold crushes the cage hood past its tear, 0.78, at 0.45 s) leaves the bay bare under the tyres: no hood to stand through.
+        if (!car["hoodPart"].detached) {
+          const clearance = tyreClearance(car, wheel, tris);
+          if (clearance < least.clearance) least = { clearance, sim: engine["elapsedSim"] };
+          hoodFrames++;
+        }
         const depth = sillInTyre(car, wheel);
         if (depth > sill.depth) sill = { depth, sim: engine["elapsedSim"] };
       }
@@ -75,6 +81,7 @@ describe("given the real engine running the owner's five-car fleet crash with th
   });
 
   it(`when the cars hit and settle for ${TO_S} s, then the pickup's front tyres keep 5 mm under its drawn hood in every frame`, () => {
+    expect(hoodFrames, "the hood stayed on the car for some frames of the window").toBeGreaterThanOrEqual(6);
     expect(least.clearance, `${(least.clearance * 1000).toFixed(1)} mm at sim ${least.sim.toFixed(2)} s`).toBeGreaterThanOrEqual(CLEARANCE_M);
   });
 
