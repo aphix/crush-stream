@@ -9,7 +9,7 @@ import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-ut
 import { droop, FLANK_UP_Y, SPRINGS, UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, CUT, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
+import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, CUT, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, pushes, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides, wreckShares, ROW_WHEEL } from "./car-air-points.ts";
 import { centreLift, centreY } from "./car-cage-rig.ts";
 import { store3d } from "../kernel/store.ts";
@@ -623,9 +623,9 @@ function takeBackBorne(car: DeformableCar, at: number): void {
  * `shareB`), when the rows of the rigid step had met the same cars this slice (`collectCrush`): one contact, armed once, at the larger
  * of the two readings of it (the rows read the closing at their point and normal, the pair contact at the cars' centres), the pair
  * rewound to before the rows' exchange (`rewindRows`) so the masses start at the speed they met at. The rows' hit is spent. False
- * when the rows saw no such contact: the pair contact arms it alone.
+ * when the rows saw no such contact: the pair contact arms it alone. A car that pushes (`pushingA`, `pushingB`) is armed no crash by it.
  */
-export function armPairWithRows(a: DeformableCar, b: DeformableCar, point: THREE.Vector3, normal: THREE.Vector3, closing: number, shareA: number, shareB: number): boolean {
+export function armPairWithRows(a: DeformableCar, b: DeformableCar, point: THREE.Vector3, normal: THREE.Vector3, closing: number, shareA: number, shareB: number, pushingA: boolean, pushingB: boolean): boolean {
   let met = false;
   let ebsA2 = shareA * shareA;
   let ebsB2 = shareB * shareB;
@@ -641,15 +641,16 @@ export function armPairWithRows(a: DeformableCar, b: DeformableCar, point: THREE
     PENDING_B[i] = PENDING_B[queue.size]!;
   }
   if (!met) return false;
-  a.applyImpact(a.deform.massPoint(point, _massPoint, a.group.position.y), normal, closing, Math.sqrt(ebsA2), false, true);
-  b.applyImpact(b.deform.massPoint(point, _massPoint, b.group.position.y), _crushBack.copy(normal).negate(), closing, Math.sqrt(ebsB2), false, true);
+  if (!pushingA) a.applyImpact(a.deform.massPoint(point, _massPoint, a.group.position.y), normal, closing, Math.sqrt(ebsA2), false, true);
+  if (!pushingB) b.applyImpact(b.deform.massPoint(point, _massPoint, b.group.position.y), _crushBack.copy(normal).negate(), closing, Math.sqrt(ebsB2), false, true);
   return true;
 }
 
 /**
  * Arms each hit `collectCrush` saw that the pair contact did not take (`armPairWithRows`), once the slice's contacts are solved
  * (`stepWorld`): both cars' crush at the contact point along the normal, at their share of the exchange's barrier speed, and fed the
- * contact's depth and closing as the pair contact feeds its own (`feedOverlap`), at the pair's common speed along the normal.
+ * contact's depth and closing as the pair contact feeds its own (`feedOverlap`), at the pair's common speed along the normal. A car that
+ * pushes the other car (`pushes`, by the speed it had before the rows' exchange) is armed none; a fixed solid is pushed by no one.
  */
 export function armCrushRows(dt: number): void {
   for (let i = 0; i < queue.size; i++) {
@@ -665,13 +666,17 @@ export function armCrushRows(dt: number): void {
     const closing = PENDING[f + P_CLOSING]!;
     const fed = Math.max(PENDING[f + P_DEPTH]!, closing * dt);
     const common = b === null ? 0 : commonSpeed(a, b, _crushNormal);
-    armAtExchange(a, f + P_PRE_A, _crushPoint, _crushNormal, closing, Math.sqrt(PENDING[f + P_EBS_A2]!), common, tyre);
-    if (b !== null) armAtExchange(b, f + P_PRE_B, _crushPoint, _crushBack, closing, Math.sqrt(PENDING[f + P_EBS_B2]!), -common, false);
-    a.deform.markMotion();
-    a.deform.feedOverlap(tyre ? _crushPoint : a.deform.massPoint(_crushPoint, _massPoint, a.group.position.y), _crushNormal, fed, closing, dt, common);
-    a.deform.takeMotion(a.velocity, a.angular);
-    a.deform.notifyContact();
-    if (b === null) continue;
+    const pushingA = b !== null && !a.crashed && pushes(-(PENDING[f + P_PRE_A]! * _crushNormal.x + PENDING[f + P_PRE_A + 2]! * _crushNormal.z), closing);
+    const pushingB = b !== null && !b.crashed && pushes(PENDING[f + P_PRE_B]! * _crushNormal.x + PENDING[f + P_PRE_B + 2]! * _crushNormal.z, closing);
+    if (!pushingA) armAtExchange(a, f + P_PRE_A, _crushPoint, _crushNormal, closing, Math.sqrt(PENDING[f + P_EBS_A2]!), common, tyre);
+    if (b !== null && !pushingB) armAtExchange(b, f + P_PRE_B, _crushPoint, _crushBack, closing, Math.sqrt(PENDING[f + P_EBS_B2]!), -common, false);
+    if (!pushingA) {
+      a.deform.markMotion();
+      a.deform.feedOverlap(tyre ? _crushPoint : a.deform.massPoint(_crushPoint, _massPoint, a.group.position.y), _crushNormal, fed, closing, dt, common);
+      a.deform.takeMotion(a.velocity, a.angular);
+      a.deform.notifyContact();
+    }
+    if (b === null || pushingB) continue;
     b.deform.markMotion();
     b.deform.feedOverlap(b.deform.massPoint(_crushPoint, _massPoint, b.group.position.y), _crushBack, fed, closing, dt, -common);
     b.deform.takeMotion(b.velocity, b.angular);

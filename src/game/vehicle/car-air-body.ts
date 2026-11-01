@@ -162,6 +162,14 @@ export const REST_PASSES = 48;
 export const REST_SPEED = (2 * G) / 120;
 /** The speed (m/s) a body at rest parts from what it stands in (a wreck from the ground, a tyre from the face it pressed): under `REST_SPEED`, so it stays at rest and may sleep. */
 export const GROUND_LIFT_V = REST_SPEED / 3;
+/** The closing speed (m/s, 11 km/h) under which the car whose own motion carries it into another is pushing it, as a bumper nudge or a PIT's touch does: a push takes no crash for the pusher (the other car's rule is unchanged). A bumper takes 2.2 m/s undamaged; a taught PIT closes at matched speed. */
+export const PUSH_MAX = 3;
+
+/** Whether a car moving `approach` m/s into the other (its own velocity along the contact normal, toward the other) pushes at the pair's `closing` m/s: it is moving into the other, and the contact is under `PUSH_MAX`. A fixed solid is no other car: it has no pusher. */
+export function pushes(approach: number, closing: number): boolean {
+  return approach > REST_SPEED && closing < PUSH_MAX;
+}
+
 /** The most (in G·dt) the solve's change of velocity moves the body within its own slice (half of it, the trapezoid rule). */
 export const SOLVE_MOVE_G = 1.5;
 /** Per contact: the depth (m) along its normal the lift has still to take out (-Infinity: a row that does not lift). */
@@ -319,16 +327,24 @@ export function placeBody(): void {
   standAtCentre();
 }
 
-/** Contact `n` (its arm `R[n]` set) on car `own`'s top (-1: the world's ground): the car that takes its reaction (`HELD`), for a stepping car of `mass`. */
+/**
+ * Contact `n` (its arm `R[n]` set) on car `own`'s top (-1: the world's ground): the car that takes its reaction (`HELD`), for a stepping car of `mass`.
+ * A car whose masses run takes no reaction from the rigid step (the pair contact exchanges with it), but its top is no fixed face: the stepping car's closing is read on the top's own motion (`SURF_V`).
+ */
 export function carrier(surf: CarSurfaces, n: number, own: number, mass: number): void {
   const o = own >= 0 ? surf.cars[own]! : null;
-  if (o === null || !o.rigid) {
+  if (o === null) {
     HELD[n] = null;
+    return;
+  }
+  ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, centreY(o), 0).applyQuaternion(o.group.quaternion));
+  if (!o.rigid) {
+    HELD[n] = null;
+    if (!body.part) SURF_V[n]!.crossVectors(o.angular, ARM[n]!).add(o.velocity);
     return;
   }
   HELD[n] = o;
   RATIO[n] = mass / o.deform.totalMass;
-  ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, centreY(o), 0).applyQuaternion(o.group.quaternion));
 }
 
 /** World inverse inertia (body orientation `q`, its inverse `qi`; `inertia` its inverse inertia per unit mass about its own axes) applied to `x` in place. */
@@ -350,7 +366,7 @@ export function pointVel(c: number, v: THREE.Vector3, w: THREE.Vector3, out: THR
   out.crossVectors(w, R[c]!).add(v);
   const o = HELD[c];
   if (o !== null) out.sub(_ov.crossVectors(o.angular, ARM[c]!).add(o.velocity));
-  else if (body.part) out.sub(SURF_V[c]!);
+  else if (body.part || OWN[c]! >= 0) out.sub(SURF_V[c]!);
   return out;
 }
 

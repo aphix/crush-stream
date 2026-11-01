@@ -3,7 +3,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { REARM_QUIET_S } from "../vehicle/car-core.ts";
 import { SCRATCH_MIN_SLIP } from "../vehicle/paint-scrapes.ts";
 import { armPairWithRows, rewindRows, wreckCentre, wreckInvI } from "../vehicle/car-air.ts";
-import { invInertia, MU_BODY, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
+import { invInertia, MU_BODY, pushes, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { leftoverCrumple, satPushCap, hypot2, CRASH } from "../deform/physics-util.ts";
 import { CAGE_STEP } from "../vehicle/car-cage.ts";
 import { barReach } from "../deform/deform-rig.ts";
@@ -674,6 +674,10 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // The rows of the rigid step that met this pair this slice (a nose corner on the other's sloped bonnet) traded part of the approach already: it is the pair's to take whole.
   if (rewindRows(carA, carB, n, ARM_CLOSING)) closing = -_v.copy(carA.velocity).sub(carB.velocity).dot(n);
 
+  // The car whose own motion carries it into the other, at a closing under `PUSH_MAX`, pushes it and is armed no crash: the other car's rule is unchanged.
+  const pushingA = !carA.crashed && pushes(-(carA.velocity.x * n.x + carA.velocity.z * n.z), closing);
+  const pushingB = !carB.crashed && pushes(carB.velocity.x * n.x + carB.velocity.z * n.z, closing);
+
   // Where the contact masses of both cars are driven to along the normal: the speed each car's contact point has once the plastic
   // exchange at the patch is done (the pair's common speed when the hit goes through both centres).
   faceSpeeds(carA, carB, n, _p);
@@ -697,9 +701,9 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
     const shareB = pairResult[OUT_EBS_B]!;
     const idleA = carA.deform.quietTime() >= REARM_QUIET_S;
     const idleB = carB.deform.quietTime() >= REARM_QUIET_S;
-    if (!armPairWithRows(carA, carB, _p, n, closing, shareA, shareB)) {
-      brushA = !carA.applyImpact(carA.deform.massPoint(_p, _massPoint, carA.group.position.y), n, closing, shareA, false, true) && idleA;
-      brushB = !carB.applyImpact(carB.deform.massPoint(_p, _massPoint, carB.group.position.y), _w.copy(n).negate(), closing, shareB, false, true) && idleB;
+    if (!armPairWithRows(carA, carB, _p, n, closing, shareA, shareB, pushingA, pushingB)) {
+      brushA = !pushingA && !carA.applyImpact(carA.deform.massPoint(_p, _massPoint, carA.group.position.y), n, closing, shareA, false, true) && idleA;
+      brushB = !pushingB && !carB.applyImpact(carB.deform.massPoint(_p, _massPoint, carB.group.position.y), _w.copy(n).negate(), closing, shareB, false, true) && idleB;
     }
   }
 
@@ -735,8 +739,8 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // A face whose crumple travel is used up (`leftoverCrumple`) is stiff: it takes whatever the pair's other face passes on.
   const leftoverA = leftoverCrumple(carA.deform.faceTravel());
   const leftoverB = leftoverCrumple(carB.deform.faceTravel());
-  const stiffA = leftoverA < 0.12;
-  const stiffB = leftoverB < 0.12;
+  const stiffA = pushingA || leftoverA < 0.12;
+  const stiffB = pushingB || leftoverB < 0.12;
   if (closing > 0) {
     // The one exchange of the pair, at the patch, once per slice: the normal impulse that closes the approach of the two cars' contact
     // points (the lever of each about its centre in the kernel's effective mass), at the most what the crush force over the slice has
