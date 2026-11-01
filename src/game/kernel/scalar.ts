@@ -26,6 +26,13 @@ export function hash01(id: number, k: number): number {
   return x - Math.floor(x);
 }
 
+/** Number of set bits in a 32-bit mask. */
+export function popcount(x: number): number {
+  let n = 0;
+  for (let v = x >>> 0; v !== 0; v &= v - 1) n++;
+  return n;
+}
+
 /**
  * `make()` on the first call, that same value after: a lazily built shared constant (a texture, a material, a
  * table) that never changes once made, so a second engine or a test sharing it inherits nothing.

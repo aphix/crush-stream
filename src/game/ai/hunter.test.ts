@@ -5,7 +5,8 @@ import { DRIVE, idleDrive } from "../vehicle/car-drive.ts";
 import { applyAiDrive } from "./input-fade.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { snapshotAiCar } from "../match/derby.ts";
-import { BLOCKABLE, copsWanted, HUNT, SETTLE } from "./hunter.ts";
+import { BLOCKABLE, CALM_END, copsWanted, HUNT, RAM_AFTER, RUN_UP, SETTLE } from "./hunter.ts";
+import { humanSlot } from "../match/survival.ts";
 import { ATTACK, attackTarget } from "./cop-brain.ts";
 import { setGround } from "../world/ground.ts";
 import type { PropCollider } from "../world/placements.ts";
@@ -401,6 +402,130 @@ describe("given a police hunter at 30 m/s on the south lawn's grass, its quarry 
     expect(wide, `${wide.toFixed(1)} m left of the chord; the arc to the quarry is ${sagitta.toFixed(1)} m`).toBeLessThanOrEqual(sagitta + 2);
   });
 });
+
+/**
+ * The pack on a stub world with the player car at its start slot facing north, and the car's speed set by the caller at each beat (`speedAt`; it
+ * never moves, and reverses toward the south at that speed). `boxed`: walls on its north, east and west, the way south open, and units 5.7 m
+ * south-east and south-west of it lying wrecked; else open ground and every unit far off.
+ */
+function playerScene(boxed: boolean) {
+  const { x, z } = humanSlot(spec.start, 0);
+  const wall = (index: number, dx: number, dz: number, hx: number, hz: number): PropCollider => ({ index, prefab: "building", body: "solid", x: x + dx, z: z + dz, yaw: 0, kind: "box", r: Math.hypot(hx, hz), hx, hz, mass: 0, base: 0, top: 14, ends: 3 });
+  const r = rig({ hidden: () => false, colliders: boxed ? [wall(0, 0, 6, 12, 1), wall(1, 6, 0, 1, 12), wall(2, -6, 0, 1, 12)] : [] });
+  r.cars[0]!.yaw = 0;
+  for (let k = 2; k < r.cars.length; k++) Object.assign(r.cars[k]!, boxed && k < 4 ? { x: x + (k === 2 ? 5.7 : -5.7), z: z - 5.7, crashed: true } : { x: FAR, z: FAR });
+  return { r, x, z };
+}
+
+/** One real police cop 25 m south of the scene's player car, driven for `seconds` s: each frame the cop's speed and its distance to the player car. */
+function copRun(seconds: number, speedAt: (t: number) => number): { t: number; v: number; d: number }[] {
+  const { r, x, z } = playerScene(true);
+  const player = r.cars[0]!;
+  setGround(track.ground());
+  const car = new DeformableCar({ body: 0x808080, accent: 0x404040, name: "cop" }, new THREE.Scene());
+  assignClass(car, "police");
+  r.brain.setClass(1, classStats("police"));
+  car.spawnFacing(x, z - 25, 0, 20);
+  const cop = r.cars[1]!;
+  const out: { t: number; v: number; d: number }[] = [];
+  const dt = 1 / FRAME_HZ;
+  r.run(seconds, (t) => {
+    Object.assign(player, { vx: 0, vz: -speedAt(t) });
+    for (let step = 0; step < BEAT * FRAME_HZ; step++) {
+      snapshotAiCar(cop, 1, car, true);
+      applyAiDrive(car, r.brain.think(cop, r.cars, dt), dt);
+      car.integrate(dt);
+      out.push({ t: t + step * dt, v: Math.hypot(cop.vx, cop.vz), d: Math.hypot(player.x - cop.x, player.z - cop.z) });
+    }
+  });
+  setGround(null);
+  return out;
+}
+
+/** Whether a cop 20 m south of the scene's player car, facing it at 10 m/s, backs off for a run-up (full lock away, the throttle held low) after `seconds` s of the player's squirm. */
+function backsOff(seconds: number, boxed: boolean, speedAt: (t: number) => number): boolean {
+  const { r, x, z } = playerScene(boxed);
+  const player = r.cars[0]!;
+  r.run(seconds, (t) => Object.assign(player, { vx: 0, vz: -speedAt(t) }));
+  Object.assign(r.cars[1]!, { x, z: z - 20, yaw: 0, vx: 0, vz: 10 });
+  let out = r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
+  for (let frame = 0; frame < FRAME_HZ; frame++) out = r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
+  return out.throttle < 0.5 && Math.abs(out.steer) > 0.5;
+}
+
+describe("given a player car boxed in by walls on three sides and two wrecks, and a police cop on the open side", () => {
+  it("when the player squirms over the bust's 20 km/h for the wait, then a real cop backs off to a run-up and charges in at 28 m/s or more (its speed within 12 m of the player car), and before the wait is up it comes in under 28 m/s", () => {
+    const run = copRun(RAM_AFTER + 14, () => 8);
+    const early = Math.max(0, ...run.filter((f) => f.t < RAM_AFTER).map((f) => f.v));
+    expect(early, `${early.toFixed(1)} m/s before the wait is up`).toBeLessThan(28);
+    const far = Math.max(...run.filter((f) => f.t > RAM_AFTER).map((f) => f.d));
+    expect(far, `${far.toFixed(0)} m the cop backed off to`).toBeGreaterThanOrEqual(RUN_UP - 10);
+    const hit = Math.max(0, ...run.filter((f) => f.t > RAM_AFTER && f.d < SETTLE).map((f) => f.v));
+    expect(hit, `${hit.toFixed(1)} m/s at the player car`).toBeGreaterThanOrEqual(28);
+  });
+  it("when the player has squirmed one second short of the wait, then the cop does not back off, and one beat past it, it does", () => {
+    expect(backsOff(RAM_AFTER - 1, true, () => 8)).toBe(false);
+    expect(backsOff(RAM_AFTER + 1, true, () => 8)).toBe(true);
+  });
+  it("when the player sits still instead, then the cop does not back off, however long: the bust is left to hold", () => {
+    expect(backsOff(RAM_AFTER * 4, true, () => 0)).toBe(false);
+  });
+  it("when the player drives off at 20 m/s a beat before the wait is up, then the wait starts over", () => {
+    const reset = RAM_AFTER / 2;
+    expect(backsOff(RAM_AFTER + 1, true, (t) => (Math.abs(t - reset) < 1e-6 ? 20 : 8))).toBe(false);
+  });
+  it("when the same squirm is on open ground, with no box round the player, then the cop does not back off", () => {
+    expect(backsOff(RAM_AFTER + 14, false, () => 8)).toBe(false);
+  });
+  it("when the wait is up and a unit of the box backs off out of it (the rammers that boxed the player in are the ones that back off), then the ram goes on: the box no longer clears a wait that is up", () => {
+    expect(waitAfterOpening(RAM_AFTER + 1), "the player's clock, s").toBeGreaterThanOrEqual(RAM_AFTER);
+  });
+  it("when the same unit leaves the box mid-wait, then the wait starts over", () => {
+    expect(waitAfterOpening(RAM_AFTER / 2), "the player's clock, s").toBeLessThan(RAM_AFTER / 2);
+  });
+  it("when the wait is up and the player then sits still for the calm time, then the ram is over and the clock starts over (the bust gets its chance); short of the calm time it goes on", () => {
+    expect(clockAfterStill(CALM_END - 1), "sat still short of the calm time, clock s").toBeGreaterThanOrEqual(RAM_AFTER);
+    expect(clockAfterStill(CALM_END + 1), "sat still past it, clock s").toBe(0);
+  });
+  it("when a cop's last ram ended with its charge flag set (the player drove off), then its next ram starts with a back-off: the flag is reset while the wait is not up", () => {
+    const { r, x, z } = playerScene(true);
+    // Past the green (before it every cop is held on the brake), the player sitting still so the wait does not run.
+    r.run(1, () => Object.assign(r.cars[0]!, { vx: 0, vz: 0 }));
+    r.brain["charging"][0] = 1;
+    Object.assign(r.cars[1]!, { x, z: z - 30, yaw: 0, vx: 0, vz: 10 });
+    r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
+    r.brain["pinned"][0] = RAM_AFTER;
+    let out = r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
+    for (let frame = 0; frame < FRAME_HZ; frame++) out = r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
+    expect(out.throttle < 0.5 && Math.abs(out.steer) > 0.5, "backing off for its run-up, not charging from 30 m").toBe(true);
+  });
+});
+
+/**
+ * The hunted player's squirm clock after `RAM_AFTER + 2` s of an 8 m/s squirm in the scene, when the box's two units are moved 40 m off (out of the
+ * box) at `openAt` s. `clockSquirm` alone is stepped, a beat at a time: the brain's own `update` would drop fresh units in beside the player.
+ */
+function waitAfterOpening(openAt: number): number {
+  const { r } = playerScene(true);
+  Object.assign(r.cars[1]!, { x: FAR, z: FAR });
+  Object.assign(r.cars[0]!, { vx: 0, vz: -8 });
+  for (let t = 0; t < RAM_AFTER + 2; t += BEAT) {
+    if (t >= openAt) for (const k of [2, 3]) Object.assign(r.cars[k]!, { x: FAR, z: FAR });
+    r.brain["clockSquirm"](r.cars, r.hunt, BEAT);
+  }
+  return r.brain["pinned"][0]!;
+}
+
+/** The player's squirm clock after `RAM_AFTER + 1` s of an 8 m/s squirm in the boxed scene (the box stays), then `stillS` s sitting still: `clockSquirm` alone is stepped, a beat at a time. */
+function clockAfterStill(stillS: number): number {
+  const { r } = playerScene(true);
+  Object.assign(r.cars[1]!, { x: FAR, z: FAR });
+  for (let t = 0; t < RAM_AFTER + 1 + stillS; t += BEAT) {
+    Object.assign(r.cars[0]!, { vx: 0, vz: t < RAM_AFTER + 1 ? -8 : 0 });
+    r.brain["clockSquirm"](r.cars, r.hunt, BEAT);
+  }
+  return r.brain["pinned"][0]!;
+}
 
 /** A frame's steps run at most 8 slices (`SimPacer`'s MAX_STEPS) of `physicsSlice` at the engine's slowest slice speed (8 m/s): the longest a placed cop waits to show while the player drives on. */
 const SHOW_LAG = 8 * physicsSlice(Infinity, 8);

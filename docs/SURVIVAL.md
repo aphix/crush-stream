@@ -97,6 +97,16 @@ than 20 m behind).
   away from, and brakes for, the pack-mate it would reach soonest within 3 s ([`RACE_DESIGN.md`](RACE_DESIGN.md), "Pack guard").
 - **Queueing.** A target faster than `PIT_MAX` = 20 m/s is queued behind (a lane `TAIL_LANE` = 2.6 m either side, a row every
   `ROW` = 8 m), and a unit closing faster than it can brake goes straight on.
+- **Ram when the box squirms.** A player sitting still or creeping under the bust's 20 km/h in the ring is busted, not rammed (a
+  unit within `SETTLE` = 12 m of a player car under `BLOCKABLE` eases to a creep). Each human has a squirm clock
+  (`HunterBrain.pinned`): the human is boxed in when units (wrecks too) and solids stand within `SETTLE` m on at least 5 of the 8
+  compass headings round it, units on at least 2 of them; the clock grows while a boxed-in human is at 20 km/h or over, up to
+  `ESCAPED` = 14 m/s (its hold keeps breaking), holds while it sits still, and starts over when it leaves the box or drives off.
+  At `RAM_AFTER` = 6 s every unit after that human rams it: it backs off along the line out from the human until it is
+  `RUN_UP` = 60 m off, then charges flat out and boosting (28 m/s and over is what kills), and backs off again once within
+  `RAM_HIT` = 10 m. Once the wait is up, leaving the box no longer clears the clock (the units backing off for their run-up are
+  the ones that boxed the human in); only a drive-off over `ESCAPED`, the human's hunt ending, or `CALM_END` = 3 s of sitting
+  still clears it: the human has stopped squirming, the pack is back to PIT, slam and queue, and the bust gets its chance.
 - **Beyond `ATTACK`** it aims at where the player will be, bent round solid props on a 16 m grid.
 - **Grip.** A hunter reads the surface under it and its class's tyre there as a racer does (`race-ai.ts`: `turnRate` for its
   steering, `arcSpeed` for the arc to its aim, the racer's brake latch `brakeOver` over that speed), so it corners on grass
@@ -149,6 +159,7 @@ Not built: rescue (ramming the cop that is busting a teammate cancels the bust) 
 |---|---|
 | bust at 12 s held, not a step before; 20 m, 20 km/h; the hold restarts; no laps | `match/survival.test.ts` |
 | the schedule, drop-ins only where hidden, wreck / lost put away only unseen and replaced, drop spot on a road in the band, steering round a wall, attack geometry, wedge back-off; a real police car turning on grass within 2 m of the arc to its quarry | `ai/hunter.test.ts` |
+| a player boxed in by walls and wrecks: squirming over 20 km/h for `RAM_AFTER`, a real police car backs off to the run-up and charges in at 28 m/s or more, and before it the car comes in under 28 m/s; a player sitting still is never rammed, a drive-off over 14 m/s starts the wait over, and a squirm on open ground is not rammed; the clock: once the wait is up, a unit leaving the box leaves it running, mid-wait the wait starts over, `CALM_END` s of sitting still after the wait ends the ram; a cop's next ram starts with a back-off even if its last one ended mid-charge | `ai/hunter.test.ts` |
 | start, countdown, bust through the real stack (the hold shortened to 3 s), wrecked ends the run, best-time store (new / worse / blocked), Retry, Quit, schedule on the HUD (first two steps) | `world/survival.test.ts` |
 | a cop dropped in with the chase camera at 12 places round the course, the player driving on at 16 m/s: never in the camera's view, never within `dropMin` | `world/survival.test.ts` |
 | `scene=survival` round trip, never with a room; `scene=survival&track=national-mall` decodes and encodes back | `hud/share-url.test.ts` |

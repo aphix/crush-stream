@@ -1,4 +1,5 @@
 import { CRASH, TRANSFER } from "../kernel/physics-core.js";
+import { popcount } from "../kernel/scalar.ts";
 import { BEAM_SPECS, CAGES, MASS_SPECS, SENSORS, SHAPE_CLUSTERS } from "../kernel/rig-spec.ts";
 import { DRIVE } from "../vehicle/car-drive.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
@@ -87,17 +88,6 @@ export function clipScore(impact: number, deform: number): number {
 
 /** Below this a cluster is a scrape, not a highlight (a lone 20 km/h tap scores ~1.0). */
 export const MIN_SCORE = 3;
-
-/** Number of set bits (cars in a 32-car mask). */
-function popcount(x: number): number {
-  let v = x >>> 0;
-  let n = 0;
-  while (v) {
-    v &= v - 1;
-    n++;
-  }
-  return n;
-}
 
 /** Impact energy of a contact: closing² × the pair's reduced mass (`massB` Infinity: a wall). */
 export function impactEnergy(closing: number, massA: number, massB: number): number {

@@ -548,9 +548,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 199: withdrawn (a squeezed body's set kept its height, and a free shape step took the cloud's net roll out): it went live with four rows red; a clip of 198 or before no longer reads.
  * 200: 199 taken back, the simulation of 198 again; a clip of 199 or before no longer reads.
  * 201: a squeezed body's mass that strays from its set distance to the cell (a crush springing back, or nearer the cell than a zero or bowed-out set once quiet) is put back on it in plan, its height kept (clampMass), not radially toward the cell: a wing or bumper under the cell no longer climbs toward the cell's height with every spring-back and pull-in; the roof, nearly over the cell, keeps the radial pull; a clip of 200 or before no longer reads.
+ * 202: Survival's pack rams a boxed-in human that squirms: a human with units (wrecks too) and solids within 12 m on 5 of 8 headings, units on 2 of them, that holds 20 km/h or over (and under 14 m/s) for 6 s in all (the wait holds while it sits still and starts over when it leaves the box or drives off) is backed off from to 60 m by every unit after it and charged flat out, and again once within 10 m, instead of eased up to at a creep; once the wait is up, leaving the box no longer clears it, only a drive-off over 14 m/s or 3 s of sitting still; a replayed Survival run with a human boxed in and squirming for 6 s moves differently; a clip of 201 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 201;
+const REPLAY_VERSION = 202;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

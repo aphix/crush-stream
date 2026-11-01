@@ -1,7 +1,7 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { DRIVE, type DriveInput } from "../vehicle/car-drive.ts";
 import type { AiCar } from "./derby-ai.ts";
-import { clamp, wrapPi } from "../kernel/scalar.ts";
+import { clamp, popcount, wrapPi } from "../kernel/scalar.ts";
 import type { PropCollider } from "../world/placements.ts";
 import type { SurvivalSpec } from "../world/track-schema.ts";
 import type { Track } from "../world/track.ts";
@@ -83,6 +83,20 @@ export const BLOCKABLE = 6;
 /** A unit this close (m) to a player car that has stopped eases to a creep (m/s): the bust needs the player car slow, and a ram makes it fast. */
 export const SETTLE = 12;
 const CREEP = 3;
+/** A player is boxed in when units (wrecks too) and solids stand within `SETTLE` m on at least `BOX_HEADINGS` of the 8 compass headings round it, units on at least `BOX_UNITS` of them. */
+const BOX_HEADINGS = 5;
+const BOX_UNITS = 2;
+/** A boxed-in player over this speed (m/s: the bust's 20 km/h) is squirming: its bust hold breaks. A player sitting still or creeping under it is left to the bust. */
+const SQUIRM = 20 / 3.6;
+/** A player that has squirmed this long (s) in all, boxed in, is rammed (not busted: the pack's hold has failed). */
+export const RAM_AFTER = 6;
+/** Over this speed (m/s) the player is driving off, not creeping: the wait for a ram starts over. */
+const ESCAPED = 14;
+/** Once the wait is up, a player that sits still (under `SQUIRM`) this long (s) has stopped squirming: the ram is over and the bust has its chance (its hold needs a chaser within 20 m for 12 s, which a pack backing off for its run-up never gives). */
+export const CALM_END = 3;
+/** A ramming unit charges from this far (m): a hit at 28 m/s or more is what kills, and a car needs a run this long to reach it. It has hit once it is under `RAM_HIT` m, and backs off for the next run. */
+export const RUN_UP = 60;
+const RAM_HIT = 10;
 /** Above this speed (m/s) a unit lifts when a solid is close ahead; below it, easing off only wedges it. */
 const DODGE_SPEED = 8;
 /** With no heading clear for the whole stretch, a bend of one radian is worth this many metres of clear run. */
@@ -196,6 +210,12 @@ export class HunterBrain extends CopBrain {
   private hunted: Uint8Array | null = null;
   /** Per unit: the car id of the human it is after (the nearest free one; −1 none). */
   private readonly aim: Int16Array;
+  /** Per racer: seconds it has squirmed boxed in (`RAM_AFTER`). Before the wait is up it starts over when the racer is out of the box; once it is up, only a drive-off, the hunt ending, or `CALM_END` s of sitting still clears it (the units that back off for their run-up are the ones that boxed it in). */
+  private readonly pinned: Float64Array;
+  /** Per racer: seconds it has sat still since the wait was up (`CALM_END`). */
+  private readonly calm: Float64Array;
+  /** Per unit: charging its target from the run-up (1), or backing off to the run-up (0). */
+  private readonly charging: Uint8Array;
   /** The distance (m) `nearestHunted` found. */
   private nearGap = Infinity;
   private go = false;
@@ -217,6 +237,9 @@ export class HunterBrain extends CopBrain {
     this.state = new Uint8Array(count);
     this.settled = new Uint8Array(count);
     this.aim = new Int16Array(count).fill(-1);
+    this.pinned = new Float64Array(racers);
+    this.calm = new Float64Array(racers);
+    this.charging = new Uint8Array(count);
     this.lost = new Float64Array(count);
     this.queued = new Int8Array(count);
     this.side = new Int8Array(count).fill(1);
@@ -242,6 +265,7 @@ export class HunterBrain extends CopBrain {
   launch(world: HunterWorld): void {
     this.go = false;
     this.aim.fill(-1);
+    this.pinned.fill(0);
     this.nextDrop = 0;
     for (let u = 0; u < this.count; u++) this.state[u] = STORED;
     for (const [k, f] of this.formation.entries()) {
@@ -294,25 +318,45 @@ export class HunterBrain extends CopBrain {
     const dz = tg.z - self.z;
     const dist = hypot2(dx, dz);
     const tv = hypot2(tg.vx, tg.vz);
-    this.settled[u] = tv <= BLOCKABLE && dist < SETTLE ? 1 : 0;
+    const ramming = this.pinned[target]! >= RAM_AFTER;
+    // A unit leaving a ram starts the next one from a back-off: a charge flag kept from the last would hit with no run-up.
+    if (!ramming) this.charging[u] = 0;
+    this.settled[u] = !ramming && tv <= BLOCKABLE && dist < SETTLE ? 1 : 0;
     // How far the unit stands ahead of its target along the target's travel (+), and whether it faces it from there.
     const along = -(dx * detSin(tg.yaw) + dz * detCos(tg.yaw));
     const headOn = along > WAIT_BEHIND && detSin(self.yaw) * dx + detCos(self.yaw) * dz > dist * HEAD_ON;
     const reach = along > 0 ? Math.max(ATTACK, tv * (headOn ? RAM_TIME : PULL_OUT)) : ATTACK;
-    if (dist <= reach) {
+    if (ramming) this.ram(u, self, tg, speed, dist, out);
+    else if (dist <= reach) {
       this.slot(u, self, tg, dist, cars);
       attackTarget(self, tg, this.role[u]!, this.turnMax, speed, dist, headOn, out, tv > BLOCKABLE, this.lane, this.row, this.pedals.isBraking(self.id));
       this.dodge(u, self, tg, speed, dist, out);
     } else this.chase(u, self, tg, speed, dist, out);
     // A ram throws a stopped player car over the bust's 20 km/h and restarts its hold, so the unit brakes in time to arrive slowly.
     const closing = Math.max(0, (self.vx * dx + self.vz * dz) / Math.max(dist, 1));
-    if (tv <= BLOCKABLE && speed > CREEP && dist < SETTLE + (closing * closing) / (2 * DRIVE.brake) + closing / BRAKE_RISE) {
+    if (!ramming && tv <= BLOCKABLE && speed > CREEP && dist < SETTLE + (closing * closing) / (2 * DRIVE.brake) + closing / BRAKE_RISE) {
       out.throttle = 0;
       out.brake = 1;
       out.boost = false;
     }
     this.wedge.watch(u, self.x, self.z, dt, out);
     return out;
+  }
+
+  /** A ram: from `RUN_UP` m flat out at where the target will be, boosting, no braking for the turn in; once it has hit, or from nearer than the run-up, back off along the line out from the target until the run-up is made. */
+  private ram(u: number, self: AiCar, tg: AiCar, speed: number, dist: number, out: DriveInput): void {
+    if (dist >= RUN_UP) this.charging[u] = 1;
+    else if (dist < RAM_HIT) this.charging[u] = 0;
+    const charge = this.charging[u] === 1;
+    const lead = charge ? Math.min(2, dist / Math.max(8, speed)) : 0;
+    const back = (RUN_UP * 1.5) / Math.max(dist, 1);
+    const ax = charge ? tg.x + tg.vx * lead : tg.x + (self.x - tg.x) * back;
+    const az = charge ? tg.z + tg.vz * lead : tg.z + (self.z - tg.z) * back;
+    const aimDist = hypot2(ax - self.x, az - self.z);
+    const alpha = wrapPi(this.openHeading(u, self, detAtan2(ax - self.x, az - self.z), speed, aimDist) - self.yaw);
+    out.steer = pursuitSteer(alpha, clamp(speed * 0.8, 8, 24), speed, this.turnMax);
+    out.throttle = Math.abs(alpha) > 1.3 && speed > 6 ? 0.2 : 1;
+    out.boost = out.throttle > 0.5 && Math.abs(alpha) < 0.35;
   }
 
   /**
@@ -401,6 +445,7 @@ export class HunterBrain extends CopBrain {
     this.hunted = hunt;
     let humans = 0;
     for (let i = 0; i < this.racers; i++) humans += hunt[i]!;
+    this.clockSquirm(cars, hunt, dt);
     let hunting = 0;
     for (let u = 0; u < this.count; u++) {
       const st = this.state[u]!;
@@ -439,6 +484,46 @@ export class HunterBrain extends CopBrain {
     this.deploy(u, world);
     this.stats.drops++;
     this.nextDrop = time + HUNT.gap;
+  }
+
+  /**
+   * Each hunted racer's squirm clock: it grows while the racer is boxed in and over `SQUIRM`, holds while it sits still, clears when it
+   * is out of the box or drives off over `ESCAPED`. Once it has reached `RAM_AFTER` the box no longer clears it (the rammers backing off
+   * for their run-up are the units that boxed it in): only a drive-off, the hunt ending, or `CALM_END` s of sitting still, when the
+   * racer has stopped squirming and the bust gets its chance.
+   */
+  private clockSquirm(cars: readonly AiCar[], hunt: Uint8Array, dt: number): void {
+    for (let i = 0; i < this.racers; i++) {
+      const me = cars[i]!;
+      const v = hypot2(me.vx, me.vz);
+      const waited = this.pinned[i]! >= RAM_AFTER;
+      if (hunt[i] !== 1 || v > ESCAPED || (!waited && !this.boxedIn(me, cars))) {
+        this.pinned[i] = 0;
+        this.calm[i] = 0;
+      } else if (v >= SQUIRM) {
+        this.pinned[i]! += dt;
+        this.calm[i] = 0;
+      } else if (waited && (this.calm[i]! += dt) >= CALM_END) {
+        this.pinned[i] = 0;
+        this.calm[i] = 0;
+      }
+    }
+  }
+
+  /** Whether units and solids close in `me` on enough headings (`BOX_HEADINGS`), units on enough of them (`BOX_UNITS`). */
+  private boxedIn(me: AiCar, cars: readonly AiCar[]): boolean {
+    let units = 0;
+    for (let u = 0; u < this.count; u++) {
+      if (this.state[u] === STORED) continue;
+      const c = cars[this.first + u]!;
+      const dx = c.x - me.x;
+      const dz = c.z - me.z;
+      if (dx * dx + dz * dz < SETTLE * SETTLE) units |= 1 << (Math.round(detAtan2(dx, dz) / (Math.PI / 4)) & 7);
+    }
+    if (popcount(units) < BOX_UNITS) return false;
+    let around = units;
+    for (let k = 0; k < 8; k++) if (this.obstacles.run(me.x, me.z, (k * Math.PI) / 4, SETTLE) < SETTLE) around |= 1 << k;
+    return popcount(around) >= BOX_HEADINGS;
   }
 
   /** A unit to drop in: one in storage, else the longest-lying wreck (past `wreckStore`) that the camera still sees, so a pile of wrecks in view never leaves the pack empty. −1 none. */
@@ -491,6 +576,7 @@ export class HunterBrain extends CopBrain {
     this.lost[u] = 0;
     this.role[u] = u;
     this.queued[u] = 0;
+    this.charging[u] = 0;
     this.wedge.reset(u);
     world.sirens(this.first + u, true);
   }
