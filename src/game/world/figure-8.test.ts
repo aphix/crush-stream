@@ -124,7 +124,7 @@ describe("given an AI racer put back on the road at a side slot two metres befor
     return (brain["seg"][0]! / track.path.count) * track.length;
   }
   for (const side of [2.6, -2.6]) {
-    it(`when the respawn names its sample and it stands ${side} m left of the line, then it is on its own strand`, () => {
+    it(`when the respawn names its sample and it stands ${Math.abs(side)} m to its ${side > 0 ? "left" : "right"}, then it is on its own strand`, () => {
       const own = passesThroughCrossing()[0]!;
       const k = Math.round(((own - 2) / track.length) * track.path.count);
       expect(Math.abs(strandOf(side, k) - own), "the seeded sample").toBeLessThan(15);
