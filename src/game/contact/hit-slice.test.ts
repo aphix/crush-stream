@@ -213,7 +213,7 @@ function sedanOff(cruiser: DeformableCar, side: THREE.Vector3): DeformableCar {
   const yaw = Math.atan2(-side.x, -side.z);
   const at = (d: number): void => launch(sedan, cruiser.group.position.x + side.x * d, cruiser.group.position.z + side.z * d, yaw, 0, 0);
   let near = 1;
-  let far = 4;
+  let far = 8; // centre to centre along the car's length: a cruiser's half length plus a sedan's runs past 4 m
   for (let i = 0; i < 30; i++) {
     const mid = (near + far) / 2;
     at(mid);
