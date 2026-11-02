@@ -28,7 +28,7 @@ import { propContact, sideContact, type PropHits } from "../contact/prop-contact
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import type { RaceCommand } from "../match/types.ts";
-import { SOLO_SCENES, type SceneId } from "../scenes/scene-id.ts";
+import { OWN_FIELD_SCENES, SOLO_SCENES, type SceneId } from "../scenes/scene-id.ts";
 import { mulberry32 } from "../world/placements.ts";
 import { celStrength } from "../present/scene-fade.ts";
 import { EngineMinigames } from "./engine-minigame-commands.ts";
@@ -130,7 +130,7 @@ export abstract class EngineScenes extends EngineMinigames {
     // The Lab and the garage are single player: a room (hosted or joined) takes the player back to the fleet. So does a guest's own Survival run: a hosted one is the host's.
     if ((SOLO_SCENES[this.sceneId] || (this.sceneId === "survival" && this.net.client && !this.race.mirrored)) && this.net.role !== "off") {
       this.setRace(false);
-      if (this.showLab || this.showGarage) {
+      if (SOLO_SCENES[this.sceneId]) {
         this.sceneId = "fleet";
         this.ensureCars(this.sandboxCars);
         this.followSceneTypes();
@@ -144,7 +144,7 @@ export abstract class EngineScenes extends EngineMinigames {
     if (next !== null) this.applyScene(next, true);
     // The Lab is flicked and the garage posed, never followed or driven: a tap by a car (`watchCar`), Q/E or LB/RB would follow it
     // and a pedal press then drive it, each taking the view off the shot and onto the car. Here, after the input and the switch, before the step and the camera.
-    if (this.showLab || this.showGarage) this.seat.clear();
+    if (this.showLab || this.showGarage || this.showShowcase) this.seat.clear();
     this.cine.post.cel = celStrength(this.celLook, fade.cel);
     // Black is a DOM veil over the canvas and the HUD at every tier; written only while it changes.
     if (fade.black !== this.veilBlack) {
@@ -159,12 +159,11 @@ export abstract class EngineScenes extends EngineMinigames {
     this.endMinigames();
     // A new scene is a new place: the free eye, left where the last one was, would hang in the new one's walls or sky.
     this.view.leaveFree();
-    // The range and the garage are one-car scenes: the sandbox's field comes back after them (the range's wall is its own, never the user's).
-    // The stack and the Lab run their own car counts and give the sandbox's back.
+    // A scene with its own field borrows `carCount`; every sandbox scene gets the user's field (`sandboxCars`) back, whichever scene it comes from.
     const wasLab = this.showLab;
     const wasGarage = this.showGarage;
     const wasShowcase = this.showShowcase;
-    if (this.showRange || this.showStack || this.showLab || this.showGarage || this.showShowcase) this.ensureCars(this.sandboxCars);
+    if (!OWN_FIELD_SCENES[next]) this.ensureCars(this.sandboxCars);
     if (this.race.active && next !== this.sceneId) this.setRace(false);
     // The workshop's lights go with the Lab, the garage and the showcase, before a race lights its course.
     if ((wasLab && next !== "lab") || ((wasGarage || wasShowcase) && next !== "garage" && next !== "showcase")) this.stage.look(null);
@@ -172,7 +171,6 @@ export abstract class EngineScenes extends EngineMinigames {
     if (wasShowcase && next !== "showcase") this.ragdolls.clearScene();
     if (this.derbyMode !== (next === "derby")) this.setDerby(next === "derby");
     if (next === "range" || next === "stack" || next === "lab" || next === "garage" || next === "showcase") {
-      this.sandboxCars = this.carCount;
       this.ensureCars(next === "range" || next === "garage" || next === "showcase" ? 1 : next === "lab" ? this.lab.types.length : this.stack.config.cars);
     }
     // The garage holds the player's car alone: the fleet's others are freed, not parked off the set where a camera could still go.
@@ -192,7 +190,7 @@ export abstract class EngineScenes extends EngineMinigames {
     if (next === "lab") {
       this.stage.look(LAB_LIGHT);
       this.frameLab();
-    } else if (wasLab) this.view.setLens(null);
+    } else this.view.setLens(null);
     if (next === "garage") {
       this.stage.look(LAB_LIGHT);
       this.view.frameReset(true, this.live(), GARAGE.angle, GARAGE.shot);
@@ -341,7 +339,6 @@ export abstract class EngineScenes extends EngineMinigames {
         this.clock.timeScale = 1;
         this.clock.targetScale = 1;
       }
-      this.sandboxCars = this.carCount;
     }
     for (const o of this.studio) o.visible = !on;
     for (const p of this.poles) p.group.visible = !on;

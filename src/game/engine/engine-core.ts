@@ -17,7 +17,7 @@ import { newWorld } from "./world-step.ts";
 import { EjectionWatch } from "../vehicle/ejection.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
 import { MAX_CARS, slotType, type CarType } from "../scenes/fleet.ts";
-import { fleetProp, type SceneId } from "../scenes/scene-id.ts";
+import { fleetProp, OWN_FIELD_SCENES, type SceneId } from "../scenes/scene-id.ts";
 import { MINIGAME_MODE, type MinigameMode } from "../scenes/minigame-constants.ts";
 import { SceneFade } from "../present/scene-fade.ts";
 import { ParkingScene } from "../present/parking-scene.ts";
@@ -376,8 +376,12 @@ export abstract class EngineCore {
   protected readonly studio: THREE.Object3D[] = [];
   protected sun!: THREE.DirectionalLight;
   protected race!: RaceDirector;
-  /** Car count to restore when leaving race mode. */
-  protected sandboxCars = 2;
+  /** The user's car count: the sandbox scenes run it, a scene with its own field borrows `carCount` and gives this back. Written by `setCarCount` and `resetDefaults` only. */
+  protected sandboxCars = INITIAL_HUD.carCount;
+  /** The scene sets its own car count: the sandbox slider and a link's `cars=` leave it alone. */
+  protected get ownsField(): boolean {
+    return this.race.active || OWN_FIELD_SCENES[this.sceneId] === true;
+  }
 
   protected tryUnlockAudio(): void {
     if (this.audioOn) this.audio.unlock();

@@ -4,7 +4,7 @@ import { camOf } from "../present/free-cam-pose.ts";
 import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
 import { NET_TX } from "../net/net-ports.ts";
 import { MINIGAME_MODE, THROWS_PER_SET } from "../scenes/minigame-constants.ts";
-import { SEEDED_SCENES } from "../scenes/scene-id.ts";
+import { OWN_FIELD_SCENES, SEEDED_SCENES } from "../scenes/scene-id.ts";
 import { HANDLING } from "../vehicle/vehicle-classes.ts";
 import { EngineReel } from "./engine-reel.ts";
 import { carPickText, NO_CAR_PICK, NO_PERSON_PICK, parseCarPick, parsePersonPick, personPickText, type CarPick, type PersonPick } from "../match/look-data.ts";
@@ -44,8 +44,8 @@ export abstract class EngineShare extends EngineReel {
       room: this.net.role !== "off" && isShareableRoom(this.net.room) ? this.net.room : "",
       tx: this.net.role === "off" ? NET_TX.rtc : this.net.tx,
       scene: sc,
-      // The race, the range, the stack, Survival and the garage put their own field up; the sandbox's size waits in `sandboxCars`.
-      cars: sc === "race" || sc === "range" || sc === "stack" || sc === "survival" || sc === "garage" ? this.sandboxCars : this.carCount,
+      // The sandbox's size always: a scene with its own field (race, range, Lab, garage...) leaves it in `sandboxCars`.
+      cars: this.sandboxCars,
       smin: this.speedMin,
       smax: this.speedMax,
       night: this.stage.night,
@@ -149,8 +149,8 @@ export abstract class EngineShare extends EngineReel {
     try {
       let c = this.shareState();
       const differs = (...keys: (keyof ShareState)[]): boolean => keys.some((k) => t[k] !== c[k]);
-      // The race, the range, the stack, Survival and the garage ignore the sandbox's car count: leave them first, the switch below stores it again.
-      if ((c.scene === "race" || c.scene === "range" || c.scene === "stack" || c.scene === "survival" || c.scene === "garage") && (t.scene !== c.scene || differs("cars"))) {
+      // A scene with its own field ignores the sandbox's car count: leave it first, so `setCarCount` below reaches the sandbox.
+      if (OWN_FIELD_SCENES[c.scene] && (t.scene !== c.scene || differs("cars"))) {
         this.applyScene("fleet");
         c = this.shareState();
       }

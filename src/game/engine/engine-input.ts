@@ -494,9 +494,10 @@ export abstract class EngineInput extends EngineRigs {
 
   setCarCount(n: number): void {
     if (this.net.client) return;
-    // The race sets its own field (setup menu), the range runs one car and the stack its own count; the sandbox slider must not reshape them.
-    if (this.race.active || this.showRange || this.showStack) return;
+    // A scene with its own field (race, range, stack, Lab, garage, showcase) sets its own count; the sandbox slider must not reshape it.
+    if (this.ownsField) return;
     this.ensureCars(n);
+    this.sandboxCars = this.carCount;
     this.tryUnlockAudio();
     this.randomizeAndReset();
     this.emitHud();
@@ -642,7 +643,7 @@ export abstract class EngineInput extends EngineRigs {
     this.showBarrier = INITIAL_HUD.showBarrier;
     this.showBalls = INITIAL_HUD.showBalls;
     this.showRamps = INITIAL_HUD.showRamps;
-    if (this.rigScene) this.sceneId = "fleet";
+    if (this.sceneId !== "fleet" && !this.race.active) this.applyScene("fleet");
     this.pistons.setConfig(PISTON_DEFAULTS);
     this.doorRig.kph = RAM_DEFAULTS.kph;
     this.doorRig.kg = RAM_DEFAULTS.kg;
@@ -650,6 +651,7 @@ export abstract class EngineInput extends EngineRigs {
     this.view.userFramed = false;
     this.setDerby(false);
     this.ensureCars(INITIAL_HUD.carCount);
+    this.sandboxCars = this.carCount;
     this.followSceneTypes();
     this.tryUnlockAudio();
     this.randomizeAndReset();

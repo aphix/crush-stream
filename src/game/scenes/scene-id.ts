@@ -29,6 +29,9 @@ export const SEEDED_SCENES: Readonly<Partial<Record<SceneId, true>>> = { fleet: 
 /** Single-player scenes: a netplay room (hosted or joined) cannot be in them, and a room's link never opens one. Survival is not one: a hosted room runs it as a team (docs/SURVIVAL.md). */
 export const SOLO_SCENES: Readonly<Partial<Record<SceneId, true>>> = { lab: true, garage: true, showcase: true };
 
+/** Scenes that set their own car count (the race and Survival by their setup): the sandbox's field (`sandboxCars`) is not theirs to change, and comes back after them. */
+export const OWN_FIELD_SCENES: Readonly<Partial<Record<SceneId, true>>> = { race: true, survival: true, range: true, stack: true, lab: true, garage: true, showcase: true };
+
 /**
  * The fleet props (jersey barrier, ramp balls, jump ramps) a scene sets for itself. The user's own choice (`showBarrier`
  * ...) is never written by a scene: the scene's value is in force while it is the scene, the user's comes back with the
