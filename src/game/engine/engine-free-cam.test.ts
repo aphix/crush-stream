@@ -74,6 +74,9 @@ describe("given the real engine in the fleet, watching a car", () => {
 
   it("when Ctrl goes down in the free view (its keydown carries the Ctrl flag, as a browser's does) and W is pressed with it, then the eye sinks and flies on, and neither keydown reaches the browser", () => {
     flyFree();
+    // The eye enters at the orbit's eye, which `EyeClear` pulls in toward the car by whatever the fleet's random layout (a fresh `Math.random` seed every `setScene`) puts on the line: 1.1 to 1.5 m up on some layouts, 5.8 m on most. The clearance floor (0.8 m up) would then bound the sink, not Ctrl, so the eye starts a known 10 m up.
+    engine["view"].free.eye.y = 10;
+    runSeconds(engine, FRAME);
     const start = eye();
     const down = (code: string) => Object.assign(new Event("keydown", { cancelable: true }), { code, repeat: false, ctrlKey: true, metaKey: false, altKey: false }) as KeyboardEvent;
     const ctrl = down("ControlLeft");
