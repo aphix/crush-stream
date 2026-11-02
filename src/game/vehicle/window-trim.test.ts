@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { runWall, type WallApproach } from "../contact/crash-scenarios.test-util.ts";
 import { DeformableCar } from "./car.ts";
+import { beltY } from "./car-lines.ts";
+import { CAR_STYLES, drawnStyle } from "./car-variants.ts";
 import { paint } from "./test-support.ts";
 
 /**
  * The coupe's chrome window trim follows what it frames: a pane's frame its pane, a strip the paint it stands on. A frame left rigid stood
- * out of the crushed body (a wreck's strip 4-8 cm in the road, `wreck-rest.test.ts`).
+ * out of the crushed body (a wreck's strip 4-8 cm in the road, `wreck-rest.test.ts`). The door window's surround belongs to the car and
+ * only its sill (the glass's belt edge) to the door, so a broken pane or a torn door leaves no trim hanging where the glass was.
  */
 
 /** A pane frame stays within this (m) of the move of its pane's nearest point: both are written from one cage, and the gap is the cage's fold. */
@@ -66,35 +69,67 @@ function stoodOn(car: DeformableCar, t: Trim): THREE.Mesh {
   return pane ? car.glassPanes.find((g) => g.name === pane)!.mesh : car.body;
 }
 
+/** The trims' rest points and the points of what each stands on, before a hit (indexed as `car.trims`). */
+type RestPoints = { trim: Float32Array; on: Float32Array }[];
+
+function restOf(car: DeformableCar): RestPoints {
+  return car["trims"].map((t) => ({ trim: carPoints(car, [t.mesh]), on: carPoints(car, [stoodOn(car, t)]) }));
+}
+
+/** The worst distance (m) a point of the chosen trims stands off the move of the drawn point it stood nearest at rest, and how many of them stood on paint that moved `DENT_M` or more. */
+function followed(crushed: DeformableCar, atRest: RestPoints, pick: (t: Trim) => boolean): { worst: number; dented: number } {
+  let worst = 0;
+  let dented = 0;
+  for (const [n, t] of crushed["trims"].entries()) {
+    if (!pick(t)) continue;
+    // A shattered pane is no longer written (its fragments fly): there is nothing left for its frame to stand on.
+    const pane = t.cage === "glassFront" ? "windshield" : t.cage === "glassRear" ? "rear" : null;
+    if (pane && crushed.glassPanes.find((g) => g.name === pane)!.state === "shattered") continue;
+    const { trim: trimRest, on: onRest } = atRest[n]!;
+    const trimNow = carPoints(crushed, [t.mesh]);
+    const onNow = carPoints(crushed, [stoodOn(crushed, t)]);
+    for (let i = 0; i < trimNow.length; i += 3) {
+      const s = nearest(onRest, trimRest[i]!, trimRest[i + 1]!, trimRest[i + 2]!);
+      const paintMove = [onNow[s]! - onRest[s]!, onNow[s + 1]! - onRest[s + 1]!, onNow[s + 2]! - onRest[s + 2]!] as const;
+      if (Math.hypot(...paintMove) > DENT_M) dented++;
+      worst = Math.max(worst, Math.hypot(trimNow[i]! - trimRest[i]! - paintMove[0], trimNow[i + 1]! - trimRest[i + 1]! - paintMove[1], trimNow[i + 2]! - trimRest[i + 2]! - paintMove[2]));
+    }
+  }
+  return { worst, dented };
+}
+
+/** A crushed coupe and its rest points, hit `approach` on at `kph` (the skin written). */
+function crushedCoupe(approach: WallApproach, kph: number): { crushed: DeformableCar; atRest: RestPoints } {
+  const crushed = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
+  crushed.deform.setMode("shape");
+  const atRest = restOf(new DeformableCar(paint(), new THREE.Scene(), null, "coupe"));
+  runWall(kph, 1, approach, { car: crushed });
+  crushed.flushDeferredSkin();
+  crushed.updateSkin();
+  return { crushed, atRest };
+}
+
 describe("given a coupe whose chrome window trim frames its glass and runs along its sides", () => {
   for (const { approach, kph, frames, bar } of HITS) {
     it(`when it is crushed ${approach} on at ${kph} km/h, then each ${frames ? "pane frame" : "strip"} point moves with the drawn point it stood nearest at rest, to within ${bar * 100} cm`, () => {
-      const crushed = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
-      crushed.deform.setMode("shape");
-      const pristine = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
-      const atRest = pristine["trims"].map((t) => ({ trim: carPoints(pristine, [t.mesh]), on: carPoints(pristine, [stoodOn(pristine, t)]) }));
-      runWall(kph, 1, approach, { car: crushed });
-      crushed.flushDeferredSkin();
-      crushed.updateSkin();
-      let worst = 0;
-      let dented = 0;
-      for (const [n, t] of crushed["trims"].entries()) {
-        const pane = t.cage === "glassFront" ? "windshield" : t.cage === "glassRear" ? "rear" : null;
-        if ((pane !== null) !== frames) continue;
-        // A shattered pane is no longer written (its fragments fly): there is nothing left for its frame to stand on.
-        if (pane && crushed.glassPanes.find((g) => g.name === pane)!.state === "shattered") continue;
-        const { trim: trimRest, on: onRest } = atRest[n]!;
-        const trimNow = carPoints(crushed, [t.mesh]);
-        const onNow = carPoints(crushed, [stoodOn(crushed, t)]);
-        for (let i = 0; i < trimNow.length; i += 3) {
-          const s = nearest(onRest, trimRest[i]!, trimRest[i + 1]!, trimRest[i + 2]!);
-          const paintMove = [onNow[s]! - onRest[s]!, onNow[s + 1]! - onRest[s + 1]!, onNow[s + 2]! - onRest[s + 2]!] as const;
-          if (Math.hypot(...paintMove) > DENT_M) dented++;
-          worst = Math.max(worst, Math.hypot(trimNow[i]! - trimRest[i]! - paintMove[0], trimNow[i + 1]! - trimRest[i + 1]! - paintMove[1], trimNow[i + 2]! - trimRest[i + 2]! - paintMove[2]));
-        }
-      }
+      const { crushed, atRest } = crushedCoupe(approach, kph);
+      const { worst, dented } = followed(crushed, atRest, (t) => (t.cage === "glassFront" || t.cage === "glassRear") === frames);
       expect(dented, `the control: some trim point stood on paint that moved ${DENT_M * 100} cm or more`).toBeGreaterThan(0);
       expect(worst, `a trim point ${(worst * 100).toFixed(1)} cm off the move of the paint it stands on`).toBeLessThanOrEqual(bar);
+    });
+  }
+});
+
+/** The window surrounds' mesh (`cage` "roof": the body paint they and the quarter frames stand on). */
+const isSurround = (t: Trim): boolean => t.cage === "roof";
+
+describe("given a coupe's window surrounds after a wall hit", () => {
+  for (const { approach, kph } of [{ approach: "side", kph: 48 }, { approach: "front", kph: 52 }] as const) {
+    it(`when it is crushed ${approach} on at ${kph} km/h, then the surrounds' points move with the body paint they stand on, to within ${STRIP_FOLLOW_M * 100} cm, not stay at rest over a crushed pillar and roof`, () => {
+      const { crushed, atRest } = crushedCoupe(approach, kph);
+      const { worst, dented } = followed(crushed, atRest, isSurround);
+      expect(dented, `the control: some surround point stood on paint that moved ${DENT_M * 100} cm or more`).toBeGreaterThan(0);
+      expect(worst, `a surround point ${(worst * 100).toFixed(1)} cm off the move of the paint it stands on`).toBeLessThanOrEqual(STRIP_FOLLOW_M);
     });
   }
 });
@@ -162,6 +197,95 @@ describe("given a coupe's windshield after a front wall hit", () => {
       const mean = sum / (now.length / 3);
       expect(!(Math.abs(mean - before) > LATCH_STEP_M), `${kph} km/h: the pane stands ${(mean * 100).toFixed(1)} cm off its seat, ${((mean - before) * 100).toFixed(1)} cm from the speed below`).toBe(true);
       before = mean;
+    }
+  });
+});
+
+/** A door's sill bead stands within this (m) of the belt line: 1 cm across, and its run is straight between the glass's columns. */
+const SILL_SLACK_M = 0.015;
+
+const coupeStyle = drawnStyle(CAR_STYLES.coupe);
+
+/** The windowTrim meshes `root` parents directly (a door group's, or the car's body group's). */
+const trimsOn = (root: THREE.Object3D): THREE.Mesh[] => root.children.filter((o): o is THREE.Mesh => o instanceof THREE.Mesh && o.name === "windowTrim");
+
+/** Door `door`'s trim points in the car frame at its rest pose (its group's rest seat on its hinge frame), on the car or torn off it. */
+function doorTrimPoints(car: DeformableCar, door: 0 | 1): Float32Array {
+  const part = car["doorParts"][door]!;
+  const points = carPoints(car, trimsOn(part.object));
+  for (let i = 0; i < points.length; i += 3) {
+    points[i] = points[i]! + part.restPos.x;
+    points[i + 1] = points[i + 1]! + part.restPos.y;
+    points[i + 2] = points[i + 2]! + part.restPos.z;
+  }
+  return points;
+}
+
+/** How many of `points` (xyz) stand over the belt line by more than the sill's slack, and how many stand at it. */
+function againstBelt(points: Float32Array): { above: number; at: number } {
+  let above = 0;
+  let at = 0;
+  for (let i = 0; i < points.length; i += 3) {
+    const off = points[i + 1]! - beltY(points[i + 2]!, coupeStyle);
+    if (off > SILL_SLACK_M) above++;
+    else if (off >= -SILL_SLACK_M) at++;
+  }
+  return { above, at };
+}
+
+/** How many points of the body's own trim meshes stand over door `door`'s opening, on its side, higher than half the glass's height over the belt: its surround's top and pillars, not a quarter frame behind the B-pillar. */
+function surroundPoints(car: DeformableCar, door: 0 | 1): number {
+  const part = car["doorParts"][door]!;
+  const pane = car.glassPanes.find((g) => g.name === (door === 0 ? "doorL" : "doorR"))!;
+  pane.mesh.geometry.computeBoundingBox();
+  const box = pane.mesh.geometry.boundingBox!;
+  const [zLo, zHi] = [box.min.z + part.restPos.z + pane.mesh.position.z, box.max.z + part.restPos.z + pane.mesh.position.z];
+  const side = door === 0 ? -1 : 1;
+  const points = carPoints(car, trimsOn(car.group));
+  let n = 0;
+  for (let i = 0; i < points.length; i += 3) {
+    const [x, y, z] = [points[i]!, points[i + 1]!, points[i + 2]!];
+    const mid = z > zLo + 0.2 * (zHi - zLo) && z < zHi - 0.2 * (zHi - zLo);
+    if (x * side > 0 && mid && y > beltY(z, coupeStyle) + 0.5 * (box.max.y - box.min.y)) n++;
+  }
+  return n;
+}
+
+describe("given a coupe whose side windows break", () => {
+  it("when both door panes shatter, then each door keeps its sill at the belt and no trim above it, and the body keeps a surround over each opening", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
+    expect(car.smashGlass("doorL") && car.smashGlass("doorR"), "the control: both door panes shatter").toBe(true);
+    for (const door of [0, 1] as const) {
+      const { above, at } = againstBelt(doorTrimPoints(car, door));
+      expect(at, `door ${door}: the control: it keeps its sill`).toBeGreaterThan(0);
+      expect(above, `door ${door}: ${above} trim points stand over the belt where the glass was`).toBe(0);
+      expect(surroundPoints(car, door), `door ${door}: the body's surround over the opening`).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("given a coupe whose doors tear off", () => {
+  it("when both doors are torn, then each carries its sill at the belt and none of the surround, and the body keeps the surround", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
+    for (const door of [0, 1] as const) car["detachPart"](car["doorParts"][door]!, 0, new THREE.Vector3());
+    for (const door of [0, 1] as const) {
+      const { above, at } = againstBelt(doorTrimPoints(car, door));
+      expect(at, `door ${door}: the control: the torn door carries its sill`).toBeGreaterThan(0);
+      expect(above, `door ${door}: the torn door carries ${above} trim points over the belt`).toBe(0);
+      expect(surroundPoints(car, door), `door ${door}: the body's surround over the empty opening`).toBeGreaterThan(0);
+    }
+  });
+
+  it("when a side-crushed coupe's doors are torn, then each door's sill and strips fly at their built shape, not at the dent they last stood on", () => {
+    const { crushed } = crushedCoupe("side", 48);
+    const built = new DeformableCar(paint(), new THREE.Scene(), null, "coupe")["trims"].map((t) => rawPoints(t.mesh));
+    const doorTrims = crushed["trims"].flatMap((t, n) => (t.door === null ? [] : [{ t, n }]));
+    const dentedBy = doorTrims.reduce((worst, { t, n }) => Math.max(worst, largestMove(rawPoints(t.mesh), built[n]!)), 0);
+    expect(dentedBy, `the control: the crush moved a door's trim point ${(dentedBy * 100).toFixed(1)} cm`).toBeGreaterThan(DENT_M);
+    for (const door of [0, 1] as const) crushed["detachPart"](crushed["doorParts"][door]!, 0, new THREE.Vector3());
+    for (const { t, n } of doorTrims) {
+      const off = largestMove(rawPoints(t.mesh), built[n]!);
+      expect(off, `torn door ${t.door}'s trim ${n} flies ${(off * 1000).toFixed(1)} mm off its built shape`).toBeLessThanOrEqual(RESET_BAR_M);
     }
   });
 });

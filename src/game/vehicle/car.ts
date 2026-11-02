@@ -25,6 +25,7 @@ import { MAT, SCRATCH_CUT, TAKES_SCRATCH, type MaterialId } from "../kernel/mate
 import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
 import { passesFor, smoothingNow, smoothNormals } from "./normal-smooth.ts";
 import { SCRATCH_MIN_SLIP } from "./paint-scrapes.ts";
+import { rideSkin } from "./trim-ride.ts";
 
 const _p = new THREE.Vector3();
 const _m = new THREE.Matrix4();
@@ -790,9 +791,11 @@ export class DeformableCar extends CarParts {
       if (!g.skin || !g.restVerts || g.state === "shattered") continue;
       this.deform.skinPanel(g.mesh.geometry, g.restVerts, g.skin, _zero);
     }
+    const skin = this.body.geometry.getAttribute("position").array as Float32Array;
     for (const t of this.trims) {
       if (t.door !== null && this.doorParts[t.door]!.detached) continue;
-      if (t.paint) this.deform.skinPoints(t.mesh.geometry, t.rest, t.paint, t.cage, t.origin);
+      if (t.ride) rideSkin(t.mesh.geometry, t.ride, skin, t.origin);
+      else if (t.paint) this.deform.skinPoints(t.mesh.geometry, t.rest, t.paint, t.cage, t.origin);
       else this.deform.skinPanel(t.mesh.geometry, t.rest, t.cage, t.origin);
     }
     this.poseLidFittings();

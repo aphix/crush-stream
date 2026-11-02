@@ -4806,7 +4806,7 @@ describe("given a pull handle for a style's side details", () => {
 });
 
 describe("given a style with chrome window trim", () => {
-  it("when its car is built, then a chrome bead rides each door at its glass's seat and one more the body, standing proud of the door glass, and a style without trim draws none", () => {
+  it("when its car is built, then a chrome sill bead and the door's strips ride each door at its glass's seat and four more trims the body, the sill standing proud of the door glass, and a style without trim draws none", () => {
     const chrome = trimMaterial(TRIM_CHROME, "chrome");
     const trims = (car: DeformableCar) => {
       const found: THREE.Mesh[] = [];
@@ -4815,20 +4815,26 @@ describe("given a style with chrome window trim", () => {
     };
     expect(trims(cars.coupe).every((m) => m.material === chrome), "every trim mesh wears the shared chrome").toBeTruthy();
     const coupe = cars.coupe;
-    // Split by what each follows in a crush: per door its glass frame and its chrome strips, on the body the quarter frames, the windshield's, the rear glass's and the strips.
+    // Split by what each follows in a crush: per door its sill (the glass's belt edge) and its chrome strips, on the body the side frames (quarter frames and door window surrounds), the windshield's, the rear glass's and the strips.
     const parents = trims(coupe).map((m) => m.parent);
     expect(parents.length, "eight trim meshes: two on each door, four on the body").toBe(8);
     expect(parents.filter((p) => p === coupe.group).length, "four on the body").toBe(4);
     for (const door of [coupe["doorL"], coupe["doorR"]]) {
       const onDoor = trims(coupe).filter((m) => m.parent === door);
-      expect(onDoor.length, "a frame and the strips on each door").toBe(2);
+      expect(onDoor.length, "a sill and the strips on each door").toBe(2);
       const trim = onDoor[0]!;
       const pane = coupe["glassPanes"].find((g) => g.mesh.parent === door)!.mesh;
       expect(onDoor.every((m) => m.position.equals(pane.position)), "the door's trims sit at its glass's seat").toBeTruthy();
-      trim.geometry.computeBoundingBox();
+      // The sill stands over the glass's belt row, outward of it (the glass leans in above, so only its lowest row is compared).
+      const side = door === coupe["doorL"] ? -1 : 1;
+      const outermost = (mesh: THREE.Mesh, upTo: number): number => {
+        const pos = mesh.geometry.getAttribute("position");
+        let out = -Infinity;
+        for (let i = 0; i < pos.count; i++) if (pos.getY(i) <= upTo) out = Math.max(out, side * pos.getX(i));
+        return out;
+      };
       pane.geometry.computeBoundingBox();
-      const out = (b: THREE.Box3) => Math.max(Math.abs(b.min.x), Math.abs(b.max.x));
-      expect(out(trim.geometry.boundingBox!), "the trim stands proud of the glass").toBeGreaterThan(out(pane.geometry.boundingBox!));
+      expect(outermost(trim, Infinity), "the sill stands proud of the glass's belt row").toBeGreaterThan(outermost(pane, pane.geometry.boundingBox!.min.y + 0.01));
     }
     expect(trims(cars.sedan).length, "the control: a style without trim draws none").toBe(0);
   });

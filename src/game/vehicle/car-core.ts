@@ -16,7 +16,8 @@ import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { doorCardFace, doorSkinZ, drawnDoorCard, mirrorSeatX } from "./car-door-mesh.ts";
 import { ownGeometry, restNormalsOf } from "./car-templates.ts";
 import { smoothingNow } from "./normal-smooth.ts";
-import { DOOR_GLASS_SEAT, makeBodyGlassTrim, makeDoorChromeStrips, makeRearGlass, makeSideGlassFrame, privacyPane } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, makeBodyGlassTrim, makeDoorBeltTrim, makeDoorChromeStrips, makeRearGlass, privacyPane } from "./car-glass.ts";
+import { bindToSkin, type SkinRide } from "./trim-ride.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
   LIGHT_BAR_FOOT,
@@ -45,10 +46,10 @@ import { carClass, CLASSES, drivenAxles } from "./vehicle-classes.ts";
 import { bootPivot, hoodSpec, lidSpec, roofHinged, type HingeSpec } from "./hinge-spec.ts";
 import { POSE_MEMO_LENGTH } from "./part-pose.ts";
 import { restShell } from "./shadow-caster.ts";
-/** What a chrome trim follows in a crush: the cage of the pane it frames, or (`strip`) the body paint's A5 rules about its seat, `cage` then the lattice mode's stand-in; `door` the door it rides. */
-type TrimKind = { cage: BodyPartName; door: 0 | 1 | null; strip: boolean };
-/** A trim mesh with its rest points (in its own frame, seated at `origin` in the car frame) and, for a strip, its paint tables. */
-type TrimFollow = Pick<TrimKind, "cage" | "door"> & { mesh: THREE.Mesh; rest: Float32Array; origin: THREE.Vector3; paint: PointSkin | null };
+/** What a chrome trim follows in a crush: the `cage` of the pane it frames; the body paint's A5 rules about its seat (`paint`, `cage` then the lattice mode's stand-in); or the body's drawn vertices nearest it (`skin`: the drawn crush's wrinkles, caps and cuts included, which A5 leaves out). `door` the door it rides. */
+type TrimKind = { cage: BodyPartName; door: 0 | 1 | null; by: "cage" | "paint" | "skin" };
+/** A trim mesh with its rest points (in its own frame, seated at `origin` in the car frame) and, for `paint`, its paint tables, for `skin` its vertex ties. */
+type TrimFollow = Pick<TrimKind, "cage" | "door"> & { mesh: THREE.Mesh; rest: Float32Array; origin: THREE.Vector3; paint: PointSkin | null; ride: SkinRide | null };
 const _inv = new THREE.Quaternion();
 const _lampQ = new THREE.Quaternion();
 const _pivot = new THREE.Vector3();
@@ -895,19 +896,27 @@ export abstract class CarCore {
         if (!follow) return;
         const rest = this.copyRest(geometry);
         const origin = at ? parent.position.clone().add(at) : new THREE.Vector3();
-        this.trims.push({ cage: follow.cage, door: follow.door, mesh, rest, origin, paint: follow.strip ? this.deform.bindPoints(rest, origin) : null });
+        this.trims.push({
+          cage: follow.cage,
+          door: follow.door,
+          mesh,
+          rest,
+          origin,
+          paint: follow.by === "paint" ? this.deform.bindPoints(rest, origin) : null,
+          ride: follow.by === "skin" ? bindToSkin(rest, origin, this.deform.restSkin) : null,
+        });
       };
-      // A pane's frame follows its pane (the skinned panes' cages; the rigid side and quarter glass keep their frames still), a strip the paint it stands on.
-      addTrim(makeSideGlassFrame(-1, style), this.doorL, null, sideL.position);
-      addTrim(makeSideGlassFrame(1, style), this.doorR, null, sideR.position);
+      // A door's sill and strips follow its paint, the window surrounds the body's drawn skin, a windshield or rear frame its pane's cage.
+      addTrim(makeDoorBeltTrim(-1, style), this.doorL, { cage: "doorLeft", door: 0, by: "paint" }, sideL.position);
+      addTrim(makeDoorBeltTrim(1, style), this.doorR, { cage: "doorRight", door: 1, by: "paint" }, sideR.position);
       const doorStrips = [makeDoorChromeStrips(-1, style), makeDoorChromeStrips(1, style)] as const;
-      if (doorStrips[0]) addTrim(doorStrips[0], this.doorL, { cage: "doorLeft", door: 0, strip: true }, sideL.position);
-      if (doorStrips[1]) addTrim(doorStrips[1], this.doorR, { cage: "doorRight", door: 1, strip: true }, sideR.position);
+      if (doorStrips[0]) addTrim(doorStrips[0], this.doorL, { cage: "doorLeft", door: 0, by: "paint" }, sideL.position);
+      if (doorStrips[1]) addTrim(doorStrips[1], this.doorR, { cage: "doorRight", door: 1, by: "paint" }, sideR.position);
       const body = makeBodyGlassTrim(style, !inGate);
-      addTrim(body.quarters, this.group, null);
-      addTrim(body.windshield, this.group, { cage: "glassFront", door: null, strip: false });
-      if (body.rear) addTrim(body.rear, this.group, { cage: "glassRear", door: null, strip: false });
-      if (body.strips) addTrim(body.strips, this.group, { cage: "chassisCell", door: null, strip: true });
+      addTrim(body.sideFrames, this.group, { cage: "roof", door: null, by: "skin" });
+      addTrim(body.windshield, this.group, { cage: "glassFront", door: null, by: "cage" });
+      if (body.rear) addTrim(body.rear, this.group, { cage: "glassRear", door: null, by: "cage" });
+      if (body.strips) addTrim(body.strips, this.group, { cage: "chassisCell", door: null, by: "paint" });
     }
   }
 

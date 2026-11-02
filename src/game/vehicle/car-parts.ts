@@ -1358,6 +1358,8 @@ export abstract class CarParts extends CarGlass {
     // ponytail: a torn door flies as its rest shell (its loose shape is sim and is read off the shell drawn, `boxShape`); flying dented moves the sim.
     if (p === this.doorParts[0]) this.restoreRest(this.doorMeshL.geometry, this.doorLRest, this.drawnRest("doorL"));
     else if (p === this.doorParts[1]) this.restoreRest(this.doorMeshR.geometry, this.doorRRest, this.drawnRest("doorR"));
+    // Its sill and strips fly on the rest shell too, not at the dent they last stood on.
+    for (const t of this.trims) if (t.door !== null && this.doorParts[t.door] === p) this.restoreRest(t.mesh.geometry, t.rest);
     this.seatDoorCards();
     this.group.updateMatrixWorld();
     const wpos = new THREE.Vector3();
