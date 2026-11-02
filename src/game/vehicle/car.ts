@@ -160,9 +160,6 @@ export class DeformableCar extends CarParts {
   wheelsDown = 15;
   /** The slice (s) `stepFree` moved this body in the slice under way; 0 once that slice's masses have stepped (`afterContacts`). */
   private flewDt = 0;
-  /** The velocity (m/s) the rigid step found this car at before its rows' impulses this slice (`snapshotRows`), while `rowsStepped`: rows on a car whose masses run take nothing back (`rewindRows`), so a push is read on it. Not state. */
-  readonly velocityBeforeRows = new THREE.Vector3();
-  rowsStepped = false;
   /** The yaw inverse inertia per unit mass (`wreckInvI`) the last wreck step had; 0 off the masses. */
   private invYaw = 0;
   /** The drawn body's load transfer over the physics body, and its wheels' seats (drawn only). */
@@ -471,7 +468,6 @@ export class DeformableCar extends CarParts {
   }
 
   afterContacts(dt: number): void {
-    this.rowsStepped = false;
     this.flewDt = 0;
     this.endAgo[0] += dt;
     this.endAgo[1] += dt;

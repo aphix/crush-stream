@@ -464,8 +464,6 @@ function storeMotion(out: Float64Array, at: number, car: DeformableCar): void {
 /** What the stepping car and the cars its rows rest on move at, before the solve gives them any impulse: the speeds their crush is armed with. */
 function snapshotRows(car: DeformableCar, n: number): void {
   storeMotion(PRE_A, 0, car);
-  car.velocityBeforeRows.copy(car.velocity);
-  car.rowsStepped = true;
   for (let c = 0; c < n; c++) {
     const o = HELD[c];
     if (o === null || o === undefined) continue;
@@ -502,16 +500,14 @@ function collectCrush(car: DeformableCar, n: number): void {
     const plastic = plasticEnergy(closing, 1 / k);
     const ebsA = barrierSpeed(plastic, 1, 1, 1, k);
     const ebsB = other === null ? 0 : barrierSpeed(plastic, RATIO[c]!, RATIO[c]!, 1, k);
-    const onCar = other === null && OWN[c]! >= 0 ? 1 : 0;
     let slot = -1;
-    for (let i = 0; i < queue.size; i++) if (PENDING_A[i] === car && PENDING_B[i] === other && PENDING[i * PENDING_STRIDE + P_ONCAR] === onCar) slot = i;
+    for (let i = 0; i < queue.size; i++) if (PENDING_A[i] === car && PENDING_B[i] === other) slot = i;
     if (slot < 0) {
       if (queue.size === PENDING_CAPACITY) continue;
       slot = queue.size++;
       PENDING_A[slot] = car;
       PENDING_B[slot] = other;
       PENDING.fill(0, slot * PENDING_STRIDE, (slot + 1) * PENDING_STRIDE);
-      PENDING[slot * PENDING_STRIDE + P_ONCAR] = onCar;
       PENDING.set(PRE_A, slot * PENDING_STRIDE + P_PRE_A);
       if (other !== null) {
         PENDING.set(PRE_B.subarray(c * 6, c * 6 + 6), slot * PENDING_STRIDE + P_PRE_B);
@@ -539,6 +535,7 @@ function collectCrush(car: DeformableCar, n: number): void {
     PENDING[f + P_CLOSING] = closing;
     PENDING[f + P_DEPTH] = Math.max(0, SINK[c]!);
     PENDING[f + P_TYRE] = TYRE[c] && N[c]!.y === 0 ? 1 : 0;
+    PENDING[f + P_ONCAR] = other === null && OWN[c]! >= 0 ? 1 : 0;
   }
 }
 
