@@ -39,6 +39,8 @@ export const HUB_POP_MPS = 15;
 /** The hit speed (m/s EBS) from which a corner crushed to `HUB_OVERRUN` of its hub takes the wheel. */
 const HUB_OVERRUN_MPS = 3;
 
+/** Largest net roll (rad) a free shape step may leave in the cloud's displacement (`removeNetSpin`): a wreck rolling over was turned 0.32 rad in one step by its own goals, a quiet one's leak is a few mrad. */
+const STEP_ROLL_MAX = 0.05;
 const _a = new THREE.Vector3();
 const _inverse = new THREE.Matrix4();
 /** `clampLocal`'s inverse of the group's world matrix while its hubs are planted, and the car-frame place `tetherHub` reads a hub at. */
@@ -124,9 +126,17 @@ export abstract class DeformSolve extends DeformFreeze {
     const eL = this.at.engineL;
     const eR = this.at.engineR;
     _a.subVectors(eR.local, eL.local);
+    // A stretched pair is pulled together along its line (which also levels a pair the body's roll split: the owner's c0 stood 30 mm apart in height
+    // with it, 71 mm without). A squeezed one is pushed apart in the body's plan only: along its slanted line the restore split their heights
+    // further each call, the clamp squeezing it again between (the owner's blue muscle car: the pair rolled 25° in the car's frame in 60 ms to the lift caps, +137.5 mm at the nose).
+    const restGap = eL.rest.distanceTo(eR.rest);
+    const stretched = _a.length() > restGap;
+    // A squeezed pair keeps its heights and aims at the plan length that makes its slanted line the rest length: it meets the stretched branch at the rest length with no step.
+    const aim = stretched ? restGap : Math.sqrt(Math.max(0, restGap * restGap - _a.y * _a.y));
+    if (!stretched) _a.y = 0;
     const gap = _a.length();
     if (!squeeze && gap > 1e-6) {
-      _a.multiplyScalar((gap - eL.rest.distanceTo(eR.rest)) / gap / (eL.mass + eR.mass));
+      _a.multiplyScalar((gap - aim) / gap / (eL.mass + eR.mass));
       eL.local.addScaledVector(_a, eR.mass);
       eR.local.addScaledVector(_a, -eL.mass);
       eL.world.copy(eL.local).applyMatrix4(group.matrixWorld);
@@ -585,8 +595,8 @@ export abstract class DeformSolve extends DeformFreeze {
     }
     // Internal goals exert no net torque. Yaw is always removed (nothing restores it, so overlapping plastic rests would turn
     // the wreck); once nothing pushes the body pitch goes too: left in, the front clusters' nose-up fit (17 deg after a 50 km/h
-    // wall) lifted the wing and bumper 0.12 m above their seat, and a quiet wreck holds them there. Roll stays: the planted
-    // hubs restore it, and a side shove's spin is real motion that removal turned into a permanent tilt (far side 0.07-0.10 m off).
+    // wall) lifted the wing and bumper 0.12 m above their seat, and a quiet wreck holds them there. Roll stays (but for a free step's leak past
+    // `STEP_ROLL_MAX`): the planted hubs restore it, and a side shove's spin is real motion that removal turned into a permanent tilt (far side 0.07-0.10 m off).
     this.removeNetSpin(comX / comM, comY / comM, comZ / comM, contacting || this.faceContacts > 0);
     if (!contacting) {
       let comX1 = 0,
@@ -625,8 +635,8 @@ export abstract class DeformSolve extends DeformFreeze {
 
   /**
    * Takes the net turn out of this step's shape-match correction (`startX/Y/Z` to the particles now) about the centroid
-   * `(cx, cy, cz)`: a small-angle `ω = I⁻¹ Σ m r × Δ`, then each particle takes the yaw and pitch part of `-ω × r` (roll is the
-   * planted hubs' to restore and a side shove's to keep). While the body is `pushed` only the turn about up goes: the push is the external torque on pitch.
+   * `(cx, cy, cz)`: a small-angle `ω = I⁻¹ Σ m r × Δ`, then each particle takes the yaw and pitch part of `-ω × r`, and a free step's roll past
+   * `STEP_ROLL_MAX` (planted hubs restore a quiet wreck's leak of a few mrad, and a side shove's spin is real motion to keep). While the body is `pushed` only the turn about up goes: the push is the external torque on pitch.
    */
   private removeNetSpin(cx: number, cy: number, cz: number, pushed: boolean): void {
     let lx = 0,
@@ -658,7 +668,8 @@ export abstract class DeformSolve extends DeformFreeze {
       iyz -= p.mass * ry * rz;
     }
     let wx = 0,
-      wy = 0;
+      wy = 0,
+      wz = 0;
     if (pushed) {
       if (iyy < 1e-8) return;
       wy = ly / iyy;
@@ -671,6 +682,8 @@ export abstract class DeformSolve extends DeformFreeze {
       if (Math.abs(det) < 1e-12) return;
       wx = (c0 * lx + c1 * ly + c2 * lz) / det;
       wy = (c1 * lx + (ixx * izz - ixz * ixz) * ly + (ixy * ixz - ixx * iyz) * lz) / det;
+      const roll = (c2 * lx + (ixy * ixz - ixx * iyz) * ly + (ixx * iyy - ixy * ixy) * lz) / det;
+      wz = Math.sign(roll) * Math.max(0, Math.abs(roll) - STEP_ROLL_MAX);
     }
     for (let i = 0; i < this.shapeParticles.length; i++) {
       if (this.masses[i]!.hub && !this.deepCrush) continue;
@@ -678,8 +691,8 @@ export abstract class DeformSolve extends DeformFreeze {
       const rx = this.startX[i]! - cx,
         ry = this.startY[i]! - cy,
         rz = this.startZ[i]! - cz;
-      p.x -= wy * rz;
-      p.y += wx * rz;
+      p.x -= wy * rz - wz * ry;
+      p.y += wx * rz - wz * rx;
       p.z -= wx * ry - wy * rx;
     }
   }
@@ -822,7 +835,7 @@ export abstract class DeformSolve extends DeformFreeze {
     }
   }
 
-  /** A3: the block is one casting: engineL/engineR keep their rest spacing and share their velocity along it (mass-weighted). */
+  /** A3: the block is one casting: engineL/engineR keep their rest spacing and share their velocity along it (mass-weighted); a squeezed pair's along the plan square to the body's up only (see `clampLocal`'s A3). */
   private holdEngineBlock(): void {
     const a = this.at.engineL;
     const b = this.at.engineR;
@@ -830,15 +843,26 @@ export abstract class DeformSolve extends DeformFreeze {
     const wb = b.dynamic ? 1 / b.mass : 0;
     const w = wa + wb;
     if (w < 1e-8) return;
-    const dx = b.world.x - a.world.x;
-    const dy = b.world.y - a.world.y;
-    const dz = b.world.z - a.world.z;
+    const up = this.frameUp;
+    let dx = b.world.x - a.world.x;
+    let dy = b.world.y - a.world.y;
+    let dz = b.world.z - a.world.z;
+    const restGap = a.rest.distanceTo(b.rest);
+    const stretched = hypot3(dx, dy, dz) > restGap;
+    let aim = restGap;
+    if (!stretched) {
+      const lift = dx * up.x + dy * up.y + dz * up.z;
+      aim = Math.sqrt(Math.max(0, restGap * restGap - lift * lift));
+      dx -= lift * up.x;
+      dy -= lift * up.y;
+      dz -= lift * up.z;
+    }
     const len = hypot3(dx, dy, dz);
     if (len < 1e-6) return;
     const nx = dx / len;
     const ny = dy / len;
     const nz = dz / len;
-    const err = (len - a.rest.distanceTo(b.rest)) / w;
+    const err = (len - aim) / w;
     a.world.x += nx * err * wa;
     a.world.y += ny * err * wa;
     a.world.z += nz * err * wa;
