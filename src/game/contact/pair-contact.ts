@@ -674,9 +674,10 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // The rows of the rigid step that met this pair this slice (a nose corner on the other's sloped bonnet) traded part of the approach already: it is the pair's to take whole.
   if (rewindRows(carA, carB, n, ARM_CLOSING)) closing = -_v.copy(carA.velocity).sub(carB.velocity).dot(n);
 
-  // The car whose own motion carries it into the other, at a closing under `PUSH_MAX`, pushes it and is armed no crash: the other car's rule is unchanged.
-  const pushingA = !carA.crashed && pushes(-(carA.velocity.x * n.x + carA.velocity.z * n.z), closing);
-  const pushingB = !carB.crashed && pushes(carB.velocity.x * n.x + carB.velocity.z * n.z, closing);
+  // The car whose own motion carries it into the other, the cars' relative speed under `PUSH_MAX`, pushes it and is armed no crash: the other car's rule is unchanged.
+  const relative = hypot2(carA.velocity.x - carB.velocity.x, carA.velocity.z - carB.velocity.z);
+  const pushingA = !carA.crashed && pushes(-(carA.velocity.x * n.x + carA.velocity.z * n.z), relative);
+  const pushingB = !carB.crashed && pushes(carB.velocity.x * n.x + carB.velocity.z * n.z, relative);
 
   // Where the contact masses of both cars are driven to along the normal: the speed each car's contact point has once the plastic
   // exchange at the patch is done (the pair's common speed when the hit goes through both centres).

@@ -9,7 +9,7 @@ import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-ut
 import { droop, FLANK_UP_Y, SPRINGS, UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, CUT, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, pushes, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
+import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, CUT, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, pushes, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, REL_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides, wreckShares, ROW_WHEEL } from "./car-air-points.ts";
 import { centreLift, centreY } from "./car-cage-rig.ts";
 import { store3d } from "../kernel/store.ts";
@@ -65,6 +65,7 @@ export function openRows(n: number): void {
     RIMP[c] = 0;
     NOTED[c] = 0;
     CLOSE_FIRST[c] = 0;
+    REL_FIRST[c] = 0;
     FRA[c]!.set(0, 0, 0);
     // A tyre in its springs rests at its share of the weight borne on its car too: only the push past that goes into the car under at once, the rest is borne on it for its next step.
     if (SOFT[c]) REST[c] = SHARE[c]! * (G * dt - _lv.y);
@@ -103,6 +104,7 @@ function noteClosing(c: number, closing: number): void {
   if (closing <= CRASH.grazeMps || plan < MIN_SIDE_PLAN) return;
   _crushNormal.set(N[c]!.x / plan, 0, N[c]!.z / plan);
   CLOSE_FIRST[c] = -(_vp.x * _crushNormal.x + _vp.z * _crushNormal.z);
+  REL_FIRST[c] = hypot2(_vp.x, _vp.z);
   store3d(CRUSH_POINT, c * 3, _crushPoint.copy(centreOfMass).add(R[c]!));
 }
 
@@ -439,7 +441,11 @@ const P_GAVE_B = 33;
 const P_BORNE = 39;
 /** The share of that borne weight the other car has taken into its motion (its own step came after the rows'): `rewindRows` takes it from the velocity, the rest from what is waiting. */
 const P_TAKEN = 45;
-const PENDING_STRIDE = 46;
+/** 1 where the hardest row is on a car whose masses run (`HELD` null: it takes no reaction, but it is a car, not a wall: `pushes` reads it). */
+const P_ONCAR = 46;
+/** The hardest row's relative plan speed (m/s): a push is read on it, not on the normal closing alone (a slide along a flank is no push). */
+const P_REL = 47;
+const PENDING_STRIDE = 48;
 const PENDING = new Float64Array(PENDING_CAPACITY * PENDING_STRIDE);
 const PENDING_A: (DeformableCar | null)[] = new Array(PENDING_CAPACITY).fill(null);
 const PENDING_B: (DeformableCar | null)[] = new Array(PENDING_CAPACITY).fill(null);
@@ -531,8 +537,10 @@ function collectCrush(car: DeformableCar, n: number): void {
     PENDING[f + P_NX] = N[c]!.x / plan;
     PENDING[f + P_NZ] = N[c]!.z / plan;
     PENDING[f + P_CLOSING] = closing;
+    PENDING[f + P_REL] = REL_FIRST[c]!;
     PENDING[f + P_DEPTH] = Math.max(0, SINK[c]!);
     PENDING[f + P_TYRE] = TYRE[c] && N[c]!.y === 0 ? 1 : 0;
+    PENDING[f + P_ONCAR] = other === null && OWN[c]! >= 0 ? 1 : 0;
   }
 }
 
@@ -650,7 +658,7 @@ export function armPairWithRows(a: DeformableCar, b: DeformableCar, point: THREE
  * Arms each hit `collectCrush` saw that the pair contact did not take (`armPairWithRows`), once the slice's contacts are solved
  * (`stepWorld`): both cars' crush at the contact point along the normal, at their share of the exchange's barrier speed, and fed the
  * contact's depth and closing as the pair contact feeds its own (`feedOverlap`), at the pair's common speed along the normal. A car that
- * pushes the other car (`pushes`, by the speed it had before the rows' exchange) is armed none; a fixed solid is pushed by no one.
+ * pushes the other car (`pushes`, by the speed it had before the rows' exchange) is armed none, whether that car is in the rigid step or its masses run (`P_ONCAR`); a fixed solid is pushed by no one.
  */
 export function armCrushRows(dt: number): void {
   for (let i = 0; i < queue.size; i++) {
@@ -666,8 +674,10 @@ export function armCrushRows(dt: number): void {
     const closing = PENDING[f + P_CLOSING]!;
     const fed = Math.max(PENDING[f + P_DEPTH]!, closing * dt);
     const common = b === null ? 0 : commonSpeed(a, b, _crushNormal);
-    const pushingA = b !== null && !a.crashed && pushes(-(PENDING[f + P_PRE_A]! * _crushNormal.x + PENDING[f + P_PRE_A + 2]! * _crushNormal.z), closing);
-    const pushingB = b !== null && !b.crashed && pushes(PENDING[f + P_PRE_B]! * _crushNormal.x + PENDING[f + P_PRE_B + 2]! * _crushNormal.z, closing);
+    const onCar = b !== null || PENDING[f + P_ONCAR] === 1;
+    const relative = PENDING[f + P_REL]!;
+    const pushingA = onCar && !a.crashed && pushes(-(PENDING[f + P_PRE_A]! * _crushNormal.x + PENDING[f + P_PRE_A + 2]! * _crushNormal.z), relative);
+    const pushingB = b !== null && !b.crashed && pushes(PENDING[f + P_PRE_B]! * _crushNormal.x + PENDING[f + P_PRE_B + 2]! * _crushNormal.z, relative);
     if (!pushingA) armAtExchange(a, f + P_PRE_A, _crushPoint, _crushNormal, closing, Math.sqrt(PENDING[f + P_EBS_A2]!), common, tyre);
     if (b !== null && !pushingB) armAtExchange(b, f + P_PRE_B, _crushPoint, _crushBack, closing, Math.sqrt(PENDING[f + P_EBS_B2]!), -common, false);
     if (!pushingA) {

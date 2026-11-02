@@ -165,9 +165,9 @@ export const GROUND_LIFT_V = REST_SPEED / 3;
 /** The closing speed (m/s, 11 km/h) under which the car whose own motion carries it into another is pushing it, as a bumper nudge or a PIT's touch does: a push takes no crash for the pusher (the other car's rule is unchanged). A bumper takes 2.2 m/s undamaged; a taught PIT closes at matched speed. */
 export const PUSH_MAX = 3;
 
-/** Whether a car moving `approach` m/s into the other (its own velocity along the contact normal, toward the other) pushes at the pair's `closing` m/s: it is moving into the other, and the contact is under `PUSH_MAX`. A fixed solid is no other car: it has no pusher. */
-export function pushes(approach: number, closing: number): boolean {
-  return approach > REST_SPEED && closing < PUSH_MAX;
+/** Whether a car moving `approach` m/s into the other (its own velocity along the contact normal, toward the other) pushes at the pair's `relative` plan speed (m/s): it is moving into the other, and the cars' relative motion is under `PUSH_MAX`, so a slide along a flank is no push. A fixed solid is no other car: it has no pusher. */
+export function pushes(approach: number, relative: number): boolean {
+  return approach > REST_SPEED && relative < PUSH_MAX;
 }
 
 /** The most (in G·dt) the solve's change of velocity moves the body within its own slice (half of it, the trapezoid rule). */
@@ -224,6 +224,8 @@ export const MU = new Float64Array(CONTACTS);
  */
 export const NOTED = new Uint8Array(CONTACTS);
 export const CLOSE_FIRST = new Float64Array(CONTACTS);
+/** Per car-owned contact: the relative plan speed (m/s) of that first closing, along the row's face included (`pushes` reads it). */
+export const REL_FIRST = new Float64Array(CONTACTS);
 export const CRUSH_POINT = new Float64Array(CONTACTS * 3);
 export const _crushPoint = new THREE.Vector3();
 export const _crushNormal = new THREE.Vector3();
@@ -329,7 +331,7 @@ export function placeBody(): void {
 
 /**
  * Contact `n` (its arm `R[n]` set) on car `own`'s top (-1: the world's ground): the car that takes its reaction (`HELD`), for a stepping car of `mass`.
- * A car whose masses run takes no reaction from the rigid step (the pair contact exchanges with it), but its top is no fixed face: the stepping car's closing is read on the top's own motion (`SURF_V`).
+ * A car whose masses run takes no reaction from the rigid step (the pair contact exchanges with it), but its top is no fixed face: the stepping car's closing is read on the top's own motion (`SURF_V`), the part of it moving away from the stepping car.
  */
 export function carrier(surf: CarSurfaces, n: number, own: number, mass: number): void {
   const o = own >= 0 ? surf.cars[own]! : null;
@@ -340,7 +342,12 @@ export function carrier(surf: CarSurfaces, n: number, own: number, mass: number)
   ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, centreY(o), 0).applyQuaternion(o.group.quaternion));
   if (!o.rigid) {
     HELD[n] = null;
-    if (!body.part) SURF_V[n]!.crossVectors(o.angular, ARM[n]!).add(o.velocity);
+    if (!body.part) {
+      SURF_V[n]!.crossVectors(o.angular, ARM[n]!).add(o.velocity);
+      // Only the part moving away from the stepping car: it takes approach away and gives no speed (the car under takes no reaction, so a surface moving into it would fling it from nothing).
+      const toward = SURF_V[n]!.dot(N[n]!);
+      if (toward > 0) SURF_V[n]!.addScaledVector(N[n]!, -toward);
+    }
     return;
   }
   HELD[n] = o;
