@@ -553,11 +553,12 @@ function momentumAlong(car: DeformableCar, nx: number, nz: number): number {
   return p;
 }
 
-/** How far (m) a push bar's box has folded back from its rest reach at its bumper's crush (`barBoxZ`), up to the cage lattice's next step (the outline stands on it): 0 for a car with no bar standing. */
+/** How far (m) a push bar's box has folded back from its rest reach at its bumper's crush (`barBoxZ`), up to the cage lattice's next step (the outline stands on it): 0 for a car with no bar standing, and when the hit's struck face is not the nose (`strokeUsed`'s own test), where the bar is not what meets the other car. */
 function barFolded(car: DeformableCar): number {
   const style = car.cage.style;
   if (style.barGroup === 0 || !car.panelsFollow || car.cage.fields.panelOn[style.barGroup - 1] === 0) return 0;
   const d = car.deform;
+  if (-d.impactInward.z < Math.abs(d.impactInward.x)) return 0;
   const crush = Math.max(d.massRest("bumperFL").z - d.massLocal("bumperFL").z, d.massRest("bumperFR").z - d.massLocal("bumperFR").z);
   return Math.ceil((PUSH_BAR_REACH - barReach(PUSH_BAR_REACH, crush)) / CAGE_STEP) * CAGE_STEP;
 }

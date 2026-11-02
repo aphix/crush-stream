@@ -6,6 +6,10 @@ import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { FREEWHEEL, launch, makeWorld, tickWorld } from "./crash-scenarios.test-util.ts";
 import { classCar } from "../vehicle/ejection.test-util.ts";
 import * as THREE from "three";
+import { barReach } from "../deform/deform-rig.ts";
+import { PUSH_BAR_REACH } from "../vehicle/car-materials.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
+import { resolveCarPair } from "./pair-contact.ts";
 import { satCars } from "./sat.ts";
 
 /**
@@ -175,5 +179,72 @@ describe("given a car tapping the tail of a sedan 3 and 4.4 m/s slower than itse
         expect(slices, `the pair contact never reported the ${striker}'s tap`).toBeGreaterThan(0);
       });
     }
+  }
+});
+
+/** The speed (m/s) a cruiser drives into a parked sedan's tail to fold its push bar, and how far (m) the fold has to be before the faces below are asked. */
+const FOLD_MPS = 8;
+const FOLDED_M = 0.05;
+/** The closing (m/s) of the second hit, armed by hand on a face that is not the cruiser's nose, and how far (m) off the cruiser the sedan stands from where the contact first reads it: more than a flank's own crush, less than the bar's fold. */
+const SECOND_HIT_MPS = 15;
+const OFF_M = 0.07;
+const _n = new THREE.Vector3();
+const _p = new THREE.Vector3();
+
+/** A cruiser whose push bar folded in a crash into the tail of a sedan, then still: where that left it. */
+function foldedCruiser(): DeformableCar {
+  const cruiser = classCar("police");
+  const other = classCar("sedan");
+  launch(other, 0, 0, Math.PI / 2, 0, 0);
+  launch(cruiser, -6, 0, Math.PI / 2, FOLD_MPS, 0);
+  const w = makeWorld([cruiser, other], false, false, null);
+  for (let f = 0; f < FRAME_HZ * 1.5; f++) tickWorld(w);
+  other.dispose();
+  for (const m of cruiser.deform.masses) m.vel.set(0, 0, 0);
+  cruiser.velocity.set(0, 0, 0);
+  cruiser.angular.set(0, 0, 0);
+  cruiser.refreshBasis();
+  return cruiser;
+}
+
+/** A sedan at rest with its nose toward `cruiser`, `OFF_M` further off its `side` (a unit vector in the plan) than the cages' contact first reads it. */
+function sedanOff(cruiser: DeformableCar, side: THREE.Vector3): DeformableCar {
+  const sedan = classCar("sedan");
+  const yaw = Math.atan2(-side.x, -side.z);
+  const at = (d: number): void => launch(sedan, cruiser.group.position.x + side.x * d, cruiser.group.position.z + side.z * d, yaw, 0, 0);
+  let near = 1;
+  let far = 4;
+  for (let i = 0; i < 30; i++) {
+    const mid = (near + far) / 2;
+    at(mid);
+    if (satCars(sedan, cruiser, _n, _p) === null) far = mid;
+    else near = mid;
+  }
+  at(far + OFF_M);
+  return sedan;
+}
+
+describe("given a cruiser whose push bar folded in an earlier crash, and a sedan standing 7 cm off the cages' contact", () => {
+  for (const face of ["flank", "tail"] as const) {
+    it(`when the sedan's hit lands on the cruiser's ${face}, then no pair contact reaches the 7 cm: the bar is on the nose only`, (t) => {
+      const cruiser = foldedCruiser();
+      const crush = Math.max(cruiser.deform.massRest("bumperFL").z - cruiser.deform.massLocal("bumperFL").z, cruiser.deform.massRest("bumperFR").z - cruiser.deform.massLocal("bumperFR").z);
+      const folded = PUSH_BAR_REACH - barReach(PUSH_BAR_REACH, crush);
+      expect(folded, `the bar has folded ${folded.toFixed(3)} m, the bumper crushed ${crush.toFixed(3)} m: the set-up is no folded cruiser`).toBeGreaterThanOrEqual(FOLDED_M);
+      const side = face === "flank" ? cruiser.rightFlat.clone() : cruiser.fwdFlat.clone().negate();
+      const sedan = sedanOff(cruiser, side);
+      expect(satCars(sedan, cruiser, _n, _p), "the sedan stands in contact").toBe(null);
+      expect(satCars(sedan, cruiser, _n, _p, folded), "the sedan stands further off than the bar's fold").not.toBe(null);
+      const point = new THREE.Vector3(cruiser.group.position.x + side.x * 0.8, cruiser.group.position.y + 0.5, cruiser.group.position.z + side.z * 0.8);
+      const inward = side.clone().negate();
+      expect(cruiser.applyImpact(point, inward, SECOND_HIT_MPS, SECOND_HIT_MPS), `the ${face} hit was refused`).toBe(true);
+      cruiser.deform.beginSlice(1 / FINE_HZ);
+      sedan.deform.beginSlice(1 / FINE_HZ);
+      const hit = resolveCarPair(sedan, cruiser, 1 / FINE_HZ);
+      t.annotate(`${face}: bar folded ${folded.toFixed(3)} m, flank stroke ${(cruiser.deform.hitStroke() * cruiser.deform.strokeUsed()).toFixed(3)} m, pair contact ${hit === null ? "none" : "held"}`);
+      expect(hit, `the pair contact reached across ${OFF_M} m to a ${face} the bar is not on`).toBe(null);
+      cruiser.dispose();
+      sedan.dispose();
+    });
   }
 });
