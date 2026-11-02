@@ -163,7 +163,7 @@ export const REST_SPEED = (2 * G) / 120;
 /** The speed (m/s) a body at rest parts from what it stands in (a wreck from the ground, a tyre from the face it pressed): under `REST_SPEED`, so it stays at rest and may sleep. */
 export const GROUND_LIFT_V = REST_SPEED / 3;
 /** The closing speed (m/s, 11 km/h) under which the car whose own motion carries it into another is pushing it, as a bumper nudge or a PIT's touch does: a push takes no crash for the pusher (the other car's rule is unchanged). A bumper takes 2.2 m/s undamaged; a taught PIT closes at matched speed. */
-export const PUSH_MAX = 3;
+const PUSH_MAX = 3;
 
 /** Whether a car moving `approach` m/s into the other (its own velocity along the contact normal, toward the other) pushes at the pair's `relative` plan speed (m/s): it is moving into the other, and the cars' relative motion is under `PUSH_MAX`, so a slide along a flank is no push. A fixed solid is no other car: it has no pusher. */
 export function pushes(approach: number, relative: number): boolean {
