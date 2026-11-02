@@ -285,6 +285,8 @@ export class ChaseCamera {
     // view's leaving (radius at least 9) never reworks it.
     this.flipped = false;
     this.orbitShift.set(0, 0, 0);
+    // A new scene's opening shot starts unpulled: the clearing's pull and swing belong to the last scene's solids.
+    this.orbitClear.reset();
     if (this.rig === "fixed") this.rig = "orbit";
     this.minRadius = shot.minRadius ?? ORBIT_RADIUS.min;
     if (compactor) {

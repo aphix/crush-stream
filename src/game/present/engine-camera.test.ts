@@ -74,6 +74,18 @@ describe("given the ride-along camera following a thrown driver's dummy", () => 
   });
 });
 
+describe("given the orbit camera's eye pulled in toward its subject by a solid on the sight line", () => {
+  it("when the scene resets to its opening shot, then no pull or swing carries over into the new scene", () => {
+    const { view } = rig("global");
+    const clear = view["orbitClear"];
+    clear["pull"] = 17.7;
+    clear["lift"] = 0.3;
+    clear["swingTo"] = 1.2;
+    view.frameReset(true, []);
+    expect([clear["pull"], clear["lift"], clear["swingTo"]], "pull, lift, swing target after the reset").toEqual([0, 0, 0]);
+  });
+});
+
 describe("given the ride-along's automatic cuts and a drag on its camera", () => {
   it("when the player drags, taps and starts a new ride, then cuts are held during the drag and for the ride pause after it, a tap holds nothing, and a new ride starts free", () => {
     const { canvas, view, look } = rig("global");
