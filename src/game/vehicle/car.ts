@@ -811,7 +811,6 @@ export class DeformableCar extends CarParts {
 
   /** Each wheel still on the car at its hub's place (a crushed hub carries it off its rest seat), `drop` as `nudgeWheels`. A car posed from a net state and never stepped (the podium's) calls it once. */
   followHubs(drop = true): void {
-    const hubs = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
     for (let i = 0; i < this.wheels.length; i++) {
       const w = this.wheels[i]!;
       if (this.looseWheels[i]!.loose) continue;
@@ -820,15 +819,15 @@ export class DeformableCar extends CarParts {
         w.position.set(rest[0], rest[1], rest[2]);
         continue;
       }
-      const hub = this.deform.massLocal(hubs[i]!);
-      if (!this.deform.hubPopped(hubs[i]!)) {
+      const hub = this.deform.massLocal(HUBS[i]!);
+      if (!this.deform.hubPopped(HUBS[i]!)) {
         // Follows its hub along the car (a face's shove, or a squeeze past the hubs, moves it off rest) at the rest ride's height, where
         // the body's tyre rows hold it (`stepFree`).
         w.position.set(hub.x, rest[1], hub.z);
         w.visible = true;
         continue;
       }
-      if (drop) this.dropWheel(i, hubs[i]!);
+      if (drop) this.dropWheel(i, HUBS[i]!);
     }
   }
 
