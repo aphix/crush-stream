@@ -1,6 +1,7 @@
 import breakerYard from "./breaker-yard.json" with { type: "json" };
 import city from "./city.json" with { type: "json" };
 import damSpine from "./dam-spine.json" with { type: "json" };
+import figure8 from "./figure-8.json" with { type: "json" };
 import fourCount from "./four-count.json" with { type: "json" };
 import nationalMall from "./national-mall.json" with { type: "json" };
 import oval from "./oval.json" with { type: "json" };
@@ -11,7 +12,7 @@ import { HAVANA } from "./havana.ts";
 import { TRACK_ID } from "../constants.ts";
 
 /** Every course, in menu order. Raw JSON: `new Track(json)` validates and compiles it. */
-export const TRACKS: readonly unknown[] = [oval, rally, city, stunt, fourCount, damSpine, razorShelf, breakerYard, nationalMall];
+export const TRACKS: readonly unknown[] = [oval, rally, city, stunt, fourCount, damSpine, razorShelf, breakerYard, nationalMall, figure8];
 
 /** Courses the race menu, the campaign and the per-course test sweeps do not list: loadable by id (`RaceField.load`) for the mode that plays them. */
 export const OFF_MENU: readonly unknown[] = [HAVANA];
