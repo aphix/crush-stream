@@ -169,6 +169,28 @@ describe("given a cruiser a load crushed that leaves it no wreck", () => {
     expect(offMasses()).toBeLessThan(1e-9);
   });
 
+  it("when a raised road lifted its bumper and the car rises clear of it, the ground under its corners unchanged, then the bumper is not left lifted", () => {
+    const car = loadedCar();
+    const bumper = car["parts"].find((p) => p.name === BUMPER_F)!;
+    const offMasses = (): number => {
+      const fl = car.deform.massLocal("bumperFL");
+      const fr = car.deform.massLocal("bumperFR");
+      return Math.abs(bumper.object.position.y - (fl.y + fr.y) / 2);
+    };
+    expect(offMasses(), "control: on flat ground it stands on its masses").toBeLessThan(1e-9);
+    setGround(new RaisedRoad(0.5));
+    deepen(car); // the masses move, so the signature changes and the parts are posed over the raised road
+    car.updateSkin();
+    expect(offMasses(), "control: the raised road lifted the bumper").toBeGreaterThan(0.01);
+    // The car rises 0.5 m with its masses unmoved: the corner ground still reads 0.5, so only the standing lift can re-pose it.
+    car.group.position.y += 0.5;
+    car.group.updateMatrixWorld(true);
+    car.updateSkin();
+    const off = offMasses();
+    setGround(null);
+    expect(off).toBeLessThan(1e-9);
+  });
+
   it("when the car is reset and the same load lands again, then the front bumper is posed on its masses again", () => {
     const car = loadedCar();
     const bumper = car["parts"].find((p) => p.name === BUMPER_F)!;
