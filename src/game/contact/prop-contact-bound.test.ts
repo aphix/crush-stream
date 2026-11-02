@@ -4,6 +4,7 @@ import { solidsOf, type PropCollider } from "../world/placements.ts";
 import { makeCar } from "../vehicle/ground-probe.test-util.ts";
 import { VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
 import { propContact, type PropHits } from "./prop-contact.ts";
+import { FINE_HZ } from "../kernel/constants.ts";
 
 /** [yaw, pitch, roll] in degrees: level, nose down, on its side, on its roof, tumbling. */
 const POSES = [
@@ -33,7 +34,7 @@ function queriedRadii(car: ReturnType<typeof makeCar>): number[] {
   const high: PropCollider = { index: 0, prefab: "lamp", body: "solid", x: pos.x, z: pos.z, yaw: 0, kind: "circle", r: 0.1, hx: 0.1, hz: 0.1, mass: 0, base: 100, top: 101, ends: 3 };
   const solids = solidsOf([], [high]);
   const near = vi.spyOn(solids, "prismsNear");
-  propContact(car, 0, solids, new Uint8Array(0), NO_HITS, 1 / 60);
+  propContact(car, 0, solids, new Uint8Array(0), NO_HITS, 1 / FINE_HZ);
   return near.mock.calls.map((c) => c[2]);
 }
 
