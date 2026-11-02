@@ -1100,6 +1100,12 @@ export abstract class CarCore {
     return l.intact ? l.kind : null;
   }
 
+  /** Whether body lamp `i` burns only at night: a head lamp, or a tail lamp while the car is not braking (its running light). */
+  burnsAtNight(i: number): boolean {
+    const l = this.lamps[i];
+    return l !== undefined && (l.kind === "head" || (l.kind === "tail" && !this.braking));
+  }
+
   /** Siren `k` (0 red, 1 blue) when lit on an attached bar: its lens centre on the skinned bar, axis out of the bar's side the lens sits on. */
   private sirenWorld(k: number, pos: THREE.Vector3, dir: THREE.Vector3): GlowKind | null {
     const bar = this.lightBar;
