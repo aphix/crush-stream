@@ -27,6 +27,12 @@ const WRECK_SPEED = 6;
 /** The speed (m/s) a car slides along a parked car's flank, pressing in at `PRESS_SPEED`. */
 const SLIDE_SPEED = 8;
 const PRESS_SPEED = 1;
+/** A target sliding back at this speed (m/s) and a cop creeping into it at the same speed. */
+const ARMED_SLIDE_BACK = 1;
+/** The PIT: the cop's yaw into the target (rad, 6°), its centre's z (m, so the target's whole tail is beside the cop's flank) and the gap (m) between their sides at the start. */
+const PIT_YAW = (6 * Math.PI) / 180;
+const PIT_Z = -0.5;
+const PIT_GAP = 0.3;
 const CRASH_CLOSING = 4;
 /** A nudge closing under the rigid step's graze (`CRASH.grazeMps`): only the pair contact reads it. */
 const CREEP_CLOSING = 1;
@@ -188,6 +194,25 @@ describe("given a car ahead already armed (an earlier hit made its masses run), 
   });
 });
 
+describe("given a car ahead already armed and sliding back at 1 m/s, a car creeping into it at 1 m/s", () => {
+  it("when they touch, then the car creeping keeps driving: the rows' stop of its approach does not make the armed car the pusher", () => {
+    const { pusher } = armedPushRun(-ARMED_SLIDE_BACK, 2 * ARMED_SLIDE_BACK);
+    expect(pusher.crashed, "the creeper crashed on a 2 m/s push against an armed car sliding back").toBe(false);
+  });
+});
+
+describe("given a cop yawed 6° into a target at the same 25 m/s, the target's rear corner on the cop's flank", () => {
+  it("when they touch, then the cop pushes and drives on, and the target is armed", () => {
+    const target = makeCar();
+    const cop = makeCar();
+    launch(target, 0, 0, 0, 0, TARGET_SPEED);
+    launch(cop, outlineOf(target).xLo - outlineOf(cop).xHi - PIT_GAP, PIT_Z, PIT_YAW, TARGET_SPEED * Math.sin(PIT_YAW), TARGET_SPEED * Math.cos(PIT_YAW));
+    step([target, cop], [FREEWHEEL, FREEWHEEL], () => target.crashed || cop.crashed);
+    expect(target.crashed, "the control: the touch armed the target").toBe(true);
+    expect(cop.crashed, "the PIT's flank contact made the cop the pushed car").toBe(false);
+  });
+});
+
 describe("given a car sliding 8 m/s along a parked car's flank, pressing in at 1 m/s", () => {
   it("when they touch, then the slide is no push: both cars crash as they would on any 1 m/s contact", () => {
     const parked = makeCar();
@@ -199,7 +224,7 @@ describe("given a car sliding 8 m/s along a parked car's flank, pressing in at 1
     expect(parked.crashed).toBe(true);
   });
 
-  it("when the parked car is already armed and the slider presses in at 2.8 m/s, then the slider crashes: the rows read the slide too", () => {
+  it("when the parked car is already armed and the slider presses in at 2.8 m/s, then the slider crashes: a slide is no push against an armed car either", () => {
     const parked = makeCar();
     const slider = makeCar();
     launch(parked, 0, 0, 0, 0, 0);

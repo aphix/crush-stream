@@ -36,6 +36,15 @@ const _arm = new THREE.Vector3();
 const _inward = new THREE.Vector3();
 /** The world heights (low, high) the pair's bodies share over the patch (`patch`), where the slide's lines fall. */
 const _band = new THREE.Vector2();
+/** The unit plan direction from car A's centre to car B's (the line a push is read along). */
+const _line = new THREE.Vector3();
+/** The centre distance (m) under which the line between the cars' centres says nothing (a car on another's top): the patch normal stands in. */
+const MIN_CENTRE_LINE = 0.5;
+
+/** `car`'s velocity into `out`, as a push is read on it: before this slice's rows when `other` takes no reaction from them (a car whose masses run: `rewindRows` cannot take them back). */
+function pushVelocity(car: DeformableCar, other: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
+  return out.copy(car.rowsStepped && !other.rigid ? car.velocityBeforeRows : car.velocity);
+}
 
 /** The world velocity of `car`'s body at world point `p` into `out`. */
 function pointVelocity(car: DeformableCar, p: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
@@ -675,9 +684,16 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   if (rewindRows(carA, carB, n, ARM_CLOSING)) closing = -_v.copy(carA.velocity).sub(carB.velocity).dot(n);
 
   // The car whose own motion carries it into the other, the cars' relative speed under `PUSH_MAX`, pushes it and is armed no crash: the other car's rule is unchanged.
-  const relative = hypot2(carA.velocity.x - carB.velocity.x, carA.velocity.z - carB.velocity.z);
-  const pushingA = !carA.crashed && pushes(-(carA.velocity.x * n.x + carA.velocity.z * n.z), relative);
-  const pushingB = !carB.crashed && pushes(carB.velocity.x * n.x + carB.velocity.z * n.z, relative);
+  // Each car's approach is read along the line between the cars' centres, not the patch normal (which tilts with the corner or flank the overlap sits on: a yawed PIT's flank
+  // contact would make the target the pusher), on the speed it had before rows that took nothing back from a car whose masses run.
+  const planDist = hypot2(gx, gz);
+  if (planDist > MIN_CENTRE_LINE) _line.set(-gx / planDist, 0, -gz / planDist);
+  else _line.copy(n).negate();
+  pushVelocity(carA, carB, _w);
+  pushVelocity(carB, carA, _v);
+  const relative = hypot2(_w.x - _v.x, _w.z - _v.z);
+  const pushingA = !carA.crashed && pushes(_w.x * _line.x + _w.z * _line.z, relative);
+  const pushingB = !carB.crashed && pushes(-(_v.x * _line.x + _v.z * _line.z), relative);
 
   // Where the contact masses of both cars are driven to along the normal: the speed each car's contact point has once the plastic
   // exchange at the patch is done (the pair's common speed when the hit goes through both centres).

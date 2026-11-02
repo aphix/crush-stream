@@ -224,8 +224,6 @@ export const MU = new Float64Array(CONTACTS);
  */
 export const NOTED = new Uint8Array(CONTACTS);
 export const CLOSE_FIRST = new Float64Array(CONTACTS);
-/** Per car-owned contact: the relative plan speed (m/s) of that first closing, along the row's face included (`pushes` reads it). */
-export const REL_FIRST = new Float64Array(CONTACTS);
 export const CRUSH_POINT = new Float64Array(CONTACTS * 3);
 export const _crushPoint = new THREE.Vector3();
 export const _crushNormal = new THREE.Vector3();
