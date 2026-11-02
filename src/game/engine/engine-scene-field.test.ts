@@ -6,6 +6,7 @@ import { setGround } from "../world/ground.ts";
 import type { SceneId } from "../scenes/scene-id.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 
 /** The player's pick on the Cars slider: not the boot's 5, and not 1 (the one-car scenes' own). */
 const PICK = 4;
@@ -132,5 +133,37 @@ describe("given the real engine with the player's car count picked on the slider
       runSeconds(engine, 0.1);
       expect(engine["view"]["sceneFov"], `${from} to ${to}: the lens a scene set`).toBe(null);
     }
+  });
+
+  it("when a room's peer is seated in a car past the player's field (joined mid-derby) and the fleet is picked, then that car stays in the field", () => {
+    fleet();
+    engine["setScene"]("derby");
+    runSeconds(engine, 0.1);
+    engine["netSeats"] = new Map([[PICK + 1, "peer"]]);
+    engine["setScene"]("fleet");
+    runSeconds(engine, 0.1);
+    const cars = engine["carCount"];
+    engine["netSeats"] = new Map();
+    expect(cars, "the fleet's cars with a peer in car PICK + 1").toBe(PICK + 2);
+  });
+
+  it("when a room starts while the showcase is up, then the player is taken to the fleet with its lights, lens and free eye left behind and the player's cars back", () => {
+    fleet();
+    engine["setScene"]("showcase");
+    runSeconds(engine, 0.1);
+    engine["view"].setLens(28);
+    const net = engine["net"];
+    const role = Object.getOwnPropertyDescriptor(net, "role");
+    Object.defineProperty(net, "role", { value: "host", configurable: true, writable: true });
+    try {
+      engine["stepSceneFade"](1 / FRAME_HZ);
+    } finally {
+      if (role) Object.defineProperty(net, "role", role);
+      else delete (net as { role?: unknown }).role;
+    }
+    expect(engine["sceneId"], "the scene").toBe("fleet");
+    expect(engine["view"]["sceneFov"], "the showcase's lens").toBe(null);
+    expect(engine["view"].flying, "the free eye").toBe(false);
+    expect(engine["carCount"], "the fleet's cars").toBe(PICK);
   });
 });

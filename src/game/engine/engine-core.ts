@@ -416,6 +416,13 @@ export abstract class EngineCore {
     return this.clears;
   }
 
+  /** The field a sandbox scene gets back: the player's (`sandboxCars`), grown to cover every car a room's peer is seated in (a peer who joined mid-derby). */
+  protected sandboxField(): number {
+    let n = this.sandboxCars;
+    for (const i of this.netSeats.keys()) n = Math.max(n, i + 1);
+    return n;
+  }
+
   protected ensureCars(n: number): void {
     const count = THREE.MathUtils.clamp(Math.round(n) || 1, 1, MAX_CARS);
     this.carCount = count;

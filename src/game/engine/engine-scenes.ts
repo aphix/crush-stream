@@ -131,8 +131,13 @@ export abstract class EngineScenes extends EngineMinigames {
     if ((SOLO_SCENES[this.sceneId] || (this.sceneId === "survival" && this.net.client && !this.race.mirrored)) && this.net.role !== "off") {
       this.setRace(false);
       if (SOLO_SCENES[this.sceneId]) {
+        // The same leave steps a pick runs (`applyScene`): the workshop's lights, the showcase's thrown props, the free eye and a scene's lens go with it.
+        if (this.showShowcase) this.ragdolls.clearScene();
+        this.stage.look(null);
+        this.view.leaveFree();
+        this.view.setLens(null);
         this.sceneId = "fleet";
-        this.ensureCars(this.sandboxCars);
+        this.ensureCars(this.sandboxField());
         this.followSceneTypes();
       }
       this.randomizeAndReset();
@@ -163,7 +168,7 @@ export abstract class EngineScenes extends EngineMinigames {
     const wasLab = this.showLab;
     const wasGarage = this.showGarage;
     const wasShowcase = this.showShowcase;
-    if (!OWN_FIELD_SCENES[next]) this.ensureCars(this.sandboxCars);
+    if (!OWN_FIELD_SCENES[next]) this.ensureCars(this.sandboxField());
     if (this.race.active && next !== this.sceneId) this.setRace(false);
     // The workshop's lights go with the Lab, the garage and the showcase, before a race lights its course.
     if ((wasLab && next !== "lab") || ((wasGarage || wasShowcase) && next !== "garage" && next !== "showcase")) this.stage.look(null);
@@ -350,7 +355,7 @@ export abstract class EngineScenes extends EngineMinigames {
       this.stopReel();
       this.sceneId = "fleet";
       this.race.exit();
-      this.ensureCars(this.sandboxCars);
+      this.ensureCars(this.sandboxField());
     }
   }
 
