@@ -131,9 +131,8 @@ export abstract class EngineScenes extends EngineMinigames {
     if ((SOLO_SCENES[this.sceneId] || (this.sceneId === "survival" && this.net.client && !this.race.mirrored)) && this.net.role !== "off") {
       this.setRace(false);
       if (SOLO_SCENES[this.sceneId]) {
-        // The same leave steps a pick runs (`applyScene`): the workshop's lights, the showcase's thrown props, the free eye and a scene's lens go with it.
-        if (this.showShowcase) this.ragdolls.clearScene();
-        this.stage.look(null);
+        // A pick's own steps (`applyScene`): the free eye and a scene's lens go with it, and the scene's lights and props (`leaveScene`).
+        this.leaveScene("fleet");
         this.view.leaveFree();
         this.view.setLens(null);
         this.sceneId = "fleet";
@@ -158,6 +157,12 @@ export abstract class EngineScenes extends EngineMinigames {
     }
   }
 
+  /** What a scene leaves behind when `next` is entered: the workshop's lights go with the Lab, the garage and the showcase (before a race lights its course), and the showcase's thrown props, which stand on the fleet's disc other sandbox scenes share. */
+  private leaveScene(next: SceneId): void {
+    if ((this.showLab && next !== "lab") || ((this.showGarage || this.showShowcase) && next !== "garage" && next !== "showcase")) this.stage.look(null);
+    if (this.showShowcase && next !== "showcase") this.ragdolls.clearScene();
+  }
+
   /** `menu`: the player picked the scene (bar, key): Survival opens its course menu first. A `#` (`engine-share.ts`) starts the run at once, as every other scene starts. */
   protected applyScene(next: SceneId, menu = false): void {
     if (this.net.client) return;
@@ -165,15 +170,9 @@ export abstract class EngineScenes extends EngineMinigames {
     // A new scene is a new place: the free eye, left where the last one was, would hang in the new one's walls or sky.
     this.view.leaveFree();
     // A scene with its own field borrows `carCount`; every sandbox scene gets the user's field (`sandboxCars`) back, whichever scene it comes from.
-    const wasLab = this.showLab;
-    const wasGarage = this.showGarage;
-    const wasShowcase = this.showShowcase;
     if (!OWN_FIELD_SCENES[next]) this.ensureCars(this.sandboxField());
     if (this.race.active && next !== this.sceneId) this.setRace(false);
-    // The workshop's lights go with the Lab, the garage and the showcase, before a race lights its course.
-    if ((wasLab && next !== "lab") || ((wasGarage || wasShowcase) && next !== "garage" && next !== "showcase")) this.stage.look(null);
-    // The showcase's thrown props stand on the fleet's disc, which other sandbox scenes share: they leave with it.
-    if (wasShowcase && next !== "showcase") this.ragdolls.clearScene();
+    this.leaveScene(next);
     if (this.derbyMode !== (next === "derby")) this.setDerby(next === "derby");
     if (next === "range" || next === "stack" || next === "lab" || next === "garage" || next === "showcase") {
       this.ensureCars(next === "range" || next === "garage" || next === "showcase" ? 1 : next === "lab" ? this.lab.types.length : this.stack.config.cars);
