@@ -169,7 +169,7 @@ function hullRadius(car: DeformableCar): number {
  * tilt stays within that on both axes), the body-frame plan box, and for a wreck its masses with their half radii; times the root of two (the
  * box's corner). Asked first, so the prisms are queried before the body is measured at all.
  */
-export function footprintBound(car: DeformableCar): number {
+function footprintBound(car: DeformableCar): number {
   const pb = car.cage.fields.planBox;
   let d = Math.max(hullRadius(car) + Math.abs(cageLift(car)), Math.abs(pb[0]!), Math.abs(pb[1]!), Math.abs(pb[2]!), Math.abs(pb[3]!));
   const deform = car.deform;
@@ -182,12 +182,6 @@ export function footprintBound(car: DeformableCar): number {
     }
   }
   return Math.SQRT2 * d + BOUND_SLACK;
-}
-
-/** The reach (m) `measure` finds for `car` now (its bound's tests read it). */
-export function footprintReach(car: DeformableCar): number {
-  measure(car);
-  return _span.reach;
 }
 
 /** How far ahead (m) a hard-driving car is still asked about (`markApproach`); 0 below `WALL_CRUSH`. */
