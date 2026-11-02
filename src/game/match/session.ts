@@ -1,7 +1,7 @@
 import { detAtan2, hypot2 } from "../kernel/physics-core.js";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { clamp } from "../kernel/scalar.ts";
-import { OPEN_REACH, blankPoint, blankProjection, crossGate, inCorridor, pointOn, projectPath, type Projection, type Track, type TrackPath } from "../world/track.ts";
+import { OPEN_REACH, blankPoint, blankProjection, crossGate, inCorridor, pointOn, projectPath, sampleAt, type Projection, type Track, type TrackPath } from "../world/track.ts";
 import type {
   CarPose,
   CarRecord,
@@ -669,7 +669,8 @@ export class RaceSession {
     c.z = spot.z;
     c.wrongFor = 0;
     c.wrongWay = false;
-    this.queue.push({ type: "respawn", id: c.id, x: spot.x, z: spot.z, yaw: spot.yaw, keep: false });
+    c.seg = spot.k;
+    this.queue.push({ type: "respawn", id: c.id, x: spot.x, z: spot.z, yaw: spot.yaw, seg: c.route < 0 ? spot.k : -1, keep: false });
   }
 
   /** The driver holds reset: back on the road at once, car as it is (host keeps its damage), also in a no-reset race; refused in an endless run and unless racing. */
@@ -680,10 +681,10 @@ export class RaceSession {
     const spot = this.spot(i);
     c.x = spot.x;
     c.z = spot.z;
-    c.seg = -1;
+    c.seg = spot.k;
     c.wrongFor = 0;
     c.wrongWay = false;
-    this.queue.push({ type: "respawn", id: c.id, x: spot.x, z: spot.z, yaw: spot.yaw, keep: true });
+    this.queue.push({ type: "respawn", id: c.id, x: spot.x, z: spot.z, yaw: spot.yaw, seg: c.route < 0 ? spot.k : -1, keep: true });
     return true;
   }
 
@@ -691,7 +692,7 @@ export class RaceSession {
    * Where car `i` goes back to: on its path's centreline, `GATE_MARGIN` short of the checkpoint it owes and never behind the last it hit.
    * Its own spot if on the road between the two, else the last such spot it passed (`CarRecord.safe`), else the checkpoint it last hit. Clear of the other cars.
    */
-  private spot(i: number): { x: number; z: number; yaw: number } {
+  private spot(i: number): { x: number; z: number; yaw: number; k: number } {
     const c = this.cars[i]!;
     const tr = this.track;
     const L = tr.length;
@@ -709,15 +710,17 @@ export class RaceSession {
     const pt = this.pt;
     let x = 0;
     let z = 0;
+    let at = s;
     for (let t = 0; t < RESPAWN_TRIES; t++) {
       const back = Math.floor(t / 3) * CLEARANCE;
-      pointOn(path, path.closed ? s - back : Math.max(0, s - back), pt);
+      at = path.closed ? s - back : Math.max(0, s - back);
+      pointOn(path, at, pt);
       const lat = t % 3 === 0 ? 0 : (t % 3 === 1 ? 0.5 : -0.5) * pt.half;
       x = pt.x + pt.tz * lat;
       z = pt.z - pt.tx * lat;
       if (this.clear(i, x, z)) break;
     }
-    return { x, z, yaw: detAtan2(pt.tx, pt.tz) };
+    return { x, z, yaw: detAtan2(pt.tx, pt.tz), k: sampleAt(path, at) };
   }
 
   private clear(i: number, x: number, z: number): boolean {

@@ -232,6 +232,8 @@ export class RaceBrain {
   /** Per car: the meter as it stood before this think's `charge`, to give back a boost the late guard cancelled. */
   private readonly meterWas = new Float64Array(MAX_CARS);
   private readonly seg = new Int32Array(MAX_CARS);
+  /** Per car: the main-loop sample a respawn put it on (−1 none): the first projection starts there, so a spot beside a crossing keeps its own strand. */
+  private readonly spotSeg = new Int32Array(MAX_CARS).fill(-1);
   private readonly route = new Int16Array(MAX_CARS);
   private readonly routeSeg = new Int32Array(MAX_CARS);
   /** Last `lap * 8 + shortcut` the shortcut coin was tossed for. */
@@ -386,6 +388,7 @@ export class RaceBrain {
 
   reset(): void {
     this.seg.fill(-1);
+    this.spotSeg.fill(-1);
     this.route.fill(-1);
     this.routeSeg.fill(-1);
     this.tossed.fill(-1);
@@ -466,9 +469,10 @@ export class RaceBrain {
     this.cls[id] = s;
   }
 
-  /** Forget a car's route, line and recovery (after a respawn teleport). */
-  respawned(id: number): void {
+  /** Forget a car's route, line and recovery (after a respawn teleport); `seg` is the main-loop sample it was put on, −1 on a shortcut. */
+  respawned(id: number, seg = -1): void {
     this.seg[id] = -1;
+    this.spotSeg[id] = seg;
     this.route[id] = -1;
     this.routeSeg[id] = -1;
     this.lane[id] = 0;
@@ -521,7 +525,8 @@ export class RaceBrain {
 
   private projectMain(i: number, self: AiCar, fresh: boolean): void {
     const half = this.track.path.half;
-    const main = projectPath(this.track.path, self.x, self.z, this.seg[i]!, this.mainProj);
+    const main = projectPath(this.track.path, self.x, self.z, fresh ? this.spotSeg[i]! : this.seg[i]!, this.mainProj);
+    this.spotSeg[i] = -1;
     this.seg[i] = main.k;
     if (fresh) this.lane[i] = clamp(main.lateral, -half[main.k]!, half[main.k]!);
     this.args[ARG_MAIN_S_IDX] = main.s;

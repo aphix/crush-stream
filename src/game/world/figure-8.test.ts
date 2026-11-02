@@ -3,9 +3,13 @@ import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld } from "./race-world.test-util.ts";
 import { placeProps } from "./placements.ts";
 import { Track } from "./track.ts";
+import { parseTrack } from "./track-schema.ts";
 import { TRACKS } from "./tracks/index.ts";
 import { RaceSession } from "../match/session.ts";
 import { centreline, field, polyline, runTo, type Pt } from "../match/session-drive.test-util.ts";
+import { RaceBrain } from "../ai/race-ai.ts";
+import { blankAiCar } from "../ai/derby-ai.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import { must } from "../kernel/must.test-util.ts";
 
 /** Road width (m): five cars of ~1.9 m (`CAR_SPRAY`, 1.9 m across) abreast with a hand's breadth between them, as the owner asked. */
@@ -16,8 +20,11 @@ const LOOP_RADIUS = 50;
 const LOOP_CENTRE_Z = 100;
 /** The crossing's centre, and how near (m) a sample of the loop must come to it to be one of the two passes through it. */
 const CROSSING_REACH = 2;
+/** Race seconds the field gets for three laps: the grid and lights, then the 770 m lap at the AI's 15 m/s (crossings and a pack's braking included). */
+const AI_RACE_BUDGET_S = 4.5 + (3 * 770) / 15;
 
-const json = TRACKS.find((j) => new Track(j).id === "figure-8");
+const json = TRACKS.find((j) => parseTrack(j).id === "figure-8");
+must(json, "the race menu lists figure-8");
 const track = new Track(json);
 
 /** The arc lengths (m) at which the loop passes through the crossing at the origin, one per pass (neighbouring samples are one pass). */
@@ -41,7 +48,6 @@ function lapsOf(pts: Pt[], v: number, laps: number, seconds: number): { laps: nu
 
 describe("given the figure-8 course, two dirt loops joined by a crossing at grade", () => {
   it("when the course is built, then it is a closed 10.5 m dirt road with no walls, listed in the race menu, its loops 50 m in radius", () => {
-    must(json, "the race menu lists figure-8");
     expect(track.path.closed).toBe(true);
     const p = track.path;
     expect(Math.hypot(p.x[0]! - p.x[p.count - 1]!, p.z[0]! - p.z[p.count - 1]!), "the last sample is one step from the first").toBeLessThan(1.5);
@@ -60,15 +66,6 @@ describe("given the figure-8 course, two dirt loops joined by a crossing at grad
     expect(passes.length, `passes at s = ${passes.join()}`).toBe(2);
     expect(Math.abs(passes[1]! - passes[0]! - track.length / 2), "the passes are half a lap apart").toBeLessThan(20);
     for (const g of track.gates) expect(Math.hypot((g.ax + g.bx) / 2, (g.az + g.bz) / 2), `gate at s=${g.s.toFixed(0)} is 20 m or more from the crossing`).toBeGreaterThan(20);
-  });
-
-  it("when a car drives the centreline from the grid, then it earns one lap per round and the lap counts through the crossing both times", () => {
-    const L = track.length;
-    const one = lapsOf(centreline(track, L - 6, L + L + 10), 30, 1, 120);
-    expect(one.laps, "one lap").toBe(1);
-    expect(one.session.cars[0]!.missed).toBe(false);
-    const two = lapsOf(centreline(track, L - 6, 3 * L + 10), 30, 2, 200);
-    expect(two.laps, "two laps, the crossing counted for neither").toBe(2);
   });
 
   it("when a car does the first loop then turns at the crossing onto the start straight, then it earns no lap and is told it missed the second loop's checkpoints", () => {
@@ -90,23 +87,52 @@ describe("given the figure-8 course, two dirt loops joined by a crossing at grad
   });
 });
 
-describe("given a 1-lap figure-8 race of 4 AI rivals and the AI-driven player slot, with field seed 1", () => {
-  it("when the race is run to its end, then the AI racers round the crossing and every car finishes its lap", () => {
+describe("given a 3-lap figure-8 race of 4 AI rivals and the AI-driven player slot, with field seed 1", () => {
+  it("when the race is run to its end, then no car ever owes a missed checkpoint and every car finishes its three laps inside the pace budget", () => {
     const w = makeWorld();
     w.race.enter();
     try {
-      w.race.command({ type: "options", options: { trackId: "figure-8", laps: 1, aiCount: 4 } });
+      w.race.command({ type: "options", options: { trackId: "figure-8", laps: 3, aiCount: 4 } });
       w.race.reseed(1);
       w.race.command({ type: "start" });
       w.seat.mode = "follow";
       const state = { acc: 0 };
-      for (let n = 0; w.race.phase !== "finished" && n * FRAME < 4.5 + 3 * (track.length / 9); n++) frame(w, state);
+      let missed = "";
+      for (let n = 0; w.race.phase !== "finished" && n * FRAME < AI_RACE_BUDGET_S; n++) {
+        frame(w, state);
+        if (n % 10 === 0) missed ||= w.race.snapshot()!.cars.filter((c) => c.missed).map((c) => `${c.name} at ${(n * FRAME).toFixed(0)} s`).join();
+      }
       const snap = w.race.snapshot()!;
-      expect(snap.phase).toBe("finished");
-      for (const c of snap.cars) expect(c.lapTimes.length, `${c.name} is ${c.status}`).toBe(1);
+      expect(missed, "cars that owed a checkpoint").toBe("");
+      expect(snap.phase, `not over after ${AI_RACE_BUDGET_S.toFixed(0)} s`).toBe("finished");
+      for (const c of snap.cars) expect(c.lapTimes.length, `${c.name} is ${c.status}`).toBe(3);
     } finally {
       w.race.exit();
       setGround(null);
     }
+  });
+});
+
+describe("given an AI racer put back on the road at a side slot two metres before the crossing", () => {
+  /** The brain's main-loop sample for racer 0 after one think from a spot `side` m left of the line, `seed` the sample the respawn event carries (−1: none). */
+  function strandOf(side: number, seed: number): number {
+    const brain = new RaceBrain(track, 1);
+    const pt = track.pointAt(passesThroughCrossing()[0]! - 2, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
+    const car = { ...blankAiCar(0), x: pt.x + side * pt.tz, z: pt.z - side * pt.tx, yaw: Math.atan2(pt.tx, pt.tz), vx: 0, vz: 0 };
+    brain.respawned(0, seed >= 0 ? seed : undefined);
+    brain.think(car, [car], { next: 1, lap: 0 }, 1 / FRAME_HZ);
+    return (brain["seg"][0]! / track.path.count) * track.length;
+  }
+  for (const side of [2.6, -2.6]) {
+    it(`when the respawn names its sample and it stands ${side} m left of the line, then it is on its own strand`, () => {
+      const own = passesThroughCrossing()[0]!;
+      const k = Math.round(((own - 2) / track.length) * track.path.count);
+      expect(Math.abs(strandOf(side, k) - own), "the seeded sample").toBeLessThan(15);
+    });
+  }
+  it("when the respawn names no sample, then one of the two slots is nearer the other strand and the racer drives that one (the hazard the sample prevents)", () => {
+    const own = passesThroughCrossing()[0]!;
+    const off = [2.6, -2.6].map((side) => Math.abs(strandOf(side, -1) - own));
+    expect(Math.max(...off), `s off its own strand: ${off.join()}`).toBeGreaterThan(100);
   });
 });

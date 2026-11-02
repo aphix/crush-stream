@@ -606,9 +606,9 @@ export abstract class RaceField {
         const k = this.track!.project(e.x, e.z, this.seg[e.id]!, this.proj).k;
         if (e.keep) this.placeKeeping(car, e.x, e.z, e.yaw, this.track!.path.y[k]!);
         else this.place(car, e.x, e.z, e.yaw, this.track!.path.y[k]!);
-        this.brain?.respawned(e.id);
+        this.brain?.respawned(e.id, e.seg);
         this.police?.respawned?.(e.id, s.time);
-        this.seg[e.id] = -1;
+        this.seg[e.id] = e.seg;
         this.flipFor[e.id] = 0;
         this.stillFor[e.id] = 0;
         this.markTime[e.id] = s.time;

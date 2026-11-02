@@ -166,7 +166,7 @@ export type RaceEvent =
   | { type: "go" }
   | { type: "lap"; id: number; lap: number; time: number }
   | { type: "died"; id: number; respawnAt: number }
-  | { type: "respawn"; id: number; x: number; z: number; yaw: number; keep: boolean }
+  | { type: "respawn"; id: number; x: number; z: number; yaw: number; seg: number; keep: boolean }
   | { type: "out"; id: number }
   | { type: "finish"; id: number; place: number; time: number }
   | { type: "over"; winnerId: number | null };
