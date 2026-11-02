@@ -114,11 +114,9 @@ const _plan = new Float64Array(4);
 const _tilt = new Float64Array(4);
 
 /**
- * `car`'s footprint into `_plan` (after `bodySpan` filled `_tilt`): the body-frame plan box grown by the drawn body's plan box at the car's whole
- * orientation (a wreck on its side or tumbling stands a car's height beside its flat plan box, and a wall that read it clear never met it) and, for
- * a wreck, its masses as a face meets them (`faceHits`: half-radius
- * spheres; a planted hub is the world pin). The drawn body is baked from the masses as they were held a slice before, so a wreck resting
- * with its masses on a face stood 0-6 cm short of it: slices with no wall, and a nose coasting into it at 14 m/s.
+ * `car`'s footprint into `_plan` (after `bodySpan` filled `_tilt`): the plan box grown over the drawn body at the car's whole tilt and, for a
+ * wreck, its masses as a face meets them (the body is baked a slice behind them). Also `_span.mx`/`mz`, the centre of mass: a wreck's masses'
+ * centroid, else the point `centreY` up the car's own axis, which is off the origin in plan once the car leans.
  */
 function footprint(car: DeformableCar): void {
   _plan.set(car.cage.fields.planBox);
@@ -126,24 +124,42 @@ function footprint(car: DeformableCar): void {
   _plan[1] = Math.max(_plan[1]!, _tilt[1]!);
   _plan[2] = Math.min(_plan[2]!, _tilt[2]!);
   _plan[3] = Math.max(_plan[3]!, _tilt[3]!);
-  const d = car.deform;
-  if (!d.massActive) return;
   const pos = car.group.position;
-  const r = car.rightFlat;
-  const f = car.fwdFlat;
-  for (let i = 0; i < d.masses.length; i++) {
-    const m = d.masses[i]!;
-    if (!m.dynamic || (m.hub && !m.popped)) continue;
-    const ox = m.world.x - pos.x;
-    const oz = m.world.z - pos.z;
-    const lx = ox * r.x + oz * r.z;
-    const lz = ox * f.x + oz * f.z;
-    const h = m.radius * 0.5;
-    _plan[0] = Math.min(_plan[0]!, lx - h);
-    _plan[1] = Math.max(_plan[1]!, lx + h);
-    _plan[2] = Math.min(_plan[2]!, lz - h);
-    _plan[3] = Math.max(_plan[3]!, lz + h);
+  const d = car.deform;
+  let mass = 0;
+  let cx = 0;
+  let cz = 0;
+  if (d.massActive) {
+    const r = car.rightFlat;
+    const f = car.fwdFlat;
+    for (let i = 0; i < d.masses.length; i++) {
+      const m = d.masses[i]!;
+      if (!m.dynamic) continue;
+      mass += m.mass;
+      cx += m.world.x * m.mass;
+      cz += m.world.z * m.mass;
+      if (m.hub && !m.popped) continue;
+      const ox = m.world.x - pos.x;
+      const oz = m.world.z - pos.z;
+      const lx = ox * r.x + oz * r.z;
+      const lz = ox * f.x + oz * f.z;
+      const h = m.radius * 0.5;
+      _plan[0] = Math.min(_plan[0]!, lx - h);
+      _plan[1] = Math.max(_plan[1]!, lx + h);
+      _plan[2] = Math.min(_plan[2]!, lz - h);
+      _plan[3] = Math.max(_plan[3]!, lz + h);
+    }
   }
+  if (mass > 1e-8) {
+    _span.mx = cx / mass;
+    _span.mz = cz / mass;
+    return;
+  }
+  // An intact car's centre of mass stands `centreY` up its own axis from the origin on the ground under it: off the origin in plan once it leans.
+  const { x, y, z, w } = car.group.quaternion;
+  const up = centreY(car);
+  _span.mx = pos.x + 2 * (x * y - z * w) * up;
+  _span.mz = pos.z + 2 * (y * z + x * w) * up;
 }
 
 /** Slack (m) on `footprintBound` for the rounding of the two rotations `bodySpan` applies. */
@@ -190,29 +206,11 @@ function aheadOf(car: DeformableCar): number {
   return v.x * v.x + v.z * v.z > WALL_CRUSH * WALL_CRUSH ? hypot2(v.x, v.z) * HIT_AHEAD : 0;
 }
 
-/** The plan point of `car`'s centre of mass into `_span.mx`, `mz`: a wreck's masses' centroid, else its origin (on its axis). */
-function centreOfMass(car: DeformableCar): void {
-  let m = 0;
-  let x = 0;
-  let z = 0;
-  if (car.deform.massActive) {
-    for (const n of car.deform.masses) {
-      if (!n.dynamic) continue;
-      m += n.mass;
-      x += n.world.x * n.mass;
-      z += n.world.z * n.mass;
-    }
-  }
-  _span.mx = m > 1e-8 ? x / m : car.group.position.x;
-  _span.mz = m > 1e-8 ? z / m : car.group.position.z;
-}
-
-/** The car as every solid meets it this slice: `_span` filled from its drawn body (`bodySpan`) and its footprint (`footprint`). */
+/** The car as every solid meets it this slice: `_span` filled from its drawn body (`bodySpan`), its footprint and its centre of mass (`footprint`). */
 function measure(car: DeformableCar): void {
   const v = car.velocity;
   bodySpan(car, _span, _tilt);
   footprint(car);
-  centreOfMass(car);
   const plan = _plan;
   _span.cx = (plan[0]! + plan[1]!) / 2;
   _span.cz = (plan[2]! + plan[3]!) / 2;
