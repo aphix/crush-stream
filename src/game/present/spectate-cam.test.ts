@@ -7,7 +7,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { blankPoint, blankProjection, projectPath, Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { FRAME, frame, makeWorld } from "../world/race-world.test-util.ts";
-import { addCars, aheadPoints, camUsable, CINE, CineCam, CLEAR, clearSpot, DutchCam, occluder, raceSight, sightLine, SightLines, type Occluder, type Sight } from "./spectate-cam.ts";
+import { addCars, aheadPoints, camUsable, CINE, CineCam, CLEAR, clearSpot, DutchCam, gather, occluder, raceSight, sightLine, SightLines, type Occluder, type Sight } from "./spectate-cam.ts";
 import { AutoCam, type AutoScene } from "./auto-cam.ts";
 import { carFrame } from "../vehicle/car-rig.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
@@ -453,4 +453,39 @@ describe("given the cars as the cinematic eye's solids", () => {
     expect(across(belt - margin, half.z + margin * 2), "past the nose the line is clear").toBeGreaterThanOrEqual(0);
     expect(sightLine(sight, half.z - 0.1, 0.5, 0, half.z + 3, 0.5, 0), "the old cylinder stood as wide as the car is long: a line along the beam's far side is clear").toBeGreaterThanOrEqual(0);
   });
+});
+
+describe("given a course's solids gathered near a box (the chase eye does it every frame)", () => {
+  /** What `gather` has always answered: every occluder whose footprint circle, grown by `pad`, reaches the box. */
+  const reaching = (occ: readonly Occluder[], x0: number, x1: number, z0: number, z1: number, pad: number): Occluder[] =>
+    occ.filter((o) => {
+      const r = (o.circle ? o.hx : Math.hypot(o.hx, o.hz)) + pad;
+      return o.x + r > x0 && o.x - r < x1 && o.z + r > z0 && o.z - r < z1;
+    });
+  for (const track of COURSES.filter((c) => c.id === "oval" || c.id === "city")) {
+    it(`when ${track.id}'s sight, and a copy of it with some occluders filtered out, are gathered near 400 boxes and pads, then each answers the occluders and the order of the footprints themselves`, () => {
+      const sight = raceSight(track, placeProps(track));
+      expect(sight.feet?.occ, "the course's sight keeps its occluders as arrays").toBe(sight.occ);
+      const filtered: Sight = { ...sight, occ: sight.occ.filter((_, i) => i % 3 !== 0) };
+      let seed = 12345;
+      const next = (): number => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32;
+      let gathered = 0;
+      for (let k = 0; k < 400; k++) {
+        const at = sight.occ[Math.floor(next() * sight.occ.length)]!;
+        const ax = at.x + (next() - 0.5) * 20;
+        const az = at.z + (next() - 0.5) * 20;
+        const bx = ax + (next() - 0.5) * 30;
+        const bz = az + (next() - 0.5) * 30;
+        const pad = [0.25, 0.5, 1.9][k % 3]!;
+        for (const s of [sight, filtered]) {
+          const want = reaching(s.occ, Math.min(ax, bx), Math.max(ax, bx), Math.min(az, bz), Math.max(az, bz), pad);
+          const got = [...gather(s, ax, az, bx, bz, pad)];
+          expect(got.length, `box ${k}`).toBe(want.length);
+          for (let i = 0; i < want.length; i++) expect(got[i], `box ${k} occluder ${i}`).toBe(want[i]);
+          gathered += got.length;
+        }
+      }
+      expect(gathered, "the control: the boxes gather solids").toBeGreaterThan(400);
+    });
+  }
 });

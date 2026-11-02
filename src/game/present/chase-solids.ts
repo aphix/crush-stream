@@ -79,12 +79,14 @@ export class ChaseSolids {
       s.rim = course.rim;
       s.occ = course.occ;
       s.grid = course.grid;
+      s.feet = course.feet;
       return s;
     }
     s.ground = activeGround();
     s.path = null;
     s.wallTop = 0;
     s.grid = undefined;
+    s.feet = undefined;
     if (derby) {
       s.rim = DERBY_RADIUS;
       s.occ = DERBY_OCCLUDERS;

@@ -78,6 +78,8 @@ export type Sight = {
   cars?: readonly Occluder[];
   /** Where `solid` starts its road projection (`roadGrid`); unset: from the whole path. */
   grid?: RoadGrid;
+  /** `occ` as arrays (`footprintsOf`), for `gather`: valid only while its `occ` is this sight's (a copy or a filter of `occ` is scanned object by object). */
+  feet?: Footprints;
 };
 
 export const CINE = {
@@ -153,7 +155,7 @@ export function raceSight(track: Track, placed: readonly Placed[]): Sight {
       occ.push(occluder((box.min.x + box.max.x) / 2, (box.min.z + box.max.z) / 2, 0, (box.max.x - box.min.x) / 2, (box.max.z - box.min.z) / 2, false, box.min.y, box.max.y));
     }
   }
-  const sight: Sight = { ground, path, wallTop: track.json.road.wallHeight, rim: Infinity, occ, grid: roadGrid(path) };
+  const sight: Sight = { ground, path, wallTop: track.json.road.wallHeight, rim: Infinity, occ, grid: roadGrid(path), feet: footprintsOf(occ) };
   raceSights.set(track, sight);
   return sight;
 }
@@ -250,6 +252,18 @@ export class EyePull {
   }
 }
 
+/** A static list of occluders as arrays, centre and footprint radius each: the scan `gather` makes every frame then walks no objects. */
+export type Footprints = { readonly occ: readonly Occluder[]; readonly x: Float64Array; readonly z: Float64Array; readonly r: Float64Array };
+
+/** The radius of the circle about `o`'s centre that holds its footprint (m). */
+function reachOf(o: Occluder): number {
+  return o.circle ? o.hx : hypot2(o.hx, o.hz);
+}
+
+function footprintsOf(occ: readonly Occluder[]): Footprints {
+  return { occ, x: Float64Array.from(occ, (o) => o.x), z: Float64Array.from(occ, (o) => o.z), r: Float64Array.from(occ, reachOf) };
+}
+
 /** `_near` = the occluders whose footprint, grown by `pad`, can reach the flat box around a→b. */
 export function gather(s: Sight, ax: number, az: number, bx: number, bz: number, pad: number): Occluder[] {
   _near.length = 0;
@@ -257,9 +271,18 @@ export function gather(s: Sight, ax: number, az: number, bx: number, bz: number,
   const x1 = Math.max(ax, bx);
   const z0 = Math.min(az, bz);
   const z1 = Math.max(az, bz);
+  const f = s.feet?.occ === s.occ ? s.feet : null;
+  if (f !== null) {
+    const { x, z, r } = f;
+    for (let i = 0; i < x.length; i++) {
+      const e = r[i]! + pad;
+      if (x[i]! + e > x0 && x[i]! - e < x1 && z[i]! + e > z0 && z[i]! - e < z1) _near.push(f.occ[i]!);
+    }
+    return _near;
+  }
   for (const o of s.occ) {
-    const r = (o.circle ? o.hx : hypot2(o.hx, o.hz)) + pad;
-    if (o.x + r > x0 && o.x - r < x1 && o.z + r > z0 && o.z - r < z1) _near.push(o);
+    const e = reachOf(o) + pad;
+    if (o.x + e > x0 && o.x - e < x1 && o.z + e > z0 && o.z - e < z1) _near.push(o);
   }
   return _near;
 }
