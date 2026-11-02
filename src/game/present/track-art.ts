@@ -307,6 +307,9 @@ export class TrackArt {
     mesh.castShadow = cast;
     if (!Array.isArray(mesh.material)) mesh.material = this.forDraw(mesh.material, mesh);
     if (cast && mesh instanceof THREE.InstancedMesh) mesh.customDepthMaterial = facadeDepth(mesh.material as THREE.Material) ?? (mesh.instanceColor ? DEPTH_INSTANCED_COLOR : DEPTH_INSTANCED);
+    // At the scene root with an identity transform (the art's cells, props, ground and gantry are built in world space; only instance matrices move): three need not compose or multiply its matrices every frame.
+    mesh.matrixAutoUpdate = false;
+    mesh.matrixWorldAutoUpdate = false;
     this.group.add(mesh);
   }
 
