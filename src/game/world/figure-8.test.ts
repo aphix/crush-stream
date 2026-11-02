@@ -12,6 +12,8 @@ import { must } from "../kernel/must.test-util.ts";
 const WIDTH = 10.5;
 /** Radius (m) of each loop's centreline: a 28 m/s lap at the AI's 16 m/s² corner budget (`checkpoint-sweep.test-util.ts`). */
 const LOOP_RADIUS = 50;
+/** Each loop's centre is this far (m) north or south of the crossing: the strands cross at 60°, tangent to the loops, leaving 87 m of straight each way (a full 16-car grid fits behind the line). */
+const LOOP_CENTRE_Z = 100;
 /** The crossing's centre, and how near (m) a sample of the loop must come to it to be one of the two passes through it. */
 const CROSSING_REACH = 2;
 
@@ -48,12 +50,12 @@ describe("given the figure-8 course, two dirt loops joined by a crossing at grad
     expect(track.json.road.surface).toBe("dirt");
     expect(Math.max(...p.wallL, ...p.wallR), "no walls: the clearing is open").toBe(0);
     expect(Math.max(...p.y) - Math.min(...p.y), "flat").toBe(0);
-    const top = LOOP_RADIUS * (1 + Math.SQRT2);
+    const top = LOOP_CENTRE_Z + LOOP_RADIUS;
     expect(Math.abs(Math.max(...p.z) - top), "the north loop reaches its radius past its centre").toBeLessThan(3);
     expect(Math.abs(Math.min(...p.z) + top), "the south loop likewise").toBeLessThan(3);
   });
 
-  it("when its centreline is walked, then it crosses itself exactly once, at the origin, at grade, and a gate stands on each of the loops and the straights but none over the crossing", () => {
+  it("when its centreline is walked, then it crosses itself exactly once, at the origin, at grade, and no gate stands over the crossing", () => {
     const passes = passesThroughCrossing();
     expect(passes.length, `passes at s = ${passes.join()}`).toBe(2);
     expect(Math.abs(passes[1]! - passes[0]! - track.length / 2), "the passes are half a lap apart").toBeLessThan(20);
@@ -72,16 +74,16 @@ describe("given the figure-8 course, two dirt loops joined by a crossing at grad
   it("when a car does the first loop then turns at the crossing onto the start straight, then it earns no lap and is told it missed the second loop's checkpoints", () => {
     const L = track.length;
     const [pass] = passesThroughCrossing();
-    const cheat = [...centreline(track, L - 6, L + pass! - 6), { x: 0, z: 0 }, { x: 40, z: 40 }, { x: 70, z: 70 }];
+    const cheat = [...centreline(track, L - 6, L + pass! - 6), { x: 0, z: 0 }, { x: 36, z: 62 }, { x: 60, z: 104 }];
     const { laps, session } = lapsOf(cheat, 30, 1, 120);
     expect(laps, "no lap for cutting across the crossing").toBe(0);
     expect(session.cars[0]!.next, "the second loop is still owed").toBeGreaterThan(0);
   });
 
-  it("when the props are placed, then trees stand in each loop and a ring of them in the forest, none on the road", () => {
+  it("when the props are placed, then trees stand in each loop and a ring of them in the forest", () => {
     const trees = placeProps(track).filter((p) => p.prefab === "tree");
     expect(trees.length).toBeGreaterThan(200);
-    for (const cz of [LOOP_RADIUS * Math.SQRT2, -LOOP_RADIUS * Math.SQRT2]) {
+    for (const cz of [LOOP_CENTRE_Z, -LOOP_CENTRE_Z]) {
       const inside = trees.filter((t) => Math.hypot(t.x, t.z - cz) < LOOP_RADIUS - 12);
       expect(inside.length, `trees inside the loop at z=${cz.toFixed(0)}`).toBeGreaterThan(8);
     }
