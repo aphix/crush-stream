@@ -108,5 +108,5 @@
   "scatter": [
     { "prefab": "tree", "count": 450, "near": 45, "far": 90, "seed": 8, "scaleMin": 0.9, "scaleMax": 1.5 }
   ],
-  "environment": { "sky": "#9db3c7", "fog": 0.004, "terrain": "grass", "hills": [] }
+  "environment": { "sky": "#9db3c7", "fog": 0.0025, "terrain": "grass", "hills": [] }
 }
