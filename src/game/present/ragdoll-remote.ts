@@ -32,6 +32,8 @@ import {
 const THROW_REACH = 12;
 /** Wall ms the sim may wait for the worker's answer (`behind`) before the worker counts as failed. */
 const STALL_MS = 1500;
+/** What `drain` hands back when the worker answered nothing since. */
+const NO_ANSWERS: readonly ResultMessage[] = [];
 
 /** What the main thread has posted to the worker so far: messages, and the bytes of the typed arrays handed over (a frame's cars, a car's cage fields; the small commands count as messages only). */
 export interface PostTraffic {
@@ -187,9 +189,9 @@ export class RagdollRemote {
     this.send({ type: "frame", seq, epoch: this.epoch, dt, authority, sandbox, lookSeed, count, cars: block, loose }, [block.buffer, loose.buffer]);
   }
 
-  /** The answers that came since the last call, for drawing. */
-  drain(): ResultMessage[] {
-    return this.undrawn.splice(0);
+  /** The answers that came since the last call, for drawing (a shared empty array when none: asked every frame). */
+  drain(): readonly ResultMessage[] {
+    return this.undrawn.length === 0 ? NO_ANSWERS : this.undrawn.splice(0);
   }
 
   /** The sim has heard everything the world answered up to frame `heardFrame`; anything is out, or was thrown since. */
