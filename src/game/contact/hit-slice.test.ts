@@ -225,7 +225,7 @@ function sedanOff(cruiser: DeformableCar, side: THREE.Vector3): DeformableCar {
 }
 
 describe("given a cruiser whose push bar folded in an earlier crash, and a sedan standing 7 cm off the cages' contact", () => {
-  // shortcut: the tail case is out until its setup is fixed: a 15 m/s hit armed on the tail gives the tail its own stroke reach past 7 cm, so the row failed with or without the nose gate.
+  // Flank only: a tail's own stroke reach is 0.098 m whatever the hit's speed (5 and 15 m/s measured), over the bar's 0.09 m fold, so no offset tells the bar's reach from the tail's own there.
   for (const face of ["flank"] as const) {
     it(`when the sedan's hit lands on the cruiser's ${face}, then no pair contact reaches the 7 cm: the bar is on the nose only`, (t) => {
       const cruiser = foldedCruiser();
