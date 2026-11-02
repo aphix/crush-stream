@@ -253,7 +253,7 @@ export class EyePull {
 }
 
 /** A static list of occluders as arrays, centre and footprint radius each: the scan `gather` makes every frame then walks no objects. */
-export type Footprints = { readonly occ: readonly Occluder[]; readonly x: Float64Array; readonly z: Float64Array; readonly r: Float64Array };
+type Footprints = { readonly occ: readonly Occluder[]; readonly x: Float64Array; readonly z: Float64Array; readonly r: Float64Array };
 
 /** The radius of the circle about `o`'s centre that holds its footprint (m). */
 function reachOf(o: Occluder): number {
