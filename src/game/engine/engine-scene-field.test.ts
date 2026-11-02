@@ -122,4 +122,15 @@ describe("given the real engine with the player's car count picked on the slider
     expect(engine["seat"].mode, "the seat's mode").toBe("global");
     expect(engine["seat"].carIndex, "the seat's car").toBe(-1);
   });
+
+  it("when a scene left its own lens set (on foot, a scene shot) and another scene is picked, then the new scene starts on the base lens", () => {
+    for (const [from, to] of [["derby", "fleet"], ["fleet", "range"], ["showcase", "fleet"]] as const) {
+      engine["setScene"](from);
+      runSeconds(engine, 0.1);
+      engine["view"].setLens(28);
+      engine["setScene"](to);
+      runSeconds(engine, 0.1);
+      expect(engine["view"]["sceneFov"], `${from} to ${to}: the lens a scene set`).toBe(null);
+    }
+  });
 });

@@ -84,6 +84,14 @@ describe("given the orbit camera's eye pulled in toward its subject by a solid o
     view.frameReset(true, []);
     expect([clear["pull"], clear["lift"], clear["swingTo"]], "pull, lift, swing target after the reset").toEqual([0, 0, 0]);
   });
+  it("when the scene resets after the rear view's eye was pulled in too, then its pull does not carry over either", () => {
+    const { view } = rig("global");
+    const rear = view["rearClear"];
+    rear["pull"] = 9.4;
+    rear["swingTo"] = 0.8;
+    view.frameReset(true, []);
+    expect([rear["pull"], rear["swingTo"]], "rear pull, swing target after the reset").toEqual([0, 0]);
+  });
 });
 
 describe("given the ride-along's automatic cuts and a drag on its camera", () => {
