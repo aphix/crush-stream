@@ -194,7 +194,10 @@ function footprintBound(car: DeformableCar): number {
     for (let i = 0; i < deform.masses.length; i++) {
       const m = deform.masses[i]!;
       if (!m.dynamic || (m.hub && !m.popped)) continue;
-      d = Math.max(d, hypot2(m.world.x - pos.x, m.world.z - pos.z) + m.radius * 0.5);
+      // A plain root: the bound only gates, and `BOUND_SLACK` covers the rounding `hypot2`'s scaling would avoid.
+      const dx = m.world.x - pos.x;
+      const dz = m.world.z - pos.z;
+      d = Math.max(d, Math.sqrt(dx * dx + dz * dz) + m.radius * 0.5);
     }
   }
   return Math.SQRT2 * d + BOUND_SLACK;
