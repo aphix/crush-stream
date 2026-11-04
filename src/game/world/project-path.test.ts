@@ -67,8 +67,10 @@ for (const json of [...TRACKS, ...OFF_MENU]) {
       const want = blankProjection();
       const got = blankProjection();
       let queries = 0;
+      // At least 3000 queries per course: a one-path course (the figure-8) runs its path for all of them.
+      const perPath = Math.max(1500, Math.ceil(3000 / track.paths().length));
       for (const p of track.paths()) {
-        for (let i = 0; i < 1500; i++) {
+        for (let i = 0; i < perPath; i++) {
           let x: number;
           let z: number;
           const mode = rand();
@@ -97,9 +99,7 @@ for (const json of [...TRACKS, ...OFF_MENU]) {
           expect(same(want, got), `(${x.toFixed(3)}, ${z.toFixed(3)}) hint ${hint}: want ${JSON.stringify(want)} got ${JSON.stringify(got)}`).toBeTruthy();
         }
       }
-      // Every path ran its points (the figure-8 has one path, the others two).
-      expect(queries).toBeGreaterThanOrEqual(1500 * track.paths().length);
-      expect(track.paths().length).toBeGreaterThan(0);
+      expect(queries).toBeGreaterThanOrEqual(3000);
     });
   });
 }
