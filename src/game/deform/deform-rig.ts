@@ -461,7 +461,7 @@ export abstract class DeformRig {
   /** Share (0–1) of the read pitch/roll the frame takes, and the sim time it was last eased at (followGroup). */
   protected lean = 1;
   protected leanAt = -Infinity;
-  /** The car has no wheel or hull point on a surface (`car.airborne`, set before each structure step): its roll is real flight, not a shape step's leak. */
+  /** The body's middle is above its ground band (followGroup): no wheel holds it, its masses fly. */
   aloft = false;
   /** The frame's height at sim time `frameAt` (followGroup's last timed call) and its measured climb (m/s). */
   protected frameY = 0;

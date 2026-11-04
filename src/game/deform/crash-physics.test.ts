@@ -1281,63 +1281,6 @@ describe("given a quiet squeezed car whose roof, almost straight over its cell, 
   });
 });
 
-/** The masses' best-fit orientation (the polar factor of Σ m (world − centroid)(rest − centroid)ᵀ over the body masses) into `out`. */
-function cloudTurnOf(d: StreamedDeformation, out: THREE.Quaternion): THREE.Quaternion {
-  const body = d.masses.filter((m) => !m.hub);
-  const rc = new THREE.Vector3();
-  const wc = new THREE.Vector3();
-  let total = 0;
-  for (const m of body) {
-    rc.addScaledVector(m.rest, m.mass);
-    wc.addScaledVector(m.world, m.mass);
-    total += m.mass;
-  }
-  rc.divideScalar(total);
-  wc.divideScalar(total);
-  const r = new THREE.Matrix3().set(0, 0, 0, 0, 0, 0, 0, 0, 0);
-  for (const m of body) {
-    const p = [m.world.x - wc.x, m.world.y - wc.y, m.world.z - wc.z];
-    const q = [m.rest.x - rc.x, m.rest.y - rc.y, m.rest.z - rc.z];
-    for (let i = 0; i < 3; i++) for (let k = 0; k < 3; k++) r.elements[k * 3 + i]! += m.mass * p[i]! * q[k]!;
-  }
-  for (let it = 0; it < 40; it++) {
-    const inverse = r.clone().invert().transpose();
-    for (let i = 0; i < 9; i++) r.elements[i] = 0.5 * (r.elements[i]! + inverse.elements[i]!);
-  }
-  return out.setFromRotationMatrix(new THREE.Matrix4().setFromMatrix3(r));
-}
-
-/** Most turn (rad) the cloud may make against its frame in one step: the frame's own turn carries it, so what is left is the goals' leak (a quiet wreck's is a few mrad; the step roll cap leaves a rolling one 0.097, main 0.48). */
-const STEP_TURN_MAX = 0.12;
-describe("given a wreck lying on its side (rolled 1.5 rad), spinning on the ground (not aloft), whose contact window ends 47 steps on", () => {
-  it("when it runs 60 fixed steps, then the cloud never turns more than the frame plus 0.12 rad in one step (the free step's goals turned a rolling wreck 0.48 rad in the step its window ended)", () => {
-    const d = new StreamedDeformation(dummyGeom());
-    d.mode = "shape";
-    const group = new THREE.Group();
-    group.rotation.set(0.1, 0, 1.5, "YXZ");
-    group.position.y = 0.5;
-    group.updateMatrixWorld();
-    const vel = new THREE.Vector3(6, 3, 0);
-    const omega = new THREE.Vector3(0.5, 0.3, 2);
-    d.beginCrush(new THREE.Vector3(0, 0.36, 2.06), new THREE.Vector3(0, 0, -1), 0, 0, group, vel, omega);
-    const rig: WreckRig = { d, group, vel, omega };
-    mass(d, "wingFR").world.addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(group.quaternion), 0.25);
-    const cloud = cloudTurnOf(d, new THREE.Quaternion());
-    const frame = group.quaternion.clone();
-    let worst = 0;
-    for (let i = 0; i < 60; i++) {
-      stepWreck(rig, 1 / FINE_HZ);
-      const nextCloud = cloudTurnOf(d, new THREE.Quaternion());
-      const nextFrame = group.quaternion.clone();
-      const rel = nextCloud.clone().multiply(cloud.clone().invert()).multiply(nextFrame.clone().multiply(frame.clone().invert()).invert());
-      worst = Math.max(worst, 2 * Math.acos(Math.min(1, Math.abs(rel.w))));
-      cloud.copy(nextCloud);
-      frame.copy(nextFrame);
-    }
-    expect(worst, `the cloud turned ${worst.toFixed(4)} rad against its frame in one step`).toBeLessThanOrEqual(STEP_TURN_MAX);
-  });
-});
-
 describe("given a quiet car whose engine pair a clamp keeps squeezing 4 mm closer while it stands 8 cm rolled in the car's frame", () => {
   it("when the clamp runs 30 times, then the pair's height split has not grown past 1 mm over the 80 mm it stood at: a squeezed pair's spacing is restored in the body's plan, not along its slanted line", () => {
     const s = spawn(0, 0, undefined, undefined, "shape");

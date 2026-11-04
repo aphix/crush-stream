@@ -39,8 +39,6 @@ export const HUB_POP_MPS = 15;
 /** The hit speed (m/s EBS) from which a corner crushed to `HUB_OVERRUN` of its hub takes the wheel. */
 const HUB_OVERRUN_MPS = 3;
 
-/** Largest net roll (rad) a free shape step may leave in the cloud's displacement (`removeNetSpin`): a wreck rolling over was turned 0.32 rad in one step by its own goals, a quiet one's leak is a few mrad. */
-const STEP_ROLL_MAX = 0.05;
 const _a = new THREE.Vector3();
 const _inverse = new THREE.Matrix4();
 /** `clampLocal`'s inverse of the group's world matrix while its hubs are planted, and the car-frame place `tetherHub` reads a hub at. */
@@ -595,8 +593,8 @@ export abstract class DeformSolve extends DeformFreeze {
     }
     // Internal goals exert no net torque. Yaw is always removed (nothing restores it, so overlapping plastic rests would turn
     // the wreck); once nothing pushes the body pitch goes too: left in, the front clusters' nose-up fit (17 deg after a 50 km/h
-    // wall) lifted the wing and bumper 0.12 m above their seat, and a quiet wreck holds them there. Roll stays (but for a free step's leak past
-    // `STEP_ROLL_MAX`): the planted hubs restore it, and a side shove's spin is real motion that removal turned into a permanent tilt (far side 0.07-0.10 m off).
+    // wall) lifted the wing and bumper 0.12 m above their seat, and a quiet wreck holds them there. Roll stays: the planted
+    // hubs restore it, and a side shove's spin is real motion that removal turned into a permanent tilt (far side 0.07-0.10 m off).
     this.removeNetSpin(comX / comM, comY / comM, comZ / comM, contacting || this.faceContacts > 0);
     if (!contacting) {
       let comX1 = 0,
@@ -635,8 +633,8 @@ export abstract class DeformSolve extends DeformFreeze {
 
   /**
    * Takes the net turn out of this step's shape-match correction (`startX/Y/Z` to the particles now) about the centroid
-   * `(cx, cy, cz)`: a small-angle `ω = I⁻¹ Σ m r × Δ`, then each particle takes the yaw and pitch part of `-ω × r`, and a free step's roll past
-   * `STEP_ROLL_MAX` (planted hubs restore a quiet wreck's leak of a few mrad, and a side shove's spin is real motion to keep). While the body is `pushed` only the turn about up goes: the push is the external torque on pitch.
+   * `(cx, cy, cz)`: a small-angle `ω = I⁻¹ Σ m r × Δ`, then each particle takes the yaw and pitch part of `-ω × r` (roll is the
+   * planted hubs' to restore and a side shove's to keep). While the body is `pushed` only the turn about up goes: the push is the external torque on pitch.
    */
   private removeNetSpin(cx: number, cy: number, cz: number, pushed: boolean): void {
     let lx = 0,
@@ -668,8 +666,7 @@ export abstract class DeformSolve extends DeformFreeze {
       iyz -= p.mass * ry * rz;
     }
     let wx = 0,
-      wy = 0,
-      wz = 0;
+      wy = 0;
     if (pushed) {
       if (iyy < 1e-8) return;
       wy = ly / iyy;
@@ -682,8 +679,6 @@ export abstract class DeformSolve extends DeformFreeze {
       if (Math.abs(det) < 1e-12) return;
       wx = (c0 * lx + c1 * ly + c2 * lz) / det;
       wy = (c1 * lx + (ixx * izz - ixz * ixz) * ly + (ixy * ixz - ixx * iyz) * lz) / det;
-      const roll = (c2 * lx + (ixy * ixz - ixx * iyz) * ly + (ixx * iyy - ixy * ixy) * lz) / det;
-      wz = this.aloft ? 0 : Math.sign(roll) * Math.max(0, Math.abs(roll) - STEP_ROLL_MAX);
     }
     for (let i = 0; i < this.shapeParticles.length; i++) {
       if (this.masses[i]!.hub && !this.deepCrush) continue;
@@ -691,8 +686,8 @@ export abstract class DeformSolve extends DeformFreeze {
       const rx = this.startX[i]! - cx,
         ry = this.startY[i]! - cy,
         rz = this.startZ[i]! - cz;
-      p.x -= wy * rz - wz * ry;
-      p.y += wx * rz - wz * rx;
+      p.x -= wy * rz;
+      p.y += wx * rz;
       p.z -= wx * ry - wy * rx;
     }
   }
