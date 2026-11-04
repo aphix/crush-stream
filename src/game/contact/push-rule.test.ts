@@ -36,12 +36,13 @@ const PIT_YAW = (6 * Math.PI) / 180;
 const PIT_Z = -0.5;
 const PIT_GAP = 0.3;
 const CRASH_CLOSING = 4;
-/** A monster's tyre closing (m/s) on the range's slab while it pushes an armed monster: over the graze (`CRASH.grazeMps`), under the push's closing, so the push row is the hardest. */
-const KERB_CLOSING = 2.2;
-/** Tyre-to-slab gaps (m) of the kerb run: the nose touches at `START_GAP / BRUSH_CLOSING` s, which the tyre closes `KERB_CLOSING` times over (0.79 m); these run from just before to a few slices after it. */
-const KERB_GAPS = [0.7, 0.72, 0.74, 0.76, 0.78, 0.8, 0.82, 0.84, 0.86, 0.88, 0.9];
-/** The pusher's centre z (m): its front tyres are beside the slab (the slab is 3.9 m long), its rear ones past its end. */
-const KERB_Z = -1;
+/** The speed (m/s) a monster drives at, heading -x, with its nose on an armed car's rear while a front tyre meets the range's slab: the same closing for both, under `PUSH_MAX`, over the graze. */
+const KERB_SPEED = 2.8;
+/** Metres between the front tyre and the slab's face at the start, and how far (m) the target's rear is from the nose beyond that gap: the two touches fall in the same slice for some of them. */
+const KERB_TYRE_GAP = 0.5;
+const KERB_NOSE_OFFSETS = [-0.1, 0, 0.1, 0.2, 0.3];
+/** How far (m) inside the slab's end the pusher's near tyre stands: its other tyre and half its nose are past the end, on the target. */
+const KERB_TYRE_IN = 0.46;
 /** A nudge closing under the rigid step's graze (`CRASH.grazeMps`): only the pair contact reads it. */
 const CREEP_CLOSING = 1;
 /** The most (m/s) the car behind may still be faster than the car ahead after the touch: the touch took the closing, it did not pass through. */
@@ -69,12 +70,12 @@ function pushRun(targetSpeed: number, closing: number): { pusher: DeformableCar;
   return { pusher, pushed };
 }
 
-/** Arms `car`'s masses with a hit at `local` (car frame) along `inward` (car frame), then sets every mass and the car to `vz` along z (and `vx` along x): the hit's own impulse taken back. */
-function arm(car: DeformableCar, local: THREE.Vector3, inward: THREE.Vector3, vz: number, vx = 0): void {
+/** Arms `car`'s masses with a hit at `local` (car frame) along `inward` (car frame), then sets every mass and the car to `vz` along z: the hit's own impulse taken back. */
+function arm(car: DeformableCar, local: THREE.Vector3, inward: THREE.Vector3, vz: number): void {
   car.group.updateMatrixWorld(true);
   car.applyImpact(car.group.localToWorld(local.clone()), inward.clone().transformDirection(car.group.matrixWorld), ARMING_EBS, ARMING_EBS);
-  for (const m of car.deform.masses) m.vel.set(vx, 0, vz);
-  car.velocity.set(vx, 0, vz);
+  for (const m of car.deform.masses) m.vel.set(0, 0, vz);
+  car.velocity.set(0, 0, vz);
   car.angular.set(0, 0, 0);
 }
 
@@ -253,20 +254,23 @@ describe("given the nose of an armed wreck, which the rigid step reads as a surf
   });
 });
 
-describe("given a monster pushing an armed monster at 2.8 m/s while its front tyre meets the range's slab at 2.2 m/s", () => {
-  it("when the two touches fall in the same slice, then the pusher is armed by the slab: a push on an armed car does not swallow a solid's hit", () => {
-    for (const gap of KERB_GAPS) {
+describe("given a monster driving at 2.8 m/s with its nose on an armed monster's rear while its front tyre meets the range's slab", () => {
+  it("when the nose's push and the tyre's hit come in the same slice, then the pusher is armed by the slab: a push on an armed car does not swallow a solid's hit", () => {
+    const heading = -Math.PI / 2;
+    for (const offset of KERB_NOSE_OFFSETS) {
       const pusher = classCar("monster");
       const target = classCar("monster");
-      launch(pusher, 0, KERB_Z, 0, -KERB_CLOSING, BRUSH_CLOSING);
+      launch(pusher, 5, 0, heading, -KERB_SPEED, 0);
       pusher.group.updateMatrixWorld(true);
-      const tyreEdge = Math.min(...pusher.wheels.map((wheel) => new THREE.Box3().setFromObject(wheel).min.x));
-      const x = BARRIER_HALF.x + gap - tyreEdge;
-      launch(pusher, x, KERB_Z, 0, -KERB_CLOSING, BRUSH_CLOSING);
-      launch(target, x + QUARTER_OFFSET, KERB_Z + outlineOf(pusher).zHi - outlineOf(target).zLo + START_GAP, 0, -KERB_CLOSING, 0);
-      arm(target, new THREE.Vector3(0, 0.5, outlineOf(target).zLo), new THREE.Vector3(0, 0, 1), 0, -KERB_CLOSING);
+      const tyres = pusher.wheels.map((wheel) => ({ at: wheel.getWorldPosition(new THREE.Vector3()), r: pusher.frame.rig.tyre.r * wheel.scale.x }));
+      const z = BARRIER_HALF.z - KERB_TYRE_IN - Math.min(...tyres.map((t) => t.at.z));
+      const x = BARRIER_HALF.x + KERB_TYRE_GAP - Math.min(...tyres.map((t) => t.at.x - 5 - t.r));
+      launch(pusher, x, z, heading, -KERB_SPEED, 0);
+      const farTyre = z + Math.max(...tyres.map((t) => t.at.z));
+      launch(target, x - outlineOf(pusher).zHi - KERB_TYRE_GAP - offset - Math.abs(outlineOf(target).zLo), farTyre, heading, 0, 0);
+      arm(target, new THREE.Vector3(0, 0.5, outlineOf(target).zLo), new THREE.Vector3(0, 0, 1), 0);
       step([target, pusher], [FREEWHEEL, FREEWHEEL], () => pusher.crashed, true);
-      expect(pusher.crashed, `the slab's hit was swallowed with the tyre ${gap} m off it`).toBe(true);
+      expect(pusher.crashed, `the slab's hit was swallowed with the target's rear ${offset} m off the tyre's gap`).toBe(true);
     }
   });
 });
