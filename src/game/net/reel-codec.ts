@@ -564,9 +564,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 215: the derby ring wall's collider stands 100 m and is 6 m thick (5 m out past the drawn 1 m), an invisible wall over and behind the drawn 20.5 m one, so a car whose jump used to clear the wall now meets it, and a wreck lodged in the wall is pushed back into the arena, not out through its outer face; a clip of 214 or before no longer reads.
  * 216: an intact car's centre of mass is the point `centreY` up its own axis, not its origin, so a box meets a leaning car from the side that point is on: a leaning car at a thin wall whose midplane lies between the car's origin and that point is now pushed to the other side; a replayed run with a leaning car against a thin wall moves differently; a clip of 215 or before no longer reads.
  * 217: a hit on a solid and a hit on a car whose masses run, in the same slice, are two hits: a push on an armed car no longer swallows a tyre's hit on a solid's side, and a strike on an armed car against a solid arms both; a replayed run where a car meets both in one slice moves differently; a clip of 216 or before no longer reads.
+ * 218: a wreck turned as a whole past 0.85 rad (lying on its side, rolling onto its roof) keeps that turn in its shape goals, so they no longer pull its cloud back toward upright by up to 0.3 rad a step against its frame; a crushed cluster is still clamped; a clip of 217 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 217;
+const REPLAY_VERSION = 218;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
