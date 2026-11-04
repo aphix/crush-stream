@@ -560,9 +560,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 211: a box meets a body from the side its centre of mass is on, not the side its footprint's middle is on: a wreck lying across a thin wall (a truck wedged on its roof between a rail and the arena wall) is no longer pushed out through it once its footprint's middle passes the wall's midplane; a clip of 210 or before no longer reads.
  * 212: a respawned racer's AI starts its line from the spot's own sample of the course, not the nearest centreline point on the whole course: on a course that crosses itself (the figure-8, the stunt course's bridge) a racer respawned beside the crossing keeps its own strand; a replayed race with a respawn near a crossing moves differently; a clip of 211 or before no longer reads.
  * 213: a car that drives into another at under 3 m/s relative (a push: a PIT's touch, a nudge on a parked car, also on a car already armed) arms no crash on itself and keeps driving, the car it pushes is armed as before; a slide along a flank at a higher relative speed is no push; who pushes is read along the line between the two cars' centres, so a PIT with the cop's flank on the target's rear corner is a cop push; a car in the rigid step reads another car whose masses run as a surface moving with it (only where it moves away from the car), not a fixed face; a replayed run where a car touches another at under 3 m/s, or drives against a moving wreck, moves differently; a clip of 212 or before no longer reads.
+ * 214: a car whose engine pair is squeezed together has the pair pushed apart in the body's plan, keeping its height split, to the length that meets the stretched rule at rest, so the pair no longer swings in length each step when tilted and no longer rolls to its lift caps in a front hit (a wing that rose over it lies lower); a free wreck's shape step that rolls its cloud more than 0.05 rad against its frame has the excess taken out, except while the car is in the air; wrecks and crashes replay differently; a clip of 213 or before no longer reads.
+ * 215: the derby ring wall's collider stands 100 m, an invisible wall over the drawn 20.5 m one, so a car whose jump used to clear the wall now meets it; a clip of 214 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 213;
+const REPLAY_VERSION = 215;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
