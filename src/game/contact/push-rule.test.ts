@@ -258,13 +258,13 @@ describe("given a monster pushing an armed monster at 2.8 m/s while its front ty
     for (const gap of KERB_GAPS) {
       const pusher = classCar("monster");
       const target = classCar("monster");
-      launch(pusher, 0, KERB_Z, 0, -KERB_CLOSING, TARGET_SPEED + BRUSH_CLOSING);
+      launch(pusher, 0, KERB_Z, 0, -KERB_CLOSING, BRUSH_CLOSING);
       pusher.group.updateMatrixWorld(true);
       const tyreEdge = Math.min(...pusher.wheels.map((wheel) => new THREE.Box3().setFromObject(wheel).min.x));
       const x = BARRIER_HALF.x + gap - tyreEdge;
-      launch(pusher, x, KERB_Z, 0, -KERB_CLOSING, TARGET_SPEED + BRUSH_CLOSING);
-      launch(target, x + QUARTER_OFFSET, KERB_Z + outlineOf(pusher).zHi - outlineOf(target).zLo + START_GAP, 0, -KERB_CLOSING, TARGET_SPEED);
-      arm(target, new THREE.Vector3(0, 0.5, outlineOf(target).zLo), new THREE.Vector3(0, 0, 1), TARGET_SPEED, -KERB_CLOSING);
+      launch(pusher, x, KERB_Z, 0, -KERB_CLOSING, BRUSH_CLOSING);
+      launch(target, x + QUARTER_OFFSET, KERB_Z + outlineOf(pusher).zHi - outlineOf(target).zLo + START_GAP, 0, -KERB_CLOSING, 0);
+      arm(target, new THREE.Vector3(0, 0.5, outlineOf(target).zLo), new THREE.Vector3(0, 0, 1), 0, -KERB_CLOSING);
       step([target, pusher], [FREEWHEEL, FREEWHEEL], () => pusher.crashed, true);
       expect(pusher.crashed, `the slab's hit was swallowed with the tyre ${gap} m off it`).toBe(true);
     }
