@@ -100,6 +100,16 @@ function rotY(rad: number): Mat3 {
   return m;
 }
 
+/** A = R·S for a fit turned `turn` rad about the vertical and stretched 0.5 along x, 1.4 along z: a crushed cluster, not a rigid turn. */
+function strainedTurn(turn: number): Mat3 {
+  const S0 = m3Id();
+  S0[0] = 0.5;
+  S0[8] = 1.4;
+  const A = m3();
+  m3Mul(rotY(turn), S0, A);
+  return A;
+}
+
 function particlesAt(pts: [number, number, number][], mass = 1): ShapeParticle[] {
   return pts.map(([x, y, z]) => ({ x, y, z, vx: 0, vy: 0, vz: 0, mass }));
 }
@@ -137,11 +147,10 @@ describe("given a body's deformation (a 3×3 transform) split into a rotation an
     expect(m3Det(R), `det(R)=${m3Det(R)}`).toBeGreaterThan(0.5);
   });
 
-  it("when the deformation is a 180° yaw, then the rotation is clamped to under 1 rad and stays a true rotation, rather than applied as an inside-out mesh", () => {
-    const A = rotY(Math.PI);
+  it("when a crushed fit (stretched 0.5 along x, 1.4 along z) also turns 180°, then the rotation is clamped to under 1 rad and stays a true rotation, rather than applied as an inside-out mesh", () => {
     const R = m3();
     const S = m3();
-    m3Polar(A, quatId(), R, S);
+    m3Polar(strainedTurn(Math.PI), quatId(), R, S);
     expect(m3RotationAngle(R), `R still flipped ${m3RotationAngle(R)}`).toBeLessThan(1.0);
     expect(m3Det(R)).toBeGreaterThan(0.5);
   });
@@ -181,16 +190,26 @@ describe("given a body's deformation (a 3×3 transform) split into a rotation an
     for (let i = 0; i < 9; i++) expect(Math.abs(S[i]! - S0[i]!), `S[${i}]=${S[i]} vs ${S0[i]}`).toBeLessThan(1e-6);
   });
 
-  it("when the deformation turns 1.2 rad, then the output rotation is clamped to between 0.8 and 0.9 rad about the same axis, while the estimate kept for the next frame holds the full 1.2 rad", () => {
+  it("when a crushed fit also turns 1.2 rad, then the output rotation is clamped to between 0.8 and 0.9 rad about the same axis, while the estimate kept for the next frame holds the full 1.2 rad", () => {
     const q = quatId();
     const R = m3();
     const S = m3();
-    m3Polar(rotY(1.2), q, R, S);
+    m3Polar(strainedTurn(1.2), q, R, S);
     const ang = m3RotationAngle(R);
     expect(ang > 0.8 && ang < 0.9, `clamped angle ${ang}`).toBeTruthy();
     expect(R[2]! > 0 && Math.abs(R[1]!) < 1e-9 && Math.abs(R[5]!) < 1e-9, "clamp left the yaw axis or reversed it").toBeTruthy();
     const qAng = 2 * Math.acos(Math.min(1, Math.abs(q[3]!)));
     expect(Math.abs(qAng - 1.2), `warm start stored the clamped turn ${qAng}`).toBeLessThan(1e-6);
+  });
+
+  it("when the deformation is a pure turn of 1.2 or 2.6 rad (a body turned, not crushed), then the rotation keeps the whole turn and the stretch is the identity", () => {
+    for (const turn of [1.2, 2.6]) {
+      const R = m3();
+      const S = m3();
+      m3Polar(rotY(turn), quatId(), R, S);
+      expect(Math.abs(m3RotationAngle(R) - turn), `a ${turn} rad turn was applied as ${m3RotationAngle(R)} rad`).toBeLessThan(1e-3);
+      expect(m3FrobeniusI(S), `a ${turn} rad turn left a stretch of ${m3FrobeniusI(S)}`).toBeLessThan(1e-2);
+    }
   });
 
   it("when the deformation collapses to all zeros while the previous rotation was 0.5 rad, then the rotation and stretch stay finite and the rotation holds at 0.5 rad instead of snapping or going NaN", () => {
@@ -236,6 +255,33 @@ describe("given a cluster of particles pulled toward the best-fit pose of its re
       err += Math.hypot(gx - P[i]!.x, gy - P[i]!.y, gz - P[i]!.z);
     }
     expect(err, `rigid match error ${err}`).toBeLessThan(0.05);
+  });
+
+  it("when every particle is turned rigidly by 1.5 rad (past the 0.85 rad clamp of a crushed fit), then the goal positions land on the particles", () => {
+    const P = particlesAt([
+      [1, 0, 0],
+      [-1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ]);
+    const c = makeCluster(P, [0, 1, 2, 3]);
+    rebuildAqqWeighted(c, P);
+    const [cs, sn] = [Math.cos(1.5), Math.sin(1.5)];
+    for (const p of P) {
+      const x = p.x * cs + p.z * sn;
+      p.z = -p.x * sn + p.z * cs;
+      p.x = x;
+    }
+    matchCluster(c, P, 0.5);
+    let err = 0;
+    for (let i = 0; i < 4; i++) {
+      const gx = c.M[0]! * c.qx[i]! + c.M[1]! * c.qy[i]! + c.M[2]! * c.qz[i]! + c.cmx;
+      const gy = c.M[3]! * c.qx[i]! + c.M[4]! * c.qy[i]! + c.M[5]! * c.qz[i]! + c.cmy;
+      const gz = c.M[6]! * c.qx[i]! + c.M[7]! * c.qy[i]! + c.M[8]! * c.qz[i]! + c.cmz;
+      err += Math.hypot(gx - P[i]!.x, gy - P[i]!.y, gz - P[i]!.z);
+    }
+    // The Aqq regularisation (AQQ_EPS) shrinks the fit's stretch a hair: 1.9 mm over four particles with the clamp and without it.
+    expect(err, `a body turned 1.5 rad has its goals ${err} m from where it stands`).toBeLessThan(5e-3);
   });
 
   it("when the particles are squashed to 0.4 in z, then the matched stretch along z is below 0.7", () => {

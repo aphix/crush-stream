@@ -250,15 +250,36 @@ function extractRotation(A, flip, q) {
   q[3] = w;
 }
 
-/** Largest rotation (rad) one cluster fit may apply; kept unchanged from the Newton polar in e4962a0. */
+/** Largest rotation (rad) one strained cluster fit may apply. */
 const ROT_CLAMP = 0.85;
 /** cos(ROT_CLAMP) as the correctly rounded double (detCos(0.85) and every engine's Math.cos agree on it). */
 const COS_ROT_CLAMP = 0.6599831458849822;
+/** |S − I| under which a fit is a body turned, not crushed, and keeps its whole turn: past the plastic yield's largest 0.155, so a cluster that is yielding stays clamped. */
+const TURNED_STRAIN = 0.25;
+/** S = sym(RᵀA) into `S`; returns |S − I|², the squared Frobenius distance from the identity. */
+function stretchInto(A, R, S) {
+  const a0 = A[0], a1 = A[1], a2 = A[2], a3 = A[3], a4 = A[4], a5 = A[5], a6 = A[6], a7 = A[7], a8 = A[8];
+  const r0 = R[0], r1 = R[1], r2 = R[2], r3 = R[3], r4 = R[4], r5 = R[5], r6 = R[6], r7 = R[7], r8 = R[8];
+  const s0 = r0 * a0 + r3 * a3 + r6 * a6;
+  const s4 = r1 * a1 + r4 * a4 + r7 * a7;
+  const s8 = r2 * a2 + r5 * a5 + r8 * a8;
+  const s01 = 0.5 * (r0 * a1 + r3 * a4 + r6 * a7 + (r1 * a0 + r4 * a3 + r7 * a6));
+  const s02 = 0.5 * (r0 * a2 + r3 * a5 + r6 * a8 + (r2 * a0 + r5 * a3 + r8 * a6));
+  const s12 = 0.5 * (r1 * a2 + r4 * a5 + r7 * a8 + (r2 * a1 + r5 * a4 + r8 * a7));
+  S[0] = s0;
+  S[1] = S[3] = s01;
+  S[2] = S[6] = s02;
+  S[4] = s4;
+  S[5] = S[7] = s12;
+  S[8] = s8;
+  const d0 = s0 - 1, d4 = s4 - 1, d8 = s8 - 1;
+  return d0 * d0 + d4 * d4 + d8 * d8 + 2 * (s01 * s01 + s02 * s02 + s12 * s12);
+}
 /**
- * A = R·S with R a proper rotation (|angle| clamped to 0.85 rad) and S = sym(R^T A)
- * (identity past |S − I| 1.8). q is the caller's warm start and receives the
- * unclamped rotation. det A < 0 keeps the polar factor with its third column
- * flipped (the cluster's own z), as the Newton polar + Gram–Schmidt it
+ * A = R·S with R a proper rotation and S = sym(R^T A) (identity past |S − I| 1.8). R's angle is clamped to 0.85 rad only
+ * when the fit is strained (|S − I| past TURNED_STRAIN): a cluster turned as a body keeps its whole turn, so its goals are
+ * its particles and exert no torque. q is the caller's warm start and receives the unclamped rotation. det A < 0 keeps the
+ * polar factor with its third column flipped (the cluster's own z), as the Newton polar + Gram–Schmidt it
  * replaces did, rather than the Frobenius-optimal half-turn about another axis.
  */
 function m3Polar(A, q, R, S) {
@@ -269,26 +290,9 @@ function m3Polar(A, q, R, S) {
   }
   extractRotation(A, m3Det(A) < 0 ? -1 : 1, q);
   quatToMat(q, R);
-  clampRotation(R, ROT_CLAMP, COS_ROT_CLAMP);
-  const a0 = A[0], a1 = A[1], a2 = A[2], a3 = A[3], a4 = A[4], a5 = A[5], a6 = A[6], a7 = A[7], a8 = A[8];
-  const r0 = R[0], r1 = R[1], r2 = R[2], r3 = R[3], r4 = R[4], r5 = R[5], r6 = R[6], r7 = R[7], r8 = R[8];
-  const s0 = r0 * a0 + r3 * a3 + r6 * a6;
-  const s4 = r1 * a1 + r4 * a4 + r7 * a7;
-  const s8 = r2 * a2 + r5 * a5 + r8 * a8;
-  const s01 = 0.5 * (r0 * a1 + r3 * a4 + r6 * a7 + (r1 * a0 + r4 * a3 + r7 * a6));
-  const s02 = 0.5 * (r0 * a2 + r3 * a5 + r6 * a8 + (r2 * a0 + r5 * a3 + r8 * a6));
-  const s12 = 0.5 * (r1 * a2 + r4 * a5 + r7 * a8 + (r2 * a1 + r5 * a4 + r8 * a7));
-  const d0 = s0 - 1, d4 = s4 - 1, d8 = s8 - 1;
-  if (!(d0 * d0 + d4 * d4 + d8 * d8 + 2 * (s01 * s01 + s02 * s02 + s12 * s12) <= 1.8 * 1.8)) {
-    m3Id(S);
-    return;
-  }
-  S[0] = s0;
-  S[1] = S[3] = s01;
-  S[2] = S[6] = s02;
-  S[4] = s4;
-  S[5] = S[7] = s12;
-  S[8] = s8;
+  let strainSq = stretchInto(A, R, S);
+  if (strainSq > TURNED_STRAIN * TURNED_STRAIN && clampRotation(R, ROT_CLAMP, COS_ROT_CLAMP)) strainSq = stretchInto(A, R, S);
+  if (!(strainSq <= 1.8 * 1.8)) m3Id(S);
 }
 function m3Orthonormalize(R) {
   let x0 = R[0], y0 = R[3], z0 = R[6];
@@ -316,11 +320,12 @@ function m3Orthonormalize(R) {
   R[5] = z0 * x1 - x0 * z1;
   R[8] = x0 * y1 - y0 * x1;
 }
+/** Clamps R's angle to `maxRad` (false and R untouched when it is already within it). */
 function clampRotation(R, maxRad, cosMax) {
   const cosA = (R[0] + R[4] + R[8] - 1) * 0.5;
-  if (!(cosA < cosMax)) return;
+  if (!(cosA < cosMax)) return false;
   const ang = detAcos(Math.max(-1, cosA));
-  if (ang < 1e-6) return;
+  if (ang < 1e-6) return false;
   const t = maxRad / ang;
   R[0] = 1 + (R[0] - 1) * t;
   R[1] = R[1] * t;
@@ -332,6 +337,7 @@ function clampRotation(R, maxRad, cosMax) {
   R[7] = R[7] * t;
   R[8] = 1 + (R[8] - 1) * t;
   m3Orthonormalize(R);
+  return true;
 }
 function stabilizeMat(R, Rprev) {
   const d0 = Rprev[0] - 1, d4 = Rprev[4] - 1, d8 = Rprev[8] - 1;
