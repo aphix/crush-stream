@@ -97,7 +97,9 @@ for (const json of [...TRACKS, ...OFF_MENU]) {
           expect(same(want, got), `(${x.toFixed(3)}, ${z.toFixed(3)}) hint ${hint}: want ${JSON.stringify(want)} got ${JSON.stringify(got)}`).toBeTruthy();
         }
       }
-      expect(queries).toBeGreaterThanOrEqual(3000);
+      // Every path ran its points (the figure-8 has one path, the others two).
+      expect(queries).toBeGreaterThanOrEqual(1500 * track.paths().length);
+      expect(track.paths().length).toBeGreaterThan(0);
     });
   });
 }
