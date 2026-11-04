@@ -24,7 +24,7 @@ export type DerbyPropKind = (typeof DERBY_PROP)[keyof typeof DERBY_PROP];
 /** A flat prism of the arena: its plan box (centre, yaw, half extents) and height over the floor. `yaw`: local z is (sin yaw, cos yaw). */
 export type DerbyBox = { kind: DerbyPropKind; x: number; z: number; yaw: number; hx: number; hz: number; height: number };
 
-const { radius, wallThickness, wallHeight, wallPieces, wallMitre, gridHalf, spawnInset } = DERBY_ARENA;
+const { radius, wallThickness, containmentHeight, wallPieces, wallMitre, gridHalf, spawnInset } = DERBY_ARENA;
 
 /**
  * The rises, axis-aligned (`plateauHeight` has no yaw): a flat top at `height`, each side a plane over `run` (-x, +x, -z, +z), crest
@@ -145,7 +145,7 @@ function wallBoxes(): DerbyBox[] {
   const hz = centre * Math.tan(Math.PI / wallPieces) + wallMitre;
   return Array.from({ length: wallPieces }, (_, k) => {
     const angle = (2 * Math.PI * k) / wallPieces;
-    return box(DERBY_PROP.wall, detSin(angle) * centre, detCos(angle) * centre, angle + Math.PI / 2, { hx: wallThickness / 2, hz, height: wallHeight });
+    return box(DERBY_PROP.wall, detSin(angle) * centre, detCos(angle) * centre, angle + Math.PI / 2, { hx: wallThickness / 2, hz, height: containmentHeight });
   });
 }
 

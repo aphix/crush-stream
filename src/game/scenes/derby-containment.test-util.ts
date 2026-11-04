@@ -30,15 +30,15 @@ const HEADINGS = 16;
 /** A second set of headings half a wall piece off the first, so one set of launches meets the wall at a seam. */
 const SEAM_OFFSET = Math.PI / DERBY_ARENA.wallPieces;
 const OFFSETS = [0, SEAM_OFFSET] as const;
-const { radius, wallThickness, wallHeight, spawnInset } = DERBY_ARENA;
+const { radius, wallThickness, containmentHeight, spawnInset } = DERBY_ARENA;
 /** The open ring between the features and the wall's inner face (the spawn ring's radius), where a launch toward the wall is clean. */
 const OPEN_RING_RADIUS = radius - spawnInset;
 const OUTER_FACE = radius + wallThickness;
 /** How far inside the wall a run-up starts (m): a car's length and a margin. */
 const RUN_UP_MARGIN = 4.5;
-/** The most of the wall's height (m) any part of a car may be at while it touches the wall: the rest is the margin to the top. */
+/** The most of the containment's height (m) any part of a car may be at while it touches the wall: the rest is the margin to the top. Re-staged with the invisible wall over the drawn one (the ceiling went from 19.5 to 99 m). */
 const WALL_TOP_MARGIN = 1;
-const WALL_TOUCH_CEILING = wallHeight - WALL_TOP_MARGIN;
+const WALL_TOUCH_CEILING = containmentHeight - WALL_TOP_MARGIN;
 
 /** Where the car's drawn body got and ended, and the most mechanical energy (J/kg) it ever held over what its drive had given it (`excess`, at second `excessAt`, the drive's total then `excessDrive`). */
 export type Flight = { maxRadius: number; maxHeightAtWall: number; finalRadius: number; excess: number; excessAt: number; excessDrive: number };
@@ -246,7 +246,7 @@ export function wallCases(): void {
           const flight = fly(cls, launch);
           expect(flight.maxRadius, `${launch.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`).toBeLessThan(OUTER_FACE);
           expect(flight.finalRadius, `${launch.label}: ended at ${flight.finalRadius.toFixed(2)} m, outside the inner face at ${radius} m`).toBeLessThan(radius);
-          expect(flight.maxHeightAtWall, `${launch.label}: touched the wall ${flight.maxHeightAtWall.toFixed(2)} m up, over ${WALL_TOUCH_CEILING} m of its ${wallHeight} m`).toBeLessThanOrEqual(WALL_TOUCH_CEILING);
+          expect(flight.maxHeightAtWall, `${launch.label}: touched the wall ${flight.maxHeightAtWall.toFixed(2)} m up, over ${WALL_TOUCH_CEILING} m of its ${containmentHeight} m`).toBeLessThanOrEqual(WALL_TOUCH_CEILING);
         }
       });
     }
@@ -268,7 +268,7 @@ export function sideWedgeCases(): void {
           expect(flight.finalRadius, `${launches[i]!.label}: ended at ${flight.finalRadius.toFixed(2)} m, outside the inner face at ${radius} m`).toBeLessThan(radius);
         }
       });
-      it(`when the ${cls} meets each ramp's two sides, then it touches the wall no higher than ${WALL_TOUCH_CEILING} m of its ${wallHeight} m`, () => {
+      it(`when the ${cls} meets each ramp's two sides, then it touches the wall no higher than ${WALL_TOUCH_CEILING} m of its ${containmentHeight} m`, () => {
         const over = flown().flatMap((flight, i) => (flight.maxHeightAtWall > WALL_TOUCH_CEILING ? [`${launches[i]!.label}: ${flight.maxHeightAtWall.toFixed(1)} m`] : []));
         expect(over).toHaveLength(0);
       });

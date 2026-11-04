@@ -30,6 +30,8 @@ export const DERBY_ARENA = {
   /** Measured need 7.83 m (monster across, heading 4.71, stride 1) + the owner's ask for a wall above 10 m: 12 m. A monster still left the arena over it,
    *  so the glass above the concrete is twice its old 8.5 m: 17 m, a 20.5 m wall. */
   wallHeight: 20.5,
+  /** The ring wall's collider (cars, wrecks and props hit it): invisible, out of reach of any jump; the drawn wall stays 20.5 m for the camera. The containment rows keep a 1 m margin under its top. */
+  containmentHeight: 100,
   concreteHeight: 3.5,
   wallPieces: 48,
   wallMitre: 0.3,

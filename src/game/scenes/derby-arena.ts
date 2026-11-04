@@ -367,7 +367,7 @@ function makeProps(): THREE.InstancedMesh[] {
   };
   return Object.values(DERBY_PROP).flatMap((kind) => {
     const listed = DERBY_BOXES.filter((box) => box.kind === kind);
-    // The wall box is the whole 12 m collider; what is drawn as wall is its concrete foot, the glass above it is its own draw.
+    // The wall box is the whole collider (`containmentHeight`, over the drawn wall); what is drawn as wall is its concrete foot, the glass above it is its own draw.
     const boxes = kind === DERBY_PROP.wall ? listed.map((box) => ({ ...box, height: DERBY_ARENA.concreteHeight })) : listed;
     return boxes.length > 0 ? [makeInstancedBoxes(kind, boxes, 0, looks[kind])] : [];
   });
