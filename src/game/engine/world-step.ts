@@ -453,6 +453,7 @@ export function stepWorld(w: World, dt: number): void {
           d.stepFrozen(hc, car.group, car.asleep);
           if (d.frozen) work[WORK.frozenCarSlices] = work[WORK.frozenCarSlices]! + 1;
         } else {
+          d.aloft = car.airborne;
           d.stepStructure(hc, car.group.quaternion);
           car.syncPose(hc);
         }

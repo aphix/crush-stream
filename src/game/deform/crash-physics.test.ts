@@ -1309,13 +1309,13 @@ function cloudTurnOf(d: StreamedDeformation, out: THREE.Quaternion): THREE.Quate
 
 /** Most turn (rad) the cloud may make against its frame in one step: the frame's own turn carries it, so what is left is the goals' leak (a quiet wreck's is a few mrad; the step roll cap leaves a rolling one 0.097, main 0.48). */
 const STEP_TURN_MAX = 0.12;
-describe("given a wreck lying on its side (rolled 1.5 rad), free in the air and spinning, whose contact window ends 47 steps on", () => {
+describe("given a wreck lying on its side (rolled 1.5 rad), spinning on the ground (not aloft), whose contact window ends 47 steps on", () => {
   it("when it runs 60 fixed steps, then the cloud never turns more than the frame plus 0.12 rad in one step (the free step's goals turned a rolling wreck 0.48 rad in the step its window ended)", () => {
     const d = new StreamedDeformation(dummyGeom());
     d.mode = "shape";
     const group = new THREE.Group();
     group.rotation.set(0.1, 0, 1.5, "YXZ");
-    group.position.y = 40;
+    group.position.y = 0.5;
     group.updateMatrixWorld();
     const vel = new THREE.Vector3(6, 3, 0);
     const omega = new THREE.Vector3(0.5, 0.3, 2);

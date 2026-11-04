@@ -683,7 +683,7 @@ export abstract class DeformSolve extends DeformFreeze {
       wx = (c0 * lx + c1 * ly + c2 * lz) / det;
       wy = (c1 * lx + (ixx * izz - ixz * ixz) * ly + (ixy * ixz - ixx * iyz) * lz) / det;
       const roll = (c2 * lx + (ixy * ixz - ixx * iyz) * ly + (ixx * iyy - ixy * ixy) * lz) / det;
-      wz = Math.sign(roll) * Math.max(0, Math.abs(roll) - STEP_ROLL_MAX);
+      wz = this.aloft ? 0 : Math.sign(roll) * Math.max(0, Math.abs(roll) - STEP_ROLL_MAX);
     }
     for (let i = 0; i < this.shapeParticles.length; i++) {
       if (this.masses[i]!.hub && !this.deepCrush) continue;
