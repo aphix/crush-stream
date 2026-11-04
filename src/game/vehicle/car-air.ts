@@ -439,7 +439,7 @@ const P_GAVE_B = 33;
 const P_BORNE = 39;
 /** The share of that borne weight the other car has taken into its motion (its own step came after the rows'): `rewindRows` takes it from the velocity, the rest from what is waiting. */
 const P_TAKEN = 45;
-/** 1 where the hardest row is on a car whose masses run (`HELD` null: it takes no reaction, but it is a car, not a wall: `pushes` reads it). */
+/** 1 where the slot's rows are on a car whose masses run (`HELD` null: it takes no reaction, but it is a car, not a wall: `pushes` reads it); 0 for a fixed solid's (a tyre on a kerb's side). Part of the slot's key with the cars: the two never share one. */
 const P_ONCAR = 46;
 const PENDING_STRIDE = 47;
 const PENDING = new Float64Array(PENDING_CAPACITY * PENDING_STRIDE);
@@ -500,14 +500,16 @@ function collectCrush(car: DeformableCar, n: number): void {
     const plastic = plasticEnergy(closing, 1 / k);
     const ebsA = barrierSpeed(plastic, 1, 1, 1, k);
     const ebsB = other === null ? 0 : barrierSpeed(plastic, RATIO[c]!, RATIO[c]!, 1, k);
+    const onCar = other === null && OWN[c]! >= 0;
     let slot = -1;
-    for (let i = 0; i < queue.size; i++) if (PENDING_A[i] === car && PENDING_B[i] === other) slot = i;
+    for (let i = 0; i < queue.size; i++) if (PENDING_A[i] === car && PENDING_B[i] === other && (PENDING[i * PENDING_STRIDE + P_ONCAR] === 1) === onCar) slot = i;
     if (slot < 0) {
       if (queue.size === PENDING_CAPACITY) continue;
       slot = queue.size++;
       PENDING_A[slot] = car;
       PENDING_B[slot] = other;
       PENDING.fill(0, slot * PENDING_STRIDE, (slot + 1) * PENDING_STRIDE);
+      if (onCar) PENDING[slot * PENDING_STRIDE + P_ONCAR] = 1;
       PENDING.set(PRE_A, slot * PENDING_STRIDE + P_PRE_A);
       if (other !== null) {
         PENDING.set(PRE_B.subarray(c * 6, c * 6 + 6), slot * PENDING_STRIDE + P_PRE_B);
@@ -535,7 +537,6 @@ function collectCrush(car: DeformableCar, n: number): void {
     PENDING[f + P_CLOSING] = closing;
     PENDING[f + P_DEPTH] = Math.max(0, SINK[c]!);
     PENDING[f + P_TYRE] = TYRE[c] && N[c]!.y === 0 ? 1 : 0;
-    PENDING[f + P_ONCAR] = other === null && OWN[c]! >= 0 ? 1 : 0;
   }
 }
 

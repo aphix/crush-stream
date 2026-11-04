@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, runWall, tickWorld } from "./crash-scenarios.test-util.ts";
 import { outlineOf } from "./cage-outline.ts";
+import { BARRIER_HALF } from "./sat.ts";
+import { classCar } from "../vehicle/ejection.test-util.ts";
 import { carrier, centreOfMass, bindBody, N, OWN, pointVel, R } from "../vehicle/car-air-body.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { CarSurfaces } from "../vehicle/car-surfaces.ts";
@@ -34,15 +36,21 @@ const PIT_YAW = (6 * Math.PI) / 180;
 const PIT_Z = -0.5;
 const PIT_GAP = 0.3;
 const CRASH_CLOSING = 4;
+/** A monster's tyre closing (m/s) on the range's slab while it pushes an armed monster: over the graze (`CRASH.grazeMps`), under the push's closing, so the push row is the hardest. */
+const KERB_CLOSING = 2.2;
+/** Tyre-to-slab gaps (m) of the kerb run: the nose touches at `START_GAP / BRUSH_CLOSING` s, which the tyre closes `KERB_CLOSING` times over (0.79 m); these run from just before to a few slices after it. */
+const KERB_GAPS = [0.7, 0.72, 0.74, 0.76, 0.78, 0.8, 0.82, 0.84, 0.86, 0.88, 0.9];
+/** The pusher's centre z (m): its front tyres are beside the slab (the slab is 3.9 m long), its rear ones past its end. */
+const KERB_Z = -1;
 /** A nudge closing under the rigid step's graze (`CRASH.grazeMps`): only the pair contact reads it. */
 const CREEP_CLOSING = 1;
 /** The most (m/s) the car behind may still be faster than the car ahead after the touch: the touch took the closing, it did not pass through. */
 const PASS_THROUGH_SLACK = 0.3;
 
 /** Steps `cars` through the engine's own step, each on its pedals, for `RUN_SECONDS`, or until `TOUCH_SETTLE` after `until` is first true. */
-function step(cars: DeformableCar[], pedals: DriveInput[], until: () => boolean = () => false): void {
+function step(cars: DeformableCar[], pedals: DriveInput[], until: () => boolean = () => false, barrier = false): void {
   for (const car of cars) layOnGround(car);
-  const world = makeWorld(cars, false, false);
+  const world = makeWorld(cars, barrier, false);
   for (const [i, car] of cars.entries()) world.pedals.set(car, pedals[i]!);
   let settled = 0;
   for (let frame = 0; frame < RUN_SECONDS / DT && settled < TOUCH_SETTLE; frame++) {
@@ -61,12 +69,12 @@ function pushRun(targetSpeed: number, closing: number): { pusher: DeformableCar;
   return { pusher, pushed };
 }
 
-/** Arms `car`'s masses with a hit at `local` (car frame) along `inward` (car frame), then sets every mass and the car to `vz` along z: the hit's own impulse taken back. */
-function arm(car: DeformableCar, local: THREE.Vector3, inward: THREE.Vector3, vz: number): void {
+/** Arms `car`'s masses with a hit at `local` (car frame) along `inward` (car frame), then sets every mass and the car to `vz` along z (and `vx` along x): the hit's own impulse taken back. */
+function arm(car: DeformableCar, local: THREE.Vector3, inward: THREE.Vector3, vz: number, vx = 0): void {
   car.group.updateMatrixWorld(true);
   car.applyImpact(car.group.localToWorld(local.clone()), inward.clone().transformDirection(car.group.matrixWorld), ARMING_EBS, ARMING_EBS);
-  for (const m of car.deform.masses) m.vel.set(0, 0, vz);
-  car.velocity.set(0, 0, vz);
+  for (const m of car.deform.masses) m.vel.set(vx, 0, vz);
+  car.velocity.set(vx, 0, vz);
   car.angular.set(0, 0, 0);
 }
 
@@ -242,5 +250,23 @@ describe("given the nose of an armed wreck, which the rigid step reads as a surf
 
   it("when the nose moves away from a body driving at it at 5 m/s (backing at 3 m/s), then the body reads the 2 m/s it closes at", () => {
     expect(closingOnNose(-3, -5)).toBeCloseTo(2, 6);
+  });
+});
+
+describe("given a monster pushing an armed monster at 2.8 m/s while its front tyre meets the range's slab at 2.2 m/s", () => {
+  it("when the two touches fall in the same slice, then the pusher is armed by the slab: a push on an armed car does not swallow a solid's hit", () => {
+    for (const gap of KERB_GAPS) {
+      const pusher = classCar("monster");
+      const target = classCar("monster");
+      launch(pusher, 0, KERB_Z, 0, -KERB_CLOSING, TARGET_SPEED + BRUSH_CLOSING);
+      pusher.group.updateMatrixWorld(true);
+      const tyreEdge = Math.min(...pusher.wheels.map((wheel) => new THREE.Box3().setFromObject(wheel).min.x));
+      const x = BARRIER_HALF.x + gap - tyreEdge;
+      launch(pusher, x, KERB_Z, 0, -KERB_CLOSING, TARGET_SPEED + BRUSH_CLOSING);
+      launch(target, x + QUARTER_OFFSET, KERB_Z + outlineOf(pusher).zHi - outlineOf(target).zLo + START_GAP, 0, -KERB_CLOSING, TARGET_SPEED);
+      arm(target, new THREE.Vector3(0, 0.5, outlineOf(target).zLo), new THREE.Vector3(0, 0, 1), TARGET_SPEED, -KERB_CLOSING);
+      step([target, pusher], [FREEWHEEL, FREEWHEEL], () => pusher.crashed, true);
+      expect(pusher.crashed, `the slab's hit was swallowed with the tyre ${gap} m off it`).toBe(true);
+    }
   });
 });
