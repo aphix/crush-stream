@@ -156,9 +156,10 @@ describe("given the derby arena as built from its box list over the derby ground
     for (let vertex = 0; vertex < positions.count; vertex++) {
       const x = positions.getX(vertex);
       const z = positions.getZ(vertex);
-      if (Math.hypot(x, z) <= reach) reachable++;
+      const inReach = Math.hypot(x, z) <= reach;
+      if (inReach) reachable++;
       if (listedBoxes.some((box) => isUnderBox(x, z, box))) continue;
-      compared++;
+      if (inReach) compared++;
       expect(Math.abs(positions.getY(vertex) - ground.heightAt(x, z)), `floor vertex (${x}, ${z}) is at the ground's height`).toBeLessThan(TOLERANCE);
     }
     expect(compared, `${compared} compared of ${reachable} reachable (${positions.count} in all)`).toBeGreaterThan(reachable * LEAST_COMPARED_SHARE);
