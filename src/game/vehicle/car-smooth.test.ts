@@ -1658,6 +1658,7 @@ const SIM_CRASH_KPH = 48;
 // Every style again when a quiet wreck standing on its planted tyres had its hubs' springs critically damped (CarRig rig-entry): its hubs
 // settle a centimetre or two off where they stood and the rest of the wreck follows by millimetres.
 // Every style's digest moves again for its own pack gap (`RigTables.packGap`: 0.30 m of crumple on every body, CarSimDims 8a5f1567); re-derived with the union.
+// Every style again for the engine pair's spacing restored in the body's plan, to the rest length (REPLAY 214: `clampLocal`'s A3, `holdEngineBlock`); only the pair moves, the crash reads the same (largest mass lift 3.6-5.8 mm on the six, the pickup's and monster's 137 mm are main's too): sedan 10279639... -> 1ca1f7ca..., hatchback 31c04538... -> 4e2f13ce..., wagon 6f3ba7a4... -> db69f413..., coupe 83d923ad... -> a8069555..., pickup ad4ee1fa... -> 55f06995..., police 11db57b4... -> c0adeac8..., monster 350367f4... -> 71f30dab....
 const SIM_DIGEST_BY_STYLE = [
   // CarSedan's shape data on top of CarRig's re-pin (sedan and police alike): crowned hood and its stations (f3ba51c8), the sedan's own front
   // fascia (e17b83ac), mirror reach .128 (28843919), then the reference's arch radius .405 -> .375. Sedan 3b05ae33... -> 26331e81... (shape
@@ -1665,26 +1666,26 @@ const SIM_DIGEST_BY_STYLE = [
   // All but the police again for the cage refitting when a cluster map or a cage corner moves a vertex past 1 cm, not only a mass (`movedSince`):
   // sedan 55a67ffc... -> 10279639..., hatchback f57f8543... -> 31c04538..., wagon 0757e5fb... -> 6f3ba7a4..., coupe 682c9d6e... -> 83d923ad...,
   // pickup 8903cd6d... -> ad4ee1fa..., monster e46fb1c5... -> d43fea4a....
-  { id: "sedan", digest: "10279639eb3219736cda4b861ba3b492dac5eeb68326a209538c456d8dbf408f" },
+  { id: "sedan", digest: "1ca1f7ca86386f4a0631b68512078fb61ebe1016c2c0834932040752e4d03f46" },
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's boot foot.
   // The hatchback's again when the cage kept the underside a body rests on, over its vertex budget (CarRig rig-lip): d1b0dbd0... ->
   // ace6af8c...; the other six unchanged.
   // The hatchback's again for its roof rolling round into its side glass (`roofSection` .4/.9, as the coupe's): the panes' tops and roof cage follow it: ace6af8c... -> b1cfea45....
   // Again for the cage's refit tolerance on a panel's pose (REPLAY 163): the hatch's swinging tailgate no longer refits the cage on every bit: ebe36deb... -> f57f8543...; the other six unchanged.
-  { id: "hatchback", digest: "31c04538bd91d24cbc71cee1eefd264e48f548019d71cc8c755b8e2e6171d717" },
-  { id: "wagon", digest: "6f3ba7a4b791da603cadf2205d801d98069497f36f5cec75667bf7532159aae3" },
+  { id: "hatchback", digest: "4e2f13ce14c6efc14df0bd9a5f94d1a2dfd8cf4e46e0c224808f6f50e82caa84" },
+  { id: "wagon", digest: "db69f413f2fbfb26ebe9182609c094892fbc64a397854572d92def805c117615" },
   // The coupe re-pinned for its nose deck lowered 0.5-2.8 cm over z 1.76-1.945 to the reference's side line.
-  { id: "coupe", digest: "83d923ad4691df0d9fbbbaa952d9ed3774bb8e3374305f3e69cd35531738f1f8" },
+  { id: "coupe", digest: "a806955580eca543f31779dd6a064b5bd223d2e8625d0ad3baba7c4576e17502" },
   // The pickup re-pinned for its hood wrapping the nose (`hood.z1` 1.86 -> 1.92): its hood's cage reaches the nose the wall meets.
   // Its cab roof narrowed to the top plate's (profile cabinHw) brings the wall hit back to the same crush as before its mid-cab roof rose.
-  { id: "pickup", digest: "ad4ee1fa0309d96360c5fd7692a7d9a702c3b91b6c84ac856065894393d86f3d" },
+  { id: "pickup", digest: "55f06995fb45fba95d4c93cadcf258389a5b98c6077f20becea51c123ab9622d" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
   // Again for its push bar's box in the cage and the wall's hold on its bumper's particles a bar's reach back (`noseReach`): 2691a219... -> 30a73a14...; the other six unchanged.
   // Again for its push bar folding onto its bumper as the bumper crushes, in the cage and in what the wall holds (`barReach`, no `noseReach`): d36c7cb0... -> 11db57b4...; the other six unchanged.
-  { id: "police", digest: "11db57b42143a8b88394225be9e9609154ee0df704d4750940e54f0d093e2b11" },
+  { id: "police", digest: "c0adeac8600a54d7679efe2f04e0d1b73d02748c25a0ebdc5c2f9c9bced06f7d" },
   // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
   // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): the other six unchanged.
   // Again when a point of a body at rest inside a solid left by the side its body stands on, not the nearest (CarRig rig-entry): the monster's front
@@ -1692,7 +1693,7 @@ const SIM_DIGEST_BY_STYLE = [
   // Again for the grip that holds a rolling wreck's yaw through its tread's push (`solveRows`): the monster's masses after the wall hit moved; the other six unchanged.
   // Again when a wreck's own faces never yield (`CarSurfaces.slot`): vaulting over the slab, the monster wreck's nose yielded 0.1 mm once and booked that
   // crush, its push off the slab cut to what the nose carries; now the nose holds and its masses after the hit differ (d43fea4a... -> 350367f4...); the other six unchanged.
-  { id: "monster", digest: "350367f46c0918d5868ee86923ff62b64a2ffc95c6248550dff0af3693d3cd15" },
+  { id: "monster", digest: "71f30dab6ac1858cf9128804b0a49ae3275d71de25921b497ee88e18a5969df6" },
   // Every style re-pinned with its bumpers in the cage (`CageSource.apart`), each a window of its own (`CageFields.part`): the cage's nose and tail meet the drawn bumper faces.
   // Again for each bumper's bottom corner held in its decimation (`bumperCorner`) and `frame.hullUnder`'s bumper rows standing on it: sedan 32ce12d9 -> 18748cc4, hatchback 05034364 -> 3a8ae274, wagon 14004d19 -> 8c803d8e, coupe a8bbcc35 -> 2f4d595f, pickup 87ed8880 -> 6506a0dd, police 30a73a14 -> b9cb6cec, monster 1417aa98 -> 0227b53d.
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];

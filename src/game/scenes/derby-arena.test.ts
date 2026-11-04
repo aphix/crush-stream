@@ -6,7 +6,7 @@ import type { Plateau } from "../world/terrain.ts";
 import { P_STRIDE, PRISM, Q_KIND, Q_STRIDE } from "../world/surfaces.ts";
 import { DERBY_ARENA } from "./constants.ts";
 import { GLASS_MESH_NAME, makeDerbyArena } from "./derby-arena.ts";
-import { DERBY_BOXES, DERBY_PLATEAUS, DERBY_PROP, DERBY_RAMPS, DERBY_TABLE_TOP, DerbyGround } from "./derby-ground.ts";
+import { DERBY_BOXES, DERBY_WALL_DRAWN, DERBY_PLATEAUS, DERBY_PROP, DERBY_RAMPS, DERBY_TABLE_TOP, DerbyGround } from "./derby-ground.ts";
 import { SUNK_CAR_DEPTH } from "./fleet.ts";
 import { must } from "../kernel/must.test-util.ts";
 
@@ -51,7 +51,7 @@ function isSameSolid(first: Placement, second: Placement): boolean {
 const listedBoxes: readonly (Placement & { kind: string })[] = DERBY_BOXES.map(({ kind, x, z, yaw, hx, hz, height }) => ({ kind, x, z, base: 0, yaw, hx, hz, height }));
 
 /** What is drawn of a listed box: the wall's concrete foot (the glass above it is its own draw), every other box whole. */
-const drawnBoxes = listedBoxes.map((box) => (box.kind === DERBY_PROP.wall ? { ...box, height: DERBY_ARENA.concreteHeight } : box));
+const drawnBoxes = [...DERBY_WALL_DRAWN.map(({ kind, x, z, yaw, hx, hz }) => ({ kind, x, z, base: 0, yaw, hx, hz, height: DERBY_ARENA.concreteHeight })), ...listedBoxes.filter((box) => box.kind !== DERBY_PROP.wall)];
 
 /** Every instance of a drawn box mesh, read back from its matrix and its box geometry. */
 function placementsOf(mesh: THREE.InstancedMesh): Placement[] {

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { DERBY_ARENA } from "./constants.ts";
 import { DIRT_EXTENT, makeDirtTexture } from "./derby-dirt-texture.ts";
-import { DERBY_BOXES, DERBY_PLATEAUS, DERBY_PROP, DERBY_RAMPS, DERBY_TABLE_TOP, type DerbyGround, type DerbyPropKind, type DerbyRamp } from "./derby-ground.ts";
+import { DERBY_BOXES, DERBY_WALL_DRAWN, DERBY_PLATEAUS, DERBY_PROP, DERBY_RAMPS, DERBY_TABLE_TOP, type DerbyGround, type DerbyPropKind, type DerbyRamp } from "./derby-ground.ts";
 import {
   makeBarrierTexture,
   makeConcreteWallTexture,
@@ -366,9 +366,8 @@ function makeProps(): THREE.InstancedMesh[] {
     [DERBY_PROP.tyres]: { material: solid(makeTyreStackTexture(), MAT.TYRE_BERM), colours: TYRE_COLOURS, tile: TYRE_TILE },
   };
   return Object.values(DERBY_PROP).flatMap((kind) => {
-    const listed = DERBY_BOXES.filter((box) => box.kind === kind);
-    // The wall box is the whole collider (`containmentHeight`, over the drawn wall); what is drawn as wall is its concrete foot, the glass above it is its own draw.
-    const boxes = kind === DERBY_PROP.wall ? listed.map((box) => ({ ...box, height: DERBY_ARENA.concreteHeight })) : listed;
+    // The wall's collider in `DERBY_BOXES` is thicker and taller than what is drawn: the drawn wall is its concrete foot, the glass above it is its own draw.
+    const boxes = kind === DERBY_PROP.wall ? DERBY_WALL_DRAWN.map((box) => ({ ...box, height: DERBY_ARENA.concreteHeight })) : DERBY_BOXES.filter((box) => box.kind === kind);
     return boxes.length > 0 ? [makeInstancedBoxes(kind, boxes, 0, looks[kind])] : [];
   });
 }
@@ -377,7 +376,7 @@ function makeProps(): THREE.InstancedMesh[] {
 function makeGlass(): THREE.InstancedMesh {
   const glassHeight = DERBY_ARENA.wallHeight - DERBY_ARENA.concreteHeight;
   const standOff = (DERBY_ARENA.radius + GLASS_THICKNESS / 2) / (DERBY_ARENA.radius + DERBY_ARENA.wallThickness / 2);
-  const panes = DERBY_BOXES.filter((box) => box.kind === DERBY_PROP.wall).map((wall) => ({
+  const panes = DERBY_WALL_DRAWN.map((wall) => ({
     x: wall.x * standOff,
     z: wall.z * standOff,
     yaw: wall.yaw,

@@ -32,6 +32,8 @@ export const DERBY_ARENA = {
   wallHeight: 20.5,
   /** The ring wall's collider (cars, wrecks and props hit it): invisible, out of reach of any jump; the drawn wall stays 20.5 m for the camera. The containment rows keep a 1 m margin under its top. */
   containmentHeight: 100,
+  /** The ring wall's collider is this thick (m) outward from the inner face, the drawn wall `wallThickness` (invisible, like the height): a wreck lodged in it stays nearer the inner face and is pushed back in, not out through a 1 m box's outer face. */
+  containmentDepth: 6,
   concreteHeight: 3.5,
   wallPieces: 48,
   wallMitre: 0.3,

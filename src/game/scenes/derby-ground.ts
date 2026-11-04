@@ -24,7 +24,7 @@ export type DerbyPropKind = (typeof DERBY_PROP)[keyof typeof DERBY_PROP];
 /** A flat prism of the arena: its plan box (centre, yaw, half extents) and height over the floor. `yaw`: local z is (sin yaw, cos yaw). */
 export type DerbyBox = { kind: DerbyPropKind; x: number; z: number; yaw: number; hx: number; hz: number; height: number };
 
-const { radius, wallThickness, containmentHeight, wallPieces, wallMitre, gridHalf, spawnInset } = DERBY_ARENA;
+const { radius, wallThickness, wallHeight, containmentHeight, containmentDepth, wallPieces, wallMitre, gridHalf, spawnInset } = DERBY_ARENA;
 
 /**
  * The rises, axis-aligned (`plateauHeight` has no yaw): a flat top at `height`, each side a plane over `run` (-x, +x, -z, +z), crest
@@ -139,15 +139,18 @@ function polar(kind: DerbyPropKind, bearing: number, distance: number, lateral: 
   return box(kind, sin * distance + cos * lateral, cos * distance - sin * lateral, bearing + turn, size);
 }
 
-/** The ring wall: `wallPieces` boxes about the middle, each mitred `wallMitre` m into the next, inner faces `radius` m out. */
-function wallBoxes(): DerbyBox[] {
-  const centre = radius + wallThickness / 2;
+/** The ring wall: `wallPieces` boxes about the middle, each mitred `wallMitre` m into the next, inner faces `radius` m out, `thickness` m thick and `height` high. */
+function wallBoxes(thickness: number, height: number): DerbyBox[] {
+  const centre = radius + thickness / 2;
   const hz = centre * Math.tan(Math.PI / wallPieces) + wallMitre;
   return Array.from({ length: wallPieces }, (_, k) => {
     const angle = (2 * Math.PI * k) / wallPieces;
-    return box(DERBY_PROP.wall, detSin(angle) * centre, detCos(angle) * centre, angle + Math.PI / 2, { hx: wallThickness / 2, hz, height: containmentHeight });
+    return box(DERBY_PROP.wall, detSin(angle) * centre, detCos(angle) * centre, angle + Math.PI / 2, { hx: thickness / 2, hz, height });
   });
 }
+
+/** The wall as drawn (`derby-arena.ts`): `wallThickness` thick and `wallHeight` high. Its collider in `DERBY_BOXES` is thicker and taller, out of sight. */
+export const DERBY_WALL_DRAWN: readonly DerbyBox[] = wallBoxes(wallThickness, wallHeight);
 
 /** Tyre berms against the wall: arcs of boxes whose outer faces meet the wall's inner face. */
 function tyreBoxes(): DerbyBox[] {
@@ -181,7 +184,7 @@ function railChicane(): DerbyBox[] {
 }
 
 export const DERBY_BOXES: readonly DerbyBox[] = [
-  ...wallBoxes(),
+  ...wallBoxes(containmentDepth, containmentHeight),
   ...tyreBoxes(),
   // Container berm in the north-west: four boxes side by side against the wall, tall and short alternating.
   ...wallRow(DERBY_PROP.container, 312, CONTAINER, CONTAINER_HEIGHTS),
