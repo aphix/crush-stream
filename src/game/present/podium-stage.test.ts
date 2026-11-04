@@ -115,6 +115,7 @@ describe("given a podium lettered for Ayla, Bo and Cy on Brickyard Oval", () => 
     expect(decals.length).toBe(3);
     for (const [k, block] of PODIUM_BLOCKS.entries()) {
       const box = new THREE.Box3().setFromObject(decals[k]!);
+      expect(box.isEmpty(), `place ${block.place}: the decal's box is empty`).toBe(false);
       expect(box.min.x, `place ${block.place}: left edge ${box.min.x} against the face's ${block.x - BLOCK_WIDTH / 2}`).toBeGreaterThanOrEqual(block.x - BLOCK_WIDTH / 2 + FACE_SIDE_MARGIN_M);
       expect(box.max.x, `place ${block.place}: right edge ${box.max.x}`).toBeLessThanOrEqual(block.x + BLOCK_WIDTH / 2 - FACE_SIDE_MARGIN_M);
       expect(box.min.y, `place ${block.place}: bottom edge ${box.min.y}`).toBeGreaterThanOrEqual(FACE_MARGIN_M);

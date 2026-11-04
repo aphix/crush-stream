@@ -90,6 +90,7 @@ describe("given the podium raised over a course with three racers, the winner's 
   it("when the cars' footprints are measured, then each fits its block", () => {
     for (const [k, block] of PODIUM_BLOCKS.entries()) {
       const box = new THREE.Box3().setFromObject(cars[k]!.lookMeshes().body);
+      expect(box.isEmpty(), `place ${block.place}: the car's body box is empty`).toBe(false);
       expect(box.min.x >= SPOT.x + block.x - BLOCK_WIDTH / 2 - 0.3 && box.max.x <= SPOT.x + block.x + BLOCK_WIDTH / 2 + 0.3, `place ${block.place} across`).toBeTruthy();
       expect(box.min.z >= SPOT.z - BLOCK_DEPTH / 2 && box.max.z <= SPOT.z + BLOCK_DEPTH / 2, `place ${block.place} along`).toBeTruthy();
     }

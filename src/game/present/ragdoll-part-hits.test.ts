@@ -65,6 +65,7 @@ function partAt(car: DeformableCar, code: number): { middle: THREE.Vector3; turn
   expect(slot, `part ${code} stands out of the car`).toBeGreaterThanOrEqual(0);
   const box = new THREE.Box3();
   const object = car.partBox(slot, box);
+  expect(box.isEmpty(), `part ${code}'s drawn box is empty (hidden or detached): nothing to stage on`).toBe(false);
   return { middle: box.getCenter(new THREE.Vector3()).applyMatrix4(object.matrixWorld), turn: object.getWorldQuaternion(new THREE.Quaternion()) };
 }
 
@@ -235,7 +236,9 @@ const droppedOn =
   (prefab: PrefabId, code: number, drop: number) =>
   (car: DeformableCar): { at: THREE.Vector3; v: THREE.Vector3 } => {
     const box = new THREE.Box3();
-    const top = box.applyMatrix4(car.partBox(car.strikeSlot(code), box).matrixWorld).max.y;
+    const object = car.partBox(car.strikeSlot(code), box);
+    expect(box.isEmpty(), `part ${code}'s drawn box is empty: nothing to drop on`).toBe(false);
+    const top = box.applyMatrix4(object.matrixWorld).max.y;
     const at = partAt(car, code).middle;
     return { at: at.setY(top + drop + PREFABS[prefab].size[1] / 2), v: new THREE.Vector3() };
   };

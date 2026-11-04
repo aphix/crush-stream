@@ -4,6 +4,7 @@ import { JerseyBarrier, type ContactHit } from "../scenes/engine-props.ts";
 import { bodyHit } from "./external-contact.ts";
 import { beginImpact, easeTimeScale, phaseClock, stepPhase, type PhaseClock } from "../match/phase.ts";
 import { CAGES } from "../kernel/rig-spec.ts";
+import { must } from "../kernel/must.test-util.ts";
 import { BARRIER_HALF, physicsSlice, sliceSpeed } from "./sat.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
 import { closedOn, DT, mass, paint } from "../vehicle/test-support.ts";
@@ -139,6 +140,7 @@ export function pooledCar(slot: number, mode: DeformMode = "shape", squash?: num
 
 /** Place `car` at (x, z) facing `yaw` and send it off at (vx, vz) m/s, the rig bound to it. */
 export function launch(car: DeformableCar, x: number, z: number, yaw: number, vx: number, vz: number): void {
+  must(Number.isFinite(x) && Number.isFinite(z), `launch at (${x}, ${z}): a non-finite place (an empty bounding box?) stages nothing`);
   car.spawnFacing(x, z, yaw, 0);
   car.velocity.set(vx, 0, vz);
   car.speed = Math.hypot(vx, vz);
@@ -153,6 +155,7 @@ export function launch(car: DeformableCar, x: number, z: number, yaw: number, vx
  * takes the velocity.
  */
 export function relaunchDamaged(car: DeformableCar, x: number, z: number, yaw: number, vx: number, vz: number): void {
+  must(Number.isFinite(x) && Number.isFinite(z), `relaunch at (${x}, ${z}): a non-finite place stages nothing`);
   const g = car.group;
   g.position.set(x, 0, z);
   g.rotation.set(0, yaw, 0, "YXZ");
