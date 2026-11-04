@@ -172,30 +172,39 @@ const REPEAT_LIFTS = [0, 0.0005, 0.001] as const;
 
 /**
  * The most (mm) a roof's crush may differ across `REPEAT_LIFTS`, per `DRIVER_CARS` id, with the worst roof spread over five starts (those
- * three and 0.25, 0.75 mm) it was set from: 7 where the class holds it on the three (muscle reads 9.6 over five, the nearest to failing),
- * else 1.5 x the five-start spread, rounded up. The bottom roof's crush is the plastic history of the drop, so a millimetre of start moves
+ * three and 0.25, 0.75 mm) it was set from: one rule for all seven, 1.5 x the five-start spread, rounded up (re-measured on b2d0a6d43, one probe: the five-start numbers below). The bottom roof's crush is the plastic history of the drop, so a millimetre of start moves
  * it by a slice of landing and coast. Truck and monster read far above the rest: their column keeps creeping down at 2-17 cm/s after the
  * landing (truck for 0.2 s, monster for 1 s) with a roof yielding, then halts within one frame, and where it halts decides the bottom
- * roof (truck 135-150 mm, monster 176-196): open defects, their bars pin today's spread. SUV's 15 mm covers a landing scatter (third roof
- * 58.8 vs 66.2 mm) with a second open defect no row asserts: its top three cars slide 7.7-10.3 cm from their set-down spot in the first 0.4 s
+ * roof (truck 135-150 mm, monster 176-196): open defects, their bars pin today's spread and a todoRow below holds each to 7 mm. SUV's 15 mm covers a landing scatter (third roof
+ * 58.8 vs 66.2 mm) with a second open defect (a todoRow below): its top three cars slide 7.7-10.3 cm from their set-down spot in the first 0.4 s
  * (every other class under 7 cm; sedan 3.7-6.6). Re-stage a bar only with its five-start number re-measured.
  */
 const REPEAT_BARS: Record<string, { barMm: number; fiveStartMm: number }> = {
   sedan: { barMm: 12, fiveStartMm: 8.0 },
-  muscle: { barMm: 7, fiveStartMm: 9.6 },
+  muscle: { barMm: 15, fiveStartMm: 9.6 },
   truck: { barMm: 23, fiveStartMm: 15.3 },
   monster: { barMm: 31, fiveStartMm: 20.4 },
-  police: { barMm: 7, fiveStartMm: 5.9 },
-  hatch: { barMm: 7, fiveStartMm: 6.6 },
+  police: { barMm: 9, fiveStartMm: 5.9 },
+  hatch: { barMm: 10, fiveStartMm: 6.6 },
   suv: { barMm: 15, fiveStartMm: 9.8 },
 };
 
 /** Each roof's crush (mm, bottom first) of a `type` column at the defaults, each drop started `lift` m higher. */
 function liftedColumn(type: DriverCar, lift: number): number[] {
-  const { cars, rig } = makeColumn({ ...DEFAULTS, drop: DEFAULTS.drop + lift }, { selected: type });
-  runStack(cars, rig, makeWorld(cars, false, false), DEFAULTS_S);
+  const { cars, rig } = column({ ...DEFAULTS, drop: DEFAULTS.drop + lift }, { selected: type }, DEFAULTS_S);
   return stackLoads(cars, rig.dropped).crushMm;
 }
+
+/** The worst roof's spread (mm) across `runs`' crushes. */
+function worstSpread(runs: readonly number[][]): number {
+  return Math.max(...runs[0]!.map((_, k) => Math.max(...runs.map((r) => r[k]!)) - Math.min(...runs.map((r) => r[k]!))));
+}
+
+/** The repeat bar (mm) the truck and monster rows hold them to: the one the classes that stand still keep. */
+const REPEAT_TODO_MM = 7;
+/** Seconds after its set-down a car is watched for a slide, and how far (m, plan) its top three cars may slide in it. */
+const SLIDE_S = 0.4;
+const SLIDE_MAX_M = 0.07;
 
 describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), each drop started 0, 0.5 or 1 mm higher", () => {
   for (const type of DRIVER_CARS) {
@@ -205,10 +214,45 @@ describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), each
       const runs = REPEAT_LIFTS.map((lift) => liftedColumn(type, lift));
       const said = runs.map((r) => r.map((m) => m.toFixed(1)).join("/")).join(" | ");
       expect(Math.min(...runs.map((r) => r[0]!)), `the bottom roof was crushed (${said})`).toBeGreaterThan(100);
-      const worst = Math.max(...runs[0]!.map((_, k) => Math.max(...runs.map((r) => r[k]!)) - Math.min(...runs.map((r) => r[k]!))));
+      const worst = worstSpread(runs);
       expect(worst, `${said} (the bar was set from ${bar!.fiveStartMm} mm over five starts)`).toBeLessThan(bar!.barMm);
     });
   }
+
+  for (const id of ["truck", "monster"]) {
+    const type = DRIVER_CARS.find((c) => c.id === id)!;
+    todoRow(
+      `when the ${type.label} column settles, then each roof's crush is the same within ${REPEAT_TODO_MM} mm, the bar the other classes hold`,
+      `after the plan: find why the ${type.label} column creeps down after the landing (truck 6-10 cm/s for 0.2 s, monster 2-17 cm/s from 0.7 s, a roof yielding on most frames) and then halts within one frame; where it halts decides the bottom roof (truck 135-150 mm, monster 176-196 mm), so its repeat bar is ${REPEAT_BARS[id]!.barMm} mm (docs/LOAD_CRUSH.md)`,
+      () => {
+        const runs = REPEAT_LIFTS.map((lift) => liftedColumn(type, lift));
+        expect(worstSpread(runs), runs.map((r) => r.map((m) => m.toFixed(1)).join("/")).join(" | ")).toBeLessThan(REPEAT_TODO_MM);
+      },
+    );
+  }
+
+  todoRow(
+    `when the SUV column's top three cars are each set down, then each slides under ${SLIDE_MAX_M * 100} cm from its spot in the next ${SLIDE_S} s`,
+    "after the plan: find why the SUV's top three cars slide 7.7-10.3 cm along the roof they landed on in the first 0.4 s (every other class under 7 cm; docs/LOAD_CRUSH.md)",
+    () => {
+      const suv = DRIVER_CARS.find((c) => c.id === "suv")!;
+      const setDown: THREE.Vector3[] = [];
+      const left: number[] = [];
+      let slide = 0;
+      column(DEFAULTS, { selected: suv }, DEFAULTS_S, (cars, dropped) => {
+        for (let i = 1; i < dropped; i++) {
+          if (setDown[i] === undefined) {
+            setDown[i] = cars[i]!.group.position.clone();
+            left[i] = Math.round(SLIDE_S * FRAME_HZ);
+          } else if (left[i]! > 0) {
+            left[i]!--;
+            slide = Math.max(slide, Math.hypot(cars[i]!.group.position.x - setDown[i]!.x, cars[i]!.group.position.z - setDown[i]!.z));
+          }
+        }
+      });
+      expect(slide, `a car slid ${(slide * 100).toFixed(1)} cm`).toBeLessThan(SLIDE_MAX_M);
+    },
+  );
 });
 
 describe("given the owner's drops (11 cars, 0.15 m, one a second) of the mixed fleet", () => {

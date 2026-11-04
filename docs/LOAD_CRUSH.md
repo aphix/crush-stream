@@ -73,14 +73,14 @@ The defaults' 4-stack of one car type, each drop started 0, 0.5 or 1 mm higher (
 | type | 3 starts | 5 starts | bar | slide |
 |---|---|---|---|---|
 | Sedan | 8.0 | 8.0 | 12 | 3.7-6.6 |
-| Muscle | 3.6 | 9.6 | 7 | 2.1-3.2 |
+| Muscle | 3.6 | 9.6 | 15 | 2.1-3.2 |
 | Truck | 8.3 | 15.3 | 23 | 0.3-0.5 |
 | Monster | 7.8 | 20.4 | 31 | 1.3-1.7 |
-| Police | 2.4 | 5.9 | 7 | 2.9-3.9 |
-| Hatchback | 6.1 | 6.6 | 7 | 3.7-5.0 |
+| Police | 2.4 | 5.9 | 9 | 2.9-3.9 |
+| Hatchback | 6.1 | 6.6 | 10 | 3.7-5.0 |
 | SUV | 9.8 | 9.8 | 15 | 7.7-10.3 |
 
-A class that holds 7 mm on the three starts keeps it; the others take 1.5 x their five-start spread. Physics asks little of a millimetre of start height (0.6 % more energy in a crush's work, well under 1 mm of roof), so the spreads are the stack's slices, not the law: a landing's tyre springs and belly rows trade the weight over a few slices, and where that ends moves each roof by up to 10 mm (sedan, hatchback, SUV, muscle). Two types read well above that, both open: after the landing the **truck**'s column creeps down at 6-10 cm/s for 0.2 s, and the **monster**'s from 0.7 s on at 2-17 cm/s, with a roof yielding on most frames; then it halts within one frame, and where the halt falls decides the bottom roof (truck 135-150 mm, monster 176-196 mm; their top cars' pitch stays under 1 deg). The **SUV** top car slides 8-10 cm along the roof it landed on in the first half second (the other types under 7 cm).
+Every class takes 1.5 x its five-start spread, rounded up (muscle reads 9.6 mm over five starts against 3.6 over three: a bar from the three would pass only on those starts). Physics asks little of a millimetre of start height (0.6 % more energy in a crush's work, well under 1 mm of roof), so the spreads are the stack's slices, not the law: a landing's tyre springs and belly rows trade the weight over a few slices, and where that ends moves each roof by up to 10 mm (sedan, hatchback, SUV, muscle). Two types read well above that, both open: after the landing the **truck**'s column creeps down at 6-10 cm/s for 0.2 s, and the **monster**'s from 0.7 s on at 2-17 cm/s, with a roof yielding on most frames; then it halts within one frame, and where the halt falls decides the bottom roof (truck 135-150 mm, monster 176-196 mm; their top cars' pitch stays under 1 deg). The **SUV** top car slides 8-10 cm along the roof it landed on in the first half second (the other types under 7 cm).
 
 A car dropped on a face, 60 Hz, crush after settling (mm):
 
