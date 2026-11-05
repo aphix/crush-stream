@@ -27,7 +27,7 @@ describe("given a sedan dropped onto its roof from 2 m", () => {
       tickWorld(world, 1 / FRAME_HZ);
       for (const g of car.glassPanes) {
         const frame = g.skin ?? (g.parts.includes("doorLeft") ? "doorLeft" : "doorRight");
-        peak.set(g.name, Math.max(peak.get(g.name) ?? 0, car.deform.glassDistortion(frame)));
+        peak.set(g.name, Math.max(peak.get(g.name) ?? 0, car.deform.shatterDistortion(frame)));
       }
     }
     const states = car.glassPanes.map((g) => `${g.name} ${g.state}, peak ${(peak.get(g.name) ?? 0).toFixed(4)} m`).join("; ");

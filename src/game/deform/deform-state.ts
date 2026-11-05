@@ -10,11 +10,14 @@ import {
 import type { BodyPartName, MassName } from "../kernel/rig-spec.ts";
 import { DeformParticleHelper, DeformRigHelper } from "./deform-helper.ts";
 import { DeformHit } from "./deform-hit.ts";
-import { RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS, type Beam, type MassNode, type PointSkin } from "./deform-rig.ts";
+import { FACE_TOP } from "./load-crush.ts";
+import { RES_SLOTS, SKIN_COUNT_BITS, WINDSCREEN, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS, type Beam, type MassNode, type PointSkin } from "./deform-rig.ts";
 import { CageStrain, maxCompression, sensorsByPart } from "./cage-measure.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { CORNER_BLEND, CORNER_CENTRED, FAR_SIDE_DOT, MIN_IMPACT_ZONE, MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
 
+/** Roof crush (m) from which the roof racks the windscreen's header: a roof landing (0.3 m and more) bends the frame the pane sits in, a nose hit's lag of the roof mass (0 baked crush) does not. */
+const ROOF_RACKS_SCREEN = 0.1;
 /** How far (m) a single nose hit's dynamic crush peaks short of its stroke: single 48–54 km/h hits at
  *  squash 0.32 and 0.4 all peak the block at the stroke's reach (stroke − 0.30) minus 0.06 ± 0.01 m. */
 const STROKE_SHORTFALL = 0.06;
@@ -700,8 +703,15 @@ export abstract class DeformState extends DeformHit {
     return cage ? this.strain.measure(cage) : 0;
   }
 
-  /** How far (m) the frame holding `name`'s pane has distorted: the largest corner displacement its rigid best fit leaves over (`CageStrain`); 0 for an unglazed cage. */
+  /** How far (m) the frame holding `name`'s pane has distorted: the largest corner displacement its rigid best fit leaves over (`CageStrain`); 0 for an unglazed cage. The windscreen reads its own frame (`glassFrame`), which leaves out the roof mass's lag behind the cabin. */
   glassDistortion(name: BodyPartName): number {
+    const cage = name === "glassFront" ? this.glassFrame : this.cageByPart.get(name);
+    return cage ? this.strain.aperture(cage) : 0;
+  }
+
+  /** What shatters a pane (`glassDistortion`, but the windscreen reads the contact cage, which rides the roof, once the roof is crushed past `ROOF_RACKS_SCREEN`). */
+  shatterDistortion(name: BodyPartName): number {
+    if (name === WINDSCREEN && this.crushBaked[FACE_TOP]! < ROOF_RACKS_SCREEN) return this.glassDistortion(name);
     const cage = this.cageByPart.get(name);
     return cage ? this.strain.aperture(cage) : 0;
   }

@@ -2,12 +2,13 @@ import * as THREE from "three";
 import { computeNormalsFast } from "./fast-normals.ts";
 import { matchSkinLocal, type ShapeCluster } from "./shape-match.ts";
 import { DeformSolve } from "./deform-solve.ts";
-import { archKeep, RES_SLOTS, SIM_SCALAR_NUMBERS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS, type Beam, type MassNode, type RigTables, type Sensor } from "./deform-rig.ts";
+import { archKeep, RES_SLOTS, SIM_SCALAR_NUMBERS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS, WINDSCREEN, type Beam, type MassNode, type RigTables, type Sensor } from "./deform-rig.ts";
 import { INF_K } from "./deform-build.ts";
 import { cageAxis, cageCoeffs } from "./deform-state.ts";
 import { skinKernel, skinKey, type SkinDynamic, type SkinKernel, type SkinStatic, type SkinTables } from "./skin-kernel.ts";
 import { FACE_TOP, SKIN_STRAIN } from "./load-crush.ts";
 import { detSin } from "../kernel/physics-core.js";
+import { m3, m3Polar, quatId } from "../kernel/shape-match-core.js";
 import { FAR_SIDE_DOT, MIN_WEIGHT_SUM } from "./constants.ts";
 
 const _a = new THREE.Vector3();
@@ -17,6 +18,11 @@ const _e = new THREE.Vector3();
 const _f = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _axis = new THREE.Vector3();
+/** `solveCagesFromShape`'s blended map of a turn-only corner, its warm start, and the rotation and stretch `m3Polar` splits it into. */
+const _blend = m3();
+const _blendQ = quatId();
+const _blendR = m3();
+const _blendS = m3();
 /** The roof mass sunk past this (m) is load crush: a crash alone holds it within `maxLift` (0.07 m, deep 0.28), so the skin's 0.1 m roof clamp lifts. */
 const SUNK_ROOF = 0.075;
 /** The share of a cage's `maxCrush` its sensor-driven lift may use before the 0.85 m cap. */
@@ -253,8 +259,10 @@ export class StreamedDeformation extends DeformSolve {
     const X = this.clusterXf;
     const n = this.vertexCount;
     const pos = this.massPos;
-    for (let j = 0; j < this.cages.length * 8; j++) {
-      const cage = this.cages[j >> 3]!;
+    const own = this.cages.length * 8;
+    let turned = false;
+    for (let j = 0; j < own + 8; j++) {
+      const cage = j < own ? this.cages[j >> 3]! : this.glassFrame;
       const rest = cage.restCorners[j & 7]!;
       const wsum = this.cornerWsum[j]!;
       // A5, as a skin vertex: parents' positions + the cluster maps on the offset from them.
@@ -266,12 +274,29 @@ export class StreamedDeformation extends DeformSolve {
         pz = dz;
       if (wsum > MIN_WEIGHT_SUM) {
         px = py = pz = 0;
-        for (let k = this.cornerStart[j]!, e = this.cornerStart[j + 1]!; k < e; k++) {
+        const turnOnly = this.cornerTurnOnly[j] === 1;
+        const turnKnown = turnOnly && turned;
+        if (turnOnly && !turnKnown) _blend.fill(0);
+        for (let k = this.cornerStart[j]!, e = turnKnown ? 0 : this.cornerStart[j + 1]!; k < e; k++) {
           const o = this.cornerXf[k]!;
           const w = this.cornerW[k]! / wsum;
+          if (turnOnly) {
+            for (let i = 0; i < 9; i++) _blend[i]! += X[o + i]! * w;
+            continue;
+          }
           px += (X[o]! * dx + X[o + 1]! * dy + X[o + 2]! * dz) * w;
           py += (X[o + 3]! * dx + X[o + 4]! * dy + X[o + 5]! * dz) * w;
           pz += (X[o + 6]! * dx + X[o + 7]! * dy + X[o + 8]! * dz) * w;
+        }
+        if (turnOnly) {
+          if (!turned) {
+            quatId(_blendQ);
+            m3Polar(_blend, _blendQ, _blendR, _blendS);
+            turned = true;
+          }
+          px = _blendR[0]! * dx + _blendR[1]! * dy + _blendR[2]! * dz;
+          py = _blendR[3]! * dx + _blendR[4]! * dy + _blendR[5]! * dz;
+          pz = _blendR[6]! * dx + _blendR[7]! * dy + _blendR[8]! * dz;
         }
       }
       for (let k = (n + j) * RES_SLOTS, e = k + RES_SLOTS; k < e; k++) {
@@ -371,6 +396,8 @@ export class StreamedDeformation extends DeformSolve {
       }
     }
 
+    const screen = this.cageByPart.get(WINDSCREEN)!.corners;
+    for (let i = 0; i < 8; i++) this.glassFrame.corners[i]!.copy(screen[i]!);
     this.capCageCorners();
     if (this.bidirectional) this.fitCagesToMasses();
   }
@@ -378,8 +405,8 @@ export class StreamedDeformation extends DeformSolve {
   private capCageCorners(): void {
     let maxTravel = 0;
     for (let mi = 0; mi < this.masses.length; mi++) maxTravel = Math.max(maxTravel, this.masses[mi]!.local.distanceTo(this.masses[mi]!.rest));
-    for (let ci = 0; ci < this.cages.length; ci++) {
-      const cage = this.cages[ci]!;
+    for (let ci = 0; ci <= this.cages.length; ci++) {
+      const cage = this.cages[ci] ?? this.glassFrame;
       const isCell = cage.spec.name === "chassisCell";
       let cap: number;
       if (this.bidirectional) {
@@ -413,8 +440,8 @@ export class StreamedDeformation extends DeformSolve {
     }
     const zPad = 0.1;
     const xPad = 0.16;
-    for (let ci = 0; ci < this.cages.length; ci++) {
-      const corners = this.cages[ci]!.corners;
+    for (let ci = 0; ci <= this.cages.length; ci++) {
+      const corners = (this.cages[ci] ?? this.glassFrame).corners;
       for (let k = 0; k < corners.length; k++) {
         const corner = corners[k]!;
         corner.z = THREE.MathUtils.clamp(corner.z, minZ - zPad, maxZ + zPad);
@@ -793,7 +820,10 @@ export class StreamedDeformation extends DeformSolve {
       this.solveCages();
       this.cageExact = true;
       this.flushSkin(geometry, true);
-    } else this.restoreRest(geometry, restNormals);
+    } else {
+      this.restoreRest(geometry, restNormals);
+      this.resetGlassFrame();
+    }
     this.skinOwed = false;
     group.updateWorldMatrix(false, false);
     for (let i = 0, r = 0; i < this.masses.length; i++, r += 3) {

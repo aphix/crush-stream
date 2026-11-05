@@ -435,8 +435,8 @@ describe("given an engine block made of a left and a right half", () => {
 });
 
 describe("given a car's glass panes, which break from their frame's distortion", () => {
-  const glassAfter = (kph: number, approach: "front" | "side", car = makeCar()): string[] => {
-    runWall(kph, 1, approach, { car });
+  const glassAfter = (kph: number, approach: "front" | "rear" | "side", car = makeCar(), overlap = 1): string[] => {
+    runWall(kph, overlap, approach, { car });
     return car["glassPanes"].map((g) => g.state);
   };
   // Pane order (addGlass): 0 windscreen, 1 rear glass, 2/3 door glass L/R, 4/5 quarter glass L/R.
@@ -444,22 +444,40 @@ describe("given a car's glass panes, which break from their frame's distortion",
     expect(glassAfter(15, "front").join()).toBe("intact,intact,intact,intact,intact,intact");
   });
 
-  // 50 km/h, not 56: at 56 the drivetrain dies and the driver is thrown through the windscreen, which smashes it (the ejection rows own that).
-  it("when a car hits a wall at 20, 35 and 50 km/h, and is hit on its left at 50 km/h, then 20 and 35 leave every pane intact, the 50 km/h wall cracks the windscreen and leaves the doors' glass whole with no driver thrown out, and the side hit shatters the windscreen, the rear glass and the left door's glass but not the right's", () => {
+  // A full-width wall leaves the aperture in true: NCAP's 56 km/h full-width barrier tests keep 100 % of the windscreen's perimeter, unchanged (.extraResearch/perplexity/2026-10-31-windscreen-crack-frontal.md).
+  // The windscreen's crack threshold (3 mm) sits between that wall's 50 km/h reading (2.77 mm) and a quarter-width wall's at 56 km/h (6.54 mm), where one A-pillar takes the load (IIHS small overlap is 25 % at 64 km/h; at 64 here the driver is thrown out and the pane shatters, so 56).
+  // 50 km/h for the full-width wall, not 56: at 56 the drivetrain dies and the driver is thrown through the windscreen, which smashes it (the ejection rows own that).
+  it("when a car hits a wall at 20, 35 and 50 km/h, hits a quarter-width wall at 56 km/h, and is hit on its left at 50 km/h, then the full-width walls leave every pane intact with no driver thrown out, the quarter-width wall cracks the windscreen and leaves the doors' glass whole with the driver in, and the side hit shatters the windscreen, the rear glass and the left door's glass but not the right's", () => {
     expect(glassAfter(20, "front").join(), "20 km/h wall").toBe("intact,intact,intact,intact,intact,intact");
     expect(glassAfter(35, "front").join(), "35 km/h wall").toBe("intact,intact,intact,intact,intact,intact");
-    const car = makeCar();
-    const hard = glassAfter(50, "front", car);
-    expect(car.driverOut, "50 km/h wall: the driver stayed in").toBe(null);
-    expect([hard[0], hard[2], hard[3]].join(), "50 km/h wall: windscreen, door glass L/R").toBe("cracked,intact,intact");
+    const full = makeCar();
+    expect(glassAfter(50, "front", full).join(), "50 km/h wall").toBe("intact,intact,intact,intact,intact,intact");
+    expect(full.driverOut, "50 km/h wall: the driver stayed in").toBe(null);
+    const narrow = makeCar();
+    const hard = glassAfter(56, "front", narrow, 0.25);
+    expect(narrow.driverOut, "56 km/h quarter-width wall: the driver stayed in").toBe(null);
+    expect([hard[0], hard[2], hard[3]].join(), "56 km/h quarter-width wall: windscreen, door glass L/R").toBe("cracked,intact,intact");
     const side = glassAfter(50, "side");
     expect(side.slice(0, 4).join(), "50 km/h left side hit: windscreen, rear, door glass L/R").toBe("shattered,shattered,shattered,intact");
+  });
+
+  it("when a car is hit from behind by a wall at 20 km/h, then the windscreen stays intact and the rear glass shatters: a rear hit's strike breaks the rear glass, the cabin's frame in front of it is in true", () => {
+    const [windscreen, rearGlass] = glassAfter(20, "rear");
+    expect([windscreen, rearGlass].join()).toBe("intact,shattered");
+  });
+
+  it("when a car hits a wall with a quarter of its width at 50 km/h, then its wreck swings round the wall's edge and the doors' glass stays whole: only a part that stands a few mm in the face is pushed out whole", () => {
+    const car = makeCar();
+    runWall(50, 0.25, "front", { car });
+    expect(car["glassPanes"].map((g) => g.state)[2], "door glass L").toBe("intact");
+    expect(car["glassPanes"].map((g) => g.state)[3], "door glass R").toBe("intact");
   });
 
   it("when the same 50 km/h side hit runs with the glass breaking and with it never breaking, then every mass and every cage corner ends bit-identical: the panes hold nothing back", () => {
     const breaking = makeCar();
     const unbreakable = makeCar();
     unbreakable.deform.glassDistortion = () => 0;
+    unbreakable.deform.shatterDistortion = () => 0;
     expect(glassAfter(50, "side", breaking).filter((s) => s === "shattered").length, "the hit broke the glass").toBe(4);
     expect(glassAfter(50, "side", unbreakable).join(), "the glass never broke").toBe("intact,intact,intact,intact,intact,intact");
     let worst = 0;

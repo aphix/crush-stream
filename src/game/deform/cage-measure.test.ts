@@ -5,7 +5,6 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { RES_SLOTS, type DeformRig, type MassNode } from "./deform-rig.ts";
-import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const DT = 1 / FINE_HZ;
 const NAMES = CAGES.map((c) => c.name);
@@ -90,11 +89,11 @@ describe("given a car's glazed cages (the windscreen's, the rear glass's and the
   it("when every corner of each turns 0.7 rad and shifts 2.3 m as one body, then the glass distortion reads 0 to 1e-9 m; when one windscreen aperture corner is then pushed 3 cm, it reads more than 1 cm and at most 3 cm", () => {
     const car = new DeformableCar(paint(), new THREE.Scene());
     for (const name of ["glassFront", "glassRear", "doorLeft", "doorRight"] as const) {
-      const cage = car.deform["cageByPart"].get(name)!;
+      const cage = name === "glassFront" ? car.deform["glassFrame"] : car.deform["cageByPart"].get(name)!;
       for (let i = 0; i < 8; i++) cage.corners[i]!.copy(cage.restCorners[i]!).applyQuaternion(TURN).add(SHIFT);
       expect(car.deform.glassDistortion(name), `${name} moved rigidly reads ${car.deform.glassDistortion(name)} m`).toBeLessThan(1e-9);
     }
-    car.deform["cageByPart"].get("glassFront")!.corners[3]!.x += PUSH;
+    car.deform["glassFrame"].corners[3]!.x += PUSH;
     const pushed = car.deform.glassDistortion("glassFront");
     expect(pushed > PUSH / 3 && pushed <= PUSH, `one corner pushed ${PUSH} m reads ${pushed} m`).toBeTruthy();
   });
@@ -103,9 +102,8 @@ describe("given a car's glazed cages (the windscreen's, the rear glass's and the
     expect(crashed().deform.glassDistortion("bonnet")).toBe(0);
   });
 
-  /** The masses a cage's eight corners follow (their A5 parents, weight above 0). */
-  function parentsOf(rig: DeformRig, name: BodyPartName): MassNode[] {
-    const first = rig["cages"].findIndex((c) => c.spec.name === name);
+  /** The masses the eight corners from point row `first` follow (their A5 parents, weight above 0): a cage's, or the glass frame's (`first` = the cage count). */
+  function parentsFrom(rig: DeformRig, first: number): MassNode[] {
     const found = new Set<MassNode>();
     for (let corner = 0; corner < 8; corner++) {
       const at = (rig["vertexCount"] + first * 8 + corner) * RES_SLOTS;
@@ -113,14 +111,47 @@ describe("given a car's glazed cages (the windscreen's, the rear glass's and the
     }
     return [...found];
   }
+  const parentsOf = (rig: DeformRig, name: BodyPartName): MassNode[] => parentsFrom(rig, rig["cages"].findIndex((c) => c.spec.name === name));
 
-  it("when each door cage's corners' parent masses are listed, then every one is a cabin mass (its rest inside the cell cage's span above its floor), and the windscreen's are cabin masses and the two wings (the foot's share of the nose), never a rail or the engine, whereas the bonnet's follow masses outside the cabin", () => {
+  it("when each door cage's corners' and the glass frame's parent masses are listed, then every one is a cabin mass (its rest inside the cell cage's span above its floor), never a wing, a rail or the engine, the glass frame's never the roof mass, and only the glass frame's four cowl corners take the cell-holding clusters' rotation without their strain, whereas the bonnet's follow masses outside the cabin", () => {
     const rig = new DeformableCar(paint(), new THREE.Scene()).deform;
     const cell = rig["cageByPart"].get("chassisCell")!.spec;
     const inCabin = (m: MassNode): boolean => m.rest.z >= cell.min[2] && m.rest.z <= cell.max[2] && m.rest.y >= cell.min[1];
     const outside = (name: BodyPartName): string[] => parentsOf(rig, name).filter((m) => !inCabin(m)).map((m) => m.name).sort();
     for (const name of ["doorLeft", "doorRight"] as const) expect(outside(name), `${name}'s corners follow masses outside the cabin`).toHaveLength(0);
-    expect(firstMismatch(outside("glassFront"), ["wingFL", "wingFR"]), "the windscreen's corners follow the cabin and the wings' share alone").toBeUndefined();
+    const frame = parentsFrom(rig, rig["cages"].length);
+    expect(frame.filter((m) => !inCabin(m)).map((m) => m.name), "the glass frame's corners follow masses outside the cabin").toHaveLength(0);
+    expect(frame.map((m) => m.name), "the glass frame never follows the roof mass").not.toContain("roof");
+    const corners = rig["cages"].length * 8;
+    const turnOnly = Array.from(rig["cornerTurnOnly"]).flatMap((flag, corner) => (flag === 1 ? [corner - corners] : []));
+    expect(turnOnly.join(), "the corners that take a turn without strain: the glass frame's cowl corners alone").toBe("4,5,6,7");
+    expect(rig["cornerStart"][corners + 5]! - rig["cornerStart"][corners + 4]!, "the cowl corner's cluster maps").toBeGreaterThan(0);
     expect(outside("bonnet").length, "the control: the bonnet's corners follow the nose").toBeGreaterThan(0);
+  });
+
+  it("when the windscreen cage's corners' parents (the contact cage's) are listed, then they follow the cabin and the nose mass at the A-pillar foot's share, not the glass frame's roofless rule", () => {
+    const rig = new DeformableCar(paint(), new THREE.Scene()).deform;
+    const contact = parentsOf(rig, "glassFront").map((m) => m.name).sort();
+    expect(contact, "the contact windscreen's parents").toEqual(["cell", "doorL", "doorR", "roof", "wingFL", "wingFR"]);
+  });
+
+  it("when every mass of a car at rest turns rigidly 0.5 degrees about the car's x, y or z axis and the skin is baked, then no glazed cage reads over 0.5 mm of aperture distortion: a cabin turning as one racks no glass", () => {
+    for (const axis of [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)]) {
+      const car = new DeformableCar(paint(), new THREE.Scene());
+      const turn = new THREE.Quaternion().setFromAxisAngle(axis, (0.5 * Math.PI) / 180);
+      for (const m of car.deform.masses) m.local.copy(m.rest).applyQuaternion(turn);
+      car.deform.bakeSkin();
+      for (const name of ["glassFront", "glassRear", "doorLeft", "doorRight"] as const) {
+        const read = car.deform.glassDistortion(name);
+        expect(read, `${name} read ${read} m after a 0.5 degree turn about (${axis.toArray().join(", ")})`).toBeLessThan(0.0005);
+      }
+    }
+  });
+
+  it("when a crashed car is reset, then its glass frame is back at rest and the windscreen reads no distortion: a respawned car is not cracked by its last life's frame", () => {
+    const car = crashed();
+    expect(car.deform.glassDistortion("glassFront"), "the control: the crash distorted the frame").toBeGreaterThan(0);
+    car.deform.reset();
+    expect(car.deform.glassDistortion("glassFront")).toBeLessThan(1e-9);
   });
 });

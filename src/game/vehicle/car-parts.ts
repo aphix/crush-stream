@@ -160,7 +160,7 @@ const MIRROR_POP = 0.5;
 const _seatDoor = new THREE.Matrix4();
 const _seatMirror = new THREE.Matrix4();
 const _unitScale = new THREE.Vector3(1, 1, 1);
-/** Glass against its frame's distortion (`glassDistortion`, m): the laminated windscreen cracks from a few mm of differential aperture movement, between a 35 km/h wall's frame and a 50 km/h one's. */
+/** Glass against its frame's distortion (`glassDistortion`, m): the laminated windscreen cracks from a few mm of differential aperture movement: above a 50 km/h full-width wall's 2.8 mm (NCAP's 56 km/h wall keeps the perimeter), below a 56 km/h quarter-width wall's 6.5 mm. */
 const GLASS_CRACK = 0.003;
 /** Tempered side and rear glass bursts once its frame is about 3 cm out of true, in any direction. */
 const GLASS_TEMPERED = 0.03;
@@ -1238,10 +1238,10 @@ export abstract class CarParts extends CarGlass {
     for (let k = 0; k < this.glassPanes.length; k++) {
       const g = this.glassPanes[k]!;
       if (g.state === "shattered") continue;
-      const distortion = this.deform.glassDistortion(g.skin ?? (g.parts.includes(DOOR_LEFT) ? DOOR_LEFT : DOOR_RIGHT));
+      const frame = g.skin ?? (g.parts.includes(DOOR_LEFT) ? DOOR_LEFT : DOOR_RIGHT);
       const laminated = g.skin === "glassFront";
-      if (laminated && g.state === "intact" && distortion > GLASS_CRACK) this.crackGlass(g);
-      if (distortion > (laminated ? GLASS_LAMINATED : GLASS_TEMPERED)) this.shatterGlass(g);
+      if (laminated && g.state === "intact" && this.deform.glassDistortion(frame) > GLASS_CRACK) this.crackGlass(g);
+      if (this.deform.shatterDistortion(frame) > (laminated ? GLASS_LAMINATED : GLASS_TEMPERED)) this.shatterGlass(g);
     }
 
     const ebs = this.deform.hitSpeedValue;
