@@ -210,15 +210,21 @@ function runDerby(cars: DeformableCar[], seconds: number, knobs: Knobs, start?: 
 
 /** The seed of the arcade 20 s derby. */
 const HIT_SEED = 7;
+/**
+ * The fewest accepted hits (`noteHit` calls that returned true) the nose-to-nose share is read over: a floor so the ratio can fail (one nose-to-nose hit of 8 reads 0.125, two read the 0.25 bar). The
+ * match reads 14 to 17 accepted hits across correct variants of the sim (its first 9, up to 9.3 s, are the same in all of them; it reshuffles from the first squeezed wreck's hit), so a count bar of 15
+ * was a draw. What keeps AI cars hitting is staged in `derby-engagement.test.ts`.
+ */
+const MIN_HITS_FOR_RATIO = 8;
 
 describe("given derby matches between AI cars", () => {
   const owner = ownerDerby(15);
   const ownerReal = ownerDerby(15, REALISTIC);
 
   describe(`given six AI cars in the arena at the arcade crush knobs (seed ${HIT_SEED})`, () => {
-    it("when 20 s of derby are played, then the cars keep hitting (at least 15 scored hits), under a quarter of the hits are nose to nose and nobody sits wedged on the throttle for 3 s", () => {
+    it("when 20 s of derby are played, then under a quarter of the hits are nose to nose (over at least a handful of hits) and nobody sits wedged on the throttle for 3 s", () => {
       const { hits, noseToNose, worstWedge } = sixCarDerby(20, HIT_SEED);
-      expect(hits, `only ${hits} scored hits in 20 s`).toBeGreaterThanOrEqual(15);
+      expect(hits, `only ${hits} hits in 20 s: the nose-to-nose share proves nothing`).toBeGreaterThanOrEqual(MIN_HITS_FOR_RATIO);
       expect(noseToNose / hits, `${noseToNose}/${hits} hits were nose to nose`).toBeLessThan(0.25);
       expect(worstWedge, `a car sat on the throttle without moving for ${worstWedge.toFixed(2)} s`).toBeLessThan(3);
     });
