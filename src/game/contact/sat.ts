@@ -184,6 +184,8 @@ function copyMeet(to: Float64Array, from: Float64Array): void {
 const _deeper = new Float64Array(M_SIZE);
 /** `_meet` of an end first placed past its cell's column, while `endAt` places it again at that column's end. */
 const _again = new Float64Array(M_SIZE);
+/** `_meet` of a node's middle where `b` has no band, while `deeperEnd` places its ends. */
+const _middle = new Float64Array(M_SIZE);
 /** How far (m) inside the heights two bands share their ends are sampled: on an end itself, whether the cell it lands in holds it is rounding. */
 const BAND_INSET = VERTICAL_CLEAR / 4;
 /** An end's own cell's end this close (m) to where the end was placed is the same place: no second placement. */
@@ -578,10 +580,14 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
     _in[I_MARGIN] = slant;
     meet(plan, style, outlineB, fields);
     if (!(_meet[M_DEPTH]! > -slant)) continue;
-    // A rolled node's ends read no deeper than its middle does plus the slant: those that cannot pass the deepest so far are left at the middle. A middle with no band (off `b`'s body by more than the window `bandAround` reads, or bridged) has ends too, at the node's own heights: a cop's hood node under a monster rolled 65° stood 0.33 m off its flank at the middle, with its end on the flank 0.05 m deep.
+    // A rolled node's ends read no deeper than its middle does plus the slant: those that cannot pass the deepest so far are left at the middle.
     if (slant > 0 && Math.abs(kyy) > 1e-6 && !(rolled && _meet[M_DEPTH]! + slant <= best)) {
       _in[I_YC] = yc;
+      // A middle with no band (off `b`'s body by more than the window `bandAround` reads, or bridged) has ends too, at the node's own heights: a cop's hood node under a monster rolled 65° stood 0.30 m off its flank at the middle, with its end on the flank 0.05 m deep. Such a middle is a reading of its own (a node just inside the plan's reach, its heights its own), which ends that land off the plan do not take away.
+      const unbanded = _meet[M_BANDED] !== 1;
+      if (unbanded) copyMeet(_middle, _meet);
       deeperEnd(plan, style, outlineB, fields);
+      if (unbanded && _middle[M_DEPTH]! > _meet[M_DEPTH]!) copyMeet(_meet, _middle);
     }
     const depth = _meet[M_DEPTH]!;
     if (!(depth > 0) || (_meet[M_BANDED] === 1 && _meet[M_HIGH]! - _meet[M_LOW]! <= VERTICAL_CLEAR)) continue;

@@ -29,6 +29,8 @@ const ROLLS = [65, 70, 75];
 const LYING_RISE = 1.1;
 const LYING_FROM = 2.4;
 const LYING_TO = 3.6;
+/** The cop's distance back (m) at which a monster rolled 65° over has only its flank in the cop's hood's centre-line node's reach: the node's column middle stands 0.30 m off the flank, its end 0.05 m into it. */
+const FLANK_BACK = 2.7;
 const scene = new THREE.Scene();
 const one = new THREE.Vector3(1, 1, 1);
 const toWorld = new THREE.Matrix4();
@@ -194,6 +196,14 @@ describe("given a monster truck lying rolled 65°, 70° or 75° over (its body l
       expect(worstOff, worst).toBeLessThanOrEqual(CAGE_STEP);
     });
   }
+
+  it("when the cop's nose is 2.7 m back at the monster rolled 65° over, its hood's centre-line node 0.05 m into the flank with its middle off it, then the contact check reads that contact (a node whose middle stands off the body and whose end stands on it)", () => {
+    lieOver(monster, cop, 65, FLANK_BACK);
+    const overlap = overlapOf();
+    const sat = satCars(cop, monster, normal, contact, 0);
+    expect(overlap, "the cages overlap").toBeGreaterThan(0);
+    expect(sat, `SAT ${sat?.toFixed(3)} m against ${overlap.toFixed(3)} m`).toBeGreaterThan(0);
+  });
 });
 
 /** How far (m) into the other's roof a car's keel stands: a lattice step less 1 cm, and a step plus 1 cm. */
@@ -241,6 +251,29 @@ describe("given two sedans, one standing with its keel a little into the other's
     expect(reads[0]![1], `${KEEL_INTO[0]! * 100} cm into, lower first: SAT ${reads[0]![1]?.toFixed(3)}`).toBe(null);
     expect((reads[1]![0] ?? 0), `${KEEL_INTO[1]! * 100} cm into, upper first: SAT ${reads[1]![0]?.toFixed(3)}`).toBeGreaterThan(0.5);
     expect(reads[1]![1], "the two orders read the same depth").toBe(reads[1]![0]);
+  });
+});
+
+/** Two police cars lying on their sides, rolled 83° and 80° over, 5.6 m apart (their noses together): the pose a nine-car pile's seeded layout drew, each as its group's x, z, its yaw and its roll (rad) at 0.9 m up. */
+const LYING_PAIR = [
+  { x: 2.5033112527818004, z: 0.017521762995757983, yaw: 5.465702380199438, roll: 1.4539732703284232 },
+  { x: 5.017927694561857, z: 4.990572309722459, yaw: 5.251812428073373, roll: 1.3936479278543457 },
+] as const;
+
+describe("given two police cars lying rolled 83° and 80° over, their noses within each other's plan reach", () => {
+  const first = build("police");
+  const second = build("police");
+
+  it("when the contact check reads the pair either way round, then it reads their touch, 8 mm inside the plan's reach (a node just inside it keeps its own reading where the ends of its column read less)", () => {
+    for (const [car, pose] of [[first, LYING_PAIR[0]], [second, LYING_PAIR[1]]] as const) {
+      car.spawnFacing(pose.x, pose.z, 0, 0);
+      car.group.position.y = 0.9;
+      car.group.rotation.set(0, pose.yaw, pose.roll, "YXZ");
+      car.refreshBasis();
+    }
+    const reads = [satCars(first, second, normal, contact, 0), satCars(second, first, normal, contact, 0)];
+    expect(reads[0], `first asked: SAT ${reads[0]?.toFixed(4)} m`).toBeGreaterThan(0);
+    expect(reads[1], `second asked: SAT ${reads[1]?.toFixed(4)} m`).toBeGreaterThan(0);
   });
 });
 
