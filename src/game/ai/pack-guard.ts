@@ -32,9 +32,9 @@ const SEDAN = classStats("sedan");
  * behind took the steer straight into the one ahead), is steered away from, to the side that mate passes on (a dead-centre
  * meeting turns both cars the same way, so they pass), the sooner and squarer the harder, and within `BRAKE_TIME` s of the hit,
  * when it is ahead, braked for, the boost dropped. A mate the steer already on the wheel (held `STEER_HOLD` s) takes the car clear of
- * is not read. A car that is stopped or reversing is left alone; a braking one still rolling forward is not. No allocation.
+ * is not read. A car that is stopped or reversing is left alone; a braking one still rolling forward is not. A mate that `ignores(mate)` is true of is not read at all. No allocation.
  */
-export function guardMates(self: AiCar, cars: readonly AiCar[], first: number, count: number, out: DriveInput, pullsOut: (unit: number) => boolean, cls = SEDAN, surf: Surface = SURFACES.asphalt): void {
+export function guardMates(self: AiCar, cars: readonly AiCar[], first: number, count: number, out: DriveInput, pullsOut: (unit: number) => boolean, cls = SEDAN, surf: Surface = SURFACES.asphalt, ignores: ((mate: AiCar) => boolean) | null = null): void {
   const fx = detSin(self.yaw);
   const fz = detCos(self.yaw);
   // A car that is reversing, or stopped (parked, knocked out), is left alone; one that is braking while still rolling forward is not: a lifted
@@ -62,6 +62,7 @@ export function guardMates(self: AiCar, cars: readonly AiCar[], first: number, c
     if (m.id === self.id) continue;
     const rx = m.x - self.x;
     const rz = m.z - self.z;
+    if (ignores !== null && ignores(m)) continue;
     const phantom = hypot2(m.vx, m.vz) < MOVING && pullsOut(k);
     const wx = (phantom ? detSin(m.yaw) * MOVING : m.vx) - vx;
     const wz = (phantom ? detCos(m.yaw) * MOVING : m.vz) - vz;

@@ -599,7 +599,9 @@ describe("given a player car boxed in by walls on three sides and two wrecks, an
     expect(hit, `${hit.toFixed(1)} m/s closing on the player car`).toBeLessThan(16);
   });
   it("when the player squirms over the bust's 20 km/h for the wait, then a real cop backs off to a run-up and charges in at 28 m/s or more (its speed within 12 m of the player car), and before the wait is up it comes in under 28 m/s", () => {
-    const run = copRun(RAM_AFTER + 14, () => 8);
+    // The first charge bends round the box's north wall and comes down its west side at 36 m/s, too fast to turn into the open side: it passes the player 13.5 m off, backs off again and the second charge lands, about 16 s after the wait.
+    // Without the guard reading the wrecks the same charge overshot identically on the shipped pack; its old 36.6 m/s "hit" was the guard steering away from the wrecks read as pulling out, which cancelled the wall bend and drew the cop through this stub's non-solid west wall.
+    const run = copRun(RAM_AFTER + 20, () => 8);
     const early = Math.max(0, ...run.filter((f) => f.t < RAM_AFTER).map((f) => f.v));
     expect(early, `${early.toFixed(1)} m/s before the wait is up`).toBeLessThan(28);
     const far = Math.max(...run.filter((f) => f.t > RAM_AFTER).map((f) => f.d));

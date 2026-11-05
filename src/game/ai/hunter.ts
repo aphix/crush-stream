@@ -253,6 +253,11 @@ export class HunterBrain extends CopBrain {
   protected readonly pullsOut = (u: number): boolean => this.state[u] !== STORED && this.settled[u] === 0;
   /** The pack guard reads a slow mate as pulling out only while it hunts: a knocked-out unit is the stopped obstacle it is (read as one pulling out at 8 m/s, cops never braked for a wreck and drove into it). */
   protected override readonly pulling = (u: number): boolean => this.state[u] === HUNTING && this.settled[u] === 0;
+  /** The human a unit that is ramming charges at (−1: not ramming) and where it stands: its box (the units within `SETTLE` m of it, wrecks too) is not read by the guard, which would brake the charge for the cars that make the box. */
+  private rammingAt = -1;
+  private boxX = 0;
+  private boxZ = 0;
+  protected override readonly ignores = (mate: AiCar): boolean => this.rammingAt >= 0 && hypot2(mate.x - this.boxX, mate.z - this.boxZ) < SETTLE;
   /** Per unit: creeping beside a stopped player car on purpose, so its slow pace is not read as pulling out. */
   private readonly settled: Uint8Array;
   private readonly state: Uint8Array;
@@ -383,6 +388,7 @@ export class HunterBrain extends CopBrain {
     const u = self.id - this.first;
     if (u < 0 || u >= this.count) return out;
     this.settled[u] = 0;
+    this.rammingAt = -1;
     // Each cop hunts the nearest human still free; the one it is after now is its `aim`.
     const target = this.nearestHunted(self.x, self.z, cars);
     this.aim[u] = target;
@@ -404,6 +410,11 @@ export class HunterBrain extends CopBrain {
     const lethal = mean >= LETHAL_FROM;
     // A stopped or creeping human is contained by the whole pack (the bust), whatever a is.
     const seeking = this.seeks[u] === 1 || this.flies[u] === 1 || tv <= BLOCKABLE;
+    this.rammingAt = ramming && seeking ? target : -1;
+    if (ramming && seeking) {
+      this.boxX = tg.x;
+      this.boxZ = tg.z;
+    }
     // How far the unit stands ahead of its target along the target's travel (+), and whether it faces it from there.
     const along = -(dx * detSin(tg.yaw) + dz * detCos(tg.yaw));
     const headOn = lethal && along > WAIT_BEHIND && detSin(self.yaw) * dx + detCos(self.yaw) * dz > dist * HEAD_ON;

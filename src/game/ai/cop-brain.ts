@@ -251,6 +251,8 @@ export abstract class CopBrain {
   protected abstract readonly pullsOut: (u: number) => boolean;
   /** What the pack guard reads as a slow mate pulling out (bound once): by default what `pullsOut` says; a brain whose knocked-out units still answer `pullsOut` narrows it. */
   protected readonly pulling: (u: number) => boolean = (u) => this.pullsOut(u);
+  /** A mate the pack guard does not read at all (bound once): by default none. */
+  protected readonly ignores: ((mate: AiCar) => boolean) | null = null;
   private readonly seed: number;
   private dice = 0;
 
@@ -305,7 +307,7 @@ export abstract class CopBrain {
       this.pedals.shape(self.id, out, dt);
       out.boost = this.pedals.holdBoost(self.id, out.boost, dt, false);
     } else this.pedals.follow(self.id, out);
-    guardMates(self, cars, this.first, this.count, out, this.pulling, cls, this.surf);
+    guardMates(self, cars, this.first, this.count, out, this.pulling, cls, this.surf, this.ignores);
     return out;
   }
 
