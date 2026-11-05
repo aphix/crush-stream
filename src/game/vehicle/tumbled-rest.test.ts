@@ -46,7 +46,7 @@ const BODY_SINK_M = 0.04;
 const PART_SINK_M = 0.02;
 /** The crown is the drawn cabin's vertices within this (m) of its highest. */
 const CROWN_DEPTH_M = 0.15;
-/** A wreck dropped on its flank with one low wheel gone is asleep within this many s: it stands on the other tyre and its body, and finds them. */
+/** A wreck dropped on its flank with one low wheel gone is asleep within this many s: it stands on the other tyre and its body, and finds them. Its settle time on a flank is chaotic: 1.3-5.1 s over this fleet's drops (the row annotates each), the sedan without its hubFL from 0.5 m the slowest at 5.12 s; with the cloud's turn taken as the mean of every cluster's it was 7.17 s, and 5.65 s with the clamp about the world's axes (same staging). Do not read the margin as a bound. */
 const REST_SECONDS = 8;
 /** Where along the car's nose (m from its middle) the hit that makes a wreck of it lands. */
 const NOSE_HIT_M = 2.05;
@@ -139,7 +139,7 @@ function lowestDrawn(car: DeformableCar, crown: ReadonlySet<number>): Lowest {
 }
 
 /** A car of `style` and `cls` dropped in `attitude` from `height` m (its lowest drawn point) on the flat pad and left `DROP_SECONDS` s, a wreck once its nose is hit first at `strike` m/s (none: 0), the hubs in `popped` and, with `bumperOff`, the front bumper torn off after the hit; with the crown it had fresh. */
-function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number, strike = 0, popped: readonly string[] = [], seconds = DROP_SECONDS, bumperOff = false): { car: DeformableCar; lowest: Lowest; world: CrashWorld } {
+function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number, strike = 0, popped: readonly string[] = [], seconds = DROP_SECONDS, bumperOff = false): { car: DeformableCar; lowest: Lowest; world: CrashWorld; sleptAt: number } {
   const car = buildCar(style, cls);
   car.spawnFacing(0, 0, 0, 0);
   car.updateSkin();
@@ -157,8 +157,12 @@ function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, hei
   car.airborne = true;
   car.parked = true;
   const world = makeWorld([car], false, false);
-  for (let f = 0; f < seconds * FRAME_HZ; f++) tickWorld(world, 1 / FRAME_HZ);
-  return { car, lowest: lowestDrawn(car, crown), world };
+  let sleptAt = Infinity;
+  for (let f = 0; f < seconds * FRAME_HZ; f++) {
+    tickWorld(world, 1 / FRAME_HZ);
+    if (car.asleep && sleptAt === Infinity) sleptAt = (f + 1) / FRAME_HZ;
+  }
+  return { car, lowest: lowestDrawn(car, crown), world, sleptAt };
 }
 
 const cm = (m: number): string => `${(m * 100).toFixed(1)} cm`;
@@ -266,10 +270,10 @@ describe("given any class that lost one of the two wheels it lies on, dropped on
         const lostHubs = [{ height: 0.5, hubIndex: 0 }, { height: 2, hubIndex: 1 }] as const;
         for (const { height, hubIndex } of lostHubs) {
           const hub = LOW_HUBS[side][hubIndex];
-          const { car, lowest } = dropped(style, cls, side, height, 0.5, [hub], REST_SECONDS);
+          const { car, lowest, sleptAt } = dropped(style, cls, side, height, 0.5, [hub], REST_SECONDS);
           const cage = cageClearance(car);
           const tag = `${cls} without its ${hub} dropped on its ${side} flank from ${height} m`;
-          t.annotate(`${tag}: ${car.asleep ? "asleep" : `awake at ${car.velocity.length().toFixed(2)} m/s`}, cage ${cm(cage)}, body ${cm(lowest.body)} over the ground`);
+          t.annotate(`${tag}: ${car.asleep ? `asleep at ${sleptAt.toFixed(2)} s of ${REST_SECONDS}` : `awake at ${car.velocity.length().toFixed(2)} m/s`}, cage ${cm(cage)}, body ${cm(lowest.body)} over the ground`);
           expect(car.asleep, `${tag}: still awake after ${REST_SECONDS} s, moving at ${car.velocity.length().toFixed(2)} m/s`).toBeTruthy();
           expect(cage, `${tag}: cage ${cm(-cage)} into the ground`).toBeGreaterThan(-BODY_SINK_M);
           expect(lowest.body, `${tag}: body ${cm(-lowest.body)} into the ground`).toBeGreaterThan(-BODY_SINK_M);

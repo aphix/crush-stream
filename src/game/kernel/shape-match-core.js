@@ -276,30 +276,53 @@ function stretchInto(A, R, S) {
 const IDENTITY = m3Id();
 const _bodyMean = m3();
 const _bodyQ = quatId();
-const _bodyRot = m3();
+let _bodyRots = new Float64Array(9 * 32);
 /**
- * The cloud's own turn into `turn`: the polar factor of the mean of its clusters' unclamped rotations (`rotQ`; a held or non-finite
- * cluster has none). The shape frame turns only the heading out of the world, so a wreck lying on its side or rolling onto its roof
- * gives every cluster a turn past `ROT_CLAMP` against the world's axes: the clamp is measured about this turn instead. Each extraction
- * starts from the identity, so the turn is a function of the clusters alone and cars stepped in any order read the same.
+ * The cloud's own turn into `turn`: the polar factor of the mean of the unclamped rotations (`rotQ`; a held or non-finite cluster has
+ * none) that stand within `ROT_CLAMP` of the rotation most clusters stand within `ROT_CLAMP` of (the lowest index on a tie). A crushed
+ * group that strays from the rest cannot drag the turn toward itself unless it outnumbers them. The shape frame turns only the heading
+ * out of the world, so a wreck lying on its side or rolling onto its roof gives every cluster a turn past `ROT_CLAMP` against the
+ * world's axes: the clamp is measured about this turn instead. Each extraction starts from the identity, so the turn is a function of
+ * the clusters alone and cars stepped in any order read the same.
  */
 function bodyTurn(clusters, turn) {
-  _bodyMean.fill(0);
+  if (_bodyRots.length < 9 * clusters.length) _bodyRots = new Float64Array(9 * clusters.length);
   let n = 0;
   for (let ci = 0; ci < clusters.length; ci++) {
     const c = clusters[ci];
     if (HELD[ci] === 1 || !m3Finite(c.A)) continue;
-    quatToMat(c.rotQ, _bodyRot);
-    for (let i = 0; i < 9; i++) _bodyMean[i] += _bodyRot[i];
+    quatToMat(c.rotQ, _bodyMean);
+    for (let i = 0; i < 9; i++) _bodyRots[n * 9 + i] = _bodyMean[i];
     n++;
   }
   if (n === 0) {
     m3Id(turn);
     return;
   }
+  let centre = 0;
+  let most = 0;
+  for (let i = 0; i < n; i++) {
+    let near = 0;
+    for (let j = 0; j < n; j++) if (rotationsWithin(i, j)) near++;
+    if (near > most) {
+      most = near;
+      centre = i;
+    }
+  }
+  _bodyMean.fill(0);
+  for (let j = 0; j < n; j++) {
+    if (!rotationsWithin(centre, j)) continue;
+    for (let i = 0; i < 9; i++) _bodyMean[i] += _bodyRots[j * 9 + i];
+  }
   quatId(_bodyQ);
   extractRotation(_bodyMean, m3Det(_bodyMean) < 0 ? -1 : 1, _bodyQ);
   quatToMat(_bodyQ, turn);
+}
+/** Whether the rotations `i` and `j` of the round (`_bodyRots`) stand within `ROT_CLAMP` of each other. */
+function rotationsWithin(i, j) {
+  let trace = 0;
+  for (let k = 0; k < 9; k++) trace += _bodyRots[i * 9 + k] * _bodyRots[j * 9 + k];
+  return (trace - 1) * 0.5 >= COS_ROT_CLAMP;
 }
 /**
  * R = the rotation `q` (the fit's unclamped one) with its angle against `turn` clamped to 0.85 rad, S = sym(R^T A) (identity past
