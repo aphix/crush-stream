@@ -58,9 +58,14 @@ const perTier = new Map();
 const outputOf = (key) => /,(?:high|medium|low)p,(srgb(?:-linear)?),/.exec(key)?.[1] ?? "unknown";
 /** What the car finish adds to a program key (`applyFinish`). */
 const FINISH_KEY_MARK = "|finish-";
-/** Frames timed after a tier switch, and how long the switch is watched for first draws (s: its warm-up runs async). */
+/**
+ * Frames timed after a tier switch; how long the switch is watched at least (s: its warm-up runs async), and at most while its
+ * frames are still to come (s: a CPU renderer starts the first frame up to ~1.5 s after the switch). A step whose frames never all
+ * came is a failure, not a pass: its first-frame links and first draws were never seen.
+ */
 const SWITCH_FRAMES = 3;
 const SWITCH_WATCH_S = 1.5;
+const SWITCH_FRAMES_TIMEOUT_S = 30;
 
 /**
  * From here on, counts every program drawn for the first time inside a frame (three fetches a program's uniform locations on its
@@ -112,6 +117,10 @@ async function tierSwitch(label, tier, late) {
     [tier, SWITCH_FRAMES],
   );
   await wait(SWITCH_WATCH_S);
+  // A timeout is not an error here: the frame count below fails the step as not observed.
+  await page
+    .waitForFunction((n) => window.__drawProbe.frameMs.length >= n, SWITCH_FRAMES, { timeout: SWITCH_FRAMES_TIMEOUT_S * 1000 })
+    .catch(() => null);
   const now = await programs();
   const linked = now.filter((p) => !before.has(programId(p)));
   perTier.set(tier, now.length);
@@ -128,6 +137,7 @@ async function tierSwitch(label, tier, late) {
   for (const key of firstKeys) console.log(`  first drawn inside a frame: …${key.slice(-80).replace(/\s+/g, " ")}`);
   late.push(...linked);
   if (firstDraws > 0) late.push({ type: "first draw inside a frame", key: label });
+  if (frameMs.length < SWITCH_FRAMES) late.push({ type: `switch not observed (${frameMs.length} of ${SWITCH_FRAMES} frames timed)`, key: label });
 }
 
 /** Load `href` and wait for the boot warm-up; scene switches cut, not fade. */
