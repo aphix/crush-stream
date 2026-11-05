@@ -89,9 +89,9 @@ export function heldRearCrush(seconds: number): number {
 
 /**
  * `car` driven at `throttle` into a wall `wallZ` m ahead of its centre after `settle` s, met for `TOUCH_S` (its last contact) and read for `AFTER_S` more: the most (m) a rear hub's place in the
- * car frame moves forward, into the car, after that contact. The wall is no fixed solid (it never re-arms a wreck's hit), like the plates.
+ * car frame moves forward, into the car, after that contact. A `fixed` wall is the game's (it re-arms a wreck's hit); the other never does, like the plates.
  */
-function intoWall(car: DeformableCar, wallZ: number, throttle: number, settle: number): number {
+function intoWall(car: DeformableCar, wallZ: number, throttle: number, settle: number, fixed: boolean): number {
   const hubs = car.deform.masses.filter((m) => m.hub && m.rest.z < 0);
   const world = newWorld([car]);
   const wall = makeBox();
@@ -101,6 +101,7 @@ function intoWall(car: DeformableCar, wallZ: number, throttle: number, settle: n
   wall.hz = PLATE.hz;
   wall.z = wallZ + PLATE.hz;
   wall.yaw = Math.PI;
+  wall.fixed = fixed;
   const input = idleDrive();
   let t = 0;
   let touchedAt = -1;
@@ -129,10 +130,10 @@ function intoWall(car: DeformableCar, wallZ: number, throttle: number, settle: n
 
 /**
  * A car squeezed in the press, the plates opened, left to settle and then driven into a wall for `TOUCH_S` (its last contact): the most (m) a rear hub's
- * place in the car frame moves forward, into the car, in the `AFTER_S` after that contact.
+ * place in the car frame moves forward, into the car, in the `AFTER_S` after that contact. Default: the plates-like wall 3 m ahead at part throttle.
  */
-export function hubCreepAfterLastContact(): number {
-  return intoWall(pressed(HOLD_S).car!, WALL_Z, THROTTLE, SETTLE_S);
+export function hubCreepAfterLastContact(wall: { z: number; throttle: number; fixed: boolean } = { z: WALL_Z, throttle: THROTTLE, fixed: false }): number {
+  return intoWall(pressed(HOLD_S).car!, wall.z, wall.throttle, SETTLE_S, wall.fixed);
 }
 
 /** The wall hits' speeds (m/s), 65 to 79 km/h: hard enough that a squeezed wreck's dent, left to its own clamp, goes deeper than a fresh car's on the nose hit (gentler, the two read alike). */

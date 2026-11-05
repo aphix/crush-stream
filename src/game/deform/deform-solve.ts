@@ -33,6 +33,8 @@ const SUSPENSION_K = 11000;
 const SUSPENSION_C = 260;
 /** Most of a crushed node's travel (m) that springs back; the rest is permanent set. */
 const SPRINGBACK = 0.08;
+/** How far (m) a planted hub stands off its pin in a quiet wreck (2 cm measured): within it a hub is at its pin and `holdHubVelocity` leaves its speed alone. */
+const HUB_STAND_SLACK = 0.03;
 /** Share of a crush past the yield that springs back: real structure keeps 75-90 % of its peak crush (17 % back at 56 km/h, SAE 2006-01-0908). */
 const SPRING_SHARE = 0.1;
 
@@ -57,8 +59,8 @@ const _inverse = new THREE.Matrix4();
 const _toCar = new THREE.Matrix4();
 const _stand = new THREE.Vector3();
 const _n = new THREE.Vector3();
-/** `clampMass`'s per-call doubles: [0] ix, [1] iz, [2] maxAway, [3] maxCrush, [4] stroke (as arguments to the out-of-line call all five were boxed per mass). */
-const _clamp = new Float64Array(5);
+/** `clampMass`'s per-call doubles: [0] ix, [1] iz, [2] maxAway, [3] maxCrush, [4] stroke, [5..7] the body's centre (as arguments to the out-of-line call all five were boxed per mass). */
+const _clamp = new Float64Array(8);
 /** `sampleGround`'s query point, and the height and grip of its last `readGround` (no boxed doubles cross the call). */
 const _pq = new Float64Array(PQ_SIZE);
 const _read = new Float64Array(2);
@@ -128,7 +130,11 @@ export abstract class DeformSolve extends DeformFreeze {
     group.updateWorldMatrix(true, false);
     if (pinned) _toCar.copy(group.matrixWorld).invert();
     // The body's centre (a scratch valid until the next `bodyCentre` call: nothing in the loop calls it) for the capped masses of a hit that crushed (`stopAtCap`): a nudge under the re-arm EBS has no stroke that caps its crush.
-    const centre = this.quietTime() > CONTACT_HOLD && this.hitSpeed >= REARM_EBS ? this.bodyCentre() : undefined;
+    const body = this.bodyCentre();
+    _clamp[5] = body[0]!;
+    _clamp[6] = body[1]!;
+    _clamp[7] = body[2]!;
+    const centre = this.quietTime() > CONTACT_HOLD && this.hitSpeed >= REARM_EBS ? body : undefined;
     for (let i = 0; i < this.masses.length; i++) this.clampMass(i, group, sideHit, pinned, squeeze, deep, centre);
     this.settleHubStand(pinned);
     // A3: each mount caps its own side of the block, but the block is one casting; hold its rest
@@ -357,10 +363,12 @@ export abstract class DeformSolve extends DeformFreeze {
         const c4 = !sideHit && front === iz < 0 && this.hitSpeed >= HUB_POP_MPS && Math.abs(this.impactLocal.x) >= 0.2 && cw > 0.6 && crushed >= reach - this.rig.tyreReach;
         if (c4 || (front ? corner.rest.z - corner.local.z : corner.local.z - corner.rest.z) >= reach - HUB_OVERRUN) this.popHub(m);
       }
-      // Past a wheel's diameter off its seat it goes (the stock tyre's: the hub hardware's travel, whatever wheel a class bolts on): a face's
-      // shove, or in a deep crush (the cage yielding, its hubs carried with it) the hub's own travel.
-      if (!m.popped && (deep ? hypot2(dx, dz) : hypot2(m.shoveX, m.shoveZ)) > 2 * this.rig.tyre.r) this.popHub(m);
-      if (!m.popped && !deep) {
+      // Past a wheel's diameter off its seat it goes (the stock tyre's: the hub hardware's travel): a face's shove, or in a live deep crush (the cage yielding, its hubs carried with it) the hub's own travel.
+      // The sticky `deep` is the shape limits' only: read here, a hub of a car pressed once ran free of its shove in every later hit.
+      const yielding = this.deepCrush;
+      if (!m.popped && (yielding ? hypot2(dx, dz) : hypot2(m.shoveX, m.shoveZ)) > 2 * this.rig.tyre.r) this.popHub(m);
+      if (!m.popped && !yielding) {
+        this.holdHubVelocity(m, group, dx, dz, m.shoveX, m.shoveZ);
         dx = m.shoveX;
         dz = m.shoveZ;
       }
@@ -377,6 +385,8 @@ export abstract class DeformSolve extends DeformFreeze {
     }
     // Planted tires are the world pin. Projecting them through a pitched group was ratcheting the wreck backward every followGroup; a stretch past `HUB_PIN_MAX` is drawn back (`tetherHub`).
     if (m.hub && !m.popped && pinned) {
+      _stand.copy(m.world).applyMatrix4(_toCar);
+      this.holdHubVelocity(m, group, _stand.x - m.rest.x, _stand.z - m.rest.z, m.local.x - m.rest.x, m.local.z - m.rest.z);
       this.tetherHub(i, m, group);
       return;
     }
@@ -397,6 +407,22 @@ export abstract class DeformSolve extends DeformFreeze {
       }
     }
     m.world.copy(m.local).applyMatrix4(group.matrixWorld);
+  }
+
+  /** A hub the clamp holds at its pin (car-frame offsets from rest: it stood at `fromX/fromZ`, the pin is `toX/toZ`) loses its speed, relative to the rigid body, away from the pin: as at a crush cap (`stopAtCap`), nothing pushes it, and the planted hub's stand slack let that speed walk it 0.26 m into the car. */
+  private holdHubVelocity(m: MassNode, group: THREE.Object3D, fromX: number, fromZ: number, toX: number, toZ: number): void {
+    const gap = hypot2(toX - fromX, toZ - fromZ);
+    if (gap < HUB_STAND_SLACK) return;
+    _a.set((toX - fromX) / gap, 0, (toZ - fromZ) / gap).applyQuaternion(group.quaternion);
+    const rx = m.world.x - _clamp[5]!;
+    const ry = m.world.y - _clamp[6]!;
+    const rz = m.world.z - _clamp[7]!;
+    const vx = this.bodyV.x + this.bodyW.y * rz - this.bodyW.z * ry;
+    const vz = this.bodyV.z + this.bodyW.x * ry - this.bodyW.y * rx;
+    const away = -((m.vel.x - vx) * _a.x + (m.vel.z - vz) * _a.z);
+    if (away <= 0) return;
+    m.vel.x += _a.x * away;
+    m.vel.z += _a.z * away;
   }
 
   /** A mass the clamp holds at its crush cap once the contact has let go has nothing pushing it in: its speed into the cap, relative to the rigid body's there (`bodyV` + `bodyW` × r about the centre `c`), goes, or `moveRelative` drives it a few mm deeper every step and the clamp and the shape step fight it back (a sawtooth the wreck's nose ends a step on any phase of). */
