@@ -18,6 +18,8 @@ import {
   stiffnessIters,
   type ShapeParticle,
   type Mat3,
+  fitClusters,
+  shapeCluster,
 } from "./shape-match.ts";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import { makeCar, runWall, type CrashResult } from "../contact/crash-scenarios.test-util.ts";
@@ -100,16 +102,6 @@ function rotY(rad: number): Mat3 {
   return m;
 }
 
-/** A = R·S for a fit turned `turn` rad about the vertical and stretched 0.5 along x, 1.4 along z: a crushed cluster, not a rigid turn. */
-function strainedTurn(turn: number): Mat3 {
-  const S0 = m3Id();
-  S0[0] = 0.5;
-  S0[8] = 1.4;
-  const A = m3();
-  m3Mul(rotY(turn), S0, A);
-  return A;
-}
-
 function particlesAt(pts: [number, number, number][], mass = 1): ShapeParticle[] {
   return pts.map(([x, y, z]) => ({ x, y, z, vx: 0, vy: 0, vz: 0, mass }));
 }
@@ -147,10 +139,11 @@ describe("given a body's deformation (a 3×3 transform) split into a rotation an
     expect(m3Det(R), `det(R)=${m3Det(R)}`).toBeGreaterThan(0.5);
   });
 
-  it("when a crushed fit (stretched 0.5 along x, 1.4 along z) also turns 180°, then the rotation is clamped to under 1 rad and stays a true rotation, rather than applied as an inside-out mesh", () => {
+  it("when the deformation is a 180° yaw, then the rotation is clamped to under 1 rad and stays a true rotation, rather than applied as an inside-out mesh", () => {
+    const A = rotY(Math.PI);
     const R = m3();
     const S = m3();
-    m3Polar(strainedTurn(Math.PI), quatId(), R, S);
+    m3Polar(A, quatId(), R, S);
     expect(m3RotationAngle(R), `R still flipped ${m3RotationAngle(R)}`).toBeLessThan(1.0);
     expect(m3Det(R)).toBeGreaterThan(0.5);
   });
@@ -190,26 +183,16 @@ describe("given a body's deformation (a 3×3 transform) split into a rotation an
     for (let i = 0; i < 9; i++) expect(Math.abs(S[i]! - S0[i]!), `S[${i}]=${S[i]} vs ${S0[i]}`).toBeLessThan(1e-6);
   });
 
-  it("when a crushed fit also turns 1.2 rad, then the output rotation is clamped to between 0.8 and 0.9 rad about the same axis, while the estimate kept for the next frame holds the full 1.2 rad", () => {
+  it("when the deformation turns 1.2 rad, then the output rotation is clamped to between 0.8 and 0.9 rad about the same axis, while the estimate kept for the next frame holds the full 1.2 rad", () => {
     const q = quatId();
     const R = m3();
     const S = m3();
-    m3Polar(strainedTurn(1.2), q, R, S);
+    m3Polar(rotY(1.2), q, R, S);
     const ang = m3RotationAngle(R);
     expect(ang > 0.8 && ang < 0.9, `clamped angle ${ang}`).toBeTruthy();
     expect(R[2]! > 0 && Math.abs(R[1]!) < 1e-9 && Math.abs(R[5]!) < 1e-9, "clamp left the yaw axis or reversed it").toBeTruthy();
     const qAng = 2 * Math.acos(Math.min(1, Math.abs(q[3]!)));
     expect(Math.abs(qAng - 1.2), `warm start stored the clamped turn ${qAng}`).toBeLessThan(1e-6);
-  });
-
-  it("when the deformation is a pure turn of 1.2 or 2.6 rad (a body turned, not crushed), then the rotation keeps the whole turn and the stretch is the identity", () => {
-    for (const turn of [1.2, 2.6]) {
-      const R = m3();
-      const S = m3();
-      m3Polar(rotY(turn), quatId(), R, S);
-      expect(Math.abs(m3RotationAngle(R) - turn), `a ${turn} rad turn was applied as ${m3RotationAngle(R)} rad`).toBeLessThan(1e-3);
-      expect(m3FrobeniusI(S), `a ${turn} rad turn left a stretch of ${m3FrobeniusI(S)}`).toBeLessThan(1e-2);
-    }
   });
 
   it("when the deformation collapses to all zeros while the previous rotation was 0.5 rad, then the rotation and stretch stay finite and the rotation holds at 0.5 rad instead of snapping or going NaN", () => {
@@ -257,33 +240,6 @@ describe("given a cluster of particles pulled toward the best-fit pose of its re
     expect(err, `rigid match error ${err}`).toBeLessThan(0.05);
   });
 
-  it("when every particle is turned rigidly by 1.5 rad (past the 0.85 rad clamp of a crushed fit), then the goal positions land on the particles", () => {
-    const P = particlesAt([
-      [1, 0, 0],
-      [-1, 0, 0],
-      [0, 1, 0],
-      [0, 0, 1],
-    ]);
-    const c = makeCluster(P, [0, 1, 2, 3]);
-    rebuildAqqWeighted(c, P);
-    const [cs, sn] = [Math.cos(1.5), Math.sin(1.5)];
-    for (const p of P) {
-      const x = p.x * cs + p.z * sn;
-      p.z = -p.x * sn + p.z * cs;
-      p.x = x;
-    }
-    matchCluster(c, P, 0.5);
-    let err = 0;
-    for (let i = 0; i < 4; i++) {
-      const gx = c.M[0]! * c.qx[i]! + c.M[1]! * c.qy[i]! + c.M[2]! * c.qz[i]! + c.cmx;
-      const gy = c.M[3]! * c.qx[i]! + c.M[4]! * c.qy[i]! + c.M[5]! * c.qz[i]! + c.cmy;
-      const gz = c.M[6]! * c.qx[i]! + c.M[7]! * c.qy[i]! + c.M[8]! * c.qz[i]! + c.cmz;
-      err += Math.hypot(gx - P[i]!.x, gy - P[i]!.y, gz - P[i]!.z);
-    }
-    // The Aqq regularisation (AQQ_EPS) shrinks the fit's stretch a hair: 1.9 mm over four particles with the clamp and without it.
-    expect(err, `a body turned 1.5 rad has its goals ${err} m from where it stands`).toBeLessThan(5e-3);
-  });
-
   it("when the particles are squashed to 0.4 in z, then the matched stretch along z is below 0.7", () => {
     const rest: [number, number, number][] = [
       [1, 0, 1],
@@ -304,6 +260,89 @@ describe("given a cluster of particles pulled toward the best-fit pose of its re
     expect(deformBeta(0.2)).toBeLessThan(deformBeta(0.9));
     expect(goalAlpha(0.2)).toBeGreaterThan(goalAlpha(0.9));
     expect(stiffnessIters(0.2)).toBeGreaterThanOrEqual(stiffnessIters(0.9));
+  });
+});
+
+const TURNED_REST: [number, number, number][] = [
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 1],
+];
+
+/** A cluster of the rest shape whose last rotation is the cloud's `bodyTurn` rad about the vertical: its fit, clamped about that turn, when its particles stand turned `bodyTurn + stray` rad and stretched `stretch` along z, after `fits` rounds. */
+function fitAboutBody(bodyTurn: number, stray: number, stretch: number, fits: number): Mat3 {
+  const P = particlesAt(TURNED_REST);
+  const c = makeCluster(P, [0, 1, 2, 3]);
+  const body = rotY(bodyTurn);
+  c.Rprev.set(body);
+  const turn = rotY(bodyTurn + stray);
+  for (const p of P) {
+    const z = p.z * (1 + stretch);
+    const x = turn[0]! * p.x + turn[2]! * z;
+    p.z = turn[6]! * p.x + turn[8]! * z;
+    p.x = x;
+  }
+  for (let i = 0; i < fits; i++) matchCluster(c, P, 0, body);
+  return c.R;
+}
+
+describe("given a cluster fitted in a cloud that is turned 1.2 rad about the vertical", () => {
+  it("when the cluster turns with the cloud and is stretched 0, 0.1, 0.2, 0.3 or 0.5 along z, then its rotation keeps the cloud's whole 1.2 rad turn at every stretch, with no step where a stretch passes a limit", () => {
+    for (const stretch of [0, 0.1, 0.2, 0.3, 0.5]) {
+      const angle = m3RotationAngle(fitAboutBody(1.2, 0, stretch, 1));
+      expect(Math.abs(angle - 1.2), `stretched ${stretch}: the fit turned ${angle} rad, not 1.2`).toBeLessThan(0.02);
+    }
+  });
+
+  it("when the cluster strays 0.9 rad from the cloud's turn, stretched 0 or 0.5, then its rotation settles between 0.8 and 0.9 rad of the cloud's, not of the world's axes", () => {
+    for (const stretch of [0, 0.5]) {
+      const angle = m3RotationAngle(fitAboutBody(1.2, 0.9, stretch, 20));
+      expect(angle > 1.2 + 0.8 && angle < 1.2 + 0.9, `stretched ${stretch}: the fit turned ${angle} rad, not 2.0 to 2.1`).toBeTruthy();
+    }
+  });
+
+  it("when its clusters' particles are turned 0.1 rad a step to 1.5 rad past the 0.85 rad clamp, six rounds a step, then every goal lands on its particle", () => {
+    const cube: [number, number, number][] = [
+      [1, 1, 1],
+      [-1, 1, 1],
+      [-1, -1, 1],
+      [1, -1, 1],
+      [1, 1, -1],
+      [-1, 1, -1],
+      [-1, -1, -1],
+      [1, -1, -1],
+    ];
+    const P = particlesAt(cube);
+    const clusters = [
+      makeCluster(P, [0, 2, 5, 7]),
+      makeCluster(P, [1, 3, 4, 6]),
+      makeCluster(P, [0, 1, 2, 3, 4, 5, 6, 7]),
+    ];
+    const turn = m3Id();
+    const step = rotY(0.1);
+    for (let s = 0; s < 15; s++) {
+      for (const p of P) {
+        const x = step[0]! * p.x + step[2]! * p.z;
+        p.z = step[6]! * p.x + step[8]! * p.z;
+        p.x = x;
+      }
+      for (let round = 0; round < 6; round++) {
+        fitClusters(clusters, P, turn);
+        for (const [ci, c] of clusters.entries()) shapeCluster(c, ci, 0.5, turn);
+      }
+    }
+    let err = 0;
+    for (const c of clusters) {
+      for (let i = 0; i < c.idx.length; i++) {
+        const gx = c.M[0]! * c.qx[i]! + c.M[1]! * c.qy[i]! + c.M[2]! * c.qz[i]! + c.cmx;
+        const gy = c.M[3]! * c.qx[i]! + c.M[4]! * c.qy[i]! + c.M[5]! * c.qz[i]! + c.cmy;
+        const gz = c.M[6]! * c.qx[i]! + c.M[7]! * c.qy[i]! + c.M[8]! * c.qz[i]! + c.cmz;
+        const p = P[c.idx[i]!]!;
+        err += Math.hypot(gx - p.x, gy - p.y, gz - p.z);
+      }
+    }
+    expect(err, `a cloud turned to 1.5 rad has its goals ${err} m from where its particles stand`).toBeLessThan(0.05);
   });
 });
 

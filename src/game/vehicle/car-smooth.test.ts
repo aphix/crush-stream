@@ -1693,7 +1693,8 @@ const SIM_DIGEST_BY_STYLE = [
   // Again for the grip that holds a rolling wreck's yaw through its tread's push (`solveRows`): the monster's masses after the wall hit moved; the other six unchanged.
   // Again when a wreck's own faces never yield (`CarSurfaces.slot`): vaulting over the slab, the monster wreck's nose yielded 0.1 mm once and booked that
   // crush, its push off the slab cut to what the nose carries; now the nose holds and its masses after the hit differ (d43fea4a... -> 350367f4...); the other six unchanged.
-  { id: "monster", digest: "71f30dab6ac1858cf9128804b0a49ae3275d71de25921b497ee88e18a5969df6" },
+  // Again when a cluster's turn is clamped about the cloud's own turn, not the world's axes (REPLAY 218): the monster's masses after the wall hit moved; the other six unchanged (71f30dab... -> 9727579f...).
+  { id: "monster", digest: "9727579ff2257585090e3b3076786a0dd6fee49285d13c214b9088e7fb8ae077" },
   // Every style re-pinned with its bumpers in the cage (`CageSource.apart`), each a window of its own (`CageFields.part`): the cage's nose and tail meet the drawn bumper faces.
   // Again for each bumper's bottom corner held in its decimation (`bumperCorner`) and `frame.hullUnder`'s bumper rows standing on it: sedan 32ce12d9 -> 18748cc4, hatchback 05034364 -> 3a8ae274, wagon 14004d19 -> 8c803d8e, coupe a8bbcc35 -> 2f4d595f, pickup 87ed8880 -> 6506a0dd, police 30a73a14 -> b9cb6cec, monster 1417aa98 -> 0227b53d.
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];

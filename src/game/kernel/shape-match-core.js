@@ -250,12 +250,10 @@ function extractRotation(A, flip, q) {
   q[3] = w;
 }
 
-/** Largest rotation (rad) one strained cluster fit may apply. */
+/** Largest rotation (rad) one cluster fit may apply against the cloud's own turn. */
 const ROT_CLAMP = 0.85;
 /** cos(ROT_CLAMP) as the correctly rounded double (detCos(0.85) and every engine's Math.cos agree on it). */
 const COS_ROT_CLAMP = 0.6599831458849822;
-/** |S − I| under which a fit is a body turned, not crushed, and keeps its whole turn: past the plastic yield's largest 0.155, so a cluster that is yielding stays clamped. */
-const TURNED_STRAIN = 0.25;
 /** S = sym(RᵀA) into `S`; returns |S − I|², the squared Frobenius distance from the identity. */
 function stretchInto(A, R, S) {
   const a0 = A[0], a1 = A[1], a2 = A[2], a3 = A[3], a4 = A[4], a5 = A[5], a6 = A[6], a7 = A[7], a8 = A[8];
@@ -275,12 +273,48 @@ function stretchInto(A, R, S) {
   const d0 = s0 - 1, d4 = s4 - 1, d8 = s8 - 1;
   return d0 * d0 + d4 * d4 + d8 * d8 + 2 * (s01 * s01 + s02 * s02 + s12 * s12);
 }
+const IDENTITY = m3Id();
+const _bodyMean = m3();
+const _bodyQ = quatId();
+const _bodyRot = m3();
 /**
- * A = R·S with R a proper rotation and S = sym(R^T A) (identity past |S − I| 1.8). R's angle is clamped to 0.85 rad only
- * when the fit is strained (|S − I| past TURNED_STRAIN): a cluster turned as a body keeps its whole turn, so its goals are
- * its particles and exert no torque. q is the caller's warm start and receives the unclamped rotation. det A < 0 keeps the
- * polar factor with its third column flipped (the cluster's own z), as the Newton polar + Gram–Schmidt it
- * replaces did, rather than the Frobenius-optimal half-turn about another axis.
+ * The cloud's own turn into `turn`: the polar factor of the mean of its clusters' unclamped rotations (`rotQ`; a held or non-finite
+ * cluster has none). The shape frame turns only the heading out of the world, so a wreck lying on its side or rolling onto its roof
+ * gives every cluster a turn past `ROT_CLAMP` against the world's axes: the clamp is measured about this turn instead. Each extraction
+ * starts from the identity, so the turn is a function of the clusters alone and cars stepped in any order read the same.
+ */
+function bodyTurn(clusters, turn) {
+  _bodyMean.fill(0);
+  let n = 0;
+  for (let ci = 0; ci < clusters.length; ci++) {
+    const c = clusters[ci];
+    if (HELD[ci] === 1 || !m3Finite(c.A)) continue;
+    quatToMat(c.rotQ, _bodyRot);
+    for (let i = 0; i < 9; i++) _bodyMean[i] += _bodyRot[i];
+    n++;
+  }
+  if (n === 0) {
+    m3Id(turn);
+    return;
+  }
+  quatId(_bodyQ);
+  extractRotation(_bodyMean, m3Det(_bodyMean) < 0 ? -1 : 1, _bodyQ);
+  quatToMat(_bodyQ, turn);
+}
+/**
+ * R = the rotation `q` (the fit's unclamped one) with its angle against `turn` clamped to 0.85 rad, S = sym(R^T A) (identity past
+ * |S − I| 1.8): a cluster turned as the cloud is turned keeps its whole turn (its goals are its particles and exert no torque), one
+ * that strays from the cloud's turn is held to 0.85 rad of it, however strained it is.
+ */
+function settleRotation(A, q, R, S, turn) {
+  quatToMat(q, R);
+  clampAbout(R, turn, ROT_CLAMP, COS_ROT_CLAMP);
+  if (!(stretchInto(A, R, S) <= 1.8 * 1.8)) m3Id(S);
+}
+/**
+ * A = R·S with R a proper rotation (|angle| clamped to 0.85 rad) and S = sym(R^T A) (identity past |S − I| 1.8). q is the caller's
+ * warm start and receives the unclamped rotation. det A < 0 keeps the polar factor with its third column flipped (the cluster's own
+ * z), as the Newton polar + Gram–Schmidt it replaces did, rather than the Frobenius-optimal half-turn about another axis.
  */
 function m3Polar(A, q, R, S) {
   if (!m3Finite(A)) {
@@ -289,10 +323,7 @@ function m3Polar(A, q, R, S) {
     return;
   }
   extractRotation(A, m3Det(A) < 0 ? -1 : 1, q);
-  quatToMat(q, R);
-  let strainSq = stretchInto(A, R, S);
-  if (strainSq > TURNED_STRAIN * TURNED_STRAIN && clampRotation(R, ROT_CLAMP, COS_ROT_CLAMP)) strainSq = stretchInto(A, R, S);
-  if (!(strainSq <= 1.8 * 1.8)) m3Id(S);
+  settleRotation(A, q, R, S, IDENTITY);
 }
 function m3Orthonormalize(R) {
   let x0 = R[0], y0 = R[3], z0 = R[6];
@@ -339,6 +370,16 @@ function clampRotation(R, maxRad, cosMax) {
   m3Orthonormalize(R);
   return true;
 }
+const _rel = m3();
+/** Clamps R's angle against the rotation `T` to `maxRad` (R untouched when it is already within it): R = T·clamp(TᵀR). */
+function clampAbout(R, T, maxRad, cosMax) {
+  const trace = T[0] * R[0] + T[1] * R[1] + T[2] * R[2] + T[3] * R[3] + T[4] * R[4] + T[5] * R[5] + T[6] * R[6] + T[7] * R[7] + T[8] * R[8];
+  if (!((trace - 1) * 0.5 < cosMax)) return;
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) _rel[i * 3 + j] = T[i] * R[j] + T[3 + i] * R[3 + j] + T[6 + i] * R[6 + j];
+  }
+  if (clampRotation(_rel, maxRad, cosMax)) m3Mul(T, _rel, R);
+}
 function stabilizeMat(R, Rprev) {
   const d0 = Rprev[0] - 1, d4 = Rprev[4] - 1, d8 = Rprev[8] - 1;
   const idle = d0 * d0 + Rprev[1] * Rprev[1] + Rprev[2] * Rprev[2] + Rprev[3] * Rprev[3] + d4 * d4 + Rprev[5] * Rprev[5] + Rprev[6] * Rprev[6] + Rprev[7] * Rprev[7] + d8 * d8;
@@ -346,19 +387,7 @@ function stabilizeMat(R, Rprev) {
     m3Copy(R, Rprev);
     return;
   }
-  let dot = R[0] * Rprev[0] + R[1] * Rprev[1] + R[2] * Rprev[2] + R[3] * Rprev[3] + R[4] * Rprev[4] + R[5] * Rprev[5] + R[6] * Rprev[6] + R[7] * Rprev[7] + R[8] * Rprev[8];
-  if (dot < 0) {
-    R[0] = -R[0];
-    R[1] = -R[1];
-    R[2] = -R[2];
-    R[3] = -R[3];
-    R[4] = -R[4];
-    R[5] = -R[5];
-    R[6] = -R[6];
-    R[7] = -R[7];
-    R[8] = -R[8];
-    dot = -dot;
-  }
+  const dot = R[0] * Rprev[0] + R[1] * Rprev[1] + R[2] * Rprev[2] + R[3] * Rprev[3] + R[4] * Rprev[4] + R[5] * Rprev[5] + R[6] * Rprev[6] + R[7] * Rprev[7] + R[8] * Rprev[8];
   const t = dot < 0.35 ? 0.08 : dot < 0.7 ? 0.22 : 0.55;
   const keep = 1 - t;
   R[0] = Rprev[0] * keep + R[0] * t;
@@ -576,7 +605,10 @@ function blendStretchInto(R, S, beta, lim, out) {
   out[8] = r6 * t2 + r7 * t5 + r8 * t8;
   if (!m3Bounded(out, lim)) m3Id(out);
 }
-function matchCluster(c, particles, beta) {
+/** Cluster `ci` of the round `fitClusters` ran folded (a flat cluster that holds its last rotation) or not finite: 1, else 0. */
+let HELD = new Uint8Array(32);
+/** `c`'s moments, fit `c.A` and its unclamped rotation `c.rotQ`; false when a flat cluster has folded over (no proper rotation fits a mirrored slab) and holds its last rotation. */
+function fitOne(c, particles) {
   const idx = c.idx, qx = c.qx, qy = c.qy, qz = c.qz;
   let msum = 0, sx = 0, sy = 0, sz = 0, ux = 0, uy = 0, uz = 0;
   let p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0, p6 = 0, p7 = 0, p8 = 0;
@@ -609,14 +641,37 @@ function matchCluster(c, particles, beta) {
   c.cmz = cmz;
   // Σ m (x − cm) q^T = Σ m x q^T − cm (Σ m q)^T
   fitInto(p0 - cmx * ux, p1 - cmx * uy, p2 - cmx * uz, p3 - cmy * ux, p4 - cmy * uy, p5 - cmy * uz, p6 - cmz * ux, p7 - cmz * uy, p8 - cmz * uz, c.AqqInv, c.A);
-  if (c.planar && !completePlanarInto(c.A, c.n, c.Rprev)) {
+  if (c.planar && !completePlanarInto(c.A, c.n, c.Rprev)) return false;
+  if (m3Finite(c.A)) extractRotation(c.A, m3Det(c.A) < 0 ? -1 : 1, c.rotQ);
+  return true;
+}
+/** `c`'s rotation clamped about `turn`, its stretch, the stabilised rotation and the goals' transform `c.M`, from the fit `fitOne` made (`fitted`: it did not fold). */
+function finishOne(c, beta, turn, fitted) {
+  if (!fitted) {
     m3Copy(c.Rprev, c.R);
     m3Id(c.S);
+  } else if (!m3Finite(c.A)) {
+    m3Id(c.R);
+    m3Id(c.S);
   } else {
-    m3Polar(c.A, c.rotQ, c.R, c.S);
+    settleRotation(c.A, c.rotQ, c.R, c.S, turn);
   }
   stabilizeMat(c.R, c.Rprev);
   blendStretchInto(c.R, c.S, beta, 8, c.M);
+}
+/** One cluster's fit, with its rotation clamped about `turn` (the world's axes when omitted). */
+function matchCluster(c, particles, beta, turn = IDENTITY) {
+  finishOne(c, beta, turn, fitOne(c, particles));
+}
+/** Round one of a solver iteration: every cluster's fit, and `turn` (9 doubles) from them, as `bodyTurn` reads them. `shapeCluster` finishes each. */
+function fitClusters(clusters, particles, turn) {
+  if (HELD.length < clusters.length) HELD = new Uint8Array(clusters.length);
+  for (let ci = 0; ci < clusters.length; ci++) HELD[ci] = fitOne(clusters[ci], particles) ? 0 : 1;
+  bodyTurn(clusters, turn);
+}
+/** Round two: cluster `ci` of `clusters` finished against the round's `turn`. */
+function shapeCluster(c, ci, beta, turn) {
+  finishOne(c, beta, turn, HELD[ci] === 0);
 }
 /** Slice rate the creep was tuned at (its old floor was `CREEP_OLD_FLOOR_SLICES` of these slices). */
 const CREEP_REF_HZ = 240;
@@ -840,12 +895,14 @@ export {
   m3Id,
   m3Mul,
   m3Polar,
+  fitClusters,
   makeCluster,
   matchCluster,
   matchSkinLocal,
   quatId,
   rebuildAqqWeighted,
   resetCluster,
+  shapeCluster,
   shiftRest,
   stiffnessIters,
 };

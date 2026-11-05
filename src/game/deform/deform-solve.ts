@@ -6,7 +6,8 @@ import {
   hypot3,
 } from "./physics-util.ts";
 import {
-  matchCluster,
+  fitClusters,
+  shapeCluster,
   PLASTIC,
   REST_SHIFT,
   applyPlasticity,
@@ -82,6 +83,8 @@ function maxLift(m: MassNode, deep: boolean, sunk: number): number {
 }
 
 export abstract class DeformSolve extends DeformFreeze {
+  /** The cloud's own turn this iteration (`fitClusters`): the rotation each cluster's fit is clamped about. */
+  private readonly cloudTurn = new Float64Array(9);
 
   protected clampLocal(group: THREE.Object3D): void {
     const ix = this.impactInward.x;
@@ -530,9 +533,11 @@ export abstract class DeformSolve extends DeformFreeze {
       this.goalY.fill(0);
       this.goalZ.fill(0);
       this.goalW.fill(0);
+      // The clamp on a cluster's turn is about the cloud's own turn, not the world's axes: a wreck on its side or roof turns every cluster past it.
+      fitClusters(this.clusters, this.shapeParticles, this.cloudTurn);
       for (let ci = 0; ci < this.clusters.length; ci++) {
         const c = this.clusters[ci]!;
-        matchCluster(c, this.shapeParticles, this.clusterBeta(ci, contacting));
+        shapeCluster(c, ci, this.clusterBeta(ci, contacting), this.cloudTurn);
         const cw = 1;
         for (let i = 0; i < c.idx.length; i++) {
           const pi = c.idx[i]!;

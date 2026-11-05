@@ -151,6 +151,9 @@ function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, hei
   car.group.rotation.set(pitch, yaw, roll, "YXZ");
   car.group.updateMatrixWorld(true);
   car.group.position.y += height - new THREE.Box3().setFromObject(car.group).min.y;
+  // The masses go where the frame was put (as `relaunchDamaged` places a damaged car): left upright at the origin, the first clamp snapped the whole cloud into the turned frame at its caps, a 10 cm offset the wreck then rested on.
+  car.group.updateMatrixWorld(true);
+  if (car.deform.massActive) for (const m of car.deform.masses) m.world.copy(m.local).applyMatrix4(car.group.matrixWorld);
   car.airborne = true;
   car.parked = true;
   const world = makeWorld([car], false, false);

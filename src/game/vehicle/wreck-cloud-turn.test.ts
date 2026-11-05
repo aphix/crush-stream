@@ -9,14 +9,14 @@ import type { DeformableCar } from "./car.ts";
 
 /**
  * A wreck's masses stand where its rigid frame puts them: the shape goals reshape the cloud, they do not turn it against the frame. A
- * wreck dropped on its flank or its roof turns every cluster past the 0.85 rad the fit used to clamp to, so the goals of a body that was
- * only turned pulled its cloud back toward upright (measured on the drops below: the cloud 16.5 degrees off its frame, 0.09-0.13 rad in one
- * tick, the clamp snapping it back).
+ * wreck dropped on its flank or its roof turns every cluster past the 0.85 rad the fit clamps to about the world's axes, so the goals of
+ * a body that was only turned pulled its cloud back toward upright (measured on the drops below with the clamp about the world's axes:
+ * the cloud 13-16.5 degrees off its frame, 0.075-0.127 rad in one tick). The clamp is now about the cloud's own turn.
  */
 const DROP_SECONDS = 4;
-/** The largest turn (rad) of the masses' cloud against the frame between two ticks of a settling wreck: 0.035 measured, 0.092-0.131 with the clamp on a turned fit. */
+/** The largest turn (rad) of the masses' cloud against the frame between two ticks of a settling wreck: 0.004 measured, 0.075-0.127 with the clamp about the world's axes. */
 const TICK_TURN_MAX = 0.05;
-/** The largest turn (degrees) of the cloud against the frame: 3.1 measured, 13.2-16.6 with the clamp on a turned fit. */
+/** The largest turn (degrees) of the cloud against the frame: 1.5 measured (the roof landing), 13.0-16.5 with the clamp about the world's axes. */
 const CLOUD_TURN_MAX_DEG = 5;
 /** Attitudes (roll about the car's length, radians) a car is dropped in. */
 const ATTITUDE = { roof: Math.PI, left: Math.PI / 2 } as const;
@@ -61,7 +61,7 @@ function cloudTurnAgainstFrame(car: DeformableCar): number {
 
 describe("given a car struck at the nose, dropped onto its flank or its roof and left to lie for 4 s", () => {
   for (const { style, cls, attitude, height } of DROPS) {
-    it(`when a ${cls} lies on its ${attitude} from ${height} m, then its masses' cloud never turns more than ${CLOUD_TURN_MAX_DEG} degrees against its frame, nor ${TICK_TURN_MAX} rad between two ticks`, () => {
+    it(`when a ${cls} lies on its ${attitude} from ${height} m, then its masses' cloud never turns more than ${CLOUD_TURN_MAX_DEG} degrees against its frame, nor ${TICK_TURN_MAX} rad between two ticks`, (t) => {
       const car = buildCar(style, cls);
       car.spawnFacing(0, 0, 0, 0);
       car.updateSkin();
@@ -69,6 +69,8 @@ describe("given a car struck at the nose, dropped onto its flank or its roof and
       car.group.rotation.set(0, 0, ATTITUDE[attitude], "YXZ");
       car.group.updateMatrixWorld(true);
       car.group.position.y += height - new THREE.Box3().setFromObject(car.group).min.y;
+      car.group.updateMatrixWorld(true);
+      for (const m of car.deform.masses) m.world.copy(m.local).applyMatrix4(car.group.matrixWorld);
       car.airborne = true;
       car.parked = true;
       const world = makeWorld([car], false, false);
@@ -83,6 +85,7 @@ describe("given a car struck at the nose, dropped onto its flank or its roof and
         before = turn;
       }
       const deg = (turnMax * 180) / Math.PI;
+      t.annotate(`${cls} on its ${attitude} from ${height} m: cloud turn ${deg.toFixed(1)} degrees, ${tickMax.toFixed(3)} rad in one tick`);
       expect(deg, `${cls} on its ${attitude}: the cloud turned ${deg.toFixed(1)} degrees against its frame`).toBeLessThan(CLOUD_TURN_MAX_DEG);
       expect(tickMax, `${cls} on its ${attitude}: the cloud turned ${tickMax.toFixed(3)} rad against its frame in one tick`).toBeLessThan(TICK_TURN_MAX);
     });

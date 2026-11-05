@@ -61,6 +61,8 @@ export {
   m3FrobeniusI,
   makeCluster,
   matchCluster,
+  fitClusters,
+  shapeCluster,
   PLASTIC,
   REST_SHIFT,
   applyPlasticity,
