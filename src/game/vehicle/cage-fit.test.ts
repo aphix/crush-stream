@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { cageOf } from "./car-cage-rig.ts";
+import { cageLift, cageOf } from "./car-cage-rig.ts";
 import type { CarCage } from "./car-cage.ts";
-import { buildCar } from "./drawn-body.test-util.ts";
-import { CAR_STYLE_IDS } from "./car-variants.ts";
+import type { DeformableCar } from "./car.ts";
+import { buildCar, cellI, cellJ, cellX, cellZ, drawnField, NX } from "./drawn-body.test-util.ts";
+import { CAR_STYLE_IDS, CAR_STYLES } from "./car-variants.ts";
 import { STYLE_CLASS } from "./vehicle-classes.ts";
 
 /**
  * The cage the cars rest on and strike is the drawn body (docs/UNIFIED_CONTACT.md stage 3), and the body is mirror-symmetric: at rest its
- * cage reads the same at x and -x.
+ * cage reads the same at x and -x, and its top over the fender crest stands at the drawn one.
  */
 
 /** How far (m) a style's cage may read off its own mirror at rest. */
@@ -68,5 +69,54 @@ describe("given every body style's cage at rest", () => {
       expect(bottom.gap, `bottom: ${bottom.at}`).toBeLessThanOrEqual(MIRROR_M);
       car.dispose();
     });
+  }
+});
+
+/** A band of the fender's plan (car frame, m; |x| from x0 to x1, z from z0 to z1). */
+type Band = { x0: number; x1: number; z0: number; z1: number };
+/** The fender crest beside the hood, ahead of the cowl, inside the tyre's track; and the strip outboard of it that a tread over the hood meets. A band's bounds: the most (m) the cage may stand over and under the drawn top, and how many drawn cells may have no cage height. */
+const FENDER_BANDS = [
+  { name: "fender crest", band: { x0: 0.6, x1: 0.7, z0: 1.2, z1: 1.7 }, over: 0.016, under: 0.02, holes: 0 },
+  { name: "fender strip a tread meets outboard of the crest", band: { x0: 0.7, x1: 0.75, z0: 1.45, z1: 1.75 }, over: 0.012, under: 0.018, holes: 2 },
+] as const;
+
+/** The most (over) and least (under) of the cage's top over the drawn top (m) in the cells of `band` both have a height at, and the drawn cells the cage has none for. */
+function bandGap(car: DeformableCar, cage: CarCage, drawn: Float32Array, band: Band): { over: number; under: number; holes: number } {
+  const lift = cageLift(car);
+  let [over, under, holes] = [-Infinity, Infinity, 0];
+  for (let j = cellJ(band.z0); j <= cellJ(band.z1); j++) {
+    for (let i = cellI(-band.x1); i <= cellI(band.x1); i++) {
+      const ax = Math.abs(cellX(i));
+      if (ax < band.x0 || ax > band.x1) continue;
+      const y = drawn[j * NX + i]!;
+      const h = fieldAt(cage, cage.fields.top, cellX(i), cellZ(j));
+      if (!Number.isFinite(y)) continue;
+      if (!Number.isFinite(h)) {
+        holes++;
+        continue;
+      }
+      over = Math.max(over, h + lift - y);
+      under = Math.min(under, h + lift - y);
+    }
+  }
+  return { over, under, holes };
+}
+
+describe("given a body style whose drawn hood is inset at its fenders, at rest", () => {
+  for (const id of CAR_STYLE_IDS.filter((s) => CAR_STYLES[s].hood.inset !== undefined)) {
+    for (const { name, band, over: overBound, under: underBound, holes: holesBound } of FENDER_BANDS) {
+      it(`when the ${id}'s cage top is read over its ${name}, then it stands at most ${overBound * 100} cm over the drawn top and ${underBound * 100} cm under, with at most ${holesBound} drawn cells without cage`, (t) => {
+        const car = buildCar(id, STYLE_CLASS[id]);
+        car.spawnFacing(0, 0, 0, 0);
+        const cage = cageOf(car);
+        const { over, under, holes } = bandGap(car, cage, drawnField(car).top, band);
+        expect(Number.isFinite(over) && Number.isFinite(under), "the band has cells both have a height at").toBe(true);
+        t.annotate(`${name}: over ${(over * 1000).toFixed(1)} mm, under ${(under * 1000).toFixed(1)} mm, ${holes} cells without cage`);
+        expect(over, `cage over the drawn ${name}`).toBeLessThanOrEqual(overBound);
+        expect(under, `cage under the drawn ${name}`).toBeGreaterThanOrEqual(-underBound);
+        expect(holes, `drawn ${name} cells without cage`).toBeLessThanOrEqual(holesBound);
+        car.dispose();
+      });
+    }
   }
 });

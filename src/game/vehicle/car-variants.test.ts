@@ -2554,6 +2554,30 @@ describe("given a body style's hood, boot, roof and bumper fittings", () => {
     expect(cageHash(straight), "the cage builds are unchanged").toBe(cageHash(plain));
   });
 
+  it("when a crowned hood is built as the cage's, then its edge stands on the deck edge (4 mm over the belt) at the plain lid's width, its crown the drawn dome's rise over the plain edge, and the drawn hood's inset changes none of it", () => {
+    const plain: BodyStyle = { ...sedan, hood: { ...sedan.hood, inset: undefined } };
+    const { z0 } = sedan.hood;
+    const [oy, oz] = sedan.hood.origin;
+    const station = sampleSlice(z0, sedan.profile);
+    const rim = (style: BodyStyle): { edge: number; crown: number; widest: number } => {
+      const pos = makeHoodGeometry(style, "cage").getAttribute("position");
+      const out = { edge: -Infinity, crown: -Infinity, widest: 0 };
+      const at = (i: number): boolean => Math.abs(pos.getZ(i) + oz - z0) < POSITION_TOL;
+      for (let i = 0; i < pos.count; i++) if (at(i)) out.widest = Math.max(out.widest, Math.abs(pos.getX(i)));
+      for (let i = 0; i < pos.count; i++) {
+        if (!at(i)) continue;
+        const [x, y] = [Math.abs(pos.getX(i)), pos.getY(i) + oy];
+        if (x > out.widest - POSITION_TOL) out.edge = Math.max(out.edge, y);
+        if (x < POSITION_TOL) out.crown = Math.max(out.crown, y);
+      }
+      return out;
+    };
+    const [drop, at] = sedan.hood.crown!;
+    const w = station.hw - 0.075;
+    assertSameNumbers([rim(sedan).edge, rim(sedan).widest, rim(sedan).crown], [station.yBelt + 0.004, w, station.yBelt + 0.016 + drop * (w / at) ** 2], "the cage hood's edge height, width and crown at z0", 1e-5);
+    assertSameNumbers([rim(plain).edge, rim(plain).widest, rim(plain).crown], [rim(sedan).edge, rim(sedan).widest, rim(sedan).crown], "the same with no inset", 1e-9);
+  });
+
   it("when a hood bulge is rolled, then its flanks roll up from the lid in steps outside its crest, the crest stays inside the roll, and the cage builds are unchanged", () => {
     const bulge = { z0: 0.9, z1: 1.8, width: 0.6, rise: 0.04, round: 0.1 } as const;
     const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge } };

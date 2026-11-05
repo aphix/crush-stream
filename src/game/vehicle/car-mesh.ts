@@ -800,8 +800,9 @@ function lidSection(z: number, style: BodyStyle, seated: boolean, crowned: BodyS
   const crown = sl.yBelt + LID_RISE + DECK_DOME;
   if (!seated) {
     const [w, edge] = [sl.hw - DECK_INSET, sl.yBelt + LID_RISE];
-    // The cage's crowned hood (`hood.cageCrown`): the drawn dome's rise over the plain edge, the plain lid's dome points kept.
-    return { w, edge, crown: crowned === undefined ? crown : edge + crowned[0] * (w / crowned[1]) ** 2, dome: DECK_DOME_POINTS };
+    // The cage's crowned hood (`hood.cageCrown`): the drawn dome's rise over the plain edge, the plain lid's width and dome points kept, its edge resting on the cage's deck edge (the hull's rim) as the drawn hood rests on the fender, not 1.2 cm over it.
+    if (crowned === undefined) return { w, edge, crown, dome: DECK_DOME_POINTS };
+    return { w, edge: deckEdgeY(sl.yBelt, 0), crown: edge + crowned[0] * (w / crowned[1]) ** 2, dome: DECK_DOME_POINTS };
   }
   const w = Math.min(sl.hw - HOOD_INSET, halfWidth);
   // A rigid lid: its edge keeps the fender's height where a cabin tub's blend runs under its rear end (the coupe's and monster's), never bending into it.
@@ -1167,6 +1168,8 @@ const SHUT_RECESS = 0.003;
 export const SHUT_RAMP = 0.02;
 /** The section ring's left 30° shoulder point (after the deck crown, the deck edge and the 60° point); the right one mirrors it. */
 const SHUT_POINT = 1 + SHOULDER_RING.length;
+/** The section ring's indices of the shoulder arc's points, after the deck crown and the deck edge; the right side's are mirrored (`ring - 1 - i`). */
+export const SHOULDER_POINTS = SHOULDER_RING.map((_, k) => 2 + k);
 
 /** Steps the drawn body ring's shut-line points (`wrapShoulder`'s `shut`) in under a clamshell lid at `z`. */
 export function recessShutLine(ring: Pt[], z: number, style: BodyStyle): void {

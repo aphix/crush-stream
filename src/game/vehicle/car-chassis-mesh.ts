@@ -26,6 +26,7 @@ import {
   recessShutLine,
   sampleSlice,
   sectionPoints,
+  SHOULDER_POINTS,
   SHUT_RAMP,
   type BodySource,
   type Pt,
@@ -231,6 +232,19 @@ function tailCutHold(zs: readonly number[], ring: number, style: BodyStyle): num
   return held;
 }
 
+/**
+ * A cage loft's shoulder-top point (both sides) at each station of the rear half of an inset hood's span, held: the decimation took the fender
+ * top beside the hood for one long chord whose plane, laid out past its edge, read 3-4 cm off the drawn fender. A measured pick: with the
+ * cage lid resting on the deck edge, the sedan column's roof-crush spread (bar 12 mm) is 8.9 with this hold and the strip reads 14 mm under at
+ * most; with no hold the strip reads 34 mm under, with the hold on every station the crest reads 31 mm over and 4 strip cells are uncovered,
+ * and (earlier lid) the spread was 12.5 with both shoulder points at every station, 12.7 with this point on the nose half alone, 14.0 with the 30° point.
+ */
+function fenderShoulderHold(zs: readonly number[], ring: number, style: BodyStyle): number[] {
+  const span = zs.flatMap((z, s) => (z >= style.hood.z0 && z <= style.hood.z1 ? [s] : []));
+  const [top] = SHOULDER_POINTS;
+  return span.slice(0, span.length / 2).flatMap((s) => [s * ring + top!, s * ring + ring - 1 - top!]);
+}
+
 export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const zs = sliceZs(style, source);
   const sectionAt = (z: number) => {
@@ -242,7 +256,11 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const n = rings[0]!.length;
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
-  if (source === "cage" && style.cageTailCut === true) body.userData.hold = tailCutHold(zs, n, style);
+  if (source === "cage") {
+    const hold = style.cageTailCut === true ? tailCutHold(zs, n, style) : [];
+    if (style.hood.inset !== undefined) hold.push(...fenderShoulderHold(zs, n, style));
+    body.userData.hold = hold;
+  }
   // How far each drawn slice has dropped into the bay's trough: its walls and floor are unpainted inner panel. Into a lid's lined boot: its
   // walls and floor are the cabin's dark trim, the boot's carpet as the references' popped lids show it. Into the cabin's tub: its floor
   // is dark cabin trim, as the glass shows it (the tub's walls keep one vertex with the belt, so they shade from it to the trim; the door

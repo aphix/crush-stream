@@ -430,8 +430,8 @@ export interface BodyStyle {
    * Bonnet lid lofted on the profile from z0 (cowl) to z1 (nose), hinged at origin. A `clamshell` lid (drawn only) wraps over the fender tops, its side shut line on the shoulder; `bulge` stands on it; `crown` [drop, at] (m, drawn only) domes its top as a parabola across x, `drop` under its centre line at |x| `at`.
    * `groove` [out, down] (m, drawn only): over the open bay the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall.
    * `nose` [drop, radius] (drawn only, `HoodNose`): the lid folds over the nose at z1 and runs down its face.
-   * `inset` [nose, cowl] (m, drawn only, with `crown`): the side shut line's inset from the half-width, z1 to z0; the flat fender top runs in to it, the crown kept.
-   * `cageCrown` (with `crown`): the cage's lid takes the crown's rise too (its plain edge and dome points kept), so what other cars and the dummies stand on is the drawn dome, not a flat lid 4-5 cm under its centre line; absent, the cage's plain lid.
+   * `inset` [nose, cowl] (m, with `crown`: the drawn hood's): the side shut line's inset from the half-width, z1 to z0; the flat fender top runs in to it, the crown kept. The cage keeps its deck edge but holds its shoulder-top points at the rear half of the hood's span through its decimation.
+   * `cageCrown` (with `crown`): the cage's lid takes the crown's rise too (its plain width and dome points kept, its edge on the deck edge's height, 12 mm under the plain lid's), so what other cars and the dummies stand on is the drawn dome, not a flat lid 4-5 cm under its centre line; absent, the cage's plain lid.
    * `followGlass` (m): drawn only, the hood's rear edge runs this far in front of the windshield's base along its plan bow (the cowl between them), fading into the lid; absent, straight at `z0`.
    * `calmPan` (drawn only): the hidden inner pan (skirts, underside) lays its gentle folds flat, keeping the bends a stamped panel would; absent, it follows the lid's own curve.
    */
