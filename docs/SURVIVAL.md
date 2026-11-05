@@ -102,9 +102,12 @@ than 20 m behind).
   (`HunterBrain.pinned`): the human is boxed in when units (wrecks too) and solids stand within `SETTLE` m on at least 5 of the 8
   compass headings round it, units on at least 2 of them; the clock grows while a boxed-in human is at 20 km/h or over, up to
   `ESCAPED` = 14 m/s (its hold keeps breaking), holds while it sits still, and starts over when it leaves the box or drives off.
-  At `RAM_AFTER` = 6 s every unit after that human rams it: it backs off along the line out from the human until it is
-  `RUN_UP` = 60 m off, then charges flat out and boosting (28 m/s and over is what kills), and backs off again once within
-  `RAM_HIT` = 10 m. Once the wait is up, leaving the box no longer clears the clock (the units backing off for their run-up are
+  At `RAM_AFTER` = 6 s every unit after that human rams it: its run-up point lies out through the box's open side (the middle of
+  the arc of headings from the human clear of solids for the run-up, the arc nearest the unit's own bearing, `Obstacles.way`), `RUN_UP` = 60 m off, reached
+  slowly enough (`RUN_UP_TURN` = 10 m/s) to turn round there; it charges from that point, or from anywhere on that line facing the
+  human, straight in along it, flat out and boosting (28 m/s and over is what kills), and backs off again once within
+  `RAM_HIT` = 10 m. (A run-up along the line out from the human bent the charge round the box's walls and past its open side: the
+  first charge missed and only a second, ~16 s after the wait, landed.) Once the wait is up, leaving the box no longer clears the clock (the units backing off for their run-up are
   the ones that boxed the human in); only a drive-off over `ESCAPED`, the human's hunt ending, or `CALM_END` = 3 s of sitting
   still clears it: the human has stopped squirming, the pack is back to PIT, slam and queue, and the bust gets its chance.
   On the aggression ramp (below) only the units that seek a hit ram, from a run-up of 15 m at the floor of a (`RUN_UP` at full), turning back once they touch (5.5 m; `RAM_HIT` at full), closing no faster than the ramp's cap.

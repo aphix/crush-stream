@@ -1,4 +1,4 @@
-import { Obstacles } from "../ai/hunter.ts";
+import { Obstacles } from "../ai/obstacles.ts";
 import { clamp, hash01, wrapPi } from "../kernel/scalar.ts";
 import { placeProps, propColliders } from "./placements.ts";
 import type { CopBrain, HunterWorld } from "../ai/cop-brain.ts";

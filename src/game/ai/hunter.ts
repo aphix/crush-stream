@@ -2,6 +2,7 @@ import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { DRIVE, type DriveInput } from "../vehicle/car-drive.ts";
 import type { AiCar } from "./derby-ai.ts";
 import { clamp, popcount, wrapPi } from "../kernel/scalar.ts";
+import { Obstacles } from "./obstacles.ts";
 import type { PropCollider } from "../world/placements.ts";
 import type { SurvivalSpec } from "../world/track-schema.ts";
 import type { Track } from "../world/track.ts";
@@ -103,10 +104,7 @@ const STORED = 0;
 const HUNTING = 1;
 const DOWN = 2;
 
-/** Half width (m) of the swath a hunter keeps clear of solids, and the room a probe keeps from a solid's face. */
-const SWATH = 1.6;
-/** Metres between the probes along a heading (a palm is 3.8 m across with the swath), and the headings tried off the straight one, in turn, to either side. */
-const PROBE_STEP = 2;
+/** The headings (rad) a unit tries off the straight one, in turn, to either side. */
 const TURNS = [0.3, 0.6, 0.9, 1.25, 1.6, 2.2, Math.PI] as const;
 /** A player car slower than this (m/s) is not blocked from ahead (a unit braking in front of a stopped player waits for ever); it is rammed. */
 export const BLOCKABLE = 6;
@@ -127,6 +125,10 @@ export const CALM_END = 3;
 /** A ramming unit charges from this far (m): a hit at 28 m/s or more is what kills, and a car needs a run this long to reach it. It has hit once it is under `RAM_HIT` m, and backs off for the next run. */
 export const RUN_UP = 60;
 const RAM_HIT = 10;
+/** A unit lines up for the charge on the box's free line within this many metres of it, facing the target within this cosine; and has this speed (m/s) left to turn round at the run-up point. */
+const RUN_UP_LINE = 3;
+const RUN_UP_FACING = 0.94;
+const RUN_UP_TURN = 10;
 /** At the floor of a a ramming unit has hit only once it touches (a car's length), not at the full ram's `RAM_HIT`: a shove from a short run-up has no momentum to carry it through a turn away. */
 const RAM_HIT_FLOOR = 5.5;
 /** The units that seek a hit are the nearest ceil(a × n) of the n after one human; a unit picked stays picked this long (s), so units trading places do not flicker. */
@@ -159,78 +161,6 @@ const DODGE_SPEED = 8;
 const TURN_COST = 6;
 /** Metres of road behind a target that a queue lane must keep clear of solids. */
 const QUEUE = 30;
-/** Obstacle grid cell (m). */
-const CELL = 16;
-/** A piece of a prop that starts higher than this (m) over the prop's foot is driven under (a tree's crown, a billboard's panel): a car's roofline is 1.36 m. */
-const CLEARANCE = 1.38;
-
-/** The course's solid props (`body: "solid"`) on a grid, the pieces of them a car meets (not a crown over its roof): is a point inside one, grown by the swath. */
-export class Obstacles {
-  private readonly cells = new Map<number, number[]>();
-  private readonly x: Float64Array;
-  private readonly z: Float64Array;
-  private readonly cos: Float64Array;
-  private readonly sin: Float64Array;
-  private readonly hx: Float64Array;
-  private readonly hz: Float64Array;
-  private readonly circle: Uint8Array;
-
-  constructor(colliders: readonly PropCollider[]) {
-    const all = colliders.filter((c) => c.body === "solid");
-    // A prop's foot is the lowest base among its pieces (they share an index).
-    const foot = new Map<number, number>();
-    for (const c of all) foot.set(c.index, Math.min(foot.get(c.index) ?? Infinity, c.base));
-    const solid = all.filter((c) => c.base - foot.get(c.index)! < CLEARANCE);
-    this.x = Float64Array.from(solid, (c) => c.x);
-    this.z = Float64Array.from(solid, (c) => c.z);
-    this.cos = Float64Array.from(solid, (c) => detCos(c.yaw));
-    this.sin = Float64Array.from(solid, (c) => detSin(c.yaw));
-    this.hx = Float64Array.from(solid, (c) => c.hx + SWATH);
-    this.hz = Float64Array.from(solid, (c) => c.hz + SWATH);
-    this.circle = Uint8Array.from(solid, (c) => (c.kind === "circle" ? 1 : 0));
-    for (const [i, c] of solid.entries()) {
-      const r = c.r + SWATH;
-      for (let gx = Math.floor((c.x - r) / CELL); gx <= Math.floor((c.x + r) / CELL); gx++) {
-        for (let gz = Math.floor((c.z - r) / CELL); gz <= Math.floor((c.z + r) / CELL); gz++) {
-          const key = cellKey(gx, gz);
-          const list = this.cells.get(key);
-          if (list) list.push(i);
-          else this.cells.set(key, [i]);
-        }
-      }
-    }
-  }
-
-  blocked(x: number, z: number): boolean {
-    const list = this.cells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL)));
-    if (!list) return false;
-    for (const i of list) {
-      const ex = x - this.x[i]!;
-      const ez = z - this.z[i]!;
-      if (this.circle[i]) {
-        if (ex * ex + ez * ez < this.hx[i]! * this.hx[i]!) return true;
-        continue;
-      }
-      // The prop's frame: local x = (cos, −sin), local z = (sin, cos).
-      const lx = ex * this.cos[i]! - ez * this.sin[i]!;
-      const lz = ex * this.sin[i]! + ez * this.cos[i]!;
-      if (Math.abs(lx) < this.hx[i]! && Math.abs(lz) < this.hz[i]!) return true;
-    }
-    return false;
-  }
-
-  /** Metres from (x, z) along heading `h` to the first solid (`len` when the way is clear that far). */
-  run(x: number, z: number, h: number, len: number): number {
-    const dx = detSin(h);
-    const dz = detCos(h);
-    for (let d = PROBE_STEP; d <= len; d += PROBE_STEP) if (this.blocked(x + dx * d, z + dz * d)) return d - PROBE_STEP;
-    return len;
-  }
-}
-
-function cellKey(gx: number, gz: number): number {
-  return (gx + 4096) * 8192 + (gz + 4096);
-}
 
 /**
  * Survival's cops (Driver 2's mode, docs/SURVIVAL.md): cars `first … first + count − 1` hunt the player over open ground, up
@@ -452,21 +382,36 @@ export class HunterBrain extends CopBrain {
     return out;
   }
 
-  /** A ram: from the run-up flat out at where the target will be, boosting, no braking for the turn in; once it has hit, or from nearer than the run-up, back off along the line out from the target until the run-up is made. */
+  /** A ram: the run-up point lies out through the box's open side (`Obstacles.way`), reached slowly enough to turn round; the charge starts there, or from anywhere on that line facing the target, and comes in straight along it. */
   private ram(u: number, self: AiCar, tg: AiCar, speed: number, dist: number, out: DriveInput, mean: number): void {
     const runUp = ramped(mean, RUN_UP_FLOOR, RUN_UP);
-    if (dist >= runUp) this.charging[u] = 1;
-    else if (dist < ramped(mean, RAM_HIT_FLOOR, RAM_HIT)) this.charging[u] = 0;
+    const near = ramped(mean, RAM_HIT_FLOOR, RAM_HIT);
+    const h = this.obstacles.way(tg.x, tg.z, detAtan2(self.x - tg.x, self.z - tg.z), runUp);
+    const reach = this.obstacles.run(tg.x, tg.z, h, runUp);
+    const ux = detSin(h);
+    const uz = detCos(h);
+    const toPoint = hypot2(tg.x + ux * reach - self.x, tg.z + uz * reach - self.z);
+    const outward = (self.x - tg.x) * ux + (self.z - tg.z) * uz;
+    const off = Math.abs((self.x - tg.x) * uz - (self.z - tg.z) * ux);
+    const facing = (detSin(self.yaw) * (tg.x - self.x) + detCos(self.yaw) * (tg.z - self.z)) / Math.max(dist, 1);
+    const lined = outward >= reach - near && off < RUN_UP_LINE && facing > RUN_UP_FACING;
+    if (lined || toPoint < near) this.charging[u] = 1;
+    else if (dist < near) this.charging[u] = 0;
     const charge = this.charging[u] === 1;
     const lead = charge ? Math.min(2, dist / Math.max(8, speed)) : 0;
-    const back = (runUp * 1.5) / Math.max(dist, 1);
-    const ax = charge ? tg.x + tg.vx * lead : tg.x + (self.x - tg.x) * back;
-    const az = charge ? tg.z + tg.vz * lead : tg.z + (self.z - tg.z) * back;
+    const ax = charge ? tg.x + tg.vx * lead : tg.x + ux * reach;
+    const az = charge ? tg.z + tg.vz * lead : tg.z + uz * reach;
     const aimDist = hypot2(ax - self.x, az - self.z);
     const alpha = wrapPi(this.openHeading(u, self, detAtan2(ax - self.x, az - self.z), speed, aimDist) - self.yaw);
     out.steer = pursuitSteer(alpha, clamp(speed * 0.8, 8, 24), speed, this.turnMax);
     out.throttle = Math.abs(alpha) > 1.3 && speed > 6 ? 0.2 : 1;
     out.boost = out.throttle > 0.5 && Math.abs(alpha) < 0.35;
+    // Short of the run-up point it brakes in time to be turning round there at `RUN_UP_TURN`, at about half the pedal's figure (the tyres' share, measured on the lawn).
+    if (!charge && speed > RUN_UP_TURN && toPoint - near < (speed * speed - RUN_UP_TURN * RUN_UP_TURN) / DRIVE.brake + speed / BRAKE_RISE) {
+      out.throttle = 0;
+      out.brake = 1;
+      out.boost = false;
+    }
   }
 
   /** A unit that does not seek, near a moving human: onto its queue lane's slot behind it, closing on it at a pace no more than `SHADOW_CATCH` over the human's. Only a target faster than `BLOCKABLE` (6 m/s) reaches it (`drive`'s `seeking`), so `tv` is never near zero. */
