@@ -94,7 +94,7 @@ block, head-on within `ATTACK` = 35 m), `pursuitSteer`, `Backoff` (back off when
 than 20 m behind).
 
 - **Pack guard.** Every hunter's drive ends with `guardMates` (`ai/pack-guard.ts`, as `PoliceBrain.think` does): it steers
-  away from, and brakes for, the pack-mate it would reach soonest within 3 s ([`RACE_DESIGN.md`](RACE_DESIGN.md), "Pack guard"). It reads a slow mate as pulling out (moving at 8 m/s along its nose) only while that unit hunts (`HunterBrain.pulling`): a knocked-out unit is the stopped obstacle it is, so a cop brakes and swerves for a wreck (read as pulling out, the wreck was reached at 2 s, not 0.6, and nobody braked for it).
+  away from, and brakes for, the pack-mate it would reach soonest within 3 s ([`RACE_DESIGN.md`](RACE_DESIGN.md), "Pack guard"). It reads a slow mate as pulling out (moving at 8 m/s along its nose) only while that unit hunts (`HunterBrain.pulling`): a knocked-out unit is the stopped obstacle it is, so a cop brakes and swerves for a wreck (read as pulling out, a wreck 12 m ahead of a cop at 20 m/s was reached at 1 s, not 0.6 s, so the cop only lifted the throttle and never braked).
 - **Queueing.** A target faster than `PIT_MAX` = 20 m/s is queued behind (a lane `TAIL_LANE` = 2.6 m either side, a row every
   `ROW` = 8 m), and a unit closing faster than it can brake goes straight on.
 - **Ram when the box squirms.** A player sitting still or creeping under the bust's 20 km/h in the ring is busted, not rammed (a
