@@ -412,7 +412,7 @@ export abstract class DeformSolve extends DeformFreeze {
   /** A hub the clamp holds at its pin (car-frame offsets from rest: it stood at `fromX/fromZ`, the pin is `toX/toZ`) loses its speed, relative to the rigid body, away from the pin: as at a crush cap (`stopAtCap`), nothing pushes it, and the planted hub's stand slack let that speed walk it 0.26 m into the car. */
   private holdHubVelocity(m: MassNode, group: THREE.Object3D, fromX: number, fromZ: number, toX: number, toZ: number): void {
     const gap = hypot2(toX - fromX, toZ - fromZ);
-    if (gap < HUB_STAND_SLACK) return;
+    if (gap < HUB_STAND_SLACK || this.quietTime() <= CONTACT_HOLD) return;
     _a.set((toX - fromX) / gap, 0, (toZ - fromZ) / gap).applyQuaternion(group.quaternion);
     const rx = m.world.x - _clamp[5]!;
     const ry = m.world.y - _clamp[6]!;
