@@ -841,7 +841,7 @@ function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGr
     else index.push(...tri.map((v) => (v < from ? v : v - count)));
   }
   const kept = held.reduce((n, h) => n + h, 0);
-  const hull = decimate(rest, index, group, CAGE_VERTICES + kept, Math.min(src.loft, from), held);
+  const hull = decimate(rest, index, group, CAGE_VERTICES + kept, Math.min(src.loft, from), held, true);
   const source = Array.from(hull.source, (v) => (v < from ? v : v + count));
   const slots = new Map<string, number>();
   const slotOf = new Int32Array(count);
@@ -880,7 +880,7 @@ function appendParts(src: CageSource, end: number, source: number[], tris: numbe
       if (src.index[t]! < part.from || src.index[t]! >= next) continue;
       own.push(src.index[t]! - part.from, src.index[t + 1]! - part.from, src.index[t + 2]! - part.from);
     }
-    const sub = decimate(src.rest.subarray(part.from * 3, next * 3), own, src.group.subarray(part.from, next), PART_VERTICES, 0, src.held.subarray(part.from, next));
+    const sub = decimate(src.rest.subarray(part.from * 3, next * 3), own, src.group.subarray(part.from, next), PART_VERTICES, 0, src.held.subarray(part.from, next), true);
     if (sub.source.length > PART_VERTICES) throw new Error(`${sub.source.length} vertices of a part apart, room for ${PART_VERTICES}`);
     const base = source.length;
     for (const v of sub.source) source.push(v + part.from);
@@ -919,7 +919,7 @@ function reachesOf(t: VertexTables): { mapReach: number; coReach: number } {
 function buildStyle(src: CageSource, step: number): CageStyle {
   const body = hullOf(src);
   const top = upFacing(src.interiorRest, src.interiorIndex);
-  const inner = decimate(top.rest, top.index, new Uint8Array(top.rest.length / 3), INTERIOR_VERTICES);
+  const inner = decimate(top.rest, top.index, new Uint8Array(top.rest.length / 3), INTERIOR_VERTICES, 0, undefined, true);
   const n = body.source.length;
   const source = Int32Array.from([...body.source, ...sillOffHull(src, body.source)]);
   const points = source.length;
