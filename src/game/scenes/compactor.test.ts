@@ -11,7 +11,7 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "../vehicle/car-variants.ts";
 import { assignClass, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { paint } from "../vehicle/test-support.ts";
-import { heldRearCrush, hubCreepAfterLastContact } from "./press-release.test-util.ts";
+import { CLEAN_NOSE_IN, freshCar, heldRearCrush, hubCreepAfterLastContact, pressedWreck, setChanges, WALL_HIT_SPEEDS, wallHit, type WallHit } from "./press-release.test-util.ts";
 
 function travelOf(d: StreamedDeformation, name: string): number {
   const m = d.masses.find((n) => n.name === name);
@@ -470,6 +470,24 @@ describe("given every body style parked in the compactor press, as its class dre
 const HUB_CREEP_MAX = 0.08;
 /** What the plates' crush of the tail reads (m) held 0.4 s: the squeeze's own rows (the set takes the shape's rest only once the pinch is over). */
 const HELD_TAIL_CRUSH = [0.55, 0.75] as const;
+/** Float noise (m) in a body mass's permanent set: what a hit may take back of a dent, and what a wreck's set may pass the bound. */
+const SET_NOISE = 0.01;
+
+/** The struck bumpers, whose set a nose hit takes to the one-ended cap on a fresh car and on a squeezed wreck alike. */
+const STRUCK_BUMPERS = ["bumperFL", "bumperFR"];
+/** What (m) a squeezed wreck's struck bumper may pass the deeper of what it held and a fresh car's: the two cars' contact slices differ by about a centimetre (0.011 m measured); the springback gap this row guards is 0.069-0.086 m. */
+const STRUCK_BUMPER_SLACK = 0.02;
+
+/** The one of `names` whose set after `hit` passes most (m) the deeper of what it held before and what the same hit sets it on `fresh` (a fresh car's). */
+function overrun(hit: WallHit, fresh: WallHit, names: readonly string[]): { name: string; by: number } {
+  let worst = { name: "", by: -Infinity };
+  for (const [i, name] of hit.names.entries()) {
+    if (!names.includes(name)) continue;
+    const by = Math.abs(hit.after[i]!) - Math.max(Math.abs(hit.before[i]!), Math.abs(fresh.after[i]!));
+    if (by > worst.by) worst = { name, by };
+  }
+  return worst;
+}
 
 describe("given a car squeezed in the press past its wheels (the nose less deep than the tail), the plates opened, driven into a wall once", () => {
   it("when the wall is gone (its last contact), then its rear hubs move no more than the springback into the car in the second after, driving away", () => {
@@ -483,5 +501,32 @@ describe("given a car squeezed in the press past its wheels (the nose less deep 
     expect(held, `the tail's crush with the plates held 0.4 s: ${held.toFixed(3)} m`).toBeGreaterThanOrEqual(HELD_TAIL_CRUSH[0]);
     expect(held, `the tail's crush with the plates held 0.4 s: ${held.toFixed(3)} m`).toBeLessThanOrEqual(HELD_TAIL_CRUSH[1]);
     expect(later, `held 1.4 s: ${later.toFixed(3)} m, 0.4 s: ${held.toFixed(3)} m`).toBeGreaterThanOrEqual(held - 0.08);
+  });
+
+  it("when it is then hit by a fixed wall on the nose, the tail and the nose again, from 65 to 79 km/h, then no hit sets any body mass deeper than a fresh car's nose hit at that speed, and none gives a dent back", () => {
+    for (const mps of WALL_HIT_SPEEDS) {
+      const freshGrowth = Math.max(...setChanges(wallHit(freshCar(), 1, mps)));
+      expect(freshGrowth, `a fresh car's hit at ${mps} m/s set no mass deeper than ${freshGrowth.toFixed(3)} m: the row proves nothing`).toBeGreaterThan(0.1);
+      const wreck = pressedWreck();
+      for (const end of [1, -1, 1] as const) {
+        const changes = setChanges(wallHit(wreck, end, mps));
+        const grew = Math.max(...changes);
+        const gave = Math.min(...changes);
+        const which = end > 0 ? "nose" : "tail";
+        expect(grew, `${mps} m/s: the ${which} hit set a squeezed wreck's mass ${grew.toFixed(3)} m deeper, a fresh car's ${freshGrowth.toFixed(3)} m`).toBeLessThanOrEqual(freshGrowth);
+        expect(gave, `${mps} m/s: the ${which} hit gave a squeezed wreck's dent back by ${(-gave).toFixed(3)} m`).toBeGreaterThanOrEqual(-SET_NOISE);
+      }
+    }
+  });
+
+  it("when its nose is hit by a fixed wall from 65 to 79 km/h, with the nose plate stopped short or at the bumper's rest, then each struck bumper is set no deeper than the same bumper of a fresh car", () => {
+    for (const noseIn of [undefined, CLEAN_NOSE_IN]) {
+      for (const mps of WALL_HIT_SPEEDS) {
+        const fresh = wallHit(freshCar(), 1, mps);
+        const hit = wallHit(pressedWreck(noseIn), 1, mps);
+        const over = overrun(hit, fresh, STRUCK_BUMPERS);
+        expect(over.by, `at ${mps} m/s (nose plate ${noseIn ?? "short"}) ${over.name} was set ${over.by.toFixed(3)} m deeper than a fresh car's and than it held`).toBeLessThanOrEqual(STRUCK_BUMPER_SLACK);
+      }
+    }
   });
 });

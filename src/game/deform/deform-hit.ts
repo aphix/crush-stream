@@ -484,7 +484,8 @@ export abstract class DeformHit extends DeformRig {
     for (const m of this.masses) {
       m.baseX = m.local.x - m.rest.x;
       m.baseZ = m.local.z - m.rest.z;
-      m.crushSet = 0;
+      // A squeezed shape's set is measured from the rest, not from this base: a new hit keeps it (zeroed, the next clamp took the whole dent into the shape rests a second time).
+      if (!this.squeezeShape) m.crushSet = 0;
     }
     return true;
   }

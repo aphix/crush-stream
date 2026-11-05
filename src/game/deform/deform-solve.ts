@@ -35,6 +35,17 @@ const SUSPENSION_C = 260;
 const SPRINGBACK = 0.08;
 /** Share of a crush past the yield that springs back: real structure keeps 75-90 % of its peak crush (17 % back at 56 km/h, SAE 2006-01-0908). */
 const SPRING_SHARE = 0.1;
+
+/** The part of a crush of `travel` (m) that springs back. */
+function springBack(travel: number): number {
+  return Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * travel);
+}
+
+/** The set a crush held at `cap` leaves: a hit crushed to the cap springs back before it sets, so a fresh car's deepest set is this, not the cap. */
+function setUnderCap(cap: number): number {
+  return cap - springBack(cap);
+}
+
 /** C4: a wheel separates only on an off-centre hit this hard (m/s EBS, 54 km/h), once the struck corner has crushed to within the rig's `tyreReach` of the hub. */
 export const HUB_POP_MPS = 15;
 /** The hit speed (m/s EBS) from which a corner crushed to `HUB_OVERRUN` of its hub takes the wheel. */
@@ -171,6 +182,11 @@ export abstract class DeformSolve extends DeformFreeze {
     }
   }
 
+  /** The deepest set (m) a hit gives a body particle at corner weight `cw` under the struck end's `stroke`: the one-ended clamp's cap, which a squeezed wreck past its pinch keeps too. */
+  private oneEndedCap(cw: number, stroke: number): number {
+    return Math.min((0.5 + this.squash * SQUASH_REACH) * (0.38 + 0.72 * cw), stroke);
+  }
+
   /** `clampLocal` for mass `i` (its doubles in `_clamp`): the far-side spring, lift, crush and lateral caps, the engine mounts and the hubs. */
   private clampMass(i: number, group: THREE.Object3D, sideHit: boolean, pinned: boolean, squeeze: boolean, deep: boolean, centre: Float64Array | undefined): void {
     const m = this.masses[i]!;
@@ -232,19 +248,24 @@ export abstract class DeformSolve extends DeformFreeze {
         const restLen = m.rest.distanceTo(c.rest);
         const dev = restLen - len;
         const set = m.crushSet;
-        const kept = Math.abs(dev) - Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * Math.abs(dev));
+        const kept = Math.abs(dev) - springBack(Math.abs(dev));
         if (kept > Math.abs(set)) {
-          const grown = Math.sign(dev) * kept;
-          // Past the pinch the set is an ordinary dent: the goals take it, as a one-ended hit's set does (`restTakesSet`). Left on the old rest they
-          // pulled the cluster back against this clamp all window long (the cell 0.29 m, the frame after it) and the planted hubs read it as creep in. The plates' own rows hold the rest while pinched.
-          if (!this.bidirectional && this.mode === "shape" && this.quietTime() <= CONTACT_HOLD && len > 1e-6) {
-            const shift = (grown - set) / len;
-            REST_SHIFT[1] = -rx * shift;
-            REST_SHIFT[2] = -ry * shift;
-            REST_SHIFT[3] = -rz * shift;
-            this.restTakesSet(i);
+          // Past the pinch a hit sets no deeper than the same hit on a fresh car: the pinch's 1.65 m clamp is no stroke, and the rest the set takes below feeds back on it.
+          const pastPinch = !this.bidirectional && this.mode === "shape";
+          const reach = pastPinch ? Math.min(kept, Math.max(Math.abs(set), setUnderCap(this.oneEndedCap(this.cornerWeight(m), stroke)))) : kept;
+          if (reach > Math.abs(set)) {
+            const grown = Math.sign(dev) * reach;
+            // Past the pinch the set is an ordinary dent: the goals take it, as a one-ended hit's set does (`restTakesSet`). Left on the old rest they
+            // pulled the cluster back against this clamp all window long (the cell 0.29 m, the frame after it) and the planted hubs read it as creep in. The plates' own rows hold the rest while pinched.
+            if (pastPinch && this.quietTime() <= CONTACT_HOLD && len > 1e-6) {
+              const shift = (grown - set) / len;
+              REST_SHIFT[1] = -rx * shift;
+              REST_SHIFT[2] = -ry * shift;
+              REST_SHIFT[3] = -rz * shift;
+              this.restTakesSet(i);
+            }
+            m.crushSet = grown;
           }
-          m.crushSet = grown;
         }
         // A bowed-out set holds only out of contact: a face still pressing may push the panel back in.
         else if (len > 1e-6 && (set > 0 ? dev < set : dev > set && this.quietTime() > 0.025)) {
@@ -264,7 +285,7 @@ export abstract class DeformSolve extends DeformFreeze {
       // Hit frame: crush runs along impactInward, the rest of the planar travel is lateral. The
       // stroke is the struck end's total (rearmHit), so a node already crushed along it gets less.
       const cabin = m.name === "cell" || m.name === "roof";
-      let cap = cabin ? (deep ? 0.72 : 0.12) : Math.min(maxCrush * (0.38 + 0.72 * cw), stroke);
+      let cap = cabin ? (deep ? 0.72 : 0.12) : this.oneEndedCap(cw, stroke);
       // A side door's crush is its travel against the cell, not the frame: the cell rides inward in the frame during the hit, so a
       // frame-absolute cap and set cut the door's crush by the cell's travel. What the face pushes a door past its cap goes to the
       // cell (to the cabin's own cap), not back into the face, which pushed it in again every clamp (50 km/h wall: door 0.299 m, band 0.12-0.28).
@@ -303,7 +324,7 @@ export abstract class DeformSolve extends DeformFreeze {
         // The roof is sheet metal too (the cell, the frame's anchor, is not): with no set its rest was wherever the clusters' elastic residual
         // left it when the contact window closed (the windscreen cluster's squash kept drawing it past its seat), so it takes the set like the
         // panels around it and stands on it once the contact lets go: its elastic part is back then, and no clock or cluster pull ends its settle.
-        const set = along - (packed && along >= cap ? 0 : Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * along));
+        const set = along - (packed && along >= cap ? 0 : springBack(along));
         if (set > m.crushSet && this.quietTime() <= CONTACT_HOLD) {
           if (this.mode === "shape") {
             REST_SHIFT[1] = (set - m.crushSet) * ix;
