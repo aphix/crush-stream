@@ -20,6 +20,8 @@ const _bFwd = new THREE.Vector3();
 const _band = new Float64Array(2);
 /** A pair's contact normal this near square to its centre line (cosine, 0.3 = 17° off square) is turned to it (`satCars`). */
 const PERPENDICULAR = 0.3;
+/** A pair's mean outline normal shorter than this share of the nodes' weight (the unit normals cancel: two cars interlocked past the outline's reach) has no direction, and is the centre line (`satCars`). */
+const NO_DIRECTION = 0.1;
 
 /** Max displacement per physics slice so a 30 m/s car cannot skip a 0.76 m wall; never shorter than `floor` (s, the fine floor unless the pacer is shedding load). */
 export function physicsSlice(dt: number, vmax: number, floor = 1 / FINE_HZ): number {
@@ -651,7 +653,7 @@ function outlineNormal(plan: Float32Array, style: CageStyle): void {
  * Returns the depth (m) of the deeper side, negative for the gap while only within `look`, or null. The contact is the overlap patch
  * itself, both ways: `contactOut` is the depth-weighted centre of every covered outline node of either cage (the point the contact's
  * pressure acts at), `normalOut` the depth-weighted mean of the outline normals there, pointing b → a (turned to the side of the
- * centres where the two cross). Neither car's list order nor one corner node picks them. `patch.half` is the patch's half width along the
+ * centres where the two cross; the centre line where the mean has no direction, `NO_DIRECTION`). Neither car's list order nor one corner node picks them. `patch.half` is the patch's half width along the
  * contact's tangent. The cages are as of the last slice's sync.
  */
 export function satCars(a: DeformableCar, b: DeformableCar, normalOut: THREE.Vector3, contactOut: THREE.Vector3, look = 0): number | null {
@@ -677,7 +679,7 @@ export function satCars(a: DeformableCar, b: DeformableCar, normalOut: THREE.Vec
   let nx = rb.x * _inA[F_NX]! + fb.x * _inA[F_NZ]! - (ra.x * _inB[F_NX]! + fa.x * _inB[F_NZ]!);
   let nz = rb.z * _inA[F_NX]! + fb.z * _inA[F_NZ]! - (ra.z * _inB[F_NX]! + fa.z * _inB[F_NZ]!);
   const nLen = hypot2(nx, nz);
-  if (nLen > 1e-9) {
+  if (nLen > NO_DIRECTION * w) {
     nx /= nLen;
     nz /= nLen;
   } else {

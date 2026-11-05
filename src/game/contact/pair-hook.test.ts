@@ -48,6 +48,8 @@ const YAWS = [-0.8, -0.4, 0, 0.4, 0.8];
 const MIN_OVERLAPPING_POSES = 500;
 /** How far (m) the stacked cars' cages overlap along the lane in the second row. */
 const LANE_OVERLAP = 1.22;
+/** The overlap (m) at which the stacked sedans' outline normals cancel (the mean falls under a tenth of its weight). */
+const LANE_OVERLAP_CANCELLING = 1.0;
 
 describe("given two cars hooked together (the front car's rear corner inside the follower's nose, as a cop car hooks onto the car it chases)", () => {
   it("when the pair's contact axis is read over a grid of overlapping poses, then it never pushes the two cars' centres together", (t) => {
@@ -101,6 +103,23 @@ describe("given two cars hooked together (the front car's rear corner inside the
     }
     const turn = axes[0]!.dot(axes[1]!);
     expect(turn, `the axis turned: cos ${turn.toFixed(2)} between (${axes[0]!.x.toFixed(2)}, ${axes[0]!.z.toFixed(2)}) and (${axes[1]!.x.toFixed(2)}, ${axes[1]!.z.toFixed(2)})`).toBeGreaterThan(0.9);
+  });
+
+  it(`when two cars lie stacked in one lane, their cages overlapping ${LANE_OVERLAP_CANCELLING} m along it, and one moves 2 mm across the other's axis either way, then the contact axis is the centre line`, () => {
+    // The interlocked nodes' outline normals cancel (their mean is under a tenth of their weight): the residue's direction was the sign of the
+    // offset, a turn of 40° to either side; a normal with no direction takes the centre line, the one direction that parts them.
+    const a = build("sedan");
+    const b = build("sedan");
+    const apart = cageSize(b).length - LANE_OVERLAP_CANCELLING;
+    const n = new THREE.Vector3();
+    const p = new THREE.Vector3();
+    for (const lat of [-0.002, 0.002]) {
+      b.spawnFacing(0, 0, 0, 0);
+      a.spawnFacing(lat, apart, 0, 0);
+      expect(satCars(a, b, n, p), `no contact at lat ${lat}`).not.toBe(null);
+      const along = (n.x * lat + n.z * apart) / Math.hypot(lat, apart);
+      expect(along, `lat ${lat}: axis (${n.x.toFixed(2)}, ${n.z.toFixed(2)}) is ${((Math.acos(Math.min(1, along)) * 180) / Math.PI).toFixed(0)}° off the centre line`).toBeGreaterThan(0.99);
+    }
   });
 
   it("when two cars lie side by side, 1 to 2.5 m apart along the lane and overlapping 5 cm across it, then the contact axis points apart across the lane", () => {
