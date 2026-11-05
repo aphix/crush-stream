@@ -644,6 +644,19 @@ describe("given a player car boxed in by walls on three sides and two wrecks, an
     for (let frame = 0; frame < FRAME_HZ; frame++) out = r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
     expect(out.throttle < 0.5 && Math.abs(out.steer) > 0.5, "backing off for its run-up, not charging from 30 m").toBe(true);
   });
+  it("when the player is walled in on every side (the way out east is 10 m, shorter than the run-up) and a ramming cop has hit it on that line, 8 m east facing it, then its charge is off: it backs off", () => {
+    const { x, z } = humanSlot(spec.start, 0);
+    const wall = (index: number, dx: number, dz: number, hx: number, hz: number): PropCollider => ({ index, prefab: "building", body: "solid", x: x + dx, z: z + dz, yaw: 0, kind: "box", r: Math.hypot(hx, hz), hx, hz, mass: 0, base: 0, top: 14, ends: 3 });
+    // North, south and west 8 m off, east 14 m off: every heading is blocked within the run-up, the longest way out (about 10 m) is east.
+    const r = rig({ hidden: () => false, colliders: [wall(0, 0, 8, 16, 1), wall(1, 0, -8, 16, 1), wall(2, -8, 0, 1, 16), wall(3, 14, 0, 1, 16)] });
+    for (let k = 2; k < r.cars.length; k++) Object.assign(r.cars[k]!, { x: FAR, z: FAR });
+    r.run(1, () => Object.assign(r.cars[0]!, { vx: 0, vz: 0 }));
+    r.brain["pinned"][0] = RAM_AFTER;
+    // On the way-out line, within the hit distance, facing the player and closing at 10 m/s: under the old order the run-up point (10 m out) was within reach and the flag stayed set.
+    Object.assign(r.cars[1]!, { x: x + 8, z, yaw: -Math.PI / 2, vx: -10, vz: 0 });
+    r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
+    expect(r.brain["charging"][0], "the charge flag 8 m from the player on its 10 m way out").toBe(0);
+  });
 });
 
 /**

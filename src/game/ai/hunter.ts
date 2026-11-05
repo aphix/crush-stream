@@ -120,9 +120,9 @@ const SQUIRM = 20 / 3.6;
 export const RAM_AFTER = 6;
 /** Over this speed (m/s) the player is driving off, not creeping: the wait for a ram starts over. */
 const ESCAPED = 14;
-/** Once the wait is up, a player that sits still (under `SQUIRM`) this long (s) has stopped squirming: the ram is over and the bust has its chance (its hold needs a chaser within 20 m for 12 s, which a pack backing off for its run-up never gives). */
+/** Once the wait is up, a player that sits still (under `SQUIRM`) this long (s) has stopped squirming: the ram is over and the bust has its chance. The bust's hold breaks at the same 20 km/h (`BUST.kph`), so it never lands while a ram runs: it lands 12 s after the player stopped at the soonest, `CALM_END` of them in the ram and the rest beside the pack back on PIT, slam and queue. */
 export const CALM_END = 3;
-/** A ramming unit charges from this far (m), the run a car needs to reach 28 m/s and over. A boxed human shows it its tail, where such a hit moves the engine only 2-7 % of what kills: the charge throws the driver out or knocks the car about until the bust's hold lands (docs/SURVIVAL.md). It has hit once it is under `RAM_HIT` m, and backs off for the next run. */
+/** A ramming unit charges from this far (m), the run a car needs to reach 28 m/s and over. A boxed human shows it its tail, where such a hit moves the engine only 2-7 % of what kills it: a tail ram does not kill the engine; it throws the driver out (the run ends, wrecked) or knocks the car about until the player sits still for `CALM_END` (docs/SURVIVAL.md). It has hit once it is under `RAM_HIT` m, and backs off for the next run. */
 export const RUN_UP = 60;
 const RAM_HIT = 10;
 /** A unit lines up for the charge on the box's free line within this many metres of it, facing the target within this cosine; and has this speed (m/s) left to turn round at the run-up point. */
@@ -382,7 +382,7 @@ export class HunterBrain extends CopBrain {
     return out;
   }
 
-  /** A ram: the run-up point lies out through the box's open side (`Obstacles.way`), reached slowly enough to turn round; the charge starts there, or from anywhere on that line facing the target, and comes in straight along it. */
+  /** A ram: the run-up point lies out through the box's open side (`Obstacles.way`), reached slowly enough to turn round; the charge starts within `RAM_HIT` m of the point, or on that line from there outward facing the target, and comes in straight along it. */
   private ram(u: number, self: AiCar, tg: AiCar, speed: number, dist: number, out: DriveInput, mean: number): void {
     const runUp = ramped(mean, RUN_UP_FLOOR, RUN_UP);
     const near = ramped(mean, RAM_HIT_FLOOR, RAM_HIT);
@@ -395,8 +395,9 @@ export class HunterBrain extends CopBrain {
     const off = Math.abs((self.x - tg.x) * uz - (self.z - tg.z) * ux);
     const facing = (detSin(self.yaw) * (tg.x - self.x) + detCos(self.yaw) * (tg.z - self.z)) / Math.max(dist, 1);
     const lined = outward >= reach - near && off < RUN_UP_LINE && facing > RUN_UP_FACING;
-    if (lined || toPoint < near) this.charging[u] = 1;
-    else if (dist < near) this.charging[u] = 0;
+    // A unit within `near` of the human has hit: it backs off first, so a short run-up (no heading clear far) never leaves the flag set at contact.
+    if (dist < near) this.charging[u] = 0;
+    else if (lined || toPoint < near) this.charging[u] = 1;
     const charge = this.charging[u] === 1;
     const lead = charge ? Math.min(2, dist / Math.max(8, speed)) : 0;
     const ax = charge ? tg.x + tg.vx * lead : tg.x + ux * reach;

@@ -7,6 +7,8 @@ const SWATH = 1.6;
 const PROBE_STEP = 2;
 /** The compass step (rad) `way` tries headings at: a gap a car can drive out through is wider than this as seen from the target. */
 const WAY_STEP = Math.PI / 12;
+/** `way` widens the clear arc at most this many steps either side of the first clear heading: one solid near the target must not send every unit to the one line opposite it. One `way` call in open ground or beside one building makes 7 runs (24 with the arc unbounded); in a walled pocket 14 either way. */
+const WAY_SPAN = 3;
 
 /** Obstacle grid cell (m). */
 const CELL = 16;
@@ -76,7 +78,7 @@ export class Obstacles {
     return len;
   }
 
-  /** The middle of the arc of headings (steps of `WAY_STEP`) with `len` m clear of solids from (x, z), of the arc nearest `want`: the way out of a pocket, down its middle. With none clear, the longest run's heading. */
+  /** The middle of the clear arc (steps of `WAY_STEP`, at most `WAY_SPAN` either side) with `len` m clear of solids from (x, z), nearest `want`: the way out of a pocket, down its middle. With none clear, the longest run's heading. */
   way(x: number, z: number, want: number, len: number): number {
     const base = Math.round(want / WAY_STEP) * WAY_STEP;
     const half = Math.round(Math.PI / WAY_STEP);
@@ -99,9 +101,9 @@ export class Obstacles {
     if (found !== found) return base + best * WAY_STEP;
     let lo = found;
     let hi = found;
-    while (hi - lo + 1 < 2 * half && this.run(x, z, base + (lo - 1) * WAY_STEP, len) >= len) lo--;
-    while (hi - lo + 1 < 2 * half && this.run(x, z, base + (hi + 1) * WAY_STEP, len) >= len) hi++;
-    return hi - lo + 1 >= 2 * half ? base : base + ((lo + hi) / 2) * WAY_STEP;
+    while (lo > found - WAY_SPAN && this.run(x, z, base + (lo - 1) * WAY_STEP, len) >= len) lo--;
+    while (hi < found + WAY_SPAN && this.run(x, z, base + (hi + 1) * WAY_STEP, len) >= len) hi++;
+    return base + ((lo + hi) / 2) * WAY_STEP;
   }
 }
 
