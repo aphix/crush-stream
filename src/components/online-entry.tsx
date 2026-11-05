@@ -4,7 +4,8 @@ import { ChevronDown, ChevronRight, ChevronUp, Globe, LogOut } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/sheet";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
-import { HostForm, newDraft, type HostDraft } from "@/components/online-host";
+import { HostForm } from "@/components/online-host";
+import { newDraft, type HostDraft } from "@/components/online-host-shared";
 import { JoinForm } from "@/components/online-join";
 import { useOnlineSlot } from "@/components/online-slot";
 import { SessionDetails } from "@/components/online-session";

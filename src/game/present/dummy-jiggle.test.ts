@@ -29,11 +29,8 @@ const NUDGE = 0.02;
 const SETTLE_SHARE = 0.1;
 const MASS_SHARE = 0.7;
 const SEPARATION_SLACK = 0.004;
-/** Direction reversals tolerated in a smooth 4 s of slow-mo, the throw's spin (rad/s), the reach (m) now in force and the share of it a spinning bust may stray (it rides the rig). */
-const SMOOTH_FLIPS = 20;
+/** The throw's spin (rad/s) and the band (m) a spinning bust may stray within (it rides the rig). */
 const SPIN = 16;
-const REACH_NOW = 0.039 * 1.28;
-const SPIN_REACH = 0.1;
 const SPIN_MOST = 0.02;
 const SPIN_LEAST = 0.005;
 /** How many times the evenly stepped speed a slow-mo bust may peak at. */

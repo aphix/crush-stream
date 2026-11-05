@@ -1,3 +1,4 @@
+import { GAME_LABEL } from "@/components/game-label";
 import { Button } from "@/components/ui/button";
 import { courseTap, selectAll } from "@/game/hud/setup-patch";
 import { GAME_KINDS, type GameKind } from "@/game/net/codec";
@@ -7,8 +8,6 @@ import { cn } from "@/lib/utils";
 /** Taps stay 44 px tall on touch, 32 px with a fine pointer. */
 const TAP = "h-11 pointer-fine:h-8";
 const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault();
-
-export const GAME_LABEL: Record<GameKind, string> = { race: "Race", campaign: "Campaign", survival: "Survival", derby: "Derby" };
 
 type GameOptionsProps = {
   kind: GameKind;

@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import { Play, RotateCcw } from "lucide-react";
-import { GAME_LABEL, GameOptions } from "@/components/game-options";
+import { GameOptions } from "@/components/game-options";
+import { GAME_LABEL } from "@/components/game-label";
 import { PlayersStepper } from "@/components/players-stepper";
 import { Button } from "@/components/ui/button";
 import type { CrashEngine } from "@/game/engine/engine";

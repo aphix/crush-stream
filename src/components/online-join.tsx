@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
-import { GAME_LABEL } from "@/components/game-options";
+import { GAME_LABEL } from "@/components/game-label";
 import { Button } from "@/components/ui/button";
-import { FIELD, FIELD_LABEL } from "@/components/online-host";
+import { FIELD, FIELD_LABEL } from "@/components/online-host-shared";
 import type { CrashEngine } from "@/game/engine/engine";
 import type { OpenRoom } from "@/game/net/matchmaking";
 import { NET_TX, type CourseMenu, type NetTx } from "@/game/net/net-ports";

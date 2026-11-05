@@ -317,37 +317,6 @@ function panOf(style: BodyStyle): V3[] {
   return [-PAN_HALF, PAN_HALF].flatMap((z) => [-PAN_HALF, 0, PAN_HALF].map((x): V3 => [x, at + rise * z, z]));
 }
 
-/** The lower convex hull of `run` ([z, height, x] by z): a point over the chord between two others is the lowest at no pitch. */
-function lowerHull(run: readonly V3[]): V3[] {
-  const hull: V3[] = [];
-  for (const c of run) {
-    while (hull.length >= 2) {
-      const a = hull[hull.length - 2]!;
-      const b = hull[hull.length - 1]!;
-      if ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) > 0) break;
-      hull.pop();
-    }
-    hull.push(c);
-  }
-  return hull;
-}
-
-/** The drawn underside's standing points (x, z, height): per profile station the lowest point of the keel and of the rocker side (mirrored), those on the lower hull of each line, so the nose and tail lips between the rows are met too. */
-function standingPoints(style: BodyStyle): V3[] {
-  const { profile } = style;
-  const keel: V3[] = [];
-  const side: V3[] = [];
-  for (const station of profile) {
-    const ring = sectionPoints(sampleSlice(station.z, profile), style, "drawn");
-    const mid = (ring.length - 1) / 2;
-    let low = ring[mid]!;
-    keel.push([station.z, low.y, 0]);
-    for (let i = mid + 1; i < ring.length; i++) if (ring[i]!.y < low.y || (ring[i]!.y === low.y && ring[i]!.x > low.x)) low = ring[i]!;
-    side.push([station.z, low.y, low.x]);
-  }
-  return [...lowerHull(keel).map(([z, y]): V3 => [0, z, y]), ...lowerHull(side).flatMap(([z, y, x]): V3[] => [[x, z, y], [-x, z, y]])];
-}
-
 /** The belly points (x, height, z): the underside rows, the mid rows, then the pan, a point with no drawn body under it standing on the floor; and per point 1 where the drawn body is absent. `rows` are [x, z, height], NaN where absent. */
 function bellyOf(w: Warp, rows: readonly V3[], pan: readonly V3[], style: BodyStyle): { belly: V3[]; absent: Uint8Array } {
   const drawn: V3[] = [
