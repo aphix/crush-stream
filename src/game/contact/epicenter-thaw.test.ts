@@ -7,6 +7,8 @@ import { layOnGround } from "../vehicle/car-air-points.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, Probe, run } from "./crash-scenarios.test-util.ts";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
+import { FAR, freezeStartJumps, NEAR } from "./epicenter-freeze-start.test-util.ts";
+import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
 
 /**
  * A frozen wreck (`epicenter` activation) rides its body and runs no solve, so whatever moves one of its masses or restarts its contact clock has to
@@ -237,5 +239,12 @@ describe("given the guard that checks frozen cars", () => {
     } finally {
       loadEpicenter(saved);
     }
+  });
+
+  it(`when the slice a freeze starts in finds one hub planted ${FAR} m off its pin and another ${NEAR} m off, then the far hub keeps its pin and the near one is re-derived from its world place`, () => {
+    const { far, near, ready } = freezeStartJumps();
+    expect(ready, "the slice did not cache the freeze").toBe(true);
+    expect(far, `the freeze moved a hub planted ${FAR} m off its pin by ${far.toFixed(2)} m`).toBeLessThanOrEqual(HUB_PIN_MAX + HUB_PULL_STEP);
+    expect(near, `a hub within the slack was not re-derived (moved ${near.toFixed(3)} m of ${NEAR})`).toBeGreaterThan(NEAR / 2);
   });
 });
