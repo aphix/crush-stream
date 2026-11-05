@@ -268,6 +268,7 @@ try {
   console.log(`finish programs by key: ${[...finishKinds].map(([k, n]) => `${k} ×${n}`).join(", ")}`);
 
   if (errors.length) console.log(`console errors:\n  ${errors.slice(0, 8).join("\n  ")}`);
+  for (const l of late) console.log(`late: ${l.type} …${String(l.key).slice(-80).replace(/\s+/g, " ")}`);
   process.exitCode = late.length || errors.length ? 1 : 0;
 } finally {
   await browser.close();
