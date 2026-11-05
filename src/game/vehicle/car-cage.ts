@@ -9,7 +9,7 @@ import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
-import { cageGateHold, makeTrunkGeometry } from "./car-mesh.ts";
+import { cageGateHold, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { wellHumpGeometry } from "./car-well-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import { rockerAt } from "./car-lines.ts";
@@ -56,7 +56,16 @@ function cageBuildCounts(style: BodyStyle): { sill: number; stations: number; ke
   }
   const stations = (geo.userData.loft as { slices: number }).slices;
   const gate = makeTrunkGeometry(style, "cage");
-  const kept = (geo.userData.hold as number[]).length + cageGateHold(style, gate).length;
+  const hood = makeHoodGeometry(style, "cage");
+  const hoodPos = hood.getAttribute("position");
+  const ring = new Map<number, number>();
+  for (let i = 0; i < hoodPos.count; i++) {
+    const key = Math.round(hoodPos.getZ(i) * 1e4);
+    ring.set(key, (ring.get(key) ?? 0) + 1);
+  }
+  // The hood's crease ring (`creaseRing`) is held too: at most the vertices of the fullest z ring of the cage hood.
+  const kept = (geo.userData.hold as number[]).length + cageGateHold(style, gate).length + Math.max(...ring.values());
+  hood.dispose();
   gate.dispose();
   geo.dispose();
   return { sill: welded.size, stations, kept };

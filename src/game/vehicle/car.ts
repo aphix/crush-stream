@@ -777,10 +777,10 @@ export class DeformableCar extends CarParts {
 
   /** The bonnet on the body's lattice, buckled into its ridge at the crease line by the crush its hinge value holds (`ridgeHeight`); the cage's hood stands the same (`readCageLive`). */
   private skinHood(): void {
-    this.deform.skinPanel(this.hood.geometry, this.hoodRest, "bonnet", this.hoodOrigin);
     const spec = this.hoodPart.swing!.spec;
     this.hoodRidgeAt = this.hoodPart.hingeT;
     const height = ridgeHeight(spec, this.hoodRidgeAt);
+    this.deform.skinPanel(this.hood.geometry, this.hoodRest, "bonnet", this.hoodOrigin, 0, undefined, height <= 0);
     if (height <= 0) return;
     creaseStations(spec, this.hoodOrigin.z, this.hoodStations, 0);
     raiseRidge((this.hood.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array, this.hoodRest, this.hoodOrigin.z, this.hoodStations, height);

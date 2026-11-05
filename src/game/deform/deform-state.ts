@@ -540,8 +540,8 @@ export abstract class DeformState extends DeformHit {
     return false;
   }
 
-  /** Skins vertices `[from, to)` of `geometry` (default all) to the cage `name`; the rest are left as they are. */
-  skinPanel(geometry: THREE.BufferGeometry, rest: Float32Array, name: BodyPartName, origin: THREE.Vector3, from = 0, to?: number): void {
+  /** Skins vertices `[from, to)` of `geometry` (default all) to the cage `name`; the rest are left as they are. `normals` false leaves the normals to the caller. */
+  skinPanel(geometry: THREE.BufferGeometry, rest: Float32Array, name: BodyPartName, origin: THREE.Vector3, from = 0, to?: number, normals = true): void {
     const cage = this.cageByPart.get(name);
     if (!cage) return;
     const attr = geometry.getAttribute("position") as THREE.BufferAttribute;
@@ -566,7 +566,7 @@ export abstract class DeformState extends DeformHit {
       arr[r + 2] = cageAxis(co, 16, u, v, w);
     }
     attr.needsUpdate = true;
-    computeNormalsFast(geometry);
+    if (normals) computeNormalsFast(geometry);
   }
 
   /**
