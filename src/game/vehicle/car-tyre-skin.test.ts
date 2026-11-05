@@ -7,7 +7,7 @@ import type { DriveInput } from "./car-drive.ts";
 import { LID } from "./constants.ts";
 import { buildCar } from "./drawn-body.test-util.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
-import { TyreSkin } from "./car-tyre-skin.ts";
+import { spreadSagLift, TyreSkin } from "./car-tyre-skin.ts";
 import { skinKernel } from "../deform/skin-kernel.ts";
 import { TyreSagArena } from "../deform/tyre-sag-kernel.ts";
 import { assertSameNumbers } from "./test-support.ts";
@@ -449,5 +449,44 @@ describe(`given a hatchback driven at ${CORNER_HIT_KPH} km/h into a standing mus
     }
     expect(car.crashed, "the muscle's corner crushed").toBe(true);
     expect(worst.over, `${(worst.over * 1000).toFixed(0)} mm over: ${worst.at}`).toBeLessThanOrEqual(OVER_ENVELOPE_SLACK_M);
+  });
+});
+
+/**
+ * Owner's five-car fleet capture, the coupe's cowl: a sag point whose third corner stands on the tyre with no room to rise, over two corners (weights 0.75 and 0.083) whose room to their own
+ * targets is within a millimetre of each other. The corner picked to carry the third's share changed with that millimetre, and the other, 0.083 of the point, took 12 times the share (40 mm).
+ */
+const SPILL_BY_M = 0.0218;
+const SPILL_WEIGHTS = [0.75, 0.083, 0.167] as const;
+const SPILL_ROOM_M = 0.2137;
+/** The room of the second corner is swept this far (m) either side of the first's, in steps this long: a lift moves at most a step of room, as no corner takes more than its room's share. */
+const SPILL_SWEEP_M = 0.002;
+const SPILL_STEP_M = 0.0001;
+
+function spillOf(roomSecond: number): Float64Array {
+  const lift = new Float64Array(3);
+  spreadSagLift(SPILL_BY_M, SPILL_WEIGHTS, [1, 1, 1], [SPILL_ROOM_M, roomSecond, 0], [0, 0, 0], [0, 0, 0], lift);
+  return lift;
+}
+
+describe("given a sag point whose third corner has no room to rise and whose first two corners' room differs by a millimetre", () => {
+  it(`when the second corner's room sweeps ${SPILL_SWEEP_M * 1000} mm either side of the first's, then neither corner's lift moves more than twice a ${SPILL_STEP_M * 1000} mm step between steps`, () => {
+    let worst = 0;
+    let last = spillOf(SPILL_ROOM_M - SPILL_SWEEP_M);
+    for (let at = -SPILL_SWEEP_M + SPILL_STEP_M; at <= SPILL_SWEEP_M + SPILL_STEP_M / 2; at += SPILL_STEP_M) {
+      const lift = spillOf(SPILL_ROOM_M + at);
+      worst = Math.max(worst, Math.abs(lift[0]! - last[0]!), Math.abs(lift[1]! - last[1]!));
+      last = lift;
+    }
+    expect(worst, `a corner's lift moved ${(worst * 1000).toFixed(2)} mm between steps of ${SPILL_STEP_M * 1000} mm of room`).toBeLessThanOrEqual(2 * SPILL_STEP_M);
+  });
+
+  it("when the corners are lifted, then the point stands the lift it asked, the third corner's share carried by the other two", () => {
+    for (const roomSecond of [SPILL_ROOM_M - SPILL_SWEEP_M, SPILL_ROOM_M, SPILL_ROOM_M + SPILL_SWEEP_M]) {
+      const lift = spillOf(roomSecond);
+      const point = SPILL_WEIGHTS[0] * lift[0]! + SPILL_WEIGHTS[1] * lift[1]! + SPILL_WEIGHTS[2] * lift[2]!;
+      expect(point, `the point stands ${(point * 1000).toFixed(3)} mm of the ${SPILL_BY_M * 1000} mm it asked`).toBeCloseTo(SPILL_BY_M, 12);
+      expect(lift[2], "the corner without room is not lifted").toBe(0);
+    }
   });
 });

@@ -289,25 +289,30 @@ fn spread_sag_lift(by: f64, l: &[f64; 3], s: &[f64; 3], k: &[f64; 3], c: &[f64; 
         u[m] = js_min(by * s[m], k[m]);
         short += l[m] * (by * s[m] - u[m]);
     }
-    let mut pass = 0;
-    while pass < 3 && short > 0.0 {
-        let mut most_at = usize::MAX;
-        let mut most = 0.0f64;
+    if short <= 0.0 {
+        return u;
+    }
+    let mut capacity = 0.0f64;
+    for m in 0..3 {
+        if s[m] > 0.0 && l[m] > 0.0 {
+            capacity += l[m] * (k[m] - u[m]);
+        }
+    }
+    if capacity > short {
+        let share = short / capacity;
         for m in 0..3 {
-            let room = k[m] - u[m];
-            if s[m] > 0.0 && l[m] > 0.0 && room > most {
-                most = room;
-                most_at = m;
+            if s[m] > 0.0 && l[m] > 0.0 {
+                u[m] += share * (k[m] - u[m]);
             }
         }
-        if most_at == usize::MAX {
-            break;
-        }
-        let take = js_min(most, short / l[most_at]);
-        u[most_at] += take;
-        short -= l[most_at] * take;
-        pass += 1;
+        return u;
     }
+    for m in 0..3 {
+        if s[m] > 0.0 && l[m] > 0.0 {
+            u[m] = k[m];
+        }
+    }
+    short -= capacity;
     if short <= 0.0 || (0..3).any(|m| l[m] > 0.0 && s[m] < 1.0 && !beside[m]) {
         return u;
     }

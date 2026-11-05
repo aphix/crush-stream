@@ -86,33 +86,30 @@ const _cb = new Uint8Array(3);
 const _cu = new Float64Array(3);
 
 /**
- * Splits a sag point's lift `by` over its corners into `_cu`: each to its own target, then to corners with room left. Past the targets only
- * when every corner holding the point down lies beside the tread (a fender falling off the tyre sideways, not a bumper down its face), on carried corners.
+ * Splits a sag point's lift `by` over its corners (weights `cl`, shares `cs`: 1 liftable, room under their own target `ck`, carry over the hub `cc`, beside the tread `cb`) into `cu`:
+ * each to its own target, then the shortfall of corners without room over the corners with room, each by its share of the room (a pick of the corner with most room flipped between
+ * frames on a millimetre and moved a corner 40 mm). Past the targets only when every corner holding the point down lies beside the tread (a fender falling off the tyre sideways,
+ * not a bumper down its face), on carried corners.
  */
-function spreadSagLift(by: number): void {
+export function spreadSagLift(by: number, cl: ArrayLike<number>, cs: ArrayLike<number>, ck: ArrayLike<number>, cc: ArrayLike<number>, cb: ArrayLike<number>, cu: Float64Array): void {
   let short = 0;
   for (let m = 0; m < 3; m++) {
-    _cu[m] = Math.min(by * _cs[m]!, _ck[m]!);
-    short += _cl[m]! * (by * _cs[m]! - _cu[m]!);
-  }
-  for (let pass = 0; pass < 3 && short > 0; pass++) {
-    let c = -1;
-    let most = 0;
-    for (let m = 0; m < 3; m++) {
-      const room = _ck[m]! - _cu[m]!;
-      if (_cs[m]! > 0 && _cl[m]! > 0 && room > most) {
-        most = room;
-        c = m;
-      }
-    }
-    if (c < 0) break;
-    const take = Math.min(most, short / _cl[c]!);
-    _cu[c] = _cu[c]! + take;
-    short -= _cl[c]! * take;
+    cu[m] = Math.min(by * cs[m]!, ck[m]!);
+    short += cl[m]! * (by * cs[m]! - cu[m]!);
   }
   if (short <= 0) return;
-  for (let m = 0; m < 3; m++) if (_cl[m]! > 0 && _cs[m]! < 1 && _cb[m] === 0) return;
-  for (let m = 0; m < 3; m++) if (_cl[m]! > 0) _cu[m] = _cu[m]! + short * _cs[m]! * _cc[m]!;
+  let capacity = 0;
+  for (let m = 0; m < 3; m++) if (cs[m]! > 0 && cl[m]! > 0) capacity += cl[m]! * (ck[m]! - cu[m]!);
+  if (capacity > short) {
+    const share = short / capacity;
+    for (let m = 0; m < 3; m++) if (cs[m]! > 0 && cl[m]! > 0) cu[m] = cu[m]! + share * (ck[m]! - cu[m]!);
+    return;
+  }
+  for (let m = 0; m < 3; m++) if (cs[m]! > 0 && cl[m]! > 0) cu[m] = ck[m]!;
+  short -= capacity;
+  if (short <= 0) return;
+  for (let m = 0; m < 3; m++) if (cl[m]! > 0 && cs[m]! < 1 && cb[m] === 0) return;
+  for (let m = 0; m < 3; m++) if (cl[m]! > 0) cu[m] = cu[m]! + short * cs[m]! * cc[m]!;
 }
 
 /** The first corner (index in `tris`) of each distinct welded point among `tris`' corners, ascending. */
@@ -1025,7 +1022,7 @@ export class TyreSkin {
         _cl[0] = l1;
         _cl[1] = l2;
         _cl[2] = l3;
-        spreadSagLift(by);
+        spreadSagLift(by, _cl, _cs, _ck, _cc, _cb, _cu);
         if (_cu[0]! > bump[weld[va]!]!) bump[weld[va]!] = _cu[0]!;
         if (_cu[1]! > bump[weld[vb]!]!) bump[weld[vb]!] = _cu[1]!;
         if (_cu[2]! > bump[weld[vc]!]!) bump[weld[vc]!] = _cu[2]!;
