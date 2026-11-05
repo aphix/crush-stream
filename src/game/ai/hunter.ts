@@ -122,7 +122,7 @@ export const RAM_AFTER = 6;
 const ESCAPED = 14;
 /** Once the wait is up, a player that sits still (under `SQUIRM`) this long (s) has stopped squirming: the ram is over and the bust has its chance (its hold needs a chaser within 20 m for 12 s, which a pack backing off for its run-up never gives). */
 export const CALM_END = 3;
-/** A ramming unit charges from this far (m): a hit at 28 m/s or more is what kills, and a car needs a run this long to reach it. It has hit once it is under `RAM_HIT` m, and backs off for the next run. */
+/** A ramming unit charges from this far (m), the run a car needs to reach 28 m/s and over. A boxed human shows it its tail, where such a hit moves the engine only 2-7 % of what kills: the charge throws the driver out or knocks the car about until the bust's hold lands (docs/SURVIVAL.md). It has hit once it is under `RAM_HIT` m, and backs off for the next run. */
 export const RUN_UP = 60;
 const RAM_HIT = 10;
 /** A unit lines up for the charge on the box's free line within this many metres of it, facing the target within this cosine; and has this speed (m/s) left to turn round at the run-up point. */
