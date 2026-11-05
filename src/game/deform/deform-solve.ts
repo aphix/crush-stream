@@ -23,7 +23,7 @@ import { FACE_TOP, SPRING_YIELD } from "./load-crush.ts";
 import { PLANT_QUIET } from "./deform-state.ts";
 import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn-hold.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
-import { CONTACT_WINDOW, HUB_PIN_MAX, HUB_PULL_STEP, MIN_INV_MASS, SQUASH_REACH } from "./constants.ts";
+import { CONTACT_WINDOW, HUB_PIN_MAX, HUB_PULL_STEP, MIN_INV_MASS, REARM_EBS, SQUASH_REACH } from "./constants.ts";
 
 /** The body lies over below this up (y of its up axis): the car's own `UPRIGHT_UP_Y`, where its wheels stop being what it stands on. */
 const LYING_UP_Y = 0.5;
@@ -116,7 +116,9 @@ export abstract class DeformSolve extends DeformFreeze {
     // The group's world matrix once for the masses below (`localToWorld` re-composed it and its parents for every mass).
     group.updateWorldMatrix(true, false);
     if (pinned) _toCar.copy(group.matrixWorld).invert();
-    for (let i = 0; i < this.masses.length; i++) this.clampMass(i, group, sideHit, pinned, squeeze, deep);
+    // The body's centre (a scratch valid until the next `bodyCentre` call: nothing in the loop calls it) for the capped masses of a hit that crushed (`stopAtCap`): a nudge under the re-arm EBS has no stroke that caps its crush.
+    const centre = this.quietTime() > CONTACT_HOLD && this.hitSpeed >= REARM_EBS ? this.bodyCentre() : undefined;
+    for (let i = 0; i < this.masses.length; i++) this.clampMass(i, group, sideHit, pinned, squeeze, deep, centre);
     this.settleHubStand(pinned);
     // A3: each mount caps its own side of the block, but the block is one casting; hold its rest
     // spacing in the frame the masses were just clamped into (T-bone struck car: engine gap error
@@ -170,7 +172,7 @@ export abstract class DeformSolve extends DeformFreeze {
   }
 
   /** `clampLocal` for mass `i` (its doubles in `_clamp`): the far-side spring, lift, crush and lateral caps, the engine mounts and the hubs. */
-  private clampMass(i: number, group: THREE.Object3D, sideHit: boolean, pinned: boolean, squeeze: boolean, deep: boolean): void {
+  private clampMass(i: number, group: THREE.Object3D, sideHit: boolean, pinned: boolean, squeeze: boolean, deep: boolean, centre: Float64Array | undefined): void {
     const m = this.masses[i]!;
     const ix = _clamp[0]!;
     const iz = _clamp[1]!;
@@ -280,6 +282,7 @@ export abstract class DeformSolve extends DeformFreeze {
         into += k;
         rel -= k;
       }
+      if (rel > cap && centre !== undefined) this.stopAtCap(m, group, ix, iz, centre);
       along = Math.max(-cap, Math.min(cap, rel));
       if ((!cabin || m.name === "roof") && this.hitSpeed >= 0) {
         // Sheet metal keeps its set: only the elastic part of the crush springs back. Only a loading contact's crush sets, within its contact hold:
@@ -361,6 +364,20 @@ export abstract class DeformSolve extends DeformFreeze {
       }
     }
     m.world.copy(m.local).applyMatrix4(group.matrixWorld);
+  }
+
+  /** A mass the clamp holds at its crush cap once the contact has let go has nothing pushing it in: its speed into the cap, relative to the rigid body's there (`bodyV` + `bodyW` × r about the centre `c`), goes, or `moveRelative` drives it a few mm deeper every step and the clamp and the shape step fight it back (a sawtooth the wreck's nose ends a step on any phase of). */
+  private stopAtCap(m: MassNode, group: THREE.Object3D, ix: number, iz: number, c: Float64Array): void {
+    _a.set(ix, 0, iz).applyQuaternion(group.quaternion);
+    const rx = m.world.x - c[0]!;
+    const ry = m.world.y - c[1]!;
+    const rz = m.world.z - c[2]!;
+    const vx = this.bodyV.x + this.bodyW.y * rz - this.bodyW.z * ry;
+    const vz = this.bodyV.z + this.bodyW.x * ry - this.bodyW.y * rx;
+    const into = (m.vel.x - vx) * _a.x + (m.vel.z - vz) * _a.z;
+    if (into <= 0) return;
+    m.vel.x -= _a.x * into;
+    m.vel.z -= _a.z * into;
   }
 
   /**

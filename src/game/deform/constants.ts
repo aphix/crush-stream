@@ -23,6 +23,11 @@ export const SQUASH_REACH = 1.15;
 /** Physics slice (s) the per-call contact shares (feedOverlap nibble and inbound-speed kill) were tuned at: a calibration reference, kept when the sim's own fine floor moves. */
 export const CONTACT_REF_SLICE = 1 / 240;
 /** The squash and buckle settings a fresh rig starts at, and the HUD starts its sliders at. */
+/** Smallest EBS (m/s, 10 km/h) that counts as a new hit on a wreck: the IIHS low-speed bumper test's
+ *  6 mph full-width impact, where bumper systems start taking damage (research 12). The old 6 m/s
+ *  (22 km/h) floor dropped every car-car hit under 43 km/h closing (each car's EBS is about half the
+ *  closing), so a derby's dozens of 25–40 km/h rams added nothing and a 90 s match killed 0–2 cars. */
+export const REARM_EBS = 2.8;
 export const DEFAULT_SQUASH = 0.32;
 export const DEFAULT_BUCKLE = 0.45;
 /** The contact window (s): how long after its last contact a crashed car's shape matching and mass step stay live (`DeformSolve.live`), and the time over which its tyres' grip comes back after a hit (`DeformSolve.settledShare`). */

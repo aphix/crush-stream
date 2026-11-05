@@ -639,6 +639,22 @@ export abstract class DeformContact extends DeformState {
     if (m.hub && !m.popped) this.shoveHub(m, dx, dz);
   }
 
+  /** The crash window is closed and nothing squeezes the wreck: a face's push now moves it whole (`moveWhole`), its dent is kept. */
+  get settled(): boolean {
+    return !this.crushing && !this.bidirectional && !this.deepCrush;
+  }
+
+  /** A face held the settled wreck out by (`dx`, `dz`): every dynamic mass moves with it (hubs too), the car-frame places stay; a mass-by-mass push would crush the nose a little more each slice a driver leans on the wall. */
+  moveWhole(dx: number, dz: number): void {
+    this.thaw();
+    for (let mi = 0; mi < this.masses.length; mi++) {
+      const m = this.masses[mi]!;
+      if (!m.dynamic) continue;
+      m.world.x += dx;
+      m.world.z += dz;
+    }
+  }
+
   /**
    * A wreck resting on the face (the slab of `faceHits`, after its rows moved masses): the face moved its bumpers after this
    * call's clamp, so the packed nose shoves the block with it (clampLocal's pack rule, within the hit's reach). Without it a dead

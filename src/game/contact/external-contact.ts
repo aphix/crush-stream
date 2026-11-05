@@ -420,6 +420,15 @@ const faceResult = new Float64Array(OUT_SIZE);
 /** [0]: the deepest mass (m) past the face in the last `holdOnFace` call, as it met them; -Infinity when none was inside. */
 const holdDepth = new Float64Array(1);
 
+/** The deepest (m) a mass may stand in a face for the whole wreck to be moved out with it (`holdOnFace`): a wreck leaning on a wall is pressed in by a slice's travel, millimetres; an offset hit's turning wreck swings a corner 0.5 m in. */
+const WHOLE_HOLD_MAX = 0.02;
+
+/** Whether a mass of `d` touches the slab `holdOnFace` would hold it on (its rows are rebuilt by that call). */
+function touchesFace(d: DeformableCar["deform"], box: ContactBox, ends: boolean, topY: number): boolean {
+  d.faceHits(box.x, box.z, box.hz, box.hx, box.yaw - Math.PI / 2, ends, faceHits, faceWho, topY);
+  return d.faceContacts > 0;
+}
+
 /**
  * The rigid slab (centre `cx`/`cz`, half extents `hx`/`hz`, rotated by `yaw`) at rest in the frame the masses' velocities are in: each
  * mass inside it is one kernel contact along the nearer face's normal (plastic, no friction, the slab kinematic) that takes the inbound
@@ -447,8 +456,13 @@ export function holdOnFace(d: DeformableCar["deform"], cx: number, cz: number, h
   faceContact[CT_MU] = 0;
   faceContact[CT_JMAX] = Infinity;
   let taken = 0;
+  let wx = 0;
+  let wz = 0;
+  let deepest = 0;
   holdDepth[0] = -Infinity;
   for (let i = 0; i < n; i++) holdDepth[0] = Math.max(holdDepth[0]!, faceHits[i * FACE_ROW + 4]!);
+  // A settled wreck (crash window closed, no squeeze) leaning on a fixed face with closed ends is held out whole, like `separateAlong`'s: its dent is kept, the face's deepest push moves every mass once. An open end (a post, a moving head) meets masses on both sides, and a whole move cannot clear both; a part through the face by more than `WHOLE_HOLD_MAX` is a turning or sliding wreck's, and only that part is pushed out.
+  const whole = !ends && d.settled && holdDepth[0] <= WHOLE_HOLD_MAX;
   for (let i = 0; i < n; i++) {
     const o = i * FACE_ROW;
     const m = masses[faceWho[i]!]!;
@@ -466,8 +480,14 @@ export function holdOnFace(d: DeformableCar["deform"], cx: number, cz: number, h
     m.vel.x = faceRows[BODY_VX]!;
     m.vel.z = faceRows[BODY_VZ]!;
     const push = faceResult[OUT_PUSH_A]!;
-    d.pushMass(faceWho[i]!, faceHits[o + 2]! * push, faceHits[o + 3]! * push);
+    if (!whole) d.pushMass(faceWho[i]!, faceHits[o + 2]! * push, faceHits[o + 3]! * push);
+    else if (push > deepest) {
+      deepest = push;
+      wx = faceHits[o + 2]! * push;
+      wz = faceHits[o + 3]! * push;
+    }
   }
+  if (whole && deepest > 0) d.moveWhole(wx, wz);
   d.packEngineBlock(cx, cz, yaw);
   return taken;
 }
@@ -527,7 +547,16 @@ export function strikeCar(car: DeformableCar, box: ContactBox, dt: number, crush
     const ub = box.vx * fx + box.vz * fz;
     shiftVelocities(car, -fx * ub, -fz * ub);
     // The slab's thin axis (`holdOnFace` x) is the striker's travel.
-    taken = holdOnFace(d, box.x, box.z, box.hz, box.hx, box.yaw - Math.PI / 2, !box.fixed || box.openEnds, topY);
+    const ends = !box.fixed || box.openEnds;
+    // A wreck coming back for another hit touches the face with its particles while its shrunken hulls are clear of it: the fresh hit
+    // arms before the face holds it (before the contact is marked: a re-arm needs the quiet time the wreck has had), so the hold reads the armed state.
+    if (armable && touchesFace(d, box, ends, topY)) {
+      d.takeMotion(car.velocity, car.angular);
+      car.applyImpact(_p, _n, closing, barrierSpeed);
+      d.markMotion();
+      armable = false;
+    }
+    taken = holdOnFace(d, box.x, box.z, box.hz, box.hx, box.yaw - Math.PI / 2, ends, topY);
     // A fixed solid narrower than the car (a palm between the bumpers) meets the crush hulls before any particle: hulls on the face
     // are a contact all the same, and the hit stays open (the quiet clock ran out while the hulls held the wreck off: an 8 m/s tap
     // read 0.016 m of block travel against the slab's 0). The hulls crush the particles (`feedOverlap`) until they are on the face.
@@ -535,8 +564,6 @@ export function strikeCar(car: DeformableCar, box: ContactBox, dt: number, crush
     if (d.faceContacts > 0 || hulled) {
       held = true;
       bodyHit.touching = true;
-      // A wreck coming back for another hit touches the face with its particles while its shrunken hulls are clear of it: the fresh hit
-      // arms here (before the contact is marked: a re-arm needs the quiet time the wreck has had).
       if (armable) {
         d.takeMotion(car.velocity, car.angular);
         car.applyImpact(_p, _n, closing, barrierSpeed);

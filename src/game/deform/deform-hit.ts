@@ -4,7 +4,7 @@ import { resetCluster } from "./shape-match.ts";
 import { DeformRig, type DeformMode, type MassNode } from "./deform-rig.ts";
 import { FACES, FACE_AXIS } from "./load-crush.ts";
 import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
-import { CORNER_BLEND, CORNER_CENTRED, MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
+import { CORNER_BLEND, CORNER_CENTRED, MIN_MASS_SUM, MIN_WEIGHT_SUM, REARM_EBS } from "./constants.ts";
 
 /** How long (s) after a hit armed its centre follows the pair's patch (`aimHit`): a few fine slices. */
 const AIM_WINDOW = 0.015;
@@ -19,11 +19,6 @@ const HUB_SLIP = 8;
 const REARM_QUIET = 0.3;
 /** A contact at this multiple of the armed hit's EBS re-arms before REARM_QUIET: a new hit at 2.25× its energy, where its own slices read within a few % of its first. */
 const HARDER_HIT = 1.5;
-/** Smallest EBS (m/s, 10 km/h) that counts as a new hit on a wreck: the IIHS low-speed bumper test's
- *  6 mph full-width impact, where bumper systems start taking damage (research 12). The old 6 m/s
- *  (22 km/h) floor dropped every car-car hit under 43 km/h closing (each car's EBS is about half the
- *  closing), so a derby's dozens of 25–40 km/h rams added nothing and a 90 s match killed 0–2 cars. */
-const REARM_EBS = 2.8;
 /** One hit's most wear (EBS², m²/s²; 6 m/s ≈ 22 km/h): a single hard hit is the engine travel's to
  *  judge, the wear counts how many hits a wreck has taken (`wreckEnergy`). */
 const WEAR_HIT = 36;
@@ -230,7 +225,7 @@ export abstract class DeformHit extends DeformRig {
   }
 
   /** The rigid body's centre: the dynamic masses' centroid off by `liftOffset` (x, y, z in a shared scratch: valid until the next call). */
-  private bodyCentre(): Float64Array {
+  protected bodyCentre(): Float64Array {
     let mass = 0;
     _centre.fill(0);
     for (const m of this.masses) {

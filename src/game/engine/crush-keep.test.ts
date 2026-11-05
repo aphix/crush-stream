@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { todoRow } from "../kernel/todo-row.test-util.ts";
 import { FREEWHEEL, launch, makeWorld, runWall, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
+import { makeBox, solidFace, strikeCar } from "../contact/external-contact.ts";
 import { pushCar } from "../contact/pair-contact.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
@@ -33,6 +33,10 @@ const STYLES: [CarStyleId, VehicleClassId][] = [
   ["wagon", "suv"],
   ["pickup", "truck"],
 ];
+
+/** The front bumper's travel (m) a 50 km/h square wall hit leaves (measured 0.408-0.410); moved whole by the wall while it crushed, a hatch stood 0.389 m in and a wagon 0.378 m. */
+const FIRST_HIT_CRUSH_MIN = 0.4;
+const FIRST_HIT_CRUSH_MAX = 0.42;
 
 /** A car of `style` 1.5 s after a 50 km/h square wall hit: a frozen, nose-crushed wreck. */
 function wreck(style: CarStyleId, cls: VehicleClassId): DeformableCar {
@@ -134,10 +138,18 @@ for (const [style, cls] of STYLES) {
     });
   });
 
+  describe(`given a ${style} that hits a wall at 50 km/h nose first`, () => {
+    it("when its crash window has closed, then the hit crushed its front bumper in by 0.40 to 0.42 m (the wall never held the crushing car out whole)", () => {
+      const car = wreck(style, cls);
+      const bumper = car.deform.masses.find((m) => m.name === "bumperFL")!;
+      const crush = bumper.rest.z - bumper.local.z;
+      expect(crush, `${style}: the front bumper stands ${(crush * 1000).toFixed(1)} mm in`).toBeGreaterThanOrEqual(FIRST_HIT_CRUSH_MIN);
+      expect(crush, `${style}: the front bumper stands ${(crush * 1000).toFixed(1)} mm in`).toBeLessThanOrEqual(FIRST_HIT_CRUSH_MAX);
+    });
+  });
+
   describe(`given a ${style} that hits a wall at 50 km/h nose first and is held on it by its driver once the hit's crash window closes`, () => {
-    // The pickup still pops 2.1 mm at the freeze step itself (no drift before it: its front masses' car-frame z re-derived from the wall-held world).
-    const todo = style === "pickup" ? "the freeze step's own re-derive moves the pickup's nose 2.1 mm" : undefined;
-    todoRow("when it settles there 3 s, then its drawn nose never jumps more than 2 mm between frames, its next bake included", todo, () => {
+    it("when it settles there 3 s, then its drawn nose never jumps more than 2 mm between frames, its next bake included", () => {
       const car = makeCar(cls);
       launch(car, 6.2, 0, -Math.PI / 2, -50 / 3.6, 0);
       const w = makeWorld([car], true, false, FREEWHEEL);
@@ -155,5 +167,71 @@ for (const [style, cls] of STYLES) {
       worst = Math.max(worst, Math.abs(drawnNose(car) - last));
       expect(worst, `${style}: the drawn nose jumped ${(worst * 1000).toFixed(1)} mm between frames`).toBeLessThanOrEqual(KEEP);
     });
+
+    it("when it is held there 3 s more, then the wall holds it whole and its nose crush grows by no more than 2 mm", () => {
+      const { car, w } = closedWindowAtWall(style, cls, 50);
+      w.pedals.set(car, GAS);
+      ticks(w, 0.5);
+      const before = drawnNose(car);
+      ticks(w, 3);
+      assertKept(`${style} leaned on the wall`, before, drawnNose(car));
+    });
+
+    it("when a wreck of a 20 km/h hit is then driven into the wall at 3 m/s, then its nose is crushed further by more than 5 mm", () => {
+      const { car, w } = closedWindowAtWall(style, cls, 20);
+      ticks(w, 1);
+      const before = drawnNose(car);
+      car.velocity.x -= 3;
+      ticks(w, 1);
+      expect(drawnNose(car) - before, `${style}: a fresh 3 m/s hit on a settled wreck left its nose as it was`).toBeGreaterThan(0.005);
+    });
   });
+
+  describe(`given a ${style} that a 50 km/h plate has crushed and let settle`, () => {
+    it("when a second 50 km/h plate shot meets the wreck, then the plate neither springs its nose back out nor leaves it dented less than 2 mm", () => {
+      const car = makeCar(cls);
+      const w = makeWorld([car], false, false, FREEWHEEL);
+      const nose = () => car.deform.masses.find((m) => m.name === "bumperFL")!.local.z;
+      plateShot(car, w, 50);
+      const first = nose();
+      expect(rest0(cls) - first, `${style}: the first plate shot did not dent the nose`).toBeGreaterThan(0.1);
+      plateShot(car, w, 50);
+      expect(nose() - first, `${style}: the second shot left the nose ${((nose() - first) * 1000).toFixed(1)} mm out of the dent of the first`).toBeLessThanOrEqual(KEEP);
+    });
+  });
+}
+
+/** The nose's z (m) on an intact car of `cls`. */
+function rest0(cls: VehicleClassId): number {
+  return makeCar(cls).deform.masses.find((m) => m.name === "bumperFL")!.rest.z;
+}
+
+/** A plate (open ends, as a piston head's) driven at `kph` into the nose of `car`, 0.4 s of contact, then 1 s to settle. */
+function plateShot(car: DeformableCar, w: CrashWorld, kph: number): void {
+  const box = makeBox();
+  const v = kph / 3.6;
+  const fwd = car.fwdFlat;
+  const b = car.deform.masses.find((m) => m.name === "bumperFL")!.world;
+  const x0 = b.x + fwd.x * 0.02;
+  const z0 = b.z + fwd.z * 0.02;
+  for (let t = 0; t < 0.4; t += 1 / FRAME_HZ) {
+    solidFace(box, -fwd.x, -fwd.z, x0 - fwd.x * v * t, z0 - fwd.z * v * t, car.group.position.x, car.group.position.z, 1.5, 0.5);
+    box.fixed = false;
+    box.vx = -fwd.x * v;
+    box.vz = -fwd.z * v;
+    box.kg = 3000;
+    strikeCar(car, box, 1 / FRAME_HZ, true, true, false);
+    tickWorld(w);
+  }
+  ticks(w, 1);
+}
+
+/** A car of `cls` that hit the wall at `kph` nose first, its crash window closed, in a world that keeps the wall. */
+function closedWindowAtWall(style: CarStyleId, cls: VehicleClassId, kph: number): { car: DeformableCar; w: CrashWorld } {
+  const car = makeCar(cls);
+  launch(car, 6.2, 0, -Math.PI / 2, -kph / 3.6, 0);
+  const w = makeWorld([car], true, false, FREEWHEEL);
+  for (let t = 0; t < 3 && (!car.crashed || car.deform.crushing); t += 1 / FRAME_HZ) tickWorld(w);
+  expect(car.crashed && !car.deform.crushing, `${style}: the hit's crash window never closed`).toBeTruthy();
+  return { car, w };
 }
