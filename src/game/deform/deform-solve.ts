@@ -537,7 +537,7 @@ export abstract class DeformSolve extends DeformFreeze {
       fitClusters(this.clusters, this.shapeParticles, this.cloudTurn);
       for (let ci = 0; ci < this.clusters.length; ci++) {
         const c = this.clusters[ci]!;
-        shapeCluster(c, ci, this.clusterBeta(ci, contacting), this.cloudTurn);
+        shapeCluster(c, this.clusterBeta(ci, contacting), this.cloudTurn);
         const cw = 1;
         for (let i = 0; i < c.idx.length; i++) {
           const pi = c.idx[i]!;

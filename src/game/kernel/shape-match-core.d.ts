@@ -39,6 +39,10 @@ export interface ShapeCluster {
   skinM: Mat3;
   Rprev: Mat3;
   rotQ: Quat;
+  /** `rotQ` as a matrix, the round's unclamped fit (`fitClusters`). */
+  fitR: Mat3;
+  /** What the last fit left: 0 `fitR` stands, 1 a flat cluster folded over and holds its last rotation, 2 `A` was not finite. */
+  fit: number;
   skinR: Mat3;
   skinRprev: Mat3;
   skinRotQ: Quat;
@@ -59,12 +63,10 @@ export function quatId(out?: Quat): Quat;
 export function m3Polar(A: Mat3, q: Quat, R: Mat3, S: Mat3): void;
 export function makeCluster(particles: ShapeParticle[], idx: number[]): ShapeCluster;
 export function rebuildAqqWeighted(c: ShapeCluster, particles: ShapeParticle[]): void;
-/** One cluster's fit, its rotation clamped to 0.85 rad about `turn` (the world's axes when omitted). */
-export function matchCluster(c: ShapeCluster, particles: ShapeParticle[], beta: number, turn?: Mat3): void;
-/** Round one of a solver iteration: every cluster's fit, and into `turn` the cloud's own turn from them (the polar factor of their mean unclamped rotation). */
+/** Round one of a solver iteration: every cluster's fit, and into `turn` the cloud's own turn from them (the polar factor of the mean of the unclamped rotations that stand within 0.85 rad of the commonest one). */
 export function fitClusters(clusters: ShapeCluster[], particles: ShapeParticle[], turn: Mat3): void;
-/** Round two: cluster `ci` of the clusters `fitClusters` fitted, finished with its rotation clamped about the round's `turn`. */
-export function shapeCluster(c: ShapeCluster, ci: number, beta: number, turn: Mat3): void;
+/** Round two: `c` (fitted by `fitClusters`), finished with its rotation clamped about the round's `turn`. */
+export function shapeCluster(c: ShapeCluster, beta: number, turn: Mat3): void;
 export const PLASTIC: Float64Array;
 /** Plastic flow of one cluster, its slice length, squash and buckle read from `PLASTIC` [0..2] (no argument boxing). */
 export function applyPlasticity(c: ShapeCluster, particles: ShapeParticle[]): void;

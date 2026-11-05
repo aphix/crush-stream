@@ -46,6 +46,10 @@ export interface ShapeCluster {
   Rprev: Mat3;
   /** Unclamped rotation of the last fit: warm start of the next extraction. */
   rotQ: Quat;
+  /** `rotQ` as a matrix, the round's unclamped fit (`fitClusters`). */
+  fitR: Mat3;
+  /** What the last fit left: 0 `fitR` stands, 1 a flat cluster folded over and holds its last rotation, 2 `A` was not finite. */
+  fit: number;
   skinR: Mat3;
   skinRprev: Mat3;
   skinRotQ: Quat;
@@ -60,7 +64,6 @@ export interface ShapeCluster {
 export {
   m3FrobeniusI,
   makeCluster,
-  matchCluster,
   fitClusters,
   shapeCluster,
   PLASTIC,

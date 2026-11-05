@@ -82,14 +82,20 @@ console.log("shape-match-core.js / physics-core.js\n");
 time("m3Polar", 80_000, () => m.m3Polar(A, q, R, S));
 time("m3Polar cold", 80_000, () => m.m3Polar(A, m.quatId(q), R, S));
 time("m3Polar animated", 80_000, () => m.m3Polar(anim[frame++ & (FRAMES - 1)], q, R, S));
-time("matchCluster", 40_000, () => m.matchCluster(c, rest, 0.25));
+const turn = m.m3();
+/** One cluster through the solver's two rounds. */
+function match(cluster, pts, beta) {
+  m.fitClusters([cluster], pts, turn);
+  m.shapeCluster(cluster, beta, turn);
+}
+time("matchCluster", 40_000, () => match(c, rest, 0.25));
 time("matchCluster animated", 40_000, () => {
   pose(moving, restPts, frame++ & (FRAMES - 1));
-  m.matchCluster(cm, moving, 0.25);
+  match(cm, moving, 0.25);
 });
 time("matchCluster 3-particle anim", 40_000, () => {
   pose(tri, triPts, frame++ & (FRAMES - 1));
-  m.matchCluster(ct, tri, 0.25);
+  match(ct, tri, 0.25);
 });
 time("applyPlasticity", 20_000, () => {
   m.PLASTIC.set([1 / 60, 0.4, 0.45]);

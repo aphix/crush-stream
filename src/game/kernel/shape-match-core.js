@@ -276,61 +276,55 @@ function stretchInto(A, R, S) {
 const IDENTITY = m3Id();
 const _bodyMean = m3();
 const _bodyQ = quatId();
-let _bodyRots = new Float64Array(9 * 32);
+/** `ShapeCluster.fit` after a fit: the unclamped rotation `fitR` stands, the cluster folded (a flat one holds its last rotation), or `A` is not finite. */
+const FIT_OK = 0;
+const FIT_FOLDED = 1;
+const FIT_BROKEN = 2;
+/** Whether the fitted clusters `a` and `b` stand within `ROT_CLAMP` of each other in rotation. */
+function turnedAlike(a, b) {
+  const x = a.fitR, y = b.fitR;
+  const trace = x[0] * y[0] + x[1] * y[1] + x[2] * y[2] + x[3] * y[3] + x[4] * y[4] + x[5] * y[5] + x[6] * y[6] + x[7] * y[7] + x[8] * y[8];
+  return (trace - 1) * 0.5 >= COS_ROT_CLAMP;
+}
 /**
- * The cloud's own turn into `turn`: the polar factor of the mean of the unclamped rotations (`rotQ`; a held or non-finite cluster has
- * none) that stand within `ROT_CLAMP` of the rotation most clusters stand within `ROT_CLAMP` of (the lowest index on a tie). A crushed
- * group that strays from the rest cannot drag the turn toward itself unless it outnumbers them. The shape frame turns only the heading
- * out of the world, so a wreck lying on its side or rolling onto its roof gives every cluster a turn past `ROT_CLAMP` against the
- * world's axes: the clamp is measured about this turn instead. Each extraction starts from the identity, so the turn is a function of
- * the clusters alone and cars stepped in any order read the same.
+ * The cloud's own turn into `turn`: the polar factor of the mean of the unclamped rotations (`fitR` of the clusters that fitted) that
+ * stand within `ROT_CLAMP` of the rotation most clusters stand within `ROT_CLAMP` of (the lowest index on a tie). A crushed group that
+ * strays from the rest cannot drag the turn toward itself unless it outnumbers them. The shape frame turns only the heading out of
+ * the world, so a wreck lying on its side or rolling onto its roof gives every cluster a turn past `ROT_CLAMP` against the world's
+ * axes: the clamp is measured about this turn instead. Each extraction starts from the identity, so the turn is a function of the
+ * clusters alone and cars stepped in any order read the same.
  */
 function bodyTurn(clusters, turn) {
-  if (_bodyRots.length < 9 * clusters.length) _bodyRots = new Float64Array(9 * clusters.length);
-  let n = 0;
-  for (let ci = 0; ci < clusters.length; ci++) {
-    const c = clusters[ci];
-    if (HELD[ci] === 1 || !m3Finite(c.A)) continue;
-    quatToMat(c.rotQ, _bodyMean);
-    for (let i = 0; i < 9; i++) _bodyRots[n * 9 + i] = _bodyMean[i];
-    n++;
+  let centre = null;
+  let most = 0;
+  for (let i = 0; i < clusters.length; i++) {
+    if (clusters[i].fit !== FIT_OK) continue;
+    let near = 0;
+    for (let j = 0; j < clusters.length; j++) if (clusters[j].fit === FIT_OK && turnedAlike(clusters[i], clusters[j])) near++;
+    if (near > most) {
+      most = near;
+      centre = clusters[i];
+    }
   }
-  if (n === 0) {
+  if (centre === null) {
     m3Id(turn);
     return;
   }
-  let centre = 0;
-  let most = 0;
-  for (let i = 0; i < n; i++) {
-    let near = 0;
-    for (let j = 0; j < n; j++) if (rotationsWithin(i, j)) near++;
-    if (near > most) {
-      most = near;
-      centre = i;
-    }
-  }
   _bodyMean.fill(0);
-  for (let j = 0; j < n; j++) {
-    if (!rotationsWithin(centre, j)) continue;
-    for (let i = 0; i < 9; i++) _bodyMean[i] += _bodyRots[j * 9 + i];
+  for (let j = 0; j < clusters.length; j++) {
+    if (clusters[j].fit !== FIT_OK || !turnedAlike(centre, clusters[j])) continue;
+    for (let i = 0; i < 9; i++) _bodyMean[i] += clusters[j].fitR[i];
   }
   quatId(_bodyQ);
   extractRotation(_bodyMean, m3Det(_bodyMean) < 0 ? -1 : 1, _bodyQ);
   quatToMat(_bodyQ, turn);
 }
-/** Whether the rotations `i` and `j` of the round (`_bodyRots`) stand within `ROT_CLAMP` of each other. */
-function rotationsWithin(i, j) {
-  let trace = 0;
-  for (let k = 0; k < 9; k++) trace += _bodyRots[i * 9 + k] * _bodyRots[j * 9 + k];
-  return (trace - 1) * 0.5 >= COS_ROT_CLAMP;
-}
 /**
- * R = the rotation `q` (the fit's unclamped one) with its angle against `turn` clamped to 0.85 rad, S = sym(R^T A) (identity past
+ * `R` (the fit's unclamped rotation) with its angle against `turn` clamped to 0.85 rad, and S = sym(R^T A) (identity past
  * |S − I| 1.8): a cluster turned as the cloud is turned keeps its whole turn (its goals are its particles and exert no torque), one
  * that strays from the cloud's turn is held to 0.85 rad of it, however strained it is.
  */
-function settleRotation(A, q, R, S, turn) {
-  quatToMat(q, R);
+function settleRotation(A, R, S, turn) {
   clampAbout(R, turn, ROT_CLAMP, COS_ROT_CLAMP);
   if (!(stretchInto(A, R, S) <= 1.8 * 1.8)) m3Id(S);
 }
@@ -346,7 +340,8 @@ function m3Polar(A, q, R, S) {
     return;
   }
   extractRotation(A, m3Det(A) < 0 ? -1 : 1, q);
-  settleRotation(A, q, R, S, IDENTITY);
+  quatToMat(q, R);
+  settleRotation(A, R, S, IDENTITY);
 }
 function m3Orthonormalize(R) {
   let x0 = R[0], y0 = R[3], z0 = R[6];
@@ -457,6 +452,8 @@ function makeCluster(particles, idx) {
     skinM: m3Id(),
     Rprev: m3Id(),
     rotQ: quatId(),
+    fitR: m3Id(),
+    fit: 0,
     skinR: m3Id(),
     skinRprev: m3Id(),
     skinRotQ: quatId(),
@@ -628,9 +625,7 @@ function blendStretchInto(R, S, beta, lim, out) {
   out[8] = r6 * t2 + r7 * t5 + r8 * t8;
   if (!m3Bounded(out, lim)) m3Id(out);
 }
-/** Cluster `ci` of the round `fitClusters` ran folded (a flat cluster that holds its last rotation) or not finite: 1, else 0. */
-let HELD = new Uint8Array(32);
-/** `c`'s moments, fit `c.A` and its unclamped rotation `c.rotQ`; false when a flat cluster has folded over (no proper rotation fits a mirrored slab) and holds its last rotation. */
+/** `c`'s moments, fit `c.A` and its unclamped rotation `c.rotQ` (as the matrix `c.fitR`), with `c.fit` saying what stands: a flat cluster that has folded over (no proper rotation fits a mirrored slab) holds its last rotation. */
 function fitOne(c, particles) {
   const idx = c.idx, qx = c.qx, qy = c.qy, qz = c.qz;
   let msum = 0, sx = 0, sy = 0, sz = 0, ux = 0, uy = 0, uz = 0;
@@ -664,37 +659,41 @@ function fitOne(c, particles) {
   c.cmz = cmz;
   // Σ m (x − cm) q^T = Σ m x q^T − cm (Σ m q)^T
   fitInto(p0 - cmx * ux, p1 - cmx * uy, p2 - cmx * uz, p3 - cmy * ux, p4 - cmy * uy, p5 - cmy * uz, p6 - cmz * ux, p7 - cmz * uy, p8 - cmz * uz, c.AqqInv, c.A);
-  if (c.planar && !completePlanarInto(c.A, c.n, c.Rprev)) return false;
-  if (m3Finite(c.A)) extractRotation(c.A, m3Det(c.A) < 0 ? -1 : 1, c.rotQ);
-  return true;
+  if (c.planar && !completePlanarInto(c.A, c.n, c.Rprev)) {
+    c.fit = FIT_FOLDED;
+    return;
+  }
+  if (!m3Finite(c.A)) {
+    c.fit = FIT_BROKEN;
+    return;
+  }
+  extractRotation(c.A, m3Det(c.A) < 0 ? -1 : 1, c.rotQ);
+  quatToMat(c.rotQ, c.fitR);
+  c.fit = FIT_OK;
 }
-/** `c`'s rotation clamped about `turn`, its stretch, the stabilised rotation and the goals' transform `c.M`, from the fit `fitOne` made (`fitted`: it did not fold). */
-function finishOne(c, beta, turn, fitted) {
-  if (!fitted) {
+/** `c`'s rotation clamped about `turn`, its stretch, the stabilised rotation and the goals' transform `c.M`, from the fit `fitOne` made. */
+function finishOne(c, beta, turn) {
+  if (c.fit === FIT_FOLDED) {
     m3Copy(c.Rprev, c.R);
     m3Id(c.S);
-  } else if (!m3Finite(c.A)) {
+  } else if (c.fit === FIT_BROKEN) {
     m3Id(c.R);
     m3Id(c.S);
   } else {
-    settleRotation(c.A, c.rotQ, c.R, c.S, turn);
+    m3Copy(c.fitR, c.R);
+    settleRotation(c.A, c.R, c.S, turn);
   }
   stabilizeMat(c.R, c.Rprev);
   blendStretchInto(c.R, c.S, beta, 8, c.M);
 }
-/** One cluster's fit, with its rotation clamped about `turn` (the world's axes when omitted). */
-function matchCluster(c, particles, beta, turn = IDENTITY) {
-  finishOne(c, beta, turn, fitOne(c, particles));
-}
 /** Round one of a solver iteration: every cluster's fit, and `turn` (9 doubles) from them, as `bodyTurn` reads them. `shapeCluster` finishes each. */
 function fitClusters(clusters, particles, turn) {
-  if (HELD.length < clusters.length) HELD = new Uint8Array(clusters.length);
-  for (let ci = 0; ci < clusters.length; ci++) HELD[ci] = fitOne(clusters[ci], particles) ? 0 : 1;
+  for (let ci = 0; ci < clusters.length; ci++) fitOne(clusters[ci], particles);
   bodyTurn(clusters, turn);
 }
-/** Round two: cluster `ci` of `clusters` finished against the round's `turn`. */
-function shapeCluster(c, ci, beta, turn) {
-  finishOne(c, beta, turn, HELD[ci] === 0);
+/** Round two: `c` finished against the round's `turn`. */
+function shapeCluster(c, beta, turn) {
+  finishOne(c, beta, turn);
 }
 /** Slice rate the creep was tuned at (its old floor was `CREEP_OLD_FLOOR_SLICES` of these slices). */
 const CREEP_REF_HZ = 240;
@@ -813,6 +812,8 @@ function resetCluster(c, particles) {
   m3Id(c.skinM);
   m3Id(c.Rprev);
   quatId(c.rotQ);
+  m3Id(c.fitR);
+  c.fit = 0;
   m3Id(c.skinR);
   m3Id(c.skinRprev);
   quatId(c.skinRotQ);
@@ -920,7 +921,6 @@ export {
   m3Polar,
   fitClusters,
   makeCluster,
-  matchCluster,
   matchSkinLocal,
   quatId,
   rebuildAqqWeighted,

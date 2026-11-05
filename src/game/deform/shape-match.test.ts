@@ -7,7 +7,6 @@ import {
   m3FrobeniusI,
   makeCluster,
   type ShapeCluster,
-  matchCluster,
   PLASTIC,
   REST_SHIFT,
   applyPlasticity,
@@ -28,6 +27,12 @@ import { stepWreck } from "./physics-util.test-util.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
+
+/** One cluster's fit alone, its rotation clamped to 0.85 rad about `turn` (the world's axes when omitted): the solver's two rounds on a cloud of one cluster. */
+function matchCluster(c: ShapeCluster, particles: ShapeParticle[], beta: number, turn: Mat3 = m3Id()): void {
+  fitClusters([c], particles, m3());
+  shapeCluster(c, beta, turn);
+}
 
 /** `applyPlasticity` of one cluster for a slice of `dt` s at the given squash and buckle. */
 function flow(c: ShapeCluster, P: ShapeParticle[], dt: number, squash: number, buckle = 0.45): void {
@@ -329,7 +334,7 @@ describe("given a cluster fitted in a cloud that is turned 1.2 rad about the ver
       }
       for (let round = 0; round < 6; round++) {
         fitClusters(clusters, P, turn);
-        for (const [ci, c] of clusters.entries()) shapeCluster(c, ci, 0.5, turn);
+        for (const c of clusters) shapeCluster(c, 0.5, turn);
       }
     }
     let err = 0;
@@ -368,7 +373,7 @@ describe("given a cluster fitted in a cloud that is turned 1.2 rad about the ver
       const turn = m3Id();
       for (let round = 0; round < 20; round++) {
         fitClusters(clusters, P, turn);
-        for (const [ci, c] of clusters.entries()) shapeCluster(c, ci, 0, turn);
+        for (const c of clusters) shapeCluster(c, 0, turn);
       }
       for (const [k, c] of clusters.entries()) {
         const angle = m3RotationAngle(c.R);
