@@ -502,6 +502,13 @@ describe("given a car squeezed in the press past its wheels (the nose less deep 
     }
   });
 
+  it("when the wall never re-arms the hit, met at 38 and at 52 km/h at full throttle, then its rear hubs move no more than the springback into the car in the second after", () => {
+    for (const [wallZ, kmh] of [[6, 38], [10, 52]] as const) {
+      const creep = hubCreepAfterLastContact({ z: wallZ, throttle: 1, fixed: false });
+      expect(creep, `${kmh} km/h: a rear hub crept ${(creep * 1000).toFixed(0)} mm into the car after the last contact`).toBeLessThanOrEqual(HUB_CREEP_MAX);
+    }
+  });
+
   it("when the plates stay closed instead, then the tail is still crushed to the plates' depth and holds there", () => {
     const held = heldRearCrush(0.4);
     const later = heldRearCrush(1.4);
