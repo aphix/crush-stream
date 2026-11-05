@@ -271,6 +271,15 @@ export abstract class DeformContact extends DeformState {
       const tilt = 1 - upY * upY;
       _a.y *= upY > 0 ? 1 - tilt * tilt : 0;
       group.position.add(_a);
+      // A planted hub's world is its own pin (the others are rewritten from `local`): it rides the seat step, or the step reads as the hub creeping into the car.
+      if (!this.bidirectional && this.quietTime() > PLANT_QUIET) {
+        for (let mi = 0; mi < this.masses.length; mi++) {
+          const m = this.masses[mi]!;
+          if (!m.hub || m.popped) continue;
+          m.world.x += _a.x;
+          m.world.z += _a.z;
+        }
+      }
       group.updateWorldMatrix(false, false);
       // The seat moves every mass in the car frame, where the mesh and the cage are baked. Past the crush window (which bakes every step)
       // they are owed a bake from the masses, fitted exactly as the window's last is (a client fits the host's net bake exactly).

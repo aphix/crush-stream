@@ -495,9 +495,11 @@ describe("given a car squeezed in the press past its wheels (the nose less deep 
     expect(creep, `a rear hub crept ${(creep * 1000).toFixed(0)} mm into the car after the last contact`).toBeLessThanOrEqual(HUB_CREEP_MAX);
   });
 
-  it("when the wall is a fixed one (the game's: it re-arms the hit) met at 38 km/h at full throttle, then its rear hubs move no more than the springback into the car in the second after", () => {
-    const creep = hubCreepAfterLastContact({ z: 6, throttle: 1, fixed: true });
-    expect(creep, `a rear hub crept ${(creep * 1000).toFixed(0)} mm into the car after the last contact`).toBeLessThanOrEqual(HUB_CREEP_MAX);
+  it("when the wall is a fixed one (the game's: it re-arms the hit) met at 18 and at 38 km/h at full throttle, then its rear hubs move no more than the springback into the car in the second after", () => {
+    for (const [wallZ, kmh] of [[3, 18], [6, 38]] as const) {
+      const creep = hubCreepAfterLastContact({ z: wallZ, throttle: 1, fixed: true });
+      expect(creep, `${kmh} km/h: a rear hub crept ${(creep * 1000).toFixed(0)} mm into the car after the last contact`).toBeLessThanOrEqual(HUB_CREEP_MAX);
+    }
   });
 
   it("when the plates stay closed instead, then the tail is still crushed to the plates' depth and holds there", () => {
