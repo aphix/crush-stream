@@ -578,8 +578,8 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
     _in[I_MARGIN] = slant;
     meet(plan, style, outlineB, fields);
     if (!(_meet[M_DEPTH]! > -slant)) continue;
-    // A rolled node's ends read no deeper than its middle does plus the slant: those that cannot pass the deepest so far are left at the middle.
-    if (slant > 0 && Math.abs(kyy) > 1e-6 && _meet[M_BANDED] === 1 && !(rolled && _meet[M_DEPTH]! + slant <= best)) {
+    // A rolled node's ends read no deeper than its middle does plus the slant: those that cannot pass the deepest so far are left at the middle. A middle with no band (off `b`'s body by more than the window `bandAround` reads, or bridged) has ends too, at the node's own heights: a cop's hood node under a monster rolled 65° stood 0.33 m off its flank at the middle, with its end on the flank 0.05 m deep.
+    if (slant > 0 && Math.abs(kyy) > 1e-6 && !(rolled && _meet[M_DEPTH]! + slant <= best)) {
       _in[I_YC] = yc;
       deeperEnd(plan, style, outlineB, fields);
     }
