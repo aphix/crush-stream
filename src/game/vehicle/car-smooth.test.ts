@@ -1679,7 +1679,9 @@ const SIM_DIGEST_BY_STYLE = [
   { id: "coupe", digest: "6ee4b024bd54f8821aee210636da0dcdfb523f1e87e63dd9641a480dc264d3ee" },
   // The pickup re-pinned for its hood wrapping the nose (`hood.z1` 1.86 -> 1.92): its hood's cage reaches the nose the wall meets.
   // Its cab roof narrowed to the top plate's (profile cabinHw) brings the wall hit back to the same crush as before its mid-cab roof rose.
-  { id: "pickup", digest: "80460be4b0031e7a43cbd8497d3efd3393c6f87456c36071ae17d40096a4e4c2" },
+  // Again for a settled wreck held whole by the wall and a capped mass stopped at its cap (REPLAY 223): the pickup's nose no longer creeps in after the hit
+  // (463.8 -> 407.6 mm at 1.5 s in the lane's probe); 80460be4... -> b398bec7...; the sedan, hatchback, wagon, coupe and police unchanged.
+  { id: "pickup", digest: "b398bec7ce9500e21c4779151b029732b3e76c97976f2a1b2056c861bf95c801" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
@@ -1694,7 +1696,8 @@ const SIM_DIGEST_BY_STYLE = [
   // Again when a wreck's own faces never yield (`CarSurfaces.slot`): vaulting over the slab, the monster wreck's nose yielded 0.1 mm once and booked that
   // crush, its push off the slab cut to what the nose carries; now the nose holds and its masses after the hit differ (d43fea4a... -> 350367f4...); the other six unchanged.
   // Again when a cluster's turn is clamped about the cloud's own turn, not the world's axes (REPLAY 218): the monster's masses after the wall hit moved; the other six unchanged (71f30dab... -> 9727579f...).
-  { id: "monster", digest: "9727579ff2257585090e3b3076786a0dd6fee49285d13c214b9088e7fb8ae077" },
+  // Again for the same REPLAY 223 rules (a settled wreck held whole, a capped mass stopped): the monster's masses after the wall hit moved (9727579f... -> c8deb0c9...).
+  { id: "monster", digest: "c8deb0c9b60ec580b03be3c67f049febc435ed2c8925613b9a26c61cb8a6dfb2" },
   // Every style re-pinned with its bumpers in the cage (`CageSource.apart`), each a window of its own (`CageFields.part`): the cage's nose and tail meet the drawn bumper faces.
   // Again for each bumper's bottom corner held in its decimation (`bumperCorner`) and `frame.hullUnder`'s bumper rows standing on it: sedan 32ce12d9 -> 18748cc4, hatchback 05034364 -> 3a8ae274, wagon 14004d19 -> 8c803d8e, coupe a8bbcc35 -> 2f4d595f, pickup 87ed8880 -> 6506a0dd, police 30a73a14 -> b9cb6cec, monster 1417aa98 -> 0227b53d.
   // The coupe and the pickup again for the hood's fold (`HingeSpec.fold`: a crushed hood buckles into a ridge, no rigid turn of the whole lid): their noses' wall hit; the other five styles are byte-identical.
