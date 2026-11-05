@@ -11,6 +11,9 @@ const CREASE_REAR = 0;
 export const CREASE_LINE = 1;
 const CREASE_FRONT = 2;
 
+/** Crush length (m) over which the ridge rises to its full height: the square root's slope at 0 would stand it 2 cm high on a millimetre. */
+const RIDGE_ONSET_M = 0.02;
+
 /** How high (m) the lid of `spec` stands at its crease line once its crush `hingeT` has buckled its fold's share of the length the crush took off its chord; 0 for a lid that does not fold. */
 export function ridgeHeight(spec: HingeSpec, hingeT: number): number {
   const fold = spec.fold;
@@ -18,7 +21,8 @@ export function ridgeHeight(spec: HingeSpec, hingeT: number): number {
   const buckled = fold.share * fold.range * hingeT;
   if (buckled <= 0) return 0;
   const chord = spec.length - buckled;
-  return 0.5 * Math.sqrt(spec.length * spec.length - chord * chord);
+  const onset = Math.min(1, buckled / RIDGE_ONSET_M);
+  return 0.5 * Math.sqrt(spec.length * spec.length - chord * chord) * onset * onset * (3 - 2 * onset);
 }
 
 /** `spec`'s lid, seated at car z `originZ`: into `out` at `at`, the car z of its hinge edge, its crease line and its free edge (a lid with no fold: three zeros). */
@@ -33,6 +37,11 @@ export function creaseStations(spec: HingeSpec, originZ: number, out: Float64Arr
   out[at + CREASE_REAR] = rear;
   out[at + CREASE_LINE] = rear + fold.crease * (front - rear);
   out[at + CREASE_FRONT] = front;
+}
+
+/** Whether the panel whose stations are at `at` folds (its free edge stands past its hinge edge); a panel with no fold has three zeros. */
+export function folds(stations: ArrayLike<number>, at: number): boolean {
+  return stations[at + CREASE_FRONT]! > stations[at + CREASE_REAR]!;
 }
 
 /** 1 on the crease line, falling straight to 0 at the hinge edge and at the free edge; 0 outside them and for a lid with no fold (its stations all 0). */

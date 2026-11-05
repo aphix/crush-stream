@@ -262,6 +262,9 @@ describe("given a crushed pickup's cage with its hood moved forward along its le
   });
 });
 
+/** Triangles the folding hood adds past the budget: its mirror images across the plane (6 on the sedan). */
+const FOLDED_HOOD_TRIANGLES = 8;
+
 describe("given the cage's vertex budget", () => {
   it("when a style's cage is built, then it has its budget's vertices, the underside points held over it and the C-post's kept crown points, about three hundred triangles, and its two bumpers and two front doors on their own budget past them", (t) => {
     const car = carInState("untouched", "sedan", "sedan");
@@ -278,7 +281,7 @@ describe("given the cage's vertex budget", () => {
     t.annotate(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}, ${kept} the C-post's kept points, ${parts} the bumpers' and doors'), ${triCount} triangles (${partTris} theirs)`);
     expect(apart.length, "two bumpers and two front doors, each decimated alone").toBe(4);
     expect(vertexCount - parts <= CAGE_VERTICES + heldCount + kept + 2 && vertexCount - parts >= CAGE_VERTICES / 2, `${vertexCount - parts} hull vertices, ${heldCount} held, ${kept} kept`).toBeTruthy();
-    expect(triCount - partTris >= 150 && triCount - partTris <= 330 + 2 * (heldCount + kept), `${triCount - partTris} hull triangles`).toBeTruthy();
+    expect(triCount - partTris >= 150 && triCount - partTris <= 330 + 2 * (heldCount + kept) + FOLDED_HOOD_TRIANGLES, `${triCount - partTris} hull triangles`).toBeTruthy();
     expect(parts > 0 && parts <= CAGE_PART_VERTICES && partTris <= 2 * CAGE_PART_VERTICES, `${parts} part vertices, ${partTris} triangles`).toBeTruthy();
   });
 });

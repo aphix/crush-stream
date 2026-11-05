@@ -4,7 +4,7 @@ import { INF_K } from "../deform/deform-build.ts";
 import { cageAxis } from "../deform/deform-state.ts";
 import { archKeep, barReach, RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS } from "../deform/deform-rig.ts";
 import { PUSH_BAR_REACH } from "./car-materials.ts";
-import { CREASE_STRIDE, ridgeAt } from "./lid-fold.ts";
+import { CREASE_STRIDE, folds, ridgeAt } from "./lid-fold.ts";
 import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
@@ -852,7 +852,10 @@ function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGr
     else index.push(...tri.map((v) => (v < from ? v : v - count)));
   }
   const kept = held.reduce((n, h) => n + h, 0);
-  const hull = decimate(rest, index, group, CAGE_VERTICES + kept, Math.min(src.loft, from), held, true);
+  // A folding lid (the hood) stands its ridge on the cage, so its triangles across the plane keep their mirror images too.
+  const folding = new Set<number>();
+  for (let k = 0; k < src.panelCount; k++) if (folds(src.panelCrease, k * CREASE_STRIDE)) folding.add(k + 1);
+  const hull = decimate(rest, index, group, CAGE_VERTICES + kept, Math.min(src.loft, from), held, true, folding);
   const source = Array.from(hull.source, (v) => (v < from ? v : v + count));
   const slots = new Map<string, number>();
   const slotOf = new Int32Array(count);

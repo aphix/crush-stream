@@ -175,7 +175,7 @@ const REPEAT_LIFTS = [0, 0.0005, 0.001] as const;
  * three and 0.25, 0.75 mm) it was set from: one rule for all seven, 1.5 x the five-start spread, rounded up (re-measured on b2d0a6d43, one probe: the five-start numbers below). The bottom roof's crush is the plastic history of the drop, so a millimetre of start moves
  * it by a slice of landing and coast. Truck and monster read far above the rest: their column keeps creeping down at 2-17 cm/s after the
  * landing (truck for 0.2 s, monster for 1 s) with a roof yielding, then halts within one frame, and where it halts decides the bottom
- * roof (truck 135-150 mm, monster 176-196): open defects, their bars pin today's spread and a todoRow below holds each to 7 mm. SUV's 24 mm (re-measured at the hood fold: five starts 15.9 mm, bottom roof 165-181 mm; it was 15 from 9.8) covers a landing scatter (third roof
+ * roof (truck 135-150 mm, monster 176-196): open defects, their bars pin today's spread and a todoRow below holds each to 7 mm. SUV's 15 mm covers a landing scatter (third roof
  * 58.8 vs 66.2 mm) with a second open defect (a todoRow below): its top three cars slide 7.7-10.3 cm from their set-down spot in the first 0.4 s
  * (every other class under 7 cm; sedan 3.7-6.6). Re-stage a bar only with its five-start number re-measured.
  */
@@ -186,7 +186,7 @@ const REPEAT_BARS: Record<string, { barMm: number; fiveStartMm: number }> = {
   monster: { barMm: 31, fiveStartMm: 20.4 },
   police: { barMm: 9, fiveStartMm: 5.9 },
   hatch: { barMm: 10, fiveStartMm: 6.6 },
-  suv: { barMm: 24, fiveStartMm: 15.9 },
+  suv: { barMm: 15, fiveStartMm: 9.8 },
 };
 
 /** Each roof's crush (mm, bottom first) of a `type` column at the defaults, each drop started `lift` m higher. */

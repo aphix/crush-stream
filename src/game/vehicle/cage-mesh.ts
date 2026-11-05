@@ -70,15 +70,19 @@ function holdUnderside(px: Float64Array, py: Float64Array, pz: Float64Array, rep
   return added;
 }
 
+/** No mesh group keeps the mirror images of its triangles across the plane (`decimate`'s `acrossGroups`). */
+const NO_GROUPS: ReadonlySet<number> = new Set();
+
 /** Vertices this close (m) to the mirror plane are on it. */
 const PLANE = 1e-4;
 
 /**
  * The surviving `tris` (welded vertex triples) with the -x side's triangles replaced by the mirror images of the +x side's. A loft cuts each quad on one
  * diagonal, so its two sides are cut opposite ways, and a crease crossing a quad reads at another height on the left than the right.
- * Triangles on the plane or across it stay, and so does a mesh group with a side vertex that has no twin (not mirror-symmetric).
+ * Triangles on the plane or across it stay, and so does a mesh group with a side vertex that has no twin (not mirror-symmetric). A group of `acrossGroups` (a folding lid)
+ * also gets the mirror image of each triangle across the plane: a cut left alone there reads another height on one side.
  */
-function mirrorTriangulation(tris: readonly number[], mirror: Int32Array, px: Float64Array, groupOf: (v: number) => number): number[] {
+function mirrorTriangulation(tris: readonly number[], mirror: Int32Array, px: Float64Array, groupOf: (v: number) => number, acrossGroups: ReadonlySet<number>): number[] {
   const sideOf = (a: number, b: number, c: number): number => {
     const lo = Math.min(px[a]!, px[b]!, px[c]!);
     const hi = Math.max(px[a]!, px[b]!, px[c]!);
@@ -91,11 +95,22 @@ function mirrorTriangulation(tris: readonly number[], mirror: Int32Array, px: Fl
     if (sideOf(a, b, c) !== 0 && (mirror[a]! < 0 || mirror[b]! < 0 || mirror[c]! < 0)) unpaired.add(groupOf(a));
   }
   const out: number[] = [];
+  const have = new Set<string>();
+  const keyOf = (a: number, b: number, c: number): string => [a, b, c].sort((p, q) => p - q).join(",");
+  const across: number[] = [];
   for (let t = 0; t < tris.length; t += 3) {
     const [a, b, c] = [tris[t]!, tris[t + 1]!, tris[t + 2]!];
     const side = unpaired.has(groupOf(a)) ? 0 : sideOf(a, b, c);
     if (side >= 0) out.push(a, b, c);
     if (side > 0) out.push(mirror[a]!, mirror[c]!, mirror[b]!);
+    if (side === 0) have.add(keyOf(a, b, c));
+    if (side === 0 && acrossGroups.has(groupOf(a)) && !unpaired.has(groupOf(a)) && Math.min(px[a]!, px[b]!, px[c]!) < -PLANE && Math.max(px[a]!, px[b]!, px[c]!) > PLANE) across.push(a, b, c);
+  }
+  for (let t = 0; t < across.length; t += 3) {
+    const [ma, mb, mc] = [mirror[across[t]!]!, mirror[across[t + 1]!]!, mirror[across[t + 2]!]!];
+    if (ma < 0 || mb < 0 || mc < 0 || have.has(keyOf(ma, mb, mc))) continue;
+    have.add(keyOf(ma, mb, mc));
+    out.push(ma, mc, mb);
   }
   return out;
 }
@@ -107,10 +122,10 @@ function mirrorTriangulation(tris: readonly number[], mirror: Int32Array, px: Fl
  * (the mesh splits them for its normals). `lofted`: the body loft's vertices, the first of the mesh, whose underside a body rests on
  * is held (`holdUnderside`), over the `target`: held within it, they cost the vertices that stood elsewhere (an upside-down sedan lost its
  * cowl's sides, rested on the drawn A-pillar's foot 7.3 cm in the ground). They come last in `source`, from `heldFrom` (`held` of them), so a reader finds
- * them as one run. `keep` (per mesh vertex): 1 never collapses, within the `target`. `mirrored`: the -x triangles are the +x ones' mirror images (the cage's; the seated driver's keeps its own).
+ * them as one run. `keep` (per mesh vertex): 1 never collapses, within the `target`. `mirrored`: the -x triangles are the +x ones' mirror images (the cage's; the seated driver's keeps its own); `acrossGroups`: see `mirrorTriangulation`.
  * Build-time only: allocates freely, runs once per style.
  */
-export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Uint8Array, target: number, lofted = 0, keep?: Uint8Array, mirrored = false): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number; heldFrom: number } {
+export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Uint8Array, target: number, lofted = 0, keep?: Uint8Array, mirrored = false, acrossGroups: ReadonlySet<number> = NO_GROUPS): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number; heldFrom: number } {
   const meshVertices = rest.length / 3;
   // Weld by rest position, within one mesh (a panel's vertex at the body's is not the body's).
   const weld = new Int32Array(meshVertices);
@@ -403,7 +418,7 @@ export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Ui
   const liveMirror = mirror.map((m) => (m >= 0 && slot[m]! >= 0 ? m : -1));
   const out: number[] = [];
   const outGroup: number[] = [];
-  const symmetric = mirrored ? mirrorTriangulation(kept, liveMirror, px, (v) => group[reps[v]!]!) : kept;
+  const symmetric = mirrored ? mirrorTriangulation(kept, liveMirror, px, (v) => group[reps[v]!]!, acrossGroups) : kept;
   for (let t = 0; t < symmetric.length; t += 3) {
     const [a, b, c] = [slot[symmetric[t]!]!, slot[symmetric[t + 1]!]!, slot[symmetric[t + 2]!]!];
     if (a === b || b === c || a === c) continue;

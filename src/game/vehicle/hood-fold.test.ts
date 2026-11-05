@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { drawnField, TOP_P95_M, TOP_WORST_M, topGaps, topGapsOff, topParts } from "./drawn-body.test-util.ts";
+import { buildCar, drawnField, TOP_P95_M, TOP_WORST_M, topGaps, topGapsOff, topParts } from "./drawn-body.test-util.ts";
+import { CAR_STYLE_IDS } from "./car-variants.ts";
+import { ridgeHeight } from "./lid-fold.ts";
+import { STYLE_CLASS } from "./vehicle-classes.ts";
 import { hoodFoldAfterWall } from "./hood-fold.test-util.ts";
 
 /**
@@ -38,4 +41,23 @@ describe("given a sedan that hit the wall at 56 km/h", () => {
     expect(gaps.cells, "hood cells read").toBeGreaterThan(100);
     expect(topGapsOff("hood", gaps)).toHaveLength(0);
   });
+});
+
+/** A drawn or cage ridge that jumps between frames flickers the tyre holds and moves wedge hits: the first millimetre of crush must not stand it 2 cm high. */
+const HINGE_STEP = 0.005;
+const RIDGE_STEP_M = 0.01;
+
+describe("given every body style's hood", () => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when the ${id}'s hinge value rises from 0 to its tear in steps of ${HINGE_STEP}, then no step lifts the ridge more than ${RIDGE_STEP_M * 100} cm and it only rises`, () => {
+      const spec = buildCar(id, STYLE_CLASS[id])["hoodPart"].swing!.spec;
+      let last = 0;
+      for (let hingeT = HINGE_STEP; hingeT <= 0.78; hingeT += HINGE_STEP) {
+        const height = ridgeHeight(spec, hingeT);
+        expect(height - last, `hinge value ${hingeT.toFixed(3)}`).toBeLessThanOrEqual(RIDGE_STEP_M);
+        expect(height - last, `hinge value ${hingeT.toFixed(3)}`).toBeGreaterThanOrEqual(0);
+        last = height;
+      }
+    });
+  }
 });

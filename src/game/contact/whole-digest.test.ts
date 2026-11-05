@@ -51,14 +51,14 @@ const NX = new THREE.Vector3(-1, 0, 0);
 // Pile-up re-pinned for a squeeze's set pulling a sprung-back mass in again in plan, its height kept (`clampMass`): df77ad3c11d7b56d -> 8d4ffb4a9531934d; the other three have no squeeze and are unchanged.
 // All four re-pinned for the engine block's spacing of a squeezed pair restored in the body's plan to the length that meets the stretched rule at rest, not along its slanted line (`clampLocal`'s A3, `holdEngineBlock`): head-on baff0220de6d5ea7 -> 1dc09f756fcdc818, door 5111dbba1807e959 -> ecfc7ab25d87f9a0, barrier ca2e30a830f5a144 -> ff5c9c6857b0d4c6, pile-up 8d4ffb4a9531934d -> 1dd5e212bd1698b9.
 // Three re-pinned for REPLAY 219-220 (the cage mirrors; the pair SAT tries a slanted node's ends): head-on 1dc09f756fcdc818 -> 2c007e59f7922659, door ecfc7ab25d87f9a0 -> 9fa8bafd89d86513, pile-up 1dd5e212bd1698b9 -> 0cae913293674637; the barrier's is unchanged (no pair, its cage reads the same). The digest is the sha1's first 16 hex digits; full values 2c007e59f7922659c98adb65e269ff14443e4127, 9fa8bafd89d865130c3bd4ba8842ef3c5ee1f235, 0cae91329367463722082d1c7fa464608089080b.
-// Three re-pinned for the hood folding (`HingeSpec.fold`): head-on 2c007e59f7922659 -> ba4e714cdaab9ea7, door 9fa8bafd89d86513 -> 07f1e5d5bc3b20d4, pile-up 0cae913293674637 -> 1591ffc672d9d462 (a crushed hood buckles into a ridge on its crease line, and the cage hood stands the same ridge; the barrier is unchanged).
+// Head-on, door and pile-up re-pinned for the hood folding (`HingeSpec.fold`: a crushed hood buckles into a ridge, the cage hood standing the same one): head-on 2c007e59f7922659 -> ce244cbebf8b6587, door 9fa8bafd89d86513 -> 07f1e5d5bc3b20d4, pile-up 0cae913293674637 -> 279af62d4675f221.
 describe("given four staged crashes with the epicenter activation off", () => {
   it("when the owner's head-on, 20 m/s each, runs 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
     const b = makeCar("shape");
     launch(a, -5, 0, Math.PI / 2, 20, 0);
     launch(b, 5, 0, -Math.PI / 2, -20, 0);
-    expect(staged([a, b], false, [new Probe(a, X), new Probe(b, NX)], [FREEWHEEL, FREEWHEEL], 5)).toBe("ba4e714cdaab9ea7");
+    expect(staged([a, b], false, [new Probe(a, X), new Probe(b, NX)], [FREEWHEEL, FREEWHEEL], 5)).toBe("ce244cbebf8b6587");
   });
 
   it("when a car meets a parked one's door at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
@@ -82,6 +82,6 @@ describe("given four staged crashes with the epicenter activation off", () => {
     launch(a, -4, 0, Math.PI / 2, 50 * KPH, 0);
     launch(b, 4, 0, -Math.PI / 2, -50 * KPH, 0);
     launch(c, 28, 0, -Math.PI / 2, -90 * KPH, 0);
-    expect(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6)).toBe("1591ffc672d9d462");
+    expect(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6)).toBe("279af62d4675f221");
   });
 });
