@@ -58,7 +58,7 @@ type Timeline = {
  * The phase clock run at fixed wall steps over a `length` s clip: 1× to `PRE_IMPACT_LEAD` before the first impact, the
  * ease into the auto slow-mo (the live sandbox's `preImpact`), the slow-mo held over the cars meeting and every throw
  * (clip s, in order) that comes while it runs, then back to 1×. Each `later` hit (clip s, in order, after the first) is a crash
- * of its own (`laterImpact`): one while the slow-mo holds holds it on, any other drops it again with the same lead and ease.
+ * of its own (`laterImpact`): one while the slow-mo holds, or whose lead (`PRE_IMPACT_LEAD`) opens while it holds, holds it on; any other drops it again with the same lead and ease.
  */
 export function clipTimeline(firstImpact: number, length: number, throws: readonly number[], later: readonly number[]): Timeline {
   const c = phaseClock();
@@ -73,6 +73,8 @@ export function clipTimeline(firstImpact: number, length: number, throws: readon
   let hit = 0;
   for (let t = 0; ; ) {
     const due = hit === 0 ? firstImpact : later[hit - 1];
+    // A later hit whose lead has opened while a slow-mo runs is held on to: the slow-mo has no hand-back to ease up from and down again.
+    if (due !== undefined && contact !== Infinity && t >= due - PRE_IMPACT_LEAD && (c.phase === "impact" || c.phase === "slowmo")) c.hold = Math.max(c.hold, c.wallSinceImpact + 2 * TL_DT);
     if (due !== undefined && t >= due - PRE_IMPACT_LEAD && (c.phase === "approach" || c.phase === "aftermath")) {
       c.phase = "approach";
       c.targetScale = impactScale(c);

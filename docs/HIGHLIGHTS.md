@@ -298,7 +298,7 @@ the shot. A peer at 45 Hz and one at 60 Hz therefore frame the same camera at th
   `THROW_HOLD` (6.13 wall s) past each of the crash's own throws that comes while it runs (owner 2026-10-07: +40 % and 2×
   of the 4.50 s and 3.65 s timed on main; owner 2026-10-25: the throw hold 16 % shorter, "lingers on people too much"), then back to 1× to the clip's end. Each later hit of the clip's scope
   (`ClipHit`) is a crash of its own (owner 2026-10-19, "each crash its own slow-mo"; `laterImpact`): one that lands while a
-  slow-mo holds holds it `CONTACT_HOLD` past itself; one after the hand-back drops the clock back to approach
+  slow-mo holds, or whose lead (`PRE_IMPACT_LEAD`) has opened while it holds (a hit 0.28 s on, 8.8 wall s into the slow-mo, has nothing to hand back to 1× and drop again from: the clock stays in impact/slowmo, not back in approach), holds it `CONTACT_HOLD` past itself; one after the hand-back drops the clock back to approach
   `PRE_IMPACT_LEAD` before it, eases back down with the first's ease (from wherever the ease back up had got to, so it
   reaches the slow scale early and the lead plays slower than the first's) and holds `CONTACT_HOLD` past it. A throw holds
   any running slow-mo, the first's or a later hit's. The owner's flagged pile-up C04P-2WMS (hits 3.313, 3.946, 4.133 clip s)

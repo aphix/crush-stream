@@ -4,7 +4,7 @@ import { frame, FRAME, makeWorld, type World } from "../world/race-world.test-ut
 import { blankPoint, type Track } from "../world/track.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { clipTitle, type HighlightClip } from "../match/highlights.ts";
-import { phaseClock } from "../match/phase.ts";
+import { phaseClock, PRE_IMPACT_LEAD } from "../match/phase.ts";
 import type { ViewBox } from "../match/types.ts";
 import { CrashCam } from "../present/engine-cine.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -77,8 +77,9 @@ export type MomentView = {
   back: Back | null;
   /** Wall seconds the viewer watches from the moment to the slow-mo's hand-back to 1× (`holdAfter`); 0 when it comes at 1×. */
   hold: number;
-  /** Wall seconds into the clip's timeline of the moment, and of the clip's end (no hold outlasts it). */
+  /** Wall seconds into the clip's timeline of the moment, of its slow-mo's lead (`PRE_IMPACT_LEAD` of clip time before it: where a later hit's drop begins), and of the clip's end (no hold outlasts it). */
   wall: number;
+  open: number;
   end: number;
   /** What the camera stack was doing: the moment's car is the clip's subject or not, the crash cam's clock. */
   note: string;
@@ -246,7 +247,7 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
       // A crash-cam cut is its held eye on its axis: a later crash moves the axis onto itself (`CrashCam.retarget`).
       const axis = `${crash["camAt"].x.toFixed(1)},${crash["camAt"].z.toFixed(1)}`;
       const cam = `${rigName}|${reel["shot"]}|${crash["held"]}|${axis}`;
-      const view = (rig: ScreenRig, kind: MomentKind, at: number, p: THREE.Vector3, car: number): MomentView => ({ scene, title, kind, at, hitAt: clip.firstImpact, rig: rigName, x: p.x, y: p.y, z: p.z, ...judge(rig.camera, s, p, rig.screen), cam, back: null, hold: holdAfter(tl, at), wall: (stepOf(tl, at) * wall) / (tl.sim.length - 1), end: wall, fov: camera.fov, note: `${car === clip.focus ? "subject" : "other car"}, hit at ${clip.firstImpact.toFixed(2)} s, eye ${camera.position.toArray().map((v) => v.toFixed(1))}` });
+      const view = (rig: ScreenRig, kind: MomentKind, at: number, p: THREE.Vector3, car: number): MomentView => ({ scene, title, kind, at, hitAt: clip.firstImpact, rig: rigName, x: p.x, y: p.y, z: p.z, ...judge(rig.camera, s, p, rig.screen), cam, back: null, hold: holdAfter(tl, at), wall: (stepOf(tl, at) * wall) / (tl.sim.length - 1), open: (stepOf(tl, at - PRE_IMPACT_LEAD) * wall) / (tl.sim.length - 1), end: wall, fov: camera.fov, note: `${car === clip.focus ? "subject" : "other car"}, hit at ${clip.firstImpact.toFixed(2)} s, eye ${camera.position.toArray().map((v) => v.toFixed(1))}` });
       for (const m of moments) {
         if (m.at > sim.time + 1e-9 || m.at < 0) continue;
         const p = m.point ?? new THREE.Vector3(m.x, sim.cars[m.car]!.group.position.y + 0.55, m.z);

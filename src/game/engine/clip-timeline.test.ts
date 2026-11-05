@@ -87,3 +87,23 @@ describe("given the highlight reel timeline of a pile-up whose hits land at 3.31
     expect(walls.every((w) => w < end), `later hits at wall ${walls.map((w) => w.toFixed(2)).join(" / ")} s, the crash cam hands back at ${end.toFixed(2)} s`).toBeTruthy();
   });
 });
+
+describe("given the highlight reel timeline of a 3-car pile-up whose second hit lands 0.283 clip s after the first (the city field's, hits 3.075 and 3.358 clip s): 8.8 wall s into the slow-mo, 2.5 past the first's 6.3 s hold", () => {
+  const hits = [3.075, 3.358];
+  const tl = clipTimeline(hits[0]!, 6.36, [], hits.slice(1));
+
+  it("when the clip plays, then the second hit's lead opens while the first's slow-mo holds, so the clock stays in impact and slowmo to the hand-back and the scale never rises between the hits", () => {
+    const from = Math.round(tl.contact * TIMELINE_HZ);
+    const back = tl.phase.indexOf("aftermath", from);
+    const approach = tl.phase.indexOf("approach", from);
+    expect(approach, `the clock fell back to approach at step ${approach} (wall ${(approach / TIMELINE_HZ).toFixed(2)} s) before its hand-back at ${(back / TIMELINE_HZ).toFixed(2)} s`).toBe(-1);
+    const between = tl.scale.slice(from + 2 * TIMELINE_HZ, stepAt(tl, hits[1]!));
+    expect(Math.max(...between), `the clip sped up between the hits (at most ${Math.max(...between).toFixed(3)}×)`).toBeLessThanOrEqual(SLOW_ENOUGH);
+  });
+
+  it("when the second hit lands, then the slow-mo hands back 6.3 wall s after it", () => {
+    const second = stepAt(tl, hits[1]!);
+    const back = tl.phase.indexOf("aftermath", second);
+    expect(Math.abs((back - second) / TIMELINE_HZ - CONTACT_HOLD), `handed back ${((back - second) / TIMELINE_HZ).toFixed(3)} wall s after the second hit`).toBeLessThanOrEqual(2 / TIMELINE_HZ);
+  });
+});

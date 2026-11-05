@@ -202,17 +202,17 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
       expect(lost.map((v) => `${v.scene} ${v.at.toFixed(2)}`)).toHaveLength(0);
     });
 
-    it("when each clip plays, then its slow-mo holds 6.3 s of wall clock past the cars meeting and past each later hit, 6.13 s past each driver thrown while it runs, every hold plays out in full before the clip ends, it hands back to 1× when the last of those is up, a later hit after that has a slow-mo of its own, and a driver thrown with none running plays at 1×", (t) => {
+    it("when each clip plays, then its slow-mo holds 6.3 s of wall clock past the cars meeting and past each later hit, 6.13 s past each driver thrown while it runs, every hold plays out in full before the clip ends, it hands back to 1× when the last of those is up, a later hit whose lead opens after that has a slow-mo of its own, and a driver thrown with none running plays at 1×", (t) => {
       staged();
       const held = views.filter((v) => v.kind !== "takeoff" && v.at >= v.hitAt);
       const key = (v: MomentView): string => `${v.scene}|${v.title}|${v.hitAt}`;
-      // Each moment's slow-mo, from the clip's moments in order: a hit or throw inside a running one holds it on, a hit after it starts its own.
+      // Each moment's slow-mo, from the clip's moments in order: a throw inside a running one, or a hit that lands or whose lead opens inside it (no hand-back to ease up from and drop again), holds it on; a hit after it starts its own.
       const running = new Map<string, { end: number }>();
       const holdOf = new Map<MomentView, { end: number }>();
       for (const v of held) {
         const cur = running.get(key(v));
         const owed = v.wall + (v.kind === "throw" ? HOLD.throw : HOLD.impact);
-        if (cur && v.wall < cur.end) {
+        if (cur && (v.kind === "hit" ? v.open : v.wall) < cur.end) {
           cur.end = Math.max(cur.end, owed);
           holdOf.set(v, cur);
         } else if (v.kind !== "throw") {
