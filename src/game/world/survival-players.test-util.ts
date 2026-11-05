@@ -20,8 +20,9 @@ import { HAVANA } from "./tracks/havana.ts";
  *   held: the set piece's driver: holds the boulevard line (x = −6 ± 1.5, looking 25–40 m ahead) flat out over the hill, then flees;
  *   evade: for the closed arena (`survival-arena.test-util.ts`): runs straight away from the nearest cop, round solids and round cops, lifting for a wall it cannot stop before and for a crest it would fly; it never stops.
  *   corner: for the closed arena: runs for the corner opposite its start, round solids, lifting for a wall, then creeps there at 3 m/s for good: a player boxed in with nowhere left to run.
+ *   orbit: for the closed arena: laps a square round its middle, corner to corner at a fixed pace, whatever stands near it: a fixed path, not an AI.
  */
-export type Fleer = "straight" | "flee" | "ring" | "held" | "evade" | "corner";
+export type Fleer = "straight" | "flee" | "ring" | "held" | "evade" | "corner" | "orbit";
 
 /** The player's pedals for one frame. */
 type Driver = (w: World) => void;
@@ -123,11 +124,32 @@ function fleeing(obstacles: Obstacles, evade = false, goal: { x: number; z: numb
   };
 }
 
+/** `orbit`: the square it laps (half side, m), how near a corner counts as reached (m), and its pace (m/s). */
+const ORBIT_HALF = 60;
+const ORBIT_REACH = 12;
+const ORBIT_SPEED = 6;
+
+function orbiting(): Driver {
+  const corners = [
+    { x: ORBIT_HALF, z: -ORBIT_HALF },
+    { x: -ORBIT_HALF, z: -ORBIT_HALF },
+    { x: -ORBIT_HALF, z: ORBIT_HALF },
+    { x: ORBIT_HALF, z: ORBIT_HALF },
+  ];
+  let next = 0;
+  return (w) => {
+    const p = w.cars[0]!.group.position;
+    if (Math.hypot(corners[next]!.x - p.x, corners[next]!.z - p.z) < ORBIT_REACH) next = (next + 1) % corners.length;
+    steerAt(w, corners[next]!.x, corners[next]!.z, ORBIT_SPEED);
+  };
+}
+
 export function drivers(kind: Fleer, seed: number, course: unknown = HAVANA): Driver {
   const track = new Track(course);
   const colliders = new Obstacles(propColliders(placeProps(track)));
   const flee = fleeing(colliders);
   if (kind === "evade") return fleeing(colliders, true);
+  if (kind === "orbit") return orbiting();
   if (kind === "corner") {
     const s = track.survival!.start;
     return fleeing(colliders, false, { x: -Math.sign(s.x) * CORNER, z: -Math.sign(s.z) * CORNER });

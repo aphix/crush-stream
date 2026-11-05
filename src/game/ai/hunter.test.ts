@@ -325,6 +325,23 @@ describe("given one cop on the paseo facing +z, driven by the hunter brain, with
     expect(Math.sign(walled.out().steer)).toBe(Math.sign(o.steer));
   });
 
+  it("when a mate lies stopped on its line 12 m ahead at 20 m/s, then the cop brakes for it if it is knocked out, and a mate that is driving (it may be pulling out) is not braked for as hard", () => {
+    const brakeFor = (down: boolean) => {
+      const r = rig();
+      if (down) r.down.add(2);
+      r.run(0.5);
+      Object.assign(r.cars[1]!, { x: 0, z: PASEO, yaw: 0, vx: 0, vz: 20 });
+      Object.assign(r.cars[0]!, { x: 0, z: PASEO + 100, yaw: 0, vx: 0, vz: 0 });
+      Object.assign(r.cars[2]!, { x: 0, z: PASEO + 12, yaw: 0, vx: 0, vz: 0 });
+      r.run(0.75);
+      Object.assign(r.cars[1]!, { x: 0, z: PASEO, yaw: 0, vx: 0, vz: 20 });
+      Object.assign(r.cars[2]!, { x: 0, z: PASEO + 12, yaw: 0, vx: 0, vz: 0 });
+      return r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ).brake;
+    };
+    expect(brakeFor(true), "drove on into a wreck").toBeGreaterThan(0.5);
+    expect(brakeFor(false)).toBeLessThan(brakeFor(true));
+  });
+
   it(`when the target is inside the ${ATTACK} m attack range, then the cop drives exactly as the police's own attack driving does`, () => {
     const d = drive(ATTACK - 10);
     const got = { ...d.out() };

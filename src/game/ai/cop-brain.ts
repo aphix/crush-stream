@@ -249,6 +249,8 @@ export abstract class CopBrain {
   protected readonly track: Track;
   /** The pack-mate guard's view of a unit: driving, so a slow one may be pulling out (bound once: no allocation per call). */
   protected abstract readonly pullsOut: (u: number) => boolean;
+  /** What the pack guard reads as a slow mate pulling out (bound once): by default what `pullsOut` says; a brain whose knocked-out units still answer `pullsOut` narrows it. */
+  protected readonly pulling: (u: number) => boolean = (u) => this.pullsOut(u);
   private readonly seed: number;
   private dice = 0;
 
@@ -303,7 +305,7 @@ export abstract class CopBrain {
       this.pedals.shape(self.id, out, dt);
       out.boost = this.pedals.holdBoost(self.id, out.boost, dt, false);
     } else this.pedals.follow(self.id, out);
-    guardMates(self, cars, this.first, this.count, out, this.pullsOut, cls, this.surf);
+    guardMates(self, cars, this.first, this.count, out, this.pulling, cls, this.surf);
     return out;
   }
 

@@ -251,6 +251,8 @@ export class HunterBrain extends CopBrain {
   private readonly obstacles: Obstacles;
   /** Driving, so a slow one may be pulling out (not waiting in storage), unless it is creeping on purpose (`settled`): that one is read at its real speed. */
   protected readonly pullsOut = (u: number): boolean => this.state[u] !== STORED && this.settled[u] === 0;
+  /** The pack guard reads a slow mate as pulling out only while it hunts: a knocked-out unit is the stopped obstacle it is (read as one pulling out at 8 m/s, cops never braked for a wreck and drove into it). */
+  protected override readonly pulling = (u: number): boolean => this.state[u] === HUNTING && this.settled[u] === 0;
   /** Per unit: creeping beside a stopped player car on purpose, so its slow pace is not read as pulling out. */
   private readonly settled: Uint8Array;
   private readonly state: Uint8Array;
