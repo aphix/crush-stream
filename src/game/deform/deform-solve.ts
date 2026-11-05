@@ -233,7 +233,19 @@ export abstract class DeformSolve extends DeformFreeze {
         const dev = restLen - len;
         const set = m.crushSet;
         const kept = Math.abs(dev) - Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * Math.abs(dev));
-        if (kept > Math.abs(set)) m.crushSet = Math.sign(dev) * kept;
+        if (kept > Math.abs(set)) {
+          const grown = Math.sign(dev) * kept;
+          // Past the pinch the set is an ordinary dent: the goals take it, as a one-ended hit's set does (`restTakesSet`). Left on the old rest they
+          // pulled the cluster back against this clamp all window long (the cell 0.29 m, the frame after it) and the planted hubs read it as creep in. The plates' own rows hold the rest while pinched.
+          if (!this.bidirectional && this.mode === "shape" && this.quietTime() <= CONTACT_HOLD && len > 1e-6) {
+            const shift = (grown - set) / len;
+            REST_SHIFT[1] = -rx * shift;
+            REST_SHIFT[2] = -ry * shift;
+            REST_SHIFT[3] = -rz * shift;
+            this.restTakesSet(i);
+          }
+          m.crushSet = grown;
+        }
         // A bowed-out set holds only out of contact: a face still pressing may push the panel back in.
         else if (len > 1e-6 && (set > 0 ? dev < set : dev > set && this.quietTime() > 0.025)) {
           // The set is held in plan, the mass's height kept: pulled straight at the cell, a mass under it climbed toward its height with every

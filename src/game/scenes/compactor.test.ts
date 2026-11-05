@@ -11,6 +11,7 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "../vehicle/car-variants.ts";
 import { assignClass, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { paint } from "../vehicle/test-support.ts";
+import { heldRearCrush, hubCreepAfterLastContact } from "./press-release.test-util.ts";
 
 function travelOf(d: StreamedDeformation, name: string): number {
   const m = d.masses.find((n) => n.name === name);
@@ -462,5 +463,25 @@ describe("given every body style parked in the compactor press, as its class dre
       r.runTo(r.faces.wellFace);
       for (const name of HUB_NAMES) expect(r.d.masses.find((m) => m.name === name)!.popped, `${id}: ${name} came off with the plates at the wells`).toBe(false);
     }
+  });
+});
+
+/** How far (m) a squeezed wreck's hubs may move into the car after its last contact: a hit's springback (`SPRINGBACK`, 0.08 m) is the most a dent gives back. */
+const HUB_CREEP_MAX = 0.08;
+/** What the plates' crush of the tail reads (m) held 0.4 s: the squeeze's own rows (the set takes the shape's rest only once the pinch is over). */
+const HELD_TAIL_CRUSH = [0.55, 0.75] as const;
+
+describe("given a car squeezed in the press past its wheels (the nose less deep than the tail), the plates opened, driven into a wall once", () => {
+  it("when the wall is gone (its last contact), then its rear hubs move no more than the springback into the car in the second after, driving away", () => {
+    const creep = hubCreepAfterLastContact();
+    expect(creep, `a rear hub crept ${(creep * 1000).toFixed(0)} mm into the car after the last contact`).toBeLessThanOrEqual(HUB_CREEP_MAX);
+  });
+
+  it("when the plates stay closed instead, then the tail is still crushed to the plates' depth and holds there", () => {
+    const held = heldRearCrush(0.4);
+    const later = heldRearCrush(1.4);
+    expect(held, `the tail's crush with the plates held 0.4 s: ${held.toFixed(3)} m`).toBeGreaterThanOrEqual(HELD_TAIL_CRUSH[0]);
+    expect(held, `the tail's crush with the plates held 0.4 s: ${held.toFixed(3)} m`).toBeLessThanOrEqual(HELD_TAIL_CRUSH[1]);
+    expect(later, `held 1.4 s: ${later.toFixed(3)} m, 0.4 s: ${held.toFixed(3)} m`).toBeGreaterThanOrEqual(held - 0.08);
   });
 });
