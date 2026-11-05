@@ -35,12 +35,33 @@ function simAt(t: number): number {
   return CLOCK[CLOCK.length - 1]![1];
 }
 
-/** One car's drawn body over the run: its worst up-and-down, and its worst drop on a frame one of its wheels tore loose. */
-type Track = { car: DeformableCar; drawn: ArrayLike<number>; last: Float32Array; change: Float32Array; worst: { by: number; at: number }; sim: number; gone: number; tearDrop: number };
+/** The pickup's skin points down the carry chain from the crushed row's 1019 (the lift passes 1019 to 1023, four hops of `carryLift`): the sag hold's lift there once went up 25 mm and fell back. */
+const CHAIN = [1019, 1020, 1021, 1022, 1023] as const;
+/** How far (m) a chain point may go up and back down: the drawn skin over a tyre under a sag hold moves with the crush, not with the number of sag passes (measured 1.0 mm; 26.5 mm when each pass lifted a sliver corner by the whole shortfall). */
+const CHAIN_UP_DOWN_M = 0.005;
+
+/** One car's drawn body over the run: its worst up-and-down, its worst drop on a frame one of its wheels tore loose, and its `CHAIN` points' up-and-down and biggest step. */
+type Track = {
+  car: DeformableCar;
+  drawn: ArrayLike<number>;
+  last: Float32Array;
+  change: Float32Array;
+  worst: { by: number; at: number };
+  sim: number;
+  gone: number;
+  tearDrop: number;
+  chain: { now: Float32Array; last: Float32Array; change: Float32Array; worst: { by: number; at: number }; step: number };
+};
+
+function chainAt(drawn: ArrayLike<number>, into: Float32Array): void {
+  for (let i = 0; i < CHAIN.length; i++) into[i * 3 + 1] = drawn[CHAIN[i]! * 3 + 1]!;
+}
 
 function trackOf(car: DeformableCar): Track {
   const drawn = car.body.geometry.getAttribute("position").array;
-  return { car, drawn, last: Float32Array.from(drawn), change: new Float32Array(drawn.length / 3), worst: { by: 0, at: -1 }, sim: 0, gone: 0, tearDrop: 0 };
+  const chain = { now: new Float32Array(CHAIN.length * 3), last: new Float32Array(CHAIN.length * 3), change: new Float32Array(CHAIN.length), worst: { by: 0, at: -1 }, step: 0 };
+  chainAt(drawn, chain.last);
+  return { car, drawn, last: Float32Array.from(drawn), change: new Float32Array(drawn.length / 3), worst: { by: 0, at: -1 }, sim: 0, gone: 0, tearDrop: 0, chain };
 }
 
 function goneOf(car: DeformableCar): number {
@@ -63,6 +84,10 @@ function follow(t: Track, sim: number): void {
   const before = t.worst.by;
   upDownOf(t.drawn, t.last, t.change, t.worst);
   if (t.worst.by > before) t.sim = sim;
+  const { chain } = t;
+  chainAt(t.drawn, chain.now);
+  for (let i = 0; i < CHAIN.length; i++) chain.step = Math.max(chain.step, Math.abs(chain.now[i * 3 + 1]! - chain.last[i * 3 + 1]!));
+  upDownOf(chain.now, chain.last, chain.change, chain.worst);
 }
 
 type Shot = { tracks: Track[]; crush: number };
@@ -120,6 +145,13 @@ describe("given the owner's five-car fleet at his seed, on his slow-mo clock", (
   it("when every car's skin is drawn on every frame, then Bronze's sag lifts no corner past its own target and no point jumps up and down", async () => {
     const t = named(await shotAt(1), "Bronze");
     expect(t.worst.by, where(t)).toBeLessThanOrEqual(UP_DOWN_M);
+  });
+
+  // The sag hold's third rule lifted a corner holding 7% of a point by the whole shortfall each pass, 24 mm a pass over 4 passes, up the chain to 1023 and back.
+  it("when every car's skin is drawn on one frame of 3, then the pickup's skin over the tyre under a sag hold does not go up and back down along the chain from 1019", async () => {
+    const t = named(await shotAt(SPARSE_STRIDE), "Bronze");
+    expect(t.chain.step, "control: the chain's points move (the crush carries them)").toBeGreaterThan(0.05);
+    expect(t.chain.worst.by, `${(t.chain.worst.by * 1000).toFixed(1)} mm up and down at chain point ${t.chain.worst.at}`).toBeLessThanOrEqual(CHAIN_UP_DOWN_M);
   });
 
   it("when a wheel tears loose under a crushed fender, then the hold over its seat fades and no drawn point drops on that frame", async () => {

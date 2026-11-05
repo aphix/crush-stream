@@ -490,3 +490,25 @@ describe("given a sag point whose third corner has no room to rise and whose fir
     }
   });
 });
+
+/**
+ * Owner's five-car fleet capture, the pickup's crushed row at 1019: a sag point nearly all on a corner the tyre holds down (weights 0.87, 0.07 liftable, the third beside the tread and unliftable),
+ * no corner with room left. The third rule lifted the 7% corner by the whole shortfall each pass (24 mm a pass); that corner carries too little of the point to be lifted for it.
+ */
+const SLIVER_BY_M = 0.025;
+const NO_ROOM = [0, 0, 0] as const;
+const BESIDE_THIRD = [0, 0, 1] as const;
+
+describe("given a sag point with no room under its corners' targets, the third corner unliftable and beside the tread", () => {
+  it("when its liftable corner carries 7% of the point (the other 87% under the hub), then that corner is not lifted past its room", () => {
+    const lift = new Float64Array(3);
+    spreadSagLift(SLIVER_BY_M, [0.07, 0.87, 0.06], [1, 1, 0], NO_ROOM, [1, 0, 0], BESIDE_THIRD, lift);
+    expect(lift[0], `the 7% corner is lifted ${(lift[0]! * 1000).toFixed(1)} mm`).toBe(0);
+  });
+
+  it("when its liftable corners carry 90% of it, then they are lifted past their room by the shortfall, the point standing the lift it asked", () => {
+    const lift = new Float64Array(3);
+    spreadSagLift(SLIVER_BY_M, [0.6, 0.3, 0.1], [1, 1, 0], NO_ROOM, [1, 1, 0], BESIDE_THIRD, lift);
+    expect(0.6 * lift[0]! + 0.3 * lift[1]!, "the point stands the lift it asked, less its unliftable corner's share").toBeCloseTo(0.9 * SLIVER_BY_M * 0.9, 12);
+  });
+});

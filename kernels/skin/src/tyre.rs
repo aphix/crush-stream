@@ -316,9 +316,11 @@ fn spread_sag_lift(by: f64, l: &[f64; 3], s: &[f64; 3], k: &[f64; 3], c: &[f64; 
     if short <= 0.0 || (0..3).any(|m| l[m] > 0.0 && s[m] < 1.0 && !beside[m]) {
         return u;
     }
+    let carried: f64 = (0..3).map(|m| l[m] * s[m] * c[m]).sum();
+    let past = sag_lift(short, carried) * carried;
     for m in 0..3 {
         if l[m] > 0.0 {
-            u[m] += short * s[m] * c[m];
+            u[m] += past * s[m] * c[m];
         }
     }
     u

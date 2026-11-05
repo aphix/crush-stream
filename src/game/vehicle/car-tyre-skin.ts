@@ -89,7 +89,7 @@ const _cu = new Float64Array(3);
  * Splits a sag point's lift `by` over its corners (weights `cl`, shares `cs`: 1 liftable, room under their own target `ck`, carry over the hub `cc`, beside the tread `cb`) into `cu`:
  * each to its own target, then the shortfall of corners without room over the corners with room, each by its share of the room (a pick of the corner with most room flipped between
  * frames on a millimetre and moved a corner 40 mm). Past the targets only when every corner holding the point down lies beside the tread (a fender falling off the tyre sideways,
- * not a bumper down its face), on carried corners.
+ * not a bumper down its face), on carried corners, by the shortfall over their carried share of the point (`sagLift`: a corner holding a sliver of the point is not lifted for all of it).
  */
 export function spreadSagLift(by: number, cl: ArrayLike<number>, cs: ArrayLike<number>, ck: ArrayLike<number>, cc: ArrayLike<number>, cb: ArrayLike<number>, cu: Float64Array): void {
   let short = 0;
@@ -109,7 +109,11 @@ export function spreadSagLift(by: number, cl: ArrayLike<number>, cs: ArrayLike<n
   short -= capacity;
   if (short <= 0) return;
   for (let m = 0; m < 3; m++) if (cl[m]! > 0 && cs[m]! < 1 && cb[m] === 0) return;
-  for (let m = 0; m < 3; m++) if (cl[m]! > 0) cu[m] = cu[m]! + short * cs[m]! * cc[m]!;
+  // The carried corners hold only `carried` of the point's height: they clear it as the rule for liftable share does (`sagLift`), or each pass would lift a corner of 7% of the point by the whole shortfall.
+  let carried = 0;
+  for (let m = 0; m < 3; m++) carried += cl[m]! * cs[m]! * cc[m]!;
+  const past = sagLift(short, carried) * carried;
+  for (let m = 0; m < 3; m++) if (cl[m]! > 0) cu[m] = cu[m]! + past * cs[m]! * cc[m]!;
 }
 
 /** The first corner (index in `tris`) of each distinct welded point among `tris`' corners, ascending. */
