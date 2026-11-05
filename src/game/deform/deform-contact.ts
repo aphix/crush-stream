@@ -8,6 +8,7 @@ import {
   hypot2,
 } from "./physics-util.ts";
 import { DeformState, PLANT_QUIET } from "./deform-state.ts";
+import type { MassName } from "../kernel/rig-spec.ts";
 import { BodyFit } from "./body-fit.ts";
 import { detSin, detCos, detAtan2, sinCosAt } from "../kernel/physics-core.js";
 import { CONTACT_REF_SLICE, MIN_IMPACT_ZONE, MIN_INERTIA, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
@@ -272,7 +273,7 @@ export abstract class DeformContact extends DeformState {
       _a.y *= upY > 0 ? 1 - tilt * tilt : 0;
       group.position.add(_a);
       // A planted hub's world is its own pin (the others are rewritten from `local`): it rides the seat step, or the step reads as the hub creeping into the car.
-      if (!this.bidirectional && this.quietTime() > PLANT_QUIET) {
+      if (this.hubsRideSeat()) {
         for (let mi = 0; mi < this.masses.length; mi++) {
           const m = this.masses[mi]!;
           if (!m.hub || m.popped) continue;
@@ -653,12 +654,25 @@ export abstract class DeformContact extends DeformState {
     return !this.crushing && !this.bidirectional && !this.deepCrush;
   }
 
+  /** How far (m, car frame, plan) the hub `name` stands from its pin (rest + shove) as the last `followGroup` read it: 0 for a popped hub. */
+  hubStandOff(name: MassName): number {
+    const m = this.masses.find((n) => n.name === name)!;
+    if (m.popped) return 0;
+    return hypot2(this.hubStand[m.index * 2]! - (m.rest.x + m.shoveX), this.hubStand[m.index * 2 + 1]! - (m.rest.z + m.shoveZ));
+  }
+
+  /** The planted hubs' world is their own, and the frame's seat step (`followGroup`) carries them (`moveWhole` leaves them to it: moved by both they walked off their pins by the whole hold). */
+  private hubsRideSeat(): boolean {
+    return !this.bidirectional && this.quietTime() > PLANT_QUIET;
+  }
+
   /** A face held the settled wreck out by (`dx`, `dz`): every dynamic mass moves with it (hubs too), the car-frame places stay; a mass-by-mass push would crush the nose a little more each slice a driver leans on the wall. */
   moveWhole(dx: number, dz: number): void {
     this.thaw();
+    const ride = this.hubsRideSeat();
     for (let mi = 0; mi < this.masses.length; mi++) {
       const m = this.masses[mi]!;
-      if (!m.dynamic) continue;
+      if (!m.dynamic || (ride && m.hub && !m.popped)) continue;
       m.world.x += dx;
       m.world.z += dz;
     }

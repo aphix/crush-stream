@@ -19,6 +19,9 @@ import { PART_STATE } from "../vehicle/part-state.ts";
  */
 
 const KEEP = 0.002;
+/** How far (m) a planted hub may stand off its pin while the wall holds its wreck: its own 7-11 mm settle; a hub left to the hold's push and the frame's step walked 0.12-0.13 m in 3 s. */
+const HUB_STAND_MAX = 0.02;
+const HUB_NAMES = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
 /** The front band (m from the nose, above the sill) whose mean inward travel is the drawn nose crush. */
 const BAND = 0.4;
 const SILL_Y = 0.5;
@@ -184,6 +187,25 @@ for (const [style, cls] of STYLES) {
       car.velocity.x -= 3;
       ticks(w, 1);
       expect(drawnNose(car) - before, `${style}: a fresh 3 m/s hit on a settled wreck left its nose as it was`).toBeGreaterThan(0.005);
+    });
+  });
+
+  describe(`given a ${style} that hits a wall at 50 km/h and is held on it by its driver once the hit's crash window closes, nose first or reversing`, () => {
+    it("when it is held there 3 s, then no hub stands more than 2 cm off its pin in the car frame", () => {
+      for (const [way, throttle, yaw] of [["nose first", 1, -Math.PI / 2], ["reversing", -1, Math.PI / 2]] as const) {
+        const car = makeCar(cls);
+        launch(car, 6.2, 0, yaw, -50 / 3.6, 0);
+        const w = makeWorld([car], true, false, FREEWHEEL);
+        for (let t = 0; t < 3 && (!car.crashed || car.deform.crushing); t += 1 / FRAME_HZ) tickWorld(w);
+        expect(car.crashed && !car.deform.crushing, `${style} ${way}: the hit's crash window never closed`).toBeTruthy();
+        w.pedals.set(car, { ...GAS, throttle });
+        let worst = 0;
+        for (let t = 0; t < 3; t += 1 / FRAME_HZ) {
+          tickWorld(w);
+          for (const name of HUB_NAMES) worst = Math.max(worst, car.deform.hubStandOff(name));
+        }
+        expect(worst, `${style} ${way}: a hub stood ${(worst * 1000).toFixed(0)} mm off its pin`).toBeLessThanOrEqual(HUB_STAND_MAX);
+      }
     });
   });
 
