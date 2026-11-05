@@ -7,6 +7,7 @@ import type { AiCar } from "./derby-ai.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { clamp, hash01, wrapPi } from "../kernel/scalar.ts";
 import { REVERSE_THROTTLE } from "./constants.ts";
+import { TailSwings } from "./tail-swing.ts";
 import { turnRate } from "./race-ai.ts";
 import { SURFACES, type Surface } from "../world/catalog.ts";
 import type { Track } from "../world/track.ts";
@@ -238,6 +239,8 @@ export abstract class CopBrain {
   protected readonly role: Uint8Array;
   protected readonly since: Float64Array;
   protected readonly wedge: Backoff;
+  /** Per unit: its tail swing under way and its cool-down (hunters only; the race police never call `swing`). */
+  protected readonly swings: TailSwings;
   /** The hands every unit's drive passes through (the pack-mate guard comes after them, so its brake is not lagged). */
   protected readonly pedals = new Pedals();
   /** Set by `drive` when the unit really drove this step (not parked, waiting for the green or knocked out): only that output goes through the hands. */
@@ -264,6 +267,12 @@ export abstract class CopBrain {
     this.role = new Uint8Array(count);
     this.since = new Float64Array(count);
     this.wedge = new Backoff(count);
+    this.swings = new TailSwings(count);
+  }
+
+  /** Unit `u`'s tail swing at `tg` (`TailSwings.step`), only at a target under `PIT_MAX` while `attacking`; true while one holds `out`. */
+  protected swing(u: number, self: AiCar, tg: AiCar, attacking: boolean, dt: number, out: DriveInput): boolean {
+    return this.swings.step(u, self, tg, attacking && hypot2(tg.vx, tg.vz) <= PIT_MAX, dt, out);
   }
 
   /** Unit `id`'s class figures for its own driving. */

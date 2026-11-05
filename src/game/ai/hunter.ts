@@ -378,6 +378,7 @@ export class HunterBrain extends CopBrain {
         out.boost = false;
       }
     }
+    this.swing(u, self, tg, seeking && tv > BLOCKABLE && !ramming && dist <= reach && !bump, dt, out);
     this.wedge.watch(u, self.x, self.z, dt, out);
     return out;
   }
@@ -686,6 +687,7 @@ export class HunterBrain extends CopBrain {
     this.seekUntil[u] = -Infinity;
     this.flies[u] = 0;
     this.wedge.reset(u);
+    this.swings.clear(u);
     world.sirens(this.first + u, true);
   }
 

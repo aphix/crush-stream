@@ -97,6 +97,15 @@ than 20 m behind).
   away from, and brakes for, the pack-mate it would reach soonest within 3 s ([`RACE_DESIGN.md`](RACE_DESIGN.md), "Pack guard"). It reads a slow mate as pulling out (moving at 8 m/s along its nose) only while that unit hunts (`HunterBrain.pulling`): a knocked-out unit is the stopped obstacle it is, so a cop brakes and swerves for a wreck (read as pulling out, a wreck 12 m ahead of a cop at 20 m/s was reached at 1 s, not 0.6 s, so the cop only lifted the throttle and never braked). A unit ramming a human (`HunterBrain.ignores`) does not read the units within `SETTLE` of it, wrecks included: they are the box the charge is at, and braked for them the charge landed at 22 m/s, not the 28 that kills (`ai/hunter.test.ts`, the squirm ram).
 - **Queueing.** A target faster than `PIT_MAX` = 20 m/s is queued behind (a lane `TAIL_LANE` = 2.6 m either side, a row every
   `ROW` = 8 m), and a unit closing faster than it can brake goes straight on.
+- **Tail swing** (`ai/tail-swing.ts`: `tailSwing`, `TailSwings`; the derby's `T_SWING`, one geometry for both). A unit that seeks a hit (`seeks` or `flies`), in its attack
+  (not shadowing, not ramming) on a target faster than `BLOCKABLE` and no faster than `PIT_MAX` = 20 m/s, handbrakes when the target's nose sits by its rear wheel
+  (0.6-3.2 m behind its origin, 0.9-3.2 m to the side, angled in at it) and the target gains on it by more than 0.5 m/s along its heading: `ebrake`, throttle 0,
+  0.85 lock away from the target for `SWING_FOR` = 0.45 s (let go sooner under 1.5 m/s), the tail whipping into the passing nose instead of the nose being
+  taken. Then `SWING_COOL` = 3 s before the unit may swing again; a unit put on the road starts with none. Race police do not swing (`PoliceBrain` never calls it).
+  Measured (hunter brain on the real vehicle stack, hunter 12 m/s, target 18 m/s angled in 0.35 rad at 2.2 m, 3 s): with the swing the target's peak yaw rate is 0.5 rad/s and
+  the hunter's 5.3 rad/s (it whips through about 1.5 rad and recovers by 1.5 s); without it the target's nose lands in the hunter's side and the target spins at up to 6.0 rad/s
+  (1.5 on the mirror side). In the 24-seed full-aggression arena and the opening's five the swing never fired (0 starts; the geometry needs a hunter being passed with the
+  target's nose angled in at its rear wheel), so the pack's numbers are unchanged.
 - **Ram when the box squirms.** A player sitting still or creeping under the bust's 20 km/h in the ring is busted, not rammed (a
   unit within `SETTLE` = 12 m of a player car under `BLOCKABLE` eases to a creep). Each human has a squirm clock
   (`HunterBrain.pinned`): the human is boxed in when units (wrecks too) and solids stand within `SETTLE` m on at least 5 of the 8

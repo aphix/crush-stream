@@ -11,6 +11,7 @@ import { personality, type Personality } from "./personality.ts";
 import { Pedals } from "./pedals.ts";
 import { PlanClock } from "./plan-clock.ts";
 import { TURN_ROUND_THROTTLE } from "./constants.ts";
+import { SWING_FOR, SWING_STEER, tailSwing } from "./tail-swing.ts";
 
 export type AiCar = {
   id: number;
@@ -81,8 +82,6 @@ const GRIND_RANGE = 4.6;
 const RESCORE = 0.14;
 /** Contact range: closer than this counts as engaged, not orbiting. */
 const ENGAGED = 3.8;
-/** Nose point (front wheel / radiator) ahead of a car's origin. */
-const NOSE = 1.7;
 const MODE_REV = 0;
 const MODE_FWD = 1;
 /**
@@ -541,17 +540,12 @@ export class DerbyBrain {
       if (!due && mood(a, self.damage, o.damage) <= -0.2) continue;
       const ofx = detSin(o.yaw);
       const ofz = detCos(o.yaw);
-      // Its nose in our frame (along +forward, lateral +left).
-      const nx = rx + ofx * NOSE;
-      const nz = rz + ofz * NOSE;
-      const na = nx * fx + nz * fz;
-      const nl = nx * fz - nz * fx;
-      const facing = -Math.sign(nl) * (ofx * fz - ofz * fx);
-      if (fwd < 13 && na > -3.2 && na < -0.6 && Math.abs(nl) > 0.9 && Math.abs(nl) < 3.2 && facing > 0.3) {
+      const swing = tailSwing(self, o, 4, 13);
+      if (swing !== 0) {
         // Its nose sits by our rear wheel: handbrake and steer away, the tail swings into its radiator.
         this.moveKind[i] = T_SWING;
-        this.moveSteer[i] = -Math.sign(nl) * 0.85;
-        this.moveFor[i] = 0.45;
+        this.moveSteer[i] = swing * SWING_STEER;
+        this.moveFor[i] = SWING_FOR;
         this.applyMove(i);
         return true;
       }
