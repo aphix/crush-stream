@@ -18,6 +18,9 @@ const WALL_KPH = 80;
 /** A tail crushed to 0.91 spent (damage 0.46): what a squeezed wreck's ratcheting set read, far past a fresh car's worst. */
 const RATCHET_TAIL = { rear: 0.91, damage: 0.455 } as const;
 
+/** The tactics of a driver going in for a hit (the others: idle with no target, the opening's hold, unstick, lay-back). */
+const ATTACKS = ["reverse", "jturn", "nose", "swing", "sideswipe"];
+
 /** The driver at the origin (the damage read from `me`), a parked equal rival 8 m behind its tail and two more across the bowl: it decides for the first time at hit-clock reading `idle`. */
 function tacticAt(me: Partial<AiCar>, idle: number): string {
   const brain = new DerbyBrain();
@@ -38,13 +41,15 @@ describe("given a derby driver on its roll in the first derby, an equal parked r
     runWall(WALL_KPH, 1, "rear", { car });
     const read = snapshotAiCar(aiCar(0), 0, car, car.deform.drivetrainAlive);
     expect(read.damage, `the wall left the tail reading damage ${read.damage.toFixed(3)}: the row proves nothing`).toBeGreaterThan(0.1);
-    expect(tacticAt({ front: read.front, rear: read.rear, damage: read.damage }, 0), `a driver with damage ${read.damage.toFixed(3)} kept clear`).not.toBe("layback");
+    const tactic = tacticAt({ front: read.front, rear: read.rear, damage: read.damage }, 0);
+    expect(ATTACKS, `a driver with damage ${read.damage.toFixed(3)} played ${tactic}`).toContain(tactic);
   });
 
   it("when its tail is crushed to 0.91 spent, then it keeps clear of the equal rival until its hit clock has run down to the share its roll sets, and then goes in", () => {
     const due = DERBY_RULES.hitClock * (0.5 - 0.3 * ROLL);
     expect(tacticAt(RATCHET_TAIL, 0), "it started in").toBe("layback");
     expect(tacticAt(RATCHET_TAIL, due - 1), "it came back before its clock ran").toBe("layback");
-    expect(tacticAt(RATCHET_TAIL, due + 1), "it kept clear after its clock ran").not.toBe("layback");
+    const after = tacticAt(RATCHET_TAIL, due + 1);
+    expect(ATTACKS, `it played ${after} after its clock ran`).toContain(after);
   });
 });
