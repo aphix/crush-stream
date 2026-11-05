@@ -127,7 +127,7 @@ function fleeing(obstacles: Obstacles, evade = false, goal: { x: number; z: numb
 /** `orbit`: the square it laps (half side, m), how near a corner counts as reached (m), and its pace (m/s). */
 const ORBIT_HALF = 60;
 const ORBIT_REACH = 12;
-const ORBIT_SPEED = 6;
+export const ORBIT_SPEED = 8;
 
 function orbiting(): Driver {
   const corners = [

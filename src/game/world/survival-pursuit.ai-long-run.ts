@@ -1,7 +1,7 @@
 import { describe, expect, it, type TestContext } from "vitest";
 import { RAMP } from "../ai/hunter.ts";
 import { fullAggression } from "../ai/ramp.test-util.ts";
-import { chase } from "./survival-players.test-util.ts";
+import { chase, ORBIT_SPEED } from "./survival-players.test-util.ts";
 import { ARENA } from "./survival-arena.test-util.ts";
 import { miss, release } from "./survival-pack.test-util.ts";
 
@@ -11,7 +11,7 @@ import { miss, release } from "./survival-pack.test-util.ts";
  * wrecked within the window with a powered cop touching in the last 2 s (a wall the player hit itself does not count), or busted by the bust's own hold.
  *
  * Re-staged onto the aggression ramp (`RAMP`): the claim was today's pack, at full aggression from the release, ending the run within 30 s of it. That claim stands as
- * the second row, with a window of `FULL_T` s for margin; the pack now reaches full aggression `RAMP.hold + RAMP.full` s after its release, so the row on the ramp has
+ * the second row, with a window of its own in the staged scene below; the pack now reaches full aggression `RAMP.hold + RAMP.full` s after its release, so the row on the ramp has
  * that long plus the 30 s, and a catch earlier on the ramp counts. The ramp's runs outlast the old ones, and two of the five end in a bust, which a ring of cops
  * holds without touching: the touch is asked of a wreck only, in the controls too.
  */
@@ -21,15 +21,15 @@ const SEEDS = [13, 5, 20, 9, 17] as const;
 /** Seconds after full aggression the pack is given to end a run, and the window from the release on the ramp: the pack ends a run within it, hunters with no aim do not. */
 const CATCH_T = 30;
 const WINDOW = RAMP.hold + RAMP.full + CATCH_T;
-/** The window from the release at full aggression from the release: the old claim's 30 s and a margin of 10 s. */
-const FULL_T = 40;
 /**
- * The full-aggression claim (a full pack can finish a runner) is staged as one deterministic scene: the `orbit` runner laps a square of the arena at 6 m/s, the pace the pinned evader bursts to (5.6-5.8 m/s in seed 9), on the fixed
- * release of `SCENE_SEED`. The pack ended it 12.3 s after the release, and 23.3 s with a knocked-out mate read as pulling out; with the lethal choices off (`LETHAL_FROM` above 1) it does not end it in 60 s. It is not five evading seeds:
- * one run of the evader is chaotic (one contact between two cops sends the whole run elsewhere), and "all five seeds within 40 s" was false for the shipped pack on 3 of 24 seeds (it ended 21 of arena seeds 1-24 within 40 s,
- * 4 of the old five, 22 of 24 with the knocked-out mate read as stopped: mean 19.2 s against 22.6 s, 236 cops wrecked against 269, 79 of them by another cop against 98).
+ * The full-aggression claim (a full pack can finish a runner) is staged as one deterministic scene, not five evading seeds: the `orbit` runner laps a square of the arena at `ORBIT_SPEED` m/s, a moving target (over the 6 m/s the
+ * pack's settle ring and bust rules start at), on the fixed release of `SCENE_SEED`. The pack wrecks it 8.9 s after the release (main's pack, which reads a knocked-out mate as pulling out: 10.4 s, so the scene does not separate the two; the unit row pins that
+ * fix); a margin of 11 s to the window. With the lethal choices off (`LETHAL_FROM` above 1) it is not wrecked within 20 s (32.4 s), so the row is red. Hunters with no aim never touch it. One run of the evader is chaotic (one contact between two cops sends the whole run
+ * elsewhere), and "all five seeds within 40 s" was false for the shipped pack on 3 of 24 seeds (it ended 21 of arena seeds 1-24 within 40 s, 4 of the old five; 22 of 24 with a knocked-out mate read as stopped: mean 19.2 s
+ * against 22.6 s, 236 cops wrecked against 269, 79 of them by another cop against 98).
  */
-const SCENE_SEED = 1;
+const SCENE_SEED = 3;
+const SCENE_T = 20;
 
 /** The staged chases, each watched for `window` s after its release (hunters with no aim when `aimless`): why each is not a run the pack ended (null: it is). */
 function staged(t: TestContext, window: number, aimless: boolean): (string | null)[] {
@@ -40,6 +40,15 @@ function staged(t: TestContext, window: number, aimless: boolean): (string | nul
     t.annotate(`seed ${seed}${aimless ? " (no aim)" : ""}: ended ${c.cause} ${(c.time - rel).toFixed(1)} s after the release, ${c.touches} cop contacts, the last ${(c.lastTouch - rel).toFixed(1)} s after it${why === null ? "" : `: ${why}`}`);
     return why;
   });
+}
+
+/** Why the pack did not wreck the orbiting runner in `SCENE_T` s from the release of `SCENE_SEED` (null: it did), hunters with no aim when `aimless`. */
+function orbitMiss(t: TestContext, aimless: boolean): string | null {
+  const rel = release(SCENE_SEED);
+  const c = chase("orbit", SCENE_SEED, rel + SCENE_T, ARENA, aimless ? { release: rel, aimless: true, tamper: (input) => void (input.steer = 0) } : { release: rel });
+  const why = miss(c, true, SCENE_T, "wrecked");
+  t.annotate(`orbit seed ${SCENE_SEED}${aimless ? " (no aim)" : ""}: ended ${c.cause} ${(c.time - rel).toFixed(1)} s after the release, ${c.touches} cop contacts, the last ${(c.lastTouch - rel).toFixed(1)} s after it${why === null ? "" : `: ${why}`}`);
+  return why;
 }
 
 /** Why the pack did not end the run of each seed it missed, one string. */
@@ -68,17 +77,14 @@ describe(`given the closed arena (Havana's plaza inside a square of its own stuc
     const ended = endedSeeds(staged(t, WINDOW, true));
     expect(ended.length, `hunters that never steer ended the runs of seeds ${ended.join(", ")}: the row above is met without steering`).toBe(0);
   });
-  it(`when a runner laps the arena on a fixed path at 6 m/s from the release, then the pack at full aggression ends the run within ${FULL_T} s of it, wrecked with a cop in contact`, (t) => {
+  it(`when a runner laps the arena on a fixed path at ${ORBIT_SPEED} m/s from the release, then the pack at full aggression wrecks it within ${SCENE_T} s of the release, with a cop in contact`, (t) => {
     fullAggression(t);
-    const rel = release(SCENE_SEED);
-    const c = chase("orbit", SCENE_SEED, rel + FULL_T, ARENA, { release: rel });
-    const why = miss(c, true, FULL_T, null, true);
-    t.annotate(`orbit seed ${SCENE_SEED}: ended ${c.cause} ${(c.time - rel).toFixed(1)} s after the release, ${c.touches} cop contacts, the last ${(c.lastTouch - rel).toFixed(1)} s after it${why === null ? "" : `: ${why}`}`);
-    expect(why, `the pack did not end the run: ${why}`).toBeNull();
+    const why = orbitMiss(t, false);
+    expect(why, `the pack did not wreck the run: ${why}`).toBeNull();
   });
-  it("when the same chases run at full aggression with hunters that have no aim, then the pack ends none of them", (t) => {
+  it("when the same runner is chased at full aggression by hunters that have no aim, then the pack does not end the run", (t) => {
     fullAggression(t);
-    const ended = endedSeeds(staged(t, FULL_T, true));
-    expect(ended.length, `hunters that never steer ended the runs of seeds ${ended.join(", ")} at full aggression: the row above is met without steering`).toBe(0);
+    const why = orbitMiss(t, true);
+    expect(why === null, `hunters that never steer ended the run: the row above is met without steering`).toBe(false);
   });
 });
