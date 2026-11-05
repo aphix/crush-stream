@@ -350,14 +350,14 @@ describe("given a cluster fitted in a cloud that is turned 1.2 rad about the ver
     expect(err, `a cloud turned to 1.5 rad has its goals ${err} m from where its particles stand`).toBeLessThan(0.05);
   });
 
-  it("when 6 of 16 clusters stray 1.2 rad from the other 10, the cloud at rest or turned 1.5 rad, then the 10 keep their turn and the 6 settle between 0.8 and 0.9 rad of it: a crushed group does not drag the cloud's turn", () => {
-    for (const base of [0, 1.5]) {
+  it("when 6 of 16 clusters stray 1.2 rad from the others, one of those bent half way (0.6 rad) or not, the cloud at rest or turned 1.5 rad, then the rest keep their turn and the 6 settle between 0.8 and 0.9 rad of it: neither a crushed group nor a half-bent cluster drags the cloud's turn", () => {
+    for (const [base, halfway] of [[0, false], [1.5, false], [0, true], [1.5, true]] as const) {
       const P = particlesAt(Array.from({ length: 16 }, (_, k) => TURNED_REST.map(([x, y, z]): [number, number, number] => [x + 10 * k, y, z])).flat());
       const clusters: ShapeCluster[] = [];
       const turns: number[] = [];
       for (let k = 0; k < 16; k++) {
         clusters.push(makeCluster(P, [0, 1, 2, 3].map((i) => i + 4 * k)));
-        turns.push(k < 10 ? base : base + 1.2);
+        turns.push(halfway && k === 0 ? base + 0.6 : k < 10 ? base : base + 1.2);
       }
       for (const [k, c] of clusters.entries()) {
         const R = rotY(turns[k]!);
@@ -377,8 +377,8 @@ describe("given a cluster fitted in a cloud that is turned 1.2 rad about the ver
       }
       for (const [k, c] of clusters.entries()) {
         const angle = m3RotationAngle(c.R);
-        const ok = k < 10 ? Math.abs(angle - base) < 0.02 : angle > base + 0.8 && angle < base + 0.9;
-        expect(ok, `base ${base}: cluster ${k} turned ${angle} rad`).toBeTruthy();
+        const ok = k >= 10 ? angle > base + 0.8 && angle < base + 0.9 : Math.abs(angle - (halfway && k === 0 ? base + 0.6 : base)) < 0.02;
+        expect(ok, `base ${base}${halfway ? ", cluster 0 bent half way" : ""}: cluster ${k} turned ${angle} rad`).toBeTruthy();
       }
     }
   });

@@ -280,24 +280,29 @@ const _bodyQ = quatId();
 const FIT_OK = 0;
 const FIT_FOLDED = 1;
 const FIT_BROKEN = 2;
-/** Whether the fitted clusters `a` and `b` stand within `ROT_CLAMP` of each other in rotation. */
+/** cos(ROT_CLAMP / 2) as the correctly rounded double (Math.cos(0.425)): voters within it of the centre are within `ROT_CLAMP` of each other. */
+const COS_HALF_CLAMP = 0.9110387329540337;
+/** Whether the fitted clusters `a` and `b` stand within `ROT_CLAMP / 2` of each other in rotation. */
 function turnedAlike(a, b) {
   const x = a.fitR, y = b.fitR;
   const trace = x[0] * y[0] + x[1] * y[1] + x[2] * y[2] + x[3] * y[3] + x[4] * y[4] + x[5] * y[5] + x[6] * y[6] + x[7] * y[7] + x[8] * y[8];
-  return (trace - 1) * 0.5 >= COS_ROT_CLAMP;
+  return (trace - 1) * 0.5 >= COS_HALF_CLAMP;
 }
 /**
  * The cloud's own turn into `turn`: the polar factor of the mean of the unclamped rotations (`fitR` of the clusters that fitted) that
- * stand within `ROT_CLAMP` of the rotation most clusters stand within `ROT_CLAMP` of (the lowest index on a tie). A crushed group that
- * strays from the rest cannot drag the turn toward itself unless it outnumbers them. The shape frame turns only the heading out of
- * the world, so a wreck lying on its side or rolling onto its roof gives every cluster a turn past `ROT_CLAMP` against the world's
- * axes: the clamp is measured about this turn instead. Each extraction starts from the identity, so the turn is a function of the
- * clusters alone and cars stepped in any order read the same.
+ * stand within `ROT_CLAMP / 2` of the rotation most clusters stand within `ROT_CLAMP / 2` of (the lowest index on a tie), so every
+ * voter is within `ROT_CLAMP` of every other and a cluster bent half way between two groups wins nothing. A crushed group that strays
+ * from the rest cannot drag the turn toward itself unless it outnumbers them. The shape frame turns only the heading out of the
+ * world, so a wreck lying on its side or rolling onto its roof gives every cluster a turn past `ROT_CLAMP` against the world's axes:
+ * the clamp is measured about this turn instead. Each extraction starts from the identity, so the turn is a function of the clusters
+ * alone and cars stepped in any order read the same.
  */
 function bodyTurn(clusters, turn) {
+  let fitted = 0;
+  for (let i = 0; i < clusters.length; i++) if (clusters[i].fit === FIT_OK) fitted++;
   let centre = null;
   let most = 0;
-  for (let i = 0; i < clusters.length; i++) {
+  for (let i = 0; i < clusters.length && most < fitted; i++) {
     if (clusters[i].fit !== FIT_OK) continue;
     let near = 0;
     for (let j = 0; j < clusters.length; j++) if (clusters[j].fit === FIT_OK && turnedAlike(clusters[i], clusters[j])) near++;
