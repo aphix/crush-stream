@@ -63,7 +63,7 @@ export function quatId(out?: Quat): Quat;
 export function m3Polar(A: Mat3, q: Quat, R: Mat3, S: Mat3): void;
 export function makeCluster(particles: ShapeParticle[], idx: number[]): ShapeCluster;
 export function rebuildAqqWeighted(c: ShapeCluster, particles: ShapeParticle[]): void;
-/** Round one of a solver iteration: every cluster's fit, and into `turn` the cloud's own turn from them (the polar factor of the mean of the unclamped rotations that stand within 0.85 rad of the commonest one). */
+/** Round one of a solver iteration: every cluster's fit, and into `turn` the cloud's own turn from them (the polar factor of the mean of the unclamped rotations that stand within half the clamp (0.425 rad) of the rotation most clusters stand within half the clamp of). */
 export function fitClusters(clusters: ShapeCluster[], particles: ShapeParticle[], turn: Mat3): void;
 /** Round two: `c` (fitted by `fitClusters`), finished with its rotation clamped about the round's `turn`. */
 export function shapeCluster(c: ShapeCluster, beta: number, turn: Mat3): void;
