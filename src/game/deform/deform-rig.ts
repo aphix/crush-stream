@@ -502,6 +502,8 @@ export abstract class DeformRig {
   protected goalY = new Float64Array(0);
   protected goalZ = new Float64Array(0);
   protected goalW = new Float64Array(0);
+  /** The cloud's own turn this iteration (`fitClusters`): the rotation each cluster's fit is clamped about. */
+  protected readonly cloudTurn = new Float64Array(9);
   /** Body-frame x/y/z of each particle when stepShapeMatch started (net-spin removal). */
   protected startX = new Float64Array(0);
   protected startY = new Float64Array(0);
@@ -735,7 +737,7 @@ export abstract class DeformRig {
     this.loadDirty.fill(0);
     for (let i = 0; i < this.masses.length; i++) this.skinRest[i]!.copy(this.masses[i]!.rest);
     for (const b of [this.endEbs2, this.cageCo, this.floorPre, this.floorPost, this.gripPost, this.hubStand, this.pose, this.spinHeld, this.strokeOut, this.massCornerW]) b.fill(0);
-    for (const b of [this.goalX, this.goalY, this.goalZ, this.goalW, this.startX, this.startY, this.startZ, this.turnX, this.turnZ, this.impulseW]) b.fill(0);
+    for (const b of [this.goalX, this.goalY, this.goalZ, this.goalW, this.startX, this.startY, this.startZ, this.turnX, this.turnZ, this.impulseW, this.cloudTurn]) b.fill(0);
     for (const b of [this.massPos, this.clusterXf, this.netImpact]) b.fill(0);
     this.netImpact[9] = IMPRINT_NONE;
     this.goalView.fill(NaN);

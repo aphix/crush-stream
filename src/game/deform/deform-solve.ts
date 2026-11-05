@@ -83,9 +83,6 @@ function maxLift(m: MassNode, deep: boolean, sunk: number): number {
 }
 
 export abstract class DeformSolve extends DeformFreeze {
-  /** The cloud's own turn this iteration (`fitClusters`): the rotation each cluster's fit is clamped about. */
-  private readonly cloudTurn = new Float64Array(9);
-
   protected clampLocal(group: THREE.Object3D): void {
     const ix = this.impactInward.x;
     const iz = this.impactInward.z;
