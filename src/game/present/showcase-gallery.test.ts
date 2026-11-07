@@ -10,11 +10,11 @@ const NON_UNIQUE: readonly string[] = [
   PREFAB.lamp, PREFAB.gantry, PREFAB.flagpole, PREFAB.billboard, PREFAB.fence, PREFAB.wall, PREFAB.tree, PREFAB.palm,
   PREFAB.grandstand, PREFAB.fountain, PREFAB.building, PREFAB.stucco,
 ];
-/** One-of-a-kind landmarks, the two pools too big for the disc, and the car parts the number keys throw (`THROWN_KINDS`): not scenery. */
+/** One-of-a-kind landmarks, the two pools too big for the disc, the car parts the number keys throw (`THROWN_KINDS`) and the figure-8's junkyard (its shells, Carhenge, crane): not scenery. */
 const EXCLUDED: readonly string[] = [
   PREFAB.obelisk, PREFAB.capitol, PREFAB.whiteHouse, PREFAB.lincoln, PREFAB.capitolPool, PREFAB.marble, PREFAB.monument,
   PREFAB.grantMemorial, PREFAB.peaceMonument, PREFAB.garfieldMonument, PREFAB.pool, PREFAB.basin,
-  PREFAB.muscleBumper, PREFAB.monsterWheel, PREFAB.carWheel,
+  PREFAB.muscleBumper, PREFAB.monsterWheel, PREFAB.carWheel, PREFAB.wreck, PREFAB.carhenge, PREFAB.junkCrane,
 ];
 /** The free cam stands near the eye and looks +z: a prop closer than this behind it would fill the view. */
 const MIN_CLEARANCE = 5;

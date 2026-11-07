@@ -34,6 +34,8 @@ import { GroundsArt } from "./grounds-art.ts";
 type RaceMeshKind = "road" | "runoff" | "terrain" | "wall" | "marking" | "kerb" | "deck" | "pillar" | "tunnel" | "prop";
 /** Weathered pastel stucco (pink, mint, ochre, sky, cream, terracotta, lilac): the Havana blocks and walls. */
 const PASTELS = [0xf3c6c0, 0xbfe0d0, 0xf2d9a0, 0xb8d4ea, 0xf0e2cb, 0xe8b9a0, 0xd9c8e6];
+/** Junked shells' faded paint and rust (rust, oxide red, faded blue, cream, olive): the wreck's per-instance tint over its light grey. */
+const WRECK_PAINTS = [0x8a4a2a, 0x8f2f25, 0x46637f, 0xc9b994, 0x4f6141];
 
 type RaceMeshTag = { kind: RaceMeshKind; surface?: SurfaceId; prefab?: PrefabId };
 
@@ -293,6 +295,10 @@ export class TrackArt {
     }
     if (id === PREFAB.stucco || id === PREFAB.wall) {
       out.setHex(PASTELS[Math.floor(h * PASTELS.length)]!);
+      return true;
+    }
+    if (id === PREFAB.wreck) {
+      out.setHex(WRECK_PAINTS[Math.floor(h * WRECK_PAINTS.length)]!);
       return true;
     }
     return false;

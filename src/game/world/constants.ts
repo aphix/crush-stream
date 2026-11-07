@@ -49,6 +49,9 @@ export const PREFAB = {
   peaceMonument: "peace-monument",
   garfieldMonument: "garfield-monument",
   flagpole: "flagpole",
+  wreck: "wreck",
+  carhenge: "carhenge",
+  junkCrane: "junk-crane",
 } as const;
 
 /**

@@ -3,7 +3,7 @@ import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { makeAsphalt, makeJerseyBarrier, makeLamp } from "./engine-world.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
-import { CHEVRON, FENCE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, WINDOW_BAY, type PrefabId } from "../world/catalog.ts";
+import { CARHENGE, CHEVRON, FENCE, JUNK_CRANE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, WINDOW_BAY, WRECK, type PrefabId } from "../world/catalog.ts";
 import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, squareFrustum } from "./prefab-pieces.ts";
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
 import { frontBumper, lyingWheel } from "./prefabs-car.ts";
@@ -43,6 +43,12 @@ const C = {
   roof: 0x6a665f,
   seatBlue: 0x2f5d9a,
   seatRed: 0xb3261e,
+  rust: 0x7e4426,
+  rustLight: 0x9a6a46,
+  paintFaded: 0x4d6278,
+  glassDark: 0x1f2226,
+  craneYellow: 0xc79a1e,
+  fire: 0xff7a1a,
 };
 
 /** World metres per texture tile (mud: across the road, its ruts run along it). */
@@ -580,6 +586,74 @@ function barrierBlock(): Piece[] {
   return [[geometry, C.barrier, MAT.JERSEY_CONCRETE]];
 }
 
+/** A junked car shell lying on its wheels, nose +Z: a body box, a crushed cabin, its glass a dark band. Light grey, so the per-instance tint (`TrackArt.tint`) is its paint. */
+function wreck(): Piece[] {
+  const { wide, long, tall } = WRECK;
+  return [
+    [box(wide, tall * 0.55, long, 0, tall * 0.3, 0), 0xc8c8c8, MAT.DUMPSTER_STEEL],
+    [box(wide * 0.84, tall * 0.4, long * 0.42, 0, tall * 0.78, -long * 0.06), 0xa8a8a8, MAT.DUMPSTER_STEEL],
+    [box(wide * 0.86, tall * 0.22, long * 0.36, 0, tall * 0.8, -long * 0.06), C.glassDark, MAT.DUMPSTER_STEEL],
+  ];
+}
+
+/** A shell's pieces turned by `yaw` about y and moved to (x, y, z): `upright` stands it on its nose first. */
+function shellAt(upright: boolean, yaw: number, x: number, y: number, z: number, hex: number): Piece[] {
+  const { wide, long, tall } = WRECK;
+  const body = box(wide, tall, long, 0, 0, 0);
+  const glass = box(wide * 0.86, tall * 0.3, long * 0.36, 0, tall * 0.4, -long * 0.06);
+  for (const g of [body, glass]) {
+    if (upright) g.rotateX(Math.PI / 2);
+    g.rotateY(yaw).translate(x, y, z);
+  }
+  return [[body, hex, MAT.DUMPSTER_STEEL], [glass, C.glassDark, MAT.DUMPSTER_STEEL]];
+}
+
+/** The Carhenge: pairs of rusted shells stood on their noses round a ring, a shell across each pair's tops, a campfire in the middle. */
+function carhenge(): Piece[] {
+  const { ring, pairs, gap } = CARHENGE;
+  const { long, tall } = WRECK;
+  const shades = [C.rust, C.rustLight, C.paintFaded];
+  const out: Piece[] = [];
+  for (let p = 0; p < pairs; p++) {
+    const a = (p * 2 * Math.PI) / pairs;
+    const rx = detSin(a);
+    const rz = detCos(a);
+    // Stood on its nose, a shell's roof (its local +y) turns to +z: a half turn past the ring's bearing faces it into the middle.
+    for (const side of [-1, 1]) out.push(...shellAt(true, a + Math.PI, ring * rx + side * (gap / 2) * rz, long / 2 - 0.2, ring * rz - side * (gap / 2) * rx, shades[(p + side + 3) % 3]!));
+    out.push(...shellAt(false, a + Math.PI / 2, ring * rx, long - 0.2 + tall / 2, ring * rz, shades[p % 3]!));
+  }
+  out.push([cyl(0.9, 1.1, 0, 0.35, 8), C.rock, MAT.ROCK], [cyl(0, 0.75, 0.3, 1.6, 6), C.fire, MAT.GENERIC]);
+  return out;
+}
+
+/** The junkyard crane: a lattice tower over a heap of wrecks and tyres, its boom out along +X with a shell hanging off the hook. */
+function junkCrane(): Piece[] {
+  const { height, reach, heap } = JUNK_CRANE;
+  const leg = 1.1;
+  const out: Piece[] = [];
+  for (const x of [-leg, leg]) for (const z of [-leg, leg]) out.push([box(0.28, height - 3, 0.28, x, (height - 3) / 2, z), C.craneYellow, MAT.GANTRY_LATTICE]);
+  for (let y = 2; y < height - 3; y += 2.5) {
+    out.push([box(leg * 2, 0.16, 0.16, 0, y, leg), C.craneYellow, MAT.GANTRY_LATTICE], [box(leg * 2, 0.16, 0.16, 0, y, -leg), C.craneYellow, MAT.GANTRY_LATTICE]);
+    out.push([box(0.16, 0.16, leg * 2, leg, y + 1.25, 0), C.craneYellow, MAT.GANTRY_LATTICE], [box(0.16, 0.16, leg * 2, -leg, y + 1.25, 0), C.craneYellow, MAT.GANTRY_LATTICE]);
+  }
+  out.push([box(2.8, 2.2, 2.8, 0, height - 2.6, 0), C.craneYellow, MAT.GANTRY_LATTICE]);
+  out.push([box(reach + 4.5, 0.7, 0.7, (reach - 4.5) / 2, height - 1.1, 0), C.craneYellow, MAT.GANTRY_LATTICE]);
+  out.push([box(1.8, 1.4, 1.6, -3.8, height - 2.1, 0), C.concreteDark, MAT.CONCRETE]);
+  out.push([box(0.08, 6, 0.08, reach - 0.4, height - 4.4, 0), C.metal, MAT.GANTRY_LATTICE]);
+  out.push(...shellAt(false, 0.6, reach - 0.4, height - 8.1, 0, C.paintFaded));
+  // The heap: shells piled round the tower's foot, the upper ones tipped over the lower.
+  const pile: readonly (readonly [number, number, number, number, number])[] = [
+    [3.2, 0.65, 0.8, 0.3, C.rust], [-3.0, 0.65, 1.5, 2.1, C.rustLight], [0.4, 0.65, -3.6, 1.4, C.paintFaded], [0.8, 0.65, 3.8, -0.4, C.rust],
+    [-2.4, 0.65, -3.0, 0.9, C.rustLight], [2.6, 1.95, 1.4, 0.5, C.paintFaded], [-2.2, 1.95, 0.2, 2.4, C.rust], [0.6, 1.95, -2.6, 1.2, C.rustLight],
+  ];
+  for (const [x, y, z, yaw, hex] of pile) out.push(...shellAt(false, yaw, x, y, z, hex));
+  for (let i = 0; i < 6; i++) {
+    const a = (i * 2 * Math.PI) / 6 + 0.4;
+    out.push([cyl(0.36, 0.36, -0.13, 0.13, 8).rotateX(Math.PI / 2).rotateY(a).translate((heap - 0.6) * detSin(a), 0.38, (heap - 0.6) * detCos(a)), C.black, MAT.TYRE_STACK]);
+  }
+  return out;
+}
+
 /** Prefab `id` at scale 1 as drawable parts (one for most; the lamp adds its head and night pool). */
 export function prefabParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
   const one = (pieces: Piece[], material: THREE.Material): PrefabPart[] => [{ geometry: painted(pieces), material, shared: false }];
@@ -654,5 +728,11 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
       return one(pylon(), mats.plain);
     case PREFAB.chevron:
       return one(chevron(), mats.plain);
+    case PREFAB.wreck:
+      return one(wreck(), mats.plain);
+    case PREFAB.carhenge:
+      return one(carhenge(), mats.plain);
+    case PREFAB.junkCrane:
+      return one(junkCrane(), mats.plain);
   }
 }
