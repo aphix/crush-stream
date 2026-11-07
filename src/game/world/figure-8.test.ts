@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld } from "./race-world.test-util.ts";
 import { placeProps } from "./placements.ts";
-import { Track } from "./track.ts";
+import { blankPoint, Track } from "./track.ts";
 import { parseTrack } from "./track-schema.ts";
 import { TRACKS } from "./tracks/index.ts";
 import { RaceSession } from "../match/session.ts";
@@ -12,16 +12,20 @@ import { blankAiCar } from "../ai/derby-ai.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { must } from "../kernel/must.test-util.ts";
 
-/** Road width (m): five cars of ~1.9 m (`CAR_SPRAY`, 1.9 m across) abreast with a hand's breadth between them, as the owner asked. */
-const WIDTH = 10.5;
-/** Radius (m) of each loop's centreline: a 28 m/s lap at the AI's 16 m/s² corner budget (`checkpoint-sweep.test-util.ts`). */
-const LOOP_RADIUS = 50;
-/** Each loop's centre is this far (m) north or south of the crossing: the strands cross at 60°, tangent to the loops, leaving 87 m of straight each way (a full 16-car grid fits behind the line). */
-const LOOP_CENTRE_Z = 100;
+/** Road width (m): six car lanes (the owner's 5-6 lane minimum, a car 1.9 m across in a 4 m lane). */
+const WIDTH = 24;
+/** Radius (m) of each loop's centreline: tight, so the field bunches at the X; its island stays 17 m to the wall line, room for a landmark. */
+const LOOP_RADIUS = 30;
+/** Each loop's centre is this far (m) north or south of the crossing (R·√2): the arms cross at 90°, tangent to both loops, 30 m from the X to each loop. */
+const LOOP_CENTRE_Z = LOOP_RADIUS * Math.SQRT2;
+/** The loop island's radius (m) to the wall line: the centreline radius less half the road and the 1 m runoff. */
+const ISLAND_RADIUS = LOOP_RADIUS - WIDTH / 2 - 1;
+/** Along either arm the walls stop this far (m) from the crossing: closer, a wall would stand across the other arm's road and runoff (13 m from its centreline). */
+const WALL_OPEN = 14;
 /** The crossing's centre, and how near (m) a sample of the loop must come to it to be one of the two passes through it. */
 const CROSSING_REACH = 2;
-/** Race seconds the field gets for three laps: the grid and lights, then the 770 m lap at the AI's 15 m/s (crossings and a pack's braking included). */
-const AI_RACE_BUDGET_S = 4.5 + (3 * 770) / 15;
+/** Race seconds the field gets for three laps: the grid and lights, then the 403 m lap at the AI's 15 m/s (crossings and a pack's braking included). */
+const AI_RACE_BUDGET_S = 4.5 + (3 * 403) / 15;
 
 const json = TRACKS.find((j) => parseTrack(j).id === "figure-8");
 must(json, "the race menu lists figure-8");
@@ -46,42 +50,53 @@ function lapsOf(pts: Pt[], v: number, laps: number, seconds: number): { laps: nu
   return { laps: events.filter((e) => e.type === "lap").length, session };
 }
 
-describe("given the figure-8 course, two dirt loops joined by a crossing at grade", () => {
-  it("when the course is built, then it is a closed 10.5 m dirt road with no walls, listed in the race menu, its loops 50 m in radius", () => {
+describe("given the figure-8 course, two tight walled dirt loops running into a crossing at grade", () => {
+  it("when the course is built, then it is a closed 24 m dirt road walled both sides, listed in the race menu, its loops 30 m in radius", () => {
     expect(track.path.closed).toBe(true);
     const p = track.path;
     expect(Math.hypot(p.x[0]! - p.x[p.count - 1]!, p.z[0]! - p.z[p.count - 1]!), "the last sample is one step from the first").toBeLessThan(1.5);
     expect(Math.min(...p.half) * 2).toBeCloseTo(WIDTH, 6);
     expect(Math.max(...p.half) * 2).toBeCloseTo(WIDTH, 6);
     expect(track.json.road.surface).toBe("dirt");
-    expect(Math.max(...p.wallL, ...p.wallR), "no walls: the clearing is open").toBe(0);
     expect(Math.max(...p.y) - Math.min(...p.y), "flat").toBe(0);
     const top = LOOP_CENTRE_Z + LOOP_RADIUS;
-    expect(Math.abs(Math.max(...p.z) - top), "the north loop reaches its radius past its centre").toBeLessThan(3);
-    expect(Math.abs(Math.min(...p.z) + top), "the south loop likewise").toBeLessThan(3);
+    expect(Math.abs(Math.max(...p.z) - top), "the north loop reaches its radius past its centre").toBeLessThan(1);
+    expect(Math.abs(Math.min(...p.z) + top), "the south loop likewise").toBeLessThan(1);
   });
 
-  it("when its centreline is walked, then it crosses itself exactly once, at the origin, at grade, and no gate stands over the crossing", () => {
+  it("when its walls are read along the loop, then both sides stand everywhere but within 14 m of the crossing, where both are open", () => {
+    const p = track.path;
+    for (let k = 0; k < p.count; k++) {
+      const fromX = Math.hypot(p.x[k]!, p.z[k]!);
+      if (fromX < WALL_OPEN - 1) expect(p.wallL[k]! + p.wallR[k]!, `sample ${k}, ${fromX.toFixed(1)} m from the X, is open`).toBe(0);
+      else if (fromX > WALL_OPEN + 1) expect(Math.min(p.wallL[k]!, p.wallR[k]!), `sample ${k}, ${fromX.toFixed(1)} m from the X, is walled`).toBeGreaterThan(0);
+    }
+  });
+
+  it("when its centreline is walked, then it crosses itself exactly once, at the origin, at grade and square, and no gate stands over the crossing", () => {
     const passes = passesThroughCrossing();
     expect(passes.length, `passes at s = ${passes.join()}`).toBe(2);
     expect(Math.abs(passes[1]! - passes[0]! - track.length / 2), "the passes are half a lap apart").toBeLessThan(20);
+    const [a, b] = passes.map((s) => track.pointAt(s, blankPoint()));
+    const angle = (Math.acos(a!.tx * b!.tx + a!.tz * b!.tz) * 180) / Math.PI;
+    expect(Math.abs(angle - 90), `the arms meet at ${angle.toFixed(1)} deg: a T-bone, not a glancing hit`).toBeLessThan(2);
     for (const g of track.gates) expect(Math.hypot((g.ax + g.bx) / 2, (g.az + g.bz) / 2), `gate at s=${g.s.toFixed(0)} is 20 m or more from the crossing`).toBeGreaterThan(20);
   });
 
   it("when a car does the first loop then turns at the crossing onto the start straight, then it earns no lap and is told it missed the second loop's checkpoints", () => {
     const L = track.length;
     const [pass] = passesThroughCrossing();
-    const cheat = [...centreline(track, L - 6, L + pass! - 6), { x: 0, z: 0 }, { x: 36, z: 62 }, { x: 60, z: 104 }];
+    const cheat = [...centreline(track, L - 6, L + pass! - 6), { x: 0, z: 0 }, { x: 21, z: 21 }, { x: 30, z: 42 }];
     const { laps, session } = lapsOf(cheat, 30, 1, 120);
     expect(laps, "no lap for cutting across the crossing").toBe(0);
     expect(session.cars[0]!.next, "the second loop is still owed").toBeGreaterThan(0);
   });
 
-  it("when the props are placed, then trees stand in each loop and a ring of them in the forest", () => {
+  it("when the props are placed, then trees stand in each loop's island and a ring of them in the forest", () => {
     const trees = placeProps(track).filter((p) => p.prefab === "tree");
     expect(trees.length).toBeGreaterThan(200);
     for (const cz of [LOOP_CENTRE_Z, -LOOP_CENTRE_Z]) {
-      const inside = trees.filter((t) => Math.hypot(t.x, t.z - cz) < LOOP_RADIUS - 12);
+      const inside = trees.filter((t) => Math.hypot(t.x, t.z - cz) < ISLAND_RADIUS);
       expect(inside.length, `trees inside the loop at z=${cz.toFixed(0)}`).toBeGreaterThan(8);
     }
   });
