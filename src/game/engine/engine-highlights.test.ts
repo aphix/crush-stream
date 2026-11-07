@@ -540,7 +540,8 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
       for (const [pass, frames] of plays.entries()) {
         seen.crash = 0;
         seen.impact = 0;
-        for (let n = 1; n / 60 < loop; n++) {
+        // A clip's wall time is whole frames, so the loop's last frame is its end, which is the next loop's first (its flight): `pass * loop + n / 60` rounds it into either, so it is not compared.
+        for (let n = 1; n / 60 < loop - 1e-6; n++) {
           clockS = pass * loop + n / 60;
           d.frame(clockS);
           d.camera(cam);
