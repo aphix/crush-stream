@@ -325,6 +325,8 @@ export const MATERIALS = [
   ["ROAD_MUD", F.SOIL, "dirt"],
   ["TERRAIN_MUD", F.SOIL, "dirt"],
   ["PATCH_MUD", F.SOIL, "dirt"],
+  ["CAMPFIRE_FLAME", F.GENERIC, "none"],
+  ["CRANE_COUNTERWEIGHT", F.CONCRETE, "concrete"],
 ] as const satisfies readonly (readonly [string, Family, Role])[];
 export type MaterialId = number;
 export type MaterialFamily = Family;

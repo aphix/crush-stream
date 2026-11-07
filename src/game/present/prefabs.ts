@@ -622,7 +622,7 @@ function carhenge(): Piece[] {
     for (const side of [-1, 1]) out.push(...shellAt(true, a + Math.PI, ring * rx + side * (gap / 2) * rz, long / 2 - 0.2, ring * rz - side * (gap / 2) * rx, shades[(p + side + 3) % 3]!));
     out.push(...shellAt(false, a + Math.PI / 2, ring * rx, long - 0.2 + tall / 2, ring * rz, shades[p % 3]!));
   }
-  out.push([cyl(0.9, 1.1, 0, 0.35, 8), C.rock, MAT.ROCK], [cyl(0, 0.75, 0.3, 1.6, 6), C.fire, MAT.GENERIC]);
+  out.push([cyl(0.9, 1.1, 0, 0.35, 8), C.rock, MAT.ROCK], [cyl(0, 0.75, 0.3, 1.6, 6), C.fire, MAT.CAMPFIRE_FLAME]);
   return out;
 }
 
@@ -640,7 +640,7 @@ function junkCrane(): Piece[] {
   out.push([box(2.8, 2.2, 2.8, 0, height - 2.6, 0), C.craneYellow, MAT.GANTRY_LATTICE]);
   // The boom lies on the cab's top.
   out.push([box(reach + 4.5, 0.7, 0.7, (reach - 4.5) / 2, cabTop + 0.7 / 2, 0), C.craneYellow, MAT.GANTRY_LATTICE]);
-  out.push([box(1.8, 1.4, 1.6, -3.8, height - 2.1, 0), C.concreteDark, MAT.CONCRETE]);
+  out.push([box(1.8, 1.4, 1.6, -3.8, height - 2.1, 0), C.concreteDark, MAT.CRANE_COUNTERWEIGHT]);
   out.push([box(0.08, 6, 0.08, reach - 0.4, height - 4.4, 0), C.metal, MAT.GANTRY_LATTICE]);
   out.push(...shellAt(false, 0.6, reach - 0.4, height - 8.1, 0, C.paintFaded));
   // The heap: shells piled round the tower's foot, the upper ones tipped over the lower.

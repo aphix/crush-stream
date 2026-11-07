@@ -36,8 +36,11 @@ function bridgeSamples(ground: TrackGround, p: TrackPath): Uint8Array {
   return b;
 }
 
-/** Columns across a dished road's strip: a column's chord stands `dish / DISH_COLS²` over the parabola (1.6 cm at 1 m of dish). */
-const DISH_COLS = 8;
+/**
+ * Columns across a dished road's strip: a column's chord stands `dish / DISH_COLS²` over the parabola (7 mm at 1 m of dish), and
+ * where two dished roads cross, a 2 m column across their ground's ridge sits at most 0.12 m under it.
+ */
+const DISH_COLS = 12;
 
 /** Columns across `p`'s road strip: one on a flat road, `DISH_COLS` on a path dished anywhere (one count per path, so its quads join). */
 function roadCols(p: TrackPath): number {
@@ -904,7 +907,9 @@ type GroundLayer = { kind: "terrain" | "runoff" | "road" | "marking" | "kerb"; s
  * surface, all paths together), markings, kerbs. The ribbons all lift by `ROAD_LIFT`; their level orders them. What lies
  * on a bridge deck is split off into "deck" level meshes (depth-written, ordered by height), after the ground ones.
  */
-export function buildGroundLayers(track: Track, ground: TrackGround, index: RoadIndex, paths: readonly TrackPath[], secs: readonly (readonly number[])[]): GroundLayer[] {
+export function buildGroundLayers(track: Track, ground: TrackGround, index: RoadIndex, paths: readonly TrackPath[], pathSecs: readonly (readonly number[])[]): GroundLayer[] {
+  // A dished path's ribbon takes every sample: where two dishes cross, the ground creases between sections.
+  const secs = paths.map((p, i) => (roadCols(p) > 1 ? Array.from({ length: p.count }, (_, k) => k) : pathSecs[i]!));
   const terrain = buildTerrain(track, ground, index);
   const out: GroundLayer[] = [{ kind: "terrain", surface: track.json.environment.terrain, level: "terrain", m: terrain.m, smooth: false, chunks: terrain.chunks }];
   const ribbons: Ribbons = new Map();

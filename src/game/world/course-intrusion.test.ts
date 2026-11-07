@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { TRACK_ID } from "./constants.ts";
 import { PREFABS } from "./catalog.ts";
 import { placeProps, type Placed } from "./placements.ts";
-import { Track, blankProjection, projectPath, type TrackPath } from "./track.ts";
+import { Track, blankProjection, dishRise, projectPath, type TrackPath } from "./track.ts";
 import { parseTrack } from "./track-schema.ts";
 import { TRACKS } from "./tracks/index.ts";
 
@@ -115,7 +115,7 @@ const STEP_DX = 0.5;
  */
 const STEP_TOL = 0.05;
 
-/** Every scan step across a path's road + runoff that rises or falls more than its bank plus `STEP_TOL`. */
+/** Every scan step across a path's road + runoff that rises or falls more than its bank and dish plus `STEP_TOL`. */
 function roadSteps(track: Track): string[] {
   const g = track.ground();
   const bad: string[] = [];
@@ -125,9 +125,11 @@ function roadSteps(track: Track): string[] {
       if (p.deck[k]) continue;
       const lo = -(p.half[k]! + p.runR[k]!);
       const hi = p.half[k]! + p.runL[k]!;
-      const bound = Math.abs(Math.tan(p.bank[k]!)) * STEP_DX + STEP_TOL;
+      const bankStep = Math.abs(Math.tan(p.bank[k]!)) * STEP_DX;
       let prev = NaN;
       for (let o = lo; o <= hi + 1e-9; o += STEP_DX) {
+        // A dished road's own parabola climbs up to 2·dish·STEP_DX/half per step at its edge: that is its shape, not a lip.
+        const bound = bankStep + Math.abs(dishRise(p.dish[k]!, o, p.half[k]!) - dishRise(p.dish[k]!, o - STEP_DX, p.half[k]!)) + STEP_TOL;
         const h = g.heightAt(p.x[k]! + p.tz[k]! * o, p.z[k]! - p.tx[k]! * o, p.y[k]!);
         if (Math.abs(h - prev) > bound) bad.push(`${track.id}: path ${pi} segment ${k} steps ${(h - prev).toFixed(2)} m at ${o.toFixed(1)} m off its centreline`);
         prev = h;
@@ -143,7 +145,7 @@ for (const json of TRACKS) {
     it(`when every placed building and prop is measured against the road and runoff, then none reaches more than ${TOL} m onto them`, () => {
       expect(courseIntrusions(track)).toHaveLength(0);
     });
-    it(`when the ground is scanned across every road and its runoff, then no step rises or falls more than the road's own bank plus ${STEP_TOL} m per ${STEP_DX} m`, () => {
+    it(`when the ground is scanned across every road and its runoff, then no step rises or falls more than the road's own bank and dish plus ${STEP_TOL} m per ${STEP_DX} m`, () => {
       expect(roadSteps(track)).toHaveLength(0);
     });
   });

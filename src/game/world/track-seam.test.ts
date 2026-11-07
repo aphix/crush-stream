@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Track, blankPoint } from "./track.ts";
+import { CELL, Track, blankPoint } from "./track.ts";
 import { square } from "./track.test-util.ts";
 import { OFF_MENU, TRACKS } from "./tracks/index.ts";
 
@@ -13,13 +13,17 @@ const REACH = 10;
  */
 const BEND = 0.002;
 
+/** A dished road's own bend (m) anywhere: its parabola, baked on `CELL` nodes and read bilinearly, turns slope by `2 dish / half² × CELL` at each node line. */
+const dishBend = (t: Track): number => ((2 * t.path.dish[0]!) / (t.path.half[0]! * t.path.half[0]!)) * CELL * DS;
+
 const worstBend = (t: Track, side: number): { bend: number; s: number } => {
   const ground = t.ground();
   const pt = blankPoint();
   const hs: number[] = [];
   for (let s = -REACH; s <= REACH + 1e-9; s += DS) {
     t.pointAt(((s % t.length) + t.length) % t.length, pt);
-    const lat = side * pt.half;
+    // A dished road's edge is read a cell inside its lip: the bake rounds the lip itself by up to 5 cm all round the loop.
+    const lat = side * (t.path.dish[0]! > 0 ? pt.half - CELL : pt.half);
     hs.push(ground.heightAt(pt.x + pt.tz * lat, pt.z - pt.tx * lat));
   }
   let worst = { bend: 0, s: 0 };
@@ -33,10 +37,10 @@ const worstBend = (t: Track, side: number): { bend: number; s: number } => {
 for (const json of [...TRACKS, ...OFF_MENU]) {
   const t = new Track(json);
   describe(`given the ${t.id} course`, () => {
-    it("when the ground is read across the start/finish line along the centre and both edges, then its height has no step or kink there", () => {
+    it("when the ground is read across the start/finish line along the centre and both edges, then its height has no step or kink there past the road's own", () => {
       for (const side of [-1, 0, 1]) {
         const { bend, s } = worstBend(t, side);
-        expect(bend, `${t.id}: the road bends ${(bend * 1000).toFixed(1)} mm at s = ${s.toFixed(2)} m on lateral ${side} × half`).toBeLessThanOrEqual(BEND);
+        expect(bend, `${t.id}: the road bends ${(bend * 1000).toFixed(1)} mm at s = ${s.toFixed(2)} m on lateral ${side} × half`).toBeLessThanOrEqual(BEND + dishBend(t));
       }
     });
   });

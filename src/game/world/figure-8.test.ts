@@ -130,7 +130,9 @@ describe("given a 3-lap figure-8 race of 4 AI rivals and the AI-driven player sl
   });
 });
 
-describe("given an AI racer put back on the road at a side slot two metres before the crossing", () => {
+describe("given an AI racer put back on the road at a side slot (half a half-width off the line, as session's respawn spots it) two metres before the crossing", () => {
+  /** The side slot (m): session's respawn tries `±0.5 × half` beside the line, so on the 24 m road 6 m. */
+  const SLOT = track.path.half[0]! / 2;
   /** The brain's main-loop sample for racer 0 after one think from a spot `side` m left of the line, `seed` the sample the respawn event carries (−1: none). */
   function strandOf(side: number, seed: number): number {
     const brain = new RaceBrain(track, 1);
@@ -140,7 +142,7 @@ describe("given an AI racer put back on the road at a side slot two metres befor
     brain.think(car, [car], { next: 1, lap: 0 }, 1 / FRAME_HZ);
     return (brain["seg"][0]! / track.path.count) * track.length;
   }
-  for (const side of [2.6, -2.6]) {
+  for (const side of [SLOT, -SLOT]) {
     it(`when the respawn names its sample and it stands ${Math.abs(side)} m to its ${side > 0 ? "left" : "right"}, then it is on its own strand`, () => {
       const own = passesThroughCrossing()[0]!;
       const k = Math.round(((own - 2) / track.length) * track.path.count);
@@ -149,7 +151,7 @@ describe("given an AI racer put back on the road at a side slot two metres befor
   }
   it("when the respawn names no sample, then one of the two slots is nearer the other strand and the racer drives that one (the hazard the sample prevents)", () => {
     const own = passesThroughCrossing()[0]!;
-    const off = [2.6, -2.6].map((side) => Math.abs(strandOf(side, -1) - own));
+    const off = [SLOT, -SLOT].map((side) => Math.abs(strandOf(side, -1) - own));
     expect(Math.max(...off), `s off its own strand: ${off.join()}`).toBeGreaterThan(100);
   });
 });
