@@ -35,6 +35,8 @@
  * `--draw`, `--scale` and `--shadow` pin the quality knobs (`?draw=`, `?scale=`, `?shadow=`). A numeric `--scale` keeps the shot's size and shrinks the CSS box (`--size` over the scale), so the drawing buffer stays `--size`.
  * `--boost <seconds>` takes the driver's seat and holds its gas for that many sim seconds, then the Boost button too (the touch pad's) through the drawn frames
  * (`--gas-only` leaves the Boost button up: the same drive camera without the boost). The JSON's `boostZoom` is the seat's mode and the zoom strength the director then reads.
+ * `--hold` keeps the driven car where it stands through `--boost`'s seconds, as the piston rig's Hold car does (its masses' mean motion taken off each
+ * frame): its wheels spin in place under the gas, for wheel-slip looks (tyre smoke, surface spatter) on a car that stays in frame.
  * `--race-start` starts the race (a `scene=race` hash) before `--at`'s seconds run, as the race menu's Start does: the field on its course, racing.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -96,6 +98,7 @@ const { values } = parseArgs({
     brake: { type: "boolean" },
     "gas-only": { type: "boolean" },
     "race-start": { type: "boolean" },
+    hold: { type: "boolean" },
     boost: { type: "string" },
     draw: { type: "string" },
     scale: { type: "string" },
@@ -354,7 +357,21 @@ if (values.boost !== undefined) {
   const { touch } = engine["pad"];
   Object.assign(engine.seat, { mode: "drive", carIndex: 0 });
   touch.gas = 1;
-  engine.advance(boostS, { frameDt: FRAME });
+  if (values.hold) {
+    const car = engine.live()[0];
+    const mean = new Float64Array(4);
+    for (let t = 0; t < boostS; t += FRAME) {
+      engine.advance(FRAME, { frameDt: FRAME });
+      car.deform.motion(mean);
+      for (const m of car.deform.masses) {
+        if (!m.dynamic) continue;
+        m.vel.x -= mean[0];
+        m.vel.z -= mean[2];
+      }
+      car.velocity.x = 0;
+      car.velocity.z = 0;
+    }
+  } else engine.advance(boostS, { frameDt: FRAME });
   await settle();
   if (!values["gas-only"]) touch.held |= 1 << PAD_BUTTON.south;
 }
