@@ -204,6 +204,7 @@ export abstract class RaceField {
   private readonly tracks = new Map<string, Track>();
   protected track: Track | null = null;
   protected art: TrackArt | null = null;
+  private trackDebug = false;
   /** The Konami code has been typed on this course (`RaceDirector.revealSecret`): its secret sky is out, its VIP walks, its guards stand down. */
   protected secretOut = false;
   private placed: Placed[] = [];
@@ -562,7 +563,10 @@ export abstract class RaceField {
     this.host.scene.background = sky;
     this.host.scene.fog = new THREE.FogExp2(sky.getHex(), env.fog);
     this.art = this.host.buildArt(tr, this.placed);
-    if (this.art) this.host.scene.add(this.art.group);
+    if (this.art) {
+      this.host.scene.add(this.art.group);
+      this.art.setTrackDebug(this.trackDebug);
+    }
     this.host.view.author(env.far, env.fog);
     this.host.setTimeOfDay(this.rules.timeOfDay);
     setGround(tr.ground());
@@ -571,6 +575,12 @@ export abstract class RaceField {
     this.host.markBounds(b.minX, b.minZ, b.maxX, b.maxZ);
     this.seg.fill(-1);
     return tr;
+  }
+
+  /** The Track debug view (node indices, checkpoint gates); kept across courses. */
+  setTrackDebug(on: boolean): void {
+    this.trackDebug = on;
+    this.art?.setTrackDebug(on);
   }
 
   protected unload(): void {

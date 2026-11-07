@@ -22,6 +22,7 @@ import { PropTumble } from "./prop-tumble.ts";
 import { backdropMesh, disposeBackdrop, type Backdrop } from "./sky-backdrop.ts";
 import { nukeFlash } from "./people.ts";
 import { GroundsArt } from "./grounds-art.ts";
+import { TrackDebug } from "./track-debug.ts";
 
 /**
  * The visible course: terrain (with a far skirt), road / runoff ribbons for the loop, shortcuts and
@@ -60,10 +61,14 @@ export class TrackArt {
   private cancelFlash: (() => void) | null = null;
   /** A guarded course's guards and VIP (`TrackJson.guards`), none on a course without. */
   readonly grounds: GroundsArt | null;
+  private readonly track: Track;
+  /** The Debug views' "Track" overlay (node indices, checkpoint gates), built the first time it is switched on. */
+  private debug: TrackDebug | null = null;
 
   /** `stage` takes the course's own daylight while the art stands (its sun, hemisphere and fill; none: the default) and its sky colour. */
   constructor(track: Track, placed: readonly Placed[], stage: Pick<WorldStage, "look">) {
     this.group.name = "track-art";
+    this.track = track;
     this.stage = stage;
     stage.look(track.json.environment.light ?? null, track.json.environment.sky);
     this.backdropSpec = track.json.environment.backdrop ?? null;
@@ -230,10 +235,19 @@ export class TrackArt {
     this.lamps.instanceColor!.needsUpdate = true;
   }
 
+  setTrackDebug(on: boolean): void {
+    if (on && !this.debug) {
+      this.debug = new TrackDebug(this.track);
+      this.group.add(this.debug.group);
+    }
+    if (this.debug) this.debug.group.visible = on;
+  }
+
   dispose(): void {
     this.cancelFlash?.();
     this.stage.look(null);
     this.grounds?.dispose();
+    this.debug?.dispose();
     this.dropBackdrop();
     const geos = new Set<THREE.BufferGeometry>();
     const mats = new Set<THREE.Material>();

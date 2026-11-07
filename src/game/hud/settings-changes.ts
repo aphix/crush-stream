@@ -54,6 +54,7 @@ const BASE_SETTINGS = {
   rig: { section: "debug", label: "Rig", defaults: { showRig: D.showRig } },
   particles: { section: "debug", label: "Particles", defaults: { showParticles: D.showParticles } },
   capture: { section: "debug", label: "Capture", defaults: { captureTrace: D.captureTrace } },
+  trackDebug: { section: "debug", label: "Track", defaults: { showTrackDebug: D.showTrackDebug } },
 } as const satisfies Record<string, Setting>;
 
 /** One setting per Debug slider (`KNOBS`), under the knob's own id: its HUD field is the one at its default. The cast holds: a row per `KnobId` (pinned by test). */

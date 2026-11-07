@@ -114,6 +114,12 @@ export abstract class EngineInput extends EngineRigs {
     this.emitHud();
   }
 
+  toggleTrackDebug(): void {
+    this.showTrackDebug = !this.showTrackDebug;
+    this.race.setTrackDebug(this.showTrackDebug);
+    this.emitHud();
+  }
+
   toggleOrbit(): void {
     this.autoRotate = !this.autoRotate;
     this.emitHud();
@@ -630,6 +636,9 @@ export abstract class EngineInput extends EngineRigs {
         break;
       case "capture":
         if (this.captureTrace) this.toggleCapture();
+        break;
+      case "trackDebug":
+        if (this.showTrackDebug !== D.showTrackDebug) this.toggleTrackDebug();
         break;
       default:
         this.setKnob(id, D[id]);

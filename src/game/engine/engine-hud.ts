@@ -62,6 +62,7 @@ export abstract class EngineHud extends EngineWarm {
       looping: this.looping,
       showRig: this.showRig,
       showParticles: this.showParticles,
+      showTrackDebug: this.showTrackDebug,
       showBarrier: this.barrierUp,
       showBalls: this.ballsUp,
       showRamps: this.rampsUp,

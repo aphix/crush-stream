@@ -79,6 +79,7 @@ export type CrashHudState = {
   looping: boolean;
   showRig: boolean;
   showParticles: boolean;
+  showTrackDebug: boolean;
   showBarrier: boolean;
   showBalls: boolean;
   /** The fleet's jump ramps on the slab's ends. */
@@ -268,6 +269,7 @@ export const INITIAL_HUD: CrashHudState = {
   looping: true,
   showRig: false,
   showParticles: false,
+  showTrackDebug: false,
   showBarrier: false,
   showBalls: false,
   showRamps: false,

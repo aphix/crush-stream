@@ -97,6 +97,7 @@ describe("given the settings menu, where each setting is a group of HUD fields w
       deformMode: "lattice",
       showRig: true,
       showParticles: true,
+      showTrackDebug: true,
       captureTrace: true,
       ...camera,
     };

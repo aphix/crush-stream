@@ -173,6 +173,8 @@ const BASE_FIELDS = {
   spectate: flag(O.spectate),
   // null = the frame-time panel is down; a number is the panel it shows (0 frames per second, 1 ms per frame, 2 heap: `Stats`' own order).
   stats: orNull(num(0, STATS_PANEL_LAST, 0, true)),
+  // The Track debug view (node indices by surface, checkpoint lines in yellow: `track-debug.ts`).
+  tdbg: flag(D.showTrackDebug),
   // null = the showcase eye is not pinned; else its pose (`showcase-eye.ts`), the `--camera` of `headless-frame.mjs`.
   cam: orNull(list(CAM_RANGES)),
   seed: hex,

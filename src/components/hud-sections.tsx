@@ -9,6 +9,7 @@ import {
   Moon,
   Orbit,
   Repeat,
+  Route,
   Spline,
   Timer,
   Undo2,
@@ -504,6 +505,10 @@ function DebugSection({ state, engine }: HudProps) {
         <Toggle on={state.captureTrace} changed={isChanged(state, "capture")} label="Toggle JSON trace capture" onClick={() => engine.current?.toggleCapture()}>
           <Braces />
           Capture
+        </Toggle>
+        <Toggle on={state.showTrackDebug} changed={isChanged(state, "trackDebug")} label="Toggle track debug (node indices, checkpoint gates)" onClick={() => engine.current?.toggleTrackDebug()}>
+          <Route />
+          Track
         </Toggle>
         <Button
           onClick={() => {

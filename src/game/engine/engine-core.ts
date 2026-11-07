@@ -126,6 +126,7 @@ export abstract class EngineCore {
   looping = true;
   showRig = false;
   showParticles = false;
+  showTrackDebug = false;
   /** The user's fleet props (HUD, hash). A scene never writes them; read the `…Up` getters for what is on screen. */
   showBarrier = false;
   showBalls = false;

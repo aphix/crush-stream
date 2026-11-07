@@ -104,6 +104,7 @@ export abstract class EngineShare extends EngineReel {
       noreset: o.noReset,
       spectate: o.spectate,
       stats: this.statsPanel(),
+      tdbg: this.showTrackDebug,
       mg: this.minigameMode,
       mgset: this.minigameMode === MINIGAME_MODE.ringFling ? this.minigames.setLength : THROWS_PER_SET.default,
       cam: sc === "showcase" ? this.showcaseCam : null,
@@ -178,6 +179,7 @@ export abstract class EngineShare extends EngineReel {
       if (differs("ts")) this.setTimeScale(t.ts);
       if (differs("loop")) this.toggleLoop();
       if (differs("stats")) this.setStats(t.stats);
+      if (differs("tdbg")) this.toggleTrackDebug();
       if (differs("slomo")) this.toggleSlomo();
       if (differs("mvol")) this.setMusicVolume(t.mvol);
       if (differs("evol")) this.setEngineVolume(t.evol);
