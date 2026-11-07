@@ -1,9 +1,9 @@
 {
   "id": "figure-8",
   "name": "Figure Eight",
-  "blurb": "Flat dirt figure-8 in a pine clearing: two tight walled loops running straight into one crossing, a road six cars wide. Everyone meets at the X.",
+  "blurb": "Concave mud figure-8 in a pine clearing: two tight walled loops running straight into one crossing, a road six cars wide that dips to its middle. Everyone meets at the X.",
   "laps": 3,
-  "road": { "width": 24, "surface": "dirt", "runoff": [1,1], "runoffSurface": "grass", "wall": [true,true], "wallHeight": 1.5 },
+  "road": { "width": 24, "surface": "mud", "dish": 1, "runoff": [1,1], "runoffSurface": "grass", "wall": [true,true], "wallHeight": 1.5 },
   "nodes": [
     { "x": 16.97, "z": 16.97, "wall": [true,true] },
     { "x": 19.09, "z": 19.09 },
