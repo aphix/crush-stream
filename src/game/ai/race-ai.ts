@@ -1,8 +1,8 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { chargeBoost, clearDrive, idleDrive, topUpBoost, type DriveInput } from "../vehicle/car-drive.ts";
 import { mood } from "./ai-aggression.ts";
-import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
-import { guardContact } from "./contact-guard.ts";
+import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
+import { contests, guardContact } from "./contact-guard.ts";
 import { DERBY_RULES, STUCK_SPEED, type AiCar } from "./derby-ai.ts";
 import { personality, type Personality } from "./personality.ts";
 import { PlanClock } from "./plan-clock.ts";
@@ -745,6 +745,7 @@ export class RaceBrain {
     g[GUARD_GRIP_IDX] = tyreHold(cls, this.surf);
     g[GUARD_DT_IDX] = dt;
     g[GUARD_RISK_IDX] = this.risk[i]!;
+    g[GUARD_RIVALS_IDX] = this.racers;
   }
 
   /** The lane (m) round the stopped cars ahead (`WreckPass`), and the speed the pass allows: the brake only where every lane is held. */
@@ -1057,8 +1058,10 @@ export class RaceBrain {
         this.nearCount++;
       }
       const rival = o.id < this.racers;
+      // A rival it contests the crossing with (`contests`) is neither passed round nor followed: the car goes for the crossing.
+      const contest = rival && contests(self, o, this.risk[i]!);
       // A cop (stopped or crawling) and a dead car steer the lane choice but never slow the pass (`WreckPass` soft): they are passed at speed.
-      if (oAlong < CRAWL && driveAlong > oAlong + 0.3 && ahead < passLook) this.pass.note(ahead, lat + side, o.id >= this.guarded || !o.alive);
+      if (!contest && oAlong < CRAWL && driveAlong > oAlong + 0.3 && ahead < passLook) this.pass.note(ahead, lat + side, o.id >= this.guarded || !o.alive);
       if (rival) this.pass.noteRival(o.id, ahead);
       // Rivals: fight or keep clear by mood (aggression, both cars' damage); traffic is only avoided. Only at racing pace, both
       // cars rolling on: two hungry cars that met slow or stopped brawled on a wall until both were out of the race.
@@ -1073,7 +1076,7 @@ export class RaceBrain {
       const shy = clamp(-m, 0, 1) * (1 - this.risk[i]!);
       this.hit[o.id] = fight > 0 ? 1 : 0;
       if (fight > 0 && aggr <= CAREFUL) this.nudge = true;
-      if (ahead > 0.5 && ahead < look && inWay) {
+      if (!contest && ahead > 0.5 && ahead < look && inWay) {
         if (driveAlong > oAlong + 0.3) {
           if (ahead < blockerAhead) {
             blockerFight = fight;

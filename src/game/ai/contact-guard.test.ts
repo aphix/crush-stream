@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_TURN_IDX } from "./constants.ts";
+import { GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_TURN_IDX } from "./constants.ts";
 import { guardContact } from "./contact-guard.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -69,6 +69,42 @@ describe("given a driver at 18 m/s asking 0.4 of lock toward a car 10 m ahead an
     expect(lagging.brake > 0.5 && lagging.throttle === 0, `hands at 0.3 on an ask of 0.4: brake ${lagging.brake.toFixed(2)}, throttle ${lagging.throttle.toFixed(2)}`).toBeTruthy();
     expect(guarded(me, [crossing], undefined, 0.3).brake, "an ask of 0.3 steers clear of it").toBe(0);
   });
+});
+
+describe("given a racer at 25 m/s planning full throttle at a crossing 20 m ahead (0.8 s), a rival crossing its way there at a right angle", () => {
+  const me = car(0, 0, 0, 25);
+  /** A rival `x` m short of the crossing, doing `speed` m/s across the racer's way. */
+  const rival = (x: number, speed: number): AiCar => ({ ...blankAiCar(1), x, z: 20, yaw: -Math.PI / 2, vx: -speed });
+  /** The guard's take on the plan for the racer at will to win `risk` (0 leading … 1 last), both cars racers. */
+  const atPlace = (risk: number, o: AiCar): DriveInput => {
+    const out: DriveInput = { ...idleDrive(), throttle: 1 };
+    const tune = new Float64Array(GUARD_COUNT);
+    tune[GUARD_BRAKE_IDX] = 20;
+    tune[GUARD_LEAD_IDX] = 11;
+    tune[GUARD_TURN_IDX] = 1.5;
+    tune[GUARD_RISK_IDX] = risk;
+    tune[GUARD_RIVALS_IDX] = 2;
+    guardContact(me, [me, o], 2, new Uint8Array(32), tune, out);
+    return out;
+  };
+  /** Whether the guard changed the plan (braked, or steered clear): the car gave way. */
+  const givesWay = (out: DriveInput): boolean => firstMismatch(pedals(out), [1, 0, 0]) !== undefined;
+  const cases = [
+    { it: "when both reach it together (the rival 20 m off at 25 m/s), then the leader gives way and last place holds its plan: it contests the crossing", o: rival(20, 25), lastGoes: true },
+    { it: "when the racer gets there first (the rival 22 m off at 25 m/s, 0.08 s behind), then the leader gives way and last place holds its plan", o: rival(22, 25), lastGoes: true },
+    { it: "when the rival gets there 0.32 s first (12 m off at 25 m/s), then last place still goes for it, where a car mid-field (half the will to win) gives way as the leader does", o: rival(12, 25), lastGoes: true, midYields: true },
+    { it: "when the rival clearly gets there first (1 m off at 8 m/s, 0.68 s before the racer), then last place gives way exactly as the leader does", o: rival(1, 8), lastGoes: false },
+  ];
+  for (const testCase of cases) {
+    it(testCase.it, () => {
+      const lead = atPlace(0, testCase.o);
+      expect(givesWay(lead), `the leader: ${pedals(lead).join(", ")}`).toBeTruthy();
+      if (testCase.midYields) expect(givesWay(atPlace(0.5, testCase.o)), `mid-field: ${pedals(atPlace(0.5, testCase.o)).join(", ")}`).toBeTruthy();
+      const last = atPlace(1, testCase.o);
+      if (testCase.lastGoes) expect(givesWay(last), `last place: ${pedals(last).join(", ")}`).toBeFalsy();
+      else assertSameNumbers(pedals(last), pedals(lead), "last place against the leader");
+    });
+  }
 });
 
 describe("given a driver at 20 m/s straight on, with a stopped car 12 m ahead and 2.9 m to one side", () => {

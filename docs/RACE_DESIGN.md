@@ -165,10 +165,13 @@ into `fight = clamp(mood, 0, 1)` and `shy = clamp(−mood, 0, 1)`. The derby AI 
   leader drives as before places existed; a trailing car plans corners `RISK_PUSH` (10 %) faster and its stops on `RISK_BRAKE`
   (30 %) more of the brake (0.94 of the class brake against 0.72, so it brakes later), closes on a racer it is going round up to
   `RISK_CLOSE` (8 m/s) faster than the leader's 6 m/s, scales its `shy` (the yield nudges for a car beside or behind, and the
-  following gap's share over its 0.4 floor) by `1 − r`, spares crossing traffic `1 − r` of the plan's crossing margin, and its
-  contact guard looks for a car **crossing** its way (heading at least 30° off) only `1 − 0.8·r` of its 1.5 s (`RISK_HORIZON`):
-  last place reacts 0.3 s out, too late to stop, and goes for the gap. A car on its own way (the one it follows above all) or
-  head-on is guarded as before at any place: no rear-ending. Difficulty scales on top as before. `r` is 0 at aggression 0 (the
+  following gap's share over its 0.4 floor) by `1 − r`, spares crossing traffic `1 − r` of the plan's crossing margin, and
+  **contests a crossing** (`contact-guard.ts` `contests`): a rival crossing its way (heading at least 30° off) that it reaches
+  the point where their headings meet no later than the rival does, plus `CONTEST_S·r` (0.5 s last), is neither braked nor
+  steered for by its contact guard, nor passed round or followed by its plan: it thinks it can make it, and two that both do
+  meet in the crossing. The leader and a car that would clearly arrive second give way as before, and crossing traffic is
+  guarded over the whole 1.5 s at any place. A car on its own way (the one it follows above all) or head-on is guarded as
+  before at any place: no rear-ending. Difficulty scales on top as before. `r` is 0 at aggression 0 (the
   slider's clean race, pinned by the `race-contact` rows), for a car home, and for police and traffic. Place, not the gap to the
   leader in seconds (`CarRecord.split`, null until the first gate and per lap): the brain reads the same rank the HUD shows.
   Rows: `ai/race-place.test.ts`.
