@@ -57,14 +57,14 @@ function lapsOf(pts: Pt[], v: number, laps: number, seconds: number): { laps: nu
   return { laps: events.filter((e) => e.type === "lap").length, session };
 }
 
-describe("given the figure-8 course, two tight walled mud loops running into a crossing at grade", () => {
-  it("when the course is built, then it is a closed 24 m mud road dished 1 m and walled both sides, listed in the race menu, its loops 30 m in radius", () => {
+describe("given the figure-8 course, two tight walled loops running into a mud crossing at grade", () => {
+  it("when the course is built, then it is a closed 24 m road dished 1 m and walled both sides, listed in the race menu, its loops 30 m in radius", () => {
     expect(track.path.closed).toBe(true);
     const p = track.path;
     expect(Math.hypot(p.x[0]! - p.x[p.count - 1]!, p.z[0]! - p.z[p.count - 1]!), "the last sample is one step from the first").toBeLessThan(1.5);
     expect(Math.min(...p.half) * 2).toBeCloseTo(WIDTH, 6);
     expect(Math.max(...p.half) * 2).toBeCloseTo(WIDTH, 6);
-    expect(track.json.road.surface).toBe("mud");
+    expect(track.json.road.surface).toBe("dirt");
     // Concave, so a sliding car runs back toward the middle instead of slapping the walls (owner).
     expect(track.json.road.dish).toBe(1);
     expect(Math.max(...p.y) - Math.min(...p.y), "flat").toBe(0);
