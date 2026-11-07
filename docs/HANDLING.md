@@ -25,7 +25,7 @@ lobby of mixed picks is fair on the mixed courses. Mass and durability stay each
 
 **Tyres** (`TYRES`, `vehicle-classes.ts`): one rule for every class. Paved ground (`Surface.paved`: asphalt, concrete, cobbles) reads
 as it is for every tyre, since each class's figures were sourced on asphalt on its own tyre. On loose ground (dirt, gravel, grass,
-sand) the tyre multiplies the surface's grip and rolls at no less than its rolling-resistance floor: road ×0.9 and Crr 0.45,
+sand, mud) the tyre multiplies the surface's grip and rolls at no less than its rolling-resistance floor: road ×0.9 and Crr 0.45,
 all-terrain ×1.15, mud ×1.4 (class-pace research, 2026-10-30: dirt cornering on a road tyre 0.50–0.65 of its pavement grip, on an
 all-terrain 0.75–0.90, on a monster's as on pavement or better; a road car holds 0.60–0.75 of its top on dirt). Surface Crr is the
 sim's only ground-speed lever (a flat off-road cap was removed for it; [`RACE_DESIGN.md`](RACE_DESIGN.md) § Ground, surfaces, decks), and dirt's 0.05

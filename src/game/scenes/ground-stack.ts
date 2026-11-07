@@ -5,7 +5,7 @@ import { GROUND_LEVEL } from "./constants.ts";
 /**
  * The one layering rule for everything drawn flat on the ground. A layer sits on a LEVEL of a fixed stack, and the level is
  * its draw order: the terrain (and the sandbox / derby floor) first, then run-off, the paved roads (concrete, asphalt, cobble)
- * with their paint and kerbs, the looser roads (a dirt or gravel track, a grass or sand ford lies over the road it crosses),
+ * with their paint and kerbs, the looser roads (a dirt, gravel or mud track, a grass or sand ford lies over the road it crosses),
  * then the scenes' decals (rings, lamp pools, the derby lip) and their glow. Only the terrain and a bridge's top write depth.
  * Every layer above them is painted over what is below it and writes no depth, so where two of them overlap the higher level
  * wins whatever the depth buffer says: a phone's GPU rounds vertices to a sixteenth of a pixel, and two ground planes seen at
@@ -37,6 +37,7 @@ const GROUND_STACK = [
   SURFACE.gravel,
   SURFACE.grass,
   SURFACE.sand,
+  SURFACE.mud,
   GROUND_LEVEL.decal,
   GROUND_LEVEL.glow,
 ] as const;

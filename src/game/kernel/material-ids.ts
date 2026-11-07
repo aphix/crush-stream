@@ -322,6 +322,9 @@ export const MATERIALS = [
   ["RIM_DISC_FAR", F.METAL, "metal"],
   ["LAMP_UNIT_HOUSING_HEAD", F.PLASTIC, "plastic"],
   ["LAMP_UNIT_HOUSING_TAIL", F.PLASTIC, "plastic"],
+  ["ROAD_MUD", F.SOIL, "dirt"],
+  ["TERRAIN_MUD", F.SOIL, "dirt"],
+  ["PATCH_MUD", F.SOIL, "dirt"],
 ] as const satisfies readonly (readonly [string, Family, Role])[];
 export type MaterialId = number;
 export type MaterialFamily = Family;
@@ -349,6 +352,7 @@ export const SCRATCH_CUT: ReadonlyMap<MaterialId, number> = new Map([
   [MAT.ROAD_GRAVEL, 1],
   [MAT.ROAD_DIRT, 0.4],
   [MAT.ROAD_SAND, 0.4],
+  [MAT.ROAD_MUD, 0.4],
   [MAT.ROAD_GRASS, 0],
 ]);
 

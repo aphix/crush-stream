@@ -1,7 +1,7 @@
 import { detAtan2, hypot2 } from "../kernel/physics-core.js";
 import { clamp } from "../kernel/scalar.ts";
 import type { PropCollider } from "./placements.ts";
-import type { Track, TrackGround, TrackPath } from "./track.ts";
+import { dishRise, type Track, type TrackGround, type TrackPath } from "./track.ts";
 
 /** How a path is cut into sections for its art and its walls, and the one definition of a course wall: drawn, met by the cars and by the dummies. */
 
@@ -28,10 +28,11 @@ const WALL_FOOT = Math.min(...WALL_PROFILE.map(([, v]) => v));
 /** The most (m) a level wall box's top may stand over the drawn top at its low end, on ground that climbs along the wall. */
 const WALL_STEP = 0.1;
 
-/** Path height at lateral `lat` of sample k (banked plane, flat beyond the road edge): the ground layer hint. */
+/** Path height at lateral `lat` of sample k (banked plane, dished, flat beyond the road edge): the ground layer hint. */
 export function levelAt(p: TrackPath, k: number, lat: number): number {
   const h = p.half[k]!;
-  return p.y[k]! - clamp(lat, -h, h) * Math.tan(p.bank[k]!);
+  const y = p.y[k]! - clamp(lat, -h, h) * Math.tan(p.bank[k]!);
+  return p.dish[k] === 0 ? y : y + dishRise(p.dish[k]!, lat, h);
 }
 
 /** Surface height at lateral `lat` of sample k: the analytic deck on a bridge span, else the ground at the path's level. */

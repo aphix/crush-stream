@@ -9,6 +9,7 @@ export const SURFACE = {
   gravel: "gravel",
   grass: "grass",
   sand: "sand",
+  mud: "mud",
 } as const;
 
 /** The prop and scenery ids a course places (`PrefabId`): `PREFAB_IDS` in catalog.ts lists them in table order, `present/prefabs.ts` draws each. */

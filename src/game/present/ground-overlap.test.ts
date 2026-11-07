@@ -294,7 +294,7 @@ describe("given ground layers that may be drawn at the same depth as one another
 
 describe("given the layers the ground is drawn in, bottom to top", () => {
   it("when its levels are listed bottom to top, then they draw in that order before the rest of the scene, and only the terrain and a bridge's top write depth", () => {
-    const order = (["terrain", "deck", "runoff", "concrete", "asphalt", "cobble", "marking", "kerb", "dirt", "gravel", "grass", "sand", "decal", "glow"] as const).map(levelOrder);
+    const order = (["terrain", "deck", "runoff", "concrete", "asphalt", "cobble", "marking", "kerb", "dirt", "gravel", "grass", "sand", "mud", "decal", "glow"] as const).map(levelOrder);
     for (let i = 1; i < order.length; i++) expect(order[i]!, `level ${i} draws at ${order[i]}, not after ${order[i - 1]}`).toBeGreaterThan(order[i - 1]!);
     expect(order.every((o) => o < 0), "the ground draws before the rest of the scene").toBeTruthy();
     expect(firstMismatch((["terrain", "deck", "runoff", "asphalt", "marking", "decal", "glow"] as const).filter(isBaseLevel), ["terrain", "deck"])).toBeUndefined();

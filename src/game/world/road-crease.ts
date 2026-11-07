@@ -17,7 +17,7 @@ export class RoadCrease {
     this.drop = new Float32Array(cells);
   }
 
-  /** Cell `c` at lateral `lat` of a road `half` wide (centre `yc`, `bank` rad), `out` m beyond its runoff (> 0: off it). */
+  /** Cell `c` at lateral `lat` of a road `half` wide (centre `yc`, a dished road's rise there included; `bank` rad), `out` m beyond its runoff (> 0: off it). */
   set(c: number, out: number, lat: number, half: number, yc: number, bank: number): void {
     this.lat[c] = out > 0 ? NaN : lat / half;
     this.centre[c] = yc;

@@ -23,6 +23,8 @@ const node = z.object({
   width: z.number().min(4).max(40).optional(),
   /** Degrees; > 0 raises the RIGHT edge (bank a left-hand turn's outside). Not inherited. */
   bank: z.number().min(-20).max(20).default(0),
+  /** Metres the road's edges stand over its centre, a parabola across it (a concave track); inherited. Not on a bridge deck. */
+  dish: z.number().min(0).max(3).optional(),
   surface: surface.optional(),
   /** Runoff [left, right] (m) between road edge and wall. */
   runoff: pair.optional(),
@@ -159,6 +161,8 @@ export const TrackSchema = z
         runoffSurface: surface.default(SURFACE.grass),
         wall: z.tuple([z.boolean(), z.boolean()]).default([true, true]),
         wallHeight: z.number().positive().default(1.1),
+        /** Node 0's `dish` (m); omitted, 0: a flat road. */
+        dish: z.number().min(0).max(3).optional(),
       })
       .prefault({}),
     /** Closed loop in driving order. Node 0 is on the start/finish line. */

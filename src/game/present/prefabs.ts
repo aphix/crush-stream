@@ -45,8 +45,8 @@ const C = {
   seatRed: 0xb3261e,
 };
 
-/** World metres per texture tile. */
-export const TILE = { asphalt: 8, concrete: 4, detail: 12 };
+/** World metres per texture tile (mud: across the road, its ruts run along it). */
+export const TILE = { asphalt: 8, concrete: 4, detail: 12, mud: 8 };
 
 /** Billboard canvas: the ad on top, a metal-coloured strip (posts) along the bottom. */
 const BILL_W = 512;
@@ -70,6 +70,10 @@ type RaceTextures = {
   /** Natural ground (grass, dirt, gravel, sand, cobble). */
   detail: THREE.CanvasTexture;
   detailGain: THREE.Color;
+  /** A mud road's ruts (along the canvas's v) and puddles, drawn in the road's own frame; `mudGloss` its roughness (puddles wet). */
+  mud: THREE.CanvasTexture;
+  mudGain: THREE.Color;
+  mudGloss: THREE.CanvasTexture;
   /** One window bay (2.95 m × 3.5 m) of a building facade; its bottom-left corner is plain wall. */
   windows: THREE.CanvasTexture;
   billboard: THREE.CanvasTexture;
@@ -139,6 +143,51 @@ function makeDetail(): HTMLCanvasElement {
     ctx.fillRect(Math.random() * S, Math.random() * S, n > 0.93 || n < 0.07 ? 3 : 1.5, n > 0.93 || n < 0.07 ? 2 : 1.5);
   }
   return c;
+}
+
+/** Mud's colour and roughness canvases: wavy wheel ruts along v (darker grooves, a lit lip beside each), puddles dark and glossy. */
+function makeMud(): [HTMLCanvasElement, HTMLCanvasElement] {
+  const S = 512;
+  const [c, ctx] = canvas(S, S);
+  const [r, rough] = canvas(S, S);
+  ctx.fillStyle = "#bcbcbc";
+  ctx.fillRect(0, 0, S, S);
+  rough.fillStyle = "#dddddd";
+  rough.fillRect(0, 0, S, S);
+  for (let i = 0; i < 60; i++) blob(ctx, S, Math.random() * S, Math.random() * S, 20 + Math.random() * 60, Math.random() > 0.5 ? "rgba(255,255,255,0.1)" : "rgba(30,25,20,0.12)");
+  // Ruts: a wobble of whole periods per tile, so the canvas tiles along v.
+  for (let i = 0; i < 18; i++) {
+    const x0 = Math.random() * S;
+    const w = 3 + Math.random() * 9;
+    const amp = 4 + Math.random() * 14;
+    const turns = 1 + Math.floor(Math.random() * 3);
+    const phase = Math.random() * Math.PI * 2;
+    const dark = 0.18 + Math.random() * 0.25;
+    for (let y = 0; y < S; y += 2) {
+      const x = x0 + amp * Math.sin((2 * Math.PI * turns * y) / S + phase);
+      for (const ox of [-S, 0, S]) {
+        ctx.fillStyle = `rgba(20,16,12,${dark})`;
+        ctx.fillRect(x + ox - w / 2, y, w, 2);
+        ctx.fillStyle = "rgba(255,255,255,0.12)";
+        ctx.fillRect(x + ox + w / 2, y, 2, 2);
+        rough.fillStyle = "rgba(140,140,140,0.5)";
+        rough.fillRect(x + ox - w / 2, y, w, 2);
+      }
+    }
+  }
+  for (let i = 0; i < 9; i++) {
+    const x = Math.random() * S;
+    const y = Math.random() * S;
+    const rad = 14 + Math.random() * 30;
+    blob(ctx, S, x, y, rad, "rgba(15,12,10,0.45)");
+    blob(rough, S, x, y, rad, "rgba(20,20,20,0.95)");
+  }
+  for (let i = 0; i < 9000; i++) {
+    const n = Math.random();
+    ctx.fillStyle = n > 0.5 ? `rgba(255,255,255,${(n - 0.5) * 0.3})` : `rgba(0,0,0,${(0.5 - n) * 0.3})`;
+    ctx.fillRect(Math.random() * S, Math.random() * S, 1.5, 1.5);
+  }
+  return [c, r];
 }
 
 function makeConcrete(): HTMLCanvasElement {
@@ -216,6 +265,9 @@ export const raceTextures = once((): RaceTextures => {
   asphalt.repeat.set(1, 1);
   const concrete = makeConcrete();
   const detail = makeDetail();
+  const [mud, mudRough] = makeMud();
+  const mudGloss = texture(mudRough, true);
+  mudGloss.colorSpace = THREE.NoColorSpace;
   return {
     asphalt,
     asphaltGain: gainOf(asphalt.image as HTMLCanvasElement),
@@ -223,6 +275,9 @@ export const raceTextures = once((): RaceTextures => {
     concreteGain: gainOf(concrete),
     detail: tagSurface(texture(detail, true), "ground", TILE.detail),
     detailGain: gainOf(detail),
+    mud: texture(mud, true),
+    mudGain: gainOf(mud),
+    mudGloss,
     windows: texture(makeWindows(), true),
     billboard: texture(makeBillboard(), false),
   };

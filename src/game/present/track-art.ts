@@ -4,7 +4,7 @@ import { applyMarkMap } from "./engine-marks.ts";
 import type { WorldStage } from "./engine-world.ts";
 import { SURFACE_IDS, SURFACES, type PrefabId, type SurfaceId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
-import { PREFAB } from "../world/constants.ts";
+import { PREFAB, SURFACE } from "../world/constants.ts";
 import { box, painted, type Piece } from "./prefab-pieces.ts";
 import { tagLike, tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
@@ -74,14 +74,17 @@ export class TrackArt {
     const index = new RoadIndex(paths);
     const secs = paths.map((p) => sections(p, 0));
     // Ground materials (one per mesh) also darken under the tyre-mark map.
-    const textured = (sid: number) => {
+    const textured = (sid: number, ribbon: boolean) => {
       const t = texClass(sid);
+      // A mud ribbon's ruts and puddles are drawn in the road's own frame (`addRibbons`); mud terrain reads the plain ground's.
+      const mud = ribbon && SURFACE_IDS[sid] === SURFACE.mud;
       const mat = tagMaterial(
         new THREE.MeshStandardMaterial({
           vertexColors: true,
-          map: t === "asphalt" ? tex.asphalt : t === "concrete" ? tex.concrete : tex.detail,
-          color: t === "asphalt" ? tex.asphaltGain : t === "concrete" ? tex.concreteGain : tex.detailGain,
-          roughness: t === "asphalt" ? 0.9 : 0.95,
+          map: mud ? tex.mud : t === "asphalt" ? tex.asphalt : t === "concrete" ? tex.concrete : tex.detail,
+          color: mud ? tex.mudGain : t === "asphalt" ? tex.asphaltGain : t === "concrete" ? tex.concreteGain : tex.detailGain,
+          roughness: mud ? 1 : t === "asphalt" ? 0.9 : 0.95,
+          roughnessMap: mud ? tex.mudGloss : null,
           metalness: 0.02,
         }),
         SURFACES[SURFACE_IDS[sid]!].ribbon,
@@ -104,7 +107,7 @@ export class TrackArt {
         if (!layer.m.empty) this.add(groundMesh(layer.m.geometry(layer.smooth), mat, layer.level), { kind: layer.kind }, false);
         continue;
       }
-      const mat = textured(SURFACE_IDS.indexOf(layer.surface));
+      const mat = textured(SURFACE_IDS.indexOf(layer.surface), !layer.chunks);
       if (layer.chunks) applyMottle(mat);
       const mesh = layer.chunks ? new TerrainBatch(layer.m, layer.chunks, groundMaterial(mat, layer.level)) : groundMesh(layer.m.geometry(layer.smooth), mat, layer.level);
       // The chunked terrain is a batch, not a plain mesh: its place in the stack is set here.

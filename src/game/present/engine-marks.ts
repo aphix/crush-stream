@@ -16,12 +16,12 @@ import { carClass, CLASSES, drivenAxles } from "../vehicle/vehicle-classes.ts";
  * The map covers the course, or on a course wider than `MARK_TEXEL` texels allow, a window round what the shot watches: the
  * map wraps (world xz / window size is its uv), so the window slides a step at a time and wipes only the band it enters.
  *
- * Channels: R rubber (asphalt, concrete, cobble), G rut / scrape groove (dirt, gravel, sand, a bare hub),
+ * Channels: R rubber (asphalt, concrete, cobble), G rut / scrape groove (dirt, gravel, sand, mud, a bare hub),
  * B torn turf (grass).
  */
 
 /** Surface id → mark channel (0 rubber, 1 rut, 2 turf); the rest leave rubber. Read from the surface under the tyre (`pointContact`). */
-const CHANNEL: Partial<Record<SurfaceId, number>> = { dirt: 1, gravel: 1, sand: 1, grass: 2 };
+const CHANNEL: Partial<Record<SurfaceId, number>> = { dirt: 1, gravel: 1, sand: 1, mud: 1, grass: 2 };
 
 /** Sandbox mark rect: the 48 m ground disc. */
 const SANDBOX = { minX: -48, minZ: -48, maxX: 48, maxZ: 48 } as const;

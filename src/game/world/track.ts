@@ -65,6 +65,8 @@ export type TrackPath = {
   half: Float64Array;
   /** Bank (rad), > 0 raises the right edge. */
   bank: Float64Array;
+  /** Dish (m): the edges' rise over the centre, `dishRise` across the road. */
+  dish: Float64Array;
   /** Signed curvature (1/m), > 0 turns left. */
   curv: Float64Array;
   runL: Float64Array;
@@ -130,6 +132,7 @@ type NodeAttrs = {
   y: number[];
   width: number[];
   bank: number[];
+  dish: number[];
   surface: number[];
   runL: number[];
   runR: number[];
@@ -142,11 +145,12 @@ type NodeAttrs = {
 
 /** Resolve inheritance: an omitted field takes the previous node's value; node 0 takes `road`. */
 function nodeAttrs(t: TrackJson): NodeAttrs {
-  const a: NodeAttrs = { y: [], width: [], bank: [], surface: [], runL: [], runR: [], runSurface: [], wallL: [], wallR: [], deck: [], tunnel: [] };
+  const a: NodeAttrs = { y: [], width: [], bank: [], dish: [], surface: [], runL: [], runR: [], runSurface: [], wallL: [], wallR: [], deck: [], tunnel: [] };
   let deck = false;
   let tunnel = false;
   let y = 0;
   let width = t.road.width;
+  let dish = t.road.dish ?? 0;
   let surface: SurfaceId = t.road.surface;
   let run = t.road.runoff;
   let runSurface: SurfaceId = t.road.runoffSurface;
@@ -154,6 +158,7 @@ function nodeAttrs(t: TrackJson): NodeAttrs {
   for (const n of t.nodes) {
     y = n.y ?? y;
     width = n.width ?? width;
+    dish = n.dish ?? dish;
     surface = n.surface ?? surface;
     run = n.runoff ?? run;
     runSurface = n.runoffSurface ?? runSurface;
@@ -163,6 +168,7 @@ function nodeAttrs(t: TrackJson): NodeAttrs {
     a.y.push(y);
     a.width.push(width);
     a.bank.push((n.bank * Math.PI) / 180);
+    a.dish.push(dish);
     a.surface.push(SURFACE_IDS.indexOf(surface));
     a.runL.push(run[0]);
     a.runR.push(run[1]);
@@ -194,6 +200,7 @@ function samplePath(pts: THREE.Vector3[], closed: boolean, attrs: NodeAttrs): { 
     tz: new Float64Array(n),
     half: new Float64Array(n),
     bank: new Float64Array(n),
+    dish: new Float64Array(n),
     curv: new Float64Array(n),
     runL: new Float64Array(n),
     runR: new Float64Array(n),
@@ -220,6 +227,7 @@ function samplePath(pts: THREE.Vector3[], closed: boolean, attrs: NodeAttrs): { 
     const lerp = (arr: number[]) => arr[i]! + (arr[j]! - arr[i]!) * f;
     path.half[k] = lerp(attrs.width) * 0.5;
     path.bank[k] = lerp(attrs.bank);
+    path.dish[k] = lerp(attrs.dish);
     path.runL[k] = lerp(attrs.runL);
     path.runR[k] = lerp(attrs.runR);
     path.wallL[k] = attrs.wallL[i]!;
@@ -384,7 +392,13 @@ export function projectPath(path: TrackPath, x: number, z: number, hint: number,
   return out;
 }
 
-/** Height of a path's stamped road at (x, z): its banked plane, held flat past the edge (`stampPath`'s road and runoff). */
+/** A dished road's rise (m) over its centre at lateral `lat` of a road `half` wide: `dish` × (lat / half)², held at `dish` past the edge. */
+export function dishRise(dish: number, lat: number, half: number): number {
+  const u = lat / half;
+  return dish * Math.min(1, u * u);
+}
+
+/** Height of a path's stamped road at (x, z): its banked plane, dished, held flat past the edge (`stampPath`'s road and runoff). */
 function roadHeight(p: TrackPath, x: number, z: number): number {
   const pr = projectPath(p, x, z, -1, blankProjection());
   const k = pr.k;
@@ -393,7 +407,9 @@ function roadHeight(p: TrackPath, x: number, z: number): number {
   const lat = pr.lateral;
   const half = p.half[k]! + (p.half[b]! - p.half[k]!) * f;
   const bank = p.bank[k]! + (p.bank[b]! - p.bank[k]!) * f;
-  return p.y[k]! + (p.y[b]! - p.y[k]!) * f - Math.max(-half, Math.min(half, lat)) * Math.tan(bank);
+  const dish = p.dish[k]! + (p.dish[b]! - p.dish[k]!) * f;
+  const y = p.y[k]! + (p.y[b]! - p.y[k]!) * f - Math.max(-half, Math.min(half, lat)) * Math.tan(bank);
+  return dish === 0 ? y : y + dishRise(dish, lat, half);
 }
 
 /** An unwalled side path (shortcut or traffic street) of one width and surface; a point's own `surface` paves the run to the next point. */
@@ -406,7 +422,7 @@ function sidePath(pts: readonly { x: number; z: number; y?: number; surface?: Su
   return samplePath(
     pts.map((p, i) => new THREE.Vector3(p.x, ys[i]!, p.z)),
     closed,
-    { y: ys, width: fill(width), bank: fill(0), surface: pointSurfaces, runL: fill(0), runR: fill(0), runSurface: fill(sid), wallL: fill(0), wallR: fill(0), deck: fill(0), tunnel: fill(0) },
+    { y: ys, width: fill(width), bank: fill(0), dish: fill(0), surface: pointSurfaces, runL: fill(0), runR: fill(0), runSurface: fill(sid), wallL: fill(0), wallR: fill(0), deck: fill(0), tunnel: fill(0) },
   );
 }
 
@@ -473,6 +489,7 @@ export class Track {
     }));
     this.checkCrossings();
     this.checkStartLine();
+    for (let k = 0; k < path.count; k++) if (path.deck[k] && path.dish[k]) throw new Error(`${this.id}: a bridge deck at s=${k} is dished: a deck's top is a plane`);
     checkPlateaus(this.id, this.json.environment.plateaus, this.paths());
     let minX = Infinity;
     let maxX = -Infinity;
@@ -541,7 +558,7 @@ export class Track {
   private checkStartLine(): void {
     const p = this.path;
     const n = p.count;
-    const h = (k: number, side: number) => p.y[k]! - side * p.half[k]! * Math.tan(p.bank[k]!);
+    const h = (k: number, side: number) => p.y[k]! - side * p.half[k]! * Math.tan(p.bank[k]!) + side * side * p.dish[k]!;
     for (const side of [-1, 0, 1]) {
       const bend = Math.abs(h(n - 1, side) - 2 * h(0, side) + h(1, side));
       if (bend > START_BEND) throw new Error(`${this.id}: the road bends ${bend.toFixed(2)} m across the start line (side ${side}): its height, bank or width at node 0 breaks from the nodes beside it`);
@@ -722,6 +739,8 @@ export class TrackGround extends Ground {
       const dHalf = p.half[b]! - halfK;
       const bankK = p.bank[k]!;
       const dBank = p.bank[b]! - bankK;
+      const dishK = p.dish[k]!;
+      const dDish = p.dish[b]! - dishK;
       const runL = p.runL[k]!;
       const runR = p.runR[k]!;
       const surface = p.surface[k]!;
@@ -763,8 +782,10 @@ export class TrackGround extends Ground {
           // runoff: a shortcut's mouth skirt dented a banked turn's inside edge 0.35 m (stunt's quarry-cut).
           if (d2 >= nearest[c]! || (side && out > 0 && gap[c] === 0)) continue;
           nearest[c] = d2;
-          const yc = yk + dy * f;
           const bank = bankK + dBank * f;
+          // A dished road's rise rides the crease's centre: piecewise linear between 1 m nodes (2 mm off the parabola at 1 m of dish on 22 m).
+          const dish = dishK + dDish * f;
+          const yc = dish === 0 ? yk + dy * f : yk + dy * f + dishRise(dish, lat, half);
           const edge = yc - Math.max(-half, Math.min(half, lat)) * Math.tan(bank);
           if (!side) {
             gap[c] = Math.max(0, out);

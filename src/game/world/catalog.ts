@@ -7,7 +7,7 @@ import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { PREFAB, SURFACE } from "./constants.ts";
 import { brickCollider, bricksTop, CAPITOL, CAPITOL_POOL, CAPITOL_TOP, capitolPlan, capitolPool, FLAGPOLE, flagpolePlan, GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT, type Brick, type Collider } from "./landmarks.ts";
 
-export const SURFACE_IDS = [SURFACE.asphalt, SURFACE.concrete, SURFACE.cobble, SURFACE.dirt, SURFACE.gravel, SURFACE.grass, SURFACE.sand] as const;
+export const SURFACE_IDS = [SURFACE.asphalt, SURFACE.concrete, SURFACE.cobble, SURFACE.dirt, SURFACE.gravel, SURFACE.grass, SURFACE.sand, SURFACE.mud] as const;
 export type SurfaceId = (typeof SURFACE_IDS)[number];
 
 export type Surface = {
@@ -41,6 +41,7 @@ export const SURFACES: Record<SurfaceId, Surface> = {
   gravel: { grip: 0.62, roll: 0.06, paved: false, color: 0x8a7d68, ribbon: MAT.ROAD_GRAVEL, terrain: MAT.TERRAIN_GRAVEL, patch: MAT.PATCH_GRAVEL }, // ToolBox: gravel loose worn 0.04–0.08 (mid)
   grass: { grip: 0.5, roll: 0.35, paved: false, color: 0x3f5a34, ribbon: MAT.ROAD_GRASS, terrain: MAT.TERRAIN_GRASS, patch: MAT.PATCH_GRASS }, // Bosch: field 0.1–0.35 (the top of the range)
   sand: { grip: 0.45, roll: 0.4, paved: false, color: 0xc2ad84, ribbon: MAT.ROAD_SAND, terrain: MAT.TERRAIN_SAND, patch: MAT.PATCH_SAND }, // ToolBox: car tyre on loose sand 0.2–0.4 (the top of the range)
+  mud: { grip: 0.45, roll: 0.1, paved: false, color: 0x5a4330, ribbon: MAT.ROAD_MUD, terrain: MAT.TERRAIN_MUD, patch: MAT.PATCH_MUD }, // Bosch: field 0.1–0.35 (the bottom: churned wet clay, not long grass); grip tuned on the figure-8
 };
 
 export const PREFAB_IDS = [

@@ -17,11 +17,12 @@ const FAMILIES: Record<SurfaceId, { ribbon: number; cell: number }> = {
   gravel: { ribbon: MAT.SOIL, cell: MAT.SOIL },
   grass: { ribbon: MAT.SOIL, cell: MAT.SOIL },
   sand: { ribbon: MAT.SOIL, cell: MAT.SOIL },
+  mud: { ribbon: MAT.SOIL, cell: MAT.SOIL },
 };
 
 /** The sim's grip and rolling resistance per surface, in `SURFACE_IDS` order: what saved clips were recorded on. */
-const SIM_GRIP = [1, 1, 0.85, 0.72, 0.62, 0.5, 0.45];
-const SIM_ROLL = [0.015, 0.015, 0.03, 0.05, 0.06, 0.35, 0.4];
+const SIM_GRIP = [1, 1, 0.85, 0.72, 0.62, 0.5, 0.45, 0.45];
+const SIM_ROLL = [0.015, 0.015, 0.03, 0.05, 0.06, 0.35, 0.4, 0.1];
 
 describe("given each surface's material ids", () => {
   for (const id of SURFACE_IDS) {

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { SURFACE } from "../world/constants.ts";
 import { clamp } from "../kernel/scalar.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { SURFACE_IDS, type SurfaceId } from "../world/catalog.ts";
@@ -33,6 +34,14 @@ function bridgeSamples(ground: TrackGround, p: TrackPath): Uint8Array {
     bridges.set(p, b);
   }
   return b;
+}
+
+/** Columns across a dished road's strip: a column's chord stands `dish / DISH_COLS²` over the parabola (1.6 cm at 1 m of dish). */
+const DISH_COLS = 8;
+
+/** Columns across `p`'s road strip: one on a flat road, `DISH_COLS` on a path dished anywhere (one count per path, so its quads join). */
+function roadCols(p: TrackPath): number {
+  return p.dish.some((d) => d > 0) ? DISH_COLS : 1;
 }
 
 /** Chunk side in blocks (128 m): the terrain draws chunk by chunk (`TerrainBatch`), so three culls the ones out of view. */
@@ -650,10 +659,14 @@ function addRibbons(out: Ribbons, p: TrackPath, secs: readonly number[], ground:
     const h = p.half[k]!;
     return strip === 0 ? [-h, h] : strip === 1 ? [h, h + p.runL[k]!] : [-h - p.runR[k]!, -h];
   };
+  const cols = roadCols(p);
+  const ds = sampleStep(p);
+  // Mud's ruts run along the road: v is arc length, a whole number of tiles round a loop so the start line has no seam.
+  const along = p.closed ? p.length / Math.max(1, Math.round(p.length / TILE.mud)) : TILE.mud;
   for (let strip = 0; strip < 3; strip++) {
+    const across = strip === 0 ? cols : 1;
     let prev = "";
-    let pa = -1;
-    let pb = -1;
+    let pa: number[] = [];
     for (let i = 0; i < last; i++) {
       const k = secs[i]!;
       const k2 = secs[(i + 1) % n]!;
@@ -673,20 +686,23 @@ function addRibbons(out: Ribbons, p: TrackPath, secs: readonly number[], ground:
       }
       const r = found;
       const tile = TILE[texClass(sid)];
-      const edge = (at: number): [number, number] => {
+      const mud = SURFACE_IDS[sid] === SURFACE.mud;
+      const edge = (at: number, s: number): number[] => {
         const [l0, l1] = span(strip, at);
-        const ids = [l0, l1].map((lat) => {
+        const ids: number[] = [];
+        for (let c = 0; c <= across; c++) {
+          const lat = c === across ? l1 : l0 + (l1 - l0) * (c / across);
           const x = p.x[at]! + p.tz[at]! * lat;
           const z = p.z[at]! - p.tx[at]! * lat;
-          return r.m.v(x, surfY(ground, p, at, lat) + lift, z, surfaceHex(sid), x / tile, z / tile, strip === 0 && sid === terrain ? ROAD_ON_TERRAIN_SHADE : 1);
-        });
-        return [ids[0]!, ids[1]!];
+          const shade = strip === 0 && sid === terrain ? ROAD_ON_TERRAIN_SHADE : 1;
+          ids.push(r.m.v(x, surfY(ground, p, at, lat) + lift, z, surfaceHex(sid), mud ? lat / TILE.mud : x / tile, mud ? s / along : z / tile, shade));
+        }
+        return ids;
       };
-      if (key !== prev) [pa, pb] = edge(k);
-      const [ca, cb] = edge(k2);
-      r.m.quad(pa, pb, ca, cb);
+      if (key !== prev) pa = edge(k, k * ds);
+      const ca = edge(k2, i + 1 === n ? p.length : k2 * ds);
+      for (let c = 0; c < across; c++) r.m.quad(pa[c]!, pa[c + 1]!, ca[c]!, ca[c + 1]!);
       pa = ca;
-      pb = cb;
       prev = key;
     }
   }
@@ -699,6 +715,8 @@ class RibbonSurface {
   private readonly ground: TrackGround;
   private readonly n: number;
   private readonly ds: number;
+  /** `roadCols` of the path: the road strip's columns. */
+  private readonly cols: number;
   /** 1 per sample where this path is a bridge (`bridgeSamples`). */
   readonly bridge: Uint8Array;
 
@@ -708,14 +726,20 @@ class RibbonSurface {
     this.ground = ground;
     this.n = p.count;
     this.ds = sampleStep(p);
+    this.cols = roadCols(p);
     this.bridge = bridgeSamples(ground, p);
   }
 
-  /** Lateral edges [e0, e1] at sample k of the ribbon strip (road, left or right runoff) holding lateral `lat`. */
+  /** Lateral edges [e0, e1] at sample k of the ribbon strip (a road column, left or right runoff) holding lateral `lat`. */
   private strip(k: number, lat: number): [number, number] {
     const p = this.p;
     const h = p.half[k]!;
-    if (Math.abs(lat) <= h) return [-h, h];
+    if (Math.abs(lat) <= h) {
+      if (this.cols === 1) return [-h, h];
+      const w = (2 * h) / this.cols;
+      const c = Math.min(this.cols - 1, Math.floor((lat + h) / w));
+      return [-h + c * w, -h + (c + 1) * w];
+    }
     return lat > 0 ? [h, h + p.runL[k]!] : [-h - p.runR[k]!, -h];
   }
 

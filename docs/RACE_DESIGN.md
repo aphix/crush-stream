@@ -410,12 +410,15 @@ interface Ground {
 }
 ```
 `FLAT_GROUND`: y 0, +Y, 1, asphalt. A race calls `setGround(track.ground())`. `TrackGround` bakes a 1 m heightfield over the
-bounds: banked road plane, flat shoulders over the runoff, smoothstep back to the base terrain over 24 m; every path is
+bounds: banked road plane (raised `dish` × (lateral / half width)² on a dished road), flat shoulders over the runoff, smoothstep back to the base terrain over 24 m; every path is
 stamped, nearest centreline winning, except that a side path's blend never replaces the main loop's road or runoff and
 eases over `MEET` (8 m) beyond it. Each segment measures only the cells of each row within its reach (`capsuleRow`), and an open side street's straight run of like samples is stamped as one segment (`sameRun`), so a cell is measured once per street rather than once per metre's sample near it; a painted polygon tests only the cells over its bounds. The National Mall's 4 M cells bake in about 0.37 s (6.2 s before). Deck spans are skipped and answered analytically from the path at its own height, so a
 bridge and the road under it coexist. Off the road, the ground is the surface drawn: the terrain mesh's 2 m cells (`TERRAIN_SPAN` nodes, corners on even world metres) are each two triangles, split from the cell's (+x, near z) corner to its (near x, +z) one, or four 1 m cells of two triangles each (a fine cell, `world/terrain-cells.ts`) where those two miss one of the cell's own 1 m nodes by more than the course's `environment.fineMiss` (0.1 m; Havana's crest, 1 cm over a cell, needs 0.01), or by more than 1.5 cm on the road's crease; the ground reads the plane of the triangle a point lies in (`Surface.addGrid`'s `lattice`: a fine cell's edge middle against a coarse cell lies on that cell's edge, and the mesh splits the coarse cell's edge there, so no crack opens), not a blend of the 1 m nodes, so a car sits on the ground you see (the mesh eases a corner beside a coarser block along that block's edge and merges flat runs into one quad, each within `FLAT_TOL`, 6 cm). On the main loop's road + runoff `world/road-crease.ts` keeps the crease where a bank
 meets the flat runoff sharp. Driven cars ride it pitched and rolled onto its normal; where it falls away faster than gravity
-follows they fly and land on whatever layer is below. Car pairs more than 2.5 m apart in height never touch.
+follows they fly and land on whatever layer is below. Car pairs more than 2.5 m apart in height never touch. Where two dished
+roads cross (a figure-8's X) the nearer centreline's dish wins, which is the lower of the two: one continuous valley whose
+floor is the crossing's centre (`mud-dish.test.ts`). A dished road's ribbon is drawn in 8 columns across (`DISH_COLS`), so it
+lies within `dish` / 64 of the parabola.
 
 | Surface | grip | rolling resistance (Crr) |
 |---|---|---|
@@ -425,16 +428,17 @@ follows they fly and land on whatever layer is below. Car pairs more than 2.5 m 
 | gravel | 0.62 | 0.06 |
 | grass | 0.5 | 0.35 |
 | sand | 0.45 | 0.4 |
+| mud | 0.45 | 0.10 |
 
 There is no speed cap per surface: grip is applied per axle in `applyDrive` (steering, the driven axles' traction, the sideways
 hold), and the surface's rolling resistance over asphalt's drags a driven car to where its power meets it
-(`terminalSpeed`; [`HANDLING.md`](HANDLING.md) § Acceleration). On loose ground (dirt, gravel, grass, sand; `Surface.paved` false) each
+(`terminalSpeed`; [`HANDLING.md`](HANDLING.md) § Acceleration). On loose ground (dirt, gravel, grass, sand, mud; `Surface.paved` false) each
 class's tyre scales the grip and floors the rolling resistance (`TYRES`; [`HANDLING.md`](HANDLING.md) § Classes), so a road car falls
 back off the pavement and the truck and the monster come forward. The AI caps its planned speeds at the same terminal and asks for a
 target as its share of the class top: a target the drag will not let it reach is simply not reached.
 
 **Ground layers** (`scenes/ground-stack.ts` `GROUND_STACK`) order every flat layer: terrain, bridge top (`deck`), run-off,
-concrete, asphalt, cobble, marking, kerb, dirt, gravel, grass, sand, then the scenes' decals and glow; `groundMesh` sets a
+concrete, asphalt, cobble, marking, kerb, dirt, gravel, grass, sand, mud, then the scenes' decals and glow; `groundMesh` sets a
 mesh's draw order from its level. Only the terrain and a bridge's top write depth. Every layer above is painted in stack
 order with no depth write and depth-tested 1 px of its own depth slope nearer (plus 3 cm toward the camera when opaque)
 against the terrain and `depthProxy`, the road and run-off ribbons at their true height. `ground-overlap.test.ts` holds
@@ -503,8 +507,8 @@ self-crossing with neither level a deck, less than 4.5 m between levels, and a c
 |---|---|---|
 | `id`, `name`, `blurb` | string | `id` is `[a-z0-9-]+` |
 | `laps` | int 1–9 = 3 | default lap count |
-| `road` | `{ width = 14, surface = "asphalt", runoff = [4, 4], runoffSurface = "grass", wall = [true, true], wallHeight = 1.1 }` | node 0's defaults |
-| `nodes[]` | `{ x, z, y?, width?, bank = 0, surface?, runoff?, runoffSurface?, wall?, deck?, tunnel? }`, ≥ 4 | closed centripetal Catmull-Rom in driving order. Omitted fields inherit the previous node (bring `y` back down explicitly); `bank` (degrees, > 0 raises the right edge) does not. Flags hold from a node to the next: `wall` [left, right], `deck` (bridge span), `tunnel` (roofed, art only) |
+| `road` | `{ width = 14, surface = "asphalt", runoff = [4, 4], runoffSurface = "grass", wall = [true, true], wallHeight = 1.1, dish? }` | node 0's defaults (`dish` omitted: 0) |
+| `nodes[]` | `{ x, z, y?, width?, bank = 0, dish?, surface?, runoff?, runoffSurface?, wall?, deck?, tunnel? }`, ≥ 4 | closed centripetal Catmull-Rom in driving order. Omitted fields inherit the previous node (bring `y` back down explicitly); `bank` (degrees, > 0 raises the right edge) does not. `dish` (m, 0–3, inherited) raises both edges that far over the centre on a parabola across the road, held over the runoff: a concave track; a bridge deck may not be dished. Flags hold from a node to the next: `wall` [left, right], `deck` (bridge span), `tunnel` (roofed, art only) |
 | `checkpoints[]` | `{ node, t = 0 }`, ≥ 3 | main gates in order; checkpoint 0 = node 0, t 0 |
 | `shortcuts[]` | `{ id, from, to, width = 7, surface = "dirt", path: [{x, z, y?, surface?}] }` | designed route: open the main walls at its mouths. Its end points take the main road's surface height there; an authored end `y` is ignored. A point's `surface` paves the run from it to the next point (omitted: the shortcut's own) |
 | `grid` | `{ perRow = 2, spacing = 8, back = 6 }` | staggered slots behind the line |
