@@ -35,6 +35,7 @@
  * `--draw`, `--scale` and `--shadow` pin the quality knobs (`?draw=`, `?scale=`, `?shadow=`). A numeric `--scale` keeps the shot's size and shrinks the CSS box (`--size` over the scale), so the drawing buffer stays `--size`.
  * `--boost <seconds>` takes the driver's seat and holds its gas for that many sim seconds, then the Boost button too (the touch pad's) through the drawn frames
  * (`--gas-only` leaves the Boost button up: the same drive camera without the boost). The JSON's `boostZoom` is the seat's mode and the zoom strength the director then reads.
+ * `--race-start` starts the race (a `scene=race` hash) before `--at`'s seconds run, as the race menu's Start does: the field on its course, racing.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -94,6 +95,7 @@ const { values } = parseArgs({
     smash: { type: "string" },
     brake: { type: "boolean" },
     "gas-only": { type: "boolean" },
+    "race-start": { type: "boolean" },
     boost: { type: "string" },
     draw: { type: "string" },
     scale: { type: "string" },
@@ -285,6 +287,7 @@ engine.pinnedSeed = SEED;
 let paceClock = 0;
 engine.pace.now = () => (paceClock += PACE_STEP_S);
 if (values.hash === undefined) engine.toggleDerby();
+if (values["race-start"]) engine.raceCommand({ type: "start" });
 engine.advance(atS, { frameDt: FRAME });
 await settle();
 for (const name of values.tear?.split(",") ?? []) {

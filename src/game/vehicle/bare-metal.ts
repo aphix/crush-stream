@@ -71,6 +71,8 @@ const DENT_FOLD_TINT = [0.03, 0.03, 0.032] as const;
 const DENT_FOLD_DARK = 0.6;
 const DENT_ROUGHNESS = 0.6;
 const DENT_COAT_ROUGHNESS = 0.35;
+/** Dried-on spatter's roughness (mud, dust): matte, no clear coat over it. */
+export const SPATTER_ROUGHNESS = 0.85;
 /** The share of a fragment at `vPrimer` that is a surface taking scratches: 1 on each `TAKES_SCRATCH` material's primer code. */
 const SCRATCH_PAINT_WEIGHT = SCRATCH_CODES.map((code) => `(1.0 - smoothstep(${f(SCRATCH_FADE)}, ${f(SCRATCH_GONE)}, abs(vPrimer - ${f(code)})))`).join(" + ") || "0.0";
 
@@ -81,16 +83,16 @@ export function takesScratch(primer: number): boolean {
 }
 
 /**
- * Where a material defines `PAINT_SCRATCH` and declares `vec2 paintWear(out vec3 lines)` (`lines` the abraded, primer and steel shares
- * a slide cut here; it returns the dent's dulled share 0..1 and its crease 0..1), the paint shows them on the surfaces that take
- * scratches: the scratches give way as to bare steel (`bareW`: no clear coat, no candy), a crease's trough darkens and a dent dulls
- * the paint and coat. `creaseW` is left for the relief's normal hook.
+ * Where a material defines `PAINT_SCRATCH` and declares `vec2 paintWear(out vec3 lines, out vec4 spatter)` (`lines` the abraded, primer and steel shares
+ * a slide cut here, `spatter` a surface's colour thrown on and its cover; it returns the dent's dulled share 0..1 and its crease 0..1), the paint shows
+ * them on the surfaces that take scratches: the scratches give way as to bare steel (`bareW`: no clear coat, no candy), a crease's trough darkens and a
+ * dent dulls the paint and coat; spatter lies over all of it, matte. `creaseW` is left for the relief's normal hook.
  */
 const SCRATCH = {
-  weigh: `#ifdef PAINT_SCRATCH\nvec3 scratchW;\nvec2 wearW = paintWear(scratchW);\nfloat wearOn = ${SCRATCH_PAINT_WEIGHT};\nscratchW *= wearOn;\nfloat dentW = wearW.x * wearOn;\nfloat creaseW = wearW.y * wearOn;\nfloat scratchMatte = max(scratchW.x, scratchW.y) * (1.0 - scratchW.z);\n#endif`,
-  color: `#ifdef PAINT_SCRATCH\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${DENT_FOLD_TINT.map(f).join(", ")}), ${f(DENT_FOLD_DARK)} * creaseW);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_ABRADED.map(f).join(", ")}), scratchW.x * ${f(SCRATCH_ABRADED_LIFT)});\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_PRIMER.map(f).join(", ")}), scratchW.y);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_STEEL.map(f).join(", ")}), scratchW.z);\nbareW = max(bareW, max(scratchW.x, max(scratchW.y, scratchW.z)));\n#endif`,
-  roughness: `#ifdef PAINT_SCRATCH\nroughnessFactor = mix(roughnessFactor, ${f(DENT_ROUGHNESS)}, dentW);\nroughnessFactor = mix(roughnessFactor, ${f(SCRATCH_PRIMER_ROUGHNESS)}, scratchMatte);\n#endif`,
-  metalness: `#ifdef PAINT_SCRATCH\nmetalnessFactor *= 1.0 - scratchMatte;\n#endif`,
+  weigh: `#ifdef PAINT_SCRATCH\nvec3 scratchW;\nvec4 spatterW;\nvec2 wearW = paintWear(scratchW, spatterW);\nfloat wearOn = ${SCRATCH_PAINT_WEIGHT};\nscratchW *= wearOn;\nfloat spatterA = spatterW.a * wearOn;\nfloat dentW = wearW.x * wearOn;\nfloat creaseW = wearW.y * wearOn;\nfloat scratchMatte = max(scratchW.x, scratchW.y) * (1.0 - scratchW.z);\n#endif`,
+  color: `#ifdef PAINT_SCRATCH\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${DENT_FOLD_TINT.map(f).join(", ")}), ${f(DENT_FOLD_DARK)} * creaseW);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_ABRADED.map(f).join(", ")}), scratchW.x * ${f(SCRATCH_ABRADED_LIFT)});\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_PRIMER.map(f).join(", ")}), scratchW.y);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_STEEL.map(f).join(", ")}), scratchW.z);\nbareW = max(bareW, max(scratchW.x, max(scratchW.y, scratchW.z)));\ndiffuseColor.rgb = mix(diffuseColor.rgb, spatterW.rgb, spatterA);\nbareW = max(bareW, spatterA);\n#endif`,
+  roughness: `#ifdef PAINT_SCRATCH\nroughnessFactor = mix(roughnessFactor, ${f(DENT_ROUGHNESS)}, dentW);\nroughnessFactor = mix(roughnessFactor, ${f(SCRATCH_PRIMER_ROUGHNESS)}, scratchMatte);\nroughnessFactor = mix(roughnessFactor, ${f(SPATTER_ROUGHNESS)}, spatterA);\n#endif`,
+  metalness: `#ifdef PAINT_SCRATCH\nmetalnessFactor *= (1.0 - scratchMatte) * (1.0 - spatterA);\n#endif`,
   clearcoat: `#if defined(PAINT_SCRATCH) && defined(USE_CLEARCOAT)\nmaterial.clearcoatRoughness = mix(material.clearcoatRoughness, ${f(DENT_COAT_ROUGHNESS)}, dentW);\n#endif`,
 } as const;
 

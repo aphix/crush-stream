@@ -680,6 +680,8 @@ export class CrashEngine extends EngineGarage {
       this.stepDerby(simDt);
       this.seat.step(simDt);
       this.cine.update(wallDt, simDt, cars, this.followedCar(), this.seat.mode === "drive", this.fxDensity, this.net.client, this.boostZoom ? this.watchedCar() : null);
+      // Live play only: a reel's cars keep the spatter they had (replays don't record it).
+      if (reelDt === null) this.paintScratches.spatter(cars, this.cine.marks.wheels, simDt);
       if (this.derbyMode) {
         const boosts = this.derby.consumeBoosts();
         for (let k = 0; k < boosts.length; k++) this.takedownBoost(boosts[k]!);

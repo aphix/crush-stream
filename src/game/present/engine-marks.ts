@@ -127,6 +127,8 @@ type WheelFx = {
   readonly scrape: Uint8Array;
   /** Surface channel under the wheel (0 rubber, 1 rut, 2 turf). */
   readonly channel: Uint8Array;
+  /** `SURFACE_IDS` index under a grounded tyre (`pointContact`), 255 for none (airborne, a bare hub, a hidden car). */
+  readonly surface: Uint8Array;
   /** Wheel contact (x, z) and velocity (x, z) per slot. */
   readonly px: Float32Array;
   readonly pz: Float32Array;
@@ -187,6 +189,7 @@ export class SkidMarks {
       slip: new Float32Array(slots),
       scrape: new Uint8Array(slots),
       channel: new Uint8Array(slots),
+      surface: new Uint8Array(slots).fill(255),
       px: new Float32Array(slots),
       pz: new Float32Array(slots),
       vx: new Float32Array(slots),
@@ -270,6 +273,7 @@ export class SkidMarks {
     this.spinHold.fill(0);
     this.wheels.slip.fill(0);
     this.wheels.scrape.fill(0);
+    this.wheels.surface.fill(255);
     this.any = false;
   }
 
@@ -305,6 +309,7 @@ export class SkidMarks {
         if (!car.group.visible) {
           this.hasPrev[s] = 0;
           w.slip[s] = 0;
+          w.surface[s] = 255;
           continue;
         }
         // A popped hub's wheel may have left for the world (`dropWheel`): track the bare hub instead.
@@ -346,6 +351,7 @@ export class SkidMarks {
         w.scrape[s] = scrape;
         const ch = scrape ? 1 : (CHANNEL[SURFACE_IDS[_hit[C_SURF]!]!] ?? 0);
         w.channel[s] = ch;
+        w.surface[s] = grounded && !popped ? _hit[C_SURF]! : 255;
         if (slip > 0.04 && this.rt) this.queue(s, w.px[s]!, w.pz[s]!, x, z, scrape ? GROOVE_W : TYRE_W, ch, Math.min(1, slip * 0.9));
         else this.joinedWidth[s] = 0;
         if (slip > 0.04) any = true;

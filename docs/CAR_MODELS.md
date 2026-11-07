@@ -259,11 +259,11 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   fragment's rest normal picks that face and its interpolated primer takes scratches, as the shader weighs it), so a slide at window,
   roof-rail or under-sill height burns none of the 32; the arch lips are paint and take them, and so do the bumpers (in the cover from their own skins), but not the exhaust tips, tow hitch and band inlays drawn in a bumper's mesh (its fitting tone, as the shader reads it: they show no marks). The cover also holds each
   painted texel's recess: how far (mm) it lies behind the outermost surface of its face within 0.3 m along and 0.2 m across, which a
-  striker meets first (the sim reads only paint or not). Present draws each scratched car's RG8 wear mask from that list (`present/paint-scratch.ts` `PaintScratches`, once a
+  striker meets first (the sim reads only paint or not). Present draws each scratched car's RGBA8 wear mask from that list (`present/paint-scratch.ts` `PaintScratches`, once a
   frame for every drawn car, only when the list's version moves, redrawing only the changed strokes' rects and uploading their rows):
   R is a stroke's severity in a capsule its width wide on the `CAR_SPRAY` box, less where the paint is recessed past the stroke's
   reach (6 mm behind the proud surface at the lightest, 40 mm at the hardest: flares, arch lips, a door's widest bulge and crease
-  lines first), G the dent height (next bullet). The paint's `paintWear()`
+  lines first), G the dent height (next bullet), B and A the spatter (the bullet after it). The paint's `paintWear()`
   (`applyScratch`, the `PAINT_SCRATCH` seam in `bare-metal.ts`; it binds `CAR_SPRAY`'s face mapping itself, since an unsprayed car's
   paint has no other) turns R into thin scratch lines along the slide at fragment resolution (at most one per 6 mm row, set off
   its middle at random, 0.5-1.2 mm wide, in dashes of their own length with frayed ends), swaying together across the slide so a
@@ -306,6 +306,13 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   deep, so the light catches its shoulders. Where G is up it is read again as a cubic B-spline (four bilinear fetches):
   bilinear G kinks at every texel, which the bump draws as blocky steps. No pattern of the shader's own; same program at every
   tier.
+- **Spatter:** a grounded wheel on loose ground throws its surface's dots onto the car's lower body (`PaintScratches.spatter`, live play
+  only): each surface's row in `world/catalog.ts` `SURFACES` names its `spatter` (colour, opacity cap, dots per stamp, cover per dot;
+  mud dark and heavy, dirt dusty tan, grass a sparse green-brown speckle, gravel and sand light dust; paved surfaces none). The cars take
+  turns, each every 0.25 s throwing as many dots per wheel as its speed (full at 20 m/s) plus its slip fling, on its flank from 0.35 m
+  ahead of the wheel to 0.9 m behind it and 5-75 cm up (low ones most), a rear wheel also on the tail; B builds up to the cap, A is the
+  last surface's index, drawn in its colour, matte, over the scratches. A repaired car (its stroke list emptied) loses it. Not recorded:
+  a replay shows the cars' spatter as it stands, and a clip that loads empty stroke lists clears it.
 - **The cage** reads `cageInterior()`, the first interior box byte-for-byte: the drawn kit moves no sim reading.
 
 ## References and scale

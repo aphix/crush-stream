@@ -6,19 +6,24 @@ import { FACE_BITS, FACE_MASK, FACE_METRES, FACE_WIDTH, SCRAPE_MAX, SEVERITY, ST
 import { CAR_SPRAY, SPRAY_FACE, sprayFace, sprayPlace } from "../vehicle/spray-box.ts";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { bookTierWork } from "../kernel/tier-work.ts";
+import { SPATTER_ROUGHNESS } from "../vehicle/bare-metal.ts";
+import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
+import type { SkidMarks } from "./engine-marks.ts";
 import { declareSprayFace, sprayFaceUniforms } from "./spray.ts";
 
 /** The FX tier's share of the paint wear, shared by every car's paint: 0 at `off`, 1 the flat wear (scratches, dent darkening and dulling) at `minimal` and `low`, 2 with the dents' relief where the finish draws (`high`, `ultra`). */
 export const SCRATCH_TIER = { value: 1 };
 
 /** What a car with no strokes samples: no wear. Shared, never disposed. */
-const BARE_SCRATCH = new THREE.DataTexture(new Uint8Array(2), 1, 1, THREE.RGFormat);
+const BARE_SCRATCH = new THREE.DataTexture(new Uint8Array(4), 1, 1);
 BARE_SCRATCH.needsUpdate = true;
 /** The `CAR_SPRAY` face mapping the strokes are made in: a paint with no spray of its own has no other, and unset it maps every fragment to texel (0, 0). Every car layout's normalized faces are these. */
 const FACE_UNIFORMS = sprayFaceUniforms(CAR_SPRAY);
 
 const SIDE = CAR_SPRAY.w;
 const FACES = CAR_SPRAY.faces.length;
+/** Bytes per mask texel: R scratch severity, G dent height, B spatter cover, A the spatter's surface (`SURFACE_IDS` index). */
+const TEXEL = 4;
 /** A stroke's least radius, in its face's coarser texel: a hairline narrower than a texel still covers one under linear filtering. */
 const MIN_RADIUS_TEXELS = 0.75;
 /** `WearMask.pending` once more rows wait than it has ranges for: only a whole upload covers them. */
@@ -91,16 +96,38 @@ const DENT_CREASE = 0.05;
 
 const f = (x: number): string => (Number.isInteger(x) ? `${x}.0` : `${x}`);
 
+/** Seconds between two spatter stamps of one car (all four wheels at once): the cars take turns, about one a frame. */
+const SPATTER_EVERY = 0.25;
+/** Wheel speed (m/s) at which it throws its surface's full spatter; its slip (0..1) adds on, so a spinning rear throws more. */
+const FLING_FULL = 20;
+/** Rest heights (m) the dots land between, the low ones most: sills, arches, lower doors. */
+const SPATTER_LOW = 0.05;
+const SPATTER_HIGH = 0.75;
+/** How far (m) along the flank a wheel's dots land ahead of it and behind it: the tread throws back. */
+const SPATTER_AHEAD = 0.35;
+const SPATTER_BEHIND = 0.9;
+/** The share of a rear wheel's dots on the tail (the rear bumper), and how wide (m) round the wheel's track they spread there. */
+const TAIL_SHARE = 0.3;
+const TAIL_SPREAD = 0.6;
+/** A dot's largest radius (texels, about 2 cm each): blobs of 2 to 10 cm. */
+const DOT_RADIUS_MAX = 2;
+/** Each surface's spatter colour (linear), by `SURFACE_IDS` index: what mask A names. */
+const SPATTER_TINT = SURFACE_IDS.map((id) => {
+  const c = new THREE.Color(SURFACES[id].spatter?.color ?? 0);
+  return `vec3(${f(c.r)}, ${f(c.g)}, ${f(c.b)})`;
+});
+
 /**
- * `paintWear(lines)` (the seam in `vehicle/bare-metal.ts`): one fetch of the wear mask, four more where G is up. R draws `lines`: thin dashed lines along the
+ * `paintWear(lines, spatter)` (the seam in `vehicle/bare-metal.ts`): one fetch of the wear mask, four more where G is up. R draws `lines`: thin dashed lines along the
  * slide, in wavy bundles whose density comes and goes along it, mostly abraded paint, some cut to steel, and past `FLAKE_FROM` primer
  * flakes: the shares (abraded, primer, steel). It returns G read as the dent's dulled share (full at `DENT_FLOOR`) and its crease
- * (G past the floor). `paintScratch()` (a bumper trim's seam) is the lines alone.
+ * (G past the floor); `spatter` is B's cover in A's surface colour. `paintScratch(spatter)` (a bumper trim's seam) is the lines and spatter.
  */
 const SCRATCH_GLSL = /* glsl */ `
 #define PAINT_SCRATCH
 uniform sampler2D wearMap;
 uniform float scratchTier;
+const vec3 SPATTER_TINT[${SPATTER_TINT.length}] = vec3[${SPATTER_TINT.length}](${SPATTER_TINT.join(", ")});
 float scratchHash(float x) { return fract(sin(x * 127.1) * 43758.5453); }
 float scratchNoise(vec2 p) {
   vec2 i = floor(p);
@@ -142,20 +169,30 @@ vec3 scratchLines(float s) {
   float flake = step(1.0 - ${f(FLAKE_SHARE)} * smoothstep(${f(FLAKE_FROM)}, 1.0, s), flaky) * (1.0 - steel);
   return vec3((hair - steel) * (1.0 - flake), flake, steel);
 }
-vec3 paintScratch() {
+vec4 spatterAt(vec2 st, float cover) {
+  if (cover == 0.0) return vec4(0.0);
+  // A is a surface's index: read at the texel, never blended between two.
+  ivec2 at = min(ivec2(st * ${f(SIDE)}), ivec2(${SIDE - 1}));
+  return vec4(SPATTER_TINT[int(texelFetch(wearMap, at, 0).a * 255.0 + 0.5)], cover);
+}
+vec3 paintScratch(out vec4 spatter) {
+  spatter = vec4(0.0);
   if (scratchTier == 0.0) return vec3(0.0);
   vec4 face = sprayFaceAt();
   if (face.x < 0.0) return vec3(0.0);
-  float s = texture2D(wearMap, face.xy).r;
-  return s == 0.0 ? vec3(0.0) : scratchLines(s);
+  vec4 w = texture2D(wearMap, face.xy);
+  spatter = spatterAt(face.xy, w.b);
+  return w.r == 0.0 ? vec3(0.0) : scratchLines(w.r);
 }
-vec2 paintWear(out vec3 lines) {
+vec2 paintWear(out vec3 lines, out vec4 spatter) {
   lines = vec3(0.0);
+  spatter = vec4(0.0);
   if (scratchTier == 0.0) return vec2(0.0);
   vec4 face = sprayFaceAt();
   if (face.x < 0.0) return vec2(0.0);
-  vec2 w = texture2D(wearMap, face.xy).rg;
+  vec4 w = texture2D(wearMap, face.xy);
   if (w.r > 0.0) lines = scratchLines(w.r);
+  spatter = spatterAt(face.xy, w.b);
   if (w.g == 0.0) return vec2(0.0);
   // Read again as a cubic B-spline (4 bilinear fetches): bilinear G kinks at every texel, which the relief's slope draws as blocky steps.
   vec2 t = face.xy * ${f(SIDE)} - 0.5;
@@ -211,6 +248,8 @@ type Wear = {
   /** The car's `quietTime` at the last frame, and `PaintScratches`' clock when it was last touched (its quiet went down). */
   quiet: number;
   touchedAt: number;
+  /** Whether mask B holds spatter: the mask stays taken until a repair clears it (`unspatter`). */
+  spattered: boolean;
   /** Per face: the texel rect (x0, y0, x1, y1) G is up in; x1 < x0 is none. */
   readonly dents: Int32Array;
   dented: boolean;
@@ -252,6 +291,7 @@ export function applyScratch(car: DeformableCar): void {
       dentAt: -Infinity,
       quiet: Infinity,
       touchedAt: -Infinity,
+      spattered: false,
       dents,
       dented: false,
       creased: false,
@@ -300,8 +340,9 @@ function patchTrim(material: THREE.MeshStandardMaterial): void {
     shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvSprayP = sprayPos;\nvSprayN = sprayNrm;");
     shader.fragmentShader = shader.fragmentShader
       .replace("void main() {", `${SCRATCH_GLSL}\nuniform vec3 scratchScuff;\nuniform float scratchLift;\nuniform vec3 scratchDeep;\nuniform float scratchRough;\nvoid main() {`)
-      .replace("#include <color_fragment>", "#include <color_fragment>\nvec3 trimScratch = paintScratch();\ndiffuseColor.rgb = mix(diffuseColor.rgb, scratchScuff, max(trimScratch.x, trimScratch.y) * scratchLift);\ndiffuseColor.rgb = mix(diffuseColor.rgb, scratchDeep, trimScratch.z);")
-      .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, scratchRough, max(trimScratch.x, max(trimScratch.y, trimScratch.z)));");
+      .replace("#include <color_fragment>", "#include <color_fragment>\nvec4 trimSpatter;\nvec3 trimScratch = paintScratch(trimSpatter);\ndiffuseColor.rgb = mix(diffuseColor.rgb, scratchScuff, max(trimScratch.x, trimScratch.y) * scratchLift);\ndiffuseColor.rgb = mix(diffuseColor.rgb, scratchDeep, trimScratch.z);\ndiffuseColor.rgb = mix(diffuseColor.rgb, trimSpatter.rgb, trimSpatter.a);")
+      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, scratchRough, max(trimScratch.x, max(trimScratch.y, trimScratch.z)));\nroughnessFactor = mix(roughnessFactor, ${f(SPATTER_ROUGHNESS)}, trimSpatter.a);`)
+      .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\nmetalnessFactor *= 1.0 - trimSpatter.a;");
   };
   trimCompile.set(material, compile);
   trimScuff.set(material, scuff);
@@ -363,10 +404,10 @@ function patchPaint(material: THREE.Material, uniforms: Wear["uniforms"]): void 
   material.needsUpdate = true;
 }
 
-/** One car's RG8 wear mask (R scratch severity, G dent height) and the reused row ranges that upload what changed. */
+/** One car's RGBA8 wear mask (`TEXEL`) and the reused row ranges that upload what changed. */
 class WearMask {
-  readonly data = new Uint8Array(SIDE * SIDE * 2);
-  readonly texture = new THREE.DataTexture(this.data, SIDE, SIDE, THREE.RGFormat);
+  readonly data = new Uint8Array(SIDE * SIDE * TEXEL);
+  readonly texture = new THREE.DataTexture(this.data, SIDE, SIDE);
   private readonly rows = Array.from({ length: SIDE }, () => ({ start: 0, count: 0 }));
   /** Ranges handed to three since its last upload (it clears them as it sends them), or `FULL`: also before the first, as a partial upload to an unallocated texture makes Firefox clear it first. */
   private pending = FULL;
@@ -398,6 +439,13 @@ class WearMask {
     }
     t.needsUpdate = true;
   }
+
+  /** The whole mask uploads at the next draw. */
+  touchAll(): void {
+    this.texture.clearUpdateRanges();
+    this.pending = FULL;
+    this.texture.needsUpdate = true;
+  }
 }
 
 /**
@@ -422,6 +470,12 @@ export class PaintScratches {
   private clock = 0;
   /** The car the next frame's dent draw is first offered to. */
   private turn = 0;
+  /** The car whose spatter stamp is next, the clock that spaces the stamps, and the dots' random state. */
+  private spatterTurn = 0;
+  private spatterClock = 0;
+  private readonly seed = Uint32Array.of(0x9e3779b9);
+  /** Per face: the texel rect (x0, y0, x1, y1) a spatter stamp touched; x1 < x0 is none. */
+  private readonly spatterRects = new Int32Array(FACES * 4);
 
   /** Once a frame (`dt` s since the last), every built car that draws (live, podium, showcase; a replay's cars are the live ones). */
   frame(cars: readonly DeformableCar[], dt: number): void {
@@ -430,10 +484,12 @@ export class PaintScratches {
       const car = cars[i]!;
       const wear = wears.get(car);
       if (wear === undefined) continue;
-      // A scratched car's bumpers draw in trims of its own; a look that swapped one for a shared trim gets a new own copy.
-      if (car.scratches.count > 0) wearBumpers(wear);
+      // A scratched or spattered car's bumpers draw in trims of its own; a look that swapped one for a shared trim gets a new own copy.
+      if (car.scratches.count > 0 || wear.spattered) wearBumpers(wear);
       if (wear.version !== car.scratches.version) {
         wear.version = car.scratches.version;
+        // A list emptied is a repaired car (`resetVisual`, a peer's or a reel's empty list): its spatter goes with its scratches.
+        if (car.scratches.count === 0) this.unspatter(wear);
         this.draw(wear, car.scratches.list, car.scratches.count, car.scratches.cover);
       }
       // An undamaged car's skin is its rest: a repaired one's dents go at once.
@@ -449,6 +505,87 @@ export class PaintScratches {
       this.turn = i + 1;
       return;
     }
+  }
+
+  /**
+   * Live play, once a frame (`dt` sim s): what each grounded wheel's surface throws (`Surface.spatter`) onto its car's lower body, the cars
+   * of `cars` (whose wheels `SkidMarks` reads, car × 4 + wheel) taking turns, each every `SPATTER_EVERY` s. It builds up until the car is repaired.
+   */
+  spatter(cars: readonly DeformableCar[], wheels: SkidMarks["wheels"], dt: number): void {
+    const n = Math.min(cars.length, wheels.surface.length >> 2);
+    if (n === 0) return;
+    const each = SPATTER_EVERY / n;
+    // At most one round of turns a frame, however long the frame.
+    this.spatterClock = Math.min(this.spatterClock + dt, SPATTER_EVERY);
+    for (; this.spatterClock >= each; this.spatterClock -= each) {
+      const c = (this.spatterTurn = (this.spatterTurn + 1) % n);
+      const car = cars[c]!;
+      const wear = wears.get(car);
+      if (wear === undefined) continue;
+      const rects = this.spatterRects;
+      for (let face = 0; face < FACES; face++) clearRect(rects, face * 4);
+      for (let k = 0; k < 4; k++) this.wheelThrow(wear, car, k, wheels, c * 4 + k);
+      // One upload per face for the four wheels: rows a stamp crosses are each a texture call.
+      for (let face = 0; face < FACES; face++) {
+        const o = face * 4;
+        if (rects[o + 2]! < rects[o]!) continue;
+        const fx = CAR_SPRAY.faces[face]![0];
+        const fy = CAR_SPRAY.faces[face]![1];
+        wear.mask!.touch(fx + rects[o]!, fy + rects[o + 1]!, fx + rects[o + 2]!, fy + rects[o + 3]!);
+      }
+    }
+  }
+
+  /** Wheel `k` of `wear`'s car (slot `s` of `wheels`) throws dots of its surface, as many as its speed and slip fling, onto its flank and, a rear one, the tail; `spatterRects` grow over them. */
+  private wheelThrow(wear: Wear, car: DeformableCar, k: number, wheels: SkidMarks["wheels"], s: number): void {
+    const surface = wheels.surface[s]!;
+    const id = SURFACE_IDS[surface];
+    const row = id === undefined ? undefined : SURFACES[id].spatter;
+    if (row === undefined) return;
+    const vx = wheels.vx[s]!;
+    const vz = wheels.vz[s]!;
+    const fling = Math.min(1, Math.sqrt(vx * vx + vz * vz) / FLING_FULL + wheels.slip[s]!);
+    const dots = Math.floor(row.density * fling + this.rand());
+    if (dots === 0) return;
+    if (wear.mask === null) this.take(wear);
+    wear.spattered = true;
+    const mask = wear.mask!;
+    const rects = this.spatterRects;
+    const wheel = car.wheels[k]!.position;
+    const flank = wheel.x < 0 ? SPRAY_FACE.left : SPRAY_FACE.right;
+    const add = Math.max(1, Math.round(255 * row.rate));
+    const cap = Math.round(255 * row.opacity);
+    // Fields, not `set` or a double-argument helper: an uninlined call boxes each double argument, garbage every stamp.
+    for (let i = 0; i < dots; i++) {
+      const tail = k >= 2 && this.rand() < TAIL_SHARE;
+      const r = this.rand();
+      _spatterP.y = SPATTER_LOW + (SPATTER_HIGH - SPATTER_LOW) * r * r;
+      _spatterP.x = tail ? wheel.x + (this.rand() - 0.5) * TAIL_SPREAD : wheel.x;
+      _spatterP.z = tail ? CAR_SPRAY.min[2] : wheel.z + SPATTER_AHEAD - (SPATTER_AHEAD + SPATTER_BEHIND) * this.rand();
+      const face = tail ? SPRAY_FACE.back : flank;
+      sprayPlace(CAR_SPRAY, face, _spatterP, _uv);
+      const rect = CAR_SPRAY.faces[face]!;
+      dot(mask.data, rects, face, (_uv[0]! * rect[2]) | 0, (_uv[1]! * rect[3]) | 0, (this.rand() * (DOT_RADIUS_MAX + 1)) | 0, add, cap, surface);
+    }
+  }
+
+  /** `wear`'s spatter cleared (mask B and A): its car was repaired. */
+  private unspatter(wear: Wear): void {
+    if (!wear.spattered) return;
+    wear.spattered = false;
+    const mask = wear.mask!;
+    for (let i = 2; i < mask.data.length; i += TEXEL) {
+      mask.data[i] = 0;
+      mask.data[i + 1] = 0;
+    }
+    mask.touchAll();
+  }
+
+  /** 0..1 from a 32-bit LCG: the dots' places, cheap and allocation-free. */
+  private rand(): number {
+    const seed = this.seed;
+    seed[0] = Math.imul(seed[0]!, 1664525) + 1013904223;
+    return seed[0]! / 4294967296;
   }
 
   /**
@@ -472,6 +609,7 @@ export class PaintScratches {
 
   /** `wear`'s mask handed back, its strokes and dents cleared: its car is gone. */
   release(wear: Wear): void {
+    this.unspatter(wear);
     this.draw(wear, wear.list, 0);
     if (wear.dented) this.dent(wear, false);
   }
@@ -506,14 +644,14 @@ export class PaintScratches {
       const fx = CAR_SPRAY.faces[face]![0];
       const fy = CAR_SPRAY.faces[face]![1];
       for (let y = rects[o + 1]!; y <= rects[o + 3]!; y++) {
-        for (let x = rects[o]!; x <= rects[o + 2]!; x++) mask.data[((fy + y) * SIDE + fx + x) * 2] = 0;
+        for (let x = rects[o]!; x <= rects[o + 2]!; x++) mask.data[((fy + y) * SIDE + fx + x) * TEXEL] = 0;
       }
       for (let k = 0; k < count; k++) {
         if ((list[k * STROKE_BYTES + FACE_WIDTH]! & FACE_MASK) === face) stamp(mask.data, list, k * STROKE_BYTES, rects, o, cover);
       }
       mask.touch(fx + rects[o]!, fy + rects[o + 1]!, fx + rects[o + 2]!, fy + rects[o + 3]!);
     }
-    if (count === 0 && !wear.dented) this.give(wear);
+    if (count === 0 && !wear.dented && !wear.spattered) this.give(wear);
   }
 
   /**
@@ -534,7 +672,7 @@ export class PaintScratches {
       const fx = CAR_SPRAY.faces[face]![0];
       const fy = CAR_SPRAY.faces[face]![1];
       for (let y = was[o + 1]!; y <= was[o + 3]!; y++) {
-        for (let x = was[o]!; x <= was[o + 2]!; x++) mask.data[((fy + y) * SIDE + fx + x) * 2 + 1] = 0;
+        for (let x = was[o]!; x <= was[o + 2]!; x++) mask.data[((fy + y) * SIDE + fx + x) * TEXEL + 1] = 0;
       }
     }
     if (build) {
@@ -568,7 +706,7 @@ export class PaintScratches {
       const y1 = Math.max(now[o + 3]!, was[o + 3]!);
       mask.touch(fx + x0, fy + y0, fx + x1, fy + y1);
     }
-    if (!wear.dented && wear.count === 0) this.give(wear);
+    if (!wear.dented && wear.count === 0 && !wear.spattered) this.give(wear);
   }
 
   /** The dents of `wear`'s shell `k` into `depths`, growing the face rects `rects` round what it lays: from its skin before the drawn tyre hold, which host, guest and replay share. */
@@ -690,11 +828,38 @@ function stamp(data: Uint8Array, list: Uint8Array, s: number, rects: Int32Array,
       const ey = py - k * by;
       const q = (ex * ex + ey * ey) / (r * r);
       if (q >= 1) continue;
-      const i = ((fy + y) * SIDE + fx + x) * 2;
+      const i = ((fy + y) * SIDE + fx + x) * TEXEL;
       const recess = cover === null ? 0 : Math.max(0, cover[(fy + y) * SIDE + fx + x]! - 1);
       data[i] = Math.max(data[i]!, Math.round(severity * (1 - q) * proudShare(recess, severity)));
     }
   }
+}
+
+/**
+ * A spatter dot of radius `r` texels at texel (`u`, `v`) of `face` into `data`: each texel's B up by `add`, to `cap` at most (a
+ * heavier coat already there stays), and A the dot's `surface`; the face's rect in `rects` grown over it.
+ */
+function dot(data: Uint8Array, rects: Int32Array, face: number, u: number, v: number, r: number, add: number, cap: number, surface: number): void {
+  const rect = CAR_SPRAY.faces[face]!;
+  const cx = Math.min(rect[2] - 1, u);
+  const cy = Math.min(rect[3] - 1, v);
+  const x0 = Math.max(0, cx - r);
+  const x1 = Math.min(rect[2] - 1, cx + r);
+  const y0 = Math.max(0, cy - r);
+  const y1 = Math.min(rect[3] - 1, cy + r);
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if ((x - cx) * (x - cx) + (y - cy) * (y - cy) > r * r + r) continue;
+      const i = ((rect[1] + y) * SIDE + rect[0] + x) * TEXEL;
+      data[i + 2] = Math.max(data[i + 2]!, Math.min(cap, data[i + 2]! + add));
+      data[i + 3] = surface;
+    }
+  }
+  const o = face * 4;
+  rects[o] = Math.min(rects[o]!, x0);
+  rects[o + 1] = Math.min(rects[o + 1]!, y0);
+  rects[o + 2] = Math.max(rects[o + 2]!, x1);
+  rects[o + 3] = Math.max(rects[o + 3]!, y1);
 }
 
 /** A striker meets the outermost paint first: it reaches this far (mm) behind it at the lightest stroke and at the hardest, and fades out over `PROUD_FADE` past that. */
@@ -711,6 +876,7 @@ function proudShare(recess: number, severity: number): number {
 const _p = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _uv = new Float64Array(2);
+const _spatterP = new THREE.Vector3();
 /** A triangle's three corners on one face, in that face's texels (texel x's centre at x), and their depths (m past `DENT_MIN`). */
 const _corners = new Float64Array(6);
 const _cornerDepth = new Float64Array(3);
@@ -873,7 +1039,7 @@ function creaseFace(data: Uint8Array, depths: Float32Array, blurs: Blurs, rects:
       const d = depths[i]!;
       if (d <= 0) continue;
       const crease = creased ? Math.min(1, Math.max(0, blurs.near[i]! - blurs.far[i]!) / BEND_FULL) : 0;
-      data[i * 2 + 1] = Math.round(255 * Math.min(1, d / DENT_FULL) * (DENT_FLOOR + (1 - DENT_FLOOR) * crease));
+      data[i * TEXEL + 1] = Math.round(255 * Math.min(1, d / DENT_FULL) * (DENT_FLOOR + (1 - DENT_FLOOR) * crease));
     }
   }
 }

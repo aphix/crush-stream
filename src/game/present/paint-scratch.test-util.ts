@@ -16,7 +16,7 @@ export function scraped(car: DeformableCar, at: readonly (readonly [number, numb
   }
 }
 
-/** The wear mask `material` hands its program, read through its compile hooks as three builds it: R scratch, G dents (RG8). */
+/** The wear mask `material` hands its program, read through its compile hooks as three builds it: R scratch, G dents, B spatter cover, A its surface (RGBA8). */
 export function wearOf(material: THREE.Material): THREE.DataTexture {
   return compileHooks(material).uniforms.wearMap!.value as THREE.DataTexture;
 }
@@ -39,12 +39,12 @@ export function sampledScratch(material: THREE.Material, p: THREE.Vector3, n: TH
   const mask = uniforms.wearMap!.value as THREE.DataTexture;
   const { width, height, data } = mask.image as { width: number; height: number; data: Uint8Array };
   // Clamped to the edge texel, as the mask wraps.
-  return data[(Math.min(height - 1, Math.floor((rect.y + v * rect.w) * height)) * width + Math.min(width - 1, Math.floor((rect.x + u * rect.z) * width))) * 2]!;
+  return data[(Math.min(height - 1, Math.floor((rect.y + v * rect.w) * height)) * width + Math.min(width - 1, Math.floor((rect.x + u * rect.z) * width))) * 4]!;
 }
 
-/** Car `car`'s wear mask channel `channel` (0 R scratches, 1 G dents), texel by texel. */
-export function channelTexels(car: DeformableCar, channel: 0 | 1): number[] {
-  return Array.from(wearTexels(car)).filter((_, i) => i % 2 === channel);
+/** Car `car`'s wear mask channel `channel` (0 R scratches, 1 G dents, 2 B spatter cover, 3 A spatter surface), texel by texel. */
+export function channelTexels(car: DeformableCar, channel: 0 | 1 | 2 | 3): number[] {
+  return Array.from(wearTexels(car)).filter((_, i) => i % 4 === channel);
 }
 
 /** Car `car`'s scratches (R), texel by texel. */

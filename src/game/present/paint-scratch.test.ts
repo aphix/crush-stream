@@ -18,6 +18,8 @@ import { channelTexels, cloneOfFinished, sampledScratch, scraped, wearOf, wearTe
 import { must } from "../kernel/must.test-util.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { SURFACE_IDS } from "../world/catalog.ts";
+import { SkidMarks } from "./engine-marks.ts";
 
 /** Bytes a frame may allocate: one boxed double, as the other allocation rows hold. */
 const FRAME_BOUND_B = 16;
@@ -99,7 +101,7 @@ describe("given a pickup whose left flank, flared arches and the recessed panels
       for (let u = 0; u < fw; u++) {
         const c = cover[at(u, v)]!;
         if (c === 0) continue;
-        const r = mask[at(u, v) * 2]!;
+        const r = mask[at(u, v) * 4]!;
         // The arch's lip: paint just over the wheel's opening (no paint one or two rows below).
         if (cover[at(u, v - 1)] === 0 || cover[at(u, v - 2)] === 0) add(sums.lip, r);
         if (c - 1 <= PROUD_MM) add(sums.proud, r);
@@ -128,7 +130,7 @@ function dentsOn(car: DeformableCar, face: number, share = 1): number[] {
   const data = wearTexels(car);
   const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!;
   const out: number[] = [];
-  for (let y = fy; y < fy + fh; y++) for (let x = fx; x < fx + Math.round(fw * share); x++) out.push(data[(y * CAR_SPRAY.w + x) * 2 + 1]!);
+  for (let y = fy; y < fy + fh; y++) for (let x = fx; x < fx + Math.round(fw * share); x++) out.push(data[(y * CAR_SPRAY.w + x) * 4 + 1]!);
   return out;
 }
 
@@ -150,7 +152,7 @@ const RIDGE_G = Math.ceil(255 * (DENT_FLOOR + (1 - DENT_FLOOR) / 2));
 function creaseRidges(car: DeformableCar, face: number): number {
   const data = wearTexels(car);
   const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!;
-  const ridge = (x: number, y: number) => x >= 0 && y >= 0 && x < fw && y < fh && data[((fy + y) * CAR_SPRAY.w + fx + x) * 2 + 1]! >= RIDGE_G;
+  const ridge = (x: number, y: number) => x >= 0 && y >= 0 && x < fw && y < fh && data[((fy + y) * CAR_SPRAY.w + fx + x) * 4 + 1]! >= RIDGE_G;
   const seen = new Uint8Array(fw * fh);
   let ridges = 0;
   for (let s = 0; s < fw * fh; s++) {
@@ -230,7 +232,7 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
   it(`when the masks are drawn, then each face draws at most ${CREASE_RIDGES_MAX} crease ridges, and every texel shaded lies on skin that moved`, () => {
     const depths = view["depths"];
     const data = wearTexels(crushed);
-    const shaded = Array.from({ length: CAR_SPRAY.w * CAR_SPRAY.h }, (_, i) => i).filter((i) => data[i * 2 + 1]! > 0);
+    const shaded = Array.from({ length: CAR_SPRAY.w * CAR_SPRAY.h }, (_, i) => i).filter((i) => data[i * 4 + 1]! > 0);
     expect(shaded.length, "the control: the nose is shaded").toBeGreaterThan(0);
     expect(creaseRidges(crushed, SPRAY_FACE.front), "the control: the nose draws a crease").toBeGreaterThan(0);
     expect(shaded.find((i) => !(depths[i]! > 0)), "a shaded texel whose skin did not move").toBeUndefined();
@@ -348,10 +350,53 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
 
   it("when the crushed car is put on a spot again (repaired) and a frame runs, then it samples no mask, and the mask it handed back is clean", () => {
     const old = wearTexels(crushed);
-    expect(old.some((v, i) => i % 2 === 1 && v > 0), "the control: dented").toBe(true);
+    expect(old.some((v, i) => i % 4 === 1 && v > 0), "the control: dented").toBe(true);
     crushed.spawnFacing(0, 0, 0, 0);
     view.frame(cars, 1 / FRAME_HZ);
     expect(wearOf(crushed.lookMeshes().bodyPaint).image.width, "the repaired car's mask").toBe(1);
+    expect(old.some((v) => v > 0), "its old mask, back in the pool").toBe(false);
+  });
+});
+
+describe("given a sedan whose four wheels roll on mud at 15 m/s for 2 s, its rears spinning", () => {
+  const car = makeCar();
+  applyScratch(car);
+  const view = new PaintScratches();
+  const wheels = new SkidMarks(1).wheels;
+  const mud = SURFACE_IDS.indexOf("mud");
+  wheels.surface.fill(mud);
+  wheels.vz.fill(15);
+  wheels.slip.set([0, 0, 1, 1]);
+  for (let i = 0; i < 2 * FRAME_HZ; i++) {
+    view.spatter([car], wheels, 1 / FRAME_HZ);
+    view.frame([car], 1 / FRAME_HZ);
+  }
+
+  it("when its mask is drawn, then its flanks below the belt and its tail wear mud and nothing above them does, and once it is repaired the spatter is gone and the mask it handed back is clean", () => {
+    const cover = channelTexels(car, 2);
+    const surface = channelTexels(car, 3);
+    /** Spattered texels of `face` in its rows `y0` to `y1`. */
+    const spattered = (face: number, y0: number, y1: number): number => {
+      const [fx, fy, fw] = CAR_SPRAY.faces[face]!;
+      let n = 0;
+      for (let y = y0; y < y1; y++) for (let x = 0; x < fw; x++) if (cover[(fy + y) * CAR_SPRAY.w + fx + x]! > 0) n++;
+      return n;
+    };
+    // Rows of a flank or the tail at 0.9 m: the dots land up to 0.75 m, 2 cm blobs.
+    const flankBelt = Math.ceil((0.9 / 1.6) * CAR_SPRAY.faces[SPRAY_FACE.left]![3]);
+    const tailBelt = Math.ceil((0.9 / 1.6) * CAR_SPRAY.faces[SPRAY_FACE.back]![3]);
+    for (const face of [SPRAY_FACE.left, SPRAY_FACE.right, SPRAY_FACE.back]) {
+      const [, , , fh] = CAR_SPRAY.faces[face]!;
+      const belt = face === SPRAY_FACE.back ? tailBelt : flankBelt;
+      expect(spattered(face, 0, belt), `face ${face} below the belt`).toBeGreaterThan(20);
+      expect(spattered(face, belt, fh), `face ${face} above it`).toBe(0);
+    }
+    expect(spattered(SPRAY_FACE.top, 0, CAR_SPRAY.faces[SPRAY_FACE.top]![3]), "the roof").toBe(0);
+    expect(surface.find((s, i) => cover[i]! > 0 && s !== mud), "a spattered texel not of mud").toBeUndefined();
+    const old = wearTexels(car);
+    car.spawnFacing(0, 0, 0, 0);
+    view.frame([car], 1 / FRAME_HZ);
+    expect(wearOf(car.lookMeshes().bodyPaint).image.width, "the repaired car's mask").toBe(1);
     expect(old.some((v) => v > 0), "its old mask, back in the pool").toBe(false);
   });
 });
@@ -382,7 +427,7 @@ describe("given the real engine with its cars on the screen", () => {
       expect(hooks.fragmentShader.includes("#define PAINT_SCRATCH"), "and draws it").toBe(true);
     }
     const data = mask.image.data as Uint8Array;
-    const texel = (face: number, u: number, v: number) => data[((CAR_SPRAY.faces[face]![1] + v) * CAR_SPRAY.w + CAR_SPRAY.faces[face]![0] + u) * 2]!;
+    const texel = (face: number, u: number, v: number) => data[((CAR_SPRAY.faces[face]![1] + v) * CAR_SPRAY.w + CAR_SPRAY.faces[face]![0] + u) * 4]!;
     expect(list[FACE_WIDTH]! & FACE_MASK, "the control: the stroke is on the left flank").toBe(SPRAY_FACE.left);
     expect(texel(SPRAY_FACE.left, list[U0]!, list[V0]!), "the stroke's start").toBeGreaterThan(0);
     expect(texel(SPRAY_FACE.right, list[U0]!, list[V0]!), "the right flank opposite it").toBe(0);

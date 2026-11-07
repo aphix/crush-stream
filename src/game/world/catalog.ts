@@ -31,17 +31,19 @@ export type Surface = {
   patch: MaterialId;
   /** Ground colour (sRGB hex) for the road / terrain mesh. */
   color: number;
+  /** What a fast or slipping wheel throws onto the car's lower body (`PaintScratches.spatter`); absent: nothing. `color` sRGB hex; `opacity` the most a texel takes (0..1); `density` dots per wheel stamp at full fling; `rate` cover each dot adds (0..1). */
+  spatter?: { readonly color: number; readonly opacity: number; readonly density: number; readonly rate: number };
 };
 
 export const SURFACES: Record<SurfaceId, Surface> = {
   asphalt: { grip: 1, roll: 0.015, paved: true, color: 0x2b2d33, ribbon: MAT.ROAD_ASPHALT, terrain: MAT.TERRAIN_ASPHALT, patch: MAT.PATCH_ASPHALT }, // ToolBox: ordinary car tyres on concrete / new asphalt 0.01–0.015
   concrete: { grip: 1, roll: 0.015, paved: true, color: 0x8d8a84, ribbon: MAT.ROAD_CONCRETE, terrain: MAT.TERRAIN_CONCRETE, patch: MAT.PATCH_CONCRETE }, // the same row
   cobble: { grip: 0.85, roll: 0.03, paved: true, color: 0x5d5a56, ribbon: MAT.ROAD_COBBLE, terrain: MAT.TERRAIN_COBBLE, patch: MAT.PATCH_COBBLE }, // ToolBox: cobbles, large worn 0.03
-  dirt: { grip: 0.72, roll: 0.05, paved: false, color: 0x6e5640, ribbon: MAT.ROAD_DIRT, terrain: MAT.TERRAIN_DIRT, patch: MAT.PATCH_DIRT }, // Bosch: unpaved road 0.05
-  gravel: { grip: 0.62, roll: 0.06, paved: false, color: 0x8a7d68, ribbon: MAT.ROAD_GRAVEL, terrain: MAT.TERRAIN_GRAVEL, patch: MAT.PATCH_GRAVEL }, // ToolBox: gravel loose worn 0.04–0.08 (mid)
-  grass: { grip: 0.5, roll: 0.35, paved: false, color: 0x3f5a34, ribbon: MAT.ROAD_GRASS, terrain: MAT.TERRAIN_GRASS, patch: MAT.PATCH_GRASS }, // Bosch: field 0.1–0.35 (the top of the range)
-  sand: { grip: 0.45, roll: 0.4, paved: false, color: 0xc2ad84, ribbon: MAT.ROAD_SAND, terrain: MAT.TERRAIN_SAND, patch: MAT.PATCH_SAND }, // ToolBox: car tyre on loose sand 0.2–0.4 (the top of the range)
-  mud: { grip: 0.45, roll: 0.1, paved: false, color: 0x5a4330, ribbon: MAT.ROAD_MUD, terrain: MAT.TERRAIN_MUD, patch: MAT.PATCH_MUD }, // Bosch: field 0.1–0.35 (the bottom: churned wet clay, not long grass); grip tuned on the figure-8
+  dirt: { grip: 0.72, roll: 0.05, paved: false, color: 0x6e5640, ribbon: MAT.ROAD_DIRT, terrain: MAT.TERRAIN_DIRT, patch: MAT.PATCH_DIRT, spatter: { color: 0x9c8160, opacity: 0.7, density: 8, rate: 0.3 } }, // Bosch: unpaved road 0.05; dusty tan
+  gravel: { grip: 0.62, roll: 0.06, paved: false, color: 0x8a7d68, ribbon: MAT.ROAD_GRAVEL, terrain: MAT.TERRAIN_GRAVEL, patch: MAT.PATCH_GRAVEL, spatter: { color: 0x8f8574, opacity: 0.4, density: 4, rate: 0.2 } }, // ToolBox: gravel loose worn 0.04–0.08 (mid); grey dust
+  grass: { grip: 0.5, roll: 0.35, paved: false, color: 0x3f5a34, ribbon: MAT.ROAD_GRASS, terrain: MAT.TERRAIN_GRASS, patch: MAT.PATCH_GRASS, spatter: { color: 0x4d5a2c, opacity: 0.35, density: 2, rate: 0.25 } }, // Bosch: field 0.1–0.35 (the top of the range); sparse green-brown speckle
+  sand: { grip: 0.45, roll: 0.4, paved: false, color: 0xc2ad84, ribbon: MAT.ROAD_SAND, terrain: MAT.TERRAIN_SAND, patch: MAT.PATCH_SAND, spatter: { color: 0xc9b48c, opacity: 0.5, density: 5, rate: 0.25 } }, // ToolBox: car tyre on loose sand 0.2–0.4 (the top of the range)
+  mud: { grip: 0.45, roll: 0.1, paved: false, color: 0x5a4330, ribbon: MAT.ROAD_MUD, terrain: MAT.TERRAIN_MUD, patch: MAT.PATCH_MUD, spatter: { color: 0x2e2015, opacity: 0.95, density: 14, rate: 0.5 } }, // Bosch: field 0.1–0.35 (the bottom: churned wet clay, not long grass); grip tuned on the figure-8; dark wet brown, heavy
 };
 
 export const PREFAB_IDS = [
