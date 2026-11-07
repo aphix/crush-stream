@@ -202,8 +202,8 @@ tier's band (`hash01(id, salt)`: `THINK_SALT` 11, `SKILL_SALT` 40–48; `AI_SKIL
 target with and without boost, what boxes it in; `RaceBrain.replan`, `TrafficBrain.replan`, `DerbyBrain.replan`) at its band's rate (hard 12 Hz), each car's first plan offset by its id (`PLAN_PHASE_STEP`, `plan-clock.ts`)
 so the field's plans land on different steps; its wheel and pedals are driven every step toward the plan (`think`). A car newly in danger by the contact guard, and one that just backed out, plans again next step. The contact guard runs every step.
 Only the host thinks and a replay stores inputs, so neither the wire nor replays' decoding change (the AI's outputs do: `REPLAY_VERSION`).
-**Hard** is the AI as it was before the dial (the default, the bench's setting): every factor is exactly 1 and every chance 0, so
-its output is bit for bit unchanged (`race-ai.test.ts` pins checkpoints of it). The lower tiers err, they do not just drive slower:
+The menu opens on **medium** (`AI_DEFAULT`). **Hard** (`AI_EVERY_SLICE`) is the AI as it was before the dial (the bench's setting, and what every pinned race and AI row names): every factor is exactly 1 and every chance 0, so
+its output is bit for bit unchanged (`race-ai.test.ts` pins checkpoints of it). A share link without `diff=` means hard, the menu's default when such links were written (`LINK_RACE_OPTIONS`). The lower tiers err, they do not just drive slower:
 
 | Tier | Think (Hz) | Corner speed | Braking | Steer gain | Look-ahead | Apex share | Sway (m) | Slip chance per corner | Slip: speed / braking | Shaken (× top) |
 |---|---|---|---|---|---|---|---|---|---|---|

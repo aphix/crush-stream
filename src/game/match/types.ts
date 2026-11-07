@@ -4,7 +4,7 @@
  * pick (`DRIVER_CARS`, `cleanName`), which the HUD stores and the engine and netplay read.
  */
 
-import { AI_EVERY_SLICE, type AiDifficulty } from "../ai/constants.ts";
+import { AI_DEFAULT, type AiDifficulty } from "../ai/constants.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "../vehicle/car-variants.ts";
 import { CLASSES, STYLE_CLASS, VEHICLE_CLASS_IDS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
@@ -88,7 +88,7 @@ export type RaceOptions = {
 };
 
 /** The campaign defaults to every course in `TRACK_ID` order, which is `CAMPAIGN`'s (pinned by test: `tracks/index.ts` is not imported here, it carries the course JSON). */
-export const DEFAULT_RACE_OPTIONS: RaceOptions = { trackId: TRACK_ID.oval, laps: 3, noReset: false, aiCount: 7, aggression: 0.35, aiDifficulty: AI_EVERY_SLICE, spectate: false, police: false, timeOfDay: TIME_OF_DAY.day, campaign: Object.values(TRACK_ID), mode: RACE_MODE.single };
+export const DEFAULT_RACE_OPTIONS: RaceOptions = { trackId: TRACK_ID.oval, laps: 3, noReset: false, aiCount: 7, aggression: 0.35, aiDifficulty: AI_DEFAULT, spectate: false, police: false, timeOfDay: TIME_OF_DAY.day, campaign: Object.values(TRACK_ID), mode: RACE_MODE.single };
 
 /** Per-step input to the rules for one car (same order as the entrants). */
 export type CarPose = {

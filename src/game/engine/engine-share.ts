@@ -1,7 +1,6 @@
-import { decodeShare, followShare, isShareableRoom, joinsRoom, type ShareState } from "../hud/share-url.ts";
+import { decodeShare, followShare, isShareableRoom, joinsRoom, LINK_RACE_OPTIONS, type ShareState } from "../hud/share-url.ts";
 import type { FreeCam } from "../present/free-cam.ts";
 import { camOf } from "../present/free-cam-pose.ts";
-import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
 import { NET_TX } from "../net/net-ports.ts";
 import { MINIGAME_MODE, THROWS_PER_SET } from "../scenes/minigame-constants.ts";
 import { OWN_FIELD_SCENES, SEEDED_SCENES } from "../scenes/scene-id.ts";
@@ -37,7 +36,7 @@ export abstract class EngineShare extends EngineReel {
   private shareState(): ShareState {
     const sc = this.sceneId;
     // Race options persist after leaving the race; they are shared only while it is the scene.
-    const o = sc === "race" ? this.race.options : DEFAULT_RACE_OPTIONS;
+    const o = sc === "race" ? this.race.options : LINK_RACE_OPTIONS;
     const p = this.pistons.config;
     return {
       // A public match's `pub-…` name is not shared by the URL (Play online finds those); only a private code is.

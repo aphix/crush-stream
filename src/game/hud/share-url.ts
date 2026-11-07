@@ -5,9 +5,9 @@
  * range). The engine applies the result through the setters the HUD uses (`engine-share.ts`).
  */
 
-import { AI_DIFFICULTIES } from "../ai/constants.ts";
+import { AI_DIFFICULTIES, AI_EVERY_SLICE } from "../ai/constants.ts";
 import { INITIAL_HUD, KNOB_RANGES } from "./hud-store.ts";
-import { DEFAULT_RACE_OPTIONS, DRIVER_CARS, RACE_MODES, TIMES_OF_DAY } from "../match/types.ts";
+import { DEFAULT_RACE_OPTIONS, DRIVER_CARS, RACE_MODES, TIMES_OF_DAY, type RaceOptions } from "../match/types.ts";
 import { NET_TX } from "../net/net-ports.ts";
 import { KNOB_DEFAULTS, KNOBS, type KnobId } from "./knobs.ts";
 import { FX_TIERS } from "../present/engine-post.ts";
@@ -93,7 +93,9 @@ export function netDeepLink(search: string): { join: boolean; code: string; tx: 
 
 const R = KNOB_RANGES;
 const D = INITIAL_HUD;
-const O = DEFAULT_RACE_OPTIONS;
+/** The race options a link that leaves one out means: the menu's, but `diff` keeps hard, the menu's default when such links were written. */
+export const LINK_RACE_OPTIONS: RaceOptions = { ...DEFAULT_RACE_OPTIONS, aiDifficulty: AI_EVERY_SLICE };
+const O = LINK_RACE_OPTIONS;
 
 /** The last of the frame-time panel's three panels (`Stats`: 0 FPS, 1 ms, 2 heap MB). */
 const STATS_PANEL_LAST = 2;

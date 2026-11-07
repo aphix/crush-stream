@@ -22,8 +22,10 @@ export const COOL_DOWN_THROTTLE = 0.55;
 /** The AI difficulties a race offers (menu order). */
 export const AI_DIFFICULTIES = ["easy", "medium", "hard"] as const;
 export type AiDifficulty = (typeof AI_DIFFICULTIES)[number];
-/** The difficulty a race plays at by default: rivals that never err (`AI_SKILL`), planning at `THINK_HZ`. */
+/** The never-erring AI: rivals that never err (`AI_SKILL`), planning at `THINK_HZ`. The benches, `benchRace`, the AI rows and every pinned race use it by name, so the menu's default (`AI_DEFAULT`) never moves them. */
 export const AI_EVERY_SLICE: AiDifficulty = AI_DIFFICULTIES[2];
+/** The difficulty the race menu opens on (`DEFAULT_RACE_OPTIONS`). A share link without `diff=` still means `AI_EVERY_SLICE`, the menu's default before this one (`share-url.ts`). */
+export const AI_DEFAULT: AiDifficulty = AI_DIFFICULTIES[1];
 /** Plan rate band per difficulty (Hz of sim time): how often a brain re-plans (its line, target speed and boost intent); its pedals and wheel are driven every step. Each rival rolls its own rate in the band once (`hash01`, salt `THINK_SALT`). About 12 Hz is a driver's reaction pace; easy's slower end reacts late. */
 export const THINK_HZ: Readonly<Record<AiDifficulty, readonly [number, number]>> = { hard: [12, 12], medium: [10, 14], easy: [8, 20] };
 /** `hash01` salt of a rival's think rate roll (`personality.ts` takes 2-10). */

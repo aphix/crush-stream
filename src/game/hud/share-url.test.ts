@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeShare, encodeShare, isShareableRoom, joinsRoom, roomLink, shareFragment, type ShareState } from "./share-url.ts";
 import { INITIAL_HUD, KNOB_RANGES } from "./hud-store.ts";
-import { DRIVER_CARS } from "../match/types.ts";
+import { DEFAULT_RACE_OPTIONS, DRIVER_CARS } from "../match/types.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const DEFAULTS = decodeShare("");
@@ -430,5 +430,14 @@ describe("given the showcase eye's pose (cam=)", () => {
     expect(firstMismatch(decodeShare("cam=1,-0.2,2.5,10,3,20").cam, [1, -0.2, 2.5, 10, 3, 20])).toBeUndefined();
     for (const bad of ["1,2,3,4,5", "1,2,3,4,5,6,7", "1,2,3,4,5,x", "", "1,2,3,4,5,"]) expect(decodeShare(`cam=${bad}`).cam, `"${bad}"`).toBe(null);
     expect(firstMismatch(decodeShare("cam=500,9,99,9999,-9999,0").cam, [100, 1.5, 7, 500, -500, 0])).toBeUndefined();
+  });
+});
+
+describe("given race links written while the menu's default AI was hard", () => {
+  it("when a race link names no diff, then it still opens on hard, while the menu's medium default is written out as diff=medium", () => {
+    expect(DEFAULT_RACE_OPTIONS.aiDifficulty, "the menu opens on medium").toBe("medium");
+    expect(decodeShare("scene=race&track=city").diff, "an old link without diff=").toBe("hard");
+    expect(encodeShare({ ...DEFAULTS, scene: "race", diff: DEFAULT_RACE_OPTIONS.aiDifficulty })).toBe("scene=race&diff=medium");
+    expect(encodeShare({ ...DEFAULTS, scene: "race", diff: "hard" })).toBe("scene=race");
   });
 });

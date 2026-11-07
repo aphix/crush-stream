@@ -59,6 +59,10 @@ describe("given the setup card", () => {
     inRaceMode((w) => expect(optionsOf(w).campaign.join()).toBe(CAMPAIGN.join()));
   });
 
+  it("when it first opens, then the rivals are on medium AI", () => {
+    inRaceMode((w) => expect(optionsOf(w).aiDifficulty).toBe("medium"));
+  });
+
   it("when everything is unticked and three courses are ticked in turn, then the campaign is those three in tap order and round 1 is the first tapped", () => {
     inRaceMode((w) => {
       const pick = (campaign: readonly string[]): void => w.race.command({ type: "options", options: { campaign } });

@@ -3,6 +3,7 @@ import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld } from "./race-world.test-util.ts";
 import { PoliceBrain } from "../ai/police.ts";
 import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
+import { AI_EVERY_SLICE } from "../ai/constants.ts";
 import { TRACK_ID } from "./constants.ts";
 import { must } from "../kernel/must.test-util.ts";
 
@@ -18,7 +19,7 @@ function frozenCops(seed: number): number[] {
   w.race.enter();
   try {
     w.race.command({ type: "quit" });
-    w.race.command({ type: "options", options: { ...DEFAULT_RACE_OPTIONS, trackId: TRACK_ID.oval, laps: 3, police: true } });
+    w.race.command({ type: "options", options: { ...DEFAULT_RACE_OPTIONS, trackId: TRACK_ID.oval, laps: 3, police: true, aiDifficulty: AI_EVERY_SLICE } });
     w.race.reseed(seed);
     w.race.command({ type: "start" });
     w.seat.mode = "follow";

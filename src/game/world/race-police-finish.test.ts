@@ -3,6 +3,7 @@ import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
 import { PoliceBrain } from "../ai/police.ts";
 import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
+import { AI_EVERY_SLICE } from "../ai/constants.ts";
 import { TRACK_ID } from "./constants.ts";
 
 /** A three-lap oval race finishes in about 65 s, before any cop on the road has been out long enough to be old. */
@@ -24,7 +25,7 @@ function afterFinish(seed: number): { atFinish: number; after: number; finishedA
   w.race.enter();
   try {
     w.race.command({ type: "quit" });
-    w.race.command({ type: "options", options: { ...DEFAULT_RACE_OPTIONS, trackId: TRACK_ID.oval, laps: 3, aiCount: 7, police: true } });
+    w.race.command({ type: "options", options: { ...DEFAULT_RACE_OPTIONS, trackId: TRACK_ID.oval, laps: 3, aiCount: 7, police: true, aiDifficulty: AI_EVERY_SLICE } });
     w.race.reseed(seed);
     w.race.command({ type: "start" });
     w.seat.mode = "follow";
