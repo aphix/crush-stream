@@ -9,8 +9,6 @@ import { ARM_CLOSING } from "../contact/constants.ts";
 /** Seconds ahead the guard looks for a contact, in steps of `STEP`. */
 const HORIZON = 1.5;
 const STEP = 0.1;
-/** A car whose way is at least this sine off ours crosses it (a junction's, the figure-8's X), not drives along it. */
-const CROSS_SIN = 0.5;
 /** Least speed (m/s) of a crossing racer contested, and of the racer contesting it: a car backing out, turning round or crawling from a wreck is given way to. */
 const CONTEST_PACE = 8;
 /** A contested rival crosses at least 60° off our way (the sine): a car turning a 90° corner beside us sweeps through shallower angles, and city's medium field contesting those jammed (1 of 8 home). */

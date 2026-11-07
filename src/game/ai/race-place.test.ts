@@ -97,12 +97,12 @@ describe("given a last-place racer at 25 m/s on the oval's back straight, holdin
     copyDrive(b.think(me, [me, onRoad(oval, 2, 440, 0)], LAST, DT), held);
     expect(held.throttle > 0 && held.brake === 0, `the held drive is clear road: throttle ${held.throttle}, brake ${held.brake}`).toBeTruthy();
     const out = b.guard(me, [me, rival], held);
-    return { held: [held.throttle, held.brake, held.steer], out: [out.throttle, out.brake, out.steer] };
+    return { stands: out.throttle === held.throttle && out.brake === held.brake && out.steer === held.steer, out: `${out.throttle} ${out.brake} ${out.steer}` };
   };
   it("when it drives at medium, then it goes for the crossing (it misjudges that it makes it), where at hard it gives way", () => {
     const medium = guarded("medium");
-    expect(medium.out, "medium: the plan stands").toEqual(medium.held);
+    expect(medium.stands, `medium: the plan stands (out ${medium.out})`).toBe(true);
     const hard = guarded("hard");
-    expect(hard.out, "hard: the guard brakes or steers clear").not.toEqual(hard.held);
+    expect(hard.stands, `hard: the guard brakes or steers clear (out ${hard.out})`).toBe(false);
   });
 });
