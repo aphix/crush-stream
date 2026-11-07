@@ -322,11 +322,11 @@ export const WRECK = { wide: 1.8, long: 4.4, tall: 1.3 } as const;
 /** The Carhenge (m): `pairs` pairs of car shells stood on their noses round a circle of radius `ring`, the two of a pair `gap` apart (their middles), a shell laid across each pair's tops. */
 export const CARHENGE = { ring: 8.5, pairs: 5, gap: 2.6 } as const;
 /** Its plan's reach (m) from the middle: an upright's outer corner. */
-export const CARHENGE_REACH = hypot2(CARHENGE.ring + WRECK.wide / 2, WRECK.long / 2);
+const CARHENGE_REACH = hypot2(CARHENGE.ring + WRECK.wide / 2, WRECK.long / 2);
 /** The junkyard crane (m): its top `height` over the ground, the boom's tip `reach` out along +X, the wreck heap `heap` round the tower. */
 export const JUNK_CRANE = { height: 18.5, reach: 12.5, heap: 6 } as const;
 /** The Carhenge's top (m): an upright's length, then the shell across it. */
-export const CARHENGE_TOP = WRECK.long + WRECK.tall;
+const CARHENGE_TOP = WRECK.long + WRECK.tall;
 
 type PrefabSpec = {
   /**
@@ -630,5 +630,5 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   // Junkyard scenery behind a course's walls (the figure-8's islands and clearing): drawn only, nothing to hit. `foot` bounds the plan.
   wreck: { body: "none", collider: [], foot: hypot2(WRECK.wide / 2, WRECK.long / 2), size: [WRECK.wide, WRECK.tall, WRECK.long], mass: 0, material: MAT.DUMPSTER_STEEL },
   carhenge: { body: "none", collider: [], foot: CARHENGE_REACH, size: [CARHENGE_REACH * 2, CARHENGE_TOP, CARHENGE_REACH * 2], mass: 0, material: MAT.DUMPSTER_STEEL },
-  "junk-crane": { body: "none", collider: [], foot: JUNK_CRANE.reach, size: [JUNK_CRANE.reach * 2, JUNK_CRANE.height, JUNK_CRANE.heap * 2], mass: 0, material: MAT.GANTRY_LATTICE },
+  [PREFAB.junkCrane]: { body: "none", collider: [], foot: JUNK_CRANE.reach, size: [JUNK_CRANE.reach * 2, JUNK_CRANE.height, JUNK_CRANE.heap * 2], mass: 0, material: MAT.GANTRY_LATTICE },
 };

@@ -636,8 +636,10 @@ function junkCrane(): Piece[] {
     out.push([box(leg * 2, 0.16, 0.16, 0, y, leg), C.craneYellow, MAT.GANTRY_LATTICE], [box(leg * 2, 0.16, 0.16, 0, y, -leg), C.craneYellow, MAT.GANTRY_LATTICE]);
     out.push([box(0.16, 0.16, leg * 2, leg, y + 1.25, 0), C.craneYellow, MAT.GANTRY_LATTICE], [box(0.16, 0.16, leg * 2, -leg, y + 1.25, 0), C.craneYellow, MAT.GANTRY_LATTICE]);
   }
+  const cabTop = height - 2.6 + 2.2 / 2;
   out.push([box(2.8, 2.2, 2.8, 0, height - 2.6, 0), C.craneYellow, MAT.GANTRY_LATTICE]);
-  out.push([box(reach + 4.5, 0.7, 0.7, (reach - 4.5) / 2, height - 1.1, 0), C.craneYellow, MAT.GANTRY_LATTICE]);
+  // The boom lies on the cab's top.
+  out.push([box(reach + 4.5, 0.7, 0.7, (reach - 4.5) / 2, cabTop + 0.7 / 2, 0), C.craneYellow, MAT.GANTRY_LATTICE]);
   out.push([box(1.8, 1.4, 1.6, -3.8, height - 2.1, 0), C.concreteDark, MAT.CONCRETE]);
   out.push([box(0.08, 6, 0.08, reach - 0.4, height - 4.4, 0), C.metal, MAT.GANTRY_LATTICE]);
   out.push(...shellAt(false, 0.6, reach - 0.4, height - 8.1, 0, C.paintFaded));
