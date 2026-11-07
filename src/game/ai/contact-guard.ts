@@ -3,12 +3,16 @@ import type { DriveInput } from "../vehicle/car-drive.ts";
 import { DERBY_RULES, type AiCar } from "./derby-ai.ts";
 import { clamp } from "../kernel/scalar.ts";
 import { GRIP_YAW_CAP } from "../vehicle/constants.ts";
-import { GUARD_BRAKE_IDX, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_STEER_NEED_IDX, GUARD_TURN_IDX } from "./constants.ts";
+import { GUARD_BRAKE_IDX, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_STEER_NEED_IDX, GUARD_TURN_IDX } from "./constants.ts";
 import { ARM_CLOSING } from "../contact/constants.ts";
 
 /** Seconds ahead the guard looks for a contact, in steps of `STEP`. */
 const HORIZON = 1.5;
 const STEP = 0.1;
+/** A car whose way is at least this sine off ours crosses it (a junction's, the figure-8's X), not drives along it. */
+const CROSS_SIN = 0.5;
+/** Share of `HORIZON` a last-place racer (`GUARD_RISK_IDX` 1) stops looking for a crossing car at: it reacts only 0.3 s out, too late to stop, and goes for the gap. */
+const RISK_HORIZON = 0.8;
 /** Half-axes (m) of the contact zone around a car, in its own frame (a car is 1.9 × 4.6 m: the zone is the car plus 0.5 m at the sides and 1.4 m at the ends). */
 const LAT = 2.4;
 const LON = 6;
@@ -73,7 +77,8 @@ function sampleTimes(): Float64Array {
  * (by its off-centre share, or in full while there is time to move sideways out of the zone: `STEER_ACC`) and every contact
  * ahead that steering cannot clear is braked for, at the deceleration that takes the closing speed off, down to a `TAP`,
  * in the time left (`brake`, m/s²). A pair already touching and moving apart is left to the physics. No allocation.
- * `brake`, `lead` and `turn` come in the `tune` buffer (`GUARD_*_IDX`). `steer`: the wheel the driver asked for, which the arc is
+ * `brake`, `lead` and `turn` come in the `tune` buffer (`GUARD_*_IDX`). A trailing racer's will to win (`GUARD_RISK_IDX`) shortens the look-ahead for a crossing car only:
+ * every car on its own way (the one it follows above all) is guarded as before. `steer`: the wheel the driver asked for, which the arc is
  * worked out on; `out.steer` is where its hands have the wheel now (`InputFade` lags the ask), and an arc on it reached a car
  * the driver was steering into 0.05 s late.
  *
@@ -84,6 +89,7 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   const brake = tune[GUARD_BRAKE_IDX]!;
   const lead = tune[GUARD_LEAD_IDX]!;
   const turn = tune[GUARD_TURN_IDX]!;
+  const crossCut = HORIZON * (1 - RISK_HORIZON * tune[GUARD_RISK_IDX]!);
   const nose = self.yaw;
   const sx = self.vx;
   const sz = self.vz;
@@ -155,8 +161,10 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
     let reach = 0;
     const ox = ospeed > 0.1 ? o.vx / ospeed : detSin(o.yaw);
     const oz = ospeed > 0.1 ? o.vz / ospeed : detCos(o.yaw);
+    const cut = ospeed > 0.1 && Math.abs(sx * oz - sz * ox) >= CROSS_SIN * speed ? crossCut : HORIZON;
     for (let i = 0; i < STEPS; i++) {
       const t = TIMES[i]!;
+      if (t > cut) break;
       // The other keeps its heading and sheds speed at `lead` (a car ahead braking for what it sees), down to a stop.
       const te = Math.min(t, ospeed / lead);
       const shed = ospeed * te - 0.5 * lead * te * te;

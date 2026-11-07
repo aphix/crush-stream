@@ -1,7 +1,7 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { chargeBoost, clearDrive, idleDrive, topUpBoost, type DriveInput } from "../vehicle/car-drive.ts";
 import { mood } from "./ai-aggression.ts";
-import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
+import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
 import { guardContact } from "./contact-guard.ts";
 import { DERBY_RULES, STUCK_SPEED, type AiCar } from "./derby-ai.ts";
 import { personality, type Personality } from "./personality.ts";
@@ -156,6 +156,12 @@ const SHOVE_SPEED = DERBY_RULES.hitSpeed;
 const SHOVE_LAT = 0.5;
 /** ... and with this much road (m) beyond the rival on the side it is pushed to. */
 const WALL_ROOM = 2.5;
+/** At the back of the field (risk 1) a racer plans corners this much faster (on top of `push`): about 0.98 of the class's limit through `CORNER_MARGIN`'s 0.89. */
+const RISK_PUSH = 0.1;
+/** ... and its stops on this much more of its brake: 0.94 of the class brake, against the leader's 0.72 (`BRAKE_SHARE`). */
+const RISK_BRAKE = 0.3;
+/** ... and closes on a racer it is going round this much faster (m/s) over the 6 m/s a leader allows. */
+const RISK_CLOSE = 8;
 /** Slots of `RaceBrain.args`: the scalars `think` hands to its per-car calls. A number passed to a call V8 does not inline is heap-boxed; a slot the caller writes and the callee reads is not. */
 const ARG_S_IDX = 0; // arc length (m) along the route being driven
 const ARG_HALF_IDX = 1; // its half width (m) here
@@ -199,6 +205,10 @@ type RaceAiState = {
   next: number;
   /** Completed laps. */
   lap: number;
+  /** Live place, 1 leading (`CarRecord.place`); none: drives as the leader. */
+  place?: number;
+  /** Set once home (`CarRecord.finishTime`): nothing left to win. */
+  finishTime?: number | null;
 };
 
 /**
@@ -224,6 +234,8 @@ export class RaceBrain {
   private readonly out: DriveInput = idleDrive();
   private readonly traits: Personality[] = [];
   private readonly aggression = new Float64Array(MAX_CARS);
+  /** Per car, this step: its will to win, 0 leading (or home, or at aggression 0, the slider's clean race) up to 1 last (`placeRisk`). */
+  private readonly risk = new Float64Array(MAX_CARS);
   /** Per car: class figures (sedan until `setClass`). */
   private readonly cls: ClassStats[] = Array.from({ length: MAX_CARS }, () => classStats("sedan"));
   /** Boost meter per car, 0–1 (the HUD reads it), and whether a burst is running (it runs on to empty). */
@@ -497,6 +509,7 @@ export class RaceBrain {
     if (i < 0 || i >= MAX_CARS || !self.alive) return out;
     this.args[ARG_DT_IDX] = dt;
     if (this.recover[i]! > 0) return this.backOut(i, dt);
+    this.risk[i] = this.placeRisk(i, race);
     const speed = hypot2(self.vx, self.vz);
     const fresh = this.seg[i] === -1;
     this.projectMain(i, self, fresh);
@@ -508,6 +521,12 @@ export class RaceBrain {
     this.pedal(i, speed, dt);
     this.finish(i, speed, dt);
     return out;
+  }
+
+  /** The will to win: the share of the field ahead of car `i` (place 1 → 0, last → 1). */
+  private placeRisk(i: number, race: RaceAiState): number {
+    if (i >= this.racers || this.racers < 2 || this.aggression[i] === 0 || race.finishTime != null) return 0;
+    return clamp(((race.place ?? 1) - 1) / (this.racers - 1), 0, 1);
   }
 
   /** Seconds of the back-out left for `i`: reverse with the nose swinging toward the line; it plans again when it ends. */
@@ -725,6 +744,7 @@ export class RaceBrain {
     g[GUARD_TURN_IDX] = this.turnMax;
     g[GUARD_GRIP_IDX] = tyreHold(cls, this.surf);
     g[GUARD_DT_IDX] = dt;
+    g[GUARD_RISK_IDX] = this.risk[i]!;
   }
 
   /** The lane (m) round the stopped cars ahead (`WreckPass`), and the speed the pass allows: the brake only where every lane is held. */
@@ -850,8 +870,9 @@ export class RaceBrain {
     const open = this.busy[i] === 0;
     const slip = open ? this.slip[i]! : 0;
     const over = slip > SLIP_RECOVER;
-    const decel = cls.brake * BRAKE_SHARE * (open ? this.brakeK[i]! : 1) * (over ? this.slipBrake[i]! : 1);
-    const push = (open ? this.push[i]! : 1) * (over ? this.slipPush[i]! : 1);
+    const risk = this.risk[i]!;
+    const decel = cls.brake * BRAKE_SHARE * (1 + RISK_BRAKE * risk) * (open ? this.brakeK[i]! : 1) * (over ? this.slipBrake[i]! : 1);
+    const push = (1 + RISK_PUSH * risk) * (open ? this.push[i]! : 1) * (over ? this.slipPush[i]! : 1);
     let best = slip > 0 && !over ? top * this.shaken[i]! : top;
     // A shortcut meets the loop at an angle neither path's curvature shows: the turns into its mouth and back onto the loop are corners too.
     if (this.entry >= 0) best = Math.min(best, this.junction(cls, this.turnIn, surfaceAt(tr.shortcuts[this.entry]!.path, 0), this.lead, decel));
@@ -916,7 +937,7 @@ export class RaceBrain {
 
   /**
    * The speed that reaches the crossing of car `o` (cutting across our way, moving at least `CRAWL`), within `look` m along our heading,
-   * only after it has cleared it; Infinity when we clear it first with time to spare at `go` m/s, are in it already, or it is gone.
+   * only after it has cleared it; Infinity when we clear it first with time to spare at `go` m/s (a trailing racer's will to win spares less), are in it already, or it is gone.
    */
   private crossingCap(self: AiCar, o: AiCar, go: number, look: number): number {
     const fx = detSin(self.yaw);
@@ -933,7 +954,7 @@ export class RaceBrain {
     const u = (dx * fz - dz * fx) / sin;
     if (t <= CROSS_CLEAR || t > look + CROSS_CLEAR || u < -CROSS_CLEAR) return Infinity;
     const itLeaves = (u + CROSS_CLEAR) / oAlong + CROSS_MARGIN_S;
-    if ((t + CROSS_CLEAR) / go + CROSS_MARGIN_S < (u - CROSS_CLEAR) / oAlong) return Infinity;
+    if ((t + CROSS_CLEAR) / go + CROSS_MARGIN_S * (1 - this.risk[self.id]!) < (u - CROSS_CLEAR) / oAlong) return Infinity;
     return (t - CROSS_CLEAR) / itLeaves;
   }
 
@@ -1049,7 +1070,7 @@ export class RaceBrain {
         m = near && this.safeShove(s, half, lat + side, side, ahead, along, oAlong) ? m + SAFE_SHOVE : Math.min(m, 0);
       }
       const fight = rolling ? clamp(m, 0, 1) : 0;
-      const shy = clamp(-m, 0, 1);
+      const shy = clamp(-m, 0, 1) * (1 - this.risk[i]!);
       this.hit[o.id] = fight > 0 ? 1 : 0;
       if (fight > 0 && aggr <= CAREFUL) this.nudge = true;
       if (ahead > 0.5 && ahead < look && inWay) {
@@ -1124,7 +1145,7 @@ export class RaceBrain {
       if (!leftOk && !rightOk) this.followBoxedIn(i, blockerAlong, blockerAhead);
       else if (blockerAlong >= CRAWL && Math.abs(blockerSide) < LINE_W + 0.5 && (blocker < this.racers || !this.clearsInTime(i, want, along - blockerAlong, blockerAhead))) {
         // Passing a moving car it cannot get clear of in time: close no faster than the gap allows (a pass at boost speed side-swiped the car it was going round).
-        this.follow = blockerAlong + 0.5 + clamp((blockerAhead - PASS_NOSE) * 0.8, blockerAhead > PASS_NOSE ? PASS_CREEP : -2, 6);
+        this.follow = blockerAlong + 0.5 + clamp((blockerAhead - PASS_NOSE) * 0.8, blockerAhead > PASS_NOSE ? PASS_CREEP : -2, 6 + RISK_CLOSE * this.risk[i]!);
       }
     } else if (keep >= 0) {
       // Its speed at the gap's edge, slower inside it (`follow` is read 0.5 m/s under).

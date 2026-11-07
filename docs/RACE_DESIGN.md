@@ -160,6 +160,18 @@ into `fight = clamp(mood, 0, 1)` and `shy = clamp(−mood, 0, 1)`. The derby AI 
   and the sideways closing speed under the derby's `hitSpeed` 2 m/s, at least 2.5 m of road beyond the rival, and not over a
   crest. A careful shove swings the lane at no more than `SHOVE_LAT` (0.5 m/s). Above 0.5 `mood` alone decides; aggression
   0 never fights.
+- **Place: the will to win** (`RaceBrain.placeRisk`): every racer reads its live place from the race's own standings
+  (`CarRecord.place`, the brain's `think` state) and drives on a risk `r = (place − 1) / (racers − 1)`: 0 leading, 1 last. The
+  leader drives as before places existed; a trailing car plans corners `RISK_PUSH` (10 %) faster and its stops on `RISK_BRAKE`
+  (30 %) more of the brake (0.94 of the class brake against 0.72, so it brakes later), closes on a racer it is going round up to
+  `RISK_CLOSE` (8 m/s) faster than the leader's 6 m/s, scales its `shy` (the yield nudges for a car beside or behind, and the
+  following gap's share over its 0.4 floor) by `1 − r`, spares crossing traffic `1 − r` of the plan's crossing margin, and its
+  contact guard looks for a car **crossing** its way (heading at least 30° off) only `1 − 0.8·r` of its 1.5 s (`RISK_HORIZON`):
+  last place reacts 0.3 s out, too late to stop, and goes for the gap. A car on its own way (the one it follows above all) or
+  head-on is guarded as before at any place: no rear-ending. Difficulty scales on top as before. `r` is 0 at aggression 0 (the
+  slider's clean race, pinned by the `race-contact` rows), for a car home, and for police and traffic. Place, not the gap to the
+  leader in seconds (`CarRecord.split`, null until the first gate and per lap): the brain reads the same rank the HUD shows.
+  Rows: `ai/race-place.test.ts`.
 
 ## Time of day (`present/sky-dome.ts`, `WorldStage.setTime`)
 
