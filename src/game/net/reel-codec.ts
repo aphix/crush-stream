@@ -585,9 +585,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 236: a course may sink shallow pits into its ground (`environment.pits`: a cosine bowl lowering the stamped road, runoff and terrain together); the figure-8's crossing sinks 0.4 m at the centre of the X, easing back to the road's level 22 m out, and only the crossing stays mud: each loop is dirt for its first two thirds out of the X and asphalt for the last third back in; a replayed figure-8 race moves differently; a clip of 235 or before no longer reads.
  * 237: a racer behind the leader contests a crossing: a racing rival crossing its way at least 60 degrees off that it reaches no later than the rival does, give or take its difficulty's misjudgement scaled by its place (medium up to 1.6 s late, easy 1.2 s, hard only when 0.15 s first), is neither braked nor steered for by its contact guard, nor passed round or followed by its plan; a trailing racer guards crossing traffic over its whole 1.5 s again; a replayed race moves differently; a clip of 236 or before no longer reads.
  * 238: the figure-8's mud stops one node shorter at each of the crossing's four ends (about 16 m out instead of 18-21 m), so the grid's back rows start on asphalt or dirt; a replayed figure-8 race moves differently; a clip of 237 or before no longer reads.
+ * 239: the figure-8's mud is only the diamond where its two roads overlap (12 m out along each arm from the crossing, a new node at each of its four ends); the arms past it are the loops' asphalt coming in and dirt going out; a replayed figure-8 race moves differently; a clip of 238 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 238;
+const REPLAY_VERSION = 239;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
