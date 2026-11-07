@@ -78,10 +78,10 @@ const DENT_FACING = 0.3;
 const DENT_NEAR = 0.5;
 /** Each `SPRAY_FACE`'s rest axis: x for the flanks, y the roof, z the nose and tail. */
 const FACE_AXIS = [0, 0, 1, 2, 2] as const;
-/** Gaussian σ (texels, 1.8-2.7 cm each) of the skin round a texel whose bend is read: a third of a crush lobe, so a crease is one smooth band, never a texel step. */
-const CREASE_NEAR = 1.5;
-/** Gaussian σ (texels) of the wider skin that bend is weighed against: about a crush lobe's half, so one fold draws one broad crease, never a crinkle. */
-const CREASE_FAR = 4;
+/** Gaussian σ (texels, 1.8-2.7 cm each) of the skin round a texel whose bend is read: a third of a crush lobe, so a crease is one smooth band, never a texel step. Exported for the rows. */
+export const CREASE_NEAR = 1.5;
+/** Gaussian σ (texels) of the wider skin that bend is weighed against: about a crush lobe's half, so one fold draws one broad crease, never a crinkle. Exported for the rows. */
+export const CREASE_FAR = 4;
 /** The bend (m: how far the skin round a texel sinks below the wider skin) at which a crease is full. */
 const BEND_FULL = 0.025;
 /** G's share (0..1) a fully dented texel off any crease takes: dulled paint, no fold; a crease takes the rest. Exported for the rows. */
@@ -878,7 +878,10 @@ function creaseFace(data: Uint8Array, depths: Float32Array, blurs: Blurs, rects:
   }
 }
 
-/** `src` blurred by `kernel` (rows into `pass`, then columns) into `out` over `rects`' rect at `o` on face `box`, the face's edge texels standing in past it: a blur never reads a neighbouring face's paint. */
+/**
+ * `src` blurred by `kernel` (rows into `pass`, then columns) into `out` over `rects`' rect at `o` on face `box`, the face's edge texels
+ * standing in past it: a blur never reads a neighbouring face's paint. `out` is written only where `src` is above 0 (all `creaseFace` reads).
+ */
 function blurFace(out: Float32Array, src: Float32Array, pass: Float32Array, box: readonly number[], rects: Int32Array, o: number, kernel: Float32Array): void {
   const r = (kernel.length - 1) >> 1;
   const base = box[1]! * SIDE + box[0]!;
@@ -888,18 +891,25 @@ function blurFace(out: Float32Array, src: Float32Array, pass: Float32Array, box:
   const x1 = rects[o + 2]!;
   const y0 = rects[o + 1]!;
   const y1 = rects[o + 3]!;
-  for (let y = Math.max(0, y0 - r); y <= Math.min(h, y1 + r); y++) {
+  // `src` is never negative and 0 off the rect (`dent` clears it, `fillTriangle` grows the rect): a tap off the rect adds an exact +0,
+  // so each sum skips those (unless the face's edge, clamped, stands in) and the rows off the rect, which blur to 0, are never read.
+  for (let y = y0; y <= y1; y++) {
     const row = base + y * SIDE;
     for (let x = x0; x <= x1; x++) {
+      const from = x0 === 0 ? -r : Math.max(-r, x0 - x);
+      const to = x1 === w ? r : Math.min(r, x1 - x);
       let sum = 0;
-      for (let k = -r; k <= r; k++) sum += kernel[k + r]! * src[row + Math.min(w, Math.max(0, x + k))]!;
+      for (let k = from; k <= to; k++) sum += kernel[k + r]! * src[row + Math.min(w, Math.max(0, x + k))]!;
       pass[row + x] = sum;
     }
   }
   for (let y = y0; y <= y1; y++) {
+    const from = y0 === 0 ? -r : Math.max(-r, y0 - y);
+    const to = y1 === h ? r : Math.min(r, y1 - y);
     for (let x = x0; x <= x1; x++) {
+      if (src[base + y * SIDE + x]! <= 0) continue;
       let sum = 0;
-      for (let k = -r; k <= r; k++) sum += kernel[k + r]! * pass[base + Math.min(h, Math.max(0, y + k)) * SIDE + x]!;
+      for (let k = from; k <= to; k++) sum += kernel[k + r]! * pass[base + Math.min(h, Math.max(0, y + k)) * SIDE + x]!;
       out[base + y * SIDE + x] = sum;
     }
   }

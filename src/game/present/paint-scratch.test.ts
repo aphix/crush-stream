@@ -13,7 +13,7 @@ import { bootEngine, runSeconds, stubBrowser } from "../engine/engine-headless.t
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { applyScratch, DENT_FLOOR, DENT_REBUILD_S, DENT_SETTLE_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
+import { applyScratch, CREASE_FAR, CREASE_NEAR, DENT_FLOOR, DENT_REBUILD_S, DENT_SETTLE_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
 import { channelTexels, cloneOfFinished, sampledScratch, scraped, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
@@ -174,6 +174,37 @@ function creaseRidges(car: DeformableCar, face: number): number {
   return ridges;
 }
 
+/** Normalized Gaussian weights of σ `sigma` texels out to 3σ either side, as Float32 as the blur takes them. */
+function gaussianOf(sigma: number): Float32Array {
+  const r = Math.ceil(3 * sigma);
+  const k = Float32Array.from({ length: 2 * r + 1 }, (_, i) => Math.exp(-((i - r) ** 2) / (2 * sigma * sigma)));
+  const sum = k.reduce((a, b) => a + b, 0);
+  return k.map((w) => w / sum);
+}
+
+/** `src` over face `face` blurred by `kernel` (rows, then columns) at every texel with every tap, the face's edge texels standing in past it; face-local, row by row. */
+function faceBlur(src: Float32Array, face: number, kernel: Float32Array): Float32Array {
+  const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!;
+  const r = (kernel.length - 1) >> 1;
+  const rows = new Float32Array(fw * fh);
+  for (let y = 0; y < fh; y++) {
+    for (let x = 0; x < fw; x++) {
+      let sum = 0;
+      for (let k = -r; k <= r; k++) sum += kernel[k + r]! * src[(fy + y) * CAR_SPRAY.w + fx + Math.min(fw - 1, Math.max(0, x + k))]!;
+      rows[y * fw + x] = sum;
+    }
+  }
+  const out = new Float32Array(fw * fh);
+  for (let y = 0; y < fh; y++) {
+    for (let x = 0; x < fw; x++) {
+      let sum = 0;
+      for (let k = -r; k <= r; k++) sum += kernel[k + r]! * rows[Math.min(fh - 1, Math.max(0, y + k)) * fw + x]!;
+      out[y * fw + x] = sum;
+    }
+  }
+  return out;
+}
+
 describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never crashed, and each one's wear mask drawn at the relief's tier (`SCRATCH_TIER` 2: the creases draw only there)", () => {
   const crushed = crushedSedan();
   const intact = makeCar();
@@ -205,6 +236,27 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     expect(shaded.find((i) => !(depths[i]! > 0)), "a shaded texel whose skin did not move").toBeUndefined();
     const ridges = CAR_SPRAY.faces.map((_, face) => creaseRidges(crushed, face));
     expect(Math.max(...ridges), `ridges per face: ${ridges.join(" ")}`).toBeLessThanOrEqual(CREASE_RIDGES_MAX);
+  });
+
+  it("when the masks are drawn, then every dented texel's two crease blurs equal, bit for bit, the whole face blurred tap by tap with its edge texels standing in past it", () => {
+    const depths = view["depths"];
+    const { near, far } = view["blurs"];
+    let dented = 0;
+    for (let face = 0; face < CAR_SPRAY.faces.length; face++) {
+      for (const [sigma, blur, name] of [[CREASE_NEAR, near, "near"], [CREASE_FAR, far, "far"]] as const) {
+        const want = faceBlur(depths, face, gaussianOf(sigma));
+        const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!;
+        for (let y = 0; y < fh; y++) {
+          for (let x = 0; x < fw; x++) {
+            const i = (fy + y) * CAR_SPRAY.w + fx + x;
+            if (!(depths[i]! > 0)) continue;
+            dented++;
+            expect(blur[i], `face ${face} texel ${x},${y}: the ${name} blur`).toBe(want[y * fw + x]);
+          }
+        }
+      }
+    }
+    expect(dented, "the control: the nose is dented").toBeGreaterThan(0);
   });
 
   it("when the tier drops below the relief's and the dents are redrawn, then they draw the dulled paint alone (no crease), and back at the relief's tier they redraw with their creases at once, the crush long settled", () => {
