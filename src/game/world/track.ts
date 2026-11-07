@@ -398,6 +398,17 @@ export function dishRise(dish: number, lat: number, half: number): number {
   return dish * Math.min(1, u * u);
 }
 
+/** How far (m) `pits` sink the ground at (x, z): each its `depth` at its centre, easing to 0 at its `radius` on a cosine (slope and height both continuous). */
+export function pitSink(pits: TrackJson["environment"]["pits"], x: number, z: number): number {
+  let sink = 0;
+  for (let i = 0; i < pits.length; i++) {
+    const p = pits[i]!;
+    const r = Math.hypot(x - p.x, z - p.z);
+    if (r < p.radius) sink += p.depth * 0.5 * (1 + Math.cos((Math.PI * r) / p.radius));
+  }
+  return sink;
+}
+
 /** Height of a path's stamped road at (x, z): its banked plane, dished, held flat past the edge (`stampPath`'s road and runoff). */
 function roadHeight(p: TrackPath, x: number, z: number): number {
   const pr = projectPath(p, x, z, -1, blankProjection());
@@ -633,6 +644,7 @@ export class TrackGround extends Ground {
   /** What the bake did, for the tests that pin its cost: street runs stamped, cells measured against them, cells looked at by the paint polygons, patches registered and grid cells bounded by the surface store. */
   readonly bakeCounts = { runsStamped: 0, cellsMeasured: 0, paintCellsVisited: 0, patches: 0, cellsBounded: 0 };
   private readonly terrainHills: TrackJson["environment"]["hills"];
+  private readonly pits: TrackJson["environment"]["pits"];
   private readonly terrain: number;
   /** The drawn terrain's cells over the baked nodes (`bakeTerrainCells`): which are fine, and the heights the mesh draws; the ground reads their triangles. */
   readonly terrainCells: TerrainCells;
@@ -641,12 +653,19 @@ export class TrackGround extends Ground {
     super();
     const env = track.json.environment;
     this.terrainHills = env.hills;
+    this.pits = env.pits;
     this.terrain = SURFACE_IDS.indexOf(env.terrain);
     const m = BLEND + 4;
     this.minX = Math.floor(track.bounds.minX - m);
     this.minZ = Math.floor(track.bounds.minZ - m);
     this.nx = Math.ceil((track.bounds.maxX + m - this.minX) / CELL) + 1;
     this.nz = Math.ceil((track.bounds.maxZ + m - this.minZ) / CELL) + 1;
+    // Past the baked grid the ground is the hills alone: a pit reaching there would end in a ledge at the grid's edge.
+    for (const p of env.pits) {
+      if (p.x - p.radius < this.minX || p.z - p.radius < this.minZ || p.x + p.radius > this.minX + (this.nx - 1) * CELL || p.z + p.radius > this.minZ + (this.nz - 1) * CELL) {
+        throw new Error(`${track.id}: the pit at (${p.x}, ${p.z}) reaches past the baked ground`);
+      }
+    }
     const cells = this.nx * this.nz;
     this.heights = new Float32Array(cells);
     this.surf = new Uint8Array(cells).fill(this.terrain);
@@ -702,7 +721,7 @@ export class TrackGround extends Ground {
     this.seal();
   }
 
-  /** Base terrain: gaussian hills over y = 0. */
+  /** Base terrain: gaussian hills over y = 0, less the pits. */
   base(x: number, z: number): number {
     let h = 0;
     for (const hl of this.terrainHills) {
@@ -710,7 +729,7 @@ export class TrackGround extends Ground {
       const dz = z - hl.z;
       h += hl.height * Math.exp(-(dx * dx + dz * dz) / (hl.radius * hl.radius));
     }
-    return h;
+    return h - pitSink(this.pits, x, z);
   }
 
   /** `side`: a shortcut or traffic street, stamped after the main loop. */
@@ -785,7 +804,7 @@ export class TrackGround extends Ground {
           const bank = bankK + dBank * f;
           // A dished road's rise rides the crease's centre: piecewise linear between 1 m nodes (2 mm off the parabola at 1 m of dish on 22 m).
           const dish = dishK + dDish * f;
-          const yc = dish === 0 ? yk + dy * f : yk + dy * f + dishRise(dish, lat, half);
+          const yc = (dish === 0 ? yk + dy * f : yk + dy * f + dishRise(dish, lat, half)) - pitSink(this.pits, x, z);
           const edge = yc - Math.max(-half, Math.min(half, lat)) * Math.tan(bank);
           if (!side) {
             gap[c] = Math.max(0, out);

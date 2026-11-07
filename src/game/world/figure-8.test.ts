@@ -26,6 +26,13 @@ const WALL_OPEN = 14;
 const CROSSING_REACH = 2;
 /** Race seconds the field gets for three laps: the grid and lights, then the 403 m lap at the AI's 15 m/s (crossings and a pack's braking included). */
 const AI_RACE_BUDGET_S = 4.5 + (3 * 403) / 15;
+/** The pit at the crossing (owner: "a bit of a pit in the middle of the X, not hard drops at all"): its depth (m) under the centreline elsewhere at the X's centre, easing on a cosine to level this far out (m). */
+const PIT_DEPTH = 0.4;
+const PIT_RADIUS = 22;
+/** The dished road's own tolerance (`mud-dish.test.ts`): its chords stand 2 mm off the parabola, the crease reads 1 m nodes. */
+const GROUND_TOL = 0.01;
+/** The most (m) a 1 m sample along a line over the X may break from the line its two neighbours draw: the bowl's own bend is 4 mm (depth × (π / radius)² / 2), the dish's 14 mm on the diagonals; a step or a ledge is centimetres. */
+const BEND_TOL = 0.02;
 
 const json = TRACKS.find((j) => parseTrack(j).id === "figure-8");
 must(json, "the race menu lists figure-8");
@@ -83,6 +90,39 @@ describe("given the figure-8 course, two tight walled mud loops running into a c
     const angle = (Math.acos(a!.tx * b!.tx + a!.tz * b!.tz) * 180) / Math.PI;
     expect(Math.abs(angle - 90), `the arms meet at ${angle.toFixed(1)} deg: a T-bone, not a glancing hit`).toBeLessThan(2);
     for (const g of track.gates) expect(Math.hypot((g.ax + g.bx) / 2, (g.az + g.bz) / 2), `gate at s=${g.s.toFixed(0)} is 20 m or more from the crossing`).toBeGreaterThan(20);
+  });
+
+  it("when the ground over the crossing is read, then its centre stands 0.4 m under the centreline elsewhere, rising on a cosine to level 22 m out over both roads' dish, with no step or ledge along either arm or between them", () => {
+    const ground = track.ground();
+    const half = WIDTH / 2;
+    const at = (x: number, z: number) => ground.heightAt(x, z, 2);
+    const bowl = (x: number, z: number) => {
+      const r = Math.hypot(x, z);
+      return r < PIT_RADIUS ? PIT_DEPTH * 0.5 * (1 + Math.cos((Math.PI * r) / PIT_RADIUS)) : 0;
+    };
+    const level = at(25 / Math.SQRT2, 25 / Math.SQRT2);
+    expect(level, "the start arm's centreline 25 m out, past the pit, is the course's level").toBeCloseTo(0, 6);
+    expect(level - at(0, 0), "the pit's depth at the X").toBeCloseTo(PIT_DEPTH, 2);
+    const misses: string[] = [];
+    for (let x = -11; x <= 11; x += 0.5) {
+      for (let z = -11; z <= 11; z += 0.5) {
+        // Laterals off the two arms (along (±1, 1) / √2): the nearer centreline's dish, less the bowl.
+        const a = Math.abs(x - z) / Math.SQRT2;
+        const b = Math.abs(x + z) / Math.SQRT2;
+        if (a > half - 1 || b > half - 1) continue;
+        const want = (Math.min(a, b) / half) ** 2 - bowl(x, z);
+        const got = at(x, z);
+        if (Math.abs(got - want) > GROUND_TOL) misses.push(`(${x}, ${z}): ${got.toFixed(3)} m, want ${want.toFixed(3)}`);
+      }
+    }
+    expect(misses).toEqual([]);
+    // Along both arms past the pit's rim, and the diagonals between them to a metre in from the road's edge (17 m out, 12 m off both arms; the dish's parabola ends in a kink at the edge, the X's corner falls to the field past the runoff): each 1 m sample on the line its neighbours draw.
+    for (const [dx, dz, reach, name] of [[Math.SQRT1_2, Math.SQRT1_2, 25, "the start arm"], [Math.SQRT1_2, -Math.SQRT1_2, 25, "the other arm"], [1, 0, 15, "the +x diagonal"], [0, 1, 15, "the +z diagonal"]] as const) {
+      for (let r = -reach; r <= reach; r++) {
+        const bend = Math.abs(at(dx * (r - 1), dz * (r - 1)) - 2 * at(dx * r, dz * r) + at(dx * (r + 1), dz * (r + 1)));
+        expect(bend, `${name}, ${r} m from the X`).toBeLessThan(BEND_TOL);
+      }
+    }
   });
 
   it("when a car does the first loop then turns at the crossing onto the start straight, then it earns no lap and is told it missed the second loop's checkpoints", () => {

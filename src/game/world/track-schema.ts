@@ -114,6 +114,8 @@ const scatter = z.object({
 const hexColour = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 const hill = z.object({ x: z.number(), z: z.number(), radius: z.number().positive(), height: z.number() });
+/** A shallow pit (`pitSink`): the ground, roads included, sunk `depth` m at (x, z), easing to level at `radius` on a cosine (no step, no ledge). Inside the baked ground. */
+const pit = z.object({ x: z.number(), z: z.number(), radius: z.number().positive(), depth: z.number().positive() });
 
 /** A raised platform (`plateau.ts`): flat top at `height`, each side a plane to the ground over `run` (-x, +x, -z, +z), crest and foot rounded over `round` m. */
 const plateau = z.object({
@@ -204,6 +206,7 @@ export const TrackSchema = z
         fog: z.number().min(0).max(0.05).default(0.0035),
         terrain: surface.default(SURFACE.grass),
         hills: z.array(hill).default([]),
+        pits: z.array(pit).default([]),
         /** How far (m) a 2 m terrain cell's triangles may pass one of its own 1 m nodes before the cell is drawn, and driven on, as four 1 m cells: a crest curving a centimetre over a cell, as Havana's does, needs less than the default. */
         fineMiss: z.number().positive().default(0.1),
         plateaus: z.array(plateau).default([]),

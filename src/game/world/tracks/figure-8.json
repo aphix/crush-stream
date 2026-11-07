@@ -132,5 +132,5 @@
     { "prefab": "tree", "count": 520, "near": 24, "far": 60, "seed": 8, "scaleMin": 0.9, "scaleMax": 1.5 },
     { "prefab": "tree", "count": 200, "near": 60, "far": 130, "seed": 9, "scaleMin": 1.0, "scaleMax": 1.6 }
   ],
-  "environment": { "sky": "#9db3c7", "fog": 0.0035, "terrain": "grass", "hills": [] }
+  "environment": { "sky": "#9db3c7", "fog": 0.0035, "terrain": "grass", "hills": [], "pits": [{ "x": 0, "z": 0, "radius": 22, "depth": 0.4 }] }
 }
