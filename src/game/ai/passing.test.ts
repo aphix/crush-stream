@@ -104,22 +104,24 @@ describe("given a racer doing 25 m/s on a straight with a side street's car cros
   }
 });
 
-describe("given a racer doing 25 m/s on a straight, of 2 racers at the default slider's mild aggression, with the other racer crossing it at a right angle 10 m ahead at 25 m/s, 3 m to its right (it reaches the crossing 0.28 s before the racer)", () => {
+describe("given a last-place racer doing 25 m/s on a straight, of 2 racers at the default slider's mild aggression, with the other racer crossing it at a right angle 10 m ahead at 25 m/s", () => {
   const p = road.pointAt(STRAIGHT_S + 10, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
   const yaw = Math.atan2(p.tz, -p.tx);
-  const rival: AiCar = { ...blankAiCar(1), x: p.x - 3 * p.tz, z: p.z + 3 * p.tx, yaw, vx: Math.sin(yaw) * RACER_SPEED, vz: Math.cos(yaw) * RACER_SPEED, alive: true };
-  /** The planned line (m) at `place` (1 leads, 2 last) for 1 s, with `others` about. */
-  const lineAt = (place: number, others: AiCar[]): number => {
+  /** The rival `off` m to the left of the crossing, driving leftward. */
+  const rival = (off: number): AiCar => ({ ...blankAiCar(1), x: p.x + off * p.tz, z: p.z - off * p.tx, yaw, vx: Math.sin(yaw) * RACER_SPEED, vz: Math.cos(yaw) * RACER_SPEED, alive: true });
+  /** The planned line (m) at `difficulty` after 1 s with `o` about. */
+  const lineAt = (difficulty: "medium" | "hard", o: AiCar): number => {
     const brain = new RaceBrain(road, RACERS);
     brain.setAggression(0, 0.2);
+    brain.setDifficulty(0, difficulty);
     const me = car(0, 0, 0, RACER_SPEED);
-    for (let k = 0; k < 1 / DT; k++) brain.think(me, [me, ...others], { ...RACE, place }, DT);
+    for (let k = 0; k < 1 / DT; k++) brain.think(me, [me, o], { ...RACE, place: RACERS }, DT);
     return want(brain);
   };
-  it("when it leads, then it moves its line round the rival; when it is last, then its line stays the one it drives on a clear road: it contests the crossing", () => {
-    const lead = lineAt(1, [rival]);
-    expect(Math.abs(lead - lineAt(1, [])), `the leader's line ${lead.toFixed(2)} m`).toBeGreaterThan(1.5);
-    expect(lineAt(2, [rival]), "last place's line").toBe(lineAt(2, []));
+  it("when the rival is 3 m to its right (it gets to the crossing 0.28 s first), then at hard the racer moves its line round it, and at medium it keeps the line it has with the rival already across (8 m to its left): it goes for the crossing", () => {
+    const hard = lineAt("hard", rival(-3));
+    expect(Math.abs(hard - lineAt("hard", rival(8))), `hard's line ${hard.toFixed(2)} m`).toBeGreaterThan(1.5);
+    expect(lineAt("medium", rival(-3)), "medium's line").toBe(lineAt("medium", rival(8)));
   });
 });
 

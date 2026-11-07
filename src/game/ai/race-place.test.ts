@@ -82,3 +82,27 @@ describe("given a racer at 18 m/s on the oval's back straight, holding the drive
     }
   });
 });
+
+describe("given a last-place racer at 25 m/s on the oval's back straight, holding the drive it planned on clear road, and a rival crossing its way at a right angle 20 m ahead (0.8 s) at 25 m/s, 12 m short of the crossing (it gets there 0.32 s first)", () => {
+  const me = onRoad(oval, 0, 40, 25);
+  const fx = me.vx / 25;
+  const fz = me.vz / 25;
+  // Left of travel is (fz, −fx): the rival drives leftward across, from 12 m to the right of the crossing.
+  const rival: AiCar = { ...blankAiCar(1), x: me.x + 20 * fx - 12 * fz, z: me.z + 20 * fz + 12 * fx, yaw: Math.atan2(fz, -fx), vx: 25 * fz, vz: -25 * fx };
+  /** The held drive and the guarded one at `difficulty`. */
+  const guarded = (difficulty: "medium" | "hard") => {
+    const b = brain(oval);
+    b.setDifficulty(0, difficulty);
+    const held = idleDrive();
+    copyDrive(b.think(me, [me, onRoad(oval, 2, 440, 0)], LAST, DT), held);
+    expect(held.throttle > 0 && held.brake === 0, `the held drive is clear road: throttle ${held.throttle}, brake ${held.brake}`).toBeTruthy();
+    const out = b.guard(me, [me, rival], held);
+    return { held: [held.throttle, held.brake, held.steer], out: [out.throttle, out.brake, out.steer] };
+  };
+  it("when it drives at medium, then it goes for the crossing (it misjudges that it makes it), where at hard it gives way", () => {
+    const medium = guarded("medium");
+    expect(medium.out, "medium: the plan stands").toEqual(medium.held);
+    const hard = guarded("hard");
+    expect(hard.out, "hard: the guard brakes or steers clear").not.toEqual(hard.held);
+  });
+});

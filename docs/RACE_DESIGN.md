@@ -166,15 +166,18 @@ into `fight = clamp(mood, 0, 1)` and `shy = clamp(−mood, 0, 1)`. The derby AI 
   (30 %) more of the brake (0.94 of the class brake against 0.72, so it brakes later), closes on a racer it is going round up to
   `RISK_CLOSE` (8 m/s) faster than the leader's 6 m/s, scales its `shy` (the yield nudges for a car beside or behind, and the
   following gap's share over its 0.4 floor) by `1 − r`, spares crossing traffic `1 − r` of the plan's crossing margin, and
-  **contests a crossing** (`contact-guard.ts` `contests`): a rival crossing its way (heading at least 30° off) that it reaches
-  the point where their headings meet no later than the rival does, plus `CONTEST_S·r` (0.5 s last), is neither braked nor
-  steered for by its contact guard, nor passed round or followed by its plan: it thinks it can make it, and two that both do
-  meet in the crossing. The leader and a car that would clearly arrive second give way as before, and crossing traffic is
-  guarded over the whole 1.5 s at any place. A car on its own way (the one it follows above all) or head-on is guarded as
-  before at any place: no rear-ending. Difficulty scales on top as before. `r` is 0 at aggression 0 (the
+  **contests a crossing** (`contact-guard.ts` `contests`): a rival crossing its way at least 60° off, both doing at least
+  8 m/s and the rival nose first, that it reaches the point where their headings meet no later than the rival does, plus its
+  difficulty's misjudgement `AI_SKILL.contest`·`r` (`GUARD_CONTEST_IDX`; hard −0.15 s: it goes only when it gets there
+  clearly first, so in practice it gives way; medium rolls 1.2-1.6 s and easy 0.8-1.2 s at the back of the field: they go
+  when they would arrive well after the rival), is neither braked nor steered for by its contact guard, nor
+  passed round or followed by its plan: it thinks it can make it, and two that both do meet in the crossing. The leader and a
+  car that would clearly arrive second give way as before, and crossing traffic is guarded over the whole 1.5 s at any place.
+  A car on its own way (the one it follows above all) or head-on is guarded as before at any place: no rear-ending.
+  Difficulty scales on top as before. `r` is 0 at aggression 0 (the
   slider's clean race, pinned by the `race-contact` rows), for a car home, and for police and traffic. Place, not the gap to the
   leader in seconds (`CarRecord.split`, null until the first gate and per lap): the brain reads the same rank the HUD shows.
-  Rows: `ai/race-place.test.ts`.
+  Rows: `ai/race-place.test.ts`, `ai/contact-guard.test.ts` (the staged crossing), `ai/passing.test.ts`.
 
 ## Time of day (`present/sky-dome.ts`, `WorldStage.setTime`)
 

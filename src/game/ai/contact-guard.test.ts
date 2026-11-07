@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_TURN_IDX } from "./constants.ts";
+import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_CONTEST_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_TURN_IDX } from "./constants.ts";
 import { guardContact } from "./contact-guard.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -75,8 +75,8 @@ describe("given a racer at 25 m/s planning full throttle at a crossing 20 m ahea
   const me = car(0, 0, 0, 25);
   /** A rival `x` m short of the crossing, doing `speed` m/s across the racer's way. */
   const rival = (x: number, speed: number): AiCar => ({ ...blankAiCar(1), x, z: 20, yaw: -Math.PI / 2, vx: -speed });
-  /** The guard's take on the plan for the racer at will to win `risk` (0 leading … 1 last), both cars racers. */
-  const atPlace = (risk: number, o: AiCar): DriveInput => {
+  /** The guard's take on the plan for the racer at will to win `risk` (0 leading … 1 last) whose difficulty lets it contest a crossing it reaches up to `contest` s after the rival (at the back of the field), both cars racers. */
+  const atPlace = (risk: number, contest: number, o: AiCar): DriveInput => {
     const out: DriveInput = { ...idleDrive(), throttle: 1 };
     const tune = new Float64Array(GUARD_COUNT);
     tune[GUARD_BRAKE_IDX] = 20;
@@ -84,25 +84,34 @@ describe("given a racer at 25 m/s planning full throttle at a crossing 20 m ahea
     tune[GUARD_TURN_IDX] = 1.5;
     tune[GUARD_RISK_IDX] = risk;
     tune[GUARD_RIVALS_IDX] = 2;
+    tune[GUARD_CONTEST_IDX] = contest * risk;
     guardContact(me, [me, o], 2, new Uint8Array(32), tune, out);
     return out;
   };
   /** Whether the guard changed the plan (braked, or steered clear): the car gave way. */
   const givesWay = (out: DriveInput): boolean => firstMismatch(pedals(out), [1, 0, 0]) !== undefined;
   const cases = [
-    { it: "when both reach it together (the rival 20 m off at 25 m/s), then the leader gives way and last place holds its plan: it contests the crossing", o: rival(20, 25), lastGoes: true },
-    { it: "when the racer gets there first (the rival 22 m off at 25 m/s, 0.08 s behind), then the leader gives way and last place holds its plan", o: rival(22, 25), lastGoes: true },
-    { it: "when the rival gets there 0.32 s first (12 m off at 25 m/s), then last place still goes for it, where a car mid-field (half the will to win) gives way as the leader does", o: rival(12, 25), lastGoes: true, midYields: true },
-    { it: "when the rival clearly gets there first (1 m off at 8 m/s, 0.68 s before the racer), then last place gives way exactly as the leader does", o: rival(1, 8), lastGoes: false },
+    { it: "when both reach it together (the rival 20 m off at 25 m/s), then last place at medium holds its plan (it contests the crossing), where last place at hard gives way as the leader does", o: rival(20, 25), mediumGoes: true, mediumRisk: 1 },
+    { it: "when the racer gets there first by a hair (the rival 22 m off at 25 m/s, 0.08 s behind), then last place at medium holds its plan, where at hard (not clearly first) it gives way as the leader does", o: rival(22, 25), mediumGoes: true, mediumRisk: 1 },
+    { it: "when the rival gets there 0.32 s first (12 m off at 25 m/s), then last place at medium still goes for it (it misjudges), where at hard it gives way as the leader does", o: rival(12, 25), mediumGoes: true, mediumRisk: 1 },
+    { it: "when the rival clearly gets there first (1 m off at 8 m/s, 0.68 s before the racer), then a medium car in the front half of the field (0.4 of the will to win) gives way exactly as the leader does, as last place at hard does", o: rival(1, 8), mediumGoes: false, mediumRisk: 0.4 },
+    { it: "when the rival crawls across (1 m off at 3 m/s: backing out or turning round, not racing), then last place at medium gives way exactly as the leader does", o: rival(1, 3), mediumGoes: false, mediumRisk: 1 },
+    {
+      it: "when the rival comes in only 45° off (a car sweeping round a corner beside it, not crossing), reaching the point together, then last place at medium gives way exactly as the leader does",
+      o: { ...blankAiCar(1), x: 20 * Math.SQRT1_2, z: 20 + 20 * Math.SQRT1_2, yaw: (-3 * Math.PI) / 4, vx: -25 * Math.SQRT1_2, vz: -25 * Math.SQRT1_2 },
+      mediumGoes: false,
+      mediumRisk: 1,
+    },
   ];
   for (const testCase of cases) {
     it(testCase.it, () => {
-      const lead = atPlace(0, testCase.o);
+      const lead = atPlace(0, 0, testCase.o);
       expect(givesWay(lead), `the leader: ${pedals(lead).join(", ")}`).toBeTruthy();
-      if (testCase.midYields) expect(givesWay(atPlace(0.5, testCase.o)), `mid-field: ${pedals(atPlace(0.5, testCase.o)).join(", ")}`).toBeTruthy();
-      const last = atPlace(1, testCase.o);
-      if (testCase.lastGoes) expect(givesWay(last), `last place: ${pedals(last).join(", ")}`).toBeFalsy();
-      else assertSameNumbers(pedals(last), pedals(lead), "last place against the leader");
+      assertSameNumbers(pedals(atPlace(1, AI_SKILL.hard.contest[1], testCase.o)), pedals(lead), "hard against the leader");
+      // Every medium car's roll: the least window for a car that goes, the most for one that gives way.
+      const medium = atPlace(testCase.mediumRisk, AI_SKILL.medium.contest[testCase.mediumGoes ? 0 : 1], testCase.o);
+      if (testCase.mediumGoes) expect(givesWay(medium), `medium: ${pedals(medium).join(", ")}`).toBeFalsy();
+      else assertSameNumbers(pedals(medium), pedals(lead), "medium against the leader");
     });
   }
 });

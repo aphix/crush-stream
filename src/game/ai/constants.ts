@@ -10,9 +10,10 @@ export const GUARD_PUSH_IDX = 4; // the guard's own state, kept per car: its ste
 export const GUARD_NEED_IDX = 5; // its braking demand (share of its brake) of the call before
 export const GUARD_STEER_NEED_IDX = 6; // the share of that demand the steer is straightened by, which rises at a bounded rate
 export const GUARD_GRIP_IDX = 7; // lateral grip the yaw rate is held to (`GRIP_YAW_CAP` grip / speed, as `applyDrive` holds it); 0: no cap
-export const GUARD_RISK_IDX = 8; // the racer's will to win (0 leading … 1 last): how far behind a crossing rival it still goes for the crossing
+export const GUARD_RISK_IDX = 8; // the racer's will to win (0 leading … 1 last): above 0 it contests a crossing rival it thinks it beats
 export const GUARD_RIVALS_IDX = 9; // ids below this are rivals (racers), the only crossing cars a racer contests; the traffic past them is given way to
-export const GUARD_COUNT = 10;
+export const GUARD_CONTEST_IDX = 10; // s: how much later than a crossing rival the racer may reach the crossing and still go for it (`AI_SKILL.contest` × risk)
+export const GUARD_COUNT = 11;
 /** The throttle a unit backs out with (a share of reverse): full is more than the drive can use. */
 export const REVERSE_THROTTLE = -0.9;
 /** The throttle a unit crawls forward at while its lock swings the nose round (facing the wrong way, or pinned against the boards). */
@@ -37,25 +38,27 @@ export const PLAN_PHASE_STEP = 0.6180339887498949;
 type Range = readonly [number, number];
 /**
  * Per-tier skill a rival rolls once (`lo+(hi-lo)*hash01(id, SKILL_SALT.k)`). `push` scales the corner speed it plans for, `brake` the braking it plans for,
- * `steer` its steering gain, `look` its look-ahead, `apex` how far it uses the road toward an apex, `wobble` (m) the amplitude of its seeded sway about the line.
+ * `steer` its steering gain, `look` its look-ahead, `apex` how far it uses the road toward an apex, `wobble` (m) the amplitude of its seeded sway about the line,
+ * `contest` (s) how much later than a rival crossing its way it still thinks it makes the crossing first (at the back of the field; scaled by its will to win): medium misjudges it by over a
+ * second (1.2-1.6 s, set by the figure-8's crossing hits), hard goes only when it gets there clearly first (0.15 s; at 0, hard's figure-8 crossings read 2 hits a race, medium's 1.7).
  * `slipP` is its chance per corner entry of a mistake: for `SLIP_WINDOW` s it plans corners at `slipPush` x the speed and braking at `slipBrake` x the decel
  * (past the grip reserve, so it arrives too fast), then for `SLIP_RECOVER` s it is shaken and holds to `shaken` x top speed.
  * `calm` (m): another car this close makes it drive as `hard` until the road is open again (0: only a car it follows or swerves for does). Medium keeps
  * its errors to an open road, so a gentle medium field never touches; easy errs in traffic too and may bump.
- * Every `push` stays at or under 1: the tiers corner no faster than `hard` except inside a mistake. `hard` is exactly 1 / 0 everywhere: today's AI, bit for bit.
+ * Every `push` stays at or under 1: the tiers corner no faster than `hard` except inside a mistake. `hard` is exactly 1 / 0 everywhere but `contest`: today's AI, bit for bit.
  * Easy's `push` is set where its oval winner runs about 10 % behind hard's, with room over the 8 % floor (`race-ai.test.ts`): the owner asked for easy a little less easy.
  * The AI plans its stops at the guard's 0.72 of the class brake (`BRAKE_SHARE`; it was 0.5), which took 1.7 s off hard's oval (52.1 to 50.4 s). Oval easy, each car planning
  * with its class: 0.76–0.84 reads 57.0 s (13.2 % behind hard), 0.78–0.86 reads 55.6 s (10.4 %; four-count 304 s, 12.8 %), 0.79–0.87 reads 54.9 s (9.0 %).
  * Easy's `slipBrake` keeps a mistake's planned braking where it was, 1.25 x the class brake, past what the car sheds (2.5 x 0.5 then, 1.75 x 0.72 now; at 2.5 x 0.72 four-count's easy mean lap read 116 s against 106 s).
  */
-type AiSkill = { push: Range; brake: Range; steer: Range; look: Range; apex: Range; wobble: Range; slipP: Range; slipPush: number; slipBrake: number; shaken: number; calm: number; react: Range; seconds: Range };
+type AiSkill = { push: Range; brake: Range; steer: Range; look: Range; apex: Range; wobble: Range; contest: Range; slipP: Range; slipPush: number; slipBrake: number; shaken: number; calm: number; react: Range; seconds: Range };
 /** Reaction time (s) from a car coming into view to a driver acting on it: 150 ms for the best (fast simple RT), 250 ms typical (rested PVT median), longer for the weakest; and how many seconds ahead of closing speed a driver looks (drivers look 2-4 s ahead). */
 export const AI_SKILL: Record<AiDifficulty, AiSkill> = {
-  easy: { push: [0.78, 0.86], brake: [0.6, 0.9], steer: [0.85, 0.95], look: [0.75, 0.95], apex: [0.5, 0.9], wobble: [0.4, 0.9], slipP: [0.3, 0.5], slipPush: 1.3, slipBrake: 1.75, shaken: 0.65, calm: 0, react: [0.3, 0.5], seconds: [1.8, 2.4] },
-  medium: { push: [0.97, 1.0], brake: [0.95, 1.0], steer: [0.97, 1.0], look: [0.95, 1.0], apex: [0.9, 1.0], wobble: [0.05, 0.2], slipP: [0.05, 0.1], slipPush: 1.1, slipBrake: 1.5, shaken: 0.93, calm: 40, react: [0.2, 0.3], seconds: [2.4, 2.8] },
-  hard: { push: [1, 1], brake: [1, 1], steer: [1, 1], look: [1, 1], apex: [1, 1], wobble: [0, 0], slipP: [0, 0], slipPush: 1, slipBrake: 1, shaken: 1, calm: 0, react: [0.15, 0.2], seconds: [2.8, 3] },
+  easy: { push: [0.78, 0.86], brake: [0.6, 0.9], steer: [0.85, 0.95], look: [0.75, 0.95], apex: [0.5, 0.9], wobble: [0.4, 0.9], contest: [0.8, 1.2], slipP: [0.3, 0.5], slipPush: 1.3, slipBrake: 1.75, shaken: 0.65, calm: 0, react: [0.3, 0.5], seconds: [1.8, 2.4] },
+  medium: { push: [0.97, 1.0], brake: [0.95, 1.0], steer: [0.97, 1.0], look: [0.95, 1.0], apex: [0.9, 1.0], wobble: [0.05, 0.2], contest: [1.2, 1.6], slipP: [0.05, 0.1], slipPush: 1.1, slipBrake: 1.5, shaken: 0.93, calm: 40, react: [0.2, 0.3], seconds: [2.4, 2.8] },
+  hard: { push: [1, 1], brake: [1, 1], steer: [1, 1], look: [1, 1], apex: [1, 1], wobble: [0, 0], contest: [-0.15, -0.15], slipP: [0, 0], slipPush: 1, slipBrake: 1, shaken: 1, calm: 0, react: [0.15, 0.2], seconds: [2.8, 3] },
 };
-export const SKILL_SALT = { push: 40, brake: 41, steer: 42, look: 43, apex: 44, wobble: 45, phase: 46, slipP: 47, slipRoll: 48, react: 49, seconds: 50 } as const;
+export const SKILL_SALT = { push: 40, brake: 41, steer: 42, look: 43, apex: 44, wobble: 45, phase: 46, slipP: 47, slipRoll: 48, react: 49, seconds: 50, contest: 51 } as const;
 /**
  * A mistake overcooks for `SLIP_WINDOW` s, then holds back for `SLIP_RECOVER` s; the next waits `SLIP_COOL` s after one starts,
  * and a corner is "ahead" when the plan wants under `SLIP_CORNER` x top speed.

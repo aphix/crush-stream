@@ -1,7 +1,7 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { chargeBoost, clearDrive, idleDrive, topUpBoost, type DriveInput } from "../vehicle/car-drive.ts";
 import { mood } from "./ai-aggression.ts";
-import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
+import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_CONTEST_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
 import { contests, guardContact } from "./contact-guard.ts";
 import { DERBY_RULES, STUCK_SPEED, type AiCar } from "./derby-ai.ts";
 import { personality, type Personality } from "./personality.ts";
@@ -273,6 +273,8 @@ export class RaceBrain {
   /** Per car, from `AI_SKILL`: reaction time (s) before it acts on a car that has come into view, and how many seconds of closing speed it looks ahead. */
   private readonly reaction = new Float64Array(MAX_CARS).fill(AI_SKILL.hard.react[0]);
   private readonly lookSeconds = new Float64Array(MAX_CARS).fill(AI_SKILL.hard.seconds[0]);
+  /** Per car, from `AI_SKILL` (unset cars as hard): how much later (s) than a crossing rival it may reach the crossing and still contest it, at the back of the field. */
+  private readonly contestS = new Float64Array(MAX_CARS).fill(AI_SKILL.hard.contest[0]);
   /** How long each car has had each other in view, and the scratch projection of a sight test. */
   private readonly sighting = new Sighting();
   private readonly seeProj = blankProjection();
@@ -450,6 +452,7 @@ export class RaceBrain {
     this.calm[id] = k.calm;
     this.reaction[id] = k.react[0] + (k.react[1] - k.react[0]) * hash01(id, SKILL_SALT.react);
     this.lookSeconds[id] = k.seconds[0] + (k.seconds[1] - k.seconds[0]) * hash01(id, SKILL_SALT.seconds);
+    this.contestS[id] = k.contest[0] + (k.contest[1] - k.contest[0]) * hash01(id, SKILL_SALT.contest);
   }
 
   /** The input car `self` drives this step from its held one, after its hands: the contact guard runs every step, so a reaction to a car ahead never waits for the next plan (scratch output). `asked`: what the driver asked for when `held` is its hands' lagging take on it (`guardContact`'s `steer`). A car the guard newly finds in danger plans again next step. */
@@ -746,6 +749,7 @@ export class RaceBrain {
     g[GUARD_DT_IDX] = dt;
     g[GUARD_RISK_IDX] = this.risk[i]!;
     g[GUARD_RIVALS_IDX] = this.racers;
+    g[GUARD_CONTEST_IDX] = this.contestS[i]! * this.risk[i]!;
   }
 
   /** The lane (m) round the stopped cars ahead (`WreckPass`), and the speed the pass allows: the brake only where every lane is held. */
@@ -1059,7 +1063,7 @@ export class RaceBrain {
       }
       const rival = o.id < this.racers;
       // A rival it contests the crossing with (`contests`) is neither passed round nor followed: the car goes for the crossing.
-      const contest = rival && contests(self, o, this.risk[i]!);
+      const contest = rival && contests(self, o, this.risk[i]!, this.contestS[i]! * this.risk[i]!);
       // A cop (stopped or crawling) and a dead car steer the lane choice but never slow the pass (`WreckPass` soft): they are passed at speed.
       if (!contest && oAlong < CRAWL && driveAlong > oAlong + 0.3 && ahead < passLook) this.pass.note(ahead, lat + side, o.id >= this.guarded || !o.alive);
       if (rival) this.pass.noteRival(o.id, ahead);
