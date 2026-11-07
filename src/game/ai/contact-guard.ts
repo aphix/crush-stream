@@ -3,11 +3,11 @@ import type { DriveInput } from "../vehicle/car-drive.ts";
 import { DERBY_RULES, type AiCar } from "./derby-ai.ts";
 import { clamp } from "../kernel/scalar.ts";
 import { GRIP_YAW_CAP } from "../vehicle/constants.ts";
-import { GUARD_BRAKE_IDX, GUARD_CONTEST_IDX, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_STEER_NEED_IDX, GUARD_TURN_IDX } from "./constants.ts";
+import { CRAWL, GUARD_BRAKE_IDX, GUARD_CONTEST_IDX, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_STEER_NEED_IDX, GUARD_TURN_IDX } from "./constants.ts";
 import { ARM_CLOSING } from "../contact/constants.ts";
 
 /** Seconds ahead the guard looks for a contact, in steps of `STEP`. */
-const HORIZON = 1.5;
+export const HORIZON = 1.5;
 const STEP = 0.1;
 /** Least speed (m/s) of a crossing racer contested, and of the racer contesting it: a car backing out, turning round or crawling from a wreck is given way to. */
 const CONTEST_PACE = 8;
@@ -20,6 +20,8 @@ const LON = 6;
 const TAP = ARM_CLOSING / 2;
 /** Sideways acceleration (m/s²) a car can steer away with. */
 const STEER_ACC = 6;
+/** Seconds before a contact it cannot steer clear of when the guard may still brake for a car it drives round (a wreck, a stopped police car or racer): the last instant, inside the owner's half second off the gas. */
+const LAST_INSTANT = 0.4;
 /** The most the guard moves the wheel (of full lock): a nudge to clear a side-swipe, never a swerve off the road or the route. */
 const STEER_CAP = 0.35;
 /** A yaw rate (rad/s) under this is a straight line. */
@@ -118,13 +120,15 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   // The hardest braking any car ahead calls for, as a share of `brake`: the deceleration that takes its closing speed off in the time left.
   let need = 0;
   let braking = false;
+  /** Lock side (-1 right, 1 left) of a handbrake flick away from a live car it drives round and cannot steer clear of; 0 none. */
+  let flick = 0;
   for (let k = 0; k < cars.length; k++) {
     const o = cars[k]!;
     if (o.id === self.id || spare[o.id] === 1) continue;
-    // Past `count` are the police: a moving live one is the racer's to be rammed by; a dead or stopped one, like a dead car, is a wreck to steer round at speed, never a reason to brake (`soft`).
-    const soft = !o.alive || k >= count;
-    if (k >= count && o.alive && hypot2(o.vx, o.vz) > DERBY_RULES.hitSpeed) continue;
+    // Past `count` are the police: a moving live one is the racer's to be rammed by; a dead or stopped one, like a dead car, is a wreck to steer round at speed, never a reason to brake (`soft`). So is a stopped or crawling racer (under `CRAWL`): it is driven round on the gas, never queued behind (owner: route round anything that holds you back and slam the gas).
     const ospeed = hypot2(o.vx, o.vz);
+    const soft = !o.alive || k >= count || (k < rivals && ospeed < CRAWL);
+    if (k >= count && o.alive && ospeed > DERBY_RULES.hitSpeed) continue;
     // Out of reach: the two centres are further apart than the zone and the most they can close in `HORIZON` s.
     const gap = hypot2(o.x - self.x, o.z - self.z) - (speed + ospeed) * last;
     if (gap >= LON) continue;
@@ -214,7 +218,10 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
     // The sideways room the car can make by then: a contact it can steer clear of is not braked for. Only a car ahead is braked for (`ahead`: a stopped car's near end counts, it lies across the way).
     const room = 0.5 * STEER_ACC * tc * tc;
     const clear = room >= ca - Math.abs(cl);
+    // A car it drives round (a wreck, a stopped police car, a stopped racer) is never braked for (owner: never more than half a second off the gas). A live one it cannot steer clear of within `LAST_INSTANT` s
+    // gets a handbrake flick with lock away from it instead, the gas kept on (owner: handbrake turns to cut round, or to swing the tail in and spare the engine).
     if (!soft && cn + reach > 0 && !clear) need = Math.max(need, Math.max(0, cw - TAP) / (2 * Math.max(tc, 0.05) * brake));
+    else if (soft && o.alive && tc < LAST_INSTANT && cn + reach > 0 && !clear) flick = cl >= 0 ? -1 : 1;
     if (!soft && tc <= 0) braking = true;
     if (tc < soonest) {
       soonest = tc;
@@ -241,6 +248,10 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   tune[GUARD_PUSH_IDX] = push;
   out.steer = clamp((toward ? out.steer * (1 - steerNeed) : out.steer) * (1 - Math.abs(push)) + push, -1, 1);
   brakeFor(out, need, braking);
+  if (flick !== 0 && need === 0) {
+    out.ebrake = true;
+    out.steer = flick;
+  }
 }
 
 /**

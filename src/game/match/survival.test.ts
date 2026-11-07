@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Track } from "../world/track.ts";
 import { HAVANA } from "../world/tracks/havana.ts";
-import { BUST, RaceSession } from "./session.ts";
+import { BUST } from "../ai/constants.ts";
+import { RaceSession } from "./session.ts";
 import { SURVIVAL, settleRun } from "./survival.ts";
 import type { CarPose, Entrant } from "./types.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";

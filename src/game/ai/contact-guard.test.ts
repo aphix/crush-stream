@@ -126,6 +126,37 @@ describe("given a driver at 20 m/s straight on, with a stopped car 12 m ahead an
   });
 });
 
+describe("given a racer planning full throttle with a stopped rival racer in its way (a racer is a car of the first `GUARD_RIVALS_IDX`)", () => {
+  /** The guard's take on the plan for `self` with `other` (car 1 of 2) among `rivals` racers (0: `other` is traffic). */
+  const racerGuard = (self: AiCar, other: AiCar, rivals: number): DriveInput => {
+    const out: DriveInput = { ...idleDrive(), throttle: 1 };
+    const tune = new Float64Array(GUARD_COUNT);
+    tune[GUARD_BRAKE_IDX] = 20;
+    tune[GUARD_LEAD_IDX] = 11;
+    tune[GUARD_TURN_IDX] = 1.5;
+    tune[GUARD_RIVALS_IDX] = rivals;
+    guardContact(self, [self, other], 2, new Uint8Array(32), tune, out);
+    return out;
+  };
+  const me = car(0, 0, 0, 20);
+  it("when the rival is stopped 12 m ahead at 20 m/s, then the guard does not brake for it (it is passed round at speed), where it brakes for the same stopped car as traffic", () => {
+    const racer = racerGuard(me, car(1, 0, 12, 0), 2);
+    expect(racer.brake === 0 && racer.throttle === 1, `racer ahead: brake ${racer.brake.toFixed(2)}, throttle ${racer.throttle.toFixed(2)}`).toBeTruthy();
+    const traffic = racerGuard(me, car(1, 0, 12, 0), 0);
+    expect(traffic.brake > 0.5 && traffic.throttle === 0, `traffic ahead: brake ${traffic.brake.toFixed(2)}, throttle ${traffic.throttle.toFixed(2)}`).toBeTruthy();
+  });
+  it("when the rival crawls 3 m/s the same way (CRAWL: no longer stopped), then the guard brakes for it", () => {
+    const crawling = racerGuard(me, car(1, 0, 12, 3), 2);
+    expect(crawling.brake, `brake ${crawling.brake.toFixed(2)}`).toBeGreaterThan(0.5);
+  });
+  it("when the racer itself is at 2.9 m/s or 3.5 m/s, then the stopped rival is driven round either way: the plan stands, gas on and no brake (owner: route round anything that holds you back and slam the gas)", () => {
+    for (const v of [2.9, 3.5]) {
+      const out = racerGuard(car(0, 0, 0, v), car(1, 0, 6.3, 0), 2);
+      expect(out.throttle === 1 && out.brake === 0, `at ${v} m/s: throttle ${out.throttle.toFixed(2)}, brake ${out.brake.toFixed(2)}`).toBeTruthy();
+    }
+  });
+});
+
 describe("given a driver at 25 m/s with 0.6 of lock on, and a stopped car 18 m ahead and 2 m to the side it turns toward", () => {
   const me = car(0, 0, 0, 25);
   const stopped: AiCar = { ...blankAiCar(1), x: 2, z: 18 };

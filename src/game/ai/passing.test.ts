@@ -39,6 +39,7 @@ const want = (brain: RaceBrain): number => brain["planWant"][0]!;
 const follow = (brain: RaceBrain): number => brain["planFollow"][0]!;
 const target = (brain: RaceBrain): number => brain["planTarget"][0]!;
 const swerves = (brain: RaceBrain, control: RaceBrain): boolean => brain["planRate"][0]! > control["planRate"][0]!;
+const evades = (brain: RaceBrain): boolean => brain["planEvade"][0] === 1;
 
 describe("given a racer doing 25 m/s on a straight", () => {
   const control = think(RACER_SPEED, []);
@@ -60,25 +61,87 @@ describe("given a racer doing 25 m/s on a straight", () => {
     });
   }
 
-  it("when a car doing 15 m/s the same way is 24 m ahead in its lane, then it goes round at its own pace: a side with room, the speed not held back", () => {
-    const brain = think(RACER_SPEED, [car(2, 24, 0, 15)]);
-    expect(Math.abs(want(brain)), `line ${want(brain).toFixed(2)} m against the car's lane at 0`).toBeGreaterThanOrEqual(MIN_SWING);
-    expect(Number.isNaN(follow(brain)), `follow ${follow(brain).toFixed(1)}: a pass that clears in time keeps its speed`).toBeTruthy();
-    expect(target(brain), "plan speed").toBe(target(control));
-  });
+  const slower = [
+    { who: "traffic car (id 2) doing 15 m/s", id: 2, speed: 15 },
+    { who: "rival racer (id 1) doing 10 m/s", id: 1, speed: 10 },
+  ];
+  for (const { who, id, speed } of slower) {
+    it(`when a ${who} the same way is 24 m ahead in its lane and a side is free, then it goes round at once and on the gas: a quick lane change to a side with room, the plan speed not held back, no following speed`, () => {
+      const brain = think(RACER_SPEED, [car(id, 24, 0, speed)]);
+      expect(Math.abs(want(brain)), `line ${want(brain).toFixed(2)} m against the car's lane at 0`).toBeGreaterThanOrEqual(MIN_SWING);
+      expect(swerves(brain, control), "quick lane change").toBe(true);
+      expect(evades(brain), "a pass round a car in the way is an evade (the boost stays on)").toBe(true);
+      expect(Number.isNaN(follow(brain)), `follow ${follow(brain).toFixed(1)}: a free side is never followed at the car's pace`).toBeTruthy();
+      expect(target(brain), "plan speed").toBe(target(control));
+    });
+  }
 });
 
 describe("given a racer doing 8 m/s 14 m behind a slower car (6 m/s)", () => {
-  const behind = (side: number[]) => think(8, [car(2, 14, 0, 6), ...side.map((off, k) => car(3 + k, 16, off, 6))], 2);
-  it("when traffic holds the lane on each side of it, then it follows at that car's pace and waits: no lane change, no stop", () => {
+  const control = think(8, []);
+  const behind = (side: number[], seconds = 2, extra: AiCar[] = []) => think(8, [car(2, 14, 0, 6), ...side.map((off, k) => car(3 + k, 16, off, 6)), ...extra], seconds);
+  const cases = [
+    { it: "traffic holds the lane on each side of it", extra: [] as AiCar[] },
+    { it: "traffic holds the lane on each side of it and a live police car is 10 m behind it and 6 m to the side", extra: [car(GUARDED, -10, 6, 8)] },
+  ];
+  for (const testCase of cases) {
+    it(`when ${testCase.it} on a road with room beyond them, then within the first 0.2 s it takes a free line round all three, at once and on the gas (a lane change like a pass's, no following speed, no wait): no car is spared, since none is pushed through`, () => {
+      const brain = behind([NEXT_LANE, -NEXT_LANE], 0.2, testCase.extra);
+      expect(Math.abs(want(brain)), `line ${want(brain).toFixed(2)} m: clear of the outer cars at ${NEXT_LANE} m by the ${NEXT_LANE} m a pass needs`).toBeGreaterThanOrEqual(2 * NEXT_LANE - 0.01);
+      expect(swerves(brain, control), "quick lane change").toBe(true);
+      expect(evades(brain), "evading").toBe(true);
+      expect(Number.isNaN(follow(brain)), `follow ${follow(brain).toFixed(1)}: not held to the car's pace`).toBeTruthy();
+      const spared = brain["hitOf"][0]!;
+      expect(spared[2]! + spared[3]! + spared[4]!, "no car spared: the line is free").toBe(0);
+    });
+  }
+  it("when traffic has held both sides for 2 s, then it is still on the free line round them, never queued behind", () => {
     const brain = behind([NEXT_LANE, -NEXT_LANE]);
-    expect(Math.abs(want(brain)), `line ${want(brain).toFixed(2)} m`).toBeLessThan(MIN_SWING / 2);
-    expect(follow(brain) > 6 && follow(brain) < 40, `follows at ${follow(brain).toFixed(1)} m/s`).toBeTruthy();
+    expect(Math.abs(want(brain)), `line ${want(brain).toFixed(2)} m`).toBeGreaterThanOrEqual(2 * NEXT_LANE - 0.01);
+    expect(Number.isNaN(follow(brain)), "never queued behind it").toBeTruthy();
   });
+  for (const seconds of [0.2, 2]) {
+    it(`when traffic holds every line across the 20 m road (cars at 0, \u00b1${NEXT_LANE}, \u00b1${2 * NEXT_LANE} and one more at +8.6 m by the left edge: no free line), then after ${seconds} s it is pushing through a line one car holds, the one nearest its own (owner: the biggest gap, preferably in the right direction), on the gas, and the guard spares that car only, not the one ahead`, () => {
+      const brain = behind([NEXT_LANE, -NEXT_LANE, 2 * NEXT_LANE, -2 * NEXT_LANE, 8.6], seconds);
+      expect(Math.abs(want(brain)), `line ${want(brain).toFixed(2)} m: off the car ahead`).toBeGreaterThanOrEqual(MIN_SWING);
+      expect(Number.isNaN(follow(brain)), "never queued behind it").toBeTruthy();
+      const spared = brain["hitOf"][0]!;
+      let held = 0;
+      for (let id = 3; id <= 7; id++) held += spared[id]!;
+      expect(held, `spared: ${[3, 4, 5, 6, 7].map((id) => `car ${id} ${spared[id]}`).join(", ")}: the one holding the line it takes`).toBe(1);
+      expect(spared[2], "the car ahead it goes round is not spared").toBe(0);
+    });
+  }
   it("when the lane on one side is free, then it takes that side at once", () => {
     const brain = behind([NEXT_LANE]);
     expect(want(brain), `line ${want(brain).toFixed(2)} m, to the side no car holds`).toBeLessThanOrEqual(-MIN_SWING);
     expect(Number.isNaN(follow(brain)), "not held to the car's speed").toBeTruthy();
+    expect(evades(brain), "evading").toBe(true);
+  });
+
+  const blockers = [
+    { who: "traffic car", id: 2 },
+    { who: "rival racer", id: 1 },
+  ];
+  for (const { who, id } of blockers) {
+    it(`when a ${who} 14 m ahead is 1 m left of the racer's line, then the line clears its lane by the 3.3 m a pass needs, to whichever side is nearer, round its predicted span and not through it`, () => {
+      const brain = think(8, [car(id, 14, 1.0, 6)], 2);
+      expect(Math.abs(want(brain) - 1.0), `line ${want(brain).toFixed(2)} m against the car's lane at 1.0`).toBeGreaterThanOrEqual(NEXT_LANE - 0.1);
+      expect(Number.isNaN(follow(brain)), "not following").toBeTruthy();
+    });
+  }
+  it("when a pile holds the lane slots on both sides of the car ahead (cars at 1.0, -2.3 and 4.3 m, 14 to 16 m on), then it finds the line round the whole group, 3.3 m clear of every car, in one quick lane change on the gas, and the guard spares none of them", () => {
+    const brain = think(8, [car(2, 14, 1.0, 6), car(3, 16, -2.3, 6), car(4, 16, 4.3, 6)], 2);
+    expect(want(brain), `line ${want(brain).toFixed(2)} m: round the group at -5.6 m`).toBeLessThanOrEqual(-5.5);
+    expect(swerves(brain, control), "quick lane change").toBe(true);
+    expect(Number.isNaN(follow(brain)), "not boxed in behind it").toBeTruthy();
+    const spared = brain["hitOf"][0]!;
+    expect(spared[2]! + spared[3]! + spared[4]!, "a free line holds no car to spare").toBe(0);
+  });
+  it("when cars hold the road between 5.5 m left and 6.5 m right of the racer, a gap too narrow for a pass, then the only free line is the road's left edge, 3.1 m beyond the first car, and it takes that", () => {
+    const brain = think(8, [car(2, 14, 5.5, 6), car(3, 16, -0.5, 6), car(4, 16, -6.5, 6)], 2);
+    expect(want(brain), `line ${want(brain).toFixed(2)} m: the left wall's room (8.6 m on this 20 m road)`).toBeGreaterThan(8);
+    expect(Number.isNaN(follow(brain)), "not boxed in behind it").toBeTruthy();
   });
 });
 

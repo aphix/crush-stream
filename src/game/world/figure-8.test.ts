@@ -92,9 +92,8 @@ describe("given the figure-8 course, two tight walled loops running into a mud c
     for (const g of track.gates) expect(Math.hypot((g.ax + g.bx) / 2, (g.az + g.bz) / 2), `gate at s=${g.s.toFixed(0)} is 20 m or more from the crossing`).toBeGreaterThan(20);
   });
 
-  it("when the ground over the crossing is read, then its centre stands 0.4 m under the centreline elsewhere, rising on a cosine to level 22 m out over both roads' dish, with no step or ledge along either arm or between them", () => {
+  it("when the ground over the crossing is read, then its centre stands 0.4 m under the centreline elsewhere, rising on a cosine to level 22 m out, the crossing itself undished (two roads' raised dish edges would stand a ridge between them that throws a car crossing off-centre), with no step or ledge along either arm, 6 m either side of each, or between them", () => {
     const ground = track.ground();
-    const half = WIDTH / 2;
     const at = (x: number, z: number) => ground.heightAt(x, z, 2);
     const bowl = (x: number, z: number) => {
       const r = Math.hypot(x, z);
@@ -107,22 +106,20 @@ describe("given the figure-8 course, two tight walled loops running into a mud c
     expect(Math.abs(level), "the centreline 25 m out, past the pit, is the course's level").toBeLessThan(GROUND_TOL);
     expect(level - at(0, 0), "the pit's depth at the X").toBeCloseTo(PIT_DEPTH, 2);
     const misses: string[] = [];
-    for (let x = -11; x <= 11; x += 0.5) {
-      for (let z = -11; z <= 11; z += 0.5) {
-        // Laterals off the two arms (along (±1, 1) / √2): the nearer centreline's dish, less the bowl.
-        const a = Math.abs(x - z) / Math.SQRT2;
-        const b = Math.abs(x + z) / Math.SQRT2;
-        if (a > half - 1 || b > half - 1) continue;
-        const want = (Math.min(a, b) / half) ** 2 - bowl(x, z);
+    // Inside the crossing, where both arms' dish is eased to 0 (the nodes 9.9 m out each way): only the bowl.
+    for (let x = -7; x <= 7; x += 0.5) {
+      for (let z = -7; z <= 7; z += 0.5) {
+        const want = -bowl(x, z);
         const got = at(x, z);
         if (Math.abs(got - want) > GROUND_TOL) misses.push(`(${x}, ${z}): ${got.toFixed(3)} m, want ${want.toFixed(3)}`);
       }
     }
     expect(misses).toEqual([]);
     // Along both arms past the pit's rim, and the diagonals between them to a metre in from the road's edge (17 m out, 12 m off both arms; the dish's parabola ends in a kink at the edge, the X's corner falls to the field past the runoff): each 1 m sample on the line its neighbours draw.
-    for (const [dx, dz, reach, name] of [[Math.SQRT1_2, Math.SQRT1_2, 25, "the start arm"], [Math.SQRT1_2, -Math.SQRT1_2, 25, "the other arm"], [1, 0, 15, "the +x diagonal"], [0, 1, 15, "the +z diagonal"]] as const) {
+    const o = 6 * Math.SQRT1_2;
+    for (const [dx, dz, reach, name, ox, oz] of [[Math.SQRT1_2, Math.SQRT1_2, 25, "the start arm", 0, 0], [Math.SQRT1_2, -Math.SQRT1_2, 25, "the other arm", 0, 0], [Math.SQRT1_2, Math.SQRT1_2, 25, "6 m left of the start arm", -o, o], [Math.SQRT1_2, Math.SQRT1_2, 25, "6 m right of the start arm", o, -o], [Math.SQRT1_2, -Math.SQRT1_2, 25, "6 m left of the other arm", o, o], [Math.SQRT1_2, -Math.SQRT1_2, 25, "6 m right of the other arm", -o, -o], [1, 0, 15, "the +x diagonal", 0, 0], [0, 1, 15, "the +z diagonal", 0, 0]] as const) {
       for (let r = -reach; r <= reach; r++) {
-        const bend = Math.abs(at(dx * (r - 1), dz * (r - 1)) - 2 * at(dx * r, dz * r) + at(dx * (r + 1), dz * (r + 1)));
+        const bend = Math.abs(at(ox + dx * (r - 1), oz + dz * (r - 1)) - 2 * at(ox + dx * r, oz + dz * r) + at(ox + dx * (r + 1), oz + dz * (r + 1)));
         expect(bend, `${name}, ${r} m from the X`).toBeLessThan(BEND_TOL);
       }
     }

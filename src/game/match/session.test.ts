@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Track, blankPoint, blankProjection, pointOn } from "../world/track.ts";
-import { BUST, CLEARANCE, COUNTDOWN, DRAFT, FINISH_GRACE, GRID_TIME, RESPAWN_BRAKE, RESPAWN_DELAY, RaceSession, WRONG_WAY_ON, startLights } from "./session.ts";
+import { BUST } from "../ai/constants.ts";
+import { CLEARANCE, COUNTDOWN, DRAFT, FINISH_GRACE, GRID_TIME, RESPAWN_BRAKE, RESPAWN_DELAY, RaceSession, WRONG_WAY_ON, startLights } from "./session.ts";
 import { Campaign, CAMPAIGN_POINTS } from "./campaign.ts";
 import type { CarPose, RaceEvent, RaceResultRow } from "./types.ts";
 import { DT, along, centreline, field, fromGrid, polyline, runTo, samples, shortcutLine, type Driver, type Pt } from "./session-drive.test-util.ts";

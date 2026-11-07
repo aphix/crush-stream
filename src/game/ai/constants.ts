@@ -22,6 +22,16 @@ export const TURN_ROUND_THROTTLE = 0.6;
 export const STRAIGHT_CURV = 1e-4;
 /** Throttle a finished racer drives its cool-down lap at, at most: off the pace, out of the field still racing's way. */
 export const COOL_DOWN_THROTTLE = 0.55;
+/** Gas (share of full) a braking racer keeps: the sim ignores throttle while brake is on, so "never both off" costs no stopping power. Under the standoff's push (0.2) and the stuck test's (0.35). */
+export const BRAKE_THROTTLE = 0.1;
+/** Seconds in a row a racer may sit off the gas (throttle 0..`BRAKE_THROTTLE`) at a crawl before it backs out: they are in a race, they want to win. */
+export const OFF_GAS_S = 0.5;
+/** Speed (m/s) at or under which a racer off the gas counts as stalled; above it, off the gas is a corner or guard stop at speed (a hairpin brake from 60 m/s lasts about 2 s). */
+export const OFF_GAS_SPEED = 3;
+/** Speed (m/s) under which a car counts as stopped or crawling: passed round at speed, not followed. */
+export const CRAWL = 3;
+/** Busted: a racing car held under `kph` within `near` m of a chasing police car for over `time` s in a row is out, as a DNF is (out in a no-reset race). The AI's bust urgency reads the same figures. */
+export const BUST = { near: 20, kph: 20, time: 4 };
 /** The AI difficulties a race offers (menu order). */
 export const AI_DIFFICULTIES = ["easy", "medium", "hard"] as const;
 export type AiDifficulty = (typeof AI_DIFFICULTIES)[number];

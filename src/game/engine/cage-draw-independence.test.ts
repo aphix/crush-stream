@@ -159,8 +159,9 @@ describe("given a staged crash run twice, the second drawing every car before ev
         refits = Math.max(refits, row[o + 8]!);
       }
       const doorMoved = doorSwing(plain);
-      expect(wrecked === 1 && refits >= 2, `the race crushed no car (${wrecked}) or fitted no cage twice (${refits}): the comparison proves nothing`).toBeTruthy();
-      if (stage === "door ajar") expect(doorMoved, `no open door was struck or swung (${doorMoved} rad): the comparison proves nothing about part contacts`).toBeGreaterThan(0.01);
+      // The crush and the cage refits are the head-on's to cover; the door ajar covers part contacts: car 2 clips the open door and goes round car 3 (owner: a racer goes round a car it has time to), so no body is crushed.
+      if (stage === "head-on") expect(wrecked === 1 && refits >= 2, `the race crushed no car (${wrecked}) or fitted no cage twice (${refits}): the comparison proves nothing`).toBeTruthy();
+      else expect(doorMoved, `no open door was struck or swung (${doorMoved} rad): the comparison proves nothing about part contacts`).toBeGreaterThan(0.01);
       const first = firstDifference(plain, drawn);
       expect(first.step, `a car differs at step ${first.step}, car ${Math.floor(first.at / STATE)}, number ${first.at % STATE}: ${plain[first.step]?.[first.at]} against ${drawn[first.step]?.[first.at]}`).toBe(-1);
     });

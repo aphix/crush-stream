@@ -9,7 +9,7 @@ import { setGround } from "../world/ground.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { BRAKE_SHARE, RaceBrain, copyDrive } from "./race-ai.ts";
 import { race, raced, summarize } from "./race-ai.test-util.ts";
-import { AI_DIFFICULTIES, AI_EVERY_SLICE, GUARD_BRAKE_IDX, GUARD_LEAD_IDX, SLIP_RECOVER, SLIP_WINDOW } from "./constants.ts";
+import { AI_DIFFICULTIES, AI_EVERY_SLICE, BRAKE_THROTTLE, BUST, GUARD_BRAKE_IDX, GUARD_LEAD_IDX, OFF_GAS_S, REVERSE_THROTTLE, SLIP_RECOVER, SLIP_WINDOW } from "./constants.ts";
 import { fieldAggression, mood } from "./ai-aggression.ts";
 import { Track } from "../world/track.ts";
 import { parseTrack } from "../world/track-schema.ts";
@@ -60,11 +60,13 @@ function hardMarks(track: Track): string[] {
  * and when a wreck pass began to drive the lane it picks no faster than stops short of a stopped car further on in it (`WreckPass.stopSpeed`: a racer crept at 2 m/s into a stopped car its pass lane still held): oval's cars 3, 4, 6 and 7, every rally mark and stunt's cars 1 to 7 change,
  * and when the contact guard began to act at any speed over its tap and to brake a contact down to half the sim's arming closing (`TAP`, `ARM_CLOSING`: a clean car crept into a stopped one under 2 m/s, and met one at up to 1.5 m/s, a crash): cars 1 to 7 of every course change (each starts behind another on the grid), car 0's marks stand,
  * and when the class tyres and pace met the wreck pass's stop speed and the guard's `ARM_CLOSING` brake (each pinned alone before; measured on their union): oval's car 0 (e0fc741b, c8d226fc) and stunt's car 0 (443c4b75, e94652a0) stand at the class pin, every other mark is new (oval car 1 at 300: 64cce7b1 class, cf384a57 traffic -> f6a0a853; rally car 0 at 300: 296d8819 class, 92fba2df traffic -> 48cf9133; stunt car 1 at 300: 9fafcd5b class, c7a0d647 traffic -> e9f6318d).
+ * and when the racers were kept on the gas (a braking racer keeps `BRAKE_THROTTLE` of it, and one off it at a crawl for `OFF_GAS_S` backs out; a stopped racer is passed at speed, a boxed-in one pushes through, one a faster car or a cop closes on evades, one about to be busted drives on, one facing away from its line reverses toward it): every mark changes again, re-pinned from the run,
+ * and when any car holding a racer under its clear-road speed became one to route round on a free line of its own (the nearest free lateral clear of every car ahead, no fixed lane slots), every lane holding a stopped car within the look-ahead counted as held and a blockade went for its biggest gap on the gas, and a car the guard drives round got a handbrake flick away from it instead of a brake: every mark changes again, re-pinned from the run.
  */
 const HARD_MARKS: Record<string, string[]> = {
-  oval: ["e0fc741b", "c8d226fc", "f6a0a853", "6537a8b5", "e3bbc2c4", "7d7c67a9", "c5c88a4e", "3347b5ae", "31c4136c", "a7bd93fe", "cdd0941f", "23dd4a03", "a2047cf8", "1ca0f2e6", "29cfaef7", "747f9d9c"],
-  rally: ["48cf9133", "f554a913", "2cacf6de", "a7adeec1", "5df16f7d", "b96db9bb", "ab072db0", "1e0746ee", "28ec158f", "e600d5b8", "52e66bc6", "c57147f1", "2be2e26d", "bd5465a1", "7e8274b8", "2974b539"],
-  stunt: ["443c4b75", "e94652a0", "e9f6318d", "5e3dbadf", "52762d7c", "1ee42f79", "5bbfbb2f", "a9ed359b", "7e8870c7", "75c6240d", "adff33e1", "20f245cf", "43be096b", "716ba590", "3e546683", "425f3092"],
+  oval: ["d64e123c", "4b18316a", "9b12057", "90409f22", "dec0331f", "40a45d13", "22b9286", "3960e96", "bd52f1ad", "c7f10b47", "bdaf7b76", "454d229f", "4b948d34", "4ba63b95", "b9f269a2", "af3359ca"],
+  rally: ["b02a1400", "2d6ffce4", "57cc8b08", "20f2c81c", "5c9e47e5", "f4cac4ca", "260dcece", "a68f2f3b", "7f0d6d62", "74cd6d87", "cda28f00", "dea7fcab", "f21daad1", "95bf3474", "9377eac5", "7e948aab"],
+  stunt: ["8f7d22f1", "5e28301d", "8d6a481b", "fb791445", "11991fb1", "44dd751a", "43a232c3", "9778bb6f", "b92c4388", "7835c3b1", "12ef417e", "35fb61a4", "12717133", "c8eba082", "8855dd67", "99faa34b"],
 };
 
 describe("given 8 clean AI cars (aggression 0) on the grid of the oval", () => {
@@ -100,19 +102,21 @@ describe("given the same 8 easy AI cars raced twice from the grid of the oval", 
   });
 });
 
-describe("given a driver holding the drive it planned on clear road, with a stopped car 8 m ahead of it at 17 m/s", () => {
+describe("given a driver holding the drive it planned on clear road, with a stopped traffic car 8 m ahead of it at 17 m/s", () => {
   for (const difficulty of AI_DIFFICULTIES) {
     it(`when the step's contact guard reads the held drive at ${difficulty} difficulty, then it brakes where the held input drove on`, () => {
       const me = at(0, pt.x, pt.z, 17);
       const parked = at(1, pt.x, pt.z + 8, 0);
       const far = at(2, pt.x, pt.z - 400, 0);
-      const brain = new RaceBrain(oval, 2);
+      // The stopped car is traffic (id 1 between the one racer and `guarded`): a stopped rival racer is steered round at speed, not braked for (`contact-guard.test.ts`).
+      const brain = new RaceBrain(oval, 1);
+      brain.guarded = 2;
       brain.setDifficulty(0, difficulty);
       const held = idleDrive();
       copyDrive(brain.think(me, [me, far], { next: 1, lap: 0 }, DT), held);
       expect(held.throttle > 0 && held.brake === 0, `the held drive is clear road: throttle ${held.throttle}, brake ${held.brake}`).toBeTruthy();
       const guarded = brain.guard(me, [me, parked], held);
-      expect(guarded.brake > 0 && guarded.throttle === 0, `guard brakes for the stopped car: brake ${guarded.brake.toFixed(2)}, throttle ${guarded.throttle.toFixed(2)}`).toBeTruthy();
+      expect(guarded.brake > 0 && guarded.throttle === BRAKE_THROTTLE, `guard brakes for the stopped car, keeping a touch of gas: brake ${guarded.brake.toFixed(2)}, throttle ${guarded.throttle.toFixed(2)}`).toBeTruthy();
     });
   }
 });
@@ -211,15 +215,34 @@ describe("given AI drivers at about 17 m/s on the oval course's back straight, w
     expect(abreast(1, stunt, 899.5, 1.3, 20, 20), "and a full driver shoves there regardless").toBeGreaterThan(0.1);
   });
 
-  it("when a rival 6 m ahead drives at the driver's own 17 m/s pace, then a clean driver brakes to keep a gap without boosting, and a hungry one boosts to catch it", () => {
+  it("when a rival 6 m ahead drives at the driver's own 17 m/s pace, then a hungry driver boosts to catch it", () => {
     const me = at(0, pt.x, pt.z, 17);
     const rival = at(1, pt.x, pt.z + 6, 17);
-    const clean = new RaceBrain(oval, 2).think(me, [me, rival], { next: 1, lap: 0 }, DT);
-    expect(!clean.boost && clean.brake > 0, `clean opens the gap: brake ${clean.brake.toFixed(2)}, boost ${clean.boost}`).toBeTruthy();
     const brute = new RaceBrain(oval, 2);
     brute.setAggression(0, 1);
     const hunt = brute.think(me, [me, rival], { next: 1, lap: 0 }, DT);
     expect(hunt.boost && hunt.throttle > 0, `hungry boosts into it: throttle ${hunt.throttle.toFixed(2)}, boost ${hunt.boost}`).toBeTruthy();
+  });
+
+  it("when a rival 6 m ahead drives at the driver's own 17 m/s pace, then a clean driver does not queue behind it: for a second it never brakes, keeps the gas, steers off the line and boosts", () => {
+    const me = at(0, pt.x, pt.z, 17);
+    const rival = at(1, pt.x, pt.z + 6, 17);
+    const brain = new RaceBrain(oval, 2);
+    let braked = 0;
+    let swung = 0;
+    let boosted = false;
+    let throttle = 0;
+    for (let k = 0; k < 1 / DT; k++) {
+      const out = brain.think(me, [me, rival], { next: 1, lap: 0 }, DT);
+      braked = Math.max(braked, out.brake);
+      swung = Math.max(swung, Math.abs(out.steer));
+      boosted = boosted || out.boost;
+      throttle = out.throttle;
+    }
+    expect(braked, "a car in the way that a free side lets it go round is not braked behind").toBe(0);
+    expect(throttle, "on the gas at the end of the second").toBe(1);
+    expect(swung, `steers off the line: most steer ${swung.toFixed(2)}`).toBeGreaterThan(0.05);
+    expect(boosted, "boosts on a full meter while it goes round").toBe(true);
   });
 
   it("when a rival is 2.6 m to its left at 15 m/s, then a hungry driver steers left into it and a clean one steers away, and at a 2 m/s crawl a hungry driver steers the same as if it were alone", () => {
@@ -289,26 +312,26 @@ describe("given an AI driver at 17 m/s alone on a clear straight with a full boo
 });
 
 describe("given a road only 6 m wide with a driver at 15 m/s coming up on a 6 m/s car 7 m ahead", () => {
-  it("when the driver reaches it, then it brakes with the throttle off and follows instead of passing", () => {
+  it("when the driver reaches it, then it brakes with only the brake's touch of gas and follows instead of passing", () => {
     const narrow = new Track({ ...(TRACKS[0] as object), road: { width: 6, runoff: [3, 3], surface: "asphalt", runoffSurface: "concrete" } });
     const p = narrow.pointAt(s0, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
     const me = at(0, p.x, p.z, 15);
     const slow = at(1, p.x, p.z + 7, 6);
     const brain = new RaceBrain(narrow, 2);
     const out = brain.think(me, [me, slow], { next: 1, lap: 0 }, DT);
-    expect(out.brake > 0 && out.throttle === 0, `brake ${out.brake} throttle ${out.throttle}`).toBeTruthy();
+    expect(out.brake > 0 && out.throttle === BRAKE_THROTTLE, `brake ${out.brake} throttle ${out.throttle}`).toBeTruthy();
   });
 });
 
 describe("given an AI driver at 30 m/s on the oval's back straight, alone, its nose 0.6 rad off the road's heading toward the left edge", () => {
-  it("when it is 1 m past the left edge, so steering back onto its line asks for more than full lock off the road, then it brakes with the throttle off; and on the road's centre line, pointed the same way, it keeps the throttle on", () => {
+  it("when it is 1 m past the left edge, so steering back onto its line asks for more than full lock off the road, then it brakes with only the brake's touch of gas; and on the road's centre line, pointed the same way, it keeps the throttle on", () => {
     // Of the two headings 0.6 rad off the road's, the one with a component along the road's left (tz, -tx).
     const roadYaw = Math.atan2(pt.tx, pt.tz);
     const yaw = Math.sin(roadYaw + 0.6) * pt.tz - Math.cos(roadYaw + 0.6) * pt.tx > 0 ? roadYaw + 0.6 : roadYaw - 0.6;
     const pointedOut = (off: number): AiCar => ({ ...onRoad(oval, 0, s0, off, 0), yaw, vx: 30 * Math.sin(yaw), vz: 30 * Math.cos(yaw) });
     const offRoad = pointedOut(pt.half + 1);
     const wide = new RaceBrain(oval, 1).think(offRoad, [offRoad], { next: 1, lap: 0 }, DT);
-    expect(wide.brake > 0 && wide.throttle === 0, `off the road: brake ${wide.brake} throttle ${wide.throttle}`).toBeTruthy();
+    expect(wide.brake > 0 && wide.throttle === BRAKE_THROTTLE, `off the road: brake ${wide.brake} throttle ${wide.throttle}`).toBeTruthy();
     const centred = pointedOut(0);
     const onLine = new RaceBrain(oval, 1).think(centred, [centred], { next: 1, lap: 0 }, DT);
     expect(onLine.throttle > 0 && onLine.brake === 0, `on the road: brake ${onLine.brake} throttle ${onLine.throttle}`).toBeTruthy();
@@ -394,10 +417,10 @@ describe("given a racer on the oval's back straight with a car 12 m ahead at 2.3
     brain.think(me, cars, { next: 1, lap: 0 }, DT);
     return { want: brain["line"](me, brain["traits"][0]!, cars), room: pt.half - 1.4 };
   };
-  it("when the blocker is stopped, or oncoming at 10 m/s, then the racer rounds it on the side with more road (right: the blocker's lane less the 3.3 m a pass needs), not the narrow one the nudge points at", () => {
+  it("when the blocker is stopped, or oncoming at 10 m/s, then the racer takes a free line round it: clear of the blocker's lane (2.3 m) by the 3.3 m a pass needs and on the road (owner: lanes are not predetermined by the road, make a line and go for it)", () => {
     for (const speed of [0, -10]) {
       const { want, room } = chosen(speed);
-      expect(want <= 2.3 - 3.3 + 1e-9 && want >= -room, `blocker doing ${speed} m/s: chose ${want.toFixed(2)} m, right of the blocker's lane (2.3 m) by the 3.3 m a pass needs: -1 m or further right; the narrow side is 5.6 m`).toBeTruthy();
+      expect(Math.abs(want - 2.3) >= 3.3 - 1e-9 && Math.abs(want) <= room + 1e-9, `blocker doing ${speed} m/s: chose ${want.toFixed(2)} m, room ${room.toFixed(1)} m`).toBeTruthy();
     }
   });
   it("when the blocker moves with it at 8 m/s, then the pass is unchanged: the side nearest the planned lane (left, with the nudge)", () => {
@@ -406,10 +429,12 @@ describe("given a racer on the oval's back straight with a car 12 m ahead at 2.3
   });
 });
 
-describe("given a racer whose contact guard runs after its think, with a car 10 m or 14 m ahead of it at 28 m/s on a boost it wants", () => {
+describe("given a racer whose contact guard runs after its think, with a traffic car stopped 10 m or 14 m ahead of it at 28 m/s on a boost it wants", () => {
   /** The oval at 100 m round, the brain's car doing 28 m/s along it with a car `gap` m ahead; 20 steps of think and guard. */
   function steps(gap: number): { out: DriveInput; meter: number } {
-    const brain = new RaceBrain(oval, 2);
+    // Traffic (id 1 between the one racer and `guarded`): a stopped rival racer would be steered round, not braked for.
+    const brain = new RaceBrain(oval, 1);
+    brain.guarded = 2;
     brain.setDifficulty(0, AI_EVERY_SLICE);
     brain.setAggression(0, 1);
     const p = oval.pointAt(100, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
@@ -430,5 +455,200 @@ describe("given a racer whose contact guard runs after its think, with a car 10 
       expect(late.out.brake > 0.5 && !late.out.boost, `${gap} m: the guard brakes and cancels the boost (brake ${late.out.brake.toFixed(2)})`).toBeTruthy();
       expect(late.meter, `${gap} m: the meter ${late.meter}`).toBe(1);
     }
+  });
+});
+
+describe("given a clean racer at 28 m/s whose contact guard runs after its think, with a slower traffic car (14 m/s) 20 m ahead in its lane and the road free beside it", () => {
+  it("when it drives 3 s of think and guard (the positions held, the gap not closing), then once the pedals have risen it never brakes and never lifts: the guard counts the pass's own lane change as room, so it goes round on the gas", () => {
+    const brain = new RaceBrain(oval, 1);
+    brain.guarded = 2;
+    brain.setDifficulty(0, AI_EVERY_SLICE);
+    const p = oval.pointAt(100, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
+    const yaw = Math.atan2(p.tx, p.tz);
+    const me = { ...blankAiCar(0), x: p.x, z: p.z, yaw, vx: p.tx * 28, vz: p.tz * 28 };
+    const slow = { ...blankAiCar(1), x: p.x + p.tx * 20, z: p.z + p.tz * 20, yaw, vx: p.tx * 14, vz: p.tz * 14 };
+    const all = [me, slow];
+    const held = idleDrive();
+    let braked = 0;
+    let lowest = 1;
+    for (let k = 0; k < 3 / DT; k++) {
+      copyDrive(brain.think(me, all, { next: 1, lap: 0 }, DT), held);
+      const out = brain.guard(me, all, held, DT);
+      if (k * DT < 0.5) continue;
+      braked = Math.max(braked, out.brake);
+      lowest = Math.min(lowest, out.throttle);
+    }
+    expect(braked, `most brake ${braked.toFixed(2)}`).toBe(0);
+    expect(lowest, `lowest throttle ${lowest.toFixed(2)}`).toBe(1);
+  });
+});
+
+/** A road only 6 m wide: a stopped car across its middle leaves no side free. */
+const tight = new Track({ ...(TRACKS[0] as object), road: { width: 6, runoff: [3, 3], surface: "asphalt", runoffSurface: "concrete" } });
+const tightPt = tight.pointAt(s0, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
+const RACING = { next: 1, lap: 0 };
+
+describe("given a racer racing on a road 6 m wide, crawling at 1.5 m/s nose to tail behind a stopped rival with both sides held (no side to round it on)", () => {
+  const me = at(0, tightPt.x, tightPt.z, 1.5);
+  const stopped = at(1, tightPt.x, tightPt.z + 5.5, 0);
+  /** Racer 0's throttle each step of `seconds`: its think, then the guard on what it held, the cars where they are. */
+  const throttles = (seconds: number): number[] => {
+    const brain = new RaceBrain(tight, 2);
+    const held = idleDrive();
+    const all = [me, stopped];
+    const out: number[] = [];
+    for (let k = 0; k < Math.ceil(seconds / DT); k++) {
+      copyDrive(brain.think(me, all, RACING, DT), held);
+      out.push(brain.guard(me, all, held, DT).throttle);
+    }
+    return out;
+  };
+
+  it("when it drives 2 s of think and guard, then it is never off the gas (a step with the throttle at or under BRAKE_THROTTLE and not reversing): it pushes at the blockade (owner: never more than half a second off the gas; gas it through a blockade)", () => {
+    const drove = throttles(2);
+    const off = drove.findIndex((t) => t >= 0 && t <= BRAKE_THROTTLE);
+    expect(off, `first step off the gas: ${off} (${drove.slice(0, 40).map((t) => t.toFixed(2)).join(" ")})`).toBe(-1);
+  });
+
+  it("when it is held there for 8 s, then its throttle is never at or under BRAKE_THROTTLE (and not reversing) for more than OFF_GAS_S in a row, and it reverses more than once", () => {
+    const drove = throttles(8);
+    let run = 0;
+    let longest = 0;
+    let reverses = 0;
+    for (let k = 0; k < drove.length; k++) {
+      const t = drove[k]!;
+      run = t >= 0 && t <= BRAKE_THROTTLE ? run + 1 : 0;
+      longest = Math.max(longest, run);
+      if (t < 0 && (k === 0 || drove[k - 1]! >= 0)) reverses++;
+    }
+    expect(longest * DT, `longest stretch off the gas ${(longest * DT).toFixed(2)} s over ${(OFF_GAS_S).toFixed(1)} s`).toBeLessThanOrEqual(OFF_GAS_S + 3 * DT);
+    expect(reverses, "it keeps trying: a back-out each time the wait runs out").toBeGreaterThan(1);
+  });
+});
+
+describe("given a racer at 30 m/s on the oval's back straight, 1 m past the left edge and pointed off the road, so it brakes", () => {
+  it("when it drives for a second, then it brakes every step with BRAKE_THROTTLE of gas under the brake (at speed that is a corner's brake, not a stall), and never backs out", () => {
+    const roadYaw = Math.atan2(pt.tx, pt.tz);
+    const yaw = Math.sin(roadYaw + 0.6) * pt.tz - Math.cos(roadYaw + 0.6) * pt.tx > 0 ? roadYaw + 0.6 : roadYaw - 0.6;
+    const me: AiCar = { ...onRoad(oval, 0, s0, pt.half + 1, 0), yaw, vx: 30 * Math.sin(yaw), vz: 30 * Math.cos(yaw) };
+    const brain = new RaceBrain(oval, 1);
+    let braking = 0;
+    for (let k = 0; k < 1 / DT; k++) {
+      const out = brain.think(me, [me], RACING, DT);
+      if (out.brake > 0) {
+        braking++;
+        expect(out.throttle, `step ${k}: brake ${out.brake.toFixed(2)}`).toBe(BRAKE_THROTTLE);
+      }
+      expect(out.throttle, `step ${k}: never reversing at speed`).toBeGreaterThanOrEqual(0);
+    }
+    expect(braking, "it braked for most of the second").toBeGreaterThan(0.8 / DT);
+    expect(brain["recover"][0], "no back-out").toBe(0);
+  });
+});
+
+describe("given a racer at 15 m/s on the oval's back straight with a car 12 m behind it in its own lane doing 20 m/s", () => {
+  const me = at(0, pt.x, pt.z, 15);
+  /** Racer 0 (of 2; traffic is id 2, police from id 3) thinks once with `chaser` about: whether it evades, the lateral it plans (m, + left) and its drive. */
+  const meets = (chaser: AiCar) => {
+    const brain = new RaceBrain(oval, 2);
+    brain.guarded = 3;
+    const out = brain.think(me, [me, chaser], RACING, DT);
+    return { evading: brain["planEvade"][0] === 1, want: brain["planWant"][0]!, throttle: out.throttle, brake: out.brake, boost: out.boost };
+  };
+  const chaser = (id: number, behind = 12, speed = 20, beside = 0): AiCar => at(id, pt.x + beside, pt.z - behind, speed);
+
+  for (const [who, id] of [["a faster rival", 1], ["a police car", 3]] as const) {
+    it(`when ${who} closes on it from behind, then it swings a car's width and a hand clear of that car's lane and keeps the gas and the boost on`, () => {
+      const r = meets(chaser(id));
+      expect(r.evading, "it evades").toBeTruthy();
+      expect(Math.abs(r.want), `planned lane ${r.want.toFixed(2)} m: 3.3 m (LINE_W + 0.9) off the chaser's lane at 0`).toBeGreaterThanOrEqual(3.2);
+      expect(r.throttle === 1 && r.brake === 0 && r.boost, `throttle ${r.throttle}, brake ${r.brake}, boost ${r.boost}`).toBeTruthy();
+    });
+  }
+
+  it("when the car behind is no threat (no faster than it, a stopped or dead police car, traffic, 30 m back where it is not reached in the guard's HORIZON, or 4 m to the side), then it does not evade", () => {
+    const cases: [string, AiCar][] = [
+      ["a rival at its own pace", chaser(1, 12, 15)],
+      ["a stopped police car", chaser(3, 12, 0)],
+      ["a dead police car", { ...chaser(3), alive: false }],
+      ["a traffic car", chaser(2)],
+      ["a rival 30 m back", chaser(1, 30)],
+      ["a rival 4 m to the side", chaser(1, 12, 20, 4)],
+    ];
+    for (const [what, car] of cases) expect(meets(car).evading, what).toBeFalsy();
+  });
+});
+
+describe("given a racer about to be busted: under BUST.kph with a police car within BUST.near m, and a stopped traffic car 6.2 m ahead", () => {
+  const slow = (BUST.kph / 3.6) * 0.9;
+  const fast = (BUST.kph / 3.6) * 1.2;
+  /** Racer 0 at `speed` (cars by id: a far rival 1, the traffic 2, a stopped cop 3 `copAway` m to its side) after one think and the guard's read of it. */
+  const guarded = (speed: number, copAway: number): DriveInput => {
+    const me = at(0, pt.x, pt.z, speed);
+    const all = [me, at(1, pt.x, pt.z - 400, 0), at(2, pt.x, pt.z + 6.2, 0), at(3, pt.x + copAway, pt.z, 0)];
+    const brain = new RaceBrain(oval, 2);
+    brain.guarded = 3;
+    const held = idleDrive();
+    copyDrive(brain.think(me, all, RACING, DT), held);
+    return { ...brain.guard(me, all, held, DT) };
+  };
+  /** The lowest throttle racer 0 drives in 22 steps (0.37 s) pinned at a standstill against the traffic car, `copAway` m from the cop. */
+  const pinned = (copAway: number): number => {
+    const me = at(0, pt.x, pt.z, 0);
+    const all = [me, at(1, pt.x, pt.z - 400, 0), at(2, pt.x, pt.z + 2, 0), at(3, pt.x + copAway, pt.z, 0)];
+    const brain = new RaceBrain(oval, 2);
+    brain.guarded = 3;
+    const held = idleDrive();
+    let lowest = Infinity;
+    for (let k = 0; k < 22; k++) {
+      copyDrive(brain.think(me, all, RACING, DT), held);
+      lowest = Math.min(lowest, brain.guard(me, all, held, DT).throttle);
+    }
+    return lowest;
+  };
+
+  it("when the cop is within BUST.near m and it is under BUST.kph, then the guard steers it clear but keeps its gas on and its brake off, with the boost; with the cop out of the near range, or over BUST.kph, the guard brakes for the traffic car as before", () => {
+    const hunted = guarded(slow, BUST.near / 2);
+    expect(hunted.throttle > 0 && hunted.brake === 0 && hunted.boost, `hunted: throttle ${hunted.throttle.toFixed(2)}, brake ${hunted.brake.toFixed(2)}, boost ${hunted.boost}`).toBeTruthy();
+    expect(guarded(slow, BUST.near * 2).brake, "cop out of range: brakes").toBeGreaterThan(0.5);
+    expect(guarded(fast, BUST.near / 2).brake, "over BUST.kph: brakes").toBeGreaterThan(0.5);
+  });
+
+  it("when it is pinned at a standstill against the traffic car with the cop near, then it backs out within 0.37 s (pushing 0.3 s), where without the cop it is still pushing", () => {
+    expect(pinned(BUST.near / 2), "with the cop near").toBeLessThan(0);
+    expect(pinned(BUST.near * 2), "with the cop out of range").toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("given a racer stopped on the oval's back straight with its nose turned away from its line", () => {
+  const roadYaw = Math.atan2(pt.tx, pt.tz);
+  const facing = (turn: number): AiCar => ({ ...onRoad(oval, 0, s0, 0, 0), yaw: roadYaw + turn });
+
+  it("when its nose is 2.8 rad off, then it reverses with the wheel toward the line; at 1.2 rad it drives forward instead", () => {
+    const away = facing(2.8);
+    const brain = new RaceBrain(oval, 1);
+    const out = brain.think(away, [away], RACING, DT);
+    expect(Math.abs(brain["alpha"]), `heading error ${brain["alpha"].toFixed(2)} rad`).toBeGreaterThan(1.9);
+    expect(out.throttle, "reverses").toBe(REVERSE_THROTTLE);
+    expect(out.steer, "with the lock toward the line").toBe(Math.sign(brain["alpha"]));
+    const slant = facing(1.2);
+    expect(new RaceBrain(oval, 1).think(slant, [slant], RACING, DT).throttle, "1.2 rad off it drives forward").toBeGreaterThan(0);
+  });
+
+  it("when it reverses against something that does not move (no motion under reverse gas), then once the stuck test trips it drives forward instead, with no back-out", () => {
+    const away = facing(2.8);
+    const brain = new RaceBrain(oval, 1);
+    let recovered = false;
+    let reversed = false;
+    let forwardAt = -1;
+    for (let k = 0; k < 1.6 / DT && forwardAt < 0; k++) {
+      const t = brain.think(away, [away], RACING, DT).throttle;
+      recovered ||= brain["recover"][0]! > 0;
+      if (t < 0) reversed = true;
+      else if (reversed && t > 0) forwardAt = k;
+    }
+    expect(reversed, "it reversed first").toBeTruthy();
+    expect(forwardAt * DT, `forward at ${(forwardAt * DT).toFixed(2)} s: the stuck test trips at the patience + 0.4 s (0.95 to 1.35 s) of reverse gas without motion`).toBeGreaterThan(0.9);
+    expect(forwardAt >= 0 && !recovered, `forward at step ${forwardAt}, backed out ${recovered}`).toBeTruthy();
   });
 });

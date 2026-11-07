@@ -1,6 +1,6 @@
 import { hypot2 } from "../kernel/physics-core.js";
 import { MIN_SCORE, QUIET_GAP } from "./highlights.ts";
-import { BUST } from "./session.ts";
+import { BUST } from "../ai/constants.ts";
 
 /**
  * Auto spectating: the "Auto" entry of the driver list lets the director pick which car the camera rides. Pure and

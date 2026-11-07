@@ -77,7 +77,8 @@ describe("given a racer at 25 m/s whose contact guard sees a stopped car 14 m ah
     return brain.guard(me, others, held, DT);
   };
   const cases = [
-    { it: "when it is another racer, then the guard brakes", racers: 2, alive: true, expectedBraking: true },
+    // Owner (2026-11-07): a stopped racer is steered round at speed like a wreck, not braked for (`contact-guard.ts` soft).
+    { it: "when it is another racer, then the guard only steers: a stopped racer is passed at speed, never braked for", racers: 2, alive: true, expectedBraking: false },
     { it: "when it is a police car (live, stopped), then the guard only steers: it is passed at speed, never braked for", racers: 1, alive: true, expectedBraking: false },
     { it: "when it is a dead police car, then the guard only steers", racers: 1, alive: false, expectedBraking: false },
   ];

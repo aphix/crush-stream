@@ -1,8 +1,8 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { chargeBoost, clearDrive, idleDrive, topUpBoost, type DriveInput } from "../vehicle/car-drive.ts";
 import { mood } from "./ai-aggression.ts";
-import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_CONTEST_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
-import { contests, guardContact } from "./contact-guard.ts";
+import { AI_SKILL, BRAKE_THROTTLE, BUST, CRAWL, GUARD_BRAKE_IDX, GUARD_CONTEST_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_TURN_IDX, OFF_GAS_S, OFF_GAS_SPEED, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
+import { contests, guardContact, HORIZON } from "./contact-guard.ts";
 import { DERBY_RULES, STUCK_SPEED, type AiCar } from "./derby-ai.ts";
 import { personality, type Personality } from "./personality.ts";
 import { PlanClock } from "./plan-clock.ts";
@@ -65,7 +65,7 @@ export const CORNER_MARGIN = 0.8;
 export const BRAKE_SHARE = 0.72;
 /** Look this far (m) ahead for traffic. */
 const SCAN = 18;
-/** `SCAN`, `GAP_KEEP` and `HUNT` hold at up to this speed (m/s), the field's pace they were tuned at, and stretch with speed above it. */
+/** `SCAN` and `HUNT` hold at up to this speed (m/s), the field's pace they were tuned at, and stretch with speed above it. */
 const PACE = 18;
 /** Two cars closer than this sideways (m) share a line. */
 const LINE_W = 2.4;
@@ -116,11 +116,11 @@ const CROSS_MARGIN_S = 0.5;
 /** Round a blind stretch of a road with oncoming loop traffic the line keeps to its own half, this far (m) off the centre: our half width and half a metre (a pursuit chord cuts a corner up to 1.2 m inside its lane, so the oncoming lane's edge is no margin). */
 const ONCOMING_KEEP = 1.5;
 /** Cars ahead (and this far behind the nose, m) a plan weighs as holding a lane, at most; a lane is held by one within this far (m) beyond the car being passed. */
-const NEAR_CARS = 8;
+const NEAR_CARS = 10;
 const HELD_TAIL = 4.5;
 const HELD_BEYOND = 8;
-/** A pass keeps its speed when the lane change takes under this share of the time left to the car (the rest is the driver's margin). */
-const CLEAR_MARGIN = 0.75;
+/** A line round a car runs this far (m) sideways of its centre: a car width and a margin. */
+const FLANK_GAP = LINE_W + 0.9;
 /** Gap (m) a driver boxed in behind a car (both sides held) closes to before matching its speed. */
 const FOLLOW_STOP_GAP = 6;
 /** Pursuit look-ahead (m) at speed; a junction's turn is planned as spread over it. */
@@ -132,20 +132,20 @@ const HUNT_SIDE = 5;
 const PIT_FIGHT = 0.3;
 /** Lateral offset (m) from the rival's centre for a PIT tap: about half a car's width of overlap. */
 const PIT_OFFSET = 1;
-/** A car on our line closer than this (m, centre to centre) is in the way even at our own pace. */
-const GAP_KEEP = 9;
-/** Centre-to-centre distance (m) a passing car closes to behind the car it is going round, until clear sideways. */
-const PASS_NOSE = 7;
 /** A car with a racer this near (m) when its shortcut coin is tossed stays on the loop. */
 const MOUTH_GAP = 12;
 /** Cars this near lengthwise (m, centre to centre) still overlap each other's flanks: their lanes stay a car width apart. */
 const ABREAST = 6.5;
 /** Least closing speed (m/s) while going round a car, so the pass never stalls behind a parked one. */
 const PASS_CREEP = 2;
+/** Lateral room (m) a crossing's other arm gives past the road's edge lanes: a wreck's clearance and a hand's breadth beyond the strand's edge. */
+const CROSS_ROOM = 4.8;
 /** A driver fights only above this speed (m/s), against a rival doing at least 0.6 of it. */
 const FIGHT_PACE = 5;
-/** The following gap is kept only behind a car doing at least this (m/s): two stopped cars waited on each other for 40 s. */
-const CRAWL = 3;
+/** Seconds a racer hunted by a cop (`BUST`) pushing at under `STUCK_SPEED` waits before backing out (else its patience + 0.4): nose against something, out at once. */
+const BUST_STUCK_S = 0.3;
+/** Seconds a racer blocked behind goes forward instead of reversing toward its line (a wall behind it). */
+const REVERSE_LOCKOUT_S = 2;
 /** A driver with this much aggression or less takes only a shove that is safe (`RaceBrain.safeShove`); above it `mood` alone decides. */
 const CAREFUL = 0.5;
 /** What a safe shove adds to a careful driver's mood, a quarter of the most a driver wants a fight: aggression 0.5 shoves a safe one, under 0.375 never fights. */
@@ -160,8 +160,6 @@ const WALL_ROOM = 2.5;
 const RISK_PUSH = 0.1;
 /** ... and its stops on this much more of its brake: 0.94 of the class brake, against the leader's 0.72 (`BRAKE_SHARE`). */
 const RISK_BRAKE = 0.3;
-/** ... and closes on a racer it is going round this much faster (m/s) over the 6 m/s a leader allows. */
-const RISK_CLOSE = 8;
 /** Slots of `RaceBrain.args`: the scalars `think` hands to its per-car calls. A number passed to a call V8 does not inline is heap-boxed; a slot the caller writes and the callee reads is not. */
 const ARG_S_IDX = 0; // arc length (m) along the route being driven
 const ARG_HALF_IDX = 1; // its half width (m) here
@@ -255,6 +253,12 @@ export class RaceBrain {
   private readonly recover = new Float64Array(MAX_CARS);
   private readonly recoverSteer = new Float64Array(MAX_CARS);
   private readonly lastThrottle = new Float64Array(MAX_CARS);
+  /** Per car: seconds in a row off the gas (guarded throttle 0..`BRAKE_THROTTLE`) at a crawl; past `OFF_GAS_S` it backs out. */
+  private readonly idle = new Float64Array(MAX_CARS);
+  /** Per car, this think: 1 when under `BUST.kph` within `BUST.near` m of a police car (about to be busted). */
+  private readonly hunted = new Uint8Array(MAX_CARS);
+  /** Per car: seconds left in which it goes forward, not in reverse, to turn round (it was blocked behind). */
+  private readonly noReverse = new Float64Array(MAX_CARS);
   /** Per car skill multipliers rolled in `setDifficulty` (1 = hard; police and unset cars stay 1): corner speed, brake decel, steer gain, look-ahead, apex share. */
   private readonly push = new Float64Array(MAX_CARS);
   private readonly brakeK = new Float64Array(MAX_CARS);
@@ -314,6 +318,8 @@ export class RaceBrain {
   private readonly nearId = new Int16Array(NEAR_CARS);
   private readonly nearAhead = new Float64Array(NEAR_CARS);
   private readonly nearLat = new Float64Array(NEAR_CARS);
+  /** This call's candidate lines (m): the wanted one, the road's two edges and both flanks of every car that holds a lane. */
+  private readonly cand = new Float64Array(5 + 2 * NEAR_CARS);
   /** This step's place on the road, set by `projectRoute`: the projection and path being driven, the shortcut (−1 none), the speed along the heading, the turn limit, the surface, and whether it is on the run in to a shortcut's mouth. */
   private proj: Projection;
   private path: TrackPath;
@@ -341,6 +347,9 @@ export class RaceBrain {
   private swerve = 0;
   /** This call: a careful driver is shoving a rival, so its lane moves at no more than `SHOVE_LAT`. */
   private nudge = false;
+  /** This call: a faster car or a cop is closing on our tail, so the lane swings clear of it and the gas stays down. */
+  private evading = false;
+  private readonly planEvade = new Uint8Array(MAX_CARS);
   /** Fight (0–1) toward the rival being hunted or rammed this call, 0 when none. */
   private chase = 0;
   /** Per car id, this call: 1 for a car the contact guard leaves alone: a rival this driver is fighting, or one it cannot see (yet). */
@@ -411,6 +420,10 @@ export class RaceBrain {
     this.recover.fill(0);
     this.recoverSteer.fill(0);
     this.lastThrottle.fill(0);
+    this.idle.fill(0);
+    this.hunted.fill(0);
+    this.noReverse.fill(0);
+    this.planEvade.fill(0);
     this.meter.fill(1);
     this.burst.fill(0);
     this.clock.forgetAll();
@@ -466,7 +479,13 @@ export class RaceBrain {
     tune[GUARD_DT_IDX] = dt;
     guardContact(self, others, this.guarded, this.hitOf[i]!, tune, out, asked.steer);
     this.pedals.holdGuardBrake(i, out, dt);
-    // The guarded throttle feeds the next stuck test, and a boost it cancelled is given back to the meter.
+    // A racer about to be busted, or crawling, keeps the gas and the boost it asked for: the guard still steers it clear, but never brakes it or holds it off the gas (reversing out stays).
+    if (out.throttle >= 0 && (this.hunted[i] === 1 || hypot2(self.vx, self.vz) < CRAWL)) {
+      out.brake = 0;
+      out.throttle = Math.max(out.throttle, 1);
+      out.boost = held.boost;
+    }
+    // The guarded throttle feeds the next stuck and off-the-gas tests (before the brake floor), and a boost it cancelled is given back to the meter.
     this.lastThrottle[i] = out.throttle;
     if (out.throttle <= 0) out.boost = false;
     if (held.boost && !out.boost) {
@@ -474,6 +493,7 @@ export class RaceBrain {
       this.charge(i, false);
       this.pedals.stopBoost(i);
     }
+    if (out.brake > 0 && out.throttle >= 0 && out.throttle < BRAKE_THROTTLE) out.throttle = BRAKE_THROTTLE;
     const danger = tune[GUARD_NEED_IDX]! > 0 || tune[GUARD_PUSH_IDX] !== 0;
     if (danger && this.endangered[i] === 0) this.clock.hurry(i);
     this.endangered[i] = danger ? 1 : 0;
@@ -492,6 +512,10 @@ export class RaceBrain {
     this.routeSeg[id] = -1;
     this.lane[id] = 0;
     this.stuck[id] = 0;
+    this.idle[id] = 0;
+    this.hunted[id] = 0;
+    this.noReverse[id] = 0;
+    this.planEvade[id] = 0;
     this.recover[id] = 0;
     this.slip[id] = 0;
     this.cool[id] = 0;
@@ -514,6 +538,7 @@ export class RaceBrain {
     if (this.recover[i]! > 0) return this.backOut(i, dt);
     this.risk[i] = this.placeRisk(i, race);
     const speed = hypot2(self.vx, self.vz);
+    this.hunted[i] = this.huntedBy(self, others, speed) ? 1 : 0;
     const fresh = this.seg[i] === -1;
     this.projectMain(i, self, fresh);
     const replan = this.clock.due(i, dt);
@@ -522,7 +547,7 @@ export class RaceBrain {
     if (replan) this.replan(i, self, others, race);
     this.steer(i, self, speed, dt);
     this.pedal(i, speed, dt);
-    this.finish(i, speed, dt);
+    this.finish(i, speed, dt, race.finishTime == null);
     return out;
   }
 
@@ -603,10 +628,11 @@ export class RaceBrain {
     this.chase = 0;
     this.swerve = 0;
     this.nudge = false;
+    this.evading = false;
     const wanted = this.line(self, this.traits[i]!, others);
     if (this.crossCap < Infinity) this.follow = Math.min(Number.isNaN(this.follow) ? Infinity : this.follow, this.crossCap + 0.5);
     this.planWant[i] = this.routeNow < 0 ? wanted : 0;
-    this.planRate[i] = this.nudge ? SHOVE_LAT : LANE_RATE * (1 + this.swerve);
+    this.planRate[i] = this.nudge && !this.passing ? SHOVE_LAT : LANE_RATE * (1 + this.swerve);
     const clear = this.openRoad(i, self, others);
     this.busy[i] = clear ? 0 : 1;
     this.aimAtMouth(i, self, race);
@@ -614,6 +640,7 @@ export class RaceBrain {
     this.planChase[i] = this.chase;
     this.planFollow[i] = this.follow;
     this.planNosed[i] = this.nosed && this.nosedFree ? 1 : 0;
+    this.planEvade[i] = this.evading ? 1 : 0;
     if (i < this.racers) this.hitOf[i]!.set(this.hit);
     this.clock.planned(i);
   }
@@ -677,9 +704,10 @@ export class RaceBrain {
   private boostButton(i: number, arc: number, dt: number): boolean {
     const follow = this.planFollow[i]!;
     const burst = this.burst[i] === 1;
+    const evade = this.planEvade[i] === 1;
     const boosted = this.planBoosted[i]!;
-    const gate = Math.max(this.planChase[i]! > 0 ? BOOST_ALPHA_CHASE : BOOST_ALPHA, burst ? BOOST_ALPHA_KEEP : 0);
-    const want = Number.isNaN(follow) && this.meter[i]! > (burst ? BURST_STOP : BURST_MIN) && Math.abs(this.alpha) < gate && boosted > this.along + (burst ? BOOST_KEEP_SHORT : BOOST_SHORT);
+    const gate = Math.max(this.planChase[i]! > 0 ? BOOST_ALPHA_CHASE : BOOST_ALPHA, burst || evade ? BOOST_ALPHA_KEEP : 0);
+    const want = Number.isNaN(follow) && this.meter[i]! > (burst || evade ? BURST_STOP : BURST_MIN) && Math.abs(this.alpha) < gate && boosted > this.along + (evade ? 0 : burst ? BOOST_KEEP_SHORT : BOOST_SHORT);
     const cut = !Number.isNaN(follow) || arc < boosted || this.meter[i]! <= BURST_STOP || this.pedals.isBraking(i);
     return this.pedals.holdBoost(i, want, dt, cut);
   }
@@ -689,34 +717,53 @@ export class RaceBrain {
     const out = this.out;
     const cls = this.cls[i]!;
     const follow = this.planFollow[i]!;
+    const hunted = this.hunted[i] === 1;
+    const evade = this.planEvade[i] === 1 && Number.isNaN(follow);
     const arc = this.offRoadArc(i);
-    const boost = this.boostButton(i, arc, dt);
+    const boost = hunted ? this.pedals.holdBoost(i, this.meter[i]! > BURST_STOP && Math.abs(this.alpha) < BOOST_ALPHA_CHASE, dt, this.meter[i]! <= BURST_STOP) : this.boostButton(i, arc, dt);
     out.boost = boost;
     const target = Math.min(Number.isNaN(follow) ? (boost ? this.planBoosted[i]! : this.planTarget[i]!) : Math.min(this.planTarget[i]!, Math.max(0, follow - 0.5)), arc);
     const excess = this.along - target;
     const brake = brakeOver(this.pedals, i, excess);
-    if (Math.abs(this.alpha) > 1.9 && speed < 6) {
-      out.throttle = TURN_ROUND_THROTTLE;
+    this.noReverse[i] = Math.max(0, this.noReverse[i]! - dt);
+    if (Math.abs(this.alpha) > 1.9 && (speed < 6 || this.along < 0)) {
+      // Facing away from the line: the rear is the nearer end, so reverse with the lock toward it; blocked behind, go forward instead.
+      out.throttle = this.noReverse[i]! > 0 ? TURN_ROUND_THROTTLE : REVERSE_THROTTLE;
       out.steer = Math.sign(this.alpha) || this.traits[i]!.side;
+    } else if (hunted) {
+      out.throttle = 1;
     } else if (brake === 0) {
       // A soft surface's drag is the drive's own: a target over its terminal is simply not reached (`plan` caps the targets at it), and one under it needs no more
       // throttle than its share of the top (the push is the full engine whenever the car is under `want`).
-      out.throttle = clamp(target / (cls.topSpeed * (boost ? cls.boostTop : 1)), excess < -0.4 ? 0.35 : 0, 1);
-    } else out.brake = brake;
+      out.throttle = evade ? 1 : clamp(target / (cls.topSpeed * (boost ? cls.boostTop : 1)), excess < -0.4 ? 0.35 : 0, 1);
+    } else {
+      out.brake = brake;
+      out.throttle = BRAKE_THROTTLE;
+    }
     this.pedals.shape(i, out, dt);
   }
 
   /** The contact guard's tune for a racer, the stuck test (throttle held without motion starts a back-out: unchanged) and the boost meter. */
-  private finish(i: number, speed: number, dt: number): void {
+  private finish(i: number, speed: number, dt: number, racing: boolean): void {
     const out = this.out;
     const p = this.traits[i]!;
     if (i < this.racers) this.tuneGuard(i, dt);
-    if (this.lastThrottle[i]! > 0.35 && speed < STUCK_SPEED) this.stuck[i]! += dt;
+    const last = this.lastThrottle[i]!;
+    if (Math.abs(last) > 0.35 && speed < STUCK_SPEED) this.stuck[i]! += dt;
     else this.stuck[i] = Math.max(0, this.stuck[i]! - dt * 2);
+    // Reversing is gas: only a racer at a crawl with the gas off (or just a brake floor on) counts idle, and it resets the moment the gas is back.
+    this.idle[i] = racing && i < this.racers && last >= 0 && last <= BRAKE_THROTTLE && speed < OFF_GAS_SPEED ? this.idle[i]! + dt : 0;
     // The plan's own throttle: the guard holds a clean car short of the one on its nose, and its guarded throttle is 0.
-    const standoff = i < this.racers && this.standoff.watch(i, speed, out.throttle, this.planNosed[i] === 1, dt);
-    if (standoff || this.stuck[i]! > p.patience + 0.4) {
+    const nosed = i < this.racers && this.standoff.watch(i, speed, out.throttle, this.planNosed[i] === 1, dt);
+    const standoff = nosed || this.idle[i]! > OFF_GAS_S;
+    const jammed = this.stuck[i]! > (this.hunted[i] === 1 ? BUST_STUCK_S : p.patience + 0.4);
+    if (jammed && !standoff && last < 0) {
+      // Stuck while reversing: something is behind it, so it turns round going forward for a while.
       this.stuck[i] = 0;
+      this.noReverse[i] = REVERSE_LOCKOUT_S;
+    } else if (standoff || jammed) {
+      this.stuck[i] = 0;
+      this.idle[i] = 0;
       this.recover[i] = standoff ? STANDOFF_BACKOFF_S : 0.9 + 0.4 * p.patience;
       this.recoverSteer[i] = Math.sign(this.alpha) || p.side;
       out.throttle = REVERSE_THROTTLE;
@@ -732,6 +779,16 @@ export class RaceBrain {
     }
     this.meterWas[i] = this.meter[i]!;
     this.charge(i, out.boost);
+  }
+
+  /** A racer under `BUST.kph` within `BUST.near` m of a live police car (ids from `guarded` up): a bust is on the clock. */
+  private huntedBy(self: AiCar, others: readonly AiCar[], speed: number): boolean {
+    if (self.id >= this.racers || speed * 3.6 >= BUST.kph) return false;
+    for (let j = 0; j < others.length; j++) {
+      const o = others[j]!;
+      if (o.id >= this.guarded && o.alive && hypot2(o.x - self.x, o.z - self.z) <= BUST.near) return true;
+    }
+    return false;
   }
 
   /**
@@ -752,14 +809,30 @@ export class RaceBrain {
     g[GUARD_CONTEST_IDX] = this.contestS[i]! * this.risk[i]!;
   }
 
-  /** The lane (m) round the stopped cars ahead (`WreckPass`), and the speed the pass allows: the brake only where every lane is held. */
-  private passRound(i: number, want: number, room: number, look: number): number {
-    const cls = this.cls[i]!;
-    const lane = this.pass.choose(i, want, this.lane[i]!, room, look, cls.brake * BRAKE_SHARE, cls.topSpeed, LANE_RATE * (1 + WRECK_SWERVE));
+  /** The lane (m) round the stopped cars ahead (`WreckPass`): always on the gas, at the biggest gap when every lane is held. */
+  private passRound(i: number, want: number, room: number, look: number, s: number): number {
+    let lane = this.pass.choose(i, want, this.lane[i]!, room, look);
+    // Every lane of the strand held: at a crossing the other arm's road lies beside it, the way round.
+    if (this.pass.blockaded && this.openBeside(s, room, this.lane[i]!)) lane = this.pass.choose(i, want, this.lane[i]!, room + CROSS_ROOM, look);
     this.swerve = Math.max(this.swerve, WRECK_SWERVE);
-    if (this.pass.speedCap < cls.topSpeed) this.follow = this.pass.speedCap + 0.5;
-    this.nosedFree = !Number.isNaN(lane);
-    return Number.isNaN(lane) ? want : lane;
+    this.nosedFree = true;
+    this.evading = true;
+    return lane;
+  }
+
+  /** Whether the walls are down and road lies on both sides of the strand `PASS_LOOK_FLOOR` m on, out to `room + CROSS_ROOM`: the other arm of a crossing. A car already out there (`lane`) keeps it. */
+  private openBeside(s: number, room: number, lane: number): boolean {
+    if (Math.abs(lane) > room) return true;
+    const path = this.track.path;
+    const k = sampleAt(path, s + PASS_LOOK_FLOOR);
+    if (path.wallL[k] !== 0 || path.wallR[k] !== 0) return false;
+    const p = this.track.pointAt(s + PASS_LOOK_FLOOR, this.pt);
+    for (let side = -1; side <= 1; side += 2) {
+      const w = side * (room + CROSS_ROOM);
+      projectPath(path, p.x + p.tz * w, p.z - p.tx * w, -1, this.seeProj);
+      if (Math.abs(this.seeProj.lateral) > path.half[this.seeProj.k]! - EDGE) return false;
+    }
+    return true;
   }
 
   /** No car close on its line this call (`follow`, `swerve`, `nudge`) and none within `calm` m: skill errors and the skill line are for an open road. */
@@ -963,24 +1036,22 @@ export class RaceBrain {
     return (t - CROSS_CLEAR) / itLeaves;
   }
 
-  /** Whether a car other than `blocker` holds `lane` (m): one of this call's cars ahead, up to `HELD_BEYOND` past the blocker, within a lane width of it. */
-  private laneHeld(lane: number, blocker: number, blockerAhead: number): boolean {
+  /** How many cars other than `blocker` hold `lane` (m): this call's cars ahead, up to `HELD_BEYOND` past the blocker, within a lane width of it. With `mark` it spares the traffic cars among them from the contact guard (`hit`): the racer pushes through them (a rival is always the guard's business). */
+  private laneHeld(lane: number, blocker: number, blockerAhead: number, mark = false): number {
+    let n = 0;
     for (let k = 0; k < this.nearCount; k++) {
-      if (this.nearId[k] !== blocker && this.nearAhead[k]! < blockerAhead + HELD_BEYOND && Math.abs(this.nearLat[k]! - lane) < LINE_W + 0.4) return true;
+      if (this.nearId[k] !== blocker && this.nearAhead[k]! < blockerAhead + HELD_BEYOND && Math.abs(this.nearLat[k]! - lane) < LINE_W + 0.4) {
+        n++;
+        if (mark && this.nearId[k]! >= this.racers) this.hit[this.nearId[k]!] = 1;
+      }
     }
-    return false;
+    return n;
   }
 
   /** Both sides of a car are held: follow it (its speed, a car's length behind), and wait for a gap. */
   private followBoxedIn(i: number, blockerAlong: number, blockerAhead: number): void {
     const decel = this.cls[i]!.brake * BRAKE_SHARE;
     this.follow = blockerAlong + Math.sqrt(2 * decel * Math.max(0, blockerAhead - FOLLOW_STOP_GAP));
-  }
-
-  /** Whether moving to lane `want` takes well under the time left to a car `ahead` m on that it closes on at `closing` m/s. */
-  private clearsInTime(i: number, want: number, closing: number, ahead: number): boolean {
-    const rate = LANE_RATE * (1 + this.swerve);
-    return Math.abs(want - this.lane[i]!) / rate < (CLEAR_MARGIN * ahead) / Math.max(closing, 1);
   }
 
   /** Lateral target (m, + = left of travel) on the main loop; sets `follow` when boxed in. */
@@ -1009,10 +1080,6 @@ export class RaceBrain {
     // Traffic distances below were tuned at `PACE`; faster, they stretch with speed (the same time ahead).
     const pace = Math.max(1, along / PACE);
     let curv = 0;
-    let keep = -1;
-    let keepAhead = Infinity;
-    let keepAlong = 0;
-    let keepGap = GAP_KEEP * pace;
     for (let d = 10; d <= 34; d += 6) curv += tr.path.curv[sampleAt(tr.path, s + d)]!;
     curv /= 5;
     // The skill line (apex share, sway) holds on an open road only; `busy` is the last think's (this one's traffic scan is below).
@@ -1032,6 +1099,8 @@ export class RaceBrain {
     let preyAhead = Infinity;
     let preySide = 0;
     let preyFight = 0;
+    let chaseAhead = -Infinity;
+    let chaseLat = 0;
     for (let n = 0; n < others.length; n++) {
       const o = others[n]!;
       if (o.id === i) continue;
@@ -1055,7 +1124,7 @@ export class RaceBrain {
       const predicted = ahead > 0 ? side + this.driftBy(o, onRoute, ahead, closing) : side;
       if (ahead > 0 && ahead < NOSE_GAP && Math.abs(side) < NOSE_HALF) this.nosed = true;
       const inWay = Math.abs(predicted) < LINE_W + 0.4 || Math.abs(lat + predicted - this.lane[i]!) < LINE_W;
-      if (o.id >= this.racers && ahead > -HELD_TAIL && ahead < look && this.nearCount < NEAR_CARS) {
+      if (ahead > -HELD_TAIL && ahead < look && this.nearCount < NEAR_CARS) {
         this.nearId[this.nearCount] = o.id;
         this.nearAhead[this.nearCount] = ahead;
         this.nearLat[this.nearCount] = lat + predicted;
@@ -1064,8 +1133,8 @@ export class RaceBrain {
       const rival = o.id < this.racers;
       // A rival it contests the crossing with (`contests`) is neither passed round nor followed: the car goes for the crossing.
       const contest = rival && contests(self, o, this.risk[i]!, this.contestS[i]! * this.risk[i]!);
-      // A cop (stopped or crawling) and a dead car steer the lane choice but never slow the pass (`WreckPass` soft): they are passed at speed.
-      if (!contest && oAlong < CRAWL && driveAlong > oAlong + 0.3 && ahead < passLook) this.pass.note(ahead, lat + side, o.id >= this.guarded || !o.alive);
+      // A cop, a crawling or stopped racer and a dead car steer the lane choice but never slow the pass (`WreckPass` soft): they are passed at speed. Total speed, not `oAlong`: an oncoming or backing racer stays hard.
+      if (!contest && oAlong < CRAWL && driveAlong > oAlong + 0.3 && ahead < passLook) this.pass.note(ahead, lat + side, o.id >= this.guarded || !o.alive || (rival && hypot2(o.vx, o.vz) < CRAWL));
       if (rival) this.pass.noteRival(o.id, ahead);
       // Rivals: fight or keep clear by mood (aggression, both cars' damage); traffic is only avoided. Only at racing pace, both
       // cars rolling on: two hungry cars that met slow or stopped brawled on a wall until both were out of the race.
@@ -1080,26 +1149,19 @@ export class RaceBrain {
       const shy = clamp(-m, 0, 1) * (1 - this.risk[i]!);
       this.hit[o.id] = fight > 0 ? 1 : 0;
       if (fight > 0 && aggr <= CAREFUL) this.nudge = true;
-      if (!contest && ahead > 0.5 && ahead < look && inWay) {
-        if (driveAlong > oAlong + 0.3) {
-          if (ahead < blockerAhead) {
-            blockerFight = fight;
-            blocker = o.id;
-            blockerAhead = ahead;
-            blockerSide = predicted;
-            blockerAlong = oAlong;
-          }
-        } else if (fight <= 0 && oAlong >= CRAWL) {
-          // At our pace: a clean driver keeps a following gap, a hungrier one a shorter one (boost
-          // used to close a clean driver onto a rival's bumper and hold it there for 20 s).
-          const gap = GAP_KEEP * pace * (0.4 + 0.6 * shy);
-          if (ahead < gap && ahead < keepAhead && Math.abs(side) < LINE_W) {
-            keep = o.id;
-            keepAhead = ahead;
-            keepAlong = oAlong;
-            keepGap = gap;
-          }
-        }
+      // Whatever is ahead on our line and slower than we want to go (not only than we go now) is a blocker: the way round it is looked for, never a gap kept behind it.
+      if (!contest && ahead > 0.5 && ahead < look && inWay && ahead < blockerAhead && Math.max(driveAlong, this.planTarget[i]!) > oAlong + 0.3) {
+        blockerFight = fight;
+        blocker = o.id;
+        blockerAhead = ahead;
+        blockerSide = predicted;
+        blockerAlong = oAlong;
+      }
+      // A faster racer or a live cop behind in our lane, closing so its zone reaches us within the guard's `HORIZON`: it is the one to evade.
+      const catchUp = oAlong - along;
+      if (i < this.racers && (rival || o.id >= this.guarded) && o.alive && ahead < 0 && catchUp > 0.5 && Math.abs(side) < LINE_W && -ahead - NOSE_GAP < HORIZON * catchUp && ahead > chaseAhead) {
+        chaseAhead = ahead;
+        chaseLat = lat + side;
       }
       if (!rival) continue;
       const oLat = lat + side;
@@ -1123,6 +1185,14 @@ export class RaceBrain {
         preyFight = fight;
       }
     }
+    if (chaseAhead > -Infinity) {
+      // Gas on and the lane a car width clear of the chaser (the other side at a wall): `pedal`/`boostButton` read `evading`.
+      this.evading = true;
+      this.swerve = Math.max(this.swerve, WRECK_SWERVE);
+      const away = want >= chaseLat ? 1 : -1;
+      const to = chaseLat + away * (LINE_W + 0.9);
+      want = Math.abs(to) <= room ? to : chaseLat - away * (LINE_W + 0.9);
+    }
     if (prey >= 0) {
       // Hunting a rival ahead: onto its line to push it from behind or, with more fight, offset by `PIT_OFFSET` to the side it leans
       // to (ours by habit when dead ahead), so the nose catches its rear quarter and the car comes up door to door.
@@ -1136,27 +1206,47 @@ export class RaceBrain {
       return clamp(lat + blockerSide, -room, room);
     }
     if (blocker >= 0 && blockerAlong < 0) this.swerve = Math.max(this.swerve, 2);
-    if (this.pass.blocks(want, this.lane[i]!)) return this.passRound(i, want, room, passLook);
+    if (this.pass.blocks(want, this.lane[i]!)) return this.passRound(i, want, room, passLook, s);
     if (blocker >= 0) {
       this.passing = true;
       const oLat = lat + blockerSide;
-      const left = oLat + LINE_W + 0.9;
-      const right = oLat - LINE_W - 0.9;
-      const leftOk = left <= room && !this.laneHeld(left, blocker, blockerAhead);
-      const rightOk = right >= -room && !this.laneHeld(right, blocker, blockerAhead);
-      // Met head-on, or on a car stopped or crawling (it closes at our whole speed, or most of it): round it on the side with more road beside it. The planned lane is no guide here: it carries the yield nudge for a faster car behind.
-      const leftFirst = blockerAlong < CRAWL ? room - left >= right + room : Math.abs(left - want) <= Math.abs(right - want);
-      if (leftOk && (!rightOk || leftFirst)) want = left;
-      else if (rightOk) want = right;
-      this.nosedFree = leftOk || rightOk;
-      if (!leftOk && !rightOk) this.followBoxedIn(i, blockerAlong, blockerAhead);
-      else if (blockerAlong >= CRAWL && Math.abs(blockerSide) < LINE_W + 0.5 && (blocker < this.racers || !this.clearsInTime(i, want, along - blockerAlong, blockerAhead))) {
-        // Passing a moving car it cannot get clear of in time: close no faster than the gap allows (a pass at boost speed side-swiped the car it was going round).
-        this.follow = blockerAlong + 0.5 + clamp((blockerAhead - PASS_NOSE) * 0.8, blockerAhead > PASS_NOSE ? PASS_CREEP : -2, 6 + RISK_CLOSE * this.risk[i]!);
+      // The line is a gap, not a slot: the lane nearest the wanted one that the blocker and the cars about it leave clear. Its nearest candidates are the road's edges, the wanted line and a flank gap off each car.
+      let n = 0;
+      this.cand[n++] = want;
+      this.cand[n++] = -room;
+      this.cand[n++] = room;
+      this.cand[n++] = oLat - FLANK_GAP;
+      this.cand[n++] = oLat + FLANK_GAP;
+      for (let k = 0; k < this.nearCount; k++) {
+        if (this.nearId[k] === blocker || this.nearAhead[k]! >= blockerAhead + HELD_BEYOND) continue;
+        this.cand[n++] = this.nearLat[k]! - FLANK_GAP;
+        this.cand[n++] = this.nearLat[k]! + FLANK_GAP;
       }
-    } else if (keep >= 0) {
-      // Its speed at the gap's edge, slower inside it (`follow` is read 0.5 m/s under).
-      this.follow = keepAlong + 0.5 - 0.8 * (keepGap - keepAhead);
+      // Fewest holders first (none: free), then nearest the wanted line. A lane the blocker itself holds is no side at all.
+      let best = Number.NaN;
+      let bestHeld = Infinity;
+      let bestCost = Infinity;
+      for (let k = 0; k < n; k++) {
+        const c = clamp(this.cand[k]!, -room, room);
+        if (Math.abs(c - oLat) < LINE_W + 0.4) continue;
+        const held = this.laneHeld(c, blocker, blockerAhead);
+        // Met head-on, or on a car stopped or crawling (it closes at our whole speed, or most of it): round it on the side with more road beside it. The planned lane is no guide here: it carries the yield nudge for a faster car behind.
+        const cost = Math.abs(c - want) + (blockerAlong < CRAWL && c > oLat !== oLat <= 0 ? 100 : 0);
+        if (held < bestHeld || (held === bestHeld && cost < bestCost)) {
+          best = c;
+          bestHeld = held;
+          bestCost = cost;
+        }
+      }
+      this.nosedFree = bestHeld === 0;
+      if (Number.isNaN(best)) this.followBoxedIn(i, blockerAlong, blockerAhead);
+      else {
+        // Every side held: push through the one fewest cars hold at once, sparing its traffic from the guard. A free side: take it at the gas.
+        want = best;
+        if (bestHeld > 0) this.laneHeld(best, blocker, blockerAhead, true);
+        this.swerve = Math.max(this.swerve, WRECK_SWERVE);
+        this.evading = true;
+      }
     }
     return clamp(want, -room, room);
   }

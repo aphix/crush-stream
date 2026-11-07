@@ -74,11 +74,11 @@ describe("given a racer at 18 m/s on the oval's back straight, holding the drive
     expect(held.throttle > 0 && held.brake === 0, `the held drive is clear road: throttle ${held.throttle}, brake ${held.brake}`).toBeTruthy();
     return b.guard(me, [me, other], held);
   };
-  it("when a rival stands stopped 8 m ahead on its line, then the last car's guard still brakes for it, as the leader's does: no rear-ending at any place", () => {
+  it("when a rival stands stopped 8 m ahead on its line, then neither the leader's nor the last car's guard brakes for it, the gas stays on (owner: a stopped racer is passed, never queued behind; the plan's pass picks the lane round it)", () => {
     const stopped = onRoad(oval, 1, 48, 0);
     for (const state of [LEAD, LAST]) {
       const out = guarded(state, stopped);
-      expect(out.brake > 0.5 && out.throttle === 0, `place ${state.place}: brake ${out.brake.toFixed(2)}, throttle ${out.throttle.toFixed(2)}`).toBeTruthy();
+      expect(out.brake === 0 && out.throttle > 0, `place ${state.place}: brake ${out.brake.toFixed(2)}, throttle ${out.throttle.toFixed(2)}`).toBeTruthy();
     }
   });
 });
