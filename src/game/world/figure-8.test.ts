@@ -100,8 +100,11 @@ describe("given the figure-8 course, two tight walled loops running into a mud c
       const r = Math.hypot(x, z);
       return r < PIT_RADIUS ? PIT_DEPTH * 0.5 * (1 + Math.cos((Math.PI * r) / PIT_RADIUS)) : 0;
     };
-    const level = at(25 / Math.SQRT2, 25 / Math.SQRT2);
-    expect(level, "the start arm's centreline 25 m out, past the pit, is the course's level").toBeCloseTo(0, 6);
+    // The centreline 25 m along the lap from the crossing, past the pit's 22 m: level within the dished ground's own tolerance
+    // (its baked grid bends the parabola by 1-2.4 mm between samples).
+    const out = track.pointAt(passesThroughCrossing()[0]! + 25, blankPoint());
+    const level = at(out.x, out.z);
+    expect(Math.abs(level), "the centreline 25 m out, past the pit, is the course's level").toBeLessThan(GROUND_TOL);
     expect(level - at(0, 0), "the pit's depth at the X").toBeCloseTo(PIT_DEPTH, 2);
     const misses: string[] = [];
     for (let x = -11; x <= 11; x += 0.5) {
