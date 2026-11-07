@@ -63,8 +63,14 @@ const PROGRESS = 1.5;
 const ATTACK_OVERSPEED = 2;
 const ATTACK_BRAKE_BAND = 1;
 
-/** An aim past this angle (rad) off the nose is behind the shoulder (`pursuitSteer`, `PoliceBrain.lead`). */
-export const BEHIND = 1.5;
+/** An aim past this angle (rad) off the nose is behind the shoulder (`pursuitSteer`, `CopBrain.leadToward`). */
+const BEHIND = 1.5;
+
+/** A parked unit a knock leaves moving faster than this (m/s) wakes. */
+export const KNOCK = 2;
+/** A woken unit leads in for this many seconds, at the point its target reaches `LEAD_AHEAD` s on, its aim blended from its own heading over the first half. */
+const LEAD_IN = 2;
+export const LEAD_AHEAD = 1;
 
 /**
  * The one steering rule of every police drive (lead-in, attack, open-ground hunt): pure pursuit. Lock for the heading error
@@ -235,12 +241,13 @@ export abstract class CopBrain {
   readonly first: number;
   readonly count: number;
   protected readonly out: DriveInput = idleDrive();
-  /** Per unit: its place in the attack (`attackTarget`'s role), seconds in its state, its wedged back-off. */
+  /** Per unit: its place in the attack (`attackTarget`'s role), seconds in its state, its wedged back-off, seconds of lead-in left. */
   protected readonly role: Uint8Array;
   protected readonly since: Float64Array;
   protected readonly wedge: Backoff;
   /** Per unit: its tail swing under way and its cool-down (hunters only; the race police never call `swing`). */
   protected readonly swings: TailSwings;
+  protected readonly leadIn: Float64Array;
   /** The hands every unit's drive passes through (the pack-mate guard comes after them, so its brake is not lagged). */
   protected readonly pedals = new Pedals();
   /** Set by `drive` when the unit really drove this step (not parked, waiting for the green or knocked out): only that output goes through the hands. */
@@ -268,11 +275,27 @@ export abstract class CopBrain {
     this.since = new Float64Array(count);
     this.wedge = new Backoff(count);
     this.swings = new TailSwings(count);
+    this.leadIn = new Float64Array(count);
   }
 
   /** Unit `u`'s tail swing at `tg` (`TailSwings.step`), only at a target under `PIT_MAX` while `attacking`; true while one holds `out`. */
   protected swing(u: number, self: AiCar, tg: AiCar, attacking: boolean, dt: number, out: DriveInput): boolean {
     return this.swings.step(u, self, tg, attacking && hypot2(tg.vx, tg.vz) <= PIT_MAX, dt, out);
+  }
+
+  /** Unit `u` was parked and now pursues: it leads in first. */
+  protected startLeadIn(u: number): void {
+    this.leadIn[u] = LEAD_IN;
+  }
+
+  /** The lead-in's drive: full throttle at (px, pz), never straight at a side; an aim past the shoulder (a unit facing the oncoming target) is full lock at half throttle. */
+  protected leadToward(u: number, self: AiCar, px: number, pz: number, speed: number, out: DriveInput): void {
+    const blend = Math.min(1, (2 * (LEAD_IN - this.leadIn[u]!)) / LEAD_IN);
+    const alpha = blend * wrapPi(detAtan2(px - self.x, pz - self.z) - self.yaw);
+    const behind = Math.abs(alpha) > BEHIND;
+    out.steer = behind ? Math.sign(alpha) : pursuitSteer(alpha, hypot2(px - self.x, pz - self.z), speed, this.turnMax);
+    out.throttle = behind ? 0.5 : 1;
+    out.boost = Math.abs(alpha) < 0.35;
   }
 
   /** Unit `id`'s class figures for its own driving. */

@@ -13,7 +13,7 @@ export const spec = track.survival!;
 export const FAR = 4000;
 export const BEAT = 0.25;
 
-type RigOpts = {
+export type RigOpts = {
   humans?: number;
   at?: (k: number) => { x: number; z: number };
   hidden?: (x: number, z: number) => boolean;
@@ -75,3 +75,6 @@ export function rig({ humans = 1, at = (k) => humanSlot(spec.start, k), hidden, 
   run(0);
   return { brain, cars, hunt, down, drops, stored, asked, run, count, now: () => now };
 }
+
+/** The stub-world pack `rig` builds. */
+export type Rig = ReturnType<typeof rig>;

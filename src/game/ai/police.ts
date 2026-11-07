@@ -1,12 +1,11 @@
-import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
+import { hypot2, detSin, detCos } from "../kernel/physics-core.js";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import type { ClassStats } from "../vehicle/vehicle-classes.ts";
 import type { AiCar } from "./derby-ai.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
-import { wrapPi } from "../kernel/scalar.ts";
 import type { RaceBrain } from "./race-ai.ts";
 import { blankPoint, blankProjection, projectPath, type Track } from "../world/track.ts";
-import { ATTACK, attackTarget, BEHIND, CATCH_UP, CopBrain, HEAD_ON, PULL_OUT, pursuitSteer, RAM_TIME, WAIT_BEHIND, type HunterWorld, type PoliceWorld } from "./cop-brain.ts";
+import { ATTACK, attackTarget, CATCH_UP, CopBrain, HEAD_ON, KNOCK, LEAD_AHEAD, PULL_OUT, RAM_TIME, WAIT_BEHIND, type HunterWorld, type PoliceWorld } from "./cop-brain.ts";
 import { CORRIDOR, PARK_SPACING, RacerSight, SIGHT_MARGIN } from "./cop-sight.ts";
 
 /**
@@ -32,19 +31,9 @@ const RETRY = 1;
 const PAST_SIGHT = 10;
 const PAST_NEAR = 20;
 const AHEAD_SPAN = 60;
-/**
- * A parked unit wakes once a racer's road progress is past its spot by up to `PASSED` m (a patrol beat at top
- * speed covers ~14 m); so does a knock that leaves it moving faster than `KNOCK` m/s.
- */
+/** A parked unit wakes once a racer's road progress is past its spot by up to `PASSED` m (a patrol beat at top speed covers ~14 m). */
 const PASSED = 30;
-const KNOCK = 2;
-/**
- * A woken unit leads in for `LEAD_IN` s: full throttle at the road the target is driving, `LEAD_AHEAD` s (at least
- * `LEAD_MIN` m) ahead of the unit but never past where the target will be in `LEAD_AHEAD` s, its aim blended from
- * its own heading over the first half; then it pursues.
- */
-const LEAD_IN = 2;
-const LEAD_AHEAD = 1;
+/** A woken unit's lead-in aims at the road at least this far (m) ahead of it, but never past where the target will be in `LEAD_AHEAD` s. */
 const LEAD_MIN = 20;
 /** A unit this close (m) to its target sustains the pursuit; a pack this far off for `LOSE_TIME` s gives up. */
 const ENGAGE = 45;
@@ -99,8 +88,7 @@ export class PoliceBrain extends CopBrain {
   /** Per unit: its pack (−1 none: stored, or giving up), and the racer its pack gave up on (−1 none), which it does not take up again. */
   private readonly pack: Int16Array;
   private readonly dropped: Int16Array;
-  /** Per unit: seconds of lead-in left, and its parking spot's road arc (m). */
-  private readonly leadIn: Float64Array;
+  /** Per unit: its parking spot's road arc (m). */
   private readonly parkS: Float64Array;
   /** Per pack slot: in use, its target (−1: a stakeout still waiting), sustained, lost and pursuit seconds. */
   private readonly packLive: Uint8Array;
@@ -135,7 +123,6 @@ export class PoliceBrain extends CopBrain {
     this.line = line;
     this.pack = new Int16Array(count).fill(-1);
     this.dropped = new Int16Array(count).fill(-1);
-    this.leadIn = new Float64Array(count);
     this.parkS = new Float64Array(count);
     this.packLive = new Uint8Array(count);
     this.target = new Int16Array(count).fill(-1);
@@ -253,14 +240,7 @@ export class PoliceBrain extends CopBrain {
     const far = sTo - sS - L * Math.round((sTo - sS) / L);
     const s = sS + Math.max(LEAD_MIN, Math.min(speed * LEAD_AHEAD, far));
     const pt = this.track.pointAt(((s % L) + L) % L, this.pt);
-    const blend = Math.min(1, (2 * (LEAD_IN - this.leadIn[u]!)) / LEAD_IN);
-    const alpha = blend * wrapPi(detAtan2(pt.x - self.x, pt.z - self.z) - self.yaw);
-    const reach = hypot2(pt.x - self.x, pt.z - self.z);
-    // An aim behind its shoulder (the stakeout car facing the oncoming racers): full lock, half throttle.
-    const behind = Math.abs(alpha) > BEHIND;
-    out.steer = behind ? Math.sign(alpha) : pursuitSteer(alpha, reach, speed, this.turnMax);
-    out.throttle = behind ? 0.5 : 1;
-    out.boost = Math.abs(alpha) < 0.35;
+    this.leadToward(u, self, pt.x, pt.z, speed, out);
   }
 
   /**
@@ -496,7 +476,7 @@ export class PoliceBrain extends CopBrain {
 
   /** Parked → pursuit starts the lead-in. */
   private setState(u: number, st: UnitState): void {
-    if (st === "pursuit" && this.state[u] === "parked") this.leadIn[u] = LEAD_IN;
+    if (st === "pursuit" && this.state[u] === "parked") this.startLeadIn(u);
     this.state[u] = st;
     this.since[u] = 0;
   }

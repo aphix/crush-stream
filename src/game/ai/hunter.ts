@@ -6,7 +6,8 @@ import { Obstacles } from "./obstacles.ts";
 import type { PropCollider } from "../world/placements.ts";
 import type { SurvivalSpec } from "../world/track-schema.ts";
 import type { Track } from "../world/track.ts";
-import { ATTACK, attackTarget, CATCH_UP, CopBrain, HEAD_ON, PULL_OUT, pursuitSteer, RAM_TIME, TAIL_LANE, WAIT_BEHIND, type HunterWorld } from "./cop-brain.ts";
+import { ATTACK, attackTarget, CATCH_UP, CopBrain, HEAD_ON, LEAD_AHEAD, PULL_OUT, pursuitSteer, RAM_TIME, TAIL_LANE, WAIT_BEHIND, type HunterWorld } from "./cop-brain.ts";
+import { ambushWakes, EscapeLine, MOVING } from "./ambush.ts";
 import { BRAKE_RISE } from "./pedals.ts";
 import { arcSpeed, brakeOver } from "./race-ai.ts";
 
@@ -37,7 +38,7 @@ export const HUNT = {
   /** Metres between the candidate drop-in spots along the roads, and the room a spot keeps from every car. */
   spacing: 6,
   clear: 12,
-  /** Most `hidden` tests a drop-in beat spends (each may sight-line the camera against the course's solids). */
+  /** Most `hidden` tests a drop-in search spends (each may sight-line the camera against the course's solids); a beat that tries an ambush spot first spends up to twice that. */
   tests: 16,
   /**
    * Cops (the formation, the cap and the units built) added per human beyond the first, as a share of one human's pack: a hosted run
@@ -103,6 +104,8 @@ export function copsWanted(time: number, formation: number, humans = 1, units: n
 const STORED = 0;
 const HUNTING = 1;
 const DOWN = 2;
+/** Parked out ahead beside the player's predicted line, sirens on and braked, until `ambushWakes`. */
+const AMBUSHING = 3;
 
 /** The headings (rad) a unit tries off the straight one, in turn, to either side. */
 const TURNS = [0.3, 0.6, 0.9, 1.25, 1.6, 2.2, Math.PI] as const;
@@ -175,12 +178,12 @@ const QUEUE = 30;
  */
 export class HunterBrain extends CopBrain {
   /** This run: cops dropped in after the start, put away for being lost, knocked out, and the most hunting at once. */
-  readonly stats = { drops: 0, despawns: 0, disabled: 0, peak: 0 };
+  readonly stats = { drops: 0, despawns: 0, disabled: 0, peak: 0, ambushes: 0 };
   private readonly racers: number;
   private readonly formation: SurvivalSpec["formation"];
   private readonly obstacles: Obstacles;
   /** Driving, so a slow one may be pulling out (not waiting in storage), unless it is creeping on purpose (`settled`): that one is read at its real speed. */
-  protected readonly pullsOut = (u: number): boolean => this.state[u] !== STORED && this.settled[u] === 0;
+  protected readonly pullsOut = (u: number): boolean => this.state[u] !== STORED && this.state[u] !== AMBUSHING && this.settled[u] === 0;
   /** The pack guard reads a slow mate as pulling out only while it hunts: a knocked-out unit is the stopped obstacle it is (read as one pulling out at 8 m/s, cops never braked for a wreck and drove into it). */
   protected override readonly pulling = (u: number): boolean => this.state[u] === HUNTING && this.settled[u] === 0;
   /** The human a unit that is ramming charges at (−1: not ramming) and where it stands: its box (the units within `SETTLE` m of it, wrecks too) is not read by the guard, which would brake the charge for the cars that make the box. */
@@ -223,6 +226,12 @@ export class HunterBrain extends CopBrain {
   private nearGap = Infinity;
   private go = false;
   private nextDrop = 0;
+  /** Units lost or wrecked whose replacement has not dropped in yet: the next drop-in may be an ambusher. */
+  private owed = 0;
+  /** The player's predicted escape line (`dropSpot`), whether the last spot found is beside it, and the ambush searches made (where the next starts). */
+  private readonly line = new EscapeLine();
+  private ambushSpot = false;
+  private ambushProbes = 0;
   /** Per unit: the lane it last queued in (−1 / +1; 0 none). Scratch: the queue place `slot` found, and the last drop-in spot found. */
   private readonly queued: Int8Array;
   private lane = 0;
@@ -280,6 +289,9 @@ export class HunterBrain extends CopBrain {
     this.seekUntil.fill(-Infinity);
     this.mean = aggression(0);
     this.nextDrop = 0;
+    this.owed = 0;
+    this.ambushProbes = 0;
+    this.leadIn.fill(0);
     for (let u = 0; u < this.count; u++) this.state[u] = STORED;
     for (const [k, f] of this.formation.entries()) {
       if (k >= this.count) continue;
@@ -332,7 +344,7 @@ export class HunterBrain extends CopBrain {
     const dz = tg.z - self.z;
     const dist = hypot2(dx, dz);
     const tv = hypot2(tg.vx, tg.vz);
-    const ramming = this.pinned[target]! >= RAM_AFTER;
+    const ramming = this.leadIn[u]! <= 0 && this.pinned[target]! >= RAM_AFTER;
     // A unit leaving a ram starts the next one from a back-off: a charge flag kept from the last would hit with no run-up.
     if (!ramming) this.charging[u] = 0;
     this.settled[u] = !ramming && tv <= BLOCKABLE && dist < SETTLE ? 1 : 0;
@@ -351,7 +363,8 @@ export class HunterBrain extends CopBrain {
     const reach = (along > 0 ? Math.max(ATTACK, tv * (headOn ? RAM_TIME : PULL_OUT)) : ATTACK) * ramped(mean, REACH_FLOOR, 1);
     // Behind a target too fast to PIT the police queue; a seeker that is not yet lethal drives on into its tail, boosting, and lifts for its closing cap.
     const bump = !lethal && along < 0 && tv > BUMP_ABOVE;
-    if (ramming && seeking) this.ram(u, self, tg, speed, dist, out, mean);
+    if (this.leadIn[u]! > 0) this.lead(u, self, tg, speed, dt, out);
+    else if (ramming && seeking) this.ram(u, self, tg, speed, dist, out, mean);
     else if (!seeking && dist <= ATTACK) {
       this.slot(u, self, tg, dist, cars);
       this.shadow(self, tg, speed, tv, out);
@@ -535,6 +548,7 @@ export class HunterBrain extends CopBrain {
         this.since[u] = 0;
         world.sirens(id, false);
         this.stats.disabled++;
+        this.owed++;
         continue;
       }
       // Lost: far from every free human and nobody to see it go. The human nearest it and how far off is what `pickSeekers` ranks the units by.
@@ -545,8 +559,10 @@ export class HunterBrain extends CopBrain {
       if (this.lost[u]! > HUNT.farTime) {
         this.store(u, world);
         this.stats.despawns++;
+        this.owed++;
         continue;
       }
+      if (st === AMBUSHING) this.wakeAmbusher(u, car, cars);
       hunting++;
     }
     this.stats.peak = Math.max(this.stats.peak, hunting);
@@ -556,9 +572,14 @@ export class HunterBrain extends CopBrain {
     if (!this.go || humans === 0 || time < this.nextDrop || hunting >= copsWanted(time, this.formation.length, humans, this.count)) return;
     const u = this.vacant();
     const tg = this.dropTarget(cars);
-    if (u < 0 || !this.dropSpot(tg, cars, world)) return;
+    if (u < 0 || !this.dropSpot(tg, cars, world, this.owed > 0 && !this.state.includes(AMBUSHING))) return;
     world.park(this.first + u, this.at.x, 0, this.at.z, this.at.yaw);
     this.deploy(u, world);
+    if (this.ambushSpot) {
+      this.state[u] = AMBUSHING;
+      this.stats.ambushes++;
+    }
+    this.owed = Math.max(0, this.owed - 1);
     this.stats.drops++;
     this.nextDrop = time + HUNT.gap;
   }
@@ -676,6 +697,25 @@ export class HunterBrain extends CopBrain {
     return best;
   }
 
+  /** Ambusher `u` wakes into the hunt once its target is near or past it (`ambushWakes`), with a lead-in. */
+  private wakeAmbusher(u: number, car: AiCar, cars: readonly AiCar[]): void {
+    const t = this.rankedOn[u]!;
+    if (t < 0 || !ambushWakes(car, cars[t]!, this.since[u]!)) return;
+    this.state[u] = HUNTING;
+    this.since[u] = 0;
+    this.startLeadIn(u);
+  }
+
+  /** A woken ambusher's lead-in: flat out at where its target will be in `LEAD_AHEAD` s, bent round any solid; the bust and ramp brakes of `drive` still apply after it. */
+  private lead(u: number, self: AiCar, tg: AiCar, speed: number, dt: number, out: DriveInput): void {
+    this.leadIn[u]! -= dt;
+    const ax = tg.x + tg.vx * LEAD_AHEAD;
+    const az = tg.z + tg.vz * LEAD_AHEAD;
+    const dist = hypot2(ax - self.x, az - self.z);
+    const h = this.openHeading(u, self, detAtan2(ax - self.x, az - self.z), speed, dist);
+    this.leadToward(u, self, self.x + detSin(h) * dist, self.z + detCos(h) * dist, speed, out);
+  }
+
   /** Unit `u` is parked and starts hunting. */
   private deploy(u: number, world: HunterWorld): void {
     this.state[u] = HUNTING;
@@ -686,6 +726,7 @@ export class HunterBrain extends CopBrain {
     this.charging[u] = 0;
     this.seekUntil[u] = -Infinity;
     this.flies[u] = 0;
+    this.leadIn[u] = 0;
     this.wedge.reset(u);
     this.swings.clear(u);
     world.sirens(this.first + u, true);
@@ -699,34 +740,42 @@ export class HunterBrain extends CopBrain {
   /**
    * A road spot `dropMin … dropMax` m from `tg` (`dropMin` from every point of its path over the next `HUNT.lag` s, going straight on: the cop shows
    * that much later), clear of every car, that the camera cannot see (`world.hidden`), facing along the road toward the player: ahead of the
-   * player's travel first, anywhere round it if none is. Fills `at`.
+   * player's travel first, anywhere round it if none is. With `ambush` and a moving player, first one beside its escape line (`EscapeLine`). Fills `at`; `ambushSpot` says which it is.
    */
-  private dropSpot(tg: AiCar, cars: readonly AiCar[], world: HunterWorld): boolean {
+  private dropSpot(tg: AiCar, cars: readonly AiCar[], world: HunterWorld, ambush: boolean): boolean {
     const n = this.spotX.length;
     const fx = detSin(tg.yaw);
     const fz = detCos(tg.yaw);
     const v2 = tg.vx * tg.vx + tg.vz * tg.vz;
-    const moving = hypot2(tg.vx, tg.vz) > 5;
+    const moving = hypot2(tg.vx, tg.vz) > MOVING;
+    const aside = ambush && moving && this.line.read(tg, this.obstacles, HUNT.dropMin, HUNT.dropMax);
     let tests = 0;
-    for (let pass = moving ? 0 : 1; pass < 2; pass++) {
-      const ahead = pass === 0;
-      const from = Math.floor(this.roll() * n);
+    for (let pass = aside ? -1 : moving ? 0 : 1; pass < 2; pass++) {
+      const ahead = pass < 1;
+      if (pass === 0) tests = 0;
+      // The ambush pass starts from its own counter, not the dice: a pack that never finds a spot beside the line drops in as it did before.
+      const from = pass < 0 ? (this.ambushProbes++ * 7919) % n : Math.floor(this.roll() * n);
       for (let k = 0; k < n; k++) {
         const i = (from + k) % n;
         const dx = this.spotX[i]! - tg.x;
         const dz = this.spotZ[i]! - tg.z;
         const d = hypot2(dx, dz);
         if (d > HUNT.dropMax || (ahead && dx * fx + dz * fz < d * 0.3)) continue;
+        if (pass < 0 && !this.line.beside(tg, this.spotX[i]!, this.spotZ[i]!)) continue;
         const t = v2 > 0 ? clamp((dx * tg.vx + dz * tg.vz) / v2, 0, HUNT.lag) : 0;
         if (hypot2(dx - tg.vx * t, dz - tg.vz * t) < HUNT.dropMin) continue;
         if (this.crowded(this.spotX[i]!, this.spotZ[i]!, cars) || this.nearHuman(this.spotX[i]!, this.spotZ[i]!, tg.id, cars)) continue;
-        if (tests++ >= HUNT.tests) return false;
+        if (tests++ >= HUNT.tests) {
+          if (pass < 0) break;
+          return false;
+        }
         if (!world.hidden(this.spotX[i]!, this.spotZ[i]!)) continue;
         // Along the road, the way that points at the player.
         const sign = this.spotTx[i]! * -dx + this.spotTz[i]! * -dz >= 0 ? 1 : -1;
         this.at.x = this.spotX[i]!;
         this.at.z = this.spotZ[i]!;
         this.at.yaw = detAtan2(this.spotTx[i]! * sign, this.spotTz[i]! * sign);
+        this.ambushSpot = pass < 0;
         return true;
       }
     }
