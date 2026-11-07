@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Ground, STEP_UP } from "./ground.ts";
-import { detAtan2, hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, detCos, hypot2 } from "../kernel/physics-core.js";
 import { clamp01, wrapPi } from "../kernel/scalar.ts";
 import { SURFACE_IDS, type SurfaceId } from "./catalog.ts";
 import { parseTrack, type SurvivalSpec, type TrackJson } from "./track-schema.ts";
@@ -399,12 +399,12 @@ export function dishRise(dish: number, lat: number, half: number): number {
 }
 
 /** How far (m) `pits` sink the ground at (x, z): each its `depth` at its centre, easing to 0 at its `radius` on a cosine (slope and height both continuous). */
-export function pitSink(pits: TrackJson["environment"]["pits"], x: number, z: number): number {
+function pitSink(pits: TrackJson["environment"]["pits"], x: number, z: number): number {
   let sink = 0;
   for (let i = 0; i < pits.length; i++) {
     const p = pits[i]!;
-    const r = Math.hypot(x - p.x, z - p.z);
-    if (r < p.radius) sink += p.depth * 0.5 * (1 + Math.cos((Math.PI * r) / p.radius));
+    const r = hypot2(x - p.x, z - p.z);
+    if (r < p.radius) sink += p.depth * 0.5 * (1 + detCos((Math.PI * r) / p.radius));
   }
   return sink;
 }
