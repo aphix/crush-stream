@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PrefabId } from "./catalog.ts";
-import { PREFAB, TRACK_ID } from "./constants.ts";
+import { BIOME, PREFAB, TRACK_ID } from "./constants.ts";
 import type { Placed } from "./placements.ts";
 import { biomeLookup } from "./scenery.ts";
 import { COURSE_JSON, REACH, REACH_SLACK, dress, footprintDepth, nearOpening, type Dressed } from "./scenery.test-util.ts";
@@ -8,10 +8,17 @@ import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
 import { assetPrefab } from "./scenery-assets/pick.ts";
 import { ROAD_DECAL_ASSET, ROAD_DECAL_NAMES, type AssetKind, type SceneryAsset } from "./scenery-assets/types.ts";
 import { parseTrack } from "./track-schema.ts";
+import { blankPoint, type Track } from "./track.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 
-/** The least (m) a manhole cover's nearest neighbour is, at the median: one every 60 to 80 m along a road, closer only where two roads meet. */
-const MANHOLE_APART = 40;
+/** The least (m) a manhole cover's nearest neighbour is, at the median: one every 90 to 120 m along a road, closer only where two roads meet. */
+const MANHOLE_APART = 50;
+/** A manhole cover's least distance (m) from a road's centre line (not on the dash), from its edge (clear of the edge line, less the lateral wobble), and from another road's centre line (not at a junction). */
+const COVER_OFF_DASH = 0.6;
+const COVER_OFF_EDGE = 1.3;
+const COVER_OFF_JUNCTION = 12;
+/** The farthest (m) from another road's centre line a crosswalk lies: it is laid only beside a junction. */
+const CROSSWALK_BY_JUNCTION = 30;
 /** The most (m) a solid standee's or cross's footprint may differ from its core share of the drawn width. */
 const CORE_TOL = 1e-6;
 
@@ -115,6 +122,32 @@ function onRoad(d: Dressed): Standing[] {
 
 const idOf = (p: Standing): string => SCENERY_ASSETS[p.asset]!.id;
 
+/** Whether the course has a city: its biome at the start line, or a zone of it (the Mall's town-house corner). */
+function hasCity(d: Dressed): boolean {
+  const at = d.track.pointAt(0, blankPoint());
+  return d.track.json.scenery?.zones.some((z) => z.biome === BIOME.city) === true || biomeLookup(d.track)(at.x, at.z) === BIOME.city;
+}
+
+const coversOf = (d: Dressed): Standing[] => onRoad(d).filter((p) => idOf(p) === ROAD_DECAL_ASSET.manhole);
+
+/** How far (m) `p` is from the centre line of the road it lies on, from that road's edge, and from the nearest centre line of any other road. */
+function roadFit(track: Track, p: Placed): { lateral: number; edge: number; other: number } {
+  const paths = track.paths();
+  let own = { d: Infinity, pi: -1, i: -1 };
+  for (const [pi, path] of paths.entries()) {
+    for (let i = 0; i < path.count; i++) {
+      const d = Math.hypot(path.x[i]! - p.x, path.z[i]! - p.z);
+      if (d < own.d) own = { d, pi, i };
+    }
+  }
+  let other = Infinity;
+  for (const [pi, path] of paths.entries()) {
+    if (pi === own.pi) continue;
+    for (let i = 0; i < path.count; i++) other = Math.min(other, Math.hypot(path.x[i]! - p.x, path.z[i]! - p.z));
+  }
+  return { lateral: own.d, edge: paths[own.pi]!.half[own.i]! - own.d, other };
+}
+
 describe("given the generated scenery assets on every course", () => {
   // Weights pick among a pair's assets, so a rare asset may miss a small course set: the row holds each asset's rule, kind and a biome
   // to what some course places (circuit: oval, park: rally, city: city, desert: stunt, dirt: dam-spine), not each asset to a hit.
@@ -161,15 +194,13 @@ describe("given the generated scenery assets on every course", () => {
   });
 
   // mutation: sed -i 's/?? \[{ name: DEFAULT_ROAD_DECAL, only: BIOME.city }\]/?? ROAD_DECAL_NAMES.map((name) => ({ name, only: null }))/' src/game/world/scenery.ts
-  it("when every course is dressed with no roadDecals, then the only generated paint on a road is a manhole cover on the city's", () => {
-    let manholes = 0;
+  it("when every course is dressed with no roadDecals, then only a course with a city (its biome or a zone: the Mall's corner) has paint on its roads, and it is manhole covers", () => {
     for (const d of dressedCourses()) {
       const ids = onRoad(d).map(idOf);
       expect(ids.filter((id) => id !== ROAD_DECAL_ASSET.manhole), `${d.track.id} paint on a road`).toEqual([]);
-      if (d.track.id !== TRACK_ID.city) expect(ids, `${d.track.id} paint on a road`).toEqual([]);
-      manholes += ids.length;
+      if (hasCity(d)) expect(ids.length, `${d.track.id} manhole covers`).toBeGreaterThan(0);
+      else expect(ids, `${d.track.id} paint on a road`).toEqual([]);
     }
-    expect(manholes, "manhole covers on the city's roads").toBeGreaterThan(0);
   });
 
   // mutation: sed -i 's/const asset = SCENERY_ASSETS.findIndex((a) => a.id === ROAD_DECAL_ASSET\[name\]);/const asset = SCENERY_ASSETS.findIndex((a) => a.id === ROAD_DECAL_ASSET.manhole);/' src/game/world/scenery.ts
@@ -180,14 +211,37 @@ describe("given the generated scenery assets on every course", () => {
     expect(crosswalks.filter((id) => id !== ROAD_DECAL_ASSET.crosswalk), "other paint on a road").toEqual([]);
   });
 
-  // mutation: sed -i 's/manhole: 70/manhole: 10/' src/game/world/scenery.ts
+  // mutation: sed -i 's/manhole: 105/manhole: 10/' src/game/world/scenery.ts
   it("when the city's manhole covers are measured, then most have their nearest neighbour a cover's spacing away", () => {
-    const covers = onRoad(dress(cityJson())).filter((p) => idOf(p) === ROAD_DECAL_ASSET.manhole);
+    const covers = coversOf(dress(cityJson()));
     expect(covers.length, "covers").toBeGreaterThan(0);
     // Two roads meeting put a pair closer, so the median of the nearest-neighbour distances is the measure.
     const nearest = covers.map((a) => Math.min(...covers.filter((b) => b !== a).map((b) => Math.hypot(a.x - b.x, a.z - b.z)))).sort((x, y) => x - y);
     const median = nearest[Math.floor(nearest.length / 2)]!;
     expect(median, `the median nearest cover is ${median.toFixed(1)} m away`).toBeGreaterThanOrEqual(MANHOLE_APART);
+  });
+
+  // mutation: sed -i 's/return (stationUnit(c, salt, seg, 1, 2) < 0.5 ? 1 : -1) \* (MANHOLE_DASH_OFFSET + wobble);/return 0;/' src/game/world/scenery.ts
+  // mutation: sed -i 's/const gutter = half - MANHOLE_EDGE_CLEAR;/const gutter = half - 0.2;/' src/game/world/scenery.ts
+  // mutation: sed -i 's/      return gap >= JUNCTION_CLEAR;/      return true;/' src/game/world/scenery.ts
+  it("when the city's and the Mall's manhole covers are measured against the roads, then none is on the centre dash, near an edge line or at a junction", () => {
+    for (const json of [cityJson(), COURSE_JSON.find((j) => parseTrack(j).id === TRACK_ID.nationalMall)]) {
+      const d = dress(json);
+      for (const p of coversOf(d)) {
+        const fit = roadFit(d.track, p);
+        expect(fit.lateral, `${d.track.id} cover at (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) off the dash`).toBeGreaterThanOrEqual(COVER_OFF_DASH);
+        expect(fit.edge, `${d.track.id} cover at (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) from the edge line`).toBeGreaterThanOrEqual(COVER_OFF_EDGE);
+        expect(fit.other, `${d.track.id} cover at (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) from another road`).toBeGreaterThanOrEqual(COVER_OFF_JUNCTION);
+      }
+    }
+  });
+
+  // mutation: sed -i 's/      return gap >= CROSSWALK_GAP\[0\] && gap < CROSSWALK_GAP\[1\];/      return true;/' src/game/world/scenery.ts
+  it("when the city lists crosswalks, then each lies beside a junction", () => {
+    const d = dress(cityJson(), { roadDecals: ["crosswalk"] });
+    const crosswalks = onRoad(d).filter((p) => idOf(p) === ROAD_DECAL_ASSET.crosswalk);
+    expect(crosswalks.length, "crosswalks").toBeGreaterThan(0);
+    for (const p of crosswalks) expect(roadFit(d.track, p).other, `crosswalk at (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) from another road`).toBeLessThanOrEqual(CROSSWALK_BY_JUNCTION);
   });
 });
 

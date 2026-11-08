@@ -30,6 +30,7 @@ export type SceneryAsset = {
 };
 
 /** The road paint a course may opt into (`scenery.roadDecals`) and the asset each is: a generated decal or tile never lies on a road otherwise. */
-export const ROAD_DECAL_NAMES = ["manhole", "crosswalk", "arrow", "kerb"] as const;
+export const ROAD_DECAL = { manhole: "manhole", crosswalk: "crosswalk", arrow: "arrow", kerb: "kerb" } as const;
+export const ROAD_DECAL_NAMES = [ROAD_DECAL.manhole, ROAD_DECAL.crosswalk, ROAD_DECAL.arrow, ROAD_DECAL.kerb] as const;
 export type RoadDecalName = (typeof ROAD_DECAL_NAMES)[number];
 export const ROAD_DECAL_ASSET: Record<RoadDecalName, string> = { manhole: "ground-manhole-cover", crosswalk: "ground-crosswalk-stripes", arrow: "ground-painted-arrow", kerb: "trackside-kerb-paint" };

@@ -174,6 +174,39 @@ export function nearest(f: RoadField, x: number, z: number, out: Near): Near {
   return out;
 }
 
+/** Samples of a path either side of one that still count as the same stretch of road: a segment of the same path farther along than this (a figure-8's at-grade crossing) is another road. */
+const SAME_STRETCH = 30;
+
+/** The least wall-line gap (m) from (x, z) to a road other than sample `k` of path `pi`'s own stretch: any segment of another path, or of `pi` itself more than `SAME_STRETCH` samples away. Infinity where none lies within `FIELD_CELL`. */
+export function crossGap(f: RoadField, pi: number, k: number, x: number, z: number): number {
+  const count = f.paths[pi]!.count;
+  const closed = f.paths[pi]!.closed;
+  let gap = Infinity;
+  const ci = Math.floor(x / FIELD_CELL);
+  const cj = Math.floor(z / FIELD_CELL);
+  for (let i = ci - 1; i <= ci + 1; i++) {
+    for (let j = cj - 1; j <= cj + 1; j++) {
+      const list = f.cells.get(cellKey(i, j));
+      if (!list) continue;
+      for (let n = 0; n < list.length; n++) {
+        const s = list[n]!;
+        if (f.path[s] === pi) {
+          const apart = Math.abs(f.sample[s]! - k);
+          if ((closed ? Math.min(apart, count - apart) : apart) <= SAME_STRETCH) continue;
+        }
+        const ex = f.ex[s]!;
+        const ez = f.ez[s]!;
+        const dx = x - f.ax[s]!;
+        const dz = z - f.az[s]!;
+        const t = Math.max(0, Math.min(1, (dx * ex + dz * ez) / (f.len[s]! * f.len[s]! || 1e-12)));
+        const d = hypot2(dx - ex * t, dz - ez * t);
+        gap = Math.min(gap, d - (dx * ez - dz * ex > 0 ? f.wl[s]! : f.wr[s]!));
+      }
+    }
+  }
+  return gap;
+}
+
 /** Footprints (oriented boxes: centre, yaw's cosine and sine, half extents) in a cell grid: a candidate circle is clear when it overlaps none. */
 export class Occupancy {
   private readonly cells = new Map<number, number[]>();

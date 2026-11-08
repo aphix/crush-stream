@@ -6,8 +6,8 @@ import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
 import { LATTICE_RULES, assetPrefab, assetScale, hasAssets, pickAsset, sceneryRule, standsIn, type AssetMode, type LatticeRule } from "./scenery-assets/pick.ts";
 import type { AssetRule, SceneryAsset } from "./scenery-assets/types.ts";
 import { ASSET_LATTICE, FRONTAGE_SPACING, ISLAND_CHANCE_MAX, ISLANDS, LAMP_SPACING, PATCH_LATTICE, SLAB_WIDTH, VERGE, VERGE_CHANCE_MAX, VERGE_REACH, defaultBiome, noGenOf, pickKind, zoneAt, zonesOf, type Zone } from "./scenery-biome.ts";
-import { ROAD_DECAL_ASSET, ROAD_DECAL_NAMES, type RoadDecalName } from "./scenery-assets/types.ts";
-import { OCC_PAD, Occupancy, SEG_COVERED, blankNear, buildField, hashString, mix, nearest, unit, type Near, type RoadField } from "./scenery-field.ts";
+import { ROAD_DECAL, ROAD_DECAL_ASSET, type RoadDecalName } from "./scenery-assets/types.ts";
+import { OCC_PAD, Occupancy, SEG_COVERED, blankNear, buildField, crossGap, hashString, mix, nearest, unit, type Near, type RoadField } from "./scenery-field.ts";
 import type { Track, TrackPath } from "./track.ts";
 import { NO_FLOOR } from "./ground.ts";
 
@@ -120,11 +120,28 @@ const ROW_MAX = 4;
 const ROW_GAP = 0.8;
 const ROW_OFFSET = 1.2;
 const ROW_PROBE = 3;
-/** Road paint a course opts into (`scenery.roadDecals`): metres between stations along a road for each kind (a manhole cover every 60 to 80 m), and how far a spacing wanders either way (a share of it). */
-const ROAD_DECAL_SPACING: Record<RoadDecalName, number> = { manhole: 70, crosswalk: 150, arrow: 100, kerb: 40 };
+/**
+ * Road paint a course opts into (`scenery.roadDecals`): metres between stations along a road (a manhole cover every 90 to 120 m, a kerb stripe every 40; a crosswalk and an arrow
+ * are looked for every 3 m on the way to a junction), and how far a spacing wanders either way (a share of it).
+ */
+const ROAD_DECAL_SPACING: Record<RoadDecalName, number> = { manhole: 105, crosswalk: 3, arrow: 3, kerb: 40 };
 const ROAD_DECAL_SPAN = 1 / 7;
+/** A cover's centre lies this far (m) from the centre line (a lane boundary, between two cars' wheel tracks), or this far inside the edge line (the gutter side, on alternating sides), wavering by this much (m) in all. */
+const MANHOLE_DASH_OFFSET = 0.9;
+const MANHOLE_EDGE_CLEAR = 1.5;
+const MANHOLE_WOBBLE = 0.3;
+/** Manholes and kerb stripes keep this far (m) from another road's wall line (a junction), and a loop's start line this far (m). */
+const JUNCTION_CLEAR = 12;
+const START_LINE_CLEAR = 6;
+/** A crosswalk is laid where a road comes within these gaps (m) of another's wall line, an arrow on the way to a junction within these; each is not laid again for the next metres. */
+const CROSSWALK_GAP: readonly [number, number] = [10, 14];
+const ARROW_GAP: readonly [number, number] = [12, 25];
+const CROSSWALK_REST = 20;
+const ARROW_REST = 30;
+/** How far (m) ahead along the road an arrow looks to tell whether it is on the way to a junction. */
+const LOOK_AHEAD = 4;
 /** The one road paint a course without `roadDecals` has, and the one biome it lies in: a manhole cover on a city's roads. */
-const DEFAULT_ROAD_DECAL: RoadDecalName = ROAD_DECAL_NAMES[0];
+const DEFAULT_ROAD_DECAL: RoadDecalName = ROAD_DECAL.manhole;
 /** Car park paint: metres between slots along the slab, the chance a slot holds one, and the lanes across it (the aisle and the two rows of bays). */
 const LOT_PITCH = 7;
 const LOT_CHANCE = 0.4;
@@ -843,36 +860,76 @@ function tracksideAssets(c: Ctx): void {
   }
 }
 
-/** Lay asset `asset` on the road at sample `k` of `p`: a decal narrower than half a lane in a lane's centre, a wider one and a kerb tile as the width allows, its longer extent running with the road. */
-function paintRoad(c: Ctx, scenery: number, p: TrackPath, k: number, seg: number, salt: number, asset: number): void {
+/** The lateral offset (m, + left) at which road paint `name` lies at sample `k` of `p`, `across` m half its width; null where it does not fit. `n` counts the paint laid so far on this road. */
+function roadLateral(c: Ctx, name: RoadDecalName, p: TrackPath, k: number, seg: number, salt: number, n: number, across: number): number | null {
+  const half = p.half[k]!;
+  if (across > half) return null;
+  switch (name) {
+    case ROAD_DECAL.manhole: {
+      const wobble = (stationUnit(c, salt, seg, 1, 3) - 0.5) * MANHOLE_WOBBLE;
+      const gutter = half - MANHOLE_EDGE_CLEAR;
+      if (stationUnit(c, salt, seg, 1, 1) < 0.5 && gutter > MANHOLE_DASH_OFFSET + 2 * across) return (n % 2 === 0 ? 1 : -1) * (gutter + wobble);
+      return (stationUnit(c, salt, seg, 1, 2) < 0.5 ? 1 : -1) * (MANHOLE_DASH_OFFSET + wobble);
+    }
+    case ROAD_DECAL.arrow:
+      return -half / 2;
+    case ROAD_DECAL.kerb:
+      return (stationUnit(c, salt, seg, 1, 5) < 0.5 ? 1 : -1) * (half - across);
+    default:
+      return 0;
+  }
+}
+
+/** Lay road paint `asset` (kind `name`) at sample `k` of `p`: a round cover turned at random, the rest with their longer extent running with the road. Whether it was laid. */
+function paintRoad(c: Ctx, name: RoadDecalName, p: TrackPath, k: number, seg: number, salt: number, n: number, asset: number): boolean {
   const a = SCENERY_ASSETS[asset]!;
   const scale = sizeOf(stationUnit(c, salt, seg, 1, 4));
   const [sx, , sz] = assetScale(a, scale);
   const xAlong = sx >= sz;
-  const across = (xAlong ? sz : sx) / 2;
-  const half = p.half[k]!;
-  if (across > half) return;
-  const side = stationUnit(c, salt, seg, 1, 5) < 0.5 ? 1 : -1;
-  const lat = a.kind === "tile" ? side * (half - across) : across * 2 <= half / 2 ? (side * half) / 2 : 0;
-  const yaw = alongYaw(xAlong, p.tx[k]!, p.tz[k]!) + (stationUnit(c, salt, seg, 1, 7) < 0.5 ? 0 : Math.PI);
-  paint(c, scenery, asset, p.x[k]! + p.tz[k]! * lat, p.z[k]! - p.tx[k]! * lat, yaw, scale);
+  const lat = roadLateral(c, name, p, k, seg, salt, n, (xAlong ? sz : sx) / 2);
+  if (lat === null) return false;
+  const yaw = name === ROAD_DECAL.manhole ? 2 * Math.PI * stationUnit(c, salt, seg, 1, 6) : alongYaw(xAlong, p.tx[k]!, p.tz[k]!);
+  return paint(c, sceneryRule(a.rule), asset, p.x[k]! + p.tz[k]! * lat, p.z[k]! - p.tx[k]! * lat, yaw, scale);
 }
 
-/** Rules 1, 5 and 3 for assets: the road paint the course opts into (`roadDecals`) on every road's surface (not under a bridge or roof), each kind at its own spacing; nothing else generated lies on a road. */
+/** Whether road paint `name` is wanted where the nearest other road is `gap` m off (`ahead`: the same a few metres on) at sample `k` of path `pi`. */
+function roadWants(name: RoadDecalName, gap: number, ahead: number, pi: number, p: TrackPath, k: number): boolean {
+  const along = (k * p.length) / p.count;
+  if (pi === 0 && (along < START_LINE_CLEAR || (p.closed && p.length - along < START_LINE_CLEAR))) return false;
+  switch (name) {
+    case ROAD_DECAL.crosswalk:
+      return gap >= CROSSWALK_GAP[0] && gap < CROSSWALK_GAP[1];
+    case ROAD_DECAL.arrow:
+      return gap >= ARROW_GAP[0] && gap <= ARROW_GAP[1] && ahead < gap;
+    default:
+      return gap >= JUNCTION_CLEAR;
+  }
+}
+
+/**
+ * Rules 1, 5 and 3 for assets: the road paint the course opts into (`roadDecals`) on every road's surface (not under a bridge or roof), each kind at its own spacing; nothing else
+ * generated lies on a road. None lies at a junction (a manhole and a kerb stripe keep `JUNCTION_CLEAR` from another road) or on a loop's start line; a crosswalk is laid only beside one and
+ * an arrow only on the way to one.
+ */
 function roadAssets(c: Ctx): void {
   for (const { name, only } of c.roadDecals) {
     const asset = SCENERY_ASSETS.findIndex((a) => a.id === ROAD_DECAL_ASSET[name]);
     if (asset < 0) continue;
     const a = SCENERY_ASSETS[asset]!;
     const spacing = ROAD_DECAL_SPACING[name];
+    const rest = name === ROAD_DECAL.crosswalk ? CROSSWALK_REST : name === ROAD_DECAL.arrow ? ARROW_REST : 0;
     const salt = mix(saltOf(c, "road", a.rule), asset);
     for (let pi = 0; pi < c.field.paths.length; pi++) {
       const p = c.field.paths[pi]!;
+      let laid = 0;
       march(c, pi, stationUnit(c, salt, c.field.base[pi]!, 1, 0) * spacing, (seg, k) => {
         const biome = biomeAt(c, p.x[k]!, p.z[k]!, seg);
         if (!standsIn(a, biome) || (only !== null && biome !== only)) return RETRY_STEP;
-        paintRoad(c, sceneryRule(a.rule), p, k, seg, salt, asset);
-        return spacing * (1 + (stationUnit(c, salt, seg, 1, 8) - 0.5) * 2 * ROAD_DECAL_SPAN);
+        const gap = crossGap(c.field, pi, k, p.x[k]!, p.z[k]!);
+        const ahead = name === ROAD_DECAL.arrow ? crossGap(c.field, pi, k, p.x[k]! + p.tx[k]! * LOOK_AHEAD, p.z[k]! + p.tz[k]! * LOOK_AHEAD) : gap;
+        if (!roadWants(name, gap, ahead, pi, p, k)) return rest > 0 ? spacing : RETRY_STEP;
+        if (paintRoad(c, name, p, k, seg, salt, laid, asset)) laid++;
+        return rest > 0 ? rest : spacing * (1 + (stationUnit(c, salt, seg, 1, 8) - 0.5) * 2 * ROAD_DECAL_SPAN);
       });
     }
   }
