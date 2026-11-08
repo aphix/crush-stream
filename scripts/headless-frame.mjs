@@ -46,6 +46,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { makeCanvasElement } from "./headless-canvas.mjs";
 import { loadHeadlessGl, NO_CONTEXT } from "./headless-gl.mjs";
 
 /** Any fixed seed: the same derby field in both trees of a diff. */
@@ -197,8 +198,7 @@ if (values.uploads) q.set("debug", "uploads");
 location.search = `?${q}`;
 if (values.hash !== undefined) location.hash = `#${values.hash.replace(/^#/, "")}`;
 const stubElement = document.createElement;
-// `data: undefined`: Skia's canvas has a `data()` method, so headless GL takes the canvas for an ImageData and uploads zeros (black).
-document.createElement = (tag) => (tag === "canvas" ? Object.assign(createCanvas(1, 1), { data: undefined, style: {}, addEventListener() {}, removeEventListener() {}, setAttribute() {} }) : stubElement(tag));
+document.createElement = (tag) => (tag === "canvas" ? makeCanvasElement(createCanvas) : stubElement(tag));
 Object.assign(globalThis, {
   innerWidth: CSS_W,
   innerHeight: CSS_H,
