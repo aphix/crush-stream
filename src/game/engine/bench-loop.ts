@@ -23,7 +23,7 @@ interface BenchStep {
  */
 export const BIGGEST_COURSE = TRACK_ID.damSpine;
 
-/** The most complex course to draw (the National Mall: 2753 props, about 500k triangles a frame), the cycle's last step. */
+/** The most complex course to draw (the National Mall: 4089 props with the scenery service, about 500k triangles a frame before it), the cycle's last step. */
 const MOST_PROPS_COURSE = TRACK_ID.nationalMall;
 
 const benchQuery = (kind: string): string => `${BENCH_QUERY}=${kind}`;
