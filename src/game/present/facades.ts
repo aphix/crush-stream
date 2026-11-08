@@ -149,23 +149,28 @@ function texturesOf(style: FacadeStyle): StyleTextures {
   return found;
 }
 
-const ROOF_ALBEDO: THREE.IUniform<THREE.Texture> = { value: new THREE.Texture() };
-const ROOF_NORMAL: THREE.IUniform<THREE.Texture> = { value: new THREE.Texture() };
+type RoofTextures = { albedo: THREE.IUniform<THREE.Texture>; normal: THREE.IUniform<THREE.Texture> };
 
-/** The roof strips are fetched once per page by the first facade material (a plain brown until the colours arrive, and in node); the normals follow the relief tier. */
-const requestRoofs = once((): void => {
-  ROOF_ALBEDO.value = standIn().roof;
+/**
+ * The roof strips' two uniforms, made once per page by the first facade material (a plain brown and a flat normal until the colours arrive, and in node), and the colour strip
+ * fetched then. `once` must return the value: it memoizes by it, and a `void` function would run again with every material (a fresh fetch and relief subscriber each course).
+ */
+const roofTextures = once((): RoofTextures => {
+  const albedo: THREE.IUniform<THREE.Texture> = { value: standIn().roof };
+  const normal: THREE.IUniform<THREE.Texture> = { value: standIn().normal };
   followRelief({ url: `${ROOF_URL}normal.webp`, repeat: 1, layers: ROOF_LAYERS }, (map) => {
-    ROOF_NORMAL.value = map;
+    normal.value = map;
   });
-  if (typeof createImageBitmap !== "function") return;
-  void (async () => {
-    try {
-      ROOF_ALBEDO.value = await loadLayers({ url: `${ROOF_URL}albedo.webp`, layers: ROOF_LAYERS, colorSpace: THREE.SRGBColorSpace, anisotropy: 4, halve: !reliefPossible() });
-    } catch (err) {
-      console.error("Crush Stream's roof colour map did not load", err);
-    }
-  })();
+  if (typeof createImageBitmap === "function") {
+    void (async () => {
+      try {
+        albedo.value = await loadLayers({ url: `${ROOF_URL}albedo.webp`, layers: ROOF_LAYERS, colorSpace: THREE.SRGBColorSpace, anisotropy: 4, halve: !reliefPossible() });
+      } catch (err) {
+        console.error("Crush Stream's roof colour map did not load", err);
+      }
+    })();
+  }
+  return { albedo, normal };
 });
 
 /**
@@ -235,14 +240,14 @@ function roofEdges(style: FacadeStyle): number[] {
 }
 
 /** The facade shader on `shader` (after the class tag's own patch, whose includes stay): layered colour, normal and glow, the roof covering, the lift. */
-function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: StyleTextures, edges: number[]): void {
+function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: StyleTextures, roofs: RoofTextures, edges: number[]): void {
   shader.uniforms.facadeGlow = FACADE_GLOW;
   shader.uniforms.facadeRoofMix = { value: edges };
   shader.uniforms.facadeAlbedo = own.albedo;
   shader.uniforms.facadeNormalMap = own.normal;
   shader.uniforms.facadeGlowMap = own.glow;
-  shader.uniforms.facadeRoofAlbedo = ROOF_ALBEDO;
-  shader.uniforms.facadeRoofNormal = ROOF_NORMAL;
+  shader.uniforms.facadeRoofAlbedo = roofs.albedo;
+  shader.uniforms.facadeRoofNormal = roofs.normal;
   shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>${FACADE_VERTEX}`).replace("#include <begin_vertex>", `#include <begin_vertex>${FACADE_SEED}`);
   shader.fragmentShader = shader.fragmentShader
     .replace("#include <common>", `#include <common>${FACADE_FRAGMENT}`)
@@ -256,7 +261,7 @@ function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: Styl
 /** One material of `style`: its layered maps (stand-ins until they load), the windows' glow, the roofs, tagged as concrete. */
 function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
   const own = texturesOf(style);
-  requestRoofs();
+  const roofs = roofTextures();
   const { roughness, metalness } = FACADE[style];
   const blank = placeholder();
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness, emissive: WINDOW_LIGHT, emissiveIntensity: WINDOW_LIGHT_INTENSITY, map: blank, normalMap: reliefPossible() ? blank : null, emissiveMap: blank });
@@ -266,7 +271,7 @@ function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
   const edges = roofEdges(style);
   material.onBeforeCompile = (shader, renderer) => {
     tagHook.call(material, shader, renderer);
-    patchFacade(shader, own, edges);
+    patchFacade(shader, own, roofs, edges);
   };
   material.customProgramCacheKey = () => `${tagKey.call(material)}|facade`;
   const stop = followRelief({ url: facadeMapUrl(style, "normal"), repeat: 1, layers: FACADE_LAYERS[style].layers }, (map, scale) => {

@@ -126,6 +126,12 @@ describe("given the City's art built and the relief tier switched", () => {
     for (const material of versions(art).keys()) expect(material.normalScale.x, "strength").toBe(0);
   });
 
+  it("when the City's art has read several styles, then the roof strips were requested once, not once a facade material", async () => {
+    await settle();
+    expect(versions(art).size, "materials drawing a normal map").toBeGreaterThan(3);
+    expect(requested.filter((url) => url.endsWith("roofs-albedo.webp")).length, "roof colour fetches").toBe(1);
+  });
+
   it("when the relief comes on, then the surfaces and styles the City draws load their maps, bound at full strength, within the City's budget", async () => {
     const flatBytes = bytesOf(normalMaps(art));
     const before = versions(art);
