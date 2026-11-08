@@ -5,6 +5,7 @@ import { placeProps, propColliders, type Placed } from "./placements.ts";
 import { Track, blankProjection, projectPath, type TrackPath } from "./track.ts";
 import oval from "./tracks/oval.json" with { type: "json" };
 import stunt from "./tracks/stunt.json" with { type: "json" };
+import { TRACKS } from "./tracks/index.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
@@ -146,6 +147,40 @@ describe("given the oval with billboards along both sides", () => {
       const toRoad = ((p.cx - b.x) * fx + (p.cz - b.z) * fz) / Math.hypot(p.cx - b.x, p.cz - b.z);
       expect(toRoad, `billboard at (${b.x.toFixed(1)}, ${b.z.toFixed(1)}) faces ${toRoad.toFixed(2)} away`).toBeGreaterThan(0.99);
     }
+  });
+});
+
+/** A stand's front (local +X) turns to within this many degrees of the nearest road's centreline point, and its front edge keeps this many metres from the nearest wall line. */
+const STAND_ANGLE = 30;
+const STAND_GAP = 8;
+/** Courses whose stands break a bound today, by track id, with the bound they are held to instead (just inside what they measure, so a worse stand still fails). */
+const KNOWN_AWAY: Record<string, { angle?: number; gap?: number; why: string }> = {
+  "four-count": { angle: 91, why: "the stand at (-30, 155) has yaw 0: it faces parallel to the road, 90.0° off the nearest centreline point 75 m away" },
+  "national-mall": { gap: 3, why: "its along rows of stands stand at offset 7 m: the front edge is 3.5 m from the wall line" },
+};
+
+describe("given every course's grandstands", () => {
+  // mutation: sed -i 's/"yaw": 3.927/"yaw": 0.785/' src/game/world/tracks/stunt.json (the stunt hand stand at (-18, -72) turns its back on the road: 177° off)
+  it("when the stands are placed, then each front (+X) points within 30° of the nearest centreline and its front edge stands 8 m clear of the nearest wall line, bar the KNOWN_AWAY courses", () => {
+    let courses = 0;
+    for (const json of TRACKS) {
+      const t = new Track(json);
+      const stands = placeProps(t).filter((s) => s.prefab === "grandstand");
+      if (stands.length > 0) courses++;
+      const lim = { angle: STAND_ANGLE, gap: STAND_GAP, ...KNOWN_AWAY[t.id] };
+      for (const s of stands) {
+        const fx = Math.cos(s.yaw);
+        const fz = -Math.sin(s.yaw);
+        const near = t.paths().map((c) => projectPath(c, s.x, s.z, -1, blankProjection())).reduce((a, b) => (b.dist2 < a.dist2 ? b : a));
+        const toRoad = ((near.cx - s.x) * fx + (near.cz - s.z) * fz) / Math.hypot(near.cx - s.x, near.cz - s.z);
+        const at = `${t.id} stand at (${s.x.toFixed(1)}, ${s.z.toFixed(1)})`;
+        expect(toRoad, `${at} faces ${((Math.acos(Math.min(1, toRoad)) * 180) / Math.PI).toFixed(0)}° off the road, over ${lim.angle}°`).toBeGreaterThanOrEqual(Math.cos((lim.angle * Math.PI) / 180));
+        const reach = (PREFABS.grandstand.size[0] * s.sx) / 2;
+        const front = Math.min(...t.paths().map((c) => gap(c, s.x + reach * fx, s.z + reach * fz)));
+        expect(front, `${at} has its front edge ${front.toFixed(1)} m from the nearest wall line`).toBeGreaterThanOrEqual(lim.gap);
+      }
+    }
+    expect(courses, "the courses that have grandstands").toBeGreaterThanOrEqual(6);
   });
 });
 
