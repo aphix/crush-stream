@@ -8,6 +8,7 @@ import { MAT } from "../kernel/material-ids.ts";
 import { PREFABS, type PrefabId } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
+import { disposeFacadeMaterials } from "./facades.ts";
 import { makePrefabMaterials, raceTextures } from "./prefabs.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { PropTumble } from "./prop-tumble.ts";
@@ -261,7 +262,8 @@ export class ShowcaseArt {
       }
     });
     const { facades, ...single } = this.galleryMaterials;
-    for (const material of [...Object.values(single), ...Object.values(facades)]) material.dispose();
+    for (const material of Object.values(single)) material.dispose();
+    disposeFacadeMaterials(facades);
     for (const light of this.postLights) light.dispose();
   }
 }

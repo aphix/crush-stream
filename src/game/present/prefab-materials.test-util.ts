@@ -1,7 +1,9 @@
 import type * as THREE from "three";
+import { FACADE, type FacadeStyle } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 
 /** Every shared prefab material as `material`: for a test that reads the shapes, not the look. */
 export function plainMaterials(material: THREE.Material): PrefabMaterials {
-  return { plain: material, concrete: material, facades: { prague: material, dc: material, stucco: material, glass: material, adobe: material }, billboard: material, water: material };
+  const facades = Object.fromEntries(Object.keys(FACADE).map((style) => [style, material])) as Record<FacadeStyle, THREE.Material>;
+  return { plain: material, concrete: material, facades, billboard: material, water: material };
 }

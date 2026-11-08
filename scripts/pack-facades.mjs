@@ -32,7 +32,10 @@ const WINDOW_OPEN_RADIUS = 2;
 
 /**
  * crop [x, y, w, h] in the source (x is the bay's left pilaster centre, w one period), size [w, h] of the tile, and `glass`, the window
- * predicate over (r, g, b) in 0..255 and lightness 0..1; `top`, the share of the tile under its roofline that holds no glass (cornice, balustrade, log ends); `neutral`, how far the albedo is washed to cream so the per-instance pastel tints colour it.
+ * predicate over (r, g, b) in 0..255 and lightness 0..1 (or `rects`, window boxes in crop pixels where the colour cannot tell them);
+ * `top`, the share of the tile under its roofline that holds no glass (cornice, balustrade, log ends); `bands`, [from, to] shares of the tile
+ * height from its top that hold no glass either (fascias, railings, roller doors); `neutral`, how far the albedo is washed to cream so the
+ * per-instance pastel tints colour it; `background`, [share, r, g, b]: near-white sky above that share of the tile is painted that colour.
  */
 const STYLES = {
   prague: { crop: [295, 0, 259, 1264], size: [256, 1024], top: 0.07, glass: (r, g, b, l) => l < 0.3 },
@@ -40,6 +43,13 @@ const STYLES = {
   stucco: { crop: [300, 44, 262, 1194], size: [256, 1024], top: 0.07, neutral: 0.8, glass: (r, g, b, l) => l < 0.5 },
   glass: { crop: [277, 0, 293, 1264], size: [256, 1024], top: 0.08, glass: (r, g, b, l) => l < 0.4 && b > r + 8 },
   adobe: { crop: [283, 668, 282, 596], size: [256, 512], top: 0.12, glass: (r, g, b, l) => l < 0.42 },
+  shops: { crop: [283, 0, 283, 1264], size: [256, 1024], top: 0.04, bands: [[0.74, 0.81]], glass: (r, g, b, l) => l < 0.32 && b >= r - 6 },
+  baroque: { crop: [290, 0, 270, 1264], size: [256, 1024], top: 0.1, background: [0.25, 214, 206, 192], glass: (r, g, b, l) => l < 0.34 && b >= r - 6 },
+  havana: { crop: [282, 0, 280, 1264], size: [256, 1024], top: 0.08, bands: [[0.255, 0.31], [0.5, 0.552], [0.742, 0.795]], glass: (r, g, b, l) => l < 0.4 },
+  federal: { crop: [300, 0, 246, 1264], size: [256, 1024], top: 0.27, glass: (r, g, b, l) => l < 0.3 },
+  warehouse: { crop: [280, 0, 287, 1264], size: [256, 1024], top: 0.04, rects: [[82, 95, 207, 290], [82, 385, 207, 575], [82, 675, 207, 865]] },
+  farm: { crop: [282, 0, 283, 1264], size: [256, 1024], top: 0.05, rects: [[43, 163, 113, 253], [171, 163, 241, 253], [43, 432, 113, 533], [171, 432, 241, 533], [98, 757, 188, 923]] },
+  rowhouse: { crop: [283, 0, 283, 1264], size: [256, 1024], top: 0.04, neutral: 0.5, glass: (r, g, b, l) => l < 0.3 && b > r + 8 },
 };
 
 function readPixels(canvas) {
@@ -89,6 +99,10 @@ async function tile(name, spec) {
       const other = at(x < w / 2 ? x + margin + w : x + margin - w);
       for (let c = 0; c < 3; c++) rgb[(y * w + x) * 3 + c] = src[here + c] * (1 - mix) + src[other + c] * mix;
     }
+  }
+  if (spec.background) {
+    const [share, ...fill] = spec.background;
+    for (let i = 0; i < Math.floor(share * h) * w; i++) if (Math.min(rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]) >= 238) for (let c = 0; c < 3; c++) rgb[i * 3 + c] = fill[c];
   }
   return rgb;
 }
@@ -205,7 +219,14 @@ for (const [name, spec] of Object.entries(STYLES)) {
   const rgb = await tile(name, spec);
   const light = Float32Array.from({ length: w * h }, (_, i) => lightness(rgb, i));
 
-  const raw = Uint8Array.from({ length: w * h }, (_, i) => (i >= spec.top * h * w && spec.glass(rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2], light[i]) ? 1 : 0));
+  const inRect = (i) => {
+    const x = (i % w) / (w / spec.crop[2]);
+    const y = Math.floor(i / w) / (h / spec.crop[3]);
+    return spec.rects.some(([x0, y0, x1, y1]) => x >= x0 && x < x1 && y >= y0 && y < y1);
+  };
+  const glassAt = (i) => (spec.rects ? inRect(i) : spec.glass(rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2], light[i]));
+  const inBand = (i) => (spec.bands ?? []).some(([from, to]) => i >= from * h * w && i < to * h * w);
+  const raw = Uint8Array.from({ length: w * h }, (_, i) => (i >= spec.top * h * w && !inBand(i) && glassAt(i) ? 1 : 0));
   const mask = morph(morph(raw, w, h, WINDOW_OPEN_RADIUS, false), w, h, WINDOW_OPEN_RADIUS, true);
   const ids = label(mask, w, h);
 

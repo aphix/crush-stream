@@ -33,11 +33,18 @@ type StyleSpec = {
 };
 
 export const FACADE = {
-  prague: { bays: 4, plain: [0.941, 0.753], roughness: 0.8, metalness: 0.05, tints: [0xffffff, 0xf6ecd8, 0xe9eef4, 0xf4e0d2, 0xecebdc], mix: { city: 4, park: 2, desert: 0, dirt: 0, circuit: 0, none: 4 }, home: null },
-  dc: { bays: 4, plain: [0.27, 0.12], roughness: 0.85, metalness: 0.03, tints: [0xffffff, 0xf0d8c8, 0xd8c0b0, 0xffe6d0, 0xc9b8aa], mix: { city: 3, park: 3, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: PREFAB.building },
-  stucco: { bays: 4, plain: [0.176, 0.46], roughness: 0.9, metalness: 0.03, tints: PASTELS, mix: { city: 1, park: 1, desert: 2, dirt: 2, circuit: 1, none: 1 }, home: PREFAB.stucco },
-  glass: { bays: 4, plain: [0.566, 0.948], roughness: 0.4, metalness: 0.2, tints: [0xffffff, 0xcfe4f0, 0xe0e8e0, 0xbcd4e4, 0xf0f0f4], mix: { city: 3, park: 0, desert: 0, dirt: 0, circuit: 3, none: 3 }, home: null },
-  adobe: { bays: 2, plain: [0.441, 0.803], roughness: 0.95, metalness: 0.02, tints: [0xffffff, 0xf0dcc0, 0xe0c8a8, 0xffe4cc, 0xd8c0a0], mix: { city: 0, park: 0, desert: 5, dirt: 1, circuit: 0, none: 0 }, home: null },
+  prague: { bays: 4, plain: [0.941, 0.753], roughness: 0.8, metalness: 0.05, tints: [0xffffff, 0xf6ecd8, 0xe9eef4, 0xf4e0d2, 0xecebdc], mix: { city: 3, park: 0, desert: 0, dirt: 0, circuit: 0, none: 1 }, home: null },
+  dc: { bays: 4, plain: [0.27, 0.12], roughness: 0.85, metalness: 0.03, tints: [0xffffff, 0xf0d8c8, 0xd8c0b0, 0xffe6d0, 0xc9b8aa], mix: { city: 2, park: 2, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: PREFAB.building },
+  stucco: { bays: 4, plain: [0.176, 0.46], roughness: 0.9, metalness: 0.03, tints: PASTELS, mix: { city: 0, park: 0, desert: 2, dirt: 1, circuit: 0, none: 0 }, home: PREFAB.stucco },
+  glass: { bays: 4, plain: [0.566, 0.948], roughness: 0.4, metalness: 0.2, tints: [0xffffff, 0xcfe4f0, 0xe0e8e0, 0xbcd4e4, 0xf0f0f4], mix: { city: 3, park: 0, desert: 0, dirt: 0, circuit: 3, none: 0 }, home: null },
+  adobe: { bays: 2, plain: [0.441, 0.803], roughness: 0.95, metalness: 0.02, tints: [0xffffff, 0xf0dcc0, 0xe0c8a8, 0xffe4cc, 0xd8c0a0], mix: { city: 0, park: 0, desert: 5, dirt: 0, circuit: 0, none: 0 }, home: null },
+  shops: { bays: 4, plain: [0.207, 0.222], roughness: 0.8, metalness: 0.05, tints: PASTELS, mix: { city: 3, park: 1, desert: 0, dirt: 0, circuit: 1, none: 1 }, home: null },
+  baroque: { bays: 4, plain: [0.051, 0.987], roughness: 0.85, metalness: 0.03, tints: [0xffffff, 0xf6ecd8, 0xf4e0d2, 0xe9eef4, 0xecebdc], mix: { city: 2, park: 0, desert: 0, dirt: 0, circuit: 0, none: 0 }, home: null },
+  havana: { bays: 4, plain: [0.879, 0.761], roughness: 0.9, metalness: 0.03, tints: [0xffffff, 0xeaf5f0, 0xd8efe8, 0xf0d0d8, 0xd0e0f0], mix: { city: 1, park: 0, desert: 1, dirt: 0, circuit: 0, none: 0 }, home: null },
+  federal: { bays: 4, plain: [0.441, 0.741], roughness: 0.85, metalness: 0.04, tints: [0xffffff, 0xf4efe4, 0xe8e8ec, 0xf0e8d8, 0xe0e4e4], mix: { city: 0, park: 0, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: null },
+  warehouse: { bays: 4, plain: [0.77, 0.05], roughness: 0.9, metalness: 0.1, tints: [0xffffff, 0xe8d8d0, 0xd8c8c0, 0xf0e0d0, 0xc8c0b8], mix: { city: 0, park: 0, desert: 0, dirt: 4, circuit: 2, none: 0 }, home: null },
+  farm: { bays: 4, plain: [0.191, 0.05], roughness: 0.92, metalness: 0.02, tints: [0xffffff, 0xf0d8d0, 0xe0c0a8, 0xd0b8a0, 0xb8c0c8], mix: { city: 0, park: 3, desert: 0, dirt: 2, circuit: 0, none: 0 }, home: null },
+  rowhouse: { bays: 4, plain: [0.332, 0.726], roughness: 0.8, metalness: 0.03, tints: PASTELS, mix: { city: 3, park: 1, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: null },
 } as const satisfies Record<string, StyleSpec>;
 
 export type FacadeStyle = keyof typeof FACADE;
@@ -90,6 +97,7 @@ const standIn = once((): Maps => ({ albedo: dataTexture(205, 200, 190, THREE.SRG
 
 const loaded: Partial<Record<FacadeStyle, Maps>> = {};
 const live = new Set<THREE.MeshStandardMaterial>();
+const requested = new Set<FacadeStyle>();
 const MAPS_URL = `${import.meta.env?.BASE_URL ?? "/"}facades/`;
 
 /** Where style `style`'s `kind` map is served from. */
@@ -126,11 +134,12 @@ async function loadStyle(style: FacadeStyle): Promise<void> {
   }
 }
 
-/** The page's one fetch of every style's maps, started by the first materials; where there is no bitmap decoder (node) the stand-ins stay. */
-const loadFacades = once((): void => {
-  if (typeof createImageBitmap !== "function") return;
-  for (const style of FACADE_STYLES) void loadStyle(style);
-});
+/** A style's maps are fetched once per page, when the first material of the style is made (a course fetches the styles it draws); where there is no bitmap decoder (node) the stand-ins stay. */
+function requestStyle(style: FacadeStyle): void {
+  if (requested.has(style) || typeof createImageBitmap !== "function") return;
+  requested.add(style);
+  void loadStyle(style);
+}
 
 /** The glow map's R is the window, its G the window's turn-on threshold: a window lights once `FACADE_GLOW` passes its threshold, shifted by a seed per building face. */
 const WINDOW_VERTEX = /* glsl */ `
@@ -151,24 +160,46 @@ float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${LIT_SH
 totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn;
 #endif`;
 
-/** One material per style: its maps (stand-ins until they load), the windows' glow, tagged as concrete. */
+/** One material of `style`: its maps (stand-ins until they load), the windows' glow, tagged as concrete. */
+function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
+  requestStyle(style);
+  const { roughness, metalness } = FACADE[style];
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness, emissive: WINDOW_LIGHT, emissiveIntensity: WINDOW_LIGHT_INTENSITY });
+  material.userData.facadeStyle = style;
+  show(material, loaded[style] ?? standIn());
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.facadeGlow = FACADE_GLOW;
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>${WINDOW_VERTEX}`).replace("#include <begin_vertex>", `#include <begin_vertex>${WINDOW_SEED}`);
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>${WINDOW_FRAGMENT}`).replace("#include <emissivemap_fragment>", WINDOW_EMISSIVE);
+  };
+  material.customProgramCacheKey = () => "facade";
+  live.add(material);
+  material.addEventListener("dispose", () => live.delete(material));
+  return tagMaterial(material, MAT.CONCRETE);
+}
+
+/** The materials each facade record has made, so a record's owner can dispose just those. */
+const made = new WeakMap<object, THREE.MeshStandardMaterial[]>();
+
+/** One material per style, each made (and its maps fetched) the first time the style is read. */
 export function makeFacadeMaterials(): Record<FacadeStyle, THREE.MeshStandardMaterial> {
-  loadFacades();
   const materials = {} as Record<FacadeStyle, THREE.MeshStandardMaterial>;
+  const own: THREE.MeshStandardMaterial[] = [];
+  made.set(materials, own);
   for (const style of FACADE_STYLES) {
-    const { roughness, metalness } = FACADE[style];
-    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness, emissive: WINDOW_LIGHT, emissiveIntensity: WINDOW_LIGHT_INTENSITY });
-    material.userData.facadeStyle = style;
-    show(material, loaded[style] ?? standIn());
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.facadeGlow = FACADE_GLOW;
-      shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>${WINDOW_VERTEX}`).replace("#include <begin_vertex>", `#include <begin_vertex>${WINDOW_SEED}`);
-      shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>${WINDOW_FRAGMENT}`).replace("#include <emissivemap_fragment>", WINDOW_EMISSIVE);
-    };
-    material.customProgramCacheKey = () => "facade";
-    live.add(material);
-    material.addEventListener("dispose", () => live.delete(material));
-    materials[style] = tagMaterial(material, MAT.CONCRETE);
+    let material: THREE.MeshStandardMaterial | undefined;
+    Object.defineProperty(materials, style, {
+      enumerable: true,
+      get: () => {
+        if (!material) own.push((material = makeFacadeMaterial(style)));
+        return material;
+      },
+    });
   }
   return materials;
+}
+
+/** Dispose the materials `makeFacadeMaterials` made (only those read). */
+export function disposeFacadeMaterials(materials: Readonly<Record<FacadeStyle, THREE.Material>>): void {
+  for (const material of made.get(materials) ?? []) material.dispose();
 }

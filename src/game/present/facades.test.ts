@@ -29,11 +29,11 @@ function stylesAcross(biome: "city" | "desert"): Set<FacadeStyle | null> {
 
 describe("given the buildings of a course in a biome", () => {
   it("when buildings stand across a city, then every style the city mixes appears", () => {
-    expect([...stylesAcross("city")].sort()).toEqual(["dc", "glass", "prague", "stucco"]);
+    expect([...stylesAcross("city")].sort()).toEqual(["baroque", "dc", "glass", "havana", "prague", "rowhouse", "shops"]);
   });
 
-  it("when buildings stand across a desert, then they are adobe and stucco, never a city's", () => {
-    expect([...stylesAcross("desert")].sort()).toEqual(["adobe", "stucco"]);
+  it("when buildings stand across a desert, then they are adobe, havana and stucco, never a city's", () => {
+    expect([...stylesAcross("desert")].sort()).toEqual(["adobe", "havana", "stucco"]);
   });
 
   it("when the same spot is asked twice, then it has the same style, and a spot's style does not depend on another's", () => {
@@ -106,12 +106,12 @@ describe("given the facade materials", () => {
         bytes += statSync(file).size;
       }
     }
-    expect(bytes, `${bytes} B`).toBeLessThan(640_000);
+    expect(bytes, `${bytes} B`).toBeLessThan(1_700_000);
   });
 });
 
-/** Meshes the Mall's 971 buildings draw (27 draw cells, 4 styles): measured 96; a style the city mix adds takes them past it. */
-const MALL_BUILDING_MESHES = 100;
+/** Meshes the Mall's 971 buildings draw (27 draw cells, 8 styles over its two biomes): measured 126; a style a biome mix adds takes them past it. */
+const MALL_BUILDING_MESHES = 130;
 
 describe("given the National Mall's art", () => {
   it("when its buildings are drawn, then they make at most one mesh per style and draw cell, within the Mall's building budget", () => {
