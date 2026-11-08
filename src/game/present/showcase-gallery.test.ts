@@ -4,7 +4,7 @@ import { PREFAB } from "../world/constants.ts";
 import { ASSET_FAMILIES, SCENERY_ASSETS } from "../world/scenery-assets/index.ts";
 import { assetPrefab, assetScale } from "../world/scenery-assets/pick.ts";
 import { FACADE, homeStyle, type FacadeStyle } from "./facades.ts";
-import { SHOWCASE_EYE, SHOWCASE_GALLERY, SHOWCASE_RADIUS } from "./showcase-art.ts";
+import { SHOWCASE_EYE, SHOWCASE_FLOOR_RADIUS, SHOWCASE_GALLERY, SHOWCASE_RADIUS } from "./showcase-art.ts";
 import { galleryStyleOf } from "./showcase-gallery-rows.ts";
 
 /** The prefabs that repeat in the game: the gallery shows each once (a building also once in each style that has no prefab of its own). */
@@ -67,6 +67,11 @@ describe("given the showcase prop gallery", () => {
 
   it("when a prefab is added to the game, then it is sorted into the gallery or the excluded set", () => {
     for (const id of PREFAB_IDS) expect(NON_UNIQUE.includes(id), id).not.toBe(EXCLUDED.includes(id));
+  });
+
+  it("when the showcase floor is built, then it is drawn far past the disc the gallery stands in, so the set has no rim", () => {
+    // mutation: sed -i 's/SHOWCASE_FLOOR_RADIUS = 10000/SHOWCASE_FLOOR_RADIUS = 140/' src/game/present/showcase-art.ts
+    expect(SHOWCASE_FLOOR_RADIUS).toBeGreaterThanOrEqual(50 * SHOWCASE_RADIUS);
   });
 
   it("when its footprints are placed, then all stand behind the eye's clearance and inside the disc", () => {
