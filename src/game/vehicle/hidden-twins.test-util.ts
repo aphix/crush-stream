@@ -11,12 +11,20 @@ const SLALOM_HZ = 1;
 
 export type Twin = { w: CrashWorld; car: DeformableCar };
 
+/** Where the freewheeling sedan starts (x, z, yaw) and its velocity (m/s), against the struck sedan at the origin facing +z. */
+type Strike = readonly [x: number, z: number, yaw: number, vx: number, vz: number];
+const KPH_25 = 25 / 3.6;
+/** Into the left flank at 25 km/h: the body over the wheels dents, the bonnet does not. */
+export const FLANK_HIT: Strike = [-5, 0, Math.PI / 2, KPH_25, 0];
+/** Head-on into the nose at 56 km/h (the crash calibration's speed): the bonnet crushes down over the front wheels (at 25 km/h it never reaches them: its hold lifts nothing). */
+export const NOSE_HIT: Strike = [0, 6, Math.PI, 0, -56 / 3.6];
+
 /**
- * Two identical sedans, each struck in the side at 25 km/h by a freewheeling sedan and then driven in a slalom. No camera sees `lazy`
+ * Two identical sedans, each struck by a freewheeling sedan (`strike`) and then driven in a slalom. No camera sees `lazy`
  * (its tyre holds are deferred every frame); `every` is held every frame. They are driven a frame at a time until `until` holds, or
  * null if it never did.
  */
-export function hiddenTwins(until: (lazy: DeformableCar, every: DeformableCar) => boolean): { every: Twin; lazy: Twin } | null {
+export function hiddenTwins(until: (lazy: DeformableCar, every: DeformableCar) => boolean, strike: Strike = FLANK_HIT): { every: Twin; lazy: Twin } | null {
   const drives: DriveInput[] = [];
   const twin = (): Twin => {
     const car = buildCar("sedan", "sedan");
@@ -27,7 +35,7 @@ export function hiddenTwins(until: (lazy: DeformableCar, every: DeformableCar) =
     w.pedals.set(car, drive);
     w.pedals.set(hitter, FREEWHEEL);
     launch(car, 0, 0, 0, 0, 0);
-    launch(hitter, -5, 0, Math.PI / 2, 25 / 3.6, 0);
+    launch(hitter, ...strike);
     return { w, car };
   };
   const [every, lazy] = [twin(), twin()];

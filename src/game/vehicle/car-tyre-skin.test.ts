@@ -15,7 +15,7 @@ import { tyreClearance } from "./tyre-clearance.test-util.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
 import { must } from "../kernel/must.test-util.ts";
 import { worstHoldOverRest } from "./skin-stretch.test-util.ts";
-import { hiddenTwins } from "./hidden-twins.test-util.ts";
+import { hiddenTwins, NOSE_HIT } from "./hidden-twins.test-util.ts";
 import { makeShell } from "./car-panels.ts";
 
 /** A car's tear hook, protected on the car: the hit that would tear the part is beside the point. */
@@ -626,17 +626,17 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
     assertSameNumbers(lazy.quarterPanel(side).object.position.toArray(), every.quarterPanel(side).object.position.toArray(), "where the shell starts");
   });
 
-  // mutation: sed -i '/^  protected openPanel(p: DetachPart): void {$/{n;n;d}' src/game/vehicle/car-parts.ts  (openPanel's lay gone: the first hinge copies the stale skin, red)
+  // mutation: sed -i '/^  protected openPanel(p: DetachPart): void {$/{n;n;d;}' src/game/vehicle/car-parts.ts  (openPanel's lay gone: the first hinge copies the stale skin, red)
   it("when a shut quarter panel first hinges open on a car no camera sees whose hold is owed, then its shell is the held twin's bit for bit", () => {
     const { every, lazy, side } = owedOverShutPanel();
     for (const car of [every, lazy]) car.setPanelOpen(side, 0.3);
     assertSameNumbers(shellOf(lazy, side), shellOf(every, side), "the hinged shell");
   });
 
-  // mutation: sed -i '/so no camera changes them\.$/{n;d}' src/game/vehicle/car-parts.ts  (detachPart's lay gone: the bonnet tears off with its stale hold, red)
-  it("when the bonnet is torn off a car no camera sees whose bonnet hold is owed, then it flies as the held twin's bit for bit", () => {
+  // mutation: sed -i '/so no camera changes them\.$/{n;d;}' src/game/vehicle/car-parts.ts  (detachPart's lay gone: the bonnet tears off with its stale hold, red)
+  it("when the bonnet is torn off a nose-crushed car no camera sees whose bonnet hold is owed, then it flies as the held twin's bit for bit", () => {
     const hoodOf = (car: DeformableCar): THREE.Mesh => car.lookMeshes().hood;
-    const twins = hiddenTwins((lazy, every) => lazy.holdOwed && farthestApart(positionsOf(hoodOf(lazy).geometry), positionsOf(hoodOf(every).geometry)) > 0);
+    const twins = hiddenTwins((lazy, every) => lazy.holdOwed && farthestApart(positionsOf(hoodOf(lazy).geometry), positionsOf(hoodOf(every).geometry)) > 0, NOSE_HIT);
     must(twins, "a frame came with the hidden car's bonnet hold owed and its bonnet skin behind the twin's");
     for (const { car } of [twins.every, twins.lazy]) {
       const torn = car as unknown as Tearable;
@@ -647,7 +647,7 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
     assertSameNumbers(a.position.toArray(), b.position.toArray(), "where the bonnet starts");
   });
 
-  // mutation: sed -i '/^    this.skinRewritten = true;$/{n;d}' src/game/vehicle/car-tyre-skin.ts  (the owed lift outlives the reset and is laid over the rest skin, red)
+  // mutation: sed -i '/^    this.skinRewritten = true;$/{n;d;}' src/game/vehicle/car-tyre-skin.ts  (the owed lift outlives the reset and is laid over the rest skin, red)
   it("when a car no camera sees is reset while its hold is owed and a quarter panel is then torn off, then the shell is the held twin's bit for bit", () => {
     const { every, lazy, side } = owedOverShutPanel();
     for (const car of [every, lazy]) car.resetVisual();
