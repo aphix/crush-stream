@@ -232,19 +232,26 @@ function record(c: Ctx, solid: boolean, p: Placed, rule: number, dc: number): vo
  * no margin, and leaves no footprint: parked cars, which stand close in rows, clear what stands but not each other.
  */
 function place(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw: number, scale: number, core?: number): boolean {
+  return stand(c, rule, prefab, x, z, yaw, scale, scale, scale, core);
+}
+
+/** `place` at scales (`sx`, `sy`, `sz`), as an asset's own size is (`asset`: its index in `SCENERY_ASSETS`, none for a built-in prefab). */
+function stand(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw: number, sx: number, sy: number, sz: number, core?: number, asset?: number): boolean {
   const near = nearest(c.field, x, z, c.near);
   if (near.seg >= 0 && (c.field.flags[near.seg]! & SEG_COVERED) !== 0) return false;
   const size = PREFABS[prefab].size;
-  const hx = (size[0] * scale) / 2;
-  const hz = (size[2] * scale) / 2;
+  const hx = (size[0] * sx) / 2;
+  const hz = (size[2] * sz) / 2;
   const r = core ?? hypot2(hx, hz);
   const margin = core === undefined ? PROP_STANDOFF : 0;
-  if (r + margin > OCC_PAD) throw new Error(`scenery: ${prefab} at scale ${scale} is wider than the occupancy pad`);
+  if (r + margin > OCC_PAD) throw new Error(`scenery: ${prefab} at scale ${sx} ${sy} ${sz} is wider than the occupancy pad`);
   if (near.gap < r + ROAD_STANDOFF || c.occ.hits(x, z, r, margin)) return false;
   const y = standAt(c, x, z);
   if (y === null) return false;
   if (core === undefined) c.occ.add(x, z, detCos(yaw), detSin(yaw), hx, hz);
-  record(c, PREFABS[prefab].body !== "none" && near.openGap < SOLID_REACH, { prefab, x, y, z, yaw, sx: scale, sy: scale, sz: scale }, rule, near.dc);
+  const p: Placed = { prefab, x, y, z, yaw, sx, sy, sz };
+  if (asset !== undefined) p.asset = asset;
+  record(c, PREFABS[prefab].body !== "none" && near.openGap < SOLID_REACH, p, rule, near.dc);
   return true;
 }
 

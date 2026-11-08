@@ -55,6 +55,14 @@ export const PREFAB = {
   sidewalk: "sidewalk",
   bush: "bush",
   flowers: "flowers",
+  // The scenery assets' generic kinds (`world/scenery-assets`): one prefab per way of drawing, the placement's `asset` picks the variant; a placement's scale is the asset's own size (sx along the front (x), sy up, sz across).
+  assetCard: "asset-card",
+  assetStandee: "asset-standee",
+  assetCross: "asset-cross",
+  assetDecal: "asset-decal",
+  assetTile: "asset-tile",
+  assetBox: "asset-box",
+  assetBoxSolid: "asset-box-solid",
 } as const;
 
 /** The word for a town: the campaign course's id and the scenery service's biome of streets and sidewalks. */

@@ -88,6 +88,13 @@ export const PREFAB_IDS = [
   PREFAB.sidewalk,
   PREFAB.bush,
   PREFAB.flowers,
+  PREFAB.assetCard,
+  PREFAB.assetStandee,
+  PREFAB.assetCross,
+  PREFAB.assetDecal,
+  PREFAB.assetTile,
+  PREFAB.assetBox,
+  PREFAB.assetBoxSolid,
 ] as const;
 export type PrefabId = (typeof PREFAB_IDS)[number];
 
@@ -635,4 +642,12 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.sidewalk]: { body: "none", collider: [], foot: 0, size: [2.4, 0.06, 3.2], mass: 0, material: MAT.JERSEY_CONCRETE },
   [PREFAB.bush]: { body: "none", collider: [], foot: 0, size: [1.4, 1, 1.4], mass: 0, material: MAT.CONIFER_FOLIAGE },
   [PREFAB.flowers]: { body: "none", collider: [], foot: 0, size: [2.2, 0.5, 1.2], mass: 0, material: MAT.CONIFER_FOLIAGE },
+  // The scenery assets (`scenery-assets/`): unit-size generic kinds, a placement's scale being the asset's own size, so a collider is the unit box. A standee is a sprite with a thin solid box (a bench, a bollard, a sign); a box wears a skin; the rest are drawn only.
+  [PREFAB.assetCard]: { body: "none", collider: [], foot: 0, size: [1, 1, 1], mass: 0, material: MAT.CONIFER_FOLIAGE },
+  [PREFAB.assetCross]: { body: "none", collider: [], foot: 0, size: [1, 1, 1], mass: 0, material: MAT.CONIFER_FOLIAGE },
+  [PREFAB.assetDecal]: { body: "none", collider: [], foot: 0, size: [1, 1, 1], mass: 0, material: MAT.JERSEY_CONCRETE },
+  [PREFAB.assetTile]: { body: "none", collider: [], foot: 0, size: [1, 1, 1], mass: 0, material: MAT.JERSEY_CONCRETE },
+  [PREFAB.assetBox]: { body: "none", collider: [], foot: 0, size: [1, 1, 1], mass: 0, material: MAT.CRATE_WOOD },
+  [PREFAB.assetStandee]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.DUMPSTER_STEEL },
+  [PREFAB.assetBoxSolid]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.DUMPSTER_STEEL },
 };
