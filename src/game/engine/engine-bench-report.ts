@@ -9,6 +9,7 @@ import { NAME, type FrameStats, type PartCard } from "./bench-frames.ts";
 import { EXTENDED_QUERY } from "./constants.ts";
 import { SCENERY_ARM, type SceneryArm } from "../world/constants.ts";
 import type { SwitchHitch } from "./bench-settle.ts";
+import { TIME_OF_DAY } from "../match/types.ts";
 
 const COARSE_LABEL = `1/${QUIET_HZ} s`;
 
@@ -30,6 +31,9 @@ export type SkyPin = (typeof SKY_ARM)[keyof typeof SKY_ARM];
 /** The two arms of each quality A/B, the keys of `BenchResult.abDraw`/`abScale`/`abShadow`: Auto, and the knob's top value. */
 export const QUALITY_ARM = { auto: "auto", max: "max" } as const;
 type QualityBlocks = { auto: Block; max: Block };
+
+/** The time-of-day A/B's arms, the keys of `BenchResult.abTime` (`TIME_OF_DAY`'s keys: each a race's whole look, held at the window's FX tier and sky pin). */
+type TimeArm = keyof typeof TIME_OF_DAY;
 
 export interface Stat {
   mean: number;
@@ -121,8 +125,8 @@ export interface BenchDressing {
 const dressingLine = (d: BenchDressing, scenery: SceneryArm = SCENERY_ARM.on): string =>
   `dressing place ${d.placeMs.toFixed(1)} ms solid ${d.solid} drawn ${d.drawn} groups ${d.drawGroups} geom ${d.geometries} tex ${d.textures}   scenery ${scenery === SCENERY_ARM.on ? scenery : scenery.toUpperCase()}`;
 
-/** The stretches of a run in order: the grid and warm-up, the sampled window, the A/Bs, then the replay of the run's own crash (`PAGE_PHASES[PHASE_WARM]` ...). Indices only grow (posted cards name them): the quality A/Bs run before the replay but come last. */
-export const PAGE_PHASES = ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay", "sweep", "ab-draw", "ab-scale", "ab-shadow"] as const;
+/** The stretches of a run in order: the grid and warm-up, the sampled window, the A/Bs, then the replay of the run's own crash (`PAGE_PHASES[PHASE_WARM]` ...). Indices only grow (posted cards name them): the quality and time-of-day A/Bs run before the replay but come last. */
+export const PAGE_PHASES = ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay", "sweep", "ab-draw", "ab-scale", "ab-shadow", "ab-time"] as const;
 export const PHASE_WARM = 0;
 export const PHASE_WINDOW = 1;
 export const PHASE_AB_PACE = 2;
@@ -134,6 +138,7 @@ export const PHASE_SWEEP = 7;
 export const PHASE_AB_DRAW = 8;
 export const PHASE_AB_SCALE = 9;
 export const PHASE_AB_SHADOW = 10;
+export const PHASE_AB_TIME = 11;
 
 /** Mean and 95th percentile of one reading (ms). */
 export interface Pair {
@@ -360,6 +365,8 @@ export interface BenchResult {
   abDraw?: QualityBlocks | null;
   abScale?: QualityBlocks | null;
   abShadow?: QualityBlocks | null;
+  /** The race's time of day pinned (day, sunset, night) at the window's tier, run after the shadows A/B (null: the Lab, which has no race; absent on an older card). */
+  abTime?: Record<TimeArm, Block> | null;
   /** The cosmetic Rapier world (the thrown drivers' and knocked props'): `world.step()` over the sampled window, and the world's size. */
   ragdoll: RagdollCost;
   /** What dressing the course cost and the scene holds: null on the Lab and on a card from before it. */
@@ -456,6 +463,11 @@ function skyArmLines(ab: NonNullable<BenchResult["abSky"]>): string[] {
 /** Each quality A/B's two arms on the card, the first under the title; `top` labels the knob's top arm. */
 function qualityArmLines(title: string, ab: QualityBlocks, top: string = QUALITY_ARM.max): string[] {
   return [`${title}${arm(QUALITY_ARM.auto, ab.auto)}`, `${" ".repeat(title.length)}${arm(top, ab.max)}`];
+}
+/** Each time-of-day arm on the card, the first under the title. */
+function timeArmLines(ab: Record<TimeArm, Block>): string[] {
+  const title = "A/B time of day pinned: ";
+  return Object.keys(TIME_OF_DAY).map((key, i) => `${i ? " ".repeat(title.length) : title}${arm(key, ab[key as TimeArm])}`);
 }
 const pair = (p: Pair): string => `${f1(p.mean)}/${f1(p.p95)}`;
 const ragdollLine = (g: RagdollCost): string => `ragdoll world: ${g.steps} steps, step ${g.stepMs.mean.toFixed(2)} ms mean / ${g.stepMs.p95.toFixed(2)} p95, ${g.colliders} colliders, ${g.bodies} bodies`;
@@ -597,6 +609,7 @@ export function describeBench(r: BenchResult): string[] {
       ...(r.abDraw ? qualityArmLines("A/B draw distance pinned: ", r.abDraw) : []),
       ...(r.abScale ? qualityArmLines("A/B render scale pinned: ", r.abScale, "2") : []),
       ...(r.abShadow ? qualityArmLines("A/B shadows pinned: ", r.abShadow) : []),
+      ...(r.abTime ? timeArmLines(r.abTime) : []),
         ]
       : [`quick bench: the window alone (no A/B blocks, no replay: the extended bench has them)`]),
     ...(r.run.extended ? replayLines(r.replay, r.replayWhy) : []),

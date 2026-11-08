@@ -3,10 +3,11 @@ import type { QualityPicks } from "../present/player-quality.ts";
 import { benchPlan, leaderAhead, type BenchPlan } from "./engine-bench-plan.ts";
 import { watchPage, type PageWatch } from "./engine-bench-page.ts";
 import { warmUp } from "./engine-bench-warm.ts";
-import { describeBench, DETAIL_ARMS, PACE_ARM, PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_DRAW, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SCALE, PHASE_AB_SHADOW, PHASE_AB_SKY, PHASE_REPLAY, PHASE_SWEEP, PHASE_WARM, PHASE_WINDOW, QUALITY_ARM, SKY_ARM, stat, type BenchResult, type Block, type LongTasks, type RunOptions, type SkyPin } from "./engine-bench-report.ts";
+import { describeBench, DETAIL_ARMS, PACE_ARM, PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_DRAW, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SCALE, PHASE_AB_SHADOW, PHASE_AB_SKY, PHASE_AB_TIME, PHASE_REPLAY, PHASE_SWEEP, PHASE_WARM, PHASE_WINDOW, QUALITY_ARM, SKY_ARM, stat, type BenchResult, type Block, type LongTasks, type RunOptions, type SkyPin } from "./engine-bench-report.ts";
 import { CLIP_WAIT_S, CRASH_GAP, CRASH_SPEED, ragdollCost, REPLAY_SETTLE_S, REPLAY_TIER_S, START_WAIT_S, type ReplayFrames } from "./engine-bench-replay.ts";
 import { BENCH, QUICK, blocksOf, CAP, deviceOf, dressingOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, skyPinOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type Samples, type Tap, type Window } from "./bench-measure.ts";
 import type { HighlightClip } from "../match/highlights.ts";
+import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
 import { lastDressing } from "../world/placements.ts";
 import type { SimPacer } from "./sim-pace.ts";
 import { BENCH_BUTTON_STYLE, BENCH_CARD_STYLE, QUALITY_QUERY, SETTING_KEY } from "./constants.ts";
@@ -34,6 +35,8 @@ interface BenchEngine extends SweepEngine, SceneEngine {
   setFxAuto(): void;
   /** The Sky setting. */
   setSky(mode: SkyMode): void;
+  /** The race's time of day for the A/B (null: the race's own). */
+  setBenchTime(time: TimeOfDay | null): void;
   /** Fetch the Ultra look (the `ultra=1` arm needs it in before its first block); false when it did not load. */
   loadUltra(): Promise<boolean>;
   benchParts(): BenchParts;
@@ -290,6 +293,7 @@ interface ExtendedTail {
   draw: Awaited<ReturnType<typeof alternate>>;
   scale: Awaited<ReturnType<typeof alternate>>;
   shadow: Awaited<ReturnType<typeof alternate>>;
+  time: Awaited<ReturnType<typeof alternate>> | null;
   replayRun: { bytes: number; arms: ReplayArm[]; clip: HighlightClip } | null;
   replayWhy: string | null;
   leaderEndM: number;
@@ -331,6 +335,10 @@ async function extendedTail(engine: BenchEngine, parts: BenchParts, plan: BenchP
   const draw = await qualityAb(engine, parts, t, beat, page, ui, PHASE_AB_DRAW, QUALITY_QUERY.draw, { draw: "auto" }, { draw: "max" });
   const scale = await qualityAb(engine, parts, t, beat, page, ui, PHASE_AB_SCALE, QUALITY_QUERY.scale, { scale: "auto" }, { scale: "2" });
   const shadow = await qualityAb(engine, parts, t, beat, page, ui, PHASE_AB_SHADOW, QUALITY_QUERY.shadow, { shadow: "auto" }, { shadow: "max" });
+  // The time of day comes last of the A/Bs: the first sunset and night build their lighting (environment, lamp pools), so that hitch lands in no other block. Each arm holds the window's tier and sky pin; the race's own light is put back before the replay.
+  enterPhase(beat, page, PHASE_AB_TIME);
+  const time = plan.lab ? null : await alternate(engine, parts, t, beat, ui, "time", Object.entries(TIME_OF_DAY).map(([key, light]) => ({ key, set: () => engine.setBenchTime(light) })), BENCH.timeCycles);
+  engine.setBenchTime(null);
   // What the run was like at its end is read now: the replay starts the race over.
   const leaderEndM = leaderAhead(parts, plan);
   enterPhase(beat, page, PHASE_REPLAY);
@@ -347,7 +355,7 @@ async function extendedTail(engine: BenchEngine, parts: BenchParts, plan: BenchP
       replayWhy = err instanceof Error ? err.message : String(err);
     }
   }
-  return { pace, detail, fx, sky, draw, scale, shadow, replayRun, replayWhy, leaderEndM };
+  return { pace, detail, fx, sky, draw, scale, shadow, time, replayRun, replayWhy, leaderEndM };
 }
 
 /**
@@ -435,6 +443,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   const gpu = await t.finish();
   const abPace = tail && blocksOf(tail.pace, gpu);
   const abSky = tail?.sky ? blocksOf(tail.sky, gpu) : null;
+  const abTime = tail?.time ? blocksOf(tail.time, gpu) : null;
   const abFx = tail && blocksOf(tail.fx, gpu);
   const device = await deviceOf(parts, timerStepMs, batteryStart);
   const windowGpu = windowGpuMs(gpu);
@@ -453,7 +462,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     frameCounts: card.frameCounts,
     hitches: beat.hitches.table(),
     sweepHitches,
-    switches: tail && windowStart ? [{ stretch: PAGE_PHASES[PHASE_WINDOW], arm: "start", round: 1, ...windowStart }, ...tail.pace.switches, ...tail.detail.switches, ...tail.fx.switches, ...(tail.sky?.switches ?? []), ...tail.draw.switches, ...tail.scale.switches, ...tail.shadow.switches] : [],
+    switches: tail && windowStart ? [{ stretch: PAGE_PHASES[PHASE_WINDOW], arm: "start", round: 1, ...windowStart }, ...tail.pace.switches, ...tail.detail.switches, ...tail.fx.switches, ...(tail.sky?.switches ?? []), ...tail.draw.switches, ...tail.scale.switches, ...tail.shadow.switches, ...(tail.time?.switches ?? [])] : [],
     strip: plan.strip ? { spec: plan.strip, body: plan.body, racers: plan.racers, leaderWindowM, leaderEndM } : null,
     labThrown: plan.lab ? w.thrown : null,
     settings,
@@ -464,6 +473,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     abDraw: tail && qualityBlocks(blocksOf(tail.draw, gpu)),
     abScale: tail && qualityBlocks(blocksOf(tail.scale, gpu)),
     abShadow: tail && qualityBlocks(blocksOf(tail.shadow, gpu)),
+    abTime: abTime && (Object.fromEntries(Object.keys(TIME_OF_DAY).map((key) => [key, abTime[key]!])) as NonNullable<BenchResult["abTime"]>),
     device,
     dressing: dressingOf(parts.renderer, loaded),
   };

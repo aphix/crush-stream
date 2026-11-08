@@ -1,6 +1,6 @@
 import { FX_TIER_ULTRA } from "../present/constants.ts";
 import { FX_TIERS } from "../present/engine-post.ts";
-import { TRACK_ID } from "../world/constants.ts";
+import { FIGURE_8_ID, TRACK_ID } from "../world/constants.ts";
 import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, EPI_STEP_SUFFIX, EXTENDED_QUERY, QUALITY_QUERY, SCENERY_QUERY, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
 import type { RunOptions } from "./engine-bench-report.ts";
 
@@ -17,34 +17,59 @@ interface BenchStep {
   query: string;
 }
 
-/**
- * The biggest of the nine race courses: `bench-loop.test.ts` measures every course's road (dam-spine 4531 m, then four-count
- * 4079 m; the city is 683 m), so a longer course added later fails there until this follows.
- */
+/** The longest road of the race menu's courses (`bench-loop.test.ts` measures them): a longer course added later fails there until this follows. */
 export const BIGGEST_COURSE = TRACK_ID.damSpine;
 
-/** The most complex course to draw (the National Mall: 4089 props with the scenery service, about 500k triangles a frame before it), the cycle's last step. */
+/** The most complex course to draw (the National Mall: 4089 props with the scenery service, about 500k triangles a frame before it). */
 const MOST_PROPS_COURSE = TRACK_ID.nationalMall;
 
 const benchQuery = (kind: string): string => `${BENCH_QUERY}=${kind}`;
+const courseQuery = (id: string): string => `${benchQuery(BENCH_KIND.city)}&${COURSE_QUERY}=${id}`;
 
-/** The four maps of a cycle. */
-const MAPS: readonly BenchStep[] = [
-  { id: BENCH_KIND.strip, query: benchQuery(BENCH_KIND.strip) },
-  { id: BENCH_KIND.city, query: benchQuery(BENCH_KIND.city) },
-  { id: BIGGEST_COURSE, query: `${benchQuery(BENCH_KIND.city)}&${COURSE_QUERY}=${BIGGEST_COURSE}` },
-  { id: MOST_PROPS_COURSE, query: `${benchQuery(BENCH_KIND.city)}&${COURSE_QUERY}=${MOST_PROPS_COURSE}` },
+/** A map the chooser offers: its step (the page query that runs it), its toggle's label and whether a loop that names no maps runs it. */
+interface BenchMap extends BenchStep {
+  label: string;
+  byDefault: boolean;
+}
+
+/**
+ * Every map the chooser lists, in its order, which is the cycle's: a map goes after the ones before it so a loop resumed from an older address's `step=<i>` lands on the same
+ * course. The default maps are the first five.
+ */
+export const MAP_CHOICES: readonly BenchMap[] = [
+  { id: BENCH_KIND.strip, query: benchQuery(BENCH_KIND.strip), label: "Strip", byDefault: true },
+  { id: BENCH_KIND.city, query: benchQuery(BENCH_KIND.city), label: "City", byDefault: true },
+  { id: BIGGEST_COURSE, query: courseQuery(BIGGEST_COURSE), label: "Dam Spine (biggest)", byDefault: true },
+  { id: MOST_PROPS_COURSE, query: courseQuery(MOST_PROPS_COURSE), label: "National Mall (most props)", byDefault: true },
+  { id: FIGURE_8_ID, query: courseQuery(FIGURE_8_ID), label: "Figure Eight", byDefault: true },
+  { id: TRACK_ID.oval, query: courseQuery(TRACK_ID.oval), label: "Oval", byDefault: false },
+  { id: TRACK_ID.rally, query: courseQuery(TRACK_ID.rally), label: "Rally", byDefault: false },
+  { id: TRACK_ID.stunt, query: courseQuery(TRACK_ID.stunt), label: "Stunt", byDefault: false },
+  { id: TRACK_ID.fourCount, query: courseQuery(TRACK_ID.fourCount), label: "Four-Count", byDefault: false },
+  { id: TRACK_ID.razorShelf, query: courseQuery(TRACK_ID.razorShelf), label: "Razor Shelf", byDefault: false },
+  { id: TRACK_ID.breakerYard, query: courseQuery(TRACK_ID.breakerYard), label: "Breaker Yard", byDefault: false },
 ];
 
-/** The extended cycle: every map twice, the epicenter activation off and then on (`&epi=1`; same seed, same cars): the cards of a pair differ in nothing else, so a cycle is its own A/B. */
-const CYCLE: readonly BenchStep[] = MAPS.flatMap((s) => [s, { id: `${s.id}${EPI_STEP_SUFFIX}`, query: `${s.query}&${EPI_QUERY}=1` }]);
+/** The maps a loop runs when its address names none. */
+export const DEFAULT_MAPS: readonly string[] = MAP_CHOICES.filter((m) => m.byDefault).map((m) => m.id);
+
+/** The known maps of `text` (`strip,city,figure-8`), each once, in its order: unknown ids drop, and none left is the default maps. */
+function parseMaps(text: string | null): readonly string[] {
+  const ids = (text ?? "").split(",").filter((id, i, all) => MAP_CHOICES.some((m) => m.id === id) && all.indexOf(id) === i);
+  return ids.length > 0 ? ids : DEFAULT_MAPS;
+}
+
+const stepOfMap = (id: string): BenchStep => MAP_CHOICES.find((m) => m.id === id)!;
+
+/** Both epicenter arms of each map, off then on (`&epi=1`; same seed, same cars): the cards of a pair differ in nothing else, so a cycle is its own A/B. */
+const bothArmsOf = (maps: readonly string[]): BenchStep[] => maps.map(stepOfMap).flatMap((s) => [s, { id: `${s.id}${EPI_STEP_SUFFIX}`, query: `${s.query}&${EPI_QUERY}=1` }]);
 
 /** The Ultra tier exists in this build (`FX_TIERS`): the loop's Ultra arm (`loopultra=1`) exists only then. */
 const FX_TIER_IDS: readonly string[] = FX_TIERS;
 export const ULTRA_AVAILABLE: boolean = FX_TIER_IDS.includes(FX_TIER_ULTRA);
 
 /** The query names that carry a loop through the bench pages' addresses (`?bench=…` is the step's own query, `ultra=1` the Ultra arm's, `epi=1` the epicenter arm's). */
-const LOOP_QUERY = { session: "loop", cycle: "cycle", step: "step", keep: "keep", auto: "auto", ultraNext: "loopultra", ultraCycle: "cycleultra", extended: EXTENDED_QUERY, epi: "loopepi", choose: "choose" } as const;
+const LOOP_QUERY = { session: "loop", cycle: "cycle", step: "step", keep: "keep", auto: "auto", ultraNext: "loopultra", ultraCycle: "cycleultra", extended: EXTENDED_QUERY, epi: "loopepi", choose: "choose", maps: "maps" } as const;
 
 /**
  * The loop's whole state, read from the address of the bench page it is on: its session (every submission of the loop carries
@@ -67,23 +92,25 @@ export interface BenchRun {
   extended: boolean;
   /** Every map runs its epicenter arm: the quick cycle under it alone, the extended one under both arms (off, then on); off, every map runs once without it. */
   epi: boolean;
+  /** The maps of the cycle (`MAP_CHOICES` ids, in the cycle's order): the chooser's course toggles, kept in the address as `maps=strip,city,…` so a reload resumes the same cycle. */
+  maps: readonly string[];
 }
 
 /**
- * The extended cycle with the epicenter on: always the same eight steps (four maps, each off and on); with `ultra` set and Ultra in the build, each page also runs its Ultra arm (no second pass for it).
+ * The extended cycle with the epicenter on: each of `maps` off and on (two steps each); with `ultra` set and Ultra in the build, each page also runs its Ultra arm (no second pass for it).
  * The pair's order alternates with the cycle (off then on in cycle 1, on then off in cycle 2, ...): the second page of a pair loads onto a warm device and a collected heap,
  * so a fixed order would charge that to one arm.
  */
-export function cycleOf(ultra: boolean, loop = 1): BenchStep[] {
+export function cycleOf(ultra: boolean, loop = 1, maps: readonly string[] = DEFAULT_MAPS): BenchStep[] {
   const arm = ultra && ULTRA_AVAILABLE;
-  const steps = CYCLE.map((s) => (arm ? { id: s.id, query: `${s.query}&${ULTRA_QUERY}=1` } : s));
+  const steps = bothArmsOf(maps).map((s) => (arm ? { id: s.id, query: `${s.query}&${ULTRA_QUERY}=1` } : s));
   if (loop % 2 === 1) return steps;
   return steps.map((_, i) => steps[i ^ 1]!);
 }
 
-/** Each map once, under the epicenter arm `on` (`&epi=1`) or without; Ultra's look on every page when `ultra` is set and the build has it. */
-function oneArmCycleOf(ultra: boolean, on: boolean): BenchStep[] {
-  return MAPS.map((s) => {
+/** Each of `maps` once, under the epicenter arm `on` (`&epi=1`) or without; Ultra's look on every page when `ultra` is set and the build has it. */
+function oneArmCycleOf(ultra: boolean, on: boolean, maps: readonly string[]): BenchStep[] {
+  return maps.map(stepOfMap).map((s) => {
     const ultraArm = ultra && ULTRA_AVAILABLE ? `&${ULTRA_QUERY}=1` : "";
     return on ? { id: `${s.id}${EPI_STEP_SUFFIX}`, query: `${s.query}&${EPI_QUERY}=1${ultraArm}` } : { id: s.id, query: `${s.query}${ultraArm}` };
   });
@@ -91,19 +118,19 @@ function oneArmCycleOf(ultra: boolean, on: boolean): BenchStep[] {
 
 /** The benches `run` is on the cycle of: both arms of each map, or each map once under the epicenter arm when it is on. */
 function stepsOf(run: BenchRun): BenchStep[] {
-  return run.extended && run.epi ? cycleOf(run.ultra, run.loop) : oneArmCycleOf(run.ultra, run.epi);
+  return run.extended && run.epi ? cycleOf(run.ultra, run.loop, run.maps) : oneArmCycleOf(run.ultra, run.epi, run.maps);
 }
 
 /**
- * A new loop with every option on, as the Benchmark entry offers it: the quick bench (default) is the four maps once each under the epicenter arm, the
+ * A new loop with every option on, as the Benchmark entry offers it: the quick bench (default) is the default maps once each under the epicenter arm, the
  * extended one both arms with the A/B blocks; each runs again when it ends and reloads onto new builds.
  */
 export function startRun(session: string, extended = false): BenchRun {
-  return { session, loop: 1, step: 0, ultra: ULTRA_AVAILABLE, keep: true, auto: true, ultraNext: ULTRA_AVAILABLE, extended, epi: true };
+  return { session, loop: 1, step: 0, ultra: ULTRA_AVAILABLE, keep: true, auto: true, ultraNext: ULTRA_AVAILABLE, extended, epi: true, maps: DEFAULT_MAPS };
 }
 
 /** The options the Benchmark's chooser offers before a loop starts: they hold for every page of it. */
-export type BenchOptions = Pick<BenchRun, "keep" | "epi" | "ultra" | "extended">;
+export type BenchOptions = Pick<BenchRun, "keep" | "epi" | "ultra" | "extended" | "maps">;
 
 /** `search` with `options` written over the loop options it carries, for `runFromPage` to start the loop under them. */
 export function withOptions(search: string, options: BenchOptions): string {
@@ -116,13 +143,14 @@ export function withOptions(search: string, options: BenchOptions): string {
     [LOOP_QUERY.extended, options.extended],
   ] as const;
   for (const [name, on] of flags) q.set(name, on ? "1" : "0");
+  q.set(LOOP_QUERY.maps, options.maps.join(","));
   return `?${q.toString()}`;
 }
 
-/** The Benchmark entry's page: the cycle's first map with no loop yet, marked to open on the chooser. */
+/** The Benchmark entry's page: the first map with no loop yet, marked to open on the chooser. */
 export function entryHref(href: string, extended: boolean): string {
   const url = new URL(href);
-  url.search = `?${MAPS[0]!.query}${extended ? `&${LOOP_QUERY.extended}=1` : ""}&${LOOP_QUERY.choose}=1`;
+  url.search = `?${MAP_CHOICES[0]!.query}${extended ? `&${LOOP_QUERY.extended}=1` : ""}&${LOOP_QUERY.choose}=1`;
   url.hash = "";
   return url.toString();
 }
@@ -139,9 +167,9 @@ export function benchRouteSearch(params: Readonly<Record<string, unknown>>): Rec
 
 /**
  * A bench page opened by its address alone (typed, shared, bookmarked, or the chooser's): a new loop at the step that runs this page's own bench, with
- * the options its address sets (`keep`, `auto`, `loopepi`, `loopultra`, `cycleultra`; `=0` is off) and every option it leaves out on, as the
- * Benchmark entry starts one; null for a bench no step of the cycle runs (the lab, another course), which runs once as asked. The
- * page's own `ultra=1` is the page's alone: a page opened without it runs no Ultra arm, the steps after it do. Its own `epi=1` picks the arm of a pair only
+ * the options its address sets (`keep`, `auto`, `loopepi`, `loopultra`, `cycleultra`, `maps`; `=0` is off) and every option it leaves out on, as the
+ * Benchmark entry starts one; a bench no step of the cycle runs (the lab, another course) runs once as asked (null), unless the address names its `maps`: the loop then
+ * starts at the first of them. The page's own `ultra=1` is the page's alone: a page opened without it runs no Ultra arm, the steps after it do. Its own `epi=1` picks the arm of a pair only
  * where the cycle runs both.
  */
 export function runFromPage(search: string, session: string): BenchRun | null {
@@ -155,13 +183,14 @@ export function runFromPage(search: string, session: string): BenchRun | null {
     auto: option(LOOP_QUERY.auto, fresh.auto),
     ultraNext: option(LOOP_QUERY.ultraNext, fresh.ultraNext) && ULTRA_AVAILABLE,
     epi: option(LOOP_QUERY.epi, fresh.epi),
+    maps: parseMaps(q.get(LOOP_QUERY.maps)),
   };
   const steps = stepsOf(run);
   for (let i = 0; i < steps.length; i++) {
     const s = new URLSearchParams(steps[i]!.query);
     if (s.get(BENCH_QUERY) === q.get(BENCH_QUERY) && s.get(COURSE_QUERY) === q.get(COURSE_QUERY) && (!(run.extended && run.epi) || (s.get(EPI_QUERY) === "1") === (q.get(EPI_QUERY) === "1"))) return { ...run, step: i };
   }
-  return null;
+  return q.has(LOOP_QUERY.maps) ? { ...run, step: 0 } : null;
 }
 
 /** The step a run is at. */
@@ -187,7 +216,7 @@ export function stepHref(href: string, run: BenchRun): string {
     [LOOP_QUERY.extended, run.extended],
     [LOOP_QUERY.epi, run.epi],
   ] as const;
-  const query = [stepOf(run).query, `${LOOP_QUERY.session}=${run.session}`, `${LOOP_QUERY.cycle}=${run.loop}`, `${LOOP_QUERY.step}=${run.step}`];
+  const query = [stepOf(run).query, `${LOOP_QUERY.session}=${run.session}`, `${LOOP_QUERY.cycle}=${run.loop}`, `${LOOP_QUERY.step}=${run.step}`, `${LOOP_QUERY.maps}=${run.maps.join(",")}`];
   for (const name of [...Object.values(STRIP_QUERY), ...Object.values(QUALITY_QUERY), SCENERY_QUERY]) {
     const value = url.searchParams.get(name);
     if (value !== null) query.push(`${name}=${encodeURIComponent(value)}`);
@@ -265,7 +294,7 @@ export function parseRun(search: string): BenchRun | null {
   const step = countOf(q, LOOP_QUERY.step, 0);
   if (loop === null || loop < 1 || step === null) return null;
   const on = (name: string): boolean => q.get(name) !== "0";
-  return { session, loop, step, ultra: q.get(LOOP_QUERY.ultraCycle) === "1", keep: on(LOOP_QUERY.keep), auto: on(LOOP_QUERY.auto), ultraNext: on(LOOP_QUERY.ultraNext) && ULTRA_AVAILABLE, extended: q.get(LOOP_QUERY.extended) === "1", epi: on(LOOP_QUERY.epi) };
+  return { session, loop, step, ultra: q.get(LOOP_QUERY.ultraCycle) === "1", keep: on(LOOP_QUERY.keep), auto: on(LOOP_QUERY.auto), ultraNext: on(LOOP_QUERY.ultraNext) && ULTRA_AVAILABLE, extended: q.get(LOOP_QUERY.extended) === "1", epi: on(LOOP_QUERY.epi), maps: parseMaps(q.get(LOOP_QUERY.maps)) };
 }
 
 /** What the loop's driver asks of the page it runs in. */

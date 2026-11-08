@@ -7,7 +7,7 @@ import { INITIAL_HUD, KNOB_RANGES } from "../hud/hud-store.ts";
 import { SETTING_IDS, type SettingId } from "../hud/settings-changes.ts";
 import { armKill, carClass, HANDLING, killClass } from "../vehicle/vehicle-classes.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { cleanName, DRIVER_CARS, type DriverCar, type SubmitContext } from "../match/types.ts";
+import { cleanName, DRIVER_CARS, type DriverCar, type SubmitContext, type TimeOfDay } from "../match/types.ts";
 import { driverCarApplies } from "../match/driver-pick.ts";
 import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import { RIM_LIGHT } from "../present/rim-light.ts";
@@ -374,6 +374,11 @@ export abstract class EngineInput extends EngineRigs {
   setSky(mode: SkyMode): void {
     this.stage.setSky(mode);
     this.emitHud();
+  }
+
+  /** The bench's time of day for the race in play (null: the race's own), set on the stage as the race sets it; the next course load takes the race's own again. */
+  setBenchTime(time: TimeOfDay | null): void {
+    this.stage.setTime(time ?? this.race.rules.timeOfDay);
   }
 
   toggleDeformMode(): void {

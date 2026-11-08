@@ -476,7 +476,7 @@ describe("given a run that hitched as often as the table holds, over every A/B s
   test("when the card is rounded for the wire, then its JSON stays 12 kB under the submission cap (room for the HUD's settings and the envelope)", () => {
     const digits = 0.123456789012345;
     const rows = Array.from({ length: HITCH.cap }, (_, i) => ({ atS: i + digits, phase: i % 7, ms: 300 + digits, cpuMs: 120 + digits, simMs: 40 + digits, drawMs: 90 + digits, causes: ["setting-switch", "gpu-resources", "focus"] }));
-    const switches = Array.from({ length: 30 }, (_, i) => ({ stretch: "fx", arm: i % 2 ? "high" : "minimal", round: 1 + (i >> 1), settled: i % 3 !== 0, frames: 60 + i, settleS: 3 + digits, longestMs: 400 + digits, longestAt: i, longestCpuMs: 200 + digits }));
+    const switches = Array.from({ length: 31 }, (_, i) => ({ stretch: "fx", arm: i % 2 ? "high" : "minimal", round: 1 + (i >> 1), settled: i % 3 !== 0, frames: 60 + i, settleS: 3 + digits, longestMs: 400 + digits, longestAt: i, longestCpuMs: 200 + digits }));
     const full = { ...RESULT, hitches: { ...RESULT.hitches, count: 4000, excessMs: 123456 + digits, rows }, switches };
     const bytes = JSON.stringify(roundCard(full)).length;
     expect(bytes, `${bytes} bytes against the cap of ${MAX_JSON_BYTES.bench}`).toBeLessThan(MAX_JSON_BYTES.bench - 12 * 1024);
@@ -496,5 +496,22 @@ describe("given a run that hitched as often as the table holds, over every A/B s
     const full = { ...RESULT, phases: { ...PHASES, perSecond }, pageSeconds: { flags: hex, phases: hex, sky: hex, epi: hex } };
     const bytes = JSON.stringify(roundCard(full)).length;
     expect(bytes, `${bytes} bytes against the cap of ${MAX_JSON_BYTES.bench}`).toBeLessThan(MAX_JSON_BYTES.bench - 12 * 1024);
+  });
+});
+
+describe("given an extended card with the time-of-day A/B", () => {
+  // mutation: sed -i 's/      ...(r.abTime ? timeArmLines(r.abTime) : \[\]),//' src/game/engine/engine-bench-report.ts  (the card prints no time-of-day arms)
+  // mutation: sed -i 's/const title = "A\/B time of day pinned: ";/const title = "A\/B time: ";/' src/game/engine/engine-bench-report.ts  (reds the title)
+  test("when it is described, then the day, sunset and night arms print in that order under one title, after the shadows A/B; a quick or Lab card has none", () => {
+    const abTime = { day: { ...B(54, null), calls: 160 }, sunset: { ...B(52, null), calls: 161 }, night: { ...B(47, null), calls: 190 } };
+    const lines = describeBench({ ...RESULT, abShadow: { auto: B(53, null), max: B(49, null) }, abTime });
+    const title = "A/B time of day pinned: ";
+    const at = lines.findIndex((l) => l.startsWith(title));
+    expect(at, "the title is printed").toBeGreaterThan(lines.findIndex((l) => l.startsWith("A/B shadows pinned: ")));
+    expect(lines[at]!.startsWith(`${title}day 54.0 fps`), lines[at]).toBeTruthy();
+    expect(lines[at + 1]!).toMatch(/^ +sunset 52\.0 fps, .*161 calls$/);
+    expect(lines[at + 2]!).toMatch(/^ +night 47\.0 fps, .*190 calls$/);
+    expect(describeBench({ ...RESULT, abTime: null }).some((l) => l.startsWith("A/B time")), "the Lab has no time of day").toBe(false);
+    expect(describeBench(RESULT).some((l) => l.startsWith("A/B time")), "a card from before the A/B").toBe(false);
   });
 });

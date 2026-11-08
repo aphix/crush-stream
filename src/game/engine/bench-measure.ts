@@ -27,8 +27,8 @@ import type { lastDressing } from "../world/placements.ts";
 import { addedDrawGroups } from "../world/scenery.ts";
 import { PHASE, PHASE_COUNT, PHASE_NAMES, WORK, WORK_COUNT, WORK_NAMES } from "./sim-phases.ts";
 
-/** The timings both benches share: the window, the A/B blocks (`qualityCycles`: each quality knob's Auto and Max arms, once each like the sky's). The warm-up and the course are the plan's. */
-export const BENCH = { seed: 1, measureS: 30, blockS: 5, paceCycles: 2, fxCycles: 2, detailCycles: 2, skyCycles: 1, qualityCycles: 1, skyWaitS: 10, sweepS: 3, sweepShortS: 1, sweepMinFrames: 60, sweepCapS: 8 } as const;
+/** The timings both benches share: the window, the A/B blocks (`qualityCycles`: each quality knob's Auto and Max arms, once each like the sky's; `timeCycles`: day, sunset and night, once each). The warm-up and the course are the plan's. */
+export const BENCH = { seed: 1, measureS: 30, blockS: 5, paceCycles: 2, fxCycles: 2, detailCycles: 2, skyCycles: 1, qualityCycles: 1, timeCycles: 1, skyWaitS: 10, sweepS: 3, sweepShortS: 1, sweepMinFrames: 60, sweepCapS: 8 } as const;
 /** The key a rung's share of the window is kept under. */
 const rungKey = (level: number): string => `${DETAIL_LEVELS[level]?.far ?? "?"} m`;
 /** Samples kept: far above any display rate, so the window always fits. */
@@ -551,7 +551,7 @@ function sharesOf(counts: Float64Array, order: Uint8Array, seen: number, frames:
   return shares;
 }
 
-export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "abDraw" | "abScale" | "abShadow" | "device" | "pageEvents" | "pageSeconds" | "pageState" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "sweepHitches" | "switches" | "frameStats" | "frameParts" | "frameCounts" | "run"> {
+export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "abDraw" | "abScale" | "abShadow" | "abTime" | "device" | "pageEvents" | "pageSeconds" | "pageState" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "sweepHitches" | "switches" | "frameStats" | "frameParts" | "frameCounts" | "run"> {
   const { race } = parts;
   const { n, iv } = s;
   const third = Math.floor(n / 3);

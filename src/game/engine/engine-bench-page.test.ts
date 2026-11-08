@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_WARM, PHASE_WINDOW, type PageEvent } from "./engine-bench-report.ts";
+import { PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_AB_TIME, PHASE_REPLAY, PHASE_WARM, PHASE_WINDOW, type PageEvent } from "./engine-bench-report.ts";
 import { watchPage } from "./engine-bench-page.ts";
 import { FRAME } from "./bench-hitch.ts";
 import { SKY_DRAWN } from "../present/sky-dome.ts";
@@ -136,6 +136,12 @@ describe("given the bench page with a stub document and window (the page's state
 
   test("when the phases are named, then the names run in the order of a run, the replay of the run's crash last", () => {
     expect(firstMismatch([PHASE_WARM, PHASE_WINDOW, PHASE_AB_PACE, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_SKY, PHASE_REPLAY].map((i) => PAGE_PHASES[i]), ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay"])).toBeUndefined();
+  });
+
+  // mutation: sed -i 's/"ab-shadow", "ab-time"\]/"ab-time", "ab-shadow"]/' src/game/engine/engine-bench-report.ts  (the time-of-day A/B takes the shadows' index: posted cards read it wrong)
+  test("when the phases are listed, then every index a posted card already names is unchanged and the time-of-day A/B is the one after the last", () => {
+    expect(PAGE_PHASES.join(" ")).toBe("warm window ab-pace ab-detail ab-fx ab-sky replay sweep ab-draw ab-scale ab-shadow ab-time");
+    expect(PAGE_PHASES[PHASE_AB_TIME]).toBe("ab-time");
   });
 
   test("when the replay's phase begins after the A/Bs, then it gets its own entry at 0 s into it", () => {

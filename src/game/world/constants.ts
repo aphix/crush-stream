@@ -115,6 +115,9 @@ export const TRACK_ID = {
   nationalMall: "national-mall",
 } as const;
 
+/** The figure-8's id: a course on the race menu (`TRACKS`) that is not in the campaign (`TRACK_ID`, `CAMPAIGN`), so the bench names it apart. */
+export const FIGURE_8_ID = "figure-8";
+
 /** The id of the bench strip's generated course (`stripCourse`), also the `trackId` of its race program. */
 export const BENCH_STRIP_ID = "bench";
 

@@ -5,11 +5,13 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
-import { advance, asksOptions, autoReloadAsked, benchRouteSearch, BIGGEST_COURSE, cycleOf, driveLoop, entryHref, isBenchPage, loopProgress, loopSettings, newSession, optionsOf, parseRun, runFromPage, shareHashOf, startRun, stepHref, stepOf, ULTRA_AVAILABLE, withOptions, type BenchRun } from "./bench-loop.ts";
+import { advance, asksOptions, autoReloadAsked, benchRouteSearch, BIGGEST_COURSE, cycleOf, DEFAULT_MAPS, driveLoop, entryHref, isBenchPage, loopProgress, loopSettings, MAP_CHOICES, newSession, optionsOf, parseRun, runFromPage, shareHashOf, startRun, stepHref, stepOf, ULTRA_AVAILABLE, withOptions, type BenchRun } from "./bench-loop.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 
-const RUN: BenchRun = { session: "k3x9q2", loop: 1, step: 0, ultra: false, keep: false, auto: false, ultraNext: false, extended: true, epi: true };
+/** The four maps a loop ran before the chooser listed the courses: the tests that count steps pin them in the run, the default maps are tested on their own. */
+const FOUR_MAPS = ["strip", "city", "dam-spine", "national-mall"];
+const RUN: BenchRun = { session: "k3x9q2", loop: 1, step: 0, ultra: false, keep: false, auto: false, ultraNext: false, extended: true, epi: true, maps: FOUR_MAPS };
 
 describe("given the race courses of the game", () => {
   it("when their roads are measured, then the course the benchmark loop calls the biggest has the longest road", () => {
@@ -23,12 +25,12 @@ describe("given the race courses of the game", () => {
 });
 
 describe("given one cycle of the benchmark loop", () => {
-  it("when the cycle is listed, then it runs the strip, the city, the biggest course and the National Mall, in that order, each map twice: the epicenter activation off, then on", () => {
-    expect(cycleOf(false).map((s) => s.id).join(" ")).toBe("strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi");
+  it("when the cycle is listed, then it runs the strip, the city, the biggest course, the National Mall and the figure-8, in that order, each map twice: the epicenter activation off, then on", () => {
+    expect(cycleOf(false).map((s) => s.id).join(" ")).toBe("strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi figure-8 figure-8:epi");
   });
 
-  it("when the second cycle is listed, then each pair runs on then off, the same eight steps, and the step the loop is at follows the cycle", () => {
-    expect(cycleOf(false, 2).map((s) => s.id).join(" ")).toBe("strip:epi strip city:epi city dam-spine:epi dam-spine national-mall:epi national-mall");
+  it("when the second cycle is listed, then each pair runs on then off, the same ten steps, and the step the loop is at follows the cycle", () => {
+    expect(cycleOf(false, 2).map((s) => s.id).join(" ")).toBe("strip:epi strip city:epi city dam-spine:epi dam-spine national-mall:epi national-mall figure-8:epi figure-8");
     expect(cycleOf(false, 3).map((s) => s.id).join(" ")).toBe(cycleOf(false, 1).map((s) => s.id).join(" "));
     const run = { ...startRun("k3x9q2", true), loop: 2, step: 0 };
     expect(stepOf(run).id).toBe("strip:epi");
@@ -46,7 +48,7 @@ describe("given one cycle of the benchmark loop", () => {
 
   it("when each step's page query is read as a bench, then every step is a bench the game knows, on the course its name says", () => {
     const plans = cycleOf(false).map((s) => benchPlan(`?${s.query}`)?.id);
-    expect(plans.join(" ")).toBe("bench bench city city dam-spine dam-spine national-mall national-mall");
+    expect(plans.join(" ")).toBe("bench bench city city dam-spine dam-spine national-mall national-mall figure-8 figure-8");
   });
 
   it("when a bench is asked for a course that does not exist, then it benches the city instead", () => {
@@ -54,9 +56,9 @@ describe("given one cycle of the benchmark loop", () => {
     expect(benchPlan("?bench=city&course=../../etc")?.id).toBe("city");
   });
 
-  it("when Ultra is included, then the cycle has the same eight steps and no Ultra twin: each step's page runs its Ultra arm if this build has Ultra", () => {
+  it("when Ultra is included, then the cycle has the same ten steps and no Ultra twin: each step's page runs its Ultra arm if this build has Ultra", () => {
     const steps = cycleOf(true);
-    expect(steps.map((s) => s.id).join(" ")).toBe("strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi");
+    expect(steps.map((s) => s.id).join(" ")).toBe("strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi figure-8 figure-8:epi");
     expect(!steps.some((s) => s.id.includes("+")), "no twin step").toBe(true);
     for (const s of steps) expect(benchPlan(`?${s.query}`)!.ultra, s.id).toBe(ULTRA_AVAILABLE);
   });
@@ -90,8 +92,8 @@ describe("given a loop that has just finished a step", () => {
       const s = loopSettings(run, stepOf(run));
       seen.push(`${s.session} ${s.loop} ${s.step}`);
     }
-    expect(seen.length).toBe(24);
-    expect(seen.slice(0, 9).join(" | ")).toBe("k3x9q2 1 strip | k3x9q2 1 strip:epi | k3x9q2 1 city | k3x9q2 1 city:epi | k3x9q2 1 dam-spine | k3x9q2 1 dam-spine:epi | k3x9q2 1 national-mall | k3x9q2 1 national-mall:epi | k3x9q2 2 strip:epi");
+    expect(seen.length).toBe(30);
+    expect(seen.slice(0, 11).join(" | ")).toBe("k3x9q2 1 strip | k3x9q2 1 strip:epi | k3x9q2 1 city | k3x9q2 1 city:epi | k3x9q2 1 dam-spine | k3x9q2 1 dam-spine:epi | k3x9q2 1 national-mall | k3x9q2 1 national-mall:epi | k3x9q2 1 figure-8 | k3x9q2 1 figure-8:epi | k3x9q2 2 strip:epi");
     expect(new Set(seen.map((s) => s.split(" ")[0])).size).toBe(1);
   });
 
@@ -222,12 +224,12 @@ describe("given a loop whose state is in the address of its bench page", () => {
   });
 
   const hrefCases = [
-    { it: "the address has a share fragment and a leftover v", from: `${base}?v=old#seed=7`, run: { ...RUN, step: 4 }, expected: `${base}?bench=city&course=dam-spine&loop=k3x9q2&cycle=1&step=4&keep=0&auto=0&loopultra=0&cycleultra=0&extended=1&loopepi=1` },
+    { it: "the address has a share fragment and a leftover v", from: `${base}?v=old#seed=7`, run: { ...RUN, step: 4 }, expected: `${base}?bench=city&course=dam-spine&loop=k3x9q2&cycle=1&step=4&maps=strip,city,dam-spine,national-mall&keep=0&auto=0&loopultra=0&cycleultra=0&extended=1&loopepi=1` },
     {
       it: "every option is on",
       from: base,
       run: { ...RUN, loop: 3, step: 0, keep: true, auto: true, ultra: true, ultraNext: true },
-      expected: `${base}?bench=strip${ULTRA_AVAILABLE ? "&ultra=1" : ""}&loop=k3x9q2&cycle=3&step=0&keep=1&auto=1&loopultra=1&cycleultra=1&extended=1&loopepi=1`,
+      expected: `${base}?bench=strip${ULTRA_AVAILABLE ? "&ultra=1" : ""}&loop=k3x9q2&cycle=3&step=0&maps=strip,city,dam-spine,national-mall&keep=1&auto=1&loopultra=1&cycleultra=1&extended=1&loopepi=1`,
     },
   ];
   for (const testCase of hrefCases) {
@@ -237,7 +239,7 @@ describe("given a loop whose state is in the address of its bench page", () => {
   }
 
   it("when a step's address is read back, then it is the run it was built from", () => {
-    const run: BenchRun = { session: "k3x9q2", loop: 7, step: 1, ultra: true, keep: true, auto: false, ultraNext: true, extended: true, epi: false };
+    const run: BenchRun = { session: "k3x9q2", loop: 7, step: 1, ultra: true, keep: true, auto: false, ultraNext: true, extended: true, epi: false, maps: ["figure-8", "city"] };
     const back = parseRun(searchOf(stepHref(base, run)));
     expect(back?.session, "session").toBe(run.session);
     expect(back?.loop, "cycle count").toBe(run.loop);
@@ -247,6 +249,7 @@ describe("given a loop whose state is in the address of its bench page", () => {
     expect(back?.auto, "auto").toBe(run.auto);
     expect(back?.ultraNext, "the next cycle's Ultra").toBe(run.ultraNext);
     expect(back?.epi, "the epicenter option").toBe(run.epi);
+    expect(back?.maps.join(), "the maps").toBe(run.maps.join());
   });
 
   const parseCases = [
@@ -437,21 +440,21 @@ function idsOf(run: BenchRun): string {
 describe("given the quick bench, the default: each map once, under the epicenter arm while that option is on", () => {
   it("when /bench's page (?bench=strip) starts a quick loop with every option left on, then every map runs its epicenter arm and the loop keeps going", () => {
     const run = runFromPage("?bench=strip", "k3x9q2")!;
-    expect(idsOf(run)).toBe("strip:epi city:epi dam-spine:epi national-mall:epi");
+    expect(idsOf(run)).toBe("strip:epi city:epi dam-spine:epi national-mall:epi figure-8:epi");
     for (let at: BenchRun | null = run; at !== null && at.loop === 1; at = advance(at)) expect(benchPlan(loopSearch(at))!.epicenter, stepOf(at).id).toBe(true);
     expect(run.keep, "Loop is on").toBe(true);
   });
 
-  it("when the Epicenter option is off, then the four maps run once each with no epicenter arm, and with Loop off it ends after them", () => {
-    const run = runFromPage(withOptions("?bench=strip", { keep: false, epi: false, ultra: false, extended: false }), "k3x9q2")!;
-    expect(idsOf(run)).toBe("strip city dam-spine national-mall");
-    expect(advance({ ...run, step: 3 }), "the loop ends after the fourth map").toBe(null);
+  it("when the Epicenter option is off, then the five maps run once each with no epicenter arm, and with Loop off it ends after them", () => {
+    const run = runFromPage(withOptions("?bench=strip", { keep: false, epi: false, ultra: false, extended: false, maps: DEFAULT_MAPS }), "k3x9q2")!;
+    expect(idsOf(run)).toBe("strip city dam-spine national-mall figure-8");
+    expect(advance({ ...run, step: 4 }), "the loop ends after the fifth map").toBe(null);
   });
 
   it("when a quick loop is kept, then every cycle runs the arm the run chose", () => {
-    const second = advance({ ...startRun("k3x9q2"), step: 3 })!;
+    const second = advance({ ...startRun("k3x9q2"), step: 4 })!;
     expect(second.loop).toBe(2);
-    expect(idsOf(second)).toBe("strip:epi city:epi dam-spine:epi national-mall:epi");
+    expect(idsOf(second)).toBe("strip:epi city:epi dam-spine:epi national-mall:epi figure-8:epi");
   });
 
   it("when a quick step's address is built and read back, then it carries the epicenter option and the bench kind, and the page's plan reads quick from it; an extended step's reads extended", () => {
@@ -471,7 +474,7 @@ describe("given the quick bench, the default: each map once, under the epicenter
     expect(stepOf(runFromPage("?bench=city&epi=1&loopepi=0", "k3x9q2")!).id).toBe("city");
   });
 
-  it("when a quick loop is driven in one page, then the four maps run once each with no pause after the last, and the loop's progress says step n of 4", async () => {
+  it("when a quick loop is driven in one page, then the five maps run once each with no pause after the last, and the loop's progress says step n of 5", async () => {
     const ran: string[] = [];
     const progress: string[] = [];
     let pauses = 0;
@@ -485,9 +488,9 @@ describe("given the quick bench, the default: each map once, under the epicenter
       pause: async () => void pauses++,
       reload: async () => false,
     });
-    expect(ran.join(" ")).toBe("strip city dam-spine national-mall");
-    expect(progress.join(" | ")).toBe("loop 1, step 1/4 | loop 1, step 2/4 | loop 1, step 3/4 | loop 1, step 4/4");
-    expect(pauses).toBe(3);
+    expect(ran.join(" ")).toBe("strip city dam-spine national-mall figure-8");
+    expect(progress.join(" | ")).toBe("loop 1, step 1/5 | loop 1, step 2/5 | loop 1, step 3/5 | loop 1, step 4/5 | loop 1, step 5/5");
+    expect(pauses).toBe(4);
   });
 });
 
@@ -507,20 +510,20 @@ describe("given the chooser before a new loop (Extended, Loop, Epicenter, Ultra)
   });
 
   it("when Epicenter is turned off for the extended bench, then each map runs once without it, the extended page all the same", () => {
-    const run = runFromPage(withOptions("?bench=strip&extended=1", { keep: true, epi: false, ultra: false, extended: true }), "k3x9q2")!;
-    expect(idsOf(run)).toBe("strip city dam-spine national-mall");
+    const run = runFromPage(withOptions("?bench=strip&extended=1", { keep: true, epi: false, ultra: false, extended: true, maps: DEFAULT_MAPS }), "k3x9q2")!;
+    expect(idsOf(run)).toBe("strip city dam-spine national-mall figure-8");
     expect(benchPlan(loopSearch(run))!.extended).toBe(true);
   });
 
   it("when the options are chosen, then Ultra on runs Ultra this cycle and the next where the build has it, and off runs it in neither", () => {
-    const on = runFromPage(withOptions("?bench=strip", { keep: true, epi: true, ultra: true, extended: false }), "k3x9q2")!;
-    const off = runFromPage(withOptions("?bench=strip", { keep: true, epi: true, ultra: false, extended: false }), "k3x9q2")!;
+    const on = runFromPage(withOptions("?bench=strip", { keep: true, epi: true, ultra: true, extended: false, maps: DEFAULT_MAPS }), "k3x9q2")!;
+    const off = runFromPage(withOptions("?bench=strip", { keep: true, epi: true, ultra: false, extended: false, maps: DEFAULT_MAPS }), "k3x9q2")!;
     expect(on.ultra && on.ultraNext, "on: this cycle and the next, where the build has it").toBe(ULTRA_AVAILABLE);
     expect(off.ultra || off.ultraNext, "off: neither").toBe(false);
   });
 
   it("when an option is turned off, then every later page of the run, read back from its own address, has it off", () => {
-    let at: BenchRun | null = runFromPage(withOptions("?bench=strip", { keep: true, epi: false, ultra: false, extended: false }), "k3x9q2");
+    let at: BenchRun | null = runFromPage(withOptions("?bench=strip", { keep: true, epi: false, ultra: false, extended: false, maps: DEFAULT_MAPS }), "k3x9q2");
     for (let pages = 0; pages < 8; pages++) {
       must(at !== null, `page ${pages}`);
       const search = loopSearch(at);
@@ -530,8 +533,8 @@ describe("given the chooser before a new loop (Extended, Loop, Epicenter, Ultra)
   });
 
   it("when Extended is chosen on the quick entry, then the run is the extended cycle: every map whole, then under the epicenter, each page extended", () => {
-    const run = runFromPage(withOptions("?bench=strip&choose=1", { keep: true, epi: true, ultra: false, extended: true }), "k3x9q2")!;
-    expect(idsOf(run)).toBe("strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi");
+    const run = runFromPage(withOptions("?bench=strip&choose=1", { keep: true, epi: true, ultra: false, extended: true, maps: DEFAULT_MAPS }), "k3x9q2")!;
+    expect(idsOf(run)).toBe("strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi figure-8 figure-8:epi");
     expect(benchPlan(loopSearch(run))!.extended).toBe(true);
   });
 
@@ -558,5 +561,87 @@ describe("given the chooser before a new loop (Extended, Loop, Epicenter, Ultra)
     expect(named.course, "named: course").toBe("dam-spine");
     expect(named.extended, "named: extended").toBe(1);
     expect(named.keep, "named: keep").toBe(0);
+  });
+});
+
+const idsOfMaps = (maps: readonly { id: string }[]): string => maps.map((m) => m.id).join(" ");
+
+describe("given the maps the chooser lists", () => {
+  // mutation: sed -i '/id: FIGURE_8_ID, query/d' src/game/engine/bench-loop.ts  (reds the list row and every default-cycle row)
+  // mutation: sed -i 's/label: "Figure Eight", byDefault: true/label: "Figure Eight", byDefault: false/' src/game/engine/bench-loop.ts  (reds the defaults)
+  // mutation: sed -i 's/{ id: BENCH_KIND.strip, query: benchQuery(BENCH_KIND.strip), label: "Strip", byDefault: true },/{ id: FIGURE_8_ID, query: courseQuery(FIGURE_8_ID), label: "Figure Eight", byDefault: true },\n&/' src/game/engine/bench-loop.ts  (reds the order: figure-8 first)
+  it("when the list is read, then the old four maps come first in their old order, the figure-8 after the Mall, the other race courses after it, and only the first five are on by default", () => {
+    expect(idsOfMaps(MAP_CHOICES)).toBe("strip city dam-spine national-mall figure-8 oval rally stunt four-count razor-shelf breaker-yard");
+    expect(DEFAULT_MAPS.join(" ")).toBe("strip city dam-spine national-mall figure-8");
+    expect(idsOfMaps(MAP_CHOICES.filter((m) => !m.byDefault))).toBe("oval rally stunt four-count razor-shelf breaker-yard");
+  });
+
+  it("when a cycle is listed with no maps named, then its first steps are the old four maps in the old order, so a loop resumed from an older address's step lands on the same course", () => {
+    expect(cycleOf(false).slice(0, 8).map((s) => s.id).join(" ")).toBe(cycleOf(false, 1, FOUR_MAPS).map((s) => s.id).join(" "));
+  });
+
+  // mutation: sed -i 's/ || course === FIGURE_8_ID//' src/game/engine/engine-bench-plan.ts  (reds the figure-8's plan: it benches the city)
+  it("when each map is read as a bench, then it runs the course its id names, and every course on the race menu has its toggle", () => {
+    for (const m of MAP_CHOICES.filter((c) => c.id !== "strip")) expect(benchPlan(`?${m.query}`)?.id, m.id).toBe(m.id);
+    const menu = TRACKS.map((raw) => parseTrack(raw).id).sort();
+    expect(MAP_CHOICES.map((m) => m.id).filter((id) => id !== "strip").sort().join(" "), "a course added to the menu is listed here too").toBe(menu.join(" "));
+  });
+});
+
+describe("given the figure-8 bench", () => {
+  // mutation: sed -i 's/{ \[FIGURE_8_ID\]: 16 }/{}/' src/game/engine/engine-bench-plan.ts  (reds the laps row: nine laps of 403 m end before the extended bench)
+  it("when its page is read, then it is the city bench's field (16 racers, 15 rivals, the 20 s warm-up) on the figure-8, whose laps cover more road than the city's nine", () => {
+    const plan = benchPlan("?bench=city&course=figure-8")!;
+    must(plan.race?.type === "program", "a race program");
+    const options = plan.race.options;
+    must(options, "the program's options");
+    expect(firstMismatch([plan.id, plan.racers, plan.warmS, options.trackId, options.aiCount], ["figure-8", 16, 20, "figure-8", 15])).toBeUndefined();
+    const length = (id: string): number => {
+      const raw = TRACKS.find((json) => parseTrack(json).id === id);
+      must(raw, `${id} is in TRACKS`);
+      return new Track(raw).length;
+    };
+    expect(options.laps! * length("figure-8"), "road the figure-8's race covers").toBeGreaterThan(9 * length("city"));
+  });
+});
+
+describe("given a loop address that names its maps", () => {
+  // mutation: sed -i 's/ && all.indexOf(id) === i//' src/game/engine/bench-loop.ts  (reds the repeat in the maps)
+  // mutation: sed -i 's/MAP_CHOICES.some((m) => m.id === id) && //' src/game/engine/bench-loop.ts  (an unknown id stays: the cycle's steps fail on it)
+  it("when the address names maps, then the cycle is exactly those steps in that order; an unknown id and a repeat are dropped", () => {
+    const run = parseRun("?bench=city&loop=k3x9q2&extended=1&maps=figure-8,nowhere,city,../x,figure-8")!;
+    expect(run.maps.join(" ")).toBe("figure-8 city");
+    expect(idsOf(run)).toBe("figure-8 figure-8:epi city city:epi");
+    expect(loopProgress(run)).toBe("loop 1, step 1/4");
+  });
+
+  // mutation: sed -i 's/return ids.length > 0 ? ids : DEFAULT_MAPS;/return ids;/' src/game/engine/bench-loop.ts  (an address naming no known map has no steps)
+  it("when the address names no maps, or none the game knows, then the loop runs the default maps, so an older link keeps working", () => {
+    for (const search of ["?bench=city&loop=k3x9q2", "?bench=city&loop=k3x9q2&maps=", "?bench=city&loop=k3x9q2&maps=nowhere,../x"]) expect(parseRun(search)!.maps.join(" "), search).toBe(DEFAULT_MAPS.join(" "));
+  });
+
+  // mutation: sed -i 's/, `${LOOP_QUERY.maps}=${run.maps.join(",")}`\]/]/' src/game/engine/bench-loop.ts  (the address drops the maps: the reload resumes on the default cycle)
+  // mutation: sed -i 's/epi: on(LOOP_QUERY.epi), maps: parseMaps(q.get(LOOP_QUERY.maps)) }/epi: on(LOOP_QUERY.epi), maps: DEFAULT_MAPS }/' src/game/engine/bench-loop.ts  (reading drops them)
+  it("when a step's address is built and read back mid-cycle, then a reload resumes the same cycle at the same step", () => {
+    const run: BenchRun = { ...startRun("k3x9q2", true), maps: ["figure-8", "oval", "city"], step: 3 };
+    const back = parseRun(loopSearch(run))!;
+    expect(back.maps.join(" ")).toBe(run.maps.join(" "));
+    expect(stepOf(back).id).toBe("oval:epi");
+    expect(idsOf(back)).toBe("oval:epi city city:epi");
+  });
+
+  it("when an older loop's address (no maps) is read, then each step still lands on the course it did: the figure-8 was added after the Mall", () => {
+    const old = "?bench=city&course=dam-spine&loop=af3fa60e&cycle=1&extended=1&step=";
+    expect(stepOf(parseRun(`${old}4`)!).id).toBe("dam-spine");
+    expect(stepOf(parseRun(`${old}7`)!).id).toBe("national-mall:epi");
+  });
+
+  // mutation: sed -i 's/return q.has(LOOP_QUERY.maps) ? { ...run, step: 0 } : null;/return null;/' src/game/engine/bench-loop.ts  (the entry's strip is no map: the loop never starts)
+  it("when the chooser's maps leave out the entry's strip, or an address names maps without its own bench, then the loop starts at the first map; with no maps a bench the cycle does not run is no loop", () => {
+    const chosen = withOptions("?bench=strip&choose=1", { keep: true, epi: true, ultra: false, extended: false, maps: ["city", "figure-8"] });
+    const run = runFromPage(chosen, "k3x9q2")!;
+    expect(firstMismatch([run.step, stepOf(run).id, idsOf(run)], [0, "city:epi", "city:epi figure-8:epi"])).toBeUndefined();
+    expect(stepOf(runFromPage("?bench=strip&maps=figure-8", "k3x9q2")!).id).toBe("figure-8:epi");
+    expect(runFromPage("?bench=lab", "k3x9q2")).toBe(null);
   });
 });

@@ -16,8 +16,8 @@ export function BenchEntry() {
       <Button
         variant="ghost"
         className={BUTTON}
-        aria-label={`Benchmark: run the four maps in turn and submit each result, ${planText(quickPlanS(ULTRA_AVAILABLE))}`}
-        title={`Run the strip, city, biggest-course and National Mall benches one after another and send each result to the developer: ${planText(quickPlanS(ULTRA_AVAILABLE))}`}
+        aria-label={`Benchmark: run the default maps in turn and submit each result, ${planText(quickPlanS(ULTRA_AVAILABLE))}`}
+        title={`Run the strip, city, biggest-course, National Mall and figure-8 benches (the chooser picks the maps) one after another and send each result to the developer: ${planText(quickPlanS(ULTRA_AVAILABLE))}`}
         onClick={() => startBenchLoop(false)}
       >
         Benchmark · {planText(quickPlanS(ULTRA_AVAILABLE))}
@@ -26,7 +26,7 @@ export function BenchEntry() {
         variant="ghost"
         className={BUTTON}
         aria-label={`Extended benchmark: both arms of every map with the A/B blocks and the replay, ${planText(extendedPlanS(ULTRA_AVAILABLE))}`}
-        title={`The long benchmark: every map under both epicenter arms, with the FX, pacer, detail and sky A/Bs and the replay: ${planText(extendedPlanS(ULTRA_AVAILABLE))}`}
+        title={`The long benchmark: every map under both epicenter arms, with the FX, pacer, detail, sky and time-of-day A/Bs and the replay: ${planText(extendedPlanS(ULTRA_AVAILABLE))}`}
         onClick={() => startBenchLoop(true)}
       >
         Extended · {planText(extendedPlanS(ULTRA_AVAILABLE))}
