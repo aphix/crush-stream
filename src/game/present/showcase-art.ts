@@ -94,6 +94,8 @@ const FLOOR_WET_SHARE = 0.6;
 
 /** The disc's radius (m): the sandbox's, grown to hold the scenery rows (the farthest building corner is about 132 m out) and a margin. */
 export const SHOWCASE_RADIUS = 140;
+/** The floor's drawn radius (m): far past the disc the rows and walkers use (`SHOWCASE_RADIUS`), so the set never ends in a rim; the horizon, fog and sky take it from there. */
+const FLOOR_RADIUS = 2500;
 
 /**
  * Every prefab that is not a unique landmark, in rows by size behind the eye (the opening frame looks -z), then the scenery rows past them
@@ -157,7 +159,7 @@ export class ShowcaseArt {
   readonly carSlots = CAR_ROWS.length * CAR_STYLES.length;
   private readonly gallery = new THREE.Group();
   private readonly galleryMaterials: PrefabMaterials;
-  private readonly floor = groundMesh(new THREE.CircleGeometry(SHOWCASE_RADIUS, 64), tagMaterial(new THREE.MeshStandardMaterial({ color: STUDIO_FLOOR, roughness: 1, metalness: 0 }), MAT.STUDIO_FLOOR, FLOOR_WET_SHARE), GROUND_LEVEL.runoff);
+  private readonly floor = groundMesh(new THREE.CircleGeometry(FLOOR_RADIUS, 96), tagMaterial(new THREE.MeshStandardMaterial({ color: STUDIO_FLOOR, roughness: 1, metalness: 0 }), MAT.STUDIO_FLOOR, FLOOR_WET_SHARE), GROUND_LEVEL.runoff);
   /** The posts' spots, in the set whenever it stands (a light shown or hidden relinks every lit shader) and dark by day (`setNight`). */
   private readonly postLights: THREE.SpotLight[] = [];
   /** Every prop the dummies' world holds (`SHOWCASE_PROPS`), drawn where it has them. */
