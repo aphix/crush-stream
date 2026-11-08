@@ -75,12 +75,12 @@
     { "prefab": "billboard", "x": 193, "z": -30, "yaw": 0 }
   ],
   "along": [
-    { "prefab": "lamp", "every": 28, "side": "both", "offset": 0.4, "route": "harbour-road" },
-    { "prefab": "lamp", "every": 28, "side": "both", "offset": 0.4, "route": "market-street" },
-    { "prefab": "building", "every": 17, "side": "both", "offset": 7.5 },
-    { "prefab": "lamp", "every": 28, "side": "both", "offset": 0.4 },
-    { "prefab": "building", "every": 17, "side": "both", "offset": 6.5, "route": "harbour-road" },
-    { "prefab": "building", "every": 17, "side": "both", "offset": 6.5, "route": "market-street" }
+    { "prefab": "lamp", "every": 28, "side": "both", "offset": 0.8, "route": "harbour-road" },
+    { "prefab": "lamp", "every": 28, "side": "both", "offset": 0.8, "route": "market-street" },
+    { "prefab": "building", "every": 17, "side": "both", "offset": 9.6 },
+    { "prefab": "lamp", "every": 28, "side": "both", "offset": 0.8 },
+    { "prefab": "building", "every": 17, "side": "both", "offset": 9.6, "route": "harbour-road" },
+    { "prefab": "building", "every": 17, "side": "both", "offset": 9.6, "route": "market-street" }
   ],
   "scatter": [{ "prefab": "tree", "count": 18, "near": 22, "far": 45, "seed": 11 }],
   "traffic": {

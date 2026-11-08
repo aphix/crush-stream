@@ -67,8 +67,8 @@ export const VERGE_CHANCE_MAX = 0.16;
  */
 export const LAMP_SPACING: Partial<Record<BiomeId, number>> = { city: 28, circuit: 36, park: 48, dirt: 64, desert: 72 };
 
-/** Rule 1: the biomes whose roads are edged with slabs, and each slab's width in sidewalk widths (a town's 2.4 m pavement, a circuit's 6 m apron). */
-export const SLAB_WIDTH: Partial<Record<BiomeId, number>> = { city: 1, circuit: 2.5 };
+/** Rule 1: the biomes whose roads are edged with slabs, and each slab's width in sidewalk widths (a town's 3.6 m pavement, NACTO's downtown sidewalk with 1.8 m clear; a circuit's 6 m apron). */
+export const SLAB_WIDTH: Partial<Record<BiomeId, number>> = { city: 1.5, circuit: 2.5 };
 
 /** Rule 4, medians and islands: per biome the share of 10 m lattice cells inside a loop that holds a bed or bush, and what stands there (a town's and a park's flower beds, a dirt track's and a desert's scrub). */
 export const ISLANDS: Partial<Record<BiomeId, { chance: number; kinds: Kinds }>> = {

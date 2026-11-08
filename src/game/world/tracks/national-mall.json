@@ -18957,7 +18957,7 @@
       "prefab": "lamp",
       "every": 30,
       "side": "right",
-      "offset": 0.4,
+      "offset": 0.8,
       "fromNode": 21,
       "toNode": 55
     },
@@ -18981,7 +18981,7 @@
       "prefab": "lamp",
       "every": 30,
       "side": "left",
-      "offset": 0.4,
+      "offset": 0.8,
       "fromNode": 129,
       "toNode": 155
     },

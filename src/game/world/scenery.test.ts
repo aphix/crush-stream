@@ -219,7 +219,7 @@ describe("given a course's scenery block", () => {
 
   it("when the course names its biome a city, then its roads get sidewalks the width of a pavement, not the circuit's apron", () => {
     const pavement = (d: ReturnType<typeof dress>) => d.drawn.find((p) => p.prefab === PREFAB.sidewalk)!.sx;
-    expect(pavement(dress(OVAL, { biome: BIOME.city }))).toBe(1);
+    expect(pavement(dress(OVAL, { biome: BIOME.city }))).toBe(1.5);
     expect(pavement(base)).toBeGreaterThan(1);
   });
 

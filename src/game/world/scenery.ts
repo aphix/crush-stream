@@ -47,8 +47,8 @@ const LAMP_OFFSET = 0.8;
 const LIT_SHARE = 0.7;
 /** Re-test distance (m) along a road where a station found no biome to dress. */
 const RETRY_STEP = 8;
-/** Spacing (m) of a city's street trees, and their scale range (a young plane tree under the lamps' 4.4 m). */
-const TREE_SPACING = 16;
+/** Spacing (m) of a city's street trees (formal rows run 7 to 10 m, .extraResearch/perplexity/2026-11-08-*.md), and their scale range (a young plane tree under the lamps' 4.4 m). */
+const TREE_SPACING = 10;
 const TREE_SCALE = 0.55;
 const TREE_SCALE_SPAN = 0.2;
 /** Station spacing jitter: a share of the spacing either way. */
@@ -504,7 +504,7 @@ function frontage(c: Ctx): void {
       march(c, pi, stationUnit(c, RULE_FRONTAGE, c.field.base[pi]!, side, 2) * TREE_SPACING, (seg, k) => {
         const scale = TREE_SCALE + TREE_SCALE_SPAN * stationUnit(c, RULE_FRONTAGE, seg, side, 3);
         const crown = hypot2(tw * scale, td * scale) / 2;
-        const spot = roadside(p, k, side, crown + ROAD_STANDOFF + PROP_STANDOFF, c.spot);
+        const spot = roadside(p, k, side, crown + ROAD_STANDOFF, c.spot);
         if (biomeAt(c, spot.x, spot.z, seg) !== BIOME.city) return RETRY_STEP;
         place(c, RULE_FRONTAGE, PREFAB.tree, spot.x, spot.z, stationUnit(c, RULE_FRONTAGE, seg, side, 4) * 2 * Math.PI, scale);
         return TREE_SPACING / c.density[RULE_FRONTAGE]!;
