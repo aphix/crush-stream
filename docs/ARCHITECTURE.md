@@ -193,7 +193,7 @@ if playing:  simDt = wallDt × timeScale × cine.timeWarp
              updatePhase → rigs → FX, ragdolls, smoke, trace → stepDerby → seat.step → cine.update
 always:      net.frame → PoseBlend.present (bodies, loose parts, attached parts and the crush skin drawn at the frame's time between
              the last two sim states) → race.frame → updateCamera → flushVisibleSkins → paintScratches.frame (wear masks of the
-             drawn cars: R when the stroke list moved, G dents when a crushed skin moved, each car at most every 0.25 s, one car a frame) → detail / lamps → audio frame
+             drawn cars: R when the stroke list moved, G dents when a crushed skin moved, each car at most every 0.25 s, one car a frame; then `flush` sends the changed rows to the GPU) → detail / lamps → audio frame
              (audio on) → cine.render → PoseBlend.restore (the sim's own poses and skin back) → emitHud every 0.05–0.12 s
              The thrown drivers' world (`RagdollRemote` ↔ `ragdoll-worker.ts`, a module Web Worker, race courses only) is posted its
              frame in the `ragdolls` step above and answers a frame or two later; the sim holds a frame (`RagdollSystem.waiting`) until the

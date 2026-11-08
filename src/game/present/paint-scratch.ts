@@ -27,8 +27,6 @@ const FACES = CAR_SPRAY.faces.length;
 const TEXEL = 4;
 /** A stroke's least radius, in its face's coarser texel: a hairline narrower than a texel still covers one under linear filtering. */
 const MIN_RADIUS_TEXELS = 0.75;
-/** `WearMask.pending` once more rows wait than it has ranges for: only a whole upload covers them. */
-const FULL = -1;
 
 /** Row pitch (m) across the slide: each 6 mm row holds at most one scratch line, set off its middle by up to `JITTER` of the row, so lines stand apart at uneven spacing with paint between them. */
 const PITCH = 0.006;
@@ -405,13 +403,22 @@ function patchPaint(material: THREE.Material, uniforms: Wear["uniforms"]): void 
   material.needsUpdate = true;
 }
 
-/** One car's RGBA8 wear mask (`TEXEL`) and the reused row ranges that upload what changed. */
+/** The GL object three keeps for a texture once it has uploaded it (`renderer.properties`). */
+type TextureProperties = { __webglTexture?: WebGLTexture };
+
+/** One car's RGBA8 wear mask (`TEXEL`) and the rows of it the GPU has not seen: only texels that differ from what was last sent go up. */
 class WearMask {
   readonly data = new Uint8Array(SIDE * SIDE * TEXEL);
   readonly texture = new THREE.DataTexture(this.data, SIDE, SIDE);
-  private readonly rows = Array.from({ length: SIDE }, () => ({ start: 0, count: 0 }));
-  /** Ranges handed to three since its last upload (it clears them as it sends them), or `FULL`: also before the first, as a partial upload to an unallocated texture makes Firefox clear it first. */
-  private pending = FULL;
+  private readonly words = new Uint32Array(this.data.buffer);
+  /** `words` as the GPU holds them once `flush` has run. */
+  private readonly sent = new Uint32Array(SIDE * SIDE);
+  /** Per row: the first and last texel that differs from `sent` (first > last: none), and how many rows have one. */
+  private readonly first = new Int16Array(SIDE).fill(SIDE);
+  private readonly last = new Int16Array(SIDE).fill(-1);
+  private dirty = 0;
+  /** Three sends the whole mask at its next draw: it has sent none yet (a partial upload to an unallocated texture makes Firefox clear it first), or `touchAll`. */
+  private whole = true;
 
   constructor() {
     const t = this.texture;
@@ -419,37 +426,84 @@ class WearMask {
     t.minFilter = THREE.LinearFilter;
     t.generateMipmaps = false;
     t.needsUpdate = true;
-    t.onUpdate = () => {
-      this.pending = 0;
-    };
+    t.onUpdate = () => this.sentWhole();
   }
 
-  /** Bitmap texels x0..x1 of rows y0..y1 upload at the next draw; ranges in three's RGBA units, which it reads back as pixels. */
+  private sentWhole(): void {
+    this.sent.set(this.words);
+    this.first.fill(SIDE);
+    this.last.fill(-1);
+    this.dirty = 0;
+    this.whole = false;
+  }
+
+  /** Bitmap texels x0..x1 of rows y0..y1 were written: the ones that differ from `sent` wait for `flush`. */
   touch(x0: number, y0: number, x1: number, y1: number): void {
-    const t = this.texture;
-    for (let y = y0; y <= y1 && this.pending !== FULL; y++) {
-      if (this.pending === SIDE) {
-        t.clearUpdateRanges();
-        this.pending = FULL;
-        break;
+    if (this.whole) return;
+    const { words, sent, first, last } = this;
+    for (let y = y0; y <= y1; y++) {
+      let lo = first[y]!;
+      let hi = last[y]!;
+      const clean = lo > hi;
+      for (let i = y * SIDE + x0, x = x0; x <= x1; x++, i++) {
+        if (words[i] === sent[i]) continue;
+        sent[i] = words[i]!;
+        if (x < lo) lo = x;
+        if (x > hi) hi = x;
       }
-      const r = this.rows[this.pending++]!;
-      r.start = (y * SIDE + x0) * 4;
-      r.count = (x1 - x0 + 1) * 4;
-      t.updateRanges[t.updateRanges.length] = r;
+      if (clean && lo <= hi) this.dirty++;
+      first[y] = lo;
+      last[y] = hi;
     }
-    t.needsUpdate = true;
-    countPart(COUNT.wearUploads, 1);
-    countPart(COUNT.wearUploadBytes, (x1 - x0 + 1) * (y1 - y0 + 1) * TEXEL);
   }
 
   /** The whole mask uploads at the next draw. */
   touchAll(): void {
-    this.texture.clearUpdateRanges();
-    this.pending = FULL;
+    this.whole = true;
     this.texture.needsUpdate = true;
     countPart(COUNT.wearUploads, 1);
     countPart(COUNT.wearUploadBytes, SIDE * SIDE * TEXEL);
+  }
+
+  /** Every run of adjacent changed rows goes up in one `texSubImage2D` over the columns the run spans. */
+  flush(renderer: THREE.WebGLRenderer): void {
+    if (this.dirty === 0 || this.whole) return;
+    const gl = renderer.getContext() as WebGL2RenderingContext;
+    const handle = (renderer.properties.get(this.texture) as TextureProperties).__webglTexture;
+    if (handle === undefined) {
+      this.touchAll();
+      return;
+    }
+    const { state } = renderer;
+    state.bindTexture(gl.TEXTURE_2D, handle);
+    state.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    state.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    state.pixelStorei(gl.UNPACK_ALIGNMENT, this.texture.unpackAlignment);
+    state.pixelStorei(gl.UNPACK_ROW_LENGTH, SIDE);
+    for (let y = 0; y < SIDE; y++) {
+      if (this.first[y]! > this.last[y]!) continue;
+      y = this.sendRun(gl, y);
+    }
+    state.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
+    this.dirty = 0;
+  }
+
+  /** The run of changed rows from `y0` sent, cleared; its last row. */
+  private sendRun(gl: WebGL2RenderingContext, y0: number): number {
+    const { first, last } = this;
+    let x0 = SIDE;
+    let x1 = -1;
+    let y = y0;
+    for (; y < SIDE && first[y]! <= last[y]!; y++) {
+      x0 = Math.min(x0, first[y]!);
+      x1 = Math.max(x1, last[y]!);
+      first[y] = SIDE;
+      last[y] = -1;
+    }
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, x0, y0, x1 - x0 + 1, y - y0, gl.RGBA, gl.UNSIGNED_BYTE, this.data, (y0 * SIDE + x0) * TEXEL);
+    countPart(COUNT.wearUploads, 1);
+    countPart(COUNT.wearUploadBytes, (x1 - x0 + 1) * (y - y0) * TEXEL);
+    return y - 1;
   }
 }
 
@@ -531,7 +585,7 @@ export class PaintScratches {
       const rects = this.spatterRects;
       for (let face = 0; face < FACES; face++) clearRect(rects, face * 4);
       for (let k = 0; k < 4; k++) this.wheelThrow(wear, car, k, wheels, c * 4 + k);
-      // One upload per face for the four wheels: rows a stamp crosses are each a texture call.
+      // One touch per face for the four wheels, not one per stamp.
       for (let face = 0; face < FACES; face++) {
         const o = face * 4;
         if (rects[o + 2]! < rects[o]!) continue;
@@ -773,6 +827,11 @@ export class PaintScratches {
     const mask = new WearMask();
     this.made.push(mask);
     return mask;
+  }
+
+  /** Before a draw: every mask's changed rows to the GPU (`WearMask.flush`). */
+  flush(renderer: THREE.WebGLRenderer): void {
+    for (let i = 0; i < this.made.length; i++) this.made[i]!.flush(renderer);
   }
 
   dispose(): void {

@@ -750,6 +750,7 @@ export class CrashEngine extends EngineGarage {
     this.flushVisibleSkins();
     lapPart(PART.skin);
     this.paintScratches.frame(this.drawnCars(), wallDt);
+    this.paintScratches.flush(this.renderer);
     lapPart(PART.paint);
     this.detail.update(this.cars, this.camera, this.followedCar(), this.highlights.playing ? this.highlights.focus() : null);
     this.lampLights.night = this.stage.night;

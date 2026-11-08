@@ -57,3 +57,32 @@ export function cloneOfFinished(own: THREE.Material): boolean {
   const trim = own.userData.sharedTrim as THREE.Material | undefined;
   return trim !== undefined && trim.userData.carFinish !== undefined;
 }
+
+/** A renderer double whose `texSubImage2D` applies each upload, by the unpack rows it set, to `bytes`: the mask as the GPU holds it after the whole upload three makes at the first draw (made here). */
+export function stubGpu(texture: THREE.DataTexture): { renderer: THREE.WebGLRenderer; bytes: Uint8Array; calls: number[][] } {
+  const { width, data } = texture.image as { width: number; data: Uint8Array };
+  const bytes = Uint8Array.from(data);
+  const calls: number[][] = [];
+  const unpack = new Map<number, number>();
+  const gl = {
+    TEXTURE_2D: 1,
+    RGBA: 2,
+    UNSIGNED_BYTE: 3,
+    UNPACK_FLIP_Y_WEBGL: 4,
+    UNPACK_PREMULTIPLY_ALPHA_WEBGL: 5,
+    UNPACK_ALIGNMENT: 6,
+    UNPACK_ROW_LENGTH: 7,
+    texSubImage2D: (_target: number, _level: number, x: number, y: number, w: number, h: number, _format: number, _type: number, src: Uint8Array, offset: number): void => {
+      calls.push([x, y, w, h]);
+      const stride = (unpack.get(7) || w) * 4;
+      for (let r = 0; r < h; r++) bytes.set(src.subarray(offset + r * stride, offset + r * stride + w * 4), ((y + r) * width + x) * 4);
+    },
+  };
+  const renderer = {
+    getContext: () => gl,
+    properties: { get: () => ({ __webglTexture: {} }) },
+    state: { bindTexture: () => undefined, pixelStorei: (name: number, value: number) => void unpack.set(name, value) },
+  };
+  texture.onUpdate?.(texture);
+  return { renderer: renderer as unknown as THREE.WebGLRenderer, bytes, calls };
+}

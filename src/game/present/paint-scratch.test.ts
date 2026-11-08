@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { COUNT, frameParts } from "../kernel/frame-parts.ts";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { fleetClass, fleetStyle } from "../scenes/fleet.ts";
@@ -14,7 +15,7 @@ import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { applyScratch, CREASE_FAR, CREASE_NEAR, DENT_FLOOR, DENT_REBUILD_S, DENT_SETTLE_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
-import { channelTexels, cloneOfFinished, sampledScratch, scraped, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
+import { channelTexels, cloneOfFinished, sampledScratch, scraped, stubGpu, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -220,6 +221,7 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     view.frame(cars, 1 / FRAME_HZ);
   });
   afterAll(() => void (SCRATCH_TIER.value = 1));
+  const redraws = () => frameParts.count[COUNT.dentRedraws]!;
   const mask = () => wearOf(crushed.lookMeshes().bodyPaint);
 
   it("when the masks are drawn, then the crushed car's dents (G) are up on its nose and nowhere on its tail or the rear of its flanks, and the car that never crashed samples no mask", () => {
@@ -289,25 +291,52 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     crushed.scratches.load(stroke, 1);
     view.frame(cars, DENT_REBUILD_S);
     const scratches = channelTexels(crushed, 0);
-    const uploads = mask().version;
+    const before = redraws();
     skinWritten(crushed);
     view.frame(cars, DENT_REBUILD_S);
-    expect(mask().version, "the control: the dents were redrawn").toBeGreaterThan(uploads);
+    expect(redraws(), "the control: the dents were redrawn").toBeGreaterThan(before);
     expect(scratches.some((v) => v > 0), "the control: the car is scratched").toBe(true);
     expect(firstMismatch(channelTexels(crushed, 0), scratches), "R").toBeUndefined();
   });
 
+  it("when its dents are redrawn without their creases and flushed, then the GPU's copy of the mask equals the mask bit for bit, from fewer texels than a whole upload", () => {
+    view.frame(cars, DENT_REBUILD_S);
+    const gpu = stubGpu(mask());
+    SCRATCH_TIER.value = 1;
+    try {
+      view.frame(cars, DENT_REBUILD_S);
+    } finally {
+      SCRATCH_TIER.value = 2;
+    }
+    view.flush(gpu.renderer);
+    const sent = gpu.calls.reduce((n, [, , w, h]) => n + w! * h!, 0);
+    expect(sent, "the control: texels changed and went up").toBeGreaterThan(0);
+    expect(sent, "texels sent").toBeLessThan(CAR_SPRAY.w * CAR_SPRAY.h);
+    expect(firstMismatch(gpu.bytes, wearTexels(crushed)), "the GPU's copy").toBeUndefined();
+  });
+
+  it("when its skin is written again and its dents are redrawn to the texels they had, then no call is sent", () => {
+    view.frame(cars, DENT_REBUILD_S);
+    const gpu = stubGpu(mask());
+    const before = redraws();
+    skinWritten(crushed);
+    view.frame(cars, DENT_REBUILD_S);
+    view.flush(gpu.renderer);
+    expect(redraws(), "the control: the dents were redrawn").toBeGreaterThan(before);
+    expect(gpu.calls.length, "calls").toBe(0);
+  });
+
   it(`when its skin is written every frame for 1 s, then its dents are redrawn at most every ${DENT_REBUILD_S} s`, () => {
     view.frame(cars, DENT_REBUILD_S);
-    let redraws = 0;
+    let drawn = 0;
     for (let i = 0; i < FRAME_HZ; i++) {
-      const uploads = mask().version;
+      const before = redraws();
       skinWritten(crushed);
       view.frame(cars, 1 / FRAME_HZ);
-      if (mask().version > uploads) redraws++;
+      if (redraws() > before) drawn++;
     }
-    expect(redraws, "the control: redrawn").toBeGreaterThan(1);
-    expect(redraws, "redraws in 1 s").toBeLessThanOrEqual(1 / DENT_REBUILD_S + 1);
+    expect(drawn, "the control: redrawn").toBeGreaterThan(1);
+    expect(drawn, "redraws in 1 s").toBeLessThanOrEqual(1 / DENT_REBUILD_S + 1);
   });
 
   it(`when its skin is written and its dents redrawn every frame, then a frame allocates at most ${FRAME_BOUND_B} B`, () => {
@@ -328,15 +357,15 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     let quiet = 0;
     const clock = vi.spyOn(crushed.deform, "quietTime").mockImplementation(() => quiet);
     const redrawsOver = (seconds: number): number => {
-      let redraws = 0;
+      let drawn = 0;
       for (let i = 0; i < Math.round(seconds * FRAME_HZ); i++) {
-        const uploads = mask().version;
+        const before = redraws();
         skinWritten(crushed);
         quiet += 1 / FRAME_HZ;
         view.frame(cars, 1 / FRAME_HZ);
-        if (mask().version > uploads) redraws++;
+        if (redraws() > before) drawn++;
       }
-      return redraws;
+      return drawn;
     };
     try {
       expect(redrawsOver(DENT_SETTLE_S + 2 * DENT_REBUILD_S), "the control: redrawn while the crush plays out").toBeGreaterThan(1);
