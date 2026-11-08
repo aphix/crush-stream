@@ -3,9 +3,9 @@ import * as THREE from "three";
 import { CELL as GROUND_CELL, Track, type TrackGround } from "../world/track.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
 import { MAT, MATERIALS } from "../kernel/material-ids.ts";
-import { MATERIAL_ATTRIBUTE } from "../vehicle/material-class.ts";
+import { MATERIAL_ATTRIBUTE, tagMaterial } from "../vehicle/material-class.ts";
 import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
-import { cellMaterial, FLAT_TOL, Mesher, RoadIndex } from "./track-mesh.ts";
+import { applyMottle, cellMaterial, FLAT_TOL, Mesher, RoadIndex } from "./track-mesh.ts";
 import { sections } from "../world/track-sections.ts";
 import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
 import { must } from "../kernel/must.test-util.ts";
@@ -480,6 +480,30 @@ describe("given Razor Shelf, whose inside cut is a dirt road across dirt terrain
     expect(dirt, `the dirt road is drawn at up to ${dirt.toFixed(3)} of the dirt colour`).toBeLessThan(0.9);
     const paved = brightest("road", "asphalt");
     expect(Math.abs(paved - 1), `asphalt drawn at ${paved.toFixed(3)} of its colour`).toBeLessThan(1e-6);
+  });
+});
+
+describe("given a terrain material patched with the mottle shader", () => {
+  const compile = (surface: keyof typeof SURFACES) => {
+    const material = tagMaterial(new THREE.MeshStandardMaterial(), SURFACES[surface].ribbon);
+    applyMottle(material);
+    const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\n#include <color_fragment>" } as THREE.WebGLProgramParametersWithUniforms;
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    return { vertex: shader.vertexShader, fragment: shader.fragmentShader, key: material.customProgramCacheKey() };
+  };
+
+  it("when the ground is natural (dirt), then its colour takes the wide-scale tint and the pit shade from the world position", () => {
+    const { vertex, fragment } = compile("dirt");
+    expect(vertex, "the world position reaches the fragment shader").toContain("vMottlePos = transformed;");
+    expect(fragment, "a pit floor is darker").toContain("pitShade(vMottlePos.y)");
+    expect(fragment, "a plain varies by the hundred metres").toContain("macroTint(vMottlePos.xz)");
+  });
+
+  it("when the ground is paved (concrete), then it takes the pit shade but no tint, and links a program of its own", () => {
+    const paved = compile("concrete");
+    expect(paved.fragment).toContain("pitShade(vMottlePos.y)");
+    expect(paved.fragment, "a plaza stays one colour").not.toContain("macroTint(vMottlePos.xz)");
+    expect(paved.key).not.toBe(compile("dirt").key);
   });
 });
 

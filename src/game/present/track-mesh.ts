@@ -244,23 +244,68 @@ float mottle(vec2 xz) {
   return ${MOTTLE_LO.toFixed(4)} + ${MOTTLE_SPAN.toFixed(4)} * mix(a, b, f.y);
 }`;
 
+/** Wide-scale ground tint: two octaves of smooth value noise over world xz, so a plain is cells of lighter and darker, warmer and cooler ground instead of one 12 m tile repeating. */
+const MACRO_CELL = 160;
+const MACRO_CELL_FINE = 70;
+/** Brightness swing about 1 (±22 % at the extremes), and the warm/cool shift of red and blue (±9 % / ∓11 %). */
+const MACRO_BRIGHT = 0.22;
+const MACRO_HUE = 0.09;
+/** A pit floor at `PIT_DEPTH` m under the base ground (y 0) is drawn `PIT_DARK` darker, easing in with depth so a trench reads from above. */
+const PIT_DARK = 0.35;
+const PIT_DEPTH = 12;
+
+/** One hash makes both fields (x: brightness, y: warmth), 16 bits each. */
+const MACRO_GLSL = /* glsl */ `
+vec2 macroHash(int a, int b) {
+  uint x = uint(a * 7919 + b) ^ ${Math.imul(MOTTLE_SALT + 2, 0x9e3779b9) >>> 0}u;
+  x *= 0x85ebca6bu;
+  x ^= x >> 13u;
+  x *= 0xc2b2ae35u;
+  x ^= x >> 16u;
+  return vec2(float(x >> 16u), float(x & 65535u)) / 65536.0;
+}
+vec2 macroOctave(vec2 xz, float cell, int salt) {
+  vec2 g = xz / cell;
+  vec2 c = floor(g);
+  vec2 f = g - c;
+  f = f * f * (3.0 - 2.0 * f);
+  int i = int(c.x) + salt;
+  int j = int(c.y);
+  vec2 a = mix(macroHash(i, j), macroHash(i + 1, j), f.x);
+  vec2 b = mix(macroHash(i, j + 1), macroHash(i + 1, j + 1), f.x);
+  return mix(a, b, f.y);
+}
+vec3 macroTint(vec2 xz) {
+  vec2 n = 0.65 * macroOctave(xz, ${MACRO_CELL.toFixed(1)}, 0) + 0.35 * macroOctave(xz, ${MACRO_CELL_FINE.toFixed(1)}, 4099);
+  vec2 s = smoothstep(0.25, 0.75, n) * 2.0 - 1.0;
+  return (1.0 + ${MACRO_BRIGHT.toFixed(4)} * s.x) * vec3(1.0 + ${MACRO_HUE.toFixed(4)} * s.y, 1.0 + ${(MACRO_HUE * 0.2).toFixed(4)} * s.y, 1.0 - ${(MACRO_HUE * 1.2).toFixed(4)} * s.y);
+}
+float pitShade(float y) {
+  return 1.0 - ${PIT_DARK.toFixed(4)} * smoothstep(0.0, ${PIT_DEPTH.toFixed(1)}, -y);
+}`;
+
+const PAVED_MATERIALS = SURFACE_IDS.filter((id) => SURFACES[id].paved).map((id) => SURFACES[id].ribbon);
+
 /**
  * Low-frequency colour mottling of a terrain material, drawn per pixel from the mesh's own xz (a lattice vertex per 8 m was
- * what held a flat stretch of ground to a quad per block): its mesh carries none.
+ * what held a flat stretch of ground to a quad per block): its mesh carries none. Natural ground also takes the wide-scale
+ * `macroTint`; every terrain darkens in a pit.
  */
 export function applyMottle(material: THREE.MeshStandardMaterial): void {
   const prev = material.onBeforeCompile;
   const prevKey = material.customProgramCacheKey;
+  const natural = !PAVED_MATERIALS.includes(material.userData.materialClass as MaterialId);
+  const tint = natural ? "macroTint(vMottlePos.xz)" : "vec3(1.0)";
   material.onBeforeCompile = (shader, renderer) => {
     prev.call(material, shader, renderer);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec2 vMottleXZ;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMottleXZ = transformed.xz;");
+      .replace("#include <common>", "#include <common>\nvarying vec3 vMottlePos;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMottlePos = transformed;");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\nvarying vec2 vMottleXZ;${MOTTLE_GLSL}`)
-      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= mottle(vMottleXZ);");
+      .replace("#include <common>", `#include <common>\nvarying vec3 vMottlePos;${MOTTLE_GLSL}${MACRO_GLSL}`)
+      .replace("#include <color_fragment>", `#include <color_fragment>\ndiffuseColor.rgb *= mottle(vMottlePos.xz) * pitShade(vMottlePos.y) * ${tint};`);
   };
-  material.customProgramCacheKey = () => `${prevKey.call(material)}|mottle`;
+  material.customProgramCacheKey = () => `${prevKey.call(material)}|mottle${natural ? "-macro" : ""}`;
   material.needsUpdate = true;
 }
 
