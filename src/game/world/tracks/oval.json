@@ -75,7 +75,7 @@
   "along": [
     { "prefab": "lamp", "every": 45, "side": "left", "offset": 1.5 },
     { "prefab": "lamp", "every": 45, "side": "right", "offset": 1.5 },
-    { "prefab": "billboard", "every": 120, "side": "right", "offset": 3, "fromNode": 3, "toNode": 7 }
+    { "prefab": "billboard", "every": 120, "side": "right", "offset": 3.1, "fromNode": 3, "toNode": 7 }
   ],
   "scatter": [
     { "prefab": "tree", "count": 70, "near": 14, "far": 70, "seed": 7 }
