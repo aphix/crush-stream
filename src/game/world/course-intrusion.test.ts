@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TRACK_ID } from "./constants.ts";
+import { PREFAB, TRACK_ID } from "./constants.ts";
 import { PREFABS } from "./catalog.ts";
 import { placeCourse, type Placed } from "./placements.ts";
 import { Track, blankProjection, dishRise, projectPath, type TrackPath } from "./track.ts";
@@ -92,13 +92,13 @@ function intrusions(track: Track, reaches: readonly number[], p: Placed, index: 
   return out;
 }
 
-/** Every intrusion of a placed piece; knock props (cones, crates, hay bales) are road obstacles by design. */
+/** Every intrusion of a placed piece; knock props (cones, crates, hay bales) are road obstacles by design, and a scenery asset's decals and tiles are paint laid on the road. */
 function courseIntrusions(track: Track): string[] {
   const reaches = track.paths().map(reachOf);
   const bad: string[] = [];
   const course = placeCourse(track);
   for (const [i, p] of [...course.placed, ...course.drawn].entries()) {
-    if (PREFABS[p.prefab].body === "knock") continue;
+    if (PREFABS[p.prefab].body === "knock" || p.prefab === PREFAB.assetDecal || p.prefab === PREFAB.assetTile) continue;
     for (const hit of intrusions(track, reaches, p, i)) {
       const name = hit.path === 0 ? "loop" : `path ${hit.path}`;
       bad.push(`${track.id}: ${hit.piece} at (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) intrudes ${hit.depth.toFixed(2)} m into the ${name} at segment ${hit.k} (s=${hit.s.toFixed(0)})`);
