@@ -153,21 +153,23 @@ describe("given the oval with billboards along both sides", () => {
 /** A stand's front (local +X) turns to within this many degrees of the nearest road's centreline point, and its front edge keeps this many metres from the nearest wall line. */
 const STAND_ANGLE = 30;
 const STAND_GAP = 8;
-/** Courses whose stands break a bound today, by track id, with the bound they are held to instead (just inside what they measure, so a worse stand still fails). */
+/** Courses whose stands break a bound today, by track id, with the bound they are held to instead (just inside what they measure, so a worse stand still fails). The row fails once a listed course meets the bounds: delete its entry. */
 const KNOWN_AWAY: Record<string, { angle?: number; gap?: number; why: string }> = {
-  "four-count": { angle: 91, why: "the stand at (-30, 155) has yaw 0: it faces parallel to the road, 90.0° off the nearest centreline point 75 m away" },
-  "national-mall": { gap: 3, why: "its along rows of stands stand at offset 7 m: the front edge is 3.5 m from the wall line" },
+  "national-mall": { gap: 3, why: "its along row of stands stands at offset 7 m: the front edge is 3.5 m from the wall line" },
 };
 
 describe("given every course's grandstands", () => {
-  // mutation: sed -i 's/"yaw": 3.927/"yaw": 0.785/' src/game/world/tracks/stunt.json (the stunt hand stand at (-18, -72) turns its back on the road: 177° off)
-  it("when the stands are placed, then each front (+X) points within 30° of the nearest centreline and its front edge stands 8 m clear of the nearest wall line, bar the KNOWN_AWAY courses", () => {
+  // mutation: sed -i 's/"yaw": 3.927/"yaw": 0.785/' src/game/world/tracks/stunt.json
+  // mutation: sed -i '1871s/"x": 40/"x": -30/;1872s/"z": 42.5/"z": 155/;1873s/"yaw": -1.5708/"yaw": 0/' src/game/world/tracks/four-count.json
+  // mutation: sed -i 's/const STAND_GAP = 8;/const STAND_GAP = 3;/' src/game/world/placements.test.ts
+  it("when the stands are placed, then each front (+X) points within 30° of the nearest centreline and its front edge stands 8 m clear of the nearest wall line, and a KNOWN_AWAY course still breaks that", () => {
     let courses = 0;
     for (const json of TRACKS) {
       const t = new Track(json);
       const stands = placeProps(t).filter((s) => s.prefab === "grandstand");
       if (stands.length > 0) courses++;
       const lim = { angle: STAND_ANGLE, gap: STAND_GAP, ...KNOWN_AWAY[t.id] };
+      let breaks = false;
       for (const s of stands) {
         const fx = Math.cos(s.yaw);
         const fz = -Math.sin(s.yaw);
@@ -178,7 +180,9 @@ describe("given every course's grandstands", () => {
         const reach = (PREFABS.grandstand.size[0] * s.sx) / 2;
         const front = Math.min(...t.paths().map((c) => gap(c, s.x + reach * fx, s.z + reach * fz)));
         expect(front, `${at} has its front edge ${front.toFixed(1)} m from the nearest wall line`).toBeGreaterThanOrEqual(lim.gap);
+        breaks ||= toRoad < Math.cos((STAND_ANGLE * Math.PI) / 180) || front < STAND_GAP;
       }
+      if (t.id in KNOWN_AWAY) expect(breaks, `${t.id} meets the stand bounds now: drop it from KNOWN_AWAY`).toBe(true);
     }
     expect(courses, "the courses that have grandstands").toBeGreaterThanOrEqual(6);
   });

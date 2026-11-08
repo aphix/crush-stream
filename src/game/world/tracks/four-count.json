@@ -1868,9 +1868,9 @@
   "props": [
     {
       "prefab": "grandstand",
-      "x": -30,
-      "z": 155,
-      "yaw": 0
+      "x": 40,
+      "z": 42.5,
+      "yaw": -1.5708
     },
     {
       "prefab": "building",
