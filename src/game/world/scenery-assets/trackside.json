@@ -9,6 +9,5 @@
   {"id":"trackside-flags-pole-row","kind":"card","size":[4.4,6.2],"body":"poof","biomes":["circuit","dirt"],"rule":"trackside","weight":0.5,"core":0.679},
   {"id":"trackside-marshal-post","kind":"card","size":[2.2,2.5],"body":"solid","biomes":["circuit","dirt"],"rule":"trackside","weight":0.5,"core":0.983},
   {"id":"trackside-tyre-wall","kind":"box","size":[3,3],"body":"solid","biomes":["circuit","dirt"],"rule":"trackside","weight":0.7,"core":1,"depth":1.2},
-  {"id":"trackside-kerb-paint","kind":"tile","size":[2,1],"body":"none","biomes":["circuit","dirt"],"rule":"trackside","weight":1,"core":1},
-  {"id":"trackside-pit-board","kind":"card","size":[0.9,2.7],"body":"poof","biomes":["circuit"],"rule":"trackside","weight":0.4,"core":0.446}
+  {"id":"trackside-kerb-paint","kind":"tile","size":[2,1],"body":"none","biomes":["circuit","dirt"],"rule":"trackside","weight":1,"core":1}
 ]
