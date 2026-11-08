@@ -81,7 +81,7 @@
   ],
   "scatter": [
     { "prefab": "tree", "count": 120, "near": 8, "far": 80, "seed": 31 },
-    { "prefab": "rock", "count": 30, "near": 5, "far": 60, "seed": 9 }
+    { "prefab": "rock", "count": 30, "near": 7, "far": 60, "seed": 9 }
   ],
   "environment": {
     "sky": "#c9b79c",
