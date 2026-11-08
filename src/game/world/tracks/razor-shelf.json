@@ -119,24 +119,30 @@
         "radius": 200,
         "height": 22
       },
-      {
-        "x": 160,
-        "z": 190,
-        "radius": 70,
-        "height": -24
-      },
-      {
-        "x": 55,
-        "z": 219,
-        "radius": 30,
-        "height": -16
-      },
-      {
-        "x": 55,
-        "z": 151,
-        "radius": 30,
-        "height": -16
-      }
+      { "x": 72, "z": 253, "radius": 10, "height": -15 },
+      { "x": 91, "z": 253, "radius": 10, "height": -15 },
+      { "x": 110, "z": 253, "radius": 10, "height": -15 },
+      { "x": 130, "z": 253, "radius": 10, "height": -15 },
+      { "x": 149, "z": 253, "radius": 10, "height": -15 },
+      { "x": 168, "z": 253, "radius": 10, "height": -15 },
+      { "x": 72, "z": 219, "radius": 10, "height": -15 },
+      { "x": 91, "z": 219, "radius": 10, "height": -15 },
+      { "x": 110, "z": 219, "radius": 10, "height": -15 },
+      { "x": 130, "z": 219, "radius": 10, "height": -15 },
+      { "x": 149, "z": 219, "radius": 10, "height": -15 },
+      { "x": 168, "z": 219, "radius": 10, "height": -15 },
+      { "x": 72, "z": 185, "radius": 10, "height": -15 },
+      { "x": 91, "z": 185, "radius": 10, "height": -15 },
+      { "x": 110, "z": 185, "radius": 10, "height": -15 },
+      { "x": 130, "z": 185, "radius": 10, "height": -15 },
+      { "x": 149, "z": 185, "radius": 10, "height": -15 },
+      { "x": 168, "z": 185, "radius": 10, "height": -15 },
+      { "x": 72, "z": 151, "radius": 10, "height": -15 },
+      { "x": 91, "z": 151, "radius": 10, "height": -15 },
+      { "x": 110, "z": 151, "radius": 10, "height": -15 },
+      { "x": 130, "z": 151, "radius": 10, "height": -15 },
+      { "x": 149, "z": 151, "radius": 10, "height": -15 },
+      { "x": 168, "z": 151, "radius": 10, "height": -15 }
     ],
     "light": {
       "sun": "#ffd2a4",
