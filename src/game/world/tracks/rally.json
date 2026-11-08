@@ -76,7 +76,7 @@
     { "prefab": "cone", "x": 112, "z": 47 },
     { "prefab": "cone", "x": 109, "z": 50 },
     { "prefab": "billboard", "x": -18, "z": 20, "yaw": 1.5708 },
-    { "prefab": "grandstand", "x": -22, "z": -20 }
+    { "prefab": "grandstand", "x": -32, "z": -20 }
   ],
   "along": [
     { "prefab": "lamp", "every": 40, "side": "right", "offset": 1 },
