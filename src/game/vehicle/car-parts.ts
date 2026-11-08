@@ -1373,6 +1373,8 @@ export abstract class CarParts extends CarGlass {
   /** Hand a part to the world where it tore, at the velocity its car had at its seat (the car's, ω × r on top); `push` is car-space m/s on top of that. */
   protected detachPart(p: DetachPart, impulse: number, push?: THREE.Vector3): void {
     if (p.detached) return;
+    // What leaves is read off the drawn skins (a shell's loose shape and start are sim): a hidden car's owed tyre hold is laid first, so no camera changes them.
+    this.layOwedHold();
     // The part leaves in the pose its state gives now, not the last frame's (poses are written once a frame, `poseParts`; a door
     // torn off by `swingHinges` finds none pending).
     this.posePart(p, false);
@@ -1481,9 +1483,13 @@ export abstract class CarParts extends CarGlass {
     if (this.liveShells.length > LIVE_SHELLS) this.liveShells.shift()!.object.visible = false;
   }
 
+  /** Lays on the drawn skins any tyre-hold lift a car no camera sees still owes (`DeformableCar`); before anything that is sim reads them. */
+  protected layOwedHold(): void {}
+
   /** First hinge or tear: the panel's shell joins the car (in the body's own frame: class lift, suspension pose) and its patch of body turns to primer. */
   protected openPanel(p: DetachPart): void {
     if (p.open) return;
+    this.layOwedHold();
     p.open = true;
     const mesh = p.object as THREE.Mesh;
     if (!mesh.geometry.getAttribute("position")) mesh.geometry = makeShell(p.region!, this.body.geometry);

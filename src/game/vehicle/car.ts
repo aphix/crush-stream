@@ -739,7 +739,10 @@ export class DeformableCar extends CarParts {
 
   /** Lays on the meshes the lifts their holds noted, unless no camera sees the car: before it is drawn. */
   settleHold(): void {
-    if (this.holdDeferred) return;
+    if (!this.holdDeferred) this.layOwedHold();
+  }
+
+  protected override layOwedHold(): void {
     this.bodyTyres?.settle();
     if (!this.hoodOff()) this.hoodTyres?.settle();
   }

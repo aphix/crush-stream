@@ -595,4 +595,42 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
     expect(lagged, "off-view frames the deferred hold left the mesh behind the twin's").toBeGreaterThan(0);
     expect(compared, "meshes compared").toBeGreaterThan(MESHES.length * 10);
   });
+
+  // A torn shell's loose shape and start are sim, read off the drawn skin: a camera must not change them.
+  // mutation: sed -i 's/^    this.layOwedHold();$//' src/game/vehicle/car-parts.ts  (the hidden car's shell tears off its stale skin: red)
+  it("when a shut quarter panel is torn off while no camera sees the car and its hold is owed, then the shell and its start are the twin's bit for bit", () => {
+    const drives: DriveInput[] = [];
+    const wreck = (): { w: CrashWorld; car: DeformableCar } => {
+      const car = buildCar("sedan", "sedan");
+      const hitter = buildCar("sedan", "sedan");
+      const w = makeWorld([car, hitter], false, false);
+      const drive: DriveInput = { throttle: 0.5, steer: 0, brake: 0, ebrake: false, boost: false };
+      drives.push(drive);
+      w.pedals.set(car, drive);
+      w.pedals.set(hitter, FREEWHEEL);
+      launch(car, 0, 0, 0, 0, 0);
+      launch(hitter, -5, 0, Math.PI / 2, 25 / 3.6, 0);
+      return { w, car };
+    };
+    const [every, lazy] = [wreck(), wreck()];
+    const shut = (side: number): boolean => !lazy.car.quarterPanel(side).open && !every.car.quarterPanel(side).open;
+    let side = 0;
+    for (let f = 0; f < FRAMES && side === 0; f++) {
+      for (const d of drives) {
+        d.throttle = every.car.crashed ? 0.5 : 0;
+        d.steer = every.car.crashed ? Math.sin((2 * Math.PI * SLALOM_HZ * f) / FRAME_HZ) : 0;
+      }
+      lazy.car.setHoldDeferred(true);
+      tickWorld(every.w, FRAME);
+      tickWorld(lazy.w, FRAME);
+      if (lazy.car.holdOwed) side = shut(1) ? 1 : shut(-1) ? -1 : 0;
+    }
+    expect(side, "a frame came with the hidden car's hold owed and a quarter panel still shut").not.toBe(0);
+    const body = (car: DeformableCar): Float32Array => car.body.geometry.getAttribute("position").array as Float32Array;
+    expect(farthestApart(body(lazy.car), body(every.car)), "the owed hold had left the hidden body's skin behind the twin's").toBeGreaterThan(0);
+    for (const { car } of [every, lazy]) car.ripPanel(side, new THREE.Vector3(side * 3, 1, 0));
+    const [a, b] = [lazy.car.quarterPanel(side).object as THREE.Mesh, every.car.quarterPanel(side).object as THREE.Mesh];
+    assertSameNumbers(a.geometry.getAttribute("position").array, b.geometry.getAttribute("position").array, "the torn shell");
+    assertSameNumbers(a.position.toArray(), b.position.toArray(), "where the shell starts");
+  });
 });
