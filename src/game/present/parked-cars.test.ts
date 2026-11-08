@@ -20,9 +20,9 @@ import { drawCell } from "./track-mesh.ts";
 const oval = COURSE_JSON.find((j) => parseTrack(j).id === TRACK_ID.oval)!;
 const material = new THREE.MeshBasicMaterial();
 const mats = plainMaterials(material);
-/** The most triangles a parked car draws: the shell near the collision cage's size, glass, bumpers and four prism tyres (a wreck stand-in was 36, a whole car is 7000 to 9000). */
-const PARKED_TRIANGLES = 650;
-/** How far (m) a parked car's drawn box may differ from the style's own dimensions (the decimation takes the roof crown's top centimetres). */
+/** The most triangles a parked car draws: a clustered shell, four glass quads, bumpers and four 8-sided prism tyres (a wreck stand-in was 36, a whole car is 7000 to 9000; measured 540 to 860). */
+const PARKED_TRIANGLES = 1000;
+/** How far (m) a parked car's drawn box may differ from the style's own dimensions (the grid merge takes the roof crown's top centimetres). */
 const BOX_SLACK = 0.12;
 
 describe("given the oval's car parks", () => {
@@ -58,8 +58,8 @@ describe("given the oval's car parks", () => {
 
 describe("given each parked car", () => {
   for (const car of PARKED_CARS) {
-    it(`when the ${car.style} is built, then it is one cheap mesh of its style's size, nose +Z, standing on the ground`, () => {
-      // mutation: sed -i 's/body: { vertices: 130/body: { vertices: 2600/' src/game/present/prefabs-car.ts
+    it(`when the ${car.style} is built, then it is one cheap clustered mesh of its style's size, nose +Z, standing on the ground`, () => {
+      // mutation: sed -i 's/body: { shape: 0.32/body: { shape: 0.02/' src/game/present/prefabs-car.ts
       // mutation: sed -i 's/wide: 1.64, long: 4.229/wide: 1.64, long: 3.0/' src/game/world/catalog.ts
       const parts = prefabParts(car.prefab, mats);
       expect(parts.length, "parts").toBe(1);

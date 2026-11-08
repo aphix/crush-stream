@@ -2,14 +2,11 @@ import * as THREE from "three";
 import { once } from "../kernel/scalar.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
-import { decimate } from "../vehicle/cage-mesh.ts";
-import { doorSkinZ } from "../vehicle/car-door-mesh.ts";
 import { DOOR_GLASS_SEAT } from "../vehicle/car-glass.ts";
 import { wheelsOf } from "../vehicle/car-lines.ts";
 import { bumperMaterial, makeWheelGeometry, makeWheelMaterial, treadNormalMap } from "../vehicle/car-materials.ts";
 import { ownGeometry, STYLE_PRODUCTS, type StyleProduct } from "../vehicle/car-templates.ts";
 import { CAR_STYLES, type BodyStyle, type CarStyleId } from "../vehicle/car-variants.ts";
-import { bootPivot } from "../vehicle/hinge-spec.ts";
 import { CLASSES, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { STYLE_WHEELS } from "../vehicle/wheel-batch.ts";
 import { cyl, type Piece, type PrefabPart } from "./prefab-pieces.ts";
@@ -54,46 +51,116 @@ const TRIM_HEX = { body: PARKED_PAINT, chrome: 0xc4c8ce, black: PARKED_BLACK } a
 /** The parked tyre's prism sides: a wheel is a few pixels at a car park's distance. */
 const PARKED_TYRE_SIDES = 8;
 
-/** Where a product's origin sits in the car's frame (`DeformableCar`'s seats: the hood and boot lid on their hinges, doors, door glass and bumpers; the rest are drawn in the car's frame). */
+/** Where a product's origin sits in the car's frame (`DeformableCar`'s seats: the door glass on its door's hinge and the bumpers; the rest are drawn in the car's frame). */
 type Seat = (style: BodyStyle) => readonly [x: number, y: number, z: number];
 const AT_ORIGIN: Seat = () => [0, 0, 0];
-/** The door skin's seat on the hinge of the `side` (-1 left, 1 right) door, and the door glass's on it. */
-const doorAt = (side: 1 | -1): Seat => (s) => [side * s.door.hingeX, s.door.hingeY, s.door.hingeZ + doorSkinZ(s)];
+/** The door glass's seat on the hinge of the `side` (-1 left, 1 right) door. */
 const doorGlassAt = (side: 1 | -1): Seat => (s) => [side * (s.door.hingeX + DOOR_GLASS_SEAT.x), s.door.hingeY + DOOR_GLASS_SEAT.y, s.door.hingeZ + DOOR_GLASS_SEAT.z];
 
 /**
- * The products a parked car draws (a light bar is not one), each with the vertices it keeps (`decimate`: the shell about the collision cage's size, the rest a few corners),
- * its seat, and its colour (a number, or a bumper's own trim).
+ * The products a parked car draws, each with its shape (a grid cell in m its vertices merge by, `clustered`; or a pane's `"quad"` on its four corners), its seat,
+ * and its colour (a number, or a bumper's own trim). The hood, boot lid and door skins are not drawn: the body shell stands under them.
  */
-const PARKED_PRODUCTS: Partial<Record<StyleProduct, { vertices: number; hex: number | "front" | "rear"; seat: Seat }>> = {
-  body: { vertices: 130, hex: PARKED_PAINT, seat: AT_ORIGIN },
-  hood: { vertices: 16, hex: PARKED_PAINT, seat: (s) => [0, s.hood.origin[0], s.hood.origin[1]] },
-  trunkLid: { vertices: 16, hex: PARKED_PAINT, seat: (s) => [0, ...bootPivot(s.boot)] },
-  doorLeft: { vertices: 12, hex: PARKED_PAINT, seat: doorAt(-1) },
-  doorRight: { vertices: 12, hex: PARKED_PAINT, seat: doorAt(1) },
-  bumperFront: { vertices: 28, hex: "front", seat: (s) => [0, s.bumpers.front.seat.y, s.bumpers.front.seat.z] },
-  bumperRear: { vertices: 28, hex: "rear", seat: (s) => [0, s.bumpers.rear.seat.y, -s.bumpers.rear.seat.z] },
-  windshield: { vertices: 8, hex: PARKED_GLASS, seat: AT_ORIGIN },
-  rearGlass: { vertices: 8, hex: PARKED_GLASS, seat: AT_ORIGIN },
-  doorGlassLeft: { vertices: 4, hex: PARKED_GLASS, seat: doorGlassAt(-1) },
-  doorGlassRight: { vertices: 4, hex: PARKED_GLASS, seat: doorGlassAt(1) },
-  quarterGlassLeft: { vertices: 4, hex: PARKED_GLASS, seat: AT_ORIGIN },
-  quarterGlassRight: { vertices: 4, hex: PARKED_GLASS, seat: AT_ORIGIN },
+const PARKED_PRODUCTS: Partial<Record<StyleProduct, { shape: number | "quad"; hex: number | "front" | "rear"; seat: Seat }>> = {
+  body: { shape: 0.32, hex: PARKED_PAINT, seat: AT_ORIGIN },
+  bumperFront: { shape: 0.18, hex: "front", seat: (s) => [0, s.bumpers.front.seat.y, s.bumpers.front.seat.z] },
+  bumperRear: { shape: 0.18, hex: "rear", seat: (s) => [0, s.bumpers.rear.seat.y, -s.bumpers.rear.seat.z] },
+  windshield: { shape: "quad", hex: PARKED_GLASS, seat: AT_ORIGIN },
+  rearGlass: { shape: "quad", hex: PARKED_GLASS, seat: AT_ORIGIN },
+  doorGlassLeft: { shape: "quad", hex: PARKED_GLASS, seat: doorGlassAt(-1) },
+  doorGlassRight: { shape: "quad", hex: PARKED_GLASS, seat: doorGlassAt(1) },
+  quarterGlassLeft: { shape: "quad", hex: PARKED_GLASS, seat: AT_ORIGIN },
+  quarterGlassRight: { shape: "quad", hex: PARKED_GLASS, seat: AT_ORIGIN },
 };
 
-/** `g` decimated to about `vertices` of its own vertices, keeping their positions and normals (build-time, once per style). */
-function decimated(g: THREE.BufferGeometry, vertices: number): THREE.BufferGeometry {
-  const count = g.getAttribute("position").count;
-  const index = g.index ? g.index.array : Uint32Array.from({ length: count }, (_, i) => i);
-  const { source, tris } = decimate(g.getAttribute("position").array as Float32Array, index, new Uint8Array(count), vertices);
+/** The index in `g` of the vertex with the highest `score`. */
+function best(g: THREE.BufferGeometry, score: (v: THREE.Vector3) => number): number {
+  const pos = g.getAttribute("position");
+  const v = new THREE.Vector3();
+  let at = 0;
+  let most = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const s = score(v.fromBufferAttribute(pos, i));
+    if (s > most) {
+      most = s;
+      at = i;
+    }
+  }
+  return at;
+}
+
+/**
+ * A near-flat pane as two triangles on its four extreme corners, facing as it does: the point farthest from its middle, the one farthest from that, then the farthest each side of the line
+ * between them. A decimation tears a flat sheet into slivers; every point here is the pane's own, so none stands off its outline.
+ */
+function paneQuad(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const pos = g.getAttribute("position");
+  const normal = g.getAttribute("normal");
+  const middle = new THREE.Vector3();
+  const facing = new THREE.Vector3();
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    middle.add(v.fromBufferAttribute(pos, i));
+    facing.add(v.fromBufferAttribute(normal, i));
+  }
+  middle.divideScalar(pos.count);
+  const a = best(g, (p) => p.distanceToSquared(middle));
+  const from = new THREE.Vector3().fromBufferAttribute(pos, a);
+  const b = best(g, (p) => p.distanceToSquared(from));
+  const along = new THREE.Vector3().fromBufferAttribute(pos, b).sub(from);
+  const side = (p: THREE.Vector3): number => facing.dot(along.clone().cross(p.clone().sub(from)));
+  const corners = [a, b, best(g, side), best(g, (p) => -side(p))];
   const out = new THREE.BufferGeometry();
   for (const name of ["position", "normal"] as const) {
-    const from = g.getAttribute(name).array as Float32Array;
-    const to = new Float32Array(source.length * 3);
-    for (let k = 0; k < source.length; k++) for (let c = 0; c < 3; c++) to[k * 3 + c] = from[source[k]! * 3 + c]!;
+    const source = g.getAttribute(name);
+    const to = new Float32Array(12);
+    for (let k = 0; k < 4; k++) for (let c = 0; c < 3; c++) to[k * 3 + c] = source.getComponent(corners[k]!, c);
     out.setAttribute(name, new THREE.BufferAttribute(to, 3));
   }
-  out.setIndex(Array.from(tris));
+  out.setIndex([0, 1, 2, 0, 3, 1]);
+  g.dispose();
+  return out;
+}
+
+/**
+ * `g` with its vertices merged by the `cell`-metre grid they fall in, each merged vertex the mean of its cell's, and the triangles left with three distinct corners kept once (a thin
+ * sheet folds onto itself into one face). Edge-collapse decimation tore the body's roof open and left shards; a grid merge keeps a closed shell closed.
+ */
+function clustered(g: THREE.BufferGeometry, cell: number): THREE.BufferGeometry {
+  const pos = g.getAttribute("position");
+  const slotOf = new Map<string, number>();
+  const sums: number[] = [];
+  const counts: number[] = [];
+  const merged = new Int32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) {
+    const key = `${Math.round(pos.getX(i) / cell)},${Math.round(pos.getY(i) / cell)},${Math.round(pos.getZ(i) / cell)}`;
+    let slot = slotOf.get(key);
+    if (slot === undefined) {
+      slot = counts.length;
+      slotOf.set(key, slot);
+      counts.push(0);
+      sums.push(0, 0, 0);
+    }
+    merged[i] = slot;
+    counts[slot]!++;
+    for (let c = 0; c < 3; c++) sums[slot * 3 + c]! += pos.getComponent(i, c);
+  }
+  const position = Float32Array.from(sums, (sum, k) => sum / counts[Math.floor(k / 3)]!);
+  const from = g.index ? g.index.array : Uint32Array.from({ length: pos.count }, (_, i) => i);
+  const kept: number[] = [];
+  const seen = new Set<string>();
+  for (let t = 0; t < from.length; t += 3) {
+    const [a, b, c] = [merged[from[t]!]!, merged[from[t + 1]!]!, merged[from[t + 2]!]!];
+    if (a === b || b === c || a === c) continue;
+    const key = [a, b, c].sort((p, q) => p - q).join();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(a, b, c);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute("position", new THREE.BufferAttribute(position, 3));
+  out.setIndex(kept);
+  out.computeVertexNormals();
   g.dispose();
   return out;
 }
@@ -111,13 +178,14 @@ export function parkedCar(style: CarStyleId): Piece[] {
     if (!part) continue;
     const [x, y, z] = part.seat(spec);
     const colour = typeof part.hex === "number" ? part.hex : TRIM_HEX[spec.bumpers[part.hex].trim ?? "black"];
-    pieces.push([decimated(ownGeometry(spec, product), part.vertices).translate(x, y, z - centre), colour, MAT.DUMPSTER_STEEL]);
+    const shaped = part.shape === "quad" ? paneQuad(ownGeometry(spec, product)) : clustered(ownGeometry(spec, product), part.shape);
+    pieces.push([shaped.translate(x, y, z - centre), colour, MAT.DUMPSTER_STEEL]);
   }
   const scale = CLASSES[STYLE_CLASS[style]].wheelScale;
   const radius = spec.dims.wheel.radius * scale;
   const width = spec.dims.wheel.width * scale;
   for (const [x, , z] of wheelsOf(spec.dims)) {
-    pieces.push([cyl(radius, radius, -width / 2, width / 2, PARKED_TYRE_SIDES).rotateZ(Math.PI / 2).translate(x, radius, z - centre), PARKED_BLACK, MAT.TYRE]);
+    pieces.push([cyl(radius, radius, -width / 2, width / 2, PARKED_TYRE_SIDES).rotateZ(Math.PI / 2).translate(x, radius, z - centre), PARKED_BLACK, MAT.TYRE_STACK]);
   }
   return pieces;
 }
