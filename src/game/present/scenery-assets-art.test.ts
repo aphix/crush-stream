@@ -7,9 +7,11 @@ import type { Placed } from "../world/placements.ts";
 import { ASSET_FAMILIES, FAMILY_BASE, SCENERY_ASSETS, type AssetFamily, type SceneryAsset } from "../world/scenery-assets/index.ts";
 import { assetPrefab, assetScale } from "../world/scenery-assets/pick.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
+import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { PropTumble } from "./prop-tumble.ts";
-import { ASSET_FIT, ASSET_RECT, assetCell, makeAssetMaterials } from "./scenery-assets-art.ts";
+import { ASSET_FIT, ASSET_LAYER, ASSET_RECT, ASSET_REPEAT, assetCell, assetParts, makeAssetMaterials, tileUrls } from "./scenery-assets-art.ts";
 import { ATLAS } from "./scenery-atlas/index.ts";
+import { publicWebpSize } from "./webp-size.test-util.ts";
 
 const plain = new THREE.MeshBasicMaterial();
 const MATS = plainMaterials(plain);
@@ -25,16 +27,16 @@ const familyOfPlacement = (p: Placed): AssetFamily => {
   return rowOf(p.asset).family;
 };
 
-function tumbleOf(placed: readonly Placed[]): THREE.InstancedMesh[] {
+function tumbleOf(placed: readonly Placed[], mats: PrefabMaterials = MATS): THREE.InstancedMesh[] {
   const meshes: THREE.InstancedMesh[] = [];
-  new PropTumble(placed, MATS, (mesh) => meshes.push(mesh), () => false, familyOfPlacement);
+  new PropTumble(placed, mats, (mesh) => meshes.push(mesh), () => false, familyOfPlacement);
   return meshes;
 }
 
 /** The first asset of `family` drawn from the atlas (a tile has no rect of its own); -1 when the family has none. */
 const firstSprite = (family: AssetFamily): number => SCENERY_ASSETS.findIndex((row) => row.family === family && row.kind !== "tile");
 
-const spritePlacement = (asset: number, x: number): Placed => {
+const placementOf = (asset: number, x: number): Placed => {
   const row = rowOf(asset);
   const [sx, sy, sz] = assetScale(row, 1);
   return { prefab: assetPrefab(row), x, y: 0, z: 0, yaw: 0, sx, sy, sz, asset };
@@ -72,7 +74,7 @@ describe("given the assets of two families drawn by one generic prefab, each in 
     // mutation: sed -i 's/${styleOf(pl) ?? ""}/${""}/' src/game/present/prop-tumble.ts
     const pair = sharedKindPair();
     const placed: Placed[] = [];
-    for (const asset of pair) for (let column = 0; column < COLUMNS; column++) for (let k = 0; k < PER_COLUMN; k++) placed.push(spritePlacement(asset, column * COLUMN_SPACING + k * COLUMN_STEP));
+    for (const asset of pair) for (let column = 0; column < COLUMNS; column++) for (let k = 0; k < PER_COLUMN; k++) placed.push(placementOf(asset, column * COLUMN_SPACING + k * COLUMN_STEP));
     const meshes = tumbleOf(placed);
     expect(meshes.length, "meshes").toBe(pair.length * COLUMNS);
     for (const mesh of meshes) expect(mesh.count, "placements in a mesh").toBe(PER_COLUMN);
@@ -85,7 +87,7 @@ describe("given placements of an asset in each family", () => {
     it(`when a ${family} sprite is built twice, then each instance reads the asset's atlas cell with v turned to run up the picture`, () => {
       // mutation: sed -i 's/1 - top - height/top/' src/game/present/scenery-assets-art.ts
       must(asset >= 0, `${family} has a sprite asset`);
-      const [mesh] = tumbleOf([spritePlacement(asset, 0), spritePlacement(asset, COLUMN_STEP)]);
+      const [mesh] = tumbleOf([placementOf(asset, 0), placementOf(asset, COLUMN_STEP)]);
       must(mesh, "one mesh");
       const rect = mesh.geometry.getAttribute(ASSET_RECT);
       const [left, top, width, height] = assetCell(asset).rect;
@@ -150,14 +152,13 @@ describe("given each family's atlas and its asset rows", () => {
     const atlas = ATLAS[family];
     const rows = rowsOf(family);
 
-    it(`when the ${family} atlas is read, then its cells run parallel to the family's rows by id, a sprite's rect lies inside the atlas and a tile names a layer`, () => {
-      // mutation: sed -i 's/rect: \[0.538086/rect: [1.538086/' src/game/present/scenery-atlas/greenery.ts
+    it(`when the ${family} atlas is read, then its cells run parallel to the family's rows by index, a sprite's rect lies inside the atlas and a tile names a layer`, () => {
+      // mutation: sed -i 's/"rect":\[0.538086/"rect":[1.538086/' src/game/present/scenery-atlas/greenery.json
       expect(atlas.family, "the atlas's family").toBe(family);
       expect(atlas.cells.length, `${family} cells against rows`).toBe(rows.length);
       for (const [k, row] of rows.entries()) {
         const cell = atlas.cells[k];
         must(cell, `${family} row ${k} has a cell`);
-        expect(cell.id, `${family} cell ${k}`).toBe(row.id);
         if (row.kind === "tile") {
           must(cell.layer !== undefined, `${row.id} names a tile layer`);
           expect(Number.isInteger(cell.layer) && cell.layer >= 0 && cell.layer < atlas.tiles, `${row.id} layer ${cell.layer} of ${atlas.tiles}`).toBe(true);
@@ -170,13 +171,104 @@ describe("given each family's atlas and its asset rows", () => {
     });
 
     it(`when the ${family} sprites' rects are compared two by two, then none overlaps another`, () => {
-      // mutation: sed -i 's/rect: \[0.132813, 0.515625/rect: [0.007813, 0.519531/' src/game/present/scenery-atlas/greenery.ts
-      const sprites = atlas.cells.filter((_, k) => rows[k]?.kind !== "tile");
+      // mutation: sed -i 's/"rect":\[0.132813,0.515625/"rect":[0.007813,0.519531/' src/game/present/scenery-atlas/greenery.json
+      const sprites = rows.flatMap((row, k) => (row.kind === "tile" ? [] : [{ id: row.id, rect: atlas.cells[k]!.rect }]));
       for (const [a, first] of sprites.entries()) {
         for (const second of sprites.slice(a + 1)) expect(overlap(first.rect, second.rect), `${first.id} over ${second.id}`).toBe(false);
       }
     });
   }
+});
+
+/** The families that draw tile patches: those with a tile row. */
+const tiledFamilies = ASSET_FAMILIES.filter((family) => rowsOf(family).some((row) => row.kind === "tile"));
+/** The registry indices of `family`'s tile assets. */
+const tilesOf = (family: AssetFamily): number[] => rowsOf(family).flatMap((row, k) => (row.kind === "tile" ? [FAMILY_BASE[family] + k] : []));
+/** Prefab materials whose assets are the real family materials (the plain record wears one material throughout). */
+const REAL: PrefabMaterials = { ...MATS, assets: makeAssetMaterials(false) };
+const tilePlacements = (family: AssetFamily): Placed[] => tilesOf(family).map((asset, k) => placementOf(asset, k * COLUMN_STEP));
+
+describe("given tile placements of each family that has tiles", () => {
+  for (const family of tiledFamilies) {
+    it(`when ${family} tiles are built, then one mesh wears the family's tile material, laid on the ground stack and not the sprites' material`, () => {
+      // mutation: sed -i 's/return groundMaterial(material, GROUND_LEVEL.decal);/return material;/' src/game/present/scenery-assets-art.ts
+      const meshes = tumbleOf(tilePlacements(family), REAL);
+      expect(meshes.length, "meshes").toBe(1);
+      const tile = assetParts(PREFAB.assetTile, family, REAL)[0]?.material;
+      expect(meshes[0]?.material, "the family's tile material").toBe(tile);
+      expect(tile, "not the sprites' material").not.toBe(REAL.assets[family]);
+      expect(tile?.depthWrite, "a ground layer writes no depth").toBe(false);
+    });
+  }
+});
+
+describe("given the families without tiles", () => {
+  it("when their tile part is asked for, then there is none", () => {
+    // mutation: sed -i 's/ATLAS\[family\].tiles > 0/true/' src/game/present/scenery-assets-art.ts
+    const bare = ASSET_FAMILIES.filter((family) => !tiledFamilies.includes(family));
+    expect(bare.length, "families without tiles").toBeGreaterThan(0);
+    for (const family of bare) expect(assetParts(PREFAB.assetTile, family, REAL), `${family} tile parts`).toEqual([]);
+  });
+});
+
+describe("given the tile patches of every tile asset", () => {
+  it("when they are built, then each instance reads its tile's layer in the family's arrays", () => {
+    // mutation: sed -i 's/layer\[slot\] = cellLayer/layer[slot] = 0/' src/game/present/scenery-assets-art.ts
+    for (const family of tiledFamilies) {
+      const [mesh] = tumbleOf(tilePlacements(family), REAL);
+      must(mesh, `${family} has a tile mesh`);
+      const layer = mesh.geometry.getAttribute(ASSET_LAYER);
+      for (const [slot, asset] of tilesOf(family).entries()) expect(layer.getX(slot), `${rowOf(asset).id} layer`).toBe(assetCell(asset).layer);
+    }
+  });
+
+  it("when they are built, then each instance repeats its tile by the patch's metres over the tile's along x and z", () => {
+    // mutation: sed -i 's/p.sx \/ width/p.sz \/ width/' src/game/present/scenery-assets-art.ts
+    for (const family of tiledFamilies) {
+      const placed = tilePlacements(family);
+      const [mesh] = tumbleOf(placed, REAL);
+      must(mesh, `${family} has a tile mesh`);
+      const repeat = mesh.geometry.getAttribute(ASSET_REPEAT);
+      for (const [slot, asset] of tilesOf(family).entries()) {
+        const [width, depth] = rowOf(asset).size;
+        expect(repeat.getX(slot), `${rowOf(asset).id} repeats along x`).toBeCloseTo(placed[slot]!.sx / width, 5);
+        expect(repeat.getY(slot), `${rowOf(asset).id} repeats along z`).toBeCloseTo(placed[slot]!.sz / depth, 5);
+      }
+    }
+  });
+});
+
+describe("given the strips a tile family's material fetches", () => {
+  it("when their files are read, then the colour is the tile size across and one tile tall per layer, and the half tier and the normal are half that", () => {
+    // mutation: sed -i 's/"tiles-albedo-half"/"tiles-albedo"/' src/game/present/scenery-assets-art.ts
+    expect(tiledFamilies.length, "families with tiles").toBeGreaterThan(0);
+    for (const family of tiledFamilies) {
+      const { tiles, tileSize } = ATLAS[family];
+      const half = { width: tileSize / 2, height: (tileSize / 2) * tiles };
+      expect(publicWebpSize(tileUrls(family, true).albedo), `${family} colour`).toEqual({ width: tileSize, height: tileSize * tiles });
+      expect(publicWebpSize(tileUrls(family, false).albedo), `${family} half-tier colour`).toEqual(half);
+      expect(publicWebpSize(tileUrls(family, true).normal), `${family} normal`).toEqual(half);
+    }
+  });
+});
+
+describe("given a tile family's material", () => {
+  it("when it is compiled, then colour and normal are read by layer from array textures and the quad's own uv feathers its alpha", () => {
+    // mutation: sed -i 's/"#include <map_fragment>"/"#include <mapx_fragment>"/' src/game/present/scenery-assets-art.ts
+    const family = tiledFamilies[0];
+    must(family, "a family has tiles");
+    const material = assetParts(PREFAB.assetTile, family, REAL)[0]?.material;
+    must(material, `${family} has a tile part`);
+    const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
+    const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    expect(shader.uniforms.assetTileMap && shader.uniforms.assetTileNormal, "the layered colour and normal are bound").toBeTruthy();
+    expect(shader.fragmentShader, "colour by layer, alpha feathered by the quad's edge").toContain("texture(assetTileMap, vec3(vMapUv, vTileLayer))");
+    expect(shader.fragmentShader, "normal by layer").toContain("texture(assetTileNormal, vec3(vNormalMapUv, vTileLayer))");
+    expect(shader.fragmentShader, "the edge feather").toContain("vTileEdge");
+    expect(shader.vertexShader, "the per-instance layer and repeat").toContain(`attribute float ${ASSET_LAYER}`);
+    expect(shader.vertexShader, "the per-instance repeat").toContain(`attribute vec2 ${ASSET_REPEAT}`);
+  });
 });
 
 const MB = 1024 * 1024;
@@ -223,7 +315,7 @@ const families = ASSET_FAMILIES.filter((family) => ATLAS[family].cells.length > 
 
 describe("given the textures each family's atlas names", () => {
   it("when the families are listed, then some have atlases and every file each names is under public/scenery", () => {
-    // mutation: sed -i 's/tiles: 0/tiles: 2/' src/game/present/scenery-atlas/greenery.ts
+    // mutation: sed -i 's/"tiles": 0/"tiles": 2/' src/game/present/scenery-atlas/greenery.json
     expect(families.length, "families with an atlas").toBeGreaterThan(0);
     for (const family of families) {
       const files = filesOf(family);
@@ -236,7 +328,7 @@ describe("given the textures each family's atlas names", () => {
   });
 
   it("when each family's textures are totalled, then the full tier holds under its GPU cap and the half tier under its own, and both download under theirs", () => {
-    // mutation: sed -i 's/width: 1024/width: 8192/' src/game/present/scenery-atlas/greenery.ts
+    // mutation: sed -i 's/"width": 1024/"width": 8192/' src/game/present/scenery-atlas/greenery.json
     expect(families.length, "families with an atlas").toBeGreaterThan(0);
     for (const family of families) {
       const files = filesOf(family);

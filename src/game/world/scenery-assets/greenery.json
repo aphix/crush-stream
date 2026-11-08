@@ -1,0 +1,18 @@
+[
+  {"id":"greenery-hedge-clipped","kind":"card","size":[2.4,1.5],"body":"poof","biomes":["park","circuit","city"],"rule":"islands","weight":0.8,"core":0.937},
+  {"id":"greenery-boxwood-ball","kind":"cross","size":[1.1,1.1],"body":"poof","biomes":["park","city"],"rule":"frontage","weight":0.5,"core":0.882},
+  {"id":"greenery-shrub-green","kind":"cross","size":[1.8,1.7],"body":"poof","biomes":["park","circuit","city"],"rule":"verge","weight":0.9,"core":0.926},
+  {"id":"greenery-shrub-azalea-pink","kind":"cross","size":[1.5,1.5],"body":"poof","biomes":["park","city"],"rule":"islands","weight":0.5,"core":0.537},
+  {"id":"greenery-shrub-hydrangea-blue","kind":"cross","size":[1.6,1.6],"body":"poof","biomes":["park","city"],"rule":"frontage","weight":0.4,"core":0.965},
+  {"id":"greenery-bed-tulip-red","kind":"cross","size":[3,1.25],"body":"poof","biomes":["park","city"],"rule":"islands","weight":0.5,"core":1},
+  {"id":"greenery-bed-marigold-yellow","kind":"cross","size":[3,1],"body":"poof","biomes":["park","circuit","city"],"rule":"islands","weight":0.5,"core":0.948},
+  {"id":"greenery-bed-lavender-purple","kind":"cross","size":[3,1.25],"body":"poof","biomes":["park","city"],"rule":"frontage","weight":0.4,"core":1},
+  {"id":"greenery-pot-terracotta-red","kind":"cross","size":[0.9,0.7],"body":"poof","biomes":["city","park"],"rule":"frontage","weight":0.6,"core":0.872},
+  {"id":"greenery-pot-glazed-blue","kind":"cross","size":[0.85,0.7],"body":"poof","biomes":["city","park"],"rule":"frontage","weight":0.5,"core":0.967},
+  {"id":"greenery-grass-tuft","kind":"cross","size":[0.8,0.42],"body":"poof","biomes":["park","circuit","city"],"rule":"verge","weight":0.9,"core":0.576},
+  {"id":"greenery-grass-ornamental","kind":"cross","size":[1.5,1.45],"body":"poof","biomes":["circuit","park","city"],"rule":"trackside","weight":0.5,"core":0.968},
+  {"id":"greenery-fern","kind":"cross","size":[1.1,1],"body":"poof","biomes":["park","city"],"rule":"verge","weight":0.4,"core":0.649},
+  {"id":"greenery-ivy-patch","kind":"card","size":[1.8,1.75],"body":"none","biomes":["city","park"],"rule":"frontage","weight":0.5,"core":0.999},
+  {"id":"greenery-cherry-blossom","kind":"card","size":[8.5,6.6],"body":"none","biomes":["park","city"],"rule":"islands","weight":0.5,"core":0.189},
+  {"id":"greenery-elm-crown","kind":"card","size":[9.5,11],"body":"none","biomes":["park","city","circuit"],"rule":"verge","weight":0.8,"core":0.73}
+]

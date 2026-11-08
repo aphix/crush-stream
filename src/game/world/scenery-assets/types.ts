@@ -7,7 +7,7 @@ export type AssetFamily = (typeof ASSET_FAMILIES)[number];
 /** How an asset is drawn: an upright quad (`card`), two crossed quads (`cross`), a flat quad on the ground (`decal`), a repeating ground patch (`tile`), a box wearing the skin (`box`). */
 export type AssetKind = "card" | "cross" | "decal" | "tile" | "box";
 /** What a car meets: `poof` a plant it drives through (drawn only), `none` nothing, `knock` a loose prop, `solid` a collider where a car can reach it (else drawn only). */
-export type AssetBody = "none" | "poof" | "knock" | "solid";
+type AssetBody = "none" | "poof" | "knock" | "solid";
 /** The placement rule that picks an asset (`scenery.ts`). */
 export type AssetRule = "verge" | "islands" | "frontage" | "paving" | "trackside" | "carpark" | "yard" | "ground";
 

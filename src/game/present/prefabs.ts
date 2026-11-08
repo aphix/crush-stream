@@ -12,7 +12,7 @@ import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMa
 import { PREFAB } from "../world/constants.ts";
 import { dressPaving } from "./ground-relief.ts";
 import { buildingPieces } from "./facade-mesh.ts";
-import { disposeFacadeMaterials, type FacadeStyle, homeStyle, makeFacadeMaterials } from "./facades.ts";
+import { disposeFacadeMaterials, homeStyle, makeFacadeMaterials } from "./facades.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { applyWaterLook } from "./water-look.ts";

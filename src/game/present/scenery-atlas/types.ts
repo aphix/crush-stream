@@ -1,8 +1,7 @@
 import type { AssetFamily } from "../../world/scenery-assets/types.ts";
 
-/** One asset's place in its family's textures (rows parallel the family's `world/scenery-assets` rows). */
+/** One asset's place in its family's textures (cells run parallel to the family's `world/scenery-assets` rows). */
 export type AtlasCell = {
-  id: string;
   /** Left, top, width and height of the cell as shares of the atlas (origin top left, as the maps are loaded: `flipY` off). A tile has none. */
   rect: readonly [number, number, number, number];
   /** Mean sRGB colour of the cell's opaque texels: a plant's leaves take it when a car drives through. */
@@ -11,7 +10,7 @@ export type AtlasCell = {
   layer?: number;
 };
 
-/** A family's textures, written by `scripts/sprite-pack.mjs` to `public/scenery/<family>-*.webp`. */
+/** A family's textures, written by `scripts/sprite-pack.mjs` to `public/scenery/<family>-*.webp` and its cells to `scenery-atlas/<family>.json`. */
 export type AtlasFamily = {
   family: AssetFamily;
   /** Size (px) of the full tier's albedo atlas (the half-size one and the normal map are 1/2 of it each way). */

@@ -8,7 +8,7 @@ const CARD_DEPTH = 0.3;
 /** The thickest (m) a standee's collider is: a sprite's solid box is as deep as it is wide, to this. */
 const STANDEE_DEPTH = 0.5;
 /** A tile patch's side as a number of its repeats (a tile's `size` is metres per repeat). */
-export const TILE_REPEATS = 2;
+const TILE_REPEATS = 2;
 
 /** The generic prefab that draws `a`: a solid card is a standee, a solid cross a solid cross and a solid box a solid box (each a unit collider the placement scales). */
 export function assetPrefab(a: SceneryAsset): PrefabId {

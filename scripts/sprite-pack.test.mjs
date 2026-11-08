@@ -1,4 +1,5 @@
 import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { pack } from "./sprite-pack.mjs";
 
@@ -7,6 +8,13 @@ const REQUIRED_CLEAR_TEXELS = 8;
 /** The side of a tile layer at the full tier. */
 const TILE_SIDE = 256;
 const WEBP_OUTPUTS = ["albedo", "albedoHalf", "normal", "tilesAlbedo", "tilesAlbedoHalf", "tilesNormal"];
+
+/** Decodes a webp to straight RGBA bytes through ffmpeg: the canvas premultiplies, which would hide the colour under alpha 0. */
+function decodeStraight(webp) {
+  const result = spawnSync("ffmpeg", ["-v", "error", "-i", "pipe:0", "-f", "rawvideo", "-pix_fmt", "rgba", "pipe:1"], { input: webp, maxBuffer: 1 << 26 });
+  if (result.status !== 0) throw new Error(`ffmpeg could not decode the webp: ${result.error ?? result.stderr}`);
+  return result.stdout;
+}
 
 function discPicture() {
   const canvas = createCanvas(96, 96);
@@ -67,12 +75,27 @@ describe("given a 96 px picture of a saturated red disc on a white background, p
     expect(centre[0], "red at the content's centre").toBeGreaterThan(200);
     expect(centre[1], "green at the content's centre").toBeLessThan(60);
   });
+
+  // mutation: sed -i 's/const BLEED_PASSES = 8;/const BLEED_PASSES = 0;/' scripts/sprite-pack-pixels.mjs
+  it("when the albedo atlas is decoded with its colour kept, then a clear texel near the disc's edge carries the disc's red, not grey or black", async () => {
+    const packed = await pack("test", [row("test-disc", "card", [1, 1], discPicture())]);
+    const rgba = decodeStraight(packed.albedo);
+    const content = contentTexels(packed.layout, "test-disc");
+    const rowStart = (content.top + (content.height >> 2)) * packed.layout.width;
+    const alphaAt = (x) => rgba[(rowStart + x) * 4 + 3];
+    let edge = content.left;
+    while (edge < content.left + content.width && alphaAt(edge) === 0) edge++;
+    expect(edge - content.left, "clear texels between the content's left side and the disc").toBeGreaterThan(3);
+    const outside = (rowStart + edge - 3) * 4;
+    expect(rgba[outside + 3], "alpha of a clear texel two short of the disc's edge").toBe(0);
+    expect(rgba[outside] - rgba[outside + 1], "red minus green of that clear texel (grey without the bleed)").toBeGreaterThan(40);
+  });
 });
 
 describe("given a card and a tile packed together", () => {
   const rows = () => [row("test-disc", "card", [1, 1], discPicture()), row("test-floor", "tile", [2, 1], plainPicture("#2060c0", 192, 128))];
 
-  // mutation: sed -i 's/return canvas.toBuffer("image\/webp", quality);/return canvas.toBuffer("image\/webp", quality - Math.floor(Math.random() * 20));/' scripts/sprite-pack-pixels.mjs
+  // mutation: sed -i 's/"-q:v", String(quality),/"-q:v", String(quality - Math.floor(Math.random() * 20)),/' scripts/sprite-pack-pixels.mjs
   it("when they are packed twice, then every output is byte for byte the same", async () => {
     const first = await pack("test", rows());
     const second = await pack("test", rows());
@@ -80,8 +103,8 @@ describe("given a card and a tile packed together", () => {
       expect(first[output].length, `${output} bytes`).toBeGreaterThan(0);
       expect(first[output].equals(second[output]), `${output} identical across runs`).toBe(true);
     }
-    expect(second.worldTs === first.worldTs, "world file text identical across runs").toBe(true);
-    expect(second.atlasTs === first.atlasTs, "atlas file text identical across runs").toBe(true);
+    expect(second.worldJsonText === first.worldJsonText, "world data text identical across runs").toBe(true);
+    expect(second.atlasJsonText === first.atlasJsonText, "atlas data text identical across runs").toBe(true);
   });
 });
 
@@ -109,6 +132,38 @@ describe("given two cards of different sizes packed into one family", () => {
   });
 });
 
+describe("given a card, a box with a depth and a tile, listed in that order", () => {
+  const rows = () => [
+    row("test-disc", "card", [1, 1], discPicture()),
+    { ...row("test-crate", "box", [1.2, 0.9], plainPicture("#a06020", 120, 90)), depth: 0.9 },
+    row("test-floor", "tile", [2, 1], plainPicture("#2060c0", 192, 128)),
+  ];
+
+  // mutation: sed -i 's/return typeof row.depth === "number" ? { ...asset, depth: row.depth } : asset;/return asset;/' scripts/sprite-pack.mjs
+  it("when they are packed, then the world rows follow the manifest order with their collider share, the box's depth and no family", async () => {
+    const { worldJson } = await pack("test", rows());
+    expect(worldJson, "world rows").toHaveLength(3);
+    expect(worldJson.map((asset) => asset.id).join(" "), "world row order").toBe("test-disc test-crate test-floor");
+    const [disc, crate, floor] = worldJson;
+    expect(disc.family, "the card row's family field").toBeUndefined();
+    expect(disc.depth, "the card row's depth").toBeUndefined();
+    expect(crate.depth, "the box row's depth").toBe(0.9);
+    expect(crate.core, "the box row's collider share").toBe(1);
+    expect(disc.core, "the disc row's collider share").toBeGreaterThan(0.15);
+    expect(floor.core, "the tile row's collider share").toBe(1);
+  });
+
+  // mutation: sed -i 's/const cells = layout.cells.map(({ rect, tint, layer }) => (layer === undefined ? { rect, tint } : { rect, tint, layer }));/const cells = layout.cells;/' scripts/sprite-pack.mjs
+  it("when they are packed, then the atlas cells run parallel to the world rows with no id and the tile's layer", async () => {
+    const { atlasJson, worldJson } = await pack("test", rows());
+    expect(atlasJson.cells, "atlas cells beside the world rows").toHaveLength(worldJson.length);
+    for (const [index, cell] of atlasJson.cells.entries()) expect(cell.id, `cell ${index} id`).toBeUndefined();
+    expect(atlasJson.cells[0].layer, "the card cell's layer").toBeUndefined();
+    expect(atlasJson.cells[2].layer, "the tile cell's layer").toBe(0);
+    expect(atlasJson.cells[2].rect.join(" "), "the tile cell's rect").toBe("0 0 1 1");
+  });
+});
+
 describe("given two tile rows, one red and one blue", () => {
   const rows = () => [row("test-red", "tile", [2, 1], plainPicture("#c82828", 192, 128)), row("test-blue", "tile", [2, 1], plainPicture("#2828c8", 192, 128))];
 
@@ -123,8 +178,8 @@ describe("given two tile rows, one red and one blue", () => {
     const blueLayer = texel(strip, TILE_SIDE >> 1, TILE_SIDE + (TILE_SIDE >> 1));
     expect(redLayer[0] - redLayer[2], "red minus blue in the first layer").toBeGreaterThan(100);
     expect(blueLayer[2] - blueLayer[0], "blue minus red in the second layer").toBeGreaterThan(100);
-    expect(packed.atlasTs, "atlas file layer count").toContain("tiles: 2,");
-    expect(packed.atlasTs, "atlas file tile size").toContain(`tileSize: ${TILE_SIDE}`);
+    expect(packed.atlasJson.tiles, "atlas data layer count").toBe(2);
+    expect(packed.atlasJson.tileSize, "atlas data tile size").toBe(TILE_SIDE);
   });
 
   it("when they are packed, then the half-size albedo and the normal strips are half the strip each way", async () => {

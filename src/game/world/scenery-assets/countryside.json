@@ -1,0 +1,18 @@
+[
+  {"id":"countryside-tall-grass","kind":"cross","size":[1.37,1.3],"body":"poof","biomes":["dirt","park"],"rule":"verge","weight":0.9,"core":0.931},
+  {"id":"countryside-wildflowers-purple","kind":"cross","size":[0.75,0.9],"body":"poof","biomes":["dirt","park"],"rule":"verge","weight":0.5,"core":0.941},
+  {"id":"countryside-wildflowers-yellow","kind":"cross","size":[0.6,0.8],"body":"poof","biomes":["dirt","park"],"rule":"verge","weight":0.6,"core":0.828},
+  {"id":"countryside-reeds","kind":"cross","size":[1.62,1.6],"body":"poof","biomes":["dirt","park"],"rule":"ground","weight":0.35,"core":0.609},
+  {"id":"countryside-hay-pile","kind":"card","size":[1.8,1.29],"body":"poof","biomes":["dirt"],"rule":"yard","weight":0.4,"core":1},
+  {"id":"countryside-hay-roll","kind":"card","size":[1.5,1.43],"body":"poof","biomes":["dirt"],"rule":"yard","weight":0.4,"core":0.845},
+  {"id":"countryside-hay-bale-skin","kind":"box","size":[1.2,0.9],"body":"knock","biomes":["dirt"],"rule":"trackside","weight":0.8,"core":1,"depth":0.9},
+  {"id":"countryside-fence-section","kind":"card","size":[1.91,1.2],"body":"poof","biomes":["dirt","park"],"rule":"verge","weight":0.6,"core":0.911},
+  {"id":"countryside-fence-picket","kind":"card","size":[1.46,1.1],"body":"poof","biomes":["dirt","park"],"rule":"yard","weight":0.3,"core":0.999},
+  {"id":"countryside-farm-gate","kind":"card","size":[1.94,1.5],"body":"poof","biomes":["dirt"],"rule":"yard","weight":0.25,"core":0.998},
+  {"id":"countryside-stone-wall","kind":"card","size":[1.75,1],"body":"solid","biomes":["dirt","park"],"rule":"verge","weight":0.35,"core":1},
+  {"id":"countryside-mailbox","kind":"card","size":[0.7,0.86],"body":"poof","biomes":["dirt","park"],"rule":"frontage","weight":0.2,"core":0.186},
+  {"id":"countryside-wheelbarrow","kind":"card","size":[1.4,0.8],"body":"poof","biomes":["dirt"],"rule":"yard","weight":0.25,"core":0.653},
+  {"id":"countryside-water-trough","kind":"card","size":[2,0.66],"body":"solid","biomes":["dirt"],"rule":"yard","weight":0.2,"core":1},
+  {"id":"countryside-scarecrow","kind":"card","size":[1.8,2],"body":"poof","biomes":["dirt"],"rule":"yard","weight":0.15,"core":0.497},
+  {"id":"countryside-spectator-tent","kind":"card","size":[3.6,2.35],"body":"poof","biomes":["dirt"],"rule":"trackside","weight":0.5,"core":0.999}
+]

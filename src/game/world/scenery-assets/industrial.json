@@ -1,0 +1,21 @@
+[
+  {"id":"industrial-container-side-red","kind":"box","size":[3.9,2.6],"body":"solid","biomes":["dirt","desert"],"rule":"yard","weight":0.9,"core":1,"depth":2.4},
+  {"id":"industrial-container-side-blue","kind":"box","size":[3.9,2.6],"body":"solid","biomes":["dirt","desert"],"rule":"yard","weight":0.7,"core":1,"depth":2.4},
+  {"id":"industrial-container-side-yellow","kind":"box","size":[3.9,2.6],"body":"solid","biomes":["dirt","desert"],"rule":"yard","weight":0.7,"core":1,"depth":2.4},
+  {"id":"industrial-container-side-green","kind":"box","size":[3.9,2.6],"body":"solid","biomes":["dirt","desert"],"rule":"yard","weight":0.7,"core":1,"depth":2.4},
+  {"id":"industrial-container-door-red","kind":"box","size":[2.35,2.6],"body":"solid","biomes":["dirt","desert"],"rule":"yard","weight":0.9,"core":1,"depth":2.4},
+  {"id":"industrial-container-door-blue","kind":"box","size":[2.35,2.6],"body":"solid","biomes":["dirt","desert"],"rule":"yard","weight":0.7,"core":1,"depth":2.4},
+  {"id":"industrial-container-door-yellow","kind":"box","size":[2.35,2.6],"body":"solid","biomes":["dirt","desert"],"rule":"yard","weight":0.7,"core":1,"depth":2.4},
+  {"id":"industrial-container-door-green","kind":"box","size":[2.35,2.6],"body":"solid","biomes":["dirt","desert"],"rule":"yard","weight":0.7,"core":1,"depth":2.4},
+  {"id":"industrial-crushed-car-stack","kind":"box","size":[4.4,3],"body":"solid","biomes":["dirt","desert"],"rule":"yard","weight":0.9,"core":1,"depth":2},
+  {"id":"industrial-pallet-stack","kind":"box","size":[2.6,1.75],"body":"knock","biomes":["dirt","desert"],"rule":"yard","weight":0.6,"core":1,"depth":1.2},
+  {"id":"industrial-jersey-barrier","kind":"box","size":[1.2,0.81],"body":"solid","biomes":["city","circuit","dirt","desert"],"rule":"verge","weight":0.8,"core":1,"depth":0.5},
+  {"id":"industrial-oil-drums","kind":"card","size":[1.5,1.1],"body":"none","biomes":["dirt","desert"],"rule":"yard","weight":0.8,"core":1},
+  {"id":"industrial-tyre-pile","kind":"card","size":[2.4,1.45],"body":"knock","biomes":["dirt","desert"],"rule":"yard","weight":0.8,"core":1},
+  {"id":"industrial-chainlink-fence","kind":"card","size":[3,1.8],"body":"none","biomes":["city","circuit","dirt","desert"],"rule":"verge","weight":0.9,"core":1},
+  {"id":"industrial-sign-warning","kind":"card","size":[1,2.4],"body":"poof","biomes":["city","circuit","dirt","desert"],"rule":"verge","weight":0.6,"core":0.153},
+  {"id":"industrial-sign-hazard","kind":"card","size":[1.2,1.3],"body":"poof","biomes":["dirt","desert"],"rule":"yard","weight":0.5,"core":0.726},
+  {"id":"industrial-traffic-barrels","kind":"card","size":[1.2,0.92],"body":"knock","biomes":["city","circuit"],"rule":"verge","weight":0.8,"core":1},
+  {"id":"industrial-generator","kind":"card","size":[1.5,1.35],"body":"solid","biomes":["dirt","desert"],"rule":"yard","weight":0.4,"core":1},
+  {"id":"industrial-scrap-pile","kind":"card","size":[5,3],"body":"none","biomes":["dirt","desert"],"rule":"yard","weight":0.9,"core":1}
+]

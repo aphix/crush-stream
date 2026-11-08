@@ -1,7 +1,8 @@
 /**
- * The pixel work behind `sprite-pack.mjs`: keying a picture's background to alpha, trimming, resampling, halving, tangent-space normals and webp encoding.
+ * The pixel work behind `sprite-pack.mjs`: keying a picture's background to alpha, trimming, resampling, halving, colour bleed, tangent-space normals and webp encoding (through ffmpeg).
  * An "image" here is { width, height, data }, `data` a Float32Array of RGBA texels with every channel (alpha too) in 0..255.
  */
+import { spawnSync } from "node:child_process";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 
 /** Side of the corner patches whose median colour is the picture's background (the renders are not pure white). */
@@ -37,6 +38,12 @@ const CHANNELS = 3;
 const TEXEL = 4;
 const ALPHA = 3;
 const BYTE = 255;
+/** Rings of colour carried out from a silhouette into its transparent texels: bilinear reaches 1 texel and each mip level doubles that, so 8 covers the first four levels. */
+const BLEED_PASSES = 8;
+/** libwebp effort (ffmpeg's `-compression_level`): 6 takes 50x the time of 5 for an output 0.2% smaller (measured on an atlas), which would make a test pack take minutes. */
+const WEBP_METHOD = 5;
+/** Largest webp ffmpeg may hand back through the pipe (spawnSync's default is 1 MiB). */
+const FFMPEG_MAX_BUFFER = 64 * 1024 * 1024;
 
 /** Decodes png bytes to an RGBA image (alpha 255 where the picture has none). */
 export async function decodeRgba(png) {
@@ -335,22 +342,68 @@ export function toStraightBytes({ data }) {
 const HALVING_SIDE = 2;
 const HALVING_AREA = 4;
 
-/** A straight RGBA byte image at half size each way, each texel the 2x2 mean weighted by alpha (a box filter that keeps edge colours clean). */
+/**
+ * Gives every fully transparent texel within BLEED_PASSES texels (Chebyshev) of a coloured one the mean colour of its coloured 8-neighbours, one ring a pass (each pass reads
+ * the colours as the pass before left them), so filtering across a silhouette mixes in the sprite's colour, not black. Straight RGBA bytes, changed in place.
+ */
+export function bleedColour(bytes, width, height) {
+  const isColoured = new Uint8Array(width * height);
+  for (let index = 0; index < isColoured.length; index++) isColoured[index] = bytes[index * TEXEL + ALPHA] > 0 ? 1 : 0;
+  const reached = new Int32Array(width * height);
+  const reachedColour = new Uint8ClampedArray(width * height * CHANNELS);
+  for (let pass = 0; pass < BLEED_PASSES; pass++) {
+    let count = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const index = y * width + x;
+        if (isColoured[index] === 1) continue;
+        let red = 0;
+        let green = 0;
+        let blue = 0;
+        let neighbours = 0;
+        for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny++) {
+          for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx++) {
+            const other = ny * width + nx;
+            if (isColoured[other] === 0) continue;
+            red += bytes[other * TEXEL];
+            green += bytes[other * TEXEL + 1];
+            blue += bytes[other * TEXEL + 2];
+            neighbours++;
+          }
+        }
+        if (neighbours === 0) continue;
+        reached[count] = index;
+        reachedColour.set([red / neighbours, green / neighbours, blue / neighbours], count * CHANNELS);
+        count++;
+      }
+    }
+    for (let k = 0; k < count; k++) {
+      for (let c = 0; c < CHANNELS; c++) bytes[reached[k] * TEXEL + c] = reachedColour[k * CHANNELS + c];
+      isColoured[reached[k]] = 1;
+    }
+  }
+}
+
+/** A straight RGBA byte image at half size each way, each texel the 2x2 mean weighted by alpha (a box filter that keeps edge colours clean); a box of four transparent texels takes their plain mean colour. */
 export function halved(bytes, width, height) {
   const halfWidth = width >> 1;
   const half = new Uint8ClampedArray(halfWidth * (height >> 1) * TEXEL);
   for (let y = 0; y < height >> 1; y++) {
     for (let x = 0; x < halfWidth; x++) {
-      const sum = [0, 0, 0];
+      const weighted = [0, 0, 0];
+      const plain = [0, 0, 0];
       let alphaSum = 0;
       for (let k = 0; k < HALVING_AREA; k++) {
         const from = ((HALVING_SIDE * y + (k >> 1)) * width + HALVING_SIDE * x + (k & 1)) * TEXEL;
         const alpha = bytes[from + ALPHA];
         alphaSum += alpha;
-        for (let c = 0; c < CHANNELS; c++) sum[c] += bytes[from + c] * alpha;
+        for (let c = 0; c < CHANNELS; c++) {
+          weighted[c] += bytes[from + c] * alpha;
+          plain[c] += bytes[from + c];
+        }
       }
       const to = (y * halfWidth + x) * TEXEL;
-      for (let c = 0; c < CHANNELS; c++) half[to + c] = alphaSum > 0 ? sum[c] / alphaSum : 0;
+      for (let c = 0; c < CHANNELS; c++) half[to + c] = alphaSum > 0 ? weighted[c] / alphaSum : plain[c] / HALVING_AREA;
       half[to + ALPHA] = alphaSum / HALVING_AREA;
     }
   }
@@ -408,12 +461,15 @@ export function normalTexels(height, width, rows, strength, wrap) {
   return normals;
 }
 
-/** A webp of a straight RGBA byte image. */
+/** A webp of a straight RGBA byte image, encoded by ffmpeg's libwebp, which keeps the colour of fully transparent texels (the canvas encoder is premultiplied and blacks it out). */
 export function encodeWebp(bytes, width, height, quality) {
-  const canvas = createCanvas(width, height);
-  const context = canvas.getContext("2d");
-  const image = context.createImageData(width, height);
-  image.data.set(bytes);
-  context.putImageData(image, 0, 0);
-  return canvas.toBuffer("image/webp", quality);
+  const result = spawnSync(
+    "ffmpeg",
+    ["-v", "error", "-fflags", "+bitexact", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", `${width}x${height}`, "-i", "pipe:0", "-frames:v", "1", "-c:v", "libwebp", "-q:v", String(quality), "-compression_level", String(WEBP_METHOD), "-flags:v", "+bitexact", "-f", "webp", "pipe:1"],
+    { input: Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), maxBuffer: FFMPEG_MAX_BUFFER },
+  );
+  if (result.error?.code === "ENOENT") throw new Error("sprite-pack needs ffmpeg on the PATH to encode webp; the committed webps need no ffmpeg at runtime");
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`ffmpeg failed to encode a ${width}x${height} webp (exit ${result.status}): ${result.stderr}`);
+  return result.stdout;
 }

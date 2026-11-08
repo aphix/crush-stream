@@ -1,0 +1,16 @@
+[
+  {"id":"desert-saguaro-tall","kind":"cross","size":[2.8,5.5],"body":"solid","biomes":["desert"],"rule":"verge","weight":0.7,"core":0.393},
+  {"id":"desert-barrel-cactus","kind":"cross","size":[1.2,0.9],"body":"poof","biomes":["desert"],"rule":"verge","weight":0.6,"core":0.863},
+  {"id":"desert-agave","kind":"cross","size":[2,1.35],"body":"poof","biomes":["desert"],"rule":"verge","weight":0.6,"core":0.967},
+  {"id":"desert-prickly-pear","kind":"cross","size":[1.5,1.8],"body":"poof","biomes":["desert"],"rule":"verge","weight":0.6,"core":0.609},
+  {"id":"desert-scrub-dry","kind":"cross","size":[1.7,1.4],"body":"poof","biomes":["desert","dirt"],"rule":"ground","weight":0.9,"core":0.822},
+  {"id":"desert-tumbleweed","kind":"cross","size":[1,1],"body":"poof","biomes":["desert","dirt"],"rule":"ground","weight":0.35,"core":0.786},
+  {"id":"desert-palm-date","kind":"cross","size":[6.5,9],"body":"none","biomes":["desert"],"rule":"islands","weight":0.3,"core":0.15},
+  {"id":"desert-palm-fan","kind":"cross","size":[6.5,11],"body":"none","biomes":["desert"],"rule":"islands","weight":0.3,"core":0.151},
+  {"id":"desert-rock-outcrop","kind":"card","size":[3.2,3],"body":"none","biomes":["desert","dirt"],"rule":"islands","weight":0.6,"core":0.995},
+  {"id":"desert-rock-butte","kind":"card","size":[36,27],"body":"none","biomes":["desert"],"rule":"ground","weight":0.2,"core":1},
+  {"id":"desert-sign-warning","kind":"card","size":[1.1,2.1],"body":"poof","biomes":["desert","dirt"],"rule":"verge","weight":0.3,"core":0.15},
+  {"id":"desert-fence-post","kind":"cross","size":[0.8,1],"body":"poof","biomes":["desert","dirt"],"rule":"verge","weight":0.4,"core":0.848},
+  {"id":"desert-ocotillo","kind":"cross","size":[2.9,3.5],"body":"poof","biomes":["desert"],"rule":"verge","weight":0.5,"core":0.484},
+  {"id":"desert-joshua-tree","kind":"cross","size":[4.5,5],"body":"solid","biomes":["desert"],"rule":"verge","weight":0.45,"core":0.167}
+]
