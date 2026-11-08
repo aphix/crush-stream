@@ -3,7 +3,8 @@ import { DEFAULT_RACE_OPTIONS, type RaceMode, type RaceOptions } from "../match/
 import { courseTap, selectAll } from "../hud/setup-patch.ts";
 import { setGround } from "./ground.ts";
 import { frame, makeWorld, type World } from "./race-world.test-util.ts";
-import { CAMPAIGN } from "./tracks/index.ts";
+import { CAMPAIGN, TRACKS } from "./tracks/index.ts";
+import { parseTrack } from "./track-schema.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** A world in race mode (the setup card up), run through `body` and always left again. */
@@ -57,6 +58,12 @@ describe("given the setup card", () => {
   it("when it first opens, then the campaign has every course in the campaign's own order", () => {
     expect(DEFAULT_RACE_OPTIONS.campaign.join()).toBe(CAMPAIGN.join());
     inRaceMode((w) => expect(optionsOf(w).campaign.join()).toBe(CAMPAIGN.join()));
+  });
+
+  // mutation: sed -i '/^  TRACK_ID.figure8,$/d' src/game/world/tracks/index.ts  (the figure-8 is on the menu but not in the campaign: red)
+  it("when it first opens, then every course on the race menu is in the campaign, before any is ticked off", () => {
+    const campaign = new Set(DEFAULT_RACE_OPTIONS.campaign);
+    for (const id of TRACKS.map((raw) => parseTrack(raw).id)) expect(campaign.has(id), `${id} is in the default campaign`).toBe(true);
   });
 
   it("when it first opens, then the rivals are on medium AI", () => {
