@@ -452,8 +452,10 @@ export class Dressing {
       const deficit = minRoad - boxClear(path, f.x, f.z, f.yaw, f.hw, f.hd);
       if (deficit <= w.deficit) continue;
       projectPath(path, f.x, f.z, -1, scratch);
-      const d = Math.hypot(f.x - scratch.cx, f.z - scratch.cz) || 1;
-      w = { deficit, nx: (f.x - scratch.cx) / d, nz: (f.z - scratch.cz) / d, why: "road" };
+      const d = Math.hypot(f.x - scratch.cx, f.z - scratch.cz);
+      // On the centreline itself the offset has no direction: leave by the road's own normal.
+      const [nx, nz] = d > 0 ? [(f.x - scratch.cx) / d, (f.z - scratch.cz) / d] : [path.tz[scratch.k], -path.tx[scratch.k]];
+      w = { deficit, nx, nz, why: "road" };
     }
     for (const { name, shape } of zones) {
       const e = edge(shape, f.x, f.z);
