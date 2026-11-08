@@ -64,6 +64,8 @@ export function phaseTable(one) {
     `    per sim-s: ${work}`,
     ...(p.unitUs ? [`    per unit (us): ${Object.entries(p.unitUs).map(([name, us]) => `${name} ${f1(us)}`).join("  ")}`] : []),
     ...(result.dressing ? [`    dressing place ${f1(result.dressing.placeMs)} ms solid ${result.dressing.solid} drawn ${result.dressing.drawn} groups ${result.dressing.drawGroups} geom ${result.dressing.geometries} tex ${result.dressing.textures}   scenery ${result.settings?.scenery && result.settings.scenery !== "on" ? result.settings.scenery.toUpperCase() : "on"}`] : []),
+    ...(result.frameParts ? [`    frame parts, ms mean/p95 (summing to cpu ${f1(result.cpuMs.mean)}): ${Object.entries(result.frameParts).map(([name, part]) => `${name} ${f1(part.mean)}/${f1(part.p95)}`).join("  ")}`] : []),
+    ...(result.frameCounts ? [`    per frame: ${Object.entries(result.frameCounts).map(([name, n]) => `${name} ${n >= 100 ? Math.round(n) : n.toFixed(2)}`).join("  ")}`] : []),
     ...(result.frameStats ? frameTable(one) : []),
     ...(result.pageState ? [`    page: step ${result.pageState.stepOfPage} of the page, keep ${result.pageState.keep}, heap ${result.pageState.heapUsedMB ?? "n/a"} of ${result.pageState.heapLimitMB ?? "n/a"} MiB, ragdoll ${result.pageState.ragdollHost}`] : []),
     `    ${tasks}; battery ${battery ? `${level(battery.start)} -> ${level(battery.end)}` : "n/a"}`,
