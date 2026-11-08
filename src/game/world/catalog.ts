@@ -95,6 +95,7 @@ export const PREFAB_IDS = [
   PREFAB.assetTile,
   PREFAB.assetBox,
   PREFAB.assetBoxSolid,
+  PREFAB.assetCrossSolid,
 ] as const;
 export type PrefabId = (typeof PREFAB_IDS)[number];
 
@@ -649,5 +650,6 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.assetTile]: { body: "none", collider: [], foot: 0, size: [1, 1, 1], mass: 0, material: MAT.JERSEY_CONCRETE },
   [PREFAB.assetBox]: { body: "none", collider: [], foot: 0, size: [1, 1, 1], mass: 0, material: MAT.CRATE_WOOD },
   [PREFAB.assetStandee]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.DUMPSTER_STEEL },
+  [PREFAB.assetCrossSolid]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.TREE_BARK },
   [PREFAB.assetBoxSolid]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.DUMPSTER_STEEL },
 };

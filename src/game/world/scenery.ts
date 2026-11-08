@@ -2,9 +2,12 @@ import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { PREFABS, type PrefabId } from "./catalog.ts";
 import { BIOME, BIOME_IDS, PREFAB, SCENERY_RULES, type BiomeId } from "./constants.ts";
 import type { Placed } from "./placements.ts";
-import { ISLAND_CHANCE_MAX, ISLANDS, LAMP_SPACING, SLAB_WIDTH, VERGE, VERGE_CHANCE_MAX, VERGE_REACH, defaultBiome, noGenOf, pickKind, zoneAt, zonesOf, type Zone } from "./scenery-biome.ts";
+import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
+import { LATTICE_RULES, ROAD_RULES, assetPrefab, assetScale, hasAssets, pickAsset, sceneryRule, standsIn, type AssetMode, type LatticeRule } from "./scenery-assets/pick.ts";
+import type { AssetRule, SceneryAsset } from "./scenery-assets/types.ts";
+import { ASSET_LATTICE, FRONTAGE_SPACING, ISLAND_CHANCE_MAX, ISLANDS, LAMP_SPACING, PATCH_LATTICE, SLAB_WIDTH, VERGE, VERGE_CHANCE_MAX, VERGE_REACH, defaultBiome, noGenOf, pickKind, zoneAt, zonesOf, type Zone } from "./scenery-biome.ts";
 import { OCC_PAD, Occupancy, SEG_COVERED, blankNear, buildField, hashString, mix, nearest, unit, type Near, type RoadField } from "./scenery-field.ts";
-import type { Track, TrackPath } from "./track.ts";
+import { OPEN_REACH, type Track, type TrackPath } from "./track.ts";
 import { NO_FLOOR } from "./ground.ts";
 
 /**
@@ -19,6 +22,8 @@ import { NO_FLOOR } from "./ground.ts";
  * Rules (`SCENERY_RULES`): paving along a city's roads and a circuit's; the frontage's lamps (spacing by biome, a city's from its building
  * bays; none where a hand lamp row already lights) and a city's street trees; the verge; flower beds and bushes inside loops;
  * circuit tyre and cone runs outside tight bends.
+ * Last of all `assets` stands the generated sprite assets (`SCENERY_ASSETS`) by their own rules and kinds: on lattices, in rows and at
+ * stations along the wall lines, flat on the road surface and on car park slabs.
  */
 
 type Scenery = { solid: Placed[]; drawn: Placed[] };
@@ -95,11 +100,42 @@ const HEDGE_GAP = 2.4;
 /** The verge thins toward the road and thickens away from it: the share of its chance at the near edge and at the far edge (mean 1). */
 const VERGE_RAMP_MIN = 0.2;
 const VERGE_RAMP_MAX = 1.8;
+/** Assets: a sprite stands at its own size times a factor from `ASSET_SCALE` over `ASSET_SCALE_SPAN`, so a row of one asset is not a row of copies. */
+const ASSET_SCALE = 0.85;
+const ASSET_SCALE_SPAN = 0.3;
+/** A card or box on a lattice turns this far (rad) either way from square-on to the road: a field's fence is never ruler-straight. */
+const FACE_JITTER = 0.3;
+/** Frontage assets: the chance a station holds one, and the clear gap (m) between its footprint circle and the wall line (`FRONT_GAP` over a span of `FRONT_GAP_SPAN`). */
+const FRONT_CHANCE = 0.55;
+const FRONT_GAP = 1;
+const FRONT_GAP_SPAN = 1.5;
+/** Islands: the share of the loop's own prop chance an asset cell holds, and the most assets a loop takes. */
+const ISLAND_ASSET_SHARE = 0.5;
+const ISLAND_ASSET_MAX = 90;
+/** Trackside rows on the race loop's outside: metres between row starts, the chance a start holds a row, the most assets in a row, the gap (m) between neighbours, the clear gap (m) from the wall line, and how far out (m) the probe tests the loop's inside. */
+const ROW_SPACING = 40;
+const ROW_CHANCE = 0.7;
+const ROW_MAX = 4;
+const ROW_GAP = 0.8;
+const ROW_OFFSET = 1.2;
+const ROW_PROBE = 3;
+/** Road paint: metres between stations along a road, the chance a station holds one, the width (m) kept clear of the centre line's paint, and the share of a tile's picks that stay (a cobbled patch among the road's paint is rare). */
+const PAINT_SPACING = 26;
+const PAINT_CHANCE = 0.45;
+const LANE_LINE_CLEAR = 0.3;
+const PAINT_TILE_SHARE = 0.3;
+/** Car park paint: metres between slots along the slab, the chance a slot holds one, and the lanes across it (the aisle and the two rows of bays). */
+const LOT_PITCH = 7;
+const LOT_CHANCE = 0.4;
+const LOT_LANES = 3;
 
 /** A point to put a prop at beside a road. */
 type Spot = { x: number; z: number; yaw: number; w: number };
 
 type Meta = { rule: number; dc: number };
+
+/** A car park slab `carParks` laid: its middle, the unit vectors along its length and across its depth, and its length (m). */
+type Lot = { x: number; z: number; ax: number; az: number; fx: number; fz: number; length: number };
 
 type Ctx = {
   track: Track;
@@ -126,6 +162,7 @@ type Ctx = {
   solidMeta: Meta[];
   drawn: Placed[];
   drawnMeta: Meta[];
+  lots: Lot[];
 };
 
 function lampKey(i: number, j: number): number {
@@ -155,6 +192,7 @@ function newCtx(track: Track, base: readonly Placed[]): Ctx {
     solidMeta: [],
     drawn: [],
     drawnMeta: [],
+    lots: [],
   };
   c.density[RULE_FRONTAGE] = spec?.density.frontage ?? 1;
   c.density[RULE_VERGE] = spec?.density.verge ?? 1;
@@ -235,6 +273,30 @@ function place(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw
   return stand(c, rule, prefab, x, z, yaw, scale, scale, scale, core);
 }
 
+/**
+ * Whether the footprint (half extents `hx`, `hz`, turned `yaw`) comes within `margin` of one standing: one circle round it when that fits
+ * the occupancy pad, else (a mesa card, a tree crown) a grid of circles that each fit it.
+ */
+function crowded(c: Ctx, x: number, z: number, yaw: number, hx: number, hz: number, margin: number): boolean {
+  const r = hypot2(hx, hz);
+  if (r + margin <= OCC_PAD) return c.occ.hits(x, z, r, margin);
+  const room = OCC_PAD - margin;
+  const nx = Math.max(1, Math.ceil((hx * Math.SQRT2) / room));
+  const nz = Math.max(1, Math.ceil((hz * Math.SQRT2) / room));
+  const cx = hx / nx;
+  const cz = hz / nz;
+  const cos = detCos(yaw);
+  const sin = detSin(yaw);
+  for (let i = 0; i < nx; i++) {
+    for (let j = 0; j < nz; j++) {
+      const u = (2 * i + 1) * cx - hx;
+      const v = (2 * j + 1) * cz - hz;
+      if (c.occ.hits(x + u * cos + v * sin, z - u * sin + v * cos, hypot2(cx, cz), margin)) return true;
+    }
+  }
+  return false;
+}
+
 /** `place` at scales (`sx`, `sy`, `sz`), as an asset's own size is (`asset`: its index in `SCENERY_ASSETS`, none for a built-in prefab). */
 function stand(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw: number, sx: number, sy: number, sz: number, core?: number, asset?: number): boolean {
   const near = nearest(c.field, x, z, c.near);
@@ -244,8 +306,8 @@ function stand(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw
   const hz = (size[2] * sz) / 2;
   const r = core ?? hypot2(hx, hz);
   const margin = core === undefined ? PROP_STANDOFF : 0;
-  if (r + margin > OCC_PAD) throw new Error(`scenery: ${prefab} at scale ${sx} ${sy} ${sz} is wider than the occupancy pad`);
-  if (near.gap < r + ROAD_STANDOFF || c.occ.hits(x, z, r, margin)) return false;
+  if (core !== undefined && core > OCC_PAD) throw new Error(`scenery: ${prefab} core ${core} is wider than the occupancy pad`);
+  if (near.gap < r + ROAD_STANDOFF || (core === undefined ? crowded(c, x, z, yaw, hx, hz, margin) : c.occ.hits(x, z, core, margin))) return false;
   const y = standAt(c, x, z);
   if (y === null) return false;
   if (core === undefined) c.occ.add(x, z, detCos(yaw), detSin(yaw), hx, hz);
@@ -546,6 +608,7 @@ function carParks(c: Ctx): void {
     c.spot.x = mx;
     c.spot.z = mz;
     if (!slab(c, c.spot, ax, az, CAR_PARK_DEPTH / pw, RULE_PAVING, length / pl)) continue;
+    c.lots.push({ x: mx, z: mz, ax, az, fx, fz, length });
     for (const row of [-CAR_ROW, CAR_ROW]) {
       for (let n = 0; n < Math.floor(length / CAR_PITCH); n++) {
         const t = (n + 0.5) * CAR_PITCH - length / 2;
@@ -588,6 +651,270 @@ function circuitBends(c: Ctx): void {
   }
 }
 
+/** Radius (m) of the circle round an asset's footprint at size factor `scale`. */
+function radiusOf(a: SceneryAsset, scale: number): number {
+  const [sx, , sz] = assetScale(a, scale);
+  return hypot2(sx, sz) / 2;
+}
+
+/** The size factor a hash `h` (in [0, 1)) picks. */
+function sizeOf(h: number): number {
+  return ASSET_SCALE + ASSET_SCALE_SPAN * h;
+}
+
+/** The salt of one asset pass: a point's hashes in it depend on the course, the pass and the point alone. */
+function saltOf(c: Ctx, mode: AssetMode, rule: AssetRule): number {
+  return mix(c.seed, hashString(`${mode}:${rule}`));
+}
+
+/** An upright card or box takes `faceYaw`, turned up to `jitter` either way by a hash `h`; a cross, decal or tile takes any yaw. */
+function yawOf(a: SceneryAsset, faceYaw: number, h: number, jitter: number): number {
+  return a.kind === "card" || a.kind === "box" ? faceYaw + (h - 0.5) * 2 * jitter : h * 2 * Math.PI;
+}
+
+/** Yaw that runs a flat asset's local x (`xAlong`) or its local z along the direction (tx, tz). */
+function alongYaw(xAlong: boolean, tx: number, tz: number): number {
+  return xAlong ? detAtan2(-tz, tx) : detAtan2(tx, tz);
+}
+
+/** Yaw that turns a prop's local +x toward the point of road segment `seg` nearest (x, z). */
+function facing(c: Ctx, seg: number, x: number, z: number): number {
+  const f = c.field;
+  const len2 = f.len[seg]! * f.len[seg]!;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((x - f.ax[seg]!) * f.ex[seg]! + (z - f.az[seg]!) * f.ez[seg]!) / len2)) : 0;
+  return detAtan2(z - (f.az[seg]! + f.ez[seg]! * t), f.ax[seg]! + f.ex[seg]! * t - x);
+}
+
+/**
+ * Stand asset `i` (an index into `SCENERY_ASSETS`) at (x, z) at size factor `scale`, in a biome its row lists. An upright goes through
+ * `stand` (and one with no body stays out of a car's reach); a decal or tile is a circle of its own radius that blocks nothing.
+ */
+function put(c: Ctx, rule: number, i: number, x: number, z: number, yaw: number, scale: number): boolean {
+  const a = SCENERY_ASSETS[i]!;
+  const near = nearest(c.field, x, z, c.near);
+  if (near.seg < 0 || !standsIn(a, biomeAt(c, x, z, near.seg))) return false;
+  const [sx, sy, sz] = assetScale(a, scale);
+  const flat = a.kind === "decal" || a.kind === "tile";
+  if (!flat && (a.body === "none" || a.body === "knock") && near.openGap < OPEN_REACH) return false;
+  return stand(c, rule, assetPrefab(a), x, z, yaw, sx, sy, sz, flat ? Math.min(hypot2(sx, sz) / 2, OCC_PAD) : undefined, i);
+}
+
+/** Lay flat asset `i` on the ground at (x, z), `lift` m up, with no footprint and no road standoff: paint on a road or a car park slab, where `stand` would find the road in the way. */
+function paint(c: Ctx, rule: number, i: number, x: number, z: number, yaw: number, scale: number, lift = 0): boolean {
+  const a = SCENERY_ASSETS[i]!;
+  const near = nearest(c.field, x, z, c.near);
+  if (near.seg < 0 || (c.field.flags[near.seg]! & SEG_COVERED) !== 0 || !standsIn(a, biomeAt(c, x, z, near.seg))) return false;
+  const y = standAt(c, x, z);
+  if (y === null) return false;
+  const [sx, sy, sz] = assetScale(a, scale);
+  record(c, false, { prefab: assetPrefab(a), x, y: y + lift, z, yaw, sx, sy, sz, asset: i }, rule, near.dc);
+  return true;
+}
+
+/** One lattice cell of `rule`'s assets: at most one, jittered, in the biome's `VERGE` band and thinning toward the road as the verge does. */
+function latticeCell(c: Ctx, mode: AssetMode, rule: LatticeRule, salt: number, cell: number, share: number, i: number, j: number): void {
+  const seed = mix(salt, mix(i, j));
+  const dice = unit(mix(seed, 0));
+  if (dice >= VERGE_CHANCE_MAX * share * VERGE_RAMP_MAX) return;
+  const x = (i + unit(mix(seed, 1))) * cell;
+  const z = (j + unit(mix(seed, 2))) * cell;
+  const near = nearest(c.field, x, z, c.near);
+  if (near.seg < 0) return;
+  const biome = biomeAt(c, x, z, near.seg);
+  const spec = VERGE[biome];
+  if (!spec || near.gap < spec.inner || near.gap > spec.outer) return;
+  const ramp = VERGE_RAMP_MIN + ((VERGE_RAMP_MAX - VERGE_RAMP_MIN) * (near.gap - spec.inner)) / (spec.outer - spec.inner);
+  if (dice >= spec.chance * share * ramp) return;
+  const asset = pickAsset(mode, rule, biome, unit(mix(seed, 3)));
+  if (asset < 0) return;
+  const yaw = yawOf(SCENERY_ASSETS[asset]!, facing(c, near.seg, x, z), unit(mix(seed, 4)), FACE_JITTER);
+  put(c, sceneryRule(rule), asset, x, z, yaw, sizeOf(unit(mix(seed, 5))));
+}
+
+/** Rule 3 for assets: a lattice for each asset rule (cell and share in `ASSET_LATTICE`), and a coarser one for tiles. */
+function lattices(c: Ctx): void {
+  const b = c.track.bounds;
+  for (const mode of ["lattice", "patch"] as const) {
+    for (const rule of LATTICE_RULES) {
+      const density = c.density[sceneryRule(rule)]!;
+      if (density <= 0 || !hasAssets(mode, rule)) continue;
+      const { cell, share } = mode === "lattice" ? ASSET_LATTICE[rule] : PATCH_LATTICE;
+      const salt = saltOf(c, mode, rule);
+      for (let i = Math.floor((b.minX - VERGE_REACH) / cell); i <= Math.ceil((b.maxX + VERGE_REACH) / cell); i++) {
+        for (let j = Math.floor((b.minZ - VERGE_REACH) / cell); j <= Math.ceil((b.maxZ + VERGE_REACH) / cell); j++) latticeCell(c, mode, rule, salt, cell, share * density, i, j);
+      }
+    }
+  }
+}
+
+/** Rule 4 for assets: on the ground a closed road encloses, `ISLAND_ASSET_SHARE` of the loop's own prop chance and at most `ISLAND_ASSET_MAX` a loop. */
+function islandAssets(c: Ctx): void {
+  const density = c.density[RULE_ISLANDS]!;
+  if (density <= 0) return;
+  for (let pi = 0; pi < c.field.paths.length; pi++) {
+    const p = c.field.paths[pi]!;
+    if (!p.closed) continue;
+    const { px, pz } = outline(p);
+    const salt = mix(saltOf(c, "islands", "islands"), pi);
+    let standing = 0;
+    for (let i = Math.floor(Math.min(...px) / ISLAND_CELL); i <= Math.ceil(Math.max(...px) / ISLAND_CELL) && standing < ISLAND_ASSET_MAX; i++) {
+      for (let j = Math.floor(Math.min(...pz) / ISLAND_CELL); j <= Math.ceil(Math.max(...pz) / ISLAND_CELL) && standing < ISLAND_ASSET_MAX; j++) {
+        const seed = mix(salt, mix(i, j));
+        const dice = unit(mix(seed, 0));
+        if (dice >= ISLAND_CHANCE_MAX * ISLAND_ASSET_SHARE * density) continue;
+        const x = (i + unit(mix(seed, 1))) * ISLAND_CELL;
+        const z = (j + unit(mix(seed, 2))) * ISLAND_CELL;
+        if (!inside(px, pz, x, z)) continue;
+        const near = nearest(c.field, x, z, c.near);
+        if (near.seg < 0 || near.gap < ISLAND_MARGIN) continue;
+        const biome = biomeAt(c, x, z, near.seg);
+        const spec = ISLANDS[biome];
+        if (!spec || dice >= spec.chance * ISLAND_ASSET_SHARE * density) continue;
+        const asset = pickAsset("islands", "islands", biome, unit(mix(seed, 3)));
+        if (asset < 0) continue;
+        const yaw = yawOf(SCENERY_ASSETS[asset]!, facing(c, near.seg, x, z), unit(mix(seed, 4)), FACE_JITTER);
+        if (put(c, RULE_ISLANDS, asset, x, z, yaw, sizeOf(unit(mix(seed, 5))))) standing++;
+      }
+    }
+  }
+}
+
+/** Rule 2 for assets: along every road's wall line one asset per station by chance, spaced by biome (`FRONTAGE_SPACING`), its footprint `FRONT_GAP` to `FRONT_GAP + FRONT_GAP_SPAN` m clear of the wall line, facing the road. */
+function frontageAssets(c: Ctx): void {
+  const density = c.density[RULE_FRONTAGE]!;
+  if (density <= 0) return;
+  const salt = saltOf(c, "frontage", "frontage");
+  for (let pi = 0; pi < c.field.paths.length; pi++) {
+    const p = c.field.paths[pi]!;
+    for (const side of [1, -1] as const) {
+      march(c, pi, stationUnit(c, salt, c.field.base[pi]!, side, 0) * LAMP_PHASE, (seg, k) => {
+        const biome = biomeAt(c, p.x[k]!, p.z[k]!, seg);
+        const spacing = FRONTAGE_SPACING[biome];
+        if (spacing === undefined) return RETRY_STEP;
+        const asset = pickAsset("frontage", "frontage", biome, stationUnit(c, salt, seg, side, 1));
+        if (asset < 0) return RETRY_STEP;
+        if (stationUnit(c, salt, seg, side, 2) < FRONT_CHANCE * density) {
+          const a = SCENERY_ASSETS[asset]!;
+          const scale = sizeOf(stationUnit(c, salt, seg, side, 3));
+          const spot = roadside(p, k, side, radiusOf(a, scale) + FRONT_GAP + FRONT_GAP_SPAN * stationUnit(c, salt, seg, side, 4), c.spot);
+          put(c, RULE_FRONTAGE, asset, spot.x, spot.z, yawOf(a, spot.yaw, stationUnit(c, salt, seg, side, 5), 0), scale);
+        }
+        return spacing * (1 + (stationUnit(c, salt, seg, side, 6) - 0.5) * 2 * SPACING_JITTER);
+      });
+    }
+  }
+}
+
+/** A row of one to `ROW_MAX` of asset `asset` along the wall line from sample `k` on `side` of `p`, an asset's width and `ROW_GAP` apart. */
+function tracksideRow(c: Ctx, p: TrackPath, k: number, side: 1 | -1, seg: number, salt: number, asset: number): void {
+  const a = SCENERY_ASSETS[asset]!;
+  const scale = sizeOf(stationUnit(c, salt, seg, side, 3));
+  const off = radiusOf(a, scale) + ROW_OFFSET;
+  const copies = 1 + Math.floor(stationUnit(c, salt, seg, side, 4) * ROW_MAX);
+  const step = Math.max(1, Math.ceil(((a.size[0] * scale + ROW_GAP) * p.count) / p.length));
+  for (let n = 0; n < copies; n++) {
+    const at = k + n * step;
+    if (!p.closed && at >= p.count) return;
+    const spot = roadside(p, at % p.count, side, off, c.spot);
+    put(c, RULE_TRACKSIDE, asset, spot.x, spot.z, yawOf(a, spot.yaw, stationUnit(c, salt, seg, side, 5 + n), 0), scale);
+  }
+}
+
+/** Rule 5 for assets: along the race loop's outside (both sides of an open road), a row of one asset every `ROW_SPACING` m by chance. */
+function tracksideAssets(c: Ctx): void {
+  const density = c.density[RULE_TRACKSIDE]!;
+  if (density <= 0) return;
+  const p = c.track.path;
+  const loop = p.closed ? outline(p) : null;
+  const salt = saltOf(c, "trackside", "trackside");
+  for (const side of [1, -1] as const) {
+    march(c, 0, stationUnit(c, salt, 0, side, 0) * ROW_SPACING, (seg, k) => {
+      const probe = roadside(p, k, side, ROW_PROBE, c.spot);
+      if (loop && inside(loop.px, loop.pz, probe.x, probe.z)) return ROW_SPACING;
+      const asset = pickAsset("trackside", "trackside", biomeAt(c, probe.x, probe.z, seg), stationUnit(c, salt, seg, side, 1));
+      if (asset < 0) return RETRY_STEP;
+      if (stationUnit(c, salt, seg, side, 2) < ROW_CHANCE * density) tracksideRow(c, p, k, side, seg, salt, asset);
+      return ROW_SPACING;
+    });
+  }
+}
+
+/** Lay asset `asset` on the road at sample `k` of `p`: in a lane clear of the centre line (a tile along the edge), its longer extent running with the road. */
+function paintRoad(c: Ctx, scenery: number, p: TrackPath, k: number, seg: number, salt: number, asset: number): void {
+  const a = SCENERY_ASSETS[asset]!;
+  if (a.kind === "tile" && a.rule !== "trackside" && stationUnit(c, salt, seg, 1, 3) >= PAINT_TILE_SHARE) return;
+  const scale = sizeOf(stationUnit(c, salt, seg, 1, 4));
+  const [sx, , sz] = assetScale(a, scale);
+  const xAlong = sx >= sz;
+  const across = (xAlong ? sz : sx) / 2;
+  const half = p.half[k]!;
+  if (across > half) return;
+  const side = stationUnit(c, salt, seg, 1, 5) < 0.5 ? 1 : -1;
+  const lo = LANE_LINE_CLEAR + across;
+  const room = half - across - lo;
+  // A wider paint than a half lane (a crosswalk) is centred over the road.
+  const lat = a.kind === "tile" ? side * (half - across) : room >= 0 ? side * (lo + room * stationUnit(c, salt, seg, 1, 6)) : 0;
+  const yaw = alongYaw(xAlong, p.tx[k]!, p.tz[k]!) + (stationUnit(c, salt, seg, 1, 7) < 0.5 ? 0 : Math.PI);
+  paint(c, scenery, asset, p.x[k]! + p.tz[k]! * lat, p.z[k]! - p.tx[k]! * lat, yaw, scale);
+}
+
+/** Rules 1, 5 and 3 for assets: decals and kerb and cobble tiles on every road's surface (not under a bridge or roof), by each asset rule that has any. */
+function roadAssets(c: Ctx): void {
+  for (const rule of ROAD_RULES) {
+    const scenery = sceneryRule(rule);
+    const density = c.density[scenery]!;
+    if (density <= 0) continue;
+    const salt = saltOf(c, "road", rule);
+    for (let pi = 0; pi < c.field.paths.length; pi++) {
+      const p = c.field.paths[pi]!;
+      march(c, pi, stationUnit(c, salt, c.field.base[pi]!, 1, 0) * PAINT_SPACING, (seg, k) => {
+        const asset = pickAsset("road", rule, biomeAt(c, p.x[k]!, p.z[k]!, seg), stationUnit(c, salt, seg, 1, 1));
+        if (asset < 0) return RETRY_STEP;
+        if (stationUnit(c, salt, seg, 1, 2) < PAINT_CHANCE * density) paintRoad(c, scenery, p, k, seg, salt, asset);
+        return PAINT_SPACING * (1 + (stationUnit(c, salt, seg, 1, 8) - 0.5) * 2 * SPACING_JITTER);
+      });
+    }
+  }
+}
+
+/** Rule 5 for assets on each car park slab `carParks` laid: paint (oil stains, arrows) in the aisle and the bays, inside the slab, its longer extent along the aisle. */
+function lotAssets(c: Ctx): void {
+  const density = c.density[RULE_TRACKSIDE]!;
+  if (density <= 0) return;
+  const salt = saltOf(c, "lot", "carpark");
+  const slabTop = PREFABS[PREFAB.sidewalk].size[1];
+  for (const lot of c.lots) {
+    const seg = nearest(c.field, lot.x, lot.z, c.near).seg;
+    if (seg < 0) continue;
+    const biome = biomeAt(c, lot.x, lot.z, seg);
+    const slots = Math.floor(lot.length / LOT_PITCH);
+    for (let n = 0; n < slots; n++) {
+      const seed = mix(salt, mix(Math.round(lot.x * 8) + n, Math.round(lot.z * 8)));
+      if (unit(mix(seed, 0)) >= LOT_CHANCE * density) continue;
+      const asset = pickAsset("lot", "carpark", biome, unit(mix(seed, 1)));
+      if (asset < 0) continue;
+      const scale = sizeOf(unit(mix(seed, 2)));
+      const [sx, , sz] = assetScale(SCENERY_ASSETS[asset]!, scale);
+      const xAlong = sx >= sz;
+      const t = (n + 0.5 - slots / 2) * LOT_PITCH;
+      const across = (Math.floor(unit(mix(seed, 3)) * LOT_LANES) - 1) * CAR_ROW;
+      if (Math.abs(t) + (xAlong ? sx : sz) / 2 > lot.length / 2 || Math.abs(across) + (xAlong ? sz : sx) / 2 > CAR_PARK_DEPTH / 2) continue;
+      const yaw = alongYaw(xAlong, lot.ax, lot.az) + (unit(mix(seed, 4)) < 0.5 ? 0 : Math.PI);
+      paint(c, RULE_TRACKSIDE, asset, lot.x + lot.ax * t + lot.fx * across, lot.z + lot.az * t + lot.fz * across, yaw, scale, slabTop);
+    }
+  }
+}
+
+/** Rules 1 to 5 once more with the generated sprite assets, after every built-in rule so no earlier placement moves: uprights first (they take footprints), paint last. */
+function assets(c: Ctx): void {
+  frontageAssets(c);
+  tracksideAssets(c);
+  islandAssets(c);
+  lattices(c);
+  roadAssets(c);
+  lotAssets(c);
+}
+
 /** `list` less what the course's `scenery` block takes out: switched-off rules, `noGen` ground, and anything nearer a centreline than `clear`. */
 function kept(c: Ctx, list: readonly Placed[], meta: readonly Meta[]): Placed[] {
   const out: Placed[] = [];
@@ -614,6 +941,7 @@ export function placeScenery(track: Track, base: readonly Placed[]): Scenery {
   infield(c);
   verge(c);
   islands(c);
+  assets(c);
   return { solid: kept(c, c.solid, c.solidMeta), drawn: kept(c, c.drawn, c.drawnMeta) };
 }
 

@@ -1,5 +1,6 @@
 import { PREFABS } from "./catalog.ts";
 import { PREFAB } from "./constants.ts";
+import { VERGE_REACH } from "./scenery-biome.ts";
 import { boxClear, placeCourse, type Placed } from "./placements.ts";
 import { parseTrack } from "./track-schema.ts";
 import { Track, blankProjection, openNear, projectPath } from "./track.ts";
@@ -10,6 +11,10 @@ import { TRACKS } from "./tracks/index.ts";
 export type Dressed = { track: Track; authored: Placed[]; solid: Placed[]; drawn: Placed[] };
 
 export const COURSE_JSON: readonly unknown[] = [...TRACKS, HAVANA];
+
+/** A solid prop's reach (m) from an open road edge: the widest verge band. The slack (m) either way is what the service's measure of it (the nearest segment) and a row's (the nearest sample, about a metre) may differ by. */
+export const REACH = VERGE_REACH;
+export const REACH_SLACK = 1;
 
 const proj = blankProjection();
 const memo = new Map<string, Dressed>();
@@ -59,11 +64,19 @@ function half(p: Placed): [number, number] {
 }
 
 /** The deepest (m) the drawn footprint of `p` reaches onto any road or run-off of the track (0 when it stands clear). */
-export function intrusion(track: Track, p: Placed): number {
+export function footprintDepth(track: Track, p: Placed): number {
   const [hw, hd] = half(p);
   let deepest = 0;
   for (const path of track.paths()) deepest = Math.max(deepest, -boxClear(path, p.x, p.z, p.yaw, hw, hd));
   return deepest;
+}
+
+/** Paint (asset decals and tiles) lies on roads by design, so no footprint bar applies to it. */
+const PAINT: readonly string[] = [PREFAB.assetDecal, PREFAB.assetTile];
+
+/** `footprintDepth` for everything but paint: the bar every other footprint is held to (paint reads 0). */
+export function intrusion(track: Track, p: Placed): number {
+  return PAINT.includes(p.prefab) ? 0 : footprintDepth(track, p);
 }
 
 /** Half the width (m) of placement `p`'s footprint along the axis (ax, az): its local x is (cos yaw, −sin yaw), its local z (sin yaw, cos yaw). */
@@ -110,4 +123,4 @@ export function seamGap(a: Placed, b: Placed): number {
 }
 
 /** Kinds that lie flat on the ground or are driven through, which may lie under or among other props. */
-export const FLAT = new Set<string>([PREFAB.sidewalk, PREFAB.wreck]);
+export const FLAT = new Set<string>([PREFAB.sidewalk, PREFAB.wreck, ...PAINT]);

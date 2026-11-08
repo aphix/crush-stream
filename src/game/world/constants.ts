@@ -62,6 +62,7 @@ export const PREFAB = {
   assetDecal: "asset-decal",
   assetTile: "asset-tile",
   assetBox: "asset-box",
+  assetCrossSolid: "asset-cross-solid",
   assetBoxSolid: "asset-box-solid",
 } as const;
 

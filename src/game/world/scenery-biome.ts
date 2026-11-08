@@ -1,5 +1,6 @@
 import type { PrefabId } from "./catalog.ts";
 import { BIOME, BIOME_IDS, PREFAB, SURFACE, type BiomeId } from "./constants.ts";
+import type { LatticeRule } from "./scenery-assets/pick.ts";
 import type { Track } from "./track.ts";
 
 /** How each biome of the scenery service is classified and dressed: the tables `scenery.ts`'s rules read. */
@@ -79,6 +80,22 @@ export const ISLANDS: Partial<Record<BiomeId, { chance: number; kinds: Kinds }>>
 };
 /** The largest of those chances, so the lattice sweep can skip a cell early. */
 export const ISLAND_CHANCE_MAX = 0.12;
+
+/**
+ * Rule 3 for assets, per asset rule: the lattice cell (m) and the share of the biome's own `VERGE` chance a cell holds an asset at
+ * (the cell's area against the verge's 14 m cell is folded in): sprites add about half the verge's own props, ground cover and heavy yard kit fewer.
+ */
+export const ASSET_LATTICE: Record<LatticeRule, { cell: number; share: number }> = {
+  verge: { cell: 12, share: 0.33 },
+  yard: { cell: 24, share: 0.35 },
+  ground: { cell: 8, share: 0.11 },
+  paving: { cell: 12, share: 0.2 },
+};
+/** Tile patches are 6 m squares and more: a coarse lattice whose share keeps them to about one cell in three where the verge is thick. */
+export const PATCH_LATTICE = { cell: 24, share: 2.6 };
+
+/** Rule 2 for assets: metres between frontage stations along a road in each biome, a third to a half of the lamps' spacing (street furniture is denser than lamps, and a city's slabs are most of its count). */
+export const FRONTAGE_SPACING: Partial<Record<BiomeId, number>> = { city: 10, park: 24, circuit: 36, dirt: 40, desert: 48 };
 
 /** A biome box of the course's `scenery.zones`. */
 export type Zone = { x0: number; z0: number; x1: number; z1: number; biome: BiomeId };

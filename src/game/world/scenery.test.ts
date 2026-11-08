@@ -3,8 +3,8 @@ import { PREFABS } from "./catalog.ts";
 import { BIOME, PREFAB, TRACK_ID } from "./constants.ts";
 import { placeProps, type Placed } from "./placements.ts";
 import { biomeLookup, thinScenery } from "./scenery.ts";
-import { VERGE_REACH } from "./scenery-biome.ts";
-import { COURSE_JSON, FLAT, centreDistance, dress, intrusion, keyOf, nearOpening, overlap, seamGap } from "./scenery.test-util.ts";
+import { COURSE_JSON, FLAT, REACH, REACH_SLACK, centreDistance, dress, intrusion, keyOf, nearOpening, overlap, seamGap } from "./scenery.test-util.ts";
+import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
 import { parseTrack } from "./track-schema.ts";
 import { Track, blankPoint } from "./track.ts";
 import { TRACKS } from "./tracks/index.ts";
@@ -14,9 +14,7 @@ import { assertSameDigest } from "../vehicle/test-support.ts";
 const TOL = 0.1;
 /** The least (m) between a generated lamp and a hand lamp: a city's 28 m spacing times the share of it a hand lamp lights. */
 const LIT_MIN = 16;
-/** A solid prop's reach (m) from an open road edge: the widest verge band, as far as a car leaving the road drives on and meets the authored scatter's trees. The slack (m) either way is what the two measures of it may differ by (the service reads the nearest segment, the row the nearest sample, a sample about a metre). */
-const REACH = VERGE_REACH;
-const REACH_SLACK = 1;
+
 
 const json = (id: string): unknown => COURSE_JSON.find((j) => parseTrack(j).id === id)!;
 const OVAL = json(TRACK_ID.oval);
@@ -239,11 +237,13 @@ function stretchDistance(track: Track, p: Placed): number {
 }
 
 describe("given the scenery's cost on every course", () => {
+  // mutation: sed -i 's/const DRAWS_MAX = 160;/const DRAWS_MAX = 1;/' src/game/world/scenery.test.ts
   it("when the draw cells of the generated props are counted, then each course adds few draws and no cell holds too many of one kind", () => {
-    // Four-count adds 45 (a long course over many 512 m draw cells, six kinds in each); dam-spine 38, the rest 18 or fewer.
-    const DRAWS_MAX = 48;
+    // Before assets four-count added 45 (a long course over many 512 m draw cells, six kinds in each). An asset's group is its prefab and
+    // family in a cell: at most about 5 families in a biome mix x 8 asset prefabs over those cells (an estimate, pinned down by measuring).
+    const DRAWS_MAX = 160;
     const PER_CELL_MAX = 2000;
-    const groupOf = (p: Placed): string => `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}`;
+    const groupOf = (p: Placed): string => `${p.prefab}${p.asset === undefined ? "" : `:${SCENERY_ASSETS[p.asset]?.family}`}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}`;
     for (const j of TRACKS) {
       const d = dress(j);
       // The solid props join the authored props' groups; the drawn-only ones are drawn apart (`TrackArt.scenery`), each group its own draw.

@@ -579,6 +579,13 @@ cell))` so a cell's output depends only on that cell, and a hand-built track giv
   inside any closed road (a loop, a roundabout) and, on a circuit's loop, a big bed with a ring of bushes at the middle of the infield and a hedge along the
   inner road edge; `trackside` (circuit only) a lining of eight tyre stacks outside each bend tighter than 60 m with three cones leading in and a small bed inboard,
   and two rows of parked cars (the `wreck` shells, tinted) on each grandstand's car park.
+- **Assets** (`world/scenery-assets/`: `SCENERY_ASSETS`, the sprite rows `scripts/sprite-pack.mjs` writes; `pick.ts` gives each its prefab, scale and weighted table per mode and biome). `assets` runs last in
+  `placeScenery`, so no earlier placement moves, and each placement carries its row's `asset` index. A row's `rule` and `kind` pick its pass: `verge`, `yard`, `ground` and `paving` uprights and ground paint
+  on a lattice of their own beyond the wall line (`ASSET_LATTICE`: cell and a share of the biome's verge chance, thinning toward the road), tiles on a coarser one (`PATCH_LATTICE`), `islands` inside closed
+  roads, `frontage` at stations along every wall line (`FRONTAGE_SPACING`), `trackside` rows (boards, banners, tyre walls) on the race loop's outside, decals and kerb tiles of `paving`, `trackside` and `yard` on the road
+  surface off the centre line (not under a bridge or roof; the cobble tile thinly), and `carpark` decals on each car park slab. Cards and boxes face the road; a solid card or cross is a standee scaled to its `core` share of
+  the drawn width. An asset with no body (`none`, `knock`) stands only beyond `OPEN_REACH`; a `solid` one by the same rule as any prop (`SOLID_REACH`); a plant (`poof`) anywhere. Decals and tiles block nothing
+  and may lie on roads (`scenery.test.ts` exempts them from the footprint rows); `scenery-assets.test.ts` holds the rest.
 - **Overrides** (`scenery`, all optional): `biome` every stretch's biome (`none`: nothing outside `zones`, and the verge and island sweeps cover only the zones); `zones` `[{ x0, z0, x1, z1, biome }]` biome boxes; `off`
   rule ids switched off (`paving`, `frontage`, `verge`, `islands`, `trackside`); `density` `{ rule: multiplier }` for `frontage`, `verge` and `islands` (the rules that scale by one; a key for another is rejected); `clear` metres from any road's **centreline** within
   which nothing is generated, in every direction (default: only what each footprint's own clearance keeps, `ROAD_STANDOFF` 0.4 m off the wall line); `noGen`
@@ -587,8 +594,8 @@ cell))` so a cell's output depends only on that cell, and a hand-built track giv
   untouched by all of them (so are the `along` and `scatter` rows: the service clears every footprint against them, and lays no lamp within 0.7 spacings of a hand lamp).
 - **Cost.** Generated cover casts no shadow (`PrefabPart.shadow = false`: slabs, bushes, beds). The drawn list is thinned to the effects tier (`thinScenery`: off and minimal a third,
   Low three fifths, High and Ultra all, by a hash of each prop's spot, so every lower tier is a subset); the solid list never depends on the tier. One `InstancedMesh` per prefab part
-  per 512 m cell: `scenery.test.ts` caps the groups a course adds (new solid groups plus drawn-only ones) at 48 (four-count 45, dam-spine 38) and 2000 instances in one. Boot (`placeCourse` beyond the authored props, node,
-  measured): 2 to 63 ms per course, the Mall 408 ms (its 2900 authored footprints and 50 side streets).
+  per 512 m cell (an asset's group is its prefab and family): `scenery.test.ts` caps each course's groups (`DRAWS_MAX`) and 2000 instances in one. Boot (`placeCourse` beyond the authored props, node,
+  measured): 2 to 63 ms per course, the Mall 408 ms (its 2900 authored footprints and 50 side streets); the asset pass adds no measurable time.
 
 ## Engine integration
 
