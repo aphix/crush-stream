@@ -359,7 +359,10 @@ export class CrashEngine extends EngineGarage {
         this.emitHud();
       },
       leave: () => this.setScene("fleet"),
-      watchCam: () => void (this.view.spec = "auto"),
+      watchCam: () => {
+        this.view.leaveFree(); // Watch Cam ends the free view too, or its begun/userFramed state outlives the switch.
+        this.view.spec = "auto";
+      },
       hitFx: this.hitFx,
       shotFx: this.shotFx,
       throwPassenger: (car, look) => this.ragdolls.throwPassenger(car, look),
@@ -1051,6 +1054,8 @@ export class CrashEngine extends EngineGarage {
     // The Range's ride takes the camera while the crash cam cuts (it does not wait for it): the ride's lens is the shot's, not the cut's.
     const cut = this.cine.direct(this.camera, wallDt, !this.view.flying && !this.view.userFramed && this.seat.mode !== "drive", null, !(this.showRange && this.ragdolls.rideAlong));
     if (this.view.flying) {
+      // The free eye ignores the target, but the Auto director must still move the named car when it finishes (no cuts: the camera makes none).
+      if (this.race.auto) this.race.autoStep(-1, true);
       this.flyFree(wallDt);
       return;
     }
