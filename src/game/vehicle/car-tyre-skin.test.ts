@@ -564,13 +564,13 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
       w.pedals.set(car, drive);
       w.pedals.set(hitter, FREEWHEEL);
       launch(car, 0, 0, 0, 0, 0);
-      launch(hitter, -5, 0, Math.PI / 2, 25 / 3.6, 0);
+      launch(hitter, ...NOSE_HIT);
       return { w, car };
     };
     const [every, lazy] = [wreck(), wreck()];
     let compared = 0;
     let flushed = 0;
-    let lagged = 0;
+    const lagged = { body: 0, hood: 0 };
     for (let f = 0; f < FRAMES; f++) {
       for (const d of drives) {
         d.throttle = every.car.crashed ? 0.5 : 0;
@@ -588,7 +588,7 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
       for (const mesh of MESHES) {
         const [a, b] = [lazy.car[mesh].geometry, every.car[mesh].geometry];
         if (!seen) {
-          lagged += Number(farthestApart(a.getAttribute("position").array as Float32Array, b.getAttribute("position").array as Float32Array) > 0);
+          lagged[mesh] += Number(farthestApart(a.getAttribute("position").array as Float32Array, b.getAttribute("position").array as Float32Array) > 0);
           continue;
         }
         assertSameNumbers(a.getAttribute("position").array, b.getAttribute("position").array, `frame ${f} ${mesh} positions`);
@@ -597,7 +597,7 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
     }
     expect(lazy.car.crashed, "the sedan was crashed").toBeTruthy();
     expect(flushed, "frames a hold was owed when the engine's flush came").toBeGreaterThan(0);
-    expect(lagged, "off-view frames the deferred hold left the mesh behind the twin's").toBeGreaterThan(0);
+    for (const mesh of MESHES) expect(lagged[mesh], `off-view frames the deferred hold left the ${mesh} behind the twin's`).toBeGreaterThan(0);
     expect(compared, "meshes compared").toBeGreaterThan(MESHES.length * 10);
   });
 
