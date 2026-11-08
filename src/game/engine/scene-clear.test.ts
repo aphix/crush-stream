@@ -19,16 +19,14 @@ import { PropTumble } from "../present/prop-tumble.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { plainMaterials } from "../present/prefab-materials.test-util.ts";
 
 // The fx pools paint their dot sprites on a canvas; the headless run lends them one that takes any draw (the cars want none).
 const ctx = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, fillStyle: "" };
 const CANVAS = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
 
 const V = new THREE.Vector3(0, 1, 0);
-const MATS = (() => {
-  const plain = new THREE.MeshBasicMaterial();
-  return { plain, concrete: plain, building: plain, billboard: plain, water: plain };
-})();
+const MATS = plainMaterials(new THREE.MeshBasicMaterial());
 const BUSH: Placed = { prefab: PREFAB.bush, x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 };
 const BED: Placed = { prefab: PREFAB.flowers, x: 3, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 };
 /** A car driving north across both, a metre and a half to the side of each one's middle. */

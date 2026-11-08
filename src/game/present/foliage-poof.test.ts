@@ -7,10 +7,11 @@ import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
 import { FoliagePoof, PIECES, type FoliageCar } from "./foliage-poof.ts";
 import { foliageTint } from "./prefabs-foliage.ts";
+import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { PropTumble } from "./prop-tumble.ts";
 
 const plain = new THREE.MeshBasicMaterial();
-const MATS = { plain, concrete: plain, building: plain, billboard: plain, water: plain };
+const MATS = plainMaterials(plain);
 const STEP = 1 / FRAME_HZ;
 const UP = new THREE.Vector3(0, 1, 0);
 /** A car with its nose to +x: the yaw that turns local +z there. */
