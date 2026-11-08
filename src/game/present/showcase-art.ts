@@ -1,17 +1,19 @@
 import * as THREE from "three";
 import { LAB_LIGHT } from "./lab-art.ts";
-import { makeLamp, STAGE_DIAMETER } from "./engine-world.ts";
+import { makeLamp } from "./engine-world.ts";
 import { GROUND_LEVEL } from "../scenes/constants.ts";
-import { groundMesh } from "../scenes/ground-stack.ts";
+import { groundMesh, levelOrder } from "../scenes/ground-stack.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
-import { PREFABS, type PrefabId } from "../world/catalog.ts";
+import type { PrefabId } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
 import { disposePrefabMaterials, makePrefabMaterials, raceTextures } from "./prefabs.ts";
-import type { PrefabMaterials } from "./prefab-pieces.ts";
+import type { PrefabMaterials, Skin } from "./prefab-pieces.ts";
+import { assetTint, isAssetFamily } from "./scenery-assets-art.ts";
 import { PropTumble } from "./prop-tumble.ts";
 import { DEPTH_INSTANCED } from "./track-mesh.ts";
+import { galleryRow, galleryStyleOf, SCENERY_GALLERY } from "./showcase-gallery-rows.ts";
 import { STYLE_WHEELS } from "../vehicle/wheel-batch.ts";
 import { ELDER_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { FACE } from "./dummy-faces.ts";
@@ -89,34 +91,19 @@ const STUDIO_FLOOR = 0x2e2c2a;
 /** The share of a street's wetness the studio floor takes: at full the low back light shone a white hot spot across the people's feet. */
 const FLOOR_WET_SHARE = 0.6;
 
-/** A prefab's front is +X, so a quarter turn puts it toward -z, where a free cam standing near the eye and looking +z sees it. */
-const FACE_EYE_SIDE = Math.PI / 2;
-/** Prefabs whose long side already runs along x at yaw 0: turned a quarter they would stand end-on. */
-const LONG_SIDE_ALONG_X: ReadonlySet<PrefabId> = new Set([PREFAB.fence, PREFAB.dumpster]);
-
-/** `ids` at scale 1 in a row at `z`, `gap` m apart, centred on x 0 and laid left to right by each one's x extent after its turn. */
-function galleryRow(z: number, ids: readonly PrefabId[], gap: number): Placed[] {
-  const cells = ids.map((prefab) => {
-    const alongX = LONG_SIDE_ALONG_X.has(prefab);
-    return { prefab, yaw: alongX ? 0 : FACE_EYE_SIDE, width: PREFABS[prefab].size[alongX ? 0 : 2] };
-  });
-  let left = -(cells.reduce((sum, c) => sum + c.width, 0) + gap * (cells.length - 1)) / 2;
-  return cells.map(({ prefab, yaw, width }) => {
-    const x = left + width / 2;
-    left += width + gap;
-    return { prefab, x, y: 0, z, yaw, sx: 1, sy: 1, sz: 1 };
-  });
-}
+/** The disc's radius (m): the sandbox's, grown to hold the scenery rows (the farthest building corner is about 132 m out) and a margin. */
+export const SHOWCASE_RADIUS = 140;
 
 /**
- * Every prefab that is not a unique landmark, in rows by size behind the eye (the opening frame looks -z). Rows are spaced so no
- * footprint touches another or crosses the rim, and the tall ones stand far enough back that their shadows end behind the eye.
+ * Every prefab that is not a unique landmark, in rows by size behind the eye (the opening frame looks -z), then the scenery rows past them
+ * (`SCENERY_GALLERY`). Rows are spaced so no footprint touches another or crosses the rim, and the tall ones stand far enough back that their shadows end behind the eye.
  */
 export const SHOWCASE_GALLERY: readonly Placed[] = [
   ...galleryRow(15, [PREFAB.cone, PREFAB.tyreStack, PREFAB.hayBale, PREFAB.crate, PREFAB.barrierBlock, PREFAB.rock, PREFAB.dumpster, PREFAB.chevron], 1.5),
   ...galleryRow(19, [PREFAB.lamp, PREFAB.gantry, PREFAB.flagpole, PREFAB.billboard, PREFAB.fence, PREFAB.wall, PREFAB.tree, PREFAB.palm], 2),
   ...galleryRow(28, [PREFAB.grandstand, PREFAB.fountain], 9),
   ...galleryRow(38, [PREFAB.building, PREFAB.stucco], 2),
+  ...SCENERY_GALLERY,
 ];
 
 /** The number keys' props, in key order (Digit1 the first): every knockable prefab (`body: "knock"`) but a carton (the high-jump pile's), then the car parts a car's own parts weigh as. */
@@ -146,8 +133,12 @@ const POST_LIGHT = { color: 0xffe2b0, intensity: 260, distance: 55, angle: 0.8, 
 
 const _mark = new THREE.Vector3();
 
-/** The monster's rims are gunmetal as its batched wheels' are (`STYLE_WHEELS`); the other wheel is untinted. */
-function wheelTint(id: PrefabId, _i: number, out: THREE.Color): boolean {
+/** The monster's rims are gunmetal as its batched wheels' are (`STYLE_WHEELS`), a scenery asset takes its placement's sprite tint; the other props are untinted. */
+function galleryTint(id: PrefabId, i: number, out: THREE.Color, style: Skin): boolean {
+  if (isAssetFamily(style)) {
+    assetTint(i, out);
+    return true;
+  }
   if (id !== PREFAB.monsterWheel) return false;
   out.copy(STYLE_WHEELS.monster.tint);
   return true;
@@ -160,7 +151,7 @@ export class ShowcaseArt {
   readonly carSlots = CAR_ROWS.length * CAR_STYLES.length;
   private readonly gallery = new THREE.Group();
   private readonly galleryMaterials: PrefabMaterials;
-  private readonly floor = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), tagMaterial(new THREE.MeshStandardMaterial({ color: STUDIO_FLOOR, roughness: 1, metalness: 0 }), MAT.STUDIO_FLOOR, FLOOR_WET_SHARE), GROUND_LEVEL.runoff);
+  private readonly floor = groundMesh(new THREE.CircleGeometry(SHOWCASE_RADIUS, 64), tagMaterial(new THREE.MeshStandardMaterial({ color: STUDIO_FLOOR, roughness: 1, metalness: 0 }), MAT.STUDIO_FLOOR, FLOOR_WET_SHARE), GROUND_LEVEL.runoff);
   /** The posts' spots, in the set whenever it stands (a light shown or hidden relinks every lit shader) and dark by day (`setNight`). */
   private readonly postLights: THREE.SpotLight[] = [];
   /** Every prop the dummies' world holds (`SHOWCASE_PROPS`), drawn where it has them. */
@@ -170,14 +161,15 @@ export class ShowcaseArt {
     this.group.name = "showcase";
     this.group.visible = false;
     this.group.add(this.floor, this.people.group, this.gallery);
-    this.galleryMaterials = makePrefabMaterials(raceTextures());
-    const add = (mesh: THREE.InstancedMesh, shared: THREE.Material | null): void => {
-      mesh.castShadow = !shared;
+    this.galleryMaterials = makePrefabMaterials(raceTextures(), true);
+    const add = (mesh: THREE.InstancedMesh, id: PrefabId, shared: THREE.Material | null, cast: boolean): void => {
+      mesh.castShadow = !shared && cast;
       mesh.receiveShadow = true;
       mesh.customDepthMaterial = DEPTH_INSTANCED;
+      if (id === PREFAB.assetDecal || id === PREFAB.assetTile) mesh.renderOrder = levelOrder(GROUND_LEVEL.decal);
       this.gallery.add(mesh);
     };
-    this.props = new PropTumble(SHOWCASE_PROPS, this.galleryMaterials, (mesh, _id, shared) => add(mesh, shared), wheelTint);
+    this.props = new PropTumble(SHOWCASE_PROPS, this.galleryMaterials, add, galleryTint, galleryStyleOf);
     this.erectPosts();
     this.floor.rotation.x = -Math.PI / 2;
     this.floor.receiveShadow = true;
