@@ -1,6 +1,6 @@
 /**
  * Packs scenery families (`<raw>/<family>/manifest.json` and its pictures) into `public/scenery/<family>-*.webp` and the family's two JSON data files:
- * `node scripts/sprite-pack.mjs <family>... [--raw <folder>]`. `pack` itself is pure; the pixel work is in `sprite-pack-pixels.mjs`.
+ * `node scripts/sprite-pack.mjs <family>... [--raw <folder>]` (the folder defaults to `$SPRITE_RAW_DIR`, else `~/crash-wt/assets`). `pack` itself is pure; the pixel work is in `sprite-pack-pixels.mjs`.
  * Packing needs ffmpeg on the PATH (libwebp keeps the colour under alpha 0); the committed webps need no ffmpeg at runtime.
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
