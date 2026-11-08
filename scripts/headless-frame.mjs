@@ -21,7 +21,7 @@
  * the point x,y,z (default the origin), looking at it. The showcase's own `cam=` (the owner's link, the same six numbers) in `--hash`
  * puts the eye there with no `--camera`, which wins when both are given.
  * `--free` detaches any scene's camera into the free eye first, so a 6-number `--camera r,pitch,angle,x,y,z` puts it anywhere (a course seen
- * from overhead: pitch 1.5, the free eye's steepest, angle 3.14159 is north up; a steeper pitch is clamped and the view slides off x,z); `--no-fog` drops the scene's fog for the shot (a whole course from hundreds of metres up) and reaches the far plane to the course's farthest corner (the JSON's `far`); `scripts/course-shots.mjs` runs it for every course.
+ * from overhead: pitch 1.5, the free eye's steepest, angle 3.14159 is north up; a steeper pitch is clamped and the view slides off x,z); `--no-fog` drops the scene's fog for the shot (a whole course from hundreds of metres up), reaches the far plane to the course's farthest corner and lifts the near plane with the eye's height (the JSON's `far`; a 0.1 m near at 300 m+ lets the road's layers z-fight); `scripts/course-shots.mjs` runs it for every course.
  * `--keys Digit5*8,Digit8*4` presses those keys (a code, `*n` times) before the drawn frames, the cursor swept across the lower view: the showcase's throws. The JSON's `frameMs` is the drawn frames' mean wall ms, each synced by a 1 px read (CPU sim and draw, and the GPU's).
  * `--uploads` tallies the bytes the drawn frames upload to the GPU (buffer and texture sub-uploads, the bytes a call sends, not the array it reads from) and runs the page's upload check (`?debug=uploads`, `upload-check.ts`): the JSON's `uploadKBPerFrame`, `uploadCallsPerFrame`, and `dummiesOut`, the most dummies out at once in a drawn frame.
  * `--sirens` flashes every light bar (with `night=1` in the hash: the lamps as seen in a night pursuit). `--break headL,headR,tailL,tailR`
@@ -75,6 +75,8 @@ const YARDSTICK_VS = "#version 300 es\nlayout(location = 0) in vec2 a; void main
 const BUILTIN_IDS = /\bgl_(VertexID|InstanceID)\b/g;
 /** A wheel-batch instance centred this near (m) one of the shot car's wheels is that wheel (another car's stands metres off). */
 const WHEEL_MATCH_M = 0.5;
+/** `--no-fog`'s near plane as a share of the eye's height: nothing in a course stands within 3/4 of that height of an eye high enough to see all of it, and the course's tallest (the Mall's obelisk, 170 m) is far below a 2 km eye. */
+const NEAR_PER_EYE_HEIGHT = 0.25;
 
 const { values } = parseArgs({
   options: {
@@ -349,12 +351,13 @@ if (camera !== undefined) {
   engine.advance(FRAMING_S, { frameDt: FRAME });
   await settle();
 }
-// `--no-fog` also reaches the far plane to the course's farthest bounds corner from the eye: the haze gone, the course's authored far (the Mall's 1800 m) would still cut its far end off.
+// `--no-fog` also reaches the far plane to the course's farthest bounds corner from the eye (the haze gone, the authored far, the Mall's 1800 m, would cut the far end off) and lifts the near plane with the eye's height, or the depth buffer's precision at 300 m+ shows the road's layers fighting.
 const courseBounds = values["no-fog"] ? engine.race["track"]?.bounds : undefined;
 if (courseBounds !== undefined) {
   const eye = engine["camera"].position;
   const reach = Math.max(...[courseBounds.minX, courseBounds.maxX].flatMap((x) => [courseBounds.minZ, courseBounds.maxZ].map((z) => Math.hypot(eye.x - x, eye.y, eye.z - z))));
   engine["camera"].far = Math.max(engine["camera"].far, reach);
+  engine["camera"].near = Math.max(engine["camera"].near, eye.y * NEAR_PER_EYE_HEIGHT);
   engine["camera"].updateProjectionMatrix();
 }
 if (seatView !== undefined) {

@@ -103,7 +103,8 @@ the tier) and written as a PNG, with one JSON line on stdout. `--hash <share lin
 `scene=garage&car=sedan`), `--camera radius,pitch,angle` frames the orbit camera by hand (readme-shots' `frame()`), and
 `--at <s>` sets the sim seconds before the drawn frames. `--free` detaches any scene's camera into the free eye, so a six-number
 `--camera r,pitch,angle,x,y,z` puts it anywhere (pitch 1.5, the free eye's steepest, and angle 3.14159 look almost straight down with north up; a steeper pitch is clamped and slides the view off x,z), and
-`--no-fog` drops the scene's fog and reaches the far plane to the course's farthest corner (the JSON's `far`). The counts are the
+`--no-fog` drops the scene's fog, reaches the far plane to the course's farthest corner (the JSON's `far`) and lifts the near plane
+with the eye's height (a 0.1 m near at 300 m+ lets the road's layers z-fight). The counts are the
 last frame whole: the script holds `renderer.info.autoReset` off and resets it before each drawn frame, as the bench does.
 
 - **For:** shots and before/after diffs (`--root <other checkout>`: same seed, same clock, and three's object uuids draw from a stream of their own, so a tree that builds fewer objects does not move the cosmetic draws of the frame; two runs of one tree give
