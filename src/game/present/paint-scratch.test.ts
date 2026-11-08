@@ -353,19 +353,47 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     expect(drawn, "redraws in 1 s").toBeLessThanOrEqual(1 / DENT_REBUILD_S + 1);
   });
 
-  it(`when its skin is written and its dents redrawn every frame, then a frame, with its flush, allocates at most ${FRAME_BOUND_B} B`, () => {
+  it(`when its skin is written and its dents redrawn every frame, a contact each frame holding its crush open, then a frame, with its flush, allocates at most ${FRAME_BOUND_B} B`, () => {
     // The skin write as the skin makes it: the attribute's version, not a `lookMeshes()` read (its arrays are the row's, not the frame's).
     const skin = crushed.lookMeshes().body.geometry.getAttribute("position");
     const { renderer } = stubGpu(mask(), false);
+    // The sim's own contact mark, not a spy (a spy records every call it sees): `elapsed` stands still here, so the car's quiet stays 0.
     const frames = (count: number) => {
       for (let i = 0; i < count; i++) {
         skin.needsUpdate = true;
+        crushed.deform.notifyContact();
         view.frame(cars, DENT_REBUILD_S);
         view.flush(renderer);
       }
     };
+    const before = redraws();
+    frames(DENT_FRAMES);
+    expect(redraws() - before, "the control: every frame redrew the dents").toBe(DENT_FRAMES);
     const perFrame = untilQuiet(() => allocatedBytes(() => frames(DENT_FRAMES)) / DENT_FRAMES, FRAME_BOUND_B);
     expect(perFrame, `${perFrame.toFixed(1)} B a frame`).toBeLessThanOrEqual(FRAME_BOUND_B);
+  });
+
+  it(`when the crease tier flips every frame, so each dent redraw changes texels and each flush sends them, then a frame allocates at most ${FRAME_BOUND_B} B`, () => {
+    const { renderer } = stubGpu(mask(), false);
+    let tick = 0;
+    const frames = (count: number) => {
+      for (let i = 0; i < count; i++) {
+        SCRATCH_TIER.value = tick++ % 2 === 0 ? 1 : 2;
+        view.frame(cars, DENT_REBUILD_S);
+        view.flush(renderer);
+      }
+    };
+    try {
+      const redrawn = redraws();
+      const sent = frameParts.count[COUNT.wearUploads]!;
+      frames(DENT_FRAMES);
+      expect(redraws() - redrawn, "the control: every frame redrew the dents").toBe(DENT_FRAMES);
+      expect(frameParts.count[COUNT.wearUploads]! - sent, "the control: every flush sent texels").toBeGreaterThanOrEqual(DENT_FRAMES);
+      const perFrame = untilQuiet(() => allocatedBytes(() => frames(DENT_FRAMES)) / DENT_FRAMES, FRAME_BOUND_B);
+      expect(perFrame, `${perFrame.toFixed(1)} B a frame`).toBeLessThanOrEqual(FRAME_BOUND_B);
+    } finally {
+      SCRATCH_TIER.value = 2;
+    }
   });
 
   it(`when it goes untouched while its skin keeps moving (a wreck at rest: the tyre hold, the sag), then once a draw is made ${DENT_SETTLE_S} s after its last touch its dents are not redrawn, and a new touch redraws them`, () => {
