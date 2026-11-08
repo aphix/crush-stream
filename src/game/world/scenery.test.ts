@@ -240,7 +240,10 @@ describe("given the scenery's cost on every course", () => {
   // mutation: sed -i 's/const DRAWS_MAX = 160;/const DRAWS_MAX = 1;/' src/game/world/scenery.test.ts
   it("when the draw cells of the generated props are counted, then each course adds few draws and no cell holds too many of one kind", () => {
     // Before assets four-count added 45 (a long course over many 512 m draw cells, six kinds in each). An asset's group is its prefab and
-    // family in a cell: at most about 5 families in a biome mix x 8 asset prefabs over those cells (an estimate, pinned down by measuring).
+    // family in a cell, so the assets took the most to 153 groups (dam-spine; four-count 143, the Mall 61), capped here with a little room
+    // (owner, 2026-11-08: land at the measured figure, cut draws later if the phone benches show it). Measured per-frame draw calls, whole
+    // course in view, headless high / low tier, before -> after the assets: dam-spine 270 -> 379 / 264 -> 368, four-count 245 -> 331 /
+    // 236 -> 317, the Mall 595 -> 636 / 591 -> 629 (triangles +1-3k: many small instanced groups, not geometry).
     const DRAWS_MAX = 160;
     const PER_CELL_MAX = 2000;
     const groupOf = (p: Placed): string => `${p.prefab}${p.asset === undefined ? "" : `:${SCENERY_ASSETS[p.asset]?.family}`}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}`;
