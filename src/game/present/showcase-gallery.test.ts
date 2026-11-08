@@ -15,6 +15,7 @@ const EXCLUDED: readonly string[] = [
   PREFAB.obelisk, PREFAB.capitol, PREFAB.whiteHouse, PREFAB.lincoln, PREFAB.capitolPool, PREFAB.marble, PREFAB.monument,
   PREFAB.grantMemorial, PREFAB.peaceMonument, PREFAB.garfieldMonument, PREFAB.pool, PREFAB.basin,
   PREFAB.muscleBumper, PREFAB.monsterWheel, PREFAB.carWheel, PREFAB.wreck, PREFAB.carhenge, PREFAB.junkCrane,
+  PREFAB.sidewalk, PREFAB.bush, PREFAB.flowers,
 ];
 /** The free cam stands near the eye and looks +z: a prop closer than this behind it would fill the view. */
 const MIN_CLEARANCE = 5;
