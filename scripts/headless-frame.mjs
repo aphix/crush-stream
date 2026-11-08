@@ -21,7 +21,7 @@
  * the point x,y,z (default the origin), looking at it. The showcase's own `cam=` (the owner's link, the same six numbers) in `--hash`
  * puts the eye there with no `--camera`, which wins when both are given.
  * `--free` detaches any scene's camera into the free eye first, so a 6-number `--camera r,pitch,angle,x,y,z` puts it anywhere (a course seen
- * from overhead: pitch 1.5697, angle 3.14159 is north up); `--no-fog` drops the scene's fog for the shot (a whole course from hundreds of metres up).
+ * from overhead: pitch 1.5, the free eye's steepest, angle 3.14159 is north up; a steeper pitch is clamped and the view slides off x,z); `--no-fog` drops the scene's fog for the shot (a whole course from hundreds of metres up) and reaches the far plane to the course's farthest corner (the JSON's `far`); `scripts/course-shots.mjs` runs it for every course.
  * `--keys Digit5*8,Digit8*4` presses those keys (a code, `*n` times) before the drawn frames, the cursor swept across the lower view: the showcase's throws. The JSON's `frameMs` is the drawn frames' mean wall ms, each synced by a 1 px read (CPU sim and draw, and the GPU's).
  * `--uploads` tallies the bytes the drawn frames upload to the GPU (buffer and texture sub-uploads, the bytes a call sends, not the array it reads from) and runs the page's upload check (`?debug=uploads`, `upload-check.ts`): the JSON's `uploadKBPerFrame`, `uploadCallsPerFrame`, and `dummiesOut`, the most dummies out at once in a drawn frame.
  * `--sirens` flashes every light bar (with `night=1` in the hash: the lamps as seen in a night pursuit). `--break headL,headR,tailL,tailR`
@@ -195,7 +195,8 @@ if (values.uploads) q.set("debug", "uploads");
 location.search = `?${q}`;
 if (values.hash !== undefined) location.hash = `#${values.hash.replace(/^#/, "")}`;
 const stubElement = document.createElement;
-document.createElement = (tag) => (tag === "canvas" ? Object.assign(createCanvas(1, 1), { style: {}, addEventListener() {}, removeEventListener() {}, setAttribute() {} }) : stubElement(tag));
+// `data: undefined`: Skia's canvas has a `data()` method, so headless GL takes the canvas for an ImageData and uploads zeros (black).
+document.createElement = (tag) => (tag === "canvas" ? Object.assign(createCanvas(1, 1), { data: undefined, style: {}, addEventListener() {}, removeEventListener() {}, setAttribute() {} }) : stubElement(tag));
 Object.assign(globalThis, {
   innerWidth: CSS_W,
   innerHeight: CSS_H,
@@ -348,6 +349,14 @@ if (camera !== undefined) {
   engine.advance(FRAMING_S, { frameDt: FRAME });
   await settle();
 }
+// `--no-fog` also reaches the far plane to the course's farthest bounds corner from the eye: the haze gone, the course's authored far (the Mall's 1800 m) would still cut its far end off.
+const courseBounds = values["no-fog"] ? engine.race["track"]?.bounds : undefined;
+if (courseBounds !== undefined) {
+  const eye = engine["camera"].position;
+  const reach = Math.max(...[courseBounds.minX, courseBounds.maxX].flatMap((x) => [courseBounds.minZ, courseBounds.maxZ].map((z) => Math.hypot(eye.x - x, eye.y, eye.z - z))));
+  engine["camera"].far = Math.max(engine["camera"].far, reach);
+  engine["camera"].updateProjectionMatrix();
+}
 if (seatView !== undefined) {
   // The hash's car, followed in that drive view (a spectator's spec view: any scene, driven or not).
   const want = hashStyle;
@@ -429,7 +438,7 @@ for (let f = 0; f < frames; f++) {
 const frameMs = frameTimes.length === 0 ? null : Math.round((frameTimes.reduce((sum, ms) => sum + ms, 0) / frameTimes.length) * 100) / 100;
 const glError = gl.getError();
 const { render, memory, programs } = three.info;
-const counts = { calls: render.calls, triangles: render.triangles, programs: programs.length, textures: memory.textures, geometries: memory.geometries };
+const counts = { calls: render.calls, triangles: render.triangles, programs: programs.length, textures: memory.textures, geometries: memory.geometries, far: Math.round(engine["camera"].far) };
 const farCars = engine["cars"].filter((car) => engine["detail"].isFar(car)).length;
 
 const w = canvas.width;

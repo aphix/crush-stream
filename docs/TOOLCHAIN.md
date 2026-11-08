@@ -101,8 +101,10 @@ host's GL), Skia canvases (`@napi-rs/canvas` 1.0.11) for the game's procedural t
 `public/`. A pinned-seed derby 8 s past its start is drawn through the engine's own frame (`tickInner`, then `PostFX` at
 the tier) and written as a PNG, with one JSON line on stdout. `--hash <share link #>` boots another scene instead (e.g.
 `scene=garage&car=sedan`), `--camera radius,pitch,angle` frames the orbit camera by hand (readme-shots' `frame()`), and
-`--at <s>` sets the sim seconds before the drawn frames. The counts are the last frame whole: the script holds
-`renderer.info.autoReset` off and resets it before each drawn frame, as the bench does.
+`--at <s>` sets the sim seconds before the drawn frames. `--free` detaches any scene's camera into the free eye, so a six-number
+`--camera r,pitch,angle,x,y,z` puts it anywhere (pitch 1.5, the free eye's steepest, and angle 3.14159 look almost straight down with north up; a steeper pitch is clamped and slides the view off x,z), and
+`--no-fog` drops the scene's fog and reaches the far plane to the course's farthest corner (the JSON's `far`). The counts are the
+last frame whole: the script holds `renderer.info.autoReset` off and resets it before each drawn frame, as the bench does.
 
 - **For:** shots and before/after diffs (`--root <other checkout>`: same seed, same clock, and three's object uuids draw from a stream of their own, so a tree that builds fewer objects does not move the cosmetic draws of the frame; two runs of one tree give
   byte-identical PNGs, and so do two checkouts of one commit), the frame's counts per tier (`renderer.info`: calls,
@@ -116,6 +118,15 @@ the tier) and written as a PNG, with one JSON line on stdout. `--hash <share lin
   which downloads the native binary from GitHub releases: the Lux deploy installs dev dependencies too, and stays
   registry-only. Fetch the binary once per `node_modules` with `node node_modules/@kmamal/gl/scripts/install.mjs`; the
   script exits 2 with that line while it is missing. `@napi-rs/canvas` ships its binaries as npm packages.
+- **Canvas textures:** the game's canvases are Skia's (`@napi-rs/canvas`), whose canvas has a `data()` method; `@kmamal/gl`
+  takes any object with a `data` for an `ImageData` and reads the method's bytes as zeros, so every canvas texture (the
+  terrain's grass, the road's asphalt, the lamp pools, the building windows) uploaded black. The script's canvas stand-in
+  shadows `data` with `undefined`, and the library reads the canvas through `getImageData`, honouring `flipY` and
+  premultiply. Its `createImageBitmap` stand-in already answered an `ImageData`.
+- **Whole courses:** `scripts/course-shots.mjs` runs the above for every course in `TRACKS`, one headless-frame process at a time
+  (about a minute each): per course a north-up overhead (the eye over the middle of `Track.bounds`, high enough that the box fits
+  the engine's lens) and an oblique (pitch 0.9 from the south, the bounding sphere fitted), at day and night, as
+  `<course>-{top,oblique}-{day,night}.png` in `--out` (`--courses oval,city` picks some).
 - **Built-in ids count as attributes:** the bundled ANGLE (2.1.24078) counts `gl_VertexID` and `gl_InstanceID` against
   `MAX_VERTEX_ATTRIBS` (16), as some GLES drivers do; Chrome 149's ANGLE does not. The dummy's lit program once declared
   16 slots and read both, and failed to link here ("Too many attributes (print)"); its attributes are now packed to 14
