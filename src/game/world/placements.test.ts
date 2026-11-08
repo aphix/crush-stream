@@ -59,7 +59,8 @@ describe("given the oval course", () => {
 
 describe("given the oval with a row of lamps along its left side", () => {
   it("when the lamps are placed, then the copies that would land on a shortcut's road are skipped", () => {
-    const t = new Track({ ...oval, along: [{ prefab: "lamp", every: 6, side: "left", offset: 1 }], scatter: [] });
+    // Authored lamps only: the scenery service's own solid lamps would add to the count.
+    const t = new Track({ ...oval, along: [{ prefab: "lamp", every: 6, side: "left", offset: 1 }], scatter: [], scenery: { biome: "none" } });
     const placed = placeProps(t);
     const lamps = placed.filter((p) => p.prefab === "lamp");
     expect(lamps.length > 0 && lamps.length < Math.round(t.length / 6), `${lamps.length} lamps`).toBeTruthy();
