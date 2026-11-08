@@ -2,7 +2,7 @@ import { PREFABS } from "./catalog.ts";
 import { PREFAB } from "./constants.ts";
 import { boxClear, placeCourse, type Placed } from "./placements.ts";
 import { parseTrack } from "./track-schema.ts";
-import { Track, blankProjection, projectPath } from "./track.ts";
+import { Track, blankProjection, openNear, projectPath } from "./track.ts";
 import { HAVANA } from "./tracks/havana.ts";
 import { TRACKS } from "./tracks/index.ts";
 
@@ -38,14 +38,14 @@ export function centreDistance(track: Track, x: number, z: number): number {
   return best;
 }
 
-/** Whether a road sample whose wall is down (on the side facing (x, z)) lies within `reach` m of (x, z) beyond its wall line: a gap a car leaves the road by. */
+/** Whether a road sample whose wall is down within `OPEN_SPAN` samples (on the side facing (x, z); `openNear`, as the service flags a segment) lies within `reach` m of (x, z) beyond its wall line: a gap a car leaves the road by. */
 export function nearOpening(track: Track, x: number, z: number, reach: number): boolean {
   for (const path of track.paths()) {
     for (let i = 0; i < path.count; i++) {
       const dx = x - path.x[i]!;
       const dz = z - path.z[i]!;
       const left = dx * path.tz[i]! - dz * path.tx[i]! > 0;
-      if ((left ? path.wallL : path.wallR)[i] !== 0) continue;
+      if (!openNear(path, left ? path.wallL : path.wallR, i)) continue;
       if (Math.hypot(dx, dz) - path.half[i]! - (left ? path.runL[i]! : path.runR[i]!) < reach) return true;
     }
   }
@@ -89,6 +89,24 @@ export function overlap(a: Placed, b: Placed): boolean {
     }
   }
   return true;
+}
+
+/** The widest seam (m) between slab `a` and the slab `b` laid after it: how far the two corners of `b`'s end that faces `a` stand from `a`'s footprint (0 when `a` holds them). */
+export function seamGap(a: Placed, b: Placed): number {
+  const [aw, ad] = half(a);
+  const [bw, bd] = half(b);
+  const [ac, an] = [Math.cos(a.yaw), Math.sin(a.yaw)];
+  const [bc, bs] = [Math.cos(b.yaw), Math.sin(b.yaw)];
+  const facing = (a.x - b.x) * bs + (a.z - b.z) * bc > 0 ? 1 : -1;
+  let worst = 0;
+  for (const side of [-1, 1]) {
+    const dx = b.x + bs * facing * bd + bc * side * bw - a.x;
+    const dz = b.z + bc * facing * bd - bs * side * bw - a.z;
+    const u = dx * ac - dz * an;
+    const v = dx * an + dz * ac;
+    worst = Math.max(worst, Math.hypot(Math.max(Math.abs(u) - aw, 0), Math.max(Math.abs(v) - ad, 0)));
+  }
+  return worst;
 }
 
 /** Kinds that lie flat on the ground or are driven through, which may lie under or among other props. */

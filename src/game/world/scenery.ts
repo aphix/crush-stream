@@ -4,15 +4,15 @@ import { BIOME, BIOME_IDS, PREFAB, SCENERY_RULES, type BiomeId } from "./constan
 import type { Placed } from "./placements.ts";
 import { ISLAND_CHANCE_MAX, ISLANDS, LAMP_SPACING, SLAB_WIDTH, VERGE, VERGE_CHANCE_MAX, VERGE_REACH, defaultBiome, noGenOf, pickKind, zoneAt, zonesOf, type Zone } from "./scenery-biome.ts";
 import { OCC_PAD, Occupancy, SEG_COVERED, blankNear, buildField, hashString, mix, nearest, unit, type Near, type RoadField } from "./scenery-field.ts";
-import { OPEN_REACH, type Track, type TrackPath } from "./track.ts";
+import type { Track, TrackPath } from "./track.ts";
 import { NO_FLOOR } from "./ground.ts";
 
 /**
  * The scenery service: dresses a course from its geometry alone, deterministically, with no per-course editing. `placeScenery` reads the
  * compiled track (every road's wall line, which wall stands, the surfaces, the terrain) and the props already placed (`placeProps`'s
  * hand props, `along` rows and scatter) and returns what to add, in two lists:
- *   - `solid`: props a car can reach (within `OPEN_REACH` of a road edge whose wall is down): colliders, appended to the course's
- *     props after its chevrons, so no existing index moves;
+ *   - `solid`: props with a body (tree, rock, palm, lamp, tyre stack, cone) wherever a road edge whose wall is down lies within `SOLID_REACH`: a car leaving the
+ *     road there drives on across the terrain. Colliders, appended to the course's props after its chevrons, so no existing index moves;
  *   - `drawn`: everything else (behind a wall, the sidewalks, the bushes and flower beds a car drives through): art only.
  * A point's value depends on its own cell (`mix` of the course id, the rule and the cell), never on the points before it; the
  * course's `scenery.off`, `clear` and `noGen` only remove from the finished list, so raising `clear` always yields a subset.
@@ -27,6 +27,8 @@ const [RULE_PAVING, RULE_FRONTAGE, RULE_VERGE, RULE_ISLANDS, RULE_TRACKSIDE] = [
 
 /** Clear ground (m) between a generated footprint and any road's wall line. */
 const ROAD_STANDOFF = 0.4;
+/** A prop with a body is solid wherever a road edge whose wall is down lies within this far (m): the widest verge band, as far as a car that leaves the road through an opening drives on and meets the authored scatter's trees. */
+const SOLID_REACH = VERGE_REACH;
 /** Clear ground (m) between two footprints. */
 const PROP_STANDOFF = 0.6;
 /** A point where the ground's top layer stands this far (m) over its lowest is under a bridge or on a plateau: nothing stands there. */
@@ -142,7 +144,7 @@ function newCtx(track: Track, base: readonly Placed[]): Ctx {
     zones: zonesOf(track),
     course: spec?.biome ?? null,
     off: SCENERY_RULES.map((r) => spec?.off.includes(r) ?? false),
-    density: SCENERY_RULES.map((r) => spec?.density[r] ?? 1),
+    density: SCENERY_RULES.map(() => 1),
     clear: spec?.clear ?? null,
     blocked: noGenOf(track),
     near: blankNear(),
@@ -154,6 +156,9 @@ function newCtx(track: Track, base: readonly Placed[]): Ctx {
     drawn: [],
     drawnMeta: [],
   };
+  c.density[RULE_FRONTAGE] = spec?.density.frontage ?? 1;
+  c.density[RULE_VERGE] = spec?.density.verge ?? 1;
+  c.density[RULE_ISLANDS] = spec?.density.islands ?? 1;
   const bays = new Float64Array(field.paths.length);
   const counts = new Int32Array(field.paths.length);
   for (const p of base) {
@@ -183,6 +188,18 @@ function biomeAt(c: Ctx, x: number, z: number, seg: number): BiomeId {
   return zoneAt(c.zones, x, z) ?? c.course ?? BIOME_IDS[c.field.biome[seg]!]!;
 }
 
+/** Whether any rule can dress (x, z): not where the course's biome is `none` and no zone holds it (no table has an entry for `none`). */
+function dressable(c: Ctx, x: number, z: number): boolean {
+  return c.course !== BIOME.none || zoneAt(c.zones, x, z) !== null;
+}
+
+/** The ground a lattice sweep covers, as [x0, x1, z0, z1]: the course's bounds grown by `reach` m, or on a course whose biome is `none` the zones' own box (nothing else is dressed). */
+function sweepBox(c: Ctx, reach: number): [number, number, number, number] {
+  const b = c.track.bounds;
+  if (c.course !== BIOME.none) return [b.minX - reach, b.maxX + reach, b.minZ - reach, b.maxZ + reach];
+  return [Math.min(...c.zones.map((z) => z.x0)), Math.max(...c.zones.map((z) => z.x1)), Math.min(...c.zones.map((z) => z.z0)), Math.max(...c.zones.map((z) => z.z1))];
+}
+
 /** Whether a lamp already stands within `radius` of (x, z). */
 function lit(c: Ctx, x: number, z: number, radius: number): boolean {
   for (let i = Math.floor((x - radius) / LAMP_CELL); i <= Math.floor((x + radius) / LAMP_CELL); i++) {
@@ -210,8 +227,8 @@ function record(c: Ctx, solid: boolean, p: Placed, rule: number, dc: number): vo
 
 /**
  * Stand `prefab` at (x, z) if its footprint clears every road's wall line and every footprint standing, on level ground that no
- * bridge covers. It goes in `solid` when it has a body, a car can leave the road toward it (the wall is down within `OPEN_SPAN`
- * on that side) and it is within `OPEN_REACH` of the wall line; else in `drawn`. A `core` radius (m) tests that circle alone, with
+ * bridge covers. It goes in `solid` when it has a body and a road edge whose wall is down (within `OPEN_SPAN` of the segment) lies within
+ * `SOLID_REACH` of it; else in `drawn`. A `core` radius (m) tests that circle alone, with
  * no margin, and leaves no footprint: parked cars, which stand close in rows, clear what stands but not each other.
  */
 function place(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw: number, scale: number, core?: number): boolean {
@@ -227,7 +244,7 @@ function place(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw
   const y = standAt(c, x, z);
   if (y === null) return false;
   if (core === undefined) c.occ.add(x, z, detCos(yaw), detSin(yaw), hx, hz);
-  record(c, PREFABS[prefab].body !== "none" && near.openGap < OPEN_REACH, { prefab, x, y, z, yaw, sx: scale, sy: scale, sz: scale }, rule, near.dc);
+  record(c, PREFABS[prefab].body !== "none" && near.openGap < SOLID_REACH, { prefab, x, y, z, yaw, sx: scale, sy: scale, sz: scale }, rule, near.dc);
   return true;
 }
 
@@ -258,32 +275,105 @@ function stationUnit(c: Ctx, rule: number, seg: number, side: number, n: number)
   return unit(mix(mix(c.seed, rule), mix(seg * 2 + (side > 0 ? 1 : 0), n)));
 }
 
-/** Rule 1: a city's roads edged with sidewalk slabs and a circuit's with a wider apron, drawn only, from the wall line out; none where a crossing road would be paved over. */
+/** One road sample's sidewalk station on one side: the sample, its wall-line point, its slab's far-edge point, and the slab's width in sidewalk widths. */
+type Station = { k: number; wx: number; wz: number; fx: number; fz: number; wide: number };
+
+function stationAt(c: Ctx, p: TrackPath, k: number, side: 1 | -1, wide: number): Station {
+  const wall = roadside(p, k, side, 0, c.spot);
+  const [wx, wz] = [wall.x, wall.z];
+  const far = roadside(p, k, side, PREFABS[PREFAB.sidewalk].size[0] * wide, c.spot);
+  return { k, wx, wz, fx: far.x, fz: far.z, wide };
+}
+
+/**
+ * The slab between two neighbouring stations of a road side (path `p`), from the wall line out. Its longer edge (the far edge outside a
+ * bend, the wall line inside one) is the chord between the stations, so neighbours share corners there and overlap on the shorter edge, and
+ * the pavement has no gap at any curvature or sample spacing. Where the wall line between the stations bulges past the road-side edge, the slab is pushed out by the most it does.
+ */
+function strip(c: Ctx, p: TrackPath, a: Station, b: Station, side: 1 | -1): void {
+  const [width, , length] = PREFABS[PREFAB.sidewalk].size;
+  const across = width * a.wide;
+  const wallLen = hypot2(b.wx - a.wx, b.wz - a.wz);
+  const farLen = hypot2(b.fx - a.fx, b.fz - a.fz);
+  const far = farLen > wallLen;
+  const len = far ? farLen : wallLen;
+  if (len === 0) return;
+  const [ax, az, bx, bz] = far ? [a.fx, a.fz, b.fx, b.fz] : [a.wx, a.wz, b.wx, b.wz];
+  const tx = (bx - ax) / len;
+  const tz = (bz - az) / len;
+  // Away from the road: roadside's lateral direction for this side.
+  const nx = side * tz;
+  const nz = -side * tx;
+  const mx = (ax + bx) / 2;
+  const mz = (az + bz) / 2;
+  const edge = far ? -across : 0;
+  let bulge = 0;
+  for (let i = 0, steps = (b.k - a.k + p.count) % p.count; i <= steps; i++) {
+    const wall = roadside(p, (a.k + i) % p.count, side, 0, c.spot);
+    bulge = Math.max(bulge, (wall.x - mx) * nx + (wall.z - mz) * nz - edge);
+  }
+  const lift = (far ? -across / 2 : across / 2) + bulge;
+  c.spot.x = mx + nx * lift;
+  c.spot.z = mz + nz * lift;
+  slab(c, c.spot, tx, tz, a.wide, RULE_PAVING, len / length);
+}
+
+/**
+ * Rule 1: a city's roads edged with sidewalk slabs and a circuit's with a wider apron, drawn only, from the wall line out; none where a
+ * crossing road would be paved over. A station stands wherever the longer of the wall line and the slab's far edge has run a slab's
+ * length since the last (so a bend's far edge is not stretched), and each slab joins two neighbouring stations (`strip`): no gap between them.
+ */
 function sidewalks(c: Ctx): void {
   const [width, , length] = PREFABS[PREFAB.sidewalk].size;
   for (let pi = 0; pi < c.field.paths.length; pi++) {
     const p = c.field.paths[pi]!;
+    const base = c.field.base[pi]!;
+    const segs = c.field.base[pi + 1]! - base;
     for (const side of [1, -1] as const) {
-      march(c, pi, 0, (seg, k) => {
+      let first: Station | null = null;
+      let last: Station | null = null;
+      let before: Station | null = null;
+      let reach = 0;
+      let broken = false;
+      for (let k = 0; k < segs; k++) {
         const probe = roadside(p, k, side, width / 2, c.spot);
-        const wide = SLAB_WIDTH[biomeAt(c, probe.x, probe.z, seg)];
-        if (wide === undefined) return RETRY_STEP;
-        const spot = roadside(p, k, side, (width * wide) / 2, c.spot);
-        slab(c, spot, p.tx[k]!, p.tz[k]!, wide, RULE_PAVING);
-        return length;
-      });
+        const wide = SLAB_WIDTH[biomeAt(c, probe.x, probe.z, base + k)];
+        if (wide === undefined) {
+          last = null;
+          before = null;
+          broken = true;
+          continue;
+        }
+        const here = stationAt(c, p, k, side, wide);
+        if (last === null || before === null || last.wide !== wide) {
+          broken = broken || first !== null;
+          first ??= here;
+          last = here;
+          before = here;
+          reach = 0;
+          continue;
+        }
+        reach += Math.max(hypot2(here.wx - before.wx, here.wz - before.wz), hypot2(here.fx - before.fx, here.fz - before.fz));
+        before = here;
+        if (reach >= length) {
+          strip(c, p, last, here, side);
+          last = here;
+          reach = 0;
+        }
+      }
+      if (p.closed && !broken && first !== null && last !== null && last !== first) strip(c, p, last, first, side);
     }
   }
 }
 
-/** A slab (`PREFABS.sidewalk`, `wide` times its width) centred on `spot` with its length along (tx, tz), if all four corners are off every road. */
+/** A slab (`PREFABS.sidewalk`, `wide` times its width) centred on `spot` with its length along (tx, tz), if its centre and four corners are off every road. */
 function slab(c: Ctx, spot: Spot, tx: number, tz: number, wide: number, rule: number, longer = 1): boolean {
   const [width, , length] = PREFABS[PREFAB.sidewalk].size;
   const hw = (width * wide) / 2;
   const hl = (length * longer) / 2;
   const centre = nearest(c.field, spot.x, spot.z, c.near);
   const dc = centre.dc;
-  if (centre.seg < 0 || (c.field.flags[centre.seg]! & SEG_COVERED) !== 0) return false;
+  if (centre.seg < 0 || (c.field.flags[centre.seg]! & SEG_COVERED) !== 0 || centre.gap < -EDGE_TOLERANCE) return false;
   for (const a of [-1, 1]) {
     for (const b of [-1, 1]) {
       const cx = spot.x + a * tx * hl + b * tz * hw;
@@ -337,15 +427,16 @@ function frontage(c: Ctx): void {
 function verge(c: Ctx): void {
   const density = c.density[RULE_VERGE]!;
   if (density <= 0) return;
-  const b = c.track.bounds;
+  const [x0, x1, z0, z1] = sweepBox(c, VERGE_REACH);
   const rule = mix(c.seed, RULE_VERGE);
-  for (let i = Math.floor((b.minX - VERGE_REACH) / VERGE_CELL); i <= Math.ceil((b.maxX + VERGE_REACH) / VERGE_CELL); i++) {
-    for (let j = Math.floor((b.minZ - VERGE_REACH) / VERGE_CELL); j <= Math.ceil((b.maxZ + VERGE_REACH) / VERGE_CELL); j++) {
+  for (let i = Math.floor(x0 / VERGE_CELL); i <= Math.ceil(x1 / VERGE_CELL); i++) {
+    for (let j = Math.floor(z0 / VERGE_CELL); j <= Math.ceil(z1 / VERGE_CELL); j++) {
       const seed = mix(rule, mix(i, j));
       const roll = unit(mix(seed, 0));
       if (roll >= VERGE_CHANCE_MAX * VERGE_RAMP_MAX * density) continue;
       const x = (i + unit(mix(seed, 1))) * VERGE_CELL;
       const z = (j + unit(mix(seed, 2))) * VERGE_CELL;
+      if (!dressable(c, x, z)) continue;
       const near = nearest(c.field, x, z, c.near);
       if (near.seg < 0) continue;
       const spec = VERGE[biomeAt(c, x, z, near.seg)];
@@ -395,7 +486,7 @@ function islands(c: Ctx): void {
         if (roll >= ISLAND_CHANCE_MAX * density) continue;
         const x = (i + unit(mix(seed, 1))) * ISLAND_CELL;
         const z = (j + unit(mix(seed, 2))) * ISLAND_CELL;
-        if (!inside(px, pz, x, z)) continue;
+        if (!dressable(c, x, z) || !inside(px, pz, x, z)) continue;
         const near = nearest(c.field, x, z, c.near);
         if (near.seg < 0 || near.gap < ISLAND_MARGIN) continue;
         const spec = ISLANDS[biomeAt(c, x, z, near.seg)];

@@ -3,7 +3,8 @@ import { PREFABS } from "./catalog.ts";
 import { BIOME, PREFAB, TRACK_ID } from "./constants.ts";
 import { placeProps, type Placed } from "./placements.ts";
 import { biomeLookup, thinScenery } from "./scenery.ts";
-import { COURSE_JSON, FLAT, centreDistance, dress, intrusion, keyOf, nearOpening, overlap } from "./scenery.test-util.ts";
+import { VERGE_REACH } from "./scenery-biome.ts";
+import { COURSE_JSON, FLAT, centreDistance, dress, intrusion, keyOf, nearOpening, overlap, seamGap } from "./scenery.test-util.ts";
 import { parseTrack } from "./track-schema.ts";
 import { Track, blankPoint } from "./track.ts";
 import { TRACKS } from "./tracks/index.ts";
@@ -13,11 +14,9 @@ import { assertSameDigest } from "../vehicle/test-support.ts";
 const TOL = 0.1;
 /** The least (m) between a generated lamp and a hand lamp: a city's 28 m spacing times the share of it a hand lamp lights. */
 const LIT_MIN = 16;
-/** A car's reach (m) from an open road edge, and the slack (m) either way the two measures of it may differ by (the service reads the nearest segment, the row the nearest sample). */
-const REACH = 12;
-const REACH_SLACK = 0.5;
-/** How far (m, a sample is about a metre) along a road an opening in its wall counts for (`track.ts`'s `OPEN_SPAN`): a solid prop may stand that much beyond the reach of the opening itself. */
-const OPEN_SPAN = 12;
+/** A solid prop's reach (m) from an open road edge: the widest verge band, as far as a car leaving the road drives on and meets the authored scatter's trees. The slack (m) either way is what the two measures of it may differ by (the service reads the nearest segment, the row the nearest sample, a sample about a metre). */
+const REACH = VERGE_REACH;
+const REACH_SLACK = 1;
 
 const json = (id: string): unknown => COURSE_JSON.find((j) => parseTrack(j).id === id)!;
 const OVAL = json(TRACK_ID.oval);
@@ -62,12 +61,12 @@ describe("given the scenery on every course", () => {
     expect(bad).toEqual([]);
   });
 
-  it("when a prop with a body is drawn only, then no car can reach it; and every solid one is within a car's reach", () => {
+  it("when a prop with a body is drawn only, then no open road edge lies within the verge reach of it; and every solid one has one within it", () => {
     const bad: string[] = [];
     for (const j of COURSE_JSON) {
       const d = dress(j);
       for (const p of d.drawn) if (PREFABS[p.prefab].body !== "none" && nearOpening(d.track, p.x, p.z, REACH - REACH_SLACK)) bad.push(`${d.track.id} drawn ${p.prefab} at (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) is within a car's reach`);
-      for (const p of d.solid) if (!nearOpening(d.track, p.x, p.z, REACH + OPEN_SPAN + REACH_SLACK)) bad.push(`${d.track.id} solid ${p.prefab} at (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) is out of a car's reach`);
+      for (const p of d.solid) if (!nearOpening(d.track, p.x, p.z, REACH + REACH_SLACK)) bad.push(`${d.track.id} solid ${p.prefab} at (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) is out of a car's reach`);
     }
     expect(bad).toEqual([]);
   });
@@ -83,6 +82,34 @@ describe("given the scenery on every course", () => {
       }
     }
     expect(bad).toEqual([]);
+  });
+
+  it("when the sidewalk slabs along the oval's and the city's bends are measured, then no seam between neighbouring slabs opens 0.1 m", () => {
+    const SEAM_MAX = 0.1;
+    const NEIGHBOURS = 8;
+    const BEND_RADIUS = 60;
+    const NEAR_BEND = 40;
+    for (const id of [TRACK_ID.oval, TRACK_ID.city]) {
+      const d = dress(json(id));
+      const path = d.track.path;
+      const bends: number[] = [];
+      for (let k = 0; k < path.count; k++) if (Math.abs(path.curv[k]!) * BEND_RADIUS > 1) bends.push(k);
+      const slabs = d.drawn.filter((p) => p.prefab === PREFAB.sidewalk);
+      const bad: string[] = [];
+      let measured = 0;
+      for (let i = 1; i < slabs.length; i++) {
+        const [a, b] = [slabs[i - 1]!, slabs[i]!];
+        // Two listed slabs further apart than this are not neighbours (a crossing road, a bridge or the next road side lies between).
+        if (Math.hypot(a.x - b.x, a.z - b.z) >= NEIGHBOURS) continue;
+        const [mx, mz] = [(a.x + b.x) / 2, (a.z + b.z) / 2];
+        if (!bends.some((k) => Math.hypot(path.x[k]! - mx, path.z[k]! - mz) < NEAR_BEND)) continue;
+        measured++;
+        const seam = seamGap(a, b);
+        if (seam >= SEAM_MAX) bad.push(`${id} slabs at (${a.x.toFixed(1)}, ${a.z.toFixed(1)}) and (${b.x.toFixed(1)}, ${b.z.toFixed(1)}) leave a ${seam.toFixed(2)} m seam`);
+      }
+      expect(measured, `${id} slab pairs measured on its bends`).toBeGreaterThan(50);
+      expect(bad).toEqual([]);
+    }
   });
 
   it("when a generated lamp is measured against the authored lamps, then none stands within the stretch a hand lamp lights", () => {
@@ -189,6 +216,15 @@ describe("given a course's scenery block", () => {
     expect(pavement(dress(OVAL, { biome: BIOME.city }))).toBe(1);
     expect(pavement(base)).toBeGreaterThan(1);
   });
+
+  it("when a density is named for a rule that reads none, then the course is rejected; and a density of 0 for one that does takes its props out", () => {
+    expect(() => parseTrack(Object.assign({}, OVAL, { scenery: { density: { paving: 2 } } }))).toThrow();
+    expect(() => parseTrack(Object.assign({}, OVAL, { scenery: { density: { trackside: 0 } } }))).toThrow();
+    const d = dress(OVAL, { density: { islands: 0 } });
+    const made = [...d.solid, ...d.drawn];
+    expect(made.length).toBeLessThan(all.length);
+    expect(subset(d)).toBe(true);
+  });
 });
 
 /** Distance (m) from a placement to the loop's samples between node 0 and node 6, the stretch the no-gen row blanks. */
@@ -204,7 +240,7 @@ function stretchDistance(track: Track, p: Placed): number {
 
 describe("given the scenery's cost on every course", () => {
   it("when the draw cells of the generated props are counted, then each course adds few draws and no cell holds too many of one kind", () => {
-    // Four-count adds 46 (a long course over many 512 m draw cells, six kinds in each); dam-spine 37, the rest 19 or fewer.
+    // Four-count adds 45 (a long course over many 512 m draw cells, six kinds in each); dam-spine 38, the rest 18 or fewer.
     const DRAWS_MAX = 48;
     const PER_CELL_MAX = 2000;
     const groupOf = (p: Placed): string => `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}`;

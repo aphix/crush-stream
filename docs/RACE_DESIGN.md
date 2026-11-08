@@ -557,34 +557,37 @@ course from its geometry, deterministically, with no per-course editing; `placeC
 cell))` so a cell's output depends only on that cell, and a hand-built track gives the same lists in every browser.
 
 - **Two lists.** `placed` is the authored props (`props`, `along`, `scatter`, chevrons: no index moves) and then the scenery's **solid** props, appended
-  last: a prop with a body (tree, rock, palm, lamp, tyre stack, cone) that a car can reach, that is within `OPEN_REACH` (12 m) of the wall line of a road
-  edge whose wall is down within `OPEN_SPAN` samples (a side street, a rally stage's open edge, a shortcut's mouth). It has a collider like any
+  last: a prop with a body (tree, rock, palm, lamp, tyre stack, cone) with a road edge whose wall is down within `SOLID_REACH` (70 m, the widest verge band) of it: a car that
+  leaves the road through an opening drives on across the terrain, as far as the authored `scatter` trees stand. An edge is open when its wall is down
+  within `OPEN_SPAN` samples (a side street, a rally stage's open edge, a shortcut's mouth). It has a collider like any
   prop and moves the sim: **REPLAY**. `drawn` is everything else, art only (`TrackArt.scenery`, a second `PropTumble`; no collider, no index, never
-  knocked): props behind a wall, and the sidewalk slabs, bushes, flower beds and parked cars (`body: "none"`), which a car drives through.
+  knocked): props behind a wall or beyond that reach, and the sidewalk slabs, bushes, flower beds and parked cars (`body: "none"`), which a car drives through.
   `scenery.test.ts` holds both ways: no solid one out of reach, no drawn one with a body in reach, no footprint on a road or run-off
-  (and `course-intrusion.test.ts` over the same lists), and none overlaps an authored prop or another generated one.
+  (and `course-intrusion.test.ts` over the same lists), no seam of 0.1 m between neighbouring slabs on the oval's and the city's bends, and no standing prop
+  overlapping an authored prop or another generated one (the flat slabs and parked cars are exempt from that row: `slab` checks the road, not the footprints, and neighbouring
+  slabs overlap on the shorter edge of a bend by design).
 - **Biome**, per road stretch, from its terrain and surfaces (`defaultBiome`): sand terrain `desert`; paved terrain (concrete, asphalt, cobble) `city`; dirt
   terrain or a dirt, gravel or mud road `dirt`; grass with a paved run-off `circuit`; other grass `park`. Courses: oval circuit; rally, four-count park
   with dirt stretches; city city; stunt desert; dam-spine, razor-shelf, breaker-yard, figure-8 dirt. The Mall and Havana are `biome: none` (hand-authored); the
   Mall's `zones` turn `city` on for its town-house corner only (x −2150…−1190, z −1300…−550: the building grid west of the White House). A point's biome is a
   `zones` box's, else the course's `biome`, else its nearest road stretch's (`biomeLookup`, which `TrackArt.biome` hands the facade styles).
 - **Rules** (`SCENERY_RULES`): `paving` slabs (the `sidewalk` prefab, 2.4 × 3.2 m, 6 cm high, drawn only) along a city's road edges from the wall line out, a circuit's 2.5 times
-  wider as an apron, none where a crossing road would be paved over, and the paved car park behind every circuit grandstand; `frontage` lamps (spacing by biome: city two building bays of the street, 24 to 30 m, circuit 36, park 48,
+  wider as an apron, none where a crossing road would be paved over, and the paved car park behind every circuit grandstand (each slab spans two stations a slab's length apart on the longer of its wall-line and far edge, so neighbours share corners and the pavement has no gap on a bend); `frontage` lamps (spacing by biome: city two building bays of the street, 24 to 30 m, circuit 36, park 48,
   dirt 64, desert 72; beyond town the two sides take alternate lamps; none within 0.7 spacings of a hand lamp, so a hand `along` row keeps its stretch) and a
   city's street trees (16 m, young: scale 0.55 to 0.75); `verge` one jittered prop per 14 m lattice cell in the biome's band beyond the wall line (park trees,
   rocks and bushes out to 50 m; desert rock, palm and scrub to 70 m; thickening away from the road, 0.2 to 1.8 times its chance); `islands` flower beds and bushes
   inside any closed road (a loop, a roundabout) and, on a circuit's loop, a big bed with a ring of bushes at the middle of the infield and a hedge along the
   inner road edge; `trackside` (circuit only) a lining of eight tyre stacks outside each bend tighter than 60 m with three cones leading in and a small bed inboard,
   and two rows of parked cars (the `wreck` shells, tinted) on each grandstand's car park.
-- **Overrides** (`scenery`, all optional): `biome` every stretch's biome (`none`: nothing outside `zones`); `zones` `[{ x0, z0, x1, z1, biome }]` biome boxes; `off`
-  rule ids switched off (`paving`, `frontage`, `verge`, `islands`, `trackside`); `density` `{ rule: multiplier }`; `clear` metres from any road's **centreline** within
+- **Overrides** (`scenery`, all optional): `biome` every stretch's biome (`none`: nothing outside `zones`, and the verge and island sweeps cover only the zones); `zones` `[{ x0, z0, x1, z1, biome }]` biome boxes; `off`
+  rule ids switched off (`paving`, `frontage`, `verge`, `islands`, `trackside`); `density` `{ rule: multiplier }` for `frontage`, `verge` and `islands` (the rules that scale by one; a key for another is rejected); `clear` metres from any road's **centreline** within
   which nothing is generated, in every direction (default: only what each footprint's own clearance keeps, `ROAD_STANDOFF` 0.4 m off the wall line); `noGen`
   zones where nothing is generated, `{ x0, z0, x1, z1 }` boxes, `{ x, z, r }` circles, and `{ fromNode, toNode, within = 40 }` stretches of the race loop (within 60 m). `off`,
   `clear` and `noGen` only remove from the finished list, so raising `clear` or adding a zone always yields a subset of the default (`scenery.test.ts`). Hand `props` are
   untouched by all of them (so are the `along` and `scatter` rows: the service clears every footprint against them, and lays no lamp within 0.7 spacings of a hand lamp).
 - **Cost.** Generated cover casts no shadow (`PrefabPart.shadow = false`: slabs, bushes, beds). The drawn list is thinned to the effects tier (`thinScenery`: off and minimal a third,
   Low three fifths, High and Ultra all, by a hash of each prop's spot, so every lower tier is a subset); the solid list never depends on the tier. One `InstancedMesh` per prefab part
-  per 512 m cell: `scenery.test.ts` caps each course at 40 prefab-cell groups and 2000 instances in one. Boot (`placeCourse` beyond the authored props, node,
+  per 512 m cell: `scenery.test.ts` caps the groups a course adds (new solid groups plus drawn-only ones) at 48 (four-count 45, dam-spine 38) and 2000 instances in one. Boot (`placeCourse` beyond the authored props, node,
   measured): 6 to 90 ms per course, the Mall 600 ms (its 2900 authored footprints and 50 side streets).
 
 ## Engine integration

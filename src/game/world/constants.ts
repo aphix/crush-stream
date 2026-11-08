@@ -64,8 +64,10 @@ const CITY = "city";
 export const BIOME = { city: CITY, park: "park", desert: "desert", dirt: "dirt", circuit: "circuit", none: "none" } as const;
 export const BIOME_IDS = [BIOME.city, BIOME.park, BIOME.desert, BIOME.dirt, BIOME.circuit, BIOME.none] as const;
 export type BiomeId = (typeof BIOME_IDS)[number];
-/** The scenery rules a course's `scenery.off` and `scenery.density` name: paving (sidewalks, aprons, car parks' ground), frontage (lamps, street trees), verge, islands (beds, hedges), trackside (tyre runs, cones, parked cars). */
-export const SCENERY_RULES = ["paving", "frontage", "verge", "islands", "trackside"] as const;
+/** The rules `scenery.density` scales (a lattice's chance, a row's spacing); the other rules follow the road's own geometry and are only switched off. */
+export const SCENERY_DENSITY_RULES = ["frontage", "verge", "islands"] as const;
+/** The scenery rules a course's `scenery.off` names: paving (sidewalks, aprons, car parks' ground), frontage (lamps, street trees), verge, islands (beds, hedges), trackside (tyre runs, cones, parked cars). The rule indices (`scenery.ts`'s `RULE_*`) follow this order. */
+export const SCENERY_RULES = ["paving", ...SCENERY_DENSITY_RULES, "trackside"] as const;
 
 /**
  * Chevron signs at a shortcut junction that turns more than `CHEVRON_TURN` (rad): `placeProps` stands a run of `CHEVRON_RUN` boards, one

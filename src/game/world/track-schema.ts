@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PREFAB_IDS, SURFACE_IDS } from "./catalog.ts";
-import { BIOME_IDS, SCENERY_RULES, SURFACE } from "./constants.ts";
+import { BIOME_IDS, SCENERY_DENSITY_RULES, SCENERY_RULES, SURFACE } from "./constants.ts";
 
 /**
  * The track JSON format: the single source of truth for a course.
@@ -117,7 +117,7 @@ const biome = z.enum(BIOME_IDS);
 /** A ground box (world metres) of the scenery service: a `zones` entry also names its `biome`. */
 const sceneryBox = z.object({ x0: z.number(), z0: z.number(), x1: z.number(), z1: z.number() });
 const sceneryCircle = z.object({ x: z.number(), z: z.number(), r: z.number().positive() });
-/** The stretch of the race loop between two nodes and everything within `within` m of it (`scenery.ts`'s reach is 64 m). */
+/** The stretch of the race loop between two nodes and everything within `within` m of it (the loop's samples, every 10 m). */
 const sceneryStretch = z.object({ fromNode: z.number().int().min(0), toNode: z.number().int().min(0), within: z.number().positive().max(60).default(40) });
 
 /** A course's overrides of the scenery service (`world/scenery.ts`): all optional, a course without the field is dressed by its terrain, surfaces and routes alone. */
@@ -128,9 +128,9 @@ const scenery = z.object({
   zones: z.array(sceneryBox.extend({ biome })).default([]),
   /** Rules switched off. */
   off: z.array(z.enum(SCENERY_RULES)).default([]),
-  /** Per-rule density multiplier (1: the biome's own). */
-  density: z.partialRecord(z.enum(SCENERY_RULES), z.number().min(0).max(4)).default({}),
-  /** Metres from any road's centreline within which nothing is generated, in every direction; omitted: the road's half width and run-off plus the biome's margin. */
+  /** Per-rule density multiplier (1: the biome's own) for the rules that scale by one (`SCENERY_DENSITY_RULES`); a key for another is rejected. */
+  density: z.partialRecord(z.enum(SCENERY_DENSITY_RULES), z.number().min(0).max(4)).default({}),
+  /** Metres from any road's centreline within which nothing is generated, in every direction; omitted: only each footprint's own clearance from the wall line (0.4 m) applies. */
   clear: z.number().min(0).max(60).optional(),
   /** Where nothing is generated: boxes, circles, and stretches of the race loop. Hand `props` are untouched. */
   noGen: z.array(z.union([sceneryBox, sceneryCircle, sceneryStretch])).default([]),
