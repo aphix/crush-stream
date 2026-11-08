@@ -152,6 +152,7 @@ describe("given props of different scales and sizes (crates, a cone and a gantry
   it("when the colliders are built, then they scale with the prop", () => {
     const t = new Track({
       ...oval,
+      scenery: { biome: "none" },
       props: [
         { prefab: "crate", x: 0, z: 0 },
         { prefab: "crate", x: 0, z: 10, scale: 2 },
@@ -178,6 +179,7 @@ describe("given a yawed billboard prop", () => {
   it("when its colliders are built, then each piece is the prefab's piece through the prop's rotation and scale: its centre, its extents and its heights", () => {
     const t = new Track({
       ...oval,
+      scenery: { biome: "none" },
       props: [{ prefab: "billboard", x: 3, z: -7, yaw: 0.6, size: [0.5, 5, 9] }],
       along: [],
       scatter: [],

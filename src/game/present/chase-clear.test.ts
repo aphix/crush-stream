@@ -6,7 +6,7 @@ import type { PadState } from "../vehicle/gamepad.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { DERBY_BOXES, DERBY_PROP, DERBY_TABLE_TOP, DerbyGround, type DerbyBox } from "../scenes/derby-ground.ts";
 import { activeGround, NO_FLOOR, setGround } from "../world/ground.ts";
-import { placeProps } from "../world/placements.ts";
+import { placeProps, propColliders } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
@@ -14,7 +14,7 @@ import { ChaseCamera, type CarPicker } from "./engine-camera.ts";
 import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
 import { ChaseSolids } from "./chase-solids.ts";
 import { EyeClear } from "./eye-clear.ts";
-import { carsBlock, CINE, inside, occluder, raceSight, solid, type Sight } from "./spectate-cam.ts";
+import { carsBlock, CINE, inside, occluder, raceSight, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const DT = 1 / FRAME_HZ;
@@ -254,12 +254,20 @@ describe("given the chase camera on a car 2 m outside a tall prop or building of
     let tried = 0;
     for (const json of TRACKS) {
       const track = new Track(parseTrack(json));
-      const sight = raceSight(track, placeProps(track));
-      const tall = sight.occ.filter((o) => o.y1 - o.y0 >= TALL);
+      const placed = placeProps(track);
+      const sight = raceSight(track, placed);
+      // `occ` lists the authored colliders, then the scenery service's, then the size boxes: each group is strided alone, so scenery never moves which authored solids are tried.
+      const authored = propColliders(placeProps(new Track({ ...parseTrack(json), scenery: { biome: "none" } }))).length;
+      const sceneryEnd = propColliders(placed).length;
+      const spread = (list: readonly Occluder[]): Occluder[] => {
+        const tallOnes = list.filter((o) => o.y1 - o.y0 >= TALL);
+        const step = Math.max(1, Math.floor(tallOnes.length / PER_COURSE));
+        return tallOnes.filter((o, i) => i % step === 0);
+      };
+      const tall = [...spread(sight.occ.filter((o, i) => i < authored || i >= sceneryEnd)), ...spread(sight.occ.slice(authored, sceneryEnd))];
       setGround(track.ground());
       try {
-        for (let i = 0; i < tall.length; i += Math.max(1, Math.floor(tall.length / PER_COURSE))) {
-          const prop = tall[i]!;
+        for (const [i, prop] of tall.entries()) {
           for (const turn of TURNS) {
             const reach = (prop.circle ? prop.hx : Math.hypot(prop.hx, prop.hz)) + 2;
             const x = prop.x + Math.cos(turn) * reach;

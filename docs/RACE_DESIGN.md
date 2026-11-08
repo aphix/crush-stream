@@ -567,13 +567,13 @@ cell))` so a cell's output depends only on that cell, and a hand-built track giv
   Mall's `zones` turn `city` on for its town-house corner only (x −2150…−1190, z −1300…−550: the building grid west of the White House). A point's biome is a
   `zones` box's, else the course's `biome`, else its nearest road stretch's (`biomeLookup`, which `TrackArt.biome` hands the facade styles).
 - **Rules** (`SCENERY_RULES`): `paving` slabs (the `sidewalk` prefab, 2.4 × 3.2 m, 6 cm high, drawn only) along a city's road edges from the wall line out, a circuit's 2.5 times
-  wider as an apron, none where a crossing road would be paved over; `frontage` lamps (spacing by biome: city two building bays of the street, 24 to 30 m, circuit 36, park 48,
+  wider as an apron, none where a crossing road would be paved over, and the paved car park behind every circuit grandstand; `frontage` lamps (spacing by biome: city two building bays of the street, 24 to 30 m, circuit 36, park 48,
   dirt 64, desert 72; beyond town the two sides take alternate lamps; none within 0.7 spacings of a hand lamp, so a hand `along` row keeps its stretch) and a
   city's street trees (16 m, young: scale 0.55 to 0.75); `verge` one jittered prop per 14 m lattice cell in the biome's band beyond the wall line (park trees,
   rocks and bushes out to 50 m; desert rock, palm and scrub to 70 m; thickening away from the road, 0.2 to 1.8 times its chance); `islands` flower beds and bushes
   inside any closed road (a loop, a roundabout) and, on a circuit's loop, a big bed with a ring of bushes at the middle of the infield and a hedge along the
   inner road edge; `trackside` (circuit only) a lining of eight tyre stacks outside each bend tighter than 60 m with three cones leading in and a small bed inboard,
-  and behind every grandstand a paved car park with two rows of parked cars (the `wreck` shells, tinted).
+  and two rows of parked cars (the `wreck` shells, tinted) on each grandstand's car park.
 - **Overrides** (`scenery`, all optional): `biome` every stretch's biome (`none`: nothing outside `zones`); `zones` `[{ x0, z0, x1, z1, biome }]` biome boxes; `off`
   rule ids switched off (`paving`, `frontage`, `verge`, `islands`, `trackside`); `density` `{ rule: multiplier }`; `clear` metres from any road's **centreline** within
   which nothing is generated, in every direction (default: only what each footprint's own clearance keeps, `ROAD_STANDOFF` 0.4 m off the wall line); `noGen`

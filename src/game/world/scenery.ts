@@ -428,7 +428,7 @@ function infield(c: Ctx): void {
   });
 }
 
-/** Rule 5: behind each of a circuit's grandstands a paved car park with two rows of parked cars (the junked shells, tinted), clear of every road. */
+/** Rules 1 and 5: behind each of a circuit's grandstands a paved car park (paving) with two rows of parked cars (trackside; the junked shells, tinted), clear of every road. */
 function carParks(c: Ctx): void {
   const [sw, , sd] = PREFABS[PREFAB.grandstand].size;
   const [pw, , pl] = PREFABS[PREFAB.sidewalk].size;
@@ -447,7 +447,7 @@ function carParks(c: Ctx): void {
     const mz = g.z - fz * back;
     c.spot.x = mx;
     c.spot.z = mz;
-    if (!slab(c, c.spot, ax, az, CAR_PARK_DEPTH / pw, RULE_TRACKSIDE, length / pl)) continue;
+    if (!slab(c, c.spot, ax, az, CAR_PARK_DEPTH / pw, RULE_PAVING, length / pl)) continue;
     for (const row of [-CAR_ROW, CAR_ROW]) {
       for (let n = 0; n < Math.floor(length / CAR_PITCH); n++) {
         const t = (n + 0.5) * CAR_PITCH - length / 2;

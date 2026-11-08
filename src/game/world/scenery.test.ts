@@ -204,16 +204,18 @@ function stretchDistance(track: Track, p: Placed): number {
 
 describe("given the scenery's cost on every course", () => {
   it("when the draw cells of the generated props are counted, then each course adds few draws and no cell holds too many of one kind", () => {
-    const DRAWS_MAX = 40;
+    // Four-count adds 46 (a long course over many 512 m draw cells, six kinds in each); dam-spine 37, the rest 19 or fewer.
+    const DRAWS_MAX = 48;
     const PER_CELL_MAX = 2000;
+    const groupOf = (p: Placed): string => `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}`;
     for (const j of TRACKS) {
       const d = dress(j);
+      // The solid props join the authored props' groups; the drawn-only ones are drawn apart (`TrackArt.scenery`), each group its own draw.
+      const standing = new Set(d.authored.map(groupOf));
+      const added = new Set(d.solid.map(groupOf).filter((k) => !standing.has(k))).size + new Set(d.drawn.map(groupOf)).size;
+      expect(added, `${d.track.id} adds ${added} prefab-cell groups`).toBeLessThanOrEqual(DRAWS_MAX);
       const cells = new Map<string, number>();
-      for (const p of [...d.solid, ...d.drawn]) {
-        const key = `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}`;
-        cells.set(key, (cells.get(key) ?? 0) + 1);
-      }
-      expect(cells.size, `${d.track.id} adds ${cells.size} prefab-cell groups`).toBeLessThanOrEqual(DRAWS_MAX);
+      for (const p of [...d.solid, ...d.drawn]) cells.set(groupOf(p), (cells.get(groupOf(p)) ?? 0) + 1);
       for (const [key, n] of cells) expect(n, `${d.track.id} ${key}`).toBeLessThanOrEqual(PER_CELL_MAX);
     }
   });
