@@ -268,6 +268,150 @@
       "x": 320,
       "z": -200,
       "scale": 1.1
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 499.7,
+      "z": -109,
+      "yaw": 3.312
+    },
+    {
+      "prefab": "crate",
+      "x": 525.6,
+      "z": -103.8,
+      "yaw": 3.806
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 493.5,
+      "z": -80.6,
+      "yaw": 4.538
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 526.3,
+      "z": -79.2,
+      "yaw": 0.578
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 503.3,
+      "z": -98.2,
+      "yaw": 5.964
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 520,
+      "z": -76.5,
+      "yaw": 5.342
+    },
+    {
+      "prefab": "crate",
+      "x": 535.4,
+      "z": -83.6,
+      "yaw": 1.198
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 506.1,
+      "z": -88,
+      "yaw": 0.514
+    },
+    {
+      "prefab": "crate",
+      "x": 492.3,
+      "z": -104.6,
+      "yaw": 3.813
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 522.4,
+      "z": -83.8,
+      "yaw": 1.094
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 518.2,
+      "z": -110,
+      "yaw": 4.822
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 482.3,
+      "z": -89.1,
+      "yaw": 2.457
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 506,
+      "z": -64.6,
+      "yaw": 1.754
+    },
+    {
+      "prefab": "crate",
+      "x": 502.1,
+      "z": -60.4,
+      "yaw": 3.024
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 508.1,
+      "z": -105.5,
+      "yaw": 6.083
+    },
+    {
+      "prefab": "crate",
+      "x": 526.4,
+      "z": -108.5,
+      "yaw": 1.793
+    },
+    {
+      "prefab": "crate",
+      "x": 520.3,
+      "z": -93.8,
+      "yaw": 1.117
+    },
+    {
+      "prefab": "crate",
+      "x": 493.5,
+      "z": -100.5,
+      "yaw": 1.411
+    },
+    {
+      "prefab": "crate",
+      "x": 485.3,
+      "z": -82,
+      "yaw": 3.498
+    },
+    {
+      "prefab": "crate",
+      "x": 536.2,
+      "z": -90.6,
+      "yaw": 3.347
+    },
+    {
+      "prefab": "crate",
+      "x": 523.4,
+      "z": -66.6,
+      "yaw": 3.007
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 528.2,
+      "z": -88.6,
+      "yaw": 3.719
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 496.9,
+      "z": -98.5,
+      "yaw": 1.36
+    },
+    {
+      "prefab": "crate",
+      "x": 483.9,
+      "z": -73.8,
+      "yaw": 4.252
     }
   ],
   "along": [
