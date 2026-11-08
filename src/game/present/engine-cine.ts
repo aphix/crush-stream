@@ -1,4 +1,5 @@
 import { hypot2 } from "../kernel/physics-core.js";
+import { lapPart, PART } from "../kernel/frame-parts.ts";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { applyCarFinish, finishForTier } from "../vehicle/car-finish.ts";
@@ -713,6 +714,7 @@ export class Cinematics {
   render(scene: THREE.Scene, camera: THREE.Camera, wallDt: number, markFocus: THREE.Vector3): void {
     this.gpu?.begin();
     this.marks.flush(this.renderer, wallDt, markFocus.x, markFocus.z);
+    lapPart(PART.marks);
     this.post.render(scene, camera, wallDt);
     this.gpu?.end();
   }

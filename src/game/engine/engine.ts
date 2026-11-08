@@ -1,6 +1,7 @@
 // First: every quaternion built from here on, constants at load included, takes the engine-identical trig (kernel/three-trig.ts).
 import "../kernel/three-trig.ts";
 import { takeTierWork } from "../kernel/tier-work.ts";
+import { COUNT, countPart, lapPart, PART } from "../kernel/frame-parts.ts";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { PISTON_ORBIT_RATE, PistonBank } from "../present/engine-pistons.ts";
@@ -237,6 +238,7 @@ export class CrashEngine extends EngineGarage {
     const driverLook = (car: number, cop: boolean) => this.ragdolls.carDriverLook(car, cop);
     // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps, parts and seated drivers.
     this.scene.onBeforeRender = (renderer) => {
+      lapPart(PART.matrices);
       const drawn = this.drawnCars();
       this.wheels.sync(drawn, renderer);
       this.lampBatch.night = this.stage.night;
@@ -245,6 +247,7 @@ export class CrashEngine extends EngineGarage {
       // In the garage the standing dummy beside the car is the driver, and the showcase's cars show their empty cabins: no one sits in the car there. A car its player left on foot has nobody in it either.
       this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook, this.onFoot.away);
       this.coverBatch.sync(drawn);
+      lapPart(PART.batches);
     };
 
     this.debris = new DebrisSystem(this.scene);
@@ -580,6 +583,7 @@ export class CrashEngine extends EngineGarage {
   protected tickInner(now: number): void {
     if (this.disposed) return;
     const t0 = performance.now();
+    lapPart(PART.rest);
     // The first rAF stamp can predate `start()`'s performance.now(): a negative dt froze the sim for seconds.
     const wallDt = Math.min(this.advanceDt ?? Math.max(0, (now - this.last) / 1000), 0.1);
     this.last = now;
@@ -588,6 +592,7 @@ export class CrashEngine extends EngineGarage {
       this.fps = this.fps > 1 ? this.fps * 0.85 + inst * 0.15 : inst;
     }
     this.pollInput(wallDt);
+    lapPart(PART.input);
     if (this.warming) return;
     this.stepSceneFade(wallDt);
     this.fxFrame(wallDt, this.pace.lost);
@@ -618,23 +623,34 @@ export class CrashEngine extends EngineGarage {
         if (!this.net.client) {
           let fineNeeded = false;
           for (let i = 0; i < cars.length; i++) if (cars[i]!.deform.massActive && cars[i]!.deform.crushing) fineNeeded = true;
+          lapPart(PART.rest);
           this.pace.run(simDt, this.clock.timeScale * this.cine.timeWarp, sliceSpeed(cars), fineNeeded, performance.now() + PACE_BUDGET_MS, this.slice);
+          lapPart(PART.sim);
         }
       }
       this.stepEdge();
+      lapPart(PART.rest);
       this.scheduleSkins(cars);
       // A client draws the host's skins; the reel's replay (a client's too) skins its own cars, the hidden ones wait.
       if (reelDt !== null || !this.net.client) {
         for (let i = 0; i < cars.length; i++) {
           const car = cars[i]!;
-          if (reelDt !== null || this.showStack ? car.group.visible : !this.rigScene || car === this.carA) car.updateSkin();
+          if (reelDt !== null || this.showStack ? car.group.visible : !this.rigScene || car === this.carA) {
+            car.updateSkin();
+            if (car.deform.skinnedThisFrame) countPart(COUNT.skinnedCars, 1);
+          }
         }
       }
+      lapPart(PART.skin);
       // The reel's skins and parts were written after `ClipSim.present`: draw them at the frame's time too.
       if (reelDt !== null) this.blend.refresh();
       if (reelDt === null && !this.net.client) this.updatePhase(wallDt);
       if (this.showStack) this.stepStack(); else if (this.showPistons && this.looping) this.stepPistonLoop(wallDt);
-      if (reelDt === null && this.clock.phase !== "approach") this.emitContactFx();
+      if (reelDt === null && this.clock.phase !== "approach") {
+        lapPart(PART.rest);
+        this.emitContactFx();
+        lapPart(PART.fx);
+      }
       if (this.impactLightLife > 0) {
         this.impactLightLife -= wallDt;
         this.impactLight.intensity = Math.max(0, this.impactLightLife * 90);
@@ -645,14 +661,18 @@ export class CrashEngine extends EngineGarage {
       const fxDt = simDt;
       // The bits land on the ground and the cars' tops of the world this frame stepped, the replay's while a clip plays (`landOn`).
       armTops(this.highlights.surfaces ?? this.world.surfaces);
+      lapPart(PART.rest);
       this.debris.update(fxDt);
       this.sparks.update(fxDt);
       this.glassDots.update(fxDt);
       armTops(null);
+      lapPart(PART.fx);
       if (this.race.active) this.race.foliageFrame(cars, fxDt, this.fxDensity);
+      lapPart(PART.scenery);
       this.fountains.setLook(this.cine.tier, this.fxDensity);
       this.fountains.update(fxDt);
       this.smoke.update(fxDt, this.camera);
+      lapPart(PART.fx);
       const sandbox = !this.race.active && !this.derbyMode;
       // Who the drivers look like: the clip on screen's race, else this race's, this derby round's, or this run's scene seed.
       this.ragdolls.lookSeed = this.highlights.look ?? (this.race.active ? this.race.look : this.derbyMode ? this.derbyRound : this.sceneSeed);
@@ -663,7 +683,9 @@ export class CrashEngine extends EngineGarage {
       this.ragdolls.pickMesh.timeScale = rate;
       this.seated.mesh.timeScale = rate;
       // A clip's own hits ride its record (`ClipPartHit`): its replayed dummies' world strikes nothing.
+      lapPart(PART.rest);
       this.ragdolls.update(simDt, cars, !this.net.client && reelDt === null, sandbox, this.barrierUp ? this.barrier.group : null);
+      lapPart(PART.ragdoll);
       for (let i = 0; i < cars.length; i++) {
         const car = cars[i]!;
         if (reelDt !== null && !car.group.visible) continue;
@@ -690,8 +712,10 @@ export class CrashEngine extends EngineGarage {
       this.stepDerby(simDt);
       this.seat.step(simDt);
       this.cine.update(wallDt, simDt, cars, this.followedCar(), this.seat.mode === "drive", this.fxDensity, this.net.client, this.boostZoom ? this.watchedCar() : null);
+      lapPart(PART.fx);
       // Live play only: a reel's cars keep the spatter they had (replays don't record it).
       if (reelDt === null) this.paintScratches.spatter(cars, this.cine.marks.wheels, simDt);
+      lapPart(PART.paint);
       if (this.derbyMode) {
         const boosts = this.derby.consumeBoosts();
         for (let k = 0; k < boosts.length; k++) this.takedownBoost(boosts[k]!);
@@ -703,7 +727,9 @@ export class CrashEngine extends EngineGarage {
     // The reel's replay presents its own steps through the same blend (`ClipSim.present`, before the skins above): the world's pace has no step to show.
     if (!this.highlights.playing) this.blend.present(this.live(), this.pace.alpha);
     if (this.race.active) {
+      lapPart(PART.rest);
       this.race.frame(this.playing && !held ? wallDt : 0, this.highlights.people);
+      lapPart(PART.scenery);
       // A reel plays a clip, not the race: its finish is not this race's last lap.
       if (!this.highlights.playing) {
         const car = this.followedCar() ? this.seat.carIndex : this.race.self;
@@ -716,19 +742,29 @@ export class CrashEngine extends EngineGarage {
     }
     const focus = this.highlights.playing ? this.highlights.focus() : null;
     if (focus) this.race.followSun(focus);
+    lapPart(PART.rest);
     this.updateCamera(wallDt);
+    lapPart(PART.camera);
     this.rumbleFrame(this.playing && !held ? wallDt : 0);
+    lapPart(PART.rest);
     this.flushVisibleSkins();
+    lapPart(PART.skin);
     this.paintScratches.frame(this.drawnCars(), wallDt);
+    lapPart(PART.paint);
     this.detail.update(this.cars, this.camera, this.followedCar(), this.highlights.playing ? this.highlights.focus() : null);
     this.lampLights.night = this.stage.night;
     this.showcase?.art.setNight(this.stage.night);
+    lapPart(PART.rest);
     this.lampLights.update(this.showShowcase ? this.drawnCars() : this.live(), this.camera, this.followedCar(), performance.now() / 1000, this.highlights.playing ? this.highlights.cars() : undefined, wallDt);
+    lapPart(PART.scenery);
     if (this.audioOn) this.audio.frame(wallDt, this.highlights.playing ? this.highlights.cars() : this.live(), this.highlights.playing ? this.highlights.focus() : this.followedCar(), this.clock.timeScale * this.cine.timeWarp, this.playing && !held);
+    lapPart(PART.audio);
     if (this.stage.night) this.stage.syncPools(this.poles);
+    lapPart(PART.scenery);
     const drawAt = performance.now();
     if (!this.skipDraw) {
       this.scene.sync(this.warmsInFlight === 0);
+      lapPart(PART.scenery);
       this.cine.render(this.scene, this.camera, wallDt, this.markFocus());
       this.frameDrawn();
     }
@@ -739,7 +775,9 @@ export class CrashEngine extends EngineGarage {
     this.hudAcc += wallDt;
     if (this.hudAcc > (this.clock.timeScale < 0.5 ? 0.05 : 0.12)) {
       this.hudAcc = 0;
+      lapPart(PART.rest);
       this.emitHud();
+      lapPart(PART.hud);
     }
     this.workMs = performance.now() - t0;
   }

@@ -6,6 +6,7 @@ import { FACE_BITS, FACE_MASK, FACE_METRES, FACE_WIDTH, SCRAPE_MAX, SEVERITY, ST
 import { CAR_SPRAY, SPRAY_FACE, sprayFace, sprayPlace } from "../vehicle/spray-box.ts";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { bookTierWork } from "../kernel/tier-work.ts";
+import { COUNT, countPart } from "../kernel/frame-parts.ts";
 import { SPATTER_ROUGHNESS } from "../vehicle/bare-metal.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
 import type { SkidMarks } from "./engine-marks.ts";
@@ -438,6 +439,8 @@ class WearMask {
       t.updateRanges[t.updateRanges.length] = r;
     }
     t.needsUpdate = true;
+    countPart(COUNT.wearUploads, 1);
+    countPart(COUNT.wearUploadBytes, (x1 - x0 + 1) * (y1 - y0 + 1) * TEXEL);
   }
 
   /** The whole mask uploads at the next draw. */
@@ -445,6 +448,8 @@ class WearMask {
     this.texture.clearUpdateRanges();
     this.pending = FULL;
     this.texture.needsUpdate = true;
+    countPart(COUNT.wearUploads, 1);
+    countPart(COUNT.wearUploadBytes, SIDE * SIDE * TEXEL);
   }
 }
 
@@ -522,6 +527,7 @@ export class PaintScratches {
       const car = cars[c]!;
       const wear = wears.get(car);
       if (wear === undefined) continue;
+      countPart(COUNT.spatterStamps, 1);
       const rects = this.spatterRects;
       for (let face = 0; face < FACES; face++) clearRect(rects, face * 4);
       for (let k = 0; k < 4; k++) this.wheelThrow(wear, car, k, wheels, c * 4 + k);
@@ -641,6 +647,7 @@ export class PaintScratches {
     for (let face = 0; face < FACES; face++) {
       const o = face * 4;
       if (rects[o + 2]! < rects[o]!) continue;
+      countPart(COUNT.wearRedraws, 1);
       const fx = CAR_SPRAY.faces[face]![0];
       const fy = CAR_SPRAY.faces[face]![1];
       for (let y = rects[o + 1]!; y <= rects[o + 3]!; y++) {
@@ -676,6 +683,7 @@ export class PaintScratches {
       }
     }
     if (build) {
+      countPart(COUNT.dentRedraws, 1);
       const depths = this.depths;
       const laid = this.laid;
       for (let face = 0; face < FACES; face++) {

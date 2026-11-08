@@ -1,5 +1,6 @@
 import type * as THREE from "three";
 import { epicenterOn } from "../deform/epicenter.ts";
+import { COUNT, countPart, frameParts, lapPart, PART } from "../kernel/frame-parts.ts";
 import { NAME } from "./bench-frames.ts";
 import { skinKernel } from "../deform/skin-kernel.ts";
 import { DETAIL_LEVELS, type CarDetail } from "../present/car-detail.ts";
@@ -129,6 +130,8 @@ export function tap(pace: SimPacer, parts: BenchParts): Tap {
   const log: GpuLog = { n: 0, block: new Int32Array(GPU_LOG_CAP), ms: new Float64Array(GPU_LOG_CAP) };
   const run = pace.run;
   const render = cine.render;
+  const shadowMap = renderer.shadowMap;
+  const shadowRender = shadowMap.render;
   const t: Tap = {
     simMs: 0,
     drawMs: 0,
@@ -157,6 +160,8 @@ export function tap(pace: SimPacer, parts: BenchParts): Tap {
       for (let i = 0; i < pool.length; i++) gl.deleteQuery(pool[i]!);
       pace.run = run;
       cine.render = render;
+      shadowMap.render = shadowRender;
+      frameParts.on = false;
       renderer.info.autoReset = true;
       return log;
     },
@@ -181,6 +186,15 @@ export function tap(pace: SimPacer, parts: BenchParts): Tap {
     }
     t.drawMs += performance.now() - t0;
   };
+  // The shadow pass is inside `renderer.render`: wrapping this one instance method (put back in `finish`) is the only way to tell it from the main pass.
+  shadowMap.render = (lights, scene, camera): void => {
+    lapPart(PART.main);
+    const calls0 = renderer.info.render.calls;
+    shadowRender.call(shadowMap, lights, scene, camera);
+    lapPart(PART.shadow);
+    countPart(COUNT.callsShadow, renderer.info.render.calls - calls0);
+  };
+  frameParts.on = true;
   renderer.info.autoReset = false;
   return t;
 }
@@ -535,7 +549,7 @@ function sharesOf(counts: Float64Array, order: Uint8Array, seen: number, frames:
   return shares;
 }
 
-export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "abDraw" | "abScale" | "abShadow" | "device" | "pageEvents" | "pageSeconds" | "pageState" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "sweepHitches" | "switches" | "frameStats" | "run"> {
+export function summarize(parts: BenchParts, plan: BenchPlan, s: Samples, w: Window, setupMs: BenchResult["setupMs"]): Omit<BenchResult, "strip" | "labThrown" | "settings" | "abPace" | "abFx" | "abDetail" | "abSky" | "abDraw" | "abScale" | "abShadow" | "device" | "pageEvents" | "pageSeconds" | "pageState" | "gpuMs" | "replay" | "replayWhy" | "longTasks" | "hitches" | "sweepHitches" | "switches" | "frameStats" | "frameParts" | "frameCounts" | "run"> {
   const { race } = parts;
   const { n, iv } = s;
   const third = Math.floor(n / 3);

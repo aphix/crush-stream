@@ -41,6 +41,7 @@
  * frame): its wheels spin in place under the gas, for wheel-slip looks (tyre smoke, surface spatter) on a car that stays in frame.
  * `--race-start` starts the race (a `scene=race` hash) before `--at`'s seconds run, as the race menu's Start does: the field on its course, racing.
  * `--teleport x,z,yaw` stands the hash's race car (car 0) at that spot, facing that yaw (rad, 0 = +z), before `--view` frames it: a shot of any part of any course (`scene=race&track=<id>`).
+ * `--bench '?bench=city'` enters the bench page's scene as the card sets it up (`enterBenchScene`: its course, the bench race on its seed) instead of the derby, `--at` sim seconds before the drawn frames; `--parts n` then runs n frames of the bench's own frame loop and adds the JSON's `parts`: the cpu, sim and draw ms a frame and, as the card's `frameParts` and `frameCounts`, each named part's ms (mean, p95) and each counter's mean (docs/PERF_BENCH.md "Where the frame's time goes").
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -114,6 +115,8 @@ const { values } = parseArgs({
     shadow: { type: "string" },
     keys: { type: "string" },
     uploads: { type: "boolean" },
+    bench: { type: "string" },
+    parts: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -298,8 +301,13 @@ engine.fadeScenes = false;
 engine.pinnedSeed = SEED;
 let paceClock = 0;
 engine.pace.now = () => (paceClock += PACE_STEP_S);
-if (values.hash === undefined) engine.toggleDerby();
+if (values.hash === undefined && values.bench === undefined) engine.toggleDerby();
 if (values["race-start"]) engine.raceCommand({ type: "start" });
+if (values.bench !== undefined) {
+  const { enterBenchScene } = await game("engine/bench-scene.ts");
+  const { benchPlan } = await game("engine/engine-bench-plan.ts");
+  enterBenchScene(engine, engine.benchParts(), benchPlan(values.bench));
+}
 engine.advance(atS, { frameDt: FRAME });
 await settle();
 for (const name of values.tear?.split(",") ?? []) {
@@ -446,6 +454,7 @@ for (let f = 0; f < frames; f++) {
   frameTimes.push(performance.now() - began);
   dummiesOut = Math.max(dummiesOut, engine["ragdolls"]["live"]);
 }
+const partsCard = values.parts === undefined ? null : await benchParts(Number(values.parts));
 const frameMs = frameTimes.length === 0 ? null : Math.round((frameTimes.reduce((sum, ms) => sum + ms, 0) / frameTimes.length) * 100) / 100;
 const glError = gl.getError();
 const { render, memory, programs } = three.info;
@@ -468,8 +477,39 @@ const boostZoom = values.boost === undefined ? null : { seat: engine.seat.mode, 
 engine.dispose();
 const uploaded = values.uploads ? { uploadKBPerFrame: Math.round((uploads.bytes / frames / 1024) * 100) / 100, uploadCallsPerFrame: Math.round((uploads.calls / frames) * 10) / 10, dummiesOut } : {};
 const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, frameMs, ...counts, ...uploaded, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
-process.stdout.write(`${JSON.stringify({ ...result, boostZoom })}\n`);
+process.stdout.write(`${JSON.stringify({ ...result, boostZoom, parts: partsCard })}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
+
+/**
+ * `--parts n`: n frames of the bench's own frame loop (`frame`, a synthetic 60 Hz rAF) over the scene `--bench` entered, recorded as the card records them: the cpu mean,
+ * each named part's ms a frame (mean, p95) and the counters' means (`partCard`).
+ */
+async function benchParts(n) {
+  const { tap, wrecks } = await game("engine/bench-measure.ts");
+  const { frame, newBeat, FRAME_CPU, FRAME_SIM, FRAME_DRAW } = await game("engine/bench-frame.ts");
+  const { FrameRecord, partCard } = await game("engine/bench-frames.ts");
+  const { frameParts } = await game("kernel/frame-parts.ts");
+  let stamp = 1000;
+  globalThis.requestAnimationFrame = (callback) => void setImmediate(() => callback((stamp += 1000 / 60)));
+  const parts = engine.benchParts();
+  const t = tap(engine.pace, parts);
+  const beat = newBeat(parts, stamp, null, 0);
+  const rec = new FrameRecord(n, { row: beat.frame, pace: engine.pace, phases: parts.world.phases, parts: frameParts, traffic: parts.ragdoll.traffic, crashed: () => wrecks(parts) });
+  rec.begin();
+  let cpu = 0;
+  let sim = 0;
+  let draw = 0;
+  for (let i = 0; i < n; i++) {
+    hideQuirkMeshes();
+    await frame(engine, three, t, beat);
+    rec.push();
+    cpu += beat.frame[FRAME_CPU];
+    sim += beat.frame[FRAME_SIM];
+    draw += beat.frame[FRAME_DRAW];
+  }
+  await t.finish();
+  return { frames: n, cars: parts.live().length, cpuMs: cpu / n, simMs: sim / n, drawMs: draw / n, ...partCard(rec) };
+}
 
 /**
  * `--uploads`: `gl`'s buffer and texture uploads add the bytes they send to `uploads` (a call's own count: a partial texture upload

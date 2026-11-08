@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
 import { MAT } from "../kernel/material-ids.ts";
+import { COUNT, countPart } from "../kernel/frame-parts.ts";
 import { PREFABS, type PrefabId } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
@@ -182,6 +183,8 @@ export class FoliagePoof {
     this.tests = 0;
     if (this.ids.length > 0) for (let c = 0; c < cars.length; c++) this.drive(cars[c]!, density);
     this.fly(dt);
+    countPart(COUNT.plantTests, this.tests);
+    countPart(COUNT.leavesLive, this.top);
   }
 
   /** Puffs every plant the footprint of `car` (a box in plan) is on. */

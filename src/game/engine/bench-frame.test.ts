@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BENCH, blocksOf } from "./bench-measure.ts";
 import { alternate } from "./bench-frame.ts";
 import { display, restoreFrame, rig, STEADY_MS, STEADY_SIM_MS, STRETCH } from "./bench-frame.test-util.ts";
 import { CAUSE_NAMES } from "./bench-hitch.ts";
 import { ArmBadge } from "./bench-badge.ts";
-import { frame } from "./bench-frame.ts";
+import { frame, FRAME_CPU } from "./bench-frame.ts";
+import { COUNT, countPart, frameParts, lapPart, PART } from "../kernel/frame-parts.ts";
 import { epicenterOn } from "../deform/epicenter.ts";
 import { KNOBS } from "../hud/knobs.ts";
 import { SETTLE } from "./bench-settle.ts";
@@ -125,5 +126,43 @@ describe("given the bench card's arm label, kept up to date by the bench's frame
     } finally {
       knob.set(initial);
     }
+  });
+});
+
+describe("given a frame whose engine laps the part clock on a scripted clock (2 ms skinning, 3 ms effects, 1 ms of nothing named)", () => {
+  it("when the bench runs the frame, then each part holds the ms it was lapped for, the unnamed tail is `rest`, and the parts sum to the frame's cpu", async () => {
+    const { engine, parts, t, beat } = rig();
+    let clock = 5000;
+    const spy = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    engine.advance = () => {
+      clock += 2;
+      lapPart(PART.skin);
+      clock += 3;
+      lapPart(PART.fx);
+      clock += 1;
+    };
+    frameParts.ms.fill(0);
+    frameParts.on = true;
+    try {
+      await frame(engine, parts.renderer, t, beat);
+    } finally {
+      frameParts.on = false;
+      spy.mockRestore();
+    }
+    expect(frameParts.ms[PART.skin], "skin").toBe(2);
+    expect(frameParts.ms[PART.fx], "fx").toBe(3);
+    expect(frameParts.ms[PART.rest], "the tail after the last lap").toBe(1);
+    expect(frameParts.ms.reduce((total, ms) => total + ms, 0), "the parts tile the frame's cpu").toBe(beat.frame[FRAME_CPU]);
+  });
+
+  it("when the frame drew 7 calls of which the shadow pass made 3, then the frame's counters say 3 shadow and 4 main", async () => {
+    const { engine, parts, t, beat } = rig();
+    parts.renderer.info.render.calls = 7;
+    engine.advance = () => countPart(COUNT.callsShadow, 3);
+    const shadow0 = frameParts.count[COUNT.callsShadow]!;
+    const main0 = frameParts.count[COUNT.callsMain]!;
+    await frame(engine, parts.renderer, t, beat);
+    expect(frameParts.count[COUNT.callsShadow]! - shadow0, "shadow").toBe(3);
+    expect(frameParts.count[COUNT.callsMain]! - main0, "main: the frame's calls less the shadow pass's").toBe(4);
   });
 });

@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest";
 import type { FrameStats } from "./bench-frames.ts";
 import { browserName, describeBench, perSecond, stat, type Block, type BenchResult, type PhaseCard, type RagdollCost, type ReplayResult, type ReplayTier } from "./engine-bench-report.ts";
+import { COUNT_NAMES, PART_NAMES } from "../kernel/frame-parts.ts";
 import { HITCH } from "./bench-hitch.ts";
-import { roundCard } from "./bench-card.ts";
+import { roundCard, wireCard } from "./bench-card.ts";
 import { MAX_JSON_BYTES } from "../../lib/submissions/kinds.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
@@ -44,6 +45,10 @@ const FRAME_STATS: FrameStats = {
     dominantPhase: [0, 0, 1, 9, 1, 1, 0, 0, 0, 0],
   },
 };
+
+/** The frame's parts (ms) and counters as a window of 7.5 ms cpu frames would carry them, to more digits than the wire keeps. */
+const FRAME_PARTS: BenchResult["frameParts"] = Object.fromEntries(PART_NAMES.map((name, i) => [name, { mean: 0.123456 + i, p95: 0.987654 + i }]));
+const FRAME_COUNTS: BenchResult["frameCounts"] = Object.fromEntries(COUNT_NAMES.map((name, i) => [name, 3.14159 + i]));
 
 const RESULT: BenchResult = {
   course: "city",
@@ -87,6 +92,8 @@ const RESULT: BenchResult = {
   pageSeconds: { flags: "ffffd5", phases: "001111", sky: "003333", epi: "000000" },
   run: { extended: true, staged: false, options: null },
   frameStats: FRAME_STATS,
+  frameParts: FRAME_PARTS,
+  frameCounts: FRAME_COUNTS,
   pageState: { stepOfPage: 2, keep: true, heapUsedMB: 118, heapLimitMB: 4096, ragdollHost: "remote" },
   phases: PHASES,
   longTasks: { count: 4, totalMs: 312.5, maxMs: 120.25 },
@@ -407,6 +414,29 @@ describe("given the bench result whose frames the device summarised", () => {
   test("when no frame was a spike, then the line says none", () => {
     const quiet = { ...FRAME_STATS, spikes: { ...FRAME_STATS.spikes, count: 0 } };
     expect(describeBench({ ...RESULT, frameStats: quiet }).some((l) => l.startsWith("frame spikes") && l.endsWith(", none"))).toBeTruthy();
+  });
+});
+
+describe("given the bench result whose frame the device split into named parts", () => {
+  test("when the card is written, then one line names every part with its mean and p95 ms and the sum against the cpu mean, and one line gives every counter's mean a frame", () => {
+    const lines = describeBench(RESULT);
+    const parts = lines.find((l) => l.startsWith("frame parts"));
+    must(parts !== undefined, "no parts line");
+    expect(parts.startsWith("frame parts, ms per frame mean/p95: rest 0.1/1.0, input 1.1/2.0, sim 2.1/3.0")).toBeTruthy();
+    expect(parts.endsWith("post 16.1/17.0  (sum 138.1 of cpu 7.5)")).toBeTruthy();
+    const counts = lines.find((l) => l.startsWith("frame counts"));
+    must(counts !== undefined, "no counts line");
+    expect(counts.startsWith("frame counts, per frame: skinnedCars 3.14, skinKernelCalls 4.14")).toBeTruthy();
+    expect(counts.endsWith("texturesAdded 18.14")).toBeTruthy();
+  });
+
+  test("when the card is rounded for the wire, then each part's mean and p95 are to 0.01 ms and each counter's mean to two decimals, under the keys frameParts and frameCounts", () => {
+    const wire: { frameParts: BenchResult["frameParts"]; frameCounts: BenchResult["frameCounts"] } = JSON.parse(JSON.stringify(wireCard({ ...RESULT })));
+    expect(wire.frameParts["skin"]!.mean, "mean to 0.01").toBe(3.12);
+    expect(wire.frameParts["skin"]!.p95, "p95 to 0.01").toBe(3.99);
+    expect(wire.frameCounts["skinnedCars"]).toBe(3.14);
+    expect(firstMismatch(Object.keys(wire.frameParts), PART_NAMES)).toBeUndefined();
+    expect(firstMismatch(Object.keys(wire.frameCounts), COUNT_NAMES)).toBeUndefined();
   });
 });
 

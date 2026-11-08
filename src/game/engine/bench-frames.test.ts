@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 import { scavengesDuring } from "../kernel/gc.test-util.ts";
-import { analyzeFrames, BUCKET_MS, FRAME_COLUMNS, FrameRecord, SERIES_COLUMNS, SPIKE_CAP, type FrameSources } from "./bench-frames.ts";
+import { analyzeFrames, BUCKET_MS, FRAME_COLUMNS, FrameRecord, partCard, SERIES_COLUMNS, SPIKE_CAP, type FrameSources } from "./bench-frames.ts";
 import { FRAME } from "./bench-hitch.ts";
 import { PHASE, PHASE_COUNT, WORK, WORK_COUNT } from "./sim-phases.ts";
+import { COUNT, COUNT_COUNT, COUNT_NAMES, PART, PART_COUNT, PART_NAMES } from "../kernel/frame-parts.ts";
 import { tabulate, wireCard } from "./bench-card.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
@@ -16,15 +17,16 @@ const READ_BLOCKS = 100;
 /** Blocks the zero-collection row runs before its window, so the watched loop is already optimised. */
 const WARM_BLOCKS = 10;
 
-/** A bench whose frames a test writes: the frame row, the pacer, the phase clock and counters, the ragdoll posts, the wrecks. */
-function source(): { from: FrameSources; row: Float64Array; work: Float64Array; ms: Float64Array; traffic: { messages: number }; pace: { steps: number }; wrecks: { n: number } } {
+/** A bench whose frames a test writes: the frame row, the pacer, the phase clock and counters, the part clock and counters, the ragdoll posts, the wrecks. */
+function source(): { from: FrameSources; row: Float64Array; work: Float64Array; ms: Float64Array; parts: FrameSources["parts"]; traffic: { messages: number }; pace: { steps: number }; wrecks: { n: number } } {
   const row = new Float64Array(FRAME.fields);
   const work = new Float64Array(WORK_COUNT);
   const ms = new Float64Array(PHASE_COUNT);
+  const parts = { ms: new Float64Array(PART_COUNT), count: new Float64Array(COUNT_COUNT) };
   const traffic = { messages: 0 };
   const pace = { steps: 0 };
   const wrecks = { n: 0 };
-  return { from: { row, pace, phases: { ms, work }, traffic, crashed: () => wrecks.n }, row, work, ms, traffic, pace, wrecks };
+  return { from: { row, pace, phases: { ms, work }, parts, traffic, crashed: () => wrecks.n }, row, work, ms, parts, traffic, pace, wrecks };
 }
 
 /** A window of `frames` frames of `intervalMs`, where `spikes` (frame index to ms) are slow: a slow frame has `contacts` pair contacts and its wreck phase takes the time. */
@@ -155,6 +157,33 @@ describe("given the frames of a window recorded as the bench runs them", () => {
     expect(series.cols[0]).toBe("atS");
     expect(SERIES_COLUMNS.length).toBe(series.cols.length);
     expect(FRAME_COLUMNS.length, "the frame columns name the sim's counters and phases").toBeGreaterThan(20);
+  });
+
+  it("when every frame names the ms of its parts and the counters it added, then the record keeps each frame's difference, the series carries each part's mean a frame, and the card gives each part's mean and p95 and each counter's mean", () => {
+    const s = source();
+    const rec = new FrameRecord(100, s.from);
+    rec.begin();
+    for (let i = 0; i < 100; i++) {
+      const skin = i === 99 ? 3 : 1;
+      s.row[FRAME.interval] = 10;
+      s.row[FRAME.cpu] = 5;
+      s.parts.ms[PART.skin] = s.parts.ms[PART.skin]! + skin;
+      s.parts.ms[PART.rest] = s.parts.ms[PART.rest]! + 5 - skin;
+      s.parts.count[COUNT.wearUploads] = s.parts.count[COUNT.wearUploads]! + 2;
+      rec.push();
+    }
+    const card = partCard(rec);
+    expect(firstMismatch(Object.keys(card.frameParts), PART_NAMES), "every part is named, in order").toBeUndefined();
+    expect(firstMismatch(Object.keys(card.frameCounts), COUNT_NAMES), "every counter is named, in order").toBeUndefined();
+    expect(card.frameParts["skin"]!.mean, "99 frames of 1 ms and one of 3").toBeCloseTo(1.02, 6);
+    expect(card.frameParts["skin"]!.p95, "the one slow frame is past the 95th percentile").toBeCloseTo(1, 6);
+    expect(Object.values(card.frameParts).reduce((total, p) => total + p.mean, 0), "the parts tile the frame's cpu").toBeCloseTo(5, 5);
+    expect(card.frameCounts["wearUploads"], "two a frame").toBeCloseTo(2, 6);
+    const { series } = analyzeFrames(rec);
+    const col = (name: string): number[] => series.data[series.cols.indexOf(name)]!;
+    expect(col("wearUploads").every((v) => Math.abs(v - 2) < 1e-9), "a counter in the series is its mean a frame, not a sum over the bucket").toBeTruthy();
+    expect(Math.max(...col("partSkinMs")), "the bucket with the slow frame").toBeGreaterThan(1.05);
+    expect(Math.min(...col("partSkinMs")), "the others").toBeCloseTo(1, 2);
   });
 });
 

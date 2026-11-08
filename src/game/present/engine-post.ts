@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { lapPart, PART } from "../kernel/frame-parts.ts";
 import { BLUE_NOISE } from "./blue-noise.ts";
 import { BOOST_ZOOM_CAP, BOOST_ZOOM_FULL_RADIUS } from "./boost-zoom.ts";
 import { GlErrors } from "./gl-errors.ts";
@@ -450,11 +451,13 @@ export class PostFX {
     const r = this.renderer;
     if (this.tierNow === "off" || this.tierNow === "minimal") {
       r.render(scene, camera);
+      lapPart(PART.main);
       return;
     }
     const spec = TIER[this.tierNow];
     r.setRenderTarget(this.sceneRT);
     r.render(scene, camera);
+    lapPart(PART.main);
 
     const mips = this.mips;
     const end = spec.mip0 + spec.mips;
@@ -502,6 +505,7 @@ export class PostFX {
     u.uHatch!.value = this.hatch;
     u.uPhase!.value = (u.uPhase!.value as number + GOLDEN) % 1;
     this.blit(composite, null);
+    lapPart(PART.post);
   }
 
   dispose(): void {

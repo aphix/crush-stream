@@ -1,26 +1,31 @@
 import { FRAME } from "./bench-hitch.ts";
+import { COUNT_COUNT, COUNT_NAMES, PART_COUNT, PART_NAMES } from "../kernel/frame-parts.ts";
 import { PHASE_COUNT, PHASE_NAMES, WORK, WORK_COUNT, WORK_NAMES } from "./sim-phases.ts";
 
 /** The names of the frame columns that other files name too (the card's spike line, the counters): one place for each. */
 export const NAME = { interval: "intervalMs", cpu: "cpuMs", sim: "simMs", draw: "drawMs", steps: "steps", crashed: "crashed", ragdoll: "ragdollMessages", atS: "atS" } as const;
 
+/** The frame column of part `name`'s ms (`PART_NAMES`). */
+const partColumn = (name: string): string => `part${name[0]!.toUpperCase()}${name.slice(1)}Ms`;
+
 /**
  * Every frame of the bench's measured window, as one row of a flat `Float32Array` sized once (boot time is free; nothing allocates in a frame): the frame's wall interval, the
  * engine's ms in it (cpu, of which sim and draw), the pacer's steps, the wrecks, the ragdoll posts, then what the sim did in the frame as the difference of its work counters
- * (`WORK_NAMES`) and its ms in each phase (`PHASE_NAMES`). The stats.js way: a frame's cost is read where the frame ends, and the page looks at it only when the run is over (`analyzeFrames`).
+ * (`WORK_NAMES`) and its ms in each phase (`PHASE_NAMES`), the frame's ms in each named part (`PART_NAMES`, tiling cpu) and its counters (`COUNT_NAMES`). The stats.js way: a frame's cost is read where the frame ends, and the page looks at it only when the run is over (`analyzeFrames`).
  */
-export const FRAME_COLUMNS = [NAME.interval, NAME.cpu, NAME.sim, NAME.draw, NAME.steps, NAME.crashed, NAME.ragdoll, ...WORK_NAMES, ...PHASE_NAMES.map((name) => `${name}Ms`)] as const;
+export const FRAME_COLUMNS = [NAME.interval, NAME.cpu, NAME.sim, NAME.draw, NAME.steps, NAME.crashed, NAME.ragdoll, ...WORK_NAMES, ...PHASE_NAMES.map((name) => `${name}Ms`), ...PART_NAMES.map(partColumn), ...COUNT_NAMES] as const;
 const FRAME_COLUMN_COUNT = FRAME_COLUMNS.length;
-/** Decimals each column keeps on the wire: ms to 0.01, counts whole, the phases' ms to 0.001. */
-const FRAME_DECIMALS: readonly number[] = FRAME_COLUMNS.map((_, k) => (k < 4 ? 2 : k < 7 + WORK_COUNT ? 0 : 3));
+/** Decimals each column keeps on the wire: ms to 0.01, counts whole, the phases' and parts' ms to 0.001. */
+const FRAME_DECIMALS: readonly number[] = FRAME_COLUMNS.map((_, k) => (k < 4 ? 2 : k < 7 + WORK_COUNT ? 0 : k < 7 + WORK_COUNT + PHASE_COUNT + PART_COUNT ? 3 : 0));
 
-const COL = { interval: 0, cpu: 1, sim: 2, draw: 3, steps: 4, crashed: 5, ragdoll: 6, work: 7, phase: 7 + WORK_COUNT } as const;
+const COL = { interval: 0, cpu: 1, sim: 2, draw: 3, steps: 4, crashed: 5, ragdoll: 6, work: 7, phase: 7 + WORK_COUNT, part: 7 + WORK_COUNT + PHASE_COUNT, count: 7 + WORK_COUNT + PHASE_COUNT + PART_COUNT } as const;
 
 /** What a frame's recorder reads: the bench's frame row, the pacer, the sim's phase clock and counters, the ragdoll worker's posts and the wreck count. */
 export interface FrameSources {
   row: Float64Array;
   pace: { readonly steps: number };
   phases: { readonly ms: Float64Array; readonly work: Float64Array };
+  parts: { readonly ms: Float64Array; readonly count: Float64Array };
   traffic: { readonly messages: number };
   crashed(): number;
 }
@@ -32,6 +37,8 @@ export class FrameRecord {
   private readonly from: FrameSources;
   private readonly lastWork = new Float64Array(WORK_COUNT);
   private readonly lastPhase = new Float64Array(PHASE_COUNT);
+  private readonly lastPart = new Float64Array(PART_COUNT);
+  private readonly lastCount = new Float64Array(COUNT_COUNT);
   private lastMessages = 0;
 
   constructor(cap: number, from: FrameSources) {
@@ -44,6 +51,8 @@ export class FrameRecord {
   begin(): void {
     this.lastWork.set(this.from.phases.work.subarray(0, WORK_COUNT));
     this.lastPhase.set(this.from.phases.ms.subarray(0, PHASE_COUNT));
+    this.lastPart.set(this.from.parts.ms.subarray(0, PART_COUNT));
+    this.lastCount.set(this.from.parts.count.subarray(0, COUNT_COUNT));
     this.lastMessages = this.from.traffic.messages;
     this.n = 0;
   }
@@ -51,7 +60,7 @@ export class FrameRecord {
   /** The frame the bench just ran (its row is read, so nothing is passed): a frame past the capacity is dropped. */
   push(): void {
     if (this.n >= this.cap) return;
-    const { row, pace, phases, traffic } = this.from;
+    const { row, pace, phases, parts, traffic } = this.from;
     const d = this.data;
     const o = this.n++ * FRAME_COLUMN_COUNT;
     d[o + COL.interval] = row[FRAME.interval]!;
@@ -69,6 +78,14 @@ export class FrameRecord {
     for (let k = 0; k < PHASE_COUNT; k++) {
       d[o + COL.phase + k] = phases.ms[k]! - this.lastPhase[k]!;
       this.lastPhase[k] = phases.ms[k]!;
+    }
+    for (let k = 0; k < PART_COUNT; k++) {
+      d[o + COL.part + k] = parts.ms[k]! - this.lastPart[k]!;
+      this.lastPart[k] = parts.ms[k]!;
+    }
+    for (let k = 0; k < COUNT_COUNT; k++) {
+      d[o + COL.count + k] = parts.count[k]! - this.lastCount[k]!;
+      this.lastCount[k] = parts.count[k]!;
     }
   }
 }
@@ -95,9 +112,9 @@ interface Columns {
 /** Width of a series bucket (ms): short enough that a drop of a few frames is its own bucket, 5 buckets a second. */
 export const BUCKET_MS = 200;
 
-/** The series' columns: the bucket's start (s into the window), its frames, the frame interval's mean and max (ms), the engine's mean cpu, sim and draw ms a frame, then each other frame column summed over the bucket (`crashed`: its largest). */
+/** The series' columns: the bucket's start (s into the window), its frames, the frame interval's mean and max (ms), the engine's mean cpu, sim and draw ms a frame, then each other frame column summed over the bucket (`crashed`: its largest) and, from the parts on, their means a frame. */
 export const SERIES_COLUMNS = [NAME.atS, "frames", "meanMs", "maxMs", NAME.cpu, NAME.sim, NAME.draw, ...FRAME_COLUMNS.slice(4)] as const;
-const SERIES_DECIMALS: readonly number[] = [1, 0, 2, 2, 2, 2, 2, ...FRAME_DECIMALS.slice(4)];
+const SERIES_DECIMALS: readonly number[] = [1, 0, 2, 2, 2, 2, 2, ...FRAME_DECIMALS.slice(4).map((dp, i) => (i + 4 >= COL.part ? 2 : dp))];
 
 /** What a window's frames say about themselves, worked out where they were recorded so a reader needs no raw series. */
 export interface FrameStats {
@@ -180,7 +197,7 @@ function bucketSeries(rec: FrameRecord, intervals: ArrayLike<number>): Columns {
   let draw = 0;
   const flush = (): void => {
     if (frames === 0) return;
-    const row = [(bucket * BUCKET_MS) / 1000, frames, sumMs / frames, maxMs, cpu / frames, sim / frames, draw / frames, ...sums];
+    const row = [(bucket * BUCKET_MS) / 1000, frames, sumMs / frames, maxMs, cpu / frames, sim / frames, draw / frames, ...sums.map((v, k) => (k + 4 >= COL.part ? v / frames : v))];
     for (let k = 0; k < row.length; k++) data[k]!.push(Math.round(row[k]! * 10 ** SERIES_DECIMALS[k]!) / 10 ** SERIES_DECIMALS[k]!);
     frames = 0;
     sumMs = maxMs = cpu = sim = draw = 0;
@@ -204,6 +221,30 @@ function bucketSeries(rec: FrameRecord, intervals: ArrayLike<number>): Columns {
   }
   flush();
   return { cols, dp: [...SERIES_DECIMALS], n: data[0]!.length, data };
+}
+
+/** A named part's ms a frame over the window, and the counters' means a frame: the card's `frameParts` and `frameCounts`. */
+export interface PartCard {
+  frameParts: Record<string, { mean: number; p95: number }>;
+  frameCounts: Record<string, number>;
+}
+
+/** The window's per-part ms (mean and p95 of the frames) and per-counter means, read off the recorded frames when the window is over (it allocates). */
+export function partCard(rec: FrameRecord): PartCard {
+  const n = rec.n;
+  const frameParts: PartCard["frameParts"] = {};
+  const frameCounts: PartCard["frameCounts"] = {};
+  const values = new Float32Array(n);
+  for (let k = 0; k < PART_COUNT; k++) {
+    for (let i = 0; i < n; i++) values[i] = rec.data[i * FRAME_COLUMN_COUNT + COL.part + k]!;
+    values.sort();
+    frameParts[PART_NAMES[k]!] = { mean: meanOf(values), p95: n ? values[Math.min(n - 1, Math.floor(0.95 * n))]! : 0 };
+  }
+  for (let k = 0; k < COUNT_COUNT; k++) {
+    for (let i = 0; i < n; i++) values[i] = rec.data[i * FRAME_COLUMN_COUNT + COL.count + k]!;
+    frameCounts[COUNT_NAMES[k]!] = meanOf(values);
+  }
+  return { frameParts, frameCounts };
 }
 
 /** The percentiles, the lows and the spikes of the recorded frames, with the sim's activity in each spike. Built when the window is over (it allocates). */

@@ -12,7 +12,8 @@ import type { SimPacer } from "./sim-pace.ts";
 import { BENCH_BUTTON_STYLE, BENCH_CARD_STYLE, QUALITY_QUERY, SETTING_KEY } from "./constants.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
 import { hudSettings, wireCard } from "./bench-card.ts";
-import { analyzeFrames, FrameRecord, type FrameStats } from "./bench-frames.ts";
+import { analyzeFrames, FrameRecord, partCard, type FrameStats, type PartCard } from "./bench-frames.ts";
+import { frameParts as clock } from "../kernel/frame-parts.ts";
 import { alternate, enterPhase, frame, FRAME_CPU, FRAME_DRAW, FRAME_DT, FRAME_SIM, newBeat, nextFrame, restartLab, pinSky, settleFrames, waitFor, type Beat } from "./bench-frame.ts";
 import { INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
 import { ArmBadge } from "./bench-badge.ts";
@@ -158,7 +159,7 @@ function countSlot(counts: Float64Array, order: Uint8Array, seen: number, slot: 
 }
 
 /** `measureS` wall seconds of one sample per frame, the engine's own auto FX tier and pacer as they are. */
-async function sample(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat, ui: { set(text: string): void }, windowS: number): Promise<{ s: Samples; w: Window; longTasks: LongTasks | null; frameStats: FrameStats }> {
+async function sample(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat, ui: { set(text: string): void }, windowS: number): Promise<{ s: Samples; w: Window; longTasks: LongTasks | null; frameStats: FrameStats; card: PartCard }> {
   const { renderer, cine } = parts;
   const arr = (): Float64Array => new Float64Array(CAP);
   const s: Samples = {
@@ -188,7 +189,7 @@ async function sample(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat
   const ragdoll0 = parts.ragdoll.stats.steps;
   const work = watchWork(parts, pace);
   // Every frame of the window, for the stats (percentiles, lows, spikes, the series): rows of one flat array, read where each frame ends.
-  const rec = new FrameRecord(CAP, { row: beat.frame, pace, phases: parts.world.phases, traffic: parts.ragdoll.traffic, crashed: () => s.wrecks[s.n - 1]! });
+  const rec = new FrameRecord(CAP, { row: beat.frame, pace, phases: parts.world.phases, parts: clock, traffic: parts.ragdoll.traffic, crashed: () => s.wrecks[s.n - 1]! });
   rec.begin();
   const longTasks = watchLongTasks();
   let wall = 0;
@@ -225,6 +226,7 @@ async function sample(engine: BenchEngine, parts: BenchParts, t: Tap, beat: Beat
     w: { wallS: wall, lostSimS: pace.lost - lost0, cutFrames: pace.cut - cut0, fineCuts: parts.world.fineCuts - fine0, clockS: t.simS - clock0, thrown: (beat.lab?.throws ?? 0) - thrown0, ragdoll: ragdollCost(parts.ragdoll.stats, ragdoll0), phaseMs, counts, series },
     longTasks: longTasks.stop(),
     frameStats: analyzeFrames(rec),
+    card: partCard(rec),
   };
 }
 
@@ -416,7 +418,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   } else if (!plan.lab) staged = parts.race.crashAtStart(CRASH_GAP, CRASH_SPEED);
   enterPhase(beat, page, PHASE_WINDOW);
   const pageState = pageStateOf(parts, opts.stepOfPage, opts.options?.loop ?? null);
-  const { s, w, longTasks, frameStats } = await sample(engine, parts, t, beat, ui, plan.extended ? BENCH.measureS : QUICK.windowS);
+  const { s, w, longTasks, frameStats, card } = await sample(engine, parts, t, beat, ui, plan.extended ? BENCH.measureS : QUICK.windowS);
   const leaderWindowM = leaderAhead(parts, plan);
   const top = topTier(s, parts.cine.tier);
   const settings = { ...settingsOf(parts, hud() as unknown as Record<string, unknown>, top), skyPlayer: sky0, skyPin: pin };
@@ -447,6 +449,8 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     pageState,
     longTasks,
     frameStats,
+    frameParts: card.frameParts,
+    frameCounts: card.frameCounts,
     hitches: beat.hitches.table(),
     sweepHitches,
     switches: tail && windowStart ? [{ stretch: PAGE_PHASES[PHASE_WINDOW], arm: "start", round: 1, ...windowStart }, ...tail.pace.switches, ...tail.detail.switches, ...tail.fx.switches, ...(tail.sky?.switches ?? []), ...tail.draw.switches, ...tail.scale.switches, ...tail.shadow.switches] : [],

@@ -5,7 +5,7 @@ import { labLine, stripLines, type StripResult } from "./engine-bench-plan.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import type { HitchTable } from "./bench-hitch.ts";
 import { PHASE_NAMES, WORK, WORK_NAMES } from "./sim-phases.ts";
-import { NAME, type FrameStats } from "./bench-frames.ts";
+import { NAME, type FrameStats, type PartCard } from "./bench-frames.ts";
 import { EXTENDED_QUERY } from "./constants.ts";
 import { SCENERY_ARM, type SceneryArm } from "../world/constants.ts";
 import type { SwitchHitch } from "./bench-settle.ts";
@@ -335,6 +335,9 @@ export interface BenchResult {
   pageState: PageState;
   /** Every frame of the window as the device saw it: percentiles, lows, the `BUCKET_MS` series and the spikes with what the sim was doing in them (`bench-frames.ts`). */
   frameStats: FrameStats;
+  /** Where the window's main-thread ms a frame went, by named part (`PART_NAMES`, tiling `cpuMs`: mean and p95), and the work counters' means a frame (`COUNT_NAMES`): `docs/PERF_BENCH.md` "Where the frame's time goes". */
+  frameParts: PartCard["frameParts"];
+  frameCounts: PartCard["frameCounts"];
   /** Where the window's sim time went, by phase of a step, and the work done (`PhaseCard`). */
   phases: PhaseCard;
   /** Long tasks during the window; null where the browser has no "longtask" entries (not Chrome). */
@@ -531,6 +534,16 @@ const hitchLine = (h: HitchTable): string => {
   return `hitches: ${h.count} of ${h.frames} frames over ${h.factor}x the median (and ${h.minMs} ms), ${Math.round(h.excessMs)} ms over in all${rows.length ? `; worst: ${rows.join(", ")}` : ""}`;
 };
 
+/** The window's named parts of a frame (ms, mean/p95) on one line, with their sum against the cpu mean: the parts tile it, so a gap names a part that is not timed. */
+const partsLine = (parts: BenchResult["frameParts"], cpuMean: number): string => {
+  const entries = Object.entries(parts);
+  const sum = entries.reduce((total, [, p]) => total + p.mean, 0);
+  return `frame parts, ms per frame mean/p95: ${entries.map(([name, p]) => `${name} ${pair(p)}`).join(", ")}  (sum ${f1(sum)} of cpu ${f1(cpuMean)})`;
+};
+
+/** The window's counters of work, per frame, on one line. */
+const countsLine = (counts: BenchResult["frameCounts"]): string => `frame counts, per frame: ${Object.entries(counts).map(([name, n]) => `${name} ${n >= 100 ? Math.round(n) : n.toFixed(2)}`).join(", ")}`;
+
 /** What the device was doing besides the game: long tasks over the window, the battery before and after. */
 const deviceStateText = (longTasks: LongTasks | null, battery: BenchResult["device"]["battery"]): string => {
   const level = (b: Battery): string => `${Math.round(100 * b.level)} %${b.charging ? " charging" : " on battery"}`;
@@ -561,6 +574,8 @@ export function describeBench(r: BenchResult): string[] {
     `${hitchLine(r.hitches)}   ${switchLine(r.switches)}   warm-up sweep: ${r.sweepHitches.count} hitched of ${r.sweepHitches.frames} frames, ${Math.round(r.sweepHitches.excessMs)} ms over`,
     spikeLine(r.frameStats),
     row("  draw", r.renderMs),
+    partsLine(r.frameParts, r.cpuMs.mean),
+    countsLine(r.frameCounts),
     r.gpuMs ? row("GPU", r.gpuMs) + (waited(r.gpuMs, r.frameMs) ? "   p95 is one frame long: a wait on the display, p50 is the work" : "") : "GPU       no timer query on this device",
     ragdollLine(r.ragdoll),
     `draw ${r.calls} calls  ${Math.round(r.triangles / 1000)}k tris   cops: ${r.cops ? `${r.cops.stakeouts} stakeouts, ${r.cops.pursuits} pursuits, pack of ${r.cops.maxPack}` : "none"}`,

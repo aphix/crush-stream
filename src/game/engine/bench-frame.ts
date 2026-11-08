@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { epicenterOn } from "../deform/epicenter.ts";
+import { COUNT, countPart, endParts, frameParts, startParts } from "../kernel/frame-parts.ts";
+import { skinKernel } from "../deform/skin-kernel.ts";
 import { SKY_DRAWN, type SkyDrawn, type SkyMode } from "../present/sky-dome.ts";
 import { INITIAL_HUD } from "../hud/hud-store.ts";
 import type { LabPresetId } from "../scenes/lab.ts";
@@ -74,7 +76,7 @@ export interface Beat {
   wake: { readonly held: boolean } | null;
   /** The card's live arm label, brought up to date every frame (`ArmBadge.sync`); null: none. */
   arm: { sync(): void } | null;
-  seen: { wrecks: number; programs: number; textures: number; geometries: number; ragdollMessages: number };
+  seen: { wrecks: number; programs: number; textures: number; geometries: number; ragdollMessages: number; shadowCalls: number };
 }
 
 /** A beat for a run of `parts` (the Lab's sequence when `plan.lab` is set), the first stretch being `phase`. */
@@ -91,7 +93,7 @@ export function newBeat(parts: BenchParts, prev: number, lab: BenchPlan["lab"], 
     switching: false,
     wake: null,
     arm: null,
-    seen: { wrecks: 0, programs: 0, textures: 0, geometries: 0, ragdollMessages: 0 },
+    seen: { wrecks: 0, programs: 0, textures: 0, geometries: 0, ragdollMessages: 0, shadowCalls: 0 },
   };
 }
 
@@ -142,12 +144,26 @@ function readCauses(beat: Beat, t: Tap): number {
   seen.ragdollMessages = messages;
   const programs = info.programs?.length ?? 0;
   if (programs !== seen.programs) causes |= CAUSE.shader;
+  countPart(COUNT.programsAdded, Math.max(0, programs - seen.programs));
   seen.programs = programs;
   if (info.memory.textures !== seen.textures || info.memory.geometries !== seen.geometries) causes |= CAUSE.gpuResources;
+  countPart(COUNT.texturesAdded, Math.max(0, info.memory.textures - seen.textures));
+  countPart(COUNT.geometriesAdded, Math.max(0, info.memory.geometries - seen.geometries));
   seen.textures = info.memory.textures;
   seen.geometries = info.memory.geometries;
   if (t.simS < COLD_SIM_S) causes |= CAUSE.cold;
   return causes;
+}
+
+/** The frame's counters that are read, not added: the skin kernel's totals and the draw calls the shadow pass did not make. */
+function readFrameCounts(beat: Beat): void {
+  const counts = frameParts.count;
+  const kernel = skinKernel();
+  counts[COUNT.skinKernelCalls] = kernel?.calls ?? 0;
+  counts[COUNT.skinVerts] = kernel?.verts ?? 0;
+  const shadowCalls = counts[COUNT.callsShadow]!;
+  countPart(COUNT.callsMain, beat.parts.renderer.info.render.calls - (shadowCalls - beat.seen.shadowCalls));
+  beat.seen.shadowCalls = shadowCalls;
 }
 
 /** A new stretch of the run (`PAGE_PHASES` index): the page watch and the hitch log's clock follow. */
@@ -167,9 +183,12 @@ export async function frame(engine: FrameEngine, renderer: THREE.WebGLRenderer, 
   renderer.info.reset();
   t.simMs = t.drawMs = 0;
   const f0 = performance.now();
+  startParts(f0);
   if (beat.lab) driveLab(engine, t, beat.lab);
   engine.advance(dt, { frameDt: dt, render: true });
   const f1 = performance.now();
+  endParts(f1);
+  readFrameCounts(beat);
   beat.frame[FRAME.now] = now;
   beat.frame[FRAME_DT] = dt;
   beat.frame[FRAME_INTERVAL] = intervalMs;

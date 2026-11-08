@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { COUNT, countPart } from "../kernel/frame-parts.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
 import type { PrefabMaterials, PrefabPart, Skin } from "./prefab-pieces.ts";
@@ -114,6 +115,7 @@ export class PropTumble {
 
   private write(index: number, m: THREE.Matrix4): readonly THREE.InstancedMesh[] {
     const meshes = this.meshes[this.cell[index]!]!;
+    countPart(COUNT.propsMoved, 1);
     for (let k = 0; k < meshes.length; k++) {
       meshes[k]!.setMatrixAt(this.slot[index]!, m);
       meshes[k]!.instanceMatrix.needsUpdate = true;

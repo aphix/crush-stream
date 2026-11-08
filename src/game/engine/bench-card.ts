@@ -59,6 +59,7 @@ export const DECIMALS: Readonly<Record<string, number>> = {
   calls: 0,
   placeMs: 2,
   triangles: 0,
+  frameCounts: 2,
 };
 
 /** `value` with every number rounded to its key's decimals (`DECIMALS`); arrays and objects are copied, not changed. */
