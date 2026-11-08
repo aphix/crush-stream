@@ -1,6 +1,6 @@
 import { FX_TIER_ULTRA } from "../present/constants.ts";
 import { FX_TIERS } from "../present/engine-post.ts";
-import { FIGURE_8_ID, TRACK_ID } from "../world/constants.ts";
+import { TRACK_ID } from "../world/constants.ts";
 import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, EPI_STEP_SUFFIX, EXTENDED_QUERY, QUALITY_QUERY, SCENERY_QUERY, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
 import type { RunOptions } from "./engine-bench-report.ts";
 
@@ -41,7 +41,7 @@ export const MAP_CHOICES: readonly BenchMap[] = [
   { id: BENCH_KIND.city, query: benchQuery(BENCH_KIND.city), label: "City", byDefault: true },
   { id: BIGGEST_COURSE, query: courseQuery(BIGGEST_COURSE), label: "Dam Spine (biggest)", byDefault: true },
   { id: MOST_PROPS_COURSE, query: courseQuery(MOST_PROPS_COURSE), label: "National Mall (most props)", byDefault: true },
-  { id: FIGURE_8_ID, query: courseQuery(FIGURE_8_ID), label: "Figure Eight", byDefault: true },
+  { id: TRACK_ID.figure8, query: courseQuery(TRACK_ID.figure8), label: "Figure Eight", byDefault: true },
   { id: TRACK_ID.oval, query: courseQuery(TRACK_ID.oval), label: "Oval", byDefault: false },
   { id: TRACK_ID.rally, query: courseQuery(TRACK_ID.rally), label: "Rally", byDefault: false },
   { id: TRACK_ID.stunt, query: courseQuery(TRACK_ID.stunt), label: "Stunt", byDefault: false },

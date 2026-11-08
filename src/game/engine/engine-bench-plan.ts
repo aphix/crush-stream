@@ -7,11 +7,11 @@ import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { PREFABS, type PrefabId } from "../world/catalog.ts";
 import { stripCourse, type StripProp, type StripSpec } from "../world/bench-strip.ts";
 import { CAMPAIGN } from "../world/tracks/index.ts";
-import { BENCH_STRIP_ID, FIGURE_8_ID, SCENERY_ARM, TRACK_ID, type SceneryArm } from "../world/constants.ts";
+import { BENCH_STRIP_ID, SCENERY_ARM, TRACK_ID, type SceneryArm } from "../world/constants.ts";
 import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, EXTENDED_QUERY, SCENERY_QUERY, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
 
 /** Laps of a bench race; the figure-8 (403 m, the city's is 683 m) runs 16 so it covers more than the city's nine laps (6.1 km): at the AI's 15 m/s its race outlasts the extended bench's last block. */
-const BENCH_LAPS: Readonly<Record<string, number>> = { [FIGURE_8_ID]: 16 };
+const BENCH_LAPS: Readonly<Record<string, number>> = { [TRACK_ID.figure8]: 16 };
 
 /** The city bench's race on course `trackId`: its own field and rules as a program over the player's options, which it never touches. */
 export function benchRace(trackId: string): RaceCommand {
@@ -84,7 +84,7 @@ function parseTraffic(v: string): StripSpec["traffic"] {
 }
 
 /**
- * The bench a page's query asks for: `?bench=city` (with `course=<campaign course id, or figure-8>` for the same field on another course), `?bench=lab` (`LAB_BENCH`), or `?bench=strip` with optional `props=building:20,tree:40,rock:20|off`,
+ * The bench a page's query asks for: `?bench=city` (with `course=<campaign course id>` for the same field on another course), `?bench=lab` (`LAB_BENCH`), or `?bench=strip` with optional `props=building:20,tree:40,rock:20|off`,
  * `traffic=2x12|1x8|off`, `cars=16` (racers, 2-16), `same=sedan|hatchback|wagon|coupe|pickup|off` (one body for every car, or
  * the fleet's mix) and `len=6000` (the straight, m: 1500-12000). A value that does not parse falls back to its default; the card
  * prints what ran. Any bench takes `ultra=1` (the Ultra arm). Null for any other `bench=`.
@@ -100,7 +100,7 @@ export function benchPlan(search: string): BenchPlan | null {
   const scenery = sceneryValue === "0" ? SCENERY_ARM.off : sceneryValue === SCENERY_ARM.draw0 ? SCENERY_ARM.draw0 : SCENERY_ARM.on;
   if (kind === BENCH_KIND.city) {
     const course = q.get(COURSE_QUERY);
-    const id = course !== null && (CAMPAIGN.includes(course) || course === FIGURE_8_ID) ? course : TRACK_ID.city;
+    const id = course !== null && CAMPAIGN.includes(course) ? course : TRACK_ID.city;
     return { id, race: id === TRACK_ID.city ? BENCH_RACE : benchRace(id), course: null, warmS: 20, racers: 16, body: null, strip: null, lab: null, ultra, epicenter, extended, scenery };
   }
   if (kind === BENCH_KIND.lab) return { id: "lab", race: null, course: null, warmS: LAB_BENCH.settleS, racers: 0, body: null, strip: null, lab: LAB_BENCH, ultra, epicenter, extended, scenery };

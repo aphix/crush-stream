@@ -244,12 +244,12 @@ therefore drives almost as hard does (0–1 mistakes a race on oval and city). T
 
 ## Campaign
 
-`CAMPAIGN` = oval, rally, city, stunt, four-count, dam-spine, razor-shelf, breaker-yard, national-mall (9 rounds). Points 10, 8, 6, 5, 4,
+`CAMPAIGN` = oval, rally, city, stunt, figure-8, four-count, dam-spine, razor-shelf, breaker-yard, national-mall (10 rounds). Points 10, 8, 6, 5, 4,
 3, 2, 1 for places 1–8. Standings: points, wins, the better place in the latest round, entry order. Round 1's grid is the
 entry order (player last); later grids are the standings, leader on pole. Retry re-runs a round without scoring it. A
 Watch campaign runs every round in spectate mode. Nothing is saved: a campaign lives only in the running page.
 
-The courses are the player's pick (`RaceOptions.campaign`, share key `camp`), defaulting to all nine in `CAMPAIGN` order. The
+The courses are the player's pick (`RaceOptions.campaign`, share key `camp`), defaulting to all ten in `CAMPAIGN` order. The
 setup menu's **Mode** row (`RaceOptions.mode`, share key `mode`: `single` or `campaign`, an unknown value is ignored; it is an option like the rest, so it survives the menu unmounting for a solo replay view or a scene change and rides in a link) switches the course cards to Campaign: a tap ticks a card at the end of the order (a number shows its
 round) or unticks it, **Select all** / **Unselect all** is one toggle, and tap order is play order (after Unselect all, the order
 tapped is the campaign). **Start campaign** is disabled with nothing ticked, and the `campaign` command ignores an empty list.

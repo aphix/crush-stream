@@ -695,7 +695,7 @@ export function readDerby(r: Reader): DerbyNetState {
 export const GAME_KINDS = ["race", "campaign", "survival", "derby"] as const;
 export type GameKind = (typeof GAME_KINDS)[number];
 
-/** The longest campaign playlist a host may send (the course menu has 9). */
+/** The longest campaign playlist a host may send (the course menu has 10). */
 export const MAX_PLAYLIST = 16;
 
 /**

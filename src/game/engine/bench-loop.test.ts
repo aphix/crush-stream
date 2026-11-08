@@ -567,9 +567,9 @@ describe("given the chooser before a new loop (Extended, Loop, Epicenter, Ultra)
 const idsOfMaps = (maps: readonly { id: string }[]): string => maps.map((m) => m.id).join(" ");
 
 describe("given the maps the chooser lists", () => {
-  // mutation: sed -i '/id: FIGURE_8_ID, query/d' src/game/engine/bench-loop.ts  (reds the list row and every default-cycle row)
+  // mutation: sed -i '/id: TRACK_ID.figure8, query/d' src/game/engine/bench-loop.ts  (reds the list row and every default-cycle row)
   // mutation: sed -i 's/label: "Figure Eight", byDefault: true/label: "Figure Eight", byDefault: false/' src/game/engine/bench-loop.ts  (reds the defaults)
-  // mutation: sed -i 's/{ id: BENCH_KIND.strip, query: benchQuery(BENCH_KIND.strip), label: "Strip", byDefault: true },/{ id: FIGURE_8_ID, query: courseQuery(FIGURE_8_ID), label: "Figure Eight", byDefault: true },\n&/' src/game/engine/bench-loop.ts  (reds the order: figure-8 first)
+  // mutation: sed -i 's/{ id: BENCH_KIND.strip, query: benchQuery(BENCH_KIND.strip), label: "Strip", byDefault: true },/{ id: TRACK_ID.figure8, query: courseQuery(TRACK_ID.figure8), label: "Figure Eight", byDefault: true },\n&/' src/game/engine/bench-loop.ts  (reds the order: figure-8 first)
   it("when the list is read, then the old four maps come first in their old order, the figure-8 after the Mall, the other race courses after it, and only the first five are on by default", () => {
     expect(idsOfMaps(MAP_CHOICES)).toBe("strip city dam-spine national-mall figure-8 oval rally stunt four-count razor-shelf breaker-yard");
     expect(DEFAULT_MAPS.join(" ")).toBe("strip city dam-spine national-mall figure-8");
@@ -580,7 +580,7 @@ describe("given the maps the chooser lists", () => {
     expect(cycleOf(false).slice(0, 8).map((s) => s.id).join(" ")).toBe(cycleOf(false, 1, FOUR_MAPS).map((s) => s.id).join(" "));
   });
 
-  // mutation: sed -i 's/ || course === FIGURE_8_ID//' src/game/engine/engine-bench-plan.ts  (reds the figure-8's plan: it benches the city)
+  // mutation: sed -i '/^  TRACK_ID.figure8,$/d' src/game/world/tracks/index.ts  (reds the figure-8's plan: a course outside the campaign benches the city)
   it("when each map is read as a bench, then it runs the course its id names, and every course on the race menu has its toggle", () => {
     for (const m of MAP_CHOICES.filter((c) => c.id !== "strip")) expect(benchPlan(`?${m.query}`)?.id, m.id).toBe(m.id);
     const menu = TRACKS.map((raw) => parseTrack(raw).id).sort();
@@ -589,7 +589,7 @@ describe("given the maps the chooser lists", () => {
 });
 
 describe("given the figure-8 bench", () => {
-  // mutation: sed -i 's/{ \[FIGURE_8_ID\]: 16 }/{}/' src/game/engine/engine-bench-plan.ts  (reds the laps row: nine laps of 403 m end before the extended bench)
+  // mutation: sed -i 's/{ \[TRACK_ID.figure8\]: 16 }/{}/' src/game/engine/engine-bench-plan.ts  (reds the laps row: nine laps of 403 m end before the extended bench)
   it("when its page is read, then it is the city bench's field (16 racers, 15 rivals, the 20 s warm-up) on the figure-8, whose laps cover more road than the city's nine", () => {
     const plan = benchPlan("?bench=city&course=figure-8")!;
     must(plan.race?.type === "program", "a race program");

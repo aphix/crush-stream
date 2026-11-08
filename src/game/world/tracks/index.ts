@@ -12,7 +12,7 @@ import { HAVANA } from "./havana.ts";
 import { TRACK_ID } from "../constants.ts";
 
 /** Every course, in menu order. Raw JSON: `new Track(json)` validates and compiles it. */
-export const TRACKS: readonly unknown[] = [oval, rally, city, stunt, fourCount, damSpine, razorShelf, breakerYard, nationalMall, figure8];
+export const TRACKS: readonly unknown[] = [oval, rally, city, stunt, figure8, fourCount, damSpine, razorShelf, breakerYard, nationalMall];
 
 /** Courses the race menu, the campaign and the per-course test sweeps do not list: loadable by id (`RaceField.load`) for the mode that plays them. */
 export const OFF_MENU: readonly unknown[] = [HAVANA];
@@ -23,6 +23,7 @@ export const CAMPAIGN: readonly string[] = [
   TRACK_ID.rally,
   TRACK_ID.city,
   TRACK_ID.stunt,
+  TRACK_ID.figure8,
   TRACK_ID.fourCount,
   TRACK_ID.damSpine,
   TRACK_ID.razorShelf,
