@@ -600,8 +600,8 @@ cell))` so a cell's output depends only on that cell, and a hand-built track giv
   overlapping an authored prop or another generated one (the flat slabs and parked cars are exempt from that row: `slab` checks the road, not the footprints, and neighbouring
   slabs overlap on the shorter edge of a bend by design).
 - **Biome**, per road stretch, from its terrain and surfaces (`defaultBiome`): sand terrain `desert`; paved terrain (concrete, asphalt, cobble) `city`; dirt
-  terrain or a dirt, gravel or mud road `dirt`; grass with a paved run-off `circuit`; other grass `park`. Courses: oval circuit; rally, four-count park
-  with dirt stretches; city city; stunt desert; dam-spine, razor-shelf, breaker-yard, figure-8 dirt. The Mall and Havana are `biome: none` (hand-authored); the
+  terrain or a dirt, gravel or mud road `dirt`; grass with a paved run-off `circuit`; other grass `park`. Courses: oval circuit; rally park
+  with dirt stretches; four-count by `zones` (bowl `circuit`, city blocks `city`, canyon `desert`, woods `park`; its dressing program `tracks/four-count.dressing.mjs` also lays the lot grid of buildings, the forest, the stands, the mesas and the ground paint); city city; stunt desert; dam-spine, razor-shelf, breaker-yard, figure-8 dirt. The Mall and Havana are `biome: none` (hand-authored); the
   Mall's `zones` turn `city` on for its town-house corner only (x −2150…−1190, z −1300…−550: the building grid west of the White House). A point's biome is a
   `zones` box's, else the course's `biome`, else its nearest road stretch's (`biomeLookup`, which `TrackArt.biome` hands the facade styles).
 - **Rules** (`SCENERY_RULES`): `paving` slabs (the `sidewalk` prefab, 2.4 × 3.2 m, 6 cm high, drawn only) along a city's road edges from the wall line out, a circuit's 2.5 times

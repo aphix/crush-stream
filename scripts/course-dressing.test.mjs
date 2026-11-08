@@ -7,6 +7,7 @@ import { boxClear } from "../src/game/world/placements.ts";
 import { Track } from "../src/game/world/track.ts";
 import { baseOf, dress } from "./course-dressing.mjs";
 import breakerYardDressing from "../src/game/world/tracks/breaker-yard.dressing.mjs";
+import fourCountDressing from "../src/game/world/tracks/four-count.dressing.mjs";
 
 const COURSE = "breaker-yard";
 const AUTHORED_PROPS = 17;
@@ -80,6 +81,17 @@ describe("given the committed breaker-yard dressing program", () => {
     const result = dress(COURSE, base, breakerYardDressing);
     expect(base.props, "authored props the sidecar names").toBe(AUTHORED_PROPS);
     expect(result.appended.props, "props the program appends").toBeGreaterThan(0);
+    expect(result.changed, "course JSON differs from the program's output").toBe(false);
+  });
+});
+
+describe("given the committed four-count dressing program", () => {
+  // mutation: sed -i 's/"x": 346, "z": 112/"x": 347, "z": 112/' src/game/world/tracks/four-count.json
+  it("when it is run against the committed course JSON, then the JSON is already its output and the four hand props lead", () => {
+    const base = baseOf(readFileSync(new URL("../src/game/world/tracks/four-count.dressing.mjs", import.meta.url), "utf8"));
+    const result = dress("four-count", base, fourCountDressing);
+    expect(base.props, "authored props the sidecar names").toBe(4);
+    expect(result.appended.props, "props the program appends").toBeGreaterThan(2000);
     expect(result.changed, "course JSON differs from the program's output").toBe(false);
   });
 });
