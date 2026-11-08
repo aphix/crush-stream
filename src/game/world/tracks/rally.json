@@ -79,6 +79,7 @@
     { "prefab": "grandstand", "x": -22, "z": -20 }
   ],
   "along": [
+    { "prefab": "lamp", "every": 40, "side": "right", "offset": 1 },
     { "prefab": "hay-bale", "every": 22, "side": "right", "offset": -0.8, "fromNode": 7, "toNode": 9 },
     { "prefab": "tree", "every": 14, "side": "both", "offset": 4, "fromNode": 11, "toNode": 13 }
   ],

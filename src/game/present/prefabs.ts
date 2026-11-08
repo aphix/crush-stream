@@ -626,6 +626,19 @@ function carhenge(): Piece[] {
   return out;
 }
 
+/** The Carhenge campfire's glow: the lamps' night pool (their shared decal, drawn only at night) laid round the fire, 12.6 m across. */
+function firePool(): PrefabPart {
+  const g = makeLamp();
+  const pool = g.getObjectByName(LAMP_POOL) as THREE.Mesh;
+  const geometry = (pool.geometry as THREE.BufferGeometry).clone().rotateX(-Math.PI / 2).scale(1.4, 1, 1.4).translate(0, 0.025, 0);
+  const keep: THREE.Material[] = [];
+  g.traverse((o) => {
+    if (o instanceof THREE.Mesh && (o.name === LAMP_POOL || (o.material as THREE.MeshStandardMaterial).emissive?.getHex())) keep.push(o.material as THREE.Material);
+  });
+  disposeGroup(g, keep);
+  return { geometry, material: pool.material as THREE.Material, shared: true };
+}
+
 /** The junkyard crane: a lattice tower over a heap of wrecks and tyres, its boom out along +X with a shell hanging off the hook. */
 function junkCrane(): Piece[] {
   const { height, reach, heap } = JUNK_CRANE;
@@ -733,7 +746,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
     case PREFAB.wreck:
       return one(wreck(), mats.plain);
     case PREFAB.carhenge:
-      return one(carhenge(), mats.plain);
+      return [...one(carhenge(), mats.plain), firePool()];
     case PREFAB.junkCrane:
       return one(junkCrane(), mats.plain);
   }

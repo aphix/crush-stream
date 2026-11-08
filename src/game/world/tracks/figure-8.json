@@ -90,6 +90,10 @@
   "shortcuts": [],
   "grid": { "perRow": 4, "spacing": 6.5, "back": 6 },
   "props": [
+    { "prefab": "lamp", "x": 22, "z": 0, "yaw": 3.1416, "scale": 2.2 },
+    { "prefab": "lamp", "x": -22, "z": 0, "yaw": 0, "scale": 2.2 },
+    { "prefab": "lamp", "x": 0, "z": 22, "yaw": 1.5708, "scale": 2.2 },
+    { "prefab": "lamp", "x": 0, "z": -22, "yaw": 4.7124, "scale": 2.2 },
     { "prefab": "carhenge", "x": 0, "z": 42.43, "yaw": 0.3, "scale": 1 },
     { "prefab": "junk-crane", "x": 0, "z": -42.43, "yaw": 0.8, "scale": 1 },
     { "prefab": "tree", "x": 13.52, "z": 45.17, "yaw": 0, "scale": 1 },
@@ -130,6 +134,10 @@
     { "prefab": "wreck", "x": 32.14, "z": -80.73, "yaw": -2.01, "scale": 1 },
     { "prefab": "wreck", "x": -4.36, "z": -92.24, "yaw": -3.81, "scale": 1 },
     { "prefab": "wreck", "x": -38.3, "z": -74.57, "yaw": -5.62, "scale": 1 }
+  ],
+  "along": [
+    { "prefab": "lamp", "every": 18, "side": "left", "offset": 1.2, "fromNode": 71, "toNode": 17, "scale": 1.6 },
+    { "prefab": "lamp", "every": 18, "side": "right", "offset": 1.2, "fromNode": 35, "toNode": 50, "scale": 1.6 }
   ],
   "scatter": [
     { "prefab": "tree", "count": 520, "near": 24, "far": 60, "seed": 8, "scaleMin": 0.9, "scaleMax": 1.5 },

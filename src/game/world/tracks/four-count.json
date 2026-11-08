@@ -1894,6 +1894,7 @@
     }
   ],
   "along": [
+    { "prefab": "lamp", "every": 46, "side": "right", "offset": 3, "fromNode": 30, "toNode": 94 },
     {
       "prefab": "lamp",
       "every": 46,

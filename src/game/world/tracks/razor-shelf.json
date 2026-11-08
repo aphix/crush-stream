@@ -91,6 +91,7 @@
     { "prefab": "billboard", "x": 128, "z": -326, "yaw": -0.7854 }
   ],
   "along": [
+    { "prefab": "lamp", "every": 70, "side": "left", "offset": 1 },
     { "prefab": "cone", "every": 10, "side": "left", "offset": -1, "fromNode": 5, "toNode": 8, "scale": 2.5 }
   ],
   "scatter": [

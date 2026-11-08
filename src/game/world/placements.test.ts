@@ -52,7 +52,8 @@ describe("given the oval course", () => {
       expect(Math.hypot(p.x - mx, p.z - mz), "tree within 25 m of the start line").toBeGreaterThanOrEqual(25);
       expect(p.y).toBe(t.ground().heightAt(p.x, p.z));
     }
-    expect(placed.filter((p) => p.prefab === "lamp").length).toBe(Math.round(t.length / 45));
+    // A lamp every 45 m on each side of the loop (the infield row since the night-lighting pass).
+    expect(placed.filter((p) => p.prefab === "lamp").length).toBe(2 * Math.round(t.length / 45));
   });
 });
 

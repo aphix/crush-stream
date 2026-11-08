@@ -73,6 +73,7 @@
     { "prefab": "grandstand", "x": 76, "z": 36, "yaw": 3.1416 }
   ],
   "along": [
+    { "prefab": "lamp", "every": 45, "side": "left", "offset": 1.5 },
     { "prefab": "lamp", "every": 45, "side": "right", "offset": 1.5 },
     { "prefab": "billboard", "every": 120, "side": "right", "offset": 6, "fromNode": 3, "toNode": 7 }
   ],
