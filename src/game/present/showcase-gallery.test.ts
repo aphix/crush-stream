@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import * as THREE from "three";
+import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { PREFAB_IDS, PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { ASSET_FAMILIES, SCENERY_ASSETS } from "../world/scenery-assets/index.ts";
 import { assetPrefab, assetScale } from "../world/scenery-assets/pick.ts";
 import { FACADE, homeStyle, type FacadeStyle } from "./facades.ts";
-import { SHOWCASE_EYE, SHOWCASE_FLOOR_RADIUS, SHOWCASE_GALLERY, SHOWCASE_RADIUS } from "./showcase-art.ts";
+import { SHOWCASE_EYE, SHOWCASE_GALLERY, SHOWCASE_RADIUS, ShowcaseArt } from "./showcase-art.ts";
 import { galleryStyleOf } from "./showcase-gallery-rows.ts";
 
 /** The prefabs that repeat in the game: the gallery shows each once (a building also once in each style that has no prefab of its own). */
@@ -70,8 +72,11 @@ describe("given the showcase prop gallery", () => {
   });
 
   it("when the showcase floor is built, then it is drawn far past the disc the gallery stands in, so the set has no rim", () => {
-    // mutation: sed -i 's/SHOWCASE_FLOOR_RADIUS = 10000/SHOWCASE_FLOOR_RADIUS = 140/' src/game/present/showcase-art.ts
-    expect(SHOWCASE_FLOOR_RADIUS).toBeGreaterThanOrEqual(50 * SHOWCASE_RADIUS);
+    // mutation: sed -i 's/FLOOR_RADIUS = 72 \* SHOWCASE_RADIUS/FLOOR_RADIUS = SHOWCASE_RADIUS/' src/game/present/showcase-art.ts
+    stubBrowser();
+    const floor = new ShowcaseArt().group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh && child.geometry instanceof THREE.CircleGeometry);
+    expect(floor, "the floor").toBeDefined();
+    expect((floor!.geometry as THREE.CircleGeometry).parameters.radius).toBeGreaterThanOrEqual(50 * SHOWCASE_RADIUS);
   });
 
   it("when its footprints are placed, then all stand behind the eye's clearance and inside the disc", () => {
