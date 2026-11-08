@@ -29,6 +29,7 @@ import { Cinematics } from "../present/engine-cine.ts";
 import { DaylightEnv } from "../present/daylight-env.ts";
 import { loadHdrEnv, STUDIO_ENV_URL } from "../present/look-env.ts";
 import { CarDetail } from "../present/car-detail.ts";
+import { CarCover } from "../present/car-cover.ts";
 import { addCars, withCars, type Occluder, type Sight } from "../present/spectate-cam.ts";
 import { ChaseSolids, DERBY_OCCLUDERS, OccluderPool } from "../present/chase-solids.ts";
 import { activeGround } from "../world/ground.ts";
@@ -294,6 +295,8 @@ export abstract class EngineCore {
   protected vaporAt: number[] = [];
   /** The camera cone every cosmetic skip asks (`present/witness.ts`); `scheduleSkins` and `flushVisibleSkins` read the camera into it. */
   protected readonly witness = new Witness();
+  /** Which cars the camera cannot see for a solid, so their tyre hold waits (`holdSlack`). */
+  protected readonly cover = new CarCover();
   protected lodFrame = 0;
   /** Per car index: skin stride from the last LoD pass (0 = off-screen). */
   protected lodStride: number[] = [];

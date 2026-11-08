@@ -410,6 +410,10 @@ export class TyreSkin {
   private hasWritten = false;
   /** Whether the last hold moved any drawn point: until one does, the drawn skin is `written` as it stands, and nothing need be put back, re-shaded or re-uploaded. */
   private held = false;
+  /** A hold made with `defer` found only a wheel move: `heldAt` took the pose, the lift waits for `settle` with that hold's `owedOut` and `owedWheels`. */
+  private owed = false;
+  private owedOut = 0;
+  private owedWheels = 0;
   /** Each shown part's pose in the mesh's frame when the floor was last found (16 elements a part), and how many were shown. */
   private partPoseAt = new Float64Array(0);
   private partsShown = 0;
@@ -551,8 +555,13 @@ export class TyreSkin {
     return Int32Array.from(found);
   }
 
-  /** Holds the skin over each tyre of `wheels` not in `gone` (bit i: wheel i is the world's) and, fading as it leaves (`leaveShare`), over a gone one at its last seat; and over `under` (parts drawn under it, those whose `showIf` holds). `skinWritten`: the mesh's positions were just written from the cage. */
-  hold(group: THREE.Object3D, wheels: readonly THREE.Object3D[], gone: number, lift: number, skinWritten: boolean, under: readonly PartSeat[] = []): void {
+  /** Whether a deferred hold's lift is not on the mesh yet. */
+  get owes(): boolean {
+    return this.owed;
+  }
+
+  /** Holds the skin over each tyre of `wheels` not in `gone` (bit i: wheel i is the world's) and, fading as it leaves (`leaveShare`), over a gone one at its last seat; and over `under` (parts drawn under it, those whose `showIf` holds). `skinWritten`: the mesh's positions were just written from the cage. `defer`: the mesh is not drawn this frame, so a lift only a wheel's move asks waits for `settle`. */
+  hold(group: THREE.Object3D, wheels: readonly THREE.Object3D[], gone: number, lift: number, skinWritten: boolean, under: readonly PartSeat[] = [], defer = false): void {
     const overFound = this.findOver(group, wheels, lift);
     matrixIn(group, this.mesh, _mesh).invert();
     let wheelMoved = false;
@@ -587,15 +596,42 @@ export class TyreSkin {
     // An uncrushed skin has nothing crushed under it to stand over.
     const partsMoved = this.notePartPoses(group, this.crushed ? under : NO_PARTS);
     // The lift is a function of the skin, the points resting over the tyres, the wheels and the parts: none changed, the drawn skin already carries it.
-    if (!fresh && !overFound && !wheelMoved && !partsMoved) return;
+    if (!fresh && !overFound && !wheelMoved && !partsMoved) {
+      if (this.owed && !defer) this.settle();
+      return;
+    }
+    if (defer && !fresh && !overFound && !partsMoved) {
+      this.heldAt.set(this.wheelNow);
+      this.owed = true;
+      this.owedOut = out;
+      this.owedWheels = wheels.length;
+      return;
+    }
+    this.owed = false;
     // A skin rewritten under wheels within the slack (a held reset) is held where the drawn lift read them: it draws the same body.
     if (!rewritten || wheelMoved) this.heldAt.set(this.wheelNow);
     const reset = !fresh && this.held;
     if (reset) pos.set(this.written);
     if (fresh || partsMoved) this.findPartFloor(pos, this.partsShown > 0 ? this.partSamples(group, under) : 0);
+    this.layLift(attr, pos, fresh, reset, wheels.length, out);
+  }
+
+  /** Lays on the mesh the lift a deferred hold noted. */
+  settle(): void {
+    if (!this.owed) return;
+    this.owed = false;
+    const attr = this.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const pos = attr.array as Float32Array;
+    const reset = this.held;
+    if (reset) pos.set(this.written);
+    this.layLift(attr, pos, false, reset, this.owedWheels, this.owedOut);
+  }
+
+  /** The lift of `written` over `heldAt`'s wheels (not those in `out`) and the part floor, added to `pos`, and the normals it moves. */
+  private layLift(attr: THREE.BufferAttribute, pos: Float32Array, fresh: boolean, reset: boolean, wheelCount: number, out: number): void {
     this.lift.set(this.partFloor);
     this.push.fill(0);
-    for (let w = 0; w < wheels.length; w++) {
+    for (let w = 0; w < wheelCount; w++) {
       if ((out >> w) & 1) continue;
       const e = this.heldAt.subarray(w * HELD_ELEMENTS.length, (w + 1) * HELD_ELEMENTS.length);
       const scale = hypot3(e[0]!, e[1]!, e[2]!);
@@ -612,7 +648,7 @@ export class TyreSkin {
     this.sagSkin.serial++;
     for (let pass = 0; pass < SAG_PASSES; pass++) {
       let sagged = false;
-      for (let w = 0; w < wheels.length; w++) {
+      for (let w = 0; w < wheelCount; w++) {
         if ((out >> w) & 1 || ((quiet >> w) & 1 && !this.cornersRose(w))) continue;
         if (this.liftSaggingTriangles(pos, w, pass > 0)) {
           sagged = true;
@@ -622,7 +658,7 @@ export class TyreSkin {
       if (!sagged) break;
       this.carryLift();
     }
-    this.capAtRest(wheels.length, out);
+    this.capAtRest(wheelCount, out);
     this.levelLift(pos);
     const held = this.applyLift(pos);
     const changed = this.changedSince(reset);

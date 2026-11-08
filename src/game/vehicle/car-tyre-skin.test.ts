@@ -16,6 +16,9 @@ import { CLASSES, carClass } from "./vehicle-classes.ts";
 import { must } from "../kernel/must.test-util.ts";
 import { worstHoldOverRest } from "./skin-stretch.test-util.ts";
 
+/** How far (m) the deferred-hold row raises the wheels under the held body: far past the hold's wheel slack. */
+const RISE_M = 0.02;
+
 /**
  * A crushed skin's triangles stretched across a front tyre: one corner held over the tyre, every other point of the skin far away and low. The held corner stands on the tyre at
  * its own place, so the plane of each triangle it belongs to dips under the arc between it and the low points: before the hold read triangles, a pickup's tyre stood 42 mm
@@ -421,6 +424,32 @@ describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, it
     const apart = farthestApart(Float32Array.from(positions.array), reference.positions);
     expect(apart, `the second hold stands ${(apart * 1000).toFixed(2)} mm off a fresh hold at the higher lift`).toBe(0);
   });
+
+  it(`when a wheel rises ${RISE_M * 1000} mm under the held body, then a hold no camera sees waits with the drawn skin as it was, and a car in view lays it that frame`, () => {
+    const { car } = fixture;
+    const crushed = fixture.meshes[0]!;
+    const lift = CLASSES[carClass(car)].lift;
+    const afterRise = (hidden: boolean): { owes: boolean; apart: number } => {
+      const skin = new TyreSkin(car.frame, crushed.mesh, crushed.rest, crushed.pushSide);
+      const positions = crushed.mesh.geometry.getAttribute("position");
+      positions.array.set(crushed.written);
+      skin.hold(car.group, car.wheels, 0, lift, true, crushed.under);
+      const held = Float32Array.from(positions.array);
+      for (const wheel of car.wheels) wheel.position.y += RISE_M;
+      try {
+        skin.hold(car.group, car.wheels, 0, lift, false, crushed.under, hidden);
+      } finally {
+        for (const wheel of car.wheels) wheel.position.y -= RISE_M;
+      }
+      return { owes: skin.owes, apart: farthestApart(Float32Array.from(positions.array), held) };
+    };
+    const hidden = afterRise(true);
+    expect(hidden.owes, "the hidden car's hold waits").toBe(true);
+    expect(hidden.apart, "and its skin stands as it was").toBe(0);
+    const seen = afterRise(false);
+    expect(seen.owes, "the car in view lays its hold").toBe(false);
+    expect(seen.apart, `and the control moved the skin ${(seen.apart * 1000).toFixed(1)} mm: the row can fail`).toBeGreaterThan(0);
+  });
 });
 
 /** Owner: the wall over a muscle's front right wheel grew and a cone of bare bay wall stood up through the fender, in a Fleet corner hit. This strike crushes that corner's arch and bay. */
@@ -510,5 +539,60 @@ describe("given a sag point with no room under its corners' targets, the third c
     const lift = new Float64Array(3);
     spreadSagLift(SLIVER_BY_M, [0.6, 0.3, 0.1], [1, 1, 0], NO_ROOM, [1, 1, 0], BESIDE_THIRD, lift);
     expect(0.6 * lift[0]! + 0.3 * lift[1]!, "the point stands the lift it asked, less its unliftable corner's share").toBeCloseTo(0.9 * SLIVER_BY_M * 0.9, 12);
+  });
+});
+
+/** Of every this many frames: frame 0 is seen after an off-view hold (the engine's flush), frame 3 is seen at its own hold; the rest are off view. */
+const SEEN_EVERY = 7;
+const SEEN_AT_FLUSH = 0;
+const SEEN_AT_HOLD = 3;
+
+describe("given a sedan wreck driven in a slalom whose tyre holds are deferred while no camera sees it, beside an identical one held every frame", () => {
+  it("when it comes into view, then its drawn body and bonnet positions are the twin's bit for bit, and off view they lag it", () => {
+    const drives: DriveInput[] = [];
+    const wreck = (): { w: CrashWorld; car: DeformableCar } => {
+      const car = buildCar("sedan", "sedan");
+      const hitter = buildCar("sedan", "sedan");
+      const w = makeWorld([car, hitter], false, false);
+      const drive: DriveInput = { throttle: 0.5, steer: 0, brake: 0, ebrake: false, boost: false };
+      drives.push(drive);
+      w.pedals.set(car, drive);
+      w.pedals.set(hitter, FREEWHEEL);
+      launch(car, 0, 0, 0, 0, 0);
+      launch(hitter, -5, 0, Math.PI / 2, 25 / 3.6, 0);
+      return { w, car };
+    };
+    const [every, lazy] = [wreck(), wreck()];
+    let compared = 0;
+    let flushed = 0;
+    let lagged = 0;
+    for (let f = 0; f < FRAMES; f++) {
+      for (const d of drives) {
+        d.throttle = every.car.crashed ? 0.5 : 0;
+        d.steer = every.car.crashed ? Math.sin((2 * Math.PI * SLALOM_HZ * f) / FRAME_HZ) : 0;
+      }
+      const seenAt = f % SEEN_EVERY;
+      lazy.car.setHoldDeferred(seenAt !== SEEN_AT_HOLD);
+      tickWorld(every.w, FRAME);
+      tickWorld(lazy.w, FRAME);
+      if (seenAt === SEEN_AT_FLUSH) lazy.car.setHoldDeferred(false);
+      if (seenAt === SEEN_AT_FLUSH && lazy.car.holdOwed) flushed++;
+      if (seenAt === SEEN_AT_FLUSH) lazy.car.settleHold();
+      if (seenAt === SEEN_AT_FLUSH || seenAt === SEEN_AT_HOLD) expect(lazy.car.holdOwed, `frame ${f}: a car in view has no hold owed`).toBe(false);
+      const seen = seenAt === SEEN_AT_FLUSH || seenAt === SEEN_AT_HOLD;
+      for (const mesh of MESHES) {
+        const [a, b] = [lazy.car[mesh].geometry, every.car[mesh].geometry];
+        if (!seen) {
+          lagged += Number(farthestApart(a.getAttribute("position").array as Float32Array, b.getAttribute("position").array as Float32Array) > 0);
+          continue;
+        }
+        assertSameNumbers(a.getAttribute("position").array, b.getAttribute("position").array, `frame ${f} ${mesh} positions`);
+        compared++;
+      }
+    }
+    expect(lazy.car.crashed, "the sedan was crashed").toBeTruthy();
+    expect(flushed, "frames a hold was owed when the engine's flush came").toBeGreaterThan(0);
+    expect(lagged, "off-view frames the deferred hold left the mesh behind the twin's").toBeGreaterThan(0);
+    expect(compared, "meshes compared").toBeGreaterThan(MESHES.length * 10);
   });
 });

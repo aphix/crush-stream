@@ -264,6 +264,21 @@ function footprintsOf(occ: readonly Occluder[]): Footprints {
   return { occ, x: Float64Array.from(occ, (o) => o.x), z: Float64Array.from(occ, (o) => o.z), r: Float64Array.from(occ, reachOf) };
 }
 
+/** A round prop narrower than this (half-width, m) hides nothing from an eye: a lamp or a trunk, whose collider is padded past what is drawn (`raceSight`). */
+const THIN_PROP_M = 1;
+const hidingSights = new WeakMap<Sight, Sight>();
+
+/** `s` with only the solids that can hide a car (`CarCover`): the thin round props are left out. Cached per sight. */
+export function hidingSight(s: Sight): Sight {
+  let hit = hidingSights.get(s);
+  if (hit === undefined) {
+    const occ = s.occ.filter((o) => !o.circle || o.hx >= THIN_PROP_M);
+    hit = { ...s, occ, feet: footprintsOf(occ) };
+    hidingSights.set(s, hit);
+  }
+  return hit;
+}
+
 /** `_near` = the occluders whose footprint, grown by `pad`, can reach the flat box around a→b. */
 export function gather(s: Sight, ax: number, az: number, bx: number, bz: number, pad: number): Occluder[] {
   _near.length = 0;

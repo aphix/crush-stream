@@ -168,6 +168,8 @@ export class DeformableCar extends CarParts {
   readonly suspension = new Suspension(this.frame);
   private bodyTyres: TyreSkin | null = null;
   private nearView = true;
+  /** The engine's verdict that no camera sees this car this frame (off every camera or wholly behind a solid): its tyre holds note a wheel's move and lay the lift when it is seen (`settleHold`). */
+  private holdDeferred = false;
   private hoodTyres: TyreSkin | null = null;
   /** The parts the bonnet folds down onto, which its hold keeps under it: the cabin shell (its dash) and the engine bay. */
   private underHood: readonly PartSeat[] | null = null;
@@ -704,7 +706,10 @@ export class DeformableCar extends CarParts {
   /** LoD catch-up once the camera has moved: write a deferred dent before this car is drawn. */
   flushDeferredSkin(): void {
     this.deform.skinDeferred = false;
-    if (!this.deform.flushSkin(this.body.geometry)) return;
+    if (!this.deform.flushSkin(this.body.geometry)) {
+      this.settleHold();
+      return;
+    }
     this.poseLamps();
     this.fitInterior();
     if (this.panelsFollow) {
@@ -720,6 +725,32 @@ export class DeformableCar extends CarParts {
     if (near === this.nearView) return;
     this.nearView = near;
     if (near && this.crashed) this.deform.skinOwed = true;
+  }
+
+  /** The engine's verdict that no camera sees this car (`holdDeferred`). */
+  setHoldDeferred(hidden: boolean): void {
+    this.holdDeferred = hidden;
+  }
+
+  /** Whether a tyre hold's lift waits to be laid on a mesh (`settleHold`). */
+  get holdOwed(): boolean {
+    return this.bodyTyres?.owes === true || (this.hoodTyres?.owes === true && !this.hoodOff());
+  }
+
+  /** Lays on the meshes the lifts their holds noted, unless no camera sees the car: before it is drawn. */
+  settleHold(): void {
+    if (this.holdDeferred) return;
+    this.bodyTyres?.settle();
+    if (!this.hoodOff()) this.hoodTyres?.settle();
+  }
+
+  /** Whether a hinged panel's shell is posed on the drawn body skin each frame (`poseParts`), so the skin it reads must be held. */
+  private shellsReadSkin(): boolean {
+    for (let i = 0; i < this.parts.length; i++) {
+      const p = this.parts[i]!;
+      if (p.region && !p.detached && (p.folding || p.open)) return true;
+    }
+    return false;
   }
 
   /** A new Car contour strength re-bakes the rest normals when its relax passes differ, and draws them on the shells at rest; the crashed cars re-skin once, so their dented skins follow the slider. */
@@ -752,9 +783,10 @@ export class DeformableCar extends CarParts {
     let gone = 0;
     for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
     const lift = CLASSES[carClass(this)].lift;
-    this.bodyTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
+    const defer = !skinWritten && this.holdDeferred && !this.shellsReadSkin();
+    this.bodyTyres.hold(this.group, this.wheels, gone, lift, skinWritten, undefined, defer);
     this.underHood ??= this.partSeats.filter((s) => s.kind === PART_KIND.interior || s.kind === PART_KIND.engineBay);
-    if (!this.hoodOff()) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten, this.underHood);
+    if (!this.hoodOff()) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten, this.underHood, defer);
   }
 
   /** The skins were rewritten outside `updateSkin` (a reset, a net or replay state): the tyre holds start their next hold from them. */
