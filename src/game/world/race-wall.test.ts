@@ -193,15 +193,20 @@ describe("given a lone car in the city race on a walled stretch of the loop with
       expect(k, "the city has a walled stretch with no prop near").toBeLessThan(p.count);
       const limit = p.half[k]! + p.runL[k]!;
       const car = w.cars[0]!;
-      const lateral = () => track.project(car.group.position.x, car.group.position.z, k, blankProjection()).lateral;
+      // What the wall did is the car's displacement through `courseHit`: on a bend the polyline's projection (`Track.project`) reads a pose put on a sample's normal up to a centimetre nearer than it was put.
+      const stepped = (): number => {
+        const [x, z] = [car.group.position.x, car.group.position.z];
+        w.race.courseHit(car, 0, 1 / QUIET_HZ);
+        return Math.hypot(car.group.position.x - x, car.group.position.z - z);
+      };
       const put = (lat: number) => car.spawnFacing(p.x[k]! + p.tz[k]! * lat, p.z[k]! - p.tx[k]! * lat, Math.atan2(p.tx[k]!, p.tz[k]!), 0);
       // On the road first (the course hint finds this stretch), then 2.8 m beyond the line: its footprint (0.95 m to a side)
       // clear of the 0.6 m wall behind the line.
       put(limit - 2);
       w.race.courseHit(car, 0, 1 / QUIET_HZ);
       put(limit + 2.8);
-      w.race.courseHit(car, 0, 1 / QUIET_HZ);
-      expect(Math.abs(lateral() - (limit + 2.8)), `a car outside the wall is not pushed (now ${lateral().toFixed(2)} m, line ${limit.toFixed(2)} m)`).toBeLessThan(0.01);
+      const left = stepped();
+      expect(left, `a car outside the wall is not pushed (moved ${left.toFixed(3)} m, line ${limit.toFixed(2)} m)`).toBeLessThan(0.01);
       // A keyframe puts it 3.7 m back, its flank 0.05 m into the drawn wall: freshly placed, and the wall returns it that far.
       // (The old line probe read 0.13 m: it measured the front probes across the bend in the frame of the car's middle.)
       // The placed car's flank (hw from its middle) 0.05 m past the wall's face.
@@ -209,8 +214,7 @@ describe("given a lone car in the city race on a walled stretch of the loop with
       put(limit - hw + 0.05);
       const depth = footDepth(car);
       w.race.remember(0, Float64Array.of(-1), 0);
-      w.race.courseHit(car, 0, 1 / QUIET_HZ);
-      const pushed = limit - hw + 0.05 - lateral();
+      const pushed = stepped();
       expect(depth > 0.03 && Math.abs(pushed - depth) < 0.01, `the placed car, ${depth.toFixed(3)} m into the wall, is pushed back ${pushed.toFixed(3)} m`).toBeTruthy();
     } finally {
       w.race.exit();
