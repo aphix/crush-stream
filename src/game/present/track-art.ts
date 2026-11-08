@@ -343,7 +343,7 @@ export class TrackArt {
     }
     if (id === PREFAB.rock) {
       const k = 0.8 + 0.3 * h;
-      out.setRGB(k, k, k, THREE.LinearSRGBColorSpace);
+      out.setRGB(k * (1 + 0.14 * (h2 - 0.5)), k, k * (1 - 0.12 * (h2 - 0.5)), THREE.LinearSRGBColorSpace);
       return true;
     }
     if (style) {

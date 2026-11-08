@@ -14,6 +14,8 @@ import type { AssetFamily } from "../world/scenery-assets/types.ts";
 export type PrefabMaterials = {
   /** Flat-shaded vertex colours (most props, gantry). */
   plain: THREE.Material;
+  /** Flat-shaded vertex colours with the world-space tint, dust and foot shade (`nature-look.ts`): rocks, trees, palms, bushes. */
+  nature: THREE.Material;
   /** Vertex colours × concrete texture (barrier blocks, walls). */
   concrete: THREE.Material;
   /** A sidewalk slab: the concrete's colour with the paving's normal map. */

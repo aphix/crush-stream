@@ -31,7 +31,7 @@ export function bushParts(mats: PrefabMaterials): PrefabPart[] {
     [lump(0.58, 0.44, 0.56, -0.04, 0.46, 0.02), SHADE[0], MAT.CONIFER_FOLIAGE],
     [lump(0.36, 0.3, 0.34, 0.3, 0.62, -0.2), SHADE[1], MAT.CONIFER_FOLIAGE],
   ];
-  return [{ geometry: painted(pieces), material: mats.plain, shared: false, shadow: false }];
+  return [{ geometry: painted(pieces), material: mats.nature, shared: false, shadow: false }];
 }
 
 /** Bloom positions on the bed (x, z) and their size. */

@@ -16,6 +16,7 @@ import { disposeFacadeMaterials, type FacadeStyle, homeStyle, makeFacadeMaterial
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { applyWaterLook } from "./water-look.ts";
+import { NatureMaterial } from "./nature-look.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 
@@ -280,6 +281,7 @@ export function makePrefabMaterials(tex: RaceTextures, fullAssetMaps = false): P
   applyWaterLook(water);
   const materials: PrefabMaterials = {
     plain: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05 }), MAT.GENERIC),
+    nature: tagMaterial(new NatureMaterial(), MAT.GENERIC),
     concrete: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }), MAT.CONCRETE),
     get paving(): THREE.Material {
       return (lazy.paving ??= paved(tex));
@@ -295,7 +297,7 @@ export function makePrefabMaterials(tex: RaceTextures, fullAssetMaps = false): P
 
 /** Dispose a record of prefab materials: the ones it holds, and of the lazy ones only those a prop read. */
 export function disposePrefabMaterials(materials: PrefabMaterials): void {
-  for (const material of [materials.plain, materials.concrete, materials.billboard, materials.water]) material.dispose();
+  for (const material of [materials.plain, materials.nature, materials.concrete, materials.billboard, materials.water]) material.dispose();
   lazyMade.get(materials)?.paving?.dispose();
   disposeFacadeMaterials(materials.facades);
   disposeAssetMaterials(materials.assets);
@@ -737,9 +739,9 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.barrierBlock:
       return one(barrierBlock(), mats.concrete);
     case PREFAB.rock:
-      return one(rock(), mats.plain);
+      return one(rock(), mats.nature);
     case PREFAB.tree:
-      return one(tree(), mats.plain);
+      return one(tree(), mats.nature);
     case PREFAB.building:
     case PREFAB.stucco: {
       const s = style ?? homeStyle(id)!;
@@ -748,7 +750,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.monument:
       return one(monument(), mats.plain);
     case PREFAB.palm:
-      return one(palm(), mats.plain);
+      return one(palm(), mats.nature);
     case PREFAB.wall:
       return one(wall(), mats.plain);
     case PREFAB.dumpster:

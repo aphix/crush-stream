@@ -12,6 +12,7 @@ import type { ChaseCamera } from "./engine-camera.ts";
 import { TireSmokeSystem, type GlassDotSystem, type SparkSystem } from "./engine-fx.ts";
 import type { FountainSystem } from "./fountain-system.ts";
 import { setWaterTier } from "./water-look.ts";
+import { setNatureTier } from "./nature-look.ts";
 import { SkidMarks } from "./engine-marks.ts";
 import { PostFX, type FxTier } from "./engine-post.ts";
 import { boostZoomStrength, easeBoostZoomSpeed, stepBoostZoom } from "./boost-zoom.ts";
@@ -584,6 +585,7 @@ export class Cinematics {
     this.post.setTier(tier);
     this.marks.setResolution(MARK_RES[tier]);
     setWaterTier(tier);
+    setNatureTier(tier);
     const on = tier !== "off";
     // Streaks and over-bright glow are for the bloom; the canvas-only tiers draw plain dots.
     const bloom = tier === "low" || tier === "high" || tier === "ultra";
