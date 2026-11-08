@@ -47,6 +47,14 @@ describe("given every course", () => {
       for (const key of tiers[i]!) expect(tiers[i - 1]!.has(key), `${key} in tier ${i} and not above`).toBe(true);
     }
   });
+
+  it("when the drawn-only list is thinned to the cheapest tier, then every sidewalk slab is still drawn (the apron stays whole)", () => {
+    const d = dress(json(TRACK_ID.fourCount));
+    const slabs = d.drawn.filter((p) => p.prefab === PREFAB.sidewalk).length;
+    expect(slabs, "the course has an apron").toBeGreaterThan(0);
+    expect(thinScenery(d.drawn, 0.3).filter((p) => p.prefab === PREFAB.sidewalk).length).toBe(slabs);
+  });
+  // mutation: sed -i 's/p.prefab === PREFAB.sidewalk || unit(/unit(/' src/game/world/scenery.ts
 });
 
 describe("given the scenery on every course", () => {

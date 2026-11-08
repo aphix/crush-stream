@@ -945,9 +945,12 @@ export function placeScenery(track: Track, base: readonly Placed[]): Scenery {
   return { solid: kept(c, c.solid, c.solidMeta), drawn: kept(c, c.drawn, c.drawnMeta) };
 }
 
-/** The share `keep` (0 to 1) of `drawn` a lower effects tier draws, by a hash of each prop's spot: every lower share is a subset of the higher. */
+/**
+ * The share `keep` (0 to 1) of `drawn` a lower effects tier draws, by a hash of each prop's spot: every lower share is a subset of the
+ * higher. The sidewalk slabs always stay: they abut to make one apron, and thinned they read as dotted tiles (the owner saw it at Auto).
+ */
 export function thinScenery(drawn: readonly Placed[], keep: number): Placed[] {
-  return drawn.filter((p) => unit(mix(Math.round(p.x * 16), Math.round(p.z * 16))) < keep);
+  return drawn.filter((p) => p.prefab === PREFAB.sidewalk || unit(mix(Math.round(p.x * 16), Math.round(p.z * 16))) < keep);
 }
 
 /** The biome at any world point, as the rules read it: a zone's, else the course's `scenery.biome`, else the nearest road stretch's (a point past every road takes the course's own road and terrain). */
