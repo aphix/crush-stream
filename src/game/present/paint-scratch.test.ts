@@ -15,7 +15,7 @@ import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { applyScratch, CREASE_FAR, CREASE_NEAR, DENT_FLOOR, DENT_REBUILD_S, DENT_SETTLE_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
-import { channelTexels, cloneOfFinished, sampledScratch, scraped, stubGpu, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
+import { channelTexels, cloneOfFinished, sampledScratch, scraped, stubGpu, UNPACK_ROW_LENGTH, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -299,7 +299,7 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     expect(firstMismatch(channelTexels(crushed, 0), scratches), "R").toBeUndefined();
   });
 
-  it("when its dents are redrawn without their creases and flushed, then the GPU's copy of the mask equals the mask bit for bit, from fewer texels than a whole upload", () => {
+  it("when its dents are redrawn without their creases and flushed, then the GPU's copy of the mask equals the mask bit for bit, from fewer texels than a whole upload, and the unpack row length is back to 0", () => {
     view.frame(cars, DENT_REBUILD_S);
     const gpu = stubGpu(mask());
     SCRATCH_TIER.value = 1;
@@ -313,6 +313,7 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     expect(sent, "the control: texels changed and went up").toBeGreaterThan(0);
     expect(sent, "texels sent").toBeLessThan(CAR_SPRAY.w * CAR_SPRAY.h);
     expect(firstMismatch(gpu.bytes, wearTexels(crushed)), "the GPU's copy").toBeUndefined();
+    expect(gpu.unpack.get(UNPACK_ROW_LENGTH), "UNPACK_ROW_LENGTH after the flush: three's other uploads read rows at their own width").toBe(0);
   });
 
   it("when its skin is written again and its dents are redrawn to the texels they had, then no call is sent", () => {

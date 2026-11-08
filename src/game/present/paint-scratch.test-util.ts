@@ -58,8 +58,11 @@ export function cloneOfFinished(own: THREE.Material): boolean {
   return trim !== undefined && trim.userData.carFinish !== undefined;
 }
 
+/** WebGL's `UNPACK_ROW_LENGTH` enum: what a test reads back from the double's recorded pixel-store state. */
+export const UNPACK_ROW_LENGTH = 0x0cf2;
+
 /** A renderer double whose `texSubImage2D`, with `apply` (without, it does nothing and allocates nothing), records each upload and applies it by the unpack rows it set to `bytes`: the mask as the GPU holds it after the whole upload three makes at the first draw (made here). */
-export function stubGpu(texture: THREE.DataTexture, apply = true): { renderer: THREE.WebGLRenderer; bytes: Uint8Array; calls: number[][] } {
+export function stubGpu(texture: THREE.DataTexture, apply = true): { renderer: THREE.WebGLRenderer; bytes: Uint8Array; calls: number[][]; unpack: Map<number, number> } {
   const { width, data } = texture.image as { width: number; data: Uint8Array };
   const bytes = Uint8Array.from(data);
   const calls: number[][] = [];
@@ -71,11 +74,11 @@ export function stubGpu(texture: THREE.DataTexture, apply = true): { renderer: T
     UNPACK_FLIP_Y_WEBGL: 4,
     UNPACK_PREMULTIPLY_ALPHA_WEBGL: 5,
     UNPACK_ALIGNMENT: 6,
-    UNPACK_ROW_LENGTH: 7,
+    UNPACK_ROW_LENGTH: UNPACK_ROW_LENGTH,
     texSubImage2D: (_target: number, _level: number, x: number, y: number, w: number, h: number, _format: number, _type: number, src: Uint8Array, offset: number): void => {
       if (!apply) return;
       calls.push([x, y, w, h]);
-      const stride = (unpack.get(7) || w) * 4;
+      const stride = (unpack.get(UNPACK_ROW_LENGTH) || w) * 4;
       for (let r = 0; r < h; r++) bytes.set(src.subarray(offset + r * stride, offset + r * stride + w * 4), ((y + r) * width + x) * 4);
     },
   };
@@ -86,5 +89,5 @@ export function stubGpu(texture: THREE.DataTexture, apply = true): { renderer: T
     state: { bindTexture: () => undefined, pixelStorei: (name: number, value: number) => void unpack.set(name, value) },
   };
   texture.onUpdate?.(texture);
-  return { renderer: renderer as unknown as THREE.WebGLRenderer, bytes, calls };
+  return { renderer: renderer as unknown as THREE.WebGLRenderer, bytes, calls, unpack };
 }
