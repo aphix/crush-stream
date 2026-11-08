@@ -223,6 +223,19 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
   afterAll(() => void (SCRATCH_TIER.value = 1));
   const redraws = () => frameParts.count[COUNT.dentRedraws]!;
   const mask = () => wearOf(crushed.lookMeshes().bodyPaint);
+  /**
+   * A frame in which the crushed car is touched (a contact: its quiet is 0), so its crush plays out for the next `DENT_SETTLE_S` of the
+   * view's clock. The rows share the view, whose clock runs on from row to row, so a row that needs dents redrawn on a skin write
+   * stages its own touch rather than lean on how much clock the rows before it took.
+   */
+  const touchedFrame = (): void => {
+    const quiet = vi.spyOn(crushed.deform, "quietTime").mockReturnValue(0);
+    try {
+      view.frame(cars, DENT_REBUILD_S);
+    } finally {
+      quiet.mockRestore();
+    }
+  };
 
   it("when the masks are drawn, then the crushed car's dents (G) are up on its nose and nowhere on its tail or the rear of its flanks, and the car that never crashed samples no mask", () => {
     expect(Math.max(...dentsOn(crushed, SPRAY_FACE.front)), "the nose").toBeGreaterThan(0);
@@ -289,7 +302,7 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     stroke[V1] = 30;
     stroke[SEVERITY] = 255;
     crushed.scratches.load(stroke, 1);
-    view.frame(cars, DENT_REBUILD_S);
+    touchedFrame();
     const scratches = channelTexels(crushed, 0);
     const before = redraws();
     skinWritten(crushed);
@@ -317,7 +330,7 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
   });
 
   it("when its skin is written again and its dents are redrawn to the texels they had, then no call is sent", () => {
-    view.frame(cars, DENT_REBUILD_S);
+    touchedFrame();
     const gpu = stubGpu(mask());
     const before = redraws();
     skinWritten(crushed);
@@ -328,7 +341,7 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
   });
 
   it(`when its skin is written every frame for 1 s, then its dents are redrawn at most every ${DENT_REBUILD_S} s`, () => {
-    view.frame(cars, DENT_REBUILD_S);
+    touchedFrame();
     let drawn = 0;
     for (let i = 0; i < FRAME_HZ; i++) {
       const before = redraws();
