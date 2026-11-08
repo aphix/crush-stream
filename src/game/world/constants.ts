@@ -57,6 +57,8 @@ export const PREFAB = {
   parkedPickup: "parked-pickup",
   carhenge: "carhenge",
   junkCrane: "junk-crane",
+  coolingTower: "cooling-tower",
+  smokestack: "smokestack",
   sidewalk: "sidewalk",
   bush: "bush",
   flowers: "flowers",

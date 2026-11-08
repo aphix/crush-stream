@@ -3,7 +3,7 @@ import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { makeAsphalt, makeJerseyBarrier, makeLamp } from "./engine-world.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
-import { CARHENGE, CHEVRON, FENCE, JUNK_CRANE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, WRECK, type PrefabId } from "../world/catalog.ts";
+import { CARHENGE, CHEVRON, COOLING_TOWER, coolingTowerRadius, FENCE, JUNK_CRANE, MARBLE, OBELISK, obeliskHalf, SMOKESTACK, smokestackRadius, STAR_INNER, WRECK, type PrefabId } from "../world/catalog.ts";
 import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, type Skin, squareFrustum } from "./prefab-pieces.ts";
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
 import { frontBumper, lyingWheel, parkedCar } from "./prefabs-car.ts";
@@ -54,6 +54,12 @@ const C = {
   glassDark: 0x1f2226,
   craneYellow: 0xc79a1e,
   fire: 0xff7a1a,
+  towerLight: 0xbdb7aa,
+  towerDark: 0xb0aa9d,
+  towerBase: 0x8f8a80,
+  towerRim: 0xcfc9bc,
+  towerInner: 0x3a3733,
+  stackRed: 0xb3281e,
 };
 
 /** World metres per texture tile (mud: across the road, its ruts run along it). */
@@ -648,6 +654,62 @@ function junkCrane(): Piece[] {
   return out;
 }
 
+const TOWER_SIDES = 64;
+const TOWER_RINGS = 22;
+
+/** A lathe's uv in the concrete tile's metres: u in whole tiles round the turn (no seam), v along the profile; for the part of the turn from fraction `turn0` to `turn1`. */
+function latheUv(g: THREE.LatheGeometry, points: readonly THREE.Vector2[], turn0: number, turn1: number, reach: number): THREE.LatheGeometry {
+  const uv = g.getAttribute("uv") as THREE.BufferAttribute;
+  const rows = points.length;
+  const sides = uv.count / rows - 1;
+  const tiles = Math.max(1, Math.round((2 * Math.PI * reach) / TILE.concrete));
+  let along = 0;
+  for (let j = 0; j < rows; j++) {
+    if (j > 0) along += points[j]!.distanceTo(points[j - 1]!);
+    for (let i = 0; i <= sides; i++) uv.setXY(i * rows + j, (turn0 + ((turn1 - turn0) * i) / sides) * tiles, along / TILE.concrete);
+  }
+  return g;
+}
+
+/** A cooling tower: an intake plinth, the hyperboloid shell in ribs of two concrete tones, a rim, and a dark inner wall and floor seen over the open top. */
+function coolingTower(): Piece[] {
+  const { base, height, plinth, wall } = COOLING_TOWER;
+  const shell: THREE.Vector2[] = [];
+  for (let k = 0; k <= TOWER_RINGS; k++) {
+    const y = plinth + ((height - plinth) * k) / TOWER_RINGS;
+    shell.push(new THREE.Vector2(coolingTowerRadius(y), y));
+  }
+  const intake = [new THREE.Vector2(base, 0), new THREE.Vector2(base, plinth)];
+  const inner = shell.map((p) => new THREE.Vector2(p.x - wall, p.y)).reverse();
+  inner.push(new THREE.Vector2(base - wall, 0));
+  const rim = shell[TOWER_RINGS]!.x;
+  const out: Piece[] = [[latheUv(new THREE.LatheGeometry(intake, TOWER_SIDES), intake, 0, 1, base), C.towerBase, MAT.GRANDSTAND_CONCRETE]];
+  for (let s = 0; s < TOWER_SIDES; s++) {
+    const g = new THREE.LatheGeometry(shell, 1, (s * 2 * Math.PI) / TOWER_SIDES, (2 * Math.PI) / TOWER_SIDES);
+    out.push([latheUv(g, shell, s / TOWER_SIDES, (s + 1) / TOWER_SIDES, base), s % 2 ? C.towerDark : C.towerLight, MAT.GRANDSTAND_CONCRETE]);
+  }
+  out.push([uvAt(new THREE.RingGeometry(rim - wall, rim, TOWER_SIDES).rotateX(-Math.PI / 2).translate(0, height, 0), 0.3, 0.3), C.towerRim, MAT.GRANDSTAND_CONCRETE]);
+  out.push([latheUv(new THREE.LatheGeometry(inner, TOWER_SIDES), inner, 0, 1, base - wall), C.towerInner, MAT.GRANDSTAND_CONCRETE]);
+  out.push([uvAt(new THREE.CircleGeometry(base - wall, TOWER_SIDES).rotateX(-Math.PI / 2).translate(0, 0.1, 0), 0.3, 0.3), C.towerInner, MAT.GRANDSTAND_CONCRETE]);
+  return out;
+}
+
+const STACK_SIDES = 24;
+
+/** A smokestack: a concrete footing and shaft, red and white aviation bands over its top, a lip and a dark flue. */
+function smokestack(): Piece[] {
+  const { base, height, footing, lip, lipRise, banded, bands } = SMOKESTACK;
+  const plainTop = height - lipRise - banded;
+  const flat = (g: THREE.BufferGeometry): THREE.BufferGeometry => uvAt(g, 0.3, 0.3);
+  const part = (y0: number, y1: number, hex: number): Piece => [flat(cyl(smokestackRadius(y1), smokestackRadius(y0), y0, y1, STACK_SIDES, true)), hex, MAT.PILLAR_CONCRETE];
+  const out: Piece[] = [[flat(cyl(base, base, 0, footing, STACK_SIDES, true)), C.concreteDark, MAT.PILLAR_CONCRETE], part(footing, plainTop, C.concrete)];
+  for (let b = 0; b < bands; b++) out.push(part(plainTop + (banded * b) / bands, plainTop + (banded * (b + 1)) / bands, b % 2 ? C.white : C.stackRed));
+  const crown = smokestackRadius(height);
+  out.push([flat(cyl(crown, crown, height - lipRise, height, STACK_SIDES, true)), C.concreteDark, MAT.PILLAR_CONCRETE]);
+  out.push([flat(new THREE.CircleGeometry(crown - lip, STACK_SIDES).rotateX(-Math.PI / 2).translate(0, height, 0)), C.towerInner, MAT.PILLAR_CONCRETE]);
+  return out;
+}
+
 /** A paving slab (`PREFABS.sidewalk.size`): a light stone box, its top 6 cm proud of the ground. */
 function sidewalk(): Piece[] {
   return [[box(2.4, 0.06, 3.2, 0, 0.03, 0), C.concrete, MAT.CONCRETE]];
@@ -745,6 +807,10 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
       return [...one(carhenge(), mats.plain), firePool()];
     case PREFAB.junkCrane:
       return one(junkCrane(), mats.plain);
+    case PREFAB.coolingTower:
+      return one(coolingTower(), mats.concrete);
+    case PREFAB.smokestack:
+      return one(smokestack(), mats.concrete);
     case PREFAB.sidewalk:
       return [{ geometry: painted(sidewalk()), material: mats.paving, shared: false, shadow: false }];
     case PREFAB.bush:

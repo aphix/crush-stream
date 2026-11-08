@@ -87,6 +87,11 @@ const KIND_TOL: Partial<Record<PrefabId, number>> = {
   "garfield-monument": 0.01,
   // The pole's 12 sides inside its circle; the canton standing proud of the stripes.
   flagpole: 0.01,
+  // The 64-sided plinth's flats inside its circle (0.0198 measured).
+  // mutation: sed -i 's/"cooling-tower": 0.02/"cooling-tower": 0/' src/game/world/collider-drawn.test.ts
+  "cooling-tower": 0.02,
+  // The 24-sided footing's corners are the ring's points: float noise only.
+  smokestack: 0.001,
   // A flat sprite stands in the middle of its thick collider: the box's faces are half its depth off the drawn quad.
   // mutation: sed -i 's/"asset-standee": 0.51/"asset-standee": 0/' src/game/world/collider-drawn.test.ts
   "asset-standee": 0.51,

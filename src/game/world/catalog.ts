@@ -90,6 +90,8 @@ export const PREFAB_IDS = [
   PREFAB.parkedPickup,
   PREFAB.carhenge,
   PREFAB.junkCrane,
+  PREFAB.coolingTower,
+  PREFAB.smokestack,
   PREFAB.sidewalk,
   PREFAB.bush,
   PREFAB.flowers,
@@ -348,6 +350,50 @@ export const CARHENGE = { ring: 8.5, pairs: 5, gap: 2.6 } as const;
 const CARHENGE_REACH = hypot2(CARHENGE.ring + WRECK.wide / 2, WRECK.long / 2);
 /** The junkyard crane (m): its top `height` over the ground, the boom's tip `reach` out along +X, the wreck heap `heap` round the tower. */
 export const JUNK_CRANE = { height: 18.5, reach: 12.5, heap: 6 } as const;
+
+/** The plant's cooling tower (m): a vertical intake `plinth` of radius `base`, then a hyperboloid shell narrowing to `waist` at `waistAt` of `height` and flaring to the open top. */
+export const COOLING_TOWER = { base: 18.5, waist: 12, height: 50, waistAt: 0.7, plinth: 4, wall: 0.8 } as const;
+/** Heights (m) where the tower's collider changes circle. */
+const COOLING_TOWER_BANDS = [0, 4, 6, 9, 13, 18, 25, 33, 50] as const;
+
+/** The tower's outer radius (m) at height y. */
+export function coolingTowerRadius(y: number): number {
+  const { base, waist, height, waistAt, plinth } = COOLING_TOWER;
+  if (y <= plinth) return base;
+  const yw = height * waistAt;
+  const k2 = (base * base - waist * waist) / ((yw - plinth) * (yw - plinth));
+  return Math.sqrt(waist * waist + k2 * (y - yw) * (y - yw));
+}
+
+/** One circle per band, as wide as the shell is at its widest end (the hyperbola's minimum is the waist, so the widest is always an end). */
+function coolingTowerPlan(): Collider[] {
+  return COOLING_TOWER_BANDS.slice(0, -1).map((y0, i): Collider => {
+    const y1 = COOLING_TOWER_BANDS[i + 1]!;
+    return { kind: "circle", r: Math.max(coolingTowerRadius(y0), coolingTowerRadius(y1)), y0, y1 };
+  });
+}
+
+/** The plant's smokestack (m): a vertical footing of radius `base` to `footing`, a shaft tapering to `top` at `height` less `lipRise`, a lip `lip` wider to the crown, red and white bands over its top `banded`. */
+export const SMOKESTACK = { base: 2.6, top: 1.8, height: 66, footing: 3, lip: 0.25, lipRise: 2.4, banded: 18, bands: 6 } as const;
+/** Heights (m) where the stack's collider changes circle. */
+const SMOKESTACK_BANDS = [0, 3, 10, 24, 44, 66] as const;
+
+/** The stack's outer radius (m) at height y: the footing, the straight taper, then the lip. */
+export function smokestackRadius(y: number): number {
+  const { base, top, height, footing, lip, lipRise } = SMOKESTACK;
+  const shaftTop = height - lipRise;
+  if (y <= footing) return base;
+  if (y >= shaftTop) return top + lip;
+  return base + ((top - base) * (y - footing)) / (shaftTop - footing);
+}
+
+function smokestackPlan(): Collider[] {
+  return SMOKESTACK_BANDS.slice(0, -1).map((y0, i): Collider => {
+    const y1 = SMOKESTACK_BANDS[i + 1]!;
+    return { kind: "circle", r: Math.max(smokestackRadius(y0), smokestackRadius(y1)), y0, y1 };
+  });
+}
+
 /** The Carhenge's top (m): an upright's length, then the shell across it. */
 const CARHENGE_TOP = WRECK.long + WRECK.tall;
 
@@ -664,6 +710,8 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.parkedPickup]: parkedSpec(PARKED_CARS[4]),
   carhenge: { body: "none", collider: [], foot: CARHENGE_REACH, size: [CARHENGE_REACH * 2, CARHENGE_TOP, CARHENGE_REACH * 2], mass: 0, material: MAT.DUMPSTER_STEEL },
   [PREFAB.junkCrane]: { body: "none", collider: [], foot: JUNK_CRANE.reach, size: [JUNK_CRANE.reach * 2, JUNK_CRANE.height, JUNK_CRANE.heap * 2], mass: 0, material: MAT.GANTRY_LATTICE },
+  [PREFAB.coolingTower]: { body: "solid", collider: coolingTowerPlan(), foot: COOLING_TOWER.base, size: [COOLING_TOWER.base * 2, COOLING_TOWER.height, COOLING_TOWER.base * 2], mass: 0, material: MAT.GRANDSTAND_CONCRETE },
+  [PREFAB.smokestack]: { body: "solid", collider: smokestackPlan(), foot: SMOKESTACK.base, size: [SMOKESTACK.base * 2, SMOKESTACK.height, SMOKESTACK.base * 2], mass: 0, material: MAT.PILLAR_CONCRETE },
   // The scenery service's ground dressing (`scenery.ts`): drawn only. A sidewalk slab is flush paving (width across the road, length along it); a bush and a flower bed poof under a car.
   [PREFAB.sidewalk]: { body: "none", collider: [], foot: 0, size: [2.4, 0.06, 3.2], mass: 0, material: MAT.JERSEY_CONCRETE },
   [PREFAB.bush]: { body: "none", collider: [], foot: 0, size: [1.4, 1, 1.4], mass: 0, material: MAT.CONIFER_FOLIAGE },

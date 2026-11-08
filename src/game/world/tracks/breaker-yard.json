@@ -169,12 +169,12 @@
   },
   "props": [
     {
-      "prefab": "monument",
+      "prefab": "cooling-tower",
       "x": 250,
       "z": -42
     },
     {
-      "prefab": "monument",
+      "prefab": "cooling-tower",
       "x": 355,
       "z": -48
     },
@@ -182,20 +182,31 @@
       "prefab": "building",
       "x": 145,
       "z": -52,
-      "yaw": 0.3
+      "size": [
+        54,
+        16,
+        26
+      ]
     },
     {
       "prefab": "building",
       "x": 430,
       "z": -58,
-      "yaw": 1.1
+      "size": [
+        60,
+        18,
+        28
+      ]
     },
     {
       "prefab": "building",
       "x": 300,
       "z": -58,
-      "yaw": 0.15,
-      "scale": 1.15
+      "size": [
+        38,
+        14,
+        22
+      ]
     },
     {
       "prefab": "dumpster",
@@ -412,6 +423,369 @@
       "x": 483.9,
       "z": -73.8,
       "yaw": 4.252
+    },
+    {
+      "prefab": "smokestack",
+      "x": 96,
+      "z": -46
+    },
+    {
+      "prefab": "building",
+      "x": 380,
+      "z": -385,
+      "size": [
+        64,
+        16,
+        28
+      ]
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.6,
+      "z": -215,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 585.5,
+      "z": -221.6,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.9,
+      "z": -229.2,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.9,
+      "z": -237.2,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 585.5,
+      "z": -246,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.3,
+      "z": -254.2,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.1,
+      "z": -262.9,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 585.5,
+      "z": -269.2,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 585.9,
+      "z": -277.9,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 585,
+      "z": -285.2,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.9,
+      "z": -293.8,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.8,
+      "z": -302.7,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 585.9,
+      "z": -309,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 585.2,
+      "z": -318.5,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.8,
+      "z": -325.1,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.6,
+      "z": -334.1,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 585.1,
+      "z": -342.9,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586,
+      "z": -350.5,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.7,
+      "z": -357.4,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.6,
+      "z": -366.4,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.5,
+      "z": -374.5,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 586.9,
+      "z": -381.4,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "barrier-block",
+      "x": 585.7,
+      "z": -390.6,
+      "yaw": 3.142
+    },
+    {
+      "prefab": "crate",
+      "x": 603.2,
+      "z": -144.2,
+      "yaw": 1.978,
+      "scale": 2.28
+    },
+    {
+      "prefab": "crate",
+      "x": 615.3,
+      "z": -148,
+      "yaw": 4.53,
+      "scale": 2.13
+    },
+    {
+      "prefab": "crate",
+      "x": 604.6,
+      "z": -151.3,
+      "yaw": 2.757,
+      "scale": 1.51
+    },
+    {
+      "prefab": "crate",
+      "x": 634.2,
+      "z": -147.5,
+      "yaw": 0.006,
+      "scale": 2.33
+    },
+    {
+      "prefab": "crate",
+      "x": 599.1,
+      "z": -151,
+      "yaw": 1.097,
+      "scale": 1.56
+    },
+    {
+      "prefab": "crate",
+      "x": 620.6,
+      "z": -202.5,
+      "yaw": 5.682,
+      "scale": 2.08
+    },
+    {
+      "prefab": "crate",
+      "x": 600.1,
+      "z": -199.7,
+      "yaw": 1.784,
+      "scale": 1.75
+    },
+    {
+      "prefab": "crate",
+      "x": 616.2,
+      "z": -192.7,
+      "yaw": 1.63,
+      "scale": 2.08
+    },
+    {
+      "prefab": "crate",
+      "x": 592.9,
+      "z": -210.2,
+      "yaw": 1.476,
+      "scale": 2.01
+    },
+    {
+      "prefab": "crate",
+      "x": 625.5,
+      "z": -200.1,
+      "yaw": 3.467,
+      "scale": 1.83
+    },
+    {
+      "prefab": "crate",
+      "x": 597.5,
+      "z": -253.9,
+      "yaw": 3.899,
+      "scale": 2.21
+    },
+    {
+      "prefab": "crate",
+      "x": 600.1,
+      "z": -234.8,
+      "yaw": 2.717,
+      "scale": 1.68
+    },
+    {
+      "prefab": "crate",
+      "x": 609.2,
+      "z": -234.9,
+      "yaw": 0.563,
+      "scale": 2.26
+    },
+    {
+      "prefab": "crate",
+      "x": 625.2,
+      "z": -239,
+      "yaw": 1.69,
+      "scale": 1.81
+    },
+    {
+      "prefab": "crate",
+      "x": 609.3,
+      "z": -242,
+      "yaw": 0.06,
+      "scale": 1.96
+    },
+    {
+      "prefab": "crate",
+      "x": 593,
+      "z": -286.1,
+      "yaw": 3.07,
+      "scale": 1.77
+    },
+    {
+      "prefab": "crate",
+      "x": 609.1,
+      "z": -276.2,
+      "yaw": 0.573,
+      "scale": 1.44
+    },
+    {
+      "prefab": "crate",
+      "x": 602.3,
+      "z": -278.6,
+      "yaw": 1.39,
+      "scale": 1.73
+    },
+    {
+      "prefab": "crate",
+      "x": 613.7,
+      "z": -287.3,
+      "yaw": 2.24,
+      "scale": 2.2
+    },
+    {
+      "prefab": "crate",
+      "x": 596.6,
+      "z": -296.3,
+      "yaw": 5.623,
+      "scale": 2.37
+    },
+    {
+      "prefab": "crate",
+      "x": 606.6,
+      "z": -327.5,
+      "yaw": 4.092,
+      "scale": 2.01
+    },
+    {
+      "prefab": "crate",
+      "x": 621.4,
+      "z": -328.2,
+      "yaw": 2.909,
+      "scale": 1.51
+    },
+    {
+      "prefab": "crate",
+      "x": 590.6,
+      "z": -317.4,
+      "yaw": 3.188,
+      "scale": 1.65
+    },
+    {
+      "prefab": "crate",
+      "x": 613,
+      "z": -325.9,
+      "yaw": 1.003,
+      "scale": 2.26
+    },
+    {
+      "prefab": "crate",
+      "x": 634.2,
+      "z": -313.7,
+      "yaw": 2.545,
+      "scale": 1.99
+    },
+    {
+      "prefab": "crate",
+      "x": 612.3,
+      "z": -357.1,
+      "yaw": 1.282,
+      "scale": 1.59
+    },
+    {
+      "prefab": "crate",
+      "x": 632.8,
+      "z": -365.9,
+      "yaw": 3.448,
+      "scale": 2.08
+    },
+    {
+      "prefab": "crate",
+      "x": 597.8,
+      "z": -370.2,
+      "yaw": 2.524,
+      "scale": 1.56
+    },
+    {
+      "prefab": "crate",
+      "x": 608.8,
+      "z": -356.5,
+      "yaw": 1.367,
+      "scale": 1.68
+    },
+    {
+      "prefab": "crate",
+      "x": 625.2,
+      "z": -358.9,
+      "yaw": 1.556,
+      "scale": 1.72
     }
   ],
   "along": [

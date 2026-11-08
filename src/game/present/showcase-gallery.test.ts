@@ -16,11 +16,11 @@ const NON_UNIQUE: readonly string[] = [
   PREFAB.grandstand, PREFAB.fountain, PREFAB.building, PREFAB.stucco, PREFAB.bush, PREFAB.flowers, PREFAB.sidewalk,
   PREFAB.parkedSedan, PREFAB.parkedHatchback, PREFAB.parkedWagon, PREFAB.parkedCoupe, PREFAB.parkedPickup,
 ];
-/** One-of-a-kind landmarks, the two pools too big for the disc, the car parts the number keys throw (`THROWN_KINDS`), the figure-8's junkyard (its shells, Carhenge, crane) and the generic asset kinds (one per way of drawing, the placement picks the sprite; the asset rows stand them): not gallery prefabs. */
+/** One-of-a-kind landmarks, the two pools too big for the disc, the car parts the number keys throw (`THROWN_KINDS`), the figure-8's junkyard (its shells, Carhenge, crane), the plant's cooling tower and smokestack, and the generic asset kinds (one per way of drawing, the placement picks the sprite; the asset rows stand them): not gallery prefabs. */
 const EXCLUDED: readonly string[] = [
   PREFAB.obelisk, PREFAB.capitol, PREFAB.whiteHouse, PREFAB.lincoln, PREFAB.capitolPool, PREFAB.marble, PREFAB.monument,
   PREFAB.grantMemorial, PREFAB.peaceMonument, PREFAB.garfieldMonument, PREFAB.pool, PREFAB.basin,
-  PREFAB.muscleBumper, PREFAB.monsterWheel, PREFAB.carWheel, PREFAB.wreck, PREFAB.carhenge, PREFAB.junkCrane,
+  PREFAB.muscleBumper, PREFAB.monsterWheel, PREFAB.carWheel, PREFAB.wreck, PREFAB.carhenge, PREFAB.junkCrane, PREFAB.coolingTower, PREFAB.smokestack,
 
   PREFAB.assetCard, PREFAB.assetStandee, PREFAB.assetCross, PREFAB.assetCrossSolid, PREFAB.assetDecal, PREFAB.assetTile, PREFAB.assetBox, PREFAB.assetBoxSolid,
 ];
