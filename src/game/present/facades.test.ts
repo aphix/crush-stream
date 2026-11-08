@@ -140,7 +140,8 @@ describe("given a building built in each facade style", () => {
     let reach = 0;
     for (let i = 0; i < region.count; i++) {
       const roofTop = klass.getX(i) === MAT.BUILDING_ROOF;
-      const parapet = !roofTop && position.getY(i) > ROOFLINE - 0.3;
+      // The cornice's top edge is at the roofline too: the parapet is the roof slab's sides, the floor layer's bare patch above it.
+      const parapet = !roofTop && region.getX(i) === LAYER.floor && position.getY(i) > ROOFLINE - 0.3;
       expect(region.getZ(i), `vertex ${i}: ${roofTop ? "roof top" : parapet ? "parapet" : "wall"}`).toBe(parapet ? 0 : 1);
       if (!roofTop && !parapet && normal.getZ(i) > 0.5) grounds.add(region.getX(i));
       reach = Math.max(reach, Math.abs(position.getX(i)), Math.abs(position.getZ(i)));
