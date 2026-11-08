@@ -219,7 +219,8 @@ const MOTTLE_LO = 0.9;
 const MOTTLE_SPAN = 0.2;
 /**
  * A road strip of the same surface as the terrain round it (dirt on dirt) is the same colour and texture as the ground, so 720 m of Razor Shelf's
- * dirt cut read as open desert: it is drawn a half span under the darkest mottle. The wide-scale tint (ribbons take none) can still darken the ground to the strip's level in its darkest cells.
+ * dirt cut read as open desert: it is drawn a half span under the darkest mottle. Natural strips take the ground's wide-scale tint too (`applyMacro`), so
+ * the strip keeps that margin against the ground beside it in every tint cell.
  */
 export const ROAD_ON_TERRAIN_SHADE = MOTTLE_LO - MOTTLE_SPAN / 2;
 
@@ -306,6 +307,24 @@ export function applyMottle(material: THREE.MeshStandardMaterial): void {
       .replace("#include <color_fragment>", `#include <color_fragment>\ndiffuseColor.rgb *= mottle(vMottlePos.xz) * pitShade(vMottlePos.y) * ${tint};`);
   };
   material.customProgramCacheKey = () => `${prevKey.call(material)}|mottle${natural ? "-macro" : ""}`;
+  material.needsUpdate = true;
+}
+
+/** A natural-surface road or run-off strip takes the ground's wide-scale `macroTint` (no mottle, no pit shade), so it darkens and warms with the terrain beside it; paved strips keep one colour. */
+export function applyMacro(material: THREE.MeshStandardMaterial): void {
+  if (PAVED_MATERIALS.includes(material.userData.materialClass as MaterialId)) return;
+  const prev = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey;
+  material.onBeforeCompile = (shader, renderer) => {
+    prev.call(material, shader, renderer);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vMacroPos;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMacroPos = transformed;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>\nvarying vec3 vMacroPos;${MACRO_GLSL}`)
+      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= macroTint(vMacroPos.xz);");
+  };
+  material.customProgramCacheKey = () => `${prevKey.call(material)}|macro`;
   material.needsUpdate = true;
 }
 

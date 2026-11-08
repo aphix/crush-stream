@@ -5,7 +5,7 @@ import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
 import { MAT, MATERIALS } from "../kernel/material-ids.ts";
 import { MATERIAL_ATTRIBUTE, tagMaterial } from "../vehicle/material-class.ts";
 import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
-import { applyMottle, cellMaterial, FLAT_TOL, Mesher, RoadIndex } from "./track-mesh.ts";
+import { applyMacro, applyMottle, cellMaterial, FLAT_TOL, Mesher, RoadIndex } from "./track-mesh.ts";
 import { sections } from "../world/track-sections.ts";
 import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
 import { must } from "../kernel/must.test-util.ts";
@@ -504,6 +504,19 @@ describe("given a terrain material patched with the mottle shader", () => {
     expect(paved.fragment).toContain("pitShade(vMottlePos.y)");
     expect(paved.fragment, "a plaza stays one colour").not.toContain("macroTint(vMottlePos.xz)");
     expect(paved.key).not.toBe(compile("dirt").key);
+  });
+
+  it("when a road or run-off strip of the same natural surface is patched, then it takes the same wide-scale tint as the ground beside it, and a paved strip takes none", () => {
+    // mutation: sed -i 's/  if (PAVED_MATERIALS.includes(material.userData.materialClass as MaterialId)) return;/  return;/' src/game/present/track-mesh.ts  (no strip takes the tint)
+    const strip = (surface: keyof typeof SURFACES) => {
+      const material = tagMaterial(new THREE.MeshStandardMaterial(), SURFACES[surface].ribbon);
+      applyMacro(material);
+      const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\n#include <color_fragment>" } as THREE.WebGLProgramParametersWithUniforms;
+      material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+      return shader.fragmentShader;
+    };
+    expect(strip("dirt"), "a dirt strip varies with the dirt plain").toContain("macroTint(vMacroPos.xz)");
+    expect(strip("asphalt"), "asphalt stays one colour").not.toContain("macroTint");
   });
 });
 
