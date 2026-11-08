@@ -11,8 +11,8 @@ import { bushParts, flowerParts } from "./prefabs-foliage.ts";
 import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMaterials } from "./scenery-assets-art.ts";
 import { PREFAB } from "../world/constants.ts";
 import { dressPaving } from "./ground-relief.ts";
-import { buildingPieces } from "./facade-mesh.ts";
-import { disposeFacadeMaterials, homeStyle, makeFacadeMaterials } from "./facades.ts";
+import { buildingPieces, HALF as BLOCK_HALF } from "./facade-mesh.ts";
+import { disposeFacadeMaterials, type FacadeStyle, homeStyle, makeFacadeMaterials } from "./facades.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { applyWaterLook } from "./water-look.ts";
@@ -428,6 +428,12 @@ function marble(): Piece[] {
   ];
 }
 
+/** A museum slab: a block in facade `style` on the marble body's footprint (the collider's), its layers laid in the instance's own metres. */
+function marbleSlab(style: FacadeStyle, mats: PrefabMaterials): PrefabPart[] {
+  const reach = MARBLE.body.half / BLOCK_HALF;
+  return [{ geometry: painted(buildingPieces(style, MAT.BUILDING_WALL, true)).scale(reach, 1, reach), material: mats.facades[style], shared: false }];
+}
+
 function fence(): Piece[] {
   const { kerb, rails, post } = FENCE;
   return [
@@ -690,7 +696,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.capitol:
       return one(capitol(), mats.plain);
     case PREFAB.marble:
-      return one(marble(), mats.plain);
+      return style ? marbleSlab(style, mats) : one(marble(), mats.plain);
     case PREFAB.whiteHouse:
       return one(whiteHouse(), mats.plain);
     case PREFAB.fountain:

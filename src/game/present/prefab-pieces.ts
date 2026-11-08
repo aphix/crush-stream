@@ -33,8 +33,8 @@ export type Skin = FacadeStyle | AssetFamily | null;
 /** One drawable part of a prefab: its geometry, its material, whether the material is shared with the track art, and whether it casts a shadow (default: yes; ground cover and flat paving do not). */
 export type PrefabPart = { geometry: THREE.BufferGeometry; material: THREE.Material; shared: boolean; shadow?: boolean };
 
-/** Which layer of a layered texture a piece reads (negative: the roof covering, picked per building) and how much of its normal map it keeps (1: all). */
-export type SurfaceRegion = readonly [layer: number, relief: number];
+/** Which layer of a layered texture a piece reads (negative: the roof covering, picked per building), how much of its normal map it keeps (1: all), and whether its uv is laid in the instance's own metres (1) or the block's (0, default). */
+export type SurfaceRegion = readonly [layer: number, relief: number, metres: number];
 
 /** A coloured piece: geometry already in prefab space, its sRGB colour, its `MaterialId` (unset: the material's own) and its texture region (unset: layer 0, full relief). */
 export type Piece = [THREE.BufferGeometry, number, MaterialId?, SurfaceRegion?];
@@ -58,9 +58,9 @@ export function painted(pieces: readonly Piece[]): THREE.BufferGeometry {
     n.setAttribute("color", new THREE.BufferAttribute(c, 3));
     if (classed) n.setAttribute(MATERIAL_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(count).fill(materialClass ?? MAT.GENERIC), 1));
     if (regioned) {
-      const regions = new Float32Array(count * 2);
-      for (let i = 0; i < count; i++) regions.set(region ?? [0, 1], i * 2);
-      n.setAttribute(SURFACE_REGION_ATTRIBUTE, new THREE.BufferAttribute(regions, 2));
+      const regions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) regions.set(region ?? [0, 1, 0], i * 3);
+      n.setAttribute(SURFACE_REGION_ATTRIBUTE, new THREE.BufferAttribute(regions, 3));
     }
     return n;
   });

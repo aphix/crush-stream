@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { detAtan2 } from "../kernel/physics-core.js";
 import { applyMarkMap } from "./engine-marks.ts";
 import type { WorldStage } from "./engine-world.ts";
-import { PARKED_PREFABS, SURFACE_IDS, SURFACES, type PrefabId, type SurfaceId } from "../world/catalog.ts";
+import { PARKED_PREFABS, PREFABS, SURFACE_IDS, SURFACES, type PrefabId, type SurfaceId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
 import { PREFAB, SURFACE, type BiomeId } from "../world/constants.ts";
 import { box, painted, type Piece, type PrefabMaterials, type Skin } from "./prefab-pieces.ts";
@@ -224,7 +224,7 @@ export class TrackArt {
         if (GROUND_ASSET_PREFABS.includes(id)) mesh.renderOrder = levelOrder(GROUND_LEVEL.decal);
       },
       (id, i, out, skin) => this.tint(id, i, out, skin),
-      (p) => (p.asset === undefined ? facadeStyle(p.prefab, p.x, p.z, this.biome(p.x, p.z)) : SCENERY_ASSETS[p.asset]!.family),
+      (p) => (p.asset === undefined ? facadeStyle(p.prefab, p.x, p.z, this.biome(p.x, p.z), Math.max(p.sx, p.sz) * PREFABS[p.prefab].size[0], p.sy * PREFABS[p.prefab].size[1]) : SCENERY_ASSETS[p.asset]!.family),
     );
   }
 

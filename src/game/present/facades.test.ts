@@ -3,16 +3,18 @@ import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { TIME_OF_DAY } from "../match/types.ts";
+import { MARBLE, PREFABS } from "../world/catalog.ts";
 import { PREFAB, TRACK_ID } from "../world/constants.ts";
 import { placeCourse } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
-import { FACADE, FACADE_GLOW, FACADE_LAYERS, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, ROOF_LAYER, ROOFLINE } from "./facades.ts";
+import { FACADE, FACADE_GLOW, FACADE_LAYERS, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, ROOF_LAYER, ROOFLINE, SLAB_STYLE } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { disposePrefabMaterials, makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { TrackArt } from "./track-art.ts";
+import { drawCell } from "./track-mesh.ts";
 import { publicWebpSize } from "./webp-size.test-util.ts";
 
 const STYLES = Object.keys(FACADE) as FacadeStyle[];
@@ -43,6 +45,15 @@ describe("given the buildings of a course in a biome", () => {
   it("when a stucco block or a prop that is no building is asked, then the block is stucco in any biome and the prop has no style", () => {
     expect(facadeStyle(PREFAB.stucco, 3, 4, "desert")).toBe("stucco");
     expect(facadeStyle(PREFAB.tree, 3, 4, "city")).toBeNull();
+  });
+
+  // mutation: sed -i 's/span >= SLAB_MIN_SPAN \&\& height >= SLAB_MIN_HEIGHT/span >= 0 \&\& height >= 0/' src/game/present/facades.ts
+  it("when a marble block is asked, then a wide tall one is a slab in the DC limestone style and a narrow, a low or an unsized one has no style", () => {
+    expect(facadeStyle(PREFAB.marble, 0, 0, "none", 240, 24)).toBe(SLAB_STYLE);
+    expect(SLAB_STYLE, "limestone, no corner stones to stretch").toBe("federal");
+    expect(facadeStyle(PREFAB.marble, 0, 0, "none", 20, 24), "a narrow block").toBeNull();
+    expect(facadeStyle(PREFAB.marble, 0, 0, "none", 240, 5), "a low block").toBeNull();
+    expect(facadeStyle(PREFAB.marble, 0, 0, "none"), "no size given").toBeNull();
   });
 });
 
@@ -117,6 +128,30 @@ describe("given a building built in each facade style", () => {
     });
   }
 
+  // mutation: sed -i 's/\[LAYER.floor, 1, 0\]\], \[top/[LAYER.floor, 1, 1]], [top/' src/game/present/facade-mesh.ts
+  it("when a marble slab is built, then every wall and the roof top are laid in the instance's metres but the parapet's bare patch is not, on the marble body's footprint, and a plain marble block stays plain", () => {
+    const [slab] = prefabParts(PREFAB.marble, materials, SLAB_STYLE);
+    const [block] = prefabParts(PREFAB.building, materials, SLAB_STYLE);
+    const region = slab!.geometry.getAttribute("surfaceRegion");
+    const position = slab!.geometry.getAttribute("position");
+    const normal = slab!.geometry.getAttribute("normal");
+    const klass = slab!.geometry.getAttribute("materialClass");
+    const grounds = new Set<number>();
+    let reach = 0;
+    for (let i = 0; i < region.count; i++) {
+      const roofTop = klass.getX(i) === MAT.BUILDING_ROOF;
+      const parapet = !roofTop && position.getY(i) > ROOFLINE - 0.3;
+      expect(region.getZ(i), `vertex ${i}: ${roofTop ? "roof top" : parapet ? "parapet" : "wall"}`).toBe(parapet ? 0 : 1);
+      if (!roofTop && !parapet && normal.getZ(i) > 0.5) grounds.add(region.getX(i));
+      reach = Math.max(reach, Math.abs(position.getX(i)), Math.abs(position.getZ(i)));
+    }
+    expect(grounds.has(LAYER.ground), "the long face has the ground band").toBe(true);
+    expect(reach, "the footprint of the marble body").toBeCloseTo(MARBLE.body.half, 3);
+    const blockRegion = block!.geometry.getAttribute("surfaceRegion");
+    for (let i = 0; i < blockRegion.count; i++) expect(blockRegion.getZ(i), "a building keeps the block's uv").toBe(0);
+    expect(prefabParts(PREFAB.marble, materials)[0]!.material, "no style, the plain block").toBe(materials.plain);
+  });
+
   it("when a block's storeys are measured, then a storey layer spans its own metres: the band's v is a whole number of storeys, and a side wall's relief is half the street's", () => {
     const [part] = prefabParts(PREFAB.building, materials, "dc");
     const geometry = part!.geometry;
@@ -158,7 +193,9 @@ describe("given the facade materials", () => {
     expect(shader.fragmentShader, "the relief share of the region").toContain("normalScale * vFacadeRegion.y");
     expect(shader.fragmentShader, "no plain normal read left").not.toContain("texture2D( normalMap");
     expect(shader.fragmentShader, "the plain emissive map step is replaced").not.toContain("#include <emissivemap_fragment>");
-    expect(shader.vertexShader, "the region attribute").toContain("attribute vec2 surfaceRegion");
+    expect(shader.vertexShader, "the region attribute, its third number the slab's metres").toContain("attribute vec3 surfaceRegion");
+    expect(shader.uniforms.facadeBays!.value, "a face's bays, for a slab's whole number of them").toBe(FACADE_LAYERS.prague.bays);
+    expect(shader.vertexShader, "a slab's uv laid in the instance's scale").toContain("surfaceRegion.z > 0.5");
   });
 });
 
@@ -179,6 +216,27 @@ describe("given the National Mall's art", () => {
     for (const mesh of meshes) {
       if (mesh instanceof THREE.Mesh && mesh.castShadow) expect(mesh.customDepthMaterial?.customProgramCacheKey(), "a building's shadow is drawn with the lift").toBe("facade-depth");
     }
+  });
+
+  // mutation: sed -i 's/SLAB_MIN_SPAN = 25/SLAB_MIN_SPAN = 1e9/' src/game/present/facades.ts
+  it("when its marble blocks are drawn, then every museum slab stands in one federal mesh per draw cell", () => {
+    stubBrowser();
+    const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
+    const course = placeCourse(track);
+    const art = new TrackArt(track, course.placed, new WorldStage(new THREE.Scene()), course.drawn);
+    const [width, height] = PREFABS.marble.size;
+    const slabs = course.placed.filter((p) => p.prefab === PREFAB.marble && facadeStyle(p.prefab, p.x, p.z, "none", Math.max(p.sx, p.sz) * width!, p.sy * height!) === SLAB_STYLE);
+    expect(slabs.length, "the Mall's museum slabs").toBeGreaterThan(20);
+    const cells = new Set(slabs.map((p) => drawCell(p.x, p.z)));
+    let drawn = 0;
+    let meshes = 0;
+    art.group.traverse((o) => {
+      if (o.name !== `prop:${PREFAB.marble}` || !(o instanceof THREE.InstancedMesh) || o.material.userData.facadeStyle !== SLAB_STYLE) return;
+      meshes++;
+      drawn += o.count;
+    });
+    expect(drawn, "every slab an instance of a federal mesh").toBe(slabs.length);
+    expect(meshes, "one mesh per draw cell the slabs stand in").toBe(cells.size);
   });
 });
 

@@ -86,8 +86,14 @@ export function homeStyle(prefab: PrefabId): FacadeStyle | null {
   return FACADE_STYLES.find((style) => FACADE[style].home === prefab) ?? null;
 }
 
-/** The style prefab `prefab` stands in at (x, z) in `biome`: only a `building` is picked by its position (so a row's neighbours differ and no placement moves another's); any other prefab has its home style, or none. */
-export function facadeStyle(prefab: PrefabId, x: number, z: number, biome: BiomeId): FacadeStyle | null {
+/** A museum slab: a `marble` block this wide (m, along its long side) and this tall at its placed size is drawn as a block in `SLAB_STYLE`, its layers laid in the slab's own metres. */
+const SLAB_MIN_SPAN = 25;
+const SLAB_MIN_HEIGHT = 12;
+export const SLAB_STYLE: FacadeStyle = "federal";
+
+/** The style prefab `prefab` stands in at (x, z) in `biome`: only a `building` is picked by its position (so a row's neighbours differ and no placement moves another's); a `marble` block is a slab (`span` and `height` its placed size, m) or has no style; any other prefab has its home style, or none. */
+export function facadeStyle(prefab: PrefabId, x: number, z: number, biome: BiomeId, span = 0, height = 0): FacadeStyle | null {
+  if (prefab === PREFAB.marble) return span >= SLAB_MIN_SPAN && height >= SLAB_MIN_HEIGHT ? SLAB_STYLE : null;
   if (prefab !== PREFAB.building) return homeStyle(prefab);
   let pick = hash01(Math.round(x) * 7919 + Math.round(z) * 104729, 31) * FACADE_STYLES.reduce((sum, style) => sum + FACADE[style].mix[biome], 0);
   for (const style of FACADE_STYLES) {
@@ -178,7 +184,8 @@ const roofTextures = once((): RoofTextures => {
  * A roof top (`ROOF_LAYER`) takes its colour and normal from the roof strips, one covering per building by the same seed; the top of the slab is raised by a per-building lift.
  */
 const FACADE_VERTEX = /* glsl */ `
-attribute vec2 ${SURFACE_REGION_ATTRIBUTE};
+attribute vec3 ${SURFACE_REGION_ATTRIBUTE};
+uniform float facadeBays;
 flat varying vec2 vFacadeRegion;
 varying float vFacadeSeed;`;
 /** The parapet lift, shared by the colour pass and the sun's shadow pass (a shadow that missed it would fall up to 2.8 m short): taken before the class tag's grain point, which follows it. */
@@ -188,8 +195,34 @@ float facadeBuilding = fract(dot(instanceMatrix[3].xz, vec2(0.0791, 0.1137)));
 const float facadeLifts[5] = float[5](${ROOF_LIFTS.map((m) => m.toFixed(1)).join(", ")});
 transformed.y += facadeLifts[int(fract(facadeBuilding * 5.7 + 0.3) * 5.0)] * step(13.9, transformed.y);
 #endif`;
+/**
+ * A slab's uv (the region's third number) is the block's, stretched by the instance's scale: laid again in its metres. A wall's bays keep their width (a whole number of them
+ * along the face), its storeys their height (a whole number of them up it, which the cornice and the ground band, stretched with the instance, do not take part in); a roof top's tiles keep theirs.
+ */
+const FACADE_METRES = /* glsl */ `
+#ifdef USE_INSTANCING
+if (surfaceRegion.z > 0.5 && surfaceRegion.x < 2.5) {
+  vec3 facadeScale = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+  float facadeAlong = abs(objectNormal.z) > 0.5 ? facadeScale.x : facadeScale.z;
+  vec2 facadeUv = uv;
+  if (surfaceRegion.x < 0.0) facadeUv *= facadeScale.xz;
+  else {
+    facadeUv.x *= max(1.0, floor(facadeAlong * facadeBays + 0.5) / facadeBays);
+    if (abs(surfaceRegion.x - 1.0) < 0.5) facadeUv.y = step(0.5, uv.y) * max(1.0, floor(uv.y * facadeScale.y + 0.5));
+  }
+  #ifdef USE_MAP
+  vMapUv = facadeUv;
+  #endif
+  #ifdef USE_NORMALMAP
+  vNormalMapUv = facadeUv;
+  #endif
+  #ifdef USE_EMISSIVEMAP
+  vEmissiveMapUv = facadeUv;
+  #endif
+}
+#endif`;
 const FACADE_SEED = /* glsl */ `
-vFacadeRegion = ${SURFACE_REGION_ATTRIBUTE};${FACADE_LIFT}
+vFacadeRegion = ${SURFACE_REGION_ATTRIBUTE}.xy;${FACADE_LIFT}${FACADE_METRES}
 #ifdef USE_INSTANCING
 vFacadeSeed = fract(facadeBuilding + dot(objectNormal.xz, vec2(0.37, 0.61)));
 #else
@@ -240,8 +273,9 @@ function roofEdges(style: FacadeStyle): number[] {
 }
 
 /** The facade shader on `shader` (after the class tag's own patch, whose includes stay): layered colour, normal and glow, the roof covering, the lift. */
-function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: StyleTextures, roofs: RoofTextures, edges: number[]): void {
+function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: StyleTextures, roofs: RoofTextures, edges: number[], bays: number): void {
   shader.uniforms.facadeGlow = FACADE_GLOW;
+  shader.uniforms.facadeBays = { value: bays };
   shader.uniforms.facadeRoofMix = { value: edges };
   shader.uniforms.facadeAlbedo = own.albedo;
   shader.uniforms.facadeNormalMap = own.normal;
@@ -272,7 +306,7 @@ function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
   const edges = roofEdges(style);
   material.onBeforeCompile = (shader, renderer) => {
     tagHook.call(material, shader, renderer);
-    patchFacade(shader, own, roofs, edges);
+    patchFacade(shader, own, roofs, edges, FACADE_LAYERS[style].bays);
   };
   material.customProgramCacheKey = () => `${tagKey.call(material)}|facade`;
   const stop = followRelief({ url: facadeMapUrl(style, "normal"), repeat: 1, layers: FACADE_LAYERS[style].layers }, (map, scale) => {

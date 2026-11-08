@@ -11,7 +11,7 @@ import { box, type Piece, type SurfaceRegion } from "./prefab-pieces.ts";
  */
 
 /** Half a block's side (m): a block is 11.8 m square. */
-const HALF = 5.9;
+export const HALF = 5.9;
 /** The corner stones' width (m), and the height (m) one tile of their layer spans (its six courses). */
 const QUOIN_W = 0.6;
 const QUOIN_TILE_H = 1.8;
@@ -49,16 +49,16 @@ function quad(x0: number, x1: number, y0: number, y1: number, u: readonly [numbe
   return g;
 }
 
-/** One face of the block, its quads turned to face `index` (a quarter turn each); `wall` is its material id. */
-function face(style: FacadeStyle, wall: MaterialId, index: number): Piece[] {
+/** One face of the block, its quads turned to face `index` (a quarter turn each); `wall` is its material id. A `slab` has the street face's shopfront band on every face. */
+function face(style: FacadeStyle, wall: MaterialId, index: number, slab: boolean): Piece[] {
   const spec = FACADE_LAYERS[style];
-  const street = index === STREET_FACE;
+  const street = slab || index === STREET_FACE;
   const stones = spec.layers > LAYER.quoin;
   const inner = stones ? 2 * HALF - 2 * QUOIN_W : 2 * HALF;
   const bays = Math.max(1, Math.round(inner / ((2 * HALF) / spec.bays)));
   const bay = inner / bays;
   const turn = (g: THREE.BufferGeometry): THREE.BufferGeometry => g.rotateY((index * Math.PI) / 2);
-  const region = (layer: number, relief: number): SurfaceRegion => [layer, relief];
+  const region = (layer: number, relief: number): SurfaceRegion => [layer, relief, slab ? 1 : 0];
   const out: Piece[] = [];
   for (const band of bands(style, street)) {
     const cornice = band.layer === LAYER.cornice;
@@ -77,7 +77,7 @@ function face(style: FacadeStyle, wall: MaterialId, index: number): Piece[] {
 }
 
 /** The roof slab: its sides read a bare patch of the style's wall, its top is in roof tiles (`ROOF_TILE_M`), for the shader to cover from the roof strips. */
-function roofSlab(style: FacadeStyle, wall: MaterialId): Piece[] {
+function roofSlab(style: FacadeStyle, wall: MaterialId, slab: boolean): Piece[] {
   const [u, v] = FACADE_LAYERS[style].plain as readonly [number, number];
   const sides = box(12, 0.5, 12, 0, 13.75, 0);
   const uv = sides.getAttribute("uv") as THREE.BufferAttribute;
@@ -89,13 +89,13 @@ function roofSlab(style: FacadeStyle, wall: MaterialId): Piece[] {
   const position = top.getAttribute("position");
   const topUv = top.getAttribute("uv") as THREE.BufferAttribute;
   for (let i = 0; i < topUv.count; i++) topUv.setXY(i, position.getX(i) / ROOF_TILE_M, position.getZ(i) / ROOF_TILE_M);
-  return [[sides, PARAPET, wall, [LAYER.floor, 1]], [top, 0xffffff, MAT.BUILDING_ROOF, [ROOF_LAYER, 1]]];
+  return [[sides, PARAPET, wall, [LAYER.floor, 1, 0]], [top, 0xffffff, MAT.BUILDING_ROOF, [ROOF_LAYER, 1, slab ? 1 : 0]]];
 }
 
-/** A city block in `style`: its four faces and its roof slab; `wall` is the faces' material id. */
-export function buildingPieces(style: FacadeStyle, wall: MaterialId): Piece[] {
+/** A city block in `style`: its four faces and its roof slab; `wall` is the faces' material id. A `slab` is a block drawn at a stretched instance scale: its uv is laid in the instance's own metres (`facades.ts`). */
+export function buildingPieces(style: FacadeStyle, wall: MaterialId, slab = false): Piece[] {
   const out: Piece[] = [];
-  for (let i = 0; i < 4; i++) out.push(...face(style, wall, i));
-  out.push(...roofSlab(style, wall));
+  for (let i = 0; i < 4; i++) out.push(...face(style, wall, i, slab));
+  out.push(...roofSlab(style, wall, slab));
   return out;
 }
