@@ -117,7 +117,7 @@ export interface Tap {
 }
 
 /** Instance patches for the run only: the sim's time (`SimPacer.run`) and the draw's (`Cinematics.render`, with a GPU timer query). */
-export function tap(pace: SimPacer, parts: BenchParts): Tap {
+export function tap(pace: Pick<SimPacer, "run" | "lost">, parts: BenchParts): Tap {
   const { renderer, cine } = parts;
   const gl = renderer.getContext() as WebGL2RenderingContext;
   const timer = gl.getExtension("EXT_disjoint_timer_query_webgl2");
@@ -161,7 +161,6 @@ export function tap(pace: SimPacer, parts: BenchParts): Tap {
       pace.run = run;
       cine.render = render;
       shadowMap.render = shadowRender;
-      frameParts.on = false;
       renderer.info.autoReset = true;
       return log;
     },
@@ -186,15 +185,18 @@ export function tap(pace: SimPacer, parts: BenchParts): Tap {
     }
     t.drawMs += performance.now() - t0;
   };
-  // The shadow pass is inside `renderer.render`: wrapping this one instance method (put back in `finish`) is the only way to tell it from the main pass.
+  // three calls `shadowMap.render` from every `renderer.render`: the post passes' blits and the mark map's scene go straight through, so only the main scene's pass is split from `main`. Wrapping this instance method (put back in `finish`) is the only way to tell the pass apart.
   shadowMap.render = (lights, scene, camera): void => {
+    if (!frameParts.on || scene !== parts.scene) {
+      shadowRender.call(shadowMap, lights, scene, camera);
+      return;
+    }
     lapPart(PART.main);
     const calls0 = renderer.info.render.calls;
     shadowRender.call(shadowMap, lights, scene, camera);
     lapPart(PART.shadow);
     countPart(COUNT.callsShadow, renderer.info.render.calls - calls0);
   };
-  frameParts.on = true;
   renderer.info.autoReset = false;
   return t;
 }

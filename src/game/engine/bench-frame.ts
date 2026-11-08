@@ -184,10 +184,14 @@ export async function frame(engine: FrameEngine, renderer: THREE.WebGLRenderer, 
   t.simMs = t.drawMs = 0;
   const f0 = performance.now();
   startParts(f0);
-  if (beat.lab) driveLab(engine, t, beat.lab);
-  engine.advance(dt, { frameDt: dt, render: true });
-  const f1 = performance.now();
-  endParts(f1);
+  let f1: number;
+  try {
+    if (beat.lab) driveLab(engine, t, beat.lab);
+    engine.advance(dt, { frameDt: dt, render: true });
+  } finally {
+    f1 = performance.now();
+    endParts(f1);
+  }
   readFrameCounts(beat);
   beat.frame[FRAME.now] = now;
   beat.frame[FRAME_DT] = dt;

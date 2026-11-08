@@ -1,3 +1,4 @@
+import { Scene } from "three";
 import { newBeat, type Beat, type FrameEngine } from "./bench-frame.ts";
 import type { BenchParts, Tap } from "./bench-measure.ts";
 
@@ -51,7 +52,8 @@ export function restoreFrame(): void {
 export function rig(): { engine: FrameEngine; parts: BenchParts; t: Tap; beat: Beat } {
   Object.defineProperty(globalThis, "requestAnimationFrame", { value: (callback: (stamp: number) => void) => void setImmediate(() => callback(display.next())), configurable: true });
   const info = { reset() {}, render: { calls: 1, triangles: 10 }, programs: [], memory: { textures: 0, geometries: 0 } };
-  const parts = { renderer: { info }, live: () => [], ragdoll: { traffic: { messages: 0, bytes: 0 } }, world: { fineCuts: 0 } } as unknown as BenchParts;
+  const renderer = { info, shadowMap: { render() {} }, getContext: () => ({ getExtension: () => null }) };
+  const parts = { renderer, scene: new Scene(), cine: { render() {} }, live: () => [], ragdoll: { traffic: { messages: 0, bytes: 0 } }, world: { fineCuts: 0 } } as unknown as BenchParts;
   const t = { simMs: 0, drawMs: 0, simS: 100, timing: false, block: 0, blocks: 0, collect() {} } as unknown as Tap;
   const engine: FrameEngine = {
     pace: { steps: 1 },

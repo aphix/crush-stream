@@ -21,8 +21,9 @@ class FrameParts {
 
 export const frameParts = new FrameParts();
 
-/** Starts the laps at `now` (the frame's own first clock read). */
+/** Opens a frame at `now` (the frame's own first clock read): laps count until `endParts`, and not between frames (a warm-up draw there is no part of one). */
 export function startParts(now: number): void {
+  frameParts.on = true;
   frameParts.last = now;
 }
 
@@ -35,12 +36,12 @@ export function lapPart(slot: number): void {
   p.last = now;
 }
 
-/** Closes the frame at `now`: what is left since the last lap goes to `rest`. */
+/** Closes the frame at `now`: what is left since the last lap goes to `rest`, and the laps stop. */
 export function endParts(now: number): void {
   const p = frameParts;
   if (!p.on) return;
   p.ms[PART.rest] = p.ms[PART.rest]! + (now - p.last);
-  p.last = now;
+  p.on = false;
 }
 
 /** `n` more of counter `slot`. */

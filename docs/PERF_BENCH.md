@@ -198,7 +198,7 @@ Skinning (`updateSkin`, the WASM kernel) and the ragdoll hand-off run in the fra
 
 ### Where the frame's time goes: parts and counters
 
-`cpuMs` is the engine's whole main-thread frame; `simMs` and `drawMs` are two pairs of clock reads inside it, and what they left (`other` = cpu − sim − draw) grew 3-5 ms on the City and the Mall between two builds with no way to say where. The frame is now split into named **parts** that tile it: `frameParts` (`src/game/kernel/frame-parts.ts`) is one clock with a slot a part; each `lapPart(slot)` adds the time since the previous lap to its slot (one `performance.now()` read per boundary, two per part; `startParts` at the frame's first read in `bench-frame.ts` `frame`, `endParts` at its last, the tail going to `rest`), so **the parts sum to `cpuMs` by construction**, and a part that is not timed shows as `rest`, not as a gap. The clock is on from the bench's `tap` until it finishes and off in every other run (a lap is then one branch). The laps are at the call sites in `CrashEngine.tickInner`, never inside a callee, so a part that runs inside another (the skin bake inside a slice) stays in the outer part and nothing counts twice. Each part is on the card as `result.frameParts[name]` = `{ mean, p95 }` (ms a frame over the window; DECIMALS 2) and per 200 ms bucket in the series as `part<Name>Ms` (the mean a frame, next to `cpuMs`, `simMs`, `drawMs`) and in each spike row, so a spike is placed in time and in a part:
+`cpuMs` is the engine's whole main-thread frame; `simMs` and `drawMs` are two pairs of clock reads inside it, and what they left (`other` = cpu − sim − draw) grew 3-5 ms on the City and the Mall between two builds with no way to say where. The frame is now split into named **parts** that tile it: `frameParts` (`src/game/kernel/frame-parts.ts`) is one clock with a slot a part; each `lapPart(slot)` adds the time since the previous lap to its slot (one `performance.now()` read per boundary, two per part; `startParts` at the frame's first read in `bench-frame.ts` `frame`, `endParts` at its last, the tail going to `rest`), so **the parts sum to `cpuMs` by construction**, and a part that is not timed shows as `rest`, not as a gap. The clock is on only between `startParts` and `endParts` (closed in a `finally`, so a frame that throws leaves it off) and off in every run that is not a bench's frame (a lap is then one branch): a warm-up draw between two frames adds nothing to the next one. The laps are at the call sites in `CrashEngine.tickInner`, never inside a callee, so a part that runs inside another (the skin bake inside a slice) stays in the outer part and nothing counts twice. Each part is on the card as `result.frameParts[name]` = `{ mean, p95 }` (ms a frame over the window; DECIMALS 2) and per 200 ms bucket in the series as `part<Name>Ms` (the mean a frame, next to `cpuMs`, `simMs`, `drawMs`) and in each spike row, so a spike is placed in time and in a part:
 
 | Part | From … to … | What runs in it |
 |---|---|---|
@@ -216,9 +216,9 @@ Skinning (`updateSkin`, the WASM kernel) and the ragdoll hand-off run in the fra
 | `matrices` | the draw's start to `Scene.onBeforeRender` | three's scene and camera matrix update |
 | `batches` | the engine's `Scene.onBeforeRender` | the wheel, lamp, part, seated-driver and cover batches' sync |
 | `marks` | `SkidMarks.flush` | the tyre-mark map's stamps |
-| `shadow` | `renderer.shadowMap.render` | the shadow pass's CPU submit (not GPU time). Splitting it from `main` needs that one instance method wrapped for the run (`tap`, put back at its end); three has no hook around the pass |
-| `main` | the rest of `renderer.render` | culling and sorting, the background, the opaque, transmissive and transparent submit, the uploads three does at draw (the dirty wear masks, instance matrices), program links; a GPU that lets the CPU wait (a full queue, a read-back) is waited out here |
-| `post` | the composer's passes | the bloom chain and the composite (0 on the Off and Minimal tiers) |
+| `shadow` | `renderer.shadowMap.render` of the main scene | the shadow pass's CPU submit (not GPU time). Three has no hook around the pass: `tap` wraps that one instance method for the run (put back at its end), and it passes every other scene through untimed, because three calls it from every `renderer.render`, the post passes' blits and the mark map's included |
+| `main` | the rest of the main scene's `renderer.render` | culling and sorting before the shadow pass, the background, the opaque, transmissive and transparent submit after it, the uploads three does at draw (the dirty wear masks, instance matrices), program links; a GPU that lets the CPU wait (a full queue, a read-back) is waited out here |
+| `post` | after the main scene's draw to the end of `PostFX.render` | the bloom chain's blits (each its own `renderer.render`) and the composite (0 on the Off and Minimal tiers) |
 
 `matrices`, `batches`, `marks`, `shadow`, `main` and `post` are inside `Cinematics.render`: their sum is `drawMs` (to a few clock reads), and the other eleven are `cpuMs − drawMs`, of which `sim` is `simMs`; `scene.sync` is in `scenery`, the frame's `emitHud` in `hud`.
 
@@ -226,26 +226,26 @@ Skinning (`updateSkin`, the WASM kernel) and the ragdoll hand-off run in the fra
 
 **Cost.** The two lines of a part are `lapPart` calls: about 35 on a race frame (`CrashEngine.tickInner`, the engine's `onBeforeRender`, the draw, the shadow wrapper). One lap is one `performance.now()` and two Float64 adds; the counters are plain adds kept always. Measured in node on the worker (20 million calls, best of three): a lap with the clock on 36.9 ns (a bare `performance.now()` 42.8 ns), a lap with it off 2.3 ns, a counter add 3.0 ns: about 1.3 us a frame on, 0.08 us off. Nothing allocates in a frame (`bench-frames.test.ts` records a million frames with no collection; `partCard` allocates once, after the window). The card grows by the 17 part and 16 counter columns of the 200 ms series (125 buckets) and of each of the 64 spike rows: not yet measured from a posted card (`MAX_JSON_BYTES.bench` is 8 MB).
 
-**First reading** (headless GL through `worker.sh`, ANGLE on D3D12, `--bench '?bench=city'` and `'?bench=city&course=national-mall'`, 6 sim-s then 300 frames of 1/60 s, FX `high`, 640x400; not a browser, so read the shares, and `main` carries the driver's waits). ms a frame, mean (p95); the parts sum to cpu exactly:
+**First reading** (headless GL through `worker.sh`, ANGLE on D3D12, `--bench '?bench=city'` and `'?bench=city&course=national-mall'`, 6 sim-s then 300 frames of 1/60 s, FX `high`, 640x400; not a browser, so read the shares, and `main` carries the driver's waits; the worker's load moves a run's totals by about 10 %). Taken after the shadow wrapper was made to pass the post passes' blits through: its first take put the bloom chain in `main` (`post` 0.06 ms, `main` 37.5 and 45.1). ms a frame, mean (p95); the parts sum to cpu exactly:
 
-| | City, 32 cars, cpu 71.6 | National Mall, 24 cars, cpu 79.0 |
+| | City, 32 cars, cpu 79.2 | National Mall, 24 cars, cpu 84.6 |
 |---|---|---|
-| `sim` | 17.4 (34.3) | 16.4 (31.5) |
-| `skin` | 6.9 (11.7) | 7.5 (11.2) |
-| `paint` | 1.5 (7.1) | 1.3 (8.7) |
-| `ragdoll` | 0.02 | 2.0 (8.2) |
-| `scenery`, `fx`, `camera`, `hud`, `input`, `audio` | 0.21, 0.85, 0.11, 0.06, 0.02, 0 | 0.16, 0.74, 0.15, 0.05, 0.02, 0 |
-| `matrices`, `batches`, `marks` | 0.67, 0.68, 0.11 | 0.58, 0.50, 0.10 |
-| `shadow` | 4.7 (9.3) | 3.4 (9.4) |
-| `main` | 37.5 (54.5) | 45.1 (58.4) |
-| `post` | 0.06 | 0.06 |
-| `rest` | 0.92 | 0.93 |
+| `sim` | 19.6 (39.4) | 18.2 (33.7) |
+| `skin` | 7.6 (14.0) | 8.1 (11.6) |
+| `paint` | 1.6 (8.3) | 1.4 (8.8) |
+| `ragdoll` | 0.02 | 2.1 (8.7) |
+| `scenery`, `fx`, `camera`, `hud`, `input`, `audio` | 0.16, 0.92, 0.13, 0.06, 0.03, 0 | 0.14, 0.84, 0.16, 0.05, 0.03, 0 |
+| `matrices`, `batches`, `marks` | 0.83, 0.84, 0.21 | 0.60, 0.60, 0.20 |
+| `shadow` | 5.2 (10.1) | 3.6 (9.3) |
+| `main` | 40.3 (58.1) | 47.0 (59.2) |
+| `post` | 0.51 (0.83) | 0.53 (0.77) |
+| `rest` | 1.11 | 1.05 |
 | `skinnedCars` of cars | 1.39 of 32 | 0.91 of 24 |
 | `callsShadow` / `callsMain` | 54 / 179 | 37 / 312 |
 
 `skin` is 7 ms a frame while `skinnedCars` is about one and the kernel sees 2.7-4 thousand vertices a frame: most of it is not the kernel's work. Which step of `updateSkin` it is (the deform update, `smoothDrawnSkin`, the panels, the glass, the casters) is not split yet.
 
-**Checks.** `bench-frame.test.ts` runs `frame` on a scripted clock (2 ms skinning, 3 ms effects, 1 ms of tail): each part holds its ms and they sum to the frame's cpu; `bench-parts.test.ts` runs a few frames of the real engine on the city race with the clock on (the draw stubbed): the parts sum to the frames' cpu within 1e-6 ms, none is negative, the `sim` part is the pacer's own pair of reads within 0.5 ms over 120 frames, and skin, scenery, fx, camera and hud each hold time. The probe: `node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs --bench '?bench=city' --at 6 --frames 3 --parts 300` (headless GL; on the worker through `worker.sh`) runs the bench's own frame loop and prints the card's `frameParts` and `frameCounts`.
+**Checks.** `bench-frame.test.ts` runs `frame` on a scripted clock. One frame laps 2 ms skinning and 3 ms effects with a 1 ms tail: each part holds its ms and they sum to the frame's cpu. A second runs a tapped renderer whose `render` calls `shadowMap.render` as three does, draws the main scene and then blits a scene of its own as `PostFX` does: the blit's ms are `post` and not `main`, `main` + `shadow` + `post` are the draw's ms, and `callsShadow` counts the main scene's pass alone. A third renders and laps between two frames (a warm-up draw): nothing of it is in any part or counter. A fourth throws in the engine's frame: the laps are off after it. `bench-parts.test.ts` runs a few frames of the real engine on the city race (the draw stubbed): the `sim` part is the pacer's own pair of reads within 0.5 ms over 120 frames, and skin, scenery, fx, camera and hud each hold time. The probe: `node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs --bench '?bench=city' --at 6 --frames 3 --parts 300` (headless GL; on the worker through `worker.sh`) runs the bench's own frame loop and prints the card's `frameParts` and `frameCounts`.
 
 ### Hitches and settling: what a switch costs, kept out of the arms
 
