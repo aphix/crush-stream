@@ -454,7 +454,7 @@ describe("given a card whose frames the device summarised, and the card as the w
   it("when a card carries frameParts and frameCounts, then --phases prints one line each (every part's mean/p95 ms against the cpu mean, every counter's mean a frame), and a card without them prints neither", async () => {
     const parts = card({ cpuMs: { mean: 6.5 }, frameParts: { sim: { mean: 3.04, p95: 4.5 }, skin: { mean: 1.2, p95: 2 }, rest: { mean: 2.26, p95: 3.1 } }, frameCounts: { skinnedCars: 12.5, wearUploadBytes: 123456.7 } });
     const lines = [];
-    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([parts, card()]).fetchImpl, pause: noPause, phases: true, log: (l) => lines.push(l) });
+    await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([parts, { ...card(), id: "GGGG-7777" }]).fetchImpl, pause: noPause, phases: true, log: (l) => lines.push(l) });
     const said = lines.map((l) => l.trim());
     expect(said.includes("frame parts, ms mean/p95 (summing to cpu 6.5): sim 3.0/4.5  skin 1.2/2.0  rest 2.3/3.1"), said.join("\n")).toBeTruthy();
     expect(said.includes("per frame: skinnedCars 12.50  wearUploadBytes 123457"), said.join("\n")).toBeTruthy();

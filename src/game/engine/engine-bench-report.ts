@@ -534,15 +534,16 @@ const hitchLine = (h: HitchTable): string => {
   return `hitches: ${h.count} of ${h.frames} frames over ${h.factor}x the median (and ${h.minMs} ms), ${Math.round(h.excessMs)} ms over in all${rows.length ? `; worst: ${rows.join(", ")}` : ""}`;
 };
 
-/** The window's named parts of a frame (ms, mean/p95) on one line, with their sum against the cpu mean: the parts tile it, so a gap names a part that is not timed. */
-const partsLine = (parts: BenchResult["frameParts"], cpuMean: number): string => {
+/** The counters that say why a part is what it is, in the card's one parts line: the rest of `frameCounts` is on the wire card and in `fetch-submissions --phases`. */
+const LINE_COUNTS = ["skinnedCars", "wearUploads", "callsShadow", "callsMain"] as const;
+
+/** The window's named parts of a frame (ms, mean/p95) with their sum against the cpu mean (the parts tile it, so a gap names a part that is not timed), then a few counters a frame: one line, so the card keeps its phone height. */
+const partsLine = (parts: BenchResult["frameParts"], counts: BenchResult["frameCounts"], cpuMean: number): string => {
   const entries = Object.entries(parts);
   const sum = entries.reduce((total, [, p]) => total + p.mean, 0);
-  return `frame parts, ms per frame mean/p95: ${entries.map(([name, p]) => `${name} ${pair(p)}`).join(", ")}  (sum ${f1(sum)} of cpu ${f1(cpuMean)})`;
+  const tail = LINE_COUNTS.map((name) => `${name} ${counts[name]! >= 100 ? Math.round(counts[name]!) : counts[name]!.toFixed(2)}`).join(", ");
+  return `frame parts, ms per frame mean/p95: ${entries.map(([name, p]) => `${name} ${pair(p)}`).join(", ")}  (sum ${f1(sum)} of cpu ${f1(cpuMean)});  per frame: ${tail}`;
 };
-
-/** The window's counters of work, per frame, on one line. */
-const countsLine = (counts: BenchResult["frameCounts"]): string => `frame counts, per frame: ${Object.entries(counts).map(([name, n]) => `${name} ${n >= 100 ? Math.round(n) : n.toFixed(2)}`).join(", ")}`;
 
 /** What the device was doing besides the game: long tasks over the window, the battery before and after. */
 const deviceStateText = (longTasks: LongTasks | null, battery: BenchResult["device"]["battery"]): string => {
@@ -573,9 +574,7 @@ export function describeBench(r: BenchResult): string[] {
     phaseLine(r.phases, r.simMsPerSimS, r.simSpreadPct),
     `${hitchLine(r.hitches)}   ${switchLine(r.switches)}   warm-up sweep: ${r.sweepHitches.count} hitched of ${r.sweepHitches.frames} frames, ${Math.round(r.sweepHitches.excessMs)} ms over`,
     spikeLine(r.frameStats),
-    row("  draw", r.renderMs),
-    partsLine(r.frameParts, r.cpuMs.mean),
-    countsLine(r.frameCounts),
+    `${row("  draw", r.renderMs)}   ${partsLine(r.frameParts, r.frameCounts, r.cpuMs.mean)}`,
     r.gpuMs ? row("GPU", r.gpuMs) + (waited(r.gpuMs, r.frameMs) ? "   p95 is one frame long: a wait on the display, p50 is the work" : "") : "GPU       no timer query on this device",
     ragdollLine(r.ragdoll),
     `draw ${r.calls} calls  ${Math.round(r.triangles / 1000)}k tris   cops: ${r.cops ? `${r.cops.stakeouts} stakeouts, ${r.cops.pursuits} pursuits, pack of ${r.cops.maxPack}` : "none"}`,

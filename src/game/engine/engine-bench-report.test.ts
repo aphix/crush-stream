@@ -418,16 +418,14 @@ describe("given the bench result whose frames the device summarised", () => {
 });
 
 describe("given the bench result whose frame the device split into named parts", () => {
-  test("when the card is written, then one line names every part with its mean and p95 ms and the sum against the cpu mean, and one line gives every counter's mean a frame", () => {
+  test("when the card is written, then one line carries the draw percentiles, every part's mean and p95 ms with the sum against the cpu mean, and four counters a frame (the other counters are not on the card), and the card has no line of its own for the counters", () => {
     const lines = describeBench(RESULT);
-    const parts = lines.find((l) => l.startsWith("frame parts"));
+    const parts = lines.find((l) => l.includes("frame parts"));
     must(parts !== undefined, "no parts line");
-    expect(parts.startsWith("frame parts, ms per frame mean/p95: rest 0.1/1.0, input 1.1/2.0, sim 2.1/3.0")).toBeTruthy();
-    expect(parts.endsWith("post 16.1/17.0  (sum 138.1 of cpu 7.5)")).toBeTruthy();
-    const counts = lines.find((l) => l.startsWith("frame counts"));
-    must(counts !== undefined, "no counts line");
-    expect(counts.startsWith("frame counts, per frame: skinnedCars 3.14, skinKernelCalls 4.14")).toBeTruthy();
-    expect(counts.endsWith("texturesAdded 18.14")).toBeTruthy();
+    expect(parts.startsWith("  draw    p50 2.0  p95 4.0  p99 6.0  max 8.0 ms   frame parts, ms per frame mean/p95: rest 0.1/1.0, input 1.1/2.0, sim 2.1/3.0"), parts).toBeTruthy();
+    expect(parts.endsWith("post 16.1/17.0  (sum 138.1 of cpu 7.5);  per frame: skinnedCars 3.14, wearUploads 7.14, callsShadow 14.14, callsMain 15.14"), parts).toBeTruthy();
+    expect(lines.some((l) => l.startsWith("frame counts")), "no line of its own for the counters").toBe(false);
+    expect(lines.filter((l) => l.startsWith("  draw")), "the draw row is not also a line of its own").toHaveLength(1);
   });
 
   test("when the card is rounded for the wire, then each part's mean and p95 are to 0.01 ms and each counter's mean to two decimals, under the keys frameParts and frameCounts", () => {
