@@ -1,28 +1,25 @@
 import * as THREE from "three";
 import { MAT } from "../kernel/material-ids.ts";
 import { once } from "../kernel/scalar.ts";
-import { tagMaterial } from "../vehicle/material-class.ts";
+import { SURFACE_REGION_ATTRIBUTE, tagMaterial } from "../vehicle/material-class.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import { type BiomeId, PREFAB } from "../world/constants.ts";
-import { loadUprightBitmap } from "./bitmap-loader.ts";
-import { followRelief, reliefMaterial } from "./surface-relief.ts";
+import layerData from "./facade-layers.json" with { type: "json" };
+import { followRelief, reliefPossible } from "./surface-relief.ts";
+import { flatLayers, loadLayers } from "./texture-array.ts";
 import { hash01 } from "./track-mesh.ts";
 
 /**
- * The building styles: one shared material each (albedo, normal and window-glow maps from `public/facades/`, packed by
- * `scripts/pack-facades.mjs`), so a draw cell's buildings cost one draw per style on it. A style's tile is one bay across and the whole
- * face tall; `building()` in prefabs.ts lays it `bays` times across a face.
- * shortcut: a draw per style per cell; a texture array with a per-instance style index makes it one, when the bench says draws limit.
+ * The building styles: one shared material each, so a draw cell's buildings cost one draw per style on it. A style's textures are three layered
+ * textures (`texture-array.ts`) from `public/facades/<style>-{albedo,normal,glow}.webp`, packed by `scripts/pack-facades.mjs`: a layer per region of the
+ * building (cornice, one storey, the ground floor, corner stones), each tiled by real metres by `facade-mesh.ts`, which sets every vertex's layer.
+ * shortcut: a draw per style per cell; one array holding every style's layers with the style in the vertex makes it one, when the bench says draws limit.
  */
 
 /** Weathered pastel stucco (pink, mint, ochre, sky, cream, terracotta, lilac): the Havana blocks and walls. */
 export const PASTELS = [0xf3c6c0, 0xbfe0d0, 0xf2d9a0, 0xb8d4ea, 0xf0e2cb, 0xe8b9a0, 0xd9c8e6];
 
 type StyleSpec = {
-  /** Tiles across a 11.8 m face. */
-  bays: number;
-  /** A bare patch of wall in the tile (u, v up), for the roof slab to sample. */
-  plain: readonly [number, number];
   roughness: number;
   metalness: number;
   /** Per-instance colours the style is multiplied by (the albedo is already coloured, so they stay near white). */
@@ -31,39 +28,44 @@ type StyleSpec = {
   mix: Readonly<Record<BiomeId, number>>;
   /** The building prefab this is the look of when no style is named. */
   home: PrefabId | null;
-  /** Weights of the roof coverings on its buildings, in `ROOF_KINDS` order: tar, clay tile, slate, copper, corrugated metal. */
+  /** Weights of the roof coverings on its buildings, in the roof strip's layer order: tar, clay tile, slate, copper, corrugated metal. */
   roofs: readonly [number, number, number, number, number];
 };
 
 export const FACADE = {
-  prague: { bays: 4, plain: [0.941, 0.753], roughness: 0.8, metalness: 0.05, tints: [0xffffff, 0xf6ecd8, 0xe9eef4, 0xf4e0d2, 0xecebdc], mix: { city: 3, park: 0, desert: 0, dirt: 0, circuit: 0, none: 1 }, home: null, roofs: [0, 1, 1, 3, 0] },
-  dc: { bays: 4, plain: [0.27, 0.12], roughness: 0.85, metalness: 0.03, tints: [0xffffff, 0xf0d8c8, 0xd8c0b0, 0xffe6d0, 0xc9b8aa], mix: { city: 2, park: 2, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: PREFAB.building, roofs: [2, 1, 3, 0, 0] },
-  stucco: { bays: 4, plain: [0.176, 0.46], roughness: 0.9, metalness: 0.03, tints: PASTELS, mix: { city: 0, park: 0, desert: 2, dirt: 1, circuit: 0, none: 0 }, home: PREFAB.stucco, roofs: [1, 4, 0, 0, 0] },
-  glass: { bays: 4, plain: [0.566, 0.948], roughness: 0.4, metalness: 0.2, tints: [0xffffff, 0xcfe4f0, 0xe0e8e0, 0xbcd4e4, 0xf0f0f4], mix: { city: 3, park: 0, desert: 0, dirt: 0, circuit: 3, none: 0 }, home: null, roofs: [3, 0, 0, 0, 1] },
-  adobe: { bays: 2, plain: [0.441, 0.803], roughness: 0.95, metalness: 0.02, tints: [0xffffff, 0xf0dcc0, 0xe0c8a8, 0xffe4cc, 0xd8c0a0], mix: { city: 0, park: 0, desert: 5, dirt: 0, circuit: 0, none: 0 }, home: null, roofs: [1, 0, 0, 0, 0] },
-  shops: { bays: 4, plain: [0.207, 0.222], roughness: 0.8, metalness: 0.05, tints: PASTELS, mix: { city: 3, park: 1, desert: 0, dirt: 0, circuit: 1, none: 1 }, home: null, roofs: [2, 2, 1, 0, 0] },
-  baroque: { bays: 4, plain: [0.051, 0.987], roughness: 0.85, metalness: 0.03, tints: [0xffffff, 0xf6ecd8, 0xf4e0d2, 0xe9eef4, 0xecebdc], mix: { city: 2, park: 0, desert: 0, dirt: 0, circuit: 0, none: 0 }, home: null, roofs: [0, 4, 0, 1, 0] },
-  havana: { bays: 4, plain: [0.879, 0.761], roughness: 0.9, metalness: 0.03, tints: [0xffffff, 0xeaf5f0, 0xd8efe8, 0xf0d0d8, 0xd0e0f0], mix: { city: 1, park: 0, desert: 1, dirt: 0, circuit: 0, none: 0 }, home: null, roofs: [1, 5, 0, 0, 0] },
-  federal: { bays: 4, plain: [0.441, 0.741], roughness: 0.85, metalness: 0.04, tints: [0xffffff, 0xf4efe4, 0xe8e8ec, 0xf0e8d8, 0xe0e4e4], mix: { city: 0, park: 0, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: null, roofs: [1, 0, 2, 2, 0] },
-  warehouse: { bays: 4, plain: [0.77, 0.05], roughness: 0.9, metalness: 0.1, tints: [0xffffff, 0xe8d8d0, 0xd8c8c0, 0xf0e0d0, 0xc8c0b8], mix: { city: 0, park: 0, desert: 0, dirt: 4, circuit: 2, none: 0 }, home: null, roofs: [1, 0, 0, 0, 4] },
-  farm: { bays: 4, plain: [0.191, 0.05], roughness: 0.92, metalness: 0.02, tints: [0xffffff, 0xf0d8d0, 0xe0c0a8, 0xd0b8a0, 0xb8c0c8], mix: { city: 0, park: 3, desert: 0, dirt: 2, circuit: 0, none: 0 }, home: null, roofs: [0, 1, 0, 0, 3] },
-  rowhouse: { bays: 4, plain: [0.332, 0.726], roughness: 0.8, metalness: 0.03, tints: PASTELS, mix: { city: 3, park: 1, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: null, roofs: [2, 3, 3, 0, 0] },
+  prague: { roughness: 0.8, metalness: 0.05, tints: [0xffffff, 0xf6ecd8, 0xe9eef4, 0xf4e0d2, 0xecebdc], mix: { city: 3, park: 0, desert: 0, dirt: 0, circuit: 0, none: 1 }, home: null, roofs: [0, 1, 1, 3, 0] },
+  dc: { roughness: 0.85, metalness: 0.03, tints: [0xffffff, 0xf0d8c8, 0xd8c0b0, 0xffe6d0, 0xc9b8aa], mix: { city: 2, park: 2, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: PREFAB.building, roofs: [2, 1, 3, 0, 0] },
+  stucco: { roughness: 0.9, metalness: 0.03, tints: PASTELS, mix: { city: 0, park: 0, desert: 2, dirt: 1, circuit: 0, none: 0 }, home: PREFAB.stucco, roofs: [1, 4, 0, 0, 0] },
+  glass: { roughness: 0.4, metalness: 0.2, tints: [0xffffff, 0xcfe4f0, 0xe0e8e0, 0xbcd4e4, 0xf0f0f4], mix: { city: 3, park: 0, desert: 0, dirt: 0, circuit: 3, none: 0 }, home: null, roofs: [3, 0, 0, 0, 1] },
+  adobe: { roughness: 0.95, metalness: 0.02, tints: [0xffffff, 0xf0dcc0, 0xe0c8a8, 0xffe4cc, 0xd8c0a0], mix: { city: 0, park: 0, desert: 5, dirt: 0, circuit: 0, none: 0 }, home: null, roofs: [1, 0, 0, 0, 0] },
+  shops: { roughness: 0.8, metalness: 0.05, tints: PASTELS, mix: { city: 3, park: 1, desert: 0, dirt: 0, circuit: 1, none: 1 }, home: null, roofs: [2, 2, 1, 0, 0] },
+  baroque: { roughness: 0.85, metalness: 0.03, tints: [0xffffff, 0xf6ecd8, 0xf4e0d2, 0xe9eef4, 0xecebdc], mix: { city: 2, park: 0, desert: 0, dirt: 0, circuit: 0, none: 0 }, home: null, roofs: [0, 4, 0, 1, 0] },
+  havana: { roughness: 0.9, metalness: 0.03, tints: [0xffffff, 0xeaf5f0, 0xd8efe8, 0xf0d0d8, 0xd0e0f0], mix: { city: 1, park: 0, desert: 1, dirt: 0, circuit: 0, none: 0 }, home: null, roofs: [1, 5, 0, 0, 0] },
+  federal: { roughness: 0.85, metalness: 0.04, tints: [0xffffff, 0xf4efe4, 0xe8e8ec, 0xf0e8d8, 0xe0e4e4], mix: { city: 0, park: 0, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: null, roofs: [1, 0, 2, 2, 0] },
+  warehouse: { roughness: 0.9, metalness: 0.1, tints: [0xffffff, 0xe8d8d0, 0xd8c8c0, 0xf0e0d0, 0xc8c0b8], mix: { city: 0, park: 0, desert: 0, dirt: 4, circuit: 2, none: 0 }, home: null, roofs: [1, 0, 0, 0, 4] },
+  farm: { roughness: 0.92, metalness: 0.02, tints: [0xffffff, 0xf0d8d0, 0xe0c0a8, 0xd0b8a0, 0xb8c0c8], mix: { city: 0, park: 3, desert: 0, dirt: 2, circuit: 0, none: 0 }, home: null, roofs: [0, 1, 0, 0, 3] },
+  rowhouse: { roughness: 0.8, metalness: 0.03, tints: PASTELS, mix: { city: 3, park: 1, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: null, roofs: [2, 3, 3, 0, 0] },
 } as const satisfies Record<string, StyleSpec>;
 
 export type FacadeStyle = keyof typeof FACADE;
 const FACADE_STYLES = Object.keys(FACADE) as FacadeStyle[];
 
-/** The building's roofline (m): a facade tile spans the ground to here, the roof slab's underside. */
+/** One style's layers as `scripts/pack-facades.mjs` packed them: bays across a 11.8 m face, layers in its strips, each band's height (m) and a bare patch of wall (u, v in the floor layer). */
+type LayerSpec = { bays: number; layers: number; metres: { cornice: number; floor: number; ground: number }; plain: readonly number[] };
+/** The JSON module's keys are the styles' (a row pins it): its inferred type is only as loose as the file. */
+export const FACADE_LAYERS = layerData as Record<FacadeStyle, LayerSpec>;
+
+/** The layer of each region in a style's strips (the corner stones' layer exists only where the style has them), and the roof's marker. */
+export const LAYER = { cornice: 0, floor: 1, ground: 2, quoin: 3 } as const;
+export const ROOF_LAYER = -1;
+
+/** The building's roofline (m): the cornice's top, the roof slab's underside. */
 export const ROOFLINE = 13.5;
 
-/** World metres one roof tile of the atlas spans on a roof slab (`prefabs.ts` lays the slab's top in them). */
+/** World metres one roof tile spans on a roof slab (`facade-mesh.ts` lays the slab's top in them). */
 export const ROOF_TILE_M = 2.4;
 /** Metres a roof may be raised over the collider's top, picked per building: a taller parapet drawn on the 14 m block, nothing the sim reads. */
 const ROOF_LIFTS = [0, 0, 0.7, 1.4, 2.8];
-/** Atlas cells across and up, the share of a cell's edge kept clear of its neighbours' bleed, and the coarsest mip (texels) a far roof samples. */
-const ROOF_CELLS = [3, 2] as const;
-const ROOF_PAD = 0.01;
-const ROOF_MIP_TEXELS = 32;
 
 /** The share of a style's windows lit at full night. */
 const LIT_SHARE = 0.6;
@@ -95,78 +97,71 @@ export function facadeStyle(prefab: PrefabId, x: number, z: number, biome: Biome
   return homeStyle(prefab);
 }
 
-type Maps = { albedo: THREE.Texture; glow: THREE.Texture };
-
-function dataTexture(r: number, g: number, b: number, colorSpace: THREE.ColorSpace): THREE.DataTexture {
-  const tex = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1);
-  tex.colorSpace = colorSpace;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-/** What a style shows until its colour and glow maps arrive: a plain cream wall, unlit (DOM-free, so a test builds the materials too). */
-const standIn = once((): Maps => ({ albedo: dataTexture(205, 200, 190, THREE.SRGBColorSpace), glow: dataTexture(0, 0, 0, THREE.NoColorSpace) }));
-
-const loaded: Partial<Record<FacadeStyle, Maps>> = {};
-const live = new Set<THREE.MeshStandardMaterial>();
-const requested = new Set<FacadeStyle>();
 const MAPS_URL = `${import.meta.env?.BASE_URL ?? "/"}facades/`;
 
-/** Where style `style`'s `kind` map is served from. */
+/** Where style `style`'s `kind` strip is served from. */
 export const facadeMapUrl = (style: FacadeStyle, kind: "albedo" | "normal" | "glow"): string => `${MAPS_URL}${style}-${kind}.webp`;
+const ROOF_URL = `${MAPS_URL}roofs-`;
+/** Layers in the roof strips: tar, clay tile, slate, green copper, corrugated metal. */
+const ROOF_LAYERS = 5;
 
-function mapOf(bitmap: ImageBitmap, colorSpace: THREE.ColorSpace, anisotropy: number): THREE.Texture {
-  const tex = new THREE.Texture(bitmap);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.flipY = false;
-  tex.colorSpace = colorSpace;
-  tex.anisotropy = anisotropy;
+type StyleTextures = { albedo: THREE.IUniform<THREE.Texture>; glow: THREE.IUniform<THREE.Texture>; normal: THREE.IUniform<THREE.Texture> };
+
+/** What a layered texture shows until its strip arrives: a cream wall, no glow, a flat normal, a brown roof (DOM-free, so a test builds the materials too). */
+const standIn = once(() => ({
+  albedo: flatLayers([205, 200, 190, 255], THREE.SRGBColorSpace),
+  glow: flatLayers([0, 0, 0, 255], THREE.NoColorSpace),
+  roof: flatLayers([110, 92, 78, 255], THREE.SRGBColorSpace),
+  normal: flatLayers([128, 128, 255, 255], THREE.NoColorSpace),
+}));
+
+/** The one 1 x 1 white map every facade material wears for the maps three needs set to keep their shader paths (the layered textures are read by the patch). */
+const placeholder = once((): THREE.DataTexture => {
+  const tex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
   tex.needsUpdate = true;
   return tex;
-}
+});
 
-function show(material: THREE.MeshStandardMaterial, maps: Maps): void {
-  material.map = maps.albedo;
-  material.emissiveMap = maps.glow;
-}
-
-async function loadStyle(style: FacadeStyle): Promise<void> {
+async function loadStyle(style: FacadeStyle, into: StyleTextures): Promise<void> {
+  const { layers } = FACADE_LAYERS[style];
   try {
-    const [albedo, glow] = await Promise.all([loadUprightBitmap(facadeMapUrl(style, "albedo")), loadUprightBitmap(facadeMapUrl(style, "glow"))]);
-    const maps = { albedo: mapOf(albedo, THREE.SRGBColorSpace, 8), glow: mapOf(glow, THREE.NoColorSpace, 4) };
-    loaded[style] = maps;
-    for (const material of live) if (material.userData.facadeStyle === style) show(material, maps);
+    const [albedo, glow] = await Promise.all([
+      loadLayers({ url: facadeMapUrl(style, "albedo"), layers, colorSpace: THREE.SRGBColorSpace, anisotropy: 8, halve: !reliefPossible() }),
+      loadLayers({ url: facadeMapUrl(style, "glow"), layers, colorSpace: THREE.NoColorSpace, anisotropy: 4, halve: !reliefPossible() }),
+    ]);
+    into.albedo.value = albedo;
+    into.glow.value = glow;
   } catch (err) {
     console.error(`Crush Stream's ${style} facade maps did not load`, err);
   }
 }
 
-/** A style's colour and glow maps are fetched once per page, when the first material of the style is made (a course fetches the styles it draws); where there is no bitmap decoder (node) the stand-ins stay. */
-function requestStyle(style: FacadeStyle): void {
-  if (requested.has(style) || typeof createImageBitmap !== "function") return;
-  requested.add(style);
-  void loadStyle(style);
+const textures = new Map<FacadeStyle, StyleTextures>();
+
+/** A style's textures (shared by every material of the style), fetched the first time the style is read; where there is no bitmap decoder (node) the stand-ins stay. */
+function texturesOf(style: FacadeStyle): StyleTextures {
+  let found = textures.get(style);
+  if (!found) {
+    const stand = standIn();
+    textures.set(style, (found = { albedo: { value: stand.albedo }, glow: { value: stand.glow }, normal: { value: stand.normal } }));
+    if (typeof createImageBitmap === "function") void loadStyle(style, found);
+  }
+  return found;
 }
 
-const ROOF_ALBEDO = { value: new THREE.Texture() };
-const ROOF_NORMAL = { value: new THREE.Texture() };
-const ROOF_URL = `${MAPS_URL}roofs-`;
+const ROOF_ALBEDO: THREE.IUniform<THREE.Texture> = { value: new THREE.Texture() };
+const ROOF_NORMAL: THREE.IUniform<THREE.Texture> = { value: new THREE.Texture() };
 
-/** The roof atlas's colour map is fetched once per page by the first facade material (a plain brown until it arrives, and in node); its normal map follows the relief tier. */
+/** The roof strips are fetched once per page by the first facade material (a plain brown until the colours arrive, and in node); the normals follow the relief tier. */
 const requestRoofs = once((): void => {
-  ROOF_ALBEDO.value = dataTexture(110, 92, 78, THREE.SRGBColorSpace);
-  followRelief({ url: `${ROOF_URL}normal.webp`, repeat: 1 }, (map) => {
+  ROOF_ALBEDO.value = standIn().roof;
+  followRelief({ url: `${ROOF_URL}normal.webp`, repeat: 1, layers: ROOF_LAYERS }, (map) => {
     ROOF_NORMAL.value = map;
   });
   if (typeof createImageBitmap !== "function") return;
   void (async () => {
     try {
-      const tex = new THREE.Texture(await loadUprightBitmap(`${ROOF_URL}albedo.webp`));
-      tex.flipY = false;
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = 4;
-      tex.needsUpdate = true;
-      ROOF_ALBEDO.value = tex;
+      ROOF_ALBEDO.value = await loadLayers({ url: `${ROOF_URL}albedo.webp`, layers: ROOF_LAYERS, colorSpace: THREE.SRGBColorSpace, anisotropy: 4, halve: !reliefPossible() });
     } catch (err) {
       console.error("Crush Stream's roof colour map did not load", err);
     }
@@ -174,49 +169,62 @@ const requestRoofs = once((): void => {
 });
 
 /**
- * The glow map's R is the window, its G the window's turn-on threshold: a window lights once `FACADE_GLOW` passes its threshold, shifted by a seed
- * per building face. A roof top (the vertices of class `BUILDING_ROOF`) takes its colour and normal from the roof atlas instead, one covering per
- * building by the same seed, and the top of the slab is raised by a per-building lift.
+ * The glow layer's R is the window, its G the window's turn-on threshold: a window lights once `FACADE_GLOW` passes its threshold, shifted by a seed per building face.
+ * A roof top (`ROOF_LAYER`) takes its colour and normal from the roof strips, one covering per building by the same seed; the top of the slab is raised by a per-building lift.
  */
-const WINDOW_VERTEX = /* glsl */ `
+const FACADE_VERTEX = /* glsl */ `
+attribute vec2 ${SURFACE_REGION_ATTRIBUTE};
+flat varying vec2 vFacadeRegion;
 varying float vFacadeSeed;`;
-const WINDOW_SEED = /* glsl */ `
+/** The parapet lift, shared by the colour pass and the sun's shadow pass (a shadow that missed it would fall up to 2.8 m short): taken before the class tag's grain point, which follows it. */
+const FACADE_LIFT = /* glsl */ `
 #ifdef USE_INSTANCING
 float facadeBuilding = fract(dot(instanceMatrix[3].xz, vec2(0.0791, 0.1137)));
-vFacadeSeed = fract(facadeBuilding + dot(objectNormal.xz, vec2(0.37, 0.61)));
 const float facadeLifts[5] = float[5](${ROOF_LIFTS.map((m) => m.toFixed(1)).join(", ")});
 transformed.y += facadeLifts[int(fract(facadeBuilding * 5.7 + 0.3) * 5.0)] * step(13.9, transformed.y);
+#endif`;
+const FACADE_SEED = /* glsl */ `
+vFacadeRegion = ${SURFACE_REGION_ATTRIBUTE};${FACADE_LIFT}
+#ifdef USE_INSTANCING
+vFacadeSeed = fract(facadeBuilding + dot(objectNormal.xz, vec2(0.37, 0.61)));
 #else
 vFacadeSeed = 0.0;
 #endif`;
-const WINDOW_FRAGMENT = /* glsl */ `
+const FACADE_FRAGMENT = /* glsl */ `
 uniform float facadeGlow;
 uniform float facadeRoofMix[4];
-uniform sampler2D facadeRoofAlbedo;
-uniform sampler2D facadeRoofNormal;
-varying float vFacadeSeed;`;
-const ROOF_CELL = /* glsl */ `vec2(${ROOF_CELLS[0]}.0, ${ROOF_CELLS[1]}.0)`;
-const ROOF_INNER = (1 - 2 * ROOF_PAD).toFixed(4);
-const WINDOW_COLOR = /* glsl */ `
-bool facadeRoof = int(vMaterialAttribute + 0.5) == ${MAT.BUILDING_ROOF};
-float facadePick = fract(vFacadeSeed * 7.31 + 0.17);
-float facadeKind = step(facadeRoofMix[0], facadePick) + step(facadeRoofMix[1], facadePick) + step(facadeRoofMix[2], facadePick) + step(facadeRoofMix[3], facadePick);
-vec2 facadeRoofCell = vec2(mod(facadeKind, ${ROOF_CELLS[0]}.0), floor(facadeKind / ${ROOF_CELLS[0]}.0));
-vec2 facadeRoofUv = (facadeRoofCell + fract(vMapUv) * ${ROOF_INNER} + ${ROOF_PAD}) / ${ROOF_CELL};
-vec2 facadeRoofGrad = vec2(${ROOF_MIP_TEXELS}.0) / (${ROOF_CELL} * vec2(256.0));
-vec2 facadeRoofDx = clamp(dFdx(vMapUv) * ${ROOF_INNER} / ${ROOF_CELL}, -facadeRoofGrad, facadeRoofGrad);
-vec2 facadeRoofDy = clamp(dFdy(vMapUv) * ${ROOF_INNER} / ${ROOF_CELL}, -facadeRoofGrad, facadeRoofGrad);
-if (facadeRoof) diffuseColor.rgb = textureGrad(facadeRoofAlbedo, facadeRoofUv, facadeRoofDx, facadeRoofDy).rgb * (0.88 + 0.24 * fract(vFacadeSeed * 3.1));`;
-const WINDOW_NORMAL = /* glsl */ `
-#ifdef USE_NORMALMAP_TANGENTSPACE
-if (facadeRoof) normal = normalize(tbn * (textureGrad(facadeRoofNormal, facadeRoofUv, facadeRoofDx, facadeRoofDy).xyz * 2.0 - 1.0));
+uniform highp sampler2DArray facadeAlbedo;
+uniform highp sampler2DArray facadeNormalMap;
+uniform highp sampler2DArray facadeGlowMap;
+uniform highp sampler2DArray facadeRoofAlbedo;
+uniform highp sampler2DArray facadeRoofNormal;
+flat varying vec2 vFacadeRegion;
+varying float vFacadeSeed;
+float facadeRoofKind() {
+  float pick = fract(vFacadeSeed * 7.31 + 0.17);
+  return step(facadeRoofMix[0], pick) + step(facadeRoofMix[1], pick) + step(facadeRoofMix[2], pick) + step(facadeRoofMix[3], pick);
+}`;
+/** After three's own normal-map uniforms are declared: the layered normal read, by layer (the roof covering for a roof). */
+const FACADE_NORMAL_PARS = /* glsl */ `
+#ifdef USE_NORMALMAP
+vec4 facadeNormalTexel() {
+  return vFacadeRegion.x < 0.0 ? texture(facadeRoofNormal, vec3(vNormalMapUv, facadeRoofKind())) : texture(facadeNormalMap, vec3(vNormalMapUv, vFacadeRegion.x));
+}
 #endif`;
-const WINDOW_EMISSIVE = /* glsl */ `
+const FACADE_MAP = /* glsl */ `
+#ifdef USE_MAP
+diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : texture(facadeAlbedo, vec3(vMapUv, vFacadeRegion.x));
+#endif`;
+const FACADE_ROOF_COLOR = /* glsl */ `
+if (vFacadeRegion.x < 0.0) diffuseColor.rgb = texture(facadeRoofAlbedo, vec3(vMapUv, facadeRoofKind())).rgb * (0.88 + 0.24 * fract(vFacadeSeed * 3.1));`;
+const FACADE_EMISSIVE = /* glsl */ `
 #ifdef USE_EMISSIVEMAP
-vec2 facadeWindow = texture2D(emissiveMap, vEmissiveMapUv).rg;
+vec2 facadeWindow = texture(facadeGlowMap, vec3(vEmissiveMapUv, vFacadeRegion.x)).rg;
 float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${LIT_SHARE.toFixed(2)});
-totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * float(!facadeRoof);
+totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x);
 #endif`;
+/** three's own tangent-space normal read, with the layered texel in its place and the region's share of the relief on it. */
+const FACADE_NORMAL_MAPS = THREE.ShaderChunk.normal_fragment_maps.replaceAll("texture2D( normalMap, vNormalMapUv )", "facadeNormalTexel()").replace("mapN.xy *= normalScale;", "mapN.xy *= normalScale * vFacadeRegion.y;");
 
 /** The cumulative first four of a style's roof weights over their sum: where a building's seed switches from one covering to the next. */
 function roofEdges(style: FacadeStyle): number[] {
@@ -226,32 +234,59 @@ function roofEdges(style: FacadeStyle): number[] {
   return weights.slice(0, 4).map((w) => (run += w) / total);
 }
 
-/** One material of `style`: its maps (stand-ins until they load), the windows' glow, tagged as concrete. */
+/** The facade shader on `shader` (after the class tag's own patch, whose includes stay): layered colour, normal and glow, the roof covering, the lift. */
+function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: StyleTextures, edges: number[]): void {
+  shader.uniforms.facadeGlow = FACADE_GLOW;
+  shader.uniforms.facadeRoofMix = { value: edges };
+  shader.uniforms.facadeAlbedo = own.albedo;
+  shader.uniforms.facadeNormalMap = own.normal;
+  shader.uniforms.facadeGlowMap = own.glow;
+  shader.uniforms.facadeRoofAlbedo = ROOF_ALBEDO;
+  shader.uniforms.facadeRoofNormal = ROOF_NORMAL;
+  shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>${FACADE_VERTEX}`).replace("#include <begin_vertex>", `#include <begin_vertex>${FACADE_SEED}`);
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <common>", `#include <common>${FACADE_FRAGMENT}`)
+    .replace("#include <normalmap_pars_fragment>", `#include <normalmap_pars_fragment>${FACADE_NORMAL_PARS}`)
+    .replace("#include <map_fragment>", FACADE_MAP)
+    .replace("#include <color_fragment>", `#include <color_fragment>${FACADE_ROOF_COLOR}`)
+    .replace("#include <normal_fragment_maps>", FACADE_NORMAL_MAPS)
+    .replace("#include <emissivemap_fragment>", FACADE_EMISSIVE);
+}
+
+/** One material of `style`: its layered maps (stand-ins until they load), the windows' glow, the roofs, tagged as concrete. */
 function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
-  requestStyle(style);
+  const own = texturesOf(style);
   requestRoofs();
   const { roughness, metalness } = FACADE[style];
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness, emissive: WINDOW_LIGHT, emissiveIntensity: WINDOW_LIGHT_INTENSITY });
-  material.userData.facadeStyle = style;
-  show(material, loaded[style] ?? standIn());
-  reliefMaterial(material, { url: facadeMapUrl(style, "normal"), repeat: 1, clampV: true });
+  const blank = placeholder();
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness, emissive: WINDOW_LIGHT, emissiveIntensity: WINDOW_LIGHT_INTENSITY, map: blank, normalMap: reliefPossible() ? blank : null, emissiveMap: blank });
+  tagMaterial(material, MAT.CONCRETE);
+  const tagHook = material.onBeforeCompile;
+  const tagKey = material.customProgramCacheKey;
   const edges = roofEdges(style);
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.facadeGlow = FACADE_GLOW;
-    shader.uniforms.facadeRoofMix = { value: edges };
-    shader.uniforms.facadeRoofAlbedo = ROOF_ALBEDO;
-    shader.uniforms.facadeRoofNormal = ROOF_NORMAL;
-    shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>${WINDOW_VERTEX}`).replace("#include <begin_vertex>", `#include <begin_vertex>${WINDOW_SEED}`);
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>${WINDOW_FRAGMENT}`)
-      .replace("#include <color_fragment>", `#include <color_fragment>${WINDOW_COLOR}`)
-      .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>${WINDOW_NORMAL}`)
-      .replace("#include <emissivemap_fragment>", WINDOW_EMISSIVE);
+  material.onBeforeCompile = (shader, renderer) => {
+    tagHook.call(material, shader, renderer);
+    patchFacade(shader, own, edges);
   };
-  material.customProgramCacheKey = () => "facade";
-  live.add(material);
-  material.addEventListener("dispose", () => live.delete(material));
-  return tagMaterial(material, MAT.CONCRETE);
+  material.customProgramCacheKey = () => `${tagKey.call(material)}|facade`;
+  const stop = followRelief({ url: facadeMapUrl(style, "normal"), repeat: 1, layers: FACADE_LAYERS[style].layers }, (map, scale) => {
+    own.normal.value = map;
+    material.normalScale.set(scale, scale);
+  });
+  material.addEventListener("dispose", stop);
+  return material;
+}
+
+/** The sun's shadow depth of a facade mesh: three's depth material with the facade's parapet lift, one for every style (a fixed program key). */
+const FACADE_DEPTH = new THREE.MeshDepthMaterial();
+FACADE_DEPTH.onBeforeCompile = (shader) => {
+  shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>${FACADE_LIFT}`);
+};
+FACADE_DEPTH.customProgramCacheKey = () => "facade-depth";
+
+/** `material`'s sun shadow depth material when it is a facade's (so lifted parapets cast their shadow), else null for the plain one. */
+export function facadeDepth(material: THREE.Material): THREE.MeshDepthMaterial | null {
+  return material.userData.facadeStyle === undefined ? null : FACADE_DEPTH;
 }
 
 /** The materials each facade record has made, so a record's owner can dispose just those. */

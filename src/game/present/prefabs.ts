@@ -10,12 +10,13 @@ import { frontBumper, lyingWheel } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
 import { PREFAB } from "../world/constants.ts";
 import { dressPaving } from "./ground-relief.ts";
-import { FACADE, type FacadeStyle, homeStyle, makeFacadeMaterials, ROOF_TILE_M, ROOFLINE } from "./facades.ts";
+import { buildingPieces } from "./facade-mesh.ts";
+import { disposeFacadeMaterials, type FacadeStyle, homeStyle, makeFacadeMaterials } from "./facades.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { applyWaterLook } from "./water-look.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
-import { MAT, type MaterialId } from "../kernel/material-ids.ts";
+import { MAT } from "../kernel/material-ids.ts";
 
 /**
  * Prefab meshes and the race's shared procedural textures. A prefab is one or a few parts (geometry
@@ -263,17 +264,32 @@ function paved(tex: RaceTextures): THREE.MeshStandardMaterial {
   return material;
 }
 
+/** The materials a prefab record makes only when a prop reads them (a course without sidewalks never makes the paving's). */
+const lazyMade = new WeakMap<PrefabMaterials, { paving?: THREE.Material }>();
+
 export function makePrefabMaterials(tex: RaceTextures): PrefabMaterials {
+  const lazy: { paving?: THREE.Material } = {};
   const water = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.2 });
   applyWaterLook(water);
-  return {
+  const materials: PrefabMaterials = {
     plain: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05 }), MAT.GENERIC),
     concrete: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }), MAT.CONCRETE),
-    paving: paved(tex),
+    get paving(): THREE.Material {
+      return (lazy.paving ??= paved(tex));
+    },
     facades: makeFacadeMaterials(),
     billboard: tagMaterial(new THREE.MeshStandardMaterial({ map: tex.billboard, emissiveMap: tex.billboard, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.6 }), MAT.BILLBOARD_FACE),
     water: tagMaterial(water, MAT.WATER),
   };
+  lazyMade.set(materials, lazy);
+  return materials;
+}
+
+/** Dispose a record of prefab materials: the ones it holds, and of the lazy ones only those a prop read. */
+export function disposePrefabMaterials(materials: PrefabMaterials): void {
+  for (const material of [materials.plain, materials.concrete, materials.billboard, materials.water]) material.dispose();
+  lazyMade.get(materials)?.paving?.dispose();
+  disposeFacadeMaterials(materials.facades);
 }
 
 /** Every uv of `g` set to (u, v). */
@@ -344,43 +360,6 @@ function tree(): Piece[] {
     [new THREE.ConeGeometry(1.6, 3.8, 6).translate(0, 3.3, 0), C.leaf[0]!, MAT.CONIFER_FOLIAGE],
     [new THREE.ConeGeometry(1.05, 3.0, 6).translate(0, 5.5, 0), C.leaf[1]!, MAT.CONIFER_FOLIAGE],
   ];
-}
-
-/** Facade plane of width w (m) from y −1.5 to the roofline: `bays` tiles across, a tile as tall as the roofline (`ROOFLINE`), so its top meets the roof slab. */
-function facade(w: number, bays: number): THREE.BufferGeometry {
-  const h = 15;
-  const g = new THREE.PlaneGeometry(w, h).translate(0, h / 2 - 1.5, 0);
-  const uv = g.getAttribute("uv") as THREE.BufferAttribute;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * bays, (uv.getY(i) * h - 1.5) / ROOFLINE);
-  return g;
-}
-
-/**
- * The roof slab, 12 m square from 13.5 to 14 m, in two pieces: its sides, which sample the style's bare wall, and its top, whose uv is in roof tiles
- * (`ROOF_TILE_M`) for the shader to cover from the roof atlas. The top is its own piece so it is the one class `BUILDING_ROOF`.
- */
-function roofSlab(wall: MaterialId, style: FacadeStyle): Piece[] {
-  const [u, v] = FACADE[style].plain;
-  const sides = uvAt(box(12, 0.5, 12, 0, 13.75, 0), u, v);
-  // A box's faces are +x, -x, +y, -y, +z, -z, six indices each: leave the +y face to the top piece.
-  const faces = Array.from(sides.index!.array);
-  sides.setIndex([...faces.slice(0, 12), ...faces.slice(18)]);
-  const top = new THREE.PlaneGeometry(12, 12).rotateX(-Math.PI / 2).translate(0, 14, 0);
-  const position = top.getAttribute("position");
-  const uv = top.getAttribute("uv") as THREE.BufferAttribute;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, position.getX(i) / ROOF_TILE_M, position.getZ(i) / ROOF_TILE_M);
-  return [[sides, C.roof, wall], [top, 0xffffff, MAT.BUILDING_ROOF]];
-}
-
-/** The four facades and the roof slab of a city block in `style`; `wall` is the facade's material id. */
-function building(wall: MaterialId, style: FacadeStyle): Piece[] {
-  const half = 5.9;
-  const out: Piece[] = [];
-  for (let i = 0; i < 4; i++) {
-    out.push([facade(half * 2, FACADE[style].bays).translate(0, 0, half).rotateY((i * Math.PI) / 2), 0xffffff, wall]);
-  }
-  out.push(...roofSlab(wall, style));
-  return out;
 }
 
 /** A five-pointed star prism (outer radius R, one tip towards +z) from y0 to y1. */
@@ -692,7 +671,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, style: FacadeSt
     case PREFAB.building:
     case PREFAB.stucco: {
       const s = style ?? homeStyle(id)!;
-      return one(building(id === PREFAB.stucco ? MAT.STUCCO_WALL : MAT.BUILDING_WALL, s), mats.facades[s]);
+      return one(buildingPieces(s, id === PREFAB.stucco ? MAT.STUCCO_WALL : MAT.BUILDING_WALL), mats.facades[s]);
     }
     case PREFAB.monument:
       return one(monument(), mats.plain);

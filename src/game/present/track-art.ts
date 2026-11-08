@@ -11,7 +11,7 @@ import { MAT } from "../kernel/material-ids.ts";
 import { makePrefabMaterials, prefabParts, raceTextures, TILE } from "./prefabs.ts";
 import { dressGround } from "./ground-relief.ts";
 import { biomeLookup } from "../world/scenery.ts";
-import { facadeStyle, facadeTint, type FacadeStyle, PASTELS } from "./facades.ts";
+import { facadeDepth, facadeStyle, facadeTint, type FacadeStyle, PASTELS } from "./facades.ts";
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
 import {
@@ -291,7 +291,7 @@ export class TrackArt {
     mesh.receiveShadow = true;
     mesh.castShadow = cast;
     if (!Array.isArray(mesh.material)) mesh.material = this.forDraw(mesh.material, mesh);
-    if (cast && mesh instanceof THREE.InstancedMesh) mesh.customDepthMaterial = mesh.instanceColor ? DEPTH_INSTANCED_COLOR : DEPTH_INSTANCED;
+    if (cast && mesh instanceof THREE.InstancedMesh) mesh.customDepthMaterial = facadeDepth(mesh.material as THREE.Material) ?? (mesh.instanceColor ? DEPTH_INSTANCED_COLOR : DEPTH_INSTANCED);
     this.group.add(mesh);
   }
 

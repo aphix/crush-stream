@@ -1,0 +1,158 @@
+{
+  "prague": {
+    "bays": 4,
+    "layers": 4,
+    "metres": {
+      "cornice": 4.32,
+      "floor": 3.79,
+      "ground": 2.5
+    },
+    "plain": [
+      0.801,
+      0.59
+    ]
+  },
+  "dc": {
+    "bays": 4,
+    "layers": 4,
+    "metres": {
+      "cornice": 2.46,
+      "floor": 3.07,
+      "ground": 4.46
+    },
+    "plain": [
+      0.879,
+      0.949
+    ]
+  },
+  "stucco": {
+    "bays": 4,
+    "layers": 3,
+    "metres": {
+      "cornice": 1.87,
+      "floor": 3.6,
+      "ground": 4.44
+    },
+    "plain": [
+      0.895,
+      0.059
+    ]
+  },
+  "glass": {
+    "bays": 2,
+    "layers": 3,
+    "metres": {
+      "cornice": 1.48,
+      "floor": 2.48,
+      "ground": 4.23
+    },
+    "plain": [
+      0.457,
+      0.059
+    ]
+  },
+  "adobe": {
+    "bays": 2,
+    "layers": 3,
+    "metres": {
+      "cornice": 0.88,
+      "floor": 3.87,
+      "ground": 3.85
+    },
+    "plain": [
+      0.598,
+      0.262
+    ]
+  },
+  "shops": {
+    "bays": 4,
+    "layers": 3,
+    "metres": {
+      "cornice": 3.16,
+      "floor": 2.92,
+      "ground": 3.25
+    },
+    "plain": [
+      0.051,
+      0.074
+    ]
+  },
+  "baroque": {
+    "bays": 4,
+    "layers": 4,
+    "metres": {
+      "cornice": 4.17,
+      "floor": 2.89,
+      "ground": 3.09
+    },
+    "plain": [
+      0.16,
+      0.496
+    ]
+  },
+  "havana": {
+    "bays": 4,
+    "layers": 3,
+    "metres": {
+      "cornice": 1.42,
+      "floor": 3.25,
+      "ground": 2.73
+    },
+    "plain": [
+      0.113,
+      0.824
+    ]
+  },
+  "federal": {
+    "bays": 4,
+    "layers": 3,
+    "metres": {
+      "cornice": 3.06,
+      "floor": 2.82,
+      "ground": 3.91
+    },
+    "plain": [
+      0.785,
+      0.262
+    ]
+  },
+  "warehouse": {
+    "bays": 4,
+    "layers": 3,
+    "metres": {
+      "cornice": 3.62,
+      "floor": 2.98,
+      "ground": 3.33
+    },
+    "plain": [
+      0.285,
+      0.934
+    ]
+  },
+  "farm": {
+    "bays": 4,
+    "layers": 3,
+    "metres": {
+      "cornice": 0.47,
+      "floor": 2.6,
+      "ground": 3.73
+    },
+    "plain": [
+      0.082,
+      0.512
+    ]
+  },
+  "rowhouse": {
+    "bays": 3,
+    "layers": 3,
+    "metres": {
+      "cornice": 2.82,
+      "floor": 2.8,
+      "ground": 4.37
+    },
+    "plain": [
+      0.629,
+      0.449
+    ]
+  }
+}

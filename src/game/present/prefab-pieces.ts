@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { MATERIAL_ATTRIBUTE } from "../vehicle/material-class.ts";
+import { MATERIAL_ATTRIBUTE, SURFACE_REGION_ATTRIBUTE } from "../vehicle/material-class.ts";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import type { FacadeStyle } from "./facades.ts";
 
@@ -27,14 +27,18 @@ export type PrefabMaterials = {
 /** One drawable part of a prefab: its geometry, its material, whether the material is shared with the track art, and whether it casts a shadow (default: yes; ground cover and flat paving do not). */
 export type PrefabPart = { geometry: THREE.BufferGeometry; material: THREE.Material; shared: boolean; shadow?: boolean };
 
-/** A coloured piece: geometry already in prefab space, its sRGB colour and its `MaterialId` (unset: the material's own). */
-export type Piece = [THREE.BufferGeometry, number, MaterialId?];
+/** Which layer of a layered texture a piece reads (negative: the roof covering, picked per building) and how much of its normal map it keeps (1: all). */
+export type SurfaceRegion = readonly [layer: number, relief: number];
 
-/** Merge pieces into one non-indexed geometry with position, normal, uv (zero when a piece has none), a per-vertex `color` and, when any piece names a class, `materialClass`. */
+/** A coloured piece: geometry already in prefab space, its sRGB colour, its `MaterialId` (unset: the material's own) and its texture region (unset: layer 0, full relief). */
+export type Piece = [THREE.BufferGeometry, number, MaterialId?, SurfaceRegion?];
+
+/** Merge pieces into one non-indexed geometry with position, normal, uv (zero when a piece has none), a per-vertex `color` and, when any piece names a class, `materialClass` (and a region, `surfaceRegion`). */
 export function painted(pieces: readonly Piece[]): THREE.BufferGeometry {
   const col = new THREE.Color();
   const classed = pieces.some((piece) => piece[2] !== undefined);
-  const parts = pieces.map(([g, hex, materialClass]) => {
+  const regioned = pieces.some((piece) => piece[3] !== undefined);
+  const parts = pieces.map(([g, hex, materialClass, region]) => {
     const n = g.index ? g.toNonIndexed() : g;
     if (n !== g) g.dispose();
     for (const name of Object.keys(n.attributes)) if (name !== "position" && name !== "normal" && name !== "uv") n.deleteAttribute(name);
@@ -47,6 +51,11 @@ export function painted(pieces: readonly Piece[]): THREE.BufferGeometry {
     for (let i = 0; i < count; i++) col.toArray(c, i * 3);
     n.setAttribute("color", new THREE.BufferAttribute(c, 3));
     if (classed) n.setAttribute(MATERIAL_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(count).fill(materialClass ?? MAT.GENERIC), 1));
+    if (regioned) {
+      const regions = new Float32Array(count * 2);
+      for (let i = 0; i < count; i++) regions.set(region ?? [0, 1], i * 2);
+      n.setAttribute(SURFACE_REGION_ATTRIBUTE, new THREE.BufferAttribute(regions, 2));
+    }
     return n;
   });
   const merged = mergeGeometries(parts, false);

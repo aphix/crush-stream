@@ -74,6 +74,9 @@ float materialSpecular(float share) { return max(1.0 + (share - 1.0) * materialS
 /** The per-vertex registry id of a merged prefab (0: the material's own); `painted()` writes it. */
 export const MATERIAL_ATTRIBUTE = "materialClass";
 
+/** The per-vertex texture region of a merged prefab (`painted()`): a vec2 of the layer a layered texture is read at (negative: the roof covering) and the share of its normal map kept. */
+export const SURFACE_REGION_ATTRIBUTE = "surfaceRegion";
+
 /** A car material's env share by its final roughness and metalness: a rough dielectric keeps `CAR_ENV_FLOOR` of it, a metal all. */
 const CAR_ENV_ROUGH_FROM = 0.45;
 const CAR_ENV_ROUGH_TO = 0.92;

@@ -3,6 +3,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { BENCH, BOARD, BOARD_T, BRACKET_T, FLOOR, LAB_BACK, LAB_LAYOUTS, LAB_SCALE, labPlaced, labSurfaces, PEG, ROOM_H, ROOM_HALF_W, type LabPresetId } from "../scenes/lab.ts";
 import { makePrefabMaterials, raceTextures } from "./prefabs.ts";
 import { PropTumble } from "./prop-tumble.ts";
+import { facadeDepth } from "./facades.ts";
 import { DEPTH_INSTANCED, DEPTH_INSTANCED_COLOR } from "./track-mesh.ts";
 import { MATERIAL_ATTRIBUTE, tagMaterial } from "../vehicle/material-class.ts";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
@@ -443,7 +444,7 @@ export class LabArt {
       const props = new PropTumble(labPlaced(layout).placed, mats, (mesh) => {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        mesh.customDepthMaterial = mesh.instanceColor ? DEPTH_INSTANCED_COLOR : DEPTH_INSTANCED;
+        mesh.customDepthMaterial = facadeDepth(mesh.material as THREE.Material) ?? (mesh.instanceColor ? DEPTH_INSTANCED_COLOR : DEPTH_INSTANCED);
         group.add(mesh);
       });
       this.group.add(group);

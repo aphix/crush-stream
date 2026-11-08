@@ -10,19 +10,11 @@ import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
 import type { FxTier } from "./engine-post.ts";
-import { reliefForTier, setReliefTier } from "./surface-relief.ts";
+import { dressGround } from "./ground-relief.ts";
+import { makeFacadeMaterials } from "./facades.ts";
+import { reliefForTier, setReliefDevice, setReliefTier } from "./surface-relief.ts";
 import { TrackArt } from "./track-art.ts";
-
-/** The picture a webp file holds: its edge sizes from the RIFF header (lossy, lossless or extended). */
-function webpSize(b: Uint8Array): { width: number; height: number } {
-  const kind = String.fromCharCode(b[12]!, b[13]!, b[14]!, b[15]!);
-  if (kind === "VP8 ") return { width: (b[26]! | (b[27]! << 8)) & 0x3fff, height: (b[28]! | (b[29]! << 8)) & 0x3fff };
-  if (kind === "VP8L") {
-    const bits = b[21]! | (b[22]! << 8) | (b[23]! << 16) | (b[24]! << 24);
-    return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
-  }
-  return { width: 1 + (b[24]! | (b[25]! << 8) | (b[26]! << 16)), height: 1 + (b[27]! | (b[28]! << 8) | (b[29]! << 16)) };
-}
+import { webpSize } from "./webp-size.test-util.ts";
 
 const requested: string[] = [];
 const realFetch = globalThis.fetch;
@@ -36,7 +28,10 @@ function stubFiles(): void {
       const bytes = readFileSync(new URL(`../../../public${String(url)}`, import.meta.url));
       return { ok: true, status: 200, blob: async () => new Blob([bytes]) };
     },
-    createImageBitmap: async (blob: Blob) => ({ ...webpSize(new Uint8Array(await blob.arrayBuffer())), close() {} }),
+    createImageBitmap: async (blob: Blob) => {
+      const { width, height } = webpSize(new Uint8Array(await blob.arrayBuffer()));
+      return { data: new Uint8ClampedArray(width * height * 4), width, height, close() {} };
+    },
   });
 }
 
@@ -64,7 +59,7 @@ describe("given the FX tiers and the device", () => {
   }
 });
 
-/** Every normal map the City's art draws with: its materials' own, and the roof atlas's through a facade material's compiled uniform. */
+/** Every normal map the City's art draws with: its materials' own, and a facade material's layered ones (its style's, the roofs') through its compiled uniforms. */
 function normalMaps(art: TrackArt): Set<THREE.Texture> {
   const found = new Set<THREE.Texture>();
   const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
@@ -74,24 +69,24 @@ function normalMaps(art: TrackArt): Set<THREE.Texture> {
     if (!(material instanceof THREE.MeshStandardMaterial)) return;
     if (material.normalMap) found.add(material.normalMap);
     if (material.userData.facadeStyle === undefined) return;
+    found.delete(material.normalMap!);
     const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
-    const roofs: THREE.IUniform<THREE.Texture> = shader.uniforms.facadeRoofNormal;
-    found.add(roofs.value);
+    for (const name of ["facadeNormalMap", "facadeRoofNormal"]) found.add(shader.uniforms[name].value);
   });
   return found;
 }
 
 const MIP_CHAIN = 4 / 3;
 
-/** A map's picture: the decoded bitmap, or the flat stand-in's data. */
-type Picture = { width: number; height: number };
+/** A map's picture: the decoded bitmap, or the flat stand-in's data; a layered map's has its layer count. */
+type Picture = { width: number; height: number; depth?: number };
 const pictureOf = (tex: THREE.Texture): Picture => tex.image as Picture;
 
 /** Bytes the maps take on the GPU (RGBA8 with mips); the 1x1 flat map counts its 4 bytes. */
 function bytesOf(maps: Iterable<THREE.Texture>): number {
   let bytes = 0;
-  for (const tex of maps) bytes += pictureOf(tex).width * pictureOf(tex).height * 4 * MIP_CHAIN;
+  for (const tex of maps) bytes += pictureOf(tex).width * pictureOf(tex).height * (pictureOf(tex).depth ?? 1) * 4 * MIP_CHAIN;
   return bytes;
 }
 
@@ -160,5 +155,18 @@ describe("given the City's art built and the relief tier switched", () => {
     setReliefTier(true);
     expect(ground!.normalMap, "the photograph stays").toBe(photograph);
     setReliefTier(false);
+  });
+});
+
+describe("given a phone, which can never draw relief", () => {
+  it("when ground and facade materials are made on it, then none binds a normal map at any tier, and the relief tier changes nothing", () => {
+    setReliefDevice(false);
+    const ground = new THREE.MeshStandardMaterial();
+    dressGround(ground, "asphalt", 8);
+    setReliefTier(true);
+    expect(ground.normalMap, "ground").toBeNull();
+    expect(makeFacadeMaterials().dc.normalMap, "facade").toBeNull();
+    setReliefTier(false);
+    setReliefDevice(true);
   });
 });

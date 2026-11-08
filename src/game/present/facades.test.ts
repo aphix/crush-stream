@@ -1,5 +1,4 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { existsSync, statSync } from "node:fs";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { MAT } from "../kernel/material-ids.ts";
@@ -10,10 +9,11 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
-import { FACADE, FACADE_GLOW, facadeMapUrl, facadeStyle, type FacadeStyle, makeFacadeMaterials } from "./facades.ts";
+import { FACADE, FACADE_GLOW, FACADE_LAYERS, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, ROOF_LAYER, ROOFLINE } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
-import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
+import { disposePrefabMaterials, makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { TrackArt } from "./track-art.ts";
+import { publicWebpSize } from "./webp-size.test-util.ts";
 
 const STYLES = Object.keys(FACADE) as FacadeStyle[];
 
@@ -46,6 +46,32 @@ describe("given the buildings of a course in a biome", () => {
   });
 });
 
+describe("given the packed layers of every facade style", () => {
+  it("when the layer data is read, then it names exactly the styles, each with 3 or 4 layers, positive bands and a bare patch inside the picture", () => {
+    expect(Object.keys(FACADE_LAYERS).sort().join(), "styles with layer data").toBe([...STYLES].sort().join());
+    for (const style of STYLES) {
+      const { layers, metres, plain } = FACADE_LAYERS[style];
+      expect([3, 4], `${style} layers`).toContain(layers);
+      for (const band of [metres.cornice, metres.floor, metres.ground]) expect(band, `${style} band`).toBeGreaterThan(0.3);
+      expect(metres.cornice + metres.ground, `${style}: a storey fits between`).toBeLessThan(ROOFLINE - metres.floor / 2);
+      for (const at of plain) expect(at, `${style} patch`).toBeGreaterThan(0);
+    }
+  });
+
+  it("when each style's strips are listed, then albedo and normal are one 256 texel layer a layer, the glow half of it, and the whole set stays in its file budget", () => {
+    for (const style of STYLES) {
+      const { layers } = FACADE_LAYERS[style];
+      const sizes = (kind: "albedo" | "normal" | "glow"): string => JSON.stringify(publicWebpSize(facadeMapUrl(style, kind)));
+      expect(sizes("albedo"), `${style} albedo`).toBe(JSON.stringify({ width: 256, height: 256 * layers }));
+      expect(sizes("normal"), `${style} normal`).toBe(JSON.stringify({ width: 256, height: 256 * layers }));
+      expect(sizes("glow"), `${style} glow`).toBe(JSON.stringify({ width: 128, height: 128 * layers }));
+    }
+  });
+});
+
+/** The triangles a block may take: street face 6 quads, three walls of 5, the slab 12 (a 4-layer style; a 3-layer one has fewer). */
+const BUILDING_TRIANGLES = 56;
+
 describe("given a building built in each facade style", () => {
   let materials: PrefabMaterials;
   beforeAll(() => {
@@ -54,38 +80,63 @@ describe("given a building built in each facade style", () => {
   });
 
   for (const style of STYLES) {
-    it(`when a ${style} building is built, then its faces repeat the tile ${FACADE[style].bays} times across, reach the roofline, the slab's sides sample the bare wall and its top is laid in 2.4 m roof tiles`, () => {
+    it(`when a ${style} building is built, then each face reads its regions: the street face its ground layer, the cornice at the roofline, the stones where the style has them, a roof top`, () => {
       const [part] = prefabParts(PREFAB.building, materials, style);
       const geometry = part!.geometry;
-      const uv = geometry.getAttribute("uv");
+      const region = geometry.getAttribute("surfaceRegion");
       const position = geometry.getAttribute("position");
+      const normal = geometry.getAttribute("normal");
       const klass = geometry.getAttribute("materialClass");
-      let facadeU = 0;
-      let facadeV = 0;
-      let sides = 0;
-      let roofU = [Infinity, -Infinity];
-      for (let i = 0; i < uv.count; i++) {
+      const { layers, metres } = FACADE_LAYERS[style];
+      const onStreet = new Set<number>();
+      const onSide = new Set<number>();
+      let corniceBottom = Infinity;
+      let corniceTop = -Infinity;
+      for (let i = 0; i < region.count; i++) {
+        const layer = region.getX(i);
         if (klass.getX(i) === MAT.BUILDING_ROOF) {
-          expect(position.getY(i), "roof top height").toBeCloseTo(14, 5);
-          roofU = [Math.min(roofU[0]!, uv.getX(i)), Math.max(roofU[1]!, uv.getX(i))];
-        } else if (Math.abs(uv.getX(i) - FACADE[style].plain[0]) < 1e-5 && Math.abs(uv.getY(i) - FACADE[style].plain[1]) < 1e-5) {
-          sides++;
-        } else {
-          facadeU = Math.max(facadeU, uv.getX(i));
-          facadeV = Math.max(facadeV, uv.getY(i));
+          expect(layer, "the roof top's layer").toBe(ROOF_LAYER);
+          expect(position.getY(i), "the roof top's height").toBeCloseTo(14, 5);
+          continue;
+        }
+        expect(layer, "a layer the style has").toBeLessThan(layers);
+        if (normal.getX(i) > 0.5) onStreet.add(layer);
+        else if (normal.getZ(i) > 0.5) onSide.add(layer);
+        if (layer === LAYER.cornice) {
+          corniceBottom = Math.min(corniceBottom, position.getY(i));
+          corniceTop = Math.max(corniceTop, position.getY(i));
         }
       }
-      expect(facadeU, "tiles across a face").toBeCloseTo(FACADE[style].bays, 5);
-      expect(facadeV, "the tile's top meets the roof slab").toBeCloseTo(1, 5);
-      expect(sides, "slab side vertices on the bare wall (five faces of two triangles)").toBe(30);
-      expect(roofU[1]! - roofU[0]!, "roof tiles across the 12 m top").toBeCloseTo(5, 5);
+      expect(onStreet.has(LAYER.ground), "the street face has its ground band").toBe(true);
+      expect(onSide.has(LAYER.ground), "a side wall runs its storeys to the ground").toBe(false);
+      expect(onStreet.has(LAYER.quoin), "corner stones where the style has them").toBe(layers > LAYER.quoin);
+      expect(corniceTop, "cornice top at the roofline").toBeCloseTo(ROOFLINE, 5);
+      expect(corniceTop - corniceBottom, "cornice height").toBeCloseTo(metres.cornice, 5);
+      expect(position.count / 3, `${position.count / 3} triangles`).toBeLessThanOrEqual(BUILDING_TRIANGLES);
       expect(part!.material, "its style's shared material").toBe(materials.facades[style]);
     });
   }
+
+  it("when a block's storeys are measured, then a storey layer spans its own metres: the band's v is a whole number of storeys, and a side wall's relief is half the street's", () => {
+    const [part] = prefabParts(PREFAB.building, materials, "dc");
+    const geometry = part!.geometry;
+    const region = geometry.getAttribute("surfaceRegion");
+    const uv = geometry.getAttribute("uv");
+    const normal = geometry.getAttribute("normal");
+    let storeys = 0;
+    const reliefs = new Set<number>();
+    for (let i = 0; i < region.count; i++) {
+      if (region.getX(i) === LAYER.floor && normal.getX(i) > 0.5) storeys = Math.max(storeys, uv.getY(i));
+      if (region.getX(i) === LAYER.floor && normal.getX(i) < -0.5) reliefs.add(region.getY(i));
+    }
+    expect(storeys, "street storeys").toBeGreaterThanOrEqual(1);
+    expect(Number.isInteger(storeys), `v ${storeys}`).toBe(true);
+    expect([...reliefs], "a back wall's relief").toEqual([0.5]);
+  });
 });
 
 describe("given the facade materials", () => {
-  it("when they are made, then each style has its own material with its albedo, normal and glow maps", () => {
+  it("when they are made, then each style has its own concrete material wearing the placeholder maps three keeps its paths for", () => {
     const made = makeFacadeMaterials();
     expect(new Set(Object.values(made)).size, "one material a style").toBe(STYLES.length);
     for (const style of STYLES) {
@@ -94,26 +145,18 @@ describe("given the facade materials", () => {
     }
   });
 
-  it("when a style's material is compiled, then its windows light from the one glow uniform every style shares", () => {
+  it("when a style's material is compiled, then colour, normal and glow are read from layered textures by layer, and its windows light from the one glow uniform every style shares", () => {
     const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
     const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
     makeFacadeMaterials().prague.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
     expect(shader.uniforms.facadeGlow, "the shared uniform").toBe(FACADE_GLOW);
-    expect(shader.fragmentShader, "windows lit by their threshold").toContain("facadeGlow");
+    for (const name of ["facadeAlbedo", "facadeNormalMap", "facadeGlowMap", "facadeRoofAlbedo", "facadeRoofNormal"]) expect(shader.uniforms[name], name).toBeTruthy();
+    expect(shader.fragmentShader, "colour by layer").toContain("texture(facadeAlbedo, vec3(vMapUv, vFacadeRegion.x))");
+    expect(shader.fragmentShader, "normal by layer, with the region's relief").toContain("facadeNormalTexel()");
+    expect(shader.fragmentShader, "the relief share of the region").toContain("normalScale * vFacadeRegion.y");
+    expect(shader.fragmentShader, "no plain normal read left").not.toContain("texture2D( normalMap");
     expect(shader.fragmentShader, "the plain emissive map step is replaced").not.toContain("#include <emissivemap_fragment>");
-  });
-
-  it("when every style's maps are listed, then each is a file under public/facades and the whole set stays under its size budget", () => {
-    const kinds = ["albedo", "normal", "glow"] as const;
-    let bytes = 0;
-    for (const style of STYLES) {
-      for (const kind of kinds) {
-        const file = new URL(`../../../public${facadeMapUrl(style, kind)}`, import.meta.url);
-        expect(existsSync(file), file.pathname).toBe(true);
-        bytes += statSync(file).size;
-      }
-    }
-    expect(bytes, `${bytes} B`).toBeLessThan(1_700_000);
+    expect(shader.vertexShader, "the region attribute").toContain("attribute vec2 surfaceRegion");
   });
 });
 
@@ -131,6 +174,50 @@ describe("given the National Mall's art", () => {
       if (o.name === `prop:${PREFAB.building}`) meshes.push(o);
     });
     expect(meshes.length, `${meshes.length} building meshes`).toBeLessThanOrEqual(MALL_BUILDING_MESHES);
+    for (const mesh of meshes) {
+      if (mesh instanceof THREE.Mesh && mesh.castShadow) expect(mesh.customDepthMaterial?.customProgramCacheKey(), "a building's shadow is drawn with the lift").toBe("facade-depth");
+    }
+  });
+});
+
+describe("given the parapet lift of a lifted building", () => {
+  const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
+  const compile = (material: THREE.Material): THREE.WebGLProgramParametersWithUniforms => {
+    const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    return shader;
+  };
+
+  it("when a facade material's vertex shader is compiled, then the lift comes before the class tag's grain point, so the grain follows the raised parapet", () => {
+    const vertex = compile(makeFacadeMaterials().dc).vertexShader;
+    expect(vertex.indexOf("facadeLifts"), "lift in the shader").toBeGreaterThan(-1);
+    expect(vertex.indexOf("facadeLifts"), "lift before the grain point").toBeLessThan(vertex.indexOf("vMaterialPoint = "));
+  });
+
+  it("when the sun's shadow material of a facade mesh is asked, then it is the one lifted depth material, and a plain material has none", () => {
+    const dc = makeFacadeMaterials().dc;
+    const depth = facadeDepth(dc);
+    expect(depth, "a facade's depth").toBeTruthy();
+    expect(facadeDepth(makeFacadeMaterials().prague), "one for every style").toBe(depth);
+    expect(compile(depth!).vertexShader, "the lift in the shadow pass").toContain("facadeLifts");
+    expect(facadeDepth(new THREE.MeshStandardMaterial()), "a plain material").toBeNull();
+  });
+});
+
+describe("given the paving material of a prefab record", () => {
+  it("when it is read twice and disposed, then it is one material made on first read, and a record that never read it makes none to dispose", () => {
+    stubBrowser();
+    const read = makePrefabMaterials(raceTextures());
+    expect(read.paving, "one material").toBe(read.paving);
+    let disposed = 0;
+    read.paving.addEventListener("dispose", () => disposed++);
+    disposePrefabMaterials(read);
+    expect(disposed, "the read paving is disposed").toBe(1);
+    const unread = makePrefabMaterials(raceTextures());
+    disposePrefabMaterials(unread);
+    let later = 0;
+    unread.paving.addEventListener("dispose", () => later++);
+    expect(later, "a paving first read after the disposal is live").toBe(0);
   });
 });
 
@@ -149,28 +236,24 @@ describe("given the world stage's time of day", () => {
 });
 
 describe("given the roof coverings", () => {
-  it("when the roof atlas files are listed, then both maps are 3 x 2 cells of 256 texels and under their size budget", () => {
-    for (const kind of ["albedo", "normal"] as const) {
-      const file = new URL(`../../../public/facades/roofs-${kind}.webp`, import.meta.url);
-      expect(existsSync(file), file.pathname).toBe(true);
-      expect(statSync(file).size, `${kind} bytes`).toBeLessThan(400_000);
-    }
+  it("when the roof strips are listed, then both are five 256 texel layers", () => {
+    for (const kind of ["albedo", "normal"] as const) expect(JSON.stringify(publicWebpSize(`/facades/roofs-${kind}.webp`)), kind).toBe(JSON.stringify({ width: 256, height: 256 * 5 }));
   });
 
-  it("when a style's material is compiled, then its roof switch points rise to at most 1 and the roof atlas is sampled for the roof class", () => {
+  it("when a style's material is compiled, then its roof switch points rise to at most 1 and the roof strips are read for the roof layer", () => {
     const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
     const made = makeFacadeMaterials();
     for (const style of STYLES) {
       const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
       made[style].onBeforeCompile(shader, {} as THREE.WebGLRenderer);
-      const edges = (shader.uniforms.facadeRoofMix as THREE.IUniform<number[]>).value;
+      const edges: number[] = shader.uniforms.facadeRoofMix.value;
       expect(edges.length, style).toBe(4);
       for (let i = 1; i < edges.length; i++) expect(edges[i]!, `${style} edge ${i}`).toBeGreaterThanOrEqual(edges[i - 1]!);
       expect(edges[3]!, `${style} last edge`).toBeLessThanOrEqual(1);
-      expect(shader.fragmentShader, `${style} roof atlas`).toContain("facadeRoofAlbedo");
+      expect(shader.fragmentShader, `${style} roof colour`).toContain("texture(facadeRoofAlbedo");
     }
     const adobe = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
     made.adobe.onBeforeCompile(adobe, {} as THREE.WebGLRenderer);
-    expect((adobe.uniforms.facadeRoofMix as THREE.IUniform<number[]>).value, "an adobe roof is all tar").toEqual([1, 1, 1, 1]);
+    expect(adobe.uniforms.facadeRoofMix.value, "an adobe roof is all tar").toEqual([1, 1, 1, 1]);
   });
 });

@@ -19,6 +19,7 @@ import { groundMaterial, levelOrder } from "../scenes/ground-stack.ts";
 import { carClass, damageStage } from "../vehicle/vehicle-classes.ts";
 import { makeJerseyBarrier, makePoolTexture } from "../present/engine-world.ts";
 import { Cinematics } from "../present/engine-cine.ts";
+import { setReliefDevice } from "../present/surface-relief.ts";
 import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import { SKY_MODES } from "../present/sky-dome.ts";
 import { AutoFx, deviceClass, gpuRenderer, type DeviceClass } from "../present/auto-fx.ts";
@@ -274,6 +275,7 @@ export class CrashEngine extends EngineGarage {
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
     this.cine.marks.phone = !desktop;
+    setReliefDevice(desktop);
     this.cine.setTier(fxParam === "ultra" ? "high" : (fxParam ?? INITIAL_HUD.fxTier));
     // `?sky=0|1|auto|on|off` pins the Sky setting for the session (bench A/B).
     const skyParam = new URLSearchParams(window.location.search).get(SETTING_KEY.sky);
