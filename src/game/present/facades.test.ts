@@ -1,6 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { existsSync, statSync } from "node:fs";
-import { join } from "node:path";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { MAT } from "../kernel/material-ids.ts";
@@ -102,8 +101,8 @@ describe("given the facade materials", () => {
     let bytes = 0;
     for (const style of STYLES) {
       for (const kind of kinds) {
-        const file = join(import.meta.dirname, "../../../public", facadeMapUrl(style, kind));
-        expect(existsSync(file), file).toBe(true);
+        const file = new URL(`../../../public${facadeMapUrl(style, kind)}`, import.meta.url);
+        expect(existsSync(file), file.pathname).toBe(true);
         bytes += statSync(file).size;
       }
     }
