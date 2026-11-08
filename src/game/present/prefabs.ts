@@ -6,7 +6,7 @@ import { tagSurface } from "./ultra/surface-tag.ts";
 import { CARHENGE, CHEVRON, FENCE, JUNK_CRANE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, WRECK, type PrefabId } from "../world/catalog.ts";
 import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, type Skin, squareFrustum } from "./prefab-pieces.ts";
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
-import { frontBumper, lyingWheel } from "./prefabs-car.ts";
+import { frontBumper, lyingWheel, parkedCar } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
 import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMaterials } from "./scenery-assets-art.ts";
 import { PREFAB } from "../world/constants.ts";
@@ -725,6 +725,16 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
       return one(chevron(), mats.plain);
     case PREFAB.wreck:
       return one(wreck(), mats.plain);
+    case PREFAB.parkedSedan:
+      return one(parkedCar("sedan"), mats.plain);
+    case PREFAB.parkedHatchback:
+      return one(parkedCar("hatchback"), mats.plain);
+    case PREFAB.parkedWagon:
+      return one(parkedCar("wagon"), mats.plain);
+    case PREFAB.parkedCoupe:
+      return one(parkedCar("coupe"), mats.plain);
+    case PREFAB.parkedPickup:
+      return one(parkedCar("pickup"), mats.plain);
     case PREFAB.carhenge:
       return [...one(carhenge(), mats.plain), firePool()];
     case PREFAB.junkCrane:

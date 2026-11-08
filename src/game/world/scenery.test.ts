@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PREFABS } from "./catalog.ts";
+import { PARKED_PREFABS, PREFABS } from "./catalog.ts";
 import { BIOME, PREFAB, TRACK_ID } from "./constants.ts";
 import { placeProps, type Placed } from "./placements.ts";
 import { addedDrawGroups, biomeLookup, drawGroupOf, thinScenery } from "./scenery.ts";
@@ -170,7 +170,8 @@ describe("given each course family", () => {
   it("when a city and a circuit are dressed, then they have sidewalks, and the oval's has tyre stacks, parked cars and flower beds", () => {
     const kinds = (id: string) => new Set([...dress(json(id)).solid, ...dress(json(id)).drawn].map((p) => p.prefab));
     expect(kinds(TRACK_ID.city).has(PREFAB.sidewalk)).toBe(true);
-    for (const kind of [PREFAB.sidewalk, PREFAB.tyreStack, PREFAB.wreck, PREFAB.flowers]) expect(kinds(TRACK_ID.oval).has(kind), `the oval has ${kind}`).toBe(true);
+    for (const kind of [PREFAB.sidewalk, PREFAB.tyreStack, PREFAB.flowers]) expect(kinds(TRACK_ID.oval).has(kind), `the oval has ${kind}`).toBe(true);
+    expect([...PARKED_PREFABS].some((id) => kinds(TRACK_ID.oval).has(id)), "the oval parks cars").toBe(true);
   });
 });
 

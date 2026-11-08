@@ -12,6 +12,7 @@ const NON_UNIQUE: readonly string[] = [
   PREFAB.cone, PREFAB.tyreStack, PREFAB.hayBale, PREFAB.crate, PREFAB.barrierBlock, PREFAB.rock, PREFAB.dumpster, PREFAB.chevron,
   PREFAB.lamp, PREFAB.gantry, PREFAB.flagpole, PREFAB.billboard, PREFAB.fence, PREFAB.wall, PREFAB.tree, PREFAB.palm,
   PREFAB.grandstand, PREFAB.fountain, PREFAB.building, PREFAB.stucco, PREFAB.bush, PREFAB.flowers, PREFAB.sidewalk,
+  PREFAB.parkedSedan, PREFAB.parkedHatchback, PREFAB.parkedWagon, PREFAB.parkedCoupe, PREFAB.parkedPickup,
 ];
 /** One-of-a-kind landmarks, the two pools too big for the disc, the car parts the number keys throw (`THROWN_KINDS`), the figure-8's junkyard (its shells, Carhenge, crane) and the generic asset kinds (one per way of drawing, the placement picks the sprite; the asset rows stand them): not gallery prefabs. */
 const EXCLUDED: readonly string[] = [

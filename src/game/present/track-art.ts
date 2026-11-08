@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { detAtan2 } from "../kernel/physics-core.js";
 import { applyMarkMap } from "./engine-marks.ts";
 import type { WorldStage } from "./engine-world.ts";
-import { SURFACE_IDS, SURFACES, type PrefabId, type SurfaceId } from "../world/catalog.ts";
+import { PARKED_PREFABS, SURFACE_IDS, SURFACES, type PrefabId, type SurfaceId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
 import { PREFAB, SURFACE, type BiomeId } from "../world/constants.ts";
 import { box, painted, type Piece, type PrefabMaterials, type Skin } from "./prefab-pieces.ts";
@@ -25,6 +25,7 @@ import { addDecks, addTunnels, addWalls, pillarPieces } from "./track-structures
 import { PropTumble } from "./prop-tumble.ts";
 import { FoliagePoof } from "./foliage-poof.ts";
 import { foliageTint } from "./prefabs-foliage.ts";
+import { PARKED_PAINTS } from "./prefabs-car.ts";
 import { assetTint, disposeAssetMaterials, isAssetFamily } from "./scenery-assets-art.ts";
 import { SCENERY_ASSETS } from "../world/scenery-assets/index.ts";
 import { backdropMesh, disposeBackdrop, type Backdrop } from "./sky-backdrop.ts";
@@ -351,6 +352,10 @@ export class TrackArt {
     }
     if (id === PREFAB.wreck) {
       out.setHex(WRECK_PAINTS[Math.floor(h * WRECK_PAINTS.length)]!);
+      return true;
+    }
+    if (PARKED_PREFABS.has(id)) {
+      out.setHex(PARKED_PAINTS[Math.floor(h * PARKED_PAINTS.length)]!);
       return true;
     }
     return foliageTint(id, i, out);

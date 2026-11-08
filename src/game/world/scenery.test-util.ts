@@ -1,4 +1,4 @@
-import { PREFABS } from "./catalog.ts";
+import { PARKED_PREFABS, PREFABS } from "./catalog.ts";
 import { PREFAB } from "./constants.ts";
 import { VERGE_REACH } from "./scenery-biome.ts";
 import { boxClear, placeCourse, type Placed } from "./placements.ts";
@@ -123,4 +123,4 @@ export function seamGap(a: Placed, b: Placed): number {
 }
 
 /** Kinds that lie flat on the ground or are driven through, which may lie under or among other props. */
-export const FLAT = new Set<string>([PREFAB.sidewalk, PREFAB.wreck, ...PAINT]);
+export const FLAT = new Set<string>([PREFAB.sidewalk, PREFAB.wreck, ...PARKED_PREFABS, ...PAINT]);

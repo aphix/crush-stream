@@ -5,12 +5,13 @@ import { GROUND_LEVEL } from "../scenes/constants.ts";
 import { groundMesh, levelOrder } from "../scenes/ground-stack.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
-import type { PrefabId } from "../world/catalog.ts";
+import { PARKED_PREFABS, type PrefabId } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
 import { disposePrefabMaterials, makePrefabMaterials, raceTextures } from "./prefabs.ts";
 import type { PrefabMaterials, Skin } from "./prefab-pieces.ts";
 import { assetTint, isAssetFamily } from "./scenery-assets-art.ts";
+import { PARKED_PAINTS } from "./prefabs-car.ts";
 import { PropTumble } from "./prop-tumble.ts";
 import { DEPTH_INSTANCED } from "./track-mesh.ts";
 import { galleryRow, galleryStyleOf, SCENERY_GALLERY } from "./showcase-gallery-rows.ts";
@@ -101,6 +102,7 @@ export const SHOWCASE_RADIUS = 140;
 export const SHOWCASE_GALLERY: readonly Placed[] = [
   ...galleryRow(15, [PREFAB.cone, PREFAB.tyreStack, PREFAB.hayBale, PREFAB.crate, PREFAB.barrierBlock, PREFAB.rock, PREFAB.dumpster, PREFAB.chevron], 1.5),
   ...galleryRow(19, [PREFAB.lamp, PREFAB.gantry, PREFAB.flagpole, PREFAB.billboard, PREFAB.fence, PREFAB.wall, PREFAB.tree, PREFAB.palm], 2),
+  ...galleryRow(23, [PREFAB.parkedSedan, PREFAB.parkedHatchback, PREFAB.parkedWagon, PREFAB.parkedCoupe, PREFAB.parkedPickup], 1),
   ...galleryRow(28, [PREFAB.grandstand, PREFAB.fountain], 9),
   ...galleryRow(38, [PREFAB.building, PREFAB.stucco], 2),
   ...SCENERY_GALLERY,
@@ -133,10 +135,14 @@ const POST_LIGHT = { color: 0xffe2b0, intensity: 260, distance: 55, angle: 0.8, 
 
 const _mark = new THREE.Vector3();
 
-/** The monster's rims are gunmetal as its batched wheels' are (`STYLE_WHEELS`), a scenery asset takes its placement's sprite tint; the other props are untinted. */
+/** The monster's rims are gunmetal as its batched wheels' are (`STYLE_WHEELS`), a scenery asset takes its placement's sprite tint, a parked car a paint by its slot; the other props are untinted. */
 function galleryTint(id: PrefabId, i: number, out: THREE.Color, style: Skin): boolean {
   if (isAssetFamily(style)) {
     assetTint(i, out);
+    return true;
+  }
+  if (PARKED_PREFABS.has(id)) {
+    out.setHex(PARKED_PAINTS[i % PARKED_PAINTS.length]!);
     return true;
   }
   if (id !== PREFAB.monsterWheel) return false;

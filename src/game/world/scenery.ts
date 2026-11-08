@@ -1,5 +1,5 @@
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
-import { PREFABS, type PrefabId } from "./catalog.ts";
+import { PARKED_CARS, PREFABS, type PrefabId } from "./catalog.ts";
 import { BIOME, BIOME_IDS, PREFAB, SCENERY_RULES, type BiomeId } from "./constants.ts";
 import type { Placed } from "./placements.ts";
 import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
@@ -609,7 +609,7 @@ function infield(c: Ctx): void {
   });
 }
 
-/** Rules 1 and 5: behind each of a circuit's grandstands a paved car park (paving) with two rows of parked cars (trackside; the junked shells, tinted), clear of every road. */
+/** Rules 1 and 5: behind each of a circuit's grandstands a paved car park (paving) with two rows of parked cars (trackside; a civilian style by the bay's hash, drawn only), clear of every road. */
 function carParks(c: Ctx): void {
   const [sw, , sd] = PREFABS[PREFAB.grandstand].size;
   const [pw, , pl] = PREFABS[PREFAB.sidewalk].size;
@@ -633,8 +633,10 @@ function carParks(c: Ctx): void {
     for (const row of [-CAR_ROW, CAR_ROW]) {
       for (let n = 0; n < Math.floor(length / CAR_PITCH); n++) {
         const t = (n + 0.5) * CAR_PITCH - length / 2;
-        if (unit(mix(mix(c.seed, RULE_TRACKSIDE), mix(Math.round(g.x * 8) + n, Math.round(g.z * 8) + (row > 0 ? 1 : 0)))) < CAR_SKIP) continue;
-        place(c, RULE_TRACKSIDE, PREFAB.wreck, mx + fx * row + ax * t, mz + fz * row + az * t, g.yaw + Math.PI / 2, 1, CAR_CORE);
+        const bay = mix(mix(c.seed, RULE_TRACKSIDE), mix(Math.round(g.x * 8) + n, Math.round(g.z * 8) + (row > 0 ? 1 : 0)));
+        if (unit(bay) < CAR_SKIP) continue;
+        const { prefab } = PARKED_CARS[Math.floor(unit(mix(bay, 1)) * PARKED_CARS.length)]!;
+        place(c, RULE_TRACKSIDE, prefab, mx + fx * row + ax * t, mz + fz * row + az * t, g.yaw + Math.PI / 2, 1, CAR_CORE);
       }
     }
     c.occ.add(mx, mz, detCos(g.yaw), detSin(g.yaw), CAR_PARK_DEPTH / 2, length / 2);

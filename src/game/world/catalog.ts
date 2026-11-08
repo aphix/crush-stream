@@ -83,6 +83,11 @@ export const PREFAB_IDS = [
   PREFAB.garfieldMonument,
   PREFAB.flagpole,
   PREFAB.wreck,
+  PREFAB.parkedSedan,
+  PREFAB.parkedHatchback,
+  PREFAB.parkedWagon,
+  PREFAB.parkedCoupe,
+  PREFAB.parkedPickup,
   PREFAB.carhenge,
   PREFAB.junkCrane,
   PREFAB.sidewalk,
@@ -327,6 +332,16 @@ export const CHEVRON = { width: 1.2, height: 0.9, top: 1.6, thick: 0.08 } as con
 
 /** A junked car shell as the scenery draws it (m): `wide` across, `long` nose to tail, `tall` to its crushed roof. */
 export const WRECK = { wide: 1.8, long: 4.4, tall: 1.3 } as const;
+/** The civilian cars a car park parks, each drawn from its body style's own meshes (`present/prefabs-car.ts`): its prefab and its box (m), the style's width, overhangs plus wheelbase, and height. */
+export const PARKED_CARS = [
+  { prefab: PREFAB.parkedSedan, style: "sedan", wide: 1.64, long: 4.229, tall: 1.337 },
+  { prefab: PREFAB.parkedHatchback, style: "hatchback", wide: 1.621, long: 3.6, tall: 1.309 },
+  { prefab: PREFAB.parkedWagon, style: "wagon", wide: 1.687, long: 4.21, tall: 1.595 },
+  { prefab: PREFAB.parkedCoupe, style: "coupe", wide: 1.571, long: 4.123, tall: 1.294 },
+  { prefab: PREFAB.parkedPickup, style: "pickup", wide: 1.584, long: 4.188, tall: 1.691 },
+] as const;
+/** The prefab ids of `PARKED_CARS`. */
+export const PARKED_PREFABS: ReadonlySet<PrefabId> = new Set<PrefabId>(PARKED_CARS.map((c) => c.prefab));
 /** The Carhenge (m): `pairs` pairs of car shells stood on their noses round a circle of radius `ring`, the two of a pair `gap` apart (their middles), a shell laid across each pair's tops. */
 export const CARHENGE = { ring: 8.5, pairs: 5, gap: 2.6 } as const;
 /** Its plan's reach (m) from the middle: an upright's outer corner. */
@@ -381,6 +396,11 @@ function monumentSpec(bricks: readonly Brick[]): PrefabSpec {
 
 /** The muscle coupe's front bumper bar's depth (m): its bounds from front to back. */
 const MUSCLE_BUMPER_DEPTH = 0.24;
+
+/** A parked car's spec: drawn only, its footprint its box's plan. */
+function parkedSpec({ wide, long, tall }: (typeof PARKED_CARS)[number]): PrefabSpec {
+  return { body: "none", collider: [], foot: hypot2(wide / 2, long / 2), size: [wide, tall, long], mass: 0, material: MAT.DUMPSTER_STEEL };
+}
 
 export const PREFABS: Record<PrefabId, PrefabSpec> = {
   cone: {
@@ -637,6 +657,11 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   },
   // Junkyard scenery behind a course's walls (the figure-8's islands and clearing): drawn only, nothing to hit. `foot` bounds the plan.
   wreck: { body: "none", collider: [], foot: hypot2(WRECK.wide / 2, WRECK.long / 2), size: [WRECK.wide, WRECK.tall, WRECK.long], mass: 0, material: MAT.DUMPSTER_STEEL },
+  [PREFAB.parkedSedan]: parkedSpec(PARKED_CARS[0]),
+  [PREFAB.parkedHatchback]: parkedSpec(PARKED_CARS[1]),
+  [PREFAB.parkedWagon]: parkedSpec(PARKED_CARS[2]),
+  [PREFAB.parkedCoupe]: parkedSpec(PARKED_CARS[3]),
+  [PREFAB.parkedPickup]: parkedSpec(PARKED_CARS[4]),
   carhenge: { body: "none", collider: [], foot: CARHENGE_REACH, size: [CARHENGE_REACH * 2, CARHENGE_TOP, CARHENGE_REACH * 2], mass: 0, material: MAT.DUMPSTER_STEEL },
   [PREFAB.junkCrane]: { body: "none", collider: [], foot: JUNK_CRANE.reach, size: [JUNK_CRANE.reach * 2, JUNK_CRANE.height, JUNK_CRANE.heap * 2], mass: 0, material: MAT.GANTRY_LATTICE },
   // The scenery service's ground dressing (`scenery.ts`): drawn only. A sidewalk slab is flush paving (width across the road, length along it); a bush and a flower bed poof under a car.
