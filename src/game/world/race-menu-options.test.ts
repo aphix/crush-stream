@@ -60,7 +60,7 @@ describe("given the setup card", () => {
     inRaceMode((w) => expect(optionsOf(w).campaign.join()).toBe(CAMPAIGN.join()));
   });
 
-  // mutation: sed -i '/^  TRACK_ID.figure8,$/d' src/game/world/tracks/index.ts  (the figure-8 is on the menu but not in the campaign: red)
+  // mutation: sed -i '/^  figure8: "figure-8",$/d' src/game/world/constants.ts  (the default campaign is Object.values(TRACK_ID): the figure-8 is on the menu but not in it, red)
   it("when it first opens, then every course on the race menu is in the campaign, before any is ticked off", () => {
     const campaign = new Set(DEFAULT_RACE_OPTIONS.campaign);
     for (const id of TRACKS.map((raw) => parseTrack(raw).id)) expect(campaign.has(id), `${id} is in the default campaign`).toBe(true);
