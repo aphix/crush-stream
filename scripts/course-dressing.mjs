@@ -405,10 +405,9 @@ export class Dressing {
 
   /** @param {string} label @param {Placement[]} list */
   heal(label, list) {
+    let placed = 0;
     let moved = 0;
     let removed = 0;
-    /** @type {Placement[]} */
-    const kept = [];
     for (const p of list) {
       const home = { x: p.x, z: p.z };
       const [tx, tz] = this.tangent(home.x, home.z);
@@ -422,11 +421,11 @@ export class Dressing {
       if (!ok) removed++;
       else {
         if (p.x !== home.x || p.z !== home.z) moved++;
-        kept.push(p);
+        this.register(p);
+        placed++;
       }
     }
-    for (const p of kept) this.register(p);
-    this.notes.push(`${label}: ${kept.length} placed, ${moved} healed, ${removed} removed`);
+    this.notes.push(`${label}: ${placed} placed, ${moved} healed, ${removed} removed`);
   }
 
   /** @param {Placement} p */
@@ -514,12 +513,17 @@ export function dress(courseId, base, program, dir = TRACKS_DIR) {
   return { text, notes: d.notes, appended: Object.fromEntries(Object.entries(d.added).filter(([, e]) => e.length).map(([k, e]) => [k, e.length])), changed: text !== d.text, file: `${dir}${courseId}.json` };
 }
 
+/** The authored entry count of each array, from a sidecar's `// base <key>: <n>` header lines. @param {string} sidecarText @returns {Record<string, number>} */
+export function baseOf(sidecarText) {
+  return Object.fromEntries([...sidecarText.matchAll(/^\/\/ base (\w+): (\d+)$/gm)].map((m) => [m[1], Number(m[2])]));
+}
+
 /** @param {string[]} args */
 async function main(args) {
   const [courseId, ...flags] = args;
   if (!courseId) throw new Error("usage: course-dressing.mjs <course id> [--dry | --check]");
   const sidecar = `${TRACKS_DIR}${courseId}.dressing.mjs`;
-  const base = Object.fromEntries([...readFileSync(sidecar, "utf8").matchAll(/^\/\/ base (\w+): (\d+)$/gm)].map((m) => [m[1], Number(m[2])]));
+  const base = baseOf(readFileSync(sidecar, "utf8"));
   const { default: program } = await import(pathToFileURL(sidecar).href);
   const { text, notes, appended, changed, file } = dress(courseId, base, program);
   console.log(`${notes.join("\n")}\nappended ${JSON.stringify(appended)}`);

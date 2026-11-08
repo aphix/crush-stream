@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import { PREFABS } from "../src/game/world/catalog.ts";
 import { boxClear } from "../src/game/world/placements.ts";
 import { Track } from "../src/game/world/track.ts";
-import { dress } from "./course-dressing.mjs";
+import { baseOf, dress } from "./course-dressing.mjs";
+import breakerYardDressing from "../src/game/world/tracks/breaker-yard.dressing.mjs";
 
 const COURSE = "breaker-yard";
 const AUTHORED_PROPS = 17;
@@ -54,5 +55,31 @@ describe("given a prop placed on the road", () => {
     const clearance = Math.min(...new Track(JSON.parse(text)).paths().map((path) => boxClear(path, placed.x, placed.z, placed.yaw ?? 0, half, half)));
     expect(props.length, "props after the run").toBe(AUTHORED_PROPS + 1);
     expect(clearance, "clearance from the nearest road").toBeGreaterThanOrEqual(MARGIN);
+  });
+});
+
+describe("given a crowded row of crates one metre apart on open ground", () => {
+  const dir = scratchDir();
+  const ROW_COUNT = 8;
+
+  it("when the course is dressed, then every crate is placed and no two footprints overlap", () => {
+    const { text } = dress(COURSE, { props: AUTHORED_PROPS }, (d) => d.row("crate", [500, -80], [507, -80], { every: 1 }), dir);
+    const placed = JSON.parse(text).props.slice(AUTHORED_PROPS);
+    let nearest = Infinity;
+    for (const [i, a] of placed.entries()) {
+      for (const b of placed.slice(i + 1)) nearest = Math.min(nearest, Math.hypot(a.x - b.x, a.z - b.z));
+    }
+    expect(placed.length, "crates placed").toBe(ROW_COUNT);
+    expect(nearest, "distance between the two nearest crates").toBeGreaterThanOrEqual(2 * PREFABS.crate.foot);
+  });
+});
+
+describe("given the committed breaker-yard dressing program", () => {
+  it("when it is run against the committed course JSON, then the JSON is already its output", () => {
+    const base = baseOf(readFileSync(new URL(`../src/game/world/tracks/${COURSE}.dressing.mjs`, import.meta.url), "utf8"));
+    const result = dress(COURSE, base, breakerYardDressing);
+    expect(base.props, "authored props the sidecar names").toBe(AUTHORED_PROPS);
+    expect(result.appended.props, "props the program appends").toBeGreaterThan(0);
+    expect(result.changed, "course JSON differs from the program's output").toBe(false);
   });
 });
