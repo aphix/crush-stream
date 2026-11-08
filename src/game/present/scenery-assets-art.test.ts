@@ -150,6 +150,22 @@ describe("given the standing quads of a card and a cross", () => {
   }
 });
 
+describe("given a family's sprite material, whose quads are drawn from both sides", () => {
+  it("when its program is built, then a back face reflects the bent normal about the quad's plane before the tangent frame is made, not negates it whole", () => {
+    // mutation: sed -i 's/\.replace("#include <normal_fragment_begin>", SPRITE_NORMAL_BEGIN)//' src/game/present/scenery-assets-art.ts
+    // mutation: sed -i 's/reflect(normal, quadFacing)/-normal/' src/game/present/scenery-assets-art.ts
+    const material = makeAssetMaterials(false)[ASSET_FAMILIES[0]];
+    must(material instanceof THREE.MeshStandardMaterial, "a standard material");
+    const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
+    const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    const mirrored = shader.fragmentShader.indexOf("reflect(normal, quadFacing)");
+    expect(mirrored, "a back face's normal is reflected about the quad's plane").toBeGreaterThan(-1);
+    expect(shader.fragmentShader, "the stock whole negation of a back face's normal is gone").not.toContain("normal *= faceDirection;");
+    expect(mirrored, "reflected before the tangent frame is built from it").toBeLessThan(shader.fragmentShader.indexOf("getTangentFrame"));
+  });
+});
+
 /** Slack (share of the atlas) for the rects' six-decimal rounding. */
 const RECT_SLACK = 1e-6;
 

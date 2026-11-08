@@ -180,6 +180,11 @@ vMapUv = ${ASSET_RECT}.xy + uv * ${ASSET_RECT}.zw;
 #ifdef USE_NORMALMAP
 vNormalMapUv = ${ASSET_RECT}.xy + uv * ${ASSET_RECT}.zw;
 #endif`;
+/** A back face reflects the bent normal about the quad's plane (three negates it whole, which turns the top's upward lean down), before the chunk builds the normal map's tangent frame from it. */
+const SPRITE_NORMAL_BEGIN = THREE.ShaderChunk.normal_fragment_begin.replace(
+  "normal *= faceDirection;",
+  "vec3 quadFacing = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));\nnormal = faceDirection < 0.0 ? reflect(normal, quadFacing) : normal;",
+);
 const SPRITE_PROGRAM = "asset";
 
 /** One material of `family`: its atlas (the stand-in until it loads), the relief normal, shaded as foliage. `onGround` is the blended copy a decal wears at its place in the ground stack. */
@@ -197,6 +202,7 @@ function makeMaterial(family: AssetFamily, full: boolean, onGround: boolean): TH
       .replace("#include <common>", `#include <common>${SPRITE_VERTEX_PARS}`)
       .replace("#include <begin_vertex>", `#include <begin_vertex>${SPRITE_VERTEX_FIT}`)
       .replace("#include <uv_vertex>", `#include <uv_vertex>${SPRITE_VERTEX_UV}`);
+    shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>", SPRITE_NORMAL_BEGIN);
   };
   material.customProgramCacheKey = () => SPRITE_PROGRAM;
   live.add(material);
