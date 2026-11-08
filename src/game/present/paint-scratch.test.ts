@@ -339,13 +339,15 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     expect(drawn, "redraws in 1 s").toBeLessThanOrEqual(1 / DENT_REBUILD_S + 1);
   });
 
-  it(`when its skin is written and its dents redrawn every frame, then a frame allocates at most ${FRAME_BOUND_B} B`, () => {
+  it(`when its skin is written and its dents redrawn every frame, then a frame, with its flush, allocates at most ${FRAME_BOUND_B} B`, () => {
     // The skin write as the skin makes it: the attribute's version, not a `lookMeshes()` read (its arrays are the row's, not the frame's).
     const skin = crushed.lookMeshes().body.geometry.getAttribute("position");
+    const { renderer } = stubGpu(mask(), false);
     const frames = (count: number) => {
       for (let i = 0; i < count; i++) {
         skin.needsUpdate = true;
         view.frame(cars, DENT_REBUILD_S);
+        view.flush(renderer);
       }
     };
     const perFrame = untilQuiet(() => allocatedBytes(() => frames(DENT_FRAMES)) / DENT_FRAMES, FRAME_BOUND_B);
