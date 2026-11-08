@@ -13,7 +13,8 @@ HUD with a focus view, controller-driven menus, and a campaign over every course
 | `world/track-schema.ts` | zod schema of the track JSON, `parseTrack`, `TrackFile` |
 | `world/track.ts` | `Track`: arc-length samples, gates, grid, projection, wall clip, routes, crossing checks; `TrackGround` heightfield + bridge decks |
 | `world/tracks/*.json`, `tracks/index.ts` | the courses; `TRACKS` (menu order), `CAMPAIGN`, `OFF_MENU` |
-| `world/placements.ts`, `world/junctions.ts` | `placeProps`, `propColliders`; `junctionsOf` (where each shortcut leaves and rejoins the loop, and its turn there) |
+| `world/placements.ts`, `world/junctions.ts` | `placeProps`, `placeCourse`, `propColliders`; `junctionsOf` (where each shortcut leaves and rejoins the loop, and its turn there) |
+| `world/scenery.ts`, `world/scenery-field.ts`, `world/scenery-biome.ts` | the scenery service ([Scenery service](#scenery-service)): `placeScenery` (solid and drawn-only props from a course's geometry), `thinScenery` (effects tiers), `biomeLookup`; the road field and footprint grid; the biome tables |
 | `match/types.ts` | contracts: entrants, options, poses, records, events, snapshot, HUD read model, commands |
 | `match/session.ts` | `RaceSession`: the rules |
 | `match/campaign.ts` | `Campaign`: points, standings, grids, pegged rival aggression |
@@ -535,6 +536,7 @@ self-crossing with neither level a deck, less than 4.5 m between levels, and a c
 | `props[]` | `{ prefab, x, z, yaw = 0, scale = 1, size? }` | placed prefabs |
 | `along[]` | `{ prefab, every, side = "both", offset = 1.5, fromNode?, toNode?, route?, scale = 1 }` | repeated beside the wall line (or along side street `route`); copies on any road are skipped, and so is any non-knock copy whose drawn footprint a bend turns onto its own road or runoff. `course-intrusion.test.ts` holds every course to ≤ 0.1 m |
 | `scatter[]` | `{ prefab, count, near = 6, far = 60, seed = 1, scaleMin = 0.8, scaleMax = 1.25 }` | seeded scenery off every corridor |
+| `scenery` | `{ biome?, zones = [], off = [], density = {}, clear?, noGen = [] }?` | overrides of the scenery service ([Scenery service](#scenery-service)); a course without it is dressed by its terrain, surfaces and walls alone |
 | `traffic` | `{ count = 0, speed = 9, lanes = [], routes = [] }?` | `lanes: [{ offset, dir: 1 \| -1 }]` on the race loop; `routes: [{ id, path, loop = false, width = 9, surface = "asphalt", count, lanes }]` side streets (open the race walls where they cross) |
 | `environment` | `{ sky = "#12141a", fog = 0.0035, terrain = "grass", hills: [{x, z, radius, height}], pits: [{x, z, radius, depth}], fineMiss = 0.1, plateaus?, paint?, light?, far = 900, backdrop? }` | look and base terrain (`plateaus` / `paint`: [`SURVIVAL.md`](SURVIVAL.md)); `hills` raise the terrain only (a road is stamped over them at its own height); `pits` sink the ground, roads included, `depth` m at (x, z) easing on a cosine to level at `radius` (see `TrackGround` above); `fineMiss`: how far (m) a 2 m terrain cell's triangles may pass one of its own 1 m nodes before the cell is drawn, and driven on, as four 1 m cells (Havana's crest, which 2 m triangles flatten into a launch, sets 0.01); `far` is the race camera's far plane (m); `backdrop: {kind: "mushroom-cloud", bearing, secret = false}` paints a picture on the sky round `bearing` (degrees from −z toward +x), drawn at infinity behind the whole course with no fog (`present/sky-backdrop.ts`); a `secret` one is not there until the Konami code is typed in a race on the course (`TrackArt.reveal`) |
 | `survival` | `{ start: {x, z, yaw}, formation: [...] }?` | Survival anchors ([`SURVIVAL.md`](SURVIVAL.md)) |
@@ -544,6 +546,44 @@ Prefabs: knock `cone, tyre-stack, hay-bale, crate`; solid `barrier-block, rock, 
 scenery `gantry` and `chevron` (placed by `placeProps` at shortcut junctions, not by the JSON), plus the courses' own (Havana's stucco, palm, monument, wall, dumpster; the National Mall's obelisk, capitol,
 marble (a plain block a placement's `size` stretches to a whole museum without stretching any windows), white-house, fountain, fence, reflecting-pool and basin (the pools, their water on its own glossy material; a stone kerb round a floor 10 cm under the water, never stone filled up to the rim, whose top would lie a centimetre under the water's and flicker overhead: `poolStone`), lincoln, capitol-pool (the Capitol Reflecting Pool's wedge: a rim of turned bricks round a flat water sheet), and grant-memorial, peace-monument and garfield-monument (marble and bronze bricks, drawn and bounded alike: `world/landmarks.ts`), and flagpole (a pole flying the Stars and Stripes); the figure-8's junkyard, drawn only: wreck (a junked shell, tinted per copy), carhenge and junk-crane). A prefab's front is its local +X;
 `along` copies face the road. The start gantry is built by `TrackArt` at s = 0.
+
+## Scenery service
+
+`world/scenery.ts` (`placeScenery`, with `scenery-field.ts`, the road field and footprint grid, and `scenery-biome.ts`, the tables) dresses every
+course from its geometry, deterministically, with no per-course editing; `placeCourse(track)` (`placements.ts`) returns `{ placed, drawn }` and
+`placeProps` is its `placed`. Pure and in the `world` layer: no `Math.sin/cos/atan2` (`detSin` etc.), a point's random numbers are `unit(mix(course id, rule,
+cell))` so a cell's output depends only on that cell, and a hand-built track gives the same lists in every browser.
+
+- **Two lists.** `placed` is the authored props (`props`, `along`, `scatter`, chevrons: no index moves) and then the scenery's **solid** props, appended
+  last: a prop with a body (tree, rock, palm, lamp, tyre stack, cone) that a car can reach, that is within `OPEN_REACH` (12 m) of the wall line of a road
+  edge whose wall is down within `OPEN_SPAN` samples (a side street, a rally stage's open edge, a shortcut's mouth). It has a collider like any
+  prop and moves the sim: **REPLAY**. `drawn` is everything else, art only (`TrackArt.scenery`, a second `PropTumble`; no collider, no index, never
+  knocked): props behind a wall, and the sidewalk slabs, bushes, flower beds and parked cars (`body: "none"`), which a car drives through.
+  `scenery.test.ts` holds both ways: no solid one out of reach, no drawn one with a body in reach, no footprint on a road or run-off
+  (and `course-intrusion.test.ts` over the same lists), and none overlaps an authored prop or another generated one.
+- **Biome**, per road stretch, from its terrain and surfaces (`defaultBiome`): sand terrain `desert`; paved terrain (concrete, asphalt, cobble) `city`; dirt
+  terrain or a dirt, gravel or mud road `dirt`; grass with a paved run-off `circuit`; other grass `park`. Courses: oval circuit; rally, four-count park
+  with dirt stretches; city city; stunt desert; dam-spine, razor-shelf, breaker-yard, figure-8 dirt. The Mall and Havana are `biome: none` (hand-authored); the
+  Mall's `zones` turn `city` on for its town-house corner only (x −2150…−1190, z −1300…−550: the building grid west of the White House). A point's biome is a
+  `zones` box's, else the course's `biome`, else its nearest road stretch's (`biomeLookup`, which `TrackArt.biome` hands the facade styles).
+- **Rules** (`SCENERY_RULES`): `paving` slabs (the `sidewalk` prefab, 2.4 × 3.2 m, 6 cm high, drawn only) along a city's road edges from the wall line out, a circuit's 2.5 times
+  wider as an apron, none where a crossing road would be paved over; `frontage` lamps (spacing by biome: city two building bays of the street, 24 to 30 m, circuit 36, park 48,
+  dirt 64, desert 72; beyond town the two sides take alternate lamps; none within 0.7 spacings of a hand lamp, so a hand `along` row keeps its stretch) and a
+  city's street trees (16 m, young: scale 0.55 to 0.75); `verge` one jittered prop per 14 m lattice cell in the biome's band beyond the wall line (park trees,
+  rocks and bushes out to 50 m; desert rock, palm and scrub to 70 m; thickening away from the road, 0.2 to 1.8 times its chance); `islands` flower beds and bushes
+  inside any closed road (a loop, a roundabout) and, on a circuit's loop, a big bed with a ring of bushes at the middle of the infield and a hedge along the
+  inner road edge; `trackside` (circuit only) a lining of eight tyre stacks outside each bend tighter than 60 m with three cones leading in and a small bed inboard,
+  and behind every grandstand a paved car park with two rows of parked cars (the `wreck` shells, tinted).
+- **Overrides** (`scenery`, all optional): `biome` every stretch's biome (`none`: nothing outside `zones`); `zones` `[{ x0, z0, x1, z1, biome }]` biome boxes; `off`
+  rule ids switched off (`paving`, `frontage`, `verge`, `islands`, `trackside`); `density` `{ rule: multiplier }`; `clear` metres from any road's **centreline** within
+  which nothing is generated, in every direction (default: only what each footprint's own clearance keeps, `ROAD_STANDOFF` 0.4 m off the wall line); `noGen`
+  zones where nothing is generated, `{ x0, z0, x1, z1 }` boxes, `{ x, z, r }` circles, and `{ fromNode, toNode, within = 40 }` stretches of the race loop (within 60 m). `off`,
+  `clear` and `noGen` only remove from the finished list, so raising `clear` or adding a zone always yields a subset of the default (`scenery.test.ts`). Hand `props` are
+  untouched by all of them (so are the `along` and `scatter` rows: the service clears every footprint against them, and lays no lamp within 0.7 spacings of a hand lamp).
+- **Cost.** Generated cover casts no shadow (`PrefabPart.shadow = false`: slabs, bushes, beds). The drawn list is thinned to the effects tier (`thinScenery`: off and minimal a third,
+  Low three fifths, High and Ultra all, by a hash of each prop's spot, so every lower tier is a subset); the solid list never depends on the tier. One `InstancedMesh` per prefab part
+  per 512 m cell: `scenery.test.ts` caps each course at 40 prefab-cell groups and 2000 instances in one. Boot (`placeCourse` beyond the authored props, node,
+  measured): 6 to 90 ms per course, the Mall 600 ms (its 2900 authored footprints and 50 side streets).
 
 ## Engine integration
 

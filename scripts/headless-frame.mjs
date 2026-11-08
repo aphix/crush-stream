@@ -40,6 +40,7 @@
  * `--hold` keeps the driven car where it stands through `--boost`'s seconds, as the piston rig's Hold car does (its masses' mean motion taken off each
  * frame): its wheels spin in place under the gas, for wheel-slip looks (tyre smoke, surface spatter) on a car that stays in frame.
  * `--race-start` starts the race (a `scene=race` hash) before `--at`'s seconds run, as the race menu's Start does: the field on its course, racing.
+ * `--teleport x,z,yaw` stands the hash's race car (car 0) at that spot, facing that yaw (rad, 0 = +z), before `--view` frames it: a shot of any part of any course (`scene=race&track=<id>`).
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -106,6 +107,7 @@ const { values } = parseArgs({
     "gas-only": { type: "boolean" },
     "race-start": { type: "boolean" },
     hold: { type: "boolean" },
+    teleport: { type: "string" },
     boost: { type: "string" },
     draw: { type: "string" },
     scale: { type: "string" },
@@ -359,6 +361,12 @@ if (courseBounds !== undefined) {
   engine["camera"].far = Math.max(engine["camera"].far, reach);
   engine["camera"].near = Math.max(engine["camera"].near, eye.y * NEAR_PER_EYE_HEIGHT);
   engine["camera"].updateProjectionMatrix();
+}
+if (values.teleport !== undefined) {
+  // `--teleport x,z,yaw`: car 0 stood at that spot facing that yaw (rad, 0 = +z) on the course's ground, before the view settles on it: a shot of any part of a course.
+  const [x, z, yaw] = values.teleport.split(",").map(Number);
+  if (![x, z, yaw].every(Number.isFinite)) throw new Error(`--teleport ${values.teleport}: x,z,yaw`);
+  engine.race.place(engine.live()[0], x, z, yaw, 0);
 }
 if (seatView !== undefined) {
   // The hash's car, followed in that drive view (a spectator's spec view: any scene, driven or not).
