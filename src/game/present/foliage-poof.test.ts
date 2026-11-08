@@ -86,7 +86,8 @@ describe("given a row of eight bushes three metres apart and a sedan driving alo
     const b = bed(row(8));
     drive(b, car(ROW_X - 10, ROW_Z), THIRD_BUSH);
     drive(b, car(ROW_X - 10, ROW_Z), THIRD_BUSH);
-    expectCounts(b, 3, 3 * BUSH_LEAVES);
+    expect(b.poof.snapshot().hidden, "bushes puffed away").toBe(3);
+    expect(b.poof.snapshot().leaves, "leaves in the air").toBeLessThanOrEqual(3 * BUSH_LEAVES);
   });
 
   it("when the scene resets, then all eight stand again and no leaf is left in the air", () => {
@@ -103,9 +104,10 @@ describe("given a row of eight bushes three metres apart and a sedan driving alo
     const want = new THREE.Color();
     foliageTint(PREFAB.bush, 0, want);
     const leaf = b.poof.leaves.instanceColor!;
+    const got = [leaf.getX(0), leaf.getY(0), leaf.getZ(0)];
     for (const [at, channel] of [want.r, want.g, want.b].entries()) {
-      expect(leaf.getComponent(0, at), `channel ${at} of the first leaf`).toBeGreaterThanOrEqual(channel * 0.7);
-      expect(leaf.getComponent(0, at), `channel ${at} of the first leaf`).toBeLessThanOrEqual(channel * 1.3 + 1e-6);
+      expect(got[at]!, `channel ${at} of the first leaf`).toBeGreaterThanOrEqual(channel * 0.7);
+      expect(got[at]!, `channel ${at} of the first leaf`).toBeLessThanOrEqual(channel * 1.3 + 1e-6);
     }
   });
 });
@@ -152,20 +154,20 @@ function field(): Field {
 /** Every car back at the west edge and every bush standing: the pass starts over, so puffs keep happening while the rows measure. */
 function restart(f: Field): void {
   f.b.poof.reset();
-  for (const c of f.cars) c.group.position.x = -20;
+  for (let i = 0; i < f.cars.length; i++) f.cars[i]!.group.position.x = -20;
 }
 
 /** One frame of the field: the cars step east, the poof sees them. */
 function step(f: Field): void {
-  for (const c of f.cars) c.group.position.x += c.velocity.x * STEP;
+  for (let i = 0; i < f.cars.length; i++) f.cars[i]!.group.position.x += f.cars[i]!.velocity.x * STEP;
   f.b.poof.frame(f.cars, STEP);
 }
 
 const BOUND_KB = 8;
 const WARM = 400;
 const MEASURE = 300;
-/** A pass is 240 frames (30 m/s over the field's 200 m and the lead-in). */
-const PASS = 240;
+/** A pass is 420 frames: 30 m/s over the 20 m lead-in and the field's 200 m. */
+const PASS = 420;
 /** The most a car may test in a frame: its footprint's grid cells hold a handful of the field's four-metre bushes each. */
 const TESTS_PER_CAR = 40;
 

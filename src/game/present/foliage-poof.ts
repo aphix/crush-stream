@@ -136,7 +136,7 @@ export class FoliagePoof {
     for (let m = 0; m < n; m++) this.items[fill[home[m]!]!++] = m;
 
     const quad = new THREE.PlaneGeometry(1, 1);
-    this.leaves = new THREE.InstancedMesh(painted([[quad, 0xffffff, MAT.FOLIAGE], [quad.clone().rotateY(Math.PI), 0xffffff, MAT.FOLIAGE]]), material, POOL);
+    this.leaves = new THREE.InstancedMesh(painted([[quad, 0xffffff, MAT.CONIFER_FOLIAGE], [quad.clone().rotateY(Math.PI), 0xffffff, MAT.CONIFER_FOLIAGE]]), material, POOL);
     this.leaves.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.leaves.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(POOL * 3), 3).setUsage(THREE.DynamicDrawUsage);
     this.leaves.count = 0;
