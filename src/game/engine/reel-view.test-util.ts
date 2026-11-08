@@ -12,7 +12,6 @@ import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { addCars, sightLine, withCars, type Sight } from "../present/spectate-cam.ts";
 import { coverLens, FLIGHT_S, ReelDirector, type ReelHost } from "./engine-highlights.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
-import type { AiDifficulty } from "../ai/constants.ts";
 
 /**
  * The results reel's cameras headless, as the engine runs them minus the renderer (`ReelDirector.aim`: the thrown driver's
@@ -301,15 +300,13 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
  * A scripted crash: two cars head-on, a car into the wall (or the kerb's buildings), a car into another's side, a car over
  * a crest at `at` (a jump) onto another standing across its line `land` m past the crest, where it comes down, a car
  * driven from (x, z) heading `yaw` up a ramp (a plateau's face) and off its lip, into whatever stands beyond it, or a chain:
- * a car into the rear of an empty one that stands 9 m ahead, which it shoves into a third standing `gap` m behind it, or a
- * crossing: two cars arriving on the two arms of a course that crosses itself at the origin, a T-bone of the course's own loop.
+ * a car into the rear of an empty one that stands 9 m ahead, which it shoves into a third standing `gap` m behind it.
  * `cars`: the slots of `a`, `b` (and the chain's third; the next pair from car 1 on when absent).
  */
 export type Crash = (
   | { kind: "headOn" | "wall" | "tBone" | "jump"; at: number; speed: number; side?: 1 | -1; land?: number }
   | { kind: "chain"; at: number; speed: number; gap: number }
   | { kind: "ramp"; x: number; z: number; yaw: number; speed: number }
-  | { kind: "cross"; speed: number }
 ) & { cars?: readonly number[] };
 
 const pt = blankPoint();
@@ -321,12 +318,12 @@ function put(track: Track, car: World["cars"][number], x: number, z: number, yaw
   layOnGround(car);
 }
 
-/** A race entered on `trackId` with a ramming field of `aiCount` and its dice from `seed` (`aiDifficulty`: the rivals' skill, the world's default when absent). */
-export function raceOn(trackId: string, seed: number, aiCount: number, aiDifficulty?: AiDifficulty): World {
+/** A race entered on `trackId` with a ramming field of `aiCount` and its dice from `seed`. */
+export function raceOn(trackId: string, seed: number, aiCount: number): World {
   const w = makeWorld();
   w.race.enter();
   w.race.command({ type: "quit" });
-  w.race.command({ type: "options", options: { trackId, laps: 1, aiCount, noReset: false, aggression: 1, ...(aiDifficulty ? { aiDifficulty } : {}) } });
+  w.race.command({ type: "options", options: { trackId, laps: 1, aiCount, noReset: false, aggression: 1 } });
   w.race.reseed(seed);
   w.race.command({ type: "start" });
   w.seat.mode = "follow";
@@ -392,10 +389,6 @@ export function stage(track: Track, a: World["cars"][number], b: World["cars"][n
   if (c.kind === "ramp") {
     pt.y = track.ground().heightAt(c.x, c.z);
     put(track, a, c.x, c.z, c.yaw, c.speed);
-    return;
-  }
-  if (c.kind === "cross") {
-    stageCrossing(track, a, b, c.speed);
     return;
   }
   track.pointAt(c.at, pt);

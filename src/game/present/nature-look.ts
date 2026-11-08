@@ -24,7 +24,7 @@ const AO_FROM = -0.25;
 const AO_TO = 1.4;
 const AO_FLOOR = 0.6;
 
-/** 1 where the tier draws the detail (the tint noise and the cover), 0 for the plain look with only the foot's shade: Low and under keep today's cost. */
+/** 1 where the tier draws the detail (the tint noise and the cover), 0 for the plain look: Low and under skip the noise and cover and add only the foot's shade. */
 const LOOK = { value: 1 };
 
 export function setNatureTier(tier: FxTier): void {
