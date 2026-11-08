@@ -20,8 +20,8 @@ export type PrefabMaterials = {
   water: THREE.Material;
 };
 
-/** One drawable part of a prefab: its geometry, its material, and whether the material is shared with the track art. */
-export type PrefabPart = { geometry: THREE.BufferGeometry; material: THREE.Material; shared: boolean };
+/** One drawable part of a prefab: its geometry, its material, whether the material is shared with the track art, and whether it casts a shadow (default: yes; ground cover and flat paving do not). */
+export type PrefabPart = { geometry: THREE.BufferGeometry; material: THREE.Material; shared: boolean; shadow?: boolean };
 
 /** A coloured piece: geometry already in prefab space, its sRGB colour and its `MaterialId` (unset: the material's own). */
 export type Piece = [THREE.BufferGeometry, number, MaterialId?];

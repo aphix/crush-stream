@@ -19027,6 +19027,7 @@
     }
   ],
   "scatter": [],
+  "scenery": { "biome": "none", "zones": [{ "x0": -2150, "z0": -1300, "x1": -1190, "z1": -550, "biome": "city" }] },
   "guards": {
     "lawn": [
       [

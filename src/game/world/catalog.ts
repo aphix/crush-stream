@@ -85,6 +85,9 @@ export const PREFAB_IDS = [
   PREFAB.wreck,
   PREFAB.carhenge,
   PREFAB.junkCrane,
+  PREFAB.sidewalk,
+  PREFAB.bush,
+  PREFAB.flowers,
 ] as const;
 export type PrefabId = (typeof PREFAB_IDS)[number];
 
@@ -631,4 +634,8 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   wreck: { body: "none", collider: [], foot: hypot2(WRECK.wide / 2, WRECK.long / 2), size: [WRECK.wide, WRECK.tall, WRECK.long], mass: 0, material: MAT.DUMPSTER_STEEL },
   carhenge: { body: "none", collider: [], foot: CARHENGE_REACH, size: [CARHENGE_REACH * 2, CARHENGE_TOP, CARHENGE_REACH * 2], mass: 0, material: MAT.DUMPSTER_STEEL },
   [PREFAB.junkCrane]: { body: "none", collider: [], foot: JUNK_CRANE.reach, size: [JUNK_CRANE.reach * 2, JUNK_CRANE.height, JUNK_CRANE.heap * 2], mass: 0, material: MAT.GANTRY_LATTICE },
+  // The scenery service's ground dressing (`scenery.ts`): drawn only. A sidewalk slab is flush paving (width across the road, length along it); a bush and a flower bed poof under a car.
+  [PREFAB.sidewalk]: { body: "none", collider: [], foot: 0, size: [2.4, 0.06, 3.2], mass: 0, material: MAT.CONCRETE },
+  [PREFAB.bush]: { body: "none", collider: [], foot: 0, size: [1.4, 1, 1.4], mass: 0, material: MAT.FOLIAGE },
+  [PREFAB.flowers]: { body: "none", collider: [], foot: 0, size: [2.2, 0.5, 1.2], mass: 0, material: MAT.FOLIAGE },
 };

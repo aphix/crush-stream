@@ -4,11 +4,12 @@ import { applyMarkMap } from "./engine-marks.ts";
 import type { WorldStage } from "./engine-world.ts";
 import { SURFACE_IDS, SURFACES, type PrefabId, type SurfaceId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
-import { PREFAB, SURFACE } from "../world/constants.ts";
-import { box, painted, type Piece } from "./prefab-pieces.ts";
+import { PREFAB, SURFACE, type BiomeId } from "../world/constants.ts";
+import { box, painted, type Piece, type PrefabMaterials } from "./prefab-pieces.ts";
 import { tagLike, tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
+import { biomeLookup } from "../world/scenery.ts";
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
 import {
@@ -51,6 +52,11 @@ export class TrackArt {
   private readonly byKind = new Map<THREE.Material, Partial<Record<DrawKind, THREE.Material>>>();
   /** The placed props drawn; the knocked ones where the dummies' world has them (`RagdollSystem.setCourse`). */
   readonly props: PropTumble;
+  /** The scenery service's drawn-only props (sidewalks, ground cover, trees behind walls): no colliders, never knocked; thinned to the effects tier. */
+  readonly scenery: PropTumble;
+  readonly sceneryPlaced: readonly Placed[];
+  /** The scenery biome at a world point (`biomeLookup`): the building facade styles pick by it. */
+  readonly biome: (x: number, z: number) => BiomeId;
   private readonly m4 = new THREE.Matrix4();
   private readonly col = new THREE.Color();
   private readonly stage: Pick<WorldStage, "look">;
@@ -66,7 +72,7 @@ export class TrackArt {
   private debug: TrackDebug | null = null;
 
   /** `stage` takes the course's own daylight while the art stands (its sun, hemisphere and fill; none: the default) and its sky colour. */
-  constructor(track: Track, placed: readonly Placed[], stage: Pick<WorldStage, "look">) {
+  constructor(track: Track, placed: readonly Placed[], stage: Pick<WorldStage, "look">, drawn: readonly Placed[]) {
     this.group.name = "track-art";
     this.track = track;
     this.stage = stage;
@@ -182,13 +188,20 @@ export class TrackArt {
     this.setLights(0);
 
     // Props: one InstancedMesh per prefab part (the course's lamp heads and pools are the scene's materials).
-    this.props = new PropTumble(
+    this.props = this.tumble(placed, mats);
+    this.sceneryPlaced = drawn;
+    this.scenery = this.tumble(drawn, mats);
+    this.biome = biomeLookup(track);
+  }
+
+  private tumble(placed: readonly Placed[], mats: PrefabMaterials): PropTumble {
+    return new PropTumble(
       placed,
       mats,
-      (mesh, id, shared) => {
+      (mesh, id, shared, cast) => {
         if (shared) this.shared.push(shared);
-        // Lamp heads and light pools neither cast shadows nor need to.
-        this.add(mesh, { kind: "prop", prefab: id }, !shared);
+        // Lamp heads and light pools neither cast shadows nor need to; nor do the parts that say so (ground cover, paving).
+        this.add(mesh, { kind: "prop", prefab: id }, !shared && cast);
       },
       (id, i, out) => this.tint(id, i, out),
     );

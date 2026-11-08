@@ -330,6 +330,7 @@
       { "x": 0, "z": 459, "yaw": 3.1416 }
     ]
   },
+  "scenery": { "biome": "none" },
   "environment": {
     "sky": "#a8cfe3",
     "fineMiss": 0.01,

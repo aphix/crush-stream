@@ -8,7 +8,7 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import { NO_FLOOR, setGround } from "../world/ground.ts";
 import type { PropHits } from "../contact/prop-contact.ts";
 import { Campaign } from "../match/campaign.ts";
-import { placeProps, propColliders, solidsOf, type Placed, type PropCollider } from "../world/placements.ts";
+import { placeCourse, propColliders, solidsOf, type Placed, type PropCollider } from "../world/placements.ts";
 import { armSolids, Surface } from "../world/surfaces.ts";
 import { wallColliders } from "../world/track-sections.ts";
 import { RaceBrain } from "../ai/race-ai.ts";
@@ -77,7 +77,7 @@ interface RaceHost {
   /** Knockable prop `index` knocked off its spot by car `car` at (vx, vy, vz) m/s: drawn flying and tumbling (cosmetic; headless: nothing). */
   knockProp(index: number, car: number, vx: number, vy: number, vz: number): void;
   /** The course's art (null headless: rules, AI, contacts and physics run without it). */
-  buildArt(track: Track, placed: readonly Placed[]): TrackArt | null;
+  buildArt(track: Track, placed: readonly Placed[], drawn: readonly Placed[]): TrackArt | null;
   /** Re-target the tyre-mark map to the course's bounds (headless: nothing to draw). */
   markBounds(minX: number, minZ: number, maxX: number, maxZ: number): void;
   /** The engine's wreck-slide rule is on (`settleStep`'s `bleed`): a highlight replays with the same. */
@@ -552,7 +552,8 @@ export abstract class RaceField {
       this.tracks.set(trackId, tr);
     }
     this.track = tr;
-    this.placed = placeProps(tr);
+    const course = placeCourse(tr);
+    this.placed = course.placed;
     this.colliders = propColliders(this.placed);
     this.walls = wallColliders(tr);
     this.solids = solidsOf(this.walls, this.colliders);
@@ -563,7 +564,7 @@ export abstract class RaceField {
     const sky = new THREE.Color(env.sky);
     this.host.scene.background = sky;
     this.host.scene.fog = new THREE.FogExp2(sky.getHex(), env.fog);
-    this.art = this.host.buildArt(tr, this.placed);
+    this.art = this.host.buildArt(tr, this.placed, course.drawn);
     if (this.art) {
       this.host.scene.add(this.art.group);
       this.art.setTrackDebug(this.trackDebug);

@@ -41,7 +41,7 @@ export class PropTumble {
   constructor(
     placed: readonly Placed[],
     mats: PrefabMaterials,
-    add: (mesh: THREE.InstancedMesh, id: PrefabId, shared: THREE.Material | null) => void,
+    add: (mesh: THREE.InstancedMesh, id: PrefabId, shared: THREE.Material | null, cast: boolean) => void,
     tint: (id: PrefabId, i: number, out: THREE.Color) => boolean = () => false,
   ) {
     this.placed = placed;
@@ -70,7 +70,7 @@ export class PropTumble {
             if (pi === 0 && tint(id, idx, col)) mesh.setColorAt(s, col);
           }
           mesh.computeBoundingSphere();
-          add(mesh, id, part.shared ? part.material : null);
+          add(mesh, id, part.shared ? part.material : null, part.shadow !== false);
           return mesh;
         }),
       );

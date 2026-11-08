@@ -19,7 +19,7 @@ import { groundMaterial, levelOrder } from "../scenes/ground-stack.ts";
 import { carClass, damageStage } from "../vehicle/vehicle-classes.ts";
 import { makeJerseyBarrier, makePoolTexture } from "../present/engine-world.ts";
 import { Cinematics } from "../present/engine-cine.ts";
-import { FX_TIERS } from "../present/engine-post.ts";
+import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import { SKY_MODES } from "../present/sky-dome.ts";
 import { AutoFx, deviceClass, gpuRenderer, type DeviceClass } from "../present/auto-fx.ts";
 import { PHONE_LEVEL } from "../present/car-detail.ts";
@@ -46,6 +46,7 @@ import type { Ejection } from "../vehicle/ejection.ts";
 import { readFreeInput } from "./engine-free.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { armTops } from "../world/surfaces.ts";
+import { thinScenery } from "../world/scenery.ts";
 import { CompactorPress, JerseyBarrier, type ContactHit } from "../scenes/engine-props.ts";
 import { FleetRamps } from "../scenes/fleet-ramps.ts";
 import { Corkscrew } from "../scenes/corkscrew.ts";
@@ -67,6 +68,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { firstMassContact } from "./car-contact-scan.ts";
 
 const FIXED = 1 / FRAME_HZ;
+/** Share of a course's drawn-only scenery (`thinScenery`) each effects tier draws: the cheap tiers a third, Low three fifths, High and above all of it. */
+const SCENERY_SHARE: Record<FxTier, number> = { off: 0.3, minimal: 0.3, low: 0.6, high: 1, ultra: 1 };
 /** Deform LoD: sphere around a car — rest half-diagonal 2.5 m plus crumple slack and the
  *  ≈0.9 m the sun throws the roof's shadow, so an off-screen car's shadow is never stale either. */
 const LOD_RADIUS = 3.5;
@@ -366,9 +369,9 @@ export class CrashEngine extends EngineGarage {
       throwFigure: (strike) => this.ragdolls.throwFigure(strike, this.live()),
       hit: (i, closing) => this.noteHit(i, closing),
       knockProp: (index, car, vx, vy, vz) => this.ragdolls.knockProp(index, car, vx, vy, vz),
-      buildArt: (track, placed) => {
+      buildArt: (track, placed, drawn) => {
         this.queueWarm();
-        const art = new TrackArt(track, placed, this.stage);
+        const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, SCENERY_SHARE[this.cine.tier]));
         this.ragdolls.setCourse(track, placed, art.props);
         return art;
       },

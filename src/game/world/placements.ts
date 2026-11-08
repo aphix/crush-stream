@@ -4,6 +4,7 @@ import { PREFABS, type PrefabId } from "./catalog.ts";
 import { CHEVRON_GAP, CHEVRON_RUN, CHEVRON_SLOTS, CHEVRON_STANDOFF, CHEVRON_TURN, PREFAB } from "./constants.ts";
 import { junctionsOf } from "./junctions.ts";
 import { ALONG_BOTH } from "./track-schema.ts";
+import { placeScenery } from "./scenery.ts";
 import { KNOCK, PROP, Surface, WALL } from "./surfaces.ts";
 import { blankPoint, blankProjection, blankSegment, pointOn, projectPath, segmentAt, type Projection, type Track, type TrackPath } from "./track.ts";
 
@@ -111,7 +112,7 @@ function segBoxDist(u0: number, v0: number, u1: number, v1: number, hw: number, 
  * hd on local z) to `path`'s road + runoff; ≤ 0 when it reaches onto them. Exact for the corridor as
  * the union of its segments, each widened by its half width + runoff on the box's side.
  */
-function boxClear(path: TrackPath, x: number, z: number, yaw: number, hw: number, hd: number): number {
+export function boxClear(path: TrackPath, x: number, z: number, yaw: number, hw: number, hd: number): number {
   const c = detCos(yaw);
   const sn = detSin(yaw);
   const reach = hypot2(hw, hd);
@@ -211,12 +212,12 @@ function placeChevrons(track: Track, out: Placed[]): void {
 }
 
 /**
- * Every prop of the track, in order: `props` as written, then `along` repeats (beside the race
+ * The course's authored props, in order: `props` as written, then `along` repeats (beside the race
  * loop, or a traffic route's centreline with `route`; copies on any other road, beside a bridge
  * span or in a tunnel are skipped), then seeded `scatter` (clear of every road: loop, shortcuts,
  * routes), then the chevron runs of the shortcut junctions (`placeChevrons`). y: see `standY` (ground level, or a deck for a prop on a bridge).
  */
-export function placeProps(track: Track): Placed[] {
+function placeAuthored(track: Track): Placed[] {
   const json = track.json;
   const out: Placed[] = [];
   const proj = blankProjection();
@@ -319,6 +320,23 @@ export function placeProps(track: Track): Placed[] {
   }
   placeChevrons(track, out);
   return out;
+}
+
+/**
+ * Every prop of the course in index order: the authored props (`placeAuthored`), then the scenery service's solid ones (`placeScenery`:
+ * a car can reach them, so they have colliders and go last, behind the chevrons, and no authored index moves), and apart from them
+ * the drawn-only scenery, which has no index and no collider.
+ */
+export function placeCourse(track: Track): { placed: Placed[]; drawn: Placed[] } {
+  const placed = placeAuthored(track);
+  const { solid, drawn } = placeScenery(track, placed);
+  for (const p of solid) placed.push(p);
+  return { placed, drawn };
+}
+
+/** `placeCourse`'s props with colliders and indices: the list the sim, the AI's sight and the crash camera read. */
+export function placeProps(track: Track): Placed[] {
+  return placeCourse(track).placed;
 }
 
 /** A circle collider whose placement's x and z scales differ by more than this share of the larger is an ellipse (`ellipseCircles`). */

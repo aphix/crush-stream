@@ -293,7 +293,7 @@ export function crossGate(g: Gate, x0: number, z0: number, x1: number, z1: numbe
 }
 
 /** Whether `wall` is down on any of the samples within `OPEN_SPAN` of `k`. */
-function openNear(path: TrackPath, wall: Uint8Array, k: number): boolean {
+export function openNear(path: TrackPath, wall: Uint8Array, k: number): boolean {
   for (let d = -OPEN_SPAN; d <= OPEN_SPAN; d++) {
     const i = path.closed ? (k + d + path.count) % path.count : Math.max(0, Math.min(path.count - 1, k + d));
     if (wall[i] === 0) return true;

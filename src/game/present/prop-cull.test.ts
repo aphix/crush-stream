@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { PREFAB, TRACK_ID } from "../world/constants.ts";
-import { placeProps, type Placed } from "../world/placements.ts";
+import { placeCourse, type Placed } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { blankPoint, Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
@@ -38,7 +38,8 @@ describe("given the National Mall's art and the race's chase eye and sun on the 
     stubBrowser();
     const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
     const stage = new WorldStage(new THREE.Scene());
-    const art = new TrackArt(track, placeProps(track), stage);
+    const course = placeCourse(track);
+    const art = new TrackArt(track, course.placed, stage, course.drawn);
     art.group.updateMatrixWorld(true);
     const meshes: THREE.Mesh[] = [];
     art.group.traverse((o) => {

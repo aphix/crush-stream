@@ -52,7 +52,20 @@ export const PREFAB = {
   wreck: "wreck",
   carhenge: "carhenge",
   junkCrane: "junk-crane",
+  sidewalk: "sidewalk",
+  bush: "bush",
+  flowers: "flowers",
 } as const;
+
+/** The word for a town: the campaign course's id and the scenery service's biome of streets and sidewalks. */
+const CITY = "city";
+
+/** The scenery service's biomes (`world/scenery.ts`): how a stretch of road is dressed. `none` dresses nothing (a hand-authored course). */
+export const BIOME = { city: CITY, park: "park", desert: "desert", dirt: "dirt", circuit: "circuit", none: "none" } as const;
+export const BIOME_IDS = [BIOME.city, BIOME.park, BIOME.desert, BIOME.dirt, BIOME.circuit, BIOME.none] as const;
+export type BiomeId = (typeof BIOME_IDS)[number];
+/** The scenery rules a course's `scenery.off` and `scenery.density` name: paving (sidewalks, aprons, car parks' ground), frontage (lamps, street trees), verge, islands (beds, hedges), trackside (tyre runs, cones, parked cars). */
+export const SCENERY_RULES = ["paving", "frontage", "verge", "islands", "trackside"] as const;
 
 /**
  * Chevron signs at a shortcut junction that turns more than `CHEVRON_TURN` (rad): `placeProps` stands a run of `CHEVRON_RUN` boards, one
@@ -72,7 +85,7 @@ export const CHEVRON_STANDOFF = 1;
 export const TRACK_ID = {
   oval: "oval",
   rally: "rally",
-  city: "city",
+  city: CITY,
   stunt: "stunt",
   fourCount: "four-count",
   damSpine: "dam-spine",

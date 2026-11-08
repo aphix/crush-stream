@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { TRACK_ID } from "../world/constants.ts";
-import { placeProps } from "../world/placements.ts";
+import { placeCourse } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
@@ -35,7 +35,8 @@ function recordingDocument(t: { onTestFinished(fn: () => void): void }) {
 
 const mallArt = (): TrackArt => {
   const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
-  return new TrackArt(track, placeProps(track), { look() {} });
+  const course = placeCourse(track);
+  return new TrackArt(track, course.placed, { look() {} }, course.drawn);
 };
 const cloudMeshes = (art: TrackArt): THREE.Object3D[] => art.group.children.filter((o) => o.name === "backdrop:mushroom-cloud");
 

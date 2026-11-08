@@ -95,6 +95,7 @@ export function stripCourse(spec: StripSpec): unknown {
     props: [],
     along,
     scatter: [],
+    scenery: { biome: "none" },
     traffic: { count: 0, speed: 9, lanes: [], routes },
     environment: { sky: "#9db3c7", fog: 0.0028, terrain: SURFACE.grass, hills: [] },
   };
