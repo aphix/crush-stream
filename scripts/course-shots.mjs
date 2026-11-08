@@ -3,9 +3,9 @@
  * Whole-course shots of every race course in `TRACKS`, from the engine's own frame in node (`headless-frame.mjs`): per course a north-up
  * overhead and an oblique, at day and night, written as `<course>-{top,oblique}-{day,night}.png` in `--out`. The eye is the free eye
  * about the middle of the course's `Track.bounds` (pitch 1.5, angle 3.14159: north up on every course; the oblique is pitch 0.9 from
- * the same side), far enough back that the whole course fits the view at the engine's lens; `--no-fog` drops the haze and reaches the
- * far plane past the course's far corner, so the Mall's 2.4 km is not cut off. One headless-frame process at a time (about a minute
- * each); a link failure or GL error in any shot is listed and exits 1.
+ * the same side), as far back as the engine's 50 degree lens needs for the whole box to fit; `--no-fog` drops the haze, reaches the far
+ * plane past the course's far corner (the Mall needs 2.4 km) and lifts the near plane with the eye's height. One headless-frame process
+ * at a time (about a minute each); a link failure or GL error in any shot is listed and exits 1.
  *
  *   node --disable-warning=ExperimentalWarning scripts/course-shots.mjs [--out screenshots/course-shots] [--courses oval,city] [--size 1024x1024]
  *
@@ -37,11 +37,12 @@ const tracks = TRACKS.map((json) => new Track(json));
 for (const id of wanted ?? []) if (!tracks.some((t) => t.id === id)) throw new Error(`--courses ${id}: one of ${tracks.map((t) => t.id).join(", ")}`);
 mkdirSync(out, { recursive: true });
 
-const half = (FOV_DEG * Math.PI) / 360;
-/** The eye's distance (m) from the course's middle: `top` fits its box to the view, `oblique` its bounding sphere to the narrower lens. */
-function radiusFor(shot, halfX, halfZ) {
-  if (shot === "top") return (Math.max(halfZ, halfX / aspect) * FIT) / Math.tan(half);
-  return (Math.hypot(halfX, halfZ) * FIT) / Math.sin(Math.atan(Math.min(1, aspect) * Math.tan(half)));
+/** What just fits the lens's half-view (tan) with `FIT` to spare. */
+const FIT_TAN = Math.tan((FOV_DEG * Math.PI) / 360) / FIT;
+/** The eye's distance (m) from the course's middle at `pitch`: the course's near edge (the side the eye is on) fits the view's height, and its near corners fit its width. */
+function radiusFor(pitch, halfX, halfZ) {
+  const nearEdge = halfZ * Math.cos(pitch);
+  return Math.max(halfZ * Math.sin(pitch) / FIT_TAN + nearEdge, halfX / (FIT_TAN * aspect) + nearEdge);
 }
 
 const failures = [];
@@ -49,7 +50,7 @@ for (const track of tracks) {
   if (wanted !== undefined && !wanted.includes(track.id)) continue;
   const { minX, maxX, minZ, maxZ } = track.bounds;
   for (const [shot, pitch] of Object.entries(SHOTS)) {
-    const radius = radiusFor(shot, (maxX - minX) / 2, (maxZ - minZ) / 2);
+    const radius = radiusFor(pitch, (maxX - minX) / 2, (maxZ - minZ) / 2);
     for (const [time, tod] of Object.entries(TIMES)) {
       const png = join(out, `${track.id}-${shot}-${time}.png`);
       const run = spawnSync(process.execPath, [

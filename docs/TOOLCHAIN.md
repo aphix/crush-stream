@@ -126,7 +126,7 @@ last frame whole: the script holds `renderer.info.autoReset` off and resets it b
   premultiply. Its `createImageBitmap` stand-in already answered an `ImageData`.
 - **Whole courses:** `scripts/course-shots.mjs` runs the above for every course in `TRACKS`, one headless-frame process at a time
   (about a minute each): per course a north-up overhead (the eye over the middle of `Track.bounds`, high enough that the box fits
-  the engine's lens) and an oblique (pitch 0.9 from the south, the bounding sphere fitted), at day and night, as
+  the engine's 50 degree lens) and an oblique (pitch 0.9 from the south, the near edge and corners fitted), at day and night, as
   `<course>-{top,oblique}-{day,night}.png` in `--out` (`--courses oval,city` picks some).
 - **Built-in ids count as attributes:** the bundled ANGLE (2.1.24078) counts `gl_VertexID` and `gl_InstanceID` against
   `MAX_VERTEX_ATTRIBS` (16), as some GLES drivers do; Chrome 149's ANGLE does not. The dummy's lit program once declared
