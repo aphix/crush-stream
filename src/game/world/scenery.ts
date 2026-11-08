@@ -1011,6 +1011,15 @@ export function thinScenery(drawn: readonly Placed[], keep: number): Placed[] {
   return drawn.filter((p) => p.prefab === PREFAB.sidewalk || unit(mix(Math.round(p.x * 16), Math.round(p.z * 16))) < keep);
 }
 
+/** A prop's draw group: its prefab (and an asset's family) in a 512 m cell, which `TrackArt` draws as one instanced mesh. */
+export const drawGroupOf = (p: Placed): string => `${p.prefab}${p.asset === undefined ? "" : `:${SCENERY_ASSETS[p.asset]?.family}`}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}`;
+
+/** The draw groups the service adds to the authored props' (`authored`): the solid props' groups none of them stands in (they join its meshes), plus the drawn-only ones' (each group its own draw). */
+export function addedDrawGroups(authored: readonly Placed[], solid: readonly Placed[], drawn: readonly Placed[]): number {
+  const standing = new Set(authored.map(drawGroupOf));
+  return new Set(solid.map(drawGroupOf).filter((k) => !standing.has(k))).size + new Set(drawn.map(drawGroupOf)).size;
+}
+
 /** The biome at any world point, as the rules read it: a zone's, else the course's `scenery.biome`, else the nearest road stretch's (a point past every road takes the course's own road and terrain). */
 export function biomeLookup(track: Track): (x: number, z: number) => BiomeId {
   const field = buildField(track);

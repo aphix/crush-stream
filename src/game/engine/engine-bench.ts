@@ -5,8 +5,9 @@ import { watchPage, type PageWatch } from "./engine-bench-page.ts";
 import { warmUp } from "./engine-bench-warm.ts";
 import { describeBench, DETAIL_ARMS, PACE_ARM, PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_DRAW, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SCALE, PHASE_AB_SHADOW, PHASE_AB_SKY, PHASE_REPLAY, PHASE_SWEEP, PHASE_WARM, PHASE_WINDOW, QUALITY_ARM, SKY_ARM, stat, type BenchResult, type Block, type LongTasks, type RunOptions, type SkyPin } from "./engine-bench-report.ts";
 import { CLIP_WAIT_S, CRASH_GAP, CRASH_SPEED, ragdollCost, REPLAY_SETTLE_S, REPLAY_TIER_S, START_WAIT_S, type ReplayFrames } from "./engine-bench-replay.ts";
-import { BENCH, QUICK, blocksOf, CAP, deviceOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, skyPinOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type Samples, type Tap, type Window } from "./bench-measure.ts";
+import { BENCH, QUICK, blocksOf, CAP, deviceOf, dressingOf, readBattery, replayResult, RUNG_SLOTS, pageStateOf, rungSlot, settingsOf, skyModeOf, skyPinOf, summarize, tap, timerStep, topTier, watchLongTasks, watchWork, windowGpuMs, WINDOW_BLOCK, wrecks, type BenchParts, type ReplayArm, type Samples, type Tap, type Window } from "./bench-measure.ts";
 import type { HighlightClip } from "../match/highlights.ts";
+import { lastDressing } from "../world/placements.ts";
 import type { SimPacer } from "./sim-pace.ts";
 import { BENCH_BUTTON_STYLE, BENCH_CARD_STYLE, QUALITY_QUERY, SETTING_KEY } from "./constants.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
@@ -374,6 +375,8 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   engine.fadeScenes = false;
   // The step's own cold load (the card's `load:` line), then the sweep warms the page on that scene, then the step starts over from a fresh page's state.
   const setupMs = enterBenchScene(engine, parts, plan);
+  // The step's own load of the course (the sweep's re-entry below loads it again, warm).
+  const loaded = plan.lab ? null : { ...lastDressing };
   ui.badge.sync();
 
   const t = tap(engine.pace, parts);
@@ -458,6 +461,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
     abScale: tail && qualityBlocks(blocksOf(tail.scale, gpu)),
     abShadow: tail && qualityBlocks(blocksOf(tail.shadow, gpu)),
     device,
+    dressing: dressingOf(parts.renderer, loaded),
   };
   const payload = (): object => ({ at: new Date().toISOString(), url: location.href, userAgent: navigator.userAgent, hud: hudSettings(hud(), INITIAL_HUD), result: wireCard(result as unknown as Record<string, unknown>) });
   const send = async (): Promise<BenchReceipt> => {

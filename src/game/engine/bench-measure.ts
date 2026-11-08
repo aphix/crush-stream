@@ -12,7 +12,7 @@ import { describePost, FX_TIERS, sceneSamples, type FxTier } from "../present/en
 import type { DriverSeat } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { BenchPlan } from "./engine-bench-plan.ts";
-import { browserName, perSecond, SKY_ARM, stat, type Battery, type BenchResult, type BenchSettings, type Block, type LongTasks, type PhaseCard, type PageState, type PhaseSeconds, type RagdollCost, type ReplayResult, type SkyPin } from "./engine-bench-report.ts";
+import { browserName, perSecond, SKY_ARM, stat, type Battery, type BenchDressing, type BenchResult, type BenchSettings, type Block, type LongTasks, type PhaseCard, type PageState, type PhaseSeconds, type RagdollCost, type ReplayResult, type SkyPin } from "./engine-bench-report.ts";
 import { REPLAY_TIER_S, replayTier, type ReplayFrames } from "./engine-bench-replay.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -22,6 +22,8 @@ import type { SimPacer } from "./sim-pace.ts";
 import { SETTING_KEY } from "./constants.ts";
 import type { World } from "./world-step.ts";
 import { armedSolids } from "../world/surfaces.ts";
+import type { lastDressing } from "../world/placements.ts";
+import { addedDrawGroups } from "../world/scenery.ts";
 import { PHASE, PHASE_COUNT, PHASE_NAMES, WORK, WORK_COUNT, WORK_NAMES } from "./sim-phases.ts";
 
 /** The timings both benches share: the window, the A/B blocks (`qualityCycles`: each quality knob's Auto and Max arms, once each like the sky's). The warm-up and the course are the plan's. */
@@ -56,7 +58,7 @@ export interface BenchParts {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   sun: THREE.DirectionalLight;
-  race: Pick<RaceDirector, "active" | "phase" | "time" | "reseed" | "policeStats" | "loadBenchCourse" | "crashAtStart" | "recorder">;
+  race: Pick<RaceDirector, "active" | "phase" | "time" | "reseed" | "policeStats" | "loadBenchCourse" | "crashAtStart" | "recorder" | "scenery">;
   seat: DriverSeat;
   live(): readonly DeformableCar[];
   /** The distance detail and the rung its governor holds: the bench pins rungs for its A/B and puts the governor's back. */
@@ -498,6 +500,7 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
     rimLight: held(hud[SETTING_KEY.rimLight]),
     shadows: { enabled: renderer.shadowMap.enabled, type: ["Basic", "PCF", "PCFSoft", "VSM"][renderer.shadowMap.type] ?? String(renderer.shadowMap.type), map: `${sun.shadow.mapSize.x}x${sun.shadow.mapSize.y}`, casters },
     quality: { draw: parts.quality.draw, scale: parts.quality.scale, shadow: parts.quality.shadow, pinned: parts.quality.pinnedKnobs },
+    scenery: parts.race.scenery,
     pixelRatio: renderer.getPixelRatio(),
     deviceRatio: Math.round(devicePixelRatio * 1000) / 1000,
     canvas: `${size.width}x${size.height}`,
@@ -514,6 +517,15 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
     epicenter: epicenterOn(),
     depth: depthOf(renderer, camera),
   };
+}
+
+/** The course's dressing: its own load (`placeCourse`, taken when the step entered its scene) and what the renderer holds now (geometries, textures: read at the run's end). Null: the Lab loads no course. */
+export function dressingOf(renderer: THREE.WebGLRenderer, load: Readonly<typeof lastDressing> | null): BenchDressing | null {
+  if (load === null) return null;
+  const authored = load.placed.slice(0, load.authored);
+  const solid = load.placed.slice(load.authored);
+  const { geometries, textures } = renderer.info.memory;
+  return { placeMs: load.placeMs, authored: authored.length, solid: solid.length, drawn: load.drawn.length, drawGroups: addedDrawGroups(authored, solid, load.drawn), geometries, textures };
 }
 
 /** Each counted slot's share of `frames`, %, keyed by `keyOf(slot)` in the order the slots were first counted. */

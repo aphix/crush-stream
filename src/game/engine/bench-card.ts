@@ -57,6 +57,7 @@ export const DECIMALS: Readonly<Record<string, number>> = {
   tierS: 3,
   lostSimS: 3,
   calls: 0,
+  placeMs: 2,
   triangles: 0,
 };
 

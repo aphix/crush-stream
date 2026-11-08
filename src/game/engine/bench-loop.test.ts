@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { TRACK_ID } from "../world/constants.ts";
+import { placeCourse } from "../world/placements.ts";
+import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
@@ -167,6 +170,24 @@ describe("given a loop whose state is in the address of its bench page", () => {
     }
     expect(seen.length, `the steps of both cycles ran (${seen.length} steps)`).toBeGreaterThan(8);
     expect([...loops].join(","), "both cycles ran").toBe("1,2");
+  });
+
+  // mutation: sed -i 's/const scenery = q.get(SCENERY_QUERY) !== "0";/const scenery = true;/' src/game/engine/engine-bench-plan.ts
+  it("when a loop starts from ?bench=city&scenery=0, then every step's address keeps the arm and its plan reads it, a bare address reads the service on, and placeCourse on that arm returns the authored props alone", () => {
+    const arm = "?bench=city&scenery=0&extended=1";
+    let href = new URL(arm, base).toString();
+    for (let run = runFromPage(arm, "k3x9q2"); run !== null && run.loop <= 1; run = advance(run)) {
+      href = stepHref(href, run);
+      expect(benchPlan(searchOf(href))!.scenery, `${stepOf(run).id}`).toBe(false);
+    }
+    expect(benchPlan("?bench=city")!.scenery).toBe(true);
+    const raw = TRACKS.find((json) => parseTrack(json).id === TRACK_ID.rally);
+    must(raw, "the rally course is in TRACKS");
+    const rally = new Track(raw);
+    const full = placeCourse(rally);
+    const bare = placeCourse(rally, false);
+    expect(bare.drawn.length, "no drawn scenery").toBe(0);
+    expect(full.placed.length - bare.placed.length, "the service's solid props are what the arm leaves out").toBeGreaterThan(0);
   });
 
   it("when keep is turned off (keep=0) in the address on the second step, then the loop goes on to the last step and ends there", () => {

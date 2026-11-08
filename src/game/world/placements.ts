@@ -322,15 +322,21 @@ function placeAuthored(track: Track): Placed[] {
   return out;
 }
 
+/** The last `placeCourse`, for the bench card (`dressing`): written once a call, read by the bench alone. The lists are the call's own. */
+export const lastDressing: { course: string; placeMs: number; authored: number; placed: readonly Placed[]; drawn: readonly Placed[] } = { course: "", placeMs: 0, authored: 0, placed: [], drawn: [] };
+
 /**
  * Every prop of the course in index order: the authored props (`placeAuthored`), then the scenery service's solid ones (`placeScenery`:
  * a car can reach them, so they have colliders and go last, behind the chevrons, and no authored index moves), and apart from them
- * the drawn-only scenery, which has no index and no collider.
+ * the drawn-only scenery, which has no index and no collider. `scenery` false (the bench's `?scenery=0` arm): the authored props alone.
  */
-export function placeCourse(track: Track): { placed: Placed[]; drawn: Placed[] } {
+export function placeCourse(track: Track, scenery = true): { placed: Placed[]; drawn: Placed[] } {
+  const start = performance.now();
   const placed = placeAuthored(track);
-  const { solid, drawn } = placeScenery(track, placed);
+  const authored = placed.length;
+  const { solid, drawn } = scenery ? placeScenery(track, placed) : { solid: [], drawn: [] };
   for (const p of solid) placed.push(p);
+  Object.assign(lastDressing, { course: track.id, placeMs: performance.now() - start, authored, placed, drawn });
   return { placed, drawn };
 }
 

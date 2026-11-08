@@ -63,6 +63,7 @@ export function phaseTable(one) {
     `    ${result.course}${armLabel(result)} ${f1(result.simMsPerSimS)} ms/sim-s${result.simSpreadPct === undefined ? "" : ` (spread ${f1(result.simSpreadPct)} %)`} = ${phases}  unattributed ${f1(p.unattributedMsPerSimS)}`,
     `    per sim-s: ${work}`,
     ...(p.unitUs ? [`    per unit (us): ${Object.entries(p.unitUs).map(([name, us]) => `${name} ${f1(us)}`).join("  ")}`] : []),
+    ...(result.dressing ? [`    dressing place ${f1(result.dressing.placeMs)} ms solid ${result.dressing.solid} drawn ${result.dressing.drawn} groups ${result.dressing.drawGroups} geom ${result.dressing.geometries} tex ${result.dressing.textures}   scenery ${result.settings?.scenery === false ? "OFF" : "on"}`] : []),
     ...(result.frameStats ? frameTable(one) : []),
     ...(result.pageState ? [`    page: step ${result.pageState.stepOfPage} of the page, keep ${result.pageState.keep}, heap ${result.pageState.heapUsedMB ?? "n/a"} of ${result.pageState.heapLimitMB ?? "n/a"} MiB, ragdoll ${result.pageState.ragdollHost}`] : []),
     `    ${tasks}; battery ${battery ? `${level(battery.start)} -> ${level(battery.end)}` : "n/a"}`,

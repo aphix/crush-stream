@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 import { PREFABS } from "./catalog.ts";
 import { BIOME, PREFAB, TRACK_ID } from "./constants.ts";
 import { placeProps, type Placed } from "./placements.ts";
-import { biomeLookup, thinScenery } from "./scenery.ts";
+import { addedDrawGroups, biomeLookup, drawGroupOf, thinScenery } from "./scenery.ts";
 import { COURSE_JSON, FLAT, REACH, REACH_SLACK, centreDistance, dress, intrusion, keyOf, nearOpening, overlap, seamGap } from "./scenery.test-util.ts";
-import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
 import { parseTrack } from "./track-schema.ts";
 import { Track, blankPoint } from "./track.ts";
 import { TRACKS } from "./tracks/index.ts";
@@ -254,15 +253,13 @@ describe("given the scenery's cost on every course", () => {
     // 236 -> 317, the Mall 595 -> 636 / 591 -> 629 (triangles +1-3k: many small instanced groups, not geometry).
     const DRAWS_MAX = 160;
     const PER_CELL_MAX = 2000;
-    const groupOf = (p: Placed): string => `${p.prefab}${p.asset === undefined ? "" : `:${SCENERY_ASSETS[p.asset]?.family}`}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}`;
     for (const j of TRACKS) {
       const d = dress(j);
       // The solid props join the authored props' groups; the drawn-only ones are drawn apart (`TrackArt.scenery`), each group its own draw.
-      const standing = new Set(d.authored.map(groupOf));
-      const added = new Set(d.solid.map(groupOf).filter((k) => !standing.has(k))).size + new Set(d.drawn.map(groupOf)).size;
+      const added = addedDrawGroups(d.authored, d.solid, d.drawn);
       expect(added, `${d.track.id} adds ${added} prefab-cell groups`).toBeLessThanOrEqual(DRAWS_MAX);
       const cells = new Map<string, number>();
-      for (const p of [...d.solid, ...d.drawn]) cells.set(groupOf(p), (cells.get(groupOf(p)) ?? 0) + 1);
+      for (const p of [...d.solid, ...d.drawn]) cells.set(drawGroupOf(p), (cells.get(drawGroupOf(p)) ?? 0) + 1);
       for (const [key, n] of cells) expect(n, `${d.track.id} ${key}`).toBeLessThanOrEqual(PER_CELL_MAX);
     }
   });

@@ -315,6 +315,8 @@ export abstract class RaceField {
     this.tracks.delete(parseTrack(json).id);
   }
   private benchJson: unknown = null;
+  /** False only on a bench page's `?scenery=0` arm (`enterBenchScene`): the next course loads its authored props alone. Nothing else writes it. */
+  scenery = true;
 
   /** The loaded course's solids for the spectator cams' sight lines (built once per course); null off a race. */
   courseSight(): Sight | null {
@@ -559,7 +561,7 @@ export abstract class RaceField {
       this.tracks.set(trackId, tr);
     }
     this.track = tr;
-    const course = placeCourse(tr);
+    const course = placeCourse(tr, this.scenery);
     this.placed = course.placed;
     this.colliders = propColliders(this.placed);
     this.walls = wallColliders(tr);

@@ -32,6 +32,7 @@ interface SetupMs {
  * activation on once the race is up when the plan asks for it.
  */
 export function enterBenchScene(engine: SceneEngine, parts: BenchParts, plan: BenchPlan): SetupMs {
+  parts.race.scenery = plan.scenery;
   if (parts.race.active) engine.toggleRace();
   if (engine.showLab) engine.toggleLab();
   for (const knob of KNOBS) engine.setKnob(knob.id, KNOB_DEFAULTS[knob.id]);

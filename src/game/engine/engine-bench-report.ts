@@ -99,8 +99,26 @@ export interface BenchSettings {
   skyPin?: SkyPin;
   /** The player's quality knobs the run held (the URL's `?draw=`/`?scale=`/`?shadow=`, else Auto: a bench page never reads the browser's saved ones) and which the URL pinned; absent on older cards. */
   quality?: { draw: string; scale: string; shadow: string; pinned: string };
+  /** False: the `?scenery=0` arm (the course loaded its authored props alone); absent on an older card, which had the service on. */
+  scenery?: boolean;
   depth: { bits: number; subpixelBits: number; contextDepth: boolean; fragmentHighFloat: { precision: number; rangeMin: number; rangeMax: number } | null; near: number; far: number; logarithmicDepthBuffer: boolean; probe: DepthProbe };
 }
+
+/** The course's dressing as the step loaded it (`placeCourse`: `?scenery=0` leaves the authored props alone) and the renderer's counts at the run's end. `drawn` is the service's drawn-only list before the effects tier thins it. */
+export interface BenchDressing {
+  placeMs: number;
+  authored: number;
+  solid: number;
+  drawn: number;
+  /** The prefab-by-512 m-cell instanced groups the service adds to the authored ones (`addedDrawGroups`). */
+  drawGroups: number;
+  geometries: number;
+  textures: number;
+}
+
+/** `dressing place 24.3 ms solid 7 drawn 673 groups 8 geom 412 tex 96`, and the scenery arm (`scenery` false: the `?scenery=0` arm). */
+const dressingLine = (d: BenchDressing, scenery: boolean | undefined): string =>
+  `dressing place ${d.placeMs.toFixed(1)} ms solid ${d.solid} drawn ${d.drawn} groups ${d.drawGroups} geom ${d.geometries} tex ${d.textures}   scenery ${scenery === false ? "OFF (?scenery=0: authored props only)" : "on"}`;
 
 /** The stretches of a run in order: the grid and warm-up, the sampled window, the A/Bs, then the replay of the run's own crash (`PAGE_PHASES[PHASE_WARM]` ...). Indices only grow (posted cards name them): the quality A/Bs run before the replay but come last. */
 export const PAGE_PHASES = ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay", "sweep", "ab-draw", "ab-scale", "ab-shadow"] as const;
@@ -340,6 +358,8 @@ export interface BenchResult {
   abShadow?: QualityBlocks | null;
   /** The cosmetic Rapier world (the thrown drivers' and knocked props'): `world.step()` over the sampled window, and the world's size. */
   ragdoll: RagdollCost;
+  /** What dressing the course cost and the scene holds: null on the Lab and on a card from before it. */
+  dressing?: BenchDressing | null;
   /** The run's own crash replayed as a highlight at each FX tier (null: no clip, `replayWhy` says why). */
   replay: ReplayResult | null;
   replayWhy: string | null;
@@ -543,6 +563,7 @@ export function describeBench(r: BenchResult): string[] {
     r.gpuMs ? row("GPU", r.gpuMs) + (waited(r.gpuMs, r.frameMs) ? "   p95 is one frame long: a wait on the display, p50 is the work" : "") : "GPU       no timer query on this device",
     ragdollLine(r.ragdoll),
     `draw ${r.calls} calls  ${Math.round(r.triangles / 1000)}k tris   cops: ${r.cops ? `${r.cops.stakeouts} stakeouts, ${r.cops.pursuits} pursuits, pack of ${r.cops.maxPack}` : "none"}`,
+    ...(r.dressing ? [dressingLine(r.dressing, s.scenery)] : []),
     `fx tier: ${tiers}${s.fxAuto ? " (auto)" : ""}   post chain at the top tier: ${s.post}`,
     `detail: only the body drawn beyond ${Object.entries(r.detailPct).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} for ${Math.round(v)} %`).join(", ")} of the window`,
     `shadows ${s.shadows.enabled ? `${s.shadows.type} ${s.shadows.map}, ${s.shadows.casters} casters` : "off"}   pixel ratio ${s.pixelRatio} of device ${s.deviceRatio}, canvas ${s.canvas}, ${s.antialias ? "MSAA" : "no MSAA"}   fx density ${f1(s.fxDensity)}, cel ${s.celLook === null ? "auto" : f1(s.celLook)}, dots ${strengthOf(s.halftone)}, hatch ${strengthOf(s.hatching)}, rim ${strengthOf(s.rimLight)}   night ${s.night ? "on" : "off"}, wet ${s.wet ? "on" : "off"}, realism ${f1(s.realism)}, squash ${f1(s.squash)}, buckle ${f1(s.buckle)}, deform ${s.deformMode}, sky ${s.skyPin ?? s.sky} pinned by the bench (your setting ${s.skyPlayer}, put back after; ${s.skyDetail} on every tier), drawn ${windowSky(r.pageSeconds)}`,
