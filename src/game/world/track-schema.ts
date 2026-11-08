@@ -54,6 +54,8 @@ const shortcut = z.object({
   surface: surface.default(SURFACE.dirt),
   /** Open spline, entry first; a gate sits on every point. */
   path: z.array(shortcutPoint).min(2),
+  /** Its gates count in order, as the main chain's do, and it is entered only through its first gates: a car cutting across the ground beside it earns nothing. */
+  ordered: z.boolean().default(false),
 });
 
 const lane = z.object({

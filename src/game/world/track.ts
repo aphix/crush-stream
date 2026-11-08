@@ -82,7 +82,7 @@ export type TrackPath = {
   tunnel: Uint8Array;
 };
 
-type Shortcut = { id: string; from: number; to: number; path: TrackPath; gates: Gate[] };
+type Shortcut = { id: string; from: number; to: number; ordered: boolean; path: TrackPath; gates: Gate[] };
 
 /** A traffic side street. */
 type Route = { id: string; path: TrackPath; count: number; lanes: readonly { offset: number; dir: 1 | -1 }[] };
@@ -490,7 +490,7 @@ export class Track {
       const sub = sidePath(pts, sc.width, sc.surface, false);
       const n = sc.path.length;
       const gates = sc.path.map((_, i) => gateAt(sub.path, i === 0 ? 0 : i === n - 1 ? sub.path.length : sAtParam(sub.path, sub.param, i)));
-      return { id: sc.id, from: sc.from, to: sc.to, path: sub.path, gates };
+      return { id: sc.id, from: sc.from, to: sc.to, ordered: sc.ordered, path: sub.path, gates };
     });
     this.routes = (this.json.traffic?.routes ?? []).map((r) => ({
       id: r.id,

@@ -9,15 +9,15 @@ must(razor, "razor-shelf is a course");
 const cut = razor.shortcuts[0];
 must(cut, "razor-shelf has its inside cut");
 
-/** The most (s) the cut may save a flying lap (owner 11-07: it cut off far too much of the map for what it risked). */
+/** The most (s) the cut may save a flying lap. */
 const MOST_SAVED_S = 8;
 /** Laps a lone car drives: its seeded coin takes the cut on some and the loop on the rest. */
 const LAPS = 6;
 /** How far (m) either side of the cut's centreline the ground is read: 8 m past the trail's edge. */
 const BESIDE = 12;
-/** The ground beside the ledge lies at least this far (m) under the road ... */
+/** The ground beside a hairpin lies at least this far (m) under the road ... */
 const DROP = 5;
-/** ... along at least this share of the ledge, the run from the first hairpin to the last. */
+/** ... along at least this share of that hairpin. */
 const DROP_SHARE = 0.5;
 
 describe("given Razor Shelf's inside cut", () => {
@@ -25,22 +25,21 @@ describe("given Razor Shelf's inside cut", () => {
     expect(hairpinsOf(cut.path).length, "hairpins on the cut").toBeGreaterThanOrEqual(4);
   });
 
-  it("when the ground beside the run from its first hairpin to its last is read, then it lies 5 m or more under the road along at least half of it", () => {
-    const hairpins = hairpinsOf(cut.path);
-    const first = hairpins[0];
-    const last = hairpins[hairpins.length - 1];
-    must(first, "the cut has a first hairpin");
-    must(last, "the cut has a last hairpin");
+  it("when the ground beside each hairpin is read, then it lies 5 m or more under the road along at least half of that hairpin", () => {
     const ground = razor.ground();
     const p = cut.path;
-    let deep = 0;
-    for (let k = first[0]; k <= last[1]; k++) {
-      // The sample's left normal is (-tz, tx).
-      const left = ground.heightAt(p.x[k]! - p.tz[k]! * BESIDE, p.z[k]! + p.tx[k]! * BESIDE);
-      const right = ground.heightAt(p.x[k]! + p.tz[k]! * BESIDE, p.z[k]! - p.tx[k]! * BESIDE);
-      if (p.y[k]! - Math.min(left, right) >= DROP) deep++;
+    const hairpins = hairpinsOf(cut.path);
+    expect(hairpins.length, "hairpins on the cut").toBeGreaterThan(0);
+    for (const [i, [first, last]] of hairpins.entries()) {
+      let deep = 0;
+      for (let k = first; k <= last; k++) {
+        // The sample's left normal is (-tz, tx).
+        const left = ground.heightAt(p.x[k]! - p.tz[k]! * BESIDE, p.z[k]! + p.tx[k]! * BESIDE);
+        const right = ground.heightAt(p.x[k]! + p.tz[k]! * BESIDE, p.z[k]! - p.tx[k]! * BESIDE);
+        if (p.y[k]! - Math.min(left, right) >= DROP) deep++;
+      }
+      expect(deep / (last - first + 1), `share of hairpin ${i + 1} with ${DROP} m of drop ${BESIDE} m beside the trail`).toBeGreaterThanOrEqual(DROP_SHARE);
     }
-    expect(deep / (last[1] - first[0] + 1), `share of the ledge with ${DROP} m of drop ${BESIDE} m beside the trail`).toBeGreaterThanOrEqual(DROP_SHARE);
   });
 });
 

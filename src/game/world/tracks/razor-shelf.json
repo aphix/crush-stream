@@ -24,6 +24,7 @@
       "to": 4,
       "width": 8,
       "surface": "gravel",
+      "ordered": true,
       "path": [
         { "x": 0, "z": 270, "y": 12, "surface": "cobble" },
         { "x": 48, "z": 270, "y": 11.8 },
@@ -123,6 +124,18 @@
         "z": 190,
         "radius": 70,
         "height": -24
+      },
+      {
+        "x": 55,
+        "z": 219,
+        "radius": 30,
+        "height": -16
+      },
+      {
+        "x": 55,
+        "z": 151,
+        "radius": 30,
+        "height": -16
       }
     ],
     "light": {

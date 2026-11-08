@@ -43,6 +43,8 @@ const WRONG_DOT = -Math.SQRT1_2;
 const WRONG_SPEED = 1.5;
 /** A move longer than this in one step is a teleport (respawn, host reset): no gate credit. */
 const TELEPORT = 25;
+/** An ordered shortcut is entered through its first this many gates: gate 0 is on the main road (never an entry), gate 1 the first off it. */
+const ORDERED_MOUTH_GATES = 2;
 /** A respawn lands at least this far short of the next gate. */
 export const GATE_MARGIN = 3;
 const RESPAWN_TRIES = 12;
@@ -422,7 +424,8 @@ export class RaceSession {
 
   /**
    * Gate credit for the move (x0, z0) → (c.x, c.z) over [t0, t0 + dt] (the `io` slots). A designed shortcut counts from any of its
-   * gates but the last, through any later one, so a car driving its own line across the shortcut's ground still took it. Main
+   * gates but the last, through any later one, so a car driving its own line across the shortcut's ground still took it; an `ordered`
+   * one counts its gates as the main chain does: only the owed gate advances it, a later one crossed first sets `missed`. Main
    * checkpoints stay strict: crossing a later one with one owed sets `missed`. A shortcut gate counts as entering only off the main
    * road, a main gate as back on it only on the main road; among shortcuts leaving one checkpoint the car is on the nearest road's.
    */
@@ -441,7 +444,12 @@ export class RaceSession {
         const sc = tr.shortcuts[c.route]!;
         const last = sc.gates.length - 1;
         let hit = -1;
-        for (let g = last; g >= c.routeNext && hit < 0; g--) if (crossGate(sc.gates[g]!, x0, z0, c.x, c.z) >= 0) hit = g;
+        if (sc.ordered) {
+          if (crossGate(sc.gates[c.routeNext]!, x0, z0, c.x, c.z) >= 0) {
+            hit = c.routeNext;
+            c.missed = false;
+          } else for (let g = last; g > c.routeNext && !c.missed; g--) if (crossGate(sc.gates[g]!, x0, z0, c.x, c.z) >= 0) c.missed = true;
+        } else for (let g = last; g >= c.routeNext && hit < 0; g--) if (crossGate(sc.gates[g]!, x0, z0, c.x, c.z) >= 0) hit = g;
         if (hit >= 0) {
           c.routeNext = hit + 1;
           c.safe = null;
@@ -505,7 +513,7 @@ export class RaceSession {
     for (let k = 0; k < tr.shortcuts.length; k++) {
       const sc = tr.shortcuts[k]!;
       if (k === c.route || (sc.from + 1) % n !== c.next) continue;
-      for (let g = 0; g < sc.gates.length - 1; g++) {
+      for (let g = 0; g < (sc.ordered ? Math.min(ORDERED_MOUTH_GATES, sc.gates.length - 1) : sc.gates.length - 1); g++) {
         const t = crossGate(sc.gates[g]!, x0, z0, c.x, c.z);
         if (t < 0 || tr.onRoad(x0 + (c.x - x0) * t, z0 + (c.z - z0) * t, this.back)) continue;
         const d = projectPath(sc.path, c.x, c.z, -1, this.back).dist2;
