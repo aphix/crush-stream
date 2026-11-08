@@ -265,6 +265,7 @@ function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
   const { roughness, metalness } = FACADE[style];
   const blank = placeholder();
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness, emissive: WINDOW_LIGHT, emissiveIntensity: WINDOW_LIGHT_INTENSITY, map: blank, normalMap: reliefPossible() ? blank : null, emissiveMap: blank });
+  material.userData.facadeStyle = style;
   tagMaterial(material, MAT.CONCRETE);
   const tagHook = material.onBeforeCompile;
   const tagKey = material.customProgramCacheKey;

@@ -123,11 +123,13 @@ describe("given a building built in each facade style", () => {
     const region = geometry.getAttribute("surfaceRegion");
     const uv = geometry.getAttribute("uv");
     const normal = geometry.getAttribute("normal");
+    const position = geometry.getAttribute("position");
     let storeys = 0;
     const reliefs = new Set<number>();
     for (let i = 0; i < region.count; i++) {
       if (region.getX(i) === LAYER.floor && normal.getX(i) > 0.5) storeys = Math.max(storeys, uv.getY(i));
-      if (region.getX(i) === LAYER.floor && normal.getX(i) < -0.5) reliefs.add(region.getY(i));
+      // The roof slab's sides (above the roofline less a cornice) also read the floor layer, at full relief: only the wall's own band counts.
+      if (region.getX(i) === LAYER.floor && normal.getX(i) < -0.5 && position.getY(i) < ROOFLINE - 0.3) reliefs.add(region.getY(i));
     }
     expect(storeys, "street storeys").toBeGreaterThanOrEqual(1);
     expect(Number.isInteger(storeys), `v ${storeys}`).toBe(true);
