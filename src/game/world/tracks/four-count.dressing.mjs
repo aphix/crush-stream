@@ -2,7 +2,7 @@
 // base zones: 0
 // base plateaus: 0
 // base paint: 0
-import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
+import { detCos, detSin } from "../../kernel/physics-core.js";
 import { BIOME, PREFAB } from "../constants.ts";
 import { boxClear, mulberry32 } from "../placements.ts";
 import { blankPoint } from "../track.ts";
@@ -24,8 +24,11 @@ const STREET = 21;
 const CITY_SETBACK = 7;
 /** Share of the woods' edge-row props that are rocks. */
 const ROCK_SHARE = 1 / 6;
+/** Edge (m) of the terrain mesh's blocks, `BLOCK` in present/track-mesh.ts (a world file does not import it). */
+const MESH_BLOCK = 8;
 
-const PLATEAU = { run: 11, round: 3, margin: 10, gap: 8, top: 24, topMin: 5, height: [10, 17] };
+/** Long gentle flanks: a flank across whole 8 m mesh blocks is a plane the terrain mesh draws as one quad each (far too), where a short steep one is split cells all over. */
+const PLATEAU = { run: 20, round: 4, margin: 6, gap: 6, top: 20, topMin: 4, height: [10, 17] };
 
 /** The largest square half-width (m, up to `top`) of a plateau at (x, z) whose foot stays `margin` m off every road, in steps of 1 m. @param {import("../../../../scripts/course-dressing.mjs").Dressing} d @param {number} x @param {number} z */
 function roadFit(d, x, z) {
@@ -71,25 +74,11 @@ function mesas(d, box, step, seed) {
   }
 }
 
-/** A box's outline with each edge ragged by up to `jag` m, so painted ground does not end in a ruled line. @param {number[]} box x0, z0, x1, z1 @param {number} jag @param {number} seed @returns {number[][]} */
-function ragged([x0, z0, x1, z1], jag, seed) {
-  const rng = mulberry32(seed);
-  const step = 30;
-  /** @type {number[][]} */
-  const out = [];
-  const edge = (/** @type {number} */ ax, /** @type {number} */ az, /** @type {number} */ bx, /** @type {number} */ bz, /** @type {number} */ nx, /** @type {number} */ nz) => {
-    const n = Math.max(1, Math.round(hypot2(bx - ax, bz - az) / step));
-    for (let i = 0; i < n; i++) {
-      const t = i / n;
-      const j = (rng() * 2 - 1) * jag;
-      out.push([Math.round(ax + (bx - ax) * t + nx * j), Math.round(az + (bz - az) * t + nz * j)]);
-    }
-  };
-  edge(x0, z0, x1, z0, 0, -1);
-  edge(x1, z0, x1, z1, 1, 0);
-  edge(x1, z1, x0, z1, 0, 1);
-  edge(x0, z1, x0, z0, -1, 0);
-  return out;
+/** A box as a four-corner paint polygon with its sides snapped outward to the terrain mesh's 8 m blocks: a block whose corners are not one colour is drawn in split cells even far away, so a side off the lattice (or a ragged one) costs a row of them. @param {number[]} box x0, z0, x1, z1 @returns {number[][]} */
+function latticePolygon([x0, z0, x1, z1]) {
+  const lo = (/** @type {number} */ v) => Math.floor(v / MESH_BLOCK) * MESH_BLOCK;
+  const hi = (/** @type {number} */ v) => Math.ceil(v / MESH_BLOCK) * MESH_BLOCK;
+  return [[lo(x0), lo(z0)], [hi(x1), lo(z0)], [hi(x1), hi(z1)], [lo(x0), hi(z1)]];
 }
 
 /** Trees (and the odd rock) one row `lane` m left of the centreline from node `from` to `to`, one every `every` m: the left is the open side there. @param {import("../../../../scripts/course-dressing.mjs").Dressing} d @param {number} from @param {number} to @param {number} lane @param {number} every @param {number} seed */
@@ -113,9 +102,9 @@ export default (d) => {
   d.zone(CANYON.x0, CANYON.z0, CANYON.x1, CANYON.z1, BIOME.desert);
   for (const [x0, z0, x1, z1] of WOODS) d.zone(x0, z0, x1, z1, BIOME.park);
 
-  d.paint("concrete", ragged([-450, 300, -150, 650], 12, 3));
-  d.paint("asphalt", ragged([CITY.x0, CITY.z0, CITY.x1, CITY.z1], 10, 5));
-  d.paint("dirt", ragged([CANYON.x0, CANYON.z0, CANYON.x1, CANYON.z1], 14, 7));
+  d.paint("concrete", latticePolygon([-450, 300, -150, 650]));
+  d.paint("asphalt", latticePolygon([CITY.x0, CITY.z0, CITY.x1, CITY.z1]));
+  d.paint("dirt", latticePolygon([CANYON.x0, CANYON.z0, CANYON.x1, CANYON.z1]));
 
   // The bowl's stands face the track from the infield: two rings round the semicircle and a row down the west straight.
   const ring = (/** @type {number} */ radius, /** @type {number} */ count) => {

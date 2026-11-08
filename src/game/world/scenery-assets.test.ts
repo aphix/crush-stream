@@ -3,7 +3,7 @@ import type { PrefabId } from "./catalog.ts";
 import { BIOME, PREFAB, TRACK_ID } from "./constants.ts";
 import type { Placed } from "./placements.ts";
 import { biomeLookup } from "./scenery.ts";
-import { COURSE_JSON, REACH, REACH_SLACK, dress, footprintDepth, nearOpening, type Dressed } from "./scenery.test-util.ts";
+import { COURSE_JSON, REACH, REACH_SLACK, dress, dressCopy, footprintDepth, nearOpening, type Dressed } from "./scenery.test-util.ts";
 import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
 import { assetPrefab } from "./scenery-assets/pick.ts";
 import { ROAD_DECAL_ASSET, ROAD_DECAL_NAMES, type AssetKind, type SceneryAsset } from "./scenery-assets/types.ts";
@@ -154,13 +154,16 @@ const SCATTERED: readonly string[] = ["verge", "yard", "ground", "paving", "isla
 const SOLID_TURN_MAX = 0.35;
 const FREE_TURN_MEDIAN_MIN = 0.3;
 
-/** How far (rad) card `p` is turned from facing the nearest road sample square-on. */
+/** How far (rad) card `p` is turned from facing square-on the road sample nearest by wall-line gap (the service's own pick: a card between two roads faces the one whose wall line is nearer, not the one whose centreline is). */
 function turnFromRoad(track: Track, p: Placed): number {
-  let near = { d: Infinity, x: 0, z: 0 };
+  let near = { gap: Infinity, x: 0, z: 0 };
   for (const path of track.paths()) {
     for (let i = 0; i < path.count; i++) {
-      const d = Math.hypot(path.x[i]! - p.x, path.z[i]! - p.z);
-      if (d < near.d) near = { d, x: path.x[i]!, z: path.z[i]! };
+      const dx = p.x - path.x[i]!;
+      const dz = p.z - path.z[i]!;
+      const left = dx * path.tz[i]! - dz * path.tx[i]! > 0;
+      const gap = Math.hypot(dx, dz) - path.half[i]! - (left ? path.runL[i]! : path.runR[i]!);
+      if (gap < near.gap) near = { gap, x: path.x[i]!, z: path.z[i]! };
     }
   }
   const turn = p.yaw - Math.atan2(p.z - near.z, near.x - p.x);
@@ -230,7 +233,7 @@ describe("given the generated scenery assets on every course", () => {
     for (const j of COURSE_JSON) {
       const a = standing(dress(j));
       seen += a.length;
-      assertSameDigest(a, standing(dress(structuredClone(j), { density: {} })), `${parseTrack(j).id} assets`);
+      assertSameDigest(a, standing(dressCopy(j)), `${parseTrack(j).id} assets`);
     }
     expect(seen, "assets placed").toBeGreaterThan(0);
   });

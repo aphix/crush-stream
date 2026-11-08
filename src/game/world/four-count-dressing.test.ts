@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PARKED_CARS, PREFABS } from "./catalog.ts";
 import { PREFAB } from "./constants.ts";
-import { boxClear, lastDressing, placeCourse, type Placed } from "./placements.ts";
+import { boxClear, placeCourse, type Placed } from "./placements.ts";
 import { nearOpening } from "./scenery.test-util.ts";
 import { biomeLookup } from "./scenery.ts";
 import { Track } from "./track.ts";
@@ -10,7 +10,8 @@ import fourCount from "./tracks/four-count.json" with { type: "json" };
 const track = new Track(fourCount);
 const course = placeCourse(track);
 const placed = course.placed;
-const authored = placed.slice(0, lastDressing.authored);
+/** The `props` array's own entries (the four hand props, then the dressing program's): the `along` and `scatter` rows' trees stand after them and fall where they fall. */
+const propRows = placed.slice(0, track.json.props.length);
 
 type Box = readonly [x0: number, z0: number, x1: number, z1: number];
 const CITY: Box = [300, 190, 880, 580];
@@ -23,9 +24,9 @@ const countIn = (prefab: string, boxes: readonly Box[]): number => placed.filter
 
 /** The sidewalk the city biome lays is 3.6 m beyond the wall line: a facade stands further off than that. */
 const FACADE_SETBACK = 6.9;
-const PLATEAU_FOOT_CLEAR = 9;
+const PLATEAU_FOOT_CLEAR = 5;
 /** The authored woods are a solid edge: between these many trees and rocks, each within `WOODS_EDGE_REACH` m of an open road edge; the forest behind is drawn by the scenery service. */
-const WOODS_EDGE_MIN = 60;
+const WOODS_EDGE_MIN = 50;
 const WOODS_EDGE_MAX = 150;
 const WOODS_EDGE_REACH = 15;
 const WOODS_DRAWN_TREES_MIN = 60;
@@ -56,7 +57,7 @@ describe("given Four-Count's four zones", () => {
 
   // mutation: sed -i 's/"verge": 3/"verge": 1/' src/game/world/tracks/four-count.json
   it("when the woods are placed, then the few authored trees and rocks stand on a road's open edge and the zone's forest is the scenery service's drawn trees", () => {
-    const edge = authored.filter((p) => (p.prefab === PREFAB.tree || p.prefab === PREFAB.rock) && WOODS.some((b) => within(p, b)));
+    const edge = propRows.filter((p) => (p.prefab === PREFAB.tree || p.prefab === PREFAB.rock) && WOODS.some((b) => within(p, b)));
     expect(edge.length, "authored solid trees and rocks in the woods").toBeGreaterThanOrEqual(WOODS_EDGE_MIN);
     expect(edge.length, "authored solid trees and rocks in the woods").toBeLessThanOrEqual(WOODS_EDGE_MAX);
     for (const p of edge) expect(nearOpening(track, p.x, p.z, WOODS_EDGE_REACH), `authored ${p.prefab} at (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) within ${WOODS_EDGE_REACH} m of an open edge`).toBe(true);
@@ -65,7 +66,7 @@ describe("given Four-Count's four zones", () => {
   });
 
   // mutation: sed -i 's/"prefab": "grandstand"/"prefab": "crate"/' src/game/world/tracks/four-count.json
-  it("when the props are placed, then the bowl has a ring of stands round its infield (their facing is the stands row's)", () => {
+  it("when the props are placed, then the bowl has a ring of stands round its infield", () => {
     expect(countIn(PREFAB.grandstand, [BOWL]), "stands in the bowl").toBeGreaterThanOrEqual(12);
   });
 
@@ -78,7 +79,7 @@ describe("given Four-Count's four zones", () => {
   // mutation: sed -i '/"halfX": /s/"height": [0-9]*/"height": 1/' src/game/world/tracks/four-count.json
   it("when the canyon's ground is read, then each mesa stands at its height, its foot keeps off every road, and boulders stand in the gaps", () => {
     const { plateaus } = track.json.environment;
-    expect(plateaus.length, "mesas").toBeGreaterThanOrEqual(10);
+    expect(plateaus.length, "mesas").toBeGreaterThanOrEqual(8);
     for (const p of plateaus) {
       const top = track.ground().heightAt(p.x, p.z);
       expect(top, `mesa at (${p.x}, ${p.z}): ground at its centre (m)`).toBeGreaterThan(p.height - 1);

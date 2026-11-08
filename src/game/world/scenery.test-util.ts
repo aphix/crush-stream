@@ -33,6 +33,11 @@ export function dress(json: unknown, extra: object = {}): Dressed {
   return out;
 }
 
+/** `json` dressed again from a copy, as a fresh parse: its own `density` is passed on as the extra, which keys a new memo entry for the same scenery (`{ density: {} }` would drop a course's own density and dress it differently). */
+export function dressCopy(json: unknown): Dressed {
+  return dress(structuredClone(json), { density: parseTrack(json).scenery?.density ?? {} });
+}
+
 /** Key of a placement, for set comparisons. */
 export const keyOf = (p: Placed): string => `${p.prefab}@${p.x.toFixed(3)},${p.z.toFixed(3)},${p.yaw.toFixed(3)}`;
 

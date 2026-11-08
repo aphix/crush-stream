@@ -3,7 +3,7 @@ import { PARKED_PREFABS, PREFABS } from "./catalog.ts";
 import { BIOME, PREFAB, TRACK_ID } from "./constants.ts";
 import { placeProps, type Placed } from "./placements.ts";
 import { addedDrawGroups, biomeLookup, drawGroupOf, thinScenery } from "./scenery.ts";
-import { COURSE_JSON, FLAT, REACH, REACH_SLACK, centreDistance, dress, intrusion, keyOf, nearOpening, overlap, seamGap } from "./scenery.test-util.ts";
+import { COURSE_JSON, FLAT, REACH, REACH_SLACK, centreDistance, dress, dressCopy, intrusion, keyOf, nearOpening, overlap, seamGap } from "./scenery.test-util.ts";
 import { parseTrack } from "./track-schema.ts";
 import { Track, blankPoint } from "./track.ts";
 import { TRACKS } from "./tracks/index.ts";
@@ -22,7 +22,7 @@ describe("given every course", () => {
   it("when it is dressed twice from separate parses, then both lists come out the same", () => {
     for (const j of COURSE_JSON) {
       const a = dress(j);
-      const b = dress(structuredClone(j), { density: {} });
+      const b = dressCopy(j);
       assertSameDigest(a.solid, b.solid, `${a.track.id} solid`);
       assertSameDigest(a.drawn, b.drawn, `${a.track.id} drawn`);
     }

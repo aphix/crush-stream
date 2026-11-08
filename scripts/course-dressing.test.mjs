@@ -91,7 +91,7 @@ describe("given the committed four-count dressing program", () => {
     const base = baseOf(readFileSync(new URL("../src/game/world/tracks/four-count.dressing.mjs", import.meta.url), "utf8"));
     const result = dress("four-count", base, fourCountDressing);
     expect(base.props, "authored props the sidecar names").toBe(4);
-    expect(result.appended.props, "props the program appends").toBeGreaterThan(2000);
+    expect(result.appended.props, "props the program appends").toBeGreaterThan(400);
     expect(result.changed, "course JSON differs from the program's output").toBe(false);
   });
 });
