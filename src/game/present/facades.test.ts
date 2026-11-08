@@ -6,7 +6,7 @@ import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { TIME_OF_DAY } from "../match/types.ts";
 import { PREFAB, TRACK_ID } from "../world/constants.ts";
-import { placeProps } from "../world/placements.ts";
+import { placeCourse } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
@@ -118,7 +118,8 @@ describe("given the National Mall's art", () => {
   it("when its buildings are drawn, then they make at most one mesh per style and draw cell, within the Mall's building budget", () => {
     stubBrowser();
     const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
-    const art = new TrackArt(track, placeProps(track), new WorldStage(new THREE.Scene()));
+    const course = placeCourse(track);
+    const art = new TrackArt(track, course.placed, new WorldStage(new THREE.Scene()), course.drawn);
     const meshes: THREE.Object3D[] = [];
     art.group.traverse((o) => {
       if (o.name === `prop:${PREFAB.building}`) meshes.push(o);
