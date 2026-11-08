@@ -588,7 +588,7 @@ cell))` so a cell's output depends only on that cell, and a hand-built track giv
 - **Cost.** Generated cover casts no shadow (`PrefabPart.shadow = false`: slabs, bushes, beds). The drawn list is thinned to the effects tier (`thinScenery`: off and minimal a third,
   Low three fifths, High and Ultra all, by a hash of each prop's spot, so every lower tier is a subset); the solid list never depends on the tier. One `InstancedMesh` per prefab part
   per 512 m cell: `scenery.test.ts` caps the groups a course adds (new solid groups plus drawn-only ones) at 48 (four-count 45, dam-spine 38) and 2000 instances in one. Boot (`placeCourse` beyond the authored props, node,
-  measured): 6 to 90 ms per course, the Mall 600 ms (its 2900 authored footprints and 50 side streets).
+  measured): 2 to 63 ms per course, the Mall 408 ms (its 2900 authored footprints and 50 side streets).
 
 ## Engine integration
 
