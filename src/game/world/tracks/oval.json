@@ -56,9 +56,9 @@
   ],
   "grid": { "perRow": 2, "spacing": 8, "back": 6 },
   "props": [
-    { "prefab": "grandstand", "x": -76, "z": -36 },
-    { "prefab": "grandstand", "x": -76, "z": 0 },
-    { "prefab": "grandstand", "x": -76, "z": 36 },
+    { "prefab": "grandstand", "x": -91, "z": -36 },
+    { "prefab": "grandstand", "x": -91, "z": 0 },
+    { "prefab": "grandstand", "x": -91, "z": 36 },
     { "prefab": "tyre-stack", "x": 40, "z": -52 },
     { "prefab": "tyre-stack", "x": 40, "z": -49 },
     { "prefab": "tyre-stack", "x": -40, "z": -52 },
@@ -68,9 +68,9 @@
     { "prefab": "hay-bale", "x": 0, "z": -105, "yaw": 1.5708 },
     { "prefab": "billboard", "x": 0, "z": 158, "yaw": 1.5708 },
     { "prefab": "billboard", "x": 0, "z": -158, "yaw": 1.5708 },
-    { "prefab": "grandstand", "x": 76, "z": -36, "yaw": 3.1416 },
-    { "prefab": "grandstand", "x": 76, "z": 0, "yaw": 3.1416 },
-    { "prefab": "grandstand", "x": 76, "z": 36, "yaw": 3.1416 }
+    { "prefab": "grandstand", "x": 91, "z": -36, "yaw": 3.1416 },
+    { "prefab": "grandstand", "x": 91, "z": 0, "yaw": 3.1416 },
+    { "prefab": "grandstand", "x": 91, "z": 36, "yaw": 3.1416 }
   ],
   "along": [
     { "prefab": "lamp", "every": 45, "side": "left", "offset": 1.5 },
