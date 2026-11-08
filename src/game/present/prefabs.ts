@@ -9,7 +9,7 @@ import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monument
 import { frontBumper, lyingWheel } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
 import { PREFAB } from "../world/constants.ts";
-import { FACADE, type FacadeStyle, homeStyle, makeFacadeMaterials, ROOFLINE } from "./facades.ts";
+import { FACADE, type FacadeStyle, homeStyle, makeFacadeMaterials, ROOF_TILE_M, ROOFLINE } from "./facades.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { applyWaterLook } from "./water-look.ts";
@@ -346,6 +346,23 @@ function facade(w: number, bays: number): THREE.BufferGeometry {
   return g;
 }
 
+/**
+ * The roof slab, 12 m square from 13.5 to 14 m, in two pieces: its sides, which sample the style's bare wall, and its top, whose uv is in roof tiles
+ * (`ROOF_TILE_M`) for the shader to cover from the roof atlas. The top is its own piece so it is the one class `BUILDING_ROOF`.
+ */
+function roofSlab(wall: MaterialId, style: FacadeStyle): Piece[] {
+  const [u, v] = FACADE[style].plain;
+  const sides = uvAt(box(12, 0.5, 12, 0, 13.75, 0), u, v);
+  // A box's faces are +x, -x, +y, -y, +z, -z, six indices each: leave the +y face to the top piece.
+  const faces = Array.from(sides.index!.array);
+  sides.setIndex([...faces.slice(0, 12), ...faces.slice(18)]);
+  const top = new THREE.PlaneGeometry(12, 12).rotateX(-Math.PI / 2).translate(0, 14, 0);
+  const position = top.getAttribute("position");
+  const uv = top.getAttribute("uv") as THREE.BufferAttribute;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, position.getX(i) / ROOF_TILE_M, position.getZ(i) / ROOF_TILE_M);
+  return [[sides, C.roof, wall], [top, 0xffffff, MAT.BUILDING_ROOF]];
+}
+
 /** The four facades and the roof slab of a city block in `style`; `wall` is the facade's material id. */
 function building(wall: MaterialId, style: FacadeStyle): Piece[] {
   const half = 5.9;
@@ -353,8 +370,7 @@ function building(wall: MaterialId, style: FacadeStyle): Piece[] {
   for (let i = 0; i < 4; i++) {
     out.push([facade(half * 2, FACADE[style].bays).translate(0, 0, half).rotateY((i * Math.PI) / 2), 0xffffff, wall]);
   }
-  const [u, v] = FACADE[style].plain;
-  out.push([uvAt(box(12, 0.5, 12, 0, 13.75, 0), u, v), C.roof, MAT.BUILDING_ROOF]);
+  out.push(...roofSlab(wall, style));
   return out;
 }
 

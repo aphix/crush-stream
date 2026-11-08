@@ -54,17 +54,22 @@ describe("given a building built in each facade style", () => {
   });
 
   for (const style of STYLES) {
-    it(`when a ${style} building is built, then its faces repeat the tile ${FACADE[style].bays} times across, reach the roofline, and the roof samples the style's bare wall`, () => {
+    it(`when a ${style} building is built, then its faces repeat the tile ${FACADE[style].bays} times across, reach the roofline, the slab's sides sample the bare wall and its top is laid in 2.4 m roof tiles`, () => {
       const [part] = prefabParts(PREFAB.building, materials, style);
       const geometry = part!.geometry;
       const uv = geometry.getAttribute("uv");
+      const position = geometry.getAttribute("position");
       const klass = geometry.getAttribute("materialClass");
       let facadeU = 0;
       let facadeV = 0;
+      let sides = 0;
+      let roofU = [Infinity, -Infinity];
       for (let i = 0; i < uv.count; i++) {
         if (klass.getX(i) === MAT.BUILDING_ROOF) {
-          expect(uv.getX(i), "roof u").toBeCloseTo(FACADE[style].plain[0], 5);
-          expect(uv.getY(i), "roof v").toBeCloseTo(FACADE[style].plain[1], 5);
+          expect(position.getY(i), "roof top height").toBeCloseTo(14, 5);
+          roofU = [Math.min(roofU[0]!, uv.getX(i)), Math.max(roofU[1]!, uv.getX(i))];
+        } else if (Math.abs(uv.getX(i) - FACADE[style].plain[0]) < 1e-5 && Math.abs(uv.getY(i) - FACADE[style].plain[1]) < 1e-5) {
+          sides++;
         } else {
           facadeU = Math.max(facadeU, uv.getX(i));
           facadeV = Math.max(facadeV, uv.getY(i));
@@ -72,6 +77,8 @@ describe("given a building built in each facade style", () => {
       }
       expect(facadeU, "tiles across a face").toBeCloseTo(FACADE[style].bays, 5);
       expect(facadeV, "the tile's top meets the roof slab").toBeCloseTo(1, 5);
+      expect(sides, "slab side vertices on the bare wall (five faces of two triangles)").toBe(30);
+      expect(roofU[1]! - roofU[0]!, "roof tiles across the 12 m top").toBeCloseTo(5, 5);
       expect(part!.material, "its style's shared material").toBe(materials.facades[style]);
     });
   }
@@ -138,5 +145,32 @@ describe("given the world stage's time of day", () => {
     expect(FACADE_GLOW.value, "sunset").toBeLessThan(1);
     stage.setTime(TIME_OF_DAY.night);
     expect(FACADE_GLOW.value, "night").toBe(1);
+  });
+});
+
+describe("given the roof coverings", () => {
+  it("when the roof atlas files are listed, then both maps are 3 x 2 cells of 256 texels and under their size budget", () => {
+    for (const kind of ["albedo", "normal"] as const) {
+      const file = new URL(`../../../public/facades/roofs-${kind}.webp`, import.meta.url);
+      expect(existsSync(file), file.pathname).toBe(true);
+      expect(statSync(file).size, `${kind} bytes`).toBeLessThan(400_000);
+    }
+  });
+
+  it("when a style's material is compiled, then its roof switch points rise to at most 1 and the roof atlas is sampled for the roof class", () => {
+    const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
+    const made = makeFacadeMaterials();
+    for (const style of STYLES) {
+      const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+      made[style].onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+      const edges = (shader.uniforms.facadeRoofMix as THREE.IUniform<number[]>).value;
+      expect(edges.length, style).toBe(4);
+      for (let i = 1; i < edges.length; i++) expect(edges[i]!, `${style} edge ${i}`).toBeGreaterThanOrEqual(edges[i - 1]!);
+      expect(edges[3]!, `${style} last edge`).toBeLessThanOrEqual(1);
+      expect(shader.fragmentShader, `${style} roof atlas`).toContain("facadeRoofAlbedo");
+    }
+    const adobe = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+    made.adobe.onBeforeCompile(adobe, {} as THREE.WebGLRenderer);
+    expect((adobe.uniforms.facadeRoofMix as THREE.IUniform<number[]>).value, "an adobe roof is all tar").toEqual([1, 1, 1, 1]);
   });
 });
