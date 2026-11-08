@@ -128,6 +128,7 @@ last frame whole: the script holds `renderer.info.autoReset` off and resets it b
   (about a minute each): per course a north-up overhead (the eye over the middle of `Track.bounds`, high enough that the box fits
   the engine's 50 degree lens) and an oblique (pitch 0.9 from the south, the near edge and corners fitted), at day and night, as
   `<course>-{top,oblique}-{day,night}.png` in `--out` (`--courses oval,city` picks some).
+- **Course dressing:** `node --disable-warning=ExperimentalWarning scripts/course-dressing.mjs <id> [--dry | --check]` regenerates the dressing arrays of `src/game/world/tracks/<id>.json` from `<id>.dressing.mjs` (`docs/RACE_DESIGN.md`, Describing a course's dressing); `--check` exits 1 when the JSON is not the program's output.
 - **Built-in ids count as attributes:** the bundled ANGLE (2.1.24078) counts `gl_VertexID` and `gl_InstanceID` against
   `MAX_VERTEX_ATTRIBS` (16), as some GLES drivers do; Chrome 149's ANGLE does not. The dummy's lit program once declared
   16 slots and read both, and failed to link here ("Too many attributes (print)"); its attributes are now packed to 14

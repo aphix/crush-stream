@@ -549,6 +549,37 @@ scenery `gantry` and `chevron` (placed by `placeProps` at shortcut junctions, no
 marble (a block a placement's `size` stretches to a whole museum: a plain one, or, from 25 m wide and 12 m tall, drawn as a slab in the DC limestone style `federal` on the marble body's footprint (`SLAB_STYLE`, `facades.ts`; the collider is the marble's either way): its bays, storeys and roof tiles keep their own metres at any size, one federal mesh per draw cell), white-house, fountain, fence, reflecting-pool and basin (the pools, their water on its own glossy material; a stone kerb round a floor 10 cm under the water, never stone filled up to the rim, whose top would lie a centimetre under the water's and flicker overhead: `poolStone`), lincoln, capitol-pool (the Capitol Reflecting Pool's wedge: a rim of turned bricks round a flat water sheet), and grant-memorial, peace-monument and garfield-monument (marble and bronze bricks, drawn and bounded alike: `world/landmarks.ts`), and flagpole (a pole flying the Stars and Stripes); the figure-8's junkyard, drawn only: wreck (a junked shell, tinted per copy), carhenge and junk-crane). A prefab's front is its local +X;
 `along` copies face the road. The start gantry is built by `TrackArt` at s = 0.
 
+### Describing a course's dressing (`scripts/course-dressing.mjs`)
+
+A course's hand-placed dressing is a short program, `tracks/<id>.dressing.mjs`, and the JSON's arrays are its output:
+
+```js
+// base props: 17
+/** @param {import("../../../../scripts/course-dressing.mjs").Dressing} d */
+export default (d) => {
+  d.sprinkle(["tree", "rock"], { near: 12, far: 90, density: 2 });
+  d.fill([480, -110, 540, -60], ["crate", "barrier-block"], { near: 8, minProp: 1.5, density: 8 });
+};
+```
+
+`// base <key>: <n>` counts the authored entries of each array the program appends to (`props`, `along`, `scatter`, `zones`, `hills`, `plateaus`, `paint`).
+`node --disable-warning=ExperimentalWarning scripts/course-dressing.mjs <id>` cuts each array back to its base and appends the program's output, so
+authored entries never move (their colliders keep their indices), formatting is the file's own and a second run changes nothing; `--dry` writes
+nothing and `--check` exits 1 when the JSON is not the program's output (a hand edit of generated entries).
+
+- `sprinkle(items, { near, far, density | count })`: props on the band `near`..`far` m beyond every road's wall line (runoff and shortcuts included), `density`
+  per 1000 m2 (default 1). `items`: a prefab id, a list, or `{ prefab, weight, scale: n | [lo, hi], size: [x, y, z] }`. Candidates are rejected within `near` of a road,
+  inside a no-go, or within `minProp` m (default 1.2 x the new prop's footprint radius) of another prop, authored ones included. Also `seed` (default: the course id's hash),
+  `sizeJitter`, `yaw: "random" | "road" | radians`, `noGo: [shape]`.
+- `fill(region, items, opts)`: the same inside a rect `[x0, z0, x1, z1]`, polygon `[[x, z], ...]` or circle `{ x, z, r }`.
+- `noGo(name, shape)`: a zone every later call keeps out of. `keepOutRoads(margin)`: the default `near` (6 m).
+- `prop(prefab, x, z, opts)` and `row(prefab, from, to, { every | count | gap, yaw: "along" | "perp" | radians, jitter })` heal instead of rejecting: pushed out
+  of a road margin or no-go along its normal, slid along the road to clear a neighbour, and counted as removed only when nothing within 4 m fits.
+- `onRoad(prefab, { every, lane, jitter })`: the one thing allowed on the road (`lamp`, `cone`).
+- `zone`, `hill`, `plateau`, `paint`, `scatterRule`, `alongRule` append their entry to the matching array.
+
+Appending to `props` moves the index of every later authored placement (`along`, scenery), which is a sim change: a `REPLAY_VERSION` entry.
+
 ## Scenery service
 
 `world/scenery.ts` (`placeScenery`, with `scenery-field.ts`, the road field and footprint grid, and `scenery-biome.ts`, the tables) dresses every
