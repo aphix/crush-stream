@@ -5,6 +5,7 @@
 import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { BIOME, PREFAB } from "../constants.ts";
 import { boxClear, mulberry32 } from "../placements.ts";
+import { blankPoint } from "../track.ts";
 
 const BOWL = { x: -280, z: 480 };
 const CITY = { x0: 300, z0: 190, x1: 880, z1: 580 };
@@ -21,6 +22,8 @@ const BLOCK = 3;
 const STREET = 21;
 /** Beyond the 3.6 m sidewalk the city biome lays, so a facade never stands on the pavement. */
 const CITY_SETBACK = 7;
+/** Share of the woods' edge-row props that are rocks. */
+const ROCK_SHARE = 1 / 6;
 
 const PLATEAU = { run: 11, round: 3, margin: 10, gap: 8, top: 24, topMin: 5, height: [10, 17] };
 
@@ -89,9 +92,23 @@ function ragged([x0, z0, x1, z1], jag, seed) {
   return out;
 }
 
+/** Trees (and the odd rock) one row `lane` m left of the centreline from node `from` to `to`, one every `every` m: the left is the open side there. @param {import("../../../../scripts/course-dressing.mjs").Dressing} d @param {number} from @param {number} to @param {number} lane @param {number} every @param {number} seed */
+function edgeRow(d, from, to, lane, every, seed) {
+  const rng = mulberry32(seed);
+  const pt = blankPoint();
+  for (let s = d.track.nodeS[from]; s < d.track.nodeS[to]; s += every) {
+    d.track.pointAt(s + (rng() - 0.5) * every * 0.5, pt);
+    const rock = rng() < ROCK_SHARE;
+    d.prop(rock ? PREFAB.rock : PREFAB.tree, pt.x + pt.tz * lane, pt.z - pt.tx * lane, { scale: rock ? 1 + rng() : 0.8 + rng() * 0.9 });
+  }
+}
+
 /** @param {import("../../../../scripts/course-dressing.mjs").Dressing} d */
 export default (d) => {
   d.zone(-425, 300, -155, 625, BIOME.circuit);
+  // The city's fringe outside the middle 512 m draw cell (x 256..768, z 256..768) takes the circuit biome's three facade styles, not the city's seven: a draw per style per cell.
+  d.zone(768, CITY.z0, CITY.x1, CITY.z1, BIOME.circuit);
+  d.zone(CITY.x0, CITY.z0, 768, 256, BIOME.circuit);
   d.zone(CITY.x0, CITY.z0, CITY.x1, CITY.z1, BIOME.city);
   d.zone(CANYON.x0, CANYON.z0, CANYON.x1, CANYON.z1, BIOME.desert);
   for (const [x0, z0, x1, z1] of WOODS) d.zone(x0, z0, x1, z1, BIOME.park);
@@ -123,16 +140,12 @@ export default (d) => {
     }
   }
 
-  // The woods.
-  const forest = [
-    { prefab: PREFAB.tree, weight: 12, scale: [0.8, 1.7] },
-    { prefab: PREFAB.bush, weight: 3, scale: [0.9, 1.6] },
-    { prefab: PREFAB.rock, weight: 1, scale: [0.9, 2] },
-  ];
-  for (const box of WOODS) d.fill(box, forest, { near: 10, density: 10, minProp: 0.6 });
+  // The woods' solid edge: the open side of the dirt road and the west ramp, where a car can leave the road; the rest of the forest is the scenery service's.
+  edgeRow(d, 169, 244, 22, 20, 21);
+  edgeRow(d, 169, 244, 25, 60, 22);
 
   // The canyon: mesas between the roads, boulders in the gaps.
   const feet = mesas(d, { x0: 300, z0: -110, x1: 800, z1: 170 }, 22, 11);
   const reach = PLATEAU.run + PLATEAU.round;
-  d.fill([CANYON.x0, CANYON.z0, CANYON.x1, CANYON.z1], { prefab: PREFAB.rock, scale: [1.8, 3.4] }, { near: 14, density: 0.5, minProp: 2, noGo: feet.map((f) => [f.x - f.half - reach, f.z - f.half - reach, f.x + f.half + reach, f.z + f.half + reach]) });
+  d.fill([CANYON.x0, CANYON.z0, CANYON.x1, CANYON.z1], { prefab: PREFAB.rock, scale: [1.8, 3.4] }, { near: 14, density: 0.4, minProp: 2, noGo: feet.map((f) => [f.x - f.half - reach, f.z - f.half - reach, f.x + f.half + reach, f.z + f.half + reach]) });
 };
