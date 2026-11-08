@@ -12,6 +12,7 @@ import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { addCars, sightLine, withCars, type Sight } from "../present/spectate-cam.ts";
 import { coverLens, FLIGHT_S, ReelDirector, type ReelHost } from "./engine-highlights.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
+import type { AiDifficulty } from "../ai/constants.ts";
 
 /**
  * The results reel's cameras headless, as the engine runs them minus the renderer (`ReelDirector.aim`: the thrown driver's
@@ -300,13 +301,15 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
  * A scripted crash: two cars head-on, a car into the wall (or the kerb's buildings), a car into another's side, a car over
  * a crest at `at` (a jump) onto another standing across its line `land` m past the crest, where it comes down, a car
  * driven from (x, z) heading `yaw` up a ramp (a plateau's face) and off its lip, into whatever stands beyond it, or a chain:
- * a car into the rear of an empty one that stands 9 m ahead, which it shoves into a third standing `gap` m behind it.
+ * a car into the rear of an empty one that stands 9 m ahead, which it shoves into a third standing `gap` m behind it, or a
+ * crossing: two cars arriving on the two arms of a course that crosses itself at the origin, a T-bone of the course's own loop.
  * `cars`: the slots of `a`, `b` (and the chain's third; the next pair from car 1 on when absent).
  */
 export type Crash = (
   | { kind: "headOn" | "wall" | "tBone" | "jump"; at: number; speed: number; side?: 1 | -1; land?: number }
   | { kind: "chain"; at: number; speed: number; gap: number }
   | { kind: "ramp"; x: number; z: number; yaw: number; speed: number }
+  | { kind: "cross"; speed: number }
 ) & { cars?: readonly number[] };
 
 const pt = blankPoint();
@@ -318,12 +321,12 @@ function put(track: Track, car: World["cars"][number], x: number, z: number, yaw
   layOnGround(car);
 }
 
-/** A race entered on `trackId` with a ramming field of `aiCount` and its dice from `seed`. */
-export function raceOn(trackId: string, seed: number, aiCount: number): World {
+/** A race entered on `trackId` with a ramming field of `aiCount` and its dice from `seed` (`aiDifficulty`: the rivals' skill, the world's default when absent). */
+export function raceOn(trackId: string, seed: number, aiCount: number, aiDifficulty?: AiDifficulty): World {
   const w = makeWorld();
   w.race.enter();
   w.race.command({ type: "quit" });
-  w.race.command({ type: "options", options: { trackId, laps: 1, aiCount, noReset: false, aggression: 1 } });
+  w.race.command({ type: "options", options: { trackId, laps: 1, aiCount, noReset: false, aggression: 1, ...(aiDifficulty ? { aiDifficulty } : {}) } });
   w.race.reseed(seed);
   w.race.command({ type: "start" });
   w.seat.mode = "follow";
@@ -356,12 +359,43 @@ function stageJump(track: Track, a: World["cars"][number], b: World["cars"][numb
   };
 }
 
+/** A sample of a self-crossing course's loop this near (m) to the crossing is one of its passes through it. */
+const CROSSING_REACH = 2;
+/** Each car of a crossing hit starts this far (m) short of the crossing along its own arm. */
+const CROSSING_RUN = 18;
+
+/** The arc lengths (m) at which `track`'s loop passes through (x, z), one per arm (neighbouring samples are one pass). */
+export function passesThrough(track: Track, x: number, z: number): number[] {
+  const passes: number[] = [];
+  const p = track.path;
+  for (let k = 0; k < p.count; k++) {
+    if (Math.hypot(p.x[k]! - x, p.z[k]! - z) > CROSSING_REACH) continue;
+    const s = (k / p.count) * track.length;
+    if (passes.length === 0 || s - passes[passes.length - 1]! > 20) passes.push(s);
+  }
+  return passes;
+}
+
+/** Cars `a` and `b` on the two arms of the course's crossing at the origin, each `CROSSING_RUN` m short of it and closing on it at `speed`. */
+export function stageCrossing(track: Track, a: World["cars"][number], b: World["cars"][number], speed: number): void {
+  const arms = passesThrough(track, 0, 0);
+  if (arms.length !== 2) throw new Error(`the course crosses itself at the origin ${arms.length} times, not twice`);
+  for (const [car, s] of [[a, arms[0]!], [b, arms[1]!]] as const) {
+    track.pointAt(s - CROSSING_RUN, pt);
+    put(track, car, pt.x, pt.z, Math.atan2(pt.tx, pt.tz), speed);
+  }
+}
+
 /** Put cars `a` and `b` (`b` unused by a wall hit or a ramp; a chain's third car is `third`) on course `track` for `c`: each a few metres from the meeting point, closing at `c.speed` each. */
 export function stage(track: Track, a: World["cars"][number], b: World["cars"][number], c: Crash, third: World["cars"][number] = b): void {
   if (c.kind === "jump") throw new Error("a staged jump places its second car once the first is in the air: use stageJump");
   if (c.kind === "ramp") {
     pt.y = track.ground().heightAt(c.x, c.z);
     put(track, a, c.x, c.z, c.yaw, c.speed);
+    return;
+  }
+  if (c.kind === "cross") {
+    stageCrossing(track, a, b, c.speed);
     return;
   }
   track.pointAt(c.at, pt);

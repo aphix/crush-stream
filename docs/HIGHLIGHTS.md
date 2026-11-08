@@ -345,6 +345,11 @@ Each clip's shots come from `mulberry32(seed ^ clip)`, so the same seed gives th
 2. a run-in about a second before the hit;
 3. the aftermath, once the crash cam hands back (`crashCamEnd` of the clip's hold).
 
+**A spectator in free fly when the reel opens** leaves it (`EngineReel.reelFrame`, on the frame the reel starts): the free eye parked over the
+race held the whole reel, over an empty road at the figure-8's crossing (68 m from the hit, the crash cam never on screen), with the
+HUD still naming Free. View flies free over the reel again (the free eye holds the camera there, `engine-free-cam.test.ts`); the
+crossing's own hit, two cars arriving on the loop's two arms, is framed as any other (`reel-view-crossing.test.ts`).
+
 **Every crash on the crash cam** (owner 2026-10-19: "continue through the subsequent crashes with their camera angles, then
 once crash moments are done with, the camera follows the ejected person"). The clip lists the impacts of its scope
 (`HighlightClip.hits`: when, where, between which cars). Each holds a slow-mo `CONTACT_HOLD` past itself and the timeline's

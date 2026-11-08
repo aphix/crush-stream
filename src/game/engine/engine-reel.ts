@@ -239,6 +239,8 @@ export abstract class EngineReel extends EngineInput {
     this.raiseFinale();
     if (on !== this.reelOn) {
       this.reelOn = on;
+      // A free eye parked before the reel would hold the camera over an empty road while the clip plays; the reel's shots take it at its start (View flies over it again).
+      if (on) this.view.leaveFree();
       this.fitLens();
     }
     if (on || this.reelFov === null) return;
