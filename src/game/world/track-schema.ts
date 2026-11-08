@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PREFAB_IDS, SURFACE_IDS } from "./catalog.ts";
 import { BIOME_IDS, SCENERY_DENSITY_RULES, SCENERY_RULES, SURFACE } from "./constants.ts";
+import { ROAD_DECAL_NAMES } from "./scenery-assets/types.ts";
 
 /**
  * The track JSON format: the single source of truth for a course.
@@ -130,6 +131,8 @@ const scenery = z.object({
   off: z.array(z.enum(SCENERY_RULES)).default([]),
   /** Per-rule density multiplier (1: the biome's own) for the rules that scale by one (`SCENERY_DENSITY_RULES`); a key for another is rejected. */
   density: z.partialRecord(z.enum(SCENERY_DENSITY_RULES), z.number().min(0).max(4)).default({}),
+  /** The road paint laid on this course's roads (manhole covers, crosswalks, lane arrows, kerb stripes): no other generated decal or tile lies on a road. Omitted: a manhole cover on a city's roads only. */
+  roadDecals: z.array(z.enum(ROAD_DECAL_NAMES)).optional(),
   /** Metres from any road's centreline within which nothing is generated, in every direction; omitted: only each footprint's own clearance from the wall line (0.4 m) applies. */
   clear: z.number().min(0).max(60).optional(),
   /** Where nothing is generated: boxes, circles, and stretches of the race loop. Hand `props` are untouched. */

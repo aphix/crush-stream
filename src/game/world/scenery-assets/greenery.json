@@ -12,7 +12,7 @@
   {"id":"greenery-grass-tuft","kind":"cross","size":[0.8,0.42],"body":"poof","biomes":["park","circuit","city"],"rule":"verge","weight":0.9,"core":0.576},
   {"id":"greenery-grass-ornamental","kind":"cross","size":[1.5,1.45],"body":"poof","biomes":["circuit","park","city"],"rule":"trackside","weight":0.5,"core":0.968},
   {"id":"greenery-fern","kind":"cross","size":[1.1,1],"body":"poof","biomes":["park","city"],"rule":"verge","weight":0.4,"core":0.649},
-  {"id":"greenery-ivy-patch","kind":"card","size":[1.8,1.75],"body":"none","biomes":["city","park"],"rule":"frontage","weight":0.5,"core":0.999},
+  {"id":"greenery-ivy-patch","kind":"card","size":[1.8,1.75],"body":"poof","biomes":["city","park"],"rule":"frontage","weight":0.5,"core":0.999},
   {"id":"greenery-cherry-blossom","kind":"card","size":[8.5,6.6],"body":"none","biomes":["park","city"],"rule":"islands","weight":0.5,"core":0.189},
-  {"id":"greenery-elm-crown","kind":"card","size":[9.5,11],"body":"none","biomes":["park","city","circuit"],"rule":"verge","weight":0.8,"core":0.73}
+  {"id":"greenery-elm-crown","kind":"card","size":[9.5,11],"body":"solid","biomes":["park","city","circuit"],"rule":"verge","weight":0.8,"core":0.73}
 ]

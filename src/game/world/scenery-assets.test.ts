@@ -6,12 +6,12 @@ import { biomeLookup } from "./scenery.ts";
 import { COURSE_JSON, REACH, REACH_SLACK, dress, footprintDepth, nearOpening, type Dressed } from "./scenery.test-util.ts";
 import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
 import { assetPrefab } from "./scenery-assets/pick.ts";
-import type { AssetKind, SceneryAsset } from "./scenery-assets/types.ts";
+import { ROAD_DECAL_ASSET, ROAD_DECAL_NAMES, type AssetKind, type SceneryAsset } from "./scenery-assets/types.ts";
 import { parseTrack } from "./track-schema.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 
-/** The least share of a city's road paint (decals whose rule paints roads) whose footprint overlaps a road. */
-const ON_ROAD_SHARE = 0.8;
+/** The least (m) a manhole cover's nearest neighbour is, at the median: one every 60 to 80 m along a road, closer only where two roads meet. */
+const MANHOLE_APART = 40;
 /** The most (m) a solid standee's or cross's footprint may differ from its core share of the drawn width. */
 const CORE_TOL = 1e-6;
 
@@ -31,7 +31,6 @@ function standing(d: Dressed): Standing[] {
 }
 
 const isPaint = (a: SceneryAsset): boolean => a.kind === "decal" || a.kind === "tile";
-const paintsRoads = (a: SceneryAsset): boolean => a.kind === "decal" && (a.rule === "paving" || a.rule === "trackside" || a.rule === "yard");
 
 /** What a placement proves a course can place: an asset rule and kind standing in a biome. */
 const pairKey = (a: SceneryAsset, biome: string): string => `${a.rule}:${a.kind}:${biome}`;
@@ -39,7 +38,9 @@ const pairKey = (a: SceneryAsset, biome: string): string => `${a.rule}:${a.kind}
 /** Ids of the assets none of whose rule, kind and biome pairs any course places, and how many pairs the courses place in all. */
 function unreached(): { ids: string[]; pairs: number } {
   const reached = new Set<string>();
-  for (const d of dressedCourses()) {
+  // The road paint is a course's opt-in: the city and the oval are dressed again with every kind listed.
+  const optedIn = [TRACK_ID.city, TRACK_ID.oval].map((id) => dress(COURSE_JSON.find((j) => parseTrack(j).id === id), { roadDecals: [...ROAD_DECAL_NAMES] }));
+  for (const d of [...dressedCourses(), ...optedIn]) {
     const biomeAt = biomeLookup(d.track);
     for (const p of standing(d)) {
       const a = SCENERY_ASSETS[p.asset];
@@ -105,15 +106,14 @@ function solids(): { total: number; counts: string[]; bad: string[] } {
   return { total, counts, bad };
 }
 
-/** The city's road paint (decals whose rule paints roads) and the part of it that overlaps a road. */
-function cityPaint(): { paint: number; onRoad: number } {
-  const d = dress(COURSE_JSON.find((j) => parseTrack(j).id === TRACK_ID.city));
-  const paint = standing(d).filter((p) => {
-    const a = SCENERY_ASSETS[p.asset];
-    return a !== undefined && paintsRoads(a);
-  });
-  return { paint: paint.length, onRoad: paint.filter((p) => footprintDepth(d.track, p) > 0).length };
+const cityJson = (): unknown => COURSE_JSON.find((j) => parseTrack(j).id === TRACK_ID.city);
+
+/** The generated decals and tiles standing in `d` whose footprint overlaps a road or its run-off (those on a car park slab are not on a road). */
+function onRoad(d: Dressed): Standing[] {
+  return standing(d).filter((p) => isPaint(SCENERY_ASSETS[p.asset]!) && footprintDepth(d.track, p) > 0);
 }
+
+const idOf = (p: Standing): string => SCENERY_ASSETS[p.asset]!.id;
 
 describe("given the generated scenery assets on every course", () => {
   // Weights pick among a pair's assets, so a rare asset may miss a small course set: the row holds each asset's rule, kind and a biome
@@ -160,11 +160,34 @@ describe("given the generated scenery assets on every course", () => {
     expect(seen, "assets placed").toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's/const half = p.half\[k\]!;/const half = p.half[k]! + 60;/' src/game/world/scenery.ts
-  it("when the city is dressed, then its road paint lies on its roads", () => {
-    const { paint, onRoad } = cityPaint();
-    expect(paint, "road paint standing in the city").toBeGreaterThan(0);
-    expect(onRoad / paint, `${onRoad} of ${paint} paint decals overlap a road`).toBeGreaterThanOrEqual(ON_ROAD_SHARE);
+  // mutation: sed -i 's/?? \[{ name: DEFAULT_ROAD_DECAL, only: BIOME.city }\]/?? ROAD_DECAL_NAMES.map((name) => ({ name, only: null }))/' src/game/world/scenery.ts
+  it("when every course is dressed with no roadDecals, then the only generated paint on a road is a manhole cover on the city's", () => {
+    let manholes = 0;
+    for (const d of dressedCourses()) {
+      const ids = onRoad(d).map(idOf);
+      expect(ids.filter((id) => id !== ROAD_DECAL_ASSET.manhole), `${d.track.id} paint on a road`).toEqual([]);
+      if (d.track.id !== TRACK_ID.city) expect(ids, `${d.track.id} paint on a road`).toEqual([]);
+      manholes += ids.length;
+    }
+    expect(manholes, "manhole covers on the city's roads").toBeGreaterThan(0);
+  });
+
+  // mutation: sed -i 's/const asset = SCENERY_ASSETS.findIndex((a) => a.id === ROAD_DECAL_ASSET\[name\]);/const asset = SCENERY_ASSETS.findIndex((a) => a.id === ROAD_DECAL_ASSET.manhole);/' src/game/world/scenery.ts
+  it("when a course lists its road paint, then only those kinds lie on its roads, and an empty list lays none", () => {
+    expect(onRoad(dress(cityJson(), { roadDecals: [] })).map(idOf), "an empty list").toEqual([]);
+    const crosswalks = onRoad(dress(cityJson(), { roadDecals: ["crosswalk"] })).map(idOf);
+    expect(crosswalks.length, "crosswalks on the city's roads").toBeGreaterThan(0);
+    expect(crosswalks.filter((id) => id !== ROAD_DECAL_ASSET.crosswalk), "other paint on a road").toEqual([]);
+  });
+
+  // mutation: sed -i 's/manhole: 70/manhole: 10/' src/game/world/scenery.ts
+  it("when the city's manhole covers are measured, then most have their nearest neighbour a cover's spacing away", () => {
+    const covers = onRoad(dress(cityJson())).filter((p) => idOf(p) === ROAD_DECAL_ASSET.manhole);
+    expect(covers.length, "covers").toBeGreaterThan(0);
+    // Two roads meeting put a pair closer, so the median of the nearest-neighbour distances is the measure.
+    const nearest = covers.map((a) => Math.min(...covers.filter((b) => b !== a).map((b) => Math.hypot(a.x - b.x, a.z - b.z)))).sort((x, y) => x - y);
+    const median = nearest[Math.floor(nearest.length / 2)]!;
+    expect(median, `the median nearest cover is ${median.toFixed(1)} m away`).toBeGreaterThanOrEqual(MANHOLE_APART);
   });
 });
 

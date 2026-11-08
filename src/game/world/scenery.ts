@@ -3,11 +3,12 @@ import { PREFABS, type PrefabId } from "./catalog.ts";
 import { BIOME, BIOME_IDS, PREFAB, SCENERY_RULES, type BiomeId } from "./constants.ts";
 import type { Placed } from "./placements.ts";
 import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
-import { LATTICE_RULES, ROAD_RULES, assetPrefab, assetScale, hasAssets, pickAsset, sceneryRule, standsIn, type AssetMode, type LatticeRule } from "./scenery-assets/pick.ts";
+import { LATTICE_RULES, assetPrefab, assetScale, hasAssets, pickAsset, sceneryRule, standsIn, type AssetMode, type LatticeRule } from "./scenery-assets/pick.ts";
 import type { AssetRule, SceneryAsset } from "./scenery-assets/types.ts";
 import { ASSET_LATTICE, FRONTAGE_SPACING, ISLAND_CHANCE_MAX, ISLANDS, LAMP_SPACING, PATCH_LATTICE, SLAB_WIDTH, VERGE, VERGE_CHANCE_MAX, VERGE_REACH, defaultBiome, noGenOf, pickKind, zoneAt, zonesOf, type Zone } from "./scenery-biome.ts";
+import { ROAD_DECAL_ASSET, ROAD_DECAL_NAMES, type RoadDecalName } from "./scenery-assets/types.ts";
 import { OCC_PAD, Occupancy, SEG_COVERED, blankNear, buildField, hashString, mix, nearest, unit, type Near, type RoadField } from "./scenery-field.ts";
-import { OPEN_REACH, type Track, type TrackPath } from "./track.ts";
+import type { Track, TrackPath } from "./track.ts";
 import { NO_FLOOR } from "./ground.ts";
 
 /**
@@ -119,11 +120,11 @@ const ROW_MAX = 4;
 const ROW_GAP = 0.8;
 const ROW_OFFSET = 1.2;
 const ROW_PROBE = 3;
-/** Road paint: metres between stations along a road, the chance a station holds one, the width (m) kept clear of the centre line's paint, and the share of a tile's picks that stay (a cobbled patch among the road's paint is rare). */
-const PAINT_SPACING = 26;
-const PAINT_CHANCE = 0.45;
-const LANE_LINE_CLEAR = 0.3;
-const PAINT_TILE_SHARE = 0.3;
+/** Road paint a course opts into (`scenery.roadDecals`): metres between stations along a road for each kind (a manhole cover every 60 to 80 m), and how far a spacing wanders either way (a share of it). */
+const ROAD_DECAL_SPACING: Record<RoadDecalName, number> = { manhole: 70, crosswalk: 150, arrow: 100, kerb: 40 };
+const ROAD_DECAL_SPAN = 1 / 7;
+/** The one road paint a course without `roadDecals` has, and the one biome it lies in: a manhole cover on a city's roads. */
+const DEFAULT_ROAD_DECAL: RoadDecalName = ROAD_DECAL_NAMES[0];
 /** Car park paint: metres between slots along the slab, the chance a slot holds one, and the lanes across it (the aisle and the two rows of bays). */
 const LOT_PITCH = 7;
 const LOT_CHANCE = 0.4;
@@ -163,6 +164,8 @@ type Ctx = {
   drawn: Placed[];
   drawnMeta: Meta[];
   lots: Lot[];
+  /** The road paint laid, each with the one biome it is limited to (null: wherever its row stands). */
+  roadDecals: { name: RoadDecalName; only: BiomeId | null }[];
 };
 
 function lampKey(i: number, j: number): number {
@@ -193,6 +196,7 @@ function newCtx(track: Track, base: readonly Placed[]): Ctx {
     drawn: [],
     drawnMeta: [],
     lots: [],
+    roadDecals: spec?.roadDecals?.map((name) => ({ name, only: null })) ?? [{ name: DEFAULT_ROAD_DECAL, only: BIOME.city }],
   };
   c.density[RULE_FRONTAGE] = spec?.density.frontage ?? 1;
   c.density[RULE_VERGE] = spec?.density.verge ?? 1;
@@ -695,7 +699,7 @@ function put(c: Ctx, rule: number, i: number, x: number, z: number, yaw: number,
   if (near.seg < 0 || !standsIn(a, biomeAt(c, x, z, near.seg))) return false;
   const [sx, sy, sz] = assetScale(a, scale);
   const flat = a.kind === "decal" || a.kind === "tile";
-  if (!flat && (a.body === "none" || a.body === "knock") && near.openGap < OPEN_REACH) return false;
+  if (!flat && (a.body === "none" || a.body === "knock") && near.openGap < SOLID_REACH) return false;
   return stand(c, rule, assetPrefab(a), x, z, yaw, sx, sy, sz, flat ? Math.min(hypot2(sx, sz) / 2, OCC_PAD) : undefined, i);
 }
 
@@ -839,10 +843,9 @@ function tracksideAssets(c: Ctx): void {
   }
 }
 
-/** Lay asset `asset` on the road at sample `k` of `p`: in a lane clear of the centre line (a tile along the edge), its longer extent running with the road. */
+/** Lay asset `asset` on the road at sample `k` of `p`: a decal narrower than half a lane in a lane's centre, a wider one and a kerb tile as the width allows, its longer extent running with the road. */
 function paintRoad(c: Ctx, scenery: number, p: TrackPath, k: number, seg: number, salt: number, asset: number): void {
   const a = SCENERY_ASSETS[asset]!;
-  if (a.kind === "tile" && a.rule !== "trackside" && stationUnit(c, salt, seg, 1, 3) >= PAINT_TILE_SHARE) return;
   const scale = sizeOf(stationUnit(c, salt, seg, 1, 4));
   const [sx, , sz] = assetScale(a, scale);
   const xAlong = sx >= sz;
@@ -850,28 +853,26 @@ function paintRoad(c: Ctx, scenery: number, p: TrackPath, k: number, seg: number
   const half = p.half[k]!;
   if (across > half) return;
   const side = stationUnit(c, salt, seg, 1, 5) < 0.5 ? 1 : -1;
-  const lo = LANE_LINE_CLEAR + across;
-  const room = half - across - lo;
-  // A wider paint than a half lane (a crosswalk) is centred over the road.
-  const lat = a.kind === "tile" ? side * (half - across) : room >= 0 ? side * (lo + room * stationUnit(c, salt, seg, 1, 6)) : 0;
+  const lat = a.kind === "tile" ? side * (half - across) : across * 2 <= half / 2 ? (side * half) / 2 : 0;
   const yaw = alongYaw(xAlong, p.tx[k]!, p.tz[k]!) + (stationUnit(c, salt, seg, 1, 7) < 0.5 ? 0 : Math.PI);
   paint(c, scenery, asset, p.x[k]! + p.tz[k]! * lat, p.z[k]! - p.tx[k]! * lat, yaw, scale);
 }
 
-/** Rules 1, 5 and 3 for assets: decals and kerb and cobble tiles on every road's surface (not under a bridge or roof), by each asset rule that has any. */
+/** Rules 1, 5 and 3 for assets: the road paint the course opts into (`roadDecals`) on every road's surface (not under a bridge or roof), each kind at its own spacing; nothing else generated lies on a road. */
 function roadAssets(c: Ctx): void {
-  for (const rule of ROAD_RULES) {
-    const scenery = sceneryRule(rule);
-    const density = c.density[scenery]!;
-    if (density <= 0) continue;
-    const salt = saltOf(c, "road", rule);
+  for (const { name, only } of c.roadDecals) {
+    const asset = SCENERY_ASSETS.findIndex((a) => a.id === ROAD_DECAL_ASSET[name]);
+    if (asset < 0) continue;
+    const a = SCENERY_ASSETS[asset]!;
+    const spacing = ROAD_DECAL_SPACING[name];
+    const salt = mix(saltOf(c, "road", a.rule), asset);
     for (let pi = 0; pi < c.field.paths.length; pi++) {
       const p = c.field.paths[pi]!;
-      march(c, pi, stationUnit(c, salt, c.field.base[pi]!, 1, 0) * PAINT_SPACING, (seg, k) => {
-        const asset = pickAsset("road", rule, biomeAt(c, p.x[k]!, p.z[k]!, seg), stationUnit(c, salt, seg, 1, 1));
-        if (asset < 0) return RETRY_STEP;
-        if (stationUnit(c, salt, seg, 1, 2) < PAINT_CHANCE * density) paintRoad(c, scenery, p, k, seg, salt, asset);
-        return PAINT_SPACING * (1 + (stationUnit(c, salt, seg, 1, 8) - 0.5) * 2 * SPACING_JITTER);
+      march(c, pi, stationUnit(c, salt, c.field.base[pi]!, 1, 0) * spacing, (seg, k) => {
+        const biome = biomeAt(c, p.x[k]!, p.z[k]!, seg);
+        if (!standsIn(a, biome) || (only !== null && biome !== only)) return RETRY_STEP;
+        paintRoad(c, sceneryRule(a.rule), p, k, seg, salt, asset);
+        return spacing * (1 + (stationUnit(c, salt, seg, 1, 8) - 0.5) * 2 * ROAD_DECAL_SPAN);
       });
     }
   }

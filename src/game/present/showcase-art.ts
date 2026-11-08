@@ -173,6 +173,8 @@ export class ShowcaseArt {
     this.erectPosts();
     this.floor.rotation.x = -Math.PI / 2;
     this.floor.receiveShadow = true;
+    // A throw's ray picks the floor before the first frame is drawn: its turned matrix must be current, or a wide floor stands on end across the set.
+    this.group.updateMatrixWorld(true);
     for (let slot = 0; slot < SLOTS; slot++) this.people.dress(slot, this.figureOf(slot).cop, this.figureOf(slot).look);
     this.stand();
   }

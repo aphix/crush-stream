@@ -28,3 +28,8 @@ export type SceneryAsset = {
   /** A box's extent (m) along its front's normal; a box's width and height are `size`. */
   depth?: number;
 };
+
+/** The road paint a course may opt into (`scenery.roadDecals`) and the asset each is: a generated decal or tile never lies on a road otherwise. */
+export const ROAD_DECAL_NAMES = ["manhole", "crosswalk", "arrow", "kerb"] as const;
+export type RoadDecalName = (typeof ROAD_DECAL_NAMES)[number];
+export const ROAD_DECAL_ASSET: Record<RoadDecalName, string> = { manhole: "ground-manhole-cover", crosswalk: "ground-crosswalk-stripes", arrow: "ground-painted-arrow", kerb: "trackside-kerb-paint" };

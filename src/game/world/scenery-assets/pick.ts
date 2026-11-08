@@ -56,14 +56,13 @@ export function assetScale(a: SceneryAsset, k: number): readonly [number, number
 /**
  * Where an asset stands (`scenery.ts` has a pass for each): on a lattice beyond the wall line (`lattice`: uprights and ground paint;
  * `patch`: tiles), inside a loop (`islands`), at stations along the wall line (`frontage`; `trackside` in rows along the race loop),
- * on the road surface (`road`) or on a car park slab (`lot`).
+ * on the road surface (`road`: only the paint a course opts into, `scenery.roadDecals`) or on a car park slab (`lot`).
  */
 export type AssetMode = "lattice" | "patch" | "islands" | "frontage" | "trackside" | "road" | "lot";
 
-/** The asset rules that have a lattice beyond the wall line, and the rules whose flat assets lie on the road surface. */
+/** The asset rules that have a lattice beyond the wall line. */
 export const LATTICE_RULES = ["verge", "yard", "ground", "paving"] as const;
 export type LatticeRule = (typeof LATTICE_RULES)[number];
-export const ROAD_RULES = ["paving", "trackside", "yard"] as const;
 
 type SceneryRule = (typeof SCENERY_RULES)[number];
 
@@ -73,9 +72,6 @@ const RULE_OF: Record<AssetRule, SceneryRule> = { verge: "verge", yard: "verge",
 export function sceneryRule(rule: AssetRule): number {
   return SCENERY_RULES.indexOf(RULE_OF[rule]);
 }
-
-/** The id of the tile that also paves a city's roads (thinly), as well as standing beside them. */
-const ROAD_TILE = "ground-tile-cobblestone";
 
 function modeOf(a: SceneryAsset): AssetMode {
   switch (a.rule) {
@@ -93,9 +89,9 @@ function modeOf(a: SceneryAsset): AssetMode {
   }
 }
 
-/** Whether `a` of asset rule `rule` stands in `mode`: its own mode, and a cobbled road's tile on the road too. */
+/** Whether `a` of asset rule `rule` stands in `mode`. */
 function inMode(a: SceneryAsset, rule: AssetRule, mode: AssetMode): boolean {
-  return a.weight > 0 && a.rule === rule && (modeOf(a) === mode || (mode === "road" && a.id === ROAD_TILE));
+  return a.weight > 0 && a.rule === rule && modeOf(a) === mode;
 }
 
 /** Whether any asset of asset rule `rule` stands in `mode`, in any biome: a pass over nothing is skipped. */
