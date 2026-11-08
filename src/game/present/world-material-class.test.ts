@@ -117,7 +117,7 @@ describe("given the prefabs drawn on the shared per-vertex materials", () => {
     for (const [style, material] of Object.entries(materials.facades)) expect(material.userData.materialClass, `${style} facade`).toBe(MAT.CONCRETE);
     expect(materials.water.userData.materialClass, "water").toBe(MAT.WATER);
     expect(materials.billboard.userData.materialClass, "billboard").toBe(MAT.BILLBOARD_FACE);
-    const { facades, ...single } = materials;
-    for (const [name, material] of Object.entries({ ...single, ...facades })) expect(material.userData.materialClass, `${name} tagged`).not.toBe(undefined);
+    const { facades, assets, ...single } = materials;
+    for (const [name, material] of Object.entries({ ...single, ...facades, ...assets })) expect(material.userData.materialClass, `${name} tagged`).not.toBe(undefined);
   });
 });

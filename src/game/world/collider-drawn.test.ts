@@ -87,6 +87,13 @@ const KIND_TOL: Partial<Record<PrefabId, number>> = {
   "garfield-monument": 0.01,
   // The pole's 12 sides inside its circle; the canton standing proud of the stripes.
   flagpole: 0.01,
+  // A flat sprite stands in the middle of its thick collider: the box's faces are half its depth off the drawn quad.
+  // mutation: sed -i 's/"asset-standee": 0.51/"asset-standee": 0/' src/game/world/collider-drawn.test.ts
+  "asset-standee": 0.51,
+  // mutation: sed -i 's/"asset-cross-solid": 0.51/"asset-cross-solid": 0/' src/game/world/collider-drawn.test.ts
+  "asset-cross-solid": 0.51,
+  // The solid box is the drawn box: float noise only.
+  "asset-box-solid": 0.001,
 };
 
 const COURSES = [...TRACKS, ...OFF_MENU].map((json) => ({ id: parseTrack(json).id, json }));

@@ -4,13 +4,14 @@ import { MAT } from "../kernel/material-ids.ts";
 import { PREFABS, type PrefabId } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
+import { SCENERY_ASSETS } from "../world/scenery-assets/index.ts";
 import { uploadRange } from "./engine-fx.ts";
 import { painted } from "./prefab-pieces.ts";
-import { foliageTint } from "./prefabs-foliage.ts";
+import { assetLeafTint, foliageTint } from "./prefabs-foliage.ts";
 import type { PropTumble } from "./prop-tumble.ts";
 
 /**
- * The bushes and flower beds a car drives through go in a puff of leaves. Drawn only: nothing here reaches the sim, and which ones
+ * The bushes, flower beds and plant assets a car drives through go in a puff of leaves. Drawn only: nothing here reaches the sim, and which ones
  * go is a function of the cars' poses alone, so a replay's cars puff the same ones.
  */
 
@@ -29,6 +30,10 @@ const MIN_SPEED = 2;
 const REACH_Y = 1.2;
 /** Leaves in a puff: a bed throws more than a bush. */
 export const PIECES: Partial<Record<PrefabId, number>> = { [PREFAB.bush]: 9, [PREFAB.flowers]: 14 };
+/** A plant asset throws this many leaves per metre of its width, within these bounds: a seedling still puffs, a hedge is no blizzard. */
+const ASSET_PIECES_PER_M = 3;
+const ASSET_PIECES_MIN = 4;
+const ASSET_PIECES_MAX = 24;
 /** Leaves in flight at once (a ring: the oldest go first). */
 const POOL = 256;
 /** A leaf's lifetime (s): this much plus up to `LIFE_SPREAD` more. */
@@ -64,17 +69,25 @@ function bucket(ix: number, iz: number, mask: number): number {
   return (Math.imul(ix, 73856093) ^ Math.imul(iz, 19349663)) & mask;
 }
 
+/** Leaves in the puff of placement `p`; 0 when it is no plant. */
+function piecesOf(p: Placed): number {
+  if (p.asset === undefined) return PIECES[p.prefab] ?? 0;
+  const row = SCENERY_ASSETS[p.asset]!;
+  return row.body === "poof" ? Math.min(ASSET_PIECES_MAX, Math.max(ASSET_PIECES_MIN, Math.round(row.size[0] * ASSET_PIECES_PER_M))) : 0;
+}
+
 export class FoliagePoof {
   /** The leaves in the air, to be added to the scene where the plants are drawn. */
   readonly leaves: THREE.InstancedMesh;
   private readonly placed: readonly Placed[];
   private readonly tumble: Pick<PropTumble, "hide" | "reset">;
-  /** Per plant: its placement index, base position and hit radius (m). */
+  /** Per plant: its placement index, base position, hit radius (m) and leaves in its puff. */
   private readonly ids: Int32Array;
   private readonly x: Float32Array;
   private readonly y: Float32Array;
   private readonly z: Float32Array;
   private readonly r: Float32Array;
+  private readonly pieces: Uint8Array;
   private readonly gone: Uint8Array;
   /** The plants by hashed grid cell: bucket b holds `items[start[b]..start[b + 1])`. A bucket may hold other cells' plants (the distance test settles it). */
   private readonly start: Int32Array;
@@ -96,18 +109,19 @@ export class FoliagePoof {
   /** One past the highest ring slot used since the leaves last emptied. */
   private top = 0;
 
-  /** The plants among `placed` (bushes and flower beds), hidden in `tumble` (which draws `placed`) when a car drives through; the leaves draw in `material`. */
+  /** The plants among `placed` (bushes, flower beds and assets whose body is a poof), hidden in `tumble` (which draws `placed`) when a car drives through; the leaves draw in `material`. */
   constructor(placed: readonly Placed[], tumble: Pick<PropTumble, "hide" | "reset">, material: THREE.Material) {
     this.placed = placed;
     this.tumble = tumble;
     const plants: number[] = [];
-    for (let i = 0; i < placed.length; i++) if (PIECES[placed[i]!.prefab] !== undefined) plants.push(i);
+    for (let i = 0; i < placed.length; i++) if (piecesOf(placed[i]!) > 0) plants.push(i);
     const n = plants.length;
     this.ids = Int32Array.from(plants);
     this.x = new Float32Array(n);
     this.y = new Float32Array(n);
     this.z = new Float32Array(n);
     this.r = new Float32Array(n);
+    this.pieces = new Uint8Array(n);
     this.gone = new Uint8Array(n);
     let reach = 0;
     for (let m = 0; m < n; m++) {
@@ -116,8 +130,9 @@ export class FoliagePoof {
       this.x[m] = p.x;
       this.y[m] = p.y;
       this.z[m] = p.z;
-      // The mean half extent of its plan.
-      this.r[m] = (w * p.sx + d * p.sz) / 4;
+      this.pieces[m] = piecesOf(p);
+      // A bush's mean half extent of its plan; a sprite's footprint is as wide as its larger side (a card's depth is only room, its width is the plant).
+      this.r[m] = p.asset === undefined ? (w * p.sx + d * p.sz) / 4 : Math.max(p.sx, p.sz) / 2;
       reach = Math.max(reach, this.r[m]!);
     }
     this.reach = reach;
@@ -212,9 +227,10 @@ export class FoliagePoof {
     const plant = this.placed[id]!;
     const prefab = plant.prefab;
     this.tumble.hide(id);
-    foliageTint(prefab, id, _col);
+    if (plant.asset === undefined) foliageTint(prefab, id, _col);
+    else assetLeafTint(plant.asset, id, _col);
     const height = PREFABS[prefab].size[1] * plant.sy;
-    const n = Math.floor(PIECES[prefab]! * density);
+    const n = Math.floor(this.pieces[m]! * density);
     const colours = this.leaves.instanceColor!;
     for (let k = 0; k < n; k++) {
       const i = this.cursor;

@@ -3,6 +3,7 @@ import { MAT } from "../kernel/material-ids.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import { box, cyl, painted, type Piece, type PrefabMaterials, type PrefabPart } from "./prefab-pieces.ts";
+import { assetCell, assetTint } from "./scenery-assets-art.ts";
 import { hash01 } from "./track-mesh.ts";
 
 /** Ground cover a car drives through: a few faceted lumps (a bush) or low blooms on a soil bed (flowers). Part 0 takes the instance's tint (`foliageTint`) as its whole colour, so its vertex colours stay near white. */
@@ -64,4 +65,13 @@ export function foliageTint(id: PrefabId, i: number, out: THREE.Color): boolean 
   const palette = flowering ? BLOOMS : BUSH_GREENS;
   out.setHex(palette[Math.floor(hash01(i, flowering ? SALT.bloom : SALT.green) * palette.length)]!);
   return true;
+}
+
+const _variation = new THREE.Color();
+
+/** `out` = the leaf colour of plant asset `asset` standing as placement `i`: its atlas cell's mean colour, shaded as the drawn sprite is (a pure function of the two, so the poof's leaves match what was drawn). */
+export function assetLeafTint(asset: number, i: number, out: THREE.Color): void {
+  out.setHex(assetCell(asset).tint);
+  assetTint(i, _variation);
+  out.multiply(_variation);
 }

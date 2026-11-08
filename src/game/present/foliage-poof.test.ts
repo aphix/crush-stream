@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
+import { SCENERY_ASSETS } from "../world/scenery-assets/index.ts";
+import { assetPrefab, assetScale } from "../world/scenery-assets/pick.ts";
 import { FoliagePoof, PIECES, type FoliageCar } from "./foliage-poof.ts";
-import { foliageTint } from "./prefabs-foliage.ts";
+import { assetLeafTint, foliageTint } from "./prefabs-foliage.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { PropTumble } from "./prop-tumble.ts";
 
@@ -138,6 +141,30 @@ describe("given a flower bed", () => {
     drive(b, car(ROW_X - 10, ROW_Z), ROW_X);
     expect(b.meshes.map(standing)).toEqual([[], []]);
     expect(b.poof.snapshot().leaves).toBe(PIECES[PREFAB.flowers]);
+  });
+});
+
+describe("given a plant asset (a sprite whose body is a poof)", () => {
+  it("when a car drives through it, then it is hidden and its leaves fly in the colour of its atlas cell", () => {
+    // mutation: sed -i 's/row.body === "poof"/row.body === "none"/' src/game/present/foliage-poof.ts
+    const asset = SCENERY_ASSETS.findIndex((row) => row.body === "poof");
+    const plantRow = SCENERY_ASSETS[asset];
+    must(plantRow, "the registry holds a plant asset");
+    const [sx, sy, sz] = assetScale(plantRow, 1);
+    const b = bed([{ prefab: assetPrefab(plantRow), x: ROW_X, y: 0, z: ROW_Z, yaw: 0, sx, sy, sz, asset }]);
+    expect(standing(b.meshes[0]!), "slots standing before the car").toHaveLength(1);
+    drive(b, car(ROW_X - 10, ROW_Z), ROW_X);
+    expect(standing(b.meshes[0]!), "slots standing after the car").toHaveLength(0);
+    expect(b.poof.snapshot().hidden, "plants hidden").toBe(1);
+    expect(b.poof.snapshot().leaves, "leaves in the air").toBeGreaterThan(0);
+    const want = new THREE.Color();
+    assetLeafTint(asset, 0, want);
+    const leaf = b.poof.leaves.instanceColor!;
+    const got = [leaf.getX(0), leaf.getY(0), leaf.getZ(0)];
+    for (const [at, channel] of [want.r, want.g, want.b].entries()) {
+      expect(got[at]!, `channel ${at} of the first leaf`).toBeGreaterThanOrEqual(channel * 0.7);
+      expect(got[at]!, `channel ${at} of the first leaf`).toBeLessThanOrEqual(channel * 1.3 + 1e-6);
+    }
   });
 });
 

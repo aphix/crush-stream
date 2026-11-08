@@ -4,10 +4,11 @@ import { once } from "../kernel/scalar.ts";
 import { makeAsphalt, makeJerseyBarrier, makeLamp } from "./engine-world.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
 import { CARHENGE, CHEVRON, FENCE, JUNK_CRANE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, WRECK, type PrefabId } from "../world/catalog.ts";
-import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, squareFrustum } from "./prefab-pieces.ts";
+import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, type Skin, squareFrustum } from "./prefab-pieces.ts";
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
 import { frontBumper, lyingWheel } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
+import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMaterials } from "./scenery-assets-art.ts";
 import { PREFAB } from "../world/constants.ts";
 import { dressPaving } from "./ground-relief.ts";
 import { buildingPieces } from "./facade-mesh.ts";
@@ -267,7 +268,7 @@ function paved(tex: RaceTextures): THREE.MeshStandardMaterial {
 /** The materials a prefab record makes only when a prop reads them (a course without sidewalks never makes the paving's). */
 const lazyMade = new WeakMap<PrefabMaterials, { paving?: THREE.Material }>();
 
-export function makePrefabMaterials(tex: RaceTextures): PrefabMaterials {
+export function makePrefabMaterials(tex: RaceTextures, fullAssetMaps = false): PrefabMaterials {
   const lazy: { paving?: THREE.Material } = {};
   const water = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.2 });
   applyWaterLook(water);
@@ -278,6 +279,7 @@ export function makePrefabMaterials(tex: RaceTextures): PrefabMaterials {
       return (lazy.paving ??= paved(tex));
     },
     facades: makeFacadeMaterials(),
+    assets: makeAssetMaterials(fullAssetMaps),
     billboard: tagMaterial(new THREE.MeshStandardMaterial({ map: tex.billboard, emissiveMap: tex.billboard, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.6 }), MAT.BILLBOARD_FACE),
     water: tagMaterial(water, MAT.WATER),
   };
@@ -290,6 +292,7 @@ export function disposePrefabMaterials(materials: PrefabMaterials): void {
   for (const material of [materials.plain, materials.concrete, materials.billboard, materials.water]) material.dispose();
   lazyMade.get(materials)?.paving?.dispose();
   disposeFacadeMaterials(materials.facades);
+  disposeAssetMaterials(materials.assets);
 }
 
 /** Every uv of `g` set to (u, v). */
@@ -644,8 +647,9 @@ function sidewalk(): Piece[] {
   return [[box(2.4, 0.06, 3.2, 0, 0.03, 0), C.concrete, MAT.CONCRETE]];
 }
 
-/** Prefab `id` at scale 1 as drawable parts (one for most; the lamp adds its head and night pool); a building in `style`, else its prefab's own. */
-export function prefabParts(id: PrefabId, mats: PrefabMaterials, style: FacadeStyle | null = null): PrefabPart[] {
+/** Prefab `id` at scale 1 as drawable parts (one for most; the lamp adds its head and night pool); a building in the facade style `skin` names (else its prefab's own), a scenery asset in the family it names (else the first). */
+export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = null): PrefabPart[] {
+  const style = isAssetFamily(skin) ? null : skin;
   const one = (pieces: Piece[], material: THREE.Material): PrefabPart[] => [{ geometry: painted(pieces), material, shared: false }];
   switch (id) {
     case PREFAB.cone:
@@ -731,5 +735,14 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, style: FacadeSt
       return bushParts(mats);
     case PREFAB.flowers:
       return flowerParts(mats);
+    case PREFAB.assetCard:
+    case PREFAB.assetStandee:
+    case PREFAB.assetCross:
+    case PREFAB.assetCrossSolid:
+    case PREFAB.assetDecal:
+    case PREFAB.assetTile:
+    case PREFAB.assetBox:
+    case PREFAB.assetBoxSolid:
+      return assetParts(id, familyOf(skin), mats);
   }
 }

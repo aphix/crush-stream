@@ -10,12 +10,13 @@ const NON_UNIQUE: readonly string[] = [
   PREFAB.lamp, PREFAB.gantry, PREFAB.flagpole, PREFAB.billboard, PREFAB.fence, PREFAB.wall, PREFAB.tree, PREFAB.palm,
   PREFAB.grandstand, PREFAB.fountain, PREFAB.building, PREFAB.stucco,
 ];
-/** One-of-a-kind landmarks, the two pools too big for the disc, the car parts the number keys throw (`THROWN_KINDS`), the figure-8's junkyard (its shells, Carhenge, crane) and the scenery service's ground dressing (paving, bushes, flower beds): not gallery props. */
+/** One-of-a-kind landmarks, the two pools too big for the disc, the car parts the number keys throw (`THROWN_KINDS`), the figure-8's junkyard (its shells, Carhenge, crane), the scenery service's ground dressing (paving, bushes, flower beds) and its generic asset kinds (one per way of drawing, the placement picks the sprite): not gallery props. */
 const EXCLUDED: readonly string[] = [
   PREFAB.obelisk, PREFAB.capitol, PREFAB.whiteHouse, PREFAB.lincoln, PREFAB.capitolPool, PREFAB.marble, PREFAB.monument,
   PREFAB.grantMemorial, PREFAB.peaceMonument, PREFAB.garfieldMonument, PREFAB.pool, PREFAB.basin,
   PREFAB.muscleBumper, PREFAB.monsterWheel, PREFAB.carWheel, PREFAB.wreck, PREFAB.carhenge, PREFAB.junkCrane,
   PREFAB.sidewalk, PREFAB.bush, PREFAB.flowers,
+  PREFAB.assetCard, PREFAB.assetStandee, PREFAB.assetCross, PREFAB.assetCrossSolid, PREFAB.assetDecal, PREFAB.assetTile, PREFAB.assetBox, PREFAB.assetBoxSolid,
 ];
 /** The free cam stands near the eye and looks +z: a prop closer than this behind it would fill the view. */
 const MIN_CLEARANCE = 5;

@@ -62,6 +62,7 @@ import { RaceDirector } from "./engine-race.ts";
 import { ReelDirector } from "./engine-highlights.ts";
 import { PodiumDirector } from "./engine-podium.ts";
 import { TrackArt } from "../present/track-art.ts";
+import { reliefForTier } from "../present/surface-relief.ts";
 import { EngineGarage } from "./engine-garage.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { SHOT_SPARK_IMPULSE, SMOKE_PUFF_HZ, SPARK_MIN_IMPULSE } from "./constants.ts";
@@ -373,7 +374,7 @@ export class CrashEngine extends EngineGarage {
       knockProp: (index, car, vx, vy, vz) => this.ragdolls.knockProp(index, car, vx, vy, vz),
       buildArt: (track, placed, drawn) => {
         this.queueWarm();
-        const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, SCENERY_SHARE[this.cine.tier]));
+        const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, SCENERY_SHARE[this.cine.tier]), reliefForTier(this.cine.tier, this.cine.marks.phone));
         this.ragdolls.setCourse(track, placed, art.props);
         return art;
       },

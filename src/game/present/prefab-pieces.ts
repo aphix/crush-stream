@@ -8,6 +8,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { MATERIAL_ATTRIBUTE, SURFACE_REGION_ATTRIBUTE } from "../vehicle/material-class.ts";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import type { FacadeStyle } from "./facades.ts";
+import type { AssetFamily } from "../world/scenery-assets/types.ts";
 
 /** Materials the prefabs draw with (shared with the track art where it says so). */
 export type PrefabMaterials = {
@@ -22,7 +23,12 @@ export type PrefabMaterials = {
   billboard: THREE.Material;
   /** Still water: vertex colours, near-mirror gloss (the pools). */
   water: THREE.Material;
+  /** The scenery assets' families (`present/scenery-assets-art.ts`), each one shared material of sprites. */
+  assets: Readonly<Record<AssetFamily, THREE.Material>>;
 };
+
+/** What a prefab is dressed in: a building's facade style or a scenery asset's family (one draw per prefab, skin and draw cell); none for a prefab with one look. */
+export type Skin = FacadeStyle | AssetFamily | null;
 
 /** One drawable part of a prefab: its geometry, its material, whether the material is shared with the track art, and whether it casts a shadow (default: yes; ground cover and flat paving do not). */
 export type PrefabPart = { geometry: THREE.BufferGeometry; material: THREE.Material; shared: boolean; shadow?: boolean };

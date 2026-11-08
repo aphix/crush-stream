@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import type { PrefabId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
-import type { PrefabMaterials, PrefabPart } from "./prefab-pieces.ts";
-import type { FacadeStyle } from "./facades.ts";
+import type { PrefabMaterials, PrefabPart, Skin } from "./prefab-pieces.ts";
+import { withAssetAttributes } from "./scenery-assets-art.ts";
 import { prefabParts } from "./prefabs.ts";
 import { drawCell } from "./track-mesh.ts";
 
@@ -36,15 +36,15 @@ export class PropTumble {
   private readonly sphere = new THREE.Sphere();
 
   /**
-   * Each placement standing in its slot of its prefab's meshes (`prefabParts` in `mats`, in the style `styleOf` names: a building's), coloured where `tint` says; `add` takes
-   * each mesh as it is made (`shared`: its part's material when that is the scene's, else null).
+   * Each placement standing in its slot of its prefab's meshes (`prefabParts` in `mats`, in the skin `styleOf` names: a building's facade style, an asset's family), coloured where `tint` says; `add` takes
+   * each mesh as it is made (`shared`: its part's material when that is the scene's, else null). A group of scenery assets draws from its own copy of the geometry, each instance carrying its sprite's atlas cell.
    */
   constructor(
     placed: readonly Placed[],
     mats: PrefabMaterials,
     add: (mesh: THREE.InstancedMesh, id: PrefabId, shared: THREE.Material | null, cast: boolean) => void,
-    tint: (id: PrefabId, i: number, out: THREE.Color, style: FacadeStyle | null) => boolean = () => false,
-    styleOf: (p: Placed) => FacadeStyle | null = () => null,
+    tint: (id: PrefabId, i: number, out: THREE.Color, style: Skin) => boolean = () => false,
+    styleOf: (p: Placed) => Skin = () => null,
   ) {
     this.placed = placed;
     const byCell = new Map<string, number[]>();
@@ -69,7 +69,8 @@ export class PropTumble {
       const group = this.meshes.length;
       this.meshes.push(
         built.map((part, pi) => {
-          const mesh = new THREE.InstancedMesh(part.geometry, part.material, list.length);
+          const geometry = first.asset === undefined ? part.geometry : withAssetAttributes(part.geometry, placed, list);
+          const mesh = new THREE.InstancedMesh(geometry, part.material, list.length);
           for (const [s, idx] of list.entries()) {
             this.cell[idx] = group;
             this.slot[idx] = s;

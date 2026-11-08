@@ -5,7 +5,7 @@ import type { WorldStage } from "./engine-world.ts";
 import { SURFACE_IDS, SURFACES, type PrefabId, type SurfaceId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
 import { PREFAB, SURFACE, type BiomeId } from "../world/constants.ts";
-import { box, painted, type Piece, type PrefabMaterials } from "./prefab-pieces.ts";
+import { box, painted, type Piece, type PrefabMaterials, type Skin } from "./prefab-pieces.ts";
 import { tagLike, tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { makePrefabMaterials, prefabParts, raceTextures, TILE } from "./prefabs.ts";
@@ -20,10 +20,13 @@ import {
 } from "./track-mesh.ts";
 import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
 import { depthProxy, groundMaterial, groundMesh, levelOrder } from "../scenes/ground-stack.ts";
+import { GROUND_LEVEL } from "../scenes/constants.ts";
 import { addDecks, addTunnels, addWalls, pillarPieces } from "./track-structures.ts";
 import { PropTumble } from "./prop-tumble.ts";
 import { FoliagePoof } from "./foliage-poof.ts";
 import { foliageTint } from "./prefabs-foliage.ts";
+import { assetTint, disposeAssetMaterials, isAssetFamily } from "./scenery-assets-art.ts";
+import { SCENERY_ASSETS } from "../world/scenery-assets/index.ts";
 import { backdropMesh, disposeBackdrop, type Backdrop } from "./sky-backdrop.ts";
 import { nukeFlash } from "./people.ts";
 import { GroundsArt } from "./grounds-art.ts";
@@ -40,6 +43,8 @@ import { TrackDebug } from "./track-debug.ts";
 type RaceMeshKind = "road" | "runoff" | "terrain" | "wall" | "marking" | "kerb" | "deck" | "pillar" | "tunnel" | "prop";
 /** Junked shells' faded paint and rust (rust, oxide red, faded blue, cream, olive): the wreck's per-instance tint over its light grey. */
 const WRECK_PAINTS = [0x8a4a2a, 0x8f2f25, 0x46637f, 0xc9b994, 0x4f6141];
+/** The generic asset prefabs drawn flat on the ground: at the decal level of the ground stack, after the roads. */
+const GROUND_ASSET_PREFABS: readonly PrefabId[] = [PREFAB.assetDecal, PREFAB.assetTile];
 
 type RaceMeshTag = { kind: RaceMeshKind; surface?: SurfaceId; prefab?: PrefabId };
 
@@ -74,9 +79,14 @@ export class TrackArt {
   private readonly track: Track;
   /** The Debug views' "Track" overlay (node indices, checkpoint gates), built the first time it is switched on. */
   private debug: TrackDebug | null = null;
+  /** The scenery assets' materials (made as read), disposed with the art even where no mesh wears one. */
+  private readonly assetMaterials: PrefabMaterials["assets"];
 
-  /** `stage` takes the course's own daylight while the art stands (its sun, hemisphere and fill; none: the default) and its sky colour. */
-  constructor(track: Track, placed: readonly Placed[], stage: Pick<WorldStage, "look">, drawn: readonly Placed[]) {
+  /**
+   * `stage` takes the course's own daylight while the art stands (its sun, hemisphere and fill; none: the default) and its sky colour. `fullAssetMaps`: the scenery assets wear
+   * their full-size atlases (the finish tiers on a desktop, `reliefForTier`), else the half-size ones.
+   */
+  constructor(track: Track, placed: readonly Placed[], stage: Pick<WorldStage, "look">, drawn: readonly Placed[], fullAssetMaps = false) {
     this.group.name = "track-art";
     this.track = track;
     this.stage = stage;
@@ -86,7 +96,8 @@ export class TrackArt {
     const ground = track.ground();
     this.grounds = track.json.guards ? new GroundsArt(track.json.guards, ground, this.group) : null;
     const tex = raceTextures();
-    const mats = makePrefabMaterials(tex);
+    const mats = makePrefabMaterials(tex, fullAssetMaps);
+    this.assetMaterials = mats.assets;
     const paths = track.paths();
     const index = new RoadIndex(paths);
     const secs = paths.map((p) => sections(p, 0));
@@ -209,9 +220,10 @@ export class TrackArt {
         if (shared) this.shared.push(shared);
         // Lamp heads and light pools neither cast shadows nor need to; nor do the parts that say so (ground cover, paving).
         this.add(mesh, { kind: "prop", prefab: id }, !shared && cast);
+        if (GROUND_ASSET_PREFABS.includes(id)) mesh.renderOrder = levelOrder(GROUND_LEVEL.decal);
       },
-      (id, i, out, style) => this.tint(id, i, out, style),
-      (p) => facadeStyle(p.prefab, p.x, p.z, this.biome(p.x, p.z)),
+      (id, i, out, skin) => this.tint(id, i, out, skin),
+      (p) => (p.asset === undefined ? facadeStyle(p.prefab, p.x, p.z, this.biome(p.x, p.z)) : SCENERY_ASSETS[p.asset]!.family),
     );
   }
 
@@ -270,6 +282,7 @@ export class TrackArt {
     this.grounds?.dispose();
     this.debug?.dispose();
     this.dropBackdrop();
+    disposeAssetMaterials(this.assetMaterials);
     const geos = new Set<THREE.BufferGeometry>();
     const mats = new Set<THREE.Material>();
     this.group.traverse((o) => {
@@ -310,8 +323,12 @@ export class TrackArt {
     return (copies[kind] ??= tagLike(m.clone(), m));
   }
 
-  /** Per-instance tint for natural / building variety (deterministic by placement index); false = none. */
-  private tint(id: PrefabId, i: number, out: THREE.Color, style: FacadeStyle | null): boolean {
+  /** Per-instance tint for natural / building / sprite variety (deterministic by placement index); false = none. */
+  private tint(id: PrefabId, i: number, out: THREE.Color, style: Skin): boolean {
+    if (isAssetFamily(style)) {
+      assetTint(i, out);
+      return true;
+    }
     const h = hash01(i, 11);
     const h2 = hash01(i, 12);
     if (id === PREFAB.tree || id === PREFAB.palm) {
