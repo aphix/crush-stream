@@ -148,6 +148,37 @@ function roadFit(track: Track, p: Placed): { lateral: number; edge: number; othe
   return { lateral: own.d, edge: paths[own.pi]!.half[own.i]! - own.d, other };
 }
 
+/** The asset rules whose cards scatter on a lattice or in a loop, each turned from square-on to the road by a jitter (frontage and trackside rows stand square-on to it by design). */
+const SCATTERED: readonly string[] = ["verge", "yard", "ground", "paving", "islands"];
+/** The most (rad) a solid card turns from square-on: the old jitter of 0.3 and the slack of measuring against the nearest road sample, not the nearest segment. A drawn-only card's median turn must pass the old jitter's own bound. */
+const SOLID_TURN_MAX = 0.35;
+const FREE_TURN_MEDIAN_MIN = 0.3;
+
+/** How far (rad) card `p` is turned from facing the nearest road sample square-on. */
+function turnFromRoad(track: Track, p: Placed): number {
+  let near = { d: Infinity, x: 0, z: 0 };
+  for (const path of track.paths()) {
+    for (let i = 0; i < path.count; i++) {
+      const d = Math.hypot(path.x[i]! - p.x, path.z[i]! - p.z);
+      if (d < near.d) near = { d, x: path.x[i]!, z: path.z[i]! };
+    }
+  }
+  const turn = p.yaw - Math.atan2(p.z - near.z, near.x - p.x);
+  return Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn)));
+}
+
+/** The turns of the scattered cards over every course: those with a body, and those a car drives through or never meets. */
+function cardTurns(): { solid: number[]; free: number[] } {
+  const turns = { solid: [] as number[], free: [] as number[] };
+  for (const d of dressedCourses()) {
+    for (const p of standing(d)) {
+      const a = SCENERY_ASSETS[p.asset]!;
+      if (a.kind === "card" && SCATTERED.includes(a.rule)) (a.body === "solid" ? turns.solid : turns.free).push(turnFromRoad(d.track, p));
+    }
+  }
+  return turns;
+}
+
 describe("given the generated scenery assets on every course", () => {
   // Weights pick among a pair's assets, so a rare asset may miss a small course set: the row holds each asset's rule, kind and a biome
   // to what some course places (circuit: oval, park: rally, city: city, desert: stunt, dirt: dam-spine), not each asset to a hit.
@@ -180,6 +211,17 @@ describe("given the generated scenery assets on every course", () => {
     const { total, counts, bad } = solids();
     expect(total, "solid assets placed").toBeGreaterThan(0);
     expect(bad, `solid assets per course: ${counts.join(", ")}`).toHaveLength(0);
+  });
+
+  // mutation: sed -i 's/? CARD_JITTER : FACE_JITTER/? FACE_JITTER : FACE_JITTER/' src/game/world/scenery.ts
+  // mutation: sed -i 's/ : FACE_JITTER;/ : CARD_JITTER;/' src/game/world/scenery.ts
+  it("when the cards on lattices and in loops are turned against the road, then the solid ones stay near square-on and the drawn-only ones are not all squared to it", () => {
+    const { solid, free } = cardTurns();
+    free.sort((a, b) => a - b);
+    expect(solid.length, "solid cards scattered").toBeGreaterThan(0);
+    expect(free.length, "drawn-only cards scattered").toBeGreaterThan(0);
+    expect(Math.max(...solid), "the most a solid card is turned").toBeLessThanOrEqual(SOLID_TURN_MAX);
+    expect(free[Math.floor(free.length / 2)]!, "the median turn of a drawn-only card").toBeGreaterThan(FREE_TURN_MEDIAN_MIN);
   });
 
   // mutation: sed -i 's/const dice = unit(mix(seed, 0));/const dice = Math.random();/' src/game/world/scenery.ts

@@ -80,9 +80,22 @@ export function assetTint(i: number, out: THREE.Color): void {
 
 // Geometry: every one in the unit space of its prefab (origin at the foot's centre, front on +x), uv 0..1 across a quad with v up the picture.
 
+/** How far a card's vertex normals lean up with height and out across its width: a lit card shades as a rounded pile does, not in one flat tone. The instance's own scale (a card is thin and wide) takes most of it back, hence the large numbers. */
+const NORMAL_LIFT = 3;
+const NORMAL_SPREAD = 3;
+
+/** `quad`'s normals bent by position: up by its height, away from its vertical axis by its horizontal offset. */
+function bent(quad: THREE.BufferGeometry): THREE.BufferGeometry {
+  const pos = quad.getAttribute("position");
+  const normal = quad.getAttribute("normal");
+  for (let i = 0; i < pos.count; i++) normal.setXYZ(i, normal.getX(i) + NORMAL_SPREAD * pos.getX(i), normal.getY(i) + NORMAL_LIFT * pos.getY(i), normal.getZ(i) + NORMAL_SPREAD * pos.getZ(i));
+  quad.normalizeNormals();
+  return quad;
+}
+
 /** A quad in the y-z plane facing +x, y from 0 to 1 and z from -0.5 to 0.5 (u runs toward -z: to the right of a viewer on +x). */
 function standingQuad(): THREE.BufferGeometry {
-  return new THREE.PlaneGeometry(1, 1).rotateY(Math.PI / 2).translate(0, 0.5, 0);
+  return bent(new THREE.PlaneGeometry(1, 1).rotateY(Math.PI / 2).translate(0, 0.5, 0));
 }
 
 const sprite = (geometry: THREE.BufferGeometry): Piece => [geometry, SPRITE_WHITE, SPRITE_CLASS];
@@ -92,7 +105,7 @@ function cardGeometry(): THREE.BufferGeometry {
 }
 
 function crossGeometry(): THREE.BufferGeometry {
-  return painted([sprite(standingQuad()), sprite(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0))]);
+  return painted([sprite(standingQuad()), sprite(bent(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0)))]);
 }
 
 /** A cuboid on the ground: the image on its +x and -x faces, a sliver of its middle stretched over each end, a patch of its middle on top. */

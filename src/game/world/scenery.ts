@@ -104,8 +104,10 @@ const VERGE_RAMP_MAX = 1.8;
 /** Assets: a sprite stands at its own size times a factor from `ASSET_SCALE` over `ASSET_SCALE_SPAN`, so a row of one asset is not a row of copies. */
 const ASSET_SCALE = 0.85;
 const ASSET_SCALE_SPAN = 0.3;
-/** A card or box on a lattice turns this far (rad) either way from square-on to the road: a field's fence is never ruler-straight. */
+/** A solid card, or a box, on a lattice turns this far (rad) either way from square-on to the road: its collider stays near-square, and a field's fence is never ruler-straight. */
 const FACE_JITTER = 0.3;
+/** A drawn-only card (no body, or a plant or pile a car drives through) on a lattice turns this far either way: a row of boards beside the road is a signboard line, a scatter of piles is not. */
+const CARD_JITTER = 0.9;
 /** Frontage assets: the chance a station holds one, and the clear gap (m) between its footprint circle and the wall line (`FRONT_GAP` over a span of `FRONT_GAP_SPAN`). */
 const FRONT_CHANCE = 0.55;
 const FRONT_GAP = 1;
@@ -695,6 +697,11 @@ function yawOf(a: SceneryAsset, faceYaw: number, h: number, jitter: number): num
   return a.kind === "card" || a.kind === "box" ? faceYaw + (h - 0.5) * 2 * jitter : h * 2 * Math.PI;
 }
 
+/** The turn (rad) a lattice or island asset may take from square-on to the road: wide for a drawn-only card, `FACE_JITTER` for everything else. */
+function faceJitter(a: SceneryAsset): number {
+  return a.kind === "card" && (a.body === "poof" || a.body === "none") ? CARD_JITTER : FACE_JITTER;
+}
+
 /** Yaw that runs a flat asset's local x (`xAlong`) or its local z along the direction (tx, tz). */
 function alongYaw(xAlong: boolean, tx: number, tz: number): number {
   return xAlong ? detAtan2(-tz, tx) : detAtan2(tx, tz);
@@ -750,7 +757,7 @@ function latticeCell(c: Ctx, mode: AssetMode, rule: LatticeRule, salt: number, c
   if (dice >= spec.chance * share * ramp) return;
   const asset = pickAsset(mode, rule, biome, unit(mix(seed, 3)));
   if (asset < 0) return;
-  const yaw = yawOf(SCENERY_ASSETS[asset]!, facing(c, near.seg, x, z), unit(mix(seed, 4)), FACE_JITTER);
+  const yaw = yawOf(SCENERY_ASSETS[asset]!, facing(c, near.seg, x, z), unit(mix(seed, 4)), faceJitter(SCENERY_ASSETS[asset]!));
   put(c, sceneryRule(rule), asset, x, z, yaw, sizeOf(unit(mix(seed, 5))));
 }
 
@@ -795,7 +802,7 @@ function islandAssets(c: Ctx): void {
         if (!spec || dice >= spec.chance * ISLAND_ASSET_SHARE * density) continue;
         const asset = pickAsset("islands", "islands", biome, unit(mix(seed, 3)));
         if (asset < 0) continue;
-        const yaw = yawOf(SCENERY_ASSETS[asset]!, facing(c, near.seg, x, z), unit(mix(seed, 4)), FACE_JITTER);
+        const yaw = yawOf(SCENERY_ASSETS[asset]!, facing(c, near.seg, x, z), unit(mix(seed, 4)), faceJitter(SCENERY_ASSETS[asset]!));
         if (put(c, RULE_ISLANDS, asset, x, z, yaw, sizeOf(unit(mix(seed, 5))))) standing++;
       }
     }

@@ -128,6 +128,28 @@ describe("given a solid cross asset whose collider is a fraction of its drawn wi
   }
 });
 
+/** The least upward lean (the normal's y) a quad's top vertices take. */
+const TOP_LEAN_MIN = 0.5;
+
+describe("given the standing quads of a card and a cross", () => {
+  const prefabs = [PREFAB.assetCard, PREFAB.assetCross] as const;
+  for (const prefab of prefabs) {
+    it(`when the ${prefab} is built, then its normals lean up toward its top and out across it, so a lit quad shades in a gradient`, () => {
+      // mutation: sed -i 's/const NORMAL_LIFT = 3;/const NORMAL_LIFT = 0;/' src/game/present/scenery-assets-art.ts
+      // mutation: sed -i 's/const NORMAL_SPREAD = 3;/const NORMAL_SPREAD = 0;/' src/game/present/scenery-assets-art.ts
+      const [part] = assetParts(prefab, ASSET_FAMILIES[0], MATS);
+      must(part, "one part");
+      const pos = part.geometry.getAttribute("position");
+      const normal = part.geometry.getAttribute("normal");
+      for (let i = 0; i < pos.count; i++) {
+        if (pos.getY(i) > 0.5) expect(normal.getY(i), `up lean of top vertex ${i}`).toBeGreaterThan(TOP_LEAN_MIN);
+        else expect(normal.getY(i), `up lean of base vertex ${i}`).toBeCloseTo(0, 5);
+        if (pos.getX(i) !== 0 || pos.getZ(i) !== 0) expect(normal.getX(i) * pos.getX(i) + normal.getZ(i) * pos.getZ(i), `outward lean of vertex ${i}`).toBeGreaterThan(0);
+      }
+    });
+  }
+});
+
 /** Slack (share of the atlas) for the rects' six-decimal rounding. */
 const RECT_SLACK = 1e-6;
 
