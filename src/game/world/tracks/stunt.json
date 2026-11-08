@@ -58,7 +58,7 @@
   ],
   "grid": { "perRow": 2, "spacing": 8, "back": 6 },
   "props": [
-    { "prefab": "grandstand", "x": -18, "z": -72, "yaw": 3.927 },
+    { "prefab": "grandstand", "x": -18, "z": -72, "yaw": 0.785 },
     { "prefab": "billboard", "x": -200, "z": 22, "yaw": 0 },
     { "prefab": "billboard", "x": -172, "z": 22, "yaw": 3.1416 },
     { "prefab": "tyre-stack", "x": -194, "z": 26 },
@@ -77,7 +77,7 @@
     { "prefab": "lamp", "every": 40, "side": "right", "offset": 1.2 },
     { "prefab": "hay-bale", "every": 9, "side": "both", "offset": -0.9, "fromNode": 18, "toNode": 19 },
     { "prefab": "billboard", "every": 60, "side": "left", "offset": 7, "fromNode": 3, "toNode": 8 },
-    { "prefab": "grandstand", "every": 34, "side": "left", "offset": 15.5, "fromNode": 1, "toNode": 2 }
+    { "prefab": "grandstand", "every": 34, "side": "left", "offset": 6, "fromNode": 1, "toNode": 2 }
   ],
   "scatter": [
     { "prefab": "tree", "count": 120, "near": 8, "far": 80, "seed": 31 },
