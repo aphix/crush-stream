@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { TrackJson } from "../world/track-schema.ts";
+import type { SceneryArm } from "../world/constants.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { PARTS } from "./ragdoll-body.ts";
@@ -100,7 +101,7 @@ interface FrameMessage {
 }
 
 export type ToWorker =
-  | { type: "course"; json: TrackJson }
+  | { type: "course"; json: TrackJson; arm?: SceneryArm }
   | { type: "reset"; epoch: number }
   | { type: "knock"; prop: number; car: number; vx: number; vy: number; vz: number }
   | ThrowMessage

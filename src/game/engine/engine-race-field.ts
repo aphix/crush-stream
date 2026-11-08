@@ -77,8 +77,8 @@ interface RaceHost {
   hit(i: number, closing: number): void;
   /** Knockable prop `index` knocked off its spot by car `car` at (vx, vy, vz) m/s: drawn flying and tumbling (cosmetic; headless: nothing). */
   knockProp(index: number, car: number, vx: number, vy: number, vz: number): void;
-  /** The course's art (null headless: rules, AI, contacts and physics run without it). */
-  buildArt(track: Track, placed: readonly Placed[], drawn: readonly Placed[]): TrackArt | null;
+  /** The course's art (null headless: rules, AI, contacts and physics run without it), and the dummies' world dressed under the same bench scenery `arm`. */
+  buildArt(track: Track, placed: readonly Placed[], drawn: readonly Placed[], arm: SceneryArm): TrackArt | null;
   /** Re-target the tyre-mark map to the course's bounds (headless: nothing to draw). */
   markBounds(minX: number, minZ: number, maxX: number, maxZ: number): void;
   /** The engine's wreck-slide rule is on (`settleStep`'s `bleed`): a highlight replays with the same. */
@@ -574,7 +574,7 @@ export abstract class RaceField {
     const sky = new THREE.Color(env.sky);
     this.host.scene.background = sky;
     this.host.scene.fog = new THREE.FogExp2(sky.getHex(), env.fog);
-    this.art = this.host.buildArt(tr, this.placed, course.drawn);
+    this.art = this.host.buildArt(tr, this.placed, course.drawn, this.scenery);
     if (this.art) {
       this.host.scene.add(this.art.group);
       this.art.setTrackDebug(this.trackDebug);

@@ -100,7 +100,7 @@ function handle(world: RagdollSystem, m: ToWorker): void {
   if (m.type === "course") {
     const track = new Track(m.json);
     setGround(track.ground());
-    world.setCourse(track, placeProps(track), recorder);
+    world.setCourse(track, placeProps(track, m.arm), recorder);
   } else if (m.type === "reset") {
     state.epoch = m.epoch;
     world.reset();

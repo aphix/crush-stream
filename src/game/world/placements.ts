@@ -342,9 +342,9 @@ export function placeCourse(track: Track, arm: SceneryArm = SCENERY_ARM.on): { p
   return { placed, drawn: drawnKept };
 }
 
-/** `placeCourse`'s props with colliders and indices: the list the sim, the AI's sight and the crash camera read. */
-export function placeProps(track: Track): Placed[] {
-  return placeCourse(track).placed;
+/** `placeCourse`'s props with colliders and indices under the bench's scenery `arm`: the list the sim, the AI's sight, the crash camera and the dummies' world read. */
+export function placeProps(track: Track, arm: SceneryArm = SCENERY_ARM.on): Placed[] {
+  return placeCourse(track, arm).placed;
 }
 
 /** A circle collider whose placement's x and z scales differ by more than this share of the larger is an ellipse (`ellipseCircles`). */

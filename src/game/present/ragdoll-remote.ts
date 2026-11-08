@@ -5,6 +5,7 @@ import type { PartHeard } from "./ragdoll-wire.ts";
 import { CLASS_LIFT } from "../vehicle/constants.ts";
 import { carClass, classStats } from "../vehicle/vehicle-classes.ts";
 import type { TrackJson } from "../world/track-schema.ts";
+import type { SceneryArm } from "../world/constants.ts";
 import type { Throw } from "./engine-ragdoll.ts";
 import { store3d, store4d } from "../kernel/store.ts";
 import { recordLoose } from "./ragdoll-loose.ts";
@@ -100,8 +101,8 @@ export class RagdollRemote {
     this.worker.terminate();
   }
 
-  setCourse(json: TrackJson): void {
-    this.send({ type: "course", json });
+  setCourse(json: TrackJson, arm: SceneryArm): void {
+    this.send({ type: "course", json, arm });
   }
 
   /** A new run: the world's dummies and props go, and what it answers of the old run is dropped. */

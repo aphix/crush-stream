@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { activeGround, type Ground } from "../world/ground.ts";
 import type { Track } from "../world/track.ts";
+import { SCENERY_ARM, type SceneryArm } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
 import { EJECT_ROLL, ejectionVelocity, type Ejection } from "../vehicle/ejection.ts";
 import type { DriverLook } from "./driver-look.ts";
@@ -253,16 +254,16 @@ export abstract class RagdollThrower extends RagdollStepper {
   /**
    * The course a throw collides with, and its knockable props (`placed`; drawn by `props`, null headless), all back on their
    * spots. Its solids are built at the first throw on it, as recipes: Rapier colliders live only from a throw to its despawn.
-   * The world's worker builds the same course from the track's JSON.
+   * The world's worker builds the same course from the track's JSON, dressed under the same bench scenery `arm` (`placeCourse`).
    */
-  setCourse(track: Track, placed: readonly Placed[], props: PropDraw | null): void {
+  setCourse(track: Track, placed: readonly Placed[], props: PropDraw | null, arm: SceneryArm = SCENERY_ARM.on): void {
     this.course = { ground: track.ground(), track, placed };
     this.solids = null;
     this.freeScenePatch();
     this.props.set(placed, props);
     this.tumble = props;
     if (this.live === 0) this.mode = null;
-    this.remote?.setCourse(track.json);
+    this.remote?.setCourse(track.json, arm);
   }
 
   /**
