@@ -20,6 +20,8 @@
  * `--state` poses the hash's cars (`showPose`); `--camera r,pitch,angle[,x,y,z]` in a free-eye scene (the showcase) sets the eye about
  * the point x,y,z (default the origin), looking at it. The showcase's own `cam=` (the owner's link, the same six numbers) in `--hash`
  * puts the eye there with no `--camera`, which wins when both are given.
+ * `--free` detaches any scene's camera into the free eye first, so a 6-number `--camera r,pitch,angle,x,y,z` puts it anywhere (a course seen
+ * from overhead: pitch 1.5697, angle 3.14159 is north up); `--no-fog` drops the scene's fog for the shot (a whole course from hundreds of metres up).
  * `--keys Digit5*8,Digit8*4` presses those keys (a code, `*n` times) before the drawn frames, the cursor swept across the lower view: the showcase's throws. The JSON's `frameMs` is the drawn frames' mean wall ms, each synced by a 1 px read (CPU sim and draw, and the GPU's).
  * `--uploads` tallies the bytes the drawn frames upload to the GPU (buffer and texture sub-uploads, the bytes a call sends, not the array it reads from) and runs the page's upload check (`?debug=uploads`, `upload-check.ts`): the JSON's `uploadKBPerFrame`, `uploadCallsPerFrame`, and `dummiesOut`, the most dummies out at once in a drawn frame.
  * `--sirens` flashes every light bar (with `night=1` in the hash: the lamps as seen in a night pursuit). `--break headL,headR,tailL,tailR`
@@ -83,6 +85,8 @@ const { values } = parseArgs({
     root: { type: "string", default: join(import.meta.dirname, "..") },
     hash: { type: "string" },
     camera: { type: "string" },
+    free: { type: "boolean" },
+    "no-fog": { type: "boolean" },
     view: { type: "string" },
     "view-camera": { type: "string" },
     backdrop: { type: "string" },
@@ -329,6 +333,10 @@ for (const name of values.break?.split(",") ?? []) {
 for (const name of values.smash?.split(",") ?? []) {
   for (const car of engine["live"]()) if (!car.smashGlass(name) && !car["glassPanes"].some((g) => g.name === name)) throw new Error(`--smash ${name}: no such pane on the ${car.style.id}`);
 }
+// `--free`: any scene's camera detaches into the free eye, so a 6-number `--camera` puts it anywhere (a course seen from overhead).
+if (values.free) engine.view.enterFree();
+// `--no-fog`: the scene's fog off for the shot, so a whole course seen from hundreds of metres up is not drawn in its haze.
+if (values["no-fog"]) engine.scene.fog = null;
 if (camera !== undefined) {
   const [radius, pitch, angle, x = 0, y = 0, z = 0] = camera;
   // The free eye (the showcase's) has no orbit: it is put at radius, pitch and angle about x,y,z, looking at it, and flies from there.

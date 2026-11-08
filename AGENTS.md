@@ -44,7 +44,7 @@ are in `docs/ARCHITECTURE.md` and enforced by `npm run check:boundaries`.
 | `npm run lint` | `oxlint` (`docs/TOOLCHAIN.md`) |
 | `npm run build:node` | the self-hosted server build into `.output/` |
 | `node scripts/check-links.mjs` | every relative link in `README.md` and `docs/*.md` resolves; run it after moving or renaming a doc |
-| `node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out <png>] [--root <checkout>] [--hash <share #>] [--camera r,pitch,angle]` | a frame drawn by the real engine in node (a derby by default, or the scene a share `--hash` names, framed by `--camera`): a PNG plus one JSON line (GPU, draw calls, triangles, programs, textures, geometries, every program that failed to link, GL error); exit 1 on a link failure or a GL error. For shots, before/after diffs (`--root` another checkout) and counts; not for frame times, which the browser judges (`docs/TOOLCHAIN.md`) |
+| `node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out <png>] [--root <checkout>] [--hash <share #>] [--camera r,pitch,angle[,x,y,z]] [--free] [--no-fog]` | a frame drawn by the real engine in node (a derby by default, or the scene a share `--hash` names, framed by `--camera`; `--free` puts the eye anywhere, `--no-fog` drops the fog, for a course seen from above): a PNG plus one JSON line (GPU, draw calls, triangles, programs, textures, geometries, every program that failed to link, GL error); exit 1 on a link failure or a GL error. For shots, before/after diffs (`--root` another checkout) and counts; not for frame times, which the browser judges (`docs/TOOLCHAIN.md`) |
 
 ## Layout
 
