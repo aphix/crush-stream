@@ -87,10 +87,17 @@ describe("given a car 60 m down the road behind a building, and a camera at the 
   });
 });
 
-describe("given a lamp post's collider between the eye and a car", () => {
-  it("when the cover is asked over the sight the cars' solids make, then the car is visible: a lamp hides nothing", () => {
-    const cover = new CarCover();
-    aimed(cover, 0);
-    expect(ask(cover, hidingSight(sightOf(occluder(0, 20, 0, 0.45, 0.45, true, 0, 9))))).toBe(false);
+describe("given three lamp posts 20 m out, one on each of the sight lines to the middle and both sides of a car 60 m down the road", () => {
+  // A sight line to a side of the sphere crosses z = 20 a third of the way out: x = ±RADIUS / 3.
+  const posts = (round: boolean): Occluder[] => [-RADIUS / 3, 0, RADIUS / 3].map((x) => occluder(x, 20, 0, 0.45, 0.45, round, 0, 9));
+  // mutation: sed -i 's/^const THIN_PROP_M = 1;/const THIN_PROP_M = 0;/' src/game/present/spectate-cam.ts  (round posts kept as solids: the car reads hidden, red)
+  it("when the cover is asked over the sight the cars' solids make, then the car is visible: lamp posts hide nothing, while square posts of that size would", () => {
+    const asked = (round: boolean): boolean => {
+      const cover = new CarCover();
+      aimed(cover, 0);
+      return ask(cover, hidingSight(sightOf(...posts(round))));
+    };
+    expect(asked(false), "the control: square posts on the three lines block every sight line").toBe(true);
+    expect(asked(true), "the round lamp posts").toBe(false);
   });
 });
