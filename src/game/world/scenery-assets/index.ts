@@ -10,7 +10,7 @@ import { ASSET_FAMILIES, type AssetFamily, type SceneryAsset } from "./types.ts"
 /** A family's rows as `scripts/sprite-pack.mjs` writes them: the family is the file's. */
 type Row = Omit<SceneryAsset, "family">;
 
-const ROWS = { greenery, desert, countryside, street, industrial, ground, trackside } as Record<AssetFamily, readonly Row[]>;
+const ROWS = { greenery, desert, countryside, street, industrial, ground, trackside } as unknown as Record<AssetFamily, readonly Row[]>;
 
 /** Every family's assets, in `ASSET_FAMILIES` order: a placement's `asset` indexes this list, a family's rows being contiguous. */
 export const SCENERY_ASSETS: readonly SceneryAsset[] = ASSET_FAMILIES.flatMap((family) => ROWS[family].map((row) => ({ ...row, family })));

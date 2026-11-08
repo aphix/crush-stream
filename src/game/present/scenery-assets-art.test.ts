@@ -245,9 +245,15 @@ describe("given the strips a tile family's material fetches", () => {
     for (const family of tiledFamilies) {
       const { tiles, tileSize } = ATLAS[family];
       const half = { width: tileSize / 2, height: (tileSize / 2) * tiles };
-      expect(publicWebpSize(tileUrls(family, true).albedo), `${family} colour`).toEqual({ width: tileSize, height: tileSize * tiles });
-      expect(publicWebpSize(tileUrls(family, false).albedo), `${family} half-tier colour`).toEqual(half);
-      expect(publicWebpSize(tileUrls(family, true).normal), `${family} normal`).toEqual(half);
+      const sizes = [
+        [`${family} colour`, publicWebpSize(tileUrls(family, true).albedo), { width: tileSize, height: tileSize * tiles }],
+        [`${family} half-tier colour`, publicWebpSize(tileUrls(family, false).albedo), half],
+        [`${family} normal`, publicWebpSize(tileUrls(family, true).normal), half],
+      ] as const;
+      for (const [what, got, want] of sizes) {
+        expect(got.width, `${what} width`).toBe(want.width);
+        expect(got.height, `${what} height`).toBe(want.height);
+      }
     }
   });
 });

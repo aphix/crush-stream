@@ -1,7 +1,7 @@
-import type { BiomeId } from "../constants.ts";
+import { BIOME, type BiomeId } from "../constants.ts";
 
 /** The seven asset families, in registry order (`index.ts`): a placement's `asset` is an index into the families' rows laid end to end. */
-export const ASSET_FAMILIES = ["greenery", "desert", "countryside", "street", "industrial", "ground", "trackside"] as const;
+export const ASSET_FAMILIES = ["greenery", BIOME.desert, "countryside", "street", "industrial", "ground", "trackside"] as const;
 export type AssetFamily = (typeof ASSET_FAMILIES)[number];
 
 /** How an asset is drawn: an upright quad (`card`), two crossed quads (`cross`), a flat quad on the ground (`decal`), a repeating ground patch (`tile`), a box wearing the skin (`box`). */

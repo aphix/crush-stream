@@ -167,3 +167,19 @@ describe("given the generated scenery assets on every course", () => {
     expect(onRoad / paint, `${onRoad} of ${paint} paint decals overlap a road`).toBeGreaterThanOrEqual(ON_ROAD_SHARE);
   });
 });
+
+describe("given the family rows read from JSON", () => {
+  it("when each row is read, then its kind, body, rule, biomes, size, weight and core are in range and its id is unique and family-prefixed", () => {
+    // mutation: sed -i 's/"weight": 0.9/"weight": 9/' src/game/world/scenery-assets/greenery.json
+    const KINDS: readonly string[] = ["card", "cross", "decal", "tile", "box"];
+    const BODIES: readonly string[] = ["none", "poof", "knock", "solid"];
+    const RULES: readonly string[] = ["verge", "islands", "frontage", "paving", "trackside", "carpark", "yard", "ground"];
+    const BIOMES: readonly string[] = ["city", "park", "circuit", "dirt", "desert"];
+    const seen = new Set<string>();
+    for (const a of SCENERY_ASSETS) {
+      const bad = [!KINDS.includes(a.kind) && "kind", !BODIES.includes(a.body) && "body", !RULES.includes(a.rule) && "rule", !a.biomes.length && "biomes", a.biomes.some((b) => !BIOMES.includes(b)) && "biome", a.size.length !== 2 && "size", !(a.size[0] > 0 && a.size[1] > 0) && "size > 0", !(a.weight >= 0 && a.weight <= 1) && "weight", !(a.core >= 0.15 && a.core <= 1) && "core", !a.id.startsWith(`${a.family}-`) && "prefix", seen.has(a.id) && "duplicate"].filter(Boolean);
+      expect(bad, a.id).toEqual([]);
+      seen.add(a.id);
+    }
+  });
+});

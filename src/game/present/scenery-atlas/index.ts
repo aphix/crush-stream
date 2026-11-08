@@ -11,7 +11,7 @@ import type { AtlasFamily } from "./types.ts";
 /** A family's atlas as `scripts/sprite-pack.mjs` writes it: the family is the file's. */
 type Atlas = Omit<AtlasFamily, "family">;
 
-const ATLASES = { greenery, desert, countryside, street, industrial, ground, trackside } as Record<AssetFamily, Atlas>;
+const ATLASES = { greenery, desert, countryside, street, industrial, ground, trackside } as unknown as Record<AssetFamily, Atlas>;
 
 /** Each family's atlas. */
 export const ATLAS = Object.fromEntries(ASSET_FAMILIES.map((family) => [family, { ...ATLASES[family], family }])) as Record<AssetFamily, AtlasFamily>;

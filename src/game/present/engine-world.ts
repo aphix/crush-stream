@@ -14,7 +14,7 @@ import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
 import { SHADOW_LEVELS, type ShadowLevel } from "./player-quality.ts";
 
 /** The sandbox's asphalt disc: its UVs span this many metres (its texture repeats 18 times across). */
-export const STAGE_DIAMETER = 96;
+const STAGE_DIAMETER = 96;
 
 function makeConcrete(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
