@@ -137,17 +137,22 @@ describe("given a building built in each facade style", () => {
     const normal = slab!.geometry.getAttribute("normal");
     const klass = slab!.geometry.getAttribute("materialClass");
     const grounds = new Set<number>();
-    let reach = 0;
+    let wallReach = 0;
+    let parapetReach = 0;
     for (let i = 0; i < region.count; i++) {
       const roofTop = klass.getX(i) === MAT.BUILDING_ROOF;
       // The cornice's top edge is at the roofline too: the parapet is the roof slab's sides, the floor layer's bare patch above it.
       const parapet = !roofTop && region.getX(i) === LAYER.floor && position.getY(i) > ROOFLINE - 0.3;
       expect(region.getZ(i), `vertex ${i}: ${roofTop ? "roof top" : parapet ? "parapet" : "wall"}`).toBe(parapet ? 0 : 1);
       if (!roofTop && !parapet && normal.getZ(i) > 0.5) grounds.add(region.getX(i));
-      reach = Math.max(reach, Math.abs(position.getX(i)), Math.abs(position.getZ(i)));
+      const reach = Math.max(Math.abs(position.getX(i)), Math.abs(position.getZ(i)));
+      if (parapet) parapetReach = Math.max(parapetReach, reach);
+      else if (!roofTop) wallReach = Math.max(wallReach, reach);
     }
     expect(grounds.has(LAYER.ground), "the long face has the ground band").toBe(true);
-    expect(reach, "the footprint of the marble body").toBeCloseTo(MARBLE.body.half, 3);
+    expect(wallReach, "the walls stand on the marble body's footprint").toBeCloseTo(MARBLE.body.half, 3);
+    // The parapet overhangs the wall by a real 0.1 m (the roof slab is 12 m on an 11.8 m block); the collider's cornice course, 6.3 m, covers it.
+    expect(parapetReach, "the parapet's overhang stays inside the collider's cornice").toBeLessThanOrEqual(MARBLE.cornice.half);
     const blockRegion = block!.geometry.getAttribute("surfaceRegion");
     for (let i = 0; i < blockRegion.count; i++) expect(blockRegion.getZ(i), "a building keeps the block's uv").toBe(0);
     expect(prefabParts(PREFAB.marble, materials)[0]!.material, "no style, the plain block").toBe(materials.plain);
