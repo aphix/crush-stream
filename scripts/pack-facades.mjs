@@ -24,6 +24,8 @@ const MARGIN = 18;
 const GLOW_DOWN = 2;
 /** Glow-map texels a window's threshold reaches past its mask. */
 const GLOW_SPREAD = 3;
+/** Texels the window mask is blurred by: the shader sharpens it back, so a half-size map keeps smooth window edges. */
+const GLOW_BLUR = 3;
 const NORMAL_STRENGTH = 5;
 const WEBP_QUALITY = 90;
 const WINDOW_OPEN_RADIUS = 2;
@@ -232,6 +234,7 @@ for (const [name, spec] of Object.entries(STYLES)) {
   const gh = h / GLOW_DOWN;
   const glow = new Uint8ClampedArray(gw * gh * 3);
   const thresholds = new Uint8Array(gw * gh);
+  const glowMask = blur(Float32Array.from(mask), w, h, GLOW_BLUR);
   for (let y = 0; y < gh; y++) {
     for (let x = 0; x < gw; x++) {
       let cover = 0;
@@ -239,7 +242,7 @@ for (const [name, spec] of Object.entries(STYLES)) {
       for (let dy = 0; dy < GLOW_DOWN; dy++) {
         for (let dx = 0; dx < GLOW_DOWN; dx++) {
           const p = (y * GLOW_DOWN + dy) * w + x * GLOW_DOWN + dx;
-          cover += mask[p];
+          cover += glowMask[p];
           id = Math.max(id, ids[p]);
         }
       }

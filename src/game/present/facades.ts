@@ -148,7 +148,7 @@ const WINDOW_EMISSIVE = /* glsl */ `
 #ifdef USE_EMISSIVEMAP
 vec2 facadeWindow = texture2D(emissiveMap, vEmissiveMapUv).rg;
 float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${LIT_SHARE.toFixed(2)});
-totalEmissiveRadiance *= facadeWindow.r * facadeOn;
+totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn;
 #endif`;
 
 /** One material per style: its maps (stand-ins until they load), the windows' glow, tagged as concrete. */
