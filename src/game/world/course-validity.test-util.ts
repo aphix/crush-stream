@@ -161,12 +161,13 @@ function inOtherRoad(c: Corridors, t: Track, k0: number, x: number, z: number): 
 
 /**
  * For each main-loop corner sample whose outside has no wall: how far (m) a `CAR_HALF`-wide walk along the outward normal, from the
- * edge of the road and runoff, goes before it meets a solid prop, a wall piece or another road. Returns the longest such run.
+ * edge of the road and runoff, goes before it meets a solid prop, a wall piece or another road. Returns the longest such run, and how
+ * many walks met nothing within `WALK_MAX` (`unbounded`): a course whose longest run is the cap is pinned by that count.
  */
-export function outsideExposure(t: Track): { worst: number; s: number; x: number; z: number; corners: number } {
+export function outsideExposure(t: Track): { worst: number; s: number; x: number; z: number; corners: number; unbounded: number } {
   const p = t.path;
   const ds = t.length / p.count;
-  const out = { worst: 0, s: 0, x: 0, z: 0, corners: 0 };
+  const out = { worst: 0, s: 0, x: 0, z: 0, corners: 0, unbounded: 0 };
   const open: number[] = [];
   for (let k = 0; k < p.count; k++) {
     const curv = p.curv[k]!;
@@ -211,6 +212,7 @@ export function outsideExposure(t: Track): { worst: number; s: number; x: number
       if (hit(x, z) || inOtherRoad(roads, t, k, x, z)) break;
       run += WALK_STEP;
     }
+    if (run >= WALK_MAX) out.unbounded++;
     if (run > out.worst) Object.assign(out, { worst: run, s: k * ds, x: p.x[k]! + nx * edge, z: p.z[k]! + nz * edge });
   }
   return out;
