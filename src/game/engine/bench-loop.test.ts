@@ -396,7 +396,7 @@ describe("given the loop driven in one page", () => {
   it("when one cycle is driven, then every map and both arms run in the one page, in order, each shown at its own address, with a pause between steps (the driver has no way to navigate: only a reload hand-over leaves the page)", async () => {
     const { log, page } = fakePage();
     await driveLoop({ ...RUN, keep: false }, page);
-    expect(log.ran.map((r) => r.split(" ")[0]).join(" ")).toBe(cycleOf(false).map((s) => s.id).join(" "));
+    expect(log.ran.map((r) => r.split(" ")[0]).join(" ")).toBe(cycleOf(false, 1, RUN.maps).map((s) => s.id).join(" "));
     expect(log.ran.length, "steps: four maps, each off and on").toBe(8);
     expect(log.shown.length, "addresses shown").toBe(8);
     expect(new Set(log.shown).size, "each at its own address").toBe(8);

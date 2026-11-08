@@ -95,7 +95,7 @@ describe("given a pasted share URL that names the city course, 9 laps, 15 AI car
       w.race.command({ type: "options", options: { trackId: t.track, campaign: t.camp, mode: t.mode, laps: t.laps, aiCount: t.ai, aggression: t.aggr, aiDifficulty: t.diff, police: t.police, timeOfDay: t.tod, noReset: t.noreset, spectate: t.spectate } });
       const options = playersOptions(w);
       expect(options.trackId, "trackId").toBe("city");
-      expect(firstMismatch(options.campaign, ["oval", "rally", "city", "stunt", "four-count", "dam-spine", "razor-shelf", "breaker-yard", "national-mall"]), "campaign").toBeUndefined();
+      expect(firstMismatch(options.campaign, ["oval", "rally", "city", "stunt", "figure-8", "four-count", "dam-spine", "razor-shelf", "breaker-yard", "national-mall"]), "campaign").toBeUndefined();
       expect(options.mode, "mode").toBe("single");
       expect(options.laps, "laps").toBe(9);
       expect(options.aiCount, "aiCount").toBe(15);
