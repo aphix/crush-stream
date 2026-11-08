@@ -1241,13 +1241,49 @@ export class RaceBrain {
       this.nosedFree = bestHeld === 0;
       if (Number.isNaN(best)) this.followBoxedIn(i, blockerAlong, blockerAhead);
       else {
-        // Every side held: push through the one fewest cars hold at once, sparing its traffic from the guard. A free side: take it at the gas.
+        // Every line held: the biggest gap (owner: "gas it towards the biggest gap, preferably in the right direction"), pushing through the
+        // traffic that holds it (spared from the guard); a rival is still the guard's business.
+        if (bestHeld > 0) {
+          best = this.biggestGap(n, oLat, blocker, blockerAhead, room, want, blockerAlong < CRAWL);
+          this.laneHeld(best, blocker, blockerAhead, true);
+        }
         want = best;
-        if (bestHeld > 0) this.laneHeld(best, blocker, blockerAhead, true);
         this.swerve = Math.max(this.swerve, WRECK_SWERVE);
         this.evading = true;
       }
     }
     return clamp(want, -room, room);
+  }
+
+  /**
+   * Of the lane candidates (`cand`, `n` of them) and the midpoint between every two cars in the blocker's window, the line farthest
+   * from every car (the biggest gap), none within a lane of the blocker at `oLat`; ties to the one nearest `want`, on the side
+   * with more road beside a stopped or oncoming blocker (`aside`). One candidate always qualifies: the caller's pick did.
+   */
+  private biggestGap(n: number, oLat: number, blocker: number, blockerAhead: number, room: number, want: number, aside: boolean): number {
+    let best = Number.NaN;
+    let bestClear = -1;
+    let bestCost = Infinity;
+    for (let k = -n; k < this.nearCount; k++) {
+      if (k >= 0 && (this.nearId[k] === blocker || this.nearAhead[k]! >= blockerAhead + HELD_BEYOND)) continue;
+      for (let j = k + 1; j <= this.nearCount; j++) {
+        if (k < 0 && j > k + 1) break;
+        if (k >= 0 && (j === this.nearCount || this.nearId[j] === blocker || this.nearAhead[j]! >= blockerAhead + HELD_BEYOND)) continue;
+        const c = clamp(k < 0 ? this.cand[n + k]! : (this.nearLat[k]! + this.nearLat[j]!) / 2, -room, room);
+        let clear = Math.abs(c - oLat);
+        if (clear < LINE_W + 0.4) continue;
+        for (let m = 0; m < this.nearCount; m++) {
+          if (this.nearId[m] === blocker || this.nearAhead[m]! >= blockerAhead + HELD_BEYOND) continue;
+          clear = Math.min(clear, Math.abs(c - this.nearLat[m]!));
+        }
+        const cost = Math.abs(c - want) + (aside && c > oLat !== oLat <= 0 ? 100 : 0);
+        if (clear > bestClear + 1e-6 || (clear > bestClear - 1e-6 && cost < bestCost)) {
+          best = c;
+          bestClear = clear;
+          bestCost = cost;
+        }
+      }
+    }
+    return best;
   }
 }

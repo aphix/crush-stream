@@ -100,10 +100,12 @@ describe("given a racer doing 8 m/s 14 m behind a slower car (6 m/s)", () => {
     expect(Math.abs(want(brain)), `line ${want(brain).toFixed(2)} m`).toBeGreaterThanOrEqual(2 * NEXT_LANE - 0.01);
     expect(Number.isNaN(follow(brain)), "never queued behind it").toBeTruthy();
   });
+  const boxed = [NEXT_LANE, -NEXT_LANE, 2 * NEXT_LANE, -2 * NEXT_LANE, 8.6];
   for (const seconds of [0.2, 2]) {
-    it(`when traffic holds every line across the 20 m road (cars at 0, \u00b1${NEXT_LANE}, \u00b1${2 * NEXT_LANE} and one more at +8.6 m by the left edge: no free line), then after ${seconds} s it is pushing through a line one car holds, the one nearest its own (owner: the biggest gap, preferably in the right direction), on the gas, and the guard spares that car only, not the one ahead`, () => {
-      const brain = behind([NEXT_LANE, -NEXT_LANE, 2 * NEXT_LANE, -2 * NEXT_LANE, 8.6], seconds);
-      expect(Math.abs(want(brain)), `line ${want(brain).toFixed(2)} m: off the car ahead`).toBeGreaterThanOrEqual(MIN_SWING);
+    it(`when traffic holds every line across the 20 m road (cars at 0, \u00b1${NEXT_LANE}, \u00b1${2 * NEXT_LANE} and one more at +8.6 m by the left edge: no free line), then after ${seconds} s it is pushing through the biggest gap (owner: "gas it towards the biggest gap"), the line farthest from every car (2 m off the car at -${2 * NEXT_LANE} m, by the right edge), not onto a car's own line, on the gas, and the guard spares the car holding it only, not the one ahead`, () => {
+      const brain = behind(boxed, seconds);
+      const clear = Math.min(...[0, ...boxed].map((lat) => Math.abs(want(brain) - lat)));
+      expect(clear, `line ${want(brain).toFixed(2)} m: ${clear.toFixed(2)} m from the nearest car's line`).toBeGreaterThanOrEqual(2 - 0.01);
       expect(Number.isNaN(follow(brain)), "never queued behind it").toBeTruthy();
       const spared = brain["hitOf"][0]!;
       let held = 0;
