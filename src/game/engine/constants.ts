@@ -20,7 +20,7 @@ export const COURSE_QUERY = "course";
 export const STRIP_QUERY = { cars: "cars", same: "same", len: "len", props: "props", traffic: "traffic" } as const;
 /** The page queries that pin the player's quality knobs for the session (`?draw=max&scale=2&shadow=high`): read at boot, carried onto every loop step, recorded on the card. */
 export const QUALITY_QUERY = { draw: "draw", scale: "scale", shadow: "shadow" } as const;
-/** The bench-only page query `?scenery=0`: the course loads its authored props alone (no scenery service) for the scenery's own A/B; `benchPlan` reads it, a loop carries it, the card records it. */
+/** The bench-only page query `?scenery=0` (authored props alone) or `?scenery=draw0` (solid props kept, no drawn-only scenery) for the scenery's own A/B (`SCENERY_ARM`); `benchPlan` reads it, a loop carries it, the card records it. */
 export const SCENERY_QUERY = "scenery";
 /** The bench card's look (the card, the chooser before a loop): a dark panel top-left over the game. */
 export const BENCH_CARD_STYLE =

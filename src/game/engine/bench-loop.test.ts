@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { TRACK_ID } from "../world/constants.ts";
+import { SCENERY_ARM, TRACK_ID } from "../world/constants.ts";
 import { placeCourse } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
@@ -172,22 +172,30 @@ describe("given a loop whose state is in the address of its bench page", () => {
     expect([...loops].join(","), "both cycles ran").toBe("1,2");
   });
 
-  // mutation: sed -i 's/const scenery = q.get(SCENERY_QUERY) !== "0";/const scenery = true;/' src/game/engine/engine-bench-plan.ts
-  it("when a loop starts from ?bench=city&scenery=0, then every step's address keeps the arm and its plan reads it, a bare address reads the service on, and placeCourse on that arm returns the authored props alone", () => {
-    const arm = "?bench=city&scenery=0&extended=1";
-    let href = new URL(arm, base).toString();
-    for (let run = runFromPage(arm, "k3x9q2"); run !== null && run.loop <= 1; run = advance(run)) {
-      href = stepHref(href, run);
-      expect(benchPlan(searchOf(href))!.scenery, `${stepOf(run).id}`).toBe(false);
+  // mutation: sed -i 's/sceneryValue === "0" ? SCENERY_ARM.off/sceneryValue === "0" ? SCENERY_ARM.on/' src/game/engine/engine-bench-plan.ts  (reds the off step reads)
+  // mutation: sed -i 's/sceneryValue === SCENERY_ARM.draw0 ? SCENERY_ARM.draw0/sceneryValue === SCENERY_ARM.draw0 ? SCENERY_ARM.on/' src/game/engine/engine-bench-plan.ts  (reds the draw0 step reads)
+  // mutation: sed -i 's/const drawnKept = arm === SCENERY_ARM.on ? drawn : \[\];/const drawnKept = drawn;/' src/game/world/placements.ts  (reds draw0's drawn count)
+  it("when a loop starts from ?bench=city&scenery=0 or &scenery=draw0, then every step's address keeps the arm, a bare address reads the service on, draw0 places the default's props with no drawn scenery and 0 places the authored props alone", () => {
+    for (const [value, arm] of [["0", SCENERY_ARM.off], ["draw0", SCENERY_ARM.draw0]] as const) {
+      const search = `?bench=city&scenery=${value}&extended=1`;
+      let href = new URL(search, base).toString();
+      for (let run = runFromPage(search, "k3x9q2"); run !== null && run.loop <= 1; run = advance(run)) {
+        href = stepHref(href, run);
+        expect(benchPlan(searchOf(href))!.scenery, `${value} ${stepOf(run).id}`).toBe(arm);
+      }
     }
-    expect(benchPlan("?bench=city")!.scenery).toBe(true);
+    expect(benchPlan("?bench=city")!.scenery).toBe(SCENERY_ARM.on);
     const raw = TRACKS.find((json) => parseTrack(json).id === TRACK_ID.rally);
     must(raw, "the rally course is in TRACKS");
     const rally = new Track(raw);
-    const full = placeCourse(rally);
-    const bare = placeCourse(rally, false);
-    expect(bare.drawn.length, "no drawn scenery").toBe(0);
-    expect(full.placed.length - bare.placed.length, "the service's solid props are what the arm leaves out").toBeGreaterThan(0);
+    const on = placeCourse(rally);
+    const draw0 = placeCourse(rally, SCENERY_ARM.draw0);
+    const off = placeCourse(rally, SCENERY_ARM.off);
+    expect(on.drawn.length, "the default draws scenery").toBeGreaterThan(0);
+    expect(draw0.drawn.length, "draw0 draws none").toBe(0);
+    expect(draw0.placed.length, "draw0 keeps every solid prop the default has").toBe(on.placed.length);
+    expect(off.drawn.length, "off draws none").toBe(0);
+    expect(on.placed.length - off.placed.length, "the service's solid props are what off leaves out").toBeGreaterThan(0);
   });
 
   it("when keep is turned off (keep=0) in the address on the second step, then the loop goes on to the last step and ends there", () => {

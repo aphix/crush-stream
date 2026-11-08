@@ -77,6 +77,9 @@ export type BiomeId = (typeof BIOME_IDS)[number];
 export const SCENERY_DENSITY_RULES = ["frontage", "verge", "islands"] as const;
 /** The scenery rules a course's `scenery.off` names: paving (sidewalks, aprons, car parks' ground), frontage (lamps, street trees), verge, islands (beds, hedges), trackside (tyre runs, cones, parked cars). The rule indices (`scenery.ts`'s `RULE_*`) follow this order. */
 export const SCENERY_RULES = ["paving", ...SCENERY_DENSITY_RULES, "trackside"] as const;
+/** The bench's scenery arms (`?scenery=`, `placeCourse`): `on` the whole service, `draw0` its solid props kept (same sim) and no drawn-only scenery, `off` the authored props alone. */
+export const SCENERY_ARM = { on: "on", draw0: "draw0", off: "off" } as const;
+export type SceneryArm = (typeof SCENERY_ARM)[keyof typeof SCENERY_ARM];
 
 /**
  * Chevron signs at a shortcut junction that turns more than `CHEVRON_TURN` (rad): `placeProps` stands a run of `CHEVRON_RUN` boards, one

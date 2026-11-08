@@ -7,6 +7,7 @@ import type { HitchTable } from "./bench-hitch.ts";
 import { PHASE_NAMES, WORK, WORK_NAMES } from "./sim-phases.ts";
 import { NAME, type FrameStats } from "./bench-frames.ts";
 import { EXTENDED_QUERY } from "./constants.ts";
+import { SCENERY_ARM, type SceneryArm } from "../world/constants.ts";
 import type { SwitchHitch } from "./bench-settle.ts";
 
 const COARSE_LABEL = `1/${QUIET_HZ} s`;
@@ -99,12 +100,12 @@ export interface BenchSettings {
   skyPin?: SkyPin;
   /** The player's quality knobs the run held (the URL's `?draw=`/`?scale=`/`?shadow=`, else Auto: a bench page never reads the browser's saved ones) and which the URL pinned; absent on older cards. */
   quality?: { draw: string; scale: string; shadow: string; pinned: string };
-  /** False: the `?scenery=0` arm (the course loaded its authored props alone); absent on an older card, which had the service on. */
-  scenery?: boolean;
+  /** The scenery arm the run loaded its course under (`?scenery=`: `on`, `draw0`, `off`); absent on an older card, which had the service on. */
+  scenery?: SceneryArm;
   depth: { bits: number; subpixelBits: number; contextDepth: boolean; fragmentHighFloat: { precision: number; rangeMin: number; rangeMax: number } | null; near: number; far: number; logarithmicDepthBuffer: boolean; probe: DepthProbe };
 }
 
-/** The course's dressing as the step loaded it (`placeCourse`: `?scenery=0` leaves the authored props alone) and the renderer's counts at the run's end. `drawn` is the service's drawn-only list before the effects tier thins it. */
+/** The course's dressing as the step loaded it (`placeCourse` under the scenery arm) and the renderer's counts at the run's end. `drawn` is the service's drawn-only list before the effects tier thins it. */
 export interface BenchDressing {
   placeMs: number;
   authored: number;
@@ -116,9 +117,9 @@ export interface BenchDressing {
   textures: number;
 }
 
-/** `dressing place 24.3 ms solid 7 drawn 673 groups 8 geom 412 tex 96`, and the scenery arm (`scenery` false: the `?scenery=0` arm). */
-const dressingLine = (d: BenchDressing, scenery: boolean | undefined): string =>
-  `dressing place ${d.placeMs.toFixed(1)} ms solid ${d.solid} drawn ${d.drawn} groups ${d.drawGroups} geom ${d.geometries} tex ${d.textures}   scenery ${scenery === false ? "OFF (?scenery=0: authored props only)" : "on"}`;
+/** `dressing place 24.3 ms solid 7 drawn 673 groups 8 geom 412 tex 96   scenery on|DRAW0|OFF`. */
+const dressingLine = (d: BenchDressing, scenery: SceneryArm = SCENERY_ARM.on): string =>
+  `dressing place ${d.placeMs.toFixed(1)} ms solid ${d.solid} drawn ${d.drawn} groups ${d.drawGroups} geom ${d.geometries} tex ${d.textures}   scenery ${scenery === SCENERY_ARM.on ? scenery : scenery.toUpperCase()}`;
 
 /** The stretches of a run in order: the grid and warm-up, the sampled window, the A/Bs, then the replay of the run's own crash (`PAGE_PHASES[PHASE_WARM]` ...). Indices only grow (posted cards name them): the quality A/Bs run before the replay but come last. */
 export const PAGE_PHASES = ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay", "sweep", "ab-draw", "ab-scale", "ab-shadow"] as const;

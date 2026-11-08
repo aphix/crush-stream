@@ -1,7 +1,7 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { wrapPi } from "../kernel/scalar.ts";
 import { PREFABS, type PrefabId } from "./catalog.ts";
-import { CHEVRON_GAP, CHEVRON_RUN, CHEVRON_SLOTS, CHEVRON_STANDOFF, CHEVRON_TURN, PREFAB } from "./constants.ts";
+import { CHEVRON_GAP, CHEVRON_RUN, CHEVRON_SLOTS, CHEVRON_STANDOFF, CHEVRON_TURN, PREFAB, SCENERY_ARM, type SceneryArm } from "./constants.ts";
 import { junctionsOf } from "./junctions.ts";
 import { ALONG_BOTH } from "./track-schema.ts";
 import { placeScenery } from "./scenery.ts";
@@ -328,16 +328,18 @@ export const lastDressing: { course: string; placeMs: number; authored: number; 
 /**
  * Every prop of the course in index order: the authored props (`placeAuthored`), then the scenery service's solid ones (`placeScenery`:
  * a car can reach them, so they have colliders and go last, behind the chevrons, and no authored index moves), and apart from them
- * the drawn-only scenery, which has no index and no collider. `scenery` false (the bench's `?scenery=0` arm): the authored props alone.
+ * the drawn-only scenery, which has no index and no collider. `arm` is the bench's scenery A/B (`SCENERY_ARM`): `off` places the authored props alone, `draw0` the
+ * authored and solid props as `on` does (the same colliders, so the same sim) and no drawn-only scenery.
  */
-export function placeCourse(track: Track, scenery = true): { placed: Placed[]; drawn: Placed[] } {
+export function placeCourse(track: Track, arm: SceneryArm = SCENERY_ARM.on): { placed: Placed[]; drawn: Placed[] } {
   const start = performance.now();
   const placed = placeAuthored(track);
   const authored = placed.length;
-  const { solid, drawn } = scenery ? placeScenery(track, placed) : { solid: [], drawn: [] };
+  const { solid, drawn } = arm === SCENERY_ARM.off ? { solid: [], drawn: [] } : placeScenery(track, placed);
   for (const p of solid) placed.push(p);
-  Object.assign(lastDressing, { course: track.id, placeMs: performance.now() - start, authored, placed, drawn });
-  return { placed, drawn };
+  const drawnKept = arm === SCENERY_ARM.on ? drawn : [];
+  Object.assign(lastDressing, { course: track.id, placeMs: performance.now() - start, authored, placed, drawn: drawnKept });
+  return { placed, drawn: drawnKept };
 }
 
 /** `placeCourse`'s props with colliders and indices: the list the sim, the AI's sight and the crash camera read. */

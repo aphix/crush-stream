@@ -27,6 +27,7 @@ import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import { raceSight, sightLine, type Sight } from "../present/spectate-cam.ts";
 import { parseTrack, type TrackJson } from "../world/track-schema.ts";
+import { SCENERY_ARM, type SceneryArm } from "../world/constants.ts";
 import { Track, blankPoint, blankProjection, pointOn } from "../world/track.ts";
 import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
 import { HAVANA } from "../world/tracks/havana.ts";
@@ -315,8 +316,8 @@ export abstract class RaceField {
     this.tracks.delete(parseTrack(json).id);
   }
   private benchJson: unknown = null;
-  /** False only on a bench page's `?scenery=0` arm (`enterBenchScene`): the next course loads its authored props alone. Nothing else writes it. */
-  scenery = true;
+  /** The scenery arm of a bench page's `?scenery=` (`enterBenchScene`): how the next course is dressed (`placeCourse`). Nothing else writes it. */
+  scenery: SceneryArm = SCENERY_ARM.on;
 
   /** The loaded course's solids for the spectator cams' sight lines (built once per course); null off a race. */
   courseSight(): Sight | null {

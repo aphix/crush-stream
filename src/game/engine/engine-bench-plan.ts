@@ -7,7 +7,7 @@ import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { PREFABS, type PrefabId } from "../world/catalog.ts";
 import { stripCourse, type StripProp, type StripSpec } from "../world/bench-strip.ts";
 import { CAMPAIGN } from "../world/tracks/index.ts";
-import { BENCH_STRIP_ID, TRACK_ID } from "../world/constants.ts";
+import { BENCH_STRIP_ID, SCENERY_ARM, TRACK_ID, type SceneryArm } from "../world/constants.ts";
 import { BENCH_KIND, BENCH_QUERY, COURSE_QUERY, EPI_QUERY, EXTENDED_QUERY, SCENERY_QUERY, STRIP_QUERY, ULTRA_QUERY } from "./constants.ts";
 
 /** The city bench's race on course `trackId`: its own field and rules as a program over the player's options, which it never touches. */
@@ -53,8 +53,8 @@ export interface BenchPlan {
   epicenter: boolean;
   /** `&extended=1`: the long bench (A/B blocks, replay); false: the quick bench, which measures the window alone. */
   extended: boolean;
-  /** `&scenery=0`: the course loads its authored props alone (the scenery service's A/B arm); false only then. */
-  scenery: boolean;
+  /** `&scenery=0` (`off`: the authored props alone) or `&scenery=draw0` (`draw0`: the solid props kept, no drawn-only scenery): the scenery service's A/B arms; `on` otherwise. */
+  scenery: SceneryArm;
 }
 
 /** The strip's defaults: a bare `?bench=strip` is the repeatable baseline. */
@@ -92,7 +92,9 @@ export function benchPlan(search: string): BenchPlan | null {
   const ultra = q.get(ULTRA_QUERY) === "1";
   const epicenter = q.get(EPI_QUERY) === "1";
   const extended = q.get(EXTENDED_QUERY) === "1";
-  const scenery = q.get(SCENERY_QUERY) !== "0";
+  // `?scenery=0`: the authored props alone; `?scenery=draw0`: no drawn-only scenery; anything else, the whole service.
+  const sceneryValue = q.get(SCENERY_QUERY);
+  const scenery = sceneryValue === "0" ? SCENERY_ARM.off : sceneryValue === SCENERY_ARM.draw0 ? SCENERY_ARM.draw0 : SCENERY_ARM.on;
   if (kind === BENCH_KIND.city) {
     const course = q.get(COURSE_QUERY);
     const id = course !== null && CAMPAIGN.includes(course) ? course : TRACK_ID.city;
