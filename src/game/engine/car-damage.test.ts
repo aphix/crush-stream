@@ -11,6 +11,9 @@ import { makeCarFrame } from "../net/codec.ts";
 import { carLayout } from "../net/car-pose.ts";
 import { CarDamage, FinalDamage } from "./car-damage.ts";
 import { stubBrowser } from "./engine-headless.test-util.ts";
+import { hiddenTwins } from "../vehicle/hidden-twins.test-util.ts";
+import { buildCar } from "../vehicle/drawn-body.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 stubBrowser();
 
@@ -162,5 +165,24 @@ describe("given a racer that crosses the finish line dented and is hit again aft
     }
     expect(dentAfter, `the control: the hit after the line dents it ${dentAfter.toFixed(3)} m`).toBeGreaterThan(0.01);
     expect(fromLine, `the podium's car is ${fromLine.toFixed(4)} m from the car at the line`).toBeLessThan(1e-6);
+  });
+});
+
+/** A car's drawn body and bonnet positions, copied. */
+const drawnOf = (car: DeformableCar): Float32Array[] => [car.lookMeshes().body, car.lookMeshes().hood].map((m) => Float32Array.from(m.geometry.getAttribute("position").array));
+
+describe("given two identical racers crashed in a slalom, one that no camera sees, whose tyre hold is still owed when the race ends", () => {
+  // mutation: sed -i '/^    car.setHoldDeferred(false);$/d' src/game/engine/car-damage.ts  (the podium keeps the hidden finisher's skin without its hold: red)
+  it("when the podium copies each car as it finished, then the hidden one is drawn as its twin held every frame, bit for bit", () => {
+    const twins = hiddenTwins((lazy, every) => lazy.holdOwed && firstMismatch(drawnOf(lazy)[0], drawnOf(every)[0]!) !== undefined);
+    must(twins, "a frame came with the hidden car's hold owed and its body skin behind the twin's");
+    const [hidden, held] = [twins.lazy.car, twins.every.car].map((car) => {
+      const damage = new CarDamage();
+      damage.readDrawn(car);
+      const shown = buildCar("sedan", "sedan");
+      damage.drawOn(shown);
+      return drawnOf(shown);
+    });
+    for (const [i, part] of ["body", "bonnet"].entries()) expect(firstMismatch(hidden![i], held![i]!), `the hidden finisher's podium ${part} against its twin's`).toBeUndefined();
   });
 });

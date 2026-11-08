@@ -32,7 +32,8 @@ export class CarDamage {
 
   /** The car's drawn body and bonnet now (`drawOn` puts them back): the race's last frame, as the player saw it. */
   readDrawn(car: DeformableCar): void {
-    // A skin the LoD deferred is written first: `updateSkin` skips it.
+    // A skin the LoD deferred is written first (`updateSkin` skips it), and a tyre hold a finisher no camera saw still owes is laid: the podium keeps this frame.
+    car.setHoldDeferred(false);
     car.flushDeferredSkin();
     const { body, hood } = car.lookMeshes();
     this.drawnBody = copyOf(body.geometry.getAttribute("position").array as Float32Array, this.drawnBody);

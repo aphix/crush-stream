@@ -489,9 +489,10 @@ export class TyreSkin {
     return this.hasWritten ? this.written : null;
   }
 
-  /** The mesh's positions were rewritten outside the writer (a reset, a net or replay state): the next hold starts from them, not from the skin it kept. */
+  /** The mesh's positions were rewritten outside the writer (a reset, a net or replay state): the next hold starts from them, not from the skin it kept, and a lift a hidden car owed (noted on the old skin) is dropped, never laid over the new one. */
   rewritten(): void {
     this.skinRewritten = true;
+    this.owed = false;
   }
 
   /** The kernel the sag pass runs in once it is loaded; null: the JS below, which is its reference. */
