@@ -7,6 +7,7 @@ import { SCRATCH_TIER } from "./paint-scratch.ts";
 import { MATERIAL_GRAIN } from "../vehicle/material-class.ts";
 import { SMOOTHING_TIER } from "../vehicle/normal-smooth.ts";
 import { setConcreteDetailTier } from "./concrete-detail.ts";
+import { reliefForTier, setReliefTier } from "./surface-relief.ts";
 import type { ChaseCamera } from "./engine-camera.ts";
 import { TireSmokeSystem, type GlassDotSystem, type SparkSystem } from "./engine-fx.ts";
 import type { FountainSystem } from "./fountain-system.ts";
@@ -600,6 +601,8 @@ export class Cinematics {
     CANDY_FILM.value = finishForTier(tier) ? 1 : 0;
     SCRATCH_TIER.value = finishForTier(tier) ? 2 : on ? 1 : 0;
     setConcreteDetailTier(finishForTier(tier));
+    // After Ultra's wear or unwear above: a ground material it has dressed keeps its photograph, one it has undressed takes the relief state again.
+    setReliefTier(reliefForTier(tier, this.marks.phone));
     if (!on) this.reset();
   }
 

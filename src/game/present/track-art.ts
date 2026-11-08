@@ -8,7 +8,8 @@ import { PREFAB, SURFACE, type BiomeId } from "../world/constants.ts";
 import { box, painted, type Piece, type PrefabMaterials } from "./prefab-pieces.ts";
 import { tagLike, tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
-import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
+import { makePrefabMaterials, prefabParts, raceTextures, TILE } from "./prefabs.ts";
+import { dressGround } from "./ground-relief.ts";
 import { biomeLookup } from "../world/scenery.ts";
 import { facadeStyle, facadeTint, type FacadeStyle, PASTELS } from "./facades.ts";
 import { blankPoint, type Track } from "../world/track.ts";
@@ -106,6 +107,7 @@ export class TrackArt {
         SURFACES[SURFACE_IDS[sid]!].ribbon,
       );
       applyMarkMap(mat);
+      dressGround(mat, SURFACE_IDS[sid]!, mud ? TILE.mud : TILE[t]);
       return mat;
     };
 

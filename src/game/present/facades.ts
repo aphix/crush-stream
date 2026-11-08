@@ -5,6 +5,7 @@ import { tagMaterial } from "../vehicle/material-class.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import { type BiomeId, PREFAB } from "../world/constants.ts";
 import { loadUprightBitmap } from "./bitmap-loader.ts";
+import { followRelief, reliefMaterial } from "./surface-relief.ts";
 import { hash01 } from "./track-mesh.ts";
 
 /**
@@ -94,7 +95,7 @@ export function facadeStyle(prefab: PrefabId, x: number, z: number, biome: Biome
   return homeStyle(prefab);
 }
 
-type Maps = { albedo: THREE.Texture; normal: THREE.Texture; glow: THREE.Texture };
+type Maps = { albedo: THREE.Texture; glow: THREE.Texture };
 
 function dataTexture(r: number, g: number, b: number, colorSpace: THREE.ColorSpace): THREE.DataTexture {
   const tex = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1);
@@ -103,8 +104,8 @@ function dataTexture(r: number, g: number, b: number, colorSpace: THREE.ColorSpa
   return tex;
 }
 
-/** What a style shows until its maps arrive: a plain cream wall, flat, unlit (DOM-free, so a test builds the materials too). */
-const standIn = once((): Maps => ({ albedo: dataTexture(205, 200, 190, THREE.SRGBColorSpace), normal: dataTexture(128, 128, 255, THREE.NoColorSpace), glow: dataTexture(0, 0, 0, THREE.NoColorSpace) }));
+/** What a style shows until its colour and glow maps arrive: a plain cream wall, unlit (DOM-free, so a test builds the materials too). */
+const standIn = once((): Maps => ({ albedo: dataTexture(205, 200, 190, THREE.SRGBColorSpace), glow: dataTexture(0, 0, 0, THREE.NoColorSpace) }));
 
 const loaded: Partial<Record<FacadeStyle, Maps>> = {};
 const live = new Set<THREE.MeshStandardMaterial>();
@@ -126,18 +127,13 @@ function mapOf(bitmap: ImageBitmap, colorSpace: THREE.ColorSpace, anisotropy: nu
 
 function show(material: THREE.MeshStandardMaterial, maps: Maps): void {
   material.map = maps.albedo;
-  material.normalMap = maps.normal;
   material.emissiveMap = maps.glow;
 }
 
 async function loadStyle(style: FacadeStyle): Promise<void> {
   try {
-    const [albedo, normal, glow] = await Promise.all([
-      loadUprightBitmap(facadeMapUrl(style, "albedo")),
-      loadUprightBitmap(facadeMapUrl(style, "normal")),
-      loadUprightBitmap(facadeMapUrl(style, "glow")),
-    ]);
-    const maps = { albedo: mapOf(albedo, THREE.SRGBColorSpace, 8), normal: mapOf(normal, THREE.NoColorSpace, 4), glow: mapOf(glow, THREE.NoColorSpace, 4) };
+    const [albedo, glow] = await Promise.all([loadUprightBitmap(facadeMapUrl(style, "albedo")), loadUprightBitmap(facadeMapUrl(style, "glow"))]);
+    const maps = { albedo: mapOf(albedo, THREE.SRGBColorSpace, 8), glow: mapOf(glow, THREE.NoColorSpace, 4) };
     loaded[style] = maps;
     for (const material of live) if (material.userData.facadeStyle === style) show(material, maps);
   } catch (err) {
@@ -145,7 +141,7 @@ async function loadStyle(style: FacadeStyle): Promise<void> {
   }
 }
 
-/** A style's maps are fetched once per page, when the first material of the style is made (a course fetches the styles it draws); where there is no bitmap decoder (node) the stand-ins stay. */
+/** A style's colour and glow maps are fetched once per page, when the first material of the style is made (a course fetches the styles it draws); where there is no bitmap decoder (node) the stand-ins stay. */
 function requestStyle(style: FacadeStyle): void {
   if (requested.has(style) || typeof createImageBitmap !== "function") return;
   requested.add(style);
@@ -156,24 +152,23 @@ const ROOF_ALBEDO = { value: new THREE.Texture() };
 const ROOF_NORMAL = { value: new THREE.Texture() };
 const ROOF_URL = `${MAPS_URL}roofs-`;
 
-/** The atlas's two maps, fetched once per page by the first facade material; until they arrive a roof is a plain brown with a flat normal (and in node it stays so). */
+/** The roof atlas's colour map is fetched once per page by the first facade material (a plain brown until it arrives, and in node); its normal map follows the relief tier. */
 const requestRoofs = once((): void => {
   ROOF_ALBEDO.value = dataTexture(110, 92, 78, THREE.SRGBColorSpace);
-  ROOF_NORMAL.value = dataTexture(128, 128, 255, THREE.NoColorSpace);
+  followRelief({ url: `${ROOF_URL}normal.webp`, repeat: 1 }, (map) => {
+    ROOF_NORMAL.value = map;
+  });
   if (typeof createImageBitmap !== "function") return;
   void (async () => {
     try {
-      const [albedo, normal] = await Promise.all([loadUprightBitmap(`${ROOF_URL}albedo.webp`), loadUprightBitmap(`${ROOF_URL}normal.webp`)]);
-      for (const [uniform, bitmap, colorSpace] of [[ROOF_ALBEDO, albedo, THREE.SRGBColorSpace], [ROOF_NORMAL, normal, THREE.NoColorSpace]] as const) {
-        const tex = new THREE.Texture(bitmap);
-        tex.flipY = false;
-        tex.colorSpace = colorSpace;
-        tex.anisotropy = 4;
-        tex.needsUpdate = true;
-        uniform.value = tex;
-      }
+      const tex = new THREE.Texture(await loadUprightBitmap(`${ROOF_URL}albedo.webp`));
+      tex.flipY = false;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      tex.needsUpdate = true;
+      ROOF_ALBEDO.value = tex;
     } catch (err) {
-      console.error("Crush Stream's roof maps did not load", err);
+      console.error("Crush Stream's roof colour map did not load", err);
     }
   })();
 });
@@ -239,6 +234,7 @@ function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness, emissive: WINDOW_LIGHT, emissiveIntensity: WINDOW_LIGHT_INTENSITY });
   material.userData.facadeStyle = style;
   show(material, loaded[style] ?? standIn());
+  reliefMaterial(material, { url: facadeMapUrl(style, "normal"), repeat: 1, clampV: true });
   const edges = roofEdges(style);
   material.onBeforeCompile = (shader) => {
     shader.uniforms.facadeGlow = FACADE_GLOW;

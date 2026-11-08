@@ -15,6 +15,8 @@ export type PrefabMaterials = {
   plain: THREE.Material;
   /** Vertex colours × concrete texture (barrier blocks, walls). */
   concrete: THREE.Material;
+  /** A sidewalk slab: the concrete's colour with the paving's normal map. */
+  paving: THREE.Material;
   /** The building styles (`present/facades.ts`), each one shared material. */
   facades: Readonly<Record<FacadeStyle, THREE.Material>>;
   billboard: THREE.Material;

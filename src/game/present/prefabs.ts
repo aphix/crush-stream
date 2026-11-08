@@ -9,6 +9,7 @@ import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monument
 import { frontBumper, lyingWheel } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
 import { PREFAB } from "../world/constants.ts";
+import { dressPaving } from "./ground-relief.ts";
 import { FACADE, type FacadeStyle, homeStyle, makeFacadeMaterials, ROOF_TILE_M, ROOFLINE } from "./facades.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
@@ -255,12 +256,20 @@ export const raceTextures = once((): RaceTextures => {
   };
 });
 
+/** The sidewalk's material: the concrete's colour, the paving's normal. */
+function paved(tex: RaceTextures): THREE.MeshStandardMaterial {
+  const material = tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }), MAT.CONCRETE);
+  dressPaving(material);
+  return material;
+}
+
 export function makePrefabMaterials(tex: RaceTextures): PrefabMaterials {
   const water = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.2 });
   applyWaterLook(water);
   return {
     plain: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05 }), MAT.GENERIC),
     concrete: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }), MAT.CONCRETE),
+    paving: paved(tex),
     facades: makeFacadeMaterials(),
     billboard: tagMaterial(new THREE.MeshStandardMaterial({ map: tex.billboard, emissiveMap: tex.billboard, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.6 }), MAT.BILLBOARD_FACE),
     water: tagMaterial(water, MAT.WATER),
@@ -738,7 +747,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, style: FacadeSt
     case PREFAB.junkCrane:
       return one(junkCrane(), mats.plain);
     case PREFAB.sidewalk:
-      return [{ geometry: painted(sidewalk()), material: mats.concrete, shared: false, shadow: false }];
+      return [{ geometry: painted(sidewalk()), material: mats.paving, shared: false, shadow: false }];
     case PREFAB.bush:
       return bushParts(mats);
     case PREFAB.flowers:

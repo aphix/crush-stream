@@ -6,14 +6,15 @@ import { writeFileSync } from "node:fs";
 const EDGE = 40;
 const MARGIN = 24;
 
-/** `rgb` (floats 0..255, 3 per texel) of `size` x `size` after `recolor(r, g, b, lightness)` -> [r, g, b] on every source texel: the picture's middle, its edges cross-faded with what lies beyond them so it tiles. */
-export async function seamlessTile(file, size, recolor = (r, g, b) => [r, g, b]) {
+/** `rgb` (floats 0..255, 3 per texel) of `size` x `size` after `recolor(r, g, b, lightness)` -> [r, g, b] on every source texel: the picture's middle (or `crop`, [x, y, w, h] in source texels), its edges cross-faded with what lies beyond them so it tiles. */
+export async function seamlessTile(file, size, recolor = (r, g, b) => [r, g, b], crop = null) {
   const image = await loadImage(file);
   const wide = size + 2 * MARGIN;
   const canvas = createCanvas(wide, wide);
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(image, EDGE, EDGE, image.width - 2 * EDGE, image.height - 2 * EDGE, 0, 0, wide, wide);
+  const [cx, cy, cw, ch] = crop ?? [EDGE, EDGE, image.width - 2 * EDGE, image.height - 2 * EDGE];
+  ctx.drawImage(image, cx, cy, cw, ch, 0, 0, wide, wide);
   const px = ctx.getImageData(0, 0, wide, wide).data;
   const ext = new Float32Array(wide * wide * 3);
   for (let i = 0; i < wide * wide; i++) {
@@ -58,10 +59,37 @@ export function seam(rgb, size) {
   return sum / (size * 6);
 }
 
-/** A tangent-space normal map (floats 0..255) of a wrapping `size` x `size` tile from its lightness; `relief` how steeply lightness tilts it. +v is up, the picture's down is -v. */
-export function normalFromLightness(rgb, size, relief) {
-  const light = new Float32Array(size * size);
-  for (let i = 0; i < size * size; i++) light[i] = (0.299 * rgb[i * 3] + 0.587 * rgb[i * 3 + 1] + 0.114 * rgb[i * 3 + 2]) / 255;
+/** A wrapping separable box blur of a size x size plane, `r` texels each way. */
+function blurWrap(plane, size, r) {
+  const n = 2 * r + 1;
+  const rows = new Float32Array(size * size);
+  const out = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let sum = 0;
+      for (let k = -r; k <= r; k++) sum += plane[y * size + ((x + k + size) % size)];
+      rows[y * size + x] = sum / n;
+    }
+  }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let sum = 0;
+      for (let k = -r; k <= r; k++) sum += rows[((y + k + size) % size) * size + x];
+      out[y * size + x] = sum / n;
+    }
+  }
+  return out;
+}
+
+/**
+ * A tangent-space normal map (floats 0..255) of a wrapping `size` x `size` tile from its lightness; `relief` how steeply lightness tilts it, and
+ * `highPass` (texels, 0: none) the radius whose blur is taken out first, so the picture's large shading does not tilt the surface. +v is up, the picture's down is -v.
+ */
+export function normalFromLightness(rgb, size, relief, highPass = 0) {
+  const raw = new Float32Array(size * size);
+  for (let i = 0; i < size * size; i++) raw[i] = (0.299 * rgb[i * 3] + 0.587 * rgb[i * 3 + 1] + 0.114 * rgb[i * 3 + 2]) / 255;
+  const low = highPass > 0 ? blurWrap(raw, size, highPass) : null;
+  const light = low ? raw.map((v, i) => v - low[i]) : raw;
   const at = (x, y) => light[((y + size) % size) * size + ((x + size) % size)];
   const normal = new Float32Array(size * size * 3);
   for (let y = 0; y < size; y++) {
