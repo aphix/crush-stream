@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TRACK_ID } from "./constants.ts";
 import { PREFABS } from "./catalog.ts";
-import { placeProps, type Placed } from "./placements.ts";
+import { placeCourse, type Placed } from "./placements.ts";
 import { Track, blankProjection, dishRise, projectPath, type TrackPath } from "./track.ts";
 import { parseTrack } from "./track-schema.ts";
 import { TRACKS } from "./tracks/index.ts";
@@ -96,7 +96,8 @@ function intrusions(track: Track, reaches: readonly number[], p: Placed, index: 
 function courseIntrusions(track: Track): string[] {
   const reaches = track.paths().map(reachOf);
   const bad: string[] = [];
-  for (const [i, p] of placeProps(track).entries()) {
+  const course = placeCourse(track);
+  for (const [i, p] of [...course.placed, ...course.drawn].entries()) {
     if (PREFABS[p.prefab].body === "knock") continue;
     for (const hit of intrusions(track, reaches, p, i)) {
       const name = hit.path === 0 ? "loop" : `path ${hit.path}`;
