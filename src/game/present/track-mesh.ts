@@ -219,7 +219,7 @@ const MOTTLE_LO = 0.9;
 const MOTTLE_SPAN = 0.2;
 /**
  * A road strip of the same surface as the terrain round it (dirt on dirt) is the same colour and texture as the ground, so 720 m of Razor Shelf's
- * dirt cut read as open desert: it is drawn a half span under the darkest mottle, darker than any patch of the ground beside it.
+ * dirt cut read as open desert: it is drawn a half span under the darkest mottle. The wide-scale tint (ribbons take none) can still darken the ground to the strip's level in its darkest cells.
  */
 export const ROAD_ON_TERRAIN_SHADE = MOTTLE_LO - MOTTLE_SPAN / 2;
 
