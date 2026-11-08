@@ -11,6 +11,7 @@ import { hash01 } from "./track-mesh.ts";
  * The building styles: one shared material each (albedo, normal and window-glow maps from `public/facades/`, packed by
  * `scripts/pack-facades.mjs`), so a draw cell's buildings cost one draw per style on it. A style's tile is one bay across and the whole
  * face tall; `building()` in prefabs.ts lays it `bays` times across a face.
+ * shortcut: a draw per style per cell; a texture array with a per-instance style index makes it one, when the bench says draws limit.
  */
 
 /** Weathered pastel stucco (pink, mint, ochre, sky, cream, terracotta, lilac): the Havana blocks and walls. */
@@ -164,6 +165,7 @@ export function makeFacadeMaterials(): Record<FacadeStyle, THREE.MeshStandardMat
       shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>${WINDOW_VERTEX}`).replace("#include <begin_vertex>", `#include <begin_vertex>${WINDOW_SEED}`);
       shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>${WINDOW_FRAGMENT}`).replace("#include <emissivemap_fragment>", WINDOW_EMISSIVE);
     };
+    material.customProgramCacheKey = () => "facade";
     live.add(material);
     material.addEventListener("dispose", () => live.delete(material));
     materials[style] = tagMaterial(material, MAT.CONCRETE);

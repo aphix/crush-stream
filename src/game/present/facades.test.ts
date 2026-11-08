@@ -5,11 +5,16 @@ import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { TIME_OF_DAY } from "../match/types.ts";
-import { PREFAB } from "../world/constants.ts";
+import { PREFAB, TRACK_ID } from "../world/constants.ts";
+import { placeProps } from "../world/placements.ts";
+import { parseTrack } from "../world/track-schema.ts";
+import { Track } from "../world/track.ts";
+import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
-import { FACADE, FACADE_GLOW, facadeMapUrl, facadeStyle, type FacadeStyle, makeFacadeMaterials, ROOFLINE } from "./facades.ts";
+import { FACADE, FACADE_GLOW, facadeMapUrl, facadeStyle, type FacadeStyle, makeFacadeMaterials } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
+import { TrackArt } from "./track-art.ts";
 
 const STYLES = Object.keys(FACADE) as FacadeStyle[];
 
@@ -67,7 +72,7 @@ describe("given a building built in each facade style", () => {
         }
       }
       expect(facadeU, "tiles across a face").toBeCloseTo(FACADE[style].bays, 5);
-      expect(facadeV, "tile height over the roofline").toBeCloseTo(13.5 / ROOFLINE, 5);
+      expect(facadeV, "the tile's top meets the roof slab").toBeCloseTo(1, 5);
       expect(part!.material, "its style's shared material").toBe(materials.facades[style]);
     });
   }
@@ -103,6 +108,22 @@ describe("given the facade materials", () => {
       }
     }
     expect(bytes, `${bytes} B`).toBeLessThan(640_000);
+  });
+});
+
+/** Meshes the Mall's 971 buildings draw (27 draw cells, 4 styles): measured 96; a style the city mix adds takes them past it. */
+const MALL_BUILDING_MESHES = 100;
+
+describe("given the National Mall's art", () => {
+  it("when its buildings are drawn, then they make at most one mesh per style and draw cell, within the Mall's building budget", () => {
+    stubBrowser();
+    const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
+    const art = new TrackArt(track, placeProps(track), new WorldStage(new THREE.Scene()));
+    const meshes: THREE.Object3D[] = [];
+    art.group.traverse((o) => {
+      if (o.name === `prop:${PREFAB.building}`) meshes.push(o);
+    });
+    expect(meshes.length, `${meshes.length} building meshes`).toBeLessThanOrEqual(MALL_BUILDING_MESHES);
   });
 });
 
