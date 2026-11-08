@@ -402,7 +402,7 @@ export abstract class EngineCore {
 
   /** Empties every system a run leaves behind (`clearTransients`). Add a new debris-like system here and to `Transients`. */
   protected clearLocal(): void {
-    clearTransients({ cars: this.cars, poles: this.poles, debris: this.debris, sparks: this.sparks, fountains: this.fountains, glassDots: this.glassDots, smoke: this.smoke, ragdolls: this.ragdolls, rangeRun: this.rangeRun, cine: this.cine });
+    clearTransients({ cars: this.cars, poles: this.poles, debris: this.debris, sparks: this.sparks, fountains: this.fountains, glassDots: this.glassDots, smoke: this.smoke, ragdolls: this.ragdolls, rangeRun: this.rangeRun, foliage: this.race.foliage, cine: this.cine });
     this.onFoot?.reset();
   }
 

@@ -14,6 +14,10 @@ import { RangeRun } from "../scenes/range.ts";
 import type { LampPole } from "../scenes/engine-props.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { clearTransients, type Transients } from "./scene-clear.ts";
+import { FoliagePoof, type FoliageCar } from "../present/foliage-poof.ts";
+import { PropTumble } from "../present/prop-tumble.ts";
+import { PREFAB } from "../world/constants.ts";
+import type { Placed } from "../world/placements.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 // The fx pools paint their dot sprites on a canvas; the headless run lends them one that takes any draw (the cars want none).
@@ -21,6 +25,19 @@ const ctx = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}
 const CANVAS = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
 
 const V = new THREE.Vector3(0, 1, 0);
+const MATS = (() => {
+  const plain = new THREE.MeshBasicMaterial();
+  return { plain, concrete: plain, building: plain, billboard: plain, water: plain };
+})();
+const BUSH: Placed = { prefab: PREFAB.bush, x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 };
+const BED: Placed = { prefab: PREFAB.flowers, x: 3, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 };
+/** A car driving north across both, a metre and a half to the side of each one's middle. */
+const passingCar: FoliageCar = {
+  group: new THREE.Group(),
+  velocity: new THREE.Vector3(0, 0, 10),
+  frame: { half: { x: 1 }, footHalfL: 2.4 },
+};
+passingCar.group.position.set(1.5, 0, 0);
 const UP = new THREE.Vector3(0, 1, 0);
 const HUB = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
 
@@ -39,6 +56,7 @@ type Rig = {
   smoke: TireSmokeSystem;
   ragdolls: RagdollSystem;
   rangeRun: RangeRun;
+  foliage: FoliagePoof;
   tyreSmoke: TireSmokeSystem;
 };
 
@@ -70,8 +88,11 @@ function rig(): Rig {
   const marks = new SkidMarks(MAX_CARS);
   // `Cinematics` needs a WebGL renderer; its reset is these two clears.
   const cine = { reset: () => (marks.clear(), tyreSmoke.reset()) };
-  const t: Transients = { cars, poles, debris, sparks, fountains, glassDots, smoke, ragdolls, rangeRun, cine };
-  return { scene, base: scene.children.length, t, marks, cars, poles, debris, sparks, fountains, glassDots, smoke, ragdolls, rangeRun, tyreSmoke };
+  const placed: Placed[] = [BUSH, BED];
+  const tumble = new PropTumble(placed, MATS, () => {});
+  const foliage = new FoliagePoof(placed, tumble, MATS.plain);
+  const t: Transients = { cars, poles, debris, sparks, fountains, glassDots, smoke, ragdolls, rangeRun, foliage, cine };
+  return { scene, base: scene.children.length, t, marks, cars, poles, debris, sparks, fountains, glassDots, smoke, ragdolls, rangeRun, foliage, tyreSmoke };
 }
 
 const alive = (life: Float32Array): number => life.filter((l) => l > 0).length;
@@ -160,6 +181,15 @@ const ROWS: Record<keyof Transients, Row> = {
       r.tyreSmoke.plume(V, UP, 20);
     },
     left: (r) => (r.marks["needsClear"] ? 0 : 1) + alive(r.tyreSmoke["life"]),
+  },
+  // A car through a bush and a flower bed: both puffed away, their leaves in the air.
+  foliage: {
+    label: "puffed-away bushes and the leaves in the air",
+    seed: (r) => r.foliage.frame([passingCar], 1 / FRAME_HZ),
+    left: (r) => {
+      const { hidden, leaves } = r.foliage.snapshot();
+      return hidden + leaves;
+    },
   },
 };
 

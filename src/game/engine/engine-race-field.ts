@@ -205,6 +205,8 @@ export abstract class RaceField {
   private readonly tracks = new Map<string, Track>();
   protected track: Track | null = null;
   protected art: TrackArt | null = null;
+  /** The course's puffed-away bushes back and its leaves gone (`clearTransients`); none before a course stands. */
+  readonly foliage = { reset: (): void => this.art?.foliage.reset() };
   private trackDebug = false;
   /** The Konami code has been typed on this course (`RaceDirector.revealSecret`): its secret sky is out, its VIP walks, its guards stand down. */
   protected secretOut = false;
@@ -480,6 +482,11 @@ export abstract class RaceField {
   /** Every knocked prop back on its spot for the rules (a race start, each highlight clip; the drawn ones go back with the scene's `clear`). */
   resetProps(): void {
     this.knocked.fill(0);
+  }
+
+  /** Every car through a bush or flower bed of the course puffs it; its leaves in the air age by `dt` s (`density`: the fx density). */
+  foliageFrame(cars: readonly DeformableCar[], dt: number, density: number): void {
+    this.art?.foliage.frame(cars, dt, density);
   }
 
   /**

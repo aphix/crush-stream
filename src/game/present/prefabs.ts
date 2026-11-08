@@ -7,6 +7,7 @@ import { CARHENGE, CHEVRON, FENCE, JUNK_CRANE, MARBLE, OBELISK, obeliskHalf, STA
 import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, squareFrustum } from "./prefab-pieces.ts";
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
 import { frontBumper, lyingWheel } from "./prefabs-car.ts";
+import { bushParts, flowerParts } from "./prefabs-foliage.ts";
 import { PREFAB } from "../world/constants.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
@@ -674,18 +675,6 @@ function sidewalk(): Piece[] {
   return [[box(2.4, 0.06, 3.2, 0, 0.03, 0), C.concrete, MAT.CONCRETE]];
 }
 
-/** A bush: a squashed green blob (a stand-in until the sprite bush replaces it). */
-function bush(): Piece[] {
-  return [[new THREE.IcosahedronGeometry(0.7, 0).scale(1, 0.75, 1).translate(0, 0.4, 0), C.leaf[1]!, MAT.FOLIAGE]];
-}
-
-/** A flower bed: a low green mound with a row of coloured blooms (a stand-in until the sprite bed replaces it). */
-function flowerBed(): Piece[] {
-  const blooms = [0xd94a5a, 0xf2c400, 0xe8e6e0, 0xb066c8];
-  const out: Piece[] = [[new THREE.IcosahedronGeometry(0.6, 0).scale(1.7, 0.4, 0.9).translate(0, 0.1, 0), C.leaf[0]!, MAT.FOLIAGE]];
-  for (let i = 0; i < 8; i++) out.push([box(0.14, 0.14, 0.14, -0.9 + i * 0.26, 0.33, ((i * 5) % 3 - 1) * 0.28), blooms[i % blooms.length]!, MAT.FOLIAGE]);
-  return out;
-}
 /** Prefab `id` at scale 1 as drawable parts (one for most; the lamp adds its head and night pool). */
 export function prefabParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
   const one = (pieces: Piece[], material: THREE.Material): PrefabPart[] => [{ geometry: painted(pieces), material, shared: false }];
@@ -769,8 +758,8 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
     case PREFAB.sidewalk:
       return [{ geometry: painted(sidewalk()), material: mats.concrete, shared: false, shadow: false }];
     case PREFAB.bush:
-      return [{ geometry: painted(bush()), material: mats.plain, shared: false, shadow: false }];
+      return bushParts(mats);
     case PREFAB.flowers:
-      return [{ geometry: painted(flowerBed()), material: mats.plain, shared: false, shadow: false }];
+      return flowerParts(mats);
   }
 }

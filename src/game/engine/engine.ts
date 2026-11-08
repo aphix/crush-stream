@@ -643,6 +643,7 @@ export class CrashEngine extends EngineGarage {
       this.sparks.update(fxDt);
       this.glassDots.update(fxDt);
       armTops(null);
+      if (this.race.active) this.race.foliageFrame(cars, fxDt, this.fxDensity);
       this.fountains.setLook(this.cine.tier, this.fxDensity);
       this.fountains.update(fxDt);
       this.smoke.update(fxDt, this.camera);

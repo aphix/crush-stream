@@ -20,6 +20,8 @@ export interface Transients {
   readonly smoke: Clearable;
   readonly ragdolls: Clearable;
   readonly rangeRun: Clearable;
+  /** The course's puffed-away bushes and the leaves in the air (`RaceField.foliage`). */
+  readonly foliage: Clearable;
   readonly cine: Clearable;
 }
 
@@ -34,5 +36,6 @@ export function clearTransients(t: Transients): void {
   t.smoke.reset();
   t.ragdolls.reset();
   t.rangeRun.reset();
+  t.foliage.reset();
   t.cine.reset();
 }

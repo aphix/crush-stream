@@ -28,7 +28,7 @@ export class PropTumble {
   private readonly cell: Int32Array;
   /** Per placement: instance slot in its cell's meshes. */
   private readonly slot: Int32Array;
-  /** Per placement: drawn off its spot since the last `reset`. */
+  /** Per placement: 0 on its spot, 1 drawn off it (flown: its cell's bounds grew), 2 hidden where it stands (`hide`) since the last `reset`. */
   private readonly moved: Uint8Array;
   private readonly m4 = new THREE.Matrix4();
   private readonly sc = new THREE.Vector3();
@@ -86,13 +86,21 @@ export class PropTumble {
     for (let k = 0; k < meshes.length; k++) meshes[k]!.boundingSphere!.union(this.sphere.copy(meshes[k]!.geometry.boundingSphere!).applyMatrix4(m));
   }
 
+  /** Draw placement `index` no more (scaled to nothing where it stands: its cell's bounds hold), until the next `reset`. */
+  hide(index: number): void {
+    const p = this.placed[index]!;
+    if (!this.moved[index]) this.moved[index] = 2;
+    this.write(index, this.m4.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0, 0, 0)));
+  }
+
   /** Every prop drawn back in place (a restart), each cell's bounds its standing props' again. */
   reset(): void {
     for (let i = 0; i < this.placed.length; i++) {
-      if (!this.moved[i]) continue;
+      const was = this.moved[i]!;
+      if (!was) continue;
       this.moved[i] = 0;
       const meshes = this.write(i, restMatrix(this.placed[i]!, this.m4));
-      for (let k = 0; k < meshes.length; k++) meshes[k]!.computeBoundingSphere();
+      if (was === 1) for (let k = 0; k < meshes.length; k++) meshes[k]!.computeBoundingSphere();
     }
   }
 

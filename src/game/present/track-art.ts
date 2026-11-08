@@ -20,6 +20,8 @@ import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
 import { depthProxy, groundMaterial, groundMesh, levelOrder } from "../scenes/ground-stack.ts";
 import { addDecks, addTunnels, addWalls, pillarPieces } from "./track-structures.ts";
 import { PropTumble } from "./prop-tumble.ts";
+import { FoliagePoof } from "./foliage-poof.ts";
+import { foliageTint } from "./prefabs-foliage.ts";
 import { backdropMesh, disposeBackdrop, type Backdrop } from "./sky-backdrop.ts";
 import { nukeFlash } from "./people.ts";
 import { GroundsArt } from "./grounds-art.ts";
@@ -57,6 +59,8 @@ export class TrackArt {
   readonly sceneryPlaced: readonly Placed[];
   /** The scenery biome at a world point (`biomeLookup`): the building facade styles pick by it. */
   readonly biome: (x: number, z: number) => BiomeId;
+  /** The bushes and flower beds a car drives through, puffed away (`FoliagePoof`). */
+  readonly foliage: FoliagePoof;
   private readonly m4 = new THREE.Matrix4();
   private readonly col = new THREE.Color();
   private readonly stage: Pick<WorldStage, "look">;
@@ -191,6 +195,8 @@ export class TrackArt {
     this.props = this.tumble(placed, mats);
     this.sceneryPlaced = drawn;
     this.scenery = this.tumble(drawn, mats);
+    this.foliage = new FoliagePoof(drawn, this.scenery, mats.plain);
+    this.add(this.foliage.leaves, { kind: "prop", prefab: PREFAB.bush }, false);
     this.biome = biomeLookup(track);
   }
 
@@ -328,7 +334,7 @@ export class TrackArt {
       out.setHex(WRECK_PAINTS[Math.floor(h * WRECK_PAINTS.length)]!);
       return true;
     }
-    return false;
+    return foliageTint(id, i, out);
   }
 }
 

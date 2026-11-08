@@ -210,6 +210,8 @@ always:      net.frame → PoseBlend.present (bodies, loose parts, attached part
 `Witness` (`present/witness.ts`) is the one "could the camera see this?" test behind every cosmetic skip (skins, sparks,
 debris, smoke). It never gates the sim, audio or marks.
 
+**Ground cover** (`present/foliage-poof.ts`, `present/prefabs-foliage.ts`). Bushes and flower beds (`PREFAB.bush`, `PREFAB.flowers`, `body: "none"`, no shadow) are drawn props that vanish in a puff of leaves when a car drives through them: `RaceDirector.foliageFrame` (every fx frame of a race, after the cars are posed, so a clip's replay runs it too) hands the live cars to `FoliagePoof.frame`, which looks each car up (above 2 m/s, on its deck level) in a hashed 4 m grid of the plants and hides every plant its footprint is on (`PropTumble.hide`: scaled to nothing where it stands) and throws that plant's leaves in its tint (`foliageTint`, a pure function of the placement index, as `TrackArt.tint` draws it). Present only: nothing reads it back, so no `REPLAY_VERSION`; which plants go is a function of the cars' poses alone, so a replay's cars puff the same ones. `clearTransients` (`Transients.foliage`) puts every plant back and empties the leaves at a scene clear, a race start and each clip's start. A frame allocates nothing and tests only the plants in the grid cells under the cars' footprints.
+
 **Audio** (`present/game-audio.ts`, one `AudioContext`). `GameAudio.frame` is the only per-frame seam; it runs after the lamps, when
 the camera (which carries the three `AudioListener`) has its matrix for the frame, and only with audio on. Engine voices are a
 fixed pool built at unlock (6 on a desktop, 3 on a phone, `?voices=N` overrides): `VoicePool` seats the priority car (the reel's
