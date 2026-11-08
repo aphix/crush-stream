@@ -10,12 +10,14 @@ import { placeProps, propColliders } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
+import fourCount from "../world/tracks/four-count.json" with { type: "json" };
 import { ChaseCamera, type CarPicker } from "./engine-camera.ts";
 import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
 import { ChaseSolids } from "./chase-solids.ts";
 import { EyeClear } from "./eye-clear.ts";
 import { carsBlock, CINE, inside, occluder, raceSight, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 
 const DT = 1 / FRAME_HZ;
 /** A car's length: an eye pulled in closer than this swings round instead. */
@@ -232,22 +234,55 @@ describe("given the chase camera on a car driven through the derby bowl", () => 
   });
 });
 
+/** The car's speed (m/s) in the rows that drive away from a solid. */
+const AWAY_SPEED = 8;
+
+/** True when `eye` is inside a solid of the course, or a solid stands on its line to `subject` (all but the last 1.5 m of it, the car's own), checked every 0.25 m with no clearance. */
+function courseBlocked(sight: Sight, eye: THREE.Vector3, subject: THREE.Vector3): boolean {
+  if (solid(sight, eye.x, eye.y, eye.z, 0)) return true;
+  const length = eye.distanceTo(subject);
+  for (let d = 0.25; d < length - 1.5; d += 0.25) {
+    const share = d / length;
+    if (solid(sight, eye.x + (subject.x - eye.x) * share, eye.y + (subject.y - eye.y) * share, eye.z + (subject.z - eye.z) * share, 0)) return true;
+  }
+  return false;
+}
+
+/**
+ * The frames (after the first 30) in which the chase eye of a car driven away from `prop` is blocked by a solid of `sight`
+ * (`courseBlocked`): the car starts 2 m outside the prop on the side `turn` (radians round the prop) and drives straight away
+ * for 2 s after a 1 s hold; `keep` false runs the bare rig. Null where the spot has no floor.
+ */
+function framesBlockedAway(sight: Sight, prop: Occluder, turn: number, keep: boolean): number | null {
+  const reach = (prop.circle ? prop.hx : Math.hypot(prop.hx, prop.hz)) + 2;
+  const x = prop.x + Math.cos(turn) * reach;
+  const z = prop.z + Math.sin(turn) * reach;
+  const ground = sight.ground.heightAt(x, z, prop.y1 + 2);
+  if (ground === NO_FLOOR) return null;
+  const yaw = Math.atan2(Math.cos(turn), Math.sin(turn));
+  const car = newCar(x, z, yaw);
+  car.group.position.y = ground;
+  const { camera, view } = chaseRig(x, z, yaw, ground);
+  const subject = new THREE.Vector3();
+  let blocked = 0;
+  for (let f = 0; f < 2 / DT; f++) {
+    const t = Math.max(0, f * DT - 1);
+    car.group.position.set(x + Math.sin(yaw) * AWAY_SPEED * t, ground, z + Math.cos(yaw) * AWAY_SPEED * t);
+    subject.set(car.group.position.x, car.group.position.y + PLATFORM_CAMERA.third.aimUp, car.group.position.z);
+    // The drive ends where the car itself would be inside a wall or a prop: no camera can see a car through its own wall.
+    if (solid(sight, subject.x, subject.y, subject.z, CINE.pad)) break;
+    car.velocity.set(f * DT >= 1 ? Math.sin(yaw) * AWAY_SPEED : 0, 0, f * DT >= 1 ? Math.cos(yaw) * AWAY_SPEED : 0);
+    view.frameDrive(car, keep ? sight : null, DT, false);
+    if (f >= 30 && courseBlocked(sight, camera.position, subject)) blocked++;
+  }
+  return blocked;
+}
+
 describe("given the chase camera on a car 2 m outside a tall prop or building of each course, driving away from it", () => {
   /** Props at least this tall (m) are tried, `PER_COURSE` of them spread over the course's list, from two sides each. */
   const TALL = 3;
   const PER_COURSE = 12;
   const TURNS = [0, Math.PI];
-  const SPEED = 8;
-  /** True when `eye` is inside a solid of the course, or a solid stands on its line to `subject` (all but the last 1.5 m of it, the car's own), checked every 0.25 m with no clearance. */
-  const courseBlocked = (sight: Sight, eye: THREE.Vector3, subject: THREE.Vector3): boolean => {
-    if (solid(sight, eye.x, eye.y, eye.z, 0)) return true;
-    const length = eye.distanceTo(subject);
-    for (let d = 0.25; d < length - 1.5; d += 0.25) {
-      const share = d / length;
-      if (solid(sight, eye.x + (subject.x - eye.x) * share, eye.y + (subject.y - eye.y) * share, eye.z + (subject.z - eye.z) * share, 0)) return true;
-    }
-    return false;
-  };
 
   it("when it sets off from each, then the eye is never inside a solid and never has one between it and the car, and without the keeper it is", () => {
     let bareTotal = 0;
@@ -269,33 +304,11 @@ describe("given the chase camera on a car 2 m outside a tall prop or building of
       try {
         for (const [i, prop] of tall.entries()) {
           for (const turn of TURNS) {
-            const reach = (prop.circle ? prop.hx : Math.hypot(prop.hx, prop.hz)) + 2;
-            const x = prop.x + Math.cos(turn) * reach;
-            const z = prop.z + Math.sin(turn) * reach;
-            const ground = sight.ground.heightAt(x, z, prop.y1 + 2);
-            if (ground === NO_FLOOR) continue;
-            const yaw = Math.atan2(Math.cos(turn), Math.sin(turn));
-            const outcome = [true, false].map((keep) => {
-              const car = newCar(x, z, yaw);
-              car.group.position.y = ground;
-              const { camera, view } = chaseRig(x, z, yaw, ground);
-              const subject = new THREE.Vector3();
-              let blocked = 0;
-              for (let f = 0; f < 2 / DT; f++) {
-                const t = Math.max(0, f * DT - 1);
-                car.group.position.set(x + Math.sin(yaw) * SPEED * t, ground, z + Math.cos(yaw) * SPEED * t);
-                subject.set(car.group.position.x, car.group.position.y + PLATFORM_CAMERA.third.aimUp, car.group.position.z);
-                // The drive ends where the car itself would be inside a wall or a prop: no camera can see a car through its own wall.
-                if (solid(sight, subject.x, subject.y, subject.z, CINE.pad)) break;
-                car.velocity.set(f * DT >= 1 ? Math.sin(yaw) * SPEED : 0, 0, f * DT >= 1 ? Math.cos(yaw) * SPEED : 0);
-                view.frameDrive(car, keep ? sight : null, DT, false);
-                if (f >= 30 && courseBlocked(sight, camera.position, subject)) blocked++;
-              }
-              return blocked;
-            });
+            const kept = framesBlockedAway(sight, prop, turn, true);
+            if (kept === null) continue;
             tried++;
-            expect(outcome[0], `${track.id} prop ${i}, turn ${turn.toFixed(2)}: frames with the eye in a solid or the car hidden, kept`).toBe(0);
-            bareTotal += outcome[1]!;
+            expect(kept, `${track.id} prop ${i}, turn ${turn.toFixed(2)}: frames with the eye in a solid or the car hidden, kept`).toBe(0);
+            bareTotal += framesBlockedAway(sight, prop, turn, false)!;
           }
         }
       } finally {
@@ -305,6 +318,39 @@ describe("given the chase camera on a car 2 m outside a tall prop or building of
     expect(tried, `placements tried over every course: ${tried}`).toBeGreaterThan(50);
     expect(bareTotal, `frames with the eye in a solid or the car hidden, bare, over every course: ${bareTotal} (the placements must put solids in the way)`).toBeGreaterThan(100);
   });
+});
+
+/** The two hand-placed four-count lamps (placeProps indices 21 and 41, both of its `along` row) at the end of a wall band. */
+const FOUR_COUNT_LAMPS = [
+  { x: 835.1, z: 301.07 },
+  { x: 805.18, z: 303.34 },
+];
+
+describe("given the chase camera on a car 2 m outside each of four-count's two lamps at the end of a wall, driving away from it", () => {
+  // Open, the owner decides: the cause is `solid()` (`spectate-cam.ts`), which every camera's sight reads, so a fix moves chase, crash-cam and spectate alike.
+  todoRow(
+    "when it sets off from each, then the eye is never inside a solid and never has one between it and the car",
+    "a sliver of `solid()`'s wall band (one segment's wall flag, `over < 3`) falls between the keeper's 1 m samples, so the kept eye ends inside it for 1-2 frames",
+    () => {
+      const track = new Track({ ...parseTrack(fourCount), scenery: { biome: "none" } });
+      const sight = raceSight(track, placeProps(track));
+      const red: string[] = [];
+      setGround(track.ground());
+      try {
+        for (const lamp of FOUR_COUNT_LAMPS) {
+          const prop = sight.occ.find((o) => Math.hypot(o.x - lamp.x, o.z - lamp.z) < 0.05);
+          expect(prop, `the four-count lamp at ${lamp.x}, ${lamp.z} is among the sight's solids`).toBeDefined();
+          for (const turn of [0, Math.PI]) {
+            const frames = framesBlockedAway(sight, prop!, turn, true);
+            if (frames) red.push(`lamp ${lamp.x}, ${lamp.z} turn ${turn.toFixed(2)}: ${frames}`);
+          }
+        }
+      } finally {
+        setGround(null);
+      }
+      expect(red.length, `frames with the eye in a solid or the car hidden, kept: ${red.join("; ")}`).toBe(0);
+    },
+  );
 });
 
 /** The race the overtake rows run: the car at `RACE_SPEED` m/s down a flat straight, the rival closing from `RIVAL_BACK` m behind at `CLOSING` m/s. */
