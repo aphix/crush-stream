@@ -7,6 +7,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { blankPoint, Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
+import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { PropTumble } from "./prop-tumble.ts";
 import { TrackArt } from "./track-art.ts";
 
@@ -74,7 +75,7 @@ describe("given the National Mall's art and the race's chase eye and sun on the 
 
 describe("given a knockable cone standing behind the camera, its draw cell out of view", () => {
   const plain = new THREE.MeshBasicMaterial();
-  const mats = { plain, concrete: plain, building: plain, billboard: plain, water: plain };
+  const mats = plainMaterials(plain);
   const cone: Placed = { prefab: PREFAB.cone, x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 };
   const eye = new THREE.PerspectiveCamera(LENS.fov, LENS.aspect, LENS.near, 900);
   eye.position.set(0, 2, 100);

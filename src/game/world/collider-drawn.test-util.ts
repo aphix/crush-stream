@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { plainMaterials } from "../present/prefab-materials.test-util.ts";
 import { prefabParts } from "../present/prefabs.ts";
 import type { PrefabId } from "./catalog.ts";
 import { propColliders, type PropCollider } from "./placements.ts";
@@ -170,7 +171,7 @@ type Worst = { d: number; at: string };
 export function prefabGap(id: PrefabId, scale: readonly [number, number, number] = [1, 1, 1]): { pieces: number; inward: Worst; outward: Worst } {
   const pieces = propColliders([{ prefab: id, x: 0, y: 0, z: 0, yaw: 0, sx: scale[0], sy: scale[1], sz: scale[2] }]);
   const plain = new THREE.MeshBasicMaterial();
-  const mats = { plain, concrete: plain, building: plain, billboard: plain, water: plain };
+  const mats = plainMaterials(plain);
   // The art's own geometry: every part but a flat decal on the ground (a lamp's light pool).
   const parts = prefabParts(id, mats).map((p) => scaled(triangles(p.geometry), scale));
   const solid = parts.filter((t) => {

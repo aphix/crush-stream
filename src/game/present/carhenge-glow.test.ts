@@ -2,10 +2,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { PREFAB } from "../world/constants.ts";
+import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
 
 const plain = new THREE.MeshBasicMaterial();
-const mats = { plain, concrete: plain, building: plain, billboard: plain, water: plain };
+const mats = plainMaterials(plain);
 
 describe("given the Carhenge prefab (its campfire in the middle of the ring)", () => {
   beforeAll(stubBrowser);

@@ -7,6 +7,7 @@ import { detCos, detSin } from "../kernel/physics-core.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { MATERIAL_ATTRIBUTE } from "../vehicle/material-class.ts";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
+import type { FacadeStyle } from "./facades.ts";
 
 /** Materials the prefabs draw with (shared with the track art where it says so). */
 export type PrefabMaterials = {
@@ -14,7 +15,8 @@ export type PrefabMaterials = {
   plain: THREE.Material;
   /** Vertex colours × concrete texture (barrier blocks, walls). */
   concrete: THREE.Material;
-  building: THREE.Material;
+  /** The building styles (`present/facades.ts`), each one shared material. */
+  facades: Readonly<Record<FacadeStyle, THREE.Material>>;
   billboard: THREE.Material;
   /** Still water: vertex colours, near-mirror gloss (the pools). */
   water: THREE.Material;

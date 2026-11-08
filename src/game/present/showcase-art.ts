@@ -260,7 +260,8 @@ export class ShowcaseArt {
         o.dispose();
       }
     });
-    for (const material of Object.values(this.galleryMaterials)) material.dispose();
+    const { facades, ...single } = this.galleryMaterials;
+    for (const material of [...Object.values(single), ...Object.values(facades)]) material.dispose();
     for (const light of this.postLights) light.dispose();
   }
 }

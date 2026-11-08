@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { triangles } from "../world/collider-drawn.test-util.ts";
 import { BASIN, FOUNTAIN, POOL, type PrefabId } from "../world/catalog.ts";
 import { CAPITOL_POOL, capitolPool } from "../world/landmarks.ts";
+import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
 
 /**
@@ -51,7 +52,7 @@ function inFootprint(pond: Pond, x: number, z: number): boolean {
 /** The heights (m) of every upward-facing horizontal triangle of a pond's prefab with a point inside the footprint: the faces an overhead camera sees. */
 function horizontalFacesInside(pond: Pond): number[] {
   const plain = new THREE.MeshBasicMaterial();
-  const mats = { plain, concrete: plain, building: plain, billboard: plain, water: plain };
+  const mats = plainMaterials(plain);
   const heights: number[] = [];
   for (const part of prefabParts(pond.id, mats)) {
     const t = triangles(part.geometry);

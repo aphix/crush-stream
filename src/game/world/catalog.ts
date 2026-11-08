@@ -91,9 +91,6 @@ export const PREFAB_IDS = [
 ] as const;
 export type PrefabId = (typeof PREFAB_IDS)[number];
 
-/** The window texture's bay in canvas pixels (y down): `present/prefabs.ts` paints these rects and a sound or shader test reads the same ones. */
-export const WINDOW_BAY = { px: 256, glass: [38, 48, 218, 190], frame: 6, mullion: 6, sillOut: 10, sillGap: 6, sillHeight: 10 } as const;
-
 /** A star plan's valley radius over its tip radius: the one number `present/prefabs.ts`'s `star` draws and `starPlan` bounds. */
 export const STAR_INNER = 0.45;
 /** Slices per metre of tip radius `starPlan` cuts each arm's tip triangle into: each stands off the drawn taper by half its width step (0.077 m worst measured). */

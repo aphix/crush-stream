@@ -6,6 +6,7 @@ import { tagSurface } from "./ultra/surface-tag.ts";
 import { MATERIAL_WET, tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { LAMP_POOL } from "./constants.ts";
+import { FACADE_GLOW } from "./facades.ts";
 import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, type SkyDetail, type SkyMode } from "./sky-dome.ts";
 import { SANDBOX_SKY } from "./sky-procedural.ts";
 import type { FxTier } from "./engine-post.ts";
@@ -177,8 +178,8 @@ export function makePoolTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-/** The day's lights: colour and intensity of the hemisphere, the sun and the fill, plus the sky, the studio env, the lamps and the smoke. */
-type Day = { sky: number; hemi: readonly [number, number]; sun: readonly [number, number]; fill: readonly [number, number]; env: number; lamp: number; smoke: number };
+/** The day's lights: colour and intensity of the hemisphere, the sun and the fill, plus the sky, the studio env, the lamps, the windows' glow (0 to 1) and the smoke. */
+type Day = { sky: number; hemi: readonly [number, number]; sun: readonly [number, number]; fill: readonly [number, number]; env: number; lamp: number; glow: number; smoke: number };
 const DAY: Day = {
   sky: 0x12141a,
   hemi: [0xb7c4d8, 1.35],
@@ -186,6 +187,7 @@ const DAY: Day = {
   fill: [0xc9d3e0, 0.9],
   env: 0.72,
   lamp: 1.4,
+  glow: 0,
   smoke: 1,
 };
 
@@ -199,6 +201,7 @@ const NIGHT = {
   fill: [0x7a8aa8, 0.06],
   env: 0.1,
   lamp: 9,
+  glow: 1,
   smoke: 0.4,
 } as const;
 
@@ -214,6 +217,7 @@ const SUNSET: Day = {
   fill: [0x7f8ccc, 0.7],
   env: 0.55,
   lamp: 4,
+  glow: 0.5,
   smoke: 0.85,
 };
 
@@ -515,6 +519,7 @@ export class WorldStage {
     this.fill.intensity = THREE.MathUtils.lerp(day.fill[1], NIGHT.fill[1], k);
     if (this.scene.environment) this.scene.environmentIntensity = this.envIntensity;
     lampHead.emissiveIntensity = this.night ? NIGHT.lamp : day.lamp;
+    FACADE_GLOW.value = this.night ? NIGHT.glow : day.glow;
     lampPool.visible = this.night;
     // Wet is a satin sheen on the dry albedo, not the old mirror whose glare band lit the ground 35 % over dry: the classed shaders read this one uniform.
     MATERIAL_WET.value = this.wet ? 1 : 0;

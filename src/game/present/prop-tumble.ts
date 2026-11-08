@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { PrefabId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
 import type { PrefabMaterials, PrefabPart } from "./prefab-pieces.ts";
+import type { FacadeStyle } from "./facades.ts";
 import { prefabParts } from "./prefabs.ts";
 import { drawCell } from "./track-mesh.ts";
 
@@ -35,19 +36,20 @@ export class PropTumble {
   private readonly sphere = new THREE.Sphere();
 
   /**
-   * Each placement standing in its slot of its prefab's meshes (`prefabParts` in `mats`), coloured where `tint` says; `add` takes
+   * Each placement standing in its slot of its prefab's meshes (`prefabParts` in `mats`, in the style `styleOf` names: a building's), coloured where `tint` says; `add` takes
    * each mesh as it is made (`shared`: its part's material when that is the scene's, else null).
    */
   constructor(
     placed: readonly Placed[],
     mats: PrefabMaterials,
     add: (mesh: THREE.InstancedMesh, id: PrefabId, shared: THREE.Material | null, cast: boolean) => void,
-    tint: (id: PrefabId, i: number, out: THREE.Color) => boolean = () => false,
+    tint: (id: PrefabId, i: number, out: THREE.Color, style: FacadeStyle | null) => boolean = () => false,
+    styleOf: (p: Placed) => FacadeStyle | null = () => null,
   ) {
     this.placed = placed;
     const byCell = new Map<string, number[]>();
     for (const [idx, pl] of placed.entries()) {
-      const key = `${pl.prefab}@${drawCell(pl.x, pl.z)}`;
+      const key = `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}`;
       let list = byCell.get(key);
       if (!list) byCell.set(key, (list = []));
       list.push(idx);
@@ -56,18 +58,23 @@ export class PropTumble {
     this.slot = new Int32Array(placed.length);
     this.moved = new Uint8Array(placed.length);
     const col = new THREE.Color();
-    const parts: Partial<Record<PrefabId, PrefabPart[]>> = {};
+    const parts = new Map<string, PrefabPart[]>();
     for (const list of byCell.values()) {
-      const id = placed[list[0]!]!.prefab;
+      const first = placed[list[0]!]!;
+      const id = first.prefab;
+      const style = styleOf(first);
+      const partsKey = `${id}:${style ?? ""}`;
+      let built = parts.get(partsKey);
+      if (!built) parts.set(partsKey, (built = prefabParts(id, mats, style)));
       const group = this.meshes.length;
       this.meshes.push(
-        (parts[id] ??= prefabParts(id, mats)).map((part, pi) => {
+        built.map((part, pi) => {
           const mesh = new THREE.InstancedMesh(part.geometry, part.material, list.length);
           for (const [s, idx] of list.entries()) {
             this.cell[idx] = group;
             this.slot[idx] = s;
             mesh.setMatrixAt(s, restMatrix(placed[idx]!, this.m4));
-            if (pi === 0 && tint(id, idx, col)) mesh.setColorAt(s, col);
+            if (pi === 0 && tint(id, idx, col, style)) mesh.setColorAt(s, col);
           }
           mesh.computeBoundingSphere();
           add(mesh, id, part.shared ? part.material : null, part.shadow !== false);

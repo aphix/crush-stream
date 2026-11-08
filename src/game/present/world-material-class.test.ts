@@ -4,7 +4,6 @@ import { DERBY_PROP, DerbyGround } from "../scenes/derby-ground.ts";
 import { GLASS_MESH_NAME, makeDerbyArena } from "../scenes/derby-arena.ts";
 import { MATERIAL_ATTRIBUTE } from "../vehicle/material-class.ts";
 import { MAT, MATERIALS, type MaterialId } from "../kernel/material-ids.ts";
-import { WINDOW_BAY } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
@@ -81,24 +80,12 @@ function idsOf(geometry: THREE.BufferGeometry): Set<MaterialId> {
 /** The shading families a geometry's vertices resolve to. */
 const classesOf = (geometry: THREE.BufferGeometry): Set<number> => new Set([...idsOf(geometry)].map(familyOf));
 
-/** Which part of a window bay the point (u, v) of the window texture falls on (v up, so canvas y = (1 - v) * px). */
-function bayPart(u: number, v: number): "glass" | "mullion" | "frame" | "sill" | "wall" {
-  const { px, glass: [x0, y0, x1, y1], frame, mullion, sillOut, sillGap, sillHeight } = WINDOW_BAY;
-  const x = u * px;
-  const y = (1 - v) * px;
-  const within = (lo: number, hi: number, at: number): boolean => at >= lo && at < hi;
-  if (within(x0, x1, x) && within(y0, y1, y)) return Math.abs(x - (x0 + x1) / 2) < mullion / 2 ? "mullion" : "glass";
-  if (within(x0 - frame, x1 + frame, x) && within(y0 - frame, y1 + frame, y)) return "frame";
-  if (within(x0 - sillOut, x1 + sillOut, x) && within(y1 + sillGap, y1 + sillGap + sillHeight, y)) return "sill";
-  return "wall";
-}
-
 /** The first row past the 14 shading families: every id on a per-vertex material must be at least this. */
 const FIRST_FINE_ID = 14;
 
 describe("given the prefabs drawn on the shared per-vertex materials", () => {
   let materials: PrefabMaterials;
-  const onPerVertexMaterial = (part: PrefabPart): boolean => ([materials.plain, materials.building, materials.billboard] as readonly THREE.Material[]).includes(part.material);
+  const onPerVertexMaterial = (part: PrefabPart): boolean => ([materials.plain, ...Object.values(materials.facades), materials.billboard] as readonly THREE.Material[]).includes(part.material);
 
   beforeAll(() => {
     stubBrowser();
@@ -127,16 +114,10 @@ describe("given the prefabs drawn on the shared per-vertex materials", () => {
 
   it("when the shared materials are listed, then each carries its registry id", () => {
     expect(materials.concrete.userData.materialClass, "concrete").toBe(MAT.CONCRETE);
-    expect(materials.building.userData.materialClass, "building").toBe(MAT.CONCRETE);
+    for (const [style, material] of Object.entries(materials.facades)) expect(material.userData.materialClass, `${style} facade`).toBe(MAT.CONCRETE);
     expect(materials.water.userData.materialClass, "water").toBe(MAT.WATER);
     expect(materials.billboard.userData.materialClass, "billboard").toBe(MAT.BILLBOARD_FACE);
-    for (const [name, material] of Object.entries(materials)) expect(material.userData.materialClass, `${name} tagged`).not.toBe(undefined);
-  });
-
-  it("when a point of the window texture is looked up, then the bay's rectangles name it", () => {
-    expect(bayPart(0.3, 0.6)).toBe("glass");
-    expect(bayPart(0.5, 0.6)).toBe("mullion");
-    expect(bayPart(0.5, 0.215)).toBe("sill");
-    expect(bayPart(0.02, 0.95)).toBe("wall");
+    const { facades, ...single } = materials;
+    for (const [name, material] of Object.entries({ ...single, ...facades })) expect(material.userData.materialClass, `${name} tagged`).not.toBe(undefined);
   });
 });

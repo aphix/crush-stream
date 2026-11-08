@@ -3,12 +3,13 @@ import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { makeAsphalt, makeJerseyBarrier, makeLamp } from "./engine-world.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
-import { CARHENGE, CHEVRON, FENCE, JUNK_CRANE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, WINDOW_BAY, WRECK, type PrefabId } from "../world/catalog.ts";
+import { CARHENGE, CHEVRON, FENCE, JUNK_CRANE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, WRECK, type PrefabId } from "../world/catalog.ts";
 import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, squareFrustum } from "./prefab-pieces.ts";
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
 import { frontBumper, lyingWheel } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
 import { PREFAB } from "../world/constants.ts";
+import { FACADE, type FacadeStyle, homeStyle, makeFacadeMaterials, ROOFLINE } from "./facades.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { applyWaterLook } from "./water-look.ts";
@@ -60,8 +61,7 @@ const BILL_W = 512;
 const BILL_AD = 256;
 const BILL_STRIP = 32;
 
-/** The window texture's frame and mullion grey, and the billboard's paper white (its ground and its STREAM / RACEWAY lettering). */
-const WINDOW_FRAME = "#5c5a55";
+/** The billboard's paper white (its ground and its STREAM / RACEWAY lettering). */
 const BILLBOARD_PAPER = "#f2efe6";
 
 /**
@@ -81,8 +81,6 @@ type RaceTextures = {
   mud: THREE.CanvasTexture;
   mudGain: THREE.Color;
   mudGloss: THREE.CanvasTexture;
-  /** One window bay (2.95 m × 3.5 m) of a building facade; its bottom-left corner is plain wall. */
-  windows: THREE.CanvasTexture;
   billboard: THREE.CanvasTexture;
 };
 
@@ -214,38 +212,6 @@ function makeConcrete(): HTMLCanvasElement {
   return c;
 }
 
-function makeWindows(): HTMLCanvasElement {
-  const { px: S, glass: [x0, y0, x1, y1], frame, mullion, sillOut, sillGap, sillHeight } = WINDOW_BAY;
-  const [c, ctx] = canvas(S, S);
-  ctx.fillStyle = "#dcd7cd";
-  ctx.fillRect(0, 0, S, S);
-  for (let i = 0; i < 1500; i++) {
-    ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.06})`;
-    ctx.fillRect(Math.random() * S, Math.random() * S, 2, 2);
-  }
-  // Window: canvas y runs down, so the sill (bottom of the bay) is at high y.
-  const glass = ctx.createLinearGradient(0, y0, 0, y1);
-  glass.addColorStop(0, "#3e5266");
-  glass.addColorStop(1, "#1f2933");
-  ctx.fillStyle = WINDOW_FRAME;
-  ctx.fillRect(x0 - frame, y0 - frame, x1 - x0 + 2 * frame, y1 - y0 + 2 * frame);
-  ctx.fillStyle = glass;
-  ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-  ctx.fillStyle = "rgba(255,255,255,0.14)";
-  ctx.beginPath();
-  ctx.moveTo(x0 + 30, y0);
-  ctx.lineTo(x0 + 80, y0);
-  ctx.lineTo(x0 + 20, y1);
-  ctx.lineTo(x0, y1);
-  ctx.lineTo(x0, y0 + 60);
-  ctx.fill();
-  ctx.fillStyle = WINDOW_FRAME;
-  ctx.fillRect((x0 + x1) / 2 - mullion / 2, y0, mullion, y1 - y0);
-  ctx.fillStyle = "#b9b3a8";
-  ctx.fillRect(x0 - sillOut, y1 + sillGap, x1 - x0 + 2 * sillOut, sillHeight);
-  return c;
-}
-
 function makeBillboard(): HTMLCanvasElement {
   const [c, ctx] = canvas(BILL_W, BILL_AD + BILL_STRIP);
   ctx.fillStyle = BILLBOARD_PAPER;
@@ -285,7 +251,6 @@ export const raceTextures = once((): RaceTextures => {
     mud: texture(mud, true),
     mudGain: gainOf(mud),
     mudGloss,
-    windows: texture(makeWindows(), true),
     billboard: texture(makeBillboard(), false),
   };
 });
@@ -296,7 +261,7 @@ export function makePrefabMaterials(tex: RaceTextures): PrefabMaterials {
   return {
     plain: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05 }), MAT.GENERIC),
     concrete: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }), MAT.CONCRETE),
-    building: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.windows, roughness: 0.8, metalness: 0.05 }), MAT.CONCRETE),
+    facades: makeFacadeMaterials(),
     billboard: tagMaterial(new THREE.MeshStandardMaterial({ map: tex.billboard, emissiveMap: tex.billboard, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.6 }), MAT.BILLBOARD_FACE),
     water: tagMaterial(water, MAT.WATER),
   };
@@ -372,24 +337,24 @@ function tree(): Piece[] {
   ];
 }
 
-/** Facade plane of width w (m) from y −1.5 to 13.5, uv in window bays (2.95 m × 3.5 m, floors from y 0). */
-function facade(w: number): THREE.BufferGeometry {
+/** Facade plane of width w (m) from y −1.5 to the roofline: `bays` tiles across, a tile as tall as the roofline (`ROOFLINE`), so its top meets the roof slab. */
+function facade(w: number, bays: number): THREE.BufferGeometry {
   const h = 15;
   const g = new THREE.PlaneGeometry(w, h).translate(0, h / 2 - 1.5, 0);
   const uv = g.getAttribute("uv") as THREE.BufferAttribute;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / 2.95, (uv.getY(i) * h - 1.5) / 3.5);
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * bays, (uv.getY(i) * h - 1.5) / ROOFLINE);
   return g;
 }
 
-/** The four facades and the roof slab of a city block; `wall` is the facade's material id. */
-function building(wall: MaterialId): Piece[] {
+/** The four facades and the roof slab of a city block in `style`; `wall` is the facade's material id. */
+function building(wall: MaterialId, style: FacadeStyle): Piece[] {
   const half = 5.9;
   const out: Piece[] = [];
   for (let i = 0; i < 4; i++) {
-    out.push([facade(half * 2).translate(0, 0, half).rotateY((i * Math.PI) / 2), 0xffffff, wall]);
+    out.push([facade(half * 2, FACADE[style].bays).translate(0, 0, half).rotateY((i * Math.PI) / 2), 0xffffff, wall]);
   }
-  // Roof slab and parapet sample the plain wall at the tile's bottom-left corner.
-  out.push([uvAt(box(12, 0.5, 12, 0, 13.75, 0), 0.05, 0.05), C.roof, MAT.BUILDING_ROOF]);
+  const [u, v] = FACADE[style].plain;
+  out.push([uvAt(box(12, 0.5, 12, 0, 13.75, 0), u, v), C.roof, MAT.BUILDING_ROOF]);
   return out;
 }
 
@@ -675,8 +640,8 @@ function sidewalk(): Piece[] {
   return [[box(2.4, 0.06, 3.2, 0, 0.03, 0), C.concrete, MAT.CONCRETE]];
 }
 
-/** Prefab `id` at scale 1 as drawable parts (one for most; the lamp adds its head and night pool). */
-export function prefabParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
+/** Prefab `id` at scale 1 as drawable parts (one for most; the lamp adds its head and night pool); a building in `style`, else its prefab's own. */
+export function prefabParts(id: PrefabId, mats: PrefabMaterials, style: FacadeStyle | null = null): PrefabPart[] {
   const one = (pieces: Piece[], material: THREE.Material): PrefabPart[] => [{ geometry: painted(pieces), material, shared: false }];
   switch (id) {
     case PREFAB.cone:
@@ -700,9 +665,10 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
     case PREFAB.tree:
       return one(tree(), mats.plain);
     case PREFAB.building:
-      return one(building(MAT.BUILDING_WALL), mats.building);
-    case PREFAB.stucco:
-      return one(building(MAT.STUCCO_WALL), mats.building);
+    case PREFAB.stucco: {
+      const s = style ?? homeStyle(id)!;
+      return one(building(id === PREFAB.stucco ? MAT.STUCCO_WALL : MAT.BUILDING_WALL, s), mats.facades[s]);
+    }
     case PREFAB.monument:
       return one(monument(), mats.plain);
     case PREFAB.palm:

@@ -15,7 +15,7 @@ function compiled(material: THREE.Material): THREE.WebGLProgramParametersWithUni
 describe("given the prefab materials", () => {
   // The materials only point at the textures; the canvas-made ones need a DOM, so plain textures stand in.
   const blank = new THREE.Texture();
-  const mats = makePrefabMaterials({ concrete: blank, concreteGain: new THREE.Color(1, 1, 1), windows: blank, billboard: blank } as Parameters<typeof makePrefabMaterials>[0]);
+  const mats = makePrefabMaterials({ concrete: blank, concreteGain: new THREE.Color(1, 1, 1), billboard: blank } as Parameters<typeof makePrefabMaterials>[0]);
 
   it("when water and the plain stone are compiled, then only the water carries the glint path and its clock", () => {
     const water = compiled(mats.water);

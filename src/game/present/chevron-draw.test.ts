@@ -6,12 +6,13 @@ import { placeProps } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
+import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
 import { PropTumble } from "./prop-tumble.ts";
 import { drawCell } from "./track-mesh.ts";
 
 const plain = new THREE.MeshBasicMaterial();
-const mats = { plain, concrete: plain, building: plain, billboard: plain, water: plain };
+const mats = plainMaterials(plain);
 
 /** Linear red above this reads as the yellow of the chevron: the board's black and the post's grey are under 0.05. */
 const YELLOW_RED = 0.5;

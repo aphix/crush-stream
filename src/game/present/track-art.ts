@@ -10,6 +10,7 @@ import { tagLike, tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { biomeLookup } from "../world/scenery.ts";
+import { facadeStyle, facadeTint, type FacadeStyle, PASTELS } from "./facades.ts";
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
 import {
@@ -36,8 +37,6 @@ import { TrackDebug } from "./track-debug.ts";
  */
 
 type RaceMeshKind = "road" | "runoff" | "terrain" | "wall" | "marking" | "kerb" | "deck" | "pillar" | "tunnel" | "prop";
-/** Weathered pastel stucco (pink, mint, ochre, sky, cream, terracotta, lilac): the Havana blocks and walls. */
-const PASTELS = [0xf3c6c0, 0xbfe0d0, 0xf2d9a0, 0xb8d4ea, 0xf0e2cb, 0xe8b9a0, 0xd9c8e6];
 /** Junked shells' faded paint and rust (rust, oxide red, faded blue, cream, olive): the wreck's per-instance tint over its light grey. */
 const WRECK_PAINTS = [0x8a4a2a, 0x8f2f25, 0x46637f, 0xc9b994, 0x4f6141];
 
@@ -192,12 +191,12 @@ export class TrackArt {
     this.setLights(0);
 
     // Props: one InstancedMesh per prefab part (the course's lamp heads and pools are the scene's materials).
+    this.biome = biomeLookup(track);
     this.props = this.tumble(placed, mats);
     this.sceneryPlaced = drawn;
     this.scenery = this.tumble(drawn, mats);
     this.foliage = new FoliagePoof(drawn, this.scenery, mats.plain);
     this.add(this.foliage.leaves, { kind: "prop", prefab: PREFAB.bush }, false);
-    this.biome = biomeLookup(track);
   }
 
   private tumble(placed: readonly Placed[], mats: PrefabMaterials): PropTumble {
@@ -209,7 +208,8 @@ export class TrackArt {
         // Lamp heads and light pools neither cast shadows nor need to; nor do the parts that say so (ground cover, paving).
         this.add(mesh, { kind: "prop", prefab: id }, !shared && cast);
       },
-      (id, i, out) => this.tint(id, i, out),
+      (id, i, out, style) => this.tint(id, i, out, style),
+      (p) => facadeStyle(p.prefab, p.x, p.z, this.biome(p.x, p.z)),
     );
   }
 
@@ -309,7 +309,7 @@ export class TrackArt {
   }
 
   /** Per-instance tint for natural / building variety (deterministic by placement index); false = none. */
-  private tint(id: PrefabId, i: number, out: THREE.Color): boolean {
+  private tint(id: PrefabId, i: number, out: THREE.Color, style: FacadeStyle | null): boolean {
     const h = hash01(i, 11);
     const h2 = hash01(i, 12);
     if (id === PREFAB.tree || id === PREFAB.palm) {
@@ -322,11 +322,11 @@ export class TrackArt {
       out.setRGB(k, k, k, THREE.LinearSRGBColorSpace);
       return true;
     }
-    if (id === PREFAB.building) {
-      out.setHex([0xffffff, 0xf2e3c6, 0xd5dde8, 0xeccbb6, 0xdcd8c4][Math.floor(h * 5)]!);
+    if (style) {
+      facadeTint(style, h, out);
       return true;
     }
-    if (id === PREFAB.stucco || id === PREFAB.wall) {
+    if (id === PREFAB.wall) {
       out.setHex(PASTELS[Math.floor(h * PASTELS.length)]!);
       return true;
     }
