@@ -15,7 +15,6 @@ const GLASS = 0x7fb4c9;
 const FOLIAGE = 0x2f6b3a;
 const SCREEN_LIGHT = 0x9fd0ff;
 const LAMP_LIGHT = 0xffe0a3;
-const NEON_BY_KIND: Record<InteriorKind, number> = { rowhome: 0xffd2a0, coffee: 0xffd2a0, bar: 0xff3d9a, office: 0xcfe8ff, store: 0xff4036 };
 /** A board or plate's thickness and the margin it keeps from an edge, and a larger inset (m). */
 const TRIM = 0.05;
 const INSET = 0.1;
@@ -173,10 +172,6 @@ const lamp: Maker = (piece, _look, _kind, out) => {
   out.glow.push([part(0.4, 0.16, 0.4, 0, 0.12, 0), LAMP_LIGHT]);
 };
 
-const neon: Maker = (piece, _look, kind, out) => {
-  out.glow.push([part(piece.depth, piece.height, piece.width, 0, 0, 0), NEON_BY_KIND[kind]]);
-};
-
 const MAKERS: Record<FurnishingKind, Maker> = {
   counter,
   backShelf,
@@ -204,7 +199,6 @@ const MAKERS: Record<FurnishingKind, Maker> = {
   deskChair,
   plant,
   lamp,
-  neon,
   screen,
 };
 

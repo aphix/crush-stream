@@ -233,7 +233,7 @@ export function layoutCoffee(d: Draft): void {
 /** The bar's booths stand this far across (m), left of the service stair's strip along the right wall. */
 const BAR_BOOTHS_ACROSS = 2.9;
 
-/** The bar down the left wall with its back shelves and eight stools, tables, two booths, a pool table, a jukebox, neon in the windows, and a restroom. */
+/** The bar down the left wall with its back shelves and eight stools, tables, two booths, a pool table, a jukebox and a restroom. */
 export function layoutBar(d: Draft): void {
   const left = -d.half;
   for (const deep of [4.5, 7, 9.5]) d.put("backShelf", 0, deep, left + 0.175, toRight, { width: 2.5 });
@@ -256,8 +256,6 @@ export function layoutBar(d: Draft): void {
   d.put("poolTable", 0, 9, -0.5, toStreet);
   d.lamp(0, 9, -0.5);
   d.put("jukebox", 0, d.back - FURNISHING.jukebox.depth / 2, 3.5, toStreet);
-  d.put("neon", 0, 0.45, -1, toStreet, { lift: 1.7 });
-  d.put("neon", 0, 0.45, 1, toStreet, { lift: 1.7 });
   d.crossWall(0, 11.6, left, -2.4, [doorway(-3.4)]);
   d.spineWall(0, -2.4, 11.6, d.back);
   d.put("toilet", 0, d.back - FURNISHING.toilet.depth / 2, -4.6, toStreet);
@@ -319,7 +317,6 @@ export function layoutStore(d: Draft): void {
   for (const across of [-3.5, -2.7, -1.9, -1.1]) d.put("fridge", 0, d.back - FURNISHING.fridge.depth / 2, across, toStreet);
   d.put("counter", 0, 12.4, 3.2, toStreet, { width: 3.6 });
   d.put("backShelf", 0, d.back - FURNISHING.backShelf.depth / 2, 3.2, toStreet, { width: 3.6 });
-  d.put("neon", 0, 0.45, -3.9, toStreet, { lift: 1.7 });
   for (const deep of [3, 7, 11]) d.lamp(0, deep, 0.5);
   layoutFlats(d, serviceStair(d, -1));
 }

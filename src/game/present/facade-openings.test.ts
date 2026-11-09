@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { MAT } from "../kernel/material-ids.ts";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import windowTable from "../world/openworld/facade-windows.json" with { type: "json" };
-import { BAY_WIDTH, BLOCK_HEIGHT, buildingHeight, DEFAULT_STOREYS, MAX_STOREYS, MIN_STOREYS, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, SHOPFRONT } from "../world/openworld/interior-kinds.ts";
+import { BAY_WIDTH, BLOCK_HEIGHT, buildingHeight, DEFAULT_STOREYS, DOOR_SURROUND, FACADE_ALPHA, MAX_STOREYS, MIN_STOREYS, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, SHOPFRONT } from "../world/openworld/interior-kinds.ts";
 import { drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
 import type { InteriorKind } from "../world/openworld/walk-graph.ts";
 import { PREFAB } from "../world/constants.ts";
@@ -11,8 +11,7 @@ import { FACADE_LAYERS, facadeSkin, LAYER, type FacadeStyle } from "./facades.ts
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 
-/** The styles whose ground band is cut open, with the interior behind them, and the world height of that band (m): a home's ground storey and a shop's. */
-/** A face's layer runs to the viewer's right, the building's local -z: the plan's `across` is measured the other way. */
+/** The styles whose doorways and windows are cut open, with the interior behind them, and the world height of the ground band (m): a home's ground storey and a shop's. A face's layer runs to the viewer's right, the building's local -z: the plan's `across` is measured the other way. */
 const OPEN_STYLES: Record<string, { kind: InteriorKind; floorY: number; ground: number }> = {
   rowbrick: { kind: "rowhome", floorY: ROWHOME_FLOOR_Y, ground: 3.6 },
   rowpainted: { kind: "rowhome", floorY: ROWHOME_FLOOR_Y, ground: 3.6 },
@@ -22,10 +21,12 @@ const OPEN_STYLES: Record<string, { kind: InteriorKind; floorY: number; ground: 
   cornerstore: { kind: "store", floorY: SHOP_FLOOR_Y, ground: 4 },
 };
 const LAYER_TEXELS = 256;
-/** An opening's texels read by the shader are those with alpha under this (of 255). */
-const CUT = 128;
+/** What the shader takes a texel's alpha to be: a doorway under the first, a window under the second, else wall (halfway between the classes the packer writes). */
+const DOORWAY_BELOW = (FACADE_ALPHA.doorway + FACADE_ALPHA.window) / 2;
+const WINDOW_BELOW = (FACADE_ALPHA.window + FACADE_ALPHA.wall) / 2;
+const classOf = (alpha: number): "doorway" | "window" | "wall" => (alpha < DOORWAY_BELOW ? "doorway" : alpha < WINDOW_BELOW ? "window" : "wall");
 
-async function alphaOf(style: string): Promise<{ at: (layer: number, u: number, v: number) => number; cut: (layer: number) => number }> {
+async function alphaOf(style: string): Promise<{ at: (layer: number, u: number, v: number) => "doorway" | "window" | "wall"; count: (layer: number, kind: "doorway" | "window" | "wall") => number }> {
   const image = await loadImage(new URL(`../../../public/facades/${style}-albedo.webp`, import.meta.url).pathname);
   const canvas = createCanvas(image.width, image.height);
   const ctx = canvas.getContext("2d");
@@ -33,10 +34,10 @@ async function alphaOf(style: string): Promise<{ at: (layer: number, u: number, 
   const data = ctx.getImageData(0, 0, image.width, image.height).data;
   const texel = (layer: number, x: number, y: number): number => data[((layer * LAYER_TEXELS + y) * LAYER_TEXELS + x) * 4 + 3]!;
   return {
-    at: (layer, u, v) => texel(layer, Math.floor(u * LAYER_TEXELS), Math.floor((1 - v) * LAYER_TEXELS)),
-    cut: (layer) => {
+    at: (layer, u, v) => classOf(texel(layer, Math.floor(u * LAYER_TEXELS), Math.floor((1 - v) * LAYER_TEXELS))),
+    count: (layer, kind) => {
       let count = 0;
-      for (let y = 0; y < LAYER_TEXELS; y++) for (let x = 0; x < LAYER_TEXELS; x++) if (texel(layer, x, y) < CUT) count++;
+      for (let y = 0; y < LAYER_TEXELS; y++) for (let x = 0; x < LAYER_TEXELS; x++) if (classOf(texel(layer, x, y)) === kind) count++;
       return count;
     },
   };
@@ -51,29 +52,34 @@ describe("given the facade styles of the places that have interiors", () => {
   });
 
   // mutation: sed -i 's/const x0 = Math.round(((half - (opening.centre + opening.width \/ 2))/const x0 = Math.round(((half - (opening.centre + opening.width \/ 2) + 1)/' scripts/pack-facades.mjs, then repack the styles (the cut lands a metre off the door)
-  it("when the packed albedo is read at each doorway of the plan, then it is cut open at body height, solid at the bay's edge, and the other layers have no opening", async () => {
+  it("when the packed albedo is read at each doorway of the plan, then it is a doorway at body height, wall at the bay's edge, and no doorway stands in the other layers", async () => {
     const half = drawnHalf(BAY_WIDTH);
     for (const [style, open] of Object.entries(OPEN_STYLES)) {
       const alpha = await alphaOf(style);
       for (const opening of SHOPFRONT[open.kind]) {
         const u = (half - opening.centre) / (2 * half);
         const v = (open.floorY + opening.top / 2) / open.ground;
-        expect(alpha.at(LAYER.ground, u, v), `${style} alpha in the doorway at u ${u.toFixed(2)}`).toBeLessThan(CUT);
+        expect(alpha.at(LAYER.ground, u, v), `${style} alpha in the doorway at u ${u.toFixed(2)}`).toBe("doorway");
       }
-      expect(alpha.at(LAYER.ground, 0.01, 0.5), `${style} alpha at the bay's edge`).toBeGreaterThanOrEqual(CUT);
-      expect(alpha.cut(LAYER.cornice) + alpha.cut(LAYER.floor), `${style} openings above the ground band`).toBe(0);
+      expect(alpha.at(LAYER.ground, 0.01, 0.5), `${style} alpha at the bay's edge`).toBe("wall");
+      expect(alpha.count(LAYER.cornice, "doorway") + alpha.count(LAYER.floor, "doorway") + alpha.count(LAYER.cornice, "window"), `${style} openings where there are none`).toBe(0);
     }
   });
 
-  // mutation: sed -i 's/store: \[doorway(0.9, 0.9, 2.1)\]/store: [doorway(-1.1, 4.5, 2.1)]/' src/game/world/openworld/interior-kinds.ts, then repack cornerstore (the cut takes the window beside the door)
-  it("when the packed albedo is read in each window the picture's table lists on the ground layer, then it is solid: a window is painted shut, only a doorway is cut", async () => {
+  // mutation: sed -i 's/      for (let y = Math.floor((1 - v1) \* LAYER); y < Math.ceil((1 - v0) \* LAYER); y++) for (let x = x0; x < x1; x++) strip\[layer \* LAYER \* LAYER + y \* LAYER + x\] = FACADE_ALPHA.window;//' scripts/pack-facades.mjs, then repack the styles (no window is marked)
+  it("when the packed albedo is read in each window the picture's table lists, then it is a window the shader cuts once its room is built: on every layer, but for a door's transom and its glass, which stay wall or doorway", async () => {
     const half = drawnHalf(BAY_WIDTH);
     for (const [style, open] of Object.entries(OPEN_STYLES)) {
       const alpha = await alphaOf(style);
-      const doors = SHOPFRONT[open.kind].map((opening) => ({ from: (half - opening.centre - opening.width / 2) / (2 * half), to: (half - opening.centre + opening.width / 2) / (2 * half) }));
-      for (const [u0, v0, u1, v1] of windowTable[style as keyof typeof windowTable].windows.ground) {
-        if (doors.some((door) => u1 > door.from && u0 < door.to)) continue;
-        expect(alpha.at(LAYER.ground, (u0 + u1) / 2, (v0 + v1) / 2), `${style} alpha in its window at u ${u0.toFixed(2)}`).toBeGreaterThanOrEqual(CUT);
+      const table = windowTable[style as keyof typeof windowTable].windows;
+      const doors = SHOPFRONT[open.kind].map((opening) => ({ from: (half - opening.centre - opening.width / 2) / (2 * half), to: (half - opening.centre + opening.width / 2) / (2 * half), head: open.floorY + opening.top }));
+      for (const [layer, rects] of [[LAYER.floor, table.floor], [LAYER.ground, table.ground]] as const) {
+        for (const [u0, v0, u1, v1] of rects) {
+          const transom = layer === LAYER.ground && doors.some((door) => u1 > door.from && u0 < door.to && v0 * open.ground < door.head + DOOR_SURROUND);
+          const found = alpha.at(layer, (u0 + u1) / 2, (v0 + v1) / 2);
+          if (transom) expect(["wall", "doorway"], `${style} layer ${layer} transom at u ${u0.toFixed(2)} is no window the shader cuts`).toContain(found);
+          else expect(found, `${style} layer ${layer} window at u ${u0.toFixed(2)}`).toBe("window");
+        }
       }
     }
   });

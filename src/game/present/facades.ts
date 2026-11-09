@@ -4,7 +4,7 @@ import { once } from "../kernel/scalar.ts";
 import { SURFACE_REGION_ATTRIBUTE, tagMaterial } from "../vehicle/material-class.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import { type BiomeId, PREFAB } from "../world/constants.ts";
-import { DEFAULT_STOREYS } from "../world/openworld/interior-kinds.ts";
+import { DEFAULT_STOREYS, FACADE_ALPHA } from "../world/openworld/interior-kinds.ts";
 import layerData from "./facade-layers.json" with { type: "json" };
 import { followRelief, reliefPossible } from "./surface-relief.ts";
 import { flatLayers, loadLayers } from "./texture-array.ts";
@@ -104,6 +104,26 @@ const NEON_INTENSITY = 2.2;
 const PARALLAX_METRES = 0.3;
 const PARALLAX_STEPS = 8;
 const PARALLAX_MIN_FACING = 0.25;
+
+/**
+ * The buildings whose rooms are built: the facade of one of these (a style with doorways and windows cut in it) shows its windows through to the room, the rest keep them painted. Up to
+ * `FACADE_OPEN_MAX` positions (x, z of the building's placement, the instance's own translation), the unused ones far away; one array every open style's material shares.
+ */
+export const FACADE_OPEN_MAX = 16;
+const OPEN_AT_NOWHERE = 1e6;
+/** An instance is one of them when its translation lies within this of a listed position (m). */
+const OPEN_AT_RADIUS = 0.05;
+export const FACADE_OPEN_AT = { value: new Float32Array(2 * FACADE_OPEN_MAX).fill(OPEN_AT_NOWHERE) };
+
+/** The windows of the buildings at `at` (x, z pairs; at most `FACADE_OPEN_MAX` of them) are seen through; every other building's stay painted. */
+export function setOpenFacades(at: ArrayLike<number>, count: number): void {
+  const slots = FACADE_OPEN_AT.value;
+  const used = Math.min(count, FACADE_OPEN_MAX);
+  for (let slot = 0; slot < FACADE_OPEN_MAX; slot++) {
+    slots[2 * slot] = slot < used ? at[2 * slot]! : OPEN_AT_NOWHERE;
+    slots[2 * slot + 1] = slot < used ? at[2 * slot + 1]! : OPEN_AT_NOWHERE;
+  }
+}
 
 /** How far the windows are lit, 0 (day) to 1 (night): one uniform every style's material shares, set by `WorldStage.apply` beside the lamp heads. */
 export const FACADE_GLOW = { value: 0 };
@@ -292,6 +312,15 @@ if (surfaceRegion.z > 0.5 && surfaceRegion.x < 2.5) {
   #endif
 }
 #endif`;
+/** An open style's instance is told whether its room is built: its translation against the listed positions. */
+const FACADE_OPEN_VERTEX = /* glsl */ `
+uniform vec2 facadeOpenAt[${FACADE_OPEN_MAX}];
+flat varying float vFacadeOpen;`;
+const FACADE_OPEN_SEED = /* glsl */ `
+vFacadeOpen = 0.0;
+#ifdef USE_INSTANCING
+for (int i = 0; i < ${FACADE_OPEN_MAX}; i++) vFacadeOpen = max(vFacadeOpen, 1.0 - step(${OPEN_AT_RADIUS}, distance(instanceMatrix[3].xz, facadeOpenAt[i])));
+#endif`;
 const FACADE_SEED = /* glsl */ `
 vFacadeRegion = ${SURFACE_REGION_ATTRIBUTE}.xy;${FACADE_LIFT}${FACADE_METRES}
 #ifdef USE_INSTANCING
@@ -338,7 +367,13 @@ function facadeRead(extras: Extras, strip: keyof typeof FACADE_READS): string {
 
 /** The uniforms of the strips beyond the base ones. */
 const facadeExtraUniforms = (extras: Extras): string =>
-  (extras.height ? "uniform highp sampler2DArray facadeHeightMap;\nuniform float facadeReliefDepth;\n" : "") + (extras.roughness ? "uniform highp sampler2DArray facadeRoughnessMap;\nuniform float facadeRoughnessMix;\n" : "");
+  (extras.height ? "uniform highp sampler2DArray facadeHeightMap;\nuniform float facadeReliefDepth;\n" : "") +
+  (extras.roughness ? "uniform highp sampler2DArray facadeRoughnessMap;\nuniform float facadeRoughnessMix;\n" : "") +
+  (extras.open ? "flat varying float vFacadeOpen;\n" : "");
+
+/** The alpha below which a texel is a doorway (always cut), and below which it is a window (cut while its room is built): halfway between the classes the packer writes. */
+const DOORWAY_BELOW = ((FACADE_ALPHA.doorway + FACADE_ALPHA.window) / 2 / 255).toFixed(3);
+const WINDOW_BELOW = ((FACADE_ALPHA.window + FACADE_ALPHA.wall) / 2 / 255).toFixed(3);
 
 /**
  * Parallax through the height strip (1 proud, 0 the deepest recess): the uv shift per metre of depth along the view ray is read from the surface's own screen derivatives (so it holds at any bay or storey
@@ -391,7 +426,7 @@ vec4 facadeNormalTexel() {
 #endif`;
 const facadeMap = (extras: Extras): string => /* glsl */ `
 #ifdef USE_MAP
-${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "albedo")};${extras.open ? `\nif (abs(vFacadeRegion.x - ${LAYER.ground}.0) < 0.5 && diffuseColor.a < 0.5) discard;` : ""}
+${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "albedo")};${extras.open ? `\nif (diffuseColor.a < ${DOORWAY_BELOW}) discard;\nif (diffuseColor.a < ${WINDOW_BELOW} && vFacadeOpen > 0.5) discard;` : ""}
 #endif`;
 /** The roughness strip's green sets the surface's roughness where its share is on (the relief tier), in place of the material's one number. */
 const facadeRoughness = (extras: Extras): string => `#include <roughnessmap_fragment>
@@ -440,7 +475,10 @@ function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: Styl
     shader.uniforms.facadeRoughnessMap = own.roughness;
     shader.uniforms.facadeRoughnessMix = own.roughnessMix;
   }
-  shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>${FACADE_VERTEX}`).replace("#include <begin_vertex>", `#include <begin_vertex>${FACADE_SEED}`);
+  if (extras.open) shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>", `#include <common>${FACADE_VERTEX}${extras.open ? FACADE_OPEN_VERTEX : ""}`)
+    .replace("#include <begin_vertex>", `#include <begin_vertex>${FACADE_SEED}${extras.open ? FACADE_OPEN_SEED : ""}`);
   shader.fragmentShader = shader.fragmentShader
     .replace("#include <common>", `#include <common>${FACADE_FRAGMENT}${facadeExtraUniforms(extras)}`)
     .replace("#include <normalmap_pars_fragment>", `#include <normalmap_pars_fragment>${facadeNormalPars(extras)}`)
