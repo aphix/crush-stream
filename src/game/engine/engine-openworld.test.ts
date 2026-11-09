@@ -15,7 +15,7 @@ import type { CrowdSight } from "../present/civilian-art.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
-import { idleCullPorts } from "./openworld-cull-ports.test-util.ts";
+import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 
 const map = buildFixtureMap();
 const SEED = 5;
@@ -45,6 +45,7 @@ class Harness {
   unhooked = 0;
   listener: WallListener | null = null;
   readonly director = new OpenWorldDirector({
+    ...idleOpenWorldPorts(),
     inOpenWorld: () => this.open,
     isClient: () => this.client,
     seed: () => this.seed,
@@ -65,14 +66,10 @@ class Harness {
       this.listener = listener;
       return () => void this.unhooked++;
     },
-    makeFacades: () => ({ dispose: () => {} }),
     makeArt: () => {
       this.artsMade++;
       return { update: (poses, eyeX, _eyeZ, sight, wallDt) => void this.updates.push({ poses, eyeX, sight, wallDt }), dispose: () => void this.artsDisposed++ };
     },
-    signsOn: () => false,
-    makeSigns: () => ({ update: () => {}, dispose: () => {} }),
-    cull: idleCullPorts(),
   });
 
   /** A frame: the sim steps `FRAME` s first (a host), then the frame. */

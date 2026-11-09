@@ -34,7 +34,7 @@ type PlaceSigns = {
 type FacadeArt = { dispose(): void };
 
 /** What the open world needs of the engine. */
-type OpenWorldPorts = {
+export type OpenWorldPorts = {
   /** The open world's course is up (solo, or in a room's lobby). */
   inOpenWorld(): boolean;
   /** A netplay client: it hears the host's crowd instead of making its own. */

@@ -19,7 +19,7 @@ import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { OFF_MENU } from "../world/tracks/index.ts";
 import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
-import { idleCullPorts } from "./openworld-cull-ports.test-util.ts";
+import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 
 const WALL_REACH = 8;
 const SEED = 0x1234;
@@ -52,21 +52,14 @@ function room() {
     const car = pooledCar(slot);
     car.group.position.set(5000, 0, 5000);
     const director = new OpenWorldDirector({
+      ...idleOpenWorldPorts(),
       inOpenWorld: () => true,
       isClient: () => client,
       seed: () => SEED,
       tier: () => POPULATION_TIER.phone,
       cars: () => [car],
-      foot: () => false,
       now: () => now / 1000,
-      eye: () => {},
       throwFigure: (strike) => void thrown.push(strike),
-      hookWallHits: () => () => {},
-      makeFacades: () => ({ dispose: () => {} }),
-      makeArt: () => ({ update: () => {}, dispose: () => {} }),
-      signsOn: () => false,
-      makeSigns: () => ({ update: () => {}, dispose: () => {} }),
-      cull: idleCullPorts(),
     });
     director.startOpenWorld(map);
     return { director, thrown, car };
