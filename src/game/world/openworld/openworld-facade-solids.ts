@@ -7,8 +7,13 @@ import { PLACE_KIND, type Place } from "./walk-graph.ts";
 /** A rowhome's frontage (m): the lot width the kit's cornice and bay stack are cut for. */
 export const LOT_WIDTH = 5.6;
 
-/** The drawn block's half side (m): a building prop's front face stands this share of the prefab's own side out from its centre, at any instance depth. */
+/** The drawn block's half side (m): a building prop's walls stand this share of the prefab's own side out from its centre (its roof slab reaches the whole side), at any instance size. */
 export const BLOCK_FACE_HALF = 5.9;
+
+/** How far from its centre (m) the drawn wall of a building prop stands whose footprint side is `extent`: short of the footprint's edge, under the roof slab's overhang. */
+export function drawnHalf(extent: number): number {
+  return (BLOCK_FACE_HALF / PREFABS[PREFAB.building].size[0]) * extent;
+}
 
 /** Storey heights (m) of a three-storey rowhome: ground storey, each floor above, the parapet over the top floor. */
 export const HOME_LEVELS = { storeys: 3, ground: 3.6, storey: 3.2, parapet: 0.9 } as const;
@@ -43,9 +48,10 @@ const DOOR_HALF_WIDTH = 0.5;
 const DOOR_HEIGHT = 2.1;
 export const DOOR = { across: DOOR_ACROSS, halfWidth: DOOR_HALF_WIDTH, sill: STOOP.sill, head: STOOP.sill + DOOR_HEIGHT } as const;
 
-/** The door's centre on a lot's front face, for the place's door point: the lot's middle (lotX) and its front line (frontZ) for a building facing `yaw`. */
-export function homeDoorPoint(lotX: number, frontZ: number, yaw: number): { x: number; z: number } {
-  return { x: lotX + DOOR_ACROSS * detSin(yaw), z: frontZ + DOOR_ACROSS * detCos(yaw) };
+/** The door's centre on a house's drawn front face, for the place's door point: the lot's middle (lotX), its front line (frontZ) and the house's depth for a building facing `yaw`. */
+export function homeDoorPoint(lotX: number, frontZ: number, yaw: number, depth: number): { x: number; z: number } {
+  const inset = depth / 2 - drawnHalf(depth);
+  return { x: lotX - inset * detCos(yaw) + DOOR_ACROSS * detSin(yaw), z: frontZ + inset * detSin(yaw) + DOOR_ACROSS * detCos(yaw) };
 }
 
 /**
@@ -101,7 +107,7 @@ export function homeFrontages(places: readonly Place[]): Frontage[] {
   const frontages: Frontage[] = [];
   for (const place of places) {
     if (place.kind !== PLACE_KIND.home) continue;
-    const face = (BLOCK_FACE_HALF / PREFABS[PREFAB.building].size[0]) * place.depth;
+    const face = drawnHalf(place.depth);
     frontages.push({ x: place.x + detCos(place.yaw) * face, z: place.z - detSin(place.yaw) * face, yaw: place.yaw, variant: variantOf(place.x, place.z) });
   }
   return frontages;

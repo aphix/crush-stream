@@ -1,13 +1,17 @@
 import { ceilingOver, Draft, footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
 import { layoutBar, layoutCoffee, layoutOffice, layoutRowhome, layoutStore } from "./interior-layouts.ts";
-import { BAY_WIDTH, FURNISHING, SHOPFRONT, STOOP_SEAT_HEIGHT, STOOP_SEAT_OUT, STOOP_SEAT_SPREAD, TURN, type Box, type Furnishing, type InteriorPlan, type Turn } from "./interior-kinds.ts";
+import { BAY_WIDTH, FURNISHING, SHOPFRONT, STOOP_SEAT_HEIGHT, STOOP_SEAT_OUT, STOOP_SEAT_SPREAD, STREET_SKIN, TURN, type Box, type Furnishing, type InteriorPlan, type Turn } from "./interior-kinds.ts";
+import { drawnHalf } from "./openworld-facade-solids.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
 
 const LAYOUTS = { rowhome: layoutRowhome, coffee: layoutCoffee, bar: layoutBar, office: layoutOffice, store: layoutStore } as const satisfies Record<InteriorKind, (draft: Draft) => void>;
 
-/** The plan of an interior for a building `width` wide and `depth` deep (m): pure, the same for every peer. */
+/**
+ * The plan of an interior for a building prop of footprint `width` x `depth` (m): pure, the same for every peer. It is laid inside the prop's drawn walls (`drawnHalf`), a skin short of them on every
+ * side, so no wall of it stands in front of the facade's own picture.
+ */
 export function planInterior(kind: InteriorKind, width: number, depth: number): InteriorPlan {
-  const draft = new Draft(kind, width, depth);
+  const draft = new Draft(kind, 2 * (drawnHalf(width) - STREET_SKIN), 2 * drawnHalf(depth));
   draft.floor(0);
   draft.roof();
   for (let level = 0; level < draft.floors.length; level++) draft.envelope(level);
@@ -27,7 +31,7 @@ const QUARTER_SIN = [0, 1, 0, -1] as const;
 /** Building yaws are quarter turns; a place off one cannot have its plan mapped by exact integer rotation. */
 const QUARTER_TOLERANCE = 1e-6;
 
-/** The place's map from plan coordinates to the world: a quarter-turn rotation, so every result is exact. */
+/** The place's map from plan coordinates to the world (the plan's front on the building's drawn front wall): a quarter-turn rotation, so every result is exact. */
 class Frame {
   private readonly place: Pick<Place, "x" | "z" | "yaw" | "depth">;
   private readonly cos: number;
@@ -43,12 +47,12 @@ class Frame {
   }
 
   x(deep: number, across: number): number {
-    const front = this.place.depth / 2 - deep;
+    const front = drawnHalf(this.place.depth) - deep;
     return this.place.x + front * this.cos + across * this.sin;
   }
 
   z(deep: number, across: number): number {
-    const front = this.place.depth / 2 - deep;
+    const front = drawnHalf(this.place.depth) - deep;
     return this.place.z - front * this.sin + across * this.cos;
   }
 
@@ -160,7 +164,7 @@ export function interiorEnvelope(place: Place): EnvelopeColumn[] {
   for (const wall of plan.walls) {
     if (wall.level !== 0 || !wall.shell) continue;
     const street = wall.axis === "across" && wall.fixed < plan.depth / 2;
-    const across = wall.axis === "across" ? { from: -plan.width / 2, to: plan.width / 2 } : {};
+    const across = wall.axis === "across" ? { from: -place.width / 2, to: place.width / 2 } : {};
     const doorways = { ...wall, ...across, openings: street ? wall.openings.filter((opening) => opening.sill === 0) : [] };
     for (const box of wallBoxes(doorways, 0, 1)) {
       const { x0, z0, x1, z1 } = frame.solid(box);

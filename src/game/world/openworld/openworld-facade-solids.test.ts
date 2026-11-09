@@ -6,9 +6,9 @@ import { propColliders } from "../placements.ts";
 import { flightHeightAt, flightsOf } from "../stairs.ts";
 import { planBlocks } from "./openworld-blocks.ts";
 import { FACING } from "./openworld-constants.ts";
-import { BAY, DOOR, facadeSolidProps, facadeSolidsOf, HOME_HEIGHT, HOME_LEVELS, homeDoorPoint, homeFrontages, LOT_WIDTH, STOOP, stoopStepRange, type Frontage } from "./openworld-facade-solids.ts";
-import { ROWHOME_FLOOR_Y } from "./interior-kinds.ts";
-import { interiorDoor } from "./interior-plan.ts";
+import { BAY, DOOR, drawnHalf, facadeSolidProps, facadeSolidsOf, HOME_HEIGHT, HOME_LEVELS, homeDoorPoint, homeFrontages, LOT_WIDTH, STOOP, stoopStepRange, type Frontage } from "./openworld-facade-solids.ts";
+import { ROWHOME_FLOOR_Y, STREET_SKIN } from "./interior-kinds.ts";
+import { interiorDoor, interiorSolids } from "./interior-plan.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { HOME_STYLES } from "./openworld-programme.ts";
 import { PLACE_KIND } from "./walk-graph.ts";
@@ -31,6 +31,9 @@ const BAY_OUT_RANGE = [0.6, 0.9] as const;
 const DOOR_MATCH = 1e-6;
 /** Lots per face the door comparison must have covered. */
 const DOORS_PER_FACE_MIN = 50;
+/** The open world's house depth (m), and how far inside a drawn wall an interior's outer wall may end (its skin and its thickness, m). */
+const HOUSE_DEPTH = 15;
+const SHELL_DEPTH_MAX = 0.4;
 /** Boxes per rowhome the course may hold. */
 const SOLIDS_PER_HOME_MAX = 3;
 const EPSILON = 1e-9;
@@ -77,33 +80,61 @@ describe("given the rowhomes of the open world's layout", () => {
     expect(misses.length, "homes whose door is off its stoop").toBe(0);
   });
 
-  // mutation: sed -i 's/return { x: lotX + DOOR_ACROSS \* detSin(yaw), z: frontZ + DOOR_ACROSS \* detCos(yaw) };/return { x: lotX - DOOR_ACROSS * detSin(yaw), z: frontZ - DOOR_ACROSS * detCos(yaw) };/' src/game/world/openworld/openworld-facade-solids.ts
-  it("when the door point of a lot facing north and of one facing south are made, then each is 1.8 m along the building's local z from the lot's middle", () => {
+  // mutation: sed -i 's/+ DOOR_ACROSS \* detSin(yaw), z: frontZ + inset \* detSin(yaw) + DOOR_ACROSS \* detCos(yaw) };/- DOOR_ACROSS * detSin(yaw), z: frontZ + inset * detSin(yaw) - DOOR_ACROSS * detCos(yaw) };/' src/game/world/openworld/openworld-facade-solids.ts
+  it("when the door point of a lot facing north and of one facing south are made, then each is 1.8 m along the building's local z from the lot's middle, on the drawn front wall", () => {
     for (const yaw of [FACING.north, FACING.south]) {
-      const door = homeDoorPoint(10, 20, yaw);
+      const door = homeDoorPoint(10, 20, yaw, HOUSE_DEPTH);
       const middle = { x: 10, z: 20, yaw, variant: 0 };
       expect(against(middle, door.x, door.z).across, `door across the lot facing ${yaw}`).toBeCloseTo(DOOR.across, 9);
-      expect(against(middle, door.x, door.z).out, `door out of the front line facing ${yaw}`).toBeCloseTo(0, 9);
+      expect(against(middle, door.x, door.z).out, `door behind the front line facing ${yaw} (m)`).toBeCloseTo(drawnHalf(HOUSE_DEPTH) - HOUSE_DEPTH / 2, 9);
     }
     expect(DOOR.across, "door across (u)").toBe(DOOR_HOLE_ACROSS);
   });
 
-  // mutation: sed -i 's/const ROWHOME_DOOR_OFFSET = 1.8;/const ROWHOME_DOOR_OFFSET = 1.9;/' src/game/world/openworld/interior-kinds.ts
-  it("when the door the facade kit stands at and the door the rowhome interior gives are compared for the lots of each face, then they are the same point", () => {
+  // mutation: sed -i 's/const ROWHOME_DOOR_OFFSET = 1.8;/const ROWHOME_DOOR_OFFSET = 1.9;/' src/game/world/openworld/interior-kinds.ts (or sed -i 's/const front = drawnHalf(this.place.depth) - deep;/const front = this.place.depth \/ 2 - deep;/' src/game/world/openworld/interior-plan.ts: the interior door 0.125 m out of the wall)
+  it("when the door the facade kit stands at and the door the rowhome interior gives are compared for the lots of each face, then they are the same point, on the drawn front wall", () => {
     const compared = { north: 0, south: 0 };
     const apart: string[] = [];
     for (const lot of lotPlans) {
       const middleZ = (lot.house.z0 + lot.house.z1) / 2;
       const home = homes.find((place) => Math.abs(place.x - lot.x) < DOOR_MATCH && Math.abs(place.z - middleZ) < DOOR_MATCH);
       if (home === undefined) continue;
-      const kit = homeDoorPoint(lot.x, lot.frontZ, lot.yaw);
+      const kit = homeDoorPoint(lot.x, lot.frontZ, lot.yaw, home.depth);
       const interior = interiorDoor("rowhome", home.width, home.depth, home.x, home.z, home.yaw);
+      const offFace = against(frontages[homes.indexOf(home)]!, interior.x, interior.z).out;
       compared[lot.face]++;
+      if (Math.abs(offFace) > DOOR_MATCH) apart.push(`${home.name} (${lot.face}): interior door ${offFace.toFixed(3)} m off the drawn front wall`);
       if (Math.abs(kit.x - interior.x) > DOOR_MATCH || Math.abs(kit.z - interior.z) > DOOR_MATCH) apart.push(`${home.name} (${lot.face}): kit ${kit.x.toFixed(3)}, ${kit.z.toFixed(3)} interior ${interior.x.toFixed(3)}, ${interior.z.toFixed(3)}`);
     }
     expect(compared.north, "north-face lots compared").toBeGreaterThanOrEqual(DOORS_PER_FACE_MIN);
     expect(compared.south, "south-face lots compared").toBeGreaterThanOrEqual(DOORS_PER_FACE_MIN);
     expect(apart.slice(0, 3).join("; "), "doors the kit and the interior place apart").toBe("");
+  });
+});
+
+describe("given the interiors of the homes", () => {
+  // mutation: sed -i 's/const draft = new Draft(kind, 2 \* (drawnHalf(width) - STREET_SKIN), 2 \* drawnHalf(depth));/const draft = new Draft(kind, width, depth);/' src/game/world/openworld/interior-plan.ts
+  it("when every solid of each home's interior is read in its building's frame, then none reaches the drawn walls: no interior wall stands in front of the facade's picture", () => {
+    let solidsRead = 0;
+    let deepest = { out: -Infinity, across: -Infinity };
+    const through: string[] = [];
+    for (const home of homes) {
+      const outLimit = drawnHalf(home.depth) - STREET_SKIN;
+      const acrossLimit = drawnHalf(home.width) - STREET_SKIN;
+      for (const solid of interiorSolids(home)) {
+        solidsRead++;
+        for (const x of [solid.x0, solid.x1]) {
+          for (const z of [solid.z0, solid.z1]) {
+            const { out, across } = against({ x: home.x, z: home.z, yaw: home.yaw, variant: 0 }, x, z);
+            deepest = { out: Math.max(deepest.out, Math.abs(out)), across: Math.max(deepest.across, Math.abs(across)) };
+            if (Math.abs(out) > outLimit + DOOR_MATCH || Math.abs(across) > acrossLimit + DOOR_MATCH) through.push(`${home.name}: corner ${out.toFixed(3)} out, ${across.toFixed(3)} across`);
+          }
+        }
+      }
+    }
+    expect(solidsRead, "interior solids read").toBeGreaterThan(homes.length * 10);
+    expect(deepest.out, "furthest an interior solid reaches out of a home's middle (m)").toBeGreaterThan(drawnHalf(HOUSE_DEPTH) - 2 * SHELL_DEPTH_MAX);
+    expect(through.slice(0, 3).join("; "), "interior solids reaching the drawn walls").toBe("");
   });
 });
 
