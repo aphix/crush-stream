@@ -1,3 +1,5 @@
+import { dressOfLook } from "../present/civilian-dress.ts";
+import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
@@ -33,7 +35,8 @@ type OpenWorldPorts = {
   now(): number;
   /** Writes where the eye is and which way it looks. */
   eye(ray: LookRay): void;
-  throwFigure(strike: FigureStrike): void;
+  /** A civilian run down is thrown dressed as the crowd draws them (`look`). */
+  throwFigure(strike: FigureStrike, look: DriverLook): void;
   /** Calls `listener` for every solid a car meets (closing speed, contact point) until the returned function is called. */
   hookWallHits(listener: (closing: number, x: number, z: number) => void): () => void;
   makeArt(capacity: number): CrowdArt;
@@ -164,7 +167,12 @@ export class OpenWorldDirector {
 
   private throwStruck(crowd: CivilianCrowd): void {
     const strikes = crowd.takeStrikes();
-    for (let at = 0; at < strikes.length; at++) this.ports.throwFigure(strikes[at]!);
+    for (let at = 0; at < strikes.length; at++) {
+      const strike = strikes[at]!;
+      const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
+      dressOfLook(crowd.poses.look[strike.guard]!, look);
+      this.ports.throwFigure(strike, look);
+    }
   }
 
   /** The panel keeps the object it had while the text is the same, so the HUD sees no change. */

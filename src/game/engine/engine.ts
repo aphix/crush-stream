@@ -381,7 +381,7 @@ export class CrashEngine extends EngineGarage {
         ray.dirY = _v.y;
         ray.dirZ = _v.z;
       },
-      throwFigure: (strike) => this.ragdolls.throwFigure(strike, this.live()),
+      throwFigure: (strike, look) => this.ragdolls.throwFigure(strike, this.live(), look),
       hookWallHits: (listener) => {
         const recorded = this.race.onWallHit;
         this.race.onWallHit = (i, closing, x, z) => {

@@ -104,7 +104,7 @@ export class CivilianCrowd {
     return this.seconds;
   }
 
-  /** One step at crowd time `crowdSeconds`: every decision tick passed is advanced, the civilians placed, and on the host (`authority`) the cars' hits on them found; a client throws the knocks it heard. */
+  /** One step at crowd time `crowdSeconds`: every decision tick passed is advanced, the people placed (animals walk in the brain but are not shown until there is art for them), and on the host (`authority`) the cars' hits on them found; a client throws the knocks it heard. */
   step(crowdSeconds: number, cars: readonly DeformableCar[], authority: boolean): void {
     this.authority = authority;
     this.advanceBrain(tickAt(crowdSeconds));
@@ -205,7 +205,7 @@ export class CivilianCrowd {
     for (let resident = 0; resident < state.capacity; resident++) {
       const intBase = resident * RESIDENT_INT_STRIDE;
       const onLeg = ints[intBase + RESIDENT_INT.pathCount]! > 0 && seconds >= ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ && seconds < ints[intBase + RESIDENT_INT.arriveTick]! / DECISION_HZ;
-      if (!onLeg || !legPositionAt(state, resident, seconds, pose)) {
+      if (!onLeg || ints[intBase + RESIDENT_INT.species] !== SPECIES.person || !legPositionAt(state, resident, seconds, pose)) {
         shown[resident] = 0;
         continue;
       }
@@ -222,7 +222,6 @@ export class CivilianCrowd {
 
   private findHits(cars: readonly DeformableCar[], seconds: number): void {
     const state = this.remote.state;
-    const { ints } = state;
     const { x, z, yaw, shown } = this.poses;
     const ground = activeGround();
     for (let carIndex = 0; carIndex < cars.length; carIndex++) {
@@ -231,7 +230,7 @@ export class CivilianCrowd {
       const carZ = car.group.position.z;
       const loose = hasLooseBody(car);
       for (let resident = 0; resident < state.capacity; resident++) {
-        if (shown[resident] === 0 || ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.species] !== SPECIES.person) continue;
+        if (shown[resident] === 0) continue;
         const near = hypot2(carX - x[resident]!, carZ - z[resident]!) <= CAR_REACH;
         if (!near && !loose) continue;
         const spotY = ground.heightAt(x[resident]!, z[resident]!);

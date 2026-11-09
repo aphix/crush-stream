@@ -37,12 +37,15 @@ per frame on a client:
 2. each resident on a leg is placed by `legPositionAt` at the crowd time (a pure function of the rows and the time: any frame rate,
    no integration, no allocation); the stride phase is the metres walked, so it needs no state;
 3. with `authority`, every shown person is tested against every car (`runsDown` within `CAR_REACH`, `looseRunsDown` for a car with
-   a torn part flying): a hit hides them at once, logs a `knock` event and queues a strike for the ragdoll throw. Animals are not
-   run down.
+   a torn part flying): a hit hides them at once, logs a `knock` event and queues a strike for the ragdoll throw, dressed as the drawn crowd dresses
+   them (`dressOfLook` of their look word, the same dress the near dummy wears).
+
+Cats and dogs live in the brain (they decide, walk and keep a life log) but the crowd shows none until there is animal art: a
+resident of species other than person has `shown = 0` in every pose, so none is drawn and none can be run down.
 
 A civilian's **look word** (`LOOK` in `civilian-crowd-constants.ts`) is a hash of who they are (bits 0-28), their gender (bit 29,
-so a drawn Rosa is a woman) and their species (bits 30-31: person, cat, dog). The drawing dresses from it; it does not yet draw cats
-and dogs differently, so animals are drawn as people for now.
+so a drawn Rosa is a woman) and their species (bits 30-31: person, cat, dog). The drawing dresses from it; the species bits are there for the animal art to
+read.
 
 **Wrecks.** The cheapest existing signal is the course's solid-prop hit, `RaceField.onWallHit(car, closing, x, z)` (every
 solid a car meets, with its closing speed and contact point). The open world wraps it: a hit at `WRECK_SPEED` or more whose point

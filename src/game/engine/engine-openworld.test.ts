@@ -2,13 +2,15 @@ import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "../ai/civilians/civilian-crowd.test-util.ts";
-import { EVENT_KIND, FLAG, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../ai/civilians/civilian-constants.ts";
+import { EVENT_KIND, FLAG, GENDER, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../ai/civilians/civilian-constants.ts";
 import { CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER, WRECK_SPEED } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { residentNameText } from "../ai/civilians/civilian-mood.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
+import { dressOfLook } from "../present/civilian-dress.ts";
+import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
@@ -32,6 +34,7 @@ class Harness {
   cars: DeformableCar[] = [];
   readonly eye = new LookRay();
   readonly thrown: FigureStrike[] = [];
+  readonly looks: DriverLook[] = [];
   readonly updates: { poses: CrowdPoses; eyeX: number }[] = [];
   artsMade = 0;
   artsDisposed = 0;
@@ -45,7 +48,10 @@ class Harness {
     cars: () => this.cars,
     now: () => this.now,
     eye: (ray) => Object.assign(ray, this.eye),
-    throwFigure: (strike) => void this.thrown.push(strike),
+    throwFigure: (strike, look) => {
+      this.thrown.push(strike);
+      this.looks.push(look);
+    },
     hookWallHits: (listener) => {
       this.listener = listener;
       return () => void this.unhooked++;
@@ -157,6 +163,10 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     }
     expect(firstMismatch(harness.thrown.map((strike) => strike.guard), [resident]), "ragdolls thrown, by civilian").toBeUndefined();
     expect(crowd.poses.shown[resident], "shown").toBe(0);
+    const drawn: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
+    dressOfLook(crowd.poses.look[resident]!, drawn);
+    expect(JSON.stringify(harness.looks[0]), "the thrown civilian's dress is the drawn dummy's").toBe(JSON.stringify(drawn));
+    expect(harness.looks[0]!.woman, "a woman is thrown a woman").toBe(crowd.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.gender] === GENDER.female);
     expect(firstMismatch(Array.from(harness.director.eventLog()).slice(0, 2), [EVENT_KIND.knock, resident]), "the log's first event").toBeUndefined();
   });
 
