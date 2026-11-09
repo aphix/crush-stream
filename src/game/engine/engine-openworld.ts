@@ -53,9 +53,9 @@ type TrafficHostPorts = TrafficPorts & {
   makeLights(): LightsArt;
 };
 
-/** The streamed interiors of the map's places: `update` once a frame with the eye, `dispose` when the course is left. */
+/** The streamed interiors of the map's places: `update` once a frame with the eye and the sight field, `dispose` when the course is left. */
 type InteriorArt = {
-  update(eyeX: number, eyeZ: number, dt: number): void;
+  update(eyeX: number, eyeZ: number, dt: number, sight: SightField): void;
   dispose(): void;
 };
 /** What the open world needs of the engine. */
@@ -201,7 +201,7 @@ export class OpenWorldDirector {
     this.facades ??= this.ports.makeFacades(this.map);
     if (this.interiors === null && this.ports.makeInteriors !== undefined) this.interiors = this.ports.makeInteriors(this.map);
     this.ports.eye(this.ray);
-    this.interiors?.update(this.ray.eyeX, this.ray.eyeZ, wallDt);
+    this.interiors?.update(this.ray.eyeX, this.ray.eyeZ, wallDt, this.sight);
     const client = this.ports.isClient();
     if (client && !this.hasHeard) return;
     const key = client ? this.heardKey : this.hostKey();
