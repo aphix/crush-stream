@@ -326,7 +326,7 @@ void facadeParallax(float layer) {
   float surfaceDepth = 1.0 - textureGrad(facadeHeightMap, vec3(at, layer), facadeDx, facadeDy).r;
   float lastDepth = surfaceDepth;
   float lastRay = 0.0;
-  for (int tap = 0; tap < ${PARALLAX_STEPS}; step++) {
+  for (int tap = 0; tap < ${PARALLAX_STEPS}; tap++) {
     if (rayDepth >= surfaceDepth) break;
     lastDepth = surfaceDepth;
     lastRay = rayDepth;
