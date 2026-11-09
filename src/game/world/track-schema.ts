@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PREFAB_IDS, SURFACE_IDS } from "./catalog.ts";
-import { BIOME_IDS, SCENERY_DENSITY_RULES, SCENERY_RULES, SURFACE } from "./constants.ts";
+import { BIOME_IDS, PAVING_IDS, SCENERY_DENSITY_RULES, SCENERY_RULES, SURFACE } from "./constants.ts";
 import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
 import { assetPrefab } from "./scenery-assets/pick.ts";
 import { ROAD_DECAL_NAMES } from "./scenery-assets/types.ts";
@@ -151,6 +151,8 @@ const scenery = z.object({
   density: z.partialRecord(z.enum(SCENERY_DENSITY_RULES), z.number().min(0).max(4)).default({}),
   /** The road paint laid on this course's roads (manhole covers, crosswalks, lane arrows, kerb stripes): no other generated decal or tile lies on a road. Omitted: a manhole cover on a city's roads only. */
   roadDecals: z.array(z.enum(ROAD_DECAL_NAMES)).optional(),
+  /** The sidewalk slabs' look: concrete flags, or brick in running bond; omitted: concrete. */
+  paving: z.enum(PAVING_IDS).optional(),
   /** Metres from any road's centreline within which nothing is generated, in every direction; omitted: only each footprint's own clearance from the wall line (0.4 m) applies. */
   clear: z.number().min(0).max(60).optional(),
   /** Where nothing is generated: boxes, circles, and stretches of the race loop. Hand `props` are untouched. */
