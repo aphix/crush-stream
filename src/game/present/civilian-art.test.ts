@@ -157,7 +157,9 @@ describe("given two civilians in figure range, one walking east and one standing
   });
 });
 
-describe("given a crowd of 50, 150 and 300 scattered within 30 m of the eye on the desktop tier", () => {
+describe("given a crowd of a few over the dummies, 150 and 300 scattered within 30 m of the eye on the desktop tier", () => {
+  /** The smallest crowd still has figures: a few more civilians than the tier has dummies. */
+  const SMALL_CROWD = NEAR_SLOTS.desktop + 10;
   const callsFor = (count: number): { calls: number; near: number; far: number } => {
     const art = new CivilianArt(NEAR_SLOTS.desktop, count);
     art.update(posesScattered(count, CROWD_RADIUS, count), 0, 0, IN_SIGHT, FRAME_SECONDS);
@@ -165,21 +167,27 @@ describe("given a crowd of 50, 150 and 300 scattered within 30 m of the eye on t
   };
 
   it("when each is drawn, then the draw calls are the same whatever the crowd's size", () => {
-    const small = callsFor(50);
+    const small = callsFor(SMALL_CROWD);
     const medium = callsFor(150);
     const large = callsFor(300);
     expect([small.near > 0, medium.near > 0, large.near > 0], "a crowd has dummies").toEqual([true, true, true]);
     expect([small.far > 0, medium.far > 0, large.far > 0], "a crowd has figures").toEqual([true, true, true]);
-    expect(firstMismatch([small.calls, medium.calls, large.calls], [large.calls, large.calls, large.calls]), "draw calls at 50, 150, 300").toBeUndefined();
+    expect(firstMismatch([small.calls, medium.calls, large.calls], [large.calls, large.calls, large.calls]), "draw calls at the small, 150 and 300 crowds").toBeUndefined();
     expect(large.calls, "draw calls").toBeLessThanOrEqual(6);
   });
 });
 
 describe("given a civilian walking and a guard walking the same stride at the same place", () => {
   const STRIDES = [0.7, 2.1, 4, 5.5] as const;
+  const LEG_EXTREMES = [Math.PI / 2, (3 * Math.PI) / 2] as const;
+  const THIGHS = [6, 8] as const;
   const REST_OFFSET = new THREE.Vector3(0.03, 0.05, 0.02);
+  /** Hers is a rounder walk than the guards' (a stride's bob and counter-turn, a foot that does not slide): a part is no further than this (m) from where the guard's is. */
+  const LIKE_A_GUARD = 0.2;
+  /** The stride's extremes are the guards' (her legs reach as far), over the ground: hers hang lower only as her hips drop. */
+  const SAME_REACH = 0.005;
 
-  it("when both are posed, then every body part of the civilian's dummy lies where the guard's does", () => {
+  it("when both are posed, then every body part of the civilian's dummy lies within a short way of the guard's", () => {
     const poses = emptyPoses(1);
     poses.x[0] = 4;
     poses.z[0] = -3;
@@ -199,7 +207,29 @@ describe("given a civilian walking and a guard walking the same stride at the sa
         const rest = new THREE.Vector3(...PARTS[part]!.c).add(REST_OFFSET);
         art.dummies[0]!.partPoint(0, part, rest, civilianPart);
         guardMesh.partPoint(0, part, rest, guardPart);
-        expect(civilianPart.distanceTo(guardPart), `part ${part} at stride ${stride}`).toBeLessThan(1e-4);
+        expect(civilianPart.distanceTo(guardPart), `part ${part} at stride ${stride}`).toBeLessThan(LIKE_A_GUARD);
+      }
+    }
+  });
+
+  it("when both are posed at the extremes of the stride, then the civilian's thighs reach as far forward and back as the guard's do", () => {
+    const poses = emptyPoses(1);
+    poses.speed[0] = 1.4;
+    const art = new CivilianArt(1, 1);
+    const guards = new People(1);
+    const guardMesh = guards.group.children.find((child): child is DummyMesh => child instanceof DummyMesh);
+    must(guardMesh, "the guards' people hold a dummy mesh");
+    const civilianPart = new THREE.Vector3();
+    const guardPart = new THREE.Vector3();
+    for (const stride of LEG_EXTREMES) {
+      poses.stride[0] = stride;
+      art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
+      guards.stand(0, 0, 0, 0, 0, walkStance(stride, false, blankStance()), false);
+      for (const part of THIGHS) {
+        const knee = new THREE.Vector3(...PARTS[part]!.c).add(new THREE.Vector3(0, -PARTS[part]!.h[1], 0));
+        art.dummies[0]!.partPoint(0, part, knee, civilianPart);
+        guardMesh.partPoint(0, part, knee, guardPart);
+        expect(Math.abs(civilianPart.z - guardPart.z), `part ${part} at stride ${stride}`).toBeLessThan(SAME_REACH);
       }
     }
   });

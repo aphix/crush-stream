@@ -47,16 +47,31 @@ export function carDoorSpot(carX: number, carZ: number, carYaw: number, groundY:
   out.surfaceY = groundY + seatFront[1] - CAR_DOOR.hipOverSeat;
 }
 
-function smoothstepBetween(from: number, to: number, value: number): number {
-  if (value <= from) return 0;
-  if (value >= to) return 1;
-  const progress = (value - from) / (to - from);
-  return progress * progress * (3 - 2 * progress);
+/** What the door's openness reads of a civilian's pose: her activity and the seconds into it. */
+type DoorClock = { activity: number; clock: number };
+
+/**
+ * `out[at]` = how far the driver's door stands open (0 shut, 1 at `CAR_DOOR.openRad`) `pose.clock` seconds into activity `pose.activity`; 0 for any other activity. Pure in the clock. It takes the pose and an
+ * output slot, not numbers, so the drawing's frame, which asks it for every civilian at a car, allocates nothing.
+ */
+export function carDoorOpennessOf(pose: DoorClock, out: Float64Array, at: number): void {
+  const times = pose.activity === ACTIVITY.carIn ? DOOR_TIMES.carIn : pose.activity === ACTIVITY.carOut ? DOOR_TIMES.carOut : null;
+  if (times === null) {
+    out[at] = 0;
+    return;
+  }
+  const opening = Math.min(1, Math.max(0, (pose.clock - times.openFrom) / (times.openTo - times.openFrom)));
+  const closing = Math.min(1, Math.max(0, (pose.clock - times.closeFrom) / (times.closeTo - times.closeFrom)));
+  out[at] = opening * opening * (3 - 2 * opening) * (1 - closing * closing * (3 - 2 * closing));
 }
 
-/** How far the driver's door stands open (0 shut, 1 at `CAR_DOOR.openRad`) `clock` seconds into activity `activity`; 0 for any other activity. Pure in the clock: the host sets the car's door by it, the drawing's hand follows it. */
+const askedClock: DoorClock = { activity: 0, clock: 0 };
+const asked = new Float64Array(1);
+
+/** `carDoorOpennessOf` for a host that has the activity and the clock as numbers: the door it sets a car's by. */
 export function carDoorOpenness(activity: number, clock: number): number {
-  const times = activity === ACTIVITY.carIn ? DOOR_TIMES.carIn : activity === ACTIVITY.carOut ? DOOR_TIMES.carOut : null;
-  if (times === null) return 0;
-  return smoothstepBetween(times.openFrom, times.openTo, clock) * (1 - smoothstepBetween(times.closeFrom, times.closeTo, clock));
+  askedClock.activity = activity;
+  askedClock.clock = clock;
+  carDoorOpennessOf(askedClock, asked, 0);
+  return asked[0]!;
 }

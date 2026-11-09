@@ -3,6 +3,7 @@ import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLOATS, FIGURE_FLOATS, NEAR_DRAW, SIGHT_RADIUS, SLOT_KEEP_DISTANCE_SCALE, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
 import { dressOfLook, isPoliceLook, skinOfLook, writeLinearColour } from "./civilian-dress.ts";
 import { civilianFigures, type CivilianFigures } from "./civilian-figure.ts";
+import { PoseSmoothing } from "./civilian-anim-smoothing.ts";
 import { poseCivilian } from "./civilian-pose.ts";
 import type { DriverLook } from "./driver-look.ts";
 import { HIDE_GRACE, type SightField } from "./openworld-sight.ts";
@@ -32,6 +33,8 @@ export class CivilianArt {
   nearDrawn = 0;
   farDrawn = 0;
   private readonly capacity: number;
+  /** What keeps a near civilian's pose from snapping when her activity or her walk changes. */
+  private readonly smoothing: PoseSmoothing;
   private readonly slotCount: number;
   private readonly slotOwner: Int32Array;
   private readonly slotLook: Uint32Array;
@@ -55,6 +58,7 @@ export class CivilianArt {
   /** `nearSlots` posed dummies at most (a tier's `NEAR_SLOTS`); `capacity` civilians at most, the crowd's size. */
   constructor(nearSlots: number, capacity: number) {
     this.capacity = capacity;
+    this.smoothing = new PoseSmoothing(capacity);
     this.slotCount = nearSlots;
     this.slotOwner = new Int32Array(nearSlots).fill(NO_SLOT);
     this.slotLook = new Uint32Array(nearSlots);
@@ -87,7 +91,7 @@ export class CivilianArt {
     this.refreshSight(poses, count, sight, wallDt);
     const selected = this.selectNearest(poses, count);
     this.assignSlots(poses, selected);
-    this.poseDummies(poses, selected);
+    this.poseDummies(poses, selected, wallDt);
     this.drawFigures(poses, count);
     this.nearDrawn = selected;
   }
@@ -171,12 +175,13 @@ export class CivilianArt {
   }
 
   /** Each near civilian posed in her slot, dressed again first when her look changed. */
-  private poseDummies(poses: CrowdPoses, selected: number): void {
+  private poseDummies(poses: CrowdPoses, selected: number, wallDt: number): void {
+    this.smoothing.begin(this.stamp, wallDt);
     for (let k = 0; k < selected; k++) {
       const civilian = this.nearList[k]!;
       const slot = this.slotOf[civilian]!;
       if (this.slotLook[slot] !== poses.look[civilian]) this.dressSlot(slot, poses.look[civilian]!);
-      poseCivilian(this.dummies[Math.floor(slot / SLOTS_PER_DUMMY_MESH)]!, slot % SLOTS_PER_DUMMY_MESH, poses, civilian);
+      poseCivilian(this.dummies[Math.floor(slot / SLOTS_PER_DUMMY_MESH)]!, slot % SLOTS_PER_DUMMY_MESH, poses, civilian, this.smoothing);
     }
   }
 

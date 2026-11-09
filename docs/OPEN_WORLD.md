@@ -253,7 +253,14 @@ tracks (`civilian-anim-clips.ts`, keyframes per channel: pelvis, torso, head, ea
 from the walk and out over the clip's last `blendOut` seconds, then two solves: a hand reaches a point (counter, door handle, a face) through the
 torso's lean, and `plant` holds the feet on the floor as the pelvis sinks. A clip is authored for its main side, mirrored toward the partner's
 side (bump, fight) or the civilian's handedness. Looping clips grow their fidgets from their rest pose over 1.5 s and start at an offset per
-civilian, so a bar of sitters does not glance together. No frame allocates.
+civilian, so a bar of sitters does not glance together. No frame allocates (doubles go through `scratch` slots, not arguments: a double passed to a call that is not inlined is boxed on the heap).
+
+The walk is the guards' stride rounded off: the legs swing as a sine flattened toward a triangle so a foot on the ground goes back about as fast as she goes forward (it does not slide: the stride is
+1.5 m of walk to a turn of phase, whatever the speed), the knee bends as the leg passes under her, the shoulders turn 0.1 rad against the hips with the head half turning back, the hips fall 5 cm as the legs
+spread and the head nods twice a stride. A change of her pose that no stride or key makes (a clip cut off by the brain, a start from standing, a stop) does not snap: `PoseSmoothing` (one per
+`CivilianArt`, per civilian) draws the old pose at once and pays the difference back with a time constant of 0.18 s; a pose that only moves on is drawn exactly, so nothing is delayed or flattened. Bits of
+her look word give each person a pace (the clip's clock a tenth quicker or slower) and an amplitude (an eighth more or less on the lean, the head and the arms); none set is neither. A flinch (`recoil`)
+is quicker and bigger the jumpier the person (`neuroticismOf`: 0.85 to 1.25 times the pace, 0.7 to 1.3 times the size), starts with the hands flung up and the body back, and comes down while she still looks.
 
 An arrest is two clips a side, set by the law (`ai/openworld-crime/crime-poses.ts`): the suspect is `cuffing` while gripped (her main arm
 taken behind her back, then the other) and `cuffed` after (hands behind her back, head down; walking, her legs stride as the walk does: the

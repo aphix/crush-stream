@@ -30,6 +30,14 @@ export const sideSign = (side: number): number => side * 2 - 1;
 const MIRRORED_BODY = new Set<number>([CHANNEL.pelvisSide, CHANNEL.torsoRoll, CHANNEL.torsoTwist, CHANNEL.headYaw]);
 const OUTWARD_ARM = new Set<number>([ARM.out, ARM.twist, ARM.sweep]);
 
+const EXPRESSIVE_BODY = new Set<number>([CHANNEL.pelvisSide, CHANNEL.torsoPitch, CHANNEL.torsoRoll, CHANNEL.torsoTwist, CHANNEL.headPitch, CHANNEL.headYaw]);
+const EXPRESSIVE_ARM = new Set<number>([ARM.swing, ARM.out, ARM.elbow]);
+
+/** 1 for the channels a person's own amplitude scales (the lean, the head, the arm's swing and bend), 0 for those that must land exactly: the seat, the planted feet, the reach weights and targets, the steps and turns. */
+export const EXPRESSIVE = new Uint8Array(CHANNELS);
+for (let channel = 0; channel < BODY_CHANNELS; channel++) EXPRESSIVE[channel] = EXPRESSIVE_BODY.has(channel) ? 1 : 0;
+for (const side of [SIDE_MINUS_X, SIDE_PLUS_X]) for (const field of EXPRESSIVE_ARM) EXPRESSIVE[armChannel(side, field)] = 1;
+
 /** Per mirror index (0: the main side is -x, 1: +x) and authored channel: the channel it drives, and the sign its value takes. Lateral angles are authored positive toward the main side, arm out, twist and sweep positive outward. */
 export const MIRROR_CHANNEL = new Int32Array(2 * CHANNELS);
 export const MIRROR_SIGN = new Float64Array(2 * CHANNELS);
