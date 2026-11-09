@@ -5,7 +5,7 @@ import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildParkingSpots } from "../../world/openworld/openworld-parking.ts";
 import { buildRoadNetwork, HEADING, HEADING_COUNT, junctionIndex } from "../../world/openworld/openworld-roads.ts";
 import { blankAiCar } from "../derby-ai.ts";
-import { NOSE_OVERHANG } from "./traffic-constants.ts";
+import { CRUISE_SPEED, NOSE_OVERHANG } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { CYCLE_SECONDS, KinematicCar, STEP_SECONDS } from "./traffic-world.test-util.ts";
@@ -91,5 +91,71 @@ describe("given a car on a trip that crosses a signalled junction", () => {
       if (Math.abs(car.group.position.x - barX) < 8 && car.speed > 0) slowest = Math.min(slowest, car.speed);
     }
     expect(slowest, "slowest speed within 8 m of the bar").toBeGreaterThan(5);
+  });
+});
+
+describe("given a car chased by a patrol car behind it", () => {
+  const LONG_TRIP_METRES = 200;
+
+  /** A straight route south (+z) from the origin, `LONG_TRIP_METRES` long, every point's cap the cruise speed. */
+  function straightRoute(): TripRoute {
+    const route = new TripRoute();
+    for (const z of [0, LONG_TRIP_METRES / 2, LONG_TRIP_METRES]) {
+      route.x[route.count] = 0;
+      route.z[route.count] = z;
+      route.cap[route.count] = CRUISE_SPEED;
+      route.arc[route.count] = z;
+      route.count++;
+    }
+    return route;
+  }
+
+  function chaserAt(x: number, z: number) {
+    const chaser = blankAiCar(9);
+    chaser.x = x;
+    chaser.z = z;
+    return chaser;
+  }
+
+  // mutation: sed -i 's/    if (!urgent \&\& chaser === null) target = Math.min(target, this.signalLimit/    if (!urgent) target = Math.min(target, this.signalLimit/' src/game/ai/openworld-traffic/traffic-driver.ts
+  it("when the light stays red, then the car runs it: it does not stop at the bar", () => {
+    const { route, car } = newTrip();
+    const snap = blankAiCar(CAR_ID);
+    const clock = timeShowing(LIGHT.red);
+    for (let step = 0; step < 45 / STEP_SECONDS; step++) {
+      car.snapshot(CAR_ID, snap);
+      car.run(driver.think(snap, route, sedan, [snap], clock, STEP_SECONDS, false, chaserAt(car.group.position.x - 40, car.group.position.z)), STEP_SECONDS);
+    }
+    expect(car.group.position.x, "the chased car's x, past the bar").toBeGreaterThan(barX + 2);
+  });
+
+  // mutation: sed -i 's/let target = chaser !== null ? Math.min(FLEE_SPEED, cls.topSpeed) : urgent/let target = chaser !== null ? Math.min(CRUISE_SPEED, cls.topSpeed) : urgent/' src/game/ai/openworld-traffic/traffic-driver.ts
+  it("when the road is clear and long, then it drives faster than traffic ever does", () => {
+    const route = straightRoute();
+    const car = new KinematicCar();
+    car.stand(0, 0, 0);
+    driver.forget(CAR_ID);
+    const snap = blankAiCar(CAR_ID);
+    let fastest = 0;
+    for (let step = 0; step < 25 / STEP_SECONDS; step++) {
+      car.snapshot(CAR_ID, snap);
+      car.run(driver.think(snap, route, sedan, [snap], 0, STEP_SECONDS, false, chaserAt(0, car.group.position.z - 30)), STEP_SECONDS);
+      fastest = Math.max(fastest, car.speed);
+    }
+    expect(fastest, "the top speed it reached").toBeGreaterThan(CRUISE_SPEED + 3);
+  });
+
+  // mutation: sed -i 's/    if (ahead > 0 || ahead < -SWERVE_BEHIND || Math.abs(side) > LINE_W) return 0;/    return 0;/' src/game/ai/openworld-traffic/traffic-driver.ts
+  it("when the chaser is close behind in its lane, then it swings its line off the chaser's; with the chaser far behind it holds its line", () => {
+    const route = straightRoute();
+    const steerWith = (chaser: ReturnType<typeof chaserAt>): number => {
+      const car = new KinematicCar();
+      car.stand(0, 0, 0);
+      driver.forget(CAR_ID);
+      const snap = car.snapshot(CAR_ID);
+      return driver.think(snap, route, sedan, [snap], 0, STEP_SECONDS, false, chaser).steer;
+    };
+    expect(Math.abs(steerWith(chaserAt(0, -300))), "a chaser far behind: straight on").toBeLessThan(0.02);
+    expect(steerWith(chaserAt(0, -10)), "a chaser dead behind: the nose swings off its line").toBeGreaterThan(0.1);
   });
 });

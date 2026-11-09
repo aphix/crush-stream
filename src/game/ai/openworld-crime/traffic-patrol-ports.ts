@@ -16,6 +16,9 @@ export type TrafficApi = {
   spawnDrivenCar(resident: number, fromSpot: number, toSpot: number, options?: { urgent?: boolean }): LeasedCar | null;
   despawn(handle: LeasedCar): void;
   drivenCarAt(carIndex: number): LeasedCar | null;
+  /** Traffic car `carIndex` runs from patrol car `chaserIndex` until `endEvade`; false for a car that is not on a street trip of the traffic's. */
+  evade(carIndex: number, chaserIndex: number): boolean;
+  endEvade(carIndex: number): void;
   /** Re-plans a leased car's trip along the streets from where it is to space `toSpot`; false (trip kept) when there is no way or the car is off the street. */
   redirect(handle: LeasedCar, toSpot: number): boolean;
   residentOf(carIndex: number): number;
@@ -79,6 +82,14 @@ export class TrafficPatrolPorts {
     if (handle === null) return false;
     handle.driver = driver;
     return true;
+  }
+
+  evade(index: number, chaserHandle: number): boolean {
+    return this.traffic.evade(index, this.leased[chaserHandle]!.index);
+  }
+
+  endEvade(index: number): void {
+    this.traffic.endEvade(index);
   }
 
   driverOf(index: number): number {
