@@ -121,7 +121,11 @@ const HOT = {
   "src/game/ai/openworld-traffic/kerb-cars.ts": ["step", "tend", "findEyes", "nearestWanted", "distanceToEyes", "evictFarthest"],
   "src/game/ai/openworld-traffic/trip-route.ts": ["projectOnRoute", "pointAtArc"],
   "src/game/present/traffic-lights.ts": ["update", "paint"],
+<<<<<<< HEAD
   "src/game/ai/civilians/society-activity.ts": ["readActivity", "readWalk", "hasDoor", "readOutdoor", "readIndoors", "readSitting", "readFight", "standAtDoor", "companionIsHere", "readFlinch", "readWatcher", "faceHazard", "stepBack", "bearingYaw", "swingLandingIn", "findWalkerStrike"],
+=======
+  "src/game/ai/civilians/society-activity.ts": ["readActivity", "readWalk", "hasDoor", "readOutdoor", "readIndoors", "readSitting", "readFight", "standAtDoor", "companionIsHere", "readFlinch", "standAt", "readWatcher", "faceHazard", "stepBack", "bearingYaw", "swingLandingIn", "findWalkerStrike"],
+>>>>>>> 29bee3844
   "src/game/ai/civilians/society-crime.ts": ["collect", "targetIsThere", "crimeKindOf"],
   "src/game/present/civilian-dress.ts": ["dressOfLook", "writeLinearColour", "scrambleLook", "fieldOf"],
   "src/game/present/openworld-sight.ts": ["playerInside", "update", "readEye", "seen", "seenAtProbe", "seenMany", "observe", "observeAtProbe", "seenThroughFace", "recordSighting", "allBlocked", "unseenFor", "reset", "near", "nearProbe", "askAbout", "someEyeSees", "inFrustum", "hiddenFrom", "rayBlocked", "blocks", "clipSlab"],

@@ -1,6 +1,6 @@
-import { PLACE_KIND, SEAT_STRIDE, type InteriorKind, type OpenWorldMap, type Place } from "../../world/openworld/walk-graph.ts";
+import { COUNTER_STRIDE, PLACE_KIND, SEAT_STRIDE, type InteriorKind, type OpenWorldMap, type Place } from "../../world/openworld/walk-graph.ts";
 import { PLACE_HOURS } from "./civilian-cast.ts";
-import { CLOSED_HOURS_WEIGHT, HOURS_PER_GAME_DAY, PURPOSE } from "./civilian-constants.ts";
+import { CLOSED_HOURS_WEIGHT, HOURS_PER_GAME_DAY, PURPOSE, STAND_SPOTS, CLERK_SPOTS } from "./civilian-constants.ts";
 
 /** What a place is to the people who go there: the interaction table and the hours choose by it. */
 export const VENUE = { other: 0, home: 1, office: 2, coffee: 3, bar: 4, diner: 5, shop: 6, supermarket: 7, park: 8, transit: 9 } as const;
@@ -73,6 +73,10 @@ export type VenueIndex = {
   seatBase: Int32Array;
   seatCount: Uint16Array;
   stoopCount: Uint16Array;
+  /** Standing spots after the seats of a place with a counter: `standCount` for customers, then `clerkCount` for staff (0 without the counter's clerk spot). */
+  standCount: Uint8Array;
+  clerkCount: Uint8Array;
+  /** Every seat and standing spot of every place: the size of the owner table. */
   seatTotal: number;
 };
 
@@ -83,6 +87,8 @@ export function buildVenueIndex(map: OpenWorldMap): VenueIndex {
   const seatBase = new Int32Array(placeCount);
   const seatCount = new Uint16Array(placeCount);
   const stoopCount = new Uint16Array(placeCount);
+  const standCount = new Uint8Array(placeCount);
+  const clerkCount = new Uint8Array(placeCount);
   const byName = new Map<string, readonly [number, number]>(PLACE_HOURS.map((entry) => [entry.place, [entry.from, entry.to]]));
   let seatTotal = 0;
   for (let place = 0; place < placeCount; place++) {
@@ -93,8 +99,11 @@ export function buildVenueIndex(map: OpenWorldMap): VenueIndex {
     seatBase[place] = seatTotal;
     seatCount[place] = entry.seats === undefined ? 0 : Math.floor(entry.seats.length / SEAT_STRIDE);
     stoopCount[place] = Math.min(seatCount[place]!, entry.stoopSeats ?? 0);
-    seatTotal += seatCount[place]!;
+    const counterSpots = entry.counter === undefined ? 0 : Math.floor(entry.counter.length / COUNTER_STRIDE);
+    standCount[place] = counterSpots >= 1 ? STAND_SPOTS : 0;
+    clerkCount[place] = counterSpots >= 2 ? CLERK_SPOTS : 0;
+    seatTotal += seatCount[place]! + standCount[place]! + clerkCount[place]!;
   }
   const byVenue = Array.from({ length: VENUE_COUNT }, (_, kind) => Int32Array.from(Array.from({ length: placeCount }, (_, place) => place).filter((place) => venue[place] === kind && map.places[place]!.doorNode >= 0)));
-  return { venueOf: venue, byVenue, hourWeight, seatBase, seatCount, stoopCount, seatTotal };
+  return { venueOf: venue, byVenue, hourWeight, seatBase, seatCount, stoopCount, standCount, clerkCount, seatTotal };
 }
