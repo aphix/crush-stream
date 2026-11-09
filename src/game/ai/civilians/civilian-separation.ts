@@ -1,9 +1,8 @@
 import { hypot2 } from "../../kernel/physics-core.js";
-import { BODY_GAP, COINCIDENT_DISTANCE, MAX_OFFSET, PAIRS_PER_BODY, SEPARATION_CELLS, SEPARATION_PASSES, SIDESTEP_SHARE, WALKER_CAPACITY } from "./civilian-crowd-constants.ts";
+import { BODY_GAP, COINCIDENT_DISTANCE, MAX_OFFSET, PAIR_RANGE, PAIRS_PER_BODY, SEPARATION_CELLS, SEPARATION_PASSES, SIDESTEP_SHARE, WALKER_CAPACITY } from "./civilian-crowd-constants.ts";
 
+/** The end of a chain of bodies in one grid cell. */
 const NO_BODY = -1;
-/** Two bodies can end within `BODY_GAP` of each other only if they start within the gap plus what both may move. */
-const PAIR_RANGE = BODY_GAP + 2 * MAX_OFFSET;
 const PAIR_RANGE_SQUARED = PAIR_RANGE * PAIR_RANGE;
 const GAP_SQUARED = BODY_GAP * BODY_GAP;
 const MAX_OFFSET_SQUARED = MAX_OFFSET * MAX_OFFSET;

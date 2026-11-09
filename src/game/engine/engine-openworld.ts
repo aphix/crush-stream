@@ -1,6 +1,7 @@
+import type { CrowdSight } from "../present/civilian-art.ts";
+import type { SightField } from "../present/openworld-sight.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
-import type { SightField } from "../present/openworld-sight.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { SignSight } from "../present/openworld-signs.ts";
@@ -19,7 +20,7 @@ const NO_EVENTS = new Float64Array(0);
 
 /** The drawn crowd: `update` once a frame after the crowd's step. */
 type CrowdArt = {
-  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: SightField, wallDt: number): void;
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void;
   dispose(): void;
 };
 
@@ -151,7 +152,7 @@ export class OpenWorldDirector {
       this.stop();
       return;
     }
-    this.culling.frame(this.ports.cars(), this.ports.now());
+    this.culling.frame(this.ports.cars(), wallDt);
     const client = this.ports.isClient();
     if (client && !this.hasHeard) return;
     const key = client ? this.heardKey : this.hostKey();

@@ -24,11 +24,13 @@ export function newCrowd(map: OpenWorldMap, residents = CROWD_RESIDENTS, seed = 
 export function posesDigest(poses: CrowdPoses): string {
   let hash = 2166136261;
   const mix = (value: number): void => void (hash = Math.imul(hash ^ value, 16777619) >>> 0);
-  const bits = [poses.x, poses.z, poses.yaw, poses.stride, poses.speed].map((array) => new Int32Array(array.buffer, array.byteOffset, array.length));
+  const bits = [poses.x, poses.z, poses.yaw, poses.stride, poses.speed, poses.activityClock, poses.activityLeft, poses.feetY, poses.surfaceY].map((array) => new Int32Array(array.buffer, array.byteOffset, array.length));
   for (let resident = 0; resident < poses.count; resident++) {
     mix(poses.shown[resident]!);
     if (poses.shown[resident] === 0) continue;
     mix(poses.look[resident]!);
+    mix(poses.activity[resident]!);
+    mix(poses.partner[resident]!);
     for (const view of bits) mix(view[resident]!);
   }
   return hash.toString(16);
