@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { HOLD_MAX_SECONDS, HOLD_MIN_SECONDS, SCAN_SECONDS } from "./auto-constants.ts";
+import { SCAN_SECONDS } from "./auto-constants.ts";
 import { AutoDirector, type AutoCandidates, SUBJECT, type SubjectKind } from "./auto-director.ts";
 
 const SEED = 21;
+/** The owner's numbers, not the code's: a subject is held 5 to 10 seconds. */
+const HOLD_MIN_SECONDS = 5;
+const HOLD_MAX_SECONDS = 10;
 const FRAME_S = 0.1;
 const CAPACITY = 16;
 /** A frame's slack on the hold's ends: the director is stepped in frames of `FRAME_S`. */
 const SLACK_S = FRAME_S + 1e-9;
 const RUN_S = 600;
+/** More than a scan a second over twenty seconds of nothing is a scan a frame. */
+const MOST_SCANS = 60;
 
 type Subject = { kind: SubjectKind; id: number; interest: number; here: boolean };
 
@@ -46,9 +51,10 @@ function run(director: AutoDirector, scan: ScriptedScan, seconds: number, each: 
   return cuts;
 }
 
-const crowdOfFive = () => new ScriptedScan([0, 1, 2, 3, 4].map((id) => walker(id, 0.3 + id * 0.01)));
+/** One civilian everyone looks at first, and four quiet ones. */
+const crowdOfFive = () => new ScriptedScan([walker(0, 0.9), ...[1, 2, 3, 4].map((id) => walker(id, 0.2))]);
 
-describe("given the director over a quiet street of five civilians", () => {
+describe("given the director over a street of five civilians, one of them more to watch than the rest", () => {
   it(`when ten minutes run, then every subject is held ${HOLD_MIN_SECONDS} to ${HOLD_MAX_SECONDS} seconds before the cut to the next`, () => {
     const cuts = run(new AutoDirector(CAPACITY, SEED), crowdOfFive(), RUN_S);
     const holds = cuts.slice(1).map((cut, at) => cut.at - cuts[at]!.at);
@@ -119,6 +125,7 @@ describe("given the director holding a quiet civilian", () => {
     const scans = scan.scans;
     expect(run(director, scan, HOLD_MAX_SECONDS * 2).length, "cuts with nobody else there").toBe(0);
     expect(scan.scans - scans, "scans in 20 s of nothing").toBeGreaterThan(HOLD_MAX_SECONDS);
+    expect(scan.scans - scans, "scans in 20 s of nothing: one a scan period, not one a frame").toBeLessThan(MOST_SCANS);
     scan.subjects.push(walker(5, 0.5));
     const later = run(director, scan, SCAN_SECONDS * 2 + HOLD_MAX_SECONDS);
     expect(later[0]?.id, "the first cut once someone is there").toBe(5);
