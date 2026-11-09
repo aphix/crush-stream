@@ -65,6 +65,8 @@ export class MoverFleet {
   private readonly planner: RoutePlanner;
   private readonly driver: TrafficDriver;
   private readonly routes: TripRoute[];
+  /** The route a re-plan is written into; it trades places with the car's on success, so a failed one leaves the car's route as it was. */
+  private spareRoute = new TripRoute();
   private readonly classes: ClassStats[];
   private readonly state: Uint8Array;
   private readonly role: Uint8Array;
@@ -176,6 +178,36 @@ export class MoverFleet {
     handle.lost = false;
     this.launch(slot, toSpot);
     return handle;
+  }
+
+  /**
+   * Sends leased car `handle` on to space `toSpot`, keeping its urgency: a car on a trip from where it is now (no pull-out), a car that arrived out of its space. False when the car is not
+   * the owner's, the space is held or a car stands in it for good, or there is no way; the car then goes on as before.
+   */
+  redirect(handle: DrivenCar, toSpot: number): boolean {
+    const slot = handle.index - this.first;
+    if (slot < 0 || slot >= this.size || handle.lost || this.state[slot] === MOVER.free) return false;
+    if (toSpot === this.spot[slot]) return true;
+    const { taken, spots, snaps } = this.context;
+    if (toSpot < 0 || toSpot >= spots.count || spots.stays[toSpot] === 1 || taken[toSpot] === 1) return false;
+    const parked = this.state[slot] === MOVER.parked;
+    const snap = snaps[handle.index]!;
+    const planned = parked ? this.planner.plan(this.spareRoute, this.spot[slot]!, toSpot) : this.planner.planFrom(this.spareRoute, snap.x, snap.z, snap.yaw, toSpot);
+    if (!planned) return false;
+    const old = this.routes[slot]!;
+    this.routes[slot] = this.spareRoute;
+    this.spareRoute = old;
+    if (parked) {
+      this.launch(slot, toSpot);
+      return true;
+    }
+    taken[this.spot[slot]!] = 0;
+    taken[toSpot] = 1;
+    this.spot[slot] = toSpot;
+    this.stillFor[slot] = 0;
+    handle.arrived = false;
+    this.driver.forget(handle.index);
+    return true;
   }
 
   /** The owner is done with the car: it goes on as ambient traffic from where it is; a patrol car is put away. */

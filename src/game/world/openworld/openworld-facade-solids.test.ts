@@ -41,7 +41,7 @@ const SOLIDS_PER_HOME_MAX = 3;
 const EPSILON = 1e-9;
 
 /** A world point against a frontage: out along the building's front direction and across along its local z (u). */
-function against(frontage: Frontage, x: number, z: number): { out: number; across: number } {
+function against(frontage: Pick<Frontage, "x" | "z" | "yaw">, x: number, z: number): { out: number; across: number } {
   const dx = x - frontage.x;
   const dz = z - frontage.z;
   return { out: dx * detCos(frontage.yaw) - dz * detSin(frontage.yaw), across: dx * detSin(frontage.yaw) + dz * detCos(frontage.yaw) };
@@ -86,7 +86,7 @@ describe("given the rowhomes of the open world's layout", () => {
   it("when the door point of a lot facing north and of one facing south are made, then each is 1.8 m along the building's local z from the lot's middle, on the drawn front wall", () => {
     for (const yaw of [FACING.north, FACING.south]) {
       const door = homeDoorPoint(10, 20, yaw, HOUSE_DEPTH);
-      const middle = { x: 10, z: 20, yaw, variant: 0 };
+      const middle = { x: 10, z: 20, yaw };
       expect(against(middle, door.x, door.z).across, `door across the lot facing ${yaw}`).toBeCloseTo(DOOR.across, 9);
       expect(against(middle, door.x, door.z).out, `door behind the front line facing ${yaw} (m)`).toBeCloseTo(drawnHalf(HOUSE_DEPTH) - HOUSE_DEPTH / 2, 9);
     }
@@ -127,7 +127,7 @@ describe("given the interiors of the homes", () => {
         solidsRead++;
         for (const x of [solid.x0, solid.x1]) {
           for (const z of [solid.z0, solid.z1]) {
-            const { out, across } = against({ x: home.x, z: home.z, yaw: home.yaw, variant: 0 }, x, z);
+            const { out, across } = against({ x: home.x, z: home.z, yaw: home.yaw }, x, z);
             deepest = { out: Math.max(deepest.out, Math.abs(out)), across: Math.max(deepest.across, Math.abs(across)) };
             if (Math.abs(out) > outLimit + DOOR_MATCH || Math.abs(across) > acrossLimit + DOOR_MATCH) through.push(`${home.name}: corner ${out.toFixed(3)} out, ${across.toFixed(3)} across`);
           }

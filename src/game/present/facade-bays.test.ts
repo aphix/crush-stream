@@ -1,11 +1,15 @@
 import * as THREE from "three";
+import { detCos, detSin } from "../kernel/physics-core.js";
 import { afterAll, describe, expect, it } from "vitest";
-import { BAY, BAY_FLOORS, DOOR, BLOCK_FACE_HALF, homeFrontages, STOOP } from "../world/openworld/openworld-facade-solids.ts";
+import { PREFABS } from "../world/catalog.ts";
+import { PREFAB } from "../world/constants.ts";
+import { BAY, BAY_FLOORS, DOOR, BLOCK_FACE_HALF, drawnHalf, HOME_HEIGHT, homeFrontages, STOOP } from "../world/openworld/openworld-facade-solids.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
-import { buildBayGeometry, buildCorniceGeometry, buildRailingGeometry, buildStoopGeometry } from "./facade-bay-parts.ts";
+import { buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildRailingGeometry, buildRoofGeometry, buildStoopGeometry } from "./facade-bay-parts.ts";
 import { FacadeBays, HOUSE_ACCENTS, tintedColorVertex } from "./facade-bays.ts";
 import { ATLAS_SIZE, KIT_CELL, paintKit, type UvRect } from "./facade-kit-atlas.ts";
 import { HALF } from "./facade-mesh.ts";
+import { roofLiftAt } from "./facades.ts";
 
 const lots = layOutLots();
 const frontages = homeFrontages(lots.places.slice(0, lots.backdropStart));
@@ -16,7 +20,12 @@ const DOOR_HOLE_X = -1.8;
 /** The lot's half width (m) and the least clear gap between the bay and the stoop's hood (m). */
 const LOT_HALF_WIDTH = 2.8;
 const STOOP_BAY_GAP_MIN = 0.3;
-/** The most triangles one rowhome's kit may cost: four meshes, each drawn once per house. */
+/** The open world's house depth (m), and how far past the party wall the chimney may reach (its half width and its cap, m). */
+const HOUSE_DEPTH = 15;
+const CHIMNEY_HALF_MAX = 0.45;
+/** The kit's draws (its instanced meshes), the ones every house has, and the most triangles one rowhome's kit may cost. */
+const KIT_DRAWS = 7;
+const EVERY_HOUSE: readonly string[] = ["facade-bay", "facade-stoop", "facade-railing", "facade-cornice", "facade-roof"];
 const TRIANGLES_PER_HOME_MAX = 400;
 
 /** The x range of every vertex of `geometry`. */
@@ -141,8 +150,8 @@ describe("given the kit made for the layout's rowhomes", () => {
   if (!(bays instanceof THREE.InstancedMesh)) throw new Error("the kit has no bay mesh");
   afterAll(() => kit.dispose());
 
-  // mutation: sed -i 's/new THREE.InstancedMesh(geometry, material, frontages.length)/new THREE.InstancedMesh(geometry, material, Math.min(frontages.length, 8))/' src/game/present/facade-bays.ts
-  it("when the kit is drawn for a few houses and then for many, then it is the same four draws with an instance for each house", () => {
+  // mutation: sed -i 's/new THREE.InstancedMesh(geometry, material, houses.length)/new THREE.InstancedMesh(geometry, material, Math.min(houses.length, 8))/' src/game/present/facade-bays.ts
+  it("when the kit is drawn for a few houses and then for many, then it is the same draws, an instance of each every-house piece for each house and of the others for a share", () => {
     const few = new FacadeBays(frontages.slice(0, 10));
     const many = new FacadeBays(frontages.slice(0, 40));
     const cases = [
@@ -151,11 +160,14 @@ describe("given the kit made for the layout's rowhomes", () => {
       { name: "layout", made: kit, houses: frontages.length },
     ];
     for (const { name, made, houses } of cases) {
-      expect(made.group.children.length, `${name}: draws`).toBe(4);
-      expect(made.stats.draws, `${name}: draws counted`).toBe(4);
-      for (const mesh of made.group.children) expect(mesh instanceof THREE.InstancedMesh ? mesh.count : -1, `${name}: instances of ${mesh.name}`).toBe(houses);
+      expect(made.group.children.length, `${name}: draws`).toBe(KIT_DRAWS);
+      expect(made.stats.draws, `${name}: draws counted`).toBe(KIT_DRAWS);
+      for (const mesh of made.group.children) {
+        const count = mesh instanceof THREE.InstancedMesh ? mesh.count : -1;
+        if (EVERY_HOUSE.includes(mesh.name)) expect(count, `${name}: instances of ${mesh.name}`).toBe(houses);
+        else expect(count, `${name}: instances of ${mesh.name}`).toBeLessThanOrEqual(houses);
+      }
     }
-    expect(many.stats.triangles / few.stats.triangles, "triangles grow with the houses").toBeCloseTo(4, 6);
     few.dispose();
     many.dispose();
   });
@@ -188,6 +200,58 @@ describe("given the kit made for the layout's rowhomes", () => {
   it("when the kit's triangles are counted for the layout, then a house costs no more than the budget", () => {
     expect(frontages.length, "houses").toBeGreaterThan(100);
     expect(kit.stats.triangles / frontages.length, "triangles per house").toBeLessThanOrEqual(TRIANGLES_PER_HOME_MAX);
+  });
+
+  // mutation: sed -i 's/setPosition(frontage.x, onRoof ? roofTopOf(frontage) : 0, frontage.z)/setPosition(frontage.x, onRoof ? HOME_HEIGHT : 0, frontage.z)/' src/game/present/facade-bays.ts
+  it("when each house's roof pieces are read, then they stand on its roof, raised by the parapet lift the facade shader gives that building", () => {
+    const roof = kit.group.getObjectByName("facade-roof");
+    if (!(roof instanceof THREE.InstancedMesh)) throw new Error("the kit has no roof mesh");
+    const matrix = new THREE.Matrix4();
+    const block = PREFABS[PREFAB.building].size[1];
+    let lifted = 0;
+    let worst = 0;
+    for (const [at, frontage] of frontages.entries()) {
+      const face = drawnHalf(frontage.depth);
+      const lift = roofLiftAt(frontage.x - detCos(frontage.yaw) * face, frontage.z + detSin(frontage.yaw) * face);
+      if (lift > 0) lifted++;
+      roof.getMatrixAt(at, matrix);
+      worst = Math.max(worst, Math.abs(matrix.elements[13]! - ((block + lift) * HOME_HEIGHT) / block));
+    }
+    expect(lifted, "houses whose roof the shader lifts").toBeGreaterThan(0);
+    expect(lifted, "houses whose roof the shader lifts").toBeLessThan(frontages.length);
+    expect(worst, "furthest a roof piece stands off its roof (m)").toBeLessThan(EPSILON);
+  });
+
+  // mutation: sed -i 's/const CONDENSER_SHARE = 45;/const CONDENSER_SHARE = 100;/' src/game/present/facade-bays.ts
+  it("when the roofs are counted, then some houses have a condenser and some a deck, and neither is on every house", () => {
+    for (const name of ["facade-condenser", "facade-deck"]) {
+      const mesh = kit.group.getObjectByName(name);
+      const count = mesh instanceof THREE.InstancedMesh ? mesh.count : -1;
+      expect(count, `houses with ${name}`).toBeGreaterThan(0);
+      expect(count, `houses with ${name}`).toBeLessThan(frontages.length);
+    }
+  });
+});
+
+describe("given the roof pieces", () => {
+  // mutation: sed -i 's/const CHIMNEY_BACK = 9.5;/const CHIMNEY_BACK = 15.5;/' src/game/present/facade-bay-parts.ts
+  it("when their vertices are read, then every one stands on or over the roof and within it: behind the facade, before the back wall, inside the lot but for the chimney astride the party wall", () => {
+    const roofDepth = 2 * drawnHalf(HOUSE_DEPTH);
+    const outside: string[] = [];
+    const pieces = [
+      { name: "roof", geometry: buildRoofGeometry() },
+      { name: "condenser", geometry: buildCondenserGeometry() },
+      { name: "deck", geometry: buildDeckGeometry() },
+    ];
+    for (const { name, geometry } of pieces) {
+      const position = geometry.getAttribute("position");
+      for (let at = 0; at < position.count; at++) {
+        const x = position.getX(at);
+        const z = position.getZ(at);
+        if (position.getY(at) < -EPSILON || z > EPSILON || z < -roofDepth - EPSILON || Math.abs(x) > LOT_HALF_WIDTH + CHIMNEY_HALF_MAX) outside.push(`${name} ${x.toFixed(2)}, ${z.toFixed(2)}`);
+      }
+    }
+    expect(outside.slice(0, 3).join("; "), "roof piece vertices off the roof").toBe("");
   });
 });
 
