@@ -5,6 +5,7 @@ import { PREFAB } from "../world/constants.ts";
 import { plazaBricks } from "../world/openworld/openworld-plaza.ts";
 import { POSTS } from "../world/street-kit.ts";
 import { box, cyl, painted, type Piece, type PrefabMaterials, type PrefabPart } from "./prefab-pieces.ts";
+import { bicyclePieces, spokePart } from "./bicycle.ts";
 import { monumentPieces } from "./prefabs-mall.ts";
 
 /**
@@ -16,9 +17,6 @@ const KIT_COLOUR = {
   wood: 0x9b6b3d,
   iron: 0x26332c,
   galvanised: 0x7a8086,
-  tyre: 0x1a1a1a,
-  frame: 0xb3322b,
-  saddle: 0x222222,
   binGreen: 0x1f4a33,
   binLid: 0x173a28,
   meterPost: 0x4b5157,
@@ -70,21 +68,13 @@ function bench(): Piece[] {
   return pieces;
 }
 
-/** A staple rack along the curb and a bicycle locked to it on the street side. */
+/** A staple rack along the curb and a bicycle (`bicycle.ts`: a diamond frame of rods, ring tyres; its spokes are the kit's second part) locked to it on the street side. */
 function bikeRack(): Piece[] {
-  const wheel = (z: number): Piece => [cyl(0.33, 0.33, -0.02, 0.02, WHEEL).rotateZ(Math.PI / 2).translate(0.1, 0.34, z), KIT_COLOUR.tyre, MAT.GENERIC];
   return [
     [box(0.05, 0.8, 0.05, -0.2, 0.4, -0.55), KIT_COLOUR.galvanised, MAT.BRACKET_STEEL],
     [box(0.05, 0.8, 0.05, -0.2, 0.4, 0.55), KIT_COLOUR.galvanised, MAT.BRACKET_STEEL],
     [box(0.05, 0.05, 1.15, -0.2, 0.8, 0), KIT_COLOUR.galvanised, MAT.BRACKET_STEEL],
-    wheel(-0.52),
-    wheel(0.52),
-    [box(0.03, 0.42, 0.03, 0.1, 0.55, -0.12), KIT_COLOUR.frame, MAT.BRACKET_STEEL],
-    [box(0.03, 0.42, 0.03, 0.1, 0.6, 0.4), KIT_COLOUR.frame, MAT.BRACKET_STEEL],
-    [box(0.03, 0.03, 0.52, 0.1, 0.76, 0.14), KIT_COLOUR.frame, MAT.BRACKET_STEEL],
-    [box(0.03, 0.03, 0.64, 0.1, 0.34, -0.2), KIT_COLOUR.frame, MAT.BRACKET_STEEL],
-    [box(0.08, 0.04, 0.22, 0.1, 0.78, -0.14), KIT_COLOUR.saddle, MAT.GENERIC],
-    [box(0.42, 0.03, 0.03, 0.1, 0.84, 0.42), KIT_COLOUR.saddle, MAT.BRACKET_STEEL],
+    ...bicyclePieces(),
   ];
 }
 
@@ -239,5 +229,7 @@ const KIT_PIECES: Partial<Record<PrefabId, () => Piece[]>> = {
 export function streetKitParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
   const draw = KIT_PIECES[id];
   if (draw === undefined) throw new Error(`${id} is no street kit piece`);
-  return [{ geometry: painted(draw()), material: mats.plain, shared: false }];
+  const parts: PrefabPart[] = [{ geometry: painted(draw()), material: mats.plain, shared: false }];
+  if (id === PREFAB.bikeRack) parts.push(spokePart());
+  return parts;
 }
