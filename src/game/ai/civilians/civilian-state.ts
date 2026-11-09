@@ -6,6 +6,7 @@ import {
   HISTORY_FIELDS,
   LOG_LINES,
   MAX_PATH_NODES,
+  MOOD_HOLD_TICKS,
   NEED_COUNT,
   NO_PLACE,
   RESIDENT_FLOAT_STRIDE,
@@ -15,7 +16,7 @@ import {
 } from "./civilian-constants.ts";
 import { LegPose } from "./civilian-leg.ts";
 import type { MapIndex } from "./civilian-map-index.ts";
-import { EVENT_CODE, moodHold, moodOfCode, packName } from "./civilian-names.ts";
+import { moodHold, packName } from "./civilian-names.ts";
 import { castHomesOf, newAppointmentSlot, type ResolvedMember } from "./civilian-story.ts";
 import { buildVenueIndex, type VenueIndex } from "./society-venues.ts";
 import { PathFinder } from "./walk-path.ts";
@@ -170,13 +171,13 @@ export function logHistory(state: CityState, resident: number, code: number, sub
 }
 
 /**
- * A walk's or a sight's mood (a party's, a chat's, a hazard seen) colours the resident only when no earlier event's mood still holds: a wrecked stoop's anger lasts its days whatever the evening brings. A life event
- * (`setMoodEvent`) always replaces it.
+ * A walk's or a sight's mood (a party's, a chat's, a hazard seen) colours the resident unless a grudge still holds, an earlier event whose mood lasts longer than the usual (a wrecked stoop's anger, days): that outlasts
+ * whatever the evening brings. A life event (`setMoodEvent`) always replaces it.
  */
 export function setVisitMood(state: CityState, resident: number, code: number, tick: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   const held = state.ints[base + RESIDENT_INT.moodEvent]!;
-  if (held !== EVENT_CODE.none && moodOfCode(held) !== -1 && tick - state.ints[base + RESIDENT_INT.moodTick]! < moodHold(held)) return;
+  if (moodHold(held) > MOOD_HOLD_TICKS && tick - state.ints[base + RESIDENT_INT.moodTick]! < moodHold(held)) return;
   setMoodEvent(state, resident, code, tick);
 }
 

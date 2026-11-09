@@ -22,6 +22,7 @@ import {
   CRASH_NODE_REACH,
   DANGER_CONFIRM_SECONDS,
   DANGER_LOCKOUT_SECONDS,
+  DANGER_MIN_SPEED,
   DANGER_SHARED_SECONDS,
   EVENT_LOG_CAPACITY,
   HARD_CLOSING_SPEED,
@@ -518,7 +519,7 @@ export class CivilianCrowd {
         if (shown[resident] === 0) continue;
         const spotX = x[resident]!;
         const spotZ = z[resident]!;
-        this.watchApproach(resident, carIndex, spotX - carX, spotZ - carZ, car.velocity.x, car.velocity.z, carSpeed, seconds);
+        if (carSpeed >= DANGER_MIN_SPEED) this.watchApproach(resident, carIndex, spotX - carX, spotZ - carZ, car.velocity.x, car.velocity.z, carSpeed, seconds);
         const near = hypot2(carX - spotX, carZ - spotZ) <= CAR_REACH;
         if (!near && !loose) continue;
         const spotY = ground.heightAt(spotX, spotZ);

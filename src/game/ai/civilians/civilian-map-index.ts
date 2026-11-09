@@ -1,5 +1,6 @@
 import { PLACE_KIND, type OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { AREA_PER_JOB, BLOCK_COLUMNS, BLOCK_COUNT, BLOCK_ROWS, MAX_JOBS, MIN_JOBS, NORTH_IS_LOW_Z, WORKPLACE_KINDS } from "./civilian-constants.ts";
+import { PRIVATE_PLACE_NAMES } from "./civilian-cast.ts";
 import { KIND_COUNT } from "./civilian-names.ts";
 
 /** What the map says that never changes, for the places inside the walls (nobody lives, works or goes beyond them): places by kind, their spots, blocks, who each can employ, the way out. */
@@ -52,6 +53,7 @@ export function buildMapIndex(map: OpenWorldMap): MapIndex {
   const kindOf = new Uint8Array(placeCount);
   const blockOf = new Int8Array(placeCount);
   const jobCapacity = new Uint16Array(placeCount);
+  const publicPlace = new Uint8Array(placeCount);
   const placeByName = new Map<string, number>();
   for (let place = 0; place < placeCount; place++) {
     const entry = map.places[place]!;
@@ -62,7 +64,9 @@ export function buildMapIndex(map: OpenWorldMap): MapIndex {
     kindOf[place] = entry.kind;
     blockOf[place] = entry.doorNode < 0 ? -1 : blockOfPosition(entry.x, entry.z, map.halfX, map.halfZ);
     if (!placeByName.has(entry.name)) placeByName.set(entry.name, place);
-    const employs = (WORKPLACE_KINDS as readonly number[]).includes(entry.kind) && entry.doorNode >= 0;
+    const isPublic = !PRIVATE_PLACE_NAMES.includes(entry.name);
+    publicPlace[place] = isPublic ? 1 : 0;
+    const employs = isPublic && (WORKPLACE_KINDS as readonly number[]).includes(entry.kind) && entry.doorNode >= 0;
     jobCapacity[place] = employs ? Math.min(MAX_JOBS, Math.max(MIN_JOBS, Math.round((entry.width * entry.depth * entry.storeys) / AREA_PER_JOB))) : 0;
   }
   const portalNodes = new Set(map.portals);
@@ -76,7 +80,7 @@ export function buildMapIndex(map: OpenWorldMap): MapIndex {
     kindOf,
     blockOf,
     placesOfBlock: Array.from({ length: BLOCK_COUNT }, (_, block) => listWhere(placeCount, (place) => blockOf[place] === block)),
-    byKind: Array.from({ length: KIND_COUNT }, (_, kind) => listWhere(placeCount, (place) => kindOf[place] === kind && doorNode[place]! >= 0)),
+    byKind: Array.from({ length: KIND_COUNT }, (_, kind) => listWhere(placeCount, (place) => kindOf[place] === kind && doorNode[place]! >= 0 && publicPlace[place] === 1)),
     workplaces: listWhere(placeCount, (place) => jobCapacity[place]! > 0),
     jobCapacity,
     exitStops: listWhere(placeCount, (place) => kindOf[place] === PLACE_KIND.transit && portalNodes.has(doorNode[place]!)),
