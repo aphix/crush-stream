@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { loadRapier } from "../kernel/rapier.ts";
 import { colliderSolids, courseSolids } from "../present/ragdoll-solids.ts";
+import { isFlight } from "./stairs.ts";
 import { Mesher } from "../present/track-mesh.ts";
 import { addWalls } from "../present/track-structures.ts";
 import { PREFAB_IDS, PREFABS, type PrefabId } from "./catalog.ts";
@@ -197,10 +198,15 @@ describe("given the colliders the cars meet and the solids the cosmetic Rapier w
       const R = await loadRapier();
       const track = new Track(course.json);
       const placed = placeProps(track);
-      const colliders = [...wallColliders(track), ...propColliders(placed).filter((c) => c.body === "solid")];
+      const walls = wallColliders(track);
+      const colliders = [...walls, ...propColliders(placed).filter((c) => c.body === "solid")];
       const solids = courseSolids(track, placed);
       expect(solids.length, `${solids.length} solids for ${colliders.length} colliders`).toBeGreaterThanOrEqual(colliders.length);
       for (const [k, c] of colliders.entries()) {
+        if (k >= walls.length && isFlight(c, placed)) {
+          expect(solids[k]!.make(R), `solid ${k} is a flight's block: it makes nothing, its treads stand instead`).toBeNull();
+          continue;
+        }
         const desc = solids[k]!.make(R)!;
         const h = (c.top - c.base) / 2;
         const t = desc.translation;

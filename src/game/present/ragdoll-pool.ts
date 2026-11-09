@@ -28,6 +28,7 @@ import { Untangle } from "./ragdoll-untangle.ts";
 import { groundColliders, PATCH_AHEAD, PATCH_HALF, SCENE_HALF, type Pole } from "./ragdoll-ground.ts";
 import { boxColliders, courseSolids, removeBoxColliders, type Solid } from "./ragdoll-solids.ts";
 import type { FloorBox } from "./walker-floor.ts";
+import { NO_STAIRS, type StairField } from "../world/stairs.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { GRAVITY } from "../kernel/constants.ts";
 
@@ -137,6 +138,8 @@ export abstract class RagdollPool {
   /** The boxes a building streams in (`setFixedBoxes`), kept across runs and replaced whole each call, and their fixed colliders in this world. */
   protected boxList: readonly FloorBox[] = [];
   private readonly boxBuilt: Collider[] = [];
+  /** The course's or scene's flights of stairs (`setCourse`, `setSolids`): every walker's floor reads them. */
+  protected flights: StairField = NO_STAIRS;
   /** A scene's ground and every solid of it (`setSolids`), built once for every dummy there: a scene's solids stand where they do whoever is thrown, and a patch of the same floor per dummy made 32 dummies cost twice what the first one did. Empty until a dummy is out. */
   private scenePatch: Collider[] = [];
   protected disposed = false;
@@ -244,6 +247,12 @@ export abstract class RagdollPool {
     this.buildFixedBoxes();
   }
 
+  /** Walker `walker` reads the boxes streamed in and the flights of the course. */
+  protected equipFloor(walker: Walker): void {
+    walker.floor.boxes = this.boxList;
+    walker.floor.stairs = this.flights;
+  }
+
   /** The streamed boxes (`boxList`) as fixed colliders in this world, those of the list before out of it; none while Rapier is still loading (`load` builds them). */
   protected buildFixedBoxes(): void {
     if (!this.world || !this.R) return;
@@ -277,7 +286,7 @@ export abstract class RagdollPool {
     const joints = joinUp(R, world, bodies);
     this.dolls.push({ bodies, joints, loose: false, braced: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3), driven: false });
     if (this.walkerList.length <= s) this.walkerList.push(new Walker());
-    this.walkerList[s]!.floor.boxes = this.boxList;
+    this.equipFloor(this.walkerList[s]!);
     this.purses?.build();
   }
 

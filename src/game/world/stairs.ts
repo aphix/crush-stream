@@ -3,28 +3,29 @@ import { NO_FLOOR } from "./ground.ts";
 import type { Placed, PropCollider } from "./placements.ts";
 
 /** The depth (m) of one tread: a flight of length L has round(L / this) of them. */
-export const STAIR_TREAD = 0.28;
+const STAIR_TREAD = 0.28;
 /** Cell side (m) of `StairField`'s index: longer than any flight, so a flight covers at most four cells. */
 const CELL = 8;
-/** Offset keeping a cell's coordinates positive in its key, and the key's stride: a map spans well under 32768 cells a side. */
-const CELL_BIAS = 32768;
-const CELL_STRIDE = 65536;
+/** A cell's two coordinates share one key, 16 bits each (a map spans well under 32768 cells a side). */
+const CELL_BITS = 16;
+const CELL_MASK = 0xffff;
 
 /** A flight's box (the prop's collider) and how many treads it holds. */
 export type Flight = { x: number; z: number; yaw: number; cos: number; sin: number; halfLength: number; halfWidth: number; base: number; top: number; treads: number };
 
-/** The flights among `colliders` (the box colliders of `placed`' stairs props: their top falls from `top` at the local -x end to `base` at the +x end, in equal treads) and the colliders that are not. */
-export function splitStairs(colliders: readonly PropCollider[], placed: readonly Placed[]): { flights: Flight[]; rest: PropCollider[] } {
+/** Whether `collider` is a flight of stairs: the box of a solid prop placed with `stairs`, whose top falls from `top` at its local -x end to `base` at its +x end, in equal treads. */
+export function isFlight(collider: PropCollider, placed: readonly Placed[]): boolean {
+  return collider.kind === "box" && collider.body === "solid" && placed[collider.index]!.stairs === true;
+}
+
+/** The flights among `colliders`. */
+export function flightsOf(colliders: readonly PropCollider[], placed: readonly Placed[]): Flight[] {
   const flights: Flight[] = [];
-  const rest: PropCollider[] = [];
   for (const c of colliders) {
-    if (c.kind !== "box" || placed[c.index]!.stairs !== true) {
-      rest.push(c);
-      continue;
-    }
+    if (!isFlight(c, placed)) continue;
     flights.push({ x: c.x, z: c.z, yaw: c.yaw, cos: detCos(c.yaw), sin: detSin(c.yaw), halfLength: c.hx, halfWidth: c.hz, base: c.base, top: c.top, treads: Math.max(1, Math.round((2 * c.hx) / STAIR_TREAD)) });
   }
-  return { flights, rest };
+  return flights;
 }
 
 /** The height (m) of the tread under the world point (x, z): `NO_FLOOR` outside the flight's footprint. */
@@ -38,8 +39,8 @@ export function flightHeightAt(flight: Flight, x: number, z: number): number {
   return flight.base + ((flight.top - flight.base) * Math.ceil(climbed * flight.treads)) / flight.treads;
 }
 
-const cellOf = (coordinate: number): number => Math.floor(coordinate / CELL) + CELL_BIAS;
-const keyOf = (cellX: number, cellZ: number): number => cellX * CELL_STRIDE + cellZ;
+const cellOf = (coordinate: number): number => Math.floor(coordinate / CELL);
+const keyOf = (cellX: number, cellZ: number): number => ((cellX & CELL_MASK) << CELL_BITS) | (cellZ & CELL_MASK);
 
 const NO_FLIGHTS: readonly Flight[] = [];
 

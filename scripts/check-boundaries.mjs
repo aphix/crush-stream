@@ -92,6 +92,9 @@ const HOT = {
   "src/game/present/civilian-art.ts": ["update", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
   "src/game/present/civilian-pose.ts": ["poseCivilian", "poseLimb", "placePart", "setSwung"],
   "src/game/present/civilian-dress.ts": ["dressOfLook", "writeLinearColour", "scrambleLook", "fieldOf"],
+  "src/game/present/walker-floor.ts": ["under", "pace", "stand", "solidsHeight"],
+  "src/game/present/walker-gait.ts": ["restHeight", "clearHeight"],
+  "src/game/world/stairs.ts": ["heightAt", "flightHeightAt"],
 };
 const KNOB_CONTEXTS = new Set(["kernel", "world", "deform", "vehicle", "contact", "scenes", "ai"]);
 const MAX_FILE_LINES = 800;

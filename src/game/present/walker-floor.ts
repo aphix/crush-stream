@@ -1,6 +1,7 @@
 import { detCos, detSin } from "../kernel/physics-core.js";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { STEP_MAX } from "../world/surfaces.ts";
+import { NO_STAIRS, type StairField } from "../world/stairs.ts";
+import { armedSolids, heightIn, PQ_SIZE, PQ_X, PQ_Y, PQ_Z, STEP_MAX } from "../world/surfaces.ts";
 import { PARTS } from "./ragdoll-body.ts";
 
 /** A fixed world-axis box that is not in the ground (an interior's slab, stair tread or counter): `y0` its foot, `y1` its top. */
@@ -21,6 +22,17 @@ const STEP_PACE = 0.5;
 const TORSO_HEIGHT = PARTS[0].c[1];
 
 const NO_BOXES: readonly FloorBox[] = [];
+const _ask = new Float64Array(PQ_SIZE);
+
+/** The armed solids' floor (the course's props: a low planter, a landing) under (x, z) for a reader asking from `y`; `NO_FLOOR` where none is within reach. */
+function solidsHeight(x: number, z: number, y: number): number {
+  const solids = armedSolids();
+  if (solids === null) return NO_FLOOR;
+  _ask[PQ_X] = x;
+  _ask[PQ_Z] = z;
+  _ask[PQ_Y] = y;
+  return heightIn(solids, _ask);
+}
 
 /** Throws unless every box is finite with x0 < x1, z0 < z1 and y0 < y1: a non-finite or empty box panics Rapier's broad phase. */
 export function assertFloorBoxes(boxes: readonly FloorBox[]): void {
@@ -32,12 +44,14 @@ export function assertFloorBoxes(boxes: readonly FloorBox[]): void {
 }
 
 /**
- * What the walker's feet stand on: the active ground plus the boxes a building streams in. A top at most `WALK_STEP` over his
- * planted feet is floor; a taller or overhead one is a wall, which the dummy's own colliders stop him at.
+ * What the walker's feet stand on: the active ground, the course's solids, the flights of stairs and the boxes a building streams in. A
+ * top at most `WALK_STEP` over his planted feet is floor; a taller or overhead one is a wall, which the dummy's own colliders stop him at.
  */
 export class WalkFloor {
   /** Boxes the ground does not hold, in force while he is near them. */
   boxes: readonly FloorBox[] = NO_BOXES;
+  /** The course's flights of stairs: over one, its tread is the floor and the flat box it is placed as is not read. */
+  stairs: StairField = NO_STAIRS;
   /** The floor (m) under his planted feet: every read is asked from here. */
   level = 0;
 
@@ -51,7 +65,10 @@ export class WalkFloor {
   /** The floor straight under (x, z) for feet at `level`; `NO_FLOOR` where there is none. */
   under(x: number, z: number): number {
     const ask = this.level + ASK_LIFT;
-    let best = activeGround().heightAt(x, z, ask);
+    const ground = activeGround().heightAt(x, z, ask);
+    const tread = this.stairs.heightAt(x, z);
+    if (tread !== NO_FLOOR) return tread <= ask + STEP_MAX ? Math.max(ground, tread) : ground;
+    let best = Math.max(ground, solidsHeight(x, z, ask));
     const boxes = this.boxes;
     for (let i = 0; i < boxes.length; i++) {
       const box = boxes[i]!;

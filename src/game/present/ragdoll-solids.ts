@@ -9,6 +9,7 @@ import { blankPoint, pointOn, type Track, type TrackPath } from "../world/track.
 import { ARCH_STEPS, DECK_LIP, DECK_THICK, GANTRY_BEAM, RoadIndex, TUNNEL_GAP, TUNNEL_SHELL, TUNNEL_SIDE } from "./track-mesh.ts";
 import { levelAt, sampleStep, sections, surfY, wallColliders } from "../world/track-sections.ts";
 import { pillarPieces } from "./track-structures.ts";
+import { flightsOf, isFlight, type Flight } from "../world/stairs.ts";
 import { FIXED_GROUPS } from "./ragdoll-config.ts";
 import type { FloorBox } from "./walker-floor.ts";
 
@@ -227,9 +228,31 @@ export function colliderSolids(s: Surface, out: Solid[]): Solid[] {
  * prisms of `solidsOf`, the very ones the cars meet), the start gantry's legs, bridge decks and bents, and the tunnels' shell.
  */
 export function courseSolids(track: Track, placed: readonly Placed[]): Solid[] {
-  const out = colliderSolids(solidsOf(wallColliders(track), propColliders(placed)), []);
+  const walls = wallColliders(track);
+  const props = propColliders(placed);
+  const out = colliderSolids(solidsOf(walls, props), []);
+  // The solids stand in collider order (walls, then the solid props): a flight's own block is a wall to a dummy, so it makes nothing and its treads follow.
+  const solid = props.filter((c) => c.body === "solid");
+  for (let i = 0; i < solid.length; i++) {
+    if (!isFlight(solid[i]!, placed)) continue;
+    const block = out[walls.length + i]!;
+    out[walls.length + i] = { x: block.x, z: block.z, r: block.r, make: () => null };
+  }
+  for (const flight of flightsOf(props, placed)) treadSolids(flight, out);
   structures(track, out);
   return out;
+}
+
+/** A flight as one box per tread, each standing from the flight's foot to its own top: what a dummy climbs, where the flight's own box (one block as high as its top) would be a wall. */
+function treadSolids(flight: Flight, out: Solid[]): void {
+  _q.setFromAxisAngle(UP, flight.yaw);
+  const treadHalf = flight.halfLength / flight.treads;
+  const riser = (flight.top - flight.base) / flight.treads;
+  for (let tread = 1; tread <= flight.treads; tread++) {
+    const along = flight.halfLength - (2 * tread - 1) * treadHalf;
+    const top = flight.base + riser * tread;
+    out.push(box(flight.x + flight.cos * along, (flight.base + top) / 2, flight.z - flight.sin * along, treadHalf, (top - flight.base) / 2, flight.halfWidth));
+  }
 }
 
 /** Friction of a streamed box: the walls' and props' (`groundColliders`' `add`). */

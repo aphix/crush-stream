@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { PREFAB } from "../world/constants.ts";
 import { Ground, setGround } from "../world/ground.ts";
+import type { Placed } from "../world/placements.ts";
 import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { WALKER_SLOT } from "./ragdoll-pool.ts";
@@ -44,10 +46,11 @@ function groundWith(boxes: readonly PrismBox[]): Ground {
 }
 
 /** The walker standing at (`x`, 0) facing +z on `ground`, settled. */
-async function standingOn(ground: Ground, x = 0): Promise<RagdollSystem> {
+async function standingOn(ground: Ground, x = 0, placed: readonly Placed[] = []): Promise<RagdollSystem> {
   const sys = await flatSystem();
   system = sys;
   setGround(ground);
+  if (placed.length > 0) sys.setSolids(ground, [], placed, null);
   expect(sys.startWalker(new THREE.Vector3(x, 0, 0), 0, { cop: false, look: driverLook(0, 0) }), "the walker is placed").toBe(WALKER_SLOT);
   frames(sys, SETTLE_SECONDS);
   return sys;
@@ -150,11 +153,12 @@ describe("given the walker and a ramp", () => {
   });
 });
 
-describe("given the walker at the foot of a stoop made of one ramp prism and a landing box", () => {
-  it("when he walks at it, then he climbs the ramp, which holds the stairs' 0.64 slope, and stands on the landing", async () => {
-    const run = TREAD * STOOP_STEPS;
-    const ramp: PrismBox = { x0: -0.8, x1: 0.8, z0: FIRST_Z, z1: FIRST_Z + run, top: LANDING_TOP / 2, slope: LANDING_TOP / run };
-    const sys = await standingOn(groundWith([ramp, { x0: -4, x1: 4, z0: FIRST_Z + run, z1: RUNS_ON_Z, top: LANDING_TOP }]));
+describe("given the walker at the foot of a flight of stairs placed as a prop, with its landing in the ground", () => {
+  it("when he walks at it, then he climbs its treads, which the ground does not hold, and stands on the landing", async () => {
+    const run = TREAD * (STOOP_STEPS - 1);
+    /** Turned a quarter so that its low end is toward him and its high end, the landing's, away along +z. */
+    const flight: Placed = { prefab: PREFAB.invisibleWall, x: 0, y: 0, z: FIRST_Z + run / 2, yaw: Math.PI / 2, sx: run, sy: LANDING_TOP - RISER, sz: 1.6, stairs: true };
+    const sys = await standingOn(groundWith([{ x0: -4, x1: 4, z0: FIRST_Z + run, z1: RUNS_ON_Z, top: LANDING_TOP }]), 0, [flight]);
     const walk = walkAlong(sys, WALK_SPEED, 12);
     const end = torso(sys);
     expect(walk.fell, "he stayed on his feet").toBe(false);

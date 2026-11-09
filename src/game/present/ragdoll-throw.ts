@@ -16,6 +16,8 @@ import { ARM, blendPose, MASS, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
 import { strikeAt } from "./ragdoll-hit.ts";
 import type { Solid } from "./ragdoll-solids.ts";
 import { assertFloorBoxes, type FloorBox } from "./walker-floor.ts";
+import { propColliders } from "../world/placements.ts";
+import { flightsOf, NO_STAIRS, StairField } from "../world/stairs.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { DOLL_CAR, DOLL_FLOATS, DOLL_HEADER, DOLL_LIVE, DOLL_RIDES, DOLL_SETTLED, DOLL_STILL, DOLL_VELOCITY, PROP_FLOATS, packBoxes, type ResultMessage } from "./ragdoll-wire.ts";
 import { LIFE, STEP_LOG, type Throw, WALKER_SLOT } from "./ragdoll-pool.ts";
@@ -260,6 +262,7 @@ export abstract class RagdollThrower extends RagdollStepper {
   setCourse(track: Track, placed: readonly Placed[], props: PropDraw | null, arm: SceneryArm = SCENERY_ARM.on): void {
     this.course = { ground: track.ground(), track, placed };
     this.solids = null;
+    this.setFlights(placed);
     this.freeScenePatch();
     this.props.set(placed, props);
     this.tumble = props;
@@ -275,6 +278,7 @@ export abstract class RagdollThrower extends RagdollStepper {
   setSolids(ground: Ground, solids: readonly Solid[], placed: readonly Placed[], props: PropDraw | null): void {
     this.course = { ground, track: null, placed };
     this.solids = solids;
+    this.setFlights(placed);
     this.freeScenePatch();
     this.props.set(placed, props);
     this.tumble = props;
@@ -288,15 +292,22 @@ export abstract class RagdollThrower extends RagdollStepper {
   setFixedBoxes(boxes: readonly FloorBox[]): void {
     assertFloorBoxes(boxes);
     this.boxList = boxes.slice();
-    for (const walker of this.walkers) walker.floor.boxes = this.boxList;
+    for (const walker of this.walkers) this.equipFloor(walker);
     this.remote?.setBoxes(packBoxes(this.boxList));
     this.buildFixedBoxes();
+  }
+
+  /** The flights of stairs among `placed` (stairs props), under every walker's feet. */
+  private setFlights(placed: readonly Placed[]): void {
+    this.flights = placed.some((p) => p.stairs === true) ? new StairField(flightsOf(propColliders(placed), placed)) : NO_STAIRS;
+    for (const walker of this.walkers) this.equipFloor(walker);
   }
 
   /** No scene's solids or props any more, and the pool back to its base capacity: leaving the showcase, whose ground (the fleet's disc) the other sandbox scenes share. */
   clearScene(): void {
     this.course = null;
     this.solids = null;
+    this.setFlights([]);
     this.freeScenePatch();
     this.props.set([], null);
     this.tumble = null;
