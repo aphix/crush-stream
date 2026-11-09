@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
-import { DECISION_HZ, FLAG, FRIDAY, JOB_AGE, MAX_PATH_NODES, NEED, NEED_COUNT, NO_PLACE, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "./civilian-constants.ts";
+import { DECISION_HZ, FLAG, FRIDAY, HOURS_PER_GAME_DAY, JOB_AGE, MAX_PATH_NODES, NEED, NEED_COUNT, NO_PLACE, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "./civilian-constants.ts";
 import { buildFixtureMap, placeNamed } from "./civilian-graph.test-util.ts";
 import { LegPose, legPose } from "./civilian-leg.ts";
 import { decideResident } from "./civilian-plan.ts";
@@ -64,7 +64,11 @@ describe("given a resident at home whose needs are set and a decision comes due 
 
   it("when they have a job and their shift is starting, then they set out for work", () => {
     const state = createCityState(5, map, 60);
-    const resident = adultWhere(state, (candidate) => intAt(state, candidate, RESIDENT_INT.work) !== NO_PLACE);
+    const opensForShift = (candidate: number): boolean => {
+      const work = intAt(state, candidate, RESIDENT_INT.work);
+      return work !== NO_PLACE && state.venues.hourWeight[work * HOURS_PER_GAME_DAY + intAt(state, candidate, RESIDENT_INT.shiftStart)]! >= 1;
+    };
+    const resident = adultWhere(state, opensForShift);
     const tick = tickOfHour(state, 2, intAt(state, resident, RESIDENT_INT.shiftStart));
     dwellingWithNeeds(state, resident, intAt(state, resident, RESIDENT_INT.home), tick, needsOf(NEED.work));
     decideResident(state, resident, tick);

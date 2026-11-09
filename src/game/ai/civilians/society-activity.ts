@@ -27,7 +27,8 @@ import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { legPose } from "./civilian-leg.ts";
 import { residentNeuroticism } from "./civilian-temperament.ts";
 import type { CityState } from "./civilian-state.ts";
-import { COUNTER_STRIDE, SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
+import { SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
+import { buyLaneSpot, StandSpot, standSpotAt } from "./society-seats.ts";
 import { VENUE, isCounterVenue, isOutdoorPurpose } from "./society-venues.ts";
 
 /** What one resident is doing at a crowd time, for the crowd to copy into the drawn poses: `placed` says the brain gives their position (seated, at a counter, standing at a door, fighting) and `x`, `z`, `yaw` hold it; else they are on a leg (or inside) and the leg's pose applies. */
@@ -87,6 +88,8 @@ class ReadScratch {
 }
 
 const scratch = new ReadScratch();
+/** Where `standAt` and the buying lane put someone, before it is copied into the reading. */
+const standing = new StandSpot();
 
 /** Standing at a place's door on the street side, spread along the frontage by the resident's own lateral offset, facing the street. */
 function standAtDoor(state: CityState, resident: number, place: number, out: ActivityReading): void {
@@ -244,41 +247,60 @@ function readOutdoor(state: CityState, resident: number, purpose: number, place:
   out.leftSeconds = scratch.rest;
 }
 
+/** A resident held to `spot` of the owner table of `place` stands there (a customer's at the counter, a clerk's behind it): into `out`, fixed (the spots are a body's width apart). */
+function standAt(state: CityState, place: number, spot: number, out: ActivityReading): void {
+  const { seatCount, standCount } = state.venues;
+  const own = spot - seatCount[place]!;
+  const clerk = own >= standCount[place]!;
+  standSpotAt(state, place, clerk ? own - standCount[place]! : own, clerk, standing);
+  out.placed = true;
+  out.fixed = true;
+  out.x = standing.x;
+  out.z = standing.z;
+  out.yaw = standing.yaw;
+  out.surfaceY = standing.surfaceY;
+}
+
 function readIndoors(state: CityState, resident: number, place: number, out: ActivityReading): void {
   const venue = state.venues.venueOf[place]!;
   const worker = intAt(state, resident, RESIDENT_INT.work) === place;
   if (!worker && !isCounterVenue(venue)) return;
-  const entry = state.map.places[place]!;
-  const counter = entry.counter;
-  if (worker && counter !== undefined && counter.length >= 2 * COUNTER_STRIDE) {
-    out.placed = true;
-    out.fixed = true;
-    out.x = counter[COUNTER_STRIDE]!;
-    out.z = counter[COUNTER_STRIDE + 1]!;
-    out.yaw = counter[COUNTER_STRIDE + 2]!;
-    out.surfaceY = counter[COUNTER_STRIDE + 3]!;
+  const spot = intAt(state, resident, RESIDENT_INT.seat);
+  const { seatCount } = state.venues;
+  if (worker) {
+    if (spot === NO_SEAT) return;
+    standAt(state, place, spot, out);
     out.code = ACTIVITY.idle;
     out.sinceSeconds = scratch.age;
     out.leftSeconds = scratch.rest;
     return;
   }
-  if (worker || !isCounterVenue(venue)) return;
-  if (counter !== undefined && counter.length >= COUNTER_STRIDE && scratch.age < ACTIVITY_SECONDS.buy) {
-    out.placed = true;
-    out.fixed = true;
-    out.x = counter[0]!;
-    out.z = counter[1]!;
-    out.yaw = counter[2]!;
-    out.surfaceY = counter[3]!;
+  const hasCounter = state.venues.standCount[place]! > 0;
+  if (hasCounter && scratch.age < ACTIVITY_SECONDS.buy) {
+    if (spot !== NO_SEAT && spot >= seatCount[place]!) standAt(state, place, spot, out);
+    else {
+      buyLaneSpot(state, place, resident, standing);
+      out.placed = true;
+      out.x = standing.x;
+      out.z = standing.z;
+      out.yaw = standing.yaw;
+      out.surfaceY = standing.surfaceY;
+    }
     out.code = ACTIVITY.buy;
     out.sinceSeconds = scratch.age;
     out.leftSeconds = ACTIVITY_SECONDS.buy - scratch.age;
     return;
   }
-  const seat = intAt(state, resident, RESIDENT_INT.seat);
-  if (seat === NO_SEAT || entry.seats === undefined) return;
-  if (counter !== undefined) scratch.age -= ACTIVITY_SECONDS.buy;
-  readSitting(state, place, seat, out, ACTIVITY.sit);
+  if (spot === NO_SEAT) return;
+  if (spot >= seatCount[place]!) {
+    standAt(state, place, spot, out);
+    out.code = ACTIVITY.idle;
+    out.sinceSeconds = scratch.age;
+    out.leftSeconds = scratch.rest;
+    return;
+  }
+  if (hasCounter) scratch.age -= ACTIVITY_SECONDS.buy;
+  readSitting(state, place, spot, out, ACTIVITY.sit);
 }
 
 function hasDoor(state: CityState, place: number): boolean {

@@ -13,7 +13,7 @@ const SEED = 5;
 const TICKS = 3600;
 const SAMPLE_EVERY = 30;
 
-/** Everything wrong with how seats are held at this moment, and how many are held: one holder per seat, only by the living (a row that never lived reads seat 0 and holds nothing: only a seat the owner table still gives a dead resident is a leak), each in the seat's place, and the owner table says the same. */
+/** Everything wrong with how seats and standing spots are held at this moment, and how many are held: one holder per seat or spot, only by the living (a row that never lived reads seat 0 and holds nothing: only a seat the owner table still gives a dead resident is a leak), each in the seat's place, and the owner table says the same. */
 function auditSeats(state: CityState, tick: number, problems: string[]): number {
   const held = new Set<number>();
   for (let resident = 0; resident < state.capacity; resident++) {
@@ -25,7 +25,8 @@ function auditSeats(state: CityState, tick: number, problems: string[]): number 
       if (state.seatOwner[slot] === resident) problems.push(`dead resident ${resident} is still the owner of a seat at tick ${tick}`);
       continue;
     }
-    if (seat >= state.venues.seatCount[place]!) problems.push(`resident ${resident} holds seat ${seat} of ${societyMap.places[place]!.name}, which has ${state.venues.seatCount[place]}`);
+    const slots = state.venues.seatCount[place]! + state.venues.standCount[place]! + state.venues.clerkCount[place]!;
+    if (seat >= slots) problems.push(`resident ${resident} holds spot ${seat} of ${societyMap.places[place]!.name}, which has ${slots} seats and standing spots`);
     if (held.has(slot)) problems.push(`two residents hold seat ${seat} of ${societyMap.places[place]!.name} at tick ${tick}`);
     if (state.seatOwner[slot] !== resident) problems.push(`the owner table names ${state.seatOwner[slot]} for resident ${resident}'s seat at tick ${tick}`);
     held.add(slot);

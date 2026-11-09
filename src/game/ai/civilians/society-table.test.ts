@@ -139,11 +139,15 @@ describe("given customers at the coffee shop, which has three seats", () => {
     stageResident(state, customer, { place: placeIn(societyMap, "Rowhome B2-1"), tick: cast.tick, flags: FLAG.coffeeFan });
     decideAs(state, customer, cast.tick, 0);
   }
-  const held = customers.filter((customer) => intAt(state, customer, RESIDENT_INT.seat) !== NO_SEAT);
+  const seatCount = state.venues.seatCount[coffee]!;
+  const held = customers.filter((customer) => intAt(state, customer, RESIDENT_INT.seat) !== NO_SEAT && intAt(state, customer, RESIDENT_INT.seat) < seatCount);
+  const standing = customers.filter((customer) => intAt(state, customer, RESIDENT_INT.seat) >= seatCount);
 
-  it("when they have all come in, then three sit, each in a seat of their own, and the other two stand", () => {
+  it("when they have all come in, then three sit, each in a seat of their own, and the other two stand, each on a spot of their own", () => {
     expect(customers.every((customer) => intAt(state, customer, RESIDENT_INT.place) === coffee), "everyone went to the coffee shop").toBe(true);
     expect(held.length, "customers who hold a seat").toBe(3);
+    expect(standing.length, "customers who hold a standing spot").toBe(2);
+    expect(new Set(standing.map((customer) => intAt(state, customer, RESIDENT_INT.seat))).size, "different standing spots held").toBe(2);
     expect(new Set(held.map((customer) => intAt(state, customer, RESIDENT_INT.seat))).size, "different seats held").toBe(3);
     for (const customer of held) expect(state.seatOwner[state.venues.seatBase[coffee]! + intAt(state, customer, RESIDENT_INT.seat)], "who the seat's owner is").toBe(customer);
   });
@@ -158,7 +162,7 @@ describe("given customers at the coffee shop, which has three seats", () => {
     decideAs(state, leaver, later, 1);
     expect(intAt(state, leaver, RESIDENT_INT.seat), "the leaver's seat after they go").toBe(NO_SEAT);
     expect(state.seatOwner[state.venues.seatBase[coffee]! + seat], "who holds the seat they left").toBe(NO_PLACE);
-    const waiting = customers.find((customer) => !held.includes(customer))!;
+    const waiting = standing[0]!;
     stageResident(state, waiting, { place: placeIn(societyMap, "Rowhome B2-1"), tick: later, flags: FLAG.coffeeFan });
     decideAs(state, waiting, later, 1);
     expect(intAt(state, waiting, RESIDENT_INT.seat), "the seat the next customer takes").toBe(seat);
