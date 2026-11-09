@@ -2,11 +2,9 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { FLAT_GROUND, setGround } from "../world/ground.ts";
-import { placeProps, propColliders } from "../world/placements.ts";
-import { parseTrack } from "../world/track-schema.ts";
-import { blankPoint, blankProjection, projectPath, Track } from "../world/track.ts";
-import { TRACKS } from "../world/tracks/index.ts";
-import { FRAME, frame, makeWorld } from "../world/race-world.test-util.ts";
+import { placeProps, propColliders, type Placed } from "../world/placements.ts";
+import { blankPoint, blankProjection, projectPath, type Track } from "../world/track.ts";
+import { FRAME, course, frame, makeWorld } from "../world/race-world.test-util.ts";
 import { addCars, aheadPoints, camUsable, CINE, CineCam, CLEAR, clearSpot, DutchCam, gather, occluder, raceSight, sightLine, SightLines, type Occluder, type Sight } from "./spectate-cam.ts";
 import { AutoCam, type AutoScene } from "./auto-cam.ts";
 import { carFrame } from "../vehicle/car-rig.ts";
@@ -17,9 +15,23 @@ import { eyeProblems } from "./spectate-cam.test-util.ts";
 /** The dutch cam's mounts: each wheel well, looking forward and back. */
 const MOUNT_COUNT = carFrame(CAR_STYLES.sedan).wheels.length * 2;
 
-const COURSES = TRACKS.map((j) => new Track(parseTrack(j)));
+const OVAL = course("oval");
+const CITY = course("city");
 /** The per-commit cases run the oval's lap; `spectate-cam.ai-long-run.ts` runs every course's. */
-const OVAL_ONLY = COURSES.filter((c) => c.id === "oval");
+const OVAL_ONLY = [OVAL];
+
+const placedOf = new Map<Track, Placed[]>();
+
+/** `placeProps` of `track`, placed once for the file. */
+function propsOf(track: Track): Placed[] {
+  let placed = placedOf.get(track);
+  if (!placed) {
+    placed = placeProps(track);
+    placedOf.set(track, placed);
+  }
+  return placed;
+}
+
 /** How fast the watched car drives round the course (m/s). */
 const WATCHED_SPEED = 30;
 /** How far apart (m along the course) the two cars of the cut test drive: a pack's length. */
@@ -29,7 +41,7 @@ const scene = new THREE.Scene();
 describe("given the trackside cinematic camera (a fixed eye beside the course that cuts to the followed car)", () => {
   for (const track of OVAL_ONLY) {
     it(`when a lap is driven on ${track.id}, then every spot the camera picks stands clear of every solid and sees the car`, (t) => {
-      const placed = placeProps(track);
+      const placed = propsOf(track);
       const cols = propColliders(placed);
       const sight = raceSight(track, placed);
       const ground = track.ground();
@@ -69,8 +81,8 @@ describe("given the trackside cinematic camera (a fixed eye beside the course th
   }
 
   it("when the oval is driven at 40 m/s, then the camera holds a shot until shortly after the car passes the eye, then picks the next spot ahead", () => {
-    const track = COURSES.find((c) => c.id === "oval")!;
-    const sight = raceSight(track, placeProps(track));
+    const track = OVAL;
+    const sight = raceSight(track, propsOf(track));
     const ground = track.ground();
     setGround(ground);
     try {
@@ -131,8 +143,8 @@ describe("given the trackside cinematic camera (a fixed eye beside the course th
   });
 
   it("when the oval search is sliced into budgets of 40 samples, then it lands on the same spot as the whole search picks", () => {
-    const track = COURSES.find((c) => c.id === "oval")!;
-    const sight = raceSight(track, placeProps(track));
+    const track = OVAL;
+    const sight = raceSight(track, propsOf(track));
     const ground = track.ground();
     setGround(ground);
     try {
@@ -282,8 +294,8 @@ describe("given a 12 × 14 × 12 m building, yawed 0.3 rad, on open flat ground"
 
 describe("given the oval course and a car driving across it", () => {
   it("when the car's position is predicted ahead, then the samples follow the course, not the straight line of its velocity", () => {
-    const track = COURSES.find((c) => c.id === "oval")!;
-    const open = raceSight(track, placeProps(track));
+    const track = OVAL;
+    const open = raceSight(track, propsOf(track));
     setGround(track.ground());
     try {
       const pt = blankPoint();
@@ -309,7 +321,7 @@ describe("given the oval course and a car driving across it", () => {
 describe("given the Auto spectator camera (the shot director that cuts between shot kinds while watching a race)", () => {
   for (const track of OVAL_ONLY) {
     it(`when a car drives 90 s round ${track.id} at ${WATCHED_SPEED} m/s, then every trackside or high cut stands clear and sees the car, and the cuts mix shot kinds`, (t) => {
-      const placed = placeProps(track);
+      const placed = propsOf(track);
       const cols = propColliders(placed);
       const sight = raceSight(track, placed);
       const ground = track.ground();
@@ -352,8 +364,8 @@ describe("given the Auto spectator camera (the shot director that cuts between s
   }
 
   it("when the camera cuts onto another car, then the chase shot is posed on it while its opener is searched, not at the old shot's eye", () => {
-    const track = COURSES.find((c) => c.id === "city")!;
-    const sight = raceSight(track, placeProps(track));
+    const track = CITY;
+    const sight = raceSight(track, propsOf(track));
     const ground = track.ground();
     setGround(ground);
     try {
@@ -462,9 +474,9 @@ describe("given a course's solids gathered near a box (the chase eye does it eve
       const r = (o.circle ? o.hx : Math.hypot(o.hx, o.hz)) + pad;
       return o.x + r > x0 && o.x - r < x1 && o.z + r > z0 && o.z - r < z1;
     });
-  for (const track of COURSES.filter((c) => c.id === "oval" || c.id === "city")) {
+  for (const track of [OVAL, CITY]) {
     it(`when ${track.id}'s sight, and a copy of it with some occluders filtered out, are gathered near 400 boxes and pads, then each answers the occluders and the order of the footprints themselves`, () => {
-      const sight = raceSight(track, placeProps(track));
+      const sight = raceSight(track, propsOf(track));
       expect(sight.feet?.occ, "the course's sight keeps its occluders as arrays").toBe(sight.occ);
       const filtered: Sight = { ...sight, occ: sight.occ.filter((_, i) => i % 3 !== 0) };
       let seed = 12345;
