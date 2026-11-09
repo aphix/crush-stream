@@ -1,4 +1,5 @@
 import { detCos, detSin } from "../../kernel/physics-core.js";
+import { PREFABS, type PrefabId } from "../catalog.ts";
 import { placeCourse, type Placed } from "../placements.ts";
 import { SCENERY_ASSETS } from "../scenery-assets/index.ts";
 import { assetScale } from "../scenery-assets/pick.ts";
@@ -38,9 +39,9 @@ export function placedEverything(track: Track): Placed[] {
   return [...course.placed, ...course.drawn];
 }
 
-/** A prop's four footprint corners, from its asset's own size (turned `yaw`, front local +x). */
-export function cornersOf(prop: { x: number; z: number; yaw: number; asset: string }): [number, number][] {
-  const [depth, , width] = assetScale(SCENERY_ASSETS[assetIndex(prop.asset)]!, 1);
+/** A prop's four footprint corners, from its asset's own size or its prefab's box (turned `yaw`, front local +x). */
+export function cornersOf(prop: { x: number; z: number; yaw: number; prefab: PrefabId; asset?: string }): [number, number][] {
+  const [depth, , width] = prop.asset === undefined ? PREFABS[prop.prefab].size : assetScale(SCENERY_ASSETS[assetIndex(prop.asset)]!, 1);
   const corners: [number, number][] = [];
   for (const localX of [-depth / 2, depth / 2]) {
     for (const localZ of [-width / 2, width / 2]) corners.push([prop.x + localX * detCos(prop.yaw) + localZ * detSin(prop.yaw), prop.z - localX * detSin(prop.yaw) + localZ * detCos(prop.yaw)]);

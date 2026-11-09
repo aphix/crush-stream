@@ -8,6 +8,7 @@ import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
 import { frontBumper, lyingWheel, parkedCar } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
+import { streetKitParts } from "./prefabs-street.ts";
 import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMaterials } from "./scenery-assets-art.ts";
 import { PREFAB } from "../world/constants.ts";
 import { dressPaving } from "./ground-relief.ts";
@@ -831,5 +832,15 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
       return assetParts(id, familyOf(skin), mats);
     case PREFAB.invisibleWall:
       return [];
+    case PREFAB.bench:
+    case PREFAB.bikeRack:
+    case PREFAB.litterBin:
+    case PREFAB.parkingMeter:
+    case PREFAB.hydrant:
+    case PREFAB.cafeSet:
+    case PREFAB.busShelter:
+    case PREFAB.busStopSign:
+    case PREFAB.streetSign:
+      return streetKitParts(id, mats);
   }
 }

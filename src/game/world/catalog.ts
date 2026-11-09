@@ -105,6 +105,15 @@ export const PREFAB_IDS = [
   PREFAB.assetCrossSolid,
   PREFAB.invisibleWall,
   PREFAB.buildingShell,
+  PREFAB.bench,
+  PREFAB.bikeRack,
+  PREFAB.litterBin,
+  PREFAB.parkingMeter,
+  PREFAB.hydrant,
+  PREFAB.cafeSet,
+  PREFAB.busShelter,
+  PREFAB.busStopSign,
+  PREFAB.streetSign,
 ] as const;
 export type PrefabId = (typeof PREFAB_IDS)[number];
 
@@ -401,6 +410,35 @@ function smokestackPlan(): Collider[] {
 /** The Carhenge's top (m): an upright's length, then the shell across it. */
 const CARHENGE_TOP = WRECK.long + WRECK.tall;
 
+/**
+ * The open world's street kit (`present/prefabs-street.ts` draws each): the box (m) each stands in, along its front (x, toward the street), up, and across (z, along the curb).
+ * A shelter and a café set are shallow enough for the 1.2 m furniture strip; a bike rack holds one bicycle.
+ */
+export const STREET_KIT = {
+  bench: [0.6, 0.9, 1.6],
+  bikeRack: [0.8, 1.15, 1.8],
+  litterBin: [0.52, 0.95, 0.52],
+  parkingMeter: [0.24, 1.4, 0.24],
+  hydrant: [0.46, 0.8, 0.46],
+  cafeSet: [1.1, 2.25, 1.7],
+  busShelter: [1.1, 2.6, 4.4],
+  busStopSign: [0.4, 2.7, 0.4],
+  streetSign: [0.95, 3, 0.95],
+} as const satisfies Record<string, readonly [number, number, number]>;
+
+/** A street sign's placement names its two streets in its `style`: the one its blade along x shows, then the one along z. */
+const STREET_SIGN_SEPARATOR = "|";
+
+export function streetSignStyle(alongX: string, alongZ: string): string {
+  return `${alongX}${STREET_SIGN_SEPARATOR}${alongZ}`;
+}
+
+/** The two street names a street sign's `style` carries (along x, along z), null when it names no two. */
+export function streetSignNames(style: string | undefined): readonly [string, string] | null {
+  const names = style?.split(STREET_SIGN_SEPARATOR) ?? [];
+  return names.length === 2 && names[0]! !== "" && names[1]! !== "" ? [names[0]!, names[1]!] : null;
+}
+
 type PrefabSpec = {
   /**
    * solid: immovable, cars are pushed out (walls, rocks, buildings).
@@ -425,6 +463,11 @@ type PrefabSpec = {
   /** Share of a hit's crush energy the struck car takes (`ContactBox.hardness`): 1 when omitted, a rigid solid; `SOFT_WOOD` for a trunk that gives. */
   hardness?: number;
 };
+
+/** A street kit piece: drawn only, standing in its `STREET_KIT` box, no clearance of its own (it stands in a sidewalk's furniture strip). */
+function kitSpec(size: readonly [number, number, number], material: MaterialId): PrefabSpec {
+  return { body: "none", collider: [], foot: 0, size: [size[0], size[1], size[2]], mass: 0, material };
+}
 
 /**
  * Hardness of a living trunk (a tree, a palm): the share of the reduced-mass energy the car takes, the piston rig's calibrated
@@ -733,4 +776,13 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   // The drawn building of an enterable lot: no collider of its own, its walls are placed apart; it keeps a building's clearance from the roads.
   [PREFAB.buildingShell]: { body: "none", collider: [], foot: hypot2(6, 6), size: [12, 14, 12], mass: 0, material: MAT.BUILDING_WALL },
   [PREFAB.invisibleWall]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.JERSEY_CONCRETE },
+  [PREFAB.bench]: kitSpec(STREET_KIT.bench, MAT.BENCH_MAPLE),
+  [PREFAB.bikeRack]: kitSpec(STREET_KIT.bikeRack, MAT.BRACKET_STEEL),
+  [PREFAB.litterBin]: kitSpec(STREET_KIT.litterBin, MAT.DUMPSTER_STEEL),
+  [PREFAB.parkingMeter]: kitSpec(STREET_KIT.parkingMeter, MAT.LAMP_POLE),
+  [PREFAB.hydrant]: kitSpec(STREET_KIT.hydrant, MAT.DUMPSTER_STEEL),
+  [PREFAB.cafeSet]: kitSpec(STREET_KIT.cafeSet, MAT.CRATE_WOOD),
+  [PREFAB.busShelter]: kitSpec(STREET_KIT.busShelter, MAT.GANTRY_STEEL),
+  [PREFAB.busStopSign]: kitSpec(STREET_KIT.busStopSign, MAT.SIGN_BOARD),
+  [PREFAB.streetSign]: kitSpec(STREET_KIT.streetSign, MAT.SIGN_BOARD),
 };

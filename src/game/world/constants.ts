@@ -75,6 +75,16 @@ export const PREFAB = {
   invisibleWall: "invisible-wall",
   // A building drawn exactly like `building` with nothing solid: the open world's enterable lots, whose walls are invisible-wall pieces with the doorways left open.
   buildingShell: "building-shell",
+  // The open world's street kit (`STREET_KIT` in catalog.ts): drawn only, each in a few boxes and cylinders.
+  bench: "park-bench",
+  bikeRack: "bike-rack",
+  litterBin: "litter-bin",
+  parkingMeter: "parking-meter",
+  hydrant: "hydrant",
+  cafeSet: "cafe-set",
+  busShelter: "bus-shelter",
+  busStopSign: "bus-stop-sign",
+  streetSign: "street-sign",
 } as const;
 
 /** The word for a town: the campaign course's id and the scenery service's biome of streets and sidewalks. */

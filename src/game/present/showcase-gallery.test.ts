@@ -26,6 +26,8 @@ const EXCLUDED: readonly string[] = [
   // The open world's edge: a wall nothing is drawn for; and the enterable lots' building, drawn as a `building` is.
   PREFAB.invisibleWall,
   PREFAB.buildingShell,
+  // The open world's street kit: its own street's furniture (`prefabs-street.ts`), shown by the street rows' sprites in the gallery.
+  PREFAB.bench, PREFAB.bikeRack, PREFAB.litterBin, PREFAB.parkingMeter, PREFAB.hydrant, PREFAB.cafeSet, PREFAB.busShelter, PREFAB.busStopSign, PREFAB.streetSign,
 ];
 /** The free cam stands near the eye and looks +z: a prop closer than this behind it would fill the view. */
 const MIN_CLEARANCE = 5;

@@ -5,6 +5,7 @@ import { PLACE_KIND, SECTOR, type InteriorKind, type PlaceKind } from "./walk-gr
  * Streets: 10th, 9th, 8th, 7th St west to east (numbers rise westward, as in Philadelphia); Morris, Tasker, Moore, Mifflin St north to south.
  * Blocks A1..C3: A north row .. C south row, 1 west column .. 3 east column; the park is B2. A spot names its block by row and (0-based) column: A2 is row A, column 1.
  */
+export const STREETS_X: readonly string[] = ["10th St", "9th St", "8th St", "7th St"];
 export const STREETS_Z: readonly string[] = ["Morris St", "Tasker St", "Moore St", "Mifflin St"];
 /** The streets one ring out (the backdrop's): north, south, west, east. */
 export const BEYOND = { north: "Reed St", south: "McKean St", west: "11th St", east: "6th St" } as const;

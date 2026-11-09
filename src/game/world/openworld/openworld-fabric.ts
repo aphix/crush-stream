@@ -1,5 +1,6 @@
-import { detAtan2, detCos, detSin } from "../../kernel/physics-core.js";
-import type { PrefabId } from "../catalog.ts";
+import { detCos, detSin } from "../../kernel/physics-core.js";
+import { PREFABS, streetSignStyle, type PrefabId } from "../catalog.ts";
+import { PREFAB } from "../constants.ts";
 import { mulberry32 } from "../placements.ts";
 import { SCENERY_ASSETS } from "../scenery-assets/index.ts";
 import { assetPrefab, assetScale } from "../scenery-assets/pick.ts";
@@ -17,17 +18,21 @@ import {
   HYDRANT_SHARE,
   KIT_SLIDE,
   LAMP_CLEARANCE,
+  PIECE,
   QUARTER_TURN,
+  SHELTER_WALL,
   SLIDE_STEP,
   TREE_CROWN_CLEARANCE,
+  type FurniturePiece,
   type KitItem,
 } from "./openworld-fabric-constants.ts";
 import type { BlockRef, Geometry, Lots } from "./openworld-layout.ts";
+import { STREETS_X, STREETS_Z } from "./openworld-programme.ts";
 import { lampStations, sidePoint, sidesOf, treeStations, type BlockSide } from "./openworld-sides.ts";
 import { PLACE_KIND, type WalkGraph } from "./walk-graph.ts";
 
-/** A course prop that names a scenery asset: the course's `props` row as the schema takes it. */
-type FabricProp = { prefab: PrefabId; asset: string; x: number; z: number; yaw: number; size?: [number, number, number] };
+/** A course prop as the schema takes it: a street kit prefab, a scenery asset on its generic prefab, or a box of invisible wall. */
+type FabricProp = { prefab: PrefabId; x: number; z: number; yaw: number; asset?: string; size?: [number, number, number]; style?: string };
 
 const CORNER_SIGNS = [-1, 1] as const;
 const SLIDE_DIRECTIONS = [1, -1] as const;
@@ -93,7 +98,7 @@ function isLoopCorner(block: BlockRef, signX: number, signZ: number, geometry: G
   return outwardX && outwardZ;
 }
 
-/** A street-name sign at two opposite block corners of each intersection, turned to the intersection; none at the perimeter loop's rounded corners. */
+/** A street sign at two opposite block corners of each intersection, its blades along the two streets carrying their names; none at the perimeter loop's rounded corners. */
 function signProps(lots: Lots): FabricProp[] {
   const geometry = lots.geometry;
   const props: FabricProp[] = [];
@@ -103,7 +108,11 @@ function signProps(lots: Lots): FabricProp[] {
         if (isLoopCorner(block, signX, signZ, geometry)) continue;
         const cornerX = block.centreX + (signX * geometry.blockLength) / 2;
         const cornerZ = block.centreZ + (signZ * geometry.blockDepth) / 2;
-        if (signX === signZ) props.push(assetProp(ASSET.nameSign, cornerX + signX * CORNER_POCKET, cornerZ + signZ * CORNER_POCKET, detAtan2(-signZ, signX)));
+        // The blade along x names the street running along x (a row of `streetZ`), the blade along z the one along z.
+        const alongX = STREETS_Z[block.row + (signZ > 0 ? 1 : 0)];
+        const alongZ = STREETS_X[block.column + (signX > 0 ? 1 : 0)];
+        if (signX !== signZ || alongX === undefined || alongZ === undefined) continue;
+        props.push({ prefab: PREFAB.streetSign, x: cornerX + signX * CORNER_POCKET, z: cornerZ + signZ * CORNER_POCKET, yaw: 0, style: streetSignStyle(alongX, alongZ) });
       }
     }
   }
@@ -126,15 +135,30 @@ function isFree(lane: Lane, from: number, to: number): boolean {
   return true;
 }
 
-/** Half the length (m) along the face of a card or box turned `turn` off facing the street. */
-function alongHalf(row: SceneryAsset, turn: number): number {
-  const [depth, , width] = assetScale(row, 1);
+/** A piece's box (m): along its front, up, across; an asset's own size, a prefab's catalogue box. */
+function pieceSize(piece: FurniturePiece): readonly [number, number, number] {
+  return piece.asset === undefined ? PREFABS[piece.prefab].size : assetScale(rowOf(piece.asset), 1);
+}
+
+/** Half the length (m) along the face of a piece turned `turn` off facing the street. */
+function alongHalf(piece: FurniturePiece, turn: number): number {
+  const [depth, , width] = pieceSize(piece);
   return (width * Math.abs(detCos(turn)) + depth * Math.abs(detSin(turn))) / 2;
+}
+
+/** A piece as a course prop at (x, z), turned `yaw`. */
+function pieceProp(piece: FurniturePiece, x: number, z: number, yaw: number): FabricProp {
+  return piece.asset === undefined ? { prefab: piece.prefab, x, z, yaw } : assetProp(piece.asset, x, z, yaw);
+}
+
+/** The solid back panel of a bus shelter standing at (x, z) turned `yaw` (its front, local +x, to the curb). */
+function shelterWall(x: number, z: number, yaw: number): FabricProp {
+  return { prefab: PREFAB.invisibleWall, x: x - detCos(yaw) * SHELTER_WALL.back, z: z + detSin(yaw) * SHELTER_WALL.back, yaw, size: [SHELTER_WALL.thickness, SHELTER_WALL.height, SHELTER_WALL.length] };
 }
 
 /** Stand `item` as near `preferred` along the lane as it fits, sliding either way up to `slide` m; whether it fit. */
 function standItem(lane: Lane, item: KitItem, preferred: number, slide: number, geometry: Geometry, props: FabricProp[]): boolean {
-  const half = alongHalf(rowOf(item.asset), item.turn);
+  const half = alongHalf(item.piece, item.turn);
   for (let step = 0; step * SLIDE_STEP <= slide; step++) {
     for (const direction of SLIDE_DIRECTIONS) {
       if (step === 0 && direction < 0) continue;
@@ -142,7 +166,9 @@ function standItem(lane: Lane, item: KitItem, preferred: number, slide: number, 
       if (!isFree(lane, along - half - FURNITURE_GAP, along + half + FURNITURE_GAP)) continue;
       lane.taken.push(along - half, along + half);
       const at = sidePoint(lane.side, along, geometry.sidewalk - item.stripShare * geometry.sidewalkFurniture);
-      props.push(assetProp(item.asset, at.x, at.z, lane.side.outwardYaw + item.turn));
+      const yaw = lane.side.outwardYaw + item.turn;
+      props.push(pieceProp(item.piece, at.x, at.z, yaw));
+      if (item.piece === PIECE.busShelter) props.push(shelterWall(at.x, at.z, yaw));
       return true;
     }
   }
@@ -177,7 +203,7 @@ function frontageProps(lots: Lots, random: () => number): FabricProp[] {
   return props;
 }
 
-/** The city's street fabric as course props that name scenery assets: marked crossings at the walk graph's crossing edges, a manhole cover per street segment, street-name signs at block corners, a hydrant per block face and the frontage kits of businesses and the bus stop. */
+/** The city's street fabric as course props: marked crossings at the walk graph's crossing edges and a manhole cover per street segment (scenery-asset decals), street signs at block corners, a hydrant per block face and the frontage kits of businesses and the bus stop (street kit prefabs, a newspaper box's asset box). */
 export function fabricProps(lots: Lots, graph: WalkGraph): FabricProp[] {
   const random = mulberry32(FABRIC_SEED);
   return [...crossingProps(lots.geometry, graph), ...manholeProps(lots.geometry, random), ...signProps(lots), ...frontageProps(lots, random)];
