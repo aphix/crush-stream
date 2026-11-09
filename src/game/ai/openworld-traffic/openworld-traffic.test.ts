@@ -182,8 +182,8 @@ describe("given the open world's traffic on a field with the local player's car"
 });
 
 describe("given a resident whose car stands at the kerb near a player and then drives off", () => {
-  /** A resident whose car is not a sedan, so a car that reports the sedan's body is caught. */
-  const RESIDENT = Array.from({ length: 64 }, (_, number) => number).find((number) => residentBody(number) !== "sedan") ?? 0;
+  /** A resident whose car is a hatchback or a wagon: both stand in the test's kerb pool and its movers, so nothing is rebuilt for him and a car that reports the sedan's body is caught. */
+  const RESIDENT = Array.from({ length: 64 }, (_, number) => number).find((number) => residentBody(number) === "hatchback" || residentBody(number) === "wagon") ?? 0;
 
   /** The space resident `resident`'s car stands in (found from its pose), -1 when it stands in none. */
   function residentSpotIndex(traffic: OpenWorldTraffic, resident: number): number {
@@ -367,6 +367,74 @@ describe("given the open world's ambulance", () => {
     const patrol = traffic.spawnDrivenCar(-1, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z), { urgent: true })!;
     expect(patrol.index, "the last mover slot").toBe(field.cars.length - 1 - 0);
     expect(field.colours[patrol.index], "no white paint").not.toBe(AMBULANCE_COLOUR);
+  });
+});
+
+/** The space resident `resident`'s car stands in (from its pose), -1 when it stands in none. */
+function residentSpace(traffic: OpenWorldTraffic, resident: number): number {
+  const pose: ResidentCarPose = { x: 0, z: 0, yaw: 0, groundY: 0, bodyStyle: "sedan" };
+  if (!traffic.carPoseOf(resident, pose)) return -1;
+  const spots = traffic.parkingSpots;
+  for (let spot = 0; spot < spots.count; spot++) if (hypot2(spots.x[spot]! - pose.x, spots.z[spot]! - pose.z) < 0.01) return spot;
+  return -1;
+}
+
+/** A sight field in which every space is seen: nothing may be rebuilt there. */
+class SeenSight extends ProximitySight {
+  override observe(): boolean {
+    return true;
+  }
+}
+
+describe("given residents whose cars show at the kerb and drive off, over a minute", () => {
+  const BODIES_ASKED = 4;
+  /** One resident for each everyday body. */
+  const residents = EVERYDAY_BODIES.map((body) => Array.from({ length: 200 }, (_, number) => number).find((number) => residentBody(number) === body) ?? 0);
+
+  function parkedFeed(count: number): ReturnType<typeof emptyFeed> {
+    const feed = emptyFeed(8);
+    feed.parked.count = count;
+    for (let index = 0; index < count; index++) {
+      feed.parked.resident[index] = residents[index]!;
+      feed.parked.place[index] = 0;
+    }
+    return feed;
+  }
+
+  // mutation: sed -i 's/      const matches = body !== null \&\& car.style.id === body;/      const matches = false;/' src/game/ai/openworld-traffic/kerb-cars.ts
+  // mutation: sed -i 's/    return freeMatch >= 0 ? freeMatch : free >= 0 ? free : ambientMatch >= 0 ? ambientMatch : ambient;/    return free >= 0 ? free : ambient;/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when a car of each body is among the pool, then no car is rebuilt for a body: each resident gets a pool car that wears his", () => {
+    const field = new FakeField();
+    const feed = parkedFeed(BODIES_ASKED);
+    const traffic = makeTraffic(field, { movers: 6, kerb: 6 }, feed, [homeAt(HOME.x, HOME.z)]);
+    const base = field.rebuilt.length;
+    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
+    const clock = new Clock();
+    runSeconds(field, traffic, clock, 30);
+    for (const resident of residents) {
+      const from = residentSpace(traffic, resident);
+      expect(from, `resident ${resident}'s space`).toBeGreaterThanOrEqual(0);
+      expect(traffic.spawnDrivenCar(resident, from, traffic.nearestSpot(WORK.x, WORK.z)), `resident ${resident} drives off`).not.toBeNull();
+    }
+    runSeconds(field, traffic, clock, 30);
+    expect(field.rebuilt.length - base, "cars rebuilt for a body").toBe(0);
+  });
+
+  // mutation: sed -i 's/ \&\& this.context.swaps.allows(this.seconds) \&\& spotUnseen(this.context, spot)) {/) {/' src/game/ai/openworld-traffic/kerb-cars.ts
+  it("when no pool car wears his body and every space is seen, then his car stands there as it is: nothing is rebuilt where an eye is", () => {
+    const field = new FakeField();
+    const feed = emptyFeed(8);
+    const mismatched = Array.from({ length: 200 }, (_, number) => number).find((number) => residentBody(number) === "pickup" || residentBody(number) === "sedan") ?? 0;
+    feed.parked.count = 1;
+    feed.parked.resident[0] = mismatched;
+    feed.parked.place[0] = 0;
+    const traffic = new OpenWorldTraffic([homeAt(HOME.x, HOME.z)], field.ports, new SeenSight(field.ports), { movers: 0, kerb: 2, patrol: 0, ambulance: 0 }, feed);
+    const base = field.rebuilt.length;
+    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
+    runSeconds(field, traffic, new Clock(), 3);
+    expect(residentSpace(traffic, mismatched), "his car has a space").toBeGreaterThanOrEqual(0);
+    expect(traffic.counts().kerb, "kerb cars stand").toBeGreaterThan(0);
+    expect(field.rebuilt.length - base, "cars rebuilt in view").toBe(0);
   });
 });
 

@@ -3,6 +3,7 @@ import { hash01 } from "../../kernel/scalar.ts";
 import { FLIPPED_UP_Y } from "../../vehicle/constants.ts";
 import { MAX_CARS } from "../../scenes/fleet.ts";
 import { rightX, rightZ } from "../../world/openworld/openworld-roads.ts";
+import type { CarStyleId } from "../../vehicle/car-variants.ts";
 import { BOOKKEEPING_SECONDS, KERB_EVICT_MARGIN, KERB_JITTER_SIDE, KERB_JITTER_YAW, KERB_KEEP, KERB_REACH, PRIME_PASSES, SIGHT_RADIUS, TOW_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { residentBody, residentColour } from "./traffic-look.ts";
 import { RESIDENT_CAPACITY, spotUnseen, STANDING, type TrafficContext } from "./traffic-ports.ts";
@@ -87,7 +88,8 @@ export class KerbCars {
       const spot = this.nearestWanted(parked);
       if (spot < 0) break;
       const limit = this.wantedResident >= 0 ? 0 : this.wantedDistance + KERB_EVICT_MARGIN;
-      if (!this.show(spot) && !(this.evictFarthest(limit) && this.show(spot))) break;
+      const body = this.wantedResident < 0 ? null : residentBody(this.wantedResident);
+      if (!this.show(spot) && !(this.evictFarthest(limit, body) && this.show(spot))) break;
     }
   }
 
@@ -136,18 +138,22 @@ export class KerbCars {
     this.vacate(slot);
   }
 
-  /** Puts away the shown car farthest from the players if it is past `limit` m and has been unseen for the grace; false when there is none. */
-  private evictFarthest(limit: number): boolean {
+  /** Puts away the shown car that stands for good, past `limit` m from the players and unseen for the grace, that wears `body` (null: any) before the farthest one; false when there is none. */
+  private evictFarthest(limit: number, body: CarStyleId | null): boolean {
     const { ports, sight } = this.context;
     let farthest = -1;
     let farthestDistance = limit;
+    let farthestMatches = false;
     for (let slot = 0; slot < this.size; slot++) {
       if (this.spotOfSlot[slot]! < 0 || this.residentOfSlot[slot]! >= 0) continue;
       const car = ports.cars()[this.first + slot];
       if (car === undefined) continue;
       const distance = this.distanceToEyes(car.group.position.x, car.group.position.z);
-      if (distance <= farthestDistance || sight.unseenFor(this.context.sightBase + this.context.movers + slot) < sight.hideGrace) continue;
+      if (distance <= limit || sight.unseenFor(this.context.sightBase + this.context.movers + slot) < sight.hideGrace) continue;
+      const matches = body !== null && car.style.id === body;
+      if (farthest >= 0 && (farthestMatches ? !matches || distance <= farthestDistance : !matches && distance <= farthestDistance)) continue;
       farthestDistance = distance;
+      farthestMatches = matches;
       farthest = slot;
     }
     if (farthest < 0) return false;

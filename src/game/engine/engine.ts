@@ -44,6 +44,7 @@ import { OpenWorldDirector } from "./engine-openworld.ts";
 import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
 import { TrafficLightArt } from "../present/traffic-lights.ts";
 import { wearCarLook } from "../present/car-look.ts";
+import { TrafficDress } from "./traffic-dress.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
@@ -532,14 +533,19 @@ export class CrashEngine extends EngineGarage {
   }
 
   /** The open world's traffic car stood on its street space: repaired, at rest, on the ground there, drawn and simulated. */
+  /** What a traffic car needs each time it is stood on a space (`TrafficDress`). */
+  private readonly trafficDress = new TrafficDress<DeformableCar>(
+    (car) => this.dressCar(car),
+    (car, colour) => wearCarLook(car, { ...NO_CAR_PICK, body: colour }, null),
+  );
+
   private standTrafficCar(car: DeformableCar, x: number, z: number, yaw: number, colour: number | null): void {
     car.stored = false;
     car.group.visible = true;
     car.spawnFacing(x, z, yaw, 0);
     car.group.position.y = activeGround().heightAt(x, z, 0.5);
     layOnGround(car);
-    this.dressCar(car);
-    if (colour !== null) wearCarLook(car, { ...NO_CAR_PICK, body: colour }, null);
+    this.trafficDress.stand(car, colour);
   }
 
   /** The open world's traffic car put away far off the course: hidden, still, and not simulated (`EPICENTER.storedSkip`). */
