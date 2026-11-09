@@ -88,6 +88,8 @@ const HOT = {
   "src/game/present/paint-scratch.ts": ["frame", "draw", "touch", "sameStroke", "radiusOf", "growRect", "stamp"],
   "src/game/ai/civilians/civilian-leg.ts": ["legPose", "legPositionAt"],
   "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "findHits", "lookOf", "hasLooseBody"],
+  "src/game/ai/civilians/society-activity.ts": ["readActivity", "readWalk", "hasDoor", "readOutdoor", "readIndoors", "readSitting", "readFight", "standAtDoor", "companionIsHere", "setClip"],
+  "src/game/ai/civilians/society-crime.ts": ["collect", "targetIsThere", "crimeKindOf"],
   "src/game/engine/engine-openworld.ts": ["step", "frame"],
   "src/game/present/civilian-art.ts": ["update", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
   "src/game/present/civilian-pose.ts": ["poseCivilian", "poseLimb", "placePart", "setSwung"],

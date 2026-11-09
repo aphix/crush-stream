@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PLACE_NAMES } from "./civilian-cast.ts";
-import { CRIME_KIND, CRIME_LAG_TICKS, EVENT_KIND, EVENT_LEAD_TICKS, FLAG, JAIL_TICKS, NEVER_TICK, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, WANTED_TICKS } from "./civilian-constants.ts";
+import { CRIME_KIND, CRIME_LAG_TICKS, EVENT_KIND, EVENT_LEAD_TICKS, FLAG, JAIL_TICKS, NEVER_TICK, NO_PLACE, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, WANTED_TICKS } from "./civilian-constants.ts";
 import { ACTIVITY } from "./civilian-activity.ts";
 import { applyIndividualEvents, applyReactionEvents, queueEvents } from "./civilian-events.ts";
 import { historyLines, moodOf } from "./civilian-mood.ts";
@@ -8,7 +8,7 @@ import { EVENT_CODE, MOOD } from "./civilian-names.ts";
 import { runTicks, stateDigest } from "./civilian-run.test-util.ts";
 import { decideResident } from "./civilian-plan.ts";
 import { ActivityReading, readActivity } from "./society-activity.ts";
-import { CrimeDesk, crimeOf, isWanted } from "./society-crime.ts";
+import { CrimeDesk, crimePlaceOf, isWanted } from "./society-crime.ts";
 import { expireWanted } from "./society-reactions.ts";
 import { newCast, societyMap, type Cast } from "./society-scenes.test-util.ts";
 import { intAt, placeIn, stageResident } from "./society.test-util.ts";
@@ -50,7 +50,7 @@ describe("given a criminal at a shop and the host's desk", () => {
     expect(desk.collect(cast.state, sinceCrimeDue(cast) + 1, due), "due crimes a tick later, after it was listed").toBe(0);
     applyIndividualEvents(cast.state, sinceCrimeDue(cast) + EVENT_LEAD_TICKS);
     applyReactionEvents(cast.state, sinceCrimeDue(cast) + EVENT_LEAD_TICKS);
-    expect(crimeOf(cast.state, cast.resident), "an open crime with no event").toBeNull();
+    expect(intAt(cast.state, cast.resident, RESIDENT_INT.crimeTick), "tick of an open crime with no event").toBe(NEVER_TICK);
   });
 
   it("when the victim of a mugging has gone in, then there is nothing due, and when they are out on their stoop it is", () => {
@@ -74,12 +74,11 @@ describe("given the host raises a crime four ticks after it happened", () => {
 
   it("when its own tick comes, then the criminal is wanted for a game day from the tick it happened, and not before", () => {
     applyIndividualEvents(state, happened + 3);
-    expect(crimeOf(state, resident), "crime before the post lands").toBeNull();
+    expect(intAt(state, resident, RESIDENT_INT.crimeTick), "crime before the post lands").toBe(NEVER_TICK);
     applyIndividualEvents(state, happened + 4);
-    const crime = crimeOf(state, resident)!;
-    expect(crime.tick, "tick the crime began").toBe(happened);
-    expect(crime.kind, "kind of crime").toBe(CRIME_KIND.theft);
-    expect(crime.place, "place of the crime").toBe(BODEGA);
+    expect(intAt(state, resident, RESIDENT_INT.crimeTick), "tick the crime began").toBe(happened);
+    expect(intAt(state, resident, RESIDENT_INT.crimeKind), "kind of crime").toBe(CRIME_KIND.theft);
+    expect(crimePlaceOf(state, resident), "place of the crime").toBe(BODEGA);
     expect(isWanted(state, resident, happened + 5), "wanted just after").toBe(true);
     expect(isWanted(state, resident, happened + WANTED_TICKS), "wanted when the game day is up").toBe(false);
     expect(historyLines(state, resident)[0], "the criminal's newest line").toBe("lifted something from Bodega Supreme");
@@ -97,9 +96,9 @@ describe("given the host raises a crime four ticks after it happened", () => {
 
   it("when a game day has passed, then the wanted spell is over and the open crime with it", () => {
     expireWanted(state, happened + WANTED_TICKS - 1);
-    expect(crimeOf(state, resident), "open crime the tick before").not.toBeNull();
+    expect(crimePlaceOf(state, resident), "place of the open crime the tick before").toBe(BODEGA);
     expireWanted(state, happened + WANTED_TICKS);
-    expect(crimeOf(state, resident), "open crime when the day is up").toBeNull();
+    expect(crimePlaceOf(state, resident), "place of the open crime when the day is up").toBe(NO_PLACE);
     expect(intAt(state, resident, RESIDENT_INT.flags) & FLAG.wanted, "wanted flag when the day is up").toBe(0);
   });
 });
@@ -118,7 +117,7 @@ describe("given a crime heard by a host at the tick it happened and by a peer te
       }
     }
     expect(stateDigest(peerScene.state), "state of the late peer past the reaction").toBe(stateDigest(hostScene.state));
-    expect(crimeOf(peerScene.state, peerScene.resident), "the crime reached the peer").not.toBeNull();
+    expect(crimePlaceOf(peerScene.state, peerScene.resident), "the crime reached the peer").toBe(BODEGA);
   });
 });
 

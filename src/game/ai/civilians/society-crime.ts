@@ -23,33 +23,24 @@ function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
 }
 
-/** The two residents a push or fight subject packs (victim + capacity * (other + 1)); `other` -1 is a player's walker or car. */
-export function pairOf(subject: number, capacity: number): { victim: number; other: number } {
-  return { victim: subject % capacity, other: Math.floor(subject / capacity) - 1 };
-}
-
 /** Wanted: an open crime or a fight not yet answered, until a bust or the wanted spell ends. */
 export function isWanted(state: CityState, resident: number, tick: number): boolean {
   return (intAt(state, resident, RESIDENT_INT.flags) & FLAG.wanted) !== 0 && tick < intAt(state, resident, RESIDENT_INT.wantedUntilTick);
 }
 
-type OpenCrime = { tick: number; kind: number; place: number; victim: number };
-
-/** The crime a resident has open (it began at `tick` at `place`), or null. */
-export function crimeOf(state: CityState, resident: number): OpenCrime | null {
-  const tick = intAt(state, resident, RESIDENT_INT.crimeTick);
-  if (tick === NEVER_TICK) return null;
-  return { tick, kind: intAt(state, resident, RESIDENT_INT.crimeKind), place: intAt(state, resident, RESIDENT_INT.crimePlace), victim: intAt(state, resident, RESIDENT_INT.crimeVictim) };
+/** The place of the crime a resident has open, or none. */
+export function crimePlaceOf(state: CityState, resident: number): number {
+  return intAt(state, resident, RESIDENT_INT.crimeTick) === NEVER_TICK ? NO_PLACE : intAt(state, resident, RESIDENT_INT.crimePlace);
 }
 
-const CRIME_KIND_OF_PURPOSE = new Map<number, number>([
-  [PURPOSE.shoplift, CRIME_KIND.theft],
-  [PURPOSE.mug, CRIME_KIND.mugging],
-  [PURPOSE.breakIn, CRIME_KIND.breakIn],
-]);
+const CRIME_KIND_OF_PURPOSE = new Uint8Array(PURPOSE.fight + 1);
+CRIME_KIND_OF_PURPOSE[PURPOSE.shoplift] = CRIME_KIND.theft;
+CRIME_KIND_OF_PURPOSE[PURPOSE.mug] = CRIME_KIND.mugging;
+CRIME_KIND_OF_PURPOSE[PURPOSE.breakIn] = CRIME_KIND.breakIn;
 
+/** The kind of crime a leg's purpose is for, `CRIME_KIND.none` when it is for none. */
 export function crimeKindOf(purpose: number): number {
-  return CRIME_KIND_OF_PURPOSE.get(purpose) ?? CRIME_KIND.none;
+  return CRIME_KIND_OF_PURPOSE[purpose] ?? CRIME_KIND.none;
 }
 
 /** Angry or annoyed from an event still colouring their mood. */

@@ -48,7 +48,7 @@ function expectNotOutsideItsHours(name: string, scene: Scene): void {
 
 describe("given the interaction table and a scene staged for each of its rows", () => {
   it("when the scenes and the rows are listed, then every row has one and no scene is for a row that is not there", () => {
-    expect(Object.keys(SCENES).sort(), "scenes").toEqual(INTERACTIONS.map((row) => row.name).sort());
+    expect(Object.keys(SCENES).sort().join(" | "), "scenes").toBe(INTERACTIONS.map((row) => row.name).sort().join(" | "));
   });
 
   for (const [name, scene] of Object.entries(SCENES)) {

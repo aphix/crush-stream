@@ -36,7 +36,7 @@ import { legPose } from "./civilian-leg.ts";
 import { EVENT_CODE } from "./civilian-names.ts";
 import { sendResidentTo, standOutside } from "./civilian-plan.ts";
 import { markDirty, residentName, type CityState } from "./civilian-state.ts";
-import { crimeKindOf, isAngry, pairOf } from "./society-crime.ts";
+import { crimeKindOf, isAngry } from "./society-crime.ts";
 import { evolveNeeds } from "./needs.ts";
 import { noteEvent } from "./society-day.ts";
 import { releaseSeat } from "./society-seats.ts";
@@ -188,7 +188,8 @@ export function startFight(state: CityState, victim: number, other: number, seco
 
 /** A push: the seeded chance that it becomes a fight, small, and several times larger when either is angry. */
 export function applyPush(state: CityState, subject: number, seconds: number, tick: number): void {
-  const { victim, other } = pairOf(subject, state.capacity);
+  const victim = subject % state.capacity;
+  const other = Math.floor(subject / state.capacity) - 1;
   const angry = isAngry(state, victim, tick) || (other >= 0 && isAngry(state, other, tick));
   if (residentDraws(state.seed, victim, STREAM.fight, tickAt(seconds))() >= FIGHT_CHANCE * (angry ? FIGHT_ANGRY_FACTOR : 1)) return;
   startFight(state, victim, other, seconds, tick);
