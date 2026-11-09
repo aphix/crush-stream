@@ -47,8 +47,10 @@ per frame on a client:
 spots, pairs the bodies by a hashed grid and relaxes the pairs `SEPARATION_PASSES` times, no body moving more than `MAX_OFFSET` (0.7 m) from the
 brain's spot; a pair closing head on or overtaking is moved sideways instead (the side they were already on, so it never flips as they cross), so they pass instead of standing off. It is a
 pure function of the brain's spots at that moment (no history, no allocation): every peer draws the same, and the brain's rows and the twin row never see it.
-`poses.x`/`z` are the drawn spots (the art, the look-at and the ragdoll throw's spawn read them); hits and events read the brain's own spot (`separation.brainX`),
-so a knock never depends on a push. A player on foot is a body that does not give way (`crowd.walkers`, which the director refills each step from the `foot` port);
+`poses.x`/`z` are the drawn spots (the art, the look-at, the ragdoll throw's spawn and the cars' hits read them: a car meets the body the player sees). Hits are found on the host only and a client hears
+the knock as an event, so the host's drawn spots are the authority (the separation is a pure function of the brain's spots and the fixed bodies); a client's walker shifts only its own drawn spots, never a hit.
+`crowd.overlay` (the law's: the fleeing suspect) runs after the placing and before the hits, so a hit meets the suspect where they are drawn. A bump or push is the brain walking two bodies through each other, so it is
+found on the brain's spots, which the drawn spots no longer show. A player on foot is a body that does not give way (`crowd.walkers`, which the director refills each step from the `foot` port);
 a civilian seated, at a counter or fighting is fixed too, and is not bumped.
 
 **Bumps and pushes.** Two civilians whose brain spots come within `BUMP_DISTANCE` closing at `BUMP_CLOSING_SPEED` bump: both play the bump clip (`ACTIVITY.bump`,
