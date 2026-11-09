@@ -54,6 +54,14 @@ export class OnFootFlow {
     return "none";
   }
 
+  /** Thrown out of car `car` (the player takes his thrown driver over): on foot at once, that car the one he may get back into. */
+  thrownOut(car: number): void {
+    this.phase = "onFoot";
+    this.car = car;
+    this.refusal = null;
+    this.seconds = 0;
+  }
+
   /** Back in the seat, as after a scene reset. */
   reset(): void {
     this.phase = "inCar";

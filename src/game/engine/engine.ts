@@ -173,7 +173,7 @@ export class CrashEngine extends EngineGarage {
     playReel: (reel, startAt) => this.highlights.play(reel, startAt),
     reelPlaying: () => this.highlights.playing,
     launchEjection: (e) => {
-      if (e.car !== this.onFoot.away) this.ragdolls.launch(e, this.live());
+      if (e.car !== this.onFoot.away && !this.onFoot.takeEjected(e)) this.ragdolls.launch(e, this.live());
     },
     meterOf: (i) => this.meterOf(i),
     playerLook: () => this.playerLook(),
@@ -306,6 +306,10 @@ export class CrashEngine extends EngineGarage {
       racing: () => this.race.active,
       look: () => ownLook(this.looks.mine.person),
       sight: () => this.chaseSight(true),
+      openWorld: () => this.showOpenWorld,
+      runsCars: () => !this.net.client,
+      freshCarNear: (index, x, z, facing) => this.race.placeNear(index, x, z, facing),
+      respawn: () => this.requestRespawn(),
     });
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
@@ -1108,7 +1112,7 @@ export class CrashEngine extends EngineGarage {
 
   /** A driver thrown out: his dummy flies (`release`: a minigame's boost), the minigame knows he is out, the race recorder and the netplay peers hear of it. */
   private throwDriver(e: Ejection, cars: readonly DeformableCar[], release?: ReleaseScale): void {
-    if (e.car !== this.onFoot.away) this.ragdolls.launch(e, cars, true, release);
+    if (e.car !== this.onFoot.away && !this.onFoot.takeEjected(e)) this.ragdolls.launch(e, cars, true, release);
     if (this.minigameMode !== null) this.minigames.noteThrown();
     if (this.race.active) this.race.recorder.eject(e);
     this.net.sendEject(e);

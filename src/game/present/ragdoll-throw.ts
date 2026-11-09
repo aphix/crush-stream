@@ -75,6 +75,37 @@ export abstract class RagdollThrower extends RagdollStepper {
    * crash than its own, `ownThrow`). `releaseScale` changes his launch velocity (the range minigames' boost: `forward` scales the horizontal, `upward` the vertical, `elevation` turns the whole of the scaled horizontal speed up to an angle; unset: the event's own).
    */
   launch(e: Ejection, cars: readonly DeformableCar[], rides = true, releaseScale: ReleaseScale = NO_RELEASE_SCALE): void {
+    const t = this.ejectThrow(e, cars, rides, releaseScale);
+    this.pick();
+    if (this.mode === "remote") this.launchRemote(t, cars);
+    else if (this.world) this.spawn(t);
+    else this.later(t);
+  }
+
+  /**
+   * The player takes his own thrown-out driver over (`e`, the open world): the throw `launch` makes, in this thread's world and in the walker's slot,
+   * limp from the first step and up again once asked (`Walker.ask`), the ride-along not framing him (the on-foot camera does). His slot, or -1 while
+   * Rapier is still loading (nothing thrown: `launch` then).
+   */
+  ejectWalker(e: Ejection, cars: readonly DeformableCar[]): number {
+    if (!this.R || !this.world) return -1;
+    if (this.mode === "remote") this.reset();
+    this.mode = "inline";
+    const t = this.ejectThrow(e, cars, false, NO_RELEASE_SCALE);
+    // A walker's joints are the ones `attach` sets, not a thrown driver's loosened and braced ones.
+    t.loose = false;
+    const placed = this.spawn(t, WALKER_SLOT, Infinity);
+    if (placed < 0) return placed;
+    const forward = _p.set(0, 0, 1).applyQuaternion(t.q);
+    this.walkers[placed]!.attach(this.R, this.world, this.dolls[placed]!, Math.atan2(forward.x, forward.z));
+    this.walkers[placed]!.struck();
+    this.walkerPatchX = t.p.x;
+    this.walkerPatchZ = t.p.z;
+    return placed;
+  }
+
+  /** Car `e.car`'s driver's throw out of its pane (the pane smashed and its cover burst), `next` filled with it and kept for his passenger (`throwPassenger`). */
+  private ejectThrow(e: Ejection, cars: readonly DeformableCar[], rides: boolean, releaseScale: ReleaseScale): Throw {
     this.cars = cars;
     const car = cars[e.car]!;
     if (this.authority) car.smashGlass(e.exit);
@@ -102,10 +133,7 @@ export abstract class RagdollThrower extends RagdollStepper {
     t.loose = true;
     this.driverThrows[e.car] = { ...t, p: t.p.clone(), q: t.q.clone(), v: t.v.clone(), w: t.w.clone() };
     this.onExit(_c, _cq, car.velocity);
-    this.pick();
-    if (this.mode === "remote") this.launchRemote(t, cars);
-    else if (this.world) this.spawn(t);
-    else this.later(t);
+    return t;
   }
 
   /**
