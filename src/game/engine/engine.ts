@@ -43,6 +43,8 @@ import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
 import { TrafficLightArt } from "../present/traffic-lights.ts";
+import { wearCarLook } from "../present/car-look.ts";
+import { NO_CAR_PICK } from "../match/look-data.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
@@ -173,7 +175,7 @@ export class CrashEngine extends EngineGarage {
     playReel: (reel, startAt) => this.highlights.play(reel, startAt),
     reelPlaying: () => this.highlights.playing,
     launchEjection: (e) => {
-      if (e.car !== this.onFoot.away) this.ragdolls.launch(e, this.live());
+      if (e.car !== this.onFoot.away && !this.onFoot.takeEjected(e)) this.ragdolls.launch(e, this.live());
     },
     meterOf: (i) => this.meterOf(i),
     playerLook: () => this.playerLook(),
@@ -277,7 +279,7 @@ export class CrashEngine extends EngineGarage {
       this.lampBatch.sync(drawn);
       this.partBatch.sync(drawn);
       // In the garage the standing dummy beside the car is the driver, and the showcase's cars show their empty cabins: no one sits in the car there. A car its player left on foot has nobody in it either.
-      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook, this.onFoot.away);
+      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook, this.onFoot.away, this.parkedEmpty);
       this.coverBatch.sync(drawn);
       lapPart(PART.batches);
     };
@@ -306,6 +308,10 @@ export class CrashEngine extends EngineGarage {
       racing: () => this.race.active,
       look: () => ownLook(this.looks.mine.person),
       sight: () => this.chaseSight(true),
+      openWorld: () => this.showOpenWorld,
+      runsCars: () => !this.net.client,
+      freshCarNear: (index, x, z, facing) => this.race.placeNear(index, x, z, facing),
+      respawn: () => this.requestRespawn(),
     });
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
@@ -381,6 +387,9 @@ export class CrashEngine extends EngineGarage {
         this.ragdolls.preload().then(() => this.queueWarm(), (err: unknown) => console.error("Crush Stream ragdoll load failed", err));
       });
   }
+
+  /** A car of the open world standing in a kerb space has nobody in it (`SeatedDrivers.sync`). */
+  private readonly parkedEmpty = (id: number, car: DeformableCar): boolean => this.openWorld.carIsEmpty(id, car);
 
   private makeOpenWorld(): OpenWorldDirector {
     const eyes = [this.camera];
@@ -482,7 +491,7 @@ export class CrashEngine extends EngineGarage {
         cars: () => this.live(),
         ensureCars: (count) => this.ensureCars(count),
         seated: (id) => id === this.race.self || this.netSeats.has(id),
-        place: (id, x, z, yaw) => this.standTrafficCar(this.live()[id]!, x, z, yaw),
+        place: (id, x, z, yaw, colour) => this.standTrafficCar(this.live()[id]!, x, z, yaw, colour),
         putAway: (id) => this.storeTrafficCar(this.live()[id]!, id),
         markPolice: (from, count) => this.setPolice(from, count),
         setBody: (id, style) => this.matchCar(id, style, STYLE_CLASS[style]),
@@ -516,13 +525,14 @@ export class CrashEngine extends EngineGarage {
   }
 
   /** The open world's traffic car stood on its street space: repaired, at rest, on the ground there, drawn and simulated. */
-  private standTrafficCar(car: DeformableCar, x: number, z: number, yaw: number): void {
+  private standTrafficCar(car: DeformableCar, x: number, z: number, yaw: number, colour: number | null): void {
     car.stored = false;
     car.group.visible = true;
     car.spawnFacing(x, z, yaw, 0);
     car.group.position.y = activeGround().heightAt(x, z, 0.5);
     layOnGround(car);
     this.dressCar(car);
+    if (colour !== null) wearCarLook(car, { ...NO_CAR_PICK, body: colour }, null);
   }
 
   /** The open world's traffic car put away far off the course: hidden, still, and not simulated (`EPICENTER.storedSkip`). */
@@ -1108,7 +1118,7 @@ export class CrashEngine extends EngineGarage {
 
   /** A driver thrown out: his dummy flies (`release`: a minigame's boost), the minigame knows he is out, the race recorder and the netplay peers hear of it. */
   private throwDriver(e: Ejection, cars: readonly DeformableCar[], release?: ReleaseScale): void {
-    if (e.car !== this.onFoot.away) this.ragdolls.launch(e, cars, true, release);
+    if (e.car !== this.onFoot.away && !this.onFoot.takeEjected(e)) this.ragdolls.launch(e, cars, true, release);
     if (this.minigameMode !== null) this.minigames.noteThrown();
     if (this.race.active) this.race.recorder.eject(e);
     this.net.sendEject(e);

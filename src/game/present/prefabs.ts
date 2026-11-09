@@ -9,6 +9,8 @@ import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monument
 import { frontBumper, lyingWheel, parkedCar } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
 import { streetKitParts } from "./prefabs-street.ts";
+import { streetTreePieces } from "./street-trees.ts";
+import { isStreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
 import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMaterials } from "./scenery-assets-art.ts";
 import { PREFAB } from "../world/constants.ts";
 import { dressPaving } from "./ground-relief.ts";
@@ -540,14 +542,14 @@ function disposeGroup(g: THREE.Group, keep: readonly THREE.Material[] = []): voi
 }
 
 /**
- * makeLamp fitted to 4.4 m with its arm towards the road (+X): the pole in vertex colours, then the
+ * makeLamp fitted to 4.4 m with its arm towards the road (+X) (`acorn`: the acorn lamp at its own size, no arm): the pole in vertex colours, then the
  * head and the night light pool on makeLamp's own shared materials, so the scene's day / night
  * switch lights them with every other lamp.
  */
-function lamp(plain: THREE.Material): PrefabPart[] {
-  const g = makeLamp();
+function lamp(plain: THREE.Material, acorn = false): PrefabPart[] {
+  const g = makeLamp(true, acorn);
   g.updateMatrixWorld(true);
-  const k = 4.4 / 5.2;
+  const k = acorn ? 1 : 4.4 / 5.2;
   const fit = new THREE.Matrix4().makeRotationY(Math.PI / 2).scale(new THREE.Vector3(k, k, k));
   const pole: Piece[] = [];
   const shared: PrefabPart[] = [];
@@ -720,7 +722,7 @@ function sidewalk(): Piece[] {
 
 /** Prefab `id` at scale 1 as drawable parts (one for most; the lamp adds its head and night pool); a building in the facade style `skin` names (else its prefab's own), a scenery asset in the family it names (else the first). */
 export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = null): PrefabPart[] {
-  const style = isAssetFamily(skin) ? null : skin;
+  const style = isAssetFamily(skin) || isStreetTreeSkin(skin) ? null : skin;
   const one = (pieces: Piece[], material: THREE.Material): PrefabPart[] => [{ geometry: painted(pieces), material, shared: false }];
   switch (id) {
     case PREFAB.cone:
@@ -742,7 +744,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.rock:
       return one(rock(), mats.nature);
     case PREFAB.tree:
-      return one(tree(), mats.nature);
+      return one(isStreetTreeSkin(skin) ? streetTreePieces(skin) : tree(), mats.nature);
     case PREFAB.building:
     case PREFAB.buildingShell:
     case PREFAB.stucco: {
@@ -791,6 +793,8 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
       return one(billboard(), mats.billboard);
     case PREFAB.lamp:
       return lamp(mats.plain);
+    case PREFAB.acornLamp:
+      return lamp(mats.plain, true);
     case PREFAB.gantry:
       return one(pylon(), mats.plain);
     case PREFAB.chevron:
@@ -841,6 +845,11 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.busShelter:
     case PREFAB.busStopSign:
     case PREFAB.streetSign:
+    case PREFAB.bollard:
+    case PREFAB.cellarDoor:
+    case PREFAB.hoopFence:
+    case PREFAB.pavilion:
+    case PREFAB.plaza:
       return streetKitParts(id, mats);
   }
 }

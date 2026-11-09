@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
-import { BIOME, PREFAB, SURFACE } from "../constants.ts";
+import { BIOME, PAVING, PREFAB, SURFACE } from "../constants.ts";
 import { TREE_SCALE } from "../scenery.ts";
 import type { TrackSchema } from "../track-schema.ts";
 import {
@@ -31,7 +31,9 @@ import { fabricProps } from "./openworld-fabric.ts";
 import { interiorEnvelopeProps } from "./openworld-interior-solids.ts";
 import type { Geometry, Lots } from "./openworld-layout.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
+import { parkPaint, parkProps } from "./openworld-park.ts";
 import { lampStations, sidePoint, sidesOf, treeStations, type BlockSide } from "./openworld-sides.ts";
+import { stoopGreeneryProps, streetTreeStyle } from "./openworld-greenery.ts";
 
 export { OPENWORLD_ID };
 
@@ -127,8 +129,11 @@ function wallProps(geometry: Geometry): Prop[] {
 
 /** Lamps and street trees along a side's furniture strip: lamps at the curb's edge, trees centred. */
 function furnitureProps(side: BlockSide, geometry: Geometry): Prop[] {
-  const lampProps = lampStations(side).map((along): Prop => ({ prefab: PREFAB.lamp, ...sidePoint(side, along, geometry.sidewalk - LAMP_FROM_CURB), yaw: side.outwardYaw }));
-  const treeProps = treeStations(side).map((along): Prop => ({ prefab: PREFAB.tree, ...sidePoint(side, along, geometry.sidewalk - geometry.sidewalkFurniture / 2), scale: TREE_SCALE }));
+  const lampProps = lampStations(side).map((along): Prop => ({ prefab: PREFAB.acornLamp, ...sidePoint(side, along, geometry.sidewalk - LAMP_FROM_CURB), yaw: side.outwardYaw }));
+  const treeProps = treeStations(side).map((along): Prop => {
+    const at = sidePoint(side, along, geometry.sidewalk - geometry.sidewalkFurniture / 2);
+    return { prefab: PREFAB.tree, ...at, scale: TREE_SCALE, style: streetTreeStyle(at.x, at.z, side.side) };
+  });
   return [...lampProps, ...treeProps];
 }
 
@@ -142,7 +147,7 @@ function streetProps(lots: Lots): Prop[] {
   return props;
 }
 
-function paintOf(lots: Lots): NonNullable<TrackInput["environment"]>["paint"] {
+function paintOf(lots: Lots): NonNullable<NonNullable<TrackInput["environment"]>["paint"]> {
   return lots.areas.map((area) => ({
     surface: area.surface,
     poly: [
@@ -166,7 +171,7 @@ function spawnOf(geometry: Geometry): NonNullable<TrackInput["survival"]> {
   return { start: { x: startX, z, yaw: QUARTER_TURN }, formation };
 }
 
-/** The open world as a course (`TrackSchema` input): the perimeter street as the road loop, the interior streets as car-free routes, a building per lot, lamps and trees, the street fabric (crossings, manholes, hydrants, furniture) and an invisible wall round the play area. */
+/** The open world as a course (`TrackSchema` input): the perimeter street as the road loop, the interior streets as car-free routes, a building per lot, lamps and trees, the street fabric (crossings, manholes, hydrants, furniture), the park's dressing and an invisible wall round the play area. */
 export function openWorldCourse(lots: Lots): TrackInput {
   const geometry = lots.geometry;
   const nodes = loopNodes(geometry);
@@ -178,8 +183,8 @@ export function openWorldCourse(lots: Lots): TrackInput {
     road: { width: geometry.carriageway, surface: SURFACE.asphalt, runoff: [0, 0], runoffSurface: SURFACE.concrete, wall: [false, false], raceMarks: false },
     nodes,
     checkpoints: Array.from({ length: LOOP_CHECKPOINTS }, (_, index) => ({ node: Math.floor((index * nodes.length) / LOOP_CHECKPOINTS) })),
-    props: [...buildingProps(lots), ...streetProps(lots), ...fabricProps(lots, buildOpenWorldMap(lots).graph), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots)],
-    scenery: { biome: BIOME.city, off: ["frontage", "verge", "islands"], roadDecals: [] },
+    props: [...buildingProps(lots), ...streetProps(lots), ...fabricProps(lots, buildOpenWorldMap(lots).graph), ...parkProps(lots), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots), ...stoopGreeneryProps(lots)],
+    scenery: { biome: BIOME.city, off: ["frontage", "verge", "islands"], roadDecals: [], paving: PAVING.brick },
     traffic: { count: 0, lanes: [], routes: streetRoutes(geometry) },
     survival: spawnOf(geometry),
     environment: {
@@ -187,7 +192,7 @@ export function openWorldCourse(lots: Lots): TrackInput {
       fog: COURSE_LOOK.fog,
       terrain: SURFACE.concrete,
       far: COURSE_LOOK.far,
-      paint: paintOf(lots),
+      paint: [...parkPaint(lots), ...paintOf(lots)],
       light: { sun: COURSE_LOOK.sun, sunIntensity: COURSE_LOOK.sunIntensity, hemi: COURSE_LOOK.hemi, fill: COURSE_LOOK.fill },
     },
   };

@@ -5,6 +5,8 @@
 import { hypot2, detSin, detCos } from "../kernel/physics-core.js";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { PREFAB, SURFACE } from "./constants.ts";
+import { PLAZA_REACH, PLAZA_TOP, plazaBricks } from "./openworld/openworld-plaza.ts";
+import { ACORN_LAMP, STREET_KIT } from "./street-kit.ts";
 import { brickCollider, bricksTop, CAPITOL, CAPITOL_POOL, CAPITOL_TOP, capitolPlan, capitolPool, FLAGPOLE, flagpolePlan, GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT, type Brick, type Collider } from "./landmarks.ts";
 
 export const SURFACE_IDS = [SURFACE.asphalt, SURFACE.concrete, SURFACE.cobble, SURFACE.dirt, SURFACE.gravel, SURFACE.grass, SURFACE.sand, SURFACE.mud] as const;
@@ -61,6 +63,7 @@ export const PREFAB_IDS = [
   PREFAB.grandstand,
   PREFAB.billboard,
   PREFAB.lamp,
+  PREFAB.acornLamp,
   PREFAB.gantry,
   PREFAB.chevron,
   PREFAB.monument,
@@ -114,6 +117,11 @@ export const PREFAB_IDS = [
   PREFAB.busShelter,
   PREFAB.busStopSign,
   PREFAB.streetSign,
+  PREFAB.bollard,
+  PREFAB.cellarDoor,
+  PREFAB.hoopFence,
+  PREFAB.pavilion,
+  PREFAB.plaza,
 ] as const;
 export type PrefabId = (typeof PREFAB_IDS)[number];
 
@@ -409,35 +417,6 @@ function smokestackPlan(): Collider[] {
 
 /** The Carhenge's top (m): an upright's length, then the shell across it. */
 const CARHENGE_TOP = WRECK.long + WRECK.tall;
-
-/**
- * The open world's street kit (`present/prefabs-street.ts` draws each): the box (m) each stands in, along its front (x, toward the street), up, and across (z, along the curb).
- * A shelter and a café set are shallow enough for the 1.2 m furniture strip; a bike rack holds one bicycle.
- */
-export const STREET_KIT = {
-  bench: [0.6, 0.9, 1.6],
-  bikeRack: [0.8, 1.15, 1.8],
-  litterBin: [0.52, 0.95, 0.52],
-  parkingMeter: [0.24, 1.4, 0.24],
-  hydrant: [0.46, 0.8, 0.46],
-  cafeSet: [1.1, 2.25, 1.7],
-  busShelter: [1.1, 2.6, 4.4],
-  busStopSign: [0.4, 2.7, 0.4],
-  streetSign: [0.95, 3, 0.95],
-} as const satisfies Record<string, readonly [number, number, number]>;
-
-/** A street sign's placement names its two streets in its `style`: the one its blade along x shows, then the one along z. */
-const STREET_SIGN_SEPARATOR = "|";
-
-export function streetSignStyle(alongX: string, alongZ: string): string {
-  return `${alongX}${STREET_SIGN_SEPARATOR}${alongZ}`;
-}
-
-/** The two street names a street sign's `style` carries (along x, along z), null when it names no two. */
-export function streetSignNames(style: string | undefined): readonly [string, string] | null {
-  const names = style?.split(STREET_SIGN_SEPARATOR) ?? [];
-  return names.length === 2 && names[0]! !== "" && names[1]! !== "" ? [names[0]!, names[1]!] : null;
-}
 
 type PrefabSpec = {
   /**
@@ -776,6 +755,21 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   // The drawn building of an enterable lot: no collider of its own, its walls are placed apart; it keeps a building's clearance from the roads.
   [PREFAB.buildingShell]: { body: "none", collider: [], foot: hypot2(6, 6), size: [12, 14, 12], mass: 0, material: MAT.BUILDING_WALL },
   [PREFAB.invisibleWall]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.JERSEY_CONCRETE },
+  // The acorn lamp: plinth, post, collar, globe and cap, each a circle of its own.
+  [PREFAB.acornLamp]: {
+    body: "solid",
+    collider: [
+      { kind: "circle", r: ACORN_LAMP.plinthRadius, y1: ACORN_LAMP.plinthHeight },
+      { kind: "circle", r: ACORN_LAMP.postRadius, y0: ACORN_LAMP.plinthHeight, y1: ACORN_LAMP.collarBottom },
+      { kind: "circle", r: ACORN_LAMP.collarRadius, y0: ACORN_LAMP.collarBottom, y1: ACORN_LAMP.collarTop },
+      { kind: "circle", r: ACORN_LAMP.globeRadius, y0: ACORN_LAMP.collarTop, y1: ACORN_LAMP.capBottom },
+      { kind: "circle", r: ACORN_LAMP.capRadius, y0: ACORN_LAMP.capBottom, y1: ACORN_LAMP.height },
+    ],
+    foot: ACORN_LAMP.globeRadius,
+    size: [2 * ACORN_LAMP.globeRadius, ACORN_LAMP.height, 2 * ACORN_LAMP.globeRadius],
+    mass: 0,
+    material: MAT.LAMP_POLE,
+  },
   [PREFAB.bench]: kitSpec(STREET_KIT.bench, MAT.BENCH_MAPLE),
   [PREFAB.bikeRack]: kitSpec(STREET_KIT.bikeRack, MAT.BRACKET_STEEL),
   [PREFAB.litterBin]: kitSpec(STREET_KIT.litterBin, MAT.DUMPSTER_STEEL),
@@ -785,4 +779,10 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.busShelter]: kitSpec(STREET_KIT.busShelter, MAT.GANTRY_STEEL),
   [PREFAB.busStopSign]: kitSpec(STREET_KIT.busStopSign, MAT.SIGN_BOARD),
   [PREFAB.streetSign]: kitSpec(STREET_KIT.streetSign, MAT.SIGN_BOARD),
+  [PREFAB.bollard]: kitSpec(STREET_KIT.bollard, MAT.LAMP_POLE),
+  [PREFAB.cellarDoor]: kitSpec(STREET_KIT.cellarDoor, MAT.DUMPSTER_STEEL),
+  [PREFAB.hoopFence]: kitSpec(STREET_KIT.hoopFence, MAT.BRACKET_STEEL),
+  [PREFAB.pavilion]: kitSpec(STREET_KIT.pavilion, MAT.GANTRY_STEEL),
+  // The park's plaza: its bricks are its colliders, so a car meets the bench rings and the statue as drawn.
+  [PREFAB.plaza]: { body: "solid", collider: plazaBricks().map(brickCollider), foot: PLAZA_REACH, size: [2 * PLAZA_REACH, PLAZA_TOP, 2 * PLAZA_REACH], mass: 0, material: MAT.MARBLE },
 };

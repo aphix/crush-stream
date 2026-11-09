@@ -36,14 +36,18 @@ export function dressGround(material: THREE.MeshStandardMaterial, surface: Surfa
   reliefMaterial(material, specOf(surface, tile));
 }
 
-/** A slab's top takes its maps' uv from the ground point it covers, a slab's length to the unit; its sides keep their own. */
+/** A slab's top takes its maps' uv from the ground point it covers (`vPavingGround`, m), a slab's length to the unit; its sides keep their own. */
 const PAVING_UV_VERTEX = /* glsl */ `#include <uv_vertex>
+vPavingTop = 0.0;
+vPavingGround = vec2( 0.0 );
 if ( normal.y > 0.5 ) {
 	vec4 pavingPoint = vec4( position, 1.0 );
 	#ifdef USE_INSTANCING
 		pavingPoint = instanceMatrix * pavingPoint;
 	#endif
-	vec2 pavingUv = ( modelMatrix * pavingPoint ).xz / ${GROUND_METRES[SLAB].toFixed(2)};
+	vPavingGround = ( modelMatrix * pavingPoint ).xz;
+	vPavingTop = 1.0;
+	vec2 pavingUv = vPavingGround / ${GROUND_METRES[SLAB].toFixed(2)};
 	#ifdef USE_MAP
 		vMapUv = ( mapTransform * vec3( pavingUv, 1 ) ).xy;
 	#endif
@@ -52,9 +56,50 @@ if ( normal.y > 0.5 ) {
 	#endif
 }`;
 
+const PAVING_VARYINGS = /* glsl */ `
+varying vec2 vPavingGround;
+varying float vPavingTop;`;
+
 /** `vertexShader` (three's standard one) with the paving's uv (`PAVING_UV_VERTEX`) after its own. */
 export function pavingVertex(vertexShader: string): string {
-  return vertexShader.replace("#include <uv_vertex>", PAVING_UV_VERTEX);
+  return vertexShader.replace("#include <common>", `#include <common>${PAVING_VARYINGS}`).replace("#include <uv_vertex>", PAVING_UV_VERTEX);
+}
+
+/** Red brick in running bond, laid on the ground: a brick's length and height, the joint's width (all m), and the colours of a brick, of its joint and the mean the bond blurs to where its joints are under a pixel. */
+const BRICK = { length: 0.215, height: 0.065, joint: 0.01, colour: [0.52, 0.17, 0.1], mortar: [0.5, 0.48, 0.44], mean: [0.46, 0.2, 0.14] } as const;
+/** How far a brick's colour wanders from its own (share), brick to brick. */
+const BRICK_WANDER = 0.25;
+/** The bond fades to its mean as a pixel spans this share of a brick or more (a joint's width in a pixel and the joints alias). */
+const BOND_FADE = [0.25, 0.6] as const;
+const vec3Of = (rgb: readonly number[]): string => `vec3( ${rgb.map((channel) => channel.toFixed(3)).join(", ")} )`;
+
+/** With `PAVING_BRICK` defined: a slab's top is laid in brick, its colour replacing the slab's (the instance's and the concrete's alike). */
+const PAVING_BRICK_FRAGMENT = /* glsl */ `
+#ifdef PAVING_BRICK
+if ( vPavingTop > 0.5 ) {
+	vec2 bond = vPavingGround / vec2( ${BRICK.length.toFixed(3)}, ${BRICK.height.toFixed(3)} );
+	bond.x += 0.5 * floor( bond.y );
+	vec2 within = fract( bond );
+	vec2 toEdge = min( within, 1.0 - within ) * vec2( ${BRICK.length.toFixed(3)}, ${BRICK.height.toFixed(3)} );
+	float joint = 1.0 - step( ${(BRICK.joint / 2).toFixed(4)}, min( toEdge.x, toEdge.y ) );
+	vec2 brickId = floor( bond );
+	float wander = fract( sin( dot( brickId, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 );
+	vec3 brickColour = ${vec3Of(BRICK.colour)} * ( 1.0 - ${BRICK_WANDER.toFixed(2)} + 2.0 * ${BRICK_WANDER.toFixed(2)} * wander );
+	vec2 spread = fwidth( bond );
+	float blur = smoothstep( ${BOND_FADE[0].toFixed(2)}, ${BOND_FADE[1].toFixed(2)}, max( spread.x, spread.y ) );
+	diffuseColor.rgb = mix( mix( brickColour, ${vec3Of(BRICK.mortar)}, joint ), ${vec3Of(BRICK.mean)}, blur );
+}
+#endif`;
+
+/** `fragmentShader` (three's standard one, as the slab's material has it) with the paving's varyings and, under `PAVING_BRICK`, the brick bond after the colour is made. */
+function pavingFragment(fragmentShader: string): string {
+  return fragmentShader.replace("#include <common>", `#include <common>${PAVING_VARYINGS}`).replace("#include <color_fragment>", `#include <color_fragment>${PAVING_BRICK_FRAGMENT}`);
+}
+
+/** The slabs' material lays brick instead of the concrete (one course's choice): its programs are keyed apart. */
+export function layBrick(material: THREE.MeshStandardMaterial): void {
+  material.defines = { ...material.defines, PAVING_BRICK: "" };
+  material.needsUpdate = true;
 }
 
 /**
@@ -67,6 +112,7 @@ export function dressPaving(material: THREE.MeshStandardMaterial): void {
   material.onBeforeCompile = (shader, renderer) => {
     hook.call(material, shader, renderer);
     shader.vertexShader = pavingVertex(shader.vertexShader);
+    shader.fragmentShader = pavingFragment(shader.fragmentShader);
   };
   material.customProgramCacheKey = () => `${key.call(material)}|paving`;
   reliefMaterial(material, specOf(SLAB, GROUND_METRES[SLAB]));

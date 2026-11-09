@@ -25,8 +25,8 @@ export type TrafficPorts = {
   ensureCars(count: number): void;
   /** A human drives car `id` (this browser's player, or a peer). */
   seated(id: number): boolean;
-  /** Stands car `id` on (x, z) facing `yaw`, repaired and at rest, drawn and simulated. */
-  place(id: number, x: number, z: number, yaw: number): void;
+  /** Stands car `id` on (x, z) facing `yaw`, repaired and at rest, drawn and simulated, in paint `colour` (sRGB; null: the car's own). */
+  place(id: number, x: number, z: number, yaw: number, colour: number | null): void;
   /** Puts car `id` away: hidden, still, and not simulated. */
   putAway(id: number): void;
   /** Car `id` is simulated again (a car put away is not): called when traffic lets go of the pool for good, so a scene that reuses the car finds it running. */

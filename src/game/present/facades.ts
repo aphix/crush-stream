@@ -134,7 +134,7 @@ export function facadeStyle(prefab: PrefabId, x: number, z: number, biome: Biome
 }
 
 /** Whether `name` (a placement's `style`) names a facade style. */
-const isFacadeStyle = (name: string | undefined): name is FacadeStyle => name !== undefined && Object.hasOwn(FACADE, name);
+export const isFacadeStyle = (name: string | undefined): name is FacadeStyle => name !== undefined && Object.hasOwn(FACADE, name);
 
 /** The style a placed building stands in: the style its placement names when that is a facade style and the prefab is drawn in one, else `facadeStyle`'s pick for its spot (a forced style never dresses a tree or a plain block). */
 export function placedFacadeStyle(prefab: PrefabId, named: string | undefined, x: number, z: number, biome: BiomeId, span = 0, height = 0): FacadeStyle | null {

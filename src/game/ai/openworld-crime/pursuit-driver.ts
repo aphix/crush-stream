@@ -1,4 +1,4 @@
-import { detAtan2, hypot2 } from "../../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { clamp, wrapPi } from "../../kernel/scalar.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { classStats } from "../../vehicle/vehicle-classes.ts";
@@ -8,7 +8,7 @@ import type { AiCar } from "../derby-ai.ts";
 import type { Obstacles } from "../obstacles.ts";
 import { Pedals } from "../pedals.ts";
 import { arcSpeed, brakeOver, turnRate } from "../race-ai.ts";
-import { AVOID_TURN_COST, AVOID_TURNS, CAR_LEAD_SECONDS, CAR_STOP_DECEL, MAX_PATROL_CARS } from "./crime-constants.ts";
+import { AVOID_TURN_COST, AVOID_TURNS, CAR_AVOID_GAP, CAR_AVOID_LOOK, CAR_AVOID_SWATH, CAR_LEAD_SECONDS, CAR_STOP_DECEL, MAX_PATROL_CARS } from "./crime-constants.ts";
 
 const PATROL_CLASS = classStats("sedan");
 const GROUND = SURFACES.asphalt;
@@ -35,8 +35,8 @@ export class PursuitDriver {
     this.obstacles = obstacles;
   }
 
-  /** Writes into `out` what car `self` (patrol slot `slot`) does over `dt` s to drive at (aimX, aimZ) moving at (aimVx, aimVz); it stops `stopGap` m short of the aim (0: never stops). */
-  drive(slot: number, self: AiCar, aimX: number, aimZ: number, aimVx: number, aimVz: number, stopGap: number, dt: number, out: DriveInput): void {
+  /** Writes into `out` what car `self` (patrol slot `slot`) does over `dt` s to drive at (aimX, aimZ) moving at (aimVx, aimVz), at most `maxSpeed` m/s; it stops `stopGap` m short of the aim (0: never stops). */
+  drive(slot: number, self: AiCar, others: readonly AiCar[], targetId: number, aimX: number, aimZ: number, aimVx: number, aimVz: number, stopGap: number, maxSpeed: number, dt: number, out: DriveInput): void {
     out.throttle = 0;
     out.steer = 0;
     out.brake = 0;
@@ -57,13 +57,31 @@ export class PursuitDriver {
     out.steer = pursuitSteer(alpha, Math.min(leadDistance, clamp(speed * REACH_PER_SPEED, REACH_MIN, REACH_MAX)), speed, turnRate(PATROL_CLASS, speed, GROUND));
     const turnSpeed = arcSpeed(PATROL_CLASS, Math.max(4, leadDistance), Math.min(Math.abs(alpha), Math.PI / 2), GROUND);
     const stopSpeed = stopGap > 0 ? Math.sqrt(2 * CAR_STOP_DECEL * Math.max(0, distance - stopGap)) : Infinity;
-    const wanted = Math.min(turnSpeed, stopSpeed);
+    const wanted = Math.min(turnSpeed, stopSpeed, maxSpeed, this.carLimit(self, others, targetId));
     const brake = brakeOver(this.pedals, self.id, speed - wanted);
     if (brake > 0) out.brake = brake;
     else out.throttle = Math.min(1, wanted / PATROL_CLASS.topSpeed);
     if (stopSpeed === 0 && speed < STANDING_SPEED) out.brake = 1;
     this.pedals.shape(self.id, out, dt);
     this.backoff.watch(slot, self.x, self.z, dt, out);
+  }
+
+  /** The speed (m/s) that keeps `CAR_AVOID_GAP` m behind the nearest car (any but `self` and the one chased, `targetId`) ahead within `CAR_AVOID_LOOK` m on its line, taking that car's own pace along it: unlimited with none. */
+  private carLimit(self: AiCar, others: readonly AiCar[], targetId: number): number {
+    const forwardX = detSin(self.yaw);
+    const forwardZ = detCos(self.yaw);
+    let limit = Infinity;
+    for (let index = 0; index < others.length; index++) {
+      const other = others[index]!;
+      if (other.id === self.id || other.id === targetId || !other.alive) continue;
+      const dx = other.x - self.x;
+      const dz = other.z - self.z;
+      const ahead = dx * forwardX + dz * forwardZ;
+      if (ahead <= 0 || ahead > CAR_AVOID_LOOK || Math.abs(dx * forwardZ - dz * forwardX) > CAR_AVOID_SWATH) continue;
+      const along = Math.max(0, other.vx * forwardX + other.vz * forwardZ);
+      limit = Math.min(limit, along + Math.sqrt(2 * CAR_STOP_DECEL * Math.max(0, ahead - CAR_AVOID_GAP)));
+    }
+    return limit;
   }
 
   /** The heading nearest `want` whose way is clear of solids for the next stretch; the one with the longest clear run when none is, each radian of bend costing `AVOID_TURN_COST` m. */

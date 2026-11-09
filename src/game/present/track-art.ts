@@ -4,12 +4,12 @@ import { applyMarkMap } from "./engine-marks.ts";
 import type { WorldStage } from "./engine-world.ts";
 import { GROUND_PAINT_PREFABS, PARKED_PREFABS, PREFABS, SURFACE_IDS, SURFACES, type PrefabId, type SurfaceId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
-import { PREFAB, SURFACE, type BiomeId } from "../world/constants.ts";
+import { PAVING, PREFAB, SURFACE, type BiomeId } from "../world/constants.ts";
 import { box, painted, type Piece, type PrefabMaterials, type Skin } from "./prefab-pieces.ts";
 import { tagLike, tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { makePrefabMaterials, prefabParts, raceTextures, TILE } from "./prefabs.ts";
-import { dressGround } from "./ground-relief.ts";
+import { dressGround, layBrick } from "./ground-relief.ts";
 import { biomeLookup } from "../world/scenery.ts";
 import { facadeDepth, facadeTint, PASTELS, placedFacadeStyle } from "./facades.ts";
 import { blankPoint, type Track } from "../world/track.ts";
@@ -28,6 +28,8 @@ import { foliageTint } from "./prefabs-foliage.ts";
 import { PARKED_PAINTS } from "./prefabs-car.ts";
 import { assetTint, disposeAssetMaterials, isAssetFamily } from "./scenery-assets-art.ts";
 import { SCENERY_ASSETS } from "../world/scenery-assets/index.ts";
+import { isStreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import { treeOf } from "./street-trees.ts";
 import { backdropMesh, disposeBackdrop, type Backdrop } from "./sky-backdrop.ts";
 import { nukeFlash } from "./people.ts";
 import { GroundsArt } from "./grounds-art.ts";
@@ -100,6 +102,8 @@ export class TrackArt {
     const tex = raceTextures();
     const mats = makePrefabMaterials(tex, fullAssetMaps);
     this.assetMaterials = mats.assets;
+    const paving = track.json.scenery?.paving === PAVING.brick ? mats.paving : null;
+    if (paving instanceof THREE.MeshStandardMaterial) layBrick(paving);
     const paths = track.paths();
     const index = new RoadIndex(paths);
     const secs = paths.map((p) => sections(p, 0));
@@ -229,8 +233,16 @@ export class TrackArt {
         if (GROUND_PAINT_PREFABS.has(id)) mesh.renderOrder = levelOrder(GROUND_LEVEL.decal);
       },
       (id, i, out, skin) => this.tint(id, i, out, skin),
-      (p) => (p.asset === undefined ? placedFacadeStyle(p.prefab, p.style, p.x, p.z, this.biome(p.x, p.z), Math.max(p.sx, p.sz) * PREFABS[p.prefab].size[0], p.sy * PREFABS[p.prefab].size[1]) : SCENERY_ASSETS[p.asset]!.family),
+      (p) => this.skinOf(p),
+      treeOf,
     );
+  }
+
+  /** A placement's skin: a scenery asset's family, a street tree's kind (a tree whose `style` names one), else a building's facade style. */
+  private skinOf(p: Placed): Skin {
+    if (p.asset !== undefined) return SCENERY_ASSETS[p.asset]!.family;
+    if (p.prefab === PREFAB.tree) return treeOf(p)?.skin ?? null;
+    return placedFacadeStyle(p.prefab, p.style, p.x, p.z, this.biome(p.x, p.z), Math.max(p.sx, p.sz) * PREFABS[p.prefab].size[0], p.sy * PREFABS[p.prefab].size[1]);
   }
 
   /** The Konami code on a course with a secret sky picture: a slow flash over `over`, and at its height (the white-out) the picture is painted and stands. */
@@ -351,7 +363,7 @@ export class TrackArt {
       out.setRGB(k * (1 + 0.14 * (h2 - 0.5)), k, k * (1 - 0.12 * (h2 - 0.5)), THREE.LinearSRGBColorSpace);
       return true;
     }
-    if (style) {
+    if (style && !isStreetTreeSkin(style)) {
       facadeTint(style, h, out);
       return true;
     }

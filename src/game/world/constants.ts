@@ -28,6 +28,8 @@ export const PREFAB = {
   grandstand: "grandstand",
   billboard: "billboard",
   lamp: "lamp",
+  // The open world's lamp: Philadelphia's acorn globe on a slim black post (`ACORN_LAMP` in street-kit.ts), the lamp's own night light.
+  acornLamp: "acorn-lamp",
   gantry: "gantry",
   chevron: "chevron",
   monument: "monument",
@@ -75,7 +77,7 @@ export const PREFAB = {
   invisibleWall: "invisible-wall",
   // A building drawn exactly like `building` with nothing solid: the open world's enterable lots, whose walls are invisible-wall pieces with the doorways left open.
   buildingShell: "building-shell",
-  // The open world's street kit (`STREET_KIT` in catalog.ts): drawn only, each in a few boxes and cylinders.
+  // The open world's street kit (`STREET_KIT` in street-kit.ts): drawn only, each in a few boxes and cylinders.
   bench: "park-bench",
   bikeRack: "bike-rack",
   litterBin: "litter-bin",
@@ -85,10 +87,20 @@ export const PREFAB = {
   busShelter: "bus-shelter",
   busStopSign: "bus-stop-sign",
   streetSign: "street-sign",
+  bollard: "bollard",
+  cellarDoor: "cellar-door",
+  hoopFence: "hoop-fence",
+  pavilion: "pavilion",
+  // The open world park's round plaza: its stone bench rings and statue, solid.
+  plaza: "plaza",
 } as const;
 
 /** The building prefab's roofline (m at its own 14 m height): the cornice's top, the roof slab's underside. */
 export const ROOFLINE = 13.5;
+
+/** The sidewalk slabs' look (`scenery.paving`): the concrete flags every course has, or brick in running bond (an old city's). */
+export const PAVING = { concrete: "concrete", brick: "brick" } as const;
+export const PAVING_IDS = [PAVING.concrete, PAVING.brick] as const;
 
 /** The word for a town: the campaign course's id and the scenery service's biome of streets and sidewalks. */
 const CITY = "city";

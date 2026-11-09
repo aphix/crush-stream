@@ -51,7 +51,7 @@ export class CrimeScene {
   constructor(map: OpenWorldMap, source: OffenceSource, ports: CrimePorts, seed: number) {
     this.ports = ports;
     this.law = new FootLaw(map, source, ports, { opened: (caseIndex, x, z) => this.patrol?.dispatchToScene(caseIndex, x, z, this.law.seconds), closed: (caseIndex) => this.patrol?.finishCase(caseIndex, this.law.seconds) }, seed, { lineOfSight: ports.lineOfSight, signals: ports.signals });
-    this.patrol = ports.cars === null ? null : new PatrolCars(ports.cars, { arrived: (caseIndex, x, z) => this.law.carCopArrived(caseIndex, x, z), busted: (resident, carIndex, seconds) => this.bustDriver(resident, carIndex, seconds) }, ports.obstacles, ports.playerBustSeconds);
+    this.patrol = ports.cars === null ? null : new PatrolCars(ports.cars, { arrived: (caseIndex, x, z) => this.law.carCopArrived(caseIndex, x, z), busted: (resident, carIndex, seconds) => this.bustDriver(resident, carIndex, seconds) }, ports.obstacles, ports.playerBustSeconds, seed);
   }
 
   get stats(): FootLaw["stats"] {

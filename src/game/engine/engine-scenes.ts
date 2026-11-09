@@ -331,12 +331,14 @@ export abstract class EngineScenes extends EngineMinigames {
   protected abstract stopReel(): void;
 
   protected requestRespawn(): void {
-    if (this.net.client) this.net.requestRespawn();
+    if (this.onFoot.resetsToCar) this.onFoot.resetIntoCar();
+    else if (this.net.client) this.net.requestRespawn();
     else this.race.requestRespawn();
   }
 
   protected requestHoldReset(): void {
-    if (this.net.client) this.net.requestHoldReset();
+    if (this.onFoot.resetsToCar) this.onFoot.resetIntoCar();
+    else if (this.net.client) this.net.requestHoldReset();
     else this.race.holdReset();
   }
 

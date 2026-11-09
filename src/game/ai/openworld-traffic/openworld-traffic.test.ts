@@ -5,9 +5,12 @@ import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork, junctionIndex } from "../../world/openworld/openworld-roads.ts";
 import { OpenWorldTraffic, type DrivenCar } from "./openworld-traffic.ts";
 import { fleetStyle } from "../../scenes/fleet.ts";
+import { KERB_CANDIDATES } from "../../world/openworld/openworld-parking.ts";
 import { EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
-import { Clock, CYCLE_SECONDS, FakeField, HOLD, makeTraffic, ProximitySight, runSeconds, STEP_SECONDS, stepField } from "./traffic-world.test-util.ts";
+import { kerbSpotsNear } from "../../world/openworld/openworld-parking.ts";
+import { residentBody, residentColour } from "./traffic-look.ts";
+import { Clock, CYCLE_SECONDS, emptyFeed, FakeField, HOLD, homeAt, makeTraffic, ProximitySight, runSeconds, STEP_SECONDS, stepField } from "./traffic-world.test-util.ts";
 
 const FAR = 1500;
 const HOME = { x: -100, z: -45 };
@@ -177,6 +180,140 @@ describe("given the open world's traffic on a field with the local player's car"
   });
 });
 
+describe("given a resident whose car stands at the kerb near a player and then drives off", () => {
+  const RESIDENT = 5;
+
+  /** The car standing within a metre of space `spot`: its id, or -1. */
+  function carAt(field: FakeField, traffic: OpenWorldTraffic, spot: number): number {
+    const spots = traffic.parkingSpots;
+    for (let id = 1; id < field.cars.length; id++) {
+      const car = field.cars[id]!;
+      if (!car.stored && hypot2(car.group.position.x - spots.x[spot]!, car.group.position.z - spots.z[spot]!) < 1) return id;
+    }
+    return -1;
+  }
+
+  // mutation: sed -i 's/      if (body !== null \&\& ports.cars()\[id\]!.style.id !== body) ports.setBody(id, body);/      \/\/ own body/' src/game/ai/openworld-traffic/mover-fleet.ts
+  // mutation: sed -i 's/paint === NO_COLOUR ? null : paint);/null);/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when the kerb car that stood there is replaced by the car that drives off, then both wear his body and his paint", () => {
+    const field = new FakeField();
+    const feed = emptyFeed(8);
+    const traffic = makeTraffic(field, { movers: 4, kerb: 4 }, feed, [homeAt(HOME.x, HOME.z)]);
+    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
+    feed.parked.count = 1;
+    feed.parked.resident[0] = RESIDENT;
+    feed.parked.place[0] = 0;
+    const clock = new Clock();
+    runSeconds(field, traffic, clock, 3);
+    const spot = traffic.claimedSpots.indexOf(1);
+    expect(spot, "his car's space").toBeGreaterThanOrEqual(0);
+    const kerbId = carAt(field, traffic, spot);
+    expect(kerbId, "a car stands at his space").toBeGreaterThan(0);
+    expect(field.cars[kerbId]!.style.id, "the kerb car's body").toBe(residentBody(RESIDENT));
+    expect(field.colours[kerbId], "the kerb car's paint").toBe(residentColour(RESIDENT));
+    const to = traffic.nearestSpot(WORK.x, WORK.z);
+    const car = traffic.spawnDrivenCar(RESIDENT, spot, to);
+    expect(car, "he drives off").not.toBeNull();
+    expect(field.cars[car!.index]!.style.id, "the driven car's body").toBe(residentBody(RESIDENT));
+    expect(field.colours[car!.index], "the driven car's paint").toBe(residentColour(RESIDENT));
+  });
+});
+
+describe("given a resident's car leased for a drive whose rider is due at the far end at a set second", () => {
+  const FAR_AWAY = { x: 140, z: 90 };
+  const DUE_SECONDS = 20;
+
+  function dueCar(playerAt: { x: number; z: number }): { field: FakeField; traffic: OpenWorldTraffic; clock: Clock; car: DrivenCar; to: number } {
+    const field = new FakeField();
+    field.cars[0]!.stand(playerAt.x, playerAt.z, 0);
+    const traffic = makeTraffic(field, { movers: 3, kerb: 0 });
+    const to = traffic.nearestSpot(WORK.x, WORK.z);
+    const car = traffic.spawnDrivenCar(7, traffic.nearestSpot(HOME.x, HOME.z), to, { dueSeconds: DUE_SECONDS })!;
+    expect(car, "a car was leased").not.toBeNull();
+    return { field, traffic, clock: new Clock(), car, to };
+  }
+
+  // mutation: sed -i 's/    if (this.seconds > this.dueAt\[slot\]! \&\& this.unseenAndFar(slot, car)) this.standInSpace(slot);/    if (false) this.standInSpace(slot);/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when the rider's second comes with the car still on the road and no one near it, then the car stands in its space, parked and still", () => {
+    const { field, traffic, clock, car, to } = dueCar({ x: FAR, z: FAR });
+    runSeconds(field, traffic, clock, DUE_SECONDS + 1);
+    const spots = traffic.parkingSpots;
+    const at = field.cars[car.index]!.group.position;
+    expect(car.arrived, "arrived").toBe(true);
+    expect(hypot2(at.x - spots.x[to]!, at.z - spots.z[to]!), "the car's distance from its space's middle").toBeLessThan(0.01);
+    expect(field.cars[car.index]!.speed, "standing").toBeLessThan(0.01);
+  });
+
+  // mutation: sed -i 's/ \&\& this.unseenAndFar(slot, car)) this.standInSpace(slot);/) this.standInSpace(slot);/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when a player's car is near it at that second, then the car is not moved: it drives on and parks when it gets there", () => {
+    const { field, traffic, clock, car } = dueCar(FAR_AWAY);
+    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
+    runSeconds(field, traffic, clock, DUE_SECONDS + 1);
+    expect(car.arrived, "still on the road at the second").toBe(false);
+  });
+});
+
+describe("given residents whose cars stand at a place's kerb", () => {
+  // mutation: sed -i 's/      const spot = this.candidates\[(resident + step) % count\]!;/      const spot = this.candidates[step]!;/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when two residents of one place have cars, then each holds a different one of the four empty spaces nearest its door, the one he is by number", () => {
+    const field = quietField();
+    const feed = emptyFeed(8);
+    const traffic = makeTraffic(field, { movers: 2, kerb: 0 }, feed, [homeAt(HOME.x, HOME.z)]);
+    const clock = new Clock();
+    feed.parked.count = 2;
+    feed.parked.resident[0] = 1;
+    feed.parked.place[0] = 0;
+    feed.parked.resident[1] = 2;
+    feed.parked.place[1] = 0;
+    runSeconds(field, traffic, clock, 1);
+    const near = new Int32Array(KERB_CANDIDATES);
+    const count = kerbSpotsNear(traffic.parkingSpots, HOME.x, HOME.z, near);
+    const held = Array.from(traffic.claimedSpots.keys()).filter((spot) => traffic.claimedSpots[spot] === 1);
+    const wanted = [near[1 % count]!, near[2 % count]!].sort((a, b) => a - b);
+    held.sort((a, b) => a - b);
+    expect(held.length, "spaces held").toBe(2);
+    expect(held[0], "the lower space held").toBe(wanted[0]);
+    expect(held[1], "the higher space held").toBe(wanted[1]);
+  });
+});
+
+describe("given a patrol car on an urgent trip that is sent somewhere else on its way", () => {
+  const ELSEWHERE = { x: -150, z: 80 };
+
+  // mutation: sed -i 's/    this.routes\[slot\] = this.spareRoute;/    this.routes[slot] = old;/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when it is redirected mid-trip, then it drives on along the streets from where it is and parks in the new space, which it holds; the old one is free again", () => {
+    const field = quietField();
+    const traffic = makeTraffic(field, { movers: 2, kerb: 0, patrol: 1 });
+    const clock = new Clock();
+    const first = traffic.nearestSpot(WORK.x, WORK.z);
+    const car = traffic.spawnDrivenCar(-1, traffic.nearestSpot(HOME.x, HOME.z), first, { urgent: true })!;
+    runSeconds(field, traffic, clock, 6);
+    expect(car.arrived, "still on its way when redirected").toBe(false);
+    const next = traffic.nearestSpot(ELSEWHERE.x, ELSEWHERE.z);
+    expect(traffic.redirect(car, next), "redirected").toBe(true);
+    runUntil({ field, traffic, clock }, () => car.arrived);
+    const spots = traffic.parkingSpots;
+    const at = field.cars[car.index]!.group.position;
+    expect(car.arrived, "arrived").toBe(true);
+    expect(hypot2(at.x - spots.x[next]!, at.z - spots.z[next]!), "distance from the new space's middle").toBeLessThan(SPOT_REACH);
+    expect(traffic.claimedSpots[next], "the new space is held").toBe(1);
+    expect(traffic.claimedSpots[first], "the first space is free again").toBe(0);
+  });
+
+  // mutation: sed -i 's/ || spots.stays\[toSpot\] === 1 || taken\[toSpot\] === 1) return false;/) return false;/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when it is redirected to a space another car holds, then the redirect is refused and its trip stands", () => {
+    const field = quietField();
+    const traffic = makeTraffic(field, { movers: 3, kerb: 0, patrol: 1 });
+    const other = traffic.spawnDrivenCar(4, traffic.nearestSpot(HOME.x, HOME.z + 40), traffic.nearestSpot(ELSEWHERE.x, ELSEWHERE.z))!;
+    expect(other, "a car leased").not.toBeNull();
+    const held = traffic.claimedSpots.indexOf(1);
+    expect(held, "the space the other car is going to").toBeGreaterThanOrEqual(0);
+    const patrol = traffic.spawnDrivenCar(-1, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z), { urgent: true })!;
+    stepField(field, traffic, new Clock());
+    expect(traffic.redirect(patrol, held)).toBe(false);
+  });
+});
+
 describe("given the player's car crossing a junction's stop bar", () => {
   const network = buildRoadNetwork(openWorldGeometry(LAYOUT));
   const junction = junctionIndex(network, 1, 1);
@@ -287,7 +424,7 @@ describe("given a peer that joins while traffic runs", () => {
     runSeconds(field, traffic, clock, 5);
     expect(traffic.inputOf(lease.index, STEP_SECONDS), "driven before the peer").not.toBeNull();
     field.seats.add(lease.index);
-    field.ports.place(lease.index, 500, 500, 0);
+    field.ports.place(lease.index, 500, 500, 0, null);
     runSeconds(field, traffic, clock, 10, () => {
       for (let id = 0; id < field.cars.length; id++) {
         if (field.seats.has(id)) expect(traffic.inputOf(id, STEP_SECONDS), `car ${id} is a human's: traffic has no input for it`).toBeNull();

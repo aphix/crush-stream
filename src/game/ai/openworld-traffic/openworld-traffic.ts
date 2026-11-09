@@ -3,7 +3,7 @@ import { MAX_CARS } from "../../scenes/fleet.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
-import { buildParkingSpots, nearestFreeSpot, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
+import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, nearestFreeSpot, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
 import { buildRoadNetwork, type RoadNetwork } from "../../world/openworld/openworld-roads.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { blankAiCar, type AiCar } from "../derby-ai.ts";
@@ -48,6 +48,7 @@ export class OpenWorldTraffic {
   private readonly watch: RedLightWatch;
   private readonly listeners: RedLightListener[] = [];
   private readonly legKey = new Float64Array(RESIDENT_CAPACITY).fill(-1);
+  private readonly candidates = new Int32Array(KERB_CANDIDATES);
   private readonly first: number;
   private readonly total: number;
   /** The ids of the patrol cruisers, `patrolFrom` up to `patrolEnd`. */
@@ -129,21 +130,37 @@ export class OpenWorldTraffic {
     return this.context.taken;
   }
 
+  /** Where resident `resident` gets out of (and in to) the car he parked, into `out`: its driver's door. False when his car is not at a space. */
+  driverDoorOf(resident: number, out: { x: number; z: number }): boolean {
+    const spot = resident >= 0 && resident < RESIDENT_CAPACITY ? this.context.residentSpot[resident]! : -1;
+    if (spot < 0) return false;
+    driverDoorPoint(this.parkingSpots, spot, out);
+    return true;
+  }
+
   /** The nearest kerb space to (x, z) no car holds. -1 when none is. */
   nearestSpot(x: number, z: number): number {
     return nearestFreeSpot(this.parkingSpots, x, z, this.context.taken);
   }
 
-  /** Leases a car for `resident` (-1: none) to drive from space `fromSpot` to `toSpot`; null when no car is free or there is no way. `urgent`: ignores the signals, drives fast. */
-  spawnDrivenCar(resident: number, fromSpot: number, toSpot: number, options?: { urgent?: boolean }): DrivenCar | null {
+  /**
+   * Leases a car for `resident` (-1: none) to drive from space `fromSpot` to `toSpot`; null when no car is free or there is no way. `urgent`: ignores the signals, drives fast. `dueSeconds`: the crowd second
+   * the rider is due at the other end; a car still on its way then, with no eye on it, is stood in its space.
+   */
+  spawnDrivenCar(resident: number, fromSpot: number, toSpot: number, options?: { urgent?: boolean; dueSeconds?: number }): DrivenCar | null {
     const count = this.parkingSpots.count;
     if (fromSpot < 0 || fromSpot >= count || toSpot < 0 || toSpot >= count || fromSpot === toSpot) return null;
     if (this.context.standing[fromSpot] === STANDING.kerb) this.kerb.clearSpot(fromSpot);
-    return this.movers.spawn(resident, fromSpot, toSpot, options?.urgent === true);
+    return this.movers.spawn(resident, fromSpot, toSpot, options?.urgent === true, options?.dueSeconds ?? Infinity);
   }
 
   despawn(handle: DrivenCar): void {
     this.movers.despawn(handle);
+  }
+
+  /** Sends leased car `handle` on to free space `toSpot` from where it is, keeping its urgency (`MoverFleet.redirect`); false when there is no way or the space is held. */
+  redirect(handle: DrivenCar, toSpot: number): boolean {
+    return this.movers.redirect(handle, toSpot);
   }
 
   /** Cars on a trip and kerb cars standing, for the cost probes. */
@@ -232,30 +249,43 @@ export class OpenWorldTraffic {
   /** The society's residents: those parked get their space, those newly on a drive leg get a car sent from their space to one near where they are going. */
   private readFeed(): void {
     const feed = this.feed!;
-    const { residentSpot, taken, spots } = this.context;
+    const { residentSpot } = this.context;
     for (let index = 0; index < feed.parked.count; index++) {
       const resident = feed.parked.resident[index]!;
-      if (resident >= 0 && resident < RESIDENT_CAPACITY && residentSpot[resident] === -1) residentSpot[resident] = this.claimNear(feed.parked.place[index]!);
+      if (resident >= 0 && resident < RESIDENT_CAPACITY && residentSpot[resident] === -1) residentSpot[resident] = this.claimFor(resident, feed.parked.place[index]!);
     }
     for (let index = 0; index < feed.legs.count; index++) {
       const resident = feed.legs.resident[index]!;
       const due = feed.legs.arriveSeconds[index]!;
       if (resident < 0 || resident >= RESIDENT_CAPACITY || this.legKey[resident] === due || this.movers.hasTripFor(resident)) continue;
-      if (residentSpot[resident] === -1) residentSpot[resident] = this.claimNear(feed.legs.fromPlace[index]!);
+      if (residentSpot[resident] === -1) residentSpot[resident] = this.claimFor(resident, feed.legs.fromPlace[index]!);
       const from = residentSpot[resident]!;
-      const place = this.places[feed.legs.toPlace[index]!];
-      if (from < 0 || place === undefined) continue;
-      const to = nearestFreeSpot(spots, place.doorX, place.doorZ, taken);
-      if (to < 0 || this.spawnDrivenCar(resident, from, to) === null) continue;
+      if (from < 0) continue;
+      const to = this.spotFor(resident, feed.legs.toPlace[index]!, from);
+      if (to < 0 || this.spawnDrivenCar(resident, from, to, { dueSeconds: due }) === null) continue;
       this.legKey[resident] = due;
     }
   }
 
-  /** Claims the space nearest the door of place `place` for a resident's car; -1 when none is free. */
-  private claimNear(place: number): number {
+  /**
+   * The free space resident `resident`'s car takes at place `place` (not `except`): of the four empty spaces nearest its door, the one he is by number, else the next; the nearest free one when all four are held. Pure in the layout while
+   * they are free, so a society that wants the same space asks `kerbSpotsNear` and counts the same way. -1 when none is.
+   */
+  private spotFor(resident: number, place: number, except: number): number {
     const target = this.places[place];
     if (target === undefined) return -1;
-    const spot = nearestFreeSpot(this.parkingSpots, target.doorX, target.doorZ, this.context.taken);
+    const { taken } = this.context;
+    const count = kerbSpotsNear(this.parkingSpots, target.doorX, target.doorZ, this.candidates);
+    for (let step = 0; step < count; step++) {
+      const spot = this.candidates[(resident + step) % count]!;
+      if (taken[spot] === 0 && spot !== except) return spot;
+    }
+    return nearestFreeSpot(this.parkingSpots, target.doorX, target.doorZ, taken);
+  }
+
+  /** Claims the space `spotFor` finds for a resident's car; -1 when none is free. */
+  private claimFor(resident: number, place: number): number {
+    const spot = this.spotFor(resident, place, -1);
     if (spot >= 0) this.context.taken[spot] = 1;
     return spot;
   }

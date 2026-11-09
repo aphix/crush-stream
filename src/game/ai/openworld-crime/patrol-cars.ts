@@ -3,7 +3,8 @@ import { idleDrive, type DriveInput } from "../../vehicle/car-drive.ts";
 import { BUST, CRAWL } from "../constants.ts";
 import type { AiCar } from "../derby-ai.ts";
 import type { Obstacles } from "../obstacles.ts";
-import { CAR_ARRIVE_DISTANCE, CAR_CHASE_GIVE_UP_SECONDS, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS, CAR_STOP_GAP, IMPOUND_SECONDS, MAX_PATROL_CARS, YIELD_DISTANCE } from "./crime-constants.ts";
+import { CAREFUL_PURSUIT_SPEED, CHASE_LEAD_SECONDS, CHASE_RESUME_DISTANCE, CLOSE_PURSUIT_DISTANCE, CRIME_STREAM, HOTHEAD_RUN_SHARE, REDIRECT_SECONDS, CAR_STOP_DECEL, CAR_ARRIVE_DISTANCE, CAR_CHASE_GIVE_UP_SECONDS, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS, CAR_STOP_GAP, IMPOUND_SECONDS, MAX_PATROL_CARS, YIELD_DISTANCE } from "./crime-constants.ts";
+import { crimeDraw } from "./crime-draw.ts";
 import type { LineOfSight } from "./offence-source.ts";
 import { PursuitDriver } from "./pursuit-driver.ts";
 
@@ -12,8 +13,12 @@ export type CarDriver = (self: AiCar, cars: readonly AiCar[], dt: number) => Dri
 
 /** What the patrol cars need of the traffic and the engine's cars. */
 export interface PatrolCarPorts {
-  /** A pool car with its siren on, put on the road out of sight to drive toward (x, z): its handle, -1 when the pool has none free. */
+  /** A pool car with its siren on, put on the road out of sight on an urgent trip along the streets to the kerb nearest (x, z): its handle, -1 when the pool has none free. */
   lease(toX: number, toZ: number): number;
+  /** The leased car has come to the end of its trip and stands there (the traffic drove it). */
+  arrived(handle: number): boolean;
+  /** Re-plans the leased car's street trip from where it is to the kerb nearest (x, z); false (trip kept) when it cannot. */
+  redirect(handle: number, toX: number, toZ: number): boolean;
   snap(handle: number): AiCar;
   setSirens(handle: number, on: boolean): void;
   setDriver(handle: number, driver: CarDriver | null): void;
@@ -37,11 +42,16 @@ const YIELD = { none: 0, stopping: 1, refused: 2 } as const;
 const PATROL_MODE = { free: 0, toScene: 1, atScene: 2, pursuing: 3, lingering: 4 } as const;
 
 /**
- * The law's cars, leased from the traffic's pool. One drives to a scene on foot-case calls and its cop steps out; one chases a car that ran a red light, makes a traffic car it is near pull over,
+ * The law's cars, leased from the traffic's pool. One drives to a scene on foot-case calls, by the streets on the traffic's urgent trip (a hothead's run, `HOTHEAD_RUN_SHARE`, straight at it), and its cop steps out; one chases a car that ran a red light, makes a traffic car it is near pull over,
  * and busts its driver by the race rule: held slow (`BUST.kph`) within `BUST.near` of the chasing car for `BUST.time` s, or `playerBustSeconds` for a human (Survival's hold).
  */
 export class PatrolCars {
   readonly mode = new Uint8Array(MAX_PATROL_CARS);
+  /** Per car: 1 on a hothead's run. */
+  readonly hothead = new Uint8Array(MAX_PATROL_CARS);
+  /** Per car: 1 while this driver has the wheel, 0 while the traffic drives the car's trip along the streets. */
+  readonly wheel = new Uint8Array(MAX_PATROL_CARS);
+  private readonly redirectAt = new Float64Array(MAX_PATROL_CARS);
   private readonly ports: PatrolCarPorts;
   private readonly hooks: PatrolHooks;
   private readonly pursuit: PursuitDriver;
@@ -60,13 +70,16 @@ export class PatrolCars {
   private readonly drivers: readonly CarDriver[];
   private readonly stopDriver: CarDriver;
   private readonly out: DriveInput = idleDrive();
+  private readonly seed: number;
+  private runs = 0;
 
-  constructor(ports: PatrolCarPorts, hooks: PatrolHooks, obstacles: Obstacles | null, playerBustSeconds: number) {
+  constructor(ports: PatrolCarPorts, hooks: PatrolHooks, obstacles: Obstacles | null, playerBustSeconds: number, seed: number) {
+    this.seed = seed;
     this.ports = ports;
     this.hooks = hooks;
     this.pursuit = new PursuitDriver(obstacles);
     this.playerBustSeconds = playerBustSeconds;
-    this.drivers = Array.from({ length: MAX_PATROL_CARS }, (_, slot): CarDriver => (self, _cars, dt) => this.driveSlot(slot, self, dt));
+    this.drivers = Array.from({ length: MAX_PATROL_CARS }, (_, slot): CarDriver => (self, cars, dt) => this.driveSlot(slot, self, cars, dt));
     this.stopDriver = () => this.brakeOut();
   }
 
@@ -138,14 +151,19 @@ export class PatrolCars {
     this.farFor[slot] = 0;
     this.yieldState[slot] = YIELD.none;
     this.since[slot] = seconds;
+    this.hothead[slot] = crimeDraw(this.seed, CRIME_STREAM.hothead, 0, this.runs) < HOTHEAD_RUN_SHARE ? 1 : 0;
+    this.runs++;
     this.ports.setSirens(handle, true);
-    this.ports.setDriver(handle, this.drivers[slot]!);
+    // A careful run is the traffic's own trip along the streets (a chase takes the wheel for its close-in stretch); a hothead's run is this driver's from the start.
+    this.wheel[slot] = this.hothead[slot];
+    this.redirectAt[slot] = seconds + REDIRECT_SECONDS;
+    this.ports.setDriver(handle, this.wheel[slot] === 1 ? this.drivers[slot]! : null);
     return slot;
   }
 
   private stepToScene(slot: number, seconds: number): void {
     const car = this.ports.snap(this.handle[slot]!);
-    const arrived = hypot2(car.x - this.aimX[slot]!, car.z - this.aimZ[slot]!) <= CAR_ARRIVE_DISTANCE && hypot2(car.vx, car.vz) < CRAWL;
+    const arrived = this.ports.arrived(this.handle[slot]!) || (hypot2(car.x - this.aimX[slot]!, car.z - this.aimZ[slot]!) <= CAR_ARRIVE_DISTANCE && hypot2(car.vx, car.vz) < CRAWL);
     if (arrived) {
       this.mode[slot] = PATROL_MODE.atScene;
       this.hooks.arrived(this.caseIndex[slot]!, car.x, car.z);
@@ -160,11 +178,28 @@ export class PatrolCars {
     }
     const cop = this.ports.snap(this.handle[slot]!);
     const gap = hypot2(offender.x - cop.x, offender.z - cop.z);
+    if (this.hothead[slot] === 0) this.followStreets(slot, offender, gap, seconds);
     if (this.yieldState[slot] === YIELD.none && gap <= YIELD_DISTANCE) this.yieldState[slot] = this.ports.takeTraffic(this.targetCar[slot]!, this.stopDriver) ? YIELD.stopping : YIELD.refused;
     this.holdSlow(slot, offender, gap, dt);
     this.farFor[slot] = gap > CAR_LOST_DISTANCE ? this.farFor[slot]! + dt : 0;
     if (this.heldFor[slot]! >= this.holdNeeded(slot)) this.bust(slot, seconds);
     else if (this.farFor[slot]! >= CAR_LOST_SECONDS || seconds - this.since[slot]! > CAR_CHASE_GIVE_UP_SECONDS) this.linger(slot, seconds, CAR_LINGER_SECONDS);
+  }
+
+  /** A careful chase drives the streets to the kerb nearest where the offender will be, re-aimed every `REDIRECT_SECONDS`; within `CLOSE_PURSUIT_DISTANCE` this driver takes the wheel, and gives it back once the offender is `CHASE_RESUME_DISTANCE` off again. */
+  private followStreets(slot: number, offender: AiCar, gap: number, seconds: number): void {
+    const handle = this.handle[slot]!;
+    if (this.wheel[slot] === 0 && gap <= CLOSE_PURSUIT_DISTANCE) {
+      this.wheel[slot] = 1;
+      this.ports.setDriver(handle, this.drivers[slot]!);
+      return;
+    }
+    if (this.wheel[slot] === 1 && gap <= CHASE_RESUME_DISTANCE) return;
+    if (seconds < this.redirectAt[slot]! && !this.ports.arrived(handle)) return;
+    this.redirectAt[slot] = seconds + REDIRECT_SECONDS;
+    if (!this.ports.redirect(handle, offender.x + offender.vx * CHASE_LEAD_SECONDS, offender.z + offender.vz * CHASE_LEAD_SECONDS)) return;
+    this.wheel[slot] = 0;
+    this.ports.setDriver(handle, null);
   }
 
   /** The race's bust rule: unbroken seconds held under `BUST.kph` within `BUST.near` of the chasing car. */
@@ -194,18 +229,22 @@ export class PatrolCars {
     if (this.targetCar[slot]! >= 0) this.ports.takeTraffic(this.targetCar[slot]!, null);
     this.ports.release(this.handle[slot]!);
     this.handle[slot] = -1;
+    this.wheel[slot] = 0;
     this.mode[slot] = PATROL_MODE.free;
   }
 
-  private driveSlot(slot: number, self: AiCar, dt: number): DriveInput {
+  private driveSlot(slot: number, self: AiCar, cars: readonly AiCar[], dt: number): DriveInput {
     if (this.mode[slot] === PATROL_MODE.toScene) {
-      this.pursuit.drive(slot, self, this.aimX[slot]!, this.aimZ[slot]!, 0, 0, CAR_STOP_GAP, dt, this.out);
+      this.pursuit.drive(slot, self, cars, -1, this.aimX[slot]!, this.aimZ[slot]!, 0, 0, CAR_STOP_GAP, Infinity, dt, this.out);
       return this.out;
     }
     const offender = this.mode[slot] === PATROL_MODE.pursuing ? this.ports.carSnap(this.targetCar[slot]!) : null;
     if (offender === null) return this.brakeOut();
     const crawling = this.yieldState[slot] === YIELD.stopping || hypot2(offender.vx, offender.vz) < CRAWL;
-    this.pursuit.drive(slot, self, offender.x, offender.z, offender.vx, offender.vz, crawling ? CAR_STOP_GAP : 0, dt, this.out);
+    // A careful car brakes ahead of the close-in stretch so it enters it at the street's pace.
+    const beyond = Math.max(0, hypot2(offender.x - self.x, offender.z - self.z) - CLOSE_PURSUIT_DISTANCE);
+    const cap = this.hothead[slot] === 0 ? Math.sqrt(CAREFUL_PURSUIT_SPEED * CAREFUL_PURSUIT_SPEED + 2 * CAR_STOP_DECEL * beyond) : Infinity;
+    this.pursuit.drive(slot, self, cars, this.targetCar[slot]!, offender.x, offender.z, offender.vx, offender.vz, crawling ? CAR_STOP_GAP : 0, cap, dt, this.out);
     return this.out;
   }
 

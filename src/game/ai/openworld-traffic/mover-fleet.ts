@@ -1,12 +1,14 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import { hash01 } from "../../kernel/scalar.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
+import type { CarStyleId } from "../../vehicle/car-variants.ts";
 import { FLIPPED_UP_Y } from "../../vehicle/constants.ts";
 import { carClass, classStats, type ClassStats } from "../../vehicle/vehicle-classes.ts";
 import { HEADING_DX, HEADING_DZ, rightX, rightZ } from "../../world/openworld/openworld-roads.ts";
 import type { AiCar } from "../derby-ai.ts";
 import { BOOKKEEPING_SECONDS, COMMUTER_HOLD_SECONDS, DWELL_SECONDS, KERB_KEEP, MIN_TRIP_METRES, PRIME_PASSES, PULL_OUT_CLEAR, SIGHT_RADIUS, STUCK_SECONDS, TOW_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
+import { residentBody, residentColour } from "./traffic-look.ts";
 import { spotUnseen, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
 import { RoutePlanner, TripRoute } from "./trip-route.ts";
 
@@ -36,6 +38,8 @@ export class DrivenCar {
 
 const MOVER = { free: 0, parked: 1, driving: 2 } as const;
 const ROLE = { ambient: 0, commuter: 1, leased: 2 } as const;
+/** No paint of its own choosing: the car stands as the fleet painted it. */
+const NO_COLOUR = -1;
 /** No resident: the car is nobody's. */
 const NO_RESIDENT = -1;
 /** Spaces tried when picking where a car goes: the whole list, from a seeded start. */
@@ -65,6 +69,8 @@ export class MoverFleet {
   private readonly planner: RoutePlanner;
   private readonly driver: TrafficDriver;
   private readonly routes: TripRoute[];
+  /** The route a re-plan is written into; it trades places with the car's on success, so a failed one leaves the car's route as it was. */
+  private spareRoute = new TripRoute();
   private readonly classes: ClassStats[];
   private readonly state: Uint8Array;
   private readonly role: Uint8Array;
@@ -73,6 +79,10 @@ export class MoverFleet {
   private readonly spot: Int32Array;
   private readonly resident: Int32Array;
   private readonly readyAt: Float64Array;
+  /** The crowd second a leased car's rider is due at his destination (Infinity: none): a car still on the road then, that no one sees, stands in its space. */
+  private readonly dueAt: Float64Array;
+  /** The paint a slot's car stands in (sRGB, `NO_COLOUR`: its own): a resident's car wears his. */
+  private readonly colour: Int32Array;
   private readonly wreckedFor: Float64Array;
   private readonly stillFor: Float64Array;
   private readonly trips: Uint32Array;
@@ -97,6 +107,8 @@ export class MoverFleet {
     this.spot = new Int32Array(size).fill(-1);
     this.resident = new Int32Array(size).fill(NO_RESIDENT);
     this.readyAt = new Float64Array(size);
+    this.dueAt = new Float64Array(size).fill(Infinity);
+    this.colour = new Int32Array(size).fill(NO_COLOUR);
     this.wreckedFor = new Float64Array(size);
     this.stillFor = new Float64Array(size);
     this.trips = new Uint32Array(size);
@@ -152,15 +164,18 @@ export class MoverFleet {
    * Leases a car for `resident` (-1: none) to drive from space `fromSpot` to `toSpot`: the resident's own parked car when it stands in `fromSpot`, else a free car or an ambient one parked
    * out of the way, placed there. Null when no car is free or there is no way between the spaces.
    */
-  spawn(resident: number, fromSpot: number, toSpot: number, urgent: boolean): DrivenCar | null {
-    const slot = this.slotFor(resident, fromSpot, urgent);
+  spawn(resident: number, fromSpot: number, toSpot: number, urgent: boolean, dueSeconds: number): DrivenCar | null {
+    const body = resident === NO_RESIDENT ? null : residentBody(resident);
+    const slot = this.slotFor(resident, fromSpot, urgent, body);
     if (slot < 0) return null;
     const { ports, spots } = this.context;
     const id = this.first + slot;
-    const car = ports.cars()[id]!;
+    const paint = resident === NO_RESIDENT ? NO_COLOUR : residentColour(resident);
     if (this.state[slot] !== MOVER.parked || this.spot[slot] !== fromSpot) {
       this.release(slot);
-      ports.place(id, spots.x[fromSpot]!, spots.z[fromSpot]!, spots.yaw[fromSpot]!);
+      if (body !== null && ports.cars()[id]!.style.id !== body) ports.setBody(id, body);
+      ports.place(id, spots.x[fromSpot]!, spots.z[fromSpot]!, spots.yaw[fromSpot]!, paint === NO_COLOUR ? null : paint);
+      this.colour[slot] = paint;
       this.spot[slot] = fromSpot;
       this.state[slot] = MOVER.parked;
       this.context.taken[fromSpot] = 1;
@@ -170,12 +185,43 @@ export class MoverFleet {
     this.role[slot] = resident === NO_RESIDENT ? ROLE.leased : ROLE.commuter;
     this.resident[slot] = resident;
     this.urgent[slot] = urgent ? 1 : 0;
-    this.classes[slot] = classStats(carClass(car));
+    this.classes[slot] = classStats(carClass(ports.cars()[id]!));
     const handle = this.handles[slot]!;
     handle.driver = null;
     handle.lost = false;
     this.launch(slot, toSpot);
+    this.dueAt[slot] = dueSeconds;
     return handle;
+  }
+
+  /**
+   * Sends leased car `handle` on to space `toSpot`, keeping its urgency: a car on a trip from where it is now (no pull-out), a car that arrived out of its space. False when the car is not
+   * the owner's, the space is held or a car stands in it for good, or there is no way; the car then goes on as before.
+   */
+  redirect(handle: DrivenCar, toSpot: number): boolean {
+    const slot = handle.index - this.first;
+    if (slot < 0 || slot >= this.size || handle.lost || this.state[slot] === MOVER.free) return false;
+    if (toSpot === this.spot[slot]) return true;
+    const { taken, spots, snaps } = this.context;
+    if (toSpot < 0 || toSpot >= spots.count || spots.stays[toSpot] === 1 || taken[toSpot] === 1) return false;
+    const parked = this.state[slot] === MOVER.parked;
+    const snap = snaps[handle.index]!;
+    const planned = parked ? this.planner.plan(this.spareRoute, this.spot[slot]!, toSpot) : this.planner.planFrom(this.spareRoute, snap.x, snap.z, snap.yaw, toSpot);
+    if (!planned) return false;
+    const old = this.routes[slot]!;
+    this.routes[slot] = this.spareRoute;
+    this.spareRoute = old;
+    if (parked) {
+      this.launch(slot, toSpot);
+      return true;
+    }
+    taken[this.spot[slot]!] = 0;
+    taken[toSpot] = 1;
+    this.spot[slot] = toSpot;
+    this.stillFor[slot] = 0;
+    handle.arrived = false;
+    this.driver.forget(handle.index);
+    return true;
   }
 
   /** The owner is done with the car: it goes on as ambient traffic from where it is; a patrol car is put away. */
@@ -222,7 +268,7 @@ export class MoverFleet {
     const spot = this.chooseSpot(slot, -1, this.passes > PRIME_PASSES);
     if (spot < 0) return;
     const { spots } = this.context;
-    ports.place(id, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!);
+    ports.place(id, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, null);
     this.spot[slot] = spot;
     this.state[slot] = MOVER.parked;
     this.context.taken[spot] = 1;
@@ -267,8 +313,23 @@ export class MoverFleet {
       this.tow(slot);
       return;
     }
-    if (!this.driver.arrived(id, this.routes[slot]!, speed)) return;
+    if (this.seconds > this.dueAt[slot]! && this.unseenAndFar(slot, car)) this.standInSpace(slot);
+    else if (!this.driver.arrived(id, this.routes[slot]!, speed)) return;
+    this.park(slot);
+  }
+
+  /** The car, late for the walker waiting at its space, stands in the space (no one sees it happen). */
+  private standInSpace(slot: number): void {
+    const { ports, spots } = this.context;
+    const spot = this.spot[slot]!;
+    ports.place(this.first + slot, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, this.colour[slot] === NO_COLOUR ? null : this.colour[slot]!);
+    this.driver.forget(this.first + slot);
+  }
+
+  /** The car has come to its space: parked, held by whose it is, and a resident's car is his for his next drive. */
+  private park(slot: number): void {
     this.state[slot] = MOVER.parked;
+    this.dueAt[slot] = Infinity;
     this.context.standing[this.spot[slot]!] = STANDING.mover;
     this.handles[slot]!.arrived = true;
     if (this.role[slot] === ROLE.commuter) this.context.residentSpot[this.resident[slot]!] = this.spot[slot]!;
@@ -289,6 +350,7 @@ export class MoverFleet {
     this.state[slot] = MOVER.driving;
     this.trips[slot]!++;
     this.stillFor[slot] = 0;
+    this.dueAt[slot] = Infinity;
     this.handles[slot]!.arrived = false;
     this.driver.forget(this.first + slot);
   }
@@ -333,17 +395,26 @@ export class MoverFleet {
   }
 
   /** A slot to lease for a trip out of `fromSpot`: the resident's own car standing there, a free one, or an ambient one parked (taken off its space); an urgent trip takes a patrol car, any other never does. -1 when none. */
-  private slotFor(resident: number, fromSpot: number, urgent: boolean): number {
+  private slotFor(resident: number, fromSpot: number, urgent: boolean, body: CarStyleId | null): number {
     for (let slot = 0; slot < this.size; slot++) {
       if (resident !== NO_RESIDENT && this.resident[slot] === resident && this.state[slot] === MOVER.parked && this.spot[slot] === fromSpot) return slot;
     }
+    let free = -1;
+    let freeMatch = -1;
     let ambient = -1;
+    let ambientMatch = -1;
     for (let slot = 0; slot < this.size; slot++) {
       if (this.context.ports.seated(this.first + slot) || this.isPatrol(slot) !== urgent) continue;
-      if (this.state[slot] === MOVER.free) return slot;
-      if (ambient < 0 && this.state[slot] === MOVER.parked && this.role[slot] === ROLE.ambient) ambient = slot;
+      const matches = body !== null && this.context.ports.cars()[this.first + slot]!.style.id === body;
+      if (this.state[slot] === MOVER.free) {
+        if (free < 0) free = slot;
+        if (matches && freeMatch < 0) freeMatch = slot;
+      } else if (this.state[slot] === MOVER.parked && this.role[slot] === ROLE.ambient) {
+        if (ambient < 0) ambient = slot;
+        if (matches && ambientMatch < 0) ambientMatch = slot;
+      }
     }
-    return ambient;
+    return freeMatch >= 0 ? freeMatch : free >= 0 ? free : ambientMatch >= 0 ? ambientMatch : ambient;
   }
 
   /** Lets go of the space a slot holds (parked in it, or on the way to it) and of what the slot's owner had. */
@@ -356,6 +427,7 @@ export class MoverFleet {
       if (standing[spot] === STANDING.mover) standing[spot] = STANDING.none;
     }
     this.spot[slot] = -1;
+    this.colour[slot] = NO_COLOUR;
     this.state[slot] = MOVER.free;
     if (this.handles[slot]!.lost === false) this.handles[slot]!.lost = true;
     this.role[slot] = ROLE.ambient;

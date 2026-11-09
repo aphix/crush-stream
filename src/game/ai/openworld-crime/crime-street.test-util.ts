@@ -8,8 +8,11 @@ const BRAKE_DECELERATION = 9;
 const TOP_SPEED = 30;
 const STEER_RATE = 1.5;
 const STEER_SPEED_REFERENCE = 5;
+/** A traffic trip's pace (m/s) along the fake's streets (x first, then z), and how far short (m, along z) of the point asked for its kerb space stands: across the sidewalk from a door. */
+const TRIP_SPEED = 8;
+const KERB_SPACE_OFFSET = 6;
 
-/** The traffic and the engine's cars as the patrol cars see them, with a point-mass for physics: a car with a driver does what the driver writes, one without keeps its velocity. */
+/** The traffic and the engine's cars as the patrol cars see them, with a point-mass for physics: a car with a driver does what the driver writes, a leased one without drives its trip along the streets (x, then z) to its kerb space, any other keeps its velocity. */
 export class FakeStreet {
   readonly snaps: AiCar[] = [];
   readonly drivers: (CarDriver | null)[] = [];
@@ -17,6 +20,11 @@ export class FakeStreet {
   readonly residents: number[] = [];
   readonly traffic: boolean[] = [];
   readonly released: number[] = [];
+  /** Per car: where its traffic trip ends (NaN: no trip) and whether it got there. */
+  readonly tripX: number[] = [];
+  readonly tripZ: number[] = [];
+  readonly tripDone: boolean[] = [];
+  readonly redirects: { handle: number; x: number; z: number }[] = [];
   /** Where the next leased car appears. */
   leaseAt = { x: 0, z: 0, yaw: 0 };
   leases = 0;
@@ -34,12 +42,31 @@ export class FakeStreet {
     this.sirens.push(false);
     this.residents.push(resident);
     this.traffic.push(traffic);
+    this.tripX.push(Number.NaN);
+    this.tripZ.push(Number.NaN);
+    this.tripDone.push(false);
     return car.id;
   }
 
-  lease(): number {
+  lease(toX: number, toZ: number): number {
     this.leases++;
-    return this.addCar(this.leaseAt.x, this.leaseAt.z, this.leaseAt.yaw, 0, -1, false);
+    const handle = this.addCar(this.leaseAt.x, this.leaseAt.z, this.leaseAt.yaw, 0, -1, false);
+    this.tripX[handle] = toX;
+    this.tripZ[handle] = toZ - KERB_SPACE_OFFSET;
+    return handle;
+  }
+
+  arrived(handle: number): boolean {
+    return this.tripDone[handle]!;
+  }
+
+  /** Re-aims the leased car's trip, as the traffic does along its streets; every call is kept for a row to read. */
+  redirect(handle: number, toX: number, toZ: number): boolean {
+    this.redirects.push({ handle, x: toX, z: toZ });
+    this.tripX[handle] = toX;
+    this.tripZ[handle] = toZ - KERB_SPACE_OFFSET;
+    this.tripDone[handle] = false;
+    return true;
   }
 
   snap(handle: number): AiCar {
@@ -79,7 +106,8 @@ export class FakeStreet {
       const car = this.snaps[index]!;
       const driver = this.drivers[index];
       if (!car.alive || driver === null) {
-        if (car.alive) this.move(car, dt);
+        if (car.alive && !Number.isNaN(this.tripX[index]!)) this.driveTrip(index, car, dt);
+        else if (car.alive) this.move(car, dt);
         continue;
       }
       this.drive(car, driver(car, this.snaps, dt), dt);
@@ -92,6 +120,24 @@ export class FakeStreet {
     car.yaw += input.steer * STEER_RATE * Math.min(1, speed / STEER_SPEED_REFERENCE) * dt;
     car.vx = Math.sin(car.yaw) * next;
     car.vz = Math.cos(car.yaw) * next;
+    this.move(car, dt);
+  }
+
+  /** The traffic's trip: along x to the space's x, then along z to it, at `TRIP_SPEED`; there it stands. */
+  private driveTrip(index: number, car: AiCar, dt: number): void {
+    const dx = this.tripX[index]! - car.x;
+    const dz = this.tripZ[index]! - car.z;
+    const along = Math.abs(dx) > 0.01 ? dx : dz;
+    const step = Math.min(Math.abs(along), TRIP_SPEED * dt);
+    if (step < 0.01) {
+      car.vx = 0;
+      car.vz = 0;
+      this.tripDone[index] = true;
+      return;
+    }
+    car.yaw = Math.abs(dx) > 0.01 ? Math.atan2(Math.sign(dx), 0) : Math.atan2(0, Math.sign(dz));
+    car.vx = Math.abs(dx) > 0.01 ? (Math.sign(dx) * step) / dt : 0;
+    car.vz = Math.abs(dx) > 0.01 ? 0 : (Math.sign(dz) * step) / dt;
     this.move(car, dt);
   }
 
