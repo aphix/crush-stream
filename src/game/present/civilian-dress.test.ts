@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import { ATTIRE } from "./civilian-art-constants.ts";
 import { dressOfLook, skinOfLook } from "./civilian-dress.ts";
 import { OUTFIT, type DriverLook } from "./driver-look.ts";
@@ -38,6 +39,16 @@ describe("given two thousand crowd looks", () => {
     for (const one of suited) expect(one.person.pants, "suit trousers").toBe(one.person.shirt);
     expect(everyone.filter((one) => one.person.woman && one.person.mustache), "women with a moustache").toHaveLength(0);
     expect(everyone.some((one) => one.person.outfit === OUTFIT.SUIT), "a suit outfit").toBe(true);
+  });
+
+  it("when a look's woman bit is set or clear, then she is drawn a woman or he a man, whatever else the word holds", () => {
+    const wrong = looks.filter((look) => dressed(look).person.woman !== (((look >>> LOOK.womanShift) & 1) === 1));
+    expect(wrong, "looks drawn against their woman bit").toHaveLength(0);
+    const womanBit = 1 << LOOK.womanShift;
+    for (const look of looks.slice(0, 50)) {
+      expect(dressed(look | womanBit).person.woman, "bit set").toBe(true);
+      expect(dressed(look & ~womanBit).person.woman, "bit clear").toBe(false);
+    }
   });
 
   it("when a look is dressed twice, then it is dressed the same", () => {

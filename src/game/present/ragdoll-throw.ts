@@ -112,14 +112,14 @@ export abstract class RagdollThrower extends RagdollStepper {
   }
 
   /**
-   * A figure a car or a loose part of it ran down (`FigureStrike`: a lawn guard, or the VIP on his walk) is thrown where he stood, standing,
-   * in the dress he wore (`guardDress`, `VIP_LOOK`) with his arms hanging, at the strike's velocity and spin, ignoring the car that struck
+   * A figure a car or a loose part of it ran down (`FigureStrike`: a lawn guard, the VIP on his walk, or a civilian of the open world, whose `look` is
+   * the drawn crowd's dress of them) is thrown where he stood, standing, in the dress he wore (`guardDress`, `VIP_LOOK`, or `look`) with his arms hanging, at the strike's velocity and spin, ignoring the car that struck
    * him for `GRACE` s (none for a part's: he stands clear of its car, and the part must meet him): through the launch a driver's throw
    * takes (the worker's world, this thread's, or waiting for Rapier up to `PENDING_MAX`).
    */
-  throwFigure(s: FigureStrike, cars: readonly DeformableCar[]): void {
+  throwFigure(s: FigureStrike, cars: readonly DeformableCar[], look?: DriverLook): void {
     this.cars = cars;
-    const dress = s.guard >= 0 ? guardDress(s.guard) : { cop: false, look: VIP_LOOK };
+    const dress = look ? { cop: false, look } : s.guard >= 0 ? guardDress(s.guard) : { cop: false, look: VIP_LOOK };
     const t = this.figure;
     t.p.set(s.x, s.y + PARTS[0]!.c[1], s.z);
     t.q.setFromAxisAngle(Y, Math.atan2(s.faceX, s.faceZ));

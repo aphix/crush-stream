@@ -86,6 +86,12 @@ const HOT = {
   "src/game/present/motor-tone.ts": ["motorRev", "accelLoad", "motorLoad", "motorRpm", "channelGains"],
   "src/game/present/game-audio.ts": ["frame"],
   "src/game/present/paint-scratch.ts": ["frame", "draw", "touch", "sameStroke", "radiusOf", "growRect", "stamp"],
+  "src/game/ai/civilians/civilian-leg.ts": ["legPose", "legPositionAt"],
+  "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "findHits", "lookOf", "hasLooseBody"],
+  "src/game/engine/engine-openworld.ts": ["step", "frame"],
+  "src/game/present/civilian-art.ts": ["update", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
+  "src/game/present/civilian-pose.ts": ["poseCivilian", "poseLimb", "placePart", "setSwung"],
+  "src/game/present/civilian-dress.ts": ["dressOfLook", "writeLinearColour", "scrambleLook", "fieldOf"],
 };
 const KNOB_CONTEXTS = new Set(["kernel", "world", "deform", "vehicle", "contact", "scenes", "ai"]);
 const MAX_FILE_LINES = 800;

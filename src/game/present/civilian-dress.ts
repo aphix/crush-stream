@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import { ATTIRE_DRAWS, ATTIRE_WEAR, ATTIRE, CAP_COLOURS, LOOK_FIELD, LOOK_SCRAMBLE, MOUSTACHE_DRAWS, SHADES_DRAWS } from "./civilian-art-constants.ts";
 import { HAIRS, type DriverLook } from "./driver-look.ts";
 import { FACE, FACES } from "./dummy-faces.ts";
@@ -25,12 +26,12 @@ function fieldOf(scrambled: number, field: LookField): number {
   return (scrambled >>> field.shift) & ((1 << field.bits) - 1);
 }
 
-/** `out` dressed as crowd look `look` says: build, today's clothes, hair, cap, face; the same look always dresses the same. Returns the attire the look drew. */
+/** `out` dressed as crowd look `look` says: build (the look's own woman bit), today's clothes, hair, cap, face; the same look always dresses the same. Returns the attire the look drew. */
 export function dressOfLook(look: number, out: DriverLook): number {
   const scrambled = scrambleLook(look);
   const attire = ATTIRE_DRAWS[fieldOf(scrambled, LOOK_FIELD.attire)]!;
   const wear = ATTIRE_WEAR[attire]!;
-  const woman = fieldOf(scrambled, LOOK_FIELD.woman) === 1;
+  const woman = ((look >>> LOOK.womanShift) & 1) === 1;
   const shirt = wear.shirts[fieldOf(scrambled, LOOK_FIELD.shirt) % wear.shirts.length]!;
   const capped = fieldOf(scrambled, LOOK_FIELD.cap) < wear.capSixteenths;
   out.woman = woman;

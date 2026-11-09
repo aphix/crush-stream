@@ -58,6 +58,7 @@ Each row links the document that covers the system; [`docs/ARCHITECTURE.md`](doc
 | Stack | Cars dropped onto a column, crushed from the top. | [`LOAD_CRUSH`](docs/LOAD_CRUSH.md) |
 | Range | FlatOut's driver-flinging event: a car hits a jersey barrier at 100 km/h and its driver flies into a sand field marked every 10 m. | [`CINEMATIC`](docs/CINEMATIC.md), [`MINIGAMES`](docs/MINIGAMES.md) |
 | Lab | A workbench where you flick a toy car at a house of cards made of cars and a wall of props. | [`PERF_BENCH`](docs/PERF_BENCH.md) |
+| Open World | A nine-block neighbourhood whose named residents (homes, jobs, moods, a life log) walk the sidewalks on a worker-computed society, with cats and a dog; a car runs them down, and a look-at panel reads who or what you are looking at. | [`OPEN_WORLD`](docs/OPEN_WORLD.md) |
 | Multiplayer | Host or join a room for a race, a campaign over the courses you pick, Survival or a derby, public (listed for anyone) or private (a password). Host-authoritative over WebRTC data channels, up to 8 players; a lobby on Havana; proximity voice. | [`MULTIPLAYER`](docs/MULTIPLAYER.md) |
 
 ### Replays, look and sound

@@ -180,6 +180,8 @@ mirror) → `engine-scenes` (scene picker, fade, reset, derby step) → `engine-
 (crash highlights) → `engine-share` (the `#` URL) → `engine.ts`. `window.__crush` is the live engine (benches and probes).
 A race runs through `RaceDirector` (`engine-race.ts`) over `RaceHudLayer` (`engine-race-hud.ts`: HUD read model, next-course flow, setup menu), `RaceWatch` (`engine-race-watch.ts`) and `RaceField` (`engine-race-field.ts`).
 
+**Open world.** `OpenWorldDirector` (`engine-openworld.ts`, held by `CrashEngine`) makes the neighbourhood's crowd (`ai/civilians`: a brain in a Web Worker with the main thread's own mirror, `CivilianCrowd`) while the open world's course is up, steps it in `fixedStep` (host and solo) or by the host's clock (a client), hands it to the drawing each frame, and is the crowd's end of the crowd message. See [`OPEN_WORLD`](OPEN_WORLD.md).
+
 **Frame** (`CrashEngine.tickInner`, wall `dt` ≤ 0.1 s):
 
 ```
@@ -189,11 +191,11 @@ if playing:  simDt = wallDt × timeScale × cine.timeWarp
                           1/240 s while a crush window is open
                fixedStep: race.drive / applyDrive (seat, derby AI, net peers) → stepWorld (1–8 slices, one when quiet; a step in contact
                           is cut at the 1/240 s floor, 3 slices of exactly 1/240 s at 1/80 s; each: integrate, pair + part contact, SAT passes,
-                          stepStructure, clips) → ejections → race.step → cinematic trigger
+                          stepStructure, clips) → ejections → race.step → cinematic trigger → open world's crowd step
              stepEdge → scheduleSkins (Witness: off-camera cars defer, small ones stride) → updateSkin
              updatePhase → rigs → FX, ragdolls, smoke, trace → stepDerby → seat.step → cine.update
 always:      net.frame → PoseBlend.present (bodies, loose parts, attached parts and the crush skin drawn at the frame's time between
-             the last two sim states) → race.frame → updateCamera → flushVisibleSkins → paintScratches.frame (wear masks of the
+             the last two sim states) → race.frame → updateCamera → open world's frame (a client's crowd step, the drawn crowd, the look-at text) → flushVisibleSkins → paintScratches.frame (wear masks of the
              drawn cars: R when the stroke list moved, G dents when a crushed skin moved, each car at most every 0.25 s, one car a frame; then `flush` sends the changed rows to the GPU) → detail / lamps → audio frame
              (audio on) → cine.render → PoseBlend.restore (the sim's own poses and skin back) → emitHud every 0.05–0.12 s
              The thrown drivers' world (`RagdollRemote` ↔ `ragdoll-worker.ts`, a module Web Worker, race courses only) is posted its

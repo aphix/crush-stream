@@ -38,6 +38,13 @@ import { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
+import { OpenWorldDirector } from "./engine-openworld.ts";
+import { CivilianArt } from "../present/civilian-art.ts";
+import { NEAR_SLOTS } from "../present/civilian-art-constants.ts";
+import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
+import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
+import type { LookAtHud } from "../hud/hud-store.ts";
+import type { CrowdLink } from "../net/net-ports.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
 import { ChaseCamera, centroid, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
@@ -163,6 +170,8 @@ export class CrashEngine extends EngineGarage {
   protected readonly highlights: ReelDirector;
   /** The podium over the course (docs/PODIUM.md). */
   protected readonly podium: PodiumDirector;
+  /** The open world's society and crowd (docs/OPEN_WORLD.md). */
+  private readonly openWorld: OpenWorldDirector;
   readonly pace = new SimPacer(true);
   private readonly blend = new PoseBlend();
   /** What a crashed car nobody drives rolls on: its drive's idle pedals (engine braking, the test world's IDLE). */
@@ -320,6 +329,7 @@ export class CrashEngine extends EngineGarage {
     this.race = this.makeRace();
     this.highlights = this.makeHighlights();
     this.podium = this.makePodium();
+    this.openWorld = this.makeOpenWorld();
 
     this.resize();
     this.resizeObs = new ResizeObserver(() => this.resize());
@@ -352,6 +362,56 @@ export class CrashEngine extends EngineGarage {
         // it is in simply throws nobody (`EjectionWatch` only judges edges it saw). Its purse pool joins the scene then: warm it.
         this.ragdolls.preload().then(() => this.queueWarm(), (err: unknown) => console.error("Crush Stream ragdoll load failed", err));
       });
+  }
+
+  private makeOpenWorld(): OpenWorldDirector {
+    return new OpenWorldDirector({
+      inOpenWorld: () => this.showOpenWorld,
+      isClient: () => this.net.client,
+      seed: () => this.sceneSeed,
+      tier: () => (this.deviceClass !== "desktop" ? POPULATION_TIER.phone : this.cine.tier === "ultra" ? POPULATION_TIER.ultra : POPULATION_TIER.desktop),
+      cars: () => this.live(),
+      now: () => performance.now() / 1000,
+      eye: (ray) => {
+        this.camera.getWorldDirection(_v);
+        ray.eyeX = this.camera.position.x;
+        ray.eyeY = this.camera.position.y;
+        ray.eyeZ = this.camera.position.z;
+        ray.dirX = _v.x;
+        ray.dirY = _v.y;
+        ray.dirZ = _v.z;
+      },
+      throwFigure: (strike, look) => this.ragdolls.throwFigure(strike, this.live(), look),
+      hookWallHits: (listener) => {
+        const recorded = this.race.onWallHit;
+        this.race.onWallHit = (i, closing, x, z) => {
+          recorded(i, closing, x, z);
+          listener(closing, x, z);
+        };
+        return () => {
+          this.race.onWallHit = recorded;
+        };
+      },
+      makeArt: (capacity) => {
+        const art = new CivilianArt(this.deviceClass === "desktop" ? NEAR_SLOTS.desktop : NEAR_SLOTS.phone, capacity);
+        this.scene.add(art.group);
+        this.queueWarm();
+        return art;
+      },
+    });
+  }
+
+  /** The map the open world's crowd lives on (the open world's builder line calls it once). */
+  startOpenWorld(map: OpenWorldMap): void {
+    this.openWorld.startOpenWorld(map);
+  }
+
+  protected override crowdLink(): CrowdLink | null {
+    return this.openWorld.link();
+  }
+
+  protected override lookAtText(): LookAtHud | null {
+    return this.openWorld.lookAt();
   }
 
   private makeRace(): RaceDirector {
@@ -502,6 +562,7 @@ export class CrashEngine extends EngineGarage {
     for (const car of this.cars) car.dispose();
     this.podium.dispose();
     this.paintScratches.dispose();
+    this.openWorld.stop();
     this.race.dispose();
     this.labArt?.dispose();
     this.garage?.dispose();
@@ -751,6 +812,8 @@ export class CrashEngine extends EngineGarage {
     lapPart(PART.rest);
     this.updateCamera(wallDt);
     lapPart(PART.camera);
+    this.openWorld.frame(wallDt);
+    lapPart(PART.scenery);
     this.rumbleFrame(this.playing && !held ? wallDt : 0);
     lapPart(PART.rest);
     this.flushVisibleSkins();
@@ -1012,6 +1075,7 @@ export class CrashEngine extends EngineGarage {
       this.sparkAt = this.elapsedWall;
       this.sparkShower(contact, normal, impulse);
     }
+    this.openWorld.step(dt);
     lap(w.phases, PHASE.rules);
   }
 

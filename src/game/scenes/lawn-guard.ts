@@ -58,7 +58,7 @@ const PORTICO_DEPTH = 3;
 /** A guard this close (m) to where he is going is there. */
 const ARRIVE = 0.3;
 /** A car's plan box reaches no further than this (m) from its origin (a truck's far corner is under 5): the cars nearer than it are tested against a guard. */
-const CAR_REACH = 6.5;
+export const CAR_REACH = 6.5;
 
 /** No strikes pending (shared, never written). */
 const NONE: readonly FigureStrike[] = [];

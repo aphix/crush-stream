@@ -78,6 +78,16 @@ describe("given a race course's dummies simulated off the main thread and a stan
     });
   }
 
+  it("when a civilian's look is given with the strike, then he is thrown in that dress, never a guard's, and a woman's purse goes with her", () => {
+    const { cars, strike } = struck(0, 15);
+    const { ragdolls, sent } = systemWithWorker();
+    const civilian = { woman: true, shirt: 0x3d5a80, pants: 0x1f2430, hair: 0, hat: null, mustache: false, outfit: 0 };
+    ragdolls.throwFigure(strike, cars, civilian);
+    expect(ragdolls["dressing"].get(FIRST_WORKER_ID)!.look, "dressed from the civilian's look").toBe(civilian);
+    expect(sent[0]!.t.cop, "not the navy uniform the strike's guard index would pick").toBe(false);
+    expect(sent[0]!.purse, "a woman's purse").toBe(true);
+  });
+
   it("when a figure is run down right after a driver is thrown, then the driver's launch is left as set, with no hanging arms", () => {
     const { cars, strike } = struck(0, 15);
     const { ragdolls } = systemWithWorker();
