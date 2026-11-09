@@ -28,5 +28,5 @@ export type Place = {
   sector: string;
 };
 
-/** `half`: half the playable square's side (m). Places with `doorNode = -1` lie beyond the walls; `portals` are the nodes where their residents enter and leave. */
-export type OpenWorldMap = { graph: WalkGraph; places: readonly Place[]; portals: Int32Array; half: number };
+/** `halfX`, `halfZ`: half the playable area's side along x and along z (m). Places with `doorNode = -1` lie beyond the walls; `portals` are the nodes where their residents enter and leave. */
+export type OpenWorldMap = { graph: WalkGraph; places: readonly Place[]; portals: Int32Array; halfX: number; halfZ: number };

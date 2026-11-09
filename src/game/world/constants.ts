@@ -71,6 +71,8 @@ export const PREFAB = {
   assetBox: "asset-box",
   assetCrossSolid: "asset-cross-solid",
   assetBoxSolid: "asset-box-solid",
+  // A wall nothing is drawn for: the open world's edge.
+  invisibleWall: "invisible-wall",
 } as const;
 
 /** The word for a town: the campaign course's id and the scenery service's biome of streets and sidewalks. */

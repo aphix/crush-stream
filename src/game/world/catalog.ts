@@ -103,6 +103,7 @@ export const PREFAB_IDS = [
   PREFAB.assetBox,
   PREFAB.assetBoxSolid,
   PREFAB.assetCrossSolid,
+  PREFAB.invisibleWall,
 ] as const;
 export type PrefabId = (typeof PREFAB_IDS)[number];
 
@@ -725,4 +726,6 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.assetStandee]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.DUMPSTER_STEEL },
   [PREFAB.assetCrossSolid]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.TREE_BARK },
   [PREFAB.assetBoxSolid]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.DUMPSTER_STEEL },
+  // The unit box of a wall that is not drawn (the open world's edge); a placement's size makes it a piece of wall.
+  [PREFAB.invisibleWall]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.JERSEY_CONCRETE },
 };

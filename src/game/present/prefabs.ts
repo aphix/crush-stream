@@ -828,5 +828,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.assetBox:
     case PREFAB.assetBoxSolid:
       return assetParts(id, familyOf(skin), mats);
+    case PREFAB.invisibleWall:
+      return [];
   }
 }

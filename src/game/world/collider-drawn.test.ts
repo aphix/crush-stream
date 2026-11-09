@@ -5,6 +5,7 @@ import { colliderSolids, courseSolids } from "../present/ragdoll-solids.ts";
 import { Mesher } from "../present/track-mesh.ts";
 import { addWalls } from "../present/track-structures.ts";
 import { PREFAB_IDS, PREFABS, type PrefabId } from "./catalog.ts";
+import { PREFAB } from "./constants.ts";
 import { BAND, gap, meshGap, pieceGrid, prefabGap, triangles, type P3 } from "./collider-drawn.test-util.ts";
 import { placeProps, propColliders, solidsOf } from "./placements.ts";
 import { Track } from "./track.ts";
@@ -146,7 +147,8 @@ describe("given each course's drawn race walls and the wall colliders the cars h
 
 describe("given every solid and knock prop kind at scale 1: the colliders the game meets, and the shape drawn for it", () => {
   for (const id of PREFAB_IDS) {
-    if (PREFABS[id].body === "none") continue;
+    // The open world's invisible wall has nothing drawn to hold its colliders to.
+    if (PREFABS[id].body === "none" || id === PREFAB.invisibleWall) continue;
     const { pieces, inward, outward } = prefabGap(id);
     const tol = KIND_TOL[id] ?? 0;
 
