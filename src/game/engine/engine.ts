@@ -41,6 +41,7 @@ import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { CivilianArt } from "../present/civilian-art.ts";
 import { NEAR_SLOTS } from "../present/civilian-art-constants.ts";
+import { OpenWorldSigns } from "../present/openworld-signs.ts";
 import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
 import { buildOpenWorldMap } from "../world/openworld/openworld-map.ts";
@@ -400,6 +401,12 @@ export class CrashEngine extends EngineGarage {
         this.scene.add(art.group);
         this.queueWarm();
         return art;
+      },
+      signsOn: () => this.showTrackDebug,
+      makeSigns: (places) => {
+        const signs = new OpenWorldSigns(places);
+        this.scene.add(signs.group);
+        return signs;
       },
     });
   }
