@@ -6,10 +6,10 @@ import { FRAME_HZ } from "../../kernel/constants.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { vestibuleSolids, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
-import { FACADE_OPEN_AT, FACADE_OPEN_MAX } from "../facades.ts";
+import { FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS } from "../facades.ts";
 import { HIDE_GRACE, SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../openworld-sight.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
-import { DOOR_SWING_SECONDS, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS } from "./interior-constants.ts";
+import { DOOR_SWING_SECONDS, INTERIOR_DIM, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS } from "./interior-constants.ts";
 import { InteriorSet } from "./interior-art.ts";
 import type { DoorOpeners } from "./interior-doors.ts";
 
@@ -25,6 +25,8 @@ const FRAME = 1 / FRAME_HZ;
 const SETTLE_FRAMES = 200;
 const SWING_FRAMES = Math.ceil(DOOR_SWING_SECONDS * FRAME_HZ) + 2;
 const GRACE_FRAMES = Math.round(HIDE_GRACE * FRAME_HZ);
+/** Frames for a building's windows to open, or to shut before its rooms are dropped. */
+const FADE_FRAMES = Math.ceil(OPEN_FADE_SECONDS * FRAME_HZ) + 2;
 /** Where the eye is out of every interior's range. */
 const AWAY = 4 * SHELL_FAR;
 const NOTHING_BUILT = JSON.stringify({ shells: 0, details: 0, vertices: 0, drawCalls: 0 });
@@ -79,12 +81,17 @@ function scene(set: InteriorSet, out: number, who: DoorOpeners, players: SightPl
   return { frames, look };
 }
 
-/** Whether a place's building is among those the facade shader shows its windows through. */
-function listed(place: Place): boolean {
+/** How far open the facade's list holds a place's building (0 painted to 1 seen through), or undefined when it is not among those the facade shader shows its windows through. */
+function openAmount(place: Place): number | undefined {
   const slots = FACADE_OPEN_AT.value;
-  for (let slot = 0; slot < FACADE_OPEN_MAX; slot++) if (Math.abs(slots[2 * slot]! - place.x) < 1e-3 && Math.abs(slots[2 * slot + 1]! - place.z) < 1e-3) return true;
-  return false;
+  for (let slot = 0; slot < FACADE_OPEN_MAX; slot++) {
+    const at = FACADE_OPEN_SLOT_FLOATS * slot;
+    if (Math.abs(slots[at]! - place.x) < 1e-3 && Math.abs(slots[at + 1]! - place.z) < 1e-3) return slots[at + 2]!;
+  }
+  return undefined;
 }
+
+const listed = (place: Place): boolean => openAmount(place) !== undefined;
 
 /** Which of `copies` are listed, nearest first, as a string of 1 (listed) and 0. */
 const listedNearestFirst = (placed: readonly Place[]): string => placed.slice().reverse().map((place) => (listed(place) ? "1" : "0")).join("");
@@ -142,6 +149,7 @@ describe("given the interiors of the open world's map, a coffee shop's door held
     set.update(coffee.doorX, coffee.doorZ, FRAME, sight, who);
     expect(set.stats().details, "after a short walk out and back").toBe(1);
     set.update(coffee.doorX + INTERIOR_FAR + 5, coffee.doorZ, INTERIOR_LINGER + FRAME, sight, who);
+    set.update(coffee.doorX + INTERIOR_FAR + 5, coffee.doorZ, FRAME, sight, who);
     expect(set.stats().details, "furnished past the far radius").toBe(0);
     expect(set.stats().shells, "envelope while still inside its radius").toBe(1);
     set.update(coffee.doorX + AWAY, coffee.doorZ, FRAME, sight, who);
@@ -214,7 +222,7 @@ describe("given a civilian opening a house's door", () => {
     who.poses.shown[0] = 0;
     frames(SWING_FRAMES + GRACE_FRAMES - 20);
     expect(set.stats().details, "kept inside the grace").toBe(1);
-    frames(40);
+    frames(40 + FADE_FRAMES);
     expect(built(set), "released once shut for the grace").toBe(NOTHING_BUILT);
     expect(digest(house.seats!), "the seats a sitter is placed at").toBe(seats);
     set.dispose();
@@ -236,7 +244,7 @@ describe("given a coffee shop with its door shut", () => {
     view.look(true);
     view.frames(GRACE_FRAMES - 20);
     expect(set.stats().details, "kept inside the grace").toBe(1);
-    view.frames(40);
+    view.frames(40 + FADE_FRAMES);
     expect(built(set), "released once out of view for the grace").toBe(NOTHING_BUILT);
     expect(listed(coffee), "listed once released").toBe(false);
     expect(digest(coffee.seats!), "the seats a sitter is placed at").toBe(seats);
@@ -332,6 +340,7 @@ describe("given the facade of a shop whose rooms are built", () => {
     expect(near.stats().details, "the rooms are built at the door").toBe(1);
     expect(listed(coffee), "listed with its rooms built").toBe(true);
     near.update(coffee.doorX + INTERIOR_FAR + 5, coffee.doorZ, INTERIOR_LINGER + FRAME, blind(), who);
+    near.update(coffee.doorX + INTERIOR_FAR + 5, coffee.doorZ, FRAME, blind(), who);
     expect(near.stats().shells, "the envelope stays within its own far radius").toBe(1);
     expect(listed(coffee), "listed once its rooms are dropped").toBe(false);
     near.dispose();
@@ -347,5 +356,61 @@ describe("given the facade of a shop whose rooms are built", () => {
     expect(listed(coffee), "listed while built").toBe(true);
     set.dispose();
     expect(listed(coffee), "listed after the course is left").toBe(false);
+  });
+});
+
+describe("given a coffee shop whose room is built and then released", () => {
+  /** What the facade's list says of the shop's windows, and whether its furnished room is built, each frame. */
+  function watch(view: ReturnType<typeof scene>, set: InteriorSet, frames: number): { amount: (number | undefined)[]; furnished: boolean[] } {
+    const amount: (number | undefined)[] = [];
+    const furnished: boolean[] = [];
+    for (let frame = 0; frame < frames; frame++) {
+      view.frames(1);
+      amount.push(openAmount(coffee));
+      furnished.push(set.stats().details === 1);
+    }
+    return { amount, furnished };
+  }
+
+  // mutation: sed -i 's/export const OPEN_FADE_SECONDS = 0.5;/export const OPEN_FADE_SECONDS = 1e-6;/' src/game/present/interiors/interior-constants.ts (the windows jump open and shut)
+  it("when the room is built, then its windows open a step a frame over the fade, never back, to wide open", () => {
+    const set = new InteriorSet(lone);
+    const view = scene(set, STREET_EYE, openers());
+    const { amount, furnished } = watch(view, set, 3 * FADE_FRAMES);
+    const built = furnished.indexOf(true);
+    expect(built, "the room is built").toBeGreaterThanOrEqual(0);
+    const opening = amount.slice(built).map((value) => value ?? -1);
+    expect(opening[0], "just built: nearly shut").toBeLessThan(0.2);
+    expect(opening[Math.round(FADE_FRAMES / 2)], "half way through the fade: about half open").toBeGreaterThan(0.3);
+    expect(opening[Math.round(FADE_FRAMES / 2)], "half way through the fade: about half open").toBeLessThan(0.7);
+    for (let at = 1; at < opening.length; at++) expect(opening[at]!, `frame ${at} after the build`).toBeGreaterThanOrEqual(opening[at - 1]!);
+    expect(opening[opening.length - 1], "wide open").toBe(1);
+    set.dispose();
+  });
+
+  // mutation: sed -i '/    if (this.openness\[at\]! > 0) {/,/    }/d' src/game/present/interiors/interior-art.ts (a room is dropped with its windows open)
+  it("when it is released, then its windows shut over the fade with the room still built, and the room is dropped only once they have", () => {
+    const set = new InteriorSet(lone);
+    const view = scene(set, STREET_EYE, openers());
+    view.frames(SETTLE_FRAMES);
+    expect(openAmount(coffee), "open before").toBe(1);
+    view.look(true);
+    const { amount, furnished } = watch(view, set, GRACE_FRAMES + 3 * FADE_FRAMES);
+    const dropped = furnished.lastIndexOf(true) + 1;
+    expect(dropped, "the room is dropped").toBeLessThan(furnished.length);
+    expect(amount[dropped - 1], "the last frame the room stood: its windows shut").toBe(0);
+    const closing = amount.slice(0, dropped).filter((value) => value !== undefined && value > 0 && value < 1);
+    expect(closing.length, "frames spent shutting, the room built").toBeGreaterThan(FADE_FRAMES / 2);
+    expect(listed(coffee), "listed once dropped").toBe(false);
+    set.dispose();
+  });
+
+  // mutation: sed -i 's/export const INTERIOR_DIM = 0.6;/export const INTERIOR_DIM = 1;/' src/game/present/interiors/interior-constants.ts (a lit room washes out to white)
+  it("when its solids are drawn, then they take a share of the light, not all of it", () => {
+    const set = new InteriorSet(lone);
+    const mesh = set.group.getObjectByName("interior-furniture") as THREE.Mesh;
+    expect((mesh.material as THREE.MeshStandardMaterial).color.r, "the furniture's colour factor").toBe(INTERIOR_DIM);
+    expect(INTERIOR_DIM, "less than all of the light").toBeLessThan(1);
+    set.dispose();
   });
 });

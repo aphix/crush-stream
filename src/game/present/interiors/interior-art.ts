@@ -4,10 +4,10 @@ import { SHOP_GROUND_STOREY, type InteriorPlan } from "../../world/openworld/int
 import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, planKey, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { drawnHalf } from "../../world/openworld/openworld-facade-solids.ts";
 import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
-import { FACADE_OPEN_MAX, setOpenFacades } from "../facades.ts";
+import { FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, setOpenFacades } from "../facades.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
-import { DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
+import { DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_DIM, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
 import { DoorSet, type DoorOpeners } from "./interior-doors.ts";
 import { NO_SLOT, PackedMesh } from "./interior-pack.ts";
 
@@ -15,12 +15,13 @@ import { NO_SLOT, PackedMesh } from "./interior-pack.ts";
 const SOLIDS = { none: 0, vestibule: 1, full: 2 } as const;
 type Solids = (typeof SOLIDS)[keyof typeof SOLIDS];
 
-/** One place with an interior: whether it is a business (not a home), its footprint's half sides (drawn depth, width), its doors in the door set, what is built of it now (whether, and the slot each piece of it holds in its packed mesh), and whether its street front is in view this frame (a business within range). */
+/** One place with an interior: whether it is a business (not a home), its footprint's half sides (drawn depth, width), its doors in the door set, what is built of it now (whether, and the slot each piece of it holds in its packed mesh), whether its street front is in view this frame (a business within range), and whether it is to be dropped once its windows have shut. */
 type Entry = {
   place: Place;
   plan: InteriorPlan;
   business: boolean;
   shopfront: boolean;
+  closing: boolean;
   halfDepth: number;
   halfWidth: number;
   firstDoor: number;
@@ -74,7 +75,7 @@ export class InteriorSet {
   readonly group = new THREE.Group();
   private readonly entries: Entry[] = [];
   private readonly doors: DoorSet;
-  private readonly solidMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
+  private readonly solidMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, color: new THREE.Color(INTERIOR_DIM, INTERIOR_DIM, INTERIOR_DIM), roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
   private readonly glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   private readonly glassMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: GLASS_OPACITY, roughness: 0.05, metalness: 0, side: THREE.DoubleSide, depthWrite: false });
   private readonly shells: PackedMesh;
@@ -96,12 +97,14 @@ export class InteriorSet {
   private readonly distance: Float64Array;
   private readonly shellAway: Float64Array;
   private readonly detailAway: Float64Array;
+  /** Per entry, how far its windows are open (0 painted to 1 seen through): up while its rooms are built whole and wanted, down to shut before they are dropped. */
+  private readonly openness: Float64Array;
   /** This frame's seconds: a double handed to a method may be boxed anew at each call, so the methods read it here. */
   private readonly seconds = new Float64Array(1);
 
   constructor(map: OpenWorldMap) {
     this.group.name = "interiors";
-    this.builtAt = new Float32Array(2 * FACADE_OPEN_MAX);
+    this.builtAt = new Float32Array(FACADE_OPEN_SLOT_FLOATS * FACADE_OPEN_MAX);
     const plans = new Map<string, InteriorPlan>();
     const leaves: DoorLeaf[] = [];
     for (const place of map.places) {
@@ -113,12 +116,13 @@ export class InteriorSet {
         plans.set(key, plan);
       }
       const doors = interiorDoors(place, plan);
-      this.entries.push({ place, plan, business: place.interior !== "rowhome", shopfront: false, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shellBuilt: false, detailBuilt: false, shellSlot: NO_SLOT, shellGlassSlot: NO_SLOT, detailSlot: NO_SLOT, glowSlot: NO_SLOT, detailGlassSlot: NO_SLOT, solids: SOLIDS.none });
+      this.entries.push({ place, plan, business: place.interior !== "rowhome", shopfront: false, closing: false, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shellBuilt: false, detailBuilt: false, shellSlot: NO_SLOT, shellGlassSlot: NO_SLOT, detailSlot: NO_SLOT, glowSlot: NO_SLOT, detailGlassSlot: NO_SLOT, solids: SOLIDS.none });
       leaves.push(...doors);
     }
     this.distance = new Float64Array(this.entries.length);
     this.shellAway = new Float64Array(this.entries.length);
     this.detailAway = new Float64Array(this.entries.length);
+    this.openness = new Float64Array(this.entries.length);
     this.doors = new DoorSet(leaves);
     this.group.add(this.doors.group);
     this.shells = this.packed("interior-shells", this.solidMaterial, PACK_START_VERTICES.shell);
@@ -142,8 +146,12 @@ export class InteriorSet {
     for (let at = 0; at < this.entries.length; at++) {
       const entry = this.entries[at]!;
       const view = this.viewOf(entry, at, sight);
+      entry.closing = false;
       if (this.streamShell(entry, at, view)) this.showVestibules(entry, !entry.shellBuilt);
       this.streamDetail(entry, at, view);
+      const open = entry.shellBuilt && entry.detailBuilt && !entry.closing ? 1 : 0;
+      const step = this.seconds[0]! / OPEN_FADE_SECONDS;
+      this.openness[at] = open === 1 ? Math.min(1, this.openness[at]! + step) : Math.max(0, this.openness[at]! - step);
       const solids = this.solidsOf(entry, at, openers.walker);
       if (solids !== entry.solids) {
         entry.solids = solids;
@@ -179,8 +187,9 @@ export class InteriorSet {
     }
     for (let slot = 0; slot < count; slot++) {
       const { place } = this.entries[this.listedAt[slot]!]!;
-      this.builtAt[2 * slot] = place.x;
-      this.builtAt[2 * slot + 1] = place.z;
+      this.builtAt[FACADE_OPEN_SLOT_FLOATS * slot] = place.x;
+      this.builtAt[FACADE_OPEN_SLOT_FLOATS * slot + 1] = place.z;
+      this.builtAt[FACADE_OPEN_SLOT_FLOATS * slot + 2] = this.openness[this.listedAt[slot]!]!;
     }
     setOpenFacades(this.builtAt, count);
   }
@@ -238,6 +247,10 @@ export class InteriorSet {
     }
     this.shellAway[at] = distance <= SHELL_FAR ? 0 : this.shellAway[at]! + this.seconds[0]!;
     if (view !== VIEW.hidden && this.shellAway[at]! < INTERIOR_LINGER) return false;
+    if (this.openness[at]! > 0) {
+      entry.closing = true;
+      return false;
+    }
     this.shells.remove(entry.shellSlot);
     this.glass.remove(entry.shellGlassSlot);
     entry.shellSlot = NO_SLOT;
@@ -263,6 +276,10 @@ export class InteriorSet {
     }
     this.detailAway[at] = distance <= INTERIOR_FAR ? 0 : this.detailAway[at]! + this.seconds[0]!;
     if (view !== VIEW.hidden && this.detailAway[at]! < INTERIOR_LINGER) return false;
+    if (this.openness[at]! > 0) {
+      entry.closing = true;
+      return false;
+    }
     this.details.remove(entry.detailSlot);
     this.glows.remove(entry.glowSlot);
     this.glass.remove(entry.detailGlassSlot);

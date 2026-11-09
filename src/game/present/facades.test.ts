@@ -15,7 +15,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
-import { FACADE, FACADE_GLOW, FACADE_LAYERS, FACADE_OPEN_AT, FACADE_OPEN_MAX, setOpenFacades, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, SLAB_STYLE } from "./facades.ts";
+import { FACADE, FACADE_GLOW, FACADE_LAYERS, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, facadeOpenLoop, setOpenFacades, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, SLAB_STYLE } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { disposePrefabMaterials, makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { setReliefDevice, setReliefTier } from "./surface-relief.ts";
@@ -376,21 +376,36 @@ describe("given a style whose layer data names no relief strips", () => {
       const open = FACADE_LAYERS[style].open === true;
       expect(shader.uniforms.facadeOpenAt, `${style} list of built buildings`).toBe(open ? FACADE_OPEN_AT : undefined);
       expect(shader.vertexShader.includes("vFacadeOpen"), `${style} vertex`).toBe(open);
-      expect(shader.fragmentShader.includes("vFacadeOpen > 0.5"), `${style} fragment`).toBe(open);
+      expect(shader.vertexShader.includes("facadeOpenAt[i].z"), `${style} vertex weighs each listed building by how far open it is`).toBe(open);
+      expect(shader.fragmentShader.includes("facadeCuts(vFacadeOpen)"), `${style} fragment`).toBe(open);
+      expect(shader.fragmentShader.includes("facadeGlowMap, vec3(vMapUv, vFacadeRegion.x)).r > 0.5"), `${style} cuts the glass of a window, not its frame`).toBe(open);
     }
   });
 
-  // mutation: sed -i 's/    slots\[2 \* slot\] = slot < used ? at\[2 \* slot\]! : OPEN_AT_NOWHERE;/    slots[2 * slot] = at[2 * slot]!;/' src/game/present/facades.ts
-  it("when the built buildings are listed, then the list holds them, at most its capacity of them, and the slots left over are far away", () => {
-    const positions = Float32Array.from({ length: 2 * (FACADE_OPEN_MAX + 3) }, (_, at) => at + 1);
-    setOpenFacades(positions, 2);
+  // mutation: sed -i 's/    slots\[FACADE_OPEN_SLOT_FLOATS \* slot\] = slot < used ? at\[FACADE_OPEN_SLOT_FLOATS \* slot\]! : OPEN_AT_NOWHERE;/    slots[FACADE_OPEN_SLOT_FLOATS * slot] = at[FACADE_OPEN_SLOT_FLOATS * slot]!;/' src/game/present/facades.ts
+  it("when the built buildings are listed, then the list holds them with how far open each is, at most its capacity of them, and the slots left over are far away and shut", () => {
+    const stride = FACADE_OPEN_SLOT_FLOATS;
     const slots = FACADE_OPEN_AT.value;
-    expect([slots[0], slots[1], slots[2], slots[3]], "the first two").toEqual([1, 2, 3, 4]);
-    for (let slot = 2; slot < FACADE_OPEN_MAX; slot++) expect(Math.abs(slots[2 * slot]!), `unused slot ${slot}`).toBeGreaterThan(1e5);
+    const positions = Float32Array.from({ length: stride * (FACADE_OPEN_MAX + 3) }, (_, at) => at + 1);
+    setOpenFacades(positions, 2);
+    for (let at = 0; at < 2 * stride; at++) expect(slots[at], `the first two, float ${at}`).toBe(at + 1);
+    for (let slot = 2; slot < FACADE_OPEN_MAX; slot++) {
+      expect(Math.abs(slots[stride * slot]!), `unused slot ${slot}`).toBeGreaterThan(1e5);
+      expect(slots[stride * slot + 2], `unused slot ${slot} is shut`).toBe(0);
+    }
     setOpenFacades(positions, FACADE_OPEN_MAX + 3);
-    expect(slots[2 * (FACADE_OPEN_MAX - 1)], "the last slot").toBe(2 * (FACADE_OPEN_MAX - 1) + 1);
+    expect(slots[stride * (FACADE_OPEN_MAX - 1)], "the last slot").toBe(stride * (FACADE_OPEN_MAX - 1) + 1);
+    expect(slots[stride * (FACADE_OPEN_MAX - 1) + 2], "the last slot's openness").toBe(stride * (FACADE_OPEN_MAX - 1) + 3);
     setOpenFacades(positions, 0);
     expect(Math.abs(slots[0]!), "emptied").toBeGreaterThan(1e5);
+    expect(slots[2], "emptied: shut").toBe(0);
+  });
+
+  // mutation: sed -i 's/ \* facadeOpenAt\[i\].z);/);/' src/game/present/facades.ts (a listed building is wholly open the moment it is listed)
+  it("when a building's openness is asked of the list, then the loop answers with it: a half open building is half open", () => {
+    const loop = facadeOpenLoop("amount", "where");
+    expect(loop, "the loop weighs the match by the openness").toContain("* facadeOpenAt[i].z");
+    expect(loop, "the loop matches on the position").toContain("facadeOpenAt[i].xy");
   });
 
   it("when it is compiled, then its program is the base facade program: no relief uniform, no parallax, the base cache key", () => {
