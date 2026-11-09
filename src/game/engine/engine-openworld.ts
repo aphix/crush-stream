@@ -15,6 +15,7 @@ import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { fillCommuterFeed } from "../ai/civilians/society-commuters.ts";
+import { makeDriverDoors, groundUnderCars } from "./engine-openworld-doors.ts";
 import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildParkingSpots, spotAt, type ParkingSpots } from "../world/openworld/openworld-parking.ts";
@@ -129,7 +130,7 @@ export class OpenWorldDirector {
   private interiors: InteriorArt | null = null;
   private unhook: (() => void) | null = null;
   private traffic: OpenWorldTraffic | null = null;
-  /** Where residents stand to get into and out of their cars, and the cars' doors swung with them. */
+  /** The cars' doors, swung with the residents getting into and out of them (where they stand is `crowd.driverDoors`). */
   private doors: OpenWorldCarDoors | null = null;
   /** The kerb spaces, known on every peer: a car standing in one has nobody in it (`carIsEmpty`). */
   private kerb: ParkingSpots | null = null;
@@ -346,9 +347,7 @@ export class OpenWorldDirector {
     const crowd = this.crowd;
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
     this.startTraffic(map, client);
-    const doors = new OpenWorldCarDoors(crowd.state.capacity, { traffic: () => this.traffic, kerb: () => this.kerb, state: () => crowd.state, places: map.places });
-    this.doors = doors;
-    crowd.driverDoors = (resident, code, out) => doors.spot(resident, code, out);
+    this.doors = new OpenWorldCarDoors(crowd.state.capacity, crowd.state, () => this.traffic);
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     if (client) crowd.hear(this.heardEvents);
   }
@@ -359,6 +358,7 @@ export class OpenWorldDirector {
     if (host === undefined) return;
     this.lights = host.makeLights();
     this.kerb = buildParkingSpots(buildRoadNetwork(openWorldGeometry(LAYOUT)));
+    this.crowd!.driverDoors = makeDriverDoors(map.places, this.crowd!.state, this.kerb, groundUnderCars);
     if (client) return;
     const phone = this.ports.tier() === POPULATION_TIER.phone;
     const capacity = this.crowd!.state.capacity;

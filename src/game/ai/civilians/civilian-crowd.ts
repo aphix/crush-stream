@@ -7,6 +7,7 @@ import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
+import type { DoorSpot } from "./civilian-car-door.ts";
 import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, GENDER, MIX_INDEX, MIX_RESIDENT, MIX_SALT, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
 import { carGap } from "./civilian-contact.ts";
 import {
@@ -43,10 +44,8 @@ import { CrowdWalkers } from "./crowd-walkers.ts";
 import { createCrowdPoses, type CrowdPoses } from "./crowd-poses.ts";
 
 /** Where the driver's door of resident `resident`'s car stands (the spot and facing of a person at it, her feet's height there and her seat top's), filled for activity `code` (`ACTIVITY.carIn` or `carOut`); false when she has no car to be at. */
-type DriverDoors = (resident: number, code: number, out: DriverDoor) => boolean;
+export type DriverDoors = (resident: number, code: number, out: DoorSpot) => boolean;
 
-/** The door spot a `DriverDoors` fills: world x and z, the way she faces (yaw), the ground under her feet and her seat top (world y). */
-type DriverDoor = { x: number; z: number; yaw: number; feetY: number; surfaceY: number };
 
 /** Changes the crowd's poses after its own placing: the poses, the crowd time, whether this crowd is the host's. */
 type CrowdOverlay = (poses: CrowdPoses, crowdSeconds: number, authority: boolean) => void;
@@ -107,7 +106,7 @@ export class CivilianCrowd {
   driverDoors: DriverDoors | null = null;
   /** What the society says each resident is doing: its own reader, set by a test that needs one the brain does not give yet. */
   activityReader: typeof readActivity = readActivity;
-  private readonly door: DriverDoor = { x: 0, z: 0, yaw: 0, feetY: 0, surfaceY: 0 };
+  private readonly door: DoorSpot = { x: 0, z: 0, yaw: 0, feetY: 0, surfaceY: 0 };
   readonly walkers = new CrowdWalkers();
   readonly separation: CrowdSeparation;
   private readonly remote: CivilianRemote;
