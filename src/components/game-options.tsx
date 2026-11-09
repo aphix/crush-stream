@@ -25,7 +25,7 @@ type GameOptionsProps = {
 /**
  * The game a room runs and what it needs, the same pick for every game: the hosting panel sets it before the room opens and the
  * lobby's start gate lets the host change it while the room waits. A race and a Survival run take a course, a campaign a playlist
- * (tap a course to add it at the end, tap again to drop it: the order of the taps is the order of play), a derby nothing.
+ * (tap a course to add it at the end, tap again to drop it: the order of the taps is the order of play), a derby and the open world nothing (the city is its one course).
  */
 export function GameOptions({ kind, onKind, course, onCourse, playlist, onPlaylist, menu }: GameOptionsProps) {
   const courses = kind === "survival" ? menu.survival : menu.courses;

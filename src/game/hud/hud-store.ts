@@ -74,6 +74,9 @@ export type SprayTool = { on: boolean; radius: number; colour: number; mirror: b
 /** The trip out of the car as the HUD reads it: `out` while he is on foot, the line under the view (what the control does now, or why it refused), and `refusal`, that why alone while it shows. */
 export type FootHud = { out: boolean; prompt: string | null; refusal: string | null };
 
+/** The look-at panel's text (`CrashHudState.lookAt`): what the eye is on, as a title (a civilian's name and job, a building's name) and its short lines (needs, mood, recent comings and goings). */
+export type LookAtHud = { title: string; lines: string[] };
+
 export type CrashHudState = {
   playing: boolean;
   looping: boolean;
@@ -106,6 +109,8 @@ export type CrashHudState = {
   garage: GarageHud | null;
   /** The showcase (by link only) is the scene: the scene buttons name it as the scene in play, so Fleet is a pick away from it. */
   showcase: boolean;
+  /** The open world is the scene: solo, or a room's lobby on its course (host and guests alike). The scene buttons name it as the scene in play. */
+  openworld: boolean;
   /** The scene a pick is fading to (the switch comes at the transition's black), else null; the scene buttons light it. */
   pendingScene: SceneId | null;
   /** This browser is in a netplay room (hosting or joined): the single-player scenes are not offered. */
@@ -199,6 +204,8 @@ export type CrashHudState = {
   seat: "global" | "follow" | "drive";
   /** The trip out of the car (offline free play only), null where it is not offered: `out` is he is on foot, `prompt` what the control does now or why it just refused. */
   foot: FootHud | null;
+  /** What the eye is on in the open world, null while it rests on nothing and in every other scene: the look-at panel. */
+  lookAt: LookAtHud | null;
   boost: number;
   /** The seat's slide while driving, `NO_DRIFT` otherwise: the free-drive boost bar's charge cue (a race and a derby read `RaceView.drift`). */
   drift: DriftView;
@@ -285,6 +292,7 @@ export const INITIAL_HUD: CrashHudState = {
   lab: null,
   garage: null,
   showcase: false,
+  openworld: false,
   pendingScene: null,
   inRoom: false,
   autoRotate: true,
@@ -348,6 +356,7 @@ export const INITIAL_HUD: CrashHudState = {
   race: null,
   seat: "global",
   foot: null,
+  lookAt: null,
   boost: 1,
   drift: NO_DRIFT,
   view: "third",

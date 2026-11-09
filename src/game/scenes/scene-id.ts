@@ -1,7 +1,7 @@
 /** The scene picker's scenes (`CrashEngine.setScene`), and the values of the share URL's `scene=`. `showcase` is by link only: no scene button, key or menu opens it. */
-export const SCENE_IDS = ["fleet", "press", "pistons", "doors", "corkscrew", "stack", "derby", "race", "range", "survival", "lab", "garage", "showcase"] as const satisfies readonly SceneId[];
+export const SCENE_IDS = ["fleet", "press", "pistons", "doors", "corkscrew", "stack", "derby", "race", "range", "survival", "lab", "garage", "showcase", "openworld"] as const satisfies readonly SceneId[];
 /** The same ids as a union a typo cannot slip past (`SCENE` below fails to compile if the two lists drift apart). */
-export type SceneId = "fleet" | "press" | "pistons" | "doors" | "corkscrew" | "stack" | "derby" | "race" | "range" | "survival" | "lab" | "garage" | "showcase";
+export type SceneId = "fleet" | "press" | "pistons" | "doors" | "corkscrew" | "stack" | "derby" | "race" | "range" | "survival" | "lab" | "garage" | "showcase" | "openworld";
 
 /** Each scene's id by name, for code that must say one without typing the string again (the pickers, the Home sheet). */
 export const SCENE = {
@@ -18,19 +18,20 @@ export const SCENE = {
   lab: SCENE_IDS[10],
   garage: SCENE_IDS[11],
   showcase: SCENE_IDS[12],
+  openworld: SCENE_IDS[13],
 } as const satisfies Record<SceneId, SceneId>;
 
 /**
  * Scenes whose spawns roll random picks, drawn from the run's seed: the fleet's spots, speeds and balls, the
- * corkscrew car's speed, the derby's start bearing. The rest are fixed set-ups (the race rolls its own, unseeded).
+ * corkscrew car's speed, the derby's start bearing, the open world's crowd (every civilian's life). The rest are fixed set-ups (the race rolls its own, unseeded).
  */
-export const SEEDED_SCENES: Readonly<Partial<Record<SceneId, true>>> = { fleet: true, corkscrew: true, derby: true };
+export const SEEDED_SCENES: Readonly<Partial<Record<SceneId, true>>> = { fleet: true, corkscrew: true, derby: true, openworld: true };
 
 /** Single-player scenes: a netplay room (hosted or joined) cannot be in them, and a room's link never opens one. Survival is not one: a hosted room runs it as a team (docs/SURVIVAL.md). */
 export const SOLO_SCENES: Readonly<Partial<Record<SceneId, true>>> = { lab: true, garage: true, showcase: true };
 
-/** Scenes that set their own car count (the race and Survival by their setup): the sandbox's field (`sandboxCars`) is not theirs to change, and comes back after them. */
-export const OWN_FIELD_SCENES: Readonly<Partial<Record<SceneId, true>>> = { race: true, survival: true, range: true, stack: true, lab: true, garage: true, showcase: true };
+/** Scenes that set their own car count (the race, Survival and the open world by their setup): the sandbox's field (`sandboxCars`) is not theirs to change, and comes back after them. */
+export const OWN_FIELD_SCENES: Readonly<Partial<Record<SceneId, true>>> = { race: true, survival: true, range: true, stack: true, lab: true, garage: true, showcase: true, openworld: true };
 
 /**
  * The fleet props (jersey barrier, ramp balls, jump ramps) a scene sets for itself. The user's own choice (`showBarrier`
@@ -51,6 +52,7 @@ const SCENE_PROPS: Readonly<Partial<Record<SceneId, FleetProps>>> = {
   lab: NO_PROPS,
   garage: NO_PROPS,
   showcase: NO_PROPS,
+  openworld: NO_PROPS,
   // The range's wall is the run's target.
   range: { barrier: true, balls: false, ramps: false },
 };

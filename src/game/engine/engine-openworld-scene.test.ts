@@ -1,0 +1,117 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import "../kernel/rapier-node.test-util.ts";
+import { homeModes, pickScene, sceneInPlay, scenesFor } from "../../components/scene-picks.ts";
+import { decodeShare, encodeShare } from "../hud/share-url.ts";
+import { HudStore, INITIAL_HUD, type LookAtHud } from "../hud/hud-store.ts";
+import { OWN_FIELD_SCENES, SEEDED_SCENES, SOLO_SCENES } from "../scenes/scene-id.ts";
+import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
+import { TRACKS } from "../world/tracks/index.ts";
+import { parseTrack } from "../world/track-schema.ts";
+import { setGround } from "../world/ground.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
+
+/** The seed a link pins (hex): the crowd of this run. */
+const LINK_SEED = 0xbeef;
+/** Seconds the car holds the throttle: long enough to leave its spawn, short of any wall. */
+const DRIVE_S = 2;
+/** The car must have left its spawn by this much (m). */
+const MOVED_M = 3;
+
+describe("given the scene picker", () => {
+  it("when the dock and the Home sheet list their scenes, then Open World is on both, in a room too", () => {
+    expect(scenesFor(false).some((scene) => scene.id === "openworld" && scene.label === "Open World"), "the dock").toBe(true);
+    expect(homeModes(false).some((scene) => scene.id === "openworld"), "the Home sheet").toBe(true);
+    expect(scenesFor(true).some((scene) => scene.id === "openworld"), "a room keeps it").toBe(true);
+  });
+
+  it("when the scene's rules are read, then it has its own field, a seeded crowd and is not single-player", () => {
+    expect(OWN_FIELD_SCENES.openworld, "its own field").toBe(true);
+    expect(SEEDED_SCENES.openworld, "the crowd's seed rides the link").toBe(true);
+    expect(SOLO_SCENES.openworld, "a room may be in it").toBeUndefined();
+  });
+
+  it("when the HUD starts, then the open world is not the scene in play", () => {
+    expect(INITIAL_HUD.openworld).toBe(false);
+    expect(sceneInPlay(INITIAL_HUD)).toBe("fleet");
+  });
+});
+
+// One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
+let engine: CrashEngine;
+let hud: HudStore;
+const car = () => engine["live"]()[0]!;
+
+beforeAll(async () => {
+  stubBrowser();
+  globalThis.location.hash = `#scene=openworld&seed=${LINK_SEED.toString(16)}`;
+  hud = new HudStore();
+  engine = await bootEngine({ hud });
+  runSeconds(engine, 0.5);
+});
+afterAll(() => {
+  engine.dispose();
+  setGround(null);
+});
+
+describe("given the real engine booted on #scene=openworld with a seed", () => {
+  it("when the page opens, then it is the free roam on the city's course, not the first menu course, with no session and no hunters", () => {
+    expect(OPENWORLD_ID, "control: the city is not the menu's first course").not.toBe(parseTrack(TRACKS[0]).id);
+    expect(engine["sceneId"], "the scene").toBe("openworld");
+    expect(engine["race"].active, "race mode carries it").toBe(true);
+    expect(engine["race"].free, "the lobby's free roam").toBe(true);
+    expect(engine["race"].courseId, "the course").toBe(OPENWORLD_ID);
+    expect(engine["race"].phase, "no session").toBe(null);
+    expect(engine["race"]["police"], "no hunters").toBe(null);
+  });
+
+  it("when the page has opened, then the HUD and the scene buttons name the open world", () => {
+    expect(hud.get().openworld, "the HUD flag").toBe(true);
+    expect(sceneInPlay(hud.get()), "the scene in play").toBe("openworld");
+  });
+
+  it("when the throttle is held, then the player's car, car 0 under the driver's seat, leaves its spawn", () => {
+    expect(engine["seat"].mode, "the seat drives").toBe("drive");
+    expect(engine["seat"].carIndex, "car 0").toBe(0);
+    const spawn = car().group.position.clone();
+    engine["keys"].add("KeyW");
+    runSeconds(engine, DRIVE_S);
+    engine["keys"].delete("KeyW");
+    expect(car().group.position.distanceTo(spawn), "metres driven").toBeGreaterThan(MOVED_M);
+  });
+
+  it("when the share state is read, then it names the scene and the seed, and the link reads back to both", () => {
+    const state = engine["shareState"]();
+    expect(state.scene, "scene").toBe("openworld");
+    expect(state.seed, "seed").toBe(LINK_SEED);
+    const link = decodeShare(encodeShare(state));
+    expect(link.scene, "scene after the link").toBe("openworld");
+    expect(link.seed, "seed after the link").toBe(LINK_SEED);
+  });
+});
+
+describe("given the open world in play on the real engine", () => {
+  it("when the eye rests on something, then the HUD carries the panel's text, and nothing again when it rests on nothing", () => {
+    expect(hud.get().lookAt, "nothing is looked at before the crowd exists").toBe(null);
+    const seen: LookAtHud = { title: "Rosa Kim, 34", lines: ["cook at Sal's Diner", "left home"] };
+    engine["lookAtText"] = () => seen;
+    runSeconds(engine, 0.5);
+    expect(hud.get().lookAt, "the panel's text").toEqual(seen);
+    engine["lookAtText"] = () => null;
+    runSeconds(engine, 0.5);
+    expect(hud.get().lookAt, "back to nothing").toBe(null);
+  });
+
+  it("when no crowd exists, then netplay has no crowd link to send or hear through", () => {
+    expect(engine.net["game"].crowdLink()).toBe(null);
+  });
+
+  it("when the Fleet button is pressed, then race mode and the lobby are left, the HUD flag drops and the sandbox's field is back", () => {
+    pickScene({ current: engine }, sceneInPlay(hud.get()), "fleet");
+    expect(engine["sceneId"], "the scene").toBe("fleet");
+    expect(engine["race"].active, "race mode").toBe(false);
+    expect(engine["race"].free, "the lobby").toBe(false);
+    expect(hud.get().openworld, "the HUD flag").toBe(false);
+    expect(engine["carCount"], "the sandbox's cars").toBe(engine["sandboxCars"]);
+  });
+});

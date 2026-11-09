@@ -30,6 +30,7 @@ import { playHostReel } from "./reel-codec.ts";
 import { ReelParts } from "./reel-wire.ts";
 import { carLayout } from "./car-pose.ts";
 import { readRoster } from "./roster-codec.ts";
+import { readCrowd } from "./crowd-codec.ts";
 import { Voice } from "./voice.ts";
 import { HELLO_EVERY, HOST_LOST_MS, HOST_WAIT_MS, INTERP_DELAY, MAX_DEAD_ROOMS, RACE_GONE_MS, REFUSED, RING, SEND_HZ } from "./net-constants.ts";
 
@@ -161,6 +162,10 @@ export abstract class NetPlayClient {
     } else if (type === MSG.roster) {
       const entries = readRoster(data);
       if (entries) this.voice.setRoster(entries);
+    } else if (type === MSG.crowd) {
+      const heard = readCrowd(data);
+      const link = this.game.crowdLink();
+      if (heard && link) link.hear(heard.seed, heard.hostTime, heard.crowdTime, heard.events);
     }
   }
 

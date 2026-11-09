@@ -21,9 +21,9 @@ import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
  * highlight reel (`reel-codec.ts`; the message itself is `MSG.reel`, but on the wire it travels as `reelPart` frames,
  * `reel-wire.ts`), sent once, reliably; `eject`: a driver was thrown out (`writeEject`), reliably; `look`: a player's car and
  * driver look with their spray paint (`look-codec.ts`), once per player, reliably; `roster`: the host's peer-to-car table for
- * proximity voice (`roster-codec.ts`), to every guest, reliably, when a seat changes and with every keyframe.
+ * proximity voice (`roster-codec.ts`), to every guest, reliably, when a seat changes and with every keyframe; `crowd`: the open world's crowd clock and event log (`crowd-codec.ts`), to every guest, reliably, with every keyframe and when an event is added.
  */
-export const MSG = { snapshot: 1, input: 2, hello: 3, assign: 4, race: 5, derby: 6, hold: 7, reel: 8, eject: 9, reelPart: 10, look: 11, roster: 12 } as const;
+export const MSG = { snapshot: 1, input: 2, hello: 3, assign: 4, race: 5, derby: 6, hold: 7, reel: 8, eject: 9, reelPart: 10, look: 11, roster: 12, crowd: 13 } as const;
 
 /**
  * Wire format version, carried by hello and assign: peers on different builds (an auto-deploy mid-session)
@@ -72,8 +72,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 40: the hood slot's two floats carry its swing and latch, as the trunk slot's do, and a clip's keyframes carry the door-swing sample's vertical velocity and drive (two more part-state doubles), so peers on 39 would misread a host's hood and clips.
 41: a clip's keyframe flight block no longer carries the side-hit fuel cut's seconds (`stalledS`, one double fewer), so peers on 40 would misread a host's clip.
 42: a wreck section ends with the car's paint scratch strokes (a count byte, then 6 bytes a stroke), and a snapshot car's flags byte bit 7 is `marked` (a load crush or scratched paint), so a car with only scratches rides the wreck section; peers on 41 would misread the wreck section.
+43: `MSG.crowd` (13) carries the open world's seed, clock and event log, and the lobby's game kinds gain "openworld" (a lobby that stays open on the city's course), so peers on 42 would drop the crowd message and refuse a start gate of that kind.
 */
-export const NET_VERSION = 42;
+export const NET_VERSION = 43;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
@@ -691,8 +692,8 @@ export function readDerby(r: Reader): DerbyNetState {
   return { round, active: (flags & 1) !== 0, time, hold, radius, winnerId, winnerName, decided, lobby, seats, board };
 }
 
-/** The game the lobby's Go switch starts. */
-export const GAME_KINDS = ["race", "campaign", "survival", "derby"] as const;
+/** The game the lobby's Go switch starts; the open world has none to start: its lobby on the city's course is the game. */
+export const GAME_KINDS = ["race", "campaign", "survival", "derby", "openworld"] as const;
 export type GameKind = (typeof GAME_KINDS)[number];
 
 /** The longest campaign playlist a host may send (the course menu has 10). */

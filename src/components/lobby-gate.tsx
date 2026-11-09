@@ -16,7 +16,7 @@ const keepFocus = (e: { preventDefault: () => void }): void => e.preventDefault(
  * The Havana lobby's start gate (docs/MULTIPLAYER.md "Lobby"). Everyone reads how many more players the room waits for and what Go starts;
  * the host also sets the players needed (1 to the room size), the game's course or campaign playlist with the same `GameOptions` the
  * hosting panel has (the game itself only in a private room: a public room is named after its game), resets the scene, and presses Go,
- * which works once enough players are in.
+ * which works once enough players are in. The open world has neither a player count nor a Go: its lobby on the city's course is the game.
  */
 export function LobbyGate({ engine, status }: { engine: RefObject<CrashEngine | null>; status: NetStatus & { gate: NonNullable<NetStatus["gate"]> } }) {
   const { gate } = status;
@@ -26,7 +26,8 @@ export function LobbyGate({ engine, status }: { engine: RefObject<CrashEngine | 
   const menu = net?.courseMenu();
   /** Steps the wanted players from what the host holds now, not from the panel's last redraw. */
   const step = (by: number): void => net?.setMinPlayers((net.status().gate?.min ?? gate.min) + by);
-  const waiting = need > 0 ? `Waiting for ${need} more player${need === 1 ? "" : "s"}…` : host ? "Ready: press Go to start." : "Waiting for the host to press Go…";
+  const world = gate.kind === "openworld";
+  const waiting = world ? "Open world: everyone here shares the city." : need > 0 ? `Waiting for ${need} more player${need === 1 ? "" : "s"}…` : host ? "Ready: press Go to start." : "Waiting for the host to press Go…";
   const list = gate.kind === "survival" ? menu?.survival : menu?.courses;
   const nameOf = (id: string): string => list?.find((c) => c.id === id)?.name ?? id;
   const detail =
@@ -40,15 +41,16 @@ export function LobbyGate({ engine, status }: { engine: RefObject<CrashEngine | 
     <div className="space-y-1.5" data-testid="lobby-gate">
       <p className="font-display" role="status">
         {waiting}
-        {need <= 0 && status.lobby != null ? ` Starts in ${status.lobby} s.` : ""}
+        {!world && need <= 0 && status.lobby != null ? ` Starts in ${status.lobby} s.` : ""}
       </p>
       <p className="text-subtle">
         {gate.players} here · {GAME_LABEL[gate.kind]}
-        {detail} starts
+        {detail}
+        {world ? "" : " starts"}
       </p>
       {host && net && menu ? (
         <>
-          <PlayersStepper value={gate.min} onStep={step} />
+          {world ? null : <PlayersStepper value={gate.min} onStep={step} />}
           <GameOptions
             kind={gate.kind}
             onKind={status.public ? null : (kind) => net.setLobbyKind(kind)}
@@ -59,10 +61,12 @@ export function LobbyGate({ engine, status }: { engine: RefObject<CrashEngine | 
             menu={menu}
           />
           <div className="flex gap-1">
-            <Button className={cn(TAP, "flex-1 gap-1.5 px-3 text-xs pointer-coarse:text-sm")} disabled={!canGo} onMouseDown={keepFocus} onClick={() => net.go()}>
-              <Play />
-              Go
-            </Button>
+            {world ? null : (
+              <Button className={cn(TAP, "flex-1 gap-1.5 px-3 text-xs pointer-coarse:text-sm")} disabled={!canGo} onMouseDown={keepFocus} onClick={() => net.go()}>
+                <Play />
+                Go
+              </Button>
+            )}
             <Button className={cn(TAP, "flex-1 gap-1.5 px-3 text-xs pointer-coarse:text-sm")} variant="secondary" onMouseDown={keepFocus} onClick={() => net.resetScene()}>
               <RotateCcw />
               Reset scene

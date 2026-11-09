@@ -38,6 +38,8 @@ export const SLOT_GRACE_MS = 10_000;
 export const INPUT_STALE_MS = 500;
 /** Client: no word from its host this long (ms), and the host isn't merely paused, means the host is gone: ask any host for a car again. */
 export const HOST_LOST_MS = 3000;
+/** Most events a crowd message carries (the newest): at 11 bytes each it stays near 5.6 KB. */
+export const CROWD_EVENT_LOG_MAX = 512;
 /** A hidden host's heartbeat (ms): its tab draws no frames, so this is all its guests hear. */
 export const HOLD_EVERY_MS = 1000;
 /** `MSG.assign` car: the host refuses this peer (another build). */

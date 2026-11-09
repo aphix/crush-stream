@@ -86,6 +86,7 @@ export abstract class EngineHud extends EngineWarm {
       lab: this.showLab ? { preset: this.lab.preset ?? LAB_PRESET.cards, shot: this.labShotHud() } : null,
       garage: this.showGarage && this.garage ? this.garageHud(this.garage) : null,
       showcase: this.showShowcase,
+      openworld: this.showOpenWorld,
       pendingScene: this.sceneFade.pending,
       inRoom: this.net.role !== "off",
       doors: {
@@ -174,6 +175,7 @@ export abstract class EngineHud extends EngineWarm {
       race: this.race.active ? { ...this.race.hud(), ...this.reelHud() } : null,
       seat: this.seat.mode,
       foot: this.onFoot?.hud() ?? null,
+      lookAt: this.lookAtText(),
       boost: this.seat.boost,
       drift: seatDrift,
       view: this.seat.view,
