@@ -187,6 +187,6 @@ export function layoutStore(d: Draft): void {
   for (const across of [-3.5, -2.7, -1.9, -1.1]) d.put("fridge", 0, 14.3, across, toStreet);
   d.put("counter", 0, 12.4, 3.2, toStreet, { width: 3.6 });
   d.put("backShelf", 0, 14.4, 3.2, toStreet, { width: 3.6 });
-  d.put("neon", 0, 0.45, -1.7, toStreet, { lift: 1.7 });
+  d.put("neon", 0, 0.45, -3.9, toStreet, { lift: 1.7 });
   for (const deep of [3, 7, 11]) d.lamp(0, deep, 0.5);
 }

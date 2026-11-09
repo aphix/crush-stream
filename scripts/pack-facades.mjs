@@ -91,8 +91,8 @@ const STYLES = {
   federal: { crop: [300, 0, 246, 1264], bays: 4, cornice: [0, 255], floor: [455, 690], ground: [938, 1264], quoins: false, rects: [[90, 525, 160, 655], [65, 1020, 180, 1250]] },
   warehouse: { crop: [280, 0, 287, 1264], bays: 4, cornice: [0, 352], floor: [352, 642], ground: [940, 1264], quoins: false, rects: [[82, 95, 207, 290], [82, 385, 207, 575]] },
   farm: { crop: [282, 0, 284, 1264], bays: 4, cornice: [0, 45], floor: [655, 905], ground: [905, 1264], quoins: false, rects: [[24, 685, 78, 750], [115, 685, 169, 750], [206, 685, 260, 750]] },
-  rowbrick: { crop: [85, 0, 677, 1264], bays: 1, cornice: [72, 135], floor: [135, 477], ground: [843, 1228], quoins: false, rects: [[107, 172, 223, 388], [456, 172, 572, 388], [160, 878, 323, 1108], [507, 880, 633, 930]], metres: HOME, open: { kind: "rowhome", floorY: ROWHOME_FLOOR_Y, ground: 3.6 } },
-  rowpainted: { crop: [0, 0, 848, 1264], bays: 1, cornice: [45, 125], floor: [132, 453], ground: [818, 1250], quoins: false, rects: [[162, 165, 305, 365], [545, 165, 688, 365], [212, 868, 402, 1125], [650, 870, 780, 925]], metres: HOME, open: { kind: "rowhome", floorY: ROWHOME_FLOOR_Y, ground: 3.6 } },
+  rowbrick: { mirror: true, crop: [85, 0, 677, 1264], bays: 1, cornice: [72, 135], floor: [135, 477], ground: [843, 1228], quoins: false, rects: [[107, 172, 223, 388], [456, 172, 572, 388], [160, 878, 323, 1108], [507, 880, 633, 930]], metres: HOME, open: { kind: "rowhome", floorY: ROWHOME_FLOOR_Y, ground: 3.6 } },
+  rowpainted: { mirror: true, crop: [0, 0, 848, 1264], bays: 1, cornice: [45, 125], floor: [132, 453], ground: [818, 1250], quoins: false, rects: [[162, 165, 305, 365], [545, 165, 688, 365], [212, 868, 402, 1125], [650, 870, 780, 925]], metres: HOME, open: { kind: "rowhome", floorY: ROWHOME_FLOOR_Y, ground: 3.6 } },
   coffee: { crop: [68, 0, 712, 1264], bays: 1, cornice: [68, 138], floor: [138, 478], ground: [757, 1225], quoins: false, rects: [[137, 175, 272, 390], [442, 175, 574, 390], [54, 960, 240, 1130], [474, 960, 659, 1130], [310, 985, 402, 1195]], metres: SHOP, open: { kind: "coffee", floorY: SHOP_FLOOR_Y, ground: 4 } },
   bar: { crop: [93, 0, 540, 848], bays: 2, cornice: [38, 115], floor: [115, 320], ground: [510, 840], quoins: false, rects: [[112, 130, 209, 262], [320, 130, 425, 262], [50, 642, 139, 730], [394, 642, 480, 730]], neon: { rects: [[67, 660, 122, 715], [417, 660, 452, 708]], bright: 170 }, metres: SHOP, open: { kind: "bar", floorY: SHOP_FLOOR_Y, ground: 4 } },
   office: { crop: [10, 0, 622, 848], bays: 2, cornice: [85, 125], floor: [125, 345], ground: [565, 848], quoins: false, glass: (r, g, b) => b - r > 30, metres: SHOP, open: { kind: "office", floorY: SHOP_FLOOR_Y, ground: 4 } },
@@ -113,6 +113,11 @@ async function bayPicture(name, spec) {
   const wide = createCanvas(LAYER + 2 * margin, h);
   const ctx = wide.getContext("2d");
   ctx.imageSmoothingQuality = "high";
+  // A building face's u runs to the viewer's right, which is the building's local -z: a style drawn the other way round (`mirror`) is flipped to match the plan.
+  if (spec.mirror) {
+    ctx.translate(LAYER + 2 * margin, 0);
+    ctx.scale(-1, 1);
+  }
   ctx.drawImage(image, cx - MARGIN, cy, cw + 2 * MARGIN, ch, 0, 0, LAYER + 2 * margin, h);
   const src = ctx.getImageData(0, 0, wide.width, h).data;
   const rgb = new Float32Array(LAYER * h * 3);
@@ -212,8 +217,9 @@ function windowMask(spec, rgb, band) {
   if (spec.rects) {
     for (const [rx0, ry0, rx1, ry1] of spec.rects) {
       if (ry0 < y0 - 1 || ry1 > y1 + 1) continue;
+      const [fx0, fx1] = spec.mirror ? [spec.crop[2] - rx1, spec.crop[2] - rx0] : [rx0, rx1];
       for (let y = Math.max(0, Math.floor((ry0 - y0) * ky)); y < Math.min(LAYER, Math.ceil((ry1 - y0) * ky)); y++) {
-        for (let x = Math.max(0, Math.floor(rx0 * kx)); x < Math.min(LAYER, Math.ceil(rx1 * kx)); x++) mask[y * LAYER + x] = 1;
+        for (let x = Math.max(0, Math.floor(fx0 * kx)); x < Math.min(LAYER, Math.ceil(fx1 * kx)); x++) mask[y * LAYER + x] = 1;
       }
     }
     return mask;
@@ -231,8 +237,9 @@ function neonMask(spec, rgb, band) {
   const ky = LAYER / (y1 - y0);
   for (const [rx0, ry0, rx1, ry1] of spec.neon.rects) {
     if (ry0 < y0 - 1 || ry1 > y1 + 1) continue;
+    const [fx0, fx1] = spec.mirror ? [spec.crop[2] - rx1, spec.crop[2] - rx0] : [rx0, rx1];
     for (let y = Math.max(0, Math.floor((ry0 - y0) * ky)); y < Math.min(LAYER, Math.ceil((ry1 - y0) * ky)); y++) {
-      for (let x = Math.max(0, Math.floor(rx0 * kx)); x < Math.min(LAYER, Math.ceil(rx1 * kx)); x++) {
+      for (let x = Math.max(0, Math.floor(fx0 * kx)); x < Math.min(LAYER, Math.ceil(fx1 * kx)); x++) {
         const p = y * LAYER + x;
         if (Math.max(rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2]) >= spec.neon.bright) mask[p] = 1;
       }
@@ -336,12 +343,12 @@ function plainPatch(rgb, mask) {
   return at;
 }
 
-/** The ground layer's albedo alpha (LAYER square, 0 in an opening): the style's `SHOPFRONT` openings of one bay, mapped from metres across the bay and up the ground band. */
+/** The ground layer's albedo alpha (LAYER square, 0 in an opening): the style's `SHOPFRONT` openings of one bay, mapped from metres across the bay (the layer's u runs toward the plan's -across) and up the ground band. */
 function openingAlpha(open) {
   const alpha = new Uint8Array(LAYER * LAYER).fill(255);
   for (const opening of SHOPFRONT[open.kind]) {
-    const x0 = Math.round(((opening.centre - opening.width / 2 + BAY_WIDTH / 2) / BAY_WIDTH) * LAYER);
-    const x1 = Math.round(((opening.centre + opening.width / 2 + BAY_WIDTH / 2) / BAY_WIDTH) * LAYER);
+    const x0 = Math.round(((BAY_WIDTH / 2 - (opening.centre + opening.width / 2)) / BAY_WIDTH) * LAYER);
+    const x1 = Math.round(((BAY_WIDTH / 2 - (opening.centre - opening.width / 2)) / BAY_WIDTH) * LAYER);
     const y0 = Math.round(((open.ground - (open.floorY + opening.top)) / open.ground) * LAYER);
     const y1 = Math.round(((open.ground - (open.floorY + opening.sill)) / open.ground) * LAYER);
     for (let y = Math.max(0, y0); y < Math.min(LAYER, y1); y++) for (let x = Math.max(0, x0); x < Math.min(LAYER, x1); x++) alpha[y * LAYER + x] = 0;

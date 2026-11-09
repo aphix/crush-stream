@@ -114,6 +114,8 @@ the **seats** (`Place.seats`: x, z, yaw, height; a rowhome's two stoop seats lea
 The **doorways and shop windows are cut through the facade's ground band** (`SHOPFRONT` per interior; `scripts/pack-facades.mjs` zeroes the ground layer's albedo alpha there and the shader discards it), so the interior is seen from the street and a door leads into it. `InteriorSet` (one per map) keeps the
 ground floor's envelope of every place within `SHELL_NEAR` of the eye, so no opening shows through to the world, and the furnished interior within `INTERIOR_NEAR`; both are dropped after the eye has been past their far radius for `INTERIOR_LINGER`. Everything is merged into three meshes (envelopes, furniture, lamps and screens): the draw calls do not grow with the interiors.
 
+**Walking in.** A place with an interior stands in a drawn-only `buildingShell` (a `building` with no collider), and its ground floor's street, party and back walls are invisible-wall props (`interiorEnvelopeProps`, merged along each row of houses) that are whole but for the doorways, so a car is stopped and a walker passes a door. The rest (slabs, stairs, furniture) reaches the physics as fixed boxes, handed over by `InteriorSet.onSolids` while the eye is within `SOLIDS_NEAR`.
+
 ## Where it lives
 
 | Piece | File |

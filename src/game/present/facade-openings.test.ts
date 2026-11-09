@@ -11,6 +11,7 @@ import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 
 /** The styles whose ground band is cut open, with the interior behind them, and the world height of that band (m): a home's ground storey and a shop's. */
+/** A face's layer runs to the viewer's right, the building's local -z: the plan's `across` is measured the other way. */
 const OPEN_STYLES: Record<string, { kind: InteriorKind; floorY: number; ground: number }> = {
   rowbrick: { kind: "rowhome", floorY: ROWHOME_FLOOR_Y, ground: 3.6 },
   rowpainted: { kind: "rowhome", floorY: ROWHOME_FLOOR_Y, ground: 3.6 },
@@ -48,12 +49,12 @@ describe("given the facade styles of the places that have interiors", () => {
     expect(FACADE_LAYERS.rowhouse.open, "a style that was there before").toBeUndefined();
   });
 
-  // mutation: sed -i 's/{ centre: -0.9, width: 0.9, sill: 0, top: 2.1, door: true }/{ centre: -1.9, width: 0.9, sill: 0, top: 2.1, door: true }/' src/game/world/openworld/interior-kinds.ts
+  // mutation: sed -i 's/{ centre: 0.9, width: 0.9, sill: 0, top: 2.1, door: true }/{ centre: -1.9, width: 0.9, sill: 0, top: 2.1, door: true }/' src/game/world/openworld/interior-kinds.ts
   it("when the packed albedo is read at each doorway and window of the plan, then it is cut open there at body height, solid at the bay's edge, and the other layers have no opening", async () => {
     for (const [style, open] of Object.entries(OPEN_STYLES)) {
       const alpha = await alphaOf(style);
       for (const opening of SHOPFRONT[open.kind]) {
-        const u = (opening.centre + BAY_WIDTH / 2) / BAY_WIDTH;
+        const u = (BAY_WIDTH / 2 - opening.centre) / BAY_WIDTH;
         const body = open.floorY + Math.max(opening.sill, 0) + Math.min(1, (opening.top - opening.sill) / 2);
         const v = body / open.ground;
         expect(alpha.at(LAYER.ground, u, v), `${style} alpha in the ${opening.door ? "doorway" : "window"} at u ${u.toFixed(2)}`).toBeLessThan(CUT);

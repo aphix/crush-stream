@@ -157,8 +157,8 @@ export const SHOPFRONT = {
     { centre: 1.8, width: 1.8, sill: 0.3, top: 2.7, door: false },
   ],
   store: [
-    { centre: -0.9, width: 0.9, sill: 0, top: 2.1, door: true },
-    { centre: 1.1, width: 2.8, sill: 0.65, top: 2.4, door: false },
+    { centre: 0.9, width: 0.9, sill: 0, top: 2.1, door: true },
+    { centre: -1.1, width: 2.8, sill: 0.65, top: 2.4, door: false },
   ],
 } as const satisfies Record<InteriorKind, readonly BayOpening[]>;
 

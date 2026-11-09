@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FRAME_HZ } from "../../kernel/constants.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import type { InteriorSolid } from "../../world/openworld/interior-plan.ts";
@@ -9,7 +10,7 @@ const map = buildOpenWorldMap(layOutLots());
 const coffee = map.places.find((place) => place.interior === "coffee" && place.doorNode >= 0)!;
 /** The map with the one coffee shop: nothing else comes into range as the eye walks about. */
 const lone = { ...map, places: [coffee] };
-const FRAME = 1 / 60;
+const FRAME = 1 / FRAME_HZ;
 /** Frames enough for the budgeted builds to cover the whole map. */
 const SETTLE_FRAMES = 200;
 /** Where the eye is out of every interior's range. */
