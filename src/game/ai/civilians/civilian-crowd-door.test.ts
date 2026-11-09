@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_SECONDS } from "./civilian-activity.ts";
-import { NEED, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import { BODY_GAP } from "./civilian-crowd-constants.ts";
 import { PACE, people, sendAlong, streetEdge } from "./civilian-crowd-contact.test-util.ts";
 import { FRAME_SECONDS, newCrowd } from "./civilian-crowd.test-util.ts";
@@ -102,17 +101,15 @@ describe("given a resident at her car's door and no port, or a port that finds n
   });
 });
 
-describe("given a resident who got into her car and whose drive leg has begun", () => {
-  it("when the society then says nothing of her on the drive, then she is not drawn, and her feet are back on the ground if she walks again", () => {
+describe("given a resident who got out of her car and then walks on, or is in her car on the road", () => {
+  it("when the society says nothing of her and she is on no leg, then she is not drawn, and when she walks, then she is drawn on the ground", () => {
     const { crowd, driver } = crowdWithDriver(ACTIVITY.carOut, true);
     stepOnce(crowd);
     expect(crowd.poses.feetY[driver], "feet at the car").toBeCloseTo(FEET_Y, 5);
     crowd.activityReader = readActivity;
-    sendAlong(crowd, driver, EDGE, EDGE.from, EDGE.to);
-    crowd.state.ints[driver * RESIDENT_INT_STRIDE + RESIDENT_INT.legPurpose] = PURPOSE.drive;
     stepOnce(crowd, 2 * FRAME_SECONDS);
-    expect(crowd.poses.shown[driver], "shown on the drive").toBe(0);
-    crowd.state.ints[driver * RESIDENT_INT_STRIDE + RESIDENT_INT.legPurpose] = NEED.errand;
+    expect(crowd.poses.shown[driver], "shown on the road, in her car").toBe(0);
+    sendAlong(crowd, driver, EDGE, EDGE.from, EDGE.to);
     stepOnce(crowd, 3 * FRAME_SECONDS);
     expect(crowd.poses.shown[driver], "shown walking").toBe(1);
     expect(crowd.poses.feetY[driver], "feet on the ground again").toBe(0);

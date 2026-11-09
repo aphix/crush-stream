@@ -43,7 +43,7 @@ import { CrowdWalkers } from "./crowd-walkers.ts";
 import { createCrowdPoses, type CrowdPoses } from "./crowd-poses.ts";
 
 /** Where the driver's door of resident `resident`'s car stands (the spot and facing of a person at it, her feet's height there and her seat top's), filled for activity `code` (`ACTIVITY.carIn` or `carOut`); false when she has no car to be at. */
-type DriverDoors = (resident: number, code: number, out: DriverDoor) => boolean;
+export type DriverDoors = (resident: number, code: number, out: DriverDoor) => boolean;
 
 /** The door spot a `DriverDoors` fills: world x and z, the way she faces (yaw), the ground under her feet and her seat top (world y). */
 type DriverDoor = { x: number; z: number; yaw: number; feetY: number; surfaceY: number };
