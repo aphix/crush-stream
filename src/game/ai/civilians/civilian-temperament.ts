@@ -14,7 +14,7 @@ const SHIFT_SECOND = 13;
  * How jumpy a person is, 0 (nothing bothers them) to 1 (everything does), hidden: a pure function of the look word (the drawing has the poses' looks, the brain computes the same word from a resident's row), so
  * every peer agrees. Squared, so that most people are calm to middling (a median of a quarter, a mean of a third).
  */
-function neuroticismOf(look: number): number {
+export function neuroticismOf(look: number): number {
   let hash = Math.imul((look & LOOK.hashMask) ^ TEMPERAMENT_SALT, SCRAMBLE_FIRST);
   hash ^= hash >>> SHIFT_FIRST;
   hash = Math.imul(hash, SCRAMBLE_SECOND);

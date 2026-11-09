@@ -1,3 +1,4 @@
+import { neuroticismOf } from "../ai/civilians/civilian-temperament.ts";
 import { CHANNELS } from "./civilian-anim-channels.ts";
 
 /** A snap in her pose (a clip begun or cut off, a stop or a start) is paid back over this long: the share of it left falls by 1/e every `SNAP_SECONDS`. */
@@ -18,6 +19,9 @@ export class PoseSmoothing {
   private readonly lastActivity: Uint8Array;
   private readonly lastMoving: Uint8Array;
   private readonly lastStamp: Int32Array;
+  /** Each civilian's jumpiness (`neuroticismOf` the look word she was last read with), kept so the hash is made again only when her look changes. */
+  readonly nerve: Float64Array;
+  private readonly nerveLook: Uint32Array;
   private stamp = 0;
   private decay = 1;
 
@@ -27,6 +31,16 @@ export class PoseSmoothing {
     this.lastActivity = new Uint8Array(capacity);
     this.lastMoving = new Uint8Array(capacity);
     this.lastStamp = new Int32Array(capacity).fill(NEVER_POSED);
+    this.nerve = new Float64Array(capacity);
+    this.nerveLook = new Uint32Array(capacity);
+    for (let civilian = 0; civilian < capacity; civilian++) this.nerve[civilian] = neuroticismOf(0);
+  }
+
+  /** `nerve[civilian]` is the jumpiness of her look word `looks[civilian]`. */
+  refreshNerve(looks: Uint32Array, civilian: number): void {
+    if (this.nerveLook[civilian] === looks[civilian]) return;
+    this.nerveLook[civilian] = looks[civilian]!;
+    this.nerve[civilian] = neuroticismOf(looks[civilian]!);
   }
 
   /** Once a frame before the civilians are posed: this frame's number (one more than the last's, so a civilian posed in both is continuous) and the seconds since the last. */

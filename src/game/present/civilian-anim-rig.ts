@@ -95,27 +95,34 @@ const centre = new THREE.Vector3();
 const worldCentre = new THREE.Vector3();
 const worldRotation = new THREE.Quaternion();
 
-function setAboutX(into: THREE.Quaternion, angle: number): void {
-  const half = angle * 0.5;
+/**
+ * The turns below read their angle from `source[at]`, not from an argument: a double passed to a call that is not inlined is boxed on the heap, and forty dummies a frame must allocate nothing.
+ * `computed` is where an angle made on the way (the yaw and the body's turn, a foot's follow, a roll's sign) waits.
+ */
+const computed = new Float64Array(1);
+
+function setAboutX(into: THREE.Quaternion, source: Float64Array, at: number): void {
+  const half = source[at]! * 0.5;
   into.set(Math.sin(half), 0, 0, Math.cos(half));
 }
 
-function setAboutY(into: THREE.Quaternion, angle: number): void {
-  const half = angle * 0.5;
+function setAboutY(into: THREE.Quaternion, source: Float64Array, at: number): void {
+  const half = source[at]! * 0.5;
   into.set(0, Math.sin(half), 0, Math.cos(half));
 }
 
-function setAboutZ(into: THREE.Quaternion, angle: number): void {
-  const half = angle * 0.5;
+function setAboutZ(into: THREE.Quaternion, source: Float64Array, at: number): void {
+  const half = source[at]! * 0.5;
   into.set(0, 0, Math.sin(half), Math.cos(half));
 }
 
 /** `into` = the torso's turn: a twist about the vertical over a lean forward over a lean toward +x. */
 export function setTorsoRotation(channels: Float64Array, into: THREE.Quaternion): void {
-  setAboutY(into, channels[CHANNEL.torsoTwist]!);
-  setAboutX(step, channels[CHANNEL.torsoPitch]!);
+  setAboutY(into, channels, CHANNEL.torsoTwist);
+  setAboutX(step, channels, CHANNEL.torsoPitch);
   into.multiply(step);
-  setAboutZ(step, -channels[CHANNEL.torsoRoll]!);
+  computed[0] = -channels[CHANNEL.torsoRoll]!;
+  setAboutZ(step, computed, 0);
   into.multiply(step);
 }
 
@@ -128,14 +135,17 @@ function placePart(sink: PoseSink, slot: number, part: number, local: THREE.Vect
 
 /** `into` = a limb's turn in its parent's frame: a sweep about the vertical over an outward hang over a swing about x over a twist about its own length. */
 function setLimbRotation(into: THREE.Quaternion, channels: Float64Array, first: number, isArm: boolean): void {
-  setAboutY(into, isArm ? channels[first + ARM.sweep]! : 0);
-  setAboutZ(step, channels[first + (isArm ? ARM.out : LEG.out)]!);
+  if (isArm) setAboutY(into, channels, first + ARM.sweep);
+  else into.identity();
+  setAboutZ(step, channels, first + (isArm ? ARM.out : LEG.out));
   into.multiply(step);
-  setAboutX(step, channels[first + (isArm ? ARM.swing : LEG.swing)]!);
+  setAboutX(step, channels, first + (isArm ? ARM.swing : LEG.swing));
   into.multiply(step);
-  setAboutY(step, isArm ? channels[first + ARM.twist]! : 0);
-  into.multiply(step);
-  setAboutX(step, channels[first + (isArm ? ARM.elbow : LEG.knee)]!);
+  if (isArm) {
+    setAboutY(step, channels, first + ARM.twist);
+    into.multiply(step);
+  }
+  setAboutX(step, channels, first + (isArm ? ARM.elbow : LEG.knee));
   lowerRotation.copy(into).multiply(step);
 }
 
@@ -163,27 +173,32 @@ function renderLeg(sink: PoseSink, slot: number, channels: Float64Array, side: n
   centre.copy(limb.lowerFromMid).applyQuaternion(lowerRotation).add(midPoint);
   placePart(sink, slot, limb.lowerPart, centre, lowerRotation);
   ankle.copy(limb.ankleFromMid).applyQuaternion(lowerRotation).add(midPoint);
-  const followed = (1 - channels[CHANNEL.plant]!) * POSE_FOOT_FOLLOW * (channels[first + LEG.swing]! + channels[first + LEG.knee]!);
-  setAboutZ(footRotation, channels[first + LEG.out]!);
-  setAboutX(step, followed);
+  computed[0] = (1 - channels[CHANNEL.plant]!) * POSE_FOOT_FOLLOW * (channels[first + LEG.swing]! + channels[first + LEG.knee]!);
+  setAboutZ(footRotation, channels, first + LEG.out);
+  setAboutX(step, computed, 0);
   footRotation.multiply(step);
   centre.copy(limb.footFromAnkle).applyQuaternion(footRotation).add(ankle);
   placePart(sink, slot, limb.footPart, centre, footRotation);
 }
 
-/** Slot `slot` of `sink` posed from `channels` (`CHANNEL`, `ARM`, `LEG`: body-frame values, each side's own) standing on (x, y, z) facing `yaw`. Allocates nothing. */
-export function renderRig(sink: PoseSink, slot: number, x: number, y: number, z: number, yaw: number, channels: Float64Array): void {
-  setAboutY(turn, yaw);
-  root.set(x, y, z);
+/** Where a civilian stands and which way she faces (rad, about the vertical). */
+type Placement = { x: number; y: number; z: number; yaw: number };
+
+/** Slot `slot` of `sink` posed from `channels` (`CHANNEL`, `ARM`, `LEG`: body-frame values, each side's own) standing as `at` says. Allocates nothing. */
+export function renderRig(sink: PoseSink, slot: number, at: Placement, channels: Float64Array): void {
+  computed[0] = at.yaw;
+  setAboutY(turn, computed, 0);
+  root.set(at.x, at.y, at.z);
   bodyShift.set(channels[CHANNEL.shiftSide]!, 0, channels[CHANNEL.shiftForward]!).applyQuaternion(turn);
   root.add(bodyShift);
-  setAboutY(turn, yaw + channels[CHANNEL.bodyYaw]!);
+  computed[0] = at.yaw + channels[CHANNEL.bodyYaw]!;
+  setAboutY(turn, computed, 0);
   offset.set(channels[CHANNEL.pelvisSide]!, -channels[CHANNEL.pelvisDrop]!, channels[CHANNEL.pelvisForward]!);
   setTorsoRotation(channels, torso);
   centre.copy(TORSO_CENTRE).sub(WAIST).applyQuaternion(torso).add(WAIST).add(offset);
   placePart(sink, slot, TORSO_PART, centre, torso);
-  setAboutY(headTurn, channels[CHANNEL.headYaw]!);
-  setAboutX(step, channels[CHANNEL.headPitch]!);
+  setAboutY(headTurn, channels, CHANNEL.headYaw);
+  setAboutX(step, channels, CHANNEL.headPitch);
   headTurn.multiply(step);
   headRotation.multiplyQuaternions(torso, headTurn);
   neckPoint.copy(NECK).sub(WAIST).applyQuaternion(torso).add(WAIST).add(offset);

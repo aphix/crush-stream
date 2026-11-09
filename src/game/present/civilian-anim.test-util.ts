@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS, type ActivityName } from "../ai/civilians/civilian-activity.ts";
+import { neuroticismOf } from "../ai/civilians/civilian-temperament.ts";
 import { type ActivityPose, poseActivity } from "./civilian-anim.ts";
 import type { PoseSmoothing } from "./civilian-anim-smoothing.ts";
 import { FOREARM_LENGTH, type PoseSink } from "./civilian-anim-rig.ts";
@@ -32,13 +33,14 @@ export const MINUS_X = 0;
 export const PLUS_X = 1;
 export const TIGHT = 1e-6;
 
-export const STANDING: ActivityPose = { x: 0, y: 0, z: 0, yaw: 0, stride: 0, speed: 0, activity: ACTIVITY.none, clock: 0, left: ACTIVITY_OPEN_ENDED, surface: 0, hasPartner: false, bearing: 0, variant: 0 };
+export const STANDING: ActivityPose = { x: 0, y: 0, z: 0, yaw: 0, stride: 0, speed: 0, activity: ACTIVITY.none, clock: 0, left: ACTIVITY_OPEN_ENDED, surface: 0, hasPartner: false, bearing: 0, variant: 0, nerve: neuroticismOf(0) };
 export const WALKING = { stride: 1.3, speed: 1.2 } as const;
 
 /** A pose from `STANDING` with `changes`; variant 0 is right-handed (her main side is +x), starts loops at their beginning and has no pace or amplitude of her own. */
 export const posed = (changes: Partial<ActivityPose>, smoothing?: PoseSmoothing, civilian = 0): Capture => {
   const body = newCapture();
-  poseActivity(body, 0, { ...STANDING, ...changes }, smoothing, civilian);
+  const variant = changes.variant ?? STANDING.variant;
+  poseActivity(body, 0, { ...STANDING, nerve: neuroticismOf(variant), ...changes }, smoothing, civilian);
   return body;
 };
 
