@@ -49,8 +49,11 @@ export const CAMERA_RADIUS = 0.2;
 const HEAD_OVER_TORSO = 0.52;
 const EYE_OVER_TORSO = 0.54;
 const EYE_AHEAD = 0.1;
-/** A shoulder camera pulled this near (m) to his head's centre is in his head: the camera does not see his head and torso, as from his own eyes. */
-const HEAD_NEAR = 0.3;
+/**
+ * The nearest the shoulder camera's boom is pulled in by a wall (m), however tight the spot: his head's breadth and the camera's ball clear of him. A wall nearer than this is
+ * stood in (a pen, a corridor), but the eye never sits in his head, so a drag round him in a squeeze stays his shoulder view, his head and torso drawn; first person is View's and the wheel's alone.
+ */
+export const SQUEEZED_BOOM = 0.6;
 /** The eyes' height follows his torso's over this long (s): the gait's bob, eased, without lagging a step down a stair. */
 const EYE_HEIGHT_TIME = 0.12;
 /** A pulled-in camera lets go over this long (s; research 0.15-0.35); it comes in at once. */
@@ -79,7 +82,7 @@ function letGo(now: number, want: number, dt: number): number {
 /**
  * Where the on-foot camera stands and the way it looks (`eye`, the unit `ahead`), for the orbit's yaw (the eye at (sin, cos) of it behind its
  * point) and pitch: over his shoulder, pulled in short of every solid its ball would meet on the way from his head out, or through his eyes.
- * `inHead`: the eye is in his head, so his head and torso are not drawn to it. Nothing allocates.
+ * `inHead`: the eye is his own (first person), so his head and torso are not drawn to it: never the shoulder camera, however it is pulled in. Nothing allocates.
  */
 export class WalkerView {
   readonly eye = new Float64Array(3);
@@ -126,13 +129,14 @@ export class WalkerView {
     const bx = s * cp;
     const bz = c * cp;
     this.boom = letGo(this.boom, stopShort(sweep(ox, py, oz, bx, sp, bz, length), length), dt);
-    this.eye[0] = ox + bx * this.boom;
-    this.eye[1] = py + sp * this.boom;
-    this.eye[2] = oz + bz * this.boom;
+    const reach = Math.max(this.boom, Math.min(length, SQUEEZED_BOOM));
+    this.eye[0] = ox + bx * reach;
+    this.eye[1] = py + sp * reach;
+    this.eye[2] = oz + bz * reach;
     this.ahead[0] = -bx;
     this.ahead[1] = -sp;
     this.ahead[2] = -bz;
-    this.inHead = hypot3(this.eye[0] - hx, this.eye[1] - hy, this.eye[2] - hz) < HEAD_NEAR;
+    this.inHead = false;
   }
 
   /** Through his eyes, his torso drawn at (`tx`, `ty`, `tz`): at his head's height, eased, and a little ahead of its centre unless a wall is nearer. */
