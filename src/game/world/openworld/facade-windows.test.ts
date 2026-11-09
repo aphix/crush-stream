@@ -7,10 +7,13 @@ import { faceBands, FACADE_FACE, isOpenStyle, OPEN_SIDE, roomPlaceOf, roomWindow
 import { buildingHeight, CORNICE_DEPTH, DEFAULT_STOREYS, levelsOf, MAX_STOREYS, MIN_STOREYS, OPENING, type InteriorPlan, type Opening } from "./interior-kinds.ts";
 import { planInterior } from "./interior-plan.ts";
 import { BAY, bayStackOf } from "./openworld-facade-solids.ts";
+import { planBlocks } from "./openworld-blocks.ts";
 import { layOutLots } from "./openworld-lots.ts";
+import { LANE, LANELESS_BLOCKS } from "./openworld-programme.ts";
 import type { InteriorKind, Place } from "./walk-graph.ts";
 
 const lots = layOutLots();
+const plans = planBlocks(lots.geometry).playable;
 const furnished = lots.places.filter((place) => place.interior !== undefined && place.doorNode === -1 && lots.places.indexOf(place) < lots.backdropStart);
 /** A storey's nominal height (m), as the facade draws it above its ground band. */
 const NOMINAL_STOREY = 3;
@@ -90,35 +93,54 @@ describe("given a rowhome's bay stack", () => {
 
 describe("given the places at the ends of a block's faces", () => {
   const reach = lots.geometry.blockLength / 2;
-  /** The block a place stands in. */
-  const blockOf = (place: Place) => lots.blocks.reduce((best, block) => (Math.abs(block.centreX - place.x) < Math.abs(best.centreX - place.x) ? block : best));
+  /** The block a place stands in (the blocks of a column share their centre's x). */
+  const blockOf = (place: Place) => plans.reduce((best, block) => (Math.hypot(block.centreX - place.x, block.centreZ - place.z) < Math.hypot(best.centreX - place.x, best.centreZ - place.z) ? block : best));
   /** Whether the place's footprint touches its block's west or east end. */
   const atEnd = (place: Place): boolean => Math.abs(Math.abs(place.x - blockOf(place).centreX) + place.width / 2 - reach) < 1e-6;
+  /** The lane lot of a place's block (none in a block without a lane). */
+  const laneLotOf = (place: Place) => {
+    const block = blockOf(place);
+    if (LANELESS_BLOCKS.some((laneless) => laneless.row === block.row && laneless.column === block.column)) return undefined;
+    return block.lots.find((lot) => lot.face === LANE.face && lot.index === LANE.at);
+  };
+  /** Whether the place's footprint touches the lane of its block, on the lane's own face. */
+  const besideLane = (place: Place): boolean => {
+    const lane = laneLotOf(place);
+    if (lane === undefined || Math.abs(place.z - (lane.house.z0 + lane.house.z1) / 2) > TOLERANCE) return false;
+    return Math.abs(place.x + place.width / 2 - lane.lot.x0) < 1e-6 || Math.abs(place.x - place.width / 2 - lane.lot.x1) < 1e-6;
+  };
 
   // mutation: sed -i 's/return ((north ? east : west) ? OPEN_SIDE.plusAcross : 0) | ((north ? west : east) ? OPEN_SIDE.minusAcross : 0);/return ((north ? west : east) ? OPEN_SIDE.plusAcross : 0) | ((north ? east : west) ? OPEN_SIDE.minusAcross : 0);/' src/game/world/openworld/openworld-lots.ts
-  it("when each place's open sides are read, then exactly the places at a block's end have one, and it stands on the block's end", () => {
+  it("when each place's open sides are read, then exactly the places at a block's end or beside its lane have one, and it stands on the block's end or the lane's edge", () => {
     let corners = 0;
+    let lanesides = 0;
     for (const place of furnished) {
       const sides = [OPEN_SIDE.plusAcross, OPEN_SIDE.minusAcross].filter((side) => ((place.openSides ?? 0) & side) !== 0);
-      expect(sides.length > 0, `${place.name} open side where it ends a block`).toBe(atEnd(place));
+      expect(sides.length > 0, `${place.name} open side where it ends a block or stands by the lane`).toBe(atEnd(place) || besideLane(place));
       if (atEnd(place)) corners++;
+      if (besideLane(place)) lanesides++;
       for (const side of sides) {
         const x = place.x + Math.sin(place.yaw) * (side === OPEN_SIDE.plusAcross ? 1 : -1) * (place.width / 2);
-        expect(Math.abs(Math.abs(x - blockOf(place).centreX) - reach), `${place.name}: the open side's distance from the block's end`).toBeLessThan(1e-6);
+        const lane = laneLotOf(place);
+        const onLane = lane !== undefined && (Math.abs(x - lane.lot.x0) < 1e-6 || Math.abs(x - lane.lot.x1) < 1e-6);
+        expect(Math.abs(Math.abs(x - blockOf(place).centreX) - reach) < 1e-6 || onLane, `${place.name}: the open side stands on the block's end or the lane's edge`).toBe(true);
       }
     }
     expect(corners, "places at a block's end").toBeGreaterThan(0);
+    expect(lanesides, "places beside a lane").toBeGreaterThan(0);
   });
 
   // mutation: sed -i 's/      this.spineWall(level, sideAt, STREET_SKIN, this.depth - STREET_SKIN, this.glazed(level, face, sideAt), ground, PARTY_WALL);/      this.spineWall(level, sideAt, STREET_SKIN, this.depth - STREET_SKIN, [], ground, PARTY_WALL);/' src/game/world/openworld/interior-draft.ts
   it("when the side walls of an end-of-terrace house and a mid-terrace one are read, then the open side has windows on every storey and a side with a neighbour has none", () => {
     const corner = furnished.find((place) => place.interior === "rowhome" && atEnd(place) && place.openSides === OPEN_SIDE.minusAcross)!;
-    const middle = furnished.find((place) => place.interior === "rowhome" && !atEnd(place))!;
+    const middle = furnished.find((place) => place.interior === "rowhome" && place.openSides === undefined)!;
     const cornerPlan = planInterior(corner);
     const middlePlan = planInterior(middle);
     for (let level = 0; level < cornerPlan.floors.length; level++) {
       expect(wallOn(cornerPlan, level, FACADE_FACE.minusAcross).openings.filter((opening) => opening.kind === OPENING.window).length, `corner house side windows on storey ${level}`).toBeGreaterThan(0);
       expect(wallOn(cornerPlan, level, FACADE_FACE.plusAcross).openings.length, `corner house party wall openings on storey ${level}`).toBe(0);
+    }
+    for (let level = 0; level < middlePlan.floors.length; level++) {
       for (const face of [FACADE_FACE.plusAcross, FACADE_FACE.minusAcross]) expect(wallOn(middlePlan, level, face).openings.length, `mid-terrace party wall openings on storey ${level}`).toBe(0);
     }
   });

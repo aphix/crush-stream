@@ -181,6 +181,12 @@ export class Draft {
     return flight;
   }
 
+  /** A flight like `stairsUp`, laid back from where its top tread ends (`head`, m deep) instead of from its foot: however many treads its climb takes, its landing stays where it was set. */
+  stairsEndingAt(level: number, head: number, across: number, dir: 1 | -1 = 1): Stairs {
+    const steps = Math.ceil((this.floors[level + 1]! - this.floors[level]!) / MAX_RISER);
+    return this.stairsUp(level, head - dir * steps * TREAD_RUN, across, dir);
+  }
+
   /** The opening a flight needs in the floor above it: from the first tread a climber's head (`HEADROOM`) would meet the slab over, to where the top tread meets that floor, across the flight. */
   stairwell(flight: Stairs): Rect {
     const floor = this.floors[flight.level]!;
