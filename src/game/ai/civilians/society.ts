@@ -26,6 +26,7 @@ import {
   MOOD_HOLD_TICKS,
   NEED,
   NEVER_TICK,
+  NO_BEARING,
   NO_PLACE,
   NO_SEAT,
   PARENT_AGE_MAX,
@@ -149,6 +150,7 @@ export function createResident(state: CityState, id: number, spec: ResidentSpec,
   ints[base + RESIDENT_INT.crimeVictim] = NO_PLACE;
   ints[base + RESIDENT_INT.fightTick] = NEVER_TICK;
   ints[base + RESIDENT_INT.fightPartner] = NO_PLACE;
+  ints[base + RESIDENT_INT.fightBearing] = NO_BEARING;
   ints[base + RESIDENT_INT.carPlace] = NO_PLACE;
   if (person) giveTraits(state, id, spec, tick);
   rollNeeds(floats, floatBase, draw);

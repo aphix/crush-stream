@@ -148,9 +148,15 @@ wanted a game day from the tick it happened, fears the corner, angers the clerk 
 `EVENT_KIND.bust` (raised by the police) takes the wanted or fighting resident off the street for `JAIL_TICKS` and home, and clears their crime and fight.
 Rows (`crimeTick`, `crimeKind`, `crimePlace`, `crimeVictim`, `fightTick`, `fightPartner`, flags) carry it all to peers and the police.
 
-**Fights**: `EVENT_KIND.push` rolls a seeded chance (`FIGHT_CHANCE`, times `FIGHT_ANGRY_FACTOR` when either is angry) that two civilians, or a civilian and a player,
-come to blows; `EVENT_KIND.fight` makes it so. Fighters stop at the nearest door for `FIGHT_TICKS` (civilians against each other are wanted for it), and a
-civilian run down may be taken on by a bystander standing at a door.
+**Fights**: `EVENT_KIND.push` rolls a seeded chance (`FIGHT_CHANCE`, times `FIGHT_ANGRY_FACTOR` when either civilian is angry) that the pushed civilian comes to blows with
+whoever pushed: another civilian, a car, or, when a `walker` triple follows, the human player on foot; `EVENT_KIND.fight` makes it so. Fighters stop at the nearest door for
+`FIGHT_TICKS`. Two civilians face each other and are both wanted for it; one who turns on the player faces the walker's bearing (`fightPartner` is `FIGHT_PLAYER`), is wanted for it,
+and swings at him: a swing lands half way through its clip, and when the host's walker is within `PLAYER_STRIKE_REACH` of the fighter's spot the director knocks him down the way the
+walker is knocked down already (`findWalkerStrike`, the `strikeWalker` port), with no damage beyond it. A civilian run down may be taken on by a bystander standing at a door.
+`EVENT_KIND.jaywalk` (raised by the police for a walker crossing against the light) holds a free resident `JAYWALK_CUSTODY_TICKS` and sends them home, annoyed.
+
+A bust, knock or jaywalk arrest hides its resident from the event's tick for its whole window on every peer: the step that applies it never lets them back early, since a mirror
+that only applies the worker's answers never runs that step.
 
 ## Cost
 

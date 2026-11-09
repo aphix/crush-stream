@@ -4,11 +4,14 @@ import {
   CENTIMETRES_PER_METRE,
   DECISION_HZ,
   DOOR_SPREAD,
+  FIGHT_PLAYER,
   FLAG,
   LATERAL_MAX,
   NEVER_TICK,
+  NO_BEARING,
   NO_PLACE,
   NO_SEAT,
+  PLAYER_STRIKE_REACH,
   PURPOSE,
   RESIDENT_FLOAT,
   RESIDENT_FLOAT_STRIDE,
@@ -17,6 +20,7 @@ import {
   SITTER_CHAT_REACH,
   SPECIES,
 } from "./civilian-constants.ts";
+import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import type { CityState } from "./civilian-state.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
 import { VENUE, isCounterVenue, isOutdoorPurpose } from "./society-venues.ts";
@@ -43,6 +47,21 @@ const OTHER_SLOTS = [ACTIVITY.hit, ACTIVITY.swing, ACTIVITY.hit, ACTIVITY.swing]
 const FIGHT_HALF_GAP = 0.5;
 /** Quarter turn: fighters face along the x axis. */
 const QUARTER_TURN = Math.PI / 2;
+const FULL_TURN = 2 * Math.PI;
+/** A swing lands half way through its clip. */
+const SWING_LAND_SECONDS = FIGHT_SLOT_SECONDS / 2;
+
+/** Where a civilian's landed swing pushes the player: along (dirX, dirZ), from the fighter to him. */
+export class WalkerStrike {
+  dirX = 0;
+  dirZ = 1;
+}
+
+/** A fight's bearing (`WALKER_BEARING_STEPS` of a turn, 0 = +z toward +x) as a yaw in (-pi, pi]; none faces +z. */
+function bearingYaw(bearing: number): number {
+  if (bearing === NO_BEARING) return 0;
+  return ((bearing > WALKER_BEARING_STEPS / 2 ? bearing - WALKER_BEARING_STEPS : bearing) / WALKER_BEARING_STEPS) * FULL_TURN;
+}
 
 function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
@@ -78,15 +97,16 @@ function companionIsHere(state: CityState, resident: number, tick: number): numb
 function readFight(state: CityState, resident: number, since: number, out: ActivityReading): void {
   const partner = intAt(state, resident, RESIDENT_INT.fightPartner);
   const fighting = intAt(state, resident, RESIDENT_INT.fightTick) !== NEVER_TICK;
-  const starter = partner < 0 || resident < partner;
+  const civilianPair = partner >= 0;
+  const starter = !civilianPair || resident < partner;
   const slot = Math.floor(since / FIGHT_SLOT_SECONDS) % FIGHT_SLOTS;
   const inSlot = since % FIGHT_SLOT_SECONDS;
   const side = starter ? -1 : 1;
   out.placed = true;
-  out.x = intAt(state, resident, RESIDENT_INT.fightX) / CENTIMETRES_PER_METRE + (partner >= 0 ? side * FIGHT_HALF_GAP : 0);
+  out.x = intAt(state, resident, RESIDENT_INT.fightX) / CENTIMETRES_PER_METRE + (civilianPair ? side * FIGHT_HALF_GAP : 0);
   out.z = intAt(state, resident, RESIDENT_INT.fightZ) / CENTIMETRES_PER_METRE;
-  out.yaw = partner >= 0 ? -side * QUARTER_TURN : 0;
-  out.partner = partner;
+  out.yaw = civilianPair ? -side * QUARTER_TURN : bearingYaw(intAt(state, resident, RESIDENT_INT.fightBearing));
+  out.partner = civilianPair ? partner : -1;
   if (!fighting) setClip(out, ACTIVITY.idle, since, ACTIVITY_OPEN_ENDED);
   else setClip(out, (starter ? STARTER_SLOTS : OTHER_SLOTS)[slot]!, inSlot, FIGHT_SLOT_SECONDS - inSlot);
 }
@@ -189,4 +209,36 @@ export function readActivity(state: CityState, resident: number, seconds: number
   if (purpose === PURPOSE.fight) readFight(state, resident, since, out);
   else if (isOutdoorPurpose(purpose)) readOutdoor(state, resident, purpose, place, tick, since, left, out);
   else readIndoors(state, resident, place, since, left, out);
+}
+
+/** The latest moment a fighter who arrived at `arriveSeconds` lands a swing in (fromSeconds, toSeconds], or -1: the one who started (or turned on the player) swings every other slot. */
+function swingLandingIn(arriveSeconds: number, fromSeconds: number, toSeconds: number): number {
+  let slot = Math.floor((toSeconds - arriveSeconds - SWING_LAND_SECONDS) / FIGHT_SLOT_SECONDS);
+  if (slot >= 0 && STARTER_SLOTS[slot % FIGHT_SLOTS] !== ACTIVITY.swing) slot--;
+  if (slot < 0) return -1;
+  const landing = arriveSeconds + slot * FIGHT_SLOT_SECONDS + SWING_LAND_SECONDS;
+  return landing > fromSeconds ? landing : -1;
+}
+
+/**
+ * A civilian who turned on the player lands a swing in crowd time (fromSeconds, toSeconds] with him at (walkerX, walkerZ) within `PLAYER_STRIKE_REACH` of their spot: true, the push's direction in `out`. Pure in the rows
+ * and the times; it is the host's own walker who shoved them, so the host asks it of its own.
+ */
+export function findWalkerStrike(state: CityState, fromSeconds: number, toSeconds: number, walkerX: number, walkerZ: number, out: WalkerStrike): boolean {
+  const { ints } = state;
+  for (let resident = 0; resident < state.capacity; resident++) {
+    const base = resident * RESIDENT_INT_STRIDE;
+    if (ints[base + RESIDENT_INT.alive] === 0 || ints[base + RESIDENT_INT.fightPartner] !== FIGHT_PLAYER || ints[base + RESIDENT_INT.fightTick] === NEVER_TICK || ints[base + RESIDENT_INT.legPurpose] !== PURPOSE.fight) continue;
+    const landing = swingLandingIn(ints[base + RESIDENT_INT.arriveTick]! / DECISION_HZ, fromSeconds, toSeconds);
+    if (landing < 0 || landing >= ints[base + RESIDENT_INT.nextDecisionTick]! / DECISION_HZ) continue;
+    const towardX = walkerX - ints[base + RESIDENT_INT.fightX]! / CENTIMETRES_PER_METRE;
+    const towardZ = walkerZ - ints[base + RESIDENT_INT.fightZ]! / CENTIMETRES_PER_METRE;
+    const reach = hypot2(towardX, towardZ);
+    if (reach > PLAYER_STRIKE_REACH) continue;
+    const yaw = bearingYaw(ints[base + RESIDENT_INT.fightBearing]!);
+    out.dirX = reach > 0 ? towardX / reach : detSin(yaw);
+    out.dirZ = reach > 0 ? towardZ / reach : detCos(yaw);
+    return true;
+  }
+  return false;
 }
