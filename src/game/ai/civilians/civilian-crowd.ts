@@ -7,7 +7,7 @@ import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, GENDER, MIX_INDEX, MIX_RESIDENT, MIX_SALT, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
-import { CAR_REACH, CLOCK_OFFSET_CREEP, EVENT_LOG_CAPACITY, HEARD_KNOCK_QUEUE, LOOK, STRIDE_RADIANS_PER_METRE, WRECK_LOCKOUT_SECONDS, WRECK_MARGIN, WRECK_SPEED } from "./civilian-crowd-constants.ts";
+import { CAR_REACH, CLOCK_OFFSET_CREEP, EVENT_LOG_CAPACITY, HEARD_KNOCK_LATE_SECONDS, HEARD_KNOCK_QUEUE, LOOK, STRIDE_RADIANS_PER_METRE, WRECK_LOCKOUT_SECONDS, WRECK_MARGIN, WRECK_SPEED } from "./civilian-crowd-constants.ts";
 import { LegPose, legPose, legPositionAt } from "./civilian-leg.ts";
 import type { CivilianRemote } from "./civilian-remote.ts";
 import type { CityState } from "./civilian-state.ts";
@@ -177,7 +177,15 @@ export class CivilianCrowd {
       this.advancedThrough = next;
       this.postedThrough = Math.max(this.postedThrough, next + PLAN_LEAD_TICKS);
     }
+    if (!this.started) this.queueUnreplayed();
+  }
+
+  /** After the catch-up, the log's events still to come (the host's clock is ahead of a client's) go to the brain as heard ones do. */
+  private queueUnreplayed(): void {
     this.started = true;
+    for (let at = this.replayed; at < this.logCount; at++) this.queueForBrain(this.log[at * EVENT_TRIPLE]!, this.log[at * EVENT_TRIPLE + 1]!, this.log[at * EVENT_TRIPLE + 2]!);
+    this.replayed = this.logCount;
+    this.postBatch();
   }
 
   /** A late joiner's first steps give the brain the log's events at the ticks they happened in, as the host's brain had them. */
@@ -196,11 +204,12 @@ export class CivilianCrowd {
     const { x, z, yaw, stride, speed, look, shown } = this.poses;
     const pose = this.pose;
     for (let resident = 0; resident < state.capacity; resident++) {
-      if (!legPositionAt(state, resident, seconds, pose)) {
+      const intBase = resident * RESIDENT_INT_STRIDE;
+      const onLeg = ints[intBase + RESIDENT_INT.pathCount]! > 0 && seconds >= ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ && seconds < ints[intBase + RESIDENT_INT.arriveTick]! / DECISION_HZ;
+      if (!onLeg || !legPositionAt(state, resident, seconds, pose)) {
         shown[resident] = 0;
         continue;
       }
-      const intBase = resident * RESIDENT_INT_STRIDE;
       const walkSpeed = floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!;
       shown[resident] = 1;
       x[resident] = pose.x;
@@ -240,12 +249,19 @@ export class CivilianCrowd {
     this.queueForBrain(EVENT_KIND.knock, resident, seconds);
   }
 
-  /** A knock heard from the host: the civilian is thrown by the car nearest where they were, as that car's own hit would have thrown them. */
+  /** A knock heard from the host, once this clock reaches its time (the cars are drawn at that time): the civilian is thrown by the car nearest where they were, as that car's own hit would have thrown them. */
   private throwHeardKnocks(cars: readonly DeformableCar[]): void {
     const state = this.remote.state;
+    let waiting = 0;
     for (let knock = 0; knock < this.heardKnocks; knock++) {
       const resident = this.heardKnockResident[knock]!;
-      if (!legPose(state, resident, this.heardKnockSeconds[knock]!, this.pose)) continue;
+      const at = this.heardKnockSeconds[knock]!;
+      if (at > this.seconds) {
+        this.heardKnockResident[waiting] = resident;
+        this.heardKnockSeconds[waiting++] = at;
+        continue;
+      }
+      if (this.seconds - at > HEARD_KNOCK_LATE_SECONDS || !legPose(state, resident, at, this.pose)) continue;
       let nearest = -1;
       let nearestDistance = Infinity;
       for (let carIndex = 0; carIndex < cars.length; carIndex++) {
@@ -257,7 +273,7 @@ export class CivilianCrowd {
       if (nearest < 0) continue;
       this.struck.push(fell(cars[nearest]!, nearest, resident, this.pose.x, activeGround().heightAt(this.pose.x, this.pose.z), this.pose.z, this.pose.dirX, this.pose.dirZ, blankStrike()));
     }
-    this.heardKnocks = 0;
+    this.heardKnocks = waiting;
   }
 
   /** The place whose footprint (grown by `WRECK_MARGIN`) holds the contact most deeply, among those inside the walls; `NO_PLACE_HIT` for none. */

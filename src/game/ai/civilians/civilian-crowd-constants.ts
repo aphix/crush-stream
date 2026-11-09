@@ -27,8 +27,9 @@ export const CROWD_TIER_SCALE = 0x1000000;
 
 /** The host's event log in memory: the wire's cap (`CROWD_EVENT_LOG_MAX`; a test pins them equal), the newest kept. */
 export const EVENT_LOG_CAPACITY = 512;
-/** Knocks heard from the host that wait for the local ragdoll throw. */
+/** Knocks heard from the host that wait for the client's clock to reach them (it runs behind the host's), and how late (s) a knock may be heard and still be thrown: older ones are history. */
 export const HEARD_KNOCK_QUEUE = 16;
+export const HEARD_KNOCK_LATE_SECONDS = 2;
 /** A client's estimate of the host clock follows the least (local - host) clock gap seen and creeps up this much (s) at each message, as the snapshot clock does (`net-play-client`). */
 export const CLOCK_OFFSET_CREEP = 0.001;
 
