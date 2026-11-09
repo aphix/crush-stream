@@ -506,7 +506,7 @@ function DebugSection({ state, engine }: HudProps) {
           <Braces />
           Capture
         </Toggle>
-        <Toggle on={state.showTrackDebug} changed={isChanged(state, "trackDebug")} label="Toggle track debug (node indices, checkpoint gates)" onClick={() => engine.current?.toggleTrackDebug()}>
+        <Toggle on={state.showTrackDebug} changed={isChanged(state, "trackDebug")} label="Toggle track debug (node indices, checkpoint gates; place names in the open world)" onClick={() => engine.current?.toggleTrackDebug()}>
           <Route />
           Track
         </Toggle>

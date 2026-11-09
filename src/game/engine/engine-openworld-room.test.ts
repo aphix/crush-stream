@@ -61,6 +61,8 @@ function room() {
       throwFigure: (strike) => void thrown.push(strike),
       hookWallHits: () => () => {},
       makeArt: () => ({ update: () => {}, dispose: () => {} }),
+      signsOn: () => false,
+      makeSigns: () => ({ update: () => {}, dispose: () => {} }),
     });
     director.startOpenWorld(map);
     return { director, thrown, car };

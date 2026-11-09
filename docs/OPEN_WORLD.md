@@ -106,6 +106,13 @@ A tick, twice a second, allocates what the brain's answer carries.
 from their look; every other civilian within 120 m is an instance of a 132-triangle figure whose limbs swing in the vertex shader;
 nothing past 120 m. Draw calls do not grow with the crowd.
 
+## Signs
+
+`OpenWorldSigns(places)` (`present/openworld-signs.ts`) is the open world's signage, made by the director on the first frame the course is up and drawn in the scene (`signsOn`, `makeSigns` are its ports).
+
+- **Shop signs** (always on, `present/openworld-shop-signs.ts`): every business inside the walls (`isBusiness`: a building that is not a home) gets a sign with its `Place.name` and a line of what it sells, by its `style` then its `sector` (a trade the table does not know gets a colour from its name and its sector as the line). All signs are cells of one atlas texture (96 px a metre, rows of up to 2048 px) drawn by one mesh: one draw call. `shopSignRect(place)` is where the sign hangs: a 1 m band from 2.9 m up on the place's street face, 0.1 m proud of it, centred on its door, no wider than 10.6 m; a shopfront's own sign-band geometry can take `ShopSigns.texture` and `uvRect(placeIndex)` instead of the panels.
+- **Names** (the Track debug button, `Debug views > Track`): while it is on, every named place inside the walls prints its name over its door on its front face: a home's under the 3.6 m ground storey's top, a business's over its sign band, a place with no front (park, alley, yard, bus stop) at head height over its door point, written on both sides. Two places that share a door (a house and its roof deck) stack. The names are quads from one glyph atlas drawn in the track debug's label style (`drawOutlinedText`), inked by the kind of place, in 64 m chunks: a chunk is one draw call, hidden while past 120 m from the eye or, when a sight field is given, unseen. They are built the first time the button is on and cost nothing while it is off. Presentation only: nothing here reaches the sim or the wire.
+
 ## Where it lives
 
 | Piece | File |
@@ -115,6 +122,7 @@ nothing past 120 m. Draw calls do not grow with the crowd.
 | The look-at | `ai/civilians/civilian-look.ts` |
 | The engine's end: crowd, link, look-at, wall hook | `engine/engine-openworld.ts` (`OpenWorldDirector`, held by `CrashEngine`) |
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
+| Signs: shop signs, names on the buildings | `present/openworld-shop-signs.ts`, `openworld-signs.ts` (the label style from `track-debug.ts`) |
 | Map and course | `world/openworld/` |
 
 The director is made with the engine; the crowd is made on the first frame the open world's course is up and a map is known

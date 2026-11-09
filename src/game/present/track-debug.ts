@@ -3,7 +3,7 @@ import { SURFACE_IDS, type SurfaceId } from "../world/catalog.ts";
 import type { Ground } from "../world/ground.ts";
 import { blankPoint, pointOn, sampleAt, type Track } from "../world/track.ts";
 
-/** The Debug-views "Track" overlay: a line across the road at each path node in its surface's ink with the node's index past it, and each checkpoint gate as a yellow strip. */
+/** The Debug-views "Track" overlay: a line across the road at each path node in its surface's ink with the node's index past it, and each checkpoint gate as a yellow strip. The open world's place names ride the same button (`openworld-signs.ts`). */
 
 /** Label ink per surface the node starts, picked to read on that surface (not the surface's own colour). */
 const INK: Record<SurfaceId, string> = {
@@ -25,6 +25,22 @@ const EDGE_WIDTH = 0.4;
 const LABEL_W = 6;
 const LABEL_H = 3;
 
+/** The outline's width as a share of the font size: 8 px round a 52 px node index. */
+const OUTLINE_SHARE = 8 / 52;
+
+/** `text` centred on (x, y) of a canvas in `ink` over a dark outline, so it reads on any surface; the open world's name signs (`openworld-signs.ts`) draw their glyphs with it. */
+export function drawOutlinedText(g: CanvasRenderingContext2D, text: string, ink: string, x: number, y: number, fontPx: number): void {
+  g.font = `bold ${fontPx}px sans-serif`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.lineWidth = fontPx * OUTLINE_SHARE;
+  g.lineJoin = "round";
+  g.strokeStyle = "#0a0a0a";
+  g.strokeText(text, x, y);
+  g.fillStyle = ink;
+  g.fillText(text, x, y);
+}
+
 function labelTexture(text: string, ink: string): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 128;
@@ -33,15 +49,7 @@ function labelTexture(text: string, ink: string): THREE.CanvasTexture {
   // A dark plate under the digits: the index reads on any surface.
   g.fillStyle = "rgba(0, 0, 0, 0.6)";
   g.fillRect(0, 0, 128, 64);
-  g.font = "bold 52px sans-serif";
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.lineWidth = 8;
-  g.lineJoin = "round";
-  g.strokeStyle = "#0a0a0a";
-  g.strokeText(text, 64, 34);
-  g.fillStyle = ink;
-  g.fillText(text, 64, 34);
+  drawOutlinedText(g, text, ink, 64, 34, 52);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;

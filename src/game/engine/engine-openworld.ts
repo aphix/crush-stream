@@ -2,7 +2,8 @@ import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
+import type { SignSight } from "../present/openworld-signs.ts";
+import type { OpenWorldMap, Place } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { tickAt } from "../ai/civilians/civilian-clock.ts";
 import { CROWD_SEED_MASK, CROWD_TIER_SCALE, LOOK_HZ, POPULATION } from "../ai/civilians/civilian-crowd-constants.ts";
@@ -17,6 +18,12 @@ const NO_EVENTS = new Float64Array(0);
 /** The drawn crowd: `update` once a frame after the crowd's step. */
 type CrowdArt = {
   update(poses: CrowdPoses, eyeX: number, eyeZ: number): void;
+  dispose(): void;
+};
+
+/** The signage on the buildings: `update` once a frame. */
+type PlaceSigns = {
+  update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null): void;
   dispose(): void;
 };
 
@@ -40,6 +47,10 @@ type OpenWorldPorts = {
   /** Calls `listener` for every solid a car meets (closing speed, contact point) until the returned function is called. */
   hookWallHits(listener: (closing: number, x: number, z: number) => void): () => void;
   makeArt(capacity: number): CrowdArt;
+  /** The Track debug button is on: every place's name is printed on its building. */
+  signsOn(): boolean;
+  /** The signage of `places`, in the scene. */
+  makeSigns(places: readonly Place[]): PlaceSigns;
 };
 
 /**
@@ -51,6 +62,7 @@ export class OpenWorldDirector {
   private map: OpenWorldMap | null = null;
   private crowd: CivilianCrowd | null = null;
   private art: CrowdArt | null = null;
+  private signs: PlaceSigns | null = null;
   private unhook: (() => void) | null = null;
   private crowdKey = 0;
   /** The host's (or solo player's) crowd clock: the sim's seconds since the crowd was made. */
@@ -128,6 +140,7 @@ export class OpenWorldDirector {
       this.throwStruck(crowd);
     }
     this.ports.eye(this.ray);
+    this.frameSigns(this.map);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ);
     this.lookAcc += wallDt;
     if (this.lookAcc >= 1 / LOOK_HZ) {
@@ -136,8 +149,10 @@ export class OpenWorldDirector {
     }
   }
 
-  /** The crowd, its drawing and its worker are gone. */
+  /** The crowd, its drawing, its worker and the signage are gone. */
   stop(): void {
+    this.signs?.dispose();
+    this.signs = null;
     if (this.crowd === null) return;
     this.unhook?.();
     this.art?.dispose();
@@ -150,6 +165,12 @@ export class OpenWorldDirector {
 
   private hostKey(): number {
     return (this.ports.tier() * CROWD_TIER_SCALE + (this.ports.seed() & CROWD_SEED_MASK)) >>> 0;
+  }
+
+  /** The signage is made on the first frame and shows names while the Track debug button is on. */
+  private frameSigns(map: OpenWorldMap): void {
+    this.signs ??= this.ports.makeSigns(map.places);
+    this.signs.update(this.ray.eyeX, this.ray.eyeZ, this.ports.signsOn(), null);
   }
 
   private start(map: OpenWorldMap, key: number, client: boolean): void {
