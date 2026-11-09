@@ -29,6 +29,7 @@ import type { CrowdLink } from "../net/net-ports.ts";
 import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
 import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
 import { OpenWorldAuto } from "./engine-openworld-auto.ts";
+import { OpenWorldCarDoors } from "./engine-openworld-cars.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
 import { EVENT_LOG_CAPACITY } from "../ai/civilians/civilian-crowd-constants.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
@@ -128,6 +129,8 @@ export class OpenWorldDirector {
   private interiors: InteriorArt | null = null;
   private unhook: (() => void) | null = null;
   private traffic: OpenWorldTraffic | null = null;
+  /** Where residents stand to get into and out of their cars, and the cars' doors swung with them. */
+  private doors: OpenWorldCarDoors | null = null;
   /** The kerb spaces, known on every peer: a car standing in one has nobody in it (`carIsEmpty`). */
   private kerb: ParkingSpots | null = null;
   private lights: LightsArt | null = null;
@@ -231,6 +234,7 @@ export class OpenWorldDirector {
     this.law?.throwTakedowns();
     if (this.traffic !== null && this.feed !== null) {
       fillCommuterFeed(this.crowd.state, tickAt(this.seconds), this.feed.legs, this.feed.parked);
+      this.doors?.step(this.crowd.poses);
       this.traffic.step(this.seconds, dt);
     }
   }
@@ -342,6 +346,9 @@ export class OpenWorldDirector {
     const crowd = this.crowd;
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
     this.startTraffic(map, client);
+    const doors = new OpenWorldCarDoors(crowd.state.capacity, () => this.traffic);
+    this.doors = doors;
+    crowd.driverDoors = (resident, _code, out) => doors.spot(resident, out);
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     if (client) crowd.hear(this.heardEvents);
   }
@@ -367,6 +374,7 @@ export class OpenWorldDirector {
     this.ports.traffic?.setFreeDrivers(null);
     this.traffic?.dispose();
     this.traffic = null;
+    this.doors = null;
     this.kerb = null;
     this.feed = null;
     this.lights?.dispose();
