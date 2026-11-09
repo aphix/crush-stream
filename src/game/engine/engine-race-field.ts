@@ -16,6 +16,7 @@ import { POLICE_CAP, PoliceBrain } from "../ai/police.ts";
 import type { CopBrain, HunterWorld } from "../ai/cop-brain.ts";
 import { HunterBrain, huntUnits } from "../ai/hunter.ts";
 import { fieldAggression } from "../ai/ai-aggression.ts";
+import { Obstacles } from "../ai/obstacles.ts";
 import { BUST } from "../ai/constants.ts";
 import { RaceSession } from "../match/session.ts";
 import { SURVIVAL, humanSlot, settleRun } from "../match/survival.ts";
@@ -213,6 +214,9 @@ export abstract class RaceField {
   protected secretOut = false;
   private placed: Placed[] = [];
   protected colliders: PropCollider[] = [];
+  /** `colliders` on a grid, and the array it was made from. */
+  private obstacles: Obstacles | null = null;
+  private obstaclesOf: PropCollider[] | null = null;
   /** The course's walls, piece by piece (`wallColliders`), and its walls and props as one surface of prisms (`solidsOf`): what a car meets. */
   protected walls: PropCollider[] = [];
   protected solids: Surface = solidsOf([], []);
@@ -318,6 +322,16 @@ export abstract class RaceField {
   private benchJson: unknown = null;
   /** The scenery arm of a bench page's `?scenery=` (`enterBenchScene`): how the next course is dressed (`placeCourse`). Nothing else writes it. */
   scenery: SceneryArm = SCENERY_ARM.on;
+
+  /** The loaded course's solid props on a grid for a pursuit to bend round (built once per course); null off a course. */
+  courseObstacles(): Obstacles | null {
+    if (!this.track) return null;
+    if (this.obstaclesOf !== this.colliders) {
+      this.obstacles = new Obstacles(this.colliders);
+      this.obstaclesOf = this.colliders;
+    }
+    return this.obstacles;
+  }
 
   /** The loaded course's solids for the spectator cams' sight lines (built once per course); null off a race. */
   courseSight(): Sight | null {

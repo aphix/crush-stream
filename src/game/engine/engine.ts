@@ -458,6 +458,14 @@ export class CrashEngine extends EngineGarage {
         followed: () => this.followedCar(),
         replaying: () => this.highlights.playing,
       },
+      law: {
+        solids: () => this.race.courseObstacles(),
+        playerBusted: (carIndex) => this.race.resetLobbyCar(carIndex),
+        sirens: (id, on) => {
+          const car = this.cars[id];
+          if (car && car.sirens !== on) car.setSirens(on);
+        },
+      },
       traffic: {
         cars: () => this.live(),
         ensureCars: (count) => this.ensureCars(count),
