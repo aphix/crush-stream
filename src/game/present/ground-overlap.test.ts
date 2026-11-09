@@ -302,7 +302,7 @@ describe("given ground layers that may be drawn at the same depth as one another
     expect(scanOverlaps([ground, unlifted], RANGE, 0.5, noise).length).toBe(1);
   });
 
-  // mutation: sed -i 's/export const GROUND_LIFT_PX = 1;/export const GROUND_LIFT_PX = 0;/' src/game/scenes/ground-stack.ts (red: 4199 m² of the oval's roads ambiguous)
+  // mutation: sed -i 's/export const GROUND_LIFT_PX = 1;/export const GROUND_LIFT_PX = 0;/' src/game/scenes/ground-stack.ts  (the roads lose their lift: the every-course row goes red)
   it("when every course's ground layers are scanned at 250 m for a phone's 1/16 pixel grid, then under 2 m² of its whole ground is ambiguous", () => {
     for (const raw of [...TRACKS, ...OFF_MENU]) {
       const track = new Track(raw);

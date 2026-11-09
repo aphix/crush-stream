@@ -285,7 +285,7 @@ function framesBlockedAway(sight: Sight, prop: Occluder, turn: number, keep: boo
   return blocked;
 }
 
-// mutation: sed -i 's/if (this.pull === 0 && turn === 0 && this.lift === 0) return;/return;/' src/game/present/eye-clear.ts (red: the keeper never moves the eye)
+// mutation: sed -i 's/if (this.pull === 0 && turn === 0 && this.lift === 0) return;/return;/' src/game/present/eye-clear.ts  (the keeper never moves the eye: the each-course row goes red)
 describe("given the chase camera on a car 2 m outside a tall prop or building of each course, driving away from it", () => {
   /** Props at least this tall (m) are tried, `PER_COURSE` of them spread over the course's list, from two sides each. */
   const TALL = 3;

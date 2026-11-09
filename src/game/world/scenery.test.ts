@@ -19,6 +19,7 @@ const json = (id: string): unknown => COURSE_JSON.find((j) => parseTrack(j).id =
 const OVAL = json(TRACK_ID.oval);
 
 describe("given every course", () => {
+  // mutation: sed -i 's|  return h / 4294967296;|  return h / 4294967296 + Math.random() * 1e-3;|' src/game/world/scenery-field.ts  (the two dressings differ: the dressed-twice row goes red)
   it("when it is dressed twice from separate parses, then both lists come out the same", () => {
     for (const j of COURSE_JSON) {
       const a = dress(j);

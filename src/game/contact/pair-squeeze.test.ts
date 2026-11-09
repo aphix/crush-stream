@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { launch, makeWorld, pooledCar, tickWorld } from "./crash-scenarios.test-util.ts";
+import { launch, makeCar, makeWorld, tickWorld } from "./crash-scenarios.test-util.ts";
 import { physicsSlice } from "./sat.ts";
 import { zipBound } from "./zip-bound.test-util.ts";
 import { stepWorld } from "../engine/world-step.ts";
@@ -43,17 +43,16 @@ function centroid(car: DeformableCar, out: Float64Array, at: number): boolean {
   return mass > 0;
 }
 
-/** What a hit left: whether the parked car was squeezed and the mm its tail is crushed (read before the next hit stands the pooled car up again). */
-type Hit = { tailMm: number; squeezed: boolean };
+type Hit = { middle: DeformableCar; squeezed: boolean };
 
 /** A parked car with a striker on each of `sides` (+1 its nose, -1 its tail, +2 its right flank) driving at it; whether it was ever squeezed (`bidirectional`) while the strikers ran in. */
 function strike(sides: readonly (1 | -1 | 2)[]): Hit {
-  const middle = pooledCar(0);
+  const middle = makeCar("shape");
   middle.spawnFacing(0, 0, 0, 0);
   const cars = [middle];
   const v = KPH / 3.6;
-  for (const [i, side] of sides.entries()) {
-    const striker = pooledCar(1 + i);
+  for (const side of sides) {
+    const striker = makeCar("shape");
     const gap = middle.frame.half.z + striker.frame.half.z + GAP;
     if (side === 2) launch(striker, middle.frame.half.x + striker.frame.half.z + GAP, 0.08, -Math.PI / 2, -v, 0);
     else launch(striker, 0, side * gap, side > 0 ? Math.PI : 0, 0, -side * v);
@@ -65,18 +64,18 @@ function strike(sides: readonly (1 | -1 | 2)[]): Hit {
     tickWorld(w, FRAME);
     squeezed ||= middle.deform.bidirectional;
   }
-  return { tailMm: carState(middle).tailMm, squeezed };
+  return { middle, squeezed };
 }
 
-// mutation: sed -i 's/^      this.deform.bidirectional = true;/      this.deform.bidirectional = false;/' src/game/vehicle/car.ts (red: the sandwich is never squeezed)
+// mutation: sed -i 's/^      this.deform.bidirectional = true;/      this.deform.bidirectional = false;/' src/game/vehicle/car.ts  (the sandwich is never squeezed: its row goes red)
 describe("given a parked car with a car driving into each of its nose and tail at 20 km/h", () => {
   it("when the two hits land within the squeeze window, then the car is squeezed (both ends crumple zones) and its tail crushes where a nose-only hit leaves it shut", () => {
     const both = strike([1, -1]);
     const noseOnly = strike([1]);
     expect(both.squeezed, "the struck car was never squeezed").toBe(true);
     expect(noseOnly.squeezed, "a car struck at one end alone was squeezed").toBe(false);
-    const tail = both.tailMm;
-    const tailAlone = noseOnly.tailMm;
+    const tail = carState(both.middle).tailMm;
+    const tailAlone = carState(noseOnly.middle).tailMm;
     expect(tailAlone, `tail of the nose-only hit ${tailAlone} mm`).toBeLessThanOrEqual(TAIL_CLOSED_MM);
     expect(tail, `tail of the sandwich ${tail} mm`).toBeGreaterThanOrEqual(TAIL_CRUSHED_MM);
   });
@@ -86,12 +85,12 @@ describe("given a parked car with a car driving into each of its nose and tail a
   });
 });
 
-// mutation: the same car.ts sed as above (red: no car is squeezed in the pile, the check proves nothing)
+// mutation: sed -i 's/^      this.deform.bidirectional = true;/      this.deform.bidirectional = false;/' src/game/vehicle/car.ts  (no car is squeezed in the pile: both pile rows go red)
 describe("given 16 cars driving across the derby arena into a pile", () => {
   for (const seed of DERBY_SEEDS) {
     it(`when the pile runs ${DERBY_SECONDS} s (seed ${seed}) and cars are squeezed in it, then no car's centroid moves past its zip bound (3 x speed x step + 5 cm) in any step`, () => {
       const cars: DeformableCar[] = [];
-      for (let i = 0; i < DERBY_CARS; i++) cars.push(pooledCar(i));
+      for (let i = 0; i < DERBY_CARS; i++) cars.push(makeCar("shape"));
       const { world } = arenaWorld(cars);
       placeDerby(cars, seed, DERBY_SPEED);
       const before = new Float64Array(2 * DERBY_CARS);

@@ -47,6 +47,7 @@ export function ejectionMatrix(hit: Hit): void {
       }
     });
 
+    // mutation: sed -i 's/peakClosing(cars, i, killed) < ejectThreshold(/peakClosing(cars, i, killed) < 1e9 + ejectThreshold(/' src/game/vehicle/ejection.ts  (a lethal hit throws nobody: the lethal row goes red)
     it(`when a ${hit} hits at the lethal ${LETHAL[hit]} m/s, then it kills ${hit === "head-on" ? "and throws both drivers" : hit === "t-bone" ? "and throws both drivers (the struck one unless he outweighs the striker past his bar), and spares the struck car's engine" : "and throws the striker's driver, and spares the struck car's engine and driver"}, for every class pair`, () => {
       for (const [a, b] of PAIRS) {
         const [striker, struck] = collide(hit, a, b, LETHAL[hit]);
