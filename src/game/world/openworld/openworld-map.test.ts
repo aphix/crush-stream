@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { buildOpenWorldMap } from "./openworld-map.ts";
+import { LAYOUT } from "./openworld-constants.ts";
 import { fixtureLots } from "./openworld-lots.test-util.ts";
 import { PLACE_KIND } from "./walk-graph.ts";
 
@@ -11,8 +12,8 @@ const TOLERANCE = 1e-3;
 
 /** The walls stand on the outer streets' far property line (outer sidewalk inside), or on their far curb (none). */
 const WALL_CASES = [
-  { it: "walls on the outer streets' far property line", wallReach: 8, outerPath: true },
-  { it: "walls on the outer streets' far curb", wallReach: 5, outerPath: false },
+  { it: "walls on the outer streets' far property line", wallReach: LAYOUT.wallReach, outerPath: true },
+  { it: "walls on the outer streets' far curb", wallReach: LAYOUT.carriageway / 2, outerPath: false },
 ] as const;
 
 for (const wallCase of WALL_CASES) {

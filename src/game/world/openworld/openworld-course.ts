@@ -26,6 +26,7 @@ import {
   SPAWN_FORMATION_BACK,
   SPAWN_FORMATION_COUNT,
   SPAWN_FORMATION_LATERAL,
+  SPAWN_BEHIND_CENTRE,
   SPAWN_FORMATION_STEP,
   SPAWN_LATERAL_SHIFT,
   TREE_LAMP_CLEARANCE,
@@ -202,10 +203,10 @@ function paintOf(lots: Lots): NonNullable<TrackInput["environment"]>["paint"] {
   }));
 }
 
-/** Spawn: abreast on the first interior east-west street's west reach, heading east; the cops queue behind. */
+/** Spawn: across the first interior intersection, heading east; the cops queue behind. */
 function spawnOf(geometry: Geometry): NonNullable<TrackInput["survival"]> {
   const z = geometry.streetZ[1]! + SPAWN_LATERAL_SHIFT;
-  const startX = (geometry.streetX[0]! + geometry.streetX[1]!) / 2;
+  const startX = geometry.streetX[1]! - SPAWN_BEHIND_CENTRE;
   const formation = Array.from({ length: SPAWN_FORMATION_COUNT }, (_, index) => ({
     x: startX - SPAWN_FORMATION_BACK - index * SPAWN_FORMATION_STEP,
     z: z + (index % 2 === 0 ? -SPAWN_FORMATION_LATERAL : SPAWN_FORMATION_LATERAL),

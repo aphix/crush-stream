@@ -3,6 +3,52 @@ export const OPENWORLD_ID = "openworld";
 export const OPENWORLD_NAME = "Open World";
 export const OPENWORLD_BLURB = "A city of rowhomes, shops and a park at golden hour, and the people walking to where they are going.";
 
+/** Street carriageway, curb to curb (m): 10.2-12.2, 11.0 common (two 3.0-3.3 m travel lanes and two 2.1-2.7 m parking lanes). */
+const CARRIAGEWAY = 11;
+/** Sidewalk, curb to property line (m): 3.0-4.3, split into a 0.6 frontage zone, a 1.8 m clear path and a 1.2 m furniture and tree strip. */
+const SIDEWALK = 3.6;
+
+/**
+ * The whole grid in one table (m), values inside the ranges Philadelphia, Baltimore and Brooklyn codes and NACTO give: swapping a number here moves the lots,
+ * the walk graph and the course together. The walls stand on the outer streets' far property line, half a building-face-to-building-face width from their centre line.
+ */
+export const LAYOUT = {
+  /** The owner's 3 x 3 blocks. */
+  columns: 3,
+  rows: 3,
+  /** 20 lots make the 112 m long side (blocks 90-150 m, Philadelphia 100-120 m common). */
+  lotsPerFace: 20,
+  /** Rowhome frontage: 4.9-6.1 m. */
+  lotFrontage: 5.6,
+  /** Lot depth: 24-30 m; a block is two lots back to back and an alley, 53 m. */
+  lotDepth: 24,
+  /** House depth: 12-18 m, leaving an 8.4 m rear yard (3-9 m) behind a 0.6 m setback. */
+  houseDepth: 15,
+  /** Front setback: 0-1.5 m (Philadelphia, Baltimore); the stoop stands in it and the frontage zone. */
+  setback: 0.6,
+  /** Mid-block rear alley along the long axis: 3.7-6.1 m, 4.9-5.5 m practical one-way service. */
+  alley: 5,
+  carriageway: CARRIAGEWAY,
+  /** Travel lane: 3.0-3.4 m (Philadelphia 10 ft). */
+  travelLane: 3.1,
+  /** Parking lane: 2.1-2.7 m (Philadelphia 8 ft). */
+  parkingLane: 2.4,
+  sidewalk: SIDEWALK,
+  sidewalkFrontage: 0.6,
+  sidewalkClear: 1.8,
+  sidewalkFurniture: 1.2,
+  wallReach: (CARRIAGEWAY + 2 * SIDEWALK) / 2,
+} as const;
+
+/** Blocks of the drawn-only backdrop round the playable grid: one ring, so the walls never show an edge to the world. */
+export const BACKDROP_RINGS = 1;
+
+/** The park block (column, row): the centre one, open to all four streets, no central courtyard. */
+export const PARK_BLOCK = { column: 1, row: 1 } as const;
+
+/** The park: basketball court 28 x 15 m (FIBA), set off the cross paths; 2.4 m paths (two people abreast); N-S paths 42 m either side of the middle so the lawn opens to the street at three points a long side. */
+export const PARK = { courtLength: 28, courtWidth: 15, courtOffsetX: 22, courtOffsetZ: 14, pathWidth: 2.4, crossPaths: [-42, 0, 42] } as const;
+
 /** Corner radius (m) of the perimeter road loop: bigger than the road's half width so the loop's own turn check passes. */
 export const LOOP_CORNER_RADIUS = 10;
 /** Nodes per loop corner arc: a quarter turn in 6 steps of 15 degrees. */
@@ -47,11 +93,13 @@ export const COURSE_LOOK = {
 /** Interior street id prefixes. */
 export const ROUTE_ID = { columnStreet: "street-x", rowStreet: "street-z" } as const;
 
-/** Spawn: abreast on the first interior east-west street's west reach, the cops queued behind. */
+/** Spawn: rows of four abreast across the first interior intersection heading east, one row gap (8 m) behind its centre so three rows stand in the 23 m the parking gaps leave clear, shifted 2 m off the street's middle so four abreast at 4 m span 12 m of the 18.2 m between building faces. */
+export const SPAWN_BEHIND_CENTRE = 8;
 export const SPAWN_LATERAL_SHIFT = 2;
+/** The cops' formation behind the anchor: two files either side of the lane's middle, 5.5 m apart nose to tail, 11 m back. */
 export const SPAWN_FORMATION_BACK = 11;
 export const SPAWN_FORMATION_STEP = 5.5;
-export const SPAWN_FORMATION_LATERAL = 2.6;
+export const SPAWN_FORMATION_LATERAL = 1.5;
 export const SPAWN_FORMATION_COUNT = 5;
 
 /** Yaw of a prefab whose front (local +x) faces each way: north is -z. */
