@@ -53,8 +53,6 @@ export function CrashLab() {
         try {
           engine = new CrashEngine(canvasRef.current, hudStore, veilRef.current);
           engineRef.current = engine;
-          // Firefox's cycle collector walks every JS object reachable only from native holders (the React ref, the rAF callback) on each collection: anchored on the window, the game's heap is marked live by the GC and skipped.
-          (window as Window & { crushEngine?: CrashEngine }).crushEngine = engine;
           engine.start();
           setBooted(true);
           engine.ready.finally(dismissBootLoader);
@@ -79,7 +77,6 @@ export function CrashLab() {
       window.clearTimeout(bootTimeout);
       engine?.dispose();
       engineRef.current = null;
-      delete (window as Window & { crushEngine?: CrashEngine }).crushEngine;
     };
   }, [hudStore]);
 
