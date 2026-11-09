@@ -8,6 +8,7 @@ import { buildRoadNetwork, type RoadNetwork } from "../../world/openworld/openwo
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { blankAiCar, type AiCar } from "../derby-ai.ts";
 import { AmbulanceService } from "./ambulance.ts";
+import { BodySwaps } from "./body-swaps.ts";
 import { KerbCars } from "./kerb-cars.ts";
 import { LEASE, MoverFleet, type DrivenCar } from "./mover-fleet.ts";
 import { carPoseAtSpot, type ResidentCarPose } from "./traffic-look.ts";
@@ -89,6 +90,7 @@ export class OpenWorldTraffic {
       residentSpot: new Int32Array(RESIDENT_CAPACITY).fill(-1),
       ports,
       sight,
+      swaps: new BodySwaps(),
       movers,
       sightBase,
       probe: sightBase + this.total,
@@ -252,7 +254,7 @@ export class OpenWorldTraffic {
     }
     this.movers.step(seconds, dt);
     this.ambulance.step(seconds);
-    this.kerb.step(dt, this.feed === null ? null : this.feed.parked);
+    this.kerb.step(seconds, dt, this.feed === null ? null : this.feed.parked);
     this.sinceFeed += dt;
     if (this.feed !== null && this.sinceFeed >= FEED_SECONDS) {
       this.sinceFeed = 0;

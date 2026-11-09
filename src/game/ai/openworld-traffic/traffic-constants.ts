@@ -141,3 +141,6 @@ export const AMBULANCE_COLOUR = 0xf4f4f2;
 export const AMBULANCE_LOAD_SECONDS = 18;
 /** An ambulance sets out from, and drives off to, a space at least this far (m) from the scene: it arrives along the streets, from the edge of the district. */
 export const AMBULANCE_DEPOT_METRES = 120;
+
+/** Rebuilding a car to give it another body (new meshes, materials and buffers for the collector) is asked at most this often (s), and only for a space no eye sees. */
+export const BODY_SWAP_SECONDS = 30;

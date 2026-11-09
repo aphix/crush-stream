@@ -179,7 +179,7 @@ export class MoverFleet {
     const paint = kind === LEASE.ambulance ? AMBULANCE_COLOUR : resident === NO_RESIDENT ? NO_COLOUR : residentColour(resident);
     if (this.state[slot] !== MOVER.parked || this.spot[slot] !== fromSpot) {
       this.release(slot);
-      if (body !== null && ports.cars()[id]!.style.id !== body) ports.setBody(id, body);
+      this.wearBody(id, body, fromSpot);
       ports.place(id, spots.x[fromSpot]!, spots.z[fromSpot]!, spots.yaw[fromSpot]!, paint === NO_COLOUR ? null : paint);
       this.colour[slot] = paint;
       this.spot[slot] = fromSpot;
@@ -248,6 +248,14 @@ export class MoverFleet {
     this.resident[slot] = NO_RESIDENT;
     this.urgent[slot] = 0;
     if (this.state[slot] === MOVER.parked) this.readyAt[slot] = this.seconds + this.dwell(slot);
+  }
+
+  /** The pool car `id` standing at space `spot` wears `body` if it can without rebuilding it where an eye might see, and when it was not rebuilt lately; else it keeps its own (a pool car of his body is preferred beforehand). */
+  private wearBody(id: number, body: CarStyleId | null, spot: number): void {
+    const { ports, swaps } = this.context;
+    if (body === null || ports.cars()[id]!.style.id === body || !swaps.allows(this.seconds) || !spotUnseen(this.context, spot)) return;
+    swaps.note(this.seconds);
+    ports.setBody(id, body);
   }
 
   private tend(slot: number, passDt: number): void {
