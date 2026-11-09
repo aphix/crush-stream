@@ -6,7 +6,9 @@ import { layOnGround } from "../vehicle/car-air-points.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { WORK } from "../engine/sim-phases.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, Probe, run, type CrashResult } from "./crash-scenarios.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { Handoff } from "../kernel/shared-run.test-util.ts";
+import { assertSameDigest } from "../vehicle/test-support.ts";
 
 /**
  * `activation: epicenter` against `whole` on the crash rows: the same staged hit run twice, once per mode, through the engine's own step. A wreck that
@@ -103,6 +105,19 @@ describe("given a staged hit run once per activation mode", () => {
       }
     });
   }
+});
+
+// Mutation: `sed -i 's|const epi = stage(kind, true); whole.cars[0]!.deform.masses[0]!.world.x += 1e-9;|const epi = stage(kind, true); whole.cars[0]!.deform.masses[0]!.world.x += 1e-9;|' src/game/contact/epicenter-equivalence.test.ts` turns this row red (the keeping row writes into the whole run it hands on).
+describe("given the wall's whole-mode run the first describe kept for the nudge rows", () => {
+  it("when it is made again from scratch, then every mass's world position, the body's and the results are the kept run's to the bit", () => {
+    const make = () => stage("wall", false);
+    const handed = wholeRuns.take("wall", make);
+    const fresh = make();
+    const flat = (r: Ran) => r.cars.flatMap((c) => [c.group.position.x, c.group.position.y, c.group.position.z, ...c.deform.masses.flatMap((m) => [m.world.x, m.world.y, m.world.z])]);
+    expect(firstMismatch(flat(handed), flat(fresh)), "first position that differs (index into body then masses' x y z)").toBeUndefined();
+    assertSameDigest(handed.results, fresh.results, "results");
+    wholeRuns.keep("wall", handed);
+  });
 });
 
 describe("given the same staged hits run twice in whole mode, one with a car's masses nudged 1 micrometre", () => {

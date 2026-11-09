@@ -12,6 +12,7 @@ import { BUMPER_F, CLASS_LIFT } from "./constants.ts";
 import { BUMP_RESERVE, droop } from "./car-suspension.ts";
 import { FRAME_RAIL_Y } from "./interior-geometry.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { Handoff } from "../kernel/shared-run.test-util.ts";
 
 /**
@@ -262,6 +263,18 @@ describe("given a monster that lost the two wheels on one side, dropped onto tha
         expect(car.partOff(down), `${tag}: the mirror under the car is still on it`).toBeTruthy();
         expect(!car.partOff(up), `${tag}: the mirror above the car was torn off`).toBe(true);
       }
+    }
+  });
+
+  // Mutation: `sed -i 's|const { car, lowest } = height === 2 ? sleepers.keep(side, drop) : drop; car.deform.masses[0]!.local.x += 1e-9;|const { car, lowest } = height === 2 ? sleepers.keep(side, drop) : drop; car.deform.masses[0]!.local.x += 1e-9;|' src/game/vehicle/tumbled-rest.test.ts` turns this row red (the keeping row writes into the drop it hands on).
+  it("when each 2 m drop is made again from scratch before the next row lets it sleep on, then it is the kept one to the bit: sleep, pose, every mass and the lowest points", () => {
+    for (const side of ["left", "right"] as const) {
+      const make = () => dropped("sedan", "monster", side, 2, 0.5, LOW_HUBS[side]);
+      const handed = sleepers.take(side, make);
+      const fresh = make();
+      const flat = (d: Drop) => [d.sleptAt, d.car.asleep ? 1 : 0, ...d.car.group.position.toArray(), ...d.car.group.quaternion.toArray(), ...d.car.velocity.toArray(), ...d.car.deform.masses.flatMap((m) => [...m.local.toArray(), ...m.world.toArray()]), ...Object.values(d.lowest)];
+      expect(firstMismatch(flat(handed), flat(fresh)), `${side}: first number that differs (sleep time and flag, body, turn, velocity, each mass's local then world x y z, then the lowest points)`).toBeUndefined();
+      sleepers.keep(side, handed);
     }
   });
 

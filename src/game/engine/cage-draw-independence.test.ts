@@ -172,6 +172,19 @@ describe("given a staged crash run twice, the second drawing every car before ev
   }
 });
 
+// Mutation: `sed -i 's|const first = firstDifference(plain, drawn); drawn[0]![0] += 1e-9;|const first = firstDifference(plain, drawn); drawn[0]![0] += 1e-9;|' src/game/engine/cage-draw-independence.test.ts` turns this row red (the keeping row writes into the drawn run it hands on).
+describe("given the door-ajar drawn run the first describe kept for the frame-skip rows", () => {
+  it("when it is made again from scratch, then every car's numbers are the kept run's to the bit at every step", () => {
+    const make = () => run(true, { skip: false, stage: "door ajar" });
+    const handed = drawnRuns.take("door ajar", make);
+    const fresh = make();
+    expect(fresh.length, "the two races ran a different number of steps").toBe(handed.length);
+    const first = firstDifference(handed, fresh);
+    expect(first.step, `a car differs at step ${first.step}, car ${Math.floor(first.at / STATE)}, number ${first.at % STATE}: ${handed[first.step]?.[first.at]} against ${fresh[first.step]?.[first.at]}`).toBe(-1);
+    drawnRuns.keep("door ajar", handed);
+  });
+});
+
 describe("given a staged crash drawn every frame with frame skipping off and then on", () => {
   for (const stage of ["head-on", "door ajar"] as const) {
     it(`when the ${stage} is done, then every car's pose, velocity, crush, cage fields, door swing and part state are the same numbers at every step`, () => {

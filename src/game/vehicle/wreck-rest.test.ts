@@ -11,6 +11,7 @@ import { BELLY_ABSENT, POINT_X, POINT_Y, POINT_Z, REST_SPEED } from "./car-air-b
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { Handoff } from "../kernel/shared-run.test-util.ts";
 
 /**
@@ -162,6 +163,18 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
       });
     }
   }
+
+  // Mutation: `sed -i 's|const { clearance, mesh } = lowestDrawn(wreck, ground); wreck.velocity.x += 1e-9;|const { clearance, mesh } = lowestDrawn(wreck, ground); wreck.velocity.x += 1e-9;|' src/game/vehicle/wreck-rest.test.ts` turns this row red (the keeping row writes into the wrecks it hands on).
+  const [handedHit] = HITS.slice(3);
+  it(`when ${handedHit!.name} on a 10° slope is made again from scratch, then both wrecks are the ones the rows above kept, to the bit: pose, velocity, sleep and every mass`, () => {
+    const make = () => wrecksAtRest(handedHit!, new Slope(10));
+    const handed = slopeWrecks.take(handedHit!.name, make);
+    const fresh = make();
+    const flat = (wrecks: DeformableCar[]) => wrecks.flatMap((w) => [w.asleep ? 1 : 0, ...w.group.position.toArray(), ...w.group.quaternion.toArray(), ...w.velocity.toArray(), ...w.deform.masses.flatMap((m) => m.world.toArray())]);
+    expect(fresh.length, "the two settles left a different number of wrecks").toBe(handed.length);
+    expect(firstMismatch(flat(handed), flat(fresh)), "first number that differs (per wreck: asleep, body, turn, velocity, then each mass's world x y z)").toBeUndefined();
+    slopeWrecks.keep(handedHit!.name, handed);
+  });
 
   // A wreck lying over (up under `UPRIGHT_UP_Y`) with its low tyres on the ground rolled on them as if on its wheels, no row of it
   // gripping: the monster wreck, on its side across the slope with its brakes held, rolled down it at 1.3 to 4.5 m/s, never asleep.
