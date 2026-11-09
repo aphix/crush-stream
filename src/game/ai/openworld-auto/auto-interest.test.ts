@@ -33,8 +33,7 @@ describe("given what the Auto camera finds interesting", () => {
 
   it("when cars are weighed, then a lit siren beats a car at speed, a car at speed beats a crawl, and a parked car is the least", () => {
     const readings = [driverInterest(DRIVING_MPS, true), driverInterest(DRIVING_MPS, false), driverInterest(CRAWL_MPS, false), driverInterest(0, false)];
-    expect(readings, "siren, speed, crawl, parked").toEqual([...readings].sort((a, b) => b - a));
-    expect(new Set(readings).size, "four different readings").toBe(4);
+    for (let at = 1; at < readings.length; at++) expect(readings[at - 1]!, `reading ${at - 1} (siren, speed, crawl, parked) over the next`).toBeGreaterThan(readings[at]!);
   });
 
   it("when a foot cop runs, then he is in pursuit and more to watch than one on his beat, and making an arrest is more still", () => {

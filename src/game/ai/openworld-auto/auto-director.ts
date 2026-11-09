@@ -68,6 +68,8 @@ export class AutoDirector {
   heldFor = 0;
   private holdFor = HOLD_MAX_SECONDS;
   private scanIn = 0;
+  /** Seconds before a cut that found no subject tries again. */
+  private retryIn = 0;
   private seed: number;
   private readonly table: AutoCandidates;
   private readonly recentKind = new Int8Array(RECENT_SUBJECTS).fill(NONE);
@@ -86,6 +88,7 @@ export class AutoDirector {
     this.cuts = 0;
     this.heldFor = 0;
     this.scanIn = 0;
+    this.retryIn = 0;
     this.recentKind.fill(NONE);
     this.recentId.fill(NONE);
   }
@@ -94,8 +97,9 @@ export class AutoDirector {
   step(wallDt: number, scan: AutoScan): boolean {
     this.heldFor += wallDt;
     this.scanIn -= wallDt;
-    if (this.kind === NONE) return this.scanIn <= 0 && this.cut(scan);
-    if (!scan.watchable(this.kind as SubjectKind, this.id)) return this.cut(scan);
+    this.retryIn -= wallDt;
+    if (this.kind === NONE) return this.retryIn <= 0 && this.cut(scan);
+    if (!scan.watchable(this.kind as SubjectKind, this.id)) return this.retryIn <= 0 && this.cut(scan);
     if (this.heldFor >= this.holdFor) return this.cut(scan);
     if (this.heldFor < HOLD_MIN_SECONDS || this.scanIn > 0) return false;
     this.scanIn = SCAN_SECONDS;
@@ -109,7 +113,7 @@ export class AutoDirector {
     scan.fill(table);
     const best = this.pick(table);
     if (best < 0) {
-      this.scanIn = SCAN_SECONDS;
+      this.retryIn = SCAN_SECONDS;
       this.holdFor = this.heldFor + SCAN_SECONDS;
       return false;
     }

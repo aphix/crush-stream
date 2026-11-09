@@ -67,7 +67,7 @@ describe("given the Auto camera over a crowd that is out on the fixture map", ()
     const tick = tickAt(crowd.crowdSeconds);
     expect(subject.kind, "the kind of subject").toBe(SUBJECT.civilian);
     expect(auto.text()?.title, "the bubble's title").toBe(civilianLine(crowd.state, subject.id, tick));
-    expect(auto.text()?.lines, "the bubble's lines").toEqual(historyLines(crowd.state, subject.id));
+    expect(auto.text()?.lines.join("|"), "the bubble's lines").toBe(historyLines(crowd.state, subject.id).join("|"));
   });
 
   it("when one of them is fighting, then that one is the first subject", () => {
@@ -78,7 +78,8 @@ describe("given the Auto camera over a crowd that is out on the fixture map", ()
     const auto = autoOver(crowd);
     auto.step(FRAME_S);
     expect(out.length, "civilians out").toBeGreaterThan(3);
-    expect(auto.subject, "the subject").toEqual({ kind: SUBJECT.civilian, id: fighter });
+    expect(auto.subject?.kind, "the kind of subject").toBe(SUBJECT.civilian);
+    expect(auto.subject?.id, "the subject: the one fighting").toBe(fighter);
   });
 });
 
@@ -99,7 +100,8 @@ describe("given the Auto camera over a street with cars and nobody on the paveme
   it("when a resident drives, then the driver is the subject, never the viewer's own car whose siren is lit, and his bubble is his line, at the wheel", () => {
     const { crowd, driver, auto } = street(false);
     auto.step(FRAME_S);
-    expect(auto.subject, "the subject: the resident's car, not the viewer's own patrol car, not the parked patrol car").toEqual({ kind: SUBJECT.driver, id: 1 });
+    expect(auto.subject?.kind, "the kind of subject").toBe(SUBJECT.driver);
+    expect(auto.subject?.id, "the subject: the resident's car, not the viewer's own patrol car, not the parked patrol car").toBe(1);
     expect(auto.text()?.title, "the driver's title").toBe(civilianLine(crowd.state, driver, tickAt(crowd.crowdSeconds)));
     expect(auto.text()?.lines[0], "the driver's first line").toBe("at the wheel");
   });
@@ -107,7 +109,8 @@ describe("given the Auto camera over a street with cars and nobody on the paveme
   it("when a patrol car has its siren lit, then it is the subject, with the patrol's bubble", () => {
     const { auto } = street(true);
     auto.step(FRAME_S);
-    expect(auto.subject, "the subject: the patrol car").toEqual({ kind: SUBJECT.driver, id: 2 });
+    expect(auto.subject?.kind, "the kind of subject").toBe(SUBJECT.driver);
+    expect(auto.subject?.id, "the subject: the patrol car").toBe(2);
     expect(auto.text()?.title, "the patrol's title").toBe("Patrol car - officer at the wheel");
     expect(auto.text()?.lines, "the patrol's line").toEqual(["siren on, answering a call"]);
   });

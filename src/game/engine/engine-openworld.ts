@@ -230,6 +230,7 @@ export class OpenWorldDirector {
       this.culling.stop(this.ports.cars());
       this.dropFacades();
       this.stop();
+      this.setAuto(false);
       return;
     }
     this.culling.frame(this.ports.cars(), wallDt);
