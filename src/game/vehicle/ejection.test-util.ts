@@ -2,7 +2,7 @@ import { DeformableCar } from "./car.ts";
 import { ejectThreshold } from "./ejection.ts";
 import { launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { armKill, CLASSES, DEFAULT_REALISM, HANDLING, type VehicleClassId } from "./vehicle-classes.ts";
-import { makeCar as makeClassCar } from "./ground-probe.test-util.ts";
+import { makeCar as makeClassCar, pooled } from "./ground-probe.test-util.ts";
 import { INITIAL_HUD } from "../hud/hud-store.ts";
 
 /** A derby wreck one hit from done: its wear limit is below a single hit's cap (36 m²/s²). */
@@ -27,9 +27,8 @@ export function headOn(mps: number): [DeformableCar, DeformableCar] {
   return [a, b];
 }
 
-/** A car of class `cls` dressed as a race or fleet car is: its body, the HUD's squash, buckle and mode, the default-realism kill limits. */
-export function classCar(cls: VehicleClassId): DeformableCar {
-  const car = makeClassCar(cls);
+/** `car` dressed as a race or fleet car of class `cls` is: the HUD's squash, buckle and mode, the default-realism kill limits. */
+export function dressAsClass(car: DeformableCar, cls: VehicleClassId): DeformableCar {
   car.deform.squash = INITIAL_HUD.squash;
   car.deform.buckle = INITIAL_HUD.buckle;
   car.deform.setMode(INITIAL_HUD.deformMode);
@@ -37,9 +36,14 @@ export function classCar(cls: VehicleClassId): DeformableCar {
   return car;
 }
 
+/** A new car of class `cls` dressed as a race or fleet car is: its body and `dressAsClass`. */
+export function classCar(cls: VehicleClassId): DeformableCar {
+  return dressAsClass(makeClassCar(cls), cls);
+}
+
 const ejectBars = new Map<VehicleClassId, number>();
 
-/** The closing speed (m/s) at which a hit on a running car of class `cls` throws its driver outside a mini game (`ejectThreshold`); read once per class, from a new car, since every new car of a class has the same bar. */
+/** The closing speed (m/s) at which a hit on a running car of class `cls` throws its driver outside a mini game (`ejectThreshold`); read once per class (a new car's bar is the same every time). */
 export function ejectBar(cls: VehicleClassId): number {
   let bar = ejectBars.get(cls);
   if (bar === undefined) {
@@ -76,8 +80,8 @@ const PLAYED_OUT_S = 0.5;
  * struck car's right door. Rear-end: the striker drives its nose into the parked struck car's tail.
  */
 export function collide(hit: Hit, striker: VehicleClassId, struck: VehicleClassId, mps: number): [Outcome, Outcome] {
-  const s = classCar(striker);
-  const t = classCar(struck);
+  const s = dressAsClass(pooled(striker, 0), striker);
+  const t = dressAsClass(pooled(struck, 1), struck);
   if (hit === "head-on") {
     launch(s, -5, 0, Math.PI / 2, mps, 0);
     launch(t, 5, 0, -Math.PI / 2, -mps, 0);
@@ -105,7 +109,5 @@ export function collide(hit: Hit, striker: VehicleClassId, struck: VehicleClassI
     still = w.clock.phase !== "approach" && !moved(now[0], result[0]) && !moved(now[1], result[1]) ? still + 1 : 0;
     result = now;
   }
-  s.dispose();
-  t.dispose();
   return result;
 }
