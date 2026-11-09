@@ -49,7 +49,7 @@ const LIT_SHARE = 0.7;
 const RETRY_STEP = 8;
 /** Spacing (m) of a city's street trees (formal rows run 7 to 10 m, .extraResearch/perplexity/2026-11-08-*.md), and their scale range (a young plane tree under the lamps' 4.4 m). */
 const TREE_SPACING = 10;
-const TREE_SCALE = 0.55;
+export const TREE_SCALE = 0.55;
 const TREE_SCALE_SPAN = 0.2;
 /** Station spacing jitter: a share of the spacing either way. */
 const SPACING_JITTER = 0.1;

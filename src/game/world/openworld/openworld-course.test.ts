@@ -8,10 +8,18 @@ import { PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
 import { Track, blankProjection, projectPath } from "../track.ts";
 import { parseTrack } from "../track-schema.ts";
-import { CAR_WIDTH, LAMP_FROM_CURB, LAMP_SPACING, PARKING_CORNER_GAP, TREE_LAMP_CLEARANCE, TREE_SPACING } from "./openworld-constants.ts";
+import { LAMP_FROM_CURB } from "./openworld-constants.ts";
 import { OPENWORLD_ID, openWorldCourse } from "./openworld-course.ts";
 import { fixtureLots } from "./openworld-lots.test-util.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
+
+/** A car is 2 m wide: a wall gap wider than this lets one through. */
+const CAR_WIDTH = 2;
+/** The street furniture rules held from outside the constants table: lamps every 32 m, trees every 9 m and 1.5 m from a lamp, parked cars 6 m from a crossing street. */
+const LAMP_SPACING_M = 32;
+const TREE_SPACING_M = 9;
+const TREE_LAMP_CLEARANCE_M = 1.5;
+const CORNER_GAP_M = 6;
 
 /** The walls stand on the outer streets' far property line, or on their far curb. */
 const WALL_CASES = [
@@ -56,7 +64,7 @@ for (const wallCase of WALL_CASES) {
       return Math.abs(dx * detCos(prop.yaw) - dz * detSin(prop.yaw)) <= depth / 2 && Math.abs(dx * detSin(prop.yaw) + dz * detCos(prop.yaw)) <= width / 2;
     };
 
-    // mutation: sed -i 's/export const LOOP_CORNER_RADIUS = 10;/export const LOOP_CORNER_RADIUS = 2;/' src/game/world/openworld/openworld-constants.ts
+    // mutation: sed -i 's/geometry.streetX.slice(1, -1).map((x, index) => route(/geometry.streetX.slice(1, 1).map((x, index) => route(/' src/game/world/openworld/openworld-course.ts
     it("when it is parsed and built as a track, then it is the course named openworld, a closed loop with the interior streets as car-free routes", () => {
       expect(course.id, "course id").toBe(OPENWORLD_ID);
       expect(OPENWORLD_ID, "the id the scene asks for").toBe("openworld");
@@ -154,11 +162,11 @@ for (const wallCase of WALL_CASES) {
       expect(lamps.length, "lamps on the face").toBeGreaterThanOrEqual(2);
       expect(trees.length, "trees on the face").toBeGreaterThanOrEqual(4);
       for (const gap of gaps(lamps)) {
-        expect(gap, "lamp spacing (m)").toBeGreaterThan(LAMP_SPACING * 0.8);
-        expect(gap, "lamp spacing (m)").toBeLessThan(LAMP_SPACING * 1.2);
+        expect(gap, "lamp spacing (m)").toBeGreaterThan(LAMP_SPACING_M * 0.8);
+        expect(gap, "lamp spacing (m)").toBeLessThan(LAMP_SPACING_M * 1.2);
       }
-      for (const gap of gaps(trees)) expect(gap, "tree spacing (m)").toBeGreaterThan(TREE_SPACING * 0.8);
-      for (const tree of trees) for (const lamp of lamps) expect(Math.abs(tree - lamp), "tree to lamp (m)").toBeGreaterThanOrEqual(TREE_LAMP_CLEARANCE);
+      for (const gap of gaps(trees)) expect(gap, "tree spacing (m)").toBeGreaterThan(TREE_SPACING_M * 0.8);
+      for (const tree of trees) for (const lamp of lamps) expect(Math.abs(tree - lamp), "tree to lamp (m)").toBeGreaterThanOrEqual(TREE_LAMP_CLEARANCE_M);
     });
 
     // mutation: sed -i 's/export const PARKING_CORNER_GAP = 6;/export const PARKING_CORNER_GAP = 0;/' src/game/world/openworld/openworld-constants.ts
@@ -175,7 +183,7 @@ for (const wallCase of WALL_CASES) {
       });
       expect(parked.length, "cars parked on the streets").toBeGreaterThan(40);
       expect(outOfLane.length, "cars outside a parking lane").toBe(0);
-      expect(Math.min(...parked.map(crossGap)), "nearest a parked car stands to a crossing street's edge (m)").toBeGreaterThanOrEqual(PARKING_CORNER_GAP - 1e-6);
+      expect(Math.min(...parked.map(crossGap)), "nearest a parked car stands to a crossing street's edge (m)").toBeGreaterThanOrEqual(CORNER_GAP_M - 1e-6);
     });
 
     // mutation: sed -i 's/const z = geometry.streetZ\[1\]! + SPAWN_LATERAL_SHIFT;/const z = geometry.streetZ[0]! + SPAWN_LATERAL_SHIFT;/' src/game/world/openworld/openworld-course.ts
