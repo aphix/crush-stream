@@ -45,7 +45,7 @@ describe("given a course whose props name scenery assets", () => {
     expect(crosswalk!.asset, "crosswalk asset").toBe(SCENERY_ASSETS.findIndex((row) => row.id === CROSSWALK));
   });
 
-  // mutation: sed -i 's/if (p.asset !== undefined) {/if (false) {/' src/game/world/placements.ts
+  // mutation: sed -i 's/sx: (p.size ? p.size\[0\] \/ size\[0\] : 1) \* s,/sx: 2 * s,/' src/game/world/placements.ts
   it("when a prop names no asset, then it is placed as before: no asset, its prefab's own size", () => {
     expect(cone!.prefab, "cone prefab").toBe(PREFAB.cone);
     expect([cone!.x, cone!.z, cone!.sx, cone!.sy, cone!.sz], "cone x, z and scales").toEqual([31, 20, 1, 1, 1]);
