@@ -496,6 +496,16 @@ describe("given each of the 7 car types released at full throttle from the long 
     expect(Math.abs(hit.arrivalSpeed - LOWEST_FAILING_ARRIVAL) <= 0.1 && hit.ejections === 1, `arrival ${hit.arrivalSpeed}, ${hit.ejections} throws`).toBeTruthy();
   });
 
+  // mutation: sed -i 's|if (!drawn) car.updateSkin = () => {};|if (!drawn) car.updateSkin = () => { car.velocity.x *= 1.001; };|' src/game/scenes/minigame-profile.test-util.ts  (the undrawn drive then differs from the drawn one: this row goes red)
+  it("when a drive into the barrier is made with the car drawn every frame, then its hit is the undrawn drive's, number for number (the drives here leave the car undrawn)", () => {
+    for (const type of [truck, monsterCar]) {
+      const undrawn = driveToBarrier(type, longJumpVariant(shipped), START_PHASES[2]!, Infinity);
+      const drawn = driveToBarrier(type, longJumpVariant(shipped), START_PHASES[2]!, Infinity, true);
+      expect(undrawn.arrivalSpeed, `${type.id} arrived`).toBeGreaterThan(MINIMUM_EJECTING_ARRIVAL);
+      for (const field of ["ejections", "arrivalSpeed", "arrivalVertical", "reboundDistance", "endX"] as const) expect(drawn[field], `${type.id}: ${field} drawn against undrawn`).toBe(undrawn[field]);
+    }
+  });
+
   it("when the builder is given the shipped numbers, then its floor is the shipped floor", () => {
     const built = longJumpVariant(shipped);
     const station = stationDriveProfile("longJump");

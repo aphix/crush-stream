@@ -494,12 +494,14 @@ const HIT_WALL_MAX = 40;
 /**
  * One car of `type` parked `startOffset` m further down the long jump's pad than the shipped start (a different slice phase at the
  * barrier), released and steered down +x with its pedals holding its horizontal speed to `horizontalSpeedCap` m/s (Infinity: full
- * throttle), into the jersey barrier at the world origin, as `driveIntoBarrier` drives it but with no ragdoll: the sim's own ejection is what is counted.
+ * throttle), into the jersey barrier at the world origin, as `driveIntoBarrier` drives it but with no ragdoll: the sim's own ejection is what is counted, so
+ * the car is not drawn (a crushed car's skin is most of a frame and changes nothing the sim reads); `drawn` skins it every frame, as the engine does: the control of the row that says so.
  */
-export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffset: number, horizontalSpeedCap: number): BarrierHit {
+export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffset: number, horizontalSpeedCap: number, drawn = false): BarrierHit {
   const ground = new ProfileGround(profile, FINE_CELL);
   setGround(ground);
   const car = rangeCar(type);
+  if (!drawn) car.updateSkin = () => {};
   try {
     const startX = profile.startX + startOffset;
     car.spawnFacing(startX, 0, THROW_YAW, 0);
