@@ -27,6 +27,14 @@ export default class TestReporter {
     this.stderrByFile.set(file, [...(this.stderrByFile.get(file) ?? []), log.content]);
   }
 
+  /**
+   * The parity project runs beside the suites; a red there means every other process skinned with a kernel the JS skin disagrees with, so the run stops.
+   * @param {import("vitest/node").TestModule} module
+   */
+  onTestModuleEnd(module) {
+    if (module.project.name === "parity" && module.state() === "failed") void this.vitest?.cancelCurrentRun("test-failure");
+  }
+
   /** @param {ReadonlyArray<import("vitest/node").TestModule>} modules */
   onTestRunEnd(modules) {
     for (const [file, lines] of this.stderrByFile) {

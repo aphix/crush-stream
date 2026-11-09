@@ -124,7 +124,7 @@ Deploy (`deploy/`, `scripts/` build helpers, `kernels/`, `migrations/`) sits out
 Runner: Vitest 5 (`vitest.config.ts`), with Node's own module loader (`experimental.viteModuleRunner: false`: Node runs the TypeScript as is, no Vite transform) and one forked process per test file. Every process imports
 `scripts/test-setup.mjs` first: the WASM skin kernel is loaded, so headless engines and cars skin as the browser does, and a failing assert on big values
 gets a bounded message (`scripts/assert-guard.mjs`; `docs/TOOLCHAIN.md`, test memory guards). The JS skin it replaces is checked
-against it alone, first, by `npm run test:parity` (`deform/skin-kernel.parity.ts`, the `parity` project: no kernel loaded), and the suites stop if that fails.
+against it by `npm run test:parity` (`deform/skin-kernel.parity.ts`, the `parity` project: no kernel loaded, a process per file), which `test:app` queues first in its pool, and the run is cancelled if that fails.
 A test process that writes to stderr fails the run (`scripts/test-reporter.mjs`, which also prints the slowest files). A row that states an open problem is a
 `todoRow(name, reason, fn)` (`kernel/todo-row.test-util.ts`): listed with its reason and not run; `npm run test:todos` runs those bodies and reports green or skipped-with-the-failed-assertion, never failing the run. `npm run test:app` runs the game and
 multiplayer suites. Each test stages the moment it claims (cars placed at the poses, speeds and states it needs; no full race,

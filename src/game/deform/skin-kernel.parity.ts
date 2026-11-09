@@ -89,7 +89,7 @@ function numberField(o: object, key: string): number {
   return v;
 }
 
-function playScenario(s: Scenario): Leg {
+function playScenario(s: Scenario, stopAtDiffFrom?: readonly number[]): Leg {
   const scene = new THREE.Scene();
   const cars = Array.from({ length: s.cars }, (_, i) => new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: `c${i}` }, scene, null, fleetStyle(i)));
   for (const [i, c] of cars.entries()) assignClass(c, fleetClass(i));
@@ -145,6 +145,7 @@ function playScenario(s: Scenario): Leg {
       }
     }
     digests.push(hash >>> 0);
+    if (stopAtDiffFrom && digests[f] !== stopAtDiffFrom[f]) break;
   }
   const final = cars.flatMap((c) => HASHED.map(([mesh, name]) => Float32Array.from(c.lookMeshes()[mesh].geometry.getAttribute(name).array)));
   setGround(null);
@@ -152,7 +153,7 @@ function playScenario(s: Scenario): Leg {
 }
 
 /** `playScenario` with every tyre-hold sag pass that lifted a corner counted into the leg's `seen.sagRaised`. */
-function play(s: Scenario): Leg {
+function play(s: Scenario, stopAtDiffFrom?: readonly number[]): Leg {
   const sagRaised = { count: 0 };
   const real = TyreSkin.prototype["liftSaggingTriangles"];
   TyreSkin.prototype["liftSaggingTriangles"] = function (this: TyreSkin, ...args: Parameters<typeof real>) {
@@ -161,7 +162,7 @@ function play(s: Scenario): Leg {
     return raised;
   };
   try {
-    const leg = playScenario(s);
+    const leg = playScenario(s, stopAtDiffFrom);
     leg.seen.sagRaised = sagRaised.count;
     return leg;
   } finally {
@@ -169,8 +170,8 @@ function play(s: Scenario): Leg {
   }
 }
 
-/** `play` with every `SkinKernel.run` and tyre sag pass counted, and `mutate` (a deliberately wrong input) applied before each skin run. */
-function playOnKernel(s: Scenario, mutate?: (d: SkinDynamic) => void): { leg: Leg; runs: number; sagPasses: number } {
+/** `play` with every `SkinKernel.run` and tyre sag pass counted, and `mutate` (a deliberately wrong input) applied before each skin run. A leg given `stopAtDiffFrom` (the JS digests) ends at the first frame whose digest differs: a mutation row needs no more. */
+function playOnKernel(s: Scenario, mutate?: (d: SkinDynamic) => void, stopAtDiffFrom?: readonly number[]): { leg: Leg; runs: number; sagPasses: number } {
   const real = SkinKernel.prototype.run;
   const realSag = TyreSagArena.prototype.sagPass;
   let runs = 0;
@@ -185,7 +186,7 @@ function playOnKernel(s: Scenario, mutate?: (d: SkinDynamic) => void): { leg: Le
     return realSag.apply(this, args);
   };
   try {
-    return { leg: play(s), runs, sagPasses };
+    return { leg: play(s, stopAtDiffFrom), runs, sagPasses };
   } finally {
     SkinKernel.prototype.run = real;
     TyreSagArena.prototype.sagPass = realSag;
@@ -216,14 +217,20 @@ describe("given the WASM skin kernel (the compiled skin and normals maths), load
     });
   }
 
+  // mutation: sed -i 's/d.params\[8\] = 0;/void 0;/' src/game/deform/skin-kernel.parity.ts  (the kernel is not mutated, so no frame's digest differs from the JS skin's)
   it("when the kernel is told to drop one parameter (the deformation mode), then at least one frame's digest differs from the JS skin's, so the comparison can fail", () => {
     const s = SCENARIOS[0]!;
-    const { leg } = playOnKernel(s, (d) => {
-      d.params[8] = 0;
-    });
+    const { leg } = playOnKernel(
+      s,
+      (d) => {
+        d.params[8] = 0;
+      },
+      js.get(s)!.digests,
+    );
     expect(leg.digests.some((h, f) => h !== js.get(s)!.digests[f]), "a kernel reading the lattice branch in shape mode must not match").toBeTruthy();
   });
 
+  // mutation: sed -i 's/r: tyre.r \* 1.2/r: tyre.r * 1.0/' src/game/deform/skin-kernel.parity.ts  (the tyres are not enlarged, so no frame's digest differs from the JS hold's)
   it("when the sag pass is handed tyres a fifth larger than the car's, then at least one frame's digest differs from the JS hold's, so the hold comparison can fail", () => {
     const s = SCENARIOS[0]!;
     const real = TyreSagArena.prototype.sagPass;
@@ -231,7 +238,7 @@ describe("given the WASM skin kernel (the compiled skin and normals maths), load
       return real.call(this, skin, pos, wheel, again, { r: tyre.r * 1.2, halfW: tyre.halfW });
     };
     try {
-      const { leg } = playOnKernel(s);
+      const { leg } = playOnKernel(s, undefined, js.get(s)!.digests);
       expect(leg.digests.some((h, f) => h !== js.get(s)!.digests[f]), "a sag pass over larger tyres must not match").toBeTruthy();
     } finally {
       TyreSagArena.prototype.sagPass = real;

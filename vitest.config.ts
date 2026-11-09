@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { BaseSequencer, type TestSpecification } from "vitest/node";
 import { defineConfig } from "vitest/config";
 
 /**
@@ -30,14 +31,23 @@ const defaults = {
   diff: { truncateThreshold: 60 },
 };
 
+/** The parity file is the longest single file of a run; queued behind the suites it would run alone at the end of the pool. */
+class ParityFirst extends BaseSequencer {
+  override async sort(files: TestSpecification[]): Promise<TestSpecification[]> {
+    const sorted = await super.sort(files);
+    return [...sorted.filter((f) => f.project.name === "parity"), ...sorted.filter((f) => f.project.name !== "parity")];
+  }
+}
+
 /** WASM skin kernel loaded first, as in the browser (`scripts/test-setup.mjs`). */
 const appSetup = ["./scripts/test-setup.mjs"];
 
 export default defineConfig({
   test: {
     reporters: ["default", "./scripts/test-reporter.mjs"],
+    sequence: { sequencer: ParityFirst },
     projects: [
-      /** Runs before everything else (`npm run test:parity`): the JS skin against the kernel, which must not be loaded yet. */
+      /** The JS skin against the kernel, which must not be loaded yet: no setup file, and every file is its own process. Queued first, runs beside the suites; a red there cancels the run (`scripts/test-reporter.mjs`). */
       { test: { ...defaults, name: "parity", include: ["src/**/*.parity.ts"] } },
       {
         test: {

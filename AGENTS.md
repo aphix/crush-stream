@@ -33,8 +33,8 @@ are in `docs/ARCHITECTURE.md` and enforced by `npm run check:boundaries`.
 
 | Command | What it does |
 |---|---|
-| `npm run test:app` | Vitest over the `src/game`, `src/lib/multiplayer`, `src/lib/submissions` and `src/lib/deploy` suites and `scripts/**/*.test.mjs`; the per-commit gate. It runs `test:parity` first and stops if it fails. A test process that writes to stderr fails the run. The GL rows (`scripts/detail-spec-aa.test.mjs`) draw through `@kmamal/gl`: they need its binary in this `node_modules` and an X display (Environment) |
-| `npm run test:parity` | the WASM skin kernel against the JS skin (`deform/skin-kernel.parity.ts`), alone: every other test process skins with the kernel |
+| `npm run test:app` | Vitest over the `src/game`, `src/lib/multiplayer`, `src/lib/submissions` and `src/lib/deploy` suites and `scripts/**/*.test.mjs`; the per-commit gate. The `parity` project runs in the same pool, queued first, and a red there cancels the run (a path filter after `--` applies to the parity files too). A test process that writes to stderr fails the run. The GL rows (`scripts/detail-spec-aa.test.mjs`) draw through `@kmamal/gl`: they need its binary in this `node_modules` and an X display (Environment) |
+| `npm run test:parity` | the WASM skin kernel against the JS skin (`deform/skin-kernel.parity.ts`), in processes of their own: every other test process skins with the kernel |
 | `npx vitest run --project app <filters> [--maxWorkers=2]` | the same runner on just the files whose path contains a filter (one process per file); `--maxWorkers=` also works after `test:app`, `--shard=i/n` splits a run across machines |
 | `npm run test:ai-long-run` | the long suite, `src/game/**/*.ai-long-run.ts`: AI-driven runs (whole fields watched for stuck cars, false ejections). Not in the per-commit gate; part of `test:all`. Linted, typechecked and boundary-checked like tests |
 | `npm run test:all` | `test:app` and `test:ai-long-run` in one pass: what a landing on `main` must pass (`--maxWorkers=` as above) |

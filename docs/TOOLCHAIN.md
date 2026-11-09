@@ -65,7 +65,7 @@ and interleaved where the effect is small; "n" is the number of pairs.
 
 ## Test runner: Vitest 5
 
-`npm run test:app` runs `test:parity` first (the JS skin against the WASM kernel, which must not be loaded yet), then the `app`, `scripts` projects; `test:ai-long-run` and `test:all` add the long suite; `test:todos` runs the `todoRow` bodies (`RUN_TODOS=1`), each reporting green or skipped with the failed assertion and the reason kept verbatim. Facts the config depends on:
+`npm run test:app` is one run of the `parity` (the JS skin against the WASM kernel, which must not be loaded yet), `app` and `scripts` projects: a `ParityFirst` sequencer queues the parity files ahead of the rest so the longest file starts at once beside the suites, and `scripts/test-reporter.mjs` cancels the run when a parity file fails; `test:ai-long-run` and `test:all` add the long suite; `test:todos` runs the `todoRow` bodies (`RUN_TODOS=1`), each reporting green or skipped with the failed assertion and the reason kept verbatim. Facts the config depends on:
 
 - **`experimental.viteModuleRunner: false` is mandatory.** Vite's SSR transform (import indirection) made the heaviest file, `wall-crush`, 23 s -> 34-37 s, and loaded Rapier twice (`wasm` undefined in `__wbindgen_memory`). With Node's own loader the pilot of 24 files ran at node:test's cost (23.6-26.2 s against 25.0-26.6 s; Vite runner 35-45 s).
 - **`pool: "forks"`, `isolate: true`.** `threads` does not start (the heap flags in `execArgv` are invalid for worker threads). One process per file, as with `node --test`.
