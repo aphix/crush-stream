@@ -1,15 +1,21 @@
 import { detCos, detSin } from "../../kernel/physics-core.js";
-import { PREFABS, streetSignStyle, type PrefabId } from "../catalog.ts";
+import { PREFABS, type PrefabId } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
+import { streetSignStyle } from "../street-kit.ts";
 import { mulberry32 } from "../placements.ts";
 import { SCENERY_ASSETS } from "../scenery-assets/index.ts";
 import { assetPrefab, assetScale } from "../scenery-assets/pick.ts";
 import type { SceneryAsset } from "../scenery-assets/types.ts";
 import {
   ASSET,
+  BOLLARD_SPOTS,
+  CELLAR,
+  CELLAR_SEED,
   CORNER_POCKET,
   CROSSING_AXIS_TOLERANCE,
   CROSSWALK_DEPTH,
+  DRAIN_FROM_CORNER,
+  DRAIN_PAST_CURB,
   FABRIC_SEED,
   FRONTAGE_KITS,
   FURNITURE_CORNER_CLEAR,
@@ -98,8 +104,8 @@ function isLoopCorner(block: BlockRef, signX: number, signZ: number, geometry: G
   return outwardX && outwardZ;
 }
 
-/** A street sign at two opposite block corners of each intersection, its blades along the two streets carrying their names; none at the perimeter loop's rounded corners. */
-function signProps(lots: Lots): FabricProp[] {
+/** At two opposite block corners of each intersection a street sign, its blades along the two streets carrying their names; at the other two, bollards round the curb and a storm drain in the gutter. None at the perimeter loop's rounded corners. */
+function cornerProps(lots: Lots): FabricProp[] {
   const geometry = lots.geometry;
   const props: FabricProp[] = [];
   for (const block of lots.blocks) {
@@ -111,7 +117,12 @@ function signProps(lots: Lots): FabricProp[] {
         // The blade along x names the street running along x (a row of `streetZ`), the blade along z the one along z.
         const alongX = STREETS_Z[block.row + (signZ > 0 ? 1 : 0)];
         const alongZ = STREETS_X[block.column + (signX > 0 ? 1 : 0)];
-        if (signX !== signZ || alongX === undefined || alongZ === undefined) continue;
+        if (signX !== signZ) {
+          for (const [outX, outZ] of BOLLARD_SPOTS) props.push({ prefab: PREFAB.bollard, x: cornerX + signX * outX, z: cornerZ + signZ * outZ, yaw: 0 });
+          props.push(assetProp(ASSET.drain, cornerX - signX * DRAIN_FROM_CORNER, cornerZ + signZ * (geometry.sidewalk + DRAIN_PAST_CURB), 0));
+          continue;
+        }
+        if (alongX === undefined || alongZ === undefined) continue;
         props.push({ prefab: PREFAB.streetSign, x: cornerX + signX * CORNER_POCKET, z: cornerZ + signZ * CORNER_POCKET, yaw: 0, style: streetSignStyle(alongX, alongZ) });
       }
     }
@@ -203,8 +214,27 @@ function frontageProps(lots: Lots, random: () => number): FabricProp[] {
   return props;
 }
 
-/** The city's street fabric as course props: marked crossings at the walk graph's crossing edges and a manhole cover per street segment (scenery-asset decals), street signs at block corners, a hydrant per block face and the frontage kits of businesses and the bus stop (street kit prefabs, a newspaper box's asset box). */
+/** Steel cellar doors in the sidewalk before a seeded share of the rowhomes inside the walls, beside the stoop on a seeded side, from just past the property line. */
+function cellarProps(lots: Lots): FabricProp[] {
+  const random = mulberry32(CELLAR_SEED);
+  const props: FabricProp[] = [];
+  for (const link of lots.links) {
+    const place = lots.places[link.place]!;
+    if (place.kind !== PLACE_KIND.home || place.storeys === 0 || link.side === null || link.place >= lots.backdropStart) continue;
+    const chosen = random() < CELLAR.share;
+    const side = random() < 0.5 ? -1 : 1;
+    if (!chosen) continue;
+    // The house's front is its local +x, (cos yaw, -sin yaw); along the front is its local z, (sin yaw, cos yaw). The door stands on the house front, a setback in from the property line.
+    const out = lots.geometry.setback + CELLAR.fromLine + PREFABS[PREFAB.cellarDoor].size[0] / 2;
+    const cos = detCos(place.yaw);
+    const sin = detSin(place.yaw);
+    props.push({ prefab: PREFAB.cellarDoor, x: place.doorX + cos * out + sin * side * CELLAR.along, z: place.doorZ - sin * out + cos * side * CELLAR.along, yaw: place.yaw });
+  }
+  return props;
+}
+
+/** The city's street fabric as course props: marked crossings at the walk graph's crossing edges and a manhole cover per street segment (scenery-asset decals), street signs, bollards and storm drains at block corners, a hydrant per block face, cellar doors before some rowhomes and the frontage kits of businesses and the bus stop (street kit prefabs, a newspaper box's asset box). */
 export function fabricProps(lots: Lots, graph: WalkGraph): FabricProp[] {
   const random = mulberry32(FABRIC_SEED);
-  return [...crossingProps(lots.geometry, graph), ...manholeProps(lots.geometry, random), ...signProps(lots), ...frontageProps(lots, random)];
+  return [...crossingProps(lots.geometry, graph), ...manholeProps(lots.geometry, random), ...cornerProps(lots), ...frontageProps(lots, random), ...cellarProps(lots)];
 }

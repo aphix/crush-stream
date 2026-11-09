@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
-import { streetSignStyle } from "../world/catalog.ts";
+import { streetSignStyle } from "../world/street-kit.ts";
 import { PREFAB } from "../world/constants.ts";
 import { OPENWORLD_ID } from "../world/openworld/openworld-constants.ts";
 import { placeCourse, type Placed } from "../world/placements.ts";

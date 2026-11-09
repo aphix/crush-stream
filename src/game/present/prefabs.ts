@@ -841,6 +841,11 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.busShelter:
     case PREFAB.busStopSign:
     case PREFAB.streetSign:
+    case PREFAB.bollard:
+    case PREFAB.cellarDoor:
+    case PREFAB.hoopFence:
+    case PREFAB.pavilion:
+    case PREFAB.plaza:
       return streetKitParts(id, mats);
   }
 }

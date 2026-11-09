@@ -11,6 +11,7 @@ export const ASSET = {
   manhole: ROAD_DECAL_ASSET.manhole,
   crosswalk: ROAD_DECAL_ASSET.crosswalk,
   newspaperBox: "street-newspaper-box",
+  drain: "ground-drain-grate",
 } as const;
 
 /** A piece of street furniture: a street kit prefab, or a scenery asset (on its generic prefab) where the asset's own shape reads well. */
@@ -54,6 +55,21 @@ export const KIT_SLIDE = 4;
 
 /** A street sign's pole stands this far (m) off both property lines of a block corner: 0.6 m in from each curb, so its blades (reach 0.45 m) stay over the sidewalk. */
 export const CORNER_POCKET = 3;
+
+/** At the two block corners of an intersection that have no street sign: brown iron bollards round the corner's curb, each this far (m) past the two property lines (out of the crossings' landings, 1.5 m out), and a storm drain grate in the gutter. */
+export const BOLLARD_SPOTS: readonly (readonly [number, number])[] = [
+  [3.3, 2.2],
+  [3.1, 3.1],
+  [2.2, 3.3],
+];
+/** A storm drain grate lies in the gutter, this far (m) from the corner along the long face, and its middle this far (m) past the curb so its 0.6 m width lies 0.05 m to 0.65 m out. */
+export const DRAIN_FROM_CORNER = 2.5;
+export const DRAIN_PAST_CURB = 0.35;
+
+/** A share of the rowhomes have steel cellar doors in the sidewalk before the house: beside the stoop (this far, m, from the door to the doors' middle, past the bay's flank), their near edge this far (m) past the property line, clear of the bay's foot. */
+export const CELLAR = { share: 0.3, along: 2, fromLine: 0.05 } as const;
+/** Seed of which rowhomes have cellar doors, and on which side of the stoop. */
+export const CELLAR_SEED = 0x0ce11a;
 
 /** One piece of a business's frontage kit: what it is, where it stands along the face from the door (m, + toward the face's far end), its turn off facing the street (rad), and where in the furniture strip (0 at the curb, 1 at the clear path). */
 export type KitItem = { piece: FurniturePiece; offset: number; turn: number; stripShare: number };
