@@ -374,10 +374,11 @@ function openAlphaStrip(open, layerCount, rectsByLayer) {
   const doors = doorRects(open);
   for (const [layer, rects] of rectsByLayer.entries()) {
     for (const [u0, v0, u1, v1] of rects) {
-      const x0 = Math.floor(u0 * LAYER);
-      const x1 = Math.ceil(u1 * LAYER);
+      // the table's uv is rounded to UV_PLACES, a texel edge lands a hair off its grid: floor or ceil would take a window one texel into its neighbour door
+      const x0 = Math.round(u0 * LAYER);
+      const x1 = Math.round(u1 * LAYER);
       if (layer === GROUND_LAYER && doors.some((door) => x0 < door.x1 && x1 > door.x0 && v0 * open.ground < door.head + DOOR_SURROUND)) continue;
-      for (let y = Math.floor((1 - v1) * LAYER); y < Math.ceil((1 - v0) * LAYER); y++) for (let x = x0; x < x1; x++) strip[layer * LAYER * LAYER + y * LAYER + x] = FACADE_ALPHA.window;
+      for (let y = Math.round((1 - v1) * LAYER); y < Math.round((1 - v0) * LAYER); y++) for (let x = x0; x < x1; x++) strip[layer * LAYER * LAYER + y * LAYER + x] = FACADE_ALPHA.window;
     }
   }
   for (const door of doors) {

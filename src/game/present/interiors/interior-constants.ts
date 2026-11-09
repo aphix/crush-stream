@@ -1,3 +1,5 @@
+import { FACADE_OPEN_MAX } from "../facades.ts";
+
 /** Furniture, partitions, stairs and upper floors are built for an interior whose door is within this of the eye (m), and dropped once it is past `INTERIOR_FAR` for `INTERIOR_LINGER`. */
 export const INTERIOR_NEAR = 35;
 export const INTERIOR_FAR = 45;
@@ -17,5 +19,8 @@ export const DOOR_SWING_SECONDS = 0.6;
 export const DOOR_RANGE = SHELL_NEAR;
 /** The player's walker within this of a street door (m) is given the vestibule's floor and walls while the room behind is not built: a stoop's run and a step. */
 export const VESTIBULE_REACH = 3;
+/** The rooms of a street's businesses are furnished for their windows while one of their fronts is in view within `INTERIOR_NEAR`; homes (a door open and seen, a player inside) are left this many slots of the facade's list of `FACADE_OPEN_MAX`, the businesses the rest. */
+const HOME_OPEN_SLOTS = 6;
+export const SHOPFRONT_ROOMS = FACADE_OPEN_MAX - HOME_OPEN_SLOTS;
 /** How much of the light a window's glass lets through (opacity of the pane drawn). */
 export const GLASS_OPACITY = 0.22;
