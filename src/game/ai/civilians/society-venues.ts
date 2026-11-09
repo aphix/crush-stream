@@ -47,8 +47,12 @@ export function isCounterVenue(venue: number): boolean {
 /** Walks that end standing at a door in the street rather than inside: they are drawn there, and witnessed. */
 const OUTDOOR_PURPOSES: readonly number[] = [PURPOSE.stoopSit, PURPOSE.stoopTalk, PURPOSE.argue, PURPOSE.loiter, PURPOSE.report, PURPOSE.mug, PURPOSE.breakIn, PURPOSE.fight, PURPOSE.lookOn, PURPOSE.callAmbulance];
 
+/** One byte per purpose, 1 for those that end out at a door: the drawing asks of every civilian every frame. */
+const OUTDOOR_BY_PURPOSE = new Uint8Array(Math.max(...Object.values(PURPOSE)) + 1);
+for (const purpose of OUTDOOR_PURPOSES) OUTDOOR_BY_PURPOSE[purpose] = 1;
+
 export function isOutdoorPurpose(purpose: number): boolean {
-  return OUTDOOR_PURPOSES.includes(purpose);
+  return OUTDOOR_BY_PURPOSE[purpose] === 1;
 }
 
 /** Opening hours [from, to) by venue when the map gives none (a window may wrap midnight; none: open at all hours): coffee in the morning, bars from dusk, shops by day. */

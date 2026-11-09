@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ACTIVITY } from "./civilian-activity.ts";
 import { DECISION_HZ, MAX_PATH_NODES, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "./civilian-constants.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
@@ -10,7 +11,7 @@ const DAY_SECONDS = TICKS_PER_GAME_DAY / DECISION_HZ;
 /** A power of two, so the clock sums exactly; a sample for the stuck check every this many steps (one second). */
 const STEP_SECONDS = 0.25;
 const SAMPLE_EVERY = 4;
-/** A walker covers over a metre a second, but a path that turns back on itself at a corner nets almost none for a moment: stuck is moving less than this in two looks in a row on one leg. */
+/** A walker covers over a metre a second, but a path that turns back on itself at a corner nets almost none for a moment: stuck is moving less than this in two looks in a row on one leg (standing at a car to get in or out is the clip's own, and so is standing at a door between legs: only a civilian on a leg can be stuck). */
 const STUCK_METRES = 0.2;
 const STUCK_LOOKS = 2;
 const MIN_LEGS = 100;
@@ -67,7 +68,10 @@ function runDay(): DayReport {
       const out = whereAt(crowd, resident, step * STEP_SECONDS, probe);
       if (out && sampled.shown[resident] === 1 && sampled.depart[resident] === depart) {
         const moved = Math.hypot(probe.x - sampled.x[resident]!, probe.z - sampled.z[resident]!);
-        sampled.slow[resident] = moved < STUCK_METRES ? sampled.slow[resident]! + 1 : 0;
+        const seconds = step * STEP_SECONDS;
+        const onLeg = state.ints[base + RESIDENT_INT.pathCount]! > 0 && seconds >= depart / DECISION_HZ && seconds < state.ints[base + RESIDENT_INT.arriveTick]! / DECISION_HZ;
+        const atCar = poses.activity[resident] === ACTIVITY.carIn || poses.activity[resident] === ACTIVITY.carOut;
+        sampled.slow[resident] = moved < STUCK_METRES && onLeg && !atCar ? sampled.slow[resident]! + 1 : 0;
         if (sampled.slow[resident] === STUCK_LOOKS) report.stuck.push(`resident ${resident} moved ${moved.toFixed(2)} m at ${step * STEP_SECONDS} s`);
         report.metres.set(species, (report.metres.get(species) ?? 0) + moved);
       }

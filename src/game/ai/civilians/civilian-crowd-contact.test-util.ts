@@ -22,12 +22,13 @@ export function streetEdge(map: OpenWorldMap, atLeast: number): StreetEdge {
   throw new Error(`the map has no street edge of ${atLeast} m`);
 }
 
-/** `count` residents of `crowd` who are people, from the first of the list or (`fromTop`) the last. */
+/** `count` residents of `crowd` who are living people (the list ends in spare slots no one lives in), from the first of the list or (`fromTop`) the last. */
 export function people(crowd: CivilianCrowd, count: number, fromTop = false): number[] {
   const found: number[] = [];
   for (let step = 0; step < crowd.poses.count && found.length < count; step++) {
     const resident = fromTop ? crowd.poses.count - 1 - step : step;
-    if (crowd.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.species] === SPECIES.person) found.push(resident);
+    const row = resident * RESIDENT_INT_STRIDE;
+    if (crowd.state.ints[row + RESIDENT_INT.alive] === 1 && crowd.state.ints[row + RESIDENT_INT.species] === SPECIES.person) found.push(resident);
   }
   return found;
 }

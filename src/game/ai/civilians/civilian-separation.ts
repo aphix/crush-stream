@@ -10,7 +10,8 @@ const CELL_MASK = SEPARATION_CELLS - 1;
 /** Large primes that spread grid cells over the hash table. */
 const CELL_PRIME_X = 73856093;
 const CELL_PRIME_Z = 19349663;
-const NEIGHBOUR_CELLS = 9;
+/** The stamp that restarts the count, before an Int32 stamp could wrap. */
+const STAMP_LIMIT = 0x7fffffff;
 
 function cellSlot(cellX: number, cellZ: number): number {
   return (Math.imul(cellX, CELL_PRIME_X) ^ Math.imul(cellZ, CELL_PRIME_Z)) & CELL_MASK;
@@ -45,7 +46,13 @@ export class CrowdSeparation {
   private readonly listed: Int32Array;
   private readonly cellHead = new Int32Array(SEPARATION_CELLS);
   private readonly cellNext: Int32Array;
-  private readonly scannedSlots = new Int32Array(NEIGHBOUR_CELLS);
+  /** Per grid slot, the stamp of the last body that scanned it, and the stamp now: a slot is scanned once for a body. */
+  private readonly slotStamp = new Int32Array(SEPARATION_CELLS);
+  private stamp = 0;
+  private readonly cellOfX: Int32Array;
+  private readonly cellOfZ: Int32Array;
+  /** The shift (x, z) `move` applies, handed over here: a double passed to a call V8 does not inline is boxed, one object a call, every pair, every pass, every frame. */
+  private readonly shift = new Float64Array(2);
 
   constructor(capacity: number) {
     this.capacity = capacity;
@@ -69,6 +76,8 @@ export class CrowdSeparation {
     this.pairSide = new Float32Array(pairs);
     this.listed = new Int32Array(bodies);
     this.cellNext = new Int32Array(bodies);
+    this.cellOfX = new Int32Array(bodies);
+    this.cellOfZ = new Int32Array(bodies);
   }
 
   /** Places every present body: the pair list is made from the brain's spots, then relaxed. */
@@ -90,31 +99,41 @@ export class CrowdSeparation {
     return count;
   }
 
+  /**
+   * Every pair of present bodies within `PAIR_RANGE`, found through a hash grid. The cells' chains run from the highest body to the lowest (the bodies are chained in ascending order, each at its head), so a walk of one stops at
+   * the first body at or below the one looking: every later one is lower still. A cell the hash maps to the same slot as one already scanned for this body is scanned once (its stamp); a body that has `PAIRS_PER_BODY` stops there.
+   */
   private buildPairs(listedCount: number): void {
     this.cellHead.fill(NO_BODY);
     for (let at = 0; at < listedCount; at++) {
       const body = this.listed[at]!;
-      const slot = cellSlot(Math.floor(this.brainX[body]! / PAIR_RANGE), Math.floor(this.brainZ[body]! / PAIR_RANGE));
+      const cellX = Math.floor(this.brainX[body]! / PAIR_RANGE);
+      const cellZ = Math.floor(this.brainZ[body]! / PAIR_RANGE);
+      this.cellOfX[body] = cellX;
+      this.cellOfZ[body] = cellZ;
+      const slot = cellSlot(cellX, cellZ);
       this.cellNext[body] = this.cellHead[slot]!;
       this.cellHead[slot] = body;
     }
     this.pairCount = 0;
     for (let at = 0; at < listedCount; at++) {
       const first = this.listed[at]!;
+      const firstFixed = this.fixed[first] === 1;
+      const cellX = this.cellOfX[first]!;
+      const cellZ = this.cellOfZ[first]!;
+      if (++this.stamp === STAMP_LIMIT) {
+        this.slotStamp.fill(0);
+        this.stamp = 1;
+      }
       let own = 0;
-      const cellX = Math.floor(this.brainX[first]! / PAIR_RANGE);
-      const cellZ = Math.floor(this.brainZ[first]! / PAIR_RANGE);
-      let scanned = 0;
-      for (let offsetZ = -1; offsetZ <= 1; offsetZ++) {
+      scan: for (let offsetZ = -1; offsetZ <= 1; offsetZ++) {
         for (let offsetX = -1; offsetX <= 1; offsetX++) {
           const slot = cellSlot(cellX + offsetX, cellZ + offsetZ);
-          let repeated = false;
-          for (let seen = 0; seen < scanned; seen++) if (this.scannedSlots[seen] === slot) repeated = true;
-          if (repeated) continue;
-          this.scannedSlots[scanned++] = slot;
-          for (let second = this.cellHead[slot]!; second !== NO_BODY; second = this.cellNext[second]!) {
-            if (second <= first || (this.fixed[first] === 1 && this.fixed[second] === 1) || own === PAIRS_PER_BODY) continue;
-            if (this.addPair(first, second)) own++;
+          if (this.slotStamp[slot] === this.stamp) continue;
+          this.slotStamp[slot] = this.stamp;
+          for (let second = this.cellHead[slot]!; second > first; second = this.cellNext[second]!) {
+            if (firstFixed && this.fixed[second] === 1) continue;
+            if (this.addPair(first, second) && ++own === PAIRS_PER_BODY) break scan;
           }
         }
       }
@@ -190,13 +209,21 @@ export class CrowdSeparation {
     const firstMoves = this.fixed[first] === 0;
     const secondMoves = this.fixed[second] === 0;
     const firstShare = firstMoves && secondMoves ? 0.5 : firstMoves ? 1 : 0;
-    if (firstMoves) this.move(first, (targetX - dx) * firstShare, (targetZ - dz) * firstShare);
-    if (secondMoves) this.move(second, -(targetX - dx) * (1 - firstShare), -(targetZ - dz) * (1 - firstShare));
+    if (firstMoves) {
+      this.shift[0] = (targetX - dx) * firstShare;
+      this.shift[1] = (targetZ - dz) * firstShare;
+      this.move(first);
+    }
+    if (secondMoves) {
+      this.shift[0] = -(targetX - dx) * (1 - firstShare);
+      this.shift[1] = -(targetZ - dz) * (1 - firstShare);
+      this.move(second);
+    }
   }
 
-  private move(body: number, shiftX: number, shiftZ: number): void {
-    let x = this.drawX[body]! + shiftX;
-    let z = this.drawZ[body]! + shiftZ;
+  private move(body: number): void {
+    let x = this.drawX[body]! + this.shift[0]!;
+    let z = this.drawZ[body]! + this.shift[1]!;
     const offsetX = x - this.brainX[body]!;
     const offsetZ = z - this.brainZ[body]!;
     const offsetSquared = offsetX * offsetX + offsetZ * offsetZ;

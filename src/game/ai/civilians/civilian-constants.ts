@@ -62,79 +62,82 @@ export const PURPOSE = {
 export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16, broke: 32, criminal: 64, wanted: 128, custody: 256, hasCar: 512, coffeeFan: 1024, drinker: 2048 } as const;
 /** A resident's integer row: society fields, then the leg and dwell the crowd walks, then the life log ring (`LOG_LINES` of `HISTORY_FIELDS`). -1 in a place field: none. */
 export const RESIDENT_INT = {
+  /** The first 16 are what the crowd reads of every civilian every frame, in the one cache line (64 bytes) a row starts on: keep them together. */
   alive: 0,
   species: 1,
-  firstName: 2,
-  familyName: 3,
-  gender: 4,
-  birthDay: 5,
-  home: 6,
-  work: 7,
-  jobTitle: 8,
-  shiftStart: 9,
-  partner: 10,
-  parent: 11,
-  childCount: 12,
-  flags: 13,
-  moodEvent: 14,
-  moodTick: 15,
-  favouriteFood: 16,
-  favouriteHangout: 17,
-  favouriteShop: 18,
-  fromPlace: 19,
-  place: 20,
-  departTick: 21,
-  arriveTick: 22,
-  nextDecisionTick: 23,
-  pathCount: 24,
-  legPurpose: 25,
-  decisionCount: 26,
-  storyTick: 27,
-  knockX: 28,
-  knockZ: 29,
-  knockTick: 30,
-  historyHead: 31,
-  /** The place whose kerb the resident's car stands at before its trip leaves (and when it has none); -1 for none. The car is the owner's, who has FLAG.hasCar; a housemate may drive it. */
-  carPlace: 32,
-  /** The index in the place's `Place.seats` the resident holds; -1 for none. One holder per seat. */
-  seat: 33,
-  /** Who they talk or argue with while they stand at a door (a resident, -1 for none). */
-  companion: 34,
-  joblessDays: 35,
-  wantedUntilTick: 36,
-  /** The tick an open crime began (NEVER_TICK for none) and its CRIME_KIND, place and victim (a resident, or -1: the place itself); cleared by a bust or when the wanted spell ends. */
-  crimeTick: 37,
-  crimeKind: 38,
-  crimePlace: 39,
-  crimeVictim: 40,
-  crimeNotBefore: 41,
-  /** The tick a fight began (NEVER_TICK for none), who the other fighter is (-1: none, or a player) and where it is, in centimetres. */
-  fightTick: 42,
-  fightPartner: 43,
-  fightX: 44,
-  fightZ: 45,
-  /** The way a fighter faces, in `WALKER_BEARING_STEPS` of a turn (toward the player who shoved them); `NO_BEARING` for a fight between two civilians or with a car. */
-  fightBearing: 46,
-  /** The owner's car trip: the place it parks at (-1: none) and the ticks its driver gets in (it leaves) and it is parked (NEVER_TICK: none); the car is away, and nobody else's to take, from the reservation to the park tick. */
-  carTo: 47,
-  carLeaveTick: 48,
-  carParkTick: 49,
-  /** A driver's leg that goes by car: whose car (-1: none, a plain walk), the path indices where he gets in and out (-1: none) and the ticks he does (NEVER_TICK: none). */
-  carOwner: 50,
-  driveFirst: 51,
-  driveLast: 52,
-  driveLeaveTick: 53,
-  driveParkTick: 54,
+  flags: 2,
+  place: 3,
+  fromPlace: 4,
+  departTick: 5,
+  arriveTick: 6,
+  nextDecisionTick: 7,
+  pathCount: 8,
+  legPurpose: 9,
+  driveLeaveTick: 10,
+  driveParkTick: 11,
+  driveFirst: 12,
+  driveLast: 13,
   /** The last hazard this resident saw: the tick (NEVER_TICK: none), where in centimetres, and who was hurt there (a resident, -1: none). */
-  alarmTick: 55,
-  alarmX: 56,
-  alarmZ: 57,
-  alarmVictim: 58,
+  alarmTick: 14,
   /** The moment after `alarmTick` they noticed it, in `ALARM_DELAY_STEPS_PER_SECOND` steps. */
-  alarmDelay: 59,
+  alarmDelay: 15,
+  firstName: 16,
+  familyName: 17,
+  gender: 18,
+  birthDay: 19,
+  home: 20,
+  work: 21,
+  jobTitle: 22,
+  shiftStart: 23,
+  partner: 24,
+  parent: 25,
+  childCount: 26,
+  moodEvent: 27,
+  moodTick: 28,
+  favouriteFood: 29,
+  favouriteHangout: 30,
+  favouriteShop: 31,
+  decisionCount: 32,
+  storyTick: 33,
+  knockX: 34,
+  knockZ: 35,
+  knockTick: 36,
+  historyHead: 37,
+  /** The place whose kerb the resident's car stands at before its trip leaves (and when it has none); -1 for none. The car is the owner's, who has FLAG.hasCar; a housemate may drive it. */
+  carPlace: 38,
+  /** The index in the place's `Place.seats` the resident holds; -1 for none. One holder per seat. */
+  seat: 39,
+  /** Who they talk or argue with while they stand at a door (a resident, -1 for none). */
+  companion: 40,
+  joblessDays: 41,
+  wantedUntilTick: 42,
+  /** The tick an open crime began (NEVER_TICK for none) and its CRIME_KIND, place and victim (a resident, or -1: the place itself); cleared by a bust or when the wanted spell ends. */
+  crimeTick: 43,
+  crimeKind: 44,
+  crimePlace: 45,
+  crimeVictim: 46,
+  crimeNotBefore: 47,
+  /** The tick a fight began (NEVER_TICK for none), who the other fighter is (-1: none, or a player) and where it is, in centimetres. */
+  fightTick: 48,
+  fightPartner: 49,
+  fightX: 50,
+  fightZ: 51,
+  /** The way a fighter faces, in `WALKER_BEARING_STEPS` of a turn (toward the player who shoved them); `NO_BEARING` for a fight between two civilians or with a car. */
+  fightBearing: 52,
+  /** The owner's car trip: the place it parks at (-1: none) and the ticks its driver gets in (it leaves) and it is parked (NEVER_TICK: none); the car is away, and nobody else's to take, from the reservation to the park tick. */
+  carTo: 53,
+  carLeaveTick: 54,
+  carParkTick: 55,
+  /** A driver's leg that goes by car: whose car (-1: none, a plain walk), the path indices where he gets in and out (-1: none) and the ticks he does (NEVER_TICK: none). */
+  carOwner: 56,
+  alarmX: 57,
+  alarmZ: 58,
+  alarmVictim: 59,
   history: 60,
 } as const;
-export const RESIDENT_INT_STRIDE = RESIDENT_INT.history + LOG_LINES * HISTORY_FIELDS;
+/** A row is a whole number of 64-byte cache lines (16 ints), so the hot fields at its start share one. */
+const ROW_ALIGN_INTS = 16;
+export const RESIDENT_INT_STRIDE = Math.ceil((RESIDENT_INT.history + LOG_LINES * HISTORY_FIELDS) / ROW_ALIGN_INTS) * ROW_ALIGN_INTS;
 /** A resident's float row: the needs as they stood at the decision that made the leg, their rise rates (per game hour), the speed of the leg or stay they are on (m/s), their lateral offset (m) and their own walking pace (m/s: the leg's speed is this, or the drive's). */
 export const RESIDENT_FLOAT = { needs: 0, rates: NEED_COUNT, speed: 2 * NEED_COUNT, lateral: 2 * NEED_COUNT + 1, pace: 2 * NEED_COUNT + 2 } as const;
 export const RESIDENT_FLOAT_STRIDE = RESIDENT_FLOAT.pace + 1;

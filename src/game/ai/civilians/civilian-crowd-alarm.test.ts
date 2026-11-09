@@ -11,9 +11,11 @@ import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 const map = buildFixtureMap();
 const FAST = 14;
 const SLOW = 5;
-const BEHIND = 12;
-/** A car passes 4 m to one side of the civilian: well clear of them, and still heading within a quarter turn of where they stand. */
-const BESIDE = 4;
+/** A car starts this far (m) behind the civilian: inside what a car at fourteen metres a second needs to stop in. */
+const BEHIND = 20;
+/** A car driving down the street passes the sidewalk five metres from the civilian; one heading at them misses by 1.7 m, under a car's half width and a body's, and still clear of them. */
+const STREET_BESIDE = 5;
+const HEADING_AT = 1.7;
 const FAR_BESIDE = 12;
 const WATCH_SECONDS = 2;
 const CAR_RUN_UP = 6;
@@ -54,15 +56,16 @@ function passingCar(crowd: CivilianCrowd, resident: number, behind: number, besi
 }
 
 /** A crowd with a civilian out, a car passing them at `mps` (`beside` m to the side, `behind` m back at first) for `WATCH_SECONDS`: the crowd, the civilian, and the time and place of the civilian when each new danger event came. */
-function watchPass(authority: boolean, mps: number, beside: number, behind = BEHIND): { crowd: CivilianCrowd; resident: number; start: number; seen: { seconds: number; node: number }[] } {
+function watchPass(authority: boolean, mps: number, beside: number, brakeAfter = Infinity): { crowd: CivilianCrowd; resident: number; start: number; seen: { seconds: number; node: number }[] } {
   const crowd = newCrowd(map);
   let seconds = stepUntilShown(crowd);
   const resident = shownResident(crowd);
-  const { car, place } = passingCar(crowd, resident, behind, beside, mps, 0);
+  const { car, place } = passingCar(crowd, resident, BEHIND, beside, mps, 0);
   const seen: { seconds: number; node: number }[] = [];
   const first = seconds;
   while (seconds - first < WATCH_SECONDS) {
     place(seconds - first + FRAME_SECONDS);
+    if (seconds - first >= brakeAfter) car.velocity.set(0, 0, 0);
     seconds += FRAME_SECONDS;
     const before = triplesOf(crowd, EVENT_KIND.danger).length;
     crowd.step(seconds, [car], authority);
@@ -71,8 +74,16 @@ function watchPass(authority: boolean, mps: number, beside: number, behind = BEH
   return { crowd, resident, start: first, seen };
 }
 
-describe("given a host crowd and a car passing a civilian at fourteen metres a second, four metres to the side", () => {
-  const { crowd, resident, start, seen } = watchPass(true, FAST, BESIDE);
+describe("given a host crowd and a car driving at fourteen metres a second down the street past a civilian on the sidewalk", () => {
+  it("when it passes five metres from them, then nothing is logged: a car driving down the street is no danger", () => {
+    const { crowd, resident } = watchPass(true, FAST, STREET_BESIDE);
+    expect(triplesOf(crowd, EVENT_KIND.danger).length, "danger events").toBe(0);
+    expect(crowd.poses.shown[resident], "the civilian is still out").toBe(1);
+  });
+});
+
+describe("given a host crowd and a car at fourteen metres a second heading at a civilian, missing them by a metre and seven", () => {
+  const { crowd, resident, start, seen } = watchPass(true, FAST, HEADING_AT);
 
   it("when the car has gone by without hitting them, then one danger event is in the log, for the street node nearest them, no sooner than the confirming time after the car was first seen", () => {
     const events = triplesOf(crowd, EVENT_KIND.danger);
@@ -86,22 +97,26 @@ describe("given a host crowd and a car passing a civilian at fourteen metres a s
   });
 });
 
-describe("given a car that is slow, or heads elsewhere, or a client's crowd that sees the fast one pass", () => {
-  it("when the car is at five metres a second, then nothing is logged", () => {
-    expect(triplesOf(watchPass(true, SLOW, BESIDE).crowd, EVENT_KIND.danger).length, "danger events").toBe(0);
+describe("given a car that is slow, brakes for them, or is heading elsewhere, or a client's crowd that sees the fast one come", () => {
+  it("when the car is at five metres a second, twenty metres back (more than it needs to stop in), then nothing is logged", () => {
+    expect(triplesOf(watchPass(true, SLOW, HEADING_AT).crowd, EVENT_KIND.danger).length, "danger events").toBe(0);
   });
 
-  it("when the car is twelve metres to the side, heading nowhere near them, then nothing is logged", () => {
+  it("when the car brakes to a stop before the confirming time is up, then nothing is logged", () => {
+    expect(triplesOf(watchPass(true, FAST, HEADING_AT, DANGER_CONFIRM_SECONDS / 2).crowd, EVENT_KIND.danger).length, "danger events").toBe(0);
+  });
+
+  it("when the car is going to miss them by twelve metres, then nothing is logged", () => {
     expect(triplesOf(watchPass(true, FAST, FAR_BESIDE).crowd, EVENT_KIND.danger).length, "danger events").toBe(0);
   });
 
   it("when the crowd is a client's, then nothing is logged", () => {
-    expect(triplesOf(watchPass(false, FAST, BESIDE).crowd, EVENT_KIND.danger).length, "danger events").toBe(0);
+    expect(triplesOf(watchPass(false, FAST, HEADING_AT).crowd, EVENT_KIND.danger).length, "danger events").toBe(0);
   });
 
   it(`when a second car comes at them within ${DANGER_LOCKOUT_SECONDS} s of the first danger, then it is not logged again`, () => {
-    const { crowd, resident } = watchPass(true, FAST, BESIDE);
-    const again = passingCar(crowd, resident, BEHIND, BESIDE, FAST, 1);
+    const { crowd, resident } = watchPass(true, FAST, HEADING_AT);
+    const again = passingCar(crowd, resident, BEHIND, HEADING_AT, FAST, 1);
     let seconds = crowd.crowdSeconds;
     const start = seconds;
     while (seconds - start < WATCH_SECONDS) {

@@ -117,6 +117,9 @@ export const CAST: readonly CastMember[] = [
   },
 ];
 
+/** Places only their own story goes to: no one else picks them as a hangout, a favourite or a job. */
+export const PRIVATE_PLACE_NAMES: readonly string[] = [PLACE_NAMES.okaforDeck];
+
 /** Places that draw a crowd only at some hours (the court in the afternoon, the garden in the morning); a window may wrap past midnight. */
 export const PLACE_HOURS: readonly { place: string; from: number; to: number }[] = [
   { place: PLACE_NAMES.parkCourt, from: 14, to: 18 },

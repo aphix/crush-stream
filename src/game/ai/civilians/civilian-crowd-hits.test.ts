@@ -2,7 +2,7 @@ import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { tickAt } from "./civilian-clock.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
-import { EVENT_KIND, FLAG, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
+import { EVENT_KIND, EVENT_TRIPLE, FLAG, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import { WRECK_LOCKOUT_SECONDS, WRECK_SPEED } from "./civilian-crowd-constants.ts";
 import { buildFixtureMap, placeNamed } from "./civilian-graph.test-util.ts";
 import { historyLines } from "./civilian-mood.ts";
@@ -39,7 +39,7 @@ describe("given a host crowd, a civilian walking out and a car driving at them",
     expect(struck[0]!.guard, "the civilian struck").toBe(resident);
     expect(struck[0]!.car, "the car that struck").toBe(0);
     expect(crowd.poses.shown[resident], "shown the step they were run down").toBe(0);
-    expect(firstMismatch(Array.from(crowd.eventLog()), [EVENT_KIND.knock, resident, seconds, EVENT_KIND.push, resident, seconds]), "the host's log: the knock, then the push that made it").toBeUndefined();
+    expect(firstMismatch(Array.from(crowd.eventLog()).slice(-2 * EVENT_TRIPLE), [EVENT_KIND.knock, resident, seconds, EVENT_KIND.push, resident, seconds]), "the host's log ends: the knock, then the push that made it").toBeUndefined();
     for (let later = 1; later <= AFTERMATH_SECONDS / FRAME_SECONDS; later++) crowd.step(seconds + later * FRAME_SECONDS, [], true);
     expect(crowd.poses.shown[resident], "shown later").toBe(0);
   });

@@ -74,11 +74,19 @@ function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
 }
 
-function setClip(out: ActivityReading, code: number, since: number, left: number): void {
-  out.code = code;
-  out.sinceSeconds = since;
-  out.leftSeconds = left;
+/**
+ * What the readers below share while one resident is read: the crowd second asked and its tick, seconds since the resident arrived and seconds of the stay left, and (for a flinch) seconds into it. Held here and not handed
+ * down as arguments: a double passed to or returned from a call V8 does not inline is boxed, one object each, for every civilian every frame.
+ */
+class ReadScratch {
+  clock = 0;
+  tick = 0;
+  age = 0;
+  rest = 0;
+  flinch = 0;
 }
+
+const scratch = new ReadScratch();
 
 /** Standing at a place's door on the street side, spread along the frontage by the resident's own lateral offset, facing the street. */
 function standAtDoor(state: CityState, resident: number, place: number, out: ActivityReading): void {
@@ -90,24 +98,25 @@ function standAtDoor(state: CityState, resident: number, place: number, out: Act
   out.yaw = detAtan2(detCos(entry.yaw), -detSin(entry.yaw));
 }
 
-/** Whether the person they talk with is still out at a door in chatting distance. */
-function companionIsHere(state: CityState, resident: number, tick: number): number {
+/** The person they talk with if they are still out at a door in chatting distance at `scratch.tick`, else -1. */
+function companionIsHere(state: CityState, resident: number): number {
   const companion = intAt(state, resident, RESIDENT_INT.companion);
   if (companion < 0 || intAt(state, companion, RESIDENT_INT.alive) === 0 || !isOutdoorPurpose(intAt(state, companion, RESIDENT_INT.legPurpose))) return -1;
-  if (intAt(state, companion, RESIDENT_INT.arriveTick) > tick || tick >= intAt(state, companion, RESIDENT_INT.nextDecisionTick)) return -1;
+  if (intAt(state, companion, RESIDENT_INT.arriveTick) > scratch.tick || scratch.tick >= intAt(state, companion, RESIDENT_INT.nextDecisionTick)) return -1;
   const { placeX, placeZ } = state.index;
   const here = intAt(state, resident, RESIDENT_INT.place);
   const there = intAt(state, companion, RESIDENT_INT.place);
   return hypot2(placeX[here]! - placeX[there]!, placeZ[here]! - placeZ[there]!) <= SITTER_CHAT_REACH ? companion : -1;
 }
 
-function readFight(state: CityState, resident: number, since: number, out: ActivityReading): void {
+/** A fight's clips, `scratch.age` seconds into it. */
+function readFight(state: CityState, resident: number, out: ActivityReading): void {
   const partner = intAt(state, resident, RESIDENT_INT.fightPartner);
   const fighting = intAt(state, resident, RESIDENT_INT.fightTick) !== NEVER_TICK;
   const civilianPair = partner >= 0;
   const starter = !civilianPair || resident < partner;
-  const slot = Math.floor(since / FIGHT_SLOT_SECONDS) % FIGHT_SLOTS;
-  const inSlot = since % FIGHT_SLOT_SECONDS;
+  const slot = Math.floor(scratch.age / FIGHT_SLOT_SECONDS) % FIGHT_SLOTS;
+  const inSlot = scratch.age % FIGHT_SLOT_SECONDS;
   const side = starter ? -1 : 1;
   out.placed = true;
   out.fixed = true;
@@ -115,12 +124,19 @@ function readFight(state: CityState, resident: number, since: number, out: Activ
   out.z = intAt(state, resident, RESIDENT_INT.fightZ) / CENTIMETRES_PER_METRE;
   out.yaw = civilianPair ? -side * QUARTER_TURN : bearingYaw(intAt(state, resident, RESIDENT_INT.fightBearing));
   out.partner = civilianPair ? partner : -1;
-  if (!fighting) setClip(out, ACTIVITY.idle, since, ACTIVITY_OPEN_ENDED);
-  else setClip(out, (starter ? STARTER_SLOTS : OTHER_SLOTS)[slot]!, inSlot, FIGHT_SLOT_SECONDS - inSlot);
+  if (!fighting) {
+    out.code = ACTIVITY.idle;
+    out.sinceSeconds = scratch.age;
+    out.leftSeconds = ACTIVITY_OPEN_ENDED;
+  } else {
+    out.code = (starter ? STARTER_SLOTS : OTHER_SLOTS)[slot]!;
+    out.sinceSeconds = inSlot;
+    out.leftSeconds = FIGHT_SLOT_SECONDS - inSlot;
+  }
 }
 
-/** Sitting down, sitting, standing up at the seat `seat` of `place`: the clip by how far into the stay (`since`) and how much of it is left. */
-function readSitting(state: CityState, place: number, seat: number, since: number, left: number, out: ActivityReading, sitting: number): void {
+/** Sitting down, sitting, standing up at the seat `seat` of `place`: the clip by how far into the stay (`scratch.age`) and how much of it is left (`scratch.rest`). */
+function readSitting(state: CityState, place: number, seat: number, out: ActivityReading, sitting: number): void {
   const seats = state.map.places[place]!.seats!;
   const at = seat * SEAT_STRIDE;
   out.placed = true;
@@ -129,9 +145,19 @@ function readSitting(state: CityState, place: number, seat: number, since: numbe
   out.z = seats[at + 1]!;
   out.yaw = seats[at + 2]!;
   out.surfaceY = seats[at + 3]!;
-  if (since < ACTIVITY_SECONDS.sitDown) setClip(out, ACTIVITY.sitDown, since, ACTIVITY_SECONDS.sitDown - since);
-  else if (left < ACTIVITY_SECONDS.standUp) setClip(out, ACTIVITY.standUp, ACTIVITY_SECONDS.standUp - left, left);
-  else setClip(out, sitting, since - ACTIVITY_SECONDS.sitDown, left);
+  if (scratch.age < ACTIVITY_SECONDS.sitDown) {
+    out.code = ACTIVITY.sitDown;
+    out.sinceSeconds = scratch.age;
+    out.leftSeconds = ACTIVITY_SECONDS.sitDown - scratch.age;
+  } else if (scratch.rest < ACTIVITY_SECONDS.standUp) {
+    out.code = ACTIVITY.standUp;
+    out.sinceSeconds = ACTIVITY_SECONDS.standUp - scratch.rest;
+    out.leftSeconds = scratch.rest;
+  } else {
+    out.code = sitting;
+    out.sinceSeconds = scratch.age - ACTIVITY_SECONDS.sitDown;
+    out.leftSeconds = scratch.rest;
+  }
 }
 
 /** Turns `out` to face the hazard the resident last saw. */
@@ -141,78 +167,89 @@ function faceHazard(state: CityState, resident: number, out: ActivityReading): v
   if (toX !== 0 || toZ !== 0) out.yaw = detAtan2(toX, toZ);
 }
 
-/** A flinch: a step back from the hazard, out and back over the recoil clip, `RECOIL_STEP_METRES` at most (the calm take `RECOIL_CALM_SHARE` of it). */
-function stepBack(state: CityState, resident: number, since: number, out: ActivityReading): void {
+/** A flinch, `scratch.flinch` seconds into it: a step back from the hazard, out and back over the recoil clip, `RECOIL_STEP_METRES` at most (the calm take `RECOIL_CALM_SHARE` of it). */
+function stepBack(state: CityState, resident: number, out: ActivityReading): void {
   const toX = intAt(state, resident, RESIDENT_INT.alarmX) / CENTIMETRES_PER_METRE - out.x;
   const toZ = intAt(state, resident, RESIDENT_INT.alarmZ) / CENTIMETRES_PER_METRE - out.z;
   const distance = hypot2(toX, toZ);
   if (distance === 0) return;
-  const step = detSin((Math.PI * since) / ACTIVITY_SECONDS.recoil) * RECOIL_STEP_METRES * (RECOIL_CALM_SHARE + (1 - RECOIL_CALM_SHARE) * residentNeuroticism(state, resident));
+  const step = detSin((Math.PI * scratch.flinch) / ACTIVITY_SECONDS.recoil) * RECOIL_STEP_METRES * (RECOIL_CALM_SHARE + (1 - RECOIL_CALM_SHARE) * residentNeuroticism(state, resident));
   out.x -= (toX / distance) * step;
   out.z -= (toZ / distance) * step;
 }
 
-/** Seconds from the hazard to the moment this resident noticed it. */
-function noticeDelay(state: CityState, resident: number): number {
-  return intAt(state, resident, RESIDENT_INT.alarmDelay) / ALARM_DELAY_STEPS_PER_SECOND;
-}
-
-/** Someone walking who saw a hazard flinches for the recoil clip's length from the moment they noticed it, stepping back from it and facing it, then walks on. */
-function readFlinch(state: CityState, resident: number, seconds: number, out: ActivityReading): void {
-  const since = seconds - intAt(state, resident, RESIDENT_INT.alarmTick) / DECISION_HZ - noticeDelay(state, resident);
-  if (since < 0 || since >= ACTIVITY_SECONDS.recoil || !legPose(state, resident, seconds, state.pose)) return;
+/** Someone walking who saw a hazard flinches for the recoil clip's length from the moment they noticed it (the hazard's tick and their own delay), stepping back from it and facing it, then walks on. */
+function readFlinch(state: CityState, resident: number, out: ActivityReading): void {
+  if (intAt(state, resident, RESIDENT_INT.alarmTick) === NEVER_TICK) return;
+  scratch.flinch = scratch.clock - intAt(state, resident, RESIDENT_INT.alarmTick) / DECISION_HZ - intAt(state, resident, RESIDENT_INT.alarmDelay) / ALARM_DELAY_STEPS_PER_SECOND;
+  if (scratch.flinch < 0 || scratch.flinch >= ACTIVITY_SECONDS.recoil || !legPose(state, resident, scratch.clock, state.pose)) return;
   out.placed = true;
   out.x = state.pose.x;
   out.z = state.pose.z;
   out.partner = intAt(state, resident, RESIDENT_INT.alarmVictim);
   faceHazard(state, resident, out);
-  stepBack(state, resident, since, out);
-  setClip(out, ACTIVITY.recoil, since, ACTIVITY_SECONDS.recoil - since);
+  stepBack(state, resident, out);
+  out.code = ACTIVITY.recoil;
+  out.sinceSeconds = scratch.flinch;
+  out.leftSeconds = ACTIVITY_SECONDS.recoil - scratch.flinch;
 }
 
 /** Out at a door watching trouble: until they notice it they stand as they were; then a flinch and a step back, then standing looking at it; the one who phones for the ambulance stands on the phone, glancing at who is down. */
-function readWatcher(state: CityState, resident: number, purpose: number, since: number, left: number, out: ActivityReading): void {
+function readWatcher(state: CityState, resident: number, purpose: number, out: ActivityReading): void {
   if (purpose === PURPOSE.callAmbulance) {
     out.partner = intAt(state, resident, RESIDENT_INT.alarmVictim);
     faceHazard(state, resident, out);
-    setClip(out, ACTIVITY.phoneCall, since, left);
+    out.code = ACTIVITY.phoneCall;
+    out.sinceSeconds = scratch.age;
+    out.leftSeconds = scratch.rest;
     return;
   }
-  const noticed = since - noticeDelay(state, resident);
-  if (noticed < 0) {
-    setClip(out, ACTIVITY.idle, since, left);
+  scratch.flinch = scratch.age - intAt(state, resident, RESIDENT_INT.alarmDelay) / ALARM_DELAY_STEPS_PER_SECOND;
+  if (scratch.flinch < 0) {
+    out.code = ACTIVITY.idle;
+    out.sinceSeconds = scratch.age;
+    out.leftSeconds = scratch.rest;
     return;
   }
   out.partner = intAt(state, resident, RESIDENT_INT.alarmVictim);
   faceHazard(state, resident, out);
-  if (noticed < ACTIVITY_SECONDS.recoil) {
-    stepBack(state, resident, noticed, out);
-    setClip(out, ACTIVITY.recoil, noticed, ACTIVITY_SECONDS.recoil - noticed);
-  } else setClip(out, ACTIVITY.idle, noticed, left);
+  if (scratch.flinch < ACTIVITY_SECONDS.recoil) {
+    stepBack(state, resident, out);
+    out.code = ACTIVITY.recoil;
+    out.sinceSeconds = scratch.flinch;
+    out.leftSeconds = ACTIVITY_SECONDS.recoil - scratch.flinch;
+  } else {
+    out.code = ACTIVITY.idle;
+    out.sinceSeconds = scratch.flinch;
+    out.leftSeconds = scratch.rest;
+  }
 }
 
-function readOutdoor(state: CityState, resident: number, purpose: number, place: number, tick: number, since: number, left: number, out: ActivityReading): void {
-  const companion = companionIsHere(state, resident, tick);
+function readOutdoor(state: CityState, resident: number, purpose: number, place: number, out: ActivityReading): void {
+  const companion = companionIsHere(state, resident);
   const seat = intAt(state, resident, RESIDENT_INT.seat);
   out.partner = companion;
   if (purpose === PURPOSE.stoopSit && seat !== NO_SEAT) {
-    readSitting(state, place, seat, since, left, out, ACTIVITY.sitSteps);
+    readSitting(state, place, seat, out, ACTIVITY.sitSteps);
     return;
   }
   standAtDoor(state, resident, place, out);
   if (purpose === PURPOSE.lookOn || purpose === PURPOSE.callAmbulance) {
-    readWatcher(state, resident, purpose, since, left, out);
+    readWatcher(state, resident, purpose, out);
     return;
   }
   const talking = companion >= 0 && (purpose === PURPOSE.stoopTalk || purpose === PURPOSE.argue || purpose === PURPOSE.stoopSit);
-  setClip(out, talking ? ACTIVITY.talk : ACTIVITY.idle, since, left);
+  out.code = talking ? ACTIVITY.talk : ACTIVITY.idle;
+  out.sinceSeconds = scratch.age;
+  out.leftSeconds = scratch.rest;
 }
 
-function readIndoors(state: CityState, resident: number, place: number, since: number, left: number, out: ActivityReading): void {
-  const entry = state.map.places[place]!;
+function readIndoors(state: CityState, resident: number, place: number, out: ActivityReading): void {
   const venue = state.venues.venueOf[place]!;
-  const counter = entry.counter;
   const worker = intAt(state, resident, RESIDENT_INT.work) === place;
+  if (!worker && !isCounterVenue(venue)) return;
+  const entry = state.map.places[place]!;
+  const counter = entry.counter;
   if (worker && counter !== undefined && counter.length >= 2 * COUNTER_STRIDE) {
     out.placed = true;
     out.fixed = true;
@@ -220,22 +257,28 @@ function readIndoors(state: CityState, resident: number, place: number, since: n
     out.z = counter[COUNTER_STRIDE + 1]!;
     out.yaw = counter[COUNTER_STRIDE + 2]!;
     out.surfaceY = counter[COUNTER_STRIDE + 3]!;
-    setClip(out, ACTIVITY.idle, since, left);
+    out.code = ACTIVITY.idle;
+    out.sinceSeconds = scratch.age;
+    out.leftSeconds = scratch.rest;
     return;
   }
   if (worker || !isCounterVenue(venue)) return;
-  if (counter !== undefined && counter.length >= COUNTER_STRIDE && since < ACTIVITY_SECONDS.buy) {
+  if (counter !== undefined && counter.length >= COUNTER_STRIDE && scratch.age < ACTIVITY_SECONDS.buy) {
     out.placed = true;
     out.fixed = true;
     out.x = counter[0]!;
     out.z = counter[1]!;
     out.yaw = counter[2]!;
     out.surfaceY = counter[3]!;
-    setClip(out, ACTIVITY.buy, since, ACTIVITY_SECONDS.buy - since);
+    out.code = ACTIVITY.buy;
+    out.sinceSeconds = scratch.age;
+    out.leftSeconds = ACTIVITY_SECONDS.buy - scratch.age;
     return;
   }
   const seat = intAt(state, resident, RESIDENT_INT.seat);
-  if (seat !== NO_SEAT && entry.seats !== undefined) readSitting(state, place, seat, since - (counter === undefined ? 0 : ACTIVITY_SECONDS.buy), left, out, ACTIVITY.sit);
+  if (seat === NO_SEAT || entry.seats === undefined) return;
+  if (counter !== undefined) scratch.age -= ACTIVITY_SECONDS.buy;
+  readSitting(state, place, seat, out, ACTIVITY.sit);
 }
 
 function hasDoor(state: CityState, place: number): boolean {
@@ -244,18 +287,30 @@ function hasDoor(state: CityState, place: number): boolean {
 }
 
 /** Door clips: the first and last `ACTIVITY_SECONDS.door` of a walk that leaves or enters a building. A leg by car is a walk to it, getting in (a clip, standing at it), the drive (nobody is seen), getting out (a clip) and a walk from it. */
-function readWalk(state: CityState, resident: number, seconds: number, out: ActivityReading): void {
+function readWalk(state: CityState, resident: number, out: ActivityReading): void {
+  const seconds = scratch.clock;
   let from = intAt(state, resident, RESIDENT_INT.departTick) / DECISION_HZ;
   let to = intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ;
   const leaveTick = intAt(state, resident, RESIDENT_INT.driveLeaveTick);
+  if (leaveTick === NEVER_TICK && seconds - from >= ACTIVITY_SECONDS.door && to - seconds >= ACTIVITY_SECONDS.door) return;
   if (leaveTick !== NEVER_TICK) {
     const leaveSeconds = leaveTick / DECISION_HZ;
     const parkSeconds = intAt(state, resident, RESIDENT_INT.driveParkTick) / DECISION_HZ;
     const gotInSeconds = leaveSeconds - ACTIVITY_SECONDS.carIn;
     const gotOutSeconds = parkSeconds + ACTIVITY_SECONDS.carOut;
-    if (seconds >= gotInSeconds && seconds < leaveSeconds) return setClip(out, ACTIVITY.carIn, seconds - gotInSeconds, leaveSeconds - seconds);
+    if (seconds >= gotInSeconds && seconds < leaveSeconds) {
+      out.code = ACTIVITY.carIn;
+      out.sinceSeconds = seconds - gotInSeconds;
+      out.leftSeconds = leaveSeconds - seconds;
+      return;
+    }
     if (seconds >= leaveSeconds && seconds < parkSeconds) return;
-    if (seconds >= parkSeconds && seconds < gotOutSeconds) return setClip(out, ACTIVITY.carOut, seconds - parkSeconds, gotOutSeconds - seconds);
+    if (seconds >= parkSeconds && seconds < gotOutSeconds) {
+      out.code = ACTIVITY.carOut;
+      out.sinceSeconds = seconds - parkSeconds;
+      out.leftSeconds = gotOutSeconds - seconds;
+      return;
+    }
     if (seconds < leaveSeconds) to = gotInSeconds;
     else from = gotOutSeconds;
   }
@@ -263,37 +318,49 @@ function readWalk(state: CityState, resident: number, seconds: number, out: Acti
   const since = seconds - from;
   const toEnd = to - seconds;
   if (to - from <= 2 * doorSeconds) return;
-  if (since < doorSeconds && from === intAt(state, resident, RESIDENT_INT.departTick) / DECISION_HZ && hasDoor(state, intAt(state, resident, RESIDENT_INT.fromPlace))) setClip(out, ACTIVITY.door, since, doorSeconds - since);
-  else if (toEnd < doorSeconds && to === intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ && hasDoor(state, intAt(state, resident, RESIDENT_INT.place))) setClip(out, ACTIVITY.door, doorSeconds - toEnd, toEnd);
+  if (since < doorSeconds && from === intAt(state, resident, RESIDENT_INT.departTick) / DECISION_HZ && hasDoor(state, intAt(state, resident, RESIDENT_INT.fromPlace))) {
+    out.code = ACTIVITY.door;
+    out.sinceSeconds = since;
+    out.leftSeconds = doorSeconds - since;
+  } else if (toEnd < doorSeconds && to === intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ && hasDoor(state, intAt(state, resident, RESIDENT_INT.place))) {
+    out.code = ACTIVITY.door;
+    out.sinceSeconds = doorSeconds - toEnd;
+    out.leftSeconds = toEnd;
+  }
 }
 
 /** Fills `out` with what resident `resident` is doing at crowd time `seconds`, from their row alone: a pure function of the row and the time (any frame rate, no allocation). */
 export function readActivity(state: CityState, resident: number, seconds: number, out: ActivityReading): void {
-  setClip(out, ACTIVITY.none, 0, ACTIVITY_OPEN_ENDED);
+  out.code = ACTIVITY.none;
+  out.sinceSeconds = 0;
+  out.leftSeconds = ACTIVITY_OPEN_ENDED;
   out.partner = -1;
   out.surfaceY = 0;
   out.placed = false;
   out.fixed = false;
+  const { ints } = state;
   const base = resident * RESIDENT_INT_STRIDE;
+  if (ints[base + RESIDENT_INT.alive] === 0 || ints[base + RESIDENT_INT.species] !== SPECIES.person) return;
   const tick = seconds * DECISION_HZ;
-  if (state.ints[base + RESIDENT_INT.alive] === 0 || state.ints[base + RESIDENT_INT.species] !== SPECIES.person) return;
-  if ((state.ints[base + RESIDENT_INT.flags]! & (FLAG.hurt | FLAG.custody)) !== 0 || (tick >= state.hiddenFromTick[resident]! && tick < state.hiddenUntilTick[resident]!)) return;
-  const arriveSeconds = state.ints[base + RESIDENT_INT.arriveTick]! / DECISION_HZ;
-  const nextSeconds = state.ints[base + RESIDENT_INT.nextDecisionTick]! / DECISION_HZ;
-  if (state.ints[base + RESIDENT_INT.pathCount]! > 0 && seconds >= state.ints[base + RESIDENT_INT.departTick]! / DECISION_HZ && seconds < arriveSeconds) {
-    readWalk(state, resident, seconds, out);
-    if (out.code === ACTIVITY.none) readFlinch(state, resident, seconds, out);
+  if ((ints[base + RESIDENT_INT.flags]! & (FLAG.hurt | FLAG.custody)) !== 0 || (tick >= state.hiddenFromTick[resident]! && tick < state.hiddenUntilTick[resident]!)) return;
+  scratch.clock = seconds;
+  scratch.tick = tick;
+  const arriveTick = ints[base + RESIDENT_INT.arriveTick]!;
+  if (ints[base + RESIDENT_INT.pathCount]! > 0 && tick >= ints[base + RESIDENT_INT.departTick]! && tick < arriveTick) {
+    readWalk(state, resident, out);
+    if (out.code === ACTIVITY.none) readFlinch(state, resident, out);
     return;
   }
-  if (seconds < arriveSeconds || seconds >= nextSeconds) return;
-  const purpose = state.ints[base + RESIDENT_INT.legPurpose]!;
-  const place = state.ints[base + RESIDENT_INT.place]!;
-  const since = seconds - arriveSeconds;
-  const left = nextSeconds - seconds;
+  const nextTick = ints[base + RESIDENT_INT.nextDecisionTick]!;
+  if (tick < arriveTick || tick >= nextTick) return;
+  const place = ints[base + RESIDENT_INT.place]!;
   if (place === NO_PLACE) return;
-  if (purpose === PURPOSE.fight) readFight(state, resident, since, out);
-  else if (isOutdoorPurpose(purpose)) readOutdoor(state, resident, purpose, place, tick, since, left, out);
-  else readIndoors(state, resident, place, since, left, out);
+  scratch.age = seconds - arriveTick / DECISION_HZ;
+  scratch.rest = nextTick / DECISION_HZ - seconds;
+  const purpose = ints[base + RESIDENT_INT.legPurpose]!;
+  if (purpose === PURPOSE.fight) readFight(state, resident, out);
+  else if (isOutdoorPurpose(purpose)) readOutdoor(state, resident, purpose, place, out);
+  else readIndoors(state, resident, place, out);
 }
 
 /** The latest moment a fighter who arrived at `arriveSeconds` lands a swing in (fromSeconds, toSeconds], or -1: the one who started (or turned on the player) swings every other slot. */
