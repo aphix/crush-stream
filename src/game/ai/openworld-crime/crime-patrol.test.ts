@@ -12,6 +12,8 @@ const RUNNER_X = 90;
 const OFF_ROAD_GAP = 26;
 /** The chased car's pace (m/s): slow enough for the patrol car to close the gap in the rows' time. */
 const RUNNER_SPEED = 1;
+/** The chased car is put this far (m) off: the patrol car, closing at the urgent pace, is still more than `CAR_LOST_DISTANCE` away for `CAR_LOST_SECONDS`. */
+const RUNAWAY_JUMP = 5 * CAR_LOST_DISTANCE;
 /** The chased car for the chase rows stands this far (m) east, with the foot cop who saw it 50 m before it: the patrol car's trip from the west end is long enough to read. */
 const FAR_RUNNER_X = 190;
 const FAR_COP_X = 140;
@@ -162,7 +164,7 @@ describe("a chased traffic car runs from the patrol car", () => {
     const runner = street.addCar(RUNNER_X, 0, EAST, RUNNER_SPEED, 2, true);
     run.scene.reportRedLight(runner, RUNNER_X, 0);
     runFor(run, 1);
-    street.snaps[runner]!.x += CAR_LOST_DISTANCE + 100;
+    street.snaps[runner]!.x += RUNAWAY_JUMP;
     street.snaps[runner]!.vx = 0;
     street.snaps[runner]!.vz = 0;
     runFor(run, CAR_LOST_SECONDS + 2);
