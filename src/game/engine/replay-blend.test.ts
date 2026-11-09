@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { recordFlat, type Spawn } from "./replay-fidelity.test-util.ts";
+import { recordFlat, type Recording, type Spawn } from "./replay-fidelity.test-util.ts";
 import { ClipSim } from "./engine-replay.ts";
 import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { memoRun } from "../kernel/shared-run.test-util.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
  * Owner, 2026-10-09 (docs/HIGHLIGHTS.md, clip review issue 6): in a slow-mo replay every drawn part of a car moves on every drawn frame, the
@@ -23,6 +26,10 @@ const PILE: Spawn[] = [
 ];
 /** Slow-mo: the clip's time per drawn frame (s): a 1/60 s frame at 0.1x (about 0.4 of a 1/240 s step) and at 0.2x. */
 const FRAME_S = [1 / 600, 1 / 300];
+/** The identity row's frame (s): a step and a half of 1/240 s, so every other frame is drawn between two steps by the blend, at half the cost of the 1/300 s frames. */
+const IDENTITY_FRAME_S = 1 / 160;
+/** A display frame at normal speed: the cheap play of the shared recording that the identity row's compared play comes after. */
+const FIRST_PLAY_S = 1 / FRAME_HZ;
 /** An entity moves on a frame when its world position or orientation changed by more than this. */
 const EPS_POS = 1e-5;
 const EPS_ROT = 1e-6;
@@ -76,10 +83,15 @@ function planarStep(now: Float32Array, last: Float32Array): number {
   return most;
 }
 
-/** Per class: the frames on which an entity moves, and the ones among them on which its drawn pose changed since the frame before. */
+/** The pile-up recorded once for every row: each replay restarts the cars from the clip's first keyframe, as the reel does on every loop. */
+const recorded = memoRun(() => recordFlat(PILE, 8, false));
+
+/** Numbers a drawn pose is written as in `Drawn.poses`: position, orientation, and 1 for a hinged part still on its car. */
+const POSE_WIDTH = 8;
+
+/** Per class: the frames on which an entity moves, and the ones among them on which its drawn pose changed since the frame before; `poses` is every entity's drawn pose on every frame, then every skin's per-frame step. */
 /** `skip`: `EPICENTER.presentSkip`, which poses the parts only when what the pose reads changed (so not on the frames between two steps); `calls` counts the poses written. */
-function shares(dt: number, skip: 0 | 1): { rows: Record<Class, { moving: number; changed: number }>; calls: number } {
-  const rec = recordFlat(PILE, 8, false);
+function shares(dt: number, skip: 0 | 1, rec: Recording): { rows: Record<Class, { moving: number; changed: number }>; calls: number; poses: Float64Array } {
   const cars = rec.clip.cars.map((c) => rec.cars[c.slot]!);
   const blend = rec.scene.blend;
   const sim = new ClipSim(rec.clip, cars, rec.scene);
@@ -141,7 +153,18 @@ function shares(dt: number, skip: 0 | 1): { rows: Record<Class, { moving: number
       if (steps[f]! > EPS_POS) out.skin.changed++;
     }
   }
-  return { rows: out, calls };
+  const poses = new Float64Array(series.reduce((n, s) => n + s.length * POSE_WIDTH, 0) + skinSteps.reduce((n, s) => n + s.length, 0));
+  let at = 0;
+  for (const s of series) {
+    for (const x of s) {
+      x.p.toArray(poses, at);
+      x.q.toArray(poses, at + 3);
+      poses[at + 7] = x.on ? 1 : 0;
+      at += POSE_WIDTH;
+    }
+  }
+  for (const steps of skinSteps) for (const v of steps) poses[at++] = v;
+  return { rows: out, calls, poses };
 }
 
 const saved = epicenterValues();
@@ -150,8 +173,8 @@ afterEach(() => loadEpicenter(saved));
 describe("given a crash replayed in slow motion from its clip", () => {
   for (const frame of FRAME_S) {
     it(`when frames of ${(frame * 1000).toFixed(2)} ms of the clip (a 1/60 s frame at ${(frame * 60).toFixed(1)}x) are drawn, with pose skipping off and on, then every class of drawn part changes pose on at least ${BAR * 100} % of the frames it moves on`, () => {
-      const every = shares(frame, 0);
-      const skipping = shares(frame, 1);
+      const every = shares(frame, 0, recorded());
+      const skipping = shares(frame, 1, recorded());
       // The skipping run must be one that skips (parts posed only when their inputs changed), or it proves nothing about presentSkip. The cars move all through this clip, so it skips little (a still wreck skips almost every pose: pose-skip.test.ts).
       expect(skipping.calls, `${skipping.calls} part poses with presentSkip against ${every.calls} without`).toBeLessThan(every.calls);
       for (const [name, { rows: s }] of [["presentSkip 0", every], ["presentSkip 1", skipping]] as const) {
@@ -165,7 +188,7 @@ describe("given a crash replayed in slow motion from its clip", () => {
   }
 
   it("when a frame is drawn between two steps and handed back, then the sim's own pose of every car is exactly what it was", () => {
-    const rec = recordFlat(PILE, 8, false);
+    const rec = recorded();
     const cars = rec.clip.cars.map((c) => rec.cars[c.slot]!);
     const sim = new ClipSim(rec.clip, cars, rec.scene);
     sim.restart();
@@ -182,5 +205,15 @@ describe("given a crash replayed in slow motion from its clip", () => {
     expect(drawn.some((v, i) => v !== before[i]), "the drawn pose is between the steps").toBeTruthy();
     rec.scene.blend.restore();
     assertSameNumbers(poses(), before, "the sim's own pose handed back");
+  });
+
+  // mutation: sed -i 's/^    this.blend.forget(this.cars);$/    ;/' src/game/engine/engine-replay.ts  (a replay starts blending the play before it: the shared recording's second replay differs from the fresh one's)
+  it("when the shared recording is replayed a second time and a fresh recording once, then every entity's drawn pose on every frame is the same, bit for bit", () => {
+    const shared = recorded();
+    shares(FIRST_PLAY_S, 0, shared);
+    const again = shares(IDENTITY_FRAME_S, 0, shared);
+    const fresh = shares(IDENTITY_FRAME_S, 0, recordFlat(PILE, 8, false));
+    expect(again.poses.length, "numbers drawn").toBe(fresh.poses.length);
+    expect(firstMismatch(again.poses, fresh.poses), "first drawn number that differs").toBeUndefined();
   });
 });
