@@ -130,7 +130,7 @@ export class OpenWorldDirector {
       this.stop();
       return;
     }
-    this.culling.frame(this.ports.cars(), this.ports.now());
+    this.culling.frame(this.ports.cars(), wallDt);
     const client = this.ports.isClient();
     if (client && !this.hasHeard) return;
     const key = client ? this.heardKey : this.hostKey();

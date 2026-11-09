@@ -25,6 +25,8 @@ export class OpenWorldCulling {
   private readonly ports: OpenWorldCullPorts;
   private readonly cars: OpenWorldCarLod;
   private solidsKnown = false;
+  /** The frames' wall seconds summed: the field's clock, so a stepped engine (a probe) and a paused game keep their grace like a running one. */
+  private seconds = 0;
 
   constructor(ports: OpenWorldCullPorts) {
     this.ports = ports;
@@ -32,13 +34,14 @@ export class OpenWorldCulling {
   }
 
   /** A frame in the open world, before anything that asks `sight`. */
-  frame(liveCars: readonly LodCar[], nowSeconds: number): void {
+  frame(liveCars: readonly LodCar[], wallDt: number): void {
     if (!this.sight.enabled) {
       this.cars.release(liveCars);
       return;
     }
     if (!this.solidsKnown) this.takeSolids();
-    this.sight.update(this.ports.eyes(), nowSeconds, this.ports.playerCars());
+    this.seconds += wallDt;
+    this.sight.update(this.ports.eyes(), this.seconds, this.ports.playerCars());
     this.cars.frame(liveCars, this.ports.followed(), this.ports.replaying());
   }
 
@@ -47,6 +50,7 @@ export class OpenWorldCulling {
     this.cars.stop(liveCars);
     this.sight.clear();
     this.solidsKnown = false;
+    this.seconds = 0;
   }
 
   private takeSolids(): void {

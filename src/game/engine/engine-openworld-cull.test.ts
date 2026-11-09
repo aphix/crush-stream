@@ -32,8 +32,8 @@ function culling() {
     detail,
     cars,
     parked,
-    run(seconds: number, from = 0): void {
-      for (let frame = 0; frame <= Math.round(seconds / FRAME_S); frame++) made.frame(cars, from + frame * FRAME_S);
+    run(seconds: number): void {
+      for (let frame = 0; frame <= Math.round(seconds / FRAME_S); frame++) made.frame(cars, FRAME_S);
     },
   };
 }
@@ -41,17 +41,17 @@ function culling() {
 describe("given the open world's culling, its course still loading", () => {
   it("when the course's solids arrive on a later frame, then a person behind a building is unseen from then on", () => {
     const { course, made, cars } = culling();
-    made.frame(cars, 0);
+    made.frame(cars, FRAME_S);
     expect(made.sight.seen(0, 50, PERSON_M), "seen before the solids").toBe(true);
     course.solids = [BUILDING];
-    made.frame(cars, 1);
+    made.frame(cars, FRAME_S);
     expect(made.sight.seen(0, 50, PERSON_M), "seen once the building is known").toBe(false);
   });
 
   it("when the open world is left, then the buildings and the claimed ids are given back", () => {
     const { course, made, cars } = culling();
     course.solids = [BUILDING];
-    made.frame(cars, 0);
+    made.frame(cars, FRAME_S);
     expect(() => made.sight.claim(SIGHT_ID_CAPACITY), "claiming every id with the cars' already taken").toThrow(RangeError);
     made.stop(cars);
     expect(made.sight.seen(0, 50, PERSON_M), "seen with no building left").toBe(true);
@@ -74,11 +74,11 @@ describe("given the course's building between the street camera and a traffic ca
     world.course.solids = [BUILDING];
     world.run(SETTLED_S);
     world.made.sight.enabled = false;
-    world.made.frame(world.cars, SETTLED_S);
+    world.made.frame(world.cars, FRAME_S);
     expect(world.parked.group.visible, "the car with culling off").toBe(true);
     expect(world.detail.level, "rung with culling off").toBe(FIRST_RUNG);
     world.made.sight.enabled = true;
-    world.run(HIDE_GRACE + FRAME_S, SETTLED_S + 1);
+    world.run(HIDE_GRACE + FRAME_S);
     expect(world.parked.group.visible, "the car after the grace with culling on again").toBe(false);
   });
 });
