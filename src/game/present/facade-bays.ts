@@ -3,13 +3,14 @@ import { detCos, detSin } from "../kernel/physics-core.js";
 import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { buildingHeight, MAX_STOREYS, MIN_STOREYS } from "../world/openworld/interior-kinds.ts";
+import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { drawnHalf, HOME_HEIGHT, type Frontage } from "../world/openworld/openworld-facade-solids.ts";
 import { BRICK_STYLE } from "../world/openworld/openworld-programme.ts";
 import { buildAirconGeometry, buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildFanlightGeometry, buildRailingGeometry, buildRoofGeometry, buildShutterGeometry, buildStoopGeometry, buildSurroundGeometry, buildWindowBoxGeometry, TINT_ATTRIBUTE } from "./facade-bay-parts.ts";
 import { airconWindowsOf, shuttersOf, visibleWindowsOf } from "./facade-fittings.ts";
 import { windowBoxPlacements, type SillWindow } from "./facade-window-boxes.ts";
-import { makeKitTextures, type KitTextures } from "./facade-kit-atlas.ts";
-import { FACADE_GLOW, roofLiftAt } from "./facades.ts";
+import { GLASS_ALPHA_BELOW, makeKitTextures, type KitTextures } from "./facade-kit-atlas.ts";
+import { FACADE_GLOW, FACADE_OPEN_AT, FACADE_OPEN_UNIFORM, facadeOpenLoop, roofLiftAt } from "./facades.ts";
 
 /**
  * The rowhomes' projecting bay stacks, stoops, iron railings, roofline cornices and what stands on their roofs (chimneys and hatches, on some a condenser or a deck): one instanced mesh per kind across
@@ -57,8 +58,22 @@ export function tintedColorVertex(): string {
   return patched;
 }
 
+/** How far behind a house's drawn front face its centre lies (m): the position the open-facade list names, found from a kit instance (the front face's point, turned to face out of it). */
+export const KIT_HOUSE_BACK = drawnHalf(LAYOUT.houseDepth);
+
 /** A house's seed from where it stands, then its windows light once the shared glow passes it (and only a share of houses light them). */
 const KIT_SEED = "fract(dot(instanceMatrix[3].xz, vec2(0.0791, 0.1137)))";
+
+/** The seed and the open flag of an instance: where its house stands (its translation, taken back along the kit's out axis to the building's centre) against the list of buildings with their rooms built. */
+const KIT_HOUSE_VERTEX = /* glsl */ `
+vKitOpen = 0.0;
+#ifdef USE_INSTANCING
+vKitSeed = ${KIT_SEED};
+vec2 kitHouse = instanceMatrix[3].xz - normalize(instanceMatrix[2].xz) * ${KIT_HOUSE_BACK.toFixed(4)};
+${facadeOpenLoop("vKitOpen", "kitHouse")}
+#else
+vKitSeed = 0.0;
+#endif`;
 
 function makeKitMaterial(textures: KitTextures): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
@@ -72,12 +87,14 @@ function makeKitMaterial(textures: KitTextures): THREE.MeshStandardMaterial {
   });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.facadeGlow = FACADE_GLOW;
+    shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\nattribute float ${TINT_ATTRIBUTE};\nvarying float vKitSeed;`)
+      .replace("#include <common>", `#include <common>\nattribute float ${TINT_ATTRIBUTE};\nvarying float vKitSeed;\nflat varying float vKitOpen;\n${FACADE_OPEN_UNIFORM}`)
       .replace("#include <color_vertex>", tintedColorVertex())
-      .replace("#include <begin_vertex>", `#include <begin_vertex>\n#ifdef USE_INSTANCING\nvKitSeed = ${KIT_SEED};\n#else\nvKitSeed = 0.0;\n#endif`);
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\n${KIT_HOUSE_VERTEX}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform float facadeGlow;\nvarying float vKitSeed;")
+      .replace("#include <common>", "#include <common>\nuniform float facadeGlow;\nvarying float vKitSeed;\nflat varying float vKitOpen;")
+      .replace("#include <map_fragment>", `#include <map_fragment>\nif (vKitOpen > 0.5 && diffuseColor.a < ${GLASS_ALPHA_BELOW}) discard;`)
       .replace(
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>\ntotalEmissiveRadiance *= smoothstep(vKitSeed * 0.7, vKitSeed * 0.7 + 0.2, facadeGlow) * step(fract(vKitSeed * 7.3), ${WINDOW_LIT_SHARE.toFixed(2)});`,

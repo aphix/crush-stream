@@ -7,11 +7,12 @@ import { buildingHeight, DEFAULT_STOREYS, MAX_STOREYS, MIN_STOREYS } from "../wo
 import { BAY, bayStackOf, DOOR, BLOCK_FACE_HALF, drawnHalf, homeFrontages, STOOP } from "../world/openworld/openworld-facade-solids.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { BRICK_STYLE } from "../world/openworld/openworld-programme.ts";
+import { PLACE_KIND } from "../world/openworld/walk-graph.ts";
 import { buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildFanlightGeometry, buildRailingGeometry, buildRoofGeometry, buildStoopGeometry, buildSurroundGeometry } from "./facade-bay-parts.ts";
-import { FacadeBays, HOUSE_ACCENTS, tintedColorVertex } from "./facade-bays.ts";
-import { ATLAS_SIZE, KIT_CELL, paintKit, type UvRect } from "./facade-kit-atlas.ts";
+import { FacadeBays, HOUSE_ACCENTS, KIT_HOUSE_BACK, tintedColorVertex } from "./facade-bays.ts";
+import { ATLAS_SIZE, GLASS_ALPHA_BELOW, KIT_CELL, paintKit, type UvRect } from "./facade-kit-atlas.ts";
 import { HALF } from "./facade-mesh.ts";
-import { roofLiftAt } from "./facades.ts";
+import { FACADE_OPEN_AT, roofLiftAt } from "./facades.ts";
 import { shuttersOf, visibleWindowsOf } from "./facade-fittings.ts";
 
 const lots = layOutLots();
@@ -56,6 +57,12 @@ const EVERY_HOUSE: readonly string[] = ["facade-stoop", "facade-railing", "facad
 /** The storey counts houses are built with: a bay stack of each has its own mesh. */
 /** The tints the stoops are made in (marble whites, sandstone, brownstone). */
 const STOOP_TINTS = 5;
+/** Where in the window cell a pane and its frame are sampled (shares of its width and height), and the largest alpha a texel holds. */
+const PANE_ACROSS = 0.25;
+const PANE_UP = 0.25;
+const FRAME_ACROSS = 0.03;
+const FRAME_UP = 0.5;
+const OPAQUE = 255;
 /** How many different storey counts the layout's houses must have. */
 const MIN_DISTINCT_STOREYS = 3;
 const STOREY_COUNTS = Array.from({ length: MAX_STOREYS - MIN_STOREYS + 1 }, (_, at) => MIN_STOREYS + at);
@@ -461,6 +468,52 @@ describe("given the roof pieces", () => {
       }
     }
     expect(outside.slice(0, 3).join("; "), "roof piece vertices off the roof").toBe("");
+  });
+});
+
+describe("given the panes of the bay windows and the list of built buildings", () => {
+  const places = lots.places.slice(0, lots.backdropStart).filter((place) => place.kind === PLACE_KIND.home && place.interior === "rowhome");
+  const kit = new FacadeBays(frontages);
+  afterAll(() => kit.dispose());
+
+  // mutation: sed -i 's/^const GLASS_ALPHA = 128;/const GLASS_ALPHA = 255;/' src/game/present/facade-kit-atlas.ts
+  it("when the window cell is sampled, then its panes are under the cut threshold and its frame is not", () => {
+    const painted = paintKit().albedo;
+    const alphaAt = (across: number, up: number): number => {
+      const cell = KIT_CELL.window;
+      const x = Math.floor((cell.u0 + (cell.u1 - cell.u0) * across) * ATLAS_SIZE);
+      const y = Math.floor((cell.v0 + (cell.v1 - cell.v0) * up) * ATLAS_SIZE);
+      return painted[(y * ATLAS_SIZE + x) * 4 + 3]! / OPAQUE;
+    };
+    expect(alphaAt(PANE_ACROSS, PANE_UP), "a pane's alpha").toBeLessThan(GLASS_ALPHA_BELOW);
+    expect(alphaAt(FRAME_ACROSS, FRAME_UP), "the frame's alpha").toBeGreaterThan(GLASS_ALPHA_BELOW);
+  });
+
+  // mutation: sed -i 's/    shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;//' src/game/present/facade-bays.ts
+  it("when the kit's material is compiled, then each instance is told whether its house has its rooms built against the shared list, and a pane is cut on that", () => {
+    const material = (kit.group.getObjectByName("facade-stoop") as THREE.InstancedMesh).material as THREE.MeshStandardMaterial;
+    const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
+    const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    expect(shader.uniforms.facadeOpenAt, "the list of built buildings").toBe(FACADE_OPEN_AT);
+    expect(shader.vertexShader, "the vertex shader's flag").toContain("vKitOpen");
+    expect(shader.fragmentShader, "the fragment shader's cut").toContain(`vKitOpen > 0.5 && diffuseColor.a < ${GLASS_ALPHA_BELOW}) discard;`);
+  });
+
+  // mutation: sed -i 's/^export const KIT_HOUSE_BACK = drawnHalf(LAYOUT.houseDepth);/export const KIT_HOUSE_BACK = drawnHalf(LAYOUT.houseDepth) + 0.5;/' src/game/present/facade-bays.ts
+  it("when each kit instance is taken back along its out axis, then it lands on the place its building stands at, the position the list names", () => {
+    const cornice = kit.group.getObjectByName("facade-cornice") as THREE.InstancedMesh;
+    const matrix = new THREE.Matrix4();
+    let worst = 0;
+    for (const [at, place] of places.entries()) {
+      cornice.getMatrixAt(at, matrix);
+      const out = { x: matrix.elements[8]!, z: matrix.elements[10]! };
+      const length = Math.hypot(out.x, out.z);
+      worst = Math.max(worst, Math.abs(matrix.elements[12]! - (out.x / length) * KIT_HOUSE_BACK - place.x), Math.abs(matrix.elements[14]! - (out.z / length) * KIT_HOUSE_BACK - place.z));
+      expect(KIT_HOUSE_BACK, `${place.name}: the house's back from its front face (m)`).toBeCloseTo(drawnHalf(place.depth), 9);
+    }
+    expect(places.length, "houses read").toBeGreaterThan(100);
+    expect(worst, "furthest a house centre found from the kit is from its place (m)").toBeLessThan(EPSILON * 10);
   });
 });
 

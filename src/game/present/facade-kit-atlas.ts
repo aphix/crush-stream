@@ -56,6 +56,9 @@ const GLASS_HIGH_RGB = [134, 164, 188] as const;
 const GLASS_STREAK_PERIOD = 24;
 const GLASS_STREAK_WIDTH = 3;
 const GLASS_STREAK_BOOST = 14;
+/** A window pane's alpha in the atlas (frames and everything else are 255): the kit's shader cuts texels under `GLASS_ALPHA_BELOW` where the room behind them is built. */
+const GLASS_ALPHA = 128;
+export const GLASS_ALPHA_BELOW = 0.75;
 /** What a lit window glows (linear-ish warm), at its brightest. */
 const WINDOW_LIGHT_RGB = [255, 186, 104] as const;
 const WINDOW_LIGHT_FLOOR = 0.75;
@@ -148,7 +151,7 @@ function paintWindow(albedo: Texels, glow: Texels, cell: Cell): void {
     }
     const height = row / cell.height;
     const streak = (column + row) % GLASS_STREAK_PERIOD < GLASS_STREAK_WIDTH ? GLASS_STREAK_BOOST : 0;
-    put(albedo, x, y, mix(GLASS_LOW_RGB[0], GLASS_HIGH_RGB[0], height) + streak, mix(GLASS_LOW_RGB[1], GLASS_HIGH_RGB[1], height) + streak, mix(GLASS_LOW_RGB[2], GLASS_HIGH_RGB[2], height) + streak);
+    put(albedo, x, y, mix(GLASS_LOW_RGB[0], GLASS_HIGH_RGB[0], height) + streak, mix(GLASS_LOW_RGB[1], GLASS_HIGH_RGB[1], height) + streak, mix(GLASS_LOW_RGB[2], GLASS_HIGH_RGB[2], height) + streak, GLASS_ALPHA);
     const light = mix(WINDOW_LIGHT_FLOOR, 1, height);
     put(glow, x, y, WINDOW_LIGHT_RGB[0] * light, WINDOW_LIGHT_RGB[1] * light, WINDOW_LIGHT_RGB[2] * light);
   });
