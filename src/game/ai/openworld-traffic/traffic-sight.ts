@@ -9,6 +9,8 @@ export type TrafficSight = {
   /** Seconds since `id` was last seen (0 before it was ever observed). */
   unseenFor(id: number): number;
   reset(id: number): void;
+  /** Gives back the ids `first` to `first + count - 1` of a claim, for the next claim to reuse. */
+  release(first: number, count: number): void;
   /** Whether a player's car is within `radius` m of (x, z). */
   near(x: number, z: number, radius: number): boolean;
 };

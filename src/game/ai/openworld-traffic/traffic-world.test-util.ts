@@ -25,6 +25,9 @@ export const HOLD: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: false
 /** Sight when no field of view is known: no eye sees anything, and a player's car is near what lies within the radius of it. */
 export class ProximitySight {
   readonly hideGrace = 0;
+  /** Every claim and every release, as (first, count), in order. */
+  readonly claims: { first: number; count: number }[] = [];
+  readonly releases: { first: number; count: number }[] = [];
   private claimed = 0;
   private readonly ports: TrafficPorts;
 
@@ -35,6 +38,7 @@ export class ProximitySight {
   claim(count: number): number {
     const first = this.claimed;
     this.claimed += count;
+    this.claims.push({ first, count });
     return first;
   }
 
@@ -47,6 +51,10 @@ export class ProximitySight {
   }
 
   reset(): void {}
+
+  release(first: number, count: number): void {
+    this.releases.push({ first, count });
+  }
 
   near(x: number, z: number, radius: number): boolean {
     const cars = this.ports.cars();

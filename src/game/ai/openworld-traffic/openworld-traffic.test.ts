@@ -3,11 +3,11 @@ import { hypot2 } from "../../kernel/physics-core.js";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork, junctionIndex } from "../../world/openworld/openworld-roads.ts";
-import type { DrivenCar, OpenWorldTraffic } from "./openworld-traffic.ts";
+import { OpenWorldTraffic, type DrivenCar } from "./openworld-traffic.ts";
 import { fleetStyle } from "../../scenes/fleet.ts";
 import { EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
-import { Clock, CYCLE_SECONDS, FakeField, HOLD, makeTraffic, runSeconds, STEP_SECONDS, stepField } from "./traffic-world.test-util.ts";
+import { Clock, CYCLE_SECONDS, FakeField, HOLD, makeTraffic, ProximitySight, runSeconds, STEP_SECONDS, stepField } from "./traffic-world.test-util.ts";
 
 const FAR = 1500;
 const HOME = { x: -100, z: -45 };
@@ -57,6 +57,20 @@ describe("given a field whose pool cars the engine has just built (shown and sim
       const car = field.cars[id]!;
       expect(car.stored && !car.group.visible, `car ${id} at (${car.group.position.x}, ${car.group.position.z})`).toBe(true);
     }
+  });
+});
+
+describe("given traffic rebuilt on the same sight field (a new crowd key mid-session)", () => {
+  // mutation: sed -i 's/    sight.release(sightBase, this.total + 1);/    \/\/ ids kept/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when traffic is let go, then it gives back every sight id it claimed", () => {
+    const field = quietField();
+    const sight = new ProximitySight(field.ports);
+    const traffic = new OpenWorldTraffic([], field.ports, sight, { movers: 4, kerb: 3, patrol: 1 }, null);
+    traffic.dispose();
+    expect(sight.claims.length, "claims").toBe(1);
+    expect(sight.releases.length, "releases").toBe(1);
+    expect(sight.releases[0]!.first, "first id given back").toBe(sight.claims[0]!.first);
+    expect(sight.releases[0]!.count, "ids given back").toBe(sight.claims[0]!.count);
   });
 });
 

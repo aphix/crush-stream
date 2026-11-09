@@ -153,7 +153,8 @@ export class OpenWorldTraffic {
 
   /** The cars go away: every pool car no human drives is put away. */
   dispose(): void {
-    const { ports } = this.context;
+    const { ports, sight, sightBase } = this.context;
+    sight.release(sightBase, this.total + 1);
     ports.markPolice(MAX_CARS, 0);
     for (let id = this.first; id < this.first + this.total; id++) {
       if (id >= ports.cars().length || ports.seated(id)) continue;
