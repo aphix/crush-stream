@@ -31,6 +31,8 @@ import { fabricProps } from "./openworld-fabric.ts";
 import { interiorEnvelopeProps } from "./openworld-interior-solids.ts";
 import type { Geometry, Lots } from "./openworld-layout.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
+import { buildRoadNetwork } from "./openworld-roads.ts";
+import { signalPoleProps } from "./openworld-signal-poles.ts";
 import { parkPaint, parkProps } from "./openworld-park.ts";
 import { lampStations, sidePoint, sidesOf, treeStations, type BlockSide } from "./openworld-sides.ts";
 import { stoopGreeneryProps, streetTreeStyle } from "./openworld-greenery.ts";
@@ -186,7 +188,7 @@ export function openWorldCourse(lots: Lots): TrackInput {
     road: { width: geometry.carriageway, surface: SURFACE.asphalt, runoff: [0, 0], runoffSurface: SURFACE.concrete, wall: [false, false], raceMarks: false },
     nodes,
     checkpoints: Array.from({ length: LOOP_CHECKPOINTS }, (_, index) => ({ node: Math.floor((index * nodes.length) / LOOP_CHECKPOINTS) })),
-    props: [...buildingProps(lots), ...streetProps(lots), ...fabric, ...parkProps(lots), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots), ...stoopGreeneryProps(lots, fabric), ...parkTrees.trees, ...parkTrees.boxwood],
+    props: [...buildingProps(lots), ...streetProps(lots), ...fabric, ...parkProps(lots), ...signalPoleProps(buildRoadNetwork(geometry)), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots), ...stoopGreeneryProps(lots, fabric), ...parkTrees.trees, ...parkTrees.boxwood],
     scenery: { biome: BIOME.city, off: ["frontage", "verge", "islands"], roadDecals: [], paving: PAVING.brick },
     traffic: { count: 0, lanes: [], routes: streetRoutes(geometry) },
     survival: spawnOf(geometry),
