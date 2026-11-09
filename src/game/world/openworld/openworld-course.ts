@@ -3,6 +3,7 @@ import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { PARKED_CARS } from "../catalog.ts";
 import { BIOME, PREFAB, SURFACE } from "../constants.ts";
 import { mulberry32 } from "../placements.ts";
+import { TREE_SCALE } from "../scenery.ts";
 import type { TrackSchema } from "../track-schema.ts";
 import {
   COURSE_LOOK,
@@ -28,7 +29,6 @@ import {
   SPAWN_FORMATION_STEP,
   SPAWN_LATERAL_SHIFT,
   TREE_LAMP_CLEARANCE,
-  TREE_SCALE,
   TREE_SPACING,
   WALL_HEIGHT,
   WALL_PIECE_LENGTH,
