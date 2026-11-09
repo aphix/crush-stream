@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_SECONDS } from "./civilian-activity.ts";
+import { DECISION_HZ, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import { BODY_GAP } from "./civilian-crowd-constants.ts";
 import { PACE, people, sendAlong, streetEdge } from "./civilian-crowd-contact.test-util.ts";
 import { FRAME_SECONDS, newCrowd } from "./civilian-crowd.test-util.ts";
@@ -101,17 +102,44 @@ describe("given a resident at her car's door and no port, or a port that finds n
   });
 });
 
-describe("given a resident who got out of her car and then walks on, or is in her car on the road", () => {
-  it("when the society says nothing of her and she is on no leg, then she is not drawn, and when she walks, then she is drawn on the ground", () => {
-    const { crowd, driver } = crowdWithDriver(ACTIVITY.carOut, true);
-    stepOnce(crowd);
-    expect(crowd.poses.feetY[driver], "feet at the car").toBeCloseTo(FEET_Y, 5);
-    crowd.activityReader = readActivity;
-    stepOnce(crowd, 2 * FRAME_SECONDS);
-    expect(crowd.poses.shown[driver], "shown on the road, in her car").toBe(0);
+describe("given a resident whose leg goes by car: to it, in it, along the road, out of it, and on", () => {
+  /** The leg runs 15 s or more; the car leaves at 4 s (getting in is the 2.6 s before) and is parked at 8 s (getting out is the 2.4 s after). */
+  const LEAVE_TICK = 4 * DECISION_HZ;
+  const PARK_TICK = 8 * DECISION_HZ;
+  const WALKING_TO_CAR = 0.5;
+  const GETTING_IN = 2;
+  const ON_THE_ROAD = 6;
+  const GETTING_OUT = 8.5;
+  const WALKING_ON = 12;
+  const FIRST_NODE = 0;
+  const LAST_NODE = 1;
+
+  function byCar() {
+    const { crowd, driver } = crowdWithDriver(null, true);
     sendAlong(crowd, driver, EDGE, EDGE.from, EDGE.to);
-    stepOnce(crowd, 3 * FRAME_SECONDS);
-    expect(crowd.poses.shown[driver], "shown walking").toBe(1);
-    expect(crowd.poses.feetY[driver], "feet on the ground again").toBe(0);
+    const base = driver * RESIDENT_INT_STRIDE;
+    crowd.state.ints[base + RESIDENT_INT.driveFirst] = FIRST_NODE;
+    crowd.state.ints[base + RESIDENT_INT.driveLast] = LAST_NODE;
+    crowd.state.ints[base + RESIDENT_INT.driveLeaveTick] = LEAVE_TICK;
+    crowd.state.ints[base + RESIDENT_INT.driveParkTick] = PARK_TICK;
+    return { crowd, driver };
+  }
+
+  it("when the leg is walked, then she is at the car's door while she gets in and out, not drawn while the car is on the road, and on the street on foot before and after, her feet on the ground", () => {
+    const { crowd, driver } = byCar();
+    const at = (seconds: number) => {
+      stepOnce(crowd, seconds);
+      return { shown: crowd.poses.shown[driver], activity: crowd.poses.activity[driver], feetY: crowd.poses.feetY[driver], x: crowd.poses.x[driver] };
+    };
+    const beforeCar = at(WALKING_TO_CAR);
+    expect(firstMismatch([beforeCar.shown, beforeCar.activity, beforeCar.feetY], [1, ACTIVITY.none, 0]), "shown, in no clip, her feet on the ground, on the way to the car").toBeUndefined();
+    const gettingIn = at(GETTING_IN);
+    expect(firstMismatch([gettingIn.shown, gettingIn.activity, gettingIn.x], [1, ACTIVITY.carIn, Math.fround(DOOR_X)]), "getting in: at the door spot").toBeUndefined();
+    expect(gettingIn.feetY, "feet at the door").toBeCloseTo(FEET_Y, 5);
+    expect(at(ON_THE_ROAD).shown, "shown on the road, in her car").toBe(0);
+    const gettingOut = at(GETTING_OUT);
+    expect(firstMismatch([gettingOut.shown, gettingOut.activity, gettingOut.x], [1, ACTIVITY.carOut, Math.fround(DOOR_X)]), "getting out: at the door spot").toBeUndefined();
+    const walkingOn = at(WALKING_ON);
+    expect(firstMismatch([walkingOn.shown, walkingOn.activity, walkingOn.feetY], [1, ACTIVITY.none, 0]), "walking on, in no clip, her feet on the ground again").toBeUndefined();
   });
 });
