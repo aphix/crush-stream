@@ -10,7 +10,7 @@ export const SUBJECT_MODE = { free: 0, atLarge: 1, fleeing: 2, hidden: 3, seizin
 export class CaseTable {
   readonly phase = new Uint8Array(MAX_CASES);
   readonly kind = new Uint8Array(MAX_CASES);
-  /** The tick of the crime or fight the case answers. */
+  /** The wanted spell the case answers (the first suspect's): its draws key on it. */
   readonly offenceTick = new Int32Array(MAX_CASES);
   readonly warnUntil = new Float64Array(MAX_CASES);
   /** 1 once a cop at the hiding door has searched (one draw per case). */
@@ -32,10 +32,9 @@ export class CaseTable {
   readonly spotX = new Float64Array(MAX_SUBJECTS);
   readonly spotZ = new Float64Array(MAX_SUBJECTS);
 
-  /** Per resident: the subject slot they hold, -1 none; the crime and fight tick last taken up. */
+  /** Per resident: the subject slot they hold, -1 none; the wanted spell last taken up. */
   readonly subjectOf: Int32Array;
-  readonly crimeHandled: Int32Array;
-  readonly fightHandled: Int32Array;
+  readonly handledSpell: Int32Array;
 
   /** Residents kept hidden since a crowd second, until their next walk begins. */
   readonly heldResident = new Int32Array(MAX_HELD).fill(-1);
@@ -44,8 +43,7 @@ export class CaseTable {
 
   constructor(residentCount: number) {
     this.subjectOf = new Int32Array(residentCount).fill(-1);
-    this.crimeHandled = new Int32Array(residentCount).fill(-1);
-    this.fightHandled = new Int32Array(residentCount).fill(-1);
+    this.handledSpell = new Int32Array(residentCount).fill(-1);
   }
 
   freeCase(): number {

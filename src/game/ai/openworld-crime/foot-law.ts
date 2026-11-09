@@ -112,14 +112,11 @@ export class FootLaw {
     const tick = tickAt(this.seconds);
     const { source, table } = this;
     for (let resident = 0; resident < source.residentCount; resident++) {
-      if (table.subjectOf[resident] !== -1) continue;
-      const crime = source.crimeTick(resident);
-      if (crime !== NEVER_TICK && crime !== table.crimeHandled[resident] && source.wanted(resident, tick)) {
-        if (this.openCrime(resident, crime)) table.crimeHandled[resident] = crime;
-        continue;
-      }
-      const fight = source.fightTick(resident);
-      if (fight !== NEVER_TICK && fight !== table.fightHandled[resident]) this.openFight(resident, fight);
+      if (table.subjectOf[resident] !== -1 || !source.wanted(resident, tick)) continue;
+      const spell = source.spellOf(resident);
+      if (spell === table.handledSpell[resident]) continue;
+      const brawling = source.fightTick(resident) !== NEVER_TICK && source.fightPartner(resident) >= 0;
+      if (brawling ? this.openFight(resident, spell) : this.openCrime(resident, spell)) table.handledSpell[resident] = spell;
     }
     for (let caseIndex = 0; caseIndex < table.phase.length; caseIndex++) {
       if (table.phase[caseIndex] !== CASE_PHASE.free) this.callCops(caseIndex);
@@ -127,39 +124,36 @@ export class FootLaw {
   }
 
   /** False when there is no room for the case yet (the poll tries again); true when it was taken up or can never be. */
-  private openCrime(resident: number, tick: number): boolean {
+  private openCrime(resident: number, spell: number): boolean {
     const caseIndex = this.table.freeCase();
     if (caseIndex < 0) return false;
     if (!this.source.standing(resident, this.seconds, this.spot)) return true;
-    this.startCase(caseIndex, CASE_KIND.crime, tick);
+    this.startCase(caseIndex, CASE_KIND.crime, spell);
     this.takeSubject(this.table.slotOf(caseIndex, 0), resident, this.spot);
     this.hooks.opened(caseIndex, this.spot.x, this.spot.z);
     return true;
   }
 
-  private openFight(resident: number, tick: number): void {
+  /** As `openCrime`, for a fight: both fighters are taken up in one case. */
+  private openFight(resident: number, spell: number): boolean {
     const partner = this.source.fightPartner(resident);
     const { table } = this;
-    if (partner < 0 || table.subjectOf[partner] !== -1) {
-      table.fightHandled[resident] = tick;
-      return;
-    }
     const caseIndex = table.freeCase();
-    if (caseIndex < 0) return;
-    table.fightHandled[resident] = tick;
-    table.fightHandled[partner] = this.source.fightTick(partner);
-    if (!this.source.standing(resident, this.seconds, this.spot) || !this.source.standing(partner, this.seconds, this.partnerSpot)) return;
-    this.startCase(caseIndex, CASE_KIND.fight, tick);
+    if (caseIndex < 0 || table.subjectOf[partner] !== -1) return false;
+    table.handledSpell[partner] = this.source.spellOf(partner);
+    if (!this.source.standing(resident, this.seconds, this.spot) || !this.source.standing(partner, this.seconds, this.partnerSpot)) return true;
+    this.startCase(caseIndex, CASE_KIND.fight, spell);
     this.takeSubject(table.slotOf(caseIndex, 0), resident, this.spot);
     this.takeSubject(table.slotOf(caseIndex, 1), partner, this.partnerSpot);
     this.hooks.opened(caseIndex, this.spot.x, this.spot.z);
+    return true;
   }
 
-  private startCase(caseIndex: number, kind: number, tick: number): void {
+  private startCase(caseIndex: number, kind: number, spell: number): void {
     const { table } = this;
     table.phase[caseIndex] = CASE_PHASE.open;
     table.kind[caseIndex] = kind;
-    table.offenceTick[caseIndex] = tick;
+    table.offenceTick[caseIndex] = spell;
     table.searched[caseIndex] = 0;
     for (let index = 0; index < COPS_PER_CASE; index++) table.setCop(caseIndex, index, -1);
     this.stats.cases++;
@@ -197,16 +191,20 @@ export class FootLaw {
     if (!table.active(table.slotOf(caseIndex, 0)) && !table.active(table.slotOf(caseIndex, 1))) this.closeCase(caseIndex);
   }
 
-  /** The society no longer holds the offence against any suspect of the case (the host's bust was heard, or the day passed). */
+  /** The society holds nothing against any suspect of the case any more (the host's bust was heard, or the spell passed). A fight that ends before the law is done with it goes on as a pursuit of the fighters still wanted. */
   private offenceCleared(caseIndex: number): boolean {
     const { table, source } = this;
     const tick = tickAt(this.seconds);
+    let brawling = false;
+    let wanted = false;
     for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
       const resident = table.resident[table.slotOf(caseIndex, index)]!;
       if (resident < 0) continue;
-      if (table.kind[caseIndex] === CASE_KIND.crime ? source.wanted(resident, tick) : source.fightTick(resident) !== NEVER_TICK) return false;
+      brawling = brawling || source.fightTick(resident) !== NEVER_TICK;
+      wanted = wanted || source.wanted(resident, tick);
     }
-    return true;
+    if (table.kind[caseIndex] === CASE_KIND.fight && !brawling && wanted) table.kind[caseIndex] = CASE_KIND.crime;
+    return !wanted && !brawling;
   }
 
   private refreshSpots(caseIndex: number): void {

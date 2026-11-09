@@ -1,5 +1,6 @@
+import { ACTIVITY, ACTIVITY_OPEN_ENDED } from "../civilians/civilian-activity.ts";
 import { STRIDE_RADIANS_PER_METRE } from "../civilians/civilian-crowd-constants.ts";
-import type { CrowdPoses } from "../civilians/crowd-poses.ts";
+import { createCrowdPoses, type CrowdPoses } from "../civilians/crowd-poses.ts";
 import { SUBJECT_MODE } from "./case-table.ts";
 import { COP_LOOK, FOOT_COP_COUNT } from "./crime-constants.ts";
 import { COP_MODE } from "./foot-cops.ts";
@@ -7,7 +8,9 @@ import type { FootLaw } from "./foot-law.ts";
 
 /** A pose set for the foot cops: drawn by a crowd art of their own, dressed by `COP_LOOK`. */
 export function newCopPoses(): CrowdPoses {
-  return { count: FOOT_COP_COUNT, x: new Float32Array(FOOT_COP_COUNT), z: new Float32Array(FOOT_COP_COUNT), yaw: new Float32Array(FOOT_COP_COUNT), stride: new Float32Array(FOOT_COP_COUNT), speed: new Float32Array(FOOT_COP_COUNT), look: new Uint32Array(FOOT_COP_COUNT).fill(COP_LOOK), shown: new Uint8Array(FOOT_COP_COUNT) };
+  const poses = createCrowdPoses(FOOT_COP_COUNT);
+  poses.look.fill(COP_LOOK);
+  return poses;
 }
 
 /** The crowd's poses after the law's say: a suspect running or in a cop's hands is where the law has them, a hider or a fighter thrown down is not drawn, and a resident held off the street stays hidden. Run after the crowd's own step. */
@@ -33,6 +36,9 @@ export function overlaySuspects(law: FootLaw, poses: CrowdPoses): void {
     poses.yaw[resident] = walkers.yaw[walker]!;
     poses.stride[resident] = walkers.walked[walker]! * STRIDE_RADIANS_PER_METRE;
     poses.speed[resident] = walkers.speed[walker]!;
+    poses.activity[resident] = ACTIVITY.none;
+    poses.activityLeft[resident] = ACTIVITY_OPEN_ENDED;
+    poses.partner[resident] = -1;
   }
 }
 

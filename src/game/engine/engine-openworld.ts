@@ -12,6 +12,7 @@ import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
+import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
 
 const NO_EVENTS = new Float64Array(0);
 
@@ -43,6 +44,8 @@ type OpenWorldPorts = {
   /** Calls `listener` for every solid a car meets (closing speed, contact point) until the returned function is called. */
   hookWallHits(listener: (closing: number, x: number, z: number) => void): () => void;
   makeArt(capacity: number): CrowdArt;
+  /** The police's extra ports (patrol cars, the course's solids, a busted player); absent: foot cops only. */
+  law?: Pick<LawEnginePorts, "patrolCars" | "solids" | "playerBusted">;
 };
 
 /**
@@ -54,6 +57,7 @@ export class OpenWorldDirector {
   private map: OpenWorldMap | null = null;
   private crowd: CivilianCrowd | null = null;
   private art: CrowdArt | null = null;
+  private law: OpenWorldLaw | null = null;
   private unhook: (() => void) | null = null;
   private crowdKey = 0;
   /** The host's (or solo player's) crowd clock: the sim's seconds since the crowd was made. */
@@ -121,6 +125,7 @@ export class OpenWorldDirector {
     this.feedWalkers(this.crowd);
     this.crowd.step(this.seconds, this.ports.cars(), true);
     this.throwStruck(this.crowd);
+    this.law?.step(this.seconds, true);
   }
 
   /** A frame: the crowd is made, rebuilt on a new seed or dropped as the course comes and goes; a client steps it by the host's clock; the crowd is drawn and the look-at text kept up. */
@@ -139,9 +144,11 @@ export class OpenWorldDirector {
       this.feedWalkers(crowd);
       crowd.step(this.clock.crowdSeconds(this.ports.now(), INTERP_DELAY), this.ports.cars(), false);
       this.throwStruck(crowd);
+      this.law?.step(crowd.crowdSeconds, false);
     }
     this.ports.eye(this.ray);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
+    this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.lookAcc += wallDt;
     if (this.lookAcc >= 1 / LOOK_HZ) {
       this.lookAcc = 0;
@@ -154,9 +161,11 @@ export class OpenWorldDirector {
     if (this.crowd === null) return;
     this.unhook?.();
     this.art?.dispose();
+    this.law?.dispose();
     this.crowd.dispose();
     this.unhook = null;
     this.art = null;
+    this.law = null;
     this.crowd = null;
     this.text = null;
   }
@@ -193,7 +202,18 @@ export class OpenWorldDirector {
     this.art = this.ports.makeArt(this.crowd.poses.count);
     const crowd = this.crowd;
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
+    this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     if (client) crowd.hear(this.heardEvents);
+  }
+
+  /** A car ran a red light at (x, z): the traffic's event, a cop who saw it sends a patrol car after it. */
+  reportRedLight(carIndex: number, x: number, z: number): void {
+    this.law?.reportRedLight(carIndex, x, z);
+  }
+
+  private makeLaw(map: OpenWorldMap, crowd: CivilianCrowd, seed: number): OpenWorldLaw {
+    const extra = this.ports.law;
+    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), patrolCars: () => extra?.patrolCars() ?? null, solids: () => extra?.solids() ?? null, playerBusted: (carIndex, seconds) => extra?.playerBusted(carIndex, seconds) }, seed);
   }
 
   private throwStruck(crowd: CivilianCrowd): void {

@@ -1,4 +1,4 @@
-import { LOOK } from "../civilians/civilian-crowd-constants.ts";
+import { POLICE_HASH } from "../civilians/civilian-crowd-constants.ts";
 
 /** The chase runs on a fixed grid of crowd time, so every peer that steps it makes the same moves whatever its frame rate. */
 export const CRIME_HZ = 10;
@@ -96,8 +96,8 @@ export const DRAW_SEED_SCALE = 0.01;
 export const DRAW_STREAM_SCALE = 17;
 export const DRAW_INDEX_SCALE = 0.61;
 
-/** The look word of a foot cop: the crowd's who-hash all ones, which the drawing dresses as police (the contract with the crowd's art). */
-export const COP_LOOK = LOOK.hashMask;
+/** The look word of a foot cop: the who-hash the drawing dresses as police. */
+export const COP_LOOK = POLICE_HASH;
 /** Within this many metres of its aim a cop leaves the sidewalk graph and closes in straight. */
 export const STRAIGHT_APPROACH = 6;
 /** A cop this close (m) to its patrol car gets back in. */
