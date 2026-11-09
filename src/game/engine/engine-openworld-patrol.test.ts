@@ -79,6 +79,7 @@ function openWorldLobby(movers: number, patrol: number): { w: World; traffic: Op
     markPolice: () => {},
     sirens: () => {},
     openDoor: () => {},
+    groundAt: () => 0,
     setBody: () => {},
     release: (id) => {
       w.live()[id]!.stored = false;

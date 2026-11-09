@@ -156,6 +156,7 @@ export class FakeField {
       car.stand(x, z, yaw);
     },
     markPolice: () => {},
+    groundAt: () => 0,
     sirens: (id, on) => {
       if (on) this.sirens.add(id);
       else this.sirens.delete(id);

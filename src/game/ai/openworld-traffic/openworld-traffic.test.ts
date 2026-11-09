@@ -10,7 +10,7 @@ import { AMBULANCE } from "./ambulance.ts";
 import { AMBULANCE_COLOUR, AMBULANCE_DEPOT_METRES, AMBULANCE_LOAD_SECONDS, EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { kerbSpotsNear } from "../../world/openworld/openworld-parking.ts";
-import { residentBody, residentColour } from "./traffic-look.ts";
+import { residentBody, residentColour, type ResidentCarPose } from "./traffic-look.ts";
 import { Clock, CYCLE_SECONDS, emptyFeed, FakeField, HOLD, homeAt, makeTraffic, ProximitySight, runSeconds, STEP_SECONDS, stepField } from "./traffic-world.test-util.ts";
 
 const FAR = 1500;
@@ -229,11 +229,13 @@ describe("given a resident whose car stands at the kerb near a player and then d
     feed.parked.resident[0] = RESIDENT;
     feed.parked.place[0] = 0;
     runSeconds(field, traffic, new Clock(), 3);
-    const pose = { x: 0, z: 0, yaw: 0 };
+    const pose: ResidentCarPose = { x: 0, z: 0, yaw: 0, groundY: -1, bodyStyle: "monster" };
     expect(traffic.carPoseOf(RESIDENT, pose), "his car is at a space").toBe(true);
     const spot = traffic.claimedSpots.indexOf(1);
     expect(pose.x, "x").toBeCloseTo(traffic.parkingSpots.x[spot]!, 3);
     expect(pose.yaw, "yaw").toBeCloseTo(traffic.parkingSpots.yaw[spot]!, 3);
+    expect(pose.groundY, "ground").toBe(0);
+    expect(pose.bodyStyle, "his car's body").toBe(residentBody(RESIDENT));
     expect(traffic.setCarDoor(RESIDENT, 0.8), "the door of the car there").toBe(true);
     const id = carAt(field, traffic, spot);
     expect(field.doors[id], "its angle").toBe(0.8);
