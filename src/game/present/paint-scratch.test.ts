@@ -22,10 +22,12 @@ import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { SURFACE_IDS } from "../world/catalog.ts";
 import { SkidMarks } from "./engine-marks.ts";
-import { tierWorkStart } from "../kernel/tier-work.ts";
+import { bookTierWork, tierWorkStart } from "../kernel/tier-work.ts";
 
 /** Bytes a frame may allocate: one boxed double, as the other allocation rows hold. */
 const FRAME_BOUND_B = 16;
+/** Ms of tier work a row books by hand, its start set this far back. */
+const BOOKED_MS = 5;
 const FRAMES = 10_000;
 /** Frames a dent allocation read runs, each a full redraw of a crushed nose. */
 const DENT_FRAMES = 300;
@@ -625,5 +627,20 @@ describe("given the real engine with its cars on the screen", () => {
     runSeconds(engine, 1 / FRAME_HZ);
     expect(engine["autoFx"].auto, "the control: the tier is picked").toBe(false);
     expect(tierWorkStart(), "the tier-work clock with the tier picked").toBe(0);
+  });
+
+  // mutation: sed -i '/^    timeTierWork(true);$/d' src/game/engine/engine-input.ts  (setFxAuto leaves the tier-work clock off until the next fxFrame: the 5 ms booked after the pick are lost and the last expect reads 0)
+  it("when the FX tier goes from picked back to automatic, then tier work booked before the next frame is the first automatic frame's: the clock reads from the pick", async () => {
+    await engine.setFxTier("low");
+    engine.setFxAuto();
+    runSeconds(engine, 1 / FRAME_HZ);
+    expect(engine["tierWorkMs"], "the control: a quiet automatic frame at the low tier books none").toBe(0);
+    await engine.setFxTier("low");
+    runSeconds(engine, 1 / FRAME_HZ);
+    expect(tierWorkStart(), "the control: the clock with the tier picked").toBe(0);
+    engine.setFxAuto();
+    bookTierWork(tierWorkStart() - BOOKED_MS);
+    runSeconds(engine, 1 / FRAME_HZ);
+    expect(engine["tierWorkMs"], "the tier work the first automatic frame took").toBeGreaterThanOrEqual(BOOKED_MS);
   });
 });
