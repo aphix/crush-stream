@@ -82,8 +82,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 50: the open world's signal poles are solid (one post per approach, where the lights draw them), so a peer on 49 would drive through what this one hits.
 51: the open world's litter bins, park benches, bike racks and a new news-box prefab are knockable (firm under their knock speed), and the park pavilion is solid, so a peer on 50 would drive through what this one hits (and PREFAB ids grew by one).
 52: the open world's hydrant is four circles (outlets, barrel, bonnet, cap) instead of one wide one; a car driving by is no hazard and how a person reacts follows a hidden neuroticism of their look (whether, when, how far, for how long); a walk's mood no longer erases a held one; a chased driver flees; so a peer on 51 would meet a different post and compute a different city from the same log.
+53: the open world's interior envelope walls stand 17.3 m (the tallest lot) instead of 12 m, so a peer on 52 would meet different solids.
 */
-export const NET_VERSION = 52;
+export const NET_VERSION = 53;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildingHeight, DEFAULT_STOREYS, MAX_STOREYS, MIN_STOREYS, storeysOfHeight } from "./interior-kinds.ts";
+import { planBlocks } from "./openworld-blocks.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { storeysOfFace, walkOfFace } from "./openworld-storeys.ts";
 import { PLACE_KIND } from "./walk-graph.ts";
@@ -7,6 +8,13 @@ import { PLACE_KIND } from "./walk-graph.ts";
 const lots = layOutLots();
 const playable = lots.places.slice(0, lots.backdropStart);
 const buildings = playable.filter((place) => place.storeys > 0 && place.interior !== undefined);
+const plans = planBlocks(lots.geometry).playable;
+/** Half a block's length (m): a building at a block's end reaches it. */
+const BLOCK_REACH = lots.geometry.blockLength / 2;
+/** The block a place stands in (the blocks of a column share their centre's x). */
+const blockOf = (place: (typeof playable)[number]) => plans.reduce((best, block) => (Math.hypot(block.centreX - place.x, block.centreZ - place.z) < Math.hypot(best.centreX - place.x, best.centreZ - place.z) ? block : best));
+/** Whether the place's footprint touches its block's west or east end (a lane's neighbours have an open side too, and no corner's extra storey). */
+const atBlockEnd = (place: (typeof playable)[number]): boolean => Math.abs(Math.abs(place.x - blockOf(place).centreX) + place.width / 2 - BLOCK_REACH) < SAME;
 /** Rows and columns of the blocks, and lots on a face: the faces the programme lays out. */
 const ROWS = 3;
 const COLUMNS = 3;
@@ -59,11 +67,13 @@ describe("given the storeys of the lots of every face of every block", () => {
 
 describe("given the places of the map", () => {
   // mutation: sed -i 's/const storeys = venueStoreys(venue, spanned);/const storeys = venue.storeys;/' src/game/world/openworld/openworld-lots.ts
+  // mutation: sed -i 's/lots: 3, shopGround: false, storeys: 3, hours: \[7, 20\] };/lots: 3, shopGround: true, storeys: 3, hours: [7, 20] };/' src/game/world/openworld/openworld-programme.ts (a church with a shop's ground storey)
   it("when each building is read, then its height is its storeys' and its place says the same count, the supermarket keeps its two, and no shop is lower than its programme says", () => {
     for (const building of lots.buildings.filter((candidate) => candidate.annex !== true)) {
       const place = playable.find((candidate) => Math.abs(candidate.x - building.x) < SAME && Math.abs(candidate.z - building.z) < SAME && candidate.storeys > 0)!;
       expect(place, `a place for the building at ${building.x.toFixed(1)}, ${building.z.toFixed(1)}`).toBeDefined();
-      const shop = place.kind !== PLACE_KIND.home;
+      // a church stands on a house's ground storey: it has no shop floor
+      const shop = place.kind !== PLACE_KIND.home && place.style !== "church";
       expect(storeysOfHeight(building.height, shop), `${place.name} storeys by height`).toBe(place.storeys);
       expect(building.height, `${place.name} height`).toBeCloseTo(buildingHeight(place.storeys, shop), 9);
       expect(place.storeys >= MIN_STOREYS && place.storeys <= MAX_STOREYS, `${place.name} storeys ${place.storeys}`).toBe(true);
@@ -75,7 +85,7 @@ describe("given the places of the map", () => {
 
   // mutation: sed -i 's/const CORNER_BONUS = 1;/const CORNER_BONUS = 0;/' src/game/world/openworld/openworld-storeys.ts
   it("when the heights of a face's corner places are read, then each end of a block's face stands taller than its walk alone gave a house, so a block reads as a corner and a run", () => {
-    const corners = buildings.filter((place) => place.openSides !== undefined);
+    const corners = buildings.filter((place) => place.openSides !== undefined && atBlockEnd(place));
     expect(corners.length, "corner buildings").toBeGreaterThan(0);
     for (const place of corners) expect(place.storeys, `${place.name} at a block's end`).toBeGreaterThan(MIN_STOREYS);
   });

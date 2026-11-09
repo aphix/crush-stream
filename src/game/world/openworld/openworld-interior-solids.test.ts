@@ -76,6 +76,7 @@ describe("given the open world's course on the real programme", () => {
     }
   });
 
+  // mutation: sed -i 's/export const ENVELOPE_HEIGHT = buildingHeight(MAX_STOREYS, true);/export const ENVELOPE_HEIGHT = 12;/' src/game/world/openworld/openworld-interior-solids.ts (the envelope of a three-storey city)
   it("when the back and the sides of each interior are probed, then a car meets a wall, and every envelope piece stands taller than every building", () => {
     const tallest = Math.max(...lots.buildings.map((building) => building.height));
     expect(Math.min(...envelope.map((prop) => prop.size![1])), "shortest envelope piece").toBeGreaterThanOrEqual(tallest);

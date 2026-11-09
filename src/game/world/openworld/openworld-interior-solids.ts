@@ -1,13 +1,14 @@
 import type { z } from "zod";
 import { PREFAB } from "../constants.ts";
 import type { TrackSchema } from "../track-schema.ts";
+import { buildingHeight, MAX_STOREYS } from "./interior-kinds.ts";
 import { interiorEnvelope, type EnvelopeColumn } from "./interior-plan.ts";
 import type { Lots } from "./openworld-layout.ts";
 
 type Prop = NonNullable<z.input<typeof TrackSchema>["props"]>[number];
 
-/** An envelope wall piece's height (m): taller than any building, so no car and no walker clears it. */
-export const ENVELOPE_HEIGHT = 12;
+/** An envelope wall piece's height (m): that of the tallest building a lot can have (a shop of `MAX_STOREYS`), so no car and no walker clears it. */
+export const ENVELOPE_HEIGHT = buildingHeight(MAX_STOREYS, true);
 const QUARTER_TURN = Math.PI / 2;
 /** Two columns whose edges are this close (m) touch. */
 const TOUCH = 1e-6;
