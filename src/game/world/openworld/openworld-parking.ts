@@ -191,6 +191,14 @@ export function kerbSpotsNear(spots: ParkingSpots, x: number, z: number, out: In
   return found;
 }
 
+const residentNearest = new Int32Array(KERB_CANDIDATES);
+
+/** The space resident `resident`'s car takes at a place whose door is at (doorX, doorZ): of the four empty spaces nearest it, the one he is by number (`resident % count`). -1 when there is none. Pure in the layout: the brain, the crowd's standing pose and traffic all count the same. */
+export function residentSpotAt(spots: ParkingSpots, doorX: number, doorZ: number, resident: number): number {
+  const count = kerbSpotsNear(spots, doorX, doorZ, residentNearest);
+  return count === 0 ? -1 : residentNearest[resident % count]!;
+}
+
 /** Where the driver's door of a car standing in space `spot` is, into `out`: out from the car's centre line on the street side (its left), level with the front seat. */
 export function driverDoorPoint(spots: ParkingSpots, spot: number, out: { x: number; z: number }): void {
   const heading = spots.heading[spot]!;

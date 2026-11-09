@@ -57,12 +57,14 @@ function openWorldLobby(movers: number, patrol = 0): { w: World; traffic: OpenWo
       car.spawnFacing(4000 + id * 12, 4000, 0, 0);
     },
     markPolice: () => {},
+    sirens: () => {},
+    openDoor: () => {},
     setBody: () => {},
     release: (id) => {
       w.live()[id]!.stored = false;
     },
   };
-  const traffic = new OpenWorldTraffic([], ports, new ProximitySight(ports), { movers, kerb: 0, patrol }, null);
+  const traffic = new OpenWorldTraffic([], ports, new ProximitySight(ports), { movers, kerb: 0, patrol, ambulance: 0 }, null);
   w.race.freeDrivers = traffic;
   return { w, traffic };
 }
