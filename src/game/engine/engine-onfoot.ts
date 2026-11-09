@@ -61,6 +61,10 @@ interface OnFootHost {
   freshCarNear(index: number, x: number, z: number, facing: number): boolean;
   /** The reset a driver has (R): his car back at its spawn, repaired; a client asks the host. */
   respawn(): void;
+  /** Car `index`, not the one he left, has nobody in it and he may get into it (the open world's free roam, on a machine that runs the cars). */
+  enterable(index: number): boolean;
+  /** He gets into car `index`, not the one he left: it is the car he drives from now on, and the one he left stays where it stands, empty. */
+  adopt(index: number): void;
 }
 
 /** The control that gets him out and in: Enter on the keyboard (`SEAT_KEYS.onFoot`), B (Circle) on the pad. Neither drives, steers or switches a scene. */
@@ -264,9 +268,18 @@ export class OnFootDirector {
     sense.doorBlocked = false;
     const car = cars[this.flow.car];
     if (!car || !ragdolls.walkerTorso(_torso)) return null;
-    sense.car = doorInReach(car, _torso, this.speed) ? this.flow.car : -1;
+    sense.car = this.carInReach(cars);
     sense.speed = sense.car < 0 ? 0 : this.speed[0]!;
     return sense;
+  }
+
+  /** The car whose driver door he is at (torso in `_torso`): his own first, else an empty one the engine offers; -1 when none. Its speed goes to `speed[0]`. */
+  private carInReach(cars: readonly DeformableCar[]): number {
+    if (doorInReach(cars[this.flow.car]!, _torso, this.speed)) return this.flow.car;
+    for (let index = 0; index < cars.length; index++) {
+      if (index !== this.flow.car && this.host.enterable(index) && doorInReach(cars[index]!, _torso, this.speed)) return index;
+    }
+    return -1;
   }
 
   private beginExit(): void {
@@ -287,6 +300,11 @@ export class OnFootDirector {
     const car = this.host.cars()[this.flow.car]!;
     ragdolls.walker.command = 0;
     if (ragdolls.walkerTorso(_torso)) ragdolls.walker.heading = detAtan2(car.group.position.x - _torso.x, car.group.position.z - _torso.z);
+    // A car that is not the one he left: the seat and the engine follow him to it now, so the one he left is empty from here.
+    if (this.host.seat.carIndex !== this.flow.car) {
+      this.host.adopt(this.flow.car);
+      this.host.seat.focus(this.flow.car);
+    }
   }
 
   /** The seat no longer follows his car (a race put him to watching, a scene took it), or his car is gone from play: the trip is over and he is in the seat's follow. */
@@ -313,7 +331,7 @@ export class OnFootDirector {
     } else ragdolls.walker.command = 0;
     const car = flow.car;
     this.finish(flow.tick(wallDt), car);
-    this.reach = flow.phase === "onFoot" && ragdolls.walkerTorso(_torso) && doorInReach(this.host.cars()[flow.car]!, _torso, this.speed);
+    this.reach = flow.phase === "onFoot" && ragdolls.walkerTorso(_torso) && this.carInReach(this.host.cars()) >= 0;
   }
 
   /** A car moving fast enough over him (`runsDown`, the lawn guards' and the VIP's rule) throws him with the same launch (`fell`): he goes ragdoll. */

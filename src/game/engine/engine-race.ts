@@ -559,6 +559,14 @@ export class RaceDirector extends RaceHudLayer {
     seat.boost = 1;
   }
 
+  /** Lobby: this browser drives car `id` from now on (the player got into another car on foot); false when it already did, or this is no lobby. */
+  adoptCar(id: number): boolean {
+    if (!this.free || this.self === id) return false;
+    this.self = id;
+    this.lobbySeatedFor = id;
+    return true;
+  }
+
   /** Lobby: car `id` (a peer's request, or this browser's R) back at its spawn, repaired. */
   resetLobbyCar(id: number): void {
     if (this.free) this.placeLobby(id);

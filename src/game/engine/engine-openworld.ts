@@ -205,9 +205,19 @@ export class OpenWorldDirector {
     if (this.crowd !== null && this.crowdKey === seed) this.crowd.hear(events);
   }
 
+  /** Car `id` has nobody in it and the player may get into it: host and solo only (the cars are ours). */
+  canEnter(id: number): boolean {
+    return this.traffic !== null && this.traffic.isEmptyCar(id);
+  }
+
+  /** The player got into car `id` on foot: it leaves the traffic's pool for good. */
+  adopt(id: number): void {
+    this.traffic?.takeCar(id);
+  }
+
   /** Car `id` (a pose is all that is read) is parked: it stands in a kerb space and no human has it, so no driver is drawn in it. The same on every peer. */
   carIsEmpty(id: number, car: { readonly group: { readonly position: { readonly x: number; readonly z: number } }; readonly yaw: number }): boolean {
-    return this.kerb !== null && this.ports.traffic?.seated(id) === false && spotAt(this.kerb, car.group.position.x, car.group.position.z, car.yaw) >= 0;
+    return this.kerb !== null && this.ports.traffic?.seated(id) === false && (spotAt(this.kerb, car.group.position.x, car.group.position.z, car.yaw) >= 0 || this.traffic?.isEmptyCar(id) === true);
   }
 
   /** The Auto camera is up: it follows the open world's events and its bubble is the followed subject's. */

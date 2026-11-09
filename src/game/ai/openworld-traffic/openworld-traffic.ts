@@ -16,7 +16,7 @@ import { RedLightWatch } from "./red-light-watch.ts";
 import { EVERYDAY_BODIES, FEED_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
 import { lightPhase } from "./traffic-lights.ts";
-import { RESIDENT_CAPACITY, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
+import { CARLESS, heldByHuman, RESIDENT_CAPACITY, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
 import type { CommuterFeed, TrafficSight } from "./traffic-sight.ts";
 
 export type { DrivenCar } from "./mover-fleet.ts";
@@ -91,6 +91,7 @@ export class OpenWorldTraffic {
       ports,
       sight,
       swaps: new BodySwaps(),
+      humans: new Uint8Array(MAX_CARS),
       movers,
       sightBase,
       probe: sightBase + this.total,
@@ -257,7 +258,34 @@ export class OpenWorldTraffic {
   }
 
   owns(id: number): boolean {
-    return id >= this.first && id < this.first + this.total && !this.context.ports.seated(id);
+    return id >= this.first && id < this.first + this.total && !heldByHuman(this.context, id);
+  }
+
+  /** Car `id` has nobody in it: a car nobody sits in that is before the pool or the player took, one whose driver was thrown out, a pool car parked at a space, a kerb car; never one on a trip. */
+  isEmptyCar(id: number): boolean {
+    const car = this.context.ports.cars()[id];
+    if (car === undefined || this.context.ports.seated(id)) return false;
+    if (id < this.first || this.context.humans[id] === 1 || car.driverOut !== null) return true;
+    return this.movers.isParked(id) || this.kerb.holds(id);
+  }
+
+  /**
+   * The player takes car `id` for good (he gets into it from the street): traffic never drives, stores or paints it again, the space it stood in is free, and the resident whose car it was has no car: his trips
+   * are walks no more than a hidden drive, and none is claimed for him. Returns that resident, -1 for none.
+   */
+  takeCar(id: number): number {
+    const { humans, residentSpot } = this.context;
+    if (id < 0 || id >= MAX_CARS || humans[id] === 1) return -1;
+    const spot = this.movers.spotOf(id) >= 0 ? this.movers.spotOf(id) : this.kerb.spotOf(id);
+    humans[id] = 1;
+    let owner = -1;
+    for (let resident = 0; spot >= 0 && resident < RESIDENT_CAPACITY; resident++) {
+      if (residentSpot[resident] !== spot) continue;
+      residentSpot[resident] = CARLESS;
+      owner = resident;
+    }
+    if (owner >= 0) this.context.taken[spot] = 0;
+    return owner;
   }
 
   /** A sim step at crowd time `seconds`: the cars' bookkeeping, the society's cars, and every car's crossing of a bar. */
