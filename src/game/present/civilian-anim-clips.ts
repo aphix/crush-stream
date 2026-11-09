@@ -1,0 +1,272 @@
+import type { ActivityName } from "../ai/civilians/civilian-activity.ts";
+import { ARM, armChannel, CHANNEL, LEG, legChannel, MAIN, OTHER } from "./civilian-anim-channels.ts";
+
+/** A key: seconds into the clip (or its period) and the channel's value then; values ease between keys. */
+type Key = readonly [time: number, value: number];
+/** One channel over time. A track with a `period` repeats it (first and last value equal); `aboveSurface` adds the seat or counter height to a hand's `handY`. */
+export type TrackSpec = { channel: number; keys: readonly Key[]; period?: number; aboveSurface?: true };
+/**
+ * A clip blends in over `blendIn` and out over `blendOut` seconds from the walk or stand it runs on, tracks authored for a main
+ * side that is the side the partner is on when `faces`, else the civilian's dominant one. Channels no track names keep the walk.
+ */
+type ClipSpec = { blendIn: number; blendOut: number; faces?: true; tracks: readonly TrackSpec[] };
+
+const keys = (...pairs: number[]): Key[] => {
+  const out: Key[] = [];
+  for (let at = 0; at < pairs.length; at += 2) out.push([pairs[at]!, pairs[at + 1]!]);
+  return out;
+};
+const track = (channel: number, ...pairs: number[]): TrackSpec => ({ channel, keys: keys(...pairs) });
+const hold = (channel: number, value: number): TrackSpec => track(channel, 0, value);
+const loop = (channel: number, period: number, ...pairs: number[]): TrackSpec => ({ channel, period, keys: keys(...pairs) });
+const arm = (group: number, field: keyof typeof ARM): number => armChannel(group, ARM[field]);
+const leg = (group: number, field: keyof typeof LEG): number => legChannel(group, LEG[field]);
+const bothArms = (field: keyof typeof ARM, make: (channel: number) => TrackSpec): TrackSpec[] => [make(arm(MAIN, field)), make(arm(OTHER, field))];
+
+/** A seated civilian's feet (m ahead of the hips, main side then other), her back and her hands in her lap (rad: the guards' seated arms). */
+const SEATED_FOOT_Z = [0.3, 0.26] as const;
+const SEATED_PITCH = 0.05;
+/** How much of the way her head turns toward a partner while she sits. */
+const SEATED_LOOK = 0.7;
+const LAP_SWING = -0.35;
+const LAP_ELBOW = -0.9;
+/** The elbow's bend a walking arm rests at (`walkStance`). */
+const ARM_REST_ELBOW = -0.2;
+
+/** The seated body every sit clip holds: the pelvis on the seat, the feet on the floor, the hands in the lap. */
+const seated = (): TrackSpec[] => [
+  hold(CHANNEL.seat, 1),
+  hold(CHANNEL.plant, 1),
+  hold(leg(MAIN, "footZ"), SEATED_FOOT_Z[0]),
+  hold(leg(OTHER, "footZ"), SEATED_FOOT_Z[1]),
+];
+
+const lapArms = (): TrackSpec[] => [...bothArms("swing", (channel) => hold(channel, LAP_SWING)), ...bothArms("elbow", (channel) => hold(channel, LAP_ELBOW))];
+
+const BUY: ClipSpec = {
+  blendIn: 0.3,
+  blendOut: 0.35,
+  tracks: [
+    track(arm(MAIN, "hand"), 0, 0, 0.35, 0, 0.85, 1, 1.4, 1, 1.85, 0),
+    hold(arm(MAIN, "handZ"), 0.5),
+    { ...hold(arm(MAIN, "handY"), 0.08), aboveSurface: true },
+    track(arm(OTHER, "hand"), 0, 0, 2.05, 0, 2.5, 1, 2.85, 1, 3.2, 0),
+    hold(arm(OTHER, "handZ"), 0.46),
+    { ...hold(arm(OTHER, "handY"), 0.14), aboveSurface: true },
+    hold(arm(MAIN, "swing"), -0.15),
+    hold(arm(MAIN, "elbow"), -0.5),
+    hold(arm(OTHER, "swing"), -0.1),
+    hold(arm(OTHER, "elbow"), -0.4),
+    track(CHANNEL.torsoPitch, 0, 0, 0.5, 0.1, 1, 0.14, 1.6, 0.06, 2.3, 0.12, 2.7, 0.1, 3.2, 0),
+    track(CHANNEL.headPitch, 0, 0, 0.5, 0.25, 1.6, 0.1, 2.5, 0.3, 3, 0.12),
+  ],
+};
+
+const DOOR: ClipSpec = {
+  blendIn: 0.25,
+  blendOut: 0.4,
+  tracks: [
+    track(arm(MAIN, "hand"), 0, 0, 0.3, 0, 0.65, 1, 1.2, 1, 1.55, 0),
+    track(arm(MAIN, "handZ"), 0, 0.5, 0.65, 0.5, 0.9, 0.62),
+    hold(arm(MAIN, "handY"), 1),
+    track(CHANNEL.torsoPitch, 0, 0, 0.65, 0.08, 0.9, 0.16, 1.3, 0.06, 1.8, 0),
+    track(CHANNEL.torsoTwist, 0, 0, 0.9, -0.12, 1.8, 0),
+  ],
+};
+
+const SIT_DOWN: ClipSpec = {
+  blendIn: 0.2,
+  blendOut: 0,
+  tracks: [
+    track(CHANNEL.seat, 0, 0, 0.2, 0, 1, 1),
+    track(CHANNEL.plant, 0, 0, 0.2, 1),
+    track(leg(MAIN, "footZ"), 0, 0, 0.2, 0, 1, SEATED_FOOT_Z[0]),
+    track(leg(OTHER, "footZ"), 0, 0, 0.2, 0, 1, SEATED_FOOT_Z[1]),
+    track(CHANNEL.torsoPitch, 0, 0, 0.3, 0.06, 0.55, 0.32, 1, SEATED_PITCH),
+    track(CHANNEL.headPitch, 0, 0, 0.55, 0.15, 1, 0),
+    track(CHANNEL.lookAtPartner, 0, 0, 1, SEATED_LOOK),
+    ...bothArms("swing", (channel) => track(channel, 0, 0, 0.5, -0.2, 1, LAP_SWING)),
+    ...bothArms("elbow", (channel) => track(channel, 0, ARM_REST_ELBOW, 1, LAP_ELBOW)),
+  ],
+};
+
+const SIT: ClipSpec = {
+  blendIn: 0,
+  blendOut: 0,
+  tracks: [
+    ...seated(),
+    ...lapArms(),
+    loop(CHANNEL.torsoPitch, 9, 0, SEATED_PITCH, 4, SEATED_PITCH, 5, 0.1, 7, 0.1, 8, SEATED_PITCH, 9, SEATED_PITCH),
+    loop(CHANNEL.headYaw, 7, 0, 0, 1.5, 0, 2.2, 0.3, 3.4, 0.3, 4.2, -0.2, 5.4, -0.2, 6.2, 0, 7, 0),
+    loop(CHANNEL.headPitch, 5, 0, 0, 2, 0.08, 3, 0.08, 5, 0),
+    hold(CHANNEL.lookAtPartner, SEATED_LOOK),
+  ],
+};
+
+const STAND_UP: ClipSpec = {
+  blendIn: 0,
+  blendOut: 0.25,
+  tracks: [
+    track(CHANNEL.seat, 0, 1, 0.25, 1, 0.85, 0),
+    hold(CHANNEL.plant, 1),
+    track(leg(MAIN, "footZ"), 0, SEATED_FOOT_Z[0], 0.25, SEATED_FOOT_Z[0], 0.85, 0),
+    track(leg(OTHER, "footZ"), 0, SEATED_FOOT_Z[1], 0.25, SEATED_FOOT_Z[1], 0.85, 0),
+    track(CHANNEL.torsoPitch, 0, SEATED_PITCH, 0.25, 0.3, 0.7, 0.18, 1.1, 0),
+    track(CHANNEL.headPitch, 0, 0, 0.3, 0.1, 0.8, 0),
+    track(CHANNEL.lookAtPartner, 0, SEATED_LOOK, 0.4, 0),
+    ...bothArms("swing", (channel) => track(channel, 0, LAP_SWING, 0.4, -0.1, 1.1, 0)),
+    ...bothArms("elbow", (channel) => track(channel, 0, LAP_ELBOW, 0.4, -0.4, 1.1, ARM_REST_ELBOW)),
+  ],
+};
+
+const LEANING_ARM_SWING = -0.6;
+const LEANING_ARM_ELBOW = -1.55;
+const SIT_STEPS: ClipSpec = {
+  blendIn: 0,
+  blendOut: 0,
+  tracks: [
+    ...seated(),
+    loop(CHANNEL.torsoPitch, 12, 0, SEATED_PITCH, 2, SEATED_PITCH, 3.5, 0.38, 10, 0.38, 11, SEATED_PITCH, 12, SEATED_PITCH),
+    ...bothArms("swing", (channel) => loop(channel, 12, 0, LAP_SWING, 2, LAP_SWING, 3.5, LEANING_ARM_SWING, 10, LEANING_ARM_SWING, 11, LAP_SWING, 12, LAP_SWING)),
+    ...bothArms("elbow", (channel) => loop(channel, 12, 0, LAP_ELBOW, 2, LAP_ELBOW, 3.5, LEANING_ARM_ELBOW, 10, LEANING_ARM_ELBOW, 11, LAP_ELBOW, 12, LAP_ELBOW)),
+    loop(CHANNEL.headPitch, 12, 0, 0, 3.5, -0.2, 10, -0.2, 11, 0, 12, 0),
+    loop(CHANNEL.headYaw, 9, 0, 0, 2, 0, 3, 0.3, 5, 0.3, 6, -0.2, 7.5, -0.2, 8.5, 0, 9, 0),
+    hold(CHANNEL.lookAtPartner, SEATED_LOOK),
+  ],
+};
+
+const BUMP: ClipSpec = {
+  blendIn: 0.06,
+  blendOut: 0.3,
+  faces: true,
+  tracks: [
+    track(CHANNEL.torsoPitch, 0, 0, 0.12, -0.18, 0.4, 0.08, 0.7, 0),
+    track(CHANNEL.torsoTwist, 0, 0, 0.12, -0.55, 0.45, -0.2, 0.7, 0),
+    track(CHANNEL.torsoRoll, 0, 0, 0.12, -0.2, 0.45, -0.05, 0.7, 0),
+    track(CHANNEL.pelvisSide, 0, 0, 0.12, -0.1, 0.45, -0.04, 0.7, 0),
+    track(CHANNEL.pelvisForward, 0, 0, 0.12, -0.06, 0.7, 0),
+    track(CHANNEL.headYaw, 0, 0, 0.12, 0.45, 0.45, 0.3, 0.7, 0),
+    track(arm(MAIN, "swing"), 0, 0, 0.12, -1, 0.45, -0.4, 0.7, -0.1),
+    track(arm(MAIN, "out"), 0, 0.05, 0.12, 0.6, 0.45, 0.3, 0.7, 0.05),
+    track(arm(MAIN, "elbow"), 0, ARM_REST_ELBOW, 0.12, -0.5, 0.45, -0.6, 0.7, ARM_REST_ELBOW),
+    track(arm(OTHER, "swing"), 0, 0, 0.12, -0.4, 0.45, -0.2, 0.7, 0),
+    track(arm(OTHER, "out"), 0, 0.05, 0.12, 0.9, 0.45, 0.3, 0.7, 0.05),
+    track(arm(OTHER, "elbow"), 0, ARM_REST_ELBOW, 0.12, -0.3, 0.7, ARM_REST_ELBOW),
+    track(leg(MAIN, "swing"), 0, 0, 0.12, -0.45, 0.4, -0.1, 0.7, 0),
+    track(leg(MAIN, "knee"), 0, 0, 0.12, 0.5, 0.4, 0.1, 0.7, 0),
+    track(leg(OTHER, "swing"), 0, 0, 0.12, 0.3, 0.7, 0),
+  ],
+};
+
+const FIST_GUARD_SWING = -1;
+const FIST_GUARD_ELBOW = -2;
+const SWING: ClipSpec = {
+  blendIn: 0.1,
+  blendOut: 0.2,
+  faces: true,
+  tracks: [
+    track(arm(MAIN, "hand"), 0, 0, 0.2, 0, 0.3, 1, 0.42, 1, 0.55, 0),
+    hold(arm(MAIN, "handZ"), 0.95),
+    hold(arm(MAIN, "handY"), 1.47),
+    track(arm(MAIN, "swing"), 0, FIST_GUARD_SWING, 0.18, 0.35, 0.6, FIST_GUARD_SWING),
+    track(arm(MAIN, "elbow"), 0, FIST_GUARD_ELBOW, 0.18, -1.9, 0.6, FIST_GUARD_ELBOW),
+    track(arm(OTHER, "swing"), 0, -1.1, 0.3, -1.2, 0.6, -1.1),
+    hold(arm(OTHER, "elbow"), -2.1),
+    track(CHANNEL.torsoTwist, 0, 0, 0.18, 0.5, 0.3, -0.55, 0.6, 0.1),
+    track(CHANNEL.pelvisForward, 0, 0, 0.18, -0.04, 0.3, 0.14, 0.6, 0),
+    track(CHANNEL.torsoPitch, 0, 0.06, 0.3, 0.16, 0.6, 0.06),
+    hold(CHANNEL.headPitch, 0.1),
+    track(CHANNEL.plant, 0, 0, 0.1, 1),
+    hold(CHANNEL.pelvisDrop, 0.05),
+    hold(leg(MAIN, "footZ"), -0.18),
+    hold(leg(OTHER, "footZ"), 0.22),
+  ],
+};
+
+const BLOCK: ClipSpec = {
+  blendIn: 0.15,
+  blendOut: 0.25,
+  faces: true,
+  tracks: [
+    ...bothArms("swing", (channel) => hold(channel, -1.15)),
+    ...bothArms("elbow", (channel) => hold(channel, -2.2)),
+    loop(CHANNEL.torsoPitch, 1.6, 0, 0.18, 0.3, 0.26, 0.8, 0.18, 1.6, 0.18),
+    loop(CHANNEL.torsoRoll, 2.2, 0, 0, 1.1, 0.06, 2.2, 0),
+    hold(CHANNEL.headPitch, 0.25),
+    hold(CHANNEL.pelvisDrop, 0.06),
+    hold(CHANNEL.plant, 1),
+    hold(leg(MAIN, "footZ"), -0.16),
+    hold(leg(OTHER, "footZ"), 0.2),
+  ],
+};
+
+const HIT: ClipSpec = {
+  blendIn: 0.04,
+  blendOut: 0.4,
+  faces: true,
+  tracks: [
+    track(CHANNEL.headYaw, 0, 0, 0.1, -0.95, 0.45, -0.7, 0.9, 0),
+    track(CHANNEL.headPitch, 0, 0, 0.1, -0.25, 0.5, 0.2, 0.9, 0),
+    track(CHANNEL.torsoPitch, 0, 0, 0.12, -0.3, 0.45, 0.28, 0.9, 0),
+    track(CHANNEL.torsoTwist, 0, 0, 0.12, -0.45, 0.5, -0.2, 0.9, 0),
+    track(CHANNEL.torsoRoll, 0, 0, 0.12, -0.2, 0.6, -0.1, 0.9, 0),
+    track(CHANNEL.pelvisForward, 0, 0, 0.12, -0.1, 0.5, -0.03, 0.9, 0),
+    track(CHANNEL.pelvisDrop, 0, 0, 0.12, 0.04, 0.5, 0.09, 0.9, 0),
+    track(CHANNEL.plant, 0, 0, 0.1, 1, 0.75, 1, 0.9, 0),
+    track(leg(MAIN, "footZ"), 0, 0, 0.12, -0.15, 0.9, 0),
+    track(leg(OTHER, "footZ"), 0, 0, 0.12, 0.12, 0.9, 0),
+    track(arm(MAIN, "hand"), 0, 0, 0.15, 0, 0.4, 1, 0.75, 1, 0.9, 0),
+    hold(arm(MAIN, "handZ"), 0.24),
+    hold(arm(MAIN, "handY"), 1.52),
+    track(arm(MAIN, "swing"), 0, 0, 0.1, -0.4, 0.35, -1),
+    track(arm(MAIN, "out"), 0, 0.05, 0.1, 0.8, 0.35, 0.2),
+    track(arm(MAIN, "elbow"), 0, ARM_REST_ELBOW, 0.35, -1.2),
+    track(arm(OTHER, "swing"), 0, 0, 0.1, 0.5, 0.5, 0.1, 0.9, 0),
+    track(arm(OTHER, "out"), 0, 0.05, 0.1, 0.9, 0.5, 0.2, 0.9, 0.05),
+  ],
+};
+
+const TALK: ClipSpec = {
+  blendIn: 0.3,
+  blendOut: 0.4,
+  tracks: [
+    loop(arm(MAIN, "elbow"), 3.4, 0, ARM_REST_ELBOW, 0.7, ARM_REST_ELBOW, 1.2, -1.5, 1.6, -1.1, 2, -1.5, 2.5, -1.5, 3, ARM_REST_ELBOW, 3.4, ARM_REST_ELBOW),
+    loop(arm(MAIN, "swing"), 3.4, 0, 0, 0.7, 0, 1.2, -0.75, 1.6, -0.9, 2, -0.75, 2.5, -0.7, 3, 0, 3.4, 0),
+    loop(arm(MAIN, "out"), 3.4, 0, 0.05, 1.2, 0.4, 2, 0.4, 3, 0.05, 3.4, 0.05),
+    loop(arm(OTHER, "elbow"), 4.7, 0, ARM_REST_ELBOW, 1.5, ARM_REST_ELBOW, 2, -1.3, 2.5, -1, 3.1, -1.3, 3.6, ARM_REST_ELBOW, 4.7, ARM_REST_ELBOW),
+    loop(arm(OTHER, "swing"), 4.7, 0, 0, 1.5, 0, 2, -0.6, 2.5, -0.8, 3.1, -0.6, 3.6, 0, 4.7, 0),
+    loop(CHANNEL.headPitch, 2.6, 0, 0, 0.5, 0.12, 1, -0.02, 1.5, 0.1, 2.6, 0),
+    loop(CHANNEL.torsoPitch, 5.1, 0, 0, 2, 0.05, 5.1, 0),
+    hold(CHANNEL.lookAtPartner, 0.9),
+  ],
+};
+
+const IDLE: ClipSpec = {
+  blendIn: 0.3,
+  blendOut: 0.4,
+  tracks: [
+    loop(CHANNEL.pelvisSide, 7.3, 0, 0, 2, 0.02, 3.5, 0.02, 5.3, -0.015, 7.3, 0),
+    loop(CHANNEL.torsoRoll, 7.3, 0, 0, 2, -0.04, 3.5, -0.04, 5.3, 0.03, 7.3, 0),
+    loop(leg(OTHER, "knee"), 7.3, 0, 0, 2, 0.12, 3.5, 0.12, 5.3, 0, 7.3, 0),
+    loop(CHANNEL.headYaw, 8.9, 0, 0, 2, 0, 2.8, 0.5, 4.2, 0.5, 5, -0.35, 6.2, -0.35, 7, 0, 8.9, 0),
+    loop(CHANNEL.headPitch, 6.1, 0, 0, 3, 0.06, 6.1, 0),
+    loop(arm(MAIN, "hand"), 14, 0, 0, 9, 0, 10, 1, 11.5, 1, 12.5, 0, 14, 0),
+    hold(arm(MAIN, "handZ"), 0.1),
+    hold(arm(MAIN, "handY"), 1.66),
+  ],
+};
+
+export const CLIPS: Readonly<Partial<Record<ActivityName, ClipSpec>>> = {
+  idle: IDLE,
+  talk: TALK,
+  buy: BUY,
+  door: DOOR,
+  sitDown: SIT_DOWN,
+  sit: SIT,
+  standUp: STAND_UP,
+  bump: BUMP,
+  swing: SWING,
+  block: BLOCK,
+  hit: HIT,
+  sitSteps: SIT_STEPS,
+};

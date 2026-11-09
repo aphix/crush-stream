@@ -90,7 +90,9 @@ const HOT = {
   "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "findHits", "lookOf", "hasLooseBody"],
   "src/game/engine/engine-openworld.ts": ["step", "frame"],
   "src/game/present/civilian-art.ts": ["update", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
-  "src/game/present/civilian-pose.ts": ["poseCivilian", "poseLimb", "placePart", "setSwung"],
+  "src/game/present/civilian-pose.ts": ["poseCivilian"],
+  "src/game/present/civilian-anim.ts": ["poseActivity", "fillBase", "walkBend", "easeIn", "sampleTrack", "clipWeight", "mirrorIndexOf", "applyClip", "seatPelvis", "clampUnit", "moveToward", "solveTwoBone", "solveLegs", "solveHands", "lookAtPartner"],
+  "src/game/present/civilian-anim-rig.ts": ["renderRig", "renderArm", "renderLeg", "placePart", "setAboutX", "setAboutY", "setAboutZ", "setTorsoRotation", "setLimbRotation"],
   "src/game/present/civilian-dress.ts": ["dressOfLook", "writeLinearColour", "scrambleLook", "fieldOf"],
 };
 const KNOB_CONTEXTS = new Set(["kernel", "world", "deform", "vehicle", "contact", "scenes", "ai"]);
