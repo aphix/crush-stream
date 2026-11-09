@@ -15,6 +15,7 @@ import { isOpenStyle, shopGroundOf } from "../world/openworld/facade-windows.ts"
 import { storeysOfHeight } from "../world/openworld/interior-kinds.ts";
 import { partyBuildingsOf } from "./building-sides.ts";
 import { facadeDepth, facadeSkin, facadeTint, PASTELS, placedFacadeStyle } from "./facades.ts";
+import { leafDepth } from "./nature-look.ts";
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
 import {
@@ -331,7 +332,7 @@ export class TrackArt {
     mesh.receiveShadow = true;
     mesh.castShadow = cast;
     if (!Array.isArray(mesh.material)) mesh.material = this.forDraw(mesh.material, mesh);
-    if (cast && mesh instanceof THREE.InstancedMesh) mesh.customDepthMaterial = facadeDepth(mesh.material as THREE.Material) ?? (mesh.instanceColor ? DEPTH_INSTANCED_COLOR : DEPTH_INSTANCED);
+    if (cast && mesh instanceof THREE.InstancedMesh) mesh.customDepthMaterial = facadeDepth(mesh.material as THREE.Material) ?? leafDepth(mesh.material as THREE.Material) ?? (mesh.instanceColor ? DEPTH_INSTANCED_COLOR : DEPTH_INSTANCED);
     // At the scene root with an identity transform (the art's cells, props, ground and gantry are built in world space; only instance matrices move): three need not compose or multiply its matrices every frame.
     mesh.matrixAutoUpdate = false;
     mesh.matrixWorldAutoUpdate = false;

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { FxTier } from "./engine-post.ts";
 import { MAT } from "../kernel/material-ids.ts";
+import { MATERIAL_ATTRIBUTE } from "../vehicle/material-class.ts";
 
 /**
  * The one material of rocks, trees, palms and bushes: the flat-shaded vertex-colour look of `plain` plus a shader chunk that keeps a few reused meshes from reading as copies. Per pixel, from the world
@@ -99,20 +100,35 @@ const LEAF_SIZE = 0.16;
 const LEAF_HOLES = 0.44;
 const LEAF_EDGE = 0.6;
 const LEAF_EDGE_CUT = 0.3;
-/** The holes close from this distance (m) to the next, down to `LEAF_FAR_HOLES` of their cut, so a far crown does not sparkle. */
+/** The leaf-sized pattern gives way to the clumps' as one of its cells shrinks from this many pixels' worth of change to the next (`fwidth`), so a far crown thins out evenly instead of sparkling; and the holes close from this distance (m) to the next, down to `LEAF_FAR_HOLES` of their cut. */
+const LEAF_FINE_FROM = 0.3;
+const LEAF_FINE_TO = 1;
 const LEAF_FAR_FROM = 30;
 const LEAF_FAR_TO = 70;
 const LEAF_FAR_HOLES = 0.35;
 /** A lump's inside (its back faces, seen through a hole) is this much darker: the shade within a crown. */
 const LEAF_INSIDE = 0.55;
 
+/** The leaf pattern at a world point: the clumps (0-1) and the leaf-sized cells (0-1), both value noise over two planes. Needs `natureNoise`. */
+const LEAF_FUNCTIONS = /* glsl */ `
+float leafClumpAt(vec3 world) {
+  vec3 p = world / ${LEAF_CELL.toFixed(2)};
+  return 0.5 * natureNoise(p.xz + 0.71 * p.y) + 0.5 * natureNoise(1.9 * p.zy + 3.1);
+}
+vec3 leafCellOf(vec3 world) {
+  return world / ${LEAF_SIZE.toFixed(2)};
+}
+float leafFineAt(vec3 p) {
+  return 0.5 * natureNoise(p.xz + 0.71 * p.y) + 0.5 * natureNoise(1.9 * p.zy + 7.3);
+}`;
+
 /** After the normal is final, before lighting: on leaf fragments only, clumps of light and dark leaves, holes through the crown, and its inside shaded. Reads the surface tag's per-vertex class (`vMaterialAttribute`). */
 const LEAF_FRAGMENT = /* glsl */ `
 if (int(vMaterialAttribute + 0.5) == ${MAT.CONIFER_FOLIAGE}) {
-  vec3 leafAt = vNatureWorld / ${LEAF_CELL.toFixed(2)};
-  float leafClump = 0.5 * natureNoise(leafAt.xz + 0.71 * leafAt.y) + 0.5 * natureNoise(1.9 * leafAt.zy + 3.1);
-  vec3 leafBit = vNatureWorld / ${LEAF_SIZE.toFixed(2)};
-  float leafFine = 0.5 * natureNoise(leafBit.xz + 0.71 * leafBit.y) + 0.5 * natureNoise(1.9 * leafBit.zy + 7.3);
+  float leafClump = leafClumpAt(vNatureWorld);
+  vec3 leafBit = leafCellOf(vNatureWorld);
+  float leafSharp = 1.0 - smoothstep(${LEAF_FINE_FROM.toFixed(2)}, ${LEAF_FINE_TO.toFixed(2)}, length(fwidth(leafBit)));
+  float leafFine = mix(0.5, leafFineAt(leafBit), leafSharp);
   float leafFacing = abs(dot(normal, normalize(vViewPosition)));
   float leafNear = 1.0 - (1.0 - ${LEAF_FAR_HOLES.toFixed(2)}) * smoothstep(${LEAF_FAR_FROM.toFixed(1)}, ${LEAF_FAR_TO.toFixed(1)}, length(vViewPosition));
   float leafCut = (${LEAF_HOLES.toFixed(2)} + ${LEAF_EDGE_CUT.toFixed(2)} * (1.0 - smoothstep(0.0, ${LEAF_EDGE.toFixed(2)}, leafFacing))) * leafNear;
@@ -122,7 +138,7 @@ if (int(vMaterialAttribute + 0.5) == ${MAT.CONIFER_FOLIAGE}) {
 
 /**
  * The street trees' one material: the nature look, smooth-shaded (a canopy lump's normals are its ellipsoid's), two-sided, its leaves in clumps of light and dark with leaf-sized holes cut through the
- * crown (more at its outline, fewer far off), so sky and limbs show through and a hole shows the lump's darker inside. Shadows stay whole (the depth pass does not cut). Needs the surface tag
+ * crown (more at its outline, evened out far off), so sky and limbs show through and a hole shows the lump's darker inside. Its shadow is cut the same way (`leafDepth`). Needs the surface tag
  * (`tagMaterial`): the leaf class comes from it.
  */
 export class LeafMaterial extends NatureMaterial {
@@ -133,8 +149,28 @@ export class LeafMaterial extends NatureMaterial {
     const nature = this.onBeforeCompile;
     this.onBeforeCompile = (shader, renderer) => {
       nature.call(this, shader, renderer);
-      shader.fragmentShader = shader.fragmentShader.replace("#include <lights_physical_fragment>", `${LEAF_FRAGMENT}\n#include <lights_physical_fragment>`);
+      shader.fragmentShader = shader.fragmentShader
+        .replace("void main() {", `${LEAF_FUNCTIONS}\nvoid main() {`)
+        .replace("#include <lights_physical_fragment>", `${LEAF_FRAGMENT}\n#include <lights_physical_fragment>`);
     };
     this.customProgramCacheKey = () => "leaf-look";
   }
+}
+
+/** The sun's shadow depth for leaf crowns: the same holes as the drawn crown at its base share (no edge or distance terms: the sun's view is not the eye's), so the street's shade is dappled like the crown. */
+const LEAF_DEPTH = new THREE.MeshDepthMaterial();
+LEAF_DEPTH.side = THREE.DoubleSide;
+LEAF_DEPTH.onBeforeCompile = (shader) => {
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>", `#include <common>\nattribute float ${MATERIAL_ATTRIBUTE};\nflat varying float vLeafClass;\nvarying vec3 vLeafWorld;`)
+    .replace("#include <begin_vertex>", `#include <begin_vertex>${NATURE_VERTEX.replaceAll("vNatureWorld", "vLeafWorld").replace(/\nvNatureHeight = [^;]*;/, "")}\nvLeafClass = ${MATERIAL_ATTRIBUTE};`);
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <common>", `#include <common>\nflat varying float vLeafClass;\nvarying vec3 vLeafWorld;${NATURE_NOISE}${LEAF_FUNCTIONS}`)
+    .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>\nif (int(vLeafClass + 0.5) == ${MAT.CONIFER_FOLIAGE} && 0.6 * leafFineAt(leafCellOf(vLeafWorld)) + 0.4 * leafClumpAt(vLeafWorld) < ${LEAF_HOLES.toFixed(2)}) discard;`);
+};
+LEAF_DEPTH.customProgramCacheKey = () => "leaf-depth";
+
+/** `material`'s sun shadow depth material when it draws leaf crowns (a `LeafMaterial` or a copy of one), else null. */
+export function leafDepth(material: THREE.Material): THREE.MeshDepthMaterial | null {
+  return material instanceof LeafMaterial ? LEAF_DEPTH : null;
 }

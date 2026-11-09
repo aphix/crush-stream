@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { PREFAB } from "../world/constants.ts";
-import { LeafMaterial, NatureMaterial, setNatureTier } from "./nature-look.ts";
+import { LeafMaterial, leafDepth, NatureMaterial, setNatureTier } from "./nature-look.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
 
@@ -57,7 +57,7 @@ describe("given the material of rocks, trees, palms and bushes", () => {
 
 describe("given the street trees' leaf material", () => {
   const compileLit = (material: THREE.Material): string => {
-    const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\n#include <normal_fragment_maps>\n#include <lights_physical_fragment>" } as THREE.WebGLProgramParametersWithUniforms;
+    const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\nvoid main() {\n#include <normal_fragment_maps>\n#include <lights_physical_fragment>" } as THREE.WebGLProgramParametersWithUniforms;
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
     return shader.fragmentShader;
   };
@@ -73,5 +73,17 @@ describe("given the street trees' leaf material", () => {
       expect(fragment.indexOf("discard;"), "a leafy outline, before lighting").toBeLessThan(fragment.indexOf("#include <lights_physical_fragment>"));
       expect(material.customProgramCacheKey(), "a program of its own").not.toBe(new NatureMaterial().customProgramCacheKey());
     }
+  });
+
+  // mutation: sed -i 's/  return material instanceof LeafMaterial ? LEAF_DEPTH : null;/  return null;/' src/game/present/nature-look.ts
+  it("when its shadow is drawn, then the leaf material and its copies cast through a depth material that cuts the same holes in leaf fragments, and the nature material casts through the plain one", () => {
+    expect(leafDepth(new NatureMaterial()), "rocks and old trees").toBeNull();
+    const depth = leafDepth(new LeafMaterial());
+    expect(depth, "a copy for another draw kind").toBe(leafDepth(new LeafMaterial().clone()));
+    const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\nvoid main() {\n#include <clipping_planes_fragment>\n}" } as THREE.WebGLProgramParametersWithUniforms;
+    depth!.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    expect(shader.vertexShader, "the leaf class and world point handed on").toContain("vLeafWorld = (modelMatrix * natureAt).xyz;");
+    expect(shader.fragmentShader, "the leaf holes cut in the shadow").toContain("leafFineAt(leafCellOf(vLeafWorld))");
+    expect(shader.fragmentShader.indexOf("discard;"), "cut after the clipping").toBeGreaterThan(shader.fragmentShader.indexOf("#include <clipping_planes_fragment>"));
   });
 });
