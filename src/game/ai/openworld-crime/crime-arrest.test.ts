@@ -29,7 +29,7 @@ describe("an arrest is acted", () => {
     expect(cops.z[cop], "behind her across z").toBeCloseTo(run.poses.z[CRIMINAL]! - Math.cos(yaw) * ARREST.cuffBehind, 3);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts completeBust(), delete the block `if (this.table.tookDown[slot] === 0) { this.arrests.escort(caseIndex, slot, this.seconds); return; }`
+  // mutation: in src/game/ai/openworld-crime/crime-poses.ts writeArrestActivity(), change `activity === ACTIVITY.none ? 0 :` to `!gripping ? 0 :` (the clock check); or in src/game/ai/openworld-crime/foot-law.ts completeBust(), delete the block `if (this.table.tookDown[slot] === 0) { this.arrests.escort(caseIndex, slot, this.seconds); return; }`
   it("once cuffed, she is led away walking at the cop's right, then is gone from the street and the case closes", () => {
     const run = arrestRun();
     runFor(run, 3);
@@ -39,6 +39,8 @@ describe("an arrest is acted", () => {
     expect(run.poses.shown[CRIMINAL], "still on the street").toBe(1);
     expect(run.poses.activity[CRIMINAL], "cuffed").toBe(ACTIVITY.cuffed);
     expect(cops.activity[cop], "he leads her").toBe(ACTIVITY.escorting);
+    expect(cops.activityClock[cop], "his escort clip runs on the walk's clock").toBeGreaterThan(0.4);
+    expect(run.poses.activityClock[CRIMINAL], "hers too").toBeCloseTo(cops.activityClock[cop]!, 4);
     expect(cops.speed[cop], "at a walk").toBeGreaterThan(0);
     expect(run.poses.speed[CRIMINAL], "beside him").toBeCloseTo(cops.speed[cop]!, 4);
     expect(run.poses.x[CRIMINAL], "at his right and a little ahead, across x").toBeCloseTo(cops.x[cop]! - ARREST.escortAcross * Math.cos(yaw) + ARREST.escortAhead * Math.sin(yaw), 3);
