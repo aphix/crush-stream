@@ -75,6 +75,8 @@ export class MoverFleet {
   private readonly spot: Int32Array;
   private readonly resident: Int32Array;
   private readonly readyAt: Float64Array;
+  /** The crowd second a leased car's rider is due at his destination (Infinity: none): a car still on the road then, that no one sees, stands in its space. */
+  private readonly dueAt: Float64Array;
   private readonly wreckedFor: Float64Array;
   private readonly stillFor: Float64Array;
   private readonly trips: Uint32Array;
@@ -99,6 +101,7 @@ export class MoverFleet {
     this.spot = new Int32Array(size).fill(-1);
     this.resident = new Int32Array(size).fill(NO_RESIDENT);
     this.readyAt = new Float64Array(size);
+    this.dueAt = new Float64Array(size).fill(Infinity);
     this.wreckedFor = new Float64Array(size);
     this.stillFor = new Float64Array(size);
     this.trips = new Uint32Array(size);
@@ -154,7 +157,7 @@ export class MoverFleet {
    * Leases a car for `resident` (-1: none) to drive from space `fromSpot` to `toSpot`: the resident's own parked car when it stands in `fromSpot`, else a free car or an ambient one parked
    * out of the way, placed there. Null when no car is free or there is no way between the spaces.
    */
-  spawn(resident: number, fromSpot: number, toSpot: number, urgent: boolean): DrivenCar | null {
+  spawn(resident: number, fromSpot: number, toSpot: number, urgent: boolean, dueSeconds: number): DrivenCar | null {
     const slot = this.slotFor(resident, fromSpot, urgent);
     if (slot < 0) return null;
     const { ports, spots } = this.context;
@@ -177,6 +180,7 @@ export class MoverFleet {
     handle.driver = null;
     handle.lost = false;
     this.launch(slot, toSpot);
+    this.dueAt[slot] = dueSeconds;
     return handle;
   }
 
@@ -299,8 +303,23 @@ export class MoverFleet {
       this.tow(slot);
       return;
     }
-    if (!this.driver.arrived(id, this.routes[slot]!, speed)) return;
+    if (this.seconds > this.dueAt[slot]! && this.unseenAndFar(slot, car)) this.standInSpace(slot);
+    else if (!this.driver.arrived(id, this.routes[slot]!, speed)) return;
+    this.park(slot);
+  }
+
+  /** The car, late for the walker waiting at its space, stands in the space (no one sees it happen). */
+  private standInSpace(slot: number): void {
+    const { ports, spots } = this.context;
+    const spot = this.spot[slot]!;
+    ports.place(this.first + slot, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!);
+    this.driver.forget(this.first + slot);
+  }
+
+  /** The car has come to its space: parked, held by whose it is, and a resident's car is his for his next drive. */
+  private park(slot: number): void {
     this.state[slot] = MOVER.parked;
+    this.dueAt[slot] = Infinity;
     this.context.standing[this.spot[slot]!] = STANDING.mover;
     this.handles[slot]!.arrived = true;
     if (this.role[slot] === ROLE.commuter) this.context.residentSpot[this.resident[slot]!] = this.spot[slot]!;
@@ -321,6 +340,7 @@ export class MoverFleet {
     this.state[slot] = MOVER.driving;
     this.trips[slot]!++;
     this.stillFor[slot] = 0;
+    this.dueAt[slot] = Infinity;
     this.handles[slot]!.arrived = false;
     this.driver.forget(this.first + slot);
   }
