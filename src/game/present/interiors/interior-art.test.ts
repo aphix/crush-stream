@@ -156,7 +156,7 @@ describe("given the interiors of the open world's map, a coffee shop's door held
     expect(INTERIOR_FAR).toBeLessThan(SHELL_NEAR);
   });
 
-  // mutation: sed -i 's/if (entry.shell !== null \&\& distance < SOLIDS_NEAR) return SOLIDS.full;/if (false) return SOLIDS.full;/' src/game/present/interiors/interior-art.ts
+  // mutation: sed -i 's/if (entry.shellBuilt \&\& distance < SOLIDS_NEAR) return SOLIDS.full;/if (false) return SOLIDS.full;/' src/game/present/interiors/interior-art.ts
   it("when the eye is at the built shop and then leaves it, then the physics is handed its solids, then an empty list", () => {
     const set = new InteriorSet(lone);
     const heard = listen(set);
@@ -171,7 +171,7 @@ describe("given the interiors of the open world's map, a coffee shop's door held
 });
 
 describe("given a house with its door shut and the player's walker on the sidewalk before it", () => {
-  // mutation: sed -i 's/if (entry.shell !== null \&\& distance < SOLIDS_NEAR) return SOLIDS.full;/if (distance < SOLIDS_NEAR) return SOLIDS.full;/' src/game/present/interiors/interior-art.ts
+  // mutation: sed -i 's/if (entry.shellBuilt \&\& distance < SOLIDS_NEAR) return SOLIDS.full;/if (distance < SOLIDS_NEAR) return SOLIDS.full;/' src/game/present/interiors/interior-art.ts
   it("when the eye looks at the shut door, then no room is built and the physics holds the vestibule behind the door alone", () => {
     const set = new InteriorSet(loneHouse);
     const heard = listen(set);
@@ -244,7 +244,7 @@ describe("given a coffee shop with its door shut", () => {
     set.dispose();
   });
 
-  // mutation: sed -i 's/ || entry.distance >= (entry.detail === null ? INTERIOR_NEAR : INTERIOR_FAR)//' src/game/present/interiors/interior-art.ts
+  // mutation: sed -i 's/ || entry.distance >= (entry.detailBuilt ? INTERIOR_FAR : INTERIOR_NEAR)//' src/game/present/interiors/interior-art.ts
   it("when the eye looking at its front is past the furnished range, then nothing is built", () => {
     const set = new InteriorSet(lone);
     scene(set, INTERIOR_NEAR + 5, openers()).frames(SETTLE_FRAMES);
@@ -319,7 +319,7 @@ describe("given the sight field an interior set took its ids from", () => {
 });
 
 describe("given the facade of a shop whose rooms are built", () => {
-  // mutation: sed -i 's/      if (entry.shell === null || entry.detail === null) continue;/      if (entry.shell === null) continue;/' src/game/present/interiors/interior-art.ts
+  // mutation: sed -i 's/      if (!entry.shellBuilt || !entry.detailBuilt) continue;/      if (!entry.shellBuilt) continue;/' src/game/present/interiors/interior-art.ts
   it("when its envelope alone is built (an eye far off sees its open door), then its windows stay painted; when its rooms are built whole, then they are listed to be seen through; once the rooms above are dropped they stay painted again", () => {
     const set = new InteriorSet(lone);
     const who = openers();

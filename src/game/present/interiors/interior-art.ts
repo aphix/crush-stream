@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { hypot2 } from "../../kernel/physics-core.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { SHOP_GROUND_STOREY, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
 import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, planKey, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { drawnHalf } from "../../world/openworld/openworld-facade-solids.ts";
@@ -8,31 +7,31 @@ import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
 import { FACADE_OPEN_MAX, setOpenFacades } from "../facades.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
-import { DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
+import { DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
 import { DoorSet, type DoorOpeners } from "./interior-doors.ts";
+import { NO_SLOT, PackedMesh } from "./interior-pack.ts";
 
 /** What of an interior the physics holds: nothing, the vestibules behind its street doors, or all of it. */
 const SOLIDS = { none: 0, vestibule: 1, full: 2 } as const;
 type Solids = (typeof SOLIDS)[keyof typeof SOLIDS];
 
-/** One place with an interior: whether it is a business (not a home), its footprint's half sides (drawn depth, width), its doors in the door set, what is built of it now, how long it has been out of range, and this frame's distance from the eye and whether its street front is in view (a business within range). */
+/** One place with an interior: whether it is a business (not a home), its footprint's half sides (drawn depth, width), its doors in the door set, what is built of it now (whether, and the slot each piece of it holds in its packed mesh), and whether its street front is in view this frame (a business within range). */
 type Entry = {
   place: Place;
   plan: InteriorPlan;
   business: boolean;
-  distance: number;
   shopfront: boolean;
   halfDepth: number;
   halfWidth: number;
   firstDoor: number;
   doorCount: number;
-  shell: THREE.BufferGeometry | null;
-  shellGlass: THREE.BufferGeometry | null;
-  detail: THREE.BufferGeometry | null;
-  glow: THREE.BufferGeometry | null;
-  detailGlass: THREE.BufferGeometry | null;
-  shellAway: number;
-  detailAway: number;
+  shellBuilt: boolean;
+  detailBuilt: boolean;
+  shellSlot: number;
+  shellGlassSlot: number;
+  detailSlot: number;
+  glowSlot: number;
+  detailGlassSlot: number;
   solids: Solids;
 };
 
@@ -46,22 +45,21 @@ const VIEW = { kept: 0, wanted: 1, hidden: 2 } as const;
 type View = (typeof VIEW)[keyof typeof VIEW];
 const NO_IDS = -1;
 
-/** Puts `index` among the nearest kept so far (the arrays' length at most, ascending by `distance`), pushing the farthest out when they are full; returns how many are kept now. */
-function keepNearest(indices: Int32Array, distances: Float64Array, count: number, index: number, distance: number): number {
-  const capacity = indices.length;
-  if (count === capacity && distance >= distances[capacity - 1]!) return count;
+/** Puts `index` among the nearest kept so far (`slots`' length at most, ascending by `distanceOf`, each entry's distance from the eye), pushing the farthest out when they are full; returns how many are kept now. */
+function keepNearest(slots: Int32Array, count: number, index: number, distanceOf: Float64Array): number {
+  const capacity = slots.length;
+  const distance = distanceOf[index]!;
+  if (count === capacity && distance >= distanceOf[slots[capacity - 1]!]!) return count;
   let at = count < capacity ? count : capacity - 1;
-  while (at > 0 && distances[at - 1]! > distance) {
-    indices[at] = indices[at - 1]!;
-    distances[at] = distances[at - 1]!;
+  while (at > 0 && distanceOf[slots[at - 1]!]! > distance) {
+    slots[at] = slots[at - 1]!;
     at--;
   }
-  indices[at] = index;
-  distances[at] = distance;
+  slots[at] = index;
   return count < capacity ? count + 1 : count;
 }
 
-/** What the streamed interiors cost right now: places with an envelope, places furnished, vertices drawn, and draw calls (one per merged mesh that has any). The doors and vestibules add two draws, always; the glass is a fourth merged mesh. */
+/** What the streamed interiors cost right now: places with an envelope, places furnished, vertices drawn, and draw calls (one per packed mesh that has any). The doors and vestibules add two draws, always; the glass is a fourth packed mesh. */
 type InteriorStats = { shells: number; details: number; vertices: number; drawCalls: number };
 
 /**
@@ -69,21 +67,20 @@ type InteriorStats = { shells: number; details: number; vertices: number; drawCa
  * is inside, or a street door of theirs is open and some eye within range sees that doorway, or (a business: shop, bar, cafe, office, store) some eye within `INTERIOR_NEAR` sees its street front,
  * the nearest `SHOPFRONT_ROOMS` of them, so its windows show the lit room from the street with no door open; they are dropped once none has held for the sight field's hide grace (or the eye has been
  * past their far radius for `INTERIOR_LINGER`): the ground floor's envelope within `SHELL_NEAR`, the furnished rooms within `INTERIOR_NEAR`. A civilian swinging a door no player sees builds nothing.
- * The rooms are merged into four meshes (envelopes, lit furniture, unlit lamps and screens, glass). The physics holds a built interior's solids within `SOLIDS_NEAR` of the eye, and a vestibule's while
+ * The rooms are packed into four meshes (envelopes, lit furniture, unlit lamps and screens, glass), each a storage made once that a build writes into and a drop closes over (`PackedMesh`). The physics holds a built interior's solids within `SOLIDS_NEAR` of the eye, and a vestibule's while
  * the player's walker is at its door.
  */
 export class InteriorSet {
   readonly group = new THREE.Group();
   private readonly entries: Entry[] = [];
   private readonly doors: DoorSet;
-  private readonly empty = new THREE.BufferGeometry();
   private readonly solidMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
   private readonly glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   private readonly glassMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: GLASS_OPACITY, roughness: 0.05, metalness: 0, side: THREE.DoubleSide, depthWrite: false });
-  private readonly shellMesh: THREE.Mesh;
-  private readonly detailMesh: THREE.Mesh;
-  private readonly glowMesh: THREE.Mesh;
-  private readonly glassMesh: THREE.Mesh;
+  private readonly shells: PackedMesh;
+  private readonly details: PackedMesh;
+  private readonly glows: PackedMesh;
+  private readonly glass: PackedMesh;
   private solidsListener: SolidsListener | null = null;
   /** The first of the sight field's ids, one per entry, claimed at the first frame from `claimedFrom`, and given back to it on dispose. */
   private sightBase = NO_IDS;
@@ -92,11 +89,15 @@ export class InteriorSet {
   private detailBuilds = 0;
   /** The x, z of every building whose room is built whole (its envelope and its rooms above), as the facade's shader takes them. */
   private readonly builtAt: Float32Array;
-  /** The nearest businesses in view (entry indices, their distances), and the nearest built buildings the facade lists, filled each frame. */
+  /** The nearest businesses in view and the nearest built buildings the facade lists (entry indices, nearest first), filled each frame. */
   private readonly shopfrontAt = new Int32Array(SHOPFRONT_ROOMS);
-  private readonly shopfrontDistance = new Float64Array(SHOPFRONT_ROOMS);
   private readonly listedAt = new Int32Array(FACADE_OPEN_MAX);
-  private readonly listedDistance = new Float64Array(FACADE_OPEN_MAX);
+  /** Per entry, in arrays and not in the entries (a double stored in an object may be a new box on every store): its door's distance from the eye this frame, and how long (s) its envelope and its furnishing have been past their far radius. */
+  private readonly distance: Float64Array;
+  private readonly shellAway: Float64Array;
+  private readonly detailAway: Float64Array;
+  /** This frame's seconds: a double handed to a method may be boxed anew at each call, so the methods read it here. */
+  private readonly seconds = new Float64Array(1);
 
   constructor(map: OpenWorldMap) {
     this.group.name = "interiors";
@@ -112,40 +113,38 @@ export class InteriorSet {
         plans.set(key, plan);
       }
       const doors = interiorDoors(place, plan);
-      this.entries.push({ place, plan, business: place.interior !== "rowhome", distance: 0, shopfront: false, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shell: null, shellGlass: null, detail: null, glow: null, detailGlass: null, shellAway: 0, detailAway: 0, solids: SOLIDS.none });
+      this.entries.push({ place, plan, business: place.interior !== "rowhome", shopfront: false, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shellBuilt: false, detailBuilt: false, shellSlot: NO_SLOT, shellGlassSlot: NO_SLOT, detailSlot: NO_SLOT, glowSlot: NO_SLOT, detailGlassSlot: NO_SLOT, solids: SOLIDS.none });
       leaves.push(...doors);
     }
+    this.distance = new Float64Array(this.entries.length);
+    this.shellAway = new Float64Array(this.entries.length);
+    this.detailAway = new Float64Array(this.entries.length);
     this.doors = new DoorSet(leaves);
     this.group.add(this.doors.group);
-    this.shellMesh = this.makeMesh("interior-shells", this.solidMaterial);
-    this.detailMesh = this.makeMesh("interior-furniture", this.solidMaterial);
-    this.glowMesh = this.makeMesh("interior-lights", this.glowMaterial);
-    this.glassMesh = this.makeMesh("interior-glass", this.glassMaterial);
+    this.shells = this.packed("interior-shells", this.solidMaterial, PACK_START_VERTICES.shell);
+    this.details = this.packed("interior-furniture", this.solidMaterial, PACK_START_VERTICES.detail);
+    this.glows = this.packed("interior-lights", this.glowMaterial, PACK_START_VERTICES.glow);
+    this.glass = this.packed("interior-glass", this.glassMaterial, PACK_START_VERTICES.glass);
   }
 
-  /** Swing the doors, build what is wanted near the eye, drop what is hidden or left behind, and hand the physics what it holds now, merging the meshes that changed. */
+  /** Swing the doors, build what is wanted near the eye, drop what is hidden or left behind, and hand the physics what it holds now. */
   update(eyeX: number, eyeZ: number, dt: number, sight: InteriorSight, openers: DoorOpeners): void {
     if (this.claimedFrom === null) {
       this.sightBase = sight.claim(this.entries.length);
       this.claimedFrom = sight;
     }
+    this.seconds[0] = dt;
     this.doors.update(eyeX, eyeZ, dt, openers);
     this.pickShopfronts(eyeX, eyeZ, sight);
     this.shellBuilds = 0;
     this.detailBuilds = 0;
-    let shellsChanged = false;
-    let detailsChanged = false;
     let solidsChanged = false;
     for (let at = 0; at < this.entries.length; at++) {
       const entry = this.entries[at]!;
-      const { distance } = entry;
-      const view = this.viewOf(entry, this.sightBase + at, distance, sight);
-      if (this.streamShell(entry, distance, view, dt)) {
-        shellsChanged = true;
-        this.showVestibules(entry, entry.shell === null);
-      }
-      if (this.streamDetail(entry, distance, view, dt)) detailsChanged = true;
-      const solids = this.solidsOf(entry, distance, openers.walker);
+      const view = this.viewOf(entry, at, sight);
+      if (this.streamShell(entry, at, view)) this.showVestibules(entry, !entry.shellBuilt);
+      this.streamDetail(entry, at, view);
+      const solids = this.solidsOf(entry, at, openers.walker);
       if (solids !== entry.solids) {
         entry.solids = solids;
         solidsChanged = true;
@@ -153,12 +152,6 @@ export class InteriorSet {
     }
     this.showBuiltThrough();
     if (solidsChanged) this.solidsListener?.(this.heldSolids());
-    if (shellsChanged) this.merge(this.shellMesh, this.entries.map((entry) => entry.shell));
-    if (detailsChanged) {
-      this.merge(this.detailMesh, this.entries.map((entry) => entry.detail));
-      this.merge(this.glowMesh, this.entries.map((entry) => entry.glow));
-    }
-    if (shellsChanged || detailsChanged) this.merge(this.glassMesh, this.entries.flatMap((entry) => [entry.shellGlass, entry.detailGlass]));
   }
 
   /** Every entry's distance from the eye; the businesses whose street front an eye sees within reach (a furnished one keeps its place out to `INTERIOR_FAR`, so a step across the near radius does not drop it) are ranked, and the nearest `SHOPFRONT_ROOMS` are marked. */
@@ -167,10 +160,11 @@ export class InteriorSet {
     for (let at = 0; at < this.entries.length; at++) {
       const entry = this.entries[at]!;
       const { place } = entry;
-      entry.distance = hypot2(place.doorX - eyeX, place.doorZ - eyeZ);
+      const distance = hypot2(place.doorX - eyeX, place.doorZ - eyeZ);
+      this.distance[at] = distance;
       entry.shopfront = false;
-      if (!entry.business || entry.distance >= (entry.detail === null ? INTERIOR_NEAR : INTERIOR_FAR)) continue;
-      if (sight.seenThroughFace(place.x, place.z, place.yaw, entry.halfDepth, entry.halfWidth, SHOP_GROUND_STOREY, FACE.front)) kept = keepNearest(this.shopfrontAt, this.shopfrontDistance, kept, at, entry.distance);
+      if (!entry.business || distance >= (entry.detailBuilt ? INTERIOR_FAR : INTERIOR_NEAR)) continue;
+      if (sight.seenThroughFace(place.x, place.z, place.yaw, entry.halfDepth, entry.halfWidth, SHOP_GROUND_STOREY, FACE.front)) kept = keepNearest(this.shopfrontAt, kept, at, this.distance);
     }
     for (let rank = 0; rank < kept; rank++) this.entries[this.shopfrontAt[rank]!]!.shopfront = true;
   }
@@ -180,8 +174,8 @@ export class InteriorSet {
     let count = 0;
     for (let at = 0; at < this.entries.length; at++) {
       const entry = this.entries[at]!;
-      if (entry.shell === null || entry.detail === null) continue;
-      count = keepNearest(this.listedAt, this.listedDistance, count, at, entry.distance);
+      if (!entry.shellBuilt || !entry.detailBuilt) continue;
+      count = keepNearest(this.listedAt, count, at, this.distance);
     }
     for (let slot = 0; slot < count; slot++) {
       const { place } = this.entries[this.listedAt[slot]!]!;
@@ -192,8 +186,10 @@ export class InteriorSet {
   }
 
   /** Only an interior in range or built is looked at: a player inside it, a business's street front in view (`pickShopfronts`), or an open street door of it whose doorway an eye within range sees, keeps its clock fresh. */
-  private viewOf(entry: Entry, id: number, distance: number, sight: InteriorSight): View {
-    if (distance >= SHELL_NEAR && entry.shell === null && entry.detail === null && entry.glow === null) return VIEW.kept;
+  private viewOf(entry: Entry, at: number, sight: InteriorSight): View {
+    const distance = this.distance[at]!;
+    const id = this.sightBase + at;
+    if (distance >= SHELL_NEAR && !entry.shellBuilt && !entry.detailBuilt) return VIEW.kept;
     const { place } = entry;
     const seen = sight.playerInside(place.x, place.z, place.yaw, entry.halfDepth, entry.halfWidth) || entry.shopfront || (distance < SHELL_NEAR && this.openDoorSeen(entry, sight));
     sight.recordSighting(id, seen);
@@ -212,8 +208,8 @@ export class InteriorSet {
   }
 
   /** A built interior within `SOLIDS_NEAR` is held whole; one the player's walker stands at the door of, only its vestibules. */
-  private solidsOf(entry: Entry, distance: number, walker: DoorOpeners["walker"]): Solids {
-    if (entry.shell !== null && distance < SOLIDS_NEAR) return SOLIDS.full;
+  private solidsOf(entry: Entry, at: number, walker: DoorOpeners["walker"]): Solids {
+    if (entry.shellBuilt && this.distance[at]! < SOLIDS_NEAR) return SOLIDS.full;
     if (walker === null) return SOLIDS.none;
     for (let door = entry.firstDoor; door < entry.firstDoor + entry.doorCount; door++) {
       const leaf = this.doors.leaves[door]!;
@@ -227,57 +223,65 @@ export class InteriorSet {
   }
 
   /** The envelope: built when wanted within `SHELL_NEAR` (the frame's budget allowing), dropped when hidden or past `SHELL_FAR` for the linger; true when it changed. */
-  private streamShell(entry: Entry, distance: number, view: View, dt: number): boolean {
-    if (entry.shell === null) {
+  private streamShell(entry: Entry, at: number, view: View): boolean {
+    const distance = this.distance[at]!;
+    if (!entry.shellBuilt) {
       if (view !== VIEW.wanted || distance >= SHELL_NEAR || this.shellBuilds >= SHELL_BUILDS_PER_FRAME) return false;
-      const built = buildShell(entry.plan, entry.place);
-      entry.shell = built.solid;
-      entry.shellGlass = built.glass;
-      entry.shellAway = 0;
+      const built = buildShell(entry.plan);
+      const { place } = entry;
+      entry.shellSlot = this.shells.add(built.solid, place.yaw, place.x, place.z);
+      entry.shellGlassSlot = this.glass.add(built.glass, place.yaw, place.x, place.z);
+      entry.shellBuilt = true;
+      this.shellAway[at] = 0;
       this.shellBuilds++;
       return true;
     }
-    entry.shellAway = distance <= SHELL_FAR ? 0 : entry.shellAway + dt;
-    if (view !== VIEW.hidden && entry.shellAway < INTERIOR_LINGER) return false;
-    entry.shell.dispose();
-    entry.shellGlass?.dispose();
-    entry.shell = null;
-    entry.shellGlass = null;
+    this.shellAway[at] = distance <= SHELL_FAR ? 0 : this.shellAway[at]! + this.seconds[0]!;
+    if (view !== VIEW.hidden && this.shellAway[at]! < INTERIOR_LINGER) return false;
+    this.shells.remove(entry.shellSlot);
+    this.glass.remove(entry.shellGlassSlot);
+    entry.shellSlot = NO_SLOT;
+    entry.shellGlassSlot = NO_SLOT;
+    entry.shellBuilt = false;
     return true;
   }
 
   /** The furniture, partitions, stairs and upper floors: the envelope's rule, within `INTERIOR_NEAR` and `INTERIOR_FAR`. */
-  private streamDetail(entry: Entry, distance: number, view: View, dt: number): boolean {
-    if (entry.detail === null && entry.glow === null) {
+  private streamDetail(entry: Entry, at: number, view: View): boolean {
+    const distance = this.distance[at]!;
+    if (!entry.detailBuilt) {
       if (view !== VIEW.wanted || distance >= INTERIOR_NEAR || this.detailBuilds >= DETAIL_BUILDS_PER_FRAME) return false;
-      const built = buildDetail(entry.plan, entry.place);
-      entry.detail = built.solid;
-      entry.glow = built.glow;
-      entry.detailGlass = built.glass;
-      entry.detailAway = 0;
+      const built = buildDetail(entry.plan);
+      const { place } = entry;
+      entry.detailSlot = this.details.add(built.solid, place.yaw, place.x, place.z);
+      entry.glowSlot = this.glows.add(built.glow, place.yaw, place.x, place.z);
+      entry.detailGlassSlot = this.glass.add(built.glass, place.yaw, place.x, place.z);
+      entry.detailBuilt = true;
+      this.detailAway[at] = 0;
       this.detailBuilds++;
       return true;
     }
-    entry.detailAway = distance <= INTERIOR_FAR ? 0 : entry.detailAway + dt;
-    if (view !== VIEW.hidden && entry.detailAway < INTERIOR_LINGER) return false;
-    entry.detail?.dispose();
-    entry.glow?.dispose();
-    entry.detailGlass?.dispose();
-    entry.detail = null;
-    entry.glow = null;
-    entry.detailGlass = null;
+    this.detailAway[at] = distance <= INTERIOR_FAR ? 0 : this.detailAway[at]! + this.seconds[0]!;
+    if (view !== VIEW.hidden && this.detailAway[at]! < INTERIOR_LINGER) return false;
+    this.details.remove(entry.detailSlot);
+    this.glows.remove(entry.glowSlot);
+    this.glass.remove(entry.detailGlassSlot);
+    entry.detailSlot = NO_SLOT;
+    entry.glowSlot = NO_SLOT;
+    entry.detailGlassSlot = NO_SLOT;
+    entry.detailBuilt = false;
     return true;
   }
 
   stats(): InteriorStats {
     let vertices = 0;
     let drawCalls = 0;
-    for (const mesh of [this.shellMesh, this.detailMesh, this.glowMesh, this.glassMesh]) {
-      if (!mesh.visible) continue;
+    for (const packed of [this.shells, this.details, this.glows, this.glass]) {
+      if (packed.vertices === 0) continue;
       drawCalls++;
-      vertices += mesh.geometry.getAttribute("position").count;
+      vertices += packed.vertices;
     }
-    return { shells: this.entries.filter((entry) => entry.shell !== null).length, details: this.entries.filter((entry) => entry.detail !== null).length, vertices, drawCalls };
+    return { shells: this.entries.filter((entry) => entry.shellBuilt).length, details: this.entries.filter((entry) => entry.detailBuilt).length, vertices, drawCalls };
   }
 
   /** Doors standing open (or swinging) now. */
@@ -296,17 +300,9 @@ export class InteriorSet {
 
   dispose(): void {
     if (this.entries.some((entry) => entry.solids !== SOLIDS.none)) this.solidsListener?.([]);
-    for (const entry of this.entries) {
-      entry.shell?.dispose();
-      entry.shellGlass?.dispose();
-      entry.detail?.dispose();
-      entry.glow?.dispose();
-      entry.detailGlass?.dispose();
-    }
-    for (const mesh of [this.shellMesh, this.detailMesh, this.glowMesh, this.glassMesh]) mesh.geometry.dispose();
+    for (const packed of [this.shells, this.details, this.glows, this.glass]) packed.dispose();
     setOpenFacades(this.builtAt, 0);
     this.doors.dispose();
-    this.empty.dispose();
     this.solidMaterial.dispose();
     this.glowMaterial.dispose();
     this.glassMaterial.dispose();
@@ -314,19 +310,9 @@ export class InteriorSet {
     this.group.removeFromParent();
   }
 
-  private makeMesh(name: string, material: THREE.Material): THREE.Mesh {
-    const mesh = new THREE.Mesh(this.empty, material);
-    mesh.name = name;
-    mesh.visible = false;
-    this.group.add(mesh);
-    return mesh;
-  }
-
-  /** `mesh` shows the merge of the geometries that exist, or nothing. */
-  private merge(mesh: THREE.Mesh, parts: readonly (THREE.BufferGeometry | null)[]): void {
-    if (mesh.geometry !== this.empty) mesh.geometry.dispose();
-    const live = parts.filter((part): part is THREE.BufferGeometry => part !== null);
-    mesh.geometry = live.length > 0 ? mergeGeometries(live)! : this.empty;
-    mesh.visible = live.length > 0;
+  private packed(name: string, material: THREE.Material, startVertices: number): PackedMesh {
+    const packed = new PackedMesh(name, material, startVertices);
+    this.group.add(packed.mesh);
+    return packed;
   }
 }
