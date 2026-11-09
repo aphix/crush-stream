@@ -41,13 +41,14 @@ const EYE_FAR = 1000;
 const STREET_EYE = 30;
 const STREET_WALL = 25;
 const ALLEY_EYE = -(coffee.depth + 3);
-const BACK_WALL = -(coffee.depth - 0.17);
 const WALL_LENGTH = 3 * coffee.width;
+/** A player in the rear yard, 6 m behind the shop's back wall. */
+const YARD_PLAYER = -(coffee.depth + 6);
 /** Frames the eye looks before a wall goes up, and how far short of and past the hide grace the rows check. */
 const MARGIN_FRAMES = 10;
 const GRACE_FRAMES = Math.round(HIDE_GRACE * FRAME_HZ);
 
-/** An eye at `out` m from the door looking at it, a sight field over `solids`, and a clock: `frame` advances both by one frame. */
+/** An eye at `out` m from the door looking at it, a sight field, the players (read each frame), and a clock: `frames` advances them frame by frame. */
 function watch(set: InteriorSet, out: number, players: readonly SightPlayer[] = []) {
   const eye = fromDoor(out);
   const camera = new THREE.PerspectiveCamera(EYE_FOV, 1, 0.1, EYE_FAR);
@@ -145,34 +146,36 @@ describe("given an eye on the street that can see a coffee shop, then cannot", (
     set.dispose();
   });
 
-  // mutation: sed -i 's/if (seen || sight.near(place.doorX, place.doorZ, INTERIOR_KEEP)) return VIEW.wanted;/if (seen) return VIEW.wanted;/' src/game/present/interiors/interior-art.ts
-  it("when a player stands at the door behind the wall, then the interior is kept however long no eye sees it", () => {
+  // mutation: sed -i 's/sight.near(place.x, place.z, entry.reach + INTERIOR_KEEP)/sight.near(place.doorX, place.doorZ, 2 * INTERIOR_KEEP)/' src/game/present/interiors/interior-art.ts
+  it("when a player stands in the yard behind the shop, out of every eye's sight, then the interior is kept however long no eye sees it", () => {
     const set = new InteriorSet(lone);
-    const player: SightPlayer = { group: { position: { x: coffee.doorX, z: coffee.doorZ } } };
+    const yard = fromDoor(YARD_PLAYER);
+    const player: SightPlayer = { group: { position: yard } };
     const { sight, frames } = watch(set, STREET_EYE, [player]);
     frames(MARGIN_FRAMES);
     sight.setSolids([wallAt(STREET_WALL, WALL_LENGTH)]);
     frames(2 * GRACE_FRAMES);
-    expect(set.stats().details, "furnished with a player beside it").toBe(1);
-    expect(INTERIOR_KEEP, "the keep reaches past the deepest interior").toBeGreaterThan(coffee.depth);
+    expect(set.stats().details, "furnished with a player behind it").toBe(1);
+    expect(Math.hypot(yard.x - coffee.doorX, yard.z - coffee.doorZ), "the player is far from the front door").toBeGreaterThan(2 * INTERIOR_KEEP);
     set.dispose();
   });
 });
 
 describe("given an eye in the alley behind a coffee shop where a civilian sits", () => {
   // mutation: sed -i 's/const reached = distance < SOLIDS_NEAR;/const reached = distance < SOLIDS_NEAR \&\& view !== VIEW.hidden;/' src/game/present/interiors/interior-art.ts
-  it("when the shop's back wall hides it past the grace, then its drawing is released while the seats and the counter the crowd sits and serves people at, and the solids the physics stands them on, are untouched", () => {
+  it("when the player who kept it built leaves and only its back faces the eye past the grace, then its drawing is released while the seats and the counter the crowd sits and serves people at, and the solids the physics stands them on, are untouched", () => {
     const set = new InteriorSet(lone);
     const heard: InteriorSolid[][] = [];
     set.onSolids((solids) => heard.push([...solids]));
     const seats = digest(coffee.seats!);
     const counter = digest(coffee.counter!);
-    const { sight, frames } = watch(set, ALLEY_EYE);
+    const players: SightPlayer[] = [{ group: { position: { x: coffee.doorX, z: coffee.doorZ } } }];
+    const { frames } = watch(set, ALLEY_EYE, players);
     frames(MARGIN_FRAMES);
-    expect(set.stats().details, "furnished while the back is open to the eye").toBe(1);
-    sight.setSolids([wallAt(BACK_WALL, WALL_LENGTH)]);
+    expect(set.stats().details, "furnished while a player is at its door").toBe(1);
+    players.length = 0;
     frames(2 * GRACE_FRAMES);
-    expect(JSON.stringify(set.stats()), "drawing released behind the back wall").toBe(NOTHING_BUILT);
+    expect(JSON.stringify(set.stats()), "drawing released with only its back in view").toBe(NOTHING_BUILT);
     expect(heard[heard.length - 1]!.length, "solids still with the physics").toBeGreaterThan(30);
     expect(digest(coffee.seats!), "the seats a sitter is placed at").toBe(seats);
     expect(digest(coffee.counter!), "the counter spots").toBe(counter);

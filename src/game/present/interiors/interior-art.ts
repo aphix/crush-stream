@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import type { InteriorPlan } from "../../world/openworld/interior-kinds.ts";
+import { SHOPFRONT, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
 import { interiorSolids, planInterior, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
-import type { SightField } from "../openworld-sight.ts";
+import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
 import { DETAIL_BUILDS_PER_FRAME, INTERIOR_FAR, INTERIOR_KEEP, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SOLIDS_NEAR } from "./interior-constants.ts";
 
@@ -12,8 +12,8 @@ import { DETAIL_BUILDS_PER_FRAME, INTERIOR_FAR, INTERIOR_KEEP, INTERIOR_LINGER, 
 type Entry = {
   place: Place;
   plan: InteriorPlan;
-  /** What the eyes are asked about: the shopfront round the door (half the frontage), and the whole footprint round its middle (half its diagonal) for an eye inside. */
-  doorRadius: number;
+  /** The top of its highest street opening above the ground (m): what an eye can see into through the front; and half its footprint's diagonal, which a player's keep is measured past. */
+  openingTop: number;
   reach: number;
   shell: THREE.BufferGeometry | null;
   detail: THREE.BufferGeometry | null;
@@ -27,7 +27,7 @@ type Entry = {
 type SolidsListener = (solids: readonly InteriorSolid[]) => void;
 
 /** What the interiors ask of the open world's sight field. */
-type InteriorSight = Pick<SightField, "claim" | "observe" | "unseenFor" | "near" | "hideGrace">;
+type InteriorSight = Pick<SightField, "claim" | "seenThroughFace" | "recordSighting" | "unseenFor" | "near" | "hideGrace">;
 
 /** An interior this frame: neither built anew nor dropped (`kept`), wanted (seen, or a player beside it), or hidden (no eye has seen it for the hide grace and no player is beside it). */
 const VIEW = { kept: 0, wanted: 1, hidden: 2 } as const;
@@ -68,7 +68,7 @@ export class InteriorSet {
         plan = planInterior(place.interior, place.width, place.depth);
         plans.set(key, plan);
       }
-      this.entries.push({ place, plan, doorRadius: place.width / 2, reach: hypot2(place.width / 2, place.depth / 2), shell: null, detail: null, glow: null, shellAway: 0, detailAway: 0, inReach: false });
+      this.entries.push({ place, plan, openingTop: plan.floors[0]! + Math.max(...SHOPFRONT[place.interior].map((opening) => opening.top)), reach: hypot2(place.width / 2, place.depth / 2), shell: null, detail: null, glow: null, shellAway: 0, detailAway: 0, inReach: false });
     }
     this.shellMesh = this.makeMesh("interior-shells", this.solidMaterial);
     this.detailMesh = this.makeMesh("interior-furniture", this.solidMaterial);
@@ -103,12 +103,12 @@ export class InteriorSet {
     }
   }
 
-  /** Only an interior in range or built is looked at: the door (the street's view through the doorway and windows) or the middle (an eye inside) seen keeps its clock fresh. */
+  /** Only an interior in range or built is looked at: an eye inside it, or before its street face with a clear line to it (the view through the doorway and the windows), keeps its clock fresh. */
   private viewOf(entry: Entry, id: number, distance: number, sight: InteriorSight): View {
     if (distance >= SHELL_NEAR && entry.shell === null && entry.detail === null && entry.glow === null) return VIEW.kept;
     const { place } = entry;
-    const seen = sight.observe(id, place.doorX, place.doorZ, entry.doorRadius) || sight.observe(id, place.x, place.z, entry.reach);
-    if (seen || sight.near(place.doorX, place.doorZ, INTERIOR_KEEP)) return VIEW.wanted;
+    const seen = sight.recordSighting(id, sight.seenThroughFace(place.x, place.z, place.yaw, place.depth / 2, place.width / 2, entry.openingTop, FACE.front));
+    if (seen || sight.near(place.x, place.z, entry.reach + INTERIOR_KEEP)) return VIEW.wanted;
     return sight.unseenFor(id) >= sight.hideGrace ? VIEW.hidden : VIEW.kept;
   }
 
