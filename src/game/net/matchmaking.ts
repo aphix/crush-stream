@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PUBLIC_PREFIX, ROOM_MAX } from "../../lib/multiplayer/rooms.ts";
-import { NET_VERSION } from "./codec.ts";
+import { GAME_KINDS, NET_VERSION } from "./codec.ts";
 import type { MatchStage, NetGame, PublicKind } from "./net-ports.ts";
 
 /**
@@ -42,7 +42,7 @@ export function publicRoomName(kind: PublicKind, code: string): string {
   return `${PUBLIC_PREFIX}${kind}-v${NET_VERSION}-${code}`;
 }
 
-const ROOM_RE = /^pub-(race|campaign|survival|derby)-v(\d+)-/;
+const ROOM_RE = new RegExp(`^${PUBLIC_PREFIX}(${GAME_KINDS.join("|")})-v(\\d+)-`);
 const STAGES: readonly string[] = ["lobby", "running", "over"];
 
 /** A host's heartbeat tag, `<stage>.<course>`: lowercase, digits, `.-_` only (the relay's `META` rule). */

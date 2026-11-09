@@ -19,7 +19,7 @@ import {
   Writer,
   writeDerby, packEject, MAX_PLAYLIST, type GameKind, type LobbyGate,
 } from "./codec.ts";
-import { NET_TX, PHASES, type CourseMenu, type HostRoom, type NetGame, type NetRace, type NetRole, type NetStatus, type NetTx, type PublicKind } from "./net-ports.ts";
+import { NET_TX, PHASES, type CourseMenu, type CrowdLink, type HostRoom, type NetGame, type NetRace, type NetRole, type NetStatus, type NetTx, type PublicKind } from "./net-ports.ts";
 import { cleanName } from "../match/types.ts";
 import { packLook, readLook } from "./look-codec.ts";
 import { RtcTransport } from "./rtc-transport.ts";
@@ -27,6 +27,8 @@ import { BroadcastTransport, type NetTransport } from "./transport.ts";
 import { NetPlayClient } from "./net-play-client.ts";
 import { readCarPose } from "./car-pose.ts";
 import { packRoster } from "./roster-codec.ts";
+import { packCrowd } from "./crowd-codec.ts";
+import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { ROOM_MAX } from "../../lib/multiplayer/rooms.ts";
 import { fetchRooms, findMatch, matchStage, publicMeta, publicRoomName, WEAK_AI, WEAK_DERBY_FIELD, type MatchDeps } from "./matchmaking.ts";
 import {
@@ -104,6 +106,8 @@ export class NetPlay extends NetPlayClient {
   private readonly wreckChangedAt: number[] = [];
   /** The `raceKey` of the last race message sent. */
   private raceSent = "";
+  /** Host: numbers in the crowd's event log when its last message went out; a longer log sends at once. */
+  private crowdLogSent = 0;
 
   /** Host: seconds the finished public race has been showing its results. */
   private finishedFor = 0;
@@ -206,10 +210,11 @@ export class NetPlay extends NetPlayClient {
   publicHost(kind: PublicKind, weak = !this.game.hostFit()): void {
     this.host(publicRoomName(kind, Math.random().toString(36).slice(2, 8).toUpperCase()), NET_TX.rtc);
     this.publicKind = kind;
+    this.showLobbyFor(kind);
     this.derbyField = weak ? WEAK_DERBY_FIELD : PUBLIC_DERBY_FIELD;
     // The weak device's smaller field is the room's own rules; the player's options stay as they were.
     if (weak && (kind === "race" || kind === "campaign")) this.game.race()?.command({ type: "program", options: { aiCount: WEAK_AI } });
-    this.lobbyLeft = LOBBY_S;
+    this.lobbyLeft = kind === "openworld" ? null : LOBBY_S;
   }
 
   /** Host: the Havana lobby opens (a new room, or a public match's results are over): every peer free-drives there until the game starts. */
@@ -232,6 +237,7 @@ export class NetPlay extends NetPlayClient {
     const race = this.game.race();
     if (kind === "race") return race?.options.trackId ?? "";
     if (kind === "survival") return race?.courseId ?? "";
+    if (kind === "openworld") return OPENWORLD_ID;
     return kind === "campaign" ? String(this.playlist.length) : "";
   }
 
@@ -259,7 +265,20 @@ export class NetPlay extends NetPlayClient {
 
   /** Host, private lobby: the game Go starts. A public room's is the one its name says. */
   setLobbyKind(kind: GameKind): void {
-    if (this.role === "host" && this.lobbyOn && !this.publicKind) this.lobbyKind = kind;
+    if (this.role !== "host" || !this.lobbyOn || this.publicKind) return;
+    this.lobbyKind = kind;
+    this.showLobbyFor(kind);
+  }
+
+  /** Host, lobby: the lobby stands on the city's course for the open world and on a Survival course for every other game. */
+  private showLobbyFor(kind: GameKind): void {
+    const race = this.game.race();
+    if (!race) return;
+    if (kind === "openworld") race.showLobby(OPENWORLD_ID);
+    else if (race.courseId === OPENWORLD_ID) {
+      const home = this.courseMenu().survival[0];
+      if (home) race.showLobby(home.id);
+    }
   }
 
   /** Host, lobby: the Survival course the lobby shows and Go's Survival run is on (`RaceDirector`'s `survivalCourse` pick); every guest's lobby follows. */
@@ -298,6 +317,7 @@ export class NetPlay extends NetPlayClient {
     else {
       this.host(o.code, o.tx);
       this.lobbyKind = o.kind;
+      this.showLobbyFor(o.kind);
     }
     this.setMinPlayers(o.minPlayers);
     this.setAutoNext(o.autoNext);
@@ -311,6 +331,7 @@ export class NetPlay extends NetPlayClient {
     const race = this.game.race();
     const kind = this.publicKind ?? this.lobbyKind;
     if (kind === "race") return race?.options.trackId ?? "";
+    if (kind === "openworld") return OPENWORLD_ID;
     return kind === "survival" ? (race?.courseId ?? "") : "";
   }
 
@@ -322,6 +343,12 @@ export class NetPlay extends NetPlayClient {
   /** The lobby ends: every peer is seated and the game starts. */
   private startGame(): void {
     const kind = this.publicKind ?? this.lobbyKind;
+    // The city has no start: everyone already drives in it, so the lobby stays open on its course.
+    if (kind === "openworld") {
+      this.lobbyLeft = null;
+      this.showLobbyFor(kind);
+      return;
+    }
     this.lobbyOn = false;
     this.lobbyLeft = null;
     this.finishedFor = 0;
@@ -397,6 +424,7 @@ export class NetPlay extends NetPlayClient {
     this.lobbyKind = "race";
     this.playlist = [];
     this.autoNext = true;
+    this.crowdLogSent = 0;
     this.nextLeft = null;
     this.heardGate = null;
   }
@@ -668,6 +696,8 @@ export class NetPlay extends NetPlayClient {
     this.statSnaps++;
     this.statBytes += this.w.off;
     if (race && (s.keyframe || this.seq % RACE_EVERY === 0)) this.sendRace(race, t, s.keyframe);
+    const crowd = this.game.crowdLink();
+    if (crowd) this.sendCrowd(crowd, t, s.keyframe);
     const derby = s.keyframe || this.seq % RACE_EVERY === 0 ? this.game.derbyState() : null;
     if (derby) {
       derby.lobby = this.lobbyLeft;
@@ -687,7 +717,7 @@ export class NetPlay extends NetPlayClient {
   private runRoom(wallDt: number): void {
     const kind = this.publicKind;
     if (this.lobbyOn) {
-      if (!kind) return;
+      if (!kind || kind === "openworld") return;
       // A room short of players (or a campaign with no courses) holds its countdown at the full `LOBBY_S`.
       this.lobbyLeft = this.slots.size + 1 < this.minPlayers || !this.hasGame() ? LOBBY_S : (this.lobbyLeft ?? LOBBY_S) - wallDt;
       if (this.lobbyLeft <= 0 || this.slots.size >= ROOM_MAX - 1) this.startGame();
@@ -749,6 +779,16 @@ export class NetPlay extends NetPlayClient {
     this.raceSent = key;
     const msg = writeRace(state);
     t.send(msg);
+    this.statBytes += msg.length;
+  }
+
+  /** Host: the open world's crowd clock and event log to every guest, reliably, with every keyframe and at once when the log grew. */
+  private sendCrowd(link: CrowdLink, t: NetTransport, keyframe: boolean): void {
+    const log = link.eventLog();
+    if (!keyframe && log.length === this.crowdLogSent) return;
+    this.crowdLogSent = log.length;
+    const msg = packCrowd(link.seed, this.now() / 1000, link.crowdTime(), log);
+    t.send(msg, undefined, true);
     this.statBytes += msg.length;
   }
 

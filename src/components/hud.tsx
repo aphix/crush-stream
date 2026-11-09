@@ -6,6 +6,7 @@ import { CreditsDialog } from "@/components/credits-dialog";
 import { GaragePanel } from "@/components/garage-panel";
 import { HudSections } from "@/components/hud-sections";
 import { HomeSheet } from "@/components/home-sheet";
+import { LookPanel } from "@/components/look-panel";
 import { RaceOverlay, RaceStandings, RaceViewToggle, SpectateBar } from "@/components/race-hud";
 import { BenchEntry } from "@/components/bench-controls";
 import { OnlineEntry } from "@/components/online-entry";
@@ -153,7 +154,9 @@ export function Hud({ store, engine, onlineShown }: Omit<HudProps, "state"> & { 
     if (t) t.tapped |= 1 << PAD_BUTTON.down;
   };
   // Race focus view: race panels only; the sandbox HUD comes back with the Full menu toggle (H). A phone has no such toggle, so its race is always the focus view.
-  const focus = state.race !== null && (touch || !state.race.fullUi);
+  // Alone in the open world there is no run to focus on: the scene dock (the way out, night and wet) stays up on a desktop.
+  const wandering = state.openworld && !state.inRoom;
+  const focus = state.race !== null && (touch || (!state.race.fullUi && !wandering));
   // The podium over the course: the HUD is a title and its pills, the view between them the stand's.
   if (state.race?.podium) return <PodiumView podium={state.race.podium} onCommand={raceCommand} />;
   // Solo view: one clip alone, full screen; the HUD is nothing but its exit.
@@ -188,6 +191,7 @@ function ScenePanels({ state, engine, touch }: HudProps & { touch: boolean }) {
       {state.lab ? <LabPanel lab={state.lab} engine={engine} /> : null}
       {state.garage ? <GaragePanel garage={state.garage} playerCar={state.playerCar} engine={engine} /> : null}
       {state.derby && state.derbyBoard.length > 0 ? <DerbyBoard board={state.derbyBoard} engine={engine} /> : null}
+      <LookPanel lookAt={state.lookAt} />
     </>
   );
 }
@@ -204,7 +208,7 @@ function DesktopHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
         {focus && state.race ? (
           <header className="hud-ink min-w-0 font-display">
             <p className="truncate text-sm font-semibold uppercase leading-tight tracking-[0.12em] text-fg/80">
-              {state.race.survival || state.race.menu === "survival" ? "Survival" : state.race.mode === "campaign" ? "Campaign" : "Race"} · <span className="text-fg">{state.race.trackName || "Pick a course"}</span>
+              {state.openworld ? null : <>{state.race.survival || state.race.menu === "survival" ? "Survival" : state.race.mode === "campaign" ? "Campaign" : "Race"} · </>}<span className="text-fg">{state.race.trackName || "Pick a course"}</span>
             </p>
           </header>
         ) : null}
@@ -326,7 +330,7 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
   return (
     <div className="hud-grid pointer-events-none absolute inset-0 text-fg" data-focus={focus || undefined} data-calm={calm || undefined}>
       {/* The cluster is hidden, not unmounted, in a race: the online entry inside stays mounted because the race menus portal it into their own header (`online-slot.ts`). */}
-      <div className={cn("absolute hud-left hud-top max-w-[calc(100%_-_13rem)] flex-wrap items-start gap-2 calm:opacity-35 hud-fade", race === null ? "flex" : "hidden")}>
+      <div className={cn("absolute hud-left hud-top max-w-[calc(100%_-_13rem)] flex-wrap items-start gap-2 calm:opacity-35 hud-fade", race === null || state.openworld ? "flex" : "hidden")}>
         <Button variant="ghost" size="icon" className={cn(ZONE, "pointer-events-auto")} aria-label="Menu" title="Menu" onClick={() => setHomeOpen(true)}>
           <Menu />
         </Button>

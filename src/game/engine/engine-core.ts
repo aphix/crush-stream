@@ -10,7 +10,7 @@ import { PistonRig } from "../scenes/piston-rig.ts";
 import { PistonBank } from "../present/engine-pistons.ts";
 import { DoorRig, type RamShot } from "../scenes/door-rig.ts";
 import { DoorRam } from "../present/engine-doors.ts";
-import { INITIAL_HUD } from "../hud/hud-store.ts";
+import { INITIAL_HUD, type LookAtHud } from "../hud/hud-store.ts";
 import { beginImpact, FUDGE_GAP, fudgeStrength, holdForThrow, pairEta, phaseClock, struck } from "../match/phase.ts";
 import { IMPACT_MIN } from "../match/highlights.ts";
 import { newWorld } from "./world-step.ts";
@@ -62,6 +62,8 @@ import { DerbyGround } from "../scenes/derby-ground.ts";
 import { groundMesh, LINE_LIFT } from "../scenes/ground-stack.ts";
 import { RangeRun } from "../scenes/range.ts";
 import { NetPlay } from "../net/net-play.ts";
+import type { CrowdLink } from "../net/net-ports.ts";
+import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { RaceDirector } from "./engine-race.ts";
 import { clearTransients } from "./scene-clear.ts";
 import { Lab } from "./engine-lab.ts";
@@ -197,6 +199,18 @@ export abstract class EngineCore {
   /** The showcase (by link only): every kind of person the game draws, standing in rows to survey (`Showcase`). */
   get showShowcase(): boolean {
     return this.sceneId === "showcase";
+  }
+  /** The open world: its course up in the race director's lobby free roam, solo (the scene) or in a room (every seat drives there). */
+  get showOpenWorld(): boolean {
+    return this.race.active && this.race.free && this.race.courseId === OPENWORLD_ID;
+  }
+  /** The look-at panel's text for what the eye is on (`CrashHudState.lookAt`); null while it rests on nothing. The open world's crowd answers it. */
+  protected lookAtText(): LookAtHud | null {
+    return null;
+  }
+  /** The crowd's end of the crowd message (`NetGame.crowdLink`); null until the open world's crowd exists. */
+  protected crowdLink(): CrowdLink | null {
+    return null;
   }
   /** A staged scene: the press, the piston bank or the door ram moves the car; the corkscrew only times it; the stack's cars fall under the world step alone. */
   protected get rigScene(): boolean {

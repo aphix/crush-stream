@@ -8,7 +8,7 @@ type SceneDef = { id: SceneId; label: string; aria: string; tone?: string; quiet
 
 /**
  * Every scene the player can pick, the one list behind the desktop dock's chips and the phone's Home sheet. Fleet is "none of the others":
- * the engine keeps derby, race, press, pistons, doors, corkscrew, stack, range, the Lab and the garage mutually exclusive. The showcase (by
+ * the engine keeps derby, race, press, pistons, doors, corkscrew, stack, range, the Lab, the garage and the open world mutually exclusive. The showcase (by
  * link only) has no button: no chip is lit there, and any pick, Fleet included, leaves it. Richer game modes first, then the test rigs.
  */
 const SCENES: SceneDef[] = [
@@ -17,6 +17,7 @@ const SCENES: SceneDef[] = [
   { id: SCENE.race, label: "Race", aria: "Race scene", tone: "[--tone:var(--color-scene-race)]" },
   { id: SCENE.range, label: "Range", aria: "Ejection range scene", tone: "[--tone:var(--color-scene-range)]" },
   { id: SCENE.survival, label: "Survival", aria: "Survival scene: how long can you last", tone: "[--tone:var(--color-scene-survival)]" },
+  { id: SCENE.openworld, label: "Open World", aria: "Open World scene: drive and walk a city of thinking civilians" },
   { id: SCENE.garage, label: "Garage", aria: "Garage: pick your car's and driver's colours and spray-paint them", tone: "[--tone:var(--color-scene-garage)]" },
   // A test bench for flings and crash forces, not a game mode: muted with the rigs so the menu does not point at it.
   { id: SCENE.lab, label: "Lab", aria: "Lab scene: flick a toy car at a stack of cars on a workbench", quiet: true },
@@ -29,8 +30,8 @@ const SCENES: SceneDef[] = [
 
 export const sceneLabel = (id: SceneId): string => SCENES.find((scene) => scene.id === id)?.label ?? id;
 
-/** The phone's Home sheet leads with these six, in this order; Fleet is its own "Free play" row and the test rigs fold away. */
-const HOME_MODE_ORDER: readonly SceneId[] = [SCENE.race, SCENE.derby, SCENE.survival, SCENE.range, SCENE.garage];
+/** The phone's Home sheet leads with these, in this order; Fleet is its own "Free play" row and the test rigs fold away. */
+const HOME_MODE_ORDER: readonly SceneId[] = [SCENE.race, SCENE.derby, SCENE.survival, SCENE.openworld, SCENE.range, SCENE.garage];
 
 /** The scenes a netplay room cannot be in (the single-player ones) drop out of the pickers while the browser is in a room. */
 export const scenesFor = (inRoom: boolean): SceneDef[] => SCENES.filter((scene) => !(SOLO_SCENES[scene.id] && inRoom));
@@ -43,6 +44,8 @@ export const TEST_RIGS: SceneDef[] = SCENES.filter((scene) => scene.quiet);
 
 /** The scene in play: Fleet is "none of the others". */
 export function sceneInPlay(state: CrashHudState): SceneId {
+  // The open world rides the race director's lobby, so its flag comes before the race's.
+  if (state.openworld) return SCENE.openworld;
   if (state.race) return state.race.survival ? SCENE.survival : SCENE.race;
   if (state.derby) return SCENE.derby;
   if (state.showCompactor) return SCENE.press;
@@ -70,6 +73,7 @@ const TOGGLES: Record<Exclude<SceneId, typeof SCENE.fleet>, (engine: CrashEngine
   lab: (engine) => engine.toggleLab(),
   garage: (engine) => engine.toggleGarage(),
   showcase: (engine) => engine.toggleShowcase(),
+  openworld: (engine) => engine.toggleOpenWorld(),
 };
 
 /** Toggles scene `id` (the engine does nothing before it has booted). */

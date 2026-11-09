@@ -57,6 +57,14 @@ export type MatchStage = "lobby" | "running" | "over";
 /** Wire order of the crash phases (`Snapshot.phase`). */
 export const PHASES: readonly CrashPhase[] = ["approach", "impact", "slowmo", "aftermath"];
 
+/** The open world's crowd as netplay sees it: what the host sends (its seed, clock and event log) and what a client hands its crowd. Events are (kind, subject, time) triples. */
+export interface CrowdLink {
+  seed: number;
+  crowdTime(): number;
+  eventLog(): Float64Array;
+  hear(seed: number, hostTime: number, crowdTime: number, events: Float64Array): void;
+}
+
 /** The engine as netplay sees it. */
 export interface NetGame {
   /** Live cars, index = car id on every peer. */
@@ -122,6 +130,8 @@ export interface NetGame {
   dropLooks(): void;
   /** The courses a host picks from, race mode on or not. */
   courseMenu(): CourseMenu;
+  /** The open world's crowd, null until it exists (and in every other game). */
+  crowdLink(): CrowdLink | null;
   readonly seat: DriverSeat;
 }
 

@@ -30,6 +30,7 @@ import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import type { RaceCommand } from "../match/types.ts";
 import { OWN_FIELD_SCENES, SOLO_SCENES, type SceneId } from "../scenes/scene-id.ts";
 import { mulberry32 } from "../world/placements.ts";
+import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { celStrength } from "../present/scene-fade.ts";
 import { EngineMinigames } from "./engine-minigame-commands.ts";
 import type { DerbyCarFlag } from "../match/derby.ts";
@@ -180,6 +181,7 @@ export abstract class EngineScenes extends EngineMinigames {
     // The garage holds the player's car alone: the fleet's others are freed, not parked off the set where a camera could still go.
     if (next === "garage") this.dropCars(1);
     if (next === "race" || next === "survival") this.setRace(true, next === "survival", false, next === "survival" && menu && this.net.role === "off");
+    else if (next === "openworld") this.enterOpenWorld();
     else this.sceneId = next;
     // The smaller, tighter modes (the Range with its Mini games, the derby) default to the far chase: more of the place in view. A view the player picked stays.
     if (!this.seat.viewPicked) this.seat.view = next === "range" || next === "derby" ? "far" : "third";
@@ -206,6 +208,13 @@ export abstract class EngineScenes extends EngineMinigames {
       this.frameShowcase();
     }
     this.emitHud();
+  }
+
+  /** The open world is the director's lobby free roam on the city's course: no session, countdown or hunters. The lobby opens on its own course first, as a room's host's does, then moves to the city's. */
+  private enterOpenWorld(): void {
+    this.setRace(true, false, true);
+    this.race.showLobby(OPENWORLD_ID);
+    this.sceneId = "openworld";
   }
 
   toggleCompactor(): void {
@@ -235,6 +244,10 @@ export abstract class EngineScenes extends EngineMinigames {
   /** The showcase has no button or key; a link (`#scene=showcase`) or a probe opens it. */
   toggleShowcase(): void {
     this.setScene("showcase");
+  }
+
+  toggleOpenWorld(): void {
+    this.setScene("openworld");
   }
 
   setLabPreset(id: LabPresetId): void {

@@ -110,7 +110,11 @@ export class CrashEngine extends EngineGarage {
     race: () => (this.race.active ? this.race : null),
     enterRace: (survival, lobby = false) => {
       if (this.race.active) {
-        if (this.race.survival === survival && (!lobby || this.race.free)) return;
+        if (this.race.survival === survival && (!lobby || this.race.free)) {
+          // A room hosted or joined from the solo open world takes its lobby over: the scene is the room's from here.
+          if (this.sceneId === "openworld") this.sceneId = "race";
+          return;
+        }
         this.setRace(false);
       }
       this.setRace(true, survival, lobby);
@@ -152,6 +156,7 @@ export class CrashEngine extends EngineGarage {
     wearLook: (i, look) => this.wearLook(i, look),
     dropLooks: () => this.dropLooks(),
     courseMenu: () => this.race.courseMenu(),
+    crowdLink: () => this.crowdLink(),
     seat: this.seat,
   });
   /** The results reel and its solo view. */
