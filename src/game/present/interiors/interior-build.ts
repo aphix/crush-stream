@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { hypot2 } from "../../kernel/physics-core.js";
 import { stairBoxes, wallBoxes } from "../../world/openworld/interior-draft.ts";
 import { ceilingOver, lookKind, ROOM_LOOK, type Alcove, type Box, type InteriorPlan, type Pane } from "../../world/openworld/interior-kinds.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
@@ -53,13 +54,46 @@ function plate(plan: InteriorPlan, corners: Alcove["corners"], y: number): THREE
   return quad(a!, b!, c!, d!);
 }
 
-/** Every alcove of `level`: its floor carried out over the bay, its ceiling at the glass's head, and the apron up to the sill round its three sides. */
+/** An alcove's sill board reaches this far (m) into the room over the apron, is this thick, and the skirting under the apron is this high: the apron reads as a wall with a sill, not a slab in front of the glass. */
+const SILL_DEPTH = 0.12;
+const SILL_THICK = 0.05;
+const SKIRTING_HEIGHT = 0.12;
+
+/** A plan point as (deep, across). */
+type PlanPoint = readonly [deep: number, across: number];
+
+/** The unit step, in plan, from the segment `from`-`to` into the alcove (toward the middle of its corners). */
+function inward(corners: Alcove["corners"], from: PlanPoint, to: PlanPoint): PlanPoint {
+  const along: PlanPoint = [to[0] - from[0], to[1] - from[1]];
+  const length = hypot2(along[0], along[1]);
+  const normal: PlanPoint = [along[1] / length, -along[0] / length];
+  const middle = corners.reduce<PlanPoint>((sum, corner) => [sum[0] + corner[0] / corners.length, sum[1] + corner[1] / corners.length], [0, 0]);
+  const toMiddle = (middle[0] - from[0]) * normal[0] + (middle[1] - from[1]) * normal[1];
+  return toMiddle >= 0 ? normal : [-normal[0], -normal[1]];
+}
+
+/**
+ * Every alcove of `level`: its floor carried out over the bay, its ceiling at the glass's head, and on its three sides the apron up to the sill: skirting, a wall-coloured body, and a sill board at the glass's
+ * bottom edge that reaches into the room.
+ */
 function alcovePieces(plan: InteriorPlan, look: Look, level: number): Piece[] {
   const out: Piece[] = [];
   for (const alcove of plan.alcoves) {
     if (alcove.level !== level) continue;
     out.push([plate(plan, alcove.corners, alcove.floorY + PLATE_LIFT), look.floor], [plate(plan, alcove.corners, alcove.head - PLATE_LIFT), look.ceiling]);
-    for (let side = 0; side + 1 < alcove.corners.length; side++) out.push([upright(plan, alcove.corners[side]!, alcove.corners[side + 1]!, alcove.floorY, alcove.sill), look.trim]);
+    for (let side = 0; side + 1 < alcove.corners.length; side++) {
+      const from = alcove.corners[side]!;
+      const to = alcove.corners[side + 1]!;
+      const step = inward(alcove.corners, from, to);
+      const boardFrom: PlanPoint = [from[0] + step[0] * SILL_DEPTH, from[1] + step[1] * SILL_DEPTH];
+      const boardTo: PlanPoint = [to[0] + step[0] * SILL_DEPTH, to[1] + step[1] * SILL_DEPTH];
+      out.push(
+        [upright(plan, from, to, alcove.floorY, alcove.floorY + SKIRTING_HEIGHT), look.trim],
+        [upright(plan, from, to, alcove.floorY + SKIRTING_HEIGHT, alcove.sill), look.wall],
+        [quad(at(plan, from[0], alcove.sill, from[1]), at(plan, to[0], alcove.sill, to[1]), at(plan, boardTo[0], alcove.sill, boardTo[1]), at(plan, boardFrom[0], alcove.sill, boardFrom[1])), look.trim],
+        [upright(plan, boardFrom, boardTo, alcove.sill - SILL_THICK, alcove.sill), look.trim],
+      );
+    }
   }
   return out;
 }

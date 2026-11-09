@@ -318,14 +318,18 @@ if (surfaceRegion.z > 0.5 && surfaceRegion.x < 2.5) {
   #endif
 }
 #endif`;
+/** The list's uniform, as a vertex shader declares it. */
+export const FACADE_OPEN_UNIFORM = /* glsl */ `uniform vec2 facadeOpenAt[${FACADE_OPEN_MAX}];`;
+/** GLSL that raises the float `variable` to 1 when the vec2 `point` lies within the radius of a listed position of `FACADE_OPEN_AT`: the building at `point` has its rooms built. */
+export const facadeOpenLoop = (variable: string, point: string): string => `for (int i = 0; i < ${FACADE_OPEN_MAX}; i++) ${variable} = max(${variable}, 1.0 - step(${OPEN_AT_RADIUS}, distance(${point}, facadeOpenAt[i])));`;
 /** An open style's instance is told whether its room is built: its translation against the listed positions. */
 const FACADE_OPEN_VERTEX = /* glsl */ `
-uniform vec2 facadeOpenAt[${FACADE_OPEN_MAX}];
+${FACADE_OPEN_UNIFORM}
 flat varying float vFacadeOpen;`;
 const FACADE_OPEN_SEED = /* glsl */ `
 vFacadeOpen = 0.0;
 #ifdef USE_INSTANCING
-for (int i = 0; i < ${FACADE_OPEN_MAX}; i++) vFacadeOpen = max(vFacadeOpen, 1.0 - step(${OPEN_AT_RADIUS}, distance(instanceMatrix[3].xz, facadeOpenAt[i])));
+${facadeOpenLoop("vFacadeOpen", "instanceMatrix[3].xz")}
 #endif`;
 const FACADE_SEED = /* glsl */ `
 vFacadeRegion = ${SURFACE_REGION_ATTRIBUTE}.xy;${FACADE_LIFT}${FACADE_METRES}
