@@ -9,6 +9,8 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { OFF_MENU } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
+import { plainMaterials } from "./prefab-materials.test-util.ts";
+import { prefabParts } from "./prefabs.ts";
 import { STREET_SIGN } from "./prefabs-street.ts";
 import { bladeFaces, nameAtlas, paintNames, streetSignsOf, type NameAtlas, type NamePainter } from "./street-name-blades.ts";
 import { TrackArt } from "./track-art.ts";
@@ -93,11 +95,12 @@ describe("given two street signs, one turned, sharing a street", () => {
 
 describe("given the open world's course drawn", () => {
   // mutation: sed -i 's/    if (this.streetNames !== null) this.add(this.streetNames.mesh, { kind: "prop", prefab: PREFAB.streetSign }, false);//' src/game/present/track-art.ts
-  it("when its art is built, then every kit piece is drawn by one instanced mesh per kind, and the street names by one mesh of four faces a sign", () => {
+  it("when its art is built, then every kit piece is drawn by one instanced mesh per part of its prefab, and the street names by one mesh of four faces a sign", () => {
     stubBrowser();
     const track = new Track(OFF_MENU.find((json) => parseTrack(json).id === OPENWORLD_ID)!);
     const course = placeCourse(track);
     const art = new TrackArt(track, course.placed, new WorldStage(new THREE.Scene()), course.drawn);
+    const plain = plainMaterials(new THREE.MeshBasicMaterial());
     const kinds = [PREFAB.bench, PREFAB.bikeRack, PREFAB.litterBin, PREFAB.parkingMeter, PREFAB.hydrant, PREFAB.cafeSet, PREFAB.busShelter, PREFAB.busStopSign, PREFAB.streetSign];
     const meshes = new Map<string, THREE.Mesh[]>();
     art.group.traverse((object) => {
@@ -110,8 +113,8 @@ describe("given the open world's course drawn", () => {
       const placedCount = course.placed.filter((prop) => prop.prefab === kind).length;
       const drawn = (meshes.get(`prop:${kind}`) ?? []).filter((mesh): mesh is THREE.InstancedMesh => mesh instanceof THREE.InstancedMesh);
       expect(placedCount, `${kind} placed`).toBeGreaterThan(0);
-      expect(drawn.length, `${kind}'s instanced meshes`).toBe(1);
-      expect(drawn[0]!.count, `${kind}'s instances`).toBe(placedCount);
+      expect(drawn.length, `${kind}'s instanced meshes: one a part of its prefab (a bike rack's spokes are its second)`).toBe(prefabParts(kind, plain).length);
+      for (const mesh of drawn) expect(mesh.count, `${kind}'s instances`).toBe(placedCount);
     }
     const names = (meshes.get(`prop:${PREFAB.streetSign}`) ?? []).filter((mesh) => !(mesh instanceof THREE.InstancedMesh));
     expect(names.length, "the street names' mesh").toBe(1);

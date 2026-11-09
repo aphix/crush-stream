@@ -8,8 +8,8 @@ import { prefabParts } from "./prefabs.ts";
 
 /** Slack (m) on a drawn extent: float rounding of the fitted vertices. */
 const SLACK = 1e-5;
-/** A lamp's old arm reaches this far (m) from its post: no acorn lamp does. */
-const ARM_REACH = 0.3;
+/** A lamp's arm hangs its head at least this far (m) off its post (0.13 m measured): the acorn lamp's globe stands over its post. */
+const ARM_OFFSET = 0.1;
 
 /** The prefab's parts: the pole in vertex colours, then the globe and the light pool on the scene's own shared lamp materials. */
 function partsOf(id: typeof PREFAB.lamp | typeof PREFAB.acornLamp): { pole: THREE.BufferGeometry; globe: THREE.BufferGeometry; pool: THREE.BufferGeometry; shared: THREE.Material[] } {
@@ -21,6 +21,12 @@ function partsOf(id: typeof PREFAB.lamp | typeof PREFAB.acornLamp): { pole: THRE
 function boundsOf(geometry: THREE.BufferGeometry): THREE.Box3 {
   geometry.computeBoundingBox();
   return geometry.boundingBox!;
+}
+
+/** Where a head's middle stands off its post along x (m): the arm of a lamp, whichever way the fit turns it. */
+function offsetOf(geometry: THREE.BufferGeometry): number {
+  const bounds = boundsOf(geometry);
+  return (bounds.min.x + bounds.max.x) / 2;
 }
 
 describe("given the acorn lamp the open world stands on its streets and in its park", () => {
@@ -35,8 +41,8 @@ describe("given the acorn lamp the open world stands on its streets and in its p
     expect(whole.min.y, "its foot (m)").toBeGreaterThanOrEqual(-SLACK);
     expect(Math.max(-whole.min.x, whole.max.x, -whole.min.z, whole.max.z), "its reach from the post (m)").toBeLessThanOrEqual(ACORN_LAMP.globeRadius + SLACK);
     expect(boundsOf(acorn.globe).min.y, "the globe hangs over the collar (m)").toBeGreaterThan(ACORN_LAMP.collarBottom);
-    const armReach = Math.max(-boundsOf(arm.pole).min.x, boundsOf(arm.pole).max.x, -boundsOf(arm.globe).min.x, boundsOf(arm.globe).max.x);
-    expect(armReach, "the other courses' lamp keeps its arm (m)").toBeGreaterThan(ARM_REACH);
+    expect(Math.abs(offsetOf(acorn.globe)), "the acorn globe stands over its post (m)").toBeLessThan(SLACK);
+    expect(Math.abs(offsetOf(arm.globe)), "the other courses' lamp keeps its arm: its head hangs off the post (m)").toBeGreaterThan(ARM_OFFSET);
   });
 
   // mutation: sed -i 's/    return withPool ? addPool(g, 0) : g;/    return withPool ? addPool(g, 0.15) : g;/' src/game/present/engine-world.ts

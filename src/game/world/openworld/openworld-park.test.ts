@@ -102,7 +102,10 @@ describe("given the park's dressing", () => {
   it("when the course's ground is read, then the plaza and every path are paved and the lawn beside them is grass", () => {
     const ground = track.ground();
     expect(ground.surfaceAt(block.centreX, block.centreZ), "the plaza's middle").toBe(SURFACE.cobble);
-    expect(ground.surfaceAt(block.centreX + PLAZA_RADIUS - 0.2, block.centreZ + PLAZA_RADIUS - 0.2 - 1.5), "inside the plaza's edge").toBe(SURFACE.cobble);
+    // A point 0.2 m inside the plaza's edge on its diagonal (the paved circle is a 32-sided polygon: its flats stand 0.5 % inside the radius).
+    const inside = (PLAZA_RADIUS - 0.2) * Math.SQRT1_2;
+    expect(ground.surfaceAt(block.centreX + inside, block.centreZ + inside), "inside the plaza's edge").toBe(SURFACE.cobble);
+    expect(ground.surfaceAt(block.centreX + (PLAZA_RADIUS + 0.4) * Math.SQRT1_2, block.centreZ + (PLAZA_RADIUS + 0.4) * Math.SQRT1_2), "outside the plaza's edge").toBe(SURFACE.grass);
     expect(ground.surfaceAt(block.centreX + 12, block.centreZ), "the east-west path").toBe(SURFACE.cobble);
     for (const x of crossXs) expect(ground.surfaceAt(x, block.centreZ - 14), `the north-south path at x ${x.toFixed(1)}`).toBe(SURFACE.cobble);
     expect(ground.surfaceAt(block.centreX + 12, block.centreZ - 10), "the lawn").toBe(SURFACE.grass);
