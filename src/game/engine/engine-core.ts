@@ -10,7 +10,7 @@ import { PistonRig } from "../scenes/piston-rig.ts";
 import { PistonBank } from "../present/engine-pistons.ts";
 import { DoorRig, type RamShot } from "../scenes/door-rig.ts";
 import { DoorRam } from "../present/engine-doors.ts";
-import { INITIAL_HUD, type LookAtHud } from "../hud/hud-store.ts";
+import { INITIAL_HUD, type ChaseHud, type LookAtHud } from "../hud/hud-store.ts";
 import { beginImpact, FUDGE_GAP, fudgeStrength, holdForThrow, pairEta, phaseClock, struck } from "../match/phase.ts";
 import { IMPACT_MIN } from "../match/highlights.ts";
 import { newWorld } from "./world-step.ts";
@@ -206,6 +206,10 @@ export abstract class EngineCore {
   }
   /** The look-at panel's text for what the eye is on (`CrashHudState.lookAt`); null while it rests on nothing. The open world's crowd answers it. */
   protected lookAtText(): LookAtHud | null {
+    return null;
+  }
+  /** The pursuit strip's numbers for the player's car in the open world (`CrashHudState.bust`); null while no patrol car chases it. */
+  protected bustText(): ChaseHud | null {
     return null;
   }
   /** The open world's Auto camera is the view. */

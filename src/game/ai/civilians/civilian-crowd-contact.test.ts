@@ -3,7 +3,7 @@ import { launch, pooledCar } from "../../contact/crash-scenarios.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import { DECISION_HZ, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
-import { BODY_GAP, HARD_DISTANCE, MAX_OFFSET, WALKER_BEARING_STEPS, WALKER_PUSH_DISTANCE } from "./civilian-crowd-constants.ts";
+import { BODY_GAP, HARD_DISTANCE, MAX_OFFSET, PUSH_LOCKOUT_SECONDS, WALKER_BEARING_STEPS, WALKER_PUSH_DISTANCE } from "./civilian-crowd-constants.ts";
 import { PACE, people, type Push, pushesIn, sendAlong, streetEdge } from "./civilian-crowd-contact.test-util.ts";
 import { FRAME_SECONDS, newCrowd, stepUntilShown } from "./civilian-crowd.test-util.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
@@ -152,7 +152,7 @@ describe("given a civilian walking along a street and a car driving beside them 
     const pose = new LegPose();
     launch(car, 0, 0, yaw, EDGE_DIR_X * PACE, EDGE_DIR_Z * PACE);
     let struck = 0;
-    for (let seconds = FRAME_SECONDS; seconds < EDGE.length / PACE; seconds += FRAME_SECONDS) {
+    for (let seconds = FRAME_SECONDS; seconds < Math.min(EDGE.length / PACE, PUSH_LOCKOUT_SECONDS - 1); seconds += FRAME_SECONDS) {
       if (legPose(crowd.state, walker, seconds, pose)) car.group.position.set(pose.x - rightX * reachRight, car.group.position.y, pose.z - rightZ * reachRight);
       crowd.step(seconds, [car], true);
       struck += crowd.takeStrikes().length;

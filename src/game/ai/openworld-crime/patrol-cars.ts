@@ -27,6 +27,9 @@ export interface PatrolCarPorts {
   carSnap(index: number): AiCar | null;
   /** Hands traffic car `index` to `driver` (null: back to its own); false for a car that is not the traffic's (the player's). */
   takeTraffic(index: number, driver: CarDriver | null): boolean;
+  /** Traffic car `index` is chased by the leased car `chaserHandle`: its driver runs as a racer evades a cop until `endEvade`; false for a car that is not on a street trip of the traffic's (the player's). */
+  evade(index: number, chaserHandle: number): boolean;
+  endEvade(index: number): void;
   /** The resident at the wheel of car `index`, -1 for none (the player). */
   driverOf(index: number): number;
 }
@@ -107,6 +110,28 @@ export class PatrolCars {
     }
   }
 
+  /**
+   * The pursuit strip's numbers for traffic car `carIndex` (a human's, whose hold is `playerBustSeconds`): how many patrol cars chase it, and the longest unbroken hold they have run on it as a share of the
+   * bust hold (`hold`) and the seconds left of it (`left`): the race's own rule, `BUST`. False, `out` untouched, when none chases it.
+   */
+  chaseOf(carIndex: number, out: { cops: number; hold: number; left: number }): boolean {
+    let cops = 0;
+    let held = 0;
+    let needed = this.playerBustSeconds;
+    for (let slot = 0; slot < MAX_PATROL_CARS; slot++) {
+      if (this.mode[slot] !== PATROL_MODE.pursuing || this.targetCar[slot] !== carIndex) continue;
+      cops++;
+      if (this.heldFor[slot]! < held) continue;
+      held = this.heldFor[slot]!;
+      needed = this.holdNeeded(slot);
+    }
+    if (cops === 0) return false;
+    out.cops = cops;
+    out.hold = Math.min(1, held / needed);
+    out.left = Math.max(0, needed - held);
+    return true;
+  }
+
   /** Whether a leased patrol car on the road within `range` m of (x, z) sees it (`lineOfSight` null: every line is clear). */
   sees(x: number, z: number, range: number, lineOfSight: LineOfSight | null): boolean {
     for (let slot = 0; slot < MAX_PATROL_CARS; slot++) {
@@ -179,6 +204,7 @@ export class PatrolCars {
     const cop = this.ports.snap(this.handle[slot]!);
     const gap = hypot2(offender.x - cop.x, offender.z - cop.z);
     if (this.hothead[slot] === 0) this.followStreets(slot, offender, gap, seconds);
+    if (this.yieldState[slot] === YIELD.none) this.ports.evade(this.targetCar[slot]!, this.handle[slot]!);
     if (this.yieldState[slot] === YIELD.none && gap <= YIELD_DISTANCE) this.yieldState[slot] = this.ports.takeTraffic(this.targetCar[slot]!, this.stopDriver) ? YIELD.stopping : YIELD.refused;
     this.holdSlow(slot, offender, gap, dt);
     this.farFor[slot] = gap > CAR_LOST_DISTANCE ? this.farFor[slot]! + dt : 0;
@@ -186,16 +212,22 @@ export class PatrolCars {
     else if (this.farFor[slot]! >= CAR_LOST_SECONDS || seconds - this.since[slot]! > CAR_CHASE_GIVE_UP_SECONDS) this.linger(slot, seconds, CAR_LINGER_SECONDS);
   }
 
-  /** A careful chase drives the streets to the kerb nearest where the offender will be, re-aimed every `REDIRECT_SECONDS`; within `CLOSE_PURSUIT_DISTANCE` this driver takes the wheel, and gives it back once the offender is `CHASE_RESUME_DISTANCE` off again. */
+  /**
+   * A careful chase drives the streets to the kerb nearest where the offender will be, re-aimed every `REDIRECT_SECONDS` and at once when the car has come to its space. Parked within `BUST.near` of the offender it
+   * waits (the bust hold runs); come to a stop `CLOSE_PURSUIT_DISTANCE` m or less from one that is not that near (it left the road), this driver takes the wheel for the last metres, and gives it back once the
+   * offender is `CHASE_RESUME_DISTANCE` off.
+   */
   private followStreets(slot: number, offender: AiCar, gap: number, seconds: number): void {
     const handle = this.handle[slot]!;
-    if (this.wheel[slot] === 0 && gap <= CLOSE_PURSUIT_DISTANCE) {
+    const arrived = this.wheel[slot] === 0 && this.ports.arrived(handle);
+    if (arrived && gap <= CLOSE_PURSUIT_DISTANCE && gap > BUST.near) {
       this.wheel[slot] = 1;
       this.ports.setDriver(handle, this.drivers[slot]!);
       return;
     }
+    if (arrived && gap <= BUST.near) return;
     if (this.wheel[slot] === 1 && gap <= CHASE_RESUME_DISTANCE) return;
-    if (seconds < this.redirectAt[slot]! && !this.ports.arrived(handle)) return;
+    if (seconds < this.redirectAt[slot]! && !arrived) return;
     this.redirectAt[slot] = seconds + REDIRECT_SECONDS;
     if (!this.ports.redirect(handle, offender.x + offender.vx * CHASE_LEAD_SECONDS, offender.z + offender.vz * CHASE_LEAD_SECONDS)) return;
     this.wheel[slot] = 0;
@@ -222,6 +254,7 @@ export class PatrolCars {
     this.mode[slot] = PATROL_MODE.lingering;
     this.lingerUntil[slot] = seconds + forSeconds;
     this.ports.setSirens(this.handle[slot]!, false);
+    if (this.targetCar[slot]! >= 0) this.ports.endEvade(this.targetCar[slot]!);
   }
 
   /** The car is let go; a car it held at the roadside goes back to its own driving. */

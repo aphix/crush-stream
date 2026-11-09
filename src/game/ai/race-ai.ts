@@ -68,7 +68,7 @@ const SCAN = 18;
 /** `SCAN` and `HUNT` hold at up to this speed (m/s), the field's pace they were tuned at, and stretch with speed above it. */
 const PACE = 18;
 /** Two cars closer than this sideways (m) share a line. */
-const LINE_W = 2.4;
+export const LINE_W = 2.4;
 /** Lateral room (m) kept between the planned line and the road edge. */
 const EDGE = 1.4;
 /** Lane change rate (m/s). */

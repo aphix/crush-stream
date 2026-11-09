@@ -65,9 +65,9 @@ export const BOLLARD_SPOTS: readonly (readonly [number, number])[] = [
 export const DRAIN_FROM_CORNER = 2.5;
 export const DRAIN_PAST_CURB = 0.35;
 
-/** A share of the rowhomes have steel cellar doors in the sidewalk before the house: beside the stoop (this far, m, from the door to the doors' middle, past the bay's flank), their near edge this far (m) past the property line, clear of the bay's foot. */
-export const CELLAR = { share: 0.3, along: 2, fromLine: 0.05 } as const;
-/** Seed of which rowhomes have cellar doors, and on which side of the stoop. */
+/** A share of the rowhomes have steel cellar doors in the sidewalk before the house: before the bay's corner nearest the stoop (where the shrubs of `openworld-greenery.ts` would stand: they keep clear of a door), their near edge this far (m) beyond the bay's front, so no door stands under the bay's solid. */
+export const CELLAR = { share: 0.3, gap: 0.1 } as const;
+/** Seed of which rowhomes have cellar doors. */
 export const CELLAR_SEED = 0x0ce11a;
 
 /** One piece of a business's frontage kit: what it is, where it stands along the face from the door (m, + toward the face's far end), its turn off facing the street (rad), and where in the furniture strip (0 at the curb, 1 at the clear path). */

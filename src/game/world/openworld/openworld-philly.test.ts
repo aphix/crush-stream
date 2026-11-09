@@ -23,12 +23,12 @@ const YARD_LEFT = 1;
 
 /** The lane paths: two points straight from the alley to the property line, the end joined to the sidewalk. */
 const lanePaths = lots.paths.filter((path) => path.points.length === 2 && path.joins.length === 1 && path.joins[0]!.side === LANE.face && path.points[0]![0] === path.points[1]![0]);
-const laneBlocks = plans.filter((plan) => !LANELESS_BLOCKS.some((block) => block.row === plan.row && block.column === plan.column));
+const laneBlocks = plans.filter((plan) => !plan.park && !LANELESS_BLOCKS.some((block) => block.row === plan.row && block.column === plan.column));
 
 describe("given the lanes through the blocks", () => {
   // mutation: sed -i 's/LANELESS_BLOCKS: readonly { row: number; column: number }\[\] = \[{ row: ROW.B, column: 2 }\];/LANELESS_BLOCKS: readonly { row: number; column: number }[] = [];/' src/game/world/openworld/openworld-programme.ts
   it("when the blocks are read, then every block but the park's and the garden's has one lane, from its alley to its south sidewalk, over a lot left bare of houses", () => {
-    expect(laneBlocks.length, "blocks with a lane").toBe(plans.length - 1);
+    expect(laneBlocks.length, "blocks with a lane").toBe(plans.length - 2);
     expect(lanePaths.length, "lane paths").toBe(laneBlocks.length);
     for (const plan of laneBlocks) {
       const lot = plan.lots.find((candidate) => candidate.face === LANE.face && candidate.index === LANE.at)!;
@@ -61,8 +61,9 @@ describe("given the lanes through the blocks", () => {
   it("when the two places beside a lane are read, then each shows its side wall to it: the one on its west its east side, the one on its east its west", () => {
     for (const plan of laneBlocks) {
       const lot = plan.lots.find((candidate) => candidate.face === LANE.face && candidate.index === LANE.at)!;
-      const west = playable.find((place) => place.interior !== undefined && Math.abs(place.x + place.width / 2 - lot.lot.x0) < SAME && Math.abs(place.z - (lot.house.z0 + lot.house.z1) / 2) < SAME);
-      const east = playable.find((place) => place.interior !== undefined && Math.abs(place.x - place.width / 2 - lot.lot.x1) < SAME && Math.abs(place.z - (lot.house.z0 + lot.house.z1) / 2) < SAME);
+      // a building's place has storeys, a roof or yard place none
+      const west = playable.find((place) => place.storeys > 0 && Math.abs(place.x + place.width / 2 - lot.lot.x0) < SAME && Math.abs(place.z - (lot.house.z0 + lot.house.z1) / 2) < SAME);
+      const east = playable.find((place) => place.storeys > 0 && Math.abs(place.x - place.width / 2 - lot.lot.x1) < SAME && Math.abs(place.z - (lot.house.z0 + lot.house.z1) / 2) < SAME);
       expect(west, `west of the lane in block ${plan.column},${plan.row}`).toBeDefined();
       expect(east, `east of the lane in block ${plan.column},${plan.row}`).toBeDefined();
       expect((west!.openSides ?? 0) & OPEN_SIDE.minusAcross, `${west!.name} shows its lane side`).not.toBe(0);

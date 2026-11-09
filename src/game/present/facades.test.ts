@@ -8,6 +8,8 @@ import { MAT } from "../kernel/material-ids.ts";
 import { TIME_OF_DAY } from "../match/types.ts";
 import { MARBLE, PREFABS } from "../world/catalog.ts";
 import { PREFAB, ROOFLINE, TRACK_ID } from "../world/constants.ts";
+import { isOpenStyle, shopGroundOf } from "../world/openworld/facade-windows.ts";
+import { BLOCK_HEIGHT, buildingHeight, CORNICE_DEPTH, DEFAULT_STOREYS } from "../world/openworld/interior-kinds.ts";
 import { placeCourse } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
@@ -94,6 +96,7 @@ describe("given a building built in each facade style", () => {
     materials = makePrefabMaterials(raceTextures());
   });
 
+  // mutation: sed -i 's/  const corniceFoot = block(lines\[storeys\]!);/  const corniceFoot = block(lines[storeys]!) - 0.5;/' src/game/world/openworld/facade-windows.ts
   for (const style of STYLES) {
     it(`when a ${style} building is built, then each face reads its regions: the street face its ground layer, the cornice at the roofline, the stones where the style has them, a roof top`, () => {
       const [part] = prefabParts(PREFAB.building, materials, style);
@@ -126,7 +129,9 @@ describe("given a building built in each facade style", () => {
       expect(onSide.has(LAYER.ground), "a side wall runs its storeys to the ground").toBe(false);
       expect(onStreet.has(LAYER.quoin), "corner stones where the style has them").toBe(layers > LAYER.quoin);
       expect(corniceTop, "cornice top at the roofline").toBeCloseTo(ROOFLINE, 5);
-      expect(corniceTop - corniceBottom, "cornice height").toBeCloseTo(metres.cornice, 5);
+      // An open style's cornice is the interior's own depth in the block's metres (the table lays the bands by the storeys), where the others' is the packed picture's.
+      const corniceMetres = isOpenStyle(style) ? (CORNICE_DEPTH * BLOCK_HEIGHT) / buildingHeight(DEFAULT_STOREYS, shopGroundOf(style)) : metres.cornice;
+      expect(corniceTop - corniceBottom, "cornice height").toBeCloseTo(corniceMetres, 5);
       expect(position.count / 3, `${position.count / 3} triangles`).toBeLessThanOrEqual(BUILDING_TRIANGLES);
       expect(part!.material, "its style's shared material").toBe(materials.facades[style]);
     });

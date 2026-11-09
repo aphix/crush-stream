@@ -5,6 +5,7 @@ import type { SightField } from "../present/openworld-sight.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
+import type { ChaseHud } from "../hud/hud-store.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { SignSight } from "../present/openworld-signs.ts";
 import type { OpenWorldMap, Place } from "../world/openworld/walk-graph.ts";
@@ -37,6 +38,9 @@ import { EVENT_LOG_CAPACITY } from "../ai/civilians/civilian-crowd-constants.ts"
 import { MAX_CARS } from "../scenes/fleet.ts";
 
 const NO_EVENTS = new Float64Array(0);
+/** The pursuit strip prints seconds to a tenth and its meter moves in hundredths: finer changes are not a change. */
+const BUST_LEFT_STEPS = 10;
+const BUST_HOLD_STEPS = 100;
 
 /** A player on foot: where he stands and his velocity (m, m/s). */
 type FootBody = { x: number; z: number; velocityX: number; velocityZ: number };
@@ -148,6 +152,8 @@ export class OpenWorldDirector {
   private hasHeard = false;
   private readonly ray = new LookRay();
   private text: LookText | null = null;
+  private bust: ChaseHud | null = null;
+  private readonly bustScratch: ChaseHud = { cops: 0, hold: 0, left: 0 };
   private lookAcc = 0;
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
   private readonly openers: DoorOpeners = { poses: null, walker: null };
@@ -224,6 +230,24 @@ export class OpenWorldDirector {
   /** What the look-at panel shows, null when the eye rests on nothing. */
   lookAt(): LookText | null {
     return this.text;
+  }
+
+  /**
+   * The pursuit strip for the player's car `carIndex` while patrol cars chase it: how many, and the bust hold they have run (the race's own rule). The same object while its figures read the same (the strip's
+   * tenth of a second and hundredth of a hold), so the HUD sees no change; null while none chases it.
+   */
+  bustOf(carIndex: number): ChaseHud | null {
+    if (this.law === null || !this.law.chaseOf(carIndex, this.bustScratch)) {
+      this.bust = null;
+      return null;
+    }
+    const next = this.bustScratch;
+    const kept = this.bust;
+    const left = Math.round(next.left * BUST_LEFT_STEPS) / BUST_LEFT_STEPS;
+    const hold = Math.round(next.hold * BUST_HOLD_STEPS) / BUST_HOLD_STEPS;
+    if (kept !== null && kept.cops === next.cops && kept.left === left && kept.hold === hold) return kept;
+    this.bust = { cops: next.cops, hold, left };
+    return this.bust;
   }
 
   /** A sim step of `dt` s: the host's and the solo player's crowd takes it. */
@@ -309,6 +333,7 @@ export class OpenWorldDirector {
     this.auto = null;
     this.crowd = null;
     this.text = null;
+    this.bust = null;
   }
 
   /** The player on foot is a body the crowd makes room round and can shove, as the ragdoll world's step has him: the same for every frame rate. */

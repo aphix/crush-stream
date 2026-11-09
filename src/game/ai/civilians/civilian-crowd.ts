@@ -138,7 +138,7 @@ export class CivilianCrowd {
   private readonly ambulanceZ: Float32Array;
   private lastCrashSeconds = -Infinity;
   private lastDangerSeconds = -Infinity;
-  private readonly reading: ActivityReading = { code: ACTIVITY.none, sinceSeconds: 0, leftSeconds: ACTIVITY_OPEN_ENDED, partner: NOT_A_CIVILIAN, surfaceY: 0, placed: false, x: 0, z: 0, yaw: 0 };
+  private readonly reading: ActivityReading = { code: ACTIVITY.none, sinceSeconds: 0, leftSeconds: ACTIVITY_OPEN_ENDED, partner: NOT_A_CIVILIAN, surfaceY: 0, placed: false, fixed: false, x: 0, z: 0, yaw: 0 };
   private readonly crimeDesk: CrimeDesk;
   private readonly crimesDue: Int32Array;
 
@@ -375,7 +375,7 @@ export class CivilianCrowd {
       }
       shown[resident] = 1;
       present[resident] = 1;
-      fixed[resident] = reading.placed || atCar ? 1 : 0;
+      fixed[resident] = reading.fixed || atCar ? 1 : 0;
       look[resident] = lookOf(state.seed, ints, intBase);
       activity[resident] = reading.code;
       activityClock[resident] = reading.sinceSeconds;

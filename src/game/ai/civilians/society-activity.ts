@@ -38,6 +38,8 @@ export class ActivityReading {
   partner = -1;
   surfaceY = 0;
   placed = false;
+  /** A placed body that must not give way (seated, at a counter, fighting): not one standing at a door or flinching, which the crowd keeps a body's width from the next. */
+  fixed = false;
   x = 0;
   z = 0;
   yaw = 0;
@@ -108,6 +110,7 @@ function readFight(state: CityState, resident: number, since: number, out: Activ
   const inSlot = since % FIGHT_SLOT_SECONDS;
   const side = starter ? -1 : 1;
   out.placed = true;
+  out.fixed = true;
   out.x = intAt(state, resident, RESIDENT_INT.fightX) / CENTIMETRES_PER_METRE + (civilianPair ? side * FIGHT_HALF_GAP : 0);
   out.z = intAt(state, resident, RESIDENT_INT.fightZ) / CENTIMETRES_PER_METRE;
   out.yaw = civilianPair ? -side * QUARTER_TURN : bearingYaw(intAt(state, resident, RESIDENT_INT.fightBearing));
@@ -121,6 +124,7 @@ function readSitting(state: CityState, place: number, seat: number, since: numbe
   const seats = state.map.places[place]!.seats!;
   const at = seat * SEAT_STRIDE;
   out.placed = true;
+  out.fixed = true;
   out.x = seats[at]!;
   out.z = seats[at + 1]!;
   out.yaw = seats[at + 2]!;
@@ -211,6 +215,7 @@ function readIndoors(state: CityState, resident: number, place: number, since: n
   const worker = intAt(state, resident, RESIDENT_INT.work) === place;
   if (worker && counter !== undefined && counter.length >= 2 * COUNTER_STRIDE) {
     out.placed = true;
+    out.fixed = true;
     out.x = counter[COUNTER_STRIDE]!;
     out.z = counter[COUNTER_STRIDE + 1]!;
     out.yaw = counter[COUNTER_STRIDE + 2]!;
@@ -221,6 +226,7 @@ function readIndoors(state: CityState, resident: number, place: number, since: n
   if (worker || !isCounterVenue(venue)) return;
   if (counter !== undefined && counter.length >= COUNTER_STRIDE && since < ACTIVITY_SECONDS.buy) {
     out.placed = true;
+    out.fixed = true;
     out.x = counter[0]!;
     out.z = counter[1]!;
     out.yaw = counter[2]!;
@@ -267,6 +273,7 @@ export function readActivity(state: CityState, resident: number, seconds: number
   out.partner = -1;
   out.surfaceY = 0;
   out.placed = false;
+  out.fixed = false;
   const base = resident * RESIDENT_INT_STRIDE;
   const tick = seconds * DECISION_HZ;
   if (state.ints[base + RESIDENT_INT.alive] === 0 || state.ints[base + RESIDENT_INT.species] !== SPECIES.person) return;

@@ -127,6 +127,10 @@ export const CHASE_LEAD_SECONDS = 2;
 export const CAR_AVOID_LOOK = 25;
 export const CAR_AVOID_SWATH = 2.2;
 export const CAR_AVOID_GAP = 5;
+/** The patrol driver plans its stop behind a car with this deceleration (m/s2): the traffic's own comfortable stop (`STOP_BRAKE`), which the brake's ramp reaches without overshooting the gap. */
+export const CAR_AVOID_DECEL = 3.2;
+/** Wanting to stand still under this speed (m/s), the patrol car holds the brake: the race brake's latch does not bite within about 1.5 m/s of its target, so a car would coast on. */
+export const HOLD_BRAKE_SPEED = 2.5;
 /** A patrol car's siren makes a traffic car it is within this many metres of pull over, and stop. */
 export const YIELD_DISTANCE = 35;
 /** A busted driver's car stays stopped this long (s) before the traffic has it back. */

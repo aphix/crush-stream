@@ -30,6 +30,8 @@ export const STRIDE_RADIANS_PER_METRE = (2 * Math.PI) / STRIDE_METRES;
 export const LOOK = { hashMask: 0x1fffffff, womanShift: 29, speciesShift: 30, salt: 0x2545f491, hashShift: 15 } as const;
 /** The who-hash with every bit set is no civilian's: a foot cop's look word, which `dressOfLook` dresses in uniform. */
 export const POLICE_HASH = LOOK.hashMask;
+/** 2^32: an unsigned 32-bit hash over it is a unit in [0, 1). */
+export const HASH_RANGE = 4294967296;
 
 /** Residents of the playable blocks by device: a phone, a desktop, a desktop at the ultra FX tier (the plan's 60 / 150 / 300). */
 export const POPULATION = [60, 150, 300] as const;

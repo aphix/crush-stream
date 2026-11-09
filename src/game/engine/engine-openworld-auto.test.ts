@@ -22,12 +22,14 @@ const FRAME_S = 1 / 30;
 const MAP = buildFixtureMap();
 /** The crowd is let out for this long (crowd seconds) after the first person shows, so a good number are out. */
 const MORNING_S = 40;
-const SIZES = { residents: 60, cops: 0, cars: 4, events: 512 };
+/** The crowd's rows are its capacity (population and animals), not its population: the scan is sized with `poses.count`. */
+const POPULATION = 60;
+const SIZES = { residents: POPULATION, cops: 0, cars: 4, events: 512 };
 const DRIVING_MPS = 12;
 
 /** A crowd on the fixture map with people out; its crowd clock at that point. */
 function morning(): CivilianCrowd {
-  const crowd = newCrowd(MAP, SIZES.residents);
+  const crowd = newCrowd(MAP, POPULATION);
   const start = stepUntilShown(crowd);
   for (let seconds = start; seconds < start + MORNING_S; seconds += FRAME_S) crowd.step(seconds, [], true);
   return crowd;
@@ -50,7 +52,7 @@ function autoOver(crowd: CivilianCrowd | null, fleet: Fleet = { cars: [], reside
     ambulanceState: () => fleet.ambulance.state,
     isPlayerCar: (carIndex) => fleet.yours.has(carIndex),
   };
-  const auto = new OpenWorldAuto(world, SIZES, SEED);
+  const auto = new OpenWorldAuto(world, { ...SIZES, residents: crowd?.poses.count ?? SIZES.residents }, SEED);
   auto.begin();
   return auto;
 }
@@ -123,9 +125,9 @@ describe("given the Auto camera over a street with cars and nobody on the paveme
 });
 
 const SCENES = [
-  { it: "when a driver is getting out of his parked car, then he is the subject, and the bubble says so", activity: ACTIVITY.carOut, line: "getting out of a car" },
-  { it: "when a witness is on the phone to the police, then she is the subject, and the bubble says so", activity: ACTIVITY.phoneCall, line: "on the phone to the police" },
-  { it: "when someone kneels by a person hurt, then he is the subject, and the bubble says so", activity: ACTIVITY.kneel, line: "kneeling by someone hurt" },
+  { it: "when a driver is getting out of his parked car, then he is the subject, and the bubble says so", activity: ACTIVITY.carOut },
+  { it: "when a witness is on the phone for an ambulance, then she is the subject, and the bubble says so", activity: ACTIVITY.phoneCall },
+  { it: "when someone kneels by a person hurt, then he is the subject, and the bubble says so", activity: ACTIVITY.kneel },
 ] as const;
 
 describe("given the Auto camera over a crowd where one scene is going on", () => {
@@ -139,7 +141,7 @@ describe("given the Auto camera over a crowd where one scene is going on", () =>
       auto.step(FRAME_S);
       expect(out.length, "civilians out").toBeGreaterThan(3);
       expect(auto.subject?.id, "the subject: the one in the scene").toBe(actor);
-      expect(auto.text()?.lines[0], "the first line of the bubble").toBe(scene.line);
+      expect(auto.text()?.lines[0], "the first line of the bubble: the activity's own words").toBe(activityLine(scene.activity));
     });
   }
 });

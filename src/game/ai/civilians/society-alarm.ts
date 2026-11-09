@@ -27,9 +27,8 @@ import { residentDraws } from "./civilian-draws.ts";
 import { legPose } from "./civilian-leg.ts";
 import { EVENT_CODE } from "./civilian-names.ts";
 import { standOutside } from "./civilian-plan.ts";
-import { residentName, type CityState } from "./civilian-state.ts";
+import { logHistory, markDirty, residentName, setVisitMood, type CityState } from "./civilian-state.ts";
 import { residentNeuroticism } from "./civilian-temperament.ts";
-import { noteEvent } from "./society-day.ts";
 import { fleeHome, isDwelling, isFreePerson, nearestPlaceTo } from "./society-reactions.ts";
 import { isOutdoorPurpose } from "./society-venues.ts";
 
@@ -48,6 +47,13 @@ function seeingFrom(state: CityState, resident: number, tick: number): number {
     return SEES.standing;
   }
   return legPose(state, resident, tick / DECISION_HZ, state.pose) ? SEES.walking : SEES.nothing;
+}
+
+/** A line in the resident's log for what they saw or did, and its mood unless an earlier event's still holds (`setVisitMood`); the row goes out in the answer. */
+function noteSight(state: CityState, resident: number, code: number, subject: number, tick: number): void {
+  logHistory(state, resident, code, subject, tick);
+  setVisitMood(state, resident, code, tick);
+  markDirty(state, resident);
 }
 
 /** The step of `ALARM_DELAY_STEPS_PER_SECOND` a person of neuroticism `neuroticism` starts reacting on, `jitter` (a unit draw) moving it a share of the span: the jumpiest first, the calmest last. */
@@ -88,7 +94,7 @@ export function alarmAt(state: CityState, x: number, z: number, tick: number, vi
     state.ints[base + RESIDENT_INT.alarmX] = Math.round(x * CENTIMETRES_PER_METRE);
     state.ints[base + RESIDENT_INT.alarmZ] = Math.round(z * CENTIMETRES_PER_METRE);
     state.ints[base + RESIDENT_INT.alarmVictim] = victim;
-    noteEvent(state, resident, EVENT_CODE.sawDanger, near, tick);
+    noteSight(state, resident, EVENT_CODE.sawDanger, near, tick);
     if (sees === SEES.walking) continue;
     if (draw() < NEURO_INDOORS_FLOOR + NEURO_INDOORS_SLOPE * neuroticism) fleeHome(state, resident, tick);
     else standOutside(state, resident, tick, PURPOSE.lookOn, Math.round(lookOnMinutes * (NEURO_LOOK_ON_FLOOR + neuroticism) * TICKS_PER_GAME_MINUTE));
@@ -124,5 +130,5 @@ export function callAmbulanceFor(state: CityState, victim: number, tick: number)
   state.ints[base + RESIDENT_INT.alarmZ] = Math.round(z * CENTIMETRES_PER_METRE);
   state.ints[base + RESIDENT_INT.alarmVictim] = victim;
   standOutside(state, caller, tick, PURPOSE.callAmbulance, CALL_MINUTES * TICKS_PER_GAME_MINUTE);
-  noteEvent(state, caller, EVENT_CODE.calledAmbulance, residentName(state, victim), tick);
+  noteSight(state, caller, EVENT_CODE.calledAmbulance, residentName(state, victim), tick);
 }

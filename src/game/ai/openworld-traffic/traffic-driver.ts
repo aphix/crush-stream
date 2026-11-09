@@ -9,7 +9,7 @@ import { MAX_CARS } from "../../scenes/fleet.ts";
 import { Backoff } from "../cop-brain.ts";
 import type { AiCar } from "../derby-ai.ts";
 import { Pedals } from "../pedals.ts";
-import { turnRate } from "../race-ai.ts";
+import { arcSpeed, LINE_W, turnRate } from "../race-ai.ts";
 import {
   ARRIVED_DISTANCE,
   ARRIVED_SPEED,
@@ -20,6 +20,12 @@ import {
   BRAKE_ON,
   BRAKE_SPAN,
   CAP_WINDOW,
+  CHASER_MARGIN,
+  FLEE_CORNER_SCALE,
+  FLEE_SPEED,
+  SWERVE_BEHIND,
+  SWERVE_LEFT,
+  SWERVE_RIGHT,
   CRUISE_SPEED,
   FOLLOW_BRAKE,
   FOLLOW_GAP,
@@ -89,8 +95,16 @@ export class TrafficDriver {
     return route.length - this.arc[id]! < ARRIVED_DISTANCE && speed < ARRIVED_SPEED;
   }
 
-  /** One step for car `self` on `route` (`seconds` the crowd clock, which the signals read). `urgent`: no signal holds it, and it drives faster. */
-  think(self: AiCar, route: TripRoute, cls: ClassStats, others: readonly AiCar[], seconds: number, dt: number, urgent: boolean): DriveInput {
+  /** How far (m) of `route` car `id` has left to drive, as of its last step. */
+  remaining(id: number, route: TripRoute): number {
+    return route.length - this.arc[id]!;
+  }
+
+  /**
+   * One step for car `self` on `route` (`seconds` the crowd clock, which the signals read). `urgent`: no signal holds it, and it drives faster. `chaser`: the patrol car after it, and it drives as a racer evades one
+   * (`RaceBrain`): gas on, no signal held, the corners taken harder (`arcSpeed`), and the line swung a car width clear of the chaser's when it is close behind.
+   */
+  think(self: AiCar, route: TripRoute, cls: ClassStats, others: readonly AiCar[], seconds: number, dt: number, urgent: boolean, chaser: AiCar | null = null): DriveInput {
     const out = clearDrive(this.out);
     const id = self.id;
     if (!self.alive) return out;
@@ -110,12 +124,15 @@ export class TrafficDriver {
     const along = self.vx * detSin(self.yaw) + self.vz * detCos(self.yaw);
     const reach = clamp(4 + 0.5 * speed, PURSUIT_SHORT, PURSUIT_LONG);
     this.aimSegment[id] = pointAtArc(route, arc + reach, this.aimSegment[id]!, this.aim);
-    const alpha = wrapPi(detAtan2(this.aim.x - self.x, this.aim.z - self.z) - self.yaw);
-    const turnMax = turnRate(cls, speed, SURFACES[SURFACE.asphalt]);
+    const swing = chaser === null ? 0 : this.swerveShift(self, chaser);
+    const alpha = wrapPi(detAtan2(this.aim.x + detCos(self.yaw) * swing - self.x, this.aim.z - detSin(self.yaw) * swing - self.z) - self.yaw);
+    const surface = SURFACES[SURFACE.asphalt];
+    const turnMax = turnRate(cls, speed, surface);
     out.steer = clamp((2 * Math.max(speed, 3) * detSin(alpha)) / reach / Math.max(0.2, turnMax), -1, 1);
-    let target = urgent ? URGENT_SPEED : CRUISE_SPEED;
-    target = Math.min(target, this.turnLimit(route, arc));
-    if (!urgent) target = Math.min(target, this.signalLimit(self, route, arc, along, seconds, dt, others));
+    let target = chaser !== null ? Math.min(FLEE_SPEED, cls.topSpeed) : urgent ? URGENT_SPEED : CRUISE_SPEED;
+    target = Math.min(target, this.turnLimit(route, arc, chaser !== null ? FLEE_CORNER_SCALE : 1));
+    if (chaser !== null) target = Math.min(target, arcSpeed(cls, reach, alpha, surface));
+    if (!urgent && chaser === null) target = Math.min(target, this.signalLimit(self, route, arc, along, seconds, dt, others));
     target = Math.min(target, this.leadLimit(self, route, arc, speed, others));
     target = Math.min(target, Math.sqrt(2 * STOP_BRAKE * Math.max(0, route.length - arc)));
     const stop = target < HELD_TARGET;
@@ -126,14 +143,30 @@ export class TrafficDriver {
     return out;
   }
 
-  /** The speed (m/s) the caps of the route points ahead allow here: each point's cap, reachable by braking at `STOP_BRAKE` from the distance. */
-  private turnLimit(route: TripRoute, arc: number): number {
+  /** The speed (m/s) the caps of the route points ahead allow here: each point's cap, reachable by braking at `STOP_BRAKE` from the distance; `scale` raises the caps and the braking (an evading driver takes turns harder). */
+  private turnLimit(route: TripRoute, arc: number, scale: number): number {
     let limit = Infinity;
     for (let point = this.projection.segment + 1; point < route.count && route.arc[point]! - arc <= CAP_WINDOW; point++) {
-      const cap = route.cap[point]!;
-      limit = Math.min(limit, Math.sqrt(cap * cap + 2 * STOP_BRAKE * Math.max(0, route.arc[point]! - arc)));
+      const cap = route.cap[point]! * scale;
+      limit = Math.min(limit, Math.sqrt(cap * cap + 2 * STOP_BRAKE * scale * Math.max(0, route.arc[point]! - arc)));
     }
     return limit;
+  }
+
+  /** How far (m) to the left (+) the aim swings off the lane's line to keep `LINE_W` and `CHASER_MARGIN` clear of a chaser close behind and in the car's lane (race-ai's rule); 0 when it is not. */
+  private swerveShift(self: AiCar, chaser: AiCar): number {
+    const forwardX = detSin(self.yaw);
+    const forwardZ = detCos(self.yaw);
+    const dx = chaser.x - self.x;
+    const dz = chaser.z - self.z;
+    const ahead = dx * forwardX + dz * forwardZ;
+    const side = dx * forwardZ - dz * forwardX;
+    if (ahead > 0 || ahead < -SWERVE_BEHIND || Math.abs(side) > LINE_W) return 0;
+    const away = side >= 0 ? -1 : 1;
+    const clear = LINE_W + CHASER_MARGIN;
+    let to = side + away * clear;
+    if (to > SWERVE_LEFT || to < -SWERVE_RIGHT) to = side - away * clear;
+    return clamp(to, -SWERVE_RIGHT, SWERVE_LEFT);
   }
 
   /** The speed (m/s) the next signal allows: unlimited on green, a stop at the bar on red, on yellow a stop when braking at `STOP_BRAKE_YELLOW` still makes it. */

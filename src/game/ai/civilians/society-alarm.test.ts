@@ -2,6 +2,8 @@ import { detAtan2, hypot2 } from "../../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import { ACTIVITY, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import {
+  ALARM_DELAY_MIN_SECONDS,
+  ALARM_DELAY_STEPS_PER_SECOND,
   ALARM_SIGHT,
   CALL_MINUTES,
   CENTIMETRES_PER_METRE,
@@ -12,9 +14,11 @@ import {
   LOOK_ON_CRASH_MINUTES,
   LOOK_ON_DOWNED_MINUTES,
   NEED,
+  NEURO_LOOK_ON_FLOOR,
   NEVER_TICK,
   NO_PLACE,
   PURPOSE,
+  RECOIL_CALM_SHARE,
   RECOIL_STEP_METRES,
   RESIDENT_INT,
   TICKS_PER_GAME_MINUTE,
@@ -26,6 +30,7 @@ import { historyLines } from "./civilian-mood.ts";
 import { sendResidentTo } from "./civilian-plan.ts";
 import type { CityState } from "./civilian-state.ts";
 import { ActivityReading, readActivity } from "./society-activity.ts";
+import { residentNeuroticism } from "./civilian-temperament.ts";
 import { newCast, societyMap, type Cast } from "./society-scenes.test-util.ts";
 import { intAt, placeIn, stageResident, withoutOtherCars } from "./society.test-util.ts";
 
@@ -89,17 +94,17 @@ describe("given forty people out at a door and a danger seen from a node thirty 
   it("when the reaction tick has not come, then nobody has reacted, and when it has, then most have, none across the city", () => {
     expect(hypot2(societyMap.places[FAR_PLACE]!.doorX - hazardX, societyMap.places[FAR_PLACE]!.doorZ - hazardZ), "metres from the hazard to the door across the city").toBeGreaterThan(ALARM_SIGHT);
     expect(quiet.length, "people alarmed the tick before").toBe(0);
-    expect(alarmed.length, "people alarmed at the reaction tick").toBeGreaterThan(24);
+    expect(alarmed.length, "people alarmed at the reaction tick").toBeGreaterThan(8);
     expect(alarmed.length, "people alarmed at the reaction tick").toBeLessThan(CROWD_SIZE);
     expect(intAt(state, across, RESIDENT_INT.alarmTick), "alarm tick of someone across the city").toBe(NEVER_TICK);
   });
 
-  it("when they have reacted, then most look on where they stand, some go in, each with a line, and the hazard and nobody hurt in their row", () => {
+  it("when they have reacted, then most look on where they stand (the jumpy longer), some go in, each with a line, and the hazard and nobody hurt in their row", () => {
     expect(lookingOn.length, "people looking on").toBeGreaterThan(0);
     expect(wentIn.length, "people who went in").toBeGreaterThan(0);
     expect(lookingOn.length + wentIn.length, "people who did either").toBe(alarmed.length);
     for (const resident of lookingOn) {
-      expect(intAt(state, resident, RESIDENT_INT.nextDecisionTick) - before, `ticks resident ${resident} looks on`).toBe(LOOK_ON_CRASH_MINUTES * TICKS_PER_GAME_MINUTE);
+      expect(intAt(state, resident, RESIDENT_INT.nextDecisionTick) - before, `ticks resident ${resident} looks on`).toBe(Math.round(LOOK_ON_CRASH_MINUTES * (NEURO_LOOK_ON_FLOOR + residentNeuroticism(state, resident)) * TICKS_PER_GAME_MINUTE));
       expect(intAt(state, resident, RESIDENT_INT.alarmX), "hazard x in centimetres").toBe(Math.round(hazardX * CENTIMETRES_PER_METRE));
       expect(intAt(state, resident, RESIDENT_INT.alarmZ), "hazard z in centimetres").toBe(Math.round(hazardZ * CENTIMETRES_PER_METRE));
       expect(intAt(state, resident, RESIDENT_INT.alarmVictim), "who was hurt").toBe(NO_PLACE);
@@ -107,19 +112,37 @@ describe("given forty people out at a door and a danger seen from a node thirty 
     }
   });
 
-  it("when someone looking on is drawn, then they flinch at first, a step back from the hazard and facing it, then stand looking at it where they stood", () => {
+  it("when the jumpy are compared with the calm, then those who looked up are the jumpier, and the jumpier were quicker to start, each on a step of their own", () => {
+    const notice = alarmed.map((resident) => residentNeuroticism(state, resident));
+    const ignored = people.filter((resident) => !alarmed.includes(resident)).map((resident) => residentNeuroticism(state, resident));
+    const mean = (values: readonly number[]): number => values.reduce((sum, value) => sum + value, 0) / values.length;
+    expect(mean(notice) - mean(ignored), "neuroticism of those who reacted over those who did not").toBeGreaterThan(0.05);
+    const steps = alarmed.map((resident) => intAt(state, resident, RESIDENT_INT.alarmDelay));
+    expect(new Set(steps).size, "different steps").toBe(alarmed.length);
+    for (const step of steps) expect(step, "a step within the span of delays").toBeGreaterThanOrEqual(Math.round(ALARM_DELAY_MIN_SECONDS * ALARM_DELAY_STEPS_PER_SECOND));
+    const meanNotice = mean(notice);
+    const meanStep = mean(steps);
+    const covariance = mean(alarmed.map((_, at) => (notice[at]! - meanNotice) * (steps[at]! - meanStep)));
+    expect(covariance, "covariance of neuroticism and the step they started on").toBeLessThan(0);
+  });
+
+  it("when someone looking on is drawn, then they stand as they were until they notice, then flinch, a step back from the hazard and facing it, then stand looking at it where they stood", () => {
     const watcher = lookingOn[0]!;
     const reading = new ActivityReading();
     const arrive = before / DECISION_HZ;
+    const noticed = arrive + intAt(state, watcher, RESIDENT_INT.alarmDelay) / ALARM_DELAY_STEPS_PER_SECOND;
     readActivity(state, watcher, arrive, reading);
+    expect([reading.code, reading.partner].join("/"), "activity before they notice").toBe([ACTIVITY.idle, -1].join("/"));
+    readActivity(state, watcher, noticed, reading);
     const [startX, startZ, startYaw] = [reading.x, reading.z, reading.yaw];
     const wanted = detAtan2(hazardX - startX, hazardZ - startZ);
-    expect([reading.code, reading.placed].join("/"), "activity as it begins").toBe([ACTIVITY.recoil, true].join("/"));
+    expect([reading.code, reading.placed].join("/"), "activity as they notice").toBe([ACTIVITY.recoil, true].join("/"));
     expect(startYaw, "yaw as they turn to it").toBeCloseTo(wanted, 5);
     const gapBefore = hypot2(hazardX - startX, hazardZ - startZ);
-    readActivity(state, watcher, arrive + ACTIVITY_SECONDS.recoil / 2, reading);
-    expect(hypot2(hazardX - reading.x, hazardZ - reading.z) - gapBefore, "metres further from it at the clip's middle").toBeCloseTo(RECOIL_STEP_METRES, 2);
-    readActivity(state, watcher, arrive + ACTIVITY_SECONDS.recoil + 0.1, reading);
+    readActivity(state, watcher, noticed + ACTIVITY_SECONDS.recoil / 2, reading);
+    const step = RECOIL_STEP_METRES * (RECOIL_CALM_SHARE + (1 - RECOIL_CALM_SHARE) * residentNeuroticism(state, watcher));
+    expect(hypot2(hazardX - reading.x, hazardZ - reading.z) - gapBefore, "metres further from it at the clip's middle").toBeCloseTo(step, 2);
+    readActivity(state, watcher, noticed + ACTIVITY_SECONDS.recoil + 0.1, reading);
     expect(reading.code, "activity once the flinch is over").toBe(ACTIVITY.idle);
     expect(hypot2(reading.x - startX, reading.z - startZ), "metres from where they began").toBeLessThan(0.001);
   });
@@ -139,7 +162,7 @@ describe("given thirty people walking out of the same door when a danger is seen
   const flinchers = alarmedOf(state, walkers, reactionTick);
 
   it("when the reaction tick has come, then most of them are alarmed and none looks on or goes in: a walker walks on", () => {
-    expect(flinchers.length, "walkers alarmed").toBeGreaterThan(15);
+    expect(flinchers.length, "walkers alarmed").toBeGreaterThan(5);
     for (const resident of flinchers) expect(intAt(state, resident, RESIDENT_INT.legPurpose), "what a walker is doing").toBe(NEED.errand);
   });
 
@@ -148,13 +171,18 @@ describe("given thirty people walking out of the same door when a danger is seen
     const reading = new ActivityReading();
     const pose = new LegPose();
     const now = reactionTick / DECISION_HZ;
-    legPose(state, walker, now + ACTIVITY_SECONDS.recoil / 2, pose);
+    const noticed = now + intAt(state, walker, RESIDENT_INT.alarmDelay) / ALARM_DELAY_STEPS_PER_SECOND;
+    readActivity(state, walker, now, reading);
+    expect([reading.code, reading.placed].join("/"), "activity before they notice").toBe([ACTIVITY.none, false].join("/"));
+    const middle = noticed + ACTIVITY_SECONDS.recoil / 2;
+    legPose(state, walker, middle, pose);
     const [onX, onZ] = [pose.x, pose.z];
-    readActivity(state, walker, now + ACTIVITY_SECONDS.recoil / 2, reading);
+    readActivity(state, walker, middle, reading);
     expect([reading.code, reading.placed].join("/"), "activity at the clip's middle").toBe([ACTIVITY.recoil, true].join("/"));
-    expect(hypot2(reading.x - onX, reading.z - onZ), "metres off the walk at the clip's middle").toBeCloseTo(RECOIL_STEP_METRES, 2);
-    expect(hypot2(hazardX - reading.x, hazardZ - reading.z) - hypot2(hazardX - onX, hazardZ - onZ), "metres further from the hazard").toBeGreaterThan(0.4);
-    readActivity(state, walker, now + ACTIVITY_SECONDS.recoil + 0.1, reading);
+    const step = RECOIL_STEP_METRES * (RECOIL_CALM_SHARE + (1 - RECOIL_CALM_SHARE) * residentNeuroticism(state, walker));
+    expect(hypot2(reading.x - onX, reading.z - onZ), "metres off the walk at the clip's middle").toBeCloseTo(step, 2);
+    expect(hypot2(hazardX - reading.x, hazardZ - reading.z) - hypot2(hazardX - onX, hazardZ - onZ), "metres further from the hazard").toBeGreaterThan(step * 0.8);
+    readActivity(state, walker, noticed + ACTIVITY_SECONDS.recoil + 0.1, reading);
     expect([reading.code, reading.placed].join("/"), "activity once it is over").toBe([ACTIVITY.none, false].join("/"));
   });
 });
@@ -225,9 +253,9 @@ describe("given someone run down at a door with nine people out at it", () => {
     expect(watchers.length, "people looking on").toBeGreaterThan(0);
     const reading = new ActivityReading();
     for (const resident of watchers) {
-      expect(intAt(state, resident, RESIDENT_INT.nextDecisionTick) - reactionTick, "ticks they look on").toBe(LOOK_ON_DOWNED_MINUTES * TICKS_PER_GAME_MINUTE);
+      expect(intAt(state, resident, RESIDENT_INT.nextDecisionTick) - reactionTick, "ticks they look on").toBe(Math.round(LOOK_ON_DOWNED_MINUTES * (NEURO_LOOK_ON_FLOOR + residentNeuroticism(state, resident)) * TICKS_PER_GAME_MINUTE));
       expect(intAt(state, resident, RESIDENT_INT.alarmVictim), "who was hurt").toBe(victim);
-      readActivity(state, resident, reactionTick / DECISION_HZ + 0.1, reading);
+      readActivity(state, resident, reactionTick / DECISION_HZ + intAt(state, resident, RESIDENT_INT.alarmDelay) / ALARM_DELAY_STEPS_PER_SECOND + 0.1, reading);
       expect(reading.partner, "who they look at").toBe(victim);
     }
   });
@@ -241,7 +269,7 @@ describe("given a crash at the bodega, and events the society cannot place", () 
     applyReactionEvents(cast.state, cast.tick + EVENT_LEAD_TICKS - 1);
     expect(alarmedOf(cast.state, people, cast.tick + EVENT_LEAD_TICKS).length, "people alarmed the tick before").toBe(0);
     applyReactionEvents(cast.state, cast.tick + EVENT_LEAD_TICKS);
-    expect(alarmedOf(cast.state, people, cast.tick + EVENT_LEAD_TICKS).length, "people alarmed at the reaction tick").toBeGreaterThan(24);
+    expect(alarmedOf(cast.state, people, cast.tick + EVENT_LEAD_TICKS).length, "people alarmed at the reaction tick").toBeGreaterThan(8);
   });
 
   it("when a danger names a node the map does not have, or an ambulance a resident it does not have, then nothing is queued", () => {
