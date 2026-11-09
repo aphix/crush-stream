@@ -293,13 +293,14 @@ export abstract class RagdollThrower extends RagdollStepper {
   /**
    * A car ran him down (`runsDown`; `s` from `fell`, the launch a lawn guard or the VIP takes): every part moves as one body at the strike's
    * velocity and spin, he goes limp (`Walker.struck`) and ignores the car for `GRACE` s, as a thrown figure does. Nothing while he is not out.
+   * `slot`: the walker struck (the player's, or a civilian's body).
    */
-  knockWalker(s: FigureStrike): void {
-    const d = this.dolls[WALKER_SLOT];
+  knockWalker(s: FigureStrike, slot = WALKER_SLOT): void {
+    const d = this.dolls[slot];
     if (!d?.live) return;
     const centre = d.bodies[0]!.translation();
     _s.set(s.wx, s.wy, s.wz);
-    const groups = thrownGroups(WALKER_SLOT, s.car);
+    const groups = thrownGroups(slot, s.car);
     for (const body of d.bodies) {
       const at = body.translation();
       _r.set(at.x - centre.x, at.y - centre.y, at.z - centre.z);
@@ -315,7 +316,7 @@ export abstract class RagdollThrower extends RagdollStepper {
       body.collider(0).setCollisionGroups(groups);
     }
     d.age = 0;
-    this.walker.struck();
+    this.walkers[slot]!.struck();
   }
 
   /**

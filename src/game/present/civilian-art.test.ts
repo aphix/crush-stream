@@ -59,6 +59,22 @@ describe("given a dummy's civilian who is then hidden", () => {
   });
 });
 
+describe("given civilians a physical body stands for", () => {
+  // mutation: sed -i 's/ || (held !== null \&\& held\[civilian\] === 1) || dx \* dx/ || dx * dx/' src/game/present/civilian-art.ts
+  it("when the caller names one held, then she is drawn neither as a dummy nor as a figure, and the others are", () => {
+    const art = new CivilianArt(1, 3);
+    const poses = posesAlongStreet([5, 10, 60]);
+    const held = Uint8Array.of(0, 1, 0);
+    art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS, held);
+    expect(art.slotOfCivilian(1), "the held one's dummy slot").toBe(-1);
+    expect(art.slotOfCivilian(0), "the near one's slot").toBeGreaterThanOrEqual(0);
+    expect(art.farDrawn, "figures drawn: the far one alone (the one dummy is the near one's)").toBe(1);
+    held[1] = 0;
+    art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS, held);
+    expect(art.farDrawn, "let go: drawn again, as a figure (the one dummy is still the near one's)").toBe(2);
+  });
+});
+
 describe("given the one dummy of a tier held by a civilian 10 m away", () => {
   const poses = posesAlongStreet([10, 20]);
   const art = new CivilianArt(1, 2);

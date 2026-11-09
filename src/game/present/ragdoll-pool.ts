@@ -372,11 +372,11 @@ export abstract class RagdollPool {
     return this.dolls.length;
   }
 
-  /** The first slot no dummy is out in, within the capacity, or -1. A slot not built yet counts: `spawn` builds it. */
-  freeSlot(): number {
-    const dead = this.dolls.findIndex((d) => !d.live);
-    if (dead >= 0 && dead < this.capacity) return dead;
-    return this.dolls.length < this.capacity ? this.dolls.length : -1;
+  /** The first slot at or after `from` no dummy is out in, within the capacity, or -1. A slot not built yet counts: `spawn` builds it. */
+  freeSlot(from = 0): number {
+    for (let s = from; s < this.dolls.length && s < this.capacity; s++) if (!this.dolls[s]!.live) return s;
+    const next = Math.max(this.dolls.length, from);
+    return next < this.capacity ? next : -1;
   }
 
   /**
