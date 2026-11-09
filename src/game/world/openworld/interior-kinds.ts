@@ -155,7 +155,7 @@ export const DEFAULT_STOREYS = 3;
 export const BLOCK_HEIGHT = 14;
 /** Storey heights (m): a house's ground storey (its parlour 3.0-3.7 m), a shop's taller one, each storey above (nominal), the cornice, and what the roof slab adds over the cornice's top. */
 const GROUND_STOREY = 3.6;
-const SHOP_GROUND_STOREY = 4;
+export const SHOP_GROUND_STOREY = 4;
 const STOREY = 3;
 export const CORNICE_DEPTH = 0.9;
 const ROOF_ALLOWANCE = CORNICE_DEPTH + 0.4;
