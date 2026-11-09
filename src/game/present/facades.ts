@@ -79,6 +79,20 @@ export const ROOFLINE = 13.5;
 export const ROOF_TILE_M = 2.4;
 /** Metres a roof may be raised over the collider's top, picked per building: a taller parapet drawn on the 14 m block, nothing the sim reads. */
 const ROOF_LIFTS = [0, 0, 0.7, 1.4, 2.8];
+/** The per-building hash of `FACADE_LIFT` below, its two weights on the instance's x and z, and the stretch and shift that pick a lift from it. */
+const LIFT_HASH_X = 0.0791;
+const LIFT_HASH_Z = 0.1137;
+const LIFT_PICK_SCALE = 5.7;
+const LIFT_PICK_SHIFT = 0.3;
+
+/** The lift (block metres) `FACADE_LIFT` gives the roof of a building whose instance stands at (x, z), in the shader's 32-bit arithmetic: what stands on a roof stands this much higher. */
+export function roofLiftAt(x: number, z: number): number {
+  const f32 = Math.fround;
+  const hash = f32(f32(f32(x) * f32(LIFT_HASH_X)) + f32(f32(z) * f32(LIFT_HASH_Z)));
+  const building = f32(hash - Math.floor(hash));
+  const pick = f32(f32(building * f32(LIFT_PICK_SCALE)) + f32(LIFT_PICK_SHIFT));
+  return ROOF_LIFTS[Math.floor(f32(f32(pick - Math.floor(pick)) * ROOF_LIFTS.length))]!;
+}
 
 /** The share of a style's windows lit at full night. */
 const LIT_SHARE = 0.6;
@@ -230,9 +244,9 @@ varying float vFacadeSeed;`;
 /** The parapet lift, shared by the colour pass and the sun's shadow pass (a shadow that missed it would fall up to 2.8 m short): taken before the class tag's grain point, which follows it. */
 const FACADE_LIFT = /* glsl */ `
 #ifdef USE_INSTANCING
-float facadeBuilding = fract(dot(instanceMatrix[3].xz, vec2(0.0791, 0.1137)));
+float facadeBuilding = fract(dot(instanceMatrix[3].xz, vec2(${LIFT_HASH_X}, ${LIFT_HASH_Z})));
 const float facadeLifts[5] = float[5](${ROOF_LIFTS.map((m) => m.toFixed(1)).join(", ")});
-transformed.y += facadeLifts[int(fract(facadeBuilding * 5.7 + 0.3) * 5.0)] * step(13.9, transformed.y);
+transformed.y += facadeLifts[int(fract(facadeBuilding * ${LIFT_PICK_SCALE} + ${LIFT_PICK_SHIFT}) * ${ROOF_LIFTS.length.toFixed(1)})] * step(13.9, transformed.y);
 #endif`;
 /**
  * A slab's uv (the region's third number) is the block's, stretched by the instance's scale: laid again in its metres. A wall's bays keep their width (a whole number of them
