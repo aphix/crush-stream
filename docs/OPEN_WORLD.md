@@ -166,6 +166,14 @@ walker is knocked down already (`findWalkerStrike`, the `strikeWalker` port), wi
 A bust, knock or jaywalk arrest hides its resident from the event's tick for its whole window on every peer: the step that applies it never lets them back early, since a mirror
 that only applies the worker's answers never runs that step.
 
+## What a client sees of the host's scenes
+
+A client has no traffic: its cars are the host's, streamed as sim cars. Two scenes that the traffic drives on the host are told to it another way.
+
+- **The ambulance.** The host notes each change of the ambulance's state or car in the crowd's event log as an `ambulanceStage` event (subject: car index times 4 plus the state; `engine/engine-openworld-ambulance.ts`). The log is sent to every guest whenever it grows, and the brain drops the kind. A client reads the newest stage: its medics kneel where the person down lay (the strike its own crowd threw at the knock the call names; the ambulance's car if it never saw it) while it is loading, and the Auto camera follows the ambulance's car. No wire layout changes: the one new thing is the kind value 12 in the log's kind byte.
+- **The driver's doors.** A door is a part of a sim car, and a part's state rides a snapshot only for a crashed car, so a client's civilian reached for a door that stayed shut. `engine-openworld-door-clips.ts` opens the driver's door of the car whose door the civilian stands at, at the angle of her clip (`carDoorOpenness`), and shuts it when nobody is at it. It is local drawing; the host's swing of the sim door (`OpenWorldCarDoors`) is unchanged.
+- **A driver at the wheel.** A thrown-out driver is hidden on every peer (the snapshot carries `driverOut`), and a car standing in a kerb space has none (`carIsEmpty`). What a client cannot know is that a peer's player has left his car on foot: nothing on the wire says so (see the walker message in the gap list).
+
 ## The Auto camera
 
 The camera key (V, T, C, Y on a pad) steps the driven car's views and, in the open world, one more after the hood view: Auto, then back to the chase. Auto follows one subject at a time, a civilian, a foot cop, a resident or patrol driver, or the spot of a wreck or a knock-down, and its top-left bubble is that subject's own look-at (the line and life log the panel shows when the eye is close; a driver's names the wheel; a patrol car's says what it is doing). The speed gauge is down while it is up.
