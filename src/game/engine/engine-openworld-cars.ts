@@ -2,14 +2,15 @@ import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { CAR_DOOR, carDoorOpenness, carDoorSpot, type DoorSpot } from "../ai/civilians/civilian-car-door.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { OpenWorldTraffic } from "../ai/openworld-traffic/openworld-traffic.ts";
+import type { ResidentCarPose } from "../ai/openworld-traffic/traffic-look.ts";
 import { FEET_Y } from "../present/civilian-art-constants.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
 
 /** What the doors read of the traffic: where a resident's parked car stands, and its driver's door. */
 type CarDoorPorts = Pick<OpenWorldTraffic, "carPoseOf" | "setCarDoor">;
 
-/** The seat every civilian's car is taken to have (a sedan's): the door spot and the seat's height follow it. */
-const CAR_SEAT_FRONT = CAR_STYLES.sedan.seats.front;
+/** The body a pose starts with, before the traffic fills it. */
+const DEFAULT_BODY = "sedan";
 
 /**
  * Getting into and out of a parked car, for the open world's director: where the resident stands at her car's driver's door (the crowd draws her there), and the car's
@@ -18,7 +19,7 @@ const CAR_SEAT_FRONT = CAR_STYLES.sedan.seats.front;
  */
 export class OpenWorldCarDoors {
   private readonly traffic: () => CarDoorPorts | null;
-  private readonly pose = { x: 0, z: 0, yaw: 0 };
+  private readonly pose: ResidentCarPose = { x: 0, z: 0, yaw: 0, groundY: 0, bodyStyle: DEFAULT_BODY };
   /** The angle (rad) each resident's car door was last set to, so a still door is not set again. */
   private readonly radians: Float64Array;
 
@@ -31,7 +32,7 @@ export class OpenWorldCarDoors {
   spot(resident: number, out: DoorSpot): boolean {
     const traffic = this.traffic();
     if (traffic === null || !traffic.carPoseOf(resident, this.pose)) return false;
-    carDoorSpot(this.pose.x, this.pose.z, this.pose.yaw, FEET_Y, CAR_SEAT_FRONT, out);
+    carDoorSpot(this.pose.x, this.pose.z, this.pose.yaw, FEET_Y, CAR_STYLES[this.pose.bodyStyle].seats.front, out);
     return true;
   }
 
