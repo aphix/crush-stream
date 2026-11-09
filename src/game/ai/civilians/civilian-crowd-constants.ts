@@ -44,8 +44,8 @@ export const MAX_OFFSET = 0.7;
 export const SEPARATION_PASSES = 8;
 /** Two bodies can end within `BODY_GAP` of each other only if they start within the gap plus what both may move. */
 export const PAIR_RANGE = BODY_GAP + 2 * MAX_OFFSET;
-/** The share of a head-on or overtaking pair's push that goes sideways, so they pass on each other's sides instead of standing off. */
-export const SIDESTEP_SHARE = 0.6;
+/** Two bodies closing or parting slower than this (m/s) stand still to each other: they are pushed straight apart, not stepped to each other's sides. */
+export const MOVING_SPEED = 0.1;
 /** Pairs kept per body: a ninth neighbour inside reach is a mob, not a street. The grid's cells hash by position (a power of two). */
 export const PAIRS_PER_BODY = 8;
 export const SEPARATION_CELLS = 2048;

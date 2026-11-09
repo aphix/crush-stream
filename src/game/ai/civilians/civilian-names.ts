@@ -132,7 +132,7 @@ export const EVENT_CODE = {
 export const VISIT_BASE = 35;
 
 /** Mood each event leaves (EVENT_CODE order). */
-export const EVENT_MOODS = [
+const EVENT_MOODS = [
   MOOD.fine, MOOD.happy, MOOD.happy, MOOD.proud, MOOD.fine, MOOD.sad, MOOD.proud, MOOD.busy, MOOD.sad, MOOD.happy, MOOD.exhausted, MOOD.happy, MOOD.hurt, MOOD.happy,
   MOOD.hurt, MOOD.happy, MOOD.sad, MOOD.happy, MOOD.sad, MOOD.sad, MOOD.angry, MOOD.annoyed,
   -1, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.afraid, MOOD.angry, MOOD.angry, MOOD.busy, MOOD.afraid, MOOD.sad, MOOD.annoyed, MOOD.angry, MOOD.angry,

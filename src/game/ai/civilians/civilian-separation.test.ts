@@ -9,6 +9,9 @@ const RESIDUAL = 0.005;
 /** Float32 spots round to this (m). */
 const FLOAT_ERROR = 1e-4;
 const WALK = 1.4;
+/** The farthest (m) a civilian's drawn spot may jump between two brain spots 5 cm apart along their way: steeper than a quick step aside is a pop. */
+const JUMP_LIMIT = 0.2;
+const STEP_ALONG = 0.05;
 
 type Body = { x: number; z: number; velocityX?: number; velocityZ?: number; fixed?: boolean };
 
@@ -56,6 +59,26 @@ describe("given two civilians walking at each other on one line, 0.2 m apart", (
   it("when they are listed, then their closing speed is the sum of their paces", () => {
     expect(separation.pairClosing[0], "closing speed").toBeCloseTo(2 * WALK, 5);
     expect(separation.pairDistance[0], "brain distance").toBeCloseTo(0.2, 5);
+  });
+});
+
+describe("given two civilians walking through each other a hand's breadth off one line", () => {
+  it("when their brain spots are stepped through the crossing, then neither is drawn jumping from one step to the next", () => {
+    let previousX = 0;
+    let previousZ = 0;
+    let worst = 0;
+    for (let step = -14; step <= 14; step++) {
+      const separation = resolved([
+        { x: 0, z: step * STEP_ALONG, velocityZ: WALK },
+        { x: 0.04, z: 0, velocityZ: -WALK },
+      ]);
+      const offsetX = separation.drawX[0]! - separation.brainX[0]!;
+      const offsetZ = separation.drawZ[0]! - separation.brainZ[0]!;
+      if (step > -14) worst = Math.max(worst, hypot2(offsetX - previousX, offsetZ - previousZ));
+      previousX = offsetX;
+      previousZ = offsetZ;
+    }
+    expect(worst, "largest jump between steps").toBeLessThan(JUMP_LIMIT);
   });
 });
 
