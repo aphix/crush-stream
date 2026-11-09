@@ -106,6 +106,14 @@ A tick, twice a second, allocates what the brain's answer carries.
 from their look; every other civilian within 120 m is an instance of a 132-triangle figure whose limbs swing in the vertex shader;
 nothing past 120 m. Draw calls do not grow with the crowd.
 
+## Seen and unseen (`SightField`)
+
+`OpenWorldDirector.sight` (`present/openworld-sight.ts`, updated at the top of each frame) answers one question for everything that draws or streams: does a local eye see this? `seen(x, z, radius)` is true when the thing's column (the radius, 2 m tall, on flat ground) is inside some eye's view frustum and at least one of the lines from that eye to its top (through its middle and both sides across the view) clears every building box of the course (`hidingSight` of the course's solids: boxes 2.5 m or taller; the line's height against the roof counts, so a camera above sees over a block). A box an endpoint stands in never blocks that line. The boxes sit in a 16 m grid and each query walks the cells under its lines: no allocation, no per-id state.
+
+The field also keeps a clock per id for those that want it: `claim(count)` hands out a private range, `observe(id, x, z, radius)` is `seen` plus the stamp, `unseenFor(id)` the seconds since it was last seen, and `HIDE_GRACE` (3 s) is the grace after which a consumer phases the thing out and releases what it holds. `near(x, z, radius)` is the host's keep-alive: a player's car within reach. Netplay: each peer culls only what it draws; the host never stops simulating something because `seen` is false, only when it is also not `near` a player. `sight.enabled = false` makes everything seen (the A/B arm with no culling).
+
+**Cars** (`present/openworld-car-lod.ts`, driven by `engine/engine-openworld-cull.ts`): the distance detail runs three rungs nearer than the match ladder's while the open world is up (a desktop cuts small parts at 20 m and all but the body at 40 m), and a car no eye has seen for `HIDE_GRACE`, no player's car is within 40 m of and the camera does not follow is taken off the draw (`group.visible`, which the wheel, lamp, part and driver batches honour), and drawn again the frame it is seen. It never touches a car it did not hide, and lets go of all of them while a reel replay plays or the open world ends.
+
 ## Where it lives
 
 | Piece | File |
@@ -116,6 +124,7 @@ nothing past 120 m. Draw calls do not grow with the crowd.
 | The engine's end: crowd, link, look-at, wall hook | `engine/engine-openworld.ts` (`OpenWorldDirector`, held by `CrashEngine`) |
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
 | Map and course | `world/openworld/` |
+| What is seen, the cars' detail and phase-out | `present/openworld-sight.ts`, `present/openworld-car-lod.ts`, `engine/engine-openworld-cull.ts` |
 
 The director is made with the engine; the crowd is made on the first frame the open world's course is up and a map is known
 (`CrashEngine.startOpenWorld(map)`), rebuilt when the key changes (a new seed, a host's other tier) and dropped, with its drawing, its
