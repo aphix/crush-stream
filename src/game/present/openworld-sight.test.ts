@@ -234,3 +234,16 @@ describe("given a shop's interior behind a block, its verdicts recorded once a f
   });
 });
 
+describe("given a shop's footprint and the players standing about it", () => {
+  const players = (x: number, z: number) => [{ group: { position: { x, z } } }];
+  const inside = (field: SightField) => field.playerInside(SHOP.x, SHOP.z, SHOP.yaw, SHOP.halfDepth, SHOP.halfWidth);
+
+  it("when the walker stands in the shop, then a player is inside it, and on the sidewalk in front of it no one is", () => {
+    const field = new SightField([SHOP_BOX], IDS);
+    field.update([street], 0, players(5, 31));
+    expect(inside(field), "player inside, 5 m along the shop and 1 m behind its middle").toBe(true);
+    field.update([street], 0, players(0, 24));
+    expect(inside(field), "player inside, on the sidewalk 2 m in front of the shopfront").toBe(false);
+  });
+});
+

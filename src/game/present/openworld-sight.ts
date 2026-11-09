@@ -27,6 +27,13 @@ const MAX_PLAYERS = MAX_CARS + 1;
 export const FACE = { front: 1, back: -1 } as const;
 type Face = (typeof FACE)[keyof typeof FACE];
 
+/** Whether (px, pz) stands inside the box of centre (x, z), turned by (cos, sin) of its yaw as an `Occluder`, of half sizes `halfDepth` along its local x and `halfWidth` along its local z. */
+function inBox(px: number, pz: number, x: number, z: number, cos: number, sin: number, halfDepth: number, halfWidth: number): boolean {
+  const fromX = px - x;
+  const fromZ = pz - z;
+  return Math.abs(fromX * cos - fromZ * sin) < halfDepth && Math.abs(fromX * sin + fromZ * cos) < halfWidth;
+}
+
 /** Where a player is: a `DeformableCar` is one, and so is the walker's torso. */
 export type SightPlayer = { readonly group: { readonly position: { readonly x: number; readonly z: number } } };
 
@@ -191,9 +198,7 @@ export class SightField {
     const middleX = x + outX * halfDepth;
     const middleZ = z + outZ * halfDepth;
     for (let eye = 0; eye < this.eyeCount; eye++) {
-      const fromX = this.eyeX[eye]! - x;
-      const fromZ = this.eyeZ[eye]! - z;
-      if (Math.abs(fromX * cos - fromZ * sin) < halfDepth && Math.abs(fromX * sin + fromZ * cos) < halfWidth) return true;
+      if (inBox(this.eyeX[eye]!, this.eyeZ[eye]!, x, z, cos, sin, halfDepth, halfWidth)) return true;
       if ((this.eyeX[eye]! - middleX) * outX + (this.eyeZ[eye]! - middleZ) * outZ <= 0) continue;
       if (!this.inFrustum(eye, middleX, middleZ, halfWidth, top)) continue;
       const acrossX = sin * halfWidth;
@@ -221,6 +226,16 @@ export class SightField {
   }
 
   /** Whether a player's car is within `radius` m of (x, z): what the host keeps simulating. */
+  /** Whether a player (a seated car, or the walker out of his) stands inside the box (centre, yaw and half sizes as `seenThroughFace`'s): someone in a building keeps its interior whatever its doors. */
+  playerInside(x: number, z: number, yaw: number, halfDepth: number, halfWidth: number): boolean {
+    const cos = Math.cos(yaw);
+    const sin = Math.sin(yaw);
+    for (let player = 0; player < this.playerCount; player++) {
+      if (inBox(this.playerX[player]!, this.playerZ[player]!, x, z, cos, sin, halfDepth, halfWidth)) return true;
+    }
+    return false;
+  }
+
   near(x: number, z: number, radius: number): boolean {
     const reach = radius * radius;
     for (let player = 0; player < this.playerCount; player++) {
