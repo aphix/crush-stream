@@ -106,6 +106,14 @@ A tick, twice a second, allocates what the brain's answer carries.
 from their look; every other civilian within 120 m is an instance of a 132-triangle figure whose limbs swing in the vertex shader;
 nothing past 120 m. Draw calls do not grow with the crowd.
 
+## Interiors (`world/openworld/interior-*`, `present/interiors`)
+
+Five interiors (`Place.interior`: rowhome, coffee, bar, office, store) are built from one furniture kit. The **plan** (`planInterior`, pure, the same on every peer) lists walls with openings, floor and ceiling slabs, stairs and furniture in plan metres (`deep` from the street wall, `across` along the face); the same plan gives
+the **seats** (`Place.seats`: x, z, yaw, height; a rowhome's two stoop seats lead, `Place.stoopSeats`), the **counter** spots (`Place.counter`: where a customer stands to buy, where the clerk stands) and the **solids** (`interiorSolids`) the walkers' physics takes while an eye is near. A rowhome stands on its stoop's landing (0.9 m) with three storeys and a stair up its left wall; a shop's floor is level with the sidewalk.
+
+The **doorways and shop windows are cut through the facade's ground band** (`SHOPFRONT` per interior; `scripts/pack-facades.mjs` zeroes the ground layer's albedo alpha there and the shader discards it), so the interior is seen from the street and a door leads into it. `InteriorSet` (one per map) keeps the
+ground floor's envelope of every place within `SHELL_NEAR` of the eye, so no opening shows through to the world, and the furnished interior within `INTERIOR_NEAR`; both are dropped after the eye has been past their far radius for `INTERIOR_LINGER`. Everything is merged into three meshes (envelopes, furniture, lamps and screens): the draw calls do not grow with the interiors.
+
 ## Where it lives
 
 | Piece | File |
@@ -116,6 +124,8 @@ nothing past 120 m. Draw calls do not grow with the crowd.
 | The engine's end: crowd, link, look-at, wall hook | `engine/engine-openworld.ts` (`OpenWorldDirector`, held by `CrashEngine`) |
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
 | Map and course | `world/openworld/` |
+| Interiors: plan, kit, streaming | `world/openworld/interior-{kinds,draft,layouts,plan}.ts`, `present/interiors/` |
+| Programme (businesses, hours, sectors) and lots | `world/openworld/openworld-{programme,lots}.ts` |
 
 The director is made with the engine; the crowd is made on the first frame the open world's course is up and a map is known
 (`CrashEngine.startOpenWorld(map)`), rebuilt when the key changes (a new seed, a host's other tier) and dropped, with its drawing, its
