@@ -48,7 +48,7 @@ type Civilians = DoorOpeners & { poses: CrowdPoses };
 function openers(civilians = 1): Civilians {
   const poses = createCrowdPoses(civilians);
   poses.shown.fill(0);
-  return { poses, walker: null };
+  return { poses, walker: null, others: [] };
 }
 
 /** Civilian `who` stands just out of a place's door. */
@@ -155,6 +155,20 @@ describe("given the interiors of the open world's map, a coffee shop's door held
     set.update(coffee.doorX + AWAY, coffee.doorZ, FRAME, sight, who);
     set.update(coffee.doorX + AWAY, coffee.doorZ, INTERIOR_LINGER + FRAME, sight, who);
     expect(built(set), "far from everything").toBe(NOTHING_BUILT);
+    set.dispose();
+  });
+
+  // mutation: sed -i 's/      for (let figure = 0; figure < other.count; figure++) if (other.shown\[figure\] === 1/      for (let figure = 0; figure < 0; figure++) if (other.shown[figure] === 1/' src/game/present/interiors/interior-doors.ts
+  it("when no civilian is at a home's door but a foot cop or a medic stands there, then the door opens and the rooms behind it are built", () => {
+    const set = new InteriorSet(loneHouse);
+    const who = openers();
+    const cop = openers();
+    who.others.push(cop.poses);
+    settle(set, house.doorX, house.doorZ, who);
+    expect(built(set), "nobody at the door").toBe(NOTHING_BUILT);
+    standAtDoor(cop, house);
+    settle(set, house.doorX, house.doorZ, who);
+    expect(set.stats().details, "furnished once the cop opens the door").toBe(1);
     set.dispose();
   });
 

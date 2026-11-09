@@ -3,8 +3,9 @@ import { hypot2 } from "../../kernel/physics-core.js";
 import { DOOR_FACE, type DoorLeaf } from "../../world/openworld/interior-plan.ts";
 import { DOOR_RANGE, DOOR_REACH, DOOR_SWING_SECONDS } from "./interior-constants.ts";
 
-/** Who can open a door this frame: the crowd's shown people (null before there is a crowd) and the player's walker (null while he is in a car). */
-export type DoorOpeners = { poses: { count: number; x: ArrayLike<number>; z: ArrayLike<number>; shown: ArrayLike<number> } | null; walker: { x: number; z: number } | null };
+type DoorPoses = { count: number; x: ArrayLike<number>; z: ArrayLike<number>; shown: ArrayLike<number> };
+/** Who can open a door this frame: the crowd's shown people (null before there is a crowd), the player's walker (null while he is in a car), and the few shown figures drawn apart from the crowd (the foot cops, the medics). */
+export type DoorOpeners = { poses: DoorPoses | null; walker: { x: number; z: number } | null; others: DoorPoses[] };
 
 /** How far a door swings open: a little short of square to the wall, so the leaf stands clear of the jamb it hinges on. */
 const OPEN_ANGLE = 0.47 * Math.PI;
@@ -132,6 +133,10 @@ export class DoorSet {
   private someoneAt(leaf: DoorLeaf, near: number, openers: DoorOpeners): boolean {
     const walker = openers.walker;
     if (walker !== null && hypot2(walker.x - leaf.x, walker.z - leaf.z) <= DOOR_REACH) return true;
+    for (let set = 0; set < openers.others.length; set++) {
+      const other = openers.others[set]!;
+      for (let figure = 0; figure < other.count; figure++) if (other.shown[figure] === 1 && hypot2(other.x[figure]! - leaf.x, other.z[figure]! - leaf.z) <= DOOR_REACH) return true;
+    }
     const poses = openers.poses;
     if (poses === null) return false;
     for (let at = 0; at < near; at++) {
