@@ -17,6 +17,7 @@ const CELLS = {
   panel: { x: 108, y: 160, width: 96, height: 96 },
   stone: { x: 4, y: 108, width: 96, height: 40 },
   basement: { x: 108, y: 108, width: 64, height: 40 },
+  louvre: { x: 4, y: 56, width: 96, height: 40 },
 } as const satisfies Record<string, Cell>;
 
 function uvOf(cell: Cell): UvRect {
@@ -28,7 +29,7 @@ function uvOf(cell: Cell): UvRect {
   };
 }
 
-export const KIT_CELL = { window: uvOf(CELLS.window), panel: uvOf(CELLS.panel), stone: uvOf(CELLS.stone), basement: uvOf(CELLS.basement) } as const;
+export const KIT_CELL = { window: uvOf(CELLS.window), panel: uvOf(CELLS.panel), stone: uvOf(CELLS.stone), basement: uvOf(CELLS.basement), louvre: uvOf(CELLS.louvre) } as const;
 
 /** The railing strip: one bar's period across, its height up; bars sit between a bottom and a top rail. */
 const RAIL_WIDTH = 32;
@@ -69,6 +70,13 @@ const PANEL_NOISE = 0.02;
 /** Stone: a warm grey with speckle. */
 const STONE_RGB = [200, 196, 188] as const;
 const STONE_NOISE = 0.09;
+
+/** Louvred shutter: slats a pitch tall, lit on the upper part of each and dark in the gap under it. */
+const LOUVRE_PITCH = 6;
+const LOUVRE_SLAT = 4;
+const LOUVRE_PAINT = 236;
+const LOUVRE_GAP_SHADE = 0.5;
+const LOUVRE_SLAT_SHADE = [1, 0.93, 0.86, 0.8] as const;
 
 /** Basement window: a dark pane behind iron bars, in a stone frame. */
 const BASEMENT_FRAME_TEXELS = 3;
@@ -143,6 +151,15 @@ function paintStone(albedo: Texels, cell: Cell, random: () => number): void {
   });
 }
 
+/** Horizontal slats up the cell: each a lit face shading toward its lower edge, then a dark gap. */
+function paintLouvre(albedo: Texels, cell: Cell): void {
+  eachTexel(cell, (column, row) => {
+    const along = row % LOUVRE_PITCH;
+    const shade = along < LOUVRE_SLAT ? LOUVRE_SLAT_SHADE[LOUVRE_SLAT - 1 - along]! : LOUVRE_GAP_SHADE;
+    put(albedo, cell.x + column, cell.y + row, LOUVRE_PAINT * shade, LOUVRE_PAINT * shade, LOUVRE_PAINT * shade);
+  });
+}
+
 function paintBasement(albedo: Texels, cell: Cell): void {
   eachTexel(cell, (column, row, edge) => {
     const bar = column % BASEMENT_BAR_PITCH >= BASEMENT_BAR_FROM && column % BASEMENT_BAR_PITCH < BASEMENT_BAR_TO;
@@ -184,6 +201,7 @@ export function paintKit(): KitTexels {
   paintPanel(albedo, CELLS.panel, random);
   paintStone(albedo, CELLS.stone, random);
   paintBasement(albedo, CELLS.basement);
+  paintLouvre(albedo, CELLS.louvre);
   paintRail(rail);
   return { albedo: albedo.data, glow: glow.data, rail: rail.data };
 }

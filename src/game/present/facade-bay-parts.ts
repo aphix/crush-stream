@@ -323,3 +323,19 @@ export function buildDeckGeometry(): THREE.BufferGeometry {
   for (const side of [-1, 1]) roofBox(builder, side * DECK_HALF_WIDTH, middle, DECK_BAR / 2, halfDepth, railTop - DECK_BAR, railTop, KIT_CELL.stone, DECK_IRON);
   return builder.geometry(true);
 }
+
+/** A louvred shutter as a unit panel (1 m wide, 1 m tall, `SHUTTER_THICK` proud of the wall): each instance scales it to its window. */
+const SHUTTER_THICK = 0.04;
+
+export function buildShutterGeometry(): THREE.BufferGeometry {
+  const builder = new KitBuilder();
+  builder.box(-0.5, 0.5, 0, 1, 0, SHUTTER_THICK, ALL_BUT_BACK, KIT_CELL.louvre, WHITE, ACCENT);
+  return builder.geometry(true);
+}
+
+/** A window air-conditioning unit as a unit box (1 m each way, its back on the wall): each instance scales it to a unit's size. */
+export function buildAirconGeometry(): THREE.BufferGeometry {
+  const builder = new KitBuilder();
+  builder.box(-0.5, 0.5, 0, 1, 0, 1, ALL_BUT_BACK, KIT_CELL.panel, CONDENSER_GREY, FIXED);
+  return builder.geometry(true);
+}
