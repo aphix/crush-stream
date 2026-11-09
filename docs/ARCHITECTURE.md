@@ -132,6 +132,7 @@ derby or Survival run, no seed sweep hoping the event happens). Long AI-driven r
 are `*.ai-long-run.ts` files, run by `npm run test:ai-long-run` and never by the gate; each one that names a failure has a fast targeted test pinning its mechanism. Harnesses: `contact/crash-scenarios.test-util.ts` (headless crash
 scenarios at the engine's slices), `scenes/contact-parity.test-util.ts` (striker vs car), `world/race-world.test-util.ts`
 (the whole race stack headless), `vehicle/test-support.ts` (`forModes`, `DT`).
+A run that two rows stage the same way is made once: `runWall` and `runPair` keep their runs by arguments (on the flat ground with nothing armed, no caller's car; frozen, so a row that writes one throws; `fresh: true` for a row that proves a rerun reproduces it), and `kernel/shared-run.test-util.ts` gives a file's own helpers `memoRun` (a plain-number result kept by arguments) and `Handoff` (a run the first row `keep`s and the second `take`s, so the cars it holds go with the second row).
 
 ## 6. Tuning knobs
 

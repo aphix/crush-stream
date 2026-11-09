@@ -12,6 +12,7 @@ import { BUMPER_F, CLASS_LIFT } from "./constants.ts";
 import { BUMP_RESERVE, droop } from "./car-suspension.ts";
 import { FRAME_RAIL_Y } from "./interior-geometry.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
+import { Handoff } from "../kernel/shared-run.test-util.ts";
 
 /**
  * A wreck lying on its roof or its side rests so that what is drawn stays out of the ground: the body and the roof crown within the
@@ -138,8 +139,15 @@ function lowestDrawn(car: DeformableCar, crown: ReadonlySet<number>): Lowest {
   return low;
 }
 
+/** The lowest points of every drop made, by its arguments: a row that drops what an earlier row did and reads only these takes them instead. */
+const lowests = new Map<string, Lowest>();
+
+type Drop = { car: DeformableCar; lowest: Lowest; world: CrashWorld; sleptAt: number };
+/** A monster's drop from 2 m with its low wheels gone: the first row's, which the row that lets it sleep on takes (and moves). */
+const sleepers = new Handoff<Drop>();
+
 /** A car of `style` and `cls` dropped in `attitude` from `height` m (its lowest drawn point) on the flat pad and left `DROP_SECONDS` s, a wreck once its nose is hit first at `strike` m/s (none: 0), the hubs in `popped` and, with `bumperOff`, the front bumper torn off after the hit; with the crown it had fresh. */
-function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number, strike = 0, popped: readonly string[] = [], seconds = DROP_SECONDS, bumperOff = false): { car: DeformableCar; lowest: Lowest; world: CrashWorld; sleptAt: number } {
+function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number, strike = 0, popped: readonly string[] = [], seconds = DROP_SECONDS, bumperOff = false): Drop {
   const car = buildCar(style, cls);
   car.spawnFacing(0, 0, 0, 0);
   car.updateSkin();
@@ -162,7 +170,13 @@ function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, hei
     tickWorld(world, 1 / FRAME_HZ);
     if (car.asleep && sleptAt === Infinity) sleptAt = (f + 1) / FRAME_HZ;
   }
-  return { car, lowest: lowestDrawn(car, crown), world, sleptAt };
+  const lowest = lowestDrawn(car, crown);
+  lowests.set([style, cls, attitude, height, strike, popped.join(), seconds, bumperOff].join("/"), lowest);
+  return { car, lowest, world, sleptAt };
+}
+
+function lowestOf(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number): Lowest {
+  return lowests.get([style, cls, attitude, height, 0, "", DROP_SECONDS, false].join("/")) ?? dropped(style, cls, attitude, height).lowest;
 }
 
 const cm = (m: number): string => `${(m * 100).toFixed(1)} cm`;
@@ -196,7 +210,7 @@ describe("given a car dropped onto its roof on the flat pad, from 0.5 and from 2
   }
 
   it("when a sedan rests on its roof from 0.5 m, then its drawn doors are out of the ground", () => {
-    const { lowest } = dropped("sedan", "sedan", "roof", 0.5);
+    const lowest = lowestOf("sedan", "sedan", "roof", 0.5);
     // A 0.12 m allowance here was the shattered side pane, hidden on its rest seat, counted as door: the drawn door stands 0.29 m clear.
     expect(lowest.doors, `a door ${cm(-lowest.doors)} into the ground`).toBeGreaterThan(0);
   });
@@ -226,7 +240,7 @@ describe("given any class dropped onto its left or right flank on the flat pad f
     // From 2 m a class tips on past flat onto its roof's edge (up -0.3 to -0.5) and the drawn tyre's shoulder reaches 2-4 cm under the footprint the sim rests on.
     it(`when a ${cls} comes to rest, then no tyre sinks more than its sidewall flattens: the tyres it lies on carry its whole weight, each its half`, (t) => {
       for (const side of ["left", "right"] as const) {
-        const { lowest } = dropped(CLASSES[cls].style, cls, side, 0.5);
+        const lowest = lowestOf(CLASSES[cls].style, cls, side, 0.5);
         t.annotate(`${cls} dropped on its ${side} flank from 0.5 m: lowest tyre ${cm(lowest.tyres)} over the ground`);
         expect(lowest.tyres, `${cls} dropped on its ${side} flank from 0.5 m: a tyre ${cm(-lowest.tyres)} into the ground`).toBeGreaterThan(-TYRE_SQUASH_M);
       }
@@ -238,7 +252,8 @@ describe("given a monster that lost the two wheels on one side, dropped onto tha
   it("when it rests, then it lies on its body: the drawn body stays out of the ground, the mirror it lies on is torn off, and the other mirror is left as it was", (t) => {
     for (const side of ["left", "right"] as const) {
       for (const height of [0.5, 2]) {
-        const { car, lowest } = dropped("sedan", "monster", side, height, 0.5, LOW_HUBS[side]);
+        const drop = dropped("sedan", "monster", side, height, 0.5, LOW_HUBS[side]);
+        const { car, lowest } = height === 2 ? sleepers.keep(side, drop) : drop;
         const tag = `monster without its ${side} wheels dropped on its ${side} flank from ${height} m`;
         const [down, up] = side === "left" ? (["mirrorL", "mirrorR"] as const) : (["mirrorR", "mirrorL"] as const);
         t.annotate(`${tag}: body ${cm(lowest.body)}, mirrors ${cm(lowest.mirrors)} over the ground`);
@@ -252,7 +267,7 @@ describe("given a monster that lost the two wheels on one side, dropped onto tha
 
   it("when it has slept for 2 s more, then none of its masses has moved a millimetre: a sleeping wreck's masses stand where it lies", () => {
     for (const side of ["left", "right"] as const) {
-      const { car, world } = dropped("sedan", "monster", side, 2, 0.5, LOW_HUBS[side]);
+      const { car, world } = sleepers.take(side, () => dropped("sedan", "monster", side, 2, 0.5, LOW_HUBS[side]));
       const tag = `monster without its ${side} wheels dropped on its ${side} flank from 2 m`;
       expect(car.asleep, `${tag}: it has not fallen asleep in ${DROP_SECONDS} s`).toBeTruthy();
       const before = car.deform.masses.map((m) => m.local.clone());
@@ -310,7 +325,7 @@ describe("given a car dropped on its wheels on the flat pad", () => {
 
 describe("given a car lying on its roof, with its doors drawn on their rest seats", () => {
   it("when it rests after a 2 m drop, then each drawn door is out of the ground (the 0.19 m it read was the hidden shattered pane)", () => {
-    const { lowest } = dropped("sedan", "sedan", "roof", 2);
+    const lowest = lowestOf("sedan", "sedan", "roof", 2);
     expect(lowest.doors, `a door ${cm(-lowest.doors)} into the ground`).toBeGreaterThan(0);
   });
 });

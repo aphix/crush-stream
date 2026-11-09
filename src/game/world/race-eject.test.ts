@@ -13,6 +13,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import type { CarRecord } from "../match/types.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { Handoff } from "../kernel/shared-run.test-util.ts";
 
 /**
  * Owner, 2026-10-03: "if your guy flies out of the car in race mode you can't drive any more (it continues in neutral
@@ -205,11 +206,15 @@ function headOn(mps: number): void {
   b.spawnFacing(pt.x, pt.z, yaw + Math.PI, mps);
 }
 
+type HeadOn = { out: number[]; reset: number[]; events: string; status: string[] };
+/** The Respawn head-on on a world of its own: the Respawn row's run, which the repeatability row takes as the first of its two. */
+const respawnRun = new Handoff<HeadOn>();
+
 /**
  * What a head-on at 2×20 m/s (72 km/h each) does, frame by frame: when each driver left and when each car was reset.
  * At the default realism both engines survive it (vehicle/ejection.test.ts), so only the ejection rule stops the cars.
  */
-function headOnRun(noReset: boolean): { out: number[]; reset: number[]; events: string; status: string[] } {
+function headOnRun(noReset: boolean): HeadOn {
   const state = start(noReset);
   runTo(state, 1);
   headOn(20);
@@ -229,8 +234,20 @@ function headOnRun(noReset: boolean): { out: number[]; reset: number[]; events: 
 }
 
 describe("given the player's car and the first AI rival driving head-on at each other at 2×20 m/s (72 km/h each) on the oval's start straight, where both engines survive the crash", () => {
+  /**
+   * A car put back after a crash differs a hair from a fresh one (1e-2 m/s a few frames on, with or without the ejection
+   * watch: `DeformableCar.resetVisual` leaves some wreck state), so exact repeatability is shown on worlds of their own.
+   */
+  const fresh = (): void => {
+    w.race.exit();
+    setGround(null);
+    Object.assign(w, makeWorld());
+    w.race.enter();
+  };
+
   it(`when the race is a Respawn race, then both drivers leave, both cars are reset ${RESPAWN_DELAY} s later, and they race on`, () => {
-    const o = headOnRun(false);
+    fresh();
+    const o = respawnRun.keep("respawn", headOnRun(false));
     expect(o.out[0]! >= 0 && o.out[1]! >= 0, `both drivers leave: ${JSON.stringify(o.out)}`).toBeTruthy();
     for (const k of [0, 1]) {
       const secs = (o.reset[k]! - o.out[k]!) * FRAME;
@@ -246,20 +263,11 @@ describe("given the player's car and the first AI rival driving head-on at each 
     expect(firstMismatch(o.status, ["out", "out"])).toBeUndefined();
   });
 
-  /**
-   * A car put back after a crash differs a hair from a fresh one (1e-2 m/s a few frames on, with or without the ejection
-   * watch: `DeformableCar.resetVisual` leaves some wreck state), so exact repeatability is shown on worlds of their own.
-   */
-  const fresh = (): void => {
-    w.race.exit();
-    setGround(null);
-    Object.assign(w, makeWorld());
-    w.race.enter();
-  };
-
   it("when the same Respawn race is run twice on worlds of their own, then the same drivers are thrown on the same frames with the same launch numbers, and the cars are reset on the same frames", () => {
-    fresh();
-    const first = headOnRun(false);
+    const first = respawnRun.take("respawn", () => {
+      fresh();
+      return headOnRun(false);
+    });
     fresh();
     const again = headOnRun(false);
     assertSameNumbers(again.out, first.out, "ejection frames");

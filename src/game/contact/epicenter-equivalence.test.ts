@@ -6,6 +6,7 @@ import { layOnGround } from "../vehicle/car-air-points.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { WORK } from "../engine/sim-phases.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, Probe, run, type CrashResult } from "./crash-scenarios.test-util.ts";
+import { Handoff } from "../kernel/shared-run.test-util.ts";
 
 /**
  * `activation: epicenter` against `whole` on the crash rows: the same staged hit run twice, once per mode, through the engine's own step. A wreck that
@@ -59,6 +60,9 @@ function stage(kind: Kind, on: boolean, nudge = 0): Ran {
   return { results: probes.map((p) => p.finish()), frozenCarSlices: work[WORK.frozenCarSlices]!, freezes: work[WORK.freezes]!, thaws: work[WORK.thaws]!, breaches: cars.reduce((n, c) => n + c.deform.frozenBreaches, 0), cars };
 }
 
+/** Each kind's whole-mode run: the first describe's `whole`, which the nudge rows take as their `plain` (the same staging). */
+const wholeRuns = new Handoff<Ran>();
+
 const REGIONS = ["noseShortL", "noseShortR", "noseMaxL", "noseMaxR", "tailShort", "tailMax", "engineMax", "doorMaxL", "doorMaxR", "roofMax", "cellShift", "cabinIntrusion", "engineTravel"] as const;
 
 describe("given a staged hit run once per activation mode", () => {
@@ -71,7 +75,7 @@ describe("given a staged hit run once per activation mode", () => {
   for (const testCase of testCases) {
     it(testCase.it, () => {
       const { kind } = testCase;
-      const whole = stage(kind, false);
+      const whole = wholeRuns.keep(kind, stage(kind, false));
       const epi = stage(kind, true);
       expect(whole.frozenCarSlices, "whole mode froze a car").toBe(0);
       expect(epi.breaches, "a frozen car was written to without a thaw").toBe(0);
@@ -111,7 +115,7 @@ describe("given the same staged hits run twice in whole mode, one with a car's m
   for (const testCase of testCases) {
     it(testCase.it, () => {
       const { kind } = testCase;
-      const plain = stage(kind, false);
+      const plain = wholeRuns.take(kind, () => stage(kind, false));
       const nudged = stage(kind, false, 1e-6);
       let worst = 0;
       for (const [i, c] of plain.cars.entries()) for (const [k, m] of c.deform.masses.entries()) worst = Math.max(worst, m.world.distanceTo(nudged.cars[i]!.deform.masses[k]!.world));

@@ -16,6 +16,7 @@ import type { SimPacer } from "../engine/sim-pace.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { RigSolids } from "../scenes/rig-solids.ts";
 import { armedSolids, armSolids } from "../world/surfaces.ts";
+import { activeGround, FLAT_GROUND } from "../world/ground.ts";
 
 /**
  * Headless crash scenarios through the engine's own step (`stepWorld`) and phase clock, at
@@ -106,6 +107,8 @@ export type ScenarioOpts = {
   after?: number;
   squash?: number;
   buckle?: number;
+  /** Run again even where an identical run is shared (`runWall`, `runPair`): the row proves a rerun reproduces it. */
+  fresh?: boolean;
 };
 
 export type WallOpts = ScenarioOpts & {
@@ -552,12 +555,39 @@ const SIDE_RUN_IN = 0.05;
 
 export type WallApproach = "front" | "rear" | "side";
 
+/** `runWall` and `runPair` runs by their arguments: fresh cars on the flat ground give the same numbers every time, so rows that stage one hit share it. Frozen: a row that writes one throws. */
+const wallRuns = new Map<string, CrashResult>();
+const pairRuns = new Map<string, readonly [CrashResult, CrashResult]>();
+
+// Mutation: `sed 's/\[scenario, \.\.\.args,/[scenario, args[0],/'` turns crash-parts' "64 km/h 40 % offset" hub row red (it reads the full-width run).
+/** A shared run's key; null where the run is not shared: another ground or armed solids put more of the world into it than the arguments, and `fresh` asks for its own. */
+function runKey(scenario: string, args: readonly (string | number)[], opts: ScenarioOpts): string | null {
+  if (opts.fresh || activeGround() !== FLAT_GROUND || armedSolids() !== null) return null;
+  return [scenario, ...args, opts.mode ?? "shape", opts.slomo ?? false, opts.after ?? 1.5, opts.squash, opts.buckle].join("/");
+}
+
+function frozen(r: CrashResult): CrashResult {
+  Object.freeze(r.detached);
+  Object.freeze(r.hubsPopped);
+  Object.freeze(r.lampsOut);
+  Object.freeze(r.hinge);
+  return Object.freeze(r);
+}
+
 /**
  * Square or offset rigid-wall hit. The slab lies along Z through the origin;
  * the car comes from +X. `overlap` is the share of the car width on the slab,
  * measured from the car's left (−Z) side.
  */
 export function runWall(speedKph: number, overlap = 1, approach: WallApproach = "front", opts: WallOpts = {}): CrashResult {
+  const key = opts.car ? null : runKey("wall", [speedKph, overlap, approach], opts);
+  if (key === null) return stageWall(speedKph, overlap, approach, opts);
+  const held = wallRuns.get(key) ?? frozen(stageWall(speedKph, overlap, approach, opts));
+  wallRuns.set(key, held);
+  return held;
+}
+
+function stageWall(speedKph: number, overlap: number, approach: WallApproach, opts: WallOpts): CrashResult {
   const v = speedKph / 3.6;
   const car = opts.car ?? makeCar(opts.mode, opts.squash, opts.buckle);
   const z = approach !== "side" && overlap < 1 ? BARRIER_HALF.z + 0.88 * (1 - 2 * overlap) : 0;
@@ -597,7 +627,18 @@ export const FREEWHEEL: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: 
  * crash (a car launched at 0 on its brake, a moving one freewheeling). Unlaid and undriven, a car on a side slope slid
  * down it on frictionless tyres and rocked on its springs into the hit.
  */
-export function runPair(kphA: number, kphB: number, kind: "head-on" | "t-bone" = "head-on", opts: ScenarioOpts = {}): [CrashResult, CrashResult] {
+export function runPair(kphA: number, kphB: number, kind: "head-on" | "t-bone" = "head-on", opts: ScenarioOpts = {}): readonly [CrashResult, CrashResult] {
+  const key = runKey(kind, [kphA, kphB], opts);
+  if (key === null) return stagePair(kphA, kphB, kind, opts);
+  const held = pairRuns.get(key);
+  if (held) return held;
+  const [a, b] = stagePair(kphA, kphB, kind, opts);
+  const shared = Object.freeze([frozen(a), frozen(b)] as const);
+  pairRuns.set(key, shared);
+  return shared;
+}
+
+function stagePair(kphA: number, kphB: number, kind: "head-on" | "t-bone", opts: ScenarioOpts): [CrashResult, CrashResult] {
   const a = makeCar(opts.mode, opts.squash, opts.buckle);
   const b = makeCar(opts.mode, opts.squash, opts.buckle);
   if (kind === "head-on") {

@@ -11,6 +11,7 @@ import { BELLY_ABSENT, POINT_X, POINT_Y, POINT_Z, REST_SPEED } from "./car-air-b
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
+import { Handoff } from "../kernel/shared-run.test-util.ts";
 
 /**
  * A wreck rests on its own crushed underside. A head-on crush pushes a sill or a fender down in the car's frame, which moves a body
@@ -138,6 +139,9 @@ function skinReachPastCage(wreck: DeformableCar): { gap: number; at: string } {
   return worst;
 }
 
+/** A hit's wrecks on the 10° slope: the "no point in the ground" row's, which the "none still moving" row of that hit takes. */
+const slopeWrecks = new Handoff<DeformableCar[]>();
+
 describe("given two cars crushed head-on, left to rest on the ground", () => {
   afterEach(() => setGround(null));
 
@@ -149,7 +153,7 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
     for (const hit of HITS) {
       it(`when ${hit.name} on ${site}, then no point of either wreck is drawn more than 3 cm in the ground under it`, () => {
         const ground = pitch === 0 ? FLAT_GROUND : new Slope(pitch);
-        const wrecks = wrecksAtRest(hit, ground);
+        const wrecks = pitch === 0 ? wrecksAtRest(hit, ground) : slopeWrecks.keep(hit.name, wrecksAtRest(hit, ground));
         expect(wrecks.length, "the hit left no wreck").toBeGreaterThan(0);
         for (const wreck of wrecks) {
           const { clearance, mesh } = lowestDrawn(wreck, ground);
@@ -163,7 +167,7 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
   // gripping: the monster wreck, on its side across the slope with its brakes held, rolled down it at 1.3 to 4.5 m/s, never asleep.
   for (const hit of HITS) {
     it(`when ${hit.name} on a 10° slope, then no wreck lying on its side or roof is still moving after ${SETTLE_MAX_S} s: none rolls away on the tyres of a side it lies on`, () => {
-      const wrecks = wrecksAtRest(hit, new Slope(10));
+      const wrecks = slopeWrecks.take(hit.name, () => wrecksAtRest(hit, new Slope(10)));
       for (const wreck of wrecks) {
         const upY = 1 - 2 * (wreck.group.quaternion.x ** 2 + wreck.group.quaternion.z ** 2);
         if (upY >= UPRIGHT_UP_Y) continue;

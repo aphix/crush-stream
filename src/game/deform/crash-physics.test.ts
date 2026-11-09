@@ -1341,8 +1341,8 @@ describe("given a quiet car whose engine pair stands at its rest length but roll
 
 describe("given the crash path's boot warm-up (a pre-run that compiles the crush path before the first real crash, see docs/PERF_HITCH.md)", () => {
   it("when two cars crash head-on at 48 km/h, the warm-up hits are run and the head-on is run again, then every warm-up hit crashes both cars and the second head-on is bit-identical to the first", () => {
-    const before = runPair(48, 48, "head-on");
+    const before = runPair(48, 48, "head-on", { fresh: true });
     expect(warmCrashPath(), "a warm-up hit no longer crashes both cars, so it no longer compiles the crush path").toBeTruthy();
-    assertSameDigest(runPair(48, 48, "head-on"), before, "48 km/h head-on after the warm-up");
+    assertSameDigest(runPair(48, 48, "head-on", { fresh: true }), before, "48 km/h head-on after the warm-up");
   });
 });

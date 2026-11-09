@@ -8,6 +8,7 @@ import { makeWorld, type World } from "../world/race-world.test-util.ts";
 import { EPICENTER, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import { recordField } from "./replay-fidelity.test-util.ts";
+import { Handoff } from "../kernel/shared-run.test-util.ts";
 
 /**
  * The car's cage is a function of the sim's state alone, scheduled by the sim alone (docs/HIGHLIGHTS.md): drawing a car (`updateSkin`,
@@ -146,11 +147,14 @@ function run(draw: boolean, opts: { skip?: boolean; stage?: "head-on" | "door aj
   }
 }
 
+/** Each stage's run with every car drawn and no frame skipped: the first row's `drawn`, which the second row takes as its `every` (`skip` unset is off: the same run). */
+const drawnRuns = new Handoff<Float64Array[]>();
+
 describe("given a staged crash run twice, the second drawing every car before every step", () => {
   for (const stage of ["head-on", "door ajar"] as const) {
     it(`when the ${stage} is done, then every car's pose, velocity, crush, cage fields, door swing and every part's hinge value and state are the same numbers at every step`, () => {
       const plain = run(false, { stage });
-      const drawn = run(true, { stage });
+      const drawn = drawnRuns.keep(stage, run(true, { stage }));
       expect(drawn.length, "the two races ran a different number of steps").toBe(plain.length);
       let wrecked = 0;
       let refits = 0;
@@ -171,7 +175,7 @@ describe("given a staged crash run twice, the second drawing every car before ev
 describe("given a staged crash drawn every frame with frame skipping off and then on", () => {
   for (const stage of ["head-on", "door ajar"] as const) {
     it(`when the ${stage} is done, then every car's pose, velocity, crush, cage fields, door swing and part state are the same numbers at every step`, () => {
-      const every = run(true, { skip: false, stage });
+      const every = drawnRuns.take(stage, () => run(true, { skip: false, stage }));
       const skipped = run(true, { skip: true, stage });
       expect(skipped.length, "the two races ran a different number of steps").toBe(every.length);
       const first = firstDifference(every, skipped);

@@ -8,6 +8,7 @@ import { CrashRecorder } from "./engine-record.ts";
 import { settleStep, stepWorld } from "./world-step.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { memoRun } from "../kernel/shared-run.test-util.ts";
 
 /**
  * Highlight scores through the real sim: two sedans (or one and the jersey slab) crash at a set closing speed, the
@@ -55,26 +56,27 @@ function placeHeadOn(a: DeformableCar, b: DeformableCar, v: number, z = 0, x = 0
   launch(b, x + 5, z, -Math.PI / 2, -v / 2, 0);
 }
 
-const headOn = (closingKph: number): CrashCluster => {
+const headOn = memoRun((closingKph: number): CrashCluster => {
   const [a, b] = [makeCar(), makeCar()] as const;
   placeHeadOn(a, b, closingKph / 3.6);
   return record([a, b], false, 3).clusters[0]!;
-};
+});
 
-const tBone = (closingKph: number): CrashCluster => {
+const tBone = memoRun((closingKph: number): CrashCluster => {
   const [a, b] = [makeCar(), makeCar()] as const;
   launch(a, 0, 0, 0, 0, 0);
   launch(b, 6, 0, -Math.PI / 2, -closingKph / 3.6, 0);
   return record([a, b], false, 3).clusters[0]!;
-};
+});
 
 /** A square front hit on the slab: the single cluster, or none. */
-const wallHit = (speedKph: number, overlap = 1): CrashCluster | undefined => {
+function stageWallHit(speedKph: number, overlap = 1): CrashCluster | undefined {
   const car = makeCar();
   const z = overlap < 1 ? BARRIER_HALF.z + 0.88 * (1 - 2 * overlap) : 0;
   launch(car, 6.2, z, -Math.PI / 2, -speedKph / 3.6, 0);
   return record([car], true, 3, speedKph / 3.6).clusters[0];
-};
+}
+const wallHit = memoRun(stageWallHit);
 
 const SWEEP = [50, 60, 70, 80, 90, 100, 110, 130];
 
