@@ -7,20 +7,47 @@ import { MATERIAL_ATTRIBUTE, tagMaterial } from "../vehicle/material-class.ts";
 import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
 import { applyMacro, applyMottle, cellMaterial, FLAT_TOL, Mesher, RoadIndex } from "./track-mesh.ts";
 import { sections } from "../world/track-sections.ts";
+import { parseTrack } from "../world/track-schema.ts";
 import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
 import { must } from "../kernel/must.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** A course's terrain as `TrackArt` draws it: the near mesh (chunk after chunk, then the far skirt), the chunks, the road index, and the ground the mesh was cut from with its terrain's surface index. */
 type Terrain = { near: Mesher; chunks: { coarse: Mesher; box: Float32Array; fineAt: Int32Array; coarseAt: Int32Array }; roads: RoadIndex; ground: TrackGround; terrainSurface: number };
 
-function terrainOf(course: string): Terrain {
-  const track = [...TRACKS, ...OFF_MENU].map((raw) => new Track(raw)).find((t) => t.id === course)!;
+const COURSE_JSON = [...TRACKS, ...OFF_MENU];
+const tracks = new Map<string, Track>();
+const terrains = new Map<string, Terrain>();
+
+const freshTrack = (course: string): Track => new Track(COURSE_JSON.find((raw) => parseTrack(raw).id === course)!);
+
+/** A course's Track, built once for the file: its ground bakes once and every row on the course reads it. */
+function trackOf(course: string): Track {
+  let track = tracks.get(course);
+  if (!track) {
+    track = freshTrack(course);
+    tracks.set(course, track);
+  }
+  return track;
+}
+
+/** The terrain of `track` as `TrackArt` draws it. */
+function buildTerrain(track: Track): Terrain {
   const paths = track.paths();
   const roads = new RoadIndex(paths);
   const terrain = buildGroundLayers(track, track.ground(), roads, paths, paths.map((p) => sections(p, 0)))[0]!;
   expect(terrain.kind).toBe("terrain");
   must(terrain.chunks, "the terrain is cut into chunks");
   return { near: terrain.m, chunks: terrain.chunks, roads, ground: track.ground(), terrainSurface: SURFACE_IDS.indexOf(track.json.environment.terrain) };
+}
+
+function terrainOf(course: string): Terrain {
+  let t = terrains.get(course);
+  if (!t) {
+    t = buildTerrain(trackOf(course));
+    terrains.set(course, t);
+  }
+  return t;
 }
 
 /** Sample offsets inside each 2 m grid cell: 1 mm past each grid line, and the middle. */
@@ -286,8 +313,8 @@ function bordersOf(t: Terrain, drawn: readonly Drawn[]): Borders {
 }
 
 describe("given every course's terrain, drawn near, far, or a checkerboard of both", () => {
-  for (const raw of [...TRACKS, ...OFF_MENU]) {
-    const course = new Track(raw).id;
+  for (const raw of COURSE_JSON) {
+    const course = parseTrack(raw).id;
     describe(`given ${course}`, () => {
       const t = terrainOf(course);
       const { box, fineAt, coarseAt } = t.chunks;
@@ -386,8 +413,8 @@ const MIXED_COURSES = ["rally", "stunt", "four-count", "dam-spine", "razor-shelf
 const MIN_POINTS = 40;
 
 describe("given every course's terrain, its single-cell triangles drawn in 2 m cells and, where the shape needs them, 1 m cells", () => {
-  for (const raw of [...TRACKS, ...OFF_MENU]) {
-    const course = new Track(raw).id;
+  for (const raw of COURSE_JSON) {
+    const course = parseTrack(raw).id;
     it(`when the ground is read inside them on ${course}, then it is the height of the drawn triangle there in every kind of cell, to ${FLAT_TOL} m where a corner is eased to a coarser block's edge`, () => {
       const { onNodes, eased } = groundAgainstDrawnCells(terrainOf(course));
       for (const kind of CELL_KINDS) {
@@ -463,7 +490,7 @@ describe("given the four-count course's terrain chunks seen from a moving camera
 
 describe("given Razor Shelf, whose inside cut is a dirt road across dirt terrain", () => {
   it("when its ground layers are built, then every vertex of the dirt road strip is darker than the darkest terrain mottle (0.9 of the surface colour), and the paved road keeps its own colour", () => {
-    const track = TRACKS.map((raw) => new Track(raw)).find((t) => t.id === "razor-shelf")!;
+    const track = trackOf("razor-shelf");
     expect(track.json.environment.terrain, "the staging: dirt terrain").toBe("dirt");
     const paths = track.paths();
     const layers = buildGroundLayers(track, track.ground(), new RoadIndex(paths), paths, paths.map((p) => sections(p, 0)));
@@ -582,4 +609,34 @@ describe("given a classed mesher cut into draw cells", () => {
     triangle(m);
     expect(m.cellGeometries()[0]!.getAttribute(MATERIAL_ATTRIBUTE)).toBe(undefined);
   });
+});
+
+describe("given a course's terrain built once for the file and read by every row above", () => {
+  // mutation: sed -i 's/      near.computeBoundingBox();/      near.computeBoundingBox();\n      m.pos[0] += 1;/' src/game/present/track-ground.ts  (the camera row's batch moves the shared mesh)
+  for (const course of ["four-count", "national-mall"]) {
+    it(`when ${course}'s terrain is built again from a fresh Track, then both have the same meshes, chunks and ground, and every reading the rows above take of them is the same, bit for bit`, () => {
+      const shared = terrainOf(course);
+      const fresh = buildTerrain(freshTrack(course));
+      const same = (a: ArrayLike<number> | null, b: ArrayLike<number> | null, what: string): void => expect(firstMismatch(a ?? [], b ?? []), what).toBeUndefined();
+      for (const [name, a, b] of [["near", fresh.near, shared.near], ["far", fresh.chunks.coarse, shared.chunks.coarse]] as const) {
+        for (const field of ["pos", "nrm", "col", "uv", "idx", "cls"] as const) same(a[field], b[field], `${name} mesh ${field}`);
+      }
+      for (const field of ["box", "fineAt", "coarseAt"] as const) same(fresh.chunks[field], shared.chunks[field], `chunk ${field}`);
+      expect(fresh.terrainSurface, "terrain surface").toBe(shared.terrainSurface);
+      const [x0, z0, x1, z1] = [shared.chunks.box[0]!, shared.chunks.box[1]!, shared.chunks.box[shared.chunks.box.length - 2]!, shared.chunks.box[shared.chunks.box.length - 1]!];
+      const heights = (t: Terrain): number[] => Array.from({ length: 4000 }, (_, i) => t.ground.heightAt(x0 + ((x1 - x0) * ((i * 7919) % 1000)) / 1000, z0 + ((z1 - z0) * ((i * 104729) % 997)) / 997));
+      same(heights(fresh), heights(shared), "ground heights");
+      same(sampleGround(fresh, () => false).y, sampleGround(shared, () => false).y, "the near ground sampled on the grid");
+      const everyChunkNear = (t: Terrain): Drawn[] => Array.from({ length: t.chunks.box.length / 4 }, (_, c) => ({ mesh: t.near, from: t.chunks.fineAt[c * 2 + 1]!, to: t.chunks.fineAt[c * 2 + 3]! }));
+      const seams = (t: Terrain): number[] => Object.values(seamsOf(everyChunkNear(t), GROUND_CELL));
+      const borders = (t: Terrain): number[] => Object.values(bordersOf(t, everyChunkNear(t)));
+      same(seams(fresh), seams(shared), "seams of every chunk drawn near");
+      same(borders(fresh), borders(shared), "borders of every chunk drawn near");
+      const readings = (t: Terrain): number[] => {
+        const { onNodes, eased } = groundAgainstDrawnCells(t);
+        return [...CELL_KINDS.flatMap((kind) => [onNodes[kind].compared, onNodes[kind].worst]), eased.compared, eased.worst];
+      };
+      same(readings(fresh), readings(shared), "the ground read inside the drawn triangles");
+    });
+  }
 });
