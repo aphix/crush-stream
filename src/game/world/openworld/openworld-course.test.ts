@@ -156,7 +156,7 @@ for (const wallCase of WALL_CASES) {
           .filter((prop) => prop.prefab === prefab && Math.abs(prop.z - (lineZ - distance)) < 0.01 && Math.abs(prop.x - block.centreX) < geometry.blockLength / 2)
           .map((prop) => prop.x)
           .sort((a, b) => a - b);
-      const lamps = along(PREFAB.lamp, geometry.sidewalk - LAMP_FROM_CURB);
+      const lamps = along(PREFAB.acornLamp, geometry.sidewalk - LAMP_FROM_CURB);
       const trees = along(PREFAB.tree, geometry.sidewalk - geometry.sidewalkFurniture / 2);
       const gaps = (xs: number[]): number[] => xs.slice(1).map((x, index) => x - xs[index]!);
       expect(lamps.length, "lamps on the face").toBeGreaterThanOrEqual(2);
@@ -174,7 +174,8 @@ for (const wallCase of WALL_CASES) {
       const placed = placeCourse(track);
       const everything = [...placed.placed, ...placed.drawn];
       const parked = everything.filter((prop) => PARKED_PREFABS.has(prop.prefab) && Math.abs(prop.x) <= geometry.halfX && Math.abs(prop.z) <= geometry.halfZ);
-      expect(everything.filter((prop) => prop.prefab === PREFAB.lamp).length, "lamps placed (the sweep reads the street)").toBeGreaterThan(40);
+      expect(everything.filter((prop) => prop.prefab === PREFAB.acornLamp).length, "lamps placed (the sweep reads the street)").toBeGreaterThan(40);
+      expect(everything.filter((prop) => prop.prefab === PREFAB.lamp).length, "arm lamps (the open world stands acorn lamps)").toBe(0);
       expect(parked.length, "parked cars inside the walls").toBe(0);
     });
 

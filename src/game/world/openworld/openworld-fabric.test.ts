@@ -132,12 +132,12 @@ describe("given the street furniture in the furniture strips", () => {
         const alongs = corners.map(([x, z]) => onFace(side, x, z).along);
         return [{ asset: keyOf(prop), from: Math.min(...alongs), to: Math.max(...alongs) }];
       });
-      const fixed = course.props.filter((prop) => (prop.prefab === PREFAB.lamp || prop.prefab === PREFAB.tree) && inStrip(side, lots, prop.x, prop.z, 0));
+      const fixed = course.props.filter((prop) => (prop.prefab === PREFAB.acornLamp || prop.prefab === PREFAB.tree) && inStrip(side, lots, prop.x, prop.z, 0));
       for (const [index, span] of spans.entries()) {
         for (const other of spans.slice(index + 1)) if (span.from < other.to + FURNITURE_GAP - 1e-6 && span.to + FURNITURE_GAP - 1e-6 > other.from) overlaps.push(`${span.asset} and ${other.asset}`);
         for (const post of fixed) {
           const along = onFace(side, post.x, post.z).along;
-          const reach = post.prefab === PREFAB.lamp ? LAMP_CLEARANCE : TREE_CROWN_CLEARANCE;
+          const reach = post.prefab === PREFAB.acornLamp ? LAMP_CLEARANCE : TREE_CROWN_CLEARANCE;
           if (span.from < along + reach && span.to > along - reach) overlaps.push(`${span.asset} and a ${post.prefab}`);
         }
       }

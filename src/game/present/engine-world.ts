@@ -5,6 +5,7 @@ import { groundMaterial, groundMesh } from "../scenes/ground-stack.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
 import { MATERIAL_WET, tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
+import { ACORN_LAMP } from "../world/street-kit.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { FACADE_GLOW } from "./facades.ts";
 import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, type SkyDetail, type SkyMode } from "./sky-dome.ts";
@@ -140,9 +141,48 @@ const lampPool = groundMaterial(
   "decal",
 );
 
-/** `withPool` false leaves off the painted ground pool, for posts that carry a real light. */
-export function makeLamp(withPool = true): THREE.Group {
+/** Sides of the acorn lamp's round parts: an octagonal post and a dozen-sided globe, as the colliders' circles bound them. */
+const ACORN_POST_SIDES = 8;
+const ACORN_GLOBE_SIDES = 12;
+/** Black cast iron (sRGB hex). */
+const ACORN_IRON = 0x17191c;
+/** The cap over the globe is a flared cone and a finial on it: the cone takes this share of the cap's height, narrows to this share of its radius, and the finial narrows from the second share to the third of it. */
+const ACORN_CAP = { coneShare: 0.6, coneTopShare: 0.5, finialBaseShare: 0.4, finialTopShare: 0.2 } as const;
+
+/** The acorn lamp's parts on the shared head and pool (the pool under its middle): plinth, post, collar, the globe on the shared lit head material, a cap and a finial. */
+function addAcornParts(g: THREE.Group): void {
+  const { plinthRadius, plinthHeight, postRadius, collarRadius, collarBottom, collarTop, globeRadius, globeStretch, globeCentre, capRadius, capBottom, height } = ACORN_LAMP;
+  const coneTop = capBottom + (height - capBottom) * ACORN_CAP.coneShare;
+  const iron = tagMaterial(new THREE.MeshStandardMaterial({ color: ACORN_IRON, roughness: 0.6, metalness: 0.5 }), MAT.LAMP_POLE);
+  const round = (radiusTop: number, radiusBottom: number, y0: number, y1: number): THREE.Mesh => {
+    const part = new THREE.Mesh(new THREE.CylinderGeometry(radiusTop, radiusBottom, y1 - y0, ACORN_POST_SIDES), iron);
+    part.position.y = (y0 + y1) / 2;
+    part.castShadow = true;
+    return part;
+  };
+  const globe = new THREE.Mesh(new THREE.SphereGeometry(globeRadius, ACORN_GLOBE_SIDES, ACORN_GLOBE_SIDES / 2), lampHead);
+  globe.scale.y = globeStretch;
+  globe.position.y = globeCentre;
+  g.add(
+    round(plinthRadius, plinthRadius, 0, plinthHeight),
+    round(postRadius, postRadius, plinthHeight, collarBottom),
+    round(collarRadius, collarRadius, collarBottom, collarTop),
+    globe,
+    round(capRadius * ACORN_CAP.coneTopShare, capRadius, capBottom, coneTop),
+    round(capRadius * ACORN_CAP.finialTopShare, capRadius * ACORN_CAP.finialBaseShare, coneTop, height),
+  );
+}
+
+/**
+ * `withPool` false leaves off the painted ground pool, for posts that carry a real light. `acorn`: Philadelphia's acorn globe on a slim black post in place of the arm and its
+ * head (the light pool is the same one, under the post's middle).
+ */
+export function makeLamp(withPool = true, acorn = false): THREE.Group {
   const g = new THREE.Group();
+  if (acorn) {
+    addAcornParts(g);
+    return withPool ? addPool(g, 0) : g;
+  }
   const pole = new THREE.Mesh(
     new THREE.CylinderGeometry(0.08, 0.1, 5.2, 8),
     tagMaterial(new THREE.MeshStandardMaterial({ color: 0x2a2c32, roughness: 0.7, metalness: 0.4 }), MAT.LAMP_POLE),
@@ -152,12 +192,16 @@ export function makeLamp(withPool = true): THREE.Group {
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.22), lampHead);
   head.position.set(0, 5.15, 0.15);
   g.add(pole, head);
-  if (!withPool) return g;
+  return withPool ? addPool(g, 0.15) : g;
+}
+
+/** `g` with the lamp's night light pool on the ground, `ahead` m along z from the post's middle. */
+function addPool(g: THREE.Group, ahead: number): THREE.Group {
   lampPool.map ??= makePoolTexture();
   const pool = groundMesh(new THREE.PlaneGeometry(9, 9), lampPool, "decal");
   pool.name = LAMP_POOL;
   pool.rotation.x = -Math.PI / 2;
-  pool.position.set(0, 0.025, 0.15);
+  pool.position.set(0, 0.025, ahead);
   g.add(pool);
   return g;
 }

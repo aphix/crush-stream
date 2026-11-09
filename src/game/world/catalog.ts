@@ -6,7 +6,7 @@ import { hypot2, detSin, detCos } from "../kernel/physics-core.js";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { PREFAB, SURFACE } from "./constants.ts";
 import { PLAZA_REACH, PLAZA_TOP, plazaBricks } from "./openworld/openworld-plaza.ts";
-import { STREET_KIT } from "./street-kit.ts";
+import { ACORN_LAMP, STREET_KIT } from "./street-kit.ts";
 import { brickCollider, bricksTop, CAPITOL, CAPITOL_POOL, CAPITOL_TOP, capitolPlan, capitolPool, FLAGPOLE, flagpolePlan, GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT, type Brick, type Collider } from "./landmarks.ts";
 
 export const SURFACE_IDS = [SURFACE.asphalt, SURFACE.concrete, SURFACE.cobble, SURFACE.dirt, SURFACE.gravel, SURFACE.grass, SURFACE.sand, SURFACE.mud] as const;
@@ -63,6 +63,7 @@ export const PREFAB_IDS = [
   PREFAB.grandstand,
   PREFAB.billboard,
   PREFAB.lamp,
+  PREFAB.acornLamp,
   PREFAB.gantry,
   PREFAB.chevron,
   PREFAB.monument,
@@ -754,6 +755,21 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   // The drawn building of an enterable lot: no collider of its own, its walls are placed apart; it keeps a building's clearance from the roads.
   [PREFAB.buildingShell]: { body: "none", collider: [], foot: hypot2(6, 6), size: [12, 14, 12], mass: 0, material: MAT.BUILDING_WALL },
   [PREFAB.invisibleWall]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.JERSEY_CONCRETE },
+  // The acorn lamp: plinth, post, collar, globe and cap, each a circle of its own.
+  [PREFAB.acornLamp]: {
+    body: "solid",
+    collider: [
+      { kind: "circle", r: ACORN_LAMP.plinthRadius, y1: ACORN_LAMP.plinthHeight },
+      { kind: "circle", r: ACORN_LAMP.postRadius, y0: ACORN_LAMP.plinthHeight, y1: ACORN_LAMP.collarBottom },
+      { kind: "circle", r: ACORN_LAMP.collarRadius, y0: ACORN_LAMP.collarBottom, y1: ACORN_LAMP.collarTop },
+      { kind: "circle", r: ACORN_LAMP.globeRadius, y0: ACORN_LAMP.collarTop, y1: ACORN_LAMP.capBottom },
+      { kind: "circle", r: ACORN_LAMP.capRadius, y0: ACORN_LAMP.capBottom, y1: ACORN_LAMP.height },
+    ],
+    foot: ACORN_LAMP.globeRadius,
+    size: [2 * ACORN_LAMP.globeRadius, ACORN_LAMP.height, 2 * ACORN_LAMP.globeRadius],
+    mass: 0,
+    material: MAT.LAMP_POLE,
+  },
   [PREFAB.bench]: kitSpec(STREET_KIT.bench, MAT.BENCH_MAPLE),
   [PREFAB.bikeRack]: kitSpec(STREET_KIT.bikeRack, MAT.BRACKET_STEEL),
   [PREFAB.litterBin]: kitSpec(STREET_KIT.litterBin, MAT.DUMPSTER_STEEL),
