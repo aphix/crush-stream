@@ -2,12 +2,13 @@ import type { ImpulseJoint, Ray, RigidBody, World } from "@dimforge/rapier3d-sim
 import type { Rapier } from "../kernel/rapier.ts";
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { GRAVITY } from "../kernel/constants.ts";
-import { activeGround, NO_FLOOR } from "../world/ground.ts";
+import { NO_FLOOR } from "../world/ground.ts";
 import { type Doll, PARTS, TOTAL_MASS } from "./ragdoll-body.ts";
 import { joinUp } from "./ragdoll-joints.ts";
 import { chooseRoute, GETUP_ROUTES, type GetUpRoute, smooth, STAGE, stageAt, standingBearing } from "./walker-getup.ts";
 import { Gait, GAIT } from "./walker-gait.ts";
 import { FootLocks } from "./walker-feet.ts";
+import { WalkFloor } from "./walker-floor.ts";
 import { Locomotion, WALK_SPEED } from "./walker-locomotion.ts";
 import { ANG, FORCE_BASED, GETUP_GIMBAL, HIP_BACK, HIP_FORWARD, HIP_L, HIP_R, HOLD, LIN, MOTOR_FLOOR, MOTORS, ROLL_IN, ROLL_OUT, STAND_GIMBAL } from "./walker-motors.ts";
 import { leanedQuaternion, nlerp, pitchedQuaternion, spinBetween, uprightness } from "./walker-math.ts";
@@ -94,6 +95,8 @@ export class Walker {
   /** The root's motion and the gait's feet: what he does while he stands. */
   readonly loco = new Locomotion();
   readonly gait = new Gait();
+  /** What his feet stand on: steps up to `WALK_STEP` are floor, and a building streams its boxes in through `floor.boxes`. */
+  readonly floor = new WalkFloor();
   private readonly feet = new FootLocks();
   private doll: Doll | null = null;
   private world: World | null = null;
@@ -124,9 +127,9 @@ export class Walker {
   /** How far (m) he has gone on past the way out looking for clear ground to come down on (`HOP_ON`). */
   private hopOn = 0;
   private ray: Ray | null = null;
-  /** The ground under (x, z), the last known one where there is none. */
+  /** The floor under (x, z), the last known one where there is none. */
   private readonly groundAt = (x: number, z: number): number => {
-    const height = activeGround().heightAt(x, z);
+    const height = this.floor.under(x, z);
     if (height !== NO_FLOOR) this.groundLast = height;
     return this.groundLast;
   };
@@ -308,6 +311,7 @@ export class Walker {
     this.loco.reset(yaw);
     this.framesOnFoot = 0;
     this.hopUp = 0;
+    this.floor.reset(at.x, at.y, at.z);
     this.gait.seed(at.x, at.y, at.z, yaw, this.groundAt);
     this.anchorPos[0] = at.x;
     this.anchorPos[1] = at.y;
@@ -325,8 +329,9 @@ export class Walker {
   private walk(doll: Doll, dt: number, out: ArrayLike<number>, at: number): void {
     this.holdRootToBody(doll);
     this.getOut(dt, out, at);
-    this.loco.update(dt, this.heading, this.command);
+    this.loco.update(dt, this.heading, this.floor.pace(this.anchorPos[0]!, this.anchorPos[2]!, this.loco.yaw, this.command));
     this.gait.update(dt, this.loco, this.groundAt, doll.cur, 3);
+    this.floor.stand(this.gait.planted, this.gait.plant);
     this.moveAnchor(dt);
   }
 
