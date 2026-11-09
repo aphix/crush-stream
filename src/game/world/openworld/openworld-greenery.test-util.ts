@@ -1,4 +1,4 @@
-import type { Lots } from "./openworld-layout.ts";
+import type { Lots, PathPlan } from "./openworld-layout.ts";
 import { sidesOf, type BlockSide } from "./openworld-sides.ts";
 
 /** How far (m) the point stands out of block face `side`'s property line toward its street: negative inside the block. */
@@ -32,4 +32,17 @@ export function inClearPath(lots: Lots, x: number, z: number, margin = 0): boole
     }
   }
   return false;
+}
+
+/** The least distance (m) from the point to any of the path's segments. */
+export function distanceToPath(path: PathPlan, x: number, z: number): number {
+  let least = Infinity;
+  for (let at = 1; at < path.points.length; at++) {
+    const [ax, az] = path.points[at - 1]!;
+    const [bx, bz] = path.points[at]!;
+    const length = (bx - ax) ** 2 + (bz - az) ** 2;
+    const share = length === 0 ? 0 : Math.min(1, Math.max(0, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / length));
+    least = Math.min(least, Math.hypot(x - (ax + share * (bx - ax)), z - (az + share * (bz - az))));
+  }
+  return least;
 }

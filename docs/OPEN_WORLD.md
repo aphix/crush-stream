@@ -292,6 +292,12 @@ ground floor's envelope of every place within `SHELL_NEAR` of the eye, so no ope
 
 The middle block is dressed after Rittenhouse Square. Its three north-south paths, the east-west path and a round plaza at the block's middle are paved (cobble paint laid ahead of the lawn, so the grass takes only what the paving leaves). The plaza is one solid prefab (`plaza`) of bricks: a seat ring 0.45 m high and a back ring 0.85 m high round a paved circle, open where the four paths come in (3.2 m, a car passes), and a bronze dog on a stone plinth in one quarter; what is drawn is exactly what a car meets. Slat benches stand beside each path facing it every 12 m, a bin by every other, a lamp every 24 m on alternate sides, low hoop fences run behind the benches, and an octagonal pavilion stands on the south-west lawn. Nothing stands on a path, in the plaza's ring, on the court or in the 2.5 m by the park's edge. Trees are the signage lane's.
 
+## Trees and greenery (`world/openworld/openworld-greenery.ts`, `openworld-park-trees.ts`, `present/street-trees.ts`)
+
+- **Street trees.** Each street tree is the one `tree` prop it always was (the same station, `TREE_SCALE`, no yaw or size, so its collider and the sim are unchanged) with a seeded `style` (`street-tree:<kind>:<side>:<variation>`, `streetTreeStyle`): a plane (9 of 20; pale mottled trunk, a wide canopy reaching over the street), a linden, a young narrow tree or a cherry in blossom. The style gives the track art its skin (one kind is one draw group per 512 m cell: 1 before, 4 on the streets) and a drawn pose (`DrawnPose`: the facing, the street's own give or take 0.15 rad, and one of four sizes, 0.88 to 1.12) that rides the instance matrix only. Each is a trunk in bark bands, limbs and 3 to 8 overlapping icosahedron lumps in the nature material, standing in a soil pit with ivy lumps at its foot. A tree with no style (every other course) draws as before. The canopy keeps 0.3 m off the bays and a walker's headroom over the sidewalk's clear path; nothing low lies in the path.
+- **Park trees.** `parkTreeProps`: planes and lindens (a third larger) in round dirt beds on the park's lawns, each ringed by boxwood balls, laid on a jittered lattice and kept off the paths' fence lines, the plaza, the court, the benches, lamps, bins and pavilion and each other. The same solid `tree` prop, so a car meets a trunk; the boxwood is drawn only.
+- **Stoop greenery.** `stoopGreeneryProps`: a pot in the notch between a rowhome's bay and its stoop (45 of 100 houses) and a shrub before the bay's corner (35 of 100), from the greenery assets; collider-less, kept off the bay, the stoop treads, the clear path and the street's cellar doors. The course lists these and the park's trees last, so no earlier prop's index moves.
+
 ## Where it lives
 
 | Piece | File |
@@ -303,6 +309,7 @@ The middle block is dressed after Rittenhouse Square. Its three north-south path
 | The look-at | `ai/civilians/civilian-look.ts` |
 | The engine's end: crowd, link, look-at, wall hook | `engine/engine-openworld.ts` (`OpenWorldDirector`, held by `CrashEngine`) |
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
+| Trees and greenery: street trees, park trees, stoop plants | `world/openworld/openworld-{greenery,park-trees}.ts`, `present/street-trees.ts`, `DrawnPose` in `present/prop-tumble.ts` |
 | Signs: shop signs, names on the buildings | `present/openworld-shop-signs.ts`, `openworld-signs.ts` (the label style from `track-debug.ts`) |
 | Rowhome facade kit | `present/facade-bays.ts`, `facade-bay-parts.ts`, `facade-kit-atlas.ts`; plan and colliders `world/openworld/openworld-facade-solids.ts` |
 | Animation | `present/civilian-anim{,-clips,-rig,-channels}.ts`, `ai/civilians/civilian-activity.ts` |

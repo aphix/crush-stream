@@ -3,7 +3,7 @@ import { MAT } from "../kernel/material-ids.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
 import { TREE_SCALE } from "../world/scenery.ts";
-import { streetTreeKindOf, streetTreeOf, type StreetTreeKind, type StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import { streetTreeKindOf, streetTreeOf, type StreetKind, type StreetTree, type StreetTreeKind, type StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
 import { cyl, type Piece } from "./prefab-pieces.ts";
 
 /** A canopy lump: an ellipsoid's middle and radii (m, in the tree's frame: +x toward its street, y up from the sidewalk) and its leaf colour. */
@@ -11,7 +11,10 @@ type Lump = readonly [x: number, y: number, z: number, rx: number, ry: number, r
 /** A limb from the trunk's top to a point in the canopy, and its radius at each end (m). */
 type Limb = readonly [x: number, y: number, z: number, rootRadius: number, tipRadius: number];
 /** A broadleaf street tree: a trunk leaning `trunkLean` m toward the street at its top, in bands of bark colour (a plane's mottling), limbs into the canopy, and the canopy's lumps. */
-type TreeForm = { trunkHeight: number; trunkLean: number; rootRadius: number; topRadius: number; bark: readonly number[]; limbs: readonly Limb[]; canopy: readonly Lump[] };
+type TreeForm = { trunkHeight: number; trunkLean: number; rootRadius: number; topRadius: number; bark: readonly number[]; limbs: readonly Limb[]; canopy: readonly Lump[]; pit: Pit; ivy: readonly Lump[] };
+/** The bare soil at a tree's foot: an octagon or a circle of these half extents across the strip (the tree frame's x) and along it (z), `sides` sides. */
+type Pit = { halfAcross: number; halfAlong: number; sides: number };
+type BareForm = Omit<TreeForm, "pit" | "ivy">;
 
 const PLANE_LEAVES = [0x5b8a3c, 0x4e7e35, 0x6a9646, 0x46733a, 0x5f8f40, 0x527f38, 0x679343, 0x4a7836] as const;
 const LINDEN_LEAVES = [0x3f6e2f, 0x4a7a36, 0x376428, 0x45722f, 0x3c6a2d] as const;
@@ -21,7 +24,7 @@ const CHERRY_LEAF = 0x6f9a48;
 
 /** Street trees' shapes: no lump reaches over 2.32 m behind the trunk toward the houses (2.6 m turned and at the largest size: 0.4 m street-side of the property line, clear of the bays); */
 /** a lump over the clear path keeps its underside 2.84 m up (2.5 m at the smallest size). A plane's canopy reaches past the street's middle. */
-const STREET_TREE_FORMS: Readonly<Record<StreetTreeKind, TreeForm>> = {
+const STREET_FORMS: Readonly<Record<StreetKind, BareForm>> = {
   plane: {
     trunkHeight: 4.6,
     trunkLean: 0.23,
@@ -98,12 +101,14 @@ const STREET_TREE_FORMS: Readonly<Record<StreetTreeKind, TreeForm>> = {
   },
 };
 
-/** The tree pit's bare soil: an octagon 0.68 m across the strip and 1.4 m along it, a little proud of the paving; at the largest size and turn its corner stays 0.94 m of the walk path's middle. */
-const PIT_HALF_ACROSS = 0.34;
-const PIT_HALF_ALONG = 0.7;
+/** The street tree pit's bare soil: an octagon 0.68 m across the strip and 1.4 m along it, a little proud of the paving; at the largest size and turn its corner stays 0.94 m of the walk path's middle. */
+const STREET_PIT: Pit = { halfAcross: 0.34, halfAlong: 0.7, sides: 8 };
+/** A park tree's bed: a round dirt bed 3.2 m across, as under the big plane tree in Rittenhouse Square, with no ivy. */
+const PARK_BED: Pit = { halfAcross: 1.6, halfAlong: 1.6, sides: 16 };
 const PIT_TOP = 0.04;
-const PIT_SIDES = 8;
 const SOIL = 0x4a3a2c;
+/** A park tree is its street kind grown this much in every length: trunk, limbs and canopy. */
+const PARK_GROWTH = 1.3;
 /** Ivy over the pit, a lump spilling toward the curb on the street side (the strip's edge is 0.6 m toward the street). */
 const IVY: readonly Lump[] = [
   [0.12, 0.1, 0.35, 0.28, 0.16, 0.32, 0x2f5a28],
@@ -111,6 +116,29 @@ const IVY: readonly Lump[] = [
   [0.32, 0.08, -0.05, 0.24, 0.14, 0.3, 0x2a4f24],
   [-0.08, 0.09, 0.05, 0.2, 0.13, 0.25, 0x356229],
 ];
+/** `form` with every length grown by `factor`; colours and the number of lumps stay. */
+function grown(form: BareForm, factor: number): BareForm {
+  const lumps = (lump: Lump): Lump => [lump[0] * factor, lump[1] * factor, lump[2] * factor, lump[3] * factor, lump[4] * factor, lump[5] * factor, lump[6]];
+  return {
+    trunkHeight: form.trunkHeight * factor,
+    trunkLean: form.trunkLean * factor,
+    rootRadius: form.rootRadius * factor,
+    topRadius: form.topRadius * factor,
+    bark: form.bark,
+    limbs: form.limbs.map((limb): Limb => [limb[0] * factor, limb[1] * factor, limb[2] * factor, limb[3] * factor, limb[4] * factor]),
+    canopy: form.canopy.map(lumps),
+  };
+}
+
+const STREET_TREE_FORMS: Readonly<Record<StreetTreeKind, TreeForm>> = {
+  plane: { ...STREET_FORMS.plane, pit: STREET_PIT, ivy: IVY },
+  linden: { ...STREET_FORMS.linden, pit: STREET_PIT, ivy: IVY },
+  young: { ...STREET_FORMS.young, pit: STREET_PIT, ivy: IVY },
+  cherry: { ...STREET_FORMS.cherry, pit: STREET_PIT, ivy: IVY },
+  parkPlane: { ...grown(STREET_FORMS.plane, PARK_GROWTH), pit: PARK_BED, ivy: [] },
+  parkLinden: { ...grown(STREET_FORMS.linden, PARK_GROWTH), pit: PARK_BED, ivy: [] },
+};
+
 const TRUNK_SIDES = 8;
 const LIMB_SIDES = 6;
 /** Each lump's icosahedron is turned this much more about y than the last, so no two show their facets alike. */
@@ -137,8 +165,9 @@ function lump([x, y, z, rx, ry, rz]: Lump, index: number): THREE.BufferGeometry 
 /** The pieces of the street tree `skin` names, at the scale its prop stands at (`TREE_SCALE`): pit, ivy, trunk in its bark bands, limbs, canopy. */
 export function streetTreePieces(skin: StreetTreeSkin): Piece[] {
   const form = STREET_TREE_FORMS[streetTreeKindOf(skin)];
-  const pieces: Piece[] = [[cyl(PIT_HALF_ALONG, PIT_HALF_ALONG, 0, PIT_TOP, PIT_SIDES).scale(PIT_HALF_ACROSS / PIT_HALF_ALONG, 1, 1), SOIL, MAT.HAY]];
-  for (const [index, ivy] of IVY.entries()) pieces.push([lump(ivy, index), ivy[6], MAT.CONIFER_FOLIAGE]);
+  const { pit } = form;
+  const pieces: Piece[] = [[cyl(pit.halfAlong, pit.halfAlong, 0, PIT_TOP, pit.sides).scale(pit.halfAcross / pit.halfAlong, 1, 1), SOIL, MAT.HAY]];
+  for (const [index, ivy] of form.ivy.entries()) pieces.push([lump(ivy, index), ivy[6], MAT.CONIFER_FOLIAGE]);
   const top = new THREE.Vector3(form.trunkLean, form.trunkHeight, 0);
   const bands = form.bark.length;
   for (let band = 0; band < bands; band++) {
@@ -154,6 +183,6 @@ export function streetTreePieces(skin: StreetTreeSkin): Piece[] {
 }
 
 /** The street tree a placement's `style` names (its kind, its drawn turn and size), null for any other: a tree of every other course has no style and draws as ever. */
-export function treeOf(p: Pick<Placed, "prefab" | "style">): ReturnType<typeof streetTreeOf> {
+export function treeOf(p: Pick<Placed, "prefab" | "style">): StreetTree | null {
   return p.prefab === PREFAB.tree ? streetTreeOf(p.style) : null;
 }

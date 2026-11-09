@@ -2,10 +2,14 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { MAT } from "../kernel/material-ids.ts";
+import { PARK, PARK_BLOCK } from "../world/openworld/openworld-constants.ts";
 import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { BAY, drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
-import { faceAt, inClearPath, outOf } from "../world/openworld/openworld-greenery.test-util.ts";
+import { distanceToPath, faceAt, inClearPath, outOf } from "../world/openworld/openworld-greenery.test-util.ts";
+import type { StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
+import { parkProps } from "../world/openworld/openworld-park.ts";
+import { PLAZA_RADIUS } from "../world/openworld/openworld-plaza.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
 import { TREE_SCALE } from "../world/scenery.ts";
@@ -31,12 +35,20 @@ const BAY_CLEARANCE = 0.3;
 const EPSILON = 1e-6;
 const TRUNK_FACE_REACH = 4;
 const ROTATION_DIGITS = 5;
+/** What a park tree's low parts (under head height) keep clear of (m): a path's half width and a walker's shoulder, a bench's or lamp's reach, the pavilion's. */
+const PATH_CLEAR = PARK.pathWidth / 2 + 0.3;
+const PROP_CLEAR = 0.8;
+const PAVILION_CLEAR = 2.7;
+/** A park tree's round bed reaches at least this far (m) across. */
+const BED_MIN_HALF = 1.4;
 
 const lots = layOutLots();
-const placed: Placed[] = (openWorldCourse(lots).props ?? [])
+const allPlaced: Placed[] = (openWorldCourse(lots).props ?? [])
   .filter((prop) => prop.prefab === PREFAB.tree)
   .map((prop) => ({ prefab: PREFAB.tree, x: prop.x, y: 0, z: prop.z, yaw: prop.yaw ?? 0, sx: prop.scale ?? 1, sy: prop.scale ?? 1, sz: prop.scale ?? 1, style: prop.style }));
-const skins = [...new Set(placed.map((tree) => treeOf(tree)!.skin))];
+const placed = allPlaced.filter((tree) => !treeOf(tree)!.kind.startsWith("park"));
+const parkPlaced = allPlaced.filter((tree) => treeOf(tree)!.kind.startsWith("park"));
+const skins = [...new Set(allPlaced.map((tree) => treeOf(tree)!.skin))];
 
 /** What the street trees were before kinds: a trunk and two cones of conifer leaves. */
 function conifer(): Float32Array {
@@ -66,16 +78,45 @@ function boundsOf(piece: Piece): THREE.Box3 {
   return piece[0].boundingBox!;
 }
 
+const vertexCache = new Map<string, Float32Array>();
+
+/** Every vertex of skin `skin`'s pieces, flat, in the tree's frame at the prop's scale. */
+function verticesOf(skin: StreetTreeSkin): Float32Array {
+  let flat = vertexCache.get(skin);
+  if (flat === undefined) {
+    flat = Float32Array.from(streetTreePieces(skin).flatMap((piece) => [...piece[0].getAttribute("position").array]));
+    vertexCache.set(skin, flat);
+  }
+  return flat;
+}
+
+/** Calls `visit` with every vertex of `tree`'s drawing in the world (x, height above its foot, z): its pose's turn and size, the prop's scale. */
+function eachVertex(tree: Placed, visit: (x: number, height: number, z: number) => void): void {
+  const pose = treeOf(tree)!;
+  const flat = verticesOf(pose.skin);
+  const cos = Math.cos(pose.yaw);
+  const sin = Math.sin(pose.yaw);
+  const size = TREE_SCALE * pose.scale;
+  for (let at = 0; at < flat.length; at += 3) {
+    const x = flat[at]! * size;
+    const z = flat[at + 2]! * size;
+    visit(tree.x + x * cos + z * sin, flat[at + 1]! * size, tree.z - x * sin + z * cos);
+  }
+}
+
 describe("given the street trees' drawings", () => {
-  it("when each kind's pieces are read, then it stands in a pit of soil no higher than the paving's edge with ivy lumps at its foot, under a canopy over a head's height", () => {
+  it("when each kind's pieces are read, then it stands in a pit of soil no higher than the paving's edge, a street tree with ivy lumps at its foot and a park tree in a round bed, under a canopy over a head's height", () => {
     expect(skins.length).toBeGreaterThanOrEqual(3);
     for (const skin of skins) {
       const pieces = streetTreePieces(skin);
+      const park = skin.includes("park");
       expect(pieces[0]![2], `${skin} first piece`).toBe(MAT.HAY);
       expect(boundsOf(pieces[0]!).max.y * TREE_SCALE, `${skin} pit`).toBeLessThanOrEqual(PIT_TOP_MAX);
+      expect(boundsOf(pieces[0]!).max.x * TREE_SCALE >= BED_MIN_HALF, `${skin} round bed`).toBe(park);
       const leaves = pieces.filter((piece) => piece[2] === MAT.CONIFER_FOLIAGE);
       const ivy = leaves.filter((piece) => boundsOf(piece).max.y * TREE_SCALE <= IVY_TOP_MAX);
-      expect(ivy.length, `${skin} ivy`).toBeGreaterThanOrEqual(IVY_LUMPS);
+      if (park) expect(ivy.length, `${skin} ivy`).toBe(0);
+      else expect(ivy.length, `${skin} ivy`).toBeGreaterThanOrEqual(IVY_LUMPS);
       for (const lump of ivy) {
         const middle = boundsOf(lump).getCenter(new THREE.Vector3());
         expect(Math.hypot(middle.x, middle.z) * TREE_SCALE, `${skin} ivy reach`).toBeLessThanOrEqual(IVY_REACH);
@@ -84,25 +125,34 @@ describe("given the street trees' drawings", () => {
     }
   });
 
-  it("when every tree of the course is placed, then no part of it a walker can meet lies in the sidewalk's clear path and no part nears a bay's front", () => {
+  it("when every street tree of the course is placed, then no part of it a walker can meet lies in the sidewalk's clear path and no part nears a bay's front", () => {
     const bayFront = -(lots.geometry.setback + lots.geometry.houseDepth / 2 - drawnHalf(lots.geometry.houseDepth)) + BAY.out;
-    const vertices = new Map(skins.map((skin) => [skin, streetTreePieces(skin).flatMap((piece) => [...piece[0].getAttribute("position").array])]));
     for (const tree of placed) {
-      const pose = treeOf(tree)!;
       const face = faceAt(lots, tree.x, tree.z, TRUNK_FACE_REACH)!;
-      const cos = Math.cos(pose.yaw);
-      const sin = Math.sin(pose.yaw);
-      const flat = vertices.get(pose.skin)!;
-      for (let at = 0; at < flat.length; at += 3) {
-        const x = flat[at]! * TREE_SCALE * pose.scale;
-        const z = flat[at + 2]! * TREE_SCALE * pose.scale;
-        const worldX = tree.x + x * cos + z * sin;
-        const worldZ = tree.z - x * sin + z * cos;
-        const height = flat[at + 1]! * TREE_SCALE * pose.scale;
-        const where = `${pose.skin} at ${tree.x.toFixed(1)},${tree.z.toFixed(1)}`;
-        if (inClearPath(lots, worldX, worldZ, EPSILON)) expect(height, `${where} over the clear path`).toBeGreaterThanOrEqual(HEADROOM);
-        expect(outOf(face, worldX, worldZ), `${where} against the house`).toBeGreaterThanOrEqual(bayFront + BAY_CLEARANCE);
-      }
+      const where = `${treeOf(tree)!.skin} at ${tree.x.toFixed(1)},${tree.z.toFixed(1)}`;
+      eachVertex(tree, (x, height, z) => {
+        if (inClearPath(lots, x, z, EPSILON)) expect(height, `${where} over the clear path`).toBeGreaterThanOrEqual(HEADROOM);
+        expect(outOf(face, x, z), `${where} against the house`).toBeGreaterThanOrEqual(bayFront + BAY_CLEARANCE);
+      });
+    }
+  });
+
+  it("when every park tree is placed, then no part of it under head height lies on a path, in the plaza, on the court or over a bench, lamp, bin or the pavilion", () => {
+    const index = lots.blocks.findIndex((block) => block.column === PARK_BLOCK.column && block.row === PARK_BLOCK.row);
+    const block = lots.blocks[index]!;
+    const paths = lots.paths.filter((path) => path.block === index);
+    const dressing = parkProps(lots).filter((prop) => prop.prefab !== PREFAB.hoopFence && prop.prefab !== PREFAB.plaza);
+    expect(parkPlaced.length).toBeGreaterThan(0);
+    for (const tree of parkPlaced) {
+      const where = `${treeOf(tree)!.skin} at ${tree.x.toFixed(1)},${tree.z.toFixed(1)}`;
+      eachVertex(tree, (x, height, z) => {
+        if (height >= HEADROOM) return;
+        for (const path of paths) expect(distanceToPath(path, x, z), `${where} on a path`).toBeGreaterThanOrEqual(PATH_CLEAR);
+        expect(Math.hypot(x - block.centreX, z - block.centreZ), `${where} in the plaza`).toBeGreaterThanOrEqual(PLAZA_RADIUS);
+        const onCourt = Math.abs(x - (block.centreX + PARK.courtOffsetX)) < PARK.courtLength / 2 && Math.abs(z - (block.centreZ + PARK.courtOffsetZ)) < PARK.courtWidth / 2;
+        expect(onCourt, `${where} on the court`).toBe(false);
+        for (const prop of dressing) expect(Math.hypot(x - prop.x, z - prop.z), `${where} over ${prop.prefab}`).toBeGreaterThanOrEqual(prop.prefab === PREFAB.pavilion ? PAVILION_CLEAR : PROP_CLEAR);
+      });
     }
   });
 });
@@ -112,7 +162,7 @@ describe("given the street trees drawn as instances", () => {
     const meshes: THREE.InstancedMesh[] = [];
     const material = new THREE.MeshBasicMaterial();
     const tumble = new PropTumble(
-      placed,
+      allPlaced,
       plainMaterials(material),
       (mesh) => void meshes.push(mesh),
       () => false,
@@ -123,7 +173,7 @@ describe("given the street trees drawn as instances", () => {
     const matrix = new THREE.Matrix4();
     const turn = new THREE.Quaternion();
     const scale = new THREE.Vector3();
-    for (const [index, tree] of placed.entries()) {
+    for (const [index, tree] of allPlaced.entries()) {
       const pose = treeOf(tree)!;
       const mesh = tumble["meshes"][tumble["cell"][index]!]![0]!;
       mesh.getMatrixAt(tumble["slot"][index]!, matrix);
@@ -133,6 +183,6 @@ describe("given the street trees drawn as instances", () => {
       expect(Math.sin(yaw), `facing ${index}`).toBeCloseTo(Math.sin(tree.yaw + pose.yaw), ROTATION_DIGITS);
       expect(scale.x, `size ${index}`).toBeCloseTo(tree.sx * pose.scale, ROTATION_DIGITS);
     }
-    expect(new Set(placed.map((tree) => treeOf(tree)!.yaw.toFixed(3))).size).toBeGreaterThan(skins.length);
+    expect(new Set(allPlaced.map((tree) => treeOf(tree)!.yaw.toFixed(3))).size).toBeGreaterThan(skins.length);
   });
 });

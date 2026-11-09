@@ -3,12 +3,15 @@ import { PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
 import { TREE_SCALE } from "../scenery.ts";
 import { SCENERY_ASSETS } from "../scenery-assets/index.ts";
-import { FACING } from "./openworld-constants.ts";
+import { FACING, PARK, PARK_BLOCK } from "./openworld-constants.ts";
 import { openWorldCourse } from "./openworld-course.ts";
 import { fabricProps } from "./openworld-fabric.ts";
 import { BAY, DOOR, homeFrontages, STOOP } from "./openworld-facade-solids.ts";
 import { greeneryAt, stoopGreeneryProps, streetTreeOf } from "./openworld-greenery.ts";
-import { inClearPath } from "./openworld-greenery.test-util.ts";
+import { distanceToPath, inClearPath } from "./openworld-greenery.test-util.ts";
+import { parkTreeProps } from "./openworld-park-trees.ts";
+import { parkProps } from "./openworld-park.ts";
+import { PLAZA_RADIUS } from "./openworld-plaza.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
 import { sidePoint, sidesOf, treeStations } from "./openworld-sides.ts";
@@ -26,7 +29,9 @@ const HALF_TURN = Math.PI;
 const lots = layOutLots();
 const course = openWorldCourse(lots);
 const courseProps = course.props ?? [];
-const trees = courseProps.filter((prop) => prop.prefab === PREFAB.tree);
+const allTrees = courseProps.filter((prop) => prop.prefab === PREFAB.tree);
+const isParkTree = (prop: { style?: string }): boolean => streetTreeOf(prop.style)?.kind.startsWith("park") === true;
+const trees = allTrees.filter((prop) => !isParkTree(prop));
 const frontages = homeFrontages(lots.places.slice(0, lots.backdropStart));
 const fabric = fabricProps(lots, buildOpenWorldMap(lots).graph);
 const cellarDoors = fabric.filter((prop) => prop.prefab === PREFAB.cellarDoor);
@@ -77,8 +82,8 @@ describe("given the open world's street trees", () => {
 
   it("when the course is made twice, then every tree has the same style: the variety is seeded by its spot", () => {
     const again = openWorldCourse(layOutLots()).props?.filter((prop) => prop.prefab === PREFAB.tree) ?? [];
-    expect(again.map((tree) => tree.style).join("|")).toBe(trees.map((tree) => tree.style).join("|"));
-    expect(trees.every((tree) => tree.style !== undefined)).toBe(true);
+    expect(again.map((tree) => tree.style).join("|")).toBe(allTrees.map((tree) => tree.style).join("|"));
+    expect(allTrees.every((tree) => tree.style !== undefined)).toBe(true);
   });
 
   it("when a style is not a street tree's, then it names none: a tree of any other course keeps drawing as it does", () => {
@@ -168,3 +173,72 @@ function insideDoor(door: { x: number; z: number; yaw: number }, plant: { x: num
 function inBox(out: number, across: number, nearOut: number, farOut: number, nearAcross: number, farAcross: number): boolean {
   return out > nearOut + EPSILON && out < farOut - EPSILON && across > nearAcross + EPSILON && across < farAcross - EPSILON;
 }
+
+const parkTrees = allTrees.filter(isParkTree);
+const parkBlockAt = lots.blocks.findIndex((block) => block.column === PARK_BLOCK.column && block.row === PARK_BLOCK.row);
+const parkBlock = lots.blocks[parkBlockAt]!;
+const parkPaths = lots.paths.filter((path) => path.block === parkBlockAt);
+const dressing = parkProps(lots).filter((prop) => prop.prefab !== PREFAB.hoopFence && prop.prefab !== PREFAB.plaza);
+const parkBoxwood = parkTreeProps(lots).boxwood;
+/** The hoop fences stand this far (m) off a path's middle: half its width and 1.6 m; a tree's bed stays off that line. */
+const FENCE_LINE = PARK.pathWidth / 2 + 1.6;
+const BED_RADIUS = 1.6;
+const LEAST_PARK_TREES = 6;
+/** Beds no nearer than this (m) to each other, and the dressing's clearances (m): the least any bench, bin or lamp reaches, and a pavilion's. */
+const BED_APART = 8;
+const PROP_CLEAR = 0.3;
+const PAVILION_CLEAR = 2.5;
+const RING_RADIUS_BETWEEN = [1.9, 2.1] as const;
+
+function nearestPath(x: number, z: number): number {
+  return Math.min(...parkPaths.map((path) => distanceToPath(path, x, z)));
+}
+
+function inCourtBox(x: number, z: number, reach: number): boolean {
+  return Math.abs(x - (parkBlock.centreX + PARK.courtOffsetX)) < PARK.courtLength / 2 + reach && Math.abs(z - (parkBlock.centreZ + PARK.courtOffsetZ)) < PARK.courtWidth / 2 + reach;
+}
+
+describe("given the park's big trees", () => {
+  it("when the course is read, then the park has several planes and lindens as the street tree prop (same solid, no turn or size), listed with their boxwood after everything else", () => {
+    expect(parkTrees.length).toBeGreaterThanOrEqual(LEAST_PARK_TREES);
+    expect(new Set(parkTrees.map((tree) => streetTreeOf(tree.style)!.kind)).size).toBe(2);
+    for (const tree of parkTrees) {
+      expect(tree.scale).toBe(TREE_SCALE);
+      expect(tree.yaw).toBeUndefined();
+      expect(tree.size).toBeUndefined();
+    }
+    const tail = courseProps.slice(courseProps.length - parkTrees.length - parkBoxwood.length);
+    expect(tail.map((prop) => keyOf(prop.x, prop.z)).join("|")).toBe([...parkTrees, ...parkBoxwood].map((prop) => keyOf(prop.x, prop.z)).join("|"));
+  });
+
+  it("when each bed is read, then it lies inside the park and off the paths' fence lines, the plaza, the court, the benches, lamps and bins, the pavilion and the other beds", () => {
+    for (const tree of parkTrees) {
+      const at = keyOf(tree.x, tree.z);
+      expect(Math.abs(tree.x - parkBlock.centreX), `${at} edge`).toBeLessThan(lots.geometry.blockLength / 2 - BED_RADIUS);
+      expect(Math.abs(tree.z - parkBlock.centreZ), `${at} edge`).toBeLessThan(lots.geometry.blockDepth / 2 - BED_RADIUS);
+      expect(nearestPath(tree.x, tree.z), `${at} path`).toBeGreaterThanOrEqual(FENCE_LINE + BED_RADIUS);
+      expect(Math.hypot(tree.x - parkBlock.centreX, tree.z - parkBlock.centreZ), `${at} plaza`).toBeGreaterThanOrEqual(PLAZA_RADIUS + BED_RADIUS);
+      expect(inCourtBox(tree.x, tree.z, BED_RADIUS), `${at} court`).toBe(false);
+      for (const prop of dressing) {
+        const clear = (prop.prefab === PREFAB.pavilion ? PAVILION_CLEAR : PROP_CLEAR) + BED_RADIUS;
+        expect(Math.hypot(tree.x - prop.x, tree.z - prop.z), `${at} ${prop.prefab}`).toBeGreaterThanOrEqual(clear);
+      }
+      for (const other of parkTrees) if (other !== tree) expect(Math.hypot(tree.x - other.x, tree.z - other.z), `${at} beds`).toBeGreaterThanOrEqual(BED_APART);
+    }
+  });
+
+  it("when the boxwood is read, then each ball is collider-less greenery ringed round a tree's bed and none stands on a path, past a fence line, in the plaza, on the court or on a bench", () => {
+    expect(parkBoxwood.length).toBeGreaterThan(parkTrees.length);
+    for (const ball of parkBoxwood) {
+      const at = keyOf(ball.x, ball.z);
+      expect(PREFABS[ball.prefab].body, at).toBe("none");
+      const ring = Math.min(...parkTrees.map((tree) => Math.hypot(tree.x - ball.x, tree.z - ball.z)));
+      expect(ring, `${at} ring`).toBeGreaterThan(RING_RADIUS_BETWEEN[0]);
+      expect(ring, `${at} ring`).toBeLessThan(RING_RADIUS_BETWEEN[1]);
+      expect(nearestPath(ball.x, ball.z), `${at} path`).toBeGreaterThanOrEqual(FENCE_LINE);
+      expect(Math.hypot(ball.x - parkBlock.centreX, ball.z - parkBlock.centreZ), `${at} plaza`).toBeGreaterThanOrEqual(PLAZA_RADIUS);
+      expect(inCourtBox(ball.x, ball.z, 0), `${at} court`).toBe(false);
+      for (const prop of dressing) expect(Math.hypot(ball.x - prop.x, ball.z - prop.z), `${at} ${prop.prefab}`).toBeGreaterThanOrEqual(PROP_CLEAR);
+    }
+  });
+});
