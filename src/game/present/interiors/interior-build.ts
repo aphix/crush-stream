@@ -1,12 +1,19 @@
 import * as THREE from "three";
-import { ceilingOver, stairBoxes, wallBoxes } from "../../world/openworld/interior-draft.ts";
-import { ROOM_LOOK, type Box, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
+import { stairBoxes, wallBoxes } from "../../world/openworld/interior-draft.ts";
+import { ceilingOver, ROOM_LOOK, type Alcove, type Box, type InteriorPlan, type Pane } from "../../world/openworld/interior-kinds.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { box, painted, type Piece } from "../prefab-pieces.ts";
 import { furnishingParts } from "./interior-kit.ts";
 
 /** A floor's wearing layer on top of its slab (m). */
 const FLOOR_LAYER = 0.03;
+/** The glass's colour: a pale blue-green, seen against the light. */
+const GLASS_COLOR = 0xbfd8e6;
+/** A plate on a floor or under a ceiling stands this far (m) clear of the slab beside it, so the two never share a plane. */
+const PLATE_LIFT = 0.004;
+/** A point of the building's local frame: x toward the street, y up, z along its face. */
+type Point = readonly [x: number, y: number, z: number];
+
 /** The turn each furnishing's front (its +x) takes it to, as a rotation about y in the building's local frame (front is +x there). */
 const TURN_ANGLE = [0, -Math.PI / 2, Math.PI, Math.PI / 2] as const;
 
@@ -17,6 +24,48 @@ function localBox(plan: InteriorPlan, solid: Box): THREE.BufferGeometry {
   const x0 = plan.depth / 2 - solid.deep1;
   const x1 = plan.depth / 2 - solid.deep0;
   return box(x1 - x0, solid.y1 - solid.y0, solid.across1 - solid.across0, (x0 + x1) / 2, (solid.y0 + solid.y1) / 2, (solid.across0 + solid.across1) / 2);
+}
+
+/** A plan point (deep, across) at height `y` as a point of the building's local frame. */
+function at(plan: InteriorPlan, deep: number, y: number, across: number): Point {
+  return [plan.depth / 2 - deep, y, across];
+}
+
+/** A quad through four points in order. */
+function quad(a: Point, b: Point, c: Point, d: Point): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([...a, ...b, ...c, ...d], 3));
+  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** A sheet standing over the plan segment from `from` to `to` between two heights. */
+function upright(plan: InteriorPlan, from: readonly [deep: number, across: number], to: readonly [deep: number, across: number], y0: number, y1: number): THREE.BufferGeometry {
+  return quad(at(plan, from[0], y0, from[1]), at(plan, to[0], y0, to[1]), at(plan, to[0], y1, to[1]), at(plan, from[0], y1, from[1]));
+}
+
+/** A level sheet over an alcove's four outline corners at height `y`. */
+function plate(plan: InteriorPlan, corners: Alcove["corners"], y: number): THREE.BufferGeometry {
+  const [a, b, c, d] = corners.map(([deep, across]) => at(plan, deep, y, across));
+  return quad(a!, b!, c!, d!);
+}
+
+/** Every alcove of `level`: its floor carried out over the bay, its ceiling at the glass's head, and the apron up to the sill round its three sides. */
+function alcovePieces(plan: InteriorPlan, look: Look, level: number): Piece[] {
+  const out: Piece[] = [];
+  for (const alcove of plan.alcoves) {
+    if (alcove.level !== level) continue;
+    out.push([plate(plan, alcove.corners, alcove.floorY + PLATE_LIFT), look.floor], [plate(plan, alcove.corners, alcove.head - PLATE_LIFT), look.ceiling]);
+    for (let side = 0; side + 1 < alcove.corners.length; side++) out.push([upright(plan, alcove.corners[side]!, alcove.corners[side + 1]!, alcove.floorY, alcove.sill), look.trim]);
+  }
+  return out;
+}
+
+/** The glass of `level`'s windows and bays, as one merged geometry; null when it has none. */
+function glassOf(plan: InteriorPlan, levels: (level: number) => boolean): THREE.BufferGeometry | null {
+  const panes = plan.panes.filter((pane: Pane) => levels(pane.level));
+  return panes.length === 0 ? null : painted(panes.map((pane): Piece => [upright(plan, [pane.deep0, pane.across0], [pane.deep1, pane.across1], pane.y0, pane.y1), GLASS_COLOR]));
 }
 
 function wallPieces(plan: InteriorPlan, look: Look, shell: boolean): Piece[] {
@@ -45,16 +94,18 @@ function inWorld(geometry: THREE.BufferGeometry, place: Place): THREE.BufferGeom
   return geometry.rotateY(place.yaw).translate(place.x, 0, place.z);
 }
 
-/** The ground floor's envelope: what shows through a door or a shopfront window from the street. */
-export function buildShell(plan: InteriorPlan, place: Place): THREE.BufferGeometry {
+/** The ground floor's envelope: what shows through a door from the street; with the glass of its windows and its bay. */
+export function buildShell(plan: InteriorPlan, place: Place): { solid: THREE.BufferGeometry; glass: THREE.BufferGeometry | null } {
   const look = ROOM_LOOK[plan.kind];
-  return inWorld(painted([...wallPieces(plan, look, true), ...slabPieces(plan, look, true)]), place);
+  const glass = glassOf(plan, (level) => level === 0);
+  return { solid: inWorld(painted([...wallPieces(plan, look, true), ...slabPieces(plan, look, true), ...alcovePieces(plan, look, 0)]), place), glass: glass === null ? null : inWorld(glass, place) };
 }
 
-/** Everything else: partitions, upper floors, stairs and the furniture (lit and unlit apart); a geometry is null when it has no pieces. */
-export function buildDetail(plan: InteriorPlan, place: Place): { solid: THREE.BufferGeometry | null; glow: THREE.BufferGeometry | null } {
+/** Everything else: partitions, upper floors, their bays, stairs and the furniture (lit and unlit apart) and the upper floors' glass; a geometry is null when it has no pieces. */
+export function buildDetail(plan: InteriorPlan, place: Place): { solid: THREE.BufferGeometry | null; glow: THREE.BufferGeometry | null; glass: THREE.BufferGeometry | null } {
   const look = ROOM_LOOK[plan.kind];
   const solid: Piece[] = [...wallPieces(plan, look, false), ...slabPieces(plan, look, false)];
+  for (let level = 1; level < plan.floors.length; level++) solid.push(...alcovePieces(plan, look, level));
   const glow: Piece[] = [];
   for (const flight of plan.stairs) for (const tread of stairBoxes(flight, plan.floors[flight.level]!)) solid.push([localBox(plan, tread), look.wood]);
   for (const piece of plan.furnishings) {
@@ -65,5 +116,6 @@ export function buildDetail(plan: InteriorPlan, place: Place): { solid: THREE.Bu
     solid.push(...parts.solid);
     glow.push(...parts.glow);
   }
-  return { solid: solid.length > 0 ? inWorld(painted(solid), place) : null, glow: glow.length > 0 ? inWorld(painted(glow), place) : null };
+  const glass = glassOf(plan, (level) => level > 0);
+  return { solid: solid.length > 0 ? inWorld(painted(solid), place) : null, glow: glow.length > 0 ? inWorld(painted(glow), place) : null, glass: glass === null ? null : inWorld(glass, place) };
 }

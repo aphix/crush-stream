@@ -62,7 +62,7 @@ describe("given the open world's course on the real programme", () => {
   it("when the street face of each interior is swept at body width, then it is walled everywhere but in the doorways, which are open for a walker", () => {
     for (const place of furnished) {
       const bays = Math.round(place.width / BAY_WIDTH);
-      const doors = Array.from({ length: bays }, (_, bay) => SHOPFRONT[place.interior!].filter((opening) => opening.door).map((opening) => ({ centre: opening.centre + (bay - (bays - 1) / 2) * BAY_WIDTH, half: opening.width / 2 }))).flat();
+      const doors = Array.from({ length: bays }, (_, bay) => SHOPFRONT[place.interior!].map((opening) => ({ centre: opening.centre + (bay - (bays - 1) / 2) * BAY_WIDTH, half: opening.width / 2 }))).flat();
       const wrong: string[] = [];
       for (let across = -place.width / 2 + 0.1; across < place.width / 2; across += 0.1) {
         const open = doors.some((door) => Math.abs(across - door.centre) < door.half - 0.02);

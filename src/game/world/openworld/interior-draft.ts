@@ -1,6 +1,9 @@
 import {
   BACK_DOOR,
   BAY_WIDTH,
+  ceilingOver,
+  OPENING,
+  type Alcove,
   FURNISHING,
   HEADROOM,
   LEVELS,
@@ -17,6 +20,7 @@ import {
   type FurnishingKind,
   type InteriorPlan,
   type Opening,
+  type Pane,
   type Rect,
   type Slab,
   type Stairs,
@@ -24,17 +28,18 @@ import {
   type Wall,
   TURN,
 } from "./interior-kinds.ts";
+import { FACADE_FACE, type RoomWindow } from "./facade-windows.ts";
+import { BAY, BAY_FLOORS, bayOutline } from "./openworld-facade-solids.ts";
 import type { InteriorKind } from "./walk-graph.ts";
+
+/** Glass sits this far (m) inside the bay kit's outer walls, so it never shares a plane with them. */
+const GLASS_INSET = 0.05;
+
 
 /** A flight is this wide (m): a person and a handrail. */
 const STAIR_WIDTH = 0.9;
 /** A hanging lamp's drop from the ceiling (m). */
 const LAMP_DROP = 0.35;
-
-/** Underside of the ceiling over `level`: the next floor's slab, or the roof's. */
-export function ceilingOver(floors: readonly number[], topCeiling: number, level: number): number {
-  return level + 1 < floors.length ? floors[level + 1]! - SLAB_THICK : topCeiling;
-}
 
 /** The footprint of a furnishing in plan coordinates: its width runs across its front, its depth along it. */
 export function footprintOf(piece: Furnishing): Rect {
@@ -44,24 +49,38 @@ export function footprintOf(piece: Furnishing): Rect {
   return { deep0: piece.deep - halfDeep, deep1: piece.deep + halfDeep, across0: piece.across - halfAcross, across1: piece.across + halfAcross };
 }
 
-/** A wall's solid boxes between `floorY` and `ceilingY`: full-height runs between its openings, a sill under and a lintel over each. */
+/** Two edges of a wall's openings closer than this (m) are one. */
+const EDGE_TOLERANCE = 1e-9;
+
+/**
+ * A wall's solid boxes between `floorY` and `ceilingY`: the wall cut at every opening's edges into runs, each run solid but for the heights of the openings that cover it (a sill under, a lintel over,
+ * a bar between two stacked ones). Openings may stand over one another or overlap.
+ */
 export function wallBoxes(wall: Wall, floorY: number, ceilingY: number): Box[] {
   const half = wall.thick / 2;
   const boxAlong = (from: number, to: number, y0: number, y1: number): Box =>
     wall.axis === "across"
       ? { deep0: wall.fixed - half, deep1: wall.fixed + half, across0: from, across1: to, y0, y1 }
       : { across0: wall.fixed - half, across1: wall.fixed + half, deep0: from, deep1: to, y0, y1 };
+  const inside = (value: number): number => Math.min(wall.to, Math.max(wall.from, value));
+  const edges = [wall.from, wall.to, ...wall.openings.flatMap((opening) => [inside(opening.centre - opening.width / 2), inside(opening.centre + opening.width / 2)])].sort((a, b) => a - b);
   const out: Box[] = [];
-  let cursor = wall.from;
-  for (const opening of [...wall.openings].sort((a, b) => a.centre - b.centre)) {
-    const start = opening.centre - opening.width / 2;
-    const end = opening.centre + opening.width / 2;
-    if (start > cursor) out.push(boxAlong(cursor, start, floorY, ceilingY));
-    if (opening.sill > 0) out.push(boxAlong(start, end, floorY, floorY + opening.sill));
-    if (floorY + opening.top < ceilingY) out.push(boxAlong(start, end, floorY + opening.top, ceilingY));
-    cursor = end;
+  for (let at = 0; at + 1 < edges.length; at++) {
+    const from = edges[at]!;
+    const to = edges[at + 1]!;
+    if (to - from < EDGE_TOLERANCE) continue;
+    const middle = (from + to) / 2;
+    const gaps = wall.openings
+      .filter((opening) => middle > opening.centre - opening.width / 2 && middle < opening.centre + opening.width / 2)
+      .map((opening): [number, number] => [floorY + opening.sill, Math.min(ceilingY, floorY + opening.top)])
+      .sort((a, b) => a[0] - b[0]);
+    let solidFrom = floorY;
+    for (const [low, high] of gaps) {
+      if (low > solidFrom) out.push(boxAlong(from, to, solidFrom, low));
+      solidFrom = Math.max(solidFrom, high);
+    }
+    if (solidFrom < ceilingY) out.push(boxAlong(from, to, solidFrom, ceilingY));
   }
-  if (wall.to > cursor) out.push(boxAlong(cursor, wall.to, floorY, ceilingY));
   return out;
 }
 
@@ -96,6 +115,8 @@ export class Draft {
   readonly slabs: Slab[] = [];
   readonly furnishings: Furnishing[] = [];
   readonly stairs: Stairs[] = [];
+  readonly panes: Pane[] = [];
+  readonly alcoves: Alcove[] = [];
   readonly floors: readonly number[];
   readonly topCeiling: number;
   /** The clear half width between the party walls, and the clear depths from the street wall to the back wall. */
@@ -103,7 +124,11 @@ export class Draft {
   readonly front = STREET_SKIN + SHELL_WALL;
   readonly back: number;
 
-  constructor(kind: InteriorKind, width: number, depth: number) {
+  /** Every window a room of this interior looks out of (the facade's own, from its picture), on every face, at every level. */
+  private readonly windows: readonly RoomWindow[];
+
+  constructor(kind: InteriorKind, width: number, depth: number, windows: readonly RoomWindow[] = []) {
+    this.windows = windows;
     this.kind = kind;
     this.width = width;
     this.depth = depth;
@@ -155,14 +180,45 @@ export class Draft {
     return { deep0: flight.deep0 + step * flight.run, deep1: flight.deep0 + flight.steps * flight.run, across0: flight.across - flight.width / 2, across1: flight.across + flight.width / 2 };
   }
 
-  /** The envelope of `level`: the street wall (cut by the shopfront on the ground floor), the party walls and the back wall; the ground floor's are the far view's shell. */
+  /** The windows on `face` at `level` as wall openings, and their panes of glass in the wall's plane, `wallAt` deep or across. */
+  private glazed(level: number, face: RoomWindow["face"], wallAt: number): Opening[] {
+    const floor = this.floors[level]!;
+    const here = this.windows.filter((window) => window.level === level && window.face === face);
+    const street = face === FACADE_FACE.street || face === FACADE_FACE.back;
+    for (const window of here) {
+      const [a, b] = [window.along0, window.along1];
+      this.panes.push(street ? { level, deep0: wallAt, across0: a, deep1: wallAt, across1: b, y0: window.y0, y1: window.y1 } : { level, deep0: a, across0: wallAt, deep1: b, across1: wallAt, y0: window.y0, y1: window.y1 });
+    }
+    return here.map((window): Opening => ({ centre: (window.along0 + window.along1) / 2, width: window.along1 - window.along0, sill: window.y0 - floor, top: window.y1 - floor, kind: OPENING.window }));
+  }
+
+  /** A rowhome's bay window on `level`: the street wall is open across its mouth from the floor up to the glass's head, and the alcove (floor, apron, ceiling) and its three panes stand outside the wall. */
+  private bayOpening(level: number): Opening[] {
+    if (this.kind !== "rowhome") return [];
+    const { sill, head } = BAY_FLOORS[level]!;
+    const floorY = this.floors[level]!;
+    const outline = bayOutline(-GLASS_INSET);
+    for (let at = 0; at + 1 < outline.length; at++) {
+      this.panes.push({ level, deep0: -outline[at]!.out, across0: outline[at]!.across, deep1: -outline[at + 1]!.out, across1: outline[at + 1]!.across, y0: sill, y1: head });
+    }
+    this.alcoves.push({ level, floorY, sill, head, corners: bayOutline(-GLASS_INSET).map((corner) => [-corner.out, corner.across] as const) });
+    return [{ centre: BAY.across, width: BAY.width, sill: 0, top: head - floorY, kind: OPENING.bay }];
+  }
+
+  /** The envelope of `level`: the street wall (its doorways on the ground floor, its windows and the bay's mouth), the party walls (with windows where a side is open) and the back wall; the ground floor's are the far view's shell. */
   envelope(level: number): void {
     const ground = level === 0;
     const bays = Math.round(this.width / BAY_WIDTH);
-    const streetOpenings = ground ? Array.from({ length: bays }, (_, bay) => SHOPFRONT[this.kind].map((opening): Opening => ({ ...opening, centre: opening.centre + (bay - (bays - 1) / 2) * BAY_WIDTH }))).flat() : [];
-    this.crossWall(level, STREET_SKIN + SHELL_WALL / 2, -this.half, this.half, streetOpenings, ground, SHELL_WALL);
-    this.crossWall(level, this.depth - STREET_SKIN - SHELL_WALL / 2, -this.half, this.half, ground && this.kind === "rowhome" ? [BACK_DOOR] : [], ground, SHELL_WALL);
-    for (const side of [-1, 1]) this.spineWall(level, side * (this.width / 2 - PARTY_WALL / 2), STREET_SKIN, this.depth - STREET_SKIN, [], ground, PARTY_WALL);
+    const doors = ground ? Array.from({ length: bays }, (_, bay) => SHOPFRONT[this.kind].map((opening): Opening => ({ ...opening, centre: opening.centre + (bay - (bays - 1) / 2) * BAY_WIDTH }))).flat() : [];
+    const streetAt = STREET_SKIN + SHELL_WALL / 2;
+    const backAt = this.depth - STREET_SKIN - SHELL_WALL / 2;
+    this.crossWall(level, streetAt, -this.half, this.half, [...doors, ...this.glazed(level, FACADE_FACE.street, streetAt), ...this.bayOpening(level)], ground, SHELL_WALL);
+    this.crossWall(level, backAt, -this.half, this.half, [...(ground && this.kind === "rowhome" ? [BACK_DOOR] : []), ...this.glazed(level, FACADE_FACE.back, backAt)], ground, SHELL_WALL);
+    for (const side of [-1, 1]) {
+      const sideAt = side * (this.width / 2 - PARTY_WALL / 2);
+      const face = side === 1 ? FACADE_FACE.plusAcross : FACADE_FACE.minusAcross;
+      this.spineWall(level, sideAt, STREET_SKIN, this.depth - STREET_SKIN, this.glazed(level, face, sideAt), ground, PARTY_WALL);
+    }
   }
 
   /** The slab under level `level`'s floor: the foundation from the ground on the ground floor, else a slab, with `holes` cut through it. */
@@ -184,7 +240,7 @@ export class Draft {
   }
 
   plan(): InteriorPlan {
-    return { kind: this.kind, width: this.width, depth: this.depth, floors: this.floors, topCeiling: this.topCeiling, walls: this.walls, slabs: this.slabs, furnishings: this.furnishings, stairs: this.stairs };
+    return { kind: this.kind, width: this.width, depth: this.depth, floors: this.floors, topCeiling: this.topCeiling, walls: this.walls, slabs: this.slabs, furnishings: this.furnishings, stairs: this.stairs, panes: this.panes, alcoves: this.alcoves };
   }
 }
 

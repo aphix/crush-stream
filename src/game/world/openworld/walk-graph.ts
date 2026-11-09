@@ -57,6 +57,8 @@ export type Place = {
   stoopSeats?: number;
   /** Two spots, `COUNTER_STRIDE` floats each: where a customer stands to buy, then where the clerk stands. */
   counter?: Float32Array;
+  /** Its building's sides with no building against them (`OPEN_SIDE` bits), whose facade shows windows a room behind must look out of. Absent: none. */
+  openSides?: number;
   /** Game hours the place is open, [from, to); `to` below `from` wraps past midnight. Absent: always open. */
   hours?: readonly [from: number, to: number];
 };

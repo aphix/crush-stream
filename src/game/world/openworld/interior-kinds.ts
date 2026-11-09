@@ -7,8 +7,18 @@ export type Rect = { deep0: number; across0: number; deep1: number; across1: num
 /** A solid box in plan coordinates with its heights (m above the ground). */
 export type Box = Rect & { y0: number; y1: number };
 
-/** A gap in a wall: its centre along the wall, its width, and its sill and top above the floor (m). */
-export type Opening = { centre: number; width: number; sill: number; top: number };
+/** What a gap in a wall is: a doorway, a window (glazed), or the mouth of a bay window's alcove (open to the floor, its glazing and sides outside the wall). */
+export const OPENING = { door: 0, window: 1, bay: 2 } as const;
+type OpeningKind = (typeof OPENING)[keyof typeof OPENING];
+
+/** A gap in a wall: its centre along the wall, its width, its sill and top above the floor (m), and what it is. */
+export type Opening = { centre: number; width: number; sill: number; top: number; kind: OpeningKind };
+
+/** A sheet of glass standing upright over a plan segment (deep and across at both ends) between two heights above the ground (m), on a floor's `level`. */
+export type Pane = { level: number; deep0: number; across0: number; deep1: number; across1: number; y0: number; y1: number };
+
+/** A bay window's alcove on a floor: the room's floor and ceiling carried out over the bay's outline (plan points: deep is negative outside the wall), the apron up to the sill and the head the glass stops at. */
+export type Alcove = { level: number; floorY: number; sill: number; head: number; corners: readonly (readonly [deep: number, across: number])[] };
 
 /** A wall running along `axis` at `fixed` on the other axis, `from` to `to`; `shell` walls are the envelope the far view keeps. */
 export type Wall = { level: number; axis: "across" | "deep"; fixed: number; from: number; to: number; thick: number; openings: readonly Opening[]; shell: boolean };
@@ -106,6 +116,9 @@ export type InteriorPlan = {
   slabs: readonly Slab[];
   furnishings: readonly Furnishing[];
   stairs: readonly Stairs[];
+  /** Every window's glass and every alcove, in plan coordinates. */
+  panes: readonly Pane[];
+  alcoves: readonly Alcove[];
 };
 
 /** The rowhome's ground floor stands on its stoop's landing (m). */
@@ -128,6 +141,11 @@ export const TREAD_RUN = 0.26;
 /** The clear height a climber needs over every tread (m): a standing walker (1.8 m) and a margin. */
 export const HEADROOM = 2;
 
+/** Underside of the ceiling over `level`: the next floor's slab, or the roof's. */
+export function ceilingOver(floors: readonly number[], topCeiling: number, level: number): number {
+  return level + 1 < floors.length ? floors[level + 1]! - SLAB_THICK : topCeiling;
+}
+
 /** Floors and the topmost ceiling by interior: a rowhome has its stoop's landing, then floors 0.1 m over the facade's storey lines (3.6 and 6.6 m: the ground band, then 3.0 m storeys), a shop one 3.75 m clear storey under a slab. */
 export const LEVELS = {
   rowhome: { floors: [ROWHOME_FLOOR_Y, 3.7, 6.7], topCeiling: 9.5 },
@@ -140,25 +158,23 @@ export const LEVELS = {
 /** The frontage bay every shopfront opening is measured in: one lot wide. */
 export const BAY_WIDTH = LAYOUT.lotFrontage;
 
-type BayOpening = Opening & { door: boolean };
-
-/** One opening of a frontage bay: its centre from the bay's centre line, its width, and its sill and top above the floor (m). */
-const opening = (centre: number, width: number, sill: number, top: number, door: boolean): BayOpening => ({ centre, width, sill, top, door });
+/** A doorway of a frontage bay: its centre from the bay's centre line, its width and its top above the floor (m). */
+const doorway = (centre: number, width: number, top: number): Opening => ({ centre, width, sill: 0, top, kind: OPENING.door });
 
 /**
- * The street wall's openings per bay, cut through the facade's ground band and through the street wall alike. A doorway is at least 0.9 m wide; openings stay at or under 2.7 m so the sign band above is whole.
- * A facade's u runs to the viewer's right, the plan's -across: the corner store's door (+0.9) is on the viewer's left.
+ * The street wall's doorways per bay, cut through the facade's ground band and through the street wall alike. A doorway is at least 0.9 m wide. Its windows are not here: they are the facade
+ * picture's (`facade-windows.ts`), so the room and the facade cannot disagree. A facade's u runs to the viewer's right, the plan's -across: the corner store's door (+0.9) is on the viewer's left.
  */
 export const SHOPFRONT = {
-  rowhome: [opening(ROWHOME_DOOR_OFFSET, 1, 0, 2.1, true)],
-  coffee: [opening(-1.65, 1.5, 0.75, 2.3, false), opening(0, 1, 0, 2.2, true), opening(1.65, 1.5, 0.75, 2.3, false)],
-  bar: [opening(-1.8, 0.9, 1.25, 2.3, false), opening(0, 1, 0, 2.25, true), opening(1.8, 0.9, 1.25, 2.3, false)],
-  office: [opening(-1.8, 1.8, 0.3, 2.7, false), opening(0, 1.5, 0, 2.4, true), opening(1.8, 1.8, 0.3, 2.7, false)],
-  store: [opening(0.9, 0.9, 0, 2.1, true), opening(-1.1, 2.8, 0.65, 2.4, false)],
-} as const satisfies Record<InteriorKind, readonly BayOpening[]>;
+  rowhome: [doorway(ROWHOME_DOOR_OFFSET, 1, 2.1)],
+  coffee: [doorway(0, 1, 2.2)],
+  bar: [doorway(0, 1, 2.25)],
+  office: [doorway(0, 1.5, 2.4)],
+  store: [doorway(0.9, 0.9, 2.1)],
+} as const satisfies Record<InteriorKind, readonly Opening[]>;
 
 /** The back door of a rowhome, into the yard. */
-export const BACK_DOOR = opening(0, 1, 0, 2.1, true);
+export const BACK_DOOR = doorway(0, 1, 2.1);
 
 /** A person sits on the stoop's third step (the stoop is centred on the door): its top above the ground, how far out of the facade its tread's middle lies, and each sitter's offset from the door's line (m). */
 export const STOOP_SEAT_HEIGHT = 0.54;

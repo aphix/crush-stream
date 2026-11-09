@@ -95,6 +95,9 @@ export const PREFAB = {
   plaza: "plaza",
 } as const;
 
+/** The building prefab's roofline (m at its own 14 m height): the cornice's top, the roof slab's underside. */
+export const ROOFLINE = 13.5;
+
 /** The sidewalk slabs' look (`scenery.paving`): the concrete flags every course has, or brick in running bond (an old city's). */
 export const PAVING = { concrete: "concrete", brick: "brick" } as const;
 export const PAVING_IDS = [PAVING.concrete, PAVING.brick] as const;

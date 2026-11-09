@@ -353,7 +353,6 @@ function openingAlpha(open) {
   const alpha = new Uint8Array(LAYER * LAYER).fill(255);
   const half = drawnHalf(BAY_WIDTH);
   for (const opening of SHOPFRONT[open.kind]) {
-    if (!opening.door) continue;
     const x0 = Math.round(((half - (opening.centre + opening.width / 2)) / (2 * half)) * LAYER);
     const x1 = Math.round(((half - (opening.centre - opening.width / 2)) / (2 * half)) * LAYER);
     const y0 = Math.round(((open.ground - (open.floorY + opening.top)) / open.ground) * LAYER);

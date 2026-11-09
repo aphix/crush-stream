@@ -72,9 +72,6 @@ export const FACADE_LAYERS = layerData as Record<FacadeStyle, LayerSpec>;
 export const LAYER = { cornice: 0, floor: 1, ground: 2, quoin: 3 } as const;
 export const ROOF_LAYER = -1;
 
-/** The building's roofline (m): the cornice's top, the roof slab's underside. */
-export const ROOFLINE = 13.5;
-
 /** World metres one roof tile spans on a roof slab (`facade-mesh.ts` lays the slab's top in them). */
 export const ROOF_TILE_M = 2.4;
 /** Metres a roof may be raised over the collider's top, picked per building: a taller parapet drawn on the 14 m block, nothing the sim reads. */

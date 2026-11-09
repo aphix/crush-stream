@@ -87,7 +87,7 @@ const digest = (floats: Float32Array): string => createHash("sha1").update(Buffe
 
 describe("given the interiors of the open world's map, a coffee shop's door held open", () => {
   // mutation: sed -i 's/const INTERIOR_NEAR = 35/const INTERIOR_NEAR = 0/' src/game/present/interiors/interior-constants.ts
-  it("when the eye comes to the door, then the shop is furnished and the whole set is drawn in three draws at most", () => {
+  it("when the eye comes to the door, then the shop is furnished and the whole set is drawn in four draws at most (envelope, furniture, lamps, glass)", () => {
     const set = new InteriorSet(map);
     const who = openers();
     expect(built(set), "before any eye").toBe(NOTHING_BUILT);
@@ -96,7 +96,7 @@ describe("given the interiors of the open world's map, a coffee shop's door held
     const near = set.stats();
     expect(near.details, "furnished interiors near the door").toBeGreaterThanOrEqual(1);
     expect(near.shells, "envelopes near the door").toBeGreaterThanOrEqual(near.details);
-    expect(near.drawCalls, "draw calls").toBeLessThanOrEqual(3);
+    expect(near.drawCalls, "draw calls").toBeLessThanOrEqual(4);
     set.dispose();
   });
 

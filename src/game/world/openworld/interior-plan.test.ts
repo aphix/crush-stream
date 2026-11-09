@@ -32,7 +32,7 @@ describe("given every kind of interior built for a place of the map", () => {
   it("when the seats of a plan are counted from its own furniture, then they equal what the place publishes", () => {
     for (const kind of KINDS) {
       const place = firstOf(kind);
-      const plan = planInterior(kind, place.width, place.depth);
+      const plan = planInterior(place);
       const furniture = plan.furnishings.reduce((sum, piece) => sum + FURNISHING[piece.kind].seats, 0);
       expect(interiorSpots(place).seats.length / SEAT_STRIDE - interiorSpots(place).stoopSeats, `${kind} indoor seats`).toBe(furniture);
     }
@@ -65,7 +65,7 @@ describe("given a place's door on the street face", () => {
       const at = (alongX: number, alongZ: number) => ({ x: place.doorX + inward.x * 0.17 + alongX, z: place.doorZ + inward.z * 0.17 + alongZ });
       const hit = (point: { x: number; z: number }) => solids.some((solid) => point.x > solid.x0 && point.x < solid.x1 && point.z > solid.z0 && point.z < solid.z1 && floor + 1 > solid.y0 && floor + 1 < solid.y1);
       expect(hit(at(0, 0)), `${place.name} door is open`).toBe(false);
-      const width = SHOPFRONT[place.interior!].find((opening) => opening.door)!.width;
+      const width = SHOPFRONT[place.interior!][0]!.width;
       const alongFace = { x: Math.round(Math.abs(Math.sin(place.yaw))), z: Math.round(Math.abs(Math.cos(place.yaw))) };
       const beside = [1, -1].some((side) => hit(at(alongFace.x * side * (width / 2 + 0.05), alongFace.z * side * (width / 2 + 0.05))));
       expect(beside, `${place.name} has wall beside its door`).toBe(true);
@@ -89,7 +89,7 @@ describe("given every place's doors", () => {
       const bays = Math.round(place.width / BAY_WIDTH);
       const street = doors.filter((door) => door.face === DOOR_FACE.street);
       const back = doors.filter((door) => door.face === DOOR_FACE.back);
-      if (street.length !== bays * SHOPFRONT[place.interior!].filter((opening) => opening.door).length) wrong.push(`${place.name}: ${street.length} street doors`);
+      if (street.length !== bays * SHOPFRONT[place.interior!].length) wrong.push(`${place.name}: ${street.length} street doors`);
       if (back.length !== (place.interior === "rowhome" ? 1 : 0)) wrong.push(`${place.name}: ${back.length} back doors`);
       const outX = Math.cos(place.yaw);
       const outZ = -Math.sin(place.yaw);
@@ -125,7 +125,7 @@ describe("given every rowhome's stoop", () => {
 });
 
 describe("given the rowhome's stairs", () => {
-  const plan = planInterior("rowhome", 5.6, 15);
+  const plan = planInterior(firstOf("rowhome"));
   /** The floor a walker needs at a flight's head before the wall ahead (m): a step and a turn. */
   const MIN_LANDING = 0.5;
 
@@ -222,7 +222,7 @@ describe("given any interior's furniture and walls", () => {
   it("when each solid piece is laid on its plan, then it clears every wall and every other solid piece of its level by at least a centimetre inside the room", () => {
     for (const kind of KINDS) {
       const place = firstOf(kind);
-      const plan = planInterior(kind, place.width, place.depth);
+      const plan = planInterior(place);
       const clash: string[] = [];
       for (const [at, piece] of plan.furnishings.entries()) {
         if (!FURNISHING[piece.kind].solid || piece.lift > 0) continue;

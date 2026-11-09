@@ -1,6 +1,7 @@
 import { PREFAB, SURFACE } from "../constants.ts";
 import type { InteriorPlan } from "./interior-kinds.ts";
-import { interiorDoor, interiorSpots, planInterior } from "./interior-plan.ts";
+import { buildingHeight, OPEN_SIDE } from "./facade-windows.ts";
+import { interiorDoor, interiorSpots, planInterior, planKey } from "./interior-plan.ts";
 import { planBlocks } from "./openworld-blocks.ts";
 import { LAYOUT } from "./openworld-constants.ts";
 import { openWorldGeometry, type Area, type BlockPlan, type Building, type Dressing, type Geometry, type Link, type Lots, type LotPlan, type PathPlan } from "./openworld-layout.ts";
@@ -27,11 +28,6 @@ import {
 import { homeDoorPoint } from "./openworld-facade-solids.ts";
 import { PLACE_KIND, SECTOR, type Place } from "./walk-graph.ts";
 
-/** Storey heights (m): ground 3.6 (parlour 3.0-3.7), shop ground 4.0, floor to floor 3.2 (2.7-3.4), cornice and parapet 0.9. */
-const GROUND_STOREY = 3.6;
-const SHOP_GROUND_STOREY = 4;
-const STOREY = 3.2;
-const PARAPET = 0.9;
 /** A dumpster stands this far (m) in from the alley's south edge, at these shares of its length. */
 const DUMPSTER_BACK = 0.7;
 const DUMPSTER_SHARES = [0.25, 0.75] as const;
@@ -49,9 +45,6 @@ function blockId(plan: BlockPlan): string {
   return `${BLOCK_ROW_LETTERS[plan.row]!}${plan.column + 1}`;
 }
 
-function heightOf(storeys: number, shopGround: boolean): number {
-  return (shopGround ? SHOP_GROUND_STOREY : GROUND_STOREY) + (storeys - 1) * STOREY + PARAPET;
-}
 
 function streetOf(plan: BlockPlan, face: Face): string {
   const index = plan.row + (face === "south" ? 1 : 0);
@@ -75,24 +68,35 @@ function furnished(layout: Layout, place: Place): Place {
   if (place.interior === undefined) return place;
   const door = interiorDoor(place.interior, place.width, place.depth, place.x, place.z, place.yaw);
   const standing = { ...place, doorX: door.x, doorZ: door.z };
-  const key = `${place.interior}:${place.width}:${place.depth}`;
+  const key = planKey(place);
   let plan = layout.plans.get(key);
   if (plan === undefined) {
-    plan = planInterior(place.interior, place.width, place.depth);
+    plan = planInterior(place);
     layout.plans.set(key, plan);
   }
   const { seats, stoopSeats, counter } = interiorSpots(standing, plan);
   return { ...standing, ...(seats.length > 0 ? { seats } : {}), ...(stoopSeats > 0 ? { stoopSeats } : {}), ...(counter !== null ? { counter } : {}) };
 }
 
+/** `Place.openSides` when a side is open, else nothing (the field is absent on a building with neighbours on both sides). */
+const openSidesField = (openSides: number): { openSides?: number } => (openSides === 0 ? {} : { openSides });
+
+/** The sides of a building spanning `lots` that no building stands against (`OPEN_SIDE`): the end of a block's face shows its side wall to the cross street. A face's across runs east on the north face and west on the south. */
+function openSidesOf(lots: readonly LotPlan[]): number {
+  const west = lots[0]!.index === 0;
+  const east = lots[lots.length - 1]!.index === LAYOUT.lotsPerFace - 1;
+  const north = lots[0]!.face === "north";
+  return ((north ? east : west) ? OPEN_SIDE.plusAcross : 0) | ((north ? west : east) ? OPEN_SIDE.minusAcross : 0);
+}
+
 function layHome(layout: Layout, plan: BlockPlan, blockIndex: number, lot: LotPlan, geometry: Geometry): void {
   const style = homeStyleOf(plan, lot);
   const centreZ = (lot.house.z0 + lot.house.z1) / 2;
   const named = NAMED_HOMES.find((home) => isBlock(home, plan) && home.face === lot.face && home.at === lot.index);
-  layout.buildings.push({ x: lot.x, z: centreZ, yaw: lot.yaw, depth: geometry.houseDepth, width: lot.width, height: heightOf(HOUSE_STOREYS, false), style, enterable: true });
+  layout.buildings.push({ x: lot.x, z: centreZ, yaw: lot.yaw, depth: geometry.houseDepth, width: lot.width, height: buildingHeight(HOUSE_STOREYS, false), style, enterable: true });
   layout.links.push({ place: layout.places.length, block: blockIndex, side: lot.face });
   layout.places.push(
-    furnished(layout, { kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys: HOUSE_STOREYS, style, sector: SECTOR.residential, interior: "rowhome" }),
+    furnished(layout, { kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys: HOUSE_STOREYS, style, sector: SECTOR.residential, interior: "rowhome", ...openSidesField(openSidesOf([lot])) }),
   );
 }
 
@@ -101,7 +105,7 @@ function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], 
   const x = (first.x + lots[lots.length - 1]!.x) / 2;
   const z = (first.house.z0 + first.house.z1) / 2;
   const width = lots.length * first.width;
-  layout.buildings.push({ x, z, yaw: first.yaw, depth: geometry.houseDepth, width, height: heightOf(venue.storeys, venue.shopGround), style: venue.style, ...(venue.interior === undefined ? {} : { enterable: true }) });
+  layout.buildings.push({ x, z, yaw: first.yaw, depth: geometry.houseDepth, width, height: buildingHeight(venue.storeys, venue.shopGround), style: venue.style, ...(venue.interior === undefined ? {} : { enterable: true }) });
   layout.links.push({ place: layout.places.length, block: blockIndex, side: first.face });
   layout.places.push(
     furnished(layout, {
@@ -120,6 +124,7 @@ function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], 
       sector: venue.sector,
       hours: venue.hours,
       ...(venue.interior === undefined ? {} : { interior: venue.interior }),
+      ...openSidesField(openSidesOf(lots)),
     }),
   );
 }
