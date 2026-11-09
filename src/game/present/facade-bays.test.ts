@@ -5,12 +5,13 @@ import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { BAY, BAY_FLOORS, DOOR, BLOCK_FACE_HALF, drawnHalf, HOME_HEIGHT, homeFrontages, STOOP } from "../world/openworld/openworld-facade-solids.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
-import { buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildRailingGeometry, buildRoofGeometry, buildStoopGeometry } from "./facade-bay-parts.ts";
+import { BRICK_STYLE } from "../world/openworld/openworld-programme.ts";
+import { buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildFanlightGeometry, buildRailingGeometry, buildRoofGeometry, buildStoopGeometry, buildSurroundGeometry } from "./facade-bay-parts.ts";
 import { FacadeBays, HOUSE_ACCENTS, tintedColorVertex } from "./facade-bays.ts";
 import { ATLAS_SIZE, KIT_CELL, paintKit, type UvRect } from "./facade-kit-atlas.ts";
 import { HALF } from "./facade-mesh.ts";
 import { roofLiftAt } from "./facades.ts";
-import { shuttersOf } from "./facade-fittings.ts";
+import { shuttersOf, visibleWindowsOf } from "./facade-fittings.ts";
 
 const lots = layOutLots();
 const frontages = homeFrontages(lots.places.slice(0, lots.backdropStart));
@@ -24,16 +25,36 @@ const STOOP_BAY_GAP_MIN = 0.3;
 /** The open world's house depth (m), and how far past the party wall the chimney may reach (its half width and its cap, m). */
 const HOUSE_DEPTH = 15;
 const CHIMNEY_HALF_MAX = 0.45;
+/** The cell is twice as wide as it is tall, so a radius (a share of its half width) reaches the same share of its height. */
+/** Radii (shares of the fan's) of an inner pane, the ring between the panes and the outer pane at the rim; the reds and glow that tell glass from bar. */
+const FAN_GLASS_RADIUS = 0.3;
+const FAN_RING_RADIUS = 0.55;
+const FAN_RIM_RADIUS = 0.85;
+const FAN_GLASS_RED_MAX = 150;
+const FAN_GLOW_MIN = 100;
+const FAN_BAR_RED_MIN = 220;
+/** What a marble texel's red is below when it is vein, how white its mean is, and what share of it veins may be. */
+const MARBLE_VEIN_RED_MAX = 215;
+const MARBLE_WHITE_RED_MIN = 220;
+const MARBLE_VEIN_SHARE_MIN = 0.01;
+const MARBLE_VEIN_SHARE_MAX = 0.2;
+/** The fan glass stands this far out of the wall at most (m), a vertex reads as upward when its normal's y is over this, a quad has this many vertices. */
+const FAN_GLASS_OUT_MAX = 0.03;
+const UPWARD = 0.9;
+const VERTICES_PER_QUAD = 6;
+/** The door's column: how far off the door's middle the Federal door reaches (m), and how far under the lowest upper window's sill its cap ends (m). */
+const DOOR_COLUMN_HALF = 0.9;
+const DOOR_TO_WINDOW_GAP_MIN = 0.3;
 /** The kit's draws (its instanced meshes), the ones every house has, and the most triangles one rowhome's kit may cost. */
 /** Shares of the louvre cell's height (a slat texel row, a gap texel row) and the least red the slats stand over the gaps. */
 const LOUVRE_SLAT_ROW = 0;
 const LOUVRE_GAP_ROW = 0.1;
 const LOUVRE_CONTRAST_MIN = 40;
-const KIT_DRAWS = 9;
+const KIT_DRAWS = 11;
 const EVERY_HOUSE: readonly string[] = ["facade-bay", "facade-stoop", "facade-railing", "facade-cornice", "facade-roof"];
 /** The most shutters a house hangs: a pair on each of its upper storeys' windows on the door's half. */
 const SHUTTERS_PER_HOUSE_MAX = 4;
-const TRIANGLES_PER_HOME_MAX = 400;
+const TRIANGLES_PER_HOME_MAX = 450;
 
 /** The x range of every vertex of `geometry`. */
 function xRange(geometry: THREE.BufferGeometry): { min: number; max: number } {
@@ -116,7 +137,7 @@ describe("given the stoop and its railing", () => {
   it("when every piece's vertices are tested against the facade's door hole, then none stands in the hole and the jambs stand at its edges", () => {
     let inside = 0;
     let atEdge = 0;
-    for (const geometry of [buildBayGeometry(), stoop, railing, buildCorniceGeometry()]) {
+    for (const geometry of [buildBayGeometry(), stoop, railing, buildCorniceGeometry(), buildSurroundGeometry(), buildFanlightGeometry()]) {
       const position = geometry.getAttribute("position");
       for (let at = 0; at < position.count; at++) {
         const across = Math.abs(position.getX(at) - DOOR_HOLE_X);
@@ -136,10 +157,14 @@ describe("given every piece of the kit", () => {
   // mutation: sed -i 's/const BAY_ACROSS = -0.9;/const BAY_ACROSS = -1.9;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the pieces are measured across the lot, then all stand inside its edges, the stoop on the door's side with a clear gap to the bay", () => {
     const bayRange = xRange(buildBayGeometry());
+    const surroundRange = xRange(buildSurroundGeometry());
+    const fanlightRange = xRange(buildFanlightGeometry());
     const stoopRange = xRange(buildStoopGeometry());
     const pieces = [
       { name: "bay", range: bayRange },
       { name: "stoop", range: stoopRange },
+      { name: "surround", range: surroundRange },
+      { name: "fanlight", range: fanlightRange },
       { name: "railing", range: xRange(buildRailingGeometry()) },
       { name: "cornice", range: xRange(buildCorniceGeometry()) },
     ];
@@ -147,7 +172,7 @@ describe("given every piece of the kit", () => {
       expect(range.min, `${name}'s least x (m)`).toBeGreaterThanOrEqual(-LOT_HALF_WIDTH - EPSILON);
       expect(range.max, `${name}'s greatest x (m)`).toBeLessThanOrEqual(LOT_HALF_WIDTH + EPSILON);
     }
-    expect(bayRange.min - stoopRange.max, "clear gap from the stoop's hood to the bay (m)").toBeGreaterThanOrEqual(STOOP_BAY_GAP_MIN);
+    expect(bayRange.min - Math.max(stoopRange.max, surroundRange.max, fanlightRange.max), "clear gap from the door's surround to the bay (m)").toBeGreaterThanOrEqual(STOOP_BAY_GAP_MIN);
   });
 });
 
@@ -286,6 +311,72 @@ describe("given the fittings of the kit made for the layout", () => {
   });
 });
 
+describe("given the Federal door", () => {
+  const fanlight = buildFanlightGeometry();
+  const kit = new FacadeBays(frontages);
+  afterAll(() => kit.dispose());
+
+  // mutation: sed -i 's/const ARCHED_DOOR_STYLES: readonly string\[\] = \["rowbrick"\];/const ARCHED_DOOR_STYLES: readonly string[] = [];/' src/game/present/facade-bays.ts
+  it("when the doors are counted, then every house has a surround or a fanlight, the fanlight on the brick houses and the flat surround on the rest", () => {
+    const count = (name: string): number => {
+      const mesh = kit.group.getObjectByName(name);
+      return mesh instanceof THREE.InstancedMesh ? mesh.count : -1;
+    };
+    const brick = frontages.filter((frontage) => frontage.style === BRICK_STYLE).length;
+    expect(brick, "brick houses").toBeGreaterThan(0);
+    expect(brick, "brick houses").toBeLessThan(frontages.length);
+    expect(count("facade-fanlight"), "fanlight instances").toBe(brick);
+    expect(count("facade-surround"), "flat surround instances").toBe(frontages.length - brick);
+  });
+
+  // mutation: sed -i 's/fanGlass(builder, DOOR.halfWidth);/fanGlass(builder, DOOR.halfWidth * 2);/' src/game/present/facade-bay-parts.ts
+  it("when the fan of glass is read, then it springs from the door's head, as wide as the hole and as high as it is wide over two", () => {
+    const position = fanlight.getAttribute("position");
+    const uv = fanlight.getAttribute("uv");
+    const fan = { minY: Infinity, maxY: -Infinity, minX: Infinity, maxX: -Infinity, count: 0 };
+    for (let at = 0; at < position.count; at++) {
+      const inCell = uv.getX(at) >= KIT_CELL.fanlight.u0 - EPSILON && uv.getX(at) <= KIT_CELL.fanlight.u1 + EPSILON && uv.getY(at) >= KIT_CELL.fanlight.v0 - EPSILON && uv.getY(at) <= KIT_CELL.fanlight.v1 + EPSILON;
+      if (!inCell || position.getZ(at) > FAN_GLASS_OUT_MAX) continue;
+      fan.count++;
+      fan.minY = Math.min(fan.minY, position.getY(at));
+      fan.maxY = Math.max(fan.maxY, position.getY(at));
+      fan.minX = Math.min(fan.minX, position.getX(at));
+      fan.maxX = Math.max(fan.maxX, position.getX(at));
+    }
+    expect(fan.count, "vertices of the fan's triangles").toBeGreaterThan(0);
+    expect(fan.minY, "the fan springs from the door's head (m)").toBeCloseTo(DOOR.head, 6);
+    expect(fan.maxX - fan.minX, "the fan's width (m)").toBeCloseTo(2 * DOOR.halfWidth, 6);
+    expect(fan.maxY - fan.minY, "the fan's height (m)").toBeCloseTo(DOOR.halfWidth, 6);
+    expect((fan.maxX + fan.minX) / 2, "the fan's middle off the door's (kit x, m)").toBeCloseTo(DOOR_HOLE_X, 6);
+  });
+
+  // mutation: sed -i 's/const ARCH_CAP_HEIGHT = 0.1;/const ARCH_CAP_HEIGHT = 1;/' src/game/present/facade-bay-parts.ts
+  it("when the Federal door's top is read against the upper windows, then it ends well under the lowest of them and never leaves the door's column", () => {
+    const position = fanlight.getAttribute("position");
+    let top = -Infinity;
+    for (let at = 0; at < position.count; at++) {
+      top = Math.max(top, position.getY(at));
+      expect(Math.abs(position.getX(at) - DOOR_HOLE_X), "a vertex's distance off the door's middle (m)").toBeLessThanOrEqual(DOOR_COLUMN_HALF);
+    }
+    const lowestSill = Math.min(...visibleWindowsOf(BRICK_STYLE).filter((window) => window.storey > 0).map((window) => window.sill));
+    expect(lowestSill - top, "gap from the door's cap to the upper windows' sills (m)").toBeGreaterThanOrEqual(DOOR_TO_WINDOW_GAP_MIN);
+  });
+
+  // mutation: sed -i 's/builder.quad(\[left, top, far\], \[right, top, far\], \[right, top, near\], \[left, top, near\], KIT_CELL.marble, TREAD_SHADE, ACCENT);/builder.quad([left, top, far], [right, top, far], [right, top, near], [left, top, near], KIT_CELL.stone, TREAD_SHADE, ACCENT);/' src/game/present/facade-bay-parts.ts
+  it("when the stoop's upward faces are read, then every tread reads the marble", () => {
+    const geometry = buildStoopGeometry();
+    const normal = geometry.getAttribute("normal");
+    const uv = geometry.getAttribute("uv");
+    let treads = 0;
+    for (let at = 0; at < normal.count; at++) {
+      if (normal.getY(at) < UPWARD) continue;
+      treads++;
+      expect(uv.getX(at) >= KIT_CELL.marble.u0 - EPSILON && uv.getX(at) <= KIT_CELL.marble.u1 + EPSILON && uv.getY(at) >= KIT_CELL.marble.v0 - EPSILON && uv.getY(at) <= KIT_CELL.marble.v1 + EPSILON, "a tread vertex reads the marble cell").toBe(true);
+    }
+    expect(treads, "vertices of the treads").toBe(STOOP.steps * VERTICES_PER_QUAD);
+  });
+});
+
 describe("given the roof pieces", () => {
   // mutation: sed -i 's/const CHIMNEY_BACK = 9.5;/const CHIMNEY_BACK = 15.5;/' src/game/present/facade-bay-parts.ts
   it("when their vertices are read, then every one stands on or over the roof and within it: behind the facade, before the back wall, inside the lot but for the chimney astride the party wall", () => {
@@ -309,6 +400,37 @@ describe("given the roof pieces", () => {
 });
 
 describe("given the kit's shared pieces", () => {
+  // mutation: sed -i 's/const MARBLE_VEIN_SHADE = 0.8;/const MARBLE_VEIN_SHADE = 1;/' src/game/present/facade-kit-atlas.ts
+  it("when the marble cell is read, then it is near white with grey veins through a share of it", () => {
+    const painted = paintKit().albedo;
+    const cell = KIT_CELL.marble;
+    let veins = 0;
+    let total = 0;
+    let sum = 0;
+    for (let y = Math.ceil(cell.v0 * ATLAS_SIZE); y < Math.floor(cell.v1 * ATLAS_SIZE); y++) {
+      for (let x = Math.ceil(cell.u0 * ATLAS_SIZE); x < Math.floor(cell.u1 * ATLAS_SIZE); x++) {
+        const red = painted[(y * ATLAS_SIZE + x) * 4]!;
+        total++;
+        sum += red;
+        if (red < MARBLE_VEIN_RED_MAX) veins++;
+      }
+    }
+    expect(sum / total, "the marble's mean red").toBeGreaterThan(MARBLE_WHITE_RED_MIN);
+    expect(veins / total, "the share of the marble that is vein").toBeGreaterThan(MARBLE_VEIN_SHARE_MIN);
+    expect(veins / total, "the share of the marble that is vein").toBeLessThan(MARBLE_VEIN_SHARE_MAX);
+  });
+
+  // mutation: sed -i 's/const FAN_RING_AT = 0.55;/const FAN_RING_AT = 0.8;/' src/game/present/facade-kit-atlas.ts
+  it("when the fanlight cell is sampled up its middle, then its glass lights at night, the ring between its two panes is white and unlit, and the pane at the rim is darker than at the centre", () => {
+    const painted = paintKit();
+    const middle = 0.5;
+    expect(texelAt(painted.albedo, KIT_CELL.fanlight, middle, FAN_GLASS_RADIUS), "inner pane's red").toBeLessThan(FAN_GLASS_RED_MAX);
+    expect(texelAt(painted.glow, KIT_CELL.fanlight, middle, FAN_GLASS_RADIUS), "inner pane's glow").toBeGreaterThan(FAN_GLOW_MIN);
+    expect(texelAt(painted.albedo, KIT_CELL.fanlight, middle, FAN_RING_RADIUS), "ring's red").toBeGreaterThan(FAN_BAR_RED_MIN);
+    expect(texelAt(painted.glow, KIT_CELL.fanlight, middle, FAN_RING_RADIUS), "ring's glow").toBe(0);
+    expect(texelAt(painted.albedo, KIT_CELL.fanlight, middle, FAN_RIM_RADIUS), "outer pane's red against the inner's").toBeLessThan(texelAt(painted.albedo, KIT_CELL.fanlight, middle, FAN_GLASS_RADIUS));
+  });
+
   /** The red of the atlas's texel at a share of a cell's width and height. */
   function texelAt(data: Uint8Array, cell: UvRect, across: number, up: number): number {
     const x = Math.floor((cell.u0 + (cell.u1 - cell.u0) * across) * ATLAS_SIZE);

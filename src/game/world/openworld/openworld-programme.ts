@@ -116,7 +116,10 @@ export const SIDE_PLACES: readonly SidePlace[] = [
 export const BUS_STOP = { row: ROW.C, column: 0, at: 1, name: PLACE_NAMES.busStop } as const;
 
 /** Every house is its own building prop, one lot wide: its own brick tint and, in time, its own bay. Brick is the street's majority, painted brick the minority. */
-export const HOME_STYLES: readonly string[] = ["rowbrick", "rowpainted"];
+/** The brick rowhome's facade style, and the painted one. */
+export const BRICK_STYLE = "rowbrick";
+const PAINTED_STYLE = "rowpainted";
+export const HOME_STYLES: readonly string[] = [BRICK_STYLE, PAINTED_STYLE];
 /** Out of ten houses, this many are brick (the rest painted), picked by a fixed mix of block and lot so a house keeps its style. */
 export const BRICK_SHARE_OF_TEN = 7;
 export const HOUSE_STOREYS = 3;

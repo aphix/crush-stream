@@ -3,7 +3,8 @@ import { detCos, detSin } from "../kernel/physics-core.js";
 import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { drawnHalf, HOME_HEIGHT, type Frontage } from "../world/openworld/openworld-facade-solids.ts";
-import { buildAirconGeometry, buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildRailingGeometry, buildRoofGeometry, buildShutterGeometry, buildStoopGeometry, TINT_ATTRIBUTE } from "./facade-bay-parts.ts";
+import { BRICK_STYLE } from "../world/openworld/openworld-programme.ts";
+import { buildAirconGeometry, buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildFanlightGeometry, buildRailingGeometry, buildRoofGeometry, buildShutterGeometry, buildStoopGeometry, buildSurroundGeometry, TINT_ATTRIBUTE } from "./facade-bay-parts.ts";
 import { airconWindowsOf, shuttersOf } from "./facade-fittings.ts";
 import { makeKitTextures, type KitTextures } from "./facade-kit-atlas.ts";
 import { FACADE_GLOW, roofLiftAt } from "./facades.ts";
@@ -26,8 +27,11 @@ export const HOUSE_ACCENTS: readonly HouseAccent[] = [
   { name: "tan", panel: 0xb08a5c, cornice: 0x4b4b50 },
 ];
 
-/** The stone's tints (sRGB): the same steps in slightly different greys from house to house. */
-const STONE_TINTS = [0xffffff, 0xe8e4dc, 0xd8d4cc] as const;
+/** The marble steps' tints (sRGB): the same steps in slightly different whites from house to house. */
+const MARBLE_TINTS = [0xffffff, 0xeeeae0, 0xdcd9d2] as const;
+
+/** The facade styles whose door has an arched fanlight in white surround (the Federal house); any other has a flat surround. */
+const ARCHED_DOOR_STYLES: readonly string[] = [BRICK_STYLE];
 
 /** The kit's surfaces: painted wood and stone, nothing shiny; the iron railing a little. */
 const KIT_ROUGHNESS = 0.85;
@@ -85,7 +89,7 @@ function makeRailMaterial(textures: KitTextures): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ map: textures.rail, alphaTest: RAIL_ALPHA_TEST, side: THREE.DoubleSide, roughness: RAIL_ROUGHNESS, metalness: RAIL_METALNESS });
 }
 
-type Kind = "bay" | "stoop" | "railing" | "cornice" | "roof" | "condenser" | "deck" | "shutter" | "aircon";
+type Kind = "bay" | "stoop" | "railing" | "surround" | "fanlight" | "cornice" | "roof" | "condenser" | "deck" | "shutter" | "aircon";
 
 /** Where one instance of a kit mesh stands against a house: across the lot (u), up from the ground (or the roof, for a roof piece), and its scale (1: the geometry as built). */
 type Placement = { across: number; up: number; width: number; height: number; depth: number };
@@ -145,8 +149,10 @@ function kitKinds(textures: { kit: THREE.Material; rail: THREE.Material }): read
   const windowsFor = byStyle(airconWindowsOf);
   return [
     { kind: "bay", geometry: buildBayGeometry(), material: textures.kit, placements: everyHouse, colourOf: (frontage) => accentOf(frontage).panel },
-    { kind: "stoop", geometry: buildStoopGeometry(), material: textures.kit, placements: everyHouse, colourOf: (frontage) => STONE_TINTS[frontage.variant % STONE_TINTS.length]! },
+    { kind: "stoop", geometry: buildStoopGeometry(), material: textures.kit, placements: everyHouse, colourOf: (frontage) => MARBLE_TINTS[frontage.variant % MARBLE_TINTS.length]! },
     { kind: "railing", geometry: buildRailingGeometry(), material: textures.rail, placements: everyHouse, colourOf: null },
+    { kind: "surround", geometry: buildSurroundGeometry(), material: textures.kit, placements: (frontage) => (ARCHED_DOOR_STYLES.includes(frontage.style) ? [] : [IN_PLACE]), colourOf: () => WHITE },
+    { kind: "fanlight", geometry: buildFanlightGeometry(), material: textures.kit, placements: (frontage) => (ARCHED_DOOR_STYLES.includes(frontage.style) ? [IN_PLACE] : []), colourOf: () => WHITE },
     { kind: "cornice", geometry: buildCorniceGeometry(), material: textures.kit, placements: everyHouse, colourOf: (frontage) => accentOf(frontage).cornice },
     { kind: "roof", geometry: buildRoofGeometry(), material: textures.kit, placements: onRoof, colourOf: () => WHITE },
     { kind: "condenser", geometry: buildCondenserGeometry(), material: textures.kit, placements: (frontage) => (inShare(frontage, CONDENSER_BITS, CONDENSER_SHARE) ? onRoof(frontage) : []), colourOf: () => WHITE },
