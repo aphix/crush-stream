@@ -32,6 +32,9 @@ type StyleSpec = {
   roofs: readonly [number, number, number, number, number];
 };
 
+/** A style no biome picks: a placement names it (the open world's programme). */
+const NAMED_ONLY = { city: 0, park: 0, desert: 0, dirt: 0, circuit: 0, none: 0 } as const;
+
 export const FACADE = {
   prague: { roughness: 0.8, metalness: 0.05, tints: [0xffffff, 0xf6ecd8, 0xe9eef4, 0xf4e0d2, 0xecebdc], mix: { city: 3, park: 0, desert: 0, dirt: 0, circuit: 0, none: 1 }, home: null, roofs: [0, 1, 1, 3, 0] },
   dc: { roughness: 0.85, metalness: 0.03, tints: [0xffffff, 0xf0d8c8, 0xd8c0b0, 0xffe6d0, 0xc9b8aa], mix: { city: 2, park: 2, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: PREFAB.building, roofs: [2, 1, 3, 0, 0] },
@@ -45,6 +48,13 @@ export const FACADE = {
   warehouse: { roughness: 0.9, metalness: 0.1, tints: [0xffffff, 0xe8d8d0, 0xd8c8c0, 0xf0e0d0, 0xc8c0b8], mix: { city: 0, park: 0, desert: 0, dirt: 4, circuit: 2, none: 0 }, home: null, roofs: [1, 0, 0, 0, 4] },
   farm: { roughness: 0.92, metalness: 0.02, tints: [0xffffff, 0xf0d8d0, 0xe0c0a8, 0xd0b8a0, 0xb8c0c8], mix: { city: 0, park: 3, desert: 0, dirt: 2, circuit: 0, none: 0 }, home: null, roofs: [0, 1, 0, 0, 3] },
   rowhouse: { roughness: 0.8, metalness: 0.03, tints: PASTELS, mix: { city: 3, park: 1, desert: 0, dirt: 0, circuit: 0, none: 3 }, home: null, roofs: [2, 3, 3, 0, 0] },
+  rowbrick: { roughness: 0.88, metalness: 0.02, tints: [0xffffff, 0xf3dccd, 0xe2c2ae, 0xf0d0b8, 0xd9b8a8], mix: NAMED_ONLY, home: null, roofs: [2, 1, 3, 0, 0] },
+  rowpainted: { roughness: 0.88, metalness: 0.02, tints: [0xffffff, 0xf0f4ea, 0xe8ecf0, 0xf4e8e0], mix: NAMED_ONLY, home: null, roofs: [2, 1, 3, 0, 0] },
+  coffee: { roughness: 0.8, metalness: 0.05, tints: [0xffffff, 0xf6f2ea, 0xeef2f0], mix: NAMED_ONLY, home: null, roofs: [1, 0, 0, 0, 0] },
+  bar: { roughness: 0.85, metalness: 0.05, tints: [0xffffff, 0xeeeeee, 0xf4eeee], mix: NAMED_ONLY, home: null, roofs: [1, 0, 0, 0, 0] },
+  office: { roughness: 0.4, metalness: 0.2, tints: [0xffffff, 0xe6eef4, 0xf0f4f4], mix: NAMED_ONLY, home: null, roofs: [3, 0, 0, 0, 1] },
+  cornerstore: { roughness: 0.82, metalness: 0.04, tints: [0xffffff, 0xf4eee8, 0xeef0f4], mix: NAMED_ONLY, home: null, roofs: [1, 0, 0, 0, 0] },
+  supermarket: { roughness: 0.7, metalness: 0.08, tints: [0xffffff], mix: NAMED_ONLY, home: null, roofs: [3, 0, 0, 0, 2] },
 } as const satisfies Record<string, StyleSpec>;
 
 export type FacadeStyle = keyof typeof FACADE;
@@ -52,9 +62,9 @@ const FACADE_STYLES = Object.keys(FACADE) as FacadeStyle[];
 
 /**
  * One style's layers as `scripts/pack-facades.mjs` packed them: bays across a 11.8 m face, layers in its strips, each band's height (m) and a bare patch of wall (u, v in the floor layer). `height` and `roughness`:
- * the style has those strips too (read only on the relief tier); `neon`: its glow strip's blue is a sign mask lit in the sign's own colour.
+ * the style has those strips too (read only on the relief tier); `neon`: its glow strip's blue is a sign mask lit in the sign's own colour; `open`: the ground layer's albedo alpha is 0 where the interior shows through (a doorway, a shopfront window).
  */
-type LayerSpec = { bays: number; layers: number; metres: { cornice: number; floor: number; ground: number }; plain: readonly number[]; height?: boolean; roughness?: boolean; neon?: boolean };
+type LayerSpec = { bays: number; layers: number; metres: { cornice: number; floor: number; ground: number }; plain: readonly number[]; height?: boolean; roughness?: boolean; neon?: boolean; open?: boolean };
 /** The JSON module's keys are the styles' (a row pins it): its inferred type is only as loose as the file. */
 export const FACADE_LAYERS = layerData as Record<FacadeStyle, LayerSpec>;
 
@@ -275,12 +285,12 @@ float facadeRoofKind() {
  * What a style's program adds to the base facade: the relief tier's strips (only where the device can draw relief) and the sign colour of a neon style. A style with none has exactly the base program,
  * the base program's key and its uniforms.
  */
-type Extras = { height: boolean; roughness: boolean; neon: boolean };
+type Extras = { height: boolean; roughness: boolean; neon: boolean; open: boolean };
 
 function extrasOf(style: FacadeStyle): Extras {
   const spec = FACADE_LAYERS[style];
   const relief = reliefPossible();
-  return { height: relief && spec.height === true, roughness: relief && spec.roughness === true, neon: spec.neon === true };
+  return { height: relief && spec.height === true, roughness: relief && spec.roughness === true, neon: spec.neon === true, open: spec.open === true };
 }
 
 /** Each strip's sampler and the uv varying it is read with, and the layer every read takes (the region's first number). */
@@ -349,7 +359,7 @@ vec4 facadeNormalTexel() {
 #endif`;
 const facadeMap = (extras: Extras): string => /* glsl */ `
 #ifdef USE_MAP
-${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "albedo")};
+${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "albedo")};${extras.open ? `\nif (abs(vFacadeRegion.x - ${LAYER.ground}.0) < 0.5 && diffuseColor.a < 0.5) discard;` : ""}
 #endif`;
 /** The roughness strip's green sets the surface's roughness where its share is on (the relief tier), in place of the material's one number. */
 const facadeRoughness = (extras: Extras): string => `#include <roughnessmap_fragment>
@@ -426,7 +436,7 @@ function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
     tagHook.call(material, shader, renderer);
     patchFacade(shader, own, roofs, edges, FACADE_LAYERS[style].bays, extras);
   };
-  const variant = `${extras.height ? "|height" : ""}${extras.roughness ? "|roughness" : ""}${extras.neon ? "|neon" : ""}`;
+  const variant = `${extras.height ? "|height" : ""}${extras.roughness ? "|roughness" : ""}${extras.neon ? "|neon" : ""}${extras.open ? "|open" : ""}`;
   material.customProgramCacheKey = () => `${tagKey.call(material)}|facade${variant}`;
   const { layers } = FACADE_LAYERS[style];
   const stops = [
