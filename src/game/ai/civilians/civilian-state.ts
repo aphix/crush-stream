@@ -16,16 +16,18 @@ import { LegPose } from "./civilian-leg.ts";
 import type { MapIndex } from "./civilian-map-index.ts";
 import { packName } from "./civilian-names.ts";
 import { castHomesOf, newAppointmentSlot, type ResolvedMember } from "./civilian-story.ts";
+import { buildVenueIndex, type VenueIndex } from "./society-venues.ts";
 import { PathFinder } from "./walk-path.ts";
 
-/** A host event waiting for its ticks: the civilian it hit (or the place) changes at `individualTick`, the society at `societyTick`. */
-type PendingEvent = { kind: number; subject: number; seconds: number; individualTick: number; societyTick: number; individualDone: boolean };
+/** A host event waiting for its ticks: the civilian it hit (or the place) changes at `individualTick`, everyone drawn into it at `reactionTick` (`EVENT_LEAD_TICKS` after it, as late as a peer may hear it) and the society at `societyTick`. */
+type PendingEvent = { kind: number; subject: number; seconds: number; individualTick: number; reactionTick: number; societyTick: number; individualDone: boolean; reactionDone: boolean };
 
 /** The whole society and crowd of the city as typed arrays; the worker and the main thread each hold one and keep it equal by the same pure steps. */
 export class CityState {
   readonly seed: number;
   readonly map: OpenWorldMap;
   readonly index: MapIndex;
+  readonly venues: VenueIndex;
   /** The named residents, resident id = position; the rest of the rows are generated. */
   readonly cast: readonly ResolvedMember[];
   readonly castHomes: ReadonlySet<number>;
@@ -46,6 +48,8 @@ export class CityState {
   readonly hiddenFromTick: Int32Array;
   readonly hiddenUntilTick: Int32Array;
   readonly closedUntilTick: Int32Array;
+  /** Who holds each seat (`VenueIndex.seatBase` + seat), -1 for none: derived from the residents' `seat` rows. */
+  readonly seatOwner: Int32Array;
   readonly occupants: Uint16Array;
   readonly headcount: Uint16Array;
   readonly fear: Float32Array;
@@ -68,11 +72,17 @@ export class CityState {
   /** Where the decision in hand chose to go, and for what (a need, a story or the bus). */
   chosenPlace = NO_PLACE;
   chosenPurpose = 0;
+  /** The interaction row that chose it (-1: a need did), and the neighbour or victim it brings in (-1: none); `scratchPartner` is the candidate row's before it wins. */
+  chosenRow = -1;
+  chosenPartner = NO_PLACE;
+  scratchPartner = NO_PLACE;
 
   constructor(seed: number, map: OpenWorldMap, index: MapIndex, cast: readonly ResolvedMember[], startHour: number, startWeekday: number, capacity: number) {
     this.seed = seed;
     this.map = map;
     this.index = index;
+    this.venues = buildVenueIndex(map);
+    this.seatOwner = new Int32Array(this.venues.seatTotal).fill(NO_PLACE);
     this.cast = cast;
     this.castHomes = castHomesOf(cast);
     this.startHour = startHour;

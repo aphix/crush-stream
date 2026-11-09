@@ -1,7 +1,8 @@
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { completeEvents } from "./civilian-events.ts";
-import { MAX_PATH_NODES, NEVER_TICK, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
+import { MAX_PATH_NODES, NEVER_TICK, NO_SEAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import { CityState, commitResident, measurePath, retractResident } from "./civilian-state.ts";
+import { releaseSeat } from "./society-seats.ts";
 
 /**
  * What the main thread and the brain's Web Worker (`civilian-worker.ts`) say to each other. The main thread posts the map and seed once, then the
@@ -67,7 +68,10 @@ export function applyAnswer(state: CityState, answer: TickAnswer): void {
     const intBase = resident * RESIDENT_INT_STRIDE;
     const floatBase = resident * RESIDENT_FLOAT_STRIDE;
     retractResident(state, resident);
+    releaseSeat(state, resident);
     for (let field = 0; field < RESIDENT_INT_STRIDE; field++) state.ints[intBase + field] = answer.ints[at * RESIDENT_INT_STRIDE + field]!;
+    const seat = state.ints[intBase + RESIDENT_INT.seat]!;
+    if (seat !== NO_SEAT) state.seatOwner[state.venues.seatBase[state.ints[intBase + RESIDENT_INT.place]!]! + seat] = resident;
     for (let field = 0; field < RESIDENT_FLOAT_STRIDE; field++) state.floats[floatBase + field] = answer.floats[at * RESIDENT_FLOAT_STRIDE + field]!;
     const nodes = state.ints[intBase + RESIDENT_INT.pathCount]!;
     for (let step = 0; step < nodes; step++) state.pathNodes[resident * MAX_PATH_NODES + step] = answer.paths[pathAt + step]!;
