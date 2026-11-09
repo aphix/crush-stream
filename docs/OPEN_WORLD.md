@@ -60,6 +60,8 @@ partners of each other) for its length, at most once in `BUMP_COOLDOWN_SECONDS`;
 and every knock, is a `push` event: a triple whose subject is the victim and, after it with the same seconds, an `alongside` triple whose subject is the civilian who pushed, or a `walker` triple whose
 subject is the bearing from the victim's brain spot to the player who shoved (`WALKER_BEARING_STEPS` a turn; the brain turns a fight his way); a car's nudge or a knock has neither: the wire's subject is 16 bits, so a pair is never packed into one. At most one per resident per `PUSH_LOCKOUT_SECONDS`; a knock logs its `knock` first and its push after. The brain rolls the fight from a push; nothing here changes its rows.
 
+**At the car.** A resident the society has getting into or out of her car (`ACTIVITY.carIn`/`carOut`, which its reader says on a drive leg's first and last seconds) is shown fixed at the door spot `crowd.driverDoors(resident, code, out)` fills: world x, z and yaw, her feet's height and her seat top's. The engine's provider is the traffic's parking space of her car and the body style's door (`CAR_DOOR`), a pure function of the brain's rows and the space, so every peer fills the same; none set, or no car, and she is not drawn. She is a fixed body (civilians are drawn round her) and her clip's clock and end come from the reader. `activityReader` is the seam a row uses to give a resident a word the brain does not say yet.
+
 **Other host events.** `raiseEvent(kind, subject, seconds?)` puts one more host event in the log and the brain's next plan (a bust, from the cops).
 
 Cats and dogs live in the brain (they decide, walk and keep a life log) but the crowd shows none until there is animal art: a
