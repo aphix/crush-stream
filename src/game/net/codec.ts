@@ -80,8 +80,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 48: the open world's bollards, hydrants, parking meters, street-name and bus-stop signs are solid posts, so a peer on 47 would drive through what this one hits.
 49: the open world's park hoop fences are knockable sections (firm under 3 m/s closing, knocked above), so a peer on 48 would drive through what this one hits.
 50: the open world's signal poles are solid (one post per approach, where the lights draw them), so a peer on 49 would drive through what this one hits.
+51: the open world's litter bins, park benches, bike racks and a new news-box prefab are knockable (firm under their knock speed), and the park pavilion is solid, so a peer on 50 would drive through what this one hits (and PREFAB ids grew by one).
 */
-export const NET_VERSION = 50;
+export const NET_VERSION = 51;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
