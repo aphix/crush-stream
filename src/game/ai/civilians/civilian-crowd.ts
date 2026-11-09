@@ -8,31 +8,26 @@ import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import type { DoorSpot } from "./civilian-car-door.ts";
-import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, GENDER, MIX_INDEX, MIX_RESIDENT, MIX_SALT, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
-import { carGap } from "./civilian-contact.ts";
+import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
+import { carGap, comingAt } from "./civilian-contact.ts";
 import {
   BUMP_CLOSING_SPEED,
   BUMP_COOLDOWN_SECONDS,
   AMBULANCE_DELAY_SECONDS,
   BUMP_DISTANCE,
-  COINCIDENT_DISTANCE,
   CAR_NUDGE_GAP,
   CAR_NUDGE_SPEED,
   CLOCK_OFFSET_CREEP,
   CRASH_LOCKOUT_SECONDS,
   CRASH_NODE_REACH,
   DANGER_CONFIRM_SECONDS,
-  DANGER_COS,
   DANGER_LOCKOUT_SECONDS,
-  DANGER_RANGE,
-  DANGER_SPEED,
+  DANGER_SHARED_SECONDS,
   EVENT_LOG_CAPACITY,
   HARD_CLOSING_SPEED,
   HARD_DISTANCE,
   HEARD_KNOCK_LATE_SECONDS,
   HEARD_KNOCK_QUEUE,
-  LOOK,
-  POLICE_HASH,
   PUSH_LOCKOUT_SECONDS,
   STRIDE_RADIANS_PER_METRE,
   WALKER_BEARING_STEPS,
@@ -44,6 +39,7 @@ import {
   WRECK_SPEED,
 } from "./civilian-crowd-constants.ts";
 import { LegPose, legPose, legPositionAt } from "./civilian-leg.ts";
+import { lookOf } from "./civilian-look-word.ts";
 import type { CivilianRemote } from "./civilian-remote.ts";
 import { CrowdSeparation } from "./civilian-separation.ts";
 import type { CityState } from "./civilian-state.ts";
@@ -63,18 +59,6 @@ const NO_EVENTS: readonly number[] = [];
 const NO_STRIKES: readonly FigureStrike[] = [];
 /** The pusher of a push that was no civilian: a player's walker or a car. */
 const NOT_A_CIVILIAN = -1;
-
-/** The look word of the resident whose integer row starts at `base` (`LOOK`): the same resident in the same city always looks the same. */
-function lookOf(seed: number, ints: Int32Array, base: number): number {
-  let hash = Math.imul(seed ^ LOOK.salt, MIX_RESIDENT);
-  hash = Math.imul(hash ^ ints[base + RESIDENT_INT.firstName]!, MIX_INDEX);
-  hash = Math.imul(hash ^ ints[base + RESIDENT_INT.familyName]!, MIX_SALT);
-  hash = Math.imul(hash ^ ints[base + RESIDENT_INT.birthDay]!, MIX_RESIDENT);
-  hash ^= hash >>> LOOK.hashShift;
-  const woman = ints[base + RESIDENT_INT.gender] === GENDER.female ? 1 : 0;
-  const who = Math.min(hash & LOOK.hashMask, POLICE_HASH - 1);
-  return ((ints[base + RESIDENT_INT.species]! << LOOK.speciesShift) | (woman << LOOK.womanShift) | who) >>> 0;
-}
 
 function hasLooseBody(car: DeformableCar): boolean {
   for (let slot = 0; slot < LOOSE_BODIES; slot++) {
@@ -147,11 +131,13 @@ export class CivilianCrowd {
   private readonly pushedAt: Float64Array;
   /** Per resident: when a car was first seen coming at them (-Infinity: none), when they may next be in danger, and when an ambulance is due for them and where they lie (Infinity: none). */
   private readonly dangerSince: Float64Array;
+  private readonly dangerCar: Int16Array;
   private readonly dangerUntil: Float64Array;
   private readonly ambulanceDue: Float64Array;
   private readonly ambulanceX: Float32Array;
   private readonly ambulanceZ: Float32Array;
   private lastCrashSeconds = -Infinity;
+  private lastDangerSeconds = -Infinity;
   private readonly reading: ActivityReading = { code: ACTIVITY.none, sinceSeconds: 0, leftSeconds: ACTIVITY_OPEN_ENDED, partner: NOT_A_CIVILIAN, surfaceY: 0, placed: false, x: 0, z: 0, yaw: 0 };
   private readonly crimeDesk: CrimeDesk;
   private readonly crimesDue: Int32Array;
@@ -167,6 +153,7 @@ export class CivilianCrowd {
     this.bumpPartner = new Int32Array(capacity).fill(-1);
     this.pushedAt = new Float64Array(capacity).fill(-Infinity);
     this.dangerSince = new Float64Array(capacity).fill(-Infinity);
+    this.dangerCar = new Int16Array(capacity);
     this.dangerUntil = new Float64Array(capacity).fill(-Infinity);
     this.ambulanceDue = new Float64Array(capacity).fill(Infinity);
     this.ambulanceX = new Float32Array(capacity);
@@ -200,7 +187,7 @@ export class CivilianCrowd {
     if (this.overlay !== null) this.overlay(this.poses, crowdSeconds, authority);
     if (authority) {
       this.findHits(cars, crowdSeconds);
-      this.raiseDangers(crowdSeconds);
+      this.raiseDangers(crowdSeconds, cars);
       this.raiseAmbulanceCalls(crowdSeconds);
       this.postBatch();
     } else this.throwHeardKnocks(cars);
@@ -531,7 +518,7 @@ export class CivilianCrowd {
         if (shown[resident] === 0) continue;
         const spotX = x[resident]!;
         const spotZ = z[resident]!;
-        if (carSpeed >= DANGER_SPEED) this.watchApproach(resident, spotX - carX, spotZ - carZ, car.velocity.x, car.velocity.z, carSpeed, seconds);
+        this.watchApproach(resident, carIndex, spotX - carX, spotZ - carZ, car.velocity.x, car.velocity.z, carSpeed, seconds);
         const near = hypot2(carX - spotX, carZ - spotZ) <= CAR_REACH;
         if (!near && !loose) continue;
         const spotY = ground.heightAt(spotX, spotZ);
@@ -542,24 +529,30 @@ export class CivilianCrowd {
     }
   }
 
-  /** A fast car (`carSpeed`, velocity (vx, vz)) whose way to the civilian (toX, toZ) lies within `DANGER_COS` of its heading and under `DANGER_RANGE` is coming at them: noted for `raiseDangers`. */
-  private watchApproach(resident: number, toX: number, toZ: number, vx: number, vz: number, carSpeed: number, seconds: number): void {
-    const distance = hypot2(toX, toZ);
-    if (distance > DANGER_RANGE || distance < COINCIDENT_DISTANCE || vx * toX + vz * toZ < DANGER_COS * carSpeed * distance) return;
-    if (this.dangerSince[resident] === -Infinity && seconds >= this.dangerUntil[resident]!) this.dangerSince[resident] = seconds;
+  /** Car `carIndex` (velocity (vx, vz), `carSpeed`) coming at the civilian (toX, toZ from it) is noted for `raiseDangers` (`comingAt`: a car driving down the street is not). */
+  private watchApproach(resident: number, carIndex: number, toX: number, toZ: number, vx: number, vz: number, carSpeed: number, seconds: number): void {
+    if (!comingAt(toX, toZ, vx, vz, carSpeed)) return;
+    if (this.dangerSince[resident] !== -Infinity || seconds < this.dangerUntil[resident]!) return;
+    this.dangerSince[resident] = seconds;
+    this.dangerCar[resident] = carIndex;
   }
 
-  /** Those a car came at who are still on their feet `DANGER_CONFIRM_SECONDS` on are in danger, seen by whoever is about; those it ran down are not (their knock is the news). */
-  private raiseDangers(seconds: number): void {
+  /** Those a car came at who, `DANGER_CONFIRM_SECONDS` on, are still on their feet with it still coming at them (it did not brake or swerve) are in danger, seen by whoever is about; those it ran down are not (their knock is the news). */
+  private raiseDangers(seconds: number, cars: readonly DeformableCar[]): void {
     const { x, z, shown } = this.poses;
     for (let resident = 0; resident < this.dangerSince.length; resident++) {
       const since = this.dangerSince[resident]!;
       if (since === -Infinity || seconds - since < DANGER_CONFIRM_SECONDS) continue;
       this.dangerSince[resident] = -Infinity;
-      if (shown[resident] === 0) continue;
+      const car = cars[this.dangerCar[resident]!];
+      if (car === undefined || shown[resident] === 0 || seconds - this.lastDangerSeconds < DANGER_SHARED_SECONDS) continue;
+      const vx = car.velocity.x;
+      const vz = car.velocity.z;
+      if (!comingAt(x[resident]! - car.group.position.x, z[resident]! - car.group.position.z, vx, vz, hypot2(vx, vz))) continue;
       const node = this.nearestNode(x[resident]!, z[resident]!);
       if (node === NO_PLACE) continue;
       this.dangerUntil[resident] = seconds + DANGER_LOCKOUT_SECONDS;
+      this.lastDangerSeconds = seconds;
       this.logHostEvent(EVENT_KIND.danger, node, seconds);
     }
   }

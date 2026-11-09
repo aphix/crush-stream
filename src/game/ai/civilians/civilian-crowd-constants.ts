@@ -5,14 +5,18 @@ export const WRECK_MARGIN = 1.5;
 /** A building is wrecked at most once in this many crowd seconds: a car grinding along a face is one wreck, not one a slice. */
 export const WRECK_LOCKOUT_SECONDS = 30;
 /**
- * Danger: a car at `DANGER_SPEED` (m/s, 36 km/h) within `DANGER_RANGE` m of a civilian and heading within `DANGER_COS` of the way to them is coming at them: if they are not run down in `DANGER_CONFIRM_SECONDS`
- * it is a danger event (a knock is its own news), at most one a resident in `DANGER_LOCKOUT_SECONDS`. A car meeting a solid at the wreck speed that is no building's within `CRASH_NODE_REACH` m of a street node is a crash: one in `CRASH_LOCKOUT_SECONDS`.
+ * Danger: a car at `DANGER_MIN_SPEED` (m/s) or more is coming at a civilian when it is heading so that it passes within `DANGER_MISS_METRES` of them (a car's half width and a body's, with room: a car driving down the
+ * street past the sidewalk misses by five) and they are nearer than it can stop in (`DANGER_REACTION_SECONDS` of driver's reaction at its speed, then `DANGER_BRAKING` m/s2 of braking). If it still is, `DANGER_CONFIRM_SECONDS`
+ * on, and they are not run down (a knock is its own news), it is a danger event: at most one a resident in `DANGER_LOCKOUT_SECONDS` and one in `DANGER_SHARED_SECONDS` at all, so a car at three people is one alarm.
+ * A car meeting a solid at the wreck speed that is no building's within `CRASH_NODE_REACH` m of a street node is a crash: one in `CRASH_LOCKOUT_SECONDS`.
  */
-export const DANGER_SPEED = 10;
-export const DANGER_RANGE = 16;
-export const DANGER_COS = 0.9;
+export const DANGER_MIN_SPEED = 5;
+export const DANGER_MISS_METRES = 1.8;
+export const DANGER_REACTION_SECONDS = 0.8;
+export const DANGER_BRAKING = 6;
 export const DANGER_CONFIRM_SECONDS = 0.4;
 export const DANGER_LOCKOUT_SECONDS = 20;
+export const DANGER_SHARED_SECONDS = 2;
 export const CRASH_NODE_REACH = 20;
 export const CRASH_LOCKOUT_SECONDS = 4;
 /** Someone run down who is still down this long after (s) has an ambulance called for them. */

@@ -13,6 +13,7 @@ import {
   JAIL_TICKS,
   JAYWALK_CUSTODY_TICKS,
   KNOCK_FEAR,
+  ATTENTION_CRASH,
   LOOK_ON_CRASH_MINUTES,
   MECHANIC_LOOK_MINUTES,
   MECHANIC_REACH,
@@ -162,8 +163,8 @@ export function applyReactionEvents(state: CityState, tick: number): void {
     } else if (event.kind === EVENT_KIND.ambulance) callAmbulanceFor(state, event.subject, tick);
     else if (event.kind === EVENT_KIND.wreck) {
       const door = state.index.doorNode[event.subject]!;
-      alarmAt(state, state.map.graph.nodeX[door]!, state.map.graph.nodeZ[door]!, tick, NO_PLACE, LOOK_ON_CRASH_MINUTES);
-    } else if (event.kind === EVENT_KIND.danger) alarmAt(state, state.map.graph.nodeX[event.subject]!, state.map.graph.nodeZ[event.subject]!, tick, NO_PLACE, LOOK_ON_CRASH_MINUTES);
+      alarmAt(state, state.map.graph.nodeX[door]!, state.map.graph.nodeZ[door]!, tick, NO_PLACE, LOOK_ON_CRASH_MINUTES, ATTENTION_CRASH);
+    } else if (event.kind === EVENT_KIND.danger) alarmAt(state, state.map.graph.nodeX[event.subject]!, state.map.graph.nodeZ[event.subject]!, tick, NO_PLACE, LOOK_ON_CRASH_MINUTES, ATTENTION_CRASH);
     else if (event.kind === EVENT_KIND.crime) reactToCrime(state, event.subject, tick);
     else if (event.kind === EVENT_KIND.bust) releaseFightPartner(state, event.subject);
     else if (event.kind === EVENT_KIND.push) applyPush(state, event.subject, event.seconds, tick, event.bearing);

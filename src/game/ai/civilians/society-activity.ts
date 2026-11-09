@@ -1,6 +1,7 @@
 import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import {
+  ALARM_DELAY_STEPS_PER_SECOND,
   CENTIMETRES_PER_METRE,
   DECISION_HZ,
   DOOR_SPREAD,
@@ -13,6 +14,7 @@ import {
   NO_SEAT,
   PLAYER_STRIKE_REACH,
   PURPOSE,
+  RECOIL_CALM_SHARE,
   RECOIL_STEP_METRES,
   RESIDENT_FLOAT,
   RESIDENT_FLOAT_STRIDE,
@@ -23,6 +25,7 @@ import {
 } from "./civilian-constants.ts";
 import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { legPose } from "./civilian-leg.ts";
+import { residentNeuroticism } from "./civilian-temperament.ts";
 import type { CityState } from "./civilian-state.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
 import { VENUE, isCounterVenue, isOutdoorPurpose } from "./society-venues.ts";
@@ -134,20 +137,25 @@ function faceHazard(state: CityState, resident: number, out: ActivityReading): v
   if (toX !== 0 || toZ !== 0) out.yaw = detAtan2(toX, toZ);
 }
 
-/** A flinch: a step back from the hazard, out and back over the recoil clip, `RECOIL_STEP_METRES` at most. */
+/** A flinch: a step back from the hazard, out and back over the recoil clip, `RECOIL_STEP_METRES` at most (the calm take `RECOIL_CALM_SHARE` of it). */
 function stepBack(state: CityState, resident: number, since: number, out: ActivityReading): void {
   const toX = intAt(state, resident, RESIDENT_INT.alarmX) / CENTIMETRES_PER_METRE - out.x;
   const toZ = intAt(state, resident, RESIDENT_INT.alarmZ) / CENTIMETRES_PER_METRE - out.z;
   const distance = hypot2(toX, toZ);
   if (distance === 0) return;
-  const step = detSin((Math.PI * since) / ACTIVITY_SECONDS.recoil) * RECOIL_STEP_METRES;
+  const step = detSin((Math.PI * since) / ACTIVITY_SECONDS.recoil) * RECOIL_STEP_METRES * (RECOIL_CALM_SHARE + (1 - RECOIL_CALM_SHARE) * residentNeuroticism(state, resident));
   out.x -= (toX / distance) * step;
   out.z -= (toZ / distance) * step;
 }
 
-/** Someone walking who saw a hazard flinches for the recoil clip's length, stepping back from it and facing it, then walks on. */
+/** Seconds from the hazard to the moment this resident noticed it. */
+function noticeDelay(state: CityState, resident: number): number {
+  return intAt(state, resident, RESIDENT_INT.alarmDelay) / ALARM_DELAY_STEPS_PER_SECOND;
+}
+
+/** Someone walking who saw a hazard flinches for the recoil clip's length from the moment they noticed it, stepping back from it and facing it, then walks on. */
 function readFlinch(state: CityState, resident: number, seconds: number, out: ActivityReading): void {
-  const since = seconds - intAt(state, resident, RESIDENT_INT.alarmTick) / DECISION_HZ;
+  const since = seconds - intAt(state, resident, RESIDENT_INT.alarmTick) / DECISION_HZ - noticeDelay(state, resident);
   if (since < 0 || since >= ACTIVITY_SECONDS.recoil || !legPose(state, resident, seconds, state.pose)) return;
   out.placed = true;
   out.x = state.pose.x;
@@ -158,15 +166,25 @@ function readFlinch(state: CityState, resident: number, seconds: number, out: Ac
   setClip(out, ACTIVITY.recoil, since, ACTIVITY_SECONDS.recoil - since);
 }
 
-/** Out at a door watching trouble: a flinch and a step back at first, then standing looking at it; the one who phones for the ambulance stands on the phone, glancing at who is down. */
+/** Out at a door watching trouble: until they notice it they stand as they were; then a flinch and a step back, then standing looking at it; the one who phones for the ambulance stands on the phone, glancing at who is down. */
 function readWatcher(state: CityState, resident: number, purpose: number, since: number, left: number, out: ActivityReading): void {
+  if (purpose === PURPOSE.callAmbulance) {
+    out.partner = intAt(state, resident, RESIDENT_INT.alarmVictim);
+    faceHazard(state, resident, out);
+    setClip(out, ACTIVITY.phoneCall, since, left);
+    return;
+  }
+  const noticed = since - noticeDelay(state, resident);
+  if (noticed < 0) {
+    setClip(out, ACTIVITY.idle, since, left);
+    return;
+  }
   out.partner = intAt(state, resident, RESIDENT_INT.alarmVictim);
   faceHazard(state, resident, out);
-  if (purpose === PURPOSE.callAmbulance) setClip(out, ACTIVITY.phoneCall, since, left);
-  else if (since < ACTIVITY_SECONDS.recoil) {
-    stepBack(state, resident, since, out);
-    setClip(out, ACTIVITY.recoil, since, ACTIVITY_SECONDS.recoil - since);
-  } else setClip(out, ACTIVITY.idle, since, left);
+  if (noticed < ACTIVITY_SECONDS.recoil) {
+    stepBack(state, resident, noticed, out);
+    setClip(out, ACTIVITY.recoil, noticed, ACTIVITY_SECONDS.recoil - noticed);
+  } else setClip(out, ACTIVITY.idle, noticed, left);
 }
 
 function readOutdoor(state: CityState, resident: number, purpose: number, place: number, tick: number, since: number, left: number, out: ActivityReading): void {
