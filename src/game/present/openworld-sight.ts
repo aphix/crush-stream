@@ -78,6 +78,8 @@ export class SightField {
 
   private now = 0;
   private claimed = 0;
+  /** Ranges given back below `claimed`, first come first reused: an owner rebuilt mid-session (the traffic on a new crowd key) takes ids again without running the field out. */
+  private readonly freeRanges: { first: number; count: number }[] = [];
   private readonly lastSeen: Float64Array;
 
   constructor(solids: readonly Occluder[], idCapacity: number) {
@@ -102,18 +104,47 @@ export class SightField {
     this.bucket(hiding.map((solid) => Math.sqrt(solid.hx * solid.hx + solid.hz * solid.hz)));
   }
 
-  /** `count` ids no other claimant has, as the first of them. */
+  /** `count` ids no other claimant has, as the first of them; give them back with `release` when their owner is disposed. */
   claim(count: number): number {
+    const reusable = this.freeRanges.findIndex((range) => range.count >= count);
+    if (reusable >= 0) {
+      const range = this.freeRanges[reusable]!;
+      const first = range.first;
+      range.first += count;
+      range.count -= count;
+      if (range.count === 0) this.freeRanges.splice(reusable, 1);
+      return first;
+    }
     if (this.claimed + count > this.lastSeen.length) throw new RangeError(`SightField: ${count} ids asked, ${this.lastSeen.length - this.claimed} left`);
     const first = this.claimed;
     this.claimed += count;
     return first;
   }
 
+  /** The ids `claim` gave are free again, their clocks with them. */
+  release(first: number, count: number): void {
+    this.lastSeen.fill(NEVER_SEEN, first, first + count);
+    this.freeRanges.push({ first, count });
+    this.freeRanges.sort((a, b) => a.first - b.first);
+    for (let at = this.freeRanges.length - 1; at > 0; at--) {
+      const before = this.freeRanges[at - 1]!;
+      const range = this.freeRanges[at]!;
+      if (before.first + before.count !== range.first) continue;
+      before.count += range.count;
+      this.freeRanges.splice(at, 1);
+    }
+    const last = this.freeRanges[this.freeRanges.length - 1];
+    if (last !== undefined && last.first + last.count === this.claimed) {
+      this.claimed = last.first;
+      this.freeRanges.pop();
+    }
+  }
+
   /** The director stopped: every claim, every clock and the solids go. */
   clear(): void {
     if (this.claimed === 0 && this.solidCount === 0) return;
     this.claimed = 0;
+    this.freeRanges.length = 0;
     this.lastSeen.fill(NEVER_SEEN);
     this.setSolids([]);
   }
