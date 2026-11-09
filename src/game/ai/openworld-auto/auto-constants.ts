@@ -20,8 +20,10 @@ export const TIE_JITTER = 0.02;
 /** A hash of (seed, n) is a share of this. */
 export const HASH_RANGE = 4294967296;
 
-/** Interest (0-1) of what a civilian is doing, by `ACTIVITY` code: a brawl and an arrest are the most to watch, a stroll the least. */
-export const ACTIVITY_INTEREST = [0.1, 0.12, 0.3, 0.35, 0.25, 0.2, 0.15, 0.2, 0.5, 1, 0.9, 1, 0.2, 0.9, 0.8, 0.95, 0.9] as const;
+/** Interest (0-1) of what a civilian is doing, by `ACTIVITY` code: a brawl and an arrest are the most to watch, a stroll the least; a driver getting out of a parked car, a witness on the phone to the police and one kneeling by the hurt are scenes of their own. */
+export const ACTIVITY_INTEREST = [0.1, 0.12, 0.3, 0.35, 0.25, 0.2, 0.15, 0.2, 0.5, 1, 0.9, 1, 0.2, 0.9, 0.8, 0.95, 0.9, 0.5, 0.7, 0.8, 0.75, 0.55] as const;
+/** Interest (0-1) of the ambulance by `AMBULANCE` state: idle (none out), on its way, loading at the scene, driving off. */
+export const AMBULANCE_INTEREST = [0, 0.85, 0.9, 0.45] as const;
 /** Interest (0-1) of a mood, by `MOOD` code: fear, anger and pain over a quiet day. */
 export const MOOD_INTEREST = [0.1, 0.25, 0.25, 0.35, 0.12, 0.2, 0.5, 0.5, 0.2, 0.25, 0.2, 0.55, 0.3, 0.3] as const;
 /** Interest (0-1) a host event gives its subject while it is in progress, by `EVENT_KIND`: a fight and a bust first, a push or a jaywalk least. */

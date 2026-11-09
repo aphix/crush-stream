@@ -3,7 +3,8 @@ import { ACTIVITY } from "../civilians/civilian-activity.ts";
 import { EVENT_KIND } from "../civilians/civilian-constants.ts";
 import { MOOD } from "../civilians/civilian-names.ts";
 import { COP_RUN_SPEED, EVENT_SECONDS } from "./auto-constants.ts";
-import { activityInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
+import { AMBULANCE } from "../openworld-traffic/ambulance.ts";
+import { activityInterest, activityLine, ambulanceInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
 
 const DRIVING_MPS = 12;
 const CRAWL_MPS = 2;
@@ -39,5 +40,26 @@ describe("given what the Auto camera finds interesting", () => {
   it("when a foot cop runs, then he is in pursuit and more to watch than one on his beat, and making an arrest is more still", () => {
     expect(copInterest(ACTIVITY.none, COP_RUN_SPEED), "at a run").toBeGreaterThan(copInterest(ACTIVITY.none, 1));
     expect(copInterest(ACTIVITY.arresting, 0), "making an arrest").toBeGreaterThan(copInterest(ACTIVITY.none, COP_RUN_SPEED));
+  });
+
+  it("when a driver gets out of a parked car, a witness phones the police or someone kneels by the hurt, then each is more to watch than buying at a counter", () => {
+    const buying = activityInterest(ACTIVITY.buy);
+    expect(activityInterest(ACTIVITY.carOut), "getting out of a car").toBeGreaterThan(buying);
+    expect(activityInterest(ACTIVITY.phoneCall), "the witness on the phone").toBeGreaterThan(buying);
+    expect(activityInterest(ACTIVITY.kneel), "kneeling by the hurt").toBeGreaterThan(buying);
+    expect(activityInterest(ACTIVITY.phoneCall), "the call, more than a shove").toBeGreaterThan(activityInterest(ACTIVITY.bump));
+  });
+
+  it("when the ambulance is out, then loading at the scene is the hottest, on its way next, driving off the least, and none out is nothing", () => {
+    expect(ambulanceInterest(AMBULANCE.loading), "loading").toBeGreaterThan(ambulanceInterest(AMBULANCE.coming));
+    expect(ambulanceInterest(AMBULANCE.coming), "on its way").toBeGreaterThan(ambulanceInterest(AMBULANCE.leaving));
+    expect(ambulanceInterest(AMBULANCE.leaving), "driving off").toBeGreaterThan(0);
+    expect(ambulanceInterest(AMBULANCE.idle), "none out").toBe(0);
+  });
+
+  it("when words are asked for what a civilian is doing, then a walk has none and a scene has its own", () => {
+    expect(activityLine(ACTIVITY.none), "walking").toBeNull();
+    expect(activityLine(ACTIVITY.carOut), "getting out of a car").toBe("getting out of a car");
+    expect(activityLine(ACTIVITY.recoil), "flinching").toBe("flinching from a hit");
   });
 });

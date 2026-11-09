@@ -396,6 +396,8 @@ export class OpenWorldDirector {
         cops: () => this.law?.copPoses ?? null,
         residentAt: (carIndex) => this.traffic?.residentOf(carIndex) ?? -1,
         cars: () => this.ports.cars(),
+        ambulanceCar: () => this.traffic?.ambulanceCar() ?? -1,
+        ambulanceState: () => this.traffic?.ambulanceState() ?? 0,
         isPlayerCar: (carIndex) => this.ports.cull.playerCars().includes(this.ports.cars()[carIndex]!),
       },
       { residents: crowd.poses.count, cops: FOOT_COP_COUNT, cars: MAX_CARS, events: EVENT_LOG_CAPACITY },

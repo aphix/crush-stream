@@ -500,6 +500,7 @@ export class CrashEngine extends EngineGarage {
           if (car && car.sirens !== on) car.setSirens(on);
         },
         openDoor: (id, radians) => this.cars[id]?.setDoorOpen(DRIVER_SIDE, radians),
+        groundAt: (x, z) => activeGround().heightAt(x, z, 0.5),
         setBody: (id, style) => this.matchCar(id, style, STYLE_CLASS[style]),
         release: (id) => {
           this.live()[id]!.stored = false;

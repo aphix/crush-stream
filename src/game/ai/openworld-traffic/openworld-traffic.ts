@@ -10,6 +10,7 @@ import { blankAiCar, type AiCar } from "../derby-ai.ts";
 import { AmbulanceService } from "./ambulance.ts";
 import { KerbCars } from "./kerb-cars.ts";
 import { LEASE, MoverFleet, type DrivenCar } from "./mover-fleet.ts";
+import { carPoseAtSpot, type ResidentCarPose } from "./traffic-look.ts";
 import { RedLightWatch } from "./red-light-watch.ts";
 import { EVERYDAY_BODIES, FEED_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
@@ -144,18 +145,21 @@ export class OpenWorldTraffic {
     return this.ambulance.state;
   }
 
+  /** The engine's index of the ambulance's car, -1 when none is out. */
+  ambulanceCar(): number {
+    return this.ambulance.carIndex;
+  }
+
   /** The space the ambulance is at or coming to, -1 when none is out. */
   ambulanceSpot(): number {
     return this.ambulance.scene;
   }
 
-  /** Where resident `resident`'s parked car stands and which way it faces (the space's middle), into `out`; false when his car is not at a space. */
-  carPoseOf(resident: number, out: { x: number; z: number; yaw: number }): boolean {
+  /** Where resident `resident`'s parked car stands and which way it faces (the space's middle), the ground there and his car's body, into `out`; false when his car is not at a space. */
+  carPoseOf(resident: number, out: ResidentCarPose): boolean {
     const spot = resident >= 0 && resident < RESIDENT_CAPACITY ? this.context.residentSpot[resident]! : -1;
     if (spot < 0) return false;
-    out.x = this.parkingSpots.x[spot]!;
-    out.z = this.parkingSpots.z[spot]!;
-    out.yaw = this.parkingSpots.yaw[spot]!;
+    carPoseAtSpot(this.parkingSpots, spot, resident, this.context.ports.groundAt, out);
     return true;
   }
 
