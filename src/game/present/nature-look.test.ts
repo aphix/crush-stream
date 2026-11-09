@@ -63,9 +63,10 @@ describe("given the street trees' leaf material", () => {
   };
 
   // mutation: sed -i 's/    this.flatShading = false;/    this.flatShading = true;/' src/game/present/nature-look.ts
-  it("when it is made or copied for another draw kind, then it is smooth-shaded, keeps the nature look, and thins the leaves' outline before the lighting reads the colour", () => {
+  it("when it is made or copied for another draw kind, then it is smooth-shaded and two-sided, keeps the nature look, and cuts the leaves' holes before the lighting reads the colour", () => {
     for (const material of [new LeafMaterial(), new LeafMaterial().clone()]) {
       expect(material.flatShading, "smooth").toBe(false);
+      expect(material.side, "two-sided: a hole shows the crown's inside").toBe(THREE.DoubleSide);
       const fragment = compileLit(material);
       expect(fragment, "the nature look").toContain("natureShade");
       expect(fragment.indexOf("discard;"), "a leafy outline, before lighting").toBeGreaterThan(-1);

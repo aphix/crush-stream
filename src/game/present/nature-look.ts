@@ -91,32 +91,45 @@ export class NatureMaterial extends THREE.MeshStandardMaterial {
   }
 }
 
-/** Leaves (a vertex class of `MAT.CONIFER_FOLIAGE`) clump in cells this size (m), darkest to brightest by these shares. */
+/** Leaves (a vertex class of `MAT.CONIFER_FOLIAGE`) clump in cells this size (m), darkest to brightest by these shares; a leaf-sized hole pattern (cells of `LEAF_SIZE` m) cuts this share of a crown away everywhere, up to `LEAF_EDGE_CUT` more where a lump turns from the eye (|cos| under `LEAF_EDGE`), so sky and limbs show through. */
 const LEAF_CELL = 0.42;
 const LEAF_DARK = 0.7;
 const LEAF_BRIGHT = 1.15;
-/** Where a crown turns this far from the eye (|cos| under it), its leaves thin out, up to this share of the clumps cut at the very edge: a ragged, leafy outline. */
-const LEAF_EDGE = 0.5;
-const LEAF_CUT = 0.85;
+const LEAF_SIZE = 0.16;
+const LEAF_HOLES = 0.44;
+const LEAF_EDGE = 0.6;
+const LEAF_EDGE_CUT = 0.3;
+/** The holes close from this distance (m) to the next, down to `LEAF_FAR_HOLES` of their cut, so a far crown does not sparkle. */
+const LEAF_FAR_FROM = 30;
+const LEAF_FAR_TO = 70;
+const LEAF_FAR_HOLES = 0.35;
+/** A lump's inside (its back faces, seen through a hole) is this much darker: the shade within a crown. */
+const LEAF_INSIDE = 0.55;
 
-/** After the normal is final, before lighting: on leaf fragments only, clumps of light and dark leaves, and gaps cut through the outline. Reads the surface tag's per-vertex class (`vMaterialAttribute`). */
+/** After the normal is final, before lighting: on leaf fragments only, clumps of light and dark leaves, holes through the crown, and its inside shaded. Reads the surface tag's per-vertex class (`vMaterialAttribute`). */
 const LEAF_FRAGMENT = /* glsl */ `
 if (int(vMaterialAttribute + 0.5) == ${MAT.CONIFER_FOLIAGE}) {
   vec3 leafAt = vNatureWorld / ${LEAF_CELL.toFixed(2)};
   float leafClump = 0.5 * natureNoise(leafAt.xz + 0.71 * leafAt.y) + 0.5 * natureNoise(1.9 * leafAt.zy + 3.1);
-  diffuseColor.rgb *= mix(${LEAF_DARK.toFixed(2)}, ${LEAF_BRIGHT.toFixed(2)}, leafClump);
+  vec3 leafBit = vNatureWorld / ${LEAF_SIZE.toFixed(2)};
+  float leafFine = 0.5 * natureNoise(leafBit.xz + 0.71 * leafBit.y) + 0.5 * natureNoise(1.9 * leafBit.zy + 7.3);
   float leafFacing = abs(dot(normal, normalize(vViewPosition)));
-  if (leafFacing < ${LEAF_EDGE.toFixed(2)} && leafClump < (1.0 - leafFacing / ${LEAF_EDGE.toFixed(2)}) * ${LEAF_CUT.toFixed(2)}) discard;
+  float leafNear = 1.0 - (1.0 - ${LEAF_FAR_HOLES.toFixed(2)}) * smoothstep(${LEAF_FAR_FROM.toFixed(1)}, ${LEAF_FAR_TO.toFixed(1)}, length(vViewPosition));
+  float leafCut = (${LEAF_HOLES.toFixed(2)} + ${LEAF_EDGE_CUT.toFixed(2)} * (1.0 - smoothstep(0.0, ${LEAF_EDGE.toFixed(2)}, leafFacing))) * leafNear;
+  if (0.6 * leafFine + 0.4 * leafClump < leafCut) discard;
+  diffuseColor.rgb *= mix(${LEAF_DARK.toFixed(2)}, ${LEAF_BRIGHT.toFixed(2)}, leafClump) * (gl_FrontFacing ? 1.0 : ${LEAF_INSIDE.toFixed(2)});
 }`;
 
 /**
- * The street trees' one material: the nature look, smooth-shaded (a canopy lump's normals are its ellipsoid's, so a crown shades as one soft mass, not as facets), its leaves in clumps of light and dark, and
- * its outline thinned where a lump turns away from the eye, so a crown's edge reads as leaves against the sky. Needs the surface tag (`tagMaterial`): the leaf class comes from it.
+ * The street trees' one material: the nature look, smooth-shaded (a canopy lump's normals are its ellipsoid's), two-sided, its leaves in clumps of light and dark with leaf-sized holes cut through the
+ * crown (more at its outline, fewer far off), so sky and limbs show through and a hole shows the lump's darker inside. Shadows stay whole (the depth pass does not cut). Needs the surface tag
+ * (`tagMaterial`): the leaf class comes from it.
  */
 export class LeafMaterial extends NatureMaterial {
   constructor() {
     super();
     this.flatShading = false;
+    this.side = THREE.DoubleSide;
     const nature = this.onBeforeCompile;
     this.onBeforeCompile = (shader, renderer) => {
       nature.call(this, shader, renderer);
