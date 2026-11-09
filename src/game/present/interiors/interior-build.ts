@@ -73,7 +73,7 @@ function inward(corners: Alcove["corners"], from: PlanPoint, to: PlanPoint): Pla
 }
 
 /**
-\ * Every alcove of `level`: its floor carried out over the bay, its ceiling at the glass's head, and on its three sides the apron up to the sill: skirting, a body in the room's wood (a window seat's face, not a
+ * Every alcove of `level`: its floor carried out over the bay, its ceiling at the glass's head, and on its three sides the apron up to the sill: skirting, a body in the room's wood (a window seat's face, not a
  * white slab), and a sill board at the glass's bottom edge that reaches into the room.
  */
 function alcovePieces(plan: InteriorPlan, look: Look, level: number): Piece[] {
