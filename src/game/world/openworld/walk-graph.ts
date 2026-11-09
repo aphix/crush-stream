@@ -37,6 +37,8 @@ export type Place = {
   interior?: InteriorKind;
   /** Every seat of the interior (and a stoop's): `SEAT_STRIDE` floats each, in a stable order that is a seat's identity. */
   seats?: Float32Array;
+  /** How many of the leading seats are on the stoop (a home's front steps); the rest are indoors. */
+  stoopSeats?: number;
   /** Two spots, `COUNTER_STRIDE` floats each: where a customer stands to buy, then where the clerk stands. */
   counter?: Float32Array;
   /** Game hours the place is open, [from, to); `to` below `from` wraps past midnight. Absent: always open. */
