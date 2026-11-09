@@ -25,6 +25,60 @@ const HEAD_COLOUR = 0x111315;
 /** No change of phase seen yet. */
 const NO_PHASE = -1;
 
+/**
+ * The regulatory signs on each signal pole, facing the traffic the head faces (Philadelphia's corners): SPEED LIMIT 25 on the pole under the head, NO TURN ON RED
+ * beside the head on the curb side. Both are the 24 x 30 in plate (0.61 x 0.76 m); bottoms over 2 m so a walker passes under them.
+ */
+export const REG_SIGN = { width: 0.61, height: 0.76, speedY: 2.4, noTurnY: HEAD_HEIGHT, noTurnOut: 0.33, standoff: 0.005 } as const;
+/** The two plates' texels: one atlas, two cells side by side. */
+const SIGN_CELL = { width: 244, height: 304 } as const;
+const SIGN_ATLAS = { width: 512, height: 512 } as const;
+const SIGN_INK = "#111111";
+const SIGN_PLATE = "#f4f4f2";
+const SIGN_BORDER_PX = 6;
+const SIGN_BORDER_INSET = 8;
+export const SPEED_LIMIT_MPH = 25;
+
+/** What the plates are painted with: a 2D canvas context's text and rectangle calls. */
+type SignPainter = Pick<CanvasRenderingContext2D, "fillStyle" | "strokeStyle" | "lineWidth" | "font" | "textAlign" | "textBaseline" | "fillRect" | "strokeRect" | "fillText">;
+
+function plate(g: SignPainter, x: number): void {
+  g.fillStyle = SIGN_PLATE;
+  g.fillRect(x, 0, SIGN_CELL.width, SIGN_CELL.height);
+  g.strokeStyle = SIGN_INK;
+  g.lineWidth = SIGN_BORDER_PX;
+  g.strokeRect(x + SIGN_BORDER_INSET, SIGN_BORDER_INSET, SIGN_CELL.width - 2 * SIGN_BORDER_INSET, SIGN_CELL.height - 2 * SIGN_BORDER_INSET);
+  g.fillStyle = SIGN_INK;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+}
+
+/** The atlas: SPEED LIMIT 25 in the left cell, NO TURN ON RED in the right, black on white as on the street. */
+export function paintRegulatorySigns(g: SignPainter): void {
+  const middle = SIGN_CELL.width / 2;
+  plate(g, 0);
+  g.font = "bold 44px sans-serif";
+  g.fillText("SPEED", middle, 62);
+  g.fillText("LIMIT", middle, 112);
+  g.font = "bold 130px sans-serif";
+  g.fillText(String(SPEED_LIMIT_MPH), middle, 214);
+  plate(g, SIGN_CELL.width);
+  g.font = "bold 46px sans-serif";
+  const lines = "NO TURN ON RED".split(" ");
+  for (let line = 0; line < lines.length; line++) g.fillText(lines[line]!, SIGN_CELL.width + middle, 70 + 58 * line);
+}
+
+/** A plate quad facing +z, its uvs on atlas cell `cell` (0 speed, 1 no turn). */
+function plateGeometry(cell: number): THREE.PlaneGeometry {
+  const geometry = new THREE.PlaneGeometry(REG_SIGN.width, REG_SIGN.height);
+  const uv = geometry.getAttribute("uv") as THREE.BufferAttribute;
+  const u0 = (cell * SIGN_CELL.width) / SIGN_ATLAS.width;
+  const u1 = ((cell + 1) * SIGN_CELL.width) / SIGN_ATLAS.width;
+  const v0 = 1 - SIGN_CELL.height / SIGN_ATLAS.height;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) === 0 ? u0 : u1, uv.getY(i) === 0 ? v0 : 1);
+  return geometry;
+}
+
 /** One signal head: the junction it serves and the approach it faces. */
 type Head = { junction: number; heading: number };
 
@@ -39,6 +93,10 @@ export class TrafficLightArt {
   private readonly lamps: THREE.InstancedMesh<THREE.BoxGeometry, THREE.MeshBasicMaterial>;
   private readonly poles: THREE.InstancedMesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
   private readonly headMesh: THREE.InstancedMesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
+  /** SPEED LIMIT plates (one per head) and NO TURN ON RED plates (one per head), on one atlas. */
+  readonly speedSigns: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  readonly noTurnSigns: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  private readonly signTexture: THREE.CanvasTexture;
   private readonly headList: Head[] = [];
   private readonly shown: Int16Array;
   private readonly colour = new THREE.Color();
@@ -54,8 +112,17 @@ export class TrafficLightArt {
     this.poles = new THREE.InstancedMesh(new THREE.BoxGeometry(POLE_WIDTH, POLE_HEIGHT, POLE_WIDTH), new THREE.MeshStandardMaterial({ color: POLE_COLOUR, roughness: 0.7 }), this.heads);
     this.headMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(HEAD_SIZE.width, HEAD_SIZE.height, HEAD_SIZE.depth), new THREE.MeshStandardMaterial({ color: HEAD_COLOUR, roughness: 0.6 }), this.heads);
     this.lamps = new THREE.InstancedMesh(new THREE.BoxGeometry(LAMP_SIZE, LAMP_SIZE, LAMP_DEPTH), new THREE.MeshBasicMaterial({ color: 0xffffff }), this.heads * LAMPS_PER_HEAD);
+    const canvas = document.createElement("canvas");
+    canvas.width = SIGN_ATLAS.width;
+    canvas.height = SIGN_ATLAS.height;
+    paintRegulatorySigns(canvas.getContext("2d")!);
+    this.signTexture = new THREE.CanvasTexture(canvas);
+    this.signTexture.colorSpace = THREE.SRGBColorSpace;
+    const signMaterial = new THREE.MeshStandardMaterial({ map: this.signTexture, roughness: 0.55, side: THREE.DoubleSide });
+    this.speedSigns = new THREE.InstancedMesh(plateGeometry(0), signMaterial, this.heads);
+    this.noTurnSigns = new THREE.InstancedMesh(plateGeometry(1), signMaterial, this.heads);
     this.place(network);
-    this.group.add(this.poles, this.headMesh, this.lamps);
+    this.group.add(this.poles, this.headMesh, this.lamps, this.speedSigns, this.noTurnSigns);
   }
 
   /** Lamps for crowd time `seconds`. */
@@ -77,6 +144,12 @@ export class TrafficLightArt {
       mesh.material.dispose();
       mesh.dispose();
     }
+    this.speedSigns.geometry.dispose();
+    this.noTurnSigns.geometry.dispose();
+    this.speedSigns.material.dispose();
+    this.signTexture.dispose();
+    this.speedSigns.dispose();
+    this.noTurnSigns.dispose();
   }
 
   private place(network: RoadNetwork): void {
@@ -103,6 +176,14 @@ export class TrafficLightArt {
       for (let lamp = 0; lamp < LAMPS_PER_HEAD; lamp++) {
         this.lamps.setMatrixAt(index * LAMPS_PER_HEAD + lamp, matrix.compose(position.set(headX + faceX * lampReach, HEAD_HEIGHT + LAMP_Y[lamp]!, headZ + faceZ * lampReach), turn, unit));
       }
+      // The plates face the traffic the head faces: a plane's front is +z, turned to (faceX, faceZ).
+      const plateTurn = Math.atan2(faceX, faceZ);
+      turn.setFromAxisAngle(up, plateTurn);
+      const onFace = POLE_WIDTH / 2 + REG_SIGN.standoff;
+      this.speedSigns.setMatrixAt(index, matrix.compose(position.set(poleX + faceX * onFace, REG_SIGN.speedY, poleZ + faceZ * onFace), turn, unit));
+      const curbX = poleX + rightX(heading) * REG_SIGN.noTurnOut;
+      const curbZ = poleZ + rightZ(heading) * REG_SIGN.noTurnOut;
+      this.noTurnSigns.setMatrixAt(index, matrix.compose(position.set(curbX + faceX * onFace, REG_SIGN.noTurnY, curbZ + faceZ * onFace), turn, unit));
     }
   }
 
