@@ -12,7 +12,9 @@ import { CROWD_SEED_MASK, CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER
 import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.ts";
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { fillCommuterFeed } from "../ai/civilians/society-commuters.ts";
 import { OpenWorldTraffic, type FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
+import type { CommuterFeed } from "../ai/openworld-traffic/traffic-sight.ts";
 import { KERB_CARS, MOVER_CARS, PATROL_CARS } from "../ai/openworld-traffic/traffic-constants.ts";
 import type { TrafficPorts } from "../ai/openworld-traffic/traffic-ports.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
@@ -103,6 +105,8 @@ export class OpenWorldDirector {
   private unhook: (() => void) | null = null;
   private traffic: OpenWorldTraffic | null = null;
   private lights: LightsArt | null = null;
+  /** The residents' drives and parked cars, written by the society before each traffic step (host and solo). */
+  private feed: CommuterFeed | null = null;
   private crowdKey = 0;
   /** The host's (or solo player's) crowd clock: the sim's seconds since the crowd was made. */
   private seconds = 0;
@@ -171,7 +175,10 @@ export class OpenWorldDirector {
     this.crowd.step(this.seconds, this.ports.cars(), true);
     this.throwStruck(this.crowd);
     this.law?.throwTakedowns();
-    this.traffic?.step(this.seconds, dt);
+    if (this.traffic !== null && this.feed !== null) {
+      fillCommuterFeed(this.crowd.state, tickAt(this.seconds), this.feed.legs, this.feed.parked);
+      this.traffic.step(this.seconds, dt);
+    }
   }
 
   /** A frame: the crowd is made, rebuilt on a new seed or dropped as the course comes and goes; a client steps it by the host's clock; the crowd is drawn and the look-at text kept up. */
@@ -267,7 +274,12 @@ export class OpenWorldDirector {
     this.lights = host.makeLights();
     if (client) return;
     const phone = this.ports.tier() === POPULATION_TIER.phone;
-    this.traffic = new OpenWorldTraffic(map.places, host, this.sight, phone ? { movers: MOVER_CARS.phone, kerb: KERB_CARS.phone, patrol: PATROL_CARS.phone } : { movers: MOVER_CARS.desktop, kerb: KERB_CARS.desktop, patrol: PATROL_CARS.desktop }, null);
+    const capacity = this.crowd!.state.capacity;
+    this.feed = {
+      legs: { count: 0, resident: new Int32Array(capacity), fromPlace: new Int32Array(capacity), toPlace: new Int32Array(capacity), arriveSeconds: new Float64Array(capacity) },
+      parked: { count: 0, resident: new Int32Array(capacity), place: new Int32Array(capacity) },
+    };
+    this.traffic = new OpenWorldTraffic(map.places, host, this.sight, phone ? { movers: MOVER_CARS.phone, kerb: KERB_CARS.phone, patrol: PATROL_CARS.phone } : { movers: MOVER_CARS.desktop, kerb: KERB_CARS.desktop, patrol: PATROL_CARS.desktop }, this.feed);
     host.setFreeDrivers(this.traffic);
   }
 
@@ -275,6 +287,7 @@ export class OpenWorldDirector {
     this.ports.traffic?.setFreeDrivers(null);
     this.traffic?.dispose();
     this.traffic = null;
+    this.feed = null;
     this.lights?.dispose();
     this.lights = null;
   }
