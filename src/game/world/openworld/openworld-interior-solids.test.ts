@@ -5,6 +5,7 @@ import type { PrefabMaterials } from "../../present/prefab-pieces.ts";
 import { PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
 import { BAY_WIDTH, SHOPFRONT } from "./interior-kinds.ts";
+import { drawnHalf } from "./openworld-facade-solids.ts";
 import { openWorldCourse } from "./openworld-course.ts";
 import { layOutLots } from "./openworld-lots.ts";
 
@@ -26,9 +27,9 @@ function walled(x: number, z: number): boolean {
   });
 }
 
-/** The point `across` m along the place's front from its middle and `deep` m in from the street face. */
+/** The point `across` m along the place's front from its middle and `deep` m in from its drawn street face. */
 function inside(place: (typeof furnished)[number], across: number, deep: number): { x: number; z: number } {
-  const front = place.depth / 2 - deep;
+  const front = drawnHalf(place.depth) - deep;
   return { x: place.x + front * Math.cos(place.yaw) + across * Math.sin(place.yaw), z: place.z - front * Math.sin(place.yaw) + across * Math.cos(place.yaw) };
 }
 

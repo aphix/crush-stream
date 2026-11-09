@@ -1,5 +1,5 @@
 import type { Draft } from "./interior-draft.ts";
-import { PARTITION, TURN, type Opening, type Rect } from "./interior-kinds.ts";
+import { FURNISHING, PARTITION, TURN, type Opening, type Rect } from "./interior-kinds.ts";
 
 /*
  * Positions are plan metres: `deep` from the street wall inward, `across` from the centre line. A piece's `facing` is the way its front points; a seat faces that way.
@@ -17,7 +17,6 @@ const doorway = (centre: number, width = 0.9): Opening => ({ centre, width, sill
  * floors' back wall, in line with the lower one and never over it, so every tread has its headroom.
  */
 const STAIR_FOOT = 5;
-const UPPER_STAIR_FOOT = 9.85;
 /** How far past the upper flight's foot (m) its side wall starts on the first floor, leaving its foot open to the back room. */
 const UPPER_FOOT_OPEN = 0.75;
 /** A rail's offset from the edge it guards, half its thickness (m). */
@@ -26,7 +25,8 @@ const RAIL_HALF = 0.03;
 const PARLOUR_WALL = 4.9;
 const KITCHEN_WALL = 9.4;
 const UPPER_FRONT_WALL = 4.7;
-const UPPER_BACK_WALL = 9.7;
+const UPPER_BACK_WALL = 9.6;
+const UPPER_STAIR_FOOT = UPPER_BACK_WALL + PARTITION;
 
 /** Rails round a stairwell's open edges on `level`: along its side toward the rooms and across its foot. */
 function railStairwell(d: Draft, level: number, well: Rect): void {
@@ -73,7 +73,7 @@ function layoutRowhomeUpper(d: Draft, level: number, left: number, right: number
   d.put("dresser", level, 2.5, left + 0.25, toRight);
   d.lamp(level, 2.4, 0);
   d.put("bed", level, 12.5, 0.9, toStreet);
-  d.put("dresser", level, 14.4, 1.8, toStreet);
+  d.put("dresser", level, d.back - FURNISHING.dresser.depth / 2, 1.8, toStreet);
   d.lamp(level, 12, 0);
   if (level === 1) {
     d.put("bathtub", level, 7.5, right - 0.4, toLeft);
@@ -105,6 +105,10 @@ export function layoutRowhome(d: Draft): void {
   layoutRowhomeUpper(d, 2, left, right, upperWell);
 }
 
+/** The coffee shop's order counter, its back counter and shelf: centred this far across (m) and this long, inside the left party wall with the staff gate on the right. */
+const COFFEE_BAR_ACROSS = -0.75;
+const COFFEE_BAR_LENGTH = 3.4;
+
 /** The shop floor: one door, two window counters, tables, a sofa nook, the order counter with a staff gate, a back counter and a store room with a restroom. */
 export function layoutCoffee(d: Draft): void {
   for (const across of [-1.65, 1.65]) {
@@ -117,21 +121,23 @@ export function layoutCoffee(d: Draft): void {
     d.put("chair", 0, 3.8, across, toStreet);
     d.lamp(0, 3, across);
   }
-  d.put("sofa", 0, 5.1, -2.1, toRight, { width: 1.5 });
+  const left = -d.half;
+  const right = d.half;
+  d.put("sofa", 0, 5.1, left + FURNISHING.sofa.depth / 2, toRight, { width: 1.5 });
   d.put("armchair", 0, 4.9, 2, toLeft);
-  d.put("plant", 0, 5.9, 2.3, toStreet);
-  d.put("counter", 0, 6.6, -0.85, toStreet, { width: 3.4, serves: true });
-  d.lamp(0, 6.6, -0.85);
-  d.put("counter", 0, 8.55, -0.85, toStreet, { width: 3.4, depth: 0.6, height: 0.95 });
-  d.put("backShelf", 0, 9.05, -0.85, toStreet, { width: 3.4 });
-  d.crossWall(0, 9.3, -d.half, d.half, [doorway(1.7)]);
-  d.put("gondola", 0, 10.2, -2.3, toRight);
-  d.put("gondola", 0, 11.9, -2.3, toRight);
-  d.put("fridge", 0, 14.3, -1.2, toStreet);
+  d.put("plant", 0, 5.9, right - FURNISHING.plant.width / 2, toStreet);
+  d.put("counter", 0, 6.6, COFFEE_BAR_ACROSS, toStreet, { width: COFFEE_BAR_LENGTH, serves: true });
+  d.lamp(0, 6.6, COFFEE_BAR_ACROSS);
+  d.put("counter", 0, 8.55, COFFEE_BAR_ACROSS, toStreet, { width: COFFEE_BAR_LENGTH, depth: 0.6, height: 0.95 });
+  d.put("backShelf", 0, 9.05, COFFEE_BAR_ACROSS, toStreet, { width: COFFEE_BAR_LENGTH });
+  d.crossWall(0, 9.3, left, right, [doorway(1.7)]);
+  d.put("gondola", 0, 10.2, left + FURNISHING.gondola.depth / 2, toRight);
+  d.put("gondola", 0, 11.9, left + FURNISHING.gondola.depth / 2, toRight);
+  d.put("fridge", 0, d.back - FURNISHING.fridge.depth / 2, -1.2, toStreet);
   d.spineWall(0, 0.8, 11.6, d.back);
-  d.crossWall(0, 11.6, 0.8, d.half, [doorway(1.6, 0.8)]);
-  d.put("toilet", 0, 14.3, 1.7, toStreet);
-  d.put("basin", 0, 12.3, 2.3, toLeft);
+  d.crossWall(0, 11.6, 0.8, right, [doorway(1.6, 0.8)]);
+  d.put("toilet", 0, d.back - FURNISHING.toilet.depth / 2, 1.7, toStreet);
+  d.put("basin", 0, 12.3, right - FURNISHING.basin.depth / 2, toLeft);
 }
 
 /** The bar down the left wall with its back shelves and eight stools, tables, two booths, a pool table, a jukebox, neon in the windows, and a restroom. */
@@ -155,24 +161,28 @@ export function layoutBar(d: Draft): void {
   }
   d.put("poolTable", 0, 9, -0.5, toStreet);
   d.lamp(0, 9, -0.5);
-  d.put("jukebox", 0, 14.35, 3.5, toStreet);
+  d.put("jukebox", 0, d.back - FURNISHING.jukebox.depth / 2, 3.5, toStreet);
   d.put("neon", 0, 0.45, -1, toStreet, { lift: 1.7 });
   d.put("neon", 0, 0.45, 1, toStreet, { lift: 1.7 });
   d.crossWall(0, 11.6, left, -2.4, [doorway(-3.4)]);
   d.spineWall(0, -2.4, 11.6, d.back);
-  d.put("toilet", 0, 14.3, -4.6, toStreet);
+  d.put("toilet", 0, d.back - FURNISHING.toilet.depth / 2, -4.6, toStreet);
   d.put("basin", 0, 12.4, left + 0.25, toRight);
 }
+
+/** The meeting room's far chairs keep this off the back wall, and each row of chairs stands this far from the table's middle (m). */
+const MEETING_GAP = 0.05;
+const MEETING_SEAT_TO_TABLE = 0.85;
 
 /** Lobby with a reception desk and waiting seats, an open plan of eight desks, a glazed-in meeting room and a pantry. */
 export function layoutOffice(d: Draft): void {
   d.put("counter", 0, 3.4, 0, toStreet, { width: 3.6, serves: true });
   d.put("deskChair", 0, 4.4, 0, toStreet);
   d.put("screen", 0, 3.4, 0, toStreet, { lift: 1.1 });
-  d.put("sofa", 0, 2, -4.9, toRight);
+  d.put("sofa", 0, 2, -d.half + FURNISHING.sofa.depth / 2, toRight);
   d.put("table", 0, 2, -3.9, toRight, { width: 1, depth: 0.5, height: 0.42 });
-  d.put("armchair", 0, 2, 4.8, toLeft);
-  d.put("plant", 0, 0.8, 5, toStreet);
+  d.put("armchair", 0, 2, d.half - FURNISHING.armchair.depth / 2, toLeft);
+  d.put("plant", 0, 0.8, d.half - FURNISHING.plant.width / 2, toStreet);
   d.lamp(0, 2.5, 0);
   for (const [row, deep] of [7.4, 10].entries()) {
     for (const across of [-4.2, -1.4, 1.4, 4.2]) {
@@ -183,13 +193,14 @@ export function layoutOffice(d: Draft): void {
   }
   d.crossWall(0, 12.1, -d.half, -1.2, [doorway(-1.8)]);
   d.spineWall(0, -1.2, 12.1, d.back);
-  d.put("table", 0, 13.4, -3.3, toStreet, { width: 2.6, depth: 1 });
+  const farChairs = d.back - FURNISHING.chair.depth / 2 - MEETING_GAP;
+  d.put("table", 0, farChairs - MEETING_SEAT_TO_TABLE, -3.3, toStreet, { width: 2.6, depth: 1 });
   for (const across of [-4.1, -3.3, -2.5]) {
-    d.put("chair", 0, 12.5, across, toBack);
-    d.put("chair", 0, 14.3, across, toStreet);
+    d.put("chair", 0, farChairs - 2 * MEETING_SEAT_TO_TABLE, across, toBack);
+    d.put("chair", 0, farChairs, across, toStreet);
   }
-  for (const across of [2, 2.6, 3.2]) d.put("cabinet", 0, 14.35, across, toStreet);
-  d.put("fridge", 0, 14.3, 4.2, toStreet);
+  for (const across of [2, 2.6, 3.2]) d.put("cabinet", 0, d.back - FURNISHING.cabinet.depth / 2, across, toStreet);
+  d.put("fridge", 0, d.back - FURNISHING.fridge.depth / 2, 4.2, toStreet);
   d.put("table", 0, 12.6, 3.4, toStreet);
   d.put("chair", 0, 12.6, 2.45, toRight);
   d.put("chair", 0, 12.6, 4.35, toLeft);
@@ -204,9 +215,9 @@ export function layoutStore(d: Draft): void {
     for (const deep of [3.5, 5.2, 6.9, 8.6]) d.put("gondola", 0, deep, across, toRight);
   }
   for (const deep of [3.5, 6, 8.5]) d.put("backShelf", 0, deep, d.half - 0.175, toLeft, { width: 2.5 });
-  for (const across of [-3.5, -2.7, -1.9, -1.1]) d.put("fridge", 0, 14.3, across, toStreet);
+  for (const across of [-3.5, -2.7, -1.9, -1.1]) d.put("fridge", 0, d.back - FURNISHING.fridge.depth / 2, across, toStreet);
   d.put("counter", 0, 12.4, 3.2, toStreet, { width: 3.6 });
-  d.put("backShelf", 0, 14.4, 3.2, toStreet, { width: 3.6 });
+  d.put("backShelf", 0, d.back - FURNISHING.backShelf.depth / 2, 3.2, toStreet, { width: 3.6 });
   d.put("neon", 0, 0.45, -3.9, toStreet, { lift: 1.7 });
   for (const deep of [3, 7, 11]) d.lamp(0, deep, 0.5);
 }
