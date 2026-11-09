@@ -128,7 +128,7 @@ export const CAST_TITLE_BASE = 100;
 
 /**
  * Event kinds of the host's input triples (kind, subject, crowd seconds). A knock's subject is the civilian run down; a wreck's the place; a crime's and a bust's the criminal; a push's and a fight's the victim, followed when
- * the other party is a civilian by an `alongside` triple of the same seconds naming them (none: a player's walker or car). Inside the brain the pair is one subject, victim + capacity * (other + 1) (see `pairOf`).
+ * the other party is a civilian by an `alongside` triple of the same seconds naming them (none: a player's walker or car). Inside the brain the pair is one subject, victim + capacity * (other + 1).
  */
 export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6 } as const;
 export const EVENT_TRIPLE = 3;

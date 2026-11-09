@@ -88,7 +88,7 @@ export const MOOD_WORDS = Object.keys(MOOD);
 export const NEED_MOODS = [MOOD.exhausted, MOOD.hungry, MOOD.restless, MOOD.lonely, MOOD.busy, MOOD.restless] as const;
 
 /** What a place's kind is called in a building's line (PLACE_KIND order). */
-export const KIND_WORDS = ["home", "workplace", "eatery", "shop", "hangout", "hideout", "bus stop"] as const;
+export const KIND_WORDS = ["home", "workplace", "eatery", "shop", "hangout", "hiding place", "bus stop"] as const;
 export const KIND_COUNT = KIND_WORDS.length;
 
 /** The codes of the life log lines and of the events that colour a mood. Codes from `VISIT_BASE` are walks: the base plus the purpose. */
@@ -141,7 +141,7 @@ const EVENT_MOODS = [
 /** What a walk is for, in the look-at line ("{label} -> {place}"), by purpose: the five needs first, then the stories and the bus. */
 export const PURPOSE_LABELS = [
   "rest",
-  "food",
+  "a meal",
   "work",
   "company",
   "an errand",

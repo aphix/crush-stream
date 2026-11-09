@@ -146,18 +146,22 @@ function readIndoors(state: CityState, resident: number, place: number, since: n
   if (seat !== NO_SEAT && entry.seats !== undefined) readSitting(state, place, seat, since - (counter === undefined ? 0 : ACTIVITY_SECONDS.buy), left, out, ACTIVITY.sit);
 }
 
+function hasDoor(state: CityState, place: number): boolean {
+  const venue = state.venues.venueOf[place]!;
+  return venue !== VENUE.park && venue !== VENUE.transit && venue !== VENUE.other;
+}
+
 /** Door clips: the first and last `ACTIVITY_SECONDS.door` of a walk that leaves or enters a building. */
 function readWalk(state: CityState, resident: number, seconds: number, out: ActivityReading): void {
   if (intAt(state, resident, RESIDENT_INT.legPurpose) === PURPOSE.drive) return;
   const departSeconds = intAt(state, resident, RESIDENT_INT.departTick) / DECISION_HZ;
   const arriveSeconds = intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ;
   const doorSeconds = ACTIVITY_SECONDS.door;
-  const hasDoor = (place: number) => state.venues.venueOf[place] !== VENUE.park && state.venues.venueOf[place] !== VENUE.transit && state.venues.venueOf[place] !== VENUE.other;
   const since = seconds - departSeconds;
   const toEnd = arriveSeconds - seconds;
   if (arriveSeconds - departSeconds <= 2 * doorSeconds) return;
-  if (since < doorSeconds && hasDoor(intAt(state, resident, RESIDENT_INT.fromPlace))) setClip(out, ACTIVITY.door, since, doorSeconds - since);
-  else if (toEnd < doorSeconds && hasDoor(intAt(state, resident, RESIDENT_INT.place))) setClip(out, ACTIVITY.door, doorSeconds - toEnd, toEnd);
+  if (since < doorSeconds && hasDoor(state, intAt(state, resident, RESIDENT_INT.fromPlace))) setClip(out, ACTIVITY.door, since, doorSeconds - since);
+  else if (toEnd < doorSeconds && hasDoor(state, intAt(state, resident, RESIDENT_INT.place))) setClip(out, ACTIVITY.door, doorSeconds - toEnd, toEnd);
 }
 
 /** Fills `out` with what resident `resident` is doing at crowd time `seconds`, from their row alone: a pure function of the row and the time (any frame rate, no allocation). */
