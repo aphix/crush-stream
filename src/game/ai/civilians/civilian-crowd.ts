@@ -425,9 +425,9 @@ export class CivilianCrowd {
   private knockDown(resident: number, seconds: number, strike: FigureStrike): void {
     this.poses.shown[resident] = 0;
     this.struck.push(strike);
-    this.logPush(resident, NOT_A_CIVILIAN, seconds);
     this.appendLog(EVENT_KIND.knock, resident, seconds);
     this.queueForBrain(EVENT_KIND.knock, resident, seconds);
+    this.logPush(resident, NOT_A_CIVILIAN, seconds);
   }
 
   /** A knock heard from the host, once this clock reaches its time (the cars are drawn at that time): the civilian is thrown by the car nearest where they were, as that car's own hit would have thrown them. */
