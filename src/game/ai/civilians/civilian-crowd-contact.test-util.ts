@@ -49,16 +49,21 @@ export function sendAlong(crowd: CivilianCrowd, resident: number, edge: StreetEd
   state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.lateral] = 0;
 }
 
-export type Push = { victim: number; pusher: number };
+/** A push read off the log: the victim, the civilian who pushed (-1: none), and the bearing to the player who shoved (-1: none; neither is a car's nudge). */
+export type Push = { victim: number; pusher: number; bearing: number };
 
-/** The pushes of an event log (kind, subject, seconds triples): a push triple, and the `alongside` triple of the same seconds after it when a civilian pushed (-1: a player's walker or a car). */
+/** The pushes of an event log (kind, subject, seconds triples): a push triple, and the `alongside` (a civilian) or `walker` (a player's bearing) triple of the same seconds after it. */
 export function pushesIn(events: ArrayLike<number>): Push[] {
   const found: Push[] = [];
   for (let at = 0; at + EVENT_TRIPLE <= events.length; at += EVENT_TRIPLE) {
     if (events[at] !== EVENT_KIND.push) continue;
     const next = at + EVENT_TRIPLE;
-    const accompanied = next + EVENT_TRIPLE <= events.length && events[next] === EVENT_KIND.alongside && events[next + 2] === events[at + 2];
-    found.push({ victim: events[at + 1]!, pusher: accompanied ? events[next + 1]! : -1 });
+    const follows = next + EVENT_TRIPLE <= events.length && events[next + 2] === events[at + 2];
+    found.push({
+      victim: events[at + 1]!,
+      pusher: follows && events[next] === EVENT_KIND.alongside ? events[next + 1]! : -1,
+      bearing: follows && events[next] === EVENT_KIND.walker ? events[next + 1]! : -1,
+    });
   }
   return found;
 }

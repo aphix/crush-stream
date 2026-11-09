@@ -87,7 +87,7 @@ const HOT = {
   "src/game/present/game-audio.ts": ["frame"],
   "src/game/present/paint-scratch.ts": ["frame", "draw", "touch", "sameStroke", "radiusOf", "growRect", "stamp"],
   "src/game/ai/civilians/civilian-leg.ts": ["legPose", "legPositionAt"],
-  "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "separate", "noteContacts", "startBump", "writeActivity", "raisePush", "logPair", "logHostEvent", "appendLog", "queueForBrain", "advanceBrain", "raiseCrimes", "postBatch", "findHits", "lookOf", "hasLooseBody"],
+  "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "separate", "noteContacts", "startBump", "writeActivity", "mayPush", "raisePush", "raiseShove", "logPair", "logHostEvent", "appendLog", "queueForBrain", "advanceBrain", "raiseCrimes", "postBatch", "findHits", "lookOf", "hasLooseBody"],
   "src/game/ai/civilians/civilian-separation.ts": ["resolve", "list", "buildPairs", "addPair", "relax", "pushApart", "move"],
   "src/game/ai/civilians/civilian-contact.ts": ["carGap"],
   "src/game/ai/civilians/crowd-walkers.ts": ["clear", "add"],

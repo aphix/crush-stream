@@ -66,5 +66,7 @@ export const WALKER_PUSH_DISTANCE = 0.5;
 export const WALKER_PUSH_CLOSING_SPEED = 0.5;
 export const CAR_NUDGE_GAP = 0.5;
 export const CAR_NUDGE_SPEED = 1;
+/** A player's shove names the way to him from the victim in this many steps a turn (a power of two, under the wire's 16-bit subject): a third of a degree each. */
+export const WALKER_BEARING_STEPS = 1024;
 /** A resident is in at most one push event per this many crowd seconds (a game hour): the log is 512 triples on the wire. */
 export const PUSH_LOCKOUT_SECONDS = 60;
