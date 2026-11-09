@@ -27,6 +27,39 @@ function runUntil(run: { field: FakeField; traffic: OpenWorldTraffic; clock: Clo
   for (let step = 0; step < MOST_SECONDS / STEP_SECONDS && !done(); step++) stepField(run.field, run.traffic, run.clock);
 }
 
+describe("given a field whose pool cars the engine has just built (shown and simulated where it builds a car: the map's middle)", () => {
+  // mutation: sed -i 's/    for (let id = first; id < first + this.total; id++) ports.putAway(id);/    \/\/ none put away/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when traffic starts, then every pool car is put away (hidden and not simulated) before anything else reads them", () => {
+    const field = quietField();
+    makeTraffic(field, { movers: 12, kerb: 10, patrol: 2 });
+    expect(field.cars.length, "the pool's cars were built").toBe(1 + 12 + 10);
+    for (let id = 1; id < field.cars.length; id++) {
+      const car = field.cars[id]!;
+      expect(car.stored && !car.group.visible, `car ${id} at (${car.group.position.x}, ${car.group.position.z}) is ${car.stored ? "stored" : "simulated"} and ${car.group.visible ? "shown" : "hidden"}`).toBe(true);
+    }
+  });
+
+  // mutation: sed -i 's/      if (car.group.visible || !car.stored) ports.putAway(id);/      \/\/ left as found/' src/game/ai/openworld-traffic/kerb-cars.ts
+  // mutation: sed -i 's/    if (car.group.visible || !car.stored) {/    if (false) {/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when something outside traffic shows a car traffic put away and wakes it, then traffic puts it away again within a pass", () => {
+    const field = quietField();
+    const traffic = makeTraffic(field, { movers: 2, kerb: 2, patrol: 1 });
+    const clock = new Clock();
+    const woken = [2, 3, 4];
+    for (const id of woken) {
+      const car = field.cars[id]!;
+      car.stand(0, 0, 0);
+      car.stored = false;
+      car.group.visible = true;
+    }
+    runSeconds(field, traffic, clock, 0.5);
+    for (const id of woken) {
+      const car = field.cars[id]!;
+      expect(car.stored && !car.group.visible, `car ${id} at (${car.group.position.x}, ${car.group.position.z})`).toBe(true);
+    }
+  });
+});
+
 describe("given the open world's traffic on a field with the local player's car", () => {
   // mutation: sed -i 's/    ports.ensureCars(first + this.total);/    ports.ensureCars(first);/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when traffic starts, then the field holds the seated car and one real car for every mover and kerb car, the pool past the seats", () => {

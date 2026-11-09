@@ -39,6 +39,7 @@ import { CrashRecorder } from "./engine-record.ts";
 import { CarDamage, FinalDamage } from "./car-damage.ts";
 import type { CourseMenu } from "../net/net-ports.ts";
 import type { HighlightClip } from "../match/highlights.ts";
+import type { FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 
 /** The name a clip gives a car that is no racer (traffic, and the cops past it: `entrants` has no row for them). */
 export const TRAFFIC_NAME = "Traffic";
@@ -138,6 +139,8 @@ export abstract class RaceField {
    * on the course's start anchor until the host's game starts.
    */
   free = false;
+  /** Whoever drives the lobby's cars that no human does (the open world's traffic); null: they stand on their brakes, as in every other lobby. The cars they own are theirs to place. */
+  freeDrivers: FreeDrivers | null = null;
   menu: RaceMenu = null;
   options: RaceOptions = { ...DEFAULT_RACE_OPTIONS };
   /** What a run reads: the user's `options`, or with a program (the bench, a weak public host) its rules laid over them; the user's own are never written. */
@@ -540,7 +543,7 @@ export abstract class RaceField {
   /** Lobby: car `id` back at its spawn, repaired (`place` dresses it afresh), upright and at rest. */
   protected placeLobby(id: number): void {
     const car = this.host.live()[id];
-    if (!car || !this.track) return;
+    if (!car || !this.track || this.freeDrivers?.owns(id)) return;
     const slot = this.lobbySlot(id);
     car.group.visible = true;
     this.place(car, slot.x, slot.z, slot.yaw, slot.y);

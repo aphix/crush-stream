@@ -10,7 +10,6 @@ import { Campaign } from "../match/campaign.ts";
 import { PoliceBrain } from "../ai/police.ts";
 import { HunterBrain } from "../ai/hunter.ts";
 import type { AiCar } from "../ai/derby-ai.ts";
-import type { FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import { applyAiDrive, InputFade } from "../ai/input-fade.ts";
 import { copyDrive } from "../ai/race-ai.ts";
 import { AI_DIFFICULTIES, COOL_DOWN_THROTTLE } from "../ai/constants.ts";
@@ -37,8 +36,6 @@ export const RESULTS_DELAY = 2.5;
  * at the end of every physics slice, `frame` once per rendered frame.
  */
 export class RaceDirector extends RaceHudLayer {
-  /** Whoever drives the lobby's cars that no human does (the open world's traffic); null: they stand on their brakes, as in every other lobby. */
-  freeDrivers: FreeDrivers | null = null;
   /** A netplay client's race is its host's: `applySnapshot` has fed it (cleared on `enter` and `exit`). A run this browser started itself is not mirrored. */
   mirrored = false;
   /** Per car id: the drafting bonuses (`CarRecord.drafts`) already put on a meter. */
@@ -610,7 +607,7 @@ export class RaceDirector extends RaceHudLayer {
     }
     if (!s || !brain || !ground) {
       for (let i = 0; i < cars.length; i++) {
-        cars[i]!.stored = false;
+        if (!this.freeDrivers?.owns(i)) cars[i]!.stored = false;
         applyDrive(cars[i]!, this.hold, dt);
       }
       return;
