@@ -182,3 +182,14 @@ describe("given an eye in the alley behind a coffee shop where a civilian sits",
     set.dispose();
   });
 });
+
+describe("given the sight field an interior set took its ids from", () => {
+  // mutation: sed -i '/this.claimedFrom?.release(this.sightBase, this.entries.length);/d' src/game/present/interiors/interior-art.ts
+  it("when the set is disposed, then its ids are free again: the next claim gets the first of them", () => {
+    const sight = blind();
+    const set = new InteriorSet(lone);
+    set.update(coffee.doorX, coffee.doorZ, FRAME, sight);
+    set.dispose();
+    expect(sight.claim(1), "the first id after the set is gone").toBe(0);
+  });
+});
