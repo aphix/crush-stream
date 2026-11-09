@@ -15,6 +15,8 @@ Measured on WSL2 (14 cores, 23 GB), with the box shared with another project's c
 
 `npm run typecheck` runs `tsrs`, oxc-project's Rust port of the TypeScript 7 checker, pinned at `0.20.0-ts7.1.0-beta` (2 days old when added, so it clears pnpm's release-age check without an exclusion). Both checkers list the same 1,743 files under `src`; seeded errors came out identical from both, file, line, column and code: five across three TS files (TS2322, TS2339, TS2344, one a `.tsx`), a `checkJs` error in `scripts/migration-plan.mjs` (reached through `src/lib/db.ts`) and a missing `@/` import (TS2307); main checks clean under both. TypeScript 7 removed `baseUrl`, so `tsconfig.json` drops it (`paths` were already relative; tsc 5.7 checks clean without it, and Vite's `resolve.tsconfigPaths` resolves `@/` without it). `typescript` 5.x stays installed: `scripts/check-boundaries.mjs` and `scripts/dup-scan.mjs` parse with its compiler API, and editors' language service uses it.
 
+`tsconfig.json` sets `erasableSyntaxOnly`: tests and scripts run `.ts` through Node's type stripping, which cannot run parameter properties, enums or namespaces, so the typecheck rejects them (TS1294) in the worktree that adds one instead of at the next test run.
+
 ## Speed audit (2026-10-07)
 
 Aim: shorter test, typecheck, build and deploy waits, and a faster game; bundle size for its own sake is not a goal. Numbers are

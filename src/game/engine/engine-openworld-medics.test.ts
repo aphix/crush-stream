@@ -3,7 +3,7 @@ import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { createCrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { AMBULANCE } from "../ai/openworld-traffic/ambulance.ts";
 import { FRAME_DT } from "./bench-frame.ts";
-import { MEDICS, placeMedics } from "./engine-openworld-medics.ts";
+import { MEDICS, OpenWorldMedics, placeMedics } from "./engine-openworld-medics.ts";
 
 const DOWN = { x: 12.5, z: -40.25 };
 
@@ -29,5 +29,16 @@ describe("given someone run down and an ambulance called for them", () => {
       placeMedics(poses, DOWN.x, DOWN.z, state, FRAME_DT);
       expect(Array.from(poses.shown), `state ${state}`).toEqual([0, 0]);
     }
+  });
+
+  it("when someone else is run down while the ambulance is loading and no second one is sent, then the medics stay at the first scene", () => {
+    // mutation: sed -i 's/    if (!sent) return;/    void sent;/' src/game/engine/engine-openworld-medics.ts
+    const medics = new OpenWorldMedics({ update() {}, dispose() {} });
+    const sight = {} as Parameters<OpenWorldMedics["frame"]>[3];
+    medics.call(DOWN.x, DOWN.z, true);
+    medics.call(DOWN.x + 30, DOWN.z + 30, false);
+    medics.frame(AMBULANCE.loading, 0, 0, sight, FRAME_DT);
+    expect((medics.poses.x[0]! + medics.poses.x[1]!) / 2, "x of the scene they kneel at").toBeCloseTo(DOWN.x, 5);
+    expect(medics.poses.z[0], "z of the scene they kneel at").toBeCloseTo(DOWN.z, 5);
   });
 });
