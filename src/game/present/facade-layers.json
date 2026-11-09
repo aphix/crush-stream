@@ -242,7 +242,7 @@
     "open": true
   },
   "supermarket": {
-    "bays": 4,
+    "bays": 2,
     "layers": 3,
     "metres": {
       "cornice": 1.56,

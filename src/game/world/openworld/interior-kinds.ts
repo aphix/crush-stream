@@ -121,9 +121,9 @@ export const MAX_RISER = 0.19;
 /** Depth of a tread (m). */
 export const TREAD_RUN = 0.26;
 
-/** Floors and the topmost ceiling by interior: a rowhome has three 3.2 m storeys over its stoop, a shop one 3.75 m clear storey under a slab. */
+/** Floors and the topmost ceiling by interior: a rowhome has its stoop's landing, then floors 0.1 m over the facade's storey lines (3.6 and 6.6 m: the ground band, then 3.0 m storeys), a shop one 3.75 m clear storey under a slab. */
 export const LEVELS = {
-  rowhome: { floors: [ROWHOME_FLOOR_Y, 3.7, 6.9], topCeiling: 9.9 },
+  rowhome: { floors: [ROWHOME_FLOOR_Y, 3.7, 6.7], topCeiling: 9.5 },
   coffee: { floors: [SHOP_FLOOR_Y], topCeiling: 3.75 },
   bar: { floors: [SHOP_FLOOR_Y], topCeiling: 3.75 },
   office: { floors: [SHOP_FLOOR_Y], topCeiling: 3.75 },

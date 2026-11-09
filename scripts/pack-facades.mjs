@@ -97,7 +97,7 @@ const STYLES = {
   bar: { crop: [93, 0, 540, 848], bays: 2, cornice: [38, 115], floor: [115, 320], ground: [510, 840], quoins: false, rects: [[112, 130, 209, 262], [320, 130, 425, 262], [50, 642, 139, 730], [394, 642, 480, 730]], neon: { rects: [[67, 660, 122, 715], [417, 660, 452, 708]], bright: 170 }, metres: SHOP, open: { kind: "bar", floorY: SHOP_FLOOR_Y, ground: 4 } },
   office: { crop: [10, 0, 622, 848], bays: 2, cornice: [85, 125], floor: [125, 345], ground: [565, 848], quoins: false, glass: (r, g, b) => b - r > 30, metres: SHOP, open: { kind: "office", floorY: SHOP_FLOOR_Y, ground: 4 } },
   cornerstore: { crop: [100, 0, 532, 848], bays: 2, cornice: [48, 125], floor: [130, 330], ground: [492, 848], quoins: false, rects: [[105, 155, 190, 275], [347, 155, 430, 275], [230, 637, 508, 790]], neon: { rects: [[243, 643, 293, 672]], bright: 170 }, metres: SHOP, open: { kind: "store", floorY: SHOP_FLOOR_Y, ground: 4 } },
-  supermarket: { crop: [72, 0, 280, 848], bays: 4, cornice: [185, 235], floor: [235, 380], ground: [380, 800], quoins: false, rects: [[48, 270, 96, 315], [188, 270, 236, 315], [8, 578, 272, 640], [8, 662, 272, 800]], metres: MARKET },
+  supermarket: { crop: [72, 0, 280, 848], bays: 2, cornice: [185, 235], floor: [235, 380], ground: [380, 800], quoins: false, rects: [[48, 270, 96, 315], [188, 270, 236, 315], [8, 578, 272, 640], [8, 662, 272, 800]], metres: MARKET },
   rowhouse: { crop: [233, 0, 383, 1264], bays: 3, cornice: [0, 275], floor: [275, 548], ground: [838, 1264], quoins: false, rects: [[159, 165, 225, 275], [159, 350, 224, 490], [95, 365, 119, 505], [264, 365, 288, 505], [254, 912, 322, 1060], [52, 910, 126, 942], [257, 1160, 322, 1240]] },
 };
 
