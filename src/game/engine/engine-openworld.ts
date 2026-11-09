@@ -13,6 +13,7 @@ import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { fillCommuterFeed } from "../ai/civilians/society-commuters.ts";
+import { findWalkerStrike, WalkerStrike } from "../ai/civilians/society-activity.ts";
 import { OpenWorldTraffic, type FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import type { CommuterFeed } from "../ai/openworld-traffic/traffic-sight.ts";
 import { KERB_CARS, MOVER_CARS, PATROL_CARS } from "../ai/openworld-traffic/traffic-constants.ts";
@@ -94,6 +95,8 @@ export type OpenWorldPorts = {
   traffic?: TrafficHostPorts;
   /** Absent in a director that draws no interiors (the tests'). */
   makeInteriors?(map: OpenWorldMap): InteriorArt;
+  /** A civilian who turned on this browser's player on foot lands a swing: he takes the walker's knockdown, pushed along (dirX, dirZ). */
+  strikeWalker(dirX: number, dirZ: number): void;
 };
 
 /**
@@ -126,6 +129,7 @@ export class OpenWorldDirector {
   private text: LookText | null = null;
   private lookAcc = 0;
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
+  private readonly walkerStrike = new WalkerStrike();
 
   constructor(ports: OpenWorldPorts) {
     this.ports = ports;
@@ -181,6 +185,7 @@ export class OpenWorldDirector {
     this.seconds += dt;
     this.feedWalkers(this.crowd);
     this.crowd.step(this.seconds, this.ports.cars(), true);
+    this.landWalkerStrike(this.crowd, dt);
     this.throwStruck(this.crowd);
     this.law?.throwTakedowns();
     if (this.traffic !== null && this.feed !== null) {
@@ -252,6 +257,13 @@ export class OpenWorldDirector {
   private feedWalkers(crowd: CivilianCrowd): void {
     crowd.walkers.clear();
     if (this.ports.foot(this.foot)) crowd.walkers.add(this.foot.x, this.foot.z, this.foot.velocityX, this.foot.velocityZ);
+  }
+
+  /** A civilian the player shoved and who turned on him lands a swing while he is in reach: the walker's knockdown. The host's own walker only: a client's player is in none of the host's fights. */
+  private landWalkerStrike(crowd: CivilianCrowd, dt: number): void {
+    const { walkers } = crowd;
+    if (walkers.count === 0 || !findWalkerStrike(crowd.state, this.seconds - dt, this.seconds, walkers.x[0]!, walkers.z[0]!, this.walkerStrike)) return;
+    this.ports.strikeWalker(this.walkerStrike.dirX, this.walkerStrike.dirZ);
   }
 
   private dropFacades(): void {
