@@ -37,11 +37,12 @@ describe("given the windows of the packed pictures on the street face", () => {
   // mutation: sed -i 's/const BAY_ACROSS = -0.9;/const BAY_ACROSS = 0.9;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the windows are split by the bay stack, then it hides exactly the ones on its half of the picture and the door's half is whole", () => {
     const all = streetWindowsOf("rowbrick");
-    const visible = visibleWindowsOf("rowbrick");
+    const key = (window: { across: number; storey: number }): string => `${window.storey}@${window.across.toFixed(4)}`;
+    const visible = new Set(visibleWindowsOf("rowbrick").map(key));
     expect(all.length, "windows of the rowbrick picture's street face").toBe(ROWBRICK_WINDOWS);
     for (const window of all) {
       const label = `window at ${window.across.toFixed(2)}, storey ${window.storey}`;
-      expect(visible.includes(window), `${label} visible`).toBe(window.across > 0);
+      expect(visible.has(key(window)), `${label} visible`).toBe(window.across > 0);
     }
   });
 

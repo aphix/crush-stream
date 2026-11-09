@@ -19,9 +19,9 @@ const EPSILON = 1e-6;
 /** The door hole the facade art cuts, half its width (m), and where its middle stands across the lot (u; the kit's x is u negated). */
 const DOOR_HOLE_HALF_WIDTH = 0.5;
 const DOOR_HOLE_X = -1.8;
-/** The lot's half width (m) and the least clear gap between the bay and the stoop's hood (m). */
+/** The lot's half width (m) and the least clear gap between the bay's slab lip and the door's hood (m): a hand and a half. */
 const LOT_HALF_WIDTH = 2.8;
-const STOOP_BAY_GAP_MIN = 0.3;
+const STOOP_BAY_GAP_MIN = 0.2;
 /** The open world's house depth (m), and how far past the party wall the chimney may reach (its half width and its cap, m). */
 const HOUSE_DEPTH = 15;
 const CHIMNEY_HALF_MAX = 0.45;
