@@ -73,8 +73,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 41: a clip's keyframe flight block no longer carries the side-hit fuel cut's seconds (`stalledS`, one double fewer), so peers on 40 would misread a host's clip.
 42: a wreck section ends with the car's paint scratch strokes (a count byte, then 6 bytes a stroke), and a snapshot car's flags byte bit 7 is `marked` (a load crush or scratched paint), so a car with only scratches rides the wreck section; peers on 41 would misread the wreck section.
 43: `MSG.crowd` (13) carries the open world's seed, clock and event log, and the lobby's game kinds gain "openworld" (a lobby that stays open on the city's course), so peers on 42 would drop the crowd message and refuse a start gate of that kind.
+44: the crowd's event log carries kinds 2-6 (crime, bust, push, fight and the pusher's alongside triple) and a peer's brain acts on them (moods, fights, busts, venue and seat choice, drives), so a peer on 43 would compute a different city from the same log.
 */
-export const NET_VERSION = 43;
+export const NET_VERSION = 44;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
