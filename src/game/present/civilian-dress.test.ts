@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
+import { LOOK, POLICE_HASH } from "../ai/civilians/civilian-crowd-constants.ts";
 import { ATTIRE } from "./civilian-art-constants.ts";
-import { dressOfLook, skinOfLook } from "./civilian-dress.ts";
+import { dressOfLook, isPoliceLook, skinOfLook } from "./civilian-dress.ts";
 import { OUTFIT, type DriverLook } from "./driver-look.ts";
+import { COP_LOOK } from "./dummy-dress.ts";
+import { FACE } from "./dummy-faces.ts";
 
 const LOOKS = 2000;
 const LOOK_STEP = 0x9e3779b1;
@@ -65,5 +67,18 @@ describe("given consecutive look seeds", () => {
   it("when they are dressed, then neighbours do not wear the same attire all the time", () => {
     const attires = Array.from({ length: CONSECUTIVE_LOOKS }, (_, look) => dressed(look).attire);
     expect(new Set(attires).size, "attires among consecutive seeds").toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe("given the look word of a foot cop", () => {
+  it("when it is dressed, then it wears the uniformed division's colours, a man's face or a woman's by its woman bit", () => {
+    const man = dressed(POLICE_HASH).person;
+    expect(firstMismatch([man.shirt, man.pants, man.outfit, man.face, man.woman], [COP_LOOK.shirt, COP_LOOK.pants, OUTFIT.UNIFORM, FACE.COP, false]), "the man").toBeUndefined();
+    const woman = dressed(POLICE_HASH | (1 << LOOK.womanShift)).person;
+    expect(firstMismatch([woman.shirt, woman.face, woman.woman], [COP_LOOK.shirt, FACE.WOMAN, true]), "the woman").toBeUndefined();
+  });
+
+  it("when two thousand civilians' looks are asked, then none of them is a cop's", () => {
+    expect(looks.filter(isPoliceLook), "looks that read as a cop's").toHaveLength(0);
   });
 });

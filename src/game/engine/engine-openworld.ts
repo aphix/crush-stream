@@ -1,6 +1,7 @@
+import type { CrowdSight } from "../present/civilian-art.ts";
+import type { SightField } from "../present/openworld-sight.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
-import type { SightField } from "../present/openworld-sight.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
@@ -13,12 +14,13 @@ import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
 import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
+import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
 
 const NO_EVENTS = new Float64Array(0);
 
 /** The drawn crowd: `update` once a frame after the crowd's step. */
 type CrowdArt = {
-  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: SightField, wallDt: number): void;
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void;
   dispose(): void;
 };
 
@@ -46,6 +48,8 @@ type OpenWorldPorts = {
   makeArt(capacity: number): CrowdArt;
   /** The police's extra ports (the traffic, the course's solids, a busted player); absent: foot cops only. */
   law?: Pick<LawEnginePorts, "traffic" | "solids" | "playerBusted" | "sirens">;
+  /** What culling reads of the engine. */
+  cull: OpenWorldCullPorts;
 };
 
 /**
@@ -54,6 +58,7 @@ type OpenWorldPorts = {
  */
 export class OpenWorldDirector {
   private readonly ports: OpenWorldPorts;
+  private readonly culling: OpenWorldCulling;
   private map: OpenWorldMap | null = null;
   private crowd: CivilianCrowd | null = null;
   private art: CrowdArt | null = null;
@@ -69,7 +74,6 @@ export class OpenWorldDirector {
   private readonly ray = new LookRay();
   private text: LookText | null = null;
   private lookAcc = 0;
-  readonly sight: SightField = { seen: () => true };
   private readonly foot = { x: 0, z: 0 };
   private footTracked = false;
   private footLastX = 0;
@@ -79,6 +83,7 @@ export class OpenWorldDirector {
 
   constructor(ports: OpenWorldPorts) {
     this.ports = ports;
+    this.culling = new OpenWorldCulling(ports.cull);
   }
 
   /** The map the crowd lives on; the crowd is made from it on the next frame in the open world. */
@@ -90,6 +95,11 @@ export class OpenWorldDirector {
   /** The crowd's end of the crowd message while the open world is up, else null. */
   link(): CrowdLink | null {
     return this.map !== null && this.ports.inOpenWorld() ? this : null;
+  }
+
+  /** What the local eyes see of the open world: everything that draws or streams asks it before it spends anything. */
+  get sight(): SightField {
+    return this.culling.sight;
   }
 
   /** The crowd's key (`CROWD_TIER_SCALE`): the population tier above the scene seed. A client has the host's. */
@@ -131,9 +141,11 @@ export class OpenWorldDirector {
   /** A frame: the crowd is made, rebuilt on a new seed or dropped as the course comes and goes; a client steps it by the host's clock; the crowd is drawn and the look-at text kept up. */
   frame(wallDt: number): void {
     if (this.map === null || !this.ports.inOpenWorld()) {
+      this.culling.stop(this.ports.cars());
       this.stop();
       return;
     }
+    this.culling.frame(this.ports.cars(), wallDt);
     const client = this.ports.isClient();
     if (client && !this.hasHeard) return;
     const key = client ? this.heardKey : this.hostKey();

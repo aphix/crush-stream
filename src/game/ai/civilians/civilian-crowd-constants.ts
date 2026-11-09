@@ -40,10 +40,12 @@ export const LOOK_HZ = 4;
 export const BODY_GAP = 0.6;
 /** A drawn civilian stands at most this far (m) from where the brain puts them: lanes already spread walkers by +-1 m, more would put one through a wall or into the road. */
 export const MAX_OFFSET = 0.7;
-/** Passes over the pair list, each moving an overlapping pair apart by half the overlap each: a row of three settles in under six. */
-export const SEPARATION_PASSES = 6;
-/** The share of a head-on or overtaking pair's push that goes sideways, so they pass on each other's sides instead of standing off. */
-export const SIDESTEP_SHARE = 0.6;
+/** Passes over the pair list, each moving an overlapping pair apart by half the overlap each: the overlap in a row of three falls to a quarter each pass. */
+export const SEPARATION_PASSES = 8;
+/** Two bodies can end within `BODY_GAP` of each other only if they start within the gap plus what both may move. */
+export const PAIR_RANGE = BODY_GAP + 2 * MAX_OFFSET;
+/** Two bodies closing or parting slower than this (m/s) stand still to each other: they are pushed straight apart, not stepped to each other's sides. */
+export const MOVING_SPEED = 0.1;
 /** Pairs kept per body: a ninth neighbour inside reach is a mob, not a street. The grid's cells hash by position (a power of two). */
 export const PAIRS_PER_BODY = 8;
 export const SEPARATION_CELLS = 2048;

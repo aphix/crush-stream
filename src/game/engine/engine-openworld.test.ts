@@ -11,9 +11,11 @@ import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
+import type { CrowdSight } from "../present/civilian-art.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { idleCullPorts } from "./openworld-cull-ports.test-util.ts";
 
 const map = buildFixtureMap();
 const SEED = 5;
@@ -37,7 +39,7 @@ class Harness {
   readonly eye = new LookRay();
   readonly thrown: FigureStrike[] = [];
   readonly looks: DriverLook[] = [];
-  readonly updates: { poses: CrowdPoses; eyeX: number }[] = [];
+  readonly updates: { poses: CrowdPoses; eyeX: number; sight: CrowdSight; wallDt: number }[] = [];
   artsMade = 0;
   artsDisposed = 0;
   unhooked = 0;
@@ -65,8 +67,9 @@ class Harness {
     },
     makeArt: () => {
       this.artsMade++;
-      return { update: (poses, eyeX) => void this.updates.push({ poses, eyeX }), dispose: () => void this.artsDisposed++ };
+      return { update: (poses, eyeX, _eyeZ, sight, wallDt) => void this.updates.push({ poses, eyeX, sight, wallDt }), dispose: () => void this.artsDisposed++ };
     },
+    cull: idleCullPorts(),
   });
 
   /** A frame: the sim steps `FRAME` s first (a host), then the frame. */
@@ -97,6 +100,8 @@ describe("given the open world's course up and a map given", () => {
     expect(harness.updates.length, "draws").toBe(2);
     expect(harness.updates[0]!.poses, "drew the crowd's own poses").toBe(harness.crowd().poses);
     expect(harness.updates[0]!.eyeX, "from the eye").toBe(12);
+    expect(harness.updates[0]!.sight, "as the sight field sees it").toBe(harness.director.sight);
+    expect(harness.updates[0]!.wallDt, "the frame's seconds").toBe(FRAME);
     expect(harness.director.link()?.seed, "the link's key").toBe(POPULATION_TIER.phone * CROWD_TIER_SCALE + SEED);
     expect(harness.listener, "wall hits heard").not.toBeNull();
   });
@@ -118,6 +123,23 @@ describe("given the open world's course up and a map given", () => {
     harness.frame();
     for (let step = 0; step < 64; step++) harness.frame();
     expect(harness.director.crowdTime(), "crowd seconds after the 64 sim steps that found a crowd").toBeCloseTo(64 * FRAME, 9);
+  });
+});
+
+describe("given the player on foot in the open world", () => {
+  it("when he moves, then the crowd has him as a body at his spot moving as he does, and when he is in a car again, then it has none", () => {
+    const harness = hostWithMap();
+    harness.footAt = { x: 5, z: 6 };
+    harness.frame();
+    harness.footAt = { x: 5 + 2 * FRAME, z: 6 };
+    harness.frame();
+    harness.frame();
+    const { walkers } = harness.crowd();
+    expect(firstMismatch([walkers.count, walkers.x[0], walkers.z[0], walkers.velocityX[0], walkers.velocityZ[0]], [1, 5 + 2 * FRAME, 6, 2, 0]), "walkers, and his spot and velocity").toBeUndefined();
+    harness.footAt = null;
+    harness.frame();
+    harness.frame();
+    expect(harness.crowd().walkers.count, "walkers after he is back in a car").toBe(0);
   });
 });
 

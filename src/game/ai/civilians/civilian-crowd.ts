@@ -7,7 +7,7 @@ import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
-import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, GENDER, MIX_INDEX, MIX_RESIDENT, MIX_SALT, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
+import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, GENDER, MIX_INDEX, MIX_RESIDENT, MIX_SALT, NO_PLACE, PLAN_LEAD_TICKS, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
 import { carGap } from "./civilian-contact.ts";
 import {
   BUMP_CLOSING_SPEED,
@@ -181,6 +181,13 @@ export class CivilianCrowd {
     this.postBatch();
   }
 
+  /** A host event between two civilians (`first` the victim, `second` the other; -1 for none) enters the log as a triple for each and the brain's next plan; a client's call does nothing. */
+  raisePair(kind: number, first: number, second: number, seconds = this.seconds): void {
+    if (!this.authority) return;
+    this.logPair(kind, first, second, seconds);
+    this.postBatch();
+  }
+
   /** The host's event log (kind, subject, crowd seconds triples), a view of the live one. */
   eventLog(): Float64Array {
     if (this.logView.length !== this.logCount * EVENT_TRIPLE) this.logView = this.log.subarray(0, this.logCount * EVENT_TRIPLE);
@@ -282,7 +289,7 @@ export class CivilianCrowd {
         stride[resident] = 0;
       } else {
         const onLeg = ints[intBase + RESIDENT_INT.pathCount]! > 0 && seconds >= ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ && seconds < ints[intBase + RESIDENT_INT.arriveTick]! / DECISION_HZ;
-        if (!onLeg || !legPositionAt(state, resident, seconds, pose)) continue;
+        if (!onLeg || ints[intBase + RESIDENT_INT.legPurpose] === PURPOSE.drive || !legPositionAt(state, resident, seconds, pose)) continue;
         brainX[resident] = pose.x;
         brainZ[resident] = pose.z;
         velocityX[resident] = pose.dirX * walkSpeed;
@@ -389,9 +396,14 @@ export class CivilianCrowd {
     this.logPush(victim, pusher, seconds);
   }
 
-  /** The push's subject carries the pusher with the victim: `victim + capacity * (pusher + 1)`, pusher -1 for a player's walker or a car. */
+  /** The victim's triple, then the pusher's `alongside` triple when the pusher is a civilian (a player's walker or a car has none): the wire's subject is 16 bits. */
   private logPush(victim: number, pusher: number, seconds: number): void {
-    this.logHostEvent(EVENT_KIND.push, victim + this.poses.count * (pusher + 1), seconds);
+    this.logPair(EVENT_KIND.push, victim, pusher, seconds);
+  }
+
+  private logPair(kind: number, first: number, second: number, seconds: number): void {
+    this.logHostEvent(kind, first, seconds);
+    if (second !== NOT_A_CIVILIAN) this.logHostEvent(EVENT_KIND.alongside, second, seconds);
   }
 
   private logHostEvent(kind: number, subject: number, seconds: number): void {
@@ -425,9 +437,9 @@ export class CivilianCrowd {
   private knockDown(resident: number, seconds: number, strike: FigureStrike): void {
     this.poses.shown[resident] = 0;
     this.struck.push(strike);
-    this.logPush(resident, NOT_A_CIVILIAN, seconds);
     this.appendLog(EVENT_KIND.knock, resident, seconds);
     this.queueForBrain(EVENT_KIND.knock, resident, seconds);
+    this.logPush(resident, NOT_A_CIVILIAN, seconds);
   }
 
   /** A knock heard from the host, once this clock reaches its time (the cars are drawn at that time): the civilian is thrown by the car nearest where they were, as that car's own hit would have thrown them. */

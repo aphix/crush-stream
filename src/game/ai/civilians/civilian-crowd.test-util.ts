@@ -1,6 +1,7 @@
 import { launch, pooledCar } from "../../contact/crash-scenarios.test-util.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
+import { ACTIVITY } from "./civilian-activity.ts";
 import { CivilianCrowd } from "./civilian-crowd.ts";
 import { RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
 import { CivilianRemote } from "./civilian-remote.ts";
@@ -20,16 +21,22 @@ export function newCrowd(map: OpenWorldMap, residents = CROWD_RESIDENTS, seed = 
   return new CivilianCrowd(map, seed, residents, remote);
 }
 
-/** A hash of everything the drawing reads. */
+/** A hash of everything the drawing reads that every peer must agree on: the bump clip is a local flinch (it starts when a peer first steps past a close pair), so it is not in it. */
 export function posesDigest(poses: CrowdPoses): string {
   let hash = 2166136261;
   const mix = (value: number): void => void (hash = Math.imul(hash ^ value, 16777619) >>> 0);
-  const bits = [poses.x, poses.z, poses.yaw, poses.stride, poses.speed].map((array) => new Int32Array(array.buffer, array.byteOffset, array.length));
+  const bitsOf = (array: Float32Array): Int32Array => new Int32Array(array.buffer, array.byteOffset, array.length);
+  const placed = [poses.x, poses.z, poses.yaw, poses.stride, poses.speed, poses.feetY, poses.surfaceY].map(bitsOf);
+  const activityTimes = [poses.activityClock, poses.activityLeft].map(bitsOf);
   for (let resident = 0; resident < poses.count; resident++) {
     mix(poses.shown[resident]!);
     if (poses.shown[resident] === 0) continue;
     mix(poses.look[resident]!);
-    for (const view of bits) mix(view[resident]!);
+    for (const view of placed) mix(view[resident]!);
+    if (poses.activity[resident] === ACTIVITY.bump) continue;
+    mix(poses.activity[resident]!);
+    mix(poses.partner[resident]!);
+    for (const view of activityTimes) mix(view[resident]!);
   }
   return hash.toString(16);
 }

@@ -1,9 +1,8 @@
 import { hypot2 } from "../../kernel/physics-core.js";
-import { BODY_GAP, COINCIDENT_DISTANCE, MAX_OFFSET, PAIRS_PER_BODY, SEPARATION_CELLS, SEPARATION_PASSES, SIDESTEP_SHARE, WALKER_CAPACITY } from "./civilian-crowd-constants.ts";
+import { BODY_GAP, COINCIDENT_DISTANCE, MAX_OFFSET, MOVING_SPEED, PAIR_RANGE, PAIRS_PER_BODY, SEPARATION_CELLS, SEPARATION_PASSES, WALKER_CAPACITY } from "./civilian-crowd-constants.ts";
 
+/** The end of a chain of bodies in one grid cell. */
 const NO_BODY = -1;
-/** Two bodies can end within `BODY_GAP` of each other only if they start within the gap plus what both may move. */
-const PAIR_RANGE = BODY_GAP + 2 * MAX_OFFSET;
 const PAIR_RANGE_SQUARED = PAIR_RANGE * PAIR_RANGE;
 const GAP_SQUARED = BODY_GAP * BODY_GAP;
 const MAX_OFFSET_SQUARED = MAX_OFFSET * MAX_OFFSET;
@@ -38,7 +37,11 @@ export class CrowdSeparation {
   /** Per pair, from the brain's positions: the distance (m) and how fast the two close on each other (m/s, negative when parting). */
   readonly pairDistance: Float32Array;
   readonly pairClosing: Float32Array;
-  private readonly pairSideways: Float32Array;
+  /** Per pair, from the brain's spots: the unit direction the two move relative to each other, how head-on that is (0 to 1), and which side the first steps to (+1 or -1). */
+  private readonly pairAlongX: Float32Array;
+  private readonly pairAlongZ: Float32Array;
+  private readonly pairHeadOn: Float32Array;
+  private readonly pairSide: Float32Array;
   private readonly listed: Int32Array;
   private readonly cellHead = new Int32Array(SEPARATION_CELLS);
   private readonly cellNext: Int32Array;
@@ -60,7 +63,10 @@ export class CrowdSeparation {
     this.pairSecond = new Int32Array(pairs);
     this.pairDistance = new Float32Array(pairs);
     this.pairClosing = new Float32Array(pairs);
-    this.pairSideways = new Float32Array(pairs);
+    this.pairAlongX = new Float32Array(pairs);
+    this.pairAlongZ = new Float32Array(pairs);
+    this.pairHeadOn = new Float32Array(pairs);
+    this.pairSide = new Float32Array(pairs);
     this.listed = new Int32Array(bodies);
     this.cellNext = new Int32Array(bodies);
   }
@@ -125,19 +131,21 @@ export class CrowdSeparation {
     const relativeX = this.velocityX[first]! - this.velocityX[second]!;
     const relativeZ = this.velocityZ[first]! - this.velocityZ[second]!;
     const relativeSpeed = hypot2(relativeX, relativeZ);
-    let alongSeparation = 1;
-    let closing = relativeSpeed;
-    if (distance > COINCIDENT_DISTANCE) {
-      const along = (relativeX * dx + relativeZ * dz) / distance;
-      closing = -along;
-      alongSeparation = relativeSpeed > 0 ? Math.abs(along) / relativeSpeed : 0;
-    }
     const at = this.pairCount++;
     this.pairFirst[at] = first;
     this.pairSecond[at] = second;
     this.pairDistance[at] = distance;
-    this.pairClosing[at] = closing;
-    this.pairSideways[at] = SIDESTEP_SHARE * alongSeparation * alongSeparation;
+    this.pairClosing[at] = distance > COINCIDENT_DISTANCE ? -(relativeX * dx + relativeZ * dz) / distance : relativeSpeed;
+    this.pairHeadOn[at] = 0;
+    this.pairSide[at] = 1;
+    if (relativeSpeed < MOVING_SPEED) return;
+    const alongX = relativeX / relativeSpeed;
+    const alongZ = relativeZ / relativeSpeed;
+    const cosine = distance > COINCIDENT_DISTANCE ? Math.abs(dx * alongX + dz * alongZ) / distance : 1;
+    this.pairAlongX[at] = alongX;
+    this.pairAlongZ[at] = alongZ;
+    this.pairHeadOn[at] = cosine * cosine;
+    this.pairSide[at] = dz * alongX - dx * alongZ < 0 ? -1 : 1;
   }
 
   private relax(): void {
@@ -146,6 +154,10 @@ export class CrowdSeparation {
     }
   }
 
+  /**
+   * Moves the pair to the nearest spots a body's width apart that it can pass on: straight apart when they stand or go side by side, and sideways (the
+   * side they were already on, so it never flips as they cross) when they come at each other, so a head-on pair does not stand off along its line.
+   */
   private pushApart(at: number): void {
     const first = this.pairFirst[at]!;
     const second = this.pairSecond[at]!;
@@ -154,16 +166,31 @@ export class CrowdSeparation {
     const distanceSquared = dx * dx + dz * dz;
     if (distanceSquared >= GAP_SQUARED) return;
     const distance = Math.sqrt(distanceSquared);
-    const apartX = distance > COINCIDENT_DISTANCE ? dx / distance : 1;
-    const apartZ = distance > COINCIDENT_DISTANCE ? dz / distance : 0;
-    const overlap = BODY_GAP - distance;
-    const sideways = overlap * this.pairSideways[at]!;
+    const apartX = (distance > COINCIDENT_DISTANCE ? dx / distance : 1) * BODY_GAP;
+    const apartZ = (distance > COINCIDENT_DISTANCE ? dz / distance : 0) * BODY_GAP;
+    let targetX = apartX;
+    let targetZ = apartZ;
+    const headOn = this.pairHeadOn[at]!;
+    if (headOn > 0) {
+      const alongX = this.pairAlongX[at]!;
+      const alongZ = this.pairAlongZ[at]!;
+      const ahead = dx * alongX + dz * alongZ;
+      const aside = this.pairSide[at]! * Math.sqrt(Math.max(0, GAP_SQUARED - ahead * ahead));
+      const blendX = apartX + headOn * (ahead * alongX - aside * alongZ - apartX);
+      const blendZ = apartZ + headOn * (ahead * alongZ + aside * alongX - apartZ);
+      const blendSquared = blendX * blendX + blendZ * blendZ;
+      // A mix of two spots a body's width apart can lie nearer than that: it is taken out to the gap.
+      const widen = blendSquared < GAP_SQUARED && blendSquared > 0 ? BODY_GAP / Math.sqrt(blendSquared) : 1;
+      if (blendSquared > 0) {
+        targetX = blendX * widen;
+        targetZ = blendZ * widen;
+      }
+    }
     const firstMoves = this.fixed[first] === 0;
     const secondMoves = this.fixed[second] === 0;
     const firstShare = firstMoves && secondMoves ? 0.5 : firstMoves ? 1 : 0;
-    const secondShare = 1 - firstShare;
-    if (firstMoves) this.move(first, (apartX * overlap - apartZ * sideways) * firstShare, (apartZ * overlap + apartX * sideways) * firstShare);
-    if (secondMoves) this.move(second, -(apartX * overlap - apartZ * sideways) * secondShare, -(apartZ * overlap + apartX * sideways) * secondShare);
+    if (firstMoves) this.move(first, (targetX - dx) * firstShare, (targetZ - dz) * firstShare);
+    if (secondMoves) this.move(second, -(targetX - dx) * (1 - firstShare), -(targetZ - dz) * (1 - firstShare));
   }
 
   private move(body: number, shiftX: number, shiftZ: number): void {

@@ -33,13 +33,13 @@ function chase(driving: boolean, authority: boolean) {
 }
 
 describe("given a host crowd, a civilian walking out and a car driving at them", () => {
-  it("when the car reaches them, then one strike is queued for the ragdoll at their feet, they are hidden at once and stay hidden, and the knock is in the host's log", () => {
+  it("when the car reaches them, then one strike is queued for the ragdoll at their feet, they are hidden at once and stay hidden, and the knock and the car's push are in the host's log", () => {
     const { crowd, resident, seconds, struck } = chase(true, true);
     expect(struck.length, "strikes").toBe(1);
     expect(struck[0]!.guard, "the civilian struck").toBe(resident);
     expect(struck[0]!.car, "the car that struck").toBe(0);
     expect(crowd.poses.shown[resident], "shown the step they were run down").toBe(0);
-    expect(firstMismatch(Array.from(crowd.eventLog()), [EVENT_KIND.knock, resident, seconds]), "the host's log").toBeUndefined();
+    expect(firstMismatch(Array.from(crowd.eventLog()), [EVENT_KIND.knock, resident, seconds, EVENT_KIND.push, resident, seconds]), "the host's log: the knock, then the push that made it").toBeUndefined();
     for (let later = 1; later <= AFTERMATH_SECONDS / FRAME_SECONDS; later++) crowd.step(seconds + later * FRAME_SECONDS, [], true);
     expect(crowd.poses.shown[resident], "shown later").toBe(0);
   });
