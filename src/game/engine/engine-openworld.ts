@@ -173,7 +173,7 @@ export class OpenWorldDirector {
     this.feedWalkers(this.crowd);
     this.crowd.step(this.seconds, this.ports.cars(), true);
     this.throwStruck(this.crowd);
-    this.law?.step(this.seconds, true);
+    this.law?.throwTakedowns();
     this.traffic?.step(this.seconds, dt);
   }
 
@@ -197,7 +197,7 @@ export class OpenWorldDirector {
       this.feedWalkers(crowd);
       crowd.step(this.clock.crowdSeconds(this.ports.now(), INTERP_DELAY), this.ports.cars(), false);
       this.throwStruck(crowd);
-      this.law?.step(crowd.crowdSeconds, false);
+      this.law?.throwTakedowns();
     }
     this.ports.eye(this.ray);
     this.frameSigns(this.map);
