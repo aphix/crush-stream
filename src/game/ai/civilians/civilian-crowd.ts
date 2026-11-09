@@ -1,4 +1,4 @@
-import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { blankStrike, fell, looseRunsDown, runsDown, stood, type FigureStrike } from "../../scenes/figure-strike.ts";
 import { LOOSE_BODIES } from "../../vehicle/part-state.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
@@ -25,6 +25,7 @@ import {
   POLICE_HASH,
   PUSH_LOCKOUT_SECONDS,
   STRIDE_RADIANS_PER_METRE,
+  WALKER_BEARING_STEPS,
   WALKER_CAPACITY,
   WALKER_PUSH_CLOSING_SPEED,
   WALKER_PUSH_DISTANCE,
@@ -345,7 +346,7 @@ export class CivilianCrowd {
     this.writeActivity(seconds);
   }
 
-  /** Pairs whose brain spots touch bump (every peer draws it); on the host, a hard collision or a walker's shove is a push event. */
+  /** Pairs whose brain spots touch bump (every peer draws it); on the host, a hard collision or a player's shove is a push event. */
   private noteContacts(seconds: number): void {
     const separation = this.separation;
     const { pairFirst, pairSecond, pairDistance, pairClosing, brainX, brainZ, velocityX, velocityZ } = separation;
@@ -363,7 +364,7 @@ export class CivilianCrowd {
       }
       if (!this.authority) continue;
       if (byWalker) {
-        if (distance < WALKER_PUSH_DISTANCE && closing >= WALKER_PUSH_CLOSING_SPEED) this.raisePush(first, NOT_A_CIVILIAN, seconds);
+        if (distance < WALKER_PUSH_DISTANCE && closing >= WALKER_PUSH_CLOSING_SPEED) this.raiseShove(first, brainX[second]!, brainZ[second]!, seconds);
         continue;
       }
       if (distance >= HARD_DISTANCE || closing < HARD_CLOSING_SPEED) continue;
@@ -396,16 +397,29 @@ export class CivilianCrowd {
     }
   }
 
-  /** A push event on the host, at most one for a resident (as victim or pusher) in `PUSH_LOCKOUT_SECONDS`. */
-  private raisePush(victim: number, pusher: number, seconds: number): void {
-    if (seconds - this.pushedAt[victim]! < PUSH_LOCKOUT_SECONDS) return;
-    if (pusher !== NOT_A_CIVILIAN && seconds - this.pushedAt[pusher]! < PUSH_LOCKOUT_SECONDS) return;
+  /** Whether a push may be logged: at most one for a resident (as victim or pusher) in `PUSH_LOCKOUT_SECONDS`; a push let through locks its residents out. */
+  private mayPush(victim: number, pusher: number, seconds: number): boolean {
+    if (seconds - this.pushedAt[victim]! < PUSH_LOCKOUT_SECONDS) return false;
+    if (pusher !== NOT_A_CIVILIAN && seconds - this.pushedAt[pusher]! < PUSH_LOCKOUT_SECONDS) return false;
     this.pushedAt[victim] = seconds;
     if (pusher !== NOT_A_CIVILIAN) this.pushedAt[pusher] = seconds;
-    this.logPush(victim, pusher, seconds);
+    return true;
   }
 
-  /** The victim's triple, then the pusher's `alongside` triple when the pusher is a civilian (a player's walker or a car has none): the wire's subject is 16 bits. */
+  /** A push by a civilian or (`NOT_A_CIVILIAN`) a car, on the host. */
+  private raisePush(victim: number, pusher: number, seconds: number): void {
+    if (this.mayPush(victim, pusher, seconds)) this.logPush(victim, pusher, seconds);
+  }
+
+  /** A player on foot at (`walkerX`, `walkerZ`) shoved `victim`: the push triple, then a `walker` triple of the bearing from the victim's brain spot to him, so the brain tells a shove from a car's nudge and turns the fight his way. */
+  private raiseShove(victim: number, walkerX: number, walkerZ: number, seconds: number): void {
+    if (!this.mayPush(victim, NOT_A_CIVILIAN, seconds)) return;
+    const turns = detAtan2(walkerX - this.separation.brainX[victim]!, walkerZ - this.separation.brainZ[victim]!) / (2 * Math.PI);
+    this.logHostEvent(EVENT_KIND.push, victim, seconds);
+    this.logHostEvent(EVENT_KIND.walker, Math.round(turns * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1), seconds);
+  }
+
+  /** The victim's triple, then the pusher's `alongside` triple when the pusher is a civilian (a car, or a knock, has none): the wire's subject is 16 bits. */
   private logPush(victim: number, pusher: number, seconds: number): void {
     this.logPair(EVENT_KIND.push, victim, pusher, seconds);
   }

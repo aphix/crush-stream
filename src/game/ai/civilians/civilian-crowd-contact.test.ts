@@ -3,7 +3,7 @@ import { launch, pooledCar } from "../../contact/crash-scenarios.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import { PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
-import { BODY_GAP, HARD_DISTANCE, MAX_OFFSET, WALKER_PUSH_DISTANCE } from "./civilian-crowd-constants.ts";
+import { BODY_GAP, HARD_DISTANCE, MAX_OFFSET, WALKER_BEARING_STEPS, WALKER_PUSH_DISTANCE } from "./civilian-crowd-constants.ts";
 import { PACE, people, type Push, pushesIn, sendAlong, streetEdge } from "./civilian-crowd-contact.test-util.ts";
 import { FRAME_SECONDS, newCrowd, stepUntilShown } from "./civilian-crowd.test-util.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
@@ -29,10 +29,12 @@ const EDGE_DIR_Z = EDGE.dirZ;
 
 const pushesOf = (crowd: CivilianCrowd): Push[] => pushesIn(crowd.eventLog());
 
-function expectOnePushByNoCivilian(crowd: CivilianCrowd, victim: number): void {
+/** The one push of `victim` in the log, which no civilian made. */
+function onePushByNoCivilian(crowd: CivilianCrowd, victim: number): Push {
   const pushes = pushesOf(crowd).filter((push) => push.victim === victim);
   expect(pushes.length, "pushes of them").toBe(1);
   expect(pushes[0]!.pusher, "pushed by a civilian").toBe(-1);
+  return pushes[0]!;
 }
 
 describe.each([true, false])("given two civilians walking at each other along one street, on the same line (host: %s)", (authority) => {
@@ -105,11 +107,13 @@ describe("given a civilian walking along a street and a player on foot standing 
   }
   const MIDDLE = Math.min(EDGE.length / 2, 10);
 
-  it("when they walk into him, then they are drawn a body's width round him though the brain walks them through him, and the host logs a push of them by no civilian", () => {
+  it("when they walk into him, then they are drawn a body's width round him though the brain walks them through him, and the host logs a shove of them by a player, bearing the way they walked into him", () => {
     const { crowd, walker, minDrawnGap, minBrainGap } = walkPast(MIDDLE, true);
     expect(minBrainGap, "closest the brain has them").toBeLessThan(WALKER_PUSH_DISTANCE);
     expect(minDrawnGap, "closest drawn").toBeGreaterThanOrEqual(BODY_GAP - RESIDUAL);
-    expectOnePushByNoCivilian(crowd, walker);
+    const expected = Math.round((Math.atan2(EDGE_DIR_X, EDGE_DIR_Z) / (2 * Math.PI)) * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1);
+    const off = Math.abs(onePushByNoCivilian(crowd, walker).bearing - expected);
+    expect(Math.min(off, WALKER_BEARING_STEPS - off), "steps the bearing is off the street's way").toBeLessThanOrEqual(1);
   });
 
   it("when the crowd is a client's, then they are drawn round him all the same and nothing is logged", () => {
@@ -148,7 +152,7 @@ describe("given a civilian walking along a street and a car driving beside them 
   it("when the car's side passes within a nudge of them, then it logs a push of them by no civilian and runs no one down", () => {
     const { crowd, walker, struck } = drivePast(NUDGE_OFFSET);
     expect(struck, "run down").toBe(0);
-    expectOnePushByNoCivilian(crowd, walker);
+    expect(onePushByNoCivilian(crowd, walker).bearing, "bearing to a player: none, it was a car").toBe(-1);
   });
 
   it("when the car keeps its distance, then nothing is logged", () => {
