@@ -75,7 +75,8 @@
     "plain": [
       0.051,
       0.074
-    ]
+    ],
+    "dark": true
   },
   "baroque": {
     "bays": 4,
@@ -252,7 +253,8 @@
     "plain": [
       0.863,
       0.246
-    ]
+    ],
+    "dark": true
   },
   "church": {
     "bays": 2,

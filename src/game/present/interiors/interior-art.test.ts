@@ -480,6 +480,26 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     expect(darkened(), "the course left: nothing listed").toBe(false);
   });
 
+  // mutation: sed -i 's/      if (closed\[plain.index\] !== 1) continue;/      continue;/' src/game/present/interiors/interior-art.ts
+  it("when a shop with no interior (the pizzeria) is shut, then the facade's list of shut shops holds it, and not while it is open", () => {
+    const pizza = map.places.find((place) => place.name === "Slice Brothers Pizza")!;
+    const closed = new Uint8Array(map.places.length);
+    const listedDark = (): boolean => {
+      const slots = FACADE_DARK_AT.value;
+      for (let slot = 0; slot < FACADE_DARK_MAX; slot++) if (Math.abs(slots[2 * slot]! - pizza.x) < 1e-3 && Math.abs(slots[2 * slot + 1]! - pizza.z) < 1e-3) return true;
+      return false;
+    };
+    const set = new InteriorSet(map);
+    const who = openers();
+    who.closed = closed;
+    settle(set, AWAY, AWAY, who, 2);
+    expect(listedDark(), "open: not listed").toBe(false);
+    closed[map.places.indexOf(pizza)] = 1;
+    settle(set, AWAY, AWAY, who, 2);
+    expect(listedDark(), "shut: listed").toBe(true);
+    set.dispose();
+  });
+
   // mutation: sed -i 's/export const CLOSED_GLOW = 0.08;/export const CLOSED_GLOW = 1;/' src/game/present/interiors/interior-constants.ts
   it("when its room is built, then its lamps and screens glow a faint share of their light while it is shut, whether it shut after the room was built or before, and as they were when it opens", () => {
     const lit = new InteriorSet(lone);
