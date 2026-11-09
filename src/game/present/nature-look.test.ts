@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { PREFAB } from "../world/constants.ts";
-import { NatureMaterial, setNatureTier } from "./nature-look.ts";
+import { LeafMaterial, NatureMaterial, setNatureTier } from "./nature-look.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
 
@@ -52,5 +52,25 @@ describe("given the material of rocks, trees, palms and bushes", () => {
     const mats = { ...plainMaterials(plain), nature };
     for (const id of [PREFAB.rock, PREFAB.tree, PREFAB.palm, PREFAB.bush]) expect(prefabParts(id, mats)[0]!.material, id).toBe(nature);
     expect(prefabParts(PREFAB.cone, mats)[0]!.material).toBe(plain);
+  });
+});
+
+describe("given the street trees' leaf material", () => {
+  const compileLit = (material: THREE.Material): string => {
+    const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\n#include <normal_fragment_maps>\n#include <lights_physical_fragment>" } as THREE.WebGLProgramParametersWithUniforms;
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    return shader.fragmentShader;
+  };
+
+  // mutation: sed -i 's/    this.flatShading = false;/    this.flatShading = true;/' src/game/present/nature-look.ts
+  it("when it is made or copied for another draw kind, then it is smooth-shaded, keeps the nature look, and thins the leaves' outline before the lighting reads the colour", () => {
+    for (const material of [new LeafMaterial(), new LeafMaterial().clone()]) {
+      expect(material.flatShading, "smooth").toBe(false);
+      const fragment = compileLit(material);
+      expect(fragment, "the nature look").toContain("natureShade");
+      expect(fragment.indexOf("discard;"), "a leafy outline, before lighting").toBeGreaterThan(-1);
+      expect(fragment.indexOf("discard;"), "a leafy outline, before lighting").toBeLessThan(fragment.indexOf("#include <lights_physical_fragment>"));
+      expect(material.customProgramCacheKey(), "a program of its own").not.toBe(new NatureMaterial().customProgramCacheKey());
+    }
   });
 });

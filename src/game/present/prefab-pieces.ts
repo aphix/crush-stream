@@ -17,6 +17,8 @@ export type PrefabMaterials = {
   plain: THREE.Material;
   /** Flat-shaded vertex colours with the world-space tint, dust and foot shade (`nature-look.ts`): rocks, trees, palms, bushes. */
   nature: THREE.Material;
+  /** The nature look smooth-shaded with leafy crowns (`LeafMaterial`): the street and park trees. */
+  leaves: THREE.Material;
   /** Vertex colours × concrete texture (barrier blocks, walls). */
   concrete: THREE.Material;
   /** A sidewalk slab: the concrete's colour with the paving's normal map. */

@@ -157,6 +157,29 @@ describe("given the street trees' drawings", () => {
   });
 });
 
+describe("given a street tree's crown", () => {
+  // mutation: sed -i 's/^  ball.setAttribute("normal", ball.getAttribute("position").clone());$//' src/game/present/street-trees.ts
+  it("when it is built, then it is drawn on the leaf material and every corner of a canopy lump has one normal, whichever face it is on, so the crown shades round", () => {
+    const leaves = new THREE.MeshBasicMaterial();
+    const mats = { ...plainMaterials(new THREE.MeshBasicMaterial()), leaves };
+    for (const skin of skins) {
+      expect(prefabParts(PREFAB.tree, mats, skin)[0]!.material, skin).toBe(leaves);
+      for (const piece of streetTreePieces(skin).filter((p) => p[2] === MAT.CONIFER_FOLIAGE)) {
+        const flat = piece[0].index ? piece[0].toNonIndexed() : piece[0];
+        const position = flat.getAttribute("position");
+        const normal = flat.getAttribute("normal");
+        const seen = new Map<string, number>();
+        for (let at = 0; at < position.count; at++) {
+          const corner = [position.getX(at), position.getY(at), position.getZ(at)].map((v) => v.toFixed(4)).join();
+          const first = seen.get(corner);
+          if (first === undefined) seen.set(corner, at);
+          else expect(normal.getX(at) * normal.getX(first) + normal.getY(at) * normal.getY(first) + normal.getZ(at) * normal.getZ(first), `${skin} corner ${corner}`).toBeCloseTo(1, 5);
+        }
+      }
+    }
+  });
+});
+
 describe("given the street trees drawn as instances", () => {
   it("when the course's trees are made into meshes, then each kind is one draw group whatever its facing, and each instance carries its own facing and size", () => {
     const meshes: THREE.InstancedMesh[] = [];

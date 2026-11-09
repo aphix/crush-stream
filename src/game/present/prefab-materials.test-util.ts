@@ -7,5 +7,5 @@ import { ASSET_FAMILIES, type AssetFamily } from "../world/scenery-assets/types.
 export function plainMaterials(material: THREE.Material): PrefabMaterials {
   const facades = Object.fromEntries(Object.keys(FACADE).map((style) => [style, material])) as Record<FacadeStyle, THREE.Material>;
   const assets = Object.fromEntries(ASSET_FAMILIES.map((family) => [family, material])) as Record<AssetFamily, THREE.Material>;
-  return { plain: material, nature: material, concrete: material, paving: material, facades, assets, billboard: material, water: material };
+  return { plain: material, nature: material, leaves: material, concrete: material, paving: material, facades, assets, billboard: material, water: material };
 }
