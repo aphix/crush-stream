@@ -147,7 +147,6 @@ export function applyIndividualEvents(state: CityState, tick: number): void {
     else if (event.kind === EVENT_KIND.crime) applyCrime(state, event.subject, event.seconds, tick);
     else if (event.kind === EVENT_KIND.bust) applyBust(state, event.subject, event.seconds);
     else if (event.kind === EVENT_KIND.jaywalk) applyJaywalk(state, event.subject, event.seconds);
-    else if (event.kind === EVENT_KIND.ambulance) callAmbulanceFor(state, event.subject, tick);
   }
 }
 
@@ -160,7 +159,8 @@ export function applyReactionEvents(state: CityState, tick: number): void {
     if (event.kind === EVENT_KIND.knock) {
       applyKnockWitness(state, event.subject, event.seconds, tick);
       alarmAtKnock(state, event.subject, tick);
-    } else if (event.kind === EVENT_KIND.wreck) {
+    } else if (event.kind === EVENT_KIND.ambulance) callAmbulanceFor(state, event.subject, tick);
+    else if (event.kind === EVENT_KIND.wreck) {
       const door = state.index.doorNode[event.subject]!;
       alarmAt(state, state.map.graph.nodeX[door]!, state.map.graph.nodeZ[door]!, tick, NO_PLACE, LOOK_ON_CRASH_MINUTES);
     } else if (event.kind === EVENT_KIND.danger) alarmAt(state, state.map.graph.nodeX[event.subject]!, state.map.graph.nodeZ[event.subject]!, tick, NO_PLACE, LOOK_ON_CRASH_MINUTES);
