@@ -43,6 +43,8 @@ import { CivilianArt } from "../present/civilian-art.ts";
 import { NEAR_SLOTS } from "../present/civilian-art-constants.ts";
 import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
+import { buildOpenWorldMap } from "../world/openworld/openworld-map.ts";
+import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import type { LookAtHud } from "../hud/hud-store.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
 import { ownLook } from "../present/driver-look.ts";
@@ -330,6 +332,7 @@ export class CrashEngine extends EngineGarage {
     this.highlights = this.makeHighlights();
     this.podium = this.makePodium();
     this.openWorld = this.makeOpenWorld();
+    this.startOpenWorld(buildOpenWorldMap(layOutLots()));
 
     this.resize();
     this.resizeObs = new ResizeObserver(() => this.resize());

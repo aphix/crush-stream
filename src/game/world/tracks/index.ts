@@ -9,13 +9,15 @@ import rally from "./rally.json" with { type: "json" };
 import razorShelf from "./razor-shelf.json" with { type: "json" };
 import stunt from "./stunt.json" with { type: "json" };
 import { HAVANA } from "./havana.ts";
+import { openWorldCourse } from "../openworld/openworld-course.ts";
+import { layOutLots } from "../openworld/openworld-lots.ts";
 import { TRACK_ID } from "../constants.ts";
 
 /** Every course, in menu order. Raw JSON: `new Track(json)` validates and compiles it. */
 export const TRACKS: readonly unknown[] = [oval, rally, city, stunt, figure8, fourCount, damSpine, razorShelf, breakerYard, nationalMall];
 
 /** Courses the race menu, the campaign and the per-course test sweeps do not list: loadable by id (`RaceField.load`) for the mode that plays them. */
-export const OFF_MENU: readonly unknown[] = [HAVANA];
+export const OFF_MENU: readonly unknown[] = [HAVANA, openWorldCourse(layOutLots())];
 
 /** Campaign playlist (track ids, raced in order). */
 export const CAMPAIGN: readonly string[] = [
