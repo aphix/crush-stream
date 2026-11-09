@@ -37,14 +37,32 @@ export function allocatedBytes(run: () => void, within?: Within): number {
   return bytes;
 }
 
-/** Wall seconds a row waits for its code to be optimized: only a real allocation (never quiet) spends them all. */
-export const COMPILE_WAIT_S = 120;
+/** Wall seconds a row's reading may stay above its bound without falling before it is called a real allocation (cold code keeps falling as tiers land). */
+export const COMPILE_WAIT_S = 5;
+/** Reads of a row's, at least, that stay above the bound without falling before it is called a real allocation: a slow read must not spend the wait on its own. */
+export const FLAT_READS = 8;
+/** A reading has fallen when it is under this share of the reading it was last compared with: a real allocation reads within a few percent of itself. */
+const FALLEN = 0.9;
+/** Wall seconds in all that a falling reading may keep a row waiting. */
+const COMPILE_CAP_S = 120;
 
-/** `read` (given the attempt's number) again, until a reading is at most `bound` or `COMPILE_WAIT_S` have passed; the last reading. A real allocation never goes quiet, cold code does. */
-export function untilQuiet(read: (attempt: number) => number, bound: number): number {
-  const until = performance.now() + COMPILE_WAIT_S * 1000;
+/** `read` (given the attempt's number) again, until a reading is at most `bound`, or stays above it `FLAT_READS` reads and `waitS` without falling, or `COMPILE_CAP_S` have passed; the last reading. */
+export function untilQuiet(read: (attempt: number) => number, bound: number, waitS = COMPILE_WAIT_S): number {
+  const start = performance.now();
   let reading = read(0);
-  for (let attempt = 1; reading > bound && performance.now() < until; attempt++) reading = read(attempt);
+  let fellAt = start;
+  let fellFrom = reading;
+  let flat = 0;
+  for (let attempt = 1; reading > bound; attempt++) {
+    const now = performance.now();
+    if ((flat >= FLAT_READS && now - fellAt > waitS * 1000) || now - start > COMPILE_CAP_S * 1000) break;
+    reading = read(attempt);
+    if (reading < fellFrom * FALLEN) {
+      fellFrom = reading;
+      fellAt = performance.now();
+      flat = 0;
+    } else flat++;
+  }
   return reading;
 }
 

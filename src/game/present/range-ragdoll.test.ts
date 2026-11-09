@@ -151,6 +151,28 @@ describe("given the ejection range (the test course where one car crashes at 100
   }
 });
 
+/** Every number of a run's dummy frames, in order: age, wall time, contacts, then every part's position, rotation, linear and angular velocity. */
+function numbersOf(run: RangeThrow): number[] {
+  const out: number[] = [];
+  for (const f of run.frames) out.push(f.age, f.wall, f.ground, f.foreign, ...f.p, ...f.q, ...f.v, ...f.w);
+  return out;
+}
+
+describe("given the ejection range at its defaults at 60 Hz jittered with stalls, with the sedan's skin drawn every frame after the throw, as the engine draws it", () => {
+  const sedan = DRIVER_CARS[0]!;
+  const [display, frames] = DISPLAYS[2]!;
+  // The runs above leave the car's skin undrawn after the throw (`Control.skin`): this row holds that the dummy's run is the same either way.
+  // mutation: sed -i 's/if (!control.skin) car.updateSkin = skipSkin;/if (!control.skin) car.updateSkin = skipSkin; else sys["world"]!.gravity.y -= 0.5;/' src/game/present/range-run.test-util.ts  (the drawn run differs from the undrawn one, as a skin that fed the sim would make it: this row)
+  it("when the sedan crashes at the range, then the dummy's every frame is the same as with the skin left undrawn", async () => {
+    const drawn = await rangeThrow(sedan, { skin: true }, frames());
+    const undrawn = (await runOf(sedan, display, frames)).run;
+    expect(drawn.frames.length, "the control: the dummy was out and lived his life").toBeGreaterThan(0);
+    expect(drawn.ejections, "ejections").toBe(undrawn.ejections);
+    expect(drawn.gone, "sim seconds he lived").toBe(undrawn.gone);
+    expect(firstMismatch(numbersOf(drawn), numbersOf(undrawn)), "every number of every frame").toBeUndefined();
+  });
+});
+
 /**
  * The range's readout (`RangeRun`) fed every engine frame as the engine feeds it, against the thrown dummy's own
  * bodies: the first frame every part of him is still (`STILL`'s speeds) with his lowest body on the terrain

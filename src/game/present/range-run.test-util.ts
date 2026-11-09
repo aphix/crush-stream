@@ -72,6 +72,8 @@ export type Control = {
   ground?: Ground;
   /** Ends the run after the engine frame it returns true for: the rest of his life is not read. */
   until?: (frame: Frame) => boolean;
+  /** Keeps skinning the car every frame after the throw, as the engine does. Left off by default: the skin is drawn state, and the dummy's run is the same with it left undrawn (a row of `range-ragdoll.test.ts` holds that). */
+  skin?: boolean;
 };
 
 /** Wall seconds a run may last; wall seconds after the hit with nobody thrown before it is called a no-throw. */
@@ -79,6 +81,7 @@ const WALL_MAX = 60;
 const NO_THROW_AFTER = 8;
 /** A part within this (m) of a collider touches it. */
 const TOUCH = 0.02;
+const skipSkin = (): void => {};
 
 /**
  * A display's frame times (s): `hz` steady, or with a `seed` each frame 0.5–1.5× as long (the browser's jitter), and
@@ -152,7 +155,7 @@ function sample(sys: RagdollSystem, d: Doll, wall: number): Frame {
  * auto slow-mo (`maybePreSlowmo`, `holdForThrow`). Every ejection event launches its dummy (`RagdollSystem.launch`);
  * what is read is the Rapier bodies of the first. Runs on until he is gone (`LIFE`), or `NO_THROW_AFTER` wall seconds
  * after a hit that threw nobody. The camera and the cinematic time warp feed nothing back into the sim, so they are
- * left out.
+ * left out; so is the car's skin once he is thrown (`Control.skin`).
  */
 export async function rangeThrow(type: DriverCar, control: Control = {}, frameDt: () => number = displayFrames(60)): Promise<RangeThrow> {
   setGround(control.ground ?? RANGE_GROUND);
@@ -211,6 +214,7 @@ export async function rangeThrow(type: DriverCar, control: Control = {}, frameDt
       const u = first.bodies[0]!.linvel();
       out.first = new THREE.Vector3(u.x, u.y, u.z);
     };
+    if (!control.skin) car.updateSkin = skipSkin;
     control.released?.(sys, car, e);
   };
 
