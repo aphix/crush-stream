@@ -110,10 +110,10 @@ const SLAB_MIN_SPAN = 25;
 const SLAB_MIN_HEIGHT = 12;
 export const SLAB_STYLE: FacadeStyle = "federal";
 
-/** The style prefab `prefab` stands in at (x, z) in `biome`: only a `building` is picked by its position (so a row's neighbours differ and no placement moves another's); a `marble` block is a slab (`span` and `height` its placed size, m) or has no style; any other prefab has its home style, or none. */
+/** The style prefab `prefab` stands in at (x, z) in `biome`: only a `building` (or a drawn-only `buildingShell`) is picked by its position (so a row's neighbours differ and no placement moves another's); a `marble` block is a slab (`span` and `height` its placed size, m) or has no style; any other prefab has its home style, or none. */
 export function facadeStyle(prefab: PrefabId, x: number, z: number, biome: BiomeId, span = 0, height = 0): FacadeStyle | null {
   if (prefab === PREFAB.marble) return span >= SLAB_MIN_SPAN && height >= SLAB_MIN_HEIGHT ? SLAB_STYLE : null;
-  if (prefab !== PREFAB.building) return homeStyle(prefab);
+  if (prefab !== PREFAB.building && prefab !== PREFAB.buildingShell) return homeStyle(prefab);
   let pick = hash01(Math.round(x) * 7919 + Math.round(z) * 104729, 31) * FACADE_STYLES.reduce((sum, style) => sum + FACADE[style].mix[biome], 0);
   for (const style of FACADE_STYLES) {
     pick -= FACADE[style].mix[biome];

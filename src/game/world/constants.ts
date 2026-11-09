@@ -73,6 +73,8 @@ export const PREFAB = {
   assetBoxSolid: "asset-box-solid",
   // A wall nothing is drawn for: the open world's edge.
   invisibleWall: "invisible-wall",
+  // A building drawn exactly like `building` with nothing solid: the open world's enterable lots, whose walls are invisible-wall pieces with the doorways left open.
+  buildingShell: "building-shell",
 } as const;
 
 /** The word for a town: the campaign course's id and the scenery service's biome of streets and sidewalks. */
