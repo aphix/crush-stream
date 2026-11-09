@@ -1,3 +1,5 @@
+import { detCos, detSin } from "../../kernel/physics-core.js";
+import { DRIVER_SIDE } from "../../vehicle/constants.ts";
 import { ACTIVITY } from "./civilian-activity.ts";
 
 /**
@@ -28,6 +30,22 @@ const DOOR_TIMES = {
   carIn: { openFrom: 0.3, openTo: 1, closeFrom: 1.8, closeTo: 2.6 },
   carOut: { openFrom: 0.2, openTo: 0.75, closeFrom: 1.55, closeTo: 2.3 },
 } as const;
+
+/** The door spot a car at (`carX`, `carZ`) facing `carYaw` on ground `groundY` gives a person: world x and z, her yaw, her feet's height and her seat top's. */
+export type DoorSpot = { x: number; z: number; yaw: number; feetY: number; surfaceY: number };
+
+/** Into `out`: the door spot of a car (`seatFront` = its `BodyStyle.seats.front`: the H-point's across, up and along). Pure, so every peer fills the same spot. */
+export function carDoorSpot(carX: number, carZ: number, carYaw: number, groundY: number, seatFront: readonly [number, number, number], out: DoorSpot): void {
+  const across = DRIVER_SIDE * (seatFront[0] + CAR_DOOR.outFromSeat);
+  const along = seatFront[2] - CAR_DOOR.behindSeat;
+  const sine = detSin(carYaw);
+  const cosine = detCos(carYaw);
+  out.x = carX + across * cosine + along * sine;
+  out.z = carZ - across * sine + along * cosine;
+  out.yaw = carYaw - DRIVER_SIDE * (Math.PI / 2);
+  out.feetY = groundY;
+  out.surfaceY = groundY + seatFront[1] - CAR_DOOR.hipOverSeat;
+}
 
 function smoothstepBetween(from: number, to: number, value: number): number {
   if (value <= from) return 0;
