@@ -39,6 +39,11 @@ export class AmbulanceService {
     return true;
   }
 
+  /** The engine's index of the ambulance's car, -1 while none is out. */
+  get carIndex(): number {
+    return this.handle === null ? -1 : this.handle.index;
+  }
+
   step(seconds: number): void {
     const handle = this.handle;
     if (handle === null) return;
