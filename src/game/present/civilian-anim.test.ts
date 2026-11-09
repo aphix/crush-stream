@@ -373,7 +373,7 @@ describe("given a civilian getting into and out of a car by its driver's door, s
 
 describe("given an activity that starts or ends while she walks", () => {
   const EASED_IN: readonly ActivityName[] = ["idle", "talk", "buy", "door", "sitDown", "bump", "swing", "block", "hit", "cuffing", "arresting", "escorting", "carIn"];
-  const ACTIVE_CLOCKS: Readonly<Record<ActivityName, number>> = { none: 0, idle: 10.5, talk: 2, buy: 1, door: 0.9, sitDown: 1, sit: 3, standUp: 0.5, bump: 0.12, swing: 0.3, block: 1, hit: 0.1, sitSteps: 5, cuffing: 1.2, cuffed: 3, arresting: 0.6, escorting: 2, carIn: 1.5, carOut: 1 };
+  const ACTIVE_CLOCKS: Readonly<Record<ActivityName, number>> = { none: 0, idle: 10.5, talk: 2, buy: 1, door: 0.9, sitDown: 1, sit: 3, standUp: 0.5, bump: 0.12, swing: 0.3, block: 1, hit: 0.1, sitSteps: 5, cuffing: 1.2, cuffed: 3, arresting: 0.6, escorting: 2, carIn: 1.5, carOut: 1, phoneCall: 2, kneel: 2, recoil: 0.25 };
   const WITH_PARTNER = { hasPartner: true, bearing: 0.6, surface: 0.9, ...WALKING } as const;
 
   it.each(EASED_IN)("when %s begins, then she is in her walk's pose at the first instant", (name) => {
