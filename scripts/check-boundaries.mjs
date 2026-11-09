@@ -95,6 +95,7 @@ const HOT = {
   "src/game/engine/engine-openworld.ts": ["step", "frame", "feedWalkers", "landWalkerStrike"],
   "src/game/present/civilian-art.ts": ["update", "refreshSight", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
   "src/game/present/openworld-signs.ts": ["update"],
+  "src/game/present/openworld-shop-signs.ts": ["update"],
   "src/game/present/civilian-pose.ts": ["poseCivilian"],
   "src/game/present/civilian-anim.ts": ["poseActivity", "fillWalk", "fillBase", "mirrorIndexOf", "fillPersonal", "applyClip", "seatPelvis", "solveTwoBone", "solveLegs", "solveHands", "reachForDoorPoint", "reachForDoor", "lookAtPartner"],
   "src/game/present/civilian-anim-smoothing.ts": ["begin", "refreshNerve", "apply"],

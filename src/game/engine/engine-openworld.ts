@@ -54,7 +54,7 @@ type CrowdArt = {
 
 /** The signage on the buildings: `update` once a frame. */
 type PlaceSigns = {
-  update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null): void;
+  update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null): void;
   dispose(): void;
 };
 
@@ -293,9 +293,9 @@ export class OpenWorldDirector {
     this.facades ??= this.ports.makeFacades(this.map);
     if (this.interiors === null && this.ports.makeInteriors !== undefined) this.interiors = this.ports.makeInteriors(this.map);
     this.ports.eye(this.ray);
+    if (this.crowd !== null && this.closedPlaces !== null) fillClosedPlaces(this.crowd.state, tickAt(this.crowd.crowdSeconds), this.closedPlaces);
     if (this.interiors !== null) {
       this.openers.poses = this.crowd?.poses ?? null;
-      if (this.crowd !== null && this.closedPlaces !== null) fillClosedPlaces(this.crowd.state, tickAt(this.crowd.crowdSeconds), this.closedPlaces);
       this.openers.closed = this.crowd === null ? null : this.closedPlaces;
       this.openers.walker = this.ports.foot(this.foot) ? this.foot : null;
       this.interiors.update(this.ray.eyeX, this.ray.eyeZ, wallDt, this.sight, this.openers);
@@ -379,7 +379,7 @@ export class OpenWorldDirector {
   /** The signage is made on the first frame and shows names while the Track debug button is on. */
   private frameSigns(map: OpenWorldMap): void {
     this.signs ??= this.ports.makeSigns(map.places);
-    this.signs.update(this.ray.eyeX, this.ray.eyeZ, this.ports.signsOn(), this.sight);
+    this.signs.update(this.ray.eyeX, this.ray.eyeZ, this.ports.signsOn(), this.sight, this.crowd === null ? null : this.closedPlaces);
   }
 
   private start(map: OpenWorldMap, key: number, client: boolean): void {

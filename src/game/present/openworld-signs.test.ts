@@ -21,6 +21,8 @@ const FLOAT32_SLACK = 1e-4;
 const ON_FACE = 1e-3;
 const MAX_ATLAS_BYTES = 16 * 2 ** 20;
 const BYTES_PER_TEXEL = 4;
+/** A shut shop's sign is under this share of its brightness. */
+const SHUT_BRIGHTNESS_MAX = 0.5;
 
 const lots = layOutLots();
 const map = buildOpenWorldMap(lots);
@@ -138,17 +140,17 @@ describe("given the signage of the open world", () => {
 
   it("when the button has never been on, then only the shop signs exist, and the names are built at the first frame it is on", () => {
     const signs = new OpenWorldSigns(map.places);
-    signs.update(0, 0, false, null);
+    signs.update(0, 0, false, null, null);
     expect(signs.group.children.length).toBe(1);
     expect(signs["names"]).toBeNull();
-    signs.update(0, 0, true, null);
+    signs.update(0, 0, true, null, null);
     expect(signs.group.children.length).toBe(2);
     expect(signs["names"]).not.toBeNull();
   });
 
   it("when the names are on, then every name is drawn as a plate and a quad for each letter, in few draw calls", () => {
     const signs = new OpenWorldSigns(map.places);
-    signs.update(0, 0, true, null);
+    signs.update(0, 0, true, null, null);
     const chunks = signsOf(signs).children.filter((child): child is THREE.Mesh => child instanceof THREE.Mesh);
     let quads = 0;
     for (const chunk of chunks) quads += chunk.geometry.getIndex()!.count / 6;
@@ -161,7 +163,7 @@ describe("given the signage of the open world", () => {
 
   it("when the names are drawn, then every name plate on a building's drawn street wall stays FACE_MARGIN inside both ends of that wall", () => {
     const signs = new OpenWorldSigns(map.places);
-    signs.update(0, 0, true, null);
+    signs.update(0, 0, true, null, null);
     let plates = 0;
     for (const chunk of signsOf(signs).children) {
       if (!(chunk instanceof THREE.Mesh)) continue;
@@ -181,34 +183,41 @@ describe("given the signage of the open world", () => {
 
   it("when the button goes off and on, then the names hide and show while the shop signs stay", () => {
     const signs = new OpenWorldSigns(map.places);
-    signs.update(0, 0, true, null);
-    signs.update(0, 0, false, null);
+    signs.update(0, 0, true, null, null);
+    signs.update(0, 0, false, null, null);
     expect(signsOf(signs).visible).toBe(false);
     expect(signs.group.children[0]!.visible).toBe(true);
-    signs.update(0, 0, true, null);
+    signs.update(0, 0, true, null, null);
     expect(signsOf(signs).visible).toBe(true);
   });
 
   it("when the eye stands in the middle of the city, then the chunks past the name range are not drawn, and with no eye near none is", () => {
     const signs = new OpenWorldSigns(map.places);
-    signs.update(0, 0, true, null);
+    signs.update(0, 0, true, null, null);
     const total = signsOf(signs).children.length;
     expect(visibleChunks(signs)).toBeGreaterThan(0);
     expect(visibleChunks(signs)).toBeLessThan(total);
-    signs.update(FAR_AWAY, FAR_AWAY, true, null);
+    signs.update(FAR_AWAY, FAR_AWAY, true, null, null);
     expect(visibleChunks(signs)).toBe(0);
   });
 
   it("when the sight field says a chunk is unseen, then it is not drawn, and when it says seen it is drawn as with no field", () => {
     const signs = new OpenWorldSigns(map.places);
-    signs.update(0, 0, true, null);
+    signs.update(0, 0, true, null, null);
     const withoutField = visibleChunks(signs);
-    signs.update(0, 0, true, sight(false));
+    signs.update(0, 0, true, sight(false), null);
     expect(visibleChunks(signs)).toBe(0);
-    signs.update(0, 0, true, sight(true));
+    signs.update(0, 0, true, sight(true), null);
     expect(visibleChunks(signs)).toBe(withoutField);
   });
 });
+
+/** The vertex colours of the panels the shop signs `group` holds. */
+function colourOf(group: THREE.Object3D): THREE.BufferAttribute {
+  const attribute = group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh)!.geometry.getAttribute("color");
+  if (!(attribute instanceof THREE.BufferAttribute)) throw new Error("the shop signs have no colour attribute");
+  return attribute;
+}
 
 describe("given the shop signs of the open world", () => {
   const businesses = [...map.places.entries()].filter(([, place]) => isBusiness(place));
@@ -239,6 +248,47 @@ describe("given the shop signs of the open world", () => {
     }
     const homeIndex = map.places.findIndex((place) => place.doorNode >= 0 && !isBusiness(place));
     expect(shop.uvRect(homeIndex)).toBeNull();
+  });
+
+  it("when a shop is shut, then its sign dims and lights again as it opens; an open shop's never dims, nothing is written while nothing changes, and a home marked shut dims nothing", () => {
+    const shop = new ShopSigns(map.places);
+    const colour = colourOf(shop.group);
+    const brightness = (sign: number): number[] => Array.from({ length: 4 * 3 }, (_, at) => colour.array[sign * 12 + at]!);
+    const closed = new Uint8Array(map.places.length);
+    const [shutShop, openShop] = [businesses[0]![0], businesses[1]![0]];
+    shop.update(closed);
+    expect(Math.min(...brightness(0)), "every sign lit").toBe(1);
+    const lit = colour.version;
+    shop.update(closed);
+    expect(colour.version, "nothing changed, nothing uploaded").toBe(lit);
+    closed[shutShop] = 1;
+    closed[map.places.findIndex((place) => place.doorNode >= 0 && !isBusiness(place))] = 1;
+    shop.update(closed);
+    expect(Math.max(...brightness(0)), "the shut shop's sign").toBeLessThan(SHUT_BRIGHTNESS_MAX);
+    expect(Math.max(...brightness(0)), "still a board").toBeGreaterThan(0);
+    expect(Math.min(...brightness(1)), "an open shop's sign").toBe(1);
+    expect(colour.version, "the change was uploaded").toBeGreaterThan(lit);
+    expect(openShop).not.toBe(shutShop);
+    const dimmed = colour.version;
+    shop.update(closed);
+    expect(colour.version, "nothing changed, nothing uploaded").toBe(dimmed);
+    closed[shutShop] = 0;
+    shop.update(closed);
+    expect(Math.min(...brightness(0)), "opened again").toBe(1);
+    closed[shutShop] = 1;
+    shop.update(closed);
+    shop.update(null);
+    expect(Math.min(...brightness(0)), "no list: every shop open").toBe(1);
+  });
+
+  it("when the signage is told a shop is shut, then its shop sign dims", () => {
+    const signs = new OpenWorldSigns(map.places);
+    const colour = colourOf(signs.group.children[0]!);
+    const closed = new Uint8Array(map.places.length);
+    closed[businesses[0]![0]] = 1;
+    signs.update(0, 0, false, null, closed);
+    expect(colour.getX(0)).toBeLessThan(SHUT_BRIGHTNESS_MAX);
+    expect(colour.getX(4)).toBe(1);
   });
 
   it("when the signs are drawn, then every business's band hangs over its shop glass on its own building's drawn street wall and stays FACE_MARGIN inside both ends of that wall", () => {

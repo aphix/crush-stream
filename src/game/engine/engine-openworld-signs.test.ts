@@ -9,13 +9,15 @@ import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 const map = buildFixtureMap();
 const FRAME = 1 / FRAME_HZ;
 const EYE_X = 3;
+/** A wreck closes a place for far longer than a test frame runs (ticks). */
+const WRECKED_FOR_TICKS = 2 ** 30;
 
 /** The director with signage ports that keep what they were asked: the places made from, each frame's eye and button state, and the signage disposed. */
 class Harness {
   open = true;
   namesOn = false;
   made: (readonly Place[])[] = [];
-  updates: { eyeX: number; namesOn: boolean }[] = [];
+  updates: { eyeX: number; namesOn: boolean; closed: Uint8Array | null }[] = [];
   disposed = 0;
   readonly director = new OpenWorldDirector({
     ...idleOpenWorldPorts(),
@@ -32,7 +34,7 @@ class Harness {
     makeSigns: (places) => {
       this.made.push(places);
       return {
-        update: (eyeX, _eyeZ, namesOn) => void this.updates.push({ eyeX, namesOn }),
+        update: (eyeX, _eyeZ, namesOn, _sight, closed) => void this.updates.push({ eyeX, namesOn, closed }),
         dispose: () => void this.disposed++,
       };
     },
@@ -53,6 +55,18 @@ describe("given the open world director in the open world", () => {
     expect(harness.made.length).toBe(1);
     expect(harness.made[0]).toBe(map.places);
     expect(harness.updates.map((update) => `${update.eyeX}:${update.namesOn}`).join(" ")).toBe(`${EYE_X}:false ${EYE_X}:false ${EYE_X}:true`);
+    harness.director.stop();
+  });
+
+  it("when a place is wrecked, then the signage is handed it as shut, in a list of a byte for every place of the map, whatever else the director has", () => {
+    const harness = new Harness();
+    harness.director.frame(FRAME);
+    const state = harness.director["crowd"]!.state;
+    state.closedUntilTick[0] = WRECKED_FOR_TICKS;
+    harness.director.frame(FRAME);
+    const closed = harness.updates[harness.updates.length - 1]!.closed!;
+    expect(closed.length).toBe(state.index.placeCount);
+    expect(closed[0]).toBe(1);
     harness.director.stop();
   });
 
