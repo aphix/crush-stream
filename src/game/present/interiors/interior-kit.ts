@@ -19,6 +19,10 @@ const NEON_BY_KIND: Record<InteriorKind, number> = { rowhome: 0xffd2a0, coffee: 
 /** A board or plate's thickness and the margin it keeps from an edge, and a larger inset (m). */
 const TRIM = 0.05;
 const INSET = 0.1;
+/** The depth of a pool table's apron and how far a leg stands below it, a gondola upright's share of its depth, and a panel's setback from a cabinet's top (m). */
+const APRON = 0.3;
+const UPRIGHT_SHARE = 0.4;
+const PANEL_SETBACK = 0.2;
 /** Product bands on gondolas and bottle shelves. */
 const PRODUCTS = [0x2f6b3a, 0xc0392b, 0xe0c040, 0x2b5ea8, 0xd98a2b] as const;
 
@@ -43,12 +47,12 @@ const backShelf: Maker = (piece, look, _kind, out) => {
 };
 
 const gondola: Maker = (piece, look, _kind, out) => {
-  out.solid.push([part(piece.depth, 0.2, piece.width, 0, 0, 0), BLACK], [part(piece.depth * 0.4, piece.height, piece.width - TRIM, 0, 0.2, 0), look.trim]);
+  out.solid.push([part(piece.depth, 0.2, piece.width, 0, 0, 0), BLACK], [part(piece.depth * UPRIGHT_SHARE, piece.height, piece.width - TRIM, 0, 0.2, 0), look.trim]);
   for (let shelf = 0; shelf < 4; shelf++) out.solid.push([part(piece.depth, 0.22, piece.width - TRIM, 0, 0.35 + shelf * 0.38, 0), PRODUCTS[shelf % PRODUCTS.length]!]);
 };
 
 const fridge: Maker = (piece, _look, _kind, out) => {
-  out.solid.push([part(piece.depth, piece.height, piece.width, 0, 0, 0), WHITE], [part(0.03, piece.height - 0.2, piece.width - INSET, piece.depth / 2, 0.1, 0), GLASS]);
+  out.solid.push([part(piece.depth, piece.height, piece.width, 0, 0, 0), WHITE], [part(0.03, piece.height - PANEL_SETBACK, piece.width - INSET, piece.depth / 2, 0.1, 0), GLASS]);
 };
 
 const cabinet: Maker = (piece, look, _kind, out) => {
@@ -72,7 +76,7 @@ const table: Maker = (piece, look, _kind, out) => {
 };
 
 const desk: Maker = (piece, look, _kind, out) => {
-  out.solid.push([part(piece.depth, 0.04, piece.width, 0, piece.height - 0.04, 0), look.wood], [part(0.03, piece.height - 0.2, piece.width - INSET, -piece.depth / 2 + 0.05, 0.1, 0), look.trim]);
+  out.solid.push([part(piece.depth, 0.04, piece.width, 0, piece.height - 0.04, 0), look.wood], [part(0.03, piece.height - PANEL_SETBACK, piece.width - INSET, -piece.depth / 2 + 0.05, 0.1, 0), look.trim]);
   for (const side of [-1, 1]) out.solid.push([part(piece.depth - TRIM, piece.height - 0.04, 0.04, 0, 0, side * (piece.width / 2 - 0.03)), look.trim]);
   out.solid.push([part(0.04, 0.32, 0.55, -0.12, piece.height + INSET, 0), BLACK], [part(0.15, 0.1, 0.2, -0.12, piece.height, 0), BLACK]);
   out.glow.push([part(0.01, 0.28, 0.5, -0.095, piece.height + INSET, 0), SCREEN_LIGHT]);
@@ -112,10 +116,10 @@ const screen: Maker = (piece, _look, _kind, out) => {
 };
 
 const poolTable: Maker = (piece, look, _kind, out) => {
-  out.solid.push([part(piece.depth - TRIM, 0.2, piece.width - TRIM, 0, piece.height - 0.3, 0), look.wood], [part(piece.depth - 0.15, 0.04, piece.width - 0.15, 0, piece.height - TRIM, 0), FOLIAGE]);
+  out.solid.push([part(piece.depth - TRIM, 0.2, piece.width - TRIM, 0, piece.height - APRON, 0), look.wood], [part(piece.depth - 0.15, 0.04, piece.width - 0.15, 0, piece.height - TRIM, 0), FOLIAGE]);
   for (const side of [-1, 1]) {
     out.solid.push([part(piece.depth, 0.1, 0.1, 0, piece.height - INSET, side * (piece.width / 2 - 0.05)), look.wood], [part(0.1, 0.1, piece.width, side * (piece.depth / 2 - 0.05), piece.height - INSET, 0), look.wood]);
-    for (const end of [-1, 1]) out.solid.push([part(0.12, piece.height - 0.3, 0.12, end * (piece.depth / 2 - 0.1), 0, side * (piece.width / 2 - 0.1)), look.wood]);
+    for (const end of [-1, 1]) out.solid.push([part(0.12, piece.height - APRON, 0.12, end * (piece.depth / 2 - 0.1), 0, side * (piece.width / 2 - 0.1)), look.wood]);
   }
 };
 

@@ -1,6 +1,6 @@
 import { ceilingOver, Draft, footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
 import { layoutBar, layoutCoffee, layoutOffice, layoutRowhome, layoutStore } from "./interior-layouts.ts";
-import { BAY_WIDTH, FURNISHING, SHOPFRONT, STOOP_SEAT, TURN, type Box, type Furnishing, type InteriorPlan, type Turn } from "./interior-kinds.ts";
+import { BAY_WIDTH, FURNISHING, SHOPFRONT, STOOP_SEAT_HEIGHT, STOOP_SEAT_OUT, STOOP_SEAT_SPREAD, TURN, type Box, type Furnishing, type InteriorPlan, type Turn } from "./interior-kinds.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
 
 const LAYOUTS = { rowhome: layoutRowhome, coffee: layoutCoffee, bar: layoutBar, office: layoutOffice, store: layoutStore } as const satisfies Record<InteriorKind, (draft: Draft) => void>;
@@ -101,15 +101,15 @@ function turnStep(turn: Turn): readonly [number, number] {
 }
 
 /** What the place's interior publishes: every seat (a rowhome's two stoop seats lead: x, z, yaw, height each) and the customer's and clerk's spots at the counter the plan marks `serves` (null where there is none). */
-export type InteriorSpots = { seats: Float32Array; stoopSeats: number; counter: Float32Array | null };
+type InteriorSpots = { seats: Float32Array; stoopSeats: number; counter: Float32Array | null };
 
 export function interiorSpots(place: Place, plan: InteriorPlan = planOf(place)): InteriorSpots {
   const frame = new Frame(place);
   const rows: number[][] = [];
   const stoopSeats = place.interior === "rowhome" ? 2 : 0;
   for (let at = 0; at < stoopSeats; at++) {
-    const across = (at === 0 ? -1 : 1) * STOOP_SEAT.spread;
-    rows.push([frame.x(-STOOP_SEAT.out, across), frame.z(-STOOP_SEAT.out, across), frame.yaw(TURN.front), STOOP_SEAT.height]);
+    const across = (at === 0 ? -1 : 1) * STOOP_SEAT_SPREAD;
+    rows.push([frame.x(-STOOP_SEAT_OUT, across), frame.z(-STOOP_SEAT_OUT, across), frame.yaw(TURN.front), STOOP_SEAT_HEIGHT]);
   }
   for (const piece of plan.furnishings) {
     const spec = FURNISHING[piece.kind];

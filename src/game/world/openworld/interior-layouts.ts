@@ -6,6 +6,9 @@ import { TURN, type Opening } from "./interior-kinds.ts";
  */
 const { front: toStreet, right: toRight, back: toBack, left: toLeft } = TURN;
 
+/** The rowhome's dining table is this long (m). */
+const DINING_TABLE_LENGTH = 1.6;
+
 /** An interior doorway: 2.1 m high, `width` wide. */
 const doorway = (centre: number, width = 0.9): Opening => ({ centre, width, sill: 0, top: 2.1 });
 
@@ -26,7 +29,7 @@ function layoutRowhomeGround(d: Draft, left: number, right: number, hallEdge: nu
   d.put("sofa", 0, 3.3, -1.5, toStreet);
   d.put("plant", 0, 3.6, right - 0.3, toStreet);
   d.lamp(0, 2.4, -1.5);
-  d.put("table", 0, 7, 1, toStreet, { width: 1.6 });
+  d.put("table", 0, 7, 1, toStreet, { width: DINING_TABLE_LENGTH });
   for (const across of [0.6, 1.4]) {
     d.put("chair", 0, 6.05, across, toBack);
     d.put("chair", 0, 7.95, across, toStreet);
@@ -103,7 +106,7 @@ export function layoutCoffee(d: Draft): void {
   d.put("counter", 0, 6.6, -0.85, toStreet, { width: 3.4, serves: true });
   d.lamp(0, 6.6, -0.85);
   d.put("counter", 0, 8.55, -0.85, toStreet, { width: 3.4, depth: 0.6, height: 0.95 });
-  d.put("backShelf", 0, 9.05, -0.85, toStreet, { width: 3.4, depth: 0.3 });
+  d.put("backShelf", 0, 9.05, -0.85, toStreet, { width: 3.4 });
   d.crossWall(0, 9.3, -d.half, d.half, [doorway(1.7)]);
   d.put("gondola", 0, 10.2, -2.3, toRight);
   d.put("gondola", 0, 11.9, -2.3, toRight);

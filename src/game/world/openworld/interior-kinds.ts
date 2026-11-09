@@ -36,37 +36,42 @@ type FurnishingSpec = {
 
 const BARE = { solid: true, seats: 0, seatHeight: 0, glow: false } as const;
 const SEAT = { solid: false, seats: 1, glow: false } as const;
+const LIGHT = { solid: false, seats: 0, seatHeight: 0, glow: true } as const;
+const SOFT = { solid: true, glow: false } as const;
 
-/** One row per piece of furniture (m): size, height, whether it blocks, its seats. */
+/** A furnishing's size (m): across its front, along its front's direction, and its height. */
+const size = (width: number, depth: number, height: number) => ({ width, depth, height });
+
+/** One row per piece of furniture: size, whether it blocks, its seats. */
 export const FURNISHING = {
-  counter: { ...BARE, width: 2, depth: 0.7, height: 1.1 },
-  backShelf: { ...BARE, width: 2, depth: 0.35, height: 2.1 },
-  gondola: { ...BARE, width: 1.6, depth: 0.5, height: 1.8 },
-  fridge: { ...BARE, width: 0.75, depth: 0.7, height: 1.8 },
-  cabinet: { ...BARE, width: 0.6, depth: 0.6, height: 0.9 },
-  stove: { ...BARE, width: 0.75, depth: 0.65, height: 0.9 },
-  sink: { ...BARE, width: 1.2, depth: 0.6, height: 0.9 },
-  table: { ...BARE, width: 0.9, depth: 0.9, height: 0.75 },
-  desk: { ...BARE, width: 1.4, depth: 0.7, height: 0.75 },
-  bed: { ...BARE, width: 1.5, depth: 2, height: 0.55 },
-  dresser: { ...BARE, width: 1, depth: 0.5, height: 0.9 },
-  bathtub: { ...BARE, width: 1.7, depth: 0.75, height: 0.55 },
-  toilet: { ...BARE, width: 0.4, depth: 0.7, height: 0.7 },
-  basin: { ...BARE, width: 0.5, depth: 0.4, height: 0.85 },
-  tvUnit: { ...BARE, width: 1.4, depth: 0.45, height: 0.5 },
-  poolTable: { ...BARE, width: 2.4, depth: 1.3, height: 0.85 },
-  jukebox: { ...BARE, width: 0.8, depth: 0.6, height: 1.5 },
-  rail: { ...BARE, width: 3, depth: 0.06, height: 1 },
-  sofa: { solid: true, seats: 2, glow: false, width: 1.9, depth: 0.9, height: 0.85, seatHeight: 0.44 },
-  armchair: { solid: true, seats: 1, glow: false, width: 0.8, depth: 0.8, height: 0.85, seatHeight: 0.44 },
-  bench: { solid: true, seats: 2, glow: false, width: 1.4, depth: 0.55, height: 0.9, seatHeight: 0.46 },
-  stool: { ...SEAT, width: 0.4, depth: 0.4, height: 0.7, seatHeight: 0.7 },
-  chair: { ...SEAT, width: 0.45, depth: 0.45, height: 0.9, seatHeight: 0.46 },
-  deskChair: { ...SEAT, width: 0.55, depth: 0.55, height: 0.95, seatHeight: 0.5 },
-  plant: { solid: false, seats: 0, seatHeight: 0, glow: false, width: 0.45, depth: 0.45, height: 1.2 },
-  lamp: { solid: false, seats: 0, seatHeight: 0, glow: true, width: 0.45, depth: 0.45, height: 0.3 },
-  neon: { solid: false, seats: 0, seatHeight: 0, glow: true, width: 1.2, depth: 0.05, height: 0.4 },
-  screen: { solid: false, seats: 0, seatHeight: 0, glow: true, width: 1, depth: 0.05, height: 0.6 },
+  counter: { ...BARE, ...size(2, 0.7, 1.1) },
+  backShelf: { ...BARE, ...size(2, 0.35, 2.1) },
+  gondola: { ...BARE, ...size(1.6, 0.5, 1.8) },
+  fridge: { ...BARE, ...size(0.75, 0.7, 1.8) },
+  cabinet: { ...BARE, ...size(0.6, 0.6, 0.9) },
+  stove: { ...BARE, ...size(0.75, 0.65, 0.9) },
+  sink: { ...BARE, ...size(1.2, 0.6, 0.9) },
+  table: { ...BARE, ...size(0.9, 0.9, 0.75) },
+  desk: { ...BARE, ...size(1.4, 0.7, 0.75) },
+  bed: { ...BARE, ...size(1.5, 2, 0.55) },
+  dresser: { ...BARE, ...size(1, 0.5, 0.9) },
+  bathtub: { ...BARE, ...size(1.7, 0.75, 0.55) },
+  toilet: { ...BARE, ...size(0.4, 0.7, 0.7) },
+  basin: { ...BARE, ...size(0.5, 0.4, 0.85) },
+  tvUnit: { ...BARE, ...size(1.4, 0.45, 0.5) },
+  poolTable: { ...BARE, ...size(2.4, 1.3, 0.85) },
+  jukebox: { ...BARE, ...size(0.8, 0.6, 1.5) },
+  rail: { ...BARE, ...size(3, 0.06, 1) },
+  sofa: { ...SOFT, seats: 2, ...size(1.9, 0.9, 0.85), seatHeight: 0.44 },
+  armchair: { ...SOFT, seats: 1, ...size(0.8, 0.8, 0.85), seatHeight: 0.44 },
+  bench: { ...SOFT, seats: 2, ...size(1.4, 0.55, 0.9), seatHeight: 0.46 },
+  stool: { ...SEAT, ...size(0.4, 0.4, 0.7), seatHeight: 0.7 },
+  chair: { ...SEAT, ...size(0.45, 0.45, 0.9), seatHeight: 0.46 },
+  deskChair: { ...SEAT, ...size(0.55, 0.55, 0.95), seatHeight: 0.5 },
+  plant: { solid: false, seats: 0, seatHeight: 0, glow: false, ...size(0.45, 0.45, 1.2) },
+  lamp: { ...LIGHT, ...size(0.45, 0.45, 0.3) },
+  neon: { ...LIGHT, ...size(1.2, 0.05, 0.4) },
+  screen: { ...LIGHT, ...size(1, 0.05, 0.6) },
 } as const satisfies Record<string, FurnishingSpec>;
 export type FurnishingKind = keyof typeof FURNISHING;
 
@@ -135,38 +140,28 @@ export const BAY_WIDTH = LAYOUT.lotFrontage;
 
 type BayOpening = Opening & { door: boolean };
 
+/** One opening of a frontage bay: its centre from the bay's centre line, its width, and its sill and top above the floor (m). */
+const opening = (centre: number, width: number, sill: number, top: number, door: boolean): BayOpening => ({ centre, width, sill, top, door });
+
 /**
- * The street wall's openings per bay (centres from the bay's centre line; sill and top above the floor, m), cut through the facade's ground band and through the
- * street wall alike. A doorway is at least 0.9 m wide; openings stay at or under 2.7 m so the sign band above is whole.
+ * The street wall's openings per bay, cut through the facade's ground band and through the street wall alike. A doorway is at least 0.9 m wide; openings stay at or under 2.7 m so the sign band above is whole.
+ * A facade's u runs to the viewer's right, the plan's -across: the corner store's door (+0.9) is on the viewer's left.
  */
 export const SHOPFRONT = {
-  rowhome: [{ centre: ROWHOME_DOOR_OFFSET, width: 1, sill: 0, top: 2.1, door: true }],
-  coffee: [
-    { centre: -1.65, width: 1.5, sill: 0.75, top: 2.3, door: false },
-    { centre: 0, width: 1, sill: 0, top: 2.2, door: true },
-    { centre: 1.65, width: 1.5, sill: 0.75, top: 2.3, door: false },
-  ],
-  bar: [
-    { centre: -1.8, width: 0.9, sill: 1.25, top: 2.3, door: false },
-    { centre: 0, width: 1, sill: 0, top: 2.25, door: true },
-    { centre: 1.8, width: 0.9, sill: 1.25, top: 2.3, door: false },
-  ],
-  office: [
-    { centre: -1.8, width: 1.8, sill: 0.3, top: 2.7, door: false },
-    { centre: 0, width: 1.5, sill: 0, top: 2.4, door: true },
-    { centre: 1.8, width: 1.8, sill: 0.3, top: 2.7, door: false },
-  ],
-  store: [
-    { centre: 0.9, width: 0.9, sill: 0, top: 2.1, door: true },
-    { centre: -1.1, width: 2.8, sill: 0.65, top: 2.4, door: false },
-  ],
+  rowhome: [opening(ROWHOME_DOOR_OFFSET, 1, 0, 2.1, true)],
+  coffee: [opening(-1.65, 1.5, 0.75, 2.3, false), opening(0, 1, 0, 2.2, true), opening(1.65, 1.5, 0.75, 2.3, false)],
+  bar: [opening(-1.8, 0.9, 1.25, 2.3, false), opening(0, 1, 0, 2.25, true), opening(1.8, 0.9, 1.25, 2.3, false)],
+  office: [opening(-1.8, 1.8, 0.3, 2.7, false), opening(0, 1.5, 0, 2.4, true), opening(1.8, 1.8, 0.3, 2.7, false)],
+  store: [opening(0.9, 0.9, 0, 2.1, true), opening(-1.1, 2.8, 0.65, 2.4, false)],
 } as const satisfies Record<InteriorKind, readonly BayOpening[]>;
 
 /** The back door of a rowhome, into the yard. */
-export const BACK_DOOR: BayOpening = { centre: 0, width: 1, sill: 0, top: 2.1, door: true };
+export const BACK_DOOR = opening(0, 1, 0, 2.1, true);
 
-/** A person sits on the stoop's third step: its top above the ground, how far out of the facade its tread's middle lies, and each sitter's offset from the door's line (m); the stoop is centred on the door. */
-export const STOOP_SEAT = { height: 0.54, out: 0.92, spread: 0.4 } as const;
+/** A person sits on the stoop's third step (the stoop is centred on the door): its top above the ground, how far out of the facade its tread's middle lies, and each sitter's offset from the door's line (m). */
+export const STOOP_SEAT_HEIGHT = 0.54;
+export const STOOP_SEAT_OUT = 0.92;
+export const STOOP_SEAT_SPREAD = 0.4;
 
 /** Furniture's colours and the room's by interior (sRGB). */
 export const ROOM_LOOK = {

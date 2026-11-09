@@ -14,21 +14,22 @@ const TOUCH = 1e-6;
 /** Decimal places a column's shared extent is keyed at when grouping the columns that can merge. */
 const KEY_PLACES = 3;
 
-/** Columns that share an extent and abut along the other axis, merged into one: a row of houses' street, back and party walls become a few long pieces. */
-function mergeAlong(columns: readonly EnvelopeColumn[], alongX: boolean): EnvelopeColumn[] {
-  const lo = alongX ? "x0" : "z0";
-  const hi = alongX ? "x1" : "z1";
-  const groups = new Map<string, EnvelopeColumn[]>();
-  for (const column of columns) {
-    const key = alongX ? `${column.z0.toFixed(KEY_PLACES)}:${column.z1.toFixed(KEY_PLACES)}` : `${column.x0.toFixed(KEY_PLACES)}:${column.x1.toFixed(KEY_PLACES)}`;
-    groups.set(key, [...(groups.get(key) ?? []), column]);
+/** A column seen along one axis: its extent along it, and the extent across it that two columns must share to merge. */
+type Span = { from: number; to: number; side0: number; side1: number };
+
+/** Spans that share both sides and abut along their axis, merged into one. */
+function mergeSpans(spans: readonly Span[]): Span[] {
+  const groups = new Map<string, Span[]>();
+  for (const span of spans) {
+    const key = `${span.side0.toFixed(KEY_PLACES)}:${span.side1.toFixed(KEY_PLACES)}`;
+    groups.set(key, [...(groups.get(key) ?? []), span]);
   }
-  const merged: EnvelopeColumn[] = [];
+  const merged: Span[] = [];
   for (const group of groups.values()) {
-    group.sort((a, b) => a[lo] - b[lo]);
+    group.sort((a, b) => a.from - b.from);
     let current = { ...group[0]! };
     for (const next of group.slice(1)) {
-      if (next[lo] - current[hi] <= TOUCH) current[hi] = Math.max(current[hi], next[hi]);
+      if (next.from - current.to <= TOUCH) current.to = Math.max(current.to, next.to);
       else {
         merged.push(current);
         current = { ...next };
@@ -37,6 +38,12 @@ function mergeAlong(columns: readonly EnvelopeColumn[], alongX: boolean): Envelo
     merged.push(current);
   }
   return merged;
+}
+
+/** Columns that share an extent and abut along the other axis, merged into one: a row of houses' street, back and party walls become a few long pieces. */
+function mergeAlong(columns: readonly EnvelopeColumn[], alongX: boolean): EnvelopeColumn[] {
+  const spans = columns.map((column): Span => (alongX ? { from: column.x0, to: column.x1, side0: column.z0, side1: column.z1 } : { from: column.z0, to: column.z1, side0: column.x0, side1: column.x1 }));
+  return mergeSpans(spans).map((span): EnvelopeColumn => (alongX ? { x0: span.from, x1: span.to, z0: span.side0, z1: span.side1 } : { z0: span.from, z1: span.to, x0: span.side0, x1: span.side1 }));
 }
 
 /**
