@@ -57,7 +57,7 @@ import { INTERACTIONS, TARGET, considerInteractions, type InteractionRow } from 
 import { isSeatedVenue } from "./society-venues.ts";
 
 /** Reasons a car owner drives to: the commute, home, errands and meals (not a drink: the car stays where it is). */
-const DRIVABLE_REASONS: readonly number[] = [NEED.work, NEED.rest, NEED.errand, NEED.food, PURPOSE.shopping];
+const DRIVABLE_REASONS: readonly number[] = [NEED.work, NEED.rest, NEED.errand, NEED.food];
 
 function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
@@ -320,10 +320,14 @@ function endFight(state: CityState, resident: number, tick: number): void {
   state.ints[base + RESIDENT_INT.fightPartner] = NO_PLACE;
 }
 
-/** A neighbour dwelling at home comes out to talk or argue at the door for as long as the visitor stays. */
-function pullOut(state: CityState, neighbour: number, tick: number, purpose: number, visitor: number, dwellTicks: number): void {
-  standOutside(state, neighbour, tick, purpose, dwellTicks);
-  state.ints[neighbour * RESIDENT_INT_STRIDE + RESIDENT_INT.companion] = visitor;
+/** A neighbour dwelling at home comes out to talk or argue at the door from when the visitor gets there until the visitor leaves. */
+function pullOut(state: CityState, neighbour: number, tick: number, purpose: number, visitor: number): void {
+  standOutside(state, neighbour, tick, purpose, 1);
+  const visiting = visitor * RESIDENT_INT_STRIDE;
+  const at = neighbour * RESIDENT_INT_STRIDE;
+  state.ints[at + RESIDENT_INT.arriveTick] = state.ints[visiting + RESIDENT_INT.arriveTick]!;
+  state.ints[at + RESIDENT_INT.nextDecisionTick] = state.ints[visiting + RESIDENT_INT.nextDecisionTick]!;
+  state.ints[at + RESIDENT_INT.companion] = visitor;
 }
 
 /** Someone out on their stoop within chatting distance who is on their own: the two talk. */
@@ -342,10 +346,10 @@ function linkNearbySitter(state: CityState, resident: number, tick: number): voi
 }
 
 /** What a chosen row does beyond the resident's own row: brings its neighbour out, joins a neighbour sitting out, or names the victim of a crime attempt. */
-function afterInteraction(state: CityState, resident: number, tick: number, row: InteractionRow, dwellTicks: number): void {
+function afterInteraction(state: CityState, resident: number, tick: number, row: InteractionRow): void {
   const partner = state.chosenPartner;
   if (row.target === TARGET.neighbour && partner !== NO_PLACE) {
-    pullOut(state, partner, tick, row.purpose, resident, dwellTicks);
+    pullOut(state, partner, tick, row.purpose, resident);
     state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.companion] = partner;
   } else if (row.purpose === PURPOSE.stoopSit) linkNearbySitter(state, resident, tick);
   else if (crimeKindOf(row.purpose) !== CRIME_KIND.none) state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.crimeVictim] = partner;
@@ -375,7 +379,7 @@ export function decideResident(state: CityState, resident: number, tick: number)
   if (place === NO_PLACE) stayPut(state, resident, tick, current, STAY_MINUTES * TICKS_PER_GAME_MINUTE, NEED.rest);
   else if (place === current) stayPut(state, resident, tick, current, dwell, purpose);
   else if (!planLeg(state, resident, tick, place, purpose, dwell)) stayPut(state, resident, tick, current, dwell, row === null ? purpose : NEED.rest);
-  else if (row !== null) afterInteraction(state, resident, tick, row, dwell);
-  if (place === current && row !== null) afterInteraction(state, resident, tick, row, dwell);
+  else if (row !== null) afterInteraction(state, resident, tick, row);
+  if (place === current && row !== null) afterInteraction(state, resident, tick, row);
   if (named) cutDwellForAppointment(state, resident, tick);
 }

@@ -117,9 +117,8 @@ export const CAST: readonly CastMember[] = [
   },
 ];
 
-/** Places that draw a crowd only at some hours (company: the court in the afternoon, the garden in the morning, the bar at night); a window may wrap past midnight. */
+/** Places that draw a crowd only at some hours (the court in the afternoon, the garden in the morning); a window may wrap past midnight. */
 export const PLACE_HOURS: readonly { place: string; from: number; to: number }[] = [
   { place: PLACE_NAMES.parkCourt, from: 14, to: 18 },
   { place: PLACE_NAMES.garden, from: 7, to: 11 },
-  { place: PLACE_NAMES.bar, from: 20, to: 2 },
 ];

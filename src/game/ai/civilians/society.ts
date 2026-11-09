@@ -95,14 +95,14 @@ function favouriteNear(state: CityState, kind: number, home: number, draw: () =>
   return ranked.length === 0 ? NO_PLACE : ranked[Math.floor(draw() * Math.min(FAVOURITE_POOL, ranked.length))]!;
 }
 
-/** A person's coffee and drink habits, and (an adult) a car at their home's kerb: drawn once from their own stream so no other draw moves. */
+/** A person's coffee and drink habits, and (an adult who is not a named one: they keep to their stories on foot) a car at their home's kerb: drawn once from their own stream so no other draw moves. */
 function giveTraits(state: CityState, id: number, spec: ResidentSpec, tick: number): void {
   const base = id * RESIDENT_INT_STRIDE;
   const draw = residentDraws(state.seed, id, STREAM.trait, 0);
   const age = spec.flags & FLAG.cast ? -spec.birthDay : dayOf(tick, state.startHour) - spec.birthDay;
   if (draw() < COFFEE_FAN_SHARE) state.ints[base + RESIDENT_INT.flags] |= FLAG.coffeeFan;
   if (draw() < DRINKER_SHARE) state.ints[base + RESIDENT_INT.flags] |= FLAG.drinker;
-  if (draw() >= CAR_SHARE || age < JOB_AGE) return;
+  if (draw() >= CAR_SHARE || age < JOB_AGE || (spec.flags & FLAG.cast) !== 0) return;
   state.ints[base + RESIDENT_INT.flags] |= FLAG.hasCar;
   state.ints[base + RESIDENT_INT.carPlace] = spec.home;
 }

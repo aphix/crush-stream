@@ -45,17 +45,16 @@ export const PURPOSE = {
   drive: 18,
   coffee: 19,
   drink: 20,
-  shopping: 21,
-  stoopSit: 22,
-  stoopTalk: 23,
-  argue: 24,
-  loiter: 25,
-  report: 26,
-  flee: 27,
-  shoplift: 28,
-  mug: 29,
-  breakIn: 30,
-  fight: 31,
+  stoopSit: 21,
+  stoopTalk: 22,
+  argue: 23,
+  loiter: 24,
+  report: 25,
+  flee: 26,
+  shoplift: 27,
+  mug: 28,
+  breakIn: 29,
+  fight: 30,
 } as const;
 /** What `RESIDENT_INT.flags` holds: in hospital, without a job, hurting, out of work while the workplace is closed, a named resident (no society chances, fixed age); jobless long enough to be broke, a criminal, wanted for an open crime or fight, in custody, a car owner, a coffee fan, a drinker. */
 export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16, broke: 32, criminal: 64, wanted: 128, custody: 256, hasCar: 512, coffeeFan: 1024, drinker: 2048 } as const;
@@ -128,10 +127,10 @@ export const CAST_NAME_BASE = 1000;
 export const CAST_TITLE_BASE = 100;
 
 /**
- * Event kinds of the host's input triples (kind, subject, crowd seconds). A knock's subject is the civilian run down; a wreck's the place; a crime's and a bust's the criminal; a push's and a fight's a pair packed as
- * victim + capacity * (other + 1), other -1 being a player's walker or car (decode with `pairOf`).
+ * Event kinds of the host's input triples (kind, subject, crowd seconds). A knock's subject is the civilian run down; a wreck's the place; a crime's and a bust's the criminal; a push's and a fight's the victim, followed when
+ * the other party is a civilian by an `alongside` triple of the same seconds naming them (none: a player's walker or car). Inside the brain the pair is one subject, victim + capacity * (other + 1) (see `pairOf`).
  */
-export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5 } as const;
+export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6 } as const;
 export const EVENT_TRIPLE = 3;
 /** Society effects of a wreck or knock: what the corner is feared at, within FEAR_RADIUS metres of the spot (falling off linearly to 0 at the edge). */
 export const WRECK_FEAR = 1;
