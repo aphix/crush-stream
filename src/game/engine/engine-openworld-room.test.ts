@@ -60,6 +60,7 @@ function room() {
       eye: () => {},
       throwFigure: (strike) => void thrown.push(strike),
       hookWallHits: () => () => {},
+      makeFacades: () => ({ dispose: () => {} }),
       makeArt: () => ({ update: () => {}, dispose: () => {} }),
     });
     director.startOpenWorld(map);

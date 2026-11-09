@@ -1,0 +1,163 @@
+import { detCos, detSin } from "../../kernel/physics-core.js";
+import { PREFABS } from "../catalog.ts";
+import { PREFAB } from "../constants.ts";
+import type { Lots } from "./openworld-layout.ts";
+import { PLACE_KIND, type Place } from "./walk-graph.ts";
+
+/** A rowhome's frontage (m): the lot width the kit's cornice and bay stack are cut for. */
+export const LOT_WIDTH = 5.6;
+
+/** The drawn block's half side (m): a building prop's front face stands this share of the prefab's own side out from its centre, at any instance depth. */
+export const BLOCK_FACE_HALF = 5.9;
+
+/** Storey heights (m) of a three-storey rowhome: ground storey, each floor above, the parapet over the top floor. */
+export const HOME_LEVELS = { storeys: 3, ground: 3.6, storey: 3.2, parapet: 0.9 } as const;
+export const HOME_HEIGHT = HOME_LEVELS.ground + (HOME_LEVELS.storeys - 1) * HOME_LEVELS.storey + HOME_LEVELS.parapet;
+
+/** Stone steps up to the door: 5 risers of 0.18 m (the interior floor sits on the top one), 0.28 m treads, a 0.5 m landing at the wall, 1.6 m wide (door 1.0 m and 0.3 m of stone each side). */
+const STOOP_RISE = 0.18;
+const STOOP_STEPS = 5;
+const STOOP_TREAD = 0.28;
+const STOOP_LANDING = 0.5;
+const STOOP_WIDTH = 1.6;
+export const STOOP = {
+  rise: STOOP_RISE,
+  steps: STOOP_STEPS,
+  tread: STOOP_TREAD,
+  landing: STOOP_LANDING,
+  width: STOOP_WIDTH,
+  /** Out from the facade face to the foot of the bottom step. */
+  run: STOOP_LANDING + (STOOP_STEPS - 1) * STOOP_TREAD,
+  /** The landing's top: the door sill. */
+  sill: STOOP_RISE * STOOP_STEPS,
+} as const;
+
+/**
+ * Door and bay side by side, the same on every house: across the lot (u, along the building's local z, from the lot's middle) the door and its stoop stand at +1.8 m and the bay stack
+ * takes the other half, centred at -0.9 m and 2.8 m wide: 0.5 m of pier at each side of it and 0.45 m between the bay and the stoop (u 1.0 to 2.6).
+ */
+const DOOR_ACROSS = 1.8;
+const BAY_ACROSS = -0.9;
+/** The door hole every rowhome's ground band is cut with (m): half its width, and its height over the door sill. */
+const DOOR_HALF_WIDTH = 0.5;
+const DOOR_HEIGHT = 2.1;
+export const DOOR = { across: DOOR_ACROSS, halfWidth: DOOR_HALF_WIDTH, sill: STOOP.sill, head: STOOP.sill + DOOR_HEIGHT } as const;
+
+/** The door's centre on a lot's front face, for the place's door point: the lot's middle (lotX) and its front line (frontZ) for a building facing `yaw`. */
+export function homeDoorPoint(lotX: number, frontZ: number, yaw: number): { x: number; z: number } {
+  return { x: lotX + DOOR_ACROSS * detSin(yaw), z: frontZ + DOOR_ACROSS * detCos(yaw) };
+}
+
+/**
+ * The bay stack beside the door, from the ground to the roof: a stone plinth with a half-basement window, then on every floor a panelled apron, a window (flat front, two angled sides)
+ * and a belt band, a panel and a roof slab on top; every ring is cut from one footprint. `out` 0.7 m is inside the 0.6-0.9 m a rowhome bay projects; its sides run `out` along the facade, so the width is `front` + 2 `out`.
+ */
+const BAY_FRONT = 1.4;
+const BAY_OUT = 0.7;
+/** A bay window's sill over its floor and its height (m): a 1.5 m sash window. */
+const BAY_SILL_ABOVE_FLOOR = 0.75;
+const BAY_WINDOW_HEIGHT = 1.5;
+/** Over the top window: the belt band, a panel and the roof slab (m). */
+const BAY_CAP_BAND = 0.25;
+const BAY_CAP_PANEL = 0.15;
+const BAY_CAP_SLAB = 0.15;
+/** The plinth's cap band over the basement (m). */
+const BAY_PLINTH_BAND = 0.15;
+
+type BayFloor = { sill: number; head: number };
+
+/** Every storey's bay window: the raised ground storey (its floor is the door sill), then each floor above. */
+export const BAY_FLOORS: readonly BayFloor[] = Array.from({ length: HOME_LEVELS.storeys }, (_, index): BayFloor => {
+  const level = index === 0 ? STOOP.sill : HOME_LEVELS.ground + (index - 1) * HOME_LEVELS.storey;
+  const sill = level + BAY_SILL_ABOVE_FLOOR;
+  return { sill, head: sill + BAY_WINDOW_HEIGHT };
+});
+
+export const BAY = {
+  front: BAY_FRONT,
+  out: BAY_OUT,
+  width: BAY_FRONT + 2 * BAY_OUT,
+  /** The footprint's middle across the lot (u). */
+  across: BAY_ACROSS,
+  windowHeight: BAY_WINDOW_HEIGHT,
+  plinthTop: STOOP.sill,
+  plinthBand: BAY_PLINTH_BAND,
+  capBand: BAY_CAP_BAND,
+  capPanel: BAY_CAP_PANEL,
+  capSlab: BAY_CAP_SLAB,
+  top: BAY_FLOORS[BAY_FLOORS.length - 1]!.head + BAY_CAP_BAND + BAY_CAP_PANEL + BAY_CAP_SLAB,
+} as const;
+
+/** A rowhome's front as the kit stands it: a point on the drawn facade at the lot's middle, the building's yaw (its front is local +x) and a number that picks the house's accent. */
+export type Frontage = { x: number; z: number; yaw: number; variant: number };
+
+/** A pseudo-random number from the lot's place: the same on every peer, whatever the order the places come in. */
+function variantOf(x: number, z: number): number {
+  return Math.imul(Math.round(x * 8) ^ Math.imul(Math.round(z * 8), 0x9e3779b1), 0x85ebca6b) >>> 0;
+}
+
+/** The frontages of the rowhomes among `places`: the caller passes only places inside the walls. */
+export function homeFrontages(places: readonly Place[]): Frontage[] {
+  const frontages: Frontage[] = [];
+  for (const place of places) {
+    if (place.kind !== PLACE_KIND.home) continue;
+    const face = (BLOCK_FACE_HALF / PREFABS[PREFAB.building].size[0]) * place.depth;
+    frontages.push({ x: place.x + detCos(place.yaw) * face, z: place.z - detSin(place.yaw) * face, yaw: place.yaw, variant: variantOf(place.x, place.z) });
+  }
+  return frontages;
+}
+
+/** Where one step's tread runs (m out from the facade face) and how high it stands; step 1 is the lowest, the last is the landing. */
+export function stoopStepRange(step: number): { near: number; far: number; top: number } {
+  const far = step === STOOP.steps ? STOOP.landing : STOOP.run - (step - 1) * STOOP.tread;
+  const near = step === STOOP.steps ? 0 : far - STOOP.tread;
+  return { near, far, top: STOOP.rise * step };
+}
+
+/** A world point against a frontage: out along the building's front direction, across along its local z (u). */
+function against(frontage: Frontage, x: number, z: number): { out: number; across: number } {
+  const dx = x - frontage.x;
+  const dz = z - frontage.z;
+  return { out: dx * detCos(frontage.yaw) - dz * detSin(frontage.yaw), across: dx * detSin(frontage.yaw) + dz * detCos(frontage.yaw) };
+}
+
+/** What a walker stands on at the world point (x, z): the stoop's stair profile there (m), 0 off the stoop. A stoop's prisms are boxes (a ramp and a landing), so the steps themselves are this function. */
+export function stoopHeightAt(frontage: Frontage, x: number, z: number): number {
+  const { out, across } = against(frontage, x, z);
+  if (Math.abs(across - DOOR.across) > STOOP.width / 2 || out < 0 || out >= STOOP.run) return 0;
+  for (let step = STOOP.steps; step >= 1; step--) {
+    const { near, far, top } = stoopStepRange(step);
+    if (out >= near && out < far) return top;
+  }
+  return 0;
+}
+
+/** A box the course stands as a prop of the invisible wall's prefab: size is [along the building's front direction, height, across]. */
+type FacadeSolid = { prefab: typeof PREFAB.invisibleWall; x: number; z: number; yaw: number; size: [number, number, number] };
+
+/** A box `out` m from the facade face and `across` m (u) from the lot's middle. */
+function boxOn(frontage: Frontage, out: number, across: number, size: [number, number, number]): FacadeSolid {
+  const cos = detCos(frontage.yaw);
+  const sin = detSin(frontage.yaw);
+  return { prefab: PREFAB.invisibleWall, x: frontage.x + cos * out + sin * across, z: frontage.z - sin * out + cos * across, yaw: frontage.yaw, size };
+}
+
+/** The stoop's ramp stands as high as its highest tread (m). */
+const RAMP_TOP = STOOP.rise * (STOOP.steps - 1);
+
+/**
+ * Colliders of one rowhome's kit, three boxes: the bay stack from the ground to its roof (one box of the footprint's own area), the stoop's ramp over the four treads and its landing.
+ * The ramp is a wall to the generic prism read; a walker's height on it is `stoopHeightAt`.
+ */
+export function facadeSolidsOf(frontage: Frontage): FacadeSolid[] {
+  return [
+    boxOn(frontage, BAY.out / 2, BAY.across, [BAY.out, BAY.top, BAY.width - BAY.out]),
+    boxOn(frontage, (STOOP.landing + STOOP.run) / 2, DOOR.across, [STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width]),
+    boxOn(frontage, STOOP.landing / 2, DOOR.across, [STOOP.landing, STOOP.sill, STOOP.width]),
+  ];
+}
+
+/** The kit's colliders for every playable home of the layout. */
+export function facadeSolidProps(lots: Lots): FacadeSolid[] {
+  return homeFrontages(lots.places.slice(0, lots.backdropStart)).flatMap(facadeSolidsOf);
+}

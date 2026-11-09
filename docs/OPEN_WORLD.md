@@ -106,6 +106,13 @@ A tick, twice a second, allocates what the brain's answer carries.
 from their look; every other civilian within 120 m is an instance of a 132-triangle figure whose limbs swing in the vertex shader;
 nothing past 120 m. Draw calls do not grow with the crowd.
 
+## Rowhome facade kit
+
+Every home inside the walls is dressed from its `Place` (`homeFrontages`): a point on the building's drawn front face at the lot's middle. Across the lot (u, along the building's local z) the door and its stoop stand at +1.8 m (`homeDoorPoint` is the place's door point) and the bay stack takes the other half, centred at -0.9 m, 2.8 m wide. Four instanced meshes (`FacadeBays`: bay, stoop, railing, cornice; four draws whatever the number of houses, painted textures made in code) draw
+the bay stack (a stone plinth from the ground with a barred half-basement window, then on every storey, the raised ground storey included, a panelled apron, the window with a flat front and two angled sides and a belt band, a panel and a roof slab on top; every ring is cut from one footprint, 0.7 m out), the stoop (five 0.18 m risers whose landing, 0.9 m, is the door sill; jambs and a hood at the door), iron railings on its cheeks and a bracketed roofline cornice;
+panels and cornice take the house's accent from `HOUSE_ACCENTS`, windows light at night from the facades' `FACADE_GLOW`. The facade art of a home carries no bay, stoop, railing or cornice of its own.
+What a car or a walker meets is `facadeSolidProps(lots)`, appended to the course's props as invisible-wall boxes, three a home: the bay stack (one box to the roof slab), the stoop's ramp (a box over the four treads) and its landing (flush with the sill). A walker's height on the stoop is `stoopHeightAt`.
+
 ## Where it lives
 
 | Piece | File |
@@ -115,6 +122,7 @@ nothing past 120 m. Draw calls do not grow with the crowd.
 | The look-at | `ai/civilians/civilian-look.ts` |
 | The engine's end: crowd, link, look-at, wall hook | `engine/engine-openworld.ts` (`OpenWorldDirector`, held by `CrashEngine`) |
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
+| Rowhome facade kit | `present/facade-bays.ts`, `facade-bay-parts.ts`, `facade-kit-atlas.ts`; plan and colliders `world/openworld/openworld-facade-solids.ts` |
 | Map and course | `world/openworld/` |
 
 The director is made with the engine; the crowd is made on the first frame the open world's course is up and a map is known
