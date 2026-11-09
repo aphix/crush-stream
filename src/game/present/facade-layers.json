@@ -253,5 +253,31 @@
       0.863,
       0.246
     ]
+  },
+  "church": {
+    "bays": 2,
+    "layers": 3,
+    "metres": {
+      "cornice": 1.54,
+      "floor": 7.32,
+      "ground": 4.62
+    },
+    "plain": [
+      0.816,
+      0.637
+    ]
+  },
+  "infill": {
+    "bays": 1,
+    "layers": 3,
+    "metres": {
+      "cornice": 0.91,
+      "floor": 3.02,
+      "ground": 3.63
+    },
+    "plain": [
+      0.066,
+      0.059
+    ]
   }
 }
