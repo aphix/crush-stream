@@ -1,4 +1,4 @@
-import type { ActivityName } from "../ai/civilians/civilian-activity.ts";
+import { ARREST, type ActivityName } from "../ai/civilians/civilian-activity.ts";
 import { ARM, armChannel, CHANNEL, LEG, legChannel, MAIN, OTHER } from "./civilian-anim-channels.ts";
 
 /** A key: seconds into the clip (or its period) and the channel's value then; values ease between keys. */
@@ -7,9 +7,9 @@ type Key = readonly [time: number, value: number];
 export type TrackSpec = { channel: number; keys: readonly Key[]; period?: number; aboveSurface?: true };
 /**
  * A clip blends in over `blendIn` and out over `blendOut` seconds from the walk or stand it runs on, tracks authored for a main
- * side that is the side the partner is on when `faces`, else the civilian's dominant one. Channels no track names keep the walk.
+ * side: the side the partner is on (`side: "partner"`), her right (-x) always (`"right"`), else her dominant one. Channels no track names keep the walk.
  */
-type ClipSpec = { blendIn: number; blendOut: number; faces?: true; tracks: readonly TrackSpec[] };
+type ClipSpec = { blendIn: number; blendOut: number; side?: "partner" | "right"; tracks: readonly TrackSpec[] };
 
 const keys = (...pairs: number[]): Key[] => {
   const out: Key[] = [];
@@ -138,7 +138,7 @@ const SIT_STEPS: ClipSpec = {
 const BUMP: ClipSpec = {
   blendIn: 0.06,
   blendOut: 0.3,
-  faces: true,
+  side: "partner",
   tracks: [
     track(CHANNEL.torsoPitch, 0, 0, 0.12, -0.18, 0.4, 0.08, 0.7, 0),
     track(CHANNEL.torsoTwist, 0, 0, 0.12, -0.55, 0.45, -0.2, 0.7, 0),
@@ -163,7 +163,7 @@ const FIST_GUARD_ELBOW = -2;
 const SWING: ClipSpec = {
   blendIn: 0.1,
   blendOut: 0.2,
-  faces: true,
+  side: "partner",
   tracks: [
     track(arm(MAIN, "hand"), 0, 0, 0.2, 0, 0.3, 1, 0.42, 1, 0.55, 0),
     hold(arm(MAIN, "handZ"), 0.95),
@@ -186,7 +186,7 @@ const SWING: ClipSpec = {
 const BLOCK: ClipSpec = {
   blendIn: 0.15,
   blendOut: 0.25,
-  faces: true,
+  side: "partner",
   tracks: [
     ...bothArms("swing", (channel) => hold(channel, -1.15)),
     ...bothArms("elbow", (channel) => hold(channel, -2.2)),
@@ -203,7 +203,7 @@ const BLOCK: ClipSpec = {
 const HIT: ClipSpec = {
   blendIn: 0.04,
   blendOut: 0.4,
-  faces: true,
+  side: "partner",
   tracks: [
     track(CHANNEL.headYaw, 0, 0, 0.1, -0.95, 0.45, -0.7, 0.9, 0),
     track(CHANNEL.headPitch, 0, 0, 0.1, -0.25, 0.5, 0.2, 0.9, 0),
@@ -256,6 +256,72 @@ const IDLE: ClipSpec = {
   ],
 };
 
+/** Cuffed, hands behind her back: each upper arm swung back and out, turned in about its length so the bent forearm crosses behind her (rad). */
+const CUFFED_SWING = 0.5;
+const CUFFED_OUT = 0.15;
+const CUFFED_TWIST = -Math.PI / 2;
+const CUFFED_ELBOW = -0.9;
+/** A cuffed head hangs this far forward (rad). */
+const CUFFED_HEAD = 0.3;
+/** Where the cuffed pose puts her +x wrist (m, her body frame; the -x one mirrored): the cop's hold reaches for it. */
+const CUFFED_WRIST = { y: 0.93, z: -0.215 } as const;
+/** Where the escorting cop's hand holds her cuffed +x upper arm, on its back just over the elbow (m, her body frame). */
+const CUFFED_GRIP = { y: 1.15, z: -0.16 } as const;
+
+const cuffedArms = (): TrackSpec[] => [
+  ...bothArms("swing", (channel) => hold(channel, CUFFED_SWING)),
+  ...bothArms("out", (channel) => hold(channel, CUFFED_OUT)),
+  ...bothArms("twist", (channel) => hold(channel, CUFFED_TWIST)),
+  ...bothArms("elbow", (channel) => hold(channel, CUFFED_ELBOW)),
+];
+
+/** One arm taken behind her back from hanging, starting at `from` s: swung back first so the hand clears the thigh, then turned in and bent. */
+const armCuffedFrom = (group: number, from: number): TrackSpec[] => [
+  track(arm(group, "swing"), 0, 0, from, 0, from + 0.3, CUFFED_SWING),
+  track(arm(group, "out"), 0, 0.05, from, 0.05, from + 0.3, CUFFED_OUT),
+  track(arm(group, "twist"), 0, 0, from + 0.2, 0, from + 0.55, CUFFED_TWIST),
+  track(arm(group, "elbow"), 0, 0, from + 0.2, 0, from + 0.55, CUFFED_ELBOW),
+];
+
+const CUFFING: ClipSpec = {
+  blendIn: 0.15,
+  blendOut: 0,
+  tracks: [...armCuffedFrom(MAIN, 0.15), ...armCuffedFrom(OTHER, 0.6), track(CHANNEL.torsoPitch, 0, 0, 0.3, 0.1, 1.1, 0), track(CHANNEL.headPitch, 0, 0, 0.4, 0.15, 1.1, CUFFED_HEAD)],
+};
+
+const CUFFED: ClipSpec = {
+  blendIn: 0,
+  blendOut: 0.3,
+  tracks: [...cuffedArms(), hold(CHANNEL.headPitch, CUFFED_HEAD), loop(CHANNEL.headYaw, 6.4, 0, 0, 2, 0, 2.8, 0.25, 4, 0.25, 4.8, 0, 6.4, 0)],
+};
+
+/** The cop behind her works the cuffs: both hands on her wrists, his main one turning them. */
+const ARRESTING: ClipSpec = {
+  blendIn: 0.25,
+  blendOut: 0.3,
+  tracks: [
+    ...bothArms("hand", (channel) => track(channel, 0, 0, 0.1, 0, 0.45, 1)),
+    ...bothArms("handZ", (channel) => hold(channel, ARREST.cuffBehind + CUFFED_WRIST.z)),
+    track(arm(MAIN, "handY"), 0, CUFFED_WRIST.y, 0.6, CUFFED_WRIST.y, 0.8, CUFFED_WRIST.y - 0.03, 1, CUFFED_WRIST.y + 0.02, 1.2, CUFFED_WRIST.y),
+    hold(arm(OTHER, "handY"), CUFFED_WRIST.y),
+    track(CHANNEL.torsoPitch, 0, 0, 0.45, 0.15),
+    track(CHANNEL.headPitch, 0, 0, 0.45, 0.4),
+  ],
+};
+
+/** The cop walks her off: his right hand on the back of her left upper arm, a glance at her now and then. */
+const ESCORTING: ClipSpec = {
+  blendIn: 0.4,
+  blendOut: 0.3,
+  side: "right",
+  tracks: [
+    hold(arm(MAIN, "hand"), 1),
+    hold(arm(MAIN, "handZ"), ARREST.escortAhead + CUFFED_GRIP.z),
+    hold(arm(MAIN, "handY"), CUFFED_GRIP.y),
+    loop(CHANNEL.headYaw, 5.2, 0, 0.15, 2, 0.15, 2.6, 0.45, 3.6, 0.45, 4.2, 0.15, 5.2, 0.15),
+  ],
+};
+
 export const CLIPS: Readonly<Partial<Record<ActivityName, ClipSpec>>> = {
   idle: IDLE,
   talk: TALK,
@@ -269,4 +335,8 @@ export const CLIPS: Readonly<Partial<Record<ActivityName, ClipSpec>>> = {
   block: BLOCK,
   hit: HIT,
   sitSteps: SIT_STEPS,
+  cuffing: CUFFING,
+  cuffed: CUFFED,
+  arresting: ARRESTING,
+  escorting: ESCORTING,
 };
