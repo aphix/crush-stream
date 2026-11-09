@@ -31,6 +31,7 @@ import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
 import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
 import { OpenWorldAuto } from "./engine-openworld-auto.ts";
 import { OpenWorldCarDoors } from "./engine-openworld-cars.ts";
+import { MEDICS, OpenWorldMedics } from "./engine-openworld-medics.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
 import { EVENT_LOG_CAPACITY } from "../ai/civilians/civilian-crowd-constants.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
@@ -127,6 +128,7 @@ export class OpenWorldDirector {
   private signs: PlaceSigns | null = null;
   private facades: FacadeArt | null = null;
   private law: OpenWorldLaw | null = null;
+  private medics: OpenWorldMedics | null = null;
   private interiors: InteriorArt | null = null;
   private unhook: (() => void) | null = null;
   private traffic: OpenWorldTraffic | null = null;
@@ -273,6 +275,7 @@ export class OpenWorldDirector {
     this.frameSigns(this.map);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
+    this.medics?.frame(this.traffic?.ambulanceState() ?? 0, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.lights?.update(crowd.crowdSeconds);
     this.lookAcc += wallDt;
     const cut = this.autoWanted && this.auto !== null && this.auto.step(wallDt);
@@ -297,10 +300,12 @@ export class OpenWorldDirector {
     this.stopTraffic();
     this.art?.dispose();
     this.law?.dispose();
+    this.medics?.dispose();
     this.crowd.dispose();
     this.unhook = null;
     this.art = null;
     this.law = null;
+    this.medics = null;
     this.auto = null;
     this.crowd = null;
     this.text = null;
@@ -342,6 +347,7 @@ export class OpenWorldDirector {
     this.crowd = new CivilianCrowd(map, key & CROWD_SEED_MASK, POPULATION[tier] ?? POPULATION[0], remote);
     this.crowd.onAmbulanceCall = (x, z, seconds) => {
       this.traffic?.callAmbulance(x, z, seconds);
+      this.medics?.call(x, z);
     };
     this.crowdKey = key;
     this.seconds = 0;
@@ -352,6 +358,7 @@ export class OpenWorldDirector {
     this.startTraffic(map, client);
     this.doors = new OpenWorldCarDoors(crowd.state.capacity, crowd.state, () => this.traffic);
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
+    this.medics = new OpenWorldMedics(this.ports.makeArt(MEDICS.count));
     if (client) crowd.hear(this.heardEvents);
   }
 
