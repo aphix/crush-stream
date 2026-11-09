@@ -3,8 +3,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { cageLift } from "../vehicle/car-cage-rig.ts";
-import { FRAME, makeCar, pooled } from "../vehicle/ground-probe.test-util.ts";
-import { hypot2 } from "../deform/physics-util.ts";
+import { FRAME, makeCar } from "../vehicle/ground-probe.test-util.ts";
 import { energyOf } from "../vehicle/energy.test-util.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { stepWorld } from "../engine/world-step.ts";
@@ -46,18 +45,14 @@ export type Flight = { maxRadius: number; maxHeightAtWall: number; finalRadius: 
 
 const vertex = new THREE.Vector3();
 
-/** `car` standing at the launch's start, deformed and armed as a derby car is. */
-function standUp(car: DeformableCar, cls: VehicleClassId, x: number, z: number, yaw: number, speed: number): DeformableCar {
+export function carOfClass(cls: VehicleClassId, x: number, z: number, yaw: number, speed: number): DeformableCar {
+  const car = makeCar(cls);
   car.spawnFacing(x, z, yaw, speed);
   car.deform.squash = INITIAL_HUD.squash;
   car.deform.buckle = INITIAL_HUD.buckle;
   car.deform.setMode(INITIAL_HUD.deformMode);
   armKill(car.deform, cls, HANDLING.realism, "derby");
   return car;
-}
-
-export function carOfClass(cls: VehicleClassId, x: number, z: number, yaw: number, speed: number): DeformableCar {
-  return standUp(makeCar(cls), cls, x, z, yaw, speed);
 }
 
 const centroid = new THREE.Vector3();
@@ -87,13 +82,13 @@ export function bodyRadius(car: DeformableCar): number {
   return Math.hypot(centroid.x, centroid.z);
 }
 
-/** One launch flown for its seconds, on the class's one car stood up again. The drawn skin is never read (the cage is), so it is not rebuilt per frame. `readEnergy` false leaves `excess` unread. */
-export function fly(cls: VehicleClassId, launch: Launch, readEnergy = true): Flight {
-  const car = standUp(pooled(cls), cls, launch.x, launch.z, launch.yaw, launch.speed);
+/** One launch flown for its seconds. The drawn skin is never read (the cage is), so it is not rebuilt per frame. */
+export function fly(cls: VehicleClassId, launch: Launch): Flight {
+  const car = carOfClass(cls, launch.x, launch.z, launch.yaw, launch.speed);
   const hits: PropHits = { knock() {}, fx() {}, wall() {} };
   const { world } = arenaWorld([car], hits);
   const flight: Flight = { maxRadius: 0, maxHeightAtWall: 0, finalRadius: 0, excess: -Infinity, excessAt: 0, excessDrive: 0 };
-  const start = readEnergy ? energyOf(car) : 0;
+  const start = energyOf(car);
   let drive = 0;
   let acc = 0;
   for (let step = 0; step < launch.seconds * 60; step++) {
@@ -101,16 +96,14 @@ export function fly(cls: VehicleClassId, launch: Launch, readEnergy = true): Fli
     while (acc > 1e-5) {
       const h = physicsSlice(acc, sliceSpeed(world.cars));
       // The drive's energy is measured round `applyDrive` itself, so a retuned engine or boost moves nothing in `excess`.
-      const before = readEnergy ? energyOf(car) : 0;
+      const before = energyOf(car);
       applyDrive(car, FLAT_OUT, h);
-      if (readEnergy) drive += energyOf(car) - before;
+      drive += energyOf(car) - before;
       stepWorld(world, h);
       car.stepBreakage(h);
       readBody(car, flight);
-      if (readEnergy) {
-        const excess = energyOf(car) - start - drive;
-        if (excess > flight.excess) Object.assign(flight, { excess, excessAt: step * FRAME, excessDrive: drive });
-      }
+      const excess = energyOf(car) - start - drive;
+      if (excess > flight.excess) Object.assign(flight, { excess, excessAt: step * FRAME, excessDrive: drive });
       acc -= h;
     }
     if (car.asleep && !car.deform.drivetrainAlive) break;
@@ -130,7 +123,7 @@ function readBody(car: DeformableCar, flight: Flight): void {
     const group = vertexGroup[k]!;
     if (group > 0 && panelOn[group - 1] === 0) continue;
     vertex.set(pos[k * 3]!, pos[k * 3 + 1]! + lift, pos[k * 3 + 2]!).applyQuaternion(orientation).add(car.group.position);
-    const vertexRadius = hypot2(vertex.x, vertex.z);
+    const vertexRadius = Math.hypot(vertex.x, vertex.z);
     flight.maxRadius = Math.max(flight.maxRadius, vertexRadius);
     if (vertexRadius >= radius) flight.maxHeightAtWall = Math.max(flight.maxHeightAtWall, vertex.y);
   }
@@ -248,10 +241,9 @@ export function wallCases(): void {
   describe("given a derby car driven flat out at the arena wall", () => {
     for (const cls of VEHICLE_CLASS_IDS) {
       const launches = [...openFloorLaunches(cls), ...acrossLaunches(ACROSS_STRIDE), ...farEntryLaunches(), ...outwardLaunches(cls)];
-      // Mutation (red): sed -i 's/\.\.\.wallBoxes(containmentDepth, containmentHeight),/...wallBoxes(containmentDepth, 0.01),/' src/game/scenes/derby-ground.ts
       it(`when the ${cls} is launched from the open ring in every direction, across the arena (every ${ACROSS_STRIDE}th), from each ramp's far entry, its foot and its crest, then no part of it passes the wall's outer face and it ends inside`, () => {
         for (const launch of launches) {
-          const flight = fly(cls, launch, false);
+          const flight = fly(cls, launch);
           expect(flight.maxRadius, `${launch.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`).toBeLessThan(OUTER_FACE);
           expect(flight.finalRadius, `${launch.label}: ended at ${flight.finalRadius.toFixed(2)} m, outside the inner face at ${radius} m`).toBeLessThan(radius);
           expect(flight.maxHeightAtWall, `${launch.label}: touched the wall ${flight.maxHeightAtWall.toFixed(2)} m up, over ${WALL_TOUCH_CEILING} m of its ${containmentHeight} m`).toBeLessThanOrEqual(WALL_TOUCH_CEILING);
@@ -269,8 +261,7 @@ export function sideWedgeCases(): void {
     const launches = sideWedgeLaunches();
     for (const cls of VEHICLE_CLASS_IDS) {
       let flights: Flight[] | null = null;
-      const flown = (): Flight[] => (flights ??= launches.map((l) => fly(cls, l, cls === "monster")));
-      // Mutation (red): sed -i 's/\.\.\.wallBoxes(containmentDepth, containmentHeight),/...wallBoxes(containmentDepth, 0.01),/' src/game/scenes/derby-ground.ts
+      const flown = (): Flight[] => (flights ??= launches.map((l) => fly(cls, l)));
       it(`when the ${cls} meets each ramp's two sides, then no part of it passes the wall's outer face and it ends inside`, () => {
         for (const [i, flight] of flown().entries()) {
           expect(flight.maxRadius, `${launches[i]!.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`).toBeLessThan(OUTER_FACE);
