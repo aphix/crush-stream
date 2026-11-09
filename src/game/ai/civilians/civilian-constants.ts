@@ -42,9 +42,23 @@ export const PURPOSE = {
   mechanicOut: 15,
   partyGuest: 16,
   busAway: 17,
+  drive: 18,
+  coffee: 19,
+  drink: 20,
+  shopping: 21,
+  stoopSit: 22,
+  stoopTalk: 23,
+  argue: 24,
+  loiter: 25,
+  report: 26,
+  flee: 27,
+  shoplift: 28,
+  mug: 29,
+  breakIn: 30,
+  fight: 31,
 } as const;
-/** What `RESIDENT_INT.flags` holds: in hospital, without a job, hurting, out of work while the workplace is closed, a named resident (no society chances, fixed age). */
-export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16 } as const;
+/** What `RESIDENT_INT.flags` holds: in hospital, without a job, hurting, out of work while the workplace is closed, a named resident (no society chances, fixed age); jobless long enough to be broke, a criminal, wanted for an open crime or fight, in custody, a car owner, a coffee fan, a drinker. */
+export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16, broke: 32, criminal: 64, wanted: 128, custody: 256, hasCar: 512, coffeeFan: 1024, drinker: 2048 } as const;
 /** A resident's integer row: society fields, then the leg and dwell the crowd walks, then the life log ring (`LOG_LINES` of `HISTORY_FIELDS`). -1 in a place field: none. */
 export const RESIDENT_INT = {
   alive: 0,
@@ -79,12 +93,33 @@ export const RESIDENT_INT = {
   knockZ: 29,
   knockTick: 30,
   historyHead: 31,
-  history: 32,
+  /** The place whose kerb the resident's car stands at (it follows a drive leg's destination); -1 for none. */
+  carPlace: 32,
+  /** Why the leg or stay: a PURPOSE. `legPurpose` is PURPOSE.drive on a drive leg and the reason is here. */
+  legReason: 33,
+  /** The index in the place's `Place.seats` the resident holds; -1 for none. One holder per seat. */
+  seat: 34,
+  /** Who they talk or argue with while they stand at a door (a resident, -1 for none). */
+  companion: 35,
+  joblessDays: 36,
+  wantedUntilTick: 37,
+  /** The tick an open crime began (NEVER_TICK for none) and its CRIME_KIND, place and victim (a resident, or -1: the place itself); cleared by a bust or when the wanted spell ends. */
+  crimeTick: 38,
+  crimeKind: 39,
+  crimePlace: 40,
+  crimeVictim: 41,
+  crimeNotBefore: 42,
+  /** The tick a fight began (NEVER_TICK for none), who the other fighter is (-1: none, or a player) and where it is, in centimetres. */
+  fightTick: 43,
+  fightPartner: 44,
+  fightX: 45,
+  fightZ: 46,
+  history: 47,
 } as const;
 export const RESIDENT_INT_STRIDE = RESIDENT_INT.history + LOG_LINES * HISTORY_FIELDS;
-/** A resident's float row: the needs as they stood at the decision that made the leg, their rise rates (per game hour), walking speed (m/s) and lateral offset (m). */
-export const RESIDENT_FLOAT = { needs: 0, rates: NEED_COUNT, speed: 2 * NEED_COUNT, lateral: 2 * NEED_COUNT + 1 } as const;
-export const RESIDENT_FLOAT_STRIDE = RESIDENT_FLOAT.lateral + 1;
+/** A resident's float row: the needs as they stood at the decision that made the leg, their rise rates (per game hour), the speed of the leg or stay they are on (m/s), their lateral offset (m) and their own walking pace (m/s: the leg's speed is this, or the drive's). */
+export const RESIDENT_FLOAT = { needs: 0, rates: NEED_COUNT, speed: 2 * NEED_COUNT, lateral: 2 * NEED_COUNT + 1, pace: 2 * NEED_COUNT + 2 } as const;
+export const RESIDENT_FLOAT_STRIDE = RESIDENT_FLOAT.pace + 1;
 /** A tick no decision ever reaches, and no place. */
 export const NEVER_TICK = 2147483647;
 export const NO_PLACE = -1;
@@ -92,8 +127,11 @@ export const NO_PLACE = -1;
 export const CAST_NAME_BASE = 1000;
 export const CAST_TITLE_BASE = 100;
 
-/** Event kinds of the host's input triples (kind, subject, crowd seconds). */
-export const EVENT_KIND = { knock: 0, wreck: 1 } as const;
+/**
+ * Event kinds of the host's input triples (kind, subject, crowd seconds). A knock's subject is the civilian run down; a wreck's the place; a crime's and a bust's the criminal; a push's and a fight's a pair packed as
+ * victim + capacity * (other + 1), other -1 being a player's walker or car (decode with `pairOf`).
+ */
+export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5 } as const;
 export const EVENT_TRIPLE = 3;
 /** Society effects of a wreck or knock: what the corner is feared at, within FEAR_RADIUS metres of the spot (falling off linearly to 0 at the edge). */
 export const WRECK_FEAR = 1;
@@ -268,7 +306,7 @@ export const HOUR_WEIGHTS = [
 export const CLOSED_HOURS_WEIGHT = 0.1;
 
 /** Salts of the draw streams (`residentDraws`): one per kind of choice, so adding a draw to one never moves another. */
-export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8 } as const;
+export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12 } as const;
 /** Odd multipliers that scramble (seed, resident, salt, index) into a mulberry32 seed. */
 export const MIX_RESIDENT = 0x9e3779b9;
 export const MIX_SALT = 0x85ebca6b;
@@ -276,3 +314,57 @@ export const MIX_INDEX = 0xc2b2ae35;
 
 /** Centimetres per metre: a knock's spot is kept in whole centimetres in the integer row. */
 export const CENTIMETRES_PER_METRE = 100;
+
+/** What a crime is, in `RESIDENT_INT.crimeKind` (0 none). */
+export const CRIME_KIND = { none: 0, theft: 1, mugging: 2, breakIn: 3 } as const;
+export const NO_SEAT = -1;
+
+/** A drive: a car owner leaves the car at the kerb of the place they drove to (not at a place they walked on from); the leg runs this fast (m/s: stop and go over a block), and a walk under this many metres is quicker than finding the car. */
+export const DRIVE_SPEED = 9;
+export const DRIVE_MIN_METRES = 90;
+/** Shares of adults who own a car, are coffee fans, are drinkers (traits drawn once, from their own stream). */
+export const CAR_SHARE = 0.35;
+export const COFFEE_FAN_SHARE = 0.6;
+export const DRINKER_SHARE = 0.5;
+
+/** The interaction table's thresholds: the rest need at which someone at the end of a shift is tired; a dwell at work this long (game minutes) was a shift; coffee on the way is only worth it with this many hours to the shift and a detour of at most this many metres. */
+export const TIRED_REST_LEVEL = 0.45;
+export const SHIFT_DWELL_MINUTES = 240;
+export const COFFEE_LEAD_HOURS = 1;
+export const COFFEE_DETOUR_METRES = 120;
+/** A neighbour is a person at another home within this many metres; one whose dwell ends within the next ticks (12 s) is not pulled out; two who sit on stoops this close (m) talk. */
+export const NEIGHBOUR_REACH = 80;
+export const PULL_LEAD_TICKS = 24;
+export const SITTER_CHAT_REACH = 25;
+/** Someone standing at a door stands this far (m) along the frontage, by their lateral offset's share of its range. */
+export const DOOR_SPREAD = 0.8;
+/** A customer's dwell must be this long (game minutes) to take a seat. */
+export const SEAT_MIN_DWELL_MINUTES = 10;
+
+/** Crime: a criminal at the crime place commits it this many ticks after arriving; they wait half a game day between crimes and go for one in this share of the decisions that allow it; a crime keeps them wanted a game day, a fight six game hours; custody lasts six game hours and in this share of them they give up crime. */
+export const CRIME_LAG_TICKS = 4;
+export const CRIME_COOLDOWN_TICKS = TICKS_PER_GAME_DAY / 2;
+export const CRIME_PER_DECISION = 0.3;
+export const WANTED_TICKS = TICKS_PER_GAME_DAY;
+export const FIGHT_WANTED_TICKS = 6 * TICKS_PER_GAME_HOUR;
+export const JAIL_TICKS = 6 * TICKS_PER_GAME_HOUR;
+export const RELEASE_REFORM_CHANCE = 0.4;
+/** The corner is feared this much after a crime or a fight (see `KNOCK_FEAR`). */
+export const CRIME_FEAR = 0.6;
+export const FIGHT_FEAR = 0.3;
+/** Witnesses are people standing at a door within this many metres of a crime or fight; this share of them report it (a minute's phone call), the rest run home (`FLEE_SPEED_FACTOR` times their pace) and stay in. */
+export const WITNESS_RADIUS = 45;
+export const REPORT_SHARE = 0.6;
+export const REPORT_MINUTES = 4;
+export const FLEE_SPEED_FACTOR = 1.8;
+export const FLEE_INSIDE_MINUTES = 30;
+/** A game day's chance of turning to crime (adults of working age): the base, and what being out of work, broke, angry, or young adds; the chance of giving it up (twice with a job); jobless days that make someone broke; young is under this age. */
+export const CRIME_LEAN = { base: 0.003, unemployed: 0.015, broke: 0.025, angry: 0.02, young: 0.015 } as const;
+export const REFORM_CHANCE = 0.2;
+export const EMPLOYED_REFORM_FACTOR = 2;
+export const BROKE_AFTER_DAYS = 3;
+export const YOUNG_AGE_MAX = 25;
+/** Fights: the chance a push puts the two at each other's throats, times this when either is angry; a fight lasts this many ticks (8 s). */
+export const FIGHT_CHANCE = 0.12;
+export const FIGHT_ANGRY_FACTOR = 4;
+export const FIGHT_TICKS = 16;
