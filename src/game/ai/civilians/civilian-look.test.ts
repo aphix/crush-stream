@@ -9,7 +9,7 @@ import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { lookAtOf, LookRay } from "./civilian-look.ts";
 import { createCrowdPoses } from "./crowd-poses.ts";
 import { historyLines, residentNameText } from "./civilian-mood.ts";
-import { newCrowd, shownResident, stepUntilShown } from "./civilian-crowd.test-util.ts";
+import { FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "./civilian-crowd.test-util.ts";
 
 const map = buildFixtureMap();
 const EYE_HEIGHT = 1.5;
@@ -43,10 +43,16 @@ function behind(crowd: CivilianCrowd, resident: number): LookRay {
   return aimedAt(ray, x[resident]!, CHEST_HEIGHT, z[resident]!);
 }
 
+/** A crowd stepped to the first civilian shown, then on until they are in no clip (the first moments of a walk are the door they came out of). */
 function crowdWithWalker(): { crowd: CivilianCrowd; resident: number; tick: number } {
   const crowd = newCrowd(map);
-  const seconds = stepUntilShown(crowd);
-  return { crowd, resident: shownResident(crowd), tick: tickAt(seconds) };
+  let seconds = stepUntilShown(crowd);
+  const resident = shownResident(crowd);
+  while (crowd.poses.activity[resident] !== ACTIVITY.none) {
+    seconds += FRAME_SECONDS;
+    crowd.step(seconds, [], true);
+  }
+  return { crowd, resident, tick: tickAt(seconds) };
 }
 
 describe("given a crowd with a civilian walking on the street", () => {
