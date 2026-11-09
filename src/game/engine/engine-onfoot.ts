@@ -222,7 +222,7 @@ export class OnFootDirector {
     const { ragdolls } = this.host;
     const walker = ragdolls.walker;
     if (walker.sinceStruck < STRIKE_COOLDOWN || !ragdolls.walkerTorso(_torso)) return;
-    const ground = activeGround().heightAt(_torso.x, _torso.z);
+    const ground = activeGround().heightAt(_torso.x, _torso.z, _torso.y);
     if (ground === NO_FLOOR) return;
     const cars = this.host.cars();
     for (let i = 0; i < cars.length; i++) {

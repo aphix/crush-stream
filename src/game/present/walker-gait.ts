@@ -1,6 +1,7 @@
 import { detAsin, detCos, detSin } from "../kernel/physics-core.js";
 import { ANKLE_TOES_DOWN, ANKLE_TOES_UP, ANKLE_Y } from "./ragdoll-body.ts";
 import { HIP_DROP, HIP_HALF, LEG, LEG_MAX, solveLeg } from "./walker-leg.ts";
+import { WALK_STEP } from "./walker-floor.ts";
 import { type Locomotion, RUN_SPEED, SPRINT_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { leanedQuaternion, smoothstep } from "./walker-math.ts";
 import { ankleFromPivot, FOOT_LENGTH, type FootRoll, HEEL, HOVER, soleBelowAnkle, stancePitch, swingPitch, TOE } from "./walker-rocker.ts";
@@ -123,6 +124,11 @@ function rollAt(speed: number): FootRoll {
 /** The ground height under (x, z), m. */
 type GroundAt = (x: number, z: number) => number;
 
+/** A swinging foot rises onto a step along this slope (m of height per m of approach beyond its toe) and not at the edge; the floor ahead is read every `CLEAR_STEP` m as far as the tallest step takes to climb. */
+const CLEAR_RISE = 1.2;
+const CLEAR_STEP = 0.05;
+const CLEAR_LOOKS = Math.ceil((FOOT_LENGTH + WALK_STEP / CLEAR_RISE) / CLEAR_STEP);
+
 /**
  * The walker's legs and upper body: a gait of feet set down in the world and walked over. Each foot is planted at a spot the pelvis will pass
  * over, stays there (no sliding) while the pelvis rides over it, then swings to the next, in a cycle whose cadence and stance share follow speed:
@@ -200,10 +206,25 @@ export class Gait {
       this.homeSpot(f, yaw, x, z);
       this.plant[f * 3] = this.spot[0]! - this.dirX * this.rock[0]!;
       this.plant[f * 3 + 2] = this.spot[1]! - this.dirZ * this.rock[0]!;
-      this.plant[f * 3 + 1] = ground(this.plant[f * 3]!, this.plant[f * 3 + 2]!) + HOVER;
+      this.plant[f * 3 + 1] = this.restHeight(this.plant[f * 3]!, this.plant[f * 3 + 2]!, ground) + HOVER;
       this.ankleAt(f);
     }
     this.needsBaseline = true;
+  }
+
+  /** The floor a foot with its heel at (`x`, `z`) rests on: the higher of what is under its heel and under its toe, so its sole never lies in a riser. */
+  private restHeight(x: number, z: number, ground: GroundAt): number {
+    return Math.max(ground(x, z), ground(x + this.dirX * FOOT_LENGTH, z + this.dirZ * FOOT_LENGTH));
+  }
+
+  /** The lowest a swinging foot's sole may pass (`x`, `z`) at: the floor under it, or what its toe will meet ahead of it, less `CLEAR_RISE` per metre beyond the toe. */
+  private clearHeight(x: number, z: number, ground: GroundAt): number {
+    let needed = ground(x, z);
+    for (let k = 1; k <= CLEAR_LOOKS; k++) {
+      const ahead = k * CLEAR_STEP;
+      needed = Math.max(needed, ground(x + this.dirX * ahead, z + this.dirZ * ahead) - Math.max(0, ahead - FOOT_LENGTH) * CLEAR_RISE);
+    }
+    return needed;
   }
 
   /** Foot `f`'s ankle from the point it turns on and how it is tipped, and how far that lifts it over a flat sole. */
@@ -384,7 +405,7 @@ export class Gait {
     ankleFromPivot(this.rock, HEEL, this.pitch[f]!);
     this.plant[o] = this.foot[o]! - this.dirX * this.rock[0]!;
     this.plant[o + 2] = this.foot[o + 2]! - this.dirZ * this.rock[0]!;
-    this.plant[o + 1] = ground(this.plant[o]!, this.plant[o + 2]!) + HOVER;
+    this.plant[o + 1] = this.restHeight(this.plant[o]!, this.plant[o + 2]!, ground) + HOVER;
   }
 
   /** How far (m) a stance carries the ankle forward over the ground as the foot rolls, touchdown to toe-off. */
@@ -408,7 +429,7 @@ export class Gait {
     const targetX = hipX + detSin(loc.yaw) * speed * remaining + sinThen * ahead + cosThen * across;
     const targetZ = hipZ + detCos(loc.yaw) * speed * remaining + cosThen * ahead - sinThen * across;
     ankleFromPivot(this.rock, HEEL, roll.strike);
-    const targetY = ground(targetX, targetZ) + HOVER + this.rock[1]!;
+    const targetY = this.restHeight(targetX, targetZ, ground) + HOVER + this.rock[1]!;
     const pitch = swingPitch(s, this.liftPitch[f]!, roll.strike);
     const e = smoothstep(s);
     const o = f * 3;
@@ -417,7 +438,7 @@ export class Gait {
     this.foot[o] = this.start[o]! + (targetX - this.start[o]!) * e;
     this.foot[o + 2] = this.start[o + 2]! + (targetZ - this.start[o + 2]!) * e;
     const lifted = this.start[o + 1]! + (targetY - this.start[o + 1]!) * e + atSpeed(speed, CLEARANCE) * detSin(Math.PI * (1 - (1 - s) ** LIFT_EARLINESS));
-    this.foot[o + 1] = Math.max(lifted, ground(this.foot[o]!, this.foot[o + 2]!) + HOVER - soleBelowAnkle(pitch));
+    this.foot[o + 1] = Math.max(lifted, this.clearHeight(this.foot[o]!, this.foot[o + 2]!, ground) + HOVER - soleBelowAnkle(pitch));
     this.aboveLanding[f] = this.foot[o + 1]! - targetY;
     this.landY[f] = targetY;
     this.landSpan[f] = Math.sqrt(ahead * ahead + across * across);
