@@ -6,7 +6,7 @@ import { tickAt } from "../civilians/civilian-clock.ts";
 import { NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { PathFinder } from "../civilians/walk-path.ts";
 import { CASE_KIND, CASE_PHASE, CaseTable, SUBJECT_MODE } from "./case-table.ts";
-import { BUST_REACH, CAR_COP, COP_SIGHT, JAYWALK_GIVE_UP_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIGHT_WARN_REACH, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, RESIST_CHANCE, SEARCH_SECONDS, SUBJECTS_PER_CASE, TAKEDOWN_LIFT, TAKEDOWN_SPEED, TAKEDOWN_TUMBLE, WARN_SECONDS } from "./crime-constants.ts";
+import { BUST_REACH, CAR_COP, COP_DOWN_SECONDS, COP_SIGHT, JAYWALK_GIVE_UP_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIGHT_WARN_REACH, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, RESIST_CHANCE, SEARCH_SECONDS, SUBJECTS_PER_CASE, TAKEDOWN_LIFT, TAKEDOWN_SPEED, TAKEDOWN_TUMBLE, WARN_SECONDS } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
 import { Arrests } from "./arrests.ts";
 import { CrossingWatch } from "./crossing-watch.ts";
@@ -76,7 +76,7 @@ export class FootLaw {
   /** Whether a foot cop out on the street within `range` m of (x, z) sees it. */
   copSees(x: number, z: number, range: number): boolean {
     for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
-      if (this.cops.mode[cop] !== COP_MODE.off && this.cops.gapTo(cop, x, z) <= range && this.sees(cop, x, z)) return true;
+      if (this.cops.onStreet(cop) && this.cops.gapTo(cop, x, z) <= range && this.sees(cop, x, z)) return true;
     }
     return false;
   }
@@ -90,7 +90,7 @@ export class FootLaw {
   private caseCopSees(caseIndex: number, x: number, z: number): boolean {
     for (let index = 0; index < COPS_PER_CASE; index++) {
       const cop = this.table.copAt(caseIndex, index);
-      if (cop < 0 || this.cops.mode[cop] === COP_MODE.off) continue;
+      if (cop < 0 || !this.cops.onStreet(cop)) continue;
       if (this.cops.gapTo(cop, x, z) <= COP_SIGHT && this.sees(cop, x, z)) return true;
     }
     return false;
@@ -117,6 +117,7 @@ export class FootLaw {
 
   /** One grid step. */
   advance(): void {
+    this.walkers.snapshot();
     this.stepIndex++;
     this.seconds = this.stepIndex * CRIME_STEP_SECONDS;
     if (this.stepIndex % POLL_EVERY_STEPS === 0) this.poll();
@@ -126,6 +127,19 @@ export class FootLaw {
     for (let cop = 0; cop < FOOT_COP_COUNT; cop++) this.cops.step(cop, this.stepIndex);
     this.arrests.step(this.seconds);
     this.releaseHeld();
+  }
+
+  /** A car ran cop `cop` down at crowd second `seconds`: he is off the street for `COP_DOWN_SECONDS`, out of his case, and a suspect in his hands walks free. */
+  knockCop(cop: number, seconds: number): void {
+    const { table } = this;
+    for (let slot = 0; slot < table.mode.length; slot++) {
+      const mode = table.mode[slot]!;
+      if (table.holder[slot] === cop && (mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted)) this.letGo(slot);
+    }
+    for (let caseIndex = 0; caseIndex < table.phase.length; caseIndex++) {
+      for (let index = 0; index < COPS_PER_CASE; index++) if (table.copAt(caseIndex, index) === cop) table.setCop(caseIndex, index, -1);
+    }
+    this.cops.knockDown(cop, seconds + COP_DOWN_SECONDS);
   }
 
   /** The cop slot of case `caseIndex` the patrol car's cop fills, once the car has come. */
@@ -466,7 +480,7 @@ export class FootLaw {
     this.nearestGap = Infinity;
     for (let index = 0; index < COPS_PER_CASE; index++) {
       const cop = this.table.copAt(caseIndex, index);
-      if (cop < 0 || this.cops.mode[cop] === COP_MODE.off) continue;
+      if (cop < 0 || !this.cops.onStreet(cop)) continue;
       const gap = this.cops.gapTo(cop, x, z);
       if (gap >= this.nearestGap) continue;
       this.nearestGap = gap;

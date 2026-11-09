@@ -5,7 +5,7 @@ import { CAR_COP, CAR_COP_BACK_REACH, COP_PATROL_SPEED, COP_REPLAN_STEPS, COP_RU
 import { crimeDraw } from "./crime-draw.ts";
 import type { FootWalkers } from "./foot-walkers.ts";
 
-export const COP_MODE = { patrol: 0, respond: 1, grip: 2, returning: 3, off: 4, escort: 5 } as const;
+export const COP_MODE = { patrol: 0, respond: 1, grip: 2, returning: 3, off: 4, escort: 5, down: 6 } as const;
 
 /** The foot cops: walkers 0 .. FOOT_COP_COUNT - 1. The ones on patrol wander the sidewalks on seeded turns; a case calls the nearest free ones, who run to what they are aimed at. */
 export class FootCops {
@@ -23,6 +23,9 @@ export class FootCops {
   private readonly patrolDraws = new Uint32Array(FOOT_COP_COUNT);
   private carHomeX = 0;
   private carHomeZ = 0;
+  /** Per cop: where his beat starts, and the crowd second a car's knock leaves him off the street until. */
+  private readonly beatNode = new Int32Array(FOOT_COP_COUNT);
+  private readonly downUntil = new Float64Array(FOOT_COP_COUNT);
 
   constructor(walkers: FootWalkers, graph: WalkGraph, finder: PathFinder, seed: number) {
     this.walkers = walkers;
@@ -33,6 +36,7 @@ export class FootCops {
     const nodeCount = graph.nodeX.length;
     for (let cop = 0; cop < PATROL_COPS; cop++) {
       const node = Math.min(nodeCount - 1, Math.floor(crimeDraw(seed, CRIME_STREAM.patrolStart, cop, 0) * nodeCount));
+      this.beatNode[cop] = node;
       walkers.place(cop, graph.nodeX[node]!, graph.nodeZ[node]!);
     }
     this.mode[CAR_COP] = COP_MODE.off;
@@ -59,12 +63,18 @@ export class FootCops {
     this.walkers.halt(cop);
   }
 
-  /** Cop `cop` goes back to patrol; the car's cop runs back to where it stepped out, to its car. */
+  /** Whether cop `cop` is out on the street: not in his car, not down from a car's knock. */
+  onStreet(cop: number): boolean {
+    return this.mode[cop] !== COP_MODE.off && this.mode[cop] !== COP_MODE.down;
+  }
+
+  /** Cop `cop` goes back to patrol; the car's cop runs back to where it stepped out, to its car. A cop down stays down. */
   release(cop: number): void {
     this.caseOf[cop] = -1;
+    if (this.mode[cop] === COP_MODE.down) return;
     this.walkers.halt(cop);
     if (cop !== CAR_COP) this.mode[cop] = COP_MODE.patrol;
-    else if (this.mode[cop] !== COP_MODE.off) this.mode[cop] = COP_MODE.returning;
+    else if (this.onStreet(cop)) this.mode[cop] = COP_MODE.returning;
   }
 
   /** The car's cop steps out of its car at (x, z) for case `caseIndex`. */
@@ -80,6 +90,15 @@ export class FootCops {
   /** Cop `cop` takes hold of whoever it reached: it stands. */
   grip(cop: number): void {
     this.mode[cop] = COP_MODE.grip;
+    this.walkers.halt(cop);
+    this.walkers.speed[cop] = 0;
+  }
+
+  /** A car ran cop `cop` down: he is off the street until crowd second `until`, his case's work dropped. */
+  knockDown(cop: number, until: number): void {
+    this.caseOf[cop] = -1;
+    this.mode[cop] = COP_MODE.down;
+    this.downUntil[cop] = until;
     this.walkers.halt(cop);
     this.walkers.speed[cop] = 0;
   }
@@ -123,9 +142,23 @@ export class FootCops {
         this.walkers.speed[cop] = 0;
         this.walkers.face(cop, this.aimX[cop]!, this.aimZ[cop]!);
         break;
+      case COP_MODE.down:
+        if (stepIndex * CRIME_STEP_SECONDS >= this.downUntil[cop]!) this.getUp(cop);
+        break;
       default:
         this.walkers.speed[cop] = 0;
     }
+  }
+
+  /** Back from a knock: a patrol cop at his beat's start, the car's cop in his car. */
+  private getUp(cop: number): void {
+    if (cop === CAR_COP) {
+      this.mode[cop] = COP_MODE.off;
+      return;
+    }
+    const node = this.beatNode[cop]!;
+    this.walkers.place(cop, this.graph.nodeX[node]!, this.graph.nodeZ[node]!);
+    this.mode[cop] = COP_MODE.patrol;
   }
 
   /** The next sidewalk node on a seeded turn, not straight back the way it came unless it must. */

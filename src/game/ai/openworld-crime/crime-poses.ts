@@ -1,9 +1,7 @@
 import { ACTIVITY, ACTIVITY_OPEN_ENDED } from "../civilians/civilian-activity.ts";
-import { STRIDE_RADIANS_PER_METRE } from "../civilians/civilian-crowd-constants.ts";
 import { createCrowdPoses, type CrowdPoses } from "../civilians/crowd-poses.ts";
 import { SUBJECT_MODE } from "./case-table.ts";
 import { COP_LOOK, FOOT_COP_COUNT, GRIP_SECONDS } from "./crime-constants.ts";
-import { COP_MODE } from "./foot-cops.ts";
 import type { FootLaw } from "./foot-law.ts";
 
 /** A pose set for the foot cops: drawn by a crowd art of their own, dressed by `COP_LOOK`. */
@@ -13,8 +11,8 @@ export function newCopPoses(): CrowdPoses {
   return poses;
 }
 
-/** The crowd's poses after the law's say: a suspect running, being cuffed or led away cuffed is where the law has them (acting it), a hider or a fighter thrown down is not drawn, and a resident held off the street stays hidden. Run after the crowd's own step. */
-export function overlaySuspects(law: FootLaw, poses: CrowdPoses): void {
+/** The crowd's poses after the law's say (`share` of the way through the grid step after the last one taken): a suspect running, being cuffed or led away cuffed is where the law has them (acting it), a hider or a fighter thrown down is not drawn, and a resident held off the street stays hidden. Run after the crowd's own step. */
+export function overlaySuspects(law: FootLaw, poses: CrowdPoses, share: number): void {
   const { table, walkers } = law;
   for (let at = 0; at < table.heldResident.length; at++) {
     const held = table.heldResident[at]!;
@@ -31,10 +29,10 @@ export function overlaySuspects(law: FootLaw, poses: CrowdPoses): void {
     if (mode !== SUBJECT_MODE.fleeing && mode !== SUBJECT_MODE.gripped && mode !== SUBJECT_MODE.escorted) continue;
     const walker = law.walkerOf(slot);
     poses.shown[resident] = 1;
-    poses.x[resident] = walkers.x[walker]!;
-    poses.z[resident] = walkers.z[walker]!;
-    poses.yaw[resident] = walkers.yaw[walker]!;
-    poses.stride[resident] = walkers.walked[walker]! * STRIDE_RADIANS_PER_METRE;
+    poses.x[resident] = walkers.drawnX(walker, share);
+    poses.z[resident] = walkers.drawnZ(walker, share);
+    poses.yaw[resident] = walkers.drawnYaw(walker, share);
+    poses.stride[resident] = walkers.drawnStride(walker, share);
     poses.speed[resident] = walkers.speed[walker]!;
     poses.partner[resident] = -1;
     writeArrestActivity(law, slot, mode === SUBJECT_MODE.gripped ? ACTIVITY.cuffing : mode === SUBJECT_MODE.escorted ? ACTIVITY.cuffed : ACTIVITY.none, poses, resident);
@@ -50,15 +48,15 @@ function writeArrestActivity(law: FootLaw, slot: number, activity: number, poses
   poses.activityLeft[index] = gripping ? Math.max(0, GRIP_SECONDS - clock) : ACTIVITY_OPEN_ENDED;
 }
 
-/** The foot cops' own poses: a cop holding a suspect for the cuffs acts the arrest, one leading her away the escort. */
-export function fillCopPoses(law: FootLaw, poses: CrowdPoses): void {
+/** The foot cops' own poses, blended as the suspects': a cop holding a suspect for the cuffs acts the arrest, one leading her away the escort. */
+export function fillCopPoses(law: FootLaw, poses: CrowdPoses, share: number): void {
   const { cops, walkers, table } = law;
   for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
-    poses.shown[cop] = cops.mode[cop] === COP_MODE.off ? 0 : 1;
-    poses.x[cop] = walkers.x[cop]!;
-    poses.z[cop] = walkers.z[cop]!;
-    poses.yaw[cop] = walkers.yaw[cop]!;
-    poses.stride[cop] = walkers.walked[cop]! * STRIDE_RADIANS_PER_METRE;
+    poses.shown[cop] = cops.onStreet(cop) ? 1 : 0;
+    poses.x[cop] = walkers.drawnX(cop, share);
+    poses.z[cop] = walkers.drawnZ(cop, share);
+    poses.yaw[cop] = walkers.drawnYaw(cop, share);
+    poses.stride[cop] = walkers.drawnStride(cop, share);
     poses.speed[cop] = walkers.speed[cop]!;
     writeArrestActivity(law, 0, ACTIVITY.none, poses, cop);
   }

@@ -1,9 +1,12 @@
 import type { Obstacles } from "../ai/obstacles.ts";
-import { EVENT_KIND } from "../ai/civilians/civilian-constants.ts";
+import { EVENT_KIND, EVENT_TRIPLE } from "../ai/civilians/civilian-constants.ts";
+import type { CrowdWalkers } from "../ai/civilians/crowd-walkers.ts";
+import { detCos, detSin } from "../kernel/physics-core.js";
+import type { DeformableCar } from "../vehicle/car.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { CrimeScene } from "../ai/openworld-crime/crime-scene.ts";
-import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
+import { COP_LOOK, FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
 import type { LineOfSight } from "../ai/openworld-crime/offence-source.ts";
 import { StateOffenceSource } from "../ai/openworld-crime/state-offence-source.ts";
 import { TrafficPatrolPorts, type TrafficApi } from "../ai/openworld-crime/traffic-patrol-ports.ts";
@@ -38,9 +41,14 @@ export type LawEnginePorts = {
   sirens(carIndex: number, on: boolean): void;
   /** The human's car was held slow by a patrol car for Survival's bust hold. */
   playerBusted(carIndex: number, seconds: number): void;
+  /** The engine's cars, which run the foot cops down as they do civilians. */
+  cars(): readonly DeformableCar[];
 };
 
-/** The open world's police in the engine: the crime scene over the crowd's society, its foot cops drawn as a crowd of their own, a fighter taken down thrown as a figure. Made with the crowd, gone with it. */
+/**
+ * The open world's police in the engine: the crime scene over the crowd's society, its foot cops drawn as a crowd of their own and standing in the crowd as bodies it steps round, a fighter taken
+ * down or a cop run down thrown as a figure. Made with the crowd, gone with it.
+ */
 export class OpenWorldLaw {
   private readonly scene: CrimeScene;
   private readonly crowd: CivilianCrowd;
@@ -58,6 +66,7 @@ export class OpenWorldLaw {
       {
         bust: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.bust, resident, seconds),
         jaywalked: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.jaywalk, resident, seconds),
+        copDown: (cop, seconds) => crowd.raiseEvent(EVENT_KIND.copDown, cop, seconds),
         // Every peer builds the signals from the layout (the traffic is the host's only), so every peer's cops see the same jaywalkers.
         signals: new TrafficSignals(buildRoadNetwork(openWorldGeometry(LAYOUT))),
         playerBusted: ports.playerBusted, cars: traffic === null ? null : new TrafficPatrolPorts(traffic, ports.sirens), obstacles: ports.solids(), playerBustSeconds: SURVIVAL.bustTime,
@@ -67,7 +76,10 @@ export class OpenWorldLaw {
     );
     this.unlisten = traffic?.onRedLightRun((carIndex, x, z) => void this.scene.reportRedLight(carIndex, x, z)) ?? null;
     this.art = ports.makeArt(FOOT_COP_COUNT);
-    crowd.overlay = (poses, crowdSeconds, authority) => this.scene.step(crowdSeconds, authority, poses);
+    crowd.overlay = (poses, crowdSeconds, authority) => {
+      this.hearCopDowns();
+      this.scene.step(crowdSeconds, authority, poses, ports.cars());
+    };
   }
 
   /** Whether the police have the traffic's cars to patrol in (false: they are on foot). */
@@ -75,14 +87,35 @@ export class OpenWorldLaw {
     return this.scene.patrolling;
   }
 
-  /** After the crowd's step (the law advanced and overlaid the crowd's poses inside it, before the cars' hits): throws the fighters it took down. */
+  /** After the crowd's step (the law advanced and overlaid the crowd's poses inside it, before the cars' hits): throws the fighters it took down, in their own clothes, and the cops run down, in uniform. */
   throwTakedowns(): void {
     const strikes = this.scene.takeStrikes();
-    for (let at = 0; at < strikes.length; at++) {
-      const strike = strikes[at]!;
-      const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
-      dressOfLook(this.crowd.poses.look[strike.guard]!, look);
-      this.ports.throwFigure(strike, look);
+    for (let at = 0; at < strikes.length; at++) this.throwDressed(strikes[at]!, this.crowd.poses.look[strikes[at]!.guard]!);
+    const copStrikes = this.scene.takeCopStrikes();
+    for (let at = 0; at < copStrikes.length; at++) this.throwDressed(copStrikes[at]!, COP_LOOK);
+  }
+
+  /** Before each crowd step: every foot cop on the street is a body the civilians step round (he gives no way and shoves nobody), where he was drawn last. */
+  feedCops(walkers: CrowdWalkers): void {
+    const poses = this.scene.copPoses;
+    for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
+      if (poses.shown[cop] === 0) continue;
+      const speed = poses.speed[cop]!;
+      walkers.addBody(poses.x[cop]!, poses.z[cop]!, detSin(poses.yaw[cop]!) * speed, detCos(poses.yaw[cop]!) * speed);
+    }
+  }
+
+  private throwDressed(strike: FigureStrike, lookWord: number): void {
+    const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
+    dressOfLook(lookWord, look);
+    this.ports.throwFigure(strike, look);
+  }
+
+  /** The host's knocks of foot cops in the crowd's event log (heard on a client, its own on the host), for the scene to apply once each. */
+  private hearCopDowns(): void {
+    const log = this.crowd.eventLog();
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) {
+      if (log[at] === EVENT_KIND.copDown) this.scene.hearCopDown(log[at + 1]!, log[at + 2]!);
     }
   }
 

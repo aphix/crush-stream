@@ -31,8 +31,8 @@ describe("the chase is the same on every peer", () => {
     const irregular = chase(7);
     irregular.poses.shown.fill(1);
     irregular.poses.x[CRIMINAL] = 60;
-    for (let time = 0.037; time < SECONDS; time += 0.037) irregular.scene.step(time, true, irregular.poses);
-    irregular.scene.step(SECONDS, true, irregular.poses);
+    for (let time = 0.037; time < SECONDS; time += 0.037) irregular.scene.step(time, true, irregular.poses, []);
+    irregular.scene.step(SECONDS, true, irregular.poses, []);
     expect(digestOf(irregular)).toBe(digestOf(regular));
   });
 });
