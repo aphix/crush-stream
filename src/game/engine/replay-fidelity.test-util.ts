@@ -117,9 +117,10 @@ function dresser(derby: boolean): (car: DeformableCar) => void {
 /**
  * A crash on a flat field with no walls (the derby's rules: `derby` arms the wear kill), the recorder fed as the engine
  * does: frames of 1/60 s cut into `physicsSlice` steps (never shorter than `floor`: 1/80 s is the adaptive pacer's coarse
- * slice), every car on its own pedals, the clip the best the ledger kept.
+ * slice), every car on its own pedals, the clip the best the ledger kept. `untilClipped`: the recording stops a whole frame after
+ * the first clip is filed with no cluster open (the clip's own post-roll over: the clip is the one that ran to its end), not after `seconds`.
  */
-export function recordFlat(spawns: readonly Spawn[], seconds: number, derby: boolean, touched: readonly number[] = [], floor = 1 / FINE_HZ, shot: Shot | null = null, latest = false): Recording {
+export function recordFlat(spawns: readonly Spawn[], seconds: number, derby: boolean, touched: readonly number[] = [], floor = 1 / FINE_HZ, shot: Shot | null = null, latest = false, untilClipped = false): Recording {
   const scene = new THREE.Scene();
   const dress = dresser(derby);
   const cars = spawns.map((s, i) => {
@@ -142,6 +143,7 @@ export function recordFlat(spawns: readonly Spawn[], seconds: number, derby: boo
   const frameEnd: boolean[] = [];
   const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
   let acc = 0;
+  let framesFiled = 0;
   for (let f = 0; f < Math.round(seconds / FRAME); f++) {
     const vmax = sliceSpeed(cars);
     acc = Math.min(0.05, acc + FRAME);
@@ -166,6 +168,7 @@ export function recordFlat(spawns: readonly Spawn[], seconds: number, derby: boo
     }
     frameEnd[rec["step"] - 1] = true;
     for (const car of cars) car.updateSkin();
+    if (untilClipped && rec.ledger.kept.length > 0 && rec.ledger.open.length === 0 && framesFiled++ > 0) break;
   }
   rec.end();
   const clip = latest ? rec.ledger.kept.reduce<HighlightClip | undefined>((a, b) => (a === undefined || b.t0 > a.t0 ? b : a), undefined) : rec.ledger.kept[0];
@@ -173,8 +176,8 @@ export function recordFlat(spawns: readonly Spawn[], seconds: number, derby: boo
   return { clip, cars, scene: { dress, collide: () => {}, blend: new PoseBlend() }, trace, s0: clipStart(clip, times), frameEnd };
 }
 
-/** The race of `race-eject-reel.test.ts` (oval, `ai` AI drivers besides the player's car, which the AI drives too; seed 1) a second in; `place` puts the crash's cars on the road. */
-export function recordRace(w: World, place: () => void, seconds: number, ai: number): Recording {
+/** The race of `race-eject-reel.test.ts` (oval, `ai` AI drivers besides the player's car, which the AI drives too; seed 1) a second in; `place` puts the crash's cars on the road. `untilClipped` as `recordFlat`'s. */
+export function recordRace(w: World, place: () => void, seconds: number, ai: number, untilClipped = false): Recording {
   const r = w.race;
   r.command({ type: "quit" });
   r.command({ type: "options", options: { trackId: "oval", laps: 3, aiCount: ai, noReset: false, aggression: 0.35 } });
@@ -198,9 +201,12 @@ export function recordRace(w: World, place: () => void, seconds: number, ai: num
   try {
     for (let n = 0; r.time < 1 && n < 900; n++) frame(w, state);
     place();
+    const keptBefore = rec.ledger.kept.length;
+    let framesFiled = 0;
     for (let n = 0; n < Math.round(seconds / FRAME); n++) {
       frame(w, state);
       frameEnd[rec["step"] - 1] = true;
+      if (untilClipped && rec.ledger.kept.length > keptBefore && rec.ledger.open.length === 0 && framesFiled++ > 0) break;
     }
     rec.end();
   } finally {

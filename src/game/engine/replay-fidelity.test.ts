@@ -22,11 +22,15 @@ const OLD_FLOOR_HZ = 120;
 /** Spawn shifts (m) of the pile-ups: the same crash as other, equally valid realizations of it. */
 const SHIFTS = [1e-9, 3e-9, 1e-6, 1e-3];
 
+/** A flat-field derby crash recorded until its clip is filed and a frame past it (`seconds` only bounds a crash that never ranks): what runs after the clip's post-roll is in no clip. */
+const recordToClip = (spawns: readonly Spawn[], seconds: number, touched: readonly number[] = [], floor = 1 / FINE_HZ): Recording => recordFlat(spawns, seconds, true, touched, floor, null, false, true);
+
 const rows: string[] = [];
 const mm = (m: number): string => (m * 1000).toFixed(3);
 function check(name: string, rec: Recording, a: Agreement): void {
-  rows.push(`${name}: ${rec.clip.cars.length} cars ${a.steps} steps ${(clipBytes(rec.clip) / 1024).toFixed(0)} KB; wreck flags differ ${a.wreckMismatch}; pose ${mm(a.pose.max)} mm, ${a.vel.max} m/s, crush ${mm(a.crush.max)} mm`);
+  rows.push(`${name}: ${rec.clip.cars.length} cars ${a.steps} steps ${(clipBytes(rec.clip) / 1024).toFixed(0)} KB (${rec.trace.length} recorded); wreck flags differ ${a.wreckMismatch}; pose ${mm(a.pose.max)} mm, ${a.vel.max} m/s, crush ${mm(a.crush.max)} mm`);
   expect(a.steps, `${name}: ${a.steps} steps compared`).toBeGreaterThanOrEqual(100);
+  expect(rec.trace.length, `${name}: the recording ended with the clip (its step ${rec.s0 + rec.clip.h.length}), so the clip's last step had no live state to compare with`).toBeGreaterThan(rec.s0 + rec.clip.h.length);
   expect(a.wreckMismatch, `${name}: a car is a wreck in one run and not in the other for ${a.wreckMismatch} car-steps`).toBe(0);
   // The point of the keyframes: what a replay restores is all the sim reads. Any error here is state a keyframe fails to carry.
   const strays = `${name}: a car strays from the live sim (m, m/s, m)\n${rows.at(-1)}`;
@@ -54,13 +58,14 @@ describe("given a highlight clip recorded from a crash and replayed from its key
       const yaw = Math.atan2(pt.tx, pt.tz);
       w.cars[slot]!.spawnFacing(pt.x + side * pt.tz, pt.z - side * pt.tx, yaw + turn, speed);
     }
+    // mutation: sed -i 's/const h = clip.h\[s\]!;/const h = clip.h[s]! * 1.001;/' src/game/engine/engine-replay.ts  (every replayed step runs 0.1 % long: every row's pose strays)
     /**
      * The crash's own cars and no others: `ai` AI drivers beside the player's car (which the AI drives too). The race AI
      * steers clear of what it closes on (`guardContact`): the two spare cars of a four-car field no longer ran into the
      * crash. The derby fixtures below spawn just their own cars too.
      */
     const run = (name: string, place: () => void, ai: number): void => {
-      const rec = recordRace(w, place, 9, ai);
+      const rec = recordRace(w, place, 9, ai, true);
       const { clip } = rec;
       const a = clip.cars[clip.firstA]?.slot;
       const b = clip.cars[clip.firstB]?.slot;
@@ -114,8 +119,9 @@ describe("given a highlight clip recorded from a crash and replayed from its key
     for (const s of SHIFTS) it(`when the same pile-up happens ${s} m further along the road, then the replay matches the live sim at every step, to the bit, just as for the unshifted pile-up`, () => run(`race pile-up shifted ${s} m`, pile(s), 3));
     // Seeds 1 to 64 of `engine-replay.ai-long-run.ts` replayed up to 4.4 m off until the clip carried the course's road-segment hint: a car
     // that forgot it projected itself onto the wrong road at the next wall.
+    // mutation: sed -i 's/    this.restoreCar?.(this.clip.cars\[j\]!.slot, this.memory\[k\]!, j \* MEMORY);//' src/game/engine/engine-replay.ts  (the hint is not restored: it stays 7777)
     it("when a clip of a race is restored over cars whose road-segment hint is somewhere else, then each clip car's hint is the one its first keyframe held", () => {
-      const rec = recordRace(w, () => (put(0, 40, 0, 0, 20), put(1, 48, 0, Math.PI, 20)), 9, 1);
+      const rec = recordRace(w, () => (put(0, 40, 0, 0, 20), put(1, 48, 0, Math.PI, 20)), 9, 1, true);
       const { clip } = rec;
       const sim = new ClipSim(clip, clip.cars.map((c) => rec.cars[c.slot]!), rec.scene);
       const seg: Int32Array = w.race["seg"];
@@ -130,8 +136,9 @@ describe("given a highlight clip recorded from a crash and replayed from its key
 
   describe("given a flat derby field with no walls, where wear alone can destroy a car", () => {
     const HEAD = Math.PI / 2;
+    // mutation: sed -i 's/const h = clip.h\[s\]!;/const h = clip.h[s]! * 1.001;/' src/game/engine/engine-replay.ts  (every replayed step runs 0.1 % long: every row's pose strays)
     const run = (name: string, spawns: Spawn[], touched: readonly number[] = []): void => {
-      const rec = recordFlat(spawns, 8, true, touched);
+      const rec = recordToClip(spawns, 8, touched);
       check(name, rec, agreement(rec));
     };
     /** The pile-up with its start x (or z) shifted by `s` m: two head-on, one behind, one across. */
@@ -175,9 +182,10 @@ describe("given a highlight clip recorded from a crash and replayed from its key
         it(testCase.it, () => run(testCase.name, BYSTANDER, testCase.touched));
       }
     });
+    // mutation: sed -i 's/const h = clip.h\[s\]!;/const h = clip.h[s]! * 1.001;/' src/game/engine/engine-replay.ts  (as above)
     it("when the car behind a head-on's cars has its engine killed from outside the crash sim just after the impact (a guard's gunfire), then the replay matches the live sim at every step, to the bit, the shot car's wreck state and dead engine included", () => {
       const spawns = pile(0);
-      const rec = recordFlat(spawns, 8, true, [], 1 / FINE_HZ, { car: 2, at: 2.4 });
+      const rec = recordFlat(spawns, 8, true, [], 1 / FINE_HZ, { car: 2, at: 2.4 }, false, true);
       expect(rec.cars[2]!.deform.drivetrainAlive, "the shot car's engine is dead").toBe(false);
       expect(rec.clip.cars.some((c) => c.slot === 2), "the shot car is in the clip").toBeTruthy();
       check("derby shot car", rec, agreement(rec));
@@ -228,8 +236,9 @@ describe("given a highlight clip recorded from a crash and replayed from its key
   for (const [floor, rate] of [[1 / QUIET_HZ, `1/${QUIET_HZ}`], [1 / OLD_FLOOR_HZ, `1/${OLD_FLOOR_HZ}`]] as const) {
     describe(`given a derby recorded on a slow device whose sim steps at ${rate} s instead of 1/240 s`, () => {
       const HEAD = Math.PI / 2;
+      // mutation: sed -i 's/const h = clip.h\[s\]!;/const h = clip.h[s]! * 1.001;/' src/game/engine/engine-replay.ts  (as above)
       const run = (name: string, spawns: Spawn[]): void => {
-        const rec = recordFlat(spawns, 8, true, [], floor);
+        const rec = recordToClip(spawns, 8, [], floor);
         const coarse = rec.clip.h.filter((h) => h > floor - 1e-6).length;
         // A 1/60 s frame is one 1/80 s step and a 1/240 s remainder, so half the steps are the floor's by the frames' own grid.
         expect(coarse, `${name}: ${coarse} of ${rec.clip.h.length} steps at ${rate} s (the rest are frame remainders)`).toBeGreaterThanOrEqual(rec.clip.h.length / 2);

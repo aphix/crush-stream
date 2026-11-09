@@ -5,8 +5,9 @@ import type { CrashEngine } from "./engine.ts";
 import { PHASE_NAMES, WORK_NAMES } from "./sim-phases.ts";
 import { must } from "../kernel/must.test-util.ts";
 
-/** Frames the race runs unmeasured first (10 s of sim: the grid's first crashes are in), then the measured stretch (4 s: the skin kernel's calls come in bursts when a car deforms, and a 2 s window can read none). */
-const WARM_FRAMES = 2400;
+/** Frames the grid may take to go green on the 1/240 s floor (a guard, not a wait), the frames the race then runs unmeasured (1 s of sim: the cars are away and the drivers planning), and the measured stretch (4 s: the skin kernel's calls come in bursts when a car deforms, and a 2 s window can read none). */
+const GRID_FRAMES = 4000;
+const WARM_FRAMES = 240;
 const WINDOW_FRAMES = 960;
 
 /** The clock reads the window leaves outside a phase, per step: the pacer's own read after each step and the wrapper's that sums `simMs` (the clock the test runs counts reads, one tick each). */
@@ -69,6 +70,8 @@ describe("given the real engine on the city bench's race, headless", () => {
   let engine: CrashEngine;
   beforeAll(async () => {
     engine = await benchRaceEngine();
+    const { race } = engine.benchParts();
+    for (let i = 0; race.phase !== "racing" && i < GRID_FRAMES; i++) runFrames(engine, 1);
     runFrames(engine, WARM_FRAMES);
   });
   afterAll(() => disposeBenchEngine(engine));
@@ -76,6 +79,7 @@ describe("given the real engine on the city bench's race, headless", () => {
     expect(engine["world"].phases.on, "a window left the phase clock on").toBe(false);
   });
 
+  // mutation: sed -i 's/unattributedMsPerSimS: perS(simMs - attributed)/unattributedMsPerSimS: perS(simMs)/' src/game/engine/bench-measure.ts  (the phases and the unattributed no longer sum to the sim's ms)
   it("when a window is watched on a clock that ticks once per read, then its phases plus the unattributed equal the sim's reads, no phase is negative, the unattributed is only the pacer's own reads, and the phases a race always runs each hold time", () => {
     let reads = 0;
     vi.spyOn(performance, "now").mockImplementation(() => ++reads);
