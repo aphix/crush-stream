@@ -1,4 +1,6 @@
+import type * as THREE from "three";
 import type { CrowdSight } from "../present/civilian-art.ts";
+import type { Sight } from "../present/spectate-cam.ts";
 import type { SightField } from "../present/openworld-sight.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
@@ -26,6 +28,10 @@ import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
 import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
 import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
+import { OpenWorldAuto } from "./engine-openworld-auto.ts";
+import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
+import { EVENT_LOG_CAPACITY } from "../ai/civilians/civilian-crowd-constants.ts";
+import { MAX_CARS } from "../scenes/fleet.ts";
 
 const NO_EVENTS = new Float64Array(0);
 
@@ -140,6 +146,9 @@ export class OpenWorldDirector {
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
   private readonly openers: DoorOpeners = { poses: null, walker: null };
   private readonly walkerStrike = new WalkerStrike();
+  /** The Auto camera: wanted (`setAuto`) across crowd rebuilds, made with each crowd. */
+  private autoWanted = false;
+  private auto: OpenWorldAuto | null = null;
 
   constructor(ports: OpenWorldPorts) {
     this.ports = ports;
@@ -189,6 +198,23 @@ export class OpenWorldDirector {
     return this.kerb !== null && this.ports.traffic?.seated(id) === false && spotAt(this.kerb, car.group.position.x, car.group.position.z, car.yaw) >= 0;
   }
 
+  /** The Auto camera is up: it follows the open world's events and its bubble is the followed subject's. */
+  get autoOn(): boolean {
+    return this.autoWanted;
+  }
+
+  setAuto(on: boolean): void {
+    if (on === this.autoWanted) return;
+    if (on) this.auto?.begin();
+    else this.text = null;
+    this.autoWanted = on;
+  }
+
+  /** The Auto camera frames its subject in `camera`; false where it is off or has none (the regular camera keeps the view). */
+  aimAuto(camera: THREE.PerspectiveCamera, sight: Sight, wallDt: number): boolean {
+    return this.autoWanted && this.auto !== null && this.auto.aim(camera, sight, wallDt);
+  }
+
   /** What the look-at panel shows, null when the eye rests on nothing. */
   lookAt(): LookText | null {
     return this.text;
@@ -215,6 +241,7 @@ export class OpenWorldDirector {
       this.culling.stop(this.ports.cars());
       this.dropFacades();
       this.stop();
+      this.setAuto(false);
       return;
     }
     this.culling.frame(this.ports.cars(), wallDt);
@@ -243,9 +270,10 @@ export class OpenWorldDirector {
     this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.lights?.update(crowd.crowdSeconds);
     this.lookAcc += wallDt;
-    if (this.lookAcc >= 1 / LOOK_HZ) {
+    const cut = this.autoWanted && this.auto !== null && this.auto.step(wallDt);
+    if (cut || this.lookAcc >= 1 / LOOK_HZ) {
       this.lookAcc = 0;
-      this.text = this.keepIfSame(lookAtOf(crowd.state, crowd.poses, tickAt(crowd.crowdSeconds), this.ray));
+      this.text = this.keepIfSame(this.autoWanted && this.auto !== null ? this.auto.text() : lookAtOf(crowd.state, crowd.poses, tickAt(crowd.crowdSeconds), this.ray));
     }
   }
 
@@ -268,6 +296,7 @@ export class OpenWorldDirector {
     this.unhook = null;
     this.art = null;
     this.law = null;
+    this.auto = null;
     this.crowd = null;
     this.text = null;
   }
@@ -308,6 +337,7 @@ export class OpenWorldDirector {
     this.crowd = new CivilianCrowd(map, key & CROWD_SEED_MASK, POPULATION[tier] ?? POPULATION[0], remote);
     this.crowdKey = key;
     this.seconds = 0;
+    this.auto = this.makeAuto(this.crowd, key & CROWD_SEED_MASK);
     this.art = this.ports.makeArt(this.crowd.poses.count);
     const crowd = this.crowd;
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
@@ -348,6 +378,23 @@ export class OpenWorldDirector {
     const extra = this.ports.law;
     if (extra === undefined) return null;
     return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, cars: () => this.ports.cars() }, seed);
+  }
+
+  /** The Auto camera over this crowd: its cars (the traffic's drivers), its foot cops and the viewers' own cars left out. */
+  private makeAuto(crowd: CivilianCrowd, seed: number): OpenWorldAuto {
+    const auto = new OpenWorldAuto(
+      {
+        crowd: () => this.crowd,
+        cops: () => this.law?.copPoses ?? null,
+        residentAt: (carIndex) => this.traffic?.residentOf(carIndex) ?? -1,
+        cars: () => this.ports.cars(),
+        isPlayerCar: (carIndex) => this.ports.cull.playerCars().includes(this.ports.cars()[carIndex]!),
+      },
+      { residents: crowd.poses.count, cops: FOOT_COP_COUNT, cars: MAX_CARS, events: EVENT_LOG_CAPACITY },
+      seed,
+    );
+    if (this.autoWanted) auto.begin();
+    return auto;
   }
 
   private throwStruck(crowd: CivilianCrowd): void {

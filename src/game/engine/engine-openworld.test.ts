@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
@@ -14,6 +15,8 @@ import type { DriverLook } from "../present/driver-look.ts";
 import type { CrowdSight } from "../present/civilian-art.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import type { Sight } from "../present/spectate-cam.ts";
+import { FLAT_GROUND } from "../world/ground.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 
@@ -289,5 +292,20 @@ describe("given a look-at panel kept up four times a second", () => {
     expect(first?.title.startsWith(residentNameText(crowd.state, resident)), `title ${first?.title}, seconds ${seconds}`).toBe(true);
     for (let frame = 0; frame < 64 / LOOK_HZ; frame++) harness.director.frame(FRAME);
     expect(harness.director.lookAt(), "the same object").toBe(first);
+  });
+});
+
+describe("given the Auto camera asked for in the open world", () => {
+  const camera = new THREE.PerspectiveCamera();
+  const NO_SOLIDS: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ: [] };
+
+  it("when Auto is switched on, then it is on across the first frame and has no subject to frame yet, and when it is switched off the regular camera keeps the view", () => {
+    const harness = hostWithMap();
+    harness.director.setAuto(true);
+    harness.frame();
+    expect(harness.director.autoOn, "Auto after the first frame").toBe(true);
+    expect(harness.director.aimAuto(camera, NO_SOLIDS, FRAME), "framing a subject before anyone is out").toBe(false);
+    harness.director.setAuto(false);
+    expect(harness.director.autoOn, "Auto after it is switched off").toBe(false);
   });
 });
