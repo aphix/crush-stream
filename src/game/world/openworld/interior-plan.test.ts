@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
 import { FURNISHING, MAX_RISER, ROWHOME_FLOOR_Y, SHOPFRONT, type Box, type InteriorPlan } from "./interior-kinds.ts";
-import { interiorCounter, interiorDoor, interiorSeats, interiorSolids, planInterior } from "./interior-plan.ts";
+import { interiorDoor, interiorSolids, interiorSpots, planInterior } from "./interior-plan.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
 
@@ -21,7 +21,7 @@ describe("given every kind of interior built for a place of the map", () => {
   // mutation: sed -i 's/d.put("stool", 0, 4.3 + stool \* 0.85, -3, toLeft)/void stool/' src/game/world/openworld/interior-layouts.ts (bar: 24 -> 16)
   it("when its seats are published, then there is one per seat of every piece of furniture, in x z yaw height rows", () => {
     for (const kind of KINDS) {
-      const { seats, stoopSeats } = interiorSeats(firstOf(kind));
+      const { seats, stoopSeats } = interiorSpots(firstOf(kind));
       expect(seats.length / SEAT_STRIDE, `${kind} seats`).toBe(EXPECTED_SEATS[kind]);
       expect(stoopSeats, `${kind} stoop seats`).toBe(kind === "rowhome" ? 2 : 0);
       for (let at = 0; at < seats.length; at++) expect(Number.isFinite(seats[at]!), `${kind} float ${at}`).toBe(true);
@@ -33,14 +33,14 @@ describe("given every kind of interior built for a place of the map", () => {
       const place = firstOf(kind);
       const plan = planInterior(kind, place.width, place.depth);
       const furniture = plan.furnishings.reduce((sum, piece) => sum + FURNISHING[piece.kind].seats, 0);
-      expect(interiorSeats(place).seats.length / SEAT_STRIDE - interiorSeats(place).stoopSeats, `${kind} indoor seats`).toBe(furniture);
+      expect(interiorSpots(place).seats.length / SEAT_STRIDE - interiorSpots(place).stoopSeats, `${kind} indoor seats`).toBe(furniture);
     }
   });
 
   // mutation: sed -i 's/serves: true, serveAt: -3.3/serveAt: -3.3/' src/game/world/openworld/interior-layouts.ts (bar loses its counter)
   it("when its counter spots are published, then a business has a customer's and a clerk's, facing each other across the counter top, and a home none", () => {
     for (const kind of KINDS) {
-      const counter = interiorCounter(firstOf(kind));
+      const counter = interiorSpots(firstOf(kind)).counter;
       if (kind === "rowhome") {
         expect(counter, "rowhome counter").toBeNull();
         continue;

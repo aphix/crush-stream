@@ -130,8 +130,8 @@ export type BlockPlan = BlockRef & {
   courtDoor: readonly [number, number] | null;
 };
 
-/** A building prop: centre, yaw (its front is local +x), footprint, height, facade style. */
-export type Building = { x: number; z: number; yaw: number; depth: number; width: number; height: number; style: string };
+/** A building prop: centre, yaw (its front is local +x), footprint, height, facade style; `enterable` ones are drawn only (`PREFAB.buildingShell`) and their walls are the envelope props with the doorways open. */
+export type Building = { x: number; z: number; yaw: number; depth: number; width: number; height: number; style: string; enterable?: boolean };
 
 /** Where a place's door joins the walk graph: a spur to the block's sidewalk path on `side`, or (no side) the door stands on a point of an interior path. */
 export type Link = { place: number; block: number; side: Side | null };

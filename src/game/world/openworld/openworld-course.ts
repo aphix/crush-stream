@@ -35,6 +35,7 @@ import {
   WALL_PIECE_LENGTH,
   WALL_THICKNESS,
 } from "./openworld-constants.ts";
+import { interiorEnvelopeProps } from "./openworld-interior-solids.ts";
 import type { BlockRef, Geometry, Lots } from "./openworld-layout.ts";
 
 export { OPENWORLD_ID };
@@ -101,7 +102,7 @@ function streetRoutes(geometry: Geometry): NonNullable<NonNullable<TrackInput["t
 }
 
 function buildingProps(lots: Lots): Prop[] {
-  return lots.buildings.map((building): Prop => ({ prefab: PREFAB.building, x: building.x, z: building.z, yaw: building.yaw, size: [building.depth, building.height, building.width], style: building.style }));
+  return lots.buildings.map((building): Prop => ({ prefab: building.enterable === true ? PREFAB.buildingShell : PREFAB.building, x: building.x, z: building.z, yaw: building.yaw, size: [building.depth, building.height, building.width], style: building.style }));
 }
 
 /** One piece of the invisible wall, thick along its short side, `length` long along the wall. */
@@ -227,7 +228,7 @@ export function openWorldCourse(lots: Lots): TrackInput {
     road: { width: geometry.carriageway, surface: SURFACE.asphalt, runoff: [0, 0], runoffSurface: SURFACE.concrete, wall: [false, false] },
     nodes,
     checkpoints: Array.from({ length: LOOP_CHECKPOINTS }, (_, index) => ({ node: Math.floor((index * nodes.length) / LOOP_CHECKPOINTS) })),
-    props: [...buildingProps(lots), ...streetProps(lots), ...wallProps(geometry)],
+    props: [...buildingProps(lots), ...streetProps(lots), ...wallProps(geometry), ...interiorEnvelopeProps(lots)],
     scenery: { biome: BIOME.city, off: ["frontage", "verge", "islands"] },
     traffic: { count: 0, lanes: [], routes: streetRoutes(geometry) },
     survival: spawnOf(geometry),

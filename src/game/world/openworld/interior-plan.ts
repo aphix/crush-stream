@@ -89,15 +89,21 @@ export function interiorSolids(place: Place): InteriorSolid[] {
   return boxes.map((box) => frame.solid(box));
 }
 
-/** How many seats a furnishing offers and where along its width the `index`th sits (m from its middle). */
+/** Where along its width the `index`th seat of a furnishing sits (m from its middle). */
 function seatOffset(piece: Furnishing, index: number): number {
   const seats = FURNISHING[piece.kind].seats;
   return (index - (seats - 1) / 2) * (piece.width / seats);
 }
 
-/** The seats of the place's interior then, for a rowhome, its stoop's two are first: x, z, yaw, height each; and how many lead on the stoop. */
-export function interiorSeats(place: Place): { seats: Float32Array; stoopSeats: number } {
-  const plan = planOf(place);
+/** Plan direction a turn points, as (deep, across). */
+function turnStep(turn: Turn): readonly [number, number] {
+  return turn === TURN.front ? [-1, 0] : turn === TURN.back ? [1, 0] : turn === TURN.right ? [0, 1] : [0, -1];
+}
+
+/** What the place's interior publishes: every seat (a rowhome's two stoop seats lead: x, z, yaw, height each) and the customer's and clerk's spots at the counter the plan marks `serves` (null where there is none). */
+export type InteriorSpots = { seats: Float32Array; stoopSeats: number; counter: Float32Array | null };
+
+export function interiorSpots(place: Place, plan: InteriorPlan = planOf(place)): InteriorSpots {
   const frame = new Frame(place);
   const rows: number[][] = [];
   const stoopSeats = place.interior === "rowhome" ? 2 : 0;
@@ -117,20 +123,12 @@ export function interiorSeats(place: Place): { seats: Float32Array; stoopSeats: 
   }
   const seats = new Float32Array(rows.length * SEAT_STRIDE);
   for (const [at, row] of rows.entries()) seats.set(row, at * SEAT_STRIDE);
-  return { seats, stoopSeats };
+  return { seats, stoopSeats, counter: counterSpots(plan, frame) };
 }
 
-/** Plan direction a turn points, as (deep, across). */
-function turnStep(turn: Turn): readonly [number, number] {
-  return turn === TURN.front ? [-1, 0] : turn === TURN.back ? [1, 0] : turn === TURN.right ? [0, 1] : [0, -1];
-}
-
-/** The customer's spot and the clerk's behind the counter the plan marks `serves` (`COUNTER_STRIDE` floats each), or null where there is none. */
-export function interiorCounter(place: Place): Float32Array | null {
-  const plan = planOf(place);
+function counterSpots(plan: InteriorPlan, frame: Frame): Float32Array | null {
   const counter = plan.furnishings.find((piece) => piece.serves);
   if (counter === undefined) return null;
-  const frame = new Frame(place);
   const [stepDeep, stepAcross] = turnStep(counter.facing);
   const alongDeep = counter.facing === TURN.front || counter.facing === TURN.back;
   const centreDeep = counter.deep + (alongDeep ? 0 : counter.serveAt);
@@ -146,6 +144,30 @@ export function interiorCounter(place: Place): Float32Array | null {
   out.set([frame.x(customerDeep, customerAcross), frame.z(customerDeep, customerAcross), frame.yaw(((counter.facing + 2) % 4) as Turn), top]);
   out.set([frame.x(clerkDeep, clerkAcross), frame.z(clerkDeep, clerkAcross), frame.yaw(counter.facing), top], COUNTER_STRIDE);
   return out;
+}
+
+/** A column of the ground-floor envelope in world metres (full height: a prism stands from the ground). */
+export type EnvelopeColumn = { x0: number; z0: number; x1: number; z1: number };
+
+/**
+ * The ground floor's street, party and back walls as columns, the street and back ones running the building's whole width so neighbours' touch: whole but for the street's doorways (a window is
+ * closed to a walker, who cannot pass a gap above a sill; the back door is closed to cars and far walkers alike).
+ */
+export function interiorEnvelope(place: Place): EnvelopeColumn[] {
+  const plan = planOf(place);
+  const frame = new Frame(place);
+  const columns: EnvelopeColumn[] = [];
+  for (const wall of plan.walls) {
+    if (wall.level !== 0 || !wall.shell) continue;
+    const street = wall.axis === "across" && wall.fixed < plan.depth / 2;
+    const across = wall.axis === "across" ? { from: -plan.width / 2, to: plan.width / 2 } : {};
+    const doorways = { ...wall, ...across, openings: street ? wall.openings.filter((opening) => opening.sill === 0) : [] };
+    for (const box of wallBoxes(doorways, 0, 1)) {
+      const { x0, z0, x1, z1 } = frame.solid(box);
+      columns.push({ x0, z0, x1, z1 });
+    }
+  }
+  return columns;
 }
 
 /** The place's own door: the doorway with the smallest `across` over every frontage bay, as the point on the street face where it stands. */

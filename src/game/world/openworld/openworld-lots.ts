@@ -1,5 +1,6 @@
 import { PREFAB, SURFACE } from "../constants.ts";
-import { interiorCounter, interiorDoor, interiorSeats } from "./interior-plan.ts";
+import type { InteriorPlan } from "./interior-kinds.ts";
+import { interiorDoor, interiorSpots, planInterior } from "./interior-plan.ts";
 import { planBlocks } from "./openworld-blocks.ts";
 import { LAYOUT } from "./openworld-constants.ts";
 import { openWorldGeometry, type Area, type BlockPlan, type Building, type Dressing, type Geometry, type Link, type Lots, type LotPlan, type PathPlan } from "./openworld-layout.ts";
@@ -36,7 +37,8 @@ const DUMPSTER_SHARES = [0.25, 0.75] as const;
 /** Mixing weights of a house's style: block column, block row, lot index and the south face's offset, so neighbours differ and no house moves another's style. */
 const STYLE_MIX = { column: 7, row: 13, lot: 5, south: 3 } as const;
 
-type Layout = { places: Place[]; links: Link[]; buildings: Building[]; paths: PathPlan[]; areas: Area[]; dressing: Dressing[] };
+/** `plans`: the interiors planned so far, by kind and size, so the three hundred rowhomes share one. */
+type Layout = { places: Place[]; links: Link[]; buildings: Building[]; paths: PathPlan[]; areas: Area[]; dressing: Dressing[]; plans: Map<string, InteriorPlan> };
 
 const NO_STYLE = "";
 
@@ -68,12 +70,17 @@ function homeStyleOf(plan: BlockPlan, lot: LotPlan): string {
 }
 
 /** A place with an interior stands at the door that interior's frontage gives it, and publishes the seats and counter its furniture makes. */
-function furnished(place: Place): Place {
+function furnished(layout: Layout, place: Place): Place {
   if (place.interior === undefined) return place;
   const door = interiorDoor(place.interior, place.width, place.depth, place.x, place.z, place.yaw);
   const standing = { ...place, doorX: door.x, doorZ: door.z };
-  const { seats, stoopSeats } = interiorSeats(standing);
-  const counter = interiorCounter(standing);
+  const key = `${place.interior}:${place.width}:${place.depth}`;
+  let plan = layout.plans.get(key);
+  if (plan === undefined) {
+    plan = planInterior(place.interior, place.width, place.depth);
+    layout.plans.set(key, plan);
+  }
+  const { seats, stoopSeats, counter } = interiorSpots(standing, plan);
   return { ...standing, ...(seats.length > 0 ? { seats } : {}), ...(stoopSeats > 0 ? { stoopSeats } : {}), ...(counter !== null ? { counter } : {}) };
 }
 
@@ -81,10 +88,10 @@ function layHome(layout: Layout, plan: BlockPlan, blockIndex: number, lot: LotPl
   const style = homeStyleOf(plan, lot);
   const centreZ = (lot.house.z0 + lot.house.z1) / 2;
   const named = NAMED_HOMES.find((home) => isBlock(home, plan) && home.face === lot.face && home.at === lot.index);
-  layout.buildings.push({ x: lot.x, z: centreZ, yaw: lot.yaw, depth: geometry.houseDepth, width: lot.width, height: heightOf(HOUSE_STOREYS, false), style });
+  layout.buildings.push({ x: lot.x, z: centreZ, yaw: lot.yaw, depth: geometry.houseDepth, width: lot.width, height: heightOf(HOUSE_STOREYS, false), style, enterable: true });
   layout.links.push({ place: layout.places.length, block: blockIndex, side: lot.face });
   layout.places.push(
-    furnished({ kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys: HOUSE_STOREYS, style, sector: SECTOR.residential, interior: "rowhome" }),
+    furnished(layout, { kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys: HOUSE_STOREYS, style, sector: SECTOR.residential, interior: "rowhome" }),
   );
 }
 
@@ -93,10 +100,10 @@ function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], 
   const x = (first.x + lots[lots.length - 1]!.x) / 2;
   const z = (first.house.z0 + first.house.z1) / 2;
   const width = lots.length * first.width;
-  layout.buildings.push({ x, z, yaw: first.yaw, depth: geometry.houseDepth, width, height: heightOf(venue.storeys, venue.shopGround), style: venue.style });
+  layout.buildings.push({ x, z, yaw: first.yaw, depth: geometry.houseDepth, width, height: heightOf(venue.storeys, venue.shopGround), style: venue.style, ...(venue.interior === undefined ? {} : { enterable: true }) });
   layout.links.push({ place: layout.places.length, block: blockIndex, side: first.face });
   layout.places.push(
-    furnished({
+    furnished(layout, {
       kind: venue.kind,
       name: venue.name,
       doorNode: -1,
@@ -215,7 +222,7 @@ function layBackdrop(layout: Layout, plan: BlockPlan, geometry: Geometry): void 
 export function layOutLots(): Lots {
   const geometry = openWorldGeometry({ ...LAYOUT });
   const plans = planBlocks(geometry);
-  const layout: Layout = { places: [], links: [], buildings: [], paths: [], areas: [], dressing: [] };
+  const layout: Layout = { places: [], links: [], buildings: [], paths: [], areas: [], dressing: [], plans: new Map() };
   for (const [blockIndex, plan] of plans.playable.entries()) {
     if (plan.park) {
       layPark(layout, plan, blockIndex);
@@ -229,5 +236,6 @@ export function layOutLots(): Lots {
   layBusStop(layout, plans.playable, geometry);
   const backdropStart = layout.places.length;
   for (const plan of plans.backdrop) layBackdrop(layout, plan, geometry);
-  return { geometry, blocks: plans.playable, backdropStart, ...layout };
+  const { plans: _plans, ...laid } = layout;
+  return { geometry, blocks: plans.playable, backdropStart, ...laid };
 }
