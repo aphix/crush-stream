@@ -14,6 +14,9 @@ import { ownLook } from "../present/driver-look.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 import type { Garage } from "./garage.ts";
 
+/** The race HUD while the open world's Auto camera is up: the camera is on no car of the viewer's, so there is no drive gauge to read. */
+const NO_DRIVE_VIEW: Pick<RaceHud, "view"> = { view: null };
+
 /**
  * HUD publish: the engine's state as one `CrashHudState` snapshot.
  */
@@ -172,14 +175,14 @@ export abstract class EngineHud extends EngineWarm {
         clock: r.clock,
         watched: this.seat.mode !== "global" && this.seat.carIndex === r.id,
       })),
-      race: this.race.active ? { ...this.race.hud(), ...this.reelHud() } : null,
+      race: this.race.active ? { ...this.race.hud(), ...this.reelHud(), ...(this.autoCamOn ? NO_DRIVE_VIEW : {}) } : null,
       seat: this.seat.mode,
       foot: this.onFoot?.hud() ?? null,
       lookAt: this.lookAtText(),
       boost: this.seat.boost,
       drift: seatDrift,
       view: this.seat.view,
-      cam: this.seat.mode === "follow" ? this.view.specView(this.followsInChaseView) : this.view.flying ? "free" : null,
+      cam: this.seat.mode === "follow" ? this.view.specView(this.followsInChaseView) : this.view.flying ? "free" : this.autoCamOn ? "auto" : null,
       pad: this.pad.label,
       padFamily: this.pad.family,
       realism: HANDLING.realism,

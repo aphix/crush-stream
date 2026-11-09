@@ -4,6 +4,7 @@ import { HASH_RANGE, HOLD_MAX_SECONDS, HOLD_MIN_SECONDS, INTERRUPT_INTEREST, INT
 export const SUBJECT = { civilian: 0, cop: 1, driver: 2, wreck: 3, knock: 4 } as const;
 export type SubjectKind = (typeof SUBJECT)[keyof typeof SUBJECT];
 
+/** No subject yet, and no one in a recent slot. */
 const NONE = -1;
 
 /** The subjects worth a look this scan, as parallel arrays sized once: what each is, which one, how interesting (0-1). */
@@ -36,7 +37,7 @@ export class AutoCandidates {
 }
 
 /** What the director asks of the world. */
-export type AutoScan = {
+type AutoScan = {
   /** Writes every subject worth watching now into `table`, already cleared. */
   fill(table: AutoCandidates): void;
   /** Whether the subject can still be watched: shown, in the world, not the viewer's own car. */

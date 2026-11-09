@@ -83,6 +83,11 @@ export class OpenWorldLaw {
   }
 
   /** Whether the police have the traffic's cars to patrol in (false: they are on foot). */
+  /** The foot cops' poses, as drawn: where each is, what he is doing. */
+  get copPoses(): CrowdPoses {
+    return this.scene.copPoses;
+  }
+
   get patrolling(): boolean {
     return this.scene.patrolling;
   }

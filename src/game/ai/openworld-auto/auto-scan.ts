@@ -9,7 +9,7 @@ import { buildingLines, civilianLine, historyLines, moodOf } from "../civilians/
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import { ACTIVITY } from "../civilians/civilian-activity.ts";
 import { CRIMINAL_INTEREST, PERSON_SHOT, SPOT_SHOT, WANTED_INTEREST } from "./auto-constants.ts";
-import { type AutoCandidates, type AutoScan, SUBJECT, type SubjectKind } from "./auto-director.ts";
+import { type AutoCandidates, SUBJECT, type SubjectKind } from "./auto-director.ts";
 import { activityInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
 
 /** What the scan reads of the open world; each is null (or empty) where the thing is not there. */
@@ -40,7 +40,7 @@ export function autoCapacity(residents: number, cops: number, cars: number, even
  * The open world as the Auto director sees it: every civilian, foot cop and driver worth a look and why (`fill`), whether one can still be watched,
  * where to stand round one (`poseOf`) and what the look-at bubble says of it (`textOf`). The same bubble the panel shows when the eye is close.
  */
-export class OpenWorldScan implements AutoScan {
+export class OpenWorldScan {
   private readonly world: AutoWorld;
   private heat = new Float32Array(0);
 

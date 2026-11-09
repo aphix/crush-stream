@@ -1,3 +1,5 @@
+import { CHEST_HEIGHT } from "../civilians/civilian-crowd-constants.ts";
+
 /** The owner's ask: a subject is held 5 to 10 seconds, and not a second less. */
 export const HOLD_MIN_SECONDS = 5;
 export const HOLD_MAX_SECONDS = 10;
@@ -41,6 +43,6 @@ export const DRIVER_FULL_SPEED = 20;
 /** A car under this speed (m/s) is parked or stopped at a light: not worth following. */
 export const DRIVER_STOPPED_SPEED = 0.5;
 /** Where the camera stands round a person (m): behind him, over his feet, aimed at his chest. */
-export const PERSON_SHOT = { back: 3.6, height: 1.9, aimUp: 1.35 } as const;
+export const PERSON_SHOT = { back: 3.6, height: 1.9, aimUp: CHEST_HEIGHT } as const;
 /** Where it stands round a spot, the front of a wrecked building or where someone was knocked down (m). */
 export const SPOT_SHOT = { back: 12, height: 3.2, aimUp: 2.5 } as const;

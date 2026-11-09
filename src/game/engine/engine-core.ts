@@ -208,6 +208,14 @@ export abstract class EngineCore {
   protected lookAtText(): LookAtHud | null {
     return null;
   }
+  /** The open world's Auto camera is the view. */
+  protected get autoCamOn(): boolean {
+    return false;
+  }
+  /** The camera key's step through the open world's Auto camera, which sits last in the driven car's views: true when it took the press (Auto came on), else the seat's views step. */
+  protected cycleAutoCamera(): boolean {
+    return false;
+  }
   /** The crowd's end of the crowd message (`NetGame.crowdLink`); null until the open world's crowd exists. */
   protected crowdLink(): CrowdLink | null {
     return null;

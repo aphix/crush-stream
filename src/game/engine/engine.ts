@@ -545,6 +545,22 @@ export class CrashEngine extends EngineGarage {
     return this.openWorld.lookAt();
   }
 
+  protected override get autoCamOn(): boolean {
+    return this.showOpenWorld && this.openWorld.autoOn;
+  }
+
+  /** In the open world the driven car's last view (the hood's) is followed by Auto, and Auto by the first (the chase). */
+  protected override cycleAutoCamera(): boolean {
+    if (!this.showOpenWorld || this.seat.mode !== "drive") return false;
+    if (this.openWorld.autoOn) {
+      this.openWorld.setAuto(false);
+      return false;
+    }
+    if (this.seat.view !== "first") return false;
+    this.openWorld.setAuto(true);
+    return true;
+  }
+
   private makeRace(): RaceDirector {
     return new RaceDirector({
       scene: this.scene,
@@ -1320,7 +1336,15 @@ export class CrashEngine extends EngineGarage {
     // The crash cam plays its cuts first (letterbox, bars and clock too); a thrown driver's ride-along, which opens on his
     // exit's windshield and then frames the dummy, waits for its window to close (the range's own dummy cam rides at once).
     // A drag hands the ride to the orbit around the dummy, the ride's cuts waiting; the ride then picks up from the user's view.
-    if (this.onFoot.aim(wallDt)) return;
+    if (this.onFoot.aim(wallDt)) {
+      this.openWorld.setAuto(false);
+      return;
+    }
+    if (this.showOpenWorld && this.openWorld.aimAuto(this.camera, this.chaseSight(true), wallDt)) {
+      this.view.setLens(null, false);
+      this.view.pos.copy(this.camera.position);
+      return;
+    }
     // The Range's ride takes the camera while the crash cam cuts (it does not wait for it): the ride's lens is the shot's, not the cut's.
     const cut = this.cine.direct(this.camera, wallDt, !this.view.flying && !this.view.userFramed && this.seat.mode !== "drive", null, !(this.showRange && this.ragdolls.rideAlong));
     if (this.view.flying) {
