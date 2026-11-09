@@ -1,7 +1,7 @@
 import { detCos, detSin } from "../../kernel/physics-core.js";
 import { PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
-import { LEVELS } from "./interior-kinds.ts";
+import { bayFloorsOf, buildingHeight, DEFAULT_STOREYS, levelsOf } from "./interior-kinds.ts";
 import type { Lots } from "./openworld-layout.ts";
 import { PLACE_KIND, type Place } from "./walk-graph.ts";
 
@@ -16,9 +16,8 @@ export function drawnHalf(extent: number): number {
   return (BLOCK_FACE_HALF / PREFABS[PREFAB.building].size[0]) * extent;
 }
 
-/** Storey heights (m) of a three-storey rowhome: ground storey, each floor above, the parapet over the top floor. */
-export const HOME_LEVELS = { storeys: 3, ground: 3.6, storey: 3.2, parapet: 0.9 } as const;
-export const HOME_HEIGHT = HOME_LEVELS.ground + (HOME_LEVELS.storeys - 1) * HOME_LEVELS.storey + HOME_LEVELS.parapet;
+/** The height (m) of a three-storey rowhome: what the roofline cornice is built at (a house of any other count stands it up or down by the difference). */
+export const HOME_HEIGHT = buildingHeight(DEFAULT_STOREYS, false);
 
 /** Stone steps up to the door: 5 risers of 0.18 m (the interior floor sits on the top one), 0.28 m treads, a 0.5 m landing at the wall, 1.6 m wide (door 1.0 m and 0.3 m of stone each side). */
 const STOOP_RISE = 0.18;
@@ -61,9 +60,6 @@ export function homeDoorPoint(lotX: number, frontZ: number, yaw: number, depth: 
  */
 const BAY_FRONT = 1.4;
 const BAY_OUT = 0.7;
-/** A bay window's sill over its floor and its height (m): a 1.5 m sash window. */
-const BAY_SILL_ABOVE_FLOOR = 0.75;
-const BAY_WINDOW_HEIGHT = 1.5;
 /** Over the top window: the belt band, a panel and the roof slab (m). */
 const BAY_CAP_BAND = 0.25;
 const BAY_CAP_PANEL = 0.15;
@@ -73,11 +69,16 @@ const BAY_PLINTH_BAND = 0.15;
 
 type BayFloor = { sill: number; head: number };
 
-/** Every storey's bay window, a sash window over each of the rowhome interior's floors: the raised ground storey (its floor is the door sill), then each floor above. */
-export const BAY_FLOORS: readonly BayFloor[] = LEVELS.rowhome.floors.map((floor): BayFloor => {
-  const sill = floor + BAY_SILL_ABOVE_FLOOR;
-  return { sill, head: sill + BAY_WINDOW_HEIGHT };
-});
+/**
+ * The bay stack of a house of `storeys` storeys: a sash window over each of the rowhome interior's floors (the raised ground storey's floor is the door sill, then each floor above) and where its roof slab tops out (m).
+ * The interior draws its alcoves from the same floors.
+ */
+export function bayStackOf(storeys: number): { floors: readonly BayFloor[]; top: number } {
+  const floors = bayFloorsOf(levelsOf("rowhome", storeys).floors);
+  return { floors, top: floors[floors.length - 1]!.head + BAY_CAP_BAND + BAY_CAP_PANEL + BAY_CAP_SLAB };
+}
+
+const THREE_STOREY_TOP = bayStackOf(DEFAULT_STOREYS).top;
 
 export const BAY = {
   front: BAY_FRONT,
@@ -85,13 +86,13 @@ export const BAY = {
   width: BAY_FRONT + 2 * BAY_OUT,
   /** The footprint's middle across the lot (u). */
   across: BAY_ACROSS,
-  windowHeight: BAY_WINDOW_HEIGHT,
   plinthTop: STOOP.sill,
   plinthBand: BAY_PLINTH_BAND,
   capBand: BAY_CAP_BAND,
   capPanel: BAY_CAP_PANEL,
   capSlab: BAY_CAP_SLAB,
-  top: BAY_FLOORS[BAY_FLOORS.length - 1]!.head + BAY_CAP_BAND + BAY_CAP_PANEL + BAY_CAP_SLAB,
+  /** The three-storey stack's roof slab (m). */
+  top: THREE_STOREY_TOP,
 } as const;
 
 /** A point of the bay's plan: out from the facade face, across the lot (u). */
@@ -109,8 +110,8 @@ export function bayOutline(offset = 0): readonly BayCorner[] {
   ];
 }
 
-/** A rowhome's front as the kit stands it: a point on the drawn facade at the lot's middle, the building's yaw (its front is local +x), its depth (m), its facade style and a number that picks the house's accent. */
-export type Frontage = { x: number; z: number; yaw: number; depth: number; style: string; variant: number };
+/** A rowhome's front as the kit stands it: a point on the drawn facade at the lot's middle, the building's yaw (its front is local +x), its depth (m), its facade style, its storeys and a number that picks the house's accent. */
+export type Frontage = { x: number; z: number; yaw: number; depth: number; style: string; storeys: number; variant: number };
 
 /** A pseudo-random number from the lot's place: the same on every peer, whatever the order the places come in. */
 function variantOf(x: number, z: number): number {
@@ -121,9 +122,9 @@ function variantOf(x: number, z: number): number {
 export function homeFrontages(places: readonly Place[]): Frontage[] {
   const frontages: Frontage[] = [];
   for (const place of places) {
-    if (place.kind !== PLACE_KIND.home) continue;
+    if (place.kind !== PLACE_KIND.home || place.interior !== "rowhome") continue;
     const face = drawnHalf(place.depth);
-    frontages.push({ x: place.x + detCos(place.yaw) * face, z: place.z - detSin(place.yaw) * face, yaw: place.yaw, depth: place.depth, style: place.style, variant: variantOf(place.x, place.z) });
+    frontages.push({ x: place.x + detCos(place.yaw) * face, z: place.z - detSin(place.yaw) * face, yaw: place.yaw, depth: place.depth, style: place.style, storeys: place.storeys, variant: variantOf(place.x, place.z) });
   }
   return frontages;
 }
@@ -154,7 +155,7 @@ const RAMP_TOP = STOOP.rise * (STOOP.steps - 1);
  */
 export function facadeSolidsOf(frontage: Frontage): FacadeSolid[] {
   return [
-    boxOn(frontage, BAY.out / 2, BAY.across, [BAY.out, BAY.top, BAY.width - BAY.out]),
+    boxOn(frontage, BAY.out / 2, BAY.across, [BAY.out, bayStackOf(frontage.storeys).top, BAY.width - BAY.out]),
     { ...boxOn(frontage, (STOOP.landing + STOOP.run) / 2, DOOR.across, [STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width]), stairs: true },
     boxOn(frontage, STOOP.landing / 2, DOOR.across, [STOOP.landing, STOOP.sill, STOOP.width]),
   ];

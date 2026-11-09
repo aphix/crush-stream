@@ -2,7 +2,7 @@ import { ROOFLINE } from "../constants.ts";
 import table from "./facade-windows.json" with { type: "json" };
 import { BACK_DOOR, BAY_WIDTH, BLOCK_HEIGHT, buildingHeight, ceilingOver, DEFAULT_STOREYS, levelsOf, SHOPFRONT, storeyLines } from "./interior-kinds.ts";
 import { LAYOUT } from "./openworld-constants.ts";
-import { BAY, drawnHalf } from "./openworld-facade-solids.ts";
+import { BAY, bayStackOf, drawnHalf } from "./openworld-facade-solids.ts";
 import type { InteriorKind, Place } from "./walk-graph.ts";
 
 /**
@@ -152,7 +152,7 @@ export function roomWindows(place: RoomPlace): RoomWindow[] {
   const out: RoomWindow[] = [];
   for (const window of facadeWindows(place)) {
     if (window.y0 < floorY || window.y1 > topCeiling) continue;
-    if (place.interior === "rowhome" && window.face === FACADE_FACE.street && window.along1 > bayFrom && window.along0 < bayTo && window.y0 < BAY.top) continue;
+    if (place.interior === "rowhome" && window.face === FACADE_FACE.street && window.along1 > bayFrom && window.along0 < bayTo && window.y0 < bayStackOf(place.storeys).top) continue;
     if (doorwaysOf(place.interior, place.width, window.face, floorY).some((door) => window.along1 > door.centre - door.half && window.along0 < door.centre + door.half && window.y0 < door.head + DOOR_SURROUND)) continue;
     const level = floors.reduce((found, floor, at) => (window.y0 >= floor ? at : found), 0);
     if (window.y1 > ceilingOver(floors, topCeiling, level) + CEILING_TOLERANCE) continue;

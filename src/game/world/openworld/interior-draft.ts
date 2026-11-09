@@ -30,7 +30,7 @@ import {
   TURN,
 } from "./interior-kinds.ts";
 import { FACADE_FACE, type RoomWindow } from "./facade-windows.ts";
-import { BAY, BAY_FLOORS, bayOutline } from "./openworld-facade-solids.ts";
+import { BAY, bayOutline } from "./openworld-facade-solids.ts";
 import type { InteriorKind } from "./walk-graph.ts";
 
 /** Glass sits this far (m) inside the bay kit's outer walls, so it never shares a plane with them. */
@@ -206,7 +206,7 @@ export class Draft {
 
   /** A rowhome's bay window on `level`: the street wall is open across its mouth from the floor up to the glass's head, and the alcove (floor, apron, ceiling) and its three panes stand outside the wall. */
   private bayOpening(level: number): Opening[] {
-    if (this.kind !== "rowhome" || level >= BAY_FLOORS.length) return [];
+    if (this.kind !== "rowhome") return [];
     const { sill, head } = bayFloorsOf(this.floors)[level]!;
     const floorY = this.floors[level]!;
     const outline = bayOutline(-GLASS_INSET);

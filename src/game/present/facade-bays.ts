@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
+import { buildingHeight, MAX_STOREYS, MIN_STOREYS } from "../world/openworld/interior-kinds.ts";
 import { drawnHalf, HOME_HEIGHT, type Frontage } from "../world/openworld/openworld-facade-solids.ts";
 import { BRICK_STYLE } from "../world/openworld/openworld-programme.ts";
 import { buildAirconGeometry, buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildFanlightGeometry, buildRailingGeometry, buildRoofGeometry, buildShutterGeometry, buildStoopGeometry, buildSurroundGeometry, buildWindowBoxGeometry, TINT_ATTRIBUTE } from "./facade-bay-parts.ts";
@@ -90,13 +91,11 @@ function makeRailMaterial(textures: KitTextures): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ map: textures.rail, alphaTest: RAIL_ALPHA_TEST, side: THREE.DoubleSide, roughness: RAIL_ROUGHNESS, metalness: RAIL_METALNESS });
 }
 
-type Kind = "bay" | "stoop" | "railing" | "surround" | "fanlight" | "cornice" | "roof" | "condenser" | "deck" | "shutter" | "aircon" | "windowBox";
-
 /** Where one instance of a kit mesh stands against a house: across the lot (u), up from the ground (or the roof, for a roof piece), and its scale (1: the geometry as built). */
 type Placement = { across: number; up: number; width: number; height: number; depth: number };
 
 /** One instanced mesh of the kit: its geometry and material, the placements each house gives it (none: the house has none) and its per-instance colour (none: the mesh has no colours). */
-type KitKind = { kind: Kind; geometry: THREE.BufferGeometry; material: THREE.Material; placements: (frontage: Frontage) => readonly Placement[]; colourOf: ((frontage: Frontage) => number) | null };
+type KitKind = { name: string; geometry: THREE.BufferGeometry; material: THREE.Material; placements: (frontage: Frontage) => readonly Placement[]; colourOf: ((frontage: Frontage) => number) | null };
 
 /** The share (of 100) of houses with a condenser on the roof, with a roof deck and with an air-conditioning unit, each from its own bits of the house's variant. */
 const CONDENSER_SHARE = 45;
@@ -124,59 +123,71 @@ const IDENTITY_TURN = new THREE.Quaternion();
 
 const IN_PLACE: Placement = { across: 0, up: 0, width: 1, height: 1, depth: 1 };
 
-/** How high (m) a house's roof stands: the 14 m block's top and the per-building parapet lift the facade shader gives it, at the home's height. */
+/** How high (m) a house stands: its roofline, the height of its storeys. */
+const homeHeightOf = (frontage: Frontage): number => buildingHeight(frontage.storeys, false);
+
+/** How high (m) a house's roof stands: the 14 m block's top and the per-building parapet lift the facade shader gives it, at the house's height. */
 function roofTopOf(frontage: Frontage): number {
   const face = drawnHalf(frontage.depth);
   const block = PREFABS[PREFAB.building].size[1];
-  return ((block + roofLiftAt(frontage.x - detCos(frontage.yaw) * face, frontage.z + detSin(frontage.yaw) * face)) * HOME_HEIGHT) / block;
+  return ((block + roofLiftAt(frontage.x - detCos(frontage.yaw) * face, frontage.z + detSin(frontage.yaw) * face)) * homeHeightOf(frontage)) / block;
 }
 
 /** The share of houses (out of `PERCENT`) a house is among, by the `bits` of its variant. */
 const inShare = (frontage: Frontage, bits: number, share: number): boolean => (frontage.variant >>> bits) % PERCENT < share;
 
-/** `compute` for a facade style, once per style. */
-function byStyle<T>(compute: (style: string) => readonly T[]): (style: string) => readonly T[] {
+/** `compute` for a facade style and a storey count, once for each. */
+function byStoreys<T>(compute: (style: string, storeys: number) => readonly T[]): (style: string, storeys: number) => readonly T[] {
   const made = new Map<string, readonly T[]>();
-  return (style) => {
-    let value = made.get(style);
+  return (style, storeys) => {
+    const key = `${style}@${storeys}`;
+    let value = made.get(key);
     if (value === undefined) {
-      value = compute(style);
-      made.set(style, value);
+      value = compute(style, storeys);
+      made.set(key, value);
     }
     return value;
   };
+}
+
+/** One bay stack for each storey count a house has, each on the houses of that count: a stack has a window over every floor, so a taller house's is taller. */
+function bayKinds(material: THREE.Material): KitKind[] {
+  return Array.from({ length: MAX_STOREYS - MIN_STOREYS + 1 }, (_, at): KitKind => {
+    const storeys = MIN_STOREYS + at;
+    return { name: `bay-${storeys}`, geometry: buildBayGeometry(storeys), material, placements: (frontage) => (frontage.storeys === storeys ? [IN_PLACE] : []), colourOf: (frontage) => accentOf(frontage).panel };
+  });
 }
 
 /** What each kind of the kit stands as, per house: the ground pieces once, the roof pieces on the lifted roof, the shutters where the table has windows with room, the air-conditioner in one upper window. */
 function kitKinds(textures: { kit: THREE.Material; rail: THREE.Material }): readonly KitKind[] {
   const everyHouse = (): readonly Placement[] => [IN_PLACE];
   const onRoof = (frontage: Frontage): readonly Placement[] => [{ ...IN_PLACE, up: roofTopOf(frontage) }];
-  const shuttersFor = byStyle(shuttersOf);
-  const windowsFor = byStyle(airconWindowsOf);
-  const boxWindowsFor = byStyle(visibleWindowsOf);
+  const shuttersFor = byStoreys(shuttersOf);
+  const windowsFor = byStoreys(airconWindowsOf);
+  const boxWindowsFor = byStoreys(visibleWindowsOf);
   const airconWindow = (frontage: Frontage): SillWindow | null => {
-    const candidates = windowsFor(frontage.style);
+    const candidates = windowsFor(frontage.style, frontage.storeys);
     return candidates.length === 0 || !inShare(frontage, AIRCON_BITS, AIRCON_SHARE) ? null : candidates[(frontage.variant >>> AIRCON_BITS) % candidates.length]!;
   };
   return [
-    { kind: "bay", geometry: buildBayGeometry(), material: textures.kit, placements: everyHouse, colourOf: (frontage) => accentOf(frontage).panel },
-    { kind: "stoop", geometry: buildStoopGeometry(), material: textures.kit, placements: everyHouse, colourOf: (frontage) => MARBLE_TINTS[frontage.variant % MARBLE_TINTS.length]! },
-    { kind: "railing", geometry: buildRailingGeometry(), material: textures.rail, placements: everyHouse, colourOf: null },
-    { kind: "surround", geometry: buildSurroundGeometry(), material: textures.kit, placements: (frontage) => (ARCHED_DOOR_STYLES.includes(frontage.style) ? [] : [IN_PLACE]), colourOf: () => WHITE },
-    { kind: "fanlight", geometry: buildFanlightGeometry(), material: textures.kit, placements: (frontage) => (ARCHED_DOOR_STYLES.includes(frontage.style) ? [IN_PLACE] : []), colourOf: () => WHITE },
-    { kind: "cornice", geometry: buildCorniceGeometry(), material: textures.kit, placements: everyHouse, colourOf: (frontage) => accentOf(frontage).cornice },
-    { kind: "roof", geometry: buildRoofGeometry(), material: textures.kit, placements: onRoof, colourOf: () => WHITE },
-    { kind: "condenser", geometry: buildCondenserGeometry(), material: textures.kit, placements: (frontage) => (inShare(frontage, CONDENSER_BITS, CONDENSER_SHARE) ? onRoof(frontage) : []), colourOf: () => WHITE },
-    { kind: "deck", geometry: buildDeckGeometry(), material: textures.kit, placements: (frontage) => (inShare(frontage, DECK_BITS, DECK_SHARE) ? onRoof(frontage) : []), colourOf: () => WHITE },
+    ...bayKinds(textures.kit),
+    { name: "stoop", geometry: buildStoopGeometry(), material: textures.kit, placements: everyHouse, colourOf: (frontage) => MARBLE_TINTS[frontage.variant % MARBLE_TINTS.length]! },
+    { name: "railing", geometry: buildRailingGeometry(), material: textures.rail, placements: everyHouse, colourOf: null },
+    { name: "surround", geometry: buildSurroundGeometry(), material: textures.kit, placements: (frontage) => (ARCHED_DOOR_STYLES.includes(frontage.style) ? [] : [IN_PLACE]), colourOf: () => WHITE },
+    { name: "fanlight", geometry: buildFanlightGeometry(), material: textures.kit, placements: (frontage) => (ARCHED_DOOR_STYLES.includes(frontage.style) ? [IN_PLACE] : []), colourOf: () => WHITE },
+    { name: "cornice", geometry: buildCorniceGeometry(), material: textures.kit, placements: (frontage) => [{ ...IN_PLACE, up: homeHeightOf(frontage) - HOME_HEIGHT }], colourOf: (frontage) => accentOf(frontage).cornice },
+    { name: "roof", geometry: buildRoofGeometry(), material: textures.kit, placements: onRoof, colourOf: () => WHITE },
+    { name: "condenser", geometry: buildCondenserGeometry(), material: textures.kit, placements: (frontage) => (inShare(frontage, CONDENSER_BITS, CONDENSER_SHARE) ? onRoof(frontage) : []), colourOf: () => WHITE },
+    { name: "deck", geometry: buildDeckGeometry(), material: textures.kit, placements: (frontage) => (inShare(frontage, DECK_BITS, DECK_SHARE) ? onRoof(frontage) : []), colourOf: () => WHITE },
     {
-      kind: "shutter",
+      name: "shutter",
       geometry: buildShutterGeometry(),
       material: textures.kit,
-      placements: (frontage) => shuttersFor(frontage.style).map((shutter) => ({ across: shutter.across, up: shutter.sill, width: shutter.width, height: shutter.height, depth: 1 })),
+      placements: (frontage) => shuttersFor(frontage.style, frontage.storeys).map((shutter) => ({ across: shutter.across, up: shutter.sill, width: shutter.width, height: shutter.height, depth: 1 })),
       colourOf: (frontage) => SHUTTER_COLOURS[(frontage.variant >>> SHUTTER_BITS) % SHUTTER_COLOURS.length]!,
     },
     {
-      kind: "aircon",
+      name: "aircon",
       geometry: buildAirconGeometry(),
       material: textures.kit,
       placements: (frontage) => {
@@ -186,10 +197,10 @@ function kitKinds(textures: { kit: THREE.Material; rail: THREE.Material }): read
       colourOf: () => WHITE,
     },
     {
-      kind: "windowBox",
+      name: "windowBox",
       geometry: buildWindowBoxGeometry(),
       material: textures.kit,
-      placements: (frontage) => (inShare(frontage, WINDOW_BOX_BITS, WINDOW_BOX_SHARE) ? windowBoxPlacements(boxWindowsFor(frontage.style), 1 + ((frontage.variant >>> WINDOW_BOX_STOREY_BITS) % WINDOW_BOX_STOREYS), airconWindow(frontage)) : []),
+      placements: (frontage) => (inShare(frontage, WINDOW_BOX_BITS, WINDOW_BOX_SHARE) ? windowBoxPlacements(boxWindowsFor(frontage.style, frontage.storeys), 1 + ((frontage.variant >>> WINDOW_BOX_STOREY_BITS) % WINDOW_BOX_STOREYS), airconWindow(frontage)) : []),
       colourOf: (frontage) => accentOf(frontage).panel,
     },
   ];
@@ -211,10 +222,10 @@ export class FacadeBays {
     const position = new THREE.Vector3();
     const colour = new THREE.Color();
     let triangles = 0;
-    for (const { kind, geometry, material, placements, colourOf } of kitKinds({ kit: this.kitMaterial, rail: this.railMaterial })) {
+    for (const { name, geometry, material, placements, colourOf } of kitKinds({ kit: this.kitMaterial, rail: this.railMaterial })) {
       const stood = frontages.flatMap((frontage) => placements(frontage).map((placement) => ({ frontage, placement })));
       const mesh = new THREE.InstancedMesh(geometry, material, stood.length);
-      mesh.name = `facade-${kind}`;
+      mesh.name = `facade-${name}`;
       mesh.receiveShadow = true;
       for (const [at, { frontage, placement }] of stood.entries()) {
         // The kit's x is the lot's u negated, and its z is out of the facade.

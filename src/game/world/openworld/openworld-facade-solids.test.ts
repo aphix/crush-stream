@@ -6,16 +6,15 @@ import { propColliders } from "../placements.ts";
 import { flightHeightAt, flightsOf } from "../stairs.ts";
 import { planBlocks } from "./openworld-blocks.ts";
 import { FACING } from "./openworld-constants.ts";
-import { BAY, BAY_FLOORS, bayOutline, DOOR, drawnHalf, facadeSolidProps, facadeSolidsOf, HOME_HEIGHT, HOME_LEVELS, homeDoorPoint, homeFrontages, LOT_WIDTH, STOOP, stoopStepRange, type Frontage } from "./openworld-facade-solids.ts";
-import { LEVELS, ROWHOME_FLOOR_Y, STREET_SKIN } from "./interior-kinds.ts";
+import { BAY, bayOutline, bayStackOf, DOOR, drawnHalf, facadeSolidProps, facadeSolidsOf, HOME_HEIGHT, homeDoorPoint, homeFrontages, LOT_WIDTH, STOOP, stoopStepRange, type Frontage } from "./openworld-facade-solids.ts";
+import { buildingHeight, CORNICE_DEPTH, levelsOf, MAX_STOREYS, MIN_STOREYS, ROWHOME_FLOOR_Y, STREET_SKIN } from "./interior-kinds.ts";
 import { interiorDoor, interiorSolids } from "./interior-plan.ts";
 import { layOutLots } from "./openworld-lots.ts";
-import { HOME_STYLES } from "./openworld-programme.ts";
 import { PLACE_KIND } from "./walk-graph.ts";
 
 const lots = layOutLots();
 const playable = lots.places.slice(0, lots.backdropStart);
-const homes = playable.filter((place) => place.kind === PLACE_KIND.home);
+const homes = playable.filter((place) => place.kind === PLACE_KIND.home && place.interior === "rowhome");
 const frontages = homeFrontages(playable);
 const lotPlans = planBlocks(lots.geometry).playable.flatMap((plan) => plan.lots);
 
@@ -27,6 +26,9 @@ const DOOR_HOLE_HALF_WIDTH = 0.5;
 const DOOR_HOLE_ACROSS = 1.8;
 /** A bay projects 0.6 to 0.9 m over the sidewalk (m). */
 const BAY_OUT_RANGE = [0.6, 0.9] as const;
+/** The storey counts houses are built with, and how many different ones the layout must use. */
+const STOREY_COUNTS = Array.from({ length: MAX_STOREYS - MIN_STOREYS + 1 }, (_, at) => MIN_STOREYS + at);
+const MIN_DISTINCT_STOREYS = 3;
 /** The door the kit and the interior name may differ by no more than this (m). */
 const DOOR_MATCH = 1e-6;
 /** Lots per face the door comparison must have covered. */
@@ -61,14 +63,19 @@ describe("given the rowhomes of the open world's layout", () => {
     expect(accents.size, "accents among the houses").toBeGreaterThanOrEqual(5);
   });
 
-  // mutation: sed -i 's/const PARAPET = 0.9;/const PARAPET = 1.2;/' src/game/world/openworld/openworld-lots.ts
-  it("when the homes' buildings are measured, then each is one lot wide and as tall as the bay stack and cornice are cut for", () => {
-    const buildings = lots.buildings.filter((building) => HOME_STYLES.includes(building.style));
-    expect(buildings.length, "home buildings").toBeGreaterThan(50);
-    const heights = buildings.map((building) => building.height);
-    expect(Math.max(...heights), "tallest home (m)").toBeCloseTo(HOME_HEIGHT, 6);
-    expect(Math.min(...heights), "lowest home (m)").toBeCloseTo(HOME_HEIGHT, 6);
-    expect(HOME_LEVELS.storeys, "storeys the layout builds").toBe(playable.find((place) => place.kind === PLACE_KIND.home)!.storeys);
+  // mutation: sed -i 's/height: buildingHeight(storeys, false), style, enterable: true/height: buildingHeight(DEFAULT_STOREYS, false), style, enterable: true/' src/game/world/openworld/openworld-lots.ts
+  it("when the homes' buildings are measured, then each is one lot wide and as tall as its place's storeys make it, and the layout builds houses of several storey counts", () => {
+    const counts = new Set<number>();
+    const wrong: string[] = [];
+    for (const home of homes) {
+      const building = lots.buildings.find((candidate) => Math.abs(candidate.x - home.x) < DOOR_MATCH && Math.abs(candidate.z - home.z) < DOOR_MATCH);
+      counts.add(home.storeys);
+      if (building === undefined || Math.abs(building.height - buildingHeight(home.storeys, false)) > EPSILON) wrong.push(`${home.name}: ${building?.height.toFixed(2)} m for ${home.storeys} storeys`);
+    }
+    expect(wrong.slice(0, 3).join("; "), "homes whose building is not as tall as their storeys").toBe("");
+    expect(Math.min(...counts), "fewest storeys").toBeGreaterThanOrEqual(MIN_STOREYS);
+    expect(Math.max(...counts), "most storeys").toBeLessThanOrEqual(MAX_STOREYS);
+    expect(counts.size, "storey counts the layout builds").toBeGreaterThanOrEqual(MIN_DISTINCT_STOREYS);
     expect(Math.max(...homes.map((place) => Math.abs(place.width - LOT_WIDTH))), "widest miss of a home's width to the lot width (m)").toBeLessThan(EPSILON);
   });
 
@@ -209,7 +216,7 @@ describe("given one rowhome's stoop", () => {
     expect(rampAt.across, "ramp on the door's line (u)").toBeCloseTo(DOOR.across, 9);
     expect(landing.size[2], "stoop width (m)").toBeCloseTo(STOOP.width, 9);
     const bayAt = against(frontage, bay.x, bay.z);
-    expect(bay.size[1], "bay stack's box reaches the roof slab (m)").toBeCloseTo(BAY.top, 9);
+    expect(bay.size[1], "bay stack's box reaches the roof slab (m)").toBeCloseTo(bayStackOf(frontage.storeys).top, 9);
     expect(bayAt.out - bay.size[0] / 2, "bay box starts at the facade").toBeCloseTo(0, 9);
     expect(bayAt.across, "bay box on the bay's line (u)").toBeCloseTo(BAY.across, 9);
   });
@@ -224,16 +231,33 @@ describe("given the course's rowhome colliders", () => {
     expect(behind.length, "colliders reaching behind the facade").toBe(0);
   });
 
-  // mutation: sed -i 's/const sill = floor + BAY_SILL_ABOVE_FLOOR;/const sill = floor + BAY_SILL_ABOVE_FLOOR * (1 + floor \/ 30);/' src/game/world/openworld/openworld-facade-solids.ts
-  it("when each storey's bay window is read against the rowhome interior's floors, then there is one a floor, every sill the same sensible height over its floor and every head under the next floor", () => {
-    const floors = LEVELS.rowhome.floors;
-    expect(BAY_FLOORS.length, "bay windows").toBe(floors.length);
-    const first = BAY_FLOORS[0]!.sill - floors[0]!;
-    expect(first, "ground storey sill over the raised floor (m)").toBeGreaterThanOrEqual(SILL_ABOVE_FLOOR_MIN);
-    for (const [storey, bay] of BAY_FLOORS.entries()) {
-      expect(bay.sill - floors[storey]!, `storey ${storey} sill over its floor against the ground storey's (m)`).toBeCloseTo(first, 9);
-      expect(bay.head, `storey ${storey} head under the next floor or the top ceiling (m)`).toBeLessThan(floors[storey + 1] ?? LEVELS.rowhome.topCeiling);
+  // mutation: sed -i 's/const BAY_CAP_SLAB = 0.15;/const BAY_CAP_SLAB = 1.5;/' src/game/world/openworld/openworld-facade-solids.ts (or sed -i 's/const BAY_SILL_ABOVE_FLOOR = 0.75;/const BAY_SILL_ABOVE_FLOOR = 0.1;/' src/game/world/openworld/interior-kinds.ts)
+  it("when the bay stack of a house of each storey count is read, then it has a window over every floor of its interior, the same height over each, every head under the next floor and the roof slab under the cornice", () => {
+    for (const storeys of STOREY_COUNTS) {
+      const stack = bayStackOf(storeys);
+      const { floors, topCeiling } = levelsOf("rowhome", storeys);
+      expect(stack.floors.length, `${storeys} storeys: bay windows`).toBe(storeys);
+      const first = stack.floors[0]!.sill - floors[0]!;
+      expect(first, `${storeys} storeys: ground storey sill over the raised floor (m)`).toBeGreaterThanOrEqual(SILL_ABOVE_FLOOR_MIN);
+      for (const [storey, bay] of stack.floors.entries()) {
+        expect(bay.sill - floors[storey]!, `${storeys} storeys: storey ${storey} sill over its floor against the ground storey's (m)`).toBeCloseTo(first, 9);
+        expect(bay.head, `${storeys} storeys: storey ${storey} head under the next floor or the top ceiling (m)`).toBeLessThan(floors[storey + 1] ?? topCeiling);
+      }
+      expect(stack.top, `${storeys} storeys: stack under the cornice (m)`).toBeLessThan(buildingHeight(storeys, false) - CORNICE_DEPTH);
     }
+  });
+
+  // mutation: sed -i 's/\[BAY.out, bayStackOf(frontage.storeys).top, BAY.width - BAY.out\]/[BAY.out, BAY.top, BAY.width - BAY.out]/' src/game/world/openworld/openworld-facade-solids.ts
+  it("when the bay boxes of the layout's houses are read, then each reaches its own stack's roof slab, and the storey counts give several heights", () => {
+    const tops = new Set<number>();
+    const wrong: string[] = [];
+    for (const frontage of frontages) {
+      const box = facadeSolidsOf(frontage)[0]!;
+      tops.add(Math.round(box.size[1] * 1000));
+      if (Math.abs(box.size[1] - bayStackOf(frontage.storeys).top) > EPSILON) wrong.push(`${frontage.storeys} storeys: box ${box.size[1].toFixed(2)} m`);
+    }
+    expect(wrong.slice(0, 3).join("; "), "bay boxes off their stack").toBe("");
+    expect(tops.size, "distinct bay box heights").toBeGreaterThanOrEqual(MIN_DISTINCT_STOREYS);
   });
 
   it("when the bay's outline is read, then its wall corners span the bay's width at the facade and its front stands out by the projection, the front as wide as the bay's front", () => {
@@ -250,7 +274,7 @@ describe("given the course's rowhome colliders", () => {
   it("when the bay stack is read, then it projects as a rowhome bay does, ends under the cornice and shares the lot with the stoop and the piers", () => {
     expect(BAY.out, "bay projection (m)").toBeGreaterThanOrEqual(BAY_OUT_RANGE[0]);
     expect(BAY.out, "bay projection (m)").toBeLessThanOrEqual(BAY_OUT_RANGE[1]);
-    expect(BAY.top, "stack ends under the cornice (m)").toBeLessThan(HOME_HEIGHT - HOME_LEVELS.parapet);
+    expect(BAY.top, "stack ends under the cornice (m)").toBeLessThan(HOME_HEIGHT - CORNICE_DEPTH);
     expect(BAY.across - BAY.width / 2, "bay's far edge inside the lot (u)").toBeGreaterThanOrEqual(-LOT_WIDTH / 2);
     expect(DOOR.across + STOOP.width / 2, "stoop's far edge inside the lot (u)").toBeLessThanOrEqual(LOT_WIDTH / 2);
     expect(DOOR.across - STOOP.width / 2 - (BAY.across + BAY.width / 2), "clear gap from the bay to the stoop (m)").toBeGreaterThan(0.4);

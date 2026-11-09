@@ -6,7 +6,7 @@ import { PREFABS } from "../catalog.ts";
 import { faceBands, FACADE_FACE, isOpenStyle, OPEN_SIDE, roomPlaceOf, roomWindows } from "./facade-windows.ts";
 import { buildingHeight, CORNICE_DEPTH, DEFAULT_STOREYS, levelsOf, MAX_STOREYS, MIN_STOREYS, OPENING, type InteriorPlan, type Opening } from "./interior-kinds.ts";
 import { planInterior } from "./interior-plan.ts";
-import { BAY, BAY_FLOORS } from "./openworld-facade-solids.ts";
+import { BAY, bayStackOf } from "./openworld-facade-solids.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import type { InteriorKind, Place } from "./walk-graph.ts";
 
@@ -53,7 +53,7 @@ describe("given every place that has an interior", () => {
     expect(missing.slice(0, 3).join("; "), "facade windows without an opening and glass").toBe("");
   });
 
-  // mutation: sed -i 's/const BAY_SILL_ABOVE_FLOOR = 0.75;/const BAY_SILL_ABOVE_FLOOR = 0.1;/' src/game/world/openworld/openworld-facade-solids.ts
+  // mutation: sed -i 's/const BAY_SILL_ABOVE_FLOOR = 0.75;/const BAY_SILL_ABOVE_FLOOR = 0.1;/' src/game/world/openworld/interior-kinds.ts
   it("when every window of every room is measured against its storey's floor, then its sill stands at least a set height above it, and under its ceiling", () => {
     const low: string[] = [];
     for (const place of furnished) {
@@ -62,7 +62,7 @@ describe("given every place that has an interior", () => {
         const sill = window.y0 - plan.floors[window.level]!;
         if (sill < MIN_SILL[place.interior!] - 1e-9) low.push(`${place.name} face ${window.face} level ${window.level}: sill ${sill.toFixed(2)} m over the floor`);
       }
-      for (const [level, bay] of BAY_FLOORS.entries()) if (place.interior === "rowhome" && bay.sill - plan.floors[level]! < MIN_SILL.rowhome) low.push(`${place.name} bay ${level}: sill ${(bay.sill - plan.floors[level]!).toFixed(2)} m over the floor`);
+      for (const [level, bay] of bayStackOf(place.storeys).floors.entries()) if (place.interior === "rowhome" && bay.sill - plan.floors[level]! < MIN_SILL.rowhome) low.push(`${place.name} bay ${level}: sill ${(bay.sill - plan.floors[level]!).toFixed(2)} m over the floor`);
     }
     expect(low.slice(0, 3).join("; "), "sills too low").toBe("");
   });
@@ -74,7 +74,7 @@ describe("given a rowhome's bay stack", () => {
 
   // mutation: sed -i 's/    if (this.kind !== "rowhome") return \[\];/    return [];/' src/game/world/openworld/interior-draft.ts
   it("when the street wall of each storey is read, then the room opens onto the bay's mouth from the floor up to the glass's head, with an alcove and three panes of glass round the bay's outline", () => {
-    for (const [level, bay] of BAY_FLOORS.entries()) {
+    for (const [level, bay] of bayStackOf(home.storeys).floors.entries()) {
       const mouth = wallOn(plan, level, FACADE_FACE.street).openings.find((opening) => opening.kind === OPENING.bay);
       expect(mouth, `storey ${level} bay mouth`).toBeDefined();
       expect(mouth!.centre, `storey ${level} mouth centre`).toBeCloseTo(BAY.across, 6);

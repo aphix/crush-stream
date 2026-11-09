@@ -3,7 +3,8 @@ import { detCos, detSin } from "../kernel/physics-core.js";
 import { afterAll, describe, expect, it } from "vitest";
 import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
-import { BAY, BAY_FLOORS, DOOR, BLOCK_FACE_HALF, drawnHalf, HOME_HEIGHT, homeFrontages, STOOP } from "../world/openworld/openworld-facade-solids.ts";
+import { buildingHeight, DEFAULT_STOREYS, MAX_STOREYS, MIN_STOREYS } from "../world/openworld/interior-kinds.ts";
+import { BAY, bayStackOf, DOOR, BLOCK_FACE_HALF, drawnHalf, homeFrontages, STOOP } from "../world/openworld/openworld-facade-solids.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { BRICK_STYLE } from "../world/openworld/openworld-programme.ts";
 import { buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildFanlightGeometry, buildRailingGeometry, buildRoofGeometry, buildStoopGeometry, buildSurroundGeometry } from "./facade-bay-parts.ts";
@@ -50,14 +51,18 @@ const DOOR_TO_WINDOW_GAP_MIN = 0.3;
 const LOUVRE_SLAT_ROW = 0;
 const LOUVRE_GAP_ROW = 0.1;
 const LOUVRE_CONTRAST_MIN = 40;
-const KIT_DRAWS = 12;
-const EVERY_HOUSE: readonly string[] = ["facade-bay", "facade-stoop", "facade-railing", "facade-cornice", "facade-roof"];
+const KIT_DRAWS = 15;
+const EVERY_HOUSE: readonly string[] = ["facade-stoop", "facade-railing", "facade-cornice", "facade-roof"];
+/** The storey counts houses are built with: a bay stack of each has its own mesh. */
+/** How many different storey counts the layout's houses must have. */
+const MIN_DISTINCT_STOREYS = 3;
+const STOREY_COUNTS = Array.from({ length: MAX_STOREYS - MIN_STOREYS + 1 }, (_, at) => MIN_STOREYS + at);
 /** The most shutters a house hangs: a pair on each of its upper storeys' windows on the door's half. */
 const SHUTTERS_PER_HOUSE_MAX = 4;
 /** The most window boxes a house stands: one on each of the windows of its storey the bay leaves. */
 const WINDOW_BOXES_PER_HOUSE_MAX = 2;
 /** The fanlight kit's about 415 a house plus a quarter of the houses' two 60-triangle window boxes (about 30 on average). */
-const TRIANGLES_PER_HOME_MAX = 480;
+const TRIANGLES_PER_HOME_MAX = 540;
 
 /** The x range of every vertex of `geometry`. */
 function xRange(geometry: THREE.BufferGeometry): { min: number; max: number } {
@@ -86,32 +91,37 @@ function extentAt(geometry: THREE.BufferGeometry, y: number): Extent {
   return extent;
 }
 
-describe("given the bay stack of a rowhome", () => {
-  const bay = buildBayGeometry();
+describe("given the bay stack of a rowhome of each storey count", () => {
+  const stacks = STOREY_COUNTS.map((storeys) => ({ storeys, bay: buildBayGeometry(storeys), floors: bayStackOf(storeys).floors }));
 
   // mutation: sed -i 's/ring(builder, floor.sill, floor.head, 0, WINDOW_CELLS, WHITE, FIXED);/ring(builder, floor.sill, floor.head, floor.sill > 5 ? 0.2 : 0, WINDOW_CELLS, WHITE, FIXED);/' src/game/present/facade-bay-parts.ts
-  it("when each floor's bay is measured at its sill, then every one has the same x range and projection, beside the door", () => {
-    for (const [at, floor] of BAY_FLOORS.entries()) {
-      const extent = extentAt(bay, floor.sill);
-      expect(extent.count, `vertices at floor ${at}'s sill`).toBeGreaterThan(0);
-      expect(extent.maxX - extent.minX, `width of floor ${at}'s bay (m)`).toBeCloseTo(BAY.width, 6);
-      expect((extent.maxX + extent.minX) / 2, `floor ${at}'s bay off its line (kit x, m)`).toBeCloseTo(-BAY.across, 6);
-      expect(extent.maxZ, `projection of floor ${at}'s bay (m)`).toBeCloseTo(BAY.out, 6);
+  it("when each floor's bay is measured at its sill, then every one has the same x range and projection, beside the door, and a house has a bay for each of its storeys", () => {
+    for (const { storeys, bay, floors } of stacks) {
+      for (const [at, floor] of floors.entries()) {
+        const extent = extentAt(bay, floor.sill);
+        expect(extent.count, `${storeys} storeys: vertices at floor ${at}'s sill`).toBeGreaterThan(0);
+        expect(extent.maxX - extent.minX, `${storeys} storeys: width of floor ${at}'s bay (m)`).toBeCloseTo(BAY.width, 6);
+        expect((extent.maxX + extent.minX) / 2, `${storeys} storeys: floor ${at}'s bay off its line (kit x, m)`).toBeCloseTo(-BAY.across, 6);
+        expect(extent.maxZ, `${storeys} storeys: projection of floor ${at}'s bay (m)`).toBeCloseTo(BAY.out, 6);
+      }
+      expect(floors.length, `${storeys} storeys: floors with a bay, the ground storey included`).toBe(storeys);
     }
-    expect(BAY_FLOORS.length, "floors with a bay, the ground storey included").toBe(3);
   });
 
+  // mutation: sed -i 's/for (const floor of bayStackOf(storeys).floors) {/for (const floor of bayStackOf(DEFAULT_STOREYS).floors) {/' src/game/present/facade-bay-parts.ts
   it("when the plinth is measured, then the stack stands from the ground on the same footprint the floors do and each belt band sits over it", () => {
-    const plinth = extentAt(bay, 0);
-    expect(plinth.count, "vertices at the ground").toBeGreaterThan(0);
-    expect((plinth.maxX + plinth.minX) / 2, "plinth off the bay's line (kit x, m)").toBeCloseTo(-BAY.across, 6);
-    expect(plinth.maxX - plinth.minX, "plinth width (m)").toBeCloseTo(BAY.width, 6);
-    const first = extentAt(bay, BAY_FLOORS[0]!.head);
-    for (const [at, floor] of BAY_FLOORS.entries()) {
-      const belt = extentAt(bay, floor.head);
-      expect(belt.maxX - belt.minX, `belt of floor ${at} against floor 0 (m)`).toBeCloseTo(first.maxX - first.minX, 6);
-      expect(belt.maxZ, `belt projection of floor ${at} against floor 0 (m)`).toBeCloseTo(first.maxZ, 6);
-      expect(belt.maxX - belt.minX, `belt of floor ${at} wider than the plinth (m)`).toBeGreaterThanOrEqual(plinth.maxX - plinth.minX - EPSILON);
+    for (const { storeys, bay, floors } of stacks) {
+      const plinth = extentAt(bay, 0);
+      expect(plinth.count, `${storeys} storeys: vertices at the ground`).toBeGreaterThan(0);
+      expect((plinth.maxX + plinth.minX) / 2, `${storeys} storeys: plinth off the bay's line (kit x, m)`).toBeCloseTo(-BAY.across, 6);
+      expect(plinth.maxX - plinth.minX, `${storeys} storeys: plinth width (m)`).toBeCloseTo(BAY.width, 6);
+      const first = extentAt(bay, floors[0]!.head);
+      for (const [at, floor] of floors.entries()) {
+        const belt = extentAt(bay, floor.head);
+        expect(belt.maxX - belt.minX, `${storeys} storeys: belt of floor ${at} against floor 0 (m)`).toBeCloseTo(first.maxX - first.minX, 6);
+        expect(belt.maxZ, `${storeys} storeys: belt projection of floor ${at} against floor 0 (m)`).toBeCloseTo(first.maxZ, 6);
+        expect(belt.maxX - belt.minX, `${storeys} storeys: belt of floor ${at} wider than the plinth (m)`).toBeGreaterThanOrEqual(plinth.maxX - plinth.minX - EPSILON);
+      }
     }
   });
 });
@@ -140,7 +150,7 @@ describe("given the stoop and its railing", () => {
   it("when every piece's vertices are tested against the facade's door hole, then none stands in the hole and the jambs stand at its edges", () => {
     let inside = 0;
     let atEdge = 0;
-    for (const geometry of [buildBayGeometry(), stoop, railing, buildCorniceGeometry(), buildSurroundGeometry(), buildFanlightGeometry()]) {
+    for (const geometry of [buildBayGeometry(DEFAULT_STOREYS), stoop, railing, buildCorniceGeometry(), buildSurroundGeometry(), buildFanlightGeometry()]) {
       const position = geometry.getAttribute("position");
       for (let at = 0; at < position.count; at++) {
         const across = Math.abs(position.getX(at) - DOOR_HOLE_X);
@@ -159,7 +169,7 @@ describe("given the stoop and its railing", () => {
 describe("given every piece of the kit", () => {
   // mutation: sed -i 's/const BAY_ACROSS = -0.9;/const BAY_ACROSS = -1.9;/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the pieces are measured across the lot, then all stand inside its edges, the stoop on the door's side with a clear gap to the bay", () => {
-    const bayRange = xRange(buildBayGeometry());
+    const bayRange = xRange(buildBayGeometry(DEFAULT_STOREYS));
     const surroundRange = xRange(buildSurroundGeometry());
     const fanlightRange = xRange(buildFanlightGeometry());
     const stoopRange = xRange(buildStoopGeometry());
@@ -181,11 +191,13 @@ describe("given every piece of the kit", () => {
 
 describe("given the kit made for the layout's rowhomes", () => {
   const kit = new FacadeBays(frontages);
-  const bays = kit.group.getObjectByName("facade-bay");
-  if (!(bays instanceof THREE.InstancedMesh)) throw new Error("the kit has no bay mesh");
+  const stoops = kit.group.getObjectByName("facade-stoop");
+  if (!(stoops instanceof THREE.InstancedMesh)) throw new Error("the kit has no stoop mesh");
+  const corniceMesh = kit.group.getObjectByName("facade-cornice");
+  if (!(corniceMesh instanceof THREE.InstancedMesh)) throw new Error("the kit has no cornice mesh");
   afterAll(() => kit.dispose());
 
-  // mutation: sed -i 's/new THREE.InstancedMesh(geometry, material, houses.length)/new THREE.InstancedMesh(geometry, material, Math.min(houses.length, 8))/' src/game/present/facade-bays.ts
+  // mutation: sed -i 's/new THREE.InstancedMesh(geometry, material, stood.length)/new THREE.InstancedMesh(geometry, material, Math.min(stood.length, 8))/' src/game/present/facade-bays.ts
   it("when the kit is drawn for a few houses and then for many, then it is the same draws, an instance of each every-house piece for each house and of the others for a share", () => {
     const few = new FacadeBays(frontages.slice(0, 10));
     const many = new FacadeBays(frontages.slice(0, 40));
@@ -200,8 +212,13 @@ describe("given the kit made for the layout's rowhomes", () => {
       for (const mesh of made.group.children) {
         const count = mesh instanceof THREE.InstancedMesh ? mesh.count : -1;
         if (EVERY_HOUSE.includes(mesh.name)) expect(count, `${name}: instances of ${mesh.name}`).toBe(houses);
+        else if (mesh.name.startsWith("facade-bay-")) continue;
         else expect(count, `${name}: instances of ${mesh.name}`).toBeLessThanOrEqual(mesh.name === "facade-shutter" ? houses * SHUTTERS_PER_HOUSE_MAX : mesh.name === "facade-windowBox" ? houses * WINDOW_BOXES_PER_HOUSE_MAX : houses);
       }
+    }
+    for (const { name, made, houses } of cases) {
+      const stacksCounted = made.group.children.filter((mesh) => mesh.name.startsWith("facade-bay-")).reduce((sum, mesh) => sum + (mesh instanceof THREE.InstancedMesh ? mesh.count : 0), 0);
+      expect(stacksCounted, `${name}: bay stacks across the storey counts`).toBe(houses);
     }
     few.dispose();
     many.dispose();
@@ -214,7 +231,7 @@ describe("given the kit made for the layout's rowhomes", () => {
     const place = new THREE.Vector3();
     let worst = 0;
     for (const [at, frontage] of frontages.entries()) {
-      bays.getMatrixAt(at, matrix);
+      stoops.getMatrixAt(at, matrix);
       front.set(0, 0, 1).transformDirection(matrix);
       place.setFromMatrixPosition(matrix);
       worst = Math.max(worst, Math.abs(front.x - Math.cos(frontage.yaw)), Math.abs(front.z + Math.sin(frontage.yaw)), Math.abs(place.x - frontage.x), Math.abs(place.z - frontage.z));
@@ -224,11 +241,46 @@ describe("given the kit made for the layout's rowhomes", () => {
   });
 
   // mutation: sed -i 's/frontage.variant % HOUSE_ACCENTS.length/0/g' src/game/present/facade-bays.ts
-  it("when the houses' bay colours are read, then they vary from house to house", () => {
-    expect(bays.instanceColor, "bay colours set").not.toBeNull();
+  it("when the houses' cornice colours are read, then they vary from house to house", () => {
+    expect(corniceMesh.instanceColor, "cornice colours set").not.toBeNull();
     const colours = new Set<number>();
-    for (let at = 0; at < bays.count; at++) colours.add(Math.round(bays.instanceColor!.getX(at) * 1000));
-    expect(colours.size, "distinct bay colours").toBeGreaterThanOrEqual(HOUSE_ACCENTS.length - 1);
+    for (let at = 0; at < corniceMesh.count; at++) colours.add(Math.round(corniceMesh.instanceColor!.getX(at) * 1000));
+    expect(colours.size, "distinct cornice colours").toBeGreaterThanOrEqual(HOUSE_ACCENTS.length - 1);
+  });
+
+  // mutation: sed -i 's/frontage.storeys === storeys ? \[IN_PLACE\] : \[\]/frontage.storeys >= storeys ? [IN_PLACE] : []/' src/game/present/facade-bays.ts
+  it("when the bay stacks are read, then each storey count has its own stack on the houses of that count, in their order, on their frontage", () => {
+    const matrix = new THREE.Matrix4();
+    const place = new THREE.Vector3();
+    for (const storeys of STOREY_COUNTS) {
+      const mesh = kit.group.getObjectByName(`facade-bay-${storeys}`);
+      if (!(mesh instanceof THREE.InstancedMesh)) throw new Error(`the kit has no stack of ${storeys} storeys`);
+      const houses = frontages.filter((frontage) => frontage.storeys === storeys);
+      expect(mesh.count, `stacks of ${storeys} storeys`).toBe(houses.length);
+      let worst = 0;
+      for (const [at, frontage] of houses.entries()) {
+        mesh.getMatrixAt(at, matrix);
+        place.setFromMatrixPosition(matrix);
+        worst = Math.max(worst, Math.abs(place.x - frontage.x), Math.abs(place.z - frontage.z));
+      }
+      expect(worst, `furthest a stack of ${storeys} storeys is from its frontage (m)`).toBeLessThan(EPSILON * 10);
+    }
+    expect(STOREY_COUNTS.filter((storeys) => frontages.some((frontage) => frontage.storeys === storeys)).length, "storey counts with houses").toBeGreaterThanOrEqual(MIN_DISTINCT_STOREYS);
+  });
+
+  // mutation: sed -i 's/up: homeHeightOf(frontage) - HOME_HEIGHT/up: 0/' src/game/present/facade-bays.ts
+  it("when each house's cornice is read, then it stands at its own roofline: raised or lowered from the three-storey one by the difference in the houses' heights", () => {
+    const matrix = new THREE.Matrix4();
+    let worst = 0;
+    const raised = new Set<number>();
+    for (const [at, frontage] of frontages.entries()) {
+      corniceMesh.getMatrixAt(at, matrix);
+      const expected = buildingHeight(frontage.storeys, false) - buildingHeight(DEFAULT_STOREYS, false);
+      raised.add(Math.round(matrix.elements[13]! * 1000));
+      worst = Math.max(worst, Math.abs(matrix.elements[13]! - expected));
+    }
+    expect(raised.size, "distinct cornice heights").toBeGreaterThanOrEqual(MIN_DISTINCT_STOREYS);
+    expect(worst, "furthest a cornice stands from its roofline (m)").toBeLessThan(EPSILON * 10);
   });
 
   // mutation: sed -i 's/const CORNICE_BRACKETS = 5;/const CORNICE_BRACKETS = 500;/' src/game/present/facade-bay-parts.ts
@@ -237,7 +289,7 @@ describe("given the kit made for the layout's rowhomes", () => {
     expect(kit.stats.triangles / frontages.length, "triangles per house").toBeLessThanOrEqual(TRIANGLES_PER_HOME_MAX);
   });
 
-  // mutation: sed -i 's/setPosition(frontage.x, onRoof ? roofTopOf(frontage) : 0, frontage.z)/setPosition(frontage.x, onRoof ? HOME_HEIGHT : 0, frontage.z)/' src/game/present/facade-bays.ts
+  // mutation: sed -i 's/\[{ ...IN_PLACE, up: roofTopOf(frontage) }\]/[{ ...IN_PLACE, up: HOME_HEIGHT }]/' src/game/present/facade-bays.ts
   it("when each house's roof pieces are read, then they stand on its roof, raised by the parapet lift the facade shader gives that building", () => {
     const roof = kit.group.getObjectByName("facade-roof");
     if (!(roof instanceof THREE.InstancedMesh)) throw new Error("the kit has no roof mesh");
@@ -250,7 +302,7 @@ describe("given the kit made for the layout's rowhomes", () => {
       const lift = roofLiftAt(frontage.x - detCos(frontage.yaw) * face, frontage.z + detSin(frontage.yaw) * face);
       if (lift > 0) lifted++;
       roof.getMatrixAt(at, matrix);
-      worst = Math.max(worst, Math.abs(matrix.elements[13]! - ((block + lift) * HOME_HEIGHT) / block));
+      worst = Math.max(worst, Math.abs(matrix.elements[13]! - ((block + lift) * buildingHeight(frontage.storeys, false)) / block));
     }
     expect(lifted, "houses whose roof the shader lifts").toBeGreaterThan(0);
     expect(lifted, "houses whose roof the shader lifts").toBeLessThan(frontages.length);
@@ -272,10 +324,10 @@ describe("given the fittings of the kit made for the layout", () => {
   const kit = new FacadeBays(frontages);
   afterAll(() => kit.dispose());
 
-  // mutation: sed -i 's/placements: (frontage) => shuttersFor(frontage.style).map(/placements: (frontage) => shuttersFor(frontage.style).slice(1).map(/' src/game/present/facade-bays.ts
+  // mutation: sed -i 's/shuttersFor(frontage.style, frontage.storeys).map(/shuttersFor(frontage.style, frontage.storeys).slice(1).map(/' src/game/present/facade-bays.ts
   it("when the shutters are counted, then there is one for each shutter the table gives each house's style", () => {
     const mesh = kit.group.getObjectByName("facade-shutter");
-    const expected = frontages.reduce((sum, frontage) => sum + shuttersOf(frontage.style).length, 0);
+    const expected = frontages.reduce((sum, frontage) => sum + shuttersOf(frontage.style, frontage.storeys).length, 0);
     expect(expected, "shutters the table gives the layout").toBeGreaterThan(frontages.length);
     expect(mesh instanceof THREE.InstancedMesh ? mesh.count : -1, "shutter instances").toBe(expected);
   });
@@ -291,7 +343,7 @@ describe("given the fittings of the kit made for the layout", () => {
     let at = 0;
     let worst = 0;
     for (const frontage of frontages) {
-      for (const shutter of shuttersOf(frontage.style)) {
+      for (const shutter of shuttersOf(frontage.style, frontage.storeys)) {
         mesh.getMatrixAt(at++, matrix);
         matrix.decompose(position, turn, size);
         const dx = position.x - frontage.x;
@@ -361,7 +413,7 @@ describe("given the Federal door", () => {
       top = Math.max(top, position.getY(at));
       expect(Math.abs(position.getX(at) - DOOR_HOLE_X), "a vertex's distance off the door's middle (m)").toBeLessThanOrEqual(DOOR_COLUMN_HALF);
     }
-    const lowestSill = Math.min(...visibleWindowsOf(BRICK_STYLE).filter((window) => window.storey > 0).map((window) => window.sill));
+    const lowestSill = Math.min(...STOREY_COUNTS.flatMap((storeys) => visibleWindowsOf(BRICK_STYLE, storeys)).filter((window) => window.storey > 0).map((window) => window.sill));
     expect(lowestSill - top, "gap from the door's cap to the upper windows' sills (m)").toBeGreaterThanOrEqual(DOOR_TO_WINDOW_GAP_MIN);
   });
 

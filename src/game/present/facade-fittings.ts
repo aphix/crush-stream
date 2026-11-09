@@ -1,9 +1,8 @@
 import windowData from "../world/openworld/facade-windows.json" with { type: "json" };
-import { PREFABS } from "../world/catalog.ts";
-import { PREFAB } from "../world/constants.ts";
-import { BAY, drawnHalf, HOME_HEIGHT, LOT_WIDTH } from "../world/openworld/openworld-facade-solids.ts";
+import { isOpenStyle, shopGroundOf } from "../world/openworld/facade-windows.ts";
+import { BLOCK_HEIGHT, buildingHeight } from "../world/openworld/interior-kinds.ts";
+import { BAY, drawnHalf, LOT_WIDTH } from "../world/openworld/openworld-facade-solids.ts";
 import { streetStoreys } from "./facade-mesh.ts";
-import { FACADE_LAYERS, isFacadeStyle } from "./facades.ts";
 
 /**
  * What hangs on a rowhome's street face where its picture shows a window: shutters either side of the upper windows, an air-conditioning unit in one. The windows are the packer's table
@@ -28,25 +27,25 @@ function windowOf(rect: Rect, bottom: number, tall: number, storey: number, face
   return { across: (low + high) / 2, width: high - low, sill: bottom + v0 * tall, head: bottom + v1 * tall, storey };
 }
 
-/** Every window the picture of `style` shows on the street face, the ones the bay stack covers included; none for a style without a table. */
-export function streetWindowsOf(style: string): StreetWindow[] {
-  if (!isFacadeStyle(style) || !Object.hasOwn(table, style)) return [];
+/** Every window the picture of `style` shows on the street face of a building of `storeys` storeys, the ones the bay stack covers included; none for a style without a table. */
+export function streetWindowsOf(style: string, storeys: number): StreetWindow[] {
+  if (!isOpenStyle(style)) return [];
   const { windows } = table[style]!;
-  const { start, height, storeys } = streetStoreys(style);
-  const toHome = HOME_HEIGHT / PREFABS[PREFAB.building].size[1];
+  const above = streetStoreys(style, storeys);
+  const toHome = buildingHeight(storeys, shopGroundOf(style)) / BLOCK_HEIGHT;
   const faceWidth = 2 * drawnHalf(LOT_WIDTH);
-  const out: StreetWindow[] = windows.ground.map((rect) => windowOf(rect, 0, FACADE_LAYERS[style].metres.ground * toHome, 0, faceWidth));
-  for (let storey = 0; storey < storeys; storey++) {
-    for (const rect of windows.floor) out.push(windowOf(rect, (start + storey * height) * toHome, height * toHome, storey + 1, faceWidth));
+  const out: StreetWindow[] = windows.ground.map((rect) => windowOf(rect, 0, above.start * toHome, 0, faceWidth));
+  for (let storey = 0; storey < above.storeys; storey++) {
+    for (const rect of windows.floor) out.push(windowOf(rect, (above.start + storey * above.height) * toHome, above.height * toHome, storey + 1, faceWidth));
   }
   return out;
 }
 
 /** The windows the bay stack does not stand in front of. */
-export function visibleWindowsOf(style: string): StreetWindow[] {
+export function visibleWindowsOf(style: string, storeys: number): StreetWindow[] {
   const bayLow = BAY.across - BAY.width / 2;
   const bayHigh = BAY.across + BAY.width / 2;
-  return streetWindowsOf(style).filter((window) => window.across + window.width / 2 < bayLow || window.across - window.width / 2 > bayHigh);
+  return streetWindowsOf(style, storeys).filter((window) => window.across + window.width / 2 < bayLow || window.across - window.width / 2 > bayHigh);
 }
 
 /** A shutter: its middle across the lot, its width, and its sill and height over the sidewalk (m). */
@@ -60,11 +59,11 @@ const SHUTTER_BAY_CLEARANCE = 0.1;
 const SHUTTER_EDGE_CLEARANCE = 0.05;
 
 /** Shutters either side of each upper window that has the room, a pair of one width: the narrower side the bay and the party wall leave. */
-export function shuttersOf(style: string): Shutter[] {
+export function shuttersOf(style: string, storeys: number): Shutter[] {
   const out: Shutter[] = [];
   const bayEdge = BAY.across + BAY.width / 2 + SHUTTER_BAY_CLEARANCE;
   const faceEdge = drawnHalf(LOT_WIDTH) - SHUTTER_EDGE_CLEARANCE;
-  for (const window of visibleWindowsOf(style)) {
+  for (const window of visibleWindowsOf(style, storeys)) {
     if (window.storey === 0) continue;
     const low = window.across - window.width / 2;
     const high = window.across + window.width / 2;
@@ -77,6 +76,6 @@ export function shuttersOf(style: string): Shutter[] {
 }
 
 /** The windows an air-conditioning unit may sit in: the upper ones the bay does not cover. */
-export function airconWindowsOf(style: string): StreetWindow[] {
-  return visibleWindowsOf(style).filter((window) => window.storey > 0);
+export function airconWindowsOf(style: string, storeys: number): StreetWindow[] {
+  return visibleWindowsOf(style, storeys).filter((window) => window.storey > 0);
 }

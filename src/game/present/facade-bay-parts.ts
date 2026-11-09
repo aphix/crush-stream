@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
-import { BAY, bayOutline, BAY_FLOORS, DOOR, HOME_HEIGHT, HOME_LEVELS, LOT_WIDTH, STOOP, stoopStepRange } from "../world/openworld/openworld-facade-solids.ts";
+import { CORNICE_DEPTH } from "../world/openworld/interior-kinds.ts";
+import { BAY, bayOutline, bayStackOf, DOOR, HOME_HEIGHT, LOT_WIDTH, STOOP, stoopStepRange } from "../world/openworld/openworld-facade-solids.ts";
 import { KIT_CELL, RAIL_SOLID_CELL, type UvRect } from "./facade-kit-atlas.ts";
 
 /**
@@ -164,14 +165,15 @@ function band(builder: KitBuilder, y0: number, y1: number, lip: number): void {
 
 /**
  * The bay stack beside the door: a stone plinth from the ground (its front a barred half-basement window) under a band, then for every storey a panelled apron, the window
- * (flat front, two angled sides) and a belt band; a panel and a roof slab cap it. Every ring is cut from the same outline, so each floor's bay stands on the one below.
+ * (flat front, two angled sides) and a belt band; a panel and a roof slab cap it. Every ring is cut from the same outline, so each floor's bay stands on the one below. A house of `storeys`
+ * storeys has a window over each of its interior's floors, so a taller house's stack has more.
  */
-export function buildBayGeometry(): THREE.BufferGeometry {
+export function buildBayGeometry(storeys: number): THREE.BufferGeometry {
   const builder = new KitBuilder();
   ring(builder, 0, BAY.plinthTop, 0, [KIT_CELL.marble, KIT_CELL.basement, KIT_CELL.marble], WHITE, FIXED);
   let cursor = BAY.plinthTop + BAY.plinthBand;
   band(builder, BAY.plinthTop, cursor, BELT_LIP);
-  for (const floor of BAY_FLOORS) {
+  for (const floor of bayStackOf(storeys).floors) {
     ring(builder, cursor, floor.sill, 0, uniform(KIT_CELL.panel), WHITE, ACCENT);
     ring(builder, floor.sill, floor.head, 0, WINDOW_CELLS, WHITE, FIXED);
     cursor = floor.head + BAY.capBand;
@@ -298,7 +300,7 @@ export function buildCorniceGeometry(): THREE.BufferGeometry {
   const builder = new KitBuilder();
   const half = LOT_WIDTH / 2;
   const top = HOME_HEIGHT;
-  const friezeBottom = top - HOME_LEVELS.parapet;
+  const friezeBottom = top - CORNICE_DEPTH;
   const shelfBottom = friezeBottom + CORNICE_FRIEZE_HEIGHT;
   const shelfTop = shelfBottom + CORNICE_SHELF_HEIGHT;
   const panel = KIT_CELL.panel;

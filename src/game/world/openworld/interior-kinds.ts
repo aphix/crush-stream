@@ -198,15 +198,6 @@ export function levelsOf(kind: InteriorKind, storeys: number): { floors: readonl
   return { floors, topCeiling: lines[storeys]! - FLOOR_OVER_LINE };
 }
 
-/** The three-storey interiors: what the bay kit is drawn for until it follows a house's storeys. */
-export const LEVELS = {
-  rowhome: levelsOf("rowhome", DEFAULT_STOREYS),
-  coffee: levelsOf("coffee", DEFAULT_STOREYS),
-  bar: levelsOf("bar", DEFAULT_STOREYS),
-  office: levelsOf("office", DEFAULT_STOREYS),
-  store: levelsOf("store", DEFAULT_STOREYS),
-} as const satisfies Record<InteriorKind, { floors: readonly number[]; topCeiling: number }>;
-
 /** A bay window's sill over its floor and its glass's height (m): a 1.5 m sash window. */
 const BAY_SILL_ABOVE_FLOOR = 0.75;
 const BAY_GLASS_HEIGHT = 1.5;
