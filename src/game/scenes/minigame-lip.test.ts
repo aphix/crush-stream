@@ -15,6 +15,7 @@ import { LipThrow, type LipMode } from "./minigame-lip.ts";
 import { lipHeight } from "./minigame-profile.ts";
 import { dressedDriverCar, FINE_CELL, lipPitch, stationDriveProfile } from "./minigame-profile.test-util.ts";
 import { RING_CUPS } from "./minigame-ring.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 
 const LIP_MODES: readonly LipMode[] = ["highJump", "ringFling"];
@@ -271,7 +272,7 @@ type FlightRun = { speedCap: number; keep: number; until: "throw" | "landing" };
  * under the real `LipThrow` hook of a one-car world, as the climb rows of `minigame-profile.test.ts` drive it; once he is thrown the
  * car freewheels (a driverless car's pedals, as the engine's race director gives it).
  */
-function flyFromLip(type: DriverCar, mode: LipMode, run: FlightRun): Flight {
+function driveFromLip(type: DriverCar, mode: LipMode, run: FlightRun): Flight {
   const anchor = STATION_ANCHORS[mode];
   const profile = stationDriveProfile(mode);
   const ground = new AnchoredGround(mode);
@@ -343,6 +344,19 @@ function flyFromLip(type: DriverCar, mode: LipMode, run: FlightRun): Flight {
   }
 }
 
+const flights = new Map<string, Flight>();
+
+/** `driveFromLip`, made once: a drive is deterministic, and the throw rows and the keep table read the same run at the chosen keep. */
+function flyFromLip(type: DriverCar, mode: LipMode, run: FlightRun): Flight {
+  const key = `${mode}:${type.id}:${run.speedCap}:${run.keep}:${run.until}`;
+  let flight = flights.get(key);
+  if (flight === undefined) {
+    flight = driveFromLip(type, mode, run);
+    flights.set(key, flight);
+  }
+  return flight;
+}
+
 /** The lip speed (m/s) of the slow runs, the plan's lowest, and how far (m/s) a governed run may be off it. */
 const SLOW_LIP_SPEED = 17;
 const SLOW_LIP_TOLERANCE = 0.5;
@@ -403,10 +417,11 @@ const keepsClearing = new Map<LipMode, Set<number>>();
 
 describe("given each car type driven up each station's ramp under the real lip throw", () => {
   for (const mode of LIP_MODES) {
+    // mutation: sed -i 's|^const THROW_UP = 3.5;|const THROW_UP = 3.0;|' src/game/vehicle/ejection.ts  (the driver's own upward pop is then off the pinned 3.5: this row goes red)
     it(`when each reaches the ${mode} lip at its best and at the slow speed, then one ejection is one windshield throw at the plane, at the car's velocity plus his seat's turn and the usual pop (out along its nose, then up), and the slow run is within tolerance of ${SLOW_LIP_SPEED} m/s`, () => {
       for (const type of DRIVER_CARS) {
         for (const speedCap of [Infinity, slowCap(type, mode)]) {
-          const flight = flyFromLip(type, mode, { speedCap, keep: LIP_CAR_SPEED_KEEP, until: "throw" });
+          const flight = flyFromLip(type, mode, { speedCap, keep: LIP_CAR_SPEED_KEEP, until: "landing" });
           const event = flight.event;
           must(event !== null, `${type.id}: thrown`);
           expect(flight.ejections, `${type.id}: one ejection`).toBe(1);
@@ -420,6 +435,7 @@ describe("given each car type driven up each station's ramp under the real lip t
       }
     });
 
+    // mutation: sed -i 's|^export const LIP_CAR_SPEED_KEEP = 0.3;|export const LIP_CAR_SPEED_KEEP = 1;|' src/game/scenes/minigame-constants.ts  (no cut: the bars fail and the chosen keep is not the largest that clears: this row goes red)
     it(`when each lands driverless on the ${mode}, then the table of kept speed shares shows the chosen share is the largest candidate that clears the bars for every type at both speeds, and no cut fails them`, (t) => {
       const cases = measures(mode);
       const lines = [`${mode}: the driverless car's landing x (m from the lip) by keep ${[...CANDIDATE_KEEPS, NO_CUT_KEEP].join(" ")} (the last: no cut), then the bar and the lip speed`];
@@ -449,5 +465,25 @@ describe("given each car type driven up each station's ramp under the real lip t
   it("when the shares that clear every bar on each station are read together, then the chosen kept share of speed is the largest candidate clearing both", () => {
     const both = CANDIDATE_KEEPS.filter((keep) => LIP_MODES.every((mode) => keepsClearing.get(mode)!.has(keep)));
     expect(LIP_CAR_SPEED_KEEP, `candidates clearing both stations: ${both.join(", ")}`).toBe(Math.max(...both));
+  });
+});
+
+describe("given a lip drive made once and kept for every row that reads it", () => {
+  // mutation: sed -i 's|^\(  const key = .*\)${run.keep}:|\1|' src/game/scenes/minigame-lip.test.ts  (every keep then reads the first keep's drive: this row goes red, and so do the keep table's bars)
+  it("when the same drive is made again from fresh, then it is the kept one's every number", () => {
+    const run: FlightRun = { speedCap: Infinity, keep: NO_CUT_KEEP, until: "landing" };
+    const kept = flyFromLip(sedan, "ringFling", run);
+    const again = driveFromLip(sedan, "ringFling", run);
+    must(kept.event, "the kept drive threw him");
+    must(again.event, "the fresh drive threw him");
+    const keptEvent = kept.event;
+    const againEvent = again.event;
+    expect(kept.ejections, "ejections").toBe(again.ejections);
+    expect(kept.lipSpeed, "lip speed").toBe(again.lipSpeed);
+    expect(kept.throwLocalX, "throw x").toBe(again.throwLocalX);
+    expect(kept.landingLocalX, "landing x").toBe(again.landingLocalX);
+    expect(firstMismatch(kept.seatTurn.toArray(), again.seatTurn.toArray()), "seat turn").toBeUndefined();
+    for (const field of ["pos", "local", "dir", "quat", "rel", "carVel", "spin"] as const) expect(firstMismatch(keptEvent[field].toArray(), againEvent[field].toArray()), `event ${field}`).toBeUndefined();
+    expect(kept.landingLocalX, "the drive landed: a drive that never ran is not the same drive").toBeGreaterThan(0);
   });
 });
