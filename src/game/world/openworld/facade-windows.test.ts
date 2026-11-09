@@ -79,7 +79,7 @@ describe("given a rowhome's bay stack", () => {
       expect(mouth!.width, `storey ${level} mouth width`).toBeCloseTo(BAY.width, 6);
       expect(plan.floors[level]! + mouth!.top, `storey ${level} mouth head`).toBeCloseTo(bay.head, 6);
       expect(plan.alcoves.filter((alcove) => alcove.level === level).length, `storey ${level} alcoves`).toBe(1);
-      const panes = plan.panes.filter((pane) => pane.level === level && pane.deep1 < 0 && pane.deep0 <= 0);
+      const panes = plan.panes.filter((pane) => pane.level === level && Math.min(pane.deep0, pane.deep1) < 0);
       expect(panes.length, `storey ${level} bay panes`).toBe(3);
       for (const pane of panes) expect(Math.abs(pane.y0 - bay.sill) + Math.abs(pane.y1 - bay.head), `storey ${level} pane heights off the bay window's`).toBeLessThan(1e-9);
     }
