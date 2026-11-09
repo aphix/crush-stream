@@ -1,0 +1,206 @@
+import { describe, expect, it } from "vitest";
+import * as THREE from "three";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { CivilianArt } from "./civilian-art.ts";
+import { FAR_DRAW, FIGURE_FLOATS, NEAR_DRAW, NEAR_SLOTS, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
+import { dressOfLook } from "./civilian-dress.ts";
+import { drawCalls, emptyPoses, posesAlongStreet, posesScattered } from "./civilian-art.test-util.ts";
+import type { DriverLook } from "./driver-look.ts";
+import { ROLE } from "./dummy-rig.ts";
+import { blankStance, People, walkStance } from "./people.ts";
+import { PARTS } from "./ragdoll-body.ts";
+import { DummyMesh } from "./ragdoll-mesh.ts";
+import { must } from "../kernel/must.test-util.ts";
+
+const SCRATCH_LOOK: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
+const shirtOf = (look: number): number => {
+  dressOfLook(look, SCRATCH_LOOK);
+  return SCRATCH_LOOK.shirt;
+};
+/** Inside the near line, so a crowd of any size here fills every dummy slot and has figures over. */
+const CROWD_RADIUS = NEAR_DRAW * 0.75;
+const NEAR_STREET = Array.from({ length: 30 }, (_, civilian) => civilian + 1);
+/** x of the figure in instance `instance`. */
+const figureX = (art: CivilianArt, instance: number): number => art.figures.instanceMatrix.array[instance * FIGURE_FLOATS.MATRIX + 12]!;
+
+describe("given a street of civilians and a tier of twelve dummies, the eye at one end", () => {
+  const distances = [3.5, 300, FAR_DRAW + 5, 119, 100, 60, ...[...NEAR_STREET].reverse()];
+  const hiddenCivilian = 0;
+  const poses = posesAlongStreet(distances);
+  poses.shown[hiddenCivilian] = 0;
+  const art = new CivilianArt(NEAR_SLOTS.phone, distances.length);
+  art.update(poses, 0, 0);
+
+  it("when it is drawn, then the twelve nearest civilians are dummies and no other is", () => {
+    const hasDummy = distances.map((_, civilian) => (art.slotOfCivilian(civilian) >= 0 ? 1 : 0));
+    const expected = distances.map((distance, civilian) => (civilian !== hiddenCivilian && distance <= NEAR_STREET[NEAR_SLOTS.phone - 1]! ? 1 : 0));
+    expect(firstMismatch(hasDummy, expected), "civilians with a dummy").toBeUndefined();
+    expect(art.nearDrawn, "dummies drawn").toBe(NEAR_SLOTS.phone);
+  });
+
+  it("when it is drawn, then every other civilian in view is a figure, and none past 120 m or hidden is drawn at all", () => {
+    const expectedFigureXs = [...NEAR_STREET.slice(NEAR_SLOTS.phone), 60, 100, 119];
+    const drawnFigureXs = Array.from({ length: art.farDrawn }, (_, instance) => figureX(art, instance)).sort((a, b) => a - b);
+    expect(firstMismatch(drawnFigureXs, expectedFigureXs), "figure positions").toBeUndefined();
+  });
+});
+
+describe("given a dummy's civilian who is then hidden", () => {
+  it("when the crowd hides her, then her dummy goes and nothing of her is drawn", () => {
+    const art = new CivilianArt(2, 2);
+    const poses = posesAlongStreet([5, 10]);
+    art.update(poses, 0, 0);
+    expect(art.dummies[0]!.count, "dummies out before").toBe(2);
+    poses.shown[1] = 0;
+    art.update(poses, 0, 0);
+    expect(art.dummies[0]!.count, "dummies out after").toBe(1);
+    expect(art.slotOfCivilian(1), "her slot").toBe(-1);
+    expect(art.farDrawn, "figures drawn").toBe(0);
+  });
+});
+
+describe("given the one dummy of a tier held by a civilian 10 m away", () => {
+  const poses = posesAlongStreet([10, 20]);
+  const art = new CivilianArt(1, 2);
+  art.update(poses, 0, 0);
+
+  it("when another civilian comes to 9.5 m, then the holder keeps the dummy", () => {
+    poses.x[1] = 9.5;
+    art.update(poses, 0, 0);
+    expect(art.slotOfCivilian(0), "holder's slot").toBe(0);
+    expect(art.slotOfCivilian(1), "newcomer's slot").toBe(-1);
+  });
+
+  it("when the other comes to 8 m, then she takes the dummy and the first becomes a figure", () => {
+    poses.x[1] = 8;
+    art.update(poses, 0, 0);
+    expect(art.slotOfCivilian(1), "newcomer's slot").toBe(0);
+    expect(art.slotOfCivilian(0), "former holder's slot").toBe(-1);
+    expect(art.farDrawn, "figures drawn").toBe(1);
+  });
+});
+
+describe("given a civilian near enough for a dummy", () => {
+  const poses = emptyPoses(1);
+  poses.x[0] = 5;
+  const art = new CivilianArt(1, 1);
+  art.update(poses, 0, 0);
+  const slotShirt = (): number => art.dummies[0]!.colourOf(0, ROLE.SHIRT, new THREE.Color()).getHex();
+
+  it("when she is drawn, then her dummy wears the shirt her look dresses her in", () => {
+    expect(slotShirt(), "dummy's shirt").toBe(new THREE.Color().setHex(shirtOf(poses.look[0]!)).getHex());
+  });
+
+  it("when her look changes, then her dummy is dressed again", () => {
+    let other = poses.look[0]! + 1;
+    while (shirtOf(other) === shirtOf(poses.look[0]!)) other++;
+    poses.look[0] = other;
+    art.update(poses, 0, 0);
+    expect(slotShirt(), "dummy's shirt").toBe(new THREE.Color().setHex(shirtOf(other)).getHex());
+  });
+});
+
+describe("given the desktop tier's forty dummies and forty civilians within 20 m", () => {
+  it("when they are drawn, then forty dummies are posed, more than one dummy mesh can track", () => {
+    const art = new CivilianArt(NEAR_SLOTS.desktop, NEAR_SLOTS.desktop);
+    const poses = posesAlongStreet(Array.from({ length: NEAR_SLOTS.desktop }, (_, civilian) => 1 + civilian * 0.5));
+    art.update(poses, 0, 0);
+    const posedByMesh = art.dummies.map((mesh) => mesh.count);
+    expect(art.nearDrawn, "dummies drawn").toBe(NEAR_SLOTS.desktop);
+    expect(firstMismatch(posedByMesh, [SLOTS_PER_DUMMY_MESH, NEAR_SLOTS.desktop - SLOTS_PER_DUMMY_MESH]), "slots each dummy mesh draws").toBeUndefined();
+  });
+});
+
+describe("given a civilian at a stride phase of a quarter turn with a dummy", () => {
+  const shinPointZ = (speed: number): number => {
+    const poses = emptyPoses(1);
+    poses.x[0] = 5;
+    poses.stride[0] = Math.PI / 2;
+    poses.speed[0] = speed;
+    const art = new CivilianArt(1, 1);
+    art.update(poses, 0, 0);
+    const standingShin = PARTS[7]!.c;
+    return art.dummies[0]!.partPoint(0, 7, new THREE.Vector3(standingShin[0], standingShin[1], standingShin[2]), new THREE.Vector3()).z;
+  };
+
+  it("when she walks, then her shin swings off the vertical", () => {
+    expect(Math.abs(shinPointZ(1)), "shin's z while walking").toBeGreaterThan(0.1);
+  });
+
+  it("when she stands still, then her shin hangs where it stands", () => {
+    expect(Math.abs(shinPointZ(0)), "shin's z while standing").toBeLessThan(0.01);
+  });
+});
+
+describe("given two civilians in figure range, one walking east and one standing", () => {
+  const poses = emptyPoses(2);
+  poses.x[0] = 60;
+  poses.yaw[0] = Math.PI / 2;
+  poses.stride[0] = 1.25;
+  poses.speed[0] = 1.4;
+  poses.x[1] = 70;
+  poses.stride[1] = 2;
+  const art = new CivilianArt(0, 2);
+  art.update(poses, 0, 0);
+  const gait = art.figures.geometry.getAttribute("gait");
+
+  it("when they are drawn, then the walker's figure faces +x like a dummy facing yaw 90 degrees", () => {
+    const matrix = art.figures.instanceMatrix.array;
+    expect(matrix[8]!, "forward axis x").toBeCloseTo(1, 5);
+    expect(matrix[10]!, "forward axis z").toBeCloseTo(0, 5);
+  });
+
+  it("when they are drawn, then the walker swings at her stride and the standing one does not swing", () => {
+    expect(gait.getX(0), "walker's phase").toBeCloseTo(1.25, 5);
+    expect(gait.getY(0), "walker's swing").toBe(1);
+    expect(gait.getY(1), "standing figure's swing").toBe(0);
+  });
+});
+
+describe("given a crowd of 50, 150 and 300 scattered within 30 m of the eye on the desktop tier", () => {
+  const callsFor = (count: number): { calls: number; near: number; far: number } => {
+    const art = new CivilianArt(NEAR_SLOTS.desktop, count);
+    art.update(posesScattered(count, CROWD_RADIUS, count), 0, 0);
+    return { calls: drawCalls(art.group), near: art.nearDrawn, far: art.farDrawn };
+  };
+
+  it("when each is drawn, then the draw calls are the same whatever the crowd's size", () => {
+    const small = callsFor(50);
+    const medium = callsFor(150);
+    const large = callsFor(300);
+    expect([small.near > 0, medium.near > 0, large.near > 0], "a crowd has dummies").toEqual([true, true, true]);
+    expect([small.far > 0, medium.far > 0, large.far > 0], "a crowd has figures").toEqual([true, true, true]);
+    expect(firstMismatch([small.calls, medium.calls, large.calls], [large.calls, large.calls, large.calls]), "draw calls at 50, 150, 300").toBeUndefined();
+    expect(large.calls, "draw calls").toBeLessThanOrEqual(6);
+  });
+});
+
+describe("given a civilian walking and a guard walking the same stride at the same place", () => {
+  const STRIDES = [0.7, 2.1, 4, 5.5] as const;
+  const REST_OFFSET = new THREE.Vector3(0.03, 0.05, 0.02);
+
+  it("when both are posed, then every body part of the civilian's dummy lies where the guard's does", () => {
+    const poses = emptyPoses(1);
+    poses.x[0] = 4;
+    poses.z[0] = -3;
+    poses.yaw[0] = 1.1;
+    poses.speed[0] = 1.4;
+    const art = new CivilianArt(1, 1);
+    const guards = new People(1);
+    const guardMesh = guards.group.children.find((child): child is DummyMesh => child instanceof DummyMesh);
+    must(guardMesh, "the guards' people hold a dummy mesh");
+    const civilianPart = new THREE.Vector3();
+    const guardPart = new THREE.Vector3();
+    for (const stride of STRIDES) {
+      poses.stride[0] = stride;
+      art.update(poses, 0, 0);
+      guards.stand(0, 4, 0, -3, 1.1, walkStance(stride, false, blankStance()), false);
+      for (let part = 0; part < PARTS.length; part++) {
+        const rest = new THREE.Vector3(...PARTS[part]!.c).add(REST_OFFSET);
+        art.dummies[0]!.partPoint(0, part, rest, civilianPart);
+        guardMesh.partPoint(0, part, rest, guardPart);
+        expect(civilianPart.distanceTo(guardPart), `part ${part} at stride ${stride}`).toBeLessThan(1e-4);
+      }
+    }
+  });
+});
