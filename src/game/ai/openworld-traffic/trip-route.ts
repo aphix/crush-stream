@@ -1,4 +1,4 @@
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { clamp } from "../../kernel/scalar.ts";
 import { HEADING_COUNT, HEADING_DX, HEADING_DZ, laneLength, rightX, rightZ, type RoadNetwork } from "../../world/openworld/openworld-roads.ts";
 import { laneOfSpot, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
@@ -16,6 +16,10 @@ const TURN = { straight: 0, right: 1, left: 3 } as const;
 const TURNS = [TURN.straight, TURN.right, TURN.left] as const;
 /** Route points nearer than this to the last (m) are the same point. */
 const SAME_POINT = 0.05;
+/** A route planned from where a car is rejoins its lane's line this far (m) ahead of it: a gentle merge at speed. */
+const REJOIN_LEAD = 8;
+/** A car drives a lane when it faces along it within 60 degrees (the cosine). */
+const FACING_COS = 0.5;
 
 /** A car's way: points along its lanes, through its turns, into the space it is going to, and the signals it crosses. Filled by `RoutePlanner`, read by the driver. */
 export class TripRoute {
@@ -98,6 +102,8 @@ export class RoutePlanner {
   private readonly settled: Uint8Array;
   private readonly chain = new Int16Array(LANES_PER_TRIP);
   private chainCount = 0;
+  /** How far (m) along the lane `laneAt` found the car stands. */
+  private startAlong = 0;
   private route: TripRoute = new TripRoute();
 
   constructor(network: RoadNetwork, spots: ParkingSpots) {
@@ -125,6 +131,64 @@ export class RoutePlanner {
     for (let index = 0; index < this.chainCount - 1; index++) this.emitLaneEnd(index);
     this.emitPullIn(toSpot);
     return route.count < ROUTE_POINTS;
+  }
+
+  /**
+   * Writes the route from a car at (x, z) heading `yaw` to space `toSpot` into `route`: from the car, back onto its lane's line `REJOIN_LEAD` m ahead, along the lanes and into the space, with no pull-out.
+   * False when the car is on no lane it faces along, or there is no way.
+   */
+  planFrom(route: TripRoute, x: number, z: number, yaw: number, toSpot: number): boolean {
+    route.clear();
+    this.route = route;
+    const { network, spots } = this;
+    let start = this.laneAt(x, z, yaw);
+    if (start < 0) return false;
+    let along = this.startAlong;
+    const length = laneLength(network, start % HEADING_COUNT);
+    // In the box at its lane's far end the car is already crossing: it goes on straight.
+    if (along > length - network.boxHalf) {
+      const next = network.neighbour[start]! * HEADING_COUNT + (start % HEADING_COUNT);
+      if (network.neighbour[next]! < 0) return false;
+      start = next;
+      along -= length;
+    }
+    const heading = start % HEADING_COUNT;
+    const rejoin = Math.min(along + REJOIN_LEAD, laneLength(network, heading) - network.boxHalf);
+    const goal = laneOfSpot(spots, toSpot);
+    if (start === goal && spots.along[toSpot]! >= rejoin + PARK_SWING) {
+      this.chain[0] = start;
+      this.chainCount = 1;
+    } else if (!this.search(start, goal)) return false;
+    this.push(x, z, CRUISE_SPEED);
+    this.pushOnLane(Math.floor(start / HEADING_COUNT), heading, rejoin, network.laneOffset, CRUISE_SPEED);
+    for (let index = 0; index < this.chainCount - 1; index++) this.emitLaneEnd(index);
+    this.emitPullIn(toSpot);
+    return route.count < ROUTE_POINTS;
+  }
+
+  /** The lane a car at (x, z) heading `yaw` drives: of the lanes it faces along whose street it stands on between the junctions' centres, the one whose line is nearest; -1 when none. Leaves the car's distance along it in `startAlong`. */
+  private laneAt(x: number, z: number, yaw: number): number {
+    const { network } = this;
+    const facingX = detSin(yaw);
+    const facingZ = detCos(yaw);
+    let best = -1;
+    let bestOff = Infinity;
+    for (let lane = 0; lane < this.lanes; lane++) {
+      if (network.neighbour[lane]! < 0) continue;
+      const heading = lane % HEADING_COUNT;
+      if (facingX * HEADING_DX[heading]! + facingZ * HEADING_DZ[heading]! < FACING_COS) continue;
+      const junction = Math.floor(lane / HEADING_COUNT);
+      const dx = x - network.junctionX[junction]!;
+      const dz = z - network.junctionZ[junction]!;
+      const along = dx * HEADING_DX[heading]! + dz * HEADING_DZ[heading]!;
+      const side = dx * rightX(heading) + dz * rightZ(heading);
+      const off = Math.abs(side - network.laneOffset);
+      if (along < 0 || along > laneLength(network, heading) || Math.abs(side) > network.boxHalf || off >= bestOff) continue;
+      best = lane;
+      bestOff = off;
+      this.startAlong = along;
+    }
+    return best;
   }
 
   /** Dijkstra over lanes from `start` to `goal`, the goal reached by at least one turn (a space behind the car's own is a trip round the block). Fills `chain`. */

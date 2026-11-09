@@ -4,7 +4,7 @@ import { MAX_PATROL_CARS, PATROL_START_DISTANCE } from "./crime-constants.ts";
 import type { CarDriver } from "./patrol-cars.ts";
 
 /** A car the traffic leased: its engine index and the driver slot the traffic applies when it is set (null: its own trip driver). */
-export type LeasedCar = { readonly index: number; driver: CarDriver | null };
+export type LeasedCar = { readonly index: number; readonly arrived: boolean; driver: CarDriver | null };
 
 /** What the law uses of the open world's traffic (`OpenWorldTraffic` has all of it). */
 export type TrafficApi = {
@@ -40,6 +40,10 @@ export class TrafficPatrolPorts {
     if (handle === null) return -1;
     this.leased[slot] = handle;
     return slot;
+  }
+
+  arrived(handle: number): boolean {
+    return this.leased[handle]!.arrived;
   }
 
   snap(handle: number): AiCar {

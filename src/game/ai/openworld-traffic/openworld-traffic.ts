@@ -146,6 +146,11 @@ export class OpenWorldTraffic {
     this.movers.despawn(handle);
   }
 
+  /** Sends leased car `handle` on to free space `toSpot` from where it is, keeping its urgency (`MoverFleet.redirect`); false when there is no way or the space is held. */
+  redirect(handle: DrivenCar, toSpot: number): boolean {
+    return this.movers.redirect(handle, toSpot);
+  }
+
   /** Cars on a trip and kerb cars standing, for the cost probes. */
   counts(): { driving: number; kerb: number } {
     return { driving: this.movers.drivingCount(), kerb: this.kerb.shownCount() };

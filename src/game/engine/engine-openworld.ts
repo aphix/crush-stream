@@ -54,9 +54,12 @@ type TrafficHostPorts = TrafficPorts & {
   makeLights(): LightsArt;
 };
 
+/** Who opens the interiors' doors: the drawn crowd and the player's walker, null where there is none. */
+type DoorOpeners = { poses: CrowdPoses | null; walker: FootBody | null };
+
 /** The streamed interiors of the map's places: `update` once a frame with the eye and the sight field, `dispose` when the course is left. */
 type InteriorArt = {
-  update(eyeX: number, eyeZ: number, dt: number, sight: SightField): void;
+  update(eyeX: number, eyeZ: number, dt: number, sight: SightField, openers: DoorOpeners): void;
   dispose(): void;
 };
 /** What the open world needs of the engine. */
@@ -129,6 +132,7 @@ export class OpenWorldDirector {
   private text: LookText | null = null;
   private lookAcc = 0;
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
+  private readonly openers: DoorOpeners = { poses: null, walker: null };
   private readonly walkerStrike = new WalkerStrike();
 
   constructor(ports: OpenWorldPorts) {
@@ -206,7 +210,11 @@ export class OpenWorldDirector {
     this.facades ??= this.ports.makeFacades(this.map);
     if (this.interiors === null && this.ports.makeInteriors !== undefined) this.interiors = this.ports.makeInteriors(this.map);
     this.ports.eye(this.ray);
-    this.interiors?.update(this.ray.eyeX, this.ray.eyeZ, wallDt, this.sight);
+    if (this.interiors !== null) {
+      this.openers.poses = this.crowd?.poses ?? null;
+      this.openers.walker = this.ports.foot(this.foot) ? this.foot : null;
+      this.interiors.update(this.ray.eyeX, this.ray.eyeZ, wallDt, this.sight, this.openers);
+    }
     const client = this.ports.isClient();
     if (client && !this.hasHeard) return;
     const key = client ? this.heardKey : this.hostKey();

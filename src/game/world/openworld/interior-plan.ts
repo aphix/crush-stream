@@ -1,6 +1,6 @@
 import { ceilingOver, Draft, footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
 import { layoutBar, layoutCoffee, layoutOffice, layoutRowhome, layoutStore } from "./interior-layouts.ts";
-import { BAY_WIDTH, FURNISHING, SHOPFRONT, STOOP_SEAT_HEIGHT, STOOP_SEAT_OUT, STOOP_SEAT_SPREAD, STREET_SKIN, TURN, type Box, type Furnishing, type InteriorPlan, type Turn } from "./interior-kinds.ts";
+import { BAY_WIDTH, FURNISHING, PARTITION, SHELL_WALL, SHOPFRONT, STOOP_SEAT_HEIGHT, STOOP_SEAT_OUT, STOOP_SEAT_SPREAD, STREET_SKIN, TURN, type Box, type Furnishing, type InteriorPlan, type Opening, type Turn } from "./interior-kinds.ts";
 import { drawnHalf } from "./openworld-facade-solids.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
 
@@ -78,8 +78,7 @@ function planOf(place: Pick<Place, "interior" | "width" | "depth">): InteriorPla
 }
 
 /** Every solid of the place's interior in world metres: wall runs beside each opening, slabs with their stairwells, stair treads and the furniture that blocks. */
-export function interiorSolids(place: Place): InteriorSolid[] {
-  const plan = planOf(place);
+export function interiorSolids(place: Place, plan: InteriorPlan = planOf(place)): InteriorSolid[] {
   const frame = new Frame(place);
   const boxes: Box[] = [];
   for (const wall of plan.walls) boxes.push(...wallBoxes(wall, plan.floors[wall.level]!, ceilingOver(plan.floors, plan.topCeiling, wall.level)));
@@ -184,4 +183,102 @@ export function interiorDoor(kind: InteriorKind, width: number, depth: number, x
     for (const opening of SHOPFRONT[kind]) if (opening.door) across = Math.min(across, opening.centre + (bay - (bays - 1) / 2) * BAY_WIDTH);
   }
   return { x: frame.x(0, across), z: frame.z(0, across) };
+}
+
+/** A door leaf's gap to its jambs and head (m), and how far behind the drawn face its closed leaf stands, inside the wall's thickness. */
+const LEAF_GAP = 0.025;
+const LEAF_INSET = 0.08;
+/** The vestibule behind a street door (m): its depth past the wall, the room it leaves either side of the door, and its height over the door's head. */
+const VESTIBULE_DEPTH = 1.2;
+const VESTIBULE_SIDE = 0.25;
+const VESTIBULE_HEADROOM = 0.3;
+
+/** A street door is drawn on its facade (1), a back door only inside (-1). */
+export const DOOR_FACE = { street: 1, back: -1 } as const;
+
+/**
+ * One door of a place, in world metres: its hinge's foot and the floor it stands on, unit directions along the closed leaf and into the room (the way it swings), the leaf's size, the doorway's
+ * middle on the drawn face and the face it is on, the narrowed box a sight query of the doorway is centred on, and, for a street door, the vestibule behind it (null for a back door).
+ */
+export type DoorLeaf = {
+  hingeX: number;
+  hingeZ: number;
+  floorY: number;
+  closedX: number;
+  closedZ: number;
+  openX: number;
+  openZ: number;
+  width: number;
+  height: number;
+  x: number;
+  z: number;
+  face: (typeof DOOR_FACE)[keyof typeof DOOR_FACE];
+  boxX: number;
+  boxZ: number;
+  vestibule: InteriorSolid | null;
+};
+
+/** The vestibule room behind a street doorway, in plan metres. */
+function vestibuleRect(opening: Opening): { deep0: number; deep1: number; across0: number; across1: number } {
+  const half = opening.width / 2 + VESTIBULE_SIDE;
+  return { deep0: STREET_SKIN + SHELL_WALL, deep1: STREET_SKIN + SHELL_WALL + VESTIBULE_DEPTH, across0: opening.centre - half, across1: opening.centre + half };
+}
+
+/** The ground floor's doorways: every one in the street wall, then every one in the back wall. */
+function doorways(plan: InteriorPlan): { opening: Opening; face: DoorLeaf["face"] }[] {
+  const out: { opening: Opening; face: DoorLeaf["face"] }[] = [];
+  for (const wall of plan.walls) {
+    if (wall.level !== 0 || !wall.shell || wall.axis !== "across") continue;
+    const face = wall.fixed < plan.depth / 2 ? DOOR_FACE.street : DOOR_FACE.back;
+    for (const opening of wall.openings) if (opening.sill === 0) out.push({ opening, face });
+  }
+  return out.sort((a, b) => b.face - a.face);
+}
+
+/** Every door of the place's ground floor: its street doors (each with its vestibule), then its back door. */
+export function interiorDoors(place: Place, plan: InteriorPlan = planOf(place)): DoorLeaf[] {
+  const frame = new Frame(place);
+  const floorY = plan.floors[0]!;
+  return doorways(plan).map(({ opening, face }): DoorLeaf => {
+    const deep = face === DOOR_FACE.street ? STREET_SKIN + LEAF_INSET : plan.depth - STREET_SKIN - LEAF_INSET;
+    const hinge = opening.centre - opening.width / 2 + LEAF_GAP;
+    const room = vestibuleRect(opening);
+    return {
+      hingeX: frame.x(deep, hinge),
+      hingeZ: frame.z(deep, hinge),
+      floorY,
+      closedX: frame.x(deep, hinge + 1) - frame.x(deep, hinge),
+      closedZ: frame.z(deep, hinge + 1) - frame.z(deep, hinge),
+      openX: frame.x(deep + face, hinge) - frame.x(deep, hinge),
+      openZ: frame.z(deep + face, hinge) - frame.z(deep, hinge),
+      width: opening.width - 2 * LEAF_GAP,
+      height: opening.top - LEAF_GAP,
+      x: frame.x(face === DOOR_FACE.street ? 0 : plan.depth, opening.centre),
+      z: frame.z(face === DOOR_FACE.street ? 0 : plan.depth, opening.centre),
+      face,
+      boxX: frame.x(drawnHalf(place.depth), opening.centre),
+      boxZ: frame.z(drawnHalf(place.depth), opening.centre),
+      vestibule: face === DOOR_FACE.street ? frame.solid({ ...room, y0: floorY, y1: floorY + opening.top + VESTIBULE_HEADROOM }) : null,
+    };
+  });
+}
+
+/** What a walker at a street door stands and is closed in by while the room behind is not built: the vestibule's floor (from the ground), its two sides and its back. */
+export function vestibuleSolids(place: Place, plan: InteriorPlan = planOf(place)): InteriorSolid[] {
+  const frame = new Frame(place);
+  const floorY = plan.floors[0]!;
+  const boxes: Box[] = [];
+  for (const { opening, face } of doorways(plan)) {
+    if (face !== DOOR_FACE.street) continue;
+    const room = vestibuleRect(opening);
+    const top = floorY + opening.top + VESTIBULE_HEADROOM;
+    const wall = PARTITION / 2;
+    boxes.push(
+      { ...room, y0: 0, y1: floorY },
+      { ...room, across0: room.across0 - wall, across1: room.across0 + wall, y0: floorY, y1: top },
+      { ...room, across0: room.across1 - wall, across1: room.across1 + wall, y0: floorY, y1: top },
+      { ...room, deep0: room.deep1 - wall, deep1: room.deep1 + wall, y0: floorY, y1: top },
+    );
+  }
+  return boxes.map((box) => frame.solid(box));
 }

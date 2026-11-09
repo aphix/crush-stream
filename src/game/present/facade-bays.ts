@@ -1,11 +1,15 @@
 import * as THREE from "three";
-import type { Frontage } from "../world/openworld/openworld-facade-solids.ts";
-import { buildBayGeometry, buildCorniceGeometry, buildRailingGeometry, buildStoopGeometry, TINT_ATTRIBUTE } from "./facade-bay-parts.ts";
+import { detCos, detSin } from "../kernel/physics-core.js";
+import { PREFABS } from "../world/catalog.ts";
+import { PREFAB } from "../world/constants.ts";
+import { drawnHalf, HOME_HEIGHT, type Frontage } from "../world/openworld/openworld-facade-solids.ts";
+import { buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildRailingGeometry, buildRoofGeometry, buildStoopGeometry, TINT_ATTRIBUTE } from "./facade-bay-parts.ts";
 import { makeKitTextures, type KitTextures } from "./facade-kit-atlas.ts";
-import { FACADE_GLOW } from "./facades.ts";
+import { FACADE_GLOW, roofLiftAt } from "./facades.ts";
 
 /**
- * The rowhomes' projecting bay stacks, stoops, iron railings and roofline cornices: one instanced mesh per kind across the map (four draws, whatever the number of houses),
+ * The rowhomes' projecting bay stacks, stoops, iron railings, roofline cornices and what stands on their roofs (chimneys and hatches, on some a condenser or a deck): one instanced mesh per kind across
+ * the map (seven draws, whatever the number of houses),
  * each house placed by its `Frontage`. Drawing only: what a car or a walker meets is `openworld-facade-solids.ts`.
  */
 
@@ -80,7 +84,27 @@ function makeRailMaterial(textures: KitTextures): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ map: textures.rail, alphaTest: RAIL_ALPHA_TEST, side: THREE.DoubleSide, roughness: RAIL_ROUGHNESS, metalness: RAIL_METALNESS });
 }
 
-type Kind = "bay" | "stoop" | "railing" | "cornice";
+type Kind = "bay" | "stoop" | "railing" | "cornice" | "roof" | "condenser" | "deck";
+
+/** One instanced mesh of the kit: its geometry and material, the houses that have it, where it stands on a house (0: the ground, else the roof) and its per-house colour (none: white). */
+type KitKind = { kind: Kind; geometry: THREE.BufferGeometry; material: THREE.Material; has: (frontage: Frontage) => boolean; onRoof: boolean; colourOf: ((frontage: Frontage) => number) | null };
+
+/** The share (of 100) of houses with a condenser on the roof, and with a roof deck, each from its own bits of the house's variant. */
+const CONDENSER_SHARE = 45;
+const DECK_SHARE = 20;
+const CONDENSER_BITS = 8;
+const DECK_BITS = 16;
+const PERCENT = 100;
+const WHITE = 0xffffff;
+
+const accentOf = (frontage: Frontage): HouseAccent => HOUSE_ACCENTS[frontage.variant % HOUSE_ACCENTS.length]!;
+
+/** How high (m) a house's roof stands: the 14 m block's top and the per-building parapet lift the facade shader gives it, at the home's height. */
+function roofTopOf(frontage: Frontage): number {
+  const face = drawnHalf(frontage.depth);
+  const block = PREFABS[PREFAB.building].size[1];
+  return ((block + roofLiftAt(frontage.x - detCos(frontage.yaw) * face, frontage.z + detSin(frontage.yaw) * face)) * HOME_HEIGHT) / block;
+}
 
 export class FacadeBays {
   readonly group = new THREE.Group();
@@ -92,31 +116,33 @@ export class FacadeBays {
   private readonly railMaterial = makeRailMaterial(this.textures);
 
   constructor(frontages: readonly Frontage[]) {
-    const kinds: readonly [Kind, THREE.BufferGeometry, THREE.Material, (frontage: Frontage, into: THREE.Color) => void][] = [
-      ["bay", buildBayGeometry(), this.kitMaterial, (frontage, into) => into.setHex(HOUSE_ACCENTS[frontage.variant % HOUSE_ACCENTS.length]!.panel)],
-      ["stoop", buildStoopGeometry(), this.kitMaterial, (frontage, into) => into.setHex(STONE_TINTS[frontage.variant % STONE_TINTS.length]!)],
-      ["railing", buildRailingGeometry(), this.railMaterial, () => undefined],
-      ["cornice", buildCorniceGeometry(), this.kitMaterial, (frontage, into) => into.setHex(HOUSE_ACCENTS[frontage.variant % HOUSE_ACCENTS.length]!.cornice)],
+    const everyHouse = (): boolean => true;
+    const kinds: readonly KitKind[] = [
+      { kind: "bay", geometry: buildBayGeometry(), material: this.kitMaterial, has: everyHouse, onRoof: false, colourOf: (frontage) => accentOf(frontage).panel },
+      { kind: "stoop", geometry: buildStoopGeometry(), material: this.kitMaterial, has: everyHouse, onRoof: false, colourOf: (frontage) => STONE_TINTS[frontage.variant % STONE_TINTS.length]! },
+      { kind: "railing", geometry: buildRailingGeometry(), material: this.railMaterial, has: everyHouse, onRoof: false, colourOf: null },
+      { kind: "cornice", geometry: buildCorniceGeometry(), material: this.kitMaterial, has: everyHouse, onRoof: false, colourOf: (frontage) => accentOf(frontage).cornice },
+      { kind: "roof", geometry: buildRoofGeometry(), material: this.kitMaterial, has: everyHouse, onRoof: true, colourOf: () => WHITE },
+      { kind: "condenser", geometry: buildCondenserGeometry(), material: this.kitMaterial, has: (frontage) => (frontage.variant >>> CONDENSER_BITS) % PERCENT < CONDENSER_SHARE, onRoof: true, colourOf: () => WHITE },
+      { kind: "deck", geometry: buildDeckGeometry(), material: this.kitMaterial, has: (frontage) => (frontage.variant >>> DECK_BITS) % PERCENT < DECK_SHARE, onRoof: true, colourOf: () => WHITE },
     ];
     const matrix = new THREE.Matrix4();
     const colour = new THREE.Color();
     let triangles = 0;
-    for (const [kind, geometry, material, colourOf] of kinds) {
-      const mesh = new THREE.InstancedMesh(geometry, material, frontages.length);
+    for (const { kind, geometry, material, has, onRoof, colourOf } of kinds) {
+      const houses = frontages.filter(has);
+      const mesh = new THREE.InstancedMesh(geometry, material, houses.length);
       mesh.name = `facade-${kind}`;
       mesh.receiveShadow = true;
-      for (const [at, frontage] of frontages.entries()) {
-        matrix.makeRotationY(frontage.yaw + Math.PI / 2).setPosition(frontage.x, 0, frontage.z);
+      for (const [at, frontage] of houses.entries()) {
+        matrix.makeRotationY(frontage.yaw + Math.PI / 2).setPosition(frontage.x, onRoof ? roofTopOf(frontage) : 0, frontage.z);
         mesh.setMatrixAt(at, matrix);
-        if (kind !== "railing") {
-          colourOf(frontage, colour);
-          mesh.setColorAt(at, colour);
-        }
+        if (colourOf !== null) mesh.setColorAt(at, colour.setHex(colourOf(frontage)));
       }
       mesh.computeBoundingSphere();
       this.group.add(mesh);
       this.meshes.push(mesh);
-      triangles += (geometry.getAttribute("position").count / 3) * frontages.length;
+      triangles += (geometry.getAttribute("position").count / 3) * houses.length;
     }
     this.stats = { frontages: frontages.length, draws: this.meshes.length, triangles };
   }

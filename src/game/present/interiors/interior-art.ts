@@ -1,50 +1,59 @@
 import * as THREE from "three";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { SHOPFRONT, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
-import { interiorSolids, planInterior, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
+import type { InteriorPlan } from "../../world/openworld/interior-kinds.ts";
+import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
+import { drawnHalf } from "../../world/openworld/openworld-facade-solids.ts";
 import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
-import { DETAIL_BUILDS_PER_FRAME, INTERIOR_FAR, INTERIOR_KEEP, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SOLIDS_NEAR } from "./interior-constants.ts";
+import { DETAIL_BUILDS_PER_FRAME, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
+import { DoorSet, type DoorOpeners } from "./interior-doors.ts";
 
-/** One place with an interior: what is built of it now, and how long it has been out of range. */
+/** What of an interior the physics holds: nothing, the vestibules behind its street doors, or all of it. */
+const SOLIDS = { none: 0, vestibule: 1, full: 2 } as const;
+type Solids = (typeof SOLIDS)[keyof typeof SOLIDS];
+
+/** One place with an interior: its footprint's half sides (drawn depth, width), its doors in the door set, what is built of it now, and how long it has been out of range. */
 type Entry = {
   place: Place;
   plan: InteriorPlan;
-  /** The top of its highest street opening above the ground (m): what an eye can see into through the front; and half its footprint's diagonal, which a player's keep is measured past. */
-  openingTop: number;
-  reach: number;
+  halfDepth: number;
+  halfWidth: number;
+  firstDoor: number;
+  doorCount: number;
   shell: THREE.BufferGeometry | null;
   detail: THREE.BufferGeometry | null;
   glow: THREE.BufferGeometry | null;
   shellAway: number;
   detailAway: number;
-  /** Its solids are with the physics. */
-  inReach: boolean;
+  solids: Solids;
 };
 
 type SolidsListener = (solids: readonly InteriorSolid[]) => void;
 
 /** What the interiors ask of the open world's sight field. */
-type InteriorSight = Pick<SightField, "claim" | "release" | "seenThroughFace" | "recordSighting" | "unseenFor" | "near" | "hideGrace">;
+type InteriorSight = Pick<SightField, "claim" | "release" | "seenThroughFace" | "recordSighting" | "unseenFor" | "playerInside" | "hideGrace">;
 
-/** An interior this frame: neither built anew nor dropped (`kept`), wanted (seen, or a player beside it), or hidden (no eye has seen it for the hide grace and no player is beside it). */
+/** An interior this frame: neither built anew nor dropped (`kept`), wanted (a player inside, or an open street door of it seen within range), or hidden (neither, for the hide grace). */
 const VIEW = { kept: 0, wanted: 1, hidden: 2 } as const;
 type View = (typeof VIEW)[keyof typeof VIEW];
 const NO_IDS = -1;
 
-/** What the set costs right now: places with an envelope, places furnished, vertices drawn, and draw calls (one per merged mesh that has any). */
+/** What the streamed interiors cost right now: places with an envelope, places furnished, vertices drawn, and draw calls (one per merged mesh that has any). The doors and vestibules add two draws, always. */
 type InteriorStats = { shells: number; details: number; vertices: number; drawCalls: number };
 
 /**
- * The interiors of a map's places, streamed by distance from the eye and by sight: an envelope (walls, floor, ceiling) within `SHELL_NEAR`, so a doorway or shopfront window never shows through to the
- * world, and the furnished rooms within `INTERIOR_NEAR`, each built while some eye sees it (or a player is beside it) and dropped once none has for the sight field's hide grace. Everything is merged
- * into three meshes (envelopes, lit furniture, unlit lamps and screens), so the draw calls do not grow with the interiors. The physics' solids follow distance alone, never sight.
+ * The interiors of a map's places. Every door is a hinged leaf, shut until someone stands at it, with a small vestibule behind each street door; the rooms behind are built only while a player
+ * is inside, or a street door of theirs is open and some eye within range sees that doorway, and dropped once neither has held for the sight field's hide grace (or the eye has been past their
+ * far radius for `INTERIOR_LINGER`): the ground floor's envelope within `SHELL_NEAR`, the furnished rooms within `INTERIOR_NEAR`. A civilian swinging a door no player sees builds nothing.
+ * The rooms are merged into three meshes (envelopes, lit furniture, unlit lamps and screens). The physics holds a built interior's solids within `SOLIDS_NEAR` of the eye, and a vestibule's while
+ * the player's walker is at its door.
  */
 export class InteriorSet {
   readonly group = new THREE.Group();
   private readonly entries: Entry[] = [];
+  private readonly doors: DoorSet;
   private readonly empty = new THREE.BufferGeometry();
   private readonly solidMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });
   private readonly glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
@@ -61,6 +70,7 @@ export class InteriorSet {
   constructor(map: OpenWorldMap) {
     this.group.name = "interiors";
     const plans = new Map<string, InteriorPlan>();
+    const leaves: DoorLeaf[] = [];
     for (const place of map.places) {
       if (place.interior === undefined || place.doorNode < 0) continue;
       const key = `${place.interior}:${place.width}:${place.depth}`;
@@ -69,37 +79,45 @@ export class InteriorSet {
         plan = planInterior(place.interior, place.width, place.depth);
         plans.set(key, plan);
       }
-      this.entries.push({ place, plan, openingTop: plan.floors[0]! + Math.max(...SHOPFRONT[place.interior].map((opening) => opening.top)), reach: hypot2(place.width / 2, place.depth / 2), shell: null, detail: null, glow: null, shellAway: 0, detailAway: 0, inReach: false });
+      const doors = interiorDoors(place, plan);
+      this.entries.push({ place, plan, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shell: null, detail: null, glow: null, shellAway: 0, detailAway: 0, solids: SOLIDS.none });
+      leaves.push(...doors);
     }
+    this.doors = new DoorSet(leaves);
+    this.group.add(this.doors.group);
     this.shellMesh = this.makeMesh("interior-shells", this.solidMaterial);
     this.detailMesh = this.makeMesh("interior-furniture", this.solidMaterial);
     this.glowMesh = this.makeMesh("interior-lights", this.glowMaterial);
   }
 
-  /** Build what the eye has come near and some eye sees, drop what it has left (for `INTERIOR_LINGER`) or no eye has seen for the hide grace, merging the meshes that changed. */
-  update(eyeX: number, eyeZ: number, dt: number, sight: InteriorSight): void {
+  /** Swing the doors, build what is wanted near the eye, drop what is hidden or left behind, and hand the physics what it holds now, merging the meshes that changed. */
+  update(eyeX: number, eyeZ: number, dt: number, sight: InteriorSight, openers: DoorOpeners): void {
     if (this.claimedFrom === null) {
       this.sightBase = sight.claim(this.entries.length);
       this.claimedFrom = sight;
     }
+    this.doors.update(eyeX, eyeZ, dt, openers);
     this.shellBuilds = 0;
     this.detailBuilds = 0;
     let shellsChanged = false;
     let detailsChanged = false;
-    let reachChanged = false;
+    let solidsChanged = false;
     for (let at = 0; at < this.entries.length; at++) {
       const entry = this.entries[at]!;
       const distance = hypot2(entry.place.doorX - eyeX, entry.place.doorZ - eyeZ);
       const view = this.viewOf(entry, this.sightBase + at, distance, sight);
-      const reached = distance < SOLIDS_NEAR;
-      if (reached !== entry.inReach) {
-        entry.inReach = reached;
-        reachChanged = true;
+      if (this.streamShell(entry, distance, view, dt)) {
+        shellsChanged = true;
+        this.showVestibules(entry, entry.shell === null);
       }
-      if (this.streamShell(entry, distance, view, dt)) shellsChanged = true;
       if (this.streamDetail(entry, distance, view, dt)) detailsChanged = true;
+      const solids = this.solidsOf(entry, distance, openers.walker);
+      if (solids !== entry.solids) {
+        entry.solids = solids;
+        solidsChanged = true;
+      }
     }
-    if (reachChanged) this.solidsListener?.(this.reachableSolids());
+    if (solidsChanged) this.solidsListener?.(this.heldSolids());
     if (shellsChanged) this.merge(this.shellMesh, this.entries.map((entry) => entry.shell));
     if (detailsChanged) {
       this.merge(this.detailMesh, this.entries.map((entry) => entry.detail));
@@ -107,13 +125,39 @@ export class InteriorSet {
     }
   }
 
-  /** Only an interior in range or built is looked at: an eye inside it, or before its street face with a clear line to it (the view through the doorway and the windows), keeps its clock fresh. */
+  /** Only an interior in range or built is looked at: a player inside it, or an open street door of it whose doorway an eye within range sees, keeps its clock fresh. */
   private viewOf(entry: Entry, id: number, distance: number, sight: InteriorSight): View {
     if (distance >= SHELL_NEAR && entry.shell === null && entry.detail === null && entry.glow === null) return VIEW.kept;
     const { place } = entry;
-    const seen = sight.recordSighting(id, sight.seenThroughFace(place.x, place.z, place.yaw, place.depth / 2, place.width / 2, entry.openingTop, FACE.front));
-    if (seen || sight.near(place.x, place.z, entry.reach + INTERIOR_KEEP)) return VIEW.wanted;
+    const seen = sight.playerInside(place.x, place.z, place.yaw, entry.halfDepth, entry.halfWidth) || (distance < SHELL_NEAR && this.openDoorSeen(entry, sight));
+    sight.recordSighting(id, seen);
+    if (seen) return VIEW.wanted;
     return sight.unseenFor(id) >= sight.hideGrace ? VIEW.hidden : VIEW.kept;
+  }
+
+  /** Some street door of the interior is open and an eye sees into its doorway. */
+  private openDoorSeen(entry: Entry, sight: InteriorSight): boolean {
+    for (let door = entry.firstDoor; door < entry.firstDoor + entry.doorCount; door++) {
+      const leaf = this.doors.leaves[door]!;
+      if (leaf.face !== DOOR_FACE.street || !this.doors.isOpen(door)) continue;
+      if (sight.seenThroughFace(leaf.boxX, leaf.boxZ, entry.place.yaw, entry.halfDepth, leaf.width / 2, leaf.floorY + leaf.height, FACE.front)) return true;
+    }
+    return false;
+  }
+
+  /** A built interior within `SOLIDS_NEAR` is held whole; one the player's walker stands at the door of, only its vestibules. */
+  private solidsOf(entry: Entry, distance: number, walker: DoorOpeners["walker"]): Solids {
+    if (entry.shell !== null && distance < SOLIDS_NEAR) return SOLIDS.full;
+    if (walker === null) return SOLIDS.none;
+    for (let door = entry.firstDoor; door < entry.firstDoor + entry.doorCount; door++) {
+      const leaf = this.doors.leaves[door]!;
+      if (leaf.face === DOOR_FACE.street && hypot2(walker.x - leaf.x, walker.z - leaf.z) <= VESTIBULE_REACH) return SOLIDS.vestibule;
+    }
+    return SOLIDS.none;
+  }
+
+  private showVestibules(entry: Entry, shown: boolean): void {
+    for (let door = entry.firstDoor; door < entry.firstDoor + entry.doorCount; door++) this.doors.showVestibule(door, shown);
   }
 
   /** The envelope: built when wanted within `SHELL_NEAR` (the frame's budget allowing), dropped when hidden or past `SHELL_FAR` for the linger; true when it changed. */
@@ -132,7 +176,7 @@ export class InteriorSet {
     return true;
   }
 
-  /** The furniture, partitions, stairs and upper floors: as the envelope, within `INTERIOR_NEAR` and `INTERIOR_FAR`. */
+  /** The furniture, partitions, stairs and upper floors: the envelope's rule, within `INTERIOR_NEAR` and `INTERIOR_FAR`. */
   private streamDetail(entry: Entry, distance: number, view: View, dt: number): boolean {
     if (entry.detail === null && entry.glow === null) {
       if (view !== VIEW.wanted || distance >= INTERIOR_NEAR || this.detailBuilds >= DETAIL_BUILDS_PER_FRAME) return false;
@@ -163,23 +207,29 @@ export class InteriorSet {
     return { shells: this.entries.filter((entry) => entry.shell !== null).length, details: this.entries.filter((entry) => entry.detail !== null).length, vertices, drawCalls };
   }
 
-  /** `listener` gets every solid of the interiors within `SOLIDS_NEAR` of the eye (the whole list each time it changes, empty when none), for the physics that lets a walker in. */
+  /** Doors standing open (or swinging) now. */
+  openDoors(): number {
+    return this.doors.openCount();
+  }
+
+  /** `listener` gets every solid the physics should hold (the whole list each time it changes, empty when none), for the walker. */
   onSolids(listener: SolidsListener): void {
     this.solidsListener = listener;
   }
 
-  private reachableSolids(): InteriorSolid[] {
-    return this.entries.filter((entry) => entry.inReach).flatMap((entry) => interiorSolids(entry.place));
+  private heldSolids(): InteriorSolid[] {
+    return this.entries.flatMap((entry) => (entry.solids === SOLIDS.full ? interiorSolids(entry.place, entry.plan) : entry.solids === SOLIDS.vestibule ? vestibuleSolids(entry.place, entry.plan) : []));
   }
 
   dispose(): void {
-    if (this.entries.some((entry) => entry.inReach)) this.solidsListener?.([]);
+    if (this.entries.some((entry) => entry.solids !== SOLIDS.none)) this.solidsListener?.([]);
     for (const entry of this.entries) {
       entry.shell?.dispose();
       entry.detail?.dispose();
       entry.glow?.dispose();
     }
     for (const mesh of [this.shellMesh, this.detailMesh, this.glowMesh]) mesh.geometry.dispose();
+    this.doors.dispose();
     this.empty.dispose();
     this.solidMaterial.dispose();
     this.glowMaterial.dispose();

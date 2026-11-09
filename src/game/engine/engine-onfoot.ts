@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { DriverSeat } from "../vehicle/car-drive.ts";
+import type { Ejection } from "../vehicle/ejection.ts";
 import { blankStrike, fell, runsDown } from "../scenes/figure-strike.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { PAD_BUTTON, type PadState, type TouchPad } from "../vehicle/gamepad.ts";
@@ -52,6 +53,14 @@ interface OnFootHost {
   look(): DriverLook;
   /** The scene's solids the camera keeps its line of sight clear of, or null where there are none. */
   sight(): Sight | null;
+  /** The open world's free roam (solo, or a room's lobby): the reset on foot puts him in a fresh car, and his thrown-out driver is his to walk. */
+  openWorld(): boolean;
+  /** This browser runs the cars (solo, a netplay host): it moves his car and puts its driver back in; a client's are the host's. */
+  runsCars(): boolean;
+  /** Car `index` fresh on the road nearest (x, z), facing the way nearer `facing` (`RaceField.placeNear`); false where there is no clear spot. */
+  freshCarNear(index: number, x: number, z: number, facing: number): boolean;
+  /** The reset a driver has (R): his car back at its spawn, repaired; a client asks the host. */
+  respawn(): void;
 }
 
 /** The control that gets him out and in: Enter on the keyboard (`SEAT_KEYS.onFoot`), B (Circle) on the pad. Neither drives, steers or switches a scene. */
@@ -61,7 +70,9 @@ const SWALLOWED_KEYS: readonly string[] = ["Space", SEAT_KEYS.reset, SEAT_KEYS.s
 const BACK_BUTTON = 1 << PAD_BUTTON.back;
 /** The pad's View button (Y, Triangle): the drive views in the seat, the on-foot views out of it. */
 const VIEW_BUTTON = 1 << PAD_BUTTON.north;
-const SWALLOWED_BUTTONS = BACK_BUTTON | VIEW_BUTTON | (1 << PAD_BUTTON.lb) | (1 << PAD_BUTTON.rb) | (1 << PAD_BUTTON.down);
+/** The pad's reset (D-pad down, the touch Respawn): in the open world it puts him back in a fresh car (`resetsToCar`). */
+const RESET_BUTTON = 1 << PAD_BUTTON.down;
+const SWALLOWED_BUTTONS = BACK_BUTTON | VIEW_BUTTON | (1 << PAD_BUTTON.lb) | (1 << PAD_BUTTON.rb) | RESET_BUTTON;
 
 /** A stick pushed less than this far does not move him (research: pad dead zone 0.12-0.18); a push beyond it walks from this speed (m/s) up to a run along this curve (research: 1.5-2). */
 const WALK_DEADZONE = 0.15;
@@ -127,6 +138,42 @@ export class OnFootDirector {
     return this.framed && this.host.view.orbitRadius < SHOULDER_NEAREST ? "first" : "shoulder";
   }
 
+  /** On foot in the open world the reset control (R, D-pad down, Respawn; a tap or a hold, as at the wheel) is his: back in a fresh car (`resetIntoCar`). */
+  get resetsToCar(): boolean {
+    return this.flow.phase === "onFoot" && this.host.openWorld();
+  }
+
+  /**
+   * The reset on foot in the open world: the trip ends and he is at the wheel of his car, fresh (repaired, at rest) on the road nearest where he stood,
+   * facing the way he faced. Where no road spot is clear, or on a netplay client (the host runs its cars), the reset a driver has puts it back at its spawn.
+   */
+  resetIntoCar(): void {
+    const { ragdolls, seat } = this.host;
+    const car = this.flow.car;
+    const out = ragdolls.walkerTorso(_torso);
+    const placed = out && this.host.runsCars() && this.host.freshCarNear(car, _torso.x, _torso.z, ragdolls.walker.facing);
+    ragdolls.stopWalker();
+    this.reset();
+    seat.focus(car);
+    seat.mode = "drive";
+    if (!placed) this.host.respawn();
+  }
+
+  /**
+   * Car `car`'s driver is thrown out (`e`): in the open world, when it is the car he drives, the player takes him over (`RagdollSystem.ejectWalker`): he
+   * flies limp, gets up once asked and walks, the camera on him, and the car stays where it ends up for him to climb back into. True when he was taken over.
+   */
+  takeEjected(e: Ejection): boolean {
+    const { ragdolls, seat } = this.host;
+    if (this.flow.active || !this.host.openWorld() || !this.host.available() || seat.mode !== "drive" || seat.carIndex !== e.car) return false;
+    if (ragdolls.ejectWalker(e, this.host.cars()) < 0) return false;
+    this.flow.thrownOut(e.car);
+    seat.esc();
+    this.framed = false;
+    this.refusal = null;
+    return true;
+  }
+
   /** View (V, T, C, the pad's Y, the HUD's camera) on foot: over the shoulder to his eyes and back. Nothing while he climbs in or out. */
   cycleView(): void {
     if (this.flow.phase !== "onFoot" || !this.framed) return;
@@ -165,6 +212,7 @@ export class OnFootDirector {
       this.cycleView();
       return true;
     }
+    if (e.code === SEAT_KEYS.reset && this.resetsToCar) return false;
     if (!this.flow.active || !SWALLOWED_KEYS.includes(e.code)) return false;
     return e.code !== SEAT_KEYS.stepOut || !this.host.racing();
   }
@@ -174,7 +222,7 @@ export class OnFootDirector {
     if (!this.host.available()) return false;
     if ((pressed & ON_FOOT_BUTTON) !== 0) this.press();
     if (this.flow.active && (pressed & VIEW_BUTTON) !== 0) this.cycleView();
-    const swallowed = this.host.racing() ? SWALLOWED_BUTTONS & ~BACK_BUTTON : SWALLOWED_BUTTONS;
+    const swallowed = (this.host.racing() ? SWALLOWED_BUTTONS & ~BACK_BUTTON : SWALLOWED_BUTTONS) & (this.resetsToCar ? ~RESET_BUTTON : -1);
     return (pressed & ON_FOOT_BUTTON) !== 0 || (this.flow.active && (pressed & swallowed) !== 0);
   }
 
@@ -322,6 +370,12 @@ export class OnFootDirector {
     const { ragdolls, seat } = this.host;
     this.endView();
     ragdolls.stopWalker();
+    // Back in a car his driver was thrown out of: he is its driver again. A client's car is the host's to say, so for him it is the reset a driver has.
+    const car = this.host.cars()[index];
+    if (car && car.driverOut !== null) {
+      if (this.host.runsCars()) car.driverOut = null;
+      else this.host.respawn();
+    }
     seat.focus(index);
     seat.mode = "drive";
     this.reach = false;

@@ -246,3 +246,80 @@ export function buildRailingGeometry(): THREE.BufferGeometry {
   }
   return builder.geometry(false);
 }
+
+/**
+ * What stands on a rowhome's flat roof, in the kit's frame with y from the roof's surface and z negative behind the facade: a brick chimney astride the party wall at the kit's +x
+ * edge (each house draws the one on its own side, so every party wall has one) and a roof hatch; some houses also have a condenser box or a timber roof deck.
+ */
+const CHIMNEY_BRICK = new THREE.Color(0x9a4a35);
+const HATCH_GREY = new THREE.Color(0x5f6266);
+const CONDENSER_GREY = new THREE.Color(0xc8ccd0);
+const DECK_WOOD = new THREE.Color(0x8b6544);
+const DECK_IRON = new THREE.Color(0x2a2a2e);
+/** The chimney: its half width across the party wall and half depth along it, its height and its middle behind the facade, then its cap's overhang and thickness (m). */
+const CHIMNEY_HALF_WIDTH = 0.35;
+const CHIMNEY_HALF_DEPTH = 0.7;
+const CHIMNEY_HEIGHT = 1.3;
+const CHIMNEY_BACK = 9.5;
+const CHIMNEY_CAP_OVER = 0.07;
+const CHIMNEY_CAP = 0.12;
+/** The hatch: its middle (kit x, behind the facade), half side, curb height and lid. */
+const HATCH_X = -0.6;
+const HATCH_BACK = 5.5;
+const HATCH_HALF = 0.45;
+const HATCH_CURB = 0.35;
+const HATCH_LID_OVER = 0.05;
+const HATCH_LID = 0.05;
+/** The condenser: its middle, half sides and height (m). */
+const CONDENSER_X = 1;
+const CONDENSER_BACK = 11.5;
+const CONDENSER_HALF_WIDTH = 0.65;
+const CONDENSER_HALF_DEPTH = 0.5;
+const CONDENSER_HEIGHT = 1;
+/** The deck: its half width, its front and back behind the facade, its platform's height, its rail's height and the rail's and posts' section (m). */
+const DECK_HALF_WIDTH = 1.6;
+const DECK_FRONT = 2.5;
+const DECK_BACK = 5.5;
+const DECK_PLATFORM = 0.3;
+const DECK_RAIL = 1;
+const DECK_BAR = 0.05;
+
+const ALL_BUT_BOTTOM = FACE.front | FACE.back | FACE.left | FACE.right | FACE.top;
+
+/** A box standing on the roof: its middle (kit x, behind the facade), half sides, foot and top. */
+function roofBox(builder: KitBuilder, x: number, back: number, halfWidth: number, halfDepth: number, y0: number, y1: number, cell: UvRect, colour: THREE.Color): void {
+  builder.box(x - halfWidth, x + halfWidth, y0, y1, -back - halfDepth, -back + halfDepth, ALL_BUT_BOTTOM, cell, colour, FIXED);
+}
+
+/** Every house's roof: the chimney on its +x party wall and the hatch. */
+export function buildRoofGeometry(): THREE.BufferGeometry {
+  const builder = new KitBuilder();
+  const party = LOT_WIDTH / 2;
+  roofBox(builder, party, CHIMNEY_BACK, CHIMNEY_HALF_WIDTH, CHIMNEY_HALF_DEPTH, 0, CHIMNEY_HEIGHT, KIT_CELL.stone, CHIMNEY_BRICK);
+  roofBox(builder, party, CHIMNEY_BACK, CHIMNEY_HALF_WIDTH + CHIMNEY_CAP_OVER, CHIMNEY_HALF_DEPTH + CHIMNEY_CAP_OVER, CHIMNEY_HEIGHT, CHIMNEY_HEIGHT + CHIMNEY_CAP, KIT_CELL.stone, TRIM);
+  roofBox(builder, HATCH_X, HATCH_BACK, HATCH_HALF, HATCH_HALF, 0, HATCH_CURB, KIT_CELL.stone, HATCH_GREY);
+  roofBox(builder, HATCH_X, HATCH_BACK, HATCH_HALF + HATCH_LID_OVER, HATCH_HALF + HATCH_LID_OVER, HATCH_CURB, HATCH_CURB + HATCH_LID, KIT_CELL.panel, HATCH_GREY);
+  return builder.geometry(true);
+}
+
+/** An air-conditioning condenser on the roof. */
+export function buildCondenserGeometry(): THREE.BufferGeometry {
+  const builder = new KitBuilder();
+  roofBox(builder, CONDENSER_X, CONDENSER_BACK, CONDENSER_HALF_WIDTH, CONDENSER_HALF_DEPTH, 0, CONDENSER_HEIGHT, KIT_CELL.panel, CONDENSER_GREY);
+  return builder.geometry(true);
+}
+
+/** A timber roof deck over the front of the roof, railed on its front and sides. */
+export function buildDeckGeometry(): THREE.BufferGeometry {
+  const builder = new KitBuilder();
+  const halfDepth = (DECK_BACK - DECK_FRONT) / 2;
+  const middle = (DECK_FRONT + DECK_BACK) / 2;
+  const railTop = DECK_PLATFORM + DECK_RAIL;
+  roofBox(builder, 0, middle, DECK_HALF_WIDTH, halfDepth, 0, DECK_PLATFORM, KIT_CELL.panel, DECK_WOOD);
+  for (const [x, back] of [[-DECK_HALF_WIDTH, DECK_FRONT], [DECK_HALF_WIDTH, DECK_FRONT], [-DECK_HALF_WIDTH, DECK_BACK], [DECK_HALF_WIDTH, DECK_BACK]] as const) {
+    roofBox(builder, x, back, DECK_BAR / 2, DECK_BAR / 2, DECK_PLATFORM, railTop, KIT_CELL.stone, DECK_IRON);
+  }
+  roofBox(builder, 0, DECK_FRONT, DECK_HALF_WIDTH, DECK_BAR / 2, railTop - DECK_BAR, railTop, KIT_CELL.stone, DECK_IRON);
+  for (const side of [-1, 1]) roofBox(builder, side * DECK_HALF_WIDTH, middle, DECK_BAR / 2, halfDepth, railTop - DECK_BAR, railTop, KIT_CELL.stone, DECK_IRON);
+  return builder.geometry(true);
+}

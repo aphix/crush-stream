@@ -177,6 +177,43 @@ describe("given the open world's traffic on a field with the local player's car"
   });
 });
 
+describe("given a patrol car on an urgent trip that is sent somewhere else on its way", () => {
+  const ELSEWHERE = { x: -150, z: 80 };
+
+  // mutation: sed -i 's/    this.routes\[slot\] = this.spareRoute;/    this.routes[slot] = old;/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when it is redirected mid-trip, then it drives on along the streets from where it is and parks in the new space, which it holds; the old one is free again", () => {
+    const field = quietField();
+    const traffic = makeTraffic(field, { movers: 2, kerb: 0, patrol: 1 });
+    const clock = new Clock();
+    const first = traffic.nearestSpot(WORK.x, WORK.z);
+    const car = traffic.spawnDrivenCar(-1, traffic.nearestSpot(HOME.x, HOME.z), first, { urgent: true })!;
+    runSeconds(field, traffic, clock, 6);
+    expect(car.arrived, "still on its way when redirected").toBe(false);
+    const next = traffic.nearestSpot(ELSEWHERE.x, ELSEWHERE.z);
+    expect(traffic.redirect(car, next), "redirected").toBe(true);
+    runUntil({ field, traffic, clock }, () => car.arrived);
+    const spots = traffic.parkingSpots;
+    const at = field.cars[car.index]!.group.position;
+    expect(car.arrived, "arrived").toBe(true);
+    expect(hypot2(at.x - spots.x[next]!, at.z - spots.z[next]!), "distance from the new space's middle").toBeLessThan(SPOT_REACH);
+    expect(traffic.claimedSpots[next], "the new space is held").toBe(1);
+    expect(traffic.claimedSpots[first], "the first space is free again").toBe(0);
+  });
+
+  // mutation: sed -i 's/ || spots.stays\[toSpot\] === 1 || taken\[toSpot\] === 1) return false;/) return false;/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when it is redirected to a space another car holds, then the redirect is refused and its trip stands", () => {
+    const field = quietField();
+    const traffic = makeTraffic(field, { movers: 3, kerb: 0, patrol: 1 });
+    const other = traffic.spawnDrivenCar(4, traffic.nearestSpot(HOME.x, HOME.z + 40), traffic.nearestSpot(ELSEWHERE.x, ELSEWHERE.z))!;
+    expect(other, "a car leased").not.toBeNull();
+    const held = traffic.claimedSpots.indexOf(1);
+    expect(held, "the space the other car is going to").toBeGreaterThanOrEqual(0);
+    const patrol = traffic.spawnDrivenCar(-1, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z), { urgent: true })!;
+    stepField(field, traffic, new Clock());
+    expect(traffic.redirect(patrol, held)).toBe(false);
+  });
+});
+
 describe("given the player's car crossing a junction's stop bar", () => {
   const network = buildRoadNetwork(openWorldGeometry(LAYOUT));
   const junction = junctionIndex(network, 1, 1);

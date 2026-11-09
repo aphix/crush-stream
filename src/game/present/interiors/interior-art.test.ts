@@ -1,108 +1,122 @@
 import { createHash } from "node:crypto";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
+import { createCrowdPoses, type CrowdPoses } from "../../ai/civilians/crowd-poses.ts";
 import { FRAME_HZ } from "../../kernel/constants.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
-import type { InteriorSolid } from "../../world/openworld/interior-plan.ts";
+import { vestibuleSolids, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { HIDE_GRACE, SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../openworld-sight.ts";
-import { occluder, type Occluder } from "../spectate-cam.ts";
-import { INTERIOR_FAR, INTERIOR_KEEP, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_FAR, SHELL_NEAR } from "./interior-constants.ts";
+import { DOOR_SWING_SECONDS, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_FAR, SHELL_NEAR } from "./interior-constants.ts";
 import { InteriorSet } from "./interior-art.ts";
+import type { DoorOpeners } from "./interior-doors.ts";
 
 const map = buildOpenWorldMap(layOutLots());
 const coffee = map.places.find((place) => place.interior === "coffee" && place.doorNode >= 0)!;
 /** The map with the one coffee shop: nothing else comes into range as the eye walks about. */
 const lone = { ...map, places: [coffee] };
 const FRAME = 1 / FRAME_HZ;
-/** Frames enough for the budgeted builds to cover the whole map. */
+/** Frames enough for the budgeted builds to cover the whole map, for a door to swing, and for the hide grace to pass. */
 const SETTLE_FRAMES = 200;
+const SWING_FRAMES = Math.ceil(DOOR_SWING_SECONDS * FRAME_HZ) + 2;
+const GRACE_FRAMES = Math.round(HIDE_GRACE * FRAME_HZ);
 /** Where the eye is out of every interior's range. */
 const AWAY = 4 * SHELL_FAR;
-/** A field with no eye: everything is seen, so only distance streams. */
-const blind = () => new SightField([], SIGHT_ID_CAPACITY);
 const NOTHING_BUILT = JSON.stringify({ shells: 0, details: 0, vertices: 0, drawCalls: 0 });
+const built = (set: InteriorSet): string => JSON.stringify(set.stats());
+/** A field with no eye: everything is seen, so only distance and the doors stream. */
+const blind = () => new SightField([], SIGHT_ID_CAPACITY);
 
-/** The shop's frame: out of its street face, and along it. */
-const outX = Math.cos(coffee.yaw);
-const outZ = -Math.sin(coffee.yaw);
-/** The point `out` m out of the shop's door (negative: in through it, toward its back). */
-const fromDoor = (out: number): { x: number; z: number } => ({ x: coffee.doorX + outX * out, z: coffee.doorZ + outZ * out });
-/** A wall 12 m tall, thin across the line out of the door and `length` m along the shop's face, standing `out` m out of the door. */
-function wallAt(out: number, length: number): Occluder {
-  const at = fromDoor(out);
-  return occluder(at.x, at.z, coffee.yaw, 0.15, length / 2, false, 0, 12);
+/** The point `out` m out of the coffee shop's door (negative: in through it). */
+const fromDoor = (out: number): { x: number; z: number } => ({ x: coffee.doorX + Math.cos(coffee.yaw) * out, z: coffee.doorZ - Math.sin(coffee.yaw) * out });
+/** A civilian standing just out of the door opens it; one who has gone is hidden. */
+const AT_DOOR = 0.5;
+const STREET_EYE = 30;
+/** The player's walker on the sidewalk, inside the vestibule's reach but outside the door's. */
+const SIDEWALK = 2.5;
+
+/** Openers with one civilian, hidden until `standAtDoor`, and no walker. */
+/** Openers whose crowd is one civilian. */
+type OneCivilian = DoorOpeners & { poses: CrowdPoses };
+
+function openers(): OneCivilian {
+  const poses = createCrowdPoses(1);
+  poses.shown[0] = 0;
+  return { poses, walker: null };
 }
 
-const EYE_HEIGHT = 1.7;
-const EYE_FOV = 60;
-const EYE_FAR = 1000;
-/** Where the street eye stands (m out of the door: inside the furnished radius), the wall that hides the shop from it, and the alley eye behind the shop's back wall. */
-const STREET_EYE = 30;
-const STREET_WALL = 25;
-const ALLEY_EYE = -(coffee.depth + 3);
-const WALL_LENGTH = 3 * coffee.width;
-/** A player in the rear yard, 6 m behind the shop's back wall. */
-const YARD_PLAYER = -(coffee.depth + 6);
-/** Frames the eye looks before a wall goes up, and how far short of and past the hide grace the rows check. */
-const MARGIN_FRAMES = 10;
-const GRACE_FRAMES = Math.round(HIDE_GRACE * FRAME_HZ);
+function standAtDoor(who: OneCivilian): void {
+  const at = fromDoor(AT_DOOR);
+  who.poses.x[0] = at.x;
+  who.poses.z[0] = at.z;
+  who.poses.shown[0] = 1;
+}
 
-/** An eye at `out` m from the door looking at it, a sight field, the players (read each frame), and a clock: `frames` advances them frame by frame. */
-function watch(set: InteriorSet, out: number, players: readonly SightPlayer[] = []) {
+/** A player's eye `out` m from the door, looking at it (or straight away from it), the sight field, the players inside it (read each frame) and a clock. */
+function scene(set: InteriorSet, out: number, who: DoorOpeners, players: SightPlayer[] = [], lookAway = false) {
   const eye = fromDoor(out);
-  const camera = new THREE.PerspectiveCamera(EYE_FOV, 1, 0.1, EYE_FAR);
-  camera.position.set(eye.x, EYE_HEIGHT, eye.z);
-  camera.lookAt(coffee.doorX, EYE_HEIGHT, coffee.doorZ);
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+  camera.position.set(eye.x, 1.7, eye.z);
+  const target = lookAway ? fromDoor(out + 10) : fromDoor(0);
+  camera.lookAt(target.x, 1.7, target.z);
   const sight = new SightField([], SIGHT_ID_CAPACITY);
   let now = 0;
   const frames = (count: number): void => {
     for (let frame = 0; frame < count; frame++) {
       now += FRAME;
       sight.update([camera], now, players);
-      set.update(eye.x, eye.z, FRAME, sight);
+      set.update(eye.x, eye.z, FRAME, sight, who);
     }
   };
-  return { sight, frames };
+  return { frames };
 }
 
-function settle(set: InteriorSet, x: number, z: number): void {
+function settle(set: InteriorSet, x: number, z: number, who: DoorOpeners, count = SETTLE_FRAMES): void {
   const sight = blind();
-  for (let frame = 0; frame < SETTLE_FRAMES; frame++) set.update(x, z, FRAME, sight);
+  for (let frame = 0; frame < count; frame++) set.update(x, z, FRAME, sight, who);
 }
 
+function listen(set: InteriorSet): InteriorSolid[][] {
+  const heard: InteriorSolid[][] = [];
+  set.onSolids((solids) => heard.push([...solids]));
+  return heard;
+}
+
+const last = (heard: InteriorSolid[][]): number => heard[heard.length - 1]?.length ?? 0;
 const digest = (floats: Float32Array): string => createHash("sha1").update(Buffer.from(floats.buffer, floats.byteOffset, floats.byteLength)).digest("hex");
 
-describe("given the interiors of the open world's map", () => {
+describe("given the interiors of the open world's map, a coffee shop's door held open", () => {
   // mutation: sed -i 's/const INTERIOR_NEAR = 35/const INTERIOR_NEAR = 0/' src/game/present/interiors/interior-constants.ts
-  it("when the eye comes to a coffee shop's door, then its furniture is built and the whole set is drawn in three draws at most", () => {
+  it("when the eye comes to the door, then the shop is furnished and the whole set is drawn in three draws at most", () => {
     const set = new InteriorSet(map);
-    expect(JSON.stringify(set.stats()), "before any eye").toBe(NOTHING_BUILT);
-    settle(set, coffee.doorX, coffee.doorZ);
+    const who = openers();
+    expect(built(set), "before any eye").toBe(NOTHING_BUILT);
+    standAtDoor(who);
+    settle(set, coffee.doorX, coffee.doorZ, who);
     const near = set.stats();
     expect(near.details, "furnished interiors near the door").toBeGreaterThanOrEqual(1);
-    expect(near.shells, "envelopes near the door").toBeGreaterThan(near.details);
+    expect(near.shells, "envelopes near the door").toBeGreaterThanOrEqual(near.details);
     expect(near.drawCalls, "draw calls").toBeLessThanOrEqual(3);
-    expect(near.vertices, "vertices").toBeGreaterThan(0);
     set.dispose();
   });
 
   // mutation: sed -i 's/const INTERIOR_LINGER = 3/const INTERIOR_LINGER = 1e9/' src/game/present/interiors/interior-constants.ts
-  it("when the eye goes past the far radius for the linger, then the furniture is dropped, then the envelopes, and the meshes are back to nothing; a return before the linger keeps them", () => {
+  it("when the eye goes past the far radius for the linger, then the furniture is dropped, then the envelope; a return before the linger keeps them", () => {
     const set = new InteriorSet(lone);
+    const who = openers();
+    standAtDoor(who);
     const sight = blind();
-    settle(set, coffee.doorX, coffee.doorZ);
+    settle(set, coffee.doorX, coffee.doorZ, who);
     expect(set.stats().details, "furnished at the door").toBe(1);
-    set.update(coffee.doorX + INTERIOR_FAR + 5, coffee.doorZ, INTERIOR_LINGER / 2, sight);
-    set.update(coffee.doorX, coffee.doorZ, FRAME, sight);
+    set.update(coffee.doorX + INTERIOR_FAR + 5, coffee.doorZ, INTERIOR_LINGER / 2, sight, who);
+    set.update(coffee.doorX, coffee.doorZ, FRAME, sight, who);
     expect(set.stats().details, "after a short walk out and back").toBe(1);
-    set.update(coffee.doorX + INTERIOR_FAR + 5, coffee.doorZ, INTERIOR_LINGER + FRAME, sight);
-    const midway = set.stats();
-    expect(midway.details, "furnished past the far radius").toBe(0);
-    expect(midway.shells, "envelope while still inside its radius").toBe(1);
-    set.update(coffee.doorX + AWAY, coffee.doorZ, FRAME, sight);
-    set.update(coffee.doorX + AWAY, coffee.doorZ, INTERIOR_LINGER + FRAME, sight);
-    expect(JSON.stringify(set.stats()), "far from everything").toBe(NOTHING_BUILT);
+    set.update(coffee.doorX + INTERIOR_FAR + 5, coffee.doorZ, INTERIOR_LINGER + FRAME, sight, who);
+    expect(set.stats().details, "furnished past the far radius").toBe(0);
+    expect(set.stats().shells, "envelope while still inside its radius").toBe(1);
+    set.update(coffee.doorX + AWAY, coffee.doorZ, FRAME, sight, who);
+    set.update(coffee.doorX + AWAY, coffee.doorZ, INTERIOR_LINGER + FRAME, sight, who);
+    expect(built(set), "far from everything").toBe(NOTHING_BUILT);
     set.dispose();
   });
 
@@ -112,73 +126,96 @@ describe("given the interiors of the open world's map", () => {
     expect(INTERIOR_FAR).toBeLessThan(SHELL_NEAR);
   });
 
-  // mutation: sed -i 's/const reached = distance < SOLIDS_NEAR;/const reached = false;/' src/game/present/interiors/interior-art.ts
-  it("when the eye comes within the solids' reach of an interior and leaves it, then the physics is handed its solids, then an empty list", () => {
+  // mutation: sed -i 's/if (entry.shell !== null \&\& distance < SOLIDS_NEAR) return SOLIDS.full;/if (false) return SOLIDS.full;/' src/game/present/interiors/interior-art.ts
+  it("when the eye is at the built shop and then leaves it, then the physics is handed its solids, then an empty list", () => {
     const set = new InteriorSet(lone);
-    const heard: InteriorSolid[][] = [];
-    set.onSolids((solids) => heard.push([...solids]));
-    settle(set, coffee.doorX, coffee.doorZ);
-    expect(heard.length, "lists handed over while at the door").toBeGreaterThanOrEqual(1);
-    expect(heard[heard.length - 1]!.length, "solids of the coffee shop at its door").toBeGreaterThan(30);
-    set.update(coffee.doorX + AWAY, coffee.doorZ, FRAME, blind());
-    expect(heard[heard.length - 1]!.length, "solids once the eye has left").toBe(0);
+    const heard = listen(set);
+    const who = openers();
+    standAtDoor(who);
+    settle(set, coffee.doorX, coffee.doorZ, who);
+    expect(last(heard), "solids of the coffee shop at its door").toBeGreaterThan(30);
+    set.update(coffee.doorX + AWAY, coffee.doorZ, FRAME, blind(), who);
+    expect(last(heard), "solids once the eye has left").toBe(0);
     set.dispose();
   });
 });
 
-describe("given an eye on the street that can see a coffee shop, then cannot", () => {
+describe("given a coffee shop with its door shut and the player's walker on the sidewalk before it", () => {
+  // mutation: sed -i 's/if (entry.shell !== null \&\& distance < SOLIDS_NEAR) return SOLIDS.full;/if (distance < SOLIDS_NEAR) return SOLIDS.full;/' src/game/present/interiors/interior-art.ts
+  it("when the eye looks at the shut door, then no room is built and the physics holds the vestibule behind the door alone", () => {
+    const set = new InteriorSet(lone);
+    const heard = listen(set);
+    const who = openers();
+    const walker = fromDoor(SIDEWALK);
+    who.walker = walker;
+    scene(set, STREET_EYE, who, [{ group: { position: walker } }]).frames(SETTLE_FRAMES);
+    expect(set.openDoors(), "doors open").toBe(0);
+    expect(built(set), "rooms built").toBe(NOTHING_BUILT);
+    expect(last(heard), "solids held").toBe(vestibuleSolids(coffee).length);
+    set.dispose();
+  });
+});
+
+describe("given a civilian opening a coffee shop's door", () => {
+  // mutation: sed -i 's/if (sight.seenThroughFace(leaf.boxX, leaf.boxZ, entry.place.yaw, entry.halfDepth, leaf.width \/ 2, leaf.floorY + leaf.height, FACE.front)) return true;/return true;/' src/game/present/interiors/interior-art.ts
+  it("when no player's eye sees the doorway (one in range looking away, or every eye out of range), then the door swings but nothing is built", () => {
+    const away = new InteriorSet(lone);
+    const who = openers();
+    standAtDoor(who);
+    scene(away, STREET_EYE, who, [], true).frames(SETTLE_FRAMES);
+    expect(away.openDoors(), "the door swung").toBe(1);
+    expect(built(away), "built for an eye looking away").toBe(NOTHING_BUILT);
+    away.dispose();
+    const far = new InteriorSet(lone);
+    scene(far, SHELL_FAR + 10, who).frames(SETTLE_FRAMES);
+    expect(built(far), "built for an eye out of range").toBe(NOTHING_BUILT);
+    far.dispose();
+  });
+
   // mutation: sed -i 's/return sight.unseenFor(id) >= sight.hideGrace ? VIEW.hidden : VIEW.kept;/return VIEW.kept;/' src/game/present/interiors/interior-art.ts
-  it("when a wall stands between them, then the interior stays through the hide grace, is released after it, and is built again once the wall is gone", () => {
+  it("when a player's eye in range sees the open doorway, then the shop is built; once the civilian has gone and the door is shut, it is released after the hide grace, its seats and counter untouched", () => {
     const set = new InteriorSet(lone);
-    const { sight, frames } = watch(set, STREET_EYE);
-    frames(MARGIN_FRAMES);
-    expect(set.stats().details, "furnished while seen").toBe(1);
-    expect(set.stats().shells, "envelope while seen").toBe(1);
-    sight.setSolids([wallAt(STREET_WALL, WALL_LENGTH)]);
-    frames(GRACE_FRAMES - MARGIN_FRAMES);
-    expect(set.stats().details, "furnished inside the grace").toBe(1);
-    frames(2 * MARGIN_FRAMES);
-    expect(JSON.stringify(set.stats()), "released once hidden for the grace").toBe(NOTHING_BUILT);
-    sight.setSolids([]);
-    frames(MARGIN_FRAMES);
-    expect(set.stats().details, "furnished once seen again").toBe(1);
-    expect(set.stats().shells, "envelope once seen again").toBe(1);
-    set.dispose();
-  });
-
-  // mutation: sed -i 's/sight.near(place.x, place.z, entry.reach + INTERIOR_KEEP)/sight.near(place.doorX, place.doorZ, 2 * INTERIOR_KEEP)/' src/game/present/interiors/interior-art.ts
-  it("when a player stands in the yard behind the shop, out of every eye's sight, then the interior is kept however long no eye sees it", () => {
-    const set = new InteriorSet(lone);
-    const yard = fromDoor(YARD_PLAYER);
-    const player: SightPlayer = { group: { position: yard } };
-    const { sight, frames } = watch(set, STREET_EYE, [player]);
-    frames(MARGIN_FRAMES);
-    sight.setSolids([wallAt(STREET_WALL, WALL_LENGTH)]);
-    frames(2 * GRACE_FRAMES);
-    expect(set.stats().details, "furnished with a player behind it").toBe(1);
-    expect(Math.hypot(yard.x - coffee.doorX, yard.z - coffee.doorZ), "the player is far from the front door").toBeGreaterThan(2 * INTERIOR_KEEP);
-    set.dispose();
-  });
-});
-
-describe("given an eye in the alley behind a coffee shop where a civilian sits", () => {
-  // mutation: sed -i 's/const reached = distance < SOLIDS_NEAR;/const reached = distance < SOLIDS_NEAR \&\& view !== VIEW.hidden;/' src/game/present/interiors/interior-art.ts
-  it("when the player who kept it built leaves and only its back faces the eye past the grace, then its drawing is released while the seats and the counter the crowd sits and serves people at, and the solids the physics stands them on, are untouched", () => {
-    const set = new InteriorSet(lone);
-    const heard: InteriorSolid[][] = [];
-    set.onSolids((solids) => heard.push([...solids]));
+    const who = openers();
     const seats = digest(coffee.seats!);
     const counter = digest(coffee.counter!);
-    const players: SightPlayer[] = [{ group: { position: { x: coffee.doorX, z: coffee.doorZ } } }];
-    const { frames } = watch(set, ALLEY_EYE, players);
-    frames(MARGIN_FRAMES);
-    expect(set.stats().details, "furnished while a player is at its door").toBe(1);
-    players.length = 0;
-    frames(2 * GRACE_FRAMES);
-    expect(JSON.stringify(set.stats()), "drawing released with only its back in view").toBe(NOTHING_BUILT);
-    expect(heard[heard.length - 1]!.length, "solids still with the physics").toBeGreaterThan(30);
+    const { frames } = scene(set, STREET_EYE, who);
+    standAtDoor(who);
+    frames(SWING_FRAMES + 2);
+    expect(set.stats().details, "furnished through the open door").toBe(1);
+    who.poses.shown[0] = 0;
+    frames(SWING_FRAMES + GRACE_FRAMES - 20);
+    expect(set.stats().details, "kept inside the grace").toBe(1);
+    frames(40);
+    expect(built(set), "released once shut for the grace").toBe(NOTHING_BUILT);
     expect(digest(coffee.seats!), "the seats a sitter is placed at").toBe(seats);
     expect(digest(coffee.counter!), "the counter spots").toBe(counter);
+    set.dispose();
+  });
+});
+
+describe("given the player in or at a coffee shop with no eye on its doorway", () => {
+  // mutation: sed -i 's/const seen = sight.playerInside(place.x, place.z, place.yaw, entry.halfDepth, entry.halfWidth) || /const seen = /' src/game/present/interiors/interior-art.ts
+  it("when he stands inside with every door shut, then the interior is kept however long", () => {
+    const set = new InteriorSet(lone);
+    const inside = { x: coffee.x, z: coffee.z };
+    const who = openers();
+    who.walker = inside;
+    scene(set, STREET_EYE, who, [{ group: { position: inside } }], true).frames(2 * GRACE_FRAMES);
+    expect(set.openDoors(), "doors open").toBe(0);
+    expect(set.stats().details, "furnished with the player inside").toBe(1);
+    set.dispose();
+  });
+
+  // mutation: sed -i 's/hypot2(walker.x - leaf.x, walker.z - leaf.z) <= VESTIBULE_REACH) return SOLIDS.vestibule;/hypot2(walker.x - leaf.x, walker.z - leaf.z) <= VESTIBULE_REACH) return SOLIDS.none;/' src/game/present/interiors/interior-art.ts
+  it("when he stands in the open doorway facing the street, then the vestibule's floor stays under him past the grace", () => {
+    const set = new InteriorSet(lone);
+    const heard = listen(set);
+    const walker = fromDoor(AT_DOOR);
+    const who = openers();
+    who.walker = walker;
+    scene(set, AT_DOOR, who, [{ group: { position: walker } }], true).frames(2 * GRACE_FRAMES);
+    expect(set.openDoors(), "his door is open").toBe(1);
+    expect(last(heard), "solids under him").toBeGreaterThanOrEqual(vestibuleSolids(coffee).length);
     set.dispose();
   });
 });
@@ -188,7 +225,7 @@ describe("given the sight field an interior set took its ids from", () => {
   it("when the set is disposed, then its ids are free again: the next claim gets the first of them", () => {
     const sight = blind();
     const set = new InteriorSet(lone);
-    set.update(coffee.doorX, coffee.doorZ, FRAME, sight);
+    set.update(coffee.doorX, coffee.doorZ, FRAME, sight, openers());
     set.dispose();
     expect(sight.claim(1), "the first id after the set is gone").toBe(0);
   });
