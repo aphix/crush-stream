@@ -1,6 +1,6 @@
 import { PREFAB, SURFACE } from "../constants.ts";
 import { OPEN_SIDE } from "./facade-windows.ts";
-import { buildingHeight, MAX_STOREYS, type InteriorPlan } from "./interior-kinds.ts";
+import { buildingHeight, MAX_STOREYS, MIN_STOREYS, type InteriorPlan } from "./interior-kinds.ts";
 import { interiorDoor, interiorSpots, planInterior, planKey } from "./interior-plan.ts";
 import { planBlocks } from "./openworld-blocks.ts";
 import { LAYOUT } from "./openworld-constants.ts";
@@ -15,6 +15,8 @@ import {
   HOUSE_STOREYS,
   HUNDRED_STEP,
   HUNDRED_WEST,
+  LANE,
+  LANELESS_BLOCKS,
   NAMED_HOMES,
   PARK_NAME,
   PLACE_NAMES,
@@ -32,6 +34,10 @@ import { PLACE_KIND, SECTOR, type Place } from "./walk-graph.ts";
 /** A dumpster stands this far (m) in from the alley's south edge, at these shares of its length. */
 const DUMPSTER_BACK = 0.7;
 const DUMPSTER_SHARES = [0.25, 0.75] as const;
+/** A rear ell: a lower wing behind some houses (the overhead photograph's L-shaped backs), this wide and deep (m), sunk this far into the house's back wall, this far in from the lot's side (m); about this share of the houses have one. */
+const ELL = { width: 2.8, depth: 4.5, overlap: 0.4, sideGap: 0.15, shareOfHundred: 45 } as const;
+/** Mixing weights of an ell's presence and side: block column, block row, lot index and the south face's offset. */
+const ELL_MIX = { column: 11, row: 17, lot: 29, south: 7 } as const;
 /** Mixing weights of a house's style: block column, block row, lot index and the south face's offset, so neighbours differ and no house moves another's style. */
 const STYLE_MIX = { column: 7, row: 13, lot: 5, south: 3 } as const;
 
@@ -82,23 +88,48 @@ function furnished(layout: Layout, place: Place): Place {
 /** `Place.openSides` when a side is open, else nothing (the field is absent on a building with neighbours on both sides). */
 const openSidesField = (openSides: number): { openSides?: number } => (openSides === 0 ? {} : { openSides });
 
-/** The sides of a building spanning `lots` that no building stands against (`OPEN_SIDE`): the end of a block's face shows its side wall to the cross street. A face's across runs east on the north face and west on the south. */
-function openSidesOf(lots: readonly LotPlan[]): number {
-  const west = lots[0]!.index === 0;
-  const east = lots[lots.length - 1]!.index === LAYOUT.lotsPerFace - 1;
+/** The sides of a building spanning `lots` that no building stands against (`OPEN_SIDE`): the end of a block's face shows its side wall to the cross street, and a lot beside the lane (`lane`, its index) to the lane. A face's across runs east on the north face and west on the south. */
+function openSidesOf(lots: readonly LotPlan[], lane: number): number {
+  const west = lots[0]!.index === 0 || lots[0]!.index - 1 === lane;
+  const east = lots[lots.length - 1]!.index === LAYOUT.lotsPerFace - 1 || lots[lots.length - 1]!.index + 1 === lane;
   const north = lots[0]!.face === "north";
   return ((north ? east : west) ? OPEN_SIDE.plusAcross : 0) | ((north ? west : east) ? OPEN_SIDE.minusAcross : 0);
 }
 
-function layHome(layout: Layout, plan: BlockPlan, blockIndex: number, lot: LotPlan, storeys: number, geometry: Geometry): void {
+function layHome(layout: Layout, plan: BlockPlan, blockIndex: number, lot: LotPlan, storeys: number, lane: number, geometry: Geometry): void {
   const style = homeStyleOf(plan, lot);
   const centreZ = (lot.house.z0 + lot.house.z1) / 2;
   const named = NAMED_HOMES.find((home) => isBlock(home, plan) && home.face === lot.face && home.at === lot.index);
   layout.buildings.push({ x: lot.x, z: centreZ, yaw: lot.yaw, depth: geometry.houseDepth, width: lot.width, height: buildingHeight(storeys, false), style, enterable: true });
   layout.links.push({ place: layout.places.length, block: blockIndex, side: lot.face });
   layout.places.push(
-    furnished(layout, { kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys, style, sector: SECTOR.residential, interior: "rowhome", ...openSidesField(openSidesOf([lot])) }),
+    furnished(layout, { kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys, style, sector: SECTOR.residential, interior: "rowhome", ...openSidesField(openSidesOf([lot], lane)) }),
   );
+  layEll(layout, plan, lot, storeys, style);
+}
+
+/** Whether a lot is given a rear ell: a seeded share of the houses, none where a yard place (a named yard, the garden) stands behind it. */
+function hasEll(plan: BlockPlan, lot: LotPlan): boolean {
+  const yard = SIDE_PLACES.some((side) => side.where === "yard" && isBlock(side, plan) && side.face === lot.face && lot.index >= side.at && lot.index < side.at + side.lots);
+  const mix = (plan.column * ELL_MIX.column + plan.row * ELL_MIX.row + lot.index * ELL_MIX.lot + (lot.face === "south" ? ELL_MIX.south : 0)) % 100;
+  return !yard && mix < ELL.shareOfHundred;
+}
+
+/** The rear ell of a house: a wing one storey lower (two at least), against its back wall on the side the seed picks, in the house's own style; a solid building with no place. */
+function layEll(layout: Layout, plan: BlockPlan, lot: LotPlan, storeys: number, style: string): void {
+  if (!hasEll(plan, lot)) return;
+  const side = (plan.column * ELL_MIX.column + plan.row * ELL_MIX.row + lot.index * ELL_MIX.lot) % 2 === 0 ? 1 : -1;
+  const backZ = lot.inward === 1 ? lot.house.z1 : lot.house.z0;
+  layout.buildings.push({
+    x: lot.x + side * (lot.width / 2 - ELL.width / 2 - ELL.sideGap),
+    z: backZ + lot.inward * (ELL.depth / 2 - ELL.overlap),
+    yaw: lot.yaw,
+    depth: ELL.depth,
+    width: ELL.width,
+    height: buildingHeight(Math.max(MIN_STOREYS, storeys - 1), false),
+    style,
+    annex: true,
+  });
 }
 
 /** A venue with an interior stands as tall as the tallest lot it spans; one without (the supermarket) as its programme says. */
@@ -106,7 +137,7 @@ function venueStoreys(venue: Venue, spanned: readonly number[]): number {
   return venue.interior === undefined ? venue.storeys : Math.min(MAX_STOREYS, Math.max(venue.storeys, ...spanned));
 }
 
-function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], venue: Venue, spanned: readonly number[], geometry: Geometry): void {
+function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], venue: Venue, spanned: readonly number[], lane: number, geometry: Geometry): void {
   const first = lots[0]!;
   const storeys = venueStoreys(venue, spanned);
   const x = (first.x + lots[lots.length - 1]!.x) / 2;
@@ -129,11 +160,16 @@ function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], 
       storeys,
       style: venue.style,
       sector: venue.sector,
-      hours: venue.hours,
+      ...(venue.hours === undefined ? {} : { hours: venue.hours }),
       ...(venue.interior === undefined ? {} : { interior: venue.interior }),
-      ...openSidesField(openSidesOf(lots)),
+      ...openSidesField(openSidesOf(lots, lane)),
     }),
   );
+}
+
+/** The index of the lot a lane takes on this face of the block, or -1: a block has one on its south face unless it is the park's or one of the garden's. */
+function laneOf(plan: BlockPlan, face: Face): number {
+  return face === LANE.face && !plan.park && !LANELESS_BLOCKS.some((block) => isBlock(block, plan)) ? LANE.at : -1;
 }
 
 /** A face, west to east: each venue its lots, a home on every lot between. */
@@ -141,14 +177,20 @@ function layFace(layout: Layout, plan: BlockPlan, blockIndex: number, face: Face
   const lots = plan.lots.filter((lot) => lot.face === face);
   const venues = VENUE_SPOTS.filter((spot) => isBlock(spot, plan) && spot.face === face);
   const storeys = storeysOfFace(plan.row, plan.column, face === "south", lots.length);
+  const lane = laneOf(plan, face);
   for (let index = 0; index < lots.length; ) {
+    if (index === lane) {
+      index++;
+      continue;
+    }
     const venue = venues.find((spot) => spot.at === index)?.venue;
     if (venue) {
-      layVenue(layout, blockIndex, lots.slice(index, index + venue.lots), venue, storeys.slice(index, index + venue.lots), geometry);
+      if (lane >= index && lane < index + venue.lots) throw new Error(`${venue.name} stands over the lane of ${blockId(plan)}`);
+      layVenue(layout, blockIndex, lots.slice(index, index + venue.lots), venue, storeys.slice(index, index + venue.lots), lane, geometry);
       index += venue.lots;
       continue;
     }
-    layHome(layout, plan, blockIndex, lots[index]!, storeys[index]!, geometry);
+    layHome(layout, plan, blockIndex, lots[index]!, storeys[index]!, lane, geometry);
     index++;
   }
 }
@@ -185,6 +227,15 @@ function layAlley(layout: Layout, plan: BlockPlan, blockIndex: number): void {
     const lots = plan.lots.filter((lot) => lot.face === face);
     layout.areas.push({ surface: SURFACE.grass, x0: lots[0]!.yard.x0, z0: lots[0]!.yard.z0, x1: lots[lots.length - 1]!.yard.x1, z1: lots[0]!.yard.z1 });
   }
+}
+
+/** The lane of a block: its lot paved, and a path from the alley to the sidewalk along it. Laid after the alley, whose grass it paves over. */
+function layLane(layout: Layout, plan: BlockPlan, blockIndex: number): void {
+  const index = laneOf(plan, LANE.face);
+  if (index < 0) return;
+  const lot = plan.lots.find((candidate) => candidate.face === LANE.face && candidate.index === index)!;
+  layout.paths.push({ block: blockIndex, points: [[lot.x, plan.centreZ], [lot.x, lot.lineZ]], joins: [{ point: 1, side: lot.face }] });
+  layout.areas.push({ surface: SURFACE.asphalt, x0: lot.lot.x0, z0: Math.min(lot.lot.z0, lot.lot.z1), x1: lot.lot.x1, z1: Math.max(lot.lot.z0, lot.lot.z1) });
 }
 
 function layPark(layout: Layout, plan: BlockPlan, blockIndex: number): void {
@@ -247,6 +298,7 @@ export function layOutLots(): Lots {
     layFace(layout, plan, blockIndex, "south", geometry);
     laySidePlaces(layout, plan, blockIndex);
     layAlley(layout, plan, blockIndex);
+    layLane(layout, plan, blockIndex);
   }
   layBusStop(layout, plans.playable, geometry);
   const backdropStart = layout.places.length;

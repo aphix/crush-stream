@@ -84,6 +84,9 @@ const metresFor = (height, { cornice, floor, ground }) => {
 const HOME = metresFor(10.9, { cornice: 0.9, floor: 3.2, ground: 3.6 });
 const SHOP = metresFor(11.3, { cornice: 0.9, floor: 3.2, ground: 4 });
 const MARKET = metresFor(8.3, { cornice: 0.9, floor: 3.2, ground: 4 });
+/** The church: three storeys tall (10.9 m) as one ground band, one tall storey of arched windows and a deep cornice; the infill four storeys (13.9 m): a brick ground band and three storeys. */
+const CHURCH = metresFor(10.9, { cornice: 1.2, floor: 5.7, ground: 3.6 });
+const INFILL = metresFor(13.9, { cornice: 0.9, floor: 3, ground: 3.6 });
 const STYLES = {
   prague: { crop: [288, 0, 270, 1264], bays: 4, cornice: [0, 395], floor: [688, 1035], ground: [1035, 1264], quoins: true, rects: [[95, 268, 177, 352], [95, 790, 177, 963], [66, 1130, 207, 1264]] },
   dc: { crop: [283, 0, 282, 1264], bays: 4, cornice: [0, 235], floor: [235, 528], ground: [838, 1264], quoins: true, rects: [[57, 172, 117, 230], [167, 172, 227, 230], [110, 312, 175, 455], [54, 327, 80, 468], [204, 327, 230, 468], [49, 897, 105, 1045], [180, 893, 243, 925]] },
@@ -103,6 +106,8 @@ const STYLES = {
   office: { crop: [10, 0, 622, 848], bays: 2, cornice: [85, 125], floor: [125, 345], ground: [565, 848], quoins: false, glass: (r, g, b) => b - r > 30, metres: SHOP, open: { kind: "office", floorY: SHOP_FLOOR_Y, ground: 4 } },
   cornerstore: { crop: [100, 0, 532, 848], bays: 2, cornice: [48, 125], floor: [130, 330], ground: [492, 848], quoins: false, rects: [[105, 155, 190, 275], [347, 155, 430, 275], [230, 637, 508, 790]], neon: { rects: [[243, 643, 293, 672]], bright: 170 }, metres: SHOP, open: { kind: "store", floorY: SHOP_FLOOR_Y, ground: 4 } },
   supermarket: { crop: [72, 0, 280, 848], bays: 2, cornice: [185, 235], floor: [235, 380], ground: [380, 800], quoins: false, rects: [[48, 270, 96, 315], [188, 270, 236, 315], [8, 578, 272, 640], [8, 662, 272, 800]], metres: MARKET },
+  church: { crop: [65, 0, 565, 848], bays: 2, cornice: [28, 160], floor: [160, 556], ground: [560, 848], quoins: false, rects: [[197, 178, 395, 550], [215, 580, 375, 735]], metres: CHURCH },
+  infill: { crop: [5, 40, 1255, 808], bays: 1, cornice: [2, 68], floor: [68, 262], ground: [645, 808], quoins: false, rects: [[52, 73, 142, 215], [221, 73, 268, 215], [376, 73, 567, 215], [690, 73, 780, 215], [859, 73, 905, 215], [1015, 73, 1205, 215], [376, 663, 567, 805], [1015, 663, 1205, 705]], metres: INFILL },
   rowhouse: { crop: [233, 0, 383, 1264], bays: 3, cornice: [0, 275], floor: [275, 548], ground: [838, 1264], quoins: false, rects: [[159, 165, 225, 275], [159, 350, 224, 490], [95, 365, 119, 505], [264, 365, 288, 505], [254, 912, 322, 1060], [52, 910, 126, 942], [257, 1160, 322, 1240]] },
 };
 

@@ -44,7 +44,7 @@ export type Face = "north" | "south";
 type Hours = readonly [from: number, to: number];
 
 /** A venue over `lots` lots of one face: one building, one place; `interior` names the interior it is built with, none for an exterior-only shop. */
-export type Venue = { name: string; style: string; kind: PlaceKind; sector: string; lots: number; shopGround: boolean; storeys: number; hours: Hours; interior?: InteriorKind };
+export type Venue = { name: string; style: string; kind: PlaceKind; sector: string; lots: number; shopGround: boolean; storeys: number; hours?: Hours; interior?: InteriorKind };
 
 /** Facade styles the venues share. */
 const CORNER_STORE = "cornerstore";
@@ -68,6 +68,13 @@ const COFFEE_BEAN: Venue = { ...NARROW_SHOP, name: "Bean There Cafe", style: "co
 const INSURANCE: Venue = { ...SHOP, name: "Pennworth Insurance & Realty", style: "office", kind: PLACE_KIND.work, sector: SECTOR.office, hours: [8, 18], interior: "office" };
 const LAW_OFFICE: Venue = { ...SHOP, name: "Lowell & Pratt Law Offices", style: "office", kind: PLACE_KIND.work, sector: SECTOR.office, hours: [8, 18], interior: "office" };
 
+/**
+ * Two landmarks from the owner's Philadelphia photographs (`refs/philly/02`): a rough-stone church three lots wide, and a modern four-storey infill two lots wide, white and grey with tall vertical
+ * bays over a brick base. Neither has an interior; the church is a hangout (people gather by it), the infill a home.
+ */
+const CHURCH: Venue = { name: "St. Brendan's Church", style: "church", kind: PLACE_KIND.hangout, sector: SECTOR.worship, lots: 3, shopGround: false, storeys: 3, hours: [7, 20] };
+const INFILL: Venue = { name: "Moore Street Lofts", style: "infill", kind: PLACE_KIND.home, sector: SECTOR.residential, lots: 2, shopGround: false, storeys: 4 };
+
 /** The block rows, north to south. */
 const ROW = { A: 0, B: 1, C: 2 } as const;
 
@@ -89,7 +96,16 @@ export const VENUE_SPOTS: readonly (Spot & { venue: Venue })[] = [
   { row: ROW.C, column: 0, face: "north", at: 12, venue: COFFEE_BEAN },
   { row: ROW.A, column: 2, face: "south", at: 12, venue: INSURANCE },
   { row: ROW.B, column: 2, face: "north", at: 12, venue: LAW_OFFICE },
+  { row: ROW.A, column: 0, face: "north", at: 6, venue: CHURCH },
+  { row: ROW.C, column: 1, face: "south", at: 12, venue: INFILL },
 ];
+
+/**
+ * A lane cuts through every block's south face at this lot (the overhead photograph's narrow lanes between the rows of houses): the lot is left empty and paved, a way from the alley to the street between
+ * two houses whose side walls it shows. The park's block has none, nor the block whose south face holds the community garden.
+ */
+export const LANE = { face: "south", at: 10 } as const satisfies { face: Face; at: number };
+export const LANELESS_BLOCKS: readonly { row: number; column: number }[] = [{ row: ROW.B, column: 2 }];
 
 /** Homes the cast lives in, by name instead of address. */
 export const NAMED_HOMES: readonly (Spot & { name: string })[] = [
