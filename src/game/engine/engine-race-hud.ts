@@ -10,6 +10,7 @@ import { RACE_MODE, type RaceHud, type RaceHudRow, type RaceView } from "../matc
 import { podiumPlaces, type PodiumPlace } from "../match/podium.ts";
 import type { CarDamage } from "./car-damage.ts";
 import { RaceWatch } from "./engine-race-watch.ts";
+import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 
 /** How high over the course's start line the podium floats (m): clear of the tallest props and the tracks' decks, low enough that the course reads below it. */
 const PODIUM_HOVER = 40;
@@ -132,6 +133,8 @@ export abstract class RaceHudLayer extends RaceWatch {
         canHold: asking && !s.endless,
         resetHold: this.holdFill,
       };
+    } else if (!s && id >= 0 && this.free && tr?.id === OPENWORLD_ID) {
+      view = this.roamingView(id, cars[id]);
     }
     const winner = s && s.winnerId != null ? s.cars[this.rowOf[s.winnerId]!]!.name : null;
     const watched =
@@ -163,6 +166,15 @@ export abstract class RaceHudLayer extends RaceWatch {
       survival: this.survivalHud(),
       team: s ? s.team() : null,
     };
+  }
+
+  /**
+   * The driven or followed car roaming the open world (its free roam has no session): the drive cluster Survival shows (speed, gear, revs, damage,
+   * boost, slide) and none of a run's readouts, so no place, lap, clock or bust strip; no reset prompt, as before.
+   */
+  private roamingView(id: number, car: DeformableCar | undefined): RaceView | null {
+    if (car === undefined) return null;
+    return { id, racer: null, ...carGauge(car), brakeCue: 0, boost: this.meterOf(id), drift: this.driftOf(id), chase: null, canReset: false };
   }
 
   protected next(): void {
