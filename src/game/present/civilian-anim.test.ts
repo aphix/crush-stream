@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS, type ActivityName } from "../ai/civilians/civilian-activity.ts";
+import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS, ARREST, type ActivityName } from "../ai/civilians/civilian-activity.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { type ActivityPose, poseActivity } from "./civilian-anim.ts";
 import { FOREARM_LENGTH, type PoseSink } from "./civilian-anim-rig.ts";
+import { HAND_LENGTH } from "./dummy-fit.ts";
 import { PARTS } from "./ragdoll-body.ts";
 
 /** Every part's centre and rotation as the rig posed it, body frame (she stands at the origin facing +z). */
@@ -25,6 +26,7 @@ function newCapture(): Capture {
 const TORSO = 0;
 const HEAD = 1;
 const FOREARM = [3, 5] as const;
+const UPPER_ARM = [2, 4] as const;
 const THIGH = [6, 8] as const;
 const SHIN = [7, 9] as const;
 const MINUS_X = 0;
@@ -48,6 +50,8 @@ const clipAt = (name: ActivityName, clock: number, changes: Partial<ActivityPose
 
 const pointOn = (body: Capture, part: number, local: THREE.Vector3): THREE.Vector3 => local.applyQuaternion(body.turns[part]!).add(body.centres[part]!);
 const handTip = (body: Capture, side: number): THREE.Vector3 => pointOn(body, FOREARM[side]!, new THREE.Vector3(0, -(FOREARM_LENGTH - PARTS[3].h[1]), 0));
+const wrist = (body: Capture, side: number): THREE.Vector3 => pointOn(body, FOREARM[side]!, new THREE.Vector3(0, -(FOREARM_LENGTH - HAND_LENGTH - PARTS[3].h[1]), 0));
+const shoulder = (body: Capture, side: number): THREE.Vector3 => pointOn(body, UPPER_ARM[side]!, new THREE.Vector3(0, PARTS[2].h[1], 0));
 const elbow = (body: Capture, side: number): THREE.Vector3 => pointOn(body, FOREARM[side]!, new THREE.Vector3(0, PARTS[3].h[1], 0));
 const hip = (body: Capture, side: number): THREE.Vector3 => pointOn(body, THIGH[side]!, new THREE.Vector3(0, PARTS[6].h[1], 0));
 const ankle = (body: Capture, side: number): THREE.Vector3 => pointOn(body, SHIN[side]!, new THREE.Vector3(0, -PARTS[7].h[1], 0));
@@ -245,9 +249,57 @@ describe("given two civilians talking and a loner standing about", () => {
   });
 });
 
+describe("given an arrest: a suspect cuffed, the cop who holds her and walks her off", () => {
+  /** The pinned cuffed pose's wrists (m, her body frame). */
+  const CUFFED_WRISTS = [new THREE.Vector3(-0.09, 0.93, -0.215), new THREE.Vector3(0.09, 0.93, -0.215)] as const;
+  const ON_IT = 0.03;
+  const LED_AWAY = { ...WALKING, clock: 3 } as const;
+
+  it("when she is cuffed, then her wrists are together behind her back at her hips, as the pinned pose has them", () => {
+    const body = clipAt("cuffed", 3);
+    for (const side of [MINUS_X, PLUS_X]) {
+      expect(wrist(body, side).distanceTo(CUFFED_WRISTS[side]!), `wrist ${side}`).toBeLessThan(ON_IT);
+      expect(handTip(body, side).z, `hand ${side} behind her back`).toBeLessThan(-0.15);
+    }
+  });
+
+  it("when she is led away cuffed, then her hands stay behind her back and her legs stride as her walk does", () => {
+    const body = clipAt("cuffed", LED_AWAY.clock, LED_AWAY);
+    const walk = posed(WALKING);
+    for (const side of [MINUS_X, PLUS_X]) expect(wrist(body, side).distanceTo(CUFFED_WRISTS[side]!), `wrist ${side}`).toBeLessThan(ON_IT);
+    for (const part of [...THIGH, ...SHIN, 10, 11]) expect(body.centres[part]!.distanceTo(walk.centres[part]!), `part ${part}`).toBeLessThan(TIGHT);
+  });
+
+  it("when she is being cuffed, then her main arm goes behind her first, the other after it, and she ends in the cuffed pose", () => {
+    const midway = clipAt("cuffing", 0.75);
+    expect(wrist(midway, PLUS_X).distanceTo(CUFFED_WRISTS[PLUS_X]), "main wrist cuffed").toBeLessThan(ON_IT);
+    expect(wrist(midway, MINUS_X).distanceTo(CUFFED_WRISTS[MINUS_X]), "other wrist still on its way").toBeGreaterThan(0.1);
+    const done = clipAt("cuffing", ACTIVITY_SECONDS.cuffing);
+    const cuffed = clipAt("cuffed", 0);
+    expect(gap(done, cuffed).distance).toBeLessThan(TIGHT);
+    expect(gap(done, cuffed).angle).toBeLessThan(TIGHT);
+  });
+
+  it("when the cop behind her works the cuffs, then each of his hands is on her wrist on its side", () => {
+    const suspect = clipAt("cuffed", 3);
+    const cop = clipAt("arresting", 0.6, { z: -ARREST.cuffBehind });
+    for (const side of [MINUS_X, PLUS_X]) expect(handTip(cop, side).distanceTo(wrist(suspect, side)), `hand ${side}`).toBeLessThan(0.04);
+  });
+
+  it.each([0, 1])("when the cop of handedness %i walks her off, then his right hand holds her left upper arm and his left swings free", (variant) => {
+    const cop = clipAt("escorting", 2, { ...WALKING, variant });
+    const suspect = clipAt("cuffed", 2, { ...WALKING, x: -ARREST.escortAcross, z: ARREST.escortAhead });
+    const upperArm = new THREE.Line3(shoulder(suspect, PLUS_X), elbow(suspect, PLUS_X));
+    const holding = handTip(cop, MINUS_X);
+    expect(upperArm.closestPointToPoint(holding, true, new THREE.Vector3()).distanceTo(holding), "his right hand from her arm").toBeLessThan(0.07);
+    const free = handTip(cop, PLUS_X);
+    expect(upperArm.closestPointToPoint(free, true, new THREE.Vector3()).distanceTo(free), "his left hand from her arm").toBeGreaterThan(0.2);
+  });
+});
+
 describe("given an activity that starts or ends while she walks", () => {
-  const EASED_IN: readonly ActivityName[] = ["idle", "talk", "buy", "door", "sitDown", "bump", "swing", "block", "hit"];
-  const ACTIVE_CLOCKS: Readonly<Record<ActivityName, number>> = { none: 0, idle: 10.5, talk: 2, buy: 1, door: 0.9, sitDown: 1, sit: 3, standUp: 0.5, bump: 0.12, swing: 0.3, block: 1, hit: 0.1, sitSteps: 5 };
+  const EASED_IN: readonly ActivityName[] = ["idle", "talk", "buy", "door", "sitDown", "bump", "swing", "block", "hit", "cuffing", "arresting", "escorting"];
+  const ACTIVE_CLOCKS: Readonly<Record<ActivityName, number>> = { none: 0, idle: 10.5, talk: 2, buy: 1, door: 0.9, sitDown: 1, sit: 3, standUp: 0.5, bump: 0.12, swing: 0.3, block: 1, hit: 0.1, sitSteps: 5, cuffing: 1.2, cuffed: 3, arresting: 0.6, escorting: 2 };
   const WITH_PARTNER = { hasPartner: true, bearing: 0.6, surface: 0.9, ...WALKING } as const;
 
   it.each(EASED_IN)("when %s begins, then she is in her walk's pose at the first instant", (name) => {

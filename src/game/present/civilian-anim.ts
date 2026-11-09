@@ -31,6 +31,10 @@ export type ActivityPose = {
 
 const ACTIVITY_NAMES = Object.keys(ACTIVITY) as ActivityName[];
 const ACTIVITY_CODES = ACTIVITY_NAMES.length;
+/** Which side a clip's main limbs take: the civilian's dominant one, the partner's, or her right (-x) always. */
+const CLIP_SIDE = { handed: 0, partner: 1, right: 2 } as const;
+/** The mirroring that puts a clip's main limbs on her -x side (her right). */
+const MAIN_ON_MINUS_X = 0;
 const TIME_TOLERANCE = 1e-9;
 
 /** Fails at load on a track that would misbehave: keys out of order, a loop that does not close, a clip's keys past its length. */
@@ -65,7 +69,7 @@ function packClips() {
     clipBlendIn: new Float64Array(ACTIVITY_CODES),
     clipBlendOut: new Float64Array(ACTIVITY_CODES),
     clipSeconds: new Float64Array(ACTIVITY_CODES),
-    clipFaces: new Uint8Array(ACTIVITY_CODES),
+    clipSide: new Uint8Array(ACTIVITY_CODES),
     trackChannel: new Int32Array(trackTotal),
     trackPeriod: new Float64Array(trackTotal),
     trackAboveSurface: new Uint8Array(trackTotal),
@@ -85,7 +89,7 @@ function packClips() {
     packed.clipBlendIn[code] = clip.blendIn;
     packed.clipBlendOut[code] = clip.blendOut;
     packed.clipSeconds[code] = ACTIVITY_SECONDS[name];
-    packed.clipFaces[code] = clip.faces === true ? 1 : 0;
+    packed.clipSide[code] = clip.side === undefined ? CLIP_SIDE.handed : CLIP_SIDE[clip.side];
     for (const spec of clip.tracks) {
       validateTrack(name, spec);
       packed.trackChannel[nextTrack] = spec.channel;
@@ -104,7 +108,7 @@ function packClips() {
 }
 
 const PACKED = packClips();
-const { clipFirstTrack: CLIP_FIRST_TRACK, clipTrackCount: CLIP_TRACK_COUNT, clipBlendIn: CLIP_BLEND_IN, clipBlendOut: CLIP_BLEND_OUT, clipSeconds: CLIP_SECONDS, clipFaces: CLIP_FACES } = PACKED;
+const { clipFirstTrack: CLIP_FIRST_TRACK, clipTrackCount: CLIP_TRACK_COUNT, clipBlendIn: CLIP_BLEND_IN, clipBlendOut: CLIP_BLEND_OUT, clipSeconds: CLIP_SECONDS, clipSide: CLIP_SIDES } = PACKED;
 const { trackChannel: TRACK_CHANNEL, trackPeriod: TRACK_PERIOD, trackAboveSurface: TRACK_ABOVE_SURFACE, trackKeyStart: TRACK_KEY_START, trackKeyCount: TRACK_KEY_COUNT, keyTime: KEY_TIME, keyValue: KEY_VALUE } = PACKED;
 
 /** A limb's walk, read off `walkStance` at its widest each way and at rest (as the guards walk): the swing and the bend's three levels. */
@@ -215,9 +219,10 @@ function clipWeight(code: number, clock: number, left: number): number {
   return rise * fall;
 }
 
-/** Which of the two mirrorings (0: main limbs on -x, 1: on +x) a clip runs in: toward a partner it reacts to, else the civilian's handedness. */
-function mirrorIndexOf(pose: ActivityPose, faces: boolean): number {
-  if (faces && pose.hasPartner && Math.abs(pose.bearing) > BEARING_DEAD_ZONE) return pose.bearing > 0 ? 1 : 0;
+/** Which of the two mirrorings (0: main limbs on -x, 1: on +x) a clip runs in: her right for a right-sided clip, toward a partner it reacts to, else her handedness. */
+function mirrorIndexOf(pose: ActivityPose, side: number): number {
+  if (side === CLIP_SIDE.right) return MAIN_ON_MINUS_X;
+  if (side === CLIP_SIDE.partner && pose.hasPartner && Math.abs(pose.bearing) > BEARING_DEAD_ZONE) return pose.bearing > 0 ? 1 : 0;
   return (pose.variant & HANDEDNESS_BIT) === 0 ? 1 : 0;
 }
 
@@ -313,7 +318,7 @@ function lookAtPartner(pose: ActivityPose): void {
 export function poseActivity(sink: PoseSink, slot: number, pose: ActivityPose): void {
   fillBase(pose.stride, pose.speed);
   const code = pose.activity;
-  if (code < ACTIVITY_CODES && CLIP_TRACK_COUNT[code]! > 0) applyClip(code, pose, mirrorIndexOf(pose, CLIP_FACES[code] === 1), clipWeight(code, pose.clock, pose.left));
+  if (code < ACTIVITY_CODES && CLIP_TRACK_COUNT[code]! > 0) applyClip(code, pose, mirrorIndexOf(pose, CLIP_SIDES[code]!), clipWeight(code, pose.clock, pose.left));
   seatPelvis(pose.surface);
   solveLegs();
   solveHands();
