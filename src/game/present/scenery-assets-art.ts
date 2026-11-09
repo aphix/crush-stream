@@ -13,7 +13,7 @@ import { painted, type Piece, type PrefabMaterials, type PrefabPart, type Skin }
 import { ATLAS, type AtlasCell } from "./scenery-atlas/index.ts";
 import { followRelief, reliefMaterial, reliefPossible } from "./surface-relief.ts";
 import { flatLayers, loadLayers } from "./texture-array.ts";
-import { hash01 } from "./track-mesh.ts";
+import { hash01, ROAD_LIFT } from "./track-mesh.ts";
 
 /** The scenery assets' drawing: a material per family (its sprite atlas, and its tile arrays for ground patches), a unit geometry per way of drawing, and per-instance attributes that pick each placement's sprite or tile. */
 
@@ -123,9 +123,10 @@ function boxGeometry(): THREE.BufferGeometry {
   return painted([sprite(geometry)]);
 }
 
-/** A quad on the ground, facing up: the picture's right on +x and its top toward -z. */
+/** A quad on the ground, facing up: the picture's right on +x and its top toward -z, `ROAD_LIFT` up (a flat asset's y scale is 1) where the road ribbons and their depth proxy lie. */
 function flatGeometry(): THREE.BufferGeometry {
-  return painted([sprite(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2))]);
+  // A transparent decal is lifted by its depth slope alone: left on the bare ground under a ribbon, it failed its depth test near the camera and showed farther off.
+  return painted([sprite(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2).translate(0, ROAD_LIFT, 0))]);
 }
 
 // Materials.
