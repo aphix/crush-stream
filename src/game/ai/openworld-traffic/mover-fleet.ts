@@ -124,12 +124,6 @@ export class MoverFleet {
     return slot >= 0 && slot < this.size && this.state[slot] !== MOVER.free ? this.resident[slot]! : NO_RESIDENT;
   }
 
-  /** Whether car `id` is one of the fleet's and on a trip. */
-  drives(id: number): boolean {
-    const slot = id - this.first;
-    return slot >= 0 && slot < this.size && this.state[slot] === MOVER.driving;
-  }
-
   /** Whether a resident's leased car is on a trip right now. */
   hasTripFor(resident: number): boolean {
     for (let slot = 0; slot < this.size; slot++) if (this.state[slot] === MOVER.driving && this.resident[slot] === resident) return true;

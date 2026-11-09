@@ -43,11 +43,11 @@ export class TripRoute {
   }
 }
 
-/** Where a car is on its route: the segment it is on, the arc length (m) of the nearest point and how far (m) the route lies to the left of it (+). */
-type RouteProjection = { segment: number; arc: number; lateral: number };
+/** Where a car is on its route: the segment it is on and the arc length (m) of the nearest point. */
+type RouteProjection = { segment: number; arc: number };
 
 export function blankRouteProjection(): RouteProjection {
-  return { segment: 0, arc: 0, lateral: 0 };
+  return { segment: 0, arc: 0 };
 }
 
 /** The nearest point of the route at or after `hint`'s segment; never looks back, so a car's progress only grows. */
@@ -66,7 +66,6 @@ export function projectOnRoute(route: TripRoute, x: number, z: number, hint: num
   const along = clamp(((x - route.x[segment]!) * dx + (z - route.z[segment]!) * dz) / (length * length), 0, 1);
   out.segment = segment;
   out.arc = route.arc[segment]! + along * length;
-  out.lateral = ((route.x[segment]! + dx * along - x) * dz - (route.z[segment]! + dz * along - z) * dx) / length;
 }
 
 /** The point `arc` m along the route (clamped to its ends) and the unit direction there, searching on from `segment`. Returns the segment it was found on. */
