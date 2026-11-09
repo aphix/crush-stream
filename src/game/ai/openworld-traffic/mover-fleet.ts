@@ -1,13 +1,14 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import { hash01 } from "../../kernel/scalar.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
+import type { AiCar } from "../derby-ai.ts";
 import type { CarStyleId } from "../../vehicle/car-variants.ts";
 import { FLIPPED_UP_Y } from "../../vehicle/constants.ts";
 import { carClass, classStats, type ClassStats } from "../../vehicle/vehicle-classes.ts";
 import { HEADING_DX, HEADING_DZ, rightX, rightZ } from "../../world/openworld/openworld-roads.ts";
-import type { AiCar } from "../derby-ai.ts";
 import { BOOKKEEPING_SECONDS, COMMUTER_HOLD_SECONDS, DWELL_SECONDS, KERB_KEEP, MIN_TRIP_METRES, PRIME_PASSES, PULL_OUT_CLEAR, SIGHT_RADIUS, STUCK_SECONDS, TOW_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { AMBULANCE_COLOUR } from "./traffic-constants.ts";
+import { FLEE_FAR_METRES, FLEE_NOTICE_METRES, FLEE_REPLAN_METRES } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
 import { residentBody, residentColour } from "./traffic-look.ts";
 import { spotUnseen, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
@@ -86,6 +87,9 @@ export class MoverFleet {
   private readonly readyAt: Float64Array;
   /** The crowd second a leased car's rider is due at his destination (Infinity: none): a car still on the road then, that no one sees, stands in its space. */
   private readonly dueAt: Float64Array;
+  /** The engine id of the patrol car chasing a slot's car (-1: none), and whether the car has noticed it and runs. */
+  private readonly chaser: Int16Array;
+  private readonly fleeing: Uint8Array;
   /** The paint a slot's car stands in (sRGB, `NO_COLOUR`: its own): a resident's car wears his. */
   private readonly colour: Int32Array;
   private readonly wreckedFor: Float64Array;
@@ -114,6 +118,8 @@ export class MoverFleet {
     this.resident = new Int32Array(size).fill(NO_RESIDENT);
     this.readyAt = new Float64Array(size);
     this.dueAt = new Float64Array(size).fill(Infinity);
+    this.chaser = new Int16Array(size).fill(-1);
+    this.fleeing = new Uint8Array(size);
     this.colour = new Int32Array(size).fill(NO_COLOUR);
     this.wreckedFor = new Float64Array(size);
     this.stillFor = new Float64Array(size);
@@ -163,7 +169,77 @@ export class MoverFleet {
     if (slot < 0 || slot >= this.size || this.state[slot] !== MOVER.driving || this.context.ports.seated(id)) return null;
     const snaps = this.context.snaps;
     const handle = this.handles[slot]!;
-    return handle.driver !== null ? handle.driver(snaps[id]!, snaps, dt) : this.driver.think(snaps[id]!, this.routes[slot]!, this.classes[slot]!, snaps, this.seconds, dt, this.urgent[slot] === 1);
+    if (handle.driver !== null) return handle.driver(snaps[id]!, snaps, dt);
+    return this.driver.think(snaps[id]!, this.routes[slot]!, this.classes[slot]!, snaps, this.seconds, dt, this.urgent[slot] === 1, this.fleeing[slot] === 1 ? snaps[this.chaser[slot]!]! : null);
+  }
+
+  /**
+   * Patrol car `chaserId` is after traffic car `carId`: once it is within `FLEE_NOTICE_METRES` the car runs as a racer evades one (`TrafficDriver.think`'s `chaser`) along the streets to a far space, and on to another when
+   * that is near, until `endEvade`. False for a car that is not traffic's, is not on a trip, is leased as a patrol or ambulance, or has a human at the wheel.
+   */
+  evade(carId: number, chaserId: number): boolean {
+    const slot = carId - this.first;
+    if (slot < 0 || slot >= this.size || this.state[slot] !== MOVER.driving || this.kindOf(slot) !== LEASE.ambient || this.context.ports.seated(carId)) return false;
+    this.chaser[slot] = chaserId;
+    return true;
+  }
+
+  /** The chase of car `carId` is over: it drives as traffic again (on the route it has, which ends in a space). */
+  endEvade(carId: number): void {
+    const slot = carId - this.first;
+    if (slot < 0 || slot >= this.size) return;
+    this.chaser[slot] = -1;
+    this.fleeing[slot] = 0;
+  }
+
+  /** Whether car `carId` runs from a chaser now. */
+  isFleeing(carId: number): boolean {
+    const slot = carId - this.first;
+    return slot >= 0 && slot < this.size && this.fleeing[slot] === 1;
+  }
+
+  /** The chased car's bookkeeping: it starts running when the chaser comes within `FLEE_NOTICE_METRES`, and plans a new run when little of the last is left. */
+  private tendChased(slot: number): void {
+    const { snaps } = this.context;
+    const me = snaps[this.first + slot]!;
+    const them = snaps[this.chaser[slot]!]!;
+    if (this.fleeing[slot] === 0) {
+      if (hypot2(them.x - me.x, them.z - me.z) > FLEE_NOTICE_METRES) return;
+      this.fleeing[slot] = 1;
+      this.planRun(slot, me, them);
+    } else if (this.driver.remaining(this.first + slot, this.routes[slot]!) < FLEE_REPLAN_METRES) this.planRun(slot, me, them);
+  }
+
+  /** Sends the car on to the free space farthest from the chaser that is at least `FLEE_FAR_METRES` from the car; the trip it had is kept when there is none or no way. */
+  private planRun(slot: number, me: AiCar, them: AiCar): void {
+    const { spots, taken } = this.context;
+    let best = -1;
+    let bestAway = 0;
+    for (let spot = 0; spot < spots.count; spot++) {
+      if (spots.stays[spot] === 1 || taken[spot] === 1 || hypot2(spots.x[spot]! - me.x, spots.z[spot]! - me.z) < FLEE_FAR_METRES) continue;
+      const away = hypot2(spots.x[spot]! - them.x, spots.z[spot]! - them.z);
+      if (away <= bestAway) continue;
+      best = spot;
+      bestAway = away;
+    }
+    if (best >= 0) this.rerouteFrom(slot, best);
+  }
+
+  /** Plans the driving car's trip afresh from where it is to space `toSpot` and takes it over; false (the trip kept) when there is no way. */
+  private rerouteFrom(slot: number, toSpot: number): boolean {
+    const snap = this.context.snaps[this.first + slot]!;
+    if (!this.planner.planFrom(this.spareRoute, snap.x, snap.z, snap.yaw, toSpot)) return false;
+    const old = this.routes[slot]!;
+    this.routes[slot] = this.spareRoute;
+    this.spareRoute = old;
+    const { taken } = this.context;
+    taken[this.spot[slot]!] = 0;
+    taken[toSpot] = 1;
+    this.spot[slot] = toSpot;
+    this.stillFor[slot] = 0;
+    this.handles[slot]!.arrived = false;
+    this.driver.forget(this.first + slot);
+    return true;
   }
 
   /**
@@ -209,25 +285,14 @@ export class MoverFleet {
     const slot = handle.index - this.first;
     if (slot < 0 || slot >= this.size || handle.lost || this.state[slot] === MOVER.free) return false;
     if (toSpot === this.spot[slot]) return true;
-    const { taken, spots, snaps } = this.context;
+    const { taken, spots } = this.context;
     if (toSpot < 0 || toSpot >= spots.count || spots.stays[toSpot] === 1 || taken[toSpot] === 1) return false;
-    const parked = this.state[slot] === MOVER.parked;
-    const snap = snaps[handle.index]!;
-    const planned = parked ? this.planner.plan(this.spareRoute, this.spot[slot]!, toSpot) : this.planner.planFrom(this.spareRoute, snap.x, snap.z, snap.yaw, toSpot);
-    if (!planned) return false;
+    if (this.state[slot] !== MOVER.parked) return this.rerouteFrom(slot, toSpot);
+    if (!this.planner.plan(this.spareRoute, this.spot[slot]!, toSpot)) return false;
     const old = this.routes[slot]!;
     this.routes[slot] = this.spareRoute;
     this.spareRoute = old;
-    if (parked) {
-      this.launch(slot, toSpot);
-      return true;
-    }
-    taken[this.spot[slot]!] = 0;
-    taken[toSpot] = 1;
-    this.spot[slot] = toSpot;
-    this.stillFor[slot] = 0;
-    handle.arrived = false;
-    this.driver.forget(handle.index);
+    this.launch(slot, toSpot);
     return true;
   }
 
@@ -329,6 +394,7 @@ export class MoverFleet {
       this.tow(slot);
       return;
     }
+    if (this.chaser[slot]! >= 0) this.tendChased(slot);
     if (this.seconds > this.dueAt[slot]! && this.unseenAndFar(slot, car)) this.standInSpace(slot);
     else if (!this.driver.arrived(id, this.routes[slot]!, speed)) return;
     this.park(slot);
@@ -346,6 +412,8 @@ export class MoverFleet {
   private park(slot: number): void {
     this.state[slot] = MOVER.parked;
     this.dueAt[slot] = Infinity;
+    this.chaser[slot] = -1;
+    this.fleeing[slot] = 0;
     this.context.standing[this.spot[slot]!] = STANDING.mover;
     this.handles[slot]!.arrived = true;
     if (this.role[slot] === ROLE.commuter) this.context.residentSpot[this.resident[slot]!] = this.spot[slot]!;
@@ -450,6 +518,8 @@ export class MoverFleet {
     }
     this.spot[slot] = -1;
     this.colour[slot] = NO_COLOUR;
+    this.chaser[slot] = -1;
+    this.fleeing[slot] = 0;
     this.state[slot] = MOVER.free;
     if (this.handles[slot]!.lost === false) this.handles[slot]!.lost = true;
     this.role[slot] = ROLE.ambient;

@@ -185,6 +185,15 @@ describe("given a resident whose car stands at the kerb near a player and then d
   /** A resident whose car is not a sedan, so a car that reports the sedan's body is caught. */
   const RESIDENT = Array.from({ length: 64 }, (_, number) => number).find((number) => residentBody(number) !== "sedan") ?? 0;
 
+  /** The space resident `resident`'s car stands in (found from its pose), -1 when it stands in none. */
+  function residentSpotIndex(traffic: OpenWorldTraffic, resident: number): number {
+    const pose: ResidentCarPose = { x: 0, z: 0, yaw: 0, groundY: 0, bodyStyle: "sedan" };
+    if (!traffic.carPoseOf(resident, pose)) return -1;
+    const spots = traffic.parkingSpots;
+    for (let spot = 0; spot < spots.count; spot++) if (hypot2(spots.x[spot]! - pose.x, spots.z[spot]! - pose.z) < 0.01) return spot;
+    return -1;
+  }
+
   /** The car standing within a metre of space `spot`: its id, or -1. */
   function carAt(field: FakeField, traffic: OpenWorldTraffic, spot: number): number {
     const spots = traffic.parkingSpots;
@@ -207,7 +216,7 @@ describe("given a resident whose car stands at the kerb near a player and then d
     feed.parked.place[0] = 0;
     const clock = new Clock();
     runSeconds(field, traffic, clock, 3);
-    const spot = traffic.claimedSpots.indexOf(1);
+    const spot = residentSpotIndex(traffic, RESIDENT);
     expect(spot, "his car's space").toBeGreaterThanOrEqual(0);
     const kerbId = carAt(field, traffic, spot);
     expect(kerbId, "a car stands at his space").toBeGreaterThan(0);
@@ -233,7 +242,7 @@ describe("given a resident whose car stands at the kerb near a player and then d
     runSeconds(field, traffic, new Clock(), 3);
     const pose: ResidentCarPose = { x: 0, z: 0, yaw: 0, groundY: -1, bodyStyle: "monster" };
     expect(traffic.carPoseOf(RESIDENT, pose), "his car is at a space").toBe(true);
-    const spot = traffic.claimedSpots.indexOf(1);
+    const spot = residentSpotIndex(traffic, RESIDENT);
     expect(pose.x, "x").toBeCloseTo(traffic.parkingSpots.x[spot]!, 3);
     expect(pose.yaw, "yaw").toBeCloseTo(traffic.parkingSpots.yaw[spot]!, 3);
     expect(pose.groundY, "ground").toBe(0);
@@ -242,6 +251,52 @@ describe("given a resident whose car stands at the kerb near a player and then d
     const id = carAt(field, traffic, spot);
     expect(field.doors[id], "its angle").toBe(0.8);
     expect(traffic.carPoseOf(RESIDENT + 1, pose), "someone with no car here").toBe(false);
+  });
+});
+
+describe("given a traffic car a patrol car chases", () => {
+  const SHORT_TRIP_FROM = { x: HOME.x, z: HOME.z };
+  const SHORT_TRIP_TO = { x: HOME.x + 60, z: HOME.z };
+
+  /** A commuter's short trip with the player's car (the chaser's stand-in) just behind it. */
+  function chasedWorld(): { field: FakeField; traffic: OpenWorldTraffic; clock: Clock; car: DrivenCar } {
+    const field = new FakeField();
+    field.cars[0]!.stand(HOME.x - 20, HOME.z, Math.PI / 2);
+    const traffic = makeTraffic(field, { movers: 4, kerb: 0, patrol: 1 });
+    const car = traffic.spawnDrivenCar(7, traffic.nearestSpot(SHORT_TRIP_FROM.x, SHORT_TRIP_FROM.z), traffic.nearestSpot(SHORT_TRIP_TO.x, SHORT_TRIP_TO.z))!;
+    return { field, traffic, clock: new Clock(), car };
+  }
+
+  // mutation: sed -i 's/    if (slot < 0 || slot >= this.size || this.state\[slot\] !== MOVER.driving || this.kindOf(slot) !== LEASE.ambient || this.context.ports.seated(carId)) return false;/    if (slot < 0 || slot >= this.size) return false;/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when a parked car, a patrol car or a human's car is named as chased, then it is refused; a car on a trip is taken", () => {
+    const { field, traffic, car } = chasedWorld();
+    expect(traffic.evade(car.index, 0), "a car on a trip").toBe(true);
+    const parked = field.cars.findIndex((other, id) => id > 0 && id !== car.index && !other.stored);
+    if (parked > 0) expect(traffic.evade(parked, 0), "a car standing parked").toBe(false);
+    const patrol = traffic.spawnDrivenCar(-1, traffic.nearestSpot(HOME.x, HOME.z + 40), traffic.nearestSpot(WORK.x, WORK.z), { urgent: true })!;
+    expect(traffic.evade(patrol.index, 0), "a patrol car").toBe(false);
+    expect(traffic.evade(0, 0), "the human's car").toBe(false);
+  });
+
+  // mutation: sed -i 's/    if (best >= 0) this.rerouteFrom(slot, best);/    \/\/ no run/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when the chaser is on it, then it runs on past the end of its trip to far spaces and does not park", () => {
+    const { field, traffic, clock, car } = chasedWorld();
+    expect(traffic.evade(car.index, 0)).toBe(true);
+    runSeconds(field, traffic, clock, 40);
+    expect(traffic.isFleeing(car.index), "it noticed the chaser and runs").toBe(true);
+    expect(car.arrived, "a run of a few hundred metres is not over").toBe(false);
+    expect(field.cars[car.index]!.speed, "still driving").toBeGreaterThan(5);
+  });
+
+  // mutation: sed -i 's/  endEvade(carId: number): void {/  endEvade(carId: number): void {\n    if (carId >= 0) return;/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when the chase ends, then it finishes its run, drives as traffic and parks", () => {
+    const { field, traffic, clock, car } = chasedWorld();
+    traffic.evade(car.index, 0);
+    runSeconds(field, traffic, clock, 10);
+    traffic.endEvade(car.index);
+    expect(traffic.isFleeing(car.index), "no longer running").toBe(false);
+    runUntil({ field, traffic, clock }, () => car.arrived);
+    expect(car.arrived, "it parks").toBe(true);
   });
 });
 
@@ -354,7 +409,7 @@ describe("given residents whose cars stand at a place's kerb", () => {
   it("when two residents of one place have cars, then each holds a different one of the four empty spaces nearest its door, the one he is by number", () => {
     const field = quietField();
     const feed = emptyFeed(8);
-    const traffic = makeTraffic(field, { movers: 2, kerb: 0 }, feed, [homeAt(HOME.x, HOME.z)]);
+    const traffic = makeTraffic(field, { movers: 0, kerb: 0 }, feed, [homeAt(HOME.x, HOME.z)]);
     const clock = new Clock();
     feed.parked.count = 2;
     feed.parked.resident[0] = 1;

@@ -30,6 +30,11 @@ export class KerbCars {
   private wantedDistance = 0;
   /** The resident whose car the space `nearestWanted` found is for; -1 for a space a car stands in for good. */
   private wantedResident = -1;
+  private wantedSpot = -1;
+  /** The crowd second of the last step. */
+  private seconds = 0;
+  /** Per slot, the resident whose car it stands as (-1: a car that stands for good there): a resident's car is never given up for another's. */
+  private readonly residentOfSlot: Int32Array;
   private sinceBookkeeping = 0;
   private passes = 0;
 
@@ -44,6 +49,7 @@ export class KerbCars {
     this.slotOfSpot = new Int16Array(spots.count).fill(-1);
     this.spotOfSlot = new Int32Array(size).fill(-1);
     this.wreckedFor = new Float64Array(size);
+    this.residentOfSlot = new Int32Array(size).fill(-1);
   }
 
   /** Kerb cars standing now. */
@@ -68,7 +74,8 @@ export class KerbCars {
   }
 
   /** One sim step: the bookkeeping pass when it is due; `parked` lists the residents' cars at kerbs. */
-  step(dt: number, parked: ParkedResidentCars | null): void {
+  step(seconds: number, dt: number, parked: ParkedResidentCars | null): void {
+    this.seconds = seconds;
     this.sinceBookkeeping += dt;
     if (this.sinceBookkeeping < BOOKKEEPING_SECONDS) return;
     const passDt = this.sinceBookkeeping;
@@ -79,7 +86,8 @@ export class KerbCars {
     for (let place = 0; place < PLACES_PER_PASS; place++) {
       const spot = this.nearestWanted(parked);
       if (spot < 0) break;
-      if (!this.show(spot) && !(this.evictFarthest(this.wantedDistance + KERB_EVICT_MARGIN) && this.show(spot))) break;
+      const limit = this.wantedResident >= 0 ? 0 : this.wantedDistance + KERB_EVICT_MARGIN;
+      if (!this.show(spot) && !(this.evictFarthest(limit) && this.show(spot))) break;
     }
   }
 
@@ -134,7 +142,7 @@ export class KerbCars {
     let farthest = -1;
     let farthestDistance = limit;
     for (let slot = 0; slot < this.size; slot++) {
-      if (this.spotOfSlot[slot]! < 0) continue;
+      if (this.spotOfSlot[slot]! < 0 || this.residentOfSlot[slot]! >= 0) continue;
       const car = ports.cars()[this.first + slot];
       if (car === undefined) continue;
       const distance = this.distanceToEyes(car.group.position.x, car.group.position.z);
@@ -155,30 +163,30 @@ export class KerbCars {
       if (this.context.standing[spot] === STANDING.kerb) this.context.standing[spot] = STANDING.none;
     }
     this.spotOfSlot[slot] = -1;
+    this.residentOfSlot[slot] = -1;
     this.wreckedFor[slot] = 0;
   }
 
-  /** The nearest space in reach of a player that wants a kerb car and shows none; during the first passes any, else only those no eye sees. -1 when none. */
+  /** The nearest space in reach of a player that wants a kerb car and shows none, a resident's car's before a car that stands for good; during the first passes any, else only those no eye sees. -1 when none. */
   private nearestWanted(parked: ParkedResidentCars | null): number {
-    const { spots, standing } = this.context;
     const prime = this.passes <= PRIME_PASSES;
-    let best = -1;
-    let bestResident = -1;
-    let bestDistance = KERB_REACH;
-    const residents = parked === null ? 0 : parked.count;
-    for (let index = 0; index < this.staticSpots.length + residents; index++) {
-      const resident = index < this.staticSpots.length ? -1 : parked!.resident[index - this.staticSpots.length]!;
-      const spot = resident < 0 ? this.staticSpots[index]! : this.residentCarSpot(resident);
-      if (spot < 0 || standing[spot] !== STANDING.none) continue;
-      const distance = this.distanceToEyes(spots.x[spot]!, spots.z[spot]!);
-      if (distance >= bestDistance || (!prime && !spotUnseen(this.context, spot))) continue;
-      bestDistance = distance;
-      best = spot;
-      bestResident = resident;
-    }
-    this.wantedDistance = bestDistance;
-    this.wantedResident = bestResident;
-    return best;
+    this.wantedDistance = KERB_REACH;
+    this.wantedSpot = -1;
+    this.wantedResident = -1;
+    if (parked !== null) for (let index = 0; index < parked.count; index++) this.consider(this.residentCarSpot(parked.resident[index]!), parked.resident[index]!, prime);
+    if (this.wantedSpot < 0) for (let index = 0; index < this.staticSpots.length; index++) this.consider(this.staticSpots[index]!, -1, prime);
+    return this.wantedSpot;
+  }
+
+  /** Space `spot` (for resident `resident`, -1 for none) is the wanted one if it is empty, nearer a player than the best so far, and unseen (unless it is the first passes). */
+  private consider(spot: number, resident: number, prime: boolean): void {
+    const { spots, standing } = this.context;
+    if (spot < 0 || standing[spot] !== STANDING.none) return;
+    const distance = this.distanceToEyes(spots.x[spot]!, spots.z[spot]!);
+    if (distance >= this.wantedDistance || (!prime && !spotUnseen(this.context, spot))) return;
+    this.wantedDistance = distance;
+    this.wantedSpot = spot;
+    this.wantedResident = resident;
   }
 
   private residentCarSpot(resident: number): number {
@@ -199,7 +207,10 @@ export class KerbCars {
       }
     }
     if (slot < 0) return false;
-    if (body !== null && ports.cars()[this.first + slot]!.style.id !== body) ports.setBody(this.first + slot, body);
+    if (body !== null && ports.cars()[this.first + slot]!.style.id !== body && this.context.swaps.allows(this.seconds) && spotUnseen(this.context, spot)) {
+      this.context.swaps.note(this.seconds);
+      ports.setBody(this.first + slot, body);
+    }
     const heading = spots.heading[spot]!;
     const side = (hash01(spot, TRAFFIC_SEED) - 0.5) * 2 * KERB_JITTER_SIDE;
     const turn = (hash01(spot, TRAFFIC_SEED + 1) - 0.5) * 2 * KERB_JITTER_YAW;
@@ -207,6 +218,7 @@ export class KerbCars {
     sight.reset(this.context.sightBase + this.context.movers + slot);
     this.spotOfSlot[slot] = spot;
     this.slotOfSpot[spot] = slot;
+    this.residentOfSlot[slot] = this.wantedResident;
     standing[spot] = STANDING.kerb;
     return true;
   }
