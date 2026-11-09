@@ -157,7 +157,7 @@ const OFFSET_ANGLE = 1;
 const BEND_ANGLE = 2;
 const solved = new Float64Array(3);
 
-/** 0 up to `from`'s left of 0, 1 from 1 on, smooth between. */
+/** 0 at progress 0 or less, 1 at 1 or more, smooth between. */
 function easeIn(progress: number): number {
   if (progress <= 0) return 0;
   if (progress >= 1) return 1;
@@ -279,6 +279,7 @@ function solveLegs(): void {
 
 /** With an arm's `hand` weight, the arm reaches its hand to (`handZ`, `handY`) in the body frame, through the torso's lean and twist. */
 function solveHands(): void {
+  if (channels[armChannel(0, ARM.hand)]! <= NEGLIGIBLE_WEIGHT && channels[armChannel(1, ARM.hand)]! <= NEGLIGIBLE_WEIGHT) return;
   const waistY = HIP_Y - channels[CHANNEL.pelvisDrop]!;
   setTorsoRotation(channels, torsoInverse);
   torsoInverse.invert();
