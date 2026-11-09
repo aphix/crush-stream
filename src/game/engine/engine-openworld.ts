@@ -346,8 +346,7 @@ export class OpenWorldDirector {
     const remote = CivilianRemote.open((err) => console.error("Crush Stream civilian worker failed", err));
     this.crowd = new CivilianCrowd(map, key & CROWD_SEED_MASK, POPULATION[tier] ?? POPULATION[0], remote);
     this.crowd.onAmbulanceCall = (x, z, seconds) => {
-      this.traffic?.callAmbulance(x, z, seconds);
-      this.medics?.call(x, z);
+      if (this.traffic?.callAmbulance(x, z, seconds) === true) this.medics?.call(x, z);
     };
     this.crowdKey = key;
     this.seconds = 0;
