@@ -6,7 +6,7 @@ import { hypot2, detSin, detCos } from "../kernel/physics-core.js";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { PREFAB, SURFACE } from "./constants.ts";
 import { PLAZA_REACH, PLAZA_TOP, plazaBricks } from "./openworld/openworld-plaza.ts";
-import { ACORN_LAMP, HOOP_FENCE, POSTS, STREET_KIT, bollardPlan, busStopPlan, meterPlan, streetSignPlan } from "./street-kit.ts";
+import { ACORN_LAMP, HOOP_FENCE, KNOCKABLE, PAVILION, POSTS, STREET_KIT, acornPlan, benchPlan, bikeRackPlan, binPlan, bollardPlan, busStopPlan, meterPlan, newsBoxPlan, pavilionPlan, streetSignPlan } from "./street-kit.ts";
 import { brickCollider, bricksTop, CAPITOL, CAPITOL_POOL, CAPITOL_TOP, capitolPlan, capitolPool, FLAGPOLE, flagpolePlan, GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT, type Brick, type Collider } from "./landmarks.ts";
 
 export const SURFACE_IDS = [SURFACE.asphalt, SURFACE.concrete, SURFACE.cobble, SURFACE.dirt, SURFACE.gravel, SURFACE.grass, SURFACE.sand, SURFACE.mud] as const;
@@ -116,6 +116,7 @@ export const PREFAB_IDS = [
   PREFAB.cafeSet,
   PREFAB.busShelter,
   PREFAB.busStopSign,
+  PREFAB.newsBox,
   PREFAB.streetSign,
   PREFAB.bollard,
   PREFAB.cellarDoor,
@@ -450,6 +451,11 @@ function kitSpec(size: readonly [number, number, number], material: MaterialId):
   return { body: "none", collider: [], foot: 0, size: [size[0], size[1], size[2]], mass: 0, material };
 }
 
+/** A street kit piece a car knocks over: its `colliders`, its weight and the speed at or under which a car meets it as a solid (`KNOCKABLE`). */
+function knockSpec(size: readonly [number, number, number], material: MaterialId, colliders: readonly Collider[], reach: number, { massKg, knockSpeed }: { massKg: number; knockSpeed: number }): PrefabSpec {
+  return { body: "knock", collider: colliders, foot: reach, size: [size[0], size[1], size[2]], mass: massKg, knockSpeed, material };
+}
+
 /** A street kit post: solid, as drawn (`colliders`), its clearance from a road the farthest it reaches in plan. */
 function postSpec(size: readonly [number, number, number], material: MaterialId, colliders: readonly Collider[], reach: number): PrefabSpec {
   return { body: "solid", collider: colliders, foot: reach, size: [size[0], size[1], size[2]], mass: 0, material };
@@ -764,23 +770,11 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.buildingShell]: { body: "none", collider: [], foot: hypot2(6, 6), size: [12, 14, 12], mass: 0, material: MAT.BUILDING_WALL },
   [PREFAB.invisibleWall]: { body: "solid", collider: [{ kind: "box", hx: 0.5, hz: 0.5, y1: 1 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 0, material: MAT.JERSEY_CONCRETE },
   // The acorn lamp: plinth, post, collar, globe and cap, each a circle of its own.
-  [PREFAB.acornLamp]: {
-    body: "solid",
-    collider: [
-      { kind: "circle", r: ACORN_LAMP.plinthRadius, y1: ACORN_LAMP.plinthHeight },
-      { kind: "circle", r: ACORN_LAMP.postRadius, y0: ACORN_LAMP.plinthHeight, y1: ACORN_LAMP.collarBottom },
-      { kind: "circle", r: ACORN_LAMP.collarRadius, y0: ACORN_LAMP.collarBottom, y1: ACORN_LAMP.collarTop },
-      { kind: "circle", r: ACORN_LAMP.globeRadius, y0: ACORN_LAMP.collarTop, y1: ACORN_LAMP.capBottom },
-      { kind: "circle", r: ACORN_LAMP.capRadius, y0: ACORN_LAMP.capBottom, y1: ACORN_LAMP.height },
-    ],
-    foot: ACORN_LAMP.globeRadius,
-    size: [2 * ACORN_LAMP.globeRadius, ACORN_LAMP.height, 2 * ACORN_LAMP.globeRadius],
-    mass: 0,
-    material: MAT.LAMP_POLE,
-  },
-  [PREFAB.bench]: kitSpec(STREET_KIT.bench, MAT.BENCH_MAPLE),
-  [PREFAB.bikeRack]: kitSpec(STREET_KIT.bikeRack, MAT.BRACKET_STEEL),
-  [PREFAB.litterBin]: kitSpec(STREET_KIT.litterBin, MAT.DUMPSTER_STEEL),
+  [PREFAB.acornLamp]: { body: "solid", collider: acornPlan(), foot: ACORN_LAMP.globeRadius, size: [2 * ACORN_LAMP.globeRadius, ACORN_LAMP.height, 2 * ACORN_LAMP.globeRadius], mass: 0, material: MAT.LAMP_POLE },
+  [PREFAB.bench]: knockSpec(STREET_KIT.bench, MAT.BENCH_MAPLE, benchPlan(), 0.8, KNOCKABLE.bench),
+  [PREFAB.bikeRack]: knockSpec(STREET_KIT.bikeRack, MAT.BRACKET_STEEL, bikeRackPlan(), 0.9, KNOCKABLE.bikeRack),
+  [PREFAB.litterBin]: knockSpec(STREET_KIT.litterBin, MAT.DUMPSTER_STEEL, binPlan(), 0.25, KNOCKABLE.litterBin),
+  [PREFAB.newsBox]: knockSpec(STREET_KIT.newsBox, MAT.DUMPSTER_STEEL, newsBoxPlan(), 0.3, KNOCKABLE.newsBox),
   [PREFAB.parkingMeter]: postSpec(STREET_KIT.parkingMeter, MAT.LAMP_POLE, meterPlan(), POSTS.meter.headHalfAlong),
   [PREFAB.hydrant]: postSpec(STREET_KIT.hydrant, MAT.DUMPSTER_STEEL, [{ kind: "circle", r: POSTS.hydrant.reach, y1: POSTS.hydrant.top }], POSTS.hydrant.reach),
   [PREFAB.cafeSet]: kitSpec(STREET_KIT.cafeSet, MAT.CRATE_WOOD),
@@ -799,7 +793,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     knockSpeed: HOOP_FENCE.knockSpeed,
     material: MAT.BRACKET_STEEL,
   },
-  [PREFAB.pavilion]: kitSpec(STREET_KIT.pavilion, MAT.GANTRY_STEEL),
+  [PREFAB.pavilion]: postSpec(STREET_KIT.pavilion, MAT.GANTRY_STEEL, pavilionPlan(), PAVILION.fasciaRadius),
   // The park's plaza: its bricks are its colliders, so a car meets the bench rings and the statue as drawn.
   [PREFAB.plaza]: { body: "solid", collider: plazaBricks().map(brickCollider), foot: PLAZA_REACH, size: [2 * PLAZA_REACH, PLAZA_TOP, 2 * PLAZA_REACH], mass: 0, material: MAT.MARBLE },
 };

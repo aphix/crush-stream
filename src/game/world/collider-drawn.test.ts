@@ -61,6 +61,13 @@ const KIND_TOL: Partial<Record<PrefabId, number>> = {
   grandstand: 0.01,
   billboard: 0.01,
   lamp: 0.02,
+  // The knockable furniture (`KNOCKABLE`): a bin's taper 0.02 m and its 14 sides; a news box's window plates proud 0.01 m; a bench's boxes as drawn; a bike rack's wheel slabs, frame plane and
+  // staple against a bicycle's rods and rings, the handlebar's end 0.2 m off the frame's plane; the pavilion's 16-sided floor and fascia inside their circles, its roof's cone in one circle over its first 0.15 m.
+  "litter-bin": 0.03,
+  "news-box": 0.02,
+  "park-bench": 0.02,
+  "bike-rack": 0.3,
+  pavilion: 0.06,
   // A fence section's one box over its two rails and three posts: the box's sides and ends stand up to a rail's gap (0.14 m) off the drawn tube.
   "hoop-fence": 0.15,
   // The street kit's posts: 8-sided shafts inside their circles, a bollard's cap narrowing 0.01 m, a hydrant's circle a hand outside its barrel, a meter's cap narrowing 0.02 m.

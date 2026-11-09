@@ -27,7 +27,7 @@ const EXCLUDED: readonly string[] = [
   PREFAB.invisibleWall,
   PREFAB.buildingShell,
   // The open world's street kit: its own street's furniture (`prefabs-street.ts`), shown by the street rows' sprites in the gallery.
-  PREFAB.bench, PREFAB.bikeRack, PREFAB.litterBin, PREFAB.parkingMeter, PREFAB.hydrant, PREFAB.cafeSet, PREFAB.busShelter, PREFAB.busStopSign, PREFAB.streetSign,
+  PREFAB.bench, PREFAB.bikeRack, PREFAB.litterBin, PREFAB.parkingMeter, PREFAB.hydrant, PREFAB.cafeSet, PREFAB.busShelter, PREFAB.busStopSign, PREFAB.newsBox, PREFAB.streetSign,
   PREFAB.bollard, PREFAB.cellarDoor, PREFAB.hoopFence, PREFAB.pavilion, PREFAB.plaza,
   // The open world's lamp: the lamp's acorn variant.
   PREFAB.acornLamp,

@@ -6,16 +6,15 @@ import { PLACE_KIND, type PlaceKind } from "./walk-graph.ts";
 /** Seed of the street fabric's choices (where on a face a hydrant stands, a manhole cover's turn): fixed so every peer lays the same street. */
 export const FABRIC_SEED = 0x0fab51;
 
-/** The scenery assets the fabric lays, by id (`world/scenery-assets`): the road paint (the scenery service's own rows) and the newspaper box, whose asset is a box already. */
+/** The scenery assets the fabric lays, by id (`world/scenery-assets`): the road paint (the scenery service's own rows). */
 export const ASSET = {
   manhole: ROAD_DECAL_ASSET.manhole,
   crosswalk: ROAD_DECAL_ASSET.crosswalk,
-  newspaperBox: "street-newspaper-box",
   drain: "ground-drain-grate",
 } as const;
 
-/** A piece of street furniture: a street kit prefab, or a scenery asset (on its generic prefab) where the asset's own shape reads well. */
-export type FurniturePiece = { prefab: PrefabId; asset?: string };
+/** A piece of street furniture: a street kit prefab. */
+export type FurniturePiece = { prefab: PrefabId };
 
 export const PIECE = {
   hydrant: { prefab: PREFAB.hydrant },
@@ -26,7 +25,7 @@ export const PIECE = {
   busShelter: { prefab: PREFAB.busShelter },
   busStopSign: { prefab: PREFAB.busStopSign },
   cafeSet: { prefab: PREFAB.cafeSet },
-  newspaperBox: { prefab: PREFAB.assetBox, asset: ASSET.newspaperBox },
+  newspaperBox: { prefab: PREFAB.newsBox },
 } as const satisfies Record<string, FurniturePiece>;
 
 /** The bus shelter's back panel is solid (an invisible-wall box under the drawn glass): this far (m) behind the shelter's middle, this thick, tall and long. */

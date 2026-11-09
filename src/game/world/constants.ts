@@ -86,6 +86,7 @@ export const PREFAB = {
   cafeSet: "cafe-set",
   busShelter: "bus-shelter",
   busStopSign: "bus-stop-sign",
+  newsBox: "news-box",
   streetSign: "street-sign",
   bollard: "bollard",
   cellarDoor: "cellar-door",

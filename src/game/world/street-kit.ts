@@ -1,3 +1,4 @@
+import { detCos, detSin } from "../kernel/physics-core.js";
 import type { Collider } from "./landmarks.ts";
 
 /**
@@ -13,6 +14,7 @@ export const STREET_KIT = {
   cafeSet: [1.1, 2.25, 1.7],
   busShelter: [1.1, 2.6, 4.4],
   busStopSign: [0.4, 2.7, 0.4],
+  newsBox: [0.5, 0.95, 0.6],
   streetSign: [0.95, 3, 0.95],
   bollard: [0.3, 0.95, 0.3],
   cellarDoor: [1, 0.2, 1.1],
@@ -115,3 +117,85 @@ export function busStopPlan(): Collider[] {
  * steel tube and two rails, what a thrown section weighs.
  */
 export const HOOP_FENCE = { knockSpeed: 3, massKg: 8, halfThickness: 0.03, halfLength: 2, height: 0.45 } as const;
+
+/**
+ * The furniture a car knocks over, each what it weighs (kg) and the closing speed (m/s) at or under which a car meets it as a solid: a bin or a news box a nudge does not move, a bench
+ * or a bolted rack with its bicycle holds a little harder. Above its speed the piece breaks loose and tumbles like a cone.
+ */
+export const KNOCKABLE = {
+  litterBin: { massKg: 20, knockSpeed: 3 },
+  bench: { massKg: 45, knockSpeed: 4 },
+  newsBox: { massKg: 35, knockSpeed: 3.5 },
+  bikeRack: { massKg: 30, knockSpeed: 4 },
+} as const;
+
+/** The pavilion (m), as drawn and as a car meets it: a 16-sided floor and fascia, the eight posts on a ring, the roof's cone over the fascia and a finial. */
+export const PAVILION = {
+  sides: 16,
+  posts: 8,
+  postRing: 2.35,
+  postHalf: 0.06,
+  floorRadius: 2.6,
+  floorHeight: 0.25,
+  fasciaRadius: 2.9,
+  fasciaBottom: 2.85,
+  fasciaTop: 3,
+  coneRadius: 2.8,
+  coneTop: 3.85,
+  finialRadius: 0.08,
+  top: 4.1,
+} as const;
+
+/** A circle collider of radius `r` from `y0` to `y1` (m). */
+function circlePiece(r: number, y0: number, y1: number): Collider {
+  return { kind: "circle", r, y0, y1 };
+}
+
+/** A box collider of half sizes (`halfAlong` front to back, `halfAcross`) centred (`x`, `z`) from `y0` to `y1` (m). */
+function boxPiece(halfAlong: number, halfAcross: number, x: number, z: number, y0: number, y1: number): Collider {
+  return { kind: "box", hx: halfAlong, hz: halfAcross, x, z, y0, y1 };
+}
+
+/** A bin's circles: its body, and its lid a little wider. */
+export function binPlan(): Collider[] {
+  return [circlePiece(0.23, 0, 0.82), circlePiece(0.25, 0.82, 0.9)];
+}
+
+/** A bench's boxes, as it is drawn: the seat, the back, a leg frame at each end and the back's two supports. */
+export function benchPlan(): Collider[] {
+  const plan = [boxPiece(0.225, 0.8, 0.02, 0, 0.42, 0.48), boxPiece(0.025, 0.8, -0.2, 0, 0.5, 0.9)];
+  for (const z of [-0.72, 0.72]) plan.push(boxPiece(0.25, 0.03, 0, z, 0, 0.42), boxPiece(0.03, 0.03, -0.2, z, 0.42, 0.9));
+  return plan;
+}
+
+/** A news box's two boxes: its body and its wider cap. */
+export function newsBoxPlan(): Collider[] {
+  return [boxPiece(0.23, 0.28, 0, 0, 0, 0.85), boxPiece(0.25, 0.3, 0, 0, 0.85, 0.95)];
+}
+
+/** A bike rack's boxes: the staple's rail and two legs, then each wheel as a slab the width of its tyre and the frame's plane between them (the bicycle is what the staple holds). */
+export function bikeRackPlan(): Collider[] {
+  const plan = [boxPiece(0.025, 0.575, -0.2, 0, 0.775, 0.825)];
+  for (const z of [-0.55, 0.55]) plan.push(boxPiece(0.025, 0.025, -0.2, z, 0, 0.8));
+  for (const z of [-0.52, 0.52]) plan.push(boxPiece(0.022, 0.332, 0.1, z, 0.008, 0.672));
+  plan.push(boxPiece(0.03, 0.45, 0.1, 0, 0.2, 0.9));
+  return plan;
+}
+
+/** The pavilion's solids: the floor, the posts, the fascia, the roof's cone and the finial. */
+export function pavilionPlan(): Collider[] {
+  const { posts, postRing, postHalf, floorRadius, floorHeight, fasciaRadius, fasciaBottom, fasciaTop, coneRadius, coneTop, finialRadius, top } = PAVILION;
+  const plan = [circlePiece(floorRadius, 0, floorHeight)];
+  for (let post = 0; post < posts; post++) {
+    const angle = ((post + 0.5) * 2 * Math.PI) / posts;
+    plan.push(boxPiece(postHalf, postHalf, postRing * detCos(angle), postRing * detSin(angle), floorHeight, fasciaBottom));
+  }
+  plan.push(circlePiece(fasciaRadius, fasciaBottom, fasciaTop), circlePiece(coneRadius, fasciaTop, coneTop), circlePiece(finialRadius, coneTop, top));
+  return plan;
+}
+
+/** The acorn lamp's circles: plinth, post, collar, globe and cap, each as wide as it is drawn. */
+export function acornPlan(): Collider[] {
+  const { plinthRadius, plinthHeight, postRadius, collarRadius, collarBottom, collarTop, globeRadius, capRadius, capBottom, height } = ACORN_LAMP;
+  return [circlePiece(plinthRadius, 0, plinthHeight), circlePiece(postRadius, plinthHeight, collarBottom), circlePiece(collarRadius, collarBottom, collarTop), circlePiece(globeRadius, collarTop, capBottom), circlePiece(capRadius, capBottom, height)];
+}

@@ -4,7 +4,7 @@ import { PREFAB } from "../constants.ts";
 import { streetSignStyle } from "../street-kit.ts";
 import { mulberry32 } from "../placements.ts";
 import { SCENERY_ASSETS } from "../scenery-assets/index.ts";
-import { assetPrefab, assetScale } from "../scenery-assets/pick.ts";
+import { assetPrefab } from "../scenery-assets/pick.ts";
 import type { SceneryAsset } from "../scenery-assets/types.ts";
 import {
   ASSET,
@@ -146,9 +146,9 @@ function isFree(lane: Lane, from: number, to: number): boolean {
   return true;
 }
 
-/** A piece's box (m): along its front, up, across; an asset's own size, a prefab's catalogue box. */
+/** A piece's box (m): along its front, up, across; its prefab's catalogue box. */
 function pieceSize(piece: FurniturePiece): readonly [number, number, number] {
-  return piece.asset === undefined ? PREFABS[piece.prefab].size : assetScale(rowOf(piece.asset), 1);
+  return PREFABS[piece.prefab].size;
 }
 
 /** Half the length (m) along the face of a piece turned `turn` off facing the street. */
@@ -159,7 +159,7 @@ function alongHalf(piece: FurniturePiece, turn: number): number {
 
 /** A piece as a course prop at (x, z), turned `yaw`. */
 function pieceProp(piece: FurniturePiece, x: number, z: number, yaw: number): FabricProp {
-  return piece.asset === undefined ? { prefab: piece.prefab, x, z, yaw } : assetProp(piece.asset, x, z, yaw);
+  return { prefab: piece.prefab, x, z, yaw };
 }
 
 /** The solid back panel of a bus shelter standing at (x, z) turned `yaw` (its front, local +x, to the curb). */
@@ -233,7 +233,7 @@ function cellarProps(lots: Lots): FabricProp[] {
   return props;
 }
 
-/** The city's street fabric as course props: marked crossings at the walk graph's crossing edges and a manhole cover per street segment (scenery-asset decals), street signs, bollards and storm drains at block corners, a hydrant per block face, cellar doors before some rowhomes and the frontage kits of businesses and the bus stop (street kit prefabs, a newspaper box's asset box). */
+/** The city's street fabric as course props: marked crossings at the walk graph's crossing edges and a manhole cover per street segment (scenery-asset decals), street signs, bollards and storm drains at block corners, a hydrant per block face, cellar doors before some rowhomes and the frontage kits of businesses and the bus stop (street kit prefabs). */
 export function fabricProps(lots: Lots, graph: WalkGraph): FabricProp[] {
   const random = mulberry32(FABRIC_SEED);
   return [...crossingProps(lots.geometry, graph), ...manholeProps(lots.geometry, random), ...cornerProps(lots), ...frontageProps(lots, random), ...cellarProps(lots)];

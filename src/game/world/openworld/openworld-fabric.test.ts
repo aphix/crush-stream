@@ -235,8 +235,39 @@ describe("given the street kit's posts", () => {
   });
 });
 
+describe("given the street kit's knockable furniture and its pavilion", () => {
+  /** The furniture a car knocks over once it closes fast enough; the pavilion's posts are solid. */
+  const KNOCKED = [PREFAB.litterBin, PREFAB.bench, PREFAB.newsBox, PREFAB.bikeRack] as const;
+  /** A placed piece's colliders lie within this (m) of its place: the bench's and the rack's longest reach. */
+  const PIECE_REACH = 1;
+  const POSTS_ROUND_THE_PAVILION = 8;
+  const colliders = propColliders(placeProps(track));
+
+  // mutation: sed -i 's/\[PREFAB.bench\]: knockSpec(STREET_KIT.bench, MAT.BENCH_MAPLE, benchPlan(), 0.8, KNOCKABLE.bench)/[PREFAB.bench]: kitSpec(STREET_KIT.bench, MAT.BENCH_MAPLE)/' src/game/world/catalog.ts
+  it("when the course is placed, then every bin, bench, news box and bike rack stands as a knock prop with its knock speed, and each has its colliders in place", () => {
+    for (const prefab of KNOCKED) {
+      const placed = course.props.filter((prop) => prop.prefab === prefab);
+      expect(placed.length, `${prefab} placed`).toBeGreaterThan(0);
+      const pieces = colliders.filter((piece) => piece.prefab === prefab);
+      expect(pieces.filter((piece) => piece.body !== "knock" || piece.knockSpeed !== PREFABS[prefab].knockSpeed || !(piece.knockSpeed! > 0)).length, `${prefab} pieces that are no knock prop with a speed`).toBe(0);
+      const unmet = placed.filter((prop) => !pieces.some((piece) => Math.hypot(piece.x - prop.x, piece.z - prop.z) < PIECE_REACH));
+      expect(unmet.slice(0, 3).map((prop) => `${prop.x.toFixed(1)}, ${prop.z.toFixed(1)}`).join("; "), `${prefab}s with no collider in place`).toBe("");
+    }
+  });
+
+  // mutation: sed -i 's/  \[PREFAB.pavilion\]: postSpec(STREET_KIT.pavilion, MAT.GANTRY_STEEL, pavilionPlan(), PAVILION.fasciaRadius),/  [PREFAB.pavilion]: kitSpec(STREET_KIT.pavilion, MAT.GANTRY_STEEL),/' src/game/world/catalog.ts
+  it("when the pavilion is placed, then its floor, its eight posts and its roof are solids a car meets", () => {
+    const placed = course.props.filter((prop) => prop.prefab === PREFAB.pavilion);
+    expect(placed.length, "pavilions placed").toBe(1);
+    const pieces = colliders.filter((piece) => piece.prefab === PREFAB.pavilion);
+    expect(pieces.filter((piece) => piece.body !== "solid").length, "pieces that are no solid").toBe(0);
+    expect(pieces.filter((piece) => piece.kind === "box").length, "posts").toBe(POSTS_ROUND_THE_PAVILION);
+    expect(pieces.filter((piece) => piece.kind === "circle").length, "floor, fascia, roof and finial").toBe(4);
+  });
+});
+
 describe("given the street furniture's drawing", () => {
-  // mutation: sed -i 's/  hydrant: { prefab: PREFAB.hydrant },/  hydrant: { prefab: PREFAB.assetCard, asset: "street-fire-hydrant" },/' src/game/world/openworld/openworld-fabric-constants.ts
+  // mutation: sed -i 's/  hydrant: { prefab: PREFAB.hydrant },/  hydrant: { prefab: PREFAB.assetCard },/' src/game/world/openworld/openworld-fabric-constants.ts
   it("when the course's props are read, then no piece of furniture is a sprite card: each is a street kit prefab, the newspaper box its asset's box", () => {
     const cards = course.props.filter((prop) => prop.prefab === PREFAB.assetCard || prop.prefab === PREFAB.assetStandee || prop.prefab === PREFAB.assetCross);
     expect(cards.map((prop) => keyOf(prop)).join(", "), "sprite cards in the course").toBe("");

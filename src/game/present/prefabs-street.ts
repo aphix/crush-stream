@@ -3,7 +3,7 @@ import { MAT } from "../kernel/material-ids.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { plazaBricks } from "../world/openworld/openworld-plaza.ts";
-import { POSTS } from "../world/street-kit.ts";
+import { PAVILION, POSTS } from "../world/street-kit.ts";
 import { box, cyl, painted, type Piece, type PrefabMaterials, type PrefabPart } from "./prefab-pieces.ts";
 import { bicyclePieces, spokePart } from "./bicycle.ts";
 import { monumentPieces } from "./prefabs-mall.ts";
@@ -41,14 +41,15 @@ const KIT_COLOUR = {
   pavilionRoof: 0x2f5b45,
   pavilionPost: 0xe8e2d0,
   pavilionFloor: 0x9c968c,
+  newsBody: 0xb32020,
+  newsCap: 0x8c1818,
+  newsWindow: 0x1c2a33,
 } as const;
 
 /** Sides of a round piece: a hydrant or a bin reads round at street level from 12 to 16, a thin post from 8. */
 const ROUND = 14;
 const THIN = 8;
 const WHEEL = 16;
-/** Sides of the pavilion's floor and roof: an octagon, as the square's is. */
-const PAVILION_SIDES = 8;
 
 /** The street sign's blades (m): one along x over one along z, each this long, tall and thick, at these heights on a pole this tall; `street-name-blades.ts` prints on their faces. */
 export const STREET_SIGN = { bladeLength: 0.9, bladeHeight: 0.18, bladeThickness: POSTS.streetSign.bladeThickness, alongXHeight: 2.78, alongZHeight: 2.56, poleHeight: 2.9 } as const;
@@ -194,18 +195,34 @@ function hoopFence(): Piece[] {
   return pieces;
 }
 
-/** The square's little pavilion: an octagonal floor, eight posts and a green octagonal roof with a finial. */
+/** The square's little pavilion: a round floor, eight posts, a fascia and a green cone roof with a finial (`PAVILION`: what a car meets is these). */
 function pavilion(): Piece[] {
+  const { sides, posts, postRing, postHalf, floorRadius, floorHeight, fasciaRadius, fasciaBottom, fasciaTop, coneRadius, coneTop, finialRadius, top } = PAVILION;
   const pieces: Piece[] = [
-    [cyl(2.6, 2.6, 0, 0.25, PAVILION_SIDES), KIT_COLOUR.pavilionFloor, MAT.JERSEY_CONCRETE],
-    [cyl(0.1, 2.9, 2.85, 3.85, PAVILION_SIDES), KIT_COLOUR.pavilionRoof, MAT.GANTRY_STEEL],
-    [cyl(0.03, 0.08, 3.85, 4.1, THIN), KIT_COLOUR.pavilionRoof, MAT.GANTRY_STEEL],
+    [cyl(floorRadius, floorRadius, 0, floorHeight, sides), KIT_COLOUR.pavilionFloor, MAT.JERSEY_CONCRETE],
+    [cyl(fasciaRadius, fasciaRadius, fasciaBottom, fasciaTop, sides), KIT_COLOUR.pavilionRoof, MAT.GANTRY_STEEL],
+    [cyl(PAVILION_CONE_TIP, coneRadius, fasciaTop, coneTop, sides), KIT_COLOUR.pavilionRoof, MAT.GANTRY_STEEL],
+    [cyl(PAVILION_FINIAL_TIP, finialRadius, coneTop, top, THIN), KIT_COLOUR.pavilionRoof, MAT.GANTRY_STEEL],
   ];
-  for (let post = 0; post < PAVILION_SIDES; post++) {
-    const angle = ((post + 0.5) * 2 * Math.PI) / PAVILION_SIDES;
-    pieces.push([box(0.12, 2.6, 0.12, 2.35 * Math.cos(angle), 1.55, 2.35 * Math.sin(angle)), KIT_COLOUR.pavilionPost, MAT.GANTRY_STEEL]);
+  for (let post = 0; post < posts; post++) {
+    const angle = ((post + 0.5) * 2 * Math.PI) / posts;
+    pieces.push([box(2 * postHalf, fasciaBottom - floorHeight, 2 * postHalf, postRing * Math.cos(angle), (floorHeight + fasciaBottom) / 2, postRing * Math.sin(angle)), KIT_COLOUR.pavilionPost, MAT.GANTRY_STEEL]);
   }
   return pieces;
+}
+
+/** The pavilion roof's cone narrows to this radius (m) at its tip, and its finial to this. */
+const PAVILION_CONE_TIP = 0.1;
+const PAVILION_FINIAL_TIP = 0.03;
+
+/** A newspaper vending box: a red body under a darker cap, a dark window and a coin plate on its street face. */
+function newsBox(): Piece[] {
+  return [
+    [box(0.46, 0.85, 0.56, 0, 0.425, 0), KIT_COLOUR.newsBody, MAT.DUMPSTER_STEEL],
+    [box(0.5, 0.1, 0.6, 0, 0.9, 0), KIT_COLOUR.newsCap, MAT.DUMPSTER_STEEL],
+    [box(0.02, 0.3, 0.4, 0.235, 0.6, 0), KIT_COLOUR.newsWindow, MAT.WINDOW_PANE],
+    [box(0.02, 0.1, 0.12, 0.235, 0.33, 0.15), KIT_COLOUR.galvanised, MAT.BRACKET_STEEL],
+  ];
 }
 
 const KIT_PIECES: Partial<Record<PrefabId, () => Piece[]>> = {
@@ -222,6 +239,7 @@ const KIT_PIECES: Partial<Record<PrefabId, () => Piece[]>> = {
   [PREFAB.cellarDoor]: cellarDoor,
   [PREFAB.hoopFence]: hoopFence,
   [PREFAB.pavilion]: pavilion,
+  [PREFAB.newsBox]: newsBox,
   [PREFAB.plaza]: () => monumentPieces(plazaBricks()),
 };
 

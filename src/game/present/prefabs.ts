@@ -845,6 +845,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.cafeSet:
     case PREFAB.busShelter:
     case PREFAB.busStopSign:
+    case PREFAB.newsBox:
     case PREFAB.streetSign:
     case PREFAB.bollard:
     case PREFAB.cellarDoor:
