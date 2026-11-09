@@ -69,8 +69,6 @@ export class MoverFleet {
   private readonly state: Uint8Array;
   private readonly role: Uint8Array;
   private readonly urgent: Uint8Array;
-  /** 1 once the slot's car is put away and its own; 0 while it is unknown what a human left it as. */
-  private readonly shelved: Uint8Array;
   /** The space the car stands in while parked, or goes to while driving. */
   private readonly spot: Int32Array;
   private readonly resident: Int32Array;
@@ -96,7 +94,6 @@ export class MoverFleet {
     this.state = new Uint8Array(size);
     this.role = new Uint8Array(size);
     this.urgent = new Uint8Array(size);
-    this.shelved = new Uint8Array(size);
     this.spot = new Int32Array(size).fill(-1);
     this.resident = new Int32Array(size).fill(NO_RESIDENT);
     this.readyAt = new Float64Array(size);
@@ -165,7 +162,6 @@ export class MoverFleet {
       this.release(slot);
       ports.place(id, spots.x[fromSpot]!, spots.z[fromSpot]!, spots.yaw[fromSpot]!);
       this.spot[slot] = fromSpot;
-      this.shelved[slot] = 1;
       this.state[slot] = MOVER.parked;
       this.context.taken[fromSpot] = 1;
       this.context.standing[fromSpot] = STANDING.mover;
@@ -191,7 +187,6 @@ export class MoverFleet {
     if (this.isPatrol(slot)) {
       this.release(slot);
       this.context.ports.putAway(this.first + slot);
-      this.shelved[slot] = 1;
       this.driver.forget(this.first + slot);
       return;
     }
@@ -219,9 +214,8 @@ export class MoverFleet {
 
   private fill(slot: number, car: TrafficCar, id: number): void {
     const { ports } = this.context;
-    if (this.shelved[slot] === 0) {
+    if (car.group.visible || !car.stored) {
       ports.putAway(id);
-      this.shelved[slot] = 1;
       this.driver.forget(id);
     }
     if (this.spawnedThisPass || this.role[slot] !== ROLE.ambient || this.isPatrol(slot)) return;
@@ -379,23 +373,20 @@ export class MoverFleet {
   private shelve(slot: number): void {
     this.release(slot);
     this.context.ports.putAway(this.first + slot);
-    this.shelved[slot] = 1;
     this.driver.forget(this.first + slot);
   }
 
   private tow(slot: number): void {
     this.release(slot);
     this.context.ports.putAway(this.first + slot);
-    this.shelved[slot] = 1;
     this.driver.forget(this.first + slot);
     this.wreckedFor[slot] = 0;
   }
 
-  /** A peer took the car's id: it is theirs, not traffic's; the slot waits for the id to come free. */
+  /** A peer took the car's id: it is theirs, not traffic's; the slot waits for the id to come free, and its car is put away then. */
   private handOverToHuman(slot: number): void {
-    if (this.state[slot] === MOVER.free && this.shelved[slot] === 0) return;
+    if (this.state[slot] === MOVER.free) return;
     this.release(slot);
-    this.shelved[slot] = 0;
     this.driver.forget(this.first + slot);
   }
 }

@@ -22,6 +22,8 @@ export type { DrivenCar } from "./mover-fleet.ts";
 export type FreeDrivers = {
   drive(cars: readonly TrafficCar[]): void;
   inputOf(id: number, dt: number): DriveInput | null;
+  /** Car `id` is theirs to place and put away: the lobby never stands it on its spawn, nor wakes it. */
+  owns(id: number): boolean;
 };
 
 /** Called (host and solo only) when car `carIndex` at (x, z) crosses a stop bar against its signal at crowd time `seconds`. */
@@ -167,6 +169,10 @@ export class OpenWorldTraffic {
 
   inputOf(id: number, dt: number): DriveInput | null {
     return this.movers.inputOf(id, dt);
+  }
+
+  owns(id: number): boolean {
+    return id >= this.first && id < this.first + this.total && !this.context.ports.seated(id);
   }
 
   /** A sim step at crowd time `seconds`: the cars' bookkeeping, the society's cars, and every car's crossing of a bar. */

@@ -21,7 +21,6 @@ export class KerbCars {
   private readonly staticSpots: Int32Array;
   private readonly slotOfSpot: Int16Array;
   private readonly spotOfSlot: Int32Array;
-  private readonly shelved: Uint8Array;
   private readonly wreckedFor: Float64Array;
   private readonly eyeX = new Float64Array(MAX_CARS);
   private readonly eyeZ = new Float64Array(MAX_CARS);
@@ -41,7 +40,6 @@ export class KerbCars {
     this.staticSpots = Int32Array.from(stays);
     this.slotOfSpot = new Int16Array(spots.count).fill(-1);
     this.spotOfSlot = new Int32Array(size).fill(-1);
-    this.shelved = new Uint8Array(size);
     this.wreckedFor = new Float64Array(size);
   }
 
@@ -57,7 +55,6 @@ export class KerbCars {
     const slot = this.slotOfSpot[spot]!;
     if (slot < 0) return;
     this.context.ports.putAway(this.first + slot);
-    this.shelved[slot] = 1;
     this.vacate(slot);
   }
 
@@ -103,15 +100,11 @@ export class KerbCars {
     const car = ports.cars()[id];
     if (car === undefined) return;
     if (ports.seated(id)) {
-      this.shelved[slot] = 0;
       this.vacate(slot);
       return;
     }
     if (spot < 0) {
-      if (this.shelved[slot] === 0) {
-        ports.putAway(id);
-        this.shelved[slot] = 1;
-      }
+      if (car.group.visible || !car.stored) ports.putAway(id);
       return;
     }
     const x = car.group.position.x;
@@ -123,7 +116,6 @@ export class KerbCars {
     const gone = this.wreckedFor[slot]! > TOW_SECONDS || (!sight.near(x, z, KERB_KEEP) && sight.unseenFor(sightId) >= sight.hideGrace);
     if (!gone) return;
     ports.putAway(id);
-    this.shelved[slot] = 1;
     this.vacate(slot);
   }
 
@@ -143,7 +135,6 @@ export class KerbCars {
     }
     if (farthest < 0) return false;
     ports.putAway(this.first + farthest);
-    this.shelved[farthest] = 1;
     this.vacate(farthest);
     return true;
   }
@@ -200,7 +191,6 @@ export class KerbCars {
     this.spotOfSlot[slot] = spot;
     this.slotOfSpot[spot] = slot;
     standing[spot] = STANDING.kerb;
-    this.shelved[slot] = 1;
     return true;
   }
 }

@@ -30,7 +30,7 @@ const GO_SECONDS = 25;
 afterEach(() => setGround(null));
 
 /** The open world's lobby, with the local player's car seated, and traffic over the world's real cars. */
-function openWorldLobby(movers: number): { w: World; traffic: OpenWorldTraffic } {
+function openWorldLobby(movers: number, patrol = 0): { w: World; traffic: OpenWorldTraffic } {
   const w = makeWorld();
   w.skin = false;
   w.race.enter(false, true);
@@ -62,7 +62,7 @@ function openWorldLobby(movers: number): { w: World; traffic: OpenWorldTraffic }
       w.live()[id]!.stored = false;
     },
   };
-  const traffic = new OpenWorldTraffic([], ports, new ProximitySight(ports), { movers, kerb: 0, patrol: 0 }, null);
+  const traffic = new OpenWorldTraffic([], ports, new ProximitySight(ports), { movers, kerb: 0, patrol }, null);
   w.race.freeDrivers = traffic;
   return { w, traffic };
 }
@@ -83,6 +83,7 @@ describe("given the lobby's cars no human drives", () => {
         asked.push(id);
         return null;
       },
+      owns: () => false,
     };
     w.race.freeDrivers = drivers;
     w.race.drive(FRAME);
@@ -97,7 +98,7 @@ describe("given the lobby's cars no human drives", () => {
     w.race["host"].setCarCount(2);
     w.race.seatLobby(0);
     const input: DriveInput = { ...idleDrive(), throttle: 0.7 };
-    w.race.freeDrivers = { drive: () => {}, inputOf: (id) => (id === 1 ? input : null) };
+    w.race.freeDrivers = { drive: () => {}, inputOf: (id) => (id === 1 ? input : null), owns: () => false };
     const car = w.live()[1]!;
     for (let n = 0; n < 60; n++) frame(w, { acc: 0 });
     const held = w.race["hold"].brake;
@@ -115,6 +116,56 @@ describe("given the lobby's cars no human drives", () => {
     expect(w.race.freeDrivers).toBeNull();
     for (let n = 0; n < 60; n++) frame(w, { acc: 0 });
     expect(w.live()[1]!.drive.brake, "the held car's brake").toBe(1);
+  });
+});
+
+describe("given the open world's traffic running in the lobby, its pool parked in spaces and put away", () => {
+  const MOVERS = 6;
+  const SETTLE_SECONDS = 3;
+
+  /** The lobby with traffic stepped long enough that its cars stand in spaces, the patrol car (never sent out) put away; where each pool car is. */
+  function settled(): { w: World; pool: number[]; before: { x: number; z: number; stored: boolean; visible: boolean }[] } {
+    const { w, traffic } = openWorldLobby(MOVERS, 1);
+    const state = { acc: 0 };
+    for (let n = 0; n < SETTLE_SECONDS * 60; n++) {
+      frame(w, state);
+      traffic.step(n * FRAME, FRAME);
+    }
+    const pool = Array.from({ length: MOVERS }, (_, at) => at + 1);
+    const before = pool.map((id) => {
+      const car = w.live()[id]!;
+      return { x: car.group.position.x, z: car.group.position.z, stored: car.stored, visible: car.group.visible };
+    });
+    expect(before.some((car) => !car.stored), "some pool car stands in a space").toBe(true);
+    expect(before.some((car) => car.stored), "some pool car is put away").toBe(true);
+    return { w, pool, before };
+  }
+
+  function expectUnmoved(w: World, pool: number[], before: { x: number; z: number; stored: boolean; visible: boolean }[], what: string): void {
+    for (const [at, id] of pool.entries()) {
+      const car = w.live()[id]!;
+      const was = before[at]!;
+      expect(hypot2(car.group.position.x - was.x, car.group.position.z - was.z), `${what}: car ${id} moved from (${was.x.toFixed(1)}, ${was.z.toFixed(1)})`).toBeLessThan(0.01);
+      expect(car.stored, `${what}: car ${id} stored`).toBe(was.stored);
+      expect(car.group.visible, `${what}: car ${id} shown`).toBe(was.visible);
+    }
+  }
+
+  // mutation: sed -i 's/    if (!car || !this.track || this.freeDrivers?.owns(id)) return;/    if (!car || !this.track) return;/' src/game/engine/engine-race-field.ts
+  it("when the lobby resets every car to its spawn and a pool car's id is asked back to its spawn, then no pool car is moved onto the spawn or woken", () => {
+    const { w, pool, before } = settled();
+    w.race.reset();
+    expectUnmoved(w, pool, before, "after the lobby's reset");
+    for (const id of pool) w.race.resetLobbyCar(id);
+    expectUnmoved(w, pool, before, "after each pool car was sent back to its spawn");
+  });
+
+  // mutation: sed -i 's/        if (!this.freeDrivers?.owns(i)) cars\[i\]!.stored = false;/        cars[i]!.stored = false;/' src/game/engine/engine-race.ts
+  it("when a slice runs outside the lobby's free branch (no session yet), then the pool cars traffic put away stay put away", () => {
+    const { w, pool, before } = settled();
+    w.race.free = false;
+    w.race.drive(FRAME);
+    for (const [at, id] of pool.entries()) if (before[at]!.stored) expect(w.live()[id]!.stored, `car ${id} put away`).toBe(true);
   });
 });
 
