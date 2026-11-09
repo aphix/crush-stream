@@ -242,8 +242,6 @@ describe("given a resident whose car stands at the kerb near a player and then d
     const id = carAt(field, traffic, spot);
     expect(field.doors[id], "its angle").toBe(0.8);
     expect(traffic.carPoseOf(RESIDENT + 1, pose), "someone with no car here").toBe(false);
-    expect(traffic.carStyleOf(RESIDENT), "the body of the car that stands there").toBe(field.cars[id]!.style.id);
-    expect(traffic.carStyleOf(RESIDENT + 1), "no car of his").toBeNull();
   });
 });
 

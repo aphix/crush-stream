@@ -172,12 +172,6 @@ export class OpenWorldTraffic {
     return true;
   }
 
-  /** The body of the car that stands for resident `resident` at his space (what his door and seat are built on), null when no car of his stands in view of the pool. */
-  carStyleOf(resident: number): CarStyleId | null {
-    const id = this.carIdOf(resident);
-    return id < 0 ? null : this.context.ports.cars()[id]!.style.id;
-  }
-
   /** The engine id of the pool car standing in resident `resident`'s space (a kerb car, else the mover parked for him), -1 when none does. */
   private carIdOf(resident: number): number {
     const spot = resident >= 0 && resident < RESIDENT_CAPACITY ? this.context.residentSpot[resident]! : -1;

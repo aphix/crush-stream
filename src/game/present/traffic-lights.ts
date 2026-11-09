@@ -35,6 +35,8 @@ const SIGN_CELL = { width: 244, height: 304 } as const;
 const SIGN_ATLAS = { width: 512, height: 512 } as const;
 const SIGN_INK = "#111111";
 const SIGN_PLATE = "#f4f4f2";
+/** A plate's back: bare galvanised sheet. */
+const SIGN_BACK_COLOUR = 0x8b8f93;
 const SIGN_BORDER_PX = 6;
 const SIGN_BORDER_INSET = 8;
 export const SPEED_LIMIT_MPH = 25;
@@ -96,6 +98,8 @@ export class TrafficLightArt {
   /** SPEED LIMIT plates (one per head) and NO TURN ON RED plates (one per head), on one atlas. */
   readonly speedSigns: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
   readonly noTurnSigns: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  /** The plates' plain backs: a grey quad facing the other way under each plate's matrix, so text never reads mirrored from behind. */
+  readonly signBacks: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
   private readonly signTexture: THREE.CanvasTexture;
   private readonly headList: Head[] = [];
   private readonly shown: Int16Array;
@@ -118,11 +122,13 @@ export class TrafficLightArt {
     paintRegulatorySigns(canvas.getContext("2d")!);
     this.signTexture = new THREE.CanvasTexture(canvas);
     this.signTexture.colorSpace = THREE.SRGBColorSpace;
-    const signMaterial = new THREE.MeshStandardMaterial({ map: this.signTexture, roughness: 0.55, side: THREE.DoubleSide });
+    const signMaterial = new THREE.MeshStandardMaterial({ map: this.signTexture, roughness: 0.55 });
     this.speedSigns = new THREE.InstancedMesh(plateGeometry(0), signMaterial, this.heads);
     this.noTurnSigns = new THREE.InstancedMesh(plateGeometry(1), signMaterial, this.heads);
+    const back = new THREE.PlaneGeometry(REG_SIGN.width, REG_SIGN.height).rotateY(Math.PI);
+    this.signBacks = new THREE.InstancedMesh(back, new THREE.MeshStandardMaterial({ color: SIGN_BACK_COLOUR, roughness: 0.8 }), this.heads * 2);
     this.place(network);
-    this.group.add(this.poles, this.headMesh, this.lamps, this.speedSigns, this.noTurnSigns);
+    this.group.add(this.poles, this.headMesh, this.lamps, this.speedSigns, this.noTurnSigns, this.signBacks);
   }
 
   /** Lamps for crowd time `seconds`. */
@@ -150,6 +156,9 @@ export class TrafficLightArt {
     this.signTexture.dispose();
     this.speedSigns.dispose();
     this.noTurnSigns.dispose();
+    this.signBacks.geometry.dispose();
+    this.signBacks.material.dispose();
+    this.signBacks.dispose();
   }
 
   private place(network: RoadNetwork): void {
@@ -181,9 +190,11 @@ export class TrafficLightArt {
       turn.setFromAxisAngle(up, plateTurn);
       const onFace = POLE_WIDTH / 2 + REG_SIGN.standoff;
       this.speedSigns.setMatrixAt(index, matrix.compose(position.set(poleX + faceX * onFace, REG_SIGN.speedY, poleZ + faceZ * onFace), turn, unit));
+      this.signBacks.setMatrixAt(index * 2, matrix);
       const curbX = poleX + rightX(heading) * REG_SIGN.noTurnOut;
       const curbZ = poleZ + rightZ(heading) * REG_SIGN.noTurnOut;
       this.noTurnSigns.setMatrixAt(index, matrix.compose(position.set(curbX + faceX * onFace, REG_SIGN.noTurnY, curbZ + faceZ * onFace), turn, unit));
+      this.signBacks.setMatrixAt(index * 2 + 1, matrix);
     }
   }
 
