@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { FLIGHT } from "./car-flight.ts";
@@ -83,6 +83,17 @@ function run(w: CrashWorld, seconds: number, hz = 60): void {
   for (let f = 0; f < seconds * hz; f++) tickWorld(w, 1 / hz);
 }
 
+/** The rows of the describe that calls this read poses, masses and crush, never a drawn skin: no car is skinned each frame (`updateSkin` writes meshes only). */
+function skipSkinWrites(): void {
+  const skin = DeformableCar.prototype.updateSkin;
+  beforeAll(() => {
+    DeformableCar.prototype.updateSkin = () => {};
+  });
+  afterAll(() => {
+    DeformableCar.prototype.updateSkin = skin;
+  });
+}
+
 /** `n` cars one above the other, bottom first: the bottom on the ground, the rest falling `GAP` onto the roof below. */
 function stack(n: number, hz = 60, rig: StackRig = WAGONS): { cars: DeformableCar[]; w: CrashWorld } {
   const cars: DeformableCar[] = [];
@@ -144,6 +155,8 @@ function assertStands(cars: readonly DeformableCar[]): void {
 }
 
 describe("given a stack of cars dropped one on the next on the flat pad, each roof yielding under the weight above it", () => {
+  skipSkinWrites();
+  // mutation: sed -i 's/const Y0 = new Float64Array(\[0.5, 15, 15, 8, 8\]);/const Y0 = new Float64Array([50, 15, 15, 8, 8]);/' src/game/deform/load-crush.ts  (a roof that never yields: no roof crushes to its band)
   it("when a stack of four settles, then each roof is crushed more than the one above it, the top car's roof not at all, the bottom roof 0.12 to 0.26 m, every car still stands on the roof under it, and the stack still stands so 5 s on", () => {
     const { cars, w } = stack(4);
     assertStands(cars);
@@ -151,12 +164,14 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
     assertStands(cars);
   });
 
+  // mutation: sed -i 's/const Y0 = new Float64Array(\[0.5, 15, 15, 8, 8\]);/const Y0 = new Float64Array([50, 15, 15, 8, 8]);/' src/game/deform/load-crush.ts  (a roof that never yields: no roof crushes to its band)
   it("when the stack has two, three and four cars, then the bottom roof is crushed more with each car added, so it takes the weight above it and not just the car on it", () => {
     const bottom = [2, 3, 4].map((n) => roofSink(stack(n).cars[0]!));
     expect(bottom[0]!, `one car on a roof crushed it ${bottom[0]!.toFixed(3)} m`).toBeGreaterThan(0.02);
     expect(bottom[1]! > bottom[0]! + 0.02 && bottom[2]! > bottom[1]! + 0.02, `bottom roof under 1, 2, 3 cars: ${bottom.map((b) => b.toFixed(3)).join(", ")} m`).toBeTruthy();
   });
 
+  // mutation: sed -i '/^      d.skinLoaded();$/d' src/game/vehicle/car-surfaces.ts  (the crush booked again each slice: a roof crushes more at a higher rate)
   it("when a stack of four settles while simulated at 60, 72, 90, 120, 144, 180, 200 and 240 Hz, then every roof is crushed the same amount at every rate", () => {
     const sinks = RATES.map((hz) => stack(4, hz).cars.map(roofSink));
     for (let i = 0; i < 3; i++) {
@@ -165,6 +180,7 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
     }
   });
 
+  // mutation: sed -i 's|const f = b\[o + 6\]! > dt ? dt / b\[o + 6\]! : 1;|const f = 1;|' src/game/vehicle/car-surfaces.ts  (a short slice takes all the weight borne, as an impulse)
   it("when a settled stack of four runs 3 s in frames of an 8.75 ms step and a 0.34 ms remainder, then the second car, which carries the two above it, stays still: the weight borne on it is a force, not a slice's impulse", () => {
     const { cars, w } = stack(4, 144);
     run(w, 1, 144);
@@ -176,6 +192,7 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
     expect(fastest, `the second car moves at up to ${(fastest * 1000).toFixed(1)} mm/s`).toBeLessThan(CARRIER_STILL_MPS);
   });
 
+  // mutation: sed -i 's/^    this.deform.simState(buf, write);$/    if (!write) this.deform.simState(buf, write);/' src/game/vehicle/car.ts  (a restored car keeps no crush)
   it("when a settled stack of four is restored from a clip keyframe into fresh cars, then the roofs show the crush they had live, carry on from it for 3 s, and the crushed cars are wrecks", () => {
     const { cars: live, w } = stack(4);
     expect(live.slice(0, 3).every((c) => c.crashed), "a load-crushed car is not a wreck (it would not ride the replay's and netplay's wreck sections)").toBeTruthy();
@@ -223,6 +240,8 @@ const MOMENTUM_HIGH = 30;
 const MOMENTUM_SHARE = 1e-3;
 
 describe("given two wagons in free fall, the upper one turned on the lower one's roof (8.6° off its axis) and falling a stack drop onto it", () => {
+  skipSkinWrites();
+  // mutation: sed -i 's/dv.x \* k;/dv.x * k * 0.5;/;s/dv.z \* k;/dv.z * k * 0.5;/' src/game/vehicle/car-surfaces.ts  (half of the borne weight's plan momentum is lost: the pair's momentum changes at the landing)
   it("when it lands and the pair falls on as one, then the pair's plan momentum, with the weight still waiting on a car, is unchanged at every frame", () => {
     const cars = [0, 1].map(() => makeCar(STYLE_CLASS.wagon));
     cars[0]!.spawnFacing(0, 0, 0.15, 0);
@@ -253,6 +272,8 @@ describe("given two wagons in free fall, the upper one turned on the lower one's
 });
 
 describe("given a car dropped onto one of its faces on the flat pad", () => {
+  skipSkinWrites();
+  // mutation: sed -i 's/const Y0 = new Float64Array(\[0.5, 15, 15, 8, 8\]);/const Y0 = new Float64Array([50, 15, 15, 8, 8]);/' src/game/deform/load-crush.ts  (a roof that never yields: no roof crushes to its band)
   it("when it is dropped upside-down from 0.5, 1 and 2 m, then the roof crushes at 0.5 m, crushes more from higher, and no further than its packed depth", () => {
     const sink = [0.5, 1, 2].map((h) => roofSink(drop("roof", h)));
     expect(sink[0]!, `0.5 m onto the roof crushed it ${sink[0]!.toFixed(3)} m`).toBeGreaterThan(0.1);
@@ -260,6 +281,7 @@ describe("given a car dropped onto one of its faces on the flat pad", () => {
     expect(sink[2]!, `the roof crushed ${sink[2]!.toFixed(3)} m past its packed depth ${faceMax(FACE_TOP)} m`).toBeLessThanOrEqual(faceMax(FACE_TOP) + 0.001);
   });
 
+  // mutation: sed -i 's/const MAX = new Float64Array(\[0.45, 0.55, 0.38, 0.3, 0.3\]);/const MAX = new Float64Array([0.45, 0.01, 0.38, 0.3, 0.3]);/' src/game/deform/load-crush.ts  (a nose packed at 1 cm: the struck nose crushes under 2 cm, the same from every height)
   it("when it is dropped from 1 m on its nose, tail, left flank, right flank or a corner, then the struck face crushes and the opposite face does not", () => {
     const nose = drop("nose", 1).deform.crush;
     expect(nose[FACE_NOSE]! > 0.02 && nose[FACE_TAIL] === 0, `nose drop: nose ${nose[FACE_NOSE]!.toFixed(3)} m, tail ${nose[FACE_TAIL]!.toFixed(3)} m`).toBeTruthy();
@@ -273,6 +295,7 @@ describe("given a car dropped onto one of its faces on the flat pad", () => {
     expect(corner[FACE_NOSE]! + corner[FACE_LEFT]! + corner[FACE_RIGHT]! > 0.02 && corner[FACE_TAIL] === 0, `corner drop (nose, left): ${Array.from(corner, (x) => x.toFixed(3)).join(" / ")} m`).toBeTruthy();
   });
 
+  // mutation: sed -i 's/const MAX = new Float64Array(\[0.45, 0.55, 0.38, 0.3, 0.3\]);/const MAX = new Float64Array([0.45, 0.01, 0.38, 0.3, 0.3]);/' src/game/deform/load-crush.ts  (a nose packed at 1 cm: the struck nose crushes under 2 cm, the same from every height)
   it("when it is dropped on its nose and on its left flank from 0.5, 1 and 2 m, then the struck face crushes more from each higher drop", () => {
     for (const kind of ["nose", "left"] as const) {
       const face = kind === "nose" ? FACE_NOSE : FACE_LEFT;
