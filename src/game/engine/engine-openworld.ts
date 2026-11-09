@@ -11,6 +11,7 @@ import type { SignSight } from "../present/openworld-signs.ts";
 import type { OpenWorldMap, Place } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { tickAt } from "../ai/civilians/civilian-clock.ts";
+import { fillClosedPlaces } from "../ai/civilians/society-hours.ts";
 import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.ts";
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
@@ -72,7 +73,7 @@ type TrafficHostPorts = TrafficPorts & {
 };
 
 /** Who opens the interiors' doors: the drawn crowd and the player's walker, null where there is none. */
-type DoorOpeners = { poses: CrowdPoses | null; walker: FootBody | null; others: CrowdPoses[] };
+type DoorOpeners = { poses: CrowdPoses | null; walker: FootBody | null; others: CrowdPoses[]; closed: Uint8Array | null };
 
 /** The streamed interiors of the map's places: `update` once a frame with the eye and the sight field, `dispose` when the course is left. */
 type InteriorArt = {
@@ -157,7 +158,9 @@ export class OpenWorldDirector {
   private readonly bustScratch: ChaseHud = { cops: 0, hold: 0, left: 0 };
   private lookAcc = 0;
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
-  private readonly openers: DoorOpeners = { poses: null, walker: null, others: [] };
+  private readonly openers: DoorOpeners = { poses: null, walker: null, others: [], closed: null };
+  /** The map's places shut now (a wreck, or outside their hours), refilled each frame from the crowd's state for the interiors. */
+  private closedPlaces: Uint8Array | null = null;
   private readonly walkerStrike = new WalkerStrike();
   /** The Auto camera: wanted (`setAuto`) across crowd rebuilds, made with each crowd. */
   private autoWanted = false;
@@ -292,6 +295,8 @@ export class OpenWorldDirector {
     this.ports.eye(this.ray);
     if (this.interiors !== null) {
       this.openers.poses = this.crowd?.poses ?? null;
+      if (this.crowd !== null && this.closedPlaces !== null) fillClosedPlaces(this.crowd.state, tickAt(this.crowd.crowdSeconds), this.closedPlaces);
+      this.openers.closed = this.crowd === null ? null : this.closedPlaces;
       this.openers.walker = this.ports.foot(this.foot) ? this.foot : null;
       this.interiors.update(this.ray.eyeX, this.ray.eyeZ, wallDt, this.sight, this.openers);
     }
@@ -393,6 +398,7 @@ export class OpenWorldDirector {
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
     this.startTraffic(map, client);
     this.doors = new OpenWorldCarDoors(crowd.state.capacity, crowd.state, () => this.traffic);
+    this.closedPlaces = new Uint8Array(crowd.state.index.placeCount);
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     this.medics = new OpenWorldMedics(this.ports.makeArt(MEDICS.count));
     this.openers.others = this.law === null ? [this.medics.poses] : [this.law.copPoses, this.medics.poses];

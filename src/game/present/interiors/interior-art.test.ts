@@ -9,7 +9,7 @@ import { vestibuleSolids, type InteriorSolid } from "../../world/openworld/inter
 import { FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS } from "../facades.ts";
 import { HIDE_GRACE, SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../openworld-sight.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
-import { DOOR_SWING_SECONDS, INTERIOR_DIM, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS } from "./interior-constants.ts";
+import { CLOSED_GLOW, DOOR_SWING_SECONDS, INTERIOR_DIM, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS } from "./interior-constants.ts";
 import { InteriorSet } from "./interior-art.ts";
 import type { DoorOpeners } from "./interior-doors.ts";
 
@@ -44,11 +44,14 @@ const SIDEWALK = 2.5;
 
 /** Openers whose crowd is `civilians` people, hidden until `standAtDoor`, and no walker. */
 type Civilians = DoorOpeners & { poses: CrowdPoses };
+/** The one place of the lone map is shut. */
+const SHUT = new Uint8Array([1]);
+const OPEN = new Uint8Array([0]);
 
 function openers(civilians = 1): Civilians {
   const poses = createCrowdPoses(civilians);
   poses.shown.fill(0);
-  return { poses, walker: null, others: [] };
+  return { poses, walker: null, others: [], closed: null };
 }
 
 /** Civilian `who` stands just out of a place's door. */
@@ -426,5 +429,55 @@ describe("given a coffee shop whose room is built and then released", () => {
     expect((mesh.material as THREE.MeshStandardMaterial).color.r, "the furniture's colour factor").toBe(INTERIOR_DIM);
     expect(INTERIOR_DIM, "less than all of the light").toBeLessThan(1);
     set.dispose();
+  });
+});
+
+describe("given a coffee shop that is shut (wrecked, or outside its hours)", () => {
+  /** The brightest colour channel the lamps and screens draw, over the vertices packed. */
+  function brightest(set: InteriorSet): number {
+    const mesh = set.group.getObjectByName("interior-lights") as THREE.Mesh;
+    const color = mesh.geometry.getAttribute("color").array;
+    let most = 0;
+    for (let at = 0; at < mesh.geometry.drawRange.count * 3; at++) most = Math.max(most, color[at]!);
+    return most;
+  }
+
+  // mutation: sed -i 's/this.locked\[door\] === 0 \&\& this.someoneAt(leaf, near, openers)/this.someoneAt(leaf, near, openers)/' src/game/present/interiors/interior-doors.ts
+  it("when a civilian stands at its street door, then the door stays shut; once it is open again the door swings", () => {
+    const set = new InteriorSet(lone);
+    const who = openers();
+    who.closed = SHUT;
+    standAtDoor(who);
+    const view = scene(set, STREET_EYE, who);
+    view.frames(SWING_FRAMES + 2);
+    expect(set.openDoors(), "doors open while it is shut").toBe(0);
+    who.closed = OPEN;
+    view.frames(SWING_FRAMES + 2);
+    expect(set.openDoors(), "doors open once it is open again").toBe(1);
+    set.dispose();
+  });
+
+  // mutation: sed -i 's/export const CLOSED_GLOW = 0.08;/export const CLOSED_GLOW = 1;/' src/game/present/interiors/interior-constants.ts
+  it("when its room is built, then its lamps and screens glow a faint share of their light while it is shut, whether it shut after the room was built or before, and as they were when it opens", () => {
+    const lit = new InteriorSet(lone);
+    settle(lit, coffee.doorX, coffee.doorZ, openers());
+    const bright = brightest(lit);
+    expect(bright, "lit").toBeGreaterThan(0.1);
+    const who = openers();
+    who.closed = SHUT;
+    settle(lit, coffee.doorX, coffee.doorZ, who, 3);
+    expect(brightest(lit), "shut after it was built").toBeCloseTo(bright * CLOSED_GLOW, 5);
+    expect(brightest(lit), "shut after it was built: well under what it was").toBeLessThan(bright / 2);
+    who.closed = OPEN;
+    settle(lit, coffee.doorX, coffee.doorZ, who, 3);
+    expect(brightest(lit), "open again").toBeCloseTo(bright, 5);
+    const shut = new InteriorSet(lone);
+    const closedFirst = openers();
+    closedFirst.closed = SHUT;
+    settle(shut, coffee.doorX, coffee.doorZ, closedFirst);
+    expect(brightest(shut), "shut before it was built").toBeCloseTo(bright * CLOSED_GLOW, 5);
+    expect(brightest(shut), "shut before it was built: well under what it was").toBeLessThan(bright / 2);
+    lit.dispose();
+    shut.dispose();
   });
 });

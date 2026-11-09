@@ -87,6 +87,16 @@ export class PackedMesh {
     this.send(start, moved);
   }
 
+  /** Scale a slot's colours by `ratio` in place (a room's lamps and screens dimmed, or lit again) and send them. */
+  scaleColor(slot: number, ratio: number): void {
+    if (slot === NO_SLOT) return;
+    const start = this.slotStart[slot]! * STREAM_FLOATS;
+    const end = start + this.slotCount[slot]! * STREAM_FLOATS;
+    const color = this.color.array as Float32Array;
+    for (let at = start; at < end; at++) color[at] = color[at]! * ratio;
+    uploadRange(this.color, start, end - start);
+  }
+
   dispose(): void {
     this.mesh.geometry.dispose();
     this.mesh.removeFromParent();

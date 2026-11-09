@@ -28,5 +28,7 @@ export const PACK_START_VERTICES = { shell: 8192, detail: 32768, glow: 2048, gla
 export const OPEN_FADE_SECONDS = 0.5;
 /** A room's solids are drawn this share of the light they are given: its walls and ceiling are lit by the open sky like a street's, and a lit room read through a window would wash out to white. */
 export const INTERIOR_DIM = 0.6;
+/** A shut shop's lamps and screens glow this share of their light: off but for a faint standby. */
+export const CLOSED_GLOW = 0.08;
 /** How much of the light a window's glass lets through (opacity of the pane drawn). */
 export const GLASS_OPACITY = 0.22;
