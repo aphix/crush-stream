@@ -4,6 +4,7 @@ import { BUST, CRAWL } from "../constants.ts";
 import type { AiCar } from "../derby-ai.ts";
 import type { Obstacles } from "../obstacles.ts";
 import { CAR_ARRIVE_DISTANCE, CAR_CHASE_GIVE_UP_SECONDS, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS, CAR_STOP_GAP, IMPOUND_SECONDS, MAX_PATROL_CARS, YIELD_DISTANCE } from "./crime-constants.ts";
+import type { LineOfSight } from "./offence-source.ts";
 import { PursuitDriver } from "./pursuit-driver.ts";
 
 /** A car's driver: the engine asks it each physics step and applies what it writes. */
@@ -93,12 +94,12 @@ export class PatrolCars {
     }
   }
 
-  /** Whether a leased patrol car on the road stands within `range` m of (x, z). */
-  within(x: number, z: number, range: number): boolean {
+  /** Whether a leased patrol car on the road within `range` m of (x, z) sees it (`lineOfSight` null: every line is clear). */
+  sees(x: number, z: number, range: number, lineOfSight: LineOfSight | null): boolean {
     for (let slot = 0; slot < MAX_PATROL_CARS; slot++) {
       if (this.mode[slot] === PATROL_MODE.free) continue;
       const car = this.ports.snap(this.handle[slot]!);
-      if (hypot2(car.x - x, car.z - z) <= range) return true;
+      if (hypot2(car.x - x, car.z - z) <= range && (lineOfSight === null || lineOfSight(car.x, car.z, x, z))) return true;
     }
     return false;
   }

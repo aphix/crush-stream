@@ -4,7 +4,8 @@ import { takeTierWork } from "../kernel/tier-work.ts";
 import { COUNT, countPart, lapPart, PART } from "../kernel/frame-parts.ts";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
-import { hidingSight, type Occluder } from "../present/spectate-cam.ts";
+import { hidingSight, sightLine, type Occluder } from "../present/spectate-cam.ts";
+import { EYE_HEIGHT } from "../ai/openworld-crime/crime-constants.ts";
 import { PISTON_ORBIT_RATE, PistonBank } from "../present/engine-pistons.ts";
 import { DoorRam } from "../present/engine-doors.ts";
 import { sliceSpeed } from "../contact/sat.ts";
@@ -464,6 +465,12 @@ export class CrashEngine extends EngineGarage {
         sirens: (id, on) => {
           const car = this.cars[id];
           if (car && car.sirens !== on) car.setSirens(on);
+        },
+        lineOfSight: (ax, az, bx, bz) => {
+          const sight = this.race.courseSight();
+          if (sight === null) return true;
+          const ground = activeGround();
+          return sightLine(hidingSight(sight), ax, ground.heightAt(ax, az) + EYE_HEIGHT, az, bx, ground.heightAt(bx, bz) + EYE_HEIGHT, bz) >= 0;
         },
       },
       traffic: {

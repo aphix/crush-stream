@@ -6,12 +6,13 @@ import { tickAt } from "../civilians/civilian-clock.ts";
 import { NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { PathFinder } from "../civilians/walk-path.ts";
 import { CASE_KIND, CASE_PHASE, CaseTable, SUBJECT_MODE } from "./case-table.ts";
-import { BUST_REACH, CAR_COP, COP_SIGHT, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIGHT_WARN_REACH, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, RESIST_CHANCE, SEARCH_SECONDS, SUBJECTS_PER_CASE, TAKEDOWN_LIFT, TAKEDOWN_SPEED, TAKEDOWN_TUMBLE, WARN_SECONDS } from "./crime-constants.ts";
+import { BUST_REACH, CAR_COP, COP_SIGHT, JAYWALK_GIVE_UP_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIGHT_WARN_REACH, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, RESIST_CHANCE, SEARCH_SECONDS, SUBJECTS_PER_CASE, TAKEDOWN_LIFT, TAKEDOWN_SPEED, TAKEDOWN_TUMBLE, WARN_SECONDS } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
+import { CrossingWatch } from "./crossing-watch.ts";
 import { Flight } from "./flight.ts";
 import { COP_MODE, FootCops } from "./foot-cops.ts";
 import { FootWalkers } from "./foot-walkers.ts";
-import type { LawPorts, OffenceSource, Spot } from "./offence-source.ts";
+import type { CrossingSignals, LawPorts, LawSenses, LineOfSight, OffenceSource, Spot, Walk } from "./offence-source.ts";
 
 /** What the patrol cars need to hear of the cases. */
 interface LawHooks {
@@ -21,14 +22,14 @@ interface LawHooks {
 
 /**
  * The law on foot. Cops patrol the sidewalks; when the society holds a crime or a fight against someone (`OffenceSource`) the nearest free cops are called, run to the suspect (radio keeps them on
- * the suspect's trail), and a suspect who sees a cop runs for a hiding place; a cop who reaches one lays hands on them and, the cuffs on, the host's bust event is raised. Fighters get a warning
- * and a draw each whether they keep attacking: the ones who do are taken down. It advances on a fixed grid of crowd time, a pure function of (seed, society rows, clock), so peers agree.
+ * the suspect's trail), and a suspect who sees a cop (a clear sight line, not through a building) runs for a hiding place; a cop who reaches one lays hands on them and, the cuffs on, the host's bust event is raised. Fighters get a warning
+ * and a draw each whether they keep attacking: the ones who do are taken down. A free cop who sees a walker cross against the signal stops and takes them off the street. Nobody a car has run down is arrested. It advances on a fixed grid of crowd time, a pure function of (seed, society rows, clock), so peers agree.
  */
 export class FootLaw {
   readonly walkers: FootWalkers;
   readonly cops: FootCops;
   readonly table: CaseTable;
-  readonly stats = { cases: 0, busts: 0, takedowns: 0, lost: 0 };
+  readonly stats = { cases: 0, busts: 0, takedowns: 0, lost: 0, jaywalkers: 0 };
   seconds = 0;
   /** Whether this peer raises the host's events. */
   authority = false;
@@ -39,12 +40,16 @@ export class FootLaw {
   private readonly seed: number;
   private readonly flight: Flight;
   private readonly graph: WalkGraph;
+  private readonly lineOfSight: LineOfSight | null;
+  private readonly signals: CrossingSignals | null;
+  private readonly crossings: CrossingWatch;
+  private readonly walk: Walk = { x: 0, z: 0, dirX: 0, dirZ: 1 };
   private readonly spot: Spot = { x: 0, z: 0 };
   private readonly partnerSpot: Spot = { x: 0, z: 0 };
   private strikes: FigureStrike[] = [];
   private nearestGap = Infinity;
 
-  constructor(map: OpenWorldMap, source: OffenceSource, ports: LawPorts, hooks: LawHooks, seed: number) {
+  constructor(map: OpenWorldMap, source: OffenceSource, ports: LawPorts, hooks: LawHooks, seed: number, senses: LawSenses) {
     const finder = new PathFinder(map.graph);
     this.walkers = new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS);
     this.cops = new FootCops(this.walkers, map.graph, finder, seed);
@@ -55,6 +60,9 @@ export class FootLaw {
     this.ports = ports;
     this.hooks = hooks;
     this.seed = seed;
+    this.lineOfSight = senses.lineOfSight;
+    this.signals = senses.signals;
+    this.crossings = new CrossingWatch(map.graph);
   }
 
   /** The foot walker of subject slot `slot`. */
@@ -62,10 +70,25 @@ export class FootLaw {
     return FOOT_COP_COUNT + slot;
   }
 
-  /** Whether a foot cop out on the street stands within `range` m of (x, z). */
-  copWithin(x: number, z: number, range: number): boolean {
+  /** Whether a foot cop out on the street within `range` m of (x, z) sees it. */
+  copSees(x: number, z: number, range: number): boolean {
     for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
-      if (this.cops.mode[cop] !== COP_MODE.off && this.cops.gapTo(cop, x, z) <= range) return true;
+      if (this.cops.mode[cop] !== COP_MODE.off && this.cops.gapTo(cop, x, z) <= range && this.sees(cop, x, z)) return true;
+    }
+    return false;
+  }
+
+  /** Whether nothing solid stands between cop `cop`'s eyes and a person at (x, z). */
+  private sees(cop: number, x: number, z: number): boolean {
+    return this.lineOfSight === null || this.lineOfSight(this.walkers.x[cop]!, this.walkers.z[cop]!, x, z);
+  }
+
+  /** Whether a cop of case `caseIndex` within `COP_SIGHT` m of (x, z) sees it. */
+  private caseCopSees(caseIndex: number, x: number, z: number): boolean {
+    for (let index = 0; index < COPS_PER_CASE; index++) {
+      const cop = this.table.copAt(caseIndex, index);
+      if (cop < 0 || this.cops.mode[cop] === COP_MODE.off) continue;
+      if (this.cops.gapTo(cop, x, z) <= COP_SIGHT && this.sees(cop, x, z)) return true;
     }
     return false;
   }
@@ -118,6 +141,7 @@ export class FootLaw {
       const brawling = source.fightTick(resident) !== NEVER_TICK && source.fightPartner(resident) >= 0;
       if (brawling ? this.openFight(resident, spell) : this.openCrime(resident, spell)) table.handledSpell[resident] = spell;
     }
+    if (this.signals !== null) this.watchCrossings(this.signals);
     for (let caseIndex = 0; caseIndex < table.phase.length; caseIndex++) {
       if (table.phase[caseIndex] !== CASE_PHASE.free) this.callCops(caseIndex);
     }
@@ -166,7 +190,43 @@ export class FootLaw {
   }
 
   /** The case's first subject's spot is where its foot cops are called to. */
+  /** Every walker out on a crossing against the signal whom a free cop sees: a jaywalk case with that cop, once per walk. */
+  private watchCrossings(signals: CrossingSignals): void {
+    const { source, table, walk, crossings } = this;
+    for (let resident = 0; resident < source.residentCount; resident++) {
+      if (table.subjectOf[resident] !== -1 || source.knocked(resident) || !source.onStreet(resident, walk)) continue;
+      const crossing = crossings.crossingOf(walk);
+      if (crossing < 0 || !signals.againstSignal(walk.x, walk.z, crossings.dirX[crossing]!, crossings.dirZ[crossing]!, this.seconds)) continue;
+      const walkBegan = source.legDepartSeconds(resident);
+      if (table.jaywalkWalk[resident] === walkBegan) continue;
+      const cop = this.freeCopSeeing(walk.x, walk.z);
+      const caseIndex = table.freeCase();
+      if (cop < 0 || caseIndex < 0) continue;
+      table.jaywalkWalk[resident] = walkBegan;
+      this.startCase(caseIndex, CASE_KIND.jaywalk, tickAt(this.seconds));
+      this.takeSubject(table.slotOf(caseIndex, 0), resident, walk);
+      this.cops.assign(cop, caseIndex);
+      table.setCop(caseIndex, 0, cop);
+    }
+  }
+
+  /** The patrolling cop nearest (x, z) within `COP_SIGHT` m who sees it, the lower number on a tie; -1 with none. */
+  private freeCopSeeing(x: number, z: number): number {
+    let best = -1;
+    let bestGap = COP_SIGHT;
+    for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
+      if (this.cops.mode[cop] !== COP_MODE.patrol || this.cops.caseOf[cop] !== -1) continue;
+      const gap = this.cops.gapTo(cop, x, z);
+      if (gap > bestGap || (gap === bestGap && best >= 0) || !this.sees(cop, x, z)) continue;
+      bestGap = gap;
+      best = cop;
+    }
+    return best;
+  }
+
+  /** A jaywalk case keeps the one cop who saw it; the others call the nearest free ones. */
   private callCops(caseIndex: number): void {
+    if (this.table.kind[caseIndex] === CASE_KIND.jaywalk) return;
     const focus = this.table.slotOf(caseIndex, 0);
     for (let index = 0; index < FOOT_COPS_PER_CASE; index++) {
       if (this.table.copAt(caseIndex, index) >= 0) continue;
@@ -179,6 +239,7 @@ export class FootLaw {
 
   private stepCase(caseIndex: number): void {
     const { table } = this;
+    this.spareKnocked(caseIndex);
     if (this.offenceCleared(caseIndex)) {
       this.closeCase(caseIndex);
       return;
@@ -194,6 +255,7 @@ export class FootLaw {
   /** The society holds nothing against any suspect of the case any more (the host's bust was heard, or the spell passed). A fight that ends before the law is done with it goes on as a pursuit of the fighters still wanted. */
   private offenceCleared(caseIndex: number): boolean {
     const { table, source } = this;
+    if (table.kind[caseIndex] === CASE_KIND.jaywalk) return !table.active(table.slotOf(caseIndex, 0));
     const tick = tickAt(this.seconds);
     let brawling = false;
     let wanted = false;
@@ -205,6 +267,15 @@ export class FootLaw {
     }
     if (table.kind[caseIndex] === CASE_KIND.fight && !brawling && wanted) table.kind[caseIndex] = CASE_KIND.crime;
     return !wanted && !brawling;
+  }
+
+  /** A suspect a car ran down is in hospital: they are let go (the society has them), never arrested for it. */
+  private spareKnocked(caseIndex: number): void {
+    const { table } = this;
+    for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
+      const slot = table.slotOf(caseIndex, index);
+      if (table.active(slot) && this.source.knocked(table.resident[slot]!)) this.letGo(slot);
+    }
   }
 
   private refreshSpots(caseIndex: number): void {
@@ -261,22 +332,27 @@ export class FootLaw {
         this.stepSeizing(caseIndex, slot);
         break;
       case SUBJECT_MODE.gripped:
-        if (this.seconds - this.table.since[slot]! >= GRIP_SECONDS) this.completeBust(slot);
+        if (this.seconds - this.table.since[slot]! >= GRIP_SECONDS) this.completeBust(caseIndex, slot);
         break;
       default:
     }
   }
 
-  /** A suspect going about their day: a cop at arm's length takes them, a cop in sight sends a criminal running. */
+  /** A suspect going about their day: a cop at arm's length takes them, a cop who has them in sight sends a criminal running. */
   private stepAtLarge(caseIndex: number, slot: number): void {
     const { table } = this;
-    if (table.kind[caseIndex] !== CASE_KIND.crime) return;
+    const kind = table.kind[caseIndex]!;
+    if (kind === CASE_KIND.fight) return;
+    if (kind === CASE_KIND.jaywalk && (this.seconds - table.since[slot]! > JAYWALK_GIVE_UP_SECONDS || !this.source.onStreet(table.resident[slot]!, this.walk))) {
+      this.letGo(slot);
+      return;
+    }
     const cop = this.nearestCop(caseIndex, table.spotX[slot]!, table.spotZ[slot]!);
     if (cop < 0) return;
     if (this.nearestGap <= BUST_REACH) {
       this.placeAtSpot(slot);
       this.startGrip(slot, cop);
-    } else if (this.nearestGap <= COP_SIGHT) this.startFlee(caseIndex, slot);
+    } else if (kind === CASE_KIND.crime && this.caseCopSees(caseIndex, table.spotX[slot]!, table.spotZ[slot]!)) this.startFlee(caseIndex, slot);
   }
 
   private startFlee(caseIndex: number, slot: number): void {
@@ -435,11 +511,20 @@ export class FootLaw {
   }
 
   /** The cuffs are on: the host raises the bust, every peer lets the suspect go from the street. */
-  private completeBust(slot: number): void {
+  private completeBust(caseIndex: number, slot: number): void {
     const resident = this.table.resident[slot]!;
-    this.stats.busts++;
-    if (this.authority) this.ports.bust(resident, this.seconds);
+    const jaywalk = this.table.kind[caseIndex] === CASE_KIND.jaywalk;
+    if (jaywalk) this.stats.jaywalkers++;
+    else this.stats.busts++;
+    if (this.authority && jaywalk) this.ports.jaywalked(resident, this.seconds);
+    else if (this.authority) this.ports.bust(resident, this.seconds);
     this.table.hold(resident, this.seconds);
+    this.table.free(slot);
+  }
+
+  /** The suspect walks on: no arrest, nobody kept off the street. */
+  private letGo(slot: number): void {
+    this.stats.lost++;
     this.table.free(slot);
   }
 

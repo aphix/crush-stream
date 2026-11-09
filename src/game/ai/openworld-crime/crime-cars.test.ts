@@ -30,7 +30,7 @@ describe("a red-light runner a cop sees is pursued and arrested", () => {
   it("does not chase a car no cop saw", () => {
     const run = harness([0, 0, 0], { withCars: true });
     const runner = run.street!.addCar(110, 0, EAST, 12, RUNNER_RESIDENT, true);
-    expect(run.scene.foot.copWithin(110, 0, RED_LIGHT_SIGHT), "no cop within sight of the light").toBe(false);
+    expect(run.scene.foot.copSees(110, 0, RED_LIGHT_SIGHT), "no cop within sight of the light").toBe(false);
     expect(run.scene.reportRedLight(runner, 110, 0)).toBe(false);
     expect(run.street!.leases, "no car left the pool").toBe(0);
   });

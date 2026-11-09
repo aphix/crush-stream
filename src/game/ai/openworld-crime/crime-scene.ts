@@ -5,7 +5,7 @@ import type { Obstacles } from "../obstacles.ts";
 import { fillCopPoses, newCopPoses, overlaySuspects } from "./crime-poses.ts";
 import { CRIME_HZ, CRIME_STEP_SECONDS, GRID_EPSILON, HEAT_CARS, HEAT_KNOCKS, HEAT_SECONDS, MAX_STEPS_PER_CALL, RED_LIGHT_SIGHT } from "./crime-constants.ts";
 import { FootLaw } from "./foot-law.ts";
-import type { LawPorts, OffenceSource } from "./offence-source.ts";
+import type { CrossingSignals, LawPorts, LineOfSight, OffenceSource } from "./offence-source.ts";
 import { PatrolCars, type PatrolCarPorts } from "./patrol-cars.ts";
 
 /** What the law needs of the engine. */
@@ -18,10 +18,14 @@ export interface CrimePorts extends LawPorts {
   obstacles: Obstacles | null;
   /** Seconds a human is held slow beside a patrol car before the bust (Survival's hold). */
   playerBustSeconds: number;
+  /** The sight lines between people past the course's buildings; null: open ground, every line clear. */
+  lineOfSight: LineOfSight | null;
+  /** The signals the crossings obey; null: no signals, nobody is stopped for jaywalking. */
+  signals: CrossingSignals | null;
 }
 
 /**
- * The open world's police: foot cops and patrol cars answering the crimes and fights the society holds against its residents, and the red lights run. `step` once per sim step on the host and solo player, once
+ * The open world's police: foot cops and patrol cars answering the crimes and fights the society holds against its residents, the red lights cars run and the walkers who cross against them. `step` once per sim step on the host and solo player, once
  * a frame on a client (which raises no events); then `copPoses` and the overlay on the crowd's poses are ready to draw.
  */
 export class CrimeScene {
@@ -36,7 +40,7 @@ export class CrimeScene {
 
   constructor(map: OpenWorldMap, source: OffenceSource, ports: CrimePorts, seed: number) {
     this.ports = ports;
-    this.law = new FootLaw(map, source, ports, { opened: (caseIndex, x, z) => this.patrol?.dispatchToScene(caseIndex, x, z, this.law.seconds), closed: (caseIndex) => this.patrol?.finishCase(caseIndex, this.law.seconds) }, seed);
+    this.law = new FootLaw(map, source, ports, { opened: (caseIndex, x, z) => this.patrol?.dispatchToScene(caseIndex, x, z, this.law.seconds), closed: (caseIndex) => this.patrol?.finishCase(caseIndex, this.law.seconds) }, seed, { lineOfSight: ports.lineOfSight, signals: ports.signals });
     this.patrol = ports.cars === null ? null : new PatrolCars(ports.cars, { arrived: (caseIndex, x, z) => this.law.carCopArrived(caseIndex, x, z), busted: (resident, carIndex, seconds) => this.bustDriver(resident, carIndex, seconds) }, ports.obstacles, ports.playerBustSeconds);
   }
 
@@ -68,10 +72,10 @@ export class CrimeScene {
     fillCopPoses(this.law, this.copPoses);
   }
 
-  /** A car ran a red light at (x, z). A cop who saw it (one in sight, on foot or in a car) sends a patrol car after it; true when one was sent. */
+  /** A car ran a red light at (x, z). A cop who saw it (in range and in sight past the buildings, on foot or in a car) sends a patrol car after it; true when one was sent. */
   reportRedLight(carIndex: number, x: number, z: number): boolean {
     if (this.patrol === null) return false;
-    if (!this.law.copWithin(x, z, RED_LIGHT_SIGHT) && !this.patrol.within(x, z, RED_LIGHT_SIGHT)) return false;
+    if (!this.law.copSees(x, z, RED_LIGHT_SIGHT) && !this.patrol.sees(x, z, RED_LIGHT_SIGHT, this.ports.lineOfSight)) return false;
     return this.patrol.chase(carIndex, x, z, this.law.seconds);
   }
 
