@@ -16,6 +16,8 @@ export type TrafficApi = {
   spawnDrivenCar(resident: number, fromSpot: number, toSpot: number, options?: { urgent?: boolean }): LeasedCar | null;
   despawn(handle: LeasedCar): void;
   drivenCarAt(carIndex: number): LeasedCar | null;
+  /** Re-plans a leased car's trip along the streets from where it is to space `toSpot`; false (trip kept) when there is no way or the car is off the street. */
+  redirect(handle: LeasedCar, toSpot: number): boolean;
   residentOf(carIndex: number): number;
 };
 
@@ -44,6 +46,11 @@ export class TrafficPatrolPorts {
 
   arrived(handle: number): boolean {
     return this.leased[handle]!.arrived;
+  }
+
+  redirect(handle: number, toX: number, toZ: number): boolean {
+    const to = this.traffic.nearestSpot(toX, toZ);
+    return to >= 0 && this.traffic.redirect(this.leased[handle]!, to);
   }
 
   snap(handle: number): AiCar {

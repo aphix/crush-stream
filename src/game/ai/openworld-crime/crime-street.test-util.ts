@@ -24,6 +24,7 @@ export class FakeStreet {
   readonly tripX: number[] = [];
   readonly tripZ: number[] = [];
   readonly tripDone: boolean[] = [];
+  readonly redirects: { handle: number; x: number; z: number }[] = [];
   /** Where the next leased car appears. */
   leaseAt = { x: 0, z: 0, yaw: 0 };
   leases = 0;
@@ -57,6 +58,15 @@ export class FakeStreet {
 
   arrived(handle: number): boolean {
     return this.tripDone[handle]!;
+  }
+
+  /** Re-aims the leased car's trip, as the traffic does along its streets; every call is kept for a row to read. */
+  redirect(handle: number, toX: number, toZ: number): boolean {
+    this.redirects.push({ handle, x: toX, z: toZ });
+    this.tripX[handle] = toX;
+    this.tripZ[handle] = toZ - KERB_SPACE_OFFSET;
+    this.tripDone[handle] = false;
+    return true;
   }
 
   snap(handle: number): AiCar {
