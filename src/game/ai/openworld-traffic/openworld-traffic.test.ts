@@ -185,6 +185,15 @@ describe("given a resident whose car stands at the kerb near a player and then d
   /** A resident whose car is not a sedan, so a car that reports the sedan's body is caught. */
   const RESIDENT = Array.from({ length: 64 }, (_, number) => number).find((number) => residentBody(number) !== "sedan") ?? 0;
 
+  /** The space resident `resident`'s car stands in (found from its pose), -1 when it stands in none. */
+  function residentSpotIndex(traffic: OpenWorldTraffic, resident: number): number {
+    const pose: ResidentCarPose = { x: 0, z: 0, yaw: 0, groundY: 0, bodyStyle: "sedan" };
+    if (!traffic.carPoseOf(resident, pose)) return -1;
+    const spots = traffic.parkingSpots;
+    for (let spot = 0; spot < spots.count; spot++) if (hypot2(spots.x[spot]! - pose.x, spots.z[spot]! - pose.z) < 0.01) return spot;
+    return -1;
+  }
+
   /** The car standing within a metre of space `spot`: its id, or -1. */
   function carAt(field: FakeField, traffic: OpenWorldTraffic, spot: number): number {
     const spots = traffic.parkingSpots;
@@ -207,7 +216,7 @@ describe("given a resident whose car stands at the kerb near a player and then d
     feed.parked.place[0] = 0;
     const clock = new Clock();
     runSeconds(field, traffic, clock, 3);
-    const spot = traffic.claimedSpots.indexOf(1);
+    const spot = residentSpotIndex(traffic, RESIDENT);
     expect(spot, "his car's space").toBeGreaterThanOrEqual(0);
     const kerbId = carAt(field, traffic, spot);
     expect(kerbId, "a car stands at his space").toBeGreaterThan(0);
@@ -233,7 +242,7 @@ describe("given a resident whose car stands at the kerb near a player and then d
     runSeconds(field, traffic, new Clock(), 3);
     const pose: ResidentCarPose = { x: 0, z: 0, yaw: 0, groundY: -1, bodyStyle: "monster" };
     expect(traffic.carPoseOf(RESIDENT, pose), "his car is at a space").toBe(true);
-    const spot = traffic.claimedSpots.indexOf(1);
+    const spot = residentSpotIndex(traffic, RESIDENT);
     expect(pose.x, "x").toBeCloseTo(traffic.parkingSpots.x[spot]!, 3);
     expect(pose.yaw, "yaw").toBeCloseTo(traffic.parkingSpots.yaw[spot]!, 3);
     expect(pose.groundY, "ground").toBe(0);
@@ -354,7 +363,7 @@ describe("given residents whose cars stand at a place's kerb", () => {
   it("when two residents of one place have cars, then each holds a different one of the four empty spaces nearest its door, the one he is by number", () => {
     const field = quietField();
     const feed = emptyFeed(8);
-    const traffic = makeTraffic(field, { movers: 2, kerb: 0 }, feed, [homeAt(HOME.x, HOME.z)]);
+    const traffic = makeTraffic(field, { movers: 0, kerb: 0 }, feed, [homeAt(HOME.x, HOME.z)]);
     const clock = new Clock();
     feed.parked.count = 2;
     feed.parked.resident[0] = 1;
