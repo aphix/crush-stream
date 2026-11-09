@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { TRACK_ID } from "../world/constants.ts";
-import { placeCourse } from "../world/placements.ts";
+import { placeCourse, type Placed } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
@@ -33,10 +33,16 @@ function recordingDocument(t: { onTestFinished(fn: () => void): void }) {
   return { clouds: () => canvases.filter((c) => c.width === CLOUD_CANVAS.w && c.height === CLOUD_CANVAS.h).length };
 }
 
+type Course = { track: Track; placed: Placed[]; drawn: Placed[] };
+let mall: Course | undefined;
+
+/** A fresh art of the Mall; its Track and props are built once for the file (an art only reads them). */
 const mallArt = (): TrackArt => {
-  const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
-  const course = placeCourse(track);
-  return new TrackArt(track, course.placed, { look() {} }, course.drawn);
+  if (!mall) {
+    const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
+    mall = { track, ...placeCourse(track) };
+  }
+  return new TrackArt(mall.track, mall.placed, { look() {} }, mall.drawn);
 };
 const cloudMeshes = (art: TrackArt): THREE.Object3D[] => art.group.children.filter((o) => o.name === "backdrop:mushroom-cloud");
 
