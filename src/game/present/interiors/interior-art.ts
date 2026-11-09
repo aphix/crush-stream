@@ -4,7 +4,7 @@ import { SHOP_GROUND_STOREY, type InteriorPlan } from "../../world/openworld/int
 import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, planKey, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { drawnHalf } from "../../world/openworld/openworld-facade-solids.ts";
 import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
-import { FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, setOpenFacades } from "../facades.ts";
+import { FACADE_DARK_MAX, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, setDarkFacades, setOpenFacades } from "../facades.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
 import { CLOSED_GLOW, DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_DIM, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
@@ -107,6 +107,9 @@ export class InteriorSet {
   /** The nearest businesses in view and the nearest built buildings the facade lists (entry indices, nearest first), filled each frame. */
   private readonly shopfrontAt = new Int32Array(SHOPFRONT_ROOMS);
   private readonly listedAt = new Int32Array(FACADE_OPEN_MAX);
+  /** The nearest shut businesses (entry indices, nearest first) and their positions, as the facade's dark list takes them. */
+  private readonly darkAt = new Int32Array(FACADE_DARK_MAX);
+  private readonly darkPositions = new Float32Array(2 * FACADE_DARK_MAX);
   /** Per entry, in arrays and not in the entries (a double stored in an object may be a new box on every store): its door's distance from the eye this frame, and how long (s) its envelope and its furnishing have been past their far radius. */
   private readonly distance: Float64Array;
   private readonly shellAway: Float64Array;
@@ -175,6 +178,7 @@ export class InteriorSet {
       }
     }
     this.showBuiltThrough();
+    this.showShutDark();
     if (solidsChanged) this.solidsListener?.(this.heldSolids());
   }
 
@@ -245,6 +249,18 @@ export class InteriorSet {
       if (leaf.face === DOOR_FACE.street && hypot2(walker.x - leaf.x, walker.z - leaf.z) <= VESTIBULE_REACH) return SOLIDS.vestibule;
     }
     return SOLIDS.none;
+  }
+
+  /** The nearest shut businesses are listed for the facade: their ground band's windows do not light at dusk. */
+  private showShutDark(): void {
+    let count = 0;
+    for (let at = 0; at < this.entries.length; at++) if (this.entries[at]!.business && this.entries[at]!.locked) count = keepNearest(this.darkAt, count, at, this.distance);
+    for (let slot = 0; slot < count; slot++) {
+      const { place } = this.entries[this.darkAt[slot]!]!;
+      this.darkPositions[2 * slot] = place.x;
+      this.darkPositions[2 * slot + 1] = place.z;
+    }
+    setDarkFacades(this.darkPositions, count);
   }
 
   /** A shut shop (a wreck, or outside its hours) has its street doors locked and its lamps and screens dimmed; open again, they are as they were. */
@@ -353,6 +369,7 @@ export class InteriorSet {
     if (this.entries.some((entry) => entry.solids !== SOLIDS.none)) this.solidsListener?.([]);
     for (const packed of [this.shells, this.details, this.glows, this.glass]) packed.dispose();
     setOpenFacades(this.builtAt, 0);
+    setDarkFacades(this.darkPositions, 0);
     this.doors.dispose();
     this.solidMaterial.dispose();
     this.glowMaterial.dispose();

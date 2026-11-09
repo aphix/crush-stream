@@ -15,7 +15,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
-import { FACADE, FACADE_GLOW, FACADE_LAYERS, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, facadeOpenLoop, setOpenFacades, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, SLAB_STYLE } from "./facades.ts";
+import { FACADE, FACADE_GLOW, FACADE_LAYERS, FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, facadeOpenLoop, setDarkFacades, setOpenFacades, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, SLAB_STYLE } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { disposePrefabMaterials, makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { setReliefDevice, setReliefTier } from "./surface-relief.ts";
@@ -399,6 +399,30 @@ describe("given a style whose layer data names no relief strips", () => {
     setOpenFacades(positions, 0);
     expect(Math.abs(slots[0]!), "emptied").toBeGreaterThan(1e5);
     expect(slots[2], "emptied: shut").toBe(0);
+  });
+
+  // mutation: sed -i 's/  if (extras.open) shader.uniforms.facadeDarkAt = FACADE_DARK_AT;//' src/game/present/facades.ts; sed -i 's/ \* (1.0 - vFacadeDark \* step(/ * (1.0 - 0.0 * vFacadeDark * step(/' src/game/present/facades.ts
+  it("when a style with windows cut in it is compiled, then its windows light unless its building is on the list of shut shops, in the ground band alone, and a style without them knows nothing of the list", () => {
+    const made = makeFacadeMaterials();
+    for (const style of STYLES) {
+      const shader = compileFacade(made[style]);
+      const open = FACADE_LAYERS[style].open === true;
+      expect(shader.uniforms.facadeDarkAt, `${style} list of shut shops`).toBe(open ? FACADE_DARK_AT : undefined);
+      expect(shader.fragmentShader.includes("* (1.0 - vFacadeDark * step(2.0, vFacadeRegion.x)"), `${style} lights its windows by the list`).toBe(open);
+    }
+  });
+
+  // mutation: sed -i 's/    slots\[DARK_SLOT_FLOATS \* slot + 1\] = slot < used ? at\[DARK_SLOT_FLOATS \* slot + 1\]! : OPEN_AT_NOWHERE;/    slots[DARK_SLOT_FLOATS * slot + 1] = at[DARK_SLOT_FLOATS * slot + 1]!;/' src/game/present/facades.ts
+  it("when the shut shops are listed, then the list holds them, at most its capacity of them, and the slots left over are far away", () => {
+    const slots = FACADE_DARK_AT.value;
+    const positions = Float32Array.from({ length: 2 * (FACADE_DARK_MAX + 2) }, (_, at) => at + 1);
+    setDarkFacades(positions, 2);
+    for (let at = 0; at < 4; at++) expect(slots[at], `the first two, float ${at}`).toBe(at + 1);
+    for (let slot = 2; slot < FACADE_DARK_MAX; slot++) expect(Math.abs(slots[2 * slot + 1]!), `unused slot ${slot}`).toBeGreaterThan(1e5);
+    setDarkFacades(positions, FACADE_DARK_MAX + 2);
+    expect(slots[2 * (FACADE_DARK_MAX - 1)], "the last slot").toBe(2 * (FACADE_DARK_MAX - 1) + 1);
+    setDarkFacades(positions, 0);
+    expect(Math.abs(slots[0]!), "emptied").toBeGreaterThan(1e5);
   });
 
   // mutation: sed -i 's/ \* facadeOpenAt\[i\].z);/);/' src/game/present/facades.ts (a listed building is wholly open the moment it is listed)

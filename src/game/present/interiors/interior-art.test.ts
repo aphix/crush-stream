@@ -6,7 +6,7 @@ import { FRAME_HZ } from "../../kernel/constants.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { vestibuleSolids, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
-import { FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS } from "../facades.ts";
+import { FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS } from "../facades.ts";
 import { HIDE_GRACE, SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../openworld-sight.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { CLOSED_GLOW, DOOR_SWING_SECONDS, INTERIOR_DIM, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS } from "./interior-constants.ts";
@@ -455,6 +455,29 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     view.frames(SWING_FRAMES + 2);
     expect(set.openDoors(), "doors open once it is open again").toBe(1);
     set.dispose();
+  });
+
+  // mutation: sed -i 's/entries\[at\]!.business \&\& this.entries\[at\]!.locked/entries[at]!.business/' src/game/present/interiors/interior-art.ts
+  it("when it is shut, then the facade's list of shut shops holds its building, and drops it once it is open", () => {
+    const darkened = (): boolean => {
+      const slots = FACADE_DARK_AT.value;
+      for (let slot = 0; slot < FACADE_DARK_MAX; slot++) if (Math.abs(slots[2 * slot]! - coffee.x) < 1e-3 && Math.abs(slots[2 * slot + 1]! - coffee.z) < 1e-3) return true;
+      return false;
+    };
+    const set = new InteriorSet(lone);
+    const who = openers();
+    settle(set, coffee.doorX, coffee.doorZ, who, 3);
+    expect(darkened(), "open: not listed").toBe(false);
+    who.closed = SHUT;
+    settle(set, coffee.doorX, coffee.doorZ, who, 3);
+    expect(darkened(), "shut: listed").toBe(true);
+    who.closed = OPEN;
+    settle(set, coffee.doorX, coffee.doorZ, who, 3);
+    expect(darkened(), "open again: dropped").toBe(false);
+    who.closed = SHUT;
+    settle(set, coffee.doorX, coffee.doorZ, who, 3);
+    set.dispose();
+    expect(darkened(), "the course left: nothing listed").toBe(false);
   });
 
   // mutation: sed -i 's/export const CLOSED_GLOW = 0.08;/export const CLOSED_GLOW = 1;/' src/game/present/interiors/interior-constants.ts
