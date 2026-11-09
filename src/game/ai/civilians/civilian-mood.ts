@@ -120,6 +120,8 @@ function historyText(state: CityState, code: number, subject: number): string {
     case EVENT_CODE.released: return "was let out of custody";
     case EVENT_CODE.fought: return `got into a fight with ${packedNameText(subject)}`;
     case EVENT_CODE.foughtStranger: return `squared up to a driver outside ${place()}`;
+    case EVENT_CODE.foughtWalker: return `turned on someone who shoved them outside ${place()}`;
+    case EVENT_CODE.jaywalkArrest: return "was arrested for crossing against the light";
     default: return "";
   }
 }

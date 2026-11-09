@@ -113,7 +113,9 @@ export const RESIDENT_INT = {
   fightPartner: 44,
   fightX: 45,
   fightZ: 46,
-  history: 47,
+  /** The way a fighter faces, in `WALKER_BEARING_STEPS` of a turn (toward the player who shoved them); `NO_BEARING` for a fight between two civilians or with a car. */
+  fightBearing: 47,
+  history: 48,
 } as const;
 export const RESIDENT_INT_STRIDE = RESIDENT_INT.history + LOG_LINES * HISTORY_FIELDS;
 /** A resident's float row: the needs as they stood at the decision that made the leg, their rise rates (per game hour), the speed of the leg or stay they are on (m/s), their lateral offset (m) and their own walking pace (m/s: the leg's speed is this, or the drive's). */
@@ -127,10 +129,15 @@ export const CAST_NAME_BASE = 1000;
 export const CAST_TITLE_BASE = 100;
 
 /**
- * Event kinds of the host's input triples (kind, subject, crowd seconds). A knock's subject is the civilian run down; a wreck's the place; a crime's and a bust's the criminal; a push's and a fight's the victim, followed when
- * the other party is a civilian by an `alongside` triple of the same seconds naming them (none: a player's walker or car). Inside the brain the pair is one subject, victim + capacity * (other + 1).
+ * Event kinds of the host's input triples (kind, subject, crowd seconds). A knock's subject is the civilian run down; a wreck's the place; a crime's, a bust's and a jaywalk arrest's the resident; a push's and a fight's the
+ * victim, followed by a triple of the same seconds naming the other party: `alongside` a civilian, `walker` a human player on foot (its subject his bearing from the victim, in `WALKER_BEARING_STEPS` of a turn); neither: a car.
+ * Inside the brain a civilian pair is one subject, victim + capacity * (other + 1).
  */
-export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6 } as const;
+export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8 } as const;
+/** A fight's bearing that is none (two civilians face each other; a car is not faced). */
+export const NO_BEARING = -1;
+/** `RESIDENT_INT.fightPartner` when the other fighter is a human player on foot (-1 is none, or a car). */
+export const FIGHT_PLAYER = -2;
 export const EVENT_TRIPLE = 3;
 /** Society effects of a wreck or knock: what the corner is feared at, within FEAR_RADIUS metres of the spot (falling off linearly to 0 at the edge). */
 export const WRECK_FEAR = 1;
@@ -367,3 +374,9 @@ export const YOUNG_AGE_MAX = 25;
 export const FIGHT_CHANCE = 0.12;
 export const FIGHT_ANGRY_FACTOR = 4;
 export const FIGHT_TICKS = 16;
+/** A civilian's swing lands on the player within this many metres of the fighter's spot (an arm and a lean), and pushes him at this speed (m/s), lifted by this share of the direction. */
+export const PLAYER_STRIKE_REACH = 1.5;
+export const PUNCH_SPEED = 4;
+export const PUNCH_LIFT = 0.3;
+/** A jaywalker arrested by the police spends a game hour in custody. */
+export const JAYWALK_CUSTODY_TICKS = TICKS_PER_GAME_HOUR;

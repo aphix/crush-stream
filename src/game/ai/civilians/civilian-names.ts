@@ -128,14 +128,17 @@ export const EVENT_CODE = {
   released: 32,
   fought: 33,
   foughtStranger: 34,
+  foughtWalker: 35,
+  jaywalkArrest: 36,
 } as const;
-export const VISIT_BASE = 35;
+export const VISIT_BASE = 37;
 
 /** Mood each event leaves (EVENT_CODE order). */
 const EVENT_MOODS = [
   MOOD.fine, MOOD.happy, MOOD.happy, MOOD.proud, MOOD.fine, MOOD.sad, MOOD.proud, MOOD.busy, MOOD.sad, MOOD.happy, MOOD.exhausted, MOOD.happy, MOOD.hurt, MOOD.happy,
   MOOD.hurt, MOOD.happy, MOOD.sad, MOOD.happy, MOOD.sad, MOOD.sad, MOOD.angry, MOOD.annoyed,
   -1, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.afraid, MOOD.angry, MOOD.angry, MOOD.busy, MOOD.afraid, MOOD.sad, MOOD.annoyed, MOOD.angry, MOOD.angry,
+  MOOD.angry, MOOD.annoyed,
 ] as const;
 
 /** What a walk is for, in the look-at line ("{label} -> {place}"), by purpose: the five needs first, then the stories and the bus. */
