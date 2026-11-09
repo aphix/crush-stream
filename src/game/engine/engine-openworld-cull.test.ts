@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { CarDetail } from "../present/car-detail.ts";
-import { HIDE_GRACE, SIGHT_ID_CAPACITY } from "../present/openworld-sight.ts";
+import { HIDE_GRACE, SIGHT_ID_CAPACITY, type SightPlayer } from "../present/openworld-sight.ts";
 import { occluder, type Occluder } from "../present/spectate-cam.ts";
 import { OpenWorldCulling } from "./engine-openworld-cull.ts";
 
@@ -25,9 +25,11 @@ function culling() {
   const player = { group: { position: { x: 0, z: 0 }, visible: true } };
   const parked = { group: { position: { x: 0, z: 60 }, visible: true } };
   const cars = [player, parked];
-  const made = new OpenWorldCulling({ eyes: () => [street], solids: () => course.solids, playerCars: () => [player], detail: () => detail, followed: () => player, replaying: () => false });
+  const onFoot: { walker: SightPlayer | null } = { walker: null };
+  const made = new OpenWorldCulling({ eyes: () => [street], solids: () => course.solids, playerCars: () => [player], walker: () => onFoot.walker, detail: () => detail, followed: () => player, replaying: () => false });
   return {
     course,
+    onFoot,
     made,
     detail,
     cars,
@@ -80,5 +82,20 @@ describe("given the course's building between the street camera and a traffic ca
     world.made.sight.enabled = true;
     world.run(HIDE_GRACE + FRAME_S);
     expect(world.parked.group.visible, "the car after the grace with culling on again").toBe(false);
+  });
+});
+
+describe("given the player on foot beside a parked car the street camera cannot see", () => {
+  const BESIDE_THE_CAR = { group: { position: { x: 3, z: 60 } } };
+
+  it("when the walker stands within the door's reach of it, then the car stays drawn and can be entered, and when he walks away it is hidden again", () => {
+    const world = culling();
+    world.course.solids = [BUILDING];
+    world.onFoot.walker = BESIDE_THE_CAR;
+    world.run(SETTLED_S);
+    expect(world.parked.group.visible, "the car the walker stands beside").toBe(true);
+    world.onFoot.walker = null;
+    world.run(HIDE_GRACE + FRAME_S);
+    expect(world.parked.group.visible, "the car once he has gone").toBe(false);
   });
 });

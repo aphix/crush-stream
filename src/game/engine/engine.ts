@@ -4,7 +4,7 @@ import { takeTierWork } from "../kernel/tier-work.ts";
 import { COUNT, countPart, lapPart, PART } from "../kernel/frame-parts.ts";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
-import { hidingSight } from "../present/spectate-cam.ts";
+import { hidingSight, type Occluder } from "../present/spectate-cam.ts";
 import { PISTON_ORBIT_RATE, PistonBank } from "../present/engine-pistons.ts";
 import { DoorRam } from "../present/engine-doors.ts";
 import { sliceSpeed } from "../contact/sat.ts";
@@ -97,6 +97,7 @@ const _bn = new THREE.Vector3();
 const _bp = new THREE.Vector3();
 /** No cars: the showcase's set outside its scene. */
 const NO_CARS: readonly DeformableCar[] = [];
+const NO_SOLIDS: readonly Occluder[] = [];
 
 export class CrashEngine extends EngineGarage {
   /** Resolves when `warmPrograms` is done (a failure is logged): the loop simulates and draws only after it, so play never links a program. */
@@ -370,6 +371,7 @@ export class CrashEngine extends EngineGarage {
   private makeOpenWorld(): OpenWorldDirector {
     const eyes = [this.camera];
     const playerCars: DeformableCar[] = [];
+    const walkerStand = { group: { position: new THREE.Vector3() } };
     return new OpenWorldDirector({
       inOpenWorld: () => this.showOpenWorld,
       isClient: () => this.net.client,
@@ -407,16 +409,19 @@ export class CrashEngine extends EngineGarage {
         eyes: () => eyes,
         solids: () => {
           const sight = this.race.courseSight();
-          return sight === null ? [] : hidingSight(sight).occ;
+          return sight === null ? NO_SOLIDS : hidingSight(sight).occ;
         },
         playerCars: () => {
-          playerCars.length = 0;
-          for (const racer of this.race.racers) {
-            const car = this.cars[racer.id];
-            if (car !== undefined && racer.kind !== "ai") playerCars.push(car);
+          const racers = this.race.racers;
+          let count = 0;
+          for (let at = 0; at < racers.length; at++) {
+            const car = this.cars[racers[at]!.id];
+            if (car !== undefined && racers[at]!.kind !== "ai") playerCars[count++] = car;
           }
+          playerCars.length = count;
           return playerCars;
         },
+        walker: () => (this.ragdolls.walkerTorso(walkerStand.group.position) ? walkerStand : null),
         detail: () => this.detail,
         followed: () => this.followedCar(),
         replaying: () => this.highlights.playing,

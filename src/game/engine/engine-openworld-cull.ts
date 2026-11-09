@@ -1,7 +1,7 @@
 import type * as THREE from "three";
 import type { CarDetail } from "../present/car-detail.ts";
 import { OpenWorldCarLod, type LodCar } from "../present/openworld-car-lod.ts";
-import { SIGHT_ID_CAPACITY, SightField } from "../present/openworld-sight.ts";
+import { SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../present/openworld-sight.ts";
 import type { Occluder } from "../present/spectate-cam.ts";
 
 /** What culling needs of the engine. */
@@ -12,6 +12,8 @@ export type OpenWorldCullPorts = {
   solids(): readonly Occluder[];
   /** The cars players drive: this browser's and every seated peer's. */
   playerCars(): readonly LodCar[];
+  /** The player's walker while he is out of his car, else null: what he is beside must stay drawn, or he cannot enter it. */
+  walker(): SightPlayer | null;
   detail(): CarDetail;
   /** The car the camera follows, null in a free view. */
   followed(): LodCar | null;
@@ -25,6 +27,7 @@ export class OpenWorldCulling {
   private readonly ports: OpenWorldCullPorts;
   private readonly cars: OpenWorldCarLod;
   private solidsKnown = false;
+  private readonly players: SightPlayer[] = [];
   /** The frames' wall seconds summed: the field's clock, so a stepped engine (a probe) and a paused game keep their grace like a running one. */
   private seconds = 0;
 
@@ -41,7 +44,7 @@ export class OpenWorldCulling {
     }
     if (!this.solidsKnown) this.takeSolids();
     this.seconds += wallDt;
-    this.sight.update(this.ports.eyes(), this.seconds, this.ports.playerCars());
+    this.sight.update(this.ports.eyes(), this.seconds, this.playersNow());
     this.cars.frame(liveCars, this.ports.followed(), this.ports.replaying());
   }
 
@@ -51,6 +54,17 @@ export class OpenWorldCulling {
     this.sight.clear();
     this.solidsKnown = false;
     this.seconds = 0;
+  }
+
+  /** Every player's car and, out of his car, the walker: what the host keeps simulating and drawn. */
+  private playersNow(): readonly SightPlayer[] {
+    const cars = this.ports.playerCars();
+    let count = 0;
+    for (let at = 0; at < cars.length; at++) this.players[count++] = cars[at]!;
+    const walker = this.ports.walker();
+    if (walker !== null) this.players[count++] = walker;
+    this.players.length = count;
+    return this.players;
   }
 
   private takeSolids(): void {

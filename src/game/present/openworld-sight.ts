@@ -20,8 +20,10 @@ const PARALLEL_M = 1e-9;
 /** The ray stamp restarts here, long before an int32 runs out. */
 const RAY_STAMP_LIMIT = 0x40000000;
 const NEVER_SEEN = -1;
+/** Players a field reads: every seated car, and one walker out of his. */
+const MAX_PLAYERS = MAX_CARS + 1;
 
-/** Where a player's car is: a `DeformableCar` is one. */
+/** Where a player is: a `DeformableCar` is one, and so is the walker's torso. */
 export type SightPlayer = { readonly group: { readonly position: { readonly x: number; readonly z: number } } };
 
 /**
@@ -66,8 +68,8 @@ export class SightField {
   private readonly frustum = new THREE.Frustum();
 
   private playerCount = 0;
-  private readonly playerX = new Float64Array(MAX_CARS);
-  private readonly playerZ = new Float64Array(MAX_CARS);
+  private readonly playerX = new Float64Array(MAX_PLAYERS);
+  private readonly playerZ = new Float64Array(MAX_PLAYERS);
 
   private now = 0;
   private claimed = 0;
@@ -116,7 +118,7 @@ export class SightField {
     this.now = nowSeconds;
     this.eyeCount = Math.min(eyes.length, MAX_EYES);
     for (let eye = 0; eye < this.eyeCount; eye++) this.readEye(eye, eyes[eye]!);
-    this.playerCount = Math.min(players.length, MAX_CARS);
+    this.playerCount = Math.min(players.length, MAX_PLAYERS);
     for (let player = 0; player < this.playerCount; player++) {
       const position = players[player]!.group.position;
       this.playerX[player] = position.x;
