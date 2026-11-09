@@ -46,6 +46,8 @@ const CLICK_PX = 8;
 const CURSOR_GRAB = "grab";
 /** The orbit's zoom range (m from `look`): the fleet's whole-car framing; the garage's shots come closer (`OrbitShot.minRadius`). */
 export const ORBIT_RADIUS = { min: 4.2, max: 32 } as const;
+/** The orbit's pitch range (rad) round a car: just over level up to steeply down. */
+const ORBIT_PITCH = { low: 0.08, high: 1.22 } as const;
 
 /** What a canvas press can pick: the car under a screen point (-1: none), and the follow itself. */
 export interface CarPicker {
@@ -97,8 +99,11 @@ export class ChaseCamera {
   trauma = 0;
   /** User dragged or zoomed since the last reset; cinematics stop re-aiming. */
   userFramed = false;
-  /** How close (m) the wheel, a pinch and a reset may bring the orbit's eye to `look`: the last shot's (`frameReset`). */
+  /** How close (m) the wheel, a pinch and a reset may bring the orbit's eye to `look`: the last shot's (`frameReset`), the walker's on foot. */
   minRadius: number = ORBIT_RADIUS.min;
+  /** The orbit's pitch range (rad, positive: the eye above `look`) for a drag, mouse look and the stick: on foot it looks up too. */
+  pitchLow: number = ORBIT_PITCH.low;
+  pitchHigh: number = ORBIT_PITCH.high;
   /** Rear-view hold, set by the input poll every frame (Backquote, R3, the touch button). */
   rear = false;
   /** Pointer lock (mouse look) held: set by the engine; clicks are off and the orbit follows fast and never auto-spins. */
@@ -239,6 +244,15 @@ export class ChaseCamera {
     return this.angle;
   }
 
+  /** The orbit's pitch (rad, positive: the eye above `look`) and its distance (m: the wheel's and a pinch's zoom). */
+  get orbitPitch(): number {
+    return this.pitch;
+  }
+
+  get orbitRadius(): number {
+    return this.radius;
+  }
+
   /** The player is looking round: a drag, mouse look or the right stick. */
   get lookingAround(): boolean {
     return this.dragging || this.locked || this.pad.rx !== 0 || this.pad.ry !== 0;
@@ -354,7 +368,7 @@ export class ChaseCamera {
     const padTurn = rx !== 0 || ry !== 0;
     if (padTurn) {
       this.angle -= rx * PAD_YAW_RATE * wallDt;
-      this.pitch = THREE.MathUtils.clamp(this.pitch + ry * PAD_PITCH_RATE * wallDt, 0.08, 1.22);
+      this.pitch = THREE.MathUtils.clamp(this.pitch + ry * PAD_PITCH_RATE * wallDt, this.pitchLow, this.pitchHigh);
       this.userFramed = true;
     }
     if (spinRate > 0 && !this.dragging && !this.locked && !padTurn && !this.reduceMotion) this.angle += spinRate * wallDt;
@@ -587,7 +601,7 @@ export class ChaseCamera {
     const dz = this.camera.position.z - this.look.z;
     this.angle = Math.atan2(dx, dz);
     this.radius = THREE.MathUtils.clamp(hypot3(dx, dy, dz), this.minRadius, ORBIT_RADIUS.max);
-    this.pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(dy / this.radius, -0.99, 0.99)), 0.08, 1.22);
+    this.pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(dy / this.radius, -0.99, 0.99)), this.pitchLow, this.pitchHigh);
   }
 
   private placeApproach(cars: readonly DeformableCar[]): void {
@@ -700,7 +714,7 @@ export class ChaseCamera {
   /** Drag right turns the orbit right, drag down tips it over (same limits for a drag and for mouse look). */
   private orbitBy(dx: number, dy: number): void {
     this.angle -= dx * DRAG_YAW_PER_PX;
-    this.pitch = THREE.MathUtils.clamp(this.pitch + dy * DRAG_PITCH_PER_PX, 0.08, 1.22);
+    this.pitch = THREE.MathUtils.clamp(this.pitch + dy * DRAG_PITCH_PER_PX, this.pitchLow, this.pitchHigh);
   }
 
   /**

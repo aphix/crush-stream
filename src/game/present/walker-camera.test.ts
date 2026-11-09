@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Damped, FOLLOW_RADIUS, FollowFocus, followFov, PIVOT_OVER_TORSO, RECENTER_DELAY } from "./walker-camera.ts";
+import { Damped, FollowFocus, followFov, PIVOT_OVER_TORSO, RECENTER_DELAY, SHOULDER_BOOM } from "./walker-camera.ts";
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -76,8 +76,8 @@ describe("given the on-foot camera's focus", () => {
     });
   }
 
-  it("when the camera sits 3.5-4.5 m back with a 66 degree view across, then it matches the research's third-person shot", () => {
-    expect(FOLLOW_RADIUS >= 3.5 && FOLLOW_RADIUS <= 4.5, `distance ${FOLLOW_RADIUS}`).toBeTruthy();
+  it("when the camera sits 1.5-2.2 m back over his shoulder with a 66 degree view across, then it matches the research's over-the-shoulder shot", () => {
+    expect(SHOULDER_BOOM >= 1.5 && SHOULDER_BOOM <= 2.2, `boom ${SHOULDER_BOOM}`).toBeTruthy();
     const wide = followFov(16 / 9);
     expect(Math.abs((2 * Math.atan(Math.tan((wide * Math.PI) / 360) * (16 / 9)) * 180) / Math.PI - 66), `vertical ${wide.toFixed(1)} degrees across 16:9`).toBeLessThan(1);
     expect(followFov(0.5), "an upright phone keeps the widest vertical lens").toBe(56);

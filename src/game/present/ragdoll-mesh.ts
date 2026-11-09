@@ -39,6 +39,8 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
   /** The first `sprayedSlots` slots' sprays (`PERSON_SPRAY`), one bitmap's rows per slot, slot 0 lowest; null on a mesh whose slots wear none, which samples `BARE_SPRAY`. */
   private readonly sprayRgba: Uint8Array | null;
   private readonly sprayAtlas: THREE.DataTexture;
+  /** The slot whose head and torso the camera does not see (-1: none): a first-person eye stands in that dummy. Its shadow keeps them. */
+  readonly viewHidden = { value: -1 };
   /** What a pick skins a slot's vertices into, and which of them the slot draws (made at the first pick). */
   private pickPoints: Float32Array | null = null;
   private pickDrawn: Uint8Array | null = null;
@@ -57,8 +59,8 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     this.sprayRgba = sprayed ? new Uint8Array(PERSON_SPRAY.w * PERSON_SPRAY.h * 4 * sprayedSlots) : null;
     this.sprayAtlas = this.sprayRgba ? sprayAtlas(this.sprayRgba, sprayedSlots) : BARE_SPRAY;
     this.customDepthMaterial = new THREE.MeshDepthMaterial();
-    applyDolls(this.customDepthMaterial, this.dolls, false);
-    applyDolls(this.material, this.dolls, true);
+    applyDolls(this.customDepthMaterial, this.dolls, false, this.viewHidden);
+    applyDolls(this.material, this.dolls, true, this.viewHidden);
     // The posed body is wherever its parts are: nothing to cull against, and the instance transforms only hide.
     this.frustumCulled = false;
     applySpray(this.material, sprayUniforms(PERSON_SPRAY, this.sprayAtlas, this.sprayRgba ? sprayedSlots : 1, sprayed ? { map: personSprayDepthTexture() } : null), "", "vSprayP = position;\nvSprayN = normal;\nvSprayRow = float(gl_InstanceID);", sprayed ? "dummy-depth" : "dummy");
