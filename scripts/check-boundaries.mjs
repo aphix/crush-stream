@@ -90,7 +90,7 @@ const HOT = {
   "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "separate", "noteContacts", "startBump", "writeActivity", "mayPush", "raisePush", "raiseShove", "logPair", "logHostEvent", "appendLog", "queueForBrain", "advanceBrain", "raiseCrimes", "postBatch", "findHits", "lookOf", "hasLooseBody"],
   "src/game/ai/civilians/civilian-separation.ts": ["resolve", "list", "buildPairs", "addPair", "relax", "pushApart", "move"],
   "src/game/ai/civilians/civilian-contact.ts": ["carGap"],
-  "src/game/ai/civilians/crowd-walkers.ts": ["clear", "add"],
+  "src/game/ai/civilians/crowd-walkers.ts": ["clear", "add", "addBody", "place"],
   "src/game/engine/engine-openworld.ts": ["step", "frame", "feedWalkers", "landWalkerStrike"],
   "src/game/present/civilian-art.ts": ["update", "refreshSight", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
   "src/game/present/openworld-signs.ts": ["update"],

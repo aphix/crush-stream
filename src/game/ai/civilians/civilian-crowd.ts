@@ -364,6 +364,7 @@ export class CivilianCrowd {
       }
       if (!this.authority) continue;
       if (byWalker) {
+        if (this.walkers.shoves[second - separation.capacity] === 0) continue;
         if (distance < WALKER_PUSH_DISTANCE && closing >= WALKER_PUSH_CLOSING_SPEED) this.raiseShove(first, brainX[second]!, brainZ[second]!, seconds);
         continue;
       }
