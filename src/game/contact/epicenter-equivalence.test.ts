@@ -107,7 +107,7 @@ describe("given a staged hit run once per activation mode", () => {
   }
 });
 
-// Mutation: `sed -i 's|const epi = stage(kind, true); whole.cars[0]!.deform.masses[0]!.world.x += 1e-9;|const epi = stage(kind, true); whole.cars[0]!.deform.masses[0]!.world.x += 1e-9;|' src/game/contact/epicenter-equivalence.test.ts` turns this row red (the keeping row writes into the whole run it hands on).
+// Mutation: `sed -i 's|^ *const epi = stage(kind, true);$|& whole.cars[0]!.deform.masses[0]!.world.x += 1e-9;|' src/game/contact/epicenter-equivalence.test.ts` turns this row red (the keeping row writes into the whole run it hands on).
 describe("given the wall's whole-mode run the first describe kept for the nudge rows", () => {
   it("when it is made again from scratch, then every mass's world position, the body's and the results are the kept run's to the bit", () => {
     const make = () => stage("wall", false);

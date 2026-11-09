@@ -164,7 +164,7 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
     }
   }
 
-  // Mutation: `sed -i 's|const { clearance, mesh } = lowestDrawn(wreck, ground); wreck.velocity.x += 1e-9;|const { clearance, mesh } = lowestDrawn(wreck, ground); wreck.velocity.x += 1e-9;|' src/game/vehicle/wreck-rest.test.ts` turns this row red (the keeping row writes into the wrecks it hands on).
+  // Mutation: `sed -i 's|^ *const wrecks = pitch === 0 ? wrecksAtRest(hit, ground) : slopeWrecks.keep(hit.name, wrecksAtRest(hit, ground));$|& for (const w of wrecks) w.velocity.x += 1e-9;|' src/game/vehicle/wreck-rest.test.ts` turns this row red (the keeping row writes into the wrecks it hands on).
   const [handedHit] = HITS.slice(3);
   it(`when ${handedHit!.name} on a 10° slope is made again from scratch, then both wrecks are the ones the rows above kept, to the bit: pose, velocity, sleep and every mass`, () => {
     const make = () => wrecksAtRest(handedHit!, new Slope(10));

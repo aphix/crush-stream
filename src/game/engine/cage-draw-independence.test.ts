@@ -172,7 +172,7 @@ describe("given a staged crash run twice, the second drawing every car before ev
   }
 });
 
-// Mutation: `sed -i 's|const first = firstDifference(plain, drawn); drawn[0]![0] += 1e-9;|const first = firstDifference(plain, drawn); drawn[0]![0] += 1e-9;|' src/game/engine/cage-draw-independence.test.ts` turns this row red (the keeping row writes into the drawn run it hands on).
+// Mutation: `sed -i 's|^ *const first = firstDifference(plain, drawn);$|& drawn[0]![0] += 1e-9;|' src/game/engine/cage-draw-independence.test.ts` turns this row red (the keeping row writes into the drawn run it hands on).
 describe("given the door-ajar drawn run the first describe kept for the frame-skip rows", () => {
   it("when it is made again from scratch, then every car's numbers are the kept run's to the bit at every step", () => {
     const make = () => run(true, { skip: false, stage: "door ajar" });
