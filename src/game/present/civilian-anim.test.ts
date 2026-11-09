@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS, ARREST, type ActivityName } from "../ai/civilians/civilian-activity.ts";
+import { carDoorOpenness } from "../ai/civilians/civilian-car-door.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { type ActivityPose, poseActivity } from "./civilian-anim.ts";
 import { FOREARM_LENGTH, type PoseSink } from "./civilian-anim-rig.ts";
@@ -297,9 +298,82 @@ describe("given an arrest: a suspect cuffed, the cop who holds her and walks her
   });
 });
 
+describe("given a civilian getting into and out of a car by its driver's door, she stands on the door spot facing the car", () => {
+  /** The H-point's seat top over the ground: a 0.47 m H-point less the hip's 0.075 m. */
+  const SEAT_TOP = 0.395;
+  const CAR = { surface: SEAT_TOP } as const;
+  /** Door-spot frame (x left, z toward the car, y up): where the seat's hips are, and the pinned reach points at the instants below. */
+  const SEAT_HIPS = new THREE.Vector3(0.4, 0.47, 1.05);
+  const OUTER_HANDLE_SHUT = new THREE.Vector3(0, 0.98, 0.48);
+  const INNER_HANDLE_SHUT = new THREE.Vector3(0.1, SEAT_TOP + 0.3, 0.63);
+  const INNER_HANDLE_PULLING = new THREE.Vector3(0.0909, SEAT_TOP + 0.3, 0.5356);
+  const INNER_HANDLE_PUSHING = new THREE.Vector3(0.1234, SEAT_TOP + 0.3, 0.2886);
+  const OUTER_PANEL_SHOVING = new THREE.Vector3(0.4785, 0.9, 0.313);
+  const HAND_ON_IT = 0.04;
+  const FIT = 0.03;
+  const middleOfHips = (body: Capture): THREE.Vector3 => hip(body, MINUS_X).add(hip(body, PLUS_X)).multiplyScalar(0.5);
+  const middleOfAnkles = (body: Capture): THREE.Vector3 => ankle(body, MINUS_X).add(ankle(body, PLUS_X)).multiplyScalar(0.5);
+
+  it("when the door is still shut, then her right hand is on its outer handle, straight ahead and at the handle's height", () => {
+    expect(handTip(clipAt("carIn", 0.3, CAR), MINUS_X).distanceTo(OUTER_HANDLE_SHUT)).toBeLessThan(HAND_ON_IT);
+  });
+
+  it("when she has pulled the door shut behind her, then she sits on the seat: hips on it, facing the car's nose, feet on the cabin floor ahead of her", () => {
+    const body = clipAt("carIn", ACTIVITY_SECONDS.carIn, CAR);
+    expect(middleOfHips(body).distanceTo(SEAT_HIPS), "hips on the seat").toBeLessThan(FIT);
+    expect(facing(body, TORSO).x, "facing the nose").toBeGreaterThan(0.95);
+    const feet = middleOfAnkles(body);
+    expect(feet.y, "feet up on the floor").toBeCloseTo(0.08 + 0.12, 1);
+    expect(feet.x - SEAT_HIPS.x, "feet ahead of the hips").toBeGreaterThan(0.5);
+    expect(handTip(body, PLUS_X).distanceTo(INNER_HANDLE_SHUT), "her left hand on the inner handle of the shut door").toBeLessThan(HAND_ON_IT);
+  });
+
+  it("when the door swings shut, then her left hand follows the inner handle in", () => {
+    expect(handTip(clipAt("carIn", 2.4, CAR), PLUS_X).distanceTo(INNER_HANDLE_PULLING)).toBeLessThan(HAND_ON_IT);
+  });
+
+  it("when she starts to step out, then she sits as she ended sitting in", () => {
+    const sat = clipAt("carIn", ACTIVITY_SECONDS.carIn, CAR);
+    const starting = clipAt("carOut", 0, CAR);
+    expect(middleOfHips(starting).distanceTo(middleOfHips(sat)), "hips").toBeLessThan(0.01);
+    expect(middleOfAnkles(starting).distanceTo(middleOfAnkles(sat)), "feet").toBeLessThan(0.01);
+    expect(gap(starting, sat).angle, "no part turned").toBeLessThan(0.3);
+  });
+
+  it("when she pushes the door open from her seat, then her left hand is on the inner handle as it swings out", () => {
+    expect(handTip(clipAt("carOut", 0.5, CAR), PLUS_X).distanceTo(INNER_HANDLE_PUSHING)).toBeLessThan(HAND_ON_IT);
+  });
+
+  it("when she has stepped out and shoves the door shut, then her left hand is on its outer panel as it swings in", () => {
+    const body = clipAt("carOut", 1.9, CAR);
+    expect(handTip(body, PLUS_X).distanceTo(OUTER_PANEL_SHOVING)).toBeLessThan(HAND_ON_IT);
+    expect(hip(body, MINUS_X).y, "standing again").toBeGreaterThan(0.8);
+    expect(Math.abs(middleOfHips(body).z), "back on the door spot").toBeLessThan(0.05);
+  });
+
+  it("when she is out, then she stands on the door spot as her walk would", () => {
+    const out = clipAt("carOut", ACTIVITY_SECONDS.carOut, CAR);
+    const walk = posed(CAR);
+    expect(gap(out, walk).distance).toBeLessThan(TIGHT);
+    expect(gap(out, walk).angle).toBeLessThan(TIGHT);
+  });
+
+  it("when the clips run, then the door they open stands shut, opens, stands open and shuts again on each clip's own times", () => {
+    const opening = (activity: number): number[] => [0.1, 0.65, 1.2, 1.6, 2.2, 2.7].map((clock) => carDoorOpenness(activity, clock));
+    expect(opening(ACTIVITY.carIn)[0], "shut at first").toBe(0);
+    expect(opening(ACTIVITY.carIn)[1]).toBeCloseTo(0.5, 1);
+    expect(opening(ACTIVITY.carIn).slice(2, 4), "open").toEqual([1, 1]);
+    expect(opening(ACTIVITY.carIn)[4]).toBeCloseTo(0.5, 1);
+    expect(opening(ACTIVITY.carIn)[5], "shut at the end").toBe(0);
+    expect(carDoorOpenness(ACTIVITY.carOut, 1), "carOut has the door open at 1 s").toBe(1);
+    expect(carDoorOpenness(ACTIVITY.carOut, ACTIVITY_SECONDS.carOut), "and shut at its end").toBe(0);
+    expect(carDoorOpenness(ACTIVITY.door, 1), "another activity opens no car door").toBe(0);
+  });
+});
+
 describe("given an activity that starts or ends while she walks", () => {
-  const EASED_IN: readonly ActivityName[] = ["idle", "talk", "buy", "door", "sitDown", "bump", "swing", "block", "hit", "cuffing", "arresting", "escorting"];
-  const ACTIVE_CLOCKS: Readonly<Record<ActivityName, number>> = { none: 0, idle: 10.5, talk: 2, buy: 1, door: 0.9, sitDown: 1, sit: 3, standUp: 0.5, bump: 0.12, swing: 0.3, block: 1, hit: 0.1, sitSteps: 5, cuffing: 1.2, cuffed: 3, arresting: 0.6, escorting: 2 };
+  const EASED_IN: readonly ActivityName[] = ["idle", "talk", "buy", "door", "sitDown", "bump", "swing", "block", "hit", "cuffing", "arresting", "escorting", "carIn"];
+  const ACTIVE_CLOCKS: Readonly<Record<ActivityName, number>> = { none: 0, idle: 10.5, talk: 2, buy: 1, door: 0.9, sitDown: 1, sit: 3, standUp: 0.5, bump: 0.12, swing: 0.3, block: 1, hit: 0.1, sitSteps: 5, cuffing: 1.2, cuffed: 3, arresting: 0.6, escorting: 2, carIn: 1.5, carOut: 1 };
   const WITH_PARTNER = { hasPartner: true, bearing: 0.6, surface: 0.9, ...WALKING } as const;
 
   it.each(EASED_IN)("when %s begins, then she is in her walk's pose at the first instant", (name) => {
@@ -309,7 +383,7 @@ describe("given an activity that starts or ends while she walks", () => {
     expect(gap(clip, walk).angle).toBeLessThan(TIGHT);
   });
 
-  it.each(EASED_IN)("when %s runs, then no frame moves a part more than 0.3 m or turns one a quarter turn", (name) => {
+  it.each([...EASED_IN, "carOut" as const])("when %s runs, then no frame moves a part more than 0.3 m or turns one a quarter turn", (name) => {
     const seconds = Math.max(ACTIVITY_SECONDS[name] + 0.3, 4);
     let worstDistance = 0;
     let worstAngle = 0;

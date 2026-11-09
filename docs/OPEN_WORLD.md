@@ -245,6 +245,12 @@ whichever hand he favours). `ARREST` is the pair's spacing (the cop `cuffBehind`
 his right, both facing her way): the law places them by it and the cop's hands reach for where the cuffed pose puts her wrists and arm, so the
 two need no partner index across their separate pose sets.
 
+Getting into or out of a car is two stationary clips (`carIn`, `carOut`: `ai/civilians/civilian-car-door.ts` has the geometry and the door's timeline). She stands
+on the door spot of the driver's door facing the car (`CAR_DOOR.outFromSeat` out from the seat's H-point, `behindSeat` back; `surfaceY` the H-point's height
+less `hipOverSeat`): carIn has a hand on the outer handle as the door swings open, a step back, in and round and down onto the seat with the feet planted on the
+cabin floor, and a hand on the inner handle to pull the door shut; carOut the reverse, ending with a shove on the outer panel. The hand follows the handle by the
+same `carDoorOpenness(activity, clock)` the host sets the car's door by (`openness * CAR_DOOR.openRad`), so the hand and the door stay together.
+
 ## Traffic (`ai/openworld-traffic`)
 
 Real cars of the field drive the streets, stop at signals and park in the kerb spaces. They are sim cars on the host (and solo) and reach a client in the host's snapshots like every car (about 30 B a car at 30 Hz while undamaged: 12 movers about 11 KB/s a client). The pool is the cars past the seated ones (`first` = highest seat + 1): `MOVER_CARS` drivers (desktop 12, phone 6, the last `PATROL_CARS` of them police bodies for `spawnDrivenCar(..., { urgent: true })`) and `KERB_CARS` standing cars (desktop 10, phone 4). Mover and kerb cars wear everyday bodies only (`EVERYDAY_BODIES`: sedan, hatchback, wagon, pickup; the fleet slot's coupe or monster is rebuilt as a seeded pick, any other body is kept). A peer that joins takes the lowest free id: if it is a pool car, traffic lets go of it (its lease is `lost`).
