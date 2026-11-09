@@ -33,7 +33,7 @@ export function isWanted(state: CityState, resident: number, tick: number): bool
   return (intAt(state, resident, RESIDENT_INT.flags) & FLAG.wanted) !== 0 && tick < intAt(state, resident, RESIDENT_INT.wantedUntilTick);
 }
 
-export type OpenCrime = { tick: number; kind: number; place: number; victim: number };
+type OpenCrime = { tick: number; kind: number; place: number; victim: number };
 
 /** The crime a resident has open (it began at `tick` at `place`), or null. */
 export function crimeOf(state: CityState, resident: number): OpenCrime | null {
@@ -61,11 +61,11 @@ export function isAngry(state: CityState, resident: number, tick: number): boole
 }
 
 /** A game day's chance of turning to crime. */
-export function crimeLeaning(unemployed: boolean, broke: boolean, angry: boolean, age: number): number {
+function crimeLeaning(unemployed: boolean, broke: boolean, angry: boolean, age: number): number {
   return CRIME_LEAN.base + (unemployed ? CRIME_LEAN.unemployed : 0) + (broke ? CRIME_LEAN.broke : 0) + (angry ? CRIME_LEAN.angry : 0) + (age <= YOUNG_AGE_MAX ? CRIME_LEAN.young : 0);
 }
 
-export function reformChance(employed: boolean): number {
+function reformChance(employed: boolean): number {
   return REFORM_CHANCE * (employed ? EMPLOYED_REFORM_FACTOR : 1);
 }
 

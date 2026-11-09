@@ -1,15 +1,18 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import { PLACE_KIND, type OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { CAST } from "./civilian-cast.ts";
-import { startHourOf } from "./civilian-clock.ts";
+import { dayOf, startHourOf } from "./civilian-clock.ts";
 import {
   ADULT_AGE_MAX,
   ADULT_AGE_MIN,
   ADULT_AGE_RANGE,
+  CAR_SHARE,
   CAST_NAME_BASE,
   CHILD_AGE_LIMIT,
+  COFFEE_FAN_SHARE,
   COUPLE_SHARE,
   DAYS_PER_WEEK,
+  DRINKER_SHARE,
   EMPLOYMENT_RATE,
   FAVOURITE_POOL,
   FEMALE_SHARE,
@@ -24,6 +27,7 @@ import {
   NEED,
   NEVER_TICK,
   NO_PLACE,
+  NO_SEAT,
   PARENT_AGE_MAX,
   PARENT_AGE_MIN,
   PARTNER_AGE_GAP,
@@ -45,6 +49,7 @@ import { FAMILY_NAMES, FEMALE_NAMES, MALE_NAMES, NAME_NONE, castTitleIndex, jobT
 import { CityState, commitResident, retractResident } from "./civilian-state.ts";
 import { castHomesOf, resolveCast } from "./civilian-story.ts";
 import { rollNeeds } from "./needs.ts";
+import { startingCrime } from "./society-crime.ts";
 
 /** What a new resident is born, moves in or starts out as: the fields a row is made from. */
 type ResidentSpec = { species: number; gender: number; firstName: number; familyName: number; birthDay: number; home: number; parent: number; partner: number; flags: number; paceFactor: number };
@@ -90,6 +95,18 @@ function favouriteNear(state: CityState, kind: number, home: number, draw: () =>
   return ranked.length === 0 ? NO_PLACE : ranked[Math.floor(draw() * Math.min(FAVOURITE_POOL, ranked.length))]!;
 }
 
+/** A person's coffee and drink habits, and (an adult) a car at their home's kerb: drawn once from their own stream so no other draw moves. */
+function giveTraits(state: CityState, id: number, spec: ResidentSpec, tick: number): void {
+  const base = id * RESIDENT_INT_STRIDE;
+  const draw = residentDraws(state.seed, id, STREAM.trait, 0);
+  const age = spec.flags & FLAG.cast ? -spec.birthDay : dayOf(tick, state.startHour) - spec.birthDay;
+  if (draw() < COFFEE_FAN_SHARE) state.ints[base + RESIDENT_INT.flags] |= FLAG.coffeeFan;
+  if (draw() < DRINKER_SHARE) state.ints[base + RESIDENT_INT.flags] |= FLAG.drinker;
+  if (draw() >= CAR_SHARE || age < JOB_AGE) return;
+  state.ints[base + RESIDENT_INT.flags] |= FLAG.hasCar;
+  state.ints[base + RESIDENT_INT.carPlace] = spec.home;
+}
+
 /** Writes a whole new row for resident `id` (a start resident, a birth or a newcomer) at `tick`, living at home with a first decision soon; the slot's old row is gone. */
 export function createResident(state: CityState, id: number, spec: ResidentSpec, tick: number): void {
   const base = id * RESIDENT_INT_STRIDE;
@@ -123,9 +140,21 @@ export function createResident(state: CityState, id: number, spec: ResidentSpec,
   ints[base + RESIDENT_INT.arriveTick] = tick;
   ints[base + RESIDENT_INT.nextDecisionTick] = tick + Math.floor(draw() * INITIAL_SPREAD_TICKS);
   ints[base + RESIDENT_INT.legPurpose] = NEED.rest;
+  ints[base + RESIDENT_INT.legReason] = NEED.rest;
   ints[base + RESIDENT_INT.storyTick] = -1;
+  ints[base + RESIDENT_INT.seat] = NO_SEAT;
+  ints[base + RESIDENT_INT.companion] = NO_PLACE;
+  ints[base + RESIDENT_INT.crimeTick] = NEVER_TICK;
+  ints[base + RESIDENT_INT.crimePlace] = NO_PLACE;
+  ints[base + RESIDENT_INT.crimeVictim] = NO_PLACE;
+  ints[base + RESIDENT_INT.fightTick] = NEVER_TICK;
+  ints[base + RESIDENT_INT.fightPartner] = NO_PLACE;
+  ints[base + RESIDENT_INT.carPlace] = NO_PLACE;
+  if (person) giveTraits(state, id, spec, tick);
   rollNeeds(floats, floatBase, draw);
-  floats[floatBase + RESIDENT_FLOAT.speed] = SPECIES_SPEED[spec.species]! * spec.paceFactor * (1 + (draw() * 2 - 1) * WALK_SPEED_SPREAD);
+  const pace = SPECIES_SPEED[spec.species]! * spec.paceFactor * (1 + (draw() * 2 - 1) * WALK_SPEED_SPREAD);
+  floats[floatBase + RESIDENT_FLOAT.pace] = pace;
+  floats[floatBase + RESIDENT_FLOAT.speed] = pace;
   floats[floatBase + RESIDENT_FLOAT.lateral] = (draw() * 2 - 1) * LATERAL_MAX;
   state.hiddenFromTick[id] = NEVER_TICK;
   state.hiddenUntilTick[id] = NEVER_TICK;
@@ -221,6 +250,10 @@ function giveStartingJobs(state: CityState, firstGenerated: number, end: number)
   }
 }
 
+function giveStartingCriminals(state: CityState, firstGenerated: number, end: number): void {
+  for (let id = firstGenerated; id < end; id++) startingCrime(state, id, -state.ints[id * RESIDENT_INT_STRIDE + RESIDENT_INT.birthDay]!, residentDraws(state.seed, id, STREAM.crime, 0)());
+}
+
 /**
  * The people of the neighbourhood from a seed and the map, at crowd time 0: the named cast (animals too), then `playableResidents` people in all (the cast counts among them) spread
  * over the homes, adults in work at the start in the proportion `EMPLOYMENT_RATE`. Nobody lives, works or goes beyond the walls.
@@ -243,5 +276,6 @@ export function createCityState(seed: number, map: OpenWorldMap, playableResiden
     if (size > 0) id = composeHousehold(state, id, homes[slot]!, size);
   }
   giveStartingJobs(state, cast.length, id);
+  giveStartingCriminals(state, cast.length, id);
   return state;
 }

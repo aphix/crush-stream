@@ -2,15 +2,14 @@ import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { dayOf } from "./civilian-clock.ts";
 import {
   AFRAID_FEAR,
-  ANGRY_HOLD_TICKS,
   CAST_NAME_BASE,
   FLAG,
   HISTORY_FIELD,
   HISTORY_FIELDS,
   LOG_LINES,
-  MOOD_HOLD_TICKS,
   MOOD_NEED_LEVEL,
   NO_PLACE,
+  PURPOSE,
   RESIDENT_FLOAT_STRIDE,
   RESIDENT_INT,
   RESIDENT_INT_STRIDE,
@@ -19,14 +18,14 @@ import {
 import { CAST } from "./civilian-cast.ts";
 import {
   EVENT_CODE,
-  EVENT_MOODS,
   KIND_WORDS,
   MOOD,
   MOOD_WORDS,
   NEED_MOODS,
+  moodHold,
+  moodOfCode,
   PURPOSE_LABELS,
   PURPOSE_LOG_TEXT,
-  PURPOSE_MOODS,
   VISIT_BASE,
   fullNameText,
   jobTitleText,
@@ -42,15 +41,6 @@ function intAt(state: CityState, resident: number, field: number): number {
 
 function placeName(state: CityState, place: number): string {
   return place === NO_PLACE ? "nowhere" : state.map.places[place]!.name;
-}
-
-/** The mood an event leaves, and for how long. */
-function moodOfCode(code: number): number {
-  return code >= VISIT_BASE ? PURPOSE_MOODS[code - VISIT_BASE]! : EVENT_MOODS[code]!;
-}
-
-function moodHold(code: number): number {
-  return code === EVENT_CODE.stoopWrecked ? ANGRY_HOLD_TICKS : MOOD_HOLD_TICKS;
 }
 
 /** A resident's mood word's index (`MOOD`): hurt in hospital, the latest event's while it lasts, afraid near a feared door, an urgent need's, else by where they are. A pure function of the row and the time. */
@@ -80,7 +70,9 @@ export function civilianLine(state: CityState, resident: number, tick: number): 
   const name = residentNameText(state, resident);
   const mood = MOOD_WORDS[moodOf(state, resident, tick)]!;
   if (intAt(state, resident, RESIDENT_INT.flags) & FLAG.hurt) return `${name}, in hospital - recovering, feeling ${mood}`;
-  const purpose = PURPOSE_LABELS[intAt(state, resident, RESIDENT_INT.legPurpose)]!;
+  if (intAt(state, resident, RESIDENT_INT.flags) & FLAG.custody) return `${name}, in custody, feeling ${mood}`;
+  const legPurpose = intAt(state, resident, RESIDENT_INT.legPurpose);
+  const purpose = legPurpose === PURPOSE.drive ? `${PURPOSE_LABELS[legPurpose]!} for ${PURPOSE_LABELS[intAt(state, resident, RESIDENT_INT.legReason)]!}` : PURPOSE_LABELS[legPurpose]!;
   const destination = placeName(state, intAt(state, resident, RESIDENT_INT.place));
   if (intAt(state, resident, RESIDENT_INT.species) !== SPECIES.person) return `${name}, ${CAST[first - CAST_NAME_BASE]?.description ?? "an animal"} - ${purpose} -> ${destination}, feeling ${mood}`;
   const age = ageOf(state, resident, dayOf(tick, state.startHour));
@@ -116,6 +108,18 @@ function historyText(state: CityState, code: number, subject: number): string {
     case EVENT_CODE.stoopWrecked: return `a car was wrecked into the stoop at ${place()}`;
     case EVENT_CODE.staticComplaint: return `the TV went to static again: ${packedNameText(subject)}'s radio`;
     case EVENT_CODE.backOnBus: return `got off the bus at ${place()}`;
+    case EVENT_CODE.shoplifted: return `lifted something from ${place()}`;
+    case EVENT_CODE.muggedSomeone: return subject < 0 ? "mugged someone" : `mugged ${packedNameText(subject)}`;
+    case EVENT_CODE.brokeIntoCar: return `broke into a car outside ${place()}`;
+    case EVENT_CODE.wasMugged: return `was mugged outside ${place()}`;
+    case EVENT_CODE.carBrokenInto: return `had their car broken into outside ${place()}`;
+    case EVENT_CODE.shopRobbed: return `${place()} was robbed`;
+    case EVENT_CODE.reportedCrime: return `called the police about trouble outside ${place()}`;
+    case EVENT_CODE.fledDanger: return `ran home from trouble outside ${place()}`;
+    case EVENT_CODE.arrested: return `was arrested outside ${place()}`;
+    case EVENT_CODE.released: return "was let out of custody";
+    case EVENT_CODE.fought: return `got into a fight with ${packedNameText(subject)}`;
+    case EVENT_CODE.foughtStranger: return `squared up to a driver outside ${place()}`;
     default: return "";
   }
 }

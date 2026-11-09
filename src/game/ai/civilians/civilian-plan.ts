@@ -4,19 +4,25 @@ import { PLACE_NAMES } from "./civilian-cast.ts";
 import { dayOf, hourOfDay } from "./civilian-clock.ts";
 import {
   AWAY_MINUTES,
+  CRIME_KIND,
   DECISION_HZ,
   DECISION_JITTER,
   DISTANCE_SCALE,
+  DRIVE_MIN_METRES,
+  DRIVE_SPEED,
   EXIT_STOP_SHARE,
   FAVOURITE_CHANCE,
   FEAR_AVOID,
+  FIGHT_TICKS,
   FLAG,
+  FLEE_SPEED_FACTOR,
   FRIDAY,
   HOURS_PER_GAME_DAY,
   JOB_AGE,
   MAX_PATH_NODES,
   NEED,
   NEED_COUNT,
+  NEVER_TICK,
   NIGHT_FEAR_WEIGHT,
   NIGHT_FROM_HOUR,
   NIGHT_TO_HOUR,
@@ -25,11 +31,14 @@ import {
   PARTY_INVITE_SHARE,
   PARTY_LAST_HOUR,
   PURPOSE,
+  RELEASE_REFORM_CHANCE,
   RESIDENT_FLOAT,
   RESIDENT_FLOAT_STRIDE,
   RESIDENT_INT,
   RESIDENT_INT_STRIDE,
   SCHEDULE_SLACK_TICKS,
+  SEAT_MIN_DWELL_MINUTES,
+  SITTER_CHAT_REACH,
   SPECIES,
   STAY_MINUTES,
   STAY_UTILITY,
@@ -41,7 +50,14 @@ import { EVENT_CODE, PURPOSE_MOODS, VISIT_BASE } from "./civilian-names.ts";
 import { CityState, logHistory, markDirty, measurePath, setMoodEvent } from "./civilian-state.ts";
 import { nextAppointment, weekdayOf } from "./civilian-story.ts";
 import { ageOf } from "./society-day.ts";
+import { crimeKindOf } from "./society-crime.ts";
 import { dwellTicksOf, evolveNeeds, needWeight } from "./needs.ts";
+import { claimSeat, releaseSeat } from "./society-seats.ts";
+import { INTERACTIONS, TARGET, considerInteractions, type InteractionRow } from "./society-table.ts";
+import { isSeatedVenue } from "./society-venues.ts";
+
+/** Reasons a car owner drives to: the commute, home, errands and meals (not a drink: the car stays where it is). */
+const DRIVABLE_REASONS: readonly number[] = [NEED.work, NEED.rest, NEED.errand, NEED.food, PURPOSE.shopping];
 
 function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
@@ -60,17 +76,17 @@ function distanceBetween(state: CityState, from: number, to: number): number {
   return hypot2(placeX[to]! - placeX[from]!, placeZ[to]! - placeZ[from]!);
 }
 
-/** The open place of `kind` nearest to `from`, or none; ties go to the lower place id. */
-function nearestOpen(state: CityState, kind: number, from: number, tick: number): number {
+/** The open place of `kind` that serves best from `from` at this hour (its opening hours' weight, falling with distance), or none; ties go to the lower place id. */
+function nearestOpen(state: CityState, kind: number, from: number, tick: number, hour: number): number {
   const list = state.index.byKind[kind]!;
   let best = NO_PLACE;
-  let bestDistance = Infinity;
+  let bestScore = 0;
   for (let at = 0; at < list.length; at++) {
     const place = list[at]!;
     if (!isOpen(state, place, tick)) continue;
-    const distance = distanceBetween(state, from, place);
-    if (distance >= bestDistance) continue;
-    bestDistance = distance;
+    const score = state.venues.hourWeight[place * HOURS_PER_GAME_DAY + hour]! / (1 + distanceBetween(state, from, place) / DISTANCE_SCALE);
+    if (best !== NO_PLACE && score <= bestScore) continue;
+    bestScore = score;
     best = place;
   }
   return best;
@@ -95,10 +111,10 @@ function walkMetres(state: CityState, from: number, to: number): number {
 function walkTicks(state: CityState, resident: number, from: number, to: number): number {
   const metres = walkMetres(state, from, to);
   if (metres < 0) return -1;
-  return Math.max(1, Math.ceil((metres / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!) * DECISION_HZ));
+  return Math.max(1, Math.ceil((metres / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.pace]!) * DECISION_HZ));
 }
 
-/** The place that would answer `need` for this resident now (a favourite, the nearest open one, or a story's), written to `state.chosenPlace` with the purpose in `state.chosenPurpose`. */
+/** The place that would answer `need` for this resident now (a favourite, the best open one for the hour, or a story's), written to `state.chosenPlace` with the purpose in `state.chosenPurpose`. */
 function candidateFor(state: CityState, resident: number, need: number, current: number, tick: number, hour: number, draw: () => number): void {
   state.chosenPurpose = need;
   state.chosenPlace = NO_PLACE;
@@ -106,34 +122,34 @@ function candidateFor(state: CityState, resident: number, need: number, current:
   const day = dayOf(tick, state.startHour);
   const adult = person && ageOf(state, resident, day) >= JOB_AGE;
   if (need === NEED.rest) state.chosenPlace = intAt(state, resident, RESIDENT_INT.home);
-  else if (need === NEED.solitude) state.chosenPlace = nearestOpen(state, PLACE_KIND.hide, current, tick);
+  else if (need === NEED.solitude) state.chosenPlace = nearestOpen(state, PLACE_KIND.hide, current, tick, hour);
   else if (need === NEED.work) {
     const work = intAt(state, resident, RESIDENT_INT.work);
     if (adult && work !== NO_PLACE && !(intAt(state, resident, RESIDENT_INT.flags) & FLAG.laidOff) && isOpen(state, work, tick)) state.chosenPlace = work;
-  } else if (need === NEED.food) state.chosenPlace = favouriteOrNearest(state, RESIDENT_INT.favouriteFood, PLACE_KIND.food, resident, current, tick, draw);
+  } else if (need === NEED.food) state.chosenPlace = favouriteOrNearest(state, RESIDENT_INT.favouriteFood, PLACE_KIND.food, resident, current, tick, hour, draw);
   else if (need === NEED.social) {
     const deck = state.index.placeByName.get(PLACE_NAMES.okaforDeck);
     const partyHour = hour >= PARTY_FIRST_HOUR && hour <= PARTY_LAST_HOUR;
     if (deck !== undefined && partyHour && weekdayOf(state, day) === FRIDAY && draw() < PARTY_INVITE_SHARE) {
       state.chosenPlace = deck;
       state.chosenPurpose = PURPOSE.partyGuest;
-    } else state.chosenPlace = favouriteOrNearest(state, RESIDENT_INT.favouriteHangout, PLACE_KIND.hangout, resident, current, tick, draw);
+    } else state.chosenPlace = favouriteOrNearest(state, RESIDENT_INT.favouriteHangout, PLACE_KIND.hangout, resident, current, tick, hour, draw);
   } else if (adult && state.index.exitStops.length > 0 && draw() < EXIT_STOP_SHARE) {
     state.chosenPlace = state.index.exitStops[Math.floor(draw() * state.index.exitStops.length)]!;
     state.chosenPurpose = PURPOSE.busAway;
   } else {
-    const shop = favouriteOrNearest(state, RESIDENT_INT.favouriteShop, PLACE_KIND.shop, resident, current, tick, draw);
-    state.chosenPlace = shop !== NO_PLACE ? shop : nearestOpen(state, PLACE_KIND.transit, current, tick);
+    const shop = favouriteOrNearest(state, RESIDENT_INT.favouriteShop, PLACE_KIND.shop, resident, current, tick, hour, draw);
+    state.chosenPlace = shop !== NO_PLACE ? shop : nearestOpen(state, PLACE_KIND.transit, current, tick, hour);
   }
 }
 
-function favouriteOrNearest(state: CityState, field: number, kind: number, resident: number, current: number, tick: number, draw: () => number): number {
+function favouriteOrNearest(state: CityState, field: number, kind: number, resident: number, current: number, tick: number, hour: number, draw: () => number): number {
   const favourite = intAt(state, resident, field);
   if (favourite !== NO_PLACE && isOpen(state, favourite, tick) && draw() < FAVOURITE_CHANCE) return favourite;
-  return nearestOpen(state, kind, current, tick);
+  return nearestOpen(state, kind, current, tick, hour);
 }
 
-/** The place and purpose with the highest utility (urgency x the hour's weight, falling with distance and with fear at the door); `state.chosenPlace` is none when nothing beats `STAY_UTILITY`. */
+/** The place and purpose with the highest utility (urgency x the hour's weight, falling with distance and with fear at the door), a need's or an interaction row's (`society-table.ts`); `state.chosenPlace` is none when nothing beats `STAY_UTILITY`. */
 function chooseByUtility(state: CityState, resident: number, current: number, tick: number, hour: number, draw: () => number): void {
   const person = intAt(state, resident, RESIDENT_INT.species) === SPECIES.person;
   const shiftStart = intAt(state, resident, RESIDENT_INT.shiftStart);
@@ -141,6 +157,8 @@ function chooseByUtility(state: CityState, resident: number, current: number, ti
   let bestUtility = STAY_UTILITY;
   let bestPlace = NO_PLACE;
   let bestPurpose: number = NEED.rest;
+  state.chosenRow = -1;
+  state.chosenPartner = NO_PLACE;
   for (let need = 0; need < NEED_COUNT; need++) {
     const urgency = state.scratchNeeds[need]!;
     if (urgency <= 0 || (!person && need !== NEED.rest && need !== NEED.solitude)) continue;
@@ -150,7 +168,7 @@ function chooseByUtility(state: CityState, resident: number, current: number, ti
     const place = state.chosenPlace;
     if (place === NO_PLACE) continue;
     const door = state.index.doorNode[place]!;
-    const hours = state.index.hourWeight[place * HOURS_PER_GAME_DAY + hour]!;
+    const hours = state.venues.hourWeight[place * HOURS_PER_GAME_DAY + hour]!;
     const utility = ((urgency * weight * hours) / (1 + distanceBetween(state, current, place) / DISTANCE_SCALE) / (1 + FEAR_AVOID * fearWeight * state.fear[door]!)) * (1 + (draw() * 2 - 1) * DECISION_JITTER);
     if (utility <= bestUtility) continue;
     bestUtility = utility;
@@ -159,12 +177,26 @@ function chooseByUtility(state: CityState, resident: number, current: number, ti
   }
   state.chosenPlace = bestPlace;
   state.chosenPurpose = bestPurpose;
+  considerInteractions(state, resident, current, tick, hour, bestUtility, draw);
+}
+
+/** A customer takes a free seat at a coffee shop, bar or diner for a dwell worth sitting through; someone sitting out takes a stoop seat. */
+function takeSeat(state: CityState, resident: number, place: number, purpose: number): void {
+  const base = resident * RESIDENT_INT_STRIDE;
+  if (purpose === PURPOSE.stoopSit) {
+    claimSeat(state, resident, place, true);
+    return;
+  }
+  const dwellMinutes = (state.ints[base + RESIDENT_INT.nextDecisionTick]! - state.ints[base + RESIDENT_INT.arriveTick]!) / TICKS_PER_GAME_MINUTE;
+  if (state.ints[base + RESIDENT_INT.species] !== SPECIES.person || state.ints[base + RESIDENT_INT.work] === place || dwellMinutes < SEAT_MIN_DWELL_MINUTES) return;
+  if (isSeatedVenue(state.venues.venueOf[place]!)) claimSeat(state, resident, place, false);
 }
 
 /** The resident dwells where they are until `nextDecision`: no leg. */
 function stayPut(state: CityState, resident: number, tick: number, place: number, dwellTicks: number, purpose: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   const floatBase = resident * RESIDENT_FLOAT_STRIDE;
+  releaseSeat(state, resident);
   state.ints[base + RESIDENT_INT.fromPlace] = place;
   state.ints[base + RESIDENT_INT.place] = place;
   state.ints[base + RESIDENT_INT.departTick] = tick;
@@ -172,12 +204,15 @@ function stayPut(state: CityState, resident: number, tick: number, place: number
   state.ints[base + RESIDENT_INT.nextDecisionTick] = tick + Math.max(1, dwellTicks);
   state.ints[base + RESIDENT_INT.pathCount] = 0;
   state.ints[base + RESIDENT_INT.legPurpose] = purpose;
+  state.ints[base + RESIDENT_INT.legReason] = purpose;
+  state.ints[base + RESIDENT_INT.companion] = NO_PLACE;
   state.ints[base + RESIDENT_INT.decisionCount]++;
   for (let need = 0; need < NEED_COUNT; need++) state.floats[floatBase + RESIDENT_FLOAT.needs + need] = state.scratchNeeds[need]!;
+  takeSeat(state, resident, place, purpose);
   markDirty(state, resident);
 }
 
-/** Plans the walk from where resident `resident` dwells to `destination` and a stay there; false (nothing written) when no walk of the allowed length exists. The needs it keeps are `state.scratchNeeds`. */
+/** Plans the walk (or drive, for a car owner whose car is here and whose walk is long) from where resident `resident` dwells to `destination` and a stay there; false (nothing written) when no walk of the allowed length exists. The needs it keeps are `state.scratchNeeds`. */
 function planLeg(state: CityState, resident: number, tick: number, destination: number, purpose: number, dwellTicks: number): boolean {
   const base = resident * RESIDENT_INT_STRIDE;
   const floatBase = resident * RESIDENT_FLOAT_STRIDE;
@@ -185,19 +220,29 @@ function planLeg(state: CityState, resident: number, tick: number, destination: 
   const hour = hourOfDay(tick, state.startHour);
   const count = state.finder.find(state.index.doorNode[current]!, state.index.doorNode[destination]!, state.fear, isNight(hour) ? NIGHT_FEAR_WEIGHT : 1, state.pathNodes, resident * MAX_PATH_NODES, MAX_PATH_NODES);
   if (count === 0) return false;
+  releaseSeat(state, resident);
   state.ints[base + RESIDENT_INT.pathCount] = count;
   const metres = measurePath(state, resident);
-  const legTicks = Math.max(1, Math.ceil((metres / state.floats[floatBase + RESIDENT_FLOAT.speed]!) * DECISION_HZ));
+  const hasCarHere = (state.ints[base + RESIDENT_INT.flags]! & FLAG.hasCar) !== 0 && state.ints[base + RESIDENT_INT.carPlace] === current;
+  const drives = hasCarHere && DRIVABLE_REASONS.includes(purpose) && metres >= DRIVE_MIN_METRES;
+  const legSpeed = drives ? DRIVE_SPEED : state.floats[floatBase + RESIDENT_FLOAT.pace]! * (purpose === PURPOSE.flee ? FLEE_SPEED_FACTOR : 1);
+  state.floats[floatBase + RESIDENT_FLOAT.speed] = legSpeed;
+  const legTicks = Math.max(1, Math.ceil((metres / legSpeed) * DECISION_HZ));
+  const legPurpose = drives ? PURPOSE.drive : purpose;
   state.ints[base + RESIDENT_INT.fromPlace] = current;
   state.ints[base + RESIDENT_INT.place] = destination;
   state.ints[base + RESIDENT_INT.departTick] = tick;
   state.ints[base + RESIDENT_INT.arriveTick] = tick + legTicks;
   state.ints[base + RESIDENT_INT.nextDecisionTick] = tick + legTicks + Math.max(1, dwellTicks);
-  state.ints[base + RESIDENT_INT.legPurpose] = purpose;
+  state.ints[base + RESIDENT_INT.legPurpose] = legPurpose;
+  state.ints[base + RESIDENT_INT.legReason] = purpose;
+  state.ints[base + RESIDENT_INT.companion] = NO_PLACE;
+  if (drives) state.ints[base + RESIDENT_INT.carPlace] = destination;
   state.ints[base + RESIDENT_INT.decisionCount]++;
   for (let need = 0; need < NEED_COUNT; need++) state.floats[floatBase + RESIDENT_FLOAT.needs + need] = state.scratchNeeds[need]!;
-  logHistory(state, resident, VISIT_BASE + purpose, destination, tick);
+  logHistory(state, resident, VISIT_BASE + legPurpose, destination, tick);
   if (PURPOSE_MOODS[purpose]! !== -1) setMoodEvent(state, resident, VISIT_BASE + purpose, tick);
+  takeSeat(state, resident, destination, purpose);
   markDirty(state, resident);
   return true;
 }
@@ -207,6 +252,13 @@ export function sendResidentTo(state: CityState, resident: number, tick: number,
   const base = resident * RESIDENT_INT_STRIDE;
   evolveNeeds(state.floats, resident * RESIDENT_FLOAT_STRIDE, state.ints[base + RESIDENT_INT.departTick]!, state.ints[base + RESIDENT_INT.arriveTick]!, tick, state.index.kindOf[state.ints[base + RESIDENT_INT.place]!]!, state.scratchNeeds);
   return planLeg(state, resident, tick, destination, purpose, dwellTicks);
+}
+
+/** A resident is made to dwell at `place` (where they are, by default) for `purpose` until `dwellTicks` have gone, with their needs worked out to `tick`. */
+export function standOutside(state: CityState, resident: number, tick: number, purpose: number, dwellTicks: number, place = state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.place]!): void {
+  const base = resident * RESIDENT_INT_STRIDE;
+  evolveNeeds(state.floats, resident * RESIDENT_FLOAT_STRIDE, state.ints[base + RESIDENT_INT.departTick]!, state.ints[base + RESIDENT_INT.arriveTick]!, tick, state.index.kindOf[state.ints[base + RESIDENT_INT.place]!]!, state.scratchNeeds);
+  stayPut(state, resident, tick, place, dwellTicks, purpose);
 }
 
 /** A named resident's appointment that is due: leaves in time to be there at the appointed tick. */
@@ -243,35 +295,87 @@ function cutDwellForAppointment(state: CityState, resident: number, tick: number
   state.ints[base + RESIDENT_INT.nextDecisionTick] = Math.max(state.ints[base + RESIDENT_INT.arriveTick]!, leaveBy, tick + 1);
 }
 
-/** Closes a spell in hospital or away on the bus: a line for the return. */
+/** Closes a spell in hospital, in custody or away on the bus: a line for the return (and, from custody, a chance of giving crime up). */
 function noteReturn(state: CityState, resident: number, tick: number, current: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   if ((state.ints[base + RESIDENT_INT.flags]! & FLAG.hurt) !== 0) {
     state.ints[base + RESIDENT_INT.flags] &= ~FLAG.hurt;
     logHistory(state, resident, EVENT_CODE.backFromHospital, current, tick);
     setMoodEvent(state, resident, EVENT_CODE.backFromHospital, tick);
+  } else if ((state.ints[base + RESIDENT_INT.flags]! & FLAG.custody) !== 0) {
+    state.ints[base + RESIDENT_INT.flags] &= ~FLAG.custody;
+    if (residentDraws(state.seed, resident, STREAM.crime, tick)() < RELEASE_REFORM_CHANCE) state.ints[base + RESIDENT_INT.flags] &= ~FLAG.criminal;
+    logHistory(state, resident, EVENT_CODE.released, current, tick);
+    setMoodEvent(state, resident, EVENT_CODE.released, tick);
   } else if (state.ints[base + RESIDENT_INT.legPurpose] === PURPOSE.busAway) {
     logHistory(state, resident, EVENT_CODE.backOnBus, current, tick);
   }
 }
 
-/** Resident `resident`'s decision at the end of a dwell, at `tick`: a named resident's appointment first, else the best need by utility; a leg to the place, or a stay. */
+/** A fight is over once its ticks have run. */
+function endFight(state: CityState, resident: number, tick: number): void {
+  const base = resident * RESIDENT_INT_STRIDE;
+  if (state.ints[base + RESIDENT_INT.fightTick] === NEVER_TICK || tick < state.ints[base + RESIDENT_INT.fightTick]! + FIGHT_TICKS) return;
+  state.ints[base + RESIDENT_INT.fightTick] = NEVER_TICK;
+  state.ints[base + RESIDENT_INT.fightPartner] = NO_PLACE;
+}
+
+/** A neighbour dwelling at home comes out to talk or argue at the door for as long as the visitor stays. */
+function pullOut(state: CityState, neighbour: number, tick: number, purpose: number, visitor: number, dwellTicks: number): void {
+  standOutside(state, neighbour, tick, purpose, dwellTicks);
+  state.ints[neighbour * RESIDENT_INT_STRIDE + RESIDENT_INT.companion] = visitor;
+}
+
+/** Someone out on their stoop within chatting distance who is on their own: the two talk. */
+function linkNearbySitter(state: CityState, resident: number, tick: number): void {
+  const home = intAt(state, resident, RESIDENT_INT.place);
+  for (let other = 0; other < state.capacity; other++) {
+    const base = other * RESIDENT_INT_STRIDE;
+    if (other === resident || state.ints[base + RESIDENT_INT.legPurpose] !== PURPOSE.stoopSit || state.ints[base + RESIDENT_INT.companion] !== NO_PLACE) continue;
+    if (state.ints[base + RESIDENT_INT.alive] === 0 || state.ints[base + RESIDENT_INT.arriveTick]! > tick || state.ints[base + RESIDENT_INT.nextDecisionTick]! <= tick) continue;
+    if (distanceBetween(state, home, state.ints[base + RESIDENT_INT.place]!) > SITTER_CHAT_REACH) continue;
+    state.ints[base + RESIDENT_INT.companion] = resident;
+    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.companion] = other;
+    markDirty(state, other);
+    return;
+  }
+}
+
+/** What a chosen row does beyond the resident's own row: brings its neighbour out, joins a neighbour sitting out, or names the victim of a crime attempt. */
+function afterInteraction(state: CityState, resident: number, tick: number, row: InteractionRow, dwellTicks: number): void {
+  const partner = state.chosenPartner;
+  if (row.target === TARGET.neighbour && partner !== NO_PLACE) {
+    pullOut(state, partner, tick, row.purpose, resident, dwellTicks);
+    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.companion] = partner;
+  } else if (row.purpose === PURPOSE.stoopSit) linkNearbySitter(state, resident, tick);
+  else if (crimeKindOf(row.purpose) !== CRIME_KIND.none) state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.crimeVictim] = partner;
+}
+
+/** Resident `resident`'s decision at the end of a dwell, at `tick`: a named resident's appointment first, else the best need or table row by utility; a leg to the place, or a stay. */
 export function decideResident(state: CityState, resident: number, tick: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   const current = state.ints[base + RESIDENT_INT.place]!;
   const hour = hourOfDay(tick, state.startHour);
   evolveNeeds(state.floats, resident * RESIDENT_FLOAT_STRIDE, state.ints[base + RESIDENT_INT.departTick]!, state.ints[base + RESIDENT_INT.arriveTick]!, tick, state.index.kindOf[current]!, state.scratchNeeds);
   noteReturn(state, resident, tick, current);
+  endFight(state, resident, tick);
   const named = (state.ints[base + RESIDENT_INT.flags]! & FLAG.cast) !== 0;
   if (named && keepAppointment(state, resident, tick, current)) return;
   const draw = residentDraws(state.seed, resident, STREAM.decision, state.ints[base + RESIDENT_INT.decisionCount]!);
   chooseByUtility(state, resident, current, tick, hour, draw);
   const purpose = state.chosenPurpose;
+  const row = state.chosenRow >= 0 ? INTERACTIONS[state.chosenRow]! : null;
   const walksAway = state.chosenPlace !== NO_PLACE && state.chosenPlace !== current;
   const place = walksAway && named && !walkFitsBeforeAppointment(state, resident, tick, current, state.chosenPlace) ? NO_PLACE : state.chosenPlace;
   const kind = place === NO_PLACE ? PLACE_KIND.home : state.index.kindOf[place]!;
-  const dwell = purpose === PURPOSE.busAway ? Math.round((AWAY_MINUTES[0] + (AWAY_MINUTES[1] - AWAY_MINUTES[0]) * draw()) * TICKS_PER_GAME_MINUTE) : dwellTicksOf(kind, draw());
+  let dwell: number;
+  if (purpose === PURPOSE.busAway) dwell = Math.round((AWAY_MINUTES[0] + (AWAY_MINUTES[1] - AWAY_MINUTES[0]) * draw()) * TICKS_PER_GAME_MINUTE);
+  else if (row !== null) dwell = Math.round((row.dwell[0] + (row.dwell[1] - row.dwell[0]) * draw()) * TICKS_PER_GAME_MINUTE);
+  else dwell = dwellTicksOf(kind, draw());
   if (place === NO_PLACE) stayPut(state, resident, tick, current, STAY_MINUTES * TICKS_PER_GAME_MINUTE, NEED.rest);
-  else if (place === current || !planLeg(state, resident, tick, place, purpose, dwell)) stayPut(state, resident, tick, current, dwell, purpose);
+  else if (place === current) stayPut(state, resident, tick, current, dwell, purpose);
+  else if (!planLeg(state, resident, tick, place, purpose, dwell)) stayPut(state, resident, tick, current, dwell, row === null ? purpose : NEED.rest);
+  else if (row !== null) afterInteraction(state, resident, tick, row, dwell);
+  if (place === current && row !== null) afterInteraction(state, resident, tick, row, dwell);
   if (named) cutDwellForAppointment(state, resident, tick);
 }
