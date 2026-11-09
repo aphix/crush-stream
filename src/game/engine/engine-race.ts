@@ -10,6 +10,7 @@ import { Campaign } from "../match/campaign.ts";
 import { PoliceBrain } from "../ai/police.ts";
 import { HunterBrain } from "../ai/hunter.ts";
 import type { AiCar } from "../ai/derby-ai.ts";
+import type { FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import { applyAiDrive, InputFade } from "../ai/input-fade.ts";
 import { copyDrive } from "../ai/race-ai.ts";
 import { AI_DIFFICULTIES, COOL_DOWN_THROTTLE } from "../ai/constants.ts";
@@ -36,6 +37,8 @@ export const RESULTS_DELAY = 2.5;
  * at the end of every physics slice, `frame` once per rendered frame.
  */
 export class RaceDirector extends RaceHudLayer {
+  /** Whoever drives the lobby's cars that no human does (the open world's traffic); null: they stand on their brakes, as in every other lobby. */
+  freeDrivers: FreeDrivers | null = null;
   /** A netplay client's race is its host's: `applySnapshot` has fed it (cleared on `enter` and `exit`). A run this browser started itself is not mirrored. */
   mirrored = false;
   /** Per car id: the drafting bonuses (`CarRecord.drafts`) already put on a meter. */
@@ -591,9 +594,15 @@ export class RaceDirector extends RaceHudLayer {
     const brain = this.brain;
     const ground = this.track?.ground();
     if (this.free && ground) {
+      this.freeDrivers?.drive(cars);
       for (let i = 0; i < cars.length; i++) {
         const car = cars[i]!;
         const own = i === this.self && this.host.seat.mode === "drive" && this.host.seat.carIndex === i;
+        const driven = !own && car.driverOut === null && !this.seats.has(i) ? (this.freeDrivers?.inputOf(i, dt) ?? null) : null;
+        if (driven !== null) {
+          applyAiDrive(car, driven, dt);
+          continue;
+        }
         const input = car.driverOut !== null ? COAST : own ? this.host.seat.input(car, dt) : this.seats.has(i) ? this.remote[i]! : this.hold;
         applyDrive(car, input, dt);
       }

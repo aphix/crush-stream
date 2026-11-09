@@ -179,6 +179,17 @@ torso's lean, and `plant` holds the feet on the floor as the pelvis sinks. A cli
 side (bump, fight) or the civilian's handedness. Looping clips grow their fidgets from their rest pose over 1.5 s and start at an offset per
 civilian, so a bar of sitters does not glance together. No frame allocates.
 
+## Traffic (`ai/openworld-traffic`)
+
+Real cars of the field drive the streets, stop at signals and park in the kerb spaces. They are sim cars on the host (and solo) and reach a client in the host's snapshots like every car (about 30 B a car at 30 Hz while undamaged: 12 movers about 11 KB/s a client). The pool is the cars past the seated ones (`first` = highest seat + 1): `MOVER_CARS` drivers (desktop 12, phone 6, the last `PATROL_CARS` of them police bodies for `spawnDrivenCar(..., { urgent: true })`) and `KERB_CARS` standing cars (desktop 10, phone 4). A peer that joins takes the lowest free id: if it is a pool car, traffic lets go of it (its lease is `lost`).
+
+- **Roads** (`world/openworld/openworld-roads.ts`): the 4 x 4 grid of junctions from `LAYOUT`, two lanes a street, traffic on the right; `openworld-parking.ts`: the kerb spaces on the block side of each lane (6 m each, 6 m clear of a junction's box), `stays` marks the 70 % that hold a car for good.
+- **Signals** (`traffic-lights.ts`): four phases a junction (north-south through, left, east-west through, left), each a green, 3 s yellow and 1.5 s all red; `lightPhase(junction, crowdSeconds)` is a pure function of the crowd clock, staggered per junction, the same on every peer. Drawn by `present/traffic-lights.ts` (poles, heads and lamps, three instanced meshes).
+- **Driving** (`trip-route.ts`, `traffic-driver.ts`): a trip is points along the lanes, the turns and the swing into a space (a Dijkstra over lanes); the driver is pure pursuit with the lowest of the cruise speed, the turn caps, the signal ahead (red, or a yellow it can stop for, holds it at the bar; a decision to stop sticks), the car ahead on the route and the end of the route.
+- **Cars** (`mover-fleet.ts`): ambient cars dwell in a space, pull out, drive to a free space and park; leased cars (`OpenWorldTraffic.spawnDrivenCar(resident, fromSpot, toSpot, options?)`: a resident's commute, a patrol) take a given trip, and `handle.driver` replaces the trip driver. `kerb-cars.ts`: real cars standing in the spaces within 70 m of a player that no eye sees, put away when unseen and 40 m off.
+- **Red-light runs** (`red-light-watch.ts`): `onRedLightRun(listener)` (host and solo) fires once per car per crossing of a stop bar against its signal, for every car, the player's included.
+- **Engine** (`engine-openworld.ts`, `engine-race.ts`): `RaceDirector.freeDrivers` drives the lobby's cars no human does (null: they stand on their brakes as ever).
+
 ## Where it lives
 
 | Piece | File |
@@ -192,6 +203,7 @@ civilian, so a bar of sitters does not glance together. No frame allocates.
 | Signs: shop signs, names on the buildings | `present/openworld-shop-signs.ts`, `openworld-signs.ts` (the label style from `track-debug.ts`) |
 | Rowhome facade kit | `present/facade-bays.ts`, `facade-bay-parts.ts`, `facade-kit-atlas.ts`; plan and colliders `world/openworld/openworld-facade-solids.ts` |
 | Animation | `present/civilian-anim{,-clips,-rig,-channels}.ts`, `ai/civilians/civilian-activity.ts` |
+| Traffic, signals, parking | `ai/openworld-traffic/`, `world/openworld/openworld-{roads,parking}.ts`, `present/traffic-lights.ts` |
 | Map and course | `world/openworld/` |
 | Street fabric (crossings, manholes, hydrants, furniture) | `world/openworld/openworld-fabric.ts`, `openworld-fabric-constants.ts`, `openworld-sides.ts` |
 | What is seen, the cars' detail and phase-out | `present/openworld-sight.ts`, `present/openworld-car-lod.ts`, `engine/engine-openworld-cull.ts` |
