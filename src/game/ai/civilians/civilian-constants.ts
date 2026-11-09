@@ -93,7 +93,7 @@ export const CAST_NAME_BASE = 1000;
 export const CAST_TITLE_BASE = 100;
 
 /** Event kinds of the host's input triples (kind, subject, crowd seconds). */
-export const EVENT_KIND = { knock: 0, wreck: 1 } as const;
+export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5 } as const;
 export const EVENT_TRIPLE = 3;
 /** Society effects of a wreck or knock: what the corner is feared at, within FEAR_RADIUS metres of the spot (falling off linearly to 0 at the edge). */
 export const WRECK_FEAR = 1;

@@ -32,6 +32,8 @@ class Harness {
   tier = POPULATION_TIER.phone;
   now = 100;
   cars: DeformableCar[] = [];
+  /** Where the player on foot stands, null while he is in a car. */
+  footAt: { x: number; z: number } | null = null;
   readonly eye = new LookRay();
   readonly thrown: FigureStrike[] = [];
   readonly looks: DriverLook[] = [];
@@ -46,6 +48,11 @@ class Harness {
     seed: () => this.seed,
     tier: () => this.tier,
     cars: () => this.cars,
+    foot: (out) => {
+      if (this.footAt === null) return false;
+      Object.assign(out, this.footAt);
+      return true;
+    },
     now: () => this.now,
     eye: (ray) => Object.assign(ray, this.eye),
     throwFigure: (strike, look) => {

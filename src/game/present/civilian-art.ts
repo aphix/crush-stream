@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
-import { FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLOATS, FIGURE_FLOATS, NEAR_DRAW, SLOT_KEEP_DISTANCE_SCALE, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
-import { dressOfLook, skinOfLook, writeLinearColour } from "./civilian-dress.ts";
+import { FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLOATS, FIGURE_FLOATS, NEAR_DRAW, SIGHT_RADIUS, SLOT_KEEP_DISTANCE_SCALE, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
+import { dressOfLook, isPoliceLook, skinOfLook, writeLinearColour } from "./civilian-dress.ts";
 import { civilianFigures, type CivilianFigures } from "./civilian-figure.ts";
 import { poseCivilian } from "./civilian-pose.ts";
 import type { DriverLook } from "./driver-look.ts";
+import { HIDE_GRACE, type SightField } from "./openworld-sight.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 
 const NO_SLOT = -1;
@@ -17,8 +18,8 @@ const SKIN_AT = FIGURE_FLOATS.COLOUR * 2;
 
 /**
  * The open world's crowd drawn (`CrowdPoses` is the crowd's, read each frame): the nearest civilians as posed dummies (`DummyMesh`,
- * dressed from their look), every other one in view as one instance of a cheap low-poly figure, nothing past `FAR_DRAW`.
- * Draw calls do not grow with the crowd.
+ * dressed from their look), every other one in view as one instance of a cheap low-poly figure, nothing past `FAR_DRAW`, and nobody
+ * the sight field has not seen for `HIDE_GRACE` seconds. Draw calls do not grow with the crowd.
  */
 export class CivilianArt {
   readonly group = new THREE.Group();
@@ -34,6 +35,9 @@ export class CivilianArt {
   private readonly slotOf: Int32Array;
   private readonly nearStamp: Int32Array;
   private readonly nearList: Int32Array;
+  /** Per civilian: seconds out of every player's sight (capped at `HIDE_GRACE`), and the stamp of the last frame she was in sight or within her grace. */
+  private readonly unseenSeconds: Float32Array;
+  private readonly visibleStamp: Int32Array;
   private readonly nearKey: Float32Array;
   private stamp = 0;
   private eyeX = 0;
@@ -53,6 +57,8 @@ export class CivilianArt {
     this.slotLook = new Uint32Array(nearSlots);
     this.slotOf = new Int32Array(capacity).fill(NO_SLOT);
     this.nearStamp = new Int32Array(capacity);
+    this.unseenSeconds = new Float32Array(capacity).fill(HIDE_GRACE);
+    this.visibleStamp = new Int32Array(capacity);
     this.nearList = new Int32Array(nearSlots);
     this.nearKey = new Float32Array(nearSlots);
     this.figureLook = new Uint32Array(capacity);
@@ -69,12 +75,13 @@ export class CivilianArt {
     return this.slotOf[civilian]!;
   }
 
-  /** Draw the crowd as seen from (`eyeX`, `eyeZ`): once a frame, after the crowd's step. */
-  update(poses: CrowdPoses, eyeX: number, eyeZ: number): void {
+  /** Draw the crowd as seen from (`eyeX`, `eyeZ`) by the players `sight` stands for, `wallDt` s after the last frame: once a frame, after the crowd's step. */
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: SightField, wallDt: number): void {
     const count = Math.min(poses.count, this.capacity);
     this.stamp = (this.stamp + 1) | 0;
     this.eyeX = eyeX;
     this.eyeZ = eyeZ;
+    this.refreshSight(poses, count, sight, wallDt);
     const selected = this.selectNearest(poses, count);
     this.assignSlots(poses, selected);
     this.poseDummies(poses, selected);
@@ -93,13 +100,28 @@ export class CivilianArt {
     this.figures.dispose();
   }
 
+  /** Every shown civilian within `FAR_DRAW` is asked of the sight field; one unseen for `HIDE_GRACE` seconds is not drawn, and one out of range must be seen again to come back. */
+  private refreshSight(poses: CrowdPoses, count: number, sight: SightField, wallDt: number): void {
+    for (let civilian = 0; civilian < count; civilian++) {
+      const dx = poses.x[civilian]! - this.eyeX;
+      const dz = poses.z[civilian]! - this.eyeZ;
+      if (poses.shown[civilian] === 0 || dx * dx + dz * dz > FAR_DRAW_SQUARED) {
+        this.unseenSeconds[civilian] = HIDE_GRACE;
+        continue;
+      }
+      const unseen = sight.seen(poses.x[civilian]!, poses.z[civilian]!, SIGHT_RADIUS) ? 0 : Math.min(HIDE_GRACE, this.unseenSeconds[civilian]! + wallDt);
+      this.unseenSeconds[civilian] = unseen;
+      if (unseen < HIDE_GRACE) this.visibleStamp[civilian] = this.stamp;
+    }
+  }
+
   /** `nearList` filled with the shown civilians within `NEAR_DRAW`, nearest first, at most one per slot; a civilian holding a slot counts as nearer than she is. Returns how many. */
   private selectNearest(poses: CrowdPoses, count: number): number {
     const slots = this.slotCount;
     if (slots === 0) return 0;
     let selected = 0;
     for (let civilian = 0; civilian < count; civilian++) {
-      if (poses.shown[civilian] === 0) continue;
+      if (this.visibleStamp[civilian] !== this.stamp) continue;
       const dx = poses.x[civilian]! - this.eyeX;
       const dz = poses.z[civilian]! - this.eyeZ;
       let key = dx * dx + dz * dz;
@@ -141,7 +163,7 @@ export class CivilianArt {
 
   private dressSlot(slot: number, look: number): void {
     dressOfLook(look, this.dress);
-    this.dummies[Math.floor(slot / SLOTS_PER_DUMMY_MESH)]!.dress(slot % SLOTS_PER_DUMMY_MESH, false, this.dress);
+    this.dummies[Math.floor(slot / SLOTS_PER_DUMMY_MESH)]!.dress(slot % SLOTS_PER_DUMMY_MESH, isPoliceLook(look), this.dress);
     this.slotLook[slot] = look;
   }
 
@@ -159,7 +181,7 @@ export class CivilianArt {
   private drawFigures(poses: CrowdPoses, count: number): void {
     let drawn = 0;
     for (let civilian = 0; civilian < count; civilian++) {
-      if (poses.shown[civilian] === 0 || this.nearStamp[civilian] === this.stamp) continue;
+      if (this.visibleStamp[civilian] !== this.stamp || this.nearStamp[civilian] === this.stamp) continue;
       const dx = poses.x[civilian]! - this.eyeX;
       const dz = poses.z[civilian]! - this.eyeZ;
       if (dx * dx + dz * dz > FAR_DRAW_SQUARED) continue;

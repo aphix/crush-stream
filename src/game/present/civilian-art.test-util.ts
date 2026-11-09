@@ -1,29 +1,17 @@
 import * as THREE from "three";
-import { ACTIVITY_OPEN_ENDED } from "../ai/civilians/civilian-activity.ts";
-import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { createCrowdPoses, type CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { mulberry32 } from "../world/placements.ts";
+import type { SightField } from "./openworld-sight.ts";
 
 const LOOK_STEP = 0x9e3779b1;
-const NO_PARTNER = -1;
+/** A sight field that sees everyone, and the length of the frame (s) the art is told passed. */
+export const IN_SIGHT: SightField = { seen: () => true };
+export const FRAME_SECONDS = 1 / 60;
 
 /** A crowd of `count` shown civilians at the origin, standing still, each in its own look. */
 export function emptyPoses(count: number): CrowdPoses {
-  const poses: CrowdPoses = {
-    count,
-    x: new Float32Array(count),
-    z: new Float32Array(count),
-    yaw: new Float32Array(count),
-    stride: new Float32Array(count),
-    speed: new Float32Array(count),
-    look: new Uint32Array(count),
-    shown: new Uint8Array(count).fill(1),
-    activity: new Uint8Array(count),
-    activityClock: new Float32Array(count),
-    activityLeft: new Float32Array(count).fill(ACTIVITY_OPEN_ENDED),
-    surfaceY: new Float32Array(count),
-    partner: new Int32Array(count).fill(NO_PARTNER),
-    feetY: new Float32Array(count),
-  };
+  const poses = createCrowdPoses(count);
+  poses.shown.fill(1);
   for (let civilian = 0; civilian < count; civilian++) poses.look[civilian] = Math.imul(civilian + 1, LOOK_STEP) >>> 0;
   return poses;
 }

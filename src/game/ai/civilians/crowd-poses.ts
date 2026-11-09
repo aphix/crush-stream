@@ -1,3 +1,5 @@
+import { ACTIVITY_OPEN_ENDED } from "./civilian-activity.ts";
+
 /** The drawn crowd, one entry per civilian, owned by the crowd and read by its drawing; `stride` is the walk phase (rad), `shown` 0 hides one. */
 export type CrowdPoses = {
   count: number;
@@ -21,3 +23,22 @@ export type CrowdPoses = {
   /** World y her feet stand on (m): the floor, a stoop step. */
   feetY: Float32Array;
 };
+
+export function createCrowdPoses(capacity: number): CrowdPoses {
+  return {
+    count: capacity,
+    x: new Float32Array(capacity),
+    z: new Float32Array(capacity),
+    yaw: new Float32Array(capacity),
+    stride: new Float32Array(capacity),
+    speed: new Float32Array(capacity),
+    look: new Uint32Array(capacity),
+    shown: new Uint8Array(capacity),
+    activity: new Uint8Array(capacity),
+    activityClock: new Float32Array(capacity),
+    activityLeft: new Float32Array(capacity).fill(ACTIVITY_OPEN_ENDED),
+    partner: new Int32Array(capacity).fill(-1),
+    feetY: new Float32Array(capacity),
+    surfaceY: new Float32Array(capacity),
+  };
+}

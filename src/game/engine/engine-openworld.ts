@@ -1,5 +1,6 @@
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
+import type { SightField } from "../present/openworld-sight.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { SignSight } from "../present/openworld-signs.ts";
@@ -17,7 +18,7 @@ const NO_EVENTS = new Float64Array(0);
 
 /** The drawn crowd: `update` once a frame after the crowd's step. */
 type CrowdArt = {
-  update(poses: CrowdPoses, eyeX: number, eyeZ: number): void;
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: SightField, wallDt: number): void;
   dispose(): void;
 };
 
@@ -38,6 +39,8 @@ type OpenWorldPorts = {
   /** The population tier of this device (`POPULATION_TIER`). */
   tier(): number;
   cars(): readonly DeformableCar[];
+  /** Writes where this browser's player on foot stands; false while he is in a car. */
+  foot(out: { x: number; z: number }): boolean;
   /** This machine's wall clock (s). */
   now(): number;
   /** Writes where the eye is and which way it looks. */
@@ -74,6 +77,13 @@ export class OpenWorldDirector {
   private readonly ray = new LookRay();
   private text: LookText | null = null;
   private lookAcc = 0;
+  readonly sight: SightField = { seen: () => true };
+  private readonly foot = { x: 0, z: 0 };
+  private footTracked = false;
+  private footLastX = 0;
+  private footLastZ = 0;
+  private footVelocityX = 0;
+  private footVelocityZ = 0;
 
   constructor(ports: OpenWorldPorts) {
     this.ports = ports;
@@ -120,6 +130,7 @@ export class OpenWorldDirector {
   step(dt: number): void {
     if (this.crowd === null || this.ports.isClient()) return;
     this.seconds += dt;
+    this.feedWalkers(this.crowd);
     this.crowd.step(this.seconds, this.ports.cars(), true);
     this.throwStruck(this.crowd);
   }
@@ -135,13 +146,15 @@ export class OpenWorldDirector {
     const key = client ? this.heardKey : this.hostKey();
     if (this.crowd === null || this.crowdKey !== key) this.start(this.map, key, client);
     const crowd = this.crowd!;
+    this.trackFoot(wallDt);
     if (client) {
+      this.feedWalkers(crowd);
       crowd.step(this.clock.crowdSeconds(this.ports.now(), INTERP_DELAY), this.ports.cars(), false);
       this.throwStruck(crowd);
     }
     this.ports.eye(this.ray);
     this.frameSigns(this.map);
-    this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ);
+    this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.lookAcc += wallDt;
     if (this.lookAcc >= 1 / LOOK_HZ) {
       this.lookAcc = 0;
@@ -161,6 +174,24 @@ export class OpenWorldDirector {
     this.art = null;
     this.crowd = null;
     this.text = null;
+  }
+
+  /** Once a frame: where the player on foot stands and how fast he moves (how far he went since the last frame). */
+  private trackFoot(wallDt: number): void {
+    const wasTracked = this.footTracked;
+    this.footTracked = this.ports.foot(this.foot);
+    if (!this.footTracked) return;
+    const moving = wasTracked && wallDt > 0;
+    this.footVelocityX = moving ? (this.foot.x - this.footLastX) / wallDt : 0;
+    this.footVelocityZ = moving ? (this.foot.z - this.footLastZ) / wallDt : 0;
+    this.footLastX = this.foot.x;
+    this.footLastZ = this.foot.z;
+  }
+
+  /** The player on foot is a body the crowd makes room round and can shove. */
+  private feedWalkers(crowd: CivilianCrowd): void {
+    crowd.walkers.clear();
+    if (this.footTracked) crowd.walkers.add(this.foot.x, this.foot.z, this.footVelocityX, this.footVelocityZ);
   }
 
   private hostKey(): number {

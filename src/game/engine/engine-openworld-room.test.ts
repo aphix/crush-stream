@@ -56,6 +56,7 @@ function room() {
       seed: () => SEED,
       tier: () => POPULATION_TIER.phone,
       cars: () => [car],
+      foot: () => false,
       now: () => now / 1000,
       eye: () => {},
       throwFigure: (strike) => void thrown.push(strike),

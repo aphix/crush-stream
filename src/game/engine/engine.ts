@@ -375,6 +375,12 @@ export class CrashEngine extends EngineGarage {
       seed: () => this.sceneSeed,
       tier: () => (this.deviceClass !== "desktop" ? POPULATION_TIER.phone : this.cine.tier === "ultra" ? POPULATION_TIER.ultra : POPULATION_TIER.desktop),
       cars: () => this.live(),
+      foot: (out) => {
+        if (!this.ragdolls.walkerTorso(_v)) return false;
+        out.x = _v.x;
+        out.z = _v.z;
+        return true;
+      },
       now: () => performance.now() / 1000,
       eye: (ray) => {
         this.camera.getWorldDirection(_v);
