@@ -93,6 +93,7 @@ describe("given a car braking on a flat straight", () => {
 
   // The drawn nose dips under braking (car-load's weight transfer, kept) toward a keel only 3.2 cm over the road: the drawn
   // body bottoms out on the road (`Suspension.bottomOut`) instead of the springs pressing it 3.5 cm in (sedan/muscle/police).
+  // mutation: sed -i -E 's/\{ pitch: [0-9.]+, roll:/{ pitch: 0, roll:/' src/game/vehicle/car-load.ts  (no class dips its nose: not yet run red, the gate proves it)
   it("when it brakes from 30 m/s, then every class dips its nose and keeps its drawn keel and bumpers out of the road", () => {
     for (const cls of VEHICLE_CLASS_IDS) {
       // Sampled from the braking point (s 100) on, as the hull reads it: the run still starts at s 25 (lead 75 before it), at 30 m/s.

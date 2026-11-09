@@ -69,7 +69,7 @@ describe("given a braked car placed at every heading across a matrix of ground s
 
   it("when the car brakes on the stunt course's CRUSH crest and descent, then it sits on the ground at every heading", (t) => report(t, crestSites()));
 
-  // Mutation (136 of 136 cells red, sunk): sed -i 's/const ly = (FY\[k\]! \* c + FZ\[k\]! \* s) \* scale;/const ly = (FY[k]! * c + FZ[k]! * s) * scale * 0.9;/' src/game/world/surfaces.ts
+  // mutation: sed -i 's/const ly = (FY\[k\]! \* c + FZ\[k\]! \* s) \* scale;/const ly = (FY[k]! * c + FZ[k]! * s) * scale * 0.9;/' src/game/world/surfaces.ts  (the stopped row: all 136 cells sunk)
   it("when the car has stopped on the stunt course's CRUSH crest, then it sits on the ground at every heading", (t) => {
     const rolled: Site[] = [];
     for (const v of [6, 10, 14]) {
