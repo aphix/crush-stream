@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
-import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
-import { Track, blankProjection } from "./track.ts";
+import { FRAME, course, frame, makeWorld, type World } from "./race-world.test-util.ts";
+import { blankProjection } from "./track.ts";
 import { placeProps, propColliders, type PropCollider } from "./placements.ts";
 import { wallColliders } from "./track-sections.ts";
-import { TRACKS } from "./tracks/index.ts";
-import { parseTrack } from "./track-schema.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { bodyPoints } from "../vehicle/body-points.test-util.ts";
 import { makeCar } from "../vehicle/ground-probe.test-util.ts";
@@ -117,7 +115,7 @@ describe("given a lone car in the city race driving at 20 m/s along the loop wit
   it("when the wall starts under it, then the wall moves it no more than its step's travel", () => {
     const w = raceWorld("city", 0);
     try {
-      const track = new Track(TRACKS.find((j) => parseTrack(j).id === "city"));
+      const track = CITY;
       const p = track.path;
       let k = 1;
       while (!(!p.wallL[k - 1] && p.wallL[k] && p.wallL[k + 12] && p.wallL[k + 2])) k++;
@@ -146,7 +144,7 @@ describe("given a lone car in the city race on a walled stretch of the loop, 2 m
   it("when it is shoved 1.35 m toward the wall in one step (a hard car-car shove), its flank 0.3 m into the 0.6 m wall, then the wall returns it to the road, having left it alone before the shove", () => {
     const w = raceWorld("city", 0);
     try {
-      const track = new Track(TRACKS.find((j) => parseTrack(j).id === "city"));
+      const track = CITY;
       const p = track.path;
       // A stretch of the loop walled on the left for 10 samples either side.
       let k = 20;
@@ -178,7 +176,7 @@ describe("given a lone car in the city race on a walled stretch of the loop with
   it("when a replay keyframe puts it beyond the wall line, clear of the wall, and another then puts it with its footprint just into the wall from the road side, then the first is not pushed (it stands outside the wall) and the second is pushed back by its footprint's depth in the drawn wall", () => {
     const w = raceWorld("city", 0);
     try {
-      const track = new Track(TRACKS.find((j) => parseTrack(j).id === "city"));
+      const track = CITY;
       const p = track.path;
       // A walled stretch (10 samples either side) with no prop within a car's length of the three poses below: a prop would push the car too.
       const props = propColliders(placeProps(track));
@@ -247,7 +245,7 @@ const APPROACHES: Approach[] = [
 ];
 
 /** The city's walls as drawn (`wallColliders`), and per piece the side (±1 along its local x) the road is on. */
-const CITY = new Track(TRACKS.find((j) => parseTrack(j).id === "city"));
+const CITY = course("city");
 const CITY_WALLS = wallColliders(CITY);
 const ROAD_SIDE = CITY_WALLS.map((c) => {
   const k = CITY.project(c.x, c.z, -1, blankProjection()).k;
@@ -375,7 +373,7 @@ describe("given the city race's staged wall hit at 0.88 of the lap (the reel's),
   it("when it hits the end at about 22 m/s, then the hit crashes it as any hit as hard: a crash armed, the nose crushed", () => {
     const w = raceOn("city", 8, 1);
     try {
-      const track = new Track(TRACKS.find((j) => parseTrack(j).id === "city"));
+      const track = CITY;
       const state = { acc: 0 };
       while (w.race.time < 1) frame(w, state);
       const car = w.live()[1]!;
