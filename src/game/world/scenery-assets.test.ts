@@ -210,6 +210,7 @@ describe("given the generated scenery assets on every course", () => {
   });
 
   // mutation: sed -i 's/h \* k, w \* a.core \* k\]/h * k, w * k]/' src/game/world/scenery-assets/pick.ts
+  // mutation: sed -i 's/placeCourse(track, SCENERY_ARM.off)/placeCourse(track)/' src/game/world/scenery.test-util.ts  (the authored list takes the solid scenery too: none is left to measure)
   it("when the solid assets are measured, then each is within a car's reach and a standee's or cross's footprint is its core share of the drawn width", () => {
     const { total, counts, bad } = solids();
     expect(total, "solid assets placed").toBeGreaterThan(0);

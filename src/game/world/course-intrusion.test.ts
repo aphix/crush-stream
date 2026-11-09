@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PREFAB, TRACK_ID } from "./constants.ts";
 import { PREFABS } from "./catalog.ts";
 import { placeCourse, type Placed } from "./placements.ts";
@@ -141,13 +141,19 @@ function roadSteps(track: Track): string[] {
 }
 
 for (const json of TRACKS) {
-  const track = new Track(json);
-  describe(`given the ${track.id} course`, () => {
+  describe(`given the ${parseTrack(json).id} course`, () => {
+    let track: Track | undefined;
+    beforeAll(() => {
+      track = new Track(json);
+    });
+    afterAll(() => {
+      track = undefined;
+    });
     it(`when every placed building and prop is measured against the road and runoff, then none reaches more than ${TOL} m onto them`, () => {
-      expect(courseIntrusions(track)).toHaveLength(0);
+      expect(courseIntrusions(track!)).toHaveLength(0);
     });
     it(`when the ground is scanned across every road and its runoff, then no step rises or falls more than the road's own bank and dish plus ${STEP_TOL} m per ${STEP_DX} m`, () => {
-      expect(roadSteps(track)).toHaveLength(0);
+      expect(roadSteps(track!)).toHaveLength(0);
     });
   });
 }

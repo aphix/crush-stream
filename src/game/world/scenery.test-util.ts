@@ -1,5 +1,5 @@
 import { PARKED_PREFABS, PREFABS } from "./catalog.ts";
-import { PREFAB } from "./constants.ts";
+import { PREFAB, SCENERY_ARM } from "./constants.ts";
 import { VERGE_REACH } from "./scenery-biome.ts";
 import { boxClear, placeCourse, type Placed } from "./placements.ts";
 import { parseTrack } from "./track-schema.ts";
@@ -25,8 +25,8 @@ export function dress(json: unknown, extra: object = {}): Dressed {
   const key = `${parsed.id}/${JSON.stringify(extra)}`;
   const known = memo.get(key);
   if (known) return known;
-  const bare = placeCourse(new Track({ ...parsed, scenery: { biome: "none" } })).placed;
   const track = new Track({ ...parsed, scenery: { ...parsed.scenery, ...extra } });
+  const bare = placeCourse(track, SCENERY_ARM.off).placed;
   const course = placeCourse(track);
   const out = { track, authored: bare, solid: course.placed.slice(bare.length), drawn: course.drawn };
   memo.set(key, out);

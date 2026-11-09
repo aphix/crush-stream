@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { PREFABS } from "./catalog.ts";
+import { SCENERY_ARM } from "./constants.ts";
 import { placeProps, propColliders, type Placed } from "./placements.ts";
 import { Track, blankProjection, projectPath, type TrackPath } from "./track.ts";
 import oval from "./tracks/oval.json" with { type: "json" };
@@ -126,7 +127,7 @@ describe("given the stunt course, with cones on the start straight under the bri
       along: [],
       scatter: [],
     });
-    const [under, onDeck, beside] = placeProps(t);
+    const [under, onDeck, beside] = placeProps(t, SCENERY_ARM.off);
     const g = t.ground();
     expect(g.heightAt(0, 0), "the bridge is over the origin").toBeGreaterThan(8);
     expect(Math.abs(under!.y - g.heightAt(0, 0, -1e9)) < 1e-9 && under!.y < 1, `under the bridge at y ${under!.y}`).toBeTruthy();
@@ -138,7 +139,7 @@ describe("given the stunt course, with cones on the start straight under the bri
 describe("given the oval with billboards along both sides", () => {
   it("when the billboards are placed, then each front (+X) points at the centreline", () => {
     const t = new Track({ ...oval, along: [{ prefab: "billboard", every: 30, side: "both", offset: 4 }], scatter: [] });
-    const boards = placeProps(t).filter((p) => p.prefab === "billboard").slice(2);
+    const boards = placeProps(t, SCENERY_ARM.off).filter((p) => p.prefab === "billboard").slice(2);
     expect(boards.length).toBeGreaterThan(10);
     for (const b of boards) {
       const p = projectPath(t.path, b.x, b.z, -1, blankProjection());
@@ -166,7 +167,7 @@ describe("given every course's grandstands", () => {
     let courses = 0;
     for (const json of TRACKS) {
       const t = new Track(json);
-      const stands = placeProps(t).filter((s) => s.prefab === "grandstand");
+      const stands = placeProps(t, SCENERY_ARM.off).filter((s) => s.prefab === "grandstand");
       if (stands.length > 0) courses++;
       const lim = { angle: STAND_ANGLE, gap: STAND_GAP, ...KNOWN_AWAY[t.id] };
       let breaks = false;
