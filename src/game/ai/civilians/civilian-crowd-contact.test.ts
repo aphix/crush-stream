@@ -87,7 +87,7 @@ describe.each([true, false])("given two civilians walking at each other along on
 });
 
 describe("given a civilian walking along a street and a player on foot standing in their way", () => {
-  function walkPast(walkerAt: number | null, authority: boolean) {
+  function walkPast(walkerAt: number | null, authority: boolean, shoves = true) {
     const crowd = newCrowd(map);
     const [walker] = people(crowd, 1) as [number];
     sendAlong(crowd, walker, EDGE, EDGE.from, EDGE.to);
@@ -95,15 +95,18 @@ describe("given a civilian walking along a street and a player on foot standing 
     const standZ = map.graph.nodeZ[EDGE.from]! + EDGE_DIR_Z * (walkerAt ?? 0);
     let minDrawnGap = Infinity;
     let minBrainGap = Infinity;
+    let bumped = false;
     for (let seconds = FRAME_SECONDS; seconds < EDGE.length / PACE; seconds += FRAME_SECONDS) {
       crowd.walkers.clear();
-      if (walkerAt !== null) crowd.walkers.add(standX, standZ, 0, 0);
+      if (walkerAt !== null && shoves) crowd.walkers.add(standX, standZ, 0, 0);
+      if (walkerAt !== null && !shoves) crowd.walkers.addBody(standX, standZ, 0, 0);
       crowd.step(seconds, [], authority);
       if (crowd.poses.shown[walker] === 0 || walkerAt === null) continue;
+      bumped = bumped || crowd.poses.activity[walker] === ACTIVITY.bump;
       minDrawnGap = Math.min(minDrawnGap, hypot2(crowd.poses.x[walker]! - standX, crowd.poses.z[walker]! - standZ));
       minBrainGap = Math.min(minBrainGap, hypot2(crowd.separation.brainX[walker]! - standX, crowd.separation.brainZ[walker]! - standZ));
     }
-    return { crowd, walker, minDrawnGap, minBrainGap };
+    return { crowd, walker, minDrawnGap, minBrainGap, bumped };
   }
   const MIDDLE = Math.min(EDGE.length / 2, 10);
 
@@ -120,6 +123,14 @@ describe("given a civilian walking along a street and a player on foot standing 
     const { crowd, minDrawnGap } = walkPast(MIDDLE, false);
     expect(minDrawnGap, "closest drawn").toBeGreaterThanOrEqual(BODY_GAP - RESIDUAL);
     expect(pushesOf(crowd).length, "pushes").toBe(0);
+  });
+
+  it("when the one in their way is a body that never shoves (a foot cop), then they are drawn round him and bump him, but nothing is logged", () => {
+    const { crowd, walker, minDrawnGap, minBrainGap, bumped } = walkPast(MIDDLE, true, false);
+    expect(minBrainGap, "closest the brain has them").toBeLessThan(WALKER_PUSH_DISTANCE);
+    expect(minDrawnGap, "closest drawn").toBeGreaterThanOrEqual(BODY_GAP - RESIDUAL);
+    expect(bumped, "played the bump clip").toBe(true);
+    expect(pushesOf(crowd).filter((push) => push.victim === walker).length, "pushes of them").toBe(0);
   });
 
   it("when no one stands in their way, then nothing of theirs is logged", () => {

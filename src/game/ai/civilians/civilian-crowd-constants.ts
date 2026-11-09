@@ -49,8 +49,8 @@ export const MOVING_SPEED = 0.1;
 /** Pairs each body lists as the lower of the two: a ninth neighbour inside reach is a mob, not a street. The grid's cells hash by position (a power of two). */
 export const PAIRS_PER_BODY = 8;
 export const SEPARATION_CELLS = 2048;
-/** Players on foot the crowd makes room for. */
-export const WALKER_CAPACITY = 4;
+/** Bodies on foot the crowd makes room for: four players and the law's four foot cops. */
+export const WALKER_CAPACITY = 8;
 /** Bodies closer than this (m) have no direction between them: they part along +x. */
 export const COINCIDENT_DISTANCE = 1e-4;
 
