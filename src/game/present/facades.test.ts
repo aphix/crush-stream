@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
@@ -347,8 +347,8 @@ const compileFacade = (material: THREE.Material): THREE.WebGLProgramParametersWi
 };
 
 const RELIEF_UNIFORMS = ["facadeHeightMap", "facadeReliefDepth", "facadeRoughnessMap", "facadeRoughnessMix"];
-/** The relief shader's marks: the parallax's gradient-sampled reads and its function. */
-const RELIEF_MARKS = ["facadeParallax", "textureGrad", "facadeShift"];
+/** The relief shader's marks: the parallax function, its shift and the screen derivatives the reads take their mip level from. */
+const RELIEF_MARKS = ["facadeParallax", "facadeShift", "facadeDx"];
 
 describe("given a style whose layer data names no relief strips", () => {
   it("when it is compiled, then its program is the base facade program: no relief uniform, no parallax, the base cache key", () => {
@@ -410,12 +410,9 @@ describe("given a style with relief strips and the relief tier switched", () => 
       },
       createImageBitmap: async (blob: Blob) => {
         const url = await blob.text();
-        let size = DEFAULT_STRIP;
-        try {
-          size = webpSize(new Uint8Array(readFileSync(new URL(`../../../public${url}`, import.meta.url))));
-        } catch {
-          // No such file (a fixture strip): the default size.
-        }
+        const file = new URL(`../../../public${url}`, import.meta.url);
+        // A fixture strip has no file: the default size.
+        const size = existsSync(file) ? webpSize(new Uint8Array(readFileSync(file))) : DEFAULT_STRIP;
         return { data: new Uint8ClampedArray(size.width * size.height * 4), width: size.width, height: size.height, close() {} };
       },
     });
