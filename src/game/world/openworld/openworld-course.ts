@@ -35,6 +35,7 @@ import {
   WALL_PIECE_LENGTH,
   WALL_THICKNESS,
 } from "./openworld-constants.ts";
+import { facadeSolidProps } from "./openworld-facade-solids.ts";
 import type { BlockRef, Geometry, Lots } from "./openworld-layout.ts";
 
 export { OPENWORLD_ID };
@@ -227,7 +228,7 @@ export function openWorldCourse(lots: Lots): TrackInput {
     road: { width: geometry.carriageway, surface: SURFACE.asphalt, runoff: [0, 0], runoffSurface: SURFACE.concrete, wall: [false, false] },
     nodes,
     checkpoints: Array.from({ length: LOOP_CHECKPOINTS }, (_, index) => ({ node: Math.floor((index * nodes.length) / LOOP_CHECKPOINTS) })),
-    props: [...buildingProps(lots), ...streetProps(lots), ...wallProps(geometry)],
+    props: [...buildingProps(lots), ...streetProps(lots), ...wallProps(geometry), ...facadeSolidProps(lots)],
     scenery: { biome: BIOME.city, off: ["frontage", "verge", "islands"] },
     traffic: { count: 0, lanes: [], routes: streetRoutes(geometry) },
     survival: spawnOf(geometry),
