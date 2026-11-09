@@ -108,22 +108,28 @@ const PARALLAX_MIN_FACING = 0.25;
 /** How far the windows are lit, 0 (day) to 1 (night): one uniform every style's material shares, set by `WorldStage.apply` beside the lamp heads. */
 export const FACADE_GLOW = { value: 0 };
 
-/** A building's skin is its facade style, and, where its storeys are not the usual three, the count after this mark ("rowbrick@4"): one geometry per style and count, their bands laid for it. */
+/**
+ * A building's skin is its facade style and, where its storeys are not the usual three, the count after this mark ("rowbrick@4"): one geometry per style and count, their bands laid for it. A building
+ * with a neighbour against both its sides ends in the other mark ("rowbrick@4!"): its side walls are party walls, drawn blank.
+ */
 const STOREYS_MARK = "@";
+const PARTY_MARK = "!";
 
-/** A building's skin: its facade style, or the style and a storey count. */
-export type FacadeSkin = FacadeStyle | `${FacadeStyle}@${number}`;
+/** A building's skin: its facade style, the style and a storey count, and either with its side walls blank. */
+export type FacadeSkin = FacadeStyle | `${FacadeStyle}@${number}` | `${FacadeStyle}!` | `${FacadeStyle}@${number}!`;
 
-/** The skin of a building of facade `style` with `storeys` storeys: the style's own name for the usual count. */
-export function facadeSkin(style: FacadeStyle, storeys: number): FacadeSkin {
-  return storeys === DEFAULT_STOREYS ? style : `${style}${STOREYS_MARK}${storeys}`;
+/** The skin of a building of facade `style` with `storeys` storeys (the style's own name for the usual count), its side walls blank when it has neighbours either side. */
+export function facadeSkin(style: FacadeStyle, storeys: number, party = false): FacadeSkin {
+  if (storeys === DEFAULT_STOREYS) return party ? `${style}${PARTY_MARK}` : style;
+  return party ? `${style}${STOREYS_MARK}${storeys}${PARTY_MARK}` : `${style}${STOREYS_MARK}${storeys}`;
 }
 
-/** The style and the storeys a building skin names. */
-export function splitFacadeSkin(skin: string): { style: FacadeStyle; storeys: number } {
-  const [name, count] = skin.split(STOREYS_MARK);
+/** The style, the storeys and whether the side walls are blank that a building skin names. */
+export function splitFacadeSkin(skin: string): { style: FacadeStyle; storeys: number; party: boolean } {
+  const party = skin.endsWith(PARTY_MARK);
+  const [name, count] = (party ? skin.slice(0, -PARTY_MARK.length) : skin).split(STOREYS_MARK);
   if (!isFacadeStyle(name)) throw new Error(`${skin} names no facade style`);
-  return { style: name, storeys: count === undefined ? DEFAULT_STOREYS : Number(count) };
+  return { style: name, storeys: count === undefined ? DEFAULT_STOREYS : Number(count), party };
 }
 
 /** `out` = the tint number `h` (0..1) picks among the tints of the style `skin` names. */

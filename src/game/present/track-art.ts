@@ -13,6 +13,7 @@ import { dressGround, layBrick } from "./ground-relief.ts";
 import { biomeLookup } from "../world/scenery.ts";
 import { isOpenStyle, shopGroundOf } from "../world/openworld/facade-windows.ts";
 import { storeysOfHeight } from "../world/openworld/interior-kinds.ts";
+import { partyBuildingsOf } from "./building-sides.ts";
 import { facadeDepth, facadeSkin, facadeTint, PASTELS, placedFacadeStyle } from "./facades.ts";
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
@@ -68,6 +69,8 @@ export class TrackArt {
   readonly sceneryPlaced: readonly Placed[];
   /** The scenery biome at a world point (`biomeLookup`): the building facade styles pick by it. */
   readonly biome: (x: number, z: number) => BiomeId;
+  /** The buildings with a neighbour against both sides: their side walls are drawn bare. */
+  private party: ReadonlySet<Placed> = new Set();
   /** The bushes and flower beds a car drives through, puffed away (`FoliagePoof`). */
   readonly foliage: FoliagePoof;
   private readonly m4 = new THREE.Matrix4();
@@ -214,6 +217,7 @@ export class TrackArt {
 
     // Props: one InstancedMesh per prefab part (the course's lamp heads and pools are the scene's materials).
     this.biome = biomeLookup(track);
+    this.party = partyBuildingsOf(placed);
     this.props = this.tumble(placed, mats);
     this.streetNames = StreetNameBlades.of(placed);
     if (this.streetNames !== null) this.add(this.streetNames.mesh, { kind: "prop", prefab: PREFAB.streetSign }, false);
@@ -246,7 +250,7 @@ export class TrackArt {
     if (p.prefab === PREFAB.tree) return treeOf(p)?.skin ?? null;
     const height = p.sy * PREFABS[p.prefab].size[1];
     const style = placedFacadeStyle(p.prefab, p.style, p.x, p.z, this.biome(p.x, p.z), Math.max(p.sx, p.sz) * PREFABS[p.prefab].size[0], height);
-    return style !== null && isOpenStyle(style) ? facadeSkin(style, storeysOfHeight(height, shopGroundOf(style))) : style;
+    return style !== null && isOpenStyle(style) ? facadeSkin(style, storeysOfHeight(height, shopGroundOf(style)), this.party.has(p)) : style;
   }
 
   /** The Konami code on a course with a secret sky picture: a slow flash over `over`, and at its height (the white-out) the picture is painted and stands. */

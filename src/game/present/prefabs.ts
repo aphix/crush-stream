@@ -748,8 +748,8 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.building:
     case PREFAB.buildingShell:
     case PREFAB.stucco: {
-      const { style: s, storeys } = splitFacadeSkin(style ?? homeStyle(id)!);
-      return one(buildingPieces(s, id === PREFAB.stucco ? MAT.STUCCO_WALL : MAT.BUILDING_WALL, false, storeys), mats.facades[s]);
+      const { style: s, storeys, party } = splitFacadeSkin(style ?? homeStyle(id)!);
+      return one(buildingPieces(s, id === PREFAB.stucco ? MAT.STUCCO_WALL : MAT.BUILDING_WALL, false, storeys, party), mats.facades[s]);
     }
     case PREFAB.monument:
       return one(monument(), mats.plain);

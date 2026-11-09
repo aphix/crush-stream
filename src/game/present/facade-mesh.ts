@@ -59,8 +59,11 @@ function quad(x0: number, x1: number, y0: number, y1: number, u: readonly [numbe
   return g;
 }
 
-/** One face of the block, its quads turned to face `index` (a quarter turn each); `wall` is its material id. A `slab` has the street face's shopfront band on every face. */
-function face(style: FacadeStyle, wall: MaterialId, index: number, slab: boolean, storeys: number): Piece[] {
+/** The faces a building shares with its neighbours: the two sides, the plan's +across and -across. */
+const SIDE_FACES: readonly number[] = [0, 2];
+
+/** One face of the block, its quads turned to face `index` (a quarter turn each); `wall` is its material id. A `slab` has the street face's shopfront band on every face. A `party` wall (a side with a neighbour against it) is bare: every band but the cornice reads the style's plain patch of wall. */
+function face(style: FacadeStyle, wall: MaterialId, index: number, slab: boolean, storeys: number, party: boolean): Piece[] {
   const spec = FACADE_LAYERS[style];
   const street = slab || index === STREET_FACE;
   const stones = spec.layers > LAYER.quoin;
@@ -76,7 +79,11 @@ function face(style: FacadeStyle, wall: MaterialId, index: number, slab: boolean
     // The cornice runs the whole width (the stones stop under it); the rest between the stones.
     const x0 = cornice || !stones ? -HALF : -inner / 2;
     const x1 = cornice || !stones ? HALF : inner / 2;
-    out.push([turn(quad(x0, x1, band.y0, band.y1, [(x0 + inner / 2) / bay, (x1 + inner / 2) / bay], [band.v0, band.v1])), 0xffffff, wall, region(band.layer, band.relief)]);
+    const bare = party && SIDE_FACES.includes(index) && !cornice;
+    const [plainU, plainV] = spec.plain as readonly [number, number];
+    const across: [number, number] = bare ? [plainU, plainU] : [(x0 + inner / 2) / bay, (x1 + inner / 2) / bay];
+    const up: [number, number] = bare ? [plainV, plainV] : [band.v0, band.v1];
+    out.push([turn(quad(x0, x1, band.y0, band.y1, across, up)), 0xffffff, wall, region(bare ? LAYER.floor : band.layer, band.relief)]);
   }
   if (stones) {
     const top = ROOFLINE - FACADE_LAYERS[style].metres.cornice;
@@ -103,10 +110,10 @@ function roofSlab(style: FacadeStyle, wall: MaterialId, slab: boolean): Piece[] 
   return [[sides, PARAPET, wall, [LAYER.floor, 1, 0]], [top, 0xffffff, MAT.BUILDING_ROOF, [ROOF_LAYER, 1, slab ? 1 : 0]]];
 }
 
-/** A city block in `style`: its four faces and its roof slab; `wall` is the faces' material id. A `slab` is a block drawn at a stretched instance scale: its uv is laid in the instance's own metres (`facades.ts`). The open world's styles are laid for the `storeys` of the building they stand on. */
-export function buildingPieces(style: FacadeStyle, wall: MaterialId, slab = false, storeys = DEFAULT_STOREYS): Piece[] {
+/** A city block in `style`: its four faces and its roof slab; `wall` is the faces' material id. A `slab` is a block drawn at a stretched instance scale: its uv is laid in the instance's own metres (`facades.ts`). The open world's styles are laid for the `storeys` of the building they stand on, and bare on both sides where `party`. */
+export function buildingPieces(style: FacadeStyle, wall: MaterialId, slab = false, storeys = DEFAULT_STOREYS, party = false): Piece[] {
   const out: Piece[] = [];
-  for (let i = 0; i < 4; i++) out.push(...face(style, wall, i, slab, storeys));
+  for (let i = 0; i < 4; i++) out.push(...face(style, wall, i, slab, storeys, party));
   out.push(...roofSlab(style, wall, slab));
   return out;
 }
