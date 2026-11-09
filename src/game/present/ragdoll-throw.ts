@@ -11,7 +11,8 @@ import { guardDress, passengerThrow } from "./people.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { PropDraw, PropTrace } from "./ragdoll-props.ts";
 import { NO_RELEASE_SCALE, type ReleaseScale } from "./ragdoll-boxes.ts";
-import { BASE_SLOTS, thrownGroups } from "./ragdoll-config.ts";
+import type { Shape } from "@dimforge/rapier3d-simd";
+import { BASE_SLOTS, SIGHT_GROUPS, thrownGroups } from "./ragdoll-config.ts";
 import { ARM, blendPose, MASS, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
 import { strikeAt } from "./ragdoll-hit.ts";
 import type { Solid } from "./ragdoll-solids.ts";
@@ -42,6 +43,9 @@ const Y = new THREE.Vector3(0, 1, 0);
 const _roll = new THREE.Vector3();
 const _com = new THREE.Vector3();
 const NO_MOTION = new THREE.Vector3();
+const _sightAt = { x: 0, y: 0, z: 0 };
+const _sightWay = { x: 0, y: 0, z: 0 };
+const UNTURNED = { x: 0, y: 0, z: 0, w: 1 };
 
 /** A thrown driver's centre of mass from his torso, standing, arms raised (`spawn`'s layout, each part at its own mass): his roll turns about it. */
 const RAISED_COM = PARTS.reduce((sum, p, k) => {
@@ -59,6 +63,10 @@ function turnToElevation(velocity: THREE.Vector3, elevation: number): void {
 
 /** The throwing layer: launching drivers, figures and passengers, the walker, knocked props, which world a run uses, and the mirror of the worker's answer. `RagdollSystem` adds the frame and camera on top. */
 export abstract class RagdollThrower extends RagdollStepper {
+  /** The ball a camera's sweep moves (`sightClear`), made at the first sweep and again for another radius. */
+  private sightBall: Shape | null = null;
+  private sightRadius = 0;
+
   /**
    * A driver is thrown out of `cars[e.car]`: the exit pane smashes and the way out gets its cover (`onExit`) now, the
    * dummy flies now or (Rapier still loading) once it is in. The sim's own event (`EjectionWatch`), a netplay host's
@@ -216,6 +224,33 @@ export abstract class RagdollThrower extends RagdollStepper {
     if (!d?.live) return;
     strikeAt(d.bodies, point, direction, speed);
     this.walkers[slot]!.struck();
+  }
+
+  /**
+   * How far (m, at most `length`) a ball of `radius` m swept from (`x`, `y`, `z`) along the unit (`dx`, `dy`, `dz`) runs before a fixed solid or a car's
+   * proxy of this world: what the walker meets, the dummies passed through. A camera on him stands short of it. `length` while there is no world.
+   */
+  sightClear(x: number, y: number, z: number, dx: number, dy: number, dz: number, length: number, radius: number): number {
+    const R = this.R;
+    const world = this.world;
+    if (R === null || world === null || length <= 0) return Math.max(0, length);
+    if (this.sightBall === null || this.sightRadius !== radius) {
+      this.sightBall = new R.Ball(radius);
+      this.sightRadius = radius;
+    }
+    _sightAt.x = x;
+    _sightAt.y = y;
+    _sightAt.z = z;
+    _sightWay.x = dx;
+    _sightWay.y = dy;
+    _sightWay.z = dz;
+    const hit = world.castShape(_sightAt, UNTURNED, _sightWay, this.sightBall, 0, length, true, R.QueryFilterFlags.EXCLUDE_SENSORS, SIGHT_GROUPS);
+    return hit === null ? length : Math.min(length, hit.time_of_impact);
+  }
+
+  /** Whether the camera sees the walker's head and torso: not while its eye is in his head (first person). His shadow keeps them. */
+  showWalkerHead(shown: boolean): void {
+    this.mesh.viewHidden.value = shown ? -1 : WALKER_SLOT;
   }
 
   /** His torso as drawn this frame (between the last two steps) into `out`; false while he is not out. */

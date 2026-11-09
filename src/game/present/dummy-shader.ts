@@ -127,6 +127,9 @@ vec3 dollCut(int slot, vec3 p, vec4 region, out int pick) {
 }`;
 
 /** The fragment's tables and helpers: fabric by pick and by role, and the bump (three's `perturbNormalArb`, from a height's screen slopes). */
+/** The parts (`PARTS`: the torso 0, the head 1) a first-person eye inside the body does not see: `applyDolls`' `viewHidden` slot draws its skin only where it rides other parts more. */
+const VIEW_HIDDEN_LAST_PART = 1;
+
 const DOLL_FRAGMENT_COMMON = /* glsl */ `
 uniform sampler2D dolls;
 uniform sampler2D prints;
@@ -141,6 +144,8 @@ flat varying int vDollRole;
 centroid varying vec4 vDollRegion;
 varying vec3 vDollColour;
 flat varying int vDollSlot;
+varying float vDollHidden;
+uniform int uViewHidden;
 ${DOLL_CUTS}
 const float DOLL_RELIEF[${FABRIC.NONE}] = float[${FABRIC.NONE}](${FABRIC_RELIEF.map(glslFloat).join(", ")});
 const float DOLL_CONTRAST[${FABRIC.NONE}] = float[${FABRIC.NONE}](${FABRIC_CONTRAST.map(glslFloat).join(", ")});
@@ -273,7 +278,7 @@ const DECALS = decalMap(DRESS_DECALS);
  * Patch `material` to skin from `dolls`; `lit` also skins the normal and draws the cloth: the slot's cut colours, fabrics,
  * decals and prints in the fragment, the fabric's relief as a bump, each role's roughness and metal, and the rim light (`RIM_LIGHT`).
  */
-export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: boolean): void {
+export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: boolean, viewHidden: { value: number }): void {
   if (lit) material.userData.materialIds = { fabric: FABRIC_MATERIAL, role: ROLE_MATERIAL };
   const prev = material.onBeforeCompile;
   const prevKey = material.customProgramCacheKey;
@@ -286,11 +291,11 @@ export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: 
       shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\ntransformed = dollP;");
       return;
     }
-    Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS }, uRim: RIM_LIGHT, uSkinSss: SKIN_SSS, materialStrength: MATERIAL_STRENGTH });
+    Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS }, uRim: RIM_LIGHT, uSkinSss: SKIN_SSS, materialStrength: MATERIAL_STRENGTH, uViewHidden: viewHidden });
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        `#include <common>\n${DOLL_COMMON}\n${DOLL_CUTS}\nattribute vec4 ${PRINT_ATTRIBUTE};\nvarying vec4 vPrint;\nflat varying int vDollRole;\ncentroid varying vec4 vDollRegion;\nvarying vec3 vDollColour;\nflat varying int vDollSlot;`,
+        `#include <common>\n${DOLL_COMMON}\n${DOLL_CUTS}\nattribute vec4 ${PRINT_ATTRIBUTE};\nvarying vec4 vPrint;\nflat varying int vDollRole;\ncentroid varying vec4 vDollRegion;\nvarying vec3 vDollColour;\nflat varying int vDollSlot;\nvarying float vDollHidden;`,
       )
       .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\nobjectNormal = dollN;")
       .replace(
@@ -304,10 +309,12 @@ vDollRegion = dollBodyMesh * vec4(float(dollRole == ${ROLE.SHIRT} || (dollRole =
 int dollVertexPick;
 vDollColour = vDollRegion.x + vDollRegion.y + vDollRegion.z + vDollRegion.w > 0.0 ? dollCut(gl_InstanceID, position, vDollRegion, dollVertexPick) : dollColour();
 vDollSlot = gl_InstanceID;
+vDollHidden = (int(bones.x + 0.5) <= ${VIEW_HIDDEN_LAST_PART} ? 1.0 - bones.z : 0.0) + (int(bones.y + 0.5) <= ${VIEW_HIDDEN_LAST_PART} ? bones.z : 0.0);
 transformed = dollP;`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>\n${MATERIAL_STRENGTH_GLSL}\n${DOLL_FRAGMENT_COMMON}`)
+      .replace("#include <clipping_planes_fragment>", "if (vDollSlot == uViewHidden && vDollHidden > 0.5) discard;\n#include <clipping_planes_fragment>")
       .replace("#include <map_fragment>", `#include <map_fragment>\n${CLOTH_FRAGMENT}\n${PRINT_FRAGMENT}\n${SKIN_FRAGMENT}`)
       .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = dollRoughness;")
       .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\nmetalnessFactor = dollMetalness;")
