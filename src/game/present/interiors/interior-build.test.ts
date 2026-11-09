@@ -3,6 +3,7 @@ import { MAX_STOREYS, MIN_STOREYS } from "../../world/openworld/interior-kinds.t
 import { planInterior } from "../../world/openworld/interior-plan.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
+import { painted } from "../prefab-pieces.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
 
 const EPSILON = 1e-6;
@@ -43,7 +44,7 @@ describe("given the bay alcove of a rowhome's rooms", () => {
     for (const storeys of STOREY_COUNTS) {
       const place = { ...standing, storeys };
       const plan = planInterior(place);
-      const pieces = [...trianglesOf(buildShell(plan, place).solid), ...(buildDetail(plan, place).solid === null ? [] : trianglesOf(buildDetail(plan, place).solid!))];
+      const pieces = [...trianglesOf(painted(buildShell(plan).solid)), ...trianglesOf(painted(buildDetail(plan).solid))];
       for (const alcove of plan.alcoves) {
         const outside = pieces.filter((triangle) => triangle.x > plan.depth / 2 && triangle.y.every((y) => y >= alcove.floorY - EPSILON && y <= alcove.head + EPSILON));
         const walls = outside.filter((triangle) => Math.abs(triangle.normalY) < WALL_NORMAL_Y);
@@ -62,7 +63,7 @@ describe("given the bay alcove of a rowhome's rooms", () => {
     const frontCorners = [alcove.corners[1]!, alcove.corners[2]!];
     const frontX = plan.depth / 2 - frontCorners[0]![0];
     const [acrossLow, acrossHigh] = [Math.min(frontCorners[0]![1], frontCorners[1]![1]), Math.max(frontCorners[0]![1], frontCorners[1]![1])];
-    const geometry = buildShell(plan, standing).solid;
+    const geometry = painted(buildShell(plan).solid);
     const position = geometry.getAttribute("position");
     const normal = geometry.getAttribute("normal");
     const onFront: number[] = [];

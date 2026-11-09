@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { FURNISHING, ROOM_LOOK, type Furnishing, type FurnishingKind } from "../../world/openworld/interior-kinds.ts";
 import type { InteriorKind } from "../../world/openworld/walk-graph.ts";
-import { box, cyl, type Piece } from "../prefab-pieces.ts";
+import { cyl, type Piece } from "../prefab-pieces.ts";
+import { brick } from "./interior-brick.ts";
 
 /** What a furnishing draws: lit and unlit pieces, in its own frame (its front along +x, its width along z, its base at y = 0, its middle at the origin). */
 type Parts = { solid: Piece[]; glow: Piece[] };
@@ -26,7 +27,7 @@ const PANEL_SETBACK = 0.2;
 const PRODUCTS = [0x2f6b3a, 0xc0392b, 0xe0c040, 0x2b5ea8, 0xd98a2b] as const;
 
 /** A box of size (sx, sy, sz) centred at (x, z) with its base at `y0`. */
-const part = (sx: number, sy: number, sz: number, x: number, y0: number, z: number): THREE.BufferGeometry => box(sx, sy, sz, x, y0 + sy / 2, z);
+const part = (sx: number, sy: number, sz: number, x: number, y0: number, z: number): THREE.BufferGeometry => brick(sx, sy, sz, x, y0 + sy / 2, z);
 
 /** A vertical cylinder at (x, z) from `y0` to `y1`. */
 function post(radiusTop: number, radiusBottom: number, y0: number, y1: number, x = 0, z = 0): THREE.BufferGeometry {

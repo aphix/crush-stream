@@ -22,5 +22,7 @@ export const VESTIBULE_REACH = 3;
 /** The rooms of a street's businesses are furnished for their windows while one of their fronts is in view within `INTERIOR_NEAR`; homes (a door open and seen, a player inside) are left this many slots of the facade's list of `FACADE_OPEN_MAX`, the businesses the rest. */
 const HOME_OPEN_SLOTS = 6;
 export const SHOPFRONT_ROOMS = FACADE_OPEN_MAX - HOME_OPEN_SLOTS;
+/** Vertices each packed mesh starts with room for (a furnished house is 6k to 16k, an envelope 1k to 2k, a set's lamps and glass a few hundred): it doubles when a build needs more, so its storage stops being made once the busiest street has been driven. */
+export const PACK_START_VERTICES = { shell: 8192, detail: 32768, glow: 2048, glass: 2048 } as const;
 /** How much of the light a window's glass lets through (opacity of the pane drawn). */
 export const GLASS_OPACITY = 0.22;
