@@ -61,6 +61,12 @@ const KIND_TOL: Partial<Record<PrefabId, number>> = {
   grandstand: 0.01,
   billboard: 0.01,
   lamp: 0.02,
+  // The street kit's posts: 8-sided shafts inside their circles, a bollard's cap narrowing 0.01 m, a hydrant's circle a hand outside its barrel, a meter's cap narrowing 0.02 m.
+  bollard: 0.03,
+  hydrant: 0.06,
+  "parking-meter": 0.03,
+  "street-sign": 0.02,
+  "bus-stop-sign": 0.02,
   // The acorn lamp's 8-sided posts and 12-sided globe inside their circles.
   "acorn-lamp": 0.02,
   // The star's arms in boxes as wide as the arm is at their middle, and the five-sided spire in three circles.

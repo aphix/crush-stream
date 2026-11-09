@@ -6,7 +6,7 @@ import { hypot2, detSin, detCos } from "../kernel/physics-core.js";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { PREFAB, SURFACE } from "./constants.ts";
 import { PLAZA_REACH, PLAZA_TOP, plazaBricks } from "./openworld/openworld-plaza.ts";
-import { ACORN_LAMP, STREET_KIT } from "./street-kit.ts";
+import { ACORN_LAMP, POSTS, STREET_KIT, bollardPlan, busStopPlan, meterPlan, streetSignPlan } from "./street-kit.ts";
 import { brickCollider, bricksTop, CAPITOL, CAPITOL_POOL, CAPITOL_TOP, capitolPlan, capitolPool, FLAGPOLE, flagpolePlan, GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT, type Brick, type Collider } from "./landmarks.ts";
 
 export const SURFACE_IDS = [SURFACE.asphalt, SURFACE.concrete, SURFACE.cobble, SURFACE.dirt, SURFACE.gravel, SURFACE.grass, SURFACE.sand, SURFACE.mud] as const;
@@ -448,6 +448,12 @@ function kitSpec(size: readonly [number, number, number], material: MaterialId):
   return { body: "none", collider: [], foot: 0, size: [size[0], size[1], size[2]], mass: 0, material };
 }
 
+/** A street kit post: solid, as drawn (`colliders`), its clearance from a road the farthest it reaches in plan. */
+function postSpec(size: readonly [number, number, number], material: MaterialId, colliders: readonly Collider[], reach: number): PrefabSpec {
+  return { body: "solid", collider: colliders, foot: reach, size: [size[0], size[1], size[2]], mass: 0, material };
+}
+
+
 /**
  * Hardness of a living trunk (a tree, a palm): the share of the reduced-mass energy the car takes, the piston rig's calibrated
  * soft value (`scenes/piston-rig.test.ts`: the honeycomb at 0.5) taken because the palm-tree note (`.extraResearch/perplexity/
@@ -773,13 +779,13 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.bench]: kitSpec(STREET_KIT.bench, MAT.BENCH_MAPLE),
   [PREFAB.bikeRack]: kitSpec(STREET_KIT.bikeRack, MAT.BRACKET_STEEL),
   [PREFAB.litterBin]: kitSpec(STREET_KIT.litterBin, MAT.DUMPSTER_STEEL),
-  [PREFAB.parkingMeter]: kitSpec(STREET_KIT.parkingMeter, MAT.LAMP_POLE),
-  [PREFAB.hydrant]: kitSpec(STREET_KIT.hydrant, MAT.DUMPSTER_STEEL),
+  [PREFAB.parkingMeter]: postSpec(STREET_KIT.parkingMeter, MAT.LAMP_POLE, meterPlan(), POSTS.meter.headHalfAlong),
+  [PREFAB.hydrant]: postSpec(STREET_KIT.hydrant, MAT.DUMPSTER_STEEL, [{ kind: "circle", r: POSTS.hydrant.reach, y1: POSTS.hydrant.top }], POSTS.hydrant.reach),
   [PREFAB.cafeSet]: kitSpec(STREET_KIT.cafeSet, MAT.CRATE_WOOD),
   [PREFAB.busShelter]: kitSpec(STREET_KIT.busShelter, MAT.GANTRY_STEEL),
-  [PREFAB.busStopSign]: kitSpec(STREET_KIT.busStopSign, MAT.SIGN_BOARD),
-  [PREFAB.streetSign]: kitSpec(STREET_KIT.streetSign, MAT.SIGN_BOARD),
-  [PREFAB.bollard]: kitSpec(STREET_KIT.bollard, MAT.LAMP_POLE),
+  [PREFAB.busStopSign]: postSpec(STREET_KIT.busStopSign, MAT.SIGN_BOARD, busStopPlan(), POSTS.busStopSign.upperHalf),
+  [PREFAB.streetSign]: postSpec(STREET_KIT.streetSign, MAT.SIGN_BOARD, streetSignPlan(), POSTS.streetSign.bladeHalf),
+  [PREFAB.bollard]: postSpec(STREET_KIT.bollard, MAT.LAMP_POLE, bollardPlan(), POSTS.bollard.collarRadius),
   [PREFAB.cellarDoor]: kitSpec(STREET_KIT.cellarDoor, MAT.DUMPSTER_STEEL),
   [PREFAB.hoopFence]: kitSpec(STREET_KIT.hoopFence, MAT.BRACKET_STEEL),
   [PREFAB.pavilion]: kitSpec(STREET_KIT.pavilion, MAT.GANTRY_STEEL),

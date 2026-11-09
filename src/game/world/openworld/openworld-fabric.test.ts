@@ -3,6 +3,7 @@ import { detCos, detSin } from "../../kernel/physics-core.js";
 import { assertSameDigest } from "../../vehicle/test-support.ts";
 import { PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
+import { placeProps, propColliders } from "../placements.ts";
 import { SCENERY_ASSETS } from "../scenery-assets/index.ts";
 import { streetSignNames } from "../street-kit.ts";
 import { facadeSolidProps } from "./openworld-facade-solids.ts";
@@ -211,6 +212,25 @@ describe("given the street signs at the block corners", () => {
       expect(names, `names on the sign at ${sign.x.toFixed(1)}, ${sign.z.toFixed(1)}`).not.toBeNull();
       expect(names![0], "the blade along x").toBe(STREETS_Z[nearest(geometry.streetZ, sign.z)]);
       expect(names![1], "the blade along z").toBe(STREETS_X[nearest(geometry.streetX, sign.x)]);
+    }
+  });
+});
+
+describe("given the street kit's posts", () => {
+  /** The post-like furniture a car must not drive through: where each stands in the course, and how tall its foot's piece must reach (m) to stop a bumper. */
+  const POSTS_THAT_STOP = [PREFAB.bollard, PREFAB.hydrant, PREFAB.parkingMeter, PREFAB.streetSign, PREFAB.busStopSign] as const;
+  const BUMPER_HEIGHT = 0.5;
+  const colliders = propColliders(placeProps(track));
+
+  // mutation: sed -i 's/  return { body: "solid", collider: colliders, foot: reach, size/  return { body: "none", collider: colliders, foot: reach, size/' src/game/world/catalog.ts
+  it("when the course is placed, then every bollard, hydrant, parking meter and street and bus stop sign stands a solid a car meets, its foot reaching a bumper's height", () => {
+    for (const prefab of POSTS_THAT_STOP) {
+      const placed = course.props.filter((prop) => prop.prefab === prefab);
+      expect(placed.length, `${prefab} placed`).toBeGreaterThan(0);
+      const pieces = colliders.filter((piece) => piece.prefab === prefab);
+      expect(pieces.filter((piece) => piece.body !== "solid").length, `${prefab} pieces that are no solid`).toBe(0);
+      const unmet = placed.filter((prop) => !pieces.some((piece) => Math.hypot(piece.x - prop.x, piece.z - prop.z) < COORDINATE_SLACK && piece.top - piece.base >= BUMPER_HEIGHT));
+      expect(unmet.slice(0, 3).map((prop) => `${prop.x.toFixed(1)}, ${prop.z.toFixed(1)}`).join("; "), `${prefab}s with nothing a bumper meets at their foot`).toBe("");
     }
   });
 });
