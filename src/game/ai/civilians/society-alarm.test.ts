@@ -21,6 +21,7 @@ import {
   RECOIL_CALM_SHARE,
   RECOIL_STEP_METRES,
   RESIDENT_INT,
+  RESIDENT_INT_STRIDE,
   TICKS_PER_GAME_MINUTE,
 } from "./civilian-constants.ts";
 import { AMBULANCE_DELAY_SECONDS } from "./civilian-crowd-constants.ts";
@@ -235,6 +236,8 @@ describe("given someone run down at a door with nine people out at it, and the c
     const bystanders = outAtDoor(unhurt, 3);
     const down = unhurt.resident + CROWD_SIZE;
     stageResident(unhurt.state, down, { place: HOME, home: HOME, tick: unhurt.tick, nextDecision: unhurt.tick + DWELL_TICKS });
+    unhurt.state.ints[down * RESIDENT_INT_STRIDE + RESIDENT_INT.knockX] = Math.round(door.doorX * CENTIMETRES_PER_METRE);
+    unhurt.state.ints[down * RESIDENT_INT_STRIDE + RESIDENT_INT.knockZ] = Math.round(door.doorZ * CENTIMETRES_PER_METRE);
     queueEvents(unhurt.state, unhurt.tick, [EVENT_KIND.ambulance, down, unhurt.tick / DECISION_HZ]);
     applyReactionEvents(unhurt.state, unhurt.tick + EVENT_LEAD_TICKS);
     expect(bystanders.filter((resident) => intAt(unhurt.state, resident, RESIDENT_INT.legPurpose) === PURPOSE.callAmbulance).length, "people on the phone for someone who is not down").toBe(0);

@@ -108,10 +108,13 @@ export function alarmAtKnock(state: CityState, victim: number, tick: number): vo
   alarmAt(state, state.ints[base + RESIDENT_INT.knockX]! / CENTIMETRES_PER_METRE, state.ints[base + RESIDENT_INT.knockZ]! / CENTIMETRES_PER_METRE, tick, victim, LOOK_ON_DOWNED_MINUTES, ATTENTION_DOWNED);
 }
 
-/** The call for an ambulance for `victim`, who is down where they were run down: the nearest person out at a door within sight (not them) is the one who phones. */
-export function callAmbulanceFor(state: CityState, victim: number, tick: number): void {
+/**
+ * Who would phone for an ambulance for `victim`, who is down where they were run down, at `tick`: the nearest free person standing out at a door within sight (not the one down), or -1 when there is none or the victim
+ * is not down. The host asks it before it sends an ambulance, so none comes unless someone phoned.
+ */
+export function ambulanceCaller(state: CityState, victim: number, tick: number): number {
   const victimBase = victim * RESIDENT_INT_STRIDE;
-  if ((state.ints[victimBase + RESIDENT_INT.flags]! & FLAG.hurt) === 0) return;
+  if ((state.ints[victimBase + RESIDENT_INT.flags]! & FLAG.hurt) === 0) return -1;
   const x = state.ints[victimBase + RESIDENT_INT.knockX]! / CENTIMETRES_PER_METRE;
   const z = state.ints[victimBase + RESIDENT_INT.knockZ]! / CENTIMETRES_PER_METRE;
   let caller = -1;
@@ -123,7 +126,16 @@ export function callAmbulanceFor(state: CityState, victim: number, tick: number)
     nearest = distance;
     caller = resident;
   }
+  return caller;
+}
+
+/** The call for an ambulance for `victim`, who is down where they were run down: the nearest person out at a door within sight (not them) is the one who phones. */
+export function callAmbulanceFor(state: CityState, victim: number, tick: number): void {
+  const caller = ambulanceCaller(state, victim, tick);
   if (caller === -1) return;
+  const victimBase = victim * RESIDENT_INT_STRIDE;
+  const x = state.ints[victimBase + RESIDENT_INT.knockX]! / CENTIMETRES_PER_METRE;
+  const z = state.ints[victimBase + RESIDENT_INT.knockZ]! / CENTIMETRES_PER_METRE;
   const base = caller * RESIDENT_INT_STRIDE;
   state.ints[base + RESIDENT_INT.alarmTick] = tick;
   state.ints[base + RESIDENT_INT.alarmX] = Math.round(x * CENTIMETRES_PER_METRE);

@@ -14,6 +14,8 @@ import {
   BUMP_CLOSING_SPEED,
   BUMP_COOLDOWN_SECONDS,
   AMBULANCE_DELAY_SECONDS,
+  AMBULANCE_RETRIES,
+  AMBULANCE_RETRY_SECONDS,
   BUMP_DISTANCE,
   CAR_NUDGE_GAP,
   CAR_NUDGE_SPEED,
@@ -45,6 +47,7 @@ import type { CivilianRemote } from "./civilian-remote.ts";
 import { CrowdSeparation } from "./civilian-separation.ts";
 import type { CityState } from "./civilian-state.ts";
 import { type ActivityReading, readActivity } from "./society-activity.ts";
+import { ambulanceCaller } from "./society-alarm.ts";
 import { CrimeDesk } from "./society-crime.ts";
 import { CrowdWalkers } from "./crowd-walkers.ts";
 import { createCrowdPoses, type CrowdPoses } from "./crowd-poses.ts";
@@ -137,6 +140,8 @@ export class CivilianCrowd {
   private readonly dangerCar: Int16Array;
   private readonly dangerUntil: Float64Array;
   private readonly ambulanceDue: Float64Array;
+  /** Times each one down has been looked for a caller for. */
+  private readonly ambulanceTries: Uint8Array;
   private readonly ambulanceX: Float32Array;
   private readonly ambulanceZ: Float32Array;
   private lastCrashSeconds = -Infinity;
@@ -159,6 +164,7 @@ export class CivilianCrowd {
     this.dangerCar = new Int16Array(capacity);
     this.dangerUntil = new Float64Array(capacity).fill(-Infinity);
     this.ambulanceDue = new Float64Array(capacity).fill(Infinity);
+    this.ambulanceTries = new Uint8Array(capacity);
     this.ambulanceX = new Float32Array(capacity);
     this.ambulanceZ = new Float32Array(capacity);
     this.crimeDesk = new CrimeDesk(capacity);
@@ -567,16 +573,22 @@ export class CivilianCrowd {
   /** Someone run down `AMBULANCE_DELAY_SECONDS` ago is still down: the call is made (it is in the log for every peer) and whoever sends the ambulance hears of it. */
   private raiseAmbulanceCalls(seconds: number): void {
     for (let resident = 0; resident < this.ambulanceDue.length; resident++) {
-      const due = this.ambulanceDue[resident]!;
-      if (due > seconds) continue;
-      this.ambulanceDue[resident] = Infinity;
-      this.logHostEvent(EVENT_KIND.ambulance, resident, due);
-      this.onAmbulanceCall?.(this.ambulanceX[resident]!, this.ambulanceZ[resident]!, due);
+      let due = this.ambulanceDue[resident]!;
+      while (due <= seconds) {
+        if (ambulanceCaller(this.remote.state, resident, tickAt(due)) !== NO_PLACE) {
+          this.logHostEvent(EVENT_KIND.ambulance, resident, due);
+          this.onAmbulanceCall?.(this.ambulanceX[resident]!, this.ambulanceZ[resident]!, due);
+          due = Infinity;
+        } else if (this.ambulanceTries[resident]!++ < AMBULANCE_RETRIES) due += AMBULANCE_RETRY_SECONDS;
+        else due = Infinity;
+      }
+      this.ambulanceDue[resident] = due;
     }
   }
 
   private knockDown(resident: number, seconds: number, strike: FigureStrike): void {
     this.ambulanceDue[resident] = seconds + AMBULANCE_DELAY_SECONDS;
+    this.ambulanceTries[resident] = 0;
     this.ambulanceX[resident] = this.poses.x[resident]!;
     this.ambulanceZ[resident] = this.poses.z[resident]!;
     this.poses.shown[resident] = 0;
