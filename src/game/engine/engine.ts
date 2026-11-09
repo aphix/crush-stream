@@ -368,6 +368,8 @@ export class CrashEngine extends EngineGarage {
   }
 
   private makeOpenWorld(): OpenWorldDirector {
+    const eyes = [this.camera];
+    const playerCars: DeformableCar[] = [];
     return new OpenWorldDirector({
       inOpenWorld: () => this.showOpenWorld,
       isClient: () => this.net.client,
@@ -400,6 +402,21 @@ export class CrashEngine extends EngineGarage {
         this.scene.add(art.group);
         this.queueWarm();
         return art;
+      },
+      cull: {
+        eyes: () => eyes,
+        solids: () => {
+          const sight = this.race.courseSight();
+          return sight === null ? [] : hidingSight(sight).occ;
+        },
+        playerCars: () => {
+          playerCars.length = 0;
+          for (const racer of this.race.racers) if (racer.kind !== "ai") playerCars.push(this.cars[racer.id]!);
+          return playerCars;
+        },
+        detail: () => this.detail,
+        followed: () => this.followedCar(),
+        replaying: () => this.highlights.playing,
       },
     });
   }

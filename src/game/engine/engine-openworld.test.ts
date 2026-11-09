@@ -14,6 +14,7 @@ import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { idleCullPorts } from "./openworld-cull-ports.test-util.ts";
 
 const map = buildFixtureMap();
 const SEED = 5;
@@ -60,6 +61,7 @@ class Harness {
       this.artsMade++;
       return { update: (poses, eyeX) => void this.updates.push({ poses, eyeX }), dispose: () => void this.artsDisposed++ };
     },
+    cull: idleCullPorts(),
   });
 
   /** A frame: the sim steps `FRAME` s first (a host), then the frame. */
