@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createCanvas as makeCanvas } from "@napi-rs/canvas";
 import { BAY_WIDTH, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, SHOPFRONT } from "../src/game/world/openworld/interior-kinds.ts";
+import { drawnHalf } from "../src/game/world/openworld/openworld-facade-solids.ts";
 import { writeWebp } from "./pack-tile-lib.mjs";
 import { blur, downPlane, heightOf, label, morph, roughnessOf, spread } from "./pack-window-lib.mjs";
 
@@ -67,7 +68,7 @@ const NEON_CLEAR = 2;
  * in 0..255 and lightness; `quoins` whether the style has corner stones; `neutral` how far the albedo is washed to cream so the per-instance pastel tints colour it;
  * `background` [share, r, g, b, min]: sky (every channel at least `min`) above that share of the picture is painted that colour; `relief`: the style has height and roughness strips; `neon`
  * { rects, bright }: sign boxes (crop-relative like `rects`) whose texels with a channel of at least `bright` are lit signs; `metres`: the bands' heights in block metres, set by hand where
- * the picture's own scale is not the building's (a building drawn `H` m tall is stretched by H / 14); `open` { kind, floorY, ground }: the style's openings (`SHOPFRONT[kind]`, per bay) are cut through the
+ * the picture's own scale is not the building's (a building drawn `H` m tall is stretched by H / 14); `open` { kind, floorY, ground }: the style's doorways (`SHOPFRONT[kind]`, per bay) are cut through the
  * ground layer's albedo alpha, `ground` being the ground band's height in world metres.
  */
 /** A building of `height` m draws at height / BLOCK_HEIGHT of the 14 m block: bands in block metres that come out at the world heights `cornice`, `floor`, `ground`. */
@@ -343,12 +344,14 @@ function plainPatch(rgb, mask) {
   return at;
 }
 
-/** The ground layer's albedo alpha (LAYER square, 0 in an opening): the style's `SHOPFRONT` openings of one bay, mapped from metres across the bay (the layer's u runs toward the plan's -across) and up the ground band. */
+/** The ground layer's albedo alpha (LAYER square, 0 in a doorway): the style's `SHOPFRONT` doorways of one bay, mapped from metres across the bay's drawn width (the layer's u runs toward the plan's -across) and up the ground band. Windows stay painted: a room behind a shut door is not built, so nothing is seen through them. */
 function openingAlpha(open) {
   const alpha = new Uint8Array(LAYER * LAYER).fill(255);
+  const half = drawnHalf(BAY_WIDTH);
   for (const opening of SHOPFRONT[open.kind]) {
-    const x0 = Math.round(((BAY_WIDTH / 2 - (opening.centre + opening.width / 2)) / BAY_WIDTH) * LAYER);
-    const x1 = Math.round(((BAY_WIDTH / 2 - (opening.centre - opening.width / 2)) / BAY_WIDTH) * LAYER);
+    if (!opening.door) continue;
+    const x0 = Math.round(((half - (opening.centre + opening.width / 2)) / (2 * half)) * LAYER);
+    const x1 = Math.round(((half - (opening.centre - opening.width / 2)) / (2 * half)) * LAYER);
     const y0 = Math.round(((open.ground - (open.floorY + opening.top)) / open.ground) * LAYER);
     const y1 = Math.round(((open.ground - (open.floorY + opening.sill)) / open.ground) * LAYER);
     for (let y = Math.max(0, y0); y < Math.min(LAYER, y1); y++) for (let x = Math.max(0, x0); x < Math.min(LAYER, x1); x++) alpha[y * LAYER + x] = 0;

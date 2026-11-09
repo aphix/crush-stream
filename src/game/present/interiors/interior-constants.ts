@@ -11,5 +11,9 @@ export const SHELL_BUILDS_PER_FRAME = 8;
 export const DETAIL_BUILDS_PER_FRAME = 1;
 /** An interior's solids are handed to the physics while its door is within this of the eye (m): a walker meets walls and furniture only near a player. */
 export const SOLIDS_NEAR = 25;
-/** A player (a car or the walker) within this of an interior's footprint (m past its half diagonal) keeps it built whatever the eyes see: anywhere inside, on its stoop, or in its rear yard (8.4 m deep) looking in at the back door. */
-export const INTERIOR_KEEP = 10;
+/** A door opens while someone stands within this of its doorway's middle (m), swings full open or shut in this long (s), and is animated only within this of the eye (m): the envelopes' range, past which a doorway is too small to read. */
+export const DOOR_REACH = 1.2;
+export const DOOR_SWING_SECONDS = 0.6;
+export const DOOR_RANGE = SHELL_NEAR;
+/** The player's walker within this of a street door (m) is given the vestibule's floor and walls while the room behind is not built: a stoop's run and a step. */
+export const VESTIBULE_REACH = 3;

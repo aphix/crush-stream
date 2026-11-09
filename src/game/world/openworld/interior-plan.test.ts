@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
-import { FURNISHING, HEADROOM, MAX_RISER, PARTITION, ROWHOME_FLOOR_Y, SHOPFRONT, type Box, type InteriorPlan } from "./interior-kinds.ts";
-import { interiorDoor, interiorSolids, interiorSpots, planInterior } from "./interior-plan.ts";
+import { BAY_WIDTH, FURNISHING, HEADROOM, MAX_RISER, PARTITION, ROWHOME_FLOOR_Y, SHOPFRONT, type Box, type InteriorPlan } from "./interior-kinds.ts";
+import { DOOR_FACE, interiorDoor, interiorDoors, interiorSolids, interiorSpots, planInterior } from "./interior-plan.ts";
 import { drawnHalf, STOOP } from "./openworld-facade-solids.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
@@ -77,6 +77,32 @@ describe("given a place's door on the street face", () => {
       const door = interiorDoor(place.interior!, place.width, place.depth, place.x, place.z, place.yaw);
       expect(Math.hypot(door.x - place.doorX, door.z - place.doorZ), `${place.name} door offset`).toBeLessThan(1e-6);
     }
+  });
+});
+
+describe("given every place's doors", () => {
+  // mutation: sed -i 's/openX: frame.x(deep + face, hinge) - frame.x(deep, hinge),/openX: frame.x(deep - face, hinge) - frame.x(deep, hinge),/' src/game/world/openworld/interior-plan.ts
+  it("when its door leaves are read, then each street doorway has a leaf shut along the face that swings into the room with a vestibule behind it, and a rowhome has a back door too", () => {
+    const wrong: string[] = [];
+    for (const place of furnished) {
+      const doors = interiorDoors(place);
+      const bays = Math.round(place.width / BAY_WIDTH);
+      const street = doors.filter((door) => door.face === DOOR_FACE.street);
+      const back = doors.filter((door) => door.face === DOOR_FACE.back);
+      if (street.length !== bays * SHOPFRONT[place.interior!].filter((opening) => opening.door).length) wrong.push(`${place.name}: ${street.length} street doors`);
+      if (back.length !== (place.interior === "rowhome" ? 1 : 0)) wrong.push(`${place.name}: ${back.length} back doors`);
+      const outX = Math.cos(place.yaw);
+      const outZ = -Math.sin(place.yaw);
+      for (const door of doors) {
+        const inward = -door.face * (door.openX * outX + door.openZ * outZ);
+        const across = door.closedX * outX + door.closedZ * outZ;
+        if (inward < 0.99 || Math.abs(across) > 1e-9 || door.width < 0.85) wrong.push(`${place.name}: leaf swings ${inward.toFixed(2)} inward, lies ${across.toFixed(2)} off the face, ${door.width.toFixed(2)} wide`);
+        const room = door.vestibule;
+        const behind = room === null ? null : -((room.x0 + room.x1) / 2 - door.x) * outX - ((room.z0 + room.z1) / 2 - door.z) * outZ;
+        if ((door.face === DOOR_FACE.street) !== (behind !== null && behind > 0)) wrong.push(`${place.name}: vestibule ${behind}`);
+      }
+    }
+    expect(wrong.slice(0, 3).join("; "), "doors").toBe("");
   });
 });
 

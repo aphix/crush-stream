@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { MAT } from "../kernel/material-ids.ts";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { BAY_WIDTH, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, SHOPFRONT } from "../world/openworld/interior-kinds.ts";
+import { drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import type { InteriorKind } from "../world/openworld/walk-graph.ts";
 import { PREFAB } from "../world/constants.ts";
@@ -49,15 +50,17 @@ describe("given the facade styles of the places that have interiors", () => {
     expect(FACADE_LAYERS.rowhouse.open, "a style that was there before").toBeUndefined();
   });
 
-  // mutation: sed -i 's/{ centre: 0.9, width: 0.9, sill: 0, top: 2.1, door: true }/{ centre: -1.9, width: 0.9, sill: 0, top: 2.1, door: true }/' src/game/world/openworld/interior-kinds.ts
-  it("when the packed albedo is read at each doorway and window of the plan, then it is cut open there at body height, solid at the bay's edge, and the other layers have no opening", async () => {
+  // mutation: sed -i 's/    if (!opening.door) continue;//' scripts/pack-facades.mjs, then repack the styles (the windows cut open too)
+  it("when the packed albedo is read at each doorway and window of the plan, then a doorway is cut open at body height and a window is painted shut, the bay's edge is solid, and the other layers have no opening", async () => {
+    const half = drawnHalf(BAY_WIDTH);
     for (const [style, open] of Object.entries(OPEN_STYLES)) {
       const alpha = await alphaOf(style);
       for (const opening of SHOPFRONT[open.kind]) {
-        const u = (BAY_WIDTH / 2 - opening.centre) / BAY_WIDTH;
+        const u = (half - opening.centre) / (2 * half);
         const body = open.floorY + Math.max(opening.sill, 0) + Math.min(1, (opening.top - opening.sill) / 2);
-        const v = body / open.ground;
-        expect(alpha.at(LAYER.ground, u, v), `${style} alpha in the ${opening.door ? "doorway" : "window"} at u ${u.toFixed(2)}`).toBeLessThan(CUT);
+        const at = alpha.at(LAYER.ground, u, body / open.ground);
+        if (opening.door) expect(at, `${style} alpha in the doorway at u ${u.toFixed(2)}`).toBeLessThan(CUT);
+        else expect(at, `${style} alpha in the window at u ${u.toFixed(2)}`).toBeGreaterThanOrEqual(CUT);
       }
       expect(alpha.at(LAYER.ground, 0.01, 0.5), `${style} alpha at the bay's edge`).toBeGreaterThanOrEqual(CUT);
       expect(alpha.cut(LAYER.cornice) + alpha.cut(LAYER.floor), `${style} openings above the ground band`).toBe(0);

@@ -1,15 +1,12 @@
 import * as THREE from "three";
 import { ceilingOver, stairBoxes, wallBoxes } from "../../world/openworld/interior-draft.ts";
-import { ROOM_LOOK, SHELL_WALL, STREET_SKIN, type Box, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
+import { ROOM_LOOK, type Box, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { box, painted, type Piece } from "../prefab-pieces.ts";
 import { furnishingParts } from "./interior-kit.ts";
 
 /** A floor's wearing layer on top of its slab (m). */
 const FLOOR_LAYER = 0.03;
-/** A door leaf: thickness (m), and how much shorter than its opening it is. */
-const LEAF_THICK = 0.05;
-const LEAF_CLEARANCE = 0.05;
 /** The turn each furnishing's front (its +x) takes it to, as a rotation about y in the building's local frame (front is +x there). */
 const TURN_ANGLE = [0, -Math.PI / 2, Math.PI, Math.PI / 2] as const;
 
@@ -43,22 +40,6 @@ function slabPieces(plan: InteriorPlan, look: Look, shell: boolean): Piece[] {
   return out;
 }
 
-/** Every doorway in the ground floor's street wall holds a leaf swung open against its hinge jamb. */
-function leafPieces(plan: InteriorPlan, look: Look): Piece[] {
-  const out: Piece[] = [];
-  const street = plan.walls.find((wall) => wall.level === 0 && wall.axis === "across" && wall.fixed < plan.depth / 2);
-  if (street === undefined) return out;
-  const floor = plan.floors[0]!;
-  const hingeDeep = STREET_SKIN + SHELL_WALL;
-  for (const opening of street.openings) {
-    if (opening.sill !== 0) continue;
-    const length = opening.width - LEAF_CLEARANCE;
-    const leaf = localBox(plan, { deep0: hingeDeep, deep1: hingeDeep + length, across0: opening.centre - opening.width / 2 + 0.02, across1: opening.centre - opening.width / 2 + 0.02 + LEAF_THICK, y0: floor, y1: floor + opening.top - LEAF_CLEARANCE });
-    out.push([leaf, plan.kind === "rowhome" ? look.wood : look.trim]);
-  }
-  return out;
-}
-
 /** Bake the building's turn and place into a merged geometry. */
 function inWorld(geometry: THREE.BufferGeometry, place: Place): THREE.BufferGeometry {
   return geometry.rotateY(place.yaw).translate(place.x, 0, place.z);
@@ -67,7 +48,7 @@ function inWorld(geometry: THREE.BufferGeometry, place: Place): THREE.BufferGeom
 /** The ground floor's envelope: what shows through a door or a shopfront window from the street. */
 export function buildShell(plan: InteriorPlan, place: Place): THREE.BufferGeometry {
   const look = ROOM_LOOK[plan.kind];
-  return inWorld(painted([...wallPieces(plan, look, true), ...slabPieces(plan, look, true), ...leafPieces(plan, look)]), place);
+  return inWorld(painted([...wallPieces(plan, look, true), ...slabPieces(plan, look, true)]), place);
 }
 
 /** Everything else: partitions, upper floors, stairs and the furniture (lit and unlit apart); a geometry is null when it has no pieces. */
