@@ -4,8 +4,9 @@ import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { must } from "../../kernel/must.test-util.ts";
 import { humanSlot } from "../../match/survival.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "../../present/prefabs.ts";
-import { PREFABS } from "../catalog.ts";
+import { PARKED_PREFABS, PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
+import { placeCourse } from "../placements.ts";
 import { Track, blankProjection, projectPath } from "../track.ts";
 import { parseTrack } from "../track-schema.ts";
 import { LAMP_FROM_CURB, LAYOUT } from "./openworld-constants.ts";
@@ -15,11 +16,10 @@ import { buildOpenWorldMap } from "./openworld-map.ts";
 
 /** A car is 2 m wide: a wall gap wider than this lets one through. */
 const CAR_WIDTH = 2;
-/** The street furniture rules held from outside the constants table: lamps every 32 m, trees every 9 m and 1.5 m from a lamp, parked cars 6 m from a crossing street. */
+/** The street furniture rules held from outside the constants table: lamps every 32 m, trees every 9 m and 1.5 m from a lamp. */
 const LAMP_SPACING_M = 32;
 const TREE_SPACING_M = 9;
 const TREE_LAMP_CLEARANCE_M = 1.5;
-const CORNER_GAP_M = 6;
 
 /** The walls stand on the outer streets' far property line, or on their far curb. */
 const WALL_CASES = [
@@ -169,21 +169,13 @@ for (const wallCase of WALL_CASES) {
       for (const tree of trees) for (const lamp of lamps) expect(Math.abs(tree - lamp), "tree to lamp (m)").toBeGreaterThanOrEqual(TREE_LAMP_CLEARANCE_M);
     });
 
-    // mutation: sed -i 's/export const PARKING_CORNER_GAP = 6;/export const PARKING_CORNER_GAP = 0;/' src/game/world/openworld/openworld-constants.ts
-    it("when the parked cars on the streets are read, then each is in a parking lane and none within 6 m of a crossing street", () => {
-      const parked = furniture.filter((prop) => prop.prefab.startsWith("parked-") && !lots.blocks.some((block) => Math.abs(prop.x - block.centreX) < geometry.blockLength / 2 && Math.abs(prop.z - block.centreZ) < geometry.blockDepth / 2));
-      const crossGap = (prop: Prop): number => {
-        const onColumnStreet = geometry.streetX.some((street) => Math.abs(prop.x - street) < geometry.carriageway / 2);
-        const crossing = onColumnStreet ? geometry.streetZ.map((street) => Math.abs(prop.z - street)) : geometry.streetX.map((street) => Math.abs(prop.x - street));
-        return Math.min(...crossing) - geometry.carriageway / 2;
-      };
-      const outOfLane = parked.filter((prop) => {
-        const fromCentre = roadClearance(prop.x, prop.z) + geometry.carriageway / 2;
-        return fromCentre < geometry.travelLane || fromCentre > geometry.carriageway / 2;
-      });
-      expect(parked.length, "cars parked on the streets").toBeGreaterThan(40);
-      expect(outOfLane.length, "cars outside a parking lane").toBe(0);
-      expect(Math.min(...parked.map(crossGap)), "nearest a parked car stands to a crossing street's edge (m)").toBeGreaterThanOrEqual(CORNER_GAP_M - 1e-6);
+    // mutation: git checkout ow-merge -- src/game/world/openworld/openworld-course.ts (the instanced parked cars come back; the file's other rows go red with it)
+    it("when the whole course is placed, then no parked-car instance stands or is drawn inside the walls", () => {
+      const placed = placeCourse(track);
+      const everything = [...placed.placed, ...placed.drawn];
+      const parked = everything.filter((prop) => PARKED_PREFABS.has(prop.prefab) && Math.abs(prop.x) <= geometry.halfX && Math.abs(prop.z) <= geometry.halfZ);
+      expect(everything.filter((prop) => prop.prefab === PREFAB.lamp).length, "lamps placed (the sweep reads the street)").toBeGreaterThan(40);
+      expect(parked.length, "parked cars inside the walls").toBe(0);
     });
 
     // mutation: sed -i 's/const z = geometry.streetZ\[1\]! + SPAWN_LATERAL_SHIFT;/const z = geometry.streetZ[0]! + SPAWN_LATERAL_SHIFT;/' src/game/world/openworld/openworld-course.ts

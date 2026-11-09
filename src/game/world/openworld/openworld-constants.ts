@@ -72,13 +72,6 @@ export const LAMP_FROM_CURB = 0.46;
 export const TREE_SPACING = 9;
 /** No tree stands nearer than this (m) to a lamp: 1.5 m. */
 export const TREE_LAMP_CLEARANCE = 1.5;
-/** Parked cars: one per 6.0 m of curb, 6 m clear at each corner, a share of spaces empty. */
-export const PARKING_SPACE = 6;
-export const PARKING_CORNER_GAP = 6;
-export const PARKING_EMPTY_SHARE = 0.3;
-/** Seed of the parked cars' choices (which spaces, which model): fixed so every peer parks alike. */
-export const PARKING_SEED = 0x0b10c4;
-
 /** Course look: a city at golden hour. */
 export const COURSE_LOOK = {
   sky: "#f2c08a",
