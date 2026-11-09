@@ -266,7 +266,7 @@ describe("given a monster that lost the two wheels on one side, dropped onto tha
     }
   });
 
-  // Mutation: `sed -i 's|const { car, lowest } = height === 2 ? sleepers.keep(side, drop) : drop; car.deform.masses[0]!.local.x += 1e-9;|const { car, lowest } = height === 2 ? sleepers.keep(side, drop) : drop; car.deform.masses[0]!.local.x += 1e-9;|' src/game/vehicle/tumbled-rest.test.ts` turns this row red (the keeping row writes into the drop it hands on).
+  // Mutation: `sed -i 's|^ *const { car, lowest } = height === 2 ? sleepers.keep(side, drop) : drop;$|& car.deform.masses[0]!.local.x += 1e-9;|' src/game/vehicle/tumbled-rest.test.ts` turns this row red (the keeping row writes into the drop it hands on).
   it("when each 2 m drop is made again from scratch before the next row lets it sleep on, then it is the kept one to the bit: sleep, pose, every mass and the lowest points", () => {
     for (const side of ["left", "right"] as const) {
       const make = () => dropped("sedan", "monster", side, 2, 0.5, LOW_HUBS[side]);

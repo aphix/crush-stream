@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FREEWHEEL } from "../contact/crash-scenarios.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { newWorld } from "../engine/world-step.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { DRIVER_CARS, type DriverCar } from "../match/types.ts";
@@ -94,6 +95,14 @@ function buildGround(): MinigameGround {
   return new MinigameGround({ highJump: NET });
 }
 
+let sharedGround: MinigameGround | undefined;
+
+/** The ground of every row that only reads it, drives on it or builds a ragdoll system on it, built once (a row that takes a patch or a mesh out builds its own). */
+function readOnlyGround(): MinigameGround {
+  sharedGround ??= buildGround();
+  return sharedGround;
+}
+
 describe("given the minigame ground", () => {
   it("when it is built, then it lays no more nodes than the budget", (t) => {
     const ground = buildGround();
@@ -104,7 +113,7 @@ describe("given the minigame ground", () => {
   });
 
   it("when it is set as the active ground and then cleared, then the flat plane is back everywhere the lanes were", () => {
-    const ground = buildGround();
+    const ground = readOnlyGround();
     setGround(ground);
     expect(activeGround()).toBe(ground);
     setGround(null);
@@ -131,28 +140,28 @@ describe("given each station's lane read between the nodes of the grid", () => {
 
   for (const mode of MINIGAME_MODES) {
     it(`when the ${mode} lane is sampled, then its height is within 2 mm of the profile's floor at its anchor`, () => {
-      expect(worstError(buildGround(), mode)).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+      expect(worstError(readOnlyGround(), mode)).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
     });
 
     it(`when the ${mode} lane is sampled against a floor read at another z, then it is not within 2 mm: the grid sits at the anchor's z`, () => {
-      expect(worstError(buildGround(), mode, STATION_ANCHORS[mode].z + 40)).toBeGreaterThan(HEIGHT_TOLERANCE);
+      expect(worstError(readOnlyGround(), mode, STATION_ANCHORS[mode].z + 40)).toBeGreaterThan(HEIGHT_TOLERANCE);
     });
   }
 
   it("when the high jump's kicker, the lane that bends most, is sampled, then the grid's worst error is within 1 to 2 mm: the cell is the coarsest that keeps the bar", (t) => {
-    const worst = worstError(buildGround(), "highJump");
+    const worst = worstError(readOnlyGround(), "highJump");
     t.annotate(`high jump worst error ${(worst * 1000).toFixed(2)} mm`);
     expect(worst, `${worst} m: too coarse`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
     expect(worst, `${worst} m: a finer cell than the bar needs`).toBeGreaterThanOrEqual(COARSEST_CELL_ERROR_FLOOR);
   });
 
   it("when the long jump's last 5 m before its barrier are read, then the floor is exactly the pad's level", () => {
-    const ground = buildGround();
+    const ground = readOnlyGround();
     for (let localX = -5; localX <= 0; localX += 0.1) expect(ground.heightAt(localX, STATION_ANCHORS.longJump.z), `x = ${localX}`).toBe(0);
   });
 
   it("when the long jump's incline foot is read, then it lies below the pad as the profile has it (negative heights are real)", () => {
-    const ground = buildGround();
+    const ground = readOnlyGround();
     const footHeight = floorHeightAt("longJump", climbFootX("longJump"), 0);
     expect(footHeight, `the profile's foot ${footHeight}`).toBeLessThan(-1);
     expect(Math.abs(ground.heightAt(STATION_ANCHORS.longJump.x + climbFootX("longJump"), STATION_ANCHORS.longJump.z, 0.5) - footHeight)).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
@@ -161,7 +170,7 @@ describe("given each station's lane read between the nodes of the grid", () => {
 
 describe("given the ground away from the lanes", () => {
   it("when it is read between, around and past the lanes and behind and past each lane, then it is the pad at 0", () => {
-    const ground = buildGround();
+    const ground = readOnlyGround();
     const betweenLanes = [(STATION_ANCHORS.longJump.z + STATION_ANCHORS.highJump.z) / 2, (STATION_ANCHORS.highJump.z + STATION_ANCHORS.ringFling.z) / 2];
     for (const z of [-300, ...betweenLanes, 400]) {
       for (const x of [-500, -60, 0, 60, 300]) expect(ground.heightAt(x, z), `(${x}, ${z})`).toBe(0);
@@ -178,7 +187,7 @@ describe("given the ground away from the lanes", () => {
 describe("given each station's start", () => {
   for (const mode of MINIGAME_MODES) {
     it(`when ${mode}'s start is asked, then it is the parked pose at the anchor on the floor's height facing the throw`, () => {
-      const ground = buildGround();
+      const ground = readOnlyGround();
       const start = ground.stationStart(mode);
       const pose = stationStartPose(mode);
       const anchor = STATION_ANCHORS[mode];
@@ -190,7 +199,7 @@ describe("given each station's start", () => {
   }
 
   it("when the bounds are asked, then they hold every lane from its pad's back, its landing to the field's end, the Ring Fling backstop and the net", () => {
-    const bounds = buildGround().minigameBounds();
+    const bounds = readOnlyGround().minigameBounds();
     for (const mode of MINIGAME_MODES) {
       const anchor = STATION_ANCHORS[mode];
       expect(bounds.minX <= anchor.x + stationBackX(mode) && bounds.minZ <= anchor.z - STATION_HALF_WIDTH && bounds.maxZ >= anchor.z + STATION_HALF_WIDTH, mode).toBeTruthy();
@@ -223,7 +232,7 @@ type Drive = {
  */
 function driveFromStart(type: DriverCar, mode: MinigameMode, assignHook = true): Drive {
   const anchor = STATION_ANCHORS[mode];
-  const ground = buildGround();
+  const ground = readOnlyGround();
   setGround(ground);
   const car = dressedDriverCar(type);
   try {
@@ -387,8 +396,9 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
   const throwAtSpeed = (system: RagdollSystem, speed: number): ThrowResult =>
     throwDummy(system, seat, new THREE.Vector3(speed * Math.cos(RING_THROW_PITCH), speed * Math.sin(RING_THROW_PITCH), 0));
 
+  // mutation: sed -i 's|^\( *\)if (deltaX \* deltaX + deltaZ \* deltaZ <= zone.radius \* zone.radius) return zone.score;$|\1if (false) return zone.score;|' src/game/scenes/minigame-ring.ts  (no throw rests in any cup: this row goes red)
   it("when throws from 14 to 24 m/s are run, then each cup 10 to 50 holds a resting dummy at some speed", async (t) => {
-    const system = await ragdollOn(buildGround());
+    const system = await ragdollOn(readOnlyGround());
     const rows: string[] = [];
     const cupsHeld = new Set<number>();
     for (const speed of RING_SWEEP_SPEEDS) {
@@ -403,8 +413,9 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
     for (const cup of RING_CUPS) expect(cupsHeld.has(cup.score), `no throw rested in the ${cup.score} cup: ${[...cupsHeld].join(", ")}`).toBeTruthy();
   });
 
+  // mutation: sed -i 's|^    this.addHeightGrid(anchor.x + bounds.minX|    void (anchor.x + bounds.minX|' src/game/scenes/minigame-ground.ts  (the board is not in the height grid: he never reads as on the ground)
   it("when the dummy rests on the board, then he is on the ground (the board is in the height grid the settle reads, and without it he is not)", async () => {
-    const result = throwAtSpeed(await ragdollOn(buildGround()), LOW_DESIGN_SPEED);
+    const result = throwAtSpeed(await ragdollOn(readOnlyGround()), LOW_DESIGN_SPEED);
     expect(result.torso.y, `his torso rests ${result.torso.y} m up: the pad alone could not tell he landed`).toBeGreaterThanOrEqual(GROUND_REACH);
     expect(result.still >= REST_HOLD && result.onGround, "he is on the ground").toBeTruthy();
     disposeSystems();
@@ -416,7 +427,7 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
   });
 
   it("when the board is read, then it starts past where the lane's cars reach (nothing drives there) and its height is the board's at the cups' centres", () => {
-    const ground = buildGround();
+    const ground = readOnlyGround();
     expect(RING_BOARD_BOUNDS.minX).toBeGreaterThan(stationFrontX("ringFling"));
     for (const cup of RING_CUPS) {
       expect(Math.abs(ground.heightAt(anchor.x + cup.centreX, anchor.z + cup.centreZ) - ringHeightAt(cup.centreX, cup.centreZ)), `${cup.score} cup`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
@@ -425,7 +436,7 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
 
   it("when the board's mesh is read, then it is the board's mesh shifted to the anchor", () => {
     const board = ringBoardMesh(RING_MESH_STEP);
-    const ground = buildGround();
+    const ground = readOnlyGround();
     const placed = ground.meshes.find((mesh) => mesh.vertices.length === board.vertices.length && mesh.indices.length === board.indices.length)!;
     expect(placed, "the board's mesh is among the ground's").toBeTruthy();
     for (let at = 0; at < board.vertices.length; at += 3) {
@@ -437,12 +448,13 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
 });
 
 describe("given a dummy thrown far past the Ring Fling board", () => {
+  // mutation: sed -i 's|^    this.addRingBackstop();|    void 0;|' src/game/scenes/minigame-ground.ts  (no backstop: he gets past it)
   it("when he is thrown at 30 m/s, then the backstop stops him and he never gets past it (and without the backstop he does)", async () => {
     const anchor = STATION_ANCHORS.ringFling;
     const seat = new THREE.Vector3(anchor.x, lipHeight("ringFling") + SEAT_OVER_LIP, anchor.z);
     const velocity = new THREE.Vector3(OVERSHOOT_SPEED * Math.cos(RING_THROW_PITCH), OVERSHOOT_SPEED * Math.sin(RING_THROW_PITCH), 0);
     const backFaceX = anchor.x + RING_BOARD_BOUNDS.maxX + RING_BACKSTOP.distancePastBoard + RING_BACKSTOP.thickness;
-    const stopped = throwDummy(await ragdollOn(buildGround()), seat, velocity);
+    const stopped = throwDummy(await ragdollOn(readOnlyGround()), seat, velocity);
     expect(stopped.furthestPartX, `a part reached x ${stopped.furthestPartX - anchor.x} past the backstop's back face at ${backFaceX - anchor.x}`).toBeLessThanOrEqual(backFaceX + SOAK);
     expect(stopped.still, `still ${stopped.still}`).toBeGreaterThanOrEqual(REST_HOLD);
     disposeSystems();
@@ -456,9 +468,10 @@ describe("given a dummy thrown at the high jump's net", () => {
   const seat = new THREE.Vector3(anchor.x + NET.netX - NET_SHOT.distanceBefore, NET_SHOT.height, anchor.z);
   const velocity = new THREE.Vector3(NET_SHOT.speed, NET_SHOT.rise, 0);
 
+  // mutation: sed -i 's|^    this.addHighJumpNet(options.highJump);|    void 0;|' src/game/scenes/minigame-ground.ts  (no net: he flies on)
   it("when he is thrown at the net, then it stops him and he ends on the ground (and without the net he flies on)", async () => {
     const netBackFaceX = anchor.x + NET.netX + NET_FACE_ALLOWANCE;
-    const caught = throwDummy(await ragdollOn(buildGround()), seat, velocity);
+    const caught = throwDummy(await ragdollOn(readOnlyGround()), seat, velocity);
     expect(caught.furthestPartX, `a part reached x ${caught.furthestPartX - anchor.x} past the net at ${NET.netX}`).toBeLessThanOrEqual(netBackFaceX);
     expect(caught.still, `still ${caught.still}`).toBeGreaterThanOrEqual(REST_HOLD);
     expect(caught.torso.y, `his torso rests ${caught.torso.y} m up`).toBeLessThanOrEqual(LYING_TORSO_HEIGHT);
@@ -480,7 +493,7 @@ describe("given the high jump's posts and slats", () => {
   const gapBetweenPosts = { min: anchor.z - POST_HALF_SPAN + POST_THICKNESS / 2, max: anchor.z + POST_HALF_SPAN - POST_THICKNESS / 2 };
 
   it("when the frame's solids are read, then two posts stand 0.25 m square from the pad to the frame's top and a slat thinner than a post stands between them at every board, every 5 m up the frame", () => {
-    const boxes = frameBoxes(buildGround());
+    const boxes = frameBoxes(readOnlyGround());
     const size = new THREE.Vector3();
     expect(boxes.length).toBe(frameBoxCount(FRAME));
     for (const [side, post] of [-1, 1].map((sign, index) => [sign, boxes[index]!] as const)) {
@@ -501,7 +514,7 @@ describe("given the high jump's posts and slats", () => {
   });
 
   it("when the frame's solids are read, then the opening between the posts holds nothing but the slats: no sign or plate collides", () => {
-    const boxes = frameBoxes(buildGround());
+    const boxes = frameBoxes(readOnlyGround());
     const size = new THREE.Vector3();
     expect(boxes.length, "the posts and one slat per board, nothing else").toBe(2 + FRAME.boards.length);
     for (const [index, box] of boxes.entries()) {
@@ -533,12 +546,13 @@ describe("given a dummy flung into the high jump's frame", () => {
 
   /** The dummy flung from `seat` with the frame in the ground and without it: where each rests (and the part furthest out of the first). */
   async function flung(seat: THREE.Vector3): Promise<{ caught: ThrowResult; control: ThrowResult }> {
-    const caught = throwDummy(await ragdollOn(buildGround()), seat, velocity);
+    const caught = throwDummy(await ragdollOn(readOnlyGround()), seat, velocity);
     disposeSystems();
     const control = throwDummy(await ragdollOn(withoutFrame(buildGround(), FRAME)), seat, velocity);
     return { caught, control };
   }
 
+  // mutation: sed -i 's/hz: POST_HALF_SPAN - POST_THICKNESS \/ 2 }/hz: 0.01 }/' src/game/scenes/minigame-ground.ts  (the slats are slivers: nothing stops him at the slat)
   it("when he is flung at a slat, then it stops him at its back face and catches him short of where he lands without the frame", async (t) => {
     const { caught, control } = await flung(seatAt(0, slat.y));
     t.annotate(`slat at ${slat.y} m: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
@@ -563,11 +577,12 @@ describe("given a dummy flung into the high jump's frame", () => {
 });
 
 describe("given a dummy dropped over the back face of the high jump's lip", () => {
+  // mutation: sed -i 's|^      this.meshes.push(latticeMesh(|      void ((|' src/game/scenes/minigame-ground.ts  (no lane meshes: he falls through the ramp)
   it("when he is dropped 2 m over it, then he lands on the face and stays above it (and without the lane's meshes he falls through the ramp)", async () => {
     const anchor = STATION_ANCHORS.highJump;
     const atX = stationFrontX("highJump") / 2;
     const seat = new THREE.Vector3(anchor.x + atX, floorHeightAt("highJump", atX, 0) + 2, anchor.z);
-    const landed = throwDummy(await ragdollOn(buildGround()), seat, new THREE.Vector3(0.5, 0, 0));
+    const landed = throwDummy(await ragdollOn(readOnlyGround()), seat, new THREE.Vector3(0.5, 0, 0));
     expect(landed.lowestPartY, `lowest part ${landed.lowestPartY}`).toBeGreaterThanOrEqual(-SOAK);
     expect(landed.still, `still ${landed.still}`).toBeGreaterThanOrEqual(REST_HOLD);
     disposeSystems();
@@ -582,8 +597,9 @@ describe("given a dummy thrown from the long jump's barrier", () => {
   const anchor = STATION_ANCHORS.longJump;
   const seat = new THREE.Vector3(anchor.x, lipHeight("longJump") + SEAT_OVER_LIP, anchor.z);
 
+  // mutation: sed -i 's|^      this.addPlane(0, STATION_ANCHORS\[lane.mode\].x + stationFrontX(lane.mode), PAD_HALF_EXTENT, lane.low, lane.high, Infinity);|      void 0;|' src/game/scenes/minigame-ground.ts  (no sand past the lip: he falls below it)
   it("when he is thrown at the barrier's release, then he lands on the sand past the lip and rests, never below it", async () => {
-    const result = throwDummy(await ragdollOn(buildGround()), seat, new THREE.Vector3(LONG_JUMP_RELEASE.speed, LONG_JUMP_RELEASE.up, 0));
+    const result = throwDummy(await ragdollOn(readOnlyGround()), seat, new THREE.Vector3(LONG_JUMP_RELEASE.speed, LONG_JUMP_RELEASE.up, 0));
     expect(result.still, `still ${result.still}`).toBeGreaterThanOrEqual(REST_HOLD);
     expect(result.torso.x > anchor.x + 10 && result.torso.x < anchor.x + RANGE.length, `rested at x ${result.torso.x}`).toBeTruthy();
     expect(result.torso.y, `his torso rests ${result.torso.y} m up`).toBeLessThanOrEqual(LYING_TORSO_HEIGHT);
@@ -592,9 +608,27 @@ describe("given a dummy thrown from the long jump's barrier", () => {
 
   it("when he is thrown so that he flies 100 m and more, then no part of him goes below the sand anywhere along the field", async () => {
     const pitch = (LONG_JUMP_FAR_THROW.pitchDegrees * Math.PI) / 180;
-    const result = throwDummy(await ragdollOn(buildGround()), seat, new THREE.Vector3(LONG_JUMP_FAR_THROW.speed * Math.cos(pitch), LONG_JUMP_FAR_THROW.speed * Math.sin(pitch), 0));
+    const result = throwDummy(await ragdollOn(readOnlyGround()), seat, new THREE.Vector3(LONG_JUMP_FAR_THROW.speed * Math.cos(pitch), LONG_JUMP_FAR_THROW.speed * Math.sin(pitch), 0));
     expect(result.furthestPartX, `he got to x ${result.furthestPartX}`).toBeGreaterThan(anchor.x + 100);
     expect(result.lowestPartY, `lowest part ${result.lowestPartY}`).toBeGreaterThanOrEqual(-SOAK);
     expect(result.still, `still ${result.still}`).toBeGreaterThanOrEqual(REST_HOLD);
+  });
+});
+
+describe("given the ground every read-only row shared, after the last of them", () => {
+  // mutation: sed -i 's|^\( *const without = \)buildGround();$|\1readOnlyGround();|' src/game/scenes/minigame-ground.test.ts  (the board row's control then disables patches on the shared ground: this row goes red)
+  it("when it is compared with a fresh build, then every patch, node height and mesh vertex is the same, bit for bit", () => {
+    const shared = readOnlyGround();
+    const fresh = buildGround();
+    expect(shared.count, "patches").toBe(fresh.count);
+    expect(firstMismatch(shared.p, fresh.p), "patch numbers").toBeUndefined();
+    expect(firstMismatch(shared.q, fresh.q), "patch kinds and ids").toBeUndefined();
+    expect(shared.nodes.length, "node arrays").toBe(fresh.nodes.length);
+    for (const [patch, nodes] of fresh.nodes.entries()) expect(firstMismatch(shared.nodes[patch], nodes), `node heights of patch ${patch}`).toBeUndefined();
+    expect(shared.meshes.length, "meshes").toBe(fresh.meshes.length);
+    for (const [index, mesh] of fresh.meshes.entries()) {
+      expect(firstMismatch(shared.meshes[index]!.vertices, mesh.vertices), `vertices of mesh ${index}`).toBeUndefined();
+      expect(firstMismatch(shared.meshes[index]!.indices, mesh.indices), `indices of mesh ${index}`).toBeUndefined();
+    }
   });
 });

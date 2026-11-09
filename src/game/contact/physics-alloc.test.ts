@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -30,10 +30,17 @@ const MEASURE = 300;
 const BOUND_KB = 540;
 /** Vectors the control makes each frame: far more than the bar's worth (over 50 B each). */
 const CONTROL_VECTORS = 12000;
+/** Frames the control reads: its vectors outweigh the pile-up's own allocation, so a short window shows them. */
+const CONTROL_FRAMES = 60;
 /** Bytes a scrape may allocate: one boxed double is 16 (as the other allocation rows hold). */
 const SCRAPE_BOUND_B = 16;
 
-function pileUp(): { cars: DeformableCar[]; step: () => void } {
+interface PileUp {
+  cars: DeformableCar[];
+  step: () => void;
+}
+
+function pileUp(): PileUp {
   const scene = new THREE.Scene();
   const cars = Array.from({ length: CARS }, (_, i) => new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: `c${i}` }, scene, null, fleetStyle(i)));
   placeDerby(cars, 11, 12);
@@ -79,43 +86,62 @@ function pileUp(): { cars: DeformableCar[]; step: () => void } {
   return { cars, step };
 }
 
-/** Bytes a window of `MEASURE` frames of a fresh warmed pile-up allocates, in KB a frame; `extra` is more work each frame. */
-function pileUpKbPerFrame(extra: () => void = () => {}): number {
-  const { cars, step } = pileUp();
-  try {
-    for (let f = 0; f < WARM; f++) step();
-    const crashed = cars.filter((c) => c.deform.massActive).length;
-    expect(crashed, `only ${crashed} of ${CARS} cars crashed: the pile-up no longer exercises the crush path`).toBeGreaterThanOrEqual(CARS / 2);
-    const kb =
-      allocatedBytes(() => {
-        for (let f = 0; f < MEASURE; f++) {
-          step();
-          extra();
-        }
-      }) /
-      1024 /
-      MEASURE;
-    if (process.env.ALLOC_PRINT) console.log(`physics-alloc: ${kb.toFixed(1)} KB/frame, ${crashed} crashed`);
-    return kb;
-  } finally {
-    setGround(null);
-  }
+/** The pile-up the last reading ended on, still on the ground and warm: the control continues it instead of building and warming another. */
+let lastPile: PileUp | null = null;
+
+/** A fresh pile-up stepped through its `WARM` frames, as the readings (and the control) start from. */
+function warmedPileUp(): PileUp {
+  const pile = pileUp();
+  for (let f = 0; f < WARM; f++) pile.step();
+  const crashed = pile.cars.filter((c) => c.deform.massActive).length;
+  expect(crashed, `only ${crashed} of ${CARS} cars crashed: the pile-up no longer exercises the crush path`).toBeGreaterThanOrEqual(CARS / 2);
+  return pile;
+}
+
+/** Bytes a window of `frames` frames of `pile` allocates, in KB a frame; `extra` is more work each frame. */
+function kbPerFrame(pile: PileUp, frames: number, extra: () => void = () => {}): number {
+  const kb =
+    allocatedBytes(() => {
+      for (let f = 0; f < frames; f++) {
+        pile.step();
+        extra();
+      }
+    }) /
+    1024 /
+    frames;
+  if (process.env.ALLOC_PRINT) console.log(`physics-alloc: ${kb.toFixed(1)} KB/frame over ${frames} frames`);
+  return kb;
 }
 
 describe("given a warmed 24-car derby pile-up with every car driving at the arena centre", () => {
+  // mutation: sed -i 's/^const BOUND_KB = 540;/const BOUND_KB = 100;/' src/game/contact/physics-alloc.test.ts  (the bar under every pile-up's reading: this row goes red after its 120 s of retries)
   it(`when 300 frames are stepped, then physics allocates at most ${BOUND_KB} KB per frame (boxed doubles, iterators and per-call arrays would show up as race GC pauses)`, () => {
-    const kb = untilQuiet(() => pileUpKbPerFrame(), BOUND_KB);
+    const kb = untilQuiet(() => {
+      lastPile = null;
+      lastPile = warmedPileUp();
+      return kbPerFrame(lastPile, MEASURE);
+    }, BOUND_KB);
     expect(kb, `${kb.toFixed(0)} KB per frame > ${BOUND_KB} in every pile-up for ${COMPILE_WAIT_S} s: a hot physics path allocates again (see docs/PERF_HITCH.md)`).toBeLessThanOrEqual(BOUND_KB);
   });
 });
 
 describe("given the allocation measure on a derby pile-up", () => {
-  it("when each frame also makes twelve thousand vectors, then it reads over the bar", () => {
+  afterAll(() => {
+    lastPile = null;
+    setGround(null);
+  });
+
+  // mutation: sed -i 's/^const CONTROL_VECTORS = 12000;/const CONTROL_VECTORS = 100;/' src/game/contact/physics-alloc.test.ts  (the vectors fall under the bar: both readings go red)
+  it("when each frame also makes twelve thousand vectors, then it reads over the bar on the pile-up the reading before it ended on and on a fresh warmed one", () => {
     const kept: THREE.Vector3[] = [];
-    const kb = pileUpKbPerFrame(() => {
+    const vectors = (): void => {
       for (let i = 0; i < CONTROL_VECTORS; i++) kept[i % 8] = new THREE.Vector3();
-    });
-    expect(kb, `${kb.toFixed(0)} KB per frame for ${CONTROL_VECTORS} vectors a frame: the measure sees nothing`).toBeGreaterThan(BOUND_KB);
+    };
+    const continued = kbPerFrame(lastPile ?? warmedPileUp(), CONTROL_FRAMES, vectors);
+    lastPile = null;
+    const fresh = kbPerFrame(warmedPileUp(), CONTROL_FRAMES, vectors);
+    expect(continued, `${continued.toFixed(0)} KB per frame for ${CONTROL_VECTORS} vectors a frame on the continued pile-up: the measure sees nothing`).toBeGreaterThan(BOUND_KB);
+    expect(fresh, `${fresh.toFixed(0)} KB per frame for ${CONTROL_VECTORS} vectors a frame on a fresh pile-up: the measure sees nothing`).toBeGreaterThan(BOUND_KB);
   });
 });
 
