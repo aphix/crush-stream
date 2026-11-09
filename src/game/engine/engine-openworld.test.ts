@@ -20,6 +20,7 @@ import { FLAT_GROUND } from "../world/ground.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { MEDICS } from "./engine-openworld-medics.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
+import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
 
 const map = buildFixtureMap();
 const SEED = 5;
@@ -29,6 +30,8 @@ const HOST_DAY_SECONDS = 100;
 const FRAME = FRAME_SECONDS;
 /** Drawings a crowd makes: its own, and the ambulance crew's (`MEDICS.count` scrubs, drawn by an art of their own). */
 const ARTS_PER_CROWD = 2;
+/** Frames (a thirtieth of a second) the eye follows a civilian until her body stands: she may start in a doorway. */
+const BODY_WAIT_FRAMES = 1800;
 
 type WallListener = (closing: number, x: number, z: number) => void;
 
@@ -45,12 +48,17 @@ class Harness {
   readonly eye = new LookRay();
   readonly thrown: FigureStrike[] = [];
   readonly looks: DriverLook[] = [];
-  readonly updates: { poses: CrowdPoses; eyeX: number; sight: CrowdSight; wallDt: number }[] = [];
+  readonly updates: { poses: CrowdPoses; eyeX: number; sight: CrowdSight; wallDt: number; held: Uint8Array | null }[] = [];
+
   artsMade = 0;
   artsDisposed = 0;
   unhooked = 0;
   listener: WallListener | null = null;
-  readonly director = new OpenWorldDirector({
+  readonly director: OpenWorldDirector;
+
+  /** `bodies`: the dummies' world the civilians near the eye have bodies in; none: the crowd's art draws them all. */
+  constructor(bodies: FakeBodyHost | null = null) {
+    this.director = new OpenWorldDirector({
     ...idleOpenWorldPorts(),
     inOpenWorld: () => this.open,
     isClient: () => this.client,
@@ -68,6 +76,7 @@ class Harness {
       this.thrown.push(strike);
       this.looks.push(look);
     },
+    ...(bodies === null ? {} : { bodies }),
     hookWallHits: (listener) => {
       this.listener = listener;
       return () => void this.unhooked++;
@@ -75,9 +84,10 @@ class Harness {
     makeArt: (capacity) => {
       this.artsMade++;
       const crewsOwn = capacity === MEDICS.count;
-      return { update: (poses, eyeX, _eyeZ, sight, wallDt) => void (crewsOwn || this.updates.push({ poses, eyeX, sight, wallDt })), dispose: () => void this.artsDisposed++ };
+      return { update: (poses, eyeX, _eyeZ, sight, wallDt, held) => void (crewsOwn || this.updates.push({ poses, eyeX, sight, wallDt, held: held ?? null })), dispose: () => void this.artsDisposed++ };
     },
-  });
+    });
+  }
 
   /** A frame: the sim steps `FRAME` s first (a host), then the frame. */
   frame(): void {
@@ -90,8 +100,8 @@ class Harness {
   }
 }
 
-function hostWithMap(): Harness {
-  const harness = new Harness();
+function hostWithMap(bodies: FakeBodyHost | null = null): Harness {
+  const harness = new Harness(bodies);
   harness.director.startOpenWorld(map);
   return harness;
 }
@@ -214,6 +224,36 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     let knocked = false;
     for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) knocked ||= log[at] === EVENT_KIND.knock && log[at + 1] === resident;
     expect(knocked, "the knock of the civilian run down is in the log (the crowd may log pushes before it)").toBe(true);
+  });
+
+  // mutation: sed -i 's/      if (this.bodies?.knock(strike) === true) {/      if (false) {/' src/game/engine/engine-openworld.ts
+  it("when the car runs down a civilian who has a body near the eye, then her live body is knocked, nothing is thrown as a separate figure, and the art is told she is held", () => {
+    const host = new FakeBodyHost();
+    const harness = hostWithMap(host);
+    carAtSomeone(harness);
+    const crowd = harness.crowd();
+    let resident = shownResident(crowd);
+    // She may have just come out of her door (no body inside or at a building): the eye follows her until she has one.
+    for (let frames = 0; frames < BODY_WAIT_FRAMES && harness.director["bodies"]!.slotOf(resident) < 0; frames++) {
+      harness.eye.eyeX = crowd.poses.x[resident]!;
+      harness.eye.eyeZ = crowd.poses.z[resident]!;
+      harness.frame();
+      host.advance(FRAME);
+      if (crowd.poses.shown[resident] === 0) resident = shownResident(crowd);
+    }
+    expect(host.started.length, "she and anyone else near the eye have bodies").toBeGreaterThan(0);
+    expect(harness.director["bodies"]!.slotOf(resident), "she has a body").toBeGreaterThanOrEqual(0);
+    expect(harness.updates.at(-1)!.held?.[resident], "the art is told she is held by a body").toBe(1);
+    const { car, place } = carAtWalker(crowd, resident, 6, 14);
+    harness.cars = [car];
+    for (let travelled = FRAME; travelled < 2 && host.knocks.length === 0; travelled += FRAME) {
+      place(travelled);
+      harness.director.step(FRAME);
+      host.advance(FRAME);
+    }
+    expect(host.knocks.map((knock) => knock.strike.guard), "bodies knocked, by civilian").toContain(resident);
+    expect(harness.thrown.map((strike) => strike.guard), "no separate throw of her").not.toContain(resident);
+    expect(crowd.poses.shown[resident], "the crowd has her down").toBe(0);
   });
 
   it("when a car hits a building's face at the wreck speed, then the wall hook makes it a wreck event in the log", () => {

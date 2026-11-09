@@ -82,13 +82,13 @@ export class CivilianArt {
     return this.slotOf[civilian]!;
   }
 
-  /** Draw the crowd as seen from (`eyeX`, `eyeZ`) by the players `sight` stands for, `wallDt` s after the last frame: once a frame, after the crowd's step. */
-  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void {
+  /** Draw the crowd as seen from (`eyeX`, `eyeZ`) by the players `sight` stands for, `wallDt` s after the last frame: once a frame, after the crowd's step. `held` (per civilian, 1: a physical body in the dummies' world stands for her) draws none of them here. */
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number, held: Uint8Array | null = null): void {
     const count = Math.min(poses.count, this.capacity);
     this.stamp = (this.stamp + 1) | 0;
     this.eyeX = eyeX;
     this.eyeZ = eyeZ;
-    this.refreshSight(poses, count, sight, wallDt);
+    this.refreshSight(poses, count, sight, wallDt, held);
     const selected = this.selectNearest(poses, count);
     this.assignSlots(poses, selected);
     this.poseDummies(poses, selected, wallDt);
@@ -108,11 +108,11 @@ export class CivilianArt {
   }
 
   /** Every shown civilian within `FAR_DRAW` is asked of the sight field; one unseen for `HIDE_GRACE` seconds is not drawn, and one out of range must be seen again to come back. */
-  private refreshSight(poses: CrowdPoses, count: number, sight: CrowdSight, wallDt: number): void {
+  private refreshSight(poses: CrowdPoses, count: number, sight: CrowdSight, wallDt: number, held: Uint8Array | null): void {
     for (let civilian = 0; civilian < count; civilian++) {
       const dx = poses.x[civilian]! - this.eyeX;
       const dz = poses.z[civilian]! - this.eyeZ;
-      if (poses.shown[civilian] === 0 || dx * dx + dz * dz > FAR_DRAW_SQUARED) {
+      if (poses.shown[civilian] === 0 || (held !== null && held[civilian] === 1) || dx * dx + dz * dz > FAR_DRAW_SQUARED) {
         this.unseenSeconds[civilian] = HIDE_GRACE;
         continue;
       }

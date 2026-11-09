@@ -45,6 +45,7 @@ import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
 import { TrafficLightArt } from "../present/traffic-lights.ts";
 import { wearCarLook } from "../present/car-look.ts";
 import { TrafficDress } from "./traffic-dress.ts";
+import { RagdollBodyHost } from "./ragdoll-body-host.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
@@ -426,6 +427,7 @@ export class CrashEngine extends EngineGarage {
         ray.dirZ = _v.z;
       },
       throwFigure: (strike, look, life) => this.ragdolls.throwFigure(strike, this.live(), look, life),
+      bodies: new RagdollBodyHost(() => this.ragdolls),
       strikeWalker: (dirX, dirZ) => {
         if (!this.ragdolls.walkerTorso(_p)) return;
         this.ragdolls.strikeWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
