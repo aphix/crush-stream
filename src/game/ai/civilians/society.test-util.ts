@@ -35,7 +35,7 @@ function counterBeside(place: Place): Float32Array {
 }
 
 /**
- * The fixture neighbourhood with the venues the table sends people to: a coffee shop (three seats, a counter) beside the pizza place, a supermarket (counter), the bar with two seats and a counter, and two stoop seats at the head of every home's seats.
+ * The fixture neighbourhood with the venues the table sends people to: a coffee shop (three seats, a counter) beside the pizza place, a supermarket and the bodega (counters), the bar with two seats and a counter, and two stoop seats at the head of every home's seats.
  */
 export function buildSocietyMap(): OpenWorldMap {
   const base = buildFixtureMap(2, [
@@ -46,6 +46,7 @@ export function buildSocietyMap(): OpenWorldMap {
     if (place.name === COFFEE_SHOP) return { ...place, interior: "coffee", seats: Float32Array.from(seatsBeside(place, 3, SEAT_TOP)), counter: counterBeside(place) };
     if (place.name === PLACE_NAMES.bar) return { ...place, interior: "bar", seats: Float32Array.from(seatsBeside(place, 2, SEAT_TOP)), counter: counterBeside(place) };
     if (place.name === SUPERMARKET) return { ...place, style: "supermarket", counter: counterBeside(place) };
+    if (place.name === PLACE_NAMES.bodega) return { ...place, interior: "store", counter: counterBeside(place) };
     if (place.kind === PLACE_KIND.home && place.doorNode >= 0) return { ...place, seats: Float32Array.from(seatsBeside(place, 2, STOOP_TOP)), stoopSeats: 2 };
     return place;
   });
@@ -85,6 +86,7 @@ export type Stage = {
   moodEvent?: number;
   purpose?: number;
   carPlace?: number;
+  joblessDays?: number;
 };
 
 /** Writes a living, free resident's whole row for a scene (no leg, no seat, no crime, no fight, needs that stay put unless told otherwise). */
@@ -113,7 +115,7 @@ export function stageResident(state: CityState, resident: number, stage: Stage):
     [RESIDENT_INT.companion]: NO_PLACE,
     [RESIDENT_INT.seat]: NO_SEAT,
     [RESIDENT_INT.carPlace]: stage.carPlace ?? NO_PLACE,
-    [RESIDENT_INT.joblessDays]: 0,
+    [RESIDENT_INT.joblessDays]: stage.joblessDays ?? 0,
     [RESIDENT_INT.wantedUntilTick]: 0,
     [RESIDENT_INT.crimeTick]: NEVER_TICK,
     [RESIDENT_INT.crimeKind]: 0,

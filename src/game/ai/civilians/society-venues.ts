@@ -9,9 +9,8 @@ const VENUE_COUNT = 10;
 const VENUE_OF_INTERIOR: Readonly<Record<InteriorKind, number>> = { rowhome: VENUE.home, coffee: VENUE.coffee, bar: VENUE.bar, office: VENUE.office, store: VENUE.shop };
 /** Exteriors with no interior name their venue by their facade style. */
 const VENUE_OF_STYLE: Readonly<Record<string, number>> = { cornerstore: VENUE.shop, supermarket: VENUE.supermarket };
-const NIGHTLIFE_SECTOR = "nightlife";
 
-/** The venue of a place: its interior, else its facade style, else its kind (and for a hangout, its trade). */
+/** The venue of a place: its interior, else its facade style, else its kind (a hangout without an interior is a park). */
 function venueOf(place: Place): number {
   const byInterior = place.interior === undefined ? undefined : VENUE_OF_INTERIOR[place.interior];
   if (byInterior !== undefined) return byInterior;
@@ -27,7 +26,7 @@ function venueOf(place: Place): number {
     case PLACE_KIND.shop:
       return VENUE.shop;
     case PLACE_KIND.hangout:
-      return place.sector.toLowerCase() === NIGHTLIFE_SECTOR ? VENUE.bar : VENUE.park;
+      return VENUE.park;
     case PLACE_KIND.transit:
       return VENUE.transit;
     default:
