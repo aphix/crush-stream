@@ -153,8 +153,9 @@ export const CAST_TITLE_BASE = 100;
  * victim, followed by a triple of the same seconds naming the other party: `alongside` a civilian, `walker` a human player on foot (its subject his bearing from the victim, in `WALKER_BEARING_STEPS` of a turn); neither: a car.
  * Inside the brain a civilian pair is one subject, victim + capacity * (other + 1). A `copDown` (a car knocked a foot cop down; subject: the cop) is the police's: it rides the log and the brain drops it.
  * An `ambulance` (someone run down has stayed down long enough for a call; subject: them) makes the nearest person out at a door the caller; a `danger` (a crash, or a car heading at someone; subject: the walk-graph node nearest) alarms those who see it.
+ * An `ambulanceStage` (the ambulance changed state or car; subject: its car index times 4 plus its state) tells a client where the ambulance is, which it has no traffic to know: it rides the log and the brain drops it.
  */
-export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9, ambulance: 10, danger: 11 } as const;
+export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9, ambulance: 10, danger: 11, ambulanceStage: 12 } as const;
 /** A fight's bearing that is none (two civilians face each other; a car is not faced). */
 export const NO_BEARING = -1;
 /** `RESIDENT_INT.fightPartner` when the other fighter is a human player on foot (-1 is none, or a car). */
