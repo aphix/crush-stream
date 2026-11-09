@@ -372,7 +372,7 @@ describe("given a style whose layer data names height, roughness and neon strips
       for (const name of RELIEF_UNIFORMS) expect(shader.uniforms[name], name).toBeTruthy();
       expect(shader.uniforms.facadeReliefDepth!.value, "depth is 0 until the relief tier loads the strip").toBe(0);
       expect(shader.uniforms.facadeRoughnessMix!.value, "roughness share is 0 until the strip loads").toBe(0);
-      for (const mark of [...RELIEF_MARKS, "facadeRoughnessMap", "facadeSign"]) expect(shader.fragmentShader, mark).toContain(mark);
+      for (const mark of [...RELIEF_MARKS, "void facadeParallax(float layer)", "facadeRoughnessMap", "facadeSign"]) expect(shader.fragmentShader, mark).toContain(mark);
       expect(shader.fragmentShader, "colour read through the shifted uv").toContain("textureGrad(facadeAlbedo, vec3(vMapUv + facadeShift, vFacadeRegion.x)");
       expect(material.customProgramCacheKey().endsWith("|facade|height|roughness|neon"), material.customProgramCacheKey()).toBe(true);
     });
