@@ -48,7 +48,7 @@ for (let at = 0; at < PLACES; at++) {
   crowd.z[at] = place.doorZ - Math.sin(place.yaw) * 0.5;
   crowd.shown[at] = place.interior === "rowhome" ? 1 : 0;
 }
-const openers = { poses: crowd, walker: null };
+const openers = { poses: crowd, walker: null, closed: null };
 const length = PLACES * PITCH_M;
 let now = 0;
 

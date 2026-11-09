@@ -4,7 +4,12 @@ import { DOOR_FACE, type DoorLeaf } from "../../world/openworld/interior-plan.ts
 import { DOOR_RANGE, DOOR_REACH, DOOR_SWING_SECONDS } from "./interior-constants.ts";
 
 /** Who can open a door this frame: the crowd's shown people (null before there is a crowd) and the player's walker (null while he is in a car). */
-export type DoorOpeners = { poses: { count: number; x: ArrayLike<number>; z: ArrayLike<number>; shown: ArrayLike<number> } | null; walker: { x: number; z: number } | null };
+export type DoorOpeners = {
+  poses: { count: number; x: ArrayLike<number>; z: ArrayLike<number>; shown: ArrayLike<number> } | null;
+  walker: { x: number; z: number } | null;
+  /** 1 at the map index of each place that is shut now (a wreck, or outside its hours), null where nothing says. */
+  closed: Uint8Array | null;
+};
 
 /** How far a door swings open: a little short of square to the wall, so the leaf stands clear of the jamb it hinges on. */
 const OPEN_ANGLE = 0.47 * Math.PI;
@@ -29,6 +34,8 @@ export class DoorSet {
   readonly group = new THREE.Group();
   readonly leaves: readonly DoorLeaf[];
   private readonly openness: Float32Array;
+  /** 1 for a leaf that no one opens: its shop is shut. */
+  private readonly locked: Uint8Array;
   private readonly leafMesh: THREE.InstancedMesh;
   private readonly vestibuleMesh: THREE.InstancedMesh;
   private readonly leafGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -41,6 +48,7 @@ export class DoorSet {
   constructor(leaves: readonly DoorLeaf[]) {
     this.leaves = leaves;
     this.openness = new Float32Array(leaves.length);
+    this.locked = new Uint8Array(leaves.length);
     this.group.name = "interior-doors";
     this.leafMesh = new THREE.InstancedMesh(this.leafGeometry, this.leafMaterial, Math.max(1, leaves.length));
     this.leafMesh.count = leaves.length;
@@ -66,13 +74,18 @@ export class DoorSet {
       const was = this.openness[door]!;
       const inRange = hypot2(leaf.x - eyeX, leaf.z - eyeZ) <= DOOR_RANGE;
       if (!inRange && was === 0) continue;
-      const next = !inRange ? 0 : this.someoneAt(leaf, near, openers) ? Math.min(1, was + step) : Math.max(0, was - step);
+      const next = !inRange ? 0 : this.locked[door] === 0 && this.someoneAt(leaf, near, openers) ? Math.min(1, was + step) : Math.max(0, was - step);
       if (next === was) continue;
       this.openness[door] = next;
       this.placeLeaf(door);
       moved = true;
     }
     if (moved) this.leafMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** A locked leaf swings shut and stays shut, whoever stands at it. */
+  setLocked(door: number, locked: boolean): void {
+    this.locked[door] = locked ? 1 : 0;
   }
 
   /** Open from the first frame of its swing. */
