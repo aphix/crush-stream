@@ -1,5 +1,5 @@
 import type { Draft } from "./interior-draft.ts";
-import { TURN, type Opening } from "./interior-kinds.ts";
+import { PARTITION, TURN, type Opening, type Rect } from "./interior-kinds.ts";
 
 /*
  * Positions are plan metres: `deep` from the street wall inward, `across` from the centre line. A piece's `facing` is the way its front points; a seat faces that way.
@@ -12,17 +12,31 @@ const DINING_TABLE_LENGTH = 1.6;
 /** An interior doorway: 2.1 m high, `width` wide. */
 const doorway = (centre: number, width = 0.9): Opening => ({ centre, width, sill: 0, top: 2.1 });
 
-/** Where a rowhome's stairs start (m deep), and where each flight's stairwell opening begins so a climber's head clears the slab above. */
+/**
+ * Where a rowhome's flights start (m deep), both up the left wall and climbing toward the back: the lower one behind the parlour, the upper one just behind the upper
+ * floors' back wall, in line with the lower one and never over it, so every tread has its headroom.
+ */
 const STAIR_FOOT = 5;
-const STAIRWELL_FROM = { lower: 5.8, upper: 6 } as const;
+const UPPER_STAIR_FOOT = 9.85;
+/** How far past the upper flight's foot (m) its side wall starts on the first floor, leaving its foot open to the back room. */
+const UPPER_FOOT_OPEN = 0.75;
+/** A rail's offset from the edge it guards, half its thickness (m). */
+const RAIL_HALF = 0.03;
 /** The rowhome's middle partitions: between the parlour and the dining room, between dining room and kitchen, and the upper floors' room dividers. */
 const PARLOUR_WALL = 4.9;
 const KITCHEN_WALL = 9.4;
 const UPPER_FRONT_WALL = 4.7;
 const UPPER_BACK_WALL = 9.7;
 
+/** Rails round a stairwell's open edges on `level`: along its side toward the rooms and across its foot. */
+function railStairwell(d: Draft, level: number, well: Rect): void {
+  d.put("rail", level, (well.deep0 + well.deep1) / 2, well.across1 + RAIL_HALF, toRight, { width: well.deep1 - well.deep0 });
+  d.put("rail", level, well.deep0 - RAIL_HALF, (well.across0 + well.across1) / 2, toStreet, { width: well.across1 - well.across0 });
+}
+
 function layoutRowhomeGround(d: Draft, left: number, right: number, hallEdge: number): void {
   d.crossWall(0, PARLOUR_WALL, hallEdge, right, [doorway(0.9, 1)]);
+  d.spineWall(0, hallEdge + PARTITION / 2, PARLOUR_WALL, KITCHEN_WALL);
   d.put("tvUnit", 0, 0.55, -1.5, toBack);
   d.put("screen", 0, 0.5, -1.5, toBack, { lift: 0.5 });
   d.put("table", 0, 2.2, -1.5, toStreet, { width: 1, depth: 0.5, height: 0.42 });
@@ -49,17 +63,16 @@ function layoutRowhomeGround(d: Draft, left: number, right: number, hallEdge: nu
   d.lamp(0, 12, 0);
 }
 
-function layoutRowhomeUpper(d: Draft, level: number, left: number, right: number, hallEdge: number, stairwellEnd: number): void {
+function layoutRowhomeUpper(d: Draft, level: number, left: number, right: number, well: Rect): void {
   const spine = left + 1.65;
   d.crossWall(level, UPPER_FRONT_WALL, left, right, [doorway(-1.7)]);
   d.spineWall(level, spine, UPPER_FRONT_WALL, UPPER_BACK_WALL, [doorway(6, 0.8)]);
   d.crossWall(level, UPPER_BACK_WALL, left, right, [doorway(-1.5)]);
-  const hole = STAIRWELL_FROM[level === 1 ? "lower" : "upper"];
-  d.put("rail", level, (hole + stairwellEnd) / 2, hallEdge + 0.03, toRight, { width: stairwellEnd - hole });
+  railStairwell(d, level, well);
   d.put("bed", level, 2, 1.2, toStreet);
   d.put("dresser", level, 2.5, left + 0.25, toRight);
   d.lamp(level, 2.4, 0);
-  d.put("bed", level, 12.5, -1.2, toStreet);
+  d.put("bed", level, 12.5, 0.9, toStreet);
   d.put("dresser", level, 14.4, 1.8, toStreet);
   d.lamp(level, 12, 0);
   if (level === 1) {
@@ -72,20 +85,24 @@ function layoutRowhomeUpper(d: Draft, level: number, left: number, right: number
   }
 }
 
-/** Parlour, dining room and kitchen on the ground floor, the stair up the left wall, two bedrooms and a bath (or a study) above. */
+/**
+ * Parlour, dining room and kitchen on the ground floor, the stair up the left wall walled off from the dining room, two bedrooms and a bath (or a study) above.
+ * The upper flight runs on from the first floor's back room in line with the lower one, its side walled off from that room but for its foot.
+ */
 export function layoutRowhome(d: Draft): void {
   const left = -d.half;
   const right = d.half;
   const hallEdge = left + 0.9;
   const lower = d.stairsUp(0, STAIR_FOOT, left + 0.45);
-  const upper = d.stairsUp(1, STAIR_FOOT, left + 0.45);
-  const lowerEnd = STAIR_FOOT + lower.steps * lower.run;
-  const upperEnd = STAIR_FOOT + upper.steps * upper.run;
-  d.floor(1, [{ deep0: STAIRWELL_FROM.lower, deep1: lowerEnd, across0: left, across1: hallEdge }]);
-  d.floor(2, [{ deep0: STAIRWELL_FROM.upper, deep1: upperEnd, across0: left, across1: hallEdge }]);
+  const upper = d.stairsUp(1, UPPER_STAIR_FOOT, left + 0.45);
+  const lowerWell = d.stairwell(lower);
+  const upperWell = d.stairwell(upper);
+  d.floor(1, [lowerWell]);
+  d.floor(2, [upperWell]);
   layoutRowhomeGround(d, left, right, hallEdge);
-  layoutRowhomeUpper(d, 1, left, right, hallEdge, lowerEnd);
-  layoutRowhomeUpper(d, 2, left, right, hallEdge, upperEnd);
+  layoutRowhomeUpper(d, 1, left, right, lowerWell);
+  d.spineWall(1, hallEdge + PARTITION / 2, UPPER_STAIR_FOOT + UPPER_FOOT_OPEN, d.back);
+  layoutRowhomeUpper(d, 2, left, right, upperWell);
 }
 
 /** The shop floor: one door, two window counters, tables, a sofa nook, the order counter with a staff gate, a back counter and a store room with a restroom. */
