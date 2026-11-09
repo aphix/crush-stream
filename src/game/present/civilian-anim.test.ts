@@ -60,11 +60,11 @@ const ankle = (body: Capture, side: number): THREE.Vector3 => pointOn(body, SHIN
 const facing = (body: Capture, part: number): THREE.Vector3 => new THREE.Vector3(0, 0, 1).applyQuaternion(body.turns[part]!);
 const leaning = (body: Capture, part: number): THREE.Vector3 => new THREE.Vector3(0, 1, 0).applyQuaternion(body.turns[part]!);
 
-/** The largest a part's centre and rotation (rad) differ between two poses. */
-function gap(a: Capture, b: Capture): { distance: number; angle: number } {
+/** The largest a part's centre and rotation (rad) differ between two poses, over `parts` (every part by default). */
+function gap(a: Capture, b: Capture, parts: readonly number[] = PARTS.map((_, part) => part)): { distance: number; angle: number } {
   let distance = 0;
   let angle = 0;
-  for (let part = 0; part < PARTS.length; part++) {
+  for (const part of parts) {
     distance = Math.max(distance, a.centres[part]!.distanceTo(b.centres[part]!));
     angle = Math.max(angle, a.turns[part]!.angleTo(b.turns[part]!));
   }
@@ -337,7 +337,7 @@ describe("given a civilian getting into and out of a car by its driver's door, s
     const starting = clipAt("carOut", 0, CAR);
     expect(middleOfHips(starting).distanceTo(middleOfHips(sat)), "hips").toBeLessThan(0.01);
     expect(middleOfAnkles(starting).distanceTo(middleOfAnkles(sat)), "feet").toBeLessThan(0.01);
-    expect(gap(starting, sat).angle, "no part turned").toBeLessThan(0.3);
+    expect(gap(starting, sat, [TORSO, HEAD, ...THIGH, ...SHIN, 10, 11]).angle, "her body and legs have not turned (her hands are free to go to the handle)").toBeLessThan(0.3);
   });
 
   it("when she pushes the door open from her seat, then her left hand is on the inner handle as it swings out", () => {
@@ -380,7 +380,8 @@ describe("given a witness to a crash: the phone call, the person on the ground, 
     const body = clipAt("phoneCall", 2, { variant });
     const [phone, other] = variant === 0 ? [PLUS_X, MINUS_X] : [MINUS_X, PLUS_X];
     expect(handTip(body, phone).distanceTo(EAR[phone]!), "fingertip at the ear").toBeLessThan(ON_IT);
-    expect(handTip(body, other).y, "the other hand low").toBeLessThan(1.25);
+    expect(handTip(body, other).y, "the other hand low").toBeLessThan(1.15);
+    expect(handTip(body, other).z, "the other hand in front of her").toBeGreaterThan(0.15);
   });
 
   it("when she is on the phone, then she stands as she would standing still", () => {
