@@ -17,11 +17,11 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { applyScratch, CREASE_FAR, CREASE_NEAR, DENT_FLOOR, DENT_REBUILD_S, DENT_SETTLE_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
 import { channelTexels, cloneOfFinished, sampledScratch, scraped, stubGpu, UNPACK_ROW_LENGTH, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
-import { todoRow } from "../kernel/todo-row.test-util.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { SURFACE_IDS } from "../world/catalog.ts";
 import { SkidMarks } from "./engine-marks.ts";
+import { tierWorkStart } from "../kernel/tier-work.ts";
 
 /** Bytes a frame may allocate: one boxed double, as the other allocation rows hold. */
 const FRAME_BOUND_B = 16;
@@ -354,10 +354,10 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     expect(drawn, "redraws in 1 s").toBeLessThanOrEqual(1 / DENT_REBUILD_S + 1);
   });
 
-  // Main's version of this row never redrew (it read settled frames). Staged so every frame redraws, the redraw itself allocates, as it did before the row-run upload.
-  todoRow(
+  // Main's version of this row never redrew (it read settled frames). Staged so every frame redraws: the redraw is the work the row bounds.
+  // mutation: sed -i 's|const work = { ms: 0, timed: false };|const work = { ms: 0, timed: true };|' src/game/kernel/tier-work.ts  (the tier-work clock reads with nothing reading it: a redraw's crease pass reads it twice, and Node's `performance.now` allocates a wrapper's argument array a call: this row reads over 16 B)
+  it(
     `when its skin is written and its dents redrawn every frame, a contact each frame holding its crush open, then a frame, with its flush, allocates at most ${FRAME_BOUND_B} B`,
-    "reads 98-102 B a frame here (local, the whole file) and 69.6 B run alone (worker), so it is not left by an earlier row; an ad-hoc loop of the same body read ~5 B once warm on this code and 359-401 B on main's (no flush there: main uploads through three), so the redraw's allocation predates the row-run upload; neither `touchedFrame`'s spy on the deform nor `creaseFace`'s per-face timer is the cause (each removed, still red); `touch` and `flush` alone are bounded by the row below; cause open",
     () => {
       // The skin write as the skin makes it: the attribute's version, not a `lookMeshes()` read (its arrays are the row's, not the frame's).
       const skin = crushed.lookMeshes().body.geometry.getAttribute("position");
@@ -407,9 +407,9 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     }
   });
 
-  todoRow(
+  // mutation: sed -i 's|const work = { ms: 0, timed: false };|const work = { ms: 0, timed: true };|' src/game/kernel/tier-work.ts  (the tier-work clock reads with nothing reading it: a redraw's crease pass reads it twice, and Node's `performance.now` allocates a wrapper's argument array a call: this row reads over 16 B)
+  it(
     `when the crease tier flips every frame, so each dent redraw changes texels and each flush sends them, then a frame allocates at most ${FRAME_BOUND_B} B`,
-    "reads about 35 B a frame (worker, node, steady after warm-up), sampled in `PaintScratches.dent` with its inlined callees; the same with `WearMask.touch` a no-op and with no flush, so it is the dent redraw's own, not the upload's; a contact held each frame (the row above) reads 2.5-5 B; cause open",
     () => {
       const { renderer } = stubGpu(mask(), false);
       let tick = 0;
@@ -610,5 +610,17 @@ describe("given the real engine with its cars on the screen", () => {
       }
     }
     expect(finishable, "the control: some bumper wears a finishing trim").toBeGreaterThan(0);
+  });
+
+  // mutation: sed -i 's|timeTierWork(this.autoFx.auto);|timeTierWork(false);|' src/game/engine/engine-input.ts  (the tier-work clock stays off while the FX tier is automatic: the first expect reads 0)
+  it("when the FX tier is automatic, then a frame leaves the tier-gated present work's clock reading for the FX governor, and once the player picks a tier it reads none", async () => {
+    engine.setFxAuto();
+    runSeconds(engine, 1 / FRAME_HZ);
+    expect(engine["autoFx"].auto, "the control: the FX tier is automatic").toBe(true);
+    expect(tierWorkStart(), "the tier-work clock with the tier automatic").toBeGreaterThan(0);
+    await engine.setFxTier("low");
+    runSeconds(engine, 1 / FRAME_HZ);
+    expect(engine["autoFx"].auto, "the control: the tier is picked").toBe(false);
+    expect(tierWorkStart(), "the tier-work clock with the tier picked").toBe(0);
   });
 });

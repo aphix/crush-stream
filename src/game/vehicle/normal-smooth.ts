@@ -1,5 +1,5 @@
 import type * as THREE from "three";
-import { bookTierWork } from "../kernel/tier-work.ts";
+import { bookTierWork, tierWorkStart } from "../kernel/tier-work.ts";
 
 /** The default Car contour strength: one relax pass, a third of the three the first default ran (the owner found doors dipped and the truck bed rounded at three). */
 export const DEFAULT_CONTOUR_STRENGTH = 0.25;
@@ -214,8 +214,8 @@ export function smoothNormals(geometry: THREE.BufferGeometry, rest: ArrayLike<nu
   const count = gatherMoved(pos, rest, graph.moved, nor, restNormals);
   if (count === 0 || strength <= 0) return;
   // Run only on the tiers that smooth (`SMOOTHING_TIER`): the governors read it as render, which a tier changes, not as sim.
-  const t0 = performance.now();
+  const t0 = tierWorkStart();
   const passes = passesFor(strength);
   relax(nor, graph, count, passes, creaseFor(passes));
-  bookTierWork(performance.now() - t0);
+  bookTierWork(t0);
 }

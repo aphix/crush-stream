@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { recoverInPlace } from "../vehicle/car-drive.ts";
 import Stats from "three/addons/libs/stats.module.js";
+import { timeTierWork } from "../kernel/tier-work.ts";
 import { PISTON_DEFAULTS, PISTON_IDS } from "../scenes/piston-rig.ts";
 import { RAM_DEFAULTS } from "../scenes/door-rig.ts";
 import { INITIAL_HUD, KNOB_RANGES } from "../hud/hud-store.ts";
@@ -291,6 +292,7 @@ export abstract class EngineInput extends EngineRigs {
     const lost = lostSimS - this.lostSeen;
     this.lostSeen = lostSimS;
     const gpuMs = this.cine.gpuMs();
+    timeTierWork(this.autoFx.auto);
     if (this.autoFx.auto) {
       const matching = matchTime !== null && matchTime >= 0;
       const level = this.detailGov.frame(wallDt * 1000, lost * 1000, this.workMs, this.renderMs, gpuMs, matching);

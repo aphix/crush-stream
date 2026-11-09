@@ -5,7 +5,7 @@ import { asFinishOf, finishOn, perturbedNormalGlsl } from "../vehicle/car-finish
 import { FACE_BITS, FACE_MASK, FACE_METRES, FACE_WIDTH, SCRAPE_MAX, SEVERITY, STROKE_BYTES, U0, U1, V0, V1, WIDTH_STEP } from "../vehicle/paint-scrapes.ts";
 import { CAR_SPRAY, SPRAY_FACE, sprayFace, sprayPlace } from "../vehicle/spray-box.ts";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
-import { bookTierWork } from "../kernel/tier-work.ts";
+import { bookTierWork, tierWorkStart } from "../kernel/tier-work.ts";
 import { COUNT, countPart } from "../kernel/frame-parts.ts";
 import { SPATTER_ROUGHNESS } from "../vehicle/bare-metal.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
@@ -750,6 +750,12 @@ export class PaintScratches {
       for (let k = 0; k < wear.shells.length; k++) this.layShell(depths, wear, k, now);
       // The creases feed only the relief (`DENT_NORMALS`, `SCRATCH_TIER` 2): on the tiers below, the depth alone, and no blur (on a phone, 11 % of a fleet frame).
       const crease = SCRATCH_TIER.value > 1.5;
+      if (crease) {
+        // Run only on the relief's tiers: the governors read it as render, which a tier changes, not as sim (`bookTierWork`); one clock pair for every face.
+        const t0 = tierWorkStart();
+        for (let face = 0; face < FACES; face++) blurCreases(this.blurs, depths, now, face);
+        bookTierWork(t0);
+      }
       for (let face = 0; face < FACES; face++) creaseFace(mask.data, depths, this.blurs, now, face, crease);
       wear.creased = crease;
       this.laid.set(now);
@@ -1083,6 +1089,15 @@ function gaussian(sigma: number): Float32Array {
 const NEAR_KERNEL = gaussian(CREASE_NEAR);
 const FAR_KERNEL = gaussian(CREASE_FAR);
 
+/** `face`'s rect in `rects` of `depths` blurred at `CREASE_NEAR` and `CREASE_FAR` into `blurs`: what `creaseFace` reads a crease from. */
+function blurCreases(blurs: Blurs, depths: Float32Array, rects: Int32Array, face: number): void {
+  const o = face * 4;
+  if (rects[o + 2]! < rects[o]!) return;
+  const box = CAR_SPRAY.faces[face]!;
+  blurFace(blurs.near, depths, blurs.pass, box, rects, o, NEAR_KERNEL);
+  blurFace(blurs.far, depths, blurs.pass, box, rects, o, FAR_KERNEL);
+}
+
 /**
  * G of `data` over `face`'s rect in `rects`, from the laid `depths`: a texel that moved takes `DENT_FLOOR` (dulled paint) as it nears
  * `DENT_FULL` deep, and a crease over the rest as far as its skin blurred at `CREASE_NEAR` sinks below it blurred at `CREASE_FAR`:
@@ -1093,13 +1108,6 @@ function creaseFace(data: Uint8Array, depths: Float32Array, blurs: Blurs, rects:
   if (rects[o + 2]! < rects[o]!) return;
   const box = CAR_SPRAY.faces[face]!;
   const base = box[1] * SIDE + box[0];
-  if (creased) {
-    // Run only on the relief's tiers: the governors read it as render, which a tier changes, not as sim (`bookTierWork`).
-    const t0 = performance.now();
-    blurFace(blurs.near, depths, blurs.pass, box, rects, o, NEAR_KERNEL);
-    blurFace(blurs.far, depths, blurs.pass, box, rects, o, FAR_KERNEL);
-    bookTierWork(performance.now() - t0);
-  }
   for (let y = rects[o + 1]!; y <= rects[o + 3]!; y++) {
     for (let x = rects[o]!; x <= rects[o + 2]!; x++) {
       const i = base + y * SIDE + x;

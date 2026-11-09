@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { DeformableCar } from "./car.ts";
 import { bakeRestNormals, CONTOUR_SMOOTHING, DEFAULT_CONTOUR_STRENGTH, passesFor, SMOOTHING_TIER, smoothNormals } from "./normal-smooth.ts";
-import { takeTierWork } from "../kernel/tier-work.ts";
+import { takeTierWork, timeTierWork } from "../kernel/tier-work.ts";
 import { freshGeometry, ownGeometry, restNormalsOf, type StyleProduct } from "./car-templates.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { paint } from "./test-support.ts";
@@ -154,15 +154,22 @@ describe("given two flat faces meeting at a right angle with noisy normals", () 
     expect(Math.abs(after[face * 3]! - 1) < 1e-6 && Math.abs(after[face * 3 + 2]!) < 1e-6, "the side face's normal, with no neighbour inside the angle but its own face, is untouched").toBeTruthy();
   });
 
+  // mutation: sed -i 's|bookTierWork(t0);|void t0;|' src/game/vehicle/normal-smooth.ts  (the relax books no tier work: the strength 2 expect reads 0)
   it("when a moved patch is smoothed, then the relax's time is booked as tier work (the FX governors read it as render, which a tier changes); at strength 0, or with nothing moved, none is", () => {
     const { geometry, positions } = flatPatch(40, 40, [UP]);
-    takeTierWork();
-    smoothNormals(geometry, positions, 1);
-    expect(takeTierWork(), "nothing moved").toBe(0);
-    smoothNormals(geometry, positions.map((value) => value + 1), 0);
-    expect(takeTierWork(), "strength 0").toBe(0);
-    smoothNormals(geometry, positions.map((value) => value + 1), 2);
-    expect(takeTierWork(), "the relax at strength 2").toBeGreaterThan(0);
+    // The engine turns the clock on while the Auto FX tier reads the work.
+    timeTierWork(true);
+    try {
+      takeTierWork();
+      smoothNormals(geometry, positions, 1);
+      expect(takeTierWork(), "nothing moved").toBe(0);
+      smoothNormals(geometry, positions.map((value) => value + 1), 0);
+      expect(takeTierWork(), "strength 0").toBe(0);
+      smoothNormals(geometry, positions.map((value) => value + 1), 2);
+      expect(takeTierWork(), "the relax at strength 2").toBeGreaterThan(0);
+    } finally {
+      timeTierWork(false);
+    }
   });
 });
 
