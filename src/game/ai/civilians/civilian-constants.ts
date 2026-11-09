@@ -130,7 +130,9 @@ export const RESIDENT_INT = {
   alarmX: 56,
   alarmZ: 57,
   alarmVictim: 58,
-  history: 59,
+  /** The moment after `alarmTick` they noticed it, in `ALARM_DELAY_STEPS_PER_SECOND` steps. */
+  alarmDelay: 59,
+  history: 60,
 } as const;
 export const RESIDENT_INT_STRIDE = RESIDENT_INT.history + LOG_LINES * HISTORY_FIELDS;
 /** A resident's float row: the needs as they stood at the decision that made the leg, their rise rates (per game hour), the speed of the leg or stay they are on (m/s), their lateral offset (m) and their own walking pace (m/s: the leg's speed is this, or the drive's). */
@@ -411,12 +413,31 @@ export const PUNCH_LIFT = 0.3;
 /** A jaywalker arrested by the police spends a game hour in custody. */
 export const JAYWALK_CUSTODY_TICKS = TICKS_PER_GAME_HOUR;
 
-/** Alarm: a crash, a car heading at someone or a person down is seen by those out at a door or on the street within this many metres (the street's length of sight); this share of them react (the rest do not look up); of those at a door this share go in, the rest look on for this many game minutes (a crash, a person down till the ambulance has gone) from where they stand; a walker flinches and steps this far (m) back from it. */
+/**
+ * Alarm: a crash, a car heading at someone or a person down is seen by those out at a door or on the street within `ALARM_SIGHT` metres (the street's length of sight). Whether a person looks up is the seeded chance
+ * `NEURO_REACT_FLOOR` + (1 - `NEURO_REACT_FLOOR`) x their neuroticism (a hidden 0..1, `civilian-temperament.ts`), times the hazard's attention: a crash draws `ATTENTION_CRASH`, a person down `ATTENTION_DOWNED` (more eyes). Of those
+ * at a door who do, the chance to go in is `NEURO_INDOORS_FLOOR` + `NEURO_INDOORS_SLOPE` x neuroticism; the rest look on for the hazard's game minutes (a crash, a person down till the ambulance has gone) times
+ * `NEURO_LOOK_ON_FLOOR` + neuroticism: jumpy people stay rattled longer. A walker flinches and steps back `RECOIL_STEP_METRES` (the calmest `RECOIL_CALM_SHARE` of it).
+ */
 export const ALARM_SIGHT = 50;
-export const ALARM_SHARE = 0.8;
-export const ALARM_INDOORS_SHARE = 0.25;
+export const NEURO_REACT_FLOOR = 0.2;
+export const ATTENTION_CRASH = 1;
+export const ATTENTION_DOWNED = 1.8;
+export const NEURO_INDOORS_FLOOR = 0.05;
+export const NEURO_INDOORS_SLOPE = 0.6;
+export const NEURO_LOOK_ON_FLOOR = 0.5;
 export const LOOK_ON_CRASH_MINUTES = 15;
 export const LOOK_ON_DOWNED_MINUTES = 70;
 export const RECOIL_STEP_METRES = 0.5;
+export const RECOIL_CALM_SHARE = 0.4;
+/**
+ * Each person who reacts to one hazard starts a moment after it, on a step of their own (the steps are `ALARM_DELAY_STEPS_PER_SECOND` a second, so no two start on one frame at the draw's 64 Hz): from
+ * `ALARM_DELAY_MIN_SECONDS` for the jumpiest to `ALARM_DELAY_MAX_SECONDS` for the calmest, `ALARM_DELAY_JITTER_SHARE` of the span a seeded draw.
+ */
+export const ALARM_DELAY_MIN_SECONDS = 0.1;
+export const ALARM_DELAY_MAX_SECONDS = 1.5;
+export const ALARM_DELAY_JITTER_SHARE = 0.2;
+export const ALARM_DELAY_STEPS_PER_SECOND = 64;
+export const ALARM_DELAY_STEPS = Math.ceil(ALARM_DELAY_MAX_SECONDS * ALARM_DELAY_STEPS_PER_SECOND) + 1;
 /** The one who calls the ambulance for someone down stays on the phone this many game minutes. */
 export const CALL_MINUTES = 12;

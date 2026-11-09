@@ -1,6 +1,7 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import {
+  ALARM_DELAY_STEPS,
   HISTORY_FIELD,
   HISTORY_FIELDS,
   LOG_LINES,
@@ -68,6 +69,8 @@ export class CityState {
   readonly scratchPath: Uint16Array;
   /** The path of a trip by car, built here before it replaces the walk's. */
   readonly carPath: Uint16Array;
+  /** The reaction steps one alarm has given out (1: taken), so that no two people react on one. */
+  readonly alarmSlots: Uint8Array;
   readonly scratchNeeds: Float32Array;
   readonly appointment = newAppointmentSlot();
   readonly pose = new LegPose();
@@ -107,6 +110,7 @@ export class CityState {
     this.noFear = new Float32Array(this.index.nodeCount);
     this.scratchPath = new Uint16Array(MAX_PATH_NODES);
     this.carPath = new Uint16Array(MAX_PATH_NODES);
+    this.alarmSlots = new Uint8Array(ALARM_DELAY_STEPS);
     this.scratchNeeds = new Float32Array(NEED_COUNT);
   }
 }

@@ -1,10 +1,34 @@
 import { hypot2 } from "../../kernel/physics-core.js";
-import { DECISION_HZ, ALARM_INDOORS_SHARE, ALARM_SHARE, ALARM_SIGHT, CALL_MINUTES, CENTIMETRES_PER_METRE, LOOK_ON_DOWNED_MINUTES, NO_PLACE, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, STREAM, TICKS_PER_GAME_MINUTE, FLAG } from "./civilian-constants.ts";
+import {
+  ALARM_DELAY_JITTER_SHARE,
+  ALARM_DELAY_MAX_SECONDS,
+  ALARM_DELAY_MIN_SECONDS,
+  ALARM_DELAY_STEPS,
+  ALARM_DELAY_STEPS_PER_SECOND,
+  ALARM_SIGHT,
+  ATTENTION_DOWNED,
+  CALL_MINUTES,
+  CENTIMETRES_PER_METRE,
+  DECISION_HZ,
+  FLAG,
+  LOOK_ON_DOWNED_MINUTES,
+  NEURO_INDOORS_FLOOR,
+  NEURO_INDOORS_SLOPE,
+  NEURO_LOOK_ON_FLOOR,
+  NEURO_REACT_FLOOR,
+  NO_PLACE,
+  PURPOSE,
+  RESIDENT_INT,
+  RESIDENT_INT_STRIDE,
+  STREAM,
+  TICKS_PER_GAME_MINUTE,
+} from "./civilian-constants.ts";
 import { residentDraws } from "./civilian-draws.ts";
 import { legPose } from "./civilian-leg.ts";
 import { EVENT_CODE } from "./civilian-names.ts";
 import { standOutside } from "./civilian-plan.ts";
 import { residentName, type CityState } from "./civilian-state.ts";
+import { residentNeuroticism } from "./civilian-temperament.ts";
 import { noteEvent } from "./society-day.ts";
 import { fleeHome, isDwelling, isFreePerson, nearestPlaceTo } from "./society-reactions.ts";
 import { isOutdoorPurpose } from "./society-venues.ts";
@@ -26,27 +50,48 @@ function seeingFrom(state: CityState, resident: number, tick: number): number {
   return legPose(state, resident, tick / DECISION_HZ, state.pose) ? SEES.walking : SEES.nothing;
 }
 
+/** The step of `ALARM_DELAY_STEPS_PER_SECOND` a person of neuroticism `neuroticism` starts reacting on, `jitter` (a unit draw) moving it a share of the span: the jumpiest first, the calmest last. */
+function delayStepOf(neuroticism: number, jitter: number): number {
+  const slow = (1 - neuroticism) * (1 - ALARM_DELAY_JITTER_SHARE) + jitter * ALARM_DELAY_JITTER_SHARE;
+  return Math.round((ALARM_DELAY_MIN_SECONDS + (ALARM_DELAY_MAX_SECONDS - ALARM_DELAY_MIN_SECONDS) * slow) * ALARM_DELAY_STEPS_PER_SECOND);
+}
+
+/** The first step at or after `step` (wrapping) that this alarm has not given out, taken; `step` itself when every one is. */
+function takeFreeStep(state: CityState, step: number): number {
+  for (let ahead = 0; ahead < ALARM_DELAY_STEPS; ahead++) {
+    const candidate = (step + ahead) % ALARM_DELAY_STEPS;
+    if (state.alarmSlots[candidate] !== 0) continue;
+    state.alarmSlots[candidate] = 1;
+    return candidate;
+  }
+  return step;
+}
+
 /**
- * A hazard at (x, z) that `victim` (-1: none) is hurt by, seen at `tick`: every free person out within `ALARM_SIGHT` reacts by their own seeded draw, and their row remembers it (`alarmTick`: the drawing flinches them, a step
- * back, then). One at a door goes in or looks on for `lookOnMinutes`; a walker walks on.
+ * A hazard at (x, z) that `victim` (-1: none) is hurt by, seen at `tick`, drawing `attention`: every free person out within `ALARM_SIGHT` looks up by their own seeded draw and neuroticism (the calm often do not), and
+ * their row remembers it (`alarmTick` and the moment they noticed: the drawing flinches them, a step back, then). One at a door goes in (the jumpy more than the calm) or looks on for `lookOnMinutes` (the jumpy
+ * longer); a walker walks on. Each who reacts has a step of their own to start on.
  */
-export function alarmAt(state: CityState, x: number, z: number, tick: number, victim: number, lookOnMinutes: number): void {
+export function alarmAt(state: CityState, x: number, z: number, tick: number, victim: number, lookOnMinutes: number, attention: number): void {
   const near = nearestPlaceTo(state, x, z, NO_PLACE);
+  state.alarmSlots.fill(0);
   for (let resident = 0; resident < state.capacity; resident++) {
     if (resident === victim) continue;
     const sees = seeingFrom(state, resident, tick);
     if (sees === SEES.nothing || hypot2(state.pose.x - x, state.pose.z - z) > ALARM_SIGHT) continue;
+    const neuroticism = residentNeuroticism(state, resident);
     const draw = residentDraws(state.seed, resident, STREAM.alarm, tick);
-    if (draw() >= ALARM_SHARE) continue;
+    if (draw() >= (NEURO_REACT_FLOOR + (1 - NEURO_REACT_FLOOR) * neuroticism) * attention) continue;
     const base = resident * RESIDENT_INT_STRIDE;
     state.ints[base + RESIDENT_INT.alarmTick] = tick;
+    state.ints[base + RESIDENT_INT.alarmDelay] = takeFreeStep(state, delayStepOf(neuroticism, draw()));
     state.ints[base + RESIDENT_INT.alarmX] = Math.round(x * CENTIMETRES_PER_METRE);
     state.ints[base + RESIDENT_INT.alarmZ] = Math.round(z * CENTIMETRES_PER_METRE);
     state.ints[base + RESIDENT_INT.alarmVictim] = victim;
     noteEvent(state, resident, EVENT_CODE.sawDanger, near, tick);
     if (sees === SEES.walking) continue;
-    if (draw() < ALARM_INDOORS_SHARE) fleeHome(state, resident, tick);
-    else standOutside(state, resident, tick, PURPOSE.lookOn, lookOnMinutes * TICKS_PER_GAME_MINUTE);
+    if (draw() < NEURO_INDOORS_FLOOR + NEURO_INDOORS_SLOPE * neuroticism) fleeHome(state, resident, tick);
+    else standOutside(state, resident, tick, PURPOSE.lookOn, Math.round(lookOnMinutes * (NEURO_LOOK_ON_FLOOR + neuroticism) * TICKS_PER_GAME_MINUTE));
   }
 }
 
@@ -54,7 +99,7 @@ export function alarmAt(state: CityState, x: number, z: number, tick: number, vi
 export function alarmAtKnock(state: CityState, victim: number, tick: number): void {
   if ((state.ints[victim * RESIDENT_INT_STRIDE + RESIDENT_INT.flags]! & FLAG.hurt) === 0) return;
   const base = victim * RESIDENT_INT_STRIDE;
-  alarmAt(state, state.ints[base + RESIDENT_INT.knockX]! / CENTIMETRES_PER_METRE, state.ints[base + RESIDENT_INT.knockZ]! / CENTIMETRES_PER_METRE, tick, victim, LOOK_ON_DOWNED_MINUTES);
+  alarmAt(state, state.ints[base + RESIDENT_INT.knockX]! / CENTIMETRES_PER_METRE, state.ints[base + RESIDENT_INT.knockZ]! / CENTIMETRES_PER_METRE, tick, victim, LOOK_ON_DOWNED_MINUTES, ATTENTION_DOWNED);
 }
 
 /** The call for an ambulance for `victim`, who is down where they were run down: the nearest person out at a door within sight (not them) is the one who phones. */
