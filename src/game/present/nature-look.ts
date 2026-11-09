@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { FxTier } from "./engine-post.ts";
+import { MAT } from "../kernel/material-ids.ts";
 
 /**
  * The one material of rocks, trees, palms and bushes: the flat-shaded vertex-colour look of `plain` plus a shader chunk that keeps a few reused meshes from reading as copies. Per pixel, from the world
@@ -87,5 +88,40 @@ export class NatureMaterial extends THREE.MeshStandardMaterial {
         .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>${NATURE_FRAGMENT}`);
     };
     this.customProgramCacheKey = () => "nature-look";
+  }
+}
+
+/** Leaves (a vertex class of `MAT.CONIFER_FOLIAGE`) clump in cells this size (m), darkest to brightest by these shares. */
+const LEAF_CELL = 0.42;
+const LEAF_DARK = 0.7;
+const LEAF_BRIGHT = 1.15;
+/** Where a crown turns this far from the eye (|cos| under it), its leaves thin out, up to this share of the clumps cut at the very edge: a ragged, leafy outline. */
+const LEAF_EDGE = 0.5;
+const LEAF_CUT = 0.85;
+
+/** After the normal is final, before lighting: on leaf fragments only, clumps of light and dark leaves, and gaps cut through the outline. Reads the surface tag's per-vertex class (`vMaterialAttribute`). */
+const LEAF_FRAGMENT = /* glsl */ `
+if (int(vMaterialAttribute + 0.5) == ${MAT.CONIFER_FOLIAGE}) {
+  vec3 leafAt = vNatureWorld / ${LEAF_CELL.toFixed(2)};
+  float leafClump = 0.5 * natureNoise(leafAt.xz + 0.71 * leafAt.y) + 0.5 * natureNoise(1.9 * leafAt.zy + 3.1);
+  diffuseColor.rgb *= mix(${LEAF_DARK.toFixed(2)}, ${LEAF_BRIGHT.toFixed(2)}, leafClump);
+  float leafFacing = abs(dot(normal, normalize(vViewPosition)));
+  if (leafFacing < ${LEAF_EDGE.toFixed(2)} && leafClump < (1.0 - leafFacing / ${LEAF_EDGE.toFixed(2)}) * ${LEAF_CUT.toFixed(2)}) discard;
+}`;
+
+/**
+ * The street trees' one material: the nature look, smooth-shaded (a canopy lump's normals are its ellipsoid's, so a crown shades as one soft mass, not as facets), its leaves in clumps of light and dark, and
+ * its outline thinned where a lump turns away from the eye, so a crown's edge reads as leaves against the sky. Needs the surface tag (`tagMaterial`): the leaf class comes from it.
+ */
+export class LeafMaterial extends NatureMaterial {
+  constructor() {
+    super();
+    this.flatShading = false;
+    const nature = this.onBeforeCompile;
+    this.onBeforeCompile = (shader, renderer) => {
+      nature.call(this, shader, renderer);
+      shader.fragmentShader = shader.fragmentShader.replace("#include <lights_physical_fragment>", `${LEAF_FRAGMENT}\n#include <lights_physical_fragment>`);
+    };
+    this.customProgramCacheKey = () => "leaf-look";
   }
 }

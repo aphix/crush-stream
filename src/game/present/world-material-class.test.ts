@@ -85,7 +85,7 @@ const FIRST_FINE_ID = 14;
 
 describe("given the prefabs drawn on the shared per-vertex materials", () => {
   let materials: PrefabMaterials;
-  const onPerVertexMaterial = (part: PrefabPart): boolean => ([materials.plain, materials.nature, ...Object.values(materials.facades), materials.billboard] as readonly THREE.Material[]).includes(part.material);
+  const onPerVertexMaterial = (part: PrefabPart): boolean => ([materials.plain, materials.nature, materials.leaves, ...Object.values(materials.facades), materials.billboard] as readonly THREE.Material[]).includes(part.material);
 
   beforeAll(() => {
     stubBrowser();

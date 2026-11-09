@@ -156,7 +156,10 @@ function rod(from: THREE.Vector3, to: THREE.Vector3, rootRadius: number, tipRadi
 }
 
 function lump([x, y, z, rx, ry, rz]: Lump, index: number): THREE.BufferGeometry {
-  return new THREE.IcosahedronGeometry(1, 0)
+  const ball = new THREE.IcosahedronGeometry(1, 0);
+  // The unit ball's corners are its own normals: scaled, they are the ellipsoid's, so the lump shades round under `LeafMaterial`.
+  ball.setAttribute("normal", ball.getAttribute("position").clone());
+  return ball
     .rotateY(index * LUMP_TWIST)
     .scale(rx, ry, rz)
     .translate(x, y, z);
