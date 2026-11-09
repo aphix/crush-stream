@@ -5,7 +5,6 @@ import { ClipSim } from "./engine-replay.ts";
 import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { memoRun } from "../kernel/shared-run.test-util.ts";
 
 /**
  * Owner, 2026-10-09 (docs/HIGHLIGHTS.md, clip review issue 6): in a slow-mo replay every drawn part of a car moves on every drawn frame, the
@@ -77,13 +76,10 @@ function planarStep(now: Float32Array, last: Float32Array): number {
   return most;
 }
 
-/** The pile-up recorded once for every row: each replay restarts the cars from the clip's first keyframe, as the reel does on every loop. */
-const recorded = memoRun(() => recordFlat(PILE, 8, false));
-
 /** Per class: the frames on which an entity moves, and the ones among them on which its drawn pose changed since the frame before. */
 /** `skip`: `EPICENTER.presentSkip`, which poses the parts only when what the pose reads changed (so not on the frames between two steps); `calls` counts the poses written. */
 function shares(dt: number, skip: 0 | 1): { rows: Record<Class, { moving: number; changed: number }>; calls: number } {
-  const rec = recorded();
+  const rec = recordFlat(PILE, 8, false);
   const cars = rec.clip.cars.map((c) => rec.cars[c.slot]!);
   const blend = rec.scene.blend;
   const sim = new ClipSim(rec.clip, cars, rec.scene);
@@ -169,7 +165,7 @@ describe("given a crash replayed in slow motion from its clip", () => {
   }
 
   it("when a frame is drawn between two steps and handed back, then the sim's own pose of every car is exactly what it was", () => {
-    const rec = recorded();
+    const rec = recordFlat(PILE, 8, false);
     const cars = rec.clip.cars.map((c) => rec.cars[c.slot]!);
     const sim = new ClipSim(rec.clip, cars, rec.scene);
     sim.restart();
