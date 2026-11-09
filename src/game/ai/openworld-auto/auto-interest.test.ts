@@ -4,7 +4,8 @@ import { EVENT_KIND } from "../civilians/civilian-constants.ts";
 import { MOOD } from "../civilians/civilian-names.ts";
 import { COP_RUN_SPEED, EVENT_SECONDS } from "./auto-constants.ts";
 import { AMBULANCE } from "../openworld-traffic/ambulance.ts";
-import { activityInterest, activityLine, ambulanceInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
+import { activityLine } from "../civilians/civilian-activity.ts";
+import { activityInterest, ambulanceInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
 
 const DRIVING_MPS = 12;
 const CRAWL_MPS = 2;
@@ -60,6 +61,8 @@ describe("given what the Auto camera finds interesting", () => {
   it("when words are asked for what a civilian is doing, then a walk has none and a scene has its own", () => {
     expect(activityLine(ACTIVITY.none), "walking").toBeNull();
     expect(activityLine(ACTIVITY.carOut), "getting out of a car").toBe("getting out of a car");
-    expect(activityLine(ACTIVITY.recoil), "flinching").toBe("flinching from a hit");
+    // re-pinned: the recoil clip now also plays for a danger seen (OwSociety-alarm), not only a hit taken
+    expect(activityLine(ACTIVITY.recoil), "flinching").toBe("flinching back");
+    expect(activityLine(ACTIVITY.phoneCall), "the only call the brain makes").toBe("phoning for an ambulance");
   });
 });

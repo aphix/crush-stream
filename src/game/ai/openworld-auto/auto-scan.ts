@@ -7,11 +7,11 @@ import type { CivilianCrowd } from "../civilians/civilian-crowd.ts";
 import type { LookText } from "../civilians/civilian-look.ts";
 import { buildingLines, civilianLine, historyLines, moodOf } from "../civilians/civilian-mood.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
-import { ACTIVITY } from "../civilians/civilian-activity.ts";
+import { ACTIVITY, activityLine } from "../civilians/civilian-activity.ts";
 import { AMBULANCE } from "../openworld-traffic/ambulance.ts";
 import { CRIMINAL_INTEREST, PERSON_SHOT, SPOT_SHOT, WANTED_INTEREST } from "./auto-constants.ts";
 import { type AutoCandidates, SUBJECT, type SubjectKind } from "./auto-director.ts";
-import { activityInterest, activityLine, ambulanceInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
+import { activityInterest, ambulanceInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
 
 /** What the scan reads of the open world; each is null (or empty) where the thing is not there. */
 export type AutoWorld = {

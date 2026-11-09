@@ -1,5 +1,6 @@
 import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
+import { ACTIVITY } from "./civilian-activity.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { RESIDENT_INT } from "./civilian-constants.ts";
 import { CHEST_HEIGHT, LOOK_REACH } from "./civilian-crowd-constants.ts";
@@ -55,6 +56,16 @@ describe("given a crowd with a civilian walking on the street", () => {
     const text = lookAtOf(crowd.state, crowd.poses, tick, behind(crowd, resident));
     expect(text?.title.startsWith(residentNameText(crowd.state, resident)), `title ${text?.title}`).toBe(true);
     expect(firstMismatch(text?.lines, historyLines(crowd.state, resident)), "life log").toBeUndefined();
+  });
+
+  it("when the one looked at is doing something the line does not say, then the panel says it first, above the life log", () => {
+    // mutation: sed -i 's/lines: doing === null ? history : \[doing, ...history\] };/lines: history };/' src/game/ai/civilians/civilian-look.ts
+    const was = crowd.poses.activity[resident]!;
+    crowd.poses.activity[resident] = ACTIVITY.phoneCall;
+    const text = lookAtOf(crowd.state, crowd.poses, tick, behind(crowd, resident));
+    crowd.poses.activity[resident] = was;
+    expect(text?.lines[0], "what they are doing").toBe("phoning for an ambulance");
+    expect(firstMismatch(text?.lines.slice(1), historyLines(crowd.state, resident)), "then the life log").toBeUndefined();
   });
 
   it("when the eye looks past them, or at the sky, then the panel is empty", () => {
