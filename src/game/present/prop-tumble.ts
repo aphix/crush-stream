@@ -3,7 +3,7 @@ import { COUNT, countPart } from "../kernel/frame-parts.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
 import { assetDrawGroupOf } from "../world/scenery-assets/draw-group.ts";
-import type { PrefabMaterials, PrefabPart, Skin } from "./prefab-pieces.ts";
+import type { DrawnPose, PrefabMaterials, PrefabPart, Skin } from "./prefab-pieces.ts";
 import { withAssetAttributes } from "./scenery-assets-art.ts";
 import { prefabParts } from "./prefabs.ts";
 import { drawCell } from "./track-mesh.ts";
@@ -13,9 +13,10 @@ const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
-/** Placement `p`'s standing matrix into `out`. */
-function restMatrix(p: Placed, out: THREE.Matrix4): THREE.Matrix4 {
-  return out.compose(_p.set(p.x, p.y, p.z), _q.setFromAxisAngle(_up, p.yaw), _s.set(p.sx, p.sy, p.sz));
+/** Placement `p`'s standing matrix into `out`, turned and sized by its drawn `pose` when it has one. */
+function restMatrix(p: Placed, pose: DrawnPose | null, out: THREE.Matrix4): THREE.Matrix4 {
+  if (pose === null) return out.compose(_p.set(p.x, p.y, p.z), _q.setFromAxisAngle(_up, p.yaw), _s.set(p.sx, p.sy, p.sz));
+  return out.compose(_p.set(p.x, p.y, p.z), _q.setFromAxisAngle(_up, p.yaw + pose.yaw), _s.set(p.sx * pose.scale, p.sy * pose.scale, p.sz * pose.scale));
 }
 
 /**
@@ -33,6 +34,8 @@ export class PropTumble {
   private readonly slot: Int32Array;
   /** Per placement: 0 on its spot, 1 drawn off it (flown: its cell's bounds grew), 2 hidden where it stands (`hide`) since the last `reset`. */
   private readonly moved: Uint8Array;
+  /** Per placement: its drawn pose (`drawnPose`), null for none. */
+  private readonly poses: (DrawnPose | null)[];
   private readonly m4 = new THREE.Matrix4();
   private readonly sc = new THREE.Vector3();
   private readonly sphere = new THREE.Sphere();
@@ -40,6 +43,7 @@ export class PropTumble {
   /**
    * Each placement standing in its slot of its prefab's meshes (`prefabParts` in `mats`, in the skin `styleOf` names: a building's facade style, an asset's family), coloured where `tint` says; `add` takes
    * each mesh as it is made (`shared`: its part's material when that is the scene's, else null). A group of scenery assets draws from its own copy of the geometry, each instance carrying its sprite's atlas cell.
+   * `drawnPose` turns and sizes a placement's drawing only (a street tree facing its street).
    */
   constructor(
     placed: readonly Placed[],
@@ -47,8 +51,10 @@ export class PropTumble {
     add: (mesh: THREE.InstancedMesh, id: PrefabId, shared: THREE.Material | null, cast: boolean) => void,
     tint: (id: PrefabId, i: number, out: THREE.Color, style: Skin) => boolean = () => false,
     styleOf: (p: Placed) => Skin = () => null,
+    drawnPose: (p: Placed) => DrawnPose | null = () => null,
   ) {
     this.placed = placed;
+    this.poses = placed.map(drawnPose);
     const byCell = new Map<string, number[]>();
     for (const [idx, pl] of placed.entries()) {
       const key = pl.asset === undefined ? `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}` : assetDrawGroupOf(pl.asset, pl.x, pl.z);
@@ -76,7 +82,7 @@ export class PropTumble {
           for (const [s, idx] of list.entries()) {
             this.cell[idx] = group;
             this.slot[idx] = s;
-            mesh.setMatrixAt(s, restMatrix(placed[idx]!, this.m4));
+            mesh.setMatrixAt(s, restMatrix(placed[idx]!, this.poses[idx]!, this.m4));
             if (pi === 0 && tint(id, idx, col, style)) mesh.setColorAt(s, col);
           }
           mesh.computeBoundingSphere();
@@ -109,7 +115,7 @@ export class PropTumble {
       const was = this.moved[i]!;
       if (!was) continue;
       this.moved[i] = 0;
-      const meshes = this.write(i, restMatrix(this.placed[i]!, this.m4));
+      const meshes = this.write(i, restMatrix(this.placed[i]!, this.poses[i]!, this.m4));
       if (was === 1) for (let k = 0; k < meshes.length; k++) meshes[k]!.computeBoundingSphere();
     }
   }

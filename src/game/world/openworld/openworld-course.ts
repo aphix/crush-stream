@@ -33,6 +33,7 @@ import type { Geometry, Lots } from "./openworld-layout.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
 import { parkPaint, parkProps } from "./openworld-park.ts";
 import { lampStations, sidePoint, sidesOf, treeStations, type BlockSide } from "./openworld-sides.ts";
+import { stoopGreeneryProps, streetTreeStyle } from "./openworld-greenery.ts";
 
 export { OPENWORLD_ID };
 
@@ -129,7 +130,10 @@ function wallProps(geometry: Geometry): Prop[] {
 /** Lamps and street trees along a side's furniture strip: lamps at the curb's edge, trees centred. */
 function furnitureProps(side: BlockSide, geometry: Geometry): Prop[] {
   const lampProps = lampStations(side).map((along): Prop => ({ prefab: PREFAB.lamp, ...sidePoint(side, along, geometry.sidewalk - LAMP_FROM_CURB), yaw: side.outwardYaw }));
-  const treeProps = treeStations(side).map((along): Prop => ({ prefab: PREFAB.tree, ...sidePoint(side, along, geometry.sidewalk - geometry.sidewalkFurniture / 2), scale: TREE_SCALE }));
+  const treeProps = treeStations(side).map((along): Prop => {
+    const at = sidePoint(side, along, geometry.sidewalk - geometry.sidewalkFurniture / 2);
+    return { prefab: PREFAB.tree, ...at, scale: TREE_SCALE, style: streetTreeStyle(at.x, at.z, side.side) };
+  });
   return [...lampProps, ...treeProps];
 }
 
@@ -179,7 +183,7 @@ export function openWorldCourse(lots: Lots): TrackInput {
     road: { width: geometry.carriageway, surface: SURFACE.asphalt, runoff: [0, 0], runoffSurface: SURFACE.concrete, wall: [false, false], raceMarks: false },
     nodes,
     checkpoints: Array.from({ length: LOOP_CHECKPOINTS }, (_, index) => ({ node: Math.floor((index * nodes.length) / LOOP_CHECKPOINTS) })),
-    props: [...buildingProps(lots), ...streetProps(lots), ...fabricProps(lots, buildOpenWorldMap(lots).graph), ...parkProps(lots), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots)],
+    props: [...buildingProps(lots), ...streetProps(lots), ...fabricProps(lots, buildOpenWorldMap(lots).graph), ...parkProps(lots), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots), ...stoopGreeneryProps(lots)],
     scenery: { biome: BIOME.city, off: ["frontage", "verge", "islands"], roadDecals: [], paving: PAVING.brick },
     traffic: { count: 0, lanes: [], routes: streetRoutes(geometry) },
     survival: spawnOf(geometry),
