@@ -1,19 +1,17 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import { hash01 } from "../../kernel/scalar.ts";
-import type { DeformableCar } from "../../vehicle/car.ts";
-import { carRuns, type DriveInput } from "../../vehicle/car-drive.ts";
+import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { FLIPPED_UP_Y } from "../../vehicle/constants.ts";
 import { carClass, classStats, type ClassStats } from "../../vehicle/vehicle-classes.ts";
 import { HEADING_DX, HEADING_DZ, rightX, rightZ } from "../../world/openworld/openworld-roads.ts";
 import type { AiCar } from "../derby-ai.ts";
-import { applyAiDrive } from "../input-fade.ts";
 import { BOOKKEEPING_SECONDS, COMMUTER_HOLD_SECONDS, DWELL_SECONDS, KERB_KEEP, MIN_TRIP_METRES, PRIME_PASSES, PULL_OUT_CLEAR, SIGHT_RADIUS, STUCK_SECONDS, TOW_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
-import { spotUnseen, STANDING, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
+import { spotUnseen, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
 import { RoutePlanner, TripRoute } from "./trip-route.ts";
 
 /** A car taking a trip other than the ambient traffic's: its own driver may replace traffic's. */
-export type CarDriver = (self: AiCar, cars: readonly AiCar[], dt: number) => DriveInput;
+type CarDriver = (self: AiCar, cars: readonly AiCar[], dt: number) => DriveInput;
 
 /** What an owner holds of a car it leased from traffic (`MoverFleet.spawn`). */
 export class DrivenCar {
@@ -31,13 +29,14 @@ export class DrivenCar {
     this.ports = ports;
   }
 
-  get car(): DeformableCar {
+  get car(): TrafficCar {
     return this.ports.cars()[this.index]!;
   }
 }
 
 const MOVER = { free: 0, parked: 1, driving: 2 } as const;
-const ROLE = { ambient: 0, commuter: 1, patrol: 2 } as const;
+const ROLE = { ambient: 0, commuter: 1, leased: 2 } as const;
+/** No resident: the car is nobody's. */
 const NO_RESIDENT = -1;
 /** Spaces tried when picking where a car goes: the whole list, from a seeded start. */
 const SEED_STEP = 97;
@@ -48,8 +47,8 @@ const MOVING_SPEED = 1;
 /** A car this slow (m/s) while driving is standing. */
 const STANDING_SPEED = 0.5;
 
-function isWreck(car: DeformableCar): boolean {
-  return !carRuns(car) || car.group.matrixWorld.elements[5]! < FLIPPED_UP_Y;
+function isWreck(car: TrafficCar): boolean {
+  return car.driverOut !== null || !car.deform.drivetrainAlive || car.group.matrixWorld.elements[5]! < FLIPPED_UP_Y;
 }
 
 /**
@@ -59,6 +58,8 @@ function isWreck(car: DeformableCar): boolean {
 export class MoverFleet {
   readonly first: number;
   readonly size: number;
+  /** The last `patrol` slots are police cruisers, leased only to urgent trips. */
+  readonly patrol: number;
   readonly handles: DrivenCar[];
   private readonly context: TrafficContext;
   private readonly planner: RoutePlanner;
@@ -82,10 +83,11 @@ export class MoverFleet {
   private spawnedThisPass = false;
   private passes = 0;
 
-  constructor(context: TrafficContext, first: number, size: number, driver: TrafficDriver) {
+  constructor(context: TrafficContext, first: number, size: number, patrol: number, driver: TrafficDriver) {
     this.context = context;
     this.first = first;
     this.size = size;
+    this.patrol = patrol;
     this.driver = driver;
     this.planner = new RoutePlanner(context.network, context.spots);
     this.handles = Array.from({ length: size }, (_, slot) => new DrivenCar(first + slot, context.ports));
@@ -108,6 +110,18 @@ export class MoverFleet {
     let count = 0;
     for (let slot = 0; slot < this.size; slot++) if (this.state[slot] === MOVER.driving) count++;
     return count;
+  }
+
+  /** The lease handle of car `id` when it is one of the fleet's and on a trip, else null. */
+  handleAt(id: number): DrivenCar | null {
+    const slot = id - this.first;
+    return slot >= 0 && slot < this.size && this.state[slot] === MOVER.driving ? this.handles[slot]! : null;
+  }
+
+  /** The resident at the wheel of car `id`, -1 when it is not one of the fleet's, stands put away, or is no resident's. */
+  residentAt(id: number): number {
+    const slot = id - this.first;
+    return slot >= 0 && slot < this.size && this.state[slot] !== MOVER.free ? this.resident[slot]! : NO_RESIDENT;
   }
 
   /** Whether car `id` is one of the fleet's and on a trip. */
@@ -134,15 +148,13 @@ export class MoverFleet {
     for (let slot = 0; slot < this.size; slot++) this.tend(slot, passDt);
   }
 
-  /** Drives car `id` for `dt` s when it is one of the fleet's on a trip; false leaves it to the engine's default (parked cars stand on their brakes). */
-  apply(car: DeformableCar, id: number, dt: number): boolean {
+  /** What car `id` does for `dt` s when it is one of the fleet's on a trip; null leaves it to the engine's default (parked cars stand on their brakes). */
+  inputOf(id: number, dt: number): DriveInput | null {
     const slot = id - this.first;
-    if (slot < 0 || slot >= this.size || this.state[slot] !== MOVER.driving) return false;
+    if (slot < 0 || slot >= this.size || this.state[slot] !== MOVER.driving || this.context.ports.seated(id)) return null;
     const snaps = this.context.snaps;
     const handle = this.handles[slot]!;
-    const input = handle.driver !== null ? handle.driver(snaps[id]!, snaps, dt) : this.driver.think(snaps[id]!, this.routes[slot]!, this.classes[slot]!, snaps, this.seconds, dt, this.urgent[slot] === 1);
-    applyAiDrive(car, input, dt);
-    return true;
+    return handle.driver !== null ? handle.driver(snaps[id]!, snaps, dt) : this.driver.think(snaps[id]!, this.routes[slot]!, this.classes[slot]!, snaps, this.seconds, dt, this.urgent[slot] === 1);
   }
 
   /**
@@ -150,14 +162,14 @@ export class MoverFleet {
    * out of the way, placed there. Null when no car is free or there is no way between the spaces.
    */
   spawn(resident: number, fromSpot: number, toSpot: number, urgent: boolean): DrivenCar | null {
-    const slot = this.slotFor(resident, fromSpot);
+    const slot = this.slotFor(resident, fromSpot, urgent);
     if (slot < 0) return null;
     const { ports, spots } = this.context;
     const id = this.first + slot;
     const car = ports.cars()[id]!;
     if (this.state[slot] !== MOVER.parked || this.spot[slot] !== fromSpot) {
       this.release(slot);
-      ports.place(car, spots.x[fromSpot]!, spots.z[fromSpot]!, spots.yaw[fromSpot]!);
+      ports.place(id, spots.x[fromSpot]!, spots.z[fromSpot]!, spots.yaw[fromSpot]!);
       this.spot[slot] = fromSpot;
       this.shelved[slot] = 1;
       this.state[slot] = MOVER.parked;
@@ -165,7 +177,7 @@ export class MoverFleet {
       this.context.standing[fromSpot] = STANDING.mover;
     }
     if (!this.planner.plan(this.routes[slot]!, fromSpot, toSpot)) return null;
-    this.role[slot] = resident === NO_RESIDENT ? ROLE.patrol : ROLE.commuter;
+    this.role[slot] = resident === NO_RESIDENT ? ROLE.leased : ROLE.commuter;
     this.resident[slot] = resident;
     this.urgent[slot] = urgent ? 1 : 0;
     this.classes[slot] = classStats(carClass(car));
@@ -176,12 +188,19 @@ export class MoverFleet {
     return handle;
   }
 
-  /** The owner is done with the car: it goes on as ambient traffic from where it is. */
+  /** The owner is done with the car: it goes on as ambient traffic from where it is; a patrol car is put away. */
   despawn(handle: DrivenCar): void {
     const slot = handle.index - this.first;
     if (slot < 0 || slot >= this.size || handle.lost) return;
     handle.lost = true;
     handle.driver = null;
+    if (this.isPatrol(slot)) {
+      this.release(slot);
+      this.context.ports.putAway(this.first + slot);
+      this.shelved[slot] = 1;
+      this.driver.forget(this.first + slot);
+      return;
+    }
     this.role[slot] = ROLE.ambient;
     this.resident[slot] = NO_RESIDENT;
     this.urgent[slot] = 0;
@@ -204,18 +223,18 @@ export class MoverFleet {
     else this.tendDriving(slot, car, passDt);
   }
 
-  private fill(slot: number, car: DeformableCar, id: number): void {
+  private fill(slot: number, car: TrafficCar, id: number): void {
     const { ports } = this.context;
     if (this.shelved[slot] === 0) {
-      ports.putAway(car, id);
+      ports.putAway(id);
       this.shelved[slot] = 1;
       this.driver.forget(id);
     }
-    if (this.spawnedThisPass || this.role[slot] !== ROLE.ambient) return;
+    if (this.spawnedThisPass || this.role[slot] !== ROLE.ambient || this.isPatrol(slot)) return;
     const spot = this.chooseSpot(slot, -1, this.passes > PRIME_PASSES);
     if (spot < 0) return;
     const { spots } = this.context;
-    ports.place(car, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!);
+    ports.place(id, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!);
     this.spot[slot] = spot;
     this.state[slot] = MOVER.parked;
     this.context.taken[spot] = 1;
@@ -227,15 +246,15 @@ export class MoverFleet {
     this.spawnedThisPass = true;
   }
 
-  private tendParked(slot: number, car: DeformableCar, passDt: number): void {
+  private tendParked(slot: number, car: TrafficCar, passDt: number): void {
     this.wreckedFor[slot] = isWreck(car) ? this.wreckedFor[slot]! + passDt : 0;
     if (this.wreckedFor[slot]! > TOW_SECONDS) {
-      this.tow(slot, car);
+      this.tow(slot);
       return;
     }
     if (this.seconds < this.readyAt[slot]!) return;
     if (this.role[slot] === ROLE.commuter) {
-      if (this.unseenAndFar(slot, car)) this.shelve(slot, car);
+      if (this.unseenAndFar(slot, car)) this.shelve(slot);
       return;
     }
     if (this.role[slot] !== ROLE.ambient) return;
@@ -251,13 +270,13 @@ export class MoverFleet {
     this.launch(slot, destination);
   }
 
-  private tendDriving(slot: number, car: DeformableCar, passDt: number): void {
+  private tendDriving(slot: number, car: TrafficCar, passDt: number): void {
     const id = this.first + slot;
     this.wreckedFor[slot] = isWreck(car) ? this.wreckedFor[slot]! + passDt : 0;
     const speed = hypot2(car.velocity.x, car.velocity.z);
     this.stillFor[slot] = speed < STANDING_SPEED ? this.stillFor[slot]! + passDt : 0;
     if (this.wreckedFor[slot]! > TOW_SECONDS || this.stillFor[slot]! > STUCK_SECONDS) {
-      this.tow(slot, car);
+      this.tow(slot);
       return;
     }
     if (!this.driver.arrived(id, this.routes[slot]!, speed)) return;
@@ -321,14 +340,18 @@ export class MoverFleet {
     return true;
   }
 
-  /** A slot to lease for a trip out of `fromSpot`: the resident's own car standing there, a free one, or an ambient one parked (taken off its space). -1 when none. */
-  private slotFor(resident: number, fromSpot: number): number {
+  private isPatrol(slot: number): boolean {
+    return slot >= this.size - this.patrol;
+  }
+
+  /** A slot to lease for a trip out of `fromSpot`: the resident's own car standing there, a free one, or an ambient one parked (taken off its space); an urgent trip takes a patrol car, any other never does. -1 when none. */
+  private slotFor(resident: number, fromSpot: number, urgent: boolean): number {
     for (let slot = 0; slot < this.size; slot++) {
       if (resident !== NO_RESIDENT && this.resident[slot] === resident && this.state[slot] === MOVER.parked && this.spot[slot] === fromSpot) return slot;
     }
     let ambient = -1;
     for (let slot = 0; slot < this.size; slot++) {
-      if (this.context.ports.seated(this.first + slot)) continue;
+      if (this.context.ports.seated(this.first + slot) || this.isPatrol(slot) !== urgent) continue;
       if (this.state[slot] === MOVER.free) return slot;
       if (ambient < 0 && this.state[slot] === MOVER.parked && this.role[slot] === ROLE.ambient) ambient = slot;
     }
@@ -353,22 +376,22 @@ export class MoverFleet {
   }
 
   /** No eye sees the car and no player is near it. */
-  private unseenAndFar(slot: number, car: DeformableCar): boolean {
+  private unseenAndFar(slot: number, car: TrafficCar): boolean {
     const { sight, sightBase } = this.context;
     return !sight.near(car.group.position.x, car.group.position.z, KERB_KEEP) && sight.unseenFor(sightBase + slot) >= sight.hideGrace;
   }
 
   /** A resident's car left standing where its owner parked it: put away, the space still the resident's; the kerb stream shows it again when a player comes near. */
-  private shelve(slot: number, car: DeformableCar): void {
+  private shelve(slot: number): void {
     this.release(slot);
-    this.context.ports.putAway(car, this.first + slot);
+    this.context.ports.putAway(this.first + slot);
     this.shelved[slot] = 1;
     this.driver.forget(this.first + slot);
   }
 
-  private tow(slot: number, car: DeformableCar): void {
+  private tow(slot: number): void {
     this.release(slot);
-    this.context.ports.putAway(car, this.first + slot);
+    this.context.ports.putAway(this.first + slot);
     this.shelved[slot] = 1;
     this.driver.forget(this.first + slot);
     this.wreckedFor[slot] = 0;

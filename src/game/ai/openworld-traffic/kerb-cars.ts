@@ -1,7 +1,5 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import { hash01 } from "../../kernel/scalar.ts";
-import type { DeformableCar } from "../../vehicle/car.ts";
-import { carRuns } from "../../vehicle/car-drive.ts";
 import { FLIPPED_UP_Y } from "../../vehicle/constants.ts";
 import { MAX_CARS } from "../../scenes/fleet.ts";
 import { rightX, rightZ } from "../../world/openworld/openworld-roads.ts";
@@ -56,9 +54,7 @@ export class KerbCars {
   clearSpot(spot: number): void {
     const slot = this.slotOfSpot[spot]!;
     if (slot < 0) return;
-    const { ports } = this.context;
-    const car = ports.cars()[this.first + slot];
-    if (car !== undefined) ports.putAway(car, this.first + slot);
+    this.context.ports.putAway(this.first + slot);
     this.shelved[slot] = 1;
     this.vacate(slot);
   }
@@ -110,7 +106,7 @@ export class KerbCars {
     }
     if (spot < 0) {
       if (this.shelved[slot] === 0) {
-        ports.putAway(car, id);
+        ports.putAway(id);
         this.shelved[slot] = 1;
       }
       return;
@@ -119,10 +115,11 @@ export class KerbCars {
     const z = car.group.position.z;
     const sightId = this.context.sightBase + this.context.movers + slot;
     sight.observe(sightId, x, z, SIGHT_RADIUS);
-    this.wreckedFor[slot] = !carRuns(car) || car.group.matrixWorld.elements[5]! < FLIPPED_UP_Y ? this.wreckedFor[slot]! + passDt : 0;
+    const wrecked = car.driverOut !== null || !car.deform.drivetrainAlive || car.group.matrixWorld.elements[5]! < FLIPPED_UP_Y;
+    this.wreckedFor[slot] = wrecked ? this.wreckedFor[slot]! + passDt : 0;
     const gone = this.wreckedFor[slot]! > TOW_SECONDS || (!sight.near(x, z, KERB_KEEP) && sight.unseenFor(sightId) >= sight.hideGrace);
     if (!gone) return;
-    ports.putAway(car, id);
+    ports.putAway(id);
     this.shelved[slot] = 1;
     this.vacate(slot);
   }
@@ -170,12 +167,10 @@ export class KerbCars {
       }
     }
     if (slot < 0) return false;
-    const car: DeformableCar | undefined = ports.cars()[this.first + slot];
-    if (car === undefined) return false;
     const heading = spots.heading[spot]!;
     const side = (hash01(spot, TRAFFIC_SEED) - 0.5) * 2 * KERB_JITTER_SIDE;
     const turn = (hash01(spot, TRAFFIC_SEED + 1) - 0.5) * 2 * KERB_JITTER_YAW;
-    ports.place(car, spots.x[spot]! + rightX(heading) * side, spots.z[spot]! + rightZ(heading) * side, spots.yaw[spot]! + turn);
+    ports.place(this.first + slot, spots.x[spot]! + rightX(heading) * side, spots.z[spot]! + rightZ(heading) * side, spots.yaw[spot]! + turn);
     sight.reset(this.context.sightBase + this.context.movers + slot);
     this.spotOfSlot[slot] = spot;
     this.slotOfSpot[spot] = slot;

@@ -6,9 +6,9 @@ import { blockOnRight, HEADING_COUNT, HEADING_DX, HEADING_DZ, HEADING_YAW, laneL
 const PARKING_SPACE = 6;
 const PARKING_CORNER_GAP = 6;
 /** A share of the spaces stand empty, so a street is not a solid row of cars. */
-const PARKING_EMPTY_SHARE = 0.3;
+const EMPTY_SPACE_SHARE = 0.3;
 /** Seed of which spaces hold a car for good, fixed so every peer parks alike. */
-const PARKING_SEED = 0x0b10c4;
+const STAYING_CARS_SEED = 0x0b10c4;
 
 /**
  * The kerb spaces of the open world, one list for everyone who parks: the course's dressing, the cars that park, the walkers who reach a car. A spot lies on the right-hand
@@ -74,7 +74,7 @@ export function buildParkingSpots(network: RoadNetwork): ParkingSpots {
       spots.junction[spot] = junction;
       spots.heading[spot] = heading;
       spots.along[spot] = along;
-      spots.stays[spot] = hash01(spot, PARKING_SEED) < PARKING_EMPTY_SHARE ? 0 : 1;
+      spots.stays[spot] = hash01(spot, STAYING_CARS_SEED) < EMPTY_SPACE_SHARE ? 0 : 1;
     }
   }
   return spots;

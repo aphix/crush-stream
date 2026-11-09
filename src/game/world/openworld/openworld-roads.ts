@@ -55,11 +55,11 @@ export function junctionIndex(network: RoadNetwork, column: number, row: number)
   return row * network.junctionColumns + column;
 }
 
-export function junctionColumn(network: RoadNetwork, junction: number): number {
+function junctionColumn(network: RoadNetwork, junction: number): number {
   return junction % network.junctionColumns;
 }
 
-export function junctionRow(network: RoadNetwork, junction: number): number {
+function junctionRow(network: RoadNetwork, junction: number): number {
   return Math.floor(junction / network.junctionColumns);
 }
 

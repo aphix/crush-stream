@@ -598,7 +598,11 @@ export class RaceDirector extends RaceHudLayer {
       for (let i = 0; i < cars.length; i++) {
         const car = cars[i]!;
         const own = i === this.self && this.host.seat.mode === "drive" && this.host.seat.carIndex === i;
-        if (!own && car.driverOut === null && !this.seats.has(i) && this.freeDrivers?.apply(car, i, dt)) continue;
+        const driven = !own && car.driverOut === null && !this.seats.has(i) ? (this.freeDrivers?.inputOf(i, dt) ?? null) : null;
+        if (driven !== null) {
+          applyAiDrive(car, driven, dt);
+          continue;
+        }
         const input = car.driverOut !== null ? COAST : own ? this.host.seat.input(car, dt) : this.seats.has(i) ? this.remote[i]! : this.hold;
         applyDrive(car, input, dt);
       }

@@ -6,11 +6,11 @@ export const SIGNAL_PHASE = { northSouthThrough: 0, northSouthLeft: 1, eastWestT
 const PHASE_COUNT = 4;
 
 export const LIGHT = { green: 0, yellow: 1, red: 2 } as const;
-export type LightState = (typeof LIGHT)[keyof typeof LIGHT];
+type LightState = (typeof LIGHT)[keyof typeof LIGHT];
 
 /** A phase's stages in order; `lightPhase` packs phase * STAGE_COUNT + stage. */
 const STAGE = { green: 0, yellow: 1, allRed: 2 } as const;
-export const STAGE_COUNT = 3;
+const STAGE_COUNT = 3;
 
 const PHASE_GREEN = [THROUGH_GREEN_SECONDS, LEFT_GREEN_SECONDS, THROUGH_GREEN_SECONDS, LEFT_GREEN_SECONDS] as const;
 const CYCLE_SECONDS = PHASE_GREEN.reduce((sum, green) => sum + green + YELLOW_SECONDS + ALL_RED_SECONDS, 0);
@@ -43,9 +43,4 @@ export function lightState(junction: number, phase: number, seconds: number): Li
   if (Math.floor(packed / STAGE_COUNT) !== phase) return LIGHT.red;
   const stage = packed % STAGE_COUNT;
   return stage === STAGE.green ? LIGHT.green : stage === STAGE.yellow ? LIGHT.yellow : LIGHT.red;
-}
-
-/** Length of one whole signal cycle (s). */
-export function secondsPerCycle(): number {
-  return CYCLE_SECONDS;
 }

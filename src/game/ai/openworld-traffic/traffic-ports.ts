@@ -1,22 +1,36 @@
 import { hypot2 } from "../../kernel/physics-core.js";
-import type { DeformableCar } from "../../vehicle/car.ts";
+import type { CarStyleId } from "../../vehicle/car-variants.ts";
 import type { RoadNetwork } from "../../world/openworld/openworld-roads.ts";
 import type { ParkingSpots } from "../../world/openworld/openworld-parking.ts";
 import type { AiCar } from "../derby-ai.ts";
 import { SIGHT_RADIUS, SPAWN_CLEAR } from "./traffic-constants.ts";
 import type { TrafficSight } from "./traffic-sight.ts";
 
+/** What traffic reads of a car of the field (a `DeformableCar` has all of it). */
+export type TrafficCar = {
+  readonly group: { visible: boolean; readonly position: { readonly x: number; readonly z: number }; readonly matrixWorld: { readonly elements: ArrayLike<number> } };
+  readonly velocity: { readonly x: number; readonly z: number };
+  readonly yaw: number;
+  readonly crashed: boolean;
+  readonly stored: boolean;
+  readonly driverOut: unknown;
+  readonly deform: { readonly drivetrainAlive: boolean };
+  readonly style: { readonly id: CarStyleId };
+};
+
 /** What traffic needs of the engine: the field's cars (index = car id) and a few things only it can do to one. */
 export type TrafficPorts = {
-  cars(): readonly DeformableCar[];
+  cars(): readonly TrafficCar[];
   /** Grows the field to at least `count` cars. */
   ensureCars(count: number): void;
   /** A human drives car `id` (this browser's player, or a peer). */
   seated(id: number): boolean;
-  /** Stands `car` on (x, z) facing `yaw`, repaired and at rest, drawn and simulated. */
-  place(car: DeformableCar, x: number, z: number, yaw: number): void;
-  /** Puts `car` (id `id`) away: hidden, still, and not simulated. */
-  putAway(car: DeformableCar, id: number): void;
+  /** Stands car `id` on (x, z) facing `yaw`, repaired and at rest, drawn and simulated. */
+  place(id: number, x: number, z: number, yaw: number): void;
+  /** Puts car `id` away: hidden, still, and not simulated. */
+  putAway(id: number): void;
+  /** Cars `from` to `from + count - 1` wear the police look (a light bar); a count of 0 gives every car its own look back. */
+  markPolice(from: number, count: number): void;
 };
 
 /** What a space holds: nothing, a car that drives (parked for now), or a kerb car that only stands. */

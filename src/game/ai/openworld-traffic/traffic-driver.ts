@@ -34,7 +34,7 @@ import {
   STOP_BRAKE_YELLOW,
   STOP_COMMIT,
   STOP_MARGIN,
-  STOP_TARGET,
+  HELD_TARGET,
   URGENT_SPEED,
 } from "./traffic-constants.ts";
 import { LIGHT, lightState } from "./traffic-lights.ts";
@@ -62,6 +62,8 @@ export class TrafficDriver {
   private readonly signal = new Int32Array(MAX_CARS);
   private readonly boxWaited = new Float64Array(MAX_CARS);
   private readonly boxGivenUp = new Int32Array(MAX_CARS).fill(-1);
+  /** Per car: the signal it decided to stop at (-1: none). A decision to stop holds until the light is green, so a yellow it could stop for is not run once its own braking has made the stop harder. */
+  private readonly stopLatched = new Int32Array(MAX_CARS).fill(-1);
   private readonly arc = new Float64Array(MAX_CARS);
 
   constructor(network: RoadNetwork) {
@@ -76,6 +78,7 @@ export class TrafficDriver {
     this.signal[id] = 0;
     this.boxWaited[id] = 0;
     this.boxGivenUp[id] = -1;
+    this.stopLatched[id] = -1;
     this.arc[id] = 0;
     this.pedals.forget(id);
     this.wedge.reset(id);
@@ -115,7 +118,7 @@ export class TrafficDriver {
     if (!urgent) target = Math.min(target, this.signalLimit(self, route, arc, along, seconds, dt, others));
     target = Math.min(target, this.leadLimit(self, route, arc, speed, others));
     target = Math.min(target, Math.sqrt(2 * STOP_BRAKE * Math.max(0, route.length - arc)));
-    const stop = target < STOP_TARGET;
+    const stop = target < HELD_TARGET;
     if (this.pedals.latch(id, stop ? Infinity : along - target, BRAKE_ON, BRAKE_OFF)) out.brake = stop ? 1 : clamp((along - target + BRAKE_OFF) / BRAKE_SPAN, 0, 1);
     else out.throttle = clamp(target / DRIVE.maxFwd + (target - along) * 0.15, 0, 1);
     this.pedals.shape(id, out, dt);
@@ -142,7 +145,12 @@ export class TrafficDriver {
     if (signal >= route.signalCount) return Infinity;
     const distance = this.stopArc(route, signal) - arc;
     const state = lightState(route.signalJunction[signal]!, route.signalPhase[signal]!, seconds);
-    let hold = state === LIGHT.red || (state === LIGHT.yellow && along * along < 2 * STOP_BRAKE_YELLOW * Math.max(0, distance));
+    if (state === LIGHT.green) this.stopLatched[id] = -1;
+    let hold = this.stopLatched[id] === signal;
+    if (!hold && (state === LIGHT.red || (state === LIGHT.yellow && along * along < 2 * STOP_BRAKE_YELLOW * Math.max(0, distance)))) {
+      hold = true;
+      this.stopLatched[id] = signal;
+    }
     if (!hold && this.boxGivenUp[id] !== signal && distance < CAP_WINDOW && this.boxBlocked(self, route.signalJunction[signal]!, others)) {
       hold = true;
       this.boxWaited[id]! += along < 1 ? dt : 0;

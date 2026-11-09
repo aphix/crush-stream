@@ -1,5 +1,7 @@
 /** Cars that drive the open world's streets (the pool, past the seated cars): desktop 12, phone 6. */
 export const MOVER_CARS = { desktop: 12, phone: 6 } as const;
+/** Of the mover cars, the last of these are police cruisers (a light bar), leased only to patrols. */
+export const PATROL_CARS = { desktop: 2, phone: 1 } as const;
 /** Cars that stand parked as scenery near the players: real cars at the kerb, taken from a second pool that never drives. */
 export const KERB_CARS = { desktop: 10, phone: 4 } as const;
 
@@ -69,8 +71,6 @@ export const SIGHT_RADIUS = 3.5;
 
 /** A red-light run is raised once per car per this many seconds. */
 export const RED_LIGHT_REARM_SECONDS = 8;
-/** Red-light runs held until the engine takes them. */
-export const RED_LIGHT_QUEUE = 16;
 
 /** Seed of the movers' choices (spots, dwell times). */
 export const TRAFFIC_SEED = 0x7a11c;
@@ -84,7 +84,7 @@ export const BRAKE_ON = 1;
 export const BRAKE_OFF = 0.5;
 export const BRAKE_SPAN = 4;
 /** A target under this (m/s) is a stop: the brake is held on. */
-export const STOP_TARGET = 0.3;
+export const HELD_TARGET = 0.3;
 /** A stopped car's centre stands this far (m) short of where its nose meets the bar. */
 export const STOP_MARGIN = 0.8;
 /** Past its stop point by this much (m) a car is in the junction: the signal no longer holds it. */

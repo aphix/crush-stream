@@ -91,6 +91,13 @@ const HOT = {
   "src/game/engine/engine-openworld.ts": ["step", "frame"],
   "src/game/present/civilian-art.ts": ["update", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
   "src/game/present/civilian-pose.ts": ["poseCivilian", "poseLimb", "placePart", "setSwung"],
+  "src/game/ai/openworld-traffic/traffic-driver.ts": ["think", "turnLimit", "signalLimit", "boxBlocked", "leadLimit"],
+  "src/game/ai/openworld-traffic/mover-fleet.ts": ["step", "inputOf", "tend", "tendParked", "tendDriving", "laneClear"],
+  "src/game/ai/openworld-traffic/openworld-traffic.ts": ["step", "drive", "inputOf", "refreshSnaps", "watchSignals"],
+  "src/game/ai/openworld-traffic/red-light-watch.ts": ["observe", "nearestJunction"],
+  "src/game/ai/openworld-traffic/kerb-cars.ts": ["step", "tend", "findEyes", "nearestWanted", "distanceToEyes"],
+  "src/game/ai/openworld-traffic/trip-route.ts": ["projectOnRoute", "pointAtArc"],
+  "src/game/present/traffic-lights.ts": ["update", "paint"],
   "src/game/present/civilian-dress.ts": ["dressOfLook", "writeLinearColour", "scrambleLook", "fieldOf"],
 };
 const KNOB_CONTEXTS = new Set(["kernel", "world", "deform", "vehicle", "contact", "scenes", "ai"]);

@@ -1,5 +1,5 @@
 import { MAX_CARS } from "../../scenes/fleet.ts";
-import type { DeformableCar } from "../../vehicle/car.ts";
+import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildParkingSpots, nearestFreeSpot, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
@@ -12,22 +12,22 @@ import { RedLightWatch } from "./red-light-watch.ts";
 import { FEED_SECONDS } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
 import { lightPhase } from "./traffic-lights.ts";
-import { RESIDENT_CAPACITY, STANDING, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
+import { RESIDENT_CAPACITY, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
 import type { CommuterFeed, TrafficSight } from "./traffic-sight.ts";
 
 export type { DrivenCar } from "./mover-fleet.ts";
 
-/** What the free-roam lobby asks of whoever drives its cars: once a slice the cars as they are, then per car whether it is driven (and the drive applied). */
+/** What the free-roam lobby asks of whoever drives its cars: once a slice the cars as they are, then per car what it does (null: nobody drives it). */
 export type FreeDrivers = {
-  drive(cars: readonly DeformableCar[]): void;
-  apply(car: DeformableCar, id: number, dt: number): boolean;
+  drive(cars: readonly TrafficCar[]): void;
+  inputOf(id: number, dt: number): DriveInput | null;
 };
 
 /** Called (host and solo only) when car `carIndex` at (x, z) crosses a stop bar against its signal at crowd time `seconds`. */
-export type RedLightListener = (carIndex: number, x: number, z: number, seconds: number) => void;
+type RedLightListener = (carIndex: number, x: number, z: number, seconds: number) => void;
 
-/** How many cars of each kind the open world has: `MOVER_CARS` and `KERB_CARS` by device. */
-export type TrafficSize = { movers: number; kerb: number };
+/** How many cars of each kind the open world has (`MOVER_CARS`, `KERB_CARS`, `PATROL_CARS` by device); the patrol cars are the last of the movers. */
+type TrafficSize = { movers: number; kerb: number; patrol: number };
 
 /**
  * The open world's cars: real cars of the field that drive its streets (ambient traffic, residents' commutes, patrols), stop at the signals and park in the kerb spaces, and real cars that
@@ -60,9 +60,11 @@ export class OpenWorldTraffic {
     for (let id = 1; id < ports.cars().length; id++) if (ports.seated(id)) first = id + 1;
     const movers = Math.min(size.movers, MAX_CARS - first);
     const kerb = Math.min(size.kerb, MAX_CARS - first - movers);
+    const patrol = Math.min(size.patrol, movers);
     this.first = first;
     this.total = movers + kerb;
     ports.ensureCars(first + this.total);
+    for (let id = first; id < first + this.total; id++) ports.putAway(id);
     const sightBase = sight.claim(this.total + 1);
     this.context = {
       network,
@@ -75,11 +77,12 @@ export class OpenWorldTraffic {
       movers,
       sightBase,
       probe: sightBase + this.total,
-      snaps: [],
+      snaps: Array.from({ length: MAX_CARS }, (_, id) => ({ ...blankAiCar(id), alive: false })),
     };
     this.refreshSnaps(ports.cars());
     this.watch = new RedLightWatch(network);
-    this.movers = new MoverFleet(this.context, first, movers, new TrafficDriver(network));
+    this.movers = new MoverFleet(this.context, first, movers, patrol, new TrafficDriver(network));
+    if (patrol > 0) ports.markPolice(first + movers - patrol, patrol);
     this.kerb = new KerbCars(this.context, first + movers, kerb);
   }
 
@@ -95,6 +98,26 @@ export class OpenWorldTraffic {
       const at = this.listeners.indexOf(listener);
       if (at >= 0) this.listeners.splice(at, 1);
     };
+  }
+
+  /** Every car as the drivers read it, index = the engine's car index. */
+  get snaps(): readonly AiCar[] {
+    return this.context.snaps;
+  }
+
+  /** The lease handle of the car on a trip as engine car `carIndex`, else null: an owner may set its `driver` (a patrol stopping a car). */
+  drivenCarAt(carIndex: number): DrivenCar | null {
+    return this.movers.handleAt(carIndex);
+  }
+
+  /** The resident at the wheel of engine car `carIndex`; -1 for none, a kerb car or the player. */
+  residentOf(carIndex: number): number {
+    return this.movers.residentAt(carIndex);
+  }
+
+  /** Per space, 1 where a car that drives (or is on its way) holds it. */
+  get claimedSpots(): Uint8Array {
+    return this.context.taken;
   }
 
   /** The nearest kerb space to (x, z) no car holds. -1 when none is. */
@@ -122,19 +145,19 @@ export class OpenWorldTraffic {
   /** The cars go away: every pool car no human drives is put away. */
   dispose(): void {
     const { ports } = this.context;
+    ports.markPolice(MAX_CARS, 0);
     for (let id = this.first; id < this.first + this.total; id++) {
-      const car = ports.cars()[id];
-      if (car !== undefined && !ports.seated(id)) ports.putAway(car, id);
+      if (id < ports.cars().length && !ports.seated(id)) ports.putAway(id);
     }
   }
 
   /** A slice's start: every car as the drivers read it. */
-  drive(cars: readonly DeformableCar[]): void {
+  drive(cars: readonly TrafficCar[]): void {
     this.refreshSnaps(cars);
   }
 
-  apply(car: DeformableCar, id: number, dt: number): boolean {
-    return this.movers.apply(car, id, dt);
+  inputOf(id: number, dt: number): DriveInput | null {
+    return this.movers.inputOf(id, dt);
   }
 
   /** A sim step at crowd time `seconds`: the cars' bookkeeping, the society's cars, and every car's crossing of a bar. */
@@ -151,9 +174,8 @@ export class OpenWorldTraffic {
     this.watchSignals(seconds);
   }
 
-  private refreshSnaps(cars: readonly DeformableCar[]): void {
-    const snaps: AiCar[] = this.context.snaps;
-    while (snaps.length < cars.length) snaps.push(blankAiCar(snaps.length));
+  private refreshSnaps(cars: readonly TrafficCar[]): void {
+    const snaps = this.context.snaps;
     for (let id = 0; id < cars.length; id++) {
       const car = cars[id]!;
       const snap = snaps[id]!;

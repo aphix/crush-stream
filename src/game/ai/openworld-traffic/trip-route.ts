@@ -44,7 +44,7 @@ export class TripRoute {
 }
 
 /** Where a car is on its route: the segment it is on, the arc length (m) of the nearest point and how far (m) the route lies to the left of it (+). */
-export type RouteProjection = { segment: number; arc: number; lateral: number };
+type RouteProjection = { segment: number; arc: number; lateral: number };
 
 export function blankRouteProjection(): RouteProjection {
   return { segment: 0, arc: 0, lateral: 0 };

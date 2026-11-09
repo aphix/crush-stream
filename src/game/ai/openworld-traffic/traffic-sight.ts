@@ -17,7 +17,7 @@ export type TrafficSight = {
 };
 
 /** Residents on a drive leg right now, filled by the society each tick: `count` entries of resident, the place they set out from, the place they drive to and the crowd second they are due there. */
-export type DriveLegs = { count: number; resident: Int32Array; fromPlace: Int32Array; toPlace: Int32Array; arriveSeconds: Float64Array };
+type DriveLegs = { count: number; resident: Int32Array; fromPlace: Int32Array; toPlace: Int32Array; arriveSeconds: Float64Array };
 
 /** Residents' cars standing at a place's kerb (those not on a drive leg), filled by the society each tick. */
 export type ParkedResidentCars = { count: number; resident: Int32Array; place: Int32Array };

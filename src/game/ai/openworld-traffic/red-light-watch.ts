@@ -1,5 +1,5 @@
 import { MAX_CARS } from "../../scenes/fleet.ts";
-import { HEADING_COUNT, HEADING_DX, HEADING_DZ, rightX, rightZ, type RoadNetwork } from "../../world/openworld/openworld-roads.ts";
+import { HEADING_COUNT, HEADING_DX, HEADING_DZ, junctionIndex, rightX, rightZ, type RoadNetwork } from "../../world/openworld/openworld-roads.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { RED_LIGHT_REARM_SECONDS, TELEPORT_METRES } from "./traffic-constants.ts";
 import { LIGHT, lightState, phaseOfApproach } from "./traffic-lights.ts";
@@ -61,7 +61,7 @@ export class RedLightWatch {
     for (let index = 1; index < network.junctionRows; index++) {
       if (Math.abs(network.junctionZ[index * network.junctionColumns]! - z) < Math.abs(network.junctionZ[row * network.junctionColumns]! - z)) row = index;
     }
-    const junction = row * network.junctionColumns + column;
+    const junction = junctionIndex(network, column, row);
     const reach = network.stopBar + 2;
     return Math.abs(network.junctionX[junction]! - x) < reach && Math.abs(network.junctionZ[junction]! - z) < reach ? junction : -1;
   }

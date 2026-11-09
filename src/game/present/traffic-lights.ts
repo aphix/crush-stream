@@ -5,7 +5,8 @@ import { HEADING_COUNT, HEADING_DX, HEADING_DZ, HEADING_YAW, rightX, rightZ, typ
 /** The pole stands this far (m) from the curb, in the sidewalk's furniture strip, and the head hangs this far (m) over the lane side of it. */
 const POLE_FROM_CURB = 0.6;
 const HEAD_OVER_LANE = 0.35;
-const POLE_SIZE = { width: 0.18, height: 4.4 } as const;
+const POLE_WIDTH = 0.18;
+const POLE_HEIGHT = 4.4;
 const HEAD_SIZE = { width: 0.42, height: 1.4, depth: 0.36 } as const;
 const HEAD_HEIGHT = 3.5;
 const LAMP_SIZE = 0.26;
@@ -50,7 +51,7 @@ export class TrafficLightArt {
     }
     this.heads = this.headList.length;
     this.shown = new Int16Array(network.junctionCount).fill(NO_PHASE);
-    this.poles = new THREE.InstancedMesh(new THREE.BoxGeometry(POLE_SIZE.width, POLE_SIZE.height, POLE_SIZE.width), new THREE.MeshStandardMaterial({ color: POLE_COLOUR, roughness: 0.7 }), this.heads);
+    this.poles = new THREE.InstancedMesh(new THREE.BoxGeometry(POLE_WIDTH, POLE_HEIGHT, POLE_WIDTH), new THREE.MeshStandardMaterial({ color: POLE_COLOUR, roughness: 0.7 }), this.heads);
     this.headMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(HEAD_SIZE.width, HEAD_SIZE.height, HEAD_SIZE.depth), new THREE.MeshStandardMaterial({ color: HEAD_COLOUR, roughness: 0.6 }), this.heads);
     this.lamps = new THREE.InstancedMesh(new THREE.BoxGeometry(LAMP_SIZE, LAMP_SIZE, LAMP_DEPTH), new THREE.MeshBasicMaterial({ color: 0xffffff }), this.heads * LAMPS_PER_HEAD);
     this.place(network);
@@ -92,7 +93,7 @@ export class TrafficLightArt {
       const poleX = baseX + rightX(heading) * out;
       const poleZ = baseZ + rightZ(heading) * out;
       turn.setFromAxisAngle(up, HEADING_YAW[heading]! + Math.PI);
-      this.poles.setMatrixAt(index, matrix.compose(position.set(poleX, POLE_SIZE.height / 2, poleZ), turn, unit));
+      this.poles.setMatrixAt(index, matrix.compose(position.set(poleX, POLE_HEIGHT / 2, poleZ), turn, unit));
       const headX = poleX - rightX(heading) * HEAD_OVER_LANE;
       const headZ = poleZ - rightZ(heading) * HEAD_OVER_LANE;
       this.headMesh.setMatrixAt(index, matrix.compose(position.set(headX, HEAD_HEIGHT, headZ), turn, unit));
