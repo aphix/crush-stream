@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { LEVELS, SLAB_THICK } from "../world/openworld/interior-kinds.ts";
+import { FACADE_FACE, roomPlaceOf, roomWindows } from "../world/openworld/facade-windows.ts";
 import { BAY, DOOR, drawnHalf, LOT_WIDTH } from "../world/openworld/openworld-facade-solids.ts";
+import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { HOME_STYLES } from "../world/openworld/openworld-programme.ts";
+import { PLACE_KIND } from "../world/openworld/walk-graph.ts";
 import { airconWindowsOf, shuttersOf, streetWindowsOf, visibleWindowsOf } from "./facade-fittings.ts";
 
 const EPSILON = 1e-9;
@@ -93,5 +96,26 @@ describe("given the shutters and air-conditioners hung from the table", () => {
   it("when a style the table does not hold is asked, then it has no windows and no fittings", () => {
     expect(streetWindowsOf("fixture-row").length, "windows of a style without a table").toBe(0);
     expect(shuttersOf("fixture-row").length, "shutters of a style without a table").toBe(0);
+  });
+});
+
+describe("given the windows the rooms look out of, from the same table", () => {
+  const lots = layOutLots();
+  const places = lots.places.slice(0, lots.backdropStart);
+
+  // mutation: sed -i 's/return { across: (low + high) \/ 2, width: high - low, sill: bottom + v0 \* tall, head: bottom + v1 \* tall, storey };/return { across: (low + high) \/ 2, width: high - low, sill: bottom + v0 * tall + 0.05, head: bottom + v1 * tall, storey };/' src/game/present/facade-fittings.ts
+  it("when a rowhome's upper windows are compared with the street windows its room looks out of, then each is the same window: the same middle, sill and head", () => {
+    for (const style of HOME_STYLES) {
+      const home = places.find((place) => place.kind === PLACE_KIND.home && place.style === style);
+      const roomPlace = home === undefined ? null : roomPlaceOf(home);
+      expect(roomPlace, `${style}: a home with a room`).not.toBeNull();
+      const room = roomWindows(roomPlace!).filter((window) => window.face === FACADE_FACE.street && window.level > 0);
+      const hung = airconWindowsOf(style);
+      expect(room.length, `${style}: street windows the room looks out of above the ground`).toBe(hung.length);
+      for (const window of hung) {
+        const same = room.some((seen) => seen.level === window.storey && Math.abs((seen.along0 + seen.along1) / 2 - window.across) < EPSILON * 1e3 && Math.abs(seen.y0 - window.sill) < EPSILON * 1e3 && Math.abs(seen.y1 - window.head) < EPSILON * 1e3);
+        expect(same, `${style}: storey ${window.storey} window at ${window.across.toFixed(2)} in the room's table`).toBe(true);
+      }
+    }
   });
 });
