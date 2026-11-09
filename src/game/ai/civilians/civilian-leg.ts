@@ -1,6 +1,7 @@
 import { detAtan2, hypot2 } from "../../kernel/physics-core.js";
-import { CAR_OUT_TICKS, DECISION_HZ, LATERAL_FADE_DISTANCE, MAX_PATH_NODES, NEVER_TICK, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
+import { ALARM_DELAY_STEPS_PER_SECOND, CAR_OUT_TICKS, CENTIMETRES_PER_METRE, DECISION_HZ, EVADE_HOLD_SECONDS, EVADE_PACE_CALM, EVADE_PACE_JUMPY, EVADE_REACH, LATERAL_FADE_DISTANCE, MAX_PATH_NODES, NEVER_TICK, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import type { CityState } from "./civilian-state.ts";
+import { residentNeuroticism } from "./civilian-temperament.ts";
 
 /** Where a walker is and which way it faces (heading 0 = +Z, positive toward +X): the out parameter of the position functions. */
 export class LegPose {
@@ -9,6 +10,75 @@ export class LegPose {
   dirX = 0;
   dirZ = 1;
   yaw = 0;
+  /** Metres a second along `dirX`, `dirZ` (the way the path runs): the leg's pace, 0 while waiting, negative going back along it; and whether it is clearing a danger (so not as its schedule has it). */
+  speed = 0;
+  evading = false;
+  /** What `evadeAlarm` is given and hands back, as fields: a double passed to a call that is not inlined is boxed. */
+  clock = 0;
+  walked = 0;
+}
+
+/** Whether the way between two neighbouring nodes of the walk graph crosses a road. */
+function isCrossing(state: CityState, from: number, to: number): boolean {
+  const { edgeStart, edgeTo, edgeCrossing } = state.map.graph;
+  for (let edge = edgeStart[from]!; edge < edgeStart[from + 1]!; edge++) if (edgeTo[edge] === to) return edgeCrossing[edge] !== 0;
+  return false;
+}
+
+/**
+ * A walker on a road crossing when a hazard was seen near it (its row's `alarmTick`, the moment it noticed, and the spot): `out.walked` (on the schedule, at `out.clock`) is where it really is, clearing the road to the nearer
+ * kerb at a hurry or a run by its neuroticism, `out.speed` how fast it goes (negative backwards) and `out.evading` that it is not on its schedule. Ahead: it runs to the kerb and waits for the schedule to come level. Behind: it
+ * runs back, waits `EVADE_HOLD_SECONDS`, and runs forward to meet the schedule. A pure function of the row and the time.
+ */
+function evadeAlarm(state: CityState, resident: number, out: LegPose): void {
+  const { ints, floats, pathNodes, pathDistance } = state;
+  const { nodeX, nodeZ } = state.map.graph;
+  const intBase = resident * RESIDENT_INT_STRIDE;
+  const first = resident * MAX_PATH_NODES;
+  const pace = floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!;
+  const departSeconds = ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ;
+  const startSeconds = ints[intBase + RESIDENT_INT.alarmTick]! / DECISION_HZ + ints[intBase + RESIDENT_INT.alarmDelay]! / ALARM_DELAY_STEPS_PER_SECOND;
+  const since = out.clock - startSeconds;
+  if (since < 0 || startSeconds <= departSeconds) return;
+  const count = ints[intBase + RESIDENT_INT.pathCount]!;
+  const there = pace * (startSeconds - departSeconds);
+  if (there >= pathDistance[first + count - 1]!) return;
+  let step = 0;
+  while (step + 2 < count && pathDistance[first + step + 1]! <= there) step++;
+  const from = pathNodes[first + step]!;
+  const to = pathNodes[first + step + 1]!;
+  if (!isCrossing(state, from, to)) return;
+  const kerbBehind = pathDistance[first + step]!;
+  const kerbAhead = pathDistance[first + step + 1]!;
+  const share = (there - kerbBehind) / (kerbAhead - kerbBehind);
+  const hereX = nodeX[from]! + (nodeX[to]! - nodeX[from]!) * share;
+  const hereZ = nodeZ[from]! + (nodeZ[to]! - nodeZ[from]!) * share;
+  if (hypot2(hereX - ints[intBase + RESIDENT_INT.alarmX]! / CENTIMETRES_PER_METRE, hereZ - ints[intBase + RESIDENT_INT.alarmZ]! / CENTIMETRES_PER_METRE) > EVADE_REACH) return;
+  const run = pace * (EVADE_PACE_CALM + (EVADE_PACE_JUMPY - EVADE_PACE_CALM) * residentNeuroticism(state, resident));
+  if (kerbAhead - there <= there - kerbBehind) {
+    const dash = Math.min(kerbAhead, there + run * since);
+    if (out.walked >= dash) return;
+    out.walked = dash;
+    out.speed = dash < kerbAhead ? run : 0;
+    out.evading = true;
+    return;
+  }
+  const backTime = (there - kerbBehind) / run;
+  out.evading = true;
+  if (since < backTime) {
+    out.walked = there - run * since;
+    out.speed = -run;
+  } else if (since < backTime + EVADE_HOLD_SECONDS) {
+    out.walked = kerbBehind;
+    out.speed = 0;
+  } else {
+    const caught = kerbBehind + run * (since - backTime - EVADE_HOLD_SECONDS);
+    if (caught >= out.walked) out.evading = false;
+    else {
+      out.walked = caught;
+      out.speed = run;
+    }
+  }
 }
 
 /**
@@ -36,6 +106,14 @@ export function legPose(state: CityState, resident: number, seconds: number, out
     else if (seconds < parkSeconds) return false;
     else walked = pathDistance[first + ints[intBase + RESIDENT_INT.driveLast]!]! + speed * Math.max(0, seconds - parkSeconds - CAR_OUT_TICKS / DECISION_HZ);
   }
+  out.speed = speed;
+  out.evading = false;
+  if (ints[intBase + RESIDENT_INT.alarmTick] !== NEVER_TICK && leaveTick === NEVER_TICK) {
+    out.clock = seconds;
+    out.walked = walked;
+    evadeAlarm(state, resident, out);
+    walked = out.walked;
+  }
   walked = Math.min(total, walked);
   let step = 0;
   while (step + 2 < count && pathDistance[first + step + 1]! <= walked) step++;
@@ -49,7 +127,7 @@ export function legPose(state: CityState, resident: number, seconds: number, out
   if (span > 0) {
     out.dirX = spanX / span;
     out.dirZ = spanZ / span;
-    out.yaw = detAtan2(out.dirX, out.dirZ);
+    out.yaw = out.speed < 0 ? detAtan2(-out.dirX, -out.dirZ) : detAtan2(out.dirX, out.dirZ);
   }
   const fade = Math.max(0, Math.min(1, walked / LATERAL_FADE_DISTANCE, (total - walked) / LATERAL_FADE_DISTANCE));
   const offset = floats[floatBase + RESIDENT_FLOAT.lateral]! * fade;

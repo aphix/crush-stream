@@ -370,10 +370,10 @@ export class CivilianCrowd {
         if (!onLeg || !legPositionAt(state, resident, seconds, pose)) continue;
         brainX[resident] = pose.x;
         brainZ[resident] = pose.z;
-        velocityX[resident] = pose.dirX * walkSpeed;
-        velocityZ[resident] = pose.dirZ * walkSpeed;
+        velocityX[resident] = pose.dirX * pose.speed;
+        velocityZ[resident] = pose.dirZ * pose.speed;
         yaw[resident] = pose.yaw;
-        speed[resident] = walkSpeed;
+        speed[resident] = Math.abs(pose.speed);
         stride[resident] = walkSpeed * (seconds - ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ) * STRIDE_RADIANS_PER_METRE;
       }
       shown[resident] = 1;

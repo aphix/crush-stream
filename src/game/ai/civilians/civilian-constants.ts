@@ -443,6 +443,14 @@ export const LOOK_ON_DOWNED_MINUTES = 70;
 export const RECOIL_STEP_METRES = 0.5;
 export const RECOIL_CALM_SHARE = 0.4;
 /**
+ * A walker out on a road crossing when a hazard is seen within `EVADE_REACH` m of it does not flinch where it stands: it clears the road to the nearer kerb, at `EVADE_PACE_CALM` times its pace (a hurry) up to `EVADE_PACE_JUMPY`
+ * times (a run) by its neuroticism; if that kerb is ahead it waits there for its schedule to come level, if behind it waits `EVADE_HOLD_SECONDS` for the danger to pass and runs to catch its schedule up, then walks on.
+ */
+export const EVADE_REACH = 30;
+export const EVADE_PACE_CALM = 1.4;
+export const EVADE_PACE_JUMPY = 2.8;
+export const EVADE_HOLD_SECONDS = 2;
+/**
  * Each person who reacts to one hazard starts a moment after it, on a step of their own (the steps are `ALARM_DELAY_STEPS_PER_SECOND` a second, so no two start on one frame at the draw's 64 Hz): from
  * `ALARM_DELAY_MIN_SECONDS` for the jumpiest to `ALARM_DELAY_MAX_SECONDS` for the calmest, `ALARM_DELAY_JITTER_SHARE` of the span a seeded draw.
  */
