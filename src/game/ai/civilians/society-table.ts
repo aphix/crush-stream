@@ -23,6 +23,7 @@ import {
   RESIDENT_INT_STRIDE,
   RETIRE_AGE,
   SHIFT_DWELL_MINUTES,
+  SHIFT_HOURS_AFTER,
   SPECIES,
   TICKS_PER_GAME_MINUTE,
   TIRED_REST_LEVEL,
@@ -125,11 +126,11 @@ function nearestOpenVenue(state: CityState, venue: number, from: number, tick: n
   return best;
 }
 
-/** The open coffee shop that adds least walking between where they are and their workplace, when the detour is small and the shift is not close. */
+/** The open coffee shop that adds least walking between where they are and their workplace, when the detour is small and the shift is neither close nor under way. */
 function coffeeOnTheWay(state: CityState, resident: number, current: number, tick: number, hour: number): number {
   const work = intAt(state, resident, RESIDENT_INT.work);
   const hoursToShift = (intAt(state, resident, RESIDENT_INT.shiftStart) - hour + HOURS_PER_GAME_DAY) % HOURS_PER_GAME_DAY;
-  if (work === NO_PLACE || hoursToShift < COFFEE_LEAD_HOURS) return NO_PLACE;
+  if (work === NO_PLACE || hoursToShift < COFFEE_LEAD_HOURS || hoursToShift > HOURS_PER_GAME_DAY - SHIFT_HOURS_AFTER) return NO_PLACE;
   const list = state.venues.byVenue[VENUE.coffee]!;
   const direct = distanceBetween(state, current, work);
   let best = NO_PLACE;

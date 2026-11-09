@@ -35,7 +35,6 @@ import { legPose } from "./civilian-leg.ts";
 import { EVENT_CODE } from "./civilian-names.ts";
 import { CityState, logHistory, markDirty, residentName, setClosedUntil, setMoodEvent } from "./civilian-state.ts";
 import { applyBust, applyCrime, applyKnockWitness, applyPush, nearestPlaceTo, raiseFear, reactToCrime, releaseFightPartner, startFight } from "./society-reactions.ts";
-import { pairOf } from "./society-crime.ts";
 import { sendResidentTo } from "./civilian-plan.ts";
 import { noteEvent } from "./society-day.ts";
 
@@ -74,7 +73,7 @@ export function queueEvents(state: CityState, postTick: number, events: ArrayLik
   }
 }
 
-/** A knock's, crime's or bust's subject is a resident, a wreck's a place with a door, a push's or fight's a packed pair of residents (see `pairOf`); another kind (a lone `alongside` too) is dropped. */
+/** A knock's, crime's or bust's subject is a resident, a wreck's a place with a door, a push's or fight's a packed pair of residents (victim + capacity * (other + 1), other -1: a player); another kind (a lone `alongside` too) is dropped. */
 function subjectInRange(state: CityState, kind: number, subject: number): boolean {
   if (!Number.isInteger(subject) || subject < 0) return false;
   if (kind === EVENT_KIND.wreck) return subject < state.index.placeCount && state.index.doorNode[subject]! >= 0;
@@ -148,10 +147,7 @@ export function applyReactionEvents(state: CityState, tick: number): void {
     else if (event.kind === EVENT_KIND.crime) reactToCrime(state, event.subject, tick);
     else if (event.kind === EVENT_KIND.bust) releaseFightPartner(state, event.subject);
     else if (event.kind === EVENT_KIND.push) applyPush(state, event.subject, event.seconds, tick);
-    else if (event.kind === EVENT_KIND.fight) {
-      const { victim, other } = pairOf(event.subject, state.capacity);
-      startFight(state, victim, other, event.seconds, tick);
-    }
+    else if (event.kind === EVENT_KIND.fight) startFight(state, event.subject % state.capacity, Math.floor(event.subject / state.capacity) - 1, event.seconds, tick);
   }
 }
 
