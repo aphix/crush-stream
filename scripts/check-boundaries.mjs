@@ -97,7 +97,7 @@ const HOT = {
   "src/game/present/civilian-pose.ts": ["poseCivilian"],
   "src/game/present/civilian-anim.ts": ["poseActivity", "fillBase", "walkBend", "easeIn", "sampleTrack", "clipWeight", "mirrorIndexOf", "applyClip", "seatPelvis", "clampUnit", "moveToward", "solveTwoBone", "solveLegs", "solveHands", "lookAtPartner", "reachForDoor", "reachForDoorPoint"],
   "src/game/ai/civilians/civilian-car-door.ts": ["carDoorOpenness", "smoothstepBetween", "carDoorSpot"],
-  "src/game/engine/engine-openworld-cars.ts": ["spot", "step"],
+  "src/game/engine/engine-openworld-cars.ts": ["spot", "step", "carPoseAtPlace"],
   "src/game/present/civilian-anim-rig.ts": ["renderRig", "renderArm", "renderLeg", "placePart", "setAboutX", "setAboutY", "setAboutZ", "setTorsoRotation", "setLimbRotation"],
   "src/game/ai/openworld-crime/foot-law.ts": ["advance", "poll", "stepCase", "stepSubject", "stepAtLarge", "stepFleeing", "stepHidden", "stepSeizing", "stepFight", "aimCops", "refreshSpots", "offenceCleared", "nearestCop", "callCops", "releaseHeld", "caseCopSees", "sees", "watchCrossings", "freeCopSeeing", "spareKnocked", "letGo"],
   "src/game/ai/openworld-crime/foot-cops.ts": ["step", "patrol", "run", "nearestFree"],
