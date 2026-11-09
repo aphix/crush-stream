@@ -54,8 +54,8 @@ a civilian seated, at a counter or fighting is fixed too, and is not bumped.
 **Bumps and pushes.** Two civilians whose brain spots come within `BUMP_DISTANCE` closing at `BUMP_CLOSING_SPEED` bump: both play the bump clip (`ACTIVITY.bump`,
 partners of each other) for its length, at most once in `BUMP_COOLDOWN_SECONDS`; every peer finds this itself. On the host only, a hard collision (`HARD_DISTANCE`,
 `HARD_CLOSING_SPEED`), a player on foot walking into a civilian (`WALKER_PUSH_DISTANCE`), a car's side passing within `CAR_NUDGE_GAP` of one at `CAR_NUDGE_SPEED` or more,
-and every knock, is a `push` event: subject = victim + capacity × (pusher + 1), pusher -1 for a player's walker or a car (`pairOf`), at most one per resident per
-`PUSH_LOCKOUT_SECONDS`; a knock logs its `knock` first and its push after. The brain rolls the fight from a push; nothing here changes its rows.
+and every knock, is a `push` event: a triple whose subject is the victim and, when a civilian pushed, an `alongside` triple of the same seconds after it whose subject is the pusher (a player's walker
+or a car has none): the wire's subject is 16 bits, so a pair is never packed into one. At most one per resident per `PUSH_LOCKOUT_SECONDS`; a knock logs its `knock` first and its push after. The brain rolls the fight from a push; nothing here changes its rows.
 
 **Other host events.** `raiseEvent(kind, subject, seconds?)` puts one more host event in the log and the brain's next plan (a bust, from the cops).
 
