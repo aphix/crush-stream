@@ -114,26 +114,8 @@ export function stoopStepRange(step: number): { near: number; far: number; top: 
   return { near, far, top: STOOP.rise * step };
 }
 
-/** A world point against a frontage: out along the building's front direction, across along its local z (u). */
-function against(frontage: Frontage, x: number, z: number): { out: number; across: number } {
-  const dx = x - frontage.x;
-  const dz = z - frontage.z;
-  return { out: dx * detCos(frontage.yaw) - dz * detSin(frontage.yaw), across: dx * detSin(frontage.yaw) + dz * detCos(frontage.yaw) };
-}
-
-/** What a walker stands on at the world point (x, z): the stoop's stair profile there (m), 0 off the stoop. A stoop's prisms are boxes (a ramp and a landing), so the steps themselves are this function. */
-export function stoopHeightAt(frontage: Frontage, x: number, z: number): number {
-  const { out, across } = against(frontage, x, z);
-  if (Math.abs(across - DOOR.across) > STOOP.width / 2 || out < 0 || out >= STOOP.run) return 0;
-  for (let step = STOOP.steps; step >= 1; step--) {
-    const { near, far, top } = stoopStepRange(step);
-    if (out >= near && out < far) return top;
-  }
-  return 0;
-}
-
-/** A box the course stands as a prop of the invisible wall's prefab: size is [along the building's front direction, height, across]. */
-type FacadeSolid = { prefab: typeof PREFAB.invisibleWall; x: number; z: number; yaw: number; size: [number, number, number] };
+/** A box the course stands as a prop of the invisible wall's prefab: size is [along the building's front direction, height, across]; a `style` names what the box is. */
+type FacadeSolid = { prefab: typeof PREFAB.invisibleWall; x: number; z: number; yaw: number; size: [number, number, number]; style?: string };
 
 /** A box `out` m from the facade face and `across` m (u) from the lot's middle. */
 function boxOn(frontage: Frontage, out: number, across: number, size: [number, number, number]): FacadeSolid {
@@ -142,17 +124,20 @@ function boxOn(frontage: Frontage, out: number, across: number, size: [number, n
   return { prefab: PREFAB.invisibleWall, x: frontage.x + cos * out + sin * across, z: frontage.z - sin * out + cos * across, yaw: frontage.yaw, size };
 }
 
+/** A solid box with this style is a flight of stairs: its top falls from its height at the facade end to the ground at its far end in equal treads of 0.28 m. */
+const STAIRS_STYLE = "stairs";
+
 /** The stoop's ramp stands as high as its highest tread (m). */
 const RAMP_TOP = STOOP.rise * (STOOP.steps - 1);
 
 /**
  * Colliders of one rowhome's kit, three boxes: the bay stack from the ground to its roof (one box of the footprint's own area), the stoop's ramp over the four treads and its landing.
- * The ramp is a wall to the generic prism read; a walker's height on it is `stoopHeightAt`.
+ * The ramp is a flight of stairs (its style): four treads of 0.28 m falling from 0.72 m at the landing to 0.18 m at the foot, the visible steps'.
  */
 export function facadeSolidsOf(frontage: Frontage): FacadeSolid[] {
   return [
     boxOn(frontage, BAY.out / 2, BAY.across, [BAY.out, BAY.top, BAY.width - BAY.out]),
-    boxOn(frontage, (STOOP.landing + STOOP.run) / 2, DOOR.across, [STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width]),
+    { ...boxOn(frontage, (STOOP.landing + STOOP.run) / 2, DOOR.across, [STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width]), style: STAIRS_STYLE },
     boxOn(frontage, STOOP.landing / 2, DOOR.across, [STOOP.landing, STOOP.sill, STOOP.width]),
   ];
 }
