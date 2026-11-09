@@ -4,7 +4,7 @@ import { CLOSED_HOURS_WEIGHT, HOURS_PER_GAME_DAY, PURPOSE } from "./civilian-con
 
 /** What a place is to the people who go there: the interaction table and the hours choose by it. */
 export const VENUE = { other: 0, home: 1, office: 2, coffee: 3, bar: 4, diner: 5, shop: 6, supermarket: 7, park: 8, transit: 9 } as const;
-export const VENUE_COUNT = 10;
+const VENUE_COUNT = 10;
 
 const VENUE_OF_INTERIOR: Readonly<Record<InteriorKind, number>> = { rowhome: VENUE.home, coffee: VENUE.coffee, bar: VENUE.bar, office: VENUE.office, store: VENUE.shop };
 /** Exteriors with no interior name their venue by their facade style. */
@@ -12,7 +12,7 @@ const VENUE_OF_STYLE: Readonly<Record<string, number>> = { cornerstore: VENUE.sh
 const NIGHTLIFE_SECTOR = "nightlife";
 
 /** The venue of a place: its interior, else its facade style, else its kind (and for a hangout, its trade). */
-export function venueOf(place: Place): number {
+function venueOf(place: Place): number {
   const byInterior = place.interior === undefined ? undefined : VENUE_OF_INTERIOR[place.interior];
   if (byInterior !== undefined) return byInterior;
   const byStyle = VENUE_OF_STYLE[place.style];
@@ -55,7 +55,8 @@ export function isOutdoorPurpose(purpose: number): boolean {
 /** Opening hours [from, to) by venue when the map gives none (a window may wrap midnight; none: open at all hours): coffee in the morning, bars from dusk, shops by day. */
 const DEFAULT_HOURS: readonly (readonly [number, number] | null)[] = [null, null, null, [6, 15], [16, 3], [7, 23], [7, 22], [8, 21], null, null];
 
-function isInside(hour: number, from: number, to: number): boolean {
+/** Whether `hour` falls in [from, to) on a clock that wraps midnight. */
+export function isHourIn(hour: number, from: number, to: number): boolean {
   return from <= to ? hour >= from && hour < to : hour >= from || hour < to;
 }
 
@@ -85,7 +86,7 @@ export function buildVenueIndex(map: OpenWorldMap): VenueIndex {
     const entry = map.places[place]!;
     venue[place] = venueOf(entry);
     const window = byName.get(entry.name) ?? entry.hours ?? DEFAULT_HOURS[venue[place]!] ?? null;
-    for (let hour = 0; hour < HOURS_PER_GAME_DAY; hour++) hourWeight[place * HOURS_PER_GAME_DAY + hour] = window === null || isInside(hour, window[0], window[1]) ? 1 : CLOSED_HOURS_WEIGHT;
+    for (let hour = 0; hour < HOURS_PER_GAME_DAY; hour++) hourWeight[place * HOURS_PER_GAME_DAY + hour] = window === null || isHourIn(hour, window[0], window[1]) ? 1 : CLOSED_HOURS_WEIGHT;
     seatBase[place] = seatTotal;
     seatCount[place] = entry.seats === undefined ? 0 : Math.floor(entry.seats.length / SEAT_STRIDE);
     stoopCount[place] = Math.min(seatCount[place]!, entry.stoopSeats ?? 0);

@@ -1,10 +1,11 @@
 import { isDayTick, isHourTick } from "./civilian-clock.ts";
 import { RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
-import { applyIndividualEvents, applySocietyEvents, broadcastStatic, completeEvents, reopenClosedPlaces } from "./civilian-events.ts";
+import { applyIndividualEvents, applyReactionEvents, applySocietyEvents, broadcastStatic, completeEvents, reopenClosedPlaces } from "./civilian-events.ts";
 import { decideResident } from "./civilian-plan.ts";
 import type { CityState } from "./civilian-state.ts";
 import { buildAnswer, type TickAnswer } from "./civilian-wire.ts";
 import { runGameDay } from "./society-day.ts";
+import { expireWanted } from "./society-reactions.ts";
 
 /** Every resident whose dwell ends at or before `tick` decides where to go next. */
 function decideDue(state: CityState, tick: number): void {
@@ -15,14 +16,16 @@ function decideDue(state: CityState, tick: number): void {
 }
 
 /**
- * Steps the city one tick: events whose own tick has come, at an hour tick the society (events' society side, reopenings, the radio, at a game day's start each resident's day), then the decisions due. A pure function of
+ * Steps the city one tick: events whose own tick has come, then those whose reaction tick has, at an hour tick the society (events' society side, reopenings, ended wanted spells, the radio, at a game day's start each resident's day), then the decisions due. A pure function of
  * the state, so the worker and the main thread, stepping the same ticks in order, keep equal states.
  */
 function stepTick(state: CityState, tick: number): void {
   applyIndividualEvents(state, tick);
+  applyReactionEvents(state, tick);
   if (isHourTick(tick)) {
     applySocietyEvents(state, tick);
     reopenClosedPlaces(state, tick);
+    expireWanted(state, tick);
     broadcastStatic(state, tick);
     if (tick > 0 && isDayTick(tick, state.startHour)) runGameDay(state, tick);
   }

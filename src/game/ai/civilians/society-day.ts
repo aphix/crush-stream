@@ -37,6 +37,8 @@ import {
 import { residentDraws } from "./civilian-draws.ts";
 import { EVENT_CODE, FEMALE_NAMES, MALE_NAMES, jobTitlesOf } from "./civilian-names.ts";
 import { CityState, commitResident, logHistory, markDirty, residentName, retractResident, setMoodEvent } from "./civilian-state.ts";
+import { rollCrimeDay } from "./society-crime.ts";
+import { releaseSeat } from "./society-seats.ts";
 import { createResident, drawFamilyName, drawGender, findWorkplace, setWork, startingTitle } from "./society.ts";
 
 /** A resident's age in years on a game day: a named resident's is fixed, everyone else's is a year a day (the reference ages a year in each of its steps). */
@@ -94,6 +96,7 @@ function mourn(state: CityState, dead: number, tick: number): void {
 function die(state: CityState, resident: number, tick: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   mourn(state, resident, tick);
+  releaseSeat(state, resident);
   retractResident(state, resident);
   state.ints[base + RESIDENT_INT.alive] = 0;
   state.ints[base + RESIDENT_INT.pathCount] = 0;
@@ -253,7 +256,7 @@ function rollMove(state: CityState, resident: number, pick: number, tick: number
 /** One resident's day: the reference's chances, drawn from a stream keyed by (seed, resident, day) in a fixed order. */
 function rollDay(state: CityState, resident: number, day: number, tick: number): void {
   const draw = residentDraws(state.seed, resident, STREAM.day, day);
-  const rolls = { job: draw(), work: draw(), court: draw(), health: draw(), move: draw(), death: draw(), pick: draw(), marry: draw() };
+  const rolls = { job: draw(), work: draw(), court: draw(), health: draw(), move: draw(), death: draw(), pick: draw(), marry: draw(), crime: draw() };
   const age = ageOf(state, resident, day);
   const injured = (intAt(state, resident, RESIDENT_INT.flags) & FLAG.injured) !== 0;
   if (rolls.death < age * DEATH_PER_YEAR * (injured ? INJURED_DEATH_FACTOR : 1)) {
@@ -261,6 +264,7 @@ function rollDay(state: CityState, resident: number, day: number, tick: number):
     return;
   }
   rollWork(state, resident, age, rolls, tick);
+  rollCrimeDay(state, resident, age, rolls.crime, tick);
   if (age >= JOB_AGE && intAt(state, resident, RESIDENT_INT.gender) === GENDER.female) rollCourtship(state, resident, age, rolls, day, tick);
   rollHealth(state, resident, age, rolls.health, tick);
   if (age >= JOB_AGE && rolls.move < MOVE_CHANCE) rollMove(state, resident, rolls.pick, tick);
