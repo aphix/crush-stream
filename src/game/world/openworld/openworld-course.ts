@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
-import { BIOME, PREFAB, SURFACE } from "../constants.ts";
+import { BIOME, PAVING, PREFAB, SURFACE } from "../constants.ts";
 import { TREE_SCALE } from "../scenery.ts";
 import type { TrackSchema } from "../track-schema.ts";
 import {
@@ -180,7 +180,7 @@ export function openWorldCourse(lots: Lots): TrackInput {
     nodes,
     checkpoints: Array.from({ length: LOOP_CHECKPOINTS }, (_, index) => ({ node: Math.floor((index * nodes.length) / LOOP_CHECKPOINTS) })),
     props: [...buildingProps(lots), ...streetProps(lots), ...fabricProps(lots, buildOpenWorldMap(lots).graph), ...parkProps(lots), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots)],
-    scenery: { biome: BIOME.city, off: ["frontage", "verge", "islands"], roadDecals: [] },
+    scenery: { biome: BIOME.city, off: ["frontage", "verge", "islands"], roadDecals: [], paving: PAVING.brick },
     traffic: { count: 0, lanes: [], routes: streetRoutes(geometry) },
     survival: spawnOf(geometry),
     environment: {

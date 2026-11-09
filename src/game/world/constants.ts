@@ -93,6 +93,10 @@ export const PREFAB = {
   plaza: "plaza",
 } as const;
 
+/** The sidewalk slabs' look (`scenery.paving`): the concrete flags every course has, or brick in running bond (an old city's). */
+export const PAVING = { concrete: "concrete", brick: "brick" } as const;
+export const PAVING_IDS = [PAVING.concrete, PAVING.brick] as const;
+
 /** The word for a town: the campaign course's id and the scenery service's biome of streets and sidewalks. */
 const CITY = "city";
 
