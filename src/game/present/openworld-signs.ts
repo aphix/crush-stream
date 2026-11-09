@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
 import { PLACE_KIND, type Place, type PlaceKind } from "../world/openworld/walk-graph.ts";
-import { facadeFace, isBusiness, ShopSigns, SHOP_SIGN, WHITE } from "./openworld-shop-signs.ts";
+import { drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
+import { facadeFace, frontWallRoom, isBusiness, onFrontFace, ShopSigns, SHOP_SIGN, WHITE } from "./openworld-shop-signs.ts";
 import { drawOutlinedText } from "./track-debug.ts";
 
 /** Whether a thing of `radius` m at (x, z) is in view of a local eye (the open world's sight field). */
@@ -33,8 +34,6 @@ export const NAME = {
   freeEm: 0.5,
   /** Proud of the shop sign band (`SHOP_SIGN.standoff`). */
   standoff: 0.15,
-  /** A name never runs wider than its building less this on each side. */
-  margin: 0.4,
   /** No name runs wider than this (m), however wide the place. */
   maxWidth: 12,
   /** Two labels over one door stack with this gap (m) between their plates. */
@@ -45,6 +44,8 @@ export const NAME = {
   /** Labels are drawn in chunks this wide (m): a chunk is one draw call, hidden whole when out of range or unseen. */
   chunkSize: 64,
 } as const;
+/** A door this near (m) its building's drawn front wall, or past it to the footprint's edge, stands on that wall: a yard's gate or a park's middle is metres off. */
+const DOOR_ON_FACE = 0.05;
 /** A name past this (m) from the eye is a speck: the crowd's drawing stops at the same distance. */
 const NAMES_RANGE = 120;
 /** A chunk's key packs its two grid coordinates; z counts never reach this many chunks either way. */
@@ -64,7 +65,7 @@ const NAME_INK: Readonly<Record<PlaceKind, string>> = {
 /** One printed name: where it hangs, which way it faces, the height of its letters and the widest it may run. `back` marks the second copy of a label with no front, so it reads from both sides. */
 type NameSpec = { place: number; text: string; ink: string; x: number; y: number; z: number; normalX: number; normalZ: number; em: number; maxWidth: number; back: boolean };
 
-/** Every named place inside the walls: its name over its door on its front face, a business's over its sign band; a place whose door another already uses stacks above it. */
+/** Every named place inside the walls: its name over its door on its front face, kept inside the face's ends, a business's over its sign band; a place whose door another already uses stacks above it. */
 export function nameSpecs(places: readonly Place[]): NameSpec[] {
   const specs: NameSpec[] = [];
   const tops = new Map<string, number>();
@@ -79,8 +80,11 @@ export function nameSpecs(places: readonly Place[]): NameSpec[] {
     const below = tops.get(doorKey);
     const y = below === undefined ? baseY : below + NAME.stackGap + (NAME.plateHeightEm * em) / 2;
     tops.set(doorKey, y + (NAME.plateHeightEm * em) / 2);
-    const face = facadeFace(place, NAME.standoff);
-    const spec: NameSpec = { place: index, text: place.name, ink: NAME_INK[place.kind], x: face.x, y, z: face.z, normalX: face.normalX, normalZ: face.normalZ, em, maxWidth: Math.min(place.width, NAME.maxWidth) - 2 * NAME.margin, back: false };
+    const maxWidth = Math.min(frontWallRoom(place), NAME.maxWidth);
+    const atDoor = facadeFace(place, NAME.standoff);
+    const doorOut = (place.doorX - place.x) * atDoor.normalX + (place.doorZ - place.z) * atDoor.normalZ;
+    const face = doorOut > drawnHalf(place.depth) - DOOR_ON_FACE ? onFrontFace(place, maxWidth, NAME.standoff) : atDoor;
+    const spec: NameSpec = { place: index, text: place.name, ink: NAME_INK[place.kind], x: face.x, y, z: face.z, normalX: face.normalX, normalZ: face.normalZ, em, maxWidth, back: false };
     specs.push(spec);
     if (place.storeys === 0) specs.push({ ...spec, x: place.doorX - face.normalX * NAME.standoff, z: place.doorZ - face.normalZ * NAME.standoff, normalX: -face.normalX, normalZ: -face.normalZ, back: true });
   }
@@ -201,12 +205,12 @@ class NameLabels {
     this.chunks.push({ mesh, x: (minX + maxX) / 2, z: (minZ + maxZ) / 2, radius: hypot2(maxX - minX, maxZ - minZ) / 2 + NAME.maxWidth / 2 });
   }
 
-  /** The plate, then a quad per letter, the whole name shrunk to `maxWidth` when it would run wider. */
+  /** The plate, then a quad per letter, the whole name shrunk until its plate fits `maxWidth`. */
   private addLabel(buffers: QuadBuffers, spec: NameSpec): void {
     const { advances, uvs, plateUvs } = this.atlas;
     let width = 0;
     for (let at = 0; at < spec.text.length; at++) width += advances[glyphOf(spec.text[at]!)]!;
-    const em = spec.em * Math.min(1, spec.maxWidth / (width * spec.em));
+    const em = spec.em * Math.min(1, spec.maxWidth / ((width + 2 * NAME.platePadEm) * spec.em));
     buffers.push(spec, 0, (width * em) / 2 + NAME.platePadEm * em, (NAME.plateHeightEm * em) / 2, plateUvs, 0, PLATE_INK);
     const ink = new THREE.Color(spec.ink);
     const cellWorld = ((GLYPH_CELL / GLYPH_PX) * em) / 2;
