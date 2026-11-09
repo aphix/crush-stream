@@ -33,6 +33,9 @@ const KITCHEN_WALL = 9.4;
 const UPPER_FRONT_WALL = 4.7;
 const UPPER_BACK_WALL = 9.6;
 const UPPER_STAIR_FOOT = UPPER_BACK_WALL + PARTITION;
+/** A walker coming off the top of a lower flight has this much floor (m) before the back room's wall: a step and a turn. A storey's climb takes a tread more than the ground storey's, so the flights above it are laid back from this head, not from `STAIR_FOOT`. */
+const HEAD_LANDING = 0.55;
+const LOWER_HEAD_ABOVE_GROUND = UPPER_BACK_WALL - PARTITION / 2 - HEAD_LANDING;
 
 /**
  * Rails round a stairwell's open edges on the floor the flight arrives at: along its side toward the rooms and across the end where the headroom is lowest (the flight's foot end), where
@@ -108,7 +111,8 @@ export function layoutRowhome(d: Draft): void {
   const hallEdge = left + 0.9;
   const arrivals: { flight: Stairs; well: Rect }[] = [];
   for (let level = 0; level + 1 < d.floors.length; level++) {
-    const flight = d.stairsUp(level, level % 2 === 0 ? STAIR_FOOT : UPPER_STAIR_FOOT, left + LANE_CENTRE);
+    const across = left + LANE_CENTRE;
+    const flight = level % 2 === 1 ? d.stairsUp(level, UPPER_STAIR_FOOT, across) : level === 0 ? d.stairsUp(level, STAIR_FOOT, across) : d.stairsEndingAt(level, LOWER_HEAD_ABOVE_GROUND, across);
     const well = d.stairwell(flight);
     arrivals.push({ flight, well });
     d.floor(level + 1, [well]);

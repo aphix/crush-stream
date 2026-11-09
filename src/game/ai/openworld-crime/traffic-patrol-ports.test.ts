@@ -29,6 +29,11 @@ function fakeTraffic() {
       return spot !== 3;
     },
     drivenCarAt: (carIndex) => (carIndex === TRAFFIC_CAR_INDEX ? driven : null),
+    evade: (carIndex, chaserIndex) => {
+      calls.push(`evade ${carIndex} ${chaserIndex}`);
+      return carIndex === TRAFFIC_CAR_INDEX;
+    },
+    endEvade: (carIndex) => void calls.push(`endEvade ${carIndex}`),
     residentOf: (carIndex) => (carIndex === TRAFFIC_CAR_INDEX ? TRAFFIC_RESIDENT : -1),
   };
   return { traffic, calls, leased, driven, sirens };
@@ -81,3 +86,18 @@ describe("the patrol cars' cars come from the traffic's pool", () => {
     expect(ports.driverOf(0), "nobody at the player's wheel").toBe(-1);
   });
 });
+
+describe("the patrol cars tell the traffic whom they chase", () => {
+  // mutation: in src/game/ai/openworld-crime/traffic-patrol-ports.ts evade(), change `this.leased[chaserHandle]!.index` to `chaserHandle`
+  it("names the chasing car by its engine index, and ends the evasion by the chased car's", () => {
+    const { traffic, calls, sirens } = fakeTraffic();
+    const ports = new TrafficPatrolPorts(traffic, sirens);
+    const slot = ports.lease(0, 0);
+    expect(ports.evade(TRAFFIC_CAR_INDEX, slot), "a traffic car").toBe(true);
+    expect(calls.at(-1), "the leased car's engine index, not its slot").toBe(`evade ${TRAFFIC_CAR_INDEX} ${PATROL_CAR_INDEX}`);
+    expect(ports.evade(0, slot), "the player's car is not the traffic's").toBe(false);
+    ports.endEvade(TRAFFIC_CAR_INDEX);
+    expect(calls.at(-1)).toBe(`endEvade ${TRAFFIC_CAR_INDEX}`);
+  });
+});
+

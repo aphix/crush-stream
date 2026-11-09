@@ -81,6 +81,15 @@ const FLYING_MPS = 1;
  * wall's foot) down to -1; at 0, 65 of the 80 run-overs let the car by on the ground's noise.
  */
 const SQUEEZE = -0.1;
+/**
+ * A car moving at least this fast (m/s) carries a knocked prop that stays over its plan (to `CARRY_TOP` m over its box's middle): the box is kinematic, so it shoves a body it
+ * cannot shed (a fence section lying broadside, longer than the car is wide) along its front for as long as it drives, or rides it up onto its hood and roof and holds it there
+ * (measured, 3 s runs at 14 m/s, a car through a knocked prop: a hoop fence, a bin, a news box, a crate, a cone and a bike rack each ended on or in front of the car, moving
+ * with it). It lets the car by after `grace` s of that (`carried`).
+ */
+const CARRIED_MPS = 2;
+/** The highest (m over the car's box's middle) a prop still over the car's plan counts as riding it: a bus's roof. */
+const CARRY_TOP = 4;
 /** A static box in a patch's `patchBoxes`: centre (3), rotation (4), half extents (3). */
 const BOX = 10;
 /** Floats per car in `press`'s car boxes: the lower box's centre height and forward offset in the car's frame, half extents (3). */
@@ -172,6 +181,11 @@ function wayOut(): boolean {
   return true;
 }
 
+/** Is `_rotated`, a prop's middle in a car's box frame, over the box's plan (to its reach `_box[3]` past it) and no higher than `CARRY_TOP`? */
+function overCar(): boolean {
+  return Math.abs(_rotated[0]!) <= _box[0]! + _box[3]! && Math.abs(_rotated[2]!) <= _box[2]! + _box[3]! && _rotated[1]! <= CARRY_TOP && _rotated[1]! >= -_box[1]! - _box[3]!;
+}
+
 /** Is (x, y, z), a point in a box's frame, inside the box (half extents `_box[0..2]`)? */
 function inBox(x: number, y: number, z: number): boolean {
   return Math.abs(x) <= _box[0]! && Math.abs(y) <= _box[1]! && Math.abs(z) <= _box[2]!;
@@ -249,6 +263,9 @@ export class PropBodies {
   private sweep = new Float32Array(0);
   private still = new Float32Array(0);
   private reach = new Float32Array(0);
+  /** Per placement: the car that has been carrying it (-1: none) and for how long (sim s). */
+  private carryBy = new Int16Array(0);
+  private carry = new Float32Array(0);
   /** Ground patches, one slot per placement at most: colliders (null: free slot), their static boxes (`BOX` floats each, read once when built), centre, how many props stand on it; each prop's slot (-1: none). */
   private patches: (Collider[] | null)[] = [];
   private patchBoxes: Float64Array[] = [];
@@ -312,6 +329,8 @@ export class PropBodies {
     this.sweep = new Float32Array(n);
     this.still = new Float32Array(n);
     this.reach = new Float32Array(n);
+    this.carryBy = new Int16Array(n).fill(-1);
+    this.carry = new Float32Array(n);
     this.patches = Array.from({ length: n }, () => null);
     this.patchX = new Float64Array(n);
     this.patchZ = new Float64Array(n);
@@ -459,11 +478,18 @@ export class PropBodies {
       _box[1] = boxes[cb + 3]!;
       _box[2] = boxes[cb + 4]!;
       _box[3] = this.reach[i]!;
-      if (!wayOut()) continue;
+      const near = wayOut();
+      const over = overCar();
       if (this.by[i] === car) {
-        this.covers[i] = 1;
+        if (near || (over && this.held[i])) this.covers[i] = 1;
         continue;
       }
+      if (this.carried(i, car, vel, dt, over)) {
+        this.drop(i);
+        this.letBy(i, car);
+        continue;
+      }
+      if (!near) continue;
       if (inBox(_rotated[0]!, _rotated[1]!, _rotated[2]!) && c[o + 1]! - activeGround().heightAt(c[o]!, c[o + 2]!, c[o + 1]!) <= this.reach[i]!) {
         const x = _rotated[0]!;
         const y = _rotated[1]!;
@@ -508,8 +534,35 @@ export class PropBodies {
     }
   }
 
+  /**
+   * Whether car `car` (moving at `vel`) has carried prop `i` along for `grace` s, counting `dt` more: it moves at least `CARRIED_MPS` and the prop stays `over` its plan.
+   * A throw's (`by`) and a squeeze's (`held`) are the car's first moment with the prop; this is the whole way it drives, so it lets the car by.
+   */
+  private carried(i: number, car: number, vel: THREE.Vector3, dt: number, over: boolean): boolean {
+    if (!over || hypot2(vel.x, vel.z) < CARRIED_MPS) {
+      if (this.carryBy[i] === car) this.carry[i] = 0;
+      return false;
+    }
+    if (this.carryBy[i] !== car) {
+      this.carryBy[i] = car;
+      this.carry[i] = 0;
+    }
+    this.carry[i] = this.carry[i]! + dt;
+    return this.carry[i]! >= this.grace;
+  }
+
+  /** Prop `i` stops over the ground (its fall goes on): the car that has carried it at its speed drives on out of it instead of taking it along inside its body. The read allocates, once a carry. */
+  private drop(i: number): void {
+    const body = this.bodies[i]!;
+    _v.x = 0;
+    _v.y = body.linvel().y;
+    _v.z = 0;
+    body.setLinvel(_v, true);
+  }
+
   /** Prop `i` lets car `car` by while that car's box covers it (`press`). */
   private letBy(i: number, car: number): void {
+    this.carry[i] = 0;
     this.by[i] = car;
     this.held[i] = 1;
     this.covers[i] = 1;
@@ -736,6 +789,7 @@ export class PropBodies {
     this.drawn[i] = 0;
     this.settled[i] = 0;
     this.still[i] = 0;
+    this.carry[i] = 0;
     this.speed[i] = hypot3(vx, vy, vz);
     // A knock is rare: its spin is read back from Rapier once (the getter allocates).
     const w = body.angvel();

@@ -224,6 +224,12 @@ export function bustedResidents(harnessed: Harness): string {
     .join(",");
 }
 
+/** Runs the harness until `done` or `seconds` more have passed, a grid step at a time: a row reads the moment something happens, not what is left of it later. */
+export function runUntil(harnessed: Harness, seconds: number, done: () => boolean): void {
+  const steps = Math.round(seconds * CRIME_HZ);
+  for (let step = 0; step < steps && !done(); step++) runFor(harnessed, STEP_SECONDS);
+}
+
 /** Where a foot walker stands, for a row to read. */
 export function footX(harnessed: Harness, walker: number): number {
   return harnessed.scene.foot.walkers.x[walker]!;

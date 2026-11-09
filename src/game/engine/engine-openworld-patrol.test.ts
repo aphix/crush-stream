@@ -33,7 +33,9 @@ const CAR_HALF_WIDTH = 0.9;
 const OVERHEAD = 2.5;
 /** Speed over the turn's cap (m/s) a car may still carry while it is going into the curve, and the yaw rate (rad/s) that tells it is in one. */
 const TURN_SLACK = 2;
-const TURNING_RATE = 0.5;
+const TURNING_RATE = 0.7;
+/** A curve is at least this many frames of that yaw rate: the row read something. */
+const CURVE_FRAMES = 5;
 /** Over the whole trip the car's speed stays under the urgent pace by this much slack (m/s). */
 const URGENT_SLACK = 3;
 /** The patrol car's cop steps out within this far (m) of the space it was sent to. */
@@ -160,6 +162,7 @@ describe("given a patrol car sent across a block of the open world's course", ()
     let heading = traffic.snaps[handle!.index]!.yaw;
     let turned = 0;
     let fastestInCurve = 0;
+    let curveFrames = 0;
     run(
       w,
       traffic,
@@ -169,11 +172,14 @@ describe("given a patrol car sent across a block of the open world's course", ()
         const change = wrapPi(snap.yaw - heading);
         heading = snap.yaw;
         turned += Math.abs(change);
-        if (Math.abs(change) / FRAME > TURNING_RATE) fastestInCurve = Math.max(fastestInCurve, hypot2(snap.vx, snap.vz));
+        if (Math.abs(change) / FRAME <= TURNING_RATE) return;
+        curveFrames++;
+        fastestInCurve = Math.max(fastestInCurve, hypot2(snap.vx, snap.vz));
       },
       () => handle!.arrived,
     );
     expect(turned, "the trip turned a corner").toBeGreaterThan(TURNED_AT_LEAST);
-    expect(fastestInCurve, "fastest pace while turning").toBeLessThan(LEFT_TURN_SPEED + TURN_SLACK);
+    expect(curveFrames, "frames in the curve").toBeGreaterThan(CURVE_FRAMES);
+    expect(fastestInCurve, "fastest pace in the middle of the curve").toBeLessThan(LEFT_TURN_SPEED + TURN_SLACK);
   });
 });

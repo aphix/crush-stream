@@ -141,3 +141,21 @@ export const AMBULANCE_COLOUR = 0xf4f4f2;
 export const AMBULANCE_LOAD_SECONDS = 18;
 /** An ambulance sets out from, and drives off to, a space at least this far (m) from the scene: it arrives along the streets, from the edge of the district. */
 export const AMBULANCE_DEPOT_METRES = 120;
+
+/** A driver chased by a patrol car (the game's evasive driving, `RaceBrain`'s: gas on, the lane a car width clear of the chaser): it notices the chaser within this far (m), and from then runs until the chase ends. */
+export const FLEE_NOTICE_METRES = 80;
+/** A fleeing car's top speed (m/s): about 75 km/h on these streets, a little over a patrol car's careful pace. */
+export const FLEE_SPEED = 21;
+/** A fleeing car takes a turn this much faster than traffic does (its caps and its braking scaled). */
+export const FLEE_CORNER_SCALE = 1.6;
+/** The space a fleeing car runs to is at least this far (m) from where it is, and as far from its chaser as there is. */
+export const FLEE_FAR_METRES = 100;
+/** A fleeing car plans its next run when this little (m) of its route is left. */
+export const FLEE_REPLAN_METRES = 70;
+/** A chaser counts for the swerve only this far (m) behind. */
+export const SWERVE_BEHIND = 25;
+/** Room (m) a swerve has, off the lane's line, to the left (into the oncoming lane) and to the right (the parking lane's cars). */
+export const SWERVE_LEFT = 3.2;
+export const SWERVE_RIGHT = 1;
+/** The lane stays this much (m) more than `LINE_W` clear of the chaser's, as `RaceBrain` keeps it. */
+export const CHASER_MARGIN = 0.9;

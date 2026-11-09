@@ -101,11 +101,12 @@ const OUTLET_MIDDLE = POSTS.hydrant.reach - OUTLET_LENGTH / 2;
 
 /** Flange, barrel, bonnet and cap, a hose outlet each side and the pumper outlet toward the street. */
 function hydrant(): Piece[] {
+  const { barrelRadius, barrelTop, bonnetRadius, bonnetTop, top } = POSTS.hydrant;
   return [
     [cyl(0.15, 0.15, 0, 0.05, ROUND), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
-    [cyl(0.12, 0.12, 0.05, 0.56, ROUND), KIT_COLOUR.hydrant, MAT.DUMPSTER_STEEL],
-    [cyl(0.08, 0.14, 0.56, 0.68, ROUND), KIT_COLOUR.hydrant, MAT.DUMPSTER_STEEL],
-    [cyl(0.04, 0.04, 0.68, 0.76, THIN), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
+    [cyl(barrelRadius, barrelRadius, 0.05, barrelTop, ROUND), KIT_COLOUR.hydrant, MAT.DUMPSTER_STEEL],
+    [cyl(0.08, bonnetRadius, barrelTop, bonnetTop, ROUND), KIT_COLOUR.hydrant, MAT.DUMPSTER_STEEL],
+    [cyl(0.04, 0.04, bonnetTop, top, THIN), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
     [lying(0.045, OUTLET_LENGTH, "z", 0, 0.42, -OUTLET_MIDDLE), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
     [lying(0.045, OUTLET_LENGTH, "z", 0, 0.42, OUTLET_MIDDLE), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
     [lying(0.06, OUTLET_LENGTH, "x", OUTLET_MIDDLE, 0.4, 0), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],

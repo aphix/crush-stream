@@ -178,7 +178,7 @@ describe("given the stairs of every interior at every storey count", () => {
   /** The floor a walker needs at a flight's head before the wall ahead (m): a step and a turn. */
   const MIN_LANDING = 0.5;
 
-  // mutation: sed -i 's/const STAIR_WIDTH = 0.9;/const STAIR_WIDTH = 1.9;/' src/game/world/openworld/interior-draft.ts (a flight so wide its wells and walls collide with the rooms)
+  // mutation: sed -i 's/const HEAD_LANDING = 0.55;/const HEAD_LANDING = 0.1;/' src/game/world/openworld/interior-layouts.ts (a flight above the ground floor's tops out against the back room's wall)
   it("when a walker reaches the head of each flight, then the floor there runs on at least a step and a turn before the wall ahead", () => {
     const short: string[] = [];
     for (const { label, plan } of variants) {
@@ -210,7 +210,7 @@ describe("given the stairs of every interior at every storey count", () => {
     }
   });
 
-  // mutation: sed -i 's/const upper = d.stairsUp(1, UPPER_STAIR_FOOT, left + 0.45);/const upper = d.stairsUp(1, STAIR_FOOT, left + 0.45);/' src/game/world/openworld/interior-layouts.ts (the flights stacked again; the rowhome loop's foot choice is `level % 2 === 0 ? STAIR_FOOT : UPPER_STAIR_FOOT`)
+  // mutation: sed -i 's/const flight = level % 2 === 1 ? d.stairsUp(level, UPPER_STAIR_FOOT, across)/const flight = level % 2 === 1 ? d.stairsUp(level, STAIR_FOOT, across)/' src/game/world/openworld/interior-layouts.ts (the flights stacked again)
   it("when a walker stands on any tread of any flight, then nothing solid is lower over it than a standing walker and a margin", () => {
     const short: string[] = [];
     for (const { label, plan } of variants) {

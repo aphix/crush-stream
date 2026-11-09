@@ -318,7 +318,7 @@ export class FootLaw {
     const { nodeX, nodeZ } = this.graph;
     for (let index = 0; index < COPS_PER_CASE; index++) {
       const cop = table.copAt(caseIndex, index);
-      if (cop < 0 || cops.mode[cop] === COP_MODE.grip) continue;
+      if (cop < 0 || cops.mode[cop] === COP_MODE.grip || cops.mode[cop] === COP_MODE.escort) continue;
       for (let offset = 0; offset < SUBJECTS_PER_CASE; offset++) {
         const slot = table.slotOf(caseIndex, (index + offset) % SUBJECTS_PER_CASE);
         if (!table.active(slot)) continue;
@@ -391,8 +391,7 @@ export class FootLaw {
     if (hide >= 0 && hypot2(this.graph.nodeX[hide]! - walkers.x[walker]!, this.graph.nodeZ[hide]! - walkers.z[walker]!) <= HIDE_ARRIVE) {
       table.mode[slot] = SUBJECT_MODE.hidden;
       table.since[slot] = this.seconds;
-      walkers.halt(walker);
-      walkers.speed[walker] = 0;
+      walkers.place(walker, this.graph.nodeX[hide]!, this.graph.nodeZ[hide]!);
       return;
     }
     if (!walkers.hasRoute(walker) || (this.stepIndex + slot) % FLEE_REPLAN_STEPS === 0) this.flight.plan(caseIndex, slot);

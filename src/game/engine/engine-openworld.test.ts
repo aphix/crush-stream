@@ -3,7 +3,7 @@ import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "../ai/civilians/civilian-crowd.test-util.ts";
-import { EVENT_KIND, FLAG, GENDER, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../ai/civilians/civilian-constants.ts";
+import { EVENT_KIND, EVENT_TRIPLE, FLAG, GENDER, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../ai/civilians/civilian-constants.ts";
 import { CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER, WRECK_SPEED } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
@@ -18,6 +18,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import type { Sight } from "../present/spectate-cam.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { MEDICS } from "./engine-openworld-medics.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 
 const map = buildFixtureMap();
@@ -26,6 +27,8 @@ const HOST_TIME = 1000;
 /** A host's crowd has been out this long when it runs a civilian down, so a client's catch-up has a day's morning to replay. */
 const HOST_DAY_SECONDS = 100;
 const FRAME = FRAME_SECONDS;
+/** Drawings a crowd makes: its own, and the ambulance crew's (`MEDICS.count` scrubs, drawn by an art of their own). */
+const ARTS_PER_CROWD = 2;
 
 type WallListener = (closing: number, x: number, z: number) => void;
 
@@ -69,9 +72,10 @@ class Harness {
       this.listener = listener;
       return () => void this.unhooked++;
     },
-    makeArt: () => {
+    makeArt: (capacity) => {
       this.artsMade++;
-      return { update: (poses, eyeX, _eyeZ, sight, wallDt) => void this.updates.push({ poses, eyeX, sight, wallDt }), dispose: () => void this.artsDisposed++ };
+      const crewsOwn = capacity === MEDICS.count;
+      return { update: (poses, eyeX, _eyeZ, sight, wallDt) => void (crewsOwn || this.updates.push({ poses, eyeX, sight, wallDt })), dispose: () => void this.artsDisposed++ };
     },
   });
 
@@ -98,7 +102,7 @@ describe("given the open world's course up and a map given", () => {
     harness.eye.eyeX = 12;
     harness.frame();
     harness.frame();
-    expect(harness.artsMade, "drawings made").toBe(1);
+    expect(harness.artsMade, "drawings made").toBe(ARTS_PER_CROWD);
     expect(harness.crowd().poses.count, "capacity at least the phone tier's residents").toBeGreaterThanOrEqual(POPULATION[0]);
     expect(harness.updates.length, "draws").toBe(2);
     expect(harness.updates[0]!.poses, "drew the crowd's own poses").toBe(harness.crowd().poses);
@@ -160,12 +164,12 @@ describe("given a crowd that has been made and the course is then left, or the s
     const crowd = harness.crowd();
     harness.open = false;
     harness.frame();
-    expect(harness.artsDisposed, "drawings disposed").toBe(1);
+    expect(harness.artsDisposed, "drawings disposed").toBe(ARTS_PER_CROWD);
     expect(harness.unhooked, "wall hooks let go").toBe(1);
     expect(crowd.usingWorker, "no worker left").toBe(false);
     expect(harness.director.link(), "link").toBeNull();
     harness.frame();
-    expect(harness.artsDisposed, "disposed once").toBe(1);
+    expect(harness.artsDisposed, "disposed once").toBe(ARTS_PER_CROWD);
   });
 
   it("when the run's seed changes, then a new crowd starts from time zero on the new seed", () => {
@@ -175,8 +179,8 @@ describe("given a crowd that has been made and the course is then left, or the s
     harness.seed = SEED + 1;
     harness.frame();
     expect(harness.crowd(), "a new crowd").not.toBe(first);
-    expect(harness.artsMade, "drawings made").toBe(2);
-    expect(harness.artsDisposed, "the old one disposed").toBe(1);
+    expect(harness.artsMade, "drawings made").toBe(2 * ARTS_PER_CROWD);
+    expect(harness.artsDisposed, "the old crowd's drawings disposed").toBe(ARTS_PER_CROWD);
     expect(harness.director.link()?.seed, "the new key").toBe(SEED + 1);
     expect(harness.director.crowdTime(), "clock restarted").toBeLessThanOrEqual(FRAME);
   });
@@ -206,7 +210,10 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     dressOfLook(crowd.poses.look[resident]!, drawn);
     expect(JSON.stringify(harness.looks[0]), "the thrown civilian's dress is the drawn dummy's").toBe(JSON.stringify(drawn));
     expect(harness.looks[0]!.woman, "a woman is thrown a woman").toBe(crowd.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.gender] === GENDER.female);
-    expect(firstMismatch(Array.from(harness.director.eventLog()).slice(0, 2), [EVENT_KIND.knock, resident]), "the log's first event").toBeUndefined();
+    const log = harness.director.eventLog();
+    let knocked = false;
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) knocked ||= log[at] === EVENT_KIND.knock && log[at + 1] === resident;
+    expect(knocked, "the knock of the civilian run down is in the log (the crowd may log pushes before it)").toBe(true);
   });
 
   it("when a car hits a building's face at the wreck speed, then the wall hook makes it a wreck event in the log", () => {
@@ -244,7 +251,7 @@ describe("given a client that has heard nothing yet, and then the host's crowd m
     harness.frame();
     harness.director.hear(SEED + 1, HOST_TIME, 0, new Float64Array(0));
     harness.frame();
-    expect(harness.artsMade, "drawings made").toBe(2);
+    expect(harness.artsMade, "drawings made").toBe(2 * ARTS_PER_CROWD);
     expect(harness.director.link()?.seed, "key").toBe(SEED + 1);
   });
 

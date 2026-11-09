@@ -1,4 +1,5 @@
-import { HASH_RANGE, HOLD_MAX_SECONDS, HOLD_MIN_SECONDS, INTERRUPT_INTEREST, INTERRUPT_MARGIN, MIN_INTEREST, RECENT_FACTOR, RECENT_SUBJECTS, SAME_KIND_FACTOR, SCAN_SECONDS, TIE_JITTER } from "./auto-constants.ts";
+import { HASH_RANGE } from "../civilians/civilian-crowd-constants.ts";
+import { HOLD_MAX_SECONDS, HOLD_MIN_SECONDS, INTERRUPT_INTEREST, INTERRUPT_MARGIN, MIN_INTEREST, RECENT_FACTOR, RECENT_SUBJECTS, SAME_KIND_FACTOR, SCAN_SECONDS, TIE_JITTER } from "./auto-constants.ts";
 
 /** What the camera can follow: a civilian (an index into the crowd), a foot cop (his slot), a car with a driver (the engine's car index), a wrecked building (its place) or the spot someone was run down at (the civilian). */
 export const SUBJECT = { civilian: 0, cop: 1, driver: 2, wreck: 3, knock: 4 } as const;
