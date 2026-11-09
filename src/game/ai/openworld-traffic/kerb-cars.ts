@@ -3,6 +3,7 @@ import { hash01 } from "../../kernel/scalar.ts";
 import { FLIPPED_UP_Y } from "../../vehicle/constants.ts";
 import { MAX_CARS } from "../../scenes/fleet.ts";
 import { rightX, rightZ } from "../../world/openworld/openworld-roads.ts";
+import type { CarStyleId } from "../../vehicle/car-variants.ts";
 import { BOOKKEEPING_SECONDS, KERB_EVICT_MARGIN, KERB_JITTER_SIDE, KERB_JITTER_YAW, KERB_KEEP, KERB_REACH, PRIME_PASSES, SIGHT_RADIUS, TOW_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { residentBody, residentColour } from "./traffic-look.ts";
 import { RESIDENT_CAPACITY, spotUnseen, STANDING, type TrafficContext } from "./traffic-ports.ts";
@@ -31,6 +32,8 @@ export class KerbCars {
   /** The resident whose car the space `nearestWanted` found is for; -1 for a space a car stands in for good. */
   private wantedResident = -1;
   private wantedSpot = -1;
+  /** The crowd second of the last step. */
+  private seconds = 0;
   /** Per slot, the resident whose car it stands as (-1: a car that stands for good there): a resident's car is never given up for another's. */
   private readonly residentOfSlot: Int32Array;
   private sinceBookkeeping = 0;
@@ -72,7 +75,8 @@ export class KerbCars {
   }
 
   /** One sim step: the bookkeeping pass when it is due; `parked` lists the residents' cars at kerbs. */
-  step(dt: number, parked: ParkedResidentCars | null): void {
+  step(seconds: number, dt: number, parked: ParkedResidentCars | null): void {
+    this.seconds = seconds;
     this.sinceBookkeeping += dt;
     if (this.sinceBookkeeping < BOOKKEEPING_SECONDS) return;
     const passDt = this.sinceBookkeeping;
@@ -84,7 +88,8 @@ export class KerbCars {
       const spot = this.nearestWanted(parked);
       if (spot < 0) break;
       const limit = this.wantedResident >= 0 ? 0 : this.wantedDistance + KERB_EVICT_MARGIN;
-      if (!this.show(spot) && !(this.evictFarthest(limit) && this.show(spot))) break;
+      const body = this.wantedResident < 0 ? null : residentBody(this.wantedResident);
+      if (!this.show(spot) && !(this.evictFarthest(limit, body) && this.show(spot))) break;
     }
   }
 
@@ -133,18 +138,22 @@ export class KerbCars {
     this.vacate(slot);
   }
 
-  /** Puts away the shown car farthest from the players if it is past `limit` m and has been unseen for the grace; false when there is none. */
-  private evictFarthest(limit: number): boolean {
+  /** Puts away the shown car that stands for good, past `limit` m from the players and unseen for the grace, that wears `body` (null: any) before the farthest one; false when there is none. */
+  private evictFarthest(limit: number, body: CarStyleId | null): boolean {
     const { ports, sight } = this.context;
     let farthest = -1;
     let farthestDistance = limit;
+    let farthestMatches = false;
     for (let slot = 0; slot < this.size; slot++) {
       if (this.spotOfSlot[slot]! < 0 || this.residentOfSlot[slot]! >= 0) continue;
       const car = ports.cars()[this.first + slot];
       if (car === undefined) continue;
       const distance = this.distanceToEyes(car.group.position.x, car.group.position.z);
-      if (distance <= farthestDistance || sight.unseenFor(this.context.sightBase + this.context.movers + slot) < sight.hideGrace) continue;
+      if (distance <= limit || sight.unseenFor(this.context.sightBase + this.context.movers + slot) < sight.hideGrace) continue;
+      const matches = body !== null && car.style.id === body;
+      if (farthest >= 0 && (farthestMatches ? !matches || distance <= farthestDistance : !matches && distance <= farthestDistance)) continue;
       farthestDistance = distance;
+      farthestMatches = matches;
       farthest = slot;
     }
     if (farthest < 0) return false;
@@ -204,7 +213,10 @@ export class KerbCars {
       }
     }
     if (slot < 0) return false;
-    if (body !== null && ports.cars()[this.first + slot]!.style.id !== body) ports.setBody(this.first + slot, body);
+    if (body !== null && ports.cars()[this.first + slot]!.style.id !== body && this.context.swaps.allows(this.seconds) && spotUnseen(this.context, spot)) {
+      this.context.swaps.note(this.seconds);
+      ports.setBody(this.first + slot, body);
+    }
     const heading = spots.heading[spot]!;
     const side = (hash01(spot, TRAFFIC_SEED) - 0.5) * 2 * KERB_JITTER_SIDE;
     const turn = (hash01(spot, TRAFFIC_SEED + 1) - 0.5) * 2 * KERB_JITTER_YAW;

@@ -142,6 +142,9 @@ export const AMBULANCE_LOAD_SECONDS = 18;
 /** An ambulance sets out from, and drives off to, a space at least this far (m) from the scene: it arrives along the streets, from the edge of the district. */
 export const AMBULANCE_DEPOT_METRES = 120;
 
+/** Rebuilding a car to give it another body (new meshes, materials and buffers for the collector) is asked at most this often (s), and only for a space no eye sees. */
+export const BODY_SWAP_SECONDS = 30;
+
 /** A driver chased by a patrol car (the game's evasive driving, `RaceBrain`'s: gas on, the lane a car width clear of the chaser): it notices the chaser within this far (m), and from then runs until the chase ends. */
 export const FLEE_NOTICE_METRES = 80;
 /** A fleeing car's top speed (m/s): about 75 km/h on these streets, a little over a patrol car's careful pace. */

@@ -4,6 +4,7 @@ import type { RoadNetwork } from "../../world/openworld/openworld-roads.ts";
 import type { ParkingSpots } from "../../world/openworld/openworld-parking.ts";
 import type { AiCar } from "../derby-ai.ts";
 import { SIGHT_RADIUS, SPAWN_CLEAR } from "./traffic-constants.ts";
+import type { BodySwaps } from "./body-swaps.ts";
 import type { TrafficSight } from "./traffic-sight.ts";
 
 /** What traffic reads of a car of the field (a `DeformableCar` has all of it). */
@@ -58,6 +59,7 @@ export type TrafficContext = {
   residentSpot: Int32Array;
   ports: TrafficPorts;
   sight: TrafficSight;
+  swaps: BodySwaps;
   /** Cars that drive (the mover pool's size), the first sight id traffic claimed (movers, then kerb cars) and the one it tests spaces with. */
   movers: number;
   sightBase: number;
