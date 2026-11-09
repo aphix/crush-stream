@@ -26,10 +26,13 @@ export const ACTIVITY_INTEREST = [0.1, 0.12, 0.3, 0.35, 0.25, 0.2, 0.15, 0.2, 0.
 export const AMBULANCE_INTEREST = [0, 0.85, 0.9, 0.45] as const;
 /** Interest (0-1) of a mood, by `MOOD` code: fear, anger and pain over a quiet day. */
 export const MOOD_INTEREST = [0.1, 0.25, 0.25, 0.35, 0.12, 0.2, 0.5, 0.5, 0.2, 0.25, 0.2, 0.55, 0.3, 0.3] as const;
-/** Interest (0-1) a host event gives its subject while it is in progress, by `EVENT_KIND`: a fight and a bust first, a push or a jaywalk least. */
-export const EVENT_INTEREST = [0.85, 0.8, 0.9, 0.95, 0.55, 1, 0, 0, 0.4, 0.9] as const;
+/**
+ * Interest (0-1) a host event gives its subject while it is in progress, by `EVENT_KIND`: a fight and a bust first, a push or a jaywalk least. An ambulance call names the
+ * one lying in the street (a spot shot of them while help comes); a danger names a street node, not a person (its witnesses' flinch carries it), so it gives none.
+ */
+export const EVENT_INTEREST = [0.85, 0.8, 0.9, 0.95, 0.55, 1, 0, 0, 0.4, 0.9, 0.9, 0] as const;
 /** How long (s) an event stays in progress, by `EVENT_KIND`: its interest falls to nothing over it. */
-export const EVENT_SECONDS = [12, 12, 10, 10, 6, 12, 0, 0, 8, 10] as const;
+export const EVENT_SECONDS = [12, 12, 10, 10, 6, 12, 0, 0, 8, 10, 20, 0] as const;
 /** A wanted resident, and a criminal not yet wanted (0-1). */
 export const WANTED_INTEREST = 0.75;
 export const CRIMINAL_INTEREST = 0.45;

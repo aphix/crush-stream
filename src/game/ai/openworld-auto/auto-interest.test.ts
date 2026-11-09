@@ -33,6 +33,13 @@ describe("given what the Auto camera finds interesting", () => {
     expect(eventInterest(EVENT_KIND.alongside, 0), "an event that only names the other party").toBe(0);
   });
 
+  it("when someone run down has an ambulance called, then the call is worth a look for as long as help takes, and a danger (a street node, not a person) gives none", () => {
+    // mutation: sed -i 's/0.4, 0.9, 0.9, 0\] as const;/0.4, 0.9, 0, 0] as const;/' src/game/ai/openworld-auto/auto-constants.ts
+    expect(eventInterest(EVENT_KIND.ambulance, 0), "a call just made").toBeGreaterThan(eventInterest(EVENT_KIND.push, 0));
+    expect(eventInterest(EVENT_KIND.ambulance, 15), "still waiting for help").toBeGreaterThan(0);
+    expect(eventInterest(EVENT_KIND.danger, 0), "a node is no one to follow").toBe(0);
+  });
+
   it("when cars are weighed, then a lit siren beats a car at speed, a car at speed beats a crawl, and a parked car is the least", () => {
     const readings = [driverInterest(DRIVING_MPS, true), driverInterest(DRIVING_MPS, false), driverInterest(CRAWL_MPS, false), driverInterest(0, false)];
     for (let at = 1; at < readings.length; at++) expect(readings[at - 1]!, `reading ${at - 1} (siren, speed, crawl, parked) over the next`).toBeGreaterThan(readings[at]!);
