@@ -6,10 +6,13 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { EjectionWatch } from "../vehicle/ejection.ts";
 import { launch } from "../contact/crash-scenarios.test-util.ts";
-import { course, makeWorld as raceWorld, type World } from "./race-world.test-util.ts";
+import { makeWorld as raceWorld, type World } from "./race-world.test-util.ts";
 import { armedCar } from "./solid-parity.test-util.ts";
 import { activeGround, setGround, type Ground } from "./ground.ts";
 import { placeProps, propColliders, type PropCollider } from "./placements.ts";
+import { Track } from "./track.ts";
+import { parseTrack } from "./track-schema.ts";
+import { OFF_MENU, TRACKS } from "./tracks/index.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
@@ -90,7 +93,7 @@ function havanaRace(): World {
   return havana.w;
 }
 function solidPieces(): PropCollider[] {
-  const track = course("havana");
+  const track = new Track([...TRACKS, ...OFF_MENU].find((j) => parseTrack(j).id === "havana"));
   return propColliders(placeProps(track)).filter((c) => c.body === "solid" && c.base < LOW);
 }
 
@@ -161,6 +164,7 @@ function sideswipe(scene: Scene, steer: number, turnIn: number, boost = false): 
 const NO_STEP = (j: Jump): string => `step ${j.step} (frame ${j.frame}) moved the car ${j.moved.toFixed(3)} m, allowed ${j.allowed.toFixed(3)} m (footprint ${j.overlap.toFixed(3)} m in a solid), ${j.at}; placements fired ${j.placements}`;
 
 describe("given a car on Havana's avenue, a palm in its path", () => {
+  // mutation: sed -i 's/^      const over = pen - WALL_REACH;$/      const over = pen + 3;/' src/game/contact/pair-contact.ts  (a solid shoves a wreck 3 m too far: red at the step that carries the car past its allowance)
   it("when a sedan on the gas taps the handbrake at full right lock 14 m out so its rear half sideswipes the palm, then no physics step carries it further than its speed times the step plus 5 cm plus its depth in a solid", () => {
     const worst = sideswipe(SEDAN, 1, 14);
     expect(worst.moved, NO_STEP(worst)).toBeLessThanOrEqual(worst.allowed);

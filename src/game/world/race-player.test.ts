@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
-import { course, makeWorld, playerRace, type PlayerLine, type World } from "./race-world.test-util.ts";
+import { makeWorld, playerRace, type PlayerLine, type World } from "./race-world.test-util.ts";
+import { Track } from "./track.ts";
+import oval from "./tracks/oval.json" with { type: "json" };
 
 /**
  * The owner's "counted DNF, had to do an extra lap": the PLAYER slot, driven through the real seat,
@@ -11,7 +13,7 @@ import { course, makeWorld, playerRace, type PlayerLine, type World } from "./ra
 // 2 laps: a detour lap at the scripted 14 m/s costs ~9 s against the AI's ~17 s laps at 200 km/h, so over
 // 3 laps the grass line was flagged home a lap down ("+1 lap", scored right) instead of on the AI's count.
 const LAPS = 2;
-const track = course("oval");
+const track = new Track(oval);
 const sc = track.shortcuts[0]!;
 const fromS = track.gates[sc.from]!.s + 30;
 const road = Array.from({ length: sc.path.count }, (_, k) => [sc.path.x[k]!, sc.path.z[k]!] as const);

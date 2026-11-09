@@ -12,7 +12,7 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const FRAMES = 120;
-/** Race seconds before a row looks: past the grid (1.5 s) and the countdown (3 s), so the race is racing. Only the last frame draws; the watched frames below all do. */
+/** Race seconds before a row looks: past the grid (1.5 s) and the countdown (3 s), so the race is racing. The four case rows run it silent (only the last frame draws); the watched frames all draw. */
 const LEAD_IN_S = 5;
 const COLOR_WRITES = ["copy", "set", "setHex", "setRGB", "setStyle", "lerp"] as const;
 
@@ -38,10 +38,11 @@ describe("given the real engine in a race, lit for a time of day", () => {
   const run = (frames: number): void => {
     for (let i = 0; i < frames; i++) engine.advance(FRAME, { frameDt: FRAME, render: true });
   };
-  const race = (trackId: string, timeOfDay: TimeOfDay): void => {
+  const race = (trackId: string, timeOfDay: TimeOfDay, silent = false): void => {
     engine.raceCommand({ type: "program", options: { trackId, laps: 1, aiCount: 3, police: false, aggression: 0.5, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false, timeOfDay } });
     engine.raceCommand({ type: "start" });
-    engine.advance(LEAD_IN_S, { frameDt: FRAME });
+    if (silent) engine.advance(LEAD_IN_S, { frameDt: FRAME });
+    else run(LEAD_IN_S * FRAME_HZ);
   };
   /** The writes to each watched colour while `work` runs. */
   const colorWrites = (watched: ReadonlyMap<THREE.Color, string>, work: () => void): Record<string, number> => {
@@ -99,7 +100,7 @@ describe("given the real engine in a race, lit for a time of day", () => {
   // mutation: sed -i '/^    if (detail === this.skyDetail) return;$/d' src/game/present/engine-world.ts  (the sky is re-applied every frame: red in all four rows, 120 writes per colour)
   for (const testCase of cases) {
     it(`when ${testCase.it} runs ${FRAMES} frames, then nothing the time of day sets is written again (colours, intensities, shadow camera, sun axes) and the drawn frames really ran`, () => {
-      race(testCase.trackId, testCase.timeOfDay);
+      race(testCase.trackId, testCase.timeOfDay, true);
       const sun = stage().sun;
       const intensityWrites: Record<string, number> = { sun: 0, hemisphere: 0, fill: 0 };
       const lights = [["sun", sun], ["hemisphere", stage()["hemi"]], ["fill", stage()["fill"]]] as const;

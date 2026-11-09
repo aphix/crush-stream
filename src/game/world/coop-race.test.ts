@@ -4,15 +4,17 @@ import { CAMPAIGN_POINTS } from "../match/campaign.ts";
 import { FINISH_GRACE } from "../match/session.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { setGround } from "./ground.ts";
-import { FRAME, course, frame, makeWorld, playerRace, type World } from "./race-world.test-util.ts";
+import { FRAME, frame, makeWorld, playerRace, type World } from "./race-world.test-util.ts";
 import { hold } from "./survival-run.test-util.ts";
+import { Track } from "./track.ts";
+import oval from "./tracks/oval.json" with { type: "json" };
 
 /**
  * Co-op races (docs/MULTIPLAYER.md, Co-op): the humans of a hosted room race the AI as one team. Each keeps its own place; the team's result is the
  * best human place, and the team wins when a human finishes first. Nobody has to finish: the finish and DNF rules end the race as they always did.
  * The host drives car 0 through its seat, a peer car 1 through `setRemoteInput` (here never touching its pedals); two AI cars drive themselves.
  */
-const track = course("oval");
+const track = new Track(oval);
 const LAPS = 2;
 /** `aiCount` counts the field's cars besides the host's: the peer takes one of its places, so three leave two AI cars. */
 const FIELD = 3;
@@ -43,6 +45,7 @@ function leave(w: World): void {
 }
 
 describe("given a co-op race on the oval: the host and a peer who never touches the pedals against two AI cars", () => {
+  // mutation: sed -i 's/^      if (c.place < place) place = c.place;$/      if (c.place > place || place === Infinity) place = c.place;/' src/game/match/session.ts  (the team takes its worst human place: red at the team place, rows 1 to 3)
   it("when the scripted host drives flat out, then the team's place is the better of the two humans' places, the peer is a DNF, and the team won exactly when a human crossed first", (t) => {
     const w = coopWorld();
     t.onTestFinished(() => leave(w));
