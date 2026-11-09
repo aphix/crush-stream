@@ -181,6 +181,13 @@ export class CivilianCrowd {
     this.postBatch();
   }
 
+  /** A host event between two civilians (`first` the victim, `second` the other; -1 for none) enters the log as a triple for each and the brain's next plan; a client's call does nothing. */
+  raisePair(kind: number, first: number, second: number, seconds = this.seconds): void {
+    if (!this.authority) return;
+    this.logPair(kind, first, second, seconds);
+    this.postBatch();
+  }
+
   /** The host's event log (kind, subject, crowd seconds triples), a view of the live one. */
   eventLog(): Float64Array {
     if (this.logView.length !== this.logCount * EVENT_TRIPLE) this.logView = this.log.subarray(0, this.logCount * EVENT_TRIPLE);
@@ -389,9 +396,14 @@ export class CivilianCrowd {
     this.logPush(victim, pusher, seconds);
   }
 
-  /** The push's subject carries the pusher with the victim: `victim + capacity * (pusher + 1)`, pusher -1 for a player's walker or a car. */
+  /** The victim's triple, then the pusher's `alongside` triple when the pusher is a civilian (a player's walker or a car has none): the wire's subject is 16 bits. */
   private logPush(victim: number, pusher: number, seconds: number): void {
-    this.logHostEvent(EVENT_KIND.push, victim + this.poses.count * (pusher + 1), seconds);
+    this.logPair(EVENT_KIND.push, victim, pusher, seconds);
+  }
+
+  private logPair(kind: number, first: number, second: number, seconds: number): void {
+    this.logHostEvent(kind, first, seconds);
+    if (second !== NOT_A_CIVILIAN) this.logHostEvent(EVENT_KIND.alongside, second, seconds);
   }
 
   private logHostEvent(kind: number, subject: number, seconds: number): void {

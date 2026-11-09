@@ -2,16 +2,15 @@ import { describe, expect, it } from "vitest";
 import { launch, pooledCar } from "../../contact/crash-scenarios.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_SECONDS } from "./civilian-activity.ts";
-import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, MAX_PATH_NODES, NEVER_TICK, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
+import { PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import { BODY_GAP, HARD_DISTANCE, MAX_OFFSET, WALKER_PUSH_DISTANCE } from "./civilian-crowd-constants.ts";
+import { PACE, people, type Push, pushesIn, sendAlong, streetEdge } from "./civilian-crowd-contact.test-util.ts";
 import { FRAME_SECONDS, newCrowd, stepUntilShown } from "./civilian-crowd.test-util.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { LegPose, legPose } from "./civilian-leg.ts";
 
 const map = buildFixtureMap();
-const PACE = 1.4;
-/** A street edge this long (m) leaves room for two to meet and part on it. */
 const LONG_EDGE = 20;
 const AFTER_PASSING_SECONDS = 3;
 /** What the relaxation leaves of an overlap (m). */
@@ -24,55 +23,11 @@ const FAR_OFFSET = 3;
 const STRETCH_SECONDS = 600;
 const STRETCH_STEP_SECONDS = 0.25;
 
-function longEdge(): { from: number; to: number; length: number } {
-  const { nodeX, nodeZ, edgeStart, edgeTo, edgeLength, edgeCrossing } = map.graph;
-  for (let node = 0; node < nodeX.length; node++) {
-    for (let edge = edgeStart[node]!; edge < edgeStart[node + 1]!; edge++) {
-      if (edgeLength[edge]! >= LONG_EDGE && edgeCrossing[edge] === 0) return { from: node, to: edgeTo[edge]!, length: hypot2(nodeX[edgeTo[edge]!]! - nodeX[node]!, nodeZ[edgeTo[edge]!]! - nodeZ[node]!) };
-    }
-  }
-  throw new Error(`the fixture map has no street edge of ${LONG_EDGE} m`);
-}
+const EDGE = streetEdge(map, LONG_EDGE);
+const EDGE_DIR_X = EDGE.dirX;
+const EDGE_DIR_Z = EDGE.dirZ;
 
-const EDGE = longEdge();
-const EDGE_DIR_X = (map.graph.nodeX[EDGE.to]! - map.graph.nodeX[EDGE.from]!) / EDGE.length;
-const EDGE_DIR_Z = (map.graph.nodeZ[EDGE.to]! - map.graph.nodeZ[EDGE.from]!) / EDGE.length;
-
-function people(crowd: CivilianCrowd, count: number): number[] {
-  const found: number[] = [];
-  for (let resident = 0; resident < crowd.poses.count && found.length < count; resident++) {
-    if (crowd.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.species] === SPECIES.person) found.push(resident);
-  }
-  return found;
-}
-
-/** `resident` walks straight from node `from` to node `to` at `PACE` m/s from the first second, on the street's middle, and decides nothing more. */
-function sendAlong(crowd: CivilianCrowd, resident: number, from: number, to: number): void {
-  const { state } = crowd;
-  const first = resident * MAX_PATH_NODES;
-  const intBase = resident * RESIDENT_INT_STRIDE;
-  state.pathNodes[first] = from;
-  state.pathNodes[first + 1] = to;
-  state.pathDistance[first] = 0;
-  state.pathDistance[first + 1] = EDGE.length;
-  state.ints[intBase + RESIDENT_INT.pathCount] = 2;
-  state.ints[intBase + RESIDENT_INT.departTick] = 0;
-  state.ints[intBase + RESIDENT_INT.arriveTick] = Math.ceil((EDGE.length / PACE) * DECISION_HZ) + 1;
-  state.ints[intBase + RESIDENT_INT.nextDecisionTick] = NEVER_TICK;
-  state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = PACE;
-  state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.lateral] = 0;
-}
-
-const pushesOf = (crowd: CivilianCrowd): { victim: number; pusher: number }[] => {
-  const log = crowd.eventLog();
-  const found: { victim: number; pusher: number }[] = [];
-  for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) {
-    if (log[at] !== EVENT_KIND.push) continue;
-    const subject = log[at + 1]!;
-    found.push({ victim: subject % crowd.poses.count, pusher: Math.floor(subject / crowd.poses.count) - 1 });
-  }
-  return found;
-};
+const pushesOf = (crowd: CivilianCrowd): Push[] => pushesIn(crowd.eventLog());
 
 function expectOnePushByNoCivilian(crowd: CivilianCrowd, victim: number): void {
   const pushes = pushesOf(crowd).filter((push) => push.victim === victim);
@@ -83,8 +38,8 @@ function expectOnePushByNoCivilian(crowd: CivilianCrowd, victim: number): void {
 describe.each([true, false])("given two civilians walking at each other along one street, on the same line (host: %s)", (authority) => {
   const crowd = newCrowd(map);
   const [first, second] = people(crowd, 2) as [number, number];
-  sendAlong(crowd, first, EDGE.from, EDGE.to);
-  sendAlong(crowd, second, EDGE.to, EDGE.from);
+  sendAlong(crowd, first, EDGE, EDGE.from, EDGE.to);
+  sendAlong(crowd, second, EDGE, EDGE.to, EDGE.from);
   let minDrawnGap = Infinity;
   let minBrainGap = Infinity;
   let maxOffset = 0;
@@ -133,7 +88,7 @@ describe("given a civilian walking along a street and a player on foot standing 
   function walkPast(walkerAt: number | null, authority: boolean) {
     const crowd = newCrowd(map);
     const [walker] = people(crowd, 1) as [number];
-    sendAlong(crowd, walker, EDGE.from, EDGE.to);
+    sendAlong(crowd, walker, EDGE, EDGE.from, EDGE.to);
     const standX = map.graph.nodeX[EDGE.from]! + EDGE_DIR_X * (walkerAt ?? 0);
     const standZ = map.graph.nodeZ[EDGE.from]! + EDGE_DIR_Z * (walkerAt ?? 0);
     let minDrawnGap = Infinity;
@@ -173,7 +128,7 @@ describe("given a civilian walking along a street and a car driving beside them 
   function drivePast(sideways: number) {
     const crowd = newCrowd(map);
     const [walker] = people(crowd, 1) as [number];
-    sendAlong(crowd, walker, EDGE.from, EDGE.to);
+    sendAlong(crowd, walker, EDGE, EDGE.from, EDGE.to);
     const car = pooledCar(0);
     const yaw = Math.atan2(EDGE_DIR_X, EDGE_DIR_Z);
     const rightX = Math.cos(yaw);
@@ -240,7 +195,7 @@ describe("given a civilian on a leg that is a drive", () => {
   it("when the crowd is stepped, then they are shown walking until the leg is a drive, and then not shown: the car is another's to draw", () => {
     const crowd = newCrowd(map);
     const [resident] = people(crowd, 1) as [number];
-    sendAlong(crowd, resident, EDGE.from, EDGE.to);
+    sendAlong(crowd, resident, EDGE, EDGE.from, EDGE.to);
     crowd.step(1, [], true);
     expect(crowd.poses.shown[resident], "shown on a walk").toBe(1);
     crowd.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.legPurpose] = PURPOSE.drive;
