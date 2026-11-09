@@ -113,6 +113,11 @@ export const HEAT_KNOCKS = 3;
 export const HEAT_SECONDS = 60;
 /** Cars the heat counts: the engine's list is no longer than this. */
 export const HEAT_CARS = 32;
+/** This share of patrol runs is a hothead's (seeded per run from the host's seed): he drives straight at the scene at full speed round only what he sees in time, so a cop wrecking himself on a tree stays possible and funny, just not every time. Every other run takes the streets. */
+export const HOTHEAD_RUN_SHARE = 0.2;
+/** A careful patrol car closes on a car it chases at no more than this (m/s, about 32 km/h, a city street's pace it can steer round the street's furniture at) once within `CLOSE_PURSUIT_DISTANCE` m. */
+export const CAREFUL_PURSUIT_SPEED = 9;
+export const CLOSE_PURSUIT_DISTANCE = 30;
 /** A patrol car's siren makes a traffic car it is within this many metres of pull over, and stop. */
 export const YIELD_DISTANCE = 35;
 /** A busted driver's car stays stopped this long (s) before the traffic has it back. */
@@ -121,7 +126,7 @@ export const IMPOUND_SECONDS = 10;
 export const CAR_LINGER_SECONDS = 8;
 
 /** Seeded draw streams: one per kind of choice, so adding one never moves another. */
-export const CRIME_STREAM = { patrolStart: 1, patrolTurn: 2, flee: 3, find: 4, resist: 5 } as const;
+export const CRIME_STREAM = { patrolStart: 1, patrolTurn: 2, flee: 3, find: 4, resist: 5, hothead: 6 } as const;
 /** A draw's hash input: the seed's low bits, the stream and the index scaled apart so no two choices share an input. */
 export const DRAW_SEED_MASK = 0xffff;
 export const DRAW_SEED_SCALE = 0.01;

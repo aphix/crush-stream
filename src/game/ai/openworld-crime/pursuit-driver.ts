@@ -35,8 +35,8 @@ export class PursuitDriver {
     this.obstacles = obstacles;
   }
 
-  /** Writes into `out` what car `self` (patrol slot `slot`) does over `dt` s to drive at (aimX, aimZ) moving at (aimVx, aimVz); it stops `stopGap` m short of the aim (0: never stops). */
-  drive(slot: number, self: AiCar, aimX: number, aimZ: number, aimVx: number, aimVz: number, stopGap: number, dt: number, out: DriveInput): void {
+  /** Writes into `out` what car `self` (patrol slot `slot`) does over `dt` s to drive at (aimX, aimZ) moving at (aimVx, aimVz), at most `maxSpeed` m/s; it stops `stopGap` m short of the aim (0: never stops). */
+  drive(slot: number, self: AiCar, aimX: number, aimZ: number, aimVx: number, aimVz: number, stopGap: number, maxSpeed: number, dt: number, out: DriveInput): void {
     out.throttle = 0;
     out.steer = 0;
     out.brake = 0;
@@ -57,7 +57,7 @@ export class PursuitDriver {
     out.steer = pursuitSteer(alpha, Math.min(leadDistance, clamp(speed * REACH_PER_SPEED, REACH_MIN, REACH_MAX)), speed, turnRate(PATROL_CLASS, speed, GROUND));
     const turnSpeed = arcSpeed(PATROL_CLASS, Math.max(4, leadDistance), Math.min(Math.abs(alpha), Math.PI / 2), GROUND);
     const stopSpeed = stopGap > 0 ? Math.sqrt(2 * CAR_STOP_DECEL * Math.max(0, distance - stopGap)) : Infinity;
-    const wanted = Math.min(turnSpeed, stopSpeed);
+    const wanted = Math.min(turnSpeed, stopSpeed, maxSpeed);
     const brake = brakeOver(this.pedals, self.id, speed - wanted);
     if (brake > 0) out.brake = brake;
     else out.throttle = Math.min(1, wanted / PATROL_CLASS.topSpeed);

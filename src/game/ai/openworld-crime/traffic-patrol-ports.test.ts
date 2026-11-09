@@ -11,8 +11,8 @@ const TRAFFIC_RESIDENT = 9;
 /** A traffic with kerb spaces along x = 0, 40, 110, 200 and 300 m, a patrol-sized lease at car 1 and a driven car at index 2. */
 function fakeTraffic() {
   const calls: string[] = [];
-  const leased: LeasedCar = { index: PATROL_CAR_INDEX, driver: null };
-  const driven: LeasedCar = { index: TRAFFIC_CAR_INDEX, driver: null };
+  const leased: LeasedCar = { index: PATROL_CAR_INDEX, arrived: false, driver: null };
+  const driven: LeasedCar = { index: TRAFFIC_CAR_INDEX, arrived: false, driver: null };
   const sirens = (carIndex: number, on: boolean): void => void calls.push(`sirens ${carIndex} ${on}`);
   const traffic: TrafficApi = {
     parkingSpots: { count: 5, x: [0, 40, PATROL_START_DISTANCE, 200, 300], z: [0, 0, 0, 0, 0] },
