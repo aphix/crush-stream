@@ -108,7 +108,7 @@ function startedRoom() {
   return r;
 }
 
-/** The largest metres a shown civilian of the guest stands from where the host's own society says it stood at the guest's crowd time. */
+/** The largest metres a shown civilian of the guest's brain stands from where the host's own society says it stood at the guest's crowd time (the drawn spot is pushed off others, locally). */
 function worstPoseGap(r: ReturnType<typeof room>): { gap: number; shown: number } {
   const hostCrowd = r.host.director["crowd"]!;
   const guestCrowd = r.guest.director["crowd"]!;
@@ -119,7 +119,7 @@ function worstPoseGap(r: ReturnType<typeof room>): { gap: number; shown: number 
   for (let resident = 0; resident < guestCrowd.poses.count; resident++) {
     if (guestCrowd.poses.shown[resident] === 0) continue;
     shown++;
-    gap = legPositionAt(hostCrowd.state, resident, at, pose) ? Math.max(gap, Math.hypot(pose.x - guestCrowd.poses.x[resident]!, pose.z - guestCrowd.poses.z[resident]!)) : Infinity;
+    gap = legPositionAt(hostCrowd.state, resident, at, pose) ? Math.max(gap, Math.hypot(pose.x - guestCrowd.separation.brainX[resident]!, pose.z - guestCrowd.separation.brainZ[resident]!)) : Infinity;
   }
   return { gap, shown };
 }
