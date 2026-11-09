@@ -90,6 +90,7 @@ const HOT = {
   "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "findHits", "lookOf", "hasLooseBody"],
   "src/game/engine/engine-openworld.ts": ["step", "frame"],
   "src/game/present/civilian-art.ts": ["update", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
+  "src/game/present/openworld-signs.ts": ["update"],
   "src/game/present/civilian-pose.ts": ["poseCivilian", "poseLimb", "placePart", "setSwung"],
   "src/game/present/civilian-dress.ts": ["dressOfLook", "writeLinearColour", "scrambleLook", "fieldOf"],
 };

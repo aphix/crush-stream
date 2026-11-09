@@ -60,6 +60,8 @@ class Harness {
       this.artsMade++;
       return { update: (poses, eyeX) => void this.updates.push({ poses, eyeX }), dispose: () => void this.artsDisposed++ };
     },
+    signsOn: () => false,
+    makeSigns: () => ({ update: () => {}, dispose: () => {} }),
   });
 
   /** A frame: the sim steps `FRAME` s first (a host), then the frame. */
