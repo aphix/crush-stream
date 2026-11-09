@@ -141,7 +141,7 @@ function pathSideProps(park: Park, path: Path, props: ParkProp[]): void {
     const side = lamps % 2 === 0 ? 1 : -1;
     const lamp = besidePath(path, along, side * LAMP_OFF);
     if (blocked(park, lamp.x, lamp.z, LAMP_REACH, path)) continue;
-    props.push({ prefab: PREFAB.lamp, ...lamp, yaw: facingPath(path, side) });
+    props.push({ prefab: PREFAB.acornLamp, ...lamp, yaw: facingPath(path, side) });
     lamps++;
   }
 }

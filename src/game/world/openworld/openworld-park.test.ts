@@ -61,7 +61,7 @@ describe("given the park's dressing", () => {
       if (Math.abs(prop.x - block.centreX) > geometry.blockLength / 2 || Math.abs(prop.z - block.centreZ) > geometry.blockDepth / 2) wrong.push(`${where} outside the block`);
       if (Math.hypot(prop.x - block.centreX, prop.z - block.centreZ) < PLAZA_RADIUS) wrong.push(`${where} inside the plaza`);
       if (prop.x > court.x0 && prop.x < court.x1 && prop.z > court.z0 && prop.z < court.z1) wrong.push(`${where} on the court`);
-      if (prop.prefab === PREFAB.bench || prop.prefab === PREFAB.litterBin || prop.prefab === PREFAB.lamp || prop.prefab === PREFAB.hoopFence) {
+      if (prop.prefab === PREFAB.bench || prop.prefab === PREFAB.litterBin || prop.prefab === PREFAB.acornLamp || prop.prefab === PREFAB.hoopFence) {
         const onPath = Math.abs(prop.z - block.centreZ) < PATH_HALF || crossXs.some((x) => Math.abs(prop.x - x) < PATH_HALF);
         if (onPath) wrong.push(`${where} on a path`);
       }
@@ -74,7 +74,7 @@ describe("given the park's dressing", () => {
     const plaza = props.filter((prop) => prop.prefab === PREFAB.plaza);
     expect(plaza.length, "plazas").toBe(1);
     expect([plaza[0]!.x, plaza[0]!.z].join(), "the plaza's place").toBe([block.centreX, block.centreZ].join());
-    for (const prefab of [PREFAB.pavilion, PREFAB.lamp, PREFAB.litterBin, PREFAB.hoopFence]) expect(props.filter((prop) => prop.prefab === prefab).length, prefab).toBeGreaterThan(0);
+    for (const prefab of [PREFAB.pavilion, PREFAB.acornLamp, PREFAB.litterBin, PREFAB.hoopFence]) expect(props.filter((prop) => prop.prefab === prefab).length, prefab).toBeGreaterThan(0);
   });
 
   // mutation: sed -i 's/  opening: PARK.pathWidth + 0.8,/  opening: 0,/' src/game/world/openworld/openworld-plaza.ts

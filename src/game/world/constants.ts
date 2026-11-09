@@ -28,6 +28,8 @@ export const PREFAB = {
   grandstand: "grandstand",
   billboard: "billboard",
   lamp: "lamp",
+  // The open world's lamp: Philadelphia's acorn globe on a slim black post (`ACORN_LAMP` in street-kit.ts), the lamp's own night light.
+  acornLamp: "acorn-lamp",
   gantry: "gantry",
   chevron: "chevron",
   monument: "monument",

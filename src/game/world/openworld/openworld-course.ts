@@ -129,7 +129,7 @@ function wallProps(geometry: Geometry): Prop[] {
 
 /** Lamps and street trees along a side's furniture strip: lamps at the curb's edge, trees centred. */
 function furnitureProps(side: BlockSide, geometry: Geometry): Prop[] {
-  const lampProps = lampStations(side).map((along): Prop => ({ prefab: PREFAB.lamp, ...sidePoint(side, along, geometry.sidewalk - LAMP_FROM_CURB), yaw: side.outwardYaw }));
+  const lampProps = lampStations(side).map((along): Prop => ({ prefab: PREFAB.acornLamp, ...sidePoint(side, along, geometry.sidewalk - LAMP_FROM_CURB), yaw: side.outwardYaw }));
   const treeProps = treeStations(side).map((along): Prop => {
     const at = sidePoint(side, along, geometry.sidewalk - geometry.sidewalkFurniture / 2);
     return { prefab: PREFAB.tree, ...at, scale: TREE_SCALE, style: streetTreeStyle(at.x, at.z, side.side) };

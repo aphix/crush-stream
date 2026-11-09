@@ -30,3 +30,22 @@ export function streetSignNames(style: string | undefined): readonly [string, st
   const names = style?.split(STREET_SIGN_SEPARATOR) ?? [];
   return names.length === 2 && names[0]! !== "" && names[1]! !== "" ? [names[0]!, names[1]!] : null;
 }
+
+/**
+ * Philadelphia's acorn lamp (m): a cast-iron plinth and a slim post under a collar, an acorn-shaped globe (a sphere stretched `globeStretch` tall) and a capped finial. Its collider is the
+ * same shape in circles, so what is drawn is what a car meets. The plan's box is the globe's.
+ */
+export const ACORN_LAMP = {
+  height: 4.2,
+  plinthRadius: 0.12,
+  plinthHeight: 0.45,
+  postRadius: 0.09,
+  collarRadius: 0.13,
+  collarBottom: 3.5,
+  collarTop: 3.6,
+  globeRadius: 0.23,
+  globeStretch: 1.15,
+  globeCentre: 3.82,
+  capRadius: 0.15,
+  capBottom: 4.08,
+} as const;
