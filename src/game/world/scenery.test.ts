@@ -246,14 +246,15 @@ function stretchDistance(track: Track, p: Placed): number {
 }
 
 describe("given the scenery's cost on every course", () => {
-  // mutation: sed -i 's/const DRAWS_MAX = 160;/const DRAWS_MAX = 1;/' src/game/world/scenery.test.ts
+  // mutation: sed -i 's/const DRAWS_MAX = 70;/const DRAWS_MAX = 1;/' src/game/world/scenery.test.ts  (the draws row: oval adds 23 groups)
+  // mutation: sed -i 's/const ASSET_DRAW_CELL = 8192;/const ASSET_DRAW_CELL = 512;/' src/game/world/scenery-assets/draw-group.ts  (the draws row: four-count adds 113 groups, over 70)
   it("when the draw cells of the generated props are counted, then each course adds few draws and no cell holds too many of one kind", () => {
-    // Before assets four-count added 45 (a long course over many 512 m draw cells, six kinds in each). An asset's group is its prefab and
-    // family in a cell, so the assets took the most to 153 groups (dam-spine; four-count 143, the Mall 61), capped here with a little room
-    // (owner, 2026-11-08: land at the measured figure, cut draws later if the phone benches show it). Measured per-frame draw calls, whole
-    // course in view, headless high / low tier, before -> after the assets: dam-spine 270 -> 379 / 264 -> 368, four-count 245 -> 331 /
-    // 236 -> 317, the Mall 595 -> 636 / 591 -> 629 (triangles +1-3k: many small instanced groups, not geometry).
-    const DRAWS_MAX = 160;
+    // Before assets four-count added 45 (a long course over many 512 m draw cells, six kinds in each). An asset's group is its kind and
+    // family in an 8192 m cell (a solid card, cross or box draws with its plain kind's mesh: a course holds a few hundred sprites of a
+    // kind), so the assets are one draw a kind and family. Groups added, with a 512 m cell for every prefab and family -> now: four-count
+    // 121 -> 66 (the most), dam-spine 131 -> 54, the Mall 53 -> 25. Headless whole-course draw calls, high tier: four-count 347 -> 292,
+    // dam-spine 394 -> 317, the Mall 638 -> 610, the same pixels.
+    const DRAWS_MAX = 70;
     const PER_CELL_MAX = 2000;
     for (const j of TRACKS) {
       const d = dress(j);

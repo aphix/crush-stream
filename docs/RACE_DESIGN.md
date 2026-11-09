@@ -626,7 +626,7 @@ cell))` so a cell's output depends only on that cell, and a hand-built track giv
   untouched by all of them (so are the `along` and `scatter` rows: the service clears every footprint against them, and lays no lamp within 0.7 spacings of a hand lamp).
 - **Cost.** Generated cover casts no shadow (`PrefabPart.shadow = false`: slabs, bushes, beds). The drawn list is thinned to the effects tier (`thinScenery`: off and minimal a third,
   Low three fifths, High and Ultra all, by a hash of each prop's spot, so every lower tier is a subset); the solid list never depends on the tier. One `InstancedMesh` per prefab part
-  per 512 m cell (an asset's group is its prefab and family): `scenery.test.ts` caps each course's groups (`DRAWS_MAX`) and 2000 instances in one. Boot (`placeCourse` beyond the authored props, node,
+  per 512 m cell (an asset's group is its kind and family in an 8192 m cell, `assetDrawGroupOf`: one draw a kind and family on a course): `scenery.test.ts` caps each course's groups (`DRAWS_MAX`) and 2000 instances in one. Boot (`placeCourse` beyond the authored props, node,
   measured): 2 to 63 ms per course, the Mall 408 ms (its 2900 authored footprints and 50 side streets); the asset pass adds no measurable time.
 
 ## Engine integration

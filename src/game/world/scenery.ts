@@ -3,6 +3,7 @@ import { PARKED_CARS, PREFABS, type PrefabId } from "./catalog.ts";
 import { BIOME, BIOME_IDS, PREFAB, SCENERY_RULES, type BiomeId } from "./constants.ts";
 import type { Placed } from "./placements.ts";
 import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
+import { assetDrawGroupOf } from "./scenery-assets/draw-group.ts";
 import { LATTICE_RULES, assetPrefab, assetScale, hasAssets, pickAsset, sceneryRule, standsIn, type AssetMode, type LatticeRule } from "./scenery-assets/pick.ts";
 import type { AssetRule, SceneryAsset } from "./scenery-assets/types.ts";
 import { ASSET_LATTICE, FRONTAGE_SPACING, ISLAND_CHANCE_MAX, ISLANDS, LAMP_SPACING, PATCH_LATTICE, SLAB_WIDTH, VERGE, VERGE_CHANCE_MAX, VERGE_REACH, defaultBiome, noGenOf, pickKind, zoneAt, zonesOf, type Zone } from "./scenery-biome.ts";
@@ -1020,8 +1021,8 @@ export function thinScenery(drawn: readonly Placed[], keep: number): Placed[] {
   return drawn.filter((p) => p.prefab === PREFAB.sidewalk || unit(mix(Math.round(p.x * 16), Math.round(p.z * 16))) < keep);
 }
 
-/** A prop's draw group: its prefab (and an asset's family) in a 512 m cell, which `TrackArt` draws as one instanced mesh. */
-export const drawGroupOf = (p: Placed): string => `${p.prefab}${p.asset === undefined ? "" : `:${SCENERY_ASSETS[p.asset]?.family}`}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}`;
+/** A prop's draw group, which `TrackArt` draws as one instanced mesh: its prefab in a 512 m cell, an asset's `assetDrawGroupOf`. */
+export const drawGroupOf = (p: Placed): string => (p.asset === undefined ? `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}` : assetDrawGroupOf(p.asset, p.x, p.z));
 
 /** The draw groups the service adds to the authored props' (`authored`): the solid props' groups none of them stands in (they join its meshes), plus the drawn-only ones' (each group its own draw). */
 export function addedDrawGroups(authored: readonly Placed[], solid: readonly Placed[], drawn: readonly Placed[]): number {

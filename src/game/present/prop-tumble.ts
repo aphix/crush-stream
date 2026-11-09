@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { COUNT, countPart } from "../kernel/frame-parts.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
+import { assetDrawGroupOf } from "../world/scenery-assets/draw-group.ts";
 import type { PrefabMaterials, PrefabPart, Skin } from "./prefab-pieces.ts";
 import { withAssetAttributes } from "./scenery-assets-art.ts";
 import { prefabParts } from "./prefabs.ts";
@@ -19,7 +20,7 @@ function restMatrix(p: Placed, out: THREE.Matrix4): THREE.Matrix4 {
 
 /**
  * Placed props drawn, one InstancedMesh per part of each prefab per draw cell (`drawCell`), so three culls each cell by
- * its own bounds; each placement at its slot: standing where it was put, a knocked one where the dummies' world has it
+ * its own bounds (a scenery asset's group is its kind and family in a wider cell, `assetDrawGroupOf`); each placement at its slot: standing where it was put, a knocked one where the dummies' world has it
  * tumbling (`RagdollSystem.knockProp` moves it, `place`). A course's (`TrackArt`) and the Lab's (`LabArt`) props.
  */
 export class PropTumble {
@@ -50,7 +51,7 @@ export class PropTumble {
     this.placed = placed;
     const byCell = new Map<string, number[]>();
     for (const [idx, pl] of placed.entries()) {
-      const key = `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}`;
+      const key = pl.asset === undefined ? `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}` : assetDrawGroupOf(pl.asset, pl.x, pl.z);
       let list = byCell.get(key);
       if (!list) byCell.set(key, (list = []));
       list.push(idx);

@@ -5,7 +5,9 @@ import { must } from "../kernel/must.test-util.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
 import { ASSET_FAMILIES, FAMILY_BASE, SCENERY_ASSETS, type AssetFamily, type SceneryAsset } from "../world/scenery-assets/index.ts";
+import { ASSET_DRAW_CELL } from "../world/scenery-assets/draw-group.ts";
 import { assetPrefab, assetScale } from "../world/scenery-assets/pick.ts";
+import { drawGroupOf } from "../world/scenery.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { PropTumble } from "./prop-tumble.ts";
@@ -52,8 +54,8 @@ describe("given the family materials of one atlas size", () => {
   });
 });
 
-/** Draw cells are 512 m: columns this far apart stand in different ones. */
-const COLUMN_SPACING = 1024;
+/** Asset draw cells are `ASSET_DRAW_CELL` wide: columns this far apart stand in different ones. */
+const COLUMN_SPACING = 2 * ASSET_DRAW_CELL;
 const COLUMNS = 3;
 const PER_COLUMN = 4;
 /** Metres between the placements of one column: far inside one draw cell. */
@@ -71,13 +73,54 @@ function sharedKindPair(): readonly [number, number] {
 
 describe("given the assets of two families drawn by one generic prefab, each in several draw cells", () => {
   it("when the placements are built, then there is one mesh per family and cell, each holding that family's placements of the cell", () => {
-    // mutation: sed -i 's/${styleOf(pl) ?? ""}/${""}/' src/game/present/prop-tumble.ts
+    // mutation: sed -i 's/:${row.family}@/@/' src/game/world/scenery-assets/draw-group.ts  (the two-family row: families share one mesh, 3 against 6)
     const pair = sharedKindPair();
     const placed: Placed[] = [];
     for (const asset of pair) for (let column = 0; column < COLUMNS; column++) for (let k = 0; k < PER_COLUMN; k++) placed.push(placementOf(asset, column * COLUMN_SPACING + k * COLUMN_STEP));
     const meshes = tumbleOf(placed);
     expect(meshes.length, "meshes").toBe(pair.length * COLUMNS);
     for (const mesh of meshes) expect(mesh.count, "placements in a mesh").toBe(PER_COLUMN);
+  });
+});
+
+/** The kinds a solid asset is drawn as (a standee, a solid cross, a solid box), each with a family that has both a plain and a solid row of it. */
+const SOLID_KINDS = ["card", "cross", "box"] as const;
+
+/** A plain and a solid asset of `kind` in one family. */
+function plainAndSolid(kind: (typeof SOLID_KINDS)[number]): readonly [number, number] {
+  for (const family of ASSET_FAMILIES) {
+    const rows = SCENERY_ASSETS.map((row, asset) => ({ row, asset })).filter(({ row }) => row.family === family && row.kind === kind);
+    const plain = rows.find(({ row }) => row.body !== "solid");
+    const solid = rows.find(({ row }) => row.body === "solid");
+    if (plain && solid) return [plain.asset, solid.asset];
+  }
+  throw new Error(`no family has a plain and a solid ${kind}`);
+}
+
+describe("given a plain and a solid asset of one kind and family standing in one draw cell", () => {
+  for (const kind of SOLID_KINDS) {
+    it(`when the ${kind} placements are built, then one mesh holds both, each instance reading its own asset's atlas cell`, () => {
+      // mutation: sed -i 's/${row.kind}:${row.family}/${row.kind}${row.body}:${row.family}/' src/game/world/scenery-assets/draw-group.ts  (the card, cross and box rows: a plain and a solid asset take two meshes)
+      const pair = plainAndSolid(kind);
+      const meshes = tumbleOf(pair.map((asset, k) => placementOf(asset, k * COLUMN_STEP)));
+      expect(meshes.length, "meshes").toBe(1);
+      const [mesh] = meshes;
+      must(mesh, "one mesh");
+      expect(mesh.count, "placements in it").toBe(pair.length);
+      const rect = mesh.geometry.getAttribute(ASSET_RECT);
+      for (const [slot, asset] of pair.entries()) expect(rect.getZ(slot), `width of ${slot}`).toBeCloseTo(assetCell(asset).rect[2], 5);
+    });
+  }
+});
+
+describe("given every kind of asset in two families, a plain and a solid one of each, in several draw cells", () => {
+  it("when the placements are built, then there is one mesh per draw group the scenery service counts", () => {
+    // mutation: sed -i 's/: assetDrawGroupOf(pl.asset, pl.x, pl.z);/: `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}`;/' src/game/present/prop-tumble.ts  (the draw-group row: 18 meshes against 9 groups)
+    const placed: Placed[] = [];
+    for (const kind of SOLID_KINDS) for (const asset of plainAndSolid(kind)) for (let column = 0; column < COLUMNS; column++) placed.push(placementOf(asset, column * COLUMN_SPACING));
+    const meshes = tumbleOf(placed);
+    expect(meshes.length, "meshes").toBe(new Set(placed.map(drawGroupOf)).size);
+    expect(meshes.length, "meshes against placements").toBeLessThan(placed.length);
   });
 });
 
