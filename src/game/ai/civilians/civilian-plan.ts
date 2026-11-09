@@ -49,7 +49,7 @@ import {
 } from "./civilian-constants.ts";
 import { residentDraws } from "./civilian-draws.ts";
 import { EVENT_CODE, PURPOSE_MOODS, VISIT_BASE } from "./civilian-names.ts";
-import { CityState, logHistory, markDirty, measurePath, setMoodEvent } from "./civilian-state.ts";
+import { CityState, logHistory, markDirty, measurePath, setMoodEvent, setVisitMood } from "./civilian-state.ts";
 import { nextAppointment, weekdayOf } from "./civilian-story.ts";
 import { ageOf } from "./society-day.ts";
 import { crimeKindOf } from "./society-crime.ts";
@@ -247,7 +247,7 @@ function planLeg(state: CityState, resident: number, tick: number, destination: 
   state.ints[base + RESIDENT_INT.decisionCount]++;
   for (let need = 0; need < NEED_COUNT; need++) state.floats[floatBase + RESIDENT_FLOAT.needs + need] = state.scratchNeeds[need]!;
   logHistory(state, resident, VISIT_BASE + purpose, destination, tick);
-  if (PURPOSE_MOODS[purpose]! !== -1) setMoodEvent(state, resident, VISIT_BASE + purpose, tick);
+  if (PURPOSE_MOODS[purpose]! !== -1) setVisitMood(state, resident, VISIT_BASE + purpose, tick);
   takeSeat(state, resident, destination, purpose);
   markDirty(state, resident);
   return true;
