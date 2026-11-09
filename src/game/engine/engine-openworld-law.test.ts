@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { FRAME_SECONDS } from "../ai/civilians/civilian-crowd.test-util.ts";
 import { BODY_GAP } from "../ai/civilians/civilian-crowd-constants.ts";
-import { RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "../ai/civilians/civilian-constants.ts";
+import { EVENT_KIND, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "../ai/civilians/civilian-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { FakeField } from "../ai/openworld-traffic/traffic-world.test-util.ts";
@@ -19,7 +19,7 @@ function idleTrafficPorts(): NonNullable<OpenWorldPorts["traffic"]> {
 
 /** The police's engine ports with no course solids, nobody to bust and no light bars. */
 function idleLawPorts(): NonNullable<OpenWorldPorts["law"]> {
-  return { solids: () => null, playerBusted: () => {}, sirens: () => {}, lineOfSight: () => true };
+  return { solids: () => null, playerBusted: () => {}, sirens: () => {}, lineOfSight: () => true, footBusted: () => {} };
 }
 
 /** The first person the crowd shows walking (not standing at a place, where the crowd does not move her), or -1. */
@@ -126,5 +126,49 @@ describe("given patrol cars chasing the player's car", () => {
     const next = director.bustOf(CAR);
     expect(next, "a new second").not.toBe(first);
     expect(next?.left).toBe(5);
+  });
+});
+
+describe("given the player on foot in the open world", () => {
+  const PLAYER_AT = 120;
+
+  /** A solo host with the player standing at `PLAYER_AT` along x, a foot cop standing five metres from him, and the crowd stepped once so its log can take a shove. */
+  function playerWithCop() {
+    const { director } = directorWith({
+      law: idleLawPorts(),
+      foot: (out) => {
+        out.x = PLAYER_AT;
+        out.z = PLAYER_AT;
+        out.velocityX = 0;
+        out.velocityZ = 0;
+        return true;
+      },
+    });
+    director.step(FRAME_SECONDS);
+    const scene = director["law"]!["scene"];
+    scene.foot.walkers.place(0, PLAYER_AT - 5, PLAYER_AT);
+    return { director, crowd: director["crowd"]!, scene };
+  }
+
+  // mutation: in src/game/engine/engine-openworld-law.ts hearShoves(), delete the line `if (authority) this.scene.playerShoved(this.shoveSeconds);`
+  it("when he shoves a civilian where a cop stands, then the crowd's log of it sends the cops after him and the pursuit strip counts them", () => {
+    const { director, crowd, scene } = playerWithCop();
+    const strip = { cops: 0, hold: 0, left: 0 };
+    expect(scene.footChaseOf(strip), "nobody after him yet").toBe(false);
+    crowd.raiseEvent(EVENT_KIND.walker, 3);
+    director.step(FRAME_SECONDS);
+    expect(scene.footChaseOf(strip), "the shove was seen").toBe(true);
+    const shown = director.bustOf(0);
+    expect(shown?.cops, "the strip shows the cops after him").toBeGreaterThanOrEqual(1);
+    expect(shown?.hold, "no hold yet").toBe(0);
+  });
+
+  // mutation: in src/game/engine/engine-openworld-law.ts feedFoot(), change `this.scene.setFoot(there, ` to `this.scene.setFoot(false, `
+  it("when he is in a car, then the law has no walker to judge", () => {
+    const { director } = directorWith({ law: idleLawPorts() });
+    director.step(FRAME_SECONDS);
+    director["crowd"]!.raiseEvent(EVENT_KIND.walker, 3);
+    director.step(FRAME_SECONDS);
+    expect(director["law"]!["scene"].footChaseOf({ cops: 0, hold: 0, left: 0 }), "nobody on foot").toBe(false);
   });
 });

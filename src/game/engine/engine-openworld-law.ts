@@ -1,13 +1,13 @@
 import type { Obstacles } from "../ai/obstacles.ts";
 import { EVENT_KIND, EVENT_TRIPLE } from "../ai/civilians/civilian-constants.ts";
 import type { CrowdWalkers } from "../ai/civilians/crowd-walkers.ts";
-import { detCos, detSin } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { ChaseHud } from "../hud/hud-store.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { CrimeScene } from "../ai/openworld-crime/crime-scene.ts";
-import { COP_LOOK, FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
+import { COP_LOOK, FACING_SPEED, FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
 import type { LineOfSight } from "../ai/openworld-crime/offence-source.ts";
 import { StateOffenceSource } from "../ai/openworld-crime/state-offence-source.ts";
 import { TrafficPatrolPorts, type TrafficApi } from "../ai/openworld-crime/traffic-patrol-ports.ts";
@@ -42,6 +42,10 @@ export type LawEnginePorts = {
   sirens(carIndex: number, on: boolean): void;
   /** The human's car was held slow by a patrol car for Survival's bust hold. */
   playerBusted(carIndex: number, seconds: number): void;
+  /** Where the player on foot stands and how fast he moves (m/s); false while he is in a car. */
+  foot(out: { x: number; z: number; velocityX: number; velocityZ: number }): boolean;
+  /** The player on foot was held by a cop for the bust hold: the engine's arrest of him. */
+  footBusted(): void;
   /** The engine's cars, which run the foot cops down as they do civilians. */
   cars(): readonly DeformableCar[];
 };
@@ -56,6 +60,11 @@ export class OpenWorldLaw {
   private readonly ports: LawEnginePorts;
   private readonly art: CopArt;
   private readonly unlisten: (() => void) | null;
+  private readonly body = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
+  /** The way he last moved (a unit vector): which way he faces while he stands still. */
+  private facingX = 0;
+  private facingZ = 1;
+  private shoveSeconds = -Infinity;
 
   constructor(map: OpenWorldMap, crowd: CivilianCrowd, ports: LawEnginePorts, seed: number) {
     this.crowd = crowd;
@@ -68,6 +77,7 @@ export class OpenWorldLaw {
         bust: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.bust, resident, seconds),
         jaywalked: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.jaywalk, resident, seconds),
         copDown: (cop, seconds) => crowd.raiseEvent(EVENT_KIND.copDown, cop, seconds),
+        footBusted: () => ports.footBusted(),
         // Every peer builds the signals from the layout (the traffic is the host's only), so every peer's cops see the same jaywalkers.
         signals: new TrafficSignals(buildRoadNetwork(openWorldGeometry(LAYOUT))),
         playerBusted: ports.playerBusted, cars: traffic === null ? null : new TrafficPatrolPorts(traffic, ports.sirens), obstacles: ports.solids(), playerBustSeconds: SURVIVAL.bustTime,
@@ -79,6 +89,8 @@ export class OpenWorldLaw {
     this.art = ports.makeArt(FOOT_COP_COUNT);
     crowd.overlay = (poses, crowdSeconds, authority) => {
       this.hearCopDowns();
+      this.feedFoot();
+      this.hearShoves(authority);
       this.scene.step(crowdSeconds, authority, poses, ports.cars());
     };
   }
@@ -111,6 +123,28 @@ export class OpenWorldLaw {
     }
   }
 
+  /** Before the law's step: where the player on foot is, for it to judge (the host's and the solo player's only: a client's walker is nobody's to judge here). */
+  private feedFoot(): void {
+    const body = this.body;
+    const there = this.ports.foot(body);
+    const speed = hypot2(body.velocityX, body.velocityZ);
+    if (speed > FACING_SPEED) {
+      this.facingX = body.velocityX / speed;
+      this.facingZ = body.velocityZ / speed;
+    }
+    this.scene.setFoot(there, body.x, body.z, this.facingX, this.facingZ, speed);
+  }
+
+  /** The crowd's log's shoves by the player on foot (a `walker` triple follows the push it belongs to) since the last one this law answered: a cop who sees one comes for him. */
+  private hearShoves(authority: boolean): void {
+    const log = this.crowd.eventLog();
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) {
+      if (log[at] !== EVENT_KIND.walker || log[at + 2]! <= this.shoveSeconds) continue;
+      this.shoveSeconds = log[at + 2]!;
+      if (authority) this.scene.playerShoved(this.shoveSeconds);
+    }
+  }
+
   private throwDressed(strike: FigureStrike, lookWord: number): void {
     const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
     dressOfLook(lookWord, look);
@@ -128,6 +162,11 @@ export class OpenWorldLaw {
   /** Draws the foot cops. */
   frame(eyeX: number, eyeZ: number, sight: SightField, wallDt: number): void {
     this.art.update(this.scene.copPoses, eyeX, eyeZ, sight, wallDt);
+  }
+
+  /** The pursuit strip's numbers for the player on foot into `out`: see `PlayerLaw.chaseOf`. */
+  footChaseOf(out: ChaseHud): boolean {
+    return this.scene.footChaseOf(out);
   }
 
   /** The pursuit strip's numbers for car `carIndex` into `out`: see `PatrolCars.chaseOf`. */

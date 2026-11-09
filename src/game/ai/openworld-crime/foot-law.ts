@@ -3,17 +3,18 @@ import { blankStrike, type FigureStrike } from "../../scenes/figure-strike.ts";
 import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap, WalkGraph } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "../civilians/civilian-clock.ts";
-import { NEVER_TICK } from "../civilians/civilian-constants.ts";
+import { FIGHT_PLAYER, NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { PathFinder } from "../civilians/walk-path.ts";
 import { CASE_KIND, CASE_PHASE, CaseTable, SUBJECT_MODE } from "./case-table.ts";
 import { BUST_REACH, CAR_COP, COP_DOWN_SECONDS, COP_SIGHT, JAYWALK_GIVE_UP_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIGHT_WARN_REACH, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, RESIST_CHANCE, SEARCH_SECONDS, SUBJECTS_PER_CASE, TAKEDOWN_LIFT, TAKEDOWN_SPEED, TAKEDOWN_TUMBLE, WARN_SECONDS } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
 import { Arrests } from "./arrests.ts";
 import { CrossingWatch } from "./crossing-watch.ts";
+import { PlayerLaw } from "./player-law.ts";
 import { Flight } from "./flight.ts";
 import { COP_MODE, FootCops } from "./foot-cops.ts";
 import { FootWalkers } from "./foot-walkers.ts";
-import type { CrossingSignals, LawPorts, LawSenses, LineOfSight, OffenceSource, Spot, Walk } from "./offence-source.ts";
+import type { CrossingSignals, LawPorts, LawSenses, LineOfSight, OffenceSource, OtherCopsSee, Spot, Walk } from "./offence-source.ts";
 
 /** What the patrol cars need to hear of the cases. */
 interface LawHooks {
@@ -44,6 +45,9 @@ export class FootLaw {
   private readonly lineOfSight: LineOfSight | null;
   private readonly signals: CrossingSignals | null;
   private readonly crossings: CrossingWatch;
+  private readonly otherCopsSee: OtherCopsSee | null;
+  /** The player on foot under the law (host and solo only). */
+  readonly player: PlayerLaw;
   private readonly arrests: Arrests;
   private readonly walk: Walk = { x: 0, z: 0, dirX: 0, dirZ: 1 };
   private readonly spot: Spot = { x: 0, z: 0 };
@@ -51,7 +55,7 @@ export class FootLaw {
   private strikes: FigureStrike[] = [];
   private nearestGap = Infinity;
 
-  constructor(map: OpenWorldMap, source: OffenceSource, ports: LawPorts, hooks: LawHooks, seed: number, senses: LawSenses) {
+  constructor(map: OpenWorldMap, source: OffenceSource, ports: LawPorts, hooks: LawHooks, seed: number, senses: LawSenses, playerBustSeconds: number) {
     const finder = new PathFinder(map.graph);
     this.walkers = new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS);
     this.cops = new FootCops(this.walkers, map.graph, finder, seed);
@@ -65,6 +69,8 @@ export class FootLaw {
     this.lineOfSight = senses.lineOfSight;
     this.signals = senses.signals;
     this.crossings = new CrossingWatch(map.graph);
+    this.otherCopsSee = senses.otherCopsSee;
+    this.player = new PlayerLaw(this, this.crossings, senses.signals, playerBustSeconds);
     this.arrests = new Arrests(this.walkers, this.cops, this.table, map.graph);
   }
 
@@ -79,6 +85,17 @@ export class FootLaw {
       if (this.cops.onStreet(cop) && this.cops.gapTo(cop, x, z) <= range && this.sees(cop, x, z)) return true;
     }
     return false;
+  }
+
+  /** Whether any cop, on foot or in a patrol car, within `COP_SIGHT` m of (x, z) sees it. */
+  copSeesSpot(x: number, z: number): boolean {
+    return this.copSees(x, z, COP_SIGHT) || (this.otherCopsSee?.(x, z, COP_SIGHT) ?? false);
+  }
+
+  /** The player on foot was held by the cops long enough (`PlayerLaw`): the host's arrest of him. */
+  footBusted(): void {
+    this.stats.busts++;
+    if (this.authority) this.ports.footBusted(this.seconds);
   }
 
   /** Whether nothing solid stands between cop `cop`'s eyes and a person at (x, z). */
@@ -158,14 +175,29 @@ export class FootLaw {
     for (let resident = 0; resident < source.residentCount; resident++) {
       if (table.subjectOf[resident] !== -1 || !source.wanted(resident, tick)) continue;
       const spell = source.spellOf(resident);
-      if (spell === table.handledSpell[resident]) continue;
+      if (spell === table.handledSpell[resident] || !this.witnessed(resident, spell, tick)) continue;
       const brawling = source.fightTick(resident) !== NEVER_TICK && source.fightPartner(resident) >= 0;
       if (brawling ? this.openFight(resident, spell) : this.openCrime(resident, spell)) table.handledSpell[resident] = spell;
     }
     if (this.signals !== null) this.watchCrossings(this.signals);
+    this.player.poll(this.seconds);
     for (let caseIndex = 0; caseIndex < table.phase.length; caseIndex++) {
       if (table.phase[caseIndex] !== CASE_PHASE.free) this.callCops(caseIndex);
     }
+  }
+
+  /** Whether a cop saw the offence of wanted `resident` (who stands in sight of one now) or a witness's call about it has ended: the police do not come for what nobody has seen or told them of. */
+  private witnessed(resident: number, spell: number, tick: number): boolean {
+    const { source, table } = this;
+    if (table.reportSpell[resident] !== spell) {
+      const done = source.reportDoneTick(resident);
+      if (done !== NEVER_TICK) {
+        table.reportSpell[resident] = spell;
+        table.reportDue[resident] = done;
+      }
+    }
+    if (table.reportSpell[resident] === spell && tick >= table.reportDue[resident]!) return true;
+    return source.standing(resident, this.seconds, this.spot) && this.copSeesSpot(this.spot.x, this.spot.z);
   }
 
   /** False when there is no room for the case yet (the poll tries again); true when it was taken up or can never be. */
@@ -176,6 +208,7 @@ export class FootLaw {
     this.startCase(caseIndex, CASE_KIND.crime, spell);
     this.takeSubject(this.table.slotOf(caseIndex, 0), resident, this.spot);
     this.hooks.opened(caseIndex, this.spot.x, this.spot.z);
+    if (this.source.fightPartner(resident) === FIGHT_PLAYER) this.player.fightKnown(this.seconds);
     return true;
   }
 
@@ -192,6 +225,13 @@ export class FootLaw {
     this.takeSubject(table.slotOf(caseIndex, 1), partner, this.partnerSpot);
     this.hooks.opened(caseIndex, this.spot.x, this.spot.z);
     return true;
+  }
+
+  /** A free case of `kind` for the wanted spell `spell`, opened with no suspect or cop: its index, -1 with no room. */
+  beginCase(kind: number, spell: number): number {
+    const caseIndex = this.table.freeCase();
+    if (caseIndex >= 0) this.startCase(caseIndex, kind, spell);
+    return caseIndex;
   }
 
   private startCase(caseIndex: number, kind: number, spell: number): void {
@@ -221,7 +261,7 @@ export class FootLaw {
       if (crossing < 0 || !signals.againstSignal(walk.x, walk.z, crossings.dirX[crossing]!, crossings.dirZ[crossing]!, this.seconds)) continue;
       const walkBegan = source.legDepartSeconds(resident);
       if (table.jaywalkWalk[resident] === walkBegan) continue;
-      const cop = this.freeCopSeeing(walk.x, walk.z);
+      const cop = this.copWhoSees(walk.x, walk.z);
       const caseIndex = table.freeCase();
       if (cop < 0 || caseIndex < 0) continue;
       table.jaywalkWalk[resident] = walkBegan;
@@ -233,7 +273,7 @@ export class FootLaw {
   }
 
   /** The patrolling cop nearest (x, z) within `COP_SIGHT` m who sees it, the lower number on a tie; -1 with none. */
-  private freeCopSeeing(x: number, z: number): number {
+  copWhoSees(x: number, z: number): number {
     let best = -1;
     let bestGap = COP_SIGHT;
     for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
@@ -261,6 +301,10 @@ export class FootLaw {
 
   private stepCase(caseIndex: number): void {
     const { table } = this;
+    if (table.kind[caseIndex] === CASE_KIND.player) {
+      this.player.step(caseIndex, this.seconds);
+      return;
+    }
     this.spareKnocked(caseIndex);
     if (!table.arresting(caseIndex) && this.offenceCleared(caseIndex)) {
       this.closeCase(caseIndex);
@@ -551,7 +595,7 @@ export class FootLaw {
   }
 
   /** Cops go back to patrol; suspects still out are held off the street; spared ones carry on. */
-  private closeCase(caseIndex: number): void {
+  closeCase(caseIndex: number): void {
     const { table } = this;
     for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
       const slot = table.slotOf(caseIndex, index);

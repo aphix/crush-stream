@@ -1,6 +1,6 @@
-import { detCos, detSin } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
-import { CENTIMETRES_PER_METRE, DECISION_HZ, FLAG, NEVER_TICK, NO_PLACE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../civilians/civilian-constants.ts";
+import { CENTIMETRES_PER_METRE, DECISION_HZ, FLAG, NEVER_TICK, NO_PLACE, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, WITNESS_RADIUS } from "../civilians/civilian-constants.ts";
 import type { CityState } from "../civilians/civilian-state.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import { crimePlaceOf, isWanted } from "../civilians/society-crime.ts";
@@ -13,6 +13,7 @@ type CrowdView = { readonly state: CityState; readonly poses: CrowdPoses };
 export class StateOffenceSource {
   private readonly crowd: CrowdView;
   private readonly map: OpenWorldMap;
+  private readonly scratch: Spot = { x: 0, z: 0 };
 
   constructor(crowd: CrowdView, map: OpenWorldMap) {
     this.crowd = crowd;
@@ -67,6 +68,35 @@ export class StateOffenceSource {
 
   knocked(resident: number): boolean {
     return (this.int(resident, RESIDENT_INT.flags) & FLAG.hurt) !== 0;
+  }
+
+  reportDoneTick(resident: number): number {
+    const since = this.offenceTick(resident);
+    if (since === NEVER_TICK || !this.offenceSpot(resident, this.scratch)) return NEVER_TICK;
+    const { placeX, placeZ } = this.crowd.state.index;
+    let done = NEVER_TICK;
+    for (let caller = 0; caller < this.residentCount; caller++) {
+      if (this.int(caller, RESIDENT_INT.legPurpose) !== PURPOSE.report || this.int(caller, RESIDENT_INT.departTick) < since) continue;
+      const at = this.int(caller, RESIDENT_INT.place);
+      if (hypot2(placeX[at]! - this.scratch.x, placeZ[at]! - this.scratch.z) > WITNESS_RADIUS) continue;
+      done = Math.min(done, this.int(caller, RESIDENT_INT.nextDecisionTick));
+    }
+    return done;
+  }
+
+  /** The tick the resident's crime or fight happened, `NEVER_TICK` for neither. */
+  private offenceTick(resident: number): number {
+    return Math.min(this.int(resident, RESIDENT_INT.crimeTick), this.int(resident, RESIDENT_INT.fightTick));
+  }
+
+  /** Where the resident's crime or fight was: the crime place's door, or the fight's spot. */
+  private offenceSpot(resident: number, out: Spot): boolean {
+    if (this.int(resident, RESIDENT_INT.fightTick) !== NEVER_TICK) {
+      out.x = this.int(resident, RESIDENT_INT.fightX) / CENTIMETRES_PER_METRE;
+      out.z = this.int(resident, RESIDENT_INT.fightZ) / CENTIMETRES_PER_METRE;
+      return true;
+    }
+    return this.atDoor(crimePlaceOf(this.crowd.state, resident), out);
   }
 
   legDepartSeconds(resident: number): number {

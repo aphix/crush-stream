@@ -42,6 +42,13 @@ export const FLEE_SPEED_SPAN = 0.8;
 /** A cop sees a suspect within this many metres in a straight line and a runner at a red light within `RED_LIGHT_SIGHT`: the sidewalks' sight lines are short, and the city's walls hold the rest. */
 export const COP_SIGHT = 40;
 export const RED_LIGHT_SIGHT = 60;
+/** The player on foot is held by a cop within this many metres of him while he moves slower than this (m/s): standing, or creeping: the bust hold of a car held slow beside a chasing cop, on foot. */
+export const FOOT_HOLD_REACH = 3;
+export const FOOT_HOLD_SPEED = 1;
+/** A chase of the player on foot that has not held him this long (s) since it began is given up: he got away. */
+export const PLAYER_CHASE_GIVE_UP_SECONDS = 45;
+/** The player on foot faces the way he last moved at over this speed (m/s); standing still he keeps his last facing. */
+export const FACING_SPEED = 0.3;
 /** A person's eyes stand this high (m) over the ground: a sight line between two people runs at this height, over railings and parked cars, not through a building. */
 export const EYE_HEIGHT = 1.6;
 /** A walker within this many metres of a zebra crossing's line, and between these shares of its length (off both kerbs), is out on it. */
