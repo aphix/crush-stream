@@ -27,6 +27,8 @@ export class FakeStreet {
   /** How far short (m) of a point the next trip's kerb space stands. */
   kerbOffset = KERB_SPACE_OFFSET;
   readonly redirects: { handle: number; x: number; z: number }[] = [];
+  /** Per car: the patrol car (its handle) its driver runs from, -1 when none. */
+  readonly evading: number[] = [];
   /** Where the next leased car appears. */
   leaseAt = { x: 0, z: 0, yaw: 0 };
   leases = 0;
@@ -47,6 +49,7 @@ export class FakeStreet {
     this.tripX.push(Number.NaN);
     this.tripZ.push(Number.NaN);
     this.tripDone.push(false);
+    this.evading.push(-1);
     return car.id;
   }
 
@@ -97,6 +100,16 @@ export class FakeStreet {
     if (!this.traffic[index]) return false;
     this.drivers[index] = driver;
     return true;
+  }
+
+  evade(index: number, chaserHandle: number): boolean {
+    if (!this.traffic[index]) return false;
+    this.evading[index] = chaserHandle;
+    return true;
+  }
+
+  endEvade(index: number): void {
+    this.evading[index] = -1;
   }
 
   driverOf(index: number): number {

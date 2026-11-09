@@ -27,6 +27,9 @@ export interface PatrolCarPorts {
   carSnap(index: number): AiCar | null;
   /** Hands traffic car `index` to `driver` (null: back to its own); false for a car that is not the traffic's (the player's). */
   takeTraffic(index: number, driver: CarDriver | null): boolean;
+  /** Traffic car `index` is chased by the leased car `chaserHandle`: its driver runs as a racer evades a cop until `endEvade`; false for a car that is not on a street trip of the traffic's (the player's). */
+  evade(index: number, chaserHandle: number): boolean;
+  endEvade(index: number): void;
   /** The resident at the wheel of car `index`, -1 for none (the player). */
   driverOf(index: number): number;
 }
@@ -201,6 +204,7 @@ export class PatrolCars {
     const cop = this.ports.snap(this.handle[slot]!);
     const gap = hypot2(offender.x - cop.x, offender.z - cop.z);
     if (this.hothead[slot] === 0) this.followStreets(slot, offender, gap, seconds);
+    if (this.yieldState[slot] === YIELD.none) this.ports.evade(this.targetCar[slot]!, this.handle[slot]!);
     if (this.yieldState[slot] === YIELD.none && gap <= YIELD_DISTANCE) this.yieldState[slot] = this.ports.takeTraffic(this.targetCar[slot]!, this.stopDriver) ? YIELD.stopping : YIELD.refused;
     this.holdSlow(slot, offender, gap, dt);
     this.farFor[slot] = gap > CAR_LOST_DISTANCE ? this.farFor[slot]! + dt : 0;
@@ -250,6 +254,7 @@ export class PatrolCars {
     this.mode[slot] = PATROL_MODE.lingering;
     this.lingerUntil[slot] = seconds + forSeconds;
     this.ports.setSirens(this.handle[slot]!, false);
+    if (this.targetCar[slot]! >= 0) this.ports.endEvade(this.targetCar[slot]!);
   }
 
   /** The car is let go; a car it held at the roadside goes back to its own driving. */
