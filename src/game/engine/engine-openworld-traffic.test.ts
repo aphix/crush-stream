@@ -4,9 +4,8 @@ import type { FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import { OpenWorldTraffic } from "../ai/openworld-traffic/openworld-traffic.ts";
 import { NOSE_OVERHANG } from "../ai/openworld-traffic/traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "../ai/openworld-traffic/traffic-lights.ts";
-import { CYCLE_SECONDS } from "../ai/openworld-traffic/traffic-world.test-util.ts";
+import { CYCLE_SECONDS, ProximitySight } from "../ai/openworld-traffic/traffic-world.test-util.ts";
 import type { TrafficPorts } from "../ai/openworld-traffic/traffic-ports.ts";
-import { ProximitySight } from "../ai/openworld-traffic/traffic-sight.ts";
 import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { activeGround, setGround } from "../world/ground.ts";
@@ -58,6 +57,7 @@ function openWorldLobby(movers: number): { w: World; traffic: OpenWorldTraffic }
       car.spawnFacing(4000 + id * 12, 4000, 0, 0);
     },
     markPolice: () => {},
+    setBody: () => {},
     release: (id) => {
       w.live()[id]!.stored = false;
     },

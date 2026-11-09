@@ -18,7 +18,7 @@ import { lap, PHASE, startLaps } from "./sim-phases.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { GROUND_LEVEL, LAB_PRESET } from "../scenes/constants.ts";
 import { groundMaterial, levelOrder } from "../scenes/ground-stack.ts";
-import { carClass, damageStage } from "../vehicle/vehicle-classes.ts";
+import { carClass, damageStage, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { makeJerseyBarrier, makePoolTexture } from "../present/engine-world.ts";
 import { Cinematics } from "../present/engine-cine.ts";
 import { setReliefDevice } from "../present/surface-relief.ts";
@@ -465,6 +465,7 @@ export class CrashEngine extends EngineGarage {
         place: (id, x, z, yaw) => this.standTrafficCar(this.live()[id]!, x, z, yaw),
         putAway: (id) => this.storeTrafficCar(this.live()[id]!, id),
         markPolice: (from, count) => this.setPolice(from, count),
+        setBody: (id, style) => this.matchCar(id, style, STYLE_CLASS[style]),
         release: (id) => {
           this.live()[id]!.stored = false;
         },
