@@ -43,6 +43,8 @@ import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
 import { TrafficLightArt } from "../present/traffic-lights.ts";
+import { wearCarLook } from "../present/car-look.ts";
+import { NO_CAR_PICK } from "../match/look-data.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
@@ -489,7 +491,7 @@ export class CrashEngine extends EngineGarage {
         cars: () => this.live(),
         ensureCars: (count) => this.ensureCars(count),
         seated: (id) => id === this.race.self || this.netSeats.has(id),
-        place: (id, x, z, yaw) => this.standTrafficCar(this.live()[id]!, x, z, yaw),
+        place: (id, x, z, yaw, colour) => this.standTrafficCar(this.live()[id]!, x, z, yaw, colour),
         putAway: (id) => this.storeTrafficCar(this.live()[id]!, id),
         markPolice: (from, count) => this.setPolice(from, count),
         setBody: (id, style) => this.matchCar(id, style, STYLE_CLASS[style]),
@@ -523,13 +525,14 @@ export class CrashEngine extends EngineGarage {
   }
 
   /** The open world's traffic car stood on its street space: repaired, at rest, on the ground there, drawn and simulated. */
-  private standTrafficCar(car: DeformableCar, x: number, z: number, yaw: number): void {
+  private standTrafficCar(car: DeformableCar, x: number, z: number, yaw: number, colour: number | null): void {
     car.stored = false;
     car.group.visible = true;
     car.spawnFacing(x, z, yaw, 0);
     car.group.position.y = activeGround().heightAt(x, z, 0.5);
     layOnGround(car);
     this.dressCar(car);
+    if (colour !== null) wearCarLook(car, { ...NO_CAR_PICK, body: colour }, null);
   }
 
   /** The open world's traffic car put away far off the course: hidden, still, and not simulated (`EPICENTER.storedSkip`). */

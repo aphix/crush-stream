@@ -128,6 +128,8 @@ export class FakeField {
   readonly cars: KinematicCar[] = [new KinematicCar()];
   /** The ids traffic had rebuilt as another body, in order. */
   readonly rebuilt: number[] = [];
+  /** The paint (sRGB; null: the car's own) each car was last stood in. */
+  readonly colours: (number | null)[] = [];
   readonly seats = new Set<number>([0]);
   readonly ports: TrafficPorts = {
     cars: () => this.cars,
@@ -143,7 +145,8 @@ export class FakeField {
       this.rebuilt.push(id);
     },
     seated: (id) => this.seats.has(id),
-    place: (id, x, z, yaw) => {
+    place: (id, x, z, yaw, colour) => {
+      this.colours[id] = colour;
       const car = this.cars[id]!;
       car.stored = false;
       car.group.visible = true;
