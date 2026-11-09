@@ -11,3 +11,5 @@ export const SHELL_BUILDS_PER_FRAME = 8;
 export const DETAIL_BUILDS_PER_FRAME = 1;
 /** An interior's solids are handed to the physics while its door is within this of the eye (m): a walker meets walls and furniture only near a player. */
 export const SOLIDS_NEAR = 25;
+/** A player (a car or the walker) within this of an interior's door keeps it built whatever the eyes see (m): anywhere inside the deepest interior (15 m) or on its stoop. */
+export const INTERIOR_KEEP = 20;

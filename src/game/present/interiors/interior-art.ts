@@ -4,13 +4,17 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { InteriorPlan } from "../../world/openworld/interior-kinds.ts";
 import { interiorSolids, planInterior, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
+import type { SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
-import { DETAIL_BUILDS_PER_FRAME, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SOLIDS_NEAR } from "./interior-constants.ts";
+import { DETAIL_BUILDS_PER_FRAME, INTERIOR_FAR, INTERIOR_KEEP, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SOLIDS_NEAR } from "./interior-constants.ts";
 
 /** One place with an interior: what is built of it now, and how long it has been out of range. */
 type Entry = {
   place: Place;
   plan: InteriorPlan;
+  /** What the eyes are asked about: the shopfront round the door (half the frontage), and the whole footprint round its middle (half its diagonal) for an eye inside. */
+  doorRadius: number;
+  reach: number;
   shell: THREE.BufferGeometry | null;
   detail: THREE.BufferGeometry | null;
   glow: THREE.BufferGeometry | null;
@@ -22,12 +26,21 @@ type Entry = {
 
 type SolidsListener = (solids: readonly InteriorSolid[]) => void;
 
+/** What the interiors ask of the open world's sight field. */
+type InteriorSight = Pick<SightField, "claim" | "observe" | "unseenFor" | "near" | "hideGrace">;
+
+/** An interior this frame: neither built anew nor dropped (`kept`), wanted (seen, or a player beside it), or hidden (no eye has seen it for the hide grace and no player is beside it). */
+const VIEW = { kept: 0, wanted: 1, hidden: 2 } as const;
+type View = (typeof VIEW)[keyof typeof VIEW];
+const NO_IDS = -1;
+
 /** What the set costs right now: places with an envelope, places furnished, vertices drawn, and draw calls (one per merged mesh that has any). */
 type InteriorStats = { shells: number; details: number; vertices: number; drawCalls: number };
 
 /**
- * The interiors of a map's places, streamed by distance from the eye: an envelope (walls, floor, ceiling) within `SHELL_NEAR`, so a doorway or shopfront window never shows through to the
- * world, and the furnished rooms within `INTERIOR_NEAR`. Everything is merged into three meshes (envelopes, lit furniture, unlit lamps and screens), so the draw calls do not grow with the interiors.
+ * The interiors of a map's places, streamed by distance from the eye and by sight: an envelope (walls, floor, ceiling) within `SHELL_NEAR`, so a doorway or shopfront window never shows through to the
+ * world, and the furnished rooms within `INTERIOR_NEAR`, each built while some eye sees it (or a player is beside it) and dropped once none has for the sight field's hide grace. Everything is merged
+ * into three meshes (envelopes, lit furniture, unlit lamps and screens), so the draw calls do not grow with the interiors. The physics' solids follow distance alone, never sight.
  */
 export class InteriorSet {
   readonly group = new THREE.Group();
@@ -39,6 +52,10 @@ export class InteriorSet {
   private readonly detailMesh: THREE.Mesh;
   private readonly glowMesh: THREE.Mesh;
   private solidsListener: SolidsListener | null = null;
+  /** The first of the sight field's ids, one per entry, claimed at the first frame. */
+  private sightBase = NO_IDS;
+  private shellBuilds = 0;
+  private detailBuilds = 0;
 
   constructor(map: OpenWorldMap) {
     this.group.name = "interiors";
@@ -51,58 +68,32 @@ export class InteriorSet {
         plan = planInterior(place.interior, place.width, place.depth);
         plans.set(key, plan);
       }
-      this.entries.push({ place, plan, shell: null, detail: null, glow: null, shellAway: 0, detailAway: 0, inReach: false });
+      this.entries.push({ place, plan, doorRadius: place.width / 2, reach: hypot2(place.width / 2, place.depth / 2), shell: null, detail: null, glow: null, shellAway: 0, detailAway: 0, inReach: false });
     }
     this.shellMesh = this.makeMesh("interior-shells", this.solidMaterial);
     this.detailMesh = this.makeMesh("interior-furniture", this.solidMaterial);
     this.glowMesh = this.makeMesh("interior-lights", this.glowMaterial);
   }
 
-  /** Build what the eye has come near and drop what it has left (for `INTERIOR_LINGER`), merging the meshes that changed. */
-  update(eyeX: number, eyeZ: number, dt: number): void {
-    let shellBuilds = 0;
-    let detailBuilds = 0;
+  /** Build what the eye has come near and some eye sees, drop what it has left (for `INTERIOR_LINGER`) or no eye has seen for the hide grace, merging the meshes that changed. */
+  update(eyeX: number, eyeZ: number, dt: number, sight: InteriorSight): void {
+    if (this.sightBase === NO_IDS) this.sightBase = sight.claim(this.entries.length);
+    this.shellBuilds = 0;
+    this.detailBuilds = 0;
     let shellsChanged = false;
     let detailsChanged = false;
     let reachChanged = false;
     for (let at = 0; at < this.entries.length; at++) {
       const entry = this.entries[at]!;
       const distance = hypot2(entry.place.doorX - eyeX, entry.place.doorZ - eyeZ);
+      const view = this.viewOf(entry, this.sightBase + at, distance, sight);
       const reached = distance < SOLIDS_NEAR;
       if (reached !== entry.inReach) {
         entry.inReach = reached;
         reachChanged = true;
       }
-      if (entry.shell === null) {
-        if (distance < SHELL_NEAR && shellBuilds < SHELL_BUILDS_PER_FRAME) {
-          entry.shell = buildShell(entry.plan, entry.place);
-          entry.shellAway = 0;
-          shellBuilds++;
-          shellsChanged = true;
-        }
-      } else if (distance <= SHELL_FAR) entry.shellAway = 0;
-      else if ((entry.shellAway += dt) >= INTERIOR_LINGER) {
-        entry.shell.dispose();
-        entry.shell = null;
-        shellsChanged = true;
-      }
-      if (entry.detail === null && entry.glow === null) {
-        if (distance < INTERIOR_NEAR && detailBuilds < DETAIL_BUILDS_PER_FRAME) {
-          const built = buildDetail(entry.plan, entry.place);
-          entry.detail = built.solid;
-          entry.glow = built.glow;
-          entry.detailAway = 0;
-          detailBuilds++;
-          detailsChanged = true;
-        }
-      } else if (distance <= INTERIOR_FAR) entry.detailAway = 0;
-      else if ((entry.detailAway += dt) >= INTERIOR_LINGER) {
-        entry.detail?.dispose();
-        entry.glow?.dispose();
-        entry.detail = null;
-        entry.glow = null;
-        detailsChanged = true;
-      }
+      if (this.streamShell(entry, distance, view, dt)) shellsChanged = true;
+      if (this.streamDetail(entry, distance, view, dt)) detailsChanged = true;
     }
     if (reachChanged) this.solidsListener?.(this.reachableSolids());
     if (shellsChanged) this.merge(this.shellMesh, this.entries.map((entry) => entry.shell));
@@ -110,6 +101,51 @@ export class InteriorSet {
       this.merge(this.detailMesh, this.entries.map((entry) => entry.detail));
       this.merge(this.glowMesh, this.entries.map((entry) => entry.glow));
     }
+  }
+
+  /** Only an interior in range or built is looked at: the door (the street's view through the doorway and windows) or the middle (an eye inside) seen keeps its clock fresh. */
+  private viewOf(entry: Entry, id: number, distance: number, sight: InteriorSight): View {
+    if (distance >= SHELL_NEAR && entry.shell === null && entry.detail === null && entry.glow === null) return VIEW.kept;
+    const { place } = entry;
+    const seen = sight.observe(id, place.doorX, place.doorZ, entry.doorRadius) || sight.observe(id, place.x, place.z, entry.reach);
+    if (seen || sight.near(place.doorX, place.doorZ, INTERIOR_KEEP)) return VIEW.wanted;
+    return sight.unseenFor(id) >= sight.hideGrace ? VIEW.hidden : VIEW.kept;
+  }
+
+  /** The envelope: built when wanted within `SHELL_NEAR` (the frame's budget allowing), dropped when hidden or past `SHELL_FAR` for the linger; true when it changed. */
+  private streamShell(entry: Entry, distance: number, view: View, dt: number): boolean {
+    if (entry.shell === null) {
+      if (view !== VIEW.wanted || distance >= SHELL_NEAR || this.shellBuilds >= SHELL_BUILDS_PER_FRAME) return false;
+      entry.shell = buildShell(entry.plan, entry.place);
+      entry.shellAway = 0;
+      this.shellBuilds++;
+      return true;
+    }
+    entry.shellAway = distance <= SHELL_FAR ? 0 : entry.shellAway + dt;
+    if (view !== VIEW.hidden && entry.shellAway < INTERIOR_LINGER) return false;
+    entry.shell.dispose();
+    entry.shell = null;
+    return true;
+  }
+
+  /** The furniture, partitions, stairs and upper floors: as the envelope, within `INTERIOR_NEAR` and `INTERIOR_FAR`. */
+  private streamDetail(entry: Entry, distance: number, view: View, dt: number): boolean {
+    if (entry.detail === null && entry.glow === null) {
+      if (view !== VIEW.wanted || distance >= INTERIOR_NEAR || this.detailBuilds >= DETAIL_BUILDS_PER_FRAME) return false;
+      const built = buildDetail(entry.plan, entry.place);
+      entry.detail = built.solid;
+      entry.glow = built.glow;
+      entry.detailAway = 0;
+      this.detailBuilds++;
+      return true;
+    }
+    entry.detailAway = distance <= INTERIOR_FAR ? 0 : entry.detailAway + dt;
+    if (view !== VIEW.hidden && entry.detailAway < INTERIOR_LINGER) return false;
+    entry.detail?.dispose();
+    entry.glow?.dispose();
+    entry.detail = null;
+    entry.glow = null;
+    return true;
   }
 
   stats(): InteriorStats {
