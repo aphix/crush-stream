@@ -8,7 +8,7 @@ import { PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
 import { Track, blankProjection, projectPath } from "../track.ts";
 import { parseTrack } from "../track-schema.ts";
-import { LAMP_FROM_CURB } from "./openworld-constants.ts";
+import { LAMP_FROM_CURB, LAYOUT } from "./openworld-constants.ts";
 import { OPENWORLD_ID, openWorldCourse } from "./openworld-course.ts";
 import { fixtureLots } from "./openworld-lots.test-util.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
@@ -23,8 +23,8 @@ const CORNER_GAP_M = 6;
 
 /** The walls stand on the outer streets' far property line, or on their far curb. */
 const WALL_CASES = [
-  { it: "walls on the outer streets' far property line", wallReach: 8 },
-  { it: "walls on the outer streets' far curb", wallReach: 5 },
+  { it: "walls on the outer streets' far property line", wallReach: LAYOUT.wallReach },
+  { it: "walls on the outer streets' far curb", wallReach: LAYOUT.carriageway / 2 },
 ] as const;
 
 for (const wallCase of WALL_CASES) {
