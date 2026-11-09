@@ -411,7 +411,10 @@ export class CrashEngine extends EngineGarage {
         },
         playerCars: () => {
           playerCars.length = 0;
-          for (const racer of this.race.racers) if (racer.kind !== "ai") playerCars.push(this.cars[racer.id]!);
+          for (const racer of this.race.racers) {
+            const car = this.cars[racer.id];
+            if (car !== undefined && racer.kind !== "ai") playerCars.push(car);
+          }
           return playerCars;
         },
         detail: () => this.detail,
