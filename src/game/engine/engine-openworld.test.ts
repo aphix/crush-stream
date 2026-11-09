@@ -34,8 +34,8 @@ class Harness {
   tier = POPULATION_TIER.phone;
   now = 100;
   cars: DeformableCar[] = [];
-  /** Where the player on foot stands, null while he is in a car. */
-  footAt: { x: number; z: number } | null = null;
+  /** Where the player on foot stands and how fast he moves, null while he is in a car. */
+  footAt: { x: number; z: number; velocityX: number; velocityZ: number } | null = null;
   readonly eye = new LookRay();
   readonly thrown: FigureStrike[] = [];
   readonly looks: DriverLook[] = [];
@@ -127,19 +127,26 @@ describe("given the open world's course up and a map given", () => {
 });
 
 describe("given the player on foot in the open world", () => {
-  it("when he moves, then the crowd has him as a body at his spot moving as he does, and when he is in a car again, then it has none", () => {
+  it("when the host steps, then the crowd has him as a body at the spot and with the velocity the ragdoll world gives, and when he is in a car again, then it has none", () => {
     const harness = hostWithMap();
-    harness.footAt = { x: 5, z: 6 };
     harness.frame();
-    harness.footAt = { x: 5 + 2 * FRAME, z: 6 };
-    harness.frame();
+    harness.footAt = { x: 5, z: 6, velocityX: 2, velocityZ: -1 };
     harness.frame();
     const { walkers } = harness.crowd();
-    expect(firstMismatch([walkers.count, walkers.x[0], walkers.z[0], walkers.velocityX[0], walkers.velocityZ[0]], [1, 5 + 2 * FRAME, 6, 2, 0]), "walkers, and his spot and velocity").toBeUndefined();
+    expect(firstMismatch([walkers.count, walkers.x[0], walkers.z[0], walkers.velocityX[0], walkers.velocityZ[0]], [1, 5, 6, 2, -1]), "walkers, and his spot and velocity").toBeUndefined();
     harness.footAt = null;
     harness.frame();
-    harness.frame();
     expect(harness.crowd().walkers.count, "walkers after he is back in a car").toBe(0);
+  });
+
+  it("when the crowd is a client's, then it has him the same way", () => {
+    const harness = hostWithMap();
+    harness.client = true;
+    harness.director.hear(POPULATION_TIER.phone * CROWD_TIER_SCALE + SEED, 500, 40, new Float64Array(0));
+    harness.footAt = { x: 5, z: 6, velocityX: 2, velocityZ: -1 };
+    harness.frame();
+    const { walkers } = harness.crowd();
+    expect(firstMismatch([walkers.count, walkers.x[0], walkers.velocityX[0]], [1, 5, 2]), "walkers, and his spot and velocity").toBeUndefined();
   });
 });
 

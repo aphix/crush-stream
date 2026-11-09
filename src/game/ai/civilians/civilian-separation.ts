@@ -99,9 +99,9 @@ export class CrowdSeparation {
       this.cellHead[slot] = body;
     }
     this.pairCount = 0;
-    const pairCapacity = this.pairFirst.length;
     for (let at = 0; at < listedCount; at++) {
       const first = this.listed[at]!;
+      let own = 0;
       const cellX = Math.floor(this.brainX[first]! / PAIR_RANGE);
       const cellZ = Math.floor(this.brainZ[first]! / PAIR_RANGE);
       let scanned = 0;
@@ -113,20 +113,20 @@ export class CrowdSeparation {
           if (repeated) continue;
           this.scannedSlots[scanned++] = slot;
           for (let second = this.cellHead[slot]!; second !== NO_BODY; second = this.cellNext[second]!) {
-            if (second <= first || (this.fixed[first] === 1 && this.fixed[second] === 1)) continue;
-            if (this.pairCount === pairCapacity) return;
-            this.addPair(first, second);
+            if (second <= first || (this.fixed[first] === 1 && this.fixed[second] === 1) || own === PAIRS_PER_BODY) continue;
+            if (this.addPair(first, second)) own++;
           }
         }
       }
     }
   }
 
-  private addPair(first: number, second: number): void {
+  /** Whether the pair is within reach and was listed. */
+  private addPair(first: number, second: number): boolean {
     const dx = this.brainX[first]! - this.brainX[second]!;
     const dz = this.brainZ[first]! - this.brainZ[second]!;
     const distanceSquared = dx * dx + dz * dz;
-    if (distanceSquared >= PAIR_RANGE_SQUARED) return;
+    if (distanceSquared >= PAIR_RANGE_SQUARED) return false;
     const distance = Math.sqrt(distanceSquared);
     const relativeX = this.velocityX[first]! - this.velocityX[second]!;
     const relativeZ = this.velocityZ[first]! - this.velocityZ[second]!;
@@ -138,7 +138,7 @@ export class CrowdSeparation {
     this.pairClosing[at] = distance > COINCIDENT_DISTANCE ? -(relativeX * dx + relativeZ * dz) / distance : relativeSpeed;
     this.pairHeadOn[at] = 0;
     this.pairSide[at] = 1;
-    if (relativeSpeed < MOVING_SPEED) return;
+    if (relativeSpeed < MOVING_SPEED) return true;
     const alongX = relativeX / relativeSpeed;
     const alongZ = relativeZ / relativeSpeed;
     const cosine = distance > COINCIDENT_DISTANCE ? Math.abs(dx * alongX + dz * alongZ) / distance : 1;
@@ -146,6 +146,7 @@ export class CrowdSeparation {
     this.pairAlongZ[at] = alongZ;
     this.pairHeadOn[at] = cosine * cosine;
     this.pairSide[at] = dz * alongX - dx * alongZ < 0 ? -1 : 1;
+    return true;
   }
 
   private relax(): void {
