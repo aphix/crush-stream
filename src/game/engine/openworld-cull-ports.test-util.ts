@@ -5,7 +5,7 @@ import type { OpenWorldPorts } from "./engine-openworld.ts";
 /** Culling ports with no camera and no solids: every thing is seen, so nothing is ever phased out. */
 export function idleCullPorts(): OpenWorldCullPorts {
   const detail = new CarDetail();
-  return { eyes: () => [], solids: () => [], playerCars: () => [], detail: () => detail, followed: () => null, replaying: () => false };
+  return { eyes: () => [], solids: () => [], playerCars: () => [], walker: () => null, detail: () => detail, followed: () => null, replaying: () => false };
 }
 
 /**
