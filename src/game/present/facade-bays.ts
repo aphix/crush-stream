@@ -29,8 +29,8 @@ export const HOUSE_ACCENTS: readonly HouseAccent[] = [
   { name: "tan", panel: 0xb08a5c, cornice: 0x4b4b50 },
 ];
 
-/** The marble steps' tints (sRGB): the same steps in slightly different whites from house to house. */
-const MARBLE_TINTS = [0xffffff, 0xeeeae0, 0xdcd9d2] as const;
+/** The steps' tints (sRGB) over the marble cell: marble in slightly different whites from house to house, and a sandstone and a brownstone for the houses that have them. */
+const MARBLE_TINTS = [0xffffff, 0xeeeae0, 0xdcd9d2, 0xc9b49c, 0xa98f7a] as const;
 
 /** The facade styles whose door has an arched fanlight in white surround (the Federal house); any other has a flat surround. */
 const ARCHED_DOOR_STYLES: readonly string[] = [BRICK_STYLE];

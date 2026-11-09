@@ -54,6 +54,8 @@ const LOUVRE_CONTRAST_MIN = 40;
 const KIT_DRAWS = 15;
 const EVERY_HOUSE: readonly string[] = ["facade-stoop", "facade-railing", "facade-cornice", "facade-roof"];
 /** The storey counts houses are built with: a bay stack of each has its own mesh. */
+/** The tints the stoops are made in (marble whites, sandstone, brownstone). */
+const STOOP_TINTS = 5;
 /** How many different storey counts the layout's houses must have. */
 const MIN_DISTINCT_STOREYS = 3;
 const STOREY_COUNTS = Array.from({ length: MAX_STOREYS - MIN_STOREYS + 1 }, (_, at) => MIN_STOREYS + at);
@@ -238,6 +240,14 @@ describe("given the kit made for the layout's rowhomes", () => {
     }
     expect(frontages.length, "houses read").toBeGreaterThan(100);
     expect(worst, "furthest an instance is from its frontage (m or unit)").toBeLessThan(EPSILON * 10);
+  });
+
+  // mutation: sed -i 's/MARBLE_TINTS\[frontage.variant % MARBLE_TINTS.length\]/MARBLE_TINTS[0]/' src/game/present/facade-bays.ts
+  it("when the houses' stoop colours are read, then marble whites, sandstone and brownstone all stand along the layout", () => {
+    expect(stoops.instanceColor, "stoop colours set").not.toBeNull();
+    const colours = new Set<number>();
+    for (let at = 0; at < stoops.count; at++) colours.add(Math.round(stoops.instanceColor!.getX(at) * 1000));
+    expect(colours.size, "distinct stoop colours").toBe(STOOP_TINTS);
   });
 
   // mutation: sed -i 's/frontage.variant % HOUSE_ACCENTS.length/0/g' src/game/present/facade-bays.ts
