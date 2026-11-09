@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { PREFAB_IDS, SURFACE_IDS } from "./catalog.ts";
 import { BIOME_IDS, SCENERY_DENSITY_RULES, SCENERY_RULES, SURFACE } from "./constants.ts";
+import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
+import { assetPrefab } from "./scenery-assets/pick.ts";
 import { ROAD_DECAL_NAMES } from "./scenery-assets/types.ts";
 
 /**
@@ -79,17 +81,23 @@ const route = z.object({
   lanes: z.array(lane).min(1),
 });
 
-const placement = z.object({
-  prefab: z.enum(PREFAB_IDS),
-  x: z.number(),
-  z: z.number(),
-  /** Radians, prefab +Z forward. */
-  yaw: z.number().default(0),
-  scale: z.number().positive().default(1),
-  size: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]).optional(),
-  /** A building's facade style by name (`present/facades.ts` `FACADE`), forcing it over the style the place's hash would pick. */
-  style: z.string().optional(),
-});
+const SCENERY_ASSET_IDS = SCENERY_ASSETS.map((row) => row.id);
+
+const placement = z
+  .object({
+    prefab: z.enum(PREFAB_IDS),
+    x: z.number(),
+    z: z.number(),
+    /** Radians, prefab +Z forward. */
+    yaw: z.number().default(0),
+    scale: z.number().positive().default(1),
+    size: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]).optional(),
+    /** A building's facade style by name (`present/facades.ts` `FACADE`), forcing it over the style the place's hash would pick. */
+    style: z.string().optional(),
+    /** A scenery asset by id (`world/scenery-assets`): `prefab` is then the asset's generic prefab (`assetPrefab`), `scale` multiplies the asset's own size (m), or `size`'s when given (the generic prefab's extents x, y, z as `assetScale` gives them: a decal's width, 1 and length). */
+    asset: z.enum(SCENERY_ASSET_IDS).optional(),
+  })
+  .refine((p) => p.asset === undefined || assetPrefab(SCENERY_ASSETS.find((row) => row.id === p.asset)!) === p.prefab, { message: "an asset's prefab is its generic one (assetPrefab)", path: ["prefab"] });
 
 const along = z.object({
   prefab: z.enum(PREFAB_IDS),
@@ -193,6 +201,8 @@ export const TrackSchema = z
         runoffSurface: surface.default(SURFACE.grass),
         wall: z.tuple([z.boolean(), z.boolean()]).default([true, true]),
         wallHeight: z.number().positive().default(1.1),
+        /** The race's own paint on the loop: the chequered start / finish band at node 0 and the red / white kerbs on its tight turns. False on a course that is a street (the lane lines stay). */
+        raceMarks: z.boolean().default(true),
         /** Node 0's `dish` (m); omitted, 0: a flat road. */
         dish: z.number().min(0).max(3).optional(),
       })
