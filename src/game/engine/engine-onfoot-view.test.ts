@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { WALKER_SLOT } from "../present/ragdoll-pool.ts";
-import { SHOULDER_BOOM } from "../present/walker-camera.ts";
+import type { FloorBox } from "../present/walker-floor.ts";
+import { SHOULDER_BOOM, SQUEEZED_BOOM } from "../present/walker-camera.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
 /** The blend from the car's camera to his (0.3 s) and a frame's slack (s). */
@@ -13,6 +14,15 @@ const NOTCHES_OUT = 3;
 const EYE_OVER_TORSO_MIN = 0.4;
 const EYE_OVER_TORSO_MAX = 0.7;
 const EYE_OFF_TORSO_MAX = 0.25;
+/** A pen of walls round him (the face of each this far, m, from his middle: past his arms' reach of 0.3) and what a drag turns through. */
+const PEN_FACE_M = 0.45;
+const PEN_WALL_M = 0.5;
+const PEN_HEIGHT_M = 3;
+const DRAG_PX = 40;
+const DRAG_STEPS = 60;
+/** His head's centre over his torso's (m), and the nearest the eye may come to it in the shoulder view. */
+const HEAD_OVER_TORSO = 0.52;
+const HEAD_CLEAR_M = 0.45;
 
 describe("given the real engine in the fleet, its player at the wheel of car 0", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -72,6 +82,36 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     rig.press("KeyV");
     rig.run(SETTLE_S);
     expect(mesh.viewHidden.value, "over his shoulder again he is drawn whole").toBe(-1);
+  });
+
+  // mutation: sed -i 's/^export const SQUEEZED_BOOM = 0.6;/export const SQUEEZED_BOOM = 0;/' src/game/present/walker-camera.ts
+  it("when the mouse drags the view round him on foot with a wall close on every side, then it stays his shoulder view at the wheel's boom, his head drawn and the eye off it", () => {
+    rig.getOut();
+    rig.run(SETTLE_S);
+    const middle = rig.torso();
+    const wall = (x0: number, z0: number, x1: number, z1: number): FloorBox => ({ x0, z0, x1, z1, y0: middle.y - 1.2, y1: middle.y - 1.2 + PEN_HEIGHT_M });
+    const out = PEN_FACE_M + PEN_WALL_M;
+    rig.engine["ragdolls"].setFixedBoxes([
+      wall(middle.x - out, middle.z - out, middle.x - PEN_FACE_M, middle.z + out),
+      wall(middle.x + PEN_FACE_M, middle.z - out, middle.x + out, middle.z + out),
+      wall(middle.x - out, middle.z - out, middle.x + out, middle.z - PEN_FACE_M),
+      wall(middle.x - out, middle.z + PEN_FACE_M, middle.x + out, middle.z + out),
+    ]);
+    rig.run(SETTLE_S);
+    const boom = view().orbitRadius;
+    const mesh = rig.engine["ragdolls"].pickMesh;
+    for (let step = 0; step < DRAG_STEPS; step++) {
+      view().lookBy(DRAG_PX, step % 2 === 0 ? DRAG_PX / 4 : -DRAG_PX / 4);
+      rig.run(FRAME);
+      const him = rig.torso();
+      const eye = rig.engine["camera"].position;
+      const head = Math.hypot(eye.x - him.x, eye.y - (him.y + HEAD_OVER_TORSO), eye.z - him.z);
+      expect(onFoot().footView, `drag ${step}: still over his shoulder`).toBe("shoulder");
+      expect(mesh.viewHidden.value, `drag ${step}: his head is drawn`).toBe(-1);
+      expect(head, `drag ${step}: the eye is ${head.toFixed(2)} m from his head`).toBeGreaterThan(HEAD_CLEAR_M);
+    }
+    expect(view().orbitRadius, "the drag did not zoom").toBeCloseTo(boom, 6);
+    expect(SQUEEZED_BOOM, "the squeeze is a head's reach").toBeGreaterThan(HEAD_CLEAR_M);
   });
 
   // mutation: sed -i 's/    view.minRadius = FIRST_PERSON_RADIUS;/    view.minRadius = this.carMinRadius;/' src/game/engine/engine-onfoot.ts

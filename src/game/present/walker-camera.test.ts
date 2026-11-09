@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Damped, FollowFocus, followFov, PIVOT_OVER_TORSO, RECENTER_DELAY, SHOULDER_BOOM } from "./walker-camera.ts";
+import { Damped, FollowFocus, followFov, PIVOT_OVER_TORSO, RECENTER_DELAY, SHOULDER_BOOM, SHOULDER_PITCH, SQUEEZED_BOOM, type Sweep, WalkerView } from "./walker-camera.ts";
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -122,4 +122,33 @@ describe("given the view left alone while he runs", () => {
       expect(yaws.every((yaw) => yaw === 1.2), "the view is where the player left it").toBeTruthy();
     });
   }
+});
+
+/** The distance the eye must keep from his head's centre however tight the spot: past the camera's ball and his head's breadth (m). */
+const HEAD_CLEAR_M = 0.45;
+/** His head's centre over his torso's centre (m: the head box at 1.63 m, the torso's at 1.11 m). */
+const HEAD_OVER_TORSO = 0.52;
+/** Turns tried round him in a squeeze (rad, a twelfth of a circle each). */
+const TURN_STEP = Math.PI / 6;
+const BLOCKED: Sweep = () => 0;
+
+describe("given the shoulder camera in a spot where every sweep is blocked at once", () => {
+  // mutation: sed -i 's/^export const SQUEEZED_BOOM = 0.6;/export const SQUEEZED_BOOM = 0;/' src/game/present/walker-camera.ts
+  it("when the view is turned all the way round him, then the eye never comes within a head's reach of his head and is never his own eyes", () => {
+    const view = new WalkerView();
+    for (let k = 0; k < 12; k++) {
+      view.shoulder(0, STANDING_TORSO, 0, 0, STANDING_TORSO + PIVOT_OVER_TORSO, 0, k * TURN_STEP, SHOULDER_PITCH, SHOULDER_BOOM, BLOCKED, FRAME);
+      const head = Math.hypot(view.eye[0]!, view.eye[1]! - (STANDING_TORSO + HEAD_OVER_TORSO), view.eye[2]!);
+      expect(head, `turn ${k}: the eye is ${head.toFixed(2)} m from his head`).toBeGreaterThan(HEAD_CLEAR_M);
+      expect(view.inHead, `turn ${k}: his head is drawn`).toBe(false);
+    }
+    expect(SQUEEZED_BOOM, "the squeeze is a boom a head's reach long").toBeGreaterThan(HEAD_CLEAR_M);
+  });
+
+  it("when the wheel has brought the boom nearer than the squeeze, then the squeeze is no longer than that boom", () => {
+    const view = new WalkerView();
+    const near = SQUEEZED_BOOM / 2;
+    view.shoulder(0, STANDING_TORSO, 0, 0, STANDING_TORSO + PIVOT_OVER_TORSO, 0, 0, 0, near, BLOCKED, FRAME);
+    expect(Math.hypot(view.eye[0]!, view.eye[2]!), "the eye is at the boom asked for, not past it").toBeLessThanOrEqual(near + 1e-6);
+  });
 });
