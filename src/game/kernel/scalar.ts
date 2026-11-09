@@ -10,6 +10,11 @@ export function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
+/** `v` rounded to the nearest multiple of `step`: a reading published at the resolution its display can show changes only when the display does. */
+export function quantize(v: number, step: number): number {
+  return Math.round(v / step) * step;
+}
+
 /** Angle wrapped into [-π, π) by floor (not the atan2 form: the two differ in the last bits). */
 export function wrapPi(a: number): number {
   return a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));

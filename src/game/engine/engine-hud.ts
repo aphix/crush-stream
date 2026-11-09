@@ -1,7 +1,7 @@
 import { stackLoads } from "../scenes/stack-rig.ts";
 import { LAB_PRESET } from "../scenes/constants.ts";
 import type { GarageHud, HudStore, LabHud } from "../hud/hud-store.ts";
-import { carGauge } from "../match/car-view.ts";
+import { carGauge, gaugeDrift, gaugeMeter } from "../match/car-view.ts";
 import { HANDLING } from "../vehicle/vehicle-classes.ts";
 import { mayRecoverFlipped, NO_DRIFT } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -41,6 +41,8 @@ export abstract class EngineHud extends EngineWarm {
     const relVel = this.fleetClosing();
     const eta =
       this.clock.phase === "approach" && !this.rigScene ? this.contactEta() : 0;
+    // The sandbox's readouts (the lead car's speed, the closing speed, the clock) are drawn only where there is no race: a race's HUD has its own, and these would change every publish for nothing.
+    const sandbox = !this.race.active;
     const carMass = this.carA.deform.totalMass;
     const pistonEnergy = this.pistons.shotEnergy(carMass);
     // The viewed car outside a race (a race publishes its own view), driven or watched: the gauge its driver has (`meterOf`).
@@ -49,13 +51,13 @@ export abstract class EngineHud extends EngineWarm {
     const viewed = id >= 0 ? cars[id] : undefined;
     const drives = this.seat.mode === "drive";
     // The slide the seat keeps, copied (the seat goes on writing it); only a car this browser drives has one.
-    const seatDrift = drives ? { ...this.seat.drift } : NO_DRIFT;
+    const seatDrift = drives ? gaugeDrift(this.seat.drift) : NO_DRIFT;
     const drivenView = viewed && {
       id,
       racer: null,
       ...carGauge(viewed),
       brakeCue: 0,
-      boost: this.meterOf(id),
+      boost: gaugeMeter(this.meterOf(id)),
       drift: seatDrift,
       chase: null,
       canReset: drives && this.mayRecover(viewed),
@@ -136,12 +138,12 @@ export abstract class EngineHud extends EngineWarm {
       phase: this.clock.phase,
       timeScale: this.clock.timeScale,
       userTimeScale: this.clock.userTimeScale,
-      elapsed: this.elapsedWall,
-      speedA: this.showCompactor ? 0 : (cars[0]?.velocity.length() ?? 0),
-      speedB: this.showCompactor ? 0 : (cars[1]?.velocity.length() ?? 0),
-      closingKph: relVel * 3.6,
+      elapsed: sandbox ? this.elapsedWall : 0,
+      speedA: !sandbox || this.showCompactor ? 0 : (cars[0]?.velocity.length() ?? 0),
+      speedB: !sandbox || this.showCompactor ? 0 : (cars[1]?.velocity.length() ?? 0),
+      closingKph: sandbox ? relVel * 3.6 : 0,
       impactKph: this.impactKph,
-      eta: Number.isFinite(eta) ? eta : 0,
+      eta: sandbox && Number.isFinite(eta) ? eta : 0,
       cageCount: this.carA.deform.cageCount,
       sensorCount: this.carA.deform.sensorCount,
       squash: this.squash,
