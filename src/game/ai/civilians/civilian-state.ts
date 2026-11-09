@@ -19,8 +19,8 @@ import { castHomesOf, newAppointmentSlot, type ResolvedMember } from "./civilian
 import { buildVenueIndex, type VenueIndex } from "./society-venues.ts";
 import { PathFinder } from "./walk-path.ts";
 
-/** A host event waiting for its ticks: the civilian it hit (or the place) changes at `individualTick`, everyone drawn into it at `reactionTick` (`EVENT_LEAD_TICKS` after it, as late as a peer may hear it) and the society at `societyTick`. */
-type PendingEvent = { kind: number; subject: number; seconds: number; individualTick: number; reactionTick: number; societyTick: number; individualDone: boolean; reactionDone: boolean };
+/** A host event waiting for its ticks (`bearing`: the way to the player who shoved, `NO_BEARING` for none): the civilian it hit (or the place) changes at `individualTick`, everyone drawn into it at `reactionTick` (`EVENT_LEAD_TICKS` after it, as late as a peer may hear it) and the society at `societyTick`. */
+type PendingEvent = { kind: number; subject: number; seconds: number; bearing: number; individualTick: number; reactionTick: number; societyTick: number; individualDone: boolean; reactionDone: boolean };
 
 /** The whole society and crowd of the city as typed arrays; the worker and the main thread each hold one and keep it equal by the same pure steps. */
 export class CityState {

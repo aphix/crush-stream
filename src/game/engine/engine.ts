@@ -53,6 +53,7 @@ import { InteriorSet } from "../present/interiors/interior-art.ts";
 import { NEAR_SLOTS } from "../present/civilian-art-constants.ts";
 import { OpenWorldSigns } from "../present/openworld-signs.ts";
 import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
+import { PUNCH_LIFT, PUNCH_SPEED } from "../ai/civilians/civilian-constants.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
 import { buildOpenWorldMap } from "../world/openworld/openworld-map.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
@@ -410,6 +411,10 @@ export class CrashEngine extends EngineGarage {
         ray.dirZ = _v.z;
       },
       throwFigure: (strike, look) => this.ragdolls.throwFigure(strike, this.live(), look),
+      strikeWalker: (dirX, dirZ) => {
+        if (!this.ragdolls.walkerTorso(_p)) return;
+        this.ragdolls.strikeWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
+      },
       hookWallHits: (listener) => {
         const recorded = this.race.onWallHit;
         this.race.onWallHit = (i, closing, x, z) => {

@@ -6,6 +6,8 @@ import { applyIndividualEvents, applyReactionEvents, queueEvents } from "./civil
 import { historyLines, moodOf } from "./civilian-mood.ts";
 import { EVENT_CODE, MOOD } from "./civilian-names.ts";
 import { runTicks, stateDigest } from "./civilian-run.test-util.ts";
+import { computeTick } from "./civilian-tick.ts";
+import { applyAnswer } from "./civilian-wire.ts";
 import { decideResident } from "./civilian-plan.ts";
 import { ActivityReading, readActivity } from "./society-activity.ts";
 import { CrimeDesk, crimePlaceOf, isWanted } from "./society-crime.ts";
@@ -148,16 +150,26 @@ describe("given a wanted criminal busted by the police", () => {
   });
 });
 
+/** A city where `resident` (not wanted) has a bust queued for the tick it is about to step. */
+function bustOfTheInnocent(): Cast {
+  const cast = newCast(NOON);
+  stageResident(cast.state, cast.resident, { place: HOME_A1, tick: cast.tick, nextDecision: cast.tick + 1000 });
+  cast.state.nextTick = cast.tick;
+  queueEvents(cast.state, cast.tick, [EVENT_KIND.bust, cast.resident, cast.tick / 2]);
+  return cast;
+}
+
 describe("given a bust raised for someone who is not wanted", () => {
-  it("when its tick comes, then nothing happens to them and they are back on the street", () => {
-    const cast = newCast(NOON);
-    const { state, resident } = cast;
-    stageResident(state, resident, { place: HOME_A1, tick: cast.tick });
-    queueEvents(state, cast.tick, [EVENT_KIND.bust, resident, cast.tick / 2]);
-    expect(state.hiddenFromTick[resident], "tick they were hidden from while the bust is queued").toBe(cast.tick);
-    applyIndividualEvents(state, cast.tick);
-    expect(state.hiddenFromTick[resident], "tick they are hidden from after").toBe(NEVER_TICK);
-    expect(intAt(state, resident, RESIDENT_INT.flags) & FLAG.custody, "custody flag").toBe(0);
+  it("when one peer steps its tick and another only applies that step's answer, then neither holds them, and both hide them for the same window", () => {
+    const stepped = bustOfTheInnocent();
+    const mirrored = bustOfTheInnocent();
+    applyAnswer(mirrored.state, computeTick(stepped.state, stepped.tick));
+    for (const { state, resident, tick } of [stepped, mirrored]) {
+      expect(intAt(state, resident, RESIDENT_INT.flags) & FLAG.custody, "custody flag").toBe(0);
+      expect(intAt(state, resident, RESIDENT_INT.nextDecisionTick), "tick their dwell ends").toBe(tick + 1000);
+      expect(state.hiddenFromTick[resident], "tick they are hidden from").toBe(tick);
+      expect(state.hiddenUntilTick[resident], "tick they are back").toBe(tick + JAIL_TICKS);
+    }
   });
 });
 

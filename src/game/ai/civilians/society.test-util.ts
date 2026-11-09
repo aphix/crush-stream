@@ -4,6 +4,7 @@ import { dayOf } from "./civilian-clock.ts";
 import {
   NEED_COUNT,
   NEVER_TICK,
+  NO_BEARING,
   NO_PLACE,
   NO_SEAT,
   RESIDENT_FLOAT,
@@ -124,6 +125,7 @@ export function stageResident(state: CityState, resident: number, stage: Stage):
     [RESIDENT_INT.crimeNotBefore]: 0,
     [RESIDENT_INT.fightTick]: NEVER_TICK,
     [RESIDENT_INT.fightPartner]: NO_PLACE,
+    [RESIDENT_INT.fightBearing]: NO_BEARING,
     [RESIDENT_INT.moodEvent]: stage.moodEvent ?? 0,
     [RESIDENT_INT.moodTick]: stage.tick - 1,
     [RESIDENT_INT.decisionCount]: 0,
