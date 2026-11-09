@@ -4,8 +4,9 @@ import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { drawnHalf, HOME_HEIGHT, type Frontage } from "../world/openworld/openworld-facade-solids.ts";
 import { BRICK_STYLE } from "../world/openworld/openworld-programme.ts";
-import { buildAirconGeometry, buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildFanlightGeometry, buildRailingGeometry, buildRoofGeometry, buildShutterGeometry, buildStoopGeometry, buildSurroundGeometry, TINT_ATTRIBUTE } from "./facade-bay-parts.ts";
-import { airconWindowsOf, shuttersOf } from "./facade-fittings.ts";
+import { buildAirconGeometry, buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildFanlightGeometry, buildRailingGeometry, buildRoofGeometry, buildShutterGeometry, buildStoopGeometry, buildSurroundGeometry, buildWindowBoxGeometry, TINT_ATTRIBUTE } from "./facade-bay-parts.ts";
+import { airconWindowsOf, shuttersOf, visibleWindowsOf } from "./facade-fittings.ts";
+import { windowBoxPlacements, type SillWindow } from "./facade-window-boxes.ts";
 import { makeKitTextures, type KitTextures } from "./facade-kit-atlas.ts";
 import { FACADE_GLOW, roofLiftAt } from "./facades.ts";
 
@@ -89,7 +90,7 @@ function makeRailMaterial(textures: KitTextures): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ map: textures.rail, alphaTest: RAIL_ALPHA_TEST, side: THREE.DoubleSide, roughness: RAIL_ROUGHNESS, metalness: RAIL_METALNESS });
 }
 
-type Kind = "bay" | "stoop" | "railing" | "surround" | "fanlight" | "cornice" | "roof" | "condenser" | "deck" | "shutter" | "aircon";
+type Kind = "bay" | "stoop" | "railing" | "surround" | "fanlight" | "cornice" | "roof" | "condenser" | "deck" | "shutter" | "aircon" | "windowBox";
 
 /** Where one instance of a kit mesh stands against a house: across the lot (u), up from the ground (or the roof, for a roof piece), and its scale (1: the geometry as built). */
 type Placement = { across: number; up: number; width: number; height: number; depth: number };
@@ -104,6 +105,11 @@ const AIRCON_SHARE = 40;
 const CONDENSER_BITS = 8;
 const DECK_BITS = 16;
 const AIRCON_BITS = 12;
+/** The share (of 100) of houses with window boxes, and the bits of the variant that choose it and which storey they stand on (the first or second above the ground storey). */
+const WINDOW_BOX_SHARE = 25;
+const WINDOW_BOX_BITS = 4;
+const WINDOW_BOX_STOREY_BITS = 20;
+const WINDOW_BOX_STOREYS = 2;
 const SHUTTER_BITS = 24;
 const PERCENT = 100;
 const WHITE = 0xffffff;
@@ -147,6 +153,11 @@ function kitKinds(textures: { kit: THREE.Material; rail: THREE.Material }): read
   const onRoof = (frontage: Frontage): readonly Placement[] => [{ ...IN_PLACE, up: roofTopOf(frontage) }];
   const shuttersFor = byStyle(shuttersOf);
   const windowsFor = byStyle(airconWindowsOf);
+  const boxWindowsFor = byStyle(visibleWindowsOf);
+  const airconWindow = (frontage: Frontage): SillWindow | null => {
+    const candidates = windowsFor(frontage.style);
+    return candidates.length === 0 || !inShare(frontage, AIRCON_BITS, AIRCON_SHARE) ? null : candidates[(frontage.variant >>> AIRCON_BITS) % candidates.length]!;
+  };
   return [
     { kind: "bay", geometry: buildBayGeometry(), material: textures.kit, placements: everyHouse, colourOf: (frontage) => accentOf(frontage).panel },
     { kind: "stoop", geometry: buildStoopGeometry(), material: textures.kit, placements: everyHouse, colourOf: (frontage) => MARBLE_TINTS[frontage.variant % MARBLE_TINTS.length]! },
@@ -169,12 +180,17 @@ function kitKinds(textures: { kit: THREE.Material; rail: THREE.Material }): read
       geometry: buildAirconGeometry(),
       material: textures.kit,
       placements: (frontage) => {
-        const candidates = windowsFor(frontage.style);
-        if (candidates.length === 0 || !inShare(frontage, AIRCON_BITS, AIRCON_SHARE)) return [];
-        const window = candidates[(frontage.variant >>> AIRCON_BITS) % candidates.length]!;
-        return [{ across: window.across, up: window.sill + AIRCON.lift, width: AIRCON.width, height: AIRCON.height, depth: AIRCON.projection }];
+        const window = airconWindow(frontage);
+        return window === null ? [] : [{ across: window.across, up: window.sill + AIRCON.lift, width: AIRCON.width, height: AIRCON.height, depth: AIRCON.projection }];
       },
       colourOf: () => WHITE,
+    },
+    {
+      kind: "windowBox",
+      geometry: buildWindowBoxGeometry(),
+      material: textures.kit,
+      placements: (frontage) => (inShare(frontage, WINDOW_BOX_BITS, WINDOW_BOX_SHARE) ? windowBoxPlacements(boxWindowsFor(frontage.style), 1 + ((frontage.variant >>> WINDOW_BOX_STOREY_BITS) % WINDOW_BOX_STOREYS), airconWindow(frontage)) : []),
+      colourOf: (frontage) => accentOf(frontage).panel,
     },
   ];
 }
