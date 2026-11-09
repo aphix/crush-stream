@@ -40,6 +40,8 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     rig.normalTime();
     onFoot().reset();
     rig.engine["ragdolls"].reset();
+    // The dummies' world keeps the boxes a row streamed in across a reset (a building's stay while he walks): a row's pen must not close the next one's door.
+    rig.engine["ragdolls"].setFixedBoxes([]);
     for (let i = 0; i < rig.cars().length; i++) rig.place(i, i === 0 ? 0 : 30 * (i % 2 === 0 ? 1 : -1), i === 0 ? 0 : -30 + 4 * i);
     rig.sit(0);
     rig.run(0.2);
