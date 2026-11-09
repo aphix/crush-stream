@@ -24,6 +24,10 @@ function fakeTraffic() {
       return leased;
     },
     despawn: () => void calls.push("despawn"),
+    redirect: (_handle, spot) => {
+      calls.push(`redirect ${spot}`);
+      return spot !== 3;
+    },
     drivenCarAt: (carIndex) => (carIndex === TRAFFIC_CAR_INDEX ? driven : null),
     residentOf: (carIndex) => (carIndex === TRAFFIC_CAR_INDEX ? TRAFFIC_RESIDENT : -1),
   };
@@ -51,6 +55,19 @@ describe("the patrol cars' cars come from the traffic's pool", () => {
     ports.release(slot);
     expect(calls.at(-1)).toBe("despawn");
     expect(ports.lease(0, 0), "the slot is free again").toBe(0);
+  });
+
+  // mutation: in src/game/ai/openworld-crime/traffic-patrol-ports.ts redirect(), change `this.traffic.redirect(this.leased[handle]!, to)` to `false`
+  it("re-aims a leased car at the kerb space nearest a point, and says when the traffic cannot", () => {
+    const { traffic, calls, sirens } = fakeTraffic();
+    const ports = new TrafficPatrolPorts(traffic, sirens);
+    const slot = ports.lease(0, 0);
+    expect(ports.redirect(slot, 50, 0), "the traffic re-planned").toBe(true);
+    expect(calls.at(-1), "to the space nearest the point").toBe("redirect 0");
+    traffic.nearestSpot = () => 3;
+    expect(ports.redirect(slot, 50, 0), "the traffic has no way").toBe(false);
+    traffic.nearestSpot = () => -1;
+    expect(ports.redirect(slot, 50, 0), "no space near the point").toBe(false);
   });
 
   it("stops a traffic car through its handle and leaves the player's car alone", () => {
