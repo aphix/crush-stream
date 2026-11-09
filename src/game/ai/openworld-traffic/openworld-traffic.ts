@@ -207,6 +207,21 @@ export class OpenWorldTraffic {
     this.movers.despawn(handle);
   }
 
+  /** Patrol car `chaserIndex` is after traffic car `carIndex`: the driver runs as a racer evades a cop (`MoverFleet.evade`) once it notices, until `endEvade`. False for a car that is not on a trip of traffic's. */
+  evade(carIndex: number, chaserIndex: number): boolean {
+    return this.movers.evade(carIndex, chaserIndex);
+  }
+
+  /** The chase of traffic car `carIndex` is over: it drives as traffic again. */
+  endEvade(carIndex: number): void {
+    this.movers.endEvade(carIndex);
+  }
+
+  /** Whether traffic car `carIndex` runs from a chaser now. */
+  isFleeing(carIndex: number): boolean {
+    return this.movers.isFleeing(carIndex);
+  }
+
   /** Sends leased car `handle` on to free space `toSpot` from where it is, keeping its urgency (`MoverFleet.redirect`); false when there is no way or the space is held. */
   redirect(handle: DrivenCar, toSpot: number): boolean {
     return this.movers.redirect(handle, toSpot);

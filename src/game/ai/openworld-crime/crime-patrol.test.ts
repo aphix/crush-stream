@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAR_AVOID_GAP, CAR_LINGER_SECONDS, CAREFUL_PURSUIT_SPEED, CHASE_LEAD_SECONDS, CHASE_RESUME_DISTANCE, CLOSE_PURSUIT_DISTANCE, CRIME_STEP_SECONDS, CRIME_STREAM, HOTHEAD_RUN_SHARE, REDIRECT_SECONDS } from "./crime-constants.ts";
+import { CAR_AVOID_GAP, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS, CAREFUL_PURSUIT_SPEED, CHASE_LEAD_SECONDS, CHASE_RESUME_DISTANCE, CLOSE_PURSUIT_DISTANCE, CRIME_STEP_SECONDS, CRIME_STREAM, HOTHEAD_RUN_SHARE, REDIRECT_SECONDS } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
 import { harness, runFor, seedWhere } from "./crime-fixture.test-util.ts";
 import { PatrolCars } from "./patrol-cars.ts";
@@ -119,6 +119,34 @@ describe("a careful chase follows the streets", () => {
     street.snaps[runner]!.vz = 0;
     runFor(run, REDIRECT_SECONDS + 1);
     expect(street.drivers[PATROL_CAR_INDEX], "the traffic drives the trip again").toBeNull();
+  });
+});
+
+describe("a chased traffic car runs from the patrol car", () => {
+  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts stepPursuit(), delete the line `if (this.yieldState[slot] === YIELD.none) this.ports.evade(this.targetCar[slot]!, this.handle[slot]!);`
+  it("is told which patrol car chases it from the start of the chase", () => {
+    const run = harness([40, 0, 0], { withCars: true, seed: CAREFUL_SEED });
+    const street = run.street!;
+    street.leaseAt = { x: 0, z: 0, yaw: EAST };
+    const runner = street.addCar(RUNNER_X, 0, EAST, RUNNER_SPEED, 2, true);
+    expect(run.scene.reportRedLight(runner, RUNNER_X, 0), "a patrol car was sent").toBe(true);
+    runFor(run, 1);
+    expect(street.evading[runner], "chased by the patrol car").toBe(PATROL_CAR_INDEX);
+  });
+
+  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts linger(), delete the line `if (this.targetCar[slot]! >= 0) this.ports.endEvade(this.targetCar[slot]!);`
+  it("is let go to drive as traffic when the chase is given up", () => {
+    const run = harness([40, 0, 0], { withCars: true, seed: CAREFUL_SEED });
+    const street = run.street!;
+    street.leaseAt = { x: 0, z: 0, yaw: EAST };
+    const runner = street.addCar(RUNNER_X, 0, EAST, RUNNER_SPEED, 2, true);
+    run.scene.reportRedLight(runner, RUNNER_X, 0);
+    runFor(run, 1);
+    street.snaps[runner]!.x += CAR_LOST_DISTANCE + 100;
+    street.snaps[runner]!.vx = 0;
+    street.snaps[runner]!.vz = 0;
+    runFor(run, CAR_LOST_SECONDS + 2);
+    expect(street.evading[runner], "the chase is over").toBe(-1);
   });
 });
 
