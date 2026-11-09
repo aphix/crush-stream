@@ -229,6 +229,9 @@ export class DeformableCar extends CarParts {
 
   resetVisual(keepTorn = false): void {
     this.wake();
+    // Where the wreck fell asleep is no part of a car put back: a new car has slept nowhere, and its flight block (`FLIGHT_SLEEP`) would carry the old spot on.
+    this.sleepX = 0;
+    this.sleepZ = 0;
     this.vaporized = false;
     this.falling = false;
     this.driverOut = null;
