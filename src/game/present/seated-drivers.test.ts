@@ -244,6 +244,27 @@ describe("given the seated drivers' batch and one car", () => {
   });
 });
 
+describe("given the seated drivers' batch and cars the open world says are parked", () => {
+  // mutation: sed -i 's/ || (empty !== null \&\& empty(c, car))) continue;/) continue;/' src/game/present/seated-drivers.ts
+  test("when the caller names a car empty, then no driver is drawn in it and the other cars' are", () => {
+    const cars = [0, 5].map((x) => {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
+      car.spawn(x, 0, 0);
+      car.group.updateMatrixWorld(true);
+      return car;
+    });
+    const drivers = new SeatedDrivers(() => false);
+    const look = (car: number) => driverLook(1, car);
+    drivers.sync(cars, look, -1, (id) => id === 0);
+    expect(drivers.mesh.count, "the second car's driver alone").toBe(1);
+    drivers.sync(cars, look, -1, () => false);
+    expect(drivers.mesh.count, "nobody parked").toBe(2);
+    drivers.sync(cars, look);
+    expect(drivers.mesh.count, "no caller: every driver in").toBe(2);
+    drivers.dispose();
+  });
+});
+
 describe("given the seated drivers' batch and two cars", () => {
   test("when the first car's driver is thrown, then the other's is drawn alone: the draw holds one figure, none for the empty seat", () => {
     const cars = [0, 5].map((x) => {

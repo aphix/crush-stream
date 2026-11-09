@@ -277,7 +277,7 @@ export class CrashEngine extends EngineGarage {
       this.lampBatch.sync(drawn);
       this.partBatch.sync(drawn);
       // In the garage the standing dummy beside the car is the driver, and the showcase's cars show their empty cabins: no one sits in the car there. A car its player left on foot has nobody in it either.
-      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook, this.onFoot.away);
+      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook, this.onFoot.away, this.parkedEmpty);
       this.coverBatch.sync(drawn);
       lapPart(PART.batches);
     };
@@ -381,6 +381,9 @@ export class CrashEngine extends EngineGarage {
         this.ragdolls.preload().then(() => this.queueWarm(), (err: unknown) => console.error("Crush Stream ragdoll load failed", err));
       });
   }
+
+  /** A car of the open world standing in a kerb space has nobody in it (`SeatedDrivers.sync`). */
+  private readonly parkedEmpty = (id: number, car: DeformableCar): boolean => this.openWorld.carIsEmpty(id, car);
 
   private makeOpenWorld(): OpenWorldDirector {
     const eyes = [this.camera];
