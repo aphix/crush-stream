@@ -42,7 +42,7 @@ import { CrowdWalkers } from "./crowd-walkers.ts";
 import { createCrowdPoses, type CrowdPoses } from "./crowd-poses.ts";
 
 /** Changes the crowd's poses after its own placing: the poses, the crowd time, whether this crowd is the host's. */
-export type CrowdOverlay = (poses: CrowdPoses, crowdSeconds: number, authority: boolean) => void;
+type CrowdOverlay = (poses: CrowdPoses, crowdSeconds: number, authority: boolean) => void;
 
 const NO_EVENTS: readonly number[] = [];
 const NO_STRIKES: readonly FigureStrike[] = [];
@@ -115,6 +115,7 @@ export class CivilianCrowd {
   private readonly batch: Float64Array;
   private batchCount = 0;
   private struck: FigureStrike[] = [];
+  private struckSpare: FigureStrike[] = [];
   private readonly wreckedAt: Float64Array;
   private readonly heardKnockResident = new Int32Array(HEARD_KNOCK_QUEUE);
   private readonly heardKnockSeconds = new Float64Array(HEARD_KNOCK_QUEUE);
@@ -224,11 +225,13 @@ export class CivilianCrowd {
     if (this.started) this.postBatch();
   }
 
-  /** The civilians run down since the last call, oldest first. */
+  /** The civilians run down since the last call, oldest first; the array is the crowd's own, valid until the next call that has any. */
   takeStrikes(): readonly FigureStrike[] {
     if (this.struck.length === 0) return NO_STRIKES;
     const out = this.struck;
-    this.struck = [];
+    this.struck = this.struckSpare;
+    this.struck.length = 0;
+    this.struckSpare = out;
     return out;
   }
 

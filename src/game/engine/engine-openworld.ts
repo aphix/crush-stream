@@ -22,6 +22,9 @@ import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cu
 
 const NO_EVENTS = new Float64Array(0);
 
+/** A player on foot: where he stands and his velocity (m, m/s). */
+type FootBody = { x: number; z: number; velocityX: number; velocityZ: number };
+
 /** The drawn crowd: `update` once a frame after the crowd's step. */
 type CrowdArt = {
   update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void;
@@ -59,8 +62,8 @@ export type OpenWorldPorts = {
   /** The population tier of this device (`POPULATION_TIER`). */
   tier(): number;
   cars(): readonly DeformableCar[];
-  /** Writes where this browser's player on foot stands; false while he is in a car. */
-  foot(out: { x: number; z: number }): boolean;
+  /** Writes where this browser's player on foot stands and how fast he moves, as the ragdoll world's last step has him (not the blended drawn torso); false while he is in a car. */
+  foot(out: FootBody): boolean;
   /** This machine's wall clock (s). */
   now(): number;
   /** Writes where the eye is and which way it looks. */
@@ -110,12 +113,7 @@ export class OpenWorldDirector {
   private readonly ray = new LookRay();
   private text: LookText | null = null;
   private lookAcc = 0;
-  private readonly foot = { x: 0, z: 0 };
-  private footTracked = false;
-  private footLastX = 0;
-  private footLastZ = 0;
-  private footVelocityX = 0;
-  private footVelocityZ = 0;
+  private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
 
   constructor(ports: OpenWorldPorts) {
     this.ports = ports;
@@ -191,7 +189,6 @@ export class OpenWorldDirector {
     const key = client ? this.heardKey : this.hostKey();
     if (this.crowd === null || this.crowdKey !== key) this.start(this.map, key, client);
     const crowd = this.crowd!;
-    this.trackFoot(wallDt);
     if (client) {
       this.feedWalkers(crowd);
       crowd.step(this.clock.crowdSeconds(this.ports.now(), INTERP_DELAY), this.ports.cars(), false);
@@ -227,22 +224,10 @@ export class OpenWorldDirector {
     this.text = null;
   }
 
-  /** Once a frame: where the player on foot stands and how fast he moves (how far he went since the last frame). */
-  private trackFoot(wallDt: number): void {
-    const wasTracked = this.footTracked;
-    this.footTracked = this.ports.foot(this.foot);
-    if (!this.footTracked) return;
-    const moving = wasTracked && wallDt > 0;
-    this.footVelocityX = moving ? (this.foot.x - this.footLastX) / wallDt : 0;
-    this.footVelocityZ = moving ? (this.foot.z - this.footLastZ) / wallDt : 0;
-    this.footLastX = this.foot.x;
-    this.footLastZ = this.foot.z;
-  }
-
-  /** The player on foot is a body the crowd makes room round and can shove. */
+  /** The player on foot is a body the crowd makes room round and can shove, as the ragdoll world's step has him: the same for every frame rate. */
   private feedWalkers(crowd: CivilianCrowd): void {
     crowd.walkers.clear();
-    if (this.footTracked) crowd.walkers.add(this.foot.x, this.foot.z, this.footVelocityX, this.footVelocityZ);
+    if (this.ports.foot(this.foot)) crowd.walkers.add(this.foot.x, this.foot.z, this.foot.velocityX, this.foot.velocityZ);
   }
 
   private dropFacades(): void {

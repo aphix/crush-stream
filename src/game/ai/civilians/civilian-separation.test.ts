@@ -138,6 +138,16 @@ describe("given two civilians further apart than the pair reach", () => {
   });
 });
 
+describe("given forty-one civilians within a hand's breadth of each other", () => {
+  it("when they are paired, then the pair budget is each body's own: the last pair is listed, though the first bodies would use up a shared list", () => {
+    const mob = Array.from({ length: 41 }, (_, index) => ({ x: (index % 7) * 0.05, z: Math.floor(index / 7) * 0.05 }));
+    const separation = resolved(mob);
+    let lastPairListed = false;
+    for (let pair = 0; pair < separation.pairCount; pair++) lastPairListed = lastPairListed || (separation.pairFirst[pair] === 39 && separation.pairSecond[pair] === 40);
+    expect(lastPairListed, "the pair of the last two bodies is listed").toBe(true);
+  });
+});
+
 describe("given a crowd placed, moved apart and placed again as it was", () => {
   it("when it is resolved the third time, then every drawn spot is exactly what the first gave", () => {
     const crowd = [{ x: 0, z: 0, velocityZ: WALK }, { x: 0, z: 0.2, velocityZ: -WALK }, { x: 0.2, z: 0.1 }];

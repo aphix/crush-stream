@@ -46,7 +46,7 @@ export const SEPARATION_PASSES = 8;
 export const PAIR_RANGE = BODY_GAP + 2 * MAX_OFFSET;
 /** Two bodies closing or parting slower than this (m/s) stand still to each other: they are pushed straight apart, not stepped to each other's sides. */
 export const MOVING_SPEED = 0.1;
-/** Pairs kept per body: a ninth neighbour inside reach is a mob, not a street. The grid's cells hash by position (a power of two). */
+/** Pairs each body lists as the lower of the two: a ninth neighbour inside reach is a mob, not a street. The grid's cells hash by position (a power of two). */
 export const PAIRS_PER_BODY = 8;
 export const SEPARATION_CELLS = 2048;
 /** Players on foot the crowd makes room for. */

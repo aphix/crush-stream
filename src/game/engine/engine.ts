@@ -35,6 +35,7 @@ import { Fountains } from "./engine-fountains.ts";
 import { GameAudio } from "../present/game-audio.ts";
 import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
+import { WALKER_SLOT } from "../present/ragdoll-pool.ts";
 import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
@@ -100,6 +101,7 @@ const LOD_SMALL_PX = 40;
 const LOD_TINY_PX = 20;
 const _lodCenter = new THREE.Vector3();
 const _v = new THREE.Vector3();
+const _footVelocity = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _bn = new THREE.Vector3();
@@ -388,9 +390,11 @@ export class CrashEngine extends EngineGarage {
       tier: () => (this.deviceClass !== "desktop" ? POPULATION_TIER.phone : this.cine.tier === "ultra" ? POPULATION_TIER.ultra : POPULATION_TIER.desktop),
       cars: () => this.live(),
       foot: (out) => {
-        if (!this.ragdolls.walkerTorso(_v)) return false;
+        if (!this.ragdolls.torso(WALKER_SLOT, _v, _footVelocity)) return false;
         out.x = _v.x;
         out.z = _v.z;
+        out.velocityX = _footVelocity.x;
+        out.velocityZ = _footVelocity.z;
         return true;
       },
       now: () => performance.now() / 1000,
