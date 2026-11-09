@@ -8,16 +8,16 @@ import { stepWorld } from "./world-step.ts";
 import * as THREE from "three";
 import { PREFABS, type PrefabId } from "../world/catalog.ts";
 import { setGround } from "../world/ground.ts";
-import { placeProps, propColliders, type PropCollider } from "../world/placements.ts";
-import { makeWorld } from "../world/race-world.test-util.ts";
-import { Track } from "../world/track.ts";
-import { parseTrack } from "../world/track-schema.ts";
-import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
+import { propColliders, type Placed, type PropCollider } from "../world/placements.ts";
+import { armSolids } from "../world/surfaces.ts";
+import type { Track } from "../world/track.ts";
+import { course as shipped, makeWorld, type World } from "../world/race-world.test-util.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import { propContact } from "../contact/prop-contact.ts";
 import { frame, makeCar, worldOf } from "../vehicle/ground-probe.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { assertSameNumbers, massCentroid } from "../vehicle/test-support.ts";
+import { assertSameDigest, assertSameNumbers, massCentroid } from "../vehicle/test-support.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 
 /**
@@ -26,26 +26,47 @@ import { QUIET_HZ } from "../kernel/constants.ts";
  * ignored height, so a car flying over the Havana alley wall met it in mid-air.
  */
 
-const COURSE_JSON = [...TRACKS, ...OFF_MENU];
+/** A course's race stack with its props and colliders, and every prop contact counted. */
+type Loaded = { w: World; track: Track; colliders: PropCollider[]; placed: readonly Placed[]; hits: number[]; props: (car: DeformableCar) => void; top: (c: PropCollider) => number; foot: (c: PropCollider) => number };
+
+const loaded = new Map<string, Loaded>();
 
 /** The tilt of the nose-down row (rad), and how far (m) over the prop's top its centre stands: its lowest corner is then as far under the top as the car's nose reaches below its centre. */
 const NOSE_DOWN_DEGREES = 15;
 const NOSE_DOWN = NOSE_DOWN_DEGREES * (Math.PI / 180);
 const CENTRE_OVER = 0.22;
 
-/** The race stack headless with `id` loaded (Havana is off the race menu, so the lobby loads it), and every prop contact counted. */
-function course(id: string) {
+/** The race stack headless with `id` loaded (Havana is off the race menu, so the lobby loads it). */
+function load(id: string): Loaded {
   const w = makeWorld();
   w.race.showLobby(id);
-  const track = new Track(COURSE_JSON.find((j) => parseTrack(j).id === id)!);
-  const placed = placeProps(track);
+  const placed = w.race["placed"];
   const colliders = propColliders(placed);
   const hits: number[] = [];
   w.race.onWallHit = (i) => hits.push(i);
   const props = (car: DeformableCar): void => propContact(car, 0, w.race["solids"], w.race["knocked"], w.race["propHits"], 1 / QUIET_HZ);
   // A prop's top is its highest piece's (a palm's fronds), its foot where it stands.
   const top = (c: PropCollider): number => Math.max(...colliders.filter((o) => o.index === c.index).map((o) => o.top));
-  return { w, colliders, placed, hits, props, top, foot: (c: PropCollider) => placed[c.index]!.y };
+  return { w, track: shipped(id), colliders, placed, hits, props, top, foot: (c: PropCollider) => placed[c.index]!.y };
+}
+
+/** `k` with no prop knocked, no hit counted, and its solids and ground the ones armed. */
+function ready(k: Loaded): Loaded {
+  k.hits.length = 0;
+  k.w.race.resetProps();
+  armSolids(k.w.race["solids"]);
+  setGround(k.track.ground());
+  return k;
+}
+
+/** `load`ed once per course, `ready` at each call. */
+function course(id: string): Loaded {
+  let k = loaded.get(id);
+  if (!k) {
+    k = load(id);
+    loaded.set(id, k);
+  }
+  return ready(k);
 }
 
 /** The ground piece (the lowest) of the prop of `prefab` whose nearest neighbour prop is farthest (a neighbour's own contact would answer for it). */
@@ -83,6 +104,43 @@ const _turned = new THREE.Vector3();
 const _turnQ = new THREE.Quaternion();
 const UP_AXIS = new THREE.Vector3(0, 1, 0);
 
+/** A sedan at 8 m/s with its front-right corner aimed at the middle of `prefab` on `k`, its lowest point `low` m over the prop's top (or over its foot, `fromFoot`), through one contact. */
+function strike(k: Loaded, prefab: PrefabId, low: number, pitch = 0, fromFoot = false) {
+  const c = pick(k.colliders, prefab);
+  const car = carOn(c, (fromFoot ? k.foot(c) : k.top(c)) + low, pitch);
+  const v = car.velocity.clone();
+  k.props(car);
+  return { k, c, car, v, touched: k.hits.length > 0 || k.w.race.propKnocked(c.index) };
+}
+
+const SPEED = 12;
+const TC = 0.6;
+
+/** A sedan flying a ballistic arc at 12 m/s over `prefab` on `k`: the lowest point's planned height over the prop's top (m) at its middle, before the nose follows the path (up to 1 m of it is lost to the tail). */
+function flight(k: Loaded, prefab: PrefabId, clear: number) {
+  const c = pick(k.colliders, prefab);
+  const top = k.top(c);
+  const car = makeCar("sedan");
+  // Along the prop's local x, 7.2 m out, a ballistic arc whose apex is over it; the right probe runs through its middle.
+  const yaw = c.yaw + Math.PI / 2;
+  const d = SPEED * TC;
+  const lat = -car.cage.fields.planBox[1]!;
+  car.spawnFacing(c.x - Math.sin(yaw) * d + Math.cos(yaw) * lat, c.z - Math.cos(yaw) * d - Math.sin(yaw) * lat, yaw, 0);
+  const vy = 9.6 * TC;
+  car.group.position.y = top + clear - (vy * TC - 4.8 * TC * TC);
+  car.airborne = true;
+  car.velocity.set(Math.sin(yaw) * SPEED, vy, Math.cos(yaw) * SPEED);
+  const world = worldOf(car, (cc) => k.props(cc));
+  const st = { acc: 0 };
+  let clearest = Infinity;
+  for (let n = 0; n < 72; n++) {
+    frame(world, null, st);
+    if (Math.hypot(car.group.position.x - c.x, car.group.position.z - c.z) < 2.5) clearest = Math.min(clearest, lowestY(car) - top);
+  }
+  const along = (car.group.position.x - c.x) * Math.sin(yaw) + (car.group.position.z - c.z) * Math.cos(yaw);
+  return { hits: k.hits.length, clearest, along };
+}
+
 afterEach(() => setGround(null));
 
 describe("given a prop on a course, solid (palm, wall, dumpster) or knockable (crate, cone), and a car reaching it", () => {
@@ -91,16 +149,9 @@ describe("given a prop on a course, solid (palm, wall, dumpster) or knockable (c
 
   for (const [id, prefab] of [...SOLIDS, ...KNOCKS]) {
     describe(`given a ${prefab} (${PREFABS[prefab].body}) on the ${id} course and a sedan at 8 m/s with its front-right corner aimed at the prop's middle`, () => {
-      /** A sedan whose lowest point is `low` m over the prop's top (or over its foot, `fromFoot`). */
-      const hit = (low: number, pitch = 0, fromFoot = false) => {
-        const k = course(id);
-        const c = pick(k.colliders, prefab);
-        const car = carOn(c, (fromFoot ? k.foot(c) : k.top(c)) + low, pitch);
-        const v = car.velocity.clone();
-        k.props(car);
-        return { k, c, car, v, touched: k.hits.length > 0 || k.w.race.propKnocked(c.index) };
-      };
+      const hit = (low: number, pitch = 0, fromFoot = false) => strike(course(id), prefab, low, pitch, fromFoot);
 
+      // mutation: sed -i 's/ || _span.low >= P\[o + PR_TOP\]!//' src/game/contact/prop-contact.ts  (a prop ignores height: the 0.5 m pass touches)
       it("when its lowest point is 0.5 m above the prop's top, then it passes over untouched, with no push and no lost speed", () => {
         const { car, v, touched } = hit(0.5);
         expect(touched, "no contact").toBe(false);
@@ -115,6 +166,7 @@ describe("given a prop on a course, solid (palm, wall, dumpster) or knockable (c
         expect(hit(0, 0, true).touched).toBe(true);
       });
 
+      // mutation: sed -i 's/  k.w.race.resetProps();//' src/game/engine/prop-height.test.ts  (the crate and cone stay knocked from the row before: the level car at the tilted car's height touches)
       it(`when it is nose down ${NOSE_DOWN_DEGREES}° with its centre ${CENTRE_OVER} m over the top, more than 0.2 m, but its front underside corner under it, then it hits the prop, while a level car at that centre height passes`, () => {
         const probe = hit(0, NOSE_DOWN);
         const reach = probe.car.group.position.y - probe.k.top(probe.c);
@@ -149,33 +201,7 @@ describe("given a prop on a course, solid (palm, wall, dumpster) or knockable (c
 });
 
 describe("given a sedan flying a ballistic arc at 12 m/s over a wall or palm on the Havana course", () => {
-  const SPEED = 12;
-  const TC = 0.6;
-  /** The lowest point's planned height over the prop's top (m) at its middle, before the nose follows the path (up to 1 m of it is lost to the tail). */
-  const fly = (prefab: PrefabId, clear: number) => {
-    const k = course("havana");
-    const c = pick(k.colliders, prefab);
-    const top = k.top(c);
-    const car = makeCar("sedan");
-    // Along the prop's local x, 7.2 m out, a ballistic arc whose apex is over it; the right probe runs through its middle.
-    const yaw = c.yaw + Math.PI / 2;
-    const d = SPEED * TC;
-    const lat = -car.cage.fields.planBox[1]!;
-    car.spawnFacing(c.x - Math.sin(yaw) * d + Math.cos(yaw) * lat, c.z - Math.cos(yaw) * d - Math.sin(yaw) * lat, yaw, 0);
-    const vy = 9.6 * TC;
-    car.group.position.y = top + clear - (vy * TC - 4.8 * TC * TC);
-    car.airborne = true;
-    car.velocity.set(Math.sin(yaw) * SPEED, vy, Math.cos(yaw) * SPEED);
-    const world = worldOf(car, (cc) => k.props(cc));
-    const st = { acc: 0 };
-    let clearest = Infinity;
-    for (let n = 0; n < 72; n++) {
-      frame(world, null, st);
-      if (Math.hypot(car.group.position.x - c.x, car.group.position.z - c.z) < 2.5) clearest = Math.min(clearest, lowestY(car) - top);
-    }
-    const along = (car.group.position.x - c.x) * Math.sin(yaw) + (car.group.position.z - c.z) * Math.cos(yaw);
-    return { hits: k.hits.length, clearest, along };
-  };
+  const fly = (prefab: PrefabId, clear: number) => flight(course("havana"), prefab, clear);
 
   for (const prefab of ["wall", "palm"] as const) {
     it(`when its lowest point is planned to cross 2.5 m over the ${prefab}, then it takes no hit and flies on past it, while the same launch 3.5 m lower does hit`, () => {
@@ -398,4 +424,39 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
     expect(out, `it was pushed out only ${(out * 1000).toFixed(0)} mm of its 0.3 m hull overlap`).toBeGreaterThan(0.05);
     expect(settled > 0 && settled <= implied + 3, `it stopped being pushed at slice ${settled}, the push-out speed implies ${implied}`).toBeTruthy();
   });
+});
+
+describe("given the race worlds built once for the file and used by every row above", () => {
+  /** What a contact can move on `car`: velocity, spin, position, pose and the cage's points. */
+  const stateOf = (car: DeformableCar): number[] => [...car.velocity.toArray(), ...car.angular.toArray(), ...car.group.position.toArray(), ...car.group.quaternion.toArray(), ...car.cage.fields.pos];
+  const SCENARIOS = [[0.5, 0, false], [-0.2, 0, false], [0, 0, true], [0, NOSE_DOWN, false]] as const;
+
+  // mutation: sed -i 's/  k.hits.length = 0;//' src/game/engine/prop-height.test.ts  (the hits of the rows before stay in the shared world's count)
+  for (const [id, prefabs] of [["havana", ["palm", "wall", "dumpster"]], ["city", ["crate", "cone"]]] as const) {
+    it(`when the ${id} world is built again, then the contacts and flights run on it give the same bits as on the shared one: the car's velocity, spin, pose and cage, the hit count and the knocks`, () => {
+      const fresh = load(id);
+      const shared = course(id);
+      expect(firstMismatch(fresh.w.race["solids"].p, shared.w.race["solids"].p), "the course's prisms").toBeUndefined();
+      assertSameDigest(fresh.placed, shared.placed, "placed props");
+      for (const prefab of prefabs) {
+        for (const [low, pitch, fromFoot] of SCENARIOS) {
+          const what = `${prefab} at ${low} m, pitch ${pitch}, from the foot ${fromFoot}`;
+          const a = strike(course(id), prefab, low, pitch, fromFoot);
+          const b = strike(ready(fresh), prefab, low, pitch, fromFoot);
+          expect(firstMismatch(stateOf(b.car), stateOf(a.car)), `${what}: car`).toBeUndefined();
+          expect(b.touched, `${what}: touched`).toBe(a.touched);
+          expect(firstMismatch(b.k.hits, a.k.hits), `${what}: hits`).toBeUndefined();
+          expect(firstMismatch(b.k.w.race["knocked"], a.k.w.race["knocked"]), `${what}: knocks`).toBeUndefined();
+        }
+      }
+      if (id !== "havana") return;
+      for (const prefab of ["wall", "palm"] as const) {
+        for (const clear of [2.5, -1]) {
+          const a = flight(course(id), prefab, clear);
+          const b = flight(ready(fresh), prefab, clear);
+          expect(firstMismatch(Object.values(b), Object.values(a)), `${prefab} flown ${clear} m over the top`).toBeUndefined();
+        }
+      }
+    });
+  }
 });
