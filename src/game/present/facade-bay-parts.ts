@@ -339,3 +339,38 @@ export function buildAirconGeometry(): THREE.BufferGeometry {
   builder.box(-0.5, 0.5, 0, 1, 0, 1, ALL_BUT_BACK, KIT_CELL.panel, CONDENSER_GREY, FIXED);
   return builder.geometry(true);
 }
+
+/** A window box as a unit piece (1 m wide, tall and out of the wall; each instance scales it to its window): a trough in the house's accent paint, its soil, four plants of different heights in greens and two blooms (60 triangles). */
+const BOX_TROUGH = 0.36;
+const BOX_SOIL = 0.04;
+const BOX_SOIL_INSET = 0.04;
+const BOX_SOIL_COLOUR = new THREE.Color(0x4a3a2c);
+/** Each plant: its middle across (the box's width 1), its width, its height over the soil (a share of what the box's height leaves above the trough and soil), how far out of the wall it stands and how deep, and its leaf colour. */
+const BOX_PLANTS: readonly (readonly [across: number, width: number, height: number, from: number, depth: number, colour: THREE.Color])[] = [
+  [-0.36, 0.26, 0.45, 0.18, 0.64, new THREE.Color(0x3f7a35)],
+  [-0.1, 0.3, 0.7, 0.16, 0.68, new THREE.Color(0x2f6a30)],
+  [0.16, 0.26, 0.5, 0.18, 0.64, new THREE.Color(0x5f9a45)],
+  [0.38, 0.2, 0.38, 0.2, 0.6, new THREE.Color(0x58903f)],
+];
+/** The blooms on top of two plants: which plant (an index into `BOX_PLANTS`), their size (a share of the unit box) and colour. */
+const BOX_BLOOMS: readonly (readonly [plant: number, size: number, colour: THREE.Color])[] = [
+  [1, 0.14, new THREE.Color(0xd23c4b)],
+  [2, 0.12, new THREE.Color(0xf2c400)],
+];
+const BOX_PLANT_FACES = FACE.front | FACE.top | FACE.left | FACE.right;
+
+export function buildWindowBoxGeometry(): THREE.BufferGeometry {
+  const builder = new KitBuilder();
+  builder.box(-0.5, 0.5, 0, BOX_TROUGH, 0, 1, ALL_BUT_BACK, KIT_CELL.panel, WHITE, ACCENT);
+  const soilTop = BOX_TROUGH + BOX_SOIL;
+  builder.box(-0.5 + BOX_SOIL_INSET, 0.5 - BOX_SOIL_INSET, BOX_TROUGH, soilTop, BOX_SOIL_INSET, 1 - BOX_SOIL_INSET, FACE.top, KIT_CELL.stone, BOX_SOIL_COLOUR, FIXED);
+  for (const [across, width, height, from, depth, colour] of BOX_PLANTS) {
+    builder.box(across - width / 2, across + width / 2, soilTop, soilTop + height * (1 - soilTop), from, from + depth, BOX_PLANT_FACES, KIT_CELL.panel, colour, FIXED);
+  }
+  for (const [plant, size, colour] of BOX_BLOOMS) {
+    const [across, , height, from, depth] = BOX_PLANTS[plant]!;
+    const top = soilTop + height * (1 - soilTop);
+    builder.box(across - size / 2, across + size / 2, top, top + size, from + depth / 2 - size / 2, from + depth / 2 + size / 2, BOX_PLANT_FACES, KIT_CELL.panel, colour, FIXED);
+  }
+  return builder.geometry(true);
+}

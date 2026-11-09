@@ -29,10 +29,12 @@ const CHIMNEY_HALF_MAX = 0.45;
 const LOUVRE_SLAT_ROW = 0;
 const LOUVRE_GAP_ROW = 0.1;
 const LOUVRE_CONTRAST_MIN = 40;
-const KIT_DRAWS = 9;
+const KIT_DRAWS = 10;
 const EVERY_HOUSE: readonly string[] = ["facade-bay", "facade-stoop", "facade-railing", "facade-cornice", "facade-roof"];
 /** The most shutters a house hangs: a pair on each of its upper storeys' windows on the door's half. */
 const SHUTTERS_PER_HOUSE_MAX = 4;
+/** The most window boxes a house stands: one on each of the windows of its storey the bay leaves. */
+const WINDOW_BOXES_PER_HOUSE_MAX = 2;
 const TRIANGLES_PER_HOME_MAX = 400;
 
 /** The x range of every vertex of `geometry`. */
@@ -172,7 +174,7 @@ describe("given the kit made for the layout's rowhomes", () => {
       for (const mesh of made.group.children) {
         const count = mesh instanceof THREE.InstancedMesh ? mesh.count : -1;
         if (EVERY_HOUSE.includes(mesh.name)) expect(count, `${name}: instances of ${mesh.name}`).toBe(houses);
-        else expect(count, `${name}: instances of ${mesh.name}`).toBeLessThanOrEqual(mesh.name === "facade-shutter" ? houses * SHUTTERS_PER_HOUSE_MAX : houses);
+        else expect(count, `${name}: instances of ${mesh.name}`).toBeLessThanOrEqual(mesh.name === "facade-shutter" ? houses * SHUTTERS_PER_HOUSE_MAX : mesh.name === "facade-windowBox" ? houses * WINDOW_BOXES_PER_HOUSE_MAX : houses);
       }
     }
     few.dispose();
