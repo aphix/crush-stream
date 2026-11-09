@@ -111,8 +111,9 @@ export function interiorSpots(place: Place, plan: InteriorPlan = planOf(place)):
   const frame = new Frame(place);
   const rows: number[][] = [];
   const stoopSeats = place.interior === "rowhome" ? 2 : 0;
+  const doorAcross = SHOPFRONT[plan.kind].find((opening) => opening.door)!.centre;
   for (let at = 0; at < stoopSeats; at++) {
-    const across = (at === 0 ? -1 : 1) * STOOP_SEAT_SPREAD;
+    const across = doorAcross + (at === 0 ? -1 : 1) * STOOP_SEAT_SPREAD;
     rows.push([frame.x(-STOOP_SEAT_OUT, across), frame.z(-STOOP_SEAT_OUT, across), frame.yaw(TURN.front), STOOP_SEAT_HEIGHT]);
   }
   for (const piece of plan.furnishings) {

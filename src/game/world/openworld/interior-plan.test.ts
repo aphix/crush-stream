@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
 import { FURNISHING, HEADROOM, MAX_RISER, PARTITION, ROWHOME_FLOOR_Y, SHOPFRONT, type Box, type InteriorPlan } from "./interior-kinds.ts";
 import { interiorDoor, interiorSolids, interiorSpots, planInterior } from "./interior-plan.ts";
+import { drawnHalf, STOOP } from "./openworld-facade-solids.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
 
@@ -79,8 +80,47 @@ describe("given a place's door on the street face", () => {
   });
 });
 
+describe("given every rowhome's stoop", () => {
+  // mutation: sed -i 's/const across = doorAcross + (at === 0 ? -1 : 1) \* STOOP_SEAT_SPREAD;/const across = (at === 0 ? -1 : 1) * STOOP_SEAT_SPREAD;/' src/game/world/openworld/interior-plan.ts
+  it("when its two stoop seats are read, then both sit on the stoop's steps either side of the door, on its third step, facing the street", () => {
+    const off: string[] = [];
+    for (const home of furnished.filter((place) => place.interior === "rowhome" && place.doorNode >= 0)) {
+      for (let seat = 0; seat < home.stoopSeats!; seat++) {
+        const dx = home.seats![seat * SEAT_STRIDE]! - home.doorX;
+        const dz = home.seats![seat * SEAT_STRIDE + 1]! - home.doorZ;
+        const out = dx * Math.cos(home.yaw) - dz * Math.sin(home.yaw);
+        const along = dx * Math.sin(home.yaw) + dz * Math.cos(home.yaw);
+        const height = home.seats![seat * SEAT_STRIDE + 3]!;
+        if (Math.abs(along) > STOOP.width / 2 || out <= 0 || out >= STOOP.run || Math.abs(height - 3 * STOOP.rise) > 1e-6) off.push(`${home.name} seat ${seat}: ${along.toFixed(2)} along, ${out.toFixed(2)} out, ${height.toFixed(2)} up`);
+      }
+    }
+    expect(off.slice(0, 3).join("; "), "stoop seats off the stoop").toBe("");
+  });
+});
+
 describe("given the rowhome's stairs", () => {
   const plan = planInterior("rowhome", 5.6, 15);
+  /** The floor a walker needs at a flight's head before the wall ahead (m): a step and a turn. */
+  const MIN_LANDING = 0.5;
+
+  // mutation: sed -i 's/const UPPER_BACK_WALL = 9.6;/const UPPER_BACK_WALL = 9.7;/' src/game/world/openworld/interior-layouts.ts (the upper flight runs to 0.42 m of the back wall)
+  it("when a walker reaches the head of each flight, then the floor there runs on at least a step and a turn before the wall ahead", () => {
+    for (const flight of plan.stairs) {
+      const level = flight.level + 1;
+      const floor = plan.floors[level]!;
+      const ceiling = level + 1 < plan.floors.length ? plan.floors[level + 1]! - 0.25 : plan.topCeiling;
+      const head = flight.deep0 + flight.steps * flight.run;
+      const laneLeft = flight.across - flight.width / 2;
+      const laneRight = flight.across + flight.width / 2;
+      const ahead = plan.walls
+        .filter((wall) => wall.level === level)
+        .flatMap((wall) => wallBoxes(wall, floor, ceiling))
+        .filter((box) => box.y1 - box.y0 > 1 && box.across0 < laneRight - 0.01 && box.across1 > laneLeft + 0.01 && box.deep0 >= head - 1e-6);
+      const landing = Math.min(...ahead.map((box) => box.deep0)) - head;
+      expect(landing, `floor past the head of the flight from level ${flight.level}`).toBeGreaterThanOrEqual(MIN_LANDING);
+    }
+  });
+
   // mutation: sed -i 's/const MAX_RISER = 0.19/const MAX_RISER = 0.3/' src/game/world/openworld/interior-kinds.ts (a 0.3 m riser)
   it("when each flight is climbed, then no step is higher than a walker climbs and its top tread is level with the floor above", () => {
     expect(plan.stairs.length, "flights").toBe(2);
@@ -124,7 +164,7 @@ describe("given the rowhome's stairs", () => {
       const middle = (tread.deep0 + tread.deep1) / 2;
       const closed = walls.some((box) => box.across0 >= side - 1e-6 && box.across0 <= side + PARTITION && box.deep0 <= middle && box.deep1 >= middle && box.y0 <= floor + 1e-6 && box.y1 >= ceiling - 1e-6);
       if (!closed) open.push(`plan open beside the tread at ${tread.deep0.toFixed(2)}`);
-      const front = home.depth / 2 - middle;
+      const front = drawnHalf(home.depth) - middle;
       const across = side + PARTITION / 2;
       const x = home.x + front * Math.cos(home.yaw) + across * Math.sin(home.yaw);
       const z = home.z - front * Math.sin(home.yaw) + across * Math.cos(home.yaw);
