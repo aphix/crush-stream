@@ -211,13 +211,13 @@ export const NEED_RATE_PER_HOUR = [1 / 16, 1 / 5, 1 / 10, 1 / 9, 1 / 22, 1 / 14]
 export const RATE_SPREAD = 0.3;
 /** A start need is a draw up to this. */
 export const START_NEED_MAX = 0.5;
-/** Need relief per game minute spent dwelling at a place of each kind (rows: PLACE_KIND order home, work, food, shop, hangout, hide, transit; columns: NEED order): a night's rest at home in 5 h, a meal in 22 min, a shift of 7.5 h, an errand in 12 min, an hour and a half of company, solitude in 35 min. */
+/** Need relief per game minute spent dwelling at a place of each kind (rows: PLACE_KIND order home, work, food, shop, hangout, hide, transit; columns: NEED order): a night's rest at home in 5 h, a meal in 22 min, a shift of 7.5 h, an errand in 12 min, about two hours of company, solitude in 35 min. */
 export const RELIEF_PER_MINUTE = [
   [1 / 300, 0, 0, 0, 0, 1 / 700],
   [0, 0, 1 / 450, 0, 0, 0],
   [0, 1 / 22, 0, 1 / 200, 0, 0],
   [0, 0, 0, 0, 1 / 12, 0],
-  [0, 0, 0, 1 / 90, 0, 0],
+  [0, 0, 0, 1 / 110, 0, 0],
   [1 / 600, 0, 0, 0, 0, 1 / 35],
   [0, 0, 0, 0, 1 / 9, 0],
 ] as const;
