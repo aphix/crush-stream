@@ -11,6 +11,8 @@ export const STRIDE_RADIANS_PER_METRE = (2 * Math.PI) / STRIDE_METRES;
 
 /** A civilian's look word (`CrowdPoses.look`, written by the crowd, read by the drawing): a who-hash in bits 0-28, the woman bit (their gender) in 29, the species in 30-31 (`SPECIES` order). */
 export const LOOK = { hashMask: 0x1fffffff, womanShift: 29, speciesShift: 30, salt: 0x2545f491, hashShift: 15 } as const;
+/** The who-hash with every bit set is no civilian's: a foot cop's look word, which `dressOfLook` dresses in uniform. */
+export const POLICE_HASH = LOOK.hashMask;
 
 /** Residents of the playable blocks by device: a phone, a desktop, a desktop at the ultra FX tier (the plan's 60 / 150 / 300). */
 export const POPULATION = [60, 150, 300] as const;
@@ -33,3 +35,34 @@ export const LOOK_RADIUS = 1;
 export const CHEST_HEIGHT = 1.3;
 export const STOREY_HEIGHT = 3.2;
 export const LOOK_HZ = 4;
+
+/** Centres of two people stay this far apart (m): the dummy's shoulders and swung hands span 0.6 m (`PARTS`). */
+export const BODY_GAP = 0.6;
+/** A drawn civilian stands at most this far (m) from where the brain puts them: lanes already spread walkers by +-1 m, more would put one through a wall or into the road. */
+export const MAX_OFFSET = 0.7;
+/** Passes over the pair list, each moving an overlapping pair apart by half the overlap each: a row of three settles in under six. */
+export const SEPARATION_PASSES = 6;
+/** The share of a head-on or overtaking pair's push that goes sideways, so they pass on each other's sides instead of standing off. */
+export const SIDESTEP_SHARE = 0.6;
+/** Pairs kept per body: a ninth neighbour inside reach is a mob, not a street. The grid's cells hash by position (a power of two). */
+export const PAIRS_PER_BODY = 8;
+export const SEPARATION_CELLS = 2048;
+/** Players on foot the crowd makes room for. */
+export const WALKER_CAPACITY = 4;
+/** Bodies closer than this (m) have no direction between them: they part along +x. */
+export const COINCIDENT_DISTANCE = 1e-4;
+
+/** Brain positions this close (m) closing at least this fast (m/s) bump: the bump clip plays, at most once in the cooldown (s) for each. */
+export const BUMP_DISTANCE = 0.55;
+export const BUMP_CLOSING_SPEED = 0.4;
+export const BUMP_COOLDOWN_SECONDS = 1.5;
+/** A collision is hard when bodies are this close (m) closing this fast (m/s): head-on walkers close at 2.8, a crossing at 2. */
+export const HARD_DISTANCE = 0.3;
+export const HARD_CLOSING_SPEED = 2;
+/** A walker on foot or a car reaches a civilian when within this of them (m) closing at least this fast (m/s). */
+export const WALKER_PUSH_DISTANCE = 0.5;
+export const WALKER_PUSH_CLOSING_SPEED = 0.5;
+export const CAR_NUDGE_GAP = 0.5;
+export const CAR_NUDGE_SPEED = 1;
+/** A resident is in at most one push event per this many crowd seconds (a game hour): the log is 512 triples on the wire. */
+export const PUSH_LOCKOUT_SECONDS = 60;

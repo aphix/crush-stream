@@ -1,11 +1,13 @@
 import { JEANS, OUTFIT, SHIRTS } from "./driver-look.ts";
 
-/** A civilian within this distance (m) of the eye may take a posed dummy: past it a 1.75 m figure is under 50 px tall and the cheap figure reads the same. */
-export const NEAR_DRAW = 40;
+/** A civilian within this distance (m) of the eye may take a posed dummy: at 60 m a 1.75 m figure is still about 35 px tall at 1080p. */
+export const NEAR_DRAW = 60;
 /** Nothing is drawn past this distance (m): the city's fog has swallowed it. */
 export const FAR_DRAW = 120;
-/** Posed dummies a tier draws. */
-export const NEAR_SLOTS = { phone: 12, desktop: 40 } as const;
+/** Posed dummies a tier draws. A slot no civilian holds costs nothing: a mesh draws up to its highest slot in use, and slots fill from the lowest. */
+export const NEAR_SLOTS = { phone: 20, desktop: 64 } as const;
+/** A person's size to the sight field (m): the sphere about the chest that must be in view. */
+export const SIGHT_RADIUS = 1;
 /** A civilian holding a dummy counts as this share nearer than it is, so two civilians at the cutoff do not trade dummies (and looks) every frame. */
 export const SLOT_KEEP_DISTANCE_SCALE = 0.9;
 /** One `DummyMesh` tracks the slots it draws in a 32-bit mask, so a tier with more near slots spreads them over several. */

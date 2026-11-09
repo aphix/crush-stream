@@ -1,7 +1,8 @@
 import * as THREE from "three";
-import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
+import { LOOK, POLICE_HASH } from "../ai/civilians/civilian-crowd-constants.ts";
 import { ATTIRE_DRAWS, ATTIRE_WEAR, ATTIRE, CAP_COLOURS, LOOK_FIELD, LOOK_SCRAMBLE, MOUSTACHE_DRAWS, SHADES_DRAWS } from "./civilian-art-constants.ts";
 import { HAIRS, type DriverLook } from "./driver-look.ts";
+import { COP_LOOK } from "./dummy-dress.ts";
 import { FACE, FACES } from "./dummy-faces.ts";
 
 /** A bareheaded man's faces: the reference's two without a name (the president's and the elder's are people of the course); a capped man wears the cap man's. */
@@ -26,8 +27,14 @@ function fieldOf(scrambled: number, field: LookField): number {
   return (scrambled >>> field.shift) & ((1 << field.bits) - 1);
 }
 
+/** Whether `look` is a foot cop's: the one who-hash no civilian has. */
+export function isPoliceLook(look: number): boolean {
+  return (look & LOOK.hashMask) === POLICE_HASH;
+}
+
 /** `out` dressed as crowd look `look` says: build (the look's own woman bit), today's clothes, hair, cap, face; the same look always dresses the same. Returns the attire the look drew. */
 export function dressOfLook(look: number, out: DriverLook): number {
+  if (isPoliceLook(look)) return dressPolice(look, out);
   const scrambled = scrambleLook(look);
   const attire = ATTIRE_DRAWS[fieldOf(scrambled, LOOK_FIELD.attire)]!;
   const wear = ATTIRE_WEAR[attire]!;
@@ -44,6 +51,21 @@ export function dressOfLook(look: number, out: DriverLook): number {
   out.shades = attire !== ATTIRE.SCRUBS && fieldOf(scrambled, LOOK_FIELD.shades) < SHADES_DRAWS;
   out.face = woman ? FACE.WOMAN : capped ? FACE.CAP_MAN : BARE_MAN_FACES[fieldOf(scrambled, LOOK_FIELD.face) % BARE_MAN_FACES.length]!;
   return attire;
+}
+
+/** The uniformed division's look (`COP_LOOK`) in the build the look word says; the dummy wears its own uniform garment for a police look (`isPoliceLook`). */
+function dressPolice(look: number, out: DriverLook): number {
+  const woman = ((look >>> LOOK.womanShift) & 1) === 1;
+  out.woman = woman;
+  out.outfit = COP_LOOK.outfit;
+  out.shirt = COP_LOOK.shirt;
+  out.pants = COP_LOOK.pants;
+  out.hair = COP_LOOK.hair;
+  out.hat = null;
+  out.mustache = false;
+  out.shades = false;
+  out.face = woman ? FACE.WOMAN : FACE.COP;
+  return ATTIRE.SUIT;
 }
 
 /** The skin (sRGB) a dressed face shows. */
