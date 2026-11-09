@@ -87,6 +87,8 @@ const placement = z.object({
   yaw: z.number().default(0),
   scale: z.number().positive().default(1),
   size: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]).optional(),
+  /** A building's facade style by name (`present/facades.ts` `FACADE`), forcing it over the style the place's hash would pick. */
+  style: z.string().optional(),
 });
 
 const along = z.object({
