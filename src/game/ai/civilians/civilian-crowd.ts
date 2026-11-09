@@ -56,6 +56,8 @@ export type DriverDoors = (resident: number, code: number, out: DoorSpot) => boo
 /** Changes the crowd's poses after its own placing: the poses, the crowd time, whether this crowd is the host's. */
 type CrowdOverlay = (poses: CrowdPoses, crowdSeconds: number, authority: boolean) => void;
 
+/** `CAR_REACH` squared: a civilian within it of a car is tested for a hit (compared squared, no root per car per civilian per frame). */
+const CAR_REACH_SQUARED = CAR_REACH * CAR_REACH;
 const NO_EVENTS: readonly number[] = [];
 const NO_STRIKES: readonly FigureStrike[] = [];
 /** The pusher of a push that was no civilian: a player's walker or a car. */
@@ -515,12 +517,15 @@ export class CivilianCrowd {
       const carZ = car.group.position.z;
       const carSpeed = hypot2(car.velocity.x, car.velocity.z);
       const loose = hasLooseBody(car);
+      const coming = carSpeed >= DANGER_MIN_SPEED;
       for (let resident = 0; resident < state.capacity; resident++) {
         if (shown[resident] === 0) continue;
         const spotX = x[resident]!;
         const spotZ = z[resident]!;
-        if (carSpeed >= DANGER_MIN_SPEED) this.watchApproach(resident, carIndex, spotX - carX, spotZ - carZ, car.velocity.x, car.velocity.z, carSpeed, seconds);
-        const near = hypot2(carX - spotX, carZ - spotZ) <= CAR_REACH;
+        if (coming) this.watchApproach(resident, carIndex, spotX - carX, spotZ - carZ, car.velocity.x, car.velocity.z, carSpeed, seconds);
+        const apartX = carX - spotX;
+        const apartZ = carZ - spotZ;
+        const near = apartX * apartX + apartZ * apartZ <= CAR_REACH_SQUARED;
         if (!near && !loose) continue;
         const spotY = ground.heightAt(spotX, spotZ);
         if (near && runsDown(car, spotX, spotZ, spotY)) this.knockDown(resident, seconds, fell(car, carIndex, resident, spotX, spotY, spotZ, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
