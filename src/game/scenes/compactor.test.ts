@@ -495,6 +495,7 @@ describe("given a car squeezed in the press past its wheels (the nose less deep 
     expect(creep, `a rear hub crept ${(creep * 1000).toFixed(0)} mm into the car after the last contact`).toBeLessThanOrEqual(HUB_CREEP_MAX);
   });
 
+  // mutation: sed -i 's/if (this.hubsRideSeat()) {/if (false) {/' src/game/deform/deform-contact.ts  (the planted hubs no longer ride the seat step: 18 km/h reads 85 mm against the 80 mm bound)
   it("when the wall is a fixed one (the game's: it re-arms the hit) met at 18 and at 38 km/h at full throttle, then its rear hubs move no more than the springback into the car in the second after", () => {
     for (const [wallZ, kmh] of [[3, 18], [6, 38]] as const) {
       const creep = hubCreepAfterLastContact({ z: wallZ, throttle: 1, fixed: true });
@@ -502,6 +503,7 @@ describe("given a car squeezed in the press past its wheels (the nose less deep 
     }
   });
 
+  // mutation: sed -i 's/const yielding = this.deepCrush;/const yielding = deep;/' src/game/deform/deform-solve.ts  (a car pressed once runs its hubs free of their shove again: 300 mm of creep against the 80 mm bound)
   it("when the wall never re-arms the hit, met at 38 and at 52 km/h at full throttle, then its rear hubs move no more than the springback into the car in the second after", () => {
     for (const [wallZ, kmh] of [[6, 38], [10, 52]] as const) {
       const creep = hubCreepAfterLastContact({ z: wallZ, throttle: 1, fixed: false });
