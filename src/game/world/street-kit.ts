@@ -16,7 +16,6 @@ export const STREET_KIT = {
   streetSign: [0.95, 3, 0.95],
   bollard: [0.3, 0.95, 0.3],
   cellarDoor: [1, 0.2, 1.1],
-  hoopFence: [0.06, 0.45, 4],
   pavilion: [5.8, 4.1, 5.8],
 } as const satisfies Record<string, readonly [number, number, number]>;
 
@@ -109,3 +108,10 @@ export function busStopPlan(): Collider[] {
     { kind: "box", hx: plateHalfThickness, hz: lowerHalf, x: plateAhead, y0: lowerBlade[0], y1: lowerBlade[1] },
   ];
 }
+
+/**
+ * A section of the park's hoop fence (`hoop-fence`): a knockable prop that holds a light touch and breaks loose from a hard one. `knockSpeed` (m/s) is the closing speed at or under
+ * which a car meets it as a solid (a nudge at parking pace, 3 m/s being 11 km/h; the rig's lamp posts fold at 3.5), over which it flies like a cone; `massKg` is a 4 m run of 8 mm
+ * steel tube and two rails, what a thrown section weighs.
+ */
+export const HOOP_FENCE = { knockSpeed: 3, massKg: 8, halfThickness: 0.03, halfLength: 2, height: 0.45 } as const;

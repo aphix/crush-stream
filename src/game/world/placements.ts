@@ -51,6 +51,8 @@ export type PropCollider = {
   ends: number;
   /** Share of a hit's crush energy the struck car takes: 1 (the default) a rigid solid, less where the solid gives (`PrefabSpec.hardness`). */
   hardness?: number;
+  /** A knock prop's knock speed (m/s, `PrefabSpec.knockSpeed`): a car closing at or under it meets the prop as a solid. */
+  knockSpeed?: number;
 };
 
 /** Scatter points closer than this (m) beyond a corridor's wall line, plus the prop's radius, are rejected. */
@@ -425,6 +427,7 @@ export function propColliders(placed: readonly Placed[]): PropCollider[] {
             top: p.y + (c.y1 ?? spec.size[1]) * p.sy,
             ends: 3,
             hardness: spec.hardness,
+            knockSpeed: spec.knockSpeed,
           });
         }
         continue;
@@ -447,6 +450,7 @@ export function propColliders(placed: readonly Placed[]): PropCollider[] {
         top: p.y + (c.y1 ?? spec.size[1]) * p.sy,
         ends: 3,
         hardness: spec.hardness,
+        knockSpeed: spec.knockSpeed,
       });
     }
   }
@@ -458,7 +462,7 @@ export function propColliders(placed: readonly Placed[]): PropCollider[] {
  * through, whatever made the collider (a placed prop, a wall piece, a rig's plate, the Lab's room). Returns its patch index.
  */
 function addCollider(solids: Surface, c: PropCollider, role: number, moves = false): number {
-  return solids.addPrism({ x: c.x, z: c.z, yaw: c.yaw, hx: c.hx, hz: c.hz, circle: c.kind === "circle", base: c.base, top: c.top, ends: c.ends, hardness: c.hardness, mass: c.mass, id: c.index, role, moves, material: c.prefab === null ? undefined : PREFABS[c.prefab].material });
+  return solids.addPrism({ x: c.x, z: c.z, yaw: c.yaw, hx: c.hx, hz: c.hz, circle: c.kind === "circle", base: c.base, top: c.top, ends: c.ends, hardness: c.hardness, knockSpeed: c.knockSpeed, mass: c.mass, id: c.index, role, moves, material: c.prefab === null ? undefined : PREFABS[c.prefab].material });
 }
 
 /**

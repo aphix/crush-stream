@@ -6,7 +6,7 @@ import { hypot2, detSin, detCos } from "../kernel/physics-core.js";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { PREFAB, SURFACE } from "./constants.ts";
 import { PLAZA_REACH, PLAZA_TOP, plazaBricks } from "./openworld/openworld-plaza.ts";
-import { ACORN_LAMP, POSTS, STREET_KIT, bollardPlan, busStopPlan, meterPlan, streetSignPlan } from "./street-kit.ts";
+import { ACORN_LAMP, HOOP_FENCE, POSTS, STREET_KIT, bollardPlan, busStopPlan, meterPlan, streetSignPlan } from "./street-kit.ts";
 import { brickCollider, bricksTop, CAPITOL, CAPITOL_POOL, CAPITOL_TOP, capitolPlan, capitolPool, FLAGPOLE, flagpolePlan, GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT, type Brick, type Collider } from "./landmarks.ts";
 
 export const SURFACE_IDS = [SURFACE.asphalt, SURFACE.concrete, SURFACE.cobble, SURFACE.dirt, SURFACE.gravel, SURFACE.grass, SURFACE.sand, SURFACE.mud] as const;
@@ -437,6 +437,8 @@ type PrefabSpec = {
   size: [number, number, number];
   /** kg, for knock bodies. */
   mass: number;
+  /** A knock body's knock speed (m/s): a car closing at or under it meets the prop as a solid, one closing faster knocks it; omitted: any touch knocks it. */
+  knockSpeed?: number;
   /** What a hit lands on: the main body's registry id (read by nothing in the sim). */
   material: MaterialId;
   /** Share of a hit's crush energy the struck car takes (`ContactBox.hardness`): 1 when omitted, a rigid solid; `SOFT_WOOD` for a trunk that gives. */
@@ -787,7 +789,16 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.streetSign]: postSpec(STREET_KIT.streetSign, MAT.SIGN_BOARD, streetSignPlan(), POSTS.streetSign.bladeHalf),
   [PREFAB.bollard]: postSpec(STREET_KIT.bollard, MAT.LAMP_POLE, bollardPlan(), POSTS.bollard.collarRadius),
   [PREFAB.cellarDoor]: kitSpec(STREET_KIT.cellarDoor, MAT.DUMPSTER_STEEL),
-  [PREFAB.hoopFence]: kitSpec(STREET_KIT.hoopFence, MAT.BRACKET_STEEL),
+  // A section of the park's hoop fence: one box of its length, knocked loose by a hit over `HOOP_FENCE.knockSpeed`.
+  [PREFAB.hoopFence]: {
+    body: "knock",
+    collider: [{ kind: "box", hx: HOOP_FENCE.halfThickness, hz: HOOP_FENCE.halfLength, y1: HOOP_FENCE.height }],
+    foot: HOOP_FENCE.halfLength,
+    size: [2 * HOOP_FENCE.halfThickness, HOOP_FENCE.height, 2 * HOOP_FENCE.halfLength],
+    mass: HOOP_FENCE.massKg,
+    knockSpeed: HOOP_FENCE.knockSpeed,
+    material: MAT.BRACKET_STEEL,
+  },
   [PREFAB.pavilion]: kitSpec(STREET_KIT.pavilion, MAT.GANTRY_STEEL),
   // The park's plaza: its bricks are its colliders, so a car meets the bench rings and the statue as drawn.
   [PREFAB.plaza]: { body: "solid", collider: plazaBricks().map(brickCollider), foot: PLAZA_REACH, size: [2 * PLAZA_REACH, PLAZA_TOP, 2 * PLAZA_REACH], mass: 0, material: MAT.MARBLE },

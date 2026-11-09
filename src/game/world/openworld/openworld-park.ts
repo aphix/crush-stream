@@ -3,6 +3,7 @@ import type { PrefabId, SurfaceId } from "../catalog.ts";
 import { PREFAB, SURFACE } from "../constants.ts";
 import { FACING, PARK, PARK_BLOCK } from "./openworld-constants.ts";
 import type { BlockRef, Geometry, Lots } from "./openworld-layout.ts";
+import { HOOP_FENCE } from "../street-kit.ts";
 import { PLAZA_RADIUS } from "./openworld-plaza.ts";
 
 /**
@@ -31,9 +32,9 @@ const LAMP_REACH = 0.3;
 /** A bin stands beside every other bench, this far (m) along the path from its middle (past its 0.8 m half length). */
 const BIN_ALONG = 1.3;
 const BIN_OFF = PATH_HALF + 0.4;
-/** The lawns' hoop fences stand behind the benches, this far (m) from the path's middle, in 4 m runs. */
+/** The lawns' hoop fences stand behind the benches, this far (m) from the path's middle, in runs of a fence section's length. */
 const FENCE_OFF = PATH_HALF + 1.6;
-const FENCE_RUN = 4;
+const FENCE_RUN = 2 * HOOP_FENCE.halfLength;
 /** Nothing stands within this (m) of the park's edge (the street's sidewalk), of the plaza's ring, of the court or of another path's edge. */
 const EDGE_CLEAR = 2.5;
 const PLAZA_CLEAR = 1;
