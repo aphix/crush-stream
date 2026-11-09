@@ -50,6 +50,14 @@ describe("given a camera on a street and a 10 m high building 30 m ahead", () =>
     expect(new SightField([BUILDING], IDS).seen(0, 50, PERSON_M), "seen before the first update").toBe(true);
   });
 
+  it("when the field is switched off, then everything is seen, and when it is switched on a person behind the building is not", () => {
+    const switched = fieldSeenBy([street]);
+    switched.enabled = false;
+    expect(switched.seen(0, 50, PERSON_M), "seen with the field off").toBe(true);
+    switched.enabled = true;
+    expect(switched.seen(0, 50, PERSON_M), "seen with the field on").toBe(false);
+  });
+
   it("when the only solids are a parked car's box and a lamp post, then they hide nothing", () => {
     const lowAndRound = fieldSeenBy([street], [occluder(0, 30, 0, 2, 1, false, 0, 1.5), occluder(0, 30, 0, 1, 1, true, 0, 9)]);
     expect(lowAndRound.seen(0, 50, PERSON_M), "seen behind a car and a lamp post").toBe(true);

@@ -33,6 +33,8 @@ export type SightPlayer = { readonly group: { readonly position: { readonly x: n
 export class SightField {
   /** `HIDE_GRACE`, for consumers that may not import this file (a layer below present). */
   readonly hideGrace = HIDE_GRACE;
+  /** Off: everything is seen, so nothing is culled (the A/B probes' arm with no culling, as `Witness.enabled`). */
+  enabled = true;
   private solidCount = 0;
   private solidX = new Float64Array(0);
   private solidZ = new Float64Array(0);
@@ -122,9 +124,9 @@ export class SightField {
     }
   }
 
-  /** Whether any eye sees a thing of `radius` m at (x, z): in its frustum and with some line across it clear of the buildings. No eyes read yet: everything is seen. */
+  /** Whether any eye sees a thing of `radius` m at (x, z): in its frustum and with some line across it clear of the buildings. No eyes read yet, or `enabled` off: everything is seen. */
   seen(x: number, z: number, radius: number): boolean {
-    if (this.eyeCount === 0) return true;
+    if (!this.enabled || this.eyeCount === 0) return true;
     for (let eye = 0; eye < this.eyeCount; eye++) {
       if (this.inFrustum(eye, x, z, radius) && !this.hiddenFrom(eye, x, z, radius)) return true;
     }

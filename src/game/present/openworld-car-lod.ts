@@ -24,6 +24,7 @@ export class OpenWorldCarLod {
   private readonly detail: Pick<CarDetail, "level" | "setLevel">;
   private readonly phasedOut = new Array<LodCar | null>(MAX_CARS).fill(null);
   private firstId = 0;
+  private hasIds = false;
   private rungBefore = NO_RUNG;
   private rung = 0;
 
@@ -44,16 +45,23 @@ export class OpenWorldCarLod {
     for (let at = 0; at < known; at++) this.judge(at, cars[at]!, followed);
   }
 
-  /** The open world ended: the cars come back and the ladder's own rung with them. */
-  stop(cars: readonly LodCar[]): void {
+  /** Culling is off for now: the cars come back and the ladder's own rung with them; the next `frame` starts over. */
+  release(cars: readonly LodCar[]): void {
     if (this.rungBefore === NO_RUNG) return;
     this.showAll(cars);
     this.detail.setLevel(this.rungBefore);
     this.rungBefore = NO_RUNG;
   }
 
+  /** The open world ended: released, and the ids go back with the field's clear. */
+  stop(cars: readonly LodCar[]): void {
+    this.release(cars);
+    this.hasIds = false;
+  }
+
   private start(): void {
-    this.firstId = this.sight.claim(MAX_CARS);
+    if (!this.hasIds) this.firstId = this.sight.claim(MAX_CARS);
+    this.hasIds = true;
     this.rungBefore = Math.max(0, this.detail.level);
     this.rung = Math.min(DETAIL_LEVELS.length - 1, this.rungBefore + RUNGS_NEARER);
   }

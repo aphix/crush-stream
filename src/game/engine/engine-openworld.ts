@@ -126,6 +126,7 @@ export class OpenWorldDirector {
   /** A frame: the crowd is made, rebuilt on a new seed or dropped as the course comes and goes; a client steps it by the host's clock; the crowd is drawn and the look-at text kept up. */
   frame(wallDt: number): void {
     if (this.map === null || !this.ports.inOpenWorld()) {
+      this.culling.stop(this.ports.cars());
       this.stop();
       return;
     }
@@ -150,7 +151,6 @@ export class OpenWorldDirector {
 
   /** The crowd, its drawing and its worker are gone. */
   stop(): void {
-    this.culling.stop(this.ports.cars());
     if (this.crowd === null) return;
     this.unhook?.();
     this.art?.dispose();
