@@ -9,6 +9,7 @@ import { MATERIAL_ATTRIBUTE, SURFACE_REGION_ATTRIBUTE } from "../vehicle/materia
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import type { FacadeStyle } from "./facades.ts";
 import type { AssetFamily } from "../world/scenery-assets/types.ts";
+import type { StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
 
 /** Materials the prefabs draw with (shared with the track art where it says so). */
 export type PrefabMaterials = {
@@ -29,8 +30,11 @@ export type PrefabMaterials = {
   assets: Readonly<Record<AssetFamily, THREE.Material>>;
 };
 
-/** What a prefab is dressed in: a building's facade style or a scenery asset's family (one draw per prefab, skin and draw cell); none for a prefab with one look. */
-export type Skin = FacadeStyle | AssetFamily | null;
+/** What a prefab is dressed in: a building's facade style, a scenery asset's family or a street tree's kind (one draw per prefab, skin and draw cell); none for a prefab with one look. */
+export type Skin = FacadeStyle | AssetFamily | StreetTreeSkin | null;
+
+/** A turn (rad) and a size factor a placement is drawn with on top of its own yaw and scale: drawing's only, the placement's collider never reads it. */
+export type DrawnPose = { yaw: number; scale: number };
 
 /** One drawable part of a prefab: its geometry, its material, whether the material is shared with the track art, and whether it casts a shadow (default: yes; ground cover and flat paving do not). */
 export type PrefabPart = { geometry: THREE.BufferGeometry; material: THREE.Material; shared: boolean; shadow?: boolean };

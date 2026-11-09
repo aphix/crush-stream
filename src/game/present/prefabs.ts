@@ -8,6 +8,8 @@ import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
 import { frontBumper, lyingWheel, parkedCar } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
+import { streetTreePieces } from "./street-trees.ts";
+import { isStreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
 import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMaterials } from "./scenery-assets-art.ts";
 import { PREFAB } from "../world/constants.ts";
 import { dressPaving } from "./ground-relief.ts";
@@ -719,7 +721,7 @@ function sidewalk(): Piece[] {
 
 /** Prefab `id` at scale 1 as drawable parts (one for most; the lamp adds its head and night pool); a building in the facade style `skin` names (else its prefab's own), a scenery asset in the family it names (else the first). */
 export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = null): PrefabPart[] {
-  const style = isAssetFamily(skin) ? null : skin;
+  const style = isAssetFamily(skin) || isStreetTreeSkin(skin) ? null : skin;
   const one = (pieces: Piece[], material: THREE.Material): PrefabPart[] => [{ geometry: painted(pieces), material, shared: false }];
   switch (id) {
     case PREFAB.cone:
@@ -741,7 +743,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.rock:
       return one(rock(), mats.nature);
     case PREFAB.tree:
-      return one(tree(), mats.nature);
+      return one(isStreetTreeSkin(skin) ? streetTreePieces(skin) : tree(), mats.nature);
     case PREFAB.building:
     case PREFAB.buildingShell:
     case PREFAB.stucco: {
