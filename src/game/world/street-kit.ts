@@ -60,8 +60,8 @@ export const ACORN_LAMP = {
 export const POSTS = {
   /** A cast-iron corner bollard: its post radius, its collar's radius and where the collar stands, the cap's radius, and its top. */
   bollard: { postRadius: 0.12, collarRadius: 0.14, collarBottom: 0.62, collarTop: 0.68, capBottom: 0.82, capTopRadius: 0.11, top: 0.95 },
-  /** A fire hydrant: its barrel's radius, the plan the outlets reach (a circle holds them), and its top. */
-  hydrant: { reach: 0.17, top: 0.76 },
+  /** A fire hydrant, as drawn: the plan its outlets reach (a circle holds them, up to `outletTop`), its barrel's radius and top, its bonnet's radius at the foot, the radius of its cap and its top. */
+  hydrant: { reach: 0.17, outletTop: 0.48, barrelRadius: 0.12, barrelTop: 0.56, bonnetRadius: 0.14, bonnetTop: 0.68, capRadius: 0.05, top: 0.76 },
   /** A parking meter: its post's radius and top, its head's half sides (m) and where it stands over the post's top, and its cap's radius and top. */
   meter: { postRadius: 0.035, postTop: 1.05, headHalfAlong: 0.09, headHalfAcross: 0.065, headTop: 1.34, capRadius: 0.08, top: 1.4 },
   /** A street sign's pole radius (its base's: the pole narrows 0.005 m over its height) and the blades' half length and thickness, with the heights each stands over (bottom, top). */
@@ -154,6 +154,12 @@ function circlePiece(r: number, y0: number, y1: number): Collider {
 /** A box collider of half sizes (`halfAlong` front to back, `halfAcross`) centred (`x`, `z`) from `y0` to `y1` (m). */
 function boxPiece(halfAlong: number, halfAcross: number, x: number, z: number, y0: number, y1: number): Collider {
   return { kind: "box", hx: halfAlong, hz: halfAcross, x, z, y0, y1 };
+}
+
+/** A hydrant's circles: the outlets' round (to the height they reach), the barrel, the bonnet (as wide as its foot) and the cap. */
+export function hydrantPlan(): Collider[] {
+  const { reach, outletTop, barrelRadius, barrelTop, bonnetRadius, bonnetTop, capRadius, top } = POSTS.hydrant;
+  return [circlePiece(reach, 0, outletTop), circlePiece(barrelRadius, outletTop, barrelTop), circlePiece(bonnetRadius, barrelTop, bonnetTop), circlePiece(capRadius, bonnetTop, top)];
 }
 
 /** A bin's circles: its body, and its lid a little wider. */
