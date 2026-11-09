@@ -40,6 +40,7 @@ import { CarDamage, FinalDamage } from "./car-damage.ts";
 import type { CourseMenu } from "../net/net-ports.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import type { FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
+import { type RoadSpot, roadSpotNear } from "../world/road-spot.ts";
 
 /** The name a clip gives a car that is no racer (traffic, and the cops past it: `entrants` has no row for them). */
 export const TRAFFIC_NAME = "Traffic";
@@ -125,6 +126,8 @@ const PARK_Z = 4000;
 const parkX = (i: number): number => PARK_X + i * 12;
 /** A Survival drop-in must be this many metres outside the camera's view (or behind a solid): the view swings while the cop is already on the road. */
 const HIDE_MARGIN = 8;
+/** A car put on the road near a spot (`placeNear`) keeps this far (m) from every other car's centre: a car's length and a gap. */
+const CAR_GAP = 6;
 const _c = new THREE.Vector3();
 const _roadPt = blankPoint();
 
@@ -547,6 +550,31 @@ export abstract class RaceField {
     const slot = this.lobbySlot(id);
     car.group.visible = true;
     this.place(car, slot.x, slot.z, slot.yaw, slot.y);
+  }
+
+  /**
+   * Car `id` fresh (repaired, at rest, drawn) on the road nearest (`x`, `z`), facing along it the way nearer `facing` (rad), clear of the other cars and of
+   * the course's solids (`roadSpotNear`). False with no course loaded or no clear spot near.
+   */
+  placeNear(id: number, x: number, z: number, facing: number): boolean {
+    const car = this.host.live()[id];
+    if (!car || !this.track || !roadSpotNear(this.track, x, z, facing, this.colliders, (sx, sz) => this.carNear(id, sx, sz), this.nearSpot)) return false;
+    car.group.visible = true;
+    this.place(car, this.nearSpot.x, this.nearSpot.z, this.nearSpot.yaw, this.nearSpot.y);
+    return true;
+  }
+
+  private readonly nearSpot: RoadSpot = { x: 0, z: 0, y: 0, yaw: 0 };
+
+  /** Whether a car but `id` (drawn, not blown away) stands within `CAR_GAP` m of (`x`, `z`): a car put there would be in it. */
+  private carNear(id: number, x: number, z: number): boolean {
+    const cars = this.host.live();
+    for (let i = 0; i < cars.length; i++) {
+      const car = cars[i]!;
+      if (i === id || !car.group.visible || car.vaporized) continue;
+      if (hypot2(car.group.position.x - x, car.group.position.z - z) < CAR_GAP) return true;
+    }
+    return false;
   }
 
   /** Lobby: every car back at its spawn and every knocked prop back on its spot (the drawn ones go back with the scene's `clear`). */

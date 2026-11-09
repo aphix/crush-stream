@@ -45,8 +45,10 @@ export class OnFootRig {
     this.engine = engine;
   }
 
-  static async boot(): Promise<OnFootRig> {
+  /** `hash`: the page's share link (`scene=openworld&seed=beef`), none for the fleet. */
+  static async boot(hash?: string): Promise<OnFootRig> {
     stubBrowser();
+    if (hash !== undefined) globalThis.location.hash = hash;
     const engine = await bootEngine({ pacer: true });
     engine.autoSlomo = false;
     await engine["ragdolls"].preload();
