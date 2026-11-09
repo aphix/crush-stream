@@ -341,6 +341,7 @@ export class ClipSim {
     }
     // The cars go back on the sim's own poses before they are respawned (a drawn pose written back after it would undo the respawn).
     this.blend.restore();
+    this.blend.forget(this.cars);
     this.heading.set(0, 0);
     this.firstHit = -1;
     this.pairAt.fill(-Infinity);

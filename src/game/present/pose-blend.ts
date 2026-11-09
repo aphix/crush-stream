@@ -228,9 +228,12 @@ class CarBlend {
   /** The last step ran on these bodies. */
   stepped = false;
   drawn = false;
+  /** `PoseBlend.steps` when this blend began: its tracks count steps from here, so a car tracked afresh blends as one tracked from the first step. */
+  readonly origin: number;
 
-  constructor(car: DeformableCar) {
+  constructor(car: DeformableCar, origin: number) {
     this.car = car;
+    this.origin = origin;
     this.parts = car.partObjects().map((o) => new PartTrack(o));
     for (const geometry of car.skinGeometries()) {
       for (const name of ["position", "normal"]) {
@@ -361,14 +364,14 @@ export class PoseBlend {
   private shownCount = 0;
   /** Steps run so far (`end` calls): the clock the skin's and the parts' writes are placed on. */
   private steps = 0;
-  /** The step time of the last `present`, which `refresh` draws at. */
-  private now = 0;
+  /** The last `present`'s share through its step, which `refresh` draws at. */
+  private alpha = 0;
 
   begin(cars: readonly DeformableCar[]): void {
     for (let i = 0; i < cars.length; i++) {
       const car = cars[i]!;
       let c = this.cars.get(car);
-      if (!c) this.cars.set(car, (c = new CarBlend(car)));
+      if (!c) this.cars.set(car, (c = new CarBlend(car, this.steps)));
       c.begin(car);
     }
   }
@@ -380,23 +383,32 @@ export class PoseBlend {
 
   present(cars: readonly DeformableCar[], alpha: number): void {
     const a = alpha < 1 ? Math.max(0, alpha) : 1;
-    const now = this.steps - 1 + a;
-    this.now = now;
+    this.alpha = a;
     for (let i = 0; i < cars.length; i++) {
       const c = this.cars.get(cars[i]!);
       if (!c?.stepped) continue;
-      c.present(a, this.steps, now);
+      const steps = this.steps - c.origin;
+      c.present(a, steps, steps - 1 + a);
       this.shown[this.shownCount++] = c;
     }
   }
 
   /** The reel skins after `present`: take those writes and draw them at the frame's time (the live order needs none). */
   refresh(): void {
-    for (let i = 0; i < this.shownCount; i++) this.shown[i]!.tracks(this.steps, this.now);
+    for (let i = 0; i < this.shownCount; i++) {
+      const c = this.shown[i]!;
+      const steps = this.steps - c.origin;
+      c.tracks(steps, steps - 1 + this.alpha);
+    }
   }
 
   restore(): void {
     for (let i = 0; i < this.shownCount; i++) this.shown[i]!.restore();
     this.shownCount = 0;
+  }
+
+  /** `cars` start their tracks again: a replay restarting them must not blend the play before it into its first frames. */
+  forget(cars: readonly DeformableCar[]): void {
+    for (let i = 0; i < cars.length; i++) this.cars.delete(cars[i]!);
   }
 }
