@@ -73,8 +73,8 @@ function inward(corners: Alcove["corners"], from: PlanPoint, to: PlanPoint): Pla
 }
 
 /**
- * Every alcove of `level`: its floor carried out over the bay, its ceiling at the glass's head, and on its three sides the apron up to the sill: skirting, a wall-coloured body, and a sill board at the glass's
- * bottom edge that reaches into the room.
+* Every alcove of `level`: its floor carried out over the bay, its ceiling at the glass's head, and on its three sides the apron up to the sill: skirting, a body in the room's wood (a window seat's face, not a
+ * white slab), and a sill board at the glass's bottom edge that reaches into the room.
  */
 function alcovePieces(plan: InteriorPlan, look: Look, level: number): Piece[] {
   const out: Piece[] = [];
@@ -89,7 +89,7 @@ function alcovePieces(plan: InteriorPlan, look: Look, level: number): Piece[] {
       const boardTo: PlanPoint = [to[0] + step[0] * SILL_DEPTH, to[1] + step[1] * SILL_DEPTH];
       out.push(
         [upright(plan, from, to, alcove.floorY, alcove.floorY + SKIRTING_HEIGHT), look.trim],
-        [upright(plan, from, to, alcove.floorY + SKIRTING_HEIGHT, alcove.sill), look.wall],
+        [upright(plan, from, to, alcove.floorY + SKIRTING_HEIGHT, alcove.sill), look.wood],
         [quad(at(plan, from[0], alcove.sill, from[1]), at(plan, to[0], alcove.sill, to[1]), at(plan, boardTo[0], alcove.sill, boardTo[1]), at(plan, boardFrom[0], alcove.sill, boardFrom[1])), look.trim],
         [upright(plan, boardFrom, boardTo, alcove.sill - SILL_THICK, alcove.sill), look.trim],
       );

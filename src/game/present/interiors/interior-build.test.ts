@@ -38,7 +38,7 @@ function trianglesOf(geometry: { getAttribute(name: string): { getX(at: number):
 }
 
 describe("given the bay alcove of a rowhome's rooms", () => {
-  // mutation: sed -i 's/        \[upright(plan, from, to, alcove.floorY + SKIRTING_HEIGHT, alcove.sill), look.wall\],/        [upright(plan, from, to, alcove.floorY + SKIRTING_HEIGHT, alcove.head), look.wall],/' src/game/present/interiors/interior-build.ts
+  // mutation: sed -i 's/        \[upright(plan, from, to, alcove.floorY + SKIRTING_HEIGHT, alcove.sill), look.wood\],/        [upright(plan, from, to, alcove.floorY + SKIRTING_HEIGHT, alcove.head), look.wood],/' src/game/present/interiors/interior-build.ts
   it("when its pieces are read, then no wall of it stands higher than the sill, and a sill board lies flat at the sill's height on each of its three sides", () => {
     for (const storeys of STOREY_COUNTS) {
       const place = { ...standing, storeys };
