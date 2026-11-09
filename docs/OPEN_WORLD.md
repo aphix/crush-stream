@@ -159,10 +159,10 @@ Nothing in the fabric throws: a piece that finds no room is left out, and a row 
 
 ## Rowhome facade kit
 
-Every home inside the walls is dressed from its `Place` (`homeFrontages`): a point on the building's drawn front face at the lot's middle, which is the door's line. Four instanced meshes (`FacadeBays`: bay, stoop, railing, cornice; four draws whatever the number of houses, painted textures made in code) draw
-a canted bay stack over the door (hood at the door's head, then every floor's apron, window and belt band on one footprint, 0.75 m out, a capped roof slab), a stoop of five 0.18 m risers whose landing (0.9 m) is the door sill, iron railings on its cheeks, half-basement windows either side and a bracketed roofline cornice;
-panels and cornice take the house's accent from `HOUSE_ACCENTS`, windows light at night from the facades' `FACADE_GLOW`. The facade art of a home carries no bay, stoop, railing or cornice of its own: this kit covers the door's column above the door, the stoop and the roofline band.
-What a car or a walker meets is `facadeSolidProps(lots)`, appended to the course's props as invisible-wall boxes: a prism per step (base on the ground, tops 0.18 to 0.9, no overhang) and a flank prism either side of the stoop under the bay (the stack overhangs the stoop itself).
+Every home inside the walls is dressed from its `Place` (`homeFrontages`): a point on the building's drawn front face at the lot's middle. Across the lot (u, along the building's local z) the door and its stoop stand at +1.8 m (`homeDoorPoint` is the place's door point) and the bay stack takes the other half, centred at -0.9 m, 2.8 m wide. Four instanced meshes (`FacadeBays`: bay, stoop, railing, cornice; four draws whatever the number of houses, painted textures made in code) draw
+the bay stack (a stone plinth from the ground with a barred half-basement window, then on every storey, the raised ground storey included, a panelled apron, the window with a flat front and two angled sides and a belt band, a panel and a roof slab on top; every ring is cut from one footprint, 0.7 m out), the stoop (five 0.18 m risers whose landing, 0.9 m, is the door sill; jambs and a hood at the door), iron railings on its cheeks and a bracketed roofline cornice;
+panels and cornice take the house's accent from `HOUSE_ACCENTS`, windows light at night from the facades' `FACADE_GLOW`. The facade art of a home carries no bay, stoop, railing or cornice of its own.
+What a car or a walker meets is `facadeSolidProps(lots)`, appended to the course's props as invisible-wall boxes, three a home: the bay stack (one box to the roof slab), the stoop's ramp (a box over the four treads) and its landing (flush with the sill). A walker's height on the stoop is `stoopHeightAt`.
 
 ## Animation (`present/civilian-anim*.ts`)
 

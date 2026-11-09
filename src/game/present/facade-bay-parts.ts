@@ -5,7 +5,7 @@ import { KIT_CELL, RAIL_SOLID_CELL, type UvRect } from "./facade-kit-atlas.ts";
 
 /**
  * The rowhome kit's pieces as geometry, in metres: x across the facade, y up, z out from the building's drawn front face, the lot's middle at x = 0.
- * Each piece is built once and drawn once per rowhome by an instanced mesh (`facade-bays.ts`).
+ * Each piece is built once and drawn once per rowhome by an instanced mesh (`facade-bays.ts`). The kit's x is the lot's u negated (a right-handed frame with z out and y up), so the door (u +1.8) stands at x -1.8.
  */
 
 type Point = readonly [x: number, y: number, z: number];
@@ -89,17 +89,21 @@ class KitBuilder {
   }
 }
 
+/** Where the door and the bay's footprint stand in the kit's x (m). */
+const DOOR_X = -DOOR.across;
+const BAY_X = -BAY.across;
+
 type PlanPoint = readonly [x: number, z: number];
 
-/** The bay's footprint (flat front, 45-degree sides) pushed `offset` m outward on every edge: wall corner, front corner, front corner, wall corner. */
+/** The bay's footprint (flat front, 45-degree sides) about its middle, pushed `offset` m outward on every edge: wall corner, front corner, front corner, wall corner. */
 function bayOutline(offset: number): readonly PlanPoint[] {
   const half = BAY.front / 2;
   const mitre = offset * (Math.SQRT2 - 1);
   return [
-    [-(half + BAY.out) - offset * Math.SQRT2, 0],
-    [-half - mitre, BAY.out + offset],
-    [half + mitre, BAY.out + offset],
-    [half + BAY.out + offset * Math.SQRT2, 0],
+    [BAY_X - (half + BAY.out) - offset * Math.SQRT2, 0],
+    [BAY_X - half - mitre, BAY.out + offset],
+    [BAY_X + half + mitre, BAY.out + offset],
+    [BAY_X + half + BAY.out + offset * Math.SQRT2, 0],
   ];
 }
 
@@ -131,12 +135,9 @@ function plate(builder: KitBuilder, y: number, offset: number, up: boolean, cell
   builder.quad([corners[0]![0], y, corners[0]![1]], [corners[1]![0], y, corners[1]![1]], [corners[2]![0], y, corners[2]![1]], [corners[3]![0], y, corners[3]![1]], cell, colour, FIXED);
 }
 
-/** The hood over the door and the belts and slab of the stack project this far past the bay's walls (m). */
-const HOOD_LIP = 0.05;
+/** The belts and the slab of the stack project this far past the bay's walls (m). */
 const BELT_LIP = 0.06;
 const SLAB_LIP = 0.1;
-/** The hood's height (m). */
-const HOOD_HEIGHT = 0.25;
 
 /** A projecting band: its wall, its underside and its top. */
 function band(builder: KitBuilder, y0: number, y1: number, lip: number): void {
@@ -146,14 +147,14 @@ function band(builder: KitBuilder, y0: number, y1: number, lip: number): void {
 }
 
 /**
- * The bay stack over the door: the hood from the door's head, then for every floor a panelled apron, the window (flat front, two angled sides) and a belt band;
- * a panel and a roof slab cap it. Every ring is cut from the same outline, so each floor's bay stands on the one below.
+ * The bay stack beside the door: a stone plinth from the ground (its front a barred half-basement window) under a band, then for every storey a panelled apron, the window
+ * (flat front, two angled sides) and a belt band; a panel and a roof slab cap it. Every ring is cut from the same outline, so each floor's bay stands on the one below.
  */
 export function buildBayGeometry(): THREE.BufferGeometry {
   const builder = new KitBuilder();
-  const hoodTop = BAY.bottom + HOOD_HEIGHT;
-  band(builder, BAY.bottom, hoodTop, HOOD_LIP);
-  let cursor = hoodTop;
+  ring(builder, 0, BAY.plinthTop, 0, [KIT_CELL.stone, KIT_CELL.basement, KIT_CELL.stone], WHITE, FIXED);
+  let cursor = BAY.plinthTop + BAY.plinthBand;
+  band(builder, BAY.plinthTop, cursor, BELT_LIP);
   for (const floor of BAY_FLOORS) {
     ring(builder, cursor, floor.sill, 0, uniform(KIT_CELL.panel), WHITE, ACCENT);
     ring(builder, floor.sill, floor.head, 0, WINDOW_CELLS, WHITE, FIXED);
@@ -165,44 +166,33 @@ export function buildBayGeometry(): THREE.BufferGeometry {
   return builder.geometry(true);
 }
 
-/** The door's stone jambs: 0.12 m wide beside the 1.0 m hole, standing 0.06 m proud. */
+/** The door's stone jambs: 0.12 m wide beside the 1.0 m hole, standing 0.06 m proud; the hood over it stands 0.3 m out and 0.2 m high, 0.3 m wider than the hole each side. */
 const JAMB_WIDTH = 0.12;
 const JAMB_DEPTH = 0.06;
-/** The half-basement windows either side of the stoop: centre from the lot's middle, half width, sill, glass bottom and top (m), and their stone surround's depth. */
-const BASEMENT_CENTRE = 1.75;
-const BASEMENT_HALF_WIDTH = 0.4;
-const BASEMENT_SILL = 0.12;
-const BASEMENT_GLASS_BOTTOM = 0.2;
-const BASEMENT_GLASS_TOP = 0.75;
-const BASEMENT_LINTEL_TOP = 0.9;
-const BASEMENT_SURROUND_OUT = 0.08;
-/** The glass stands this far off the wall so it does not fight the facade's own pixels. */
-const BASEMENT_GLASS_SET = 0.01;
-const BASEMENT_SURROUND_OVER = 0.1;
+const HOOD_OUT = 0.3;
+const HOOD_HEIGHT = 0.2;
+const HOOD_OVER = 0.3;
 
-/** The stoop: solid stone steps (landing at the wall, riser and tread for each step, cheeks to the ground), the door's jambs and a basement window with its surround either side. */
+/** The stoop: solid stone steps (landing at the wall, riser and tread for each step, cheeks to the ground) under the door, with its jambs and hood. */
 export function buildStoopGeometry(): THREE.BufferGeometry {
   const builder = new KitBuilder();
-  const half = STOOP.width / 2;
+  const left = DOOR_X - STOOP.width / 2;
+  const right = DOOR_X + STOOP.width / 2;
   for (let step = 1; step <= STOOP.steps; step++) {
     const { near, far, top } = stoopStepRange(step);
     const previous = top - STOOP.rise;
-    builder.quad([-half, previous, far], [half, previous, far], [half, top, far], [-half, top, far], KIT_CELL.stone, RISER_SHADE, ACCENT);
-    builder.quad([-half, top, far], [half, top, far], [half, top, near], [-half, top, near], KIT_CELL.stone, TREAD_SHADE, ACCENT);
-    builder.quad([half, 0, far], [half, 0, near], [half, top, near], [half, top, far], KIT_CELL.stone, CHEEK_SHADE, ACCENT);
-    builder.quad([-half, 0, near], [-half, 0, far], [-half, top, far], [-half, top, near], KIT_CELL.stone, CHEEK_SHADE, ACCENT);
+    builder.quad([left, previous, far], [right, previous, far], [right, top, far], [left, top, far], KIT_CELL.stone, RISER_SHADE, ACCENT);
+    builder.quad([left, top, far], [right, top, far], [right, top, near], [left, top, near], KIT_CELL.stone, TREAD_SHADE, ACCENT);
+    builder.quad([right, 0, far], [right, 0, near], [right, top, near], [right, top, far], KIT_CELL.stone, CHEEK_SHADE, ACCENT);
+    builder.quad([left, 0, near], [left, 0, far], [left, top, far], [left, top, near], KIT_CELL.stone, CHEEK_SHADE, ACCENT);
   }
   for (const side of [-1, 1]) {
-    const inner = side * DOOR.halfWidth;
-    const outer = side * (DOOR.halfWidth + JAMB_WIDTH);
+    const inner = DOOR_X + side * DOOR.halfWidth;
+    const outer = DOOR_X + side * (DOOR.halfWidth + JAMB_WIDTH);
     builder.box(Math.min(inner, outer), Math.max(inner, outer), DOOR.sill, DOOR.head, 0, JAMB_DEPTH, FACE.front | FACE.left | FACE.right, KIT_CELL.stone, TRIM, FIXED);
-    const centre = side * BASEMENT_CENTRE;
-    const left = centre - BASEMENT_HALF_WIDTH;
-    const right = centre + BASEMENT_HALF_WIDTH;
-    builder.quad([left, BASEMENT_GLASS_BOTTOM, BASEMENT_GLASS_SET], [right, BASEMENT_GLASS_BOTTOM, BASEMENT_GLASS_SET], [right, BASEMENT_GLASS_TOP, BASEMENT_GLASS_SET], [left, BASEMENT_GLASS_TOP, BASEMENT_GLASS_SET], KIT_CELL.basement, WHITE, FIXED);
-    builder.box(left - BASEMENT_SURROUND_OVER, right + BASEMENT_SURROUND_OVER, BASEMENT_GLASS_TOP, BASEMENT_LINTEL_TOP, 0, BASEMENT_SURROUND_OUT, ALL_BUT_BACK, KIT_CELL.stone, TRIM, FIXED);
-    builder.box(left - BASEMENT_SURROUND_OVER, right + BASEMENT_SURROUND_OVER, BASEMENT_SILL, BASEMENT_GLASS_BOTTOM, 0, BASEMENT_SURROUND_OUT, ALL_BUT_BACK, KIT_CELL.stone, TRIM, FIXED);
   }
+  const hoodHalf = DOOR.halfWidth + JAMB_WIDTH + HOOD_OVER;
+  builder.box(DOOR_X - hoodHalf, DOOR_X + hoodHalf, DOOR.head, DOOR.head + HOOD_HEIGHT, 0, HOOD_OUT, ALL_BUT_BACK, KIT_CELL.stone, TRIM, FIXED);
   return builder.geometry(true);
 }
 
@@ -253,7 +243,7 @@ export function buildRailingGeometry(): THREE.BufferGeometry {
   const landingBars = { u0: 0, v0: 0, u1: STOOP.landing / BAR_PITCH, v1: 1 };
   const slopeBars = { u0: 0, v0: 0, u1: slopeLength / BAR_PITCH, v1: 1 };
   for (const side of [-1, 1]) {
-    const x = side * (STOOP.width / 2 - RAIL_INSET);
+    const x = DOOR_X + side * (STOOP.width / 2 - RAIL_INSET);
     builder.quad([x, landingTop, 0], [x, landingTop, STOOP.landing], [x, landingTop + RAIL_HEIGHT, STOOP.landing], [x, landingTop + RAIL_HEIGHT, 0], landingBars, WHITE, FIXED);
     builder.quad([x, landingTop, STOOP.landing], [x, footNose, STOOP.run], [x, footNose + RAIL_HEIGHT, STOOP.run], [x, landingTop + RAIL_HEIGHT, STOOP.landing], slopeBars, WHITE, FIXED);
     for (const [along, base] of [[STOOP.landing, landingTop], [STOOP.run, footNose]] as const) {

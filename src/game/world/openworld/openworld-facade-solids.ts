@@ -32,17 +32,28 @@ export const STOOP = {
   sill: STOOP_RISE * STOOP_STEPS,
 } as const;
 
+/**
+ * Door and bay side by side, the same on every house: across the lot (u, along the building's local z, from the lot's middle) the door and its stoop stand at +1.8 m and the bay stack
+ * takes the other half, centred at -0.9 m and 2.8 m wide: 0.5 m of pier at each side of it and 0.45 m between the bay and the stoop (u 1.0 to 2.6).
+ */
+const DOOR_ACROSS = 1.8;
+const BAY_ACROSS = -0.9;
 /** The door hole every rowhome's ground band is cut with (m): half its width, and its height over the door sill. */
 const DOOR_HALF_WIDTH = 0.5;
 const DOOR_HEIGHT = 2.1;
-export const DOOR = { halfWidth: DOOR_HALF_WIDTH, sill: STOOP.sill, head: STOOP.sill + DOOR_HEIGHT } as const;
+export const DOOR = { across: DOOR_ACROSS, halfWidth: DOOR_HALF_WIDTH, sill: STOOP.sill, head: STOOP.sill + DOOR_HEIGHT } as const;
+
+/** The door's centre on a lot's front face, for the place's door point: the lot's middle (lotX) and its front line (frontZ) for a building facing `yaw`. */
+export function homeDoorPoint(lotX: number, frontZ: number, yaw: number): { x: number; z: number } {
+  return { x: lotX + DOOR_ACROSS * detSin(yaw), z: frontZ + DOOR_ACROSS * detCos(yaw) };
+}
 
 /**
- * The bay stack over the door: a canted bay (flat front, sides at 45 degrees) from the door's head to the top floor, every floor's bay on the same footprint.
- * `out` 0.75 m is inside the 0.6-0.9 m a rowhome bay projects; its sides run `out` along the facade, so the width is `front` + 2 `out`.
+ * The bay stack beside the door, from the ground to the roof: a stone plinth with a half-basement window, then on every floor a panelled apron, a window (flat front, two angled sides)
+ * and a belt band, a panel and a roof slab on top; every ring is cut from one footprint. `out` 0.7 m is inside the 0.6-0.9 m a rowhome bay projects; its sides run `out` along the facade, so the width is `front` + 2 `out`.
  */
-const BAY_FRONT = 1.5;
-const BAY_OUT = 0.75;
+const BAY_FRONT = 1.4;
+const BAY_OUT = 0.7;
 /** A bay window's sill over its floor and its height (m): a 1.5 m sash window. */
 const BAY_SILL_ABOVE_FLOOR = 0.75;
 const BAY_WINDOW_HEIGHT = 1.5;
@@ -50,12 +61,15 @@ const BAY_WINDOW_HEIGHT = 1.5;
 const BAY_CAP_BAND = 0.25;
 const BAY_CAP_PANEL = 0.15;
 const BAY_CAP_SLAB = 0.15;
+/** The plinth's cap band over the basement (m). */
+const BAY_PLINTH_BAND = 0.15;
 
 type BayFloor = { sill: number; head: number };
 
-/** The floors above the ground storey, each with a bay window. */
-export const BAY_FLOORS: readonly BayFloor[] = Array.from({ length: HOME_LEVELS.storeys - 1 }, (_, index): BayFloor => {
-  const sill = HOME_LEVELS.ground + index * HOME_LEVELS.storey + BAY_SILL_ABOVE_FLOOR;
+/** Every storey's bay window: the raised ground storey (its floor is the door sill), then each floor above. */
+export const BAY_FLOORS: readonly BayFloor[] = Array.from({ length: HOME_LEVELS.storeys }, (_, index): BayFloor => {
+  const level = index === 0 ? STOOP.sill : HOME_LEVELS.ground + (index - 1) * HOME_LEVELS.storey;
+  const sill = level + BAY_SILL_ABOVE_FLOOR;
   return { sill, head: sill + BAY_WINDOW_HEIGHT };
 });
 
@@ -63,16 +77,18 @@ export const BAY = {
   front: BAY_FRONT,
   out: BAY_OUT,
   width: BAY_FRONT + 2 * BAY_OUT,
+  /** The footprint's middle across the lot (u). */
+  across: BAY_ACROSS,
   windowHeight: BAY_WINDOW_HEIGHT,
+  plinthTop: STOOP.sill,
+  plinthBand: BAY_PLINTH_BAND,
   capBand: BAY_CAP_BAND,
   capPanel: BAY_CAP_PANEL,
   capSlab: BAY_CAP_SLAB,
-  /** The hood over the door is the stack's lowest piece: it starts at the door's head. */
-  bottom: DOOR.head,
   top: BAY_FLOORS[BAY_FLOORS.length - 1]!.head + BAY_CAP_BAND + BAY_CAP_PANEL + BAY_CAP_SLAB,
 } as const;
 
-/** A rowhome's front as the kit stands it: a point on the drawn facade at the lot's middle, the building's yaw (its front is local +x), and a number that picks the house's accent. */
+/** A rowhome's front as the kit stands it: a point on the drawn facade at the lot's middle, the building's yaw (its front is local +x) and a number that picks the house's accent. */
 export type Frontage = { x: number; z: number; yaw: number; variant: number };
 
 /** A pseudo-random number from the lot's place: the same on every peer, whatever the order the places come in. */
@@ -98,27 +114,47 @@ export function stoopStepRange(step: number): { near: number; far: number; top: 
   return { near, far, top: STOOP.rise * step };
 }
 
+/** A world point against a frontage: out along the building's front direction, across along its local z (u). */
+function against(frontage: Frontage, x: number, z: number): { out: number; across: number } {
+  const dx = x - frontage.x;
+  const dz = z - frontage.z;
+  return { out: dx * detCos(frontage.yaw) - dz * detSin(frontage.yaw), across: dx * detSin(frontage.yaw) + dz * detCos(frontage.yaw) };
+}
+
+/** What a walker stands on at the world point (x, z): the stoop's stair profile there (m), 0 off the stoop. A stoop's prisms are boxes (a ramp and a landing), so the steps themselves are this function. */
+export function stoopHeightAt(frontage: Frontage, x: number, z: number): number {
+  const { out, across } = against(frontage, x, z);
+  if (Math.abs(across - DOOR.across) > STOOP.width / 2 || out < 0 || out >= STOOP.run) return 0;
+  for (let step = STOOP.steps; step >= 1; step--) {
+    const { near, far, top } = stoopStepRange(step);
+    if (out >= near && out < far) return top;
+  }
+  return 0;
+}
+
 /** A box the course stands as a prop of the invisible wall's prefab: size is [along the building's front direction, height, across]. */
 type FacadeSolid = { prefab: typeof PREFAB.invisibleWall; x: number; z: number; yaw: number; size: [number, number, number] };
 
+/** A box `out` m from the facade face and `across` m (u) from the lot's middle. */
 function boxOn(frontage: Frontage, out: number, across: number, size: [number, number, number]): FacadeSolid {
   const cos = detCos(frontage.yaw);
   const sin = detSin(frontage.yaw);
   return { prefab: PREFAB.invisibleWall, x: frontage.x + cos * out + sin * across, z: frontage.z - sin * out + cos * across, yaw: frontage.yaw, size };
 }
 
-/** The stone beside the stoop under the bay's footprint, on each side. */
-const BAY_FLANK = (BAY.width - STOOP.width) / 2;
+/** The stoop's ramp stands as high as its highest tread (m). */
+const RAMP_TOP = STOOP.rise * (STOOP.steps - 1);
 
-/** Colliders of one rowhome's kit: a prism per step (walkable, base on the ground) and a prism either side of the stoop under the bay stack (the stack overhangs the stoop itself, so that column stays open). */
+/**
+ * Colliders of one rowhome's kit, three boxes: the bay stack from the ground to its roof (one box of the footprint's own area), the stoop's ramp over the four treads and its landing.
+ * The ramp is a wall to the generic prism read; a walker's height on it is `stoopHeightAt`.
+ */
 export function facadeSolidsOf(frontage: Frontage): FacadeSolid[] {
-  const solids: FacadeSolid[] = [];
-  for (let step = 1; step <= STOOP.steps; step++) {
-    const { near, far, top } = stoopStepRange(step);
-    solids.push(boxOn(frontage, (near + far) / 2, 0, [far - near, top, STOOP.width]));
-  }
-  for (const side of [-1, 1]) solids.push(boxOn(frontage, BAY.out / 2, (side * (STOOP.width + BAY_FLANK)) / 2, [BAY.out, BAY.top, BAY_FLANK]));
-  return solids;
+  return [
+    boxOn(frontage, BAY.out / 2, BAY.across, [BAY.out, BAY.top, BAY.width - BAY.out]),
+    boxOn(frontage, (STOOP.landing + STOOP.run) / 2, DOOR.across, [STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width]),
+    boxOn(frontage, STOOP.landing / 2, DOOR.across, [STOOP.landing, STOOP.sill, STOOP.width]),
+  ];
 }
 
 /** The kit's colliders for every playable home of the layout. */

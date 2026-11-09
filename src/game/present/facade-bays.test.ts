@@ -10,10 +10,25 @@ import { HALF } from "./facade-mesh.ts";
 const lots = layOutLots();
 const frontages = homeFrontages(lots.places.slice(0, lots.backdropStart));
 const EPSILON = 1e-6;
-/** The door hole the facade art cuts, half its width (m). */
+/** The door hole the facade art cuts, half its width (m), and where its middle stands across the lot (u; the kit's x is u negated). */
 const DOOR_HOLE_HALF_WIDTH = 0.5;
+const DOOR_HOLE_X = -1.8;
+/** The lot's half width (m) and the least clear gap between the bay and the stoop's hood (m). */
+const LOT_HALF_WIDTH = 2.8;
+const STOOP_BAY_GAP_MIN = 0.3;
 /** The most triangles one rowhome's kit may cost: four meshes, each drawn once per house. */
 const TRIANGLES_PER_HOME_MAX = 400;
+
+/** The x range of every vertex of `geometry`. */
+function xRange(geometry: THREE.BufferGeometry): { min: number; max: number } {
+  const position = geometry.getAttribute("position");
+  const range = { min: Infinity, max: -Infinity };
+  for (let at = 0; at < position.count; at++) {
+    range.min = Math.min(range.min, position.getX(at));
+    range.max = Math.max(range.max, position.getX(at));
+  }
+  return range;
+}
 
 type Extent = { minX: number; maxX: number; maxZ: number; count: number };
 
@@ -35,27 +50,28 @@ describe("given the bay stack of a rowhome", () => {
   const bay = buildBayGeometry();
 
   // mutation: sed -i 's/ring(builder, floor.sill, floor.head, 0, WINDOW_CELLS, WHITE, FIXED);/ring(builder, floor.sill, floor.head, floor.sill > 5 ? 0.2 : 0, WINDOW_CELLS, WHITE, FIXED);/' src/game/present/facade-bay-parts.ts
-  it("when each floor's bay is measured at its sill, then every one has the same x range and projection, centred over the door", () => {
+  it("when each floor's bay is measured at its sill, then every one has the same x range and projection, beside the door", () => {
     for (const [at, floor] of BAY_FLOORS.entries()) {
       const extent = extentAt(bay, floor.sill);
       expect(extent.count, `vertices at floor ${at}'s sill`).toBeGreaterThan(0);
       expect(extent.maxX - extent.minX, `width of floor ${at}'s bay (m)`).toBeCloseTo(BAY.width, 6);
-      expect(extent.maxX + extent.minX, `floor ${at}'s bay off the door's line (m)`).toBeCloseTo(0, 6);
+      expect((extent.maxX + extent.minX) / 2, `floor ${at}'s bay off its line (kit x, m)`).toBeCloseTo(-BAY.across, 6);
       expect(extent.maxZ, `projection of floor ${at}'s bay (m)`).toBeCloseTo(BAY.out, 6);
     }
-    expect(BAY_FLOORS.length, "floors with a bay").toBeGreaterThanOrEqual(2);
+    expect(BAY_FLOORS.length, "floors with a bay, the ground storey included").toBe(3);
   });
 
-  it("when each floor's belt band is measured at its window's head, then every floor's is the same and sits over the hood's footprint", () => {
-    const hood = extentAt(bay, BAY.bottom);
-    expect(hood.count, "vertices at the hood's underside").toBeGreaterThan(0);
-    expect(hood.maxX + hood.minX, "hood off the door's line (m)").toBeCloseTo(0, 6);
+  it("when the plinth is measured, then the stack stands from the ground on the same footprint the floors do and each belt band sits over it", () => {
+    const plinth = extentAt(bay, 0);
+    expect(plinth.count, "vertices at the ground").toBeGreaterThan(0);
+    expect((plinth.maxX + plinth.minX) / 2, "plinth off the bay's line (kit x, m)").toBeCloseTo(-BAY.across, 6);
+    expect(plinth.maxX - plinth.minX, "plinth width (m)").toBeCloseTo(BAY.width, 6);
     const first = extentAt(bay, BAY_FLOORS[0]!.head);
     for (const [at, floor] of BAY_FLOORS.entries()) {
       const belt = extentAt(bay, floor.head);
       expect(belt.maxX - belt.minX, `belt of floor ${at} against floor 0 (m)`).toBeCloseTo(first.maxX - first.minX, 6);
       expect(belt.maxZ, `belt projection of floor ${at} against floor 0 (m)`).toBeCloseTo(first.maxZ, 6);
-      expect(belt.maxX - belt.minX, `belt of floor ${at} wider than the hood (m)`).toBeGreaterThanOrEqual(hood.maxX - hood.minX - EPSILON);
+      expect(belt.maxX - belt.minX, `belt of floor ${at} wider than the plinth (m)`).toBeGreaterThanOrEqual(plinth.maxX - plinth.minX - EPSILON);
     }
   });
 });
@@ -87,7 +103,7 @@ describe("given the stoop and its railing", () => {
     for (const geometry of [buildBayGeometry(), stoop, railing, buildCorniceGeometry()]) {
       const position = geometry.getAttribute("position");
       for (let at = 0; at < position.count; at++) {
-        const across = Math.abs(position.getX(at));
+        const across = Math.abs(position.getX(at) - DOOR_HOLE_X);
         const height = position.getY(at);
         const betweenSillAndHead = height > DOOR.sill + EPSILON && height < DOOR.head - EPSILON;
         const withinHoleHeight = height > DOOR.sill - EPSILON && height < DOOR.head + EPSILON;
@@ -97,6 +113,25 @@ describe("given the stoop and its railing", () => {
     }
     expect(atEdge, "jamb vertices on the hole's edges").toBeGreaterThan(0);
     expect(inside, "vertices inside the hole").toBe(0);
+  });
+});
+
+describe("given every piece of the kit", () => {
+  // mutation: sed -i 's/const BAY_ACROSS = -0.9;/const BAY_ACROSS = -1.9;/' src/game/world/openworld/openworld-facade-solids.ts
+  it("when the pieces are measured across the lot, then all stand inside its edges, the stoop on the door's side with a clear gap to the bay", () => {
+    const bayRange = xRange(buildBayGeometry());
+    const stoopRange = xRange(buildStoopGeometry());
+    const pieces = [
+      { name: "bay", range: bayRange },
+      { name: "stoop", range: stoopRange },
+      { name: "railing", range: xRange(buildRailingGeometry()) },
+      { name: "cornice", range: xRange(buildCorniceGeometry()) },
+    ];
+    for (const { name, range } of pieces) {
+      expect(range.min, `${name}'s least x (m)`).toBeGreaterThanOrEqual(-LOT_HALF_WIDTH - EPSILON);
+      expect(range.max, `${name}'s greatest x (m)`).toBeLessThanOrEqual(LOT_HALF_WIDTH + EPSILON);
+    }
+    expect(bayRange.min - stoopRange.max, "clear gap from the stoop's hood to the bay (m)").toBeGreaterThanOrEqual(STOOP_BAY_GAP_MIN);
   });
 });
 
