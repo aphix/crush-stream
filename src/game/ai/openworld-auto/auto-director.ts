@@ -136,12 +136,20 @@ export class AutoDirector {
     return 0;
   }
 
-  /** The table's index with the highest score that is neither the subject on screen nor the one before it; -1 when there is none. */
+  /** The table's index with the highest score that is neither the subject on screen nor the one before it (that one only when nothing else is there); -1 when there is none. */
   private pick(table: AutoCandidates): number {
+    const best = this.best(table, true);
+    return best >= 0 ? best : this.best(table, false);
+  }
+
+  private best(table: AutoCandidates, skipPrevious: boolean): number {
     let best = NONE;
     let bestScore = 0;
     for (let at = 0; at < table.count; at++) {
-      if (this.isOnScreenOrPrevious(table.kind[at]!, table.id[at]!)) continue;
+      const kind = table.kind[at]!;
+      const id = table.id[at]!;
+      if (kind === this.kind && id === this.id) continue;
+      if (skipPrevious && kind === this.recentKind[0] && id === this.recentId[0]) continue;
       const score = this.adjusted(table, at);
       if (score > bestScore) {
         bestScore = score;
@@ -149,10 +157,6 @@ export class AutoDirector {
       }
     }
     return best;
-  }
-
-  private isOnScreenOrPrevious(kind: number, id: number): boolean {
-    return (kind === this.kind && id === this.id) || (kind === this.recentKind[0] && id === this.recentId[0]);
   }
 
   /** A candidate's score: its interest, less for a repeat of the kind on screen or of a recent subject, nudged by the seed. */

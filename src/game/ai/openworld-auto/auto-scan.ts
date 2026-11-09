@@ -31,21 +31,18 @@ export function newAutoPose(): AutoPose {
   return { x: 0, y: 0, z: 0, yaw: 0, speed: 0, back: 0, height: 0, aimUp: 0 };
 }
 
-/** The most subjects a scan lists: every resident, every foot cop, every car and a wreck's or a knock's spot per event the log holds. */
-export function autoCapacity(residents: number, cops: number, cars: number, events: number): number {
-  return residents + cops + cars + events;
-}
-
 /**
  * The open world as the Auto director sees it: every civilian, foot cop and driver worth a look and why (`fill`), whether one can still be watched,
  * where to stand round one (`poseOf`) and what the look-at bubble says of it (`textOf`). The same bubble the panel shows when the eye is close.
  */
 export class OpenWorldScan {
   private readonly world: AutoWorld;
-  private heat = new Float32Array(0);
+  /** Per resident, the hottest event in progress that names them: written afresh each scan. */
+  private readonly heat: Float32Array;
 
-  constructor(world: AutoWorld) {
+  constructor(world: AutoWorld, residents: number) {
     this.world = world;
+    this.heat = new Float32Array(residents);
   }
 
   fill(table: AutoCandidates): void {
@@ -97,8 +94,7 @@ export class OpenWorldScan {
     const poses = crowd.poses;
     const state = crowd.state;
     const tick = tickAt(crowd.crowdSeconds);
-    if (this.heat.length < poses.count) this.heat = new Float32Array(poses.count);
-    this.heat.fill(0, 0, poses.count);
+    this.heat.fill(0);
     this.heatFromLog(table, crowd);
     for (let resident = 0; resident < poses.count; resident++) {
       if (poses.shown[resident] === 0) continue;

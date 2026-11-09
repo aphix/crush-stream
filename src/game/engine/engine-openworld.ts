@@ -25,7 +25,6 @@ import type { CrowdLink } from "../net/net-ports.ts";
 import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
 import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
 import { OpenWorldAuto } from "./engine-openworld-auto.ts";
-import { autoCapacity } from "../ai/openworld-auto/auto-scan.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
 import { EVENT_LOG_CAPACITY } from "../ai/civilians/civilian-crowd-constants.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
@@ -377,7 +376,7 @@ export class OpenWorldDirector {
         cars: () => this.ports.cars(),
         isPlayerCar: (carIndex) => this.ports.cull.playerCars().includes(this.ports.cars()[carIndex]!),
       },
-      autoCapacity(crowd.poses.count, FOOT_COP_COUNT, MAX_CARS, EVENT_LOG_CAPACITY),
+      { residents: crowd.poses.count, cops: FOOT_COP_COUNT, cars: MAX_CARS, events: EVENT_LOG_CAPACITY },
       seed,
     );
     if (this.autoWanted) auto.begin();

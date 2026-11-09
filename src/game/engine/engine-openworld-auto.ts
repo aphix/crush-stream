@@ -23,9 +23,10 @@ export class OpenWorldAuto {
   private readonly seed: number;
   private framedCuts = -1;
 
-  constructor(world: AutoWorld, capacity: number, seed: number) {
-    this.scan = new OpenWorldScan(world);
-    this.director = new AutoDirector(capacity, seed);
+  /** `sizes`: how many residents, foot cops, cars and logged events there can be, which is how many subjects a scan can list. */
+  constructor(world: AutoWorld, sizes: { residents: number; cops: number; cars: number; events: number }, seed: number) {
+    this.scan = new OpenWorldScan(world, sizes.residents);
+    this.director = new AutoDirector(sizes.residents + sizes.cops + sizes.cars + sizes.events, seed);
     this.seed = seed;
   }
 
