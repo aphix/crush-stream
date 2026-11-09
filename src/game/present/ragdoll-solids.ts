@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { ColliderDesc } from "@dimforge/rapier3d-simd";
+import type { Collider, ColliderDesc, World } from "@dimforge/rapier3d-simd";
 import type { Rapier } from "../kernel/rapier.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { propColliders, solidsOf, type Placed } from "../world/placements.ts";
@@ -9,6 +9,8 @@ import { blankPoint, pointOn, type Track, type TrackPath } from "../world/track.
 import { ARCH_STEPS, DECK_LIP, DECK_THICK, GANTRY_BEAM, RoadIndex, TUNNEL_GAP, TUNNEL_SHELL, TUNNEL_SIDE } from "./track-mesh.ts";
 import { levelAt, sampleStep, sections, surfY, wallColliders } from "../world/track-sections.ts";
 import { pillarPieces } from "./track-structures.ts";
+import { FIXED_GROUPS } from "./ragdoll-config.ts";
+import type { FloorBox } from "./walker-floor.ts";
 
 /**
  * A fixed solid of a course that a thrown dummy hits (the cosmetic Rapier world's static colliders). `x`, `z`, `r`: its
@@ -228,4 +230,27 @@ export function courseSolids(track: Track, placed: readonly Placed[]): Solid[] {
   const out = colliderSolids(solidsOf(wallColliders(track), propColliders(placed)), []);
   structures(track, out);
   return out;
+}
+
+/** Friction of a streamed box: the walls' and props' (`groundColliders`' `add`). */
+const BOX_FRICTION = 0.9;
+
+/** `boxes` as fixed cuboids in `world`, colliding with what a course's walls do (`FIXED_GROUPS`); each is its own collider with no body, so removing them (`removeBoxColliders`) leaves nothing behind. */
+export function boxColliders(R: Rapier, world: World, boxes: readonly FloorBox[]): Collider[] {
+  const made: Collider[] = [];
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i]!;
+    const desc = R.ColliderDesc.cuboid((b.x1 - b.x0) / 2, (b.y1 - b.y0) / 2, (b.z1 - b.z0) / 2)
+      .setTranslation((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2)
+      .setFriction(BOX_FRICTION)
+      .setCollisionGroups(FIXED_GROUPS);
+    made.push(world.createCollider(desc));
+  }
+  return made;
+}
+
+/** The colliders `boxColliders` made, out of `world`; what lies on them is woken so it falls. */
+export function removeBoxColliders(world: World, colliders: Collider[]): void {
+  for (let i = 0; i < colliders.length; i++) world.removeCollider(colliders[i]!, true);
+  colliders.length = 0;
 }

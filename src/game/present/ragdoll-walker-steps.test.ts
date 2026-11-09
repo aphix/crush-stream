@@ -4,7 +4,6 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { Ground, setGround } from "../world/ground.ts";
 import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
-import { FIXED_GROUPS } from "./ragdoll-config.ts";
 import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import type { FloorBox } from "./walker-floor.ts";
@@ -151,6 +150,19 @@ describe("given the walker and a ramp", () => {
   });
 });
 
+describe("given the walker at the foot of a stoop made of one ramp prism and a landing box", () => {
+  it("when he walks at it, then he climbs the ramp, which holds the stairs' 0.64 slope, and stands on the landing", async () => {
+    const run = TREAD * STOOP_STEPS;
+    const ramp: PrismBox = { x0: -0.8, x1: 0.8, z0: FIRST_Z, z1: FIRST_Z + run, top: LANDING_TOP / 2, slope: LANDING_TOP / run };
+    const sys = await standingOn(groundWith([ramp, { x0: -4, x1: 4, z0: FIRST_Z + run, z1: RUNS_ON_Z, top: LANDING_TOP }]));
+    const walk = walkAlong(sys, WALK_SPEED, 12);
+    const end = torso(sys);
+    expect(walk.fell, "he stayed on his feet").toBe(false);
+    expect(end.z, `on the landing: z ${end.z.toFixed(2)}`).toBeGreaterThan(FIRST_Z + run + 0.3);
+    expect(end.y - LANDING_TOP, `standing over the landing: ${(end.y - LANDING_TOP).toFixed(2)} m`).toBeGreaterThan(STANDING_MIN);
+  });
+});
+
 describe("given the walker and a doorway with a raised threshold", () => {
   it("when he walks through the one-metre opening, then he is past the wall, standing", async () => {
     const z0 = 2;
@@ -183,15 +195,10 @@ describe("given the walker and a bay window (a tall block that projects from a f
 describe("given a building's interior floor boxes that are in the world but not in the ground", () => {
   it("when he walks up its stairs of stacked boxes, then he stands on the landing at its height", async () => {
     const sys = await standingOn(groundWith([]));
-    const R = sys["R"]!;
     const boxes: FloorBox[] = [];
     for (let step = 1; step <= 4; step++) boxes.push({ x0: -0.8, x1: 0.8, z0: FIRST_Z + 0.26 * (step - 1), z1: FIRST_Z + 0.26 * step, y0: 0, y1: 0.19 * step });
     boxes.push({ x0: -3, x1: 3, z0: FIRST_Z + 0.26 * 4, z1: RUNS_ON_Z, y0: 0, y1: 0.19 * 4 });
-    for (const b of boxes) {
-      const half = { x: (b.x1 - b.x0) / 2, y: (b.y1 - b.y0) / 2, z: (b.z1 - b.z0) / 2 };
-      sys["world"]!.createCollider(R.ColliderDesc.cuboid(half.x, half.y, half.z).setTranslation((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2).setCollisionGroups(FIXED_GROUPS));
-    }
-    sys.walker.floor.boxes = boxes;
+    sys.setFixedBoxes(boxes);
     const walk = walkAlong(sys, WALK_SPEED, 9);
     const end = torso(sys);
     const top = 0.19 * 4;

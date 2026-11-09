@@ -5,7 +5,7 @@ import { Track } from "../world/track.ts";
 import { RagdollSystem, type Throw } from "./engine-ragdoll.ts";
 import { RemoteCar } from "./ragdoll-car-view.ts";
 import { PURSE_BLOCK } from "./ragdoll-purse.ts";
-import { DOLL_FLOATS, type FromWorker, type ResultMessage, type ToWorker } from "./ragdoll-wire.ts";
+import { DOLL_FLOATS, type FromWorker, type ResultMessage, type ToWorker, unpackBoxes } from "./ragdoll-wire.ts";
 
 /**
  * The dummies' world (`RagdollSystem`) in a Web Worker: the main thread posts its frames, throws, knocks and cars' cages
@@ -101,6 +101,8 @@ function handle(world: RagdollSystem, m: ToWorker): void {
     const track = new Track(m.json);
     setGround(track.ground());
     world.setCourse(track, placeProps(track, m.arm), recorder);
+  } else if (m.type === "boxes") {
+    world.setFixedBoxes(unpackBoxes(m.boxes));
   } else if (m.type === "reset") {
     state.epoch = m.epoch;
     world.reset();

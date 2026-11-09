@@ -15,8 +15,9 @@ import { BASE_SLOTS, thrownGroups } from "./ragdoll-config.ts";
 import { ARM, blendPose, MASS, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
 import { strikeAt } from "./ragdoll-hit.ts";
 import type { Solid } from "./ragdoll-solids.ts";
+import { assertFloorBoxes, type FloorBox } from "./walker-floor.ts";
 import { hypot2 } from "../kernel/physics-core.js";
-import { DOLL_CAR, DOLL_FLOATS, DOLL_HEADER, DOLL_LIVE, DOLL_RIDES, DOLL_SETTLED, DOLL_STILL, DOLL_VELOCITY, PROP_FLOATS, type ResultMessage } from "./ragdoll-wire.ts";
+import { DOLL_CAR, DOLL_FLOATS, DOLL_HEADER, DOLL_LIVE, DOLL_RIDES, DOLL_SETTLED, DOLL_STILL, DOLL_VELOCITY, PROP_FLOATS, packBoxes, type ResultMessage } from "./ragdoll-wire.ts";
 import { LIFE, STEP_LOG, type Throw, WALKER_SLOT } from "./ragdoll-pool.ts";
 import { RagdollStepper } from "./ragdoll-step.ts";
 import { PATCH_HALF, STATICS_HALF, terrainColliders } from "./ragdoll-ground.ts";
@@ -278,6 +279,18 @@ export abstract class RagdollThrower extends RagdollStepper {
     this.props.set(placed, props);
     this.tumble = props;
     if (this.live === 0) this.mode = null;
+  }
+
+  /**
+   * The boxes of a building streamed in (an interior's slabs, treads, walls), the whole list each call (`[]`: none): fixed colliders in this thread's world,
+   * in the worker's too, and the floor every walker reads (`Walker.floor`). The list before is gone: what lay on it falls. Throws on an empty or non-finite box.
+   */
+  setFixedBoxes(boxes: readonly FloorBox[]): void {
+    assertFloorBoxes(boxes);
+    this.boxList = boxes.slice();
+    for (const walker of this.walkers) walker.floor.boxes = this.boxList;
+    this.remote?.setBoxes(packBoxes(this.boxList));
+    this.buildFixedBoxes();
   }
 
   /** No scene's solids or props any more, and the pool back to its base capacity: leaving the showcase, whose ground (the fleet's disc) the other sandbox scenes share. */

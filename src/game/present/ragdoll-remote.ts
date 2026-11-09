@@ -105,6 +105,11 @@ export class RagdollRemote {
     this.send({ type: "course", json, arm });
   }
 
+  /** The boxes a building streams in (`packBoxes`), the whole list each time: the worker's world builds exactly these and drops the ones before. */
+  setBoxes(boxes: Float64Array): void {
+    this.send({ type: "boxes", boxes }, [boxes.buffer]);
+  }
+
   /** A new run: the world's dummies and props go, and what it answers of the old run is dropped. */
   reset(): void {
     this.epoch++;

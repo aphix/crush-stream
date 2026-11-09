@@ -4,6 +4,7 @@ import type { SceneryArm } from "../world/constants.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { PARTS } from "./ragdoll-body.ts";
+import type { FloorBox } from "./walker-floor.ts";
 
 const _push = new THREE.Vector3();
 const _inverse = new THREE.Quaternion();
@@ -100,8 +101,28 @@ interface FrameMessage {
   loose: Float64Array;
 }
 
+/** A fixed box's record in a `boxes` message, floats: x0, z0, x1, z1 (m, world) then its foot y0 and top y1. */
+const BOX_FLOATS = 6;
+
+/** `boxes` as the one transferred array a message carries. */
+export function packBoxes(boxes: readonly FloorBox[]): Float64Array {
+  const packed = new Float64Array(boxes.length * BOX_FLOATS);
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i]!;
+    packed.set([b.x0, b.z0, b.x1, b.z1, b.y0, b.y1], i * BOX_FLOATS);
+  }
+  return packed;
+}
+
+export function unpackBoxes(packed: Float64Array): FloorBox[] {
+  const boxes: FloorBox[] = [];
+  for (let o = 0; o + BOX_FLOATS <= packed.length; o += BOX_FLOATS) boxes.push({ x0: packed[o]!, z0: packed[o + 1]!, x1: packed[o + 2]!, z1: packed[o + 3]!, y0: packed[o + 4]!, y1: packed[o + 5]! });
+  return boxes;
+}
+
 export type ToWorker =
   | { type: "course"; json: TrackJson; arm?: SceneryArm }
+  | { type: "boxes"; boxes: Float64Array }
   | { type: "reset"; epoch: number }
   | { type: "knock"; prop: number; car: number; vx: number; vy: number; vz: number }
   | ThrowMessage

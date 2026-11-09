@@ -22,6 +22,15 @@ const TORSO_HEIGHT = PARTS[0].c[1];
 
 const NO_BOXES: readonly FloorBox[] = [];
 
+/** Throws unless every box is finite with x0 < x1, z0 < z1 and y0 < y1: a non-finite or empty box panics Rapier's broad phase. */
+export function assertFloorBoxes(boxes: readonly FloorBox[]): void {
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i]!;
+    const finite = Number.isFinite(b.x0) && Number.isFinite(b.x1) && Number.isFinite(b.z0) && Number.isFinite(b.z1) && Number.isFinite(b.y0) && Number.isFinite(b.y1);
+    if (!finite || b.x0 >= b.x1 || b.z0 >= b.z1 || b.y0 >= b.y1) throw new RangeError(`floor box ${i} is empty or not finite: ${JSON.stringify(b)}`);
+  }
+}
+
 /**
  * What the walker's feet stand on: the active ground plus the boxes a building streams in. A top at most `WALK_STEP` over his
  * planted feet is floor; a taller or overhead one is a wall, which the dummy's own colliders stop him at.
