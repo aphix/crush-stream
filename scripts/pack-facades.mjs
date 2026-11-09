@@ -7,20 +7,23 @@
  * and cross-faded at its sides so it tiles across), and scaled to LAYER x LAYER. The normal map of a layer is derived from its lightness (windows set back);
  * the glow map (GLOW_LAYER square) is R the window mask and G a turn-on threshold per window.
  *
- * It writes `src/game/present/facade-layers.json`: per style its bays, layer count, each band's height in metres (the picture's own scale) and a bare patch of wall
- * (u, v in the floor layer) for the roof slab's sides.
+ * A style with `relief` also gets `<style>-height.webp` and `<style>-roughness.webp` (layers like the albedo's: windows and doors recessed, sills, lintels and the cornice proud; glass and wet sills
+ * shiny), read only by the relief tier; one with `neon` has its sign texels (the bright ones inside its `neon` boxes) in the glow strip's blue, lit in their own colour at night.
  *
- *   node scripts/pack-facades.mjs <folder with the twelve <style>.png> [out folder, default public/facades] [json, default src/game/present/facade-layers.json]
+ * It packs the styles whose <style>.png the folder holds and merges them by key into `src/game/present/facade-layers.json`: per style its bays, layer count, each band's height in metres (the picture's own
+ * scale), a bare patch of wall (u, v in the floor layer) for the roof slab's sides, and `height`, `roughness`, `neon` where it has those strips. A style whose picture is not in the folder is left as it was.
+ *
+ *   node scripts/pack-facades.mjs <folder with <style>.png> [out folder, default public/facades] [json, default src/game/present/facade-layers.json]
  */
 import { createCanvas, loadImage } from "@napi-rs/canvas";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { writeWebp } from "./pack-tile-lib.mjs";
-import { blur, label, morph, spread } from "./pack-window-lib.mjs";
+import { blur, downPlane, heightOf, label, morph, roughnessOf, spread } from "./pack-window-lib.mjs";
 
 const root = join(dirname(new URL(import.meta.url).pathname), "..");
 const [folder, outArg, jsonArg] = process.argv.slice(2);
-if (folder === undefined) throw new Error("usage: pack-facades.mjs <folder with the twelve <style>.png> [out folder] [json]");
+if (folder === undefined) throw new Error("usage: pack-facades.mjs <folder with <style>.png> [out folder] [json]");
 const out = resolve(outArg ?? join(root, "public/facades"));
 const jsonFile = resolve(jsonArg ?? join(root, "src/game/present/facade-layers.json"));
 mkdirSync(out, { recursive: true });
@@ -51,12 +54,17 @@ const QUOIN_STONE = [226, 219, 202];
 const QUOIN_LEAN = 0.55;
 /** How far (as a share of the layer's mean lightness) a bare-wall patch may lie from it. */
 const PLAIN_BAND = 0.25;
+/** The relief strips' quality (their values are smooth: a high one keeps a recess's edge), the height a cornice layer is lifted by (it projects from the wall), and texels a sign's mask is grown by to clear the window mask round it. */
+const RELIEF_QUALITY = 98;
+const CORNICE_LIFT = 0.12;
+const NEON_CLEAR = 2;
 
 /**
  * crop [x, y, w, h] in the source (x is the bay's left pilaster centre, w one period); bays across a 11.8 m face; the rows (crop-relative) of the three bands:
  * cornice, floor (one storey) and ground; the glass: `rects` (window boxes, crop-relative, where colour cannot tell glass from wall) or `glass`, a predicate over (r, g, b)
  * in 0..255 and lightness; `quoins` whether the style has corner stones; `neutral` how far the albedo is washed to cream so the per-instance pastel tints colour it;
- * `background` [share, r, g, b, min]: sky (every channel at least `min`) above that share of the picture is painted that colour.
+ * `background` [share, r, g, b, min]: sky (every channel at least `min`) above that share of the picture is painted that colour; `relief`: the style has height and roughness strips; `neon`
+ * { rects, bright }: sign boxes (crop-relative like `rects`) whose texels with a channel of at least `bright` are lit signs.
  */
 const STYLES = {
   prague: { crop: [288, 0, 270, 1264], bays: 4, cornice: [0, 395], floor: [688, 1035], ground: [1035, 1264], quoins: true, rects: [[95, 268, 177, 352], [95, 790, 177, 963], [66, 1130, 207, 1264]] },
@@ -194,6 +202,32 @@ function windowMask(spec, rgb, band) {
   return mask;
 }
 
+/** The sign mask of one layer (LAYER square, 0/1): the texels of the style's `neon` boxes that fall in the layer's band and have a channel of at least `bright`. */
+function neonMask(spec, rgb, band) {
+  const mask = new Uint8Array(LAYER * LAYER);
+  if (!spec.neon) return mask;
+  const [y0, y1] = band;
+  const kx = LAYER / spec.crop[2];
+  const ky = LAYER / (y1 - y0);
+  for (const [rx0, ry0, rx1, ry1] of spec.neon.rects) {
+    if (ry0 < y0 - 1 || ry1 > y1 + 1) continue;
+    for (let y = Math.max(0, Math.floor((ry0 - y0) * ky)); y < Math.min(LAYER, Math.ceil((ry1 - y0) * ky)); y++) {
+      for (let x = Math.max(0, Math.floor(rx0 * kx)); x < Math.min(LAYER, Math.ceil(rx1 * kx)); x++) {
+        const p = y * LAYER + x;
+        if (Math.max(rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2]) >= spec.neon.bright) mask[p] = 1;
+      }
+    }
+  }
+  return mask;
+}
+
+/** A plane of floats 0..1 as a grey layer (floats 0..255, three per texel). */
+function grey(plane) {
+  const rgb = new Float32Array(plane.length * 3);
+  for (let i = 0; i < plane.length; i++) rgb.fill(plane[i] * 255, i * 3, i * 3 + 3);
+  return rgb;
+}
+
 /** The normal map of a layer (floats 0..255): lightness for the fine relief, a wider blur for the mouldings' swell, the windows set back. */
 function normalOf(rgb, mask, relief) {
   const light = Float32Array.from({ length: LAYER * LAYER }, (_, i) => lightOf(rgb, i));
@@ -290,8 +324,9 @@ function stack(layers, size) {
 }
 
 const BANDS = ["cornice", "floor", "ground"];
-const metadata = {};
+const metadata = existsSync(jsonFile) ? JSON.parse(readFileSync(jsonFile, "utf8")) : {};
 for (const [name, spec] of Object.entries(STYLES)) {
+  if (!existsSync(join(resolve(folder), `${name}.png`))) continue;
   const picture = await bayPicture(name, spec);
   const rgbs = BANDS.map((band) => bandLayer(picture, spec[band], band === "floor"));
   if (spec.neutral) {
@@ -304,13 +339,36 @@ for (const [name, spec] of Object.entries(STYLES)) {
   // Corner stones have no glass; a cornice has none unless boxes say so (a colour test would take its shadows for glass).
   const hasGlass = (layer) => layer !== "quoin" && (layer !== "cornice" || spec.rects);
   const masks = rgbs.map((rgb, i) => (hasGlass(names[i]) ? windowMask(spec, rgb, spec[names[i]]) : new Uint8Array(LAYER * LAYER)));
+  // A sign is lit in its own colour from the glow strip's blue: the window mask leaves it.
+  const signs = rgbs.map((rgb, i) => {
+    const sign = hasGlass(names[i]) ? neonMask(spec, rgb, spec[names[i]]) : new Uint8Array(LAYER * LAYER);
+    if (spec.neon) {
+      const grown = morph(sign, LAYER, LAYER, NEON_CLEAR, true);
+      for (let p = 0; p < LAYER * LAYER; p++) if (grown[p]) masks[i][p] = 0;
+    }
+    return sign;
+  });
   const glows = masks.map((mask) => glowOf(mask));
+  if (spec.neon) {
+    for (const [i, sign] of signs.entries()) {
+      const cover = downPlane(blur(Float32Array.from(morph(sign, LAYER, LAYER, 1, true)), LAYER, LAYER, 1), LAYER, LAYER / GLOW_LAYER);
+      for (let p = 0; p < GLOW_LAYER * GLOW_LAYER; p++) glows[i].glow[p * 3 + 2] = cover[p];
+    }
+  }
   const normals = rgbs.map((rgb, i) => normalOf(rgb, glows[i].mask, RELIEF[names[i]]));
   const bytes = [
     writeWebp(join(out, `${name}-albedo.webp`), LAYER, LAYER * rgbs.length, stack(rgbs, LAYER), WEBP_QUALITY),
     writeWebp(join(out, `${name}-normal.webp`), LAYER, LAYER * rgbs.length, stack(normals, LAYER), NORMAL_QUALITY),
     writeWebp(join(out, `${name}-glow.webp`), GLOW_LAYER, GLOW_LAYER * rgbs.length, stack(glows.map((g) => g.glow), GLOW_LAYER), 100),
   ];
+  if (spec.relief) {
+    const heights = rgbs.map((rgb, i) => grey(heightOf(rgb, glows[i].mask, LAYER, names[i] === "cornice" ? CORNICE_LIFT : 0)));
+    const roughnesses = rgbs.map((rgb, i) => grey(roughnessOf(rgb, glows[i].mask, LAYER)));
+    bytes.push(
+      writeWebp(join(out, `${name}-height.webp`), LAYER, LAYER * rgbs.length, stack(heights, LAYER), RELIEF_QUALITY),
+      writeWebp(join(out, `${name}-roughness.webp`), LAYER, LAYER * rgbs.length, stack(roughnesses, LAYER), RELIEF_QUALITY),
+    );
+  }
   const [, , cw] = spec.crop;
   const metresPerRow = FACE_M / spec.bays / cw;
   const bandMetres = (band) => Math.round((spec[band][1] - spec[band][0]) * metresPerRow * 100) / 100;
@@ -319,7 +377,9 @@ for (const [name, spec] of Object.entries(STYLES)) {
     layers: rgbs.length,
     metres: { cornice: bandMetres("cornice"), floor: bandMetres("floor"), ground: bandMetres("ground") },
     plain: plainPatch(rgbs[1], glows[1].mask).map((v) => Math.round(v * 1000) / 1000),
+    ...(spec.relief ? { height: true, roughness: true } : {}),
+    ...(spec.neon ? { neon: true } : {}),
   };
-  console.log(`${name}: ${rgbs.length} layers, albedo ${bytes[0]} B, normal ${bytes[1]} B, glow ${bytes[2]} B; windows ${glows.map((g) => g.windows).join("/")}; ${JSON.stringify(metadata[name].metres)}`);
+  console.log(`${name}: ${rgbs.length} layers, albedo ${bytes[0]} B, normal ${bytes[1]} B, glow ${bytes[2]} B${bytes[3] ? `, height ${bytes[3]} B, roughness ${bytes[4]} B` : ""}; windows ${glows.map((g) => g.windows).join("/")}; ${JSON.stringify(metadata[name].metres)}`);
 }
 writeFileSync(jsonFile, `${JSON.stringify(metadata, null, 2)}\n`);

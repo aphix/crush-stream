@@ -1,4 +1,7 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { setImmediate as yieldToLoop } from "node:timers/promises";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { MAT } from "../kernel/material-ids.ts";
@@ -10,12 +13,13 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
-import { FACADE, FACADE_GLOW, FACADE_LAYERS, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, ROOF_LAYER, ROOFLINE, SLAB_STYLE } from "./facades.ts";
+import { FACADE, FACADE_GLOW, FACADE_LAYERS, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, ROOFLINE, SLAB_STYLE } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { disposePrefabMaterials, makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
+import { setReliefDevice, setReliefTier } from "./surface-relief.ts";
 import { TrackArt } from "./track-art.ts";
 import { drawCell } from "./track-mesh.ts";
-import { publicWebpSize } from "./webp-size.test-util.ts";
+import { publicWebpSize, webpSize } from "./webp-size.test-util.ts";
 
 const STYLES = Object.keys(FACADE) as FacadeStyle[];
 
@@ -321,5 +325,197 @@ describe("given the roof coverings", () => {
     const adobe = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
     made.adobe.onBeforeCompile(adobe, {} as THREE.WebGLRenderer);
     expect(adobe.uniforms.facadeRoofMix.value, "an adobe roof is all tar").toEqual([1, 1, 1, 1]);
+  });
+});
+
+/** A style's layer data with extra strips named for the length of `run` (a fixture: the shipped data names none on an old style). */
+async function withStrips<T>(style: FacadeStyle, strips: { height?: true; roughness?: true; neon?: true }, run: () => Promise<T> | T): Promise<T> {
+  const spec = FACADE_LAYERS[style];
+  Object.assign(spec, strips);
+  try {
+    return await run();
+  } finally {
+    for (const name of Object.keys(strips)) delete spec[name as keyof typeof strips];
+  }
+}
+
+const compileFacade = (material: THREE.Material): THREE.WebGLProgramParametersWithUniforms => {
+  const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
+  const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+  material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+  return shader;
+};
+
+const RELIEF_UNIFORMS = ["facadeHeightMap", "facadeReliefDepth", "facadeRoughnessMap", "facadeRoughnessMix"];
+/** The relief shader's marks: the parallax function, its shift and the screen derivatives the reads take their mip level from. */
+const RELIEF_MARKS = ["facadeParallax", "facadeShift", "facadeDx"];
+
+describe("given a style whose layer data names no relief strips", () => {
+  it("when it is compiled, then its program is the base facade program: no relief uniform, no parallax, the base cache key", () => {
+    const made = makeFacadeMaterials();
+    for (const style of STYLES) {
+      const material = made[style];
+      const shader = compileFacade(material);
+      for (const name of RELIEF_UNIFORMS) expect(shader.uniforms[name], `${style} ${name}`).toBeUndefined();
+      for (const mark of RELIEF_MARKS) expect(shader.fragmentShader, `${style} ${mark}`).not.toContain(mark);
+      expect(shader.fragmentShader, `${style} sign colour`).not.toContain("facadeSign");
+      expect(material.customProgramCacheKey().endsWith("|facade"), `${style} key ${material.customProgramCacheKey()}`).toBe(true);
+    }
+  });
+});
+
+describe("given a style whose layer data names height, roughness and neon strips", () => {
+  it("when it is compiled on a desktop, then it reads the strips through its own program: parallax over the height, the roughness strip, the sign colour", async () => {
+    await withStrips("dc", { height: true, roughness: true, neon: true }, () => {
+      const material = makeFacadeMaterials().dc;
+      const shader = compileFacade(material);
+      for (const name of RELIEF_UNIFORMS) expect(shader.uniforms[name], name).toBeTruthy();
+      expect(shader.uniforms.facadeReliefDepth!.value, "depth is 0 until the relief tier loads the strip").toBe(0);
+      expect(shader.uniforms.facadeRoughnessMix!.value, "roughness share is 0 until the strip loads").toBe(0);
+      for (const mark of [...RELIEF_MARKS, "void facadeParallax(float layer)", "facadeRoughnessMap", "facadeSign"]) expect(shader.fragmentShader, mark).toContain(mark);
+      expect(shader.fragmentShader, "colour read through the shifted uv").toContain("textureGrad(facadeAlbedo, vec3(vMapUv + facadeShift, vFacadeRegion.x)");
+      expect(material.customProgramCacheKey().endsWith("|facade|height|roughness|neon"), material.customProgramCacheKey()).toBe(true);
+    });
+  });
+
+  it("when it is compiled on a phone, then the relief strips are not in its program, and the sign colour, which every tier draws, is", async () => {
+    setReliefDevice(false);
+    try {
+      await withStrips("dc", { height: true, roughness: true, neon: true }, () => {
+        const material = makeFacadeMaterials().dc;
+        const shader = compileFacade(material);
+        for (const name of RELIEF_UNIFORMS) expect(shader.uniforms[name], name).toBeUndefined();
+        for (const mark of RELIEF_MARKS) expect(shader.fragmentShader, mark).not.toContain(mark);
+        expect(shader.fragmentShader, "sign colour").toContain("facadeSign");
+        expect(material.customProgramCacheKey().endsWith("|facade|neon"), material.customProgramCacheKey()).toBe(true);
+      });
+    } finally {
+      setReliefDevice(true);
+    }
+  });
+});
+
+describe("given a style with relief strips and the relief tier switched", () => {
+  const requested: string[] = [];
+  const realFetch = globalThis.fetch;
+  const realCreateImageBitmap = Reflect.get(globalThis, "createImageBitmap");
+  const DEFAULT_STRIP = { width: 256, height: 1024 };
+
+  /** Serves any facade strip at its real size where the file exists (else a 256-wide four-layer strip), decoded to blank texels. */
+  function stubStrips(): void {
+    Object.assign(globalThis, {
+      fetch: async (url: string) => {
+        requested.push(String(url));
+        return { ok: true, status: 200, blob: async () => new Blob([String(url)]) };
+      },
+      createImageBitmap: async (blob: Blob) => {
+        const url = await blob.text();
+        const file = new URL(`../../../public${url}`, import.meta.url);
+        // A fixture strip has no file: the default size.
+        const size = existsSync(file) ? webpSize(new Uint8Array(readFileSync(file))) : DEFAULT_STRIP;
+        return { data: new Uint8ClampedArray(size.width * size.height * 4), width: size.width, height: size.height, close() {} };
+      },
+    });
+  }
+  const settle = async (): Promise<void> => {
+    for (let turn = 0; turn < 6; turn++) await yieldToLoop();
+  };
+  const reliefStrips = (): string[] => requested.filter((url) => url.includes("dc-height") || url.includes("dc-roughness"));
+  afterAll(() => {
+    Object.assign(globalThis, { fetch: realFetch, createImageBitmap: realCreateImageBitmap });
+    setReliefTier(false);
+  });
+
+  // mutation: in facades.ts makeFacadeMaterial, replace `if (extras.height) {\n    stops.push(` so the height strip is followed whatever the style names (e.g. `if (true) {`), and the style without strips fetches it
+  it("when the tier is off, then no height or roughness strip is fetched and the strips' depth and share stay 0; when it comes on, then both are fetched once, at full strength, and off again they return to 0 without a new fetch", async () => {
+    stubBrowser();
+    stubStrips();
+    setReliefTier(false);
+    await withStrips("dc", { height: true, roughness: true }, async () => {
+      const shader = compileFacade(makeFacadeMaterials().dc);
+      await settle();
+      expect(reliefStrips(), "strips fetched with the tier off").toEqual([]);
+      setReliefTier(true);
+      await settle();
+      expect(reliefStrips().sort(), "strips fetched with the tier on").toEqual(["/facades/dc-height.webp", "/facades/dc-roughness.webp"]);
+      expect(shader.uniforms.facadeReliefDepth!.value, "parallax depth (m) with the strip loaded").toBeGreaterThan(0);
+      expect(shader.uniforms.facadeRoughnessMix!.value, "roughness share with the strip loaded").toBe(1);
+      setReliefTier(false);
+      expect(shader.uniforms.facadeReliefDepth!.value, "parallax off").toBe(0);
+      expect(shader.uniforms.facadeRoughnessMix!.value, "roughness off").toBe(0);
+      expect(reliefStrips().length, "no new fetch").toBe(2);
+    });
+  });
+
+  it("when the device is a phone, then the relief tier fetches none of them", async () => {
+    const before = reliefStrips().length;
+    setReliefDevice(false);
+    try {
+      await withStrips("dc", { height: true, roughness: true }, async () => {
+        compileFacade(makeFacadeMaterials().dc);
+        setReliefTier(true);
+        await settle();
+        expect(reliefStrips().length, "strips fetched on a phone").toBe(before);
+      });
+    } finally {
+      setReliefDevice(true);
+      setReliefTier(false);
+    }
+  });
+});
+
+describe("given a placement that names a facade style", () => {
+  it("when the style is a facade's, then it wins over the hash pick for a building, an unknown name falls back to the pick, and a prop with no facade stays plain", () => {
+    const picked = facadeStyle(PREFAB.building, 3, 4, "city");
+    expect(picked, "the pick differs from the named style, or the row proves nothing").not.toBe("adobe");
+    expect(placedFacadeStyle(PREFAB.building, "adobe", 3, 4, "city"), "named").toBe("adobe");
+    expect(placedFacadeStyle(PREFAB.building, "nonesuch", 3, 4, "city"), "unknown name").toBe(picked);
+    expect(placedFacadeStyle(PREFAB.building, "toString", 3, 4, "city"), "an object's own name is no style").toBe(picked);
+    expect(placedFacadeStyle(PREFAB.building, undefined, 3, 4, "city"), "no name").toBe(picked);
+    expect(placedFacadeStyle(PREFAB.tree, "adobe", 3, 4, "city"), "a tree has no facade").toBeNull();
+  });
+
+  // mutation: in facades.ts placedFacadeStyle, `return picked !== null && isFacadeStyle(named) ? named : picked;` -> `return picked;`
+  it("when a course places buildings with a named style, then they draw with that style's material, and the one with an unknown name draws as the hash picks", () => {
+    stubBrowser();
+    const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.city)!);
+    const placed = [
+      { prefab: PREFAB.building, x: 3, y: 0, z: 4, yaw: 0, sx: 1, sy: 1, sz: 1, style: "adobe" },
+      { prefab: PREFAB.building, x: 80, y: 0, z: 90, yaw: 0, sx: 1, sy: 1, sz: 1, style: "nonesuch" },
+    ];
+    const art = new TrackArt(track, placed, new WorldStage(new THREE.Scene()), []);
+    const styles: unknown[] = [];
+    art.group.traverse((o) => {
+      if (o.name === `prop:${PREFAB.building}` && o instanceof THREE.InstancedMesh) styles.push(o.material.userData.facadeStyle);
+    });
+    expect(styles.length, "one mesh per style and draw cell").toBe(2);
+    expect(styles, "the named style's material, and the pick's for the unknown name").toContain("adobe");
+    expect(styles.filter((style) => style !== "adobe").length, "the unknown name drew as a hash pick, not adobe").toBe(1);
+  });
+});
+
+/** The digests of the shipped layer data of each style that predates the open world's: re-packing the facades must leave them as they are. */
+const SHIPPED_ENTRY_DIGESTS: Record<string, string> = {
+  prague: "0747ae4184",
+  dc: "1c6d51bb13",
+  stucco: "4b7fd97c0e",
+  glass: "c75b474c2c",
+  adobe: "f084f8099e",
+  shops: "bd40a7770c",
+  baroque: "3ea941430d",
+  havana: "e2d1004049",
+  federal: "768b9e1c05",
+  warehouse: "129e255458",
+  farm: "1ef3cbb51c",
+  rowhouse: "deeeee0310",
+};
+
+describe("given the facade layer data of the styles that were shipped first", () => {
+  // mutation: in facade-layers.json change a value of an old style, e.g. prague's "floor": 3.79 to 3.8
+  it("when each old style's entry is digested, then it is as shipped", () => {
+    for (const [style, digest] of Object.entries(SHIPPED_ENTRY_DIGESTS)) {
+      const entry = FACADE_LAYERS[style as FacadeStyle];
+      expect(createHash("sha1").update(JSON.stringify(entry)).digest("hex").slice(0, 10), style).toBe(digest);
+    }
   });
 });

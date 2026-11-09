@@ -1,4 +1,4 @@
-/** What the facade packer needs to turn a window mask into a glow map: blurs, grows and shrinks, labelling each window, spreading its threshold. All planes wrap in x and clamp in y. */
+/** What the facade packer needs to turn a window mask into a glow map and into the relief tier's height and roughness maps: blurs, grows and shrinks, labelling each window, spreading its threshold. All planes wrap in x and clamp in y. */
 
 /** Windows below this many texels, or thinner than `MIN_SIDE`, are mouldings, rails and log ends, not glass. */
 const MIN_AREA = 160;
@@ -103,4 +103,90 @@ export function spread(plane, w, h, passes) {
     cur = next;
   }
   return cur;
+}
+
+/** The height map (0..1, 1 the proudest): the wall's own level, its lightness detail (a mortar joint low, a moulding high), windows recessed, and a sill and a lintel proud of the wall. Texels counted in the layer's own size. */
+const WALL_HEIGHT = 0.78;
+const DETAIL_GAIN = 1.2;
+const DETAIL_LIMIT = 0.12;
+/** The blur radii (texels) that split a layer's lightness into its fine detail and its broad shading. */
+const DETAIL_FINE = 1;
+const DETAIL_WIDE = 6;
+const RECESS = 0.55;
+const RECESS_SOFT = 2;
+const SILL_ROWS = 6;
+const SILL_RISE = 0.2;
+const LINTEL_ROWS = 5;
+const LINTEL_RISE = 0.1;
+/** Texels each way a sill or lintel reaches past its window. */
+const SILL_WIDEN = 2;
+
+const lightness = (rgb, i) => (0.299 * rgb[i * 3] + 0.587 * rgb[i * 3 + 1] + 0.114 * rgb[i * 3 + 2]) / 255;
+
+/** A plane of the texels that lie within `rows` rows below (rows > 0) or above (rows < 0) a mask texel, `widen` texels each side, themselves clear of it: a sill or a lintel. */
+export function ledgeOf(mask, size, rows, widen) {
+  const out = new Float32Array(size * size);
+  const step = Math.sign(rows);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (mask[y * size + x]) continue;
+      for (let k = 1; k <= Math.abs(rows) && !out[y * size + x]; k++) {
+        const source = y - step * k;
+        if (source < 0 || source >= size) break;
+        for (let dx = -widen; dx <= widen; dx++) {
+          if (mask[source * size + ((x + dx + size) % size)]) {
+            out[y * size + x] = 1;
+            break;
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** The height plane (floats 0..1) of a size x size layer from its colours and its window mask; `lift` raises the whole layer (a cornice stands proud of the wall). */
+export function heightOf(rgb, mask, size, lift = 0) {
+  const light = Float32Array.from({ length: size * size }, (_, i) => lightness(rgb, i));
+  const fine = blur(light, size, size, DETAIL_FINE);
+  const wide = blur(light, size, size, DETAIL_WIDE);
+  const soft = blur(Float32Array.from(mask), size, size, RECESS_SOFT);
+  const sills = blur(ledgeOf(mask, size, SILL_ROWS, SILL_WIDEN), size, size, 1);
+  const lintels = blur(ledgeOf(mask, size, -LINTEL_ROWS, SILL_WIDEN), size, size, 1);
+  return Float32Array.from({ length: size * size }, (_, i) => {
+    const detail = Math.max(-DETAIL_LIMIT, Math.min(DETAIL_LIMIT, (fine[i] - wide[i]) * DETAIL_GAIN));
+    return Math.max(0, Math.min(1, WALL_HEIGHT + lift + detail - RECESS * soft[i] + SILL_RISE * sills[i] + LINTEL_RISE * lintels[i]));
+  });
+}
+
+/** The roughness plane (floats 0..1): a rough wall (its joints rougher), glass shiny, a wet sill between. */
+const WALL_ROUGHNESS = 0.82;
+const JOINT_ROUGHNESS = 0.6;
+const GLASS_ROUGHNESS = 0.1;
+const SILL_ROUGHNESS = 0.4;
+export function roughnessOf(rgb, mask, size) {
+  const light = Float32Array.from({ length: size * size }, (_, i) => lightness(rgb, i));
+  const fine = blur(light, size, size, DETAIL_FINE);
+  const wide = blur(light, size, size, DETAIL_WIDE);
+  const glass = blur(Float32Array.from(mask), size, size, 1);
+  const sills = blur(ledgeOf(mask, size, SILL_ROWS, SILL_WIDEN), size, size, 1);
+  return Float32Array.from({ length: size * size }, (_, i) => {
+    const wall = WALL_ROUGHNESS + JOINT_ROUGHNESS * Math.max(-DETAIL_LIMIT, Math.min(DETAIL_LIMIT, wide[i] - fine[i]));
+    const wet = wall + (SILL_ROUGHNESS - wall) * sills[i];
+    return wet + (GLASS_ROUGHNESS - wet) * glass[i];
+  });
+}
+
+/** A plane of 0..1 (a blurred sign mask, `down` times smaller each way by averaging) as one byte per texel's worth of float 0..255: the glow strip's blue. */
+export function downPlane(plane, size, down) {
+  const out = size / down;
+  const result = new Float32Array(out * out);
+  for (let y = 0; y < out; y++) {
+    for (let x = 0; x < out; x++) {
+      let sum = 0;
+      for (let dy = 0; dy < down; dy++) for (let dx = 0; dx < down; dx++) sum += plane[(y * down + dy) * size + x * down + dx];
+      result[y * out + x] = (sum / (down * down)) * 255;
+    }
+  }
+  return result;
 }

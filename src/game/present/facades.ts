@@ -50,8 +50,11 @@ export const FACADE = {
 export type FacadeStyle = keyof typeof FACADE;
 const FACADE_STYLES = Object.keys(FACADE) as FacadeStyle[];
 
-/** One style's layers as `scripts/pack-facades.mjs` packed them: bays across a 11.8 m face, layers in its strips, each band's height (m) and a bare patch of wall (u, v in the floor layer). */
-type LayerSpec = { bays: number; layers: number; metres: { cornice: number; floor: number; ground: number }; plain: readonly number[] };
+/**
+ * One style's layers as `scripts/pack-facades.mjs` packed them: bays across a 11.8 m face, layers in its strips, each band's height (m) and a bare patch of wall (u, v in the floor layer). `height` and `roughness`:
+ * the style has those strips too (read only on the relief tier); `neon`: its glow strip's blue is a sign mask lit in the sign's own colour.
+ */
+type LayerSpec = { bays: number; layers: number; metres: { cornice: number; floor: number; ground: number }; plain: readonly number[]; height?: boolean; roughness?: boolean; neon?: boolean };
 /** The JSON module's keys are the styles' (a row pins it): its inferred type is only as loose as the file. */
 export const FACADE_LAYERS = layerData as Record<FacadeStyle, LayerSpec>;
 
@@ -71,6 +74,12 @@ const ROOF_LIFTS = [0, 0, 0.7, 1.4, 2.8];
 const LIT_SHARE = 0.6;
 const WINDOW_LIGHT = 0xffb35e;
 const WINDOW_LIGHT_INTENSITY = 1.3;
+/** A neon or LED sign's radiance at full glow (linear colour, over the windows' 1.3): bright enough to bloom, a sign being the night's light source. */
+const NEON_INTENSITY = 2.2;
+/** The relief tier's parallax: the metres a wall's deepest recess lies behind its proudest moulding, the steps the view ray takes through it, and the cosine of the grazing angle a view is held to (a flatter one would throw the offset across the wall). */
+const PARALLAX_METRES = 0.3;
+const PARALLAX_STEPS = 8;
+const PARALLAX_MIN_FACING = 0.25;
 
 /** How far the windows are lit, 0 (day) to 1 (night): one uniform every style's material shares, set by `WorldStage.apply` beside the lamp heads. */
 export const FACADE_GLOW = { value: 0 };
@@ -103,15 +112,33 @@ export function facadeStyle(prefab: PrefabId, x: number, z: number, biome: Biome
   return homeStyle(prefab);
 }
 
+/** Whether `name` (a placement's `style`) names a facade style. */
+const isFacadeStyle = (name: string | undefined): name is FacadeStyle => name !== undefined && Object.hasOwn(FACADE, name);
+
+/** The style a placed building stands in: the style its placement names when that is a facade style and the prefab is drawn in one, else `facadeStyle`'s pick for its spot (a forced style never dresses a tree or a plain block). */
+export function placedFacadeStyle(prefab: PrefabId, named: string | undefined, x: number, z: number, biome: BiomeId, span = 0, height = 0): FacadeStyle | null {
+  const picked = facadeStyle(prefab, x, z, biome, span, height);
+  return picked !== null && isFacadeStyle(named) ? named : picked;
+}
+
 const MAPS_URL = `${import.meta.env?.BASE_URL ?? "/"}facades/`;
 
 /** Where style `style`'s `kind` strip is served from. */
-export const facadeMapUrl = (style: FacadeStyle, kind: "albedo" | "normal" | "glow"): string => `${MAPS_URL}${style}-${kind}.webp`;
+export const facadeMapUrl = (style: FacadeStyle, kind: "albedo" | "normal" | "glow" | "height" | "roughness"): string => `${MAPS_URL}${style}-${kind}.webp`;
 const ROOF_URL = `${MAPS_URL}roofs-`;
 /** Layers in the roof strips: tar, clay tile, slate, green copper, corrugated metal. */
 const ROOF_LAYERS = 5;
 
-type StyleTextures = { albedo: THREE.IUniform<THREE.Texture>; glow: THREE.IUniform<THREE.Texture>; normal: THREE.IUniform<THREE.Texture> };
+type StyleTextures = {
+  albedo: THREE.IUniform<THREE.Texture>;
+  glow: THREE.IUniform<THREE.Texture>;
+  normal: THREE.IUniform<THREE.Texture>;
+  /** The relief tier's strips and how far each is on (0 until its strip has loaded with the tier on): the parallax depth (m) and the share of the roughness the strip sets. */
+  height: THREE.IUniform<THREE.Texture>;
+  roughness: THREE.IUniform<THREE.Texture>;
+  depth: THREE.IUniform<number>;
+  roughnessMix: THREE.IUniform<number>;
+};
 
 /** What a layered texture shows until its strip arrives: a cream wall, no glow, a flat normal, a brown roof (DOM-free, so a test builds the materials too). */
 const standIn = once(() => ({
@@ -119,6 +146,8 @@ const standIn = once(() => ({
   glow: flatLayers([0, 0, 0, 255], THREE.NoColorSpace),
   roof: flatLayers([110, 92, 78, 255], THREE.SRGBColorSpace),
   normal: flatLayers([128, 128, 255, 255], THREE.NoColorSpace),
+  /** No recess and the full material roughness: what a relief strip shows until it arrives. */
+  relief: flatLayers([255, 255, 255, 255], THREE.NoColorSpace),
 }));
 
 /** The one 1 x 1 white map every facade material wears for the maps three needs set to keep their shader paths (the layered textures are read by the patch). */
@@ -149,7 +178,7 @@ function texturesOf(style: FacadeStyle): StyleTextures {
   let found = textures.get(style);
   if (!found) {
     const stand = standIn();
-    textures.set(style, (found = { albedo: { value: stand.albedo }, glow: { value: stand.glow }, normal: { value: stand.normal } }));
+    textures.set(style, (found = { albedo: { value: stand.albedo }, glow: { value: stand.glow }, normal: { value: stand.normal }, height: { value: stand.relief }, roughness: { value: stand.relief }, depth: { value: 0 }, roughnessMix: { value: 0 } }));
     if (typeof createImageBitmap === "function") void loadStyle(style, found);
   }
   return found;
@@ -242,24 +271,103 @@ float facadeRoofKind() {
   float pick = fract(vFacadeSeed * 7.31 + 0.17);
   return step(facadeRoofMix[0], pick) + step(facadeRoofMix[1], pick) + step(facadeRoofMix[2], pick) + step(facadeRoofMix[3], pick);
 }`;
-/** After three's own normal-map uniforms are declared: the layered normal read, by layer (the roof covering for a roof). */
-const FACADE_NORMAL_PARS = /* glsl */ `
+/**
+ * What a style's program adds to the base facade: the relief tier's strips (only where the device can draw relief) and the sign colour of a neon style. A style with none has exactly the base program,
+ * the base program's key and its uniforms.
+ */
+type Extras = { height: boolean; roughness: boolean; neon: boolean };
+
+function extrasOf(style: FacadeStyle): Extras {
+  const spec = FACADE_LAYERS[style];
+  const relief = reliefPossible();
+  return { height: relief && spec.height === true, roughness: relief && spec.roughness === true, neon: spec.neon === true };
+}
+
+/** Each strip's sampler and the uv varying it is read with, and the layer every read takes (the region's first number). */
+const MAP_UV = "vMapUv";
+const REGION_LAYER = "vFacadeRegion.x";
+const FACADE_READS = { albedo: ["facadeAlbedo", MAP_UV], normal: ["facadeNormalMap", "vNormalMapUv"], glow: ["facadeGlowMap", "vEmissiveMapUv"], roughness: ["facadeRoughnessMap", MAP_UV] } as const;
+
+/** The strips a style's program reads by layer: with parallax a read is shifted by `facadeShift` and takes its mip level from the unshifted uv (a shift that jumps at a window's edge would otherwise blur a line there). */
+function facadeRead(extras: Extras, strip: keyof typeof FACADE_READS): string {
+  const [map, uv] = FACADE_READS[strip];
+  return extras.height ? `textureGrad(${map}, vec3(${uv} + facadeShift, ${REGION_LAYER}), facadeDx, facadeDy)` : `texture(${map}, vec3(${uv}, ${REGION_LAYER}))`;
+}
+
+/** The uniforms of the strips beyond the base ones. */
+const facadeExtraUniforms = (extras: Extras): string =>
+  (extras.height ? "uniform highp sampler2DArray facadeHeightMap;\nuniform float facadeReliefDepth;\n" : "") + (extras.roughness ? "uniform highp sampler2DArray facadeRoughnessMap;\nuniform float facadeRoughnessMix;\n" : "");
+
+/**
+ * Parallax through the height strip (1 proud, 0 the deepest recess): the uv shift per metre of depth along the view ray is read from the surface's own screen derivatives (so it holds at any bay or storey
+ * stretch), the ray steps through the strip `PARALLAX_STEPS` times and the last two steps are blended. A roof, and a wall while the strip is not on (`facadeReliefDepth` 0), keep their own uv.
+ */
+const FACADE_PARALLAX = /* glsl */ `
+vec2 facadeShift = vec2(0.0);
+vec2 facadeDx = vec2(0.0);
+vec2 facadeDy = vec2(0.0);
+void facadeParallax(float layer) {
+  facadeDx = dFdx(vMapUv);
+  facadeDy = dFdy(vMapUv);
+  vec3 facadeNormal = normalize(vNormal);
+  vec3 dPdx = dFdx(-vViewPosition);
+  vec3 dPdy = dFdy(-vViewPosition);
+  vec3 perpY = cross(dPdy, facadeNormal);
+  vec3 perpX = cross(facadeNormal, dPdx);
+  float area = dot(dPdx, perpY);
+  vec3 eye = normalize(vViewPosition);
+  float facing = max(dot(eye, facadeNormal), ${PARALLAX_MIN_FACING.toFixed(2)});
+  if (facadeReliefDepth <= 0.0 || layer < 0.0 || abs(area) < 1e-12) return;
+  vec3 gradU = (perpY * facadeDx.x + perpX * facadeDy.x) / area;
+  vec3 gradV = (perpY * facadeDx.y + perpX * facadeDy.y) / area;
+  vec2 stride = -vec2(dot(gradU, eye), dot(gradV, eye)) / facing * (facadeReliefDepth / ${PARALLAX_STEPS.toFixed(1)});
+  float rayDepth = 0.0;
+  vec2 at = vMapUv;
+  float surfaceDepth = 1.0 - textureGrad(facadeHeightMap, vec3(at, layer), facadeDx, facadeDy).r;
+  float lastDepth = surfaceDepth;
+  float lastRay = 0.0;
+  for (int tap = 0; tap < ${PARALLAX_STEPS}; tap++) {
+    if (rayDepth >= surfaceDepth) break;
+    lastDepth = surfaceDepth;
+    lastRay = rayDepth;
+    at += stride;
+    surfaceDepth = 1.0 - textureGrad(facadeHeightMap, vec3(at, layer), facadeDx, facadeDy).r;
+    rayDepth += ${(1 / PARALLAX_STEPS).toFixed(4)};
+  }
+  float after = surfaceDepth - rayDepth;
+  float before = lastDepth - lastRay;
+  float back = clamp(after / min(after - before, -1e-5), 0.0, 1.0);
+  facadeShift = at - stride * back - vMapUv;
+}`;
+
+/** After three's own normal-map uniforms are declared: the parallax, and the layered normal read by layer (the roof covering for a roof). */
+const facadeNormalPars = (extras: Extras): string => /* glsl */ `${extras.height ? FACADE_PARALLAX : ""}
 #ifdef USE_NORMALMAP
 vec4 facadeNormalTexel() {
-  return vFacadeRegion.x < 0.0 ? texture(facadeRoofNormal, vec3(vNormalMapUv, facadeRoofKind())) : texture(facadeNormalMap, vec3(vNormalMapUv, vFacadeRegion.x));
+  return vFacadeRegion.x < 0.0 ? texture(facadeRoofNormal, vec3(vNormalMapUv, facadeRoofKind())) : ${facadeRead(extras, "normal")};
 }
 #endif`;
-const FACADE_MAP = /* glsl */ `
+const facadeMap = (extras: Extras): string => /* glsl */ `
 #ifdef USE_MAP
-diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : texture(facadeAlbedo, vec3(vMapUv, vFacadeRegion.x));
+${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "albedo")};
 #endif`;
+/** The roughness strip's green sets the surface's roughness where its share is on (the relief tier), in place of the material's one number. */
+const facadeRoughness = (extras: Extras): string => `#include <roughnessmap_fragment>
+roughnessFactor = mix(roughnessFactor, ${facadeRead(extras, "roughness")}.g, facadeRoughnessMix * step(0.0, vFacadeRegion.x));`;
 const FACADE_ROOF_COLOR = /* glsl */ `
 if (vFacadeRegion.x < 0.0) diffuseColor.rgb = texture(facadeRoofAlbedo, vec3(vMapUv, facadeRoofKind())).rgb * (0.88 + 0.24 * fract(vFacadeSeed * 3.1));`;
-const FACADE_EMISSIVE = /* glsl */ `
+/** The glow strip's red is the window, its green the window's threshold; of a neon style its blue is a sign, lit in its own albedo's colour from dusk. */
+const facadeEmissive = (extras: Extras): string => /* glsl */ `
 #ifdef USE_EMISSIVEMAP
-vec2 facadeWindow = texture(facadeGlowMap, vec3(vEmissiveMapUv, vFacadeRegion.x)).rg;
+${extras.neon ? `vec3 facadeSign = ${facadeRead(extras, "glow")}.rgb;
+vec2 facadeWindow = facadeSign.rg;` : `vec2 facadeWindow = ${facadeRead(extras, "glow")}.rg;`}
 float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${LIT_SHARE.toFixed(2)});
-totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x);
+totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x);${
+    extras.neon
+      ? `
+totalEmissiveRadiance += diffuseColor.rgb / max(max(diffuseColor.r, diffuseColor.g), max(diffuseColor.b, 0.05)) * (smoothstep(0.1, 0.6, facadeSign.b) * smoothstep(0.0, 0.4, facadeGlow) * ${NEON_INTENSITY.toFixed(1)} * step(0.0, vFacadeRegion.x));`
+      : ""
+  }
 #endif`;
 /** three's own tangent-space normal read, with the layered texel in its place and the region's share of the relief on it. */
 const FACADE_NORMAL_MAPS = THREE.ShaderChunk.normal_fragment_maps.replaceAll("texture2D( normalMap, vNormalMapUv )", "facadeNormalTexel()").replace("mapN.xy *= normalScale;", "mapN.xy *= normalScale * vFacadeRegion.y;");
@@ -273,7 +381,7 @@ function roofEdges(style: FacadeStyle): number[] {
 }
 
 /** The facade shader on `shader` (after the class tag's own patch, whose includes stay): layered colour, normal and glow, the roof covering, the lift. */
-function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: StyleTextures, roofs: RoofTextures, edges: number[], bays: number): void {
+function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: StyleTextures, roofs: RoofTextures, edges: number[], bays: number, extras: Extras): void {
   shader.uniforms.facadeGlow = FACADE_GLOW;
   shader.uniforms.facadeBays = { value: bays };
   shader.uniforms.facadeRoofMix = { value: edges };
@@ -282,14 +390,23 @@ function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: Styl
   shader.uniforms.facadeGlowMap = own.glow;
   shader.uniforms.facadeRoofAlbedo = roofs.albedo;
   shader.uniforms.facadeRoofNormal = roofs.normal;
+  if (extras.height) {
+    shader.uniforms.facadeHeightMap = own.height;
+    shader.uniforms.facadeReliefDepth = own.depth;
+  }
+  if (extras.roughness) {
+    shader.uniforms.facadeRoughnessMap = own.roughness;
+    shader.uniforms.facadeRoughnessMix = own.roughnessMix;
+  }
   shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>${FACADE_VERTEX}`).replace("#include <begin_vertex>", `#include <begin_vertex>${FACADE_SEED}`);
   shader.fragmentShader = shader.fragmentShader
-    .replace("#include <common>", `#include <common>${FACADE_FRAGMENT}`)
-    .replace("#include <normalmap_pars_fragment>", `#include <normalmap_pars_fragment>${FACADE_NORMAL_PARS}`)
-    .replace("#include <map_fragment>", FACADE_MAP)
+    .replace("#include <common>", `#include <common>${FACADE_FRAGMENT}${facadeExtraUniforms(extras)}`)
+    .replace("#include <normalmap_pars_fragment>", `#include <normalmap_pars_fragment>${facadeNormalPars(extras)}`)
+    .replace("#include <map_fragment>", facadeMap(extras))
     .replace("#include <color_fragment>", `#include <color_fragment>${FACADE_ROOF_COLOR}`)
+    .replace("#include <roughnessmap_fragment>", extras.roughness ? facadeRoughness(extras) : "#include <roughnessmap_fragment>")
     .replace("#include <normal_fragment_maps>", FACADE_NORMAL_MAPS)
-    .replace("#include <emissivemap_fragment>", FACADE_EMISSIVE);
+    .replace("#include <emissivemap_fragment>", facadeEmissive(extras));
 }
 
 /** One material of `style`: its layered maps (stand-ins until they load), the windows' glow, the roofs, tagged as concrete. */
@@ -304,16 +421,39 @@ function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
   const tagHook = material.onBeforeCompile;
   const tagKey = material.customProgramCacheKey;
   const edges = roofEdges(style);
+  const extras = extrasOf(style);
   material.onBeforeCompile = (shader, renderer) => {
     tagHook.call(material, shader, renderer);
-    patchFacade(shader, own, roofs, edges, FACADE_LAYERS[style].bays);
+    patchFacade(shader, own, roofs, edges, FACADE_LAYERS[style].bays, extras);
   };
-  material.customProgramCacheKey = () => `${tagKey.call(material)}|facade`;
-  const stop = followRelief({ url: facadeMapUrl(style, "normal"), repeat: 1, layers: FACADE_LAYERS[style].layers }, (map, scale) => {
-    own.normal.value = map;
-    material.normalScale.set(scale, scale);
+  const variant = `${extras.height ? "|height" : ""}${extras.roughness ? "|roughness" : ""}${extras.neon ? "|neon" : ""}`;
+  material.customProgramCacheKey = () => `${tagKey.call(material)}|facade${variant}`;
+  const { layers } = FACADE_LAYERS[style];
+  const stops = [
+    followRelief({ url: facadeMapUrl(style, "normal"), repeat: 1, layers }, (map, scale) => {
+      own.normal.value = map;
+      material.normalScale.set(scale, scale);
+    }),
+  ];
+  if (extras.height) {
+    stops.push(
+      followRelief({ url: facadeMapUrl(style, "height"), repeat: 1, layers }, (map, scale) => {
+        own.height.value = map;
+        own.depth.value = scale * PARALLAX_METRES;
+      }),
+    );
+  }
+  if (extras.roughness) {
+    stops.push(
+      followRelief({ url: facadeMapUrl(style, "roughness"), repeat: 1, layers }, (map, scale) => {
+        own.roughness.value = map;
+        own.roughnessMix.value = scale;
+      }),
+    );
+  }
+  material.addEventListener("dispose", () => {
+    for (const stop of stops) stop();
   });
-  material.addEventListener("dispose", stop);
   return material;
 }
 

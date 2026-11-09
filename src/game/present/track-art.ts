@@ -11,7 +11,7 @@ import { MAT } from "../kernel/material-ids.ts";
 import { makePrefabMaterials, prefabParts, raceTextures, TILE } from "./prefabs.ts";
 import { dressGround } from "./ground-relief.ts";
 import { biomeLookup } from "../world/scenery.ts";
-import { facadeDepth, facadeStyle, facadeTint, PASTELS } from "./facades.ts";
+import { facadeDepth, facadeTint, PASTELS, placedFacadeStyle } from "./facades.ts";
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
 import {
@@ -225,7 +225,7 @@ export class TrackArt {
         if (GROUND_ASSET_PREFABS.includes(id)) mesh.renderOrder = levelOrder(GROUND_LEVEL.decal);
       },
       (id, i, out, skin) => this.tint(id, i, out, skin),
-      (p) => (p.asset === undefined ? facadeStyle(p.prefab, p.x, p.z, this.biome(p.x, p.z), Math.max(p.sx, p.sz) * PREFABS[p.prefab].size[0], p.sy * PREFABS[p.prefab].size[1]) : SCENERY_ASSETS[p.asset]!.family),
+      (p) => (p.asset === undefined ? placedFacadeStyle(p.prefab, p.style, p.x, p.z, this.biome(p.x, p.z), Math.max(p.sx, p.sz) * PREFABS[p.prefab].size[0], p.sy * PREFABS[p.prefab].size[1]) : SCENERY_ASSETS[p.asset]!.family),
     );
   }
 
