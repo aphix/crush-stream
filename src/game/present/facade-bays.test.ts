@@ -10,6 +10,7 @@ import { FacadeBays, HOUSE_ACCENTS, tintedColorVertex } from "./facade-bays.ts";
 import { ATLAS_SIZE, KIT_CELL, paintKit, type UvRect } from "./facade-kit-atlas.ts";
 import { HALF } from "./facade-mesh.ts";
 import { roofLiftAt } from "./facades.ts";
+import { shuttersOf } from "./facade-fittings.ts";
 
 const lots = layOutLots();
 const frontages = homeFrontages(lots.places.slice(0, lots.backdropStart));
@@ -24,8 +25,14 @@ const STOOP_BAY_GAP_MIN = 0.3;
 const HOUSE_DEPTH = 15;
 const CHIMNEY_HALF_MAX = 0.45;
 /** The kit's draws (its instanced meshes), the ones every house has, and the most triangles one rowhome's kit may cost. */
-const KIT_DRAWS = 7;
+/** Shares of the louvre cell's height (a slat texel row, a gap texel row) and the least red the slats stand over the gaps. */
+const LOUVRE_SLAT_ROW = 0;
+const LOUVRE_GAP_ROW = 0.1;
+const LOUVRE_CONTRAST_MIN = 40;
+const KIT_DRAWS = 9;
 const EVERY_HOUSE: readonly string[] = ["facade-bay", "facade-stoop", "facade-railing", "facade-cornice", "facade-roof"];
+/** The most shutters a house hangs: a pair on each of its upper storeys' windows on the door's half. */
+const SHUTTERS_PER_HOUSE_MAX = 4;
 const TRIANGLES_PER_HOME_MAX = 400;
 
 /** The x range of every vertex of `geometry`. */
@@ -165,7 +172,7 @@ describe("given the kit made for the layout's rowhomes", () => {
       for (const mesh of made.group.children) {
         const count = mesh instanceof THREE.InstancedMesh ? mesh.count : -1;
         if (EVERY_HOUSE.includes(mesh.name)) expect(count, `${name}: instances of ${mesh.name}`).toBe(houses);
-        else expect(count, `${name}: instances of ${mesh.name}`).toBeLessThanOrEqual(houses);
+        else expect(count, `${name}: instances of ${mesh.name}`).toBeLessThanOrEqual(mesh.name === "facade-shutter" ? houses * SHUTTERS_PER_HOUSE_MAX : houses);
       }
     }
     few.dispose();
@@ -233,6 +240,52 @@ describe("given the kit made for the layout's rowhomes", () => {
   });
 });
 
+describe("given the fittings of the kit made for the layout", () => {
+  const kit = new FacadeBays(frontages);
+  afterAll(() => kit.dispose());
+
+  // mutation: sed -i 's/placements: (frontage) => shuttersFor(frontage.style).map(/placements: (frontage) => shuttersFor(frontage.style).slice(1).map(/' src/game/present/facade-bays.ts
+  it("when the shutters are counted, then there is one for each shutter the table gives each house's style", () => {
+    const mesh = kit.group.getObjectByName("facade-shutter");
+    const expected = frontages.reduce((sum, frontage) => sum + shuttersOf(frontage.style).length, 0);
+    expect(expected, "shutters the table gives the layout").toBeGreaterThan(frontages.length);
+    expect(mesh instanceof THREE.InstancedMesh ? mesh.count : -1, "shutter instances").toBe(expected);
+  });
+
+  // mutation: sed -i 's/local.compose(position.set(-placement.across, placement.up, 0)/local.compose(position.set(placement.across, placement.up, 0)/' src/game/present/facade-bays.ts
+  it("when each shutter instance is read back, then it stands at its table entry's place on its house's facade, the same height up and as wide and tall", () => {
+    const mesh = kit.group.getObjectByName("facade-shutter");
+    if (!(mesh instanceof THREE.InstancedMesh)) throw new Error("the kit has no shutter mesh");
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    const turn = new THREE.Quaternion();
+    let at = 0;
+    let worst = 0;
+    for (const frontage of frontages) {
+      for (const shutter of shuttersOf(frontage.style)) {
+        mesh.getMatrixAt(at++, matrix);
+        matrix.decompose(position, turn, size);
+        const dx = position.x - frontage.x;
+        const dz = position.z - frontage.z;
+        const out = dx * detCos(frontage.yaw) - dz * detSin(frontage.yaw);
+        const across = dx * detSin(frontage.yaw) + dz * detCos(frontage.yaw);
+        worst = Math.max(worst, Math.abs(out), Math.abs(across - shutter.across), Math.abs(position.y - shutter.sill), Math.abs(size.x - shutter.width), Math.abs(size.y - shutter.height));
+      }
+    }
+    expect(at, "shutters read back").toBeGreaterThan(frontages.length);
+    expect(worst, "furthest a shutter instance is from its table entry (m)").toBeLessThan(EPSILON * 10);
+  });
+
+  // mutation: sed -i 's/const AIRCON_SHARE = 40;/const AIRCON_SHARE = 100;/' src/game/present/facade-bays.ts
+  it("when the air-conditioners are counted, then some houses have one in a window and not every house does", () => {
+    const mesh = kit.group.getObjectByName("facade-aircon");
+    const count = mesh instanceof THREE.InstancedMesh ? mesh.count : -1;
+    expect(count, "air-conditioner instances").toBeGreaterThan(0);
+    expect(count, "air-conditioner instances").toBeLessThan(frontages.length);
+  });
+});
+
 describe("given the roof pieces", () => {
   // mutation: sed -i 's/const CHIMNEY_BACK = 9.5;/const CHIMNEY_BACK = 15.5;/' src/game/present/facade-bay-parts.ts
   it("when their vertices are read, then every one stands on or over the roof and within it: behind the facade, before the back wall, inside the lot but for the chimney astride the party wall", () => {
@@ -270,6 +323,15 @@ describe("given the kit's shared pieces", () => {
     expect(texelAt(painted.glow, KIT_CELL.window, 0.25, 0.25), "pane's glow").toBeGreaterThan(120);
     expect(texelAt(painted.albedo, KIT_CELL.window, 0.03, 0.5), "frame's red").toBeGreaterThan(200);
     expect(texelAt(painted.glow, KIT_CELL.window, 0.03, 0.5), "frame's glow").toBe(0);
+  });
+
+  // mutation: sed -i 's/const LOUVRE_GAP_SHADE = 0.5;/const LOUVRE_GAP_SHADE = 1;/' src/game/present/facade-kit-atlas.ts
+  it("when the louvre cell is sampled up its height, then its slats are lit and a dark gap lies under each", () => {
+    const painted = paintKit().albedo;
+    const columnAt = 0.5;
+    const lit = texelAt(painted, KIT_CELL.louvre, columnAt, LOUVRE_SLAT_ROW);
+    const gap = texelAt(painted, KIT_CELL.louvre, columnAt, LOUVRE_GAP_ROW);
+    expect(lit, "a slat's red").toBeGreaterThan(gap + LOUVRE_CONTRAST_MIN);
   });
 
   // mutation: sed -i 's/const RAIL_BAR_FROM = 13;/const RAIL_BAR_FROM = 25;/' src/game/present/facade-kit-atlas.ts

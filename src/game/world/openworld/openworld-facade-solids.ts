@@ -109,8 +109,8 @@ export function bayOutline(offset = 0): readonly BayCorner[] {
   ];
 }
 
-/** A rowhome's front as the kit stands it: a point on the drawn facade at the lot's middle, the building's yaw (its front is local +x), its depth (m) and a number that picks the house's accent. */
-export type Frontage = { x: number; z: number; yaw: number; depth: number; variant: number };
+/** A rowhome's front as the kit stands it: a point on the drawn facade at the lot's middle, the building's yaw (its front is local +x), its depth (m), its facade style and a number that picks the house's accent. */
+export type Frontage = { x: number; z: number; yaw: number; depth: number; style: string; variant: number };
 
 /** A pseudo-random number from the lot's place: the same on every peer, whatever the order the places come in. */
 function variantOf(x: number, z: number): number {
@@ -123,7 +123,7 @@ export function homeFrontages(places: readonly Place[]): Frontage[] {
   for (const place of places) {
     if (place.kind !== PLACE_KIND.home) continue;
     const face = drawnHalf(place.depth);
-    frontages.push({ x: place.x + detCos(place.yaw) * face, z: place.z - detSin(place.yaw) * face, yaw: place.yaw, depth: place.depth, variant: variantOf(place.x, place.z) });
+    frontages.push({ x: place.x + detCos(place.yaw) * face, z: place.z - detSin(place.yaw) * face, yaw: place.yaw, depth: place.depth, style: place.style, variant: variantOf(place.x, place.z) });
   }
   return frontages;
 }
