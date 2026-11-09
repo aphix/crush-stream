@@ -107,7 +107,7 @@ export type OpenWorldPorts = {
   /** The signage of `places`, in the scene. */
   makeSigns(places: readonly Place[]): PlaceSigns;
   /** What the police need of the engine (the course's solids, a busted player, the light bars, sight lines past the buildings); absent: no police. */
-  law?: Pick<LawEnginePorts, "solids" | "playerBusted" | "sirens" | "lineOfSight">;
+  law?: Pick<LawEnginePorts, "solids" | "playerBusted" | "sirens" | "lineOfSight" | "footBusted">;
   /** What culling reads of the engine. */
   cull: OpenWorldCullPorts;
   /** The facade kit for the map's homes inside the walls. */
@@ -248,7 +248,7 @@ export class OpenWorldDirector {
    * tenth of a second and hundredth of a hold), so the HUD sees no change; null while none chases it.
    */
   bustOf(carIndex: number): ChaseHud | null {
-    if (this.law === null || !this.law.chaseOf(carIndex, this.bustScratch)) {
+    if (this.law === null || !(this.law.chaseOf(carIndex, this.bustScratch) || this.law.footChaseOf(this.bustScratch))) {
       this.bust = null;
       return null;
     }
@@ -430,7 +430,7 @@ export class OpenWorldDirector {
   private makeLaw(map: OpenWorldMap, crowd: CivilianCrowd, seed: number): OpenWorldLaw | null {
     const extra = this.ports.law;
     if (extra === undefined) return null;
-    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, cars: () => this.ports.cars() }, seed);
+    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, foot: (out) => this.ports.foot(out), footBusted: () => extra.footBusted(), cars: () => this.ports.cars() }, seed);
   }
 
   /** The Auto camera over this crowd: its cars (the traffic's drivers), its foot cops and the viewers' own cars left out. */
