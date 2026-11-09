@@ -44,8 +44,8 @@ type OpenWorldPorts = {
   /** Calls `listener` for every solid a car meets (closing speed, contact point) until the returned function is called. */
   hookWallHits(listener: (closing: number, x: number, z: number) => void): () => void;
   makeArt(capacity: number): CrowdArt;
-  /** The police's extra ports (patrol cars, the course's solids, a busted player); absent: foot cops only. */
-  law?: Pick<LawEnginePorts, "patrolCars" | "solids" | "playerBusted">;
+  /** The police's extra ports (the traffic, the course's solids, a busted player); absent: foot cops only. */
+  law?: Pick<LawEnginePorts, "traffic" | "solids" | "playerBusted" | "sirens">;
 };
 
 /**
@@ -206,14 +206,9 @@ export class OpenWorldDirector {
     if (client) crowd.hear(this.heardEvents);
   }
 
-  /** A car ran a red light at (x, z): the traffic's event, a cop who saw it sends a patrol car after it. */
-  reportRedLight(carIndex: number, x: number, z: number): void {
-    this.law?.reportRedLight(carIndex, x, z);
-  }
-
   private makeLaw(map: OpenWorldMap, crowd: CivilianCrowd, seed: number): OpenWorldLaw {
     const extra = this.ports.law;
-    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), patrolCars: () => extra?.patrolCars() ?? null, solids: () => extra?.solids() ?? null, playerBusted: (carIndex, seconds) => extra?.playerBusted(carIndex, seconds) }, seed);
+    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => extra?.traffic() ?? null, solids: () => extra?.solids() ?? null, playerBusted: (carIndex, seconds) => extra?.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra?.sirens(carIndex, on) }, seed);
   }
 
   private throwStruck(crowd: CivilianCrowd): void {
@@ -223,6 +218,7 @@ export class OpenWorldDirector {
       const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
       dressOfLook(crowd.poses.look[strike.guard]!, look);
       this.ports.throwFigure(strike, look);
+      this.law?.noteStrike(strike);
     }
   }
 

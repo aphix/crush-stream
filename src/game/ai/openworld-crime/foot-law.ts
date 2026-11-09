@@ -14,7 +14,7 @@ import { FootWalkers } from "./foot-walkers.ts";
 import type { LawPorts, OffenceSource, Spot } from "./offence-source.ts";
 
 /** What the patrol cars need to hear of the cases. */
-export interface LawHooks {
+interface LawHooks {
   opened(caseIndex: number, x: number, z: number): void;
   closed(caseIndex: number): void;
 }

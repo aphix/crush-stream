@@ -3,13 +3,13 @@ import { CENTIMETRES_PER_METRE, DECISION_HZ, NEVER_TICK, NO_PLACE, RESIDENT_INT,
 import type { CityState } from "../civilians/civilian-state.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import { isWanted } from "../civilians/society-crime.ts";
-import type { OffenceSource, Spot } from "./offence-source.ts";
+import type { Spot } from "./offence-source.ts";
 
 /** The crowd's owner: its society rows and its drawn poses. */
-export type CrowdView = { readonly state: CityState; readonly poses: CrowdPoses };
+type CrowdView = { readonly state: CityState; readonly poses: CrowdPoses };
 
 /** The law's reading of the society: crimes and fights are the brain's rows (`society-crime.ts`), a resident stands where the crowd draws them, else at their fight or crime place. */
-export class StateOffenceSource implements OffenceSource {
+export class StateOffenceSource {
   private readonly crowd: CrowdView;
   private readonly map: OpenWorldMap;
 

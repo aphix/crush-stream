@@ -4,8 +4,8 @@ import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { CrimeScene } from "../ai/openworld-crime/crime-scene.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
-import type { PatrolCarPorts } from "../ai/openworld-crime/patrol-cars.ts";
 import { StateOffenceSource } from "../ai/openworld-crime/state-offence-source.ts";
+import { TrafficPatrolPorts, type TrafficApi } from "../ai/openworld-crime/traffic-patrol-ports.ts";
 import { SURVIVAL } from "../match/survival.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
@@ -23,10 +23,12 @@ type CopArt = {
 export type LawEnginePorts = {
   makeArt(capacity: number): CopArt;
   throwFigure(strike: FigureStrike, look: DriverLook): void;
-  /** The traffic's cars for patrol cars to lease; null: the law is on foot. */
-  patrolCars(): PatrolCarPorts | null;
+  /** The open world's traffic, whose pool cars patrol cars are leased from and whose red-light runners the law hears; null: the law is on foot. */
+  traffic(): TrafficApi | null;
   /** The course's solids the patrol cars bend round; null: they drive straight. */
   solids(): Obstacles | null;
+  /** Turns the light bar of car `carIndex` of the engine's list on or off. */
+  sirens(carIndex: number, on: boolean): void;
   /** The human's car was held slow by a patrol car for Survival's bust hold. */
   playerBusted(carIndex: number, seconds: number): void;
 };
@@ -37,16 +39,19 @@ export class OpenWorldLaw {
   private readonly crowd: CivilianCrowd;
   private readonly ports: LawEnginePorts;
   private readonly art: CopArt;
+  private readonly unlisten: (() => void) | null;
 
   constructor(map: OpenWorldMap, crowd: CivilianCrowd, ports: LawEnginePorts, seed: number) {
     this.crowd = crowd;
     this.ports = ports;
+    const traffic = ports.traffic();
     this.scene = new CrimeScene(
       map,
       new StateOffenceSource(crowd, map),
-      { bust: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.bust, resident, seconds), playerBusted: ports.playerBusted, cars: ports.patrolCars(), obstacles: ports.solids(), playerBustSeconds: SURVIVAL.bustTime },
+      { bust: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.bust, resident, seconds), playerBusted: ports.playerBusted, cars: traffic === null ? null : new TrafficPatrolPorts(traffic, ports.sirens), obstacles: ports.solids(), playerBustSeconds: SURVIVAL.bustTime },
       seed,
     );
+    this.unlisten = traffic?.onRedLightRun((carIndex, x, z) => void this.scene.reportRedLight(carIndex, x, z)) ?? null;
     this.art = ports.makeArt(FOOT_COP_COUNT);
   }
 
@@ -67,12 +72,13 @@ export class OpenWorldLaw {
     this.art.update(this.scene.copPoses, eyeX, eyeZ, sight, wallDt);
   }
 
-  /** A car ran a red light at (x, z) (the traffic's event). */
-  reportRedLight(carIndex: number, x: number, z: number): void {
-    this.scene.reportRedLight(carIndex, x, z);
+  /** A civilian a car ran down (the crowd's strike): the third in a minute by one car has a patrol car sent after it. */
+  noteStrike(strike: FigureStrike): void {
+    if (!strike.loose) this.scene.noteKnock(strike.car, strike.x, strike.z);
   }
 
   dispose(): void {
+    this.unlisten?.();
     this.art.dispose();
   }
 }

@@ -3,6 +3,8 @@ import { POLICE_HASH } from "../civilians/civilian-crowd-constants.ts";
 /** The chase runs on a fixed grid of crowd time, so every peer that steps it makes the same moves whatever its frame rate. */
 export const CRIME_HZ = 10;
 export const CRIME_STEP_SECONDS = 1 / CRIME_HZ;
+/** A crowd time a hair under a grid line (float rounding of the sim's sum) still counts as on it. */
+export const GRID_EPSILON = 1e-6;
 /** One `step` call catches up at most this many grid steps: a client whose clock jumped far ahead skips the rest. */
 export const MAX_STEPS_PER_CALL = 20;
 /** The society's offence rows are read every this many grid steps (twice a second). */
@@ -81,6 +83,13 @@ export const CAR_STOP_DECEL = 6;
 /** The headings (rad) a patrol car tries off the straight one when a solid is in its way, in turn to either side, and the metres of clear run a radian of bend costs: the hunters' own. */
 export const AVOID_TURNS = [0.3, 0.6, 0.9, 1.25, 1.6, 2.2, Math.PI] as const;
 export const AVOID_TURN_COST = 6;
+/** A patrol car starts from a kerb space about this far (m) from the scene: out of sight of most of a play area 409 m across. */
+export const PATROL_START_DISTANCE = 110;
+/** A car that runs this many civilians down within `HEAT_SECONDS` has a patrol car sent after it. */
+export const HEAT_KNOCKS = 3;
+export const HEAT_SECONDS = 60;
+/** Cars the heat counts: the engine's list is no longer than this. */
+export const HEAT_CARS = 32;
 /** A patrol car's siren makes a traffic car it is within this many metres of pull over, and stop. */
 export const YIELD_DISTANCE = 35;
 /** A busted driver's car stays stopped this long (s) before the traffic has it back. */

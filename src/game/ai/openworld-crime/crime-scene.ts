@@ -3,7 +3,7 @@ import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import type { Obstacles } from "../obstacles.ts";
 import { fillCopPoses, newCopPoses, overlaySuspects } from "./crime-poses.ts";
-import { CRIME_HZ, CRIME_STEP_SECONDS, MAX_STEPS_PER_CALL, RED_LIGHT_SIGHT } from "./crime-constants.ts";
+import { CRIME_HZ, CRIME_STEP_SECONDS, GRID_EPSILON, HEAT_CARS, HEAT_KNOCKS, HEAT_SECONDS, MAX_STEPS_PER_CALL, RED_LIGHT_SIGHT } from "./crime-constants.ts";
 import { FootLaw } from "./foot-law.ts";
 import type { LawPorts, OffenceSource } from "./offence-source.ts";
 import { PatrolCars, type PatrolCarPorts } from "./patrol-cars.ts";
@@ -30,6 +30,9 @@ export class CrimeScene {
   private readonly patrol: PatrolCars | null;
   private readonly ports: CrimePorts;
   private authority = false;
+  /** Per car: the civilians it ran down in the current minute and when that minute began. */
+  private readonly heatKnocks = new Uint8Array(HEAT_CARS);
+  private readonly heatSince = new Float64Array(HEAT_CARS);
 
   constructor(map: OpenWorldMap, source: OffenceSource, ports: CrimePorts, seed: number) {
     this.ports = ports;
@@ -50,7 +53,7 @@ export class CrimeScene {
   step(crowdSeconds: number, authority: boolean, crowdPoses: CrowdPoses): void {
     this.authority = authority;
     this.law.authority = authority;
-    const target = Math.floor(crowdSeconds * CRIME_HZ);
+    const target = Math.floor(crowdSeconds * CRIME_HZ + GRID_EPSILON);
     if (target - this.law.steps > MAX_STEPS_PER_CALL) this.law.fastForward(target - MAX_STEPS_PER_CALL);
     while (this.law.steps < target) {
       this.law.advance();
@@ -65,6 +68,20 @@ export class CrimeScene {
     if (this.patrol === null) return false;
     if (!this.law.copWithin(x, z, RED_LIGHT_SIGHT) && !this.patrol.within(x, z, RED_LIGHT_SIGHT)) return false;
     return this.patrol.chase(carIndex, x, z, this.law.seconds);
+  }
+
+  /** Car `carIndex` ran a civilian down at (x, z): the third in a minute sends a patrol car after it, whoever saw it. True when one was sent. The host's call only. */
+  noteKnock(carIndex: number, x: number, z: number): boolean {
+    if (this.patrol === null || !this.authority || carIndex < 0 || carIndex >= HEAT_CARS) return false;
+    const now = this.law.seconds;
+    if (now - this.heatSince[carIndex]! > HEAT_SECONDS || this.heatKnocks[carIndex] === 0) {
+      this.heatSince[carIndex] = now;
+      this.heatKnocks[carIndex] = 0;
+    }
+    this.heatKnocks[carIndex]! += 1;
+    if (this.heatKnocks[carIndex]! < HEAT_KNOCKS) return false;
+    this.heatKnocks[carIndex] = 0;
+    return this.patrol.chase(carIndex, x, z, now);
   }
 
   /** The fighters taken down since the last call: the engine throws them as figures. */

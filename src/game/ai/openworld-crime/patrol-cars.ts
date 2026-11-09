@@ -25,14 +25,14 @@ export interface PatrolCarPorts {
   driverOf(index: number): number;
 }
 
-export interface PatrolHooks {
+interface PatrolHooks {
   /** The car of case `caseIndex` has come: its cop steps out at (x, z). */
   arrived(caseIndex: number, x: number, z: number): void;
   /** The driver of car `carIndex` was held slow beside a patrol car long enough: `resident` -1 for the player. */
   busted(resident: number, carIndex: number, seconds: number): void;
 }
 
-export const PATROL_MODE = { free: 0, toScene: 1, atScene: 2, pursuing: 3, lingering: 4 } as const;
+const PATROL_MODE = { free: 0, toScene: 1, atScene: 2, pursuing: 3, lingering: 4 } as const;
 
 /**
  * The law's cars, leased from the traffic's pool. One drives to a scene on foot-case calls and its cop steps out; one chases a car that ran a red light, makes a traffic car it is near pull over,
