@@ -23,6 +23,7 @@ import {
   type Face,
   type Venue,
 } from "./openworld-programme.ts";
+import { homeDoorPoint } from "./openworld-facade-solids.ts";
 import { PLACE_KIND, type Place } from "./walk-graph.ts";
 
 /** Storey heights (m): ground 3.6 (parlour 3.0-3.7), shop ground 4.0, floor to floor 3.2 (2.7-3.4), cornice and parapet 0.9. */
@@ -66,7 +67,8 @@ function layHomes(layout: Layout, plan: BlockPlan, blockIndex: number, id: strin
   for (const lot of lots) {
     const named = NAMED_HOMES.find((home) => home.block === id && home.face === lot.face && home.at === lot.index);
     layout.links.push({ place: layout.places.length, block: blockIndex, side: lot.face });
-    layout.places.push({ kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys: HOUSE_STOREYS, style, sector: RESIDENTIAL });
+    const door = homeDoorPoint(lot.x, lot.frontZ, lot.yaw);
+    layout.places.push({ kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: door.x, doorZ: door.z, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys: HOUSE_STOREYS, style, sector: RESIDENTIAL });
   }
 }
 
@@ -109,7 +111,8 @@ function laySidePlaces(layout: Layout, plan: BlockPlan, blockIndex: number): voi
     const common = { kind: spot.kind, name: spot.name, yaw: first.yaw, width: lots.length * first.width, sector: spot.sector, style: NO_STYLE, storeys: 0 };
     if (spot.where === "roof") {
       layout.links.push({ place: layout.places.length, block: blockIndex, side: first.face });
-      layout.places.push({ ...common, doorNode: -1, doorX: first.x, doorZ: first.frontZ, x: first.x, z: (first.house.z0 + first.house.z1) / 2, depth: first.house.z1 - first.house.z0 });
+      const door = homeDoorPoint(first.x, first.frontZ, first.yaw);
+      layout.places.push({ ...common, doorNode: -1, doorX: door.x, doorZ: door.z, x: first.x, z: (first.house.z0 + first.house.z1) / 2, depth: first.house.z1 - first.house.z0 });
       continue;
     }
     const gateZ = first.inward === 1 ? first.yard.z1 : first.yard.z0;
