@@ -121,7 +121,7 @@ const HOT = {
   "src/game/present/civilian-dress.ts": ["dressOfLook", "writeLinearColour", "scrambleLook", "fieldOf"],
   "src/game/present/openworld-sight.ts": ["inBox", "playerInside", "update", "readEye", "seen", "observe", "seenThroughFace", "recordSighting", "allBlocked", "unseenFor", "reset", "near", "inFrustum", "hiddenFrom", "rayBlocked", "blocks", "narrow", "columnOf", "rowOf"],
   "src/game/present/openworld-car-lod.ts": ["frame", "judge", "showAll"],
-  "src/game/ai/openworld-auto/auto-director.ts": ["step", "cut", "interrupt", "interestOf", "pick", "best", "adjusted", "go", "add", "clear"],
+  "src/game/ai/openworld-auto/auto-director.ts": ["step", "cut", "interrupt", "hottest", "interestOf", "pick", "best", "adjusted", "go", "add", "clear"],
   "src/game/ai/openworld-auto/auto-interest.ts": ["activityInterest", "moodInterest", "eventInterest", "copInterest", "driverInterest"],
   "src/game/ai/openworld-auto/auto-scan.ts": ["fill", "fillCrowd", "heatFromLog", "warm", "fillCops", "fillDrivers", "watchableCar", "watchable", "personPose", "carPose", "poseOf"],
   "src/game/present/openworld-auto-cam.ts": ["update", "followHeading"],

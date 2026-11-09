@@ -117,17 +117,33 @@ export class AutoDirector {
     return true;
   }
 
-  /** After the minimum hold: cut when something in progress beats what is on screen. */
+  /** After the minimum hold: cut when something hot is in progress that beats what is on screen by a margin (its own interest: a brawl is worth a cut from another civilian). */
   private interrupt(scan: AutoScan): boolean {
     const table = this.table;
     table.clear();
     scan.fill(table);
-    const best = this.pick(table);
-    if (best < 0) return false;
-    const adjusted = this.adjusted(table, best);
-    if (adjusted < INTERRUPT_INTEREST || adjusted < this.interestOf(table) + INTERRUPT_MARGIN) return false;
-    this.go(table.kind[best]!, table.id[best]!);
+    const hottest = this.hottest(table);
+    if (hottest < 0) return false;
+    const interest = table.interest[hottest]!;
+    if (interest < INTERRUPT_INTEREST || interest < this.interestOf(table) + INTERRUPT_MARGIN) return false;
+    this.go(table.kind[hottest]!, table.id[hottest]!);
     return true;
+  }
+
+  /** The table's index of the most interesting subject that is neither on screen nor the one before it; -1 when there is none. */
+  private hottest(table: AutoCandidates): number {
+    let hottest = NONE;
+    let heat = 0;
+    for (let at = 0; at < table.count; at++) {
+      const kind = table.kind[at]!;
+      const id = table.id[at]!;
+      if ((kind === this.kind && id === this.id) || (kind === this.recentKind[0] && id === this.recentId[0])) continue;
+      if (table.interest[at]! > heat) {
+        heat = table.interest[at]!;
+        hottest = at;
+      }
+    }
+    return hottest;
   }
 
   /** The interest the table gives the subject on screen (0 when it is not in it). */
