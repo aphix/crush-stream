@@ -436,7 +436,7 @@ export class CivilianCrowd {
       if (!this.authority) continue;
       if (byWalker) {
         if (this.walkers.shoves[second - separation.capacity] === 0) continue;
-        if (distance < WALKER_PUSH_DISTANCE && closing >= WALKER_PUSH_CLOSING_SPEED) this.raiseShove(first, brainX[second]!, brainZ[second]!, seconds);
+        if (distance < WALKER_PUSH_DISTANCE && closing >= WALKER_PUSH_CLOSING_SPEED) this.raiseBearingPush(first, brainX[second]!, brainZ[second]!, seconds, EVENT_KIND.walker);
         continue;
       }
       if (distance >= HARD_DISTANCE || closing < HARD_CLOSING_SPEED) continue;
@@ -484,11 +484,12 @@ export class CivilianCrowd {
   }
 
   /** A player on foot at (`walkerX`, `walkerZ`) shoved `victim`: the push triple, then a `walker` triple of the bearing from the victim's brain spot to him, so the brain tells a shove from a car's nudge and turns the fight his way. */
-  private raiseShove(victim: number, walkerX: number, walkerZ: number, seconds: number): void {
+  /** A push by a body at (x, z) that is not a civilian, logged with the bearing to it (`party`: `EVENT_KIND.walker` for the player on foot, `EVENT_KIND.car` for a car): the one pushed turns on it. */
+  private raiseBearingPush(victim: number, x: number, z: number, seconds: number, party: number): void {
     if (!this.mayPush(victim, NOT_A_CIVILIAN, seconds)) return;
-    const turns = detAtan2(walkerX - this.separation.brainX[victim]!, walkerZ - this.separation.brainZ[victim]!) / (2 * Math.PI);
+    const turns = detAtan2(x - this.separation.brainX[victim]!, z - this.separation.brainZ[victim]!) / (2 * Math.PI);
     this.logHostEvent(EVENT_KIND.push, victim, seconds);
-    this.logHostEvent(EVENT_KIND.walker, Math.round(turns * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1), seconds);
+    this.logHostEvent(party, Math.round(turns * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1), seconds);
   }
 
   /** The victim's triple, then the pusher's `alongside` triple when the pusher is a civilian (a car, or a knock, has none): the wire's subject is 16 bits. */
@@ -530,7 +531,7 @@ export class CivilianCrowd {
         const spotY = ground.heightAt(spotX, spotZ);
         if (near && runsDown(car, spotX, spotZ, spotY)) this.knockDown(resident, seconds, fell(car, carIndex, resident, spotX, spotY, spotZ, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
         else if (loose && looseRunsDown(car, spotX, spotZ, spotY)) this.knockDown(resident, seconds, stood(carIndex, resident, spotX, spotY, spotZ, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
-        else if (near && carSpeed >= CAR_NUDGE_SPEED && carGap(car, spotX, spotZ) < CAR_NUDGE_GAP) this.raisePush(resident, NOT_A_CIVILIAN, seconds);
+        else if (near && carSpeed >= CAR_NUDGE_SPEED && carGap(car, spotX, spotZ) < CAR_NUDGE_GAP) this.raiseBearingPush(resident, carX, carZ, seconds, EVENT_KIND.car);
       }
     }
   }

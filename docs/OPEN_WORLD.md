@@ -157,7 +157,7 @@ wanted a game day from the tick it happened, fears the corner, angers the clerk 
 Rows (`crimeTick`, `crimeKind`, `crimePlace`, `crimeVictim`, `fightTick`, `fightPartner`, flags) carry it all to peers and the police.
 
 **Fights**: `EVENT_KIND.push` rolls a seeded chance (`FIGHT_CHANCE`, times `FIGHT_ANGRY_FACTOR` when either civilian is angry) that the pushed civilian comes to blows with
-whoever pushed: another civilian, a car, or, when a `walker` triple follows, the human player on foot; `EVENT_KIND.fight` makes it so. Fighters stop at the nearest door for
+whoever pushed: another civilian, a car, or, when a `walker` triple follows, the human player on foot; `EVENT_KIND.fight` makes it so. A push by a body that is not a civilian names the way to it in a triple of the same seconds after it (`walker`: the player on foot, `car`: a car that nudged them, in `WALKER_BEARING_STEPS` of a turn), and the one pushed squares up facing it (against a car, with no one as the other fighter). Fighters stop at the nearest door for
 `FIGHT_TICKS`. Two civilians face each other and are both wanted for it; one who turns on the player faces the walker's bearing (`fightPartner` is `FIGHT_PLAYER`), is wanted for it,
 and swings at him: a swing lands half way through its clip, and when the host's walker is within `PLAYER_STRIKE_REACH` of the fighter's spot the director knocks him down the way the
 walker is knocked down already (`findWalkerStrike`, the `strikeWalker` port), with no damage beyond it. A civilian run down may be taken on by a bystander standing at a door.

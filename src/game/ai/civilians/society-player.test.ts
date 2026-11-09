@@ -40,6 +40,34 @@ function tallyPushes(logOf: (victim: number, seconds: number) => number[]): Shov
   return tally;
 }
 
+describe("given 400 nudges by a car coming from the east on a calm resident, and the same pushes with no bearing", () => {
+  const nudged = tallyPushes((victim, seconds) => [EVENT_KIND.push, victim, seconds, EVENT_KIND.car, EAST, seconds]);
+  const bare = tallyPushes((victim, seconds) => [EVENT_KIND.push, victim, seconds]);
+
+  it("when they are rolled, then the same seeded fights happen, each facing the car, with no civilian and no player as the other fighter, and not wanted for it", () => {
+    expect(nudged.fights, "fights from the nudges").toBe(bare.fights);
+    expect(nudged.facingHim, "fighters facing the car").toBe(nudged.fights);
+    expect(nudged.withPlayer, "fights with the player").toBe(0);
+    expect(nudged.wanted, "fighters wanted for it").toBe(0);
+    expect(bare.facingHim, "fighters facing a way when the car gave none").toBe(0);
+  });
+
+  it("when one of them is drawn at the fight, then they swing at the car: facing east, and no swing lands on the player", () => {
+    const cast = newCast(NOON);
+    const { state, resident } = cast;
+    stageResident(state, resident, { place: HOME_A1, tick: cast.tick, nextDecision: cast.tick + 1000 });
+    queueEvents(state, cast.tick, [EVENT_KIND.fight, resident, cast.tick / 2, EVENT_KIND.car, EAST, cast.tick / 2]);
+    applyReactionEvents(state, cast.tick + EVENT_LEAD_TICKS);
+    const arrive = (cast.tick + EVENT_LEAD_TICKS) / 2;
+    const seen = new ActivityReading();
+    readActivity(state, resident, arrive + 0.3, seen);
+    expect([seen.code, seen.placed].join("/"), "activity and placed").toBe([ACTIVITY.swing, true].join("/"));
+    expect(seen.yaw, "the way they face").toBeCloseTo(Math.PI / 2, 5);
+    expect(intAt(state, resident, RESIDENT_INT.fightPartner), "who they fight").toBe(-1);
+    expect(findWalkerStrike(state, arrive + 0.2, arrive + 0.4, 0, 0, new WalkerStrike()), "a swing on the player").toBe(false);
+  });
+});
+
 describe("given 400 shoves by the player's walker on a calm resident, and the same pushes from a car", () => {
   const byWalker = tallyPushes((victim, seconds) => [EVENT_KIND.push, victim, seconds, EVENT_KIND.walker, EAST, seconds]);
   const byCar = tallyPushes((victim, seconds) => [EVENT_KIND.push, victim, seconds]);

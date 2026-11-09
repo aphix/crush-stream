@@ -51,9 +51,9 @@ export function sendAlong(crowd: CivilianCrowd, resident: number, edge: StreetEd
 }
 
 /** A push read off the log: the victim, the civilian who pushed (-1: none), and the bearing to the player who shoved (-1: none; neither is a car's nudge). */
-export type Push = { victim: number; pusher: number; bearing: number };
+export type Push = { victim: number; pusher: number; bearing: number; byCar: boolean };
 
-/** The pushes of an event log (kind, subject, seconds triples): a push triple, and the `alongside` (a civilian) or `walker` (a player's bearing) triple of the same seconds after it. */
+/** The pushes of an event log (kind, subject, seconds triples): a push triple, and the `alongside` (a civilian), `walker` (a player's bearing) or `car` (a car's bearing) triple of the same seconds after it. */
 export function pushesIn(events: ArrayLike<number>): Push[] {
   const found: Push[] = [];
   for (let at = 0; at + EVENT_TRIPLE <= events.length; at += EVENT_TRIPLE) {
@@ -63,7 +63,8 @@ export function pushesIn(events: ArrayLike<number>): Push[] {
     found.push({
       victim: events[at + 1]!,
       pusher: follows && events[next] === EVENT_KIND.alongside ? events[next + 1]! : -1,
-      bearing: follows && events[next] === EVENT_KIND.walker ? events[next + 1]! : -1,
+      bearing: follows && (events[next] === EVENT_KIND.walker || events[next] === EVENT_KIND.car) ? events[next + 1]! : -1,
+      byCar: follows && events[next] === EVENT_KIND.car,
     });
   }
   return found;

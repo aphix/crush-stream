@@ -16,7 +16,7 @@ export function moodInterest(mood: number): number {
 /** An event `ageSeconds` after it began: its interest falls from the kind's own to nothing over the kind's window; nothing before it began, once it is over, or for a kind that names no subject. */
 export function eventInterest(kind: number, ageSeconds: number): number {
   const window = EVENT_SECONDS[kind] ?? 0;
-  if (kind === EVENT_KIND.alongside || kind === EVENT_KIND.walker || ageSeconds < 0 || ageSeconds >= window) return 0;
+  if (kind === EVENT_KIND.alongside || kind === EVENT_KIND.walker || kind === EVENT_KIND.car || ageSeconds < 0 || ageSeconds >= window) return 0;
   return EVENT_INTEREST[kind]! * (1 - ageSeconds / window);
 }
 

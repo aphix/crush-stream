@@ -4,6 +4,7 @@ import { PLACE_NAMES } from "./civilian-cast.ts";
 import { DRIVE_MIN_METRES, DRIVE_SPEED, FLAG, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_HOUR } from "./civilian-constants.ts";
 import { ActivityReading, readActivity } from "./society-activity.ts";
 import { INTERACTIONS } from "./society-table.ts";
+import { isHourIn } from "./society-venues.ts";
 import { SCENES, decideScene, newCast, societyMap, type Cast, type Outcome, type Scene } from "./society-scenes.test-util.ts";
 import { COFFEE_SHOP, SUPERMARKET, decideAs, farthestWorkplace, intAt, needsWith, placeIn, stageResident } from "./society.test-util.ts";
 
@@ -82,8 +83,8 @@ describe("given the time of day choosing between a coffee shop and a bar", () =>
     }
   });
 
-  it("when it is nine at night, then they go to the bar, never for coffee", () => {
-    const cast = coffeeFanWantingCompany(21);
+  it("when it is eleven at night, after the stoops have emptied, then they go to the bar, never for coffee", () => {
+    const cast = coffeeFanWantingCompany(23);
     for (let count = 0; count < DECISIONS; count++) {
       decideAs(cast.state, cast.resident, cast.tick, count);
       expect(societyMap.places[intAt(cast.state, cast.resident, RESIDENT_INT.place)]!.name, `place chosen in decision ${count}`).toBe(PLACE_NAMES.bar);
@@ -105,6 +106,16 @@ describe("given an errand on someone's mind and the hour of the day", () => {
     const noon = societyMap.places[errandAt(12)]!;
     expect([PLACE_NAMES.bodega, SUPERMARKET, "Tasker Barber", "Spin Cycle Laundry", "Mifflin Mini Mart", PLACE_NAMES.busStop], "place chosen at noon: a shop, or the bus out").toContain(noon.name);
     expect(errandAt(2), "place they are at after deciding at 2:00").toBe(placeIn(societyMap, "Rowhome B2-1"));
+  });
+});
+
+describe("given the mugging row's hours and the evening stoop row's", () => {
+  it("when every hour a mugging may start is looked at, then a stoop-sitting row was open the hour before, so a mugger has someone out on a stoop to find", () => {
+    const mugging = INTERACTIONS.find((row) => row.name === "mugging someone on their stoop")!;
+    const evening = INTERACTIONS.find((row) => row.name === "sitting out on the stoop in the evening")!;
+    const hours = Array.from({ length: 24 }, (_, hour) => hour).filter((hour) => isHourIn(hour, mugging.hours[0], mugging.hours[1]));
+    expect(hours.length, "hours a mugging may start in").toBeGreaterThan(0);
+    for (const hour of hours) expect(isHourIn((hour + 23) % 24, evening.hours[0], evening.hours[1]), `stoop sitting open the hour before ${hour}:00`).toBe(true);
   });
 });
 
