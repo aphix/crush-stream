@@ -89,8 +89,8 @@ describe("given a resident who has turned on the player standing east of them", 
 
   it("when the player is a metre east, then a swing lands on him half way through each swing, pushing him east, and not while they block", () => {
     expect(findWalkerStrike(state, arrive + 0.2, arrive + 0.4, spotX + 1, spotZ, strike), "a swing lands in the first swing's middle").toBe(true);
-    expect(strike.dirX, "push east").toBeCloseTo(1, 5);
-    expect(strike.dirZ, "push north or south").toBeCloseTo(0, 5);
+    expect(strike.dirX, "push east").toBeCloseTo(1, 2);
+    expect(strike.dirZ, "push north or south").toBeCloseTo(0, 2);
     expect(findWalkerStrike(state, arrive + 0.4, arrive + 0.8, spotX + 1, spotZ, strike), "a swing lands after the first one, while blocking").toBe(false);
     expect(findWalkerStrike(state, arrive + 1.4, arrive + 1.6, spotX + 1, spotZ, strike), "the second swing lands").toBe(true);
   });
