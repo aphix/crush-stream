@@ -5,10 +5,14 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { tickAt } from "../ai/civilians/civilian-clock.ts";
-import { CROWD_SEED_MASK, CROWD_TIER_SCALE, LOOK_HZ, POPULATION } from "../ai/civilians/civilian-crowd-constants.ts";
+import { CROWD_SEED_MASK, CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.ts";
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { OpenWorldTraffic, type FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
+import { KERB_CARS, MOVER_CARS } from "../ai/openworld-traffic/traffic-constants.ts";
+import { ProximitySight } from "../ai/openworld-traffic/traffic-sight.ts";
+import type { TrafficPorts } from "../ai/openworld-traffic/traffic-ports.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
 
@@ -18,6 +22,18 @@ const NO_EVENTS = new Float64Array(0);
 type CrowdArt = {
   update(poses: CrowdPoses, eyeX: number, eyeZ: number): void;
   dispose(): void;
+};
+
+/** The traffic lights drawn: `update` once a frame with the crowd's clock. */
+type LightsArt = {
+  update(seconds: number): void;
+  dispose(): void;
+};
+
+/** What the open world's cars need of the engine: the field's cars (`TrafficPorts`), who drives the lobby's cars no human does, and the lights' drawing. */
+type TrafficHostPorts = TrafficPorts & {
+  setFreeDrivers(drivers: FreeDrivers | null): void;
+  makeLights(): LightsArt;
 };
 
 /** What the open world needs of the engine. */
@@ -40,6 +56,8 @@ type OpenWorldPorts = {
   /** Calls `listener` for every solid a car meets (closing speed, contact point) until the returned function is called. */
   hookWallHits(listener: (closing: number, x: number, z: number) => void): () => void;
   makeArt(capacity: number): CrowdArt;
+  /** The cars and lights of the open world; a harness without them has a crowd and no traffic. */
+  traffic?: TrafficHostPorts;
 };
 
 /**
@@ -52,6 +70,8 @@ export class OpenWorldDirector {
   private crowd: CivilianCrowd | null = null;
   private art: CrowdArt | null = null;
   private unhook: (() => void) | null = null;
+  private traffic: OpenWorldTraffic | null = null;
+  private lights: LightsArt | null = null;
   private crowdKey = 0;
   /** The host's (or solo player's) crowd clock: the sim's seconds since the crowd was made. */
   private seconds = 0;
@@ -110,6 +130,7 @@ export class OpenWorldDirector {
     this.seconds += dt;
     this.crowd.step(this.seconds, this.ports.cars(), true);
     this.throwStruck(this.crowd);
+    this.traffic?.step(this.seconds, dt);
   }
 
   /** A frame: the crowd is made, rebuilt on a new seed or dropped as the course comes and goes; a client steps it by the host's clock; the crowd is drawn and the look-at text kept up. */
@@ -129,6 +150,7 @@ export class OpenWorldDirector {
     }
     this.ports.eye(this.ray);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ);
+    this.lights?.update(crowd.crowdSeconds);
     this.lookAcc += wallDt;
     if (this.lookAcc >= 1 / LOOK_HZ) {
       this.lookAcc = 0;
@@ -140,6 +162,7 @@ export class OpenWorldDirector {
   stop(): void {
     if (this.crowd === null) return;
     this.unhook?.();
+    this.stopTraffic();
     this.art?.dispose();
     this.crowd.dispose();
     this.unhook = null;
@@ -163,6 +186,26 @@ export class OpenWorldDirector {
     const crowd = this.crowd;
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
     if (client) crowd.hear(this.heardEvents);
+    this.startTraffic(map, client);
+  }
+
+  /** The lights are drawn on every peer; the cars are the host's and the solo player's. */
+  private startTraffic(map: OpenWorldMap, client: boolean): void {
+    const host = this.ports.traffic;
+    if (host === undefined) return;
+    this.lights = host.makeLights();
+    if (client) return;
+    const phone = this.ports.tier() === POPULATION_TIER.phone;
+    this.traffic = new OpenWorldTraffic(map.places, host, new ProximitySight(host), phone ? { movers: MOVER_CARS.phone, kerb: KERB_CARS.phone } : { movers: MOVER_CARS.desktop, kerb: KERB_CARS.desktop }, null);
+    host.setFreeDrivers(this.traffic);
+  }
+
+  private stopTraffic(): void {
+    this.ports.traffic?.setFreeDrivers(null);
+    this.traffic?.dispose();
+    this.traffic = null;
+    this.lights?.dispose();
+    this.lights = null;
   }
 
   private throwStruck(crowd: CivilianCrowd): void {

@@ -39,6 +39,12 @@ import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
+import { TrafficLightArt } from "../present/traffic-lights.ts";
+import { layOnGround } from "../vehicle/car-air-points.ts";
+import { LAYOUT } from "../world/openworld/openworld-constants.ts";
+import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
+import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
 import { CivilianArt } from "../present/civilian-art.ts";
 import { NEAR_SLOTS } from "../present/civilian-art-constants.ts";
 import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
@@ -401,7 +407,46 @@ export class CrashEngine extends EngineGarage {
         this.queueWarm();
         return art;
       },
+      traffic: {
+        cars: () => this.live(),
+        ensureCars: (count) => this.ensureCars(count),
+        seated: (id) => id === this.race.self || this.netSeats.has(id),
+        place: (car, x, z, yaw) => this.standTrafficCar(car, x, z, yaw),
+        putAway: (car, id) => this.storeTrafficCar(car, id),
+        setFreeDrivers: (drivers) => {
+          this.race.freeDrivers = drivers;
+        },
+        makeLights: () => {
+          const lights = new TrafficLightArt(buildRoadNetwork(openWorldGeometry(LAYOUT)));
+          this.scene.add(lights.group);
+          this.queueWarm();
+          return {
+            update: (seconds) => lights.update(seconds),
+            dispose: () => {
+              this.scene.remove(lights.group);
+              lights.dispose();
+            },
+          };
+        },
+      },
     });
+  }
+
+  /** The open world's traffic car stood on its street space: repaired, at rest, on the ground there, drawn and simulated. */
+  private standTrafficCar(car: DeformableCar, x: number, z: number, yaw: number): void {
+    car.stored = false;
+    car.group.visible = true;
+    car.spawnFacing(x, z, yaw, 0);
+    car.group.position.y = activeGround().heightAt(x, z, 0.5);
+    layOnGround(car);
+    this.dressCar(car);
+  }
+
+  /** The open world's traffic car put away far off the course: hidden, still, and not simulated (`EPICENTER.storedSkip`). */
+  private storeTrafficCar(car: DeformableCar, id: number): void {
+    car.stored = true;
+    car.group.visible = false;
+    car.spawnFacing(STORE_AT.x + id * STORE_AT.step, STORE_AT.z, 0, 0);
   }
 
   /** The map the open world's crowd lives on (the open world's builder line calls it once). */
