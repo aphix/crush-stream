@@ -113,6 +113,14 @@ nothing past 120 m. Draw calls do not grow with the crowd.
 - **Shop signs** (always on, `present/openworld-shop-signs.ts`): every business inside the walls (`isBusiness`: a building that is not a home) gets a sign with its `Place.name` and a line of what it sells, by its `style` then its `sector` (a trade the table does not know gets a colour from its name and its sector as the line). All signs are cells of one atlas texture (96 px a metre, rows of up to 2048 px) drawn by one mesh: one draw call. `shopSignRect(place)` is where the sign hangs: a 1 m band from 2.9 m up on the place's street face, 0.1 m proud of it, centred on its door, no wider than 10.6 m; a shopfront's own sign-band geometry can take `ShopSigns.texture` and `uvRect(placeIndex)` instead of the panels.
 - **Names** (the Track debug button, `Debug views > Track`): while it is on, every named place inside the walls prints its name over its door on its front face: a home's under the 3.6 m ground storey's top, a business's over its sign band, a place with no front (park, alley, yard, bus stop) at head height over its door point, written on both sides. Two places that share a door (a house and its roof deck) stack. The names are quads from one glyph atlas drawn in the track debug's label style (`drawOutlinedText`), inked by the kind of place, in 64 m chunks: a chunk is one draw call, hidden while past 120 m from the eye or, when a sight field is given, unseen. They are built the first time the button is on and cost nothing while it is off. Presentation only: nothing here reaches the sim or the wire.
 
+## Seen and unseen (`SightField`)
+
+`OpenWorldDirector.sight` (`present/openworld-sight.ts`, updated at the top of each frame) answers one question for everything that draws or streams: does a local eye see this? `seen(x, z, radius)` is true when the thing's column (the radius, 2 m tall, on flat ground) is inside some eye's view frustum and at least one of the lines from that eye to its top (through its middle and both sides across the view) clears every building box of the course (`hidingSight` of the course's solids: boxes 2.5 m or taller; the line's height against the roof counts, so a camera above sees over a block). A box an endpoint stands in never blocks that line. The boxes sit in a 16 m grid and each query walks the cells under its lines: no allocation, no per-id state.
+
+The field also keeps a clock per id for those that want it: `claim(count)` hands out a private range, `observe(id, x, z, radius)` is `seen` plus the stamp, `unseenFor(id)` the seconds since it was last seen, and `HIDE_GRACE` (3 s) is the grace after which a consumer phases the thing out and releases what it holds. `near(x, z, radius)` is the host's keep-alive: a player's car within reach. Netplay: each peer culls only what it draws; the host never stops simulating something because `seen` is false, only when it is also not `near` a player. `sight.enabled = false` makes everything seen (the A/B arm with no culling).
+
+**Cars** (`present/openworld-car-lod.ts`, driven by `engine/engine-openworld-cull.ts`): the distance detail runs three rungs nearer than the match ladder's while the open world is up (a desktop cuts small parts at 20 m and all but the body at 40 m), and a car no eye has seen for `HIDE_GRACE`, no player's car is within 40 m of and the camera does not follow is taken off the draw (`group.visible`, which the wheel, lamp, part and driver batches honour), and drawn again the frame it is seen. It never touches a car it did not hide, and lets go of all of them while a reel replay plays or the open world ends.
+
 ## Where it lives
 
 | Piece | File |
@@ -124,6 +132,7 @@ nothing past 120 m. Draw calls do not grow with the crowd.
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
 | Signs: shop signs, names on the buildings | `present/openworld-shop-signs.ts`, `openworld-signs.ts` (the label style from `track-debug.ts`) |
 | Map and course | `world/openworld/` |
+| What is seen, the cars' detail and phase-out | `present/openworld-sight.ts`, `present/openworld-car-lod.ts`, `engine/engine-openworld-cull.ts` |
 
 The director is made with the engine; the crowd is made on the first frame the open world's course is up and a map is known
 (`CrashEngine.startOpenWorld(map)`), rebuilt when the key changes (a new seed, a host's other tier) and dropped, with its drawing, its

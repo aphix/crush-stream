@@ -19,6 +19,7 @@ import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { OFF_MENU } from "../world/tracks/index.ts";
 import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { idleCullPorts } from "./openworld-cull-ports.test-util.ts";
 
 const WALL_REACH = 8;
 const SEED = 0x1234;
@@ -64,6 +65,7 @@ function room() {
       makeArt: () => ({ update: () => {}, dispose: () => {} }),
       signsOn: () => false,
       makeSigns: () => ({ update: () => {}, dispose: () => {} }),
+      cull: idleCullPorts(),
     });
     director.startOpenWorld(map);
     return { director, thrown, car };

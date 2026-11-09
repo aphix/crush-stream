@@ -5,7 +5,7 @@ import type { SightField } from "./openworld-sight.ts";
 
 const LOOK_STEP = 0x9e3779b1;
 /** A sight field that sees everyone, and the length of the frame (s) the art is told passed. */
-export const IN_SIGHT: SightField = { seen: () => true };
+export const IN_SIGHT: Pick<SightField, "seen"> = { seen: () => true };
 export const FRAME_SECONDS = 1 / 60;
 
 /** A crowd of `count` shown civilians at the origin, standing still, each in its own look. */

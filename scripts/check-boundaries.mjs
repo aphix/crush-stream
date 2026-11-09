@@ -93,6 +93,9 @@ const HOT = {
   "src/game/present/openworld-signs.ts": ["update"],
   "src/game/present/civilian-pose.ts": ["poseCivilian", "poseLimb", "placePart", "setSwung"],
   "src/game/present/civilian-dress.ts": ["dressOfLook", "writeLinearColour", "scrambleLook", "fieldOf"],
+  "src/game/present/openworld-sight.ts": ["update", "readEye", "seen", "observe", "unseenFor", "reset", "near", "inFrustum", "hiddenFrom", "rayBlocked", "blocks", "narrow", "columnOf", "rowOf"],
+  "src/game/present/openworld-car-lod.ts": ["frame", "judge", "showAll"],
+  "src/game/engine/engine-openworld-cull.ts": ["frame"],
 };
 const KNOB_CONTEXTS = new Set(["kernel", "world", "deform", "vehicle", "contact", "scenes", "ai"]);
 const MAX_FILE_LINES = 800;

@@ -76,7 +76,7 @@ export class CivilianArt {
   }
 
   /** Draw the crowd as seen from (`eyeX`, `eyeZ`) by the players `sight` stands for, `wallDt` s after the last frame: once a frame, after the crowd's step. */
-  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: SightField, wallDt: number): void {
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: Pick<SightField, "seen">, wallDt: number): void {
     const count = Math.min(poses.count, this.capacity);
     this.stamp = (this.stamp + 1) | 0;
     this.eyeX = eyeX;
@@ -101,7 +101,7 @@ export class CivilianArt {
   }
 
   /** Every shown civilian within `FAR_DRAW` is asked of the sight field; one unseen for `HIDE_GRACE` seconds is not drawn, and one out of range must be seen again to come back. */
-  private refreshSight(poses: CrowdPoses, count: number, sight: SightField, wallDt: number): void {
+  private refreshSight(poses: CrowdPoses, count: number, sight: Pick<SightField, "seen">, wallDt: number): void {
     for (let civilian = 0; civilian < count; civilian++) {
       const dx = poses.x[civilian]! - this.eyeX;
       const dz = poses.z[civilian]! - this.eyeZ;

@@ -4,6 +4,7 @@ import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import type { Place } from "../world/openworld/walk-graph.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { idleCullPorts } from "./openworld-cull-ports.test-util.ts";
 
 const map = buildFixtureMap();
 const FRAME = 1 / FRAME_HZ;
@@ -22,6 +23,7 @@ class Harness {
     seed: () => 5,
     tier: () => POPULATION_TIER.phone,
     cars: () => [],
+    foot: () => false,
     now: () => 100,
     eye: (ray) => {
       ray.eyeX = EYE_X;
@@ -37,6 +39,7 @@ class Harness {
         dispose: () => void this.disposed++,
       };
     },
+    cull: idleCullPorts(),
   });
 
   constructor() {
