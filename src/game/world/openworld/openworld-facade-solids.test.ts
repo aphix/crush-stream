@@ -4,8 +4,11 @@ import { PREFAB } from "../constants.ts";
 import { NO_FLOOR } from "../ground.ts";
 import { propColliders } from "../placements.ts";
 import { flightHeightAt, flightsOf } from "../stairs.ts";
+import { planBlocks } from "./openworld-blocks.ts";
 import { FACING } from "./openworld-constants.ts";
 import { BAY, DOOR, facadeSolidProps, facadeSolidsOf, HOME_HEIGHT, HOME_LEVELS, homeDoorPoint, homeFrontages, LOT_WIDTH, STOOP, stoopStepRange, type Frontage } from "./openworld-facade-solids.ts";
+import { ROWHOME_FLOOR_Y } from "./interior-kinds.ts";
+import { interiorDoor } from "./interior-plan.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { HOME_STYLES } from "./openworld-programme.ts";
 import { PLACE_KIND } from "./walk-graph.ts";
@@ -14,9 +17,8 @@ const lots = layOutLots();
 const playable = lots.places.slice(0, lots.backdropStart);
 const homes = playable.filter((place) => place.kind === PLACE_KIND.home);
 const frontages = homeFrontages(playable);
+const lotPlans = planBlocks(lots.geometry).playable.flatMap((plan) => plan.lots);
 
-/** The interior's floor and the door sill stand this high over the sidewalk (m): the interior kit's number. */
-const INTERIOR_FLOOR_Y = 0.9;
 /** The tallest riser and the least tread (m) a walker takes as a step. */
 const WALKER_RISE_MAX = 0.22;
 const WALKER_TREAD_MIN = 0.28;
@@ -25,6 +27,10 @@ const DOOR_HOLE_HALF_WIDTH = 0.5;
 const DOOR_HOLE_ACROSS = 1.8;
 /** A bay projects 0.6 to 0.9 m over the sidewalk (m). */
 const BAY_OUT_RANGE = [0.6, 0.9] as const;
+/** The door the kit and the interior name may differ by no more than this (m). */
+const DOOR_MATCH = 1e-6;
+/** Lots per face the door comparison must have covered. */
+const DOORS_PER_FACE_MIN = 50;
 /** Boxes per rowhome the course may hold. */
 const SOLIDS_PER_HOME_MAX = 3;
 const EPSILON = 1e-9;
@@ -61,7 +67,7 @@ describe("given the rowhomes of the open world's layout", () => {
     expect(Math.max(...homes.map((place) => Math.abs(place.width - LOT_WIDTH))), "widest miss of a home's width to the lot width (m)").toBeLessThan(EPSILON);
   });
 
-  // mutation: sed -i 's/doorX: door.x, doorZ: door.z, yaw: lot.yaw, x: lot.x/doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x/' src/game/world/openworld/openworld-lots.ts
+  // mutation: sed -i 's/  const door = interiorDoor(place.interior, place.width, place.depth, place.x, place.z, place.yaw);/  const door = { x: place.doorX, z: place.doorZ };/' src/game/world/openworld/openworld-lots.ts
   it("when each home's door point is read against its stoop, then the door stands 1.8 m across the lot, on the stoop's landing between its cheeks", () => {
     const misses = homes.filter((place, at) => {
       const { out, across } = against(frontages[at]!, place.doorX, place.doorZ);
@@ -81,14 +87,32 @@ describe("given the rowhomes of the open world's layout", () => {
     }
     expect(DOOR.across, "door across (u)").toBe(DOOR_HOLE_ACROSS);
   });
+
+  // mutation: sed -i 's/const ROWHOME_DOOR_OFFSET = 1.8;/const ROWHOME_DOOR_OFFSET = 1.9;/' src/game/world/openworld/interior-kinds.ts
+  it("when the door the facade kit stands at and the door the rowhome interior gives are compared for the lots of each face, then they are the same point", () => {
+    const compared = { north: 0, south: 0 };
+    const apart: string[] = [];
+    for (const lot of lotPlans) {
+      const middleZ = (lot.house.z0 + lot.house.z1) / 2;
+      const home = homes.find((place) => Math.abs(place.x - lot.x) < DOOR_MATCH && Math.abs(place.z - middleZ) < DOOR_MATCH);
+      if (home === undefined) continue;
+      const kit = homeDoorPoint(lot.x, lot.frontZ, lot.yaw);
+      const interior = interiorDoor("rowhome", home.width, home.depth, home.x, home.z, home.yaw);
+      compared[lot.face]++;
+      if (Math.abs(kit.x - interior.x) > DOOR_MATCH || Math.abs(kit.z - interior.z) > DOOR_MATCH) apart.push(`${home.name} (${lot.face}): kit ${kit.x.toFixed(3)}, ${kit.z.toFixed(3)} interior ${interior.x.toFixed(3)}, ${interior.z.toFixed(3)}`);
+    }
+    expect(compared.north, "north-face lots compared").toBeGreaterThanOrEqual(DOORS_PER_FACE_MIN);
+    expect(compared.south, "south-face lots compared").toBeGreaterThanOrEqual(DOORS_PER_FACE_MIN);
+    expect(apart.slice(0, 3).join("; "), "doors the kit and the interior place apart").toBe("");
+  });
 });
 
 describe("given one rowhome's stoop", () => {
-  // mutation: sed -i 's/const STOOP_STEPS = 5;/const STOOP_STEPS = 4;/' src/game/world/openworld/openworld-facade-solids.ts
-  it("when its top step is read, then it meets the interior's floor at the door sill", () => {
-    expect(stoopStepRange(STOOP.steps).top, "top step (m)").toBeCloseTo(INTERIOR_FLOOR_Y, 9);
-    expect(STOOP.sill, "stoop sill (m)").toBeCloseTo(INTERIOR_FLOOR_Y, 9);
-    expect(DOOR.sill, "door sill (m)").toBeCloseTo(INTERIOR_FLOOR_Y, 9);
+  // mutation: sed -i 's/const STOOP_STEPS = 5;/const STOOP_STEPS = 4;/' src/game/world/openworld/openworld-facade-solids.ts (or sed -i 's/export const ROWHOME_FLOOR_Y = 0.9;/export const ROWHOME_FLOOR_Y = 0.95;/' src/game/world/openworld/interior-kinds.ts)
+  it("when its top step is read, then it meets the rowhome interior's floor at the door sill", () => {
+    expect(stoopStepRange(STOOP.steps).top, "top step (m)").toBeCloseTo(ROWHOME_FLOOR_Y, 9);
+    expect(STOOP.sill, "stoop sill (m)").toBeCloseTo(ROWHOME_FLOOR_Y, 9);
+    expect(DOOR.sill, "door sill (m)").toBeCloseTo(ROWHOME_FLOOR_Y, 9);
   });
 
   // mutation: sed -i 's/const STOOP_TREAD = 0.28;/const STOOP_TREAD = 0.2;/' src/game/world/openworld/openworld-facade-solids.ts
