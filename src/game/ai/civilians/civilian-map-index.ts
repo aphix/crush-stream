@@ -1,9 +1,8 @@
 import { PLACE_KIND, type OpenWorldMap } from "../../world/openworld/walk-graph.ts";
-import { PLACE_HOURS } from "./civilian-cast.ts";
-import { AREA_PER_JOB, BLOCK_COLUMNS, BLOCK_COUNT, BLOCK_ROWS, CLOSED_HOURS_WEIGHT, HOURS_PER_GAME_DAY, MAX_JOBS, MIN_JOBS, NORTH_IS_LOW_Z, WORKPLACE_KINDS } from "./civilian-constants.ts";
+import { AREA_PER_JOB, BLOCK_COLUMNS, BLOCK_COUNT, BLOCK_ROWS, MAX_JOBS, MIN_JOBS, NORTH_IS_LOW_Z, WORKPLACE_KINDS } from "./civilian-constants.ts";
 import { KIND_COUNT } from "./civilian-names.ts";
 
-/** What the map says that never changes, for the places inside the walls (nobody lives, works or goes beyond them): places by kind, their spots, blocks, who each can employ, opening hours, the way out. */
+/** What the map says that never changes, for the places inside the walls (nobody lives, works or goes beyond them): places by kind, their spots, blocks, who each can employ, the way out. */
 export type MapIndex = {
   placeCount: number;
   nodeCount: number;
@@ -19,8 +18,6 @@ export type MapIndex = {
   byKind: readonly Int32Array[];
   workplaces: Int32Array;
   jobCapacity: Uint16Array;
-  /** `HOURS_PER_GAME_DAY` weights per place: how much its hours favour a visit. */
-  hourWeight: Float32Array;
   /** Bus stops at a portal of the map: a visitor who goes there leaves the neighbourhood. */
   exitStops: Int32Array;
   placeByName: ReadonlyMap<string, number>;
@@ -38,19 +35,6 @@ function listWhere(count: number, keep: (place: number) => boolean): Int32Array 
   const found: number[] = [];
   for (let place = 0; place < count; place++) if (keep(place)) found.push(place);
   return Int32Array.from(found);
-}
-
-function openingWeights(placeCount: number, placeByName: ReadonlyMap<string, number>): Float32Array {
-  const weights = new Float32Array(placeCount * HOURS_PER_GAME_DAY).fill(1);
-  for (const { place, from, to } of PLACE_HOURS) {
-    const index = placeByName.get(place);
-    if (index === undefined) continue;
-    for (let hour = 0; hour < HOURS_PER_GAME_DAY; hour++) {
-      const open = from <= to ? hour >= from && hour < to : hour >= from || hour < to;
-      weights[index * HOURS_PER_GAME_DAY + hour] = open ? 1 : CLOSED_HOURS_WEIGHT;
-    }
-  }
-  return weights;
 }
 
 export function buildMapIndex(map: OpenWorldMap): MapIndex {
@@ -86,7 +70,6 @@ export function buildMapIndex(map: OpenWorldMap): MapIndex {
     byKind: Array.from({ length: KIND_COUNT }, (_, kind) => listWhere(placeCount, (place) => kindOf[place] === kind && doorNode[place]! >= 0)),
     workplaces: listWhere(placeCount, (place) => jobCapacity[place]! > 0),
     jobCapacity,
-    hourWeight: openingWeights(placeCount, placeByName),
     exitStops: listWhere(placeCount, (place) => kindOf[place] === PLACE_KIND.transit && portalNodes.has(doorNode[place]!)),
     placeByName,
   };

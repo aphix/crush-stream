@@ -107,25 +107,25 @@ function witnessAll(state: CityState, place: number, tick: number, partyA: numbe
   }
 }
 
-/** The criminal at the crime place, at the tick the host's crime event lands: wanted for a game day, a line in their log. Nothing happens unless they are there with a crime purpose and no crime open. */
-export function applyCrime(state: CityState, criminal: number, tick: number): void {
+/** The criminal at the crime place, when the host's crime event lands: wanted for a game day from the tick it happened (so a peer that hears late writes the same row), a line in their log. Nothing happens unless they are there with a crime purpose and no crime open. */
+export function applyCrime(state: CityState, criminal: number, seconds: number, tick: number): void {
   const base = criminal * RESIDENT_INT_STRIDE;
   const { ints } = state;
   const kind = crimeKindOf(ints[base + RESIDENT_INT.legPurpose]!);
   if (ints[base + RESIDENT_INT.alive] === 0 || kind === CRIME_KIND.none || ints[base + RESIDENT_INT.crimeTick] !== NEVER_TICK) return;
   if ((ints[base + RESIDENT_INT.flags]! & (FLAG.wanted | FLAG.custody | FLAG.hurt)) !== 0 || !isDwelling(state, criminal, tick)) return;
   const place = ints[base + RESIDENT_INT.place]!;
-  ints[base + RESIDENT_INT.crimeTick] = tick;
+  const happened = tickAt(seconds);
+  ints[base + RESIDENT_INT.crimeTick] = happened;
   ints[base + RESIDENT_INT.crimeKind] = kind;
   ints[base + RESIDENT_INT.crimePlace] = place;
   ints[base + RESIDENT_INT.flags] |= FLAG.wanted;
-  ints[base + RESIDENT_INT.wantedUntilTick] = tick + WANTED_TICKS;
-  ints[base + RESIDENT_INT.crimeNotBefore] = tick + CRIME_COOLDOWN_TICKS;
-  ints[base + RESIDENT_INT.nextDecisionTick] = tick + 1;
+  ints[base + RESIDENT_INT.wantedUntilTick] = happened + WANTED_TICKS;
+  ints[base + RESIDENT_INT.crimeNotBefore] = happened + CRIME_COOLDOWN_TICKS;
   const victim = ints[base + RESIDENT_INT.crimeVictim]!;
-  if (kind === CRIME_KIND.theft) noteEvent(state, criminal, EVENT_CODE.shoplifted, place, tick);
-  else if (kind === CRIME_KIND.breakIn) noteEvent(state, criminal, EVENT_CODE.brokeIntoCar, place, tick);
-  else noteEvent(state, criminal, EVENT_CODE.muggedSomeone, victim >= 0 ? residentName(state, victim) : NO_PLACE, tick);
+  if (kind === CRIME_KIND.theft) noteEvent(state, criminal, EVENT_CODE.shoplifted, place, happened);
+  else if (kind === CRIME_KIND.breakIn) noteEvent(state, criminal, EVENT_CODE.brokeIntoCar, place, happened);
+  else noteEvent(state, criminal, EVENT_CODE.muggedSomeone, victim >= 0 ? residentName(state, victim) : NO_PLACE, happened);
 }
 
 /** Everyone else's side of a crime, `EVENT_LEAD_TICKS` after it: the corner is feared, the shop's staff, the car's owner or the mugged are angry or afraid, and witnesses react. */
@@ -216,7 +216,7 @@ export function applyKnockWitness(state: CityState, knocked: number, seconds: nu
 }
 
 /** A bust: the wanted (or fighting) resident is taken off the street for `JAIL_TICKS`, then home; crime and fight state clear. Anyone else is left alone and un-hidden. */
-export function applyBust(state: CityState, resident: number, seconds: number, tick: number): void {
+export function applyBust(state: CityState, resident: number, seconds: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   const { ints } = state;
   const arrestable = (ints[base + RESIDENT_INT.flags]! & FLAG.wanted) !== 0 || ints[base + RESIDENT_INT.fightTick] !== NEVER_TICK;
@@ -228,7 +228,7 @@ export function applyBust(state: CityState, resident: number, seconds: number, t
   const struck = tickAt(seconds);
   const home = ints[base + RESIDENT_INT.home]!;
   const was = ints[base + RESIDENT_INT.place]!;
-  evolveNeeds(state.floats, resident * RESIDENT_FLOAT_STRIDE, ints[base + RESIDENT_INT.departTick]!, ints[base + RESIDENT_INT.arriveTick]!, tick, state.index.kindOf[was]!, state.scratchNeeds);
+  evolveNeeds(state.floats, resident * RESIDENT_FLOAT_STRIDE, ints[base + RESIDENT_INT.departTick]!, ints[base + RESIDENT_INT.arriveTick]!, struck, state.index.kindOf[was]!, state.scratchNeeds);
   releaseSeat(state, resident);
   ints[base + RESIDENT_INT.fromPlace] = home;
   ints[base + RESIDENT_INT.place] = home;
@@ -238,7 +238,7 @@ export function applyBust(state: CityState, resident: number, seconds: number, t
   ints[base + RESIDENT_INT.legPurpose] = NEED.rest;
   ints[base + RESIDENT_INT.legReason] = NEED.rest;
   ints[base + RESIDENT_INT.companion] = NO_PLACE;
-  ints[base + RESIDENT_INT.nextDecisionTick] = Math.max(struck + JAIL_TICKS, tick + 1);
+  ints[base + RESIDENT_INT.nextDecisionTick] = struck + JAIL_TICKS;
   ints[base + RESIDENT_INT.flags] = (ints[base + RESIDENT_INT.flags]! | FLAG.custody) & ~FLAG.wanted;
   ints[base + RESIDENT_INT.wantedUntilTick] = 0;
   ints[base + RESIDENT_INT.crimeTick] = NEVER_TICK;

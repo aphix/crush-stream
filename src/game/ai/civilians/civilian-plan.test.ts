@@ -48,7 +48,7 @@ describe("given a resident at home whose needs are set and a decision comes due 
     dwellingWithNeeds(state, resident, intAt(state, resident, RESIDENT_INT.home), tick, needsOf(NEED.food));
     decideResident(state, resident, tick);
     expect(map.places[intAt(state, resident, RESIDENT_INT.place)]!.kind, "kind of the place they head for").toBe(PLACE_KIND.food);
-    expect(intAt(state, resident, RESIDENT_INT.legPurpose), "what the walk is for").toBe(NEED.food);
+    expect(intAt(state, resident, RESIDENT_INT.legReason), "what the walk (or drive, for a car owner) is for").toBe(NEED.food);
     expect(intAt(state, resident, RESIDENT_INT.pathCount), "nodes on the walk").toBeGreaterThan(1);
   });
 
@@ -69,7 +69,7 @@ describe("given a resident at home whose needs are set and a decision comes due 
     dwellingWithNeeds(state, resident, intAt(state, resident, RESIDENT_INT.home), tick, needsOf(NEED.work));
     decideResident(state, resident, tick);
     expect(intAt(state, resident, RESIDENT_INT.place), "place they head for").toBe(intAt(state, resident, RESIDENT_INT.work));
-    expect(intAt(state, resident, RESIDENT_INT.legPurpose), "what the walk is for").toBe(NEED.work);
+    expect(intAt(state, resident, RESIDENT_INT.legReason), "what the walk (or drive, for a car owner) is for").toBe(NEED.work);
   });
 
   it("when nothing is pressing, then they stay where they are", () => {
@@ -105,8 +105,10 @@ describe("given a resident with company on their mind whose home is by the court
     expect(headsOutAt(evening, 16), "place they head for at 16:00").toBe(park);
   });
 
-  it("when it is nine at night and the court is empty, then they stay in", () => {
-    expect(headsOutAt(evening, 21), "place they are at after deciding at 21:00").toBe(nextDoor);
+  it("when it is nine at night and the court is empty, then they do not go to the court: they stay in, or go where it is open, the bar", () => {
+    const bar = placeNamed(map, PLACE_NAMES.bar);
+    expect([nextDoor, bar], "place they are at after deciding at 21:00").toContain(headsOutAt(evening, 21));
+    expect(headsOutAt(evening, 21), "place they are at after deciding at 21:00").not.toBe(park);
   });
 });
 

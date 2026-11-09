@@ -161,7 +161,6 @@ export const PURPOSE_LABELS = [
   "driving",
   "a coffee",
   "a drink",
-  "the shopping",
   "sitting out on the stoop",
   "a chat with a neighbour",
   "a row with a neighbour",
@@ -196,7 +195,6 @@ export const PURPOSE_LOG_TEXT = [
   "drove to",
   "went for a coffee at",
   "went for a drink at",
-  "went shopping at",
   "sat out on the stoop at",
   "stopped to chat at",
   "went to have it out at",
@@ -209,7 +207,7 @@ export const PURPOSE_LOG_TEXT = [
   "got into a fight outside",
 ] as const;
 /** The mood a story's walk leaves, or -1 for none (needs: -1). */
-export const PURPOSE_MOODS = [-1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, MOOD.hungry, MOOD.worried, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.busy, MOOD.happy, -1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, -1, MOOD.busy, MOOD.afraid, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.angry] as const;
+export const PURPOSE_MOODS = [-1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, MOOD.hungry, MOOD.worried, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.busy, MOOD.happy, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, -1, MOOD.busy, MOOD.afraid, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.angry] as const;
 
 /** The mood an event leaves (-1 for none), and for how long it holds (a wrecked stoop angers a family for days). */
 export function moodOfCode(code: number): number {

@@ -14,7 +14,7 @@ const SLOT_STEP_X = 30;
 const SLOT_STEP_Z = 14;
 const STREET_COLUMNS = STREET_X.length;
 
-type PlaceSpec = { name: string; kind: PlaceKind; block: string; sector: string; width?: number; depth?: number };
+export type PlaceSpec = { name: string; kind: PlaceKind; block: string; sector: string; width?: number; depth?: number };
 
 /** The blocks' places: every place the cast's stories name, a bodega, shops, eateries, homes, and two drawn-only places beyond the walls. */
 const NAMED_PLACES: readonly PlaceSpec[] = [
@@ -125,10 +125,10 @@ function toWalkGraph(layout: Layout): WalkGraph {
   };
 }
 
-function placeSpecs(extraHomes: number): PlaceSpec[] {
+function placeSpecs(extraHomes: number, extraSpecs: readonly PlaceSpec[]): PlaceSpec[] {
   const specs: PlaceSpec[] = [...NAMED_PLACES, { name: PLACE_NAMES.busStop, kind: PLACE_KIND.transit, block: "B1", sector: "Transport" }];
   for (const block of BLOCKS) for (let count = 0; count < extraHomes; count++) specs.push({ name: `Rowhome ${block}-${count + 1}`, kind: PLACE_KIND.home, block, sector: "" });
-  return specs;
+  return [...specs, ...extraSpecs];
 }
 
 function placeAt(spec: PlaceSpec, doorNode: number, layout: Layout, spot: { x: number; z: number }): Place {
@@ -137,14 +137,14 @@ function placeAt(spec: PlaceSpec, doorNode: number, layout: Layout, spot: { x: n
 
 /**
  * A small hand-built neighbourhood: sixteen street corners in a four by four lattice (crossings on the middle ring), a door spur for every place inside the walls, the places the cast needs by name in their blocks,
- * `extraHomes` plain rowhomes per block on top, a bus stop on the third street's west end as the only portal, and two places beyond the walls with no door on the graph.
+ * `extraHomes` plain rowhomes per block on top (then `extraSpecs`, which take the slots after them), a bus stop on the third street's west end as the only portal, and two places beyond the walls with no door on the graph.
  */
-export function buildFixtureMap(extraHomes = 2): OpenWorldMap {
+export function buildFixtureMap(extraHomes = 2, extraSpecs: readonly PlaceSpec[] = []): OpenWorldMap {
   const layout = streetLattice();
   const slotsUsed = new Map<string, number>();
   const places: Place[] = [];
   const portals: number[] = [];
-  for (const spec of placeSpecs(extraHomes)) {
+  for (const spec of placeSpecs(extraHomes, extraSpecs)) {
     const blockIndex = BLOCKS.indexOf(spec.block);
     const slot = slotsUsed.get(spec.block) ?? 0;
     slotsUsed.set(spec.block, slot + 1);
