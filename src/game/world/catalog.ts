@@ -346,6 +346,8 @@ export const PARKED_CARS = [
 ] as const;
 /** The prefab ids of `PARKED_CARS`. */
 export const PARKED_PREFABS: ReadonlySet<PrefabId> = new Set<PrefabId>(PARKED_CARS.map((c) => c.prefab));
+/** The generic asset prefabs drawn flat on the ground (paint, paving): their size's y is a scale of 1, not a height, so they stand up as nothing. */
+export const GROUND_PAINT_PREFABS: ReadonlySet<PrefabId> = new Set<PrefabId>([PREFAB.assetDecal, PREFAB.assetTile]);
 /** The Carhenge (m): `pairs` pairs of car shells stood on their noses round a circle of radius `ring`, the two of a pair `gap` apart (their middles), a shell laid across each pair's tops. */
 export const CARHENGE = { ring: 8.5, pairs: 5, gap: 2.6 } as const;
 /** Its plan's reach (m) from the middle: an upright's outer corner. */

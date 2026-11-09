@@ -3,7 +3,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { PartSeat } from "../vehicle/part-geometry.ts";
 import { NO_FLOOR, type Ground } from "../world/ground.ts";
-import { PREFABS } from "../world/catalog.ts";
+import { GROUND_PAINT_PREFABS, PREFABS } from "../world/catalog.ts";
 import { propColliders, type Placed } from "../world/placements.ts";
 import { blankPoint, blankProjection, pointOn, projectPath, type Track, type TrackPath } from "../world/track.ts";
 import { projectGrid, roadGrid, type RoadGrid } from "./road-grid.ts";
@@ -119,7 +119,7 @@ const raceSights = new WeakMap<Track, Sight>();
 
 /**
  * The course's solids at their drawn size (the props' collider pieces, the start gantry's legs, bridge pillars); cached per track.
- * A round prop keeps 0.45 m at least, for a lamp's head and arm or a trunk's bark. A prop with no collider (the gantry) is its size box.
+ * A round prop keeps 0.45 m at least, for a lamp's head and arm or a trunk's bark. A prop with no collider (the gantry) is its size box, but paint on the ground (a crossing, a manhole) is no solid at all.
  */
 export function raceSight(track: Track, placed: readonly Placed[]): Sight {
   const hit = raceSights.get(track);
@@ -130,7 +130,7 @@ export function raceSight(track: Track, placed: readonly Placed[]): Sight {
   });
   for (const p of placed) {
     const spec = PREFABS[p.prefab];
-    if (spec.collider.length === 0) occ.push(occluder(p.x, p.z, p.yaw, (spec.size[0] * p.sx) / 2, (spec.size[2] * p.sz) / 2, false, p.y, p.y + spec.size[1] * p.sy));
+    if (spec.collider.length === 0 && !GROUND_PAINT_PREFABS.has(p.prefab)) occ.push(occluder(p.x, p.z, p.yaw, (spec.size[0] * p.sx) / 2, (spec.size[2] * p.sz) / 2, false, p.y, p.y + spec.size[1] * p.sy));
   }
   // Start gantry legs (art only, `TrackArt`): just past each side's wall line.
   const path = track.path;
