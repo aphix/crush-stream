@@ -29,7 +29,7 @@ import { facadeSolidProps } from "./openworld-facade-solids.ts";
 import { QUARTER_TURN } from "./openworld-fabric-constants.ts";
 import { fabricProps } from "./openworld-fabric.ts";
 import { interiorEnvelopeProps } from "./openworld-interior-solids.ts";
-import type { BlockRef, Geometry, Lots } from "./openworld-layout.ts";
+import type { Geometry, Lots } from "./openworld-layout.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
 import { lampStations, sidePoint, sidesOf, treeStations, type BlockSide } from "./openworld-sides.ts";
 
