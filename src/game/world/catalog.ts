@@ -5,6 +5,8 @@
 import { hypot2, detSin, detCos } from "../kernel/physics-core.js";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { PREFAB, SURFACE } from "./constants.ts";
+import { PLAZA_REACH, PLAZA_TOP, plazaBricks } from "./openworld/openworld-plaza.ts";
+import { STREET_KIT } from "./street-kit.ts";
 import { brickCollider, bricksTop, CAPITOL, CAPITOL_POOL, CAPITOL_TOP, capitolPlan, capitolPool, FLAGPOLE, flagpolePlan, GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT, type Brick, type Collider } from "./landmarks.ts";
 
 export const SURFACE_IDS = [SURFACE.asphalt, SURFACE.concrete, SURFACE.cobble, SURFACE.dirt, SURFACE.gravel, SURFACE.grass, SURFACE.sand, SURFACE.mud] as const;
@@ -114,6 +116,11 @@ export const PREFAB_IDS = [
   PREFAB.busShelter,
   PREFAB.busStopSign,
   PREFAB.streetSign,
+  PREFAB.bollard,
+  PREFAB.cellarDoor,
+  PREFAB.hoopFence,
+  PREFAB.pavilion,
+  PREFAB.plaza,
 ] as const;
 export type PrefabId = (typeof PREFAB_IDS)[number];
 
@@ -409,35 +416,6 @@ function smokestackPlan(): Collider[] {
 
 /** The Carhenge's top (m): an upright's length, then the shell across it. */
 const CARHENGE_TOP = WRECK.long + WRECK.tall;
-
-/**
- * The open world's street kit (`present/prefabs-street.ts` draws each): the box (m) each stands in, along its front (x, toward the street), up, and across (z, along the curb).
- * A shelter and a café set are shallow enough for the 1.2 m furniture strip; a bike rack holds one bicycle.
- */
-export const STREET_KIT = {
-  bench: [0.6, 0.9, 1.6],
-  bikeRack: [0.8, 1.15, 1.8],
-  litterBin: [0.52, 0.95, 0.52],
-  parkingMeter: [0.24, 1.4, 0.24],
-  hydrant: [0.46, 0.8, 0.46],
-  cafeSet: [1.1, 2.25, 1.7],
-  busShelter: [1.1, 2.6, 4.4],
-  busStopSign: [0.4, 2.7, 0.4],
-  streetSign: [0.95, 3, 0.95],
-} as const satisfies Record<string, readonly [number, number, number]>;
-
-/** A street sign's placement names its two streets in its `style`: the one its blade along x shows, then the one along z. */
-const STREET_SIGN_SEPARATOR = "|";
-
-export function streetSignStyle(alongX: string, alongZ: string): string {
-  return `${alongX}${STREET_SIGN_SEPARATOR}${alongZ}`;
-}
-
-/** The two street names a street sign's `style` carries (along x, along z), null when it names no two. */
-export function streetSignNames(style: string | undefined): readonly [string, string] | null {
-  const names = style?.split(STREET_SIGN_SEPARATOR) ?? [];
-  return names.length === 2 && names[0]! !== "" && names[1]! !== "" ? [names[0]!, names[1]!] : null;
-}
 
 type PrefabSpec = {
   /**
@@ -785,4 +763,10 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.busShelter]: kitSpec(STREET_KIT.busShelter, MAT.GANTRY_STEEL),
   [PREFAB.busStopSign]: kitSpec(STREET_KIT.busStopSign, MAT.SIGN_BOARD),
   [PREFAB.streetSign]: kitSpec(STREET_KIT.streetSign, MAT.SIGN_BOARD),
+  [PREFAB.bollard]: kitSpec(STREET_KIT.bollard, MAT.LAMP_POLE),
+  [PREFAB.cellarDoor]: kitSpec(STREET_KIT.cellarDoor, MAT.DUMPSTER_STEEL),
+  [PREFAB.hoopFence]: kitSpec(STREET_KIT.hoopFence, MAT.BRACKET_STEEL),
+  [PREFAB.pavilion]: kitSpec(STREET_KIT.pavilion, MAT.GANTRY_STEEL),
+  // The park's plaza: its bricks are its colliders, so a car meets the bench rings and the statue as drawn.
+  [PREFAB.plaza]: { body: "solid", collider: plazaBricks().map(brickCollider), foot: PLAZA_REACH, size: [2 * PLAZA_REACH, PLAZA_TOP, 2 * PLAZA_REACH], mass: 0, material: MAT.MARBLE },
 };

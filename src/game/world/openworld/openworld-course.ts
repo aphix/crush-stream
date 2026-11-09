@@ -31,6 +31,7 @@ import { fabricProps } from "./openworld-fabric.ts";
 import { interiorEnvelopeProps } from "./openworld-interior-solids.ts";
 import type { Geometry, Lots } from "./openworld-layout.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
+import { parkPaint, parkProps } from "./openworld-park.ts";
 import { lampStations, sidePoint, sidesOf, treeStations, type BlockSide } from "./openworld-sides.ts";
 
 export { OPENWORLD_ID };
@@ -142,7 +143,7 @@ function streetProps(lots: Lots): Prop[] {
   return props;
 }
 
-function paintOf(lots: Lots): NonNullable<TrackInput["environment"]>["paint"] {
+function paintOf(lots: Lots): NonNullable<NonNullable<TrackInput["environment"]>["paint"]> {
   return lots.areas.map((area) => ({
     surface: area.surface,
     poly: [
@@ -166,7 +167,7 @@ function spawnOf(geometry: Geometry): NonNullable<TrackInput["survival"]> {
   return { start: { x: startX, z, yaw: QUARTER_TURN }, formation };
 }
 
-/** The open world as a course (`TrackSchema` input): the perimeter street as the road loop, the interior streets as car-free routes, a building per lot, lamps and trees, the street fabric (crossings, manholes, hydrants, furniture) and an invisible wall round the play area. */
+/** The open world as a course (`TrackSchema` input): the perimeter street as the road loop, the interior streets as car-free routes, a building per lot, lamps and trees, the street fabric (crossings, manholes, hydrants, furniture), the park's dressing and an invisible wall round the play area. */
 export function openWorldCourse(lots: Lots): TrackInput {
   const geometry = lots.geometry;
   const nodes = loopNodes(geometry);
@@ -178,7 +179,7 @@ export function openWorldCourse(lots: Lots): TrackInput {
     road: { width: geometry.carriageway, surface: SURFACE.asphalt, runoff: [0, 0], runoffSurface: SURFACE.concrete, wall: [false, false], raceMarks: false },
     nodes,
     checkpoints: Array.from({ length: LOOP_CHECKPOINTS }, (_, index) => ({ node: Math.floor((index * nodes.length) / LOOP_CHECKPOINTS) })),
-    props: [...buildingProps(lots), ...streetProps(lots), ...fabricProps(lots, buildOpenWorldMap(lots).graph), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots)],
+    props: [...buildingProps(lots), ...streetProps(lots), ...fabricProps(lots, buildOpenWorldMap(lots).graph), ...parkProps(lots), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots)],
     scenery: { biome: BIOME.city, off: ["frontage", "verge", "islands"], roadDecals: [] },
     traffic: { count: 0, lanes: [], routes: streetRoutes(geometry) },
     survival: spawnOf(geometry),
@@ -187,7 +188,7 @@ export function openWorldCourse(lots: Lots): TrackInput {
       fog: COURSE_LOOK.fog,
       terrain: SURFACE.concrete,
       far: COURSE_LOOK.far,
-      paint: paintOf(lots),
+      paint: [...parkPaint(lots), ...paintOf(lots)],
       light: { sun: COURSE_LOOK.sun, sunIntensity: COURSE_LOOK.sunIntensity, hemi: COURSE_LOOK.hemi, fill: COURSE_LOOK.fill },
     },
   };

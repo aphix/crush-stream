@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { detCos, detSin } from "../kernel/physics-core.js";
-import { streetSignNames } from "../world/catalog.ts";
+import { streetSignNames } from "../world/street-kit.ts";
 import { PREFAB } from "../world/constants.ts";
 import type { Placed } from "../world/placements.ts";
 import { WHITE } from "./openworld-shop-signs.ts";

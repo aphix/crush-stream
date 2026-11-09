@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { detCos, detSin } from "../../kernel/physics-core.js";
 import { assertSameDigest } from "../../vehicle/test-support.ts";
-import { streetSignNames } from "../catalog.ts";
+import { PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
 import { SCENERY_ASSETS } from "../scenery-assets/index.ts";
+import { streetSignNames } from "../street-kit.ts";
 import { facadeSolidProps } from "./openworld-facade-solids.ts";
-import { ASSET, FRONTAGE_KITS, FURNITURE_GAP, KIT_SLIDE, LAMP_CLEARANCE, PIECE, QUARTER_TURN, SHELTER_WALL, TREE_CROWN_CLEARANCE, type FurniturePiece } from "./openworld-fabric-constants.ts";
+import { ASSET, BOLLARD_SPOTS, CELLAR, FRONTAGE_KITS, FURNITURE_GAP, KIT_SLIDE, LAMP_CLEARANCE, PIECE, QUARTER_TURN, SHELTER_WALL, TREE_CROWN_CLEARANCE, type FurniturePiece } from "./openworld-fabric-constants.ts";
 import { fabricProps } from "./openworld-fabric.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { STREETS_X, STREETS_Z } from "./openworld-programme.ts";
@@ -19,9 +20,10 @@ const geometry = lots.geometry;
 const faces = allFaces(lots);
 /** What a furniture prop is: its asset where it names one, else its prefab. */
 const keyOf = (prop: { prefab: string; asset?: string }): string => prop.asset ?? prop.prefab;
-/** The street furniture: every kit piece and the street signs. */
+/** The street furniture: every kit piece and the street signs, on the sidewalks (the park's benches and bins stand inside its block). */
 const FURNITURE: readonly string[] = [...Object.values(PIECE).map(keyOf), PREFAB.streetSign];
-const kit = course.props.filter((prop) => FURNITURE.includes(keyOf(prop)));
+const insideABlock = (x: number, z: number): boolean => lots.blocks.some((block) => Math.abs(x - block.centreX) < geometry.blockLength / 2 && Math.abs(z - block.centreZ) < geometry.blockDepth / 2);
+const kit = course.props.filter((prop) => FURNITURE.includes(keyOf(prop)) && !insideABlock(prop.x, prop.z));
 
 /** A decal is on a crossing leg's line within this (m). */
 const ON_LINE = 0.01;
@@ -235,13 +237,71 @@ describe("given the street furniture's drawing", () => {
   });
 });
 
+describe("given the block corners without a street sign", () => {
+  const bollards = course.props.filter((prop) => prop.prefab === PREFAB.bollard);
+  const drains = course.props.filter((prop) => prop.asset === ASSET.drain);
+  const legs = crossingLegs();
+  /** A bollard's radius and a walker's shoulder room (m): the most a bollard may near a crossing's line. */
+  const BOLLARD_CLEAR = 0.6;
+  /** Corners of the playable blocks that are no loop corner, half of them signed. */
+  const unsigned = lots.blocks.length * 2 - 2;
+
+  // mutation: sed -i 's/  \[3.3, 2.2\],/  [3.3, 1.6],/' src/game/world/openworld/openworld-fabric-constants.ts
+  it("when the corners are read, then three bollards stand round each one's curb on the sidewalk, clear of the crossings' landings", () => {
+    expect(bollards.length, "bollards").toBe(unsigned * BOLLARD_SPOTS.length);
+    for (const bollard of bollards) {
+      expect(roadDepth(track, bollard.x, bollard.z), `the bollard at ${bollard.x.toFixed(1)}, ${bollard.z.toFixed(1)} off the road (m)`).toBeLessThan(-PREFABS[PREFAB.bollard].size[0] / 2);
+      expect(Math.min(...legs.map((leg) => distanceToLeg(bollard.x, bollard.z, leg))), `the bollard at ${bollard.x.toFixed(1)}, ${bollard.z.toFixed(1)} from a crossing's line (m)`).toBeGreaterThan(BOLLARD_CLEAR);
+    }
+  });
+
+  // mutation: sed -i 's/geometry.sidewalk + DRAIN_PAST_CURB/geometry.sidewalk - DRAIN_PAST_CURB/' src/game/world/openworld/openworld-fabric.ts
+  it("when the corners' drains are read, then one lies in the gutter at each, every corner of it on the road", () => {
+    expect(drains.length, "drains").toBe(unsigned);
+    for (const drain of drains) for (const [x, z] of cornersOf(drain)) expect(roadDepth(track, x, z), `drain at ${drain.x.toFixed(1)}, ${drain.z.toFixed(1)}: depth into the road (m)`).toBeGreaterThan(0);
+  });
+});
+
+describe("given the cellar doors before the rowhomes", () => {
+  const doors = course.props.filter((prop) => prop.prefab === PREFAB.cellarDoor);
+  const boxes = facadeSolidProps(lots);
+  const homes = lots.links.filter((link) => link.side !== null && link.place < lots.backdropStart && lots.places[link.place]!.kind === PLACE_KIND.home).length;
+  /** The share of homes with cellar doors may wander this far from the seeded share over a city's few hundred homes. */
+  const SHARE_SLACK = 0.1;
+
+  // mutation: sed -i 's/export const CELLAR = { share: 0.3, along: 2, fromLine: 0.05 } as const;/export const CELLAR = { share: 0.3, along: 0.4, fromLine: 0.05 } as const;/' src/game/world/openworld/openworld-fabric-constants.ts
+  it("when the doors are read, then about the seeded share of homes has one, each on the sidewalk just past the property line, clear of every stoop and bay", () => {
+    expect(doors.length / homes, "share of homes with cellar doors").toBeGreaterThan(CELLAR.share - SHARE_SLACK);
+    expect(doors.length / homes, "share of homes with cellar doors").toBeLessThan(CELLAR.share + SHARE_SLACK);
+    const inside = doors.filter((door) =>
+      cornersOf(door).some(([x, z]) =>
+        boxes.some((box) => {
+          const dx = x - box.x;
+          const dz = z - box.z;
+          return Math.abs(dx * detCos(box.yaw) - dz * detSin(box.yaw)) <= box.size[0] / 2 && Math.abs(dx * detSin(box.yaw) + dz * detCos(box.yaw)) <= box.size[2] / 2;
+        }),
+      ),
+    );
+    expect(inside.slice(0, 3).map((door) => `${door.x.toFixed(2)}, ${door.z.toFixed(2)}`).join("; "), "cellar doors in a stoop or bay").toBe("");
+    for (const door of doors) {
+      // Each corner against the face it is nearest across, among the faces whose length it lies along.
+      const out = cornersOf(door).map(([x, z]) => {
+        const along = faces.filter((side) => Math.abs(onFace(side, x, z).along - (side.start + side.length / 2)) <= side.length / 2);
+        return along.map((side) => onFace(side, x, z).out).reduce((best, value) => (Math.abs(value) < Math.abs(best) ? value : best), Infinity);
+      });
+      expect(Math.min(...out), `the door at ${door.x.toFixed(1)}, ${door.z.toFixed(1)}: nearest corner past the property line (m)`).toBeGreaterThanOrEqual(0);
+      expect(Math.max(...out), `the door at ${door.x.toFixed(1)}, ${door.z.toFixed(1)}: farthest corner past the property line (m)`).toBeLessThan(geometry.sidewalkFrontage + geometry.sidewalkClear);
+    }
+  });
+});
+
 describe("given the paint on the roads", () => {
   const paint = everything.filter((prop) => (prop.prefab === PREFAB.assetDecal || prop.prefab === PREFAB.assetTile) && roadDepth(track, prop.x, prop.z) > 0);
 
   // mutation: sed -i 's/, roadDecals: \[\] }/, roadDecals: ["arrow"] }/' src/game/world/openworld/openworld-course.ts
-  it("when every decal and tile the course places or draws on a road is read, then it is a manhole cover or a marked crossing", () => {
+  it("when every decal and tile the course places or draws on a road is read, then it is a manhole cover, a marked crossing or a storm drain", () => {
     const ids = new Set(paint.map((prop) => SCENERY_ASSETS[prop.asset!]!.id));
-    expect([...ids].sort().join(", "), "assets painted on the roads").toBe([ASSET.crosswalk, ASSET.manhole].sort().join(", "));
+    expect([...ids].sort().join(", "), "assets painted on the roads").toBe([ASSET.crosswalk, ASSET.drain, ASSET.manhole].sort().join(", "));
   });
 });
 

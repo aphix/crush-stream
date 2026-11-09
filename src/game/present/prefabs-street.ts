@@ -2,7 +2,9 @@ import type * as THREE from "three";
 import { MAT } from "../kernel/material-ids.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
+import { plazaBricks } from "../world/openworld/openworld-plaza.ts";
 import { box, cyl, painted, type Piece, type PrefabMaterials, type PrefabPart } from "./prefab-pieces.ts";
+import { monumentPieces } from "./prefabs-mall.ts";
 
 /**
  * The open world's street kit (`STREET_KIT`): each piece in a few boxes and cylinders, vertex coloured on the plain material, its front (+x) toward the street. Origin at the foot's middle.
@@ -33,12 +35,21 @@ const KIT_COLOUR = {
   stopBlue: 0x2a59a8,
   signPole: 0x1e3a2b,
   signBlade: 0x1f56a6,
+  bollard: 0x4a3426,
+  cellarFrame: 0xa8a39a,
+  cellarLeaf: 0x3d4045,
+  fence: 0x1b1c1a,
+  pavilionRoof: 0x2f5b45,
+  pavilionPost: 0xe8e2d0,
+  pavilionFloor: 0x9c968c,
 } as const;
 
 /** Sides of a round piece: a hydrant or a bin reads round at street level from 12 to 16, a thin post from 8. */
 const ROUND = 14;
 const THIN = 8;
 const WHEEL = 16;
+/** Sides of the pavilion's floor and roof: an octagon, as the square's is. */
+const PAVILION_SIDES = 8;
 
 /** The street sign's blades (m): one along x over one along z, each this long, tall and thick, at these heights on a pole this tall; `street-name-blades.ts` prints on their faces. */
 export const STREET_SIGN = { bladeLength: 0.9, bladeHeight: 0.18, bladeThickness: 0.025, alongXHeight: 2.78, alongZHeight: 2.56, poleHeight: 2.9 } as const;
@@ -159,6 +170,47 @@ function streetSign(): Piece[] {
   ];
 }
 
+/** Philadelphia's brown cast-iron corner bollard: a post, a collar and a domed cap. */
+function bollard(): Piece[] {
+  return [
+    [cyl(0.11, 0.12, 0, 0.82, THIN), KIT_COLOUR.bollard, MAT.LAMP_POLE],
+    [cyl(0.14, 0.14, 0.62, 0.68, THIN), KIT_COLOUR.bollard, MAT.LAMP_POLE],
+    [cyl(0.04, 0.12, 0.82, 0.95, THIN), KIT_COLOUR.bollard, MAT.LAMP_POLE],
+  ];
+}
+
+/** A basement's steel doors in the sidewalk: two leaves on a concrete curb a hand high, hinged along the curb's sides. */
+function cellarDoor(): Piece[] {
+  return [
+    [box(1, 0.1, 1.1, 0, 0.05, 0), KIT_COLOUR.cellarFrame, MAT.JERSEY_CONCRETE],
+    [box(0.9, 0.04, 0.48, 0, 0.12, -0.26), KIT_COLOUR.cellarLeaf, MAT.DUMPSTER_STEEL],
+    [box(0.9, 0.04, 0.48, 0, 0.12, 0.26), KIT_COLOUR.cellarLeaf, MAT.DUMPSTER_STEEL],
+    [box(0.06, 0.04, 0.2, 0.3, 0.16, 0), KIT_COLOUR.cellarLeaf, MAT.DUMPSTER_STEEL],
+  ];
+}
+
+/** A run of low hoop fence along a path (4 m along z): a post at each end and the middle, a rail at the top and one low. */
+function hoopFence(): Piece[] {
+  const pieces: Piece[] = [];
+  for (const z of [-1.97, 0, 1.97]) pieces.push([box(0.04, 0.45, 0.04, 0, 0.225, z), KIT_COLOUR.fence, MAT.BRACKET_STEEL]);
+  for (const y of [0.12, 0.4]) pieces.push([box(0.025, 0.025, 4, 0, y, 0), KIT_COLOUR.fence, MAT.BRACKET_STEEL]);
+  return pieces;
+}
+
+/** The square's little pavilion: an octagonal floor, eight posts and a green octagonal roof with a finial. */
+function pavilion(): Piece[] {
+  const pieces: Piece[] = [
+    [cyl(2.6, 2.6, 0, 0.25, PAVILION_SIDES), KIT_COLOUR.pavilionFloor, MAT.JERSEY_CONCRETE],
+    [cyl(0.1, 2.9, 2.85, 3.85, PAVILION_SIDES), KIT_COLOUR.pavilionRoof, MAT.GANTRY_STEEL],
+    [cyl(0.03, 0.08, 3.85, 4.1, THIN), KIT_COLOUR.pavilionRoof, MAT.GANTRY_STEEL],
+  ];
+  for (let post = 0; post < PAVILION_SIDES; post++) {
+    const angle = ((post + 0.5) * 2 * Math.PI) / PAVILION_SIDES;
+    pieces.push([box(0.12, 2.6, 0.12, 2.35 * Math.cos(angle), 1.55, 2.35 * Math.sin(angle)), KIT_COLOUR.pavilionPost, MAT.GANTRY_STEEL]);
+  }
+  return pieces;
+}
+
 const KIT_PIECES: Partial<Record<PrefabId, () => Piece[]>> = {
   [PREFAB.bench]: bench,
   [PREFAB.bikeRack]: bikeRack,
@@ -169,6 +221,11 @@ const KIT_PIECES: Partial<Record<PrefabId, () => Piece[]>> = {
   [PREFAB.busShelter]: busShelter,
   [PREFAB.busStopSign]: busStopSign,
   [PREFAB.streetSign]: streetSign,
+  [PREFAB.bollard]: bollard,
+  [PREFAB.cellarDoor]: cellarDoor,
+  [PREFAB.hoopFence]: hoopFence,
+  [PREFAB.pavilion]: pavilion,
+  [PREFAB.plaza]: () => monumentPieces(plazaBricks()),
 };
 
 /** A street kit piece as one part on the plain material. */

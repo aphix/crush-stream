@@ -87,6 +87,8 @@ const KIND_TOL: Partial<Record<PrefabId, number>> = {
   "grant-memorial": 0.01,
   "peace-monument": 0.01,
   "garfield-monument": 0.01,
+  // Bricks drawn and bounded alike.
+  plaza: 0.01,
   // The pole's 12 sides inside its circle; the canton standing proud of the stripes.
   flagpole: 0.01,
   // The 64-sided plinth's flats inside its circle (0.0198 measured).
