@@ -40,11 +40,13 @@ import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { CivilianArt } from "../present/civilian-art.ts";
+import { FacadeBays } from "../present/facade-bays.ts";
 import { NEAR_SLOTS } from "../present/civilian-art-constants.ts";
 import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
 import { buildOpenWorldMap } from "../world/openworld/openworld-map.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
+import { homeFrontages } from "../world/openworld/openworld-facade-solids.ts";
 import type { LookAtHud } from "../hud/hud-store.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
 import { ownLook } from "../present/driver-look.ts";
@@ -394,6 +396,12 @@ export class CrashEngine extends EngineGarage {
         return () => {
           this.race.onWallHit = recorded;
         };
+      },
+      makeFacades: (map) => {
+        const kit = new FacadeBays(homeFrontages(map.places.filter((place) => place.doorNode >= 0)));
+        this.scene.add(kit.group);
+        this.queueWarm();
+        return kit;
       },
       makeArt: (capacity) => {
         const art = new CivilianArt(this.deviceClass === "desktop" ? NEAR_SLOTS.desktop : NEAR_SLOTS.phone, capacity);

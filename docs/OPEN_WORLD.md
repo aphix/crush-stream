@@ -118,6 +118,13 @@ The course lays the street's own paint and furniture as props that name scenery 
 
 Not here yet: trees in pits, utility poles, curb ramps.
 
+## Rowhome facade kit
+
+Every home inside the walls is dressed from its `Place` (`homeFrontages`): a point on the building's drawn front face at the lot's middle, which is the door's line. Four instanced meshes (`FacadeBays`: bay, stoop, railing, cornice; four draws whatever the number of houses, painted textures made in code) draw
+a canted bay stack over the door (hood at the door's head, then every floor's apron, window and belt band on one footprint, 0.75 m out, a capped roof slab), a stoop of five 0.18 m risers whose landing (0.9 m) is the door sill, iron railings on its cheeks, half-basement windows either side and a bracketed roofline cornice;
+panels and cornice take the house's accent from `HOUSE_ACCENTS`, windows light at night from the facades' `FACADE_GLOW`. The facade art of a home carries no bay, stoop, railing or cornice of its own: this kit covers the door's column above the door, the stoop and the roofline band.
+What a car or a walker meets is `facadeSolidProps(lots)`, appended to the course's props as invisible-wall boxes: a prism per step (base on the ground, tops 0.18 to 0.9, no overhang) and a flank prism either side of the stoop under the bay (the stack overhangs the stoop itself).
+
 ## Where it lives
 
 | Piece | File |
@@ -127,6 +134,7 @@ Not here yet: trees in pits, utility poles, curb ramps.
 | The look-at | `ai/civilians/civilian-look.ts` |
 | The engine's end: crowd, link, look-at, wall hook | `engine/engine-openworld.ts` (`OpenWorldDirector`, held by `CrashEngine`) |
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
+| Rowhome facade kit | `present/facade-bays.ts`, `facade-bay-parts.ts`, `facade-kit-atlas.ts`; plan and colliders `world/openworld/openworld-facade-solids.ts` |
 | Map and course | `world/openworld/` |
 | Street fabric (crossings, manholes, hydrants, furniture) | `world/openworld/openworld-fabric.ts`, `openworld-fabric-constants.ts`, `openworld-sides.ts` |
 

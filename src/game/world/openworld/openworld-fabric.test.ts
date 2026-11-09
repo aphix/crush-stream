@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { detCos, detSin } from "../../kernel/physics-core.js";
 import { assertSameDigest } from "../../vehicle/test-support.ts";
 import { PREFAB } from "../constants.ts";
+import { facadeSolidProps } from "./openworld-facade-solids.ts";
 import { ASSET, FRONTAGE_KITS, FURNITURE_GAP, KIT_SLIDE, LAMP_CLEARANCE, QUARTER_TURN, TREE_CROWN_CLEARANCE } from "./openworld-fabric-constants.ts";
 import { fabricProps } from "./openworld-fabric.ts";
 import { allFaces, assetIndex, cornersOf, fabricCourse, inStrip, onFace, roadDepth } from "./openworld-fabric.test-util.ts";
@@ -157,6 +159,25 @@ describe("given the hydrants, the businesses' frontages and the bus stop", () =>
       expect(shelter.length, `bus shelters at ${place.name}`).toBe(items.some((item) => item.asset === ASSET.busShelter) ? 1 : 0);
     }
     expect(businesses, "businesses read").toBeGreaterThan(20);
+  });
+});
+
+describe("given the facade kit's solid boxes (stoop steps, bay flanks)", () => {
+  const boxes = facadeSolidProps(lots);
+
+  // mutation: sed -i 's/const NEAR_CURB = 0.3;/const NEAR_CURB = 2.8;/' src/game/world/openworld/openworld-fabric-constants.ts
+  it("when the boxes are read, then no piece of furniture has a footprint corner inside one", () => {
+    const inside = kit.filter((prop) =>
+      cornersOf(prop).some(([x, z]) =>
+        boxes.some((box) => {
+          const dx = x - box.x;
+          const dz = z - box.z;
+          return Math.abs(dx * detCos(box.yaw) - dz * detSin(box.yaw)) <= box.size[0] / 2 && Math.abs(dx * detSin(box.yaw) + dz * detCos(box.yaw)) <= box.size[2] / 2;
+        }),
+      ),
+    );
+    expect(boxes.length, "boxes read").toBeGreaterThan(100);
+    expect(inside.slice(0, 3).map((prop) => `${prop.asset} at ${prop.x.toFixed(2)}, ${prop.z.toFixed(2)}`).join("; "), "pieces inside a box").toBe("");
   });
 });
 
