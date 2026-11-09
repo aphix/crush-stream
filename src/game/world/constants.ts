@@ -87,6 +87,9 @@ export const PREFAB = {
   streetSign: "street-sign",
 } as const;
 
+/** The building prefab's roofline (m at its own 14 m height): the cornice's top, the roof slab's underside. */
+export const ROOFLINE = 13.5;
+
 /** The word for a town: the campaign course's id and the scenery service's biome of streets and sidewalks. */
 const CITY = "city";
 

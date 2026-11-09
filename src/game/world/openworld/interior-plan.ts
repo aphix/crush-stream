@@ -1,17 +1,29 @@
-import { ceilingOver, Draft, footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
+import { Draft, footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
+import { roomPlaceOf, roomWindows } from "./facade-windows.ts";
 import { layoutBar, layoutCoffee, layoutOffice, layoutRowhome, layoutStore } from "./interior-layouts.ts";
-import { BAY_WIDTH, FURNISHING, PARTITION, SHELL_WALL, SHOPFRONT, STOOP_SEAT_HEIGHT, STOOP_SEAT_OUT, STOOP_SEAT_SPREAD, STREET_SKIN, TURN, type Box, type Furnishing, type InteriorPlan, type Opening, type Turn } from "./interior-kinds.ts";
+import { BAY_WIDTH, ceilingOver, FURNISHING, OPENING, PARTITION, SHELL_WALL, SHOPFRONT, STOOP_SEAT_HEIGHT, STOOP_SEAT_OUT, STOOP_SEAT_SPREAD, STREET_SKIN, TURN, type Box, type Furnishing, type InteriorPlan, type Opening, type Turn } from "./interior-kinds.ts";
 import { drawnHalf } from "./openworld-facade-solids.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
 
 const LAYOUTS = { rowhome: layoutRowhome, coffee: layoutCoffee, bar: layoutBar, office: layoutOffice, store: layoutStore } as const satisfies Record<InteriorKind, (draft: Draft) => void>;
 
+/** What a plan is made from: the place's interior, its facade (the style's windows, and which sides are open) and its footprint (m). */
+type PlanPlace = Pick<Place, "interior" | "style" | "width" | "depth" | "openSides">;
+
+/** Places with this key have the same plan: share it. */
+export function planKey(place: PlanPlace): string {
+  return `${place.interior}:${place.style}:${place.width}:${place.depth}:${place.openSides ?? 0}`;
+}
+
 /**
- * The plan of an interior for a building prop of footprint `width` x `depth` (m): pure, the same for every peer. It is laid inside the prop's drawn walls (`drawnHalf`), a skin short of them on every
- * side, so no wall of it stands in front of the facade's own picture.
+ * The plan of a place's interior: pure, the same for every peer. It is laid inside the building prop's drawn walls (`drawnHalf`), a skin short of them on every side, so no wall of it stands in
+ * front of the facade's own picture, and it opens onto every window that picture shows (`roomWindows`).
  */
-export function planInterior(kind: InteriorKind, width: number, depth: number): InteriorPlan {
-  const draft = new Draft(kind, 2 * (drawnHalf(width) - STREET_SKIN), 2 * drawnHalf(depth));
+export function planInterior(place: PlanPlace): InteriorPlan {
+  const roomPlace = roomPlaceOf(place);
+  if (roomPlace === null) throw new Error("this place has no interior");
+  const kind = roomPlace.interior;
+  const draft = new Draft(kind, 2 * (drawnHalf(place.width) - STREET_SKIN), 2 * drawnHalf(place.depth), roomWindows(roomPlace));
   draft.floor(0);
   draft.roof();
   for (let level = 0; level < draft.floors.length; level++) draft.envelope(level);
@@ -72,9 +84,8 @@ class Frame {
   }
 }
 
-function planOf(place: Pick<Place, "interior" | "width" | "depth">): InteriorPlan {
-  if (place.interior === undefined) throw new Error("this place has no interior");
-  return planInterior(place.interior, place.width, place.depth);
+function planOf(place: PlanPlace): InteriorPlan {
+  return planInterior(place);
 }
 
 /** Every solid of the place's interior in world metres: wall runs beside each opening, slabs with their stairwells, stair treads and the furniture that blocks. */
@@ -110,7 +121,7 @@ export function interiorSpots(place: Place, plan: InteriorPlan = planOf(place)):
   const frame = new Frame(place);
   const rows: number[][] = [];
   const stoopSeats = place.interior === "rowhome" ? 2 : 0;
-  const doorAcross = SHOPFRONT[plan.kind].find((opening) => opening.door)!.centre;
+  const doorAcross = SHOPFRONT[plan.kind][0]!.centre;
   for (let at = 0; at < stoopSeats; at++) {
     const across = doorAcross + (at === 0 ? -1 : 1) * STOOP_SEAT_SPREAD;
     rows.push([frame.x(-STOOP_SEAT_OUT, across), frame.z(-STOOP_SEAT_OUT, across), frame.yaw(TURN.front), STOOP_SEAT_HEIGHT]);
@@ -165,7 +176,7 @@ export function interiorEnvelope(place: Place): EnvelopeColumn[] {
     if (wall.level !== 0 || !wall.shell) continue;
     const street = wall.axis === "across" && wall.fixed < plan.depth / 2;
     const across = wall.axis === "across" ? { from: -place.width / 2, to: place.width / 2 } : {};
-    const doorways = { ...wall, ...across, openings: street ? wall.openings.filter((opening) => opening.sill === 0) : [] };
+    const doorways = { ...wall, ...across, openings: street ? wall.openings.filter((opening) => opening.kind === OPENING.door) : [] };
     for (const box of wallBoxes(doorways, 0, 1)) {
       const { x0, z0, x1, z1 } = frame.solid(box);
       columns.push({ x0, z0, x1, z1 });
@@ -180,7 +191,7 @@ export function interiorDoor(kind: InteriorKind, width: number, depth: number, x
   const frame = new Frame({ x, z, yaw, depth });
   let across = Infinity;
   for (let bay = 0; bay < bays; bay++) {
-    for (const opening of SHOPFRONT[kind]) if (opening.door) across = Math.min(across, opening.centre + (bay - (bays - 1) / 2) * BAY_WIDTH);
+    for (const opening of SHOPFRONT[kind]) across = Math.min(across, opening.centre + (bay - (bays - 1) / 2) * BAY_WIDTH);
   }
   return { x: frame.x(0, across), z: frame.z(0, across) };
 }
@@ -230,7 +241,7 @@ function doorways(plan: InteriorPlan): { opening: Opening; face: DoorLeaf["face"
   for (const wall of plan.walls) {
     if (wall.level !== 0 || !wall.shell || wall.axis !== "across") continue;
     const face = wall.fixed < plan.depth / 2 ? DOOR_FACE.street : DOOR_FACE.back;
-    for (const opening of wall.openings) if (opening.sill === 0) out.push({ opening, face });
+    for (const opening of wall.openings) if (opening.kind === OPENING.door) out.push({ opening, face });
   }
   return out.sort((a, b) => b.face - a.face);
 }

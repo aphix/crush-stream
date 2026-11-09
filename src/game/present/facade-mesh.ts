@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
-import { FACADE_LAYERS, type FacadeStyle, LAYER, ROOF_LAYER, ROOF_TILE_M, ROOFLINE } from "./facades.ts";
+import { ROOFLINE } from "../world/constants.ts";
+import { faceBands, isOpenStyle } from "../world/openworld/facade-windows.ts";
+import { FACADE_LAYERS, type FacadeStyle, LAYER, ROOF_LAYER, ROOF_TILE_M } from "./facades.ts";
 import { box, type Piece, type SurfaceRegion } from "./prefab-pieces.ts";
 
 /**
@@ -28,10 +30,11 @@ const STREET_FACE = 1;
 /** A vertical band of a face: its height range (m), the layer it reads and the layer's v range over it. */
 type Band = { y0: number; y1: number; layer: number; v0: number; v1: number; relief: number };
 
-/** The bands of a face from the ground up: a strip below the ground, the shopfront (the street face), the storeys, the cornice. */
-function bands(style: FacadeStyle, street: boolean): Band[] {
+/** The bands of a face from the ground up: a strip below the ground, the shopfront (the street face), the storeys, the cornice. An open world style with an interior draws every face on the window table's bands, and its side faces in as many bays as they hold. */
+function bands(style: FacadeStyle, street: boolean, table: ReturnType<typeof faceBands> | null): Band[] {
   const { cornice, floor, ground } = FACADE_LAYERS[style].metres;
   const relief = street ? 1 : SIDE_RELIEF;
+  if (table !== null) return [{ y0: -UNDER, y1: 0, layer: street ? LAYER.ground : LAYER.floor, v0: 0, v1: 0, relief }, ...table.bands.map((band): Band => ({ ...band, relief }))];
   const bottom = street ? ground : 0;
   const top = ROOFLINE - cornice;
   const storeys = Math.max(1, Math.round((top - bottom) / floor));
@@ -55,12 +58,13 @@ function face(style: FacadeStyle, wall: MaterialId, index: number, slab: boolean
   const street = slab || index === STREET_FACE;
   const stones = spec.layers > LAYER.quoin;
   const inner = stones ? 2 * HALF - 2 * QUOIN_W : 2 * HALF;
-  const bays = Math.max(1, Math.round(inner / ((2 * HALF) / spec.bays)));
+  const table = !slab && isOpenStyle(style) ? faceBands(style, index) : null;
+  const bays = table?.bays ?? Math.max(1, Math.round(inner / ((2 * HALF) / spec.bays)));
   const bay = inner / bays;
   const turn = (g: THREE.BufferGeometry): THREE.BufferGeometry => g.rotateY((index * Math.PI) / 2);
   const region = (layer: number, relief: number): SurfaceRegion => [layer, relief, slab ? 1 : 0];
   const out: Piece[] = [];
-  for (const band of bands(style, street)) {
+  for (const band of bands(style, street, table)) {
     const cornice = band.layer === LAYER.cornice;
     // The cornice runs the whole width (the stones stop under it); the rest between the stones.
     const x0 = cornice || !stones ? -HALF : -inner / 2;

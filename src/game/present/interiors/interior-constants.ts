@@ -17,3 +17,5 @@ export const DOOR_SWING_SECONDS = 0.6;
 export const DOOR_RANGE = SHELL_NEAR;
 /** The player's walker within this of a street door (m) is given the vestibule's floor and walls while the room behind is not built: a stoop's run and a step. */
 export const VESTIBULE_REACH = 3;
+/** How much of the light a window's glass lets through (opacity of the pane drawn). */
+export const GLASS_OPACITY = 0.22;

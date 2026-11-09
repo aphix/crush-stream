@@ -1,5 +1,5 @@
 import type { Draft } from "./interior-draft.ts";
-import { FURNISHING, PARTITION, TURN, type Opening, type Rect } from "./interior-kinds.ts";
+import { FURNISHING, OPENING, PARTITION, TURN, type Opening, type Rect } from "./interior-kinds.ts";
 
 /*
  * Positions are plan metres: `deep` from the street wall inward, `across` from the centre line. A piece's `facing` is the way its front points; a seat faces that way.
@@ -10,7 +10,11 @@ const { front: toStreet, right: toRight, back: toBack, left: toLeft } = TURN;
 const DINING_TABLE_LENGTH = 1.6;
 
 /** An interior doorway: 2.1 m high, `width` wide. */
-const doorway = (centre: number, width = 0.9): Opening => ({ centre, width, sill: 0, top: 2.1 });
+const doorway = (centre: number, width = 0.9): Opening => ({ centre, width, sill: 0, top: 2.1, kind: OPENING.door });
+
+/** The parlour's seating group stands this far in (m), off the hall and the bay's alcove, and its plant stands this much further. */
+const PARLOUR_SEATING = 2.8;
+const PARLOUR_PLANT_STEP = 1.5;
 
 /**
  * Where a rowhome's flights start (m deep), both up the left wall and climbing toward the back: the lower one behind the parlour, the upper one just behind the upper
@@ -37,12 +41,12 @@ function railStairwell(d: Draft, level: number, well: Rect): void {
 function layoutRowhomeGround(d: Draft, left: number, right: number, hallEdge: number): void {
   d.crossWall(0, PARLOUR_WALL, hallEdge, right, [doorway(0.9, 1)]);
   d.spineWall(0, hallEdge + PARTITION / 2, PARLOUR_WALL, KITCHEN_WALL);
-  d.put("tvUnit", 0, 0.55, -1.5, toBack);
-  d.put("screen", 0, 0.5, -1.5, toBack, { lift: 0.5 });
-  d.put("table", 0, 2.2, -1.5, toStreet, { width: 1, depth: 0.5, height: 0.42 });
-  d.put("sofa", 0, 3.3, -1.5, toStreet);
-  d.put("plant", 0, 3.6, right - 0.3, toStreet);
-  d.lamp(0, 2.4, -1.5);
+  d.put("tvUnit", 0, PARLOUR_SEATING, right - FURNISHING.tvUnit.depth / 2, toLeft);
+  d.put("screen", 0, PARLOUR_SEATING, right - FURNISHING.screen.depth / 2, toLeft, { lift: 0.5 });
+  d.put("table", 0, PARLOUR_SEATING, 0, toRight, { width: 1, depth: 0.5, height: 0.42 });
+  d.put("sofa", 0, PARLOUR_SEATING, left + FURNISHING.sofa.depth / 2, toRight);
+  d.put("plant", 0, PARLOUR_SEATING + PARLOUR_PLANT_STEP, right - 0.3, toStreet);
+  d.lamp(0, PARLOUR_SEATING, 0);
   d.put("table", 0, 7, 1, toStreet, { width: DINING_TABLE_LENGTH });
   for (const across of [0.6, 1.4]) {
     d.put("chair", 0, 6.05, across, toBack);

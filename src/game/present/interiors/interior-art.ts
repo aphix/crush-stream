@@ -2,12 +2,12 @@ import * as THREE from "three";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { InteriorPlan } from "../../world/openworld/interior-kinds.ts";
-import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
+import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, planKey, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { drawnHalf } from "../../world/openworld/openworld-facade-solids.ts";
 import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
-import { DETAIL_BUILDS_PER_FRAME, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
+import { DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
 import { DoorSet, type DoorOpeners } from "./interior-doors.ts";
 
 /** What of an interior the physics holds: nothing, the vestibules behind its street doors, or all of it. */
@@ -23,8 +23,10 @@ type Entry = {
   firstDoor: number;
   doorCount: number;
   shell: THREE.BufferGeometry | null;
+  shellGlass: THREE.BufferGeometry | null;
   detail: THREE.BufferGeometry | null;
   glow: THREE.BufferGeometry | null;
+  detailGlass: THREE.BufferGeometry | null;
   shellAway: number;
   detailAway: number;
   solids: Solids;
@@ -40,14 +42,14 @@ const VIEW = { kept: 0, wanted: 1, hidden: 2 } as const;
 type View = (typeof VIEW)[keyof typeof VIEW];
 const NO_IDS = -1;
 
-/** What the streamed interiors cost right now: places with an envelope, places furnished, vertices drawn, and draw calls (one per merged mesh that has any). The doors and vestibules add two draws, always. */
+/** What the streamed interiors cost right now: places with an envelope, places furnished, vertices drawn, and draw calls (one per merged mesh that has any). The doors and vestibules add two draws, always; the glass is a fourth merged mesh. */
 type InteriorStats = { shells: number; details: number; vertices: number; drawCalls: number };
 
 /**
  * The interiors of a map's places. Every door is a hinged leaf, shut until someone stands at it, with a small vestibule behind each street door; the rooms behind are built only while a player
  * is inside, or a street door of theirs is open and some eye within range sees that doorway, and dropped once neither has held for the sight field's hide grace (or the eye has been past their
  * far radius for `INTERIOR_LINGER`): the ground floor's envelope within `SHELL_NEAR`, the furnished rooms within `INTERIOR_NEAR`. A civilian swinging a door no player sees builds nothing.
- * The rooms are merged into three meshes (envelopes, lit furniture, unlit lamps and screens). The physics holds a built interior's solids within `SOLIDS_NEAR` of the eye, and a vestibule's while
+ * The rooms are merged into four meshes (envelopes, lit furniture, unlit lamps and screens, glass). The physics holds a built interior's solids within `SOLIDS_NEAR` of the eye, and a vestibule's while
  * the player's walker is at its door.
  */
 export class InteriorSet {
@@ -55,11 +57,13 @@ export class InteriorSet {
   private readonly entries: Entry[] = [];
   private readonly doors: DoorSet;
   private readonly empty = new THREE.BufferGeometry();
-  private readonly solidMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });
+  private readonly solidMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
   private readonly glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+  private readonly glassMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: GLASS_OPACITY, roughness: 0.05, metalness: 0, side: THREE.DoubleSide, depthWrite: false });
   private readonly shellMesh: THREE.Mesh;
   private readonly detailMesh: THREE.Mesh;
   private readonly glowMesh: THREE.Mesh;
+  private readonly glassMesh: THREE.Mesh;
   private solidsListener: SolidsListener | null = null;
   /** The first of the sight field's ids, one per entry, claimed at the first frame from `claimedFrom`, and given back to it on dispose. */
   private sightBase = NO_IDS;
@@ -73,14 +77,14 @@ export class InteriorSet {
     const leaves: DoorLeaf[] = [];
     for (const place of map.places) {
       if (place.interior === undefined || place.doorNode < 0) continue;
-      const key = `${place.interior}:${place.width}:${place.depth}`;
+      const key = planKey(place);
       let plan = plans.get(key);
       if (plan === undefined) {
-        plan = planInterior(place.interior, place.width, place.depth);
+        plan = planInterior(place);
         plans.set(key, plan);
       }
       const doors = interiorDoors(place, plan);
-      this.entries.push({ place, plan, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shell: null, detail: null, glow: null, shellAway: 0, detailAway: 0, solids: SOLIDS.none });
+      this.entries.push({ place, plan, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shell: null, shellGlass: null, detail: null, glow: null, detailGlass: null, shellAway: 0, detailAway: 0, solids: SOLIDS.none });
       leaves.push(...doors);
     }
     this.doors = new DoorSet(leaves);
@@ -88,6 +92,7 @@ export class InteriorSet {
     this.shellMesh = this.makeMesh("interior-shells", this.solidMaterial);
     this.detailMesh = this.makeMesh("interior-furniture", this.solidMaterial);
     this.glowMesh = this.makeMesh("interior-lights", this.glowMaterial);
+    this.glassMesh = this.makeMesh("interior-glass", this.glassMaterial);
   }
 
   /** Swing the doors, build what is wanted near the eye, drop what is hidden or left behind, and hand the physics what it holds now, merging the meshes that changed. */
@@ -123,6 +128,7 @@ export class InteriorSet {
       this.merge(this.detailMesh, this.entries.map((entry) => entry.detail));
       this.merge(this.glowMesh, this.entries.map((entry) => entry.glow));
     }
+    if (shellsChanged || detailsChanged) this.merge(this.glassMesh, this.entries.flatMap((entry) => [entry.shellGlass, entry.detailGlass]));
   }
 
   /** Only an interior in range or built is looked at: a player inside it, or an open street door of it whose doorway an eye within range sees, keeps its clock fresh. */
@@ -164,7 +170,9 @@ export class InteriorSet {
   private streamShell(entry: Entry, distance: number, view: View, dt: number): boolean {
     if (entry.shell === null) {
       if (view !== VIEW.wanted || distance >= SHELL_NEAR || this.shellBuilds >= SHELL_BUILDS_PER_FRAME) return false;
-      entry.shell = buildShell(entry.plan, entry.place);
+      const built = buildShell(entry.plan, entry.place);
+      entry.shell = built.solid;
+      entry.shellGlass = built.glass;
       entry.shellAway = 0;
       this.shellBuilds++;
       return true;
@@ -172,7 +180,9 @@ export class InteriorSet {
     entry.shellAway = distance <= SHELL_FAR ? 0 : entry.shellAway + dt;
     if (view !== VIEW.hidden && entry.shellAway < INTERIOR_LINGER) return false;
     entry.shell.dispose();
+    entry.shellGlass?.dispose();
     entry.shell = null;
+    entry.shellGlass = null;
     return true;
   }
 
@@ -183,6 +193,7 @@ export class InteriorSet {
       const built = buildDetail(entry.plan, entry.place);
       entry.detail = built.solid;
       entry.glow = built.glow;
+      entry.detailGlass = built.glass;
       entry.detailAway = 0;
       this.detailBuilds++;
       return true;
@@ -191,15 +202,17 @@ export class InteriorSet {
     if (view !== VIEW.hidden && entry.detailAway < INTERIOR_LINGER) return false;
     entry.detail?.dispose();
     entry.glow?.dispose();
+    entry.detailGlass?.dispose();
     entry.detail = null;
     entry.glow = null;
+    entry.detailGlass = null;
     return true;
   }
 
   stats(): InteriorStats {
     let vertices = 0;
     let drawCalls = 0;
-    for (const mesh of [this.shellMesh, this.detailMesh, this.glowMesh]) {
+    for (const mesh of [this.shellMesh, this.detailMesh, this.glowMesh, this.glassMesh]) {
       if (!mesh.visible) continue;
       drawCalls++;
       vertices += mesh.geometry.getAttribute("position").count;
@@ -225,14 +238,17 @@ export class InteriorSet {
     if (this.entries.some((entry) => entry.solids !== SOLIDS.none)) this.solidsListener?.([]);
     for (const entry of this.entries) {
       entry.shell?.dispose();
+      entry.shellGlass?.dispose();
       entry.detail?.dispose();
       entry.glow?.dispose();
+      entry.detailGlass?.dispose();
     }
-    for (const mesh of [this.shellMesh, this.detailMesh, this.glowMesh]) mesh.geometry.dispose();
+    for (const mesh of [this.shellMesh, this.detailMesh, this.glowMesh, this.glassMesh]) mesh.geometry.dispose();
     this.doors.dispose();
     this.empty.dispose();
     this.solidMaterial.dispose();
     this.glowMaterial.dispose();
+    this.glassMaterial.dispose();
     this.claimedFrom?.release(this.sightBase, this.entries.length);
     this.group.removeFromParent();
   }

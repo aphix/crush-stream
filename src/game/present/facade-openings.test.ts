@@ -2,6 +2,7 @@ import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { beforeAll, describe, expect, it } from "vitest";
 import { MAT } from "../kernel/material-ids.ts";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
+import windowTable from "../world/openworld/facade-windows.json" with { type: "json" };
 import { BAY_WIDTH, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, SHOPFRONT } from "../world/openworld/interior-kinds.ts";
 import { drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
@@ -50,20 +51,31 @@ describe("given the facade styles of the places that have interiors", () => {
     expect(FACADE_LAYERS.rowhouse.open, "a style that was there before").toBeUndefined();
   });
 
-  // mutation: sed -i 's/    if (!opening.door) continue;//' scripts/pack-facades.mjs, then repack the styles (the windows cut open too)
-  it("when the packed albedo is read at each doorway and window of the plan, then a doorway is cut open at body height and a window is painted shut, the bay's edge is solid, and the other layers have no opening", async () => {
+  // mutation: sed -i 's/const x0 = Math.round(((half - (opening.centre + opening.width \/ 2))/const x0 = Math.round(((half - (opening.centre + opening.width \/ 2) + 1)/' scripts/pack-facades.mjs, then repack the styles (the cut lands a metre off the door)
+  it("when the packed albedo is read at each doorway of the plan, then it is cut open at body height, solid at the bay's edge, and the other layers have no opening", async () => {
     const half = drawnHalf(BAY_WIDTH);
     for (const [style, open] of Object.entries(OPEN_STYLES)) {
       const alpha = await alphaOf(style);
       for (const opening of SHOPFRONT[open.kind]) {
         const u = (half - opening.centre) / (2 * half);
-        const body = open.floorY + Math.max(opening.sill, 0) + Math.min(1, (opening.top - opening.sill) / 2);
-        const at = alpha.at(LAYER.ground, u, body / open.ground);
-        if (opening.door) expect(at, `${style} alpha in the doorway at u ${u.toFixed(2)}`).toBeLessThan(CUT);
-        else expect(at, `${style} alpha in the window at u ${u.toFixed(2)}`).toBeGreaterThanOrEqual(CUT);
+        const v = (open.floorY + opening.top / 2) / open.ground;
+        expect(alpha.at(LAYER.ground, u, v), `${style} alpha in the doorway at u ${u.toFixed(2)}`).toBeLessThan(CUT);
       }
       expect(alpha.at(LAYER.ground, 0.01, 0.5), `${style} alpha at the bay's edge`).toBeGreaterThanOrEqual(CUT);
       expect(alpha.cut(LAYER.cornice) + alpha.cut(LAYER.floor), `${style} openings above the ground band`).toBe(0);
+    }
+  });
+
+  // mutation: sed -i 's/store: \[doorway(0.9, 0.9, 2.1)\]/store: [doorway(-1.1, 4.5, 2.1)]/' src/game/world/openworld/interior-kinds.ts, then repack cornerstore (the cut takes the window beside the door)
+  it("when the packed albedo is read in each window the picture's table lists on the ground layer, then it is solid: a window is painted shut, only a doorway is cut", async () => {
+    const half = drawnHalf(BAY_WIDTH);
+    for (const [style, open] of Object.entries(OPEN_STYLES)) {
+      const alpha = await alphaOf(style);
+      const doors = SHOPFRONT[open.kind].map((opening) => ({ from: (half - opening.centre - opening.width / 2) / (2 * half), to: (half - opening.centre + opening.width / 2) / (2 * half) }));
+      for (const [u0, v0, u1, v1] of windowTable[style as keyof typeof windowTable].windows.ground) {
+        if (doors.some((door) => u1 > door.from && u0 < door.to)) continue;
+        expect(alpha.at(LAYER.ground, (u0 + u1) / 2, (v0 + v1) / 2), `${style} alpha in its window at u ${u0.toFixed(2)}`).toBeGreaterThanOrEqual(CUT);
+      }
     }
   });
 });
