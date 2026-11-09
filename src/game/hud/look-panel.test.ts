@@ -12,6 +12,10 @@ import { INITIAL_HUD, type LookAtHud } from "./hud-store.ts";
 const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const PANEL = "/src/components/look-panel.tsx";
 
+/** React's escaping of text in markup. */
+const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#x27;" };
+const escaped = (text: string): string => text.replace(/[&<>"']/g, (char) => ESCAPES[char]!);
+
 describe("given the look-at panel the HUD mounts for the open world", () => {
   let server: ViteDevServer;
   let render: (lookAt: LookAtHud | null) => string;
@@ -44,7 +48,7 @@ describe("given the look-at panel the HUD mounts for the open world", () => {
   it("when the field names a civilian, then the title and every line are in the panel, in order", () => {
     const lookAt = { title: "Rosa Kim, 34 · Cook at Sal's Diner", lines: ["hungry -> Sal's Diner", "left home", "started her shift"] };
     const markup = render(lookAt);
-    const at = [lookAt.title, ...lookAt.lines].map((text) => markup.indexOf(text.replace("'", "&#x27;")));
+    const at = [lookAt.title, ...lookAt.lines].map((text) => markup.indexOf(escaped(text)));
     expect(at.every((index) => index >= 0), `every text is in the markup (found at ${at.join(", ")})`).toBe(true);
     expect(at, "title first, then the lines top to bottom").toEqual([...at].sort((a, b) => a - b));
   });

@@ -208,7 +208,7 @@ function DesktopHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
         {focus && state.race ? (
           <header className="hud-ink min-w-0 font-display">
             <p className="truncate text-sm font-semibold uppercase leading-tight tracking-[0.12em] text-fg/80">
-              {state.race.survival || state.race.menu === "survival" ? "Survival" : state.race.mode === "campaign" ? "Campaign" : "Race"} · <span className="text-fg">{state.race.trackName || "Pick a course"}</span>
+              {state.openworld ? null : <>{state.race.survival || state.race.menu === "survival" ? "Survival" : state.race.mode === "campaign" ? "Campaign" : "Race"} · </>}<span className="text-fg">{state.race.trackName || "Pick a course"}</span>
             </p>
           </header>
         ) : null}

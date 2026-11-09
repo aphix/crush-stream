@@ -114,4 +114,14 @@ describe("given the open world in play on the real engine", () => {
     expect(hud.get().openworld, "the HUD flag").toBe(false);
     expect(engine["carCount"], "the sandbox's cars").toBe(engine["sandboxCars"]);
   });
+
+  it("when a room takes the lobby over from the solo scene, then the scene is the room's, still on the city, and the HUD still flags the open world", () => {
+    engine["setScene"]("openworld");
+    expect(engine["sceneId"], "control: the solo scene").toBe("openworld");
+    engine.net["game"].enterRace(false, true);
+    expect(engine["sceneId"], "the room's scene").toBe("race");
+    expect(engine["race"].courseId, "still the city").toBe(OPENWORLD_ID);
+    runSeconds(engine, 0.3);
+    expect(hud.get().openworld, "the flag follows the course").toBe(true);
+  });
 });

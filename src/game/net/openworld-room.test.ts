@@ -167,15 +167,16 @@ describe("given the proximity voice of a room of the open world", () => {
     const peers = s.guest.voice.snapshot().peers;
     expect(peers.map((p) => p.car), "the roster seats the host in car 0").toEqual([0]);
     const world = s.guest.voice["world"];
-    const listener = () => must(world.carPosition(s.guest.status().car), "the guest's own car is drawn");
-    const speaker = () => must(world.carPosition(peers[0]!.car), "the host's car is drawn");
     expect(s.gw.race.courseId, "the guest is in the city").toBe(OPENWORLD_ID);
-    expect(speaker(), "the voice reads the car the guest draws").toBe(s.gw.live()[0]!.group.position);
+    expect(world.carPosition(peers[0]!.car), "the voice reads the car the guest draws").toBe(s.gw.live()[0]!.group.position);
     const gains: number[] = [];
     for (const metres of [0, 20, 40]) {
       s.hw.live()[0]!.spawnFacing(start.x + Math.sin(start.yaw) * metres, start.z + Math.cos(start.yaw) * metres, start.yaw, 0);
       s.step(30);
-      gains.push(voiceGain(metresBetween(listener(), speaker())));
+      const listener = world.carPosition(s.guest.status().car);
+      const speaker = world.carPosition(peers[0]!.car);
+      must(listener && speaker, "both cars are drawn");
+      gains.push(voiceGain(metresBetween(listener, speaker)));
     }
     expect(gains[0], "abreast at the start: full strength").toBe(1);
     expect(gains[1]!, "20 m up the street: fading").toBeGreaterThan(0);
@@ -185,13 +186,12 @@ describe("given the proximity voice of a room of the open world", () => {
 });
 
 describe("given a host with a crowd and a guest with a crowd in a room of the open world", () => {
-  const log = [...FIRST_EVENTS];
-
   it("when the guest has joined, then it heard the host's seed, both clocks and the whole event log, which was there before it joined", () => {
     const heard: HeardCrowd[] = [];
     const s = room({ hostCrowd: hostLink([...FIRST_EVENTS]), guestCrowd: guestLink(heard) });
     s.step(30);
-    const last = must(heard.at(-1), "a crowd message arrived");
+    const last = heard.at(-1);
+    must(last, "a crowd message arrived");
     expect(last.seed, "seed").toBe(CROWD_SEED);
     expect(last.crowdTime, "crowd clock").toBe(CROWD_CLOCK);
     expect(last.hostTime, "the host's wall clock when it sent").toBeGreaterThan(0);
@@ -200,15 +200,16 @@ describe("given a host with a crowd and a guest with a crowd in a room of the op
 
   it("when the host's log grows between keyframes, then the guest hears the new event within two frames, not at the next keyframe", () => {
     const heard: HeardCrowd[] = [];
-    log.length = 0;
-    log.push(...FIRST_EVENTS);
+    const log = [...FIRST_EVENTS];
     const s = room({ hostCrowd: hostLink(log), guestCrowd: guestLink(heard) });
     s.step(7);
     const before = heard.length;
     log.push(...NEXT_EVENT);
     s.step(2);
     expect(heard.length, "a message went out for the event").toBeGreaterThan(before);
-    expect(firstMismatch(must(heard.at(-1), "heard").events, [...FIRST_EVENTS, ...NEXT_EVENT]), "the log as the host has it").toBeUndefined();
+    const last = heard.at(-1);
+    must(last, "a crowd message arrived");
+    expect(firstMismatch(last.events, [...FIRST_EVENTS, ...NEXT_EVENT]), "the log as the host has it").toBeUndefined();
   });
 });
 
@@ -217,7 +218,8 @@ describe("given a room whose host has no crowd", () => {
     const heard: HeardCrowd[] = [];
     const s = room({ hostCrowd: null, guestCrowd: guestLink(heard) });
     let crowdSent = 0;
-    const end = must(s.hub.ends.get(s.host.status().selfId), "the host's end");
+    const end = s.hub.ends.get(s.host.status().selfId);
+    must(end, "the host's end");
     const send = end.send.bind(end);
     end.send = (data, to) => {
       if (data[0] === MSG.crowd) crowdSent++;

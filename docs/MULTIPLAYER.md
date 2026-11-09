@@ -529,8 +529,8 @@ shrank to scale 0.23 before it vanished.
 
 Code: `src/game/net/` (`transport.ts` `NetTransport` + `BroadcastTransport`, `rtc-transport.ts`,
 `codec.ts`, `net-play.ts`, `net-ports.ts` (the engine as netplay sees it), `net-view.ts` (a client
-draws the snapshot ring), `voice.ts` + `voice-range.ts` + `roster-codec.ts` (proximity voice, below),
-`net.test.ts`, `net-session.test.ts`, `race-net.test.ts`, `voice-range.test.ts`, `roster-codec.test.ts`),
+draws the snapshot ring), `voice.ts` + `voice-range.ts` + `roster-codec.ts` (proximity voice, below), `crowd-codec.ts` (the open world's crowd message),
+`net.test.ts`, `net-session.test.ts`, `race-net.test.ts`, `voice-range.test.ts`, `roster-codec.test.ts`, `crowd-codec.test.ts`, `openworld-room.test.ts`),
 `src/components/online-entry.tsx` (+ `online-host.tsx`, `online-join.tsx`, `game-options.tsx`, `online-session.tsx`, `lobby-gate.tsx`, `auto-next.tsx`, `online-slot.ts`, `voice-panel.tsx`), `src/routes/api/rtc.ts` +
 `src/lib/multiplayer/signaling.server.ts` (the kit's reference relay).
 
