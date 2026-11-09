@@ -6,7 +6,7 @@ import { rightX, rightZ } from "../../world/openworld/openworld-roads.ts";
 import type { CarStyleId } from "../../vehicle/car-variants.ts";
 import { BOOKKEEPING_SECONDS, KERB_EVICT_MARGIN, KERB_JITTER_SIDE, KERB_JITTER_YAW, KERB_KEEP, KERB_REACH, PRIME_PASSES, SIGHT_RADIUS, TOW_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { residentBody, residentColour } from "./traffic-look.ts";
-import { RESIDENT_CAPACITY, spotUnseen, STANDING, type TrafficContext } from "./traffic-ports.ts";
+import { heldByHuman, RESIDENT_CAPACITY, spotUnseen, STANDING, type TrafficContext } from "./traffic-ports.ts";
 import type { ParkedResidentCars } from "./traffic-sight.ts";
 
 /** Kerb cars placed per bookkeeping pass at most: the nearest first. */
@@ -58,6 +58,18 @@ export class KerbCars {
     let count = 0;
     for (let slot = 0; slot < this.size; slot++) if (this.spotOfSlot[slot]! >= 0) count++;
     return count;
+  }
+
+  /** Whether kerb car `id` is standing at a space now. */
+  holds(id: number): boolean {
+    const slot = id - this.first;
+    return slot >= 0 && slot < this.size && this.spotOfSlot[slot]! >= 0;
+  }
+
+  /** The space kerb car `id` stands in, -1 when it is none of this fleet's or stands in none. */
+  spotOf(id: number): number {
+    const slot = id - this.first;
+    return slot >= 0 && slot < this.size ? this.spotOfSlot[slot]! : -1;
   }
 
   /** The engine id of the kerb car standing in `spot`, -1 when none does. */
@@ -118,7 +130,7 @@ export class KerbCars {
     const id = this.first + slot;
     const car = ports.cars()[id];
     if (car === undefined) return;
-    if (ports.seated(id)) {
+    if (heldByHuman(this.context, id)) {
       this.vacate(slot);
       return;
     }
@@ -205,7 +217,7 @@ export class KerbCars {
     const body = this.wantedResident < 0 ? null : residentBody(this.wantedResident);
     let slot = -1;
     for (let candidate = 0; candidate < this.size; candidate++) {
-      if (this.spotOfSlot[candidate]! >= 0 || ports.seated(this.first + candidate)) continue;
+      if (this.spotOfSlot[candidate]! >= 0 || heldByHuman(this.context, this.first + candidate)) continue;
       if (slot < 0) slot = candidate;
       if (body === null || ports.cars()[this.first + candidate]!.style.id === body) {
         slot = candidate;

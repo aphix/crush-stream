@@ -47,6 +47,14 @@ export type TrafficPorts = {
 /** What a space holds: nothing, a car that drives (parked for now), or a kerb car that only stands. */
 export const STANDING = { none: 0, mover: 1, kerb: 2 } as const;
 
+/** What `residentSpot` holds for a resident whose car the player took: no car, and none is claimed for him again. */
+export const CARLESS = -2;
+
+/** A human has car `id`: sat in it, or took it for good and left it where it stands. */
+export function heldByHuman(context: TrafficContext, id: number): boolean {
+  return context.ports.seated(id) || context.humans[id] === 1;
+}
+
 /** Most residents the open world's society has: the size of the per-resident tables. */
 export const RESIDENT_CAPACITY = 1024;
 
@@ -60,6 +68,8 @@ export type TrafficContext = {
   ports: TrafficPorts;
   sight: TrafficSight;
   swaps: BodySwaps;
+  /** Per engine car id, 1 once the player took the car for good (`OpenWorldTraffic.takeCar`): traffic never drives, stores or paints it again. */
+  humans: Uint8Array;
   /** Cars that drive (the mover pool's size), the first sight id traffic claimed (movers, then kerb cars) and the one it tests spaces with. */
   movers: number;
   sightBase: number;

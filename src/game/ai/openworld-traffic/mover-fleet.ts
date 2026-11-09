@@ -11,7 +11,7 @@ import { AMBULANCE_COLOUR } from "./traffic-constants.ts";
 import { FLEE_FAR_METRES, FLEE_NOTICE_METRES, FLEE_REPLAN_METRES } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
 import { residentBody, residentColour } from "./traffic-look.ts";
-import { spotUnseen, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
+import { heldByHuman, spotUnseen, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
 import { RoutePlanner, TripRoute } from "./trip-route.ts";
 
 /** A car taking a trip other than the ambient traffic's: its own driver may replace traffic's. */
@@ -166,7 +166,7 @@ export class MoverFleet {
   /** What car `id` does for `dt` s when it is one of the fleet's on a trip; null leaves it to the engine's default (parked cars stand on their brakes). */
   inputOf(id: number, dt: number): DriveInput | null {
     const slot = id - this.first;
-    if (slot < 0 || slot >= this.size || this.state[slot] !== MOVER.driving || this.context.ports.seated(id)) return null;
+    if (slot < 0 || slot >= this.size || this.state[slot] !== MOVER.driving || heldByHuman(this.context, id)) return null;
     const snaps = this.context.snaps;
     const handle = this.handles[slot]!;
     if (handle.driver !== null) return handle.driver(snaps[id]!, snaps, dt);
@@ -179,7 +179,7 @@ export class MoverFleet {
    */
   evade(carId: number, chaserId: number): boolean {
     const slot = carId - this.first;
-    if (slot < 0 || slot >= this.size || this.state[slot] !== MOVER.driving || this.kindOf(slot) !== LEASE.ambient || this.context.ports.seated(carId)) return false;
+    if (slot < 0 || slot >= this.size || this.state[slot] !== MOVER.driving || this.kindOf(slot) !== LEASE.ambient || heldByHuman(this.context, carId)) return false;
     this.chaser[slot] = chaserId;
     return true;
   }
@@ -328,7 +328,7 @@ export class MoverFleet {
     const id = this.first + slot;
     const car = ports.cars()[id];
     if (car === undefined) return;
-    if (ports.seated(id)) {
+    if (heldByHuman(this.context, id)) {
       this.handOverToHuman(slot);
       return;
     }
@@ -478,6 +478,18 @@ export class MoverFleet {
     return slot >= this.size - this.patrol ? LEASE.patrol : slot >= this.size - this.patrol - this.ambulance ? LEASE.ambulance : LEASE.ambient;
   }
 
+  /** Whether pool car `id` stands parked at a space (leased or not), not on a trip and not free. */
+  isParked(id: number): boolean {
+    const slot = id - this.first;
+    return slot >= 0 && slot < this.size && this.state[slot] === MOVER.parked;
+  }
+
+  /** The space pool car `id` stands in or drives to, -1 when it is none of this fleet's or is free. */
+  spotOf(id: number): number {
+    const slot = id - this.first;
+    return slot >= 0 && slot < this.size && this.state[slot] !== MOVER.free ? this.spot[slot]! : -1;
+  }
+
   /** The engine id of the car standing parked for resident `resident`, -1 when none does. */
   carOf(resident: number): number {
     for (let slot = 0; slot < this.size; slot++) if (this.resident[slot] === resident && this.state[slot] === MOVER.parked && this.role[slot] === ROLE.commuter) return this.first + slot;
@@ -494,7 +506,7 @@ export class MoverFleet {
     let ambient = -1;
     let ambientMatch = -1;
     for (let slot = 0; slot < this.size; slot++) {
-      if (this.context.ports.seated(this.first + slot) || this.kindOf(slot) !== kind) continue;
+      if (heldByHuman(this.context, this.first + slot) || this.kindOf(slot) !== kind) continue;
       const matches = body !== null && this.context.ports.cars()[this.first + slot]!.style.id === body;
       if (this.state[slot] === MOVER.free) {
         if (free < 0) free = slot;

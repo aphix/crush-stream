@@ -386,6 +386,49 @@ class SeenSight extends ProximitySight {
   }
 }
 
+describe("given the player takes a resident's kerb car on foot", () => {
+  const OWNER = Array.from({ length: 64 }, (_, number) => number).find((number) => residentBody(number) === "hatchback" || residentBody(number) === "wagon") ?? 0;
+
+  function takenWorld(): { field: FakeField; traffic: OpenWorldTraffic; clock: Clock; id: number; spot: number } {
+    const field = new FakeField();
+    const feed = emptyFeed(8);
+    feed.parked.count = 1;
+    feed.parked.resident[0] = OWNER;
+    feed.parked.place[0] = 0;
+    const traffic = makeTraffic(field, { movers: 2, kerb: 4 }, feed, [homeAt(HOME.x, HOME.z)]);
+    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
+    const clock = new Clock();
+    runSeconds(field, traffic, clock, 3);
+    const spot = residentSpace(traffic, OWNER);
+    const id = field.cars.findIndex((car, index) => index > 0 && !car.stored && hypot2(car.group.position.x - traffic.parkingSpots.x[spot]!, car.group.position.z - traffic.parkingSpots.z[spot]!) < 1);
+    expect(id, "his car stands at his space").toBeGreaterThan(0);
+    expect(traffic.isEmptyCar(id), "an empty kerb car").toBe(true);
+    return { field, traffic, clock, id, spot };
+  }
+
+  // mutation: sed -i 's/      residentSpot\[resident\] = CARLESS;/      residentSpot[resident] = -1;/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when he takes it, then its owner has no car (none is claimed for him again), the space is free and the car stays where it is, no longer traffic's", () => {
+    const { field, traffic, clock, id, spot } = takenWorld();
+    expect(traffic.takeCar(id), "the owner").toBe(OWNER);
+    runSeconds(field, traffic, clock, 20);
+    const pose: ResidentCarPose = { x: 0, z: 0, yaw: 0, groundY: 0, bodyStyle: "sedan" };
+    expect(traffic.carPoseOf(OWNER, pose), "the owner has no car at a space").toBe(false);
+    expect(traffic.claimedSpots[spot], "his space is free").toBe(0);
+    expect(field.cars[id]!.stored, "the car was not put away").toBe(false);
+    expect(traffic.owns(id), "it is not traffic's").toBe(false);
+  });
+
+  // mutation: sed -i 's/    return this.movers.isParked(id) || this.kerb.holds(id);/    return this.movers.isParked(id);/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when it is taken and left, then it stays an empty car anyone may take, and a car on a trip is no such car", () => {
+    const { field, traffic, clock, id } = takenWorld();
+    traffic.takeCar(id);
+    runSeconds(field, traffic, clock, 5);
+    expect(traffic.isEmptyCar(id), "the car he left").toBe(true);
+    const trip = traffic.spawnDrivenCar(5, traffic.nearestSpot(HOME.x, HOME.z + 40), traffic.nearestSpot(WORK.x, WORK.z))!;
+    expect(traffic.isEmptyCar(trip.index), "a car on a trip has its driver").toBe(false);
+  });
+});
+
 describe("given residents whose cars show at the kerb and drive off, over a minute", () => {
   const BODIES_ASKED = 4;
   /** One resident for each everyday body. */

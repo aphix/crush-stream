@@ -314,6 +314,10 @@ export class CrashEngine extends EngineGarage {
       runsCars: () => !this.net.client,
       freshCarNear: (index, x, z, facing) => this.race.placeNear(index, x, z, facing),
       respawn: () => this.requestRespawn(),
+      enterable: (index) => this.race.free && !this.net.client && this.openWorld.canEnter(index),
+      adopt: (index) => {
+        if (this.race.adoptCar(index)) this.openWorld.adopt(index);
+      },
     });
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
