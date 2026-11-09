@@ -152,11 +152,6 @@ function standItem(lane: Lane, item: KitItem, preferred: number, slide: number, 
   return false;
 }
 
-/** Where along a place's face its door is. */
-function doorAlong(side: BlockSide, doorX: number, doorZ: number): number {
-  return side.alongX ? doorX : doorZ;
-}
-
 /** Stand a place's frontage kit on its face, the first piece of a bus stop's (its shelter) wherever on the face it fits. */
 function standKit(lanes: readonly (readonly Lane[])[], lots: Lots, index: number, props: FabricProp[]): void {
   const place = lots.places[index]!;
@@ -166,7 +161,7 @@ function standKit(lanes: readonly (readonly Lane[])[], lots: Lots, index: number
   const isBusStop = place.kind === PLACE_KIND.transit;
   if (!isBusStop && place.storeys === 0) return;
   const lane = lanes[link.block]!.find((candidate) => candidate.side.side === link.side)!;
-  const door = doorAlong(lane.side, place.doorX, place.doorZ);
+  const door = lane.side.alongX ? place.doorX : place.doorZ;
   for (const [slot, item] of kit.entries()) {
     const required = isBusStop && slot === 0;
     const fit = standItem(lane, item, door + item.offset, required ? lane.side.length : KIT_SLIDE, lots.geometry, props);

@@ -54,7 +54,7 @@ describe("given a course whose props name scenery assets", () => {
 });
 
 describe("given a prop that names an asset", () => {
-  // mutation: sed -i 's/.refine((p) => p.asset === undefined ||/.refine((p) => true ||/' src/game/world/track-schema.ts
+  // mutation: sed -i 's/return row === undefined || assetPrefab(row) === p.prefab;/return true;/' src/game/world/track-schema.ts
   it("when its prefab is not the asset's generic one or the id is no asset's, then the course is rejected", () => {
     const withProp = (prop: object): unknown => ({ ...square(), props: [prop] });
     expect(() => parseTrack(withProp({ prefab: PREFAB.cone, asset: HYDRANT, x: 0, z: 0 }))).toThrow(/props\.0\.prefab/);

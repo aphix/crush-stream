@@ -97,7 +97,13 @@ const placement = z
     /** A scenery asset by id (`world/scenery-assets`): `prefab` is then the asset's generic prefab (`assetPrefab`), `scale` multiplies the asset's own size (m), or `size`'s when given (the generic prefab's extents x, y, z as `assetScale` gives them: a decal's width, 1 and length). */
     asset: z.enum(SCENERY_ASSET_IDS).optional(),
   })
-  .refine((p) => p.asset === undefined || assetPrefab(SCENERY_ASSETS.find((row) => row.id === p.asset)!) === p.prefab, { message: "an asset's prefab is its generic one (assetPrefab)", path: ["prefab"] });
+  .refine(
+    (p) => {
+      const row = SCENERY_ASSETS.find((candidate) => candidate.id === p.asset);
+      return row === undefined || assetPrefab(row) === p.prefab;
+    },
+    { message: "an asset's prefab is its generic one (assetPrefab)", path: ["prefab"] },
+  );
 
 const along = z.object({
   prefab: z.enum(PREFAB_IDS),
