@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { CAR_AVOID_GAP, CAR_LINGER_SECONDS, CAREFUL_PURSUIT_SPEED, CHASE_LEAD_SECONDS, CHASE_RESUME_DISTANCE, CLOSE_PURSUIT_DISTANCE, CRIME_STEP_SECONDS, CRIME_STREAM, HOTHEAD_RUN_SHARE, REDIRECT_SECONDS } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
-import { harness, runFor, seedWhere } from "./crime-fixture.test-util.ts";
+import { harness, runFor, runUntil, seedWhere } from "./crime-fixture.test-util.ts";
 import { PatrolCars } from "./patrol-cars.ts";
 import { FakeStreet } from "./crime-street.test-util.ts";
 
 const RUNS = 200;
 const EAST = Math.PI / 2;
 const RUNNER_X = 90;
+/** An offender's street trip ends this far (m) off the car: between the bust range and the close-in distance, so the car comes to a stop short of it. */
+const OFF_ROAD_GAP = 26;
 /** The chased car's pace (m/s): slow enough for the patrol car to close the gap in the rows' time. */
 const RUNNER_SPEED = 1;
+/** The chased car for the chase rows stands this far (m) east, with the foot cop who saw it 50 m before it: the patrol car's trip from the west end is long enough to read. */
+const FAR_RUNNER_X = 190;
+const FAR_COP_X = 140;
 /** A stopped car standing on the patrol car's line, between its start and the scene. */
 const BLOCKER_X = 30;
 /** The patrol car's place in the fake street's list: after the car already standing there. */
@@ -51,7 +56,7 @@ describe("patrol cars mostly drive like city police", () => {
     run.street!.leaseAt = { x: 20, z: -40, yaw: 0 };
     run.offences.x[1] = 60;
     run.offences.commitCrime(1);
-    runFor(run, 15);
+    runUntil(run, 15, () => run.scene.foot.table.copAt(0, 2) >= 0);
     expect(run.street!.drivers[0], "the traffic drove it").toBeNull();
     expect(run.street!.tripDone[0], "at its kerb space").toBe(true);
     expect(run.scene.foot.table.copAt(0, 2), "its cop joined the case").toBeGreaterThanOrEqual(0);
@@ -59,24 +64,30 @@ describe("patrol cars mostly drive like city police", () => {
 });
 
 describe("closing on a car it chases", () => {
-  /** A patrol car chasing a stopped car 90 m east of where it starts, on the given seed: the fastest it goes within `CLOSE_PURSUIT_DISTANCE` m of it. */
+  /** The chased car drives off east at this pace (m/s) over open ground, and a careful patrol car's street trip ends this far (m) from it, off the road. */
+  const FLEEING_SPEED = 2;
+  const KERB_GAP = 28;
+
+  /** A patrol car chasing a car that is driving off, on the given seed: the fastest it goes with the police driver at the wheel within `CLOSE_PURSUIT_DISTANCE` m of it. */
   function closeChase(seed: number): number {
     const run = harness([40, 0, 0], { withCars: true, seed });
     const street = run.street!;
     street.leaseAt = { x: 0, z: 0, yaw: EAST };
-    const runner = street.addCar(RUNNER_X, 0, EAST, 0, 2, true);
+    street.kerbOffset = KERB_GAP;
+    const runner = street.addCar(RUNNER_X, 0, EAST, FLEEING_SPEED, 2, false);
     run.scene.reportRedLight(runner, RUNNER_X, 0);
     let fastestClose = 0;
-    for (let step = 0; step < 200; step++) {
+    for (let step = 0; step < 300; step++) {
       runFor(run, CRIME_STEP_SECONDS);
-      const patrolCar = street.snaps[1]!;
-      if (Math.hypot(patrolCar.x - RUNNER_X, patrolCar.z) <= CLOSE_PURSUIT_DISTANCE) fastestClose = Math.max(fastestClose, Math.hypot(patrolCar.vx, patrolCar.vz));
+      const patrolCar = street.snaps[PATROL_CAR_INDEX]!;
+      const close = Math.hypot(patrolCar.x - street.snaps[runner]!.x, patrolCar.z - street.snaps[runner]!.z) <= CLOSE_PURSUIT_DISTANCE;
+      if (close && street.drivers[PATROL_CAR_INDEX] !== null) fastestClose = Math.max(fastestClose, Math.hypot(patrolCar.vx, patrolCar.vz));
     }
     return fastestClose;
   }
 
   // mutation: in src/game/ai/openworld-crime/patrol-cars.ts driveSlot(), change `const cap = this.hothead[slot] === 0 ? Math.sqrt(CAREFUL_PURSUIT_SPEED * CAREFUL_PURSUIT_SPEED + 2 * CAR_STOP_DECEL * beyond) : Infinity;` to `const cap = Infinity;`
-  it("a careful car slows to a city street's pace within the last metres, a hothead does not", () => {
+  it("a careful car takes the wheel at a street's pace for the last metres, a hothead is at it at full speed", () => {
     expect(closeChase(CAREFUL_SEED), "careful").toBeLessThanOrEqual(CAREFUL_PURSUIT_SPEED + BRAKE_LATCH);
     expect(closeChase(HOTHEAD_SEED), "hothead").toBeGreaterThan(CAREFUL_PURSUIT_SPEED + BRAKE_LATCH);
   });
@@ -85,11 +96,11 @@ describe("closing on a car it chases", () => {
 describe("a careful chase follows the streets", () => {
   /** A car 90 m east cruising east at `RUNNER_SPEED`, seen by the foot cop at x = 40, the patrol car's lease starting at the west end; careful runs under `CAREFUL_SEED`. */
   function chase() {
-    const run = harness([40, 0, 0], { withCars: true, seed: CAREFUL_SEED });
+    const run = harness([FAR_COP_X, 0, 0], { withCars: true, seed: CAREFUL_SEED });
     const street = run.street!;
     street.leaseAt = { x: 0, z: 0, yaw: EAST };
-    const runner = street.addCar(RUNNER_X, 0, EAST, RUNNER_SPEED, 2, false);
-    expect(run.scene.reportRedLight(runner, RUNNER_X, 0), "a patrol car was sent").toBe(true);
+    const runner = street.addCar(FAR_RUNNER_X, 0, EAST, RUNNER_SPEED, 2, false);
+    expect(run.scene.reportRedLight(runner, FAR_RUNNER_X, 0), "a patrol car was sent").toBe(true);
     return { run, street, runner };
   }
 
@@ -102,23 +113,32 @@ describe("a careful chase follows the streets", () => {
     runFor(run, 1);
     expect(street.redirects.length, "re-aimed once").toBe(1);
     const first = street.redirects[0]!;
-    expect(first.x, "ahead of the offender by what it covers in the lead time, at the second it was aimed").toBeCloseTo(RUNNER_X + RUNNER_SPEED * (REDIRECT_SECONDS + CHASE_LEAD_SECONDS), 0);
+    expect(first.x, "ahead of the offender by what it covers in the lead time, at the second it was aimed").toBeCloseTo(FAR_RUNNER_X + RUNNER_SPEED * (REDIRECT_SECONDS + CHASE_LEAD_SECONDS), 0);
     runFor(run, REDIRECT_SECONDS);
     expect(street.redirects.length, "and again").toBe(2);
     expect(street.redirects[1]!.x, "further on with the offender").toBeGreaterThan(first.x);
     expect(street.drivers[PATROL_CAR_INDEX], "still the traffic's trip").toBeNull();
   });
 
-  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts followStreets(), change `gap <= CLOSE_PURSUIT_DISTANCE) {` to `gap <= 0) {`
-  it("takes the wheel within the close-in distance, and hands it back to the traffic once the offender is far off again", () => {
+  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts followStreets(), change `if (arrived && gap <= CLOSE_PURSUIT_DISTANCE && gap > BUST.near) {` to `if (arrived && gap <= 0) {`
+  it("takes the wheel for the last metres once its street trip has stopped short of an offender that left the road, and hands it back to the traffic once the offender is far off again", () => {
     const { run, street, runner } = chase();
-    runFor(run, 12);
+    street.kerbOffset = OFF_ROAD_GAP;
+    runFor(run, 14);
     expect(street.drivers[PATROL_CAR_INDEX], "this driver has the wheel close in").not.toBeNull();
     street.snaps[runner]!.x += CHASE_RESUME_DISTANCE + 60;
     street.snaps[runner]!.vx = 0;
     street.snaps[runner]!.vz = 0;
     runFor(run, REDIRECT_SECONDS + 1);
     expect(street.drivers[PATROL_CAR_INDEX], "the traffic drives the trip again").toBeNull();
+  });
+
+  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts followStreets(), delete the line `if (arrived && gap <= BUST.near) return;`
+  it("stays parked at its kerb while it is within bust range of the offender, the hold running, and does not take the wheel", () => {
+    const { run, street } = chase();
+    runFor(run, 25);
+    expect(street.drivers[PATROL_CAR_INDEX], "the traffic's trip still").toBeNull();
+    expect(street.redirects.length, "re-aimed on its way and not once it stood beside it").toBeLessThan(8);
   });
 });
 
@@ -139,5 +159,53 @@ describe("a patrol car brakes for a car in its way", () => {
       closest = Math.min(closest, Math.hypot(street.snaps[blocker]!.x - patrolCar.x, street.snaps[blocker]!.z - patrolCar.z));
     }
     expect(closest, "nearest it came to the car in its way").toBeGreaterThan(CAR_AVOID_GAP - 2);
+  });
+});
+
+describe("the pursuit strip counts what chases the player's car", () => {
+  /** The player's car standing 20 m past the foot cop who saw it run a red light, a patrol car sent from the west end. */
+  function playerChase() {
+    const run = harness([40, 0, 0], { withCars: true, seed: CAREFUL_SEED });
+    const street = run.street!;
+    street.leaseAt = { x: 0, z: 0, yaw: EAST };
+    const player = street.addCar(60, 0, EAST, 0, -1, false);
+    expect(run.scene.reportRedLight(player, 60, 0), "a patrol car was sent").toBe(true);
+    return { run, street, player };
+  }
+  const BUST_HOLD_SECONDS = 12;
+
+  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts chaseOf(), change `cops++;` to `cops += 0;`
+  it("says nothing while no patrol car chases it and counts the cars once one does", () => {
+    const { run, player } = playerChase();
+    const strip = { cops: 0, hold: 0, left: 0 };
+    expect(run.scene.chaseOf(player + 1, strip), "another car").toBe(false);
+    expect(run.scene.chaseOf(player, strip), "the chased car").toBe(true);
+    expect(strip.cops).toBe(1);
+    expect(strip.hold, "no hold yet: the patrol car is far").toBe(0);
+    expect(strip.left, "all of Survival's hold ahead").toBe(BUST_HOLD_SECONDS);
+  });
+
+  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts holdSlow(), change `slow && gap <= BUST.near ? this.heldFor[slot]! + dt : 0` to `slow && gap <= BUST.near ? this.heldFor[slot]! + dt : this.heldFor[slot]!`
+  it("fills the hold while a patrol car has it held slow beside it, and drains it the moment it drives off", () => {
+    const { run, street, player } = playerChase();
+    const strip = { cops: 0, hold: 0, left: 0 };
+    runFor(run, 10);
+    expect(run.scene.chaseOf(player, strip), "still chased").toBe(true);
+    expect(strip.hold, "a hold has run").toBeGreaterThan(0);
+    expect(strip.hold * BUST_HOLD_SECONDS + strip.left, "the meter and the countdown are one hold").toBeCloseTo(BUST_HOLD_SECONDS, 6);
+    street.snaps[player]!.vx = 12;
+    runFor(run, CRIME_STEP_SECONDS * 2);
+    expect(run.scene.chaseOf(player, strip), "chased still").toBe(true);
+    expect(strip.hold, "the hold is over with the speed").toBe(0);
+    expect(strip.left, "and starts again from all of it").toBe(BUST_HOLD_SECONDS);
+  });
+
+  // mutation: in src/game/ai/openworld-crime/patrol-cars.ts bust(), delete the line `this.linger(slot, seconds, IMPOUND_SECONDS);`
+  it("ends with the bust: no strip once the player is busted, and the engine was told", () => {
+    const { run, player } = playerChase();
+    const strip = { cops: 0, hold: 0, left: 0 };
+    runFor(run, 30);
+    expect(run.playerBusts.join(","), "the player's car busted").toBe(String(player));
+    expect(run.scene.chaseOf(player, strip), "the chase is over").toBe(false);
   });
 });

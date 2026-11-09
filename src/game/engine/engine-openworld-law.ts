@@ -2,6 +2,7 @@ import type { Obstacles } from "../ai/obstacles.ts";
 import { EVENT_KIND, EVENT_TRIPLE } from "../ai/civilians/civilian-constants.ts";
 import type { CrowdWalkers } from "../ai/civilians/crowd-walkers.ts";
 import { detCos, detSin } from "../kernel/physics-core.js";
+import type { ChaseHud } from "../hud/hud-store.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
@@ -127,6 +128,11 @@ export class OpenWorldLaw {
   /** Draws the foot cops. */
   frame(eyeX: number, eyeZ: number, sight: SightField, wallDt: number): void {
     this.art.update(this.scene.copPoses, eyeX, eyeZ, sight, wallDt);
+  }
+
+  /** The pursuit strip's numbers for car `carIndex` into `out`: see `PatrolCars.chaseOf`. */
+  chaseOf(carIndex: number, out: ChaseHud): boolean {
+    return this.scene.chaseOf(carIndex, out);
   }
 
   /** A civilian a car ran down (the crowd's strike): the third in a minute by one car has a patrol car sent after it. */

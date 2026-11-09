@@ -86,3 +86,45 @@ describe("given the open world's director", () => {
     expect(apart, "pushed apart toward a body's width").toBeGreaterThan(BODY_GAP * 0.75);
   });
 });
+
+describe("given patrol cars chasing the player's car", () => {
+  const CAR = 3;
+
+  /** The director with its law's strip numbers set by the row: `figures.next` is what the law reports for the car. */
+  function stripDirector() {
+    const { director } = directorWith({ law: idleLawPorts() });
+    const figures: { next: { cops: number; hold: number; left: number } | null } = { next: null };
+    director["law"]!.chaseOf = (carIndex, out) => {
+      if (figures.next === null || carIndex !== CAR) return false;
+      Object.assign(out, figures.next);
+      return true;
+    };
+    return { director, figures };
+  }
+
+  // mutation: in src/game/engine/engine-openworld.ts bustOf(), change `if (this.law === null || !this.law.chaseOf(carIndex, this.bustScratch)) {` to `if (this.law === null) {`
+  it("when none chases the car, then there is no strip; when one does, then the strip carries its numbers", () => {
+    const { director, figures } = stripDirector();
+    expect(director.bustOf(CAR), "none chasing").toBeNull();
+    figures.next = { cops: 2, hold: 0.5, left: 6 };
+    const strip = director.bustOf(CAR);
+    expect(strip?.cops).toBe(2);
+    expect(strip?.hold).toBe(0.5);
+    expect(strip?.left).toBe(6);
+    figures.next = null;
+    expect(director.bustOf(CAR), "escaped").toBeNull();
+  });
+
+  // mutation: in src/game/engine/engine-openworld.ts bustOf(), change `if (kept !== null && kept.cops === next.cops && kept.left === left && kept.hold === hold) return kept;` to `if (false) return kept;`
+  it("when the figures change by less than the strip shows, then the HUD is handed the same object, and a changed second gives a new one", () => {
+    const { director, figures } = stripDirector();
+    figures.next = { cops: 1, hold: 0.5, left: 6 };
+    const first = director.bustOf(CAR);
+    figures.next = { cops: 1, hold: 0.5004, left: 6.004 };
+    expect(director.bustOf(CAR), "the same to the strip's precision").toBe(first);
+    figures.next = { cops: 1, hold: 0.58, left: 5.04 };
+    const next = director.bustOf(CAR);
+    expect(next, "a new second").not.toBe(first);
+    expect(next?.left).toBe(5);
+  });
+});

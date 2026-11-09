@@ -181,6 +181,11 @@ export class CrimeScene {
     return this.patrol.chase(carIndex, x, z, now);
   }
 
+  /** The pursuit strip's numbers for car `carIndex`: see `PatrolCars.chaseOf`. */
+  chaseOf(carIndex: number, out: { cops: number; hold: number; left: number }): boolean {
+    return this.patrol !== null && this.patrol.chaseOf(carIndex, out);
+  }
+
   /** The fighters taken down since the last call: the engine throws them as figures. */
   takeStrikes(): readonly FigureStrike[] {
     return this.law.takeStrikes();
