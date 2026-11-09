@@ -149,7 +149,7 @@ function laySidePlaces(layout: Layout, plan: BlockPlan, blockIndex: number): voi
     const common = { kind: spot.kind, name: spot.name, yaw: first.yaw, width: lots.length * first.width, sector: spot.sector, style: NO_STYLE, storeys: 0 };
     if (spot.where === "roof") {
       layout.links.push({ place: layout.places.length, block: blockIndex, side: first.face });
-      const door = homeDoorPoint(first.x, first.frontZ, first.yaw);
+      const door = homeDoorPoint(first.x, first.frontZ, first.yaw, first.house.z1 - first.house.z0);
       layout.places.push({ ...common, doorNode: -1, doorX: door.x, doorZ: door.z, x: first.x, z: (first.house.z0 + first.house.z1) / 2, depth: first.house.z1 - first.house.z0 });
       continue;
     }
