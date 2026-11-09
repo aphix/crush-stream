@@ -40,6 +40,7 @@ import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { CivilianArt } from "../present/civilian-art.ts";
+import { InteriorSet } from "../present/interiors/interior-art.ts";
 import { NEAR_SLOTS } from "../present/civilian-art-constants.ts";
 import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
@@ -400,6 +401,12 @@ export class CrashEngine extends EngineGarage {
         this.scene.add(art.group);
         this.queueWarm();
         return art;
+      },
+      makeInteriors: (map) => {
+        const interiors = new InteriorSet(map);
+        this.scene.add(interiors.group);
+        this.queueWarm();
+        return interiors;
       },
     });
   }
