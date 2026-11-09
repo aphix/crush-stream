@@ -4,6 +4,7 @@ import { FLIPPED_UP_Y } from "../../vehicle/constants.ts";
 import { MAX_CARS } from "../../scenes/fleet.ts";
 import { rightX, rightZ } from "../../world/openworld/openworld-roads.ts";
 import { BOOKKEEPING_SECONDS, KERB_EVICT_MARGIN, KERB_JITTER_SIDE, KERB_JITTER_YAW, KERB_KEEP, KERB_REACH, PRIME_PASSES, SIGHT_RADIUS, TOW_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
+import { residentBody, residentColour } from "./traffic-look.ts";
 import { RESIDENT_CAPACITY, spotUnseen, STANDING, type TrafficContext } from "./traffic-ports.ts";
 import type { ParkedResidentCars } from "./traffic-sight.ts";
 
@@ -27,6 +28,8 @@ export class KerbCars {
   private eyes = 0;
   /** How far (m) the space `nearestWanted` found is from the nearest player. */
   private wantedDistance = 0;
+  /** The resident whose car the space `nearestWanted` found is for; -1 for a space a car stands in for good. */
+  private wantedResident = -1;
   private sinceBookkeeping = 0;
   private passes = 0;
 
@@ -154,17 +157,21 @@ export class KerbCars {
     const { spots, standing } = this.context;
     const prime = this.passes <= PRIME_PASSES;
     let best = -1;
+    let bestResident = -1;
     let bestDistance = KERB_REACH;
     const residents = parked === null ? 0 : parked.count;
     for (let index = 0; index < this.staticSpots.length + residents; index++) {
-      const spot = index < this.staticSpots.length ? this.staticSpots[index]! : this.residentCarSpot(parked!.resident[index - this.staticSpots.length]!);
+      const resident = index < this.staticSpots.length ? -1 : parked!.resident[index - this.staticSpots.length]!;
+      const spot = resident < 0 ? this.staticSpots[index]! : this.residentCarSpot(resident);
       if (spot < 0 || standing[spot] !== STANDING.none) continue;
       const distance = this.distanceToEyes(spots.x[spot]!, spots.z[spot]!);
       if (distance >= bestDistance || (!prime && !spotUnseen(this.context, spot))) continue;
       bestDistance = distance;
       best = spot;
+      bestResident = resident;
     }
     this.wantedDistance = bestDistance;
+    this.wantedResident = bestResident;
     return best;
   }
 
@@ -175,18 +182,22 @@ export class KerbCars {
   /** Stands a pooled car in `spot`, nudged a little off true so a row of them does not look stamped; false when the pool is all out. */
   private show(spot: number): boolean {
     const { ports, spots, standing, sight } = this.context;
+    const body = this.wantedResident < 0 ? null : residentBody(this.wantedResident);
     let slot = -1;
     for (let candidate = 0; candidate < this.size; candidate++) {
-      if (this.spotOfSlot[candidate]! < 0 && !ports.seated(this.first + candidate)) {
+      if (this.spotOfSlot[candidate]! >= 0 || ports.seated(this.first + candidate)) continue;
+      if (slot < 0) slot = candidate;
+      if (body === null || ports.cars()[this.first + candidate]!.style.id === body) {
         slot = candidate;
         break;
       }
     }
     if (slot < 0) return false;
+    if (body !== null && ports.cars()[this.first + slot]!.style.id !== body) ports.setBody(this.first + slot, body);
     const heading = spots.heading[spot]!;
     const side = (hash01(spot, TRAFFIC_SEED) - 0.5) * 2 * KERB_JITTER_SIDE;
     const turn = (hash01(spot, TRAFFIC_SEED + 1) - 0.5) * 2 * KERB_JITTER_YAW;
-    ports.place(this.first + slot, spots.x[spot]! + rightX(heading) * side, spots.z[spot]! + rightZ(heading) * side, spots.yaw[spot]! + turn);
+    ports.place(this.first + slot, spots.x[spot]! + rightX(heading) * side, spots.z[spot]! + rightZ(heading) * side, spots.yaw[spot]! + turn, this.wantedResident < 0 ? null : residentColour(this.wantedResident));
     sight.reset(this.context.sightBase + this.context.movers + slot);
     this.spotOfSlot[slot] = spot;
     this.slotOfSpot[spot] = slot;

@@ -9,6 +9,7 @@ import { KERB_CANDIDATES } from "../../world/openworld/openworld-parking.ts";
 import { EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { kerbSpotsNear } from "../../world/openworld/openworld-parking.ts";
+import { residentBody, residentColour } from "./traffic-look.ts";
 import { Clock, CYCLE_SECONDS, emptyFeed, FakeField, HOLD, homeAt, makeTraffic, ProximitySight, runSeconds, STEP_SECONDS, stepField } from "./traffic-world.test-util.ts";
 
 const FAR = 1500;
@@ -176,6 +177,45 @@ describe("given the open world's traffic on a field with the local player's car"
     car.driver = null;
     stepField(field, traffic, clock);
     expect(traffic.inputOf(car.index, STEP_SECONDS), "traffic's own driver again").not.toBe(own);
+  });
+});
+
+describe("given a resident whose car stands at the kerb near a player and then drives off", () => {
+  const RESIDENT = 5;
+
+  /** The car standing within a metre of space `spot`: its id, or -1. */
+  function carAt(field: FakeField, traffic: OpenWorldTraffic, spot: number): number {
+    const spots = traffic.parkingSpots;
+    for (let id = 1; id < field.cars.length; id++) {
+      const car = field.cars[id]!;
+      if (!car.stored && hypot2(car.group.position.x - spots.x[spot]!, car.group.position.z - spots.z[spot]!) < 1) return id;
+    }
+    return -1;
+  }
+
+  // mutation: sed -i 's/      if (body !== null \&\& ports.cars()\[id\]!.style.id !== body) ports.setBody(id, body);/      \/\/ own body/' src/game/ai/openworld-traffic/mover-fleet.ts
+  // mutation: sed -i 's/paint === NO_COLOUR ? null : paint);/null);/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when the kerb car that stood there is replaced by the car that drives off, then both wear his body and his paint", () => {
+    const field = new FakeField();
+    const feed = emptyFeed(8);
+    const traffic = makeTraffic(field, { movers: 4, kerb: 4 }, feed, [homeAt(HOME.x, HOME.z)]);
+    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
+    feed.parked.count = 1;
+    feed.parked.resident[0] = RESIDENT;
+    feed.parked.place[0] = 0;
+    const clock = new Clock();
+    runSeconds(field, traffic, clock, 3);
+    const spot = traffic.claimedSpots.indexOf(1);
+    expect(spot, "his car's space").toBeGreaterThanOrEqual(0);
+    const kerbId = carAt(field, traffic, spot);
+    expect(kerbId, "a car stands at his space").toBeGreaterThan(0);
+    expect(field.cars[kerbId]!.style.id, "the kerb car's body").toBe(residentBody(RESIDENT));
+    expect(field.colours[kerbId], "the kerb car's paint").toBe(residentColour(RESIDENT));
+    const to = traffic.nearestSpot(WORK.x, WORK.z);
+    const car = traffic.spawnDrivenCar(RESIDENT, spot, to);
+    expect(car, "he drives off").not.toBeNull();
+    expect(field.cars[car!.index]!.style.id, "the driven car's body").toBe(residentBody(RESIDENT));
+    expect(field.colours[car!.index], "the driven car's paint").toBe(residentColour(RESIDENT));
   });
 });
 
@@ -384,7 +424,7 @@ describe("given a peer that joins while traffic runs", () => {
     runSeconds(field, traffic, clock, 5);
     expect(traffic.inputOf(lease.index, STEP_SECONDS), "driven before the peer").not.toBeNull();
     field.seats.add(lease.index);
-    field.ports.place(lease.index, 500, 500, 0);
+    field.ports.place(lease.index, 500, 500, 0, null);
     runSeconds(field, traffic, clock, 10, () => {
       for (let id = 0; id < field.cars.length; id++) {
         if (field.seats.has(id)) expect(traffic.inputOf(id, STEP_SECONDS), `car ${id} is a human's: traffic has no input for it`).toBeNull();

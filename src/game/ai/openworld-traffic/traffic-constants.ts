@@ -127,3 +127,8 @@ export const FEED_SECONDS = 0.5;
 
 /** Where a put-away car waits, far off the course (m): car `id` stands at `x + id * step`. */
 export const STORE_AT = { x: 4000, z: 4000, step: 12 } as const;
+
+/** Paints a resident's car comes in (sRGB): silver, black, white, red, blue, green, tan, grey-blue: the commonest colours on a street. */
+export const RESIDENT_CAR_COLOURS = [0x8a8d91, 0x1d1f23, 0xf0f0ee, 0x7b1e24, 0x24406e, 0x2f5d3b, 0x6e5a3c, 0x55606e] as const;
+/** Seed of which body and colour a resident's car has. */
+export const RESIDENT_CAR_SEED = 0x51dec4;
