@@ -98,6 +98,29 @@ describe("given the neighbourhood on its first days", () => {
   });
 });
 
+const SEEDS = [
+  { it: "seed 1", seed: 1 },
+  { it: "seed 2", seed: 2 },
+  { it: "seed 3", seed: 3 },
+  { it: "seed 4", seed: 4 },
+  { it: "seed 5", seed: 5 },
+  { it: "seed 6", seed: 6 },
+  { it: "seed 7", seed: 7 },
+  { it: "seed 8", seed: 8 },
+] as const;
+
+describe("given cities of many seeds on their third day", () => {
+  for (const testCase of SEEDS) {
+    it(`when it is seven in the morning in ${testCase.it}, then Sal is at his coop, and at five past eleven at night Dee is at the bodega`, () => {
+      const probe = createCityState(testCase.seed, map, 60);
+      const morning = cityAt(tickOfHour(probe, 2, 7), testCase.seed);
+      expect(isDwellingAt(morning, castResident(probe, "sal"), PLACE_NAMES.salCoop), "Sal at the coop at 7:00").toBe(true);
+      const night = cityAt(tickOfHour(probe, 2, 23) + 5 * TICKS_PER_GAME_MINUTE, testCase.seed);
+      expect(isDwellingAt(night, castResident(probe, "dee"), PLACE_NAMES.bodega), "Dee at the bodega at 23:05").toBe(true);
+    });
+  }
+});
+
 describe("given a flyer-poster and the days of a week", () => {
   const state = createCityState(31, map, 60);
   const jamal = castResident(state, "jamal");
