@@ -53,11 +53,11 @@ export class OpenWorldLaw {
     );
     this.unlisten = traffic?.onRedLightRun((carIndex, x, z) => void this.scene.reportRedLight(carIndex, x, z)) ?? null;
     this.art = ports.makeArt(FOOT_COP_COUNT);
+    crowd.overlay = (poses, crowdSeconds, authority) => this.scene.step(crowdSeconds, authority, poses);
   }
 
-  /** After the crowd's step at crowd time `crowdSeconds`: the law advances, overlays the crowd's poses and throws the fighters it took down. */
-  step(crowdSeconds: number, authority: boolean): void {
-    this.scene.step(crowdSeconds, authority, this.crowd.poses);
+  /** After the crowd's step (the law advanced and overlaid the crowd's poses inside it, before the cars' hits): throws the fighters it took down. */
+  throwTakedowns(): void {
     const strikes = this.scene.takeStrikes();
     for (let at = 0; at < strikes.length; at++) {
       const strike = strikes[at]!;
@@ -78,6 +78,7 @@ export class OpenWorldLaw {
   }
 
   dispose(): void {
+    this.crowd.overlay = null;
     this.unlisten?.();
     this.art.dispose();
   }

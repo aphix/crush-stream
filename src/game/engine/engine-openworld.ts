@@ -135,7 +135,7 @@ export class OpenWorldDirector {
     this.feedWalkers(this.crowd);
     this.crowd.step(this.seconds, this.ports.cars(), true);
     this.throwStruck(this.crowd);
-    this.law?.step(this.seconds, true);
+    this.law?.throwTakedowns();
   }
 
   /** A frame: the crowd is made, rebuilt on a new seed or dropped as the course comes and goes; a client steps it by the host's clock; the crowd is drawn and the look-at text kept up. */
@@ -156,7 +156,7 @@ export class OpenWorldDirector {
       this.feedWalkers(crowd);
       crowd.step(this.clock.crowdSeconds(this.ports.now(), INTERP_DELAY), this.ports.cars(), false);
       this.throwStruck(crowd);
-      this.law?.step(crowd.crowdSeconds, false);
+      this.law?.throwTakedowns();
     }
     this.ports.eye(this.ray);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
