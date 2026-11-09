@@ -8,6 +8,8 @@ import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { civilianLine, historyLines } from "../ai/civilians/civilian-mood.ts";
 import { SUBJECT } from "../ai/openworld-auto/auto-director.ts";
+import { activityLine } from "../ai/openworld-auto/auto-interest.ts";
+import { AMBULANCE } from "../ai/openworld-traffic/ambulance.ts";
 import type { AutoWorld } from "../ai/openworld-auto/auto-scan.ts";
 import { AutoFollowCam } from "../present/openworld-auto-cam.ts";
 import { inside, occluder, type Sight } from "../present/spectate-cam.ts";
@@ -35,15 +37,17 @@ function shownResidents(crowd: CivilianCrowd): number[] {
   return Array.from({ length: crowd.poses.count }, (_, resident) => resident).filter((resident) => crowd.poses.shown[resident] === 1);
 }
 
-type Fleet = { cars: DeformableCar[]; resident: Map<number, number>; yours: Set<number> };
+type Fleet = { cars: DeformableCar[]; resident: Map<number, number>; yours: Set<number>; ambulance: { car: number; state: number } };
 
 /** The Auto camera over `crowd` and `fleet`'s cars, no foot cops. */
-function autoOver(crowd: CivilianCrowd | null, fleet: Fleet = { cars: [], resident: new Map(), yours: new Set() }): OpenWorldAuto {
+function autoOver(crowd: CivilianCrowd | null, fleet: Fleet = { cars: [], resident: new Map(), yours: new Set(), ambulance: { car: -1, state: AMBULANCE.idle } }): OpenWorldAuto {
   const world: AutoWorld = {
     crowd: () => crowd,
     cops: () => null,
     residentAt: (carIndex) => fleet.resident.get(carIndex) ?? -1,
     cars: () => fleet.cars,
+    ambulanceCar: () => fleet.ambulance.car,
+    ambulanceState: () => fleet.ambulance.state,
     isPlayerCar: (carIndex) => fleet.yours.has(carIndex),
   };
   const auto = new OpenWorldAuto(world, SIZES, SEED);
@@ -67,7 +71,9 @@ describe("given the Auto camera over a crowd that is out on the fixture map", ()
     const tick = tickAt(crowd.crowdSeconds);
     expect(subject.kind, "the kind of subject").toBe(SUBJECT.civilian);
     expect(auto.text()?.title, "the bubble's title").toBe(civilianLine(crowd.state, subject.id, tick));
-    expect(auto.text()?.lines.join("|"), "the bubble's lines").toBe(historyLines(crowd.state, subject.id).join("|"));
+    const doing = activityLine(crowd.poses.activity[subject.id]!);
+    const expected = doing === null ? historyLines(crowd.state, subject.id) : [doing, ...historyLines(crowd.state, subject.id)];
+    expect(auto.text()?.lines.join("|"), "the bubble's lines").toBe(expected.join("|"));
   });
 
   it("when one of them is fighting, then that one is the first subject", () => {
@@ -93,7 +99,7 @@ describe("given the Auto camera over a street with cars and nobody on the paveme
     const resident = pooledCar(1);
     launch(resident, 20, 0, 0, 0, DRIVING_MPS);
     const patrol = patrolCar(40, sirenOn, sirenOn ? DRIVING_MPS : 0);
-    const fleet: Fleet = { cars: [own, resident, patrol], resident: new Map([[1, driver]]), yours: new Set([0]) };
+    const fleet: Fleet = { cars: [own, resident, patrol], resident: new Map([[1, driver]]), yours: new Set([0]), ambulance: { car: -1, state: AMBULANCE.idle } };
     return { crowd, driver, fleet, auto: autoOver(crowd, fleet) };
   }
 
@@ -113,6 +119,54 @@ describe("given the Auto camera over a street with cars and nobody on the paveme
     expect(auto.subject?.id, "the subject: the patrol car").toBe(2);
     expect(auto.text()?.title, "the patrol's title").toBe("Patrol car - officer at the wheel");
     expect(auto.text()?.lines, "the patrol's line").toEqual(["siren on, answering a call"]);
+  });
+});
+
+const SCENES = [
+  { it: "when a driver is getting out of his parked car, then he is the subject, and the bubble says so", activity: ACTIVITY.carOut, line: "getting out of a car" },
+  { it: "when a witness is on the phone to the police, then she is the subject, and the bubble says so", activity: ACTIVITY.phoneCall, line: "on the phone to the police" },
+  { it: "when someone kneels by a person hurt, then he is the subject, and the bubble says so", activity: ACTIVITY.kneel, line: "kneeling by someone hurt" },
+] as const;
+
+describe("given the Auto camera over a crowd where one scene is going on", () => {
+  for (const scene of SCENES) {
+    it(scene.it, () => {
+      const crowd = morning();
+      const out = shownResidents(crowd);
+      const actor = out[out.length - 1]!;
+      crowd.poses.activity[actor] = scene.activity;
+      const auto = autoOver(crowd);
+      auto.step(FRAME_S);
+      expect(out.length, "civilians out").toBeGreaterThan(3);
+      expect(auto.subject?.id, "the subject: the one in the scene").toBe(actor);
+      expect(auto.text()?.lines[0], "the first line of the bubble").toBe(scene.line);
+    });
+  }
+});
+
+describe("given the Auto camera over a street with an ambulance and a patrol car, both with their lights on", () => {
+  function street(state: number) {
+    const crowd = morning();
+    crowd.poses.shown.fill(0);
+    const ambulance = patrolCar(20, true);
+    const patrol = patrolCar(40, true);
+    const fleet: Fleet = { cars: [ambulance, patrol], resident: new Map(), yours: new Set(), ambulance: { car: 0, state } };
+    return autoOver(crowd, fleet);
+  }
+
+  it("when the ambulance is loading a patient at the scene, then it is the subject, ahead of the patrol car, and the bubble says paramedics are at the scene", () => {
+    const auto = street(AMBULANCE.loading);
+    auto.step(FRAME_S);
+    expect(auto.subject?.id, "the subject: the ambulance").toBe(0);
+    expect(auto.text()?.title, "the title").toBe("Ambulance - paramedics at the scene");
+    expect(auto.text()?.lines[0], "the first line").toBe("loading a patient");
+  });
+
+  it("when the ambulance is driving off, then the patrol car with its siren lit is the more interesting, and the ambulance's bubble says it is driving off", () => {
+    const auto = street(AMBULANCE.leaving);
+    auto.step(FRAME_S);
+    expect(auto.subject?.id, "the subject: the patrol car").toBe(1);
+    expect(auto.text()?.title, "the title of the patrol car").toBe("Patrol car - officer at the wheel");
   });
 });
 

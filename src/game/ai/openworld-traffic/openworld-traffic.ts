@@ -1,6 +1,7 @@
 import { hash01 } from "../../kernel/scalar.ts";
 import { MAX_CARS } from "../../scenes/fleet.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
+import type { CarStyleId } from "../../vehicle/car-variants.ts";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, nearestFreeSpot, residentSpotAt, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
@@ -145,6 +146,11 @@ export class OpenWorldTraffic {
     return this.ambulance.state;
   }
 
+  /** The engine's index of the ambulance's car, -1 when none is out. */
+  ambulanceCar(): number {
+    return this.ambulance.carIndex;
+  }
+
   /** The space the ambulance is at or coming to, -1 when none is out. */
   ambulanceSpot(): number {
     return this.ambulance.scene;
@@ -160,12 +166,23 @@ export class OpenWorldTraffic {
 
   /** Opens the driver's door of resident `resident`'s parked car `radians` (0 shuts and latches it); false when no car of his stands in view of the pool. */
   setCarDoor(resident: number, radians: number): boolean {
-    const spot = resident >= 0 && resident < RESIDENT_CAPACITY ? this.context.residentSpot[resident]! : -1;
-    if (spot < 0) return false;
-    const id = this.kerb.carAt(spot) >= 0 ? this.kerb.carAt(spot) : this.movers.carOf(resident);
+    const id = this.carIdOf(resident);
     if (id < 0) return false;
     this.context.ports.openDoor(id, radians);
     return true;
+  }
+
+  /** The body of the car that stands for resident `resident` at his space (what his door and seat are built on), null when no car of his stands in view of the pool. */
+  carStyleOf(resident: number): CarStyleId | null {
+    const id = this.carIdOf(resident);
+    return id < 0 ? null : this.context.ports.cars()[id]!.style.id;
+  }
+
+  /** The engine id of the pool car standing in resident `resident`'s space (a kerb car, else the mover parked for him), -1 when none does. */
+  private carIdOf(resident: number): number {
+    const spot = resident >= 0 && resident < RESIDENT_CAPACITY ? this.context.residentSpot[resident]! : -1;
+    if (spot < 0) return -1;
+    return this.kerb.carAt(spot) >= 0 ? this.kerb.carAt(spot) : this.movers.carOf(resident);
   }
 
   /** Where resident `resident` gets out of (and in to) the car he parked, into `out`: its driver's door. False when his car is not at a space. */

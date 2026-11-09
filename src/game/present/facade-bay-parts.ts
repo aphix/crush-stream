@@ -64,6 +64,28 @@ class KitBuilder {
     }
   }
 
+  /** A triangle, its corners counter-clockwise seen from outside, each with its own texture point (u, v). */
+  triangle(corners: readonly [Point, Point, Point], uvs: readonly [readonly [number, number], readonly [number, number], readonly [number, number]], colour: THREE.Color, tint: number): void {
+    const [a, b, c] = corners;
+    const edgeX = b[0] - a[0];
+    const edgeY = b[1] - a[1];
+    const edgeZ = b[2] - a[2];
+    const otherX = c[0] - a[0];
+    const otherY = c[1] - a[1];
+    const otherZ = c[2] - a[2];
+    const normalX = edgeY * otherZ - edgeZ * otherY;
+    const normalY = edgeZ * otherX - edgeX * otherZ;
+    const normalZ = edgeX * otherY - edgeY * otherX;
+    const length = hypot3(normalX, normalY, normalZ);
+    for (const [at, point] of corners.entries()) {
+      this.positions.push(point[0], point[1], point[2]);
+      this.normals.push(normalX / length, normalY / length, normalZ / length);
+      this.uvs.push(uvs[at]![0], uvs[at]![1]);
+      this.colours.push(colour.r, colour.g, colour.b);
+      this.tints.push(tint);
+    }
+  }
+
   /** The faces of the axis-aligned box that `faces` (a mask of `FACE`) names, each reading `cell`. */
   box(x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, faces: number, cell: UvRect, colour: THREE.Color, tint: number): void {
     if (faces & FACE.front) this.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], cell, colour, tint);
@@ -146,7 +168,7 @@ function band(builder: KitBuilder, y0: number, y1: number, lip: number): void {
  */
 export function buildBayGeometry(): THREE.BufferGeometry {
   const builder = new KitBuilder();
-  ring(builder, 0, BAY.plinthTop, 0, [KIT_CELL.stone, KIT_CELL.basement, KIT_CELL.stone], WHITE, FIXED);
+  ring(builder, 0, BAY.plinthTop, 0, [KIT_CELL.marble, KIT_CELL.basement, KIT_CELL.marble], WHITE, FIXED);
   let cursor = BAY.plinthTop + BAY.plinthBand;
   band(builder, BAY.plinthTop, cursor, BELT_LIP);
   for (const floor of BAY_FLOORS) {
@@ -167,7 +189,7 @@ const HOOD_OUT = 0.3;
 const HOOD_HEIGHT = 0.2;
 const HOOD_OVER = 0.3;
 
-/** The stoop: solid stone steps (landing at the wall, riser and tread for each step, cheeks to the ground) under the door, with its jambs and hood. */
+/** The stoop: solid marble steps (landing at the wall, riser and tread for each step, cheeks to the ground) under the door. */
 export function buildStoopGeometry(): THREE.BufferGeometry {
   const builder = new KitBuilder();
   const left = DOOR_X - STOOP.width / 2;
@@ -175,11 +197,17 @@ export function buildStoopGeometry(): THREE.BufferGeometry {
   for (let step = 1; step <= STOOP.steps; step++) {
     const { near, far, top } = stoopStepRange(step);
     const previous = top - STOOP.rise;
-    builder.quad([left, previous, far], [right, previous, far], [right, top, far], [left, top, far], KIT_CELL.stone, RISER_SHADE, ACCENT);
-    builder.quad([left, top, far], [right, top, far], [right, top, near], [left, top, near], KIT_CELL.stone, TREAD_SHADE, ACCENT);
-    builder.quad([right, 0, far], [right, 0, near], [right, top, near], [right, top, far], KIT_CELL.stone, CHEEK_SHADE, ACCENT);
-    builder.quad([left, 0, near], [left, 0, far], [left, top, far], [left, top, near], KIT_CELL.stone, CHEEK_SHADE, ACCENT);
+    builder.quad([left, previous, far], [right, previous, far], [right, top, far], [left, top, far], KIT_CELL.marble, RISER_SHADE, ACCENT);
+    builder.quad([left, top, far], [right, top, far], [right, top, near], [left, top, near], KIT_CELL.marble, TREAD_SHADE, ACCENT);
+    builder.quad([right, 0, far], [right, 0, near], [right, top, near], [right, top, far], KIT_CELL.marble, CHEEK_SHADE, ACCENT);
+    builder.quad([left, 0, near], [left, 0, far], [left, top, far], [left, top, near], KIT_CELL.marble, CHEEK_SHADE, ACCENT);
   }
+  return builder.geometry(true);
+}
+
+/** The flat door surround of a house with no fanlight: stone jambs beside the hole and a hood over it. */
+export function buildSurroundGeometry(): THREE.BufferGeometry {
+  const builder = new KitBuilder();
   for (const side of [-1, 1]) {
     const inner = DOOR_X + side * DOOR.halfWidth;
     const outer = DOOR_X + side * (DOOR.halfWidth + JAMB_WIDTH);
@@ -187,6 +215,69 @@ export function buildStoopGeometry(): THREE.BufferGeometry {
   }
   const hoodHalf = DOOR.halfWidth + JAMB_WIDTH + HOOD_OVER;
   builder.box(DOOR_X - hoodHalf, DOOR_X + hoodHalf, DOOR.head, DOOR.head + HOOD_HEIGHT, 0, HOOD_OUT, ALL_BUT_BACK, KIT_CELL.stone, TRIM, FIXED);
+  return builder.geometry(true);
+}
+
+/**
+ * The Federal door: white pilasters beside the hole, an arched fanlight over it (a fan of glass in a proud white ring, a keystone at its crown) and a slim cap over the arch. The fan springs from the
+ * door's head and is as wide as the hole; every number is in metres.
+ */
+const PILASTER_WIDTH = 0.14;
+const PILASTER_OUT = 0.07;
+const FAN_SEGMENTS = 8;
+const FAN_RING_WIDTH = 0.16;
+const FAN_RING_OUT = 0.06;
+const FAN_GLASS_OUT = 0.02;
+const KEYSTONE_HALF = 0.07;
+const KEYSTONE_RISE = 0.08;
+const KEYSTONE_OUT = 0.09;
+const ARCH_CAP_HALF = 0.8;
+const ARCH_CAP_GAP = 0.04;
+const ARCH_CAP_HEIGHT = 0.1;
+const ARCH_CAP_OUT = 0.2;
+const FEDERAL_WHITE = new THREE.Color(0xf2efe6);
+
+/** A point on the fan's circle of radius `radius` at `angle` (0 on the door's +x side, up to PI on its other), in the kit's x and y. */
+function fanPoint(radius: number, angle: number, out: number): Point {
+  return [DOOR_X + radius * Math.cos(angle), DOOR.head + radius * Math.sin(angle), out];
+}
+
+/** The half ring over the fan: its front, its outer and its inner wall, a segment at a time. */
+function archRing(builder: KitBuilder, inner: number, outer: number): void {
+  const cell = KIT_CELL.panel;
+  for (let segment = 0; segment < FAN_SEGMENTS; segment++) {
+    const from = (Math.PI * segment) / FAN_SEGMENTS;
+    const to = (Math.PI * (segment + 1)) / FAN_SEGMENTS;
+    builder.quad(fanPoint(inner, from, FAN_RING_OUT), fanPoint(outer, from, FAN_RING_OUT), fanPoint(outer, to, FAN_RING_OUT), fanPoint(inner, to, FAN_RING_OUT), cell, FEDERAL_WHITE, FIXED);
+    builder.quad(fanPoint(outer, from, 0), fanPoint(outer, to, 0), fanPoint(outer, to, FAN_RING_OUT), fanPoint(outer, from, FAN_RING_OUT), cell, FEDERAL_WHITE, FIXED);
+    builder.quad(fanPoint(inner, to, 0), fanPoint(inner, from, 0), fanPoint(inner, from, FAN_RING_OUT), fanPoint(inner, to, FAN_RING_OUT), cell, FEDERAL_WHITE, FIXED);
+  }
+}
+
+/** The fan of glass: a triangle a segment from the springing point, each reading its slice of the fanlight cell (its flat edge along the cell's bottom). */
+function fanGlass(builder: KitBuilder, radius: number): void {
+  const cell = KIT_CELL.fanlight;
+  const uvOf = (angle: number): readonly [number, number] => [cell.u0 + (cell.u1 - cell.u0) * (0.5 + 0.5 * Math.cos(angle)), cell.v0 + (cell.v1 - cell.v0) * Math.sin(angle)];
+  for (let segment = 0; segment < FAN_SEGMENTS; segment++) {
+    const from = (Math.PI * segment) / FAN_SEGMENTS;
+    const to = (Math.PI * (segment + 1)) / FAN_SEGMENTS;
+    builder.triangle([fanPoint(0, 0, FAN_GLASS_OUT), fanPoint(radius, from, FAN_GLASS_OUT), fanPoint(radius, to, FAN_GLASS_OUT)], [[cell.u0 + (cell.u1 - cell.u0) / 2, cell.v0], uvOf(from), uvOf(to)], WHITE, FIXED);
+  }
+}
+
+export function buildFanlightGeometry(): THREE.BufferGeometry {
+  const builder = new KitBuilder();
+  for (const side of [-1, 1]) {
+    const inner = DOOR_X + side * DOOR.halfWidth;
+    const outer = DOOR_X + side * (DOOR.halfWidth + PILASTER_WIDTH);
+    builder.box(Math.min(inner, outer), Math.max(inner, outer), DOOR.sill, DOOR.head, 0, PILASTER_OUT, FACE.front | FACE.left | FACE.right | FACE.top, KIT_CELL.panel, FEDERAL_WHITE, FIXED);
+  }
+  const ringOuter = DOOR.halfWidth + FAN_RING_WIDTH;
+  fanGlass(builder, DOOR.halfWidth);
+  archRing(builder, DOOR.halfWidth, ringOuter);
+  builder.box(DOOR_X - KEYSTONE_HALF, DOOR_X + KEYSTONE_HALF, DOOR.head + DOOR.halfWidth, DOOR.head + ringOuter + KEYSTONE_RISE, 0, KEYSTONE_OUT, ALL_BUT_BACK, KIT_CELL.panel, FEDERAL_WHITE, FIXED);
+  const capBottom = DOOR.head + ringOuter + KEYSTONE_RISE + ARCH_CAP_GAP;
+  builder.box(DOOR_X - ARCH_CAP_HALF, DOOR_X + ARCH_CAP_HALF, capBottom, capBottom + ARCH_CAP_HEIGHT, 0, ARCH_CAP_OUT, ALL_BUT_BACK, KIT_CELL.panel, FEDERAL_WHITE, FIXED);
   return builder.geometry(true);
 }
 

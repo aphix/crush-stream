@@ -8,9 +8,10 @@ import type { LookText } from "../civilians/civilian-look.ts";
 import { buildingLines, civilianLine, historyLines, moodOf } from "../civilians/civilian-mood.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import { ACTIVITY } from "../civilians/civilian-activity.ts";
+import { AMBULANCE } from "../openworld-traffic/ambulance.ts";
 import { CRIMINAL_INTEREST, PERSON_SHOT, SPOT_SHOT, WANTED_INTEREST } from "./auto-constants.ts";
 import { type AutoCandidates, SUBJECT, type SubjectKind } from "./auto-director.ts";
-import { activityInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
+import { activityInterest, activityLine, ambulanceInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
 
 /** What the scan reads of the open world; each is null (or empty) where the thing is not there. */
 export type AutoWorld = {
@@ -20,6 +21,9 @@ export type AutoWorld = {
   /** The resident at the wheel of engine car `carIndex`; -1 for none or a kerb car. */
   residentAt(carIndex: number): number;
   cars(): readonly DeformableCar[];
+  /** The engine's index of the ambulance's car (-1 when none is out) and where its call is (`AMBULANCE`). */
+  ambulanceCar(): number;
+  ambulanceState(): number;
   /** Engine car `carIndex` is a viewer's own (a seated player's car), never followed. */
   isPlayerCar(carIndex: number): boolean;
 };
@@ -84,7 +88,7 @@ export class OpenWorldScan {
     const crowd = this.world.crowd();
     if (crowd === null) return null;
     const tick = tickAt(crowd.crowdSeconds);
-    if (kind === SUBJECT.civilian || kind === SUBJECT.knock) return { title: civilianLine(crowd.state, id, tick), lines: historyLines(crowd.state, id) };
+    if (kind === SUBJECT.civilian || kind === SUBJECT.knock) return this.civilianText(crowd, id, tick);
     if (kind === SUBJECT.wreck) return buildingLines(crowd.state, id, tick);
     if (kind === SUBJECT.cop) return this.copText(id);
     return this.driverText(crowd, id, tick);
@@ -138,7 +142,7 @@ export class OpenWorldScan {
     for (let index = 0; index < cars.length; index++) {
       if (!this.watchableCar(index)) continue;
       const car = cars[index]!;
-      table.add(SUBJECT.driver, index, driverInterest(hypot2(car.velocity.x, car.velocity.z), car.sirens));
+      table.add(SUBJECT.driver, index, index === this.world.ambulanceCar() ? ambulanceInterest(this.world.ambulanceState()) : driverInterest(hypot2(car.velocity.x, car.velocity.z), car.sirens));
     }
   }
 
@@ -215,11 +219,25 @@ export class OpenWorldScan {
     return { title: `Officer ${cop + 1} - ${doing}`, lines: [] };
   }
 
+  /** A civilian's line, then what he is doing when the line does not say it, then his life log. */
+  private civilianText(crowd: CivilianCrowd, resident: number, tick: number): LookText {
+    const doing = crowd.poses.shown[resident] === 1 ? activityLine(crowd.poses.activity[resident]!) : null;
+    const history = historyLines(crowd.state, resident);
+    return { title: civilianLine(crowd.state, resident, tick), lines: doing === null ? history : [doing, ...history] };
+  }
+
+  private ambulanceText(): LookText {
+    const state = this.world.ambulanceState();
+    if (state === AMBULANCE.loading) return { title: "Ambulance - paramedics at the scene", lines: ["loading a patient"] };
+    return { title: state === AMBULANCE.leaving ? "Ambulance - driving off" : "Ambulance - answering a call", lines: ["lights on"] };
+  }
+
   private driverText(crowd: CivilianCrowd, carIndex: number, tick: number): LookText | null {
     const car = this.world.cars()[carIndex];
     if (car === undefined) return null;
     const resident = this.world.residentAt(carIndex);
     if (resident >= 0) return { title: civilianLine(crowd.state, resident, tick), lines: ["at the wheel", ...historyLines(crowd.state, resident)] };
+    if (carIndex === this.world.ambulanceCar()) return this.ambulanceText();
     return { title: `Patrol car - officer at the wheel`, lines: [car.sirens ? "siren on, answering a call" : "on patrol"] };
   }
 }
