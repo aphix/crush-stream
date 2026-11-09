@@ -32,6 +32,7 @@ interface PatrolHooks {
   busted(resident: number, carIndex: number, seconds: number): void;
 }
 
+const YIELD = { none: 0, stopping: 1, refused: 2 } as const;
 const PATROL_MODE = { free: 0, toScene: 1, atScene: 2, pursuing: 3, lingering: 4 } as const;
 
 /**
@@ -53,7 +54,8 @@ export class PatrolCars {
   private readonly farFor = new Float64Array(MAX_PATROL_CARS);
   private readonly since = new Float64Array(MAX_PATROL_CARS);
   private readonly lingerUntil = new Float64Array(MAX_PATROL_CARS);
-  private readonly yielded = new Uint8Array(MAX_PATROL_CARS);
+  /** Per car: whether it has been asked to pull over yet (`YIELD.none`), is pulling over (`YIELD.stopping`) or cannot be made to (`YIELD.refused`: a human's). */
+  private readonly yieldState = new Uint8Array(MAX_PATROL_CARS);
   private readonly drivers: readonly CarDriver[];
   private readonly stopDriver: CarDriver;
   private readonly out: DriveInput = idleDrive();
@@ -133,7 +135,7 @@ export class PatrolCars {
     this.targetCar[slot] = -1;
     this.heldFor[slot] = 0;
     this.farFor[slot] = 0;
-    this.yielded[slot] = 0;
+    this.yieldState[slot] = YIELD.none;
     this.since[slot] = seconds;
     this.ports.setSirens(handle, true);
     this.ports.setDriver(handle, this.drivers[slot]!);
@@ -157,10 +159,7 @@ export class PatrolCars {
     }
     const cop = this.ports.snap(this.handle[slot]!);
     const gap = hypot2(offender.x - cop.x, offender.z - cop.z);
-    if (this.yielded[slot] === 0 && gap <= YIELD_DISTANCE) {
-      this.yielded[slot] = 1;
-      this.ports.takeTraffic(this.targetCar[slot]!, this.stopDriver);
-    }
+    if (this.yieldState[slot] === YIELD.none && gap <= YIELD_DISTANCE) this.yieldState[slot] = this.ports.takeTraffic(this.targetCar[slot]!, this.stopDriver) ? YIELD.stopping : YIELD.refused;
     this.holdSlow(slot, offender, gap, dt);
     this.farFor[slot] = gap > CAR_LOST_DISTANCE ? this.farFor[slot]! + dt : 0;
     if (this.heldFor[slot]! >= this.holdNeeded(slot)) this.bust(slot, seconds);
@@ -204,7 +203,7 @@ export class PatrolCars {
     }
     const offender = this.mode[slot] === PATROL_MODE.pursuing ? this.ports.carSnap(this.targetCar[slot]!) : null;
     if (offender === null) return this.brakeOut();
-    const crawling = hypot2(offender.vx, offender.vz) < CRAWL;
+    const crawling = this.yieldState[slot] === YIELD.stopping || hypot2(offender.vx, offender.vz) < CRAWL;
     this.pursuit.drive(slot, self, offender.x, offender.z, offender.vx, offender.vz, crawling ? CAR_STOP_GAP : 0, dt, this.out);
     return this.out;
   }
