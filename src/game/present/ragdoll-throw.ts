@@ -154,9 +154,9 @@ export abstract class RagdollThrower extends RagdollStepper {
    * A figure a car or a loose part of it ran down (`FigureStrike`: a lawn guard, the VIP on his walk, or a civilian of the open world, whose `look` is
    * the drawn crowd's dress of them) is thrown where he stood, standing, in the dress he wore (`guardDress`, `VIP_LOOK`, or `look`) with his arms hanging, at the strike's velocity and spin, ignoring the car that struck
    * him for `GRACE` s (none for a part's: he stands clear of its car, and the part must meet him): through the launch a driver's throw
-   * takes (the worker's world, this thread's, or waiting for Rapier up to `PENDING_MAX`).
+   * takes (the worker's world, this thread's, or waiting for Rapier up to `PENDING_MAX`). `life`: sim s he lies about (default: the pool's).
    */
-  throwFigure(s: FigureStrike, cars: readonly DeformableCar[], look?: DriverLook): void {
+  throwFigure(s: FigureStrike, cars: readonly DeformableCar[], look?: DriverLook, life?: number): void {
     this.cars = cars;
     const dress = look ? { cop: false, look } : s.guard >= 0 ? guardDress(s.guard) : { cop: false, look: VIP_LOOK };
     const t = this.figure;
@@ -168,6 +168,7 @@ export abstract class RagdollThrower extends RagdollStepper {
     t.age = 0;
     t.cop = dress.cop;
     t.look = dress.look;
+    t.life = life;
     this.pick();
     if (this.mode === "remote") this.launchRemote(t, cars);
     else if (this.world) this.spawn(t);

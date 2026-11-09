@@ -57,7 +57,7 @@ export const ITERATIONS = 4;
 /** Rapier's internal solver passes per iteration (default 1): at the first touch of a 29 m/s throw one pass rose energy 75–325 J in a frame at 1/120 and 26–30 J (1 of 5 runs) at 1/480 and 1/960; two at most 0.6 J over 60 runs (60/144/240 Hz). */
 export const INTERNAL_PASSES = 2;
 /** A throw, placed: car (-1: none, `place`; else the one he ignores for `GRACE` s), torso point and orientation, linear and angular velocity (world), sim seconds waiting, a police driver, whether the ride-along may frame him, whether his purse flies too (unset: when his look is a woman's), arms hanging (a figure thrown standing) instead of raised, a look of his own (unset: his car's driver's), and whether his limbs leave loose (`limp`: a driver thrown out of a car). */
-export type Throw = { car: number; p: THREE.Vector3; q: THREE.Quaternion; v: THREE.Vector3; w: THREE.Vector3; age: number; cop: boolean; rides: boolean; purse?: boolean; armsDown?: boolean; look?: DriverLook; loose?: boolean };
+export type Throw = { car: number; p: THREE.Vector3; q: THREE.Quaternion; v: THREE.Vector3; w: THREE.Vector3; age: number; cop: boolean; rides: boolean; purse?: boolean; armsDown?: boolean; look?: DriverLook; loose?: boolean; life?: number };
 
 /** What a dummy sent to the worker looks like, applied (`mesh.dress`, `spray`, `Purses.paint`) once the worker says which slot he took. */
 type Dressing = { cop: boolean; look: DriverLook; spray: SprayBitmap | null; purse: boolean; car: number; seed: number };
@@ -399,8 +399,8 @@ export abstract class RagdollPool {
     return oldest;
   }
 
-  /** Throw `t`'s dummy into slot `at` (-1: a free slot, else the oldest one's), to lie about `life` sim s, in `dressed` (none: his car's driver's look); returns the slot. */
-  spawn(t: Throw, at = -1, life = this.thrownLife, dressed: DriverLook | null = null): number {
+  /** Throw `t`'s dummy into slot `at` (-1: a free slot, else the oldest one's), to lie about `life` sim s (the throw's own `life`, else the pool's), in `dressed` (none: his car's driver's look); returns the slot. */
+  spawn(t: Throw, at = -1, life = t.life ?? this.thrownLife, dressed: DriverLook | null = null): number {
     let slot = at >= 0 ? at : this.freeSlot();
     if (slot < 0) slot = this.oldestSlot();
     if (slot >= this.capacity) throw new RangeError(`dummy slot ${slot} is past the pool's capacity of ${this.capacity}`);

@@ -421,7 +421,7 @@ export class CrashEngine extends EngineGarage {
         ray.dirY = _v.y;
         ray.dirZ = _v.z;
       },
-      throwFigure: (strike, look) => this.ragdolls.throwFigure(strike, this.live(), look),
+      throwFigure: (strike, look, life) => this.ragdolls.throwFigure(strike, this.live(), look, life),
       strikeWalker: (dirX, dirZ) => {
         if (!this.ragdolls.walkerTorso(_p)) return;
         this.ragdolls.strikeWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);

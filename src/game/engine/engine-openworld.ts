@@ -11,7 +11,7 @@ import type { SignSight } from "../present/openworld-signs.ts";
 import type { OpenWorldMap, Place } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { tickAt } from "../ai/civilians/civilian-clock.ts";
-import { CROWD_SEED_MASK, CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
+import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.ts";
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
@@ -97,7 +97,8 @@ export type OpenWorldPorts = {
   /** Writes where the eye is and which way it looks. */
   eye(ray: LookRay): void;
   /** A civilian run down is thrown dressed as the crowd draws them (`look`). */
-  throwFigure(strike: FigureStrike, look: DriverLook): void;
+  /** `life`: sim s the body lies (default: the pool's). */
+  throwFigure(strike: FigureStrike, look: DriverLook, life?: number): void;
   /** Calls `listener` for every solid a car meets (closing speed, contact point) until the returned function is called. */
   hookWallHits(listener: (closing: number, x: number, z: number) => void): () => void;
   makeArt(capacity: number): CrowdArt;
@@ -447,7 +448,7 @@ export class OpenWorldDirector {
       const strike = strikes[at]!;
       const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
       dressOfLook(crowd.poses.look[strike.guard]!, look);
-      this.ports.throwFigure(strike, look);
+      this.ports.throwFigure(strike, look, DOWNED_LIFE_SECONDS);
       this.law?.noteStrike(strike);
     }
   }

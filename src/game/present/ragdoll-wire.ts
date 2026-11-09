@@ -64,6 +64,8 @@ interface ThrowMessage {
   armsDown: boolean;
   loose: boolean;
   lookSeed: number;
+  /** Sim seconds he lies about, when the throw names its own (`Throw.life`). */
+  life?: number;
 }
 
 /** A car's cage as the dummies' world fits a proxy to it (`CageView`), sent when it changes. */

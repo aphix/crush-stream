@@ -21,6 +21,8 @@ export const CRASH_NODE_REACH = 20;
 export const CRASH_LOCKOUT_SECONDS = 4;
 /** Someone run down who is still down this long after (s) has an ambulance called for them. */
 export const AMBULANCE_DELAY_SECONDS = 6;
+/** Sim seconds the body of a civilian run down lies in the street: past the call, the drive and the loading (a thrown figure's default is 10 s). */
+export const DOWNED_LIFE_SECONDS = 120;
 
 /** A whole walking stride (both feet) covers this many metres: the guards' and the VIP's stride (`people.ts`). */
 const STRIDE_METRES = 1.5;
