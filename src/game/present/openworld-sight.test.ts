@@ -186,8 +186,13 @@ const FAR_SHOP = { ...SHOP, z: 80 } as const;
 const FAR_SHOP_BOX = occluder(FAR_SHOP.x, FAR_SHOP.z, FAR_SHOP.yaw, FAR_SHOP.halfDepth, FAR_SHOP.halfWidth, false, 0, 10);
 const BLOCK_BETWEEN = occluder(0, 40, 0, 15, 4, false, 0, 10);
 
+function aimAt(field: SightField, shop: typeof SHOP | typeof FAR_SHOP, top: number): void {
+  Object.assign(field.probe, { x: shop.x, z: shop.z, yaw: shop.yaw, halfDepth: shop.halfDepth, halfWidth: shop.halfWidth, top });
+}
+
 function seesInto(field: SightField, shop: typeof SHOP | typeof FAR_SHOP, face: (typeof FACE)[keyof typeof FACE]): boolean {
-  return field.seenThroughFace(shop.x, shop.z, shop.yaw, shop.halfDepth, shop.halfWidth, OPENING_TOP_M, face);
+  aimAt(field, shop, OPENING_TOP_M);
+  return field.seenThroughFace(face);
 }
 
 describe("given a shop's interior and the street camera in front of its shopfront", () => {
@@ -236,7 +241,10 @@ describe("given a shop's interior behind a block, its verdicts recorded once a f
 
 describe("given a shop's footprint and the players standing about it", () => {
   const players = (x: number, z: number) => [{ group: { position: { x, z } } }];
-  const inside = (field: SightField) => field.playerInside(SHOP.x, SHOP.z, SHOP.yaw, SHOP.halfDepth, SHOP.halfWidth);
+  const inside = (field: SightField) => {
+    aimAt(field, SHOP, OPENING_TOP_M);
+    return field.playerInside();
+  };
 
   it("when the walker stands in the shop, then a player is inside it, and on the sidewalk in front of it no one is", () => {
     const field = new SightField([SHOP_BOX], IDS);
@@ -244,6 +252,49 @@ describe("given a shop's footprint and the players standing about it", () => {
     expect(inside(field), "player inside, 5 m along the shop and 1 m behind its middle").toBe(true);
     field.update([street], 0, players(0, 24));
     expect(inside(field), "player inside, on the sidewalk 2 m in front of the shopfront").toBe(false);
+  });
+});
+
+describe("given the zero-boxing forms of the queries, over a street camera and a building 30 m ahead", () => {
+  const field = fieldSeenBy([street]);
+  const at = [
+    { x: 0, z: 15 },
+    { x: 0, z: 50 },
+    { x: 30, z: 50 },
+    { x: 0, z: -20 },
+    { x: 17, z: 50 },
+  ] as const;
+
+  it("when the probe is aimed at a place, then it is seen as the same place asked by number", () => {
+    for (const place of at) {
+      Object.assign(field.probe, { x: place.x, z: place.z, radius: PERSON_M });
+      expect(field.seenAtProbe(), `seen at (${place.x}, ${place.z}) by the probe`).toBe(field.seen(place.x, place.z, PERSON_M));
+    }
+  });
+
+  it("when a crowd is asked in one call, then each is seen as it is asked alone, and a building hides those behind it", () => {
+    const seen = new Uint8Array(at.length);
+    field.seenMany(at.map((place) => place.x), at.map((place) => place.z), at.length, PERSON_M, seen);
+    for (const [index, place] of at.entries()) expect(seen[index], `seen at (${place.x}, ${place.z}) with the crowd`).toBe(field.seen(place.x, place.z, PERSON_M) ? 1 : 0);
+    expect(seen[0], "in front of the building").toBe(1);
+    expect(seen[1], "behind the building").toBe(0);
+  });
+
+  it("when the field is off, then a crowd asked in one call is all seen", () => {
+    const off = fieldSeenBy([street]);
+    off.enabled = false;
+    const seen = new Uint8Array(2);
+    off.seenMany([0, 0], [15, 50], 2, PERSON_M, seen);
+    expect(seen[0]! + seen[1]!, "seen with the field off").toBe(2);
+  });
+
+  it("when the probe is aimed at a place and a player's car stands near it, then it is near, and not once the radius is short of the car", () => {
+    const nearField = new SightField([], IDS);
+    nearField.update([], 0, [{ group: { position: { x: 100, z: 0 } } }]);
+    Object.assign(nearField.probe, { x: 130, z: 0, radius: 40 });
+    expect(nearField.nearProbe(), "30 m from the car, within 40").toBe(true);
+    nearField.probe.radius = 20;
+    expect(nearField.nearProbe(), "30 m from the car, within 20").toBe(false);
   });
 });
 

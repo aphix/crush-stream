@@ -131,7 +131,7 @@ at dusk and night. Every destination, a need's or a row's, is ranked by that wei
 
 **Seats** (`society-seats.ts`): a customer at a coffee shop, bar or diner takes a free seat from `Place.seats` (one holder per seat, held from
 the moment they set out, freed when they leave or are knocked, busted or die); a resident sitting out takes one of the home's leading
-`stoopSeats`. The holder is in their row (`seat`); the owner table is derived and kept equal by the mirror.
+`stoopSeats`. The holder is in their row (`seat`); the owner table is derived and kept equal by the mirror. A venue with a counter (`Place.counter`) also has `STAND_SPOTS` standing spots for customers who have no seat, numbered after its seats in the same table (one holder each, rows of `STAND_COLUMNS` behind the buying lane, `STAND_SPACING` apart: more than a body's width, so they are fixed bodies that need no separating), and `CLERK_SPOTS` along the clerk's spot for staff. A customer who is not held to a spot (a stop too short to sit or stand for) buys on a lane at the counter itself, in front of every standing spot, which the crowd keeps them apart on; a seated customer buys there first, then sits; someone who finds every spot taken is not drawn inside.
 
 **Activity** (`society-activity.ts`): `readActivity` is a pure function of the row and the time that says what the drawing animates
 (`civilian-activity.ts`'s codes), since when and until when, with whom, the surface they sit at, and, for someone the brain places (seated,

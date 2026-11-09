@@ -489,7 +489,7 @@ describe("given the panes of the bay windows and the list of built buildings", (
     expect(alphaAt(FRAME_ACROSS, FRAME_UP), "the frame's alpha").toBeGreaterThan(GLASS_ALPHA_BELOW);
   });
 
-  // mutation: sed -i 's/    shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;//' src/game/present/facade-bays.ts
+  // mutation: sed -i 's/ \&\& facadeCuts(vKitOpen)) discard;/) discard;/' src/game/present/facade-bays.ts (a pane pops at once, not by the openness); sed -i 's/    shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;//' src/game/present/facade-bays.ts
   it("when the kit's material is compiled, then each instance is told whether its house has its rooms built against the shared list, and a pane is cut on that", () => {
     const material = (kit.group.getObjectByName("facade-stoop") as THREE.InstancedMesh).material as THREE.MeshStandardMaterial;
     const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
@@ -497,7 +497,7 @@ describe("given the panes of the bay windows and the list of built buildings", (
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
     expect(shader.uniforms.facadeOpenAt, "the list of built buildings").toBe(FACADE_OPEN_AT);
     expect(shader.vertexShader, "the vertex shader's flag").toContain("vKitOpen");
-    expect(shader.fragmentShader, "the fragment shader's cut").toContain(`vKitOpen > 0.5 && diffuseColor.a < ${GLASS_ALPHA_BELOW}) discard;`);
+    expect(shader.fragmentShader, "the fragment shader's cut").toContain(`vKitOpen > 0.0 && diffuseColor.a < ${GLASS_ALPHA_BELOW} && facadeCuts(vKitOpen)) discard;`);
   });
 
   // mutation: sed -i 's/^export const KIT_HOUSE_BACK = drawnHalf(LAYOUT.houseDepth);/export const KIT_HOUSE_BACK = drawnHalf(LAYOUT.houseDepth) + 0.5;/' src/game/present/facade-bays.ts

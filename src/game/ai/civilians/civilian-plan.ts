@@ -55,9 +55,9 @@ import { ageOf } from "./society-day.ts";
 import { crimeKindOf } from "./society-crime.ts";
 import { dwellTicksOf, evolveNeeds, needWeight } from "./needs.ts";
 import { carStandsAt, chooseCar, clearDriveLeg, planCarPath, reserveCar, walkMetres } from "./society-cars.ts";
-import { claimSeat, releaseSeat } from "./society-seats.ts";
+import { claimSeat, claimStand, releaseSeat } from "./society-seats.ts";
 import { INTERACTIONS, TARGET, considerInteractions, type InteractionRow } from "./society-table.ts";
-import { isSeatedVenue } from "./society-venues.ts";
+import { isCounterVenue, isSeatedVenue } from "./society-venues.ts";
 
 function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
@@ -165,7 +165,7 @@ function chooseByUtility(state: CityState, resident: number, current: number, ti
   considerInteractions(state, resident, current, tick, hour, bestUtility, draw);
 }
 
-/** A customer takes a free seat at a coffee shop, bar or diner for a dwell worth sitting through; someone sitting out takes a stoop seat. */
+/** A customer takes a free seat at a coffee shop, bar or diner for a dwell worth sitting through, else a standing spot of their own at a counter; staff take a clerk's spot; someone sitting out takes a stoop seat. */
 function takeSeat(state: CityState, resident: number, place: number, purpose: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   if (purpose === PURPOSE.stoopSit) {
@@ -173,8 +173,15 @@ function takeSeat(state: CityState, resident: number, place: number, purpose: nu
     return;
   }
   const dwellMinutes = (state.ints[base + RESIDENT_INT.nextDecisionTick]! - state.ints[base + RESIDENT_INT.arriveTick]!) / TICKS_PER_GAME_MINUTE;
-  if (state.ints[base + RESIDENT_INT.species] !== SPECIES.person || state.ints[base + RESIDENT_INT.work] === place || dwellMinutes < SEAT_MIN_DWELL_MINUTES) return;
-  if (isSeatedVenue(state.venues.venueOf[place]!)) claimSeat(state, resident, place, false);
+  if (state.ints[base + RESIDENT_INT.species] !== SPECIES.person) return;
+  if (state.ints[base + RESIDENT_INT.work] === place) {
+    if (state.venues.clerkCount[place]! > 0) claimStand(state, resident, place, true);
+    return;
+  }
+  if (dwellMinutes < SEAT_MIN_DWELL_MINUTES) return;
+  const venue = state.venues.venueOf[place]!;
+  if (isSeatedVenue(venue) && claimSeat(state, resident, place, false)) return;
+  if (isCounterVenue(venue)) claimStand(state, resident, place, false);
 }
 
 /** The resident dwells where they are until `nextDecision`: no leg. */

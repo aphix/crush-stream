@@ -10,7 +10,7 @@ import { buildAirconGeometry, buildBayGeometry, buildCondenserGeometry, buildCor
 import { airconWindowsOf, shuttersOf, visibleWindowsOf } from "./facade-fittings.ts";
 import { windowBoxPlacements, type SillWindow } from "./facade-window-boxes.ts";
 import { GLASS_ALPHA_BELOW, makeKitTextures, type KitTextures } from "./facade-kit-atlas.ts";
-import { FACADE_GLOW, FACADE_OPEN_AT, FACADE_OPEN_UNIFORM, facadeOpenLoop, roofLiftAt } from "./facades.ts";
+import { FACADE_CUT_GLSL, FACADE_GLOW, FACADE_OPEN_AT, FACADE_OPEN_UNIFORM, facadeOpenLoop, roofLiftAt } from "./facades.ts";
 
 /**
  * The rowhomes' projecting bay stacks, stoops, iron railings, roofline cornices and what stands on their roofs (chimneys and hatches, on some a condenser or a deck): one instanced mesh per kind across
@@ -93,8 +93,8 @@ function makeKitMaterial(textures: KitTextures): THREE.MeshStandardMaterial {
       .replace("#include <color_vertex>", tintedColorVertex())
       .replace("#include <begin_vertex>", `#include <begin_vertex>\n${KIT_HOUSE_VERTEX}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform float facadeGlow;\nvarying float vKitSeed;\nflat varying float vKitOpen;")
-      .replace("#include <map_fragment>", `#include <map_fragment>\nif (vKitOpen > 0.5 && diffuseColor.a < ${GLASS_ALPHA_BELOW}) discard;`)
+      .replace("#include <common>", `#include <common>\nuniform float facadeGlow;\nvarying float vKitSeed;\nflat varying float vKitOpen;${FACADE_CUT_GLSL}`)
+      .replace("#include <map_fragment>", `#include <map_fragment>\nif (vKitOpen > 0.0 && diffuseColor.a < ${GLASS_ALPHA_BELOW} && facadeCuts(vKitOpen)) discard;`)
       .replace(
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>\ntotalEmissiveRadiance *= smoothstep(vKitSeed * 0.7, vKitSeed * 0.7 + 0.2, facadeGlow) * step(fract(vKitSeed * 7.3), ${WINDOW_LIT_SHARE.toFixed(2)});`,

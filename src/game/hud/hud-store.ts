@@ -19,6 +19,7 @@ import { DEFAULT_BUCKLE, DEFAULT_SQUASH } from "../deform/constants.ts";
 import { MUSIC_MAX_GAIN } from "../present/audio-mix.ts";
 import { PISTON_SHOT } from "../scenes/constants.ts";
 import type { MinigameHudState } from "../scenes/minigame-session.ts";
+import { reconcile } from "./hud-reconcile.ts";
 
 type CompactStage = "open" | "contact" | "wells" | "mid" | "max";
 
@@ -391,8 +392,11 @@ export class HudStore {
     };
   };
 
+  /** The engine's snapshot, taken as the new one only where it differs: what is equal to what was published stays the same object, and a snapshot equal throughout is not published at all (nothing re-renders). */
   publish(next: CrashHudState): void {
-    this.snapshot = next;
+    const kept = reconcile(this.snapshot, next);
+    if (kept === this.snapshot) return;
+    this.snapshot = kept;
     for (const listener of this.listeners) listener();
   }
 }

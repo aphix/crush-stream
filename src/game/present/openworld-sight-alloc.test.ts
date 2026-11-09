@@ -12,11 +12,15 @@ const CARS = 12;
 /** Interiors asked about through their front a frame: the buildings of the first rows. */
 const INTERIORS = 40;
 const OPENING_TOP_M = 2.7;
+/** A person's radius across the view (m). */
+const PERSON_M = 0.6;
 const BUILDING_COLUMNS = 20;
 const BUILDING_ROWS = 10;
 const LOT_PITCH_M = 7;
 const BLOCK_PITCH_M = 40;
 const SPREAD_M = 150;
+/** Each row of buildings leaves a street this wide (m) round the camera's line: the people in it are seen, the rest are behind the rows. */
+const STREET_HALF_M = 10;
 /** Frames before the first read: past most of V8's tier-up (cold code runs in the interpreter, where every double is boxed). */
 const WARM_FRAMES = 6000;
 /** Windows of this many frames are read until one is quiet: how long the cold code lasts follows the box's load. */
@@ -26,7 +30,10 @@ const BOUND_B = 16;
 const random = mulberry32(11);
 const buildings: Occluder[] = [];
 for (let row = 0; row < BUILDING_ROWS; row++) {
-  for (let column = 0; column < BUILDING_COLUMNS; column++) buildings.push(occluder((column - BUILDING_COLUMNS / 2) * LOT_PITCH_M, row * BLOCK_PITCH_M, 0, 3, 6.5, false, 0, 9.6));
+  for (let column = 0; column < BUILDING_COLUMNS; column++) {
+    const x = (column - BUILDING_COLUMNS / 2) * LOT_PITCH_M;
+    if (Math.abs(x) >= STREET_HALF_M) buildings.push(occluder(x, row * BLOCK_PITCH_M, 0, 3, 6.5, false, 0, 9.6));
+  }
 }
 const sight = new SightField(buildings, 1024);
 const lod = new OpenWorldCarLod(sight, { level: 0, setLevel() {} });
@@ -41,17 +48,26 @@ const peopleZ = Float64Array.from({ length: PEOPLE }, () => random() * 2 * SPREA
 const cars: LodCar[] = Array.from({ length: CARS }, () => ({ group: { position: { x: (random() - 0.5) * 2 * SPREAD_M, z: random() * 2 * SPREAD_M }, visible: true } }));
 let frames = 0;
 let seenPeople = 0;
+const peopleSeen = new Uint8Array(PEOPLE);
 const firstInterior = sight.claim(INTERIORS);
 
 /** One frame: the field reads the camera, every person is observed and every car judged. */
 function frame(): void {
   sight.update(eyes, frames++ / FRAME_HZ, players);
   seenPeople = 0;
-  for (let person = 0; person < PEOPLE; person++) if (sight.observe(firstPerson + person, peopleX[person]!, peopleZ[person]!, 0.6)) seenPeople++;
+  sight.seenMany(peopleX, peopleZ, PEOPLE, PERSON_M, peopleSeen);
+  for (let person = 0; person < PEOPLE; person++) if (sight.recordSighting(firstPerson + person, peopleSeen[person] === 1)) seenPeople++;
   lod.frame(cars, null, false);
+  const probe = sight.probe;
   for (let interior = 0; interior < INTERIORS; interior++) {
     const box = buildings[interior]!;
-    sight.recordSighting(firstInterior + interior, sight.seenThroughFace(box.x, box.z, 0, box.hx, box.hz, OPENING_TOP_M, FACE.front));
+    probe.x = box.x;
+    probe.z = box.z;
+    probe.yaw = 0;
+    probe.halfDepth = box.hx;
+    probe.halfWidth = box.hz;
+    probe.top = OPENING_TOP_M;
+    sight.recordSighting(firstInterior + interior, sight.seenThroughFace(FACE.front));
   }
 }
 

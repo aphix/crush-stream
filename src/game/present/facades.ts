@@ -334,7 +334,7 @@ export const facadeOpenLoop = (variable: string, point: string): string =>
  * GLSL for a window cut a fraction `amount` open: a screen-door dither (interleaved gradient noise on the fragment's pixel), so the painted window thins out over the room behind it instead of
  * popping, and at full opening still keeps its share of painted glass (`OPEN_WINDOW_CUT` of it is cut), tinted and reflecting as the picture has it.
  */
-const FACADE_CUT_GLSL = /* glsl */ `
+export const FACADE_CUT_GLSL = /* glsl */ `
 bool facadeCuts(float amount) {
   float noise = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))));
   return noise < amount * ${OPEN_WINDOW_CUT.toFixed(2)};

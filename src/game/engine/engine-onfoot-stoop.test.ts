@@ -14,6 +14,8 @@ import { bootEngine, runSeconds, stubBrowser } from "./engine-headless.test-util
 const START_OUT_M = STOOP.run + 1.4;
 /** The walk to the door: the stoop is 3 m of stairs and the pace over steps is 0.5 m/s. */
 const WALK_S = 14;
+/** He stands a moment on the landing before he is read (s). */
+const SETTLE_S = 1;
 /** A standing torso's centre is at least this high (m) over the floor. */
 const STANDING_MIN_M = 0.95;
 /** The door's landing is this deep (m) at the wall: he ends within it, and not past the facade. */
@@ -49,11 +51,15 @@ describe("given a rowhome of the open world's course on the real engine", () => 
     expect(ragdolls.startWalker(start, toward, { cop: false, look: driverLook(0, 0) }), "he is out").toBeGreaterThanOrEqual(0);
     runSeconds(engine, 1);
     ragdolls.walker.heading = toward;
-    ragdolls.walker.command = WALK_SPEED;
+    const here = new THREE.Vector3();
     for (let t = 0; t < WALK_S; t += 0.5) {
+      ragdolls.walkerTorso(here);
+      // The door opens to whoever stands at it, and a walker who goes on is in its doorway: he is stopped as he reaches the landing, which is what the row is about.
+      ragdolls.walker.command = outOf(here.x, here.z) < STOOP.landing + WALL_SLACK_M ? 0 : WALK_SPEED;
       ragdolls.walker.ask();
       runSeconds(engine, 0.5);
     }
+    runSeconds(engine, SETTLE_S);
     const end = new THREE.Vector3();
     expect(ragdolls.walkerTorso(end), "he is still out").toBe(true);
     expect(ragdolls.walker.state, "on his feet").toBe("stand");

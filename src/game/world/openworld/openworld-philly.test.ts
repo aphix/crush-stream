@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { SURFACE_IDS } from "../catalog.ts";
 import { SURFACE } from "../constants.ts";
+import { paintGrid } from "../terrain.ts";
 import { OPEN_SIDE } from "./facade-windows.ts";
 import { buildingHeight } from "./interior-kinds.ts";
 import { planBlocks } from "./openworld-blocks.ts";
@@ -39,6 +41,33 @@ describe("given the lanes through the blocks", () => {
       expect(built.length, `buildings on the lane's lot in block ${plan.column},${plan.row}`).toBe(0);
       const paved = lots.areas.some((area) => area.surface === SURFACE.asphalt && area.x0 <= lot.lot.x0 + SAME && area.x1 >= lot.lot.x1 - SAME && area.z0 <= Math.min(lot.lot.z0, lot.lot.z1) + SAME && area.z1 >= Math.max(lot.lot.z0, lot.lot.z1) - SAME);
       expect(paved, `the lane of block ${plan.column},${plan.row} is paved`).toBe(true);
+    }
+  });
+
+  // mutation: sed -i '/^    layLane(layout, plan, blockIndex);$/d; s/^    layYards(layout, plan);$/    layYards(layout, plan);\n    layLane(layout, plan, blockIndex);/' src/game/world/openworld/openworld-lots.ts (the yards' grass laid first keeps the lane's yard-deep part)
+  it("when the ground is painted from the layout's areas in order, then each lane is asphalt from the alley to the sidewalk and the yard beside it is grass", () => {
+    const paint = lots.areas.map((area) => ({
+      surface: area.surface,
+      poly: [[area.x0, area.z0], [area.x1, area.z0], [area.x1, area.z1], [area.x0, area.z1]] as [number, number][],
+    }));
+    const TERRAIN = SURFACE_IDS.indexOf(SURFACE.concrete);
+    /** The ground is painted a metre a cell, from this far (m) either side of a block's middle. */
+    const HALF_X = 70;
+    const HALF_Z = 40;
+    const cell = (surf: Uint8Array, minX: number, minZ: number, nx: number, x: number, z: number): string => SURFACE_IDS[surf[Math.floor(z - minZ) * nx + Math.floor(x - minX)]!]!;
+    for (const plan of laneBlocks) {
+      const minX = Math.floor(plan.centreX - HALF_X);
+      const minZ = Math.floor(plan.centreZ - HALF_Z);
+      const nx = 2 * HALF_X + 1;
+      const surf = new Uint8Array(nx * (2 * HALF_Z + 1)).fill(TERRAIN);
+      paintGrid(paint, surf, TERRAIN, minX, minZ, nx, 1);
+      const lot = plan.lots.find((candidate) => candidate.face === LANE.face && candidate.index === LANE.at)!;
+      const from = Math.min(lot.lot.z0, lot.lot.z1);
+      const to = Math.max(lot.lot.z0, lot.lot.z1);
+      const unpaved: string[] = [];
+      for (let z = Math.ceil(from) + 0.5; z < to - 0.5; z++) if (cell(surf, minX, minZ, nx, lot.x, z) !== SURFACE.asphalt) unpaved.push(z.toFixed(1));
+      expect(unpaved.join(" "), `lane of block ${plan.column},${plan.row}: z where it is not asphalt`).toBe("");
+      expect(cell(surf, minX, minZ, nx, lot.x - lot.width, from + 1.5), `the yard beside the lane of block ${plan.column},${plan.row}`).toBe(SURFACE.grass);
     }
   });
 
