@@ -6,6 +6,7 @@ import { FRAME_HZ } from "../../kernel/constants.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { vestibuleSolids, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
+import { FACADE_OPEN_AT, FACADE_OPEN_MAX } from "../facades.ts";
 import { HIDE_GRACE, SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../openworld-sight.ts";
 import { DOOR_SWING_SECONDS, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_FAR, SHELL_NEAR } from "./interior-constants.ts";
 import { InteriorSet } from "./interior-art.ts";
@@ -228,5 +229,44 @@ describe("given the sight field an interior set took its ids from", () => {
     set.update(coffee.doorX, coffee.doorZ, FRAME, sight, openers());
     set.dispose();
     expect(sight.claim(1), "the first id after the set is gone").toBe(0);
+  });
+});
+
+describe("given the facade of a shop whose rooms are built", () => {
+  /** Whether the coffee shop's place is among the buildings the facade shader shows its windows through. */
+  const listed = (): boolean => {
+    const slots = FACADE_OPEN_AT.value;
+    for (let slot = 0; slot < FACADE_OPEN_MAX; slot++) if (Math.abs(slots[2 * slot]! - coffee.x) < 1e-3 && Math.abs(slots[2 * slot + 1]! - coffee.z) < 1e-3) return true;
+    return false;
+  };
+
+  // mutation: sed -i 's/      if (entry.shell === null || entry.detail === null) continue;/      if (entry.shell === null) continue;/' src/game/present/interiors/interior-art.ts
+  it("when its envelope alone is built (an eye far off sees its open door), then its windows stay painted; when its rooms are built whole, then they are listed to be seen through; once the rooms above are dropped they stay painted again", () => {
+    const set = new InteriorSet(lone);
+    const who = openers();
+    standAtDoor(who);
+    scene(set, SHELL_NEAR - 10, who).frames(SWING_FRAMES + 2);
+    expect(set.stats().shells, "the envelope is built from afar").toBe(1);
+    expect(listed(), "listed with its envelope alone").toBe(false);
+    const near = new InteriorSet(lone);
+    settle(near, coffee.doorX, coffee.doorZ, who);
+    expect(near.stats().details, "the rooms are built at the door").toBe(1);
+    expect(listed(), "listed with its rooms built").toBe(true);
+    near.update(coffee.doorX + INTERIOR_FAR + 5, coffee.doorZ, INTERIOR_LINGER + FRAME, blind(), who);
+    expect(near.stats().shells, "the envelope stays within its own far radius").toBe(1);
+    expect(listed(), "listed once its rooms are dropped").toBe(false);
+    near.dispose();
+    set.dispose();
+  });
+
+  // mutation: sed -i 's/    setOpenFacades(this.builtAt, 0);//' src/game/present/interiors/interior-art.ts
+  it("when the set is disposed, then no building is left listed: a facade of the next course shows its windows painted", () => {
+    const set = new InteriorSet(lone);
+    const who = openers();
+    standAtDoor(who);
+    settle(set, coffee.doorX, coffee.doorZ, who);
+    expect(listed(), "listed while built").toBe(true);
+    set.dispose();
+    expect(listed(), "listed after the course is left").toBe(false);
   });
 });

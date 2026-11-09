@@ -22,7 +22,7 @@ import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createCanvas as makeCanvas } from "@napi-rs/canvas";
-import { BAY_WIDTH, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, SHOPFRONT } from "../src/game/world/openworld/interior-kinds.ts";
+import { BAY_WIDTH, DOOR_SURROUND, FACADE_ALPHA, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, SHOPFRONT } from "../src/game/world/openworld/interior-kinds.ts";
 import { drawnHalf } from "../src/game/world/openworld/openworld-facade-solids.ts";
 import { writeWebp } from "./pack-tile-lib.mjs";
 import { blur, downPlane, heightOf, label, morph, roughnessOf, spread } from "./pack-window-lib.mjs";
@@ -73,7 +73,7 @@ const NEON_CLEAR = 2;
  * `background` [share, r, g, b, min]: sky (every channel at least `min`) above that share of the picture is painted that colour; `relief`: the style has height and roughness strips; `neon`
  * { rects, bright }: sign boxes (crop-relative like `rects`) whose texels with a channel of at least `bright` are lit signs; `metres`: the bands' heights in block metres, set by hand where
  * the picture's own scale is not the building's (a building drawn `H` m tall is stretched by H / 14); `open` { kind, floorY, ground }: the style's doorways (`SHOPFRONT[kind]`, per bay) are cut through the
- * ground layer's albedo alpha, `ground` being the ground band's height in world metres.
+ * ground layer's albedo alpha, `ground` being the ground band's height in world metres, and every window the table lists (but a door's transom) is marked in the alpha as one the shader cuts while its room is built.
  */
 /** A building of `height` m draws at height / BLOCK_HEIGHT of the 14 m block: bands in block metres that come out at the world heights `cornice`, `floor`, `ground`. */
 const BLOCK_HEIGHT = 14;
@@ -353,18 +353,37 @@ function plainPatch(rgb, mask) {
   return at;
 }
 
-/** The ground layer's albedo alpha (LAYER square, 0 in a doorway): the style's `SHOPFRONT` doorways of one bay, mapped from metres across the bay's drawn width (the layer's u runs toward the plan's -across) and up the ground band. Windows stay painted: a room behind a shut door is not built, so nothing is seen through them. */
-function openingAlpha(open) {
-  const alpha = new Uint8Array(LAYER * LAYER).fill(255);
+/** The doorways of a bay's ground layer, in texels (x0 < x1 across, y0 < y1 down from the layer's top) and the height of each one's head over the ground (m): the style's `SHOPFRONT` doorways mapped from metres across the bay's drawn width (the layer's u runs toward the plan's -across) and up the ground band. */
+function doorRects(open) {
   const half = drawnHalf(BAY_WIDTH);
-  for (const opening of SHOPFRONT[open.kind]) {
-    const x0 = Math.round(((half - (opening.centre + opening.width / 2)) / (2 * half)) * LAYER);
-    const x1 = Math.round(((half - (opening.centre - opening.width / 2)) / (2 * half)) * LAYER);
-    const y0 = Math.round(((open.ground - (open.floorY + opening.top)) / open.ground) * LAYER);
-    const y1 = Math.round(((open.ground - (open.floorY + opening.sill)) / open.ground) * LAYER);
-    for (let y = Math.max(0, y0); y < Math.min(LAYER, y1); y++) for (let x = Math.max(0, x0); x < Math.min(LAYER, x1); x++) alpha[y * LAYER + x] = 0;
+  return SHOPFRONT[open.kind].map((opening) => ({
+    x0: Math.round(((half - (opening.centre + opening.width / 2)) / (2 * half)) * LAYER),
+    x1: Math.round(((half - (opening.centre - opening.width / 2)) / (2 * half)) * LAYER),
+    y0: Math.round(((open.ground - (open.floorY + opening.top)) / open.ground) * LAYER),
+    y1: Math.round(((open.ground - (open.floorY + opening.sill)) / open.ground) * LAYER),
+    head: open.floorY + opening.top,
+  }));
+}
+
+/**
+ * The albedo alpha of an open style's layers, stacked (a byte a texel): the wall opaque; a doorway of the ground layer cut for good (`FACADE_ALPHA.doorway`); every window the table lists (`rectsByLayer`, in the
+ * layers' uv, v up) marked as one the shader cuts while the room behind it is built (`FACADE_ALPHA.window`), but for a window over or beside a door (its transom, its hood), which is no room's: it stays painted.
+ */
+function openAlphaStrip(open, layerCount, rectsByLayer) {
+  const strip = new Uint8Array(LAYER * LAYER * layerCount).fill(FACADE_ALPHA.wall);
+  const doors = doorRects(open);
+  for (const [layer, rects] of rectsByLayer.entries()) {
+    for (const [u0, v0, u1, v1] of rects) {
+      const x0 = Math.floor(u0 * LAYER);
+      const x1 = Math.ceil(u1 * LAYER);
+      if (layer === GROUND_LAYER && doors.some((door) => x0 < door.x1 && x1 > door.x0 && v0 * open.ground < door.head + DOOR_SURROUND)) continue;
+      for (let y = Math.floor((1 - v1) * LAYER); y < Math.ceil((1 - v0) * LAYER); y++) for (let x = x0; x < x1; x++) strip[layer * LAYER * LAYER + y * LAYER + x] = FACADE_ALPHA.window;
+    }
   }
-  return alpha;
+  for (const door of doors) {
+    for (let y = Math.max(0, door.y0); y < Math.min(LAYER, door.y1); y++) for (let x = Math.max(0, door.x0); x < Math.min(LAYER, door.x1); x++) strip[GROUND_LAYER * LAYER * LAYER + y * LAYER + x] = FACADE_ALPHA.doorway;
+  }
+  return strip;
 }
 
 /** floats 0..255 (3 per texel) with `alpha` (a byte per texel) as a webp: the albedo strip of a style with openings. */
@@ -424,6 +443,8 @@ function stack(layers, size) {
 }
 
 const BANDS = ["cornice", "floor", "ground"];
+/** The ground band's index among the layers: the packer's order. */
+const GROUND_LAYER = BANDS.indexOf("ground");
 const metadata = existsSync(jsonFile) ? JSON.parse(readFileSync(jsonFile, "utf8")) : {};
 const windowTable = existsSync(windowsFile) ? JSON.parse(readFileSync(windowsFile, "utf8")) : {};
 for (const [name, spec] of Object.entries(STYLES)) {
@@ -459,7 +480,7 @@ for (const [name, spec] of Object.entries(STYLES)) {
   const normals = rgbs.map((rgb, i) => normalOf(rgb, glows[i].mask, RELIEF[names[i]]));
   const bytes = [
     spec.open
-      ? writeWebpAlpha(join(out, `${name}-albedo.webp`), LAYER, LAYER * rgbs.length, stack(rgbs, LAYER), Uint8Array.from({ length: LAYER * LAYER * rgbs.length }, (_, i) => (Math.floor(i / (LAYER * LAYER)) === 2 ? openingAlpha(spec.open)[i % (LAYER * LAYER)] : 255)), WEBP_QUALITY)
+      ? writeWebpAlpha(join(out, `${name}-albedo.webp`), LAYER, LAYER * rgbs.length, stack(rgbs, LAYER), openAlphaStrip(spec.open, rgbs.length, glows.map((glow, layer) => (layer === 0 || layer >= BANDS.length ? [] : windowRects(glow.mask)))), WEBP_QUALITY)
       : writeWebp(join(out, `${name}-albedo.webp`), LAYER, LAYER * rgbs.length, stack(rgbs, LAYER), WEBP_QUALITY),
     writeWebp(join(out, `${name}-normal.webp`), LAYER, LAYER * rgbs.length, stack(normals, LAYER), NORMAL_QUALITY),
     writeWebp(join(out, `${name}-glow.webp`), GLOW_LAYER, GLOW_LAYER * rgbs.length, stack(glows.map((g) => g.glow), GLOW_LAYER), 100),

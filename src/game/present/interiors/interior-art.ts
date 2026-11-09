@@ -5,6 +5,7 @@ import type { InteriorPlan } from "../../world/openworld/interior-kinds.ts";
 import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, planKey, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { drawnHalf } from "../../world/openworld/openworld-facade-solids.ts";
 import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
+import { FACADE_OPEN_MAX, setOpenFacades } from "../facades.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
 import { DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
@@ -70,9 +71,12 @@ export class InteriorSet {
   private claimedFrom: InteriorSight | null = null;
   private shellBuilds = 0;
   private detailBuilds = 0;
+  /** The x, z of every building whose room is built whole (its envelope and its rooms above), as the facade's shader takes them. */
+  private readonly builtAt: Float32Array;
 
   constructor(map: OpenWorldMap) {
     this.group.name = "interiors";
+    this.builtAt = new Float32Array(2 * FACADE_OPEN_MAX);
     const plans = new Map<string, InteriorPlan>();
     const leaves: DoorLeaf[] = [];
     for (const place of map.places) {
@@ -122,6 +126,7 @@ export class InteriorSet {
         solidsChanged = true;
       }
     }
+    this.showBuiltThrough();
     if (solidsChanged) this.solidsListener?.(this.heldSolids());
     if (shellsChanged) this.merge(this.shellMesh, this.entries.map((entry) => entry.shell));
     if (detailsChanged) {
@@ -129,6 +134,19 @@ export class InteriorSet {
       this.merge(this.glowMesh, this.entries.map((entry) => entry.glow));
     }
     if (shellsChanged || detailsChanged) this.merge(this.glassMesh, this.entries.flatMap((entry) => [entry.shellGlass, entry.detailGlass]));
+  }
+
+  /** The facades of the buildings whose rooms are built (the ground floor's envelope and the rooms above it) show their windows through to them; every other keeps its windows painted. */
+  private showBuiltThrough(): void {
+    let count = 0;
+    for (let at = 0; at < this.entries.length && count < FACADE_OPEN_MAX; at++) {
+      const entry = this.entries[at]!;
+      if (entry.shell === null || entry.detail === null) continue;
+      this.builtAt[2 * count] = entry.place.x;
+      this.builtAt[2 * count + 1] = entry.place.z;
+      count++;
+    }
+    setOpenFacades(this.builtAt, count);
   }
 
   /** Only an interior in range or built is looked at: a player inside it, or an open street door of it whose doorway an eye within range sees, keeps its clock fresh. */
@@ -244,6 +262,7 @@ export class InteriorSet {
       entry.detailGlass?.dispose();
     }
     for (const mesh of [this.shellMesh, this.detailMesh, this.glowMesh, this.glassMesh]) mesh.geometry.dispose();
+    setOpenFacades(this.builtAt, 0);
     this.doors.dispose();
     this.empty.dispose();
     this.solidMaterial.dispose();

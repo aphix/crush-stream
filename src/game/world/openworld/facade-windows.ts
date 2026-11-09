@@ -1,6 +1,6 @@
 import { ROOFLINE } from "../constants.ts";
 import table from "./facade-windows.json" with { type: "json" };
-import { BACK_DOOR, BAY_WIDTH, BLOCK_HEIGHT, buildingHeight, ceilingOver, DEFAULT_STOREYS, levelsOf, SHOPFRONT, storeyLines } from "./interior-kinds.ts";
+import { BACK_DOOR, BAY_WIDTH, BLOCK_HEIGHT, buildingHeight, ceilingOver, DEFAULT_STOREYS, DOOR_SURROUND, levelsOf, SHOPFRONT, storeyLines } from "./interior-kinds.ts";
 import { LAYOUT } from "./openworld-constants.ts";
 import { BAY, bayStackOf, drawnHalf } from "./openworld-facade-solids.ts";
 import type { InteriorKind, Place } from "./walk-graph.ts";
@@ -17,8 +17,6 @@ const BAND_LAYER = { cornice: 0, floor: 1, ground: 2 } as const;
 const PLINTH_V = 0.12;
 /** A window this little past its band's edge (in the band's v) is still in it. */
 const V_TOLERANCE = 1e-6;
-/** Over a doorway the facade's surround (transom, hood) runs this high (m): a window there is part of the door, not a room's. */
-const DOOR_SURROUND = 0.6;
 /** A window at most this far (m) short of its ceiling's underside is clamped to it. */
 const CEILING_TOLERANCE = 1e-3;
 

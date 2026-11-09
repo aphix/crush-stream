@@ -41,7 +41,7 @@ type FurnishingSpec = {
   /** Seats it offers, evenly along its width, and each one's top above the floor (m). */
   seats: number;
   seatHeight: number;
-  /** Drawn unlit (a lamp, a screen, a neon sign): the night's light. */
+  /** Drawn unlit (a lamp, a screen): the night's light. */
   glow: boolean;
 };
 
@@ -81,7 +81,6 @@ export const FURNISHING = {
   deskChair: { ...SEAT, ...size(0.55, 0.55, 0.95), seatHeight: 0.5 },
   plant: { solid: false, seats: 0, seatHeight: 0, glow: false, ...size(0.45, 0.45, 1.2) },
   lamp: { ...LIGHT, ...size(0.45, 0.45, 0.3) },
-  neon: { ...LIGHT, ...size(1.2, 0.05, 0.4) },
   screen: { ...LIGHT, ...size(1, 0.05, 0.6) },
 } as const satisfies Record<string, FurnishingSpec>;
 export type FurnishingKind = keyof typeof FURNISHING;
@@ -206,6 +205,14 @@ const BAY_GLASS_HEIGHT = 1.5;
 export function bayFloorsOf(floors: readonly number[]): readonly { sill: number; head: number }[] {
   return floors.map((floor) => ({ sill: floor + BAY_SILL_ABOVE_FLOOR, head: floor + BAY_SILL_ABOVE_FLOOR + BAY_GLASS_HEIGHT }));
 }
+
+/**
+ * What the packed facade's albedo alpha says of a texel: a doorway (cut open always), a window (cut open while the room behind it is built, painted otherwise), the wall. The shader reads them
+ * as thresholds halfway between, so a webp's rounding or a mip's blur never moves a texel across.
+ */
+export const FACADE_ALPHA = { doorway: 0, window: 128, wall: 255 } as const;
+/** Over a doorway the facade's surround (transom, hood) runs this high (m): a window there is part of the door, not a room's, and stays painted. */
+export const DOOR_SURROUND = 0.6;
 
 /** The frontage bay every shopfront opening is measured in: one lot wide. */
 export const BAY_WIDTH = LAYOUT.lotFrontage;
