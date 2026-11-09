@@ -42,6 +42,12 @@ import { CrimeDesk } from "./society-crime.ts";
 import { CrowdWalkers } from "./crowd-walkers.ts";
 import { createCrowdPoses, type CrowdPoses } from "./crowd-poses.ts";
 
+/** Where the driver's door of resident `resident`'s car stands (the spot and facing of a person at it, her feet's height there and her seat top's), filled for activity `code` (`ACTIVITY.carIn` or `carOut`); false when she has no car to be at. */
+type DriverDoors = (resident: number, code: number, out: DriverDoor) => boolean;
+
+/** The door spot a `DriverDoors` fills: world x and z, the way she faces (yaw), the ground under her feet and her seat top (world y). */
+type DriverDoor = { x: number; z: number; yaw: number; feetY: number; surfaceY: number };
+
 /** Changes the crowd's poses after its own placing: the poses, the crowd time, whether this crowd is the host's. */
 type CrowdOverlay = (poses: CrowdPoses, crowdSeconds: number, authority: boolean) => void;
 
@@ -97,6 +103,11 @@ export class CivilianCrowd {
   readonly poses: CrowdPoses;
   /** The law's: run once a step after the civilians are placed and before the cars' hits are found, so a hit meets where a fleeing suspect is drawn. */
   overlay: CrowdOverlay | null = null;
+  /** Where a resident the society has getting into or out of her car stands (the traffic's car, the body style's door): none set, and she is not drawn. Every peer fills the same spot: it is a pure function of the brain's rows and the parking space. */
+  driverDoors: DriverDoors | null = null;
+  /** What the society says each resident is doing: its own reader, set by a test that needs one the brain does not give yet. */
+  activityReader: typeof readActivity = readActivity;
+  private readonly door: DriverDoor = { x: 0, z: 0, yaw: 0, feetY: 0, surfaceY: 0 };
   readonly walkers = new CrowdWalkers();
   readonly separation: CrowdSeparation;
   private readonly remote: CivilianRemote;
@@ -278,18 +289,31 @@ export class CivilianCrowd {
   private fillPoses(seconds: number): void {
     const state = this.remote.state;
     const { ints, floats } = state;
-    const { yaw, stride, speed, look, shown, activity, activityClock, activityLeft, partner, surfaceY } = this.poses;
+    const { yaw, stride, speed, look, shown, activity, activityClock, activityLeft, partner, surfaceY, feetY } = this.poses;
     const { present, fixed, brainX, brainZ, velocityX, velocityZ } = this.separation;
     const pose = this.pose;
     const reading = this.reading;
+    const door = this.door;
     for (let resident = 0; resident < state.capacity; resident++) {
       const intBase = resident * RESIDENT_INT_STRIDE;
       shown[resident] = 0;
       present[resident] = 0;
       if (ints[intBase + RESIDENT_INT.species] !== SPECIES.person) continue;
-      readActivity(state, resident, seconds, reading);
+      this.activityReader(state, resident, seconds, reading);
       const walkSpeed = floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!;
-      if (reading.placed) {
+      const atCar = reading.code === ACTIVITY.carIn || reading.code === ACTIVITY.carOut;
+      if (atCar) {
+        if (this.driverDoors === null || !this.driverDoors(resident, reading.code, door)) continue;
+        brainX[resident] = door.x;
+        brainZ[resident] = door.z;
+        velocityX[resident] = 0;
+        velocityZ[resident] = 0;
+        yaw[resident] = door.yaw;
+        speed[resident] = 0;
+        stride[resident] = 0;
+        feetY[resident] = door.feetY;
+        surfaceY[resident] = door.surfaceY;
+      } else if (reading.placed) {
         brainX[resident] = reading.x;
         brainZ[resident] = reading.z;
         velocityX[resident] = 0;
@@ -310,13 +334,16 @@ export class CivilianCrowd {
       }
       shown[resident] = 1;
       present[resident] = 1;
-      fixed[resident] = reading.placed ? 1 : 0;
+      fixed[resident] = reading.placed || atCar ? 1 : 0;
       look[resident] = lookOf(state.seed, ints, intBase);
       activity[resident] = reading.code;
       activityClock[resident] = reading.sinceSeconds;
       activityLeft[resident] = reading.leftSeconds;
       partner[resident] = reading.partner;
-      surfaceY[resident] = reading.surfaceY;
+      if (!atCar) {
+        feetY[resident] = 0;
+        surfaceY[resident] = reading.surfaceY;
+      }
     }
   }
 
