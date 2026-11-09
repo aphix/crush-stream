@@ -3,6 +3,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { BrickWall, CircleDot, CircleHelp, Menu, Pause, Play, RotateCcw, SlidersHorizontal, TriangleRight, Video } from "lucide-react";
 import { DerbyBoard, DoorPanel, LabPanel, MinigamePick, PistonPanel, RangePanel, StackPanel } from "@/components/hud-panels";
 import { CreditsDialog } from "@/components/credits-dialog";
+import { showsRaceView } from "@/components/drive-readouts";
 import { GaragePanel } from "@/components/garage-panel";
 import { HudSections } from "@/components/hud-sections";
 import { HomeSheet } from "@/components/home-sheet";
@@ -153,10 +154,7 @@ export function Hud({ store, engine, onlineShown }: Omit<HudProps, "state"> & { 
     const t = engine.current?.touch;
     if (t) t.tapped |= 1 << PAD_BUTTON.down;
   };
-  // Race focus view: race panels only; the sandbox HUD comes back with the Full menu toggle (H). A phone has no such toggle, so its race is always the focus view.
-  // Alone in the open world there is no run to focus on: the scene dock (the way out, night and wet) stays up on a desktop.
-  const wandering = state.openworld && !state.inRoom;
-  const focus = state.race !== null && (touch || (!state.race.fullUi && !wandering));
+  const focus = showsRaceView(state.race, touch);
   // The podium over the course: the HUD is a title and its pills, the view between them the stand's.
   if (state.race?.podium) return <PodiumView podium={state.race.podium} onCommand={raceCommand} />;
   // Solo view: one clip alone, full screen; the HUD is nothing but its exit.

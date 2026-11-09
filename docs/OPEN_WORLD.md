@@ -158,6 +158,10 @@ walker is knocked down already (`findWalkerStrike`, the `strikeWalker` port), wi
 A bust, knock or jaywalk arrest hides its resident from the event's tick for its whole window on every peer: the step that applies it never lets them back early, since a mirror
 that only applies the worker's answers never runs that step.
 
+## HUD
+
+The open world's free roam has no session, but the race HUD reads the driven (or followed) car as a race's: `RaceHudLayer.hud` gives it a view with no racer (`roamingView`), so the drive cluster Survival shows (speed, gear, revs, damage, boost, slide) is up and no place, lap, clock or bust strip is. The race view and the Full menu toggle (H) work as in a race: the race view hides the menus.
+
 ## Cost
 
 Measured by a node probe on the fixture neighbourhood (45 places, 8 cars parked beyond every street), per frame on the main thread
