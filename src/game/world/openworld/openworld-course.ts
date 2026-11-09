@@ -175,6 +175,7 @@ function spawnOf(geometry: Geometry): NonNullable<TrackInput["survival"]> {
 export function openWorldCourse(lots: Lots): TrackInput {
   const geometry = lots.geometry;
   const nodes = loopNodes(geometry);
+  const fabric = fabricProps(lots, buildOpenWorldMap(lots).graph);
   return {
     id: OPENWORLD_ID,
     name: OPENWORLD_NAME,
@@ -183,7 +184,7 @@ export function openWorldCourse(lots: Lots): TrackInput {
     road: { width: geometry.carriageway, surface: SURFACE.asphalt, runoff: [0, 0], runoffSurface: SURFACE.concrete, wall: [false, false], raceMarks: false },
     nodes,
     checkpoints: Array.from({ length: LOOP_CHECKPOINTS }, (_, index) => ({ node: Math.floor((index * nodes.length) / LOOP_CHECKPOINTS) })),
-    props: [...buildingProps(lots), ...streetProps(lots), ...fabricProps(lots, buildOpenWorldMap(lots).graph), ...parkProps(lots), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots), ...stoopGreeneryProps(lots)],
+    props: [...buildingProps(lots), ...streetProps(lots), ...fabric, ...parkProps(lots), ...wallProps(geometry), ...facadeSolidProps(lots), ...interiorEnvelopeProps(lots), ...stoopGreeneryProps(lots, fabric)],
     scenery: { biome: BIOME.city, off: ["frontage", "verge", "islands"], roadDecals: [], paving: PAVING.brick },
     traffic: { count: 0, lanes: [], routes: streetRoutes(geometry) },
     survival: spawnOf(geometry),

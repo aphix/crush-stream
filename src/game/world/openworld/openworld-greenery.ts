@@ -1,5 +1,6 @@
 import { detCos, detSin } from "../../kernel/physics-core.js";
-import type { PrefabId } from "../catalog.ts";
+import { PREFABS, type PrefabId } from "../catalog.ts";
+import { PREFAB } from "../constants.ts";
 import { mulberry32 } from "../placements.ts";
 import { SCENERY_ASSETS } from "../scenery-assets/index.ts";
 import { assetPrefab } from "../scenery-assets/pick.ts";
@@ -110,7 +111,7 @@ function greeneryProp(asset: string, frontage: Frontage, out: number, across: nu
 }
 
 /** The pot's spot: in the notch between the bay's side and the stoop's, against the wall. */
-function potSpot(): { out: number; across: number; width: number } {
+function potSpot(): Spot {
   const bayEdge = BAY.across + BAY.width / 2;
   const stoopEdge = DOOR.across - STOOP.width / 2;
   const reach = (stoopEdge - bayEdge) / 2 - PLANTER_CLEAR;
@@ -118,29 +119,51 @@ function potSpot(): { out: number; across: number; width: number } {
 }
 
 /** The shrub's spot: before the bay's corner nearest the stoop, between the bay's front and the clear path. */
-function shrubSpot(geometry: Geometry): { out: number; across: number; width: number } {
+function shrubSpot(geometry: Geometry): Spot {
   const near = BAY.out + PLANTER_CLEAR;
   const far = clearPathFromWall(geometry) - PLANTER_CLEAR;
   const reach = (far - near) / 2;
   return { out: (near + far) / 2, across: BAY.across + BAY.width / 2 - reach - PLANTER_CLEAR, width: reach / CROSS_DIAGONAL_REACH };
 }
 
-/** What stands at one rowhome's front: a pot in the notch beside its stoop and/or a shrub before its bay, by the house's variant; drawn only, clear of the bay, the stoop and the sidewalk's clear path. */
-export function greeneryAt(frontage: Frontage, geometry: Geometry): GreeneryProp[] {
+/** A course prop's place: what the street's fabric stands (the cellar doors in the sidewalk a plant keeps off). */
+type Fixture = { prefab: PrefabId; x: number; z: number; yaw: number };
+
+type Spot = { out: number; across: number; width: number };
+
+/** Kept clear (m) round a cellar door. */
+const CELLAR_GAP = 0.1;
+
+/** Whether a plant at `spot` stands clear of every cellar door of `fixtures`, all measured in the frontage's frame (a cellar door stands turned as its house, its first extent out of the wall, its third along it). */
+function clearOfCellars(frontage: Frontage, spot: Spot, fixtures: readonly Fixture[]): boolean {
+  const cos = detCos(frontage.yaw);
+  const sin = detSin(frontage.yaw);
+  const reach = spot.width * CROSS_DIAGONAL_REACH;
+  const [depth, , span] = PREFABS[PREFAB.cellarDoor].size;
+  for (const fixture of fixtures) {
+    if (fixture.prefab !== PREFAB.cellarDoor) continue;
+    const out = (fixture.x - frontage.x) * cos - (fixture.z - frontage.z) * sin;
+    const across = (fixture.x - frontage.x) * sin + (fixture.z - frontage.z) * cos;
+    if (Math.abs(out - spot.out) < reach + depth / 2 + CELLAR_GAP && Math.abs(across - spot.across) < reach + span / 2 + CELLAR_GAP) return false;
+  }
+  return true;
+}
+
+/**
+ * What stands at one rowhome's front: a pot in the notch beside its stoop and/or a shrub before its bay, by the house's variant, and none where a cellar door of `fixtures` lies; drawn only, clear of the bay,
+ * the stoop and the sidewalk's clear path.
+ */
+export function greeneryAt(frontage: Frontage, geometry: Geometry, fixtures: readonly Fixture[]): GreeneryProp[] {
   const pick = frontage.variant >>> ASSET_BITS;
   const props: GreeneryProp[] = [];
-  if (frontage.variant % PERCENT < POT_SHARE) {
-    const pot = potSpot();
-    props.push(greeneryProp(POT_ASSETS[pick % POT_ASSETS.length]!, frontage, pot.out, pot.across, pot.width));
-  }
-  if ((frontage.variant >>> SHRUB_BITS) % PERCENT < SHRUB_SHARE) {
-    const shrub = shrubSpot(geometry);
-    props.push(greeneryProp(SHRUB_ASSETS[pick % SHRUB_ASSETS.length]!, frontage, shrub.out, shrub.across, shrub.width));
-  }
+  const pot = potSpot();
+  if (frontage.variant % PERCENT < POT_SHARE && clearOfCellars(frontage, pot, fixtures)) props.push(greeneryProp(POT_ASSETS[pick % POT_ASSETS.length]!, frontage, pot.out, pot.across, pot.width));
+  const shrub = shrubSpot(geometry);
+  if ((frontage.variant >>> SHRUB_BITS) % PERCENT < SHRUB_SHARE && clearOfCellars(frontage, shrub, fixtures)) props.push(greeneryProp(SHRUB_ASSETS[pick % SHRUB_ASSETS.length]!, frontage, shrub.out, shrub.across, shrub.width));
   return props;
 }
 
-/** Potted plants and shrubs at a share of the playable rowhomes' fronts. */
-export function stoopGreeneryProps(lots: Lots): GreeneryProp[] {
-  return homeFrontages(lots.places.slice(0, lots.backdropStart)).flatMap((frontage) => greeneryAt(frontage, lots.geometry));
+/** Potted plants and shrubs at a share of the playable rowhomes' fronts, clear of the cellar doors among `fixtures`. */
+export function stoopGreeneryProps(lots: Lots, fixtures: readonly Fixture[]): GreeneryProp[] {
+  return homeFrontages(lots.places.slice(0, lots.backdropStart)).flatMap((frontage) => greeneryAt(frontage, lots.geometry, fixtures));
 }

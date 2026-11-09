@@ -5,10 +5,12 @@ import { TREE_SCALE } from "../scenery.ts";
 import { SCENERY_ASSETS } from "../scenery-assets/index.ts";
 import { FACING } from "./openworld-constants.ts";
 import { openWorldCourse } from "./openworld-course.ts";
+import { fabricProps } from "./openworld-fabric.ts";
 import { BAY, DOOR, homeFrontages, STOOP } from "./openworld-facade-solids.ts";
 import { greeneryAt, stoopGreeneryProps, streetTreeOf } from "./openworld-greenery.ts";
 import { inClearPath } from "./openworld-greenery.test-util.ts";
 import { layOutLots } from "./openworld-lots.ts";
+import { buildOpenWorldMap } from "./openworld-map.ts";
 import { sidePoint, sidesOf, treeStations } from "./openworld-sides.ts";
 
 /** A drawn turn off the street's facing, at most (rad): the form's `TURN_SPREAD`. */
@@ -26,7 +28,9 @@ const course = openWorldCourse(lots);
 const courseProps = course.props ?? [];
 const trees = courseProps.filter((prop) => prop.prefab === PREFAB.tree);
 const frontages = homeFrontages(lots.places.slice(0, lots.backdropStart));
-const greenery = stoopGreeneryProps(lots);
+const fabric = fabricProps(lots, buildOpenWorldMap(lots).graph);
+const cellarDoors = fabric.filter((prop) => prop.prefab === PREFAB.cellarDoor);
+const greenery = stoopGreeneryProps(lots, fabric);
 
 /** Each station's spot and its face's facing, as the course stands its trees. */
 function stations(): { x: number; z: number; facing: number }[] {
@@ -96,14 +100,14 @@ describe("given the greenery at the rowhomes' fronts", () => {
     }
     const tail = courseProps.slice(courseProps.length - greenery.length);
     expect(tail.map((prop) => `${prop.asset}@${keyOf(prop.x, prop.z)}`).join("|")).toBe(greenery.map((prop) => `${prop.asset}@${keyOf(prop.x, prop.z)}`).join("|"));
-    const dressed = frontages.filter((frontage) => greeneryAt(frontage, lots.geometry).length > 0).length;
+    const dressed = frontages.filter((frontage) => greeneryAt(frontage, lots.geometry, fabric).length > 0).length;
     expect(dressed / frontages.length).toBeGreaterThanOrEqual(SHARE_OF_HOMES.least);
     expect(dressed / frontages.length).toBeLessThanOrEqual(SHARE_OF_HOMES.most);
   });
 
   it("when every pot and shrub's drawn extent is read, then none stands in the bay, on a stoop tread, inside the wall or in the sidewalk's clear path", () => {
     for (const frontage of frontages) {
-      for (const prop of greeneryAt(frontage, lots.geometry)) {
+      for (const prop of greeneryAt(frontage, lots.geometry, fabric)) {
         for (const [out, across, x, z] of extentOf(prop, frontage)) {
           const at = `${prop.asset} at ${keyOf(frontage.x, frontage.z)}`;
           expect(out, `${at} inside the wall`).toBeGreaterThan(-EPSILON);
@@ -115,10 +119,18 @@ describe("given the greenery at the rowhomes' fronts", () => {
     }
   });
 
+  it("when the street's cellar doors are read, then no pot or shrub stands on one, and without the doors the plants would", () => {
+    expect(cellarDoors.length).toBeGreaterThan(0);
+    const covered = (list: typeof fabric): number =>
+      frontages.flatMap((frontage) => greeneryAt(frontage, lots.geometry, list)).filter((prop) => cellarDoors.some((door) => insideDoor(door, prop))).length;
+    expect(covered(fabric)).toBe(0);
+    expect(covered([])).toBeGreaterThan(0);
+  });
+
   it("when two houses stand side by side, then their plants stay in their own lot's width", () => {
     const half = lots.geometry.lotFrontage / 2;
     for (const frontage of frontages) {
-      for (const prop of greeneryAt(frontage, lots.geometry)) {
+      for (const prop of greeneryAt(frontage, lots.geometry, fabric)) {
         for (const [, across] of extentOf(prop, frontage)) expect(Math.abs(across), prop.asset).toBeLessThan(half);
       }
     }
@@ -142,6 +154,14 @@ function extentOf(prop: { asset: string; x: number; z: number; yaw: number; scal
     }
   }
   return ends;
+}
+
+/** Whether a plant's centre lies over a cellar door's footprint (turned as its house: the first extent out of the wall, the third along it). */
+function insideDoor(door: { x: number; z: number; yaw: number }, plant: { x: number; z: number }): boolean {
+  const [depth, , span] = PREFABS[PREFAB.cellarDoor].size;
+  const out = (plant.x - door.x) * Math.cos(door.yaw) - (plant.z - door.z) * Math.sin(door.yaw);
+  const across = (plant.x - door.x) * Math.sin(door.yaw) + (plant.z - door.z) * Math.cos(door.yaw);
+  return Math.abs(out) < depth / 2 && Math.abs(across) < span / 2;
 }
 
 /** Whether (out, across) lies strictly inside the box, by more than float noise. */
