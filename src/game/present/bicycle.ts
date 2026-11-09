@@ -81,12 +81,12 @@ function tyreGeometry(z: number): THREE.BufferGeometry {
 /** The frame, the tyres, the saddle, the chainring and the pedals as pieces of the plain part. */
 export function bicyclePieces(): Piece[] {
   const pieces: Piece[] = BIKE_RODS.map((rod): Piece => [rodGeometry(rod), rod.name === HANDLEBAR ? COLOUR.grip : COLOUR.frame, MAT.BRACKET_STEEL]);
-  for (const z of [-BIKE.axleOffset, BIKE.axleOffset]) pieces.push([tyreGeometry(z), COLOUR.tyre, MAT.GENERIC]);
+  for (const z of [-BIKE.axleOffset, BIKE.axleOffset]) pieces.push([tyreGeometry(z), COLOUR.tyre, MAT.TYRE]);
   pieces.push(
-    [box(SADDLE.across, SADDLE.thick, SADDLE.along, BIKE.lane, SADDLE.height, SADDLE.z), COLOUR.saddle, MAT.GENERIC],
+    [box(SADDLE.across, SADDLE.thick, SADDLE.along, BIKE.lane, SADDLE.height, SADDLE.z), COLOUR.saddle, MAT.RUBBER_SEAL],
     [new THREE.CylinderGeometry(RING.radius, RING.radius, 2 * RING.halfWidth, RING_SIDES).rotateZ(Math.PI / 2).translate(BIKE.lane - STAY_ASIDE, JOINT.bottomBracket[1], JOINT.bottomBracket[2]), COLOUR.steel, MAT.BRACKET_STEEL],
-    [box(PEDAL.size[0], PEDAL.size[1], PEDAL.size[2], BIKE.lane - PEDAL.x, PEDAL.low, PEDAL.z), COLOUR.grip, MAT.GENERIC],
-    [box(PEDAL.size[0], PEDAL.size[1], PEDAL.size[2], BIKE.lane + PEDAL.x, PEDAL.high, PEDAL.z), COLOUR.grip, MAT.GENERIC],
+    [box(PEDAL.size[0], PEDAL.size[1], PEDAL.size[2], BIKE.lane - PEDAL.x, PEDAL.low, PEDAL.z), COLOUR.grip, MAT.RUBBER_SEAL],
+    [box(PEDAL.size[0], PEDAL.size[1], PEDAL.size[2], BIKE.lane + PEDAL.x, PEDAL.high, PEDAL.z), COLOUR.grip, MAT.RUBBER_SEAL],
   );
   return pieces;
 }
