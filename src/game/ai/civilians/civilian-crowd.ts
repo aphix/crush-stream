@@ -41,6 +41,9 @@ import { CrimeDesk } from "./society-crime.ts";
 import { CrowdWalkers } from "./crowd-walkers.ts";
 import { createCrowdPoses, type CrowdPoses } from "./crowd-poses.ts";
 
+/** Changes the crowd's poses after its own placing: the poses, the crowd time, whether this crowd is the host's. */
+export type CrowdOverlay = (poses: CrowdPoses, crowdSeconds: number, authority: boolean) => void;
+
 const NO_EVENTS: readonly number[] = [];
 const NO_STRIKES: readonly FigureStrike[] = [];
 /** The pusher of a push that was no civilian: a player's walker or a car. */
@@ -87,10 +90,12 @@ export class ClientCrowdClock {
 /**
  * The drawn crowd on the main thread: the brain's civilians (`CivilianRemote`) placed on their legs at the sim's crowd time, the cars' hits on them and the buildings' wrecks as host events, and the host's events heard on a client.
  * `poses` is read by the drawing: a civilian's drawn spot is the brain's (a pure function of its rows and the crowd time) pushed off the others by at most `MAX_OFFSET`.
- * Hits and events are found on the brain's spot, so the push never reaches the society except as a push event.
+ * The cars' hits are found on the drawn spots; a bump or push is the brain walking two bodies through each other, so it is found on the brain's.
  */
 export class CivilianCrowd {
   readonly poses: CrowdPoses;
+  /** The law's: run once a step after the civilians are placed and before the cars' hits are found, so a hit meets where a fleeing suspect is drawn. */
+  overlay: CrowdOverlay | null = null;
   readonly walkers = new CrowdWalkers();
   readonly separation: CrowdSeparation;
   private readonly remote: CivilianRemote;
@@ -157,6 +162,7 @@ export class CivilianCrowd {
     this.seconds = crowdSeconds;
     this.fillPoses(crowdSeconds);
     this.separate(crowdSeconds);
+    if (this.overlay !== null) this.overlay(this.poses, crowdSeconds, authority);
     if (authority) {
       this.findHits(cars, crowdSeconds);
       this.postBatch();
@@ -411,10 +417,10 @@ export class CivilianCrowd {
     this.queueForBrain(kind, subject, seconds);
   }
 
+  /** The host's hits meet the body the player sees. The separation is a pure function of the brain's spots and the fixed bodies, and a client hears the knock as an event, so the host's drawn spots are the authority; a client's own walker shifts only its drawn spots, never a hit. */
   private findHits(cars: readonly DeformableCar[], seconds: number): void {
     const state = this.remote.state;
     const { x, z, yaw, shown } = this.poses;
-    const { brainX, brainZ } = this.separation;
     const ground = activeGround();
     for (let carIndex = 0; carIndex < cars.length; carIndex++) {
       const car = cars[carIndex]!;
@@ -424,12 +430,14 @@ export class CivilianCrowd {
       const loose = hasLooseBody(car);
       for (let resident = 0; resident < state.capacity; resident++) {
         if (shown[resident] === 0) continue;
-        const near = hypot2(carX - brainX[resident]!, carZ - brainZ[resident]!) <= CAR_REACH;
+        const spotX = x[resident]!;
+        const spotZ = z[resident]!;
+        const near = hypot2(carX - spotX, carZ - spotZ) <= CAR_REACH;
         if (!near && !loose) continue;
-        const spotY = ground.heightAt(brainX[resident]!, brainZ[resident]!);
-        if (near && runsDown(car, brainX[resident]!, brainZ[resident]!, spotY)) this.knockDown(resident, seconds, fell(car, carIndex, resident, x[resident]!, spotY, z[resident]!, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
-        else if (loose && looseRunsDown(car, brainX[resident]!, brainZ[resident]!, spotY)) this.knockDown(resident, seconds, stood(carIndex, resident, x[resident]!, spotY, z[resident]!, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
-        else if (near && carSpeed >= CAR_NUDGE_SPEED && carGap(car, brainX[resident]!, brainZ[resident]!) < CAR_NUDGE_GAP) this.raisePush(resident, NOT_A_CIVILIAN, seconds);
+        const spotY = ground.heightAt(spotX, spotZ);
+        if (near && runsDown(car, spotX, spotZ, spotY)) this.knockDown(resident, seconds, fell(car, carIndex, resident, spotX, spotY, spotZ, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
+        else if (loose && looseRunsDown(car, spotX, spotZ, spotY)) this.knockDown(resident, seconds, stood(carIndex, resident, spotX, spotY, spotZ, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
+        else if (near && carSpeed >= CAR_NUDGE_SPEED && carGap(car, spotX, spotZ) < CAR_NUDGE_GAP) this.raisePush(resident, NOT_A_CIVILIAN, seconds);
       }
     }
   }
