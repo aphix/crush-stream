@@ -9,10 +9,7 @@ export const WRECK_LOCKOUT_SECONDS = 30;
 const STRIDE_METRES = 1.5;
 export const STRIDE_RADIANS_PER_METRE = (2 * Math.PI) / STRIDE_METRES;
 
-/**
- * The look word a civilian is drawn from (`CrowdPoses.look`), written by the crowd and read by the drawing: a hash of who they are in bits 0-28, the woman bit (the resident's gender, so a drawn name and body agree) in bit 29,
- * the species in bits 30-31 (`SPECIES` order: person 0, cat 1, dog 2). The hash mixes the resident's identity with the city's seed, `salt` keeping it apart from their other draws.
- */
+/** A civilian's look word (`CrowdPoses.look`, written by the crowd, read by the drawing): a who-hash in bits 0-28, the woman bit (their gender) in 29, the species in 30-31 (`SPECIES` order). */
 export const LOOK = { hashMask: 0x1fffffff, womanShift: 29, speciesShift: 30, salt: 0x2545f491, hashShift: 15 } as const;
 
 /** Residents of the playable blocks by device: a phone, a desktop, a desktop at the ultra FX tier (the plan's 60 / 150 / 300). */
