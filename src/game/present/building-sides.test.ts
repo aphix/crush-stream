@@ -11,6 +11,8 @@ import { buildingPieces } from "./facade-mesh.ts";
 import { FACADE_LAYERS, facadeSkin, LAYER, splitFacadeSkin, type FacadeStyle } from "./facades.ts";
 
 const EPSILON = 1e-9;
+/** A geometry holds its uv in 32 bits: the plain patch is read back to this many decimals. */
+const UV_DIGITS = 6;
 /** The facade styles of the houses. */
 const HOME_FACADES: readonly FacadeStyle[] = ["rowbrick", "rowpainted"];
 /** The storey counts houses are built with. */
@@ -98,8 +100,8 @@ describe("given a house drawn with party walls", () => {
           if (isSide(face) && face.layer !== LAYER.cornice) {
             sides++;
             expect(isFlat(face.uv), `${label}: bare`).toBe(true);
-            expect(face.uv[0], `${label}: plain patch u`).toBeCloseTo(plainU, 9);
-            expect(face.uv[2], `${label}: plain patch v`).toBeCloseTo(plainV, 9);
+            expect(face.uv[0], `${label}: plain patch u`).toBeCloseTo(plainU, UV_DIGITS);
+            expect(face.uv[2], `${label}: plain patch v`).toBeCloseTo(plainV, UV_DIGITS);
           } else {
             expect(face.uv.every((value, k) => Math.abs(value - open[at]!.uv[k]!) < EPSILON), `${label}: unchanged`).toBe(true);
           }

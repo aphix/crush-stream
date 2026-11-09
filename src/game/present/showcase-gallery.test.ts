@@ -88,7 +88,7 @@ describe("given the showcase prop gallery", () => {
   });
 
   it("when its footprints are placed, then all stand behind the eye's clearance and inside the disc", () => {
-    // mutation: sed -i 's/SHOWCASE_RADIUS = 150/SHOWCASE_RADIUS = 100/' src/game/present/showcase-art.ts
+    // mutation: sed -i 's/SHOWCASE_RADIUS = 160/SHOWCASE_RADIUS = 100/' src/game/present/showcase-art.ts
     const reach = SHOWCASE_RADIUS - RIM_MARGIN;
     for (const b of boxes) {
       expect(b.z0, `${b.id} reaches z ${b.z0}`).toBeGreaterThan(SHOWCASE_EYE.z + MIN_CLEARANCE);

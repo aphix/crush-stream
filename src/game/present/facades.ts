@@ -158,9 +158,10 @@ export function facadeTint(skin: string, h: number, out: THREE.Color): void {
   out.setHex(tints[Math.floor(h * tints.length)]!);
 }
 
-/** The style a building prefab stands in when none is named (the one whose `home` it is); null for a prefab that is no building. */
+/** The style a building prefab stands in when none is named (the one whose `home` it is; a drawn-only shell is drawn as the building is); null for a prefab that is no building. */
 export function homeStyle(prefab: PrefabId): FacadeStyle | null {
-  return FACADE_STYLES.find((style) => FACADE[style].home === prefab) ?? null;
+  const drawnAs = prefab === PREFAB.buildingShell ? PREFAB.building : prefab;
+  return FACADE_STYLES.find((style) => FACADE[style].home === drawnAs) ?? null;
 }
 
 /** A museum slab: a `marble` block this wide (m, along its long side) and this tall at its placed size is drawn as a block in `SLAB_STYLE`, its layers laid in the slab's own metres. */

@@ -122,7 +122,7 @@ function cafeSet(): Piece[] {
     [cyl(0.35, 0.35, 0.7, 0.73, WHEEL), KIT_COLOUR.tableTop, MAT.GANTRY_STEEL],
     [cyl(0.2, 0.2, 0, 0.02, WHEEL), KIT_COLOUR.tableTop, MAT.GANTRY_STEEL],
     [cyl(0.02, 0.02, 0.02, 2.25, THIN), KIT_COLOUR.tableTop, MAT.GANTRY_STEEL],
-    [cyl(0.03, 0.55, 1.9, 2.25, THIN + 2), KIT_COLOUR.canopy, MAT.GENERIC],
+    [cyl(0.03, 0.55, 1.9, 2.25, THIN + 2), KIT_COLOUR.canopy, MAT.CANVAS],
   ];
   for (const side of [-1, 1]) {
     const z = side * 0.62;
