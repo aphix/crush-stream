@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { hypot2 } from "../kernel/physics-core.js";
 import { mulberry32 } from "../world/placements.ts";
 
 /** A texture region: u and v run 0..1 over the atlas, v up. */
@@ -18,6 +19,8 @@ const CELLS = {
   stone: { x: 4, y: 108, width: 96, height: 40 },
   basement: { x: 108, y: 108, width: 64, height: 40 },
   louvre: { x: 4, y: 56, width: 96, height: 40 },
+  marble: { x: 108, y: 56, width: 96, height: 40 },
+  fanlight: { x: 4, y: 4, width: 96, height: 48 },
 } as const satisfies Record<string, Cell>;
 
 function uvOf(cell: Cell): UvRect {
@@ -29,7 +32,7 @@ function uvOf(cell: Cell): UvRect {
   };
 }
 
-export const KIT_CELL = { window: uvOf(CELLS.window), panel: uvOf(CELLS.panel), stone: uvOf(CELLS.stone), basement: uvOf(CELLS.basement), louvre: uvOf(CELLS.louvre) } as const;
+export const KIT_CELL = { window: uvOf(CELLS.window), panel: uvOf(CELLS.panel), stone: uvOf(CELLS.stone), basement: uvOf(CELLS.basement), louvre: uvOf(CELLS.louvre), marble: uvOf(CELLS.marble), fanlight: uvOf(CELLS.fanlight) } as const;
 
 /** The railing strip: one bar's period across, its height up; bars sit between a bottom and a top rail. */
 const RAIL_WIDTH = 32;
@@ -77,6 +80,23 @@ const LOUVRE_SLAT = 4;
 const LOUVRE_PAINT = 236;
 const LOUVRE_GAP_SHADE = 0.5;
 const LOUVRE_SLAT_SHADE = [1, 0.93, 0.86, 0.8] as const;
+
+/** Marble: a near-white stone with grey veins running up and to the right, wobbling as they climb. */
+const MARBLE_PAINT = 238;
+const MARBLE_NOISE = 0.025;
+const MARBLE_VEIN_SLOPE = 2.2;
+const MARBLE_VEIN_FREQ = 0.13;
+const MARBLE_WOBBLE = 2.5;
+const MARBLE_WOBBLE_FREQ = 0.17;
+const MARBLE_VEIN_THRESHOLD = 0.995;
+const MARBLE_VEIN_SHADE = 0.8;
+
+/** Fanlight: a half disc (its flat edge at the cell's bottom) of glass from a dark rim to a pale middle, cut by radial bars and one ring. */
+const FAN_BARS = 7;
+const FAN_BAR_HALF = 0.06;
+const FAN_RING_AT = 0.55;
+const FAN_RING_HALF = 0.04;
+const FAN_BAR_RGB = [240, 238, 230] as const;
 
 /** Basement window: a dark pane behind iron bars, in a stone frame. */
 const BASEMENT_FRAME_TEXELS = 3;
@@ -160,6 +180,36 @@ function paintLouvre(albedo: Texels, cell: Cell): void {
   });
 }
 
+function paintMarble(albedo: Texels, cell: Cell, random: () => number): void {
+  eachTexel(cell, (column, row) => {
+    const vein = Math.abs(Math.sin((column + MARBLE_VEIN_SLOPE * row) * MARBLE_VEIN_FREQ + MARBLE_WOBBLE * Math.sin(row * MARBLE_WOBBLE_FREQ))) > MARBLE_VEIN_THRESHOLD;
+    const grey = MARBLE_PAINT * (vein ? MARBLE_VEIN_SHADE : 1) * (1 + (random() - 0.5) * 2 * MARBLE_NOISE);
+    put(albedo, cell.x + column, cell.y + row, grey, grey, grey);
+  });
+}
+
+/** The fan: glass lit warm toward its middle, white bars between its panes that never light; the cell outside the disc is bar white. */
+function paintFanlight(albedo: Texels, glow: Texels, cell: Cell): void {
+  const middle = cell.width / 2;
+  eachTexel(cell, (column, row) => {
+    const dx = column + 0.5 - middle;
+    const dy = row + 0.5;
+    const radius = hypot2(dx, dy) / middle;
+    const sector = (Math.atan2(dy, dx) / Math.PI) * FAN_BARS;
+    const bar = Math.abs(sector - Math.round(sector)) < FAN_BAR_HALF * FAN_BARS || Math.abs(radius - FAN_RING_AT) < FAN_RING_HALF || radius > 1;
+    const x = cell.x + column;
+    const y = cell.y + row;
+    if (bar) {
+      put(albedo, x, y, FAN_BAR_RGB[0], FAN_BAR_RGB[1], FAN_BAR_RGB[2]);
+      put(glow, x, y, 0, 0, 0);
+      return;
+    }
+    put(albedo, x, y, mix(GLASS_HIGH_RGB[0], GLASS_LOW_RGB[0], radius), mix(GLASS_HIGH_RGB[1], GLASS_LOW_RGB[1], radius), mix(GLASS_HIGH_RGB[2], GLASS_LOW_RGB[2], radius));
+    const light = mix(1, WINDOW_LIGHT_FLOOR, radius);
+    put(glow, x, y, WINDOW_LIGHT_RGB[0] * light, WINDOW_LIGHT_RGB[1] * light, WINDOW_LIGHT_RGB[2] * light);
+  });
+}
+
 function paintBasement(albedo: Texels, cell: Cell): void {
   eachTexel(cell, (column, row, edge) => {
     const bar = column % BASEMENT_BAR_PITCH >= BASEMENT_BAR_FROM && column % BASEMENT_BAR_PITCH < BASEMENT_BAR_TO;
@@ -202,6 +252,8 @@ export function paintKit(): KitTexels {
   paintStone(albedo, CELLS.stone, random);
   paintBasement(albedo, CELLS.basement);
   paintLouvre(albedo, CELLS.louvre);
+  paintMarble(albedo, CELLS.marble, random);
+  paintFanlight(albedo, glow, CELLS.fanlight);
   paintRail(rail);
   return { albedo: albedo.data, glow: glow.data, rail: rail.data };
 }
