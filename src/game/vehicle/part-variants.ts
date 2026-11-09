@@ -992,21 +992,33 @@ const PART_SLOT: Partial<Record<PartKind, SlotName>> = {
   [PART_KIND.wipers]: "wipers",
 };
 
-/** Per slot: its variants (0 the platform geometry, then one per distinct key the fleet table asks for) and their keys. */
+/** A slot's variants: 0 the platform geometry, then one per distinct key the fleet table asks for, each geometry built when first asked for (`variantGeometry`), its number fixed by the key's place in the table. */
+interface VariantEntry {
+  builds: (() => THREE.BufferGeometry)[];
+  geometries: (THREE.BufferGeometry | undefined)[];
+  byKey: Map<string, number>;
+}
+
+/** Per slot: its variants and their keys. A car of one style builds that style's own variants, not the whole fleet's. */
 const VARIANTS = once(() => {
-  const table = new Map<SlotName, { geometries: THREE.BufferGeometry[]; byKey: Map<string, number> }>();
+  const table = new Map<SlotName, VariantEntry>();
   for (const [name, slot] of Object.entries(SLOTS) as [SlotName, Slot][]) {
-    const entry = { geometries: [slot.base()], byKey: new Map<string, number>() };
+    const entry: VariantEntry = { builds: [slot.base], geometries: [], byKey: new Map<string, number>() };
     for (const id of CAR_STYLE_IDS) {
+      const style = CAR_STYLES[id];
       for (const side of slot.sides) {
-        const key = slot.key(CAR_STYLES[id], side);
-        if (key !== null && !entry.byKey.has(key)) entry.byKey.set(key, entry.geometries.push(slot.build(CAR_STYLES[id], side)) - 1);
+        const key = slot.key(style, side);
+        if (key !== null && !entry.byKey.has(key)) entry.byKey.set(key, entry.builds.push(() => slot.build(style, side)) - 1);
       }
     }
     table.set(name, entry);
   }
   return table;
 });
+
+function variantGeometry(entry: VariantEntry, variant: number): THREE.BufferGeometry {
+  return (entry.geometries[variant] ??= entry.builds[variant]!());
+}
 
 /**
  * Slot `name`'s drawn geometry for `style` on side `side` and its variant in the batch. A spec the fleet table does not hold (a row's or a
@@ -1016,9 +1028,9 @@ function drawnVariant(name: SlotName, style: BodyStyle, side: number): { variant
   const slot: Slot = SLOTS[name];
   const key = slot.key(style, side);
   const entry = VARIANTS().get(name)!;
-  if (key === null) return { variant: 0, geometry: entry.geometries[0]! };
+  if (key === null) return { variant: 0, geometry: variantGeometry(entry, 0) };
   const k = entry.byKey.get(key);
-  return k === undefined ? { variant: 0, geometry: slot.build(style, side) } : { variant: k, geometry: entry.geometries[k]! };
+  return k === undefined ? { variant: 0, geometry: slot.build(style, side) } : { variant: k, geometry: variantGeometry(entry, k) };
 }
 
 /** Part `kind`'s drawn geometry on `style` and its variant in the part batch (`drawnVariant`); the platform part for a kind no style draws its own way. */
@@ -1038,9 +1050,9 @@ export function drawnLamp(style: BodyStyle, slot: LampKind | "hood" | "boot", si
  */
 function variantGeometries(name: SlotName): THREE.BufferGeometry[] | null {
   const entry = VARIANTS().get(name)!;
-  if (entry.geometries.length === 1) return null;
-  return entry.geometries.map((geometry) => {
-    const g = geometry.clone();
+  if (entry.builds.length === 1) return null;
+  return entry.builds.map((_, variant) => {
+    const g = variantGeometry(entry, variant).clone();
     if (!g.getAttribute(PAINTED_ATTRIBUTE)) withPainted(g, 0);
     return g;
   });
