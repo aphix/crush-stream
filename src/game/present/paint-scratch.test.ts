@@ -357,7 +357,7 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
   // Main's version of this row never redrew (it read settled frames). Staged so every frame redraws, the redraw itself allocates, as it did before the row-run upload.
   todoRow(
     `when its skin is written and its dents redrawn every frame, a contact each frame holding its crush open, then a frame, with its flush, allocates at most ${FRAME_BOUND_B} B`,
-    "reads 98-102 B a frame here, with the rows before it run; the same body alone reads 4-58 B (usually ~5) on this code and 359-401 B on main's (no flush there: main uploads through three), so the redraw's allocation predates the row-run upload and is cut by it; `touch` and `flush` alone are bounded by the row below; cause open",
+    "reads 98-102 B a frame here (local, the whole file) and 69.6 B run alone (worker), so it is not left by an earlier row; an ad-hoc loop of the same body read ~5 B once warm on this code and 359-401 B on main's (no flush there: main uploads through three), so the redraw's allocation predates the row-run upload; neither `touchedFrame`'s spy on the deform nor `creaseFace`'s per-face timer is the cause (each removed, still red); `touch` and `flush` alone are bounded by the row below; cause open",
     () => {
       // The skin write as the skin makes it: the attribute's version, not a `lookMeshes()` read (its arrays are the row's, not the frame's).
       const skin = crushed.lookMeshes().body.geometry.getAttribute("position");
