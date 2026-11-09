@@ -223,13 +223,17 @@ function layAlley(layout: Layout, plan: BlockPlan, blockIndex: number): void {
   layout.places.push({ kind: PLACE_KIND.hide, name: `${blockId(plan)} alley`, doorNode: -1, doorX: plan.centreX, doorZ: plan.centreZ, yaw: 0, x: plan.centreX, z: plan.centreZ, width: alley.x1 - alley.x0, depth: alley.z1 - alley.z0, storeys: 0, style: NO_STYLE, sector: SECTOR.hideout });
   layout.areas.push({ surface: SURFACE.asphalt, ...alley });
   for (const share of DUMPSTER_SHARES) layout.dressing.push({ prefab: PREFAB.dumpster, x: alley.x0 + share * (alley.x1 - alley.x0), z: alley.z1 - DUMPSTER_BACK });
+}
+
+/** The yards behind a block's houses are grass. The ground keeps the first surface painted on a cell (`paintGrid` takes bare ground only), so they are laid after the alley and the lane, which cross them. */
+function layYards(layout: Layout, plan: BlockPlan): void {
   for (const face of ["north", "south"] as const) {
     const lots = plan.lots.filter((lot) => lot.face === face);
     layout.areas.push({ surface: SURFACE.grass, x0: lots[0]!.yard.x0, z0: lots[0]!.yard.z0, x1: lots[lots.length - 1]!.yard.x1, z1: lots[0]!.yard.z1 });
   }
 }
 
-/** The lane of a block: its lot paved, and a path from the alley to the sidewalk along it. Laid after the alley, whose grass it paves over. */
+/** The lane of a block: its lot paved, and a path from the alley to the sidewalk along it. Laid before the yards, whose grass would otherwise keep the part of the lane that crosses them. */
 function layLane(layout: Layout, plan: BlockPlan, blockIndex: number): void {
   const index = laneOf(plan, LANE.face);
   if (index < 0) return;
@@ -299,6 +303,7 @@ export function layOutLots(): Lots {
     laySidePlaces(layout, plan, blockIndex);
     layAlley(layout, plan, blockIndex);
     layLane(layout, plan, blockIndex);
+    layYards(layout, plan);
   }
   layBusStop(layout, plans.playable, geometry);
   const backdropStart = layout.places.length;
