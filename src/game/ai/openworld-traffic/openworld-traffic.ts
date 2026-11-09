@@ -1,7 +1,6 @@
 import { hash01 } from "../../kernel/scalar.ts";
 import { MAX_CARS } from "../../scenes/fleet.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
-import type { CarStyleId } from "../../vehicle/car-variants.ts";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, nearestFreeSpot, residentSpotAt, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
