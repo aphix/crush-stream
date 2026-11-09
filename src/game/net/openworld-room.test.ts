@@ -157,7 +157,9 @@ describe("given a public room of the open world", () => {
     expect(net.status().lobby, "no countdown").toBe(null);
     expect(world.race.courseId, "the lobby is on the city").toBe(OPENWORLD_ID);
     const listed = openRooms([{ room: publicRoomName("openworld", "ABC123"), players: 1, addrs: 1, meta: "lobby.openworld" }], null);
-    expect(listed.map((r) => [r.kind, r.course]), "the list reads kind and course").toEqual([["openworld", OPENWORLD_ID]]);
+    expect(listed.length, "the room is listed").toBe(1);
+    expect(listed[0]!.kind, "its game").toBe("openworld");
+    expect(listed[0]!.course, "its course").toBe(OPENWORLD_ID);
   });
 });
 

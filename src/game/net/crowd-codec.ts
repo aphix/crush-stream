@@ -5,7 +5,7 @@ import { CROWD_EVENT_LOG_MAX } from "./net-constants.ts";
 export const CROWD_EVENT_FIELDS = 3;
 
 /** What a `MSG.crowd` carries: the crowd's seed, the host's wall clock when it sent and its crowd clock then, and its event log. */
-export interface CrowdState {
+interface CrowdState {
   seed: number;
   hostTime: number;
   crowdTime: number;

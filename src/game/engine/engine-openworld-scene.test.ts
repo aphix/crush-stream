@@ -3,6 +3,7 @@ import "../kernel/rapier-node.test-util.ts";
 import { homeModes, pickScene, sceneInPlay, scenesFor } from "../../components/scene-picks.ts";
 import { decodeShare, encodeShare } from "../hud/share-url.ts";
 import { HudStore, INITIAL_HUD, type LookAtHud } from "../hud/hud-store.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { OWN_FIELD_SCENES, SEEDED_SCENES, SOLO_SCENES } from "../scenes/scene-id.ts";
 import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { TRACKS } from "../world/tracks/index.ts";
@@ -96,7 +97,8 @@ describe("given the open world in play on the real engine", () => {
     const seen: LookAtHud = { title: "Rosa Kim, 34", lines: ["cook at Sal's Diner", "left home"] };
     engine["lookAtText"] = () => seen;
     runSeconds(engine, 0.5);
-    expect(hud.get().lookAt, "the panel's text").toEqual(seen);
+    expect(hud.get().lookAt?.title, "the panel's title").toBe(seen.title);
+    expect(firstMismatch(hud.get().lookAt?.lines, seen.lines), "the panel's lines").toBeUndefined();
     engine["lookAtText"] = () => null;
     runSeconds(engine, 0.5);
     expect(hud.get().lookAt, "back to nothing").toBe(null);

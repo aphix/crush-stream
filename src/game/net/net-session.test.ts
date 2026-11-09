@@ -1336,7 +1336,10 @@ describe("given a room hosted through the one hosting flow, whatever the game", 
         if (kind === "race") expect(firstMismatch(r.hg.started, ["race"]), label).toBeUndefined();
         else if (kind === "derby") expect(firstMismatch(r.hg.started, ["derby"]), label).toBeUndefined();
         else if (kind === "survival") expect(r.hg.raceEntered.at(-1), `${label}: Survival is entered as such`).toBe(true);
-        else expect(race.commands.at(-1)?.type, label).toBe("campaign");
+        else if (kind === "openworld") {
+          expect(r.hg.started.length, `${label}: Go starts nothing`).toBe(0);
+          expect(r.host.status().gate?.kind, `${label}: the lobby stays open`).toBe("openworld");
+        } else expect(race.commands.at(-1)?.type, label).toBe("campaign");
       }
     }
   });

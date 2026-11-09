@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createServer, type ViteDevServer } from "vite";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { INITIAL_HUD, type LookAtHud } from "./hud-store.ts";
 
 /**
@@ -50,7 +51,7 @@ describe("given the look-at panel the HUD mounts for the open world", () => {
     const markup = render(lookAt);
     const at = [lookAt.title, ...lookAt.lines].map((text) => markup.indexOf(escaped(text)));
     expect(at.every((index) => index >= 0), `every text is in the markup (found at ${at.join(", ")})`).toBe(true);
-    expect(at, "title first, then the lines top to bottom").toEqual([...at].sort((a, b) => a - b));
+    expect(firstMismatch(at, [...at].sort((a, b) => a - b)), "title first, then the lines top to bottom").toBeUndefined();
   });
 
   it("when the field has a title and no lines, then the panel shows the title alone", () => {
