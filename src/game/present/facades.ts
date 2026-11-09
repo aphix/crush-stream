@@ -107,21 +107,27 @@ const PARALLAX_MIN_FACING = 0.25;
 
 /**
  * The buildings whose rooms are built: the facade of one of these (a style with doorways and windows cut in it) shows its windows through to the room, the rest keep them painted. Up to
- * `FACADE_OPEN_MAX` positions (x, z of the building's placement, the instance's own translation), the unused ones far away; one array every open style's material shares.
+ * `FACADE_OPEN_MAX` slots of (x, z of the building's placement, the instance's own translation; how far open it is, 0 painted to 1 seen through), the unused ones far away and shut; one array
+ * every open style's material shares.
  */
 export const FACADE_OPEN_MAX = 16;
 const OPEN_AT_NOWHERE = 1e6;
+/** Floats of a slot: x, z, openness. */
+export const FACADE_OPEN_SLOT_FLOATS = 3;
 /** An instance is one of them when its translation lies within this of a listed position (m). */
 const OPEN_AT_RADIUS = 0.05;
-export const FACADE_OPEN_AT = { value: new Float32Array(2 * FACADE_OPEN_MAX).fill(OPEN_AT_NOWHERE) };
+/** The share of an open window's painted glass that is cut away at full opening (the rest stays over the room, as a pane's tint and reflection): about a half, as a glass that is a third to a half clear. */
+const OPEN_WINDOW_CUT = 0.55;
+export const FACADE_OPEN_AT = { value: Float32Array.from({ length: FACADE_OPEN_SLOT_FLOATS * FACADE_OPEN_MAX }, (_, at) => (at % FACADE_OPEN_SLOT_FLOATS === 2 ? 0 : OPEN_AT_NOWHERE)) };
 
-/** The windows of the buildings at `at` (x, z pairs; at most `FACADE_OPEN_MAX` of them) are seen through; every other building's stay painted. */
+/** The windows of the buildings at `at` (x, z, openness triples; at most `FACADE_OPEN_MAX` of them) are seen through that far; every other building's stay painted. */
 export function setOpenFacades(at: ArrayLike<number>, count: number): void {
   const slots = FACADE_OPEN_AT.value;
   const used = Math.min(count, FACADE_OPEN_MAX);
   for (let slot = 0; slot < FACADE_OPEN_MAX; slot++) {
-    slots[2 * slot] = slot < used ? at[2 * slot]! : OPEN_AT_NOWHERE;
-    slots[2 * slot + 1] = slot < used ? at[2 * slot + 1]! : OPEN_AT_NOWHERE;
+    slots[FACADE_OPEN_SLOT_FLOATS * slot] = slot < used ? at[FACADE_OPEN_SLOT_FLOATS * slot]! : OPEN_AT_NOWHERE;
+    slots[FACADE_OPEN_SLOT_FLOATS * slot + 1] = slot < used ? at[FACADE_OPEN_SLOT_FLOATS * slot + 1]! : OPEN_AT_NOWHERE;
+    slots[FACADE_OPEN_SLOT_FLOATS * slot + 2] = slot < used ? at[FACADE_OPEN_SLOT_FLOATS * slot + 2]! : 0;
   }
 }
 
@@ -320,9 +326,19 @@ if (surfaceRegion.z > 0.5 && surfaceRegion.x < 2.5) {
 }
 #endif`;
 /** The list's uniform, as a vertex shader declares it. */
-export const FACADE_OPEN_UNIFORM = /* glsl */ `uniform vec2 facadeOpenAt[${FACADE_OPEN_MAX}];`;
-/** GLSL that raises the float `variable` to 1 when the vec2 `point` lies within the radius of a listed position of `FACADE_OPEN_AT`: the building at `point` has its rooms built. */
-export const facadeOpenLoop = (variable: string, point: string): string => `for (int i = 0; i < ${FACADE_OPEN_MAX}; i++) ${variable} = max(${variable}, 1.0 - step(${OPEN_AT_RADIUS}, distance(${point}, facadeOpenAt[i])));`;
+export const FACADE_OPEN_UNIFORM = /* glsl */ `uniform vec3 facadeOpenAt[${FACADE_OPEN_MAX}];`;
+/** GLSL that raises the float `variable` to the openness of a listed building of `FACADE_OPEN_AT` when the vec2 `point` lies within the radius of its position: the building at `point` has its rooms built, and its windows are that far seen through. */
+export const facadeOpenLoop = (variable: string, point: string): string =>
+  `for (int i = 0; i < ${FACADE_OPEN_MAX}; i++) ${variable} = max(${variable}, (1.0 - step(${OPEN_AT_RADIUS}, distance(${point}, facadeOpenAt[i].xy))) * facadeOpenAt[i].z);`;
+/**
+ * GLSL for a window cut a fraction `amount` open: a screen-door dither (interleaved gradient noise on the fragment's pixel), so the painted window thins out over the room behind it instead of
+ * popping, and at full opening still keeps its share of painted glass (`OPEN_WINDOW_CUT` of it is cut), tinted and reflecting as the picture has it.
+ */
+const FACADE_CUT_GLSL = /* glsl */ `
+bool facadeCuts(float amount) {
+  float noise = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))));
+  return noise < amount * ${OPEN_WINDOW_CUT.toFixed(2)};
+}`;
 /** An open style's instance is told whether its room is built: its translation against the listed positions. */
 const FACADE_OPEN_VERTEX = /* glsl */ `
 ${FACADE_OPEN_UNIFORM}
@@ -368,7 +384,7 @@ function extrasOf(style: FacadeStyle): Extras {
 /** Each strip's sampler and the uv varying it is read with, and the layer every read takes (the region's first number). */
 const MAP_UV = "vMapUv";
 const REGION_LAYER = "vFacadeRegion.x";
-const FACADE_READS = { albedo: ["facadeAlbedo", MAP_UV], normal: ["facadeNormalMap", "vNormalMapUv"], glow: ["facadeGlowMap", "vEmissiveMapUv"], roughness: ["facadeRoughnessMap", MAP_UV] } as const;
+const FACADE_READS = { albedo: ["facadeAlbedo", MAP_UV], normal: ["facadeNormalMap", "vNormalMapUv"], glow: ["facadeGlowMap", MAP_UV], roughness: ["facadeRoughnessMap", MAP_UV] } as const;
 
 /** The strips a style's program reads by layer: with parallax a read is shifted by `facadeShift` and takes its mip level from the unshifted uv (a shift that jumps at a window's edge would otherwise blur a line there). */
 function facadeRead(extras: Extras, strip: keyof typeof FACADE_READS): string {
@@ -380,11 +396,13 @@ function facadeRead(extras: Extras, strip: keyof typeof FACADE_READS): string {
 const facadeExtraUniforms = (extras: Extras): string =>
   (extras.height ? "uniform highp sampler2DArray facadeHeightMap;\nuniform float facadeReliefDepth;\n" : "") +
   (extras.roughness ? "uniform highp sampler2DArray facadeRoughnessMap;\nuniform float facadeRoughnessMix;\n" : "") +
-  (extras.open ? "flat varying float vFacadeOpen;\n" : "");
+  (extras.open ? `flat varying float vFacadeOpen;\n${FACADE_CUT_GLSL}\n` : "");
 
 /** The alpha below which a texel is a doorway (always cut), and below which it is a window (cut while its room is built): halfway between the classes the packer writes. */
 const DOORWAY_BELOW = ((FACADE_ALPHA.doorway + FACADE_ALPHA.window) / 2 / 255).toFixed(3);
 const WINDOW_BELOW = ((FACADE_ALPHA.window + FACADE_ALPHA.wall) / 2 / 255).toFixed(3);
+/** Inside a window's rect only the texels of its pane (the glow strip's red, the mask the windows light by) are cut: a mullion or a frame between panes stays as painted. */
+const WINDOW_PANE_ABOVE = "0.5";
 
 /**
  * Parallax through the height strip (1 proud, 0 the deepest recess): the uv shift per metre of depth along the view ray is read from the surface's own screen derivatives (so it holds at any bay or storey
@@ -437,7 +455,7 @@ vec4 facadeNormalTexel() {
 #endif`;
 const facadeMap = (extras: Extras): string => /* glsl */ `
 #ifdef USE_MAP
-${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "albedo")};${extras.open ? `\nif (diffuseColor.a < ${DOORWAY_BELOW}) discard;\nif (diffuseColor.a < ${WINDOW_BELOW} && vFacadeOpen > 0.5) discard;` : ""}
+${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "albedo")};${extras.open ? `\nif (diffuseColor.a < ${DOORWAY_BELOW}) discard;\nif (diffuseColor.a < ${WINDOW_BELOW} && vFacadeOpen > 0.0 && ${facadeRead(extras, "glow")}.r > ${WINDOW_PANE_ABOVE} && facadeCuts(vFacadeOpen)) discard;` : ""}
 #endif`;
 /** The roughness strip's green sets the surface's roughness where its share is on (the relief tier), in place of the material's one number. */
 const facadeRoughness = (extras: Extras): string => `#include <roughnessmap_fragment>
