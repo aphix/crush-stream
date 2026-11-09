@@ -175,3 +175,30 @@ export function seedWhere(draw: (seed: number) => number, chance: number, below:
   for (let seed = 1; seed <= 400; seed++) if (draw(seed) < chance === below) return seed;
   throw new Error("no seed in 1..400 draws that way");
 }
+
+const FNV_PRIME = 16777619;
+const FNV_OFFSET = 2166136261;
+/** Millimetres: a walker's place is compared to this. */
+const MILLIMETRES = 1000;
+
+/** One number for where every walker stands and what every suspect is doing: a row compares runs by it, not by deep compares. */
+export function digestOf(harnessed: Harness): number {
+  const { walkers, table } = harnessed.scene.foot;
+  let hash = FNV_OFFSET;
+  for (let walker = 0; walker < walkers.x.length; walker++) {
+    hash = Math.imul(hash ^ Math.round(walkers.x[walker]! * MILLIMETRES), FNV_PRIME);
+    hash = Math.imul(hash ^ Math.round(walkers.z[walker]! * MILLIMETRES), FNV_PRIME);
+  }
+  for (let slot = 0; slot < table.mode.length; slot++) hash = Math.imul(hash ^ table.mode[slot]!, FNV_PRIME);
+  return hash >>> 0;
+}
+
+/** Runs `seconds` a second at a time and folds the digest of every second into one number. */
+export function traceOf(harnessed: Harness, seconds: number): number {
+  let trace = FNV_OFFSET;
+  for (let second = 0; second < seconds; second++) {
+    runFor(harnessed, 1);
+    trace = Math.imul(trace ^ digestOf(harnessed), FNV_PRIME);
+  }
+  return trace >>> 0;
+}
