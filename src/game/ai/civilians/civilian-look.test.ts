@@ -1,3 +1,4 @@
+import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { tickAt } from "./civilian-clock.ts";
 import { RESIDENT_INT } from "./civilian-constants.ts";
@@ -48,7 +49,7 @@ describe("given a crowd with a civilian walking on the street", () => {
   it("when the eye looks at them, then the panel is titled with their name and lists their life log", () => {
     const text = lookAtOf(crowd.state, crowd.poses, tick, behind(crowd, resident));
     expect(text?.title.startsWith(residentNameText(crowd.state, resident)), `title ${text?.title}`).toBe(true);
-    expect(text?.lines, "life log").toEqual(historyLines(crowd.state, resident));
+    expect(firstMismatch(text?.lines, historyLines(crowd.state, resident)), "life log").toBeUndefined();
   });
 
   it("when the eye looks past them, or at the sky, then the panel is empty", () => {

@@ -43,9 +43,9 @@ class CountingWorker extends PageWorker {
 
   whenAnswered(count: number): Promise<void> {
     if (this.answers >= count) return Promise.resolve();
-    const { promise, resolve } = Promise.withResolvers<void>();
-    this.waiting = { count, resolve };
-    return promise;
+    return new Promise<void>((resolve) => {
+      this.waiting = { count, resolve };
+    });
   }
 }
 

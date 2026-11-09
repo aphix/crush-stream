@@ -1,3 +1,4 @@
+import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { tickAt } from "./civilian-clock.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
@@ -38,7 +39,7 @@ describe("given a host crowd, a civilian walking out and a car driving at them",
     expect(struck[0]!.guard, "the civilian struck").toBe(resident);
     expect(struck[0]!.car, "the car that struck").toBe(0);
     expect(crowd.poses.shown[resident], "shown the step they were run down").toBe(0);
-    expect(Array.from(crowd.eventLog()), "the host's log").toEqual([EVENT_KIND.knock, resident, seconds]);
+    expect(firstMismatch(Array.from(crowd.eventLog()), [EVENT_KIND.knock, resident, seconds]), "the host's log").toBeUndefined();
     for (let later = 1; later <= AFTERMATH_SECONDS / FRAME_SECONDS; later++) crowd.step(seconds + later * FRAME_SECONDS, [], true);
     expect(crowd.poses.shown[resident], "shown later").toBe(0);
   });
@@ -80,7 +81,7 @@ describe("given a host crowd and a bodega on the map", () => {
   it("when a car meets a solid at the wreck speed on the bodega's face, then a wreck event is logged for it and, once the hour comes, the place is shut", () => {
     const crowd = hostCrowd();
     crowd.noteWallHit(WRECK_SPEED, faceX, front.z);
-    expect(Array.from(crowd.eventLog()), "the log").toEqual([EVENT_KIND.wreck, bodega, 1]);
+    expect(firstMismatch(Array.from(crowd.eventLog()), [EVENT_KIND.wreck, bodega, 1]), "the log").toBeUndefined();
     const later = 1 + 70;
     for (let seconds = 2; seconds <= later; seconds++) crowd.step(seconds, [], true);
     expect(crowd.state.closedUntilTick[bodega]!, "closed until a tick after now").toBeGreaterThan(tickAt(later));

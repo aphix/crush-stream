@@ -1,3 +1,4 @@
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "../ai/civilians/civilian-crowd.test-util.ts";
@@ -154,9 +155,9 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
       place(travelled);
       harness.director.step(FRAME);
     }
-    expect(harness.thrown.map((strike) => strike.guard), "ragdolls thrown, by civilian").toEqual([resident]);
+    expect(firstMismatch(harness.thrown.map((strike) => strike.guard), [resident]), "ragdolls thrown, by civilian").toBeUndefined();
     expect(crowd.poses.shown[resident], "shown").toBe(0);
-    expect(Array.from(harness.director.eventLog()).slice(0, 2), "the log's first event").toEqual([EVENT_KIND.knock, resident]);
+    expect(firstMismatch(Array.from(harness.director.eventLog()).slice(0, 2), [EVENT_KIND.knock, resident]), "the log's first event").toBeUndefined();
   });
 
   it("when a car hits a building's face at the wreck speed, then the wall hook makes it a wreck event in the log", () => {
@@ -213,7 +214,7 @@ describe("given a client that has heard nothing yet, and then the host's crowd m
     expect(harness.thrown.length, "the client's clock is behind the knock: nobody thrown yet").toBe(0);
     harness.now += 2 * INTERP_DELAY;
     harness.frame();
-    expect(harness.thrown.map((strike) => strike.guard), "thrown by civilian once its clock reaches the knock").toEqual([resident]);
+    expect(firstMismatch(harness.thrown.map((strike) => strike.guard), [resident]), "thrown by civilian once its clock reaches the knock").toBeUndefined();
     for (let frame = 0; frame < 8 / FRAME; frame++) {
       harness.now += FRAME;
       harness.director.frame(FRAME);

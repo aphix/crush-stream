@@ -1,13 +1,13 @@
 import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { blankStrike, fell, looseRunsDown, runsDown, stood, type FigureStrike } from "../../scenes/figure-strike.ts";
-import { MAX_CARS } from "../../scenes/fleet.ts";
 import { LOOSE_BODIES } from "../../vehicle/part-state.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
+import { CAR_REACH } from "../../scenes/lawn-guard.ts";
 import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "./civilian-clock.ts";
-import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, GENDER, MIX_INDEX, MIX_RESIDENT, MIX_SALT, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
-import { CAR_REACH, CLOCK_OFFSET_CREEP, EVENT_LOG_CAPACITY, HEARD_KNOCK_LATE_SECONDS, HEARD_KNOCK_QUEUE, LOOK, STRIDE_RADIANS_PER_METRE, WRECK_LOCKOUT_SECONDS, WRECK_MARGIN, WRECK_SPEED } from "./civilian-crowd-constants.ts";
+import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, GENDER, MIX_INDEX, MIX_RESIDENT, MIX_SALT, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
+import { CLOCK_OFFSET_CREEP, EVENT_LOG_CAPACITY, HEARD_KNOCK_LATE_SECONDS, HEARD_KNOCK_QUEUE, LOOK, STRIDE_RADIANS_PER_METRE, WRECK_LOCKOUT_SECONDS, WRECK_MARGIN, WRECK_SPEED } from "./civilian-crowd-constants.ts";
 import { LegPose, legPose, legPositionAt } from "./civilian-leg.ts";
 import type { CivilianRemote } from "./civilian-remote.ts";
 import type { CityState } from "./civilian-state.ts";
@@ -15,7 +15,6 @@ import type { CrowdPoses } from "./crowd-poses.ts";
 
 const NO_EVENTS: readonly number[] = [];
 const NO_STRIKES: readonly FigureStrike[] = [];
-const NO_PLACE_HIT = -1;
 
 /** The look word of the resident whose integer row starts at `base` (`LOOK`): the same resident in the same city always looks the same. */
 function lookOf(seed: number, ints: Int32Array, base: number): number {
@@ -121,7 +120,7 @@ export class CivilianCrowd {
   noteWallHit(closing: number, x: number, z: number): void {
     if (!this.authority || closing < WRECK_SPEED) return;
     const place = this.buildingAt(x, z);
-    if (place === NO_PLACE_HIT || this.seconds - this.wreckedAt[place]! < WRECK_LOCKOUT_SECONDS) return;
+    if (place === NO_PLACE || this.seconds - this.wreckedAt[place]! < WRECK_LOCKOUT_SECONDS) return;
     this.wreckedAt[place] = this.seconds;
     this.appendLog(EVENT_KIND.wreck, place, this.seconds);
     this.queueForBrain(EVENT_KIND.wreck, place, this.seconds);
@@ -276,10 +275,10 @@ export class CivilianCrowd {
     this.heardKnocks = waiting;
   }
 
-  /** The place whose footprint (grown by `WRECK_MARGIN`) holds the contact most deeply, among those inside the walls; `NO_PLACE_HIT` for none. */
+  /** The place whose footprint (grown by `WRECK_MARGIN`) holds the contact most deeply, among those inside the walls; `NO_PLACE` for none. */
   private buildingAt(x: number, z: number): number {
     const { places } = this.map;
-    let best = NO_PLACE_HIT;
+    let best = NO_PLACE;
     let bestExcess = Infinity;
     for (let place = 0; place < places.length; place++) {
       const entry = places[place]!;

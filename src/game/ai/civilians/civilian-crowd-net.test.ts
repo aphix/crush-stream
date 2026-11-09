@@ -1,3 +1,4 @@
+import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import { packCrowd, readCrowd } from "../../net/crowd-codec.ts";
@@ -8,7 +9,7 @@ import { EVENT_LOG_CAPACITY } from "./civilian-crowd-constants.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { historyLines } from "./civilian-mood.ts";
 import { stateDigest } from "./civilian-run.test-util.ts";
-import { carAtWalker, CROWD_SEED, FRAME_SECONDS, newCrowd, posesDigest, shownResident, stepUntilShown } from "./civilian-crowd.test-util.ts";
+import { carAtWalker, CROWD_SEED, FRAME_SECONDS, newCrowd, posesDigest, shownResident } from "./civilian-crowd.test-util.ts";
 
 const map = buildFixtureMap();
 const CAR_SPEED = 14;
@@ -78,11 +79,11 @@ describe("given a host crowd and a client crowd of its seed that hears the host'
   it("when a car on the host runs a civilian down, then the client hides them the same frame, throws them from its own car, and the knock reaches its society", () => {
     const pair = new CrowdPair();
     const { resident, apart } = runDownOnHost(pair);
-    expect(pair.hostStrikes, "the host's strikes").toEqual([resident]);
-    expect(pair.clientStrikes, "the client's strikes").toEqual([resident]);
+    expect(firstMismatch(pair.hostStrikes, [resident]), "the host's strikes").toBeUndefined();
+    expect(firstMismatch(pair.clientStrikes, [resident]), "the client's strikes").toBeUndefined();
     expect(apart, "frames the poses differed").toBe(0);
     expect(pair.client.poses.shown[resident], "shown on the client").toBe(0);
-    expect(Array.from(pair.client.eventLog()), "the client's log").toEqual(Array.from(pair.host.eventLog()));
+    expect(firstMismatch(Array.from(pair.client.eventLog()), Array.from(pair.host.eventLog())), "the client's log").toBeUndefined();
     expect(pair.client.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.flags]! & FLAG.hurt, "hurt flag").toBe(FLAG.hurt);
     expect(historyLines(pair.client.state, resident)[0], "their log line").toContain("knocked down");
   });
@@ -108,9 +109,9 @@ describe("given a crowd that hears the same log again with each message", () => 
     client.hear(log);
     client.hear(log);
     client.hear(new Float64Array(0));
-    expect(Array.from(client.eventLog()), "after the same log twice and an empty one").toEqual([0, 5, 1.5]);
+    expect(firstMismatch(Array.from(client.eventLog()), [0, 5, 1.5]), "after the same log twice and an empty one").toBeUndefined();
     client.hear(Float64Array.of(0, 5, 1.5, 1, 3, 2));
-    expect(Array.from(client.eventLog()), "after one more event").toEqual([0, 5, 1.5, 1, 3, 2]);
+    expect(firstMismatch(Array.from(client.eventLog()), [0, 5, 1.5, 1, 3, 2]), "after one more event").toBeUndefined();
   });
 
   it("when the in-memory log is full, then it keeps the newest the wire's size and no more", () => {

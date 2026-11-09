@@ -1,5 +1,3 @@
-/** A car's plan box reaches no further than this (m) from its origin (a truck's far corner is under 5; the lawn guards' `CAR_REACH`): only cars nearer than it are tested against a walker. */
-export const CAR_REACH = 6.5;
 /** A car closing on a building at this speed (m/s, 29 km/h) wrecks it: a graze or a bump at a kerb is no news, a hard hit into a stoop is. */
 export const WRECK_SPEED = 8;
 /** A contact within this many metres of a building's footprint is that building's: the solid's face and the contact point differ by a slice's travel. */
@@ -8,7 +6,7 @@ export const WRECK_MARGIN = 1.5;
 export const WRECK_LOCKOUT_SECONDS = 30;
 
 /** A whole walking stride (both feet) covers this many metres: the guards' and the VIP's stride (`people.ts`). */
-export const STRIDE_METRES = 1.5;
+const STRIDE_METRES = 1.5;
 export const STRIDE_RADIANS_PER_METRE = (2 * Math.PI) / STRIDE_METRES;
 
 /**
@@ -21,7 +19,6 @@ export const LOOK = { hashMask: 0x1fffffff, womanShift: 29, speciesShift: 30, sa
 export const POPULATION = [60, 150, 300] as const;
 export const POPULATION_TIER = { phone: 0, desktop: 1, ultra: 2 } as const;
 /** A crowd's key is its population tier above the 24-bit scene seed (the share link's seed width): one u32 on the wire, so a client builds the host's city size without a new field. */
-export const CROWD_SEED_BITS = 24;
 export const CROWD_SEED_MASK = 0xffffff;
 export const CROWD_TIER_SCALE = 0x1000000;
 

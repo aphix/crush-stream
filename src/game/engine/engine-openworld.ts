@@ -13,13 +13,13 @@ import type { CrowdLink } from "../net/net-ports.ts";
 const NO_EVENTS = new Float64Array(0);
 
 /** The drawn crowd: `update` once a frame after the crowd's step. */
-export type CrowdArt = {
+type CrowdArt = {
   update(poses: CrowdPoses, eyeX: number, eyeZ: number): void;
   dispose(): void;
 };
 
 /** What the open world needs of the engine. */
-export type OpenWorldPorts = {
+type OpenWorldPorts = {
   /** The open world's course is up (solo, or in a room's lobby). */
   inOpenWorld(): boolean;
   /** A netplay client: it hears the host's crowd instead of making its own. */
@@ -43,7 +43,7 @@ export type OpenWorldPorts = {
  * The open world's society and crowd in the engine: made when the course is up and a map is given (`startOpenWorld`), stepped with the sim (host and solo) or by the host's clock (a client), drawn each frame, and gone when the
  * course is left. It is the crowd's end of the netplay crowd message (`CrowdLink`) and answers the look-at panel.
  */
-export class OpenWorldDirector implements CrowdLink {
+export class OpenWorldDirector {
   private readonly ports: OpenWorldPorts;
   private map: OpenWorldMap | null = null;
   private crowd: CivilianCrowd | null = null;
