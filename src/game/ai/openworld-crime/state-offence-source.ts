@@ -2,7 +2,7 @@ import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { CENTIMETRES_PER_METRE, DECISION_HZ, NEVER_TICK, NO_PLACE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../civilians/civilian-constants.ts";
 import type { CityState } from "../civilians/civilian-state.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
-import { isWanted } from "../civilians/society-crime.ts";
+import { crimeOf, isWanted } from "../civilians/society-crime.ts";
 import type { Spot } from "./offence-source.ts";
 
 /** The crowd's owner: its society rows and its drawn poses. */
@@ -50,7 +50,8 @@ export class StateOffenceSource {
       out.z = this.int(resident, RESIDENT_INT.fightZ) / CENTIMETRES_PER_METRE;
       return true;
     }
-    return this.atDoor(this.int(resident, RESIDENT_INT.crimePlace), out) || this.atDoor(this.int(resident, RESIDENT_INT.place), out);
+    const crime = crimeOf(this.crowd.state, resident);
+    return (crime !== null && this.atDoor(crime.place, out)) || this.atDoor(this.int(resident, RESIDENT_INT.place), out);
   }
 
   legDepartSeconds(resident: number): number {
