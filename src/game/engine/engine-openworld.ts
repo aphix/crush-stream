@@ -346,9 +346,9 @@ export class OpenWorldDirector {
     const crowd = this.crowd;
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
     this.startTraffic(map, client);
-    const doors = new OpenWorldCarDoors(crowd.state.capacity, () => this.traffic);
+    const doors = new OpenWorldCarDoors(crowd.state.capacity, { traffic: () => this.traffic, kerb: () => this.kerb, state: () => crowd.state, places: map.places });
     this.doors = doors;
-    crowd.driverDoors = (resident, _code, out) => doors.spot(resident, out);
+    crowd.driverDoors = (resident, code, out) => doors.spot(resident, code, out);
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     if (client) crowd.hear(this.heardEvents);
   }
