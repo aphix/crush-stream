@@ -1,4 +1,5 @@
 import { PREFAB, SURFACE } from "../constants.ts";
+import { interiorCounter, interiorDoor, interiorSeats } from "./interior-plan.ts";
 import { planBlocks } from "./openworld-blocks.ts";
 import { LAYOUT } from "./openworld-constants.ts";
 import { openWorldGeometry, type Area, type BlockPlan, type Building, type Dressing, type Geometry, type Link, type Lots, type LotPlan, type PathPlan } from "./openworld-layout.ts";
@@ -6,24 +7,23 @@ import {
   BACKDROP_MARKET,
   BEYOND,
   BLOCK_ROW_LETTERS,
+  BRICK_SHARE_OF_TEN,
   BUS_STOP,
   HOME_STYLES,
-  HOMES_PER_BUILDING,
   HOUSE_STOREYS,
   HUNDRED_STEP,
   HUNDRED_WEST,
   NAMED_HOMES,
   PARK_NAME,
   PLACE_NAMES,
-  RESIDENTIAL,
-  SHOP_STOREYS,
   SIDE_PLACES,
   STREETS_Z,
   VENUE_SPOTS,
   type Face,
+  type Spot,
   type Venue,
 } from "./openworld-programme.ts";
-import { PLACE_KIND, type Place } from "./walk-graph.ts";
+import { PLACE_KIND, SECTOR, type Place } from "./walk-graph.ts";
 
 /** Storey heights (m): ground 3.6 (parlour 3.0-3.7), shop ground 4.0, floor to floor 3.2 (2.7-3.4), cornice and parapet 0.9. */
 const GROUND_STOREY = 3.6;
@@ -33,10 +33,14 @@ const PARAPET = 0.9;
 /** A dumpster stands this far (m) in from the alley's south edge, at these shares of its length. */
 const DUMPSTER_BACK = 0.7;
 const DUMPSTER_SHARES = [0.25, 0.75] as const;
+/** Mixing weights of a house's style: block column, block row, lot index and the south face's offset, so neighbours differ and no house moves another's style. */
+const STYLE_MIX = { column: 7, row: 13, lot: 5, south: 3 } as const;
 
 type Layout = { places: Place[]; links: Link[]; buildings: Building[]; paths: PathPlan[]; areas: Area[]; dressing: Dressing[] };
 
 const NO_STYLE = "";
+
+const isBlock = (spot: Pick<Spot, "row" | "column">, plan: BlockPlan): boolean => spot.row === plan.row && spot.column === plan.column;
 
 function blockId(plan: BlockPlan): string {
   return `${BLOCK_ROW_LETTERS[plan.row]!}${plan.column + 1}`;
@@ -58,16 +62,30 @@ function addressOf(plan: BlockPlan, lot: LotPlan): string {
   return `${number} ${streetOf(plan, lot.face)}`;
 }
 
-function layHomes(layout: Layout, plan: BlockPlan, blockIndex: number, id: string, lots: readonly LotPlan[], geometry: Geometry): void {
-  const first = lots[0]!;
-  const style = HOME_STYLES[Math.floor(first.index / HOMES_PER_BUILDING) % HOME_STYLES.length]!;
-  const centreZ = (first.house.z0 + first.house.z1) / 2;
-  layout.buildings.push({ x: (first.x + lots[lots.length - 1]!.x) / 2, z: centreZ, yaw: first.yaw, depth: geometry.houseDepth, width: lots.length * first.width, height: heightOf(HOUSE_STOREYS, false), style });
-  for (const lot of lots) {
-    const named = NAMED_HOMES.find((home) => home.block === id && home.face === lot.face && home.at === lot.index);
-    layout.links.push({ place: layout.places.length, block: blockIndex, side: lot.face });
-    layout.places.push({ kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys: HOUSE_STOREYS, style, sector: RESIDENTIAL });
-  }
+function homeStyleOf(plan: BlockPlan, lot: LotPlan): string {
+  const mix = (plan.column * STYLE_MIX.column + plan.row * STYLE_MIX.row + lot.index * STYLE_MIX.lot + (lot.face === "south" ? STYLE_MIX.south : 0)) % 10;
+  return HOME_STYLES[mix < BRICK_SHARE_OF_TEN ? 0 : 1]!;
+}
+
+/** A place with an interior stands at the door that interior's frontage gives it, and publishes the seats and counter its furniture makes. */
+function furnished(place: Place): Place {
+  if (place.interior === undefined) return place;
+  const door = interiorDoor(place.interior, place.width, place.depth, place.x, place.z, place.yaw);
+  const standing = { ...place, doorX: door.x, doorZ: door.z };
+  const { seats, stoopSeats } = interiorSeats(standing);
+  const counter = interiorCounter(standing);
+  return { ...standing, ...(seats.length > 0 ? { seats } : {}), ...(stoopSeats > 0 ? { stoopSeats } : {}), ...(counter !== null ? { counter } : {}) };
+}
+
+function layHome(layout: Layout, plan: BlockPlan, blockIndex: number, lot: LotPlan, geometry: Geometry): void {
+  const style = homeStyleOf(plan, lot);
+  const centreZ = (lot.house.z0 + lot.house.z1) / 2;
+  const named = NAMED_HOMES.find((home) => isBlock(home, plan) && home.face === lot.face && home.at === lot.index);
+  layout.buildings.push({ x: lot.x, z: centreZ, yaw: lot.yaw, depth: geometry.houseDepth, width: lot.width, height: heightOf(HOUSE_STOREYS, false), style });
+  layout.links.push({ place: layout.places.length, block: blockIndex, side: lot.face });
+  layout.places.push(
+    furnished({ kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys: HOUSE_STOREYS, style, sector: SECTOR.residential, interior: "rowhome" }),
+  );
 }
 
 function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], venue: Venue, geometry: Geometry): void {
@@ -75,16 +93,33 @@ function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], 
   const x = (first.x + lots[lots.length - 1]!.x) / 2;
   const z = (first.house.z0 + first.house.z1) / 2;
   const width = lots.length * first.width;
-  layout.buildings.push({ x, z, yaw: first.yaw, depth: geometry.houseDepth, width, height: heightOf(SHOP_STOREYS, venue.shopGround), style: venue.style });
+  layout.buildings.push({ x, z, yaw: first.yaw, depth: geometry.houseDepth, width, height: heightOf(venue.storeys, venue.shopGround), style: venue.style });
   layout.links.push({ place: layout.places.length, block: blockIndex, side: first.face });
-  layout.places.push({ kind: venue.kind, name: venue.name, doorNode: -1, doorX: x, doorZ: first.frontZ, yaw: first.yaw, x, z, width, depth: geometry.houseDepth, storeys: SHOP_STOREYS, style: venue.style, sector: venue.sector });
+  layout.places.push(
+    furnished({
+      kind: venue.kind,
+      name: venue.name,
+      doorNode: -1,
+      doorX: x,
+      doorZ: first.frontZ,
+      yaw: first.yaw,
+      x,
+      z,
+      width,
+      depth: geometry.houseDepth,
+      storeys: venue.storeys,
+      style: venue.style,
+      sector: venue.sector,
+      hours: venue.hours,
+      ...(venue.interior === undefined ? {} : { interior: venue.interior }),
+    }),
+  );
 }
 
-/** A face, west to east: each venue its lots, the homes in pairs. */
+/** A face, west to east: each venue its lots, a home on every lot between. */
 function layFace(layout: Layout, plan: BlockPlan, blockIndex: number, face: Face, geometry: Geometry): void {
-  const id = blockId(plan);
   const lots = plan.lots.filter((lot) => lot.face === face);
-  const venues = VENUE_SPOTS.filter((spot) => spot.block === id && spot.face === face);
+  const venues = VENUE_SPOTS.filter((spot) => isBlock(spot, plan) && spot.face === face);
   for (let index = 0; index < lots.length; ) {
     const venue = venues.find((spot) => spot.at === index)?.venue;
     if (venue) {
@@ -92,17 +127,14 @@ function layFace(layout: Layout, plan: BlockPlan, blockIndex: number, face: Face
       index += venue.lots;
       continue;
     }
-    const pair = index % HOMES_PER_BUILDING === 0 && index + HOMES_PER_BUILDING <= lots.length && !venues.some((spot) => spot.at > index && spot.at < index + HOMES_PER_BUILDING);
-    const span = pair ? HOMES_PER_BUILDING : 1;
-    layHomes(layout, plan, blockIndex, id, lots.slice(index, index + span), geometry);
-    index += span;
+    layHome(layout, plan, blockIndex, lots[index]!, geometry);
+    index++;
   }
 }
 
 /** Roof places are reached through their house's front door, yard places through a gate on the alley (a spur off the alley path, at the lot's middle). */
 function laySidePlaces(layout: Layout, plan: BlockPlan, blockIndex: number): void {
-  const id = blockId(plan);
-  for (const spot of SIDE_PLACES.filter((side) => side.block === id)) {
+  for (const spot of SIDE_PLACES.filter((side) => isBlock(side, plan))) {
     const lots = plan.lots.filter((lot) => lot.face === spot.face).slice(spot.at, spot.at + spot.lots);
     const first = lots[0]!;
     const middle = lots[Math.floor(lots.length / 2)]!;
@@ -124,7 +156,7 @@ function layAlley(layout: Layout, plan: BlockPlan, blockIndex: number): void {
   const alley = plan.alley!;
   layout.paths.push(...plan.paths);
   layout.links.push({ place: layout.places.length, block: blockIndex, side: null });
-  layout.places.push({ kind: PLACE_KIND.hide, name: `${blockId(plan)} alley`, doorNode: -1, doorX: plan.centreX, doorZ: plan.centreZ, yaw: 0, x: plan.centreX, z: plan.centreZ, width: alley.x1 - alley.x0, depth: alley.z1 - alley.z0, storeys: 0, style: NO_STYLE, sector: "hideout" });
+  layout.places.push({ kind: PLACE_KIND.hide, name: `${blockId(plan)} alley`, doorNode: -1, doorX: plan.centreX, doorZ: plan.centreZ, yaw: 0, x: plan.centreX, z: plan.centreZ, width: alley.x1 - alley.x0, depth: alley.z1 - alley.z0, storeys: 0, style: NO_STYLE, sector: SECTOR.hideout });
   layout.areas.push({ surface: SURFACE.asphalt, ...alley });
   for (const share of DUMPSTER_SHARES) layout.dressing.push({ prefab: PREFAB.dumpster, x: alley.x0 + share * (alley.x1 - alley.x0), z: alley.z1 - DUMPSTER_BACK });
   for (const face of ["north", "south"] as const) {
@@ -138,18 +170,18 @@ function layPark(layout: Layout, plan: BlockPlan, blockIndex: number): void {
   layout.paths.push(...plan.paths);
   layout.areas.push({ surface: SURFACE.grass, ...lawn! }, { surface: SURFACE.asphalt, ...court! });
   layout.links.push({ place: layout.places.length, block: blockIndex, side: null });
-  layout.places.push({ kind: PLACE_KIND.hangout, name: PARK_NAME, doorNode: -1, doorX: plan.centreX, doorZ: plan.centreZ, yaw: 0, x: plan.centreX, z: plan.centreZ, width: lawn!.x1 - lawn!.x0, depth: lawn!.z1 - lawn!.z0, storeys: 0, style: NO_STYLE, sector: "recreation" });
+  layout.places.push({ kind: PLACE_KIND.hangout, name: PARK_NAME, doorNode: -1, doorX: plan.centreX, doorZ: plan.centreZ, yaw: 0, x: plan.centreX, z: plan.centreZ, width: lawn!.x1 - lawn!.x0, depth: lawn!.z1 - lawn!.z0, storeys: 0, style: NO_STYLE, sector: SECTOR.recreation });
   layout.links.push({ place: layout.places.length, block: blockIndex, side: null });
-  layout.places.push({ kind: PLACE_KIND.hangout, name: PLACE_NAMES.parkCourt, doorNode: -1, doorX: courtDoor![0], doorZ: courtDoor![1], yaw: 0, x: (court!.x0 + court!.x1) / 2, z: (court!.z0 + court!.z1) / 2, width: court!.x1 - court!.x0, depth: court!.z1 - court!.z0, storeys: 0, style: NO_STYLE, sector: "recreation" });
+  layout.places.push({ kind: PLACE_KIND.hangout, name: PLACE_NAMES.parkCourt, doorNode: -1, doorX: courtDoor![0], doorZ: courtDoor![1], yaw: 0, x: (court!.x0 + court!.x1) / 2, z: (court!.z0 + court!.z1) / 2, width: court!.x1 - court!.x0, depth: court!.z1 - court!.z0, storeys: 0, style: NO_STYLE, sector: SECTOR.recreation });
 }
 
 /** The bus stop stands on the clear path's curb edge of C1's north face, on Moore St at 10th. */
 function layBusStop(layout: Layout, plans: readonly BlockPlan[], geometry: Geometry): void {
-  const blockIndex = plans.findIndex((plan) => blockId(plan) === BUS_STOP.block);
+  const blockIndex = plans.findIndex((plan) => isBlock(BUS_STOP, plan));
   const lot = plans[blockIndex]!.lots.find((candidate) => candidate.face === "north" && candidate.index === BUS_STOP.at)!;
   const doorZ = lot.lineZ - geometry.sidewalkFrontage - geometry.sidewalkClear;
   layout.links.push({ place: layout.places.length, block: blockIndex, side: "north" });
-  layout.places.push({ kind: PLACE_KIND.transit, name: BUS_STOP.name, doorNode: -1, doorX: lot.x, doorZ, yaw: lot.yaw, x: lot.x, z: doorZ, width: lot.width, depth: geometry.sidewalkFurniture, storeys: 0, style: NO_STYLE, sector: "transit" });
+  layout.places.push({ kind: PLACE_KIND.transit, name: BUS_STOP.name, doorNode: -1, doorX: lot.x, doorZ, yaw: lot.yaw, x: lot.x, z: doorZ, width: lot.width, depth: geometry.sidewalkFurniture, storeys: 0, style: NO_STYLE, sector: SECTOR.transit });
 }
 
 /** The drawn-only city beyond the walls: a home on every lot, a corner market on every other block's north face. */
@@ -160,7 +192,7 @@ function layBackdrop(layout: Layout, plan: BlockPlan, geometry: Geometry): void 
     if (isMarket && lot.index > 0) continue;
     const width = isMarket ? BACKDROP_MARKET.lots * lot.width : lot.width;
     const x = isMarket ? (lot.x + lot.x + lot.width) / 2 : lot.x;
-    const style = isMarket ? BACKDROP_MARKET.style : HOME_STYLES[Math.floor(lot.index / HOMES_PER_BUILDING) % HOME_STYLES.length]!;
+    const style = isMarket ? BACKDROP_MARKET.style : homeStyleOf(plan, lot);
     layout.places.push({
       kind: isMarket ? PLACE_KIND.work : PLACE_KIND.home,
       name: isMarket ? `${BACKDROP_MARKET.name} ${plan.column},${plan.row}` : addressOf(plan, lot),
@@ -174,7 +206,7 @@ function layBackdrop(layout: Layout, plan: BlockPlan, geometry: Geometry): void 
       depth: geometry.houseDepth,
       storeys: HOUSE_STOREYS,
       style,
-      sector: isMarket ? BACKDROP_MARKET.sector : RESIDENTIAL,
+      sector: isMarket ? BACKDROP_MARKET.sector : SECTOR.residential,
     });
   }
 }
