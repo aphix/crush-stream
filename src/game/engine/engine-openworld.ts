@@ -30,6 +30,9 @@ type PlaceSigns = {
   dispose(): void;
 };
 
+/** The rowhomes' bays, stoops, railings and cornices: made with the open world's course, gone when it is left. */
+type FacadeArt = { dispose(): void };
+
 /** What the open world needs of the engine. */
 type OpenWorldPorts = {
   /** The open world's course is up (solo, or in a room's lobby). */
@@ -58,6 +61,8 @@ type OpenWorldPorts = {
   makeSigns(places: readonly Place[]): PlaceSigns;
   /** What culling reads of the engine. */
   cull: OpenWorldCullPorts;
+  /** The facade kit for the map's homes inside the walls. */
+  makeFacades(map: OpenWorldMap): FacadeArt;
 };
 
 /**
@@ -71,6 +76,7 @@ export class OpenWorldDirector {
   private crowd: CivilianCrowd | null = null;
   private art: CrowdArt | null = null;
   private signs: PlaceSigns | null = null;
+  private facades: FacadeArt | null = null;
   private unhook: (() => void) | null = null;
   private crowdKey = 0;
   /** The host's (or solo player's) crowd clock: the sim's seconds since the crowd was made. */
@@ -97,6 +103,7 @@ export class OpenWorldDirector {
   /** The map the crowd lives on; the crowd is made from it on the next frame in the open world. */
   startOpenWorld(map: OpenWorldMap): void {
     this.stop();
+    this.dropFacades();
     this.map = map;
   }
 
@@ -149,10 +156,12 @@ export class OpenWorldDirector {
   frame(wallDt: number): void {
     if (this.map === null || !this.ports.inOpenWorld()) {
       this.culling.stop(this.ports.cars());
+      this.dropFacades();
       this.stop();
       return;
     }
     this.culling.frame(this.ports.cars(), wallDt);
+    this.facades ??= this.ports.makeFacades(this.map);
     const client = this.ports.isClient();
     if (client && !this.hasHeard) return;
     const key = client ? this.heardKey : this.hostKey();
@@ -204,6 +213,11 @@ export class OpenWorldDirector {
   private feedWalkers(crowd: CivilianCrowd): void {
     crowd.walkers.clear();
     if (this.footTracked) crowd.walkers.add(this.foot.x, this.foot.z, this.footVelocityX, this.footVelocityZ);
+  }
+
+  private dropFacades(): void {
+    this.facades?.dispose();
+    this.facades = null;
   }
 
   private hostKey(): number {

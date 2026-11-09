@@ -62,6 +62,7 @@ function room() {
       eye: () => {},
       throwFigure: (strike) => void thrown.push(strike),
       hookWallHits: () => () => {},
+      makeFacades: () => ({ dispose: () => {} }),
       makeArt: () => ({ update: () => {}, dispose: () => {} }),
       signsOn: () => false,
       makeSigns: () => ({ update: () => {}, dispose: () => {} }),

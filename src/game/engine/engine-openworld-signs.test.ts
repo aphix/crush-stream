@@ -40,6 +40,7 @@ class Harness {
       };
     },
     cull: idleCullPorts(),
+    makeFacades: () => ({ dispose: () => {} }),
   });
 
   constructor() {

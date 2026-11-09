@@ -65,6 +65,7 @@ class Harness {
       this.listener = listener;
       return () => void this.unhooked++;
     },
+    makeFacades: () => ({ dispose: () => {} }),
     makeArt: () => {
       this.artsMade++;
       return { update: (poses, eyeX, _eyeZ, sight, wallDt) => void this.updates.push({ poses, eyeX, sight, wallDt }), dispose: () => void this.artsDisposed++ };

@@ -145,6 +145,25 @@ The field also keeps a clock per id for those that want it: `claim(count)` hands
 
 **Cars** (`present/openworld-car-lod.ts`, driven by `engine/engine-openworld-cull.ts`): the distance detail runs three rungs nearer than the match ladder's while the open world is up (a desktop cuts small parts at 20 m and all but the body at 40 m), and a car no eye has seen for `HIDE_GRACE`, no player's car is within 40 m of and the camera does not follow is taken off the draw (`group.visible`, which the wheel, lamp, part and driver batches honour), and drawn again the frame it is seen. It never touches a car it did not hide, and lets go of all of them while a reel replay plays or the open world ends.
 
+## The street fabric (`world/openworld/openworld-fabric.ts`)
+
+The course lays the street's own paint and furniture as props that name scenery assets (`props[].asset`, the street and ground families), at exact points, from the layout and the walk graph; nothing is generated on the roads (`scenery.roadDecals: []`) and the loop's race marks are off (`road.raceMarks: false`: no chequered band, no red and white kerbs; the edge lines and centre dashes stay).
+
+- **Crossings.** At the middle of every crossing edge of the walk graph, bars with the traffic across the whole carriageway (the crosswalk decal, as many as cover 11 m at its own pitch). No crosswalk lies anywhere else.
+- **Manholes.** One cover in the middle of every street segment (between two intersections), in the middle of a travel lane, alternating lanes.
+- **Furniture strips.** The 1.2 m strip at the curb of every block face, round the lamps and street trees (each keeps its clearance; nothing stands within 3 m of a face's end): a hydrant per face; per business (a place of kind shop, food, hangout or work with a face) its kit (`FRONTAGE_KITS`: newspaper box, bins, a bench, a café table, bike racks, parking meters), slid up to 4 m along the face to fit; the bus stop first of all (shelter, stop sign, bin).
+- **Corners.** A street-name sign at two opposite corners of each intersection and a storm drain grate in the gutter by the other two; none at the perimeter loop's four rounded corners.
+- **Parked cars.** None are placed by the course: the low-poly parked cars inside the walls are gone, parked cars are real cars (traffic).
+
+Not here yet: trees in pits, utility poles, curb ramps.
+
+## Rowhome facade kit
+
+Every home inside the walls is dressed from its `Place` (`homeFrontages`): a point on the building's drawn front face at the lot's middle, which is the door's line. Four instanced meshes (`FacadeBays`: bay, stoop, railing, cornice; four draws whatever the number of houses, painted textures made in code) draw
+a canted bay stack over the door (hood at the door's head, then every floor's apron, window and belt band on one footprint, 0.75 m out, a capped roof slab), a stoop of five 0.18 m risers whose landing (0.9 m) is the door sill, iron railings on its cheeks, half-basement windows either side and a bracketed roofline cornice;
+panels and cornice take the house's accent from `HOUSE_ACCENTS`, windows light at night from the facades' `FACADE_GLOW`. The facade art of a home carries no bay, stoop, railing or cornice of its own: this kit covers the door's column above the door, the stoop and the roofline band.
+What a car or a walker meets is `facadeSolidProps(lots)`, appended to the course's props as invisible-wall boxes: a prism per step (base on the ground, tops 0.18 to 0.9, no overhang) and a flank prism either side of the stoop under the bay (the stack overhangs the stoop itself).
+
 ## Where it lives
 
 | Piece | File |
@@ -156,7 +175,9 @@ The field also keeps a clock per id for those that want it: `claim(count)` hands
 | The engine's end: crowd, link, look-at, wall hook | `engine/engine-openworld.ts` (`OpenWorldDirector`, held by `CrashEngine`) |
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
 | Signs: shop signs, names on the buildings | `present/openworld-shop-signs.ts`, `openworld-signs.ts` (the label style from `track-debug.ts`) |
+| Rowhome facade kit | `present/facade-bays.ts`, `facade-bay-parts.ts`, `facade-kit-atlas.ts`; plan and colliders `world/openworld/openworld-facade-solids.ts` |
 | Map and course | `world/openworld/` |
+| Street fabric (crossings, manholes, hydrants, furniture) | `world/openworld/openworld-fabric.ts`, `openworld-fabric-constants.ts`, `openworld-sides.ts` |
 | What is seen, the cars' detail and phase-out | `present/openworld-sight.ts`, `present/openworld-car-lod.ts`, `engine/engine-openworld-cull.ts` |
 
 The director is made with the engine; the crowd is made on the first frame the open world's course is up and a map is known

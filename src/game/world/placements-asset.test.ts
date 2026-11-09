@@ -28,7 +28,9 @@ describe("given a course whose props name scenery assets", () => {
   // mutation: sed -i 's/sz: sz \* p.scale, asset });/sz: sz * p.scale });/' src/game/world/placements.ts
   it("when it is placed, then an asset prop stands at its exact point with its asset and the asset's own size", () => {
     expect(placed.length, "authored props").toBe(4);
-    expect(hydrant, "hydrant").toMatchObject({ prefab: PREFAB.assetCard, x: 30.25, z: 20.5, yaw: 0.5, asset: SCENERY_ASSETS.findIndex((row) => row.id === HYDRANT) });
+    expect(hydrant!.prefab, "hydrant prefab").toBe(PREFAB.assetCard);
+    expect([hydrant!.x, hydrant!.z, hydrant!.yaw], "hydrant x, z, yaw").toEqual([30.25, 20.5, 0.5]);
+    expect(hydrant!.asset, "hydrant asset").toBe(SCENERY_ASSETS.findIndex((row) => row.id === HYDRANT));
     expect(hydrant!.sy, "hydrant height (m)").toBeCloseTo(HYDRANT_HEIGHT, 6);
     expect(hydrant!.sz, "hydrant width (m)").toBeCloseTo(HYDRANT_WIDTH, 6);
   });
@@ -37,19 +39,22 @@ describe("given a course whose props name scenery assets", () => {
   it("when it carries a scale or a size, then the scale multiplies the asset's size and the size replaces it", () => {
     expect(tall!.sy, "scaled hydrant height (m)").toBeCloseTo(2 * HYDRANT_HEIGHT, 6);
     expect(tall!.sz, "scaled hydrant width (m)").toBeCloseTo(2 * HYDRANT_WIDTH, 6);
-    expect([crosswalk!.sx, crosswalk!.sy, crosswalk!.sz], "crosswalk extents (m)").toEqual(CROSSWALK_SIZE);
+    expect(crosswalk!.sx, "crosswalk width (m)").toBe(CROSSWALK_SIZE[0]);
+    expect(crosswalk!.sy, "crosswalk height").toBe(CROSSWALK_SIZE[1]);
+    expect(crosswalk!.sz, "crosswalk depth (m)").toBe(CROSSWALK_SIZE[2]);
     expect(crosswalk!.asset, "crosswalk asset").toBe(SCENERY_ASSETS.findIndex((row) => row.id === CROSSWALK));
   });
 
-  // mutation: sed -i 's/if (p.asset !== undefined) {/if (false) {/' src/game/world/placements.ts
+  // mutation: sed -i 's/sx: (p.size ? p.size\[0\] \/ size\[0\] : 1) \* s,/sx: 2 * s,/' src/game/world/placements.ts
   it("when a prop names no asset, then it is placed as before: no asset, its prefab's own size", () => {
-    expect(cone, "cone").toMatchObject({ prefab: PREFAB.cone, x: 31, z: 20, sx: 1, sy: 1, sz: 1 });
+    expect(cone!.prefab, "cone prefab").toBe(PREFAB.cone);
+    expect([cone!.x, cone!.z, cone!.sx, cone!.sy, cone!.sz], "cone x, z and scales").toEqual([31, 20, 1, 1, 1]);
     expect("asset" in cone!, "a cone has no asset").toBe(false);
   });
 });
 
 describe("given a prop that names an asset", () => {
-  // mutation: sed -i 's/.refine((p) => p.asset === undefined ||/.refine((p) => true ||/' src/game/world/track-schema.ts
+  // mutation: sed -i 's/return row === undefined || assetPrefab(row) === p.prefab;/return true;/' src/game/world/track-schema.ts
   it("when its prefab is not the asset's generic one or the id is no asset's, then the course is rejected", () => {
     const withProp = (prop: object): unknown => ({ ...square(), props: [prop] });
     expect(() => parseTrack(withProp({ prefab: PREFAB.cone, asset: HYDRANT, x: 0, z: 0 }))).toThrow(/props\.0\.prefab/);
