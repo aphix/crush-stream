@@ -85,7 +85,7 @@ export function buildVenueIndex(map: OpenWorldMap): VenueIndex {
   for (let place = 0; place < placeCount; place++) {
     const entry = map.places[place]!;
     venue[place] = venueOf(entry);
-    const window = byName.get(entry.name) ?? entry.hours ?? DEFAULT_HOURS[venue[place]!] ?? null;
+    const window = entry.hours ?? byName.get(entry.name) ?? DEFAULT_HOURS[venue[place]!] ?? null;
     for (let hour = 0; hour < HOURS_PER_GAME_DAY; hour++) hourWeight[place * HOURS_PER_GAME_DAY + hour] = window === null || isHourIn(hour, window[0], window[1]) ? 1 : CLOSED_HOURS_WEIGHT;
     seatBase[place] = seatTotal;
     seatCount[place] = entry.seats === undefined ? 0 : Math.floor(entry.seats.length / SEAT_STRIDE);

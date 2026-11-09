@@ -38,7 +38,7 @@ const JOB = { employed: 1, jobless: 2, broke: 4, retired: 8, child: 16, adult: 3
 /** Where they must be now: anywhere, at home, or at their workplace after a shift's length of dwell. */
 const FROM = { anywhere: 0, home: 1, work: 2 } as const;
 /** How a row picks its place. */
-export const TARGET = { coffeeOnTheWay: 1, coffee: 2, bar: 3, supermarket: 4, ownDoor: 5, neighbour: 6, shopDoor: 7, shopWithStaff: 8, stoopSitter: 9, parkedCar: 10, hideout: 11 } as const;
+export const TARGET = { coffeeOnTheWay: 1, coffee: 2, bar: 3, ownDoor: 5, neighbour: 6, shopDoor: 7, shopWithStaff: 8, stoopSitter: 9, parkedCar: 10, hideout: 11 } as const;
 
 const moods = (...list: number[]): number => list.reduce((mask, mood) => mask | (1 << mood), 0);
 /** A row that lists no moods takes any but afraid. */
@@ -72,7 +72,6 @@ export const INTERACTIONS: readonly InteractionRow[] = [
   { name: "morning coffee out of work", purpose: PURPOSE.coffee, jobs: JOB.jobless | JOB.retired, traits: FLAG.coffeeFan, moods: ANY_MOOD, from: FROM.home, hours: [7, 11], need: -1, needLevel: 0, strength: 0.5, target: TARGET.coffee, dwell: [20, 45] },
   { name: "a drink after work", purpose: PURPOSE.drink, jobs: JOB.employed, traits: FLAG.drinker, moods: ANY_MOOD, from: FROM.work, hours: [17, 3], need: NEED.rest, needLevel: TIRED_REST_LEVEL, strength: 0.8, target: TARGET.bar, dwell: [60, 150] },
   { name: "a drink to forget", purpose: PURPOSE.drink, jobs: JOB.adult, traits: 0, moods: LOW_MOODS, from: FROM.anywhere, hours: [16, 3], need: -1, needLevel: 0, strength: 0.6, target: TARGET.bar, dwell: [45, 120] },
-  { name: "the shopping", purpose: PURPOSE.shopping, jobs: JOB.adult, traits: 0, moods: moods(MOOD.busy, MOOD.fine, MOOD.happy, MOOD.proud, MOOD.hungry), from: FROM.anywhere, hours: [10, 19], need: NEED.errand, needLevel: 0.25, strength: 0.4, target: TARGET.supermarket, dwell: [20, 40] },
   { name: "sitting out on the stoop in the evening", purpose: PURPOSE.stoopSit, jobs: JOB.adult, traits: 0, moods: CALM_MOODS, from: FROM.home, hours: [17, 21], need: NEED.social, needLevel: 0.25, strength: 0.5, target: TARGET.ownDoor, dwell: [30, 90] },
   { name: "sitting out on the stoop by day", purpose: PURPOSE.stoopSit, jobs: JOB.retired | JOB.jobless, traits: 0, moods: CALM_MOODS, from: FROM.home, hours: [10, 15], need: NEED.social, needLevel: 0.25, strength: 0.5, target: TARGET.ownDoor, dwell: [30, 90] },
   { name: "a chat with a neighbour", purpose: PURPOSE.stoopTalk, jobs: JOB.adult, traits: 0, moods: moods(MOOD.happy, MOOD.lonely, MOOD.fine, MOOD.proud), from: FROM.home, hours: [10, 20], need: NEED.social, needLevel: 0.4, strength: 0.45, target: TARGET.neighbour, dwell: [10, 25] },
@@ -214,10 +213,6 @@ function targetPlace(state: CityState, resident: number, row: InteractionRow, cu
       return nearestOpenVenue(state, VENUE.coffee, current, tick, hour);
     case TARGET.bar:
       return nearestOpenVenue(state, VENUE.bar, current, tick, hour);
-    case TARGET.supermarket: {
-      const market = nearestOpenVenue(state, VENUE.supermarket, current, tick, hour);
-      return market !== NO_PLACE ? market : nearestOpenVenue(state, VENUE.shop, current, tick, hour);
-    }
     case TARGET.ownDoor:
       return intAt(state, resident, RESIDENT_INT.home);
     case TARGET.neighbour:

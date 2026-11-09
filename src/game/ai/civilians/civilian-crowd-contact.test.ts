@@ -191,6 +191,78 @@ describe.each([60])("given a host crowd of %i residents over ten minutes of its 
   });
 });
 
+/** How far a figure's body reaches past the car's side (m): the figure-strike module's own figure. */
+const BODY_REACH = 0.3;
+/** How far the drawn body stands inside that reach: the brain's spot is then `BODY_GAP / 2 - LEAN_IN` short of it, and the body is deeper in than the car moves in a frame, so its front is the face it meets. */
+const LEAN_IN = 0.2;
+const CAR_PACE = 4;
+const CAR_RUN_UP = 6;
+const DRIVE_SECONDS = 2.5;
+
+/** A car heading along +z, its middle `lateralOf(left edge)` m to the +x side of `resident`'s brain spot and `CAR_RUN_UP` m behind it, closing at `CAR_PACE`: the residents it ran down. */
+function driveAt(crowd: CivilianCrowd, resident: number, lateralOf: (planLeft: number) => number): number[] {
+  const car = pooledCar(0);
+  launch(car, 0, 0, 0, 0, CAR_PACE);
+  const lateral = lateralOf(car.cage.fields.planBox[0]!);
+  const pose = new LegPose();
+  const struck: number[] = [];
+  for (let seconds = FRAME_SECONDS; seconds < DRIVE_SECONDS; seconds += FRAME_SECONDS) {
+    legPose(crowd.state, resident, seconds, pose);
+    car.group.position.set(pose.x + lateral, car.group.position.y, pose.z - CAR_RUN_UP + CAR_PACE * seconds);
+    crowd.step(seconds, [car], true);
+    for (const strike of crowd.takeStrikes()) struck.push(strike.guard);
+  }
+  return struck;
+}
+
+describe("given two civilians on one spot, parted, and a car driving at the one drawn on its side", () => {
+  /** The car's left edge stands `BODY_GAP / 2 + BODY_REACH - LEAN_IN` m past the brain spot: the body drawn `BODY_GAP / 2` m out is `LEAN_IN` inside its reach, the empty brain spot short of it. */
+  const lateralOf = (planLeft: number): number => BODY_GAP / 2 + BODY_REACH - LEAN_IN - planLeft;
+
+  function parted(twins: boolean) {
+    const crowd = newCrowd(map);
+    const [lower, upper] = people(crowd, 2) as [number, number];
+    sendAlong(crowd, lower, EDGE, EDGE.from, EDGE.to);
+    if (twins) sendAlong(crowd, upper, EDGE, EDGE.from, EDGE.to);
+    return { crowd, lower, upper, struck: driveAt(crowd, lower, lateralOf) };
+  }
+
+  it("when the car arrives, then it runs down the body it passes, not the other, and not the empty spot between them", () => {
+    const { crowd, lower, upper, struck } = parted(true);
+    expect(struck.length, "run down").toBe(1);
+    expect(struck[0], "who").toBe(lower);
+    expect(crowd.poses.shown[lower], "the one run down is shown").toBe(0);
+    expect(crowd.poses.shown[upper], "the other is shown").toBe(1);
+  });
+
+  it("when the same car drives at one civilian alone, then it runs no one down: the spot it was aimed at was empty", () => {
+    const { struck } = parted(false);
+    expect(struck.length, "run down").toBe(0);
+  });
+});
+
+describe("given the law's overlay moving a civilian's drawn spot, and a car driving at where they are drawn", () => {
+  const SHIFT = 5;
+
+  function shifted(overlay: boolean) {
+    const crowd = newCrowd(map);
+    const [resident] = people(crowd, 1) as [number];
+    sendAlong(crowd, resident, EDGE, EDGE.from, EDGE.to);
+    if (overlay) crowd.overlay = (poses) => void (poses.x[resident] = poses.x[resident]! + SHIFT);
+    return { resident, struck: driveAt(crowd, resident, () => SHIFT) };
+  }
+
+  it("when the overlay is up, then the car runs them down where they are drawn", () => {
+    const { resident, struck } = shifted(true);
+    expect(struck.length, "run down").toBe(1);
+    expect(struck[0], "who").toBe(resident);
+  });
+
+  it("when there is no overlay, then the same car misses them", () => {
+    expect(shifted(false).struck.length, "run down").toBe(0);
+  });
+});
+
 describe("given a civilian on a leg that is a drive", () => {
   it("when the crowd is stepped, then they are shown walking until the leg is a drive, and then not shown: the car is another's to draw", () => {
     const crowd = newCrowd(map);

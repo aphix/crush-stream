@@ -55,8 +55,15 @@ function nextHourTick(tick: number): number {
 export function queueEvents(state: CityState, postTick: number, events: ArrayLike<number>): void {
   for (let at = 0; at + EVENT_TRIPLE <= events.length; at += EVENT_TRIPLE) {
     const kind = events[at]!;
-    const subject = events[at + 1]!;
     const seconds = events[at + 2]!;
+    let subject = events[at + 1]!;
+    if (kind === EVENT_KIND.push || kind === EVENT_KIND.fight) {
+      const alongside = at + 2 * EVENT_TRIPLE <= events.length && events[at + EVENT_TRIPLE] === EVENT_KIND.alongside && events[at + EVENT_TRIPLE + 2] === seconds;
+      const other = alongside ? events[at + EVENT_TRIPLE + 1]! : -1;
+      if (alongside) at += EVENT_TRIPLE;
+      if (!subjectInRange(state, EVENT_KIND.knock, subject)) continue;
+      if (other >= 0 && subjectInRange(state, EVENT_KIND.knock, other)) subject += state.capacity * (other + 1);
+    }
     if (!subjectInRange(state, kind, subject)) continue;
     const happened = tickAt(seconds);
     const reactionTick = Math.max(happened + EVENT_LEAD_TICKS, postTick);
@@ -67,7 +74,7 @@ export function queueEvents(state: CityState, postTick: number, events: ArrayLik
   }
 }
 
-/** A knock's, crime's or bust's subject is a resident, a wreck's a place with a door, a push's or fight's a packed pair of residents (see `pairOf`); another kind is dropped. */
+/** A knock's, crime's or bust's subject is a resident, a wreck's a place with a door, a push's or fight's a packed pair of residents (see `pairOf`); another kind (a lone `alongside` too) is dropped. */
 function subjectInRange(state: CityState, kind: number, subject: number): boolean {
   if (!Number.isInteger(subject) || subject < 0) return false;
   if (kind === EVENT_KIND.wreck) return subject < state.index.placeCount && state.index.doorNode[subject]! >= 0;
@@ -126,8 +133,8 @@ export function applyIndividualEvents(state: CityState, tick: number): void {
     event.individualDone = true;
     if (event.kind === EVENT_KIND.knock) knockResident(state, event.subject, event.seconds, tick);
     else if (event.kind === EVENT_KIND.wreck) sendMechanicOut(state, event.subject, tick);
-    else if (event.kind === EVENT_KIND.crime) applyCrime(state, event.subject, tick);
-    else if (event.kind === EVENT_KIND.bust) applyBust(state, event.subject, event.seconds, tick);
+    else if (event.kind === EVENT_KIND.crime) applyCrime(state, event.subject, event.seconds, tick);
+    else if (event.kind === EVENT_KIND.bust) applyBust(state, event.subject, event.seconds);
   }
 }
 
