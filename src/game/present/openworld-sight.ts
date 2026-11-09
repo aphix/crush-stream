@@ -121,8 +121,9 @@ export class SightField {
     return first;
   }
 
-  /** The ids `claim` gave are free again, their clocks with them. */
+  /** The ids `claim` gave are free again, their clocks with them. A release after `clear` (an owner disposed after the field let go of everything) is nothing. */
   release(first: number, count: number): void {
+    if (first + count > this.claimed) return;
     this.lastSeen.fill(NEVER_SEEN, first, first + count);
     this.freeRanges.push({ first, count });
     this.freeRanges.sort((a, b) => a.first - b.first);

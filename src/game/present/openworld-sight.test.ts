@@ -161,6 +161,16 @@ describe("given players' cars and claimed ids", () => {
     expect([cars, interiors, traffic], "first ids of the three claims").toEqual([0, 4, 8]);
   });
 
+  it("when an owner gives its ids back after the field was cleared, then nothing is freed twice and a new claim gets its own ids", () => {
+    const left = new SightField([], IDS);
+    const old = left.claim(6);
+    left.clear();
+    left.release(old, 6);
+    const first = left.claim(4);
+    const second = left.claim(4);
+    expect([first, second], "first ids of the two claims after the clear").toEqual([0, 4]);
+  });
+
   it("when the field is cleared, then the ids are free again", () => {
     field.clear();
     expect(field.claim(IDS), "all ids after the clear").toBe(0);
