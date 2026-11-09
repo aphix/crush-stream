@@ -92,7 +92,7 @@ const placement = z
     yaw: z.number().default(0),
     scale: z.number().positive().default(1),
     size: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]).optional(),
-    /** A building's facade style by name (`present/facades.ts` `FACADE`), forcing it over the style the place's hash would pick. */
+    /** A building's facade style by name (`present/facades.ts` `FACADE`), forcing it over the style the place's hash would pick; a `street-sign`'s two street names (`streetSignStyle`). */
     style: z.string().optional(),
     /** A scenery asset by id (`world/scenery-assets`): `prefab` is then the asset's generic prefab (`assetPrefab`), `scale` multiplies the asset's own size (m), or `size`'s when given (the generic prefab's extents x, y, z as `assetScale` gives them: a decal's width, 1 and length). */
     asset: z.enum(SCENERY_ASSET_IDS).optional(),

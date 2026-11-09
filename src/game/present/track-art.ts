@@ -32,6 +32,7 @@ import { backdropMesh, disposeBackdrop, type Backdrop } from "./sky-backdrop.ts"
 import { nukeFlash } from "./people.ts";
 import { GroundsArt } from "./grounds-art.ts";
 import { TrackDebug } from "./track-debug.ts";
+import { StreetNameBlades } from "./street-name-blades.ts";
 
 /**
  * The visible course: terrain (with a far skirt), road / runoff ribbons for the loop, shortcuts and
@@ -75,6 +76,8 @@ export class TrackArt {
   private cancelFlash: (() => void) | null = null;
   /** A guarded course's guards and VIP (`TrackJson.guards`), none on a course without. */
   readonly grounds: GroundsArt | null;
+  /** The street names printed on the course's street signs' blades, none on a course without. */
+  private readonly streetNames: StreetNameBlades | null;
   private readonly track: Track;
   /** The Debug views' "Track" overlay (node indices, checkpoint gates), built the first time it is switched on. */
   private debug: TrackDebug | null = null;
@@ -206,6 +209,8 @@ export class TrackArt {
     // Props: one InstancedMesh per prefab part (the course's lamp heads and pools are the scene's materials).
     this.biome = biomeLookup(track);
     this.props = this.tumble(placed, mats);
+    this.streetNames = StreetNameBlades.of(placed);
+    if (this.streetNames !== null) this.add(this.streetNames.mesh, { kind: "prop", prefab: PREFAB.streetSign }, false);
     this.sceneryPlaced = drawn;
     this.scenery = this.tumble(drawn, mats);
     this.foliage = new FoliagePoof(drawn, this.scenery, mats.plain);
@@ -282,6 +287,7 @@ export class TrackArt {
     this.stage.look(null);
     this.grounds?.dispose();
     this.debug?.dispose();
+    this.streetNames?.dispose();
     this.dropBackdrop();
     disposeAssetMaterials(this.assetMaterials);
     const geos = new Set<THREE.BufferGeometry>();
