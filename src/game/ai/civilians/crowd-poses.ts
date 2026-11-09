@@ -10,14 +10,18 @@ export type CrowdPoses = {
   speed: Float32Array;
   look: Uint32Array;
   shown: Uint8Array;
-  /** `ACTIVITY` code, seconds since it began, seconds until it ends, and the other civilian in it (-1: none). */
+  /** What she is doing: an `ACTIVITY` code, 0 walking or standing. */
   activity: Uint8Array;
+  /** Seconds since her activity began, the clip's own time. */
   activityClock: Float32Array;
+  /** Seconds until her activity ends (`ACTIVITY_OPEN_ENDED` when unknown), so a looping clip can ease out. */
   activityLeft: Float32Array;
-  partner: Int32Array;
-  /** Height of the feet, and of the seat or counter top the activity uses (m). */
-  feetY: Float32Array;
+  /** World y of the seat top she sits on, or the counter top she buys at (m). */
   surfaceY: Float32Array;
+  /** The civilian (an index into these rows) a bump, fight or talk is with, -1 for none. */
+  partner: Int32Array;
+  /** World y her feet stand on (m): the floor, a stoop step. */
+  feetY: Float32Array;
 };
 
 export function createCrowdPoses(capacity: number): CrowdPoses {
