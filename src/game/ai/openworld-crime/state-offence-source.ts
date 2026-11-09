@@ -50,7 +50,8 @@ export class StateOffenceSource {
       out.z = this.int(resident, RESIDENT_INT.fightZ) / CENTIMETRES_PER_METRE;
       return true;
     }
-    return this.atDoor(crimePlaceOf(this.crowd.state, resident), out) || this.atDoor(this.int(resident, RESIDENT_INT.place), out);
+    const crimePlace = crimePlaceOf(this.crowd.state, resident);
+    return (crimePlace !== NO_PLACE && this.atDoor(crimePlace, out)) || this.atDoor(this.int(resident, RESIDENT_INT.place), out);
   }
 
   legDepartSeconds(resident: number): number {
