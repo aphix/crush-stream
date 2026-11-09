@@ -6,6 +6,7 @@ import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { legPositionAt, LegPose } from "../ai/civilians/civilian-leg.ts";
 import { historyLines } from "../ai/civilians/civilian-mood.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { INTERP_DELAY } from "../net/net-constants.ts";
 import { FRAME_MS, Hub } from "../net/net-hub.test-util.ts";
 import { NetPlay } from "../net/net-play.ts";
 import { worldGame } from "../net/net-world-game.test-util.ts";
@@ -29,6 +30,8 @@ const HOST_CAR_SLOT = 0;
 /** Net frames (1/30 s) the host's crowd runs before a test looks at it: 150 crowd seconds, civilians are out. */
 const MORNING_FRAMES = 150 * 30;
 const AFTERMATH_FRAMES = 6 * 30;
+/** The guest's clock is the host's less the delay, to within a sim step. */
+const CLOCK_TOLERANCE_S = 0.02;
 /** A client's civilians are where the host's were at its clock, to the width of a float. */
 const POSE_TOLERANCE_M = 1e-3;
 
@@ -123,6 +126,8 @@ describe("given a host and a guest in a room of the open world, each with the en
     const r = startedRoom();
     r.step(MORNING_FRAMES);
     expect(r.guest.director.link()?.seed, "the guest's key is the host's").toBe(r.host.director.link()?.seed);
+    const lag = r.host.director.crowdTime() - r.guest.director.crowdTime();
+    expect(Math.abs(lag - INTERP_DELAY), "seconds the guest's clock is off the host's, the interpolation delay behind").toBeLessThan(CLOCK_TOLERANCE_S);
     const { gap, shown } = worstPoseGap(r);
     expect(shown, "civilians the guest shows").toBeGreaterThan(0);
     expect(gap, "metres the guest's civilians are off the host's").toBeLessThan(POSE_TOLERANCE_M);

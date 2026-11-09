@@ -6,11 +6,16 @@ import { CHEST_HEIGHT, LOOK_REACH } from "./civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { lookAtOf, LookRay } from "./civilian-look.ts";
+import type { CrowdPoses } from "./crowd-poses.ts";
 import { historyLines, residentNameText } from "./civilian-mood.ts";
 import { newCrowd, shownResident, stepUntilShown } from "./civilian-crowd.test-util.ts";
 
 const map = buildFixtureMap();
 const EYE_HEIGHT = 1.5;
+/** Ground with no building on it, and a ray that climbs this many metres over this many along: it is above a house's roof where it would meet the house's face. */
+const OPEN_GROUND = 1000;
+const ROOF_RUN = 10;
+const ROOF_RISE = 30;
 /** Metres the eye stands back from what it looks at. */
 const STAND_BACK = 8;
 /** A unit vector from the eye towards the point (x, y, z). */
@@ -60,11 +65,25 @@ describe("given a crowd with a civilian walking on the street", () => {
     expect(lookAtOf(crowd.state, crowd.poses, tick, aimedAt(eyeAt(crowd.poses.x[resident]!, crowd.poses.z[resident]!), crowd.poses.x[resident]!, 100, crowd.poses.z[resident]!)), "looking up").toBeNull();
   });
 
-  it("when they are beyond the look reach, then the panel does not name them", () => {
-    const ray = behind(crowd, resident);
-    const far = eyeAt(ray.eyeX - ray.dirX * LOOK_REACH, ray.eyeZ - ray.dirZ * LOOK_REACH);
-    const text = lookAtOf(crowd.state, crowd.poses, tick, aimedAt(far, crowd.poses.x[resident]!, CHEST_HEIGHT, crowd.poses.z[resident]!));
-    expect(text?.title.startsWith(residentNameText(crowd.state, resident)) ?? false, "named").toBe(false);
+});
+
+describe("given one civilian out on open ground, far from every building", () => {
+  const crowd = newCrowd(map);
+  const resident = 0;
+
+  /** The panel's title with the eye `metres` short of the civilian, looking straight at them. */
+  function titleAt(metres: number): string | undefined {
+    const count = crowd.poses.count;
+    const poses: CrowdPoses = { count, x: new Float32Array(count), z: new Float32Array(count), yaw: new Float32Array(count), stride: new Float32Array(count), speed: new Float32Array(count), look: new Uint32Array(count), shown: new Uint8Array(count) };
+    poses.shown[resident] = 1;
+    poses.x[resident] = OPEN_GROUND;
+    poses.z[resident] = metres;
+    return lookAtOf(crowd.state, poses, 0, aimedAt(eyeAt(OPEN_GROUND, 0), OPEN_GROUND, CHEST_HEIGHT, metres))?.title;
+  }
+
+  it("when they are inside the look reach, then the panel names them, and when they are beyond it, then it does not", () => {
+    expect(titleAt(LOOK_REACH - 1)?.startsWith(residentNameText(crowd.state, resident)), "inside the reach").toBe(true);
+    expect(titleAt(LOOK_REACH + 1), "beyond the reach").toBeUndefined();
   });
 });
 
@@ -83,7 +102,7 @@ describe("given a crowd and the eye aimed at the door of a home", () => {
     const crowd = newCrowd(map);
     const house = map.places[crowd.state.ints[RESIDENT_INT.home]!]!;
     const eye = eyeAt(house.x - house.depth / 2 - 3, house.z);
-    expect(lookAtOf(crowd.state, crowd.poses, 0, aimedAt(eye, house.x, 200, house.z)), "over the roof").toBeNull();
+    expect(lookAtOf(crowd.state, crowd.poses, 0, aimedAt(eye, eye.eyeX + ROOF_RUN, EYE_HEIGHT + ROOF_RISE, eye.eyeZ)), "over the roof").toBeNull();
     const away = aimedAt(eyeAt(house.x - house.depth / 2 - 3, house.z), house.x - 50, EYE_HEIGHT, house.z);
     expect(lookAtOf(crowd.state, crowd.poses, 0, away), "looking away").toBeNull();
   });

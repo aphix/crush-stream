@@ -43,7 +43,7 @@ function residentMet(poses: CrowdPoses, ray: LookRay): Meeting {
 
 /** The building (inside the walls) whose box the ray enters first within `LOOK_REACH`: the slab test in the building's own frame (local x its depth, local z its width), ground to roof. */
 function placeMet(map: OpenWorldMap, ray: LookRay): Meeting {
-  const met: Meeting = { index: -1, along: LOOK_REACH };
+  const met: Meeting = { index: -1, along: Infinity };
   for (let place = 0; place < map.places.length; place++) {
     const entry = map.places[place]!;
     if (entry.doorNode < 0) continue;
@@ -67,7 +67,7 @@ function placeMet(map: OpenWorldMap, ray: LookRay): Meeting {
       enter = Math.max(enter, Math.min(near, far));
       leave = Math.min(leave, Math.max(near, far));
     }
-    if (enter <= 0 || enter >= leave || enter >= met.along) continue;
+    if (enter <= 0 || enter >= leave || enter >= met.along || enter > LOOK_REACH) continue;
     met.index = place;
     met.along = enter;
   }

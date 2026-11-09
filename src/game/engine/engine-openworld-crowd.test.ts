@@ -64,11 +64,13 @@ describe("given the real engine booted on the open world's course with a map giv
 
   it("when the scene is left for the sandbox, then the crowd, its drawing and the link are gone", () => {
     const art = drawnCrowd()!;
+    const wrapped = engine["race"].onWallHit;
     engine.fadeScenes = false;
     engine["setScene"]("fleet");
     runSeconds(engine, 0.2);
     expect(director()["crowd"], "the crowd").toBeNull();
     expect(art.group.parent, "the drawn crowd's parent").toBeNull();
     expect(engine.net["game"].crowdLink(), "the crowd link").toBeNull();
+    expect(engine["race"].onWallHit, "the race's wall-hit hook").not.toBe(wrapped);
   });
 });
