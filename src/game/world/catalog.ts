@@ -6,7 +6,7 @@ import { hypot2, detSin, detCos } from "../kernel/physics-core.js";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { PREFAB, SURFACE } from "./constants.ts";
 import { PLAZA_REACH, PLAZA_TOP, plazaBricks } from "./openworld/openworld-plaza.ts";
-import { ACORN_LAMP, HOOP_FENCE, KNOCKABLE, PAVILION, POSTS, STREET_KIT, acornPlan, benchPlan, bikeRackPlan, binPlan, bollardPlan, busStopPlan, meterPlan, newsBoxPlan, pavilionPlan, streetSignPlan } from "./street-kit.ts";
+import { ACORN_LAMP, HOOP_FENCE, KNOCKABLE, PAVILION, POSTS, STREET_KIT, acornPlan, benchPlan, bikeRackPlan, binPlan, bollardPlan, busStopPlan, hydrantPlan, meterPlan, newsBoxPlan, pavilionPlan, streetSignPlan } from "./street-kit.ts";
 import { brickCollider, bricksTop, CAPITOL, CAPITOL_POOL, CAPITOL_TOP, capitolPlan, capitolPool, FLAGPOLE, flagpolePlan, GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT, type Brick, type Collider } from "./landmarks.ts";
 
 export const SURFACE_IDS = [SURFACE.asphalt, SURFACE.concrete, SURFACE.cobble, SURFACE.dirt, SURFACE.gravel, SURFACE.grass, SURFACE.sand, SURFACE.mud] as const;
@@ -776,7 +776,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   [PREFAB.litterBin]: knockSpec(STREET_KIT.litterBin, MAT.DUMPSTER_STEEL, binPlan(), 0.25, KNOCKABLE.litterBin),
   [PREFAB.newsBox]: knockSpec(STREET_KIT.newsBox, MAT.DUMPSTER_STEEL, newsBoxPlan(), 0.3, KNOCKABLE.newsBox),
   [PREFAB.parkingMeter]: postSpec(STREET_KIT.parkingMeter, MAT.LAMP_POLE, meterPlan(), POSTS.meter.headHalfAlong),
-  [PREFAB.hydrant]: postSpec(STREET_KIT.hydrant, MAT.DUMPSTER_STEEL, [{ kind: "circle", r: POSTS.hydrant.reach, y1: POSTS.hydrant.top }], POSTS.hydrant.reach),
+  [PREFAB.hydrant]: postSpec(STREET_KIT.hydrant, MAT.DUMPSTER_STEEL, hydrantPlan(), POSTS.hydrant.reach),
   [PREFAB.cafeSet]: kitSpec(STREET_KIT.cafeSet, MAT.CRATE_WOOD),
   [PREFAB.busShelter]: kitSpec(STREET_KIT.busShelter, MAT.GANTRY_STEEL),
   [PREFAB.busStopSign]: postSpec(STREET_KIT.busStopSign, MAT.SIGN_BOARD, busStopPlan(), POSTS.busStopSign.upperHalf),

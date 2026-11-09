@@ -33,6 +33,7 @@ import {
   type KitItem,
 } from "./openworld-fabric-constants.ts";
 import type { BlockRef, Geometry, Lots } from "./openworld-layout.ts";
+import { BAY, homeFrontages } from "./openworld-facade-solids.ts";
 import { STREETS_X, STREETS_Z } from "./openworld-programme.ts";
 import { lampStations, sidePoint, sidesOf, treeStations, type BlockSide } from "./openworld-sides.ts";
 import { PLACE_KIND, type WalkGraph } from "./walk-graph.ts";
@@ -219,16 +220,16 @@ function cellarProps(lots: Lots): FabricProp[] {
   const random = mulberry32(CELLAR_SEED);
   const props: FabricProp[] = [];
   for (const link of lots.links) {
-    const place = lots.places[link.place]!;
-    if (place.kind !== PLACE_KIND.home || place.storeys === 0 || link.side === null || link.place >= lots.backdropStart) continue;
-    const chosen = random() < CELLAR.share;
-    const side = random() < 0.5 ? -1 : 1;
-    if (!chosen) continue;
-    // The house's front is its local +x, (cos yaw, -sin yaw); along the front is its local z, (sin yaw, cos yaw). The door stands on the house front, a setback in from the property line.
-    const out = lots.geometry.setback + CELLAR.fromLine + PREFABS[PREFAB.cellarDoor].size[0] / 2;
-    const cos = detCos(place.yaw);
-    const sin = detSin(place.yaw);
-    props.push({ prefab: PREFAB.cellarDoor, x: place.doorX + cos * out + sin * side * CELLAR.along, z: place.doorZ - sin * out + cos * side * CELLAR.along, yaw: place.yaw });
+    if (link.side === null || link.place >= lots.backdropStart) continue;
+    // Only a rowhome has a bay and a stoop (`homeFrontages`: the modern infill and the church have neither).
+    const [frontage] = homeFrontages([lots.places[link.place]!]);
+    if (frontage === undefined || random() >= CELLAR.share) continue;
+    // The house's front is its local +x, (cos yaw, -sin yaw); along the front is its local z, (sin yaw, cos yaw), as the kit's boxes are laid (`boxOn`).
+    const out = BAY.out + CELLAR.gap + PREFABS[PREFAB.cellarDoor].size[0] / 2;
+    const across = BAY.across + BAY.front / 2;
+    const cos = detCos(frontage.yaw);
+    const sin = detSin(frontage.yaw);
+    props.push({ prefab: PREFAB.cellarDoor, x: frontage.x + cos * out + sin * across, z: frontage.z - sin * out + cos * across, yaw: frontage.yaw });
   }
   return props;
 }
