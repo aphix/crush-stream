@@ -113,7 +113,7 @@ export function facadeStyle(prefab: PrefabId, x: number, z: number, biome: Biome
 }
 
 /** Whether `name` (a placement's `style`) names a facade style. */
-export const isFacadeStyle = (name: string | undefined): name is FacadeStyle => name !== undefined && Object.hasOwn(FACADE, name);
+const isFacadeStyle = (name: string | undefined): name is FacadeStyle => name !== undefined && Object.hasOwn(FACADE, name);
 
 /** The style a placed building stands in: the style its placement names when that is a facade style and the prefab is drawn in one, else `facadeStyle`'s pick for its spot (a forced style never dresses a tree or a plain block). */
 export function placedFacadeStyle(prefab: PrefabId, named: string | undefined, x: number, z: number, biome: BiomeId, span = 0, height = 0): FacadeStyle | null {
@@ -283,8 +283,16 @@ function extrasOf(style: FacadeStyle): Extras {
   return { height: relief && spec.height === true, roughness: relief && spec.roughness === true, neon: spec.neon === true };
 }
 
+/** Each strip's sampler and the uv varying it is read with, and the layer every read takes (the region's first number). */
+const MAP_UV = "vMapUv";
+const REGION_LAYER = "vFacadeRegion.x";
+const FACADE_READS = { albedo: ["facadeAlbedo", MAP_UV], normal: ["facadeNormalMap", "vNormalMapUv"], glow: ["facadeGlowMap", "vEmissiveMapUv"], roughness: ["facadeRoughnessMap", MAP_UV] } as const;
+
 /** The strips a style's program reads by layer: with parallax a read is shifted by `facadeShift` and takes its mip level from the unshifted uv (a shift that jumps at a window's edge would otherwise blur a line there). */
-const facadeRead = (extras: Extras, map: string, uv: string, layer: string): string => (extras.height ? `textureGrad(${map}, vec3(${uv} + facadeShift, ${layer}), facadeDx, facadeDy)` : `texture(${map}, vec3(${uv}, ${layer}))`);
+function facadeRead(extras: Extras, strip: keyof typeof FACADE_READS): string {
+  const [map, uv] = FACADE_READS[strip];
+  return extras.height ? `textureGrad(${map}, vec3(${uv} + facadeShift, ${REGION_LAYER}), facadeDx, facadeDy)` : `texture(${map}, vec3(${uv}, ${REGION_LAYER}))`;
+}
 
 /** The uniforms of the strips beyond the base ones. */
 const facadeExtraUniforms = (extras: Extras): string =>
@@ -336,23 +344,23 @@ void facadeParallax(float layer) {
 const facadeNormalPars = (extras: Extras): string => /* glsl */ `${extras.height ? FACADE_PARALLAX : ""}
 #ifdef USE_NORMALMAP
 vec4 facadeNormalTexel() {
-  return vFacadeRegion.x < 0.0 ? texture(facadeRoofNormal, vec3(vNormalMapUv, facadeRoofKind())) : ${facadeRead(extras, "facadeNormalMap", "vNormalMapUv", "vFacadeRegion.x")};
+  return vFacadeRegion.x < 0.0 ? texture(facadeRoofNormal, vec3(vNormalMapUv, facadeRoofKind())) : ${facadeRead(extras, "normal")};
 }
 #endif`;
 const facadeMap = (extras: Extras): string => /* glsl */ `
 #ifdef USE_MAP
-${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "facadeAlbedo", "vMapUv", "vFacadeRegion.x")};
+${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "albedo")};
 #endif`;
 /** The roughness strip's green sets the surface's roughness where its share is on (the relief tier), in place of the material's one number. */
 const facadeRoughness = (extras: Extras): string => `#include <roughnessmap_fragment>
-roughnessFactor = mix(roughnessFactor, ${facadeRead(extras, "facadeRoughnessMap", "vMapUv", "vFacadeRegion.x")}.g, facadeRoughnessMix * step(0.0, vFacadeRegion.x));`;
+roughnessFactor = mix(roughnessFactor, ${facadeRead(extras, "roughness")}.g, facadeRoughnessMix * step(0.0, vFacadeRegion.x));`;
 const FACADE_ROOF_COLOR = /* glsl */ `
 if (vFacadeRegion.x < 0.0) diffuseColor.rgb = texture(facadeRoofAlbedo, vec3(vMapUv, facadeRoofKind())).rgb * (0.88 + 0.24 * fract(vFacadeSeed * 3.1));`;
 /** The glow strip's red is the window, its green the window's threshold; of a neon style its blue is a sign, lit in its own albedo's colour from dusk. */
 const facadeEmissive = (extras: Extras): string => /* glsl */ `
 #ifdef USE_EMISSIVEMAP
-${extras.neon ? `vec3 facadeSign = ${facadeRead(extras, "facadeGlowMap", "vEmissiveMapUv", "vFacadeRegion.x")}.rgb;
-vec2 facadeWindow = facadeSign.rg;` : `vec2 facadeWindow = ${facadeRead(extras, "facadeGlowMap", "vEmissiveMapUv", "vFacadeRegion.x")}.rg;`}
+${extras.neon ? `vec3 facadeSign = ${facadeRead(extras, "glow")}.rgb;
+vec2 facadeWindow = facadeSign.rg;` : `vec2 facadeWindow = ${facadeRead(extras, "glow")}.rg;`}
 float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${LIT_SHARE.toFixed(2)});
 totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x);${
     extras.neon

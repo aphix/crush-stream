@@ -13,7 +13,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
-import { FACADE, FACADE_GLOW, FACADE_LAYERS, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, isFacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, ROOFLINE, SLAB_STYLE } from "./facades.ts";
+import { FACADE, FACADE_GLOW, FACADE_LAYERS, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, ROOFLINE, SLAB_STYLE } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { disposePrefabMaterials, makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { setReliefDevice, setReliefTier } from "./surface-relief.ts";
@@ -452,7 +452,7 @@ describe("given a style with relief strips and the relief tier switched", () => 
     setReliefDevice(false);
     try {
       await withStrips("dc", { height: true, roughness: true }, async () => {
-        makeFacadeMaterials().dc;
+        compileFacade(makeFacadeMaterials().dc);
         setReliefTier(true);
         await settle();
         expect(reliefStrips().length, "strips fetched on a phone").toBe(before);
@@ -466,14 +466,11 @@ describe("given a style with relief strips and the relief tier switched", () => 
 
 describe("given a placement that names a facade style", () => {
   it("when the style is a facade's, then it wins over the hash pick for a building, an unknown name falls back to the pick, and a prop with no facade stays plain", () => {
-    expect(isFacadeStyle("federal"), "a facade style").toBe(true);
-    expect(isFacadeStyle("nonesuch"), "no such style").toBe(false);
-    expect(isFacadeStyle("toString"), "an object's own name is no style").toBe(false);
-    expect(isFacadeStyle(undefined), "none named").toBe(false);
     const picked = facadeStyle(PREFAB.building, 3, 4, "city");
     expect(picked, "the pick differs from the named style, or the row proves nothing").not.toBe("adobe");
     expect(placedFacadeStyle(PREFAB.building, "adobe", 3, 4, "city"), "named").toBe("adobe");
     expect(placedFacadeStyle(PREFAB.building, "nonesuch", 3, 4, "city"), "unknown name").toBe(picked);
+    expect(placedFacadeStyle(PREFAB.building, "toString", 3, 4, "city"), "an object's own name is no style").toBe(picked);
     expect(placedFacadeStyle(PREFAB.building, undefined, 3, 4, "city"), "no name").toBe(picked);
     expect(placedFacadeStyle(PREFAB.tree, "adobe", 3, 4, "city"), "a tree has no facade").toBeNull();
   });
