@@ -44,5 +44,3 @@ export const DRIVER_STOPPED_SPEED = 0.5;
 export const PERSON_SHOT = { back: 3.6, height: 1.9, aimUp: 1.35 } as const;
 /** Where it stands round a spot, the front of a wrecked building or where someone was knocked down (m). */
 export const SPOT_SHOT = { back: 12, height: 3.2, aimUp: 2.5 } as const;
-/** How far a wreck's frame stands out in front of the place's centre line: the lot's depth. */
-export const WRECK_FRONT_METRES = 8;
