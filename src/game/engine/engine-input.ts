@@ -161,8 +161,6 @@ export abstract class EngineInput extends EngineRigs {
   setFxAuto(): void {
     this.ultraWanted = false;
     this.autoFx.resume(this.cine.tier);
-    // The clock reads from the pick, not from the next frame's `fxFrame`: tier work booked in between is the first automatic frame's.
-    timeTierWork(true);
     this.emitHud();
   }
 
