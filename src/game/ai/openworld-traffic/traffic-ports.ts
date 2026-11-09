@@ -31,6 +31,8 @@ export type TrafficPorts = {
   putAway(id: number): void;
   /** Car `id` is simulated again (a car put away is not): called when traffic lets go of the pool for good, so a scene that reuses the car finds it running. */
   release(id: number): void;
+  /** Car `id` is rebuilt as a car of body `style` (and that body's class), unless it is one already. */
+  setBody(id: number, style: CarStyleId): void;
   /** Cars `from` to `from + count - 1` wear the police look (a light bar); a count of 0 gives every car its own look back. */
   markPolice(from: number, count: number): void;
 };

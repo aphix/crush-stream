@@ -4,7 +4,8 @@ import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork, junctionIndex } from "../../world/openworld/openworld-roads.ts";
 import type { DrivenCar, OpenWorldTraffic } from "./openworld-traffic.ts";
-import { KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
+import { fleetStyle } from "../../scenes/fleet.ts";
+import { EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { Clock, CYCLE_SECONDS, FakeField, HOLD, makeTraffic, runSeconds, STEP_SECONDS, stepField } from "./traffic-world.test-util.ts";
 
@@ -274,5 +275,35 @@ describe("given nobody stepping a peer's seat", () => {
     const traffic = makeTraffic(field, { movers: 0, kerb: 0 });
     stepField(field, traffic, new Clock(), HOLD);
     expect(traffic.inputOf(0, STEP_SECONDS)).toBeNull();
+  });
+});
+
+describe("given a pool the engine built as the fleet's mix, a coupe and a monster truck among its bodies", () => {
+  const fleet = { movers: 12, kerb: 10, patrol: 2 };
+  const patrolIds = [11, 12];
+
+  // mutation: sed -i 's/if (!EVERYDAY_BODIES.includes(style)) ports.setBody/if (false) ports.setBody/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when traffic starts, then every mover and kerb car wears an everyday body (the patrol cruisers apart)", () => {
+    const field = quietField();
+    makeTraffic(field, fleet);
+    for (let id = 1; id < field.cars.length; id++) {
+      if (patrolIds.includes(id)) continue;
+      expect(EVERYDAY_BODIES, `car ${id} wears ${field.cars[id]!.style.id}`).toContain(field.cars[id]!.style.id);
+    }
+  });
+
+  // mutation: sed -i 's/if (!EVERYDAY_BODIES.includes(style)) ports.setBody/if (true) ports.setBody/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when a car already wears an everyday body, then it is kept, not rebuilt", () => {
+    const field = quietField();
+    makeTraffic(field, fleet);
+    expect(field.rebuilt.length, "cars rebuilt").toBeGreaterThan(0);
+    for (const id of field.rebuilt) expect(EVERYDAY_BODIES, `car ${id}'s fleet body`).not.toContain(fleetStyle(id));
+  });
+
+  // mutation: sed -i 's/      if (id >= this.patrolFrom && id < this.patrolEnd) continue;/      \/\/ no skip/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when the patrol cruisers are marked, then traffic leaves their bodies alone", () => {
+    const field = quietField();
+    makeTraffic(field, fleet);
+    for (const id of patrolIds) expect(field.rebuilt, `patrol car ${id}`).not.toContain(id);
   });
 });

@@ -1,3 +1,4 @@
+import { hash01 } from "../../kernel/scalar.ts";
 import { MAX_CARS } from "../../scenes/fleet.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
@@ -9,7 +10,7 @@ import { blankAiCar, type AiCar } from "../derby-ai.ts";
 import { KerbCars } from "./kerb-cars.ts";
 import { MoverFleet, type DrivenCar } from "./mover-fleet.ts";
 import { RedLightWatch } from "./red-light-watch.ts";
-import { FEED_SECONDS } from "./traffic-constants.ts";
+import { EVERYDAY_BODIES, FEED_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
 import { lightPhase } from "./traffic-lights.ts";
 import { RESIDENT_CAPACITY, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
@@ -47,6 +48,9 @@ export class OpenWorldTraffic {
   private readonly legKey = new Float64Array(RESIDENT_CAPACITY).fill(-1);
   private readonly first: number;
   private readonly total: number;
+  /** The ids of the patrol cruisers, `patrolFrom` up to `patrolEnd`. */
+  private readonly patrolFrom: number;
+  private readonly patrolEnd: number;
   private sinceFeed = 0;
 
   constructor(places: readonly Place[], ports: TrafficPorts, sight: TrafficSight, size: TrafficSize, feed: CommuterFeed | null) {
@@ -65,6 +69,9 @@ export class OpenWorldTraffic {
     this.total = movers + kerb;
     ports.ensureCars(first + this.total);
     if (patrol > 0) ports.markPolice(first + movers - patrol, patrol);
+    this.patrolFrom = first + movers - patrol;
+    this.patrolEnd = first + movers;
+    this.wearEverydayBodies();
     for (let id = first; id < first + this.total; id++) ports.putAway(id);
     const sightBase = sight.claim(this.total + 1);
     this.context = {
@@ -165,7 +172,10 @@ export class OpenWorldTraffic {
   /** A sim step at crowd time `seconds`: the cars' bookkeeping, the society's cars, and every car's crossing of a bar. */
   step(seconds: number, dt: number): void {
     const { ports } = this.context;
-    if (ports.cars().length < this.first + this.total) ports.ensureCars(this.first + this.total);
+    if (ports.cars().length < this.first + this.total) {
+      ports.ensureCars(this.first + this.total);
+      this.wearEverydayBodies();
+    }
     this.movers.step(seconds, dt);
     this.kerb.step(dt, this.feed === null ? null : this.feed.parked);
     this.sinceFeed += dt;
@@ -174,6 +184,16 @@ export class OpenWorldTraffic {
       this.readFeed();
     }
     this.watchSignals(seconds);
+  }
+
+  /** Every pool car but the patrol cruisers (the last `patrol` of the movers) wears an everyday body: one it already wears is kept, a coupe or monster slot's is rebuilt as a seeded pick of `EVERYDAY_BODIES`. */
+  private wearEverydayBodies(): void {
+    const { ports } = this.context;
+    for (let id = this.first; id < this.first + this.total; id++) {
+      if (id >= this.patrolFrom && id < this.patrolEnd) continue;
+      const style = ports.cars()[id]!.style.id;
+      if (!EVERYDAY_BODIES.includes(style)) ports.setBody(id, EVERYDAY_BODIES[Math.floor(hash01(id, TRAFFIC_SEED) * EVERYDAY_BODIES.length)]!);
+    }
   }
 
   private refreshSnaps(cars: readonly TrafficCar[]): void {

@@ -1,9 +1,12 @@
+import { hypot2 } from "../../kernel/physics-core.js";
+import { fleetStyle } from "../../scenes/fleet.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
+import type { CarStyleId } from "../../vehicle/car-variants.ts";
 import { blankAiCar, type AiCar } from "../derby-ai.ts";
 import { OpenWorldTraffic } from "./openworld-traffic.ts";
 import { ALL_RED_SECONDS, LEFT_GREEN_SECONDS, STORE_AT, THROUGH_GREEN_SECONDS, YELLOW_SECONDS } from "./traffic-constants.ts";
 import type { TrafficPorts } from "./traffic-ports.ts";
-import { ProximitySight, type CommuterFeed } from "./traffic-sight.ts";
+import type { CommuterFeed } from "./traffic-sight.ts";
 
 /** A car with the figures of a sedan's drive, enough to run traffic against without the physics: forward thrust and drag that settle at a sedan's 55 m/s top, a brake, a turn that needs speed. */
 const THRUST = 3.5;
@@ -19,12 +22,49 @@ const UPRIGHT = Array.from({ length: 16 }, (_, index) => (index % 5 === 0 ? 1 : 
 
 export const HOLD: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: false, boost: false };
 
+/** Sight when no field of view is known: no eye sees anything, and a player's car is near what lies within the radius of it. */
+export class ProximitySight {
+  readonly hideGrace = 0;
+  private claimed = 0;
+  private readonly ports: TrafficPorts;
+
+  constructor(ports: TrafficPorts) {
+    this.ports = ports;
+  }
+
+  claim(count: number): number {
+    const first = this.claimed;
+    this.claimed += count;
+    return first;
+  }
+
+  observe(): boolean {
+    return false;
+  }
+
+  unseenFor(): number {
+    return Infinity;
+  }
+
+  reset(): void {}
+
+  near(x: number, z: number, radius: number): boolean {
+    const cars = this.ports.cars();
+    for (let id = 0; id < cars.length; id++) {
+      if (!this.ports.seated(id)) continue;
+      const car = cars[id]!;
+      if (hypot2(car.group.position.x - x, car.group.position.z - z) < radius) return true;
+    }
+    return false;
+  }
+}
+
 export class KinematicCar {
   readonly group = { visible: true, position: { x: 0, z: 0 }, matrixWorld: { elements: UPRIGHT } };
   readonly velocity = { x: 0, z: 0 };
   readonly driverOut = null;
   readonly deform = { drivetrainAlive: true };
-  readonly style = { id: "sedan" } as const;
+  style: { id: CarStyleId } = { id: "sedan" };
   crashed = false;
   stored = false;
   yaw = 0;
@@ -64,11 +104,21 @@ export class KinematicCar {
 /** The engine as traffic sees it: a list of kinematic cars (car 0 is the local player's), the seats, and placing and putting away. */
 export class FakeField {
   readonly cars: KinematicCar[] = [new KinematicCar()];
+  /** The ids traffic had rebuilt as another body, in order. */
+  readonly rebuilt: number[] = [];
   readonly seats = new Set<number>([0]);
   readonly ports: TrafficPorts = {
     cars: () => this.cars,
     ensureCars: (count) => {
-      while (this.cars.length < count) this.cars.push(new KinematicCar());
+      while (this.cars.length < count) {
+        const car = new KinematicCar();
+        car.style = { id: fleetStyle(this.cars.length) };
+        this.cars.push(car);
+      }
+    },
+    setBody: (id, style) => {
+      this.cars[id]!.style = { id: style };
+      this.rebuilt.push(id);
     },
     seated: (id) => this.seats.has(id),
     place: (id, x, z, yaw) => {
