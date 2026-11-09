@@ -78,8 +78,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 46: the open world's society makes trips of three blocks or more by car (a resident walks to a household car, gets in, is not seen on the road, gets out where it parks and walks in), the brain's rows carry the car's trip and the leg's drive fields, and the commuter feed lists cars only on the road, so a peer on 45 would compute a different city from the same log.
 47: the crowd's event log carries kinds 10 and 11 (an ambulance call for someone run down, a danger at a street node), and the brain makes people out in the street flinch, look on, go in and phone, so a peer on 46 would compute a different city from the same log.
 48: the open world's bollards, hydrants, parking meters, street-name and bus-stop signs are solid posts, so a peer on 47 would drive through what this one hits.
+49: the open world's park hoop fences are knockable sections (firm under 3 m/s closing, knocked above), so a peer on 48 would drive through what this one hits.
 */
-export const NET_VERSION = 48;
+export const NET_VERSION = 49;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
