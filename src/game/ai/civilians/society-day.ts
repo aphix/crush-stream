@@ -37,6 +37,7 @@ import {
 import { residentDraws } from "./civilian-draws.ts";
 import { EVENT_CODE, FEMALE_NAMES, MALE_NAMES, jobTitlesOf } from "./civilian-names.ts";
 import { CityState, commitResident, logHistory, markDirty, residentName, retractResident, setMoodEvent } from "./civilian-state.ts";
+import { dropCarLeg, moveCarHome } from "./society-cars.ts";
 import { rollCrimeDay } from "./society-crime.ts";
 import { releaseSeat } from "./society-seats.ts";
 import { createResident, drawFamilyName, drawGender, findWorkplace, setWork, startingTitle } from "./society.ts";
@@ -97,6 +98,7 @@ function die(state: CityState, resident: number, tick: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   mourn(state, resident, tick);
   releaseSeat(state, resident);
+  dropCarLeg(state, resident, tick);
   retractResident(state, resident);
   state.ints[base + RESIDENT_INT.alive] = 0;
   state.ints[base + RESIDENT_INT.pathCount] = 0;
@@ -248,6 +250,7 @@ function rollMove(state: CityState, resident: number, pick: number, tick: number
   const home = emptiestHome(state, pick);
   if (home === NO_PLACE || home === intAt(state, resident, RESIDENT_INT.home)) return;
   retractResident(state, resident);
+  moveCarHome(state, resident, intAt(state, resident, RESIDENT_INT.home), home, tick);
   state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.home] = home;
   commitResident(state, resident);
   noteEvent(state, resident, EVENT_CODE.moved, home, tick);

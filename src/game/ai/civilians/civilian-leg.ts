@@ -1,5 +1,5 @@
 import { detAtan2, hypot2 } from "../../kernel/physics-core.js";
-import { DECISION_HZ, LATERAL_FADE_DISTANCE, MAX_PATH_NODES, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
+import { CAR_OUT_TICKS, DECISION_HZ, LATERAL_FADE_DISTANCE, MAX_PATH_NODES, NEVER_TICK, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import type { CityState } from "./civilian-state.ts";
 
 /** Where a walker is and which way it faces (heading 0 = +Z, positive toward +X): the out parameter of the position functions. */
@@ -11,7 +11,22 @@ export class LegPose {
   yaw = 0;
 }
 
-/** Writes where resident `resident` stands on its leg at crowd time `seconds` into `out`; false when it is not on a leg then (not yet departed, arrived, or no leg). A pure function of the row and the time: any frame rate, no state, no allocation. */
+/** Metres of the leg's path walked by crowd time `seconds`, or -1 while in the car: a leg by car is a walk to it, getting in (standing at it), the drive (nobody on foot), getting out (standing at it) and a walk from it. */
+function walkedAt(state: CityState, resident: number, seconds: number, total: number): number {
+  const { ints, floats, pathDistance } = state;
+  const intBase = resident * RESIDENT_INT_STRIDE;
+  const speed = floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!;
+  const departSeconds = ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ;
+  const leaveTick = ints[intBase + RESIDENT_INT.driveLeaveTick]!;
+  if (leaveTick === NEVER_TICK) return Math.min(total, speed * (seconds - departSeconds));
+  const first = resident * MAX_PATH_NODES;
+  const parkSeconds = ints[intBase + RESIDENT_INT.driveParkTick]! / DECISION_HZ;
+  if (seconds < leaveTick / DECISION_HZ) return Math.min(pathDistance[first + ints[intBase + RESIDENT_INT.driveFirst]!]!, speed * (seconds - departSeconds));
+  if (seconds < parkSeconds) return -1;
+  return Math.min(total, pathDistance[first + ints[intBase + RESIDENT_INT.driveLast]!]! + speed * Math.max(0, seconds - parkSeconds - CAR_OUT_TICKS / DECISION_HZ));
+}
+
+/** Writes where resident `resident` stands on its leg at crowd time `seconds` into `out`; false when it is not on a leg then (not yet departed, arrived, no leg, or in the car). A pure function of the row and the time: any frame rate, no state, no allocation. */
 export function legPose(state: CityState, resident: number, seconds: number, out: LegPose): boolean {
   const { ints, floats, pathNodes, pathDistance } = state;
   const { nodeX, nodeZ } = state.map.graph;
@@ -23,7 +38,8 @@ export function legPose(state: CityState, resident: number, seconds: number, out
   const first = resident * MAX_PATH_NODES;
   const floatBase = resident * RESIDENT_FLOAT_STRIDE;
   const total = pathDistance[first + count - 1]!;
-  const walked = Math.min(total, floats[floatBase + RESIDENT_FLOAT.speed]! * (seconds - departSeconds));
+  const walked = walkedAt(state, resident, seconds, total);
+  if (walked < 0) return false;
   let step = 0;
   while (step + 2 < count && pathDistance[first + step + 1]! <= walked) step++;
   const from = pathNodes[first + step]!;

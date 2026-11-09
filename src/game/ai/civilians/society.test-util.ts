@@ -2,9 +2,12 @@ import { PLACE_KIND, type OpenWorldMap, type Place } from "../../world/openworld
 import { PLACE_NAMES } from "./civilian-cast.ts";
 import { dayOf } from "./civilian-clock.ts";
 import {
+  FLAG,
+  HOURS_PER_GAME_DAY,
   NEED_COUNT,
   NEVER_TICK,
   NO_BEARING,
+  NO_INDEX,
   NO_PLACE,
   NO_SEAT,
   RESIDENT_FLOAT,
@@ -16,6 +19,7 @@ import {
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { decideResident } from "./civilian-plan.ts";
 import type { CityState } from "./civilian-state.ts";
+import { walkMetres } from "./society-cars.ts";
 import { releaseSeat } from "./society-seats.ts";
 
 export const COFFEE_SHOP = "Perk Up Coffee";
@@ -112,10 +116,17 @@ export function stageResident(state: CityState, resident: number, stage: Stage):
     [RESIDENT_INT.nextDecisionTick]: stage.nextDecision ?? stage.tick,
     [RESIDENT_INT.pathCount]: 0,
     [RESIDENT_INT.legPurpose]: stage.purpose ?? 0,
-    [RESIDENT_INT.legReason]: stage.purpose ?? 0,
     [RESIDENT_INT.companion]: NO_PLACE,
     [RESIDENT_INT.seat]: NO_SEAT,
     [RESIDENT_INT.carPlace]: stage.carPlace ?? NO_PLACE,
+    [RESIDENT_INT.carTo]: NO_PLACE,
+    [RESIDENT_INT.carLeaveTick]: NEVER_TICK,
+    [RESIDENT_INT.carParkTick]: NEVER_TICK,
+    [RESIDENT_INT.carOwner]: NO_PLACE,
+    [RESIDENT_INT.driveFirst]: NO_INDEX,
+    [RESIDENT_INT.driveLast]: NO_INDEX,
+    [RESIDENT_INT.driveLeaveTick]: NEVER_TICK,
+    [RESIDENT_INT.driveParkTick]: NEVER_TICK,
     [RESIDENT_INT.joblessDays]: stage.joblessDays ?? 0,
     [RESIDENT_INT.wantedUntilTick]: 0,
     [RESIDENT_INT.crimeTick]: NEVER_TICK,
@@ -144,4 +155,47 @@ export function stageResident(state: CityState, resident: number, stage: Stage):
 export function decideAs(state: CityState, resident: number, tick: number, count: number): void {
   state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.decisionCount] = count;
   decideResident(state, resident, tick);
+}
+
+/** The workplaces (a place that employs) open at `hour`. */
+function openWorkplaces(state: CityState, hour: number): number[] {
+  return Array.from(state.index.workplaces).filter((place) => state.venues.hourWeight[place * HOURS_PER_GAME_DAY + hour]! >= 1);
+}
+
+/** The workplace open at `hour` whose door is the longest walk from `from`'s door in `state`'s city, and that walk's metres. */
+export function farthestWorkplace(state: CityState, from: number, hour: number): { place: number; metres: number } {
+  let best = { place: NO_PLACE, metres: -1 };
+  for (const place of openWorkplaces(state, hour)) {
+    const metres = walkMetres(state, from, place);
+    if (metres > best.metres) best = { place, metres };
+  }
+  return best;
+}
+
+/** The workplace open at `hour` (not `from`) whose door is the shortest walk from `from`'s, and that walk's metres. */
+export function nearestWorkplace(state: CityState, from: number, hour: number): { place: number; metres: number } {
+  let best = { place: NO_PLACE, metres: Infinity };
+  for (const place of openWorkplaces(state, hour)) {
+    const metres = place === from ? -1 : walkMetres(state, from, place);
+    if (metres > 0 && metres < best.metres) best = { place, metres };
+  }
+  return best;
+}
+
+/** The place (not `from`, with a door) whose door is the shortest walk from `from`'s, and that walk's metres. */
+export function nearestPlace(state: CityState, from: number): { place: number; metres: number } {
+  let best = { place: NO_PLACE, metres: Infinity };
+  for (let place = 0; place < state.index.placeCount; place++) {
+    const metres = place === from || state.index.doorNode[place]! < 0 ? -1 : walkMetres(state, from, place);
+    if (metres > 0 && metres < best.metres) best = { place, metres };
+  }
+  return best;
+}
+
+/** Takes the car away from every resident of `home` but `keep`: a scene then has the cars it stages and no household's else. */
+export function withoutOtherCars(state: CityState, home: number, keep: readonly number[]): void {
+  for (let resident = 0; resident < state.capacity; resident++) {
+    if (keep.includes(resident) || state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.home] !== home) continue;
+    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.flags]! &= ~FLAG.hasCar;
+  }
 }

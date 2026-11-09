@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "./civilian-activity.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
-import { DRIVE_SPEED, FLAG, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_HOUR } from "./civilian-constants.ts";
+import { DRIVE_MIN_METRES, DRIVE_SPEED, FLAG, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_HOUR } from "./civilian-constants.ts";
 import { ActivityReading, readActivity } from "./society-activity.ts";
 import { INTERACTIONS } from "./society-table.ts";
 import { SCENES, decideScene, newCast, societyMap, type Cast, type Outcome, type Scene } from "./society-scenes.test-util.ts";
-import { COFFEE_SHOP, SUPERMARKET, decideAs, intAt, needsWith, placeIn, stageResident } from "./society.test-util.ts";
+import { COFFEE_SHOP, SUPERMARKET, decideAs, farthestWorkplace, intAt, needsWith, placeIn, stageResident } from "./society.test-util.ts";
 
 const HOUR_TICKS = TICKS_PER_GAME_HOUR;
 /** Decisions a certain row is asked for, and a crime row (which fires in a share of them). */
@@ -165,33 +165,37 @@ describe("given customers at the coffee shop, which has three seats", () => {
   });
 });
 
-describe("given a car owner at home whose shift is starting, and one whose car is left at work", () => {
-  const home = placeIn(societyMap, "Rowhome B2-1");
-  const work = placeIn(societyMap, "Mifflin Mini Mart");
+describe("given a car owner at home whose shift is starting at a workplace far across the city, and one whose car is left where they are not", () => {
+  const probe = newCast(8);
+  const home = placeIn(societyMap, "Rowhome A1-1");
+  const far = farthestWorkplace(probe.state, home, 8);
+  const bar = placeIn(societyMap, PLACE_NAMES.bar);
 
-  function driverAt(hour: number, place: number, carPlace: number, needs: Readonly<Record<number, number>>): Cast {
+  function driverAt(hour: number, place: number, carPlace: number, needs: Readonly<Record<number, number>>, work: number): Cast {
     const cast = newCast(hour);
-    stageResident(cast.state, cast.resident, { place, home, work, tick: cast.tick, flags: FLAG.hasCar, carPlace, needs: needsWith(needs) });
+    stageResident(cast.state, cast.resident, { place, home, work, shiftStart: hour, tick: cast.tick, flags: FLAG.hasCar, carPlace, needs: needsWith(needs) });
     decideAs(cast.state, cast.resident, cast.tick, 0);
     return cast;
   }
 
-  it("when they set out for work from the car's kerb, then they drive: a drive leg at the driving pace, the car follows them to work", () => {
-    const { state, resident } = driverAt(8, home, home, { [NEED.work]: 0.9 });
-    expect(intAt(state, resident, RESIDENT_INT.legPurpose), "what the leg is").toBe(PURPOSE.drive);
-    expect(intAt(state, resident, RESIDENT_INT.legReason), "what it is for").toBe(NEED.work);
-    expect(state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed], "speed of the leg").toBe(DRIVE_SPEED);
-    expect(intAt(state, resident, RESIDENT_INT.carPlace), "where the car will stand").toBe(work);
+  it("when the walk to work is at least three blocks, then they walk to the car, get in, and the car is theirs to park at work: a leg by car, not a drive of nobody", () => {
+    expect(far.metres, "metres of the longest walk from home in the fixture city").toBeGreaterThanOrEqual(DRIVE_MIN_METRES);
+    const { state, resident } = driverAt(8, home, home, { [NEED.work]: 0.9 }, far.place);
+    expect(intAt(state, resident, RESIDENT_INT.legPurpose), "what the leg is for").toBe(NEED.work);
+    expect(intAt(state, resident, RESIDENT_INT.carOwner), "whose car").toBe(resident);
+    expect(intAt(state, resident, RESIDENT_INT.carTo), "where the car will stand").toBe(far.place);
+    expect(intAt(state, resident, RESIDENT_INT.carPlace), "where the car stood").toBe(home);
     const reading = new ActivityReading();
-    readActivity(state, resident, (intAt(state, resident, RESIDENT_INT.departTick) + 4) / 2, reading);
+    readActivity(state, resident, (intAt(state, resident, RESIDENT_INT.driveLeaveTick) + intAt(state, resident, RESIDENT_INT.driveParkTick)) / 4, reading);
     expect(reading.code, "what the drawing is told while they drive").toBe(ACTIVITY.none);
-    expect(reading.placed, "the brain places nobody on a drive").toBe(false);
+    expect(reading.placed, "the brain places nobody in a car").toBe(false);
   });
 
-  it("when they have left the car at work and set out from somewhere else, then they walk", () => {
-    const bar = placeIn(societyMap, PLACE_NAMES.bar);
-    const { state, resident } = driverAt(23, bar, work, { [NEED.rest]: 1 });
-    expect(intAt(state, resident, RESIDENT_INT.legPurpose), "what the leg is").toBe(NEED.rest);
-    expect(intAt(state, resident, RESIDENT_INT.carPlace), "where the car stands").toBe(work);
+  it("when their car stands too far from them to walk to, then they walk the whole way", () => {
+    const { state, resident } = driverAt(8, home, bar, { [NEED.work]: 0.9 }, far.place);
+    expect(intAt(state, resident, RESIDENT_INT.legPurpose), "what the leg is for").toBe(NEED.work);
+    expect(intAt(state, resident, RESIDENT_INT.carOwner), "whose car they take").toBe(NO_PLACE);
+    expect(intAt(state, resident, RESIDENT_INT.carPlace), "where the car stands").toBe(bar);
+    expect(state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed], "speed of the leg").toBeLessThan(DRIVE_SPEED);
   });
 });

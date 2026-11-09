@@ -8,7 +8,8 @@ import {
   DECISION_HZ,
   DECISION_JITTER,
   DISTANCE_SCALE,
-  DRIVE_MIN_METRES,
+  CAR_IN_TICKS,
+  CAR_OUT_TICKS,
   DRIVE_SPEED,
   EXIT_STOP_SHARE,
   FAVOURITE_CHANCE,
@@ -29,6 +30,7 @@ import {
   NO_PLACE,
   PARTY_FIRST_HOUR,
   PARTY_INVITE_SHARE,
+  PARK_TICKS,
   PARTY_LAST_HOUR,
   PURPOSE,
   RELEASE_REFORM_CHANCE,
@@ -52,12 +54,10 @@ import { nextAppointment, weekdayOf } from "./civilian-story.ts";
 import { ageOf } from "./society-day.ts";
 import { crimeKindOf } from "./society-crime.ts";
 import { dwellTicksOf, evolveNeeds, needWeight } from "./needs.ts";
+import { carStandsAt, chooseCar, clearDriveLeg, planCarPath, reserveCar, walkMetres } from "./society-cars.ts";
 import { claimSeat, releaseSeat } from "./society-seats.ts";
 import { INTERACTIONS, TARGET, considerInteractions, type InteractionRow } from "./society-table.ts";
 import { isSeatedVenue } from "./society-venues.ts";
-
-/** Reasons a car owner drives to: the commute, home, errands and meals (not a drink: the car stays where it is). */
-const DRIVABLE_REASONS: readonly number[] = [NEED.work, NEED.rest, NEED.errand, NEED.food];
 
 function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
@@ -90,21 +90,6 @@ function nearestOpen(state: CityState, kind: number, from: number, tick: number,
     best = place;
   }
   return best;
-}
-
-/** Metres of the shortest walk (fear ignored) from one place's door to another's, or -1 when there is none. */
-function walkMetres(state: CityState, from: number, to: number): number {
-  const { doorNode } = state.index;
-  const count = state.finder.find(doorNode[from]!, doorNode[to]!, state.noFear, 1, state.scratchPath, 0, MAX_PATH_NODES);
-  if (count === 0) return -1;
-  const { nodeX, nodeZ } = state.map.graph;
-  let metres = 0;
-  for (let step = 1; step < count; step++) {
-    const before = state.scratchPath[step - 1]!;
-    const here = state.scratchPath[step]!;
-    metres += hypot2(nodeX[here]! - nodeX[before]!, nodeZ[here]! - nodeZ[before]!);
-  }
-  return metres;
 }
 
 /** Ticks a resident walks from one place's door to another's, or -1 when it cannot. */
@@ -204,43 +189,64 @@ function stayPut(state: CityState, resident: number, tick: number, place: number
   state.ints[base + RESIDENT_INT.nextDecisionTick] = tick + Math.max(1, dwellTicks);
   state.ints[base + RESIDENT_INT.pathCount] = 0;
   state.ints[base + RESIDENT_INT.legPurpose] = purpose;
-  state.ints[base + RESIDENT_INT.legReason] = purpose;
   state.ints[base + RESIDENT_INT.companion] = NO_PLACE;
   state.ints[base + RESIDENT_INT.decisionCount]++;
+  clearDriveLeg(state, resident);
   for (let need = 0; need < NEED_COUNT; need++) state.floats[floatBase + RESIDENT_FLOAT.needs + need] = state.scratchNeeds[need]!;
   takeSeat(state, resident, place, purpose);
   markDirty(state, resident);
 }
 
-/** Plans the walk (or drive, for a car owner whose car is here and whose walk is long) from where resident `resident` dwells to `destination` and a stay there; false (nothing written) when no walk of the allowed length exists. The needs it keeps are `state.scratchNeeds`. */
+function ticksOf(seconds: number): number {
+  return Math.ceil(seconds * DECISION_HZ);
+}
+
+/** Where a trip by car puts the ticks: the driver walks to the car at their own pace, gets in (a clip), drives and parks, gets out (a clip), then walks in; the leg's ticks and the car's are written here. Returns the leg's length in ticks. */
+function timeCarLeg(state: CityState, resident: number, tick: number, owner: number, stand: number, destination: number, metres: number): number {
+  const base = resident * RESIDENT_INT_STRIDE;
+  const first = resident * MAX_PATH_NODES;
+  const pace = state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.pace]!;
+  const toCar = state.pathDistance[first + state.ints[base + RESIDENT_INT.driveFirst]!]!;
+  const toKerb = state.pathDistance[first + state.ints[base + RESIDENT_INT.driveLast]!]!;
+  const leaveTick = tick + ticksOf(toCar / pace) + CAR_IN_TICKS;
+  const parkTick = leaveTick + ticksOf((toKerb - toCar) / DRIVE_SPEED) + PARK_TICKS;
+  reserveCar(state, resident, owner, stand, destination, leaveTick, parkTick);
+  return Math.max(1, parkTick + CAR_OUT_TICKS + ticksOf((metres - toKerb) / pace) - tick);
+}
+
+/**
+ * Plans the walk from where resident `resident` dwells to `destination` and a stay there, by car when one of the household's is free and within a short walk and the trip is long (`chooseCar`): the walk to the car,
+ * the drive, the walk in, all one leg of the path. False (nothing written) when no walk of the allowed length exists. The needs it keeps are `state.scratchNeeds`.
+ */
 function planLeg(state: CityState, resident: number, tick: number, destination: number, purpose: number, dwellTicks: number): boolean {
   const base = resident * RESIDENT_INT_STRIDE;
   const floatBase = resident * RESIDENT_FLOAT_STRIDE;
   const current = state.ints[base + RESIDENT_INT.place]!;
   const hour = hourOfDay(tick, state.startHour);
-  const count = state.finder.find(state.index.doorNode[current]!, state.index.doorNode[destination]!, state.fear, isNight(hour) ? NIGHT_FEAR_WEIGHT : 1, state.pathNodes, resident * MAX_PATH_NODES, MAX_PATH_NODES);
+  const fearWeight = isNight(hour) ? NIGHT_FEAR_WEIGHT : 1;
+  const count = state.finder.find(state.index.doorNode[current]!, state.index.doorNode[destination]!, state.fear, fearWeight, state.pathNodes, resident * MAX_PATH_NODES, MAX_PATH_NODES);
   if (count === 0) return false;
   releaseSeat(state, resident);
   state.ints[base + RESIDENT_INT.pathCount] = count;
-  const metres = measurePath(state, resident);
-  const hasCarHere = (state.ints[base + RESIDENT_INT.flags]! & FLAG.hasCar) !== 0 && state.ints[base + RESIDENT_INT.carPlace] === current;
-  const drives = hasCarHere && DRIVABLE_REASONS.includes(purpose) && metres >= DRIVE_MIN_METRES;
-  const legSpeed = drives ? DRIVE_SPEED : state.floats[floatBase + RESIDENT_FLOAT.pace]! * (purpose === PURPOSE.flee ? FLEE_SPEED_FACTOR : 1);
-  state.floats[floatBase + RESIDENT_FLOAT.speed] = legSpeed;
-  const legTicks = Math.max(1, Math.ceil((metres / legSpeed) * DECISION_HZ));
-  const legPurpose = drives ? PURPOSE.drive : purpose;
+  let metres = measurePath(state, resident);
+  clearDriveLeg(state, resident);
+  const owner = chooseCar(state, resident, current, purpose, metres, tick);
+  const stand = owner === NO_PLACE ? NO_PLACE : carStandsAt(state, owner, tick);
+  const byCar = owner !== NO_PLACE && planCarPath(state, resident, current, stand, destination, fearWeight);
+  if (byCar) metres = measurePath(state, resident);
+  const pace = state.floats[floatBase + RESIDENT_FLOAT.pace]!;
+  state.floats[floatBase + RESIDENT_FLOAT.speed] = pace * (purpose === PURPOSE.flee ? FLEE_SPEED_FACTOR : 1);
+  const legTicks = byCar ? timeCarLeg(state, resident, tick, owner, stand, destination, metres) : Math.max(1, ticksOf(metres / state.floats[floatBase + RESIDENT_FLOAT.speed]!));
   state.ints[base + RESIDENT_INT.fromPlace] = current;
   state.ints[base + RESIDENT_INT.place] = destination;
   state.ints[base + RESIDENT_INT.departTick] = tick;
   state.ints[base + RESIDENT_INT.arriveTick] = tick + legTicks;
   state.ints[base + RESIDENT_INT.nextDecisionTick] = tick + legTicks + Math.max(1, dwellTicks);
-  state.ints[base + RESIDENT_INT.legPurpose] = legPurpose;
-  state.ints[base + RESIDENT_INT.legReason] = purpose;
+  state.ints[base + RESIDENT_INT.legPurpose] = purpose;
   state.ints[base + RESIDENT_INT.companion] = NO_PLACE;
-  if (drives) state.ints[base + RESIDENT_INT.carPlace] = destination;
   state.ints[base + RESIDENT_INT.decisionCount]++;
   for (let need = 0; need < NEED_COUNT; need++) state.floats[floatBase + RESIDENT_FLOAT.needs + need] = state.scratchNeeds[need]!;
-  logHistory(state, resident, VISIT_BASE + legPurpose, destination, tick);
+  logHistory(state, resident, VISIT_BASE + purpose, destination, tick);
   if (PURPOSE_MOODS[purpose]! !== -1) setMoodEvent(state, resident, VISIT_BASE + purpose, tick);
   takeSeat(state, resident, destination, purpose);
   markDirty(state, resident);

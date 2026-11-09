@@ -7,7 +7,7 @@ import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
-import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, GENDER, MIX_INDEX, MIX_RESIDENT, MIX_SALT, NO_PLACE, PLAN_LEAD_TICKS, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
+import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, GENDER, MIX_INDEX, MIX_RESIDENT, MIX_SALT, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
 import { carGap } from "./civilian-contact.ts";
 import {
   BUMP_CLOSING_SPEED,
@@ -299,7 +299,7 @@ export class CivilianCrowd {
         stride[resident] = 0;
       } else {
         const onLeg = ints[intBase + RESIDENT_INT.pathCount]! > 0 && seconds >= ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ && seconds < ints[intBase + RESIDENT_INT.arriveTick]! / DECISION_HZ;
-        if (!onLeg || ints[intBase + RESIDENT_INT.legPurpose] === PURPOSE.drive || !legPositionAt(state, resident, seconds, pose)) continue;
+        if (!onLeg || !legPositionAt(state, resident, seconds, pose)) continue;
         brainX[resident] = pose.x;
         brainZ[resident] = pose.z;
         velocityX[resident] = pose.dirX * walkSpeed;

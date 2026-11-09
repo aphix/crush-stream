@@ -171,17 +171,28 @@ function hasDoor(state: CityState, place: number): boolean {
   return venue !== VENUE.park && venue !== VENUE.transit && venue !== VENUE.other;
 }
 
-/** Door clips: the first and last `ACTIVITY_SECONDS.door` of a walk that leaves or enters a building. */
+/** Door clips: the first and last `ACTIVITY_SECONDS.door` of a walk that leaves or enters a building. A leg by car is a walk to it, getting in (a clip, standing at it), the drive (nobody is seen), getting out (a clip) and a walk from it. */
 function readWalk(state: CityState, resident: number, seconds: number, out: ActivityReading): void {
-  if (intAt(state, resident, RESIDENT_INT.legPurpose) === PURPOSE.drive) return;
-  const departSeconds = intAt(state, resident, RESIDENT_INT.departTick) / DECISION_HZ;
-  const arriveSeconds = intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ;
+  let from = intAt(state, resident, RESIDENT_INT.departTick) / DECISION_HZ;
+  let to = intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ;
+  const leaveTick = intAt(state, resident, RESIDENT_INT.driveLeaveTick);
+  if (leaveTick !== NEVER_TICK) {
+    const leaveSeconds = leaveTick / DECISION_HZ;
+    const parkSeconds = intAt(state, resident, RESIDENT_INT.driveParkTick) / DECISION_HZ;
+    const gotInSeconds = leaveSeconds - ACTIVITY_SECONDS.carIn;
+    const gotOutSeconds = parkSeconds + ACTIVITY_SECONDS.carOut;
+    if (seconds >= gotInSeconds && seconds < leaveSeconds) return setClip(out, ACTIVITY.carIn, seconds - gotInSeconds, leaveSeconds - seconds);
+    if (seconds >= leaveSeconds && seconds < parkSeconds) return;
+    if (seconds >= parkSeconds && seconds < gotOutSeconds) return setClip(out, ACTIVITY.carOut, seconds - parkSeconds, gotOutSeconds - seconds);
+    if (seconds < leaveSeconds) to = gotInSeconds;
+    else from = gotOutSeconds;
+  }
   const doorSeconds = ACTIVITY_SECONDS.door;
-  const since = seconds - departSeconds;
-  const toEnd = arriveSeconds - seconds;
-  if (arriveSeconds - departSeconds <= 2 * doorSeconds) return;
-  if (since < doorSeconds && hasDoor(state, intAt(state, resident, RESIDENT_INT.fromPlace))) setClip(out, ACTIVITY.door, since, doorSeconds - since);
-  else if (toEnd < doorSeconds && hasDoor(state, intAt(state, resident, RESIDENT_INT.place))) setClip(out, ACTIVITY.door, doorSeconds - toEnd, toEnd);
+  const since = seconds - from;
+  const toEnd = to - seconds;
+  if (to - from <= 2 * doorSeconds) return;
+  if (since < doorSeconds && from === intAt(state, resident, RESIDENT_INT.departTick) / DECISION_HZ && hasDoor(state, intAt(state, resident, RESIDENT_INT.fromPlace))) setClip(out, ACTIVITY.door, since, doorSeconds - since);
+  else if (toEnd < doorSeconds && to === intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ && hasDoor(state, intAt(state, resident, RESIDENT_INT.place))) setClip(out, ACTIVITY.door, doorSeconds - toEnd, toEnd);
 }
 
 /** Fills `out` with what resident `resident` is doing at crowd time `seconds`, from their row alone: a pure function of the row and the time (any frame rate, no allocation). */
