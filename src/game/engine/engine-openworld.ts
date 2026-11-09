@@ -293,9 +293,6 @@ export class OpenWorldDirector {
     if (this.interiors !== null) {
       this.openers.poses = this.crowd?.poses ?? null;
       this.openers.walker = this.ports.foot(this.foot) ? this.foot : null;
-      this.openers.others.length = 0;
-      if (this.law !== null) this.openers.others.push(this.law.copPoses);
-      if (this.medics !== null) this.openers.others.push(this.medics.poses);
       this.interiors.update(this.ray.eyeX, this.ray.eyeZ, wallDt, this.sight, this.openers);
     }
     const client = this.ports.isClient();
@@ -344,6 +341,7 @@ export class OpenWorldDirector {
     this.art = null;
     this.law = null;
     this.medics = null;
+    this.openers.others = [];
     this.auto = null;
     this.crowd = null;
     this.text = null;
@@ -397,6 +395,7 @@ export class OpenWorldDirector {
     this.doors = new OpenWorldCarDoors(crowd.state.capacity, crowd.state, () => this.traffic);
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     this.medics = new OpenWorldMedics(this.ports.makeArt(MEDICS.count));
+    this.openers.others = this.law === null ? [this.medics.poses] : [this.law.copPoses, this.medics.poses];
     if (client) crowd.hear(this.heardEvents);
   }
 
