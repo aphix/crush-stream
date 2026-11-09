@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { detCos, detSin } from "../../kernel/physics-core.js";
+import { PREFAB } from "../constants.ts";
+import { NO_FLOOR } from "../ground.ts";
+import { propColliders } from "../placements.ts";
+import { flightHeightAt, flightsOf } from "../stairs.ts";
 import { FACING } from "./openworld-constants.ts";
 import { BAY, DOOR, facadeSolidProps, facadeSolidsOf, HOME_HEIGHT, HOME_LEVELS, homeDoorPoint, homeFrontages, LOT_WIDTH, STOOP, stoopStepRange, type Frontage } from "./openworld-facade-solids.ts";
 import { layOutLots } from "./openworld-lots.ts";
@@ -21,8 +25,6 @@ const DOOR_HOLE_HALF_WIDTH = 0.5;
 const DOOR_HOLE_ACROSS = 1.8;
 /** A bay projects 0.6 to 0.9 m over the sidewalk (m). */
 const BAY_OUT_RANGE = [0.6, 0.9] as const;
-/** The style that makes a solid box a flight of stairs. */
-const STAIRS_STYLE = "stairs";
 /** Boxes per rowhome the course may hold. */
 const SOLIDS_PER_HOME_MAX = 3;
 const EPSILON = 1e-9;
@@ -103,15 +105,34 @@ describe("given one rowhome's stoop", () => {
     expect(previousNear, "the landing starts at the wall").toBeCloseTo(0, 9);
   });
 
-  // mutation: sed -i 's/{ ...boxOn(frontage, (STOOP.landing + STOOP.run) \/ 2, DOOR.across, \[STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width\]), style: STAIRS_STYLE }/boxOn(frontage, (STOOP.landing + STOOP.run) \/ 2, DOOR.across, [STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width])/' src/game/world/openworld/openworld-facade-solids.ts
+  // mutation: sed -i 's/{ ...boxOn(frontage, (STOOP.landing + STOOP.run) \/ 2, DOOR.across, \[STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width\]), stairs: true }/boxOn(frontage, (STOOP.landing + STOOP.run) \/ 2, DOOR.across, [STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width])/' src/game/world/openworld/openworld-facade-solids.ts
   it("when the stoop's ramp is read, then it is a flight of stairs of as many treads and risers as the visible steps', falling from the landing's end", () => {
     const solids = facadeSolidsOf(frontages[0]!);
     const ramp = solids[1]!;
-    expect(ramp.style, "the ramp's style").toBe(STAIRS_STYLE);
-    expect(solids.filter((solid) => solid.style === STAIRS_STYLE).length, "boxes that are stairs").toBe(1);
+    expect(ramp.stairs, "the ramp is stairs").toBe(true);
+    expect(solids.filter((solid) => solid.stairs === true).length, "boxes that are stairs").toBe(1);
     const treads = Math.round(ramp.size[0] / WALKER_TREAD_MIN);
     expect(treads, "treads the flight cuts its length into").toBe(STOOP.steps - 1);
     expect(ramp.size[1] / treads, "riser the flight's height gives (m)").toBeCloseTo(STOOP.rise, 9);
+  });
+
+  // mutation: sed -i 's/Math.ceil(climbed \* flight.treads)/Math.floor(climbed * flight.treads)/' src/game/world/stairs.ts
+  it("when the stoop's ramp is read as the course places it, then the flight stands on the drawn treads' heights and nowhere off the stoop", () => {
+    const frontage = frontages[0]!;
+    const ramp = facadeSolidsOf(frontage)[1]!;
+    const placed = { prefab: PREFAB.invisibleWall, x: ramp.x, y: 0, z: ramp.z, yaw: ramp.yaw, sx: ramp.size[0], sy: ramp.size[1], sz: ramp.size[2], stairs: true as const };
+    const flights = flightsOf(propColliders([placed]), [placed]);
+    expect(flights.length, "the ramp is one flight").toBe(1);
+    const at = (out: number, across: number) => ({ x: frontage.x + detCos(frontage.yaw) * out + detSin(frontage.yaw) * across, z: frontage.z - detSin(frontage.yaw) * out + detCos(frontage.yaw) * across });
+    for (let step = 1; step < STOOP.steps; step++) {
+      const { near, far, top } = stoopStepRange(step);
+      const point = at((near + far) / 2, DOOR.across);
+      expect(flightHeightAt(flights[0]!, point.x, point.z), `tread ${step}'s height (m)`).toBeCloseTo(top, 9);
+    }
+    const past = at(STOOP.run + 0.1, DOOR.across);
+    expect(flightHeightAt(flights[0]!, past.x, past.z), "past the foot").toBe(NO_FLOOR);
+    const beside = at(STOOP.run / 2, DOOR.across + STOOP.width / 2 + 0.1);
+    expect(flightHeightAt(flights[0]!, beside.x, beside.z), "beside the stoop").toBe(NO_FLOOR);
   });
 
   // mutation: sed -i 's/boxOn(frontage, STOOP.landing \/ 2, DOOR.across, \[STOOP.landing, STOOP.sill, STOOP.width\]),/boxOn(frontage, STOOP.landing \/ 2, DOOR.across, [STOOP.landing, STOOP.sill + 0.3, STOOP.width]),/' src/game/world/openworld/openworld-facade-solids.ts

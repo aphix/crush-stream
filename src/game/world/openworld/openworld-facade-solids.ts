@@ -114,8 +114,8 @@ export function stoopStepRange(step: number): { near: number; far: number; top: 
   return { near, far, top: STOOP.rise * step };
 }
 
-/** A box the course stands as a prop of the invisible wall's prefab: size is [along the building's front direction, height, across]; a `style` names what the box is. */
-type FacadeSolid = { prefab: typeof PREFAB.invisibleWall; x: number; z: number; yaw: number; size: [number, number, number]; style?: string };
+/** A box the course stands as a prop of the invisible wall's prefab: size is [along the building's front direction, height, across]; `stairs` makes it a flight of stairs (`world/stairs.ts`). */
+type FacadeSolid = { prefab: typeof PREFAB.invisibleWall; x: number; z: number; yaw: number; size: [number, number, number]; stairs?: true };
 
 /** A box `out` m from the facade face and `across` m (u) from the lot's middle. */
 function boxOn(frontage: Frontage, out: number, across: number, size: [number, number, number]): FacadeSolid {
@@ -124,20 +124,17 @@ function boxOn(frontage: Frontage, out: number, across: number, size: [number, n
   return { prefab: PREFAB.invisibleWall, x: frontage.x + cos * out + sin * across, z: frontage.z - sin * out + cos * across, yaw: frontage.yaw, size };
 }
 
-/** A solid box with this style is a flight of stairs: its top falls from its height at the facade end to the ground at its far end in equal treads of 0.28 m. */
-const STAIRS_STYLE = "stairs";
-
 /** The stoop's ramp stands as high as its highest tread (m). */
 const RAMP_TOP = STOOP.rise * (STOOP.steps - 1);
 
 /**
  * Colliders of one rowhome's kit, three boxes: the bay stack from the ground to its roof (one box of the footprint's own area), the stoop's ramp over the four treads and its landing.
- * The ramp is a flight of stairs (its style): four treads of 0.28 m falling from 0.72 m at the landing to 0.18 m at the foot, the visible steps'.
+ * The ramp is a flight of stairs: four treads of 0.28 m falling from 0.72 m at the landing to 0.18 m at the foot, the visible steps'.
  */
 export function facadeSolidsOf(frontage: Frontage): FacadeSolid[] {
   return [
     boxOn(frontage, BAY.out / 2, BAY.across, [BAY.out, BAY.top, BAY.width - BAY.out]),
-    { ...boxOn(frontage, (STOOP.landing + STOOP.run) / 2, DOOR.across, [STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width]), style: STAIRS_STYLE },
+    { ...boxOn(frontage, (STOOP.landing + STOOP.run) / 2, DOOR.across, [STOOP.run - STOOP.landing, RAMP_TOP, STOOP.width]), stairs: true },
     boxOn(frontage, STOOP.landing / 2, DOOR.across, [STOOP.landing, STOOP.sill, STOOP.width]),
   ];
 }
