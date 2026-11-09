@@ -13,6 +13,7 @@ import {
   JAIL_TICKS,
   JAYWALK_CUSTODY_TICKS,
   KNOCK_FEAR,
+  LOOK_ON_CRASH_MINUTES,
   MECHANIC_LOOK_MINUTES,
   MECHANIC_REACH,
   NEED,
@@ -39,6 +40,7 @@ import { CityState, logHistory, markDirty, residentName, setClosedUntil, setMood
 import { applyBust, applyCrime, applyJaywalk, applyKnockWitness, applyPush, nearestPlaceTo, raiseFear, reactToCrime, releaseFightPartner, startFight } from "./society-reactions.ts";
 import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { sendResidentTo } from "./civilian-plan.ts";
+import { alarmAt, alarmAtKnock, callAmbulanceFor } from "./society-alarm.ts";
 import { dropCarLeg } from "./society-cars.ts";
 import { noteEvent } from "./society-day.ts";
 
@@ -81,12 +83,13 @@ export function queueEvents(state: CityState, postTick: number, events: ArrayLik
   }
 }
 
-/** A knock's, crime's, bust's or jaywalk arrest's subject is a resident, a wreck's a place with a door, a push's or fight's a packed pair of residents (victim + capacity * (other + 1), other -1: a player); another kind (a lone `alongside` or `walker` too) is dropped. */
+/** A knock's, crime's, bust's, jaywalk arrest's or ambulance call's subject is a resident, a wreck's a place with a door, a danger's a walk-graph node, a push's or fight's a packed pair of residents (victim + capacity * (other + 1), other -1: a player); another kind (a lone `alongside` or `walker` too) is dropped. */
 function subjectInRange(state: CityState, kind: number, subject: number): boolean {
   if (!Number.isInteger(subject) || subject < 0) return false;
   if (kind === EVENT_KIND.wreck) return subject < state.index.placeCount && state.index.doorNode[subject]! >= 0;
+  if (kind === EVENT_KIND.danger) return subject < state.index.nodeCount;
   if (kind === EVENT_KIND.push || kind === EVENT_KIND.fight) return subject < state.capacity * (state.capacity + 1);
-  return (kind === EVENT_KIND.knock || kind === EVENT_KIND.crime || kind === EVENT_KIND.bust || kind === EVENT_KIND.jaywalk) && subject < state.capacity;
+  return (kind === EVENT_KIND.knock || kind === EVENT_KIND.crime || kind === EVENT_KIND.bust || kind === EVENT_KIND.jaywalk || kind === EVENT_KIND.ambulance) && subject < state.capacity;
 }
 
 /** The knocked civilian is out of the neighbourhood's streets and in hospital until `HOSPITAL_TICKS` after the knock, then home: their row says so, whatever they were doing. */
@@ -153,7 +156,14 @@ export function applyReactionEvents(state: CityState, tick: number): void {
     const event = state.events[at]!;
     if (event.reactionDone || event.reactionTick > tick) continue;
     event.reactionDone = true;
-    if (event.kind === EVENT_KIND.knock) applyKnockWitness(state, event.subject, event.seconds, tick);
+    if (event.kind === EVENT_KIND.knock) {
+      applyKnockWitness(state, event.subject, event.seconds, tick);
+      alarmAtKnock(state, event.subject, tick);
+    } else if (event.kind === EVENT_KIND.ambulance) callAmbulanceFor(state, event.subject, tick);
+    else if (event.kind === EVENT_KIND.wreck) {
+      const door = state.index.doorNode[event.subject]!;
+      alarmAt(state, state.map.graph.nodeX[door]!, state.map.graph.nodeZ[door]!, tick, NO_PLACE, LOOK_ON_CRASH_MINUTES);
+    } else if (event.kind === EVENT_KIND.danger) alarmAt(state, state.map.graph.nodeX[event.subject]!, state.map.graph.nodeZ[event.subject]!, tick, NO_PLACE, LOOK_ON_CRASH_MINUTES);
     else if (event.kind === EVENT_KIND.crime) reactToCrime(state, event.subject, tick);
     else if (event.kind === EVENT_KIND.bust) releaseFightPartner(state, event.subject);
     else if (event.kind === EVENT_KIND.push) applyPush(state, event.subject, event.seconds, tick, event.bearing);

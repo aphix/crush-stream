@@ -127,6 +127,8 @@ export function stageResident(state: CityState, resident: number, stage: Stage):
     [RESIDENT_INT.driveLast]: NO_INDEX,
     [RESIDENT_INT.driveLeaveTick]: NEVER_TICK,
     [RESIDENT_INT.driveParkTick]: NEVER_TICK,
+    [RESIDENT_INT.alarmTick]: NEVER_TICK,
+    [RESIDENT_INT.alarmVictim]: NO_PLACE,
     [RESIDENT_INT.joblessDays]: stage.joblessDays ?? 0,
     [RESIDENT_INT.wantedUntilTick]: 0,
     [RESIDENT_INT.crimeTick]: NEVER_TICK,

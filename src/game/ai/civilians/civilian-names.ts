@@ -130,15 +130,17 @@ export const EVENT_CODE = {
   foughtStranger: 34,
   foughtWalker: 35,
   jaywalkArrest: 36,
+  sawDanger: 37,
+  calledAmbulance: 38,
 } as const;
-export const VISIT_BASE = 37;
+export const VISIT_BASE = 39;
 
 /** Mood each event leaves (EVENT_CODE order). */
 const EVENT_MOODS = [
   MOOD.fine, MOOD.happy, MOOD.happy, MOOD.proud, MOOD.fine, MOOD.sad, MOOD.proud, MOOD.busy, MOOD.sad, MOOD.happy, MOOD.exhausted, MOOD.happy, MOOD.hurt, MOOD.happy,
   MOOD.hurt, MOOD.happy, MOOD.sad, MOOD.happy, MOOD.sad, MOOD.sad, MOOD.angry, MOOD.annoyed,
   -1, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.afraid, MOOD.angry, MOOD.angry, MOOD.busy, MOOD.afraid, MOOD.sad, MOOD.annoyed, MOOD.angry, MOOD.angry,
-  MOOD.angry, MOOD.annoyed,
+  MOOD.angry, MOOD.annoyed, MOOD.afraid, MOOD.worried,
 ] as const;
 
 /** What a walk is for, in the look-at line ("{label} -> {place}"), by purpose: the five needs first, then the stories and the bus. */
@@ -173,6 +175,8 @@ export const PURPOSE_LABELS = [
   "looking for someone to mug",
   "trying the parked cars",
   "a fight",
+  "looking on",
+  "calling an ambulance",
 ] as const;
 /** The line a walk leaves in the life log, by purpose; the place follows. */
 export const PURPOSE_LOG_TEXT = [
@@ -206,9 +210,11 @@ export const PURPOSE_LOG_TEXT = [
   "went looking for trouble at",
   "went to try the cars outside",
   "got into a fight outside",
+  "stood looking at the trouble outside",
+  "called an ambulance from",
 ] as const;
 /** The mood a story's walk leaves, or -1 for none (needs: -1). */
-export const PURPOSE_MOODS = [-1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, MOOD.hungry, MOOD.worried, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.busy, MOOD.happy, -1, -1, -1, -1, MOOD.happy, MOOD.angry, -1, MOOD.busy, MOOD.afraid, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.angry] as const;
+export const PURPOSE_MOODS = [-1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, MOOD.hungry, MOOD.worried, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.busy, MOOD.happy, -1, -1, -1, -1, MOOD.happy, MOOD.angry, -1, MOOD.busy, MOOD.afraid, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.angry, MOOD.afraid, MOOD.worried] as const;
 
 /** What the look-at line says of someone in their car: "driving for {purpose}". */
 export const DRIVING_WORD = "driving";

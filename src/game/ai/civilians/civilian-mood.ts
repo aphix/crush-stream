@@ -123,6 +123,8 @@ function historyText(state: CityState, code: number, subject: number): string {
     case EVENT_CODE.foughtStranger: return `squared up to a driver outside ${place()}`;
     case EVENT_CODE.foughtWalker: return `turned on someone who shoved them outside ${place()}`;
     case EVENT_CODE.jaywalkArrest: return "was arrested for crossing against the light";
+    case EVENT_CODE.sawDanger: return `saw trouble outside ${place()}`;
+    case EVENT_CODE.calledAmbulance: return `called an ambulance for ${packedNameText(subject)}`;
     default: return "";
   }
 }

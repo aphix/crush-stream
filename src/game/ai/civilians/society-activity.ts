@@ -13,6 +13,7 @@ import {
   NO_SEAT,
   PLAYER_STRIKE_REACH,
   PURPOSE,
+  RECOIL_STEP_METRES,
   RESIDENT_FLOAT,
   RESIDENT_FLOAT_STRIDE,
   RESIDENT_INT,
@@ -21,6 +22,7 @@ import {
   SPECIES,
 } from "./civilian-constants.ts";
 import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
+import { legPose } from "./civilian-leg.ts";
 import type { CityState } from "./civilian-state.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
 import { VENUE, isCounterVenue, isOutdoorPurpose } from "./society-venues.ts";
@@ -125,6 +127,48 @@ function readSitting(state: CityState, place: number, seat: number, since: numbe
   else setClip(out, sitting, since - ACTIVITY_SECONDS.sitDown, left);
 }
 
+/** Turns `out` to face the hazard the resident last saw. */
+function faceHazard(state: CityState, resident: number, out: ActivityReading): void {
+  const toX = intAt(state, resident, RESIDENT_INT.alarmX) / CENTIMETRES_PER_METRE - out.x;
+  const toZ = intAt(state, resident, RESIDENT_INT.alarmZ) / CENTIMETRES_PER_METRE - out.z;
+  if (toX !== 0 || toZ !== 0) out.yaw = detAtan2(toX, toZ);
+}
+
+/** A flinch: a step back from the hazard, out and back over the recoil clip, `RECOIL_STEP_METRES` at most. */
+function stepBack(state: CityState, resident: number, since: number, out: ActivityReading): void {
+  const toX = intAt(state, resident, RESIDENT_INT.alarmX) / CENTIMETRES_PER_METRE - out.x;
+  const toZ = intAt(state, resident, RESIDENT_INT.alarmZ) / CENTIMETRES_PER_METRE - out.z;
+  const distance = hypot2(toX, toZ);
+  if (distance === 0) return;
+  const step = detSin((Math.PI * since) / ACTIVITY_SECONDS.recoil) * RECOIL_STEP_METRES;
+  out.x -= (toX / distance) * step;
+  out.z -= (toZ / distance) * step;
+}
+
+/** Someone walking who saw a hazard flinches for the recoil clip's length, stepping back from it and facing it, then walks on. */
+function readFlinch(state: CityState, resident: number, seconds: number, out: ActivityReading): void {
+  const since = seconds - intAt(state, resident, RESIDENT_INT.alarmTick) / DECISION_HZ;
+  if (since < 0 || since >= ACTIVITY_SECONDS.recoil || !legPose(state, resident, seconds, state.pose)) return;
+  out.placed = true;
+  out.x = state.pose.x;
+  out.z = state.pose.z;
+  out.partner = intAt(state, resident, RESIDENT_INT.alarmVictim);
+  faceHazard(state, resident, out);
+  stepBack(state, resident, since, out);
+  setClip(out, ACTIVITY.recoil, since, ACTIVITY_SECONDS.recoil - since);
+}
+
+/** Out at a door watching trouble: a flinch and a step back at first, then standing looking at it; the one who phones for the ambulance stands on the phone, glancing at who is down. */
+function readWatcher(state: CityState, resident: number, purpose: number, since: number, left: number, out: ActivityReading): void {
+  out.partner = intAt(state, resident, RESIDENT_INT.alarmVictim);
+  faceHazard(state, resident, out);
+  if (purpose === PURPOSE.callAmbulance) setClip(out, ACTIVITY.phoneCall, since, left);
+  else if (since < ACTIVITY_SECONDS.recoil) {
+    stepBack(state, resident, since, out);
+    setClip(out, ACTIVITY.recoil, since, ACTIVITY_SECONDS.recoil - since);
+  } else setClip(out, ACTIVITY.idle, since, left);
+}
+
 function readOutdoor(state: CityState, resident: number, purpose: number, place: number, tick: number, since: number, left: number, out: ActivityReading): void {
   const companion = companionIsHere(state, resident, tick);
   const seat = intAt(state, resident, RESIDENT_INT.seat);
@@ -134,6 +178,10 @@ function readOutdoor(state: CityState, resident: number, purpose: number, place:
     return;
   }
   standAtDoor(state, resident, place, out);
+  if (purpose === PURPOSE.lookOn || purpose === PURPOSE.callAmbulance) {
+    readWatcher(state, resident, purpose, since, left, out);
+    return;
+  }
   const talking = companion >= 0 && (purpose === PURPOSE.stoopTalk || purpose === PURPOSE.argue || purpose === PURPOSE.stoopSit);
   setClip(out, talking ? ACTIVITY.talk : ACTIVITY.idle, since, left);
 }
@@ -209,6 +257,7 @@ export function readActivity(state: CityState, resident: number, seconds: number
   const nextSeconds = state.ints[base + RESIDENT_INT.nextDecisionTick]! / DECISION_HZ;
   if (state.ints[base + RESIDENT_INT.pathCount]! > 0 && seconds >= state.ints[base + RESIDENT_INT.departTick]! / DECISION_HZ && seconds < arriveSeconds) {
     readWalk(state, resident, seconds, out);
+    if (out.code === ACTIVITY.none) readFlinch(state, resident, seconds, out);
     return;
   }
   if (seconds < arriveSeconds || seconds >= nextSeconds) return;
