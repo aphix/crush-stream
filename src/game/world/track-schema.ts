@@ -89,6 +89,8 @@ const placement = z.object({
   size: z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]).optional(),
   /** A building's facade style by name (`present/facades.ts` `FACADE`), forcing it over the style the place's hash would pick. */
   style: z.string().optional(),
+  /** A solid box prop that is a flight of stairs (`world/stairs.ts`): its top falls from its height at its local -x end to the ground at its +x end, in treads. */
+  stairs: z.literal(true).optional(),
 });
 
 const along = z.object({
