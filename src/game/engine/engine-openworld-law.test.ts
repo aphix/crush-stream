@@ -5,16 +5,16 @@ import { BODY_GAP } from "../ai/civilians/civilian-crowd-constants.ts";
 import { RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "../ai/civilians/civilian-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { hypot2 } from "../kernel/physics-core.js";
+import { FakeField } from "../ai/openworld-traffic/traffic-world.test-util.ts";
 import { OpenWorldDirector, type OpenWorldPorts } from "./engine-openworld.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 
 const map = buildFixtureMap();
 
-/** The traffic's host ports with no cars in the field and nothing drawn. */
+/** The traffic's host ports over the traffic tests' fake field of cars, with nothing drawn and nobody to drive the lobby's cars. */
 function idleTrafficPorts(): NonNullable<OpenWorldPorts["traffic"]> {
-  return { cars: () => [], ensureCars: () => {}, seated: () => false, place: () => {}, putAway: () => {}, markPolice: () => {},
-    sirens: () => {},
-    openDoor: () => {}, groundAt: () => 0, release: () => {}, setBody: () => {}, setFreeDrivers: () => {}, makeLights: () => ({ update: () => {}, dispose: () => {} }) };
+  const field = new FakeField();
+  return { ...field.ports, setFreeDrivers: () => {}, makeLights: () => ({ update: () => {}, dispose: () => {} }) };
 }
 
 /** The police's engine ports with no course solids, nobody to bust and no light bars. */
@@ -65,7 +65,7 @@ describe("given the open world's director", () => {
   it("when the engine gives no law ports, then there are no police and no second drawing for their cops", () => {
     const { director, arts } = directorWith({});
     expect(director["law"], "no law").toBeNull();
-    expect(arts.made, "the crowd's drawing only").toBe(1);
+    expect(directorWith({ law: idleLawPorts() }).arts.made - arts.made, "the cops' drawing is one more").toBe(1);
   });
 
   // mutation: in src/game/engine/engine-openworld.ts feedWalkers(), delete the line `this.law?.feedCops(crowd.walkers);`
