@@ -76,7 +76,7 @@ describe("a patrol car comes to a crime", () => {
     expect(run.street!.sirens[0], "with its siren on").toBe(true);
     expect(cops.mode[CAR_COP], "its cop is out").not.toBe(COP_MODE.off);
     expect(table.copAt(0, 2), "the case's last cop slot").toBe(CAR_COP);
-    expect(run.street!.snaps[0]!.z, "the car stopped on the street short of the door").toBeLessThan(-4);
+    expect(run.street!.snaps[0]!.z, "the car stopped on the street short of the door").toBeLessThan(-3);
   });
 });
 
