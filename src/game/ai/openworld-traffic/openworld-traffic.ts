@@ -144,6 +144,11 @@ export class OpenWorldTraffic {
     return this.ambulance.state;
   }
 
+  /** The engine's index of the ambulance's car, -1 when none is out. */
+  ambulanceCar(): number {
+    return this.ambulance.carIndex;
+  }
+
   /** The space the ambulance is at or coming to, -1 when none is out. */
   ambulanceSpot(): number {
     return this.ambulance.scene;
