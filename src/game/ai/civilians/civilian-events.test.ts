@@ -141,11 +141,11 @@ describe("given a car wrecked into the busiest workplace five ticks before the n
     expect(wrecked.closedUntilTick[bodega], "closed-until an hour on (two game days of 2880 ticks)").toBe(hour + 120 + 2 * 2880);
   });
 
-  it("when a game day passes with it shut, then nobody sets out for it, while with no wreck people keep going", () => {
-    const from = hour + 120;
-    const to = from + TICKS_PER_GAME_DAY;
-    expect(walksTo(bodega, from, to, wreck), "walks to the wrecked workplace in a day").toBe(0);
-    expect(walksTo(bodega, from, to, new Map()), "walks to the workplace in a day with no wreck").toBeGreaterThan(0);
+  it("when its second day shut passes (the fear has halved), then nobody sets out for it, while with no wreck people keep going", () => {
+    const from = hour + 120 + TICKS_PER_GAME_DAY;
+    const to = hour + 120 + 2 * TICKS_PER_GAME_DAY - 60;
+    expect(walksTo(bodega, from, to, wreck), "walks to the wrecked workplace on its second day shut").toBe(0);
+    expect(walksTo(bodega, from, to, new Map()), "walks to the workplace on a day with no wreck").toBeGreaterThan(0);
   });
 
   it("when the staff are asked, then they are laid off with a line in their log, and back at work when it reopens", () => {

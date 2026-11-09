@@ -221,6 +221,15 @@ function keepAppointment(state: CityState, resident: number, tick: number, curre
   return true;
 }
 
+/** A named resident's walk is worth taking only if they get there in time to leave again for their next appointment. */
+function walkFitsBeforeAppointment(state: CityState, resident: number, tick: number, current: number, destination: number): boolean {
+  const slot = state.appointment;
+  if (!nextAppointment(state, resident, Math.max(intAt(state, resident, RESIDENT_INT.storyTick), tick), slot)) return true;
+  const there = walkTicks(state, resident, current, destination);
+  const onward = slot.place === destination ? 0 : walkTicks(state, resident, destination, slot.place);
+  return there < 0 || onward < 0 || tick + there <= slot.arriveTick - onward - SCHEDULE_SLACK_TICKS;
+}
+
 /** A named resident does not sleep through their next appointment: the dwell just planned is cut to end in time to walk there. */
 function cutDwellForAppointment(state: CityState, resident: number, tick: number): void {
   const slot = state.appointment;
@@ -257,8 +266,9 @@ export function decideResident(state: CityState, resident: number, tick: number)
   if (named && keepAppointment(state, resident, tick, current)) return;
   const draw = residentDraws(state.seed, resident, STREAM.decision, state.ints[base + RESIDENT_INT.decisionCount]!);
   chooseByUtility(state, resident, current, tick, hour, draw);
-  const place = state.chosenPlace;
   const purpose = state.chosenPurpose;
+  const walksAway = state.chosenPlace !== NO_PLACE && state.chosenPlace !== current;
+  const place = walksAway && named && !walkFitsBeforeAppointment(state, resident, tick, current, state.chosenPlace) ? NO_PLACE : state.chosenPlace;
   const kind = place === NO_PLACE ? PLACE_KIND.home : state.index.kindOf[place]!;
   const dwell = purpose === PURPOSE.busAway ? Math.round((AWAY_MINUTES[0] + (AWAY_MINUTES[1] - AWAY_MINUTES[0]) * draw()) * TICKS_PER_GAME_MINUTE) : dwellTicksOf(kind, draw());
   if (place === NO_PLACE) stayPut(state, resident, tick, current, STAY_MINUTES * TICKS_PER_GAME_MINUTE, NEED.rest);

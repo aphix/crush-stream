@@ -98,10 +98,10 @@ afterEach(() => {
 describe("given the brain in a worker thread and the same brain computing in the main thread alone, both told the same events", () => {
   it("when a game day and more of ticks is taken from each, then every tick's answer and the final state are the same", async () => {
     const alone = CivilianRemote.open(noFailure);
-    alone.init(SEED, map, RESIDENTS);
+    alone.init(SEED, buildFixtureMap(), RESIDENTS);
     usePageWorker(SpyWorker);
     const threaded = CivilianRemote.open(noFailure);
-    threaded.init(SEED, map, RESIDENTS);
+    threaded.init(SEED, buildFixtureMap(), RESIDENTS);
     for (let tick = 0; tick <= TICKS; tick++) {
       alone.post(tick, eventsAt(tick));
       threaded.post(tick, eventsAt(tick));
@@ -123,19 +123,29 @@ describe("given the brain in a worker thread and the same brain computing in the
     expect(answerRows.reduce((sum, rows) => sum + rows, 0), "rows changed over the run").toBeGreaterThan(100);
   });
 
-  it("when events and the map are posted to the worker, then their typed arrays go by transfer: the main thread's own copies are not detached, the posted events are", async () => {
-    usePageWorker(SpyWorker);
+  it("when the map and events are posted to a worker, then copies of the map's arrays and the events go by transfer, and the main thread's own arrays do not", () => {
+    usePageWorker(ScriptedWorker);
     const remote = CivilianRemote.open(noFailure);
     remote.init(SEED, map, RESIDENTS);
     remote.post(0, [EVENT_KIND.wreck, placeNamed(map, PLACE_NAMES.bodega), 0]);
-    await SpyWorker.last.whenAnswered(1);
-    const [init, plan] = SpyWorker.last.posted;
-    expect(init!.kind, "first message").toBe("init");
-    expect(plan!.kind, "second message").toBe("plan");
-    if (plan!.kind === "plan") expect(plan!.events.buffer.byteLength, "bytes left in the posted events").toBe(0);
-    expect(map.graph.nodeX.byteLength, "bytes left in the main thread's map").toBeGreaterThan(0);
+    const [init, plan] = ScriptedWorker.last.posted;
+    const mainBuffers = [map.graph.nodeX.buffer, map.graph.nodeZ.buffer, map.graph.edgeStart.buffer, map.graph.edgeTo.buffer, map.graph.edgeLength.buffer, map.graph.edgeCrossing.buffer, map.portals.buffer];
+    expect(init!.transfer.length, "buffers handed over with the map").toBe(mainBuffers.length);
+    for (const buffer of init!.transfer) expect(mainBuffers.includes(buffer), "a handed-over map buffer is the main thread's own").toBe(false);
+    expect(plan!.message.kind === "plan" && plan!.transfer.some((buffer) => buffer === (plan!.message.kind === "plan" ? plan!.message.events.buffer : null)), "the events are handed over").toBe(true);
     expect(remote.traffic.postedMessages, "messages posted").toBe(2);
     expect(remote.traffic.postedBytes, "bytes handed over").toBeGreaterThan(map.graph.nodeX.byteLength);
+  });
+
+  it("when events are posted to a worker thread, then the posted array has been handed over and holds no bytes here", async () => {
+    usePageWorker(SpyWorker);
+    const remote = CivilianRemote.open(noFailure);
+    remote.init(SEED, buildFixtureMap(), RESIDENTS);
+    remote.post(0, [EVENT_KIND.wreck, placeNamed(map, PLACE_NAMES.bodega), 0]);
+    await SpyWorker.last.whenAnswered(1);
+    const plan = SpyWorker.last.posted[1]!;
+    expect(plan.kind, "second message").toBe("plan");
+    expect(plan.kind === "plan" ? plan.events.buffer.byteLength : -1, "bytes left in the posted events").toBe(0);
   });
 });
 

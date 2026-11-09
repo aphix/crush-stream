@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
-import { DECISION_HZ, JOB_AGE, MAX_PATH_NODES, NEED, NEED_COUNT, NO_PLACE, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "./civilian-constants.ts";
+import { DECISION_HZ, FLAG, FRIDAY, JOB_AGE, MAX_PATH_NODES, NEED, NEED_COUNT, NO_PLACE, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "./civilian-constants.ts";
 import { buildFixtureMap, placeNamed } from "./civilian-graph.test-util.ts";
 import { LegPose, legPose } from "./civilian-leg.ts";
 import { decideResident } from "./civilian-plan.ts";
@@ -9,6 +9,7 @@ import { tickOfHour } from "./civilian-run.test-util.ts";
 import type { CityState } from "./civilian-state.ts";
 import { computeTick } from "./civilian-tick.ts";
 import { createCityState } from "./society.ts";
+import { weekdayOf } from "./civilian-story.ts";
 import { ageOf } from "./society-day.ts";
 
 const map = buildFixtureMap();
@@ -81,6 +82,61 @@ describe("given a resident at home whose needs are set and a decision comes due 
     expect(intAt(state, resident, RESIDENT_INT.place), "place they stay at").toBe(home);
     expect(intAt(state, resident, RESIDENT_INT.pathCount), "nodes on a walk").toBe(0);
     expect(intAt(state, resident, RESIDENT_INT.nextDecisionTick), "when they decide again").toBeGreaterThan(tick);
+  });
+});
+
+describe("given a resident with company on their mind whose home is by the court in the park", () => {
+  const state = createCityState(5, map, 60);
+  const park = placeNamed(map, PLACE_NAMES.parkCourt);
+  const nextDoor = placeNamed(map, "Rowhome B2-1");
+  const resident = adultWhere(state, (candidate) => intAt(state, candidate, RESIDENT_INT.home) === nextDoor);
+  state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.favouriteHangout] = park;
+  let evening = 2;
+  while (weekdayOf(state, evening) === FRIDAY) evening++;
+
+  function headsOutAt(day: number, hour: number): number {
+    const tick = tickOfHour(state, day, hour);
+    dwellingWithNeeds(state, resident, nextDoor, tick, needsOf(NEED.social));
+    decideResident(state, resident, tick);
+    return intAt(state, resident, RESIDENT_INT.place);
+  }
+
+  it("when it is four in the afternoon, then they go to the court", () => {
+    expect(headsOutAt(evening, 16), "place they head for at 16:00").toBe(park);
+  });
+
+  it("when it is nine at night and the court is empty, then they stay in", () => {
+    expect(headsOutAt(evening, 21), "place they are at after deciding at 21:00").toBe(nextDoor);
+  });
+});
+
+describe("given a shop and a workplace that are shut, with nobody afraid of them", () => {
+  it("when someone at the shut shop wants an errand, then they leave for another shop, and while it is open they stay", () => {
+    const state = createCityState(5, map, 60);
+    const resident = adultWhere(state, () => true);
+    const bodega = placeNamed(map, PLACE_NAMES.bodega);
+    const tick = tickOfHour(state, 2, 11);
+    dwellingWithNeeds(state, resident, bodega, tick, needsOf(NEED.errand));
+    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.favouriteShop] = bodega;
+    decideResident(state, resident, tick);
+    expect(intAt(state, resident, RESIDENT_INT.place), "place they are at while the shop is open").toBe(bodega);
+    state.closedUntilTick[bodega] = tick + 1000;
+    dwellingWithNeeds(state, resident, bodega, tick, needsOf(NEED.errand));
+    decideResident(state, resident, tick);
+    expect(intAt(state, resident, RESIDENT_INT.place), "place they head for while it is shut").not.toBe(bodega);
+    expect(intAt(state, resident, RESIDENT_INT.pathCount), "nodes on their walk").toBeGreaterThan(1);
+  });
+
+  it("when someone's workplace is shut at the start of their shift, then they do not set out for it", () => {
+    const state = createCityState(5, map, 60);
+    const resident = adultWhere(state, (candidate) => intAt(state, candidate, RESIDENT_INT.work) !== NO_PLACE);
+    const work = intAt(state, resident, RESIDENT_INT.work);
+    const tick = tickOfHour(state, 2, intAt(state, resident, RESIDENT_INT.shiftStart));
+    state.closedUntilTick[work] = tick + 1000;
+    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.flags] |= FLAG.laidOff;
+    dwellingWithNeeds(state, resident, intAt(state, resident, RESIDENT_INT.home), tick, needsOf(NEED.work));
+    decideResident(state, resident, tick);
+    expect(intAt(state, resident, RESIDENT_INT.place), "place they are at after deciding").not.toBe(work);
   });
 });
 
