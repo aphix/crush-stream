@@ -1,10 +1,15 @@
-/** Body channels: pelvis offsets (m), torso and head angles (rad), then the weights `seat` (pelvis onto the seat), `plant` (feet held on the floor) and `lookAtPartner`. */
-export const CHANNEL = { pelvisDrop: 0, pelvisForward: 1, pelvisSide: 2, torsoPitch: 3, torsoRoll: 4, torsoTwist: 5, headPitch: 6, headYaw: 7, seat: 8, plant: 9, lookAtPartner: 10 } as const;
-const BODY_CHANNELS = 11;
+/**
+ * Body channels: pelvis offsets (m), torso and head angles (rad), the weights `seat` (pelvis onto the seat), `plant` (feet held on the floor) and
+ * `lookAtPartner`; `footRaise` (m) lifts the planted feet's floor; `bodyYaw` (rad, left positive) turns the whole body about where it stands and
+ * `shiftSide` (left) and `shiftForward` (m, in the frame she began in) walk it off that spot; the three `reach` weights put a hand on a car door's
+ * outer handle, inner handle or outer panel (the arm and the place follow the door's swing).
+ */
+export const CHANNEL = { pelvisDrop: 0, pelvisForward: 1, pelvisSide: 2, torsoPitch: 3, torsoRoll: 4, torsoTwist: 5, headPitch: 6, headYaw: 7, seat: 8, plant: 9, lookAtPartner: 10, footRaise: 11, bodyYaw: 12, shiftSide: 13, shiftForward: 14, reachOutsideHandle: 15, reachInsideHandle: 16, reachOutsidePanel: 17 } as const;
+const BODY_CHANNELS = 18;
 
-/** An arm's channels: angles (rad), the elbow's bend, `hand` (0..1) to reach `handZ` ahead and `handY` high instead. */
-export const ARM = { swing: 0, out: 1, twist: 2, sweep: 3, elbow: 4, hand: 5, handZ: 6, handY: 7 } as const;
-const ARM_FIELDS = 8;
+/** An arm's channels: angles (rad), the elbow's bend, `hand` (0..1) to reach `handZ` ahead, `handY` high and `handOut` away from the middle line instead. */
+export const ARM = { swing: 0, out: 1, twist: 2, sweep: 3, elbow: 4, hand: 5, handZ: 6, handY: 7, handOut: 8 } as const;
+const ARM_FIELDS = 9;
 /** A leg's channels: angles (rad), the knee's bend, and where `plant` puts the ankle ahead of the hip (m). */
 export const LEG = { swing: 0, out: 1, knee: 2, footZ: 3 } as const;
 const LEG_FIELDS = 4;

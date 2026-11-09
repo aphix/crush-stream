@@ -1,11 +1,13 @@
 import * as THREE from "three";
 import { ACTIVITY, ACTIVITY_SECONDS, type ActivityName } from "../ai/civilians/civilian-activity.ts";
+import { CAR_DOOR, carDoorOpenness } from "../ai/civilians/civilian-car-door.ts";
 import { ARM, armChannel, CHANNEL, CHANNELS, LEG, legChannel, MIRROR_CHANNEL, MIRROR_SIGN, sideSign } from "./civilian-anim-channels.ts";
 import { CLIPS, type TrackSpec } from "./civilian-anim-clips.ts";
 import { FOREARM_LENGTH, HIP_Y, renderRig, setTorsoRotation, SHIN_LENGTH, SHOULDER_X, THIGH_LENGTH, UPPER_ARM_LENGTH, type PoseSink } from "./civilian-anim-rig.ts";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { POSE_ARM_OUT } from "./civilian-art-constants.ts";
 import { blankStance, walkStance, type Stance } from "./people.ts";
-import { ANKLE_Y, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
+import { ANKLE_Y, SHOULDER_Y } from "./ragdoll-body.ts";
 
 /** One civilian's drawing state: where she stands, her walk, and the activity (`ACTIVITY`) she is in. */
 export type ActivityPose = {
@@ -132,7 +134,7 @@ const LEG_GAITS = [makeGait(false, 0, WALK_FORWARD, WALK_BACK, WALK_REST), makeG
 /** Where a hand's target sits until a clip names one: at the hip, so a hand's weight rising from 0 starts from a rest. */
 const REST_HAND_Z = 0.1;
 const REST_HAND_Y = 0.9;
-/** A hand's target is this far (m) from the middle line, on its own side. */
+/** A hand's target is this far (m) from the middle line, on its own side, until a clip names another. */
 const HAND_TARGET_X = 0.1;
 /** Fidgets (a loop's tracks) grow from their rest value over this long (s), so a loop starts on the pose it follows. */
 const FIDGET_RAMP_SECONDS = 1.5;
@@ -150,7 +152,7 @@ const SWEEP_HELD_RADIUS = 0.08;
 /** A channel weight under this is not worth solving. */
 const NEGLIGIBLE_WEIGHT = 1e-4;
 /** Seated, her thigh's underside rests on the seat: the hip joint sits one thigh half-thickness over its top. */
-const THIGH_HALF_THICKNESS = PARTS[6].h[2];
+const THIGH_HALF_THICKNESS = CAR_DOOR.hipOverSeat;
 /** The lowest the hips go (m) on a very low seat. */
 const LOWEST_SEATED_HIP_Y = 0.25;
 
@@ -189,6 +191,7 @@ function fillBase(stride: number, speed: number): void {
     channels[arm + ARM.elbow] = bendShare * walkBend(armGait, sine);
     channels[arm + ARM.handZ] = REST_HAND_Z;
     channels[arm + ARM.handY] = REST_HAND_Y;
+    channels[arm + ARM.handOut] = HAND_TARGET_X;
     const legGait = LEG_GAITS[side]!;
     const leg = legChannel(side, 0);
     channels[leg + LEG.swing] = legGait.swing * sine;
@@ -278,7 +281,7 @@ function solveLegs(): void {
   const hipY = HIP_Y - channels[CHANNEL.pelvisDrop]!;
   for (let side = 0; side < 2; side++) {
     const leg = legChannel(side, 0);
-    solveTwoBone(THIGH_LENGTH, SHIN_LENGTH, channels[leg + LEG.footZ]! - channels[CHANNEL.pelvisForward]!, hipY - ANKLE_Y);
+    solveTwoBone(THIGH_LENGTH, SHIN_LENGTH, channels[leg + LEG.footZ]! - channels[CHANNEL.pelvisForward]!, hipY - ANKLE_Y - channels[CHANNEL.footRaise]!);
     moveToward(leg + LEG.swing, solved[LINE_ANGLE]! - solved[OFFSET_ANGLE]!, plant);
     moveToward(leg + LEG.knee, solved[BEND_ANGLE]!, plant);
   }
@@ -294,7 +297,7 @@ function solveHands(): void {
     const arm = armChannel(side, 0);
     const weight = channels[arm + ARM.hand]!;
     if (weight <= NEGLIGIBLE_WEIGHT) continue;
-    target.set(sideSign(side) * HAND_TARGET_X - channels[CHANNEL.pelvisSide]!, channels[arm + ARM.handY]! - waistY, channels[arm + ARM.handZ]! - channels[CHANNEL.pelvisForward]!);
+    target.set(sideSign(side) * channels[arm + ARM.handOut]! - channels[CHANNEL.pelvisSide]!, channels[arm + ARM.handY]! - waistY, channels[arm + ARM.handZ]! - channels[CHANNEL.pelvisForward]!);
     target.applyQuaternion(torsoInverse);
     const lateral = target.x - sideSign(side) * SHOULDER_X;
     const horizontal = Math.sqrt(lateral * lateral + target.z * target.z);
@@ -305,6 +308,45 @@ function solveHands(): void {
     moveToward(arm + ARM.out, 0, weight);
     moveToward(arm + ARM.twist, 0, weight);
   }
+}
+
+/** The arm that reaches the outer handle: the one toward the car's rear; the others reach with the one toward its front. */
+const REAR_ARM = DRIVER_SIDE > 0 ? 0 : 1;
+const FRONT_ARM = 1 - REAR_ARM;
+
+/**
+ * Arm `side`'s hand to the door point (`across`, `along` from the seat's H-point with the door shut, `height` over the ground), carried round the
+ * hinge by the door's swing, `weight` of the way: the point in her own frame, through where she has stepped (`shift*`) and turned (`bodyYaw`).
+ */
+function reachForDoorPoint(side: number, across: number, along: number, height: number, openness: number, weight: number): void {
+  const swing = openness * CAR_DOOR.openRad;
+  const cosine = Math.cos(swing);
+  const sine = Math.sin(swing);
+  const fromHingeAcross = across - CAR_DOOR.hinge.across;
+  const fromHingeAlong = along - CAR_DOOR.hinge.along;
+  const swungAcross = CAR_DOOR.hinge.across + fromHingeAcross * cosine - fromHingeAlong * sine;
+  const swungAlong = CAR_DOOR.hinge.along + fromHingeAlong * cosine + fromHingeAcross * sine;
+  const toLeft = DRIVER_SIDE * (swungAlong + CAR_DOOR.behindSeat) - channels[CHANNEL.shiftSide]!;
+  const toCar = CAR_DOOR.outFromSeat - swungAcross - channels[CHANNEL.shiftForward]!;
+  const turned = channels[CHANNEL.bodyYaw]!;
+  const arm = armChannel(side, 0);
+  channels[arm + ARM.handOut] = sideSign(side) * (toLeft * Math.cos(turned) - toCar * Math.sin(turned));
+  channels[arm + ARM.handZ] = toLeft * Math.sin(turned) + toCar * Math.cos(turned);
+  channels[arm + ARM.handY] = height;
+  channels[arm + ARM.hand] = Math.max(channels[arm + ARM.hand]!, weight);
+}
+
+/** The reach weights of a car clip put a hand on the driver's door as it stands at this moment of the clip. */
+function reachForDoor(pose: ActivityPose): void {
+  const outsideHandle = channels[CHANNEL.reachOutsideHandle]!;
+  const insideHandle = channels[CHANNEL.reachInsideHandle]!;
+  const outsidePanel = channels[CHANNEL.reachOutsidePanel]!;
+  if (outsideHandle <= NEGLIGIBLE_WEIGHT && insideHandle <= NEGLIGIBLE_WEIGHT && outsidePanel <= NEGLIGIBLE_WEIGHT) return;
+  const openness = carDoorOpenness(pose.activity, pose.clock);
+  const { outsideHandle: outer, insideHandle: inner, outsidePanel: panel } = CAR_DOOR;
+  if (outsideHandle > NEGLIGIBLE_WEIGHT) reachForDoorPoint(REAR_ARM, outer.across, outer.along, outer.up, openness, outsideHandle);
+  if (insideHandle > NEGLIGIBLE_WEIGHT) reachForDoorPoint(FRONT_ARM, inner.across, inner.along, pose.surface + inner.aboveSeat, openness, insideHandle);
+  if (outsidePanel > NEGLIGIBLE_WEIGHT) reachForDoorPoint(FRONT_ARM, panel.across, panel.along, panel.up, openness, outsidePanel);
 }
 
 /** The head turned toward her partner by the `lookAtPartner` channel's share. */
@@ -321,6 +363,7 @@ export function poseActivity(sink: PoseSink, slot: number, pose: ActivityPose): 
   if (code < ACTIVITY_CODES && CLIP_TRACK_COUNT[code]! > 0) applyClip(code, pose, mirrorIndexOf(pose, CLIP_SIDES[code]!), clipWeight(code, pose.clock, pose.left));
   seatPelvis(pose.surface);
   solveLegs();
+  reachForDoor(pose);
   solveHands();
   lookAtPartner(pose);
   renderRig(sink, slot, pose.x, pose.y, pose.z, pose.yaw, channels);

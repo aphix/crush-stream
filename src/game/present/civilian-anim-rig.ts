@@ -76,6 +76,7 @@ const WAIST = new THREE.Vector3(0, HIP_Y, 0);
 
 const turn = new THREE.Quaternion();
 const root = new THREE.Vector3();
+const bodyShift = new THREE.Vector3();
 const offset = new THREE.Vector3();
 const torso = new THREE.Quaternion();
 const headTurn = new THREE.Quaternion();
@@ -174,6 +175,9 @@ function renderLeg(sink: PoseSink, slot: number, channels: Float64Array, side: n
 export function renderRig(sink: PoseSink, slot: number, x: number, y: number, z: number, yaw: number, channels: Float64Array): void {
   setAboutY(turn, yaw);
   root.set(x, y, z);
+  bodyShift.set(channels[CHANNEL.shiftSide]!, 0, channels[CHANNEL.shiftForward]!).applyQuaternion(turn);
+  root.add(bodyShift);
+  setAboutY(turn, yaw + channels[CHANNEL.bodyYaw]!);
   offset.set(channels[CHANNEL.pelvisSide]!, -channels[CHANNEL.pelvisDrop]!, channels[CHANNEL.pelvisForward]!);
   setTorsoRotation(channels, torso);
   centre.copy(TORSO_CENTRE).sub(WAIST).applyQuaternion(torso).add(WAIST).add(offset);

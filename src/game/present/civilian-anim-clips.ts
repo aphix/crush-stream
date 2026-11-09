@@ -1,4 +1,6 @@
 import { ARREST, type ActivityName } from "../ai/civilians/civilian-activity.ts";
+import { CAR_DOOR } from "../ai/civilians/civilian-car-door.ts";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { ARM, armChannel, CHANNEL, LEG, legChannel, MAIN, OTHER } from "./civilian-anim-channels.ts";
 
 /** A key: seconds into the clip (or its period) and the channel's value then; values ease between keys. */
@@ -322,6 +324,59 @@ const ESCORTING: ClipSpec = {
   ],
 };
 
+/** Seated, she has stepped `SEAT_FORWARD` toward the car and `SEAT_ASIDE` to her left of the door spot, turned `TURN_TO_FRONT` to face the car's nose. */
+const SEAT_FORWARD = CAR_DOOR.outFromSeat;
+const SEAT_ASIDE = DRIVER_SIDE * CAR_DOOR.behindSeat;
+const TURN_TO_FRONT = DRIVER_SIDE * (Math.PI / 2);
+/** She steps back this far (m) from the door as it swings out past her. */
+const STEP_BACK = -0.35;
+/** She ducks under the door frame, head and back (rad). */
+const DUCK_PITCH = 0.4;
+const DUCK_HEAD = 0.2;
+const bothFeet = (field: keyof typeof LEG, ...pairs: number[]): TrackSpec[] => [track(leg(MAIN, field), ...pairs), track(leg(OTHER, field), ...pairs)];
+
+/** Into the car by the driver's door: a hand on the handle as it opens, a step back, in and round and down, a hand on the inner handle to pull it shut. She stands still at the door spot until the step in. */
+const CAR_IN: ClipSpec = {
+  blendIn: 0.25,
+  blendOut: 0,
+  tracks: [
+    track(CHANNEL.reachOutsideHandle, 0, 0, 0.25, 1, 0.85, 1, 1, 0),
+    track(CHANNEL.reachInsideHandle, 0, 0, 2, 0, 2.2, 1, 2.6, 1),
+    track(CHANNEL.shiftForward, 0, 0, 0.3, 0, 0.9, STEP_BACK, 1.05, STEP_BACK, 1.75, SEAT_FORWARD),
+    track(CHANNEL.shiftSide, 0, 0, 1.05, 0, 1.75, SEAT_ASIDE),
+    track(CHANNEL.bodyYaw, 0, 0, 1.05, 0, 1.6, TURN_TO_FRONT),
+    track(CHANNEL.seat, 0, 0, 1.3, 0, 1.9, 1),
+    track(CHANNEL.plant, 0, 0, 1.2, 0, 1.5, 1),
+    ...bothFeet("footZ", 0, 0, 1.2, 0, 1.6, CAR_DOOR.footAhead),
+    track(CHANNEL.footRaise, 0, 0, 1.4, 0, 1.9, CAR_DOOR.floorRise),
+    track(CHANNEL.torsoPitch, 0, 0, 0.25, 0.08, 1.05, 0.1, 1.3, DUCK_PITCH, 1.7, DUCK_PITCH, 2, SEATED_PITCH, 2.6, SEATED_PITCH),
+    track(CHANNEL.headPitch, 0, 0, 1.3, DUCK_HEAD, 1.7, DUCK_HEAD, 2, 0),
+    ...bothArms("swing", (channel) => track(channel, 0, 0, 1.6, 0, 2, LAP_SWING)),
+    ...bothArms("elbow", (channel) => track(channel, 0, 0, 1.6, 0, 2, LAP_ELBOW)),
+  ],
+};
+
+/** Out of the car: a hand on the inner handle pushes the door open, up and round and out, a hand on the outer panel shoves it shut. She starts seated and ends standing at the door spot. */
+const CAR_OUT: ClipSpec = {
+  blendIn: 0,
+  blendOut: 0.3,
+  tracks: [
+    track(CHANNEL.reachInsideHandle, 0, 0, 0.3, 1, 0.75, 1, 0.95, 0),
+    track(CHANNEL.reachOutsidePanel, 0, 0, 1.5, 0, 1.7, 1, 2.1, 1, 2.3, 0),
+    track(CHANNEL.shiftForward, 0, SEAT_FORWARD, 0.8, SEAT_FORWARD, 1.5, 0),
+    track(CHANNEL.shiftSide, 0, SEAT_ASIDE, 0.8, SEAT_ASIDE, 1.5, 0),
+    track(CHANNEL.bodyYaw, 0, TURN_TO_FRONT, 0.7, TURN_TO_FRONT, 1.3, 0),
+    track(CHANNEL.seat, 0, 1, 0.85, 1, 1.4, 0),
+    track(CHANNEL.plant, 0, 1, 1.2, 1, 1.5, 0),
+    ...bothFeet("footZ", 0, CAR_DOOR.footAhead, 0.9, CAR_DOOR.footAhead, 1.4, 0),
+    track(CHANNEL.footRaise, 0, CAR_DOOR.floorRise, 0.9, CAR_DOOR.floorRise, 1.4, 0),
+    track(CHANNEL.torsoPitch, 0, SEATED_PITCH, 0.8, SEATED_PITCH, 1.1, DUCK_PITCH, 1.4, 0.3, 1.8, 0.05, 2.4, 0),
+    track(CHANNEL.headPitch, 0, 0, 1.1, DUCK_HEAD, 1.5, 0, 2.4, 0),
+    ...bothArms("swing", (channel) => track(channel, 0, LAP_SWING, 0.9, LAP_SWING, 1.5, 0)),
+    ...bothArms("elbow", (channel) => track(channel, 0, LAP_ELBOW, 0.9, LAP_ELBOW, 1.5, 0)),
+  ],
+};
+
 export const CLIPS: Readonly<Partial<Record<ActivityName, ClipSpec>>> = {
   idle: IDLE,
   talk: TALK,
@@ -339,4 +394,6 @@ export const CLIPS: Readonly<Partial<Record<ActivityName, ClipSpec>>> = {
   cuffed: CUFFED,
   arresting: ARRESTING,
   escorting: ESCORTING,
+  carIn: CAR_IN,
+  carOut: CAR_OUT,
 };
