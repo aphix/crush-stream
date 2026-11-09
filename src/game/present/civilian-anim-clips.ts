@@ -216,7 +216,7 @@ const HIT: ClipSpec = {
     track(leg(MAIN, "footZ"), 0, 0, 0.12, -0.15, 0.9, 0),
     track(leg(OTHER, "footZ"), 0, 0, 0.12, 0.12, 0.9, 0),
     track(arm(MAIN, "hand"), 0, 0, 0.15, 0, 0.4, 1, 0.75, 1, 0.9, 0),
-    hold(arm(MAIN, "handZ"), 0.24),
+    hold(arm(MAIN, "handZ"), 0.4),
     hold(arm(MAIN, "handY"), 1.52),
     track(arm(MAIN, "swing"), 0, 0, 0.1, -0.4, 0.35, -1),
     track(arm(MAIN, "out"), 0, 0.05, 0.1, 0.8, 0.35, 0.2),

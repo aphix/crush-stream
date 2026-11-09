@@ -141,6 +141,8 @@ const HANDEDNESS_BIT = 1;
 const BEARING_DEAD_ZONE = 0.05;
 /** The head turns at most this far (rad) toward a partner. */
 const LOOK_LIMIT = 1.1;
+/** A hand's target this close (m) to straight over its shoulder leaves the arm's sweep where it was: the angle there flips with a hair's move. */
+const SWEEP_HELD_RADIUS = 0.08;
 /** A channel weight under this is not worth solving. */
 const NEGLIGIBLE_WEIGHT = 1e-4;
 /** Seated, her thigh's underside rests on the seat: the hip joint sits one thigh half-thickness over its top. */
@@ -290,10 +292,11 @@ function solveHands(): void {
     target.set(sideSign(side) * HAND_TARGET_X - channels[CHANNEL.pelvisSide]!, channels[arm + ARM.handY]! - waistY, channels[arm + ARM.handZ]! - channels[CHANNEL.pelvisForward]!);
     target.applyQuaternion(torsoInverse);
     const lateral = target.x - sideSign(side) * SHOULDER_X;
-    solveTwoBone(UPPER_ARM_LENGTH, FOREARM_LENGTH, Math.sqrt(lateral * lateral + target.z * target.z), SHOULDER_Y - HIP_Y - target.y);
+    const horizontal = Math.sqrt(lateral * lateral + target.z * target.z);
+    solveTwoBone(UPPER_ARM_LENGTH, FOREARM_LENGTH, horizontal, SHOULDER_Y - HIP_Y - target.y);
     moveToward(arm + ARM.swing, solved[LINE_ANGLE]! + solved[OFFSET_ANGLE]!, weight);
     moveToward(arm + ARM.elbow, -solved[BEND_ANGLE]!, weight);
-    moveToward(arm + ARM.sweep, Math.atan2(lateral, target.z), weight);
+    moveToward(arm + ARM.sweep, Math.atan2(lateral, target.z), weight * easeIn(horizontal / SWEEP_HELD_RADIUS));
     moveToward(arm + ARM.out, 0, weight);
     moveToward(arm + ARM.twist, 0, weight);
   }

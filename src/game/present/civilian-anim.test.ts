@@ -206,7 +206,7 @@ describe("given a fist fight", () => {
     const snapped = clipAt("hit", 0.1, PARTNER_ON_PLUS_X);
     expect(facing(snapped, HEAD).x, "head snapped away").toBeLessThan(-0.6);
     const holding = clipAt("hit", 0.5, PARTNER_ON_PLUS_X);
-    expect(handTip(holding, PLUS_X).distanceTo(new THREE.Vector3(0.1, 1.52, 0.24))).toBeLessThan(0.04);
+    expect(handTip(holding, PLUS_X).distanceTo(new THREE.Vector3(0.1, 1.52, 0.4))).toBeLessThan(0.04);
   });
 
   it("when she is hit from her -x side, then her head snaps to +x", () => {
