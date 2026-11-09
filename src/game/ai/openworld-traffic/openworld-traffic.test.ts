@@ -182,7 +182,8 @@ describe("given the open world's traffic on a field with the local player's car"
 });
 
 describe("given a resident whose car stands at the kerb near a player and then drives off", () => {
-  const RESIDENT = 5;
+  /** A resident whose car is not a sedan, so a car that reports the sedan's body is caught. */
+  const RESIDENT = Array.from({ length: 64 }, (_, number) => number).find((number) => residentBody(number) !== "sedan") ?? 0;
 
   /** The car standing within a metre of space `spot`: its id, or -1. */
   function carAt(field: FakeField, traffic: OpenWorldTraffic, spot: number): number {
@@ -220,6 +221,7 @@ describe("given a resident whose car stands at the kerb near a player and then d
   });
 
   // mutation: sed -i 's/    this.context.ports.openDoor(id, radians);/    this.context.ports.openDoor(id, 0);/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  // mutation: sed -i 's/    return id < 0 ? null : this.context.ports.cars()\[id\]!.style.id;/    return id < 0 ? null : "sedan";/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when his car's pose and door are asked, then the pose is its space's and the door opens on the car that stands there", () => {
     const field = new FakeField();
     const feed = emptyFeed(8);
@@ -240,6 +242,8 @@ describe("given a resident whose car stands at the kerb near a player and then d
     const id = carAt(field, traffic, spot);
     expect(field.doors[id], "its angle").toBe(0.8);
     expect(traffic.carPoseOf(RESIDENT + 1, pose), "someone with no car here").toBe(false);
+    expect(traffic.carStyleOf(RESIDENT), "the body of the car that stands there").toBe(field.cars[id]!.style.id);
+    expect(traffic.carStyleOf(RESIDENT + 1), "no car of his").toBeNull();
   });
 });
 
