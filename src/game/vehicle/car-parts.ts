@@ -1032,13 +1032,14 @@ export abstract class CarParts extends CarGlass {
     this.flapClock += flapRate(this.flapSpeed) * dt;
   }
 
-  /** A fresh car's flutter, contact timing and door motion sample (`resetVisual`): a reused car replays as a new one. */
+  /** A fresh car's flutter, contact timing, door motion sample and drive (`resetVisual`). The sample is zero, not the last life's velocity: `resetVisual` runs ahead of the placing. */
   protected resetWear(): void {
     this.flapClock = 0;
     this.air.fill(0);
     this.flapSpeed = 0;
     this.quietPrev = 0;
-    this.sampleMotion();
+    this.motion.fill(0);
+    this.swingDrive.fill(0);
   }
 
   /** The contact timing and door motion sample of a car whose state was just written (`writeNetState`): the next frame reads them as a continuing one. */

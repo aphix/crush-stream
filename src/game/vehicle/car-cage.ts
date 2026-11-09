@@ -625,9 +625,10 @@ export class CarCage {
   /** How many fits changed the fields (the cost row: a refit is about 160-190 µs at 5 cm). */
   refits = 0;
 
-  /** The car is whole again (a reset, or its skin never baked): back on the style's shared fields, the next `refit` fits afresh. True when that changed `fields`. */
+  /** The car is whole again (a reset, or its skin never baked): back on the style's shared fields, the next `refit` fits afresh. `last` is a never-fitted car's zeros (a keyframe writes it fitted or not). True when that changed `fields`. */
   reset(): boolean {
     this.fitted = false;
+    this.last.fill(0);
     const changed = this.fields !== this.style.pristine;
     if (changed) this.serial++;
     this.fields = this.style.pristine;

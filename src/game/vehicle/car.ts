@@ -232,11 +232,15 @@ export class DeformableCar extends CarParts {
     // Where the wreck fell asleep is no part of a car put back: a new car has slept nowhere, and its flight block (`FLIGHT_SLEEP`) would carry the old spot on.
     this.sleepX = 0;
     this.sleepZ = 0;
+    // A new car has seen no wreck step: `integrateWreck` turns the spin by the change of this inertia.
+    this.invYaw = 0;
     this.vaporized = false;
     this.falling = false;
     this.driverOut = null;
     this.group.scale.setScalar(1);
     this.deform.reset();
+    // Its style's shared shape at once, not at the next `refitCage`: a reader ahead of one saw the last life's crush.
+    if (this.cageRig?.cage.reset()) this.cageChanged = true;
     this.scratches.clear();
     // Before the rest restores below: a dent's saved copy may be a crumpled skin the rest restore then overwrites.
     for (const p of this.parts) if (!keepTorn || !p.detached) clearDents(p.dent);
