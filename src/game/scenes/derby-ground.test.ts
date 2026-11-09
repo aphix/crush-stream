@@ -10,6 +10,7 @@ import { DERBY_ARENA } from "./constants.ts";
 import { DERBY_BOXES, DERBY_FREE_PROPS, DERBY_PLATEAUS, DERBY_PROP, DERBY_RAMPS, DERBY_TABLE_TOP, DerbyGround, SPAWN_CLEARANCE, type DerbyBox } from "./derby-ground.ts";
 import { DERBY_RADIUS } from "./derby-arena.ts";
 import { must } from "../kernel/must.test-util.ts";
+import { Misses } from "../kernel/misses.test-util.ts";
 
 /**
  * The arena's ground is laid out so that a full field spawns on open level floor, and so that what is a prism stands on level ground clear
@@ -21,6 +22,11 @@ const { radius, gridHalf, spawnInset } = DERBY_ARENA;
 /** How far around a prop's box the floor must be level too (m): a car's tyre reaches that far over the box's face. */
 const LEVEL_MARGIN = 1;
 const SAMPLE_STEP = 0.5;
+/** A hull's corners, and the slots of the fields of 1 car up to a full one. */
+const HULL_CORNERS = 4;
+const FIELD_SLOTS = (MAX_CARS * (MAX_CARS + 1)) / 2;
+/** The start bearings a row walks (spin 0 to 1 in 0.05 steps): at least this many, as float steps may add one more. */
+const MIN_BEARINGS = 20;
 /** The foot of a rise is a parabola that dies out over its last metres: under this (m) the floor counts as level. */
 const LEVEL = 0.01;
 
@@ -100,54 +106,88 @@ function onAxis(name: string, along: number): { x: number; z: number } {
   return { x: plateau.x + toward.x * reach, z: plateau.z + toward.z * reach };
 }
 
+function cornerLabel(count: number, slotIndex: number, x: number, z: number): string {
+  return `${count} cars, slot ${slotIndex} corner (${x.toFixed(1)}, ${z.toFixed(1)})`;
+}
+
 describe("given the arena's ground and the full field's spawn ring", () => {
+  // mutation: sed -i 's/const r = Math.max(5.5, radius - DERBY_ARENA.spawnInset);/const r = Math.max(5.5, radius - 2);/' src/game/scenes/fleet.ts  (hull corners past the wall and onto props)
   it("when fields of every size are laid out, then every hull corner is inside the wall, on level floor at height 0 and clear of every prop", () => {
+    const misses = new Misses();
+    let corners = 0;
     for (let count = 1; count <= MAX_CARS; count++) {
       for (const [slotIndex, slot] of layoutDerby(count, DERBY_RADIUS, () => 0.37, DERBY_FREE_PROPS).entries()) {
         for (const [x, z] of hullCorners(slot.x, slot.z, slot.yaw)) {
-          const label = `${count} cars, slot ${slotIndex} corner (${x.toFixed(1)}, ${z.toFixed(1)})`;
-          expect(Math.hypot(x, z), `${label} is in the wall`).toBeLessThan(radius);
-          expect(ground.heightAt(x, z), `${label} is not on level floor`).toBeLessThan(LEVEL);
-          for (const prop of props) expect(!isWithin(prop, x, z, SPAWN_CLEARANCE), `${label} is within ${SPAWN_CLEARANCE} m of a ${prop.kind}`).toBe(true);
+          corners++;
+          if (!(Math.hypot(x, z) < radius)) misses.note(`${cornerLabel(count, slotIndex, x, z)} is ${Math.hypot(x, z)} m out, not in the wall at ${radius}`);
+          if (!(ground.heightAt(x, z) < LEVEL)) misses.note(`${cornerLabel(count, slotIndex, x, z)} is not on level floor: ${ground.heightAt(x, z)} m`);
+          for (const prop of props) {
+            if (isWithin(prop, x, z, SPAWN_CLEARANCE)) misses.note(`${cornerLabel(count, slotIndex, x, z)} is within ${SPAWN_CLEARANCE} m of a ${prop.kind}`);
+          }
         }
       }
     }
+    expect(corners, "hull corners checked, every slot of every field size").toBe(HULL_CORNERS * FIELD_SLOTS);
+    expect(misses.count, misses.report("every hull corner is inside the wall, on level floor and clear of every prop")).toBe(0);
   });
 
+  // mutation: sed -i 's/const PROP_CLEAR = FLEET_HALF.z + 0.5;/const PROP_CLEAR = 0;/' src/game/scenes/fleet.ts  (a car's line to the centre within a half length of a free prop)
+  // mutation: sed -i 's/const step = Math.min(open \/ n, DERBY_ARENA.packPitch \/ r);/const step = Math.min(open \/ n, 3 \/ r);/' src/game/scenes/fleet.ts  (32 cars stand within 4 m)
   it("when fields of every size are laid out at every start bearing, then no car's line to the centre comes within its half length of a free-standing prop, and 32 cars stand over 4 m apart", () => {
+    const lines = new Misses();
+    const spacing = new Misses();
+    let slotsWalked = 0;
     for (let count = 1; count <= MAX_CARS; count++) {
       for (let spin = 0; spin < 1; spin += 0.05) {
         const slots = layoutDerby(count, DERBY_RADIUS, () => spin, DERBY_FREE_PROPS);
         for (const [slotIndex, slot] of slots.entries()) {
+          slotsWalked++;
           for (let t = 0; t <= 1; t += 0.01) {
             const x = slot.x * t;
             const z = slot.z * t;
-            for (const [propIndex, prop] of DERBY_FREE_PROPS.entries()) {
+            for (let propIndex = 0; propIndex < DERBY_FREE_PROPS.length; propIndex++) {
+              const prop = DERBY_FREE_PROPS[propIndex]!;
               const local = localOf(prop, x, z);
               const gap = Math.hypot(Math.max(0, Math.abs(local.across) - prop.hx), Math.max(0, Math.abs(local.along) - prop.hz));
-              expect(gap, `${count} cars at spin ${spin.toFixed(2)}: slot ${slotIndex} heads at free prop ${propIndex} (${gap.toFixed(2)} m)`).toBeGreaterThanOrEqual(FLEET_HALF.z);
+              if (!(gap >= FLEET_HALF.z)) lines.note(`${count} cars at spin ${spin.toFixed(2)}: slot ${slotIndex} heads at free prop ${propIndex} (${gap.toFixed(2)} m)`);
             }
           }
         }
         if (count === MAX_CARS) {
-          for (const [i, a] of slots.entries()) for (const b of slots.slice(i + 1)) expect(Math.hypot(a.x - b.x, a.z - b.z), "two of 32 cars stand within 4 m").toBeGreaterThan(4);
-        }
-      }
-    }
-  });
-
-  it("when fields of every size are laid out at every start bearing, then no hull corner of any slot stands on a ramp", () => {
-    for (let count = 1; count <= MAX_CARS; count++) {
-      for (let spin = 0; spin < 1; spin += 0.05) {
-        for (const [slotIndex, slot] of layoutDerby(count, DERBY_RADIUS, () => spin, DERBY_FREE_PROPS).entries()) {
-          for (const [x, z] of hullCorners(slot.x, slot.z, slot.yaw)) {
-            for (const entry of DERBY_RAMPS) {
-              expect(plateauHeight(entry.plateau, x, z), `${count} cars at spin ${spin.toFixed(2)}: slot ${slotIndex} stands on the ${entry.name} ramp at (${x.toFixed(1)}, ${z.toFixed(1)})`).toBeLessThan(LEVEL);
+          for (let i = 0; i < slots.length; i++) {
+            for (let j = i + 1; j < slots.length; j++) {
+              const apart = Math.hypot(slots[i]!.x - slots[j]!.x, slots[i]!.z - slots[j]!.z);
+              if (!(apart > 4)) spacing.note(`two of 32 cars, slots ${i} and ${j} at spin ${spin.toFixed(2)}, stand ${apart.toFixed(2)} m apart`);
             }
           }
         }
       }
     }
+    expect(slotsWalked, "slots walked to the centre, every field size at every start bearing").toBeGreaterThanOrEqual(FIELD_SLOTS * MIN_BEARINGS);
+    expect(lines.count, lines.report("no car's line to the centre comes within its half length of a free-standing prop")).toBe(0);
+    expect(spacing.count, spacing.report("32 cars stand over 4 m apart")).toBe(0);
+  });
+
+  // mutation: sed -i 's/const r = Math.max(5.5, radius - DERBY_ARENA.spawnInset);/const r = Math.max(5.5, radius - 14);/' src/game/scenes/fleet.ts  (hull corners on a ramp)
+  it("when fields of every size are laid out at every start bearing, then no hull corner of any slot stands on a ramp", () => {
+    const misses = new Misses();
+    let corners = 0;
+    for (let count = 1; count <= MAX_CARS; count++) {
+      for (let spin = 0; spin < 1; spin += 0.05) {
+        for (const [slotIndex, slot] of layoutDerby(count, DERBY_RADIUS, () => spin, DERBY_FREE_PROPS).entries()) {
+          for (const [x, z] of hullCorners(slot.x, slot.z, slot.yaw)) {
+            corners++;
+            for (const entry of DERBY_RAMPS) {
+              if (!(plateauHeight(entry.plateau, x, z) < LEVEL)) {
+                misses.note(`${count} cars at spin ${spin.toFixed(2)}: slot ${slotIndex} stands on the ${entry.name} ramp at (${x.toFixed(1)}, ${z.toFixed(1)}), ${plateauHeight(entry.plateau, x, z)} m up`);
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(corners, "hull corners checked, every slot of every field size at every start bearing").toBeGreaterThanOrEqual(HULL_CORNERS * FIELD_SLOTS * MIN_BEARINGS);
+    expect(misses.count, misses.report("no hull corner of any slot stands on a ramp")).toBe(0);
   });
 
   it("when the rises are read on the grid, then none but the ramps reaches the ring where cars spawn, a grid cell's reach included", () => {

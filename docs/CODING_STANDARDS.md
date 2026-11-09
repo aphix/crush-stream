@@ -337,6 +337,15 @@ for (const testCase of testCases) {
   differ only in a number are a table waiting to happen.
 - Check every field of the result, as a stack of `expect`s, one per field, each message naming the field.
 
+### Loops of thousands of cases
+
+An `expect` costs a matcher, a result record and the message the loop built for it, passing or not (a template with `toFixed`s
+is the dear part). A loop that checks thousands of cases or more notes the cases that fail instead, with `Misses` from
+`src/game/kernel/misses.test-util.ts`: ``if (!(gap >= bound)) misses.note(`${label}: ${gap}`)`` builds its message only when the
+case fails, and one `expect(misses.count, misses.report("what held")).toBe(0)` after the loop prints the count and the first
+failing case. The predicate is the same one the per-case `expect` had, written as a negation that fails on `NaN` as the matcher
+did. A populated companion (the loop's case count) stands beside it, as for any absence check.
+
 ### No deep equality, ever
 
 `toEqual`, `toStrictEqual`, `toMatchObject` and `toContainEqual` walk both sides, and on failure print and diff both sides

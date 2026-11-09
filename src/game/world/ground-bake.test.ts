@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Ground } from "./ground.ts";
 import { activate, BAKE, C_ARG, C_H, C_NY, C_OWNER, HIT_SIZE, KNOCK, pointContact, PQ_SIZE, PQ_X, PQ_Y, PQ_Z } from "./surfaces.ts";
+import { Misses } from "../kernel/misses.test-util.ts";
 
 /**
  * The ground bake answers every point query as the layered path it replaces does, to the bit: the index cell that lists prisms besides the one always-tested plain grid
@@ -37,18 +38,24 @@ function ask(q: Float64Array, travel2: number): { far: boolean; out: Float64Arra
   return { far: pointContact(q, -1, out, travel2, GAP), out };
 }
 
+const HEIGHTS_OVER_GROUND = [-0.3, -0.0001, 0, 0.0001, 0.0003, 0.01, 0.05, 0.1, 0.2, 2];
+const TRAVELS_SQUARED = [NaN, -1, 0, 1e-6, 1e-3, 4e-4, 2.5e-3, 0.01, 0.0225, 0.04];
+/** The entries a far answer carries. */
+const FAR_ENTRIES = [C_H, C_OWNER, C_ARG];
+
 /** Every point of a 1.13 m lattice at several heights and travels asked with the bake on and off: each answer the same bits, and a far one's travel under its height along the live normal. Returns the far and whole answers seen. */
 function sweep(g: Ground): { far: number; whole: number; byProp: number } {
   let far = 0;
   let whole = 0;
   let byProp = 0;
+  const misses = new Misses();
   activate(g);
   try {
     const q = new Float64Array(PQ_SIZE);
     for (let x = -1; x < N + 1; x += 1.13) {
       for (let z = -1; z < N + 1; z += 1.13) {
-        for (const dy of [-0.3, -0.0001, 0, 0.0001, 0.0003, 0.01, 0.05, 0.1, 0.2, 2]) {
-          for (const travel2 of [NaN, -1, 0, 1e-6, 1e-3, 4e-4, 2.5e-3, 0.01, 0.0225, 0.04]) {
+        for (const dy of HEIGHTS_OVER_GROUND) {
+          for (const travel2 of TRAVELS_SQUARED) {
             q[PQ_X] = x;
             q[PQ_Z] = z;
             q[PQ_Y] = g.heightAt(x, z) + dy;
@@ -56,18 +63,24 @@ function sweep(g: Ground): { far: number; whole: number; byProp: number } {
             const live = ask(q, travel2);
             BAKE.on = true;
             const baked = ask(q, travel2);
-            expect(live.far, "the layered path never answers far").toBe(false);
+            if (live.far) misses.note(`the layered path answers far at ${x}, ${z}, +${dy}, travel² ${travel2}`);
             if (live.out[C_H]! >= PROP_TOP - 1e-9) byProp++;
             if (!baked.far) {
               whole++;
-              for (let k = 0; k < HIT_SIZE; k++) expect(Object.is(baked.out[k], live.out[k]), `entry ${k} at ${x}, ${z}, +${dy}: baked ${baked.out[k]} live ${live.out[k]}`).toBeTruthy();
+              for (let k = 0; k < HIT_SIZE; k++) {
+                if (!Object.is(baked.out[k], live.out[k])) misses.note(`entry ${k} at ${x}, ${z}, +${dy}: baked ${baked.out[k]} live ${live.out[k]}`);
+              }
               continue;
             }
             far++;
-            for (const k of [C_H, C_OWNER, C_ARG]) expect(Object.is(baked.out[k], live.out[k]), `far entry ${k} at ${x}, ${z}, +${dy}`).toBeTruthy();
+            for (const k of FAR_ENTRIES) {
+              if (!Object.is(baked.out[k], live.out[k])) misses.note(`far entry ${k} at ${x}, ${z}, +${dy}: baked ${baked.out[k]} live ${live.out[k]}`);
+            }
             const height = live.out[C_H]! - q[PQ_Y]!;
-            expect(height, "a far point is more than the gap above").toBeLessThan(-GAP);
-            if (travel2 >= 0) expect(Math.sqrt(travel2), `travel ${Math.sqrt(travel2)} reaches height ${-height} along the normal ${live.out[C_NY]}`).toBeLessThan(-height * live.out[C_NY]!);
+            if (!(height < -GAP)) misses.note(`a far point at ${x}, ${z}, +${dy} is ${-height} above the cell, not more than the gap ${GAP}`);
+            if (travel2 >= 0 && !(Math.sqrt(travel2) < -height * live.out[C_NY]!)) {
+              misses.note(`travel ${Math.sqrt(travel2)} at ${x}, ${z}, +${dy} reaches height ${-height} along the normal ${live.out[C_NY]}`);
+            }
           }
         }
       }
@@ -76,10 +89,13 @@ function sweep(g: Ground): { far: number; whole: number; byProp: number } {
     BAKE.on = true;
     activate(null);
   }
+  expect(misses.count, misses.report("every lattice answer is the layered path's, bit for bit, and a far one is out of its travel's reach along the normal")).toBe(0);
   return { far, whole, byProp };
 }
 
 describe("given a sloped grid with a tying prism, a knockable prop, a movable prop, filler prisms and a NaN node", () => {
+  // mutation: sed -i 's/out\[C_OWNER\] = -1;/out[C_OWNER] = -2;/' src/game/world/surfaces.ts  (a far answer's owner differs from the layered path's)
+  // mutation: sed -i 's/if (!(travel2 \* (1 + NY_MARGIN) < pen \* pen \* ny \* ny)) return false;/if (false) return false;/' src/game/world/surfaces.ts  (a far answer's travel reaches its height along the normal)
   it("when every point of the lattice is asked with the bake on and off, then each answer is the same bits, and both far and whole answers occur", () => {
     const { far, whole, byProp } = sweep(ground().g);
     expect(far > 1000 && whole > 1000, `both kinds of answer are exercised (far ${far}, whole ${whole})`).toBeTruthy();

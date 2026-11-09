@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SURFACE_IDS } from "./catalog.ts";
 import { capsuleRow } from "./ground-stamp.ts";
+import { Misses } from "../kernel/misses.test-util.ts";
 import { Track } from "./track.ts";
 import { HAVANA } from "./tracks/havana.ts";
 import { must } from "../kernel/must.test-util.ts";
@@ -25,10 +26,12 @@ function distanceToSegment(px: number, pz: number, ax: number, az: number, bx: n
 }
 
 describe("given a street segment painted into the ground's rows of cells", () => {
+  // mutation: sed -i 's/hi = Math.max(hi, cx + w);/hi = Math.max(hi, cx + w - 1);/' src/game/world/ground-stamp.ts  (a point at a disc's far end falls outside the stretch painted)
   it("when a row crosses the street's reach, then every point on it within the reach lies inside the stretch painted, and a row out of reach is painted not at all", () => {
     const random = seededRandom(7);
     const run = new Float64Array(2);
     const reach = 20;
+    const misses = new Misses();
     let rowsInReach = 0;
     for (let trial = 0; trial < 300; trial++) {
       const [ax, az, bx, bz] = [0, 0, 0, 0].map(() => (random() - 0.5) * 120) as [number, number, number, number];
@@ -38,11 +41,14 @@ describe("given a street segment painted into the ground's rows of cells", () =>
         for (let x = -80; x <= 80; x += 0.5) {
           if (distanceToSegment(x, z, ax, az, bx, bz) > reach) continue;
           nearestInRow = Math.min(nearestInRow, x);
-          expect(crosses && x >= run[0]! - 1e-9 && x <= run[1]! + 1e-9, `row z=${z} of (${ax.toFixed(1)},${az.toFixed(1)})-(${bx.toFixed(1)},${bz.toFixed(1)}): x=${x} in reach, run ${crosses ? `${run[0]!.toFixed(2)}..${run[1]!.toFixed(2)}` : "refused"}`).toBeTruthy();
+          if (!(crosses && x >= run[0]! - 1e-9 && x <= run[1]! + 1e-9)) {
+            misses.note(`row z=${z} of (${ax.toFixed(1)},${az.toFixed(1)})-(${bx.toFixed(1)},${bz.toFixed(1)}): x=${x} in reach, run ${crosses ? `${run[0]!.toFixed(2)}..${run[1]!.toFixed(2)}` : "refused"}`);
+          }
         }
         if (nearestInRow < Infinity) rowsInReach++;
       }
     }
+    expect(misses.count, misses.report("every point within the reach lies inside the stretch painted")).toBe(0);
     expect(rowsInReach, `${rowsInReach} rows reached by a segment`).toBeGreaterThan(5000);
   });
 });
