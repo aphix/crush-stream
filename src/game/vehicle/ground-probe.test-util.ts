@@ -111,6 +111,25 @@ const _centre0 = new THREE.Vector3();
 const _hub: THREE.Vector3[] = [0, 1, 2, 3].map(() => new THREE.Vector3());
 const _g = [0, 0, 0, 0];
 
+/** Which hull probe read a depth: the stock underside, a bumper corner or a cage vertex (`probeName` words it; `PROBE_NONE`: no probe was in the ground). */
+const PROBE_NONE = -1;
+const PROBE_UNDER = 0;
+const PROBE_BUMPER = 1;
+const PROBE_HULL = 2;
+/** The probe (kind, x, y, z in the body's frame) that set `pen`, and the one that set `overlap`: named once per fit, as a cage has hundreds of probes and a name's `toFixed`s cost more than the depth read. */
+const _penAt = new Float64Array(4);
+const _overlapAt = new Float64Array(4);
+
+function probeName(at: Float64Array): string {
+  const x = at[1]!;
+  const y = at[2]!;
+  const z = at[3]!;
+  if (at[0] === PROBE_UNDER) return `under(${x},${z})`;
+  if (at[0] === PROBE_BUMPER) return `bumper(${x > 0 ? "+" : "-"}x,${z > 0 ? "front" : "rear"})`;
+  if (at[0] === PROBE_HULL) return `hull(${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)})`;
+  return "";
+}
+
 /**
  * How far (m) the body point (x, y, z) is in the active ground by the shortest way out, as the rigid step reads a body point (`readPoints`,
  * `PQ_BODY`): `side` for a wall's face it came in by (the way back out through it), else a floor's height over it less its own (negative
@@ -239,22 +258,22 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   const slope = Math.acos(Math.min(1, _m.y)) * DEG;
   const warp = Math.abs(_g[0]! - _g[1]! - _g[2]! + _g[3]!);
   let pen = 0;
-  let penAt = "";
   let overlap = 0;
-  let overlapAt = "";
   let hull = Infinity;
-  const probe = (name: string, x: number, y: number, z: number) => {
+  _penAt[0] = PROBE_NONE;
+  _overlapAt[0] = PROBE_NONE;
+  const probe = (kind: number, x: number, y: number, z: number) => {
     _p.set(x, y, z).applyMatrix4(body.matrixWorld);
     const { depth, side } = bodyPointDepth(_p.x, _p.y, _p.z);
     if (depth === -Infinity) return;
     if (!side) hull = Math.min(hull, -depth);
     if (!side && depth > pen) {
       pen = depth;
-      penAt = name;
+      _penAt.set([kind, x, y, z]);
     }
     if (depth > overlap) {
       overlap = depth;
-      overlapAt = name;
+      _overlapAt.set([kind, x, y, z]);
     }
   };
   // The stock underside is the intact car's drawn underside; a wreck's is the cage's own bottom (a crushed nose stands up off the stock
@@ -263,13 +282,13 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   const wreck = car.deform.massActive;
   for (const [x, z, h] of car.frame.underside) {
     const drawn = wreck ? sampleField(car.cage.fields.bottom, car.cage.style, x, z) : h;
-    if (!Number.isNaN(drawn)) probe(`under(${x},${z})`, x, drawn, z);
+    if (!Number.isNaN(drawn)) probe(PROBE_UNDER, x, drawn, z);
   }
   const under = car.frame.hullUnder;
   for (let i = under.length - BUMPER_ROWS * 3; i < under.length; i += 3) {
     const x = under[i]!;
     const z = under[i + 1]!;
-    probe(`bumper(${x > 0 ? "+" : "-"}x,${z > 0 ? "front" : "rear"})`, x, under[i + 2]!, z);
+    probe(PROBE_BUMPER, x, under[i + 2]!, z);
   }
   // The cage's vertices (the drawn body's points the rigid step meets surfaces with, in the body's frame), so a car on its side or
   // roof is judged on the points it lies on.
@@ -278,7 +297,7 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
     const x = cagePos[i * 3]!;
     const y = cagePos[i * 3 + 1]!;
     const z = cagePos[i * 3 + 2]!;
-    probe(`hull(${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)})`, x, y, z);
+    probe(PROBE_HULL, x, y, z);
   }
   // The belly between the keel and the rockers, along its lines: where the ground under a line is not one plane between two samples (a
   // face's edge or a crest under the belly) the line is halved down to `LINE_STEP`, so a belly resting on an edge between the stations
@@ -347,9 +366,9 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
     framePitch: axisPitch(ge, 8),
     frameRoll: axisPitch(ge, 0),
     pen,
-    penAt,
+    penAt: probeName(_penAt),
     overlap,
-    overlapAt,
+    overlapAt: probeName(_overlapAt),
     hull,
     slope,
     warp,
@@ -453,21 +472,19 @@ export function drop(
 
 export type Sample = Fit & { s: number; lateral: number; speed: number; y: number };
 
-/**
- * One car driven down `track`'s main loop from `s0` to `s1` (m along it) on the centreline, its
- * throttle holding `pace(s)` m/s (a pursuit line steers it), one `Fit` per rendered frame. The car starts `lead` m
- * before `s0` at `pace(s0)` so it arrives in its stride. From `brakeFrom` (m along) on, the throttle is released and
- * the brake held, and the run ends two seconds after the car stops. `ground` is made the active one; the caller
- * restores it.
- */
-export function drive(
+/** Frames over which `driveToRest` reads how far a stopped car crept: its last two held seconds. */
+const CREEP_FRAMES = 120;
+
+/** The run `drive` and `driveToRest` share: `onFrame` sees the car after every frame from `s0` on (its `s` before that frame, and its lateral offset); the car is returned where the run ends. */
+function driveCar(
   track: Track,
   cls: VehicleClassId,
   s0: number,
   s1: number,
   pace: (s: number) => number,
-  o: { lead?: number; brakeFrom?: number; each?: (car: DeformableCar, f: Sample) => void } = {},
-): Sample[] {
+  o: { lead?: number; brakeFrom?: number },
+  onFrame: (car: DeformableCar, s: number, lateral: number) => void,
+): DeformableCar {
   const path = track.path;
   const ground = track.ground();
   setGround(ground);
@@ -486,7 +503,6 @@ export function drive(
   const st = { acc: 0 };
   const proj = blankProjection();
   const input = idleDrive();
-  const out: Sample[] = [];
   let still = 0;
   const maxFrames = Math.ceil(((s1 - start) / 4) * 60);
   for (let n = 0; n < maxFrames; n++) {
@@ -501,16 +517,63 @@ export function drive(
     input.throttle = !braking && car.speed < v ? 1 : 0;
     input.brake = braking || car.speed > v + 2 ? 1 : 0;
     frame(w, input, st);
-    if (s >= s0) {
-      const f: Sample = { ...fit(car, ground), s, lateral: proj.lateral, speed: car.speed, y: car.group.position.y };
-      out.push(f);
-      o.each?.(car, f);
-    }
+    if (s >= s0) onFrame(car, s, proj.lateral);
     still = braking && car.speed < 0.05 ? still + 1 : 0;
     if (still > 120) break;
   }
   // Not disposed: the next drop or drive of this class stands it up again.
+  return car;
+}
+
+/**
+ * One car driven down `track`'s main loop from `s0` to `s1` (m along it) on the centreline, its
+ * throttle holding `pace(s)` m/s (a pursuit line steers it), one `Fit` per rendered frame (`hullOnly`: as `fit` reads it, for a caller
+ * that wants `pen`, `overlap`, `crush` and the poses alone). The car starts `lead` m
+ * before `s0` at `pace(s0)` so it arrives in its stride. From `brakeFrom` (m along) on, the throttle is released and
+ * the brake held, and the run ends two seconds after the car stops. `ground` is made the active one; the caller
+ * restores it.
+ */
+export function drive(
+  track: Track,
+  cls: VehicleClassId,
+  s0: number,
+  s1: number,
+  pace: (s: number) => number,
+  o: { lead?: number; brakeFrom?: number; hullOnly?: boolean; each?: (car: DeformableCar, f: Sample) => void } = {},
+): Sample[] {
+  const ground = track.ground();
+  const out: Sample[] = [];
+  driveCar(track, cls, s0, s1, pace, o, (car, s, lateral) => {
+    const f: Sample = { ...fit(car, ground, o.hullOnly), s, lateral, speed: car.speed, y: car.group.position.y };
+    out.push(f);
+    o.each?.(car, f);
+  });
   return out;
+}
+
+/**
+ * `drive` for a run read only where it ends: the car's `Sample` there (one `fit`, not one a frame) and how far (m along the course) it
+ * crept over its last `CREEP_FRAMES` frames; null when it never reached `s0`. The run ends on a frame it samples (the stop is past
+ * `brakeFrom`, which is past `s0`), so the car's state at its end is that frame's.
+ */
+export function driveToRest(
+  track: Track,
+  cls: VehicleClassId,
+  s0: number,
+  s1: number,
+  pace: (s: number) => number,
+  o: { lead?: number; brakeFrom?: number } = {},
+): { rest: Sample; creep: number } | null {
+  const trail: number[] = [];
+  let lateral = 0;
+  const car = driveCar(track, cls, s0, s1, pace, o, (_car, s, offset) => {
+    trail.push(s);
+    lateral = offset;
+  });
+  const s = trail[trail.length - 1];
+  if (s === undefined) return null;
+  const rest: Sample = { ...fit(car, track.ground()), s, lateral, speed: car.speed, y: car.group.position.y };
+  return { rest, creep: Math.abs(s - trail[Math.max(0, trail.length - 1 - CREEP_FRAMES)]!) };
 }
 
 /** One matrix cell: a drop's `Fit`; `slide` is how far the car moved (a rolled-to-stop car: how far it rolled). */

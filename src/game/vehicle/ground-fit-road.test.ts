@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
 import { ALONG, COMPASS, report, roadSite, type Site } from "./ground-judge.test-util.ts";
-import { drive } from "./ground-probe.test-util.ts";
+import { driveToRest } from "./ground-probe.test-util.ts";
 import { useStiffSprings } from "./stiff-springs.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { blankPoint, pointOn, Track } from "../world/track.ts";
@@ -69,6 +69,7 @@ describe("given a braked car placed at every heading across a matrix of ground s
 
   it("when the car brakes on the stunt course's CRUSH crest and descent, then it sits on the ground at every heading", (t) => report(t, crestSites()));
 
+  // Mutation (136 of 136 cells red, sunk): sed -i 's/const ly = (FY\[k\]! \* c + FZ\[k\]! \* s) \* scale;/const ly = (FY[k]! * c + FZ[k]! * s) * scale * 0.9;/' src/game/world/surfaces.ts
   it("when the car has stopped on the stunt course's CRUSH crest, then it sits on the ground at every heading", (t) => {
     const rolled: Site[] = [];
     for (const v of [6, 10, 14]) {
@@ -78,12 +79,10 @@ describe("given a braked car placed at every heading across a matrix of ground s
           kind: "plain",
           classes: SEDAN_MONSTER,
           runs: (cls) => {
-            const out = drive(stunt, cls, stop - 5, stop + 120, () => v, { lead: 35, brakeFrom: stop });
-            const last = out[out.length - 1];
-            if (!last) throw new Error(`v=${v} brake@${stop}: never reached the braking point`);
+            const stopped = driveToRest(stunt, cls, stop - 5, stop + 120, () => v, { lead: 35, brakeFrom: stop });
+            if (!stopped) throw new Error(`v=${v} brake@${stop}: never reached the braking point`);
             // Heading column: the speed in and how far it rolled; slide: how far it crept in its last two held seconds.
-            const creep = Math.abs(last.s - out[Math.max(0, out.length - 121)]!.s);
-            return [[`v=${v}/${(last.s - stop).toFixed(0)}m`, { ...last, slide: creep }]];
+            return [[`v=${v}/${(stopped.rest.s - stop).toFixed(0)}m`, { ...stopped.rest, slide: stopped.creep }]];
           },
         });
       }

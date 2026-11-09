@@ -95,11 +95,11 @@ describe("given a car braking on a flat straight", () => {
   // body bottoms out on the road (`Suspension.bottomOut`) instead of the springs pressing it 3.5 cm in (sedan/muscle/police).
   it("when it brakes from 30 m/s, then every class dips its nose and keeps its drawn keel and bumpers out of the road", () => {
     for (const cls of VEHICLE_CLASS_IDS) {
-      const out = drive(oval, cls, 60, 180, () => 30, { lead: 35, brakeFrom: 100 });
+      // Sampled from the braking point (s 100) on, as the hull reads it: the run still starts at s 25 (lead 75 before it), at 30 m/s.
+      const out = drive(oval, cls, 100, 180, () => 30, { lead: 75, brakeFrom: 100, hullOnly: true });
       let pen = 0;
       let dive = 0;
       for (const f of out) {
-        if (f.s < 100) continue;
         pen = Math.max(pen, f.pen);
         dive = Math.min(dive, f.pitch - f.groundPitch);
       }
