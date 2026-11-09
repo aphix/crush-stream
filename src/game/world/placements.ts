@@ -4,6 +4,8 @@ import { PREFABS, type PrefabId } from "./catalog.ts";
 import { CHEVRON_GAP, CHEVRON_RUN, CHEVRON_SLOTS, CHEVRON_STANDOFF, CHEVRON_TURN, PREFAB, SCENERY_ARM, type SceneryArm } from "./constants.ts";
 import { junctionsOf } from "./junctions.ts";
 import { ALONG_BOTH } from "./track-schema.ts";
+import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
+import { assetScale } from "./scenery-assets/pick.ts";
 import { placeScenery } from "./scenery.ts";
 import { KNOCK, PROP, Surface, WALL } from "./surfaces.ts";
 import { blankPoint, blankProjection, blankSegment, pointOn, projectPath, segmentAt, type Projection, type Track, type TrackPath } from "./track.ts";
@@ -211,6 +213,9 @@ function placeChevrons(track: Track, out: Placed[]): void {
   }
 }
 
+/** Index in `SCENERY_ASSETS` of each asset id: what an authored placement's `asset` names. */
+const ASSET_INDEX: ReadonlyMap<string, number> = new Map(SCENERY_ASSETS.map((row, index) => [row.id, index]));
+
 /**
  * The course's authored props, in order: `props` as written, then `along` repeats (beside the race
  * loop, or a traffic route's centreline with `route`; copies on any other road, beside a bridge
@@ -225,6 +230,12 @@ function placeAuthored(track: Track): Placed[] {
   const corridors = track.paths();
 
   for (const p of json.props) {
+    if (p.asset !== undefined) {
+      const asset = ASSET_INDEX.get(p.asset)!;
+      const [sx, sy, sz] = p.size ? p.size : assetScale(SCENERY_ASSETS[asset]!, 1);
+      out.push({ prefab: p.prefab, x: p.x, y: standY(track, p.x, p.z), z: p.z, yaw: p.yaw, sx: sx * p.scale, sy: sy * p.scale, sz: sz * p.scale, asset });
+      continue;
+    }
     const size = PREFABS[p.prefab].size;
     const s = p.scale;
     out.push({
