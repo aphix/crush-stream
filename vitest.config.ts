@@ -1,4 +1,15 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+
+/**
+ * Every test process reads and writes Node's compile cache (V8 code and the type-stripped source of each module), so it loads the engine's modules
+ * much faster and the first processes of a run fill it for the rest. Portable: a copy of the tree at another path (a worktree, a CI checkout) finds the
+ * entries a sibling wrote. A caller's own `NODE_COMPILE_CACHE` wins and keeps its mode.
+ */
+if (!process.env.NODE_COMPILE_CACHE) {
+  process.env.NODE_COMPILE_CACHE = fileURLToPath(new URL("./node_modules/.cache/node-compile", import.meta.url));
+  process.env.NODE_COMPILE_CACHE_PORTABLE = "1";
+}
 
 /**
  * Defaults of every test process. One forked process per test file (`isolate`: a global, a timer or a WASM singleton one
