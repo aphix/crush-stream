@@ -37,8 +37,8 @@ per frame on a client:
 1. every decision tick passed is advanced through the brain (on the host, `CrimeDesk.collect` hands the crimes now due to the log as
    `crime` events);
 2. each resident on a leg is placed by `legPositionAt` at the crowd time (a pure function of the rows and the time: any frame rate,
-   no integration, no allocation); the stride phase is the metres walked, so it needs no state. A resident on a drive leg is in a car
-   (not shown: the traffic draws it); one the society places (`readActivity`: seated, at a counter, fighting) is shown where it says;
+   no integration, no allocation); the stride phase is the metres walked, so it needs no state. A resident in a car on a leg by car
+   is not shown (the traffic draws it); one the society places (`readActivity`: seated, at a counter, fighting) is shown where it says;
 3. the shown are kept a body apart and their bumps found (below);
 4. with `authority`, every shown person is tested against every car (`runsDown` within `CAR_REACH`, `looseRunsDown` for a car with
    a torn part flying): a hit hides them at once, logs a `knock` event and queues a strike for the ragdoll throw, dressed as the drawn crowd dresses
@@ -133,12 +133,18 @@ the moment they set out, freed when they leave or are knocked, busted or die); a
 
 **Activity** (`society-activity.ts`): `readActivity` is a pure function of the row and the time that says what the drawing animates
 (`civilian-activity.ts`'s codes), since when and until when, with whom, the surface they sit at, and, for someone the brain places (seated,
-at a counter, at a door, fighting), where. A drive leg is nobody on foot; a door clip runs on the first and last second of a walk into
-a building.
+at a counter, at a door, fighting), where. Someone in a car is nobody on foot; a door clip runs on the first and last second of a walk out of or into
+a building, and getting into or out of a car is a stationary `carIn` or `carOut` clip at the car's node.
 
-**Drives** (`civilian-plan.ts`): about a third of adults own a car, standing at the kerb of the last place they drove to. A leg for work, home,
-an errand or a meal that starts where the car is and is longer than `DRIVE_MIN_METRES` is a drive: `legPurpose` is `PURPOSE.drive` (the reason is
-in `legReason`), the leg runs at `DRIVE_SPEED`, and the car follows (`carPlace`). `fillCommuterFeed` lists drivers and parked cars for the traffic.
+**Cars** (`civilian-plan.ts`, `society-cars.ts`): about a third of adults own a car (`FLAG.hasCar`), standing at the kerb of the place it was last parked at (`carPlace`,
+`carTo`, `carLeaveTick`, `carParkTick` on the owner's row: before its trip leaves it stands where it was, once parked at the trip's end, in between it is away, and nobody
+else's to take from the decision on). A trip for work, home, an errand, a meal, company, a coffee or a drink of at least `DRIVE_MIN_BLOCKS` blocks (`BLOCK_WALK_METRES` each)
+is made by car when the resident's own car, or a housemate's, is free and within `CAR_WALK_METRES` of where they are (`chooseCar`): the leg is one path, the walk from the door to the
+node beside the car's door (`MapIndex.carNode`: the end of a door's spur to the sidewalk), the way by the graph to the node beside the destination's door, and the walk in. The
+driver walks to the car, stands there getting in (`carIn`), is not seen while the car drives (`DRIVE_SPEED` on the graph's metres, `PARK_SECONDS` to park), stands at the parked
+car getting out (`carOut`) and walks in. The row carries the path indices where they get in and out and the ticks (`driveFirst`, `driveLast`, `driveLeaveTick`, `driveParkTick`,
+`carOwner`), so `legPose` is still a pure function of the row and the time. A knock, arrest or death before they get in gives the trip up (the car stays); after, it stands.
+`fillCommuterFeed` lists each car on the road from the tick its driver gets in to the tick it is parked (the owner is the resident listed) and each car that stands, with its kerb place.
 
 **Crime** (`society-crime.ts`, `society-reactions.ts`): each game day a working-age resident's chance of turning to crime adds a base, being out of
 work, broke (three jobless days), angry and young (`CRIME_LEAN`); criminals give it up at `REFORM_CHANCE` a day (twice with a job), and a city starts

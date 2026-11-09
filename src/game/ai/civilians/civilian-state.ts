@@ -66,6 +66,8 @@ export class CityState {
   readonly finder: PathFinder;
   readonly noFear: Float32Array;
   readonly scratchPath: Uint16Array;
+  /** The path of a trip by car, built here before it replaces the walk's. */
+  readonly carPath: Uint16Array;
   readonly scratchNeeds: Float32Array;
   readonly appointment = newAppointmentSlot();
   readonly pose = new LegPose();
@@ -104,6 +106,7 @@ export class CityState {
     this.finder = new PathFinder(map.graph);
     this.noFear = new Float32Array(this.index.nodeCount);
     this.scratchPath = new Uint16Array(MAX_PATH_NODES);
+    this.carPath = new Uint16Array(MAX_PATH_NODES);
     this.scratchNeeds = new Float32Array(NEED_COUNT);
   }
 }

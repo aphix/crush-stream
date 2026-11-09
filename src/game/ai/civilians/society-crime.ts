@@ -17,6 +17,7 @@ import {
 } from "./civilian-constants.ts";
 import { EVENT_CODE, MOOD, moodHold, moodOfCode } from "./civilian-names.ts";
 import { markDirty, type CityState } from "./civilian-state.ts";
+import { carStandsAt } from "./society-cars.ts";
 import { isOutdoorPurpose } from "./society-venues.ts";
 
 function intAt(state: CityState, resident: number, field: number): number {
@@ -89,12 +90,12 @@ export function startingCrime(state: CityState, resident: number, age: number, u
 }
 
 /** Whether the target of a crime attempt is still there when the criminal is: a shop is, a mugging's victim must still be outdoors at the place, a car's owner must still have it parked there. */
-function targetIsThere(state: CityState, criminal: number, purpose: number): boolean {
+function targetIsThere(state: CityState, criminal: number, purpose: number, tick: number): boolean {
   if (purpose === PURPOSE.shoplift) return true;
   const victim = intAt(state, criminal, RESIDENT_INT.crimeVictim);
   const place = intAt(state, criminal, RESIDENT_INT.place);
   if (victim < 0 || intAt(state, victim, RESIDENT_INT.alive) === 0) return false;
-  if (purpose === PURPOSE.breakIn) return intAt(state, victim, RESIDENT_INT.carPlace) === place;
+  if (purpose === PURPOSE.breakIn) return carStandsAt(state, victim, tick) === place;
   return intAt(state, victim, RESIDENT_INT.place) === place && isOutdoorPurpose(intAt(state, victim, RESIDENT_INT.legPurpose));
 }
 
@@ -116,7 +117,7 @@ export class CrimeDesk {
       if (ints[base + RESIDENT_INT.alive] === 0 || crimeKindOf(purpose) === CRIME_KIND.none || ints[base + RESIDENT_INT.crimeTick] !== NEVER_TICK) continue;
       if ((ints[base + RESIDENT_INT.flags]! & (FLAG.wanted | FLAG.custody | FLAG.hurt)) !== 0) continue;
       if (tick < ints[base + RESIDENT_INT.arriveTick]! + CRIME_LAG_TICKS || tick >= ints[base + RESIDENT_INT.nextDecisionTick]!) continue;
-      if (this.posted[resident] === ints[base + RESIDENT_INT.departTick] || !targetIsThere(state, resident, purpose)) continue;
+      if (this.posted[resident] === ints[base + RESIDENT_INT.departTick] || !targetIsThere(state, resident, purpose, tick)) continue;
       this.posted[resident] = ints[base + RESIDENT_INT.departTick]!;
       out[count++] = resident;
     }

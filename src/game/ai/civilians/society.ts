@@ -27,6 +27,7 @@ import {
   NEED,
   NEVER_TICK,
   NO_BEARING,
+  NO_INDEX,
   NO_PLACE,
   NO_SEAT,
   PARENT_AGE_MAX,
@@ -141,7 +142,6 @@ export function createResident(state: CityState, id: number, spec: ResidentSpec,
   ints[base + RESIDENT_INT.arriveTick] = tick;
   ints[base + RESIDENT_INT.nextDecisionTick] = tick + Math.floor(draw() * INITIAL_SPREAD_TICKS);
   ints[base + RESIDENT_INT.legPurpose] = NEED.rest;
-  ints[base + RESIDENT_INT.legReason] = NEED.rest;
   ints[base + RESIDENT_INT.storyTick] = -1;
   ints[base + RESIDENT_INT.seat] = NO_SEAT;
   ints[base + RESIDENT_INT.companion] = NO_PLACE;
@@ -152,6 +152,14 @@ export function createResident(state: CityState, id: number, spec: ResidentSpec,
   ints[base + RESIDENT_INT.fightPartner] = NO_PLACE;
   ints[base + RESIDENT_INT.fightBearing] = NO_BEARING;
   ints[base + RESIDENT_INT.carPlace] = NO_PLACE;
+  ints[base + RESIDENT_INT.carTo] = NO_PLACE;
+  ints[base + RESIDENT_INT.carLeaveTick] = NEVER_TICK;
+  ints[base + RESIDENT_INT.carParkTick] = NEVER_TICK;
+  ints[base + RESIDENT_INT.carOwner] = NO_PLACE;
+  ints[base + RESIDENT_INT.driveFirst] = NO_INDEX;
+  ints[base + RESIDENT_INT.driveLast] = NO_INDEX;
+  ints[base + RESIDENT_INT.driveLeaveTick] = NEVER_TICK;
+  ints[base + RESIDENT_INT.driveParkTick] = NEVER_TICK;
   if (person) giveTraits(state, id, spec, tick);
   rollNeeds(floats, floatBase, draw);
   const pace = SPECIES_SPEED[spec.species]! * spec.paceFactor * (1 + (draw() * 2 - 1) * WALK_SPEED_SPREAD);

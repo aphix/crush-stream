@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { launch, pooledCar } from "../../contact/crash-scenarios.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_SECONDS } from "./civilian-activity.ts";
-import { PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
+import { DECISION_HZ, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import { BODY_GAP, HARD_DISTANCE, MAX_OFFSET, WALKER_BEARING_STEPS, WALKER_PUSH_DISTANCE } from "./civilian-crowd-constants.ts";
 import { PACE, people, type Push, pushesIn, sendAlong, streetEdge } from "./civilian-crowd-contact.test-util.ts";
 import { FRAME_SECONDS, newCrowd, stepUntilShown } from "./civilian-crowd.test-util.ts";
@@ -278,15 +278,19 @@ describe("given the law's overlay moving a civilian's drawn spot, and a car driv
   });
 });
 
-describe("given a civilian on a leg that is a drive", () => {
-  it("when the crowd is stepped, then they are shown walking until the leg is a drive, and then not shown: the car is another's to draw", () => {
+describe("given a civilian on a leg by car", () => {
+  it("when the crowd is stepped, then they are shown walking until the car leaves with them in it, and then not shown: the car is another's to draw", () => {
     const crowd = newCrowd(map);
     const [resident] = people(crowd, 1) as [number];
     sendAlong(crowd, resident, EDGE, EDGE.from, EDGE.to);
     crowd.step(1, [], true);
     expect(crowd.poses.shown[resident], "shown on a walk").toBe(1);
-    crowd.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.legPurpose] = PURPOSE.drive;
+    const row = resident * RESIDENT_INT_STRIDE;
+    crowd.state.ints[row + RESIDENT_INT.driveFirst] = 0;
+    crowd.state.ints[row + RESIDENT_INT.driveLast] = 1;
+    crowd.state.ints[row + RESIDENT_INT.driveLeaveTick] = DECISION_HZ;
+    crowd.state.ints[row + RESIDENT_INT.driveParkTick] = crowd.state.ints[row + RESIDENT_INT.arriveTick]! - 1;
     crowd.step(1 + FRAME_SECONDS, [], true);
-    expect(crowd.poses.shown[resident], "shown on a drive").toBe(0);
+    expect(crowd.poses.shown[resident], "shown in the car").toBe(0);
   });
 });

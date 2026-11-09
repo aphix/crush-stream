@@ -1,4 +1,5 @@
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
+import { ACTIVITY_SECONDS } from "./civilian-activity.ts";
 
 /** Crowd time runs on one grid: a plan, an event and a society step all land on a tick of 1 / DECISION_HZ crowd seconds. */
 export const DECISION_HZ = 2;
@@ -42,19 +43,18 @@ export const PURPOSE = {
   mechanicOut: 15,
   partyGuest: 16,
   busAway: 17,
-  drive: 18,
-  coffee: 19,
-  drink: 20,
-  stoopSit: 21,
-  stoopTalk: 22,
-  argue: 23,
-  loiter: 24,
-  report: 25,
-  flee: 26,
-  shoplift: 27,
-  mug: 28,
-  breakIn: 29,
-  fight: 30,
+  coffee: 18,
+  drink: 19,
+  stoopSit: 20,
+  stoopTalk: 21,
+  argue: 22,
+  loiter: 23,
+  report: 24,
+  flee: 25,
+  shoplift: 26,
+  mug: 27,
+  breakIn: 28,
+  fight: 29,
 } as const;
 /** What `RESIDENT_INT.flags` holds: in hospital, without a job, hurting, out of work while the workplace is closed, a named resident (no society chances, fixed age); jobless long enough to be broke, a criminal, wanted for an open crime or fight, in custody, a car owner, a coffee fan, a drinker. */
 export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16, broke: 32, criminal: 64, wanted: 128, custody: 256, hasCar: 512, coffeeFan: 1024, drinker: 2048 } as const;
@@ -92,30 +92,38 @@ export const RESIDENT_INT = {
   knockZ: 29,
   knockTick: 30,
   historyHead: 31,
-  /** The place whose kerb the resident's car stands at (it follows a drive leg's destination); -1 for none. */
+  /** The place whose kerb the resident's car stands at before its trip leaves (and when it has none); -1 for none. The car is the owner's, who has FLAG.hasCar; a housemate may drive it. */
   carPlace: 32,
-  /** Why the leg or stay: a PURPOSE. `legPurpose` is PURPOSE.drive on a drive leg and the reason is here. */
-  legReason: 33,
   /** The index in the place's `Place.seats` the resident holds; -1 for none. One holder per seat. */
-  seat: 34,
+  seat: 33,
   /** Who they talk or argue with while they stand at a door (a resident, -1 for none). */
-  companion: 35,
-  joblessDays: 36,
-  wantedUntilTick: 37,
+  companion: 34,
+  joblessDays: 35,
+  wantedUntilTick: 36,
   /** The tick an open crime began (NEVER_TICK for none) and its CRIME_KIND, place and victim (a resident, or -1: the place itself); cleared by a bust or when the wanted spell ends. */
-  crimeTick: 38,
-  crimeKind: 39,
-  crimePlace: 40,
-  crimeVictim: 41,
-  crimeNotBefore: 42,
+  crimeTick: 37,
+  crimeKind: 38,
+  crimePlace: 39,
+  crimeVictim: 40,
+  crimeNotBefore: 41,
   /** The tick a fight began (NEVER_TICK for none), who the other fighter is (-1: none, or a player) and where it is, in centimetres. */
-  fightTick: 43,
-  fightPartner: 44,
-  fightX: 45,
-  fightZ: 46,
+  fightTick: 42,
+  fightPartner: 43,
+  fightX: 44,
+  fightZ: 45,
   /** The way a fighter faces, in `WALKER_BEARING_STEPS` of a turn (toward the player who shoved them); `NO_BEARING` for a fight between two civilians or with a car. */
-  fightBearing: 47,
-  history: 48,
+  fightBearing: 46,
+  /** The owner's car trip: the place it parks at (-1: none) and the ticks its driver gets in (it leaves) and it is parked (NEVER_TICK: none); the car is away, and nobody else's to take, from the reservation to the park tick. */
+  carTo: 47,
+  carLeaveTick: 48,
+  carParkTick: 49,
+  /** A driver's leg that goes by car: whose car (-1: none, a plain walk), the path indices where he gets in and out (-1: none) and the ticks he does (NEVER_TICK: none). */
+  carOwner: 50,
+  driveFirst: 51,
+  driveLast: 52,
+  driveLeaveTick: 53,
+  driveParkTick: 54,
+  history: 55,
 } as const;
 export const RESIDENT_INT_STRIDE = RESIDENT_INT.history + LOG_LINES * HISTORY_FIELDS;
 /** A resident's float row: the needs as they stood at the decision that made the leg, their rise rates (per game hour), the speed of the leg or stay they are on (m/s), their lateral offset (m) and their own walking pace (m/s: the leg's speed is this, or the drive's). */
@@ -325,9 +333,23 @@ export const CENTIMETRES_PER_METRE = 100;
 export const CRIME_KIND = { none: 0, theft: 1, mugging: 2, breakIn: 3 } as const;
 export const NO_SEAT = -1;
 
-/** A drive: a car owner leaves the car at the kerb of the place they drove to (not at a place they walked on from); the leg runs this fast (m/s: stop and go over a block), and a walk under this many metres is quicker than finding the car. */
-export const DRIVE_SPEED = 9;
-export const DRIVE_MIN_METRES = 90;
+/**
+ * A drive: a trip of at least `DRIVE_MIN_BLOCKS` blocks (a block's walk is about `BLOCK_WALK_METRES`: the grid's pitch is 123 m along its long side and 75 m along the short) is made by car when one of the household's, standing
+ * within `CAR_WALK_METRES` of where the resident is, is free: they walk to it, drive at `DRIVE_SPEED` (m/s of the walk graph's metres, stop and go through the lights, under a car's own pace so it is parked in time),
+ * the car takes `PARK_SECONDS` to park, and they walk in from where it stands.
+ */
+const DRIVE_MIN_BLOCKS = 3;
+const BLOCK_WALK_METRES = 100;
+export const DRIVE_MIN_METRES = DRIVE_MIN_BLOCKS * BLOCK_WALK_METRES;
+export const CAR_WALK_METRES = 150;
+export const DRIVE_SPEED = 6;
+const PARK_SECONDS = 8;
+export const PARK_TICKS = PARK_SECONDS * DECISION_HZ;
+/** Getting in and out are stationary clips at the car's node: the driver stands there this long before the car leaves and after it is parked. */
+export const CAR_IN_TICKS = Math.ceil(ACTIVITY_SECONDS.carIn * DECISION_HZ);
+export const CAR_OUT_TICKS = Math.ceil(ACTIVITY_SECONDS.carOut * DECISION_HZ);
+/** A leg that goes by no car: its drive indices. */
+export const NO_INDEX = -1;
 /** Shares of adults who own a car, are coffee fans, are drinkers (traits drawn once, from their own stream). */
 export const CAR_SHARE = 0.35;
 export const COFFEE_FAN_SHARE = 0.6;

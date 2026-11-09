@@ -161,7 +161,6 @@ export const PURPOSE_LABELS = [
   "looking at the wreck",
   "the Friday party",
   "the bus",
-  "driving",
   "a coffee",
   "a drink",
   "sitting out on the stoop",
@@ -195,7 +194,6 @@ export const PURPOSE_LOG_TEXT = [
   "came out to look at the wreck at",
   "went up to the Friday party at",
   "took the bus from",
-  "drove to",
   "went for a coffee at",
   "went for a drink at",
   "sat out on the stoop at",
@@ -210,7 +208,10 @@ export const PURPOSE_LOG_TEXT = [
   "got into a fight outside",
 ] as const;
 /** The mood a story's walk leaves, or -1 for none (needs: -1). */
-export const PURPOSE_MOODS = [-1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, MOOD.hungry, MOOD.worried, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.busy, MOOD.happy, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, -1, MOOD.busy, MOOD.afraid, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.angry] as const;
+export const PURPOSE_MOODS = [-1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, MOOD.hungry, MOOD.worried, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.busy, MOOD.happy, -1, -1, -1, -1, MOOD.happy, MOOD.angry, -1, MOOD.busy, MOOD.afraid, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.angry] as const;
+
+/** What the look-at line says of someone in their car: "driving for {purpose}". */
+export const DRIVING_WORD = "driving";
 
 /** The mood an event leaves (-1 for none), and for how long it holds (a wrecked stoop angers a family for days). */
 export function moodOfCode(code: number): number {

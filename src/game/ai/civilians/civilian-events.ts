@@ -39,6 +39,7 @@ import { CityState, logHistory, markDirty, residentName, setClosedUntil, setMood
 import { applyBust, applyCrime, applyJaywalk, applyKnockWitness, applyPush, nearestPlaceTo, raiseFear, reactToCrime, releaseFightPartner, startFight } from "./society-reactions.ts";
 import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { sendResidentTo } from "./civilian-plan.ts";
+import { dropCarLeg } from "./society-cars.ts";
 import { noteEvent } from "./society-day.ts";
 
 function intAt(state: CityState, resident: number, field: number): number {
@@ -95,6 +96,7 @@ function knockResident(state: CityState, resident: number, seconds: number, tick
   if (ints[base + RESIDENT_INT.alive] === 0 || (ints[base + RESIDENT_INT.flags]! & FLAG.hurt) !== 0) return;
   const struck = tickAt(seconds);
   const onLeg = legPose(state, resident, seconds, state.pose);
+  dropCarLeg(state, resident, struck);
   const spotX = onLeg ? state.pose.x : state.index.placeX[ints[base + RESIDENT_INT.place]!]!;
   const spotZ = onLeg ? state.pose.z : state.index.placeZ[ints[base + RESIDENT_INT.place]!]!;
   const home = ints[base + RESIDENT_INT.home]!;

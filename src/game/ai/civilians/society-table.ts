@@ -31,6 +31,7 @@ import {
 import { moodOf } from "./civilian-mood.ts";
 import { MOOD } from "./civilian-names.ts";
 import type { CityState } from "./civilian-state.ts";
+import { carStandsAt } from "./society-cars.ts";
 import { ageOf } from "./society-day.ts";
 import { VENUE, isHourIn, isOutdoorPurpose } from "./society-venues.ts";
 
@@ -186,9 +187,9 @@ function stoopSitter(state: CityState, resident: number, current: number, tick: 
 
 /** The kerb of the nearest parked car of someone dwelling at it, whose owner is the victim. */
 function parkedCar(state: CityState, resident: number, current: number, tick: number): number {
-  const owner = nearestDweller(state, resident, current, tick, (other) => (intAt(state, other, RESIDENT_INT.flags) & FLAG.hasCar) !== 0 && intAt(state, other, RESIDENT_INT.carPlace) === intAt(state, other, RESIDENT_INT.place));
+  const owner = nearestDweller(state, resident, current, tick, (other) => carStandsAt(state, other, tick) === intAt(state, other, RESIDENT_INT.place));
   state.scratchPartner = owner;
-  return owner === -1 ? NO_PLACE : intAt(state, owner, RESIDENT_INT.carPlace);
+  return owner === -1 ? NO_PLACE : intAt(state, owner, RESIDENT_INT.place);
 }
 
 function nearestHideout(state: CityState, current: number): number {

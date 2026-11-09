@@ -9,6 +9,8 @@ export type MapIndex = {
   placeX: Float32Array;
   placeZ: Float32Array;
   doorNode: Int32Array;
+  /** The node a car at a place's kerb is got into and out of: the one beside its door (the end of its spur to the sidewalk), the door itself when it has no spur. */
+  carNode: Int32Array;
   kindOf: Uint8Array;
   /** The block (0-8, A1 first) of each place, -1 for one beyond the walls. */
   blockOf: Int8Array;
@@ -31,6 +33,10 @@ function blockOfPosition(x: number, z: number, halfX: number, halfZ: number): nu
   return row * BLOCK_COLUMNS + column;
 }
 
+function degreeOf(map: OpenWorldMap, node: number): number {
+  return map.graph.edgeStart[node + 1]! - map.graph.edgeStart[node]!;
+}
+
 function listWhere(count: number, keep: (place: number) => boolean): Int32Array {
   const found: number[] = [];
   for (let place = 0; place < count; place++) if (keep(place)) found.push(place);
@@ -42,6 +48,7 @@ export function buildMapIndex(map: OpenWorldMap): MapIndex {
   const placeX = new Float32Array(placeCount);
   const placeZ = new Float32Array(placeCount);
   const doorNode = new Int32Array(placeCount);
+  const carNode = new Int32Array(placeCount);
   const kindOf = new Uint8Array(placeCount);
   const blockOf = new Int8Array(placeCount);
   const jobCapacity = new Uint16Array(placeCount);
@@ -51,6 +58,7 @@ export function buildMapIndex(map: OpenWorldMap): MapIndex {
     placeX[place] = entry.x;
     placeZ[place] = entry.z;
     doorNode[place] = entry.doorNode;
+    carNode[place] = entry.doorNode >= 0 && degreeOf(map, entry.doorNode) === 1 ? map.graph.edgeTo[map.graph.edgeStart[entry.doorNode]!]! : entry.doorNode;
     kindOf[place] = entry.kind;
     blockOf[place] = entry.doorNode < 0 ? -1 : blockOfPosition(entry.x, entry.z, map.halfX, map.halfZ);
     if (!placeByName.has(entry.name)) placeByName.set(entry.name, place);
@@ -64,6 +72,7 @@ export function buildMapIndex(map: OpenWorldMap): MapIndex {
     placeX,
     placeZ,
     doorNode,
+    carNode,
     kindOf,
     blockOf,
     placesOfBlock: Array.from({ length: BLOCK_COUNT }, (_, block) => listWhere(placeCount, (place) => blockOf[place] === block)),

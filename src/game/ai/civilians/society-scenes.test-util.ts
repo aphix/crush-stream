@@ -223,7 +223,7 @@ export function decideScene(scene: Scene, cast: Cast, count: number): Outcome {
   decideAs(cast.state, cast.resident, cast.tick, count);
   const { state, resident } = cast;
   readActivity(state, resident, intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ + scene.readAfter, reading);
-  const outcome = { purpose: intAt(state, resident, RESIDENT_INT.legReason), place: intAt(state, resident, RESIDENT_INT.place), code: reading.code, placed: reading.placed, partner: reading.partner, cast };
+  const outcome = { purpose: intAt(state, resident, RESIDENT_INT.legPurpose), place: intAt(state, resident, RESIDENT_INT.place), code: reading.code, placed: reading.placed, partner: reading.partner, cast };
   if (outcome.purpose === scene.purpose) scene.after?.(cast);
   return outcome;
 }

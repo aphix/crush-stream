@@ -75,8 +75,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 43: `MSG.crowd` (13) carries the open world's seed, clock and event log, and the lobby's game kinds gain "openworld" (a lobby that stays open on the city's course), so peers on 42 would drop the crowd message and refuse a start gate of that kind.
 44: the crowd's event log carries kinds 2-6 (crime, bust, push, fight and the pusher's alongside triple) and a peer's brain acts on them (moods, fights, busts, venue and seat choice, drives), so a peer on 43 would compute a different city from the same log.
 45: the crowd's event log carries kinds 7, 8 and 9 (a player's shove names his bearing in a walker triple after its push or fight; the police's jaywalk arrest; a car knocking down a foot cop), the brain turns a pushed civilian on the player and holds a jaywalker, and a bust of someone not wanted no longer lets them back on the street early; the open world's street furniture is drawn-only kit pieces (the bus shelter keeps a solid back panel) and the park gains a solid plaza (bench rings and statue), so the course's solids differ; a peer on 44 would compute a different city from the same log.
+46: the open world's society makes trips of three blocks or more by car (a resident walks to a household car, gets in, is not seen on the road, gets out where it parks and walks in), the brain's rows carry the car's trip and the leg's drive fields, and the commuter feed lists cars only on the road, so a peer on 45 would compute a different city from the same log.
 */
-export const NET_VERSION = 45;
+export const NET_VERSION = 46;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;

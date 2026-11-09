@@ -9,7 +9,6 @@ import {
   LOG_LINES,
   MOOD_NEED_LEVEL,
   NO_PLACE,
-  PURPOSE,
   RESIDENT_FLOAT_STRIDE,
   RESIDENT_INT,
   RESIDENT_INT_STRIDE,
@@ -17,6 +16,7 @@ import {
 } from "./civilian-constants.ts";
 import { CAST } from "./civilian-cast.ts";
 import {
+  DRIVING_WORD,
   EVENT_CODE,
   KIND_WORDS,
   MOOD,
@@ -72,7 +72,8 @@ export function civilianLine(state: CityState, resident: number, tick: number): 
   if (intAt(state, resident, RESIDENT_INT.flags) & FLAG.hurt) return `${name}, in hospital - recovering, feeling ${mood}`;
   if (intAt(state, resident, RESIDENT_INT.flags) & FLAG.custody) return `${name}, in custody, feeling ${mood}`;
   const legPurpose = intAt(state, resident, RESIDENT_INT.legPurpose);
-  const purpose = legPurpose === PURPOSE.drive ? `${PURPOSE_LABELS[legPurpose]!} for ${PURPOSE_LABELS[intAt(state, resident, RESIDENT_INT.legReason)]!}` : PURPOSE_LABELS[legPurpose]!;
+  const inCar = tick >= intAt(state, resident, RESIDENT_INT.driveLeaveTick) && tick < intAt(state, resident, RESIDENT_INT.driveParkTick);
+  const purpose = inCar ? `${DRIVING_WORD} for ${PURPOSE_LABELS[legPurpose]!}` : PURPOSE_LABELS[legPurpose]!;
   const destination = placeName(state, intAt(state, resident, RESIDENT_INT.place));
   if (intAt(state, resident, RESIDENT_INT.species) !== SPECIES.person) return `${name}, ${CAST[first - CAST_NAME_BASE]?.description ?? "an animal"} - ${purpose} -> ${destination}, feeling ${mood}`;
   const age = ageOf(state, resident, dayOf(tick, state.startHour));
