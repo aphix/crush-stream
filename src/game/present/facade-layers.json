@@ -245,9 +245,9 @@
     "bays": 2,
     "layers": 3,
     "metres": {
-      "cornice": 1.56,
-      "floor": 5.53,
-      "ground": 6.91
+      "cornice": 1.52,
+      "floor": 5.4,
+      "ground": 6.75
     },
     "plain": [
       0.863,

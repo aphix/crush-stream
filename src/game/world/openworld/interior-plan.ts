@@ -8,11 +8,11 @@ import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./wa
 const LAYOUTS = { rowhome: layoutRowhome, coffee: layoutCoffee, bar: layoutBar, office: layoutOffice, store: layoutStore } as const satisfies Record<InteriorKind, (draft: Draft) => void>;
 
 /** What a plan is made from: the place's interior, its facade (the style's windows, and which sides are open) and its footprint (m). */
-type PlanPlace = Pick<Place, "interior" | "style" | "width" | "depth" | "openSides">;
+type PlanPlace = Pick<Place, "interior" | "style" | "width" | "depth" | "storeys" | "openSides">;
 
 /** Places with this key have the same plan: share it. */
 export function planKey(place: PlanPlace): string {
-  return `${place.interior}:${place.style}:${place.width}:${place.depth}:${place.openSides ?? 0}`;
+  return `${place.interior}:${place.style}:${place.width}:${place.depth}:${place.storeys}:${place.openSides ?? 0}`;
 }
 
 /**
@@ -23,7 +23,7 @@ export function planInterior(place: PlanPlace): InteriorPlan {
   const roomPlace = roomPlaceOf(place);
   if (roomPlace === null) throw new Error("this place has no interior");
   const kind = roomPlace.interior;
-  const draft = new Draft(kind, 2 * (drawnHalf(place.width) - STREET_SKIN), 2 * drawnHalf(place.depth), roomWindows(roomPlace));
+  const draft = new Draft(kind, 2 * (drawnHalf(place.width) - STREET_SKIN), 2 * drawnHalf(place.depth), place.storeys, roomWindows(roomPlace));
   draft.floor(0);
   draft.roof();
   for (let level = 0; level < draft.floors.length; level++) draft.envelope(level);

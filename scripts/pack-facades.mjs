@@ -83,7 +83,7 @@ const metresFor = (height, { cornice, floor, ground }) => {
 };
 const HOME = metresFor(10.9, { cornice: 0.9, floor: 3.2, ground: 3.6 });
 const SHOP = metresFor(11.3, { cornice: 0.9, floor: 3.2, ground: 4 });
-const MARKET = metresFor(8.1, { cornice: 0.9, floor: 3.2, ground: 4 });
+const MARKET = metresFor(8.3, { cornice: 0.9, floor: 3.2, ground: 4 });
 const STYLES = {
   prague: { crop: [288, 0, 270, 1264], bays: 4, cornice: [0, 395], floor: [688, 1035], ground: [1035, 1264], quoins: true, rects: [[95, 268, 177, 352], [95, 790, 177, 963], [66, 1130, 207, 1264]] },
   dc: { crop: [283, 0, 282, 1264], bays: 4, cornice: [0, 235], floor: [235, 528], ground: [838, 1264], quoins: true, rects: [[57, 172, 117, 230], [167, 172, 227, 230], [110, 312, 175, 455], [54, 327, 80, 468], [204, 327, 230, 468], [49, 897, 105, 1045], [180, 893, 243, 925]] },
@@ -479,7 +479,7 @@ for (const [name, spec] of Object.entries(STYLES)) {
     ...(spec.neon ? { neon: true } : {}),
     ...(spec.open ? { open: true } : {}),
   };
-  if (spec.open) windowTable[name] = { bays: spec.bays, metres: metadata[name].metres, windows: { floor: windowRects(glows[1].mask), ground: windowRects(glows[2].mask) } };
+  if (spec.open) windowTable[name] = { bays: spec.bays, windows: { floor: windowRects(glows[1].mask), ground: windowRects(glows[2].mask) } };
   console.log(`${name}: ${rgbs.length} layers, albedo ${bytes[0]} B, normal ${bytes[1]} B, glow ${bytes[2]} B${bytes[3] ? `, height ${bytes[3]} B, roughness ${bytes[4]} B` : ""}; windows ${glows.map((g) => g.windows).join("/")}; ${JSON.stringify(metadata[name].metres)}`);
 }
 writeFileSync(jsonFile, `${JSON.stringify(metadata, null, 2)}\n`);

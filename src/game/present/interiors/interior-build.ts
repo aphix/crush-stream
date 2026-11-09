@@ -1,10 +1,12 @@
 import * as THREE from "three";
 import { stairBoxes, wallBoxes } from "../../world/openworld/interior-draft.ts";
-import { ceilingOver, ROOM_LOOK, type Alcove, type Box, type InteriorPlan, type Pane } from "../../world/openworld/interior-kinds.ts";
+import { ceilingOver, lookKind, ROOM_LOOK, type Alcove, type Box, type InteriorPlan, type Pane } from "../../world/openworld/interior-kinds.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { box, painted, type Piece } from "../prefab-pieces.ts";
 import { furnishingParts } from "./interior-kit.ts";
 
+/** A slab's top matches a floor's height within this (m). */
+const FLOOR_MATCH = 1e-6;
 /** A floor's wearing layer on top of its slab (m). */
 const FLOOR_LAYER = 0.03;
 /** The glass's colour: a pale blue-green, seen against the light. */
@@ -68,23 +70,28 @@ function glassOf(plan: InteriorPlan, levels: (level: number) => boolean): THREE.
   return panes.length === 0 ? null : painted(panes.map((pane): Piece => [upright(plan, [pane.deep0, pane.across0], [pane.deep1, pane.across1], pane.y0, pane.y1), GLASS_COLOR]));
 }
 
-function wallPieces(plan: InteriorPlan, look: Look, shell: boolean): Piece[] {
+/** The room look of `level` of the plan. */
+const lookOf = (plan: InteriorPlan, level: number): Look => ROOM_LOOK[lookKind(plan.kind, level)];
+
+function wallPieces(plan: InteriorPlan, shell: boolean): Piece[] {
   const out: Piece[] = [];
   for (const wall of plan.walls) {
     if (wall.shell !== shell) continue;
+    const look = lookOf(plan, wall.level);
     for (const solid of wallBoxes(wall, plan.floors[wall.level]!, ceilingOver(plan.floors, plan.topCeiling, wall.level))) out.push([localBox(plan, solid), look.wall]);
   }
   return out;
 }
 
-/** A slab is its body in the ceiling's colour and, except under the roof, a floor layer on top. */
-function slabPieces(plan: InteriorPlan, look: Look, shell: boolean): Piece[] {
+/** A slab is its body in the ceiling's colour (the room below's) and, except under the roof, a floor layer on top (the room above's). */
+function slabPieces(plan: InteriorPlan, shell: boolean): Piece[] {
   const out: Piece[] = [];
   for (const slab of plan.slabs) {
     if (slab.shell !== shell) continue;
     const roof = slab.y0 === plan.topCeiling;
-    out.push([localBox(plan, { ...slab.rect, y0: slab.y0, y1: roof ? slab.y1 : slab.y1 - FLOOR_LAYER }), look.ceiling]);
-    if (!roof) out.push([localBox(plan, { ...slab.rect, y0: slab.y1 - FLOOR_LAYER, y1: slab.y1 }), look.floor]);
+    const level = roof ? plan.floors.length - 1 : plan.floors.findIndex((floor) => Math.abs(floor - slab.y1) < FLOOR_MATCH);
+    out.push([localBox(plan, { ...slab.rect, y0: slab.y0, y1: roof ? slab.y1 : slab.y1 - FLOOR_LAYER }), lookOf(plan, Math.max(0, roof ? level : level - 1)).ceiling]);
+    if (!roof) out.push([localBox(plan, { ...slab.rect, y0: slab.y1 - FLOOR_LAYER, y1: slab.y1 }), lookOf(plan, level).floor]);
   }
   return out;
 }
@@ -96,20 +103,18 @@ function inWorld(geometry: THREE.BufferGeometry, place: Place): THREE.BufferGeom
 
 /** The ground floor's envelope: what shows through a door from the street; with the glass of its windows and its bay. */
 export function buildShell(plan: InteriorPlan, place: Place): { solid: THREE.BufferGeometry; glass: THREE.BufferGeometry | null } {
-  const look = ROOM_LOOK[plan.kind];
   const glass = glassOf(plan, (level) => level === 0);
-  return { solid: inWorld(painted([...wallPieces(plan, look, true), ...slabPieces(plan, look, true), ...alcovePieces(plan, look, 0)]), place), glass: glass === null ? null : inWorld(glass, place) };
+  return { solid: inWorld(painted([...wallPieces(plan, true), ...slabPieces(plan, true), ...alcovePieces(plan, lookOf(plan, 0), 0)]), place), glass: glass === null ? null : inWorld(glass, place) };
 }
 
 /** Everything else: partitions, upper floors, their bays, stairs and the furniture (lit and unlit apart) and the upper floors' glass; a geometry is null when it has no pieces. */
 export function buildDetail(plan: InteriorPlan, place: Place): { solid: THREE.BufferGeometry | null; glow: THREE.BufferGeometry | null; glass: THREE.BufferGeometry | null } {
-  const look = ROOM_LOOK[plan.kind];
-  const solid: Piece[] = [...wallPieces(plan, look, false), ...slabPieces(plan, look, false)];
-  for (let level = 1; level < plan.floors.length; level++) solid.push(...alcovePieces(plan, look, level));
+  const solid: Piece[] = [...wallPieces(plan, false), ...slabPieces(plan, false)];
+  for (let level = 1; level < plan.floors.length; level++) solid.push(...alcovePieces(plan, lookOf(plan, level), level));
   const glow: Piece[] = [];
-  for (const flight of plan.stairs) for (const tread of stairBoxes(flight, plan.floors[flight.level]!)) solid.push([localBox(plan, tread), look.wood]);
+  for (const flight of plan.stairs) for (const tread of stairBoxes(flight, plan.floors[flight.level]!)) solid.push([localBox(plan, tread), lookOf(plan, flight.level).wood]);
   for (const piece of plan.furnishings) {
-    const parts = furnishingParts(piece, plan.kind);
+    const parts = furnishingParts(piece, lookKind(plan.kind, piece.level));
     const lx = plan.depth / 2 - piece.deep;
     const y = plan.floors[piece.level]! + piece.lift;
     for (const made of [...parts.solid, ...parts.glow]) made[0].rotateY(TURN_ANGLE[piece.facing]).translate(lx, y, piece.across);

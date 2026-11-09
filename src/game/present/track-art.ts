@@ -11,7 +11,9 @@ import { MAT } from "../kernel/material-ids.ts";
 import { makePrefabMaterials, prefabParts, raceTextures, TILE } from "./prefabs.ts";
 import { dressGround, layBrick } from "./ground-relief.ts";
 import { biomeLookup } from "../world/scenery.ts";
-import { facadeDepth, facadeTint, PASTELS, placedFacadeStyle } from "./facades.ts";
+import { isOpenStyle, shopGroundOf } from "../world/openworld/facade-windows.ts";
+import { storeysOfHeight } from "../world/openworld/interior-kinds.ts";
+import { facadeDepth, facadeSkin, facadeTint, PASTELS, placedFacadeStyle } from "./facades.ts";
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
 import {
@@ -242,7 +244,9 @@ export class TrackArt {
   private skinOf(p: Placed): Skin {
     if (p.asset !== undefined) return SCENERY_ASSETS[p.asset]!.family;
     if (p.prefab === PREFAB.tree) return treeOf(p)?.skin ?? null;
-    return placedFacadeStyle(p.prefab, p.style, p.x, p.z, this.biome(p.x, p.z), Math.max(p.sx, p.sz) * PREFABS[p.prefab].size[0], p.sy * PREFABS[p.prefab].size[1]);
+    const height = p.sy * PREFABS[p.prefab].size[1];
+    const style = placedFacadeStyle(p.prefab, p.style, p.x, p.z, this.biome(p.x, p.z), Math.max(p.sx, p.sz) * PREFABS[p.prefab].size[0], height);
+    return style !== null && isOpenStyle(style) ? facadeSkin(style, storeysOfHeight(height, shopGroundOf(style))) : style;
   }
 
   /** The Konami code on a course with a secret sky picture: a slow flash over `over`, and at its height (the white-out) the picture is painted and stands. */
