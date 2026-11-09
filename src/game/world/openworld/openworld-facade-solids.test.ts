@@ -6,8 +6,8 @@ import { propColliders } from "../placements.ts";
 import { flightHeightAt, flightsOf } from "../stairs.ts";
 import { planBlocks } from "./openworld-blocks.ts";
 import { FACING } from "./openworld-constants.ts";
-import { BAY, DOOR, drawnHalf, facadeSolidProps, facadeSolidsOf, HOME_HEIGHT, HOME_LEVELS, homeDoorPoint, homeFrontages, LOT_WIDTH, STOOP, stoopStepRange, type Frontage } from "./openworld-facade-solids.ts";
-import { ROWHOME_FLOOR_Y, STREET_SKIN } from "./interior-kinds.ts";
+import { BAY, BAY_FLOORS, bayOutline, DOOR, drawnHalf, facadeSolidProps, facadeSolidsOf, HOME_HEIGHT, HOME_LEVELS, homeDoorPoint, homeFrontages, LOT_WIDTH, STOOP, stoopStepRange, type Frontage } from "./openworld-facade-solids.ts";
+import { LEVELS, ROWHOME_FLOOR_Y, STREET_SKIN } from "./interior-kinds.ts";
 import { interiorDoor, interiorSolids } from "./interior-plan.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { HOME_STYLES } from "./openworld-programme.ts";
@@ -34,6 +34,8 @@ const DOORS_PER_FACE_MIN = 50;
 /** The open world's house depth (m), and how far inside a drawn wall an interior's outer wall may end (its skin and its thickness, m). */
 const HOUSE_DEPTH = 15;
 const SHELL_DEPTH_MAX = 0.4;
+/** The least a window's sill stands over its storey's floor (m): a seated person's knee and a table's edge are below it. */
+const SILL_ABOVE_FLOOR_MIN = 0.5;
 /** Boxes per rowhome the course may hold. */
 const SOLIDS_PER_HOME_MAX = 3;
 const EPSILON = 1e-9;
@@ -220,6 +222,28 @@ describe("given the course's rowhome colliders", () => {
     expect(solids.length, "colliders for the layout").toBe(frontages.length * SOLIDS_PER_HOME_MAX);
     const behind = solids.filter((solid, at) => against(frontages[Math.floor(at / SOLIDS_PER_HOME_MAX)]!, solid.x, solid.z).out - solid.size[0] / 2 < -EPSILON);
     expect(behind.length, "colliders reaching behind the facade").toBe(0);
+  });
+
+  // mutation: sed -i 's/const sill = floor + BAY_SILL_ABOVE_FLOOR;/const sill = floor + BAY_SILL_ABOVE_FLOOR * (1 + floor \/ 30);/' src/game/world/openworld/openworld-facade-solids.ts
+  it("when each storey's bay window is read against the rowhome interior's floors, then there is one a floor, every sill the same sensible height over its floor and every head under the next floor", () => {
+    const floors = LEVELS.rowhome.floors;
+    expect(BAY_FLOORS.length, "bay windows").toBe(floors.length);
+    const first = BAY_FLOORS[0]!.sill - floors[0]!;
+    expect(first, "ground storey sill over the raised floor (m)").toBeGreaterThanOrEqual(SILL_ABOVE_FLOOR_MIN);
+    for (const [storey, bay] of BAY_FLOORS.entries()) {
+      expect(bay.sill - floors[storey]!, `storey ${storey} sill over its floor against the ground storey's (m)`).toBeCloseTo(first, 9);
+      expect(bay.head, `storey ${storey} head under the next floor or the top ceiling (m)`).toBeLessThan(floors[storey + 1] ?? LEVELS.rowhome.topCeiling);
+    }
+  });
+
+  it("when the bay's outline is read, then its wall corners span the bay's width at the facade and its front stands out by the projection, the front as wide as the bay's front", () => {
+    const outline = bayOutline(0);
+    const [wallLow, frontLow, frontHigh, wallHigh] = [outline[0]!, outline[1]!, outline[2]!, outline[3]!];
+    expect(wallHigh.across - wallLow.across, "width at the facade (m)").toBeCloseTo(BAY.width, 9);
+    expect((wallHigh.across + wallLow.across) / 2, "middle across (u)").toBeCloseTo(BAY.across, 9);
+    expect(frontHigh.across - frontLow.across, "front width (m)").toBeCloseTo(BAY.front, 9);
+    expect(frontLow.out, "projection (m)").toBeCloseTo(BAY.out, 9);
+    expect(wallLow.out, "wall corner on the facade (m)").toBe(0);
   });
 
   // mutation: sed -i 's/const BAY_OUT = 0.7;/const BAY_OUT = 1.2;/' src/game/world/openworld/openworld-facade-solids.ts

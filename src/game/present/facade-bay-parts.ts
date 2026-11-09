@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
-import { BAY, BAY_FLOORS, DOOR, HOME_HEIGHT, HOME_LEVELS, LOT_WIDTH, STOOP, stoopStepRange } from "../world/openworld/openworld-facade-solids.ts";
+import { BAY, bayOutline, BAY_FLOORS, DOOR, HOME_HEIGHT, HOME_LEVELS, LOT_WIDTH, STOOP, stoopStepRange } from "../world/openworld/openworld-facade-solids.ts";
 import { KIT_CELL, RAIL_SOLID_CELL, type UvRect } from "./facade-kit-atlas.ts";
 
 /**
@@ -89,22 +89,16 @@ class KitBuilder {
   }
 }
 
-/** Where the door and the bay's footprint stand in the kit's x (m). */
+/** Where the door stands in the kit's x (m). */
 const DOOR_X = -DOOR.across;
-const BAY_X = -BAY.across;
 
 type PlanPoint = readonly [x: number, z: number];
 
-/** The bay's footprint (flat front, 45-degree sides) about its middle, pushed `offset` m outward on every edge: wall corner, front corner, front corner, wall corner. */
-function bayOutline(offset: number): readonly PlanPoint[] {
-  const half = BAY.front / 2;
-  const mitre = offset * (Math.SQRT2 - 1);
-  return [
-    [BAY_X - (half + BAY.out) - offset * Math.SQRT2, 0],
-    [BAY_X - half - mitre, BAY.out + offset],
-    [BAY_X + half + mitre, BAY.out + offset],
-    [BAY_X + half + BAY.out + offset * Math.SQRT2, 0],
-  ];
+/** The bay's outline (`bayOutline`) in the kit's x and z, wall corner to wall corner along +x. */
+function kitOutline(offset: number): readonly PlanPoint[] {
+  return bayOutline(offset)
+    .map((corner): PlanPoint => [-corner.across, corner.out])
+    .reverse();
 }
 
 type Cells = readonly [left: UvRect, front: UvRect, right: UvRect];
@@ -120,7 +114,7 @@ const WINDOW_CELLS: Cells = [{ ...WINDOW_CELL, u1: lerp(WINDOW_CELL.u0, WINDOW_C
 
 /** The wall of the bay stack between two heights, one quad for each of its three faces. */
 function ring(builder: KitBuilder, y0: number, y1: number, offset: number, cells: Cells, colour: THREE.Color, tint: number): void {
-  const outline = bayOutline(offset);
+  const outline = kitOutline(offset);
   for (let edge = 0; edge < cells.length; edge++) {
     const from = outline[edge]!;
     const to = outline[edge + 1]!;
@@ -130,7 +124,7 @@ function ring(builder: KitBuilder, y0: number, y1: number, offset: number, cells
 
 /** The flat top (`up`) or underside of the bay's footprint at height `y`. */
 function plate(builder: KitBuilder, y: number, offset: number, up: boolean, cell: UvRect, colour: THREE.Color): void {
-  const [a, b, c, d] = bayOutline(offset);
+  const [a, b, c, d] = kitOutline(offset);
   const corners = up ? [a!, b!, c!, d!] : [d!, c!, b!, a!];
   builder.quad([corners[0]![0], y, corners[0]![1]], [corners[1]![0], y, corners[1]![1]], [corners[2]![0], y, corners[2]![1]], [corners[3]![0], y, corners[3]![1]], cell, colour, FIXED);
 }
