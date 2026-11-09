@@ -1,5 +1,18 @@
 /** A point on the ground. */
 export type Spot = { x: number; z: number };
+/** A person on the street: where, and which way they face (a unit vector on the ground). */
+export type Walk = { x: number; z: number; dirX: number; dirZ: number };
+/** Whether a person standing at (ax, az) sees one at (bx, bz): nothing solid between their eyes. */
+export type LineOfSight = (ax: number, az: number, bx: number, bz: number) => boolean;
+
+/** What the cops perceive with: the sight lines between people (null: open ground, every line clear) and the crossings' signals (null: no signals, nobody jaywalks). */
+export type LawSenses = { lineOfSight: LineOfSight | null; signals: CrossingSignals | null };
+
+/** The signals the zebra crossings obey. */
+export interface CrossingSignals {
+  /** Whether a walker on the crossing at (x, z) whose line runs along (dirX, dirZ) crosses at crowd time `seconds` while the cars it crosses have green. */
+  againstSignal(x: number, z: number, dirX: number, dirZ: number, seconds: number): boolean;
+}
 
 /** What the law reads of the society, per resident: kept apart from the brain's row layout so the chase can be driven by a fixture. */
 export interface OffenceSource {
@@ -15,9 +28,15 @@ export interface OffenceSource {
   standing(resident: number, seconds: number, out: Spot): boolean;
   /** The crowd second the resident's current walk began. */
   legDepartSeconds(resident: number): number;
+  /** Where the resident is drawn on the street now and which way they face; false when they are not out on it. */
+  onStreet(resident: number, out: Walk): boolean;
+  /** Run down by a car and in hospital: nobody is arrested for anything while so. */
+  knocked(resident: number): boolean;
 }
 
-/** What the law does to the world: the host's bust event, called only with authority. */
+/** What the law does to the world: the host's events, called only with authority. */
 export interface LawPorts {
   bust(resident: number, seconds: number): void;
+  /** A walker taken off the street for crossing against the signal. */
+  jaywalked(resident: number, seconds: number): void;
 }

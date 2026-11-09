@@ -13,7 +13,7 @@ function idleTrafficPorts(): NonNullable<OpenWorldPorts["traffic"]> {
 
 /** The police's engine ports with no course solids, nobody to bust and no light bars. */
 function idleLawPorts(): NonNullable<OpenWorldPorts["law"]> {
-  return { solids: () => null, playerBusted: () => {}, sirens: () => {} };
+  return { solids: () => null, playerBusted: () => {}, sirens: () => {}, lineOfSight: () => true };
 }
 
 /** A solo host in the open world on the fixture map, past its first frame, with the ports `extra` adds. */

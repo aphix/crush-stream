@@ -1,9 +1,10 @@
+import { detCos, detSin } from "../../kernel/physics-core.js";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
-import { CENTIMETRES_PER_METRE, DECISION_HZ, NEVER_TICK, NO_PLACE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../civilians/civilian-constants.ts";
+import { CENTIMETRES_PER_METRE, DECISION_HZ, FLAG, NEVER_TICK, NO_PLACE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../civilians/civilian-constants.ts";
 import type { CityState } from "../civilians/civilian-state.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import { crimePlaceOf, isWanted } from "../civilians/society-crime.ts";
-import type { Spot } from "./offence-source.ts";
+import type { Spot, Walk } from "./offence-source.ts";
 
 /** The crowd's owner: its society rows and its drawn poses. */
 type CrowdView = { readonly state: CityState; readonly poses: CrowdPoses };
@@ -52,6 +53,20 @@ export class StateOffenceSource {
     }
     const crimePlace = crimePlaceOf(this.crowd.state, resident);
     return (crimePlace !== NO_PLACE && this.atDoor(crimePlace, out)) || this.atDoor(this.int(resident, RESIDENT_INT.place), out);
+  }
+
+  onStreet(resident: number, out: Walk): boolean {
+    const { poses } = this.crowd;
+    if (poses.shown[resident] !== 1) return false;
+    out.x = poses.x[resident]!;
+    out.z = poses.z[resident]!;
+    out.dirX = detSin(poses.yaw[resident]!);
+    out.dirZ = detCos(poses.yaw[resident]!);
+    return true;
+  }
+
+  knocked(resident: number): boolean {
+    return (this.int(resident, RESIDENT_INT.flags) & FLAG.hurt) !== 0;
   }
 
   legDepartSeconds(resident: number): number {

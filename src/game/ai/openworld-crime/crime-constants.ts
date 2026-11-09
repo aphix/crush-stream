@@ -35,6 +35,15 @@ export const FLEE_SPEED_SPAN = 0.8;
 /** A cop sees a suspect within this many metres in a straight line and a runner at a red light within `RED_LIGHT_SIGHT`: the sidewalks' sight lines are short, and the city's walls hold the rest. */
 export const COP_SIGHT = 40;
 export const RED_LIGHT_SIGHT = 60;
+/** A person's eyes stand this high (m) over the ground: a sight line between two people runs at this height, over railings and parked cars, not through a building. */
+export const EYE_HEIGHT = 1.6;
+/** A walker within this many metres of a zebra crossing's line, and between these shares of its length (off both kerbs), is out on it. */
+export const CROSSING_HALF_WIDTH = 1.5;
+export const CROSSING_KERB_SHARE = 0.15;
+/** A walker heading within acos of this of a crossing's line walks along it. */
+export const CROSSING_ALIGNMENT = 0.7;
+/** A cop stops chasing a jaywalker after this long (s): they have walked on and it was only a light. */
+export const JAYWALK_GIVE_UP_SECONDS = 30;
 /** A cop this close (m) lays hands on a suspect: an arm's reach plus a shoulder's width. */
 export const BUST_REACH = 1.6;
 /** Seconds the cuffs take; the bust is raised when they are on. */

@@ -4,13 +4,16 @@ import { createCrowdPoses, type CrowdPoses } from "../civilians/crowd-poses.ts";
 import { CRIME_HZ, FOOT_COP_COUNT } from "./crime-constants.ts";
 import { CrimeScene, type CrimePorts } from "./crime-scene.ts";
 import { FakeStreet } from "./crime-street.test-util.ts";
-import type { Spot } from "./offence-source.ts";
+import type { LineOfSight, Spot, Walk } from "./offence-source.ts";
 
 /** Nodes of the line city, 10 m apart from x = 0 to x = 120 on z = 0. */
 export const LINE_NODES = 13;
 export const NODE_SPACING = 10;
 export const WEST_HIDE = 0;
 export const EAST_HIDE = LINE_NODES - 1;
+/** The street between these two corners (x = 60 to 70) is a zebra crossing. */
+export const CROSSING_WEST_NODE = 6;
+export const CROSSING_EAST_NODE = 7;
 /** Residents in the fixture society. */
 export const RESIDENTS = 4;
 /** A wanted spell that outlasts every row (ticks). */
@@ -23,18 +26,23 @@ function placeAt(kind: Place["kind"], name: string, node: number): Place {
   return { kind, name, doorNode: node, doorX: x, doorZ: 0, yaw: 0, x, z: 8, width: 8, depth: 8, storeys: 2, style: "rowbrick", sector: "" };
 }
 
-/** One street of thirteen corners in a line with a hiding place at each end: the simplest city a flight can be read in. */
+/** One street of thirteen corners in a line with a hiding place at each end and one zebra crossing: the simplest city a flight can be read in. */
 export function lineCity(): OpenWorldMap {
   const nodeX = Float32Array.from({ length: LINE_NODES }, (_, node) => node * NODE_SPACING);
   const nodeZ = new Float32Array(LINE_NODES);
   const edgeStart = new Int32Array(LINE_NODES + 1);
   const edgeTo: number[] = [];
+  const crossing: number[] = [];
+  const isCrossing = (from: number, to: number): number => (Math.min(from, to) === CROSSING_WEST_NODE && Math.max(from, to) === CROSSING_EAST_NODE ? 1 : 0);
   for (let node = 0; node < LINE_NODES; node++) {
-    if (node > 0) edgeTo.push(node - 1);
-    if (node < LINE_NODES - 1) edgeTo.push(node + 1);
+    for (const to of [node - 1, node + 1]) {
+      if (to < 0 || to >= LINE_NODES) continue;
+      edgeTo.push(to);
+      crossing.push(isCrossing(node, to));
+    }
     edgeStart[node + 1] = edgeTo.length;
   }
-  const graph = { nodeX, nodeZ, edgeStart, edgeTo: Int32Array.from(edgeTo), edgeLength: new Float32Array(edgeTo.length).fill(NODE_SPACING), edgeCrossing: new Uint8Array(edgeTo.length) };
+  const graph = { nodeX, nodeZ, edgeStart, edgeTo: Int32Array.from(edgeTo), edgeLength: new Float32Array(edgeTo.length).fill(NODE_SPACING), edgeCrossing: Uint8Array.from(crossing) };
   return { graph, places: [placeAt(PLACE_KIND.hide, "West alley", WEST_HIDE), placeAt(PLACE_KIND.hide, "East alley", EAST_HIDE)], portals: new Int32Array(0), halfX: 120, halfZ: 20 };
 }
 
@@ -47,6 +55,9 @@ export class FixtureOffences {
   readonly x = new Float64Array(RESIDENTS);
   readonly present = new Uint8Array(RESIDENTS).fill(1);
   readonly departSeconds = new Float64Array(RESIDENTS);
+  /** Which way along the street each resident faces (+1 east, -1 west), and whether a car has run them down. */
+  readonly facing = new Float64Array(RESIDENTS).fill(1);
+  readonly hurt = new Uint8Array(RESIDENTS);
 
   wanted(resident: number, tick: number): boolean {
     return tick < this.wantedUntil[resident]!;
@@ -72,6 +83,24 @@ export class FixtureOffences {
 
   legDepartSeconds(resident: number): number {
     return this.departSeconds[resident]!;
+  }
+
+  onStreet(resident: number, out: Walk): boolean {
+    out.x = this.x[resident]!;
+    out.z = 0;
+    out.dirX = this.facing[resident]!;
+    out.dirZ = 0;
+    return this.present[resident] === 1;
+  }
+
+  knocked(resident: number): boolean {
+    return this.hurt[resident] === 1;
+  }
+
+  /** A car runs the resident down: in hospital, off the street. */
+  knockDown(resident: number): void {
+    this.hurt[resident] = 1;
+    this.present[resident] = 0;
   }
 
   commitCrime(resident: number): void {
@@ -108,23 +137,44 @@ export class FixtureOffences {
 
 export type Bust = { resident: number; seconds: number };
 
+/** Signals that show every crossing one way: `against` true, a walker on any crossing crosses against them. */
+export class FixtureSignals {
+  against = false;
+
+  againstSignal(): boolean {
+    return this.against;
+  }
+}
+
 export type Harness = {
   scene: CrimeScene;
   offences: FixtureOffences;
   poses: CrowdPoses;
   busts: Bust[];
+  jaywalks: Bust[];
+  signals: FixtureSignals;
   playerBusts: number[];
   street: FakeStreet | null;
   now: number;
   authority: boolean;
 };
 
-export type HarnessOptions = { seed?: number; withCars?: boolean; authority?: boolean };
+/** A building standing across the street between these x (m): it blocks every sight line that passes it. */
+export type Wall = { minX: number; maxX: number };
+
+export type HarnessOptions = { seed?: number; withCars?: boolean; authority?: boolean; wall?: Wall };
+
+/** Sight lines along the line city past `wall`. */
+function sightPast(wall: Wall): LineOfSight {
+  return (ax, _az, bx) => Math.max(ax, bx) <= wall.minX || Math.min(ax, bx) >= wall.maxX;
+}
 
 /** A scene on the line city whose foot cops stand at `copX` (patrol cop number by number; the rest far west), the host's bust applied to the fixture society. */
 export function harness(copX: readonly number[], options: HarnessOptions = {}): Harness {
   const offences = new FixtureOffences();
   const busts: Bust[] = [];
+  const jaywalks: Bust[] = [];
+  const signals = new FixtureSignals();
   const playerBusts: number[] = [];
   const street = options.withCars ? new FakeStreet() : null;
   const ports: CrimePorts = {
@@ -132,14 +182,17 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
       busts.push({ resident, seconds });
       offences.applyBust(resident);
     },
+    jaywalked: (resident, seconds) => void jaywalks.push({ resident, seconds }),
+    signals,
     playerBusted: (carIndex) => void playerBusts.push(carIndex),
     cars: street,
     obstacles: null,
     playerBustSeconds: 12,
+    lineOfSight: options.wall === undefined ? null : sightPast(options.wall),
   };
   const scene = new CrimeScene(lineCity(), offences, ports, options.seed ?? 7);
   for (let cop = 0; cop < FOOT_COP_COUNT - 1; cop++) scene.foot.walkers.place(cop, copX[cop] ?? 0, 0);
-  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, playerBusts, street, now: 0, authority: options.authority ?? true };
+  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, signals, playerBusts, street, now: 0, authority: options.authority ?? true };
 }
 
 /** Runs the harness `seconds` more: each step the crowd's poses are written where the society stands the residents (the crowd's own step), the street's cars drive, then the law steps. */

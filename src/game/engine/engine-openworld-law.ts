@@ -4,8 +4,13 @@ import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { CrimeScene } from "../ai/openworld-crime/crime-scene.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
+import type { LineOfSight } from "../ai/openworld-crime/offence-source.ts";
 import { StateOffenceSource } from "../ai/openworld-crime/state-offence-source.ts";
 import { TrafficPatrolPorts, type TrafficApi } from "../ai/openworld-crime/traffic-patrol-ports.ts";
+import { TrafficSignals } from "../ai/openworld-crime/traffic-signals.ts";
+import { LAYOUT } from "../world/openworld/openworld-constants.ts";
+import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
+import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
 import { SURVIVAL } from "../match/survival.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
@@ -27,6 +32,8 @@ export type LawEnginePorts = {
   traffic(): TrafficApi | null;
   /** The course's solids the patrol cars bend round; null: they drive straight. */
   solids(): Obstacles | null;
+  /** Whether a person at (ax, az) sees one at (bx, bz) past the course's buildings. */
+  lineOfSight: LineOfSight;
   /** Turns the light bar of car `carIndex` of the engine's list on or off. */
   sirens(carIndex: number, on: boolean): void;
   /** The human's car was held slow by a patrol car for Survival's bust hold. */
@@ -48,7 +55,14 @@ export class OpenWorldLaw {
     this.scene = new CrimeScene(
       map,
       new StateOffenceSource(crowd, map),
-      { bust: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.bust, resident, seconds), playerBusted: ports.playerBusted, cars: traffic === null ? null : new TrafficPatrolPorts(traffic, ports.sirens), obstacles: ports.solids(), playerBustSeconds: SURVIVAL.bustTime },
+      {
+        bust: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.bust, resident, seconds),
+        jaywalked: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.jaywalk, resident, seconds),
+        // Every peer builds the signals from the layout (the traffic is the host's only), so every peer's cops see the same jaywalkers.
+        signals: new TrafficSignals(buildRoadNetwork(openWorldGeometry(LAYOUT))),
+        playerBusted: ports.playerBusted, cars: traffic === null ? null : new TrafficPatrolPorts(traffic, ports.sirens), obstacles: ports.solids(), playerBustSeconds: SURVIVAL.bustTime,
+        lineOfSight: ports.lineOfSight,
+      },
       seed,
     );
     this.unlisten = traffic?.onRedLightRun((carIndex, x, z) => void this.scene.reportRedLight(carIndex, x, z)) ?? null;

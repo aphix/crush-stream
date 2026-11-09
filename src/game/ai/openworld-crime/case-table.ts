@@ -1,6 +1,7 @@
 import { COPS_PER_CASE, MAX_CASES, MAX_HELD, MAX_SUBJECTS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
 
-export const CASE_KIND = { crime: 1, fight: 2 } as const;
+/** A crime or a fight the society holds against someone, or a walk across a crossing against the signal a cop saw (the law's own, no society event). */
+export const CASE_KIND = { crime: 1, fight: 2, jaywalk: 3 } as const;
 /** A fight case warns the fighters, then seizes the ones to arrest. */
 export const CASE_PHASE = { free: 0, open: 1, warning: 2, seizing: 3 } as const;
 /** Where a suspect stands in a case: free slot, still about their day (not yet running), running, hiding, a fighter a cop is closing on, in a cop's hands, or let go. */
@@ -35,6 +36,8 @@ export class CaseTable {
   /** Per resident: the subject slot they hold, -1 none; the wanted spell last taken up. */
   readonly subjectOf: Int32Array;
   readonly handledSpell: Int32Array;
+  /** Per resident: the crowd second the walk began on which they were last stopped for jaywalking, so one walk is stopped once. */
+  readonly jaywalkWalk: Float64Array;
 
   /** Residents kept hidden since a crowd second, until their next walk begins. */
   readonly heldResident = new Int32Array(MAX_HELD).fill(-1);
@@ -44,6 +47,7 @@ export class CaseTable {
   constructor(residentCount: number) {
     this.subjectOf = new Int32Array(residentCount).fill(-1);
     this.handledSpell = new Int32Array(residentCount).fill(-1);
+    this.jaywalkWalk = new Float64Array(residentCount).fill(-1);
   }
 
   freeCase(): number {
