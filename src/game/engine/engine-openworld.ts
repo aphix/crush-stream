@@ -53,6 +53,11 @@ type TrafficHostPorts = TrafficPorts & {
   makeLights(): LightsArt;
 };
 
+/** The streamed interiors of the map's places: `update` once a frame with the eye, `dispose` when the course is left. */
+type InteriorArt = {
+  update(eyeX: number, eyeZ: number, dt: number): void;
+  dispose(): void;
+};
 /** What the open world needs of the engine. */
 export type OpenWorldPorts = {
   /** The open world's course is up (solo, or in a room's lobby). */
@@ -87,6 +92,8 @@ export type OpenWorldPorts = {
   makeFacades(map: OpenWorldMap): FacadeArt;
   /** The cars and lights of the open world; a harness without them has a crowd and no traffic. */
   traffic?: TrafficHostPorts;
+  /** Absent in a director that draws no interiors (the tests'). */
+  makeInteriors?(map: OpenWorldMap): InteriorArt;
 };
 
 /**
@@ -102,6 +109,7 @@ export class OpenWorldDirector {
   private signs: PlaceSigns | null = null;
   private facades: FacadeArt | null = null;
   private law: OpenWorldLaw | null = null;
+  private interiors: InteriorArt | null = null;
   private unhook: (() => void) | null = null;
   private traffic: OpenWorldTraffic | null = null;
   private lights: LightsArt | null = null;
@@ -191,6 +199,9 @@ export class OpenWorldDirector {
     }
     this.culling.frame(this.ports.cars(), wallDt);
     this.facades ??= this.ports.makeFacades(this.map);
+    if (this.interiors === null && this.ports.makeInteriors !== undefined) this.interiors = this.ports.makeInteriors(this.map);
+    this.ports.eye(this.ray);
+    this.interiors?.update(this.ray.eyeX, this.ray.eyeZ, wallDt);
     const client = this.ports.isClient();
     if (client && !this.hasHeard) return;
     const key = client ? this.heardKey : this.hostKey();
@@ -214,10 +225,16 @@ export class OpenWorldDirector {
     }
   }
 
-  /** The crowd, its drawing, its worker and the signage are gone. */
+  /** The crowd, its drawing, its worker and the signage are gone, and the interiors with them. */
   stop(): void {
+    this.stopCrowd();
     this.signs?.dispose();
     this.signs = null;
+    this.interiors?.dispose();
+    this.interiors = null;
+  }
+
+  private stopCrowd(): void {
     if (this.crowd === null) return;
     this.unhook?.();
     this.stopTraffic();
@@ -253,7 +270,7 @@ export class OpenWorldDirector {
   }
 
   private start(map: OpenWorldMap, key: number, client: boolean): void {
-    this.stop();
+    this.stopCrowd();
     const tier = Math.floor(key / CROWD_TIER_SCALE);
     const remote = CivilianRemote.open((err) => console.error("Crush Stream civilian worker failed", err));
     this.crowd = new CivilianCrowd(map, key & CROWD_SEED_MASK, POPULATION[tier] ?? POPULATION[0], remote);

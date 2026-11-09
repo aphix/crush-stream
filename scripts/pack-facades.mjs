@@ -18,6 +18,8 @@
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { createCanvas as makeCanvas } from "@napi-rs/canvas";
+import { BAY_WIDTH, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, SHOPFRONT } from "../src/game/world/openworld/interior-kinds.ts";
 import { writeWebp } from "./pack-tile-lib.mjs";
 import { blur, downPlane, heightOf, label, morph, roughnessOf, spread } from "./pack-window-lib.mjs";
 
@@ -64,8 +66,19 @@ const NEON_CLEAR = 2;
  * cornice, floor (one storey) and ground; the glass: `rects` (window boxes, crop-relative, where colour cannot tell glass from wall) or `glass`, a predicate over (r, g, b)
  * in 0..255 and lightness; `quoins` whether the style has corner stones; `neutral` how far the albedo is washed to cream so the per-instance pastel tints colour it;
  * `background` [share, r, g, b, min]: sky (every channel at least `min`) above that share of the picture is painted that colour; `relief`: the style has height and roughness strips; `neon`
- * { rects, bright }: sign boxes (crop-relative like `rects`) whose texels with a channel of at least `bright` are lit signs.
+ * { rects, bright }: sign boxes (crop-relative like `rects`) whose texels with a channel of at least `bright` are lit signs; `metres`: the bands' heights in block metres, set by hand where
+ * the picture's own scale is not the building's (a building drawn `H` m tall is stretched by H / 14); `open` { kind, floorY, ground }: the style's openings (`SHOPFRONT[kind]`, per bay) are cut through the
+ * ground layer's albedo alpha, `ground` being the ground band's height in world metres.
  */
+/** A building of `height` m draws at height / BLOCK_HEIGHT of the 14 m block: bands in block metres that come out at the world heights `cornice`, `floor`, `ground`. */
+const BLOCK_HEIGHT = 14;
+const metresFor = (height, { cornice, floor, ground }) => {
+  const k = BLOCK_HEIGHT / height;
+  return { cornice: Math.round(cornice * k * 100) / 100, floor: Math.round(floor * k * 100) / 100, ground: Math.round(ground * k * 100) / 100 };
+};
+const HOME = metresFor(10.9, { cornice: 0.9, floor: 3.2, ground: 3.6 });
+const SHOP = metresFor(11.3, { cornice: 0.9, floor: 3.2, ground: 4 });
+const MARKET = metresFor(8.1, { cornice: 0.9, floor: 3.2, ground: 4 });
 const STYLES = {
   prague: { crop: [288, 0, 270, 1264], bays: 4, cornice: [0, 395], floor: [688, 1035], ground: [1035, 1264], quoins: true, rects: [[95, 268, 177, 352], [95, 790, 177, 963], [66, 1130, 207, 1264]] },
   dc: { crop: [283, 0, 282, 1264], bays: 4, cornice: [0, 235], floor: [235, 528], ground: [838, 1264], quoins: true, rects: [[57, 172, 117, 230], [167, 172, 227, 230], [110, 312, 175, 455], [54, 327, 80, 468], [204, 327, 230, 468], [49, 897, 105, 1045], [180, 893, 243, 925]] },
@@ -78,6 +91,13 @@ const STYLES = {
   federal: { crop: [300, 0, 246, 1264], bays: 4, cornice: [0, 255], floor: [455, 690], ground: [938, 1264], quoins: false, rects: [[90, 525, 160, 655], [65, 1020, 180, 1250]] },
   warehouse: { crop: [280, 0, 287, 1264], bays: 4, cornice: [0, 352], floor: [352, 642], ground: [940, 1264], quoins: false, rects: [[82, 95, 207, 290], [82, 385, 207, 575]] },
   farm: { crop: [282, 0, 284, 1264], bays: 4, cornice: [0, 45], floor: [655, 905], ground: [905, 1264], quoins: false, rects: [[24, 685, 78, 750], [115, 685, 169, 750], [206, 685, 260, 750]] },
+  rowbrick: { mirror: true, crop: [85, 0, 677, 1264], bays: 1, cornice: [72, 135], floor: [135, 477], ground: [843, 1228], quoins: false, rects: [[107, 172, 223, 388], [456, 172, 572, 388], [160, 878, 323, 1108], [507, 880, 633, 930]], metres: HOME, open: { kind: "rowhome", floorY: ROWHOME_FLOOR_Y, ground: 3.6 } },
+  rowpainted: { mirror: true, crop: [0, 0, 848, 1264], bays: 1, cornice: [45, 125], floor: [132, 453], ground: [818, 1250], quoins: false, rects: [[162, 165, 305, 365], [545, 165, 688, 365], [212, 868, 402, 1125], [650, 870, 780, 925]], metres: HOME, open: { kind: "rowhome", floorY: ROWHOME_FLOOR_Y, ground: 3.6 } },
+  coffee: { crop: [68, 0, 712, 1264], bays: 1, cornice: [68, 138], floor: [138, 478], ground: [757, 1225], quoins: false, rects: [[137, 175, 272, 390], [442, 175, 574, 390], [54, 960, 240, 1130], [474, 960, 659, 1130], [310, 985, 402, 1195]], metres: SHOP, open: { kind: "coffee", floorY: SHOP_FLOOR_Y, ground: 4 } },
+  bar: { crop: [93, 0, 540, 848], bays: 2, cornice: [38, 115], floor: [115, 320], ground: [510, 840], quoins: false, rects: [[112, 130, 209, 262], [320, 130, 425, 262], [50, 642, 139, 730], [394, 642, 480, 730]], neon: { rects: [[67, 660, 122, 715], [417, 660, 452, 708]], bright: 170 }, metres: SHOP, open: { kind: "bar", floorY: SHOP_FLOOR_Y, ground: 4 } },
+  office: { crop: [10, 0, 622, 848], bays: 2, cornice: [85, 125], floor: [125, 345], ground: [565, 848], quoins: false, glass: (r, g, b) => b - r > 30, metres: SHOP, open: { kind: "office", floorY: SHOP_FLOOR_Y, ground: 4 } },
+  cornerstore: { crop: [100, 0, 532, 848], bays: 2, cornice: [48, 125], floor: [130, 330], ground: [492, 848], quoins: false, rects: [[105, 155, 190, 275], [347, 155, 430, 275], [230, 637, 508, 790]], neon: { rects: [[243, 643, 293, 672]], bright: 170 }, metres: SHOP, open: { kind: "store", floorY: SHOP_FLOOR_Y, ground: 4 } },
+  supermarket: { crop: [72, 0, 280, 848], bays: 2, cornice: [185, 235], floor: [235, 380], ground: [380, 800], quoins: false, rects: [[48, 270, 96, 315], [188, 270, 236, 315], [8, 578, 272, 640], [8, 662, 272, 800]], metres: MARKET },
   rowhouse: { crop: [233, 0, 383, 1264], bays: 3, cornice: [0, 275], floor: [275, 548], ground: [838, 1264], quoins: false, rects: [[159, 165, 225, 275], [159, 350, 224, 490], [95, 365, 119, 505], [264, 365, 288, 505], [254, 912, 322, 1060], [52, 910, 126, 942], [257, 1160, 322, 1240]] },
 };
 
@@ -93,6 +113,11 @@ async function bayPicture(name, spec) {
   const wide = createCanvas(LAYER + 2 * margin, h);
   const ctx = wide.getContext("2d");
   ctx.imageSmoothingQuality = "high";
+  // A building face's u runs to the viewer's right, which is the building's local -z: a style drawn the other way round (`mirror`) is flipped to match the plan.
+  if (spec.mirror) {
+    ctx.translate(LAYER + 2 * margin, 0);
+    ctx.scale(-1, 1);
+  }
   ctx.drawImage(image, cx - MARGIN, cy, cw + 2 * MARGIN, ch, 0, 0, LAYER + 2 * margin, h);
   const src = ctx.getImageData(0, 0, wide.width, h).data;
   const rgb = new Float32Array(LAYER * h * 3);
@@ -192,8 +217,9 @@ function windowMask(spec, rgb, band) {
   if (spec.rects) {
     for (const [rx0, ry0, rx1, ry1] of spec.rects) {
       if (ry0 < y0 - 1 || ry1 > y1 + 1) continue;
+      const [fx0, fx1] = spec.mirror ? [spec.crop[2] - rx1, spec.crop[2] - rx0] : [rx0, rx1];
       for (let y = Math.max(0, Math.floor((ry0 - y0) * ky)); y < Math.min(LAYER, Math.ceil((ry1 - y0) * ky)); y++) {
-        for (let x = Math.max(0, Math.floor(rx0 * kx)); x < Math.min(LAYER, Math.ceil(rx1 * kx)); x++) mask[y * LAYER + x] = 1;
+        for (let x = Math.max(0, Math.floor(fx0 * kx)); x < Math.min(LAYER, Math.ceil(fx1 * kx)); x++) mask[y * LAYER + x] = 1;
       }
     }
     return mask;
@@ -211,8 +237,9 @@ function neonMask(spec, rgb, band) {
   const ky = LAYER / (y1 - y0);
   for (const [rx0, ry0, rx1, ry1] of spec.neon.rects) {
     if (ry0 < y0 - 1 || ry1 > y1 + 1) continue;
+    const [fx0, fx1] = spec.mirror ? [spec.crop[2] - rx1, spec.crop[2] - rx0] : [rx0, rx1];
     for (let y = Math.max(0, Math.floor((ry0 - y0) * ky)); y < Math.min(LAYER, Math.ceil((ry1 - y0) * ky)); y++) {
-      for (let x = Math.max(0, Math.floor(rx0 * kx)); x < Math.min(LAYER, Math.ceil(rx1 * kx)); x++) {
+      for (let x = Math.max(0, Math.floor(fx0 * kx)); x < Math.min(LAYER, Math.ceil(fx1 * kx)); x++) {
         const p = y * LAYER + x;
         if (Math.max(rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2]) >= spec.neon.bright) mask[p] = 1;
       }
@@ -316,6 +343,34 @@ function plainPatch(rgb, mask) {
   return at;
 }
 
+/** The ground layer's albedo alpha (LAYER square, 0 in an opening): the style's `SHOPFRONT` openings of one bay, mapped from metres across the bay (the layer's u runs toward the plan's -across) and up the ground band. */
+function openingAlpha(open) {
+  const alpha = new Uint8Array(LAYER * LAYER).fill(255);
+  for (const opening of SHOPFRONT[open.kind]) {
+    const x0 = Math.round(((BAY_WIDTH / 2 - (opening.centre + opening.width / 2)) / BAY_WIDTH) * LAYER);
+    const x1 = Math.round(((BAY_WIDTH / 2 - (opening.centre - opening.width / 2)) / BAY_WIDTH) * LAYER);
+    const y0 = Math.round(((open.ground - (open.floorY + opening.top)) / open.ground) * LAYER);
+    const y1 = Math.round(((open.ground - (open.floorY + opening.sill)) / open.ground) * LAYER);
+    for (let y = Math.max(0, y0); y < Math.min(LAYER, y1); y++) for (let x = Math.max(0, x0); x < Math.min(LAYER, x1); x++) alpha[y * LAYER + x] = 0;
+  }
+  return alpha;
+}
+
+/** floats 0..255 (3 per texel) with `alpha` (a byte per texel) as a webp: the albedo strip of a style with openings. */
+function writeWebpAlpha(file, width, height, rgb, alpha, quality) {
+  const canvas = makeCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+  const image = ctx.createImageData(width, height);
+  for (let i = 0; i < width * height; i++) {
+    for (let c = 0; c < 3; c++) image.data[i * 4 + c] = rgb[i * 3 + c];
+    image.data[i * 4 + 3] = alpha[i];
+  }
+  ctx.putImageData(image, 0, 0);
+  const bytes = canvas.toBuffer("image/webp", quality);
+  writeFileSync(file, bytes);
+  return bytes.length;
+}
+
 /** Layers stacked into one strip (floats 0..255, three per texel). */
 function stack(layers, size) {
   const strip = new Float32Array(layers.length * size * size * 3);
@@ -357,7 +412,9 @@ for (const [name, spec] of Object.entries(STYLES)) {
   }
   const normals = rgbs.map((rgb, i) => normalOf(rgb, glows[i].mask, RELIEF[names[i]]));
   const bytes = [
-    writeWebp(join(out, `${name}-albedo.webp`), LAYER, LAYER * rgbs.length, stack(rgbs, LAYER), WEBP_QUALITY),
+    spec.open
+      ? writeWebpAlpha(join(out, `${name}-albedo.webp`), LAYER, LAYER * rgbs.length, stack(rgbs, LAYER), Uint8Array.from({ length: LAYER * LAYER * rgbs.length }, (_, i) => (Math.floor(i / (LAYER * LAYER)) === 2 ? openingAlpha(spec.open)[i % (LAYER * LAYER)] : 255)), WEBP_QUALITY)
+      : writeWebp(join(out, `${name}-albedo.webp`), LAYER, LAYER * rgbs.length, stack(rgbs, LAYER), WEBP_QUALITY),
     writeWebp(join(out, `${name}-normal.webp`), LAYER, LAYER * rgbs.length, stack(normals, LAYER), NORMAL_QUALITY),
     writeWebp(join(out, `${name}-glow.webp`), GLOW_LAYER, GLOW_LAYER * rgbs.length, stack(glows.map((g) => g.glow), GLOW_LAYER), 100),
   ];
@@ -375,10 +432,11 @@ for (const [name, spec] of Object.entries(STYLES)) {
   metadata[name] = {
     bays: spec.bays,
     layers: rgbs.length,
-    metres: { cornice: bandMetres("cornice"), floor: bandMetres("floor"), ground: bandMetres("ground") },
+    metres: spec.metres ?? { cornice: bandMetres("cornice"), floor: bandMetres("floor"), ground: bandMetres("ground") },
     plain: plainPatch(rgbs[1], glows[1].mask).map((v) => Math.round(v * 1000) / 1000),
     ...(spec.relief ? { height: true, roughness: true } : {}),
     ...(spec.neon ? { neon: true } : {}),
+    ...(spec.open ? { open: true } : {}),
   };
   console.log(`${name}: ${rgbs.length} layers, albedo ${bytes[0]} B, normal ${bytes[1]} B, glow ${bytes[2]} B${bytes[3] ? `, height ${bytes[3]} B, roughness ${bytes[4]} B` : ""}; windows ${glows.map((g) => g.windows).join("/")}; ${JSON.stringify(metadata[name].metres)}`);
 }

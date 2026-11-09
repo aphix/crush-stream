@@ -743,6 +743,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.tree:
       return one(tree(), mats.nature);
     case PREFAB.building:
+    case PREFAB.buildingShell:
     case PREFAB.stucco: {
       const s = style ?? homeStyle(id)!;
       return one(buildingPieces(s, id === PREFAB.stucco ? MAT.STUCCO_WALL : MAT.BUILDING_WALL), mats.facades[s]);

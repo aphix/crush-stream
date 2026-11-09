@@ -11,6 +11,22 @@ export type WalkGraph = {
   edgeCrossing: Uint8Array;
 };
 
+/** What a place's trade is called: `Place.sector`, one spelling for every file that reads or writes it. */
+export const SECTOR = {
+  retail: "retail",
+  services: "services",
+  food: "food",
+  cafe: "cafe",
+  office: "office",
+  nightlife: "nightlife",
+  auto: "auto",
+  grocery: "grocery",
+  recreation: "recreation",
+  hideout: "hideout",
+  transit: "transit",
+  residential: "residential",
+} as const;
+
 /** Which interior a place has: one builder per kind, all from one shared furniture kit. */
 export type InteriorKind = "rowhome" | "coffee" | "bar" | "office" | "store";
 

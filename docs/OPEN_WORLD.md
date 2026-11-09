@@ -235,6 +235,16 @@ Real cars of the field drive the streets, stop at signals and park in the kerb s
 - **Red-light runs** (`red-light-watch.ts`): `onRedLightRun(listener)` (host and solo) fires once per car per crossing of a stop bar against its signal, for every car, the player's included.
 - **Engine** (`engine-openworld.ts`, `engine-race.ts`): `RaceDirector.freeDrivers` drives the lobby's cars no human does (null: they stand on their brakes as ever).
 
+## Interiors (`world/openworld/interior-*`, `present/interiors`)
+
+Five interiors (`Place.interior`: rowhome, coffee, bar, office, store) are built from one furniture kit. The **plan** (`planInterior`, pure, the same on every peer) lists walls with openings, floor and ceiling slabs, stairs and furniture in plan metres (`deep` from the street wall, `across` along the face); the same plan gives
+the **seats** (`Place.seats`: x, z, yaw, height; a rowhome's two stoop seats lead, `Place.stoopSeats`), the **counter** spots (`Place.counter`: where a customer stands to buy, where the clerk stands) and the **solids** (`interiorSolids`) the walkers' physics takes while an eye is near. A rowhome stands on its stoop's landing (0.9 m) with three storeys and a stair up its left wall; a shop's floor is level with the sidewalk.
+
+The **doorways and shop windows are cut through the facade's ground band** (`SHOPFRONT` per interior; `scripts/pack-facades.mjs` zeroes the ground layer's albedo alpha there and the shader discards it), so the interior is seen from the street and a door leads into it. `InteriorSet` (one per map) keeps the
+ground floor's envelope of every place within `SHELL_NEAR` of the eye, so no opening shows through to the world, and the furnished interior within `INTERIOR_NEAR`; both are dropped after the eye has been past their far radius for `INTERIOR_LINGER`. Everything is merged into three meshes (envelopes, furniture, lamps and screens): the draw calls do not grow with the interiors.
+
+**Walking in.** A place with an interior stands in a drawn-only `buildingShell` (a `building` with no collider), and its ground floor's street, party and back walls are invisible-wall props (`interiorEnvelopeProps`, merged along each row of houses) that are whole but for the doorways, so a car is stopped and a walker passes a door. The rest (slabs, stairs, furniture) reaches the physics as fixed boxes, handed over by `InteriorSet.onSolids` while the eye is within `SOLIDS_NEAR`.
+
 ## Where it lives
 
 | Piece | File |
@@ -253,6 +263,8 @@ Real cars of the field drive the streets, stop at signals and park in the kerb s
 | Map and course | `world/openworld/` |
 | Street fabric (crossings, manholes, hydrants, furniture) | `world/openworld/openworld-fabric.ts`, `openworld-fabric-constants.ts`, `openworld-sides.ts` |
 | What is seen, the cars' detail and phase-out | `present/openworld-sight.ts`, `present/openworld-car-lod.ts`, `engine/engine-openworld-cull.ts` |
+| Interiors: plan, kit, streaming | `world/openworld/interior-{kinds,draft,layouts,plan}.ts`, `present/interiors/` |
+| Programme (businesses, hours, sectors) and lots | `world/openworld/openworld-{programme,lots}.ts` |
 
 The director is made with the engine; the crowd is made on the first frame the open world's course is up and a map is known
 (`CrashEngine.startOpenWorld(map)`), rebuilt when the key changes (a new seed, a host's other tier) and dropped, with its drawing, its

@@ -48,6 +48,7 @@ import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
 import { CivilianArt } from "../present/civilian-art.ts";
 import { FacadeBays } from "../present/facade-bays.ts";
+import { InteriorSet } from "../present/interiors/interior-art.ts";
 import { NEAR_SLOTS } from "../present/civilian-art-constants.ts";
 import { OpenWorldSigns } from "../present/openworld-signs.ts";
 import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
@@ -482,6 +483,13 @@ export class CrashEngine extends EngineGarage {
             },
           };
         },
+      },
+      makeInteriors: (map) => {
+        const interiors = new InteriorSet(map);
+        this.scene.add(interiors.group);
+        this.queueWarm();
+        interiors.onSolids((boxes) => this.ragdolls.setFixedBoxes(boxes));
+        return interiors;
       },
     });
   }

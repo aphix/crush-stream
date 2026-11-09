@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FACADE } from "../../present/facades.ts";
 import { makeWorld } from "../race-world.test-util.ts";
 import { parseTrack } from "../track-schema.ts";
 import { OFF_MENU } from "../tracks/index.ts";
@@ -6,7 +7,7 @@ import { OPENWORLD_ID } from "./openworld-course.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
 import { PLACE_NAMES } from "./openworld-programme.ts";
-import { PLACE_KIND } from "./walk-graph.ts";
+import { PLACE_KIND, SECTOR } from "./walk-graph.ts";
 
 const lots = layOutLots();
 const map = buildOpenWorldMap(lots);
@@ -72,5 +73,58 @@ describe("given the drafted programme's map", () => {
     expect(beyond.length, "places beyond the walls").toBeGreaterThan(400);
     expect(beyond.every((place) => Math.abs(place.x) > map.halfX || Math.abs(place.z) > map.halfZ), "all beyond the walls").toBe(true);
     expect(beyond.filter((place) => place.kind === PLACE_KIND.work).length, "workplaces beyond the walls").toBeGreaterThan(0);
+  });
+});
+
+describe("given the programme's businesses on the map", () => {
+  const businesses = playable.filter((place) => place.storeys > 0 && place.kind !== PLACE_KIND.home);
+  const withInterior = (interior: string) => playable.filter((place) => place.interior === interior);
+
+  // mutation: sed -i 's/{ row: ROW.A, column: 0, face: "south", at: 9, venue: COFFEE_GRIND },//' src/game/world/openworld/openworld-programme.ts
+  it("when the places are counted by kind of interior, then there are coffee shops, bars and an office, a store on each of several corners and one supermarket without an interior", () => {
+    expect(withInterior("coffee").length, "coffee shops").toBeGreaterThanOrEqual(2);
+    expect(withInterior("bar").length, "bars").toBeGreaterThanOrEqual(2);
+    expect(withInterior("office").length, "offices").toBeGreaterThanOrEqual(1);
+    expect(withInterior("store").length, "corner stores").toBeGreaterThanOrEqual(3);
+    const supermarkets = playable.filter((place) => place.style === "supermarket");
+    expect(supermarkets.length, "supermarkets").toBe(1);
+    expect(supermarkets[0]!.interior, "the supermarket's interior").toBeUndefined();
+  });
+
+  // mutation: sed -i 's/{ row: ROW.C, column: 0, face: "south", at: 0, venue: MARTINEZ }/{ row: ROW.C, column: 0, face: "south", at: 6, venue: MARTINEZ }/' src/game/world/openworld/openworld-programme.ts
+  it("when each corner store is placed on its block, then it touches the block's west or east end", () => {
+    const reach = lots.geometry.blockLength / 2;
+    for (const store of withInterior("store")) {
+      const block = lots.blocks.find((candidate) => Math.abs(store.x - candidate.centreX) < reach)!;
+      const fromEnd = reach - (Math.abs(store.x - block.centreX) + store.width / 2);
+      expect(Math.abs(fromEnd), `${store.name} distance from its block's end`).toBeLessThan(1e-6);
+    }
+  });
+
+  // mutation: sed -i 's/hours: \[6, 15\], interior: "coffee"/interior: "coffee"/' src/game/world/openworld/openworld-programme.ts
+  it("when the businesses are read, then each has opening hours of game hours, a sector and a facade style the pipeline has, and a type of business has its own style", () => {
+    const styleOf = new Map<string, Set<string>>();
+    for (const place of businesses) {
+      if (place.hours === undefined) throw new Error(`${place.name} has no hours`);
+      for (const hour of place.hours) expect(Number.isInteger(hour) && hour >= 0 && hour < 24, `${place.name} hour ${hour}`).toBe(true);
+      expect(Object.values(SECTOR), `${place.name} sector`).toContain(place.sector);
+      if (place.interior !== undefined) {
+        expect(Object.hasOwn(FACADE, place.style), `${place.name} style ${place.style}`).toBe(true);
+        styleOf.set(place.interior, (styleOf.get(place.interior) ?? new Set()).add(place.style));
+      }
+    }
+    expect(Object.fromEntries([...styleOf].map(([interior, styles]) => [interior, [...styles]])), "style by kind of interior").toEqual({ bar: ["bar"], coffee: ["coffee"], office: ["office"], store: ["cornerstore"] });
+  });
+
+  // mutation: sed -i 's/interior: "rowhome" }/}/' src/game/world/openworld/openworld-lots.ts
+  it("when the homes inside the walls are read, then each is a one-lot building of its own with a rowhome interior and two stoop seats leading its seats", () => {
+    const homes = playable.filter((place) => place.kind === PLACE_KIND.home);
+    expect(homes.length, "homes inside the walls").toBeGreaterThan(100);
+    for (const home of homes) {
+      expect(home.interior, `${home.name} interior`).toBe("rowhome");
+      expect(home.stoopSeats, `${home.name} stoop seats`).toBe(2);
+      expect(home.seats!.length, `${home.name} seats`).toBe(40);
+    }
+    expect(lots.buildings.filter((building) => building.style === "rowbrick" || building.style === "rowpainted").length, "house buildings").toBeGreaterThanOrEqual(homes.length);
   });
 });
