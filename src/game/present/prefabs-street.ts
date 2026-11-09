@@ -3,6 +3,7 @@ import { MAT } from "../kernel/material-ids.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { plazaBricks } from "../world/openworld/openworld-plaza.ts";
+import { POSTS } from "../world/street-kit.ts";
 import { box, cyl, painted, type Piece, type PrefabMaterials, type PrefabPart } from "./prefab-pieces.ts";
 import { monumentPieces } from "./prefabs-mall.ts";
 
@@ -52,7 +53,7 @@ const WHEEL = 16;
 const PAVILION_SIDES = 8;
 
 /** The street sign's blades (m): one along x over one along z, each this long, tall and thick, at these heights on a pole this tall; `street-name-blades.ts` prints on their faces. */
-export const STREET_SIGN = { bladeLength: 0.9, bladeHeight: 0.18, bladeThickness: 0.025, alongXHeight: 2.78, alongZHeight: 2.56, poleHeight: 2.9 } as const;
+export const STREET_SIGN = { bladeLength: 0.9, bladeHeight: 0.18, bladeThickness: POSTS.streetSign.bladeThickness, alongXHeight: 2.78, alongZHeight: 2.56, poleHeight: 2.9 } as const;
 
 /** A cylinder of radius `r` lying along x (`axis` "x") or z, centred at (x, y, z), `length` long. */
 function lying(r: number, length: number, axis: "x" | "z", x: number, y: number, z: number): THREE.BufferGeometry {
@@ -103,6 +104,10 @@ function parkingMeter(): Piece[] {
   ];
 }
 
+/** A hydrant's outlets (m): each this long, its middle this far from the barrel's axis, so the tip stands at the plan's reach (`POSTS.hydrant.reach`). */
+const OUTLET_LENGTH = 0.1;
+const OUTLET_MIDDLE = POSTS.hydrant.reach - OUTLET_LENGTH / 2;
+
 /** Flange, barrel, bonnet and cap, a hose outlet each side and the pumper outlet toward the street. */
 function hydrant(): Piece[] {
   return [
@@ -110,9 +115,9 @@ function hydrant(): Piece[] {
     [cyl(0.12, 0.12, 0.05, 0.56, ROUND), KIT_COLOUR.hydrant, MAT.DUMPSTER_STEEL],
     [cyl(0.08, 0.14, 0.56, 0.68, ROUND), KIT_COLOUR.hydrant, MAT.DUMPSTER_STEEL],
     [cyl(0.04, 0.04, 0.68, 0.76, THIN), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
-    [lying(0.045, 0.16, "z", 0, 0.42, -0.14), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
-    [lying(0.045, 0.16, "z", 0, 0.42, 0.14), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
-    [lying(0.06, 0.14, "x", 0.14, 0.4, 0), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
+    [lying(0.045, OUTLET_LENGTH, "z", 0, 0.42, -OUTLET_MIDDLE), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
+    [lying(0.045, OUTLET_LENGTH, "z", 0, 0.42, OUTLET_MIDDLE), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
+    [lying(0.06, OUTLET_LENGTH, "x", OUTLET_MIDDLE, 0.4, 0), KIT_COLOUR.hydrantCap, MAT.DUMPSTER_STEEL],
   ];
 }
 
@@ -172,10 +177,12 @@ function streetSign(): Piece[] {
 
 /** Philadelphia's brown cast-iron corner bollard: a post, a collar and a domed cap. */
 function bollard(): Piece[] {
+  const { postRadius, collarRadius, collarBottom, collarTop, capBottom, capTopRadius, top } = POSTS.bollard;
   return [
-    [cyl(0.11, 0.12, 0, 0.82, THIN), KIT_COLOUR.bollard, MAT.LAMP_POLE],
-    [cyl(0.14, 0.14, 0.62, 0.68, THIN), KIT_COLOUR.bollard, MAT.LAMP_POLE],
-    [cyl(0.04, 0.12, 0.82, 0.95, THIN), KIT_COLOUR.bollard, MAT.LAMP_POLE],
+    [cyl(postRadius, postRadius, 0, collarBottom, THIN), KIT_COLOUR.bollard, MAT.LAMP_POLE],
+    [cyl(collarRadius, collarRadius, collarBottom, collarTop, THIN), KIT_COLOUR.bollard, MAT.LAMP_POLE],
+    [cyl(postRadius, postRadius, collarTop, capBottom, THIN), KIT_COLOUR.bollard, MAT.LAMP_POLE],
+    [cyl(capTopRadius, postRadius, capBottom, top, THIN), KIT_COLOUR.bollard, MAT.LAMP_POLE],
   ];
 }
 
