@@ -44,6 +44,7 @@ import { OpenWorldDirector } from "./engine-openworld.ts";
 import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
 import { TrafficLightArt } from "../present/traffic-lights.ts";
 import { wearCarLook } from "../present/car-look.ts";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { LAYOUT } from "../world/openworld/openworld-constants.ts";
@@ -494,6 +495,11 @@ export class CrashEngine extends EngineGarage {
         place: (id, x, z, yaw, colour) => this.standTrafficCar(this.live()[id]!, x, z, yaw, colour),
         putAway: (id) => this.storeTrafficCar(this.live()[id]!, id),
         markPolice: (from, count) => this.setPolice(from, count),
+        sirens: (id, on) => {
+          const car = this.cars[id];
+          if (car && car.sirens !== on) car.setSirens(on);
+        },
+        openDoor: (id, radians) => this.cars[id]?.setDoorOpen(DRIVER_SIDE, radians),
         setBody: (id, style) => this.matchCar(id, style, STYLE_CLASS[style]),
         release: (id) => {
           this.live()[id]!.stored = false;

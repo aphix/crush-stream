@@ -6,7 +6,8 @@ import { buildRoadNetwork, junctionIndex } from "../../world/openworld/openworld
 import { OpenWorldTraffic, type DrivenCar } from "./openworld-traffic.ts";
 import { fleetStyle } from "../../scenes/fleet.ts";
 import { KERB_CANDIDATES } from "../../world/openworld/openworld-parking.ts";
-import { EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
+import { AMBULANCE } from "./ambulance.ts";
+import { AMBULANCE_COLOUR, AMBULANCE_DEPOT_METRES, AMBULANCE_LOAD_SECONDS, EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { kerbSpotsNear } from "../../world/openworld/openworld-parking.ts";
 import { residentBody, residentColour } from "./traffic-look.ts";
@@ -34,7 +35,7 @@ describe("given a field whose pool cars the engine has just built (shown and sim
   // mutation: sed -i 's/    for (let id = first; id < first + this.total; id++) ports.putAway(id);/    \/\/ none put away/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when traffic starts, then every pool car is put away (hidden and not simulated) before anything else reads them", () => {
     const field = quietField();
-    makeTraffic(field, { movers: 12, kerb: 10, patrol: 2 });
+    makeTraffic(field, { movers: 12, kerb: 10, patrol: 2, ambulance: 0 });
     expect(field.cars.length, "the pool's cars were built").toBe(1 + 12 + 10);
     for (let id = 1; id < field.cars.length; id++) {
       const car = field.cars[id]!;
@@ -46,7 +47,7 @@ describe("given a field whose pool cars the engine has just built (shown and sim
   // mutation: sed -i 's/    if (car.group.visible || !car.stored) {/    if (false) {/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when something outside traffic shows a car traffic put away and wakes it, then traffic puts it away again within a pass", () => {
     const field = quietField();
-    const traffic = makeTraffic(field, { movers: 2, kerb: 2, patrol: 1 });
+    const traffic = makeTraffic(field, { movers: 2, kerb: 2, patrol: 1, ambulance: 0 });
     const clock = new Clock();
     const woken = [2, 3, 4];
     for (const id of woken) {
@@ -68,7 +69,7 @@ describe("given traffic rebuilt on the same sight field (a new crowd key mid-ses
   it("when traffic is let go, then it gives back every sight id it claimed", () => {
     const field = quietField();
     const sight = new ProximitySight(field.ports);
-    const traffic = new OpenWorldTraffic([], field.ports, sight, { movers: 4, kerb: 3, patrol: 1 }, null);
+    const traffic = new OpenWorldTraffic([], field.ports, sight, { movers: 4, kerb: 3, patrol: 1, ambulance: 0 }, null);
     traffic.dispose();
     expect(sight.claims.length, "claims").toBe(1);
     expect(sight.releases.length, "releases").toBe(1);
@@ -167,7 +168,7 @@ describe("given the open world's traffic on a field with the local player's car"
   // mutation: sed -i 's/return handle.driver !== null ?/return handle.driver === undefined ?/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when the owner of a leased car sets its driver, then the car takes that driver's input until it is set to null", () => {
     const field = quietField();
-    const traffic = makeTraffic(field, { movers: 2, kerb: 0, patrol: 1 });
+    const traffic = makeTraffic(field, { movers: 2, kerb: 0, patrol: 1, ambulance: 0 });
     const clock = new Clock();
     const car = traffic.spawnDrivenCar(-1, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z), { urgent: true })!;
     const own = { throttle: 0.9, steer: 0, brake: 0, ebrake: false, boost: false };
@@ -216,6 +217,97 @@ describe("given a resident whose car stands at the kerb near a player and then d
     expect(car, "he drives off").not.toBeNull();
     expect(field.cars[car!.index]!.style.id, "the driven car's body").toBe(residentBody(RESIDENT));
     expect(field.colours[car!.index], "the driven car's paint").toBe(residentColour(RESIDENT));
+  });
+
+  // mutation: sed -i 's/    this.context.ports.openDoor(id, radians);/    this.context.ports.openDoor(id, 0);/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when his car's pose and door are asked, then the pose is its space's and the door opens on the car that stands there", () => {
+    const field = new FakeField();
+    const feed = emptyFeed(8);
+    const traffic = makeTraffic(field, { movers: 4, kerb: 4 }, feed, [homeAt(HOME.x, HOME.z)]);
+    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
+    feed.parked.count = 1;
+    feed.parked.resident[0] = RESIDENT;
+    feed.parked.place[0] = 0;
+    runSeconds(field, traffic, new Clock(), 3);
+    const pose = { x: 0, z: 0, yaw: 0 };
+    expect(traffic.carPoseOf(RESIDENT, pose), "his car is at a space").toBe(true);
+    const spot = traffic.claimedSpots.indexOf(1);
+    expect(pose.x, "x").toBeCloseTo(traffic.parkingSpots.x[spot]!, 3);
+    expect(pose.yaw, "yaw").toBeCloseTo(traffic.parkingSpots.yaw[spot]!, 3);
+    expect(traffic.setCarDoor(RESIDENT, 0.8), "the door of the car there").toBe(true);
+    const id = carAt(field, traffic, spot);
+    expect(field.doors[id], "its angle").toBe(0.8);
+    expect(traffic.carPoseOf(RESIDENT + 1, pose), "someone with no car here").toBe(false);
+  });
+});
+
+describe("given the open world's ambulance", () => {
+  const SCENE = { x: 20, z: -45 };
+  const FLEET = { movers: 5, kerb: 0, patrol: 1, ambulance: 1 };
+
+  function ambulanceWorld(): { field: FakeField; traffic: OpenWorldTraffic; clock: Clock } {
+    const field = quietField();
+    return { field, traffic: makeTraffic(field, FLEET), clock: new Clock() };
+  }
+
+  function ambulanceId(field: FakeField): number {
+    const [id] = [...field.sirens];
+    return id ?? -1;
+  }
+
+  // mutation: sed -i 's/    if (kind === LEASE.ambulance) ports.sirens(id, true);/    \/\/ no lights/' src/game/ai/openworld-traffic/mover-fleet.ts
+  // mutation: sed -i 's/const paint = kind === LEASE.ambulance ? AMBULANCE_COLOUR : /const paint = /' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when it is called to a scene, then a white car with its lights on sets out from a space far away and comes to the space nearest the scene", () => {
+    const { field, traffic, clock } = ambulanceWorld();
+    expect(traffic.callAmbulance(SCENE.x, SCENE.z, clock.seconds), "the call was taken").toBe(true);
+    expect(traffic.ambulanceState(), "on its way").toBe(AMBULANCE.coming);
+    const id = ambulanceId(field);
+    expect(id, "a car has its lights on").toBeGreaterThan(0);
+    expect(field.colours[id], "its paint").toBe(AMBULANCE_COLOUR);
+    const spots = traffic.parkingSpots;
+    const scene = traffic.ambulanceSpot();
+    expect(hypot2(spots.x[scene]! - SCENE.x, spots.z[scene]! - SCENE.z), "the space it comes to is near the scene").toBeLessThan(20);
+    const start = field.cars[id]!.group.position;
+    expect(hypot2(start.x - spots.x[scene]!, start.z - spots.z[scene]!), "it sets out from far away").toBeGreaterThanOrEqual(AMBULANCE_DEPOT_METRES);
+    runUntil({ field, traffic, clock }, () => traffic.ambulanceState() === AMBULANCE.loading);
+    expect(traffic.ambulanceState(), "it arrived").toBe(AMBULANCE.loading);
+    const at = field.cars[id]!.group.position;
+    expect(hypot2(at.x - spots.x[scene]!, at.z - spots.z[scene]!), "it stands in the space").toBeLessThan(SPOT_REACH);
+    expect(field.sirens.has(id), "lights still on at the scene").toBe(true);
+  });
+
+  // mutation: sed -i 's/seconds - this.since >= AMBULANCE_LOAD_SECONDS/seconds - this.since >= 0/' src/game/ai/openworld-traffic/ambulance.ts
+  it("when it has stood at the scene for its loading time, then it drives off to another far space and is put away there, lights off, the pool car free again", () => {
+    const { field, traffic, clock } = ambulanceWorld();
+    traffic.callAmbulance(SCENE.x, SCENE.z, clock.seconds);
+    const id = ambulanceId(field);
+    runUntil({ field, traffic, clock }, () => traffic.ambulanceState() === AMBULANCE.loading);
+    const arrivedAt = clock.seconds;
+    runSeconds(field, traffic, clock, AMBULANCE_LOAD_SECONDS - 2);
+    expect(traffic.ambulanceState(), "still loading shortly before its time").toBe(AMBULANCE.loading);
+    expect(clock.seconds - arrivedAt, "stood").toBeGreaterThan(AMBULANCE_LOAD_SECONDS - 3);
+    runUntil({ field, traffic, clock }, () => traffic.ambulanceState() === AMBULANCE.idle);
+    expect(traffic.ambulanceState(), "it left and was put away").toBe(AMBULANCE.idle);
+    expect(field.cars[id]!.stored, "put away").toBe(true);
+    expect(field.sirens.has(id), "lights off").toBe(false);
+    expect(traffic.callAmbulance(SCENE.x, SCENE.z, clock.seconds), "a new call is taken again").toBe(true);
+  });
+
+  // mutation: sed -i 's/    if (this.state !== AMBULANCE.idle || scene < 0) return false;/    if (scene < 0) return false;/' src/game/ai/openworld-traffic/ambulance.ts
+  it("when a second call comes while one is out, or the pool has no ambulance, then it is refused", () => {
+    const { traffic } = ambulanceWorld();
+    expect(traffic.callAmbulance(SCENE.x, SCENE.z, 0), "first").toBe(true);
+    expect(traffic.callAmbulance(SCENE.x + 30, SCENE.z, 0), "second while one is out").toBe(false);
+    const none = makeTraffic(quietField(), { movers: 3, kerb: 0, patrol: 1, ambulance: 0 });
+    expect(none.callAmbulance(SCENE.x, SCENE.z, 0), "a pool with no ambulance").toBe(false);
+  });
+
+  // mutation: sed -i 's/this.kindOf(slot) !== kind) continue;/false) continue;/' src/game/ai/openworld-traffic/mover-fleet.ts
+  it("when a patrol is leased, then it gets the cruiser and never the ambulance", () => {
+    const { field, traffic } = ambulanceWorld();
+    const patrol = traffic.spawnDrivenCar(-1, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z), { urgent: true })!;
+    expect(patrol.index, "the last mover slot").toBe(field.cars.length - 1 - 0);
+    expect(field.colours[patrol.index], "no white paint").not.toBe(AMBULANCE_COLOUR);
   });
 });
 
@@ -283,7 +375,7 @@ describe("given a patrol car on an urgent trip that is sent somewhere else on it
   // mutation: sed -i 's/    this.routes\[slot\] = this.spareRoute;/    this.routes[slot] = old;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when it is redirected mid-trip, then it drives on along the streets from where it is and parks in the new space, which it holds; the old one is free again", () => {
     const field = quietField();
-    const traffic = makeTraffic(field, { movers: 2, kerb: 0, patrol: 1 });
+    const traffic = makeTraffic(field, { movers: 2, kerb: 0, patrol: 1, ambulance: 0 });
     const clock = new Clock();
     const first = traffic.nearestSpot(WORK.x, WORK.z);
     const car = traffic.spawnDrivenCar(-1, traffic.nearestSpot(HOME.x, HOME.z), first, { urgent: true })!;
@@ -303,7 +395,7 @@ describe("given a patrol car on an urgent trip that is sent somewhere else on it
   // mutation: sed -i 's/ || spots.stays\[toSpot\] === 1 || taken\[toSpot\] === 1) return false;/) return false;/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when it is redirected to a space another car holds, then the redirect is refused and its trip stands", () => {
     const field = quietField();
-    const traffic = makeTraffic(field, { movers: 3, kerb: 0, patrol: 1 });
+    const traffic = makeTraffic(field, { movers: 3, kerb: 0, patrol: 1, ambulance: 0 });
     const other = traffic.spawnDrivenCar(4, traffic.nearestSpot(HOME.x, HOME.z + 40), traffic.nearestSpot(ELSEWHERE.x, ELSEWHERE.z))!;
     expect(other, "a car leased").not.toBeNull();
     const held = traffic.claimedSpots.indexOf(1);
@@ -463,7 +555,7 @@ describe("given nobody stepping a peer's seat", () => {
 });
 
 describe("given a pool the engine built as the fleet's mix, a coupe and a monster truck among its bodies", () => {
-  const fleet = { movers: 12, kerb: 10, patrol: 2 };
+  const fleet = { movers: 12, kerb: 10, patrol: 2, ambulance: 0 };
   const patrolIds = [11, 12];
 
   // mutation: sed -i 's/if (!EVERYDAY_BODIES.includes(style)) ports.setBody/if (false) ports.setBody/' src/game/ai/openworld-traffic/openworld-traffic.ts

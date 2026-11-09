@@ -7,6 +7,8 @@ export const EVERYDAY_BODIES: readonly CarStyleId[] = ["sedan", "hatchback", "wa
 export const MOVER_CARS = { desktop: 12, phone: 6 } as const;
 /** Of the mover cars, the last of these are police cruisers (a light bar), leased only to patrols. */
 export const PATROL_CARS = { desktop: 2, phone: 1 } as const;
+/** Of the mover cars, just before the patrol cruisers: ambulances (a police body in white with its light bar), leased only to a call. */
+export const AMBULANCE_CARS = { desktop: 1, phone: 1 } as const;
 /** Cars that stand parked as scenery near the players: real cars at the kerb, taken from a second pool that never drives. */
 export const KERB_CARS = { desktop: 10, phone: 4 } as const;
 
@@ -132,3 +134,10 @@ export const STORE_AT = { x: 4000, z: 4000, step: 12 } as const;
 export const RESIDENT_CAR_COLOURS = [0x8a8d91, 0x1d1f23, 0xf0f0ee, 0x7b1e24, 0x24406e, 0x2f5d3b, 0x6e5a3c, 0x55606e] as const;
 /** Seed of which body and colour a resident's car has. */
 export const RESIDENT_CAR_SEED = 0x51dec4;
+
+/** An ambulance's paint (sRGB): white. */
+export const AMBULANCE_COLOUR = 0xf4f4f2;
+/** Crowd seconds an ambulance stays at the scene with its lights on before it drives off. */
+export const AMBULANCE_LOAD_SECONDS = 18;
+/** An ambulance sets out from, and drives off to, a space at least this far (m) from the scene: it arrives along the streets, from the edge of the district. */
+export const AMBULANCE_DEPOT_METRES = 120;

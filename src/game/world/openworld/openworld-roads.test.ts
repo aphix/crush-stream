@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { LAYOUT } from "./openworld-constants.ts";
 import { openWorldGeometry } from "./openworld-layout.ts";
-import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, spotAt } from "./openworld-parking.ts";
+import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, residentSpotAt, spotAt } from "./openworld-parking.ts";
 import { buildRoadNetwork, HEADING, HEADING_COUNT, junctionIndex, laneLength } from "./openworld-roads.ts";
 
 const geometry = openWorldGeometry(LAYOUT);
@@ -102,6 +102,14 @@ describe("given a car in the open world's streets", () => {
       if (spots.stays[spot] === 1 || out.includes(spot)) continue;
       expect(hypot2(spots.x[spot]!, spots.z[spot]! + 45), `space ${spot} is no nearer than the fourth`).toBeGreaterThanOrEqual(last - 1e-9);
     }
+  });
+
+  // mutation: sed -i 's/  return count === 0 ? -1 : residentNearest\[resident % count\]!;/  return count === 0 ? -1 : residentNearest[0]!;/' src/game/world/openworld/openworld-parking.ts
+  it("when two residents of one place are asked for their space, then each gets the one of the nearest four that he is by number, pure in the layout", () => {
+    const out = new Int32Array(KERB_CANDIDATES);
+    const count = kerbSpotsNear(spots, 0, -45, out);
+    for (let resident = 0; resident < 9; resident++) expect(residentSpotAt(spots, 0, -45, resident), `resident ${resident}`).toBe(out[resident % count]);
+    expect(residentSpotAt(spots, 0, -45, 1), "residents 1 and 2 differ").not.toBe(residentSpotAt(spots, 0, -45, 2));
   });
 
   // mutation: sed -i 's/spots.x\[spot\]! - rightX(heading) \* DRIVER_DOOR_SIDE/spots.x[spot]! + rightX(heading) * DRIVER_DOOR_SIDE/' src/game/world/openworld/openworld-parking.ts

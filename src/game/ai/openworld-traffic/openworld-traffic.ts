@@ -3,12 +3,13 @@ import { MAX_CARS } from "../../scenes/fleet.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
-import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, nearestFreeSpot, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
+import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, nearestFreeSpot, residentSpotAt, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
 import { buildRoadNetwork, type RoadNetwork } from "../../world/openworld/openworld-roads.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { blankAiCar, type AiCar } from "../derby-ai.ts";
+import { AmbulanceService } from "./ambulance.ts";
 import { KerbCars } from "./kerb-cars.ts";
-import { MoverFleet, type DrivenCar } from "./mover-fleet.ts";
+import { LEASE, MoverFleet, type DrivenCar } from "./mover-fleet.ts";
 import { RedLightWatch } from "./red-light-watch.ts";
 import { EVERYDAY_BODIES, FEED_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
@@ -29,8 +30,8 @@ export type FreeDrivers = {
 /** Called (host and solo only) when car `carIndex` at (x, z) crosses a stop bar against its signal at crowd time `seconds`. */
 type RedLightListener = (carIndex: number, x: number, z: number, seconds: number) => void;
 
-/** How many cars of each kind the open world has (`MOVER_CARS`, `KERB_CARS`, `PATROL_CARS` by device); the patrol cars are the last of the movers. */
-type TrafficSize = { movers: number; kerb: number; patrol: number };
+/** How many cars of each kind the open world has (`MOVER_CARS`, `KERB_CARS`, `PATROL_CARS`, `AMBULANCE_CARS` by device); the patrol cars are the last of the movers, the ambulances just before them. */
+type TrafficSize = { movers: number; kerb: number; patrol: number; ambulance: number };
 
 /**
  * The open world's cars: real cars of the field that drive its streets (ambient traffic, residents' commutes, patrols), stop at the signals and park in the kerb spaces, and real cars that
@@ -46,6 +47,7 @@ export class OpenWorldTraffic {
   private readonly movers: MoverFleet;
   private readonly kerb: KerbCars;
   private readonly watch: RedLightWatch;
+  private readonly ambulance: AmbulanceService;
   private readonly listeners: RedLightListener[] = [];
   private readonly legKey = new Float64Array(RESIDENT_CAPACITY).fill(-1);
   private readonly candidates = new Int32Array(KERB_CANDIDATES);
@@ -68,12 +70,13 @@ export class OpenWorldTraffic {
     const movers = Math.min(size.movers, MAX_CARS - first);
     const kerb = Math.min(size.kerb, MAX_CARS - first - movers);
     const patrol = Math.min(size.patrol, movers);
+    const ambulance = Math.min(size.ambulance, movers - patrol);
     this.first = first;
     this.total = movers + kerb;
     ports.ensureCars(first + this.total);
-    if (patrol > 0) ports.markPolice(first + movers - patrol, patrol);
-    this.patrolFrom = first + movers - patrol;
+    this.patrolFrom = first + movers - patrol - ambulance;
     this.patrolEnd = first + movers;
+    if (patrol + ambulance > 0) ports.markPolice(this.patrolFrom, patrol + ambulance);
     this.wearEverydayBodies(ports);
     for (let id = first; id < first + this.total; id++) ports.putAway(id);
     const sightBase = sight.claim(this.total + 1);
@@ -92,7 +95,8 @@ export class OpenWorldTraffic {
     };
     this.refreshSnaps(ports.cars());
     this.watch = new RedLightWatch(network);
-    this.movers = new MoverFleet(this.context, first, movers, patrol, new TrafficDriver(network));
+    this.movers = new MoverFleet(this.context, first, movers, patrol, ambulance, new TrafficDriver(network));
+    this.ambulance = new AmbulanceService(this.context, this.movers);
     this.kerb = new KerbCars(this.context, first + movers, kerb);
   }
 
@@ -130,6 +134,41 @@ export class OpenWorldTraffic {
     return this.context.taken;
   }
 
+  /** Sends the ambulance to the free space nearest (x, z) (`AmbulanceService`); false when one is out already, the pool has none, or there is no way. */
+  callAmbulance(x: number, z: number, seconds: number): boolean {
+    return this.ambulance.call(nearestFreeSpot(this.parkingSpots, x, z, this.context.taken), seconds);
+  }
+
+  /** Whether an ambulance is out, and where (`AMBULANCE`): idle, on its way, loading at the scene, driving off. */
+  ambulanceState(): number {
+    return this.ambulance.state;
+  }
+
+  /** The space the ambulance is at or coming to, -1 when none is out. */
+  ambulanceSpot(): number {
+    return this.ambulance.scene;
+  }
+
+  /** Where resident `resident`'s parked car stands and which way it faces (the space's middle), into `out`; false when his car is not at a space. */
+  carPoseOf(resident: number, out: { x: number; z: number; yaw: number }): boolean {
+    const spot = resident >= 0 && resident < RESIDENT_CAPACITY ? this.context.residentSpot[resident]! : -1;
+    if (spot < 0) return false;
+    out.x = this.parkingSpots.x[spot]!;
+    out.z = this.parkingSpots.z[spot]!;
+    out.yaw = this.parkingSpots.yaw[spot]!;
+    return true;
+  }
+
+  /** Opens the driver's door of resident `resident`'s parked car `radians` (0 shuts and latches it); false when no car of his stands in view of the pool. */
+  setCarDoor(resident: number, radians: number): boolean {
+    const spot = resident >= 0 && resident < RESIDENT_CAPACITY ? this.context.residentSpot[resident]! : -1;
+    if (spot < 0) return false;
+    const id = this.kerb.carAt(spot) >= 0 ? this.kerb.carAt(spot) : this.movers.carOf(resident);
+    if (id < 0) return false;
+    this.context.ports.openDoor(id, radians);
+    return true;
+  }
+
   /** Where resident `resident` gets out of (and in to) the car he parked, into `out`: its driver's door. False when his car is not at a space. */
   driverDoorOf(resident: number, out: { x: number; z: number }): boolean {
     const spot = resident >= 0 && resident < RESIDENT_CAPACITY ? this.context.residentSpot[resident]! : -1;
@@ -147,11 +186,12 @@ export class OpenWorldTraffic {
    * Leases a car for `resident` (-1: none) to drive from space `fromSpot` to `toSpot`; null when no car is free or there is no way. `urgent`: ignores the signals, drives fast. `dueSeconds`: the crowd second
    * the rider is due at the other end; a car still on its way then, with no eye on it, is stood in its space.
    */
-  spawnDrivenCar(resident: number, fromSpot: number, toSpot: number, options?: { urgent?: boolean; dueSeconds?: number }): DrivenCar | null {
+  spawnDrivenCar(resident: number, fromSpot: number, toSpot: number, options?: { urgent?: boolean; ambulance?: boolean; dueSeconds?: number }): DrivenCar | null {
     const count = this.parkingSpots.count;
     if (fromSpot < 0 || fromSpot >= count || toSpot < 0 || toSpot >= count || fromSpot === toSpot) return null;
     if (this.context.standing[fromSpot] === STANDING.kerb) this.kerb.clearSpot(fromSpot);
-    return this.movers.spawn(resident, fromSpot, toSpot, options?.urgent === true, options?.dueSeconds ?? Infinity);
+    const kind = options?.ambulance === true ? LEASE.ambulance : options?.urgent === true ? LEASE.patrol : LEASE.ambient;
+    return this.movers.spawn(resident, fromSpot, toSpot, kind, options?.dueSeconds ?? Infinity);
   }
 
   despawn(handle: DrivenCar): void {
@@ -175,6 +215,7 @@ export class OpenWorldTraffic {
     ports.markPolice(MAX_CARS, 0);
     for (let id = this.first; id < this.first + this.total; id++) {
       if (id >= ports.cars().length || ports.seated(id)) continue;
+      ports.sirens(id, false);
       ports.putAway(id);
       ports.release(id);
     }
@@ -201,6 +242,7 @@ export class OpenWorldTraffic {
       this.wearEverydayBodies(ports);
     }
     this.movers.step(seconds, dt);
+    this.ambulance.step(seconds);
     this.kerb.step(dt, this.feed === null ? null : this.feed.parked);
     this.sinceFeed += dt;
     if (this.feed !== null && this.sinceFeed >= FEED_SECONDS) {
@@ -275,6 +317,8 @@ export class OpenWorldTraffic {
     const target = this.places[place];
     if (target === undefined) return -1;
     const { taken } = this.context;
+    const preferred = residentSpotAt(this.parkingSpots, target.doorX, target.doorZ, resident);
+    if (preferred >= 0 && taken[preferred] === 0 && preferred !== except) return preferred;
     const count = kerbSpotsNear(this.parkingSpots, target.doorX, target.doorZ, this.candidates);
     for (let step = 0; step < count; step++) {
       const spot = this.candidates[(resident + step) % count]!;

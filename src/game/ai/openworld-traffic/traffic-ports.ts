@@ -27,6 +27,10 @@ export type TrafficPorts = {
   seated(id: number): boolean;
   /** Stands car `id` on (x, z) facing `yaw`, repaired and at rest, drawn and simulated, in paint `colour` (sRGB; null: the car's own). */
   place(id: number, x: number, z: number, yaw: number, colour: number | null): void;
+  /** Car `id`'s light bar flashes (a car with none ignores it). */
+  sirens(id: number, on: boolean): void;
+  /** Car `id`'s driver's door stands open `radians` (0: shut and latched). */
+  openDoor(id: number, radians: number): void;
   /** Puts car `id` away: hidden, still, and not simulated. */
   putAway(id: number): void;
   /** Car `id` is simulated again (a car put away is not): called when traffic lets go of the pool for good, so a scene that reuses the car finds it running. */

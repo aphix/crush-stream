@@ -53,6 +53,12 @@ export class KerbCars {
     return count;
   }
 
+  /** The engine id of the kerb car standing in `spot`, -1 when none does. */
+  carAt(spot: number): number {
+    const slot = this.slotOfSpot[spot]!;
+    return slot < 0 ? -1 : this.first + slot;
+  }
+
   /** The car in `spot` leaves it (a resident drives off in a car that stood there). */
   clearSpot(spot: number): void {
     const slot = this.slotOfSpot[spot]!;

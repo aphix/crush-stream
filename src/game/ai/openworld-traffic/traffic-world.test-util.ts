@@ -128,6 +128,9 @@ export class FakeField {
   readonly cars: KinematicCar[] = [new KinematicCar()];
   /** The ids traffic had rebuilt as another body, in order. */
   readonly rebuilt: number[] = [];
+  /** The cars whose lights are flashing, and the angle each car's driver's door was last set to. */
+  readonly sirens = new Set<number>();
+  readonly doors: number[] = [];
   /** The paint (sRGB; null: the car's own) each car was last stood in. */
   readonly colours: (number | null)[] = [];
   readonly seats = new Set<number>([0]);
@@ -153,6 +156,13 @@ export class FakeField {
       car.stand(x, z, yaw);
     },
     markPolice: () => {},
+    sirens: (id, on) => {
+      if (on) this.sirens.add(id);
+      else this.sirens.delete(id);
+    },
+    openDoor: (id, radians) => {
+      this.doors[id] = radians;
+    },
     release: (id) => {
       this.cars[id]!.stored = false;
     },
@@ -166,13 +176,13 @@ export class FakeField {
 }
 
 /** The sizes a test names: patrol cars default to none. */
-type TestSize = { movers: number; kerb: number; patrol?: number };
+type TestSize = { movers: number; kerb: number; patrol?: number; ambulance?: number };
 
 export const SMALL_FLEET: TestSize = { movers: 6, kerb: 4 };
 
 /** Traffic on a fake field with the sight field that knows only where the players are. */
 export function makeTraffic(field: FakeField, size: TestSize = SMALL_FLEET, feed: CommuterFeed | null = null, places: readonly Place[] = []): OpenWorldTraffic {
-  return new OpenWorldTraffic(places, field.ports, new ProximitySight(field.ports), { ...size, patrol: size.patrol ?? 0 }, feed);
+  return new OpenWorldTraffic(places, field.ports, new ProximitySight(field.ports), { ...size, patrol: size.patrol ?? 0, ambulance: size.ambulance ?? 0 }, feed);
 }
 
 /** The crowd clock a test runs traffic on. */

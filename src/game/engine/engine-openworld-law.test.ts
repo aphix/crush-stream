@@ -12,7 +12,9 @@ const map = buildFixtureMap();
 
 /** The traffic's host ports with no cars in the field and nothing drawn. */
 function idleTrafficPorts(): NonNullable<OpenWorldPorts["traffic"]> {
-  return { cars: () => [], ensureCars: () => {}, seated: () => false, place: () => {}, putAway: () => {}, markPolice: () => {}, release: () => {}, setBody: () => {}, setFreeDrivers: () => {}, makeLights: () => ({ update: () => {}, dispose: () => {} }) };
+  return { cars: () => [], ensureCars: () => {}, seated: () => false, place: () => {}, putAway: () => {}, markPolice: () => {},
+    sirens: () => {},
+    openDoor: () => {}, release: () => {}, setBody: () => {}, setFreeDrivers: () => {}, makeLights: () => ({ update: () => {}, dispose: () => {} }) };
 }
 
 /** The police's engine ports with no course solids, nobody to bust and no light bars. */

@@ -20,7 +20,7 @@ import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
 import { findWalkerStrike, WalkerStrike } from "../ai/civilians/society-activity.ts";
 import { OpenWorldTraffic, type FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import type { CommuterFeed } from "../ai/openworld-traffic/traffic-sight.ts";
-import { KERB_CARS, MOVER_CARS, PATROL_CARS } from "../ai/openworld-traffic/traffic-constants.ts";
+import { AMBULANCE_CARS, KERB_CARS, MOVER_CARS, PATROL_CARS } from "../ai/openworld-traffic/traffic-constants.ts";
 import type { TrafficPorts } from "../ai/openworld-traffic/traffic-ports.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
@@ -329,7 +329,7 @@ export class OpenWorldDirector {
       legs: { count: 0, resident: new Int32Array(capacity), fromPlace: new Int32Array(capacity), toPlace: new Int32Array(capacity), arriveSeconds: new Float64Array(capacity) },
       parked: { count: 0, resident: new Int32Array(capacity), place: new Int32Array(capacity) },
     };
-    this.traffic = new OpenWorldTraffic(map.places, host, this.sight, phone ? { movers: MOVER_CARS.phone, kerb: KERB_CARS.phone, patrol: PATROL_CARS.phone } : { movers: MOVER_CARS.desktop, kerb: KERB_CARS.desktop, patrol: PATROL_CARS.desktop }, this.feed);
+    this.traffic = new OpenWorldTraffic(map.places, host, this.sight, phone ? { movers: MOVER_CARS.phone, kerb: KERB_CARS.phone, patrol: PATROL_CARS.phone, ambulance: AMBULANCE_CARS.phone } : { movers: MOVER_CARS.desktop, kerb: KERB_CARS.desktop, patrol: PATROL_CARS.desktop, ambulance: AMBULANCE_CARS.desktop }, this.feed);
     host.setFreeDrivers(this.traffic);
   }
 
