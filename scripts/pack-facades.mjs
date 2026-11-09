@@ -93,7 +93,7 @@ const STYLES = {
   stucco: { crop: [300, 44, 262, 1194], bays: 4, cornice: [0, 166], floor: [166, 486], ground: [800, 1194], quoins: false, neutral: 0.8, glass: (r, g, b, l) => l < 0.5 },
   glass: { crop: [185, 0, 480, 1264], bays: 2, cornice: [0, 120], floor: [120, 322], ground: [920, 1264], quoins: false, rects: [[25, 125, 455, 240], [45, 935, 440, 1070], [45, 1135, 440, 1262]] },
   adobe: { crop: [283, 668, 282, 596], bays: 2, cornice: [0, 42], floor: [42, 227], ground: [412, 596], quoins: false, glass: (r, g, b, l) => l < 0.42 },
-  shops: { crop: [270, 0, 308, 1264], bays: 4, cornice: [0, 330], floor: [330, 635], ground: [925, 1264], quoins: false, rects: [[110, 152, 198, 292], [110, 417, 198, 590], [25, 1090, 105, 1205], [220, 1090, 290, 1205], [125, 1080, 185, 1245]] },
+  shops: { dark: true, crop: [270, 0, 308, 1264], bays: 4, cornice: [0, 330], floor: [330, 635], ground: [925, 1264], quoins: false, rects: [[110, 152, 198, 292], [110, 417, 198, 590], [25, 1090, 105, 1205], [220, 1090, 290, 1205], [125, 1080, 185, 1245]] },
   baroque: { crop: [282, 0, 283, 1264], bays: 4, cornice: [0, 400], floor: [688, 965], ground: [968, 1264], quoins: true, background: [0.17, 214, 206, 192, 215], rects: [[76, 312, 130, 384], [153, 312, 208, 384], [76, 782, 130, 905], [153, 782, 208, 905], [78, 1105, 206, 1215]] },
   havana: { crop: [282, 0, 280, 1264], bays: 4, cornice: [0, 135], floor: [135, 443], ground: [1005, 1264], quoins: false, glass: (r, g, b, l) => l < 0.4 },
   federal: { crop: [300, 0, 246, 1264], bays: 4, cornice: [0, 255], floor: [455, 690], ground: [938, 1264], quoins: false, rects: [[90, 525, 160, 655], [65, 1020, 180, 1250]] },
@@ -105,7 +105,7 @@ const STYLES = {
   bar: { crop: [93, 0, 540, 848], bays: 2, cornice: [38, 115], floor: [115, 320], ground: [510, 840], quoins: false, rects: [[112, 130, 209, 262], [320, 130, 425, 262], [50, 642, 139, 730], [394, 642, 480, 730]], neon: { rects: [[67, 660, 122, 715], [417, 660, 452, 708]], bright: 170 }, metres: SHOP, open: { kind: "bar", floorY: SHOP_FLOOR_Y, ground: 4 } },
   office: { crop: [10, 0, 622, 848], bays: 2, cornice: [85, 125], floor: [125, 345], ground: [565, 848], quoins: false, glass: (r, g, b) => b - r > 30, metres: SHOP, open: { kind: "office", floorY: SHOP_FLOOR_Y, ground: 4 } },
   cornerstore: { crop: [100, 0, 532, 848], bays: 2, cornice: [48, 125], floor: [130, 330], ground: [492, 848], quoins: false, rects: [[105, 155, 190, 275], [347, 155, 430, 275], [230, 637, 508, 790]], neon: { rects: [[243, 643, 293, 672]], bright: 170 }, metres: SHOP, open: { kind: "store", floorY: SHOP_FLOOR_Y, ground: 4 } },
-  supermarket: { crop: [72, 0, 280, 848], bays: 2, cornice: [185, 235], floor: [235, 380], ground: [380, 800], quoins: false, rects: [[48, 270, 96, 315], [188, 270, 236, 315], [8, 578, 272, 640], [8, 662, 272, 800]], metres: MARKET },
+  supermarket: { dark: true, crop: [72, 0, 280, 848], bays: 2, cornice: [185, 235], floor: [235, 380], ground: [380, 800], quoins: false, rects: [[48, 270, 96, 315], [188, 270, 236, 315], [8, 578, 272, 640], [8, 662, 272, 800]], metres: MARKET },
   church: { crop: [65, 0, 565, 848], bays: 2, cornice: [28, 160], floor: [160, 556], ground: [560, 848], quoins: false, rects: [[197, 178, 395, 550], [215, 580, 375, 735]], metres: CHURCH },
   infill: { crop: [5, 40, 1255, 808], bays: 1, cornice: [2, 68], floor: [68, 262], ground: [645, 808], quoins: false, rects: [[52, 73, 142, 215], [221, 73, 268, 215], [376, 73, 567, 215], [690, 73, 780, 215], [859, 73, 905, 215], [1015, 73, 1205, 215], [376, 663, 567, 805], [1015, 663, 1205, 705]], metres: INFILL },
   rowhouse: { crop: [233, 0, 383, 1264], bays: 3, cornice: [0, 275], floor: [275, 548], ground: [838, 1264], quoins: false, rects: [[159, 165, 225, 275], [159, 350, 224, 490], [95, 365, 119, 505], [264, 365, 288, 505], [254, 912, 322, 1060], [52, 910, 126, 942], [257, 1160, 322, 1240]] },
@@ -505,6 +505,7 @@ for (const [name, spec] of Object.entries(STYLES)) {
     ...(spec.relief ? { height: true, roughness: true } : {}),
     ...(spec.neon ? { neon: true } : {}),
     ...(spec.open ? { open: true } : {}),
+    ...(spec.dark ? { dark: true } : {}),
   };
   if (spec.open) windowTable[name] = { bays: spec.bays, windows: { floor: windowRects(glows[1].mask), ground: windowRects(glows[2].mask) } };
   console.log(`${name}: ${rgbs.length} layers, albedo ${bytes[0]} B, normal ${bytes[1]} B, glow ${bytes[2]} B${bytes[3] ? `, height ${bytes[3]} B, roughness ${bytes[4]} B` : ""}; windows ${glows.map((g) => g.windows).join("/")}; ${JSON.stringify(metadata[name].metres)}`);

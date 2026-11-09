@@ -368,6 +368,16 @@ describe("given a style whose layer data names no relief strips", () => {
     }
   });
 
+  // mutation: sed -i 's/ || spec.dark === true//' src/game/present/facades.ts (a supermarket's windows light however shut it is)
+  it("when a shop style with no interior is compiled, then its program is the base facade program plus the list of shut shops, under its own cache key", () => {
+    const made = makeFacadeMaterials();
+    for (const style of ["supermarket", "shops"] as const) {
+      expect(FACADE_LAYERS[style].dark, `${style} is flagged`).toBe(true);
+      expect(made[style].customProgramCacheKey().endsWith("|facade|dark"), `${style} key ${made[style].customProgramCacheKey()}`).toBe(true);
+      expect(compileFacade(made[style]).vertexShader, `${style} vertex`).toContain("facadeDarkAt");
+    }
+  });
+
   // mutation: sed -i 's/  if (extras.open) shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;//' src/game/present/facades.ts
   it("when a style with windows cut in it is compiled, then its vertex shader tells each instance whether its room is built against the shared list, its fragment shader cuts its windows on that, and a style without them knows nothing of it", () => {
     const made = makeFacadeMaterials();
@@ -407,8 +417,9 @@ describe("given a style whose layer data names no relief strips", () => {
     for (const style of STYLES) {
       const shader = compileFacade(made[style]);
       const open = FACADE_LAYERS[style].open === true;
-      expect(shader.uniforms.facadeDarkAt, `${style} list of shut shops`).toBe(open ? FACADE_DARK_AT : undefined);
-      expect(shader.fragmentShader.includes("* (1.0 - vFacadeDark * step(2.0, vFacadeRegion.x)"), `${style} lights its windows by the list`).toBe(open);
+      const shops = open || FACADE_LAYERS[style].dark === true;
+      expect(shader.uniforms.facadeDarkAt, `${style} list of shut shops`).toBe(shops ? FACADE_DARK_AT : undefined);
+      expect(shader.fragmentShader.includes("* (1.0 - vFacadeDark * step(2.0, vFacadeRegion.x)"), `${style} lights its windows by the list`).toBe(shops);
     }
   });
 
@@ -434,7 +445,7 @@ describe("given a style whose layer data names no relief strips", () => {
 
   it("when it is compiled, then its program is the base facade program: no relief uniform, no parallax, the base cache key", () => {
     const made = makeFacadeMaterials();
-    for (const style of STYLES.filter((name) => FACADE_LAYERS[name].open !== true)) {
+    for (const style of STYLES.filter((name) => FACADE_LAYERS[name].open !== true && FACADE_LAYERS[name].dark !== true)) {
       const material = made[style];
       const shader = compileFacade(material);
       for (const name of RELIEF_UNIFORMS) expect(shader.uniforms[name], `${style} ${name}`).toBeUndefined();
@@ -596,7 +607,8 @@ describe("given the facade layer data of the styles that were shipped first", ()
   it("when each old style's entry is digested, then it is as shipped", () => {
     for (const [style, digest] of Object.entries(SHIPPED_ENTRY_DIGESTS)) {
       const entry = FACADE_LAYERS[style as FacadeStyle];
-      expect(createHash("sha1").update(JSON.stringify(entry)).digest("hex").slice(0, 10), style).toBe(digest);
+      // the shut-shop flag `dark` was added to two of them after they shipped: every other value is as it was
+      expect(createHash("sha1").update(JSON.stringify(entry, (key, value) => (key === "dark" ? undefined : value))).digest("hex").slice(0, 10), style).toBe(digest);
     }
   });
 });

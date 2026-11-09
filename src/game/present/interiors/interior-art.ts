@@ -3,7 +3,7 @@ import { hypot2 } from "../../kernel/physics-core.js";
 import { SHOP_GROUND_STOREY, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
 import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, planKey, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { drawnHalf } from "../../world/openworld/openworld-facade-solids.ts";
-import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
+import { PLACE_KIND, type OpenWorldMap, type Place } from "../../world/openworld/walk-graph.ts";
 import { FACADE_DARK_MAX, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, setDarkFacades, setOpenFacades } from "../facades.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
@@ -110,6 +110,8 @@ export class InteriorSet {
   /** The nearest shut businesses (entry indices, nearest first) and their positions, as the facade's dark list takes them. */
   private readonly darkAt = new Int32Array(FACADE_DARK_MAX);
   private readonly darkPositions = new Float32Array(2 * FACADE_DARK_MAX);
+  /** The shops with no interior (a supermarket, a pizzeria), by map index and where they stand: they have no rooms to stream, but their windows go dark when they are shut. */
+  private readonly plainShops: { index: number; x: number; z: number }[] = [];
   /** Per entry, in arrays and not in the entries (a double stored in an object may be a new box on every store): its door's distance from the eye this frame, and how long (s) its envelope and its furnishing have been past their far radius. */
   private readonly distance: Float64Array;
   private readonly shellAway: Float64Array;
@@ -126,6 +128,7 @@ export class InteriorSet {
     const leaves: DoorLeaf[] = [];
     for (let placeIndex = 0; placeIndex < map.places.length; placeIndex++) {
       const place = map.places[placeIndex]!;
+      if (place.interior === undefined && place.storeys > 0 && (place.kind === PLACE_KIND.shop || place.kind === PLACE_KIND.food)) this.plainShops.push({ index: placeIndex, x: place.x, z: place.z });
       if (place.interior === undefined || place.doorNode < 0) continue;
       const key = planKey(place);
       let plan = plans.get(key);
@@ -178,7 +181,7 @@ export class InteriorSet {
       }
     }
     this.showBuiltThrough();
-    this.showShutDark();
+    this.showShutDark(openers.closed);
     if (solidsChanged) this.solidsListener?.(this.heldSolids());
   }
 
@@ -252,13 +255,20 @@ export class InteriorSet {
   }
 
   /** The nearest shut businesses are listed for the facade: their ground band's windows do not light at dusk. */
-  private showShutDark(): void {
+  private showShutDark(closed: Uint8Array | null): void {
     let count = 0;
     for (let at = 0; at < this.entries.length; at++) if (this.entries[at]!.business && this.entries[at]!.locked) count = keepNearest(this.darkAt, count, at, this.distance);
     for (let slot = 0; slot < count; slot++) {
       const { place } = this.entries[this.darkAt[slot]!]!;
       this.darkPositions[2 * slot] = place.x;
       this.darkPositions[2 * slot + 1] = place.z;
+    }
+    for (let shop = 0; shop < this.plainShops.length && count < FACADE_DARK_MAX && closed !== null; shop++) {
+      const plain = this.plainShops[shop]!;
+      if (closed[plain.index] !== 1) continue;
+      this.darkPositions[2 * count] = plain.x;
+      this.darkPositions[2 * count + 1] = plain.z;
+      count++;
     }
     setDarkFacades(this.darkPositions, count);
   }
