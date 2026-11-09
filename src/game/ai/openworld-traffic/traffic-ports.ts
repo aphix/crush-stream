@@ -29,6 +29,8 @@ export type TrafficPorts = {
   place(id: number, x: number, z: number, yaw: number): void;
   /** Puts car `id` away: hidden, still, and not simulated. */
   putAway(id: number): void;
+  /** Car `id` is simulated again (a car put away is not): called when traffic lets go of the pool for good, so a scene that reuses the car finds it running. */
+  release(id: number): void;
   /** Cars `from` to `from + count - 1` wear the police look (a light bar); a count of 0 gives every car its own look back. */
   markPolice(from: number, count: number): void;
 };

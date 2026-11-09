@@ -78,6 +78,9 @@ export class FakeField {
       car.stand(x, z, yaw);
     },
     markPolice: () => {},
+    release: (id) => {
+      this.cars[id]!.stored = false;
+    },
     putAway: (id) => {
       const car = this.cars[id]!;
       car.stored = true;

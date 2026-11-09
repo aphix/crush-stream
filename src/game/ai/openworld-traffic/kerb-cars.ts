@@ -3,7 +3,7 @@ import { hash01 } from "../../kernel/scalar.ts";
 import { FLIPPED_UP_Y } from "../../vehicle/constants.ts";
 import { MAX_CARS } from "../../scenes/fleet.ts";
 import { rightX, rightZ } from "../../world/openworld/openworld-roads.ts";
-import { BOOKKEEPING_SECONDS, KERB_JITTER_SIDE, KERB_JITTER_YAW, KERB_KEEP, KERB_REACH, PRIME_PASSES, SIGHT_RADIUS, TOW_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
+import { BOOKKEEPING_SECONDS, KERB_EVICT_MARGIN, KERB_JITTER_SIDE, KERB_JITTER_YAW, KERB_KEEP, KERB_REACH, PRIME_PASSES, SIGHT_RADIUS, TOW_SECONDS, TRAFFIC_SEED } from "./traffic-constants.ts";
 import { RESIDENT_CAPACITY, spotUnseen, STANDING, type TrafficContext } from "./traffic-ports.ts";
 import type { ParkedResidentCars } from "./traffic-sight.ts";
 
@@ -26,6 +26,8 @@ export class KerbCars {
   private readonly eyeX = new Float64Array(MAX_CARS);
   private readonly eyeZ = new Float64Array(MAX_CARS);
   private eyes = 0;
+  /** How far (m) the space `nearestWanted` found is from the nearest player. */
+  private wantedDistance = 0;
   private sinceBookkeeping = 0;
   private passes = 0;
 
@@ -70,7 +72,8 @@ export class KerbCars {
     for (let slot = 0; slot < this.size; slot++) this.tend(slot, passDt);
     for (let place = 0; place < PLACES_PER_PASS; place++) {
       const spot = this.nearestWanted(parked);
-      if (spot < 0 || !this.show(spot)) break;
+      if (spot < 0) break;
+      if (!this.show(spot) && !(this.evictFarthest(this.wantedDistance + KERB_EVICT_MARGIN) && this.show(spot))) break;
     }
   }
 
@@ -124,6 +127,27 @@ export class KerbCars {
     this.vacate(slot);
   }
 
+  /** Puts away the shown car farthest from the players if it is past `limit` m and has been unseen for the grace; false when there is none. */
+  private evictFarthest(limit: number): boolean {
+    const { ports, sight } = this.context;
+    let farthest = -1;
+    let farthestDistance = limit;
+    for (let slot = 0; slot < this.size; slot++) {
+      if (this.spotOfSlot[slot]! < 0) continue;
+      const car = ports.cars()[this.first + slot];
+      if (car === undefined) continue;
+      const distance = this.distanceToEyes(car.group.position.x, car.group.position.z);
+      if (distance <= farthestDistance || sight.unseenFor(this.context.sightBase + this.context.movers + slot) < sight.hideGrace) continue;
+      farthestDistance = distance;
+      farthest = slot;
+    }
+    if (farthest < 0) return false;
+    ports.putAway(this.first + farthest);
+    this.shelved[farthest] = 1;
+    this.vacate(farthest);
+    return true;
+  }
+
   private vacate(slot: number): void {
     const spot = this.spotOfSlot[slot]!;
     if (spot >= 0) {
@@ -149,6 +173,7 @@ export class KerbCars {
       bestDistance = distance;
       best = spot;
     }
+    this.wantedDistance = bestDistance;
     return best;
   }
 

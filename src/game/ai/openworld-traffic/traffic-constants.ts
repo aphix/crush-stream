@@ -62,8 +62,10 @@ export const BOX_PATIENCE = 6;
 
 /** A kerb car appears within this far (m) of a player where no player can see it. */
 export const KERB_REACH = 70;
-/** A kerb car is put away when unseen and farther than this (m) from every player. */
-export const KERB_KEEP = 40;
+/** A kerb car is put away when unseen and farther than this (m) from every player: past `KERB_REACH`, or a space just out of reach would show and hide its car in turn. */
+export const KERB_KEEP = 90;
+/** A pool car unseen for the grace is put away for a space this much (m) nearer a player than it is, when the pool is out. */
+export const KERB_EVICT_MARGIN = 15;
 /** Seconds between the kerb cars' and the movers' bookkeeping passes (spawns, departures, tows). */
 export const BOOKKEEPING_SECONDS = 0.25;
 /** A car's body radius (m) as the sight field is asked about it. */

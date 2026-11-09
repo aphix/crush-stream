@@ -4,7 +4,7 @@ import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork, junctionIndex } from "../../world/openworld/openworld-roads.ts";
 import type { DrivenCar, OpenWorldTraffic } from "./openworld-traffic.ts";
-import { KERB_REACH } from "./traffic-constants.ts";
+import { KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { Clock, CYCLE_SECONDS, FakeField, HOLD, makeTraffic, runSeconds, STEP_SECONDS, stepField } from "./traffic-world.test-util.ts";
 
@@ -213,7 +213,7 @@ describe("given kerb cars standing near the local player", () => {
       let nearest = -1;
       for (let spot = 0; spot < spots.count; spot++) if (nearest < 0 || hypot2(spots.x[spot]! - car.group.position.x, spots.z[spot]! - car.group.position.z) < hypot2(spots.x[nearest]! - car.group.position.x, spots.z[nearest]! - car.group.position.z)) nearest = spot;
       expect(spots.stays[nearest], `the space car ${id} stands in is one a car stands in for good`).toBe(1);
-      expect(hypot2(car.group.position.x, car.group.position.z), `car ${id}'s distance from the player`).toBeLessThan(KERB_REACH);
+      expect(hypot2(car.group.position.x, car.group.position.z), `car ${id}'s distance from the player (the space's, and the nudge off it)`).toBeLessThan(KERB_REACH + KERB_JITTER_SIDE);
     }
   });
 

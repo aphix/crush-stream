@@ -64,6 +64,7 @@ export class OpenWorldTraffic {
     this.first = first;
     this.total = movers + kerb;
     ports.ensureCars(first + this.total);
+    if (patrol > 0) ports.markPolice(first + movers - patrol, patrol);
     for (let id = first; id < first + this.total; id++) ports.putAway(id);
     const sightBase = sight.claim(this.total + 1);
     this.context = {
@@ -82,7 +83,6 @@ export class OpenWorldTraffic {
     this.refreshSnaps(ports.cars());
     this.watch = new RedLightWatch(network);
     this.movers = new MoverFleet(this.context, first, movers, patrol, new TrafficDriver(network));
-    if (patrol > 0) ports.markPolice(first + movers - patrol, patrol);
     this.kerb = new KerbCars(this.context, first + movers, kerb);
   }
 
@@ -147,7 +147,9 @@ export class OpenWorldTraffic {
     const { ports } = this.context;
     ports.markPolice(MAX_CARS, 0);
     for (let id = this.first; id < this.first + this.total; id++) {
-      if (id < ports.cars().length && !ports.seated(id)) ports.putAway(id);
+      if (id >= ports.cars().length || ports.seated(id)) continue;
+      ports.putAway(id);
+      ports.release(id);
     }
   }
 
