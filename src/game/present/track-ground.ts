@@ -832,12 +832,12 @@ function addSpan(m: Mesher, rs: RibbonSurface, s0: number, s1: number, l0: numbe
   }
 }
 
-/** Edge lines and centre dashes on paved stretches (a bridge's go to `deck`), a chequered line on the loop; none where another road crosses. */
-function addMarkings(m: Mesher, deck: Mesher, pi: number, rs: RibbonSurface, secs: readonly number[], index: RoadIndex): void {
+/** Edge lines and centre dashes on paved stretches (a bridge's go to `deck`), a chequered line on the loop when `raceMarks`; none where another road crosses. */
+function addMarkings(m: Mesher, deck: Mesher, pi: number, rs: RibbonSurface, secs: readonly number[], index: RoadIndex, raceMarks: boolean): void {
   const p = rs.p;
   const n = secs.length;
   const last = p.closed ? n : n - 1;
-  const main = pi === 0;
+  const main = pi === 0 && raceMarks;
   const L = p.length;
   const ds = sampleStep(p);
   const clear = (k: number, lat: number) => !index.onOther(pi, p.x[k]! + p.tz[k]! * lat, p.z[k]! - p.tx[k]! * lat, p.y[k]!, 0.2);
@@ -921,12 +921,13 @@ export function buildGroundLayers(track: Track, ground: TrackGround, index: Road
   }
   const marks = new Mesher(MAT.ROAD_MARKING);
   const deckMarks = new Mesher(MAT.ROAD_MARKING);
-  for (const [i, p] of paths.entries()) addMarkings(marks, deckMarks, i, new RibbonSurface(p, secs[i]!, ground), secs[i]!, index);
+  const raceMarks = track.json.road.raceMarks;
+  for (const [i, p] of paths.entries()) addMarkings(marks, deckMarks, i, new RibbonSurface(p, secs[i]!, ground), secs[i]!, index, raceMarks);
   out.push({ kind: "marking", surface: null, level: "marking", m: marks, smooth: true, chunks: null });
   if (!deckMarks.empty) out.push({ kind: "marking", surface: null, level: "deck", m: deckMarks, smooth: true, chunks: null });
   const kerbs = new Mesher(MAT.KERB_PAINT);
   const deckKerbs = new Mesher(MAT.KERB_PAINT);
-  addKerbs(kerbs, deckKerbs, new RibbonSurface(paths[0]!, secs[0]!, ground), index);
+  if (raceMarks) addKerbs(kerbs, deckKerbs, new RibbonSurface(paths[0]!, secs[0]!, ground), index);
   if (!kerbs.empty) out.push({ kind: "kerb", surface: null, level: "kerb", m: kerbs, smooth: true, chunks: null });
   if (!deckKerbs.empty) out.push({ kind: "kerb", surface: null, level: "deck", m: deckKerbs, smooth: true, chunks: null });
   return out;

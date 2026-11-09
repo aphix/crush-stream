@@ -201,6 +201,8 @@ export const TrackSchema = z
         runoffSurface: surface.default(SURFACE.grass),
         wall: z.tuple([z.boolean(), z.boolean()]).default([true, true]),
         wallHeight: z.number().positive().default(1.1),
+        /** The race's own paint on the loop: the chequered start / finish band at node 0 and the red / white kerbs on its tight turns. False on a course that is a street (the lane lines stay). */
+        raceMarks: z.boolean().default(true),
         /** Node 0's `dish` (m); omitted, 0: a flat road. */
         dish: z.number().min(0).max(3).optional(),
       })
