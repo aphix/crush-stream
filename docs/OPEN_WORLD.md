@@ -19,10 +19,11 @@ Web Worker both import.
   the city's fear of a corner) and walks it. A leg is (depart tick, place, node path, speed, lateral offset).
 - **Clock.** Decisions fall on a 2 Hz grid of crowd time (`DECISION_HZ`); a crowd second is a game minute, a day is 24 real minutes,
   and the start hour comes from the seed.
-- **Feedback.** Two host events change the society: a `knock` (a civilian run down: hospital for half a game day, hurt, the corner
-  feared) and a `wreck` (a building hit hard: its place closes for two game days, its staff are laid off). An event at time `t`
-  changes the knocked civilian at once and the rest of the society at the first hour tick at least `EVENT_LEAD_TICKS` later, so a
-  peer that hears it up to that late applies it on the same tick as the host.
+- **Feedback.** Host events change the society: a `knock` (a civilian run down: hospital for half a game day, hurt, the corner
+  feared), a `wreck` (a building hit hard: its place closes for two game days, its staff are laid off), and the street's own `crime`,
+  `bust`, `push` and `fight` (see "Interactions, crime and seats"). An event at time `t` changes the civilian it names at once, everyone
+  drawn into it (witnesses, a fight's two, a crime's victims) `EVENT_LEAD_TICKS` after it, and the rest of the society at the first hour
+  tick after that, so a peer that hears it up to that late applies it on the same tick as the host.
 
 `CivilianRemote` is the main thread's end: it posts one plan per tick `PLAN_LEAD_TICKS` ahead to the worker and mirrors the city;
 a tick whose answer is not back when due is computed inline by the same step.
@@ -94,7 +95,8 @@ their ticks were taken, with a knock and a wreck heard at fixed frames: poses an
 `MSG.crowd` (`net/crowd-codec.ts`) carries `{seed, hostTime, crowdTime, events}`, reliably, with every keyframe and at once when the
 host's log grew. The **seed** is the crowd's key: the population tier (phone 60, desktop 150, ultra 300 residents, `POPULATION`) above
 the 24-bit scene seed, so a client builds the host's city size without a new field. The event log is the newest 512 (kind, subject,
-crowd seconds) triples (`EVENT_LOG_CAPACITY`, equal to the wire's cap).
+crowd seconds) triples (`EVENT_LOG_CAPACITY`, equal to the wire's cap). A push or fight names its victim, and a civilian on the other side
+in an `alongside` triple of the same seconds right after it (none: a player's walker or car), so a subject stays under 16 bits.
 
 A client has no crowd until it hears a message. It runs the host's crowd time on its own clock the way the snapshot clock does (the
 least local-minus-host gap seen, a 1 ms creep up per message), `INTERP_DELAY` behind, where the cars it draws are. A client that
@@ -108,6 +110,47 @@ for it. The brain is told of a heard event by posting it with the next plan tick
 building whose box the ray enters first (its kind and name, who lives or works there, the latest comings and goings), whichever is
 nearer along the ray. The director recomputes it `LOOK_HZ` times a second and keeps the same object while the text is the same; the
 HUD's look panel shows it.
+
+## Interactions, crime and seats (`ai/civilians/society-*.ts`)
+
+**The table** (`society-table.ts`, `INTERACTIONS`) answers what a resident does where, from mood x job x place x hour. A row applies when the
+resident has one of its jobs (employed, jobless, broke, retired, adult, criminal, wanted), all its traits (coffee fan, drinker), a mood
+it lists, stands where it says (home, or at work after a shift's dwell), in its hours, with its need high enough. It is a candidate beside
+the needs, worth `strength` times the need's level, falling with distance and fear like any destination. Rows: coffee on the way to work
+and after waking out of work, a drink after a shift when tired and a drink to forget when sad or angry, sitting out on the stoop (evening;
+by day for the retired and jobless), a chat with a neighbour (who comes out to their own door when the visitor arrives), a row with one
+when angry, loitering at a shop door when broke, lifting from a shop, mugging someone sitting out, trying parked cars, lying low while wanted.
+Named residents keep their stories and are not in the table; children and animals are not either.
+
+**Venues and hours** (`society-venues.ts`): a place is a coffee shop, bar, diner, shop, supermarket, office, home, park or stop, from its
+`interior`, its facade style or its kind. Opening hours come from the map (`Place.hours`), else a default by venue (coffee 6-15, bars from
+16, shops 7-22, supermarket 8-21); an hour outside them weighs `CLOSED_HOURS_WEIGHT`, so coffee is chosen in the morning, shops by day, bars
+at dusk and night. Every destination, a need's or a row's, is ranked by that weight over distance.
+
+**Seats** (`society-seats.ts`): a customer at a coffee shop, bar or diner takes a free seat from `Place.seats` (one holder per seat, held from
+the moment they set out, freed when they leave or are knocked, busted or die); a resident sitting out takes one of the home's leading
+`stoopSeats`. The holder is in their row (`seat`); the owner table is derived and kept equal by the mirror.
+
+**Activity** (`society-activity.ts`): `readActivity` is a pure function of the row and the time that says what the drawing animates
+(`civilian-activity.ts`'s codes), since when and until when, with whom, the surface they sit at, and, for someone the brain places (seated,
+at a counter, at a door, fighting), where. A drive leg is nobody on foot; a door clip runs on the first and last second of a walk into
+a building.
+
+**Drives** (`civilian-plan.ts`): about a third of adults own a car, standing at the kerb of the last place they drove to. A leg for work, home,
+an errand or a meal that starts where the car is and is longer than `DRIVE_MIN_METRES` is a drive: `legPurpose` is `PURPOSE.drive` (the reason is
+in `legReason`), the leg runs at `DRIVE_SPEED`, and the car follows (`carPlace`). `fillCommuterFeed` lists drivers and parked cars for the traffic.
+
+**Crime** (`society-crime.ts`, `society-reactions.ts`): each game day a working-age resident's chance of turning to crime adds a base, being out of
+work, broke (three jobless days), angry and young (`CRIME_LEAN`); criminals give it up at `REFORM_CHANCE` a day (twice with a job), and a city starts
+at the share those chances settle to. A criminal's table row takes them to a shop, a stoop sitter or a parked car; the brain commits nothing there
+by itself: the host's `CrimeDesk` lists those who have been at the place `CRIME_LAG_TICKS`, and the host raises `EVENT_KIND.crime`. It makes the criminal
+wanted a game day from the tick it happened, fears the corner, angers the clerk or owner, and sends witnesses at their doors to report it or run home.
+`EVENT_KIND.bust` (raised by the police) takes the wanted or fighting resident off the street for `JAIL_TICKS` and home, and clears their crime and fight.
+Rows (`crimeTick`, `crimeKind`, `crimePlace`, `crimeVictim`, `fightTick`, `fightPartner`, flags) carry it all to peers and the police.
+
+**Fights**: `EVENT_KIND.push` rolls a seeded chance (`FIGHT_CHANCE`, times `FIGHT_ANGRY_FACTOR` when either is angry) that two civilians, or a civilian and a player,
+come to blows; `EVENT_KIND.fight` makes it so. Fighters stop at the nearest door for `FIGHT_TICKS` (civilians against each other are wanted for it), and a
+civilian run down may be taken on by a bystander standing at a door.
 
 ## Cost
 
@@ -197,6 +240,7 @@ Real cars of the field drive the streets, stop at signals and park in the kerb s
 | Piece | File |
 |---|---|
 | The brain, its worker and remote | `ai/civilians/civilian-{state,tick,plan,events,remote,worker,wire}.ts`, `society*.ts`, `needs.ts` |
+| Interaction table, venues, seats, crime, activity | `ai/civilians/society-{table,venues,seats,crime,reactions,activity,commuters}.ts` |
 | The crowd, its constants | `ai/civilians/civilian-crowd.ts`, `civilian-crowd-constants.ts` |
 | Bodies kept apart, the player on foot, a car's brush | `ai/civilians/civilian-separation.ts`, `crowd-walkers.ts`, `civilian-contact.ts` |
 | The look-at | `ai/civilians/civilian-look.ts` |
