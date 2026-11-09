@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { FRAME_SECONDS } from "../ai/civilians/civilian-crowd.test-util.ts";
+import { BODY_GAP } from "../ai/civilians/civilian-crowd-constants.ts";
+import { RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "../ai/civilians/civilian-constants.ts";
+import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 import { OpenWorldDirector, type OpenWorldPorts } from "./engine-openworld.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 
@@ -14,6 +18,14 @@ function idleTrafficPorts(): NonNullable<OpenWorldPorts["traffic"]> {
 /** The police's engine ports with no course solids, nobody to bust and no light bars. */
 function idleLawPorts(): NonNullable<OpenWorldPorts["law"]> {
   return { solids: () => null, playerBusted: () => {}, sirens: () => {}, lineOfSight: () => true };
+}
+
+/** The first person the crowd shows walking (not standing at a place, where the crowd does not move her), or -1. */
+function walkingCivilian(crowd: CivilianCrowd): number {
+  for (let resident = 0; resident < crowd.poses.count; resident++) {
+    if (crowd.poses.shown[resident] === 1 && crowd.separation.fixed[resident] === 0 && crowd.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.species] === SPECIES.person) return resident;
+  }
+  return -1;
 }
 
 /** A solo host in the open world on the fixture map, past its first frame, with the ports `extra` adds. */
@@ -52,5 +64,23 @@ describe("given the open world's director", () => {
     const { director, arts } = directorWith({});
     expect(director["law"], "no law").toBeNull();
     expect(arts.made, "the crowd's drawing only").toBe(1);
+  });
+
+  // mutation: in src/game/engine/engine-openworld.ts feedWalkers(), delete the line `this.law?.feedCops(crowd.walkers);`
+  it("when a foot cop and a civilian stand on one spot, then the crowd steps the civilian round him as round any body", () => {
+    const { director } = directorWith({ law: idleLawPorts() });
+    const crowd: CivilianCrowd = director["crowd"]!;
+    let civilian = walkingCivilian(crowd);
+    for (let frame = 0; frame < 4096 && civilian < 0; frame++) {
+      director.step(FRAME_SECONDS);
+      civilian = walkingCivilian(crowd);
+    }
+    expect(civilian, "a civilian walks").toBeGreaterThanOrEqual(0);
+    const cops = director["law"]!["scene"];
+    cops.foot.walkers.place(0, crowd.separation.brainX[civilian]!, crowd.separation.brainZ[civilian]!);
+    director.step(FRAME_SECONDS);
+    director.step(FRAME_SECONDS);
+    const apart = hypot2(crowd.poses.x[civilian]! - cops.copPoses.x[0]!, crowd.poses.z[civilian]! - cops.copPoses.z[0]!);
+    expect(apart, "pushed apart toward a body's width").toBeGreaterThan(BODY_GAP * 0.75);
   });
 });

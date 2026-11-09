@@ -39,4 +39,6 @@ export interface LawPorts {
   bust(resident: number, seconds: number): void;
   /** A walker taken off the street for crossing against the signal. */
   jaywalked(resident: number, seconds: number): void;
+  /** Foot cop `cop` run down by a car. */
+  copDown(cop: number, seconds: number): void;
 }

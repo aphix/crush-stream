@@ -2,6 +2,7 @@ import { PLACE_KIND, type OpenWorldMap, type Place } from "../../world/openworld
 import { NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { createCrowdPoses, type CrowdPoses } from "../civilians/crowd-poses.ts";
 import { CRIME_HZ, FOOT_COP_COUNT } from "./crime-constants.ts";
+import type { DeformableCar } from "../../vehicle/car.ts";
 import { CrimeScene, type CrimePorts } from "./crime-scene.ts";
 import { FakeStreet } from "./crime-street.test-util.ts";
 import type { LineOfSight, Spot, Walk } from "./offence-source.ts";
@@ -152,6 +153,9 @@ export type Harness = {
   poses: CrowdPoses;
   busts: Bust[];
   jaywalks: Bust[];
+  /** Foot cops the host's hit test ran down (cop number and crowd second), and the engine's cars it tests. */
+  copDowns: Bust[];
+  cars: DeformableCar[];
   signals: FixtureSignals;
   playerBusts: number[];
   street: FakeStreet | null;
@@ -174,6 +178,7 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
   const offences = new FixtureOffences();
   const busts: Bust[] = [];
   const jaywalks: Bust[] = [];
+  const copDowns: Bust[] = [];
   const signals = new FixtureSignals();
   const playerBusts: number[] = [];
   const street = options.withCars ? new FakeStreet() : null;
@@ -183,6 +188,7 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
       offences.applyBust(resident);
     },
     jaywalked: (resident, seconds) => void jaywalks.push({ resident, seconds }),
+    copDown: (cop, seconds) => void copDowns.push({ resident: cop, seconds }),
     signals,
     playerBusted: (carIndex) => void playerBusts.push(carIndex),
     cars: street,
@@ -192,7 +198,7 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
   };
   const scene = new CrimeScene(lineCity(), offences, ports, options.seed ?? 7);
   for (let cop = 0; cop < FOOT_COP_COUNT - 1; cop++) scene.foot.walkers.place(cop, copX[cop] ?? 0, 0);
-  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, signals, playerBusts, street, now: 0, authority: options.authority ?? true };
+  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, copDowns, cars: [], signals, playerBusts, street, now: 0, authority: options.authority ?? true };
 }
 
 /** Runs the harness `seconds` more: each step the crowd's poses are written where the society stands the residents (the crowd's own step), the street's cars drive, then the law steps. */
@@ -206,7 +212,7 @@ export function runFor(harnessed: Harness, seconds: number): void {
       harnessed.poses.z[resident] = 0;
     }
     harnessed.street?.step(STEP_SECONDS);
-    harnessed.scene.step(harnessed.now, harnessed.authority, harnessed.poses);
+    harnessed.scene.step(harnessed.now, harnessed.authority, harnessed.poses, harnessed.cars);
   }
 }
 

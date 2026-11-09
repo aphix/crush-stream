@@ -1,39 +1,87 @@
 import { detAtan2, hypot2 } from "../../kernel/physics-core.js";
+import { wrapPi } from "../../kernel/scalar.ts";
 import type { WalkGraph } from "../../world/openworld/walk-graph.ts";
+import { STRIDE_RADIANS_PER_METRE } from "../civilians/civilian-crowd-constants.ts";
 import type { PathFinder } from "../civilians/walk-path.ts";
-import { MAX_ROUTE_NODES } from "./crime-constants.ts";
+import { MAX_ROUTE_NODES, RUN_STRIDES_PER_SECOND } from "./crime-constants.ts";
 
-/** Cops and suspects as struct-of-arrays walkers on the sidewalk graph: one node route each, walked at a pace. Nothing here allocates after construction. */
+/**
+ * Cops and suspects as struct-of-arrays walkers on the sidewalk graph: one node route each, walked at a pace. Each grid step keeps where it began (`snapshot`), so the
+ * drawing blends between the last two steps at any frame rate. Nothing here allocates after construction.
+ */
 export class FootWalkers {
   readonly x: Float64Array;
   readonly z: Float64Array;
   readonly yaw: Float64Array;
-  /** Metres walked in all: the stride phase is this times the stride's radians per metre. */
-  readonly walked: Float64Array;
+  /** The stride's phase (rad, a whole stride per 2π): the civilians' per metre at a walk, never faster than `RUN_STRIDES_PER_SECOND`. */
+  readonly stride: Float64Array;
   /** Metres per second over the last advance. */
   readonly speed: Float64Array;
   private readonly graph: WalkGraph;
   private readonly route: Uint16Array;
   private readonly routeCount: Uint16Array;
   private readonly routeAt: Uint16Array;
+  private readonly fromX: Float64Array;
+  private readonly fromZ: Float64Array;
+  private readonly fromYaw: Float64Array;
+  private readonly fromStride: Float64Array;
 
   constructor(graph: WalkGraph, count: number) {
     this.graph = graph;
     this.x = new Float64Array(count);
     this.z = new Float64Array(count);
     this.yaw = new Float64Array(count);
-    this.walked = new Float64Array(count);
+    this.stride = new Float64Array(count);
+    this.fromX = new Float64Array(count);
+    this.fromZ = new Float64Array(count);
+    this.fromYaw = new Float64Array(count);
+    this.fromStride = new Float64Array(count);
     this.speed = new Float64Array(count);
     this.route = new Uint16Array(count * MAX_ROUTE_NODES);
     this.routeCount = new Uint16Array(count);
     this.routeAt = new Uint16Array(count);
   }
 
+  /** Stands `walker` at (x, z) at once: the drawing does not slide it there. */
   place(walker: number, x: number, z: number): void {
     this.x[walker] = x;
     this.z[walker] = z;
+    this.fromX[walker] = x;
+    this.fromZ[walker] = z;
     this.speed[walker] = 0;
     this.halt(walker);
+  }
+
+  /** The start of a grid step: every walker's place, heading and stride now are what the drawing blends from. */
+  snapshot(): void {
+    this.fromX.set(this.x);
+    this.fromZ.set(this.z);
+    this.fromYaw.set(this.yaw);
+    this.fromStride.set(this.stride);
+  }
+
+  /** Where `walker` is drawn `share` (0 to 1) of the way through the step after the last one taken. */
+  drawnX(walker: number, share: number): number {
+    return this.fromX[walker]! + (this.x[walker]! - this.fromX[walker]!) * share;
+  }
+
+  drawnZ(walker: number, share: number): number {
+    return this.fromZ[walker]! + (this.z[walker]! - this.fromZ[walker]!) * share;
+  }
+
+  drawnYaw(walker: number, share: number): number {
+    return this.fromYaw[walker]! + wrapPi(this.yaw[walker]! - this.fromYaw[walker]!) * share;
+  }
+
+  drawnStride(walker: number, share: number): number {
+    return this.fromStride[walker]! + (this.stride[walker]! - this.fromStride[walker]!) * share;
+  }
+
+  /** `walker` covered `metres` in `dt` s: its pace, and its stride on by the metres at the stride length that pace takes. */
+  carry(walker: number, metres: number, dt: number): void {
+    const speed = dt > 0 ? metres / dt : 0;
+    this.speed[walker] = speed;
+    this.stride[walker]! += metres * (speed > 0 ? Math.min(STRIDE_RADIANS_PER_METRE, (2 * Math.PI * RUN_STRIDES_PER_SECOND) / speed) : STRIDE_RADIANS_PER_METRE);
   }
 
   /** The lowest-numbered node nearest (x, z), so a tie is the same on every peer. */
@@ -106,8 +154,7 @@ export class FootWalkers {
       moved += remaining;
       remaining = 0;
     }
-    this.walked[walker]! += moved;
-    this.speed[walker] = dt > 0 ? moved / dt : 0;
+    this.carry(walker, moved, dt);
   }
 
   /** Steps `distance` metres straight toward (x, z), off the graph, for the last metres of a run. */
@@ -121,8 +168,7 @@ export class FootWalkers {
       this.z[walker]! += (dz / gap) * step;
       this.yaw[walker] = detAtan2(dx, dz);
     }
-    this.walked[walker]! += step;
-    this.speed[walker] = dt > 0 ? step / dt : 0;
+    this.carry(walker, step, dt);
   }
 
   /** Turns `walker` to face (x, z). */

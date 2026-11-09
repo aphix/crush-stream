@@ -65,7 +65,7 @@ describe("a criminal runs from the cops", () => {
     runFor(run, 2);
     expect(run.scene.foot.table.mode[0]).toBe(SUBJECT_MODE.fleeing);
     expect(run.poses.shown[CRIMINAL]).toBe(1);
-    expect(run.poses.x[CRIMINAL], "the overlay's place").toBeCloseTo(footX(run, CRIMINAL_WALKER), 3);
+    expect(run.poses.x[CRIMINAL], "the overlay's place, blended between the last two grid steps").toBeCloseTo(run.scene.foot.walkers.drawnX(CRIMINAL_WALKER, run.scene.drawShare), 3);
     expect(run.poses.x[CRIMINAL], "not the crowd's").toBeGreaterThan(61);
     expect(run.poses.speed[CRIMINAL], "at a run").toBeGreaterThan(3);
   });

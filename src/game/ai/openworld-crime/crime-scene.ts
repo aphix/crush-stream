@@ -1,9 +1,13 @@
-import type { FigureStrike } from "../../scenes/figure-strike.ts";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
+import { blankStrike, fell, runsDown, type FigureStrike } from "../../scenes/figure-strike.ts";
+import { CAR_REACH } from "../../scenes/lawn-guard.ts";
+import type { DeformableCar } from "../../vehicle/car.ts";
+import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import type { Obstacles } from "../obstacles.ts";
 import { fillCopPoses, newCopPoses, overlaySuspects } from "./crime-poses.ts";
-import { CRIME_HZ, CRIME_STEP_SECONDS, GRID_EPSILON, HEAT_CARS, HEAT_KNOCKS, HEAT_SECONDS, MAX_STEPS_PER_CALL, RED_LIGHT_SIGHT } from "./crime-constants.ts";
+import { CRIME_HZ, CRIME_STEP_SECONDS, FOOT_COP_COUNT, GRID_EPSILON, HEARD_COP_DOWN_LATE_SECONDS, HEAT_CARS, HEAT_KNOCKS, HEAT_SECONDS, MAX_STEPS_PER_CALL, RED_LIGHT_SIGHT } from "./crime-constants.ts";
 import { FootLaw } from "./foot-law.ts";
 import type { CrossingSignals, LawPorts, LineOfSight, OffenceSource } from "./offence-source.ts";
 import { PatrolCars, type PatrolCarPorts } from "./patrol-cars.ts";
@@ -37,6 +41,12 @@ export class CrimeScene {
   /** Per car: the civilians it ran down in the current minute and when that minute began. */
   private readonly heatKnocks = new Uint8Array(HEAT_CARS);
   private readonly heatSince = new Float64Array(HEAT_CARS);
+  /** Per foot cop: the crowd second of the latest knock heard or found (the host's event), and one waiting for this peer's clock (-1 none). */
+  private readonly copDownAt = new Float64Array(FOOT_COP_COUNT).fill(-1);
+  private readonly copDownDue = new Float64Array(FOOT_COP_COUNT).fill(-1);
+  private copStrikes: FigureStrike[] = [];
+  /** The share of the grid step after the last one taken that the poses were drawn at. */
+  drawShare = 0;
 
   constructor(map: OpenWorldMap, source: OffenceSource, ports: CrimePorts, seed: number) {
     this.ports = ports;
@@ -58,8 +68,11 @@ export class CrimeScene {
     return this.law;
   }
 
-  /** Advances to crowd time `crowdSeconds` on the fixed grid, then writes the cops' poses and the suspects' over `crowdPoses` (the crowd's, just stepped). */
-  step(crowdSeconds: number, authority: boolean, crowdPoses: CrowdPoses): void {
+  /**
+   * Advances to crowd time `crowdSeconds` on the fixed grid, then writes the cops' poses and the suspects' over `crowdPoses` (the crowd's, just stepped), blended between the last two grid
+   * steps; on the host, a car whose path meets a drawn cop runs him down (`cars`, the engine's).
+   */
+  step(crowdSeconds: number, authority: boolean, crowdPoses: CrowdPoses, cars: readonly DeformableCar[]): void {
     this.authority = authority;
     this.law.authority = authority;
     const target = Math.floor(crowdSeconds * CRIME_HZ + GRID_EPSILON);
@@ -68,8 +81,83 @@ export class CrimeScene {
       this.law.advance();
       this.patrol?.step(this.law.seconds, CRIME_STEP_SECONDS);
     }
-    overlaySuspects(this.law, crowdPoses);
-    fillCopPoses(this.law, this.copPoses);
+    this.applyDueCopDowns(cars);
+    this.drawShare = Math.min(1, Math.max(0, (crowdSeconds - this.law.seconds) * CRIME_HZ));
+    overlaySuspects(this.law, crowdPoses, this.drawShare);
+    fillCopPoses(this.law, this.copPoses, this.drawShare);
+    if (authority) this.findCopHits(cars, crowdSeconds);
+  }
+
+  /** The host's knock of foot cop `cop` at crowd second `seconds`, heard (a client) or its own echoed back: applied once, when this peer's clock reaches it. */
+  hearCopDown(cop: number, seconds: number): void {
+    if (cop < 0 || cop >= FOOT_COP_COUNT || seconds <= this.copDownAt[cop]!) return;
+    this.copDownAt[cop] = seconds;
+    this.copDownDue[cop] = seconds;
+  }
+
+  /** The cops run down since the last call (the host's own hits, a client's heard ones): the engine throws them dressed as police. */
+  takeCopStrikes(): readonly FigureStrike[] {
+    if (this.copStrikes.length === 0) return this.copStrikes;
+    const out = this.copStrikes;
+    this.copStrikes = [];
+    return out;
+  }
+
+  /** The host's hit test, the crowd's own (`runsDown` within `CAR_REACH`) on each drawn cop: a hit throws him and is the host's event. */
+  private findCopHits(cars: readonly DeformableCar[], seconds: number): void {
+    const poses = this.copPoses;
+    const ground = activeGround();
+    for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
+      if (poses.shown[cop] === 0) continue;
+      const x = poses.x[cop]!;
+      const z = poses.z[cop]!;
+      for (let carIndex = 0; carIndex < cars.length; carIndex++) {
+        const car = cars[carIndex]!;
+        if (hypot2(car.group.position.x - x, car.group.position.z - z) > CAR_REACH) continue;
+        const groundY = ground.heightAt(x, z);
+        if (!runsDown(car, x, z, groundY)) continue;
+        this.runCopDown(cop, car, carIndex, groundY, seconds);
+        break;
+      }
+    }
+  }
+
+  /** Car `carIndex` ran cop `cop` down where he was drawn: thrown by it, down in the law, hidden, and the host's event raised. */
+  private runCopDown(cop: number, car: DeformableCar, carIndex: number, groundY: number, seconds: number): void {
+    const poses = this.copPoses;
+    this.copStrikes.push(fell(car, carIndex, cop, poses.x[cop]!, groundY, poses.z[cop]!, detSin(poses.yaw[cop]!), detCos(poses.yaw[cop]!), blankStrike()));
+    this.copDownAt[cop] = seconds;
+    this.law.knockCop(cop, seconds);
+    poses.shown[cop] = 0;
+    this.ports.copDown(cop, seconds);
+  }
+
+  /** A heard knock whose time this peer's clock has reached: the cop goes down, thrown by the car nearest him when it is fresh (as a heard civilian's knock is). */
+  private applyDueCopDowns(cars: readonly DeformableCar[]): void {
+    for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
+      const due = this.copDownDue[cop]!;
+      if (due < 0 || this.law.seconds < due) continue;
+      this.copDownDue[cop] = -1;
+      if (!this.law.cops.onStreet(cop)) continue;
+      this.law.knockCop(cop, due);
+      if (this.law.seconds - due <= HEARD_COP_DOWN_LATE_SECONDS) this.throwFromNearest(cop, cars);
+    }
+  }
+
+  private throwFromNearest(cop: number, cars: readonly DeformableCar[]): void {
+    const { walkers } = this.law;
+    const x = walkers.x[cop]!;
+    const z = walkers.z[cop]!;
+    let nearest = -1;
+    let nearestGap = Infinity;
+    for (let carIndex = 0; carIndex < cars.length; carIndex++) {
+      const gap = hypot2(cars[carIndex]!.group.position.x - x, cars[carIndex]!.group.position.z - z);
+      if (gap >= nearestGap) continue;
+      nearestGap = gap;
+      nearest = carIndex;
+    }
+    if (nearest < 0) return;
+    this.copStrikes.push(fell(cars[nearest]!, nearest, cop, x, activeGround().heightAt(x, z), z, detSin(walkers.yaw[cop]!), detCos(walkers.yaw[cop]!), blankStrike()));
   }
 
   /** A car ran a red light at (x, z). A cop who saw it (in range and in sight past the buildings, on foot or in a car) sends a patrol car after it; true when one was sent. */

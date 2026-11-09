@@ -70,8 +70,7 @@ export class Arrests {
       walkers.x[walker] = walkers.x[cop]! - ARREST.escortAcross * cos + ARREST.escortAhead * sin;
       walkers.z[walker] = walkers.z[cop]! + ARREST.escortAcross * sin + ARREST.escortAhead * cos;
       walkers.yaw[walker] = yaw;
-      walkers.speed[walker] = walkers.speed[cop]!;
-      walkers.walked[walker]! += walkers.speed[cop]! * CRIME_STEP_SECONDS;
+      walkers.carry(walker, walkers.speed[cop]! * CRIME_STEP_SECONDS, CRIME_STEP_SECONDS);
       if (this.cops.gapTo(cop, this.cops.aimX[cop]!, this.cops.aimZ[cop]!) > ESCORT_ARRIVE && seconds - table.since[slot]! < ESCORT_SECONDS) continue;
       table.hold(table.resident[slot]!, seconds);
       table.free(slot);
