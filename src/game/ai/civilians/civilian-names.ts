@@ -1,6 +1,6 @@
 import type { PlaceKind } from "../../world/openworld/walk-graph.ts";
 import { CAST, type CastMember } from "./civilian-cast.ts";
-import { CAST_NAME_BASE, CAST_TITLE_BASE, GENDER } from "./civilian-constants.ts";
+import { ANGRY_HOLD_TICKS, CAST_NAME_BASE, CAST_TITLE_BASE, GENDER, MOOD_HOLD_TICKS } from "./civilian-constants.ts";
 
 /** Names a present-day city's residents are drawn from (the reference's lists, dressed for today). */
 export const FEMALE_NAMES = [
@@ -116,13 +116,26 @@ export const EVENT_CODE = {
   stoopWrecked: 20,
   staticComplaint: 21,
   backOnBus: 22,
+  shoplifted: 23,
+  muggedSomeone: 24,
+  brokeIntoCar: 25,
+  wasMugged: 26,
+  carBrokenInto: 27,
+  shopRobbed: 28,
+  reportedCrime: 29,
+  fledDanger: 30,
+  arrested: 31,
+  released: 32,
+  fought: 33,
+  foughtStranger: 34,
 } as const;
-export const VISIT_BASE = 23;
+export const VISIT_BASE = 35;
 
 /** Mood each event leaves (EVENT_CODE order). */
 export const EVENT_MOODS = [
   MOOD.fine, MOOD.happy, MOOD.happy, MOOD.proud, MOOD.fine, MOOD.sad, MOOD.proud, MOOD.busy, MOOD.sad, MOOD.happy, MOOD.exhausted, MOOD.happy, MOOD.hurt, MOOD.happy,
   MOOD.hurt, MOOD.happy, MOOD.sad, MOOD.happy, MOOD.sad, MOOD.sad, MOOD.angry, MOOD.annoyed,
+  -1, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.afraid, MOOD.angry, MOOD.angry, MOOD.busy, MOOD.afraid, MOOD.sad, MOOD.annoyed, MOOD.angry, MOOD.angry,
 ] as const;
 
 /** What a walk is for, in the look-at line ("{label} -> {place}"), by purpose: the five needs first, then the stories and the bus. */
@@ -145,6 +158,20 @@ export const PURPOSE_LABELS = [
   "looking at the wreck",
   "the Friday party",
   "the bus",
+  "driving",
+  "a coffee",
+  "a drink",
+  "the shopping",
+  "sitting out on the stoop",
+  "a chat with a neighbour",
+  "a row with a neighbour",
+  "hanging about",
+  "calling the police",
+  "getting away",
+  "shoplifting",
+  "looking for someone to mug",
+  "trying the parked cars",
+  "a fight",
 ] as const;
 /** The line a walk leaves in the life log, by purpose; the place follows. */
 export const PURPOSE_LOG_TEXT = [
@@ -166,6 +193,29 @@ export const PURPOSE_LOG_TEXT = [
   "came out to look at the wreck at",
   "went up to the Friday party at",
   "took the bus from",
+  "drove to",
+  "went for a coffee at",
+  "went for a drink at",
+  "went shopping at",
+  "sat out on the stoop at",
+  "stopped to chat at",
+  "went to have it out at",
+  "hung about outside",
+  "called the police from",
+  "ran for it to",
+  "went to lift something from",
+  "went looking for trouble at",
+  "went to try the cars outside",
+  "got into a fight outside",
 ] as const;
 /** The mood a story's walk leaves, or -1 for none (needs: -1). */
-export const PURPOSE_MOODS = [-1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, MOOD.hungry, MOOD.worried, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.busy, MOOD.happy, -1] as const;
+export const PURPOSE_MOODS = [-1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, MOOD.hungry, MOOD.worried, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.happy, MOOD.restless, MOOD.busy, MOOD.happy, -1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, -1, MOOD.busy, MOOD.afraid, MOOD.worried, MOOD.worried, MOOD.worried, MOOD.angry] as const;
+
+/** The mood an event leaves (-1 for none), and for how long it holds (a wrecked stoop angers a family for days). */
+export function moodOfCode(code: number): number {
+  return code >= VISIT_BASE ? PURPOSE_MOODS[code - VISIT_BASE]! : EVENT_MOODS[code]!;
+}
+
+export function moodHold(code: number): number {
+  return code === EVENT_CODE.stoopWrecked ? ANGRY_HOLD_TICKS : MOOD_HOLD_TICKS;
+}
