@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { POLICE_HASH } from "../ai/civilians/civilian-crowd-constants.ts";
-import { CivilianArt } from "./civilian-art.ts";
+import { CivilianArt, type CrowdSight } from "./civilian-art.ts";
 import { FAR_DRAW, NEAR_DRAW, NEAR_SLOTS } from "./civilian-art-constants.ts";
 import { drawCalls, emptyPoses, FRAME_SECONDS, IN_SIGHT, posesAlongStreet, posesScattered } from "./civilian-art.test-util.ts";
 import { ROLE } from "./dummy-rig.ts";
 import { dummyGeometry } from "./dummy-skin.ts";
-import { HIDE_GRACE, type SightField } from "./openworld-sight.ts";
+import { HIDE_GRACE } from "./openworld-sight.ts";
 
 /** Frames timed per crowd size, after the warm-up frames. */
 const TIMED_FRAMES = 200;
@@ -17,7 +17,7 @@ describe("given a street of civilians and a sight field that can stop seeing the
   const poses = posesAlongStreet(distances);
   let visible = true;
   let asked = 0;
-  const sight: SightField = {
+  const sight: CrowdSight = {
     seen: () => {
       asked++;
       return visible;

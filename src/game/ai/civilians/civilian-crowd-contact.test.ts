@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { launch, pooledCar } from "../../contact/crash-scenarios.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_SECONDS } from "./civilian-activity.ts";
-import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, MAX_PATH_NODES, NEVER_TICK, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
+import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, MAX_PATH_NODES, NEVER_TICK, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
 import { BODY_GAP, HARD_DISTANCE, MAX_OFFSET, WALKER_PUSH_DISTANCE } from "./civilian-crowd-constants.ts";
 import { FRAME_SECONDS, newCrowd, stepUntilShown } from "./civilian-crowd.test-util.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
@@ -233,5 +233,18 @@ describe.each([60])("given a host crowd of %i residents over ten minutes of its 
     expect(framesBrainOverlaps, "frames the brain overlaps").toBeGreaterThan(0);
     expect(overlappingFrames, "frames with a drawn overlap").toBe(0);
     expect(maxOffset, "furthest drawn from the brain's spot").toBeLessThanOrEqual(MAX_OFFSET + FLOAT_ERROR);
+  });
+});
+
+describe("given a civilian on a leg that is a drive", () => {
+  it("when the crowd is stepped, then they are shown walking until the leg is a drive, and then not shown: the car is another's to draw", () => {
+    const crowd = newCrowd(map);
+    const [resident] = people(crowd, 1) as [number];
+    sendAlong(crowd, resident, EDGE.from, EDGE.to);
+    crowd.step(1, [], true);
+    expect(crowd.poses.shown[resident], "shown on a walk").toBe(1);
+    crowd.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.legPurpose] = PURPOSE.drive;
+    crowd.step(1 + FRAME_SECONDS, [], true);
+    expect(crowd.poses.shown[resident], "shown on a drive").toBe(0);
   });
 });

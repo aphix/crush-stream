@@ -1,6 +1,7 @@
+import type { CrowdSight } from "../present/civilian-art.ts";
+import type { SightField } from "../present/openworld-sight.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
-import type { SightField } from "../present/openworld-sight.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
@@ -10,7 +11,6 @@ import { CROWD_SEED_MASK, CROWD_TIER_SCALE, LOOK_HZ, POPULATION } from "../ai/ci
 import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.ts";
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
-import type { SightField } from "../present/openworld-sight.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
 import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
@@ -19,7 +19,7 @@ const NO_EVENTS = new Float64Array(0);
 
 /** The drawn crowd: `update` once a frame after the crowd's step. */
 type CrowdArt = {
-  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: SightField, wallDt: number): void;
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void;
   dispose(): void;
 };
 
@@ -70,7 +70,6 @@ export class OpenWorldDirector {
   private readonly ray = new LookRay();
   private text: LookText | null = null;
   private lookAcc = 0;
-  readonly sight: SightField = { seen: () => true };
   private readonly foot = { x: 0, z: 0 };
   private footTracked = false;
   private footLastX = 0;

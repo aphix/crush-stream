@@ -11,7 +11,7 @@ import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
-import type { SightField } from "../present/openworld-sight.ts";
+import type { CrowdSight } from "../present/civilian-art.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
@@ -39,7 +39,7 @@ class Harness {
   readonly eye = new LookRay();
   readonly thrown: FigureStrike[] = [];
   readonly looks: DriverLook[] = [];
-  readonly updates: { poses: CrowdPoses; eyeX: number; sight: SightField; wallDt: number }[] = [];
+  readonly updates: { poses: CrowdPoses; eyeX: number; sight: CrowdSight; wallDt: number }[] = [];
   artsMade = 0;
   artsDisposed = 0;
   unhooked = 0;

@@ -29,16 +29,35 @@ a tick whose answer is not back when due is computed inline by the same step.
 
 ## The crowd on the main thread (`CivilianCrowd`)
 
-`CivilianCrowd(map, seed, playableResidents, remote)` owns a `CrowdPoses` (what the drawing reads: position, yaw, stride phase,
-speed, look word, shown flag). `step(crowdSeconds, cars, authority)` runs once per sim step on the host and solo player and once
+`CivilianCrowd(map, seed, playableResidents, remote)` owns a `CrowdPoses` (what the drawing reads: drawn position, yaw, stride phase,
+speed, look word, shown flag, and the activity the society or a bump gives each: code, clock, time left, partner, feet and surface height). `step(crowdSeconds, cars, authority)` runs once per sim step on the host and solo player and once
 per frame on a client:
 
-1. every decision tick passed is advanced through the brain;
+1. every decision tick passed is advanced through the brain (on the host, `CrimeDesk.collect` hands the crimes now due to the log as
+   `crime` events);
 2. each resident on a leg is placed by `legPositionAt` at the crowd time (a pure function of the rows and the time: any frame rate,
-   no integration, no allocation); the stride phase is the metres walked, so it needs no state;
-3. with `authority`, every shown person is tested against every car (`runsDown` within `CAR_REACH`, `looseRunsDown` for a car with
+   no integration, no allocation); the stride phase is the metres walked, so it needs no state. A resident on a drive leg is in a car
+   (not shown: the traffic draws it); one the society places (`readActivity`: seated, at a counter, fighting) is shown where it says;
+3. the shown are kept a body apart and their bumps found (below);
+4. with `authority`, every shown person is tested against every car (`runsDown` within `CAR_REACH`, `looseRunsDown` for a car with
    a torn part flying): a hit hides them at once, logs a `knock` event and queues a strike for the ragdoll throw, dressed as the drawn crowd dresses
    them (`dressOfLook` of their look word, the same dress the near dummy wears).
+
+**Bodies.** Civilians keep a body's width apart (`BODY_GAP`, 0.6 m) without the brain knowing. `CrowdSeparation` (`civilian-separation.ts`) takes the brain's
+spots, pairs the bodies by a hashed grid and relaxes the pairs `SEPARATION_PASSES` times, no body moving more than `MAX_OFFSET` (0.7 m) from the
+brain's spot; a pair closing head on or overtaking also steps to each other's sides (`SIDESTEP_SHARE`), so they pass instead of standing off. It is a
+pure function of the brain's spots at that moment (no history, no allocation): every peer draws the same, and the brain's rows and the twin row never see it.
+`poses.x`/`z` are the drawn spots (the art, the look-at and the ragdoll throw's spawn read them); hits and events read the brain's own spot (`separation.brainX`),
+so a knock never depends on a push. A player on foot is a body that does not give way (`crowd.walkers`, which the director refills each step from the `foot` port);
+a civilian seated, at a counter or fighting is fixed too, and is not bumped.
+
+**Bumps and pushes.** Two civilians whose brain spots come within `BUMP_DISTANCE` closing at `BUMP_CLOSING_SPEED` bump: both play the bump clip (`ACTIVITY.bump`,
+partners of each other) for its length, at most once in `BUMP_COOLDOWN_SECONDS`; every peer finds this itself. On the host only, a hard collision (`HARD_DISTANCE`,
+`HARD_CLOSING_SPEED`), a player on foot walking into a civilian (`WALKER_PUSH_DISTANCE`), a car's side passing within `CAR_NUDGE_GAP` of one at `CAR_NUDGE_SPEED` or more,
+and every knock, is a `push` event: subject = victim + capacity × (pusher + 1), pusher -1 for a player's walker or a car (`pairOf`), at most one per resident per
+`PUSH_LOCKOUT_SECONDS`; a knock logs its `knock` first and its push after. The brain rolls the fight from a push; nothing here changes its rows.
+
+**Other host events.** `raiseEvent(kind, subject, seconds?)` puts one more host event in the log and the brain's next plan (a bust, from the cops).
 
 Cats and dogs live in the brain (they decide, walk and keep a life log) but the crowd shows none until there is animal art: a
 resident of species other than person has `shown = 0` in every pose, so none is drawn and none can be run down.
@@ -62,6 +81,8 @@ lies on the footprint (grown by `WRECK_MARGIN`) of a place inside the walls is a
 | Game clock and seed | the host's: a client runs the host's crowd time on its own clock |
 | The ragdoll of a knocked civilian | local presentation, thrown from the strike (the host's own, a client's from the car nearest the civilian when its clock reaches the knock) |
 | Stride, look word | local presentation (still a pure function of the rows) |
+| Drawn spot (separation), bump clip | local presentation: a pure function of the brain's spots at the crowd time |
+| Push events | host: found on the brain's spots, logged and sent like knocks |
 
 The twin row (`civilian-crowd-twin.test.ts`) steps one crowd with the real worker, one with none and one whose answers all come after
 their ticks were taken, with a knock and a wreck heard at fixed frames: poses and society rows are bit for bit equal at every frame.
@@ -102,9 +123,12 @@ A tick, twice a second, allocates what the brain's answer carries.
 
 ## Drawing
 
-`CivilianArt(nearSlots, capacity).update(poses, eyeX, eyeZ)`: the nearest `nearSlots` civilians within 40 m are posed dummies dressed
-from their look; every other civilian within 120 m is an instance of a 132-triangle figure whose limbs swing in the vertex shader;
-nothing past 120 m. Draw calls do not grow with the crowd.
+`CivilianArt(nearSlots, capacity).update(poses, eyeX, eyeZ, sight, wallDt)`: the nearest `nearSlots` civilians within `NEAR_DRAW` (60 m) are posed dummies
+dressed from their look (64 slots on a desktop, 20 on a phone: a slot nobody holds costs nothing, a mesh draws up to its highest slot in use); every other civilian within 120 m
+is an instance of a 132-triangle figure whose limbs swing in the vertex shader; nothing past 120 m. Every shown civilian in range is asked of the sight field
+(`seen(x, z, SIGHT_RADIUS)`): one unseen for `HIDE_GRACE` seconds is neither posed nor drawn, and comes back on the frame it is seen. Draw calls do not grow with the crowd.
+A dummy's pose reads the activity rows (bump, buy, sit, fight...: `civilian-pose.ts`). `LOD_PRINT=1` on `civilian-art-sight.test.ts` prints the dummies, figures, draws, triangles and
+milliseconds a frame at 50, 150 and 300 civilians. A look word that is all ones (`POLICE_HASH`) is a foot cop: dressed in uniform, on the dummy's police garment.
 
 ## Seen and unseen (`SightField`)
 
@@ -120,6 +144,7 @@ The field also keeps a clock per id for those that want it: `claim(count)` hands
 |---|---|
 | The brain, its worker and remote | `ai/civilians/civilian-{state,tick,plan,events,remote,worker,wire}.ts`, `society*.ts`, `needs.ts` |
 | The crowd, its constants | `ai/civilians/civilian-crowd.ts`, `civilian-crowd-constants.ts` |
+| Bodies kept apart, the player on foot, a car's brush | `ai/civilians/civilian-separation.ts`, `crowd-walkers.ts`, `civilian-contact.ts` |
 | The look-at | `ai/civilians/civilian-look.ts` |
 | The engine's end: crowd, link, look-at, wall hook | `engine/engine-openworld.ts` (`OpenWorldDirector`, held by `CrashEngine`) |
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
