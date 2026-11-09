@@ -28,7 +28,7 @@ describe("a cop within reach busts", () => {
     const run = harness([60, 0, 0]);
     run.offences.x[CRIMINAL] = 60;
     run.offences.commitCrime(CRIMINAL);
-    runFor(run, 8);
+    runFor(run, 10);
     expect(bustedResidents(run)).toBe(String(CRIMINAL));
     expect(run.busts[0]!.seconds, "the cuffs take GRIP_SECONDS from the poll that found the cop at arm's length").toBeCloseTo(0.5 + GRIP_SECONDS, 1);
     expect(run.scene.foot.table.phase[0], "the case is closed").toBe(CASE_PHASE.free);

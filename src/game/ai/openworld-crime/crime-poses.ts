@@ -2,7 +2,7 @@ import { ACTIVITY, ACTIVITY_OPEN_ENDED } from "../civilians/civilian-activity.ts
 import { STRIDE_RADIANS_PER_METRE } from "../civilians/civilian-crowd-constants.ts";
 import { createCrowdPoses, type CrowdPoses } from "../civilians/crowd-poses.ts";
 import { SUBJECT_MODE } from "./case-table.ts";
-import { COP_LOOK, FOOT_COP_COUNT } from "./crime-constants.ts";
+import { COP_LOOK, FOOT_COP_COUNT, GRIP_SECONDS } from "./crime-constants.ts";
 import { COP_MODE } from "./foot-cops.ts";
 import type { FootLaw } from "./foot-law.ts";
 
@@ -13,7 +13,7 @@ export function newCopPoses(): CrowdPoses {
   return poses;
 }
 
-/** The crowd's poses after the law's say: a suspect running or in a cop's hands is where the law has them, a hider or a fighter thrown down is not drawn, and a resident held off the street stays hidden. Run after the crowd's own step. */
+/** The crowd's poses after the law's say: a suspect running, being cuffed or led away cuffed is where the law has them (acting it), a hider or a fighter thrown down is not drawn, and a resident held off the street stays hidden. Run after the crowd's own step. */
 export function overlaySuspects(law: FootLaw, poses: CrowdPoses): void {
   const { table, walkers } = law;
   for (let at = 0; at < table.heldResident.length; at++) {
@@ -28,7 +28,7 @@ export function overlaySuspects(law: FootLaw, poses: CrowdPoses): void {
       poses.shown[resident] = 0;
       continue;
     }
-    if (mode !== SUBJECT_MODE.fleeing && mode !== SUBJECT_MODE.gripped) continue;
+    if (mode !== SUBJECT_MODE.fleeing && mode !== SUBJECT_MODE.gripped && mode !== SUBJECT_MODE.escorted) continue;
     const walker = law.walkerOf(slot);
     poses.shown[resident] = 1;
     poses.x[resident] = walkers.x[walker]!;
@@ -36,15 +36,23 @@ export function overlaySuspects(law: FootLaw, poses: CrowdPoses): void {
     poses.yaw[resident] = walkers.yaw[walker]!;
     poses.stride[resident] = walkers.walked[walker]! * STRIDE_RADIANS_PER_METRE;
     poses.speed[resident] = walkers.speed[walker]!;
-    poses.activity[resident] = ACTIVITY.none;
-    poses.activityLeft[resident] = ACTIVITY_OPEN_ENDED;
     poses.partner[resident] = -1;
+    writeArrestActivity(law, slot, mode === SUBJECT_MODE.gripped ? ACTIVITY.cuffing : mode === SUBJECT_MODE.escorted ? ACTIVITY.cuffed : ACTIVITY.none, poses, resident);
   }
 }
 
-/** The foot cops' own poses. */
+/** Pose `index` acts `activity`: the grip's clip runs on the grip's clock (cuffing, arresting), the others loop. */
+function writeArrestActivity(law: FootLaw, slot: number, activity: number, poses: CrowdPoses, index: number): void {
+  poses.activity[index] = activity;
+  const gripping = activity === ACTIVITY.cuffing || activity === ACTIVITY.arresting;
+  const clock = gripping ? law.seconds - law.table.since[slot]! : 0;
+  poses.activityClock[index] = clock;
+  poses.activityLeft[index] = gripping ? Math.max(0, GRIP_SECONDS - clock) : ACTIVITY_OPEN_ENDED;
+}
+
+/** The foot cops' own poses: a cop holding a suspect for the cuffs acts the arrest, one leading her away the escort. */
 export function fillCopPoses(law: FootLaw, poses: CrowdPoses): void {
-  const { cops, walkers } = law;
+  const { cops, walkers, table } = law;
   for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
     poses.shown[cop] = cops.mode[cop] === COP_MODE.off ? 0 : 1;
     poses.x[cop] = walkers.x[cop]!;
@@ -52,5 +60,13 @@ export function fillCopPoses(law: FootLaw, poses: CrowdPoses): void {
     poses.yaw[cop] = walkers.yaw[cop]!;
     poses.stride[cop] = walkers.walked[cop]! * STRIDE_RADIANS_PER_METRE;
     poses.speed[cop] = walkers.speed[cop]!;
+    writeArrestActivity(law, 0, ACTIVITY.none, poses, cop);
+  }
+  for (let slot = 0; slot < table.mode.length; slot++) {
+    const mode = table.mode[slot]!;
+    const holder = table.holder[slot]!;
+    if (table.resident[slot]! < 0 || holder < 0 || table.tookDown[slot] === 1) continue;
+    if (mode === SUBJECT_MODE.gripped) writeArrestActivity(law, slot, ACTIVITY.arresting, poses, holder);
+    else if (mode === SUBJECT_MODE.escorted) writeArrestActivity(law, slot, ACTIVITY.escorting, poses, holder);
   }
 }

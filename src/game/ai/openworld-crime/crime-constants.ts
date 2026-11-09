@@ -1,3 +1,4 @@
+import { ACTIVITY_SECONDS } from "../civilians/civilian-activity.ts";
 import { POLICE_HASH } from "../civilians/civilian-crowd-constants.ts";
 
 /** The chase runs on a fixed grid of crowd time, so every peer that steps it makes the same moves whatever its frame rate. */
@@ -46,8 +47,15 @@ export const CROSSING_ALIGNMENT = 0.7;
 export const JAYWALK_GIVE_UP_SECONDS = 30;
 /** A cop this close (m) lays hands on a suspect: an arm's reach plus a shoulder's width. */
 export const BUST_REACH = 1.6;
-/** Seconds the cuffs take; the bust is raised when they are on. */
-export const GRIP_SECONDS = 1.5;
+/** Seconds the cuffs take (the cuffing clip's length, so the grip and the clip are one number); the bust is raised when they are on. */
+export const GRIP_SECONDS = ACTIVITY_SECONDS.cuffing;
+/** A cuffed suspect is led away at this walk (m/s) for at most this long (s), to the case's patrol car or this far along the street, and is gone from it within this many metres of where the cop leads her. */
+export const ESCORT_SPEED = 1.2;
+export const ESCORT_SECONDS = 6;
+export const ESCORT_AHEAD_DISTANCE = 12;
+export const ESCORT_ARRIVE = 2;
+/** Led along the street, she is walked to a corner at least this far (m) from where she was cuffed, so the walk away is seen. */
+export const ESCORT_MIN_DISTANCE = 6;
 
 /** A cop this close (m) to a fight shouts at it, and the fighters have this many seconds to stop; each one keeps attacking with this chance (a seeded draw of their fight). */
 export const FIGHT_WARN_REACH = 6;

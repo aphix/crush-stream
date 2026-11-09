@@ -20,7 +20,7 @@ describe("a walker crossing against the signal", () => {
   // mutation: in src/game/ai/openworld-crime/foot-law.ts poll(), delete the line `if (this.signals !== null) this.watchCrossings(this.signals);`
   it("is stopped by the cop who sees it and taken off the street, and the host raises the jaywalk arrest, not a bust", () => {
     const run = crossingRun(ON_CROSSING_X, true);
-    runFor(run, 10);
+    runFor(run, 15);
     expect(run.jaywalks.map((arrest) => arrest.resident).join(","), "the jaywalker").toBe(String(WALKER));
     expect(run.busts, "no bust").toHaveLength(0);
     expect(run.scene.stats.jaywalkers).toBe(1);
