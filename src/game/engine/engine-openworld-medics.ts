@@ -62,7 +62,9 @@ export class OpenWorldMedics {
     this.poses.look[1] = scrubsLook(true);
   }
 
-  call(x: number, z: number): void {
+  /** A call for someone down at (x, z): the crew go there only when an ambulance was `sent` (none is while one is already out). */
+  call(x: number, z: number, sent: boolean): void {
+    if (!sent) return;
     this.sceneX = x;
     this.sceneZ = z;
   }

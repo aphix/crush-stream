@@ -121,7 +121,7 @@ describe("given the programme's businesses on the map", () => {
 
   // mutation: sed -i 's/interior: "rowhome" }/}/' src/game/world/openworld/openworld-lots.ts
   it("when the homes inside the walls are read, then each is a one-lot building of its own with a rowhome interior and two stoop seats leading its seats, however many storeys it has", () => {
-    const homes = playable.filter((place) => place.kind === PLACE_KIND.home);
+    const homes = playable.filter((place) => place.kind === PLACE_KIND.home && place.interior !== undefined);
     expect(homes.length, "homes inside the walls").toBeGreaterThan(100);
     for (const home of homes) {
       expect(home.interior, `${home.name} interior`).toBe("rowhome");

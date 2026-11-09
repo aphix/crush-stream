@@ -55,6 +55,8 @@ export const FACADE = {
   bar: { roughness: 0.85, metalness: 0.05, tints: [0xffffff, 0xeeeeee, 0xf4eeee], mix: NAMED_ONLY, home: null, roofs: [1, 0, 0, 0, 0] },
   office: { roughness: 0.4, metalness: 0.2, tints: [0xffffff, 0xe6eef4, 0xf0f4f4], mix: NAMED_ONLY, home: null, roofs: [3, 0, 0, 0, 1] },
   cornerstore: { roughness: 0.82, metalness: 0.04, tints: [0xffffff, 0xf4eee8, 0xeef0f4], mix: NAMED_ONLY, home: null, roofs: [1, 0, 0, 0, 0] },
+  church: { roughness: 0.95, metalness: 0, tints: [0xffffff, 0xf4eee2, 0xece6da], mix: NAMED_ONLY, home: null, roofs: [0, 0, 1, 0, 0] },
+  infill: { roughness: 0.75, metalness: 0.05, tints: [0xffffff, 0xf2efe8, 0xe8ebee], mix: NAMED_ONLY, home: null, roofs: [3, 0, 0, 0, 1] },
   supermarket: { roughness: 0.7, metalness: 0.08, tints: [0xffffff], mix: NAMED_ONLY, home: null, roofs: [3, 0, 0, 0, 2] },
 } as const satisfies Record<string, StyleSpec>;
 

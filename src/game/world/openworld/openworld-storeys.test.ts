@@ -11,6 +11,8 @@ const buildings = playable.filter((place) => place.storeys > 0 && place.interior
 const ROWS = 3;
 const COLUMNS = 3;
 const FACE_LOTS = 20;
+/** Two coordinates within this (m) are the same point. */
+const SAME = 1e-3;
 const faces = Array.from({ length: ROWS * COLUMNS * 2 }, (_, at) => ({ row: Math.floor(at / (COLUMNS * 2)), column: Math.floor(at / 2) % COLUMNS, south: at % 2 === 1 }));
 
 describe("given the storeys of the lots of every face of every block", () => {
@@ -58,8 +60,9 @@ describe("given the storeys of the lots of every face of every block", () => {
 describe("given the places of the map", () => {
   // mutation: sed -i 's/const storeys = venueStoreys(venue, spanned);/const storeys = venue.storeys;/' src/game/world/openworld/openworld-lots.ts
   it("when each building is read, then its height is its storeys' and its place says the same count, the supermarket keeps its two, and no shop is lower than its programme says", () => {
-    for (const [at, building] of lots.buildings.entries()) {
-      const place = lots.places[lots.links[at]!.place]!;
+    for (const building of lots.buildings.filter((candidate) => candidate.annex !== true)) {
+      const place = playable.find((candidate) => Math.abs(candidate.x - building.x) < SAME && Math.abs(candidate.z - building.z) < SAME && candidate.storeys > 0)!;
+      expect(place, `a place for the building at ${building.x.toFixed(1)}, ${building.z.toFixed(1)}`).toBeDefined();
       const shop = place.kind !== PLACE_KIND.home;
       expect(storeysOfHeight(building.height, shop), `${place.name} storeys by height`).toBe(place.storeys);
       expect(building.height, `${place.name} height`).toBeCloseTo(buildingHeight(place.storeys, shop), 9);

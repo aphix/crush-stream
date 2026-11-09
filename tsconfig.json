@@ -11,6 +11,8 @@
     "jsx": "react-jsx",
     "strict": true,
     "isolatedModules": true,
+    // Tests run under Node's type stripping, which rejects parameter properties and enums.
+    "erasableSyntaxOnly": true,
     "skipLibCheck": true,
     // `src/lib/db.ts` imports scripts/migration-plan.mjs; checkJs types the
     // implementation itself instead of a hand-written declaration beside it.

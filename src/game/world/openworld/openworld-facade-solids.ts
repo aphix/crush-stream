@@ -118,7 +118,7 @@ function variantOf(x: number, z: number): number {
   return Math.imul(Math.round(x * 8) ^ Math.imul(Math.round(z * 8), 0x9e3779b1), 0x85ebca6b) >>> 0;
 }
 
-/** The frontages of the rowhomes among `places`: the caller passes only places inside the walls. */
+/** The frontages of the rowhomes among `places` (a home with a rowhome interior: the modern infill has no stoop and no bay): the caller passes only places inside the walls. */
 export function homeFrontages(places: readonly Place[]): Frontage[] {
   const frontages: Frontage[] = [];
   for (const place of places) {
