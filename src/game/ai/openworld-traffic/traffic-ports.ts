@@ -31,6 +31,8 @@ export type TrafficPorts = {
   sirens(id: number, on: boolean): void;
   /** Car `id`'s driver's door stands open `radians` (0: shut and latched). */
   openDoor(id: number, radians: number): void;
+  /** The ground's height (m) at (x, z). */
+  groundAt(x: number, z: number): number;
   /** Puts car `id` away: hidden, still, and not simulated. */
   putAway(id: number): void;
   /** Car `id` is simulated again (a car put away is not): called when traffic lets go of the pool for good, so a scene that reuses the car finds it running. */
