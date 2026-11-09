@@ -427,23 +427,23 @@ const KNEEL: ClipSpec = {
   ],
 };
 
-/** A flinch from a danger: back and up on her heels, both hands up and open, the head round to it, the arm nearest it highest. */
+/** A flinch from a danger: a start back and up on her heels with both hands flung up and the head round to it, the arm nearest it highest, then the hands coming down and the body settling while she still looks. */
 const RECOIL: ClipSpec = {
-  blendIn: 0.08,
+  blendIn: 0.04,
   blendOut: 0.3,
   side: "partner",
   tracks: [
-    ...bothArms("hand", (channel) => track(channel, 0, 0, 0.18, 1, 0.6, 1, 0.9, 0)),
+    ...bothArms("hand", (channel) => track(channel, 0, 0, 0.12, 1, 0.45, 0.65, 0.7, 0.3, 0.9, 0)),
     hold(arm(MAIN, "handY"), 1.4),
     hold(arm(OTHER, "handY"), 1.25),
     hold(arm(MAIN, "handZ"), 0.3),
     hold(arm(OTHER, "handZ"), 0.25),
     hold(arm(MAIN, "handOut"), 0.3),
     hold(arm(OTHER, "handOut"), 0.28),
-    track(CHANNEL.torsoPitch, 0, 0, 0.2, -0.28, 0.6, -0.15, 0.9, 0),
-    track(CHANNEL.headPitch, 0, 0, 0.2, 0.2, 0.9, 0),
-    track(CHANNEL.pelvisForward, 0, 0, 0.2, -0.12, 0.9, 0),
-    track(CHANNEL.lookAtPartner, 0, 0, 0.15, 1, 0.7, 1, 0.9, 0),
+    track(CHANNEL.torsoPitch, 0, 0, 0.12, -0.3, 0.35, -0.14, 0.6, -0.06, 0.9, 0),
+    track(CHANNEL.headPitch, 0, 0, 0.12, 0.2, 0.5, 0.1, 0.9, 0),
+    track(CHANNEL.pelvisForward, 0, 0, 0.12, -0.1, 0.5, -0.04, 0.9, 0),
+    track(CHANNEL.lookAtPartner, 0, 0, 0.1, 1, 0.75, 1, 0.9, 0),
   ],
 };
 

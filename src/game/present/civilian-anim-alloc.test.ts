@@ -5,6 +5,7 @@ import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-samp
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { NEAR_SLOTS, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
 import { emptyPoses } from "./civilian-art.test-util.ts";
+import { PoseSmoothing } from "./civilian-anim-smoothing.ts";
 import { poseCivilian } from "./civilian-pose.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 
@@ -23,10 +24,12 @@ const SEAT_TOP_M = 0.46;
 
 const poses = emptyPoses(DUMMIES);
 const meshes = Array.from({ length: Math.ceil(DUMMIES / SLOTS_PER_DUMMY_MESH) }, (_, chunk) => new DummyMesh(Math.min(SLOTS_PER_DUMMY_MESH, DUMMIES - chunk * SLOTS_PER_DUMMY_MESH)));
+const smoothing = new PoseSmoothing(DUMMIES);
 let frames = 0;
 
 /** One frame: every dummy strides, her activity's clock runs, and each takes the next code every `ACTIVITY_FRAMES`, a partner beside her. */
 function frame(): void {
+  smoothing.begin(frames + 1, CLOCK_STEP);
   const next = frames % ACTIVITY_FRAMES === 0;
   const round = Math.floor(frames / ACTIVITY_FRAMES);
   for (let civilian = 0; civilian < DUMMIES; civilian++) {
@@ -39,7 +42,7 @@ function frame(): void {
     poses.speed[civilian] = civilian % 2;
     poses.partner[civilian] = (civilian + 1) % DUMMIES;
     poses.surfaceY[civilian] = SEAT_TOP_M;
-    poseCivilian(meshes[Math.floor(civilian / SLOTS_PER_DUMMY_MESH)]!, civilian % SLOTS_PER_DUMMY_MESH, poses, civilian);
+    poseCivilian(meshes[Math.floor(civilian / SLOTS_PER_DUMMY_MESH)]!, civilian % SLOTS_PER_DUMMY_MESH, poses, civilian, smoothing);
   }
   frames++;
 }

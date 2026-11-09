@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import { ACTIVITY, ACTIVITY_SECONDS, type ActivityName } from "../ai/civilians/civilian-activity.ts";
 import { CAR_DOOR, carDoorOpenness } from "../ai/civilians/civilian-car-door.ts";
-import { ARM, armChannel, CHANNEL, CHANNELS, LEG, legChannel, MIRROR_CHANNEL, MIRROR_SIGN, sideSign } from "./civilian-anim-channels.ts";
+import { neuroticismOf } from "../ai/civilians/civilian-temperament.ts";
+import { ARM, armChannel, CHANNEL, CHANNELS, EXPRESSIVE, LEG, legChannel, MIRROR_CHANNEL, MIRROR_SIGN, sideSign } from "./civilian-anim-channels.ts";
 import { CLIPS, type TrackSpec } from "./civilian-anim-clips.ts";
+import type { PoseSmoothing } from "./civilian-anim-smoothing.ts";
 import { FOREARM_LENGTH, HIP_Y, renderRig, setTorsoRotation, SHIN_LENGTH, SHOULDER_X, THIGH_LENGTH, UPPER_ARM_LENGTH, type PoseSink } from "./civilian-anim-rig.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { POSE_ARM_OUT } from "./civilian-art-constants.ts";
@@ -172,31 +174,55 @@ function easeIn(progress: number): number {
   return progress * progress * (3 - 2 * progress);
 }
 
-/** A limb's bend at stride sine `sine`: its rest bend, plus the bend's extra on the side the limb swings to. */
-function walkBend(gait: Gait, sine: number): number {
-  return gait.bendAtRest + gait.bendForward * Math.max(0, sine) + gait.bendBack * Math.max(0, -sine);
-}
+/**
+ * The leg swing is a sine rounded toward a triangle wave (`asin(FLAT * sin) / asin(FLAT)`): a foot on the ground then goes back at nearly the pace the body goes forward, instead of
+ * 1.6 times it mid-stance and none at its ends, so it does not slide. The stride's own length (`STRIDE_METRES`) and the legs' swing match: a foot's whole stance stands 0.75 m behind the last.
+ */
+const STANCE_FLAT = 0.95;
+const STANCE_FLAT_SCALE = 1 / Math.asin(STANCE_FLAT);
+/** The shoulders turn this far (rad) against the hips each step, the head half turning back to hold its gaze, the hips fall this far (m) as the legs spread, and the head nods this far (rad) twice a stride. */
+const SHOULDER_TWIST = 0.1;
+const HEAD_COUNTER_TWIST = 0.7;
+const HIP_DROP = 0.05;
+const HEAD_NOD = 0.02;
+/** An arm swung forward bends its elbow this much more (rad). */
+const ELBOW_FORWARD_BEND = 0.3;
+/** The knee's bend at its swing through (rad), from the guards' walk. */
+const KNEE_SWING_BEND = Math.max(LEG_GAITS[0].bendForward, LEG_GAITS[1].bendBack);
 
-/** The walk (striding while she moves, standing when she does not) in every limb's channels, everything else at rest. */
-function fillBase(stride: number, speed: number): void {
-  const walking = speed > 0;
-  const sine = walking ? Math.sin(stride) : 0;
-  const bendShare = walking ? 1 : 0;
-  channels.fill(0);
+/** The stride at `stride` rad in every limb's channels and the body's counter-turn, bob and nod, on top of the standing channels `fillBase` made. */
+function fillWalk(stride: number): void {
+  const sine = Math.sin(stride);
+  const passing = Math.cos(stride);
+  const swing = Math.asin(STANCE_FLAT * sine) * STANCE_FLAT_SCALE;
   for (let side = 0; side < 2; side++) {
     const armGait = ARM_GAITS[side]!;
     const arm = armChannel(side, 0);
-    channels[arm + ARM.swing] = armGait.swing * sine;
+    const armSwing = armGait.swing * sine;
+    channels[arm + ARM.swing] = armSwing;
+    channels[arm + ARM.elbow] = armGait.bendAtRest - ELBOW_FORWARD_BEND * Math.max(0, -armSwing / Math.abs(armGait.swing));
+    const legGait = LEG_GAITS[side]!;
+    const leg = legChannel(side, 0);
+    channels[leg + LEG.swing] = legGait.swing * swing;
+    channels[leg + LEG.knee] = KNEE_SWING_BEND * Math.max(0, side === 0 ? passing : -passing);
+  }
+  channels[CHANNEL.torsoTwist] = -SHOULDER_TWIST * sine;
+  channels[CHANNEL.headYaw] = HEAD_COUNTER_TWIST * SHOULDER_TWIST * sine;
+  channels[CHANNEL.pelvisDrop] = HIP_DROP * sine * sine;
+  channels[CHANNEL.headPitch] = HEAD_NOD * Math.cos(2 * stride);
+}
+
+/** Standing in every channel, and walking at `stride` when she moves (`speed` above 0). */
+function fillBase(stride: number, speed: number): void {
+  channels.fill(0);
+  for (let side = 0; side < 2; side++) {
+    const arm = armChannel(side, 0);
     channels[arm + ARM.out] = sideSign(side) * POSE_ARM_OUT;
-    channels[arm + ARM.elbow] = bendShare * walkBend(armGait, sine);
     channels[arm + ARM.handZ] = REST_HAND_Z;
     channels[arm + ARM.handY] = REST_HAND_Y;
     channels[arm + ARM.handOut] = HAND_TARGET_X;
-    const legGait = LEG_GAITS[side]!;
-    const leg = legChannel(side, 0);
-    channels[leg + LEG.swing] = legGait.swing * sine;
-    channels[leg + LEG.knee] = bendShare * walkBend(legGait, sine);
   }
+  if (speed > 0) fillWalk(stride);
 }
 
 /** Track `track` at `time` seconds: the first value before its first key, the last after its last, eased between. */
@@ -229,10 +255,47 @@ function mirrorIndexOf(pose: ActivityPose, side: number): number {
   return (pose.variant & HANDEDNESS_BIT) === 0 ? 1 : 0;
 }
 
-/** Clip `code`'s tracks at the pose's clock, each channel moved `weight` of the way from the walk to the track's value. */
+/** Bits of her look word give her her pace (the clip's clock runs this much faster or slower) and amplitude (how far she moves from her walk), a tenth and an eighth either way; none set is neither. */
+const PACE_SPREAD = 0.1;
+const PACE_LOOK_SHIFT = 12;
+const AMPLITUDE_SPREAD = 0.125;
+const AMPLITUDE_LOOK_SHIFT = 19;
+const SPREAD_BITS = 7;
+/** A flinch is quicker and bigger the jumpier the person (`neuroticismOf`): the pace and the amplitude of the calmest and the jumpiest. */
+const RECOIL_PACE = { calm: 0.85, jumpy: 1.25 } as const;
+const RECOIL_AMPLITUDE = { calm: 0.7, jumpy: 1.3 } as const;
+/** Slots of `personal`. */
+const PACE = 0;
+const AMPLITUDE = 1;
+const personal = new Float64Array(2);
+
+/** `bits` bits of `word` from `shift`, read as a number from -1 (all of the top half set) to just under 1, 0 for none set. */
+function centredFraction(word: number, shift: number, bits: number): number {
+  const size = 1 << bits;
+  const raw = (word >>> shift) & (size - 1);
+  return (raw >= size >> 1 ? raw - size : raw) / (size >> 1);
+}
+
+/** `personal` = the pace and the amplitude her look word gives her for activity `code`. */
+function fillPersonal(code: number, look: number): void {
+  if (code === ACTIVITY.recoil) {
+    const nerve = neuroticismOf(look);
+    personal[PACE] = RECOIL_PACE.calm + (RECOIL_PACE.jumpy - RECOIL_PACE.calm) * nerve;
+    personal[AMPLITUDE] = RECOIL_AMPLITUDE.calm + (RECOIL_AMPLITUDE.jumpy - RECOIL_AMPLITUDE.calm) * nerve;
+    return;
+  }
+  personal[PACE] = 1 + PACE_SPREAD * centredFraction(look, PACE_LOOK_SHIFT, SPREAD_BITS);
+  personal[AMPLITUDE] = 1 + AMPLITUDE_SPREAD * centredFraction(look, AMPLITUDE_LOOK_SHIFT, SPREAD_BITS);
+}
+
+/** Clip `code`'s tracks at the pose's clock (at her pace), each channel moved `weight` of the way (more or less by her amplitude, on the channels that are hers to exaggerate) from the walk to the track's value. */
 function applyClip(code: number, pose: ActivityPose, mirrorIndex: number, weight: number): void {
   const first = CLIP_FIRST_TRACK[code]!;
   const end = first + CLIP_TRACK_COUNT[code]!;
+  fillPersonal(code, pose.variant);
+  const clock = pose.clock * personal[PACE]!;
+  const amplitude = personal[AMPLITUDE]!;
+  const scalesAll = code === ACTIVITY.recoil;
   const fidgetRamp = easeIn(pose.clock / FIDGET_RAMP_SECONDS);
   const loopOffset = (((pose.variant >>> LOOP_OFFSET_SHIFT) & LOOP_OFFSET_STEPS) / LOOP_OFFSET_STEPS) * LOOP_OFFSET_SECONDS;
   const mirrorAt = mirrorIndex * CHANNELS;
@@ -240,13 +303,15 @@ function applyClip(code: number, pose: ActivityPose, mirrorIndex: number, weight
     const period = TRACK_PERIOD[track]!;
     let value: number;
     if (period > 0) {
-      const time = pose.clock + loopOffset;
+      const time = clock + loopOffset;
       const rest = KEY_VALUE[TRACK_KEY_START[track]!]!;
       value = rest + (sampleTrack(track, time - Math.floor(time / period) * period) - rest) * fidgetRamp;
-    } else value = sampleTrack(track, pose.clock);
+    } else value = sampleTrack(track, clock);
     if (TRACK_ABOVE_SURFACE[track] === 1) value += pose.surface;
     const slot = mirrorAt + TRACK_CHANNEL[track]!;
-    moveToward(MIRROR_CHANNEL[slot]!, MIRROR_SIGN[slot]! * value, weight);
+    const channel = MIRROR_CHANNEL[slot]!;
+    const strength = EXPRESSIVE[channel] === 1 ? weight * amplitude : scalesAll ? Math.min(1, weight * amplitude) : weight;
+    channels[channel] = channels[channel]! + strength * (MIRROR_SIGN[slot]! * value - channels[channel]!);
   }
 }
 
@@ -356,8 +421,8 @@ function lookAtPartner(pose: ActivityPose): void {
   channels[CHANNEL.headYaw] = channels[CHANNEL.headYaw]! + channels[CHANNEL.lookAtPartner]! * turn;
 }
 
-/** Slot `slot` of `sink` posed as `pose` says: the walk or stand, with her activity's clip blended over it. Allocates nothing. */
-export function poseActivity(sink: PoseSink, slot: number, pose: ActivityPose): void {
+/** Slot `slot` of `sink` posed as `pose` says: the walk or stand, with her activity's clip blended over it; with `smoothing`, civilian `civilian`'s pose does not snap when her activity or her walk changes. Allocates nothing. */
+export function poseActivity(sink: PoseSink, slot: number, pose: ActivityPose, smoothing?: PoseSmoothing, civilian = 0): void {
   fillBase(pose.stride, pose.speed);
   const code = pose.activity;
   if (code < ACTIVITY_CODES && CLIP_TRACK_COUNT[code]! > 0) applyClip(code, pose, mirrorIndexOf(pose, CLIP_SIDES[code]!), clipWeight(code, pose.clock, pose.left));
@@ -366,5 +431,6 @@ export function poseActivity(sink: PoseSink, slot: number, pose: ActivityPose): 
   reachForDoor(pose);
   solveHands();
   lookAtPartner(pose);
+  smoothing?.apply(civilian, pose.activity, pose.speed > 0 ? 1 : 0, channels);
   renderRig(sink, slot, pose.x, pose.y, pose.z, pose.yaw, channels);
 }
