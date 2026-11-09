@@ -41,11 +41,11 @@ export function overlaySuspects(law: FootLaw, poses: CrowdPoses): void {
   }
 }
 
-/** Pose `index` acts `activity`: the grip's clip runs on the grip's clock (cuffing, arresting), the others loop. */
+/** Pose `index` acts `activity` on the clock of subject slot `slot`'s phase (the grip, or the walk away): the grip's clips end with the cuffs, the walk's loop. */
 function writeArrestActivity(law: FootLaw, slot: number, activity: number, poses: CrowdPoses, index: number): void {
   poses.activity[index] = activity;
   const gripping = activity === ACTIVITY.cuffing || activity === ACTIVITY.arresting;
-  const clock = gripping ? law.seconds - law.table.since[slot]! : 0;
+  const clock = activity === ACTIVITY.none ? 0 : law.seconds - law.table.since[slot]!;
   poses.activityClock[index] = clock;
   poses.activityLeft[index] = gripping ? Math.max(0, GRIP_SECONDS - clock) : ACTIVITY_OPEN_ENDED;
 }
