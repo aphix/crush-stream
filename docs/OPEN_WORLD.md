@@ -164,6 +164,21 @@ a canted bay stack over the door (hood at the door's head, then every floor's ap
 panels and cornice take the house's accent from `HOUSE_ACCENTS`, windows light at night from the facades' `FACADE_GLOW`. The facade art of a home carries no bay, stoop, railing or cornice of its own: this kit covers the door's column above the door, the stoop and the roofline band.
 What a car or a walker meets is `facadeSolidProps(lots)`, appended to the course's props as invisible-wall boxes: a prism per step (base on the ground, tops 0.18 to 0.9, no overhang) and a flank prism either side of the stoop under the bay (the stack overhangs the stoop itself).
 
+## Animation (`present/civilian-anim*.ts`)
+
+A near dummy does what her brain says she does: `CrowdPoses.activity` is an `ACTIVITY` code (`ai/civilians/civilian-activity.ts`: idle, talk,
+buy, door, sitDown, sit, standUp, bump, swing, block, hit, sitSteps; 0 is the walk). `activityClock` is the seconds since it began (the clip's own
+time, so a civilian who comes into view mid-activity is already in it), `activityLeft` the seconds until it ends, `partner` the civilian a
+bump, fight or talk is with (the clips turn toward or away from her), `feetY` and `surfaceY` the floor and the seat or counter top, so a
+sitter lands on any seat height (`Place.seats`, a stoop step) and a customer's hand finds the counter.
+
+`poseCivilian` fills one `ActivityPose` and `poseActivity` poses the dummy: the walk's channels (the guards' stride) first, then the clip's
+tracks (`civilian-anim-clips.ts`, keyframes per channel: pelvis, torso, head, each arm and leg) blended over them by a weight that eases in
+from the walk and out over the clip's last `blendOut` seconds, then two solves: a hand reaches a point (counter, door handle, a face) through the
+torso's lean, and `plant` holds the feet on the floor as the pelvis sinks. A clip is authored for its main side, mirrored toward the partner's
+side (bump, fight) or the civilian's handedness. Looping clips grow their fidgets from their rest pose over 1.5 s and start at an offset per
+civilian, so a bar of sitters does not glance together. No frame allocates.
+
 ## Where it lives
 
 | Piece | File |
@@ -176,6 +191,7 @@ What a car or a walker meets is `facadeSolidProps(lots)`, appended to the course
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
 | Signs: shop signs, names on the buildings | `present/openworld-shop-signs.ts`, `openworld-signs.ts` (the label style from `track-debug.ts`) |
 | Rowhome facade kit | `present/facade-bays.ts`, `facade-bay-parts.ts`, `facade-kit-atlas.ts`; plan and colliders `world/openworld/openworld-facade-solids.ts` |
+| Animation | `present/civilian-anim{,-clips,-rig,-channels}.ts`, `ai/civilians/civilian-activity.ts` |
 | Map and course | `world/openworld/` |
 | Street fabric (crossings, manholes, hydrants, furniture) | `world/openworld/openworld-fabric.ts`, `openworld-fabric-constants.ts`, `openworld-sides.ts` |
 | What is seen, the cars' detail and phase-out | `present/openworld-sight.ts`, `present/openworld-car-lod.ts`, `engine/engine-openworld-cull.ts` |
