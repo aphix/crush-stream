@@ -27,7 +27,7 @@ type Entry = {
 type SolidsListener = (solids: readonly InteriorSolid[]) => void;
 
 /** What the interiors ask of the open world's sight field. */
-type InteriorSight = Pick<SightField, "claim" | "seenThroughFace" | "recordSighting" | "unseenFor" | "near" | "hideGrace">;
+type InteriorSight = Pick<SightField, "claim" | "release" | "seenThroughFace" | "recordSighting" | "unseenFor" | "near" | "hideGrace">;
 
 /** An interior this frame: neither built anew nor dropped (`kept`), wanted (seen, or a player beside it), or hidden (no eye has seen it for the hide grace and no player is beside it). */
 const VIEW = { kept: 0, wanted: 1, hidden: 2 } as const;
@@ -52,8 +52,9 @@ export class InteriorSet {
   private readonly detailMesh: THREE.Mesh;
   private readonly glowMesh: THREE.Mesh;
   private solidsListener: SolidsListener | null = null;
-  /** The first of the sight field's ids, one per entry, claimed at the first frame. */
+  /** The first of the sight field's ids, one per entry, claimed at the first frame from `claimedFrom`, and given back to it on dispose. */
   private sightBase = NO_IDS;
+  private claimedFrom: InteriorSight | null = null;
   private shellBuilds = 0;
   private detailBuilds = 0;
 
@@ -77,7 +78,10 @@ export class InteriorSet {
 
   /** Build what the eye has come near and some eye sees, drop what it has left (for `INTERIOR_LINGER`) or no eye has seen for the hide grace, merging the meshes that changed. */
   update(eyeX: number, eyeZ: number, dt: number, sight: InteriorSight): void {
-    if (this.sightBase === NO_IDS) this.sightBase = sight.claim(this.entries.length);
+    if (this.claimedFrom === null) {
+      this.sightBase = sight.claim(this.entries.length);
+      this.claimedFrom = sight;
+    }
     this.shellBuilds = 0;
     this.detailBuilds = 0;
     let shellsChanged = false;
@@ -179,6 +183,7 @@ export class InteriorSet {
     this.empty.dispose();
     this.solidMaterial.dispose();
     this.glowMaterial.dispose();
+    this.claimedFrom?.release(this.sightBase, this.entries.length);
     this.group.removeFromParent();
   }
 
