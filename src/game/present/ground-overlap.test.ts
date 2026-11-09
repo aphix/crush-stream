@@ -80,15 +80,20 @@ type Overlap = {
   spots: [number, number, number][];
 };
 
-type Hit = { layer: number; y: number };
-
 /**
  * Every pair of layers the renderer cannot tell apart at `RANGE`, with the area, worst separation and its place.
  * The terrain is rasterised only where another layer already is (it would be most of the map).
  * `cell` is the raster step (m): an overlap thinner than it can be missed. `noise` is the separation (steps) a pair needs.
  */
 function scanOverlaps(layers: readonly ScanLayer[], range = RANGE, cell = SCAN_CELL, noise = rasterNoise()): Overlap[] {
-  const cells = new Map<number, Hit[]>();
+  /** A cell's number by its key, in the order the cells were first covered; its hits are a linked list (`cellHead` to `cellTail` through `hitNext`) in the order they were laid. */
+  const cellOf = new Map<number, number>();
+  const cellKey: number[] = [];
+  const cellHead: number[] = [];
+  const cellTail: number[] = [];
+  const hitLayer: number[] = [];
+  const hitY: number[] = [];
+  const hitNext: number[] = [];
   const key = (i: number, j: number) => (i + 32768) * 65536 + (j + 32768);
   const raster = (li: number, onlyKnown: boolean) => {
     const { pos, idx } = layers[li]!;
@@ -113,20 +118,34 @@ function scanOverlaps(layers: readonly ScanLayer[], range = RANGE, cell = SCAN_C
       const j1 = Math.floor(Math.max(az, bz, cz) / cell);
       for (let i = i0; i <= i1; i++) {
         for (let j = j0; j <= j1; j++) {
-          const k = key(i, j);
-          const list = cells.get(k);
-          if (onlyKnown && !list) continue;
           const x = (i + 0.5) * cell;
           const z = (j + 0.5) * cell;
           const l0 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / det;
           const l1 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / det;
           const l2 = 1 - l0 - l1;
           if (l0 < 0 || l1 < 0 || l2 < 0) continue;
-          const hit = { layer: li, y: l0 * ay + l1 * by + l2 * cy };
+          const k = key(i, j);
+          let c = cellOf.get(k);
+          if (c === undefined) {
+            if (onlyKnown) continue;
+            c = cellKey.length;
+            cellOf.set(k, c);
+            cellKey.push(k);
+            cellHead.push(-1);
+            cellTail.push(-1);
+          }
+          const y = l0 * ay + l1 * by + l2 * cy;
           // A centre exactly on a shared edge lies in both triangles: the layer counts once there.
-          if (list?.some((h) => h.layer === li && Math.abs(h.y - hit.y) < 1e-6)) continue;
-          if (list) list.push(hit);
-          else cells.set(k, [hit]);
+          let laid = false;
+          for (let h = cellHead[c]!; h >= 0 && !laid; h = hitNext[h]!) laid = hitLayer[h] === li && Math.abs(hitY[h]! - y) < 1e-6;
+          if (laid) continue;
+          const hit = hitLayer.length;
+          hitLayer.push(li);
+          hitY.push(y);
+          hitNext.push(-1);
+          if (cellHead[c]! < 0) cellHead[c] = hit;
+          else hitNext[cellTail[c]!] = hit;
+          cellTail[c] = hit;
         }
       }
     }
@@ -140,14 +159,15 @@ function scanOverlaps(layers: readonly ScanLayer[], range = RANGE, cell = SCAN_C
 
   const out = new Map<string, Overlap>();
   const bins = new Map<string, Map<string, [number, number, number]>>();
-  for (const [k, list] of cells) {
-    for (let p = 0; p < list.length; p++) {
-      for (let q = p + 1; q < list.length; q++) {
-        const hp = list[p]!;
-        const hq = list[q]!;
-        const lp = layers[hp.layer]!;
-        const lq = layers[hq.layer]!;
-        const gap = Math.abs(hp.y - hq.y);
+  for (let c = 0; c < cellKey.length; c++) {
+    const k = cellKey[c]!;
+    for (let p = cellHead[c]!; p >= 0; p = hitNext[p]!) {
+      for (let q = hitNext[p]!; q >= 0; q = hitNext[q]!) {
+        const lp = layers[hitLayer[p]!]!;
+        const lq = layers[hitLayer[q]!]!;
+        const yp = hitY[p]!;
+        const yq = hitY[q]!;
+        const gap = Math.abs(yp - yq);
         let steps: number;
         if (lp.name === lq.name) {
           // One mesh: parts of it that lie at one height look the same; painted in index order, parts at two heights are a coin toss.
@@ -157,8 +177,8 @@ function scanOverlaps(layers: readonly ScanLayer[], range = RANGE, cell = SCAN_C
           const pBack = lp.order <= lq.order;
           const back = pBack ? lp : lq;
           const front = pBack ? lq : lp;
-          const yBack = pBack ? hp.y : hq.y;
-          const yFront = pBack ? hq.y : hp.y;
+          const yBack = pBack ? yp : yq;
+          const yFront = pBack ? yq : yp;
           if (!back.writes) {
             // Painted over: wrong only where the one painted later lies clearly under the one painted earlier.
             if (yBack - yFront <= INVERT_GAP) continue;
@@ -282,6 +302,7 @@ describe("given ground layers that may be drawn at the same depth as one another
     expect(scanOverlaps([ground, unlifted], RANGE, 0.5, noise).length).toBe(1);
   });
 
+  // mutation: sed -i 's/export const GROUND_LIFT_PX = 1;/export const GROUND_LIFT_PX = 0;/' src/game/scenes/ground-stack.ts (red: 4199 m² of the oval's roads ambiguous)
   it("when every course's ground layers are scanned at 250 m for a phone's 1/16 pixel grid, then under 2 m² of its whole ground is ambiguous", () => {
     for (const raw of [...TRACKS, ...OFF_MENU]) {
       const track = new Track(raw);

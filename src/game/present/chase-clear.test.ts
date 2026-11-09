@@ -6,6 +6,7 @@ import type { PadState } from "../vehicle/gamepad.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { DERBY_BOXES, DERBY_PROP, DERBY_TABLE_TOP, DerbyGround, type DerbyBox } from "../scenes/derby-ground.ts";
 import { activeGround, NO_FLOOR, setGround } from "../world/ground.ts";
+import { SCENERY_ARM } from "../world/constants.ts";
 import { placeProps, propColliders } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
@@ -18,6 +19,7 @@ import { EyeClear } from "./eye-clear.ts";
 import { carsBlock, CINE, inside, occluder, raceSight, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const DT = 1 / FRAME_HZ;
 /** A car's length: an eye pulled in closer than this swings round instead. */
@@ -237,13 +239,16 @@ describe("given the chase camera on a car driven through the derby bowl", () => 
 /** The car's speed (m/s) in the rows that drive away from a solid. */
 const AWAY_SPEED = 8;
 
-/** True when `eye` is inside a solid of the course, or a solid stands on its line to `subject` (all but the last 1.5 m of it, the car's own), checked every 0.25 m with no clearance. */
-function courseBlocked(sight: Sight, eye: THREE.Vector3, subject: THREE.Vector3): boolean {
-  if (solid(sight, eye.x, eye.y, eye.z, 0)) return true;
+/** A drive away from a prop stays this near (m) to where it starts: 8 m of travel plus the eye's trail, with room to spare (`framesBlockedAway` fails the row if the eye leaves it). */
+const RUN_REACH = 40;
+
+/** True when `eye` is inside a solid of the course (`near`: the solids that can reach it), or a solid stands on its line to `subject` (all but the last 1.5 m of it, the car's own), checked every 0.25 m with no clearance. */
+function courseBlocked(sight: Sight, near: readonly Occluder[], eye: THREE.Vector3, subject: THREE.Vector3): boolean {
+  if (solid(sight, eye.x, eye.y, eye.z, 0, near)) return true;
   const length = eye.distanceTo(subject);
   for (let d = 0.25; d < length - 1.5; d += 0.25) {
     const share = d / length;
-    if (solid(sight, eye.x + (subject.x - eye.x) * share, eye.y + (subject.y - eye.y) * share, eye.z + (subject.z - eye.z) * share, 0)) return true;
+    if (solid(sight, eye.x + (subject.x - eye.x) * share, eye.y + (subject.y - eye.y) * share, eye.z + (subject.z - eye.z) * share, 0, near)) return true;
   }
   return false;
 }
@@ -263,6 +268,7 @@ function framesBlockedAway(sight: Sight, prop: Occluder, turn: number, keep: boo
   const car = newCar(x, z, yaw);
   car.group.position.y = ground;
   const { camera, view } = chaseRig(x, z, yaw, ground);
+  const near = sight.occ.filter((o) => Math.hypot(o.x - x, o.z - z) < RUN_REACH + CINE.pad * Math.SQRT2 + (o.circle ? o.hx : Math.hypot(o.hx, o.hz)));
   const subject = new THREE.Vector3();
   let blocked = 0;
   for (let f = 0; f < 2 / DT; f++) {
@@ -270,14 +276,16 @@ function framesBlockedAway(sight: Sight, prop: Occluder, turn: number, keep: boo
     car.group.position.set(x + Math.sin(yaw) * AWAY_SPEED * t, ground, z + Math.cos(yaw) * AWAY_SPEED * t);
     subject.set(car.group.position.x, car.group.position.y + PLATFORM_CAMERA.third.aimUp, car.group.position.z);
     // The drive ends where the car itself would be inside a wall or a prop: no camera can see a car through its own wall.
-    if (solid(sight, subject.x, subject.y, subject.z, CINE.pad)) break;
+    if (solid(sight, subject.x, subject.y, subject.z, CINE.pad, near)) break;
     car.velocity.set(f * DT >= 1 ? Math.sin(yaw) * AWAY_SPEED : 0, 0, f * DT >= 1 ? Math.cos(yaw) * AWAY_SPEED : 0);
     view.frameDrive(car, keep ? sight : null, DT, false);
-    if (f >= 30 && courseBlocked(sight, camera.position, subject)) blocked++;
+    must(Math.hypot(camera.position.x - x, camera.position.z - z) < RUN_REACH, `the eye left the ${RUN_REACH} m the solids were culled to`);
+    if (f >= 30 && courseBlocked(sight, near, camera.position, subject)) blocked++;
   }
   return blocked;
 }
 
+// mutation: sed -i 's/if (this.pull === 0 && turn === 0 && this.lift === 0) return;/return;/' src/game/present/eye-clear.ts (red: the keeper never moves the eye)
 describe("given the chase camera on a car 2 m outside a tall prop or building of each course, driving away from it", () => {
   /** Props at least this tall (m) are tried, `PER_COURSE` of them spread over the course's list, from two sides each. */
   const TALL = 3;
@@ -292,7 +300,7 @@ describe("given the chase camera on a car 2 m outside a tall prop or building of
       const placed = placeProps(track);
       const sight = raceSight(track, placed);
       // `occ` lists the authored colliders, then the scenery service's, then the size boxes: each group is strided alone, so scenery never moves which authored solids are tried.
-      const authored = propColliders(placeProps(new Track({ ...parseTrack(json), scenery: { biome: "none" } }))).length;
+      const authored = propColliders(placeProps(track, SCENERY_ARM.off)).length;
       const sceneryEnd = propColliders(placed).length;
       const spread = (list: readonly Occluder[]): Occluder[] => {
         const tallOnes = list.filter((o) => o.y1 - o.y0 >= TALL);
