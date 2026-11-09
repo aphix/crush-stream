@@ -18,7 +18,7 @@ import { blankPoint, blankProjection, blankSegment, pointOn, projectPath, segmen
  */
 
 /** A placed prefab: ground point, yaw (rad, +Z forward at 0), scale factors on `PREFABS[prefab].size`. A scenery asset's generic prefab is unit size and its `asset` indexes `SCENERY_ASSETS`: the scale is then the asset's own size (m). */
-export type Placed = { prefab: PrefabId; x: number; y: number; z: number; yaw: number; sx: number; sy: number; sz: number; asset?: number };
+export type Placed = { prefab: PrefabId; x: number; y: number; z: number; yaw: number; sx: number; sy: number; sz: number; asset?: number; style?: string };
 
 /**
  * Footprint of a solid / knock placement, or of a piece of a course wall (`wallColliders`). Box half-extents (`hx`, `hz`)
@@ -236,6 +236,7 @@ function placeAuthored(track: Track): Placed[] {
       sx: (p.size ? p.size[0] / size[0] : 1) * s,
       sy: (p.size ? p.size[1] / size[1] : 1) * s,
       sz: (p.size ? p.size[2] / size[2] : 1) * s,
+      style: p.style,
     });
   }
 
