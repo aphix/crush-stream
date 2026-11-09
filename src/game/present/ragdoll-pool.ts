@@ -15,7 +15,7 @@ import { Purses } from "./ragdoll-purse.ts";
 import { type PropDraw, PropBodies } from "./ragdoll-props.ts";
 import { BoxPile } from "./ragdoll-boxes.ts";
 import { CarProxies, PROP_BAND_HIGH, PROP_BAND_LOW } from "./ragdoll-cars.ts";
-import type { PartHeard, PartHit } from "./ragdoll-wire.ts";
+import { packBoxes, type PartHeard, type PartHit } from "./ragdoll-wire.ts";
 import { LooseProxies } from "./ragdoll-loose.ts";
 import { BASE_SLOTS, dollGroups, FIXED_GROUPS, knockedGroups, propGroups, SLOTS, STEP, thrownGroups } from "./ragdoll-config.ts";
 import { RagdollDebug } from "./ragdoll-debug.ts";
@@ -26,7 +26,9 @@ import { brace, joinUp, loosen } from "./ragdoll-joints.ts";
 import { Walker } from "./ragdoll-walker.ts";
 import { Untangle } from "./ragdoll-untangle.ts";
 import { groundColliders, PATCH_AHEAD, PATCH_HALF, SCENE_HALF, type Pole } from "./ragdoll-ground.ts";
-import { courseSolids, type Solid } from "./ragdoll-solids.ts";
+import { boxColliders, courseSolids, removeBoxColliders, type Solid } from "./ragdoll-solids.ts";
+import type { FloorBox } from "./walker-floor.ts";
+import { NO_STAIRS, type StairField } from "../world/stairs.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { GRAVITY } from "../kernel/constants.ts";
 
@@ -133,6 +135,11 @@ export abstract class RagdollPool {
   protected readonly figure: Throw = { car: 0, p: new THREE.Vector3(), q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: false, purse: false, armsDown: true };
   /** Fixed colliders every dummy shares off a course (pad or disc with its ramps, corkscrew, poles), built at the run's first throw: Rapier's step allocates per collider (0.31 KB, RapierEval). */
   protected readonly statics: Collider[] = [];
+  /** The boxes a building streams in (`setFixedBoxes`), kept across runs and replaced whole each call, and their fixed colliders in this world. */
+  protected boxList: readonly FloorBox[] = [];
+  private readonly boxBuilt: Collider[] = [];
+  /** The course's or scene's flights of stairs (`setCourse`, `setSolids`): every walker's floor reads them. */
+  protected flights: StairField = NO_STAIRS;
   /** A scene's ground and every solid of it (`setSolids`), built once for every dummy there: a scene's solids stand where they do whoever is thrown, and a patch of the same floor per dummy made 32 dummies cost twice what the first one did. Empty until a dummy is out. */
   private scenePatch: Collider[] = [];
   protected disposed = false;
@@ -215,6 +222,7 @@ export abstract class RagdollPool {
 
   protected async load(): Promise<void> {
     if (!this.hosted) this.remote ??= RagdollRemote.open((err) => this.fallBack(err), this.traffic);
+    if (this.boxList.length > 0) this.remote?.setBoxes(packBoxes(this.boxList));
     const R = await loadRapier();
     if (this.disposed) return;
     this.R = R;
@@ -236,6 +244,22 @@ export abstract class RagdollPool {
     for (const b of d.bodies) b.setEnabled(true);
     world.step();
     for (const b of d.bodies) disable(b);
+    this.buildFixedBoxes();
+  }
+
+  /** Walker `walker` reads the boxes streamed in and the flights of the course. */
+  protected equipFloor(walker: Walker): void {
+    walker.floor.boxes = this.boxList;
+    walker.floor.stairs = this.flights;
+  }
+
+  /** The streamed boxes (`boxList`) as fixed colliders in this world, those of the list before out of it; none while Rapier is still loading (`load` builds them). */
+  protected buildFixedBoxes(): void {
+    if (!this.world || !this.R) return;
+    removeBoxColliders(this.world, this.boxBuilt);
+    this.boxBuilt.push(...boxColliders(this.R, this.world, this.boxList));
+    // A dummy asleep on a box that is gone would hang there: the world only reads the removal in a step, and it does not step while every dummy sleeps.
+    for (const d of this.dolls) if (d.live) for (const b of d.bodies) b.wakeUp();
   }
 
   /** Builds the next slot at the end of the pool: ten parts and their joints parked disabled far below the world, its walker and its purse set. A slot past `BASE_SLOTS` wears no spray (`DummyMesh`'s atlas holds the first four). */
@@ -262,6 +286,7 @@ export abstract class RagdollPool {
     const joints = joinUp(R, world, bodies);
     this.dolls.push({ bodies, joints, loose: false, braced: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3), driven: false });
     if (this.walkerList.length <= s) this.walkerList.push(new Walker());
+    this.equipFloor(this.walkerList[s]!);
     this.purses?.build();
   }
 
