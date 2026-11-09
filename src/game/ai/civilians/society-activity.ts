@@ -1,6 +1,7 @@
 import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import {
+  ALARM_DELAY_STEPS_PER_SECOND,
   CENTIMETRES_PER_METRE,
   DECISION_HZ,
   DOOR_SPREAD,
@@ -13,6 +14,7 @@ import {
   NO_SEAT,
   PLAYER_STRIKE_REACH,
   PURPOSE,
+  RECOIL_CALM_SHARE,
   RECOIL_STEP_METRES,
   RESIDENT_FLOAT,
   RESIDENT_FLOAT_STRIDE,
@@ -23,6 +25,7 @@ import {
 } from "./civilian-constants.ts";
 import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { legPose } from "./civilian-leg.ts";
+import { residentNeuroticism } from "./civilian-temperament.ts";
 import type { CityState } from "./civilian-state.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
 import { VENUE, isCounterVenue, isOutdoorPurpose } from "./society-venues.ts";
@@ -35,6 +38,8 @@ export class ActivityReading {
   partner = -1;
   surfaceY = 0;
   placed = false;
+  /** A placed body that must not give way (seated, at a counter, fighting): not one standing at a door or flinching, which the crowd keeps a body's width from the next. */
+  fixed = false;
   x = 0;
   z = 0;
   yaw = 0;
@@ -105,6 +110,7 @@ function readFight(state: CityState, resident: number, since: number, out: Activ
   const inSlot = since % FIGHT_SLOT_SECONDS;
   const side = starter ? -1 : 1;
   out.placed = true;
+  out.fixed = true;
   out.x = intAt(state, resident, RESIDENT_INT.fightX) / CENTIMETRES_PER_METRE + (civilianPair ? side * FIGHT_HALF_GAP : 0);
   out.z = intAt(state, resident, RESIDENT_INT.fightZ) / CENTIMETRES_PER_METRE;
   out.yaw = civilianPair ? -side * QUARTER_TURN : bearingYaw(intAt(state, resident, RESIDENT_INT.fightBearing));
@@ -118,6 +124,7 @@ function readSitting(state: CityState, place: number, seat: number, since: numbe
   const seats = state.map.places[place]!.seats!;
   const at = seat * SEAT_STRIDE;
   out.placed = true;
+  out.fixed = true;
   out.x = seats[at]!;
   out.z = seats[at + 1]!;
   out.yaw = seats[at + 2]!;
@@ -134,20 +141,25 @@ function faceHazard(state: CityState, resident: number, out: ActivityReading): v
   if (toX !== 0 || toZ !== 0) out.yaw = detAtan2(toX, toZ);
 }
 
-/** A flinch: a step back from the hazard, out and back over the recoil clip, `RECOIL_STEP_METRES` at most. */
+/** A flinch: a step back from the hazard, out and back over the recoil clip, `RECOIL_STEP_METRES` at most (the calm take `RECOIL_CALM_SHARE` of it). */
 function stepBack(state: CityState, resident: number, since: number, out: ActivityReading): void {
   const toX = intAt(state, resident, RESIDENT_INT.alarmX) / CENTIMETRES_PER_METRE - out.x;
   const toZ = intAt(state, resident, RESIDENT_INT.alarmZ) / CENTIMETRES_PER_METRE - out.z;
   const distance = hypot2(toX, toZ);
   if (distance === 0) return;
-  const step = detSin((Math.PI * since) / ACTIVITY_SECONDS.recoil) * RECOIL_STEP_METRES;
+  const step = detSin((Math.PI * since) / ACTIVITY_SECONDS.recoil) * RECOIL_STEP_METRES * (RECOIL_CALM_SHARE + (1 - RECOIL_CALM_SHARE) * residentNeuroticism(state, resident));
   out.x -= (toX / distance) * step;
   out.z -= (toZ / distance) * step;
 }
 
-/** Someone walking who saw a hazard flinches for the recoil clip's length, stepping back from it and facing it, then walks on. */
+/** Seconds from the hazard to the moment this resident noticed it. */
+function noticeDelay(state: CityState, resident: number): number {
+  return intAt(state, resident, RESIDENT_INT.alarmDelay) / ALARM_DELAY_STEPS_PER_SECOND;
+}
+
+/** Someone walking who saw a hazard flinches for the recoil clip's length from the moment they noticed it, stepping back from it and facing it, then walks on. */
 function readFlinch(state: CityState, resident: number, seconds: number, out: ActivityReading): void {
-  const since = seconds - intAt(state, resident, RESIDENT_INT.alarmTick) / DECISION_HZ;
+  const since = seconds - intAt(state, resident, RESIDENT_INT.alarmTick) / DECISION_HZ - noticeDelay(state, resident);
   if (since < 0 || since >= ACTIVITY_SECONDS.recoil || !legPose(state, resident, seconds, state.pose)) return;
   out.placed = true;
   out.x = state.pose.x;
@@ -158,15 +170,25 @@ function readFlinch(state: CityState, resident: number, seconds: number, out: Ac
   setClip(out, ACTIVITY.recoil, since, ACTIVITY_SECONDS.recoil - since);
 }
 
-/** Out at a door watching trouble: a flinch and a step back at first, then standing looking at it; the one who phones for the ambulance stands on the phone, glancing at who is down. */
+/** Out at a door watching trouble: until they notice it they stand as they were; then a flinch and a step back, then standing looking at it; the one who phones for the ambulance stands on the phone, glancing at who is down. */
 function readWatcher(state: CityState, resident: number, purpose: number, since: number, left: number, out: ActivityReading): void {
+  if (purpose === PURPOSE.callAmbulance) {
+    out.partner = intAt(state, resident, RESIDENT_INT.alarmVictim);
+    faceHazard(state, resident, out);
+    setClip(out, ACTIVITY.phoneCall, since, left);
+    return;
+  }
+  const noticed = since - noticeDelay(state, resident);
+  if (noticed < 0) {
+    setClip(out, ACTIVITY.idle, since, left);
+    return;
+  }
   out.partner = intAt(state, resident, RESIDENT_INT.alarmVictim);
   faceHazard(state, resident, out);
-  if (purpose === PURPOSE.callAmbulance) setClip(out, ACTIVITY.phoneCall, since, left);
-  else if (since < ACTIVITY_SECONDS.recoil) {
-    stepBack(state, resident, since, out);
-    setClip(out, ACTIVITY.recoil, since, ACTIVITY_SECONDS.recoil - since);
-  } else setClip(out, ACTIVITY.idle, since, left);
+  if (noticed < ACTIVITY_SECONDS.recoil) {
+    stepBack(state, resident, noticed, out);
+    setClip(out, ACTIVITY.recoil, noticed, ACTIVITY_SECONDS.recoil - noticed);
+  } else setClip(out, ACTIVITY.idle, noticed, left);
 }
 
 function readOutdoor(state: CityState, resident: number, purpose: number, place: number, tick: number, since: number, left: number, out: ActivityReading): void {
@@ -193,6 +215,7 @@ function readIndoors(state: CityState, resident: number, place: number, since: n
   const worker = intAt(state, resident, RESIDENT_INT.work) === place;
   if (worker && counter !== undefined && counter.length >= 2 * COUNTER_STRIDE) {
     out.placed = true;
+    out.fixed = true;
     out.x = counter[COUNTER_STRIDE]!;
     out.z = counter[COUNTER_STRIDE + 1]!;
     out.yaw = counter[COUNTER_STRIDE + 2]!;
@@ -203,6 +226,7 @@ function readIndoors(state: CityState, resident: number, place: number, since: n
   if (worker || !isCounterVenue(venue)) return;
   if (counter !== undefined && counter.length >= COUNTER_STRIDE && since < ACTIVITY_SECONDS.buy) {
     out.placed = true;
+    out.fixed = true;
     out.x = counter[0]!;
     out.z = counter[1]!;
     out.yaw = counter[2]!;
@@ -249,6 +273,7 @@ export function readActivity(state: CityState, resident: number, seconds: number
   out.partner = -1;
   out.surfaceY = 0;
   out.placed = false;
+  out.fixed = false;
   const base = resident * RESIDENT_INT_STRIDE;
   const tick = seconds * DECISION_HZ;
   if (state.ints[base + RESIDENT_INT.alive] === 0 || state.ints[base + RESIDENT_INT.species] !== SPECIES.person) return;

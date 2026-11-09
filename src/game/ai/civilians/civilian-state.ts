@@ -1,6 +1,7 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import {
+  ALARM_DELAY_STEPS,
   HISTORY_FIELD,
   HISTORY_FIELDS,
   LOG_LINES,
@@ -14,7 +15,7 @@ import {
 } from "./civilian-constants.ts";
 import { LegPose } from "./civilian-leg.ts";
 import type { MapIndex } from "./civilian-map-index.ts";
-import { packName } from "./civilian-names.ts";
+import { EVENT_CODE, moodHold, moodOfCode, packName } from "./civilian-names.ts";
 import { castHomesOf, newAppointmentSlot, type ResolvedMember } from "./civilian-story.ts";
 import { buildVenueIndex, type VenueIndex } from "./society-venues.ts";
 import { PathFinder } from "./walk-path.ts";
@@ -68,6 +69,8 @@ export class CityState {
   readonly scratchPath: Uint16Array;
   /** The path of a trip by car, built here before it replaces the walk's. */
   readonly carPath: Uint16Array;
+  /** The reaction steps one alarm has given out (1: taken), so that no two people react on one. */
+  readonly alarmSlots: Uint8Array;
   readonly scratchNeeds: Float32Array;
   readonly appointment = newAppointmentSlot();
   readonly pose = new LegPose();
@@ -107,6 +110,7 @@ export class CityState {
     this.noFear = new Float32Array(this.index.nodeCount);
     this.scratchPath = new Uint16Array(MAX_PATH_NODES);
     this.carPath = new Uint16Array(MAX_PATH_NODES);
+    this.alarmSlots = new Uint8Array(ALARM_DELAY_STEPS);
     this.scratchNeeds = new Float32Array(NEED_COUNT);
   }
 }
@@ -163,6 +167,17 @@ export function logHistory(state: CityState, resident: number, code: number, sub
   ints[line + HISTORY_FIELD.subject] = subject;
   ints[line + HISTORY_FIELD.tick] = tick;
   ints[base + RESIDENT_INT.historyHead] = head + 1;
+}
+
+/**
+ * A walk's or a sight's mood (a party's, a chat's, a hazard seen) colours the resident only when no earlier event's mood still holds: a wrecked stoop's anger lasts its days whatever the evening brings. A life event
+ * (`setMoodEvent`) always replaces it.
+ */
+export function setVisitMood(state: CityState, resident: number, code: number, tick: number): void {
+  const base = resident * RESIDENT_INT_STRIDE;
+  const held = state.ints[base + RESIDENT_INT.moodEvent]!;
+  if (held !== EVENT_CODE.none && moodOfCode(held) !== -1 && tick - state.ints[base + RESIDENT_INT.moodTick]! < moodHold(held)) return;
+  setMoodEvent(state, resident, code, tick);
 }
 
 /** Mood is coloured by the latest event for `MOOD_HOLD_TICKS` (the event's code and tick). */

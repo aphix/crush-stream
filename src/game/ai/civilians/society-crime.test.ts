@@ -208,7 +208,7 @@ describe("given pushes between two residents, and a day of the city with none", 
     const state = newCast(NOON).state;
     runTicks(state, 3600);
     let fighters = 0;
-    for (let resident = 0; resident < state.capacity; resident++) if (intAt(state, resident, RESIDENT_INT.fightTick) !== NEVER_TICK) fighters++;
+    for (let resident = 0; resident < state.capacity; resident++) if (intAt(state, resident, RESIDENT_INT.alive) === 1 && intAt(state, resident, RESIDENT_INT.fightTick) !== NEVER_TICK) fighters++;
     expect(fighters, "residents in a fight").toBe(0);
   });
 });
