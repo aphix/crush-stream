@@ -55,6 +55,8 @@ export const PURPOSE = {
   mug: 27,
   breakIn: 28,
   fight: 29,
+  lookOn: 30,
+  callAmbulance: 31,
 } as const;
 /** What `RESIDENT_INT.flags` holds: in hospital, without a job, hurting, out of work while the workplace is closed, a named resident (no society chances, fixed age); jobless long enough to be broke, a criminal, wanted for an open crime or fight, in custody, a car owner, a coffee fan, a drinker. */
 export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16, broke: 32, criminal: 64, wanted: 128, custody: 256, hasCar: 512, coffeeFan: 1024, drinker: 2048 } as const;
@@ -123,7 +125,12 @@ export const RESIDENT_INT = {
   driveLast: 52,
   driveLeaveTick: 53,
   driveParkTick: 54,
-  history: 55,
+  /** The last hazard this resident saw: the tick (NEVER_TICK: none), where in centimetres, and who was hurt there (a resident, -1: none). */
+  alarmTick: 55,
+  alarmX: 56,
+  alarmZ: 57,
+  alarmVictim: 58,
+  history: 59,
 } as const;
 export const RESIDENT_INT_STRIDE = RESIDENT_INT.history + LOG_LINES * HISTORY_FIELDS;
 /** A resident's float row: the needs as they stood at the decision that made the leg, their rise rates (per game hour), the speed of the leg or stay they are on (m/s), their lateral offset (m) and their own walking pace (m/s: the leg's speed is this, or the drive's). */
@@ -140,8 +147,9 @@ export const CAST_TITLE_BASE = 100;
  * Event kinds of the host's input triples (kind, subject, crowd seconds). A knock's subject is the civilian run down; a wreck's the place; a crime's, a bust's and a jaywalk arrest's the resident; a push's and a fight's the
  * victim, followed by a triple of the same seconds naming the other party: `alongside` a civilian, `walker` a human player on foot (its subject his bearing from the victim, in `WALKER_BEARING_STEPS` of a turn); neither: a car.
  * Inside the brain a civilian pair is one subject, victim + capacity * (other + 1). A `copDown` (a car knocked a foot cop down; subject: the cop) is the police's: it rides the log and the brain drops it.
+ * An `ambulance` (someone run down has stayed down long enough for a call; subject: them) makes the nearest person out at a door the caller; a `danger` (a crash, or a car heading at someone; subject: the walk-graph node nearest) alarms those who see it.
  */
-export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9 } as const;
+export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9, ambulance: 10, danger: 11 } as const;
 /** A fight's bearing that is none (two civilians face each other; a car is not faced). */
 export const NO_BEARING = -1;
 /** `RESIDENT_INT.fightPartner` when the other fighter is a human player on foot (-1 is none, or a car). */
@@ -320,7 +328,7 @@ export const HOUR_WEIGHTS = [
 export const CLOSED_HOURS_WEIGHT = 0.1;
 
 /** Salts of the draw streams (`residentDraws`): one per kind of choice, so adding a draw to one never moves another. */
-export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12 } as const;
+export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12, alarm: 13 } as const;
 /** Odd multipliers that scramble (seed, resident, salt, index) into a mulberry32 seed. */
 export const MIX_RESIDENT = 0x9e3779b9;
 export const MIX_SALT = 0x85ebca6b;
@@ -402,3 +410,13 @@ export const PUNCH_SPEED = 4;
 export const PUNCH_LIFT = 0.3;
 /** A jaywalker arrested by the police spends a game hour in custody. */
 export const JAYWALK_CUSTODY_TICKS = TICKS_PER_GAME_HOUR;
+
+/** Alarm: a crash, a car heading at someone or a person down is seen by those out at a door or on the street within this many metres (the street's length of sight); this share of them react (the rest do not look up); of those at a door this share go in, the rest look on for this many game minutes (a crash, a person down till the ambulance has gone) from where they stand; a walker flinches and steps this far (m) back from it. */
+export const ALARM_SIGHT = 50;
+export const ALARM_SHARE = 0.8;
+export const ALARM_INDOORS_SHARE = 0.25;
+export const LOOK_ON_CRASH_MINUTES = 15;
+export const LOOK_ON_DOWNED_MINUTES = 70;
+export const RECOIL_STEP_METRES = 0.5;
+/** The one who calls the ambulance for someone down stays on the phone this many game minutes. */
+export const CALL_MINUTES = 12;
