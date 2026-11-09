@@ -258,6 +258,8 @@ export abstract class DeformContact extends DeformState {
     this.bodyV = velocityOut;
     this.bodyW = angularOut;
     this.measurePose();
+    // The re-fit's drift (`settleDrift`) is measured from here, so the planted hubs' ride of the seat step (a translation of their share of the wreck) takes from the slice's net-translation budget like every other correction.
+    this.driftFrom();
     const off = this.seatOffset(group);
     if (dt > 0 && off > 1e-9) {
       _a.multiplyScalar(Math.min(1, (dt * SEAT_SPEED) / off)).applyQuaternion(group.quaternion);
@@ -296,7 +298,6 @@ export abstract class DeformContact extends DeformState {
       this.hubStand[mi * 2] = m.local.x;
       this.hubStand[mi * 2 + 1] = m.local.z;
     }
-    this.driftFrom();
     this.clampLocal(group);
     this.settleDrift(0, this.budgetAt());
     if (dt > 0) { this.keptTurn[3] = this.keptTurn[0]! / dt; this.keptTurn[0] = 0; } // prettier-ignore
