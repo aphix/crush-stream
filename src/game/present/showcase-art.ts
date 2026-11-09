@@ -92,8 +92,8 @@ const STUDIO_FLOOR = 0x2e2c2a;
 /** The share of a street's wetness the studio floor takes: at full the low back light shone a white hot spot across the people's feet. */
 const FLOOR_WET_SHARE = 0.6;
 
-/** The disc's radius (m): the sandbox's, grown to hold the scenery rows (the farthest building corner is about 132 m out) and a margin. */
-export const SHOWCASE_RADIUS = 140;
+/** The disc's radius (m): the sandbox's, grown to hold the scenery rows (the farthest building corner is about 143 m out, with the open world's eight styles) and a margin. */
+export const SHOWCASE_RADIUS = 150;
 /** The floor's drawn radius (m): past the farthest view the draw setting allows, far beyond the disc the rows and walkers use (`SHOWCASE_RADIUS`), so the set never ends in a rim; the horizon, fog and sky take it from there. */
 const FLOOR_RADIUS = 72 * SHOWCASE_RADIUS;
 
