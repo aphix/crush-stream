@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import { LIGHT, lightPhase, lightState, phaseOfApproach } from "../ai/openworld-traffic/traffic-lights.ts";
 import { HEADING_COUNT, HEADING_DX, HEADING_DZ, HEADING_YAW, rightX, rightZ, type RoadNetwork } from "../world/openworld/openworld-roads.ts";
+import { SIGNAL_POLE } from "../world/openworld/openworld-signal-poles.ts";
 
-/** The pole stands this far (m) from the curb, in the sidewalk's furniture strip, and the head hangs this far (m) over the lane side of it. */
-const POLE_FROM_CURB = 0.6;
+/** The pole stands `SIGNAL_POLE.fromCurb` (m) from the curb, in the sidewalk's furniture strip (the solid a car meets stands there too), and the head hangs this far (m) over the lane side of it. */
+const POLE_FROM_CURB = SIGNAL_POLE.fromCurb;
 const HEAD_OVER_LANE = 0.35;
-const POLE_WIDTH = 0.18;
-const POLE_HEIGHT = 4.4;
+const POLE_WIDTH = SIGNAL_POLE.width;
+const POLE_HEIGHT = SIGNAL_POLE.poleHeight;
 const HEAD_SIZE = { width: 0.42, height: 1.4, depth: 0.36 } as const;
 const HEAD_HEIGHT = 3.5;
 const LAMP_SIZE = 0.26;
