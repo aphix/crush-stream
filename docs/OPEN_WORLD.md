@@ -212,7 +212,7 @@ What a car or a walker meets is `facadeSolidProps(lots)`, appended to the course
 ## Animation (`present/civilian-anim*.ts`)
 
 A near dummy does what her brain says she does: `CrowdPoses.activity` is an `ACTIVITY` code (`ai/civilians/civilian-activity.ts`: idle, talk,
-buy, door, sitDown, sit, standUp, bump, swing, block, hit, sitSteps; 0 is the walk). `activityClock` is the seconds since it began (the clip's own
+buy, door, sitDown, sit, standUp, bump, swing, block, hit, sitSteps, cuffing, cuffed, arresting, escorting; 0 is the walk). `activityClock` is the seconds since it began (the clip's own
 time, so a civilian who comes into view mid-activity is already in it), `activityLeft` the seconds until it ends, `partner` the civilian a
 bump, fight or talk is with (the clips turn toward or away from her), `feetY` and `surfaceY` the floor and the seat or counter top, so a
 sitter lands on any seat height (`Place.seats`, a stoop step) and a customer's hand finds the counter.
@@ -223,6 +223,13 @@ from the walk and out over the clip's last `blendOut` seconds, then two solves: 
 torso's lean, and `plant` holds the feet on the floor as the pelvis sinks. A clip is authored for its main side, mirrored toward the partner's
 side (bump, fight) or the civilian's handedness. Looping clips grow their fidgets from their rest pose over 1.5 s and start at an offset per
 civilian, so a bar of sitters does not glance together. No frame allocates.
+
+An arrest is two clips a side, set by the law (`ai/openworld-crime/crime-poses.ts`): the suspect is `cuffing` while gripped (her main arm
+taken behind her back, then the other) and `cuffed` after (hands behind her back, head down; walking, her legs stride as the walk does: the
+led-away walk); the cop is `arresting` (behind her, both hands on her wrists) and then `escorting` (his right hand on her left upper arm,
+whichever hand he favours). `ARREST` is the pair's spacing (the cop `cuffBehind` behind her, she `escortAhead` ahead and `escortAcross` to
+his right, both facing her way): the law places them by it and the cop's hands reach for where the cuffed pose puts her wrists and arm, so the
+two need no partner index across their separate pose sets.
 
 ## Traffic (`ai/openworld-traffic`)
 
