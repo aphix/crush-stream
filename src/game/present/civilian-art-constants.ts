@@ -54,9 +54,8 @@ export const ATTIRE_WEAR: readonly AttireWear[] = [
   { outfitMan: OUTFIT.LONG_SLEEVE, outfitWoman: OUTFIT.LONG_SLEEVE, shirts: RIDER_COLOURS, trousers: RIDER_TROUSERS, capSixteenths: 16 },
 ];
 
-/** A look's bit fields once scrambled: where each starts and how wide it is (woman 1, attire 4, shirt 4, trousers 3, hair 5, cap 4, moustache 4, shades 3, face 2). */
+/** A look's bit fields once scrambled: where each starts and how wide it is (attire 4, shirt 4, trousers 3, hair 5, cap 4, moustache 4, shades 3, face 2). The woman bit is not one: it is read raw (`LOOK`). */
 export const LOOK_FIELD = {
-  woman: { shift: 0, bits: 1 },
   attire: { shift: 1, bits: 4 },
   shirt: { shift: 5, bits: 4 },
   trousers: { shift: 9, bits: 3 },
