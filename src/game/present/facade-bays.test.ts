@@ -110,7 +110,12 @@ describe("given the kit made for the layout's rowhomes", () => {
   it("when the kit is drawn for a few houses and then for many, then it is the same four draws with an instance for each house", () => {
     const few = new FacadeBays(frontages.slice(0, 10));
     const many = new FacadeBays(frontages.slice(0, 40));
-    for (const [name, made, houses] of [["few", few, 10], ["many", many, 40], ["layout", kit, frontages.length]] as const) {
+    const cases = [
+      { name: "few", made: few, houses: 10 },
+      { name: "many", made: many, houses: 40 },
+      { name: "layout", made: kit, houses: frontages.length },
+    ];
+    for (const { name, made, houses } of cases) {
       expect(made.group.children.length, `${name}: draws`).toBe(4);
       expect(made.stats.draws, `${name}: draws counted`).toBe(4);
       for (const mesh of made.group.children) expect(mesh instanceof THREE.InstancedMesh ? mesh.count : -1, `${name}: instances of ${mesh.name}`).toBe(houses);
