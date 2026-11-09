@@ -371,8 +371,59 @@ describe("given a civilian getting into and out of a car by its driver's door, s
   });
 });
 
+describe("given a witness to a crash: the phone call, the person on the ground, the flinch", () => {
+  const EAR = [new THREE.Vector3(-0.14, 1.62, 0.02), new THREE.Vector3(0.14, 1.62, 0.02)] as const;
+  const ON_IT = 0.04;
+  const PARTNER_ON_PLUS_X = { hasPartner: true, bearing: 0.6 } as const;
+
+  it.each([0, 1])("when she calls an ambulance (handedness %i), then that hand is at her ear and the other arm across her waist", (variant) => {
+    const body = clipAt("phoneCall", 2, { variant });
+    const [phone, other] = variant === 0 ? [PLUS_X, MINUS_X] : [MINUS_X, PLUS_X];
+    expect(handTip(body, phone).distanceTo(EAR[phone]!), "fingertip at the ear").toBeLessThan(ON_IT);
+    expect(handTip(body, other).y, "the other hand low").toBeLessThan(1.25);
+  });
+
+  it("when she is on the phone, then she stands as she would standing still", () => {
+    const body = clipAt("phoneCall", 2);
+    const standing = posed({});
+    for (const part of [...THIGH, ...SHIN, 10, 11]) expect(body.centres[part]!.distanceTo(standing.centres[part]!), `part ${part}`).toBeLessThan(TIGHT);
+  });
+
+  it("when she looks across to what she is calling about, then her head turns toward it", () => {
+    expect(facing(clipAt("phoneCall", 2, PARTNER_ON_PLUS_X), HEAD).x).toBeGreaterThan(0.2);
+  });
+
+  it("when she kneels to a person on her +x side, then her hips are low, her near foot flat ahead, her far knee on the ground and her near hand low over them", () => {
+    const body = clipAt("kneel", 2, PARTNER_ON_PLUS_X);
+    expect(hip(body, PLUS_X).y, "hips").toBeCloseTo(0.84 - 0.4, 1);
+    expect(ankle(body, PLUS_X).z, "near foot ahead").toBeCloseTo(0.32, 1);
+    expect(ankle(body, PLUS_X).y, "near foot flat").toBeLessThan(0.14);
+    const farKnee = pointOn(body, SHIN[MINUS_X]!, new THREE.Vector3(0, PARTS[7].h[1], 0));
+    expect(farKnee.y, "far knee on the ground").toBeLessThan(0.14);
+    expect(leaning(body, TORSO).z, "leaning over them").toBeGreaterThan(0.25);
+    expect(handTip(body, PLUS_X).distanceTo(new THREE.Vector3(0.1, 0.5, 0.4)), "near hand on them").toBeLessThan(ON_IT);
+  });
+
+  it("when she kneels to a person on her -x side, then the same kneel is the other way round", () => {
+    const body = clipAt("kneel", 2, { hasPartner: true, bearing: -0.6 });
+    expect(ankle(body, MINUS_X).z, "near foot ahead").toBeCloseTo(0.32, 1);
+    expect(handTip(body, MINUS_X).distanceTo(new THREE.Vector3(-0.1, 0.5, 0.4)), "near hand on them").toBeLessThan(ON_IT);
+  });
+
+  it("when she flinches from a danger on her +x side, then she leans back with both hands up in front and the near one highest, her head round to it", () => {
+    const body = clipAt("recoil", 0.25, PARTNER_ON_PLUS_X);
+    expect(leaning(body, TORSO).z, "leaning back").toBeLessThan(-0.15);
+    for (const side of [MINUS_X, PLUS_X]) {
+      expect(handTip(body, side).y, `hand ${side} up`).toBeGreaterThan(1.1);
+      expect(handTip(body, side).z, `hand ${side} in front`).toBeGreaterThan(0.15);
+    }
+    expect(handTip(body, PLUS_X).y, "the near hand higher").toBeGreaterThan(handTip(body, MINUS_X).y + 0.05);
+    expect(facing(body, HEAD).x, "head toward it").toBeGreaterThan(0.2);
+  });
+});
+
 describe("given an activity that starts or ends while she walks", () => {
-  const EASED_IN: readonly ActivityName[] = ["idle", "talk", "buy", "door", "sitDown", "bump", "swing", "block", "hit", "cuffing", "arresting", "escorting", "carIn"];
+  const EASED_IN: readonly ActivityName[] = ["idle", "talk", "buy", "door", "sitDown", "bump", "swing", "block", "hit", "cuffing", "arresting", "escorting", "carIn", "phoneCall", "kneel", "recoil"];
   const ACTIVE_CLOCKS: Readonly<Record<ActivityName, number>> = { none: 0, idle: 10.5, talk: 2, buy: 1, door: 0.9, sitDown: 1, sit: 3, standUp: 0.5, bump: 0.12, swing: 0.3, block: 1, hit: 0.1, sitSteps: 5, cuffing: 1.2, cuffed: 3, arresting: 0.6, escorting: 2, carIn: 1.5, carOut: 1, phoneCall: 2, kneel: 2, recoil: 0.25 };
   const WITH_PARTNER = { hasPartner: true, bearing: 0.6, surface: 0.9, ...WALKING } as const;
 

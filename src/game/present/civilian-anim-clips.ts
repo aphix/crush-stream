@@ -377,6 +377,75 @@ const CAR_OUT: ClipSpec = {
   ],
 };
 
+/** The phone held at her ear: the fingertip beside the temple (m, her frame: out from the middle line, up, ahead), the other forearm across her waist (rad). */
+const EAR = { out: 0.14, up: 1.62, ahead: 0.02 } as const;
+const WAIST_SWING = -0.45;
+const WAIST_ELBOW = -1.5;
+
+/** Standing on the phone: the main hand to her ear, the other arm across her waist, a glance at what she is calling about now and then. */
+const PHONE_CALL: ClipSpec = {
+  blendIn: 0.5,
+  blendOut: 0.4,
+  tracks: [
+    hold(arm(MAIN, "hand"), 1),
+    hold(arm(MAIN, "handOut"), EAR.out),
+    hold(arm(MAIN, "handY"), EAR.up),
+    hold(arm(MAIN, "handZ"), EAR.ahead),
+    hold(arm(OTHER, "swing"), WAIST_SWING),
+    hold(arm(OTHER, "elbow"), WAIST_ELBOW),
+    loop(CHANNEL.headPitch, 4.5, 0, 0.05, 2, 0.14, 3.5, 0.05, 4.5, 0.05),
+    loop(CHANNEL.headYaw, 6.1, 0, 0, 2, 0.1, 4, -0.1, 6.1, 0),
+    hold(CHANNEL.lookAtPartner, 0.6),
+  ],
+};
+
+/** Down on one knee beside a person on the ground: the near foot ahead and flat, the far knee on the ground, leaning over them, the near hand on them (m, her frame), the other forearm on her knee. */
+const KNEEL_DROP = 0.4;
+const KNEEL_FEET = { near: 0.32, far: -0.5 } as const;
+const KNEEL_LEAN = 0.35;
+const KNEEL_HAND = { out: 0.1, up: 0.5, ahead: 0.4 } as const;
+const KNEEL: ClipSpec = {
+  blendIn: 0.7,
+  blendOut: 0.7,
+  side: "partner",
+  tracks: [
+    hold(CHANNEL.pelvisDrop, KNEEL_DROP),
+    hold(CHANNEL.pelvisForward, 0.1),
+    hold(CHANNEL.plant, 1),
+    hold(leg(MAIN, "footZ"), KNEEL_FEET.near),
+    hold(leg(OTHER, "footZ"), KNEEL_FEET.far),
+    loop(CHANNEL.torsoPitch, 5, 0, KNEEL_LEAN, 2.5, KNEEL_LEAN + 0.06, 5, KNEEL_LEAN),
+    hold(CHANNEL.headPitch, 0.25),
+    hold(arm(MAIN, "hand"), 1),
+    hold(arm(MAIN, "handOut"), KNEEL_HAND.out),
+    hold(arm(MAIN, "handY"), KNEEL_HAND.up),
+    hold(arm(MAIN, "handZ"), KNEEL_HAND.ahead),
+    hold(arm(OTHER, "swing"), -0.5),
+    hold(arm(OTHER, "elbow"), -0.9),
+    hold(CHANNEL.lookAtPartner, 1),
+  ],
+};
+
+/** A flinch from a danger: back and up on her heels, both hands up and open, the head round to it, the arm nearest it highest. */
+const RECOIL: ClipSpec = {
+  blendIn: 0.08,
+  blendOut: 0.3,
+  side: "partner",
+  tracks: [
+    ...bothArms("hand", (channel) => track(channel, 0, 0, 0.18, 1, 0.6, 1, 0.9, 0)),
+    hold(arm(MAIN, "handY"), 1.4),
+    hold(arm(OTHER, "handY"), 1.25),
+    hold(arm(MAIN, "handZ"), 0.3),
+    hold(arm(OTHER, "handZ"), 0.25),
+    hold(arm(MAIN, "handOut"), 0.3),
+    hold(arm(OTHER, "handOut"), 0.28),
+    track(CHANNEL.torsoPitch, 0, 0, 0.2, -0.28, 0.6, -0.15, 0.9, 0),
+    track(CHANNEL.headPitch, 0, 0, 0.2, 0.2, 0.9, 0),
+    track(CHANNEL.pelvisForward, 0, 0, 0.2, -0.12, 0.9, 0),
+    track(CHANNEL.lookAtPartner, 0, 0, 0.15, 1, 0.7, 1, 0.9, 0),
+  ],
+};
+
 export const CLIPS: Readonly<Partial<Record<ActivityName, ClipSpec>>> = {
   idle: IDLE,
   talk: TALK,
@@ -396,4 +465,7 @@ export const CLIPS: Readonly<Partial<Record<ActivityName, ClipSpec>>> = {
   escorting: ESCORTING,
   carIn: CAR_IN,
   carOut: CAR_OUT,
+  phoneCall: PHONE_CALL,
+  kneel: KNEEL,
+  recoil: RECOIL,
 };
