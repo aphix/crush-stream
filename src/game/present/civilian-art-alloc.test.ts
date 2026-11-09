@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 import { CivilianArt } from "./civilian-art.ts";
 import { NEAR_DRAW, NEAR_SLOTS } from "./civilian-art-constants.ts";
-import { posesScattered } from "./civilian-art.test-util.ts";
+import { FRAME_SECONDS, IN_SIGHT, posesScattered } from "./civilian-art.test-util.ts";
 
 const CIVILIANS = 300;
 /** Frames before the first read: past most of V8's tier-up (cold code runs in the interpreter, where every double is boxed). */
@@ -27,7 +27,7 @@ function frame(): void {
     poses.stride[civilian] = poses.stride[civilian]! + STRIDE_STEP;
     if (poses.x[civilian]! * poses.x[civilian]! + poses.z[civilian]! * poses.z[civilian]! > TURN_BACK * TURN_BACK) poses.yaw[civilian] = poses.yaw[civilian]! + Math.PI;
   }
-  art.update(poses, 0, 0);
+  art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
 }
 
 /** Bytes a frame allocates over one window of frames. */

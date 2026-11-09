@@ -6,7 +6,7 @@ import { CHEST_HEIGHT, LOOK_REACH } from "./civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { lookAtOf, LookRay } from "./civilian-look.ts";
-import type { CrowdPoses } from "./crowd-poses.ts";
+import { createCrowdPoses } from "./crowd-poses.ts";
 import { historyLines, residentNameText } from "./civilian-mood.ts";
 import { newCrowd, shownResident, stepUntilShown } from "./civilian-crowd.test-util.ts";
 
@@ -74,7 +74,7 @@ describe("given one civilian out on open ground, far from every building", () =>
   /** The panel's title with the eye `metres` short of the civilian, looking straight at them. */
   function titleAt(metres: number): string | undefined {
     const count = crowd.poses.count;
-    const poses: CrowdPoses = { count, x: new Float32Array(count), z: new Float32Array(count), yaw: new Float32Array(count), stride: new Float32Array(count), speed: new Float32Array(count), look: new Uint32Array(count), shown: new Uint8Array(count) };
+    const poses = createCrowdPoses(count);
     poses.shown[resident] = 1;
     poses.x[resident] = OPEN_GROUND;
     poses.z[resident] = metres;
