@@ -18,11 +18,15 @@ import { CROWD_RESIDENTS, CROWD_SEED, newCrowd, posesDigest, shownResident } fro
 
 const map = buildFixtureMap();
 const bodega = placeNamed(map, PLACE_NAMES.bodega);
+/** Where the host hears of a danger: the node at the bodega's door. */
+const DANGER_NODE = map.places[bodega]!.doorNode;
 /** Frames of a sixteenth of a crowd second (a power of two: the clock sums exactly), five minutes of them; the host's knock and wreck land at these. */
 const FRAME_SECONDS = 1 / 16;
 const FRAMES = 300 * 16;
 const PLAYER_FIGHT_FRAME = 60 * 16;
 const JAYWALK_FRAME = 70 * 16;
+const DANGER_FRAME = 90 * 16;
+const AMBULANCE_FRAME = 106 * 16;
 const KNOCK_FRAME = 100 * 16;
 const FIGHT_FRAME = 120 * 16;
 const BUST_FRAME = 130 * 16;
@@ -100,11 +104,13 @@ function openRun(label: string, worker?: typeof CountingWorker | typeof LateWork
   return { label, crowd: newCrowd(map, CROWD_RESIDENTS, CROWD_SEED, remote), remote };
 }
 
-/** The host's log as it was heard by `frame`: a fight with the player, a jaywalk arrest, the knock, a fight of two residents, the bust of one of them and the wreck, each from its own frame on. */
-function logAt(frame: number, knocked: number, fighters: readonly number[]): Float64Array {
+/** The host's log as it was heard by `frame`: a danger at a node, an ambulance call for the one run down, a fight with the player, a jaywalk arrest, the knock, a fight of two residents, the bust of one of them and the wreck, each from its own frame on. */
+function logAt(frame: number, knocked: number, fighters: readonly number[], dangerNode: number): Float64Array {
   const fightSeconds = FIGHT_FRAME * FRAME_SECONDS;
   const playerFightSeconds = PLAYER_FIGHT_FRAME * FRAME_SECONDS;
   const heard: readonly { from: number; triples: readonly number[] }[] = [
+    { from: DANGER_FRAME, triples: [EVENT_KIND.danger, dangerNode, DANGER_FRAME * FRAME_SECONDS] },
+    { from: AMBULANCE_FRAME, triples: [EVENT_KIND.ambulance, knocked, AMBULANCE_FRAME * FRAME_SECONDS] },
     { from: PLAYER_FIGHT_FRAME, triples: [EVENT_KIND.fight, fighters[2]!, playerFightSeconds, EVENT_KIND.walker, EAST, playerFightSeconds] },
     { from: JAYWALK_FRAME, triples: [EVENT_KIND.jaywalk, fighters[3]!, JAYWALK_FRAME * FRAME_SECONDS] },
     { from: KNOCK_FRAME, triples: [EVENT_KIND.knock, knocked, KNOCK_FRAME * FRAME_SECONDS] },
@@ -130,7 +136,7 @@ async function runAll(runs: readonly Run[], plain: Run, knocked: { resident: num
     if (frame === KNOCK_FRAME) knocked.resident = shownResident(runs[0]!.crowd);
     if (lastTick >= 0 && tick > lastTick) await CountingWorker.last.whenAnswered(tick + 1);
     for (const run of runs) {
-      run.crowd.hear(logAt(frame, knocked.resident, fighters));
+      run.crowd.hear(logAt(frame, knocked.resident, fighters, DANGER_NODE));
       run.crowd.step(seconds, [], false);
     }
     plain.crowd.step(seconds, [], false);

@@ -7,11 +7,11 @@ import type { CivilianCrowd } from "../civilians/civilian-crowd.ts";
 import type { LookText } from "../civilians/civilian-look.ts";
 import { buildingLines, civilianLine, historyLines, moodOf } from "../civilians/civilian-mood.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
-import { ACTIVITY } from "../civilians/civilian-activity.ts";
+import { ACTIVITY, activityLine } from "../civilians/civilian-activity.ts";
 import { AMBULANCE } from "../openworld-traffic/ambulance.ts";
 import { CRIMINAL_INTEREST, PERSON_SHOT, SPOT_SHOT, WANTED_INTEREST } from "./auto-constants.ts";
 import { type AutoCandidates, SUBJECT, type SubjectKind } from "./auto-director.ts";
-import { activityInterest, activityLine, ambulanceInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
+import { activityInterest, ambulanceInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
 
 /** What the scan reads of the open world; each is null (or empty) where the thing is not there. */
 export type AutoWorld = {
@@ -110,7 +110,7 @@ export class OpenWorldScan {
     }
   }
 
-  /** The log's events in progress: a civilian they name gets their heat; a wreck and a knock are spots of their own. */
+  /** The log's events in progress: a civilian they name gets their heat; a wreck, a knock and an ambulance call (where the one run down lies) are spots of their own. */
   private heatFromLog(table: AutoCandidates, crowd: CivilianCrowd): void {
     const log = crowd.eventLog();
     const now = crowd.crowdSeconds;
@@ -120,7 +120,7 @@ export class OpenWorldScan {
       const interest = eventInterest(kind, now - log[at + 2]!);
       if (interest === 0) continue;
       if (kind === EVENT_KIND.wreck) table.add(SUBJECT.wreck, subject, interest);
-      else if (kind === EVENT_KIND.knock) table.add(SUBJECT.knock, subject, interest);
+      else if (kind === EVENT_KIND.knock || kind === EVENT_KIND.ambulance) table.add(SUBJECT.knock, subject, interest);
       else if (kind !== EVENT_KIND.copDown) this.warm(subject, interest);
       if ((kind === EVENT_KIND.push || kind === EVENT_KIND.fight) && log[at + EVENT_TRIPLE] === EVENT_KIND.alongside) this.warm(log[at + EVENT_TRIPLE + 1]!, interest);
     }

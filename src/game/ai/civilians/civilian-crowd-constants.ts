@@ -4,6 +4,19 @@ export const WRECK_SPEED = 8;
 export const WRECK_MARGIN = 1.5;
 /** A building is wrecked at most once in this many crowd seconds: a car grinding along a face is one wreck, not one a slice. */
 export const WRECK_LOCKOUT_SECONDS = 30;
+/**
+ * Danger: a car at `DANGER_SPEED` (m/s, 36 km/h) within `DANGER_RANGE` m of a civilian and heading within `DANGER_COS` of the way to them is coming at them: if they are not run down in `DANGER_CONFIRM_SECONDS`
+ * it is a danger event (a knock is its own news), at most one a resident in `DANGER_LOCKOUT_SECONDS`. A car meeting a solid at the wreck speed that is no building's within `CRASH_NODE_REACH` m of a street node is a crash: one in `CRASH_LOCKOUT_SECONDS`.
+ */
+export const DANGER_SPEED = 10;
+export const DANGER_RANGE = 16;
+export const DANGER_COS = 0.9;
+export const DANGER_CONFIRM_SECONDS = 0.4;
+export const DANGER_LOCKOUT_SECONDS = 20;
+export const CRASH_NODE_REACH = 20;
+export const CRASH_LOCKOUT_SECONDS = 4;
+/** Someone run down who is still down this long after (s) has an ambulance called for them. */
+export const AMBULANCE_DELAY_SECONDS = 6;
 
 /** A whole walking stride (both feet) covers this many metres: the guards' and the VIP's stride (`people.ts`). */
 const STRIDE_METRES = 1.5;

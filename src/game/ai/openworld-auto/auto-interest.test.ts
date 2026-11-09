@@ -4,7 +4,8 @@ import { EVENT_KIND } from "../civilians/civilian-constants.ts";
 import { MOOD } from "../civilians/civilian-names.ts";
 import { COP_RUN_SPEED, EVENT_SECONDS } from "./auto-constants.ts";
 import { AMBULANCE } from "../openworld-traffic/ambulance.ts";
-import { activityInterest, activityLine, ambulanceInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
+import { activityLine } from "../civilians/civilian-activity.ts";
+import { activityInterest, ambulanceInterest, copInterest, driverInterest, eventInterest, moodInterest } from "./auto-interest.ts";
 
 const DRIVING_MPS = 12;
 const CRAWL_MPS = 2;
@@ -30,6 +31,13 @@ describe("given what the Auto camera finds interesting", () => {
     expect(eventInterest(EVENT_KIND.fight, -1), "before it began").toBe(0);
     expect(eventInterest(EVENT_KIND.bust, 0), "a bust").toBeGreaterThan(eventInterest(EVENT_KIND.push, 0));
     expect(eventInterest(EVENT_KIND.alongside, 0), "an event that only names the other party").toBe(0);
+  });
+
+  it("when someone run down has an ambulance called, then the call is worth a look for as long as help takes, and a danger (a street node, not a person) gives none", () => {
+    // mutation: sed -i 's/0.4, 0.9, 0.9, 0\] as const;/0.4, 0.9, 0, 0] as const;/' src/game/ai/openworld-auto/auto-constants.ts
+    expect(eventInterest(EVENT_KIND.ambulance, 0), "a call just made").toBeGreaterThan(eventInterest(EVENT_KIND.push, 0));
+    expect(eventInterest(EVENT_KIND.ambulance, 15), "still waiting for help").toBeGreaterThan(0);
+    expect(eventInterest(EVENT_KIND.danger, 0), "a node is no one to follow").toBe(0);
   });
 
   it("when cars are weighed, then a lit siren beats a car at speed, a car at speed beats a crawl, and a parked car is the least", () => {
@@ -60,6 +68,8 @@ describe("given what the Auto camera finds interesting", () => {
   it("when words are asked for what a civilian is doing, then a walk has none and a scene has its own", () => {
     expect(activityLine(ACTIVITY.none), "walking").toBeNull();
     expect(activityLine(ACTIVITY.carOut), "getting out of a car").toBe("getting out of a car");
-    expect(activityLine(ACTIVITY.recoil), "flinching").toBe("flinching from a hit");
+    // re-pinned: the recoil clip now also plays for a danger seen (OwSociety-alarm), not only a hit taken
+    expect(activityLine(ACTIVITY.recoil), "flinching").toBe("flinching back");
+    expect(activityLine(ACTIVITY.phoneCall), "the only call the brain makes").toBe("phoning for an ambulance");
   });
 });

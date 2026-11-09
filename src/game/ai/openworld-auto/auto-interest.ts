@@ -3,9 +3,6 @@ import { MOOD } from "../civilians/civilian-names.ts";
 import { EVENT_KIND } from "../civilians/civilian-constants.ts";
 import { ACTIVITY_INTEREST, AMBULANCE_INTEREST, COP_PATROL_INTEREST, COP_PURSUIT_INTEREST, COP_RUN_SPEED, DRIVER_BASE_INTEREST, DRIVER_FULL_SPEED, DRIVER_SPEED_INTEREST, DRIVER_STOPPED_SPEED, EVENT_INTEREST, EVENT_SECONDS, MOOD_INTEREST, SIREN_INTEREST } from "./auto-constants.ts";
 
-/** The bubble's words for an `ACTIVITY`, by code; a gap is an activity the title already says. */
-const ACTIVITY_LINES: readonly (string | null)[] = [null, null, "talking", "buying at the counter", "going through a door", null, null, null, "bumped into someone", "swinging a punch", "blocking a punch", "taking a hit", null, "cuffing a suspect", "in handcuffs", "making an arrest", "leading a suspect away", "getting into a car", "getting out of a car", "on the phone to the police", "kneeling by someone hurt", "flinching from a hit"];
-
 /** How interesting what a civilian is doing is (0-1), by `ACTIVITY` code. */
 export function activityInterest(activity: number): number {
   return ACTIVITY_INTEREST[activity] ?? ACTIVITY_INTEREST[ACTIVITY.none];
@@ -21,11 +18,6 @@ export function eventInterest(kind: number, ageSeconds: number): number {
   const window = EVENT_SECONDS[kind] ?? 0;
   if (kind === EVENT_KIND.alongside || kind === EVENT_KIND.walker || ageSeconds < 0 || ageSeconds >= window) return 0;
   return EVENT_INTEREST[kind]! * (1 - ageSeconds / window);
-}
-
-/** What a civilian is doing, in words for the bubble; null for a walk, a stand or a sit, which the line above it already says. */
-export function activityLine(activity: number): string | null {
-  return ACTIVITY_LINES[activity] ?? null;
 }
 
 /** The ambulance by `AMBULANCE` state: its call is the one on screen when it is out, nothing when it is not. */

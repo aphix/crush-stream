@@ -8,7 +8,7 @@ import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { civilianLine, historyLines } from "../ai/civilians/civilian-mood.ts";
 import { SUBJECT } from "../ai/openworld-auto/auto-director.ts";
-import { activityLine } from "../ai/openworld-auto/auto-interest.ts";
+import { activityLine } from "../ai/civilians/civilian-activity.ts";
 import { AMBULANCE } from "../ai/openworld-traffic/ambulance.ts";
 import type { AutoWorld } from "../ai/openworld-auto/auto-scan.ts";
 import { AutoFollowCam } from "../present/openworld-auto-cam.ts";

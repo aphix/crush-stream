@@ -45,7 +45,7 @@ export function isCounterVenue(venue: number): boolean {
 }
 
 /** Walks that end standing at a door in the street rather than inside: they are drawn there, and witnessed. */
-const OUTDOOR_PURPOSES: readonly number[] = [PURPOSE.stoopSit, PURPOSE.stoopTalk, PURPOSE.argue, PURPOSE.loiter, PURPOSE.report, PURPOSE.mug, PURPOSE.breakIn, PURPOSE.fight];
+const OUTDOOR_PURPOSES: readonly number[] = [PURPOSE.stoopSit, PURPOSE.stoopTalk, PURPOSE.argue, PURPOSE.loiter, PURPOSE.report, PURPOSE.mug, PURPOSE.breakIn, PURPOSE.fight, PURPOSE.lookOn, PURPOSE.callAmbulance];
 
 export function isOutdoorPurpose(purpose: number): boolean {
   return OUTDOOR_PURPOSES.includes(purpose);

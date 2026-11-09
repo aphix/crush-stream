@@ -5,14 +5,15 @@ import { must } from "../../kernel/must.test-util.ts";
 import { humanSlot } from "../../match/survival.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "../../present/prefabs.ts";
 import { PARKED_PREFABS, PREFABS } from "../catalog.ts";
-import { PREFAB } from "../constants.ts";
+import { PREFAB, SURFACE } from "../constants.ts";
 import { placeCourse } from "../placements.ts";
 import { Track, blankProjection, projectPath } from "../track.ts";
 import { parseTrack } from "../track-schema.ts";
-import { LAMP_FROM_CURB, LAYOUT } from "./openworld-constants.ts";
+import { LAMP_FROM_CURB, LAYOUT, PARK, WALL_THICKNESS } from "./openworld-constants.ts";
 import { OPENWORLD_ID, openWorldCourse } from "./openworld-course.ts";
 import { fixtureLots } from "./openworld-lots.test-util.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
+import { parkPaint } from "./openworld-park.ts";
 
 /** A car is 2 m wide: a wall gap wider than this lets one through. */
 const CAR_WIDTH = 2;
@@ -35,6 +36,7 @@ for (const wallCase of WALL_CASES) {
     const track = new Track(openWorldCourse(lots));
     const map = buildOpenWorldMap(lots);
     const buildings = course.props.filter((prop) => prop.prefab === PREFAB.building);
+    /** Every invisible-wall prop (the edge walls, and the bus shelters', stoops' and interiors' solids, which stand elsewhere): the edge's own pieces are picked by their place on an edge line. */
     const walls = course.props.filter((prop) => prop.prefab === PREFAB.invisibleWall);
     const furniture = course.props.filter((prop) => prop.prefab !== PREFAB.building && prop.prefab !== PREFAB.invisibleWall);
     const projection = blankProjection();
@@ -104,8 +106,9 @@ for (const wallCase of WALL_CASES) {
     });
 
     // mutation: sed -i 's/Array.from({ length: count }, (_, index) => {/Array.from({ length: count - 1 }, (_, index) => {/' src/game/world/openworld/openworld-course.ts
+    // mutation: sed -i 's/const outX = geometry.halfX + WALL_THICKNESS \/ 2;/const outX = geometry.halfX + WALL_THICKNESS;/' src/game/world/openworld/openworld-course.ts
     it("when the invisible walls are laid along each edge of the play area, then no gap is wider than a car, none opens at a corner and each stands on the line the layout gives", () => {
-      const thickness = walls[0]!.size![0];
+      const thickness = WALL_THICKNESS;
       const edges = [
         { name: "north", alongX: true, fixed: -(geometry.halfZ + thickness / 2), half: geometry.halfX },
         { name: "south", alongX: true, fixed: geometry.halfZ + thickness / 2, half: geometry.halfX },
@@ -113,8 +116,9 @@ for (const wallCase of WALL_CASES) {
         { name: "east", alongX: false, fixed: geometry.halfX + thickness / 2, half: geometry.halfZ },
       ];
       for (const edge of edges) {
-        const spans = walls
-          .filter((piece) => Math.abs((edge.alongX ? piece.z : piece.x) - edge.fixed) < 1e-6)
+        const pieces = walls.filter((piece) => Math.abs((edge.alongX ? piece.z : piece.x) - edge.fixed) < 1e-6);
+        expect(pieces.filter((piece) => piece.size![0] !== thickness).length, `${edge.name} pieces not as thick as the wall`).toBe(0);
+        const spans = pieces
           .map((piece) => {
             const along = edge.alongX ? piece.x : piece.z;
             return { from: along - piece.size![2] / 2, to: along + piece.size![2] / 2 };
@@ -195,11 +199,18 @@ for (const wallCase of WALL_CASES) {
     });
 
     // mutation: sed -i 's/prefab: dressing.prefab, x: dressing.x, z: dressing.z/prefab: PREFAB.cone, x: dressing.x, z: dressing.z/' src/game/world/openworld/openworld-course.ts
-    it("when the layout's dressing and painted ground are read, then the course stands each prop and paints each area", () => {
+    // mutation: sed -i 's/paint: \[...parkPaint(lots), ...paintOf(lots)\]/paint: [...paintOf(lots), ...parkPaint(lots)]/' src/game/world/openworld/openworld-course.ts
+    it("when the layout's dressing and painted ground are read, then the course stands each prop and paints the park's pavers and then each area", () => {
       const standing = course.props.filter((prop) => prop.prefab === PREFAB.dumpster);
       expect(lots.dressing.length, "props the layout dresses").toBeGreaterThan(0);
       expect(standing.length, "dumpsters in the course").toBe(lots.dressing.filter((dressing) => dressing.prefab === PREFAB.dumpster).length);
-      expect(course.environment.paint.length, "areas painted").toBe(lots.areas.length);
+      // The pavers are the plaza and the paths (the east-west one, the cross paths and the court's spur). They come first: paint lands only on ground still bare (`paintGrid`), so a paver laid after the park's lawn would never show.
+      const pavers = parkPaint(lots);
+      const paint = course.environment.paint;
+      expect(pavers.length, "paved pieces").toBe(PARK.crossPaths.length + 3);
+      expect(paint.length, "pieces painted").toBe(pavers.length + lots.areas.length);
+      expect(paint.slice(0, pavers.length).filter((piece) => piece.surface !== SURFACE.cobble).length, "pavers not in cobble").toBe(0);
+      expect(paint.slice(pavers.length).map((piece) => piece.surface).join(), "the layout's areas, in order").toBe(lots.areas.map((area) => area.surface).join());
     });
   });
 }

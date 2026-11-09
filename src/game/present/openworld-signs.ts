@@ -250,8 +250,10 @@ export class OpenWorldSigns {
   readonly group = new THREE.Group();
   private readonly shop: ShopSigns;
   private names: NameLabels | null = null;
+  private readonly places: readonly Place[];
 
-  constructor(private readonly places: readonly Place[]) {
+  constructor(places: readonly Place[]) {
+    this.places = places;
     this.group.name = "openworld-signs";
     this.shop = new ShopSigns(places);
     this.group.add(this.shop.group);

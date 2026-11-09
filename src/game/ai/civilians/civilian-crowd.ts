@@ -7,15 +7,25 @@ import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
+import type { DoorSpot } from "./civilian-car-door.ts";
 import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, GENDER, MIX_INDEX, MIX_RESIDENT, MIX_SALT, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
 import { carGap } from "./civilian-contact.ts";
 import {
   BUMP_CLOSING_SPEED,
   BUMP_COOLDOWN_SECONDS,
+  AMBULANCE_DELAY_SECONDS,
   BUMP_DISTANCE,
+  COINCIDENT_DISTANCE,
   CAR_NUDGE_GAP,
   CAR_NUDGE_SPEED,
   CLOCK_OFFSET_CREEP,
+  CRASH_LOCKOUT_SECONDS,
+  CRASH_NODE_REACH,
+  DANGER_CONFIRM_SECONDS,
+  DANGER_COS,
+  DANGER_LOCKOUT_SECONDS,
+  DANGER_RANGE,
+  DANGER_SPEED,
   EVENT_LOG_CAPACITY,
   HARD_CLOSING_SPEED,
   HARD_DISTANCE,
@@ -43,10 +53,8 @@ import { CrowdWalkers } from "./crowd-walkers.ts";
 import { createCrowdPoses, type CrowdPoses } from "./crowd-poses.ts";
 
 /** Where the driver's door of resident `resident`'s car stands (the spot and facing of a person at it, her feet's height there and her seat top's), filled for activity `code` (`ACTIVITY.carIn` or `carOut`); false when she has no car to be at. */
-type DriverDoors = (resident: number, code: number, out: DriverDoor) => boolean;
+export type DriverDoors = (resident: number, code: number, out: DoorSpot) => boolean;
 
-/** The door spot a `DriverDoors` fills: world x and z, the way she faces (yaw), the ground under her feet and her seat top (world y). */
-type DriverDoor = { x: number; z: number; yaw: number; feetY: number; surfaceY: number };
 
 /** Changes the crowd's poses after its own placing: the poses, the crowd time, whether this crowd is the host's. */
 type CrowdOverlay = (poses: CrowdPoses, crowdSeconds: number, authority: boolean) => void;
@@ -107,7 +115,9 @@ export class CivilianCrowd {
   driverDoors: DriverDoors | null = null;
   /** What the society says each resident is doing: its own reader, set by a test that needs one the brain does not give yet. */
   activityReader: typeof readActivity = readActivity;
-  private readonly door: DriverDoor = { x: 0, z: 0, yaw: 0, feetY: 0, surfaceY: 0 };
+  private readonly door: DoorSpot = { x: 0, z: 0, yaw: 0, feetY: 0, surfaceY: 0 };
+  /** Called on the host when someone run down has stayed down long enough to call an ambulance for: where they lie and when it was called. */
+  onAmbulanceCall: ((x: number, z: number, seconds: number) => void) | null = null;
   readonly walkers = new CrowdWalkers();
   readonly separation: CrowdSeparation;
   private readonly remote: CivilianRemote;
@@ -135,6 +145,13 @@ export class CivilianCrowd {
   private readonly bumpSince: Float64Array;
   private readonly bumpPartner: Int32Array;
   private readonly pushedAt: Float64Array;
+  /** Per resident: when a car was first seen coming at them (-Infinity: none), when they may next be in danger, and when an ambulance is due for them and where they lie (Infinity: none). */
+  private readonly dangerSince: Float64Array;
+  private readonly dangerUntil: Float64Array;
+  private readonly ambulanceDue: Float64Array;
+  private readonly ambulanceX: Float32Array;
+  private readonly ambulanceZ: Float32Array;
+  private lastCrashSeconds = -Infinity;
   private readonly reading: ActivityReading = { code: ACTIVITY.none, sinceSeconds: 0, leftSeconds: ACTIVITY_OPEN_ENDED, partner: NOT_A_CIVILIAN, surfaceY: 0, placed: false, x: 0, z: 0, yaw: 0 };
   private readonly crimeDesk: CrimeDesk;
   private readonly crimesDue: Int32Array;
@@ -149,6 +166,11 @@ export class CivilianCrowd {
     this.bumpSince = new Float64Array(capacity).fill(-Infinity);
     this.bumpPartner = new Int32Array(capacity).fill(-1);
     this.pushedAt = new Float64Array(capacity).fill(-Infinity);
+    this.dangerSince = new Float64Array(capacity).fill(-Infinity);
+    this.dangerUntil = new Float64Array(capacity).fill(-Infinity);
+    this.ambulanceDue = new Float64Array(capacity).fill(Infinity);
+    this.ambulanceX = new Float32Array(capacity);
+    this.ambulanceZ = new Float32Array(capacity);
     this.crimeDesk = new CrimeDesk(capacity);
     this.crimesDue = new Int32Array(capacity);
     this.batch = new Float64Array((capacity + EVENT_LOG_CAPACITY) * EVENT_TRIPLE);
@@ -178,6 +200,8 @@ export class CivilianCrowd {
     if (this.overlay !== null) this.overlay(this.poses, crowdSeconds, authority);
     if (authority) {
       this.findHits(cars, crowdSeconds);
+      this.raiseDangers(crowdSeconds);
+      this.raiseAmbulanceCalls(crowdSeconds);
       this.postBatch();
     } else this.throwHeardKnocks(cars);
   }
@@ -186,11 +210,41 @@ export class CivilianCrowd {
   noteWallHit(closing: number, x: number, z: number): void {
     if (!this.authority || closing < WRECK_SPEED) return;
     const place = this.buildingAt(x, z);
-    if (place === NO_PLACE || this.seconds - this.wreckedAt[place]! < WRECK_LOCKOUT_SECONDS) return;
+    if (place === NO_PLACE) {
+      this.noteCrash(x, z);
+      return;
+    }
+    if (this.seconds - this.wreckedAt[place]! < WRECK_LOCKOUT_SECONDS) return;
     this.wreckedAt[place] = this.seconds;
     this.appendLog(EVENT_KIND.wreck, place, this.seconds);
     this.queueForBrain(EVENT_KIND.wreck, place, this.seconds);
     this.postBatch();
+  }
+
+  /** A hard hit of a car on something that is no building's, near enough a street, is a crash for those who see it: one in `CRASH_LOCKOUT_SECONDS`. */
+  private noteCrash(x: number, z: number): void {
+    if (this.seconds - this.lastCrashSeconds < CRASH_LOCKOUT_SECONDS) return;
+    const node = this.nearestNode(x, z);
+    if (node === NO_PLACE) return;
+    const { nodeX, nodeZ } = this.map.graph;
+    if (hypot2(nodeX[node]! - x, nodeZ[node]! - z) > CRASH_NODE_REACH) return;
+    this.lastCrashSeconds = this.seconds;
+    this.logHostEvent(EVENT_KIND.danger, node, this.seconds);
+    this.postBatch();
+  }
+
+  /** The walk-graph node nearest (x, z); `NO_PLACE` when the graph has none. */
+  private nearestNode(x: number, z: number): number {
+    const { nodeX, nodeZ } = this.map.graph;
+    let best = NO_PLACE;
+    let bestDistance = Infinity;
+    for (let node = 0; node < nodeX.length; node++) {
+      const distance = hypot2(nodeX[node]! - x, nodeZ[node]! - z);
+      if (distance >= bestDistance) continue;
+      bestDistance = distance;
+      best = node;
+    }
+    return best;
   }
 
   /** A host event the crowd does not decide itself (a bust, say) enters the log and the brain's next plan; a client's call does nothing. */
@@ -477,6 +531,7 @@ export class CivilianCrowd {
         if (shown[resident] === 0) continue;
         const spotX = x[resident]!;
         const spotZ = z[resident]!;
+        if (carSpeed >= DANGER_SPEED) this.watchApproach(resident, spotX - carX, spotZ - carZ, car.velocity.x, car.velocity.z, carSpeed, seconds);
         const near = hypot2(carX - spotX, carZ - spotZ) <= CAR_REACH;
         if (!near && !loose) continue;
         const spotY = ground.heightAt(spotX, spotZ);
@@ -487,7 +542,43 @@ export class CivilianCrowd {
     }
   }
 
+  /** A fast car (`carSpeed`, velocity (vx, vz)) whose way to the civilian (toX, toZ) lies within `DANGER_COS` of its heading and under `DANGER_RANGE` is coming at them: noted for `raiseDangers`. */
+  private watchApproach(resident: number, toX: number, toZ: number, vx: number, vz: number, carSpeed: number, seconds: number): void {
+    const distance = hypot2(toX, toZ);
+    if (distance > DANGER_RANGE || distance < COINCIDENT_DISTANCE || vx * toX + vz * toZ < DANGER_COS * carSpeed * distance) return;
+    if (this.dangerSince[resident] === -Infinity && seconds >= this.dangerUntil[resident]!) this.dangerSince[resident] = seconds;
+  }
+
+  /** Those a car came at who are still on their feet `DANGER_CONFIRM_SECONDS` on are in danger, seen by whoever is about; those it ran down are not (their knock is the news). */
+  private raiseDangers(seconds: number): void {
+    const { x, z, shown } = this.poses;
+    for (let resident = 0; resident < this.dangerSince.length; resident++) {
+      const since = this.dangerSince[resident]!;
+      if (since === -Infinity || seconds - since < DANGER_CONFIRM_SECONDS) continue;
+      this.dangerSince[resident] = -Infinity;
+      if (shown[resident] === 0) continue;
+      const node = this.nearestNode(x[resident]!, z[resident]!);
+      if (node === NO_PLACE) continue;
+      this.dangerUntil[resident] = seconds + DANGER_LOCKOUT_SECONDS;
+      this.logHostEvent(EVENT_KIND.danger, node, seconds);
+    }
+  }
+
+  /** Someone run down `AMBULANCE_DELAY_SECONDS` ago is still down: the call is made (it is in the log for every peer) and whoever sends the ambulance hears of it. */
+  private raiseAmbulanceCalls(seconds: number): void {
+    for (let resident = 0; resident < this.ambulanceDue.length; resident++) {
+      const due = this.ambulanceDue[resident]!;
+      if (due > seconds) continue;
+      this.ambulanceDue[resident] = Infinity;
+      this.logHostEvent(EVENT_KIND.ambulance, resident, due);
+      this.onAmbulanceCall?.(this.ambulanceX[resident]!, this.ambulanceZ[resident]!, due);
+    }
+  }
+
   private knockDown(resident: number, seconds: number, strike: FigureStrike): void {
+    this.ambulanceDue[resident] = seconds + AMBULANCE_DELAY_SECONDS;
+    this.ambulanceX[resident] = this.poses.x[resident]!;
+    this.ambulanceZ[resident] = this.poses.z[resident]!;
     this.poses.shown[resident] = 0;
     this.struck.push(strike);
     this.appendLog(EVENT_KIND.knock, resident, seconds);

@@ -1,6 +1,7 @@
 import { detCos, detSin } from "../../kernel/physics-core.js";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { CHEST_HEIGHT, LOOK_RADIUS, LOOK_REACH, STOREY_HEIGHT } from "./civilian-crowd-constants.ts";
+import { activityLine } from "./civilian-activity.ts";
 import { buildingLines, civilianLine, historyLines } from "./civilian-mood.ts";
 import type { CityState } from "./civilian-state.ts";
 import type { CrowdPoses } from "./crowd-poses.ts";
@@ -74,10 +75,14 @@ function placeMet(map: OpenWorldMap, ray: LookRay): Meeting {
   return met;
 }
 
-/** The panel's text for what the eye rests on: the civilian in front of it (their line and their life log), else the building the ray meets (its kind, who lives or works there, its comings and goings), else nothing; whichever is nearer along the ray. */
+/** The panel's text for what the eye rests on: the civilian in front of it (their line, what they are doing when the line does not say it, and their life log), else the building the ray meets (its kind, who lives or works there, its comings and goings), else nothing; whichever is nearer along the ray. */
 export function lookAtOf(state: CityState, poses: CrowdPoses, tick: number, ray: LookRay): LookText | null {
   const resident = residentMet(poses, ray);
   const place = placeMet(state.map, ray);
-  if (resident.index >= 0 && resident.along <= place.along) return { title: civilianLine(state, resident.index, tick), lines: historyLines(state, resident.index) };
+  if (resident.index >= 0 && resident.along <= place.along) {
+    const doing = activityLine(poses.activity[resident.index]!);
+    const history = historyLines(state, resident.index);
+    return { title: civilianLine(state, resident.index, tick), lines: doing === null ? history : [doing, ...history] };
+  }
   return place.index >= 0 ? buildingLines(state, place.index, tick) : null;
 }

@@ -76,17 +76,17 @@ export function raiseFear(state: CityState, x: number, z: number, amount: number
   }
 }
 
-function isDwelling(state: CityState, resident: number, tick: number): boolean {
+export function isDwelling(state: CityState, resident: number, tick: number): boolean {
   return intAt(state, resident, RESIDENT_INT.alive) === 1 && intAt(state, resident, RESIDENT_INT.arriveTick) <= tick && tick < intAt(state, resident, RESIDENT_INT.nextDecisionTick);
 }
 
 /** Someone who lives the street's life and can be drawn into events: a living, unhurt, free person with no story of their own. */
-function isFreePerson(state: CityState, resident: number): boolean {
+export function isFreePerson(state: CityState, resident: number): boolean {
   return intAt(state, resident, RESIDENT_INT.alive) === 1 && intAt(state, resident, RESIDENT_INT.species) === SPECIES.person && (intAt(state, resident, RESIDENT_INT.flags) & (FLAG.hurt | FLAG.custody | FLAG.cast)) === 0;
 }
 
 /** Runs home (or just goes in, if already there) and stays in for a while. */
-function fleeHome(state: CityState, resident: number, tick: number): void {
+export function fleeHome(state: CityState, resident: number, tick: number): void {
   const home = intAt(state, resident, RESIDENT_INT.home);
   const stayIn = FLEE_INSIDE_MINUTES * TICKS_PER_GAME_MINUTE;
   if (intAt(state, resident, RESIDENT_INT.place) === home) standOutside(state, resident, tick, NEED.rest, stayIn);

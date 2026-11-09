@@ -19,9 +19,9 @@ const EPSILON = 1e-6;
 /** The door hole the facade art cuts, half its width (m), and where its middle stands across the lot (u; the kit's x is u negated). */
 const DOOR_HOLE_HALF_WIDTH = 0.5;
 const DOOR_HOLE_X = -1.8;
-/** The lot's half width (m) and the least clear gap between the bay and the stoop's hood (m). */
+/** The lot's half width (m) and the least clear gap between the bay's slab lip and the door's hood (m): a hand and a half. */
 const LOT_HALF_WIDTH = 2.8;
-const STOOP_BAY_GAP_MIN = 0.3;
+const STOOP_BAY_GAP_MIN = 0.2;
 /** The open world's house depth (m), and how far past the party wall the chimney may reach (its half width and its cap, m). */
 const HOUSE_DEPTH = 15;
 const CHIMNEY_HALF_MAX = 0.45;
@@ -50,11 +50,14 @@ const DOOR_TO_WINDOW_GAP_MIN = 0.3;
 const LOUVRE_SLAT_ROW = 0;
 const LOUVRE_GAP_ROW = 0.1;
 const LOUVRE_CONTRAST_MIN = 40;
-const KIT_DRAWS = 11;
+const KIT_DRAWS = 12;
 const EVERY_HOUSE: readonly string[] = ["facade-bay", "facade-stoop", "facade-railing", "facade-cornice", "facade-roof"];
 /** The most shutters a house hangs: a pair on each of its upper storeys' windows on the door's half. */
 const SHUTTERS_PER_HOUSE_MAX = 4;
-const TRIANGLES_PER_HOME_MAX = 450;
+/** The most window boxes a house stands: one on each of the windows of its storey the bay leaves. */
+const WINDOW_BOXES_PER_HOUSE_MAX = 2;
+/** The fanlight kit's about 415 a house plus a quarter of the houses' two 60-triangle window boxes (about 30 on average). */
+const TRIANGLES_PER_HOME_MAX = 480;
 
 /** The x range of every vertex of `geometry`. */
 function xRange(geometry: THREE.BufferGeometry): { min: number; max: number } {
@@ -197,7 +200,7 @@ describe("given the kit made for the layout's rowhomes", () => {
       for (const mesh of made.group.children) {
         const count = mesh instanceof THREE.InstancedMesh ? mesh.count : -1;
         if (EVERY_HOUSE.includes(mesh.name)) expect(count, `${name}: instances of ${mesh.name}`).toBe(houses);
-        else expect(count, `${name}: instances of ${mesh.name}`).toBeLessThanOrEqual(mesh.name === "facade-shutter" ? houses * SHUTTERS_PER_HOUSE_MAX : houses);
+        else expect(count, `${name}: instances of ${mesh.name}`).toBeLessThanOrEqual(mesh.name === "facade-shutter" ? houses * SHUTTERS_PER_HOUSE_MAX : mesh.name === "facade-windowBox" ? houses * WINDOW_BOXES_PER_HOUSE_MAX : houses);
       }
     }
     few.dispose();

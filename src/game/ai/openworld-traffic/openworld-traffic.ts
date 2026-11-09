@@ -1,7 +1,6 @@
 import { hash01 } from "../../kernel/scalar.ts";
 import { MAX_CARS } from "../../scenes/fleet.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
-import type { CarStyleId } from "../../vehicle/car-variants.ts";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, nearestFreeSpot, residentSpotAt, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
@@ -170,12 +169,6 @@ export class OpenWorldTraffic {
     if (id < 0) return false;
     this.context.ports.openDoor(id, radians);
     return true;
-  }
-
-  /** The body of the car that stands for resident `resident` at his space (what his door and seat are built on), null when no car of his stands in view of the pool. */
-  carStyleOf(resident: number): CarStyleId | null {
-    const id = this.carIdOf(resident);
-    return id < 0 ? null : this.context.ports.cars()[id]!.style.id;
   }
 
   /** The engine id of the pool car standing in resident `resident`'s space (a kerb car, else the mover parked for him), -1 when none does. */

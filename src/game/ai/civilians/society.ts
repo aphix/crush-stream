@@ -160,6 +160,8 @@ export function createResident(state: CityState, id: number, spec: ResidentSpec,
   ints[base + RESIDENT_INT.driveLast] = NO_INDEX;
   ints[base + RESIDENT_INT.driveLeaveTick] = NEVER_TICK;
   ints[base + RESIDENT_INT.driveParkTick] = NEVER_TICK;
+  ints[base + RESIDENT_INT.alarmTick] = NEVER_TICK;
+  ints[base + RESIDENT_INT.alarmVictim] = NO_PLACE;
   if (person) giveTraits(state, id, spec, tick);
   rollNeeds(floats, floatBase, draw);
   const pace = SPECIES_SPEED[spec.species]! * spec.paceFactor * (1 + (draw() * 2 - 1) * WALK_SPEED_SPREAD);
