@@ -23,6 +23,8 @@ const EXCLUDED: readonly string[] = [
   PREFAB.muscleBumper, PREFAB.monsterWheel, PREFAB.carWheel, PREFAB.wreck, PREFAB.carhenge, PREFAB.junkCrane, PREFAB.coolingTower, PREFAB.smokestack,
 
   PREFAB.assetCard, PREFAB.assetStandee, PREFAB.assetCross, PREFAB.assetCrossSolid, PREFAB.assetDecal, PREFAB.assetTile, PREFAB.assetBox, PREFAB.assetBoxSolid,
+  // The open world's edge: a wall nothing is drawn for.
+  PREFAB.invisibleWall,
 ];
 /** The free cam stands near the eye and looks +z: a prop closer than this behind it would fill the view. */
 const MIN_CLEARANCE = 5;
