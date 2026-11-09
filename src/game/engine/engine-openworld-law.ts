@@ -56,6 +56,11 @@ export class OpenWorldLaw {
     crowd.overlay = (poses, crowdSeconds, authority) => this.scene.step(crowdSeconds, authority, poses);
   }
 
+  /** Whether the police have the traffic's cars to patrol in (false: they are on foot). */
+  get patrolling(): boolean {
+    return this.scene.patrolling;
+  }
+
   /** After the crowd's step (the law advanced and overlaid the crowd's poses inside it, before the cars' hits): throws the fighters it took down. */
   throwTakedowns(): void {
     const strikes = this.scene.takeStrikes();

@@ -84,8 +84,8 @@ export type OpenWorldPorts = {
   signsOn(): boolean;
   /** The signage of `places`, in the scene. */
   makeSigns(places: readonly Place[]): PlaceSigns;
-  /** The police's extra ports (the traffic, the course's solids, a busted player); absent: foot cops only. */
-  law?: Pick<LawEnginePorts, "traffic" | "solids" | "playerBusted" | "sirens">;
+  /** What the police need of the engine (the course's solids, a busted player, the light bars); absent: no police. */
+  law?: Pick<LawEnginePorts, "solids" | "playerBusted" | "sirens">;
   /** What culling reads of the engine. */
   cull: OpenWorldCullPorts;
   /** The facade kit for the map's homes inside the walls. */
@@ -279,9 +279,9 @@ export class OpenWorldDirector {
     this.art = this.ports.makeArt(this.crowd.poses.count);
     const crowd = this.crowd;
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
+    this.startTraffic(map, client);
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     if (client) crowd.hear(this.heardEvents);
-    this.startTraffic(map, client);
   }
 
   /** The lights are drawn on every peer; the cars are the host's and the solo player's. */
@@ -309,9 +309,11 @@ export class OpenWorldDirector {
     this.lights = null;
   }
 
-  private makeLaw(map: OpenWorldMap, crowd: CivilianCrowd, seed: number): OpenWorldLaw {
+  /** The police, made after the traffic (they lease its cars); none where the engine gives no law ports. */
+  private makeLaw(map: OpenWorldMap, crowd: CivilianCrowd, seed: number): OpenWorldLaw | null {
     const extra = this.ports.law;
-    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => extra?.traffic() ?? null, solids: () => extra?.solids() ?? null, playerBusted: (carIndex, seconds) => extra?.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra?.sirens(carIndex, on) }, seed);
+    if (extra === undefined) return null;
+    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on) }, seed);
   }
 
   private throwStruck(crowd: CivilianCrowd): void {

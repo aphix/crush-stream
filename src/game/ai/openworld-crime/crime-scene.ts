@@ -44,6 +44,11 @@ export class CrimeScene {
     return this.law.stats;
   }
 
+  /** Whether patrol cars are available (the traffic's cars were given). */
+  get patrolling(): boolean {
+    return this.patrol !== null;
+  }
+
   /** The law's foot side, for what reads it (the drawn cops' look, rows). */
   get foot(): FootLaw {
     return this.law;
