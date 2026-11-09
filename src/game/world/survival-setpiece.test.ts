@@ -57,6 +57,8 @@ function flyersOf(w: World): number[] {
 
 function setPiece(seed: number, brake: boolean): Piece {
   const w = survivalWorld(undefined, seed);
+  // The rows read cars' positions and flights: no skin, and no chase camera (it only picks where drop-ins may appear).
+  w.skin = false;
   try {
     const line = -6 + (hash01(seed, 1) - 0.5) * 3;
     const look = 25 + 15 * hash01(seed, 2);
@@ -66,6 +68,8 @@ function setPiece(seed: number, brake: boolean): Piece {
     const flying = new Set<number>();
     const away = new Set<number>();
     const piece: Piece = { foot: [], flyers: [], takeoffs: [], passed: 0, stray: 0, tapped: false };
+    /** Every formation cop is over the crest or put away (and, in the line row, the player is past the foot): nothing the rows read can change. */
+    let final = false;
     const player = (ww: World): void => {
       const me = ww.cars[0]!;
       const z = me.group.position.z;
@@ -75,19 +79,25 @@ function setPiece(seed: number, brake: boolean): Piece {
       // From the 300 m mark on: the first stretch is the player getting from the start (x 0) onto his line.
       if (z > FOOT && z < 300) piece.stray = Math.max(piece.stray, Math.abs(me.group.position.x - line));
       if (z > FOOT && me.crashed) piece.tapped = true;
+      let settled = 0;
       for (let i = 1; i <= 5; i++) {
         const c = ww.cars[i]!;
         const cz = c.group.position.z;
         if (cz > PARKED) away.add(i);
-        if (away.has(i)) continue;
+        if (away.has(i)) {
+          settled++;
+          continue;
+        }
         if (!foot.has(i) && cz < FOOT) foot.set(i, ww.race.time);
         if (c.airborne && !flying.has(i) && cz > CREST[0] && cz < CREST[1]) takeoffs.add(i);
         if (c.airborne) flying.add(i);
         else flying.delete(i);
         if (cz < z - 5 && z < 200) passed.add(i);
+        if (cz < CREST[0]) settled++;
       }
+      final = settled === 5 && (brake || z <= FOOT);
     };
-    play(w, { seconds: 20, player, retry: false });
+    play(w, { seconds: 20, player, retry: false, cam: false, until: () => final });
     piece.foot = [...foot.entries()].map(([car, t]) => ({ car, t })).sort((a, b) => a.t - b.t);
     piece.takeoffs = [...takeoffs];
     piece.passed = passed.size;
@@ -103,6 +113,7 @@ function together(foot: readonly Crossing[]): number {
 }
 
 describe(`given Survival's opening scene on the Havana course (five cops in a staggered formation behind the player), rolled with seed ${SEED}`, () => {
+  // mutation: sed -i 's/^  opening: 13,$/  opening: 0,/' src/game/ai/hunter.ts  (no cop flies the opening: red in both rows, "only 0 formation cops fly the opening" and "only 2 cops overshot the braking player")
   it("when the player holds the boulevard line at full throttle, then the flyers all reach the embankment's foot, three cops of the pack within half a second of each other, and three leave the ground at the crest", (t) => {
     const p = setPiece(SEED, false);
     const flyers = p.foot.filter((f) => p.flyers.includes(f.car));

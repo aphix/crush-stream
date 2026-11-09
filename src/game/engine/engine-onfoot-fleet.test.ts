@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
+import type { DeformableCar } from "../vehicle/car.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
 /** The fleet's far cars wait this far out on the disc (m), out of the walker's way; the near one stands where he can walk to its door. */
@@ -22,15 +23,17 @@ const REFUSAL_GONE_S = 2.5;
 const LOOP_DRIVER_IN_SEED = 4;
 const LOOP_DRIVER_THROWN_SEED = 1;
 
-describe("given the real engine in the fleet, its player at the wheel of car 0 with a neighbour car and the rest parked far out", () => {
-  // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
-  let rig: OnFootRig;
+// One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
+let rig: OnFootRig;
 
-  beforeAll(async () => {
-    rig = await OnFootRig.boot();
-    rig.engine["looping"] = false;
-    rig.run(FRAME);
-  });
+beforeAll(async () => {
+  rig = await OnFootRig.boot();
+  rig.engine["looping"] = false;
+  rig.run(FRAME);
+});
+afterAll(() => rig.dispose());
+
+describe("given the real engine in the fleet, its player at the wheel of car 0 with a neighbour car and the rest parked far out", () => {
   beforeEach(() => {
     rig.normalTime();
     rig.engine["onFoot"].reset();
@@ -41,7 +44,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     rig.sit(0);
     rig.run(0.2);
   });
-  afterAll(() => rig.dispose());
 
   it("when he gets out, walks off, is run down by another car, gets up and walks back to his door and in, then he drives his own car again", () => {
     const own = rig.cars()[0]!;
@@ -127,9 +129,17 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     rig.tapOnFoot(1);
     expect(rig.phase(), "the tap does nothing").toBe("inCar");
   });
+});
 
-  it("when the fleet's own crash loop (seed 4) leaves car 0 stopped with its driver in and another wreck at his door, then Enter tells him there is no room and he stays in", () => {
-    const own = rig.stoppedInFleetLoop(LOOP_DRIVER_IN_SEED);
+describe("given the real engine in the fleet, its own crash loop (seed 4) run out until car 0 stops", () => {
+  // The loop is the slow part and both rows read its end: the second row continues from the first's refused Enter.
+  let own: DeformableCar;
+  beforeAll(() => {
+    own = rig.stoppedInFleetLoop(LOOP_DRIVER_IN_SEED);
+  });
+
+  // mutation: sed -i '/sense.doorBlocked) return this.refuse("doorBlocked");/d' src/game/present/onfoot-flow.ts  (a wreck at the door no longer blocks it: red at "a wreck lies at his door")
+  it("when it leaves car 0 stopped with its driver in and another wreck at his door, then Enter tells him there is no room and he stays in", () => {
     expect(own.driverOut, "the crash left his driver in").toBe(null);
     expect(rig.engine["onFoot"].prompt(), "the control is offered").toBe("Enter or B: get out");
     rig.press("Enter");
@@ -137,8 +147,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     expect(rig.engine["onFoot"].prompt(), "and he is told").toBe("No room to open the door");
   });
 
-  it("when the fleet's own crash loop (seed 4) leaves car 0 stopped with its driver in and the wrecks cleared from his door, then Enter gets him out, the car stays where the crash left it, and Enter gets him back in", () => {
-    const own = rig.stoppedInFleetLoop(LOOP_DRIVER_IN_SEED);
+  it("when it leaves car 0 stopped with its driver in and the wrecks are cleared from his door, then Enter gets him out, the car stays where the crash left it, and Enter gets him back in", () => {
     rig.normalTime();
     for (let i = 1; i < rig.cars().length; i++) rig.place(i, PARKED_AT * (i % 2 === 0 ? 1 : -1), -PARKED_AT + 4 * i);
     const at = own.group.position.clone();
@@ -149,8 +158,10 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     rig.getIn();
     expect(rig.away(), "and he is in it again").toBe(-1);
   });
+});
 
-  it("when the fleet's own crash loop (seed 1) throws car 0's driver out and stops it with the seat still on the car, then the control offers nothing and Enter does nothing", () => {
+describe("given the real engine in the fleet, its own crash loop (seed 1) run out until car 0 stops", () => {
+  it("when it throws car 0's driver out and stops it with the seat still on the car, then the control offers nothing and Enter does nothing", () => {
     const own = rig.stoppedInFleetLoop(LOOP_DRIVER_THROWN_SEED);
     expect(own.driverOut, "the crash threw his driver out").not.toBe(null);
     expect(rig.engine["seat"].mode, "the seat is still on the car").toBe("drive");

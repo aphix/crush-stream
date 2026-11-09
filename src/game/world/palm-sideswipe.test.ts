@@ -6,13 +6,10 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { EjectionWatch } from "../vehicle/ejection.ts";
 import { launch } from "../contact/crash-scenarios.test-util.ts";
-import { makeWorld as raceWorld, type World } from "./race-world.test-util.ts";
+import { course, makeWorld as raceWorld, type World } from "./race-world.test-util.ts";
 import { armedCar } from "./solid-parity.test-util.ts";
 import { activeGround, setGround, type Ground } from "./ground.ts";
 import { placeProps, propColliders, type PropCollider } from "./placements.ts";
-import { Track } from "./track.ts";
-import { parseTrack } from "./track-schema.ts";
-import { OFF_MENU, TRACKS } from "./tracks/index.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
@@ -28,6 +25,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const SECONDS = 8;
+/** A run ends once the car is this far (m) beyond its closest approach to the palm: a wreck drifting off the trunk is long clear, and the next palm is another scene. */
+const PASSED_M = 30;
 /** How long (s) the handbrake is held: a tap. */
 const TAP = 0.35;
 /** A solid piece is one a car's body can touch below this height (m); a palm's crown and upper trunk are above any car. */
@@ -91,13 +90,13 @@ function havanaRace(): World {
   return havana.w;
 }
 function solidPieces(): PropCollider[] {
-  const track = new Track([...TRACKS, ...OFF_MENU].find((j) => parseTrack(j).id === "havana"));
+  const track = course("havana");
   return propColliders(placeProps(track)).filter((c) => c.body === "solid" && c.base < LOW);
 }
 
 /**
- * Drives `scene`'s car on the gas for SECONDS; `turnIn` m from its palm (none when negative) the wheel goes to `steer` (±1) and the
- * handbrake is tapped for TAP s. Returns the step that moved it furthest past its allowance.
+ * Drives `scene`'s car on the gas for SECONDS, or until it is `PASSED_M` beyond its closest approach to its palm; `turnIn` m from its palm (none when negative)
+ * the wheel goes to `steer` (±1) and the handbrake is tapped for TAP s. Returns the step that moved it furthest past its allowance.
  */
 function sideswipe(scene: Scene, steer: number, turnIn: number, boost = false): Jump {
   const w = havanaRace();
@@ -119,8 +118,12 @@ function sideswipe(scene: Scene, steer: number, turnIn: number, boost = false): 
   let acc = 0;
   let step = 0;
   let turned = -1;
+  let closest = Infinity;
   try {
     for (let f = 0; f < SECONDS / FRAME; f++) {
+      const away = Math.hypot(car.group.position.x - scene.palm.x, car.group.position.z - scene.palm.z);
+      closest = Math.min(closest, away);
+      if (away > closest + PASSED_M) break;
       const vmax = sliceSpeed(world.cars);
       acc = Math.min(0.05, acc + FRAME);
       for (let n = 0; acc > 1e-5 && n < 8; n++) {

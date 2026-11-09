@@ -27,16 +27,24 @@ function assertDefaultOptions(w: World, when = "the player's options"): void {
   for (const key of Object.keys(DEFAULT_RACE_OPTIONS) as (keyof RaceOptions)[]) expect(options[key], `${when}: ${key}`).toBe(DEFAULT_RACE_OPTIONS[key]);
 }
 
+/** Race seconds past the green (the grid takes 1.5 s, the countdown 3 s) the bench's race runs before its options are read. */
+const RACING_S = 1;
+const LEAD_IN_FRAMES = 10 * 60;
+
 describe("given a player on the default race options, running the bench's own race", () => {
+  // mutation: sed -i 's/ && this.rules === this.options) this.options.trackId = tr.id;/) this.options.trackId = tr.id;/' src/game/engine/engine-race-field.ts  (a program's course is written over the player's own pick when the race loads: red at "while the bench race runs", trackId)
   it("when the bench sets its race up and then runs it, then it races its own course, laps and field while the player's options and the setup card hold no bench value", () => {
     inRaceMode((w) => {
       w.race.command(BENCH_RACE);
       assertDefaultOptions(w, "right after the bench applied its setup");
       w.race.reseed(1);
       w.race.command({ type: "start" });
+      // No row reads a skin, and no frame writes the options: the green and a second of racing are the staging.
+      w.skin = false;
       const state = { acc: 0 };
-      for (let n = 0; n < 10 * 60; n++) frame(w, state);
+      for (let n = 0; n < LEAD_IN_FRAMES && w.race.time < RACING_S; n++) frame(w, state);
       const hud = w.race.hud();
+      expect(hud.phase, "the bench race is racing").toBe("racing");
       expect(hud.trackName).toBe("Harbour Streets");
       expect(hud.laps).toBe(9);
       expect(hud.field).toBe(16);

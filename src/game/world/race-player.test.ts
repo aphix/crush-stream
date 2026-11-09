@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
-import { makeWorld, playerRace, type PlayerLine, type World } from "./race-world.test-util.ts";
-import { Track } from "./track.ts";
-import oval from "./tracks/oval.json" with { type: "json" };
+import { course, makeWorld, playerRace, type PlayerLine, type World } from "./race-world.test-util.ts";
 
 /**
  * The owner's "counted DNF, had to do an extra lap": the PLAYER slot, driven through the real seat,
@@ -13,7 +11,7 @@ import oval from "./tracks/oval.json" with { type: "json" };
 // 2 laps: a detour lap at the scripted 14 m/s costs ~9 s against the AI's ~17 s laps at 200 km/h, so over
 // 3 laps the grass line was flagged home a lap down ("+1 lap", scored right) instead of on the AI's count.
 const LAPS = 2;
-const track = new Track(oval);
+const track = course("oval");
 const sc = track.shortcuts[0]!;
 const fromS = track.gates[sc.from]!.s + 30;
 const road = Array.from({ length: sc.path.count }, (_, k) => [sc.path.x[k]!, sc.path.z[k]!] as const);
@@ -30,12 +28,15 @@ describe(`given a ${LAPS}-lap race on the oval with the player's car driven thro
   let w: World;
   beforeAll(() => {
     w = makeWorld();
+    // The rows read laps, places and the HUD, never a skin.
+    w.skin = false;
     w.race.enter();
   });
   afterAll(() => {
     w.race.exit();
     setGround(null);
   });
+  // mutation: sed -i 's/^      if (c.armed) {$/      if (false) {/' src/game/match/session.ts  (a shortcut is never entered, so its lap is lost: red on the grass line, "expected 1 to be 2")
   for (const [name, line] of Object.entries(LINES)) {
     it(`when the player's line is ${name}, then he is home on the full distance, and the HUD's lap and place match the rules' count`, (t) => {
       const o = playerRace(w, track, line, LAPS, 3, 220);

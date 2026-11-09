@@ -25,8 +25,8 @@ const nameOf = (w: World, id: string): string => w.race.hud().courses.find((c) =
 /** Frames until the race menu `menu` is up (a watched race of AI cars runs itself out). */
 function untilMenu(w: World, menu: "results" | "standings"): void {
   const state = { acc: 0 };
-  for (let n = 0; n < 60 * 600 && w.race.hud().menu !== menu; n++) frame(w, state);
-  expect(w.race.hud().menu).toBe(menu);
+  for (let n = 0; n < 60 * 600 && w.race.menu !== menu; n++) frame(w, state);
+  expect(w.race.menu).toBe(menu);
 }
 
 /** Options none of which is a default (the course is the one under test). */
@@ -116,8 +116,11 @@ describe("given the setup card", () => {
 });
 
 describe("given a Watch campaign of the rally and then the oval, the reverse of the campaign's own order", () => {
+  // mutation: sed -i 's/new Campaign(this.rules.campaign,/new Campaign([...this.rules.campaign].sort(),/' src/game/engine/engine-race.ts  (the picks race in alphabetical order, not the tapped one: red at round 1's course)
   it("when each round runs out and Next is pressed, then the rounds race on those courses in that order and the campaign ends back at the card", () => {
     inRaceMode((w) => {
+      // The rounds run out unwatched: the claim is their courses and menus, so no skin is drawn.
+      w.skin = false;
       w.race.command({ type: "options", options: { laps: 1, aiCount: 3, spectate: true, campaign: ["rally", "oval"] } });
       w.race.command({ type: "campaign" });
       expect(w.race.hud().trackName).toBe(nameOf(w, "rally"));

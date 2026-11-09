@@ -4,17 +4,15 @@ import { CAMPAIGN_POINTS } from "../match/campaign.ts";
 import { FINISH_GRACE } from "../match/session.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { setGround } from "./ground.ts";
-import { FRAME, frame, makeWorld, playerRace, type World } from "./race-world.test-util.ts";
+import { FRAME, course, frame, makeWorld, playerRace, type World } from "./race-world.test-util.ts";
 import { hold } from "./survival-run.test-util.ts";
-import { Track } from "./track.ts";
-import oval from "./tracks/oval.json" with { type: "json" };
 
 /**
  * Co-op races (docs/MULTIPLAYER.md, Co-op): the humans of a hosted room race the AI as one team. Each keeps its own place; the team's result is the
  * best human place, and the team wins when a human finishes first. Nobody has to finish: the finish and DNF rules end the race as they always did.
  * The host drives car 0 through its seat, a peer car 1 through `setRemoteInput` (here never touching its pedals); two AI cars drive themselves.
  */
-const track = new Track(oval);
+const track = course("oval");
 const LAPS = 2;
 /** `aiCount` counts the field's cars besides the host's: the peer takes one of its places, so three leave two AI cars. */
 const FIELD = 3;
@@ -22,6 +20,8 @@ const PARKED: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: true, boos
 
 function coopWorld(): World {
   const w = makeWorld();
+  // The rows read places and results, never a skin.
+  w.skin = false;
   w.race.enter();
   w.race.setSeats(new Map([[1, "Zed"]]));
   return w;

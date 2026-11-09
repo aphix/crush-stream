@@ -164,6 +164,8 @@ type PlayOpts = {
   retry?: boolean;
   /** The chase camera follows the player (needed for the spawn test). */
   cam?: boolean;
+  /** Ends the run after the frame it is true for (asked once per frame, after the physics): a run whose data is final stops there, not at `seconds`. */
+  until?: (w: World, t: number) => boolean;
 };
 
 /** Play `seconds` of Survival with the scripted player, collecting the numbers the tests and the docs quote. */
@@ -183,6 +185,7 @@ export function play(w: World, o: PlayOpts): Play {
     o.player(w, t);
     frame(w, state);
     out.seconds = t;
+    if (o.until?.(w, t)) break;
     const time = w.race.time;
     const hud = w.race.hud();
     const over = hud.phase === "finished";

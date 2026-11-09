@@ -10,8 +10,12 @@ import type { SceneId } from "../scenes/scene-id.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
-import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 
+const FRAME = 1 / FRAME_HZ;
+/** The race a row leaves for the next scene has run this long (s): its sky is set when it loads, before the grid's 1.5 s and the countdown's 3 s. */
+const RACE_S = 1;
 
 /** Race, then the scene picked after it: a race's time of day and night toggle leave the sandbox scene as a fresh page has it. */
 const cases = [
@@ -25,6 +29,8 @@ const cases = [
 describe("given the real engine, its sandbox sky as a fresh page has it", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
+  /** `seconds` of frames, only the last drawn: no row reads what a frame draws, only the state it leaves. */
+  const run = (seconds: number): void => engine.advance(seconds, { frameDt: FRAME });
   const stage = (): CrashEngine["stage"] => engine["stage"];
   const scene = (): THREE.Scene => engine["scene"];
   /** What the sandbox's sky is made of: the background and fog, the three lights, the night setting, the dome and the far plane. */
@@ -50,7 +56,7 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
   beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine();
-    runSeconds(engine, 1);
+    run(1);
     fresh = sandboxSky();
     freshDrawn = stage().sky.drawn;
   });
@@ -59,29 +65,31 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     setGround(null);
   });
 
+  // mutation: sed -i 's/^    this.host.setTimeOfDay(null);$/    \/\/ mutated/' src/game/engine/engine-race-field.ts  (the race's sky stays after it: red in all five cases)
   for (const testCase of cases) {
     it(`when ${testCase.it}, then the scene's sky, fog, lights, night setting and far plane are as on a fresh load`, () => {
       engine.toggleRace();
       engine.raceCommand({ type: "program", options: { trackId: testCase.trackId, laps: 1, aiCount: 3, police: false, aggression: 0.5, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false, timeOfDay: testCase.timeOfDay } });
       engine.raceCommand({ type: "start" });
-      runSeconds(engine, 3);
+      run(RACE_S);
       const racing = sandboxSky();
       expect(racing.background, "the race has its own sky (the control: the colours below are not trivially equal)").not.toBe(fresh.background);
       if (testCase.nightToggled) engine.setNight(true);
       engine["setScene"](testCase.next);
-      runSeconds(engine, 1);
+      run(1);
       const after = sandboxSky();
       for (const key of Object.keys(fresh)) expect(after[key], `${key} after the race, in the ${testCase.next}`).toBe(fresh[key]);
       engine["setScene"]("fleet");
     });
   }
 
+  // mutation: sed -i 's/^    this.sky.setDetail(detail);$/    \/\/ mutated/' src/game/present/engine-world.ts  (the dome never changes detail: red at "expected +0 to be 5", the drawn sky)
   it("when a fresh engine runs under the Sky setting auto, then on the minimal tier it draws no sky (the studio's colour), and on high the default procedural sky, its background and fog that sky's horizon", () => {
     expect(engine["cine"].tier, "the control: a fresh page's tier").toBe("minimal");
     expect(freshDrawn, "no sky on minimal").toBe(SKY_DRAWN.off);
     expect(fresh.background, "the studio's colour").toBe("12141a");
     engine.setFxTier("high");
-    runSeconds(engine, 1);
+    run(1);
     const procedural = sandboxSky();
     const horizon = new THREE.Color(SANDBOX_SKY.day.horizon).getHexString();
     expect(stage().sky.drawn).toBe(SKY_DRAWN.procedural);
@@ -89,12 +97,12 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     expect(procedural.background).toBe(horizon);
     expect(procedural.fog).toBe(horizon);
     stage().setProceduralSky(null);
-    runSeconds(engine, 1);
+    run(1);
     expect(stage().sky.drawn, "the picture: the sandbox has none").toBe(SKY_DRAWN.off);
     expect(sandboxSky().background, "the picture: the studio's colour").toBe("12141a");
     stage().setProceduralSky(INITIAL_HUD.proceduralSky);
     engine.setFxTier("minimal");
-    runSeconds(engine, 1);
+    run(1);
     for (const key of Object.keys(fresh)) expect(sandboxSky()[key], key).toBe(fresh[key]);
   });
 
@@ -111,23 +119,24 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     expect(u.uStars!.value, `${label}: stars`).toBe(look.stars ? 1 : 0);
   };
 
+  // mutation: sed -i 's/^    this.sky.show(time, SUN_BEARING);$/    \/\/ mutated/' src/game/present/engine-world.ts  (a time of day never reaches the dome: red at the night horizon)
   it("when the default procedural sky runs on high, then each race's dome takes its time of day's look (night: its stops, moon and stars on), and the sandbox's Night toggle the sandbox night look", () => {
     engine.setFxTier("high");
     for (const time of [TIME_OF_DAY.night, TIME_OF_DAY.sunset, TIME_OF_DAY.day]) {
       engine.toggleRace();
       engine.raceCommand({ type: "program", options: { trackId: TRACK_ID.city, laps: 1, aiCount: 3, police: false, aggression: 0.5, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false, timeOfDay: time } });
       engine.raceCommand({ type: "start" });
-      runSeconds(engine, 1);
+      run(1);
       assertDomeLook({ ...SKY_LOOKS[time], ...PROCEDURAL_LOOKS[time] }, time);
       engine["setScene"]("fleet");
-      runSeconds(engine, 1);
+      run(1);
     }
     assertDomeLook(SANDBOX_SKY.day, "sandbox day");
     engine.setNight(true);
-    runSeconds(engine, 1);
+    run(1);
     assertDomeLook(SANDBOX_SKY.night, "sandbox night");
     engine.setNight(false);
     engine.setFxTier("minimal");
-    runSeconds(engine, 1);
+    run(1);
   });
 });
