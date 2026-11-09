@@ -157,17 +157,8 @@ function axisPitch(e: ArrayLike<number>, o: number): number {
   return Math.asin(Math.max(-1, Math.min(1, e[o + 1]! / Math.hypot(e[o]!, e[o + 1]!, e[o + 2]!)))) * DEG;
 }
 
-/**
- * How `car` sits on `ground` now. `hullOnly`: for a caller that reads `pen`, `overlap` and `crush` (the hull points') alone: the tyre
- * scan and the belly lines are skipped, so `gaps` are all Infinity and `hull` is the hull points' lowest clearance only.
- */
-export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
-  car.group.updateWorldMatrix(true, true);
-  // A car with no class assigned has no class body: its drawn body is the group (the springs move nothing, `Suspension.body`).
-  const body = car.group.getObjectByName("classLift") ?? car.group;
-  const e = body.matrixWorld.elements;
-  const gaps: number[] = [];
-  const contacts = new Float64Array(12).fill(NaN);
+/** Each tyre's lowest tread point over the ground under it into `gaps` (`Fit.gaps`) and where it rests into `contacts`, and each hub and the ground's height under it into `_hub` and `_g`; without `withTread` the gaps are all Infinity. */
+function readTyres(car: DeformableCar, ground: Ground, withTread: boolean, gaps: number[], contacts: Float64Array): void {
   const { r: tyreR, halfW: tyreHalfW } = car.frame.rig.tyre;
   const kAcross = tyreHalfW / PLATFORM_TYRE.halfW;
   const kRadius = tyreR / PLATFORM_TYRE.r;
@@ -190,7 +181,7 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
     };
     // Each ring at `TREAD_STEPS` points, then at 1/32 of that step across the step either side of its lowest one: at a face's edge the
     // tread's lowest point over the face is where the ring crosses the edge, and the nearest of 48 points read up to 4 cm above it.
-    if (!hullOnly) {
+    if (withTread) {
       for (const [ringX, ringR] of TREAD_RINGS) {
         const x = ringX * kAcross;
         const r = ringR * kRadius;
@@ -209,6 +200,28 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
     gaps.push(gap);
     _g[i] = ground.heightAt(_hub[i]!.x, _hub[i]!.z, hint);
   }
+}
+
+/** `car`'s tyre gaps (`Fit.gaps`) and whether it flies, nothing of the hull read: for a harness that reads those alone every slice. */
+export function tyreGaps(car: DeformableCar, ground: Ground): Pick<Fit, "airborne" | "gaps"> {
+  car.group.updateWorldMatrix(true, true);
+  const gaps: number[] = [];
+  readTyres(car, ground, true, gaps, new Float64Array(12));
+  return { airborne: car.airborne, gaps };
+}
+
+/**
+ * How `car` sits on `ground` now. `hullOnly`: for a caller that reads `pen`, `overlap` and `crush` (the hull points') alone: the tyre
+ * scan and the belly lines are skipped, so `gaps` are all Infinity and `hull` is the hull points' lowest clearance only.
+ */
+export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
+  car.group.updateWorldMatrix(true, true);
+  // A car with no class assigned has no class body: its drawn body is the group (the springs move nothing, `Suspension.body`).
+  const body = car.group.getObjectByName("classLift") ?? car.group;
+  const e = body.matrixWorld.elements;
+  const gaps: number[] = [];
+  const contacts = new Float64Array(12).fill(NaN);
+  readTyres(car, ground, !hullOnly, gaps, contacts);
   const mid = (a: number, b: number, c: "x" | "z") => (_hub[a]![c] + _hub[b]![c]) / 2;
   const planFB = Math.hypot(mid(0, 1, "x") - mid(2, 3, "x"), mid(0, 1, "z") - mid(2, 3, "z"));
   const planLR = Math.hypot(mid(1, 3, "x") - mid(0, 2, "x"), mid(1, 3, "z") - mid(0, 2, "z"));
