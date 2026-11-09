@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
-import { FURNISHING, MAX_RISER, ROWHOME_FLOOR_Y, SHOPFRONT, type Box, type InteriorPlan } from "./interior-kinds.ts";
+import { FURNISHING, HEADROOM, MAX_RISER, PARTITION, ROWHOME_FLOOR_Y, SHOPFRONT, type Box, type InteriorPlan } from "./interior-kinds.ts";
 import { interiorDoor, interiorSolids, interiorSpots, planInterior } from "./interior-plan.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
@@ -89,6 +89,49 @@ describe("given the rowhome's stairs", () => {
       const treads = stairBoxes(flight, plan.floors[flight.level]!);
       expect(treads[treads.length - 1]!.y1, `top tread of the flight from level ${flight.level}`).toBeCloseTo(plan.floors[flight.level + 1]!, 9);
     }
+  });
+
+  // mutation: sed -i 's/const upper = d.stairsUp(1, UPPER_STAIR_FOOT, left + 0.45);/const upper = d.stairsUp(1, STAIR_FOOT, left + 0.45);/' src/game/world/openworld/interior-layouts.ts (the flights stacked again)
+  it("when a walker stands on any tread of either flight, then nothing solid is lower over it than a standing walker and a margin", () => {
+    const solidsOver: Box[] = [
+      ...plan.slabs.map((slab): Box => ({ ...slab.rect, y0: slab.y0, y1: slab.y1 })),
+      ...plan.stairs.flatMap((flight) => stairBoxes(flight, plan.floors[flight.level]!)),
+      ...plan.furnishings.filter((piece) => FURNISHING[piece.kind].solid).map((piece): Box => ({ ...footprintOf(piece), y0: plan.floors[piece.level]! + piece.lift, y1: plan.floors[piece.level]! + piece.lift + piece.height })),
+    ];
+    const short: string[] = [];
+    for (const flight of plan.stairs) {
+      for (const tread of stairBoxes(flight, plan.floors[flight.level]!)) {
+        const footing = { deep0: tread.deep0 + 0.01, deep1: tread.deep1 - 0.01, across0: tread.across0 + 0.01, across1: tread.across1 - 0.01 };
+        const above = solidsOver.filter((box) => box.y0 > tread.y1 + 1e-9 && overlap(footing, box) > 0);
+        const clear = Math.min(...above.map((box) => box.y0 - tread.y1));
+        if (clear < HEADROOM) short.push(`level ${flight.level} tread at ${tread.deep0.toFixed(2)}: ${clear.toFixed(2)} m`);
+      }
+    }
+    expect(short.slice(0, 3).join("; "), "treads short of headroom").toBe("");
+  });
+
+  // mutation: sed -i '/d.spineWall(0, hallEdge + PARTITION \/ 2, PARLOUR_WALL, KITCHEN_WALL);/d' src/game/world/openworld/interior-layouts.ts
+  it("when the ground floor's flight is looked at from the dining room, then a full-height wall closes its side along every tread, and a walker meets it as a solid", () => {
+    const lower = plan.stairs.find((flight) => flight.level === 0)!;
+    const side = lower.across + lower.width / 2;
+    const floor = plan.floors[0]!;
+    const ceiling = plan.floors[1]! - 0.25;
+    const walls = plan.walls.filter((wall) => wall.level === 0).flatMap((wall) => wallBoxes(wall, floor, ceiling));
+    const home = firstOf("rowhome");
+    const solids = interiorSolids(home);
+    const open: string[] = [];
+    for (const tread of stairBoxes(lower, floor)) {
+      const middle = (tread.deep0 + tread.deep1) / 2;
+      const closed = walls.some((box) => box.across0 >= side - 1e-6 && box.across0 <= side + PARTITION && box.deep0 <= middle && box.deep1 >= middle && box.y0 <= floor + 1e-6 && box.y1 >= ceiling - 1e-6);
+      if (!closed) open.push(`plan open beside the tread at ${tread.deep0.toFixed(2)}`);
+      const front = home.depth / 2 - middle;
+      const across = side + PARTITION / 2;
+      const x = home.x + front * Math.cos(home.yaw) + across * Math.sin(home.yaw);
+      const z = home.z - front * Math.sin(home.yaw) + across * Math.cos(home.yaw);
+      const y = floor + 1.5;
+      if (!solids.some((solid) => x > solid.x0 && x < solid.x1 && z > solid.z0 && z < solid.z1 && y > solid.y0 && y < solid.y1)) open.push(`no solid beside the tread at ${tread.deep0.toFixed(2)}`);
+    }
+    expect(open.slice(0, 3).join("; "), "the stair's side toward the dining room").toBe("");
   });
 
   it("when the floor above a flight is read, then it has a hole over the flight and the hole ends where the top tread meets the floor", () => {

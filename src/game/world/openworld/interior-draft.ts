@@ -2,6 +2,7 @@ import {
   BACK_DOOR,
   BAY_WIDTH,
   FURNISHING,
+  HEADROOM,
   LEVELS,
   MAX_RISER,
   PARTITION,
@@ -143,6 +144,15 @@ export class Draft {
     const flight = { level, deep0, across, width: STAIR_WIDTH, steps, rise: climb / steps, run: TREAD_RUN };
     this.stairs.push(flight);
     return flight;
+  }
+
+  /** The opening a flight needs in the floor above it: from the first tread a climber's head (`HEADROOM`) would meet the slab over, to where the top tread meets that floor, across the flight. */
+  stairwell(flight: Stairs): Rect {
+    const floor = this.floors[flight.level]!;
+    const underside = this.ceilingOf(flight.level);
+    let step = 0;
+    while (step < flight.steps && underside - (floor + (step + 1) * flight.rise) >= HEADROOM) step++;
+    return { deep0: flight.deep0 + step * flight.run, deep1: flight.deep0 + flight.steps * flight.run, across0: flight.across - flight.width / 2, across1: flight.across + flight.width / 2 };
   }
 
   /** The envelope of `level`: the street wall (cut by the shopfront on the ground floor), the party walls and the back wall; the ground floor's are the far view's shell. */

@@ -125,6 +125,8 @@ export const STREET_SKIN = 0.02;
 export const MAX_RISER = 0.19;
 /** Depth of a tread (m). */
 export const TREAD_RUN = 0.26;
+/** The clear height a climber needs over every tread (m): a standing walker (1.8 m) and a margin. */
+export const HEADROOM = 2;
 
 /** Floors and the topmost ceiling by interior: a rowhome has its stoop's landing, then floors 0.1 m over the facade's storey lines (3.6 and 6.6 m: the ground band, then 3.0 m storeys), a shop one 3.75 m clear storey under a slab. */
 export const LEVELS = {
