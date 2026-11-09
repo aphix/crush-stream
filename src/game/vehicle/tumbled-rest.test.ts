@@ -323,6 +323,15 @@ describe("given a car dropped on its wheels on the flat pad", () => {
   });
 });
 
+// Mutation: `sed 's|setFromObject(car.group).min.y;|setFromObject(car.group).min.y + 1e-6 * Math.random();|'` turns this row red (a rerun is no longer the shared drop).
+describe("given a drop whose lowest points a later row reads off an earlier row's", () => {
+  it("when the sedan's 0.5 m roof drop is made again, then its lowest points are the shared ones to the bit", () => {
+    const shared = lowestOf("sedan", "sedan", "roof", 0.5);
+    const again = dropped("sedan", "sedan", "roof", 0.5).lowest;
+    for (const part of ["body", "crown", "mirrors", "doors", "lamps", "tyres", "kit"] as const) expect(again[part], part).toBe(shared[part]);
+  });
+});
+
 describe("given a car lying on its roof, with its doors drawn on their rest seats", () => {
   it("when it rests after a 2 m drop, then each drawn door is out of the ground (the 0.19 m it read was the hidden shattered pane)", () => {
     const lowest = lowestOf("sedan", "sedan", "roof", 2);

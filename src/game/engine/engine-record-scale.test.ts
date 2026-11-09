@@ -56,11 +56,12 @@ function placeHeadOn(a: DeformableCar, b: DeformableCar, v: number, z = 0, x = 0
   launch(b, x + 5, z, -Math.PI / 2, -v / 2, 0);
 }
 
-const headOn = memoRun((closingKph: number): CrashCluster => {
+function stageHeadOn(closingKph: number): CrashCluster {
   const [a, b] = [makeCar(), makeCar()] as const;
   placeHeadOn(a, b, closingKph / 3.6);
   return record([a, b], false, 3).clusters[0]!;
-});
+}
+const headOn = memoRun(stageHeadOn);
 
 const tBone = memoRun((closingKph: number): CrashCluster => {
   const [a, b] = [makeCar(), makeCar()] as const;
@@ -100,6 +101,15 @@ describe("given the highlight recorder scoring crashes between real simulated se
     const at100 = headOn(100).score;
     expect(Math.abs(at50 - 3.65), `the 50 km/h reference moved: ${at50.toFixed(2)} (was 3.65)`).toBeLessThan(0.02);
     expect(at100 / at50 >= 3.5 && at100 / at50 <= 5, `100 km/h ${at100.toFixed(2)} vs 50 km/h ${at50.toFixed(2)}: ×${(at100 / at50).toFixed(2)}`).toBeTruthy();
+  });
+
+  // Mutation: `sed 's|placeHeadOn(a, b, closingKph / 3.6);|placeHeadOn(a, b, closingKph / 3.6 + 1e-6 * Math.random());|'` turns this row red (a rerun is no longer the shared run).
+  it("when the 50 km/h head-on is recorded again, then its cluster is the shared run's to the bit: the same score, kills and ejects", () => {
+    const shared = headOn(50);
+    const again = stageHeadOn(50);
+    expect(again.score, "score").toBe(shared.score);
+    expect(again.kills, "kills").toBe(shared.kills);
+    expect(again.ejects, "ejects").toBe(shared.ejects);
   });
 
   it("when 20 and 40 km/h head-ons are recorded, then they fall under the minimum impact speed and open no cluster, while a 50 km/h head-on still scores enough for the highlight reel", () => {
