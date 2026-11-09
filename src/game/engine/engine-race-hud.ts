@@ -133,7 +133,7 @@ export abstract class RaceHudLayer extends RaceWatch {
         canHold: asking && !s.endless,
         resetHold: this.holdFill,
       };
-    } else if (!s && id >= 0 && this.free && tr?.id === OPENWORLD_ID) {
+    } else if (!s && id >= 0 && this.free && tr?.id === OPENWORLD_ID && !this.host.afoot(id)) {
       view = this.roamingView(id, cars[id]);
     }
     const winner = s && s.winnerId != null ? s.cars[this.rowOf[s.winnerId]!]!.name : null;
@@ -170,7 +170,7 @@ export abstract class RaceHudLayer extends RaceWatch {
 
   /**
    * The driven or followed car roaming the open world (its free roam has no session): the drive cluster Survival shows (speed, gear, revs, damage,
-   * boost, slide) and none of a run's readouts, so no place, lap, clock or bust strip; no reset prompt, as before.
+   * boost, slide) and none of a run's readouts, so no place, lap, clock or bust strip; no reset prompt, as before. None while the player is out of it on foot.
    */
   private roamingView(id: number, car: DeformableCar | undefined): RaceView | null {
     if (car === undefined) return null;

@@ -8,14 +8,15 @@ const DESKTOP = false;
 
 afterEach(() => setGround(null));
 
-/** The race HUD of the open world's free roam with the player's car seated, after the Full menu toggle (H) is set to `fullMenu`. */
-function openWorldRace(fullMenu: boolean) {
+/** The race HUD of the open world's free roam with the player's car seated (or left on foot, `onFoot`), after the Full menu toggle (H) is set to `fullMenu`. */
+function openWorldRace(fullMenu: boolean, onFoot = false) {
   const w = makeWorld();
   w.skin = false;
   w.race.enter(false, true);
   w.race.showLobby(OPENWORLD_ID);
   w.race.seatLobby(0);
   w.race.command({ type: "fullUi", on: fullMenu });
+  if (onFoot) w.away = 0;
   return { ...w.race.hud(), reel: null };
 }
 
@@ -34,5 +35,10 @@ describe("given the player driving in the open world on a desktop", () => {
     const race = openWorldRace(true);
     expect(showsRaceView(race, DESKTOP), "race view").toBe(false);
     expect(showsDriveReadouts(race), "the drive cluster (speedometer) is up").toBe(true);
+  });
+
+  it("when he steps out of the car on foot, then no speedometer shows, in the race view or the full menu", () => {
+    expect(showsDriveReadouts(openWorldRace(false, true)), "drive cluster on foot in the race view").toBe(false);
+    expect(showsDriveReadouts(openWorldRace(true, true)), "drive cluster on foot under the full menu").toBe(false);
   });
 });
