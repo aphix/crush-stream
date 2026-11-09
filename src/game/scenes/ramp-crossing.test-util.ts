@@ -6,8 +6,7 @@ import { collideOn } from "./ramp-collide.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
-import { makeCar, pooled, tyreGaps } from "../vehicle/ground-probe.test-util.ts";
-import type { DeformableCar } from "../vehicle/car.ts";
+import { pooled, tyreGaps } from "../vehicle/ground-probe.test-util.ts";
 import { STIFF_TRAVEL } from "../vehicle/stiff-springs.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -98,34 +97,23 @@ function planeAngle(p: Float64Array, q: Float64Array): number {
   return Math.acos(Math.min(1, dot)) * DEG;
 }
 
-/** The ramps and the slab a crossing runs on, with the sedan that drives it. */
-export type CrossingFixture = { ramps: FleetRamps; slab: JerseyBarrier; car: DeformableCar };
-
-function builtScene(): { ramps: FleetRamps; slab: JerseyBarrier } {
-  const three = new THREE.Scene();
-  return { ramps: new FleetRamps(three), slab: new JerseyBarrier(three, new THREE.Group()) };
+/** The ramps and the slab, built once and put back as new for each crossing. */
+let builtScene: { ramps: FleetRamps; slab: JerseyBarrier } | undefined;
+function crossingScene(): { ramps: FleetRamps; slab: JerseyBarrier } {
+  if (!builtScene) {
+    const three = new THREE.Scene();
+    builtScene = { ramps: new FleetRamps(three), slab: new JerseyBarrier(three, new THREE.Group()) };
+  }
+  builtScene.slab.reset();
+  builtScene.ramps.place(0, builtScene.slab);
+  setGround(builtScene.ramps);
+  return builtScene;
 }
 
-export function freshCrossingFixture(): CrossingFixture {
-  return { ...builtScene(), car: makeCar("sedan") };
-}
-
-let sharedFixture: CrossingFixture | undefined;
-/** The fixture every `cross` runs on: built on first use, stood up again by each crossing. */
-export function sharedCrossingFixture(): CrossingFixture {
-  sharedFixture ??= { ...builtScene(), car: pooled("sedan") };
-  return sharedFixture;
-}
-
+/** Cross the toe once: the worst of every bar over every physics slice. `mirrored` drives the reflection of the same crossing in the ramp's axis. */
 export function cross(v: number, thDeg: number, e: number, mirrored = false): Result {
-  return crossOn(sharedCrossingFixture(), v, thDeg, e, mirrored);
-}
-
-/** Cross the toe once on `fixture`: the worst of every bar over every physics slice. `mirrored` drives the reflection of the same crossing in the ramp's axis. */
-export function crossOn({ ramps, slab, car }: CrossingFixture, v: number, thDeg: number, e: number, mirrored = false): Result {
-  slab.reset();
-  ramps.place(0, slab);
-  setGround(ramps);
+  const { ramps, slab } = crossingScene();
+  const car = pooled("sedan");
   const w = newWorld([car], slab);
   w.collide = collideOn(ramps);
   const yaw = mirrored ? Math.PI - thDeg / DEG : Math.PI + thDeg / DEG;

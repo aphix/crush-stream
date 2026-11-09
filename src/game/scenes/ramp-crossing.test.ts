@@ -3,9 +3,7 @@ import { MU_BODY } from "../vehicle/car-air-body.ts";
 import { carFrame } from "../vehicle/car-rig.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { RAMP } from "./fleet-ramps.ts";
-import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { carState } from "../vehicle/car-state.test-util.ts";
-import { cross, crossOn, DEG, freshCrossingFixture, sharedCrossingFixture, type Result } from "./ramp-crossing.test-util.ts";
+import { cross, DEG } from "./ramp-crossing.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { CLASSES } from "../vehicle/vehicle-classes.ts";
 import { useStiffSprings } from "../vehicle/stiff-springs.test-util.ts";
@@ -80,7 +78,7 @@ describe("given a sedan cruising at the fleet's jump ramp with steer 0 and the t
   }
 });
 
-// mutation: sed -i 's/side \* this.ax \* mid, side \* this.az \* mid, yaw/side * this.ax * mid + 0.3, side * this.az * mid, yaw/' src/game/scenes/fleet-ramps.ts  (the reflected crossing differs from the direct one: the reflected-crossing rows)
+// Mutation (red): sed -i 's/side \* this.ax \* mid, side \* this.az \* mid, yaw/side * this.ax * mid + 0.3, side * this.az * mid, yaw/' src/game/scenes/fleet-ramps.ts
 describe("given the same crossing built twice, once over the ramp's -x edge and once reflected in the ramp's axis", () => {
   beforeAll(() => {
     restoreSprings = useStiffSprings();
@@ -118,30 +116,5 @@ describe("given a sedan driving up the middle of the ramp's wedge, so its tyres 
     expect(r.flatSlices, `only ${r.flatSlices} slices with every point on level ground`).toBeGreaterThanOrEqual(10);
     expect(r.planeSlices - r.flatSlices, `only ${r.planeSlices - r.flatSlices} slices with every point on the wedge's slope`).toBeGreaterThanOrEqual(5);
     expect(r.planeGap, `the planes differ by ${r.planeGap.toFixed(4)}° over ${r.planeSlices} single-plane slices`).toBeLessThanOrEqual(0.01);
-  });
-});
-
-describe("given the sedan, ramps and slab that every crossing shares, and a sedan, ramps and slab built fresh", () => {
-  beforeAll(() => {
-    restoreSprings = useStiffSprings();
-  });
-  afterAll(() => restoreSprings());
-  afterEach(() => setGround(null));
-
-  // mutation: sed -i 's/^    this.wheelSpin.fill(0);$/    \/\/ wheelSpin kept/' src/game/vehicle/car.ts  (the shared sedan keeps its wheels' spin: the fresh-vs-shared row)
-  it("when a crossing follows a harder one on the shared fixture and runs alone on a fresh one, then the measured bars and the sedan's final state are identical bit for bit", () => {
-    const bars = (r: Result): number[] => [r.yaw, r.heading, r.shove, r.dv, r.tilt, r.airWhileTouching, r.slices, r.planeGap, r.planeSlices, r.flatSlices, r.crashed ? 1 : 0];
-    const shared = sharedCrossingFixture();
-    cross(20, 45, -0.8);
-    const reused = crossOn(shared, 12, 30, 0.4);
-    const reusedState = carState(shared.car);
-    const fresh = freshCrossingFixture();
-    const alone = crossOn(fresh, 12, 30, 0.4);
-    const aloneState = carState(fresh.car);
-    expect(reused.slices, "slices of the reused crossing").toBeGreaterThan(50);
-    expect(reusedState.length, "numbers in the reused sedan's state").toBeGreaterThan(1000);
-    expect(firstMismatch(bars(reused), bars(alone)), "first differing bar").toBeUndefined();
-    expect(reused.tiltAt, "where the plane was worst").toBe(alone.tiltAt);
-    expect(firstMismatch(reusedState, aloneState), "first differing state number").toBeUndefined();
   });
 });

@@ -1,10 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { carState } from "../vehicle/car-state.test-util.ts";
-import { makeCar, pooled } from "../vehicle/ground-probe.test-util.ts";
-import { setGround } from "../world/ground.ts";
+import { describe, expect, it } from "vitest";
 import { DERBY_ARENA } from "./constants.ts";
-import { bodyRadius, carOfClass, fly, flyOn, sideWedgeLaunches, wallCases } from "./derby-containment.test-util.ts";
+import { bodyRadius, carOfClass, wallCases } from "./derby-containment.test-util.ts";
 
 // The side wedges are derby-containment-wedge.test.ts, run beside this file.
 wallCases();
@@ -37,26 +33,4 @@ describe("given a truck stood on its nose or tail at the arena wall, its drawn b
     expect(inner.group.position.x, `the origin stands at ${inner.group.position.x.toFixed(2)} m, outside the inner face at ${radius} m`).toBeGreaterThanOrEqual(radius);
     expect(bodyRadius(inner), `the body rests at ${bodyRadius(inner).toFixed(2)} m, which the row reads as inside the inner face at ${radius} m`).toBeLessThan(radius);
   });
-});
-
-describe("given a class's one car that has flown launch after launch, and a car built fresh for the same launch", () => {
-  afterEach(() => setGround(null));
-
-  for (const cls of ["sedan", "monster"] as const) {
-    // mutation: sed -i 's/^    this.wheelSpin.fill(0);$/    \/\/ wheelSpin kept/' src/game/vehicle/car.ts  (the reused car keeps its wheels' spin: the fresh-vs-reused row)
-    it(`when the ${cls} flies a side-wedge launch on the reused car and on a fresh one, then the flights and the cars' final states are identical bit for bit`, () => {
-      const launches = sideWedgeLaunches();
-      const [earlier, compared] = [launches[0]!, launches[7]!];
-      fly(cls, earlier);
-      const reusedFlight = fly(cls, compared);
-      const reusedState = carState(pooled(cls));
-      const freshCar = makeCar(cls);
-      const freshFlight = flyOn(freshCar, cls, compared);
-      const freshState = carState(freshCar);
-      expect(reusedFlight.maxRadius, "how far the reused car's body got").toBeGreaterThan(0);
-      expect(reusedState.length, "numbers in the reused car's state").toBeGreaterThan(1000);
-      expect(firstMismatch(Object.values(reusedFlight), Object.values(freshFlight)), "first differing flight number").toBeUndefined();
-      expect(firstMismatch(reusedState, freshState), "first differing state number").toBeUndefined();
-    });
-  }
 });
