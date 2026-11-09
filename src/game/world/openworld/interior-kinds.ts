@@ -1,3 +1,4 @@
+import { ROOFLINE } from "../constants.ts";
 import { LAYOUT } from "./openworld-constants.ts";
 import type { InteriorKind } from "./walk-graph.ts";
 
@@ -102,8 +103,8 @@ export type Furnishing = {
   serveAt: number;
 };
 
-/** A straight flight: `steps` treads of `rise` and `run` from `deep0`, climbing toward the back, on the floor of `level`. */
-export type Stairs = { level: number; deep0: number; across: number; width: number; steps: number; rise: number; run: number };
+/** A straight flight: `steps` treads of `rise` and `run` from its foot `deep0` on the floor of `level`, climbing toward the back (`dir` 1) or toward the street (-1). */
+export type Stairs = { level: number; deep0: number; across: number; width: number; steps: number; rise: number; run: number; dir: 1 | -1 };
 
 export type InteriorPlan = {
   kind: InteriorKind;
@@ -146,14 +147,74 @@ export function ceilingOver(floors: readonly number[], topCeiling: number, level
   return level + 1 < floors.length ? floors[level + 1]! - SLAB_THICK : topCeiling;
 }
 
-/** Floors and the topmost ceiling by interior: a rowhome has its stoop's landing, then floors 0.1 m over the facade's storey lines (3.6 and 6.6 m: the ground band, then 3.0 m storeys), a shop one 3.75 m clear storey under a slab. */
+/** A building's storeys: a house or a shop stands between the fewest and the most, three as a rule. */
+export const MIN_STOREYS = 2;
+export const MAX_STOREYS = 5;
+export const DEFAULT_STOREYS = 3;
+
+/** The building prefab's own height (m): a placement stretches it to its height, and every band of its facade is laid in this height's metres. A row pins it to the catalog's. */
+export const BLOCK_HEIGHT = 14;
+/** Storey heights (m): a house's ground storey (its parlour 3.0-3.7 m), a shop's taller one, each storey above (nominal), the cornice, and what the roof slab adds over the cornice's top. */
+const GROUND_STOREY = 3.6;
+const SHOP_GROUND_STOREY = 4;
+const STOREY = 3;
+export const CORNICE_DEPTH = 0.9;
+const ROOF_ALLOWANCE = CORNICE_DEPTH + 0.4;
+/** A floor stands this far (m) over its storey line, so a window's sill and the floor beside it never share a plane. */
+const FLOOR_OVER_LINE = 0.1;
+
+/** Whether an interior's building has a shop's taller ground storey. */
+const hasShopGround = (kind: InteriorKind): boolean => kind !== "rowhome";
+
+/** The height (m) of a building of `storeys` storeys (a shop's ground storey is taller). */
+export function buildingHeight(storeys: number, shopGround: boolean): number {
+  return (shopGround ? SHOP_GROUND_STOREY : GROUND_STOREY) + STOREY * (storeys - 1) + ROOF_ALLOWANCE;
+}
+
+/** How many storeys a building `height` m tall has (the inverse of `buildingHeight`), within the range buildings are built in. */
+export function storeysOfHeight(height: number, shopGround: boolean): number {
+  const storeys = Math.round((height - (shopGround ? SHOP_GROUND_STOREY : GROUND_STOREY) - ROOF_ALLOWANCE) / STOREY) + 1;
+  return Math.min(MAX_STOREYS, Math.max(MIN_STOREYS, storeys));
+}
+
+/**
+ * The storey lines of a building of `storeys` storeys, in metres above the ground: 0, the ground band's top, each storey's top above it, the last the cornice's foot. The cornice's top is the roofline
+ * (`ROOFLINE` of the prefab's own height, in this building's metres), and the storeys above the ground band share what lies between them equally, so a storey is about `STOREY` tall whatever the count.
+ */
+export function storeyLines(storeys: number, shopGround: boolean): number[] {
+  const ground = shopGround ? SHOP_GROUND_STOREY : GROUND_STOREY;
+  const corniceFoot = (ROOFLINE * buildingHeight(storeys, shopGround)) / BLOCK_HEIGHT - CORNICE_DEPTH;
+  const repeat = (corniceFoot - ground) / (storeys - 1);
+  return [0, ...Array.from({ length: storeys }, (_, at) => ground + at * repeat)];
+}
+
+/**
+ * Floors and the topmost ceiling of an interior of `storeys` storeys: a rowhome has its stoop's landing, then a floor 0.1 m over each storey line above its ground band; a shop has its own floor
+ * 5 cm over the sidewalk, then the flats over it the same way. Level `k` stands in the storey whose top is line `k + 1`.
+ */
+export function levelsOf(kind: InteriorKind, storeys: number): { floors: readonly number[]; topCeiling: number } {
+  const lines = storeyLines(storeys, hasShopGround(kind));
+  const floors = Array.from({ length: storeys }, (_, level) => (level === 0 ? (kind === "rowhome" ? ROWHOME_FLOOR_Y : SHOP_FLOOR_Y) : lines[level]! + FLOOR_OVER_LINE));
+  return { floors, topCeiling: lines[storeys]! - FLOOR_OVER_LINE };
+}
+
+/** The three-storey interiors: what the bay kit is drawn for until it follows a house's storeys. */
 export const LEVELS = {
-  rowhome: { floors: [ROWHOME_FLOOR_Y, 3.7, 6.7], topCeiling: 9.5 },
-  coffee: { floors: [SHOP_FLOOR_Y], topCeiling: 3.75 },
-  bar: { floors: [SHOP_FLOOR_Y], topCeiling: 3.75 },
-  office: { floors: [SHOP_FLOOR_Y], topCeiling: 3.75 },
-  store: { floors: [SHOP_FLOOR_Y], topCeiling: 3.75 },
+  rowhome: levelsOf("rowhome", DEFAULT_STOREYS),
+  coffee: levelsOf("coffee", DEFAULT_STOREYS),
+  bar: levelsOf("bar", DEFAULT_STOREYS),
+  office: levelsOf("office", DEFAULT_STOREYS),
+  store: levelsOf("store", DEFAULT_STOREYS),
 } as const satisfies Record<InteriorKind, { floors: readonly number[]; topCeiling: number }>;
+
+/** A bay window's sill over its floor and its glass's height (m): a 1.5 m sash window. */
+const BAY_SILL_ABOVE_FLOOR = 0.75;
+const BAY_GLASS_HEIGHT = 1.5;
+
+/** Each floor's bay window, a sash window over it: its sill and head above the ground (m). */
+export function bayFloorsOf(floors: readonly number[]): readonly { sill: number; head: number }[] {
+  return floors.map((floor) => ({ sill: floor + BAY_SILL_ABOVE_FLOOR, head: floor + BAY_SILL_ABOVE_FLOOR + BAY_GLASS_HEIGHT }));
+}
 
 /** The frontage bay every shopfront opening is measured in: one lot wide. */
 export const BAY_WIDTH = LAYOUT.lotFrontage;
@@ -180,6 +241,9 @@ export const BACK_DOOR = doorway(0, 1, 2.1);
 export const STOOP_SEAT_HEIGHT = 0.54;
 export const STOOP_SEAT_OUT = 0.92;
 export const STOOP_SEAT_SPREAD = 0.4;
+
+/** The look a floor of an interior wears: a flat over a shop is dressed as a home, whatever the shop below. */
+export const lookKind = (kind: InteriorKind, level: number): InteriorKind => (level > 0 ? "rowhome" : kind);
 
 /** Furniture's colours and the room's by interior (sRGB). */
 export const ROOM_LOOK = {

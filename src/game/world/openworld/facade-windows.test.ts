@@ -4,7 +4,7 @@ import { buildingPieces } from "../../present/facade-mesh.ts";
 import { PREFAB, ROOFLINE } from "../constants.ts";
 import { PREFABS } from "../catalog.ts";
 import { faceBands, FACADE_FACE, isOpenStyle, OPEN_SIDE, roomPlaceOf, roomWindows } from "./facade-windows.ts";
-import { LEVELS, OPENING, type InteriorPlan, type Opening } from "./interior-kinds.ts";
+import { buildingHeight, CORNICE_DEPTH, DEFAULT_STOREYS, levelsOf, MAX_STOREYS, MIN_STOREYS, OPENING, type InteriorPlan, type Opening } from "./interior-kinds.ts";
 import { planInterior } from "./interior-plan.ts";
 import { BAY, BAY_FLOORS } from "./openworld-facade-solids.ts";
 import { layOutLots } from "./openworld-lots.ts";
@@ -12,6 +12,8 @@ import type { InteriorKind, Place } from "./walk-graph.ts";
 
 const lots = layOutLots();
 const furnished = lots.places.filter((place) => place.interior !== undefined && place.doorNode === -1 && lots.places.indexOf(place) < lots.backdropStart);
+/** A storey's nominal height (m), as the facade draws it above its ground band. */
+const NOMINAL_STOREY = 3;
 /** How far (m) an opening's edge may stand from its facade window's. */
 const TOLERANCE = 0.03;
 /** The lowest a window's sill may stand over its storey's floor (m): knee height for a room's, none for an office's curtain wall. */
@@ -79,7 +81,7 @@ describe("given a rowhome's bay stack", () => {
       expect(mouth!.width, `storey ${level} mouth width`).toBeCloseTo(BAY.width, 6);
       expect(plan.floors[level]! + mouth!.top, `storey ${level} mouth head`).toBeCloseTo(bay.head, 6);
       expect(plan.alcoves.filter((alcove) => alcove.level === level).length, `storey ${level} alcoves`).toBe(1);
-      const panes = plan.panes.filter((pane) => pane.level === level && pane.deep1 < 0 && pane.deep0 <= 0);
+      const panes = plan.panes.filter((pane) => pane.level === level && Math.min(pane.deep0, pane.deep1) < 0);
       expect(panes.length, `storey ${level} bay panes`).toBe(3);
       for (const pane of panes) expect(Math.abs(pane.y0 - bay.sill) + Math.abs(pane.y1 - bay.head), `storey ${level} pane heights off the bay window's`).toBeLessThan(1e-9);
     }
@@ -127,9 +129,9 @@ describe("given the window table's bands and the drawn building", () => {
   const BLOCK_HEIGHT = PREFABS[PREFAB.building].size[1];
 
   /** The y ranges (block metres) a face of the drawn building is cut into above the ground. */
-  function drawnBands(style: (typeof styles)[number], face: number): [number, number][] {
+  function drawnBands(style: (typeof styles)[number], face: number, storeys: number): [number, number][] {
     const out: [number, number][] = [];
-    for (const piece of buildingPieces(style, MAT.BUILDING_WALL, false)) {
+    for (const piece of buildingPieces(style, MAT.BUILDING_WALL, false, storeys)) {
       const normal = piece[0].getAttribute("normal");
       const turned = (face * Math.PI) / 2;
       if (Math.abs(normal.getX(0) - Math.sin(turned)) > 1e-6 || Math.abs(normal.getZ(0) - Math.cos(turned)) > 1e-6) continue;
@@ -141,28 +143,45 @@ describe("given the window table's bands and the drawn building", () => {
   }
 
   // mutation: sed -i 's/const sideBays = Math.max(1, Math.round((LAYOUT.houseDepth \* bays) \/ (STYLE_LOTS\[style\] \* LAYOUT.lotFrontage)));/const sideBays = bays;/' src/game/world/openworld/facade-windows.ts
-  it("when each style's faces are drawn, then every band the table lists is a band of the drawn face, a side face holds more bays than the street, and the roofline closes it", () => {
+  it("when each style's faces are drawn for every storey count, then every band the table lists is a band of the drawn face, a side face holds more bays than the street, and the roofline closes it", () => {
     for (const style of styles) {
       expect(isOpenStyle(style), `${style} is an open style`).toBe(true);
-      for (const face of FACES) {
-        const drawn = drawnBands(style, face);
-        for (const band of faceBands(style, face).bands) {
-          expect(drawn.some(([y0, y1]) => Math.abs(y0 - band.y0) < 1e-4 && Math.abs(y1 - band.y1) < 1e-4), `${style} face ${face}: band ${band.y0.toFixed(2)}..${band.y1.toFixed(2)} drawn`).toBe(true);
+      for (const storeys of [MIN_STOREYS, DEFAULT_STOREYS, MAX_STOREYS]) {
+        for (const face of FACES) {
+          const drawn = drawnBands(style, face, storeys);
+          for (const band of faceBands(style, face, storeys).bands) {
+            expect(drawn.some(([y0, y1]) => Math.abs(y0 - band.y0) < 1e-4 && Math.abs(y1 - band.y1) < 1e-4), `${style} x${storeys} face ${face}: band ${band.y0.toFixed(2)}..${band.y1.toFixed(2)} drawn`).toBe(true);
+          }
         }
+        expect(faceBands(style, FACADE_FACE.plusAcross, storeys).bays, `${style} x${storeys} side bays`).toBeGreaterThan(faceBands(style, FACADE_FACE.street, storeys).bays);
+        const bands = faceBands(style, FACADE_FACE.minusAcross, storeys).bands;
+        expect(bands[bands.length - 1]!.y1, `${style} x${storeys} roofline`).toBeCloseTo(ROOFLINE, 6);
       }
-      expect(faceBands(style, FACADE_FACE.plusAcross).bays, `${style} side bays`).toBeGreaterThan(faceBands(style, FACADE_FACE.street).bays);
-      const bands = faceBands(style, FACADE_FACE.minusAcross).bands;
-      expect(bands[bands.length - 1]!.y1, `${style} roofline`).toBeCloseTo(ROOFLINE, 6);
     }
   });
 
-  // mutation: sed -i 's/const plinth = (LEVELS\[STYLE_INTERIOR\[style\]\].floors\[0\]! \* BLOCK_HEIGHT) \/ styleHeight(style);/const plinth = 0.5 * BLOCK_HEIGHT \/ styleHeight(style);/' src/game/world/openworld/facade-windows.ts
+  // mutation: sed -i 's/  const repeat = (corniceFoot - ground) \/ (storeys - 1);/  const repeat = STOREY;/' src/game/world/openworld/interior-kinds.ts (the storeys no longer fill the height between the ground band and the cornice)
+  it("when a street face is read at every storey count in the building's own metres, then its ground band is the ground storey, its storeys are about three metres each and its cornice is the cornice's depth", () => {
+    for (const style of styles) {
+      const shop = style === "coffee" || style === "bar" || style === "office" || style === "cornerstore";
+      for (const storeys of [MIN_STOREYS, DEFAULT_STOREYS, MAX_STOREYS]) {
+        const toMetres = buildingHeight(storeys, shop) / BLOCK_HEIGHT;
+        const [ground, floors, cornice] = faceBands(style, FACADE_FACE.street, storeys).bands;
+        expect(ground!.y1 * toMetres, `${style} x${storeys} ground band (m)`).toBeCloseTo(shop ? 4 : 3.6, 6);
+        expect(((floors!.y1 - floors!.y0) * toMetres) / floors!.v1, `${style} x${storeys} one storey (m)`).toBeCloseTo(NOMINAL_STOREY, 0);
+        expect(floors!.v1, `${style} x${storeys} repeats of the storey layer`).toBe(storeys - 1);
+        expect((cornice!.y1 - cornice!.y0) * toMetres, `${style} x${storeys} cornice (m)`).toBeCloseTo(CORNICE_DEPTH, 6);
+      }
+    }
+  });
+
+  // mutation: sed -i 's/  const plinth = block(levelsOf(STYLE_INTERIOR\[style\], storeys).floors\[0\]!);/  const plinth = block(0.5);/' src/game/world/openworld/facade-windows.ts
   it("when a side face's plinth is read in the building's own metres, then it stands on the interior's raised ground floor, so its windows sit over the floor", () => {
     for (const place of furnished) {
       if (!isOpenStyle(place.style)) continue;
-      const height = lots.buildings.find((building) => building.style === place.style)!.height;
-      const plinth = faceBands(place.style, FACADE_FACE.plusAcross).bands[0]!;
-      expect((plinth.y1 * height) / BLOCK_HEIGHT, `${place.name}: plinth top in metres`).toBeCloseTo(LEVELS[place.interior!].floors[0]!, 6);
+      const plinth = faceBands(place.style, FACADE_FACE.plusAcross, place.storeys).bands[0]!;
+      const height = buildingHeight(place.storeys, place.interior !== "rowhome");
+      expect((plinth.y1 * height) / BLOCK_HEIGHT, `${place.name}: plinth top in metres`).toBeCloseTo(levelsOf(place.interior!, place.storeys).floors[0]!, 6);
     }
   });
 });

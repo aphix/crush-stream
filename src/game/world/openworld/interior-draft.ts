@@ -1,12 +1,13 @@
 import {
   BACK_DOOR,
   BAY_WIDTH,
+  bayFloorsOf,
   ceilingOver,
   OPENING,
   type Alcove,
   FURNISHING,
   HEADROOM,
-  LEVELS,
+  levelsOf,
   MAX_RISER,
   PARTITION,
   PARTY_WALL,
@@ -84,16 +85,24 @@ export function wallBoxes(wall: Wall, floorY: number, ceilingY: number): Box[] {
   return out;
 }
 
+/** The deep range (m) tread `step` of a flight spans, whichever way the flight climbs. */
+function treadSpan(stairs: Stairs, step: number): readonly [number, number] {
+  const near = stairs.deep0 + stairs.dir * step * stairs.run;
+  const far = near + stairs.dir * stairs.run;
+  return [Math.min(near, far), Math.max(near, far)];
+}
+
+/** Where a flight's top tread ends (m deep): the deep the floor above begins to be walkable at. */
+export function flightHead(stairs: Stairs): number {
+  return stairs.deep0 + stairs.dir * stairs.steps * stairs.run;
+}
+
 /** The stair treads as stacked boxes: tread `step` reaches `rise * (step + 1)` over the floor it climbs from. */
 export function stairBoxes(stairs: Stairs, floorY: number): Box[] {
-  return Array.from({ length: stairs.steps }, (_, step): Box => ({
-    deep0: stairs.deep0 + step * stairs.run,
-    deep1: stairs.deep0 + (step + 1) * stairs.run,
-    across0: stairs.across - stairs.width / 2,
-    across1: stairs.across + stairs.width / 2,
-    y0: floorY,
-    y1: floorY + (step + 1) * stairs.rise,
-  }));
+  return Array.from({ length: stairs.steps }, (_, step): Box => {
+    const [deep0, deep1] = treadSpan(stairs, step);
+    return { deep0, deep1, across0: stairs.across - stairs.width / 2, across1: stairs.across + stairs.width / 2, y0: floorY, y1: floorY + (step + 1) * stairs.rise };
+  });
 }
 
 /** `rect` with `hole` cut out: up to four rectangles round it. */
@@ -127,13 +136,14 @@ export class Draft {
   /** Every window a room of this interior looks out of (the facade's own, from its picture), on every face, at every level. */
   private readonly windows: readonly RoomWindow[];
 
-  constructor(kind: InteriorKind, width: number, depth: number, windows: readonly RoomWindow[] = []) {
+  constructor(kind: InteriorKind, width: number, depth: number, storeys: number, windows: readonly RoomWindow[] = []) {
     this.windows = windows;
     this.kind = kind;
     this.width = width;
     this.depth = depth;
-    this.floors = LEVELS[kind].floors;
-    this.topCeiling = LEVELS[kind].topCeiling;
+    const levels = levelsOf(kind, storeys);
+    this.floors = levels.floors;
+    this.topCeiling = levels.topCeiling;
     this.half = width / 2 - PARTY_WALL;
     this.back = depth - STREET_SKIN - SHELL_WALL;
   }
@@ -162,11 +172,11 @@ export class Draft {
     this.put("lamp", level, deep, across, TURN.front, { lift: this.ceilingOf(level) - this.floors[level]! - LAMP_DROP });
   }
 
-  /** A straight flight from `level` to the next, as many treads as the climb needs at no more than `MAX_RISER`. */
-  stairsUp(level: number, deep0: number, across: number): Stairs {
+  /** A straight flight from `level` to the next, as many treads as the climb needs at no more than `MAX_RISER`, its foot at `deep0` and climbing toward the back (`dir` 1) or the street (-1). */
+  stairsUp(level: number, deep0: number, across: number, dir: 1 | -1 = 1): Stairs {
     const climb = this.floors[level + 1]! - this.floors[level]!;
     const steps = Math.ceil(climb / MAX_RISER);
-    const flight = { level, deep0, across, width: STAIR_WIDTH, steps, rise: climb / steps, run: TREAD_RUN };
+    const flight = { level, deep0, across, width: STAIR_WIDTH, steps, rise: climb / steps, run: TREAD_RUN, dir };
     this.stairs.push(flight);
     return flight;
   }
@@ -177,7 +187,9 @@ export class Draft {
     const underside = this.ceilingOf(flight.level);
     let step = 0;
     while (step < flight.steps && underside - (floor + (step + 1) * flight.rise) >= HEADROOM) step++;
-    return { deep0: flight.deep0 + step * flight.run, deep1: flight.deep0 + flight.steps * flight.run, across0: flight.across - flight.width / 2, across1: flight.across + flight.width / 2 };
+    const first = treadSpan(flight, step);
+    const last = treadSpan(flight, flight.steps - 1);
+    return { deep0: Math.min(first[0], last[0]), deep1: Math.max(first[1], last[1]), across0: flight.across - flight.width / 2, across1: flight.across + flight.width / 2 };
   }
 
   /** The windows on `face` at `level` as wall openings, and their panes of glass in the wall's plane, `wallAt` deep or across. */
@@ -194,8 +206,8 @@ export class Draft {
 
   /** A rowhome's bay window on `level`: the street wall is open across its mouth from the floor up to the glass's head, and the alcove (floor, apron, ceiling) and its three panes stand outside the wall. */
   private bayOpening(level: number): Opening[] {
-    if (this.kind !== "rowhome") return [];
-    const { sill, head } = BAY_FLOORS[level]!;
+    if (this.kind !== "rowhome" || level >= BAY_FLOORS.length) return [];
+    const { sill, head } = bayFloorsOf(this.floors)[level]!;
     const floorY = this.floors[level]!;
     const outline = bayOutline(-GLASS_INSET);
     for (let at = 0; at + 1 < outline.length; at++) {

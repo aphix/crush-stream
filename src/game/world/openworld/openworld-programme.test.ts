@@ -7,7 +7,10 @@ import { OPENWORLD_ID } from "./openworld-course.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
 import { PLACE_NAMES } from "./openworld-programme.ts";
-import { PLACE_KIND, SECTOR } from "./walk-graph.ts";
+import { PLACE_KIND, SEAT_STRIDE, SECTOR } from "./walk-graph.ts";
+
+/** A rowhome's seats are its two stoop seats, four dining chairs, a kitchen chair and a sofa of two, and a desk chair on each floor from the second up: `storeys + 7`. */
+const HOME_SEATS_BEYOND_STOREYS = 7;
 
 const lots = layOutLots();
 const map = buildOpenWorldMap(lots);
@@ -117,13 +120,13 @@ describe("given the programme's businesses on the map", () => {
   });
 
   // mutation: sed -i 's/interior: "rowhome" }/}/' src/game/world/openworld/openworld-lots.ts
-  it("when the homes inside the walls are read, then each is a one-lot building of its own with a rowhome interior and two stoop seats leading its seats", () => {
+  it("when the homes inside the walls are read, then each is a one-lot building of its own with a rowhome interior and two stoop seats leading its seats, however many storeys it has", () => {
     const homes = playable.filter((place) => place.kind === PLACE_KIND.home);
     expect(homes.length, "homes inside the walls").toBeGreaterThan(100);
     for (const home of homes) {
       expect(home.interior, `${home.name} interior`).toBe("rowhome");
       expect(home.stoopSeats, `${home.name} stoop seats`).toBe(2);
-      expect(home.seats!.length, `${home.name} seats`).toBe(40);
+      expect(home.seats!.length / SEAT_STRIDE, `${home.name} seats`).toBe(home.storeys + HOME_SEATS_BEYOND_STOREYS);
     }
     expect(lots.buildings.filter((building) => building.style === "rowbrick" || building.style === "rowpainted").length, "house buildings").toBeGreaterThanOrEqual(homes.length);
   });

@@ -4,6 +4,7 @@ import { once } from "../kernel/scalar.ts";
 import { SURFACE_REGION_ATTRIBUTE, tagMaterial } from "../vehicle/material-class.ts";
 import type { PrefabId } from "../world/catalog.ts";
 import { type BiomeId, PREFAB } from "../world/constants.ts";
+import { DEFAULT_STOREYS } from "../world/openworld/interior-kinds.ts";
 import layerData from "./facade-layers.json" with { type: "json" };
 import { followRelief, reliefPossible } from "./surface-relief.ts";
 import { flatLayers, loadLayers } from "./texture-array.ts";
@@ -105,9 +106,27 @@ const PARALLAX_MIN_FACING = 0.25;
 /** How far the windows are lit, 0 (day) to 1 (night): one uniform every style's material shares, set by `WorldStage.apply` beside the lamp heads. */
 export const FACADE_GLOW = { value: 0 };
 
-/** `out` = the tint number `h` (0..1) picks among `style`'s. */
-export function facadeTint(style: FacadeStyle, h: number, out: THREE.Color): void {
-  const tints = FACADE[style].tints;
+/** A building's skin is its facade style, and, where its storeys are not the usual three, the count after this mark ("rowbrick@4"): one geometry per style and count, their bands laid for it. */
+const STOREYS_MARK = "@";
+
+/** A building's skin: its facade style, or the style and a storey count. */
+export type FacadeSkin = FacadeStyle | `${FacadeStyle}@${number}`;
+
+/** The skin of a building of facade `style` with `storeys` storeys: the style's own name for the usual count. */
+export function facadeSkin(style: FacadeStyle, storeys: number): FacadeSkin {
+  return storeys === DEFAULT_STOREYS ? style : `${style}${STOREYS_MARK}${storeys}`;
+}
+
+/** The style and the storeys a building skin names. */
+export function splitFacadeSkin(skin: string): { style: FacadeStyle; storeys: number } {
+  const [name, count] = skin.split(STOREYS_MARK);
+  if (!isFacadeStyle(name)) throw new Error(`${skin} names no facade style`);
+  return { style: name, storeys: count === undefined ? DEFAULT_STOREYS : Number(count) };
+}
+
+/** `out` = the tint number `h` (0..1) picks among the tints of the style `skin` names. */
+export function facadeTint(skin: string, h: number, out: THREE.Color): void {
+  const tints = FACADE[splitFacadeSkin(skin).style].tints;
   out.setHex(tints[Math.floor(h * tints.length)]!);
 }
 

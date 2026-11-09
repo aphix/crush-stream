@@ -1,6 +1,6 @@
 import { PREFAB, SURFACE } from "../constants.ts";
-import type { InteriorPlan } from "./interior-kinds.ts";
-import { buildingHeight, OPEN_SIDE } from "./facade-windows.ts";
+import { OPEN_SIDE } from "./facade-windows.ts";
+import { buildingHeight, MAX_STOREYS, type InteriorPlan } from "./interior-kinds.ts";
 import { interiorDoor, interiorSpots, planInterior, planKey } from "./interior-plan.ts";
 import { planBlocks } from "./openworld-blocks.ts";
 import { LAYOUT } from "./openworld-constants.ts";
@@ -26,6 +26,7 @@ import {
   type Venue,
 } from "./openworld-programme.ts";
 import { homeDoorPoint } from "./openworld-facade-solids.ts";
+import { storeysOfFace } from "./openworld-storeys.ts";
 import { PLACE_KIND, SECTOR, type Place } from "./walk-graph.ts";
 
 /** A dumpster stands this far (m) in from the alley's south edge, at these shares of its length. */
@@ -89,23 +90,29 @@ function openSidesOf(lots: readonly LotPlan[]): number {
   return ((north ? east : west) ? OPEN_SIDE.plusAcross : 0) | ((north ? west : east) ? OPEN_SIDE.minusAcross : 0);
 }
 
-function layHome(layout: Layout, plan: BlockPlan, blockIndex: number, lot: LotPlan, geometry: Geometry): void {
+function layHome(layout: Layout, plan: BlockPlan, blockIndex: number, lot: LotPlan, storeys: number, geometry: Geometry): void {
   const style = homeStyleOf(plan, lot);
   const centreZ = (lot.house.z0 + lot.house.z1) / 2;
   const named = NAMED_HOMES.find((home) => isBlock(home, plan) && home.face === lot.face && home.at === lot.index);
-  layout.buildings.push({ x: lot.x, z: centreZ, yaw: lot.yaw, depth: geometry.houseDepth, width: lot.width, height: buildingHeight(HOUSE_STOREYS, false), style, enterable: true });
+  layout.buildings.push({ x: lot.x, z: centreZ, yaw: lot.yaw, depth: geometry.houseDepth, width: lot.width, height: buildingHeight(storeys, false), style, enterable: true });
   layout.links.push({ place: layout.places.length, block: blockIndex, side: lot.face });
   layout.places.push(
-    furnished(layout, { kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys: HOUSE_STOREYS, style, sector: SECTOR.residential, interior: "rowhome", ...openSidesField(openSidesOf([lot])) }),
+    furnished(layout, { kind: PLACE_KIND.home, name: named?.name ?? addressOf(plan, lot), doorNode: -1, doorX: lot.x, doorZ: lot.frontZ, yaw: lot.yaw, x: lot.x, z: centreZ, width: lot.width, depth: geometry.houseDepth, storeys, style, sector: SECTOR.residential, interior: "rowhome", ...openSidesField(openSidesOf([lot])) }),
   );
 }
 
-function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], venue: Venue, geometry: Geometry): void {
+/** A venue with an interior stands as tall as the tallest lot it spans; one without (the supermarket) as its programme says. */
+function venueStoreys(venue: Venue, spanned: readonly number[]): number {
+  return venue.interior === undefined ? venue.storeys : Math.min(MAX_STOREYS, Math.max(venue.storeys, ...spanned));
+}
+
+function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], venue: Venue, spanned: readonly number[], geometry: Geometry): void {
   const first = lots[0]!;
+  const storeys = venueStoreys(venue, spanned);
   const x = (first.x + lots[lots.length - 1]!.x) / 2;
   const z = (first.house.z0 + first.house.z1) / 2;
   const width = lots.length * first.width;
-  layout.buildings.push({ x, z, yaw: first.yaw, depth: geometry.houseDepth, width, height: buildingHeight(venue.storeys, venue.shopGround), style: venue.style, ...(venue.interior === undefined ? {} : { enterable: true }) });
+  layout.buildings.push({ x, z, yaw: first.yaw, depth: geometry.houseDepth, width, height: buildingHeight(storeys, venue.shopGround), style: venue.style, ...(venue.interior === undefined ? {} : { enterable: true }) });
   layout.links.push({ place: layout.places.length, block: blockIndex, side: first.face });
   layout.places.push(
     furnished(layout, {
@@ -119,7 +126,7 @@ function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], 
       z,
       width,
       depth: geometry.houseDepth,
-      storeys: venue.storeys,
+      storeys,
       style: venue.style,
       sector: venue.sector,
       hours: venue.hours,
@@ -133,14 +140,15 @@ function layVenue(layout: Layout, blockIndex: number, lots: readonly LotPlan[], 
 function layFace(layout: Layout, plan: BlockPlan, blockIndex: number, face: Face, geometry: Geometry): void {
   const lots = plan.lots.filter((lot) => lot.face === face);
   const venues = VENUE_SPOTS.filter((spot) => isBlock(spot, plan) && spot.face === face);
+  const storeys = storeysOfFace(plan.row, plan.column, face === "south", lots.length);
   for (let index = 0; index < lots.length; ) {
     const venue = venues.find((spot) => spot.at === index)?.venue;
     if (venue) {
-      layVenue(layout, blockIndex, lots.slice(index, index + venue.lots), venue, geometry);
+      layVenue(layout, blockIndex, lots.slice(index, index + venue.lots), venue, storeys.slice(index, index + venue.lots), geometry);
       index += venue.lots;
       continue;
     }
-    layHome(layout, plan, blockIndex, lots[index]!, geometry);
+    layHome(layout, plan, blockIndex, lots[index]!, storeys[index]!, geometry);
     index++;
   }
 }

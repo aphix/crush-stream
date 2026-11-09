@@ -3,12 +3,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { MAT } from "../kernel/material-ids.ts";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import windowTable from "../world/openworld/facade-windows.json" with { type: "json" };
-import { BAY_WIDTH, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, SHOPFRONT } from "../world/openworld/interior-kinds.ts";
+import { BAY_WIDTH, BLOCK_HEIGHT, buildingHeight, DEFAULT_STOREYS, MAX_STOREYS, MIN_STOREYS, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, SHOPFRONT } from "../world/openworld/interior-kinds.ts";
 import { drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
-import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import type { InteriorKind } from "../world/openworld/walk-graph.ts";
 import { PREFAB } from "../world/constants.ts";
-import { FACADE_LAYERS, LAYER, type FacadeStyle } from "./facades.ts";
+import { FACADE_LAYERS, facadeSkin, LAYER, type FacadeStyle } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 
@@ -87,19 +86,19 @@ describe("given the ground band of each open style drawn on its building", () =>
     materials = makePrefabMaterials(raceTextures());
   });
 
-  // mutation: node -e "const f='src/game/present/facade-layers.json';const j=JSON.parse(require('fs').readFileSync(f));j.rowbrick.metres.ground=4;require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\\n')"
-  it("when a building of each style is stretched to its height on the map, then its ground band reaches the height the plan's doorway and ceiling are built for", () => {
-    const buildings = layOutLots().buildings;
+  // mutation: sed -i 's/export const GROUND_STOREY = 3.6;/export const GROUND_STOREY = 3.2;/' src/game/world/openworld/interior-kinds.ts
+  it("when a building of each style at each storey count is stretched to its height on the map, then its ground band reaches the height the plan's doorway and ceiling are built for", () => {
     for (const [style, open] of Object.entries(OPEN_STYLES)) {
-      const height = buildings.find((building) => building.style === style)!.height;
-      const [part] = prefabParts(PREFAB.building, materials, style as FacadeStyle);
-      const region = part!.geometry.getAttribute("surfaceRegion");
-      const position = part!.geometry.getAttribute("position");
-      const klass = part!.geometry.getAttribute("materialClass");
-      let groundTop = -Infinity;
-      for (let i = 0; i < region.count; i++) if (klass.getX(i) !== MAT.BUILDING_ROOF && region.getX(i) === LAYER.ground) groundTop = Math.max(groundTop, position.getY(i));
-      const BLOCK_HEIGHT = 14;
-      expect((groundTop * height) / BLOCK_HEIGHT, `${style} ground band in world metres`).toBeCloseTo(open.ground, 1);
+      for (const storeys of [MIN_STOREYS, DEFAULT_STOREYS, MAX_STOREYS]) {
+        const height = buildingHeight(storeys, open.kind !== "rowhome");
+        const [part] = prefabParts(PREFAB.building, materials, facadeSkin(style as FacadeStyle, storeys));
+        const region = part!.geometry.getAttribute("surfaceRegion");
+        const position = part!.geometry.getAttribute("position");
+        const klass = part!.geometry.getAttribute("materialClass");
+        let groundTop = -Infinity;
+        for (let i = 0; i < region.count; i++) if (klass.getX(i) !== MAT.BUILDING_ROOF && region.getX(i) === LAYER.ground) groundTop = Math.max(groundTop, position.getY(i));
+        expect((groundTop * height) / BLOCK_HEIGHT, `${style} x${storeys} ground band in world metres`).toBeCloseTo(open.ground, 1);
+      }
     }
   });
 });

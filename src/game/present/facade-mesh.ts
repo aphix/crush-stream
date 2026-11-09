@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { ROOFLINE } from "../world/constants.ts";
 import { faceBands, isOpenStyle } from "../world/openworld/facade-windows.ts";
+import { DEFAULT_STOREYS } from "../world/openworld/interior-kinds.ts";
 import { FACADE_LAYERS, type FacadeStyle, LAYER, ROOF_LAYER, ROOF_TILE_M } from "./facades.ts";
 import { box, type Piece, type SurfaceRegion } from "./prefab-pieces.ts";
 
@@ -44,9 +45,9 @@ function bands(style: FacadeStyle, street: boolean, table: ReturnType<typeof fac
   return out;
 }
 
-/** The street face's storeys as drawn (block metres): where the first starts, how tall each is and how many. */
-export function streetStoreys(style: FacadeStyle): { start: number; height: number; storeys: number } {
-  const floor = bands(style, true, isOpenStyle(style) ? faceBands(style, STREET_FACE) : null).find((band) => band.layer === LAYER.floor && band.v1 > 0)!;
+/** The street face's storeys as drawn (block metres) for a building of `storeys` storeys: where the first starts, how tall each is and how many. */
+export function streetStoreys(style: FacadeStyle, storeys = DEFAULT_STOREYS): { start: number; height: number; storeys: number } {
+  const floor = bands(style, true, isOpenStyle(style) ? faceBands(style, STREET_FACE, storeys) : null).find((band) => band.layer === LAYER.floor && band.v1 > 0)!;
   return { start: floor.y0, height: (floor.y1 - floor.y0) / floor.v1, storeys: floor.v1 };
 }
 
@@ -59,12 +60,12 @@ function quad(x0: number, x1: number, y0: number, y1: number, u: readonly [numbe
 }
 
 /** One face of the block, its quads turned to face `index` (a quarter turn each); `wall` is its material id. A `slab` has the street face's shopfront band on every face. */
-function face(style: FacadeStyle, wall: MaterialId, index: number, slab: boolean): Piece[] {
+function face(style: FacadeStyle, wall: MaterialId, index: number, slab: boolean, storeys: number): Piece[] {
   const spec = FACADE_LAYERS[style];
   const street = slab || index === STREET_FACE;
   const stones = spec.layers > LAYER.quoin;
   const inner = stones ? 2 * HALF - 2 * QUOIN_W : 2 * HALF;
-  const table = !slab && isOpenStyle(style) ? faceBands(style, index) : null;
+  const table = !slab && isOpenStyle(style) ? faceBands(style, index, storeys) : null;
   const bays = table?.bays ?? Math.max(1, Math.round(inner / ((2 * HALF) / spec.bays)));
   const bay = inner / bays;
   const turn = (g: THREE.BufferGeometry): THREE.BufferGeometry => g.rotateY((index * Math.PI) / 2);
@@ -102,10 +103,10 @@ function roofSlab(style: FacadeStyle, wall: MaterialId, slab: boolean): Piece[] 
   return [[sides, PARAPET, wall, [LAYER.floor, 1, 0]], [top, 0xffffff, MAT.BUILDING_ROOF, [ROOF_LAYER, 1, slab ? 1 : 0]]];
 }
 
-/** A city block in `style`: its four faces and its roof slab; `wall` is the faces' material id. A `slab` is a block drawn at a stretched instance scale: its uv is laid in the instance's own metres (`facades.ts`). */
-export function buildingPieces(style: FacadeStyle, wall: MaterialId, slab = false): Piece[] {
+/** A city block in `style`: its four faces and its roof slab; `wall` is the faces' material id. A `slab` is a block drawn at a stretched instance scale: its uv is laid in the instance's own metres (`facades.ts`). The open world's styles are laid for the `storeys` of the building they stand on. */
+export function buildingPieces(style: FacadeStyle, wall: MaterialId, slab = false, storeys = DEFAULT_STOREYS): Piece[] {
   const out: Piece[] = [];
-  for (let i = 0; i < 4; i++) out.push(...face(style, wall, i, slab));
+  for (let i = 0; i < 4; i++) out.push(...face(style, wall, i, slab, storeys));
   out.push(...roofSlab(style, wall, slab));
   return out;
 }

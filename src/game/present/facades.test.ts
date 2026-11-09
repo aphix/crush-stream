@@ -351,9 +351,21 @@ const RELIEF_UNIFORMS = ["facadeHeightMap", "facadeReliefDepth", "facadeRoughnes
 const RELIEF_MARKS = ["facadeParallax", "facadeShift", "facadeDx"];
 
 describe("given a style whose layer data names no relief strips", () => {
+  // mutation: sed -i 's/${extras.open ? "|open" : ""}//' src/game/present/facades.ts (an open style keeps the base key, so it shares a program that has no discard)
+  it("when a style with doorways cut in its ground band is compiled, then its program is the base facade program plus the discard, under its own cache key (the open variant is the last the key names)", () => {
+    const made = makeFacadeMaterials();
+    const open = STYLES.filter((style) => FACADE_LAYERS[style].open === true);
+    expect(open.length, "open styles").toBeGreaterThan(0);
+    for (const style of open) {
+      const shader = compileFacade(made[style]);
+      expect(shader.fragmentShader, `${style} discards its doorway`).toContain("discard");
+      expect(made[style].customProgramCacheKey().endsWith("|open"), `${style} key ${made[style].customProgramCacheKey()}`).toBe(true);
+    }
+  });
+
   it("when it is compiled, then its program is the base facade program: no relief uniform, no parallax, the base cache key", () => {
     const made = makeFacadeMaterials();
-    for (const style of STYLES) {
+    for (const style of STYLES.filter((name) => FACADE_LAYERS[name].open !== true)) {
       const material = made[style];
       const shader = compileFacade(material);
       for (const name of RELIEF_UNIFORMS) expect(shader.uniforms[name], `${style} ${name}`).toBeUndefined();

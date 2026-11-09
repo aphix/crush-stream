@@ -15,7 +15,7 @@ import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMa
 import { PREFAB } from "../world/constants.ts";
 import { dressPaving } from "./ground-relief.ts";
 import { buildingPieces, HALF as BLOCK_HALF } from "./facade-mesh.ts";
-import { disposeFacadeMaterials, type FacadeStyle, homeStyle, makeFacadeMaterials } from "./facades.ts";
+import { disposeFacadeMaterials, type FacadeStyle, homeStyle, makeFacadeMaterials, splitFacadeSkin } from "./facades.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { applyWaterLook } from "./water-look.ts";
@@ -748,8 +748,8 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.building:
     case PREFAB.buildingShell:
     case PREFAB.stucco: {
-      const s = style ?? homeStyle(id)!;
-      return one(buildingPieces(s, id === PREFAB.stucco ? MAT.STUCCO_WALL : MAT.BUILDING_WALL), mats.facades[s]);
+      const { style: s, storeys } = splitFacadeSkin(style ?? homeStyle(id)!);
+      return one(buildingPieces(s, id === PREFAB.stucco ? MAT.STUCCO_WALL : MAT.BUILDING_WALL, false, storeys), mats.facades[s]);
     }
     case PREFAB.monument:
       return one(monument(), mats.plain);
@@ -764,7 +764,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.capitol:
       return one(capitol(), mats.plain);
     case PREFAB.marble:
-      return style ? marbleSlab(style, mats) : one(marble(), mats.plain);
+      return style ? marbleSlab(splitFacadeSkin(style).style, mats) : one(marble(), mats.plain);
     case PREFAB.whiteHouse:
       return one(whiteHouse(), mats.plain);
     case PREFAB.fountain:

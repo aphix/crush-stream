@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
-import { BAY_WIDTH, FURNISHING, HEADROOM, MAX_RISER, PARTITION, ROWHOME_FLOOR_Y, SHOPFRONT, type Box, type InteriorPlan } from "./interior-kinds.ts";
+import { flightHead, footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
+import { BAY_WIDTH, ceilingOver, FURNISHING, HEADROOM, MAX_RISER, MAX_STOREYS, MIN_STOREYS, PARTITION, ROWHOME_FLOOR_Y, SHOPFRONT, type Box, type InteriorPlan } from "./interior-kinds.ts";
 import { DOOR_FACE, interiorDoor, interiorDoors, interiorSolids, interiorSpots, planInterior } from "./interior-plan.ts";
 import { drawnHalf, STOOP } from "./openworld-facade-solids.ts";
 import { layOutLots } from "./openworld-lots.ts";
@@ -11,8 +11,20 @@ const furnished = lots.places.filter((place) => place.interior !== undefined);
 const firstOf = (kind: InteriorKind): Place => furnished.find((place) => place.interior === kind)!;
 const KINDS: readonly InteriorKind[] = ["rowhome", "coffee", "bar", "office", "store"];
 
-/** Seats a place should publish, counted by hand from what each layout puts in it (the stoop's two lead a rowhome's). */
-const EXPECTED_SEATS: Record<InteriorKind, number> = { rowhome: 10, coffee: 11, bar: 24, office: 22, store: 0 };
+const STOREY_COUNTS = Array.from({ length: MAX_STOREYS - MIN_STOREYS + 1 }, (_, at) => MIN_STOREYS + at);
+
+/** Every kind of interior at every storey count: the first place of the kind, planned as if it stood that many storeys. */
+const variants = KINDS.flatMap((kind) =>
+  STOREY_COUNTS.map((storeys) => {
+    const place: Place = { ...firstOf(kind), storeys };
+    return { label: `${kind} x${storeys}`, kind, storeys, place, plan: planInterior(place) };
+  }),
+);
+
+/** Seats a place should publish, counted by hand from what each layout puts in it: a rowhome's two on its stoop, four dining chairs, one in its kitchen and a desk chair on each floor from the second up (so `storeys + 7`); a shop's own, and the sofa of two in each flat over it. */
+const SHOP_SEATS: Record<Exclude<InteriorKind, "rowhome">, number> = { coffee: 11, bar: 24, office: 22, store: 0 };
+const SOFA_SEATS = 2;
+const expectedSeats = (kind: InteriorKind, storeys: number): number => (kind === "rowhome" ? storeys + 7 : SHOP_SEATS[kind] + SOFA_SEATS * (storeys - 1));
 
 function overlap(a: { deep0: number; deep1: number; across0: number; across1: number }, b: { deep0: number; deep1: number; across0: number; across1: number }): number {
   return Math.max(0, Math.min(a.deep1, b.deep1) - Math.max(a.deep0, b.deep0)) * Math.max(0, Math.min(a.across1, b.across1) - Math.max(a.across0, b.across0));
@@ -20,21 +32,20 @@ function overlap(a: { deep0: number; deep1: number; across0: number; across1: nu
 
 describe("given every kind of interior built for a place of the map", () => {
   // mutation: sed -i 's/d.put("stool", 0, 4.3 + stool \* 0.85, -3, toLeft)/void stool/' src/game/world/openworld/interior-layouts.ts (bar: 24 -> 16)
-  it("when its seats are published, then there is one per seat of every piece of furniture, in x z yaw height rows", () => {
-    for (const kind of KINDS) {
-      const { seats, stoopSeats } = interiorSpots(firstOf(kind));
-      expect(seats.length / SEAT_STRIDE, `${kind} seats`).toBe(EXPECTED_SEATS[kind]);
-      expect(stoopSeats, `${kind} stoop seats`).toBe(kind === "rowhome" ? 2 : 0);
-      for (let at = 0; at < seats.length; at++) expect(Number.isFinite(seats[at]!), `${kind} float ${at}`).toBe(true);
+  it("when its seats are published for every storey count, then there is one per seat of every piece of furniture, in x z yaw height rows", () => {
+    for (const { label, kind, storeys, place, plan } of variants) {
+      const { seats, stoopSeats } = interiorSpots(place, plan);
+      expect(seats.length / SEAT_STRIDE, `${label} seats`).toBe(expectedSeats(kind, storeys));
+      expect(stoopSeats, `${label} stoop seats`).toBe(kind === "rowhome" ? 2 : 0);
+      for (let at = 0; at < seats.length; at++) expect(Number.isFinite(seats[at]!), `${label} float ${at}`).toBe(true);
     }
   });
 
   it("when the seats of a plan are counted from its own furniture, then they equal what the place publishes", () => {
-    for (const kind of KINDS) {
-      const place = firstOf(kind);
-      const plan = planInterior(place);
+    for (const { label, place, plan } of variants) {
       const furniture = plan.furnishings.reduce((sum, piece) => sum + FURNISHING[piece.kind].seats, 0);
-      expect(interiorSpots(place).seats.length / SEAT_STRIDE - interiorSpots(place).stoopSeats, `${kind} indoor seats`).toBe(furniture);
+      const spots = interiorSpots(place, plan);
+      expect(spots.seats.length / SEAT_STRIDE - spots.stoopSeats, `${label} indoor seats`).toBe(furniture);
     }
   });
 
@@ -124,66 +135,111 @@ describe("given every rowhome's stoop", () => {
   });
 });
 
-describe("given the rowhome's stairs", () => {
-  const plan = planInterior(firstOf("rowhome"));
+/** A storey's nominal height (m), as the facade draws it above its ground band. */
+const NOMINAL_STOREY = 3;
+
+/** A plan's level `level` ceiling (m). */
+const ceilingOf = (plan: InteriorPlan, level: number): number => ceilingOver(plan.floors, plan.topCeiling, level);
+
+describe("given an interior of any storey count", () => {
+  // mutation: sed -i 's/const floors = Array.from({ length: storeys }, (_, level)/const floors = Array.from({ length: storeys + 1 }, (_, level)/' src/game/world/openworld/interior-kinds.ts
+  it("when it is planned, then it has a floor for every storey and a flight between each pair, none up from the top", () => {
+    for (const { label, storeys, plan } of variants) {
+      expect(plan.floors.length, `${label} floors`).toBe(storeys);
+      expect(plan.stairs.map((flight) => flight.level).join(), `${label} flights, by the floor each climbs from`).toBe(Array.from({ length: storeys - 1 }, (_, level) => level).join());
+      expect(plan.topCeiling, `${label} top ceiling over its top floor (m)`).toBeGreaterThan(plan.floors[storeys - 1]! + 2.4);
+      for (let level = 1; level < storeys; level++) expect(plan.slabs.some((slab) => slab.y1 === plan.floors[level]), `${label} slab under floor ${level}`).toBe(true);
+    }
+  });
+
+  // mutation: sed -i 's/    d.put("bed", level, FLAT_BED, 0.6, toStreet);//' src/game/world/openworld/interior-layouts.ts
+  it("when a shop's floors above its own are read, then each is a flat with a bed and a kitchen, a rowhome's each have bedrooms, and the ground floors have none", () => {
+    for (const { label, kind, storeys, plan } of variants) {
+      for (let level = 0; level < storeys; level++) {
+        const kinds = plan.furnishings.filter((piece) => piece.level === level).map((piece) => piece.kind);
+        if (level === 0) expect(kinds.includes("bed"), `${label} ground floor has a bed`).toBe(false);
+        else expect(kinds.includes("bed"), `${label} floor ${level} has a bed`).toBe(true);
+        if (level > 0 && kind !== "rowhome") expect(kinds.includes("stove"), `${label} flat ${level} has a stove`).toBe(true);
+      }
+    }
+  });
+
+  // mutation: sed -i 's/export const STOREY = 3;/export const STOREY = 4;/' src/game/world/openworld/interior-kinds.ts
+  it("when its floors are read, then each storey above the second is about as tall as a storey is, and every floor's room is at least a room high", () => {
+    for (const { label, kind, storeys, plan } of variants) {
+      for (let level = 2; level < storeys; level++) expect(Math.abs(plan.floors[level]! - plan.floors[level - 1]! - NOMINAL_STOREY), `${label} floor ${level} over the one below, off the nominal storey (m)`).toBeLessThan(0.1);
+      for (let level = 0; level < storeys; level++) expect(ceilingOf(plan, level) - plan.floors[level]!, `${label} floor ${level} clear height`).toBeGreaterThan(2.5);
+      expect(plan.floors[0], `${label} ground floor`).toBe(kind === "rowhome" ? ROWHOME_FLOOR_Y : 0.05);
+    }
+  });
+});
+
+describe("given the stairs of every interior at every storey count", () => {
   /** The floor a walker needs at a flight's head before the wall ahead (m): a step and a turn. */
   const MIN_LANDING = 0.5;
 
-  // mutation: sed -i 's/const UPPER_BACK_WALL = 9.6;/const UPPER_BACK_WALL = 9.7;/' src/game/world/openworld/interior-layouts.ts (the upper flight runs to 0.42 m of the back wall)
+  // mutation: sed -i 's/const STAIR_WIDTH = 0.9;/const STAIR_WIDTH = 1.9;/' src/game/world/openworld/interior-draft.ts (a flight so wide its wells and walls collide with the rooms)
   it("when a walker reaches the head of each flight, then the floor there runs on at least a step and a turn before the wall ahead", () => {
-    for (const flight of plan.stairs) {
-      const level = flight.level + 1;
-      const floor = plan.floors[level]!;
-      const ceiling = level + 1 < plan.floors.length ? plan.floors[level + 1]! - 0.25 : plan.topCeiling;
-      const head = flight.deep0 + flight.steps * flight.run;
-      const laneLeft = flight.across - flight.width / 2;
-      const laneRight = flight.across + flight.width / 2;
-      const ahead = plan.walls
-        .filter((wall) => wall.level === level)
-        .flatMap((wall) => wallBoxes(wall, floor, ceiling))
-        .filter((box) => box.y1 - box.y0 > 1 && box.across0 < laneRight - 0.01 && box.across1 > laneLeft + 0.01 && box.deep0 >= head - 1e-6);
-      const landing = Math.min(...ahead.map((box) => box.deep0)) - head;
-      expect(landing, `floor past the head of the flight from level ${flight.level}`).toBeGreaterThanOrEqual(MIN_LANDING);
+    const short: string[] = [];
+    for (const { label, plan } of variants) {
+      for (const flight of plan.stairs) {
+        const level = flight.level + 1;
+        const floor = plan.floors[level]!;
+        const head = flightHead(flight);
+        const laneLeft = flight.across - flight.width / 2;
+        const laneRight = flight.across + flight.width / 2;
+        const ahead = plan.walls
+          .filter((wall) => wall.level === level)
+          .flatMap((wall) => wallBoxes(wall, floor, ceilingOf(plan, level)))
+          .filter((box) => box.y1 - box.y0 > 1 && box.across0 < laneRight - 0.01 && box.across1 > laneLeft + 0.01 && (flight.dir === 1 ? box.deep0 >= head - 1e-6 : box.deep1 <= head + 1e-6));
+        const landing = flight.dir === 1 ? Math.min(...ahead.map((box) => box.deep0)) - head : head - Math.max(...ahead.map((box) => box.deep1));
+        if (landing < MIN_LANDING) short.push(`${label} flight up from ${flight.level}: ${landing.toFixed(2)} m`);
+      }
     }
+    expect(short.slice(0, 3).join("; "), "landings short of a step and a turn").toBe("");
   });
 
   // mutation: sed -i 's/const MAX_RISER = 0.19/const MAX_RISER = 0.3/' src/game/world/openworld/interior-kinds.ts (a 0.3 m riser)
   it("when each flight is climbed, then no step is higher than a walker climbs and its top tread is level with the floor above", () => {
-    expect(plan.stairs.length, "flights").toBe(2);
-    for (const flight of plan.stairs) {
-      expect(flight.rise, `riser of the flight from level ${flight.level}`).toBeLessThanOrEqual(MAX_RISER);
-      const treads = stairBoxes(flight, plan.floors[flight.level]!);
-      expect(treads[treads.length - 1]!.y1, `top tread of the flight from level ${flight.level}`).toBeCloseTo(plan.floors[flight.level + 1]!, 9);
+    for (const { label, plan } of variants) {
+      for (const flight of plan.stairs) {
+        expect(flight.rise, `${label} riser of the flight from level ${flight.level}`).toBeLessThanOrEqual(MAX_RISER);
+        const treads = stairBoxes(flight, plan.floors[flight.level]!);
+        expect(treads[treads.length - 1]!.y1, `${label} top tread of the flight from level ${flight.level}`).toBeCloseTo(plan.floors[flight.level + 1]!, 9);
+      }
     }
   });
 
-  // mutation: sed -i 's/const upper = d.stairsUp(1, UPPER_STAIR_FOOT, left + 0.45);/const upper = d.stairsUp(1, STAIR_FOOT, left + 0.45);/' src/game/world/openworld/interior-layouts.ts (the flights stacked again)
-  it("when a walker stands on any tread of either flight, then nothing solid is lower over it than a standing walker and a margin", () => {
-    const solidsOver: Box[] = [
-      ...plan.slabs.map((slab): Box => ({ ...slab.rect, y0: slab.y0, y1: slab.y1 })),
-      ...plan.stairs.flatMap((flight) => stairBoxes(flight, plan.floors[flight.level]!)),
-      ...plan.furnishings.filter((piece) => FURNISHING[piece.kind].solid).map((piece): Box => ({ ...footprintOf(piece), y0: plan.floors[piece.level]! + piece.lift, y1: plan.floors[piece.level]! + piece.lift + piece.height })),
-    ];
+  // mutation: sed -i 's/const upper = d.stairsUp(1, UPPER_STAIR_FOOT, left + 0.45);/const upper = d.stairsUp(1, STAIR_FOOT, left + 0.45);/' src/game/world/openworld/interior-layouts.ts (the flights stacked again; the rowhome loop's foot choice is `level % 2 === 0 ? STAIR_FOOT : UPPER_STAIR_FOOT`)
+  it("when a walker stands on any tread of any flight, then nothing solid is lower over it than a standing walker and a margin", () => {
     const short: string[] = [];
-    for (const flight of plan.stairs) {
-      for (const tread of stairBoxes(flight, plan.floors[flight.level]!)) {
-        const footing = { deep0: tread.deep0 + 0.01, deep1: tread.deep1 - 0.01, across0: tread.across0 + 0.01, across1: tread.across1 - 0.01 };
-        const above = solidsOver.filter((box) => box.y0 > tread.y1 + 1e-9 && overlap(footing, box) > 0);
-        const clear = Math.min(...above.map((box) => box.y0 - tread.y1));
-        if (clear < HEADROOM) short.push(`level ${flight.level} tread at ${tread.deep0.toFixed(2)}: ${clear.toFixed(2)} m`);
+    for (const { label, plan } of variants) {
+      const solidsOver: Box[] = [
+        ...plan.slabs.map((slab): Box => ({ ...slab.rect, y0: slab.y0, y1: slab.y1 })),
+        ...plan.stairs.flatMap((flight) => stairBoxes(flight, plan.floors[flight.level]!)),
+        ...plan.furnishings.filter((piece) => FURNISHING[piece.kind].solid).map((piece): Box => ({ ...footprintOf(piece), y0: plan.floors[piece.level]! + piece.lift, y1: plan.floors[piece.level]! + piece.lift + piece.height })),
+      ];
+      for (const flight of plan.stairs) {
+        for (const tread of stairBoxes(flight, plan.floors[flight.level]!)) {
+          const footing = { deep0: tread.deep0 + 0.01, deep1: tread.deep1 - 0.01, across0: tread.across0 + 0.01, across1: tread.across1 - 0.01 };
+          const above = solidsOver.filter((box) => box.y0 > tread.y1 + 1e-9 && overlap(footing, box) > 0);
+          const clear = Math.min(...above.map((box) => box.y0 - tread.y1));
+          if (clear < HEADROOM) short.push(`${label} level ${flight.level} tread at ${tread.deep0.toFixed(2)}: ${clear.toFixed(2)} m`);
+        }
       }
     }
     expect(short.slice(0, 3).join("; "), "treads short of headroom").toBe("");
   });
 
   // mutation: sed -i '/d.spineWall(0, hallEdge + PARTITION \/ 2, PARLOUR_WALL, KITCHEN_WALL);/d' src/game/world/openworld/interior-layouts.ts
-  it("when the ground floor's flight is looked at from the dining room, then a full-height wall closes its side along every tread, and a walker meets it as a solid", () => {
+  it("when a rowhome's ground flight is looked at from the dining room, then a full-height wall closes its side along every tread, and a walker meets it as a solid", () => {
+    const home = firstOf("rowhome");
+    const plan = planInterior(home);
     const lower = plan.stairs.find((flight) => flight.level === 0)!;
     const side = lower.across + lower.width / 2;
     const floor = plan.floors[0]!;
-    const ceiling = plan.floors[1]! - 0.25;
+    const ceiling = ceilingOf(plan, 0);
     const walls = plan.walls.filter((wall) => wall.level === 0).flatMap((wall) => wallBoxes(wall, floor, ceiling));
-    const home = firstOf("rowhome");
     const solids = interiorSolids(home);
     const open: string[] = [];
     for (const tread of stairBoxes(lower, floor)) {
@@ -200,38 +256,75 @@ describe("given the rowhome's stairs", () => {
     expect(open.slice(0, 3).join("; "), "the stair's side toward the dining room").toBe("");
   });
 
+  // mutation: sed -i '/  d.spineWall(0, partition, head - PARTITION, d.back, \[doorway(d.back - 0.45)\]);/d' src/game/world/openworld/interior-layouts.ts (a shop's service stair open to the shop)
+  it("when a shop's service stair is looked at from the shop, then its side is walled the whole length of the flight but for a doorway at its foot, and its head is closed across", () => {
+    for (const { label, kind, plan } of variants.filter((variant) => variant.kind !== "rowhome" && variant.storeys === MIN_STOREYS)) {
+      const flight = plan.stairs.find((candidate) => candidate.level === 0)!;
+      const head = flightHead(flight);
+      const walls = plan.walls.filter((wall) => wall.level === 0 && !wall.shell);
+      const partition = walls.find((wall) => wall.axis === "deep" && Math.abs(wall.fixed - (flight.across - Math.sign(flight.across) * (0.45 + PARTITION / 2))) < 1e-9);
+      expect(partition, `${label} (${kind}) partition`).toBeDefined();
+      expect(partition!.openings.length, `${label} doorways`).toBe(1);
+      expect(partition!.from, `${label} partition starts at the head`).toBeLessThanOrEqual(head);
+      expect(walls.some((wall) => wall.axis === "across" && Math.abs(wall.fixed - (head - PARTITION / 2)) < 1e-9), `${label} head closed across`).toBe(true);
+    }
+  });
+
   it("when the floor above a flight is read, then it has a hole over the flight and the hole ends where the top tread meets the floor", () => {
-    for (const flight of plan.stairs) {
-      const upper = plan.slabs.filter((slab) => slab.y1 === plan.floors[flight.level + 1]);
-      const over = { deep0: flight.deep0 + flight.run * flight.steps - 0.5, deep1: flight.deep0 + flight.run * flight.steps - 0.1, across0: flight.across - 0.2, across1: flight.across + 0.2 };
-      expect(upper.length, `slab pieces over the flight from level ${flight.level}`).toBeGreaterThan(1);
-      expect(upper.reduce((sum, slab) => sum + overlap(slab.rect, over), 0), `slab under the stair head`).toBe(0);
+    for (const { label, plan } of variants) {
+      for (const flight of plan.stairs) {
+        const upper = plan.slabs.filter((slab) => slab.y1 === plan.floors[flight.level + 1]);
+        const head = flightHead(flight);
+        const near = flight.dir === 1 ? [head - 0.5, head - 0.1] : [head + 0.1, head + 0.5];
+        const over = { deep0: near[0]!, deep1: near[1]!, across0: flight.across - 0.2, across1: flight.across + 0.2 };
+        expect(upper.length, `${label} slab pieces over the flight from level ${flight.level}`).toBeGreaterThan(1);
+        expect(upper.reduce((sum, slab) => sum + overlap(slab.rect, over), 0), `${label} slab under the stair head`).toBe(0);
+      }
     }
   });
 });
 
-describe("given any interior's furniture and walls", () => {
+describe("given any interior's furniture and walls at any storey count", () => {
   const solidBoxes = (plan: InteriorPlan, level: number): Box[] => {
     const floor = plan.floors[level]!;
-    const ceiling = level + 1 < plan.floors.length ? plan.floors[level + 1]! - 0.25 : plan.topCeiling;
-    const boxes = plan.walls.filter((wall) => wall.level === level).flatMap((wall) => wallBoxes(wall, floor, ceiling));
+    const boxes = plan.walls.filter((wall) => wall.level === level).flatMap((wall) => wallBoxes(wall, floor, ceilingOf(plan, level)));
     return boxes.filter((box) => box.y1 - box.y0 > 1);
   };
 
-  // mutation: sed -i 's/d.put("sofa", 0, 3.3, -1.5, toStreet)/d.put("sofa", 0, 3.3, -1.5, toLeft)/' src/game/world/openworld/interior-layouts.ts (a sofa turned into the wall)
+  // mutation: sed -i 's/d.put("sofa", level, FLAT_LIVING, left + FURNISHING.sofa.depth \/ 2, toRight);/d.put("sofa", level, FLAT_LIVING, left + FURNISHING.sofa.depth \/ 2, toLeft);/' src/game/world/openworld/interior-layouts.ts (a sofa turned into the wall)
   it("when each solid piece is laid on its plan, then it clears every wall and every other solid piece of its level by at least a centimetre inside the room", () => {
-    for (const kind of KINDS) {
-      const place = firstOf(kind);
-      const plan = planInterior(place);
+    for (const { label, plan } of variants) {
       const clash: string[] = [];
       for (const [at, piece] of plan.furnishings.entries()) {
         if (!FURNISHING[piece.kind].solid || piece.lift > 0) continue;
         const rect = footprintOf(piece);
         const shrunk = { deep0: rect.deep0 + 0.01, deep1: rect.deep1 - 0.01, across0: rect.across0 + 0.01, across1: rect.across1 - 0.01 };
-        for (const wall of solidBoxes(plan, piece.level)) if (overlap(shrunk, wall) > 0) clash.push(`${kind} ${piece.kind}#${at} in a wall`);
-        for (const other of plan.furnishings.slice(at + 1)) if (other.level === piece.level && FURNISHING[other.kind].solid && other.lift === 0 && overlap(shrunk, footprintOf(other)) > 0) clash.push(`${kind} ${piece.kind}#${at} in ${other.kind}`);
+        for (const wall of solidBoxes(plan, piece.level)) if (overlap(shrunk, wall) > 0) clash.push(`${label} ${piece.kind}#${at} in a wall`);
+        for (const other of plan.furnishings.slice(at + 1)) if (other.level === piece.level && FURNISHING[other.kind].solid && other.lift === 0 && overlap(shrunk, footprintOf(other)) > 0) clash.push(`${label} ${piece.kind}#${at} in ${other.kind}`);
+        for (const flight of plan.stairs) {
+          if (flight.level !== piece.level) continue;
+          for (const tread of stairBoxes(flight, plan.floors[flight.level]!)) if (overlap(shrunk, tread) > 0) clash.push(`${label} ${piece.kind}#${at} on a tread`);
+        }
       }
-      expect(clash.slice(0, 4).join("; "), `${kind} clashes`).toBe("");
+      expect(clash.slice(0, 4).join("; "), `${label} clashes`).toBe("");
+    }
+  });
+
+  // mutation: sed -i 's/d.floor(level + 1, \[well\]);/d.floor(level + 1);/' src/game/world/openworld/interior-layouts.ts (no hole in the floor above a rowhome's flight)
+  it("when a room's solid piece stands over the hole a flight's well leaves in a floor, then it does not: the well of every flight is clear of furniture", () => {
+    for (const { label, plan } of variants) {
+      const stray: string[] = [];
+      for (const flight of plan.stairs) {
+        const hole = plan.slabs.filter((slab) => slab.y1 === plan.floors[flight.level + 1]);
+        const head = flightHead(flight);
+        const probe = { deep0: Math.min(head, head - flight.dir * 0.4), deep1: Math.max(head, head - flight.dir * 0.4), across0: flight.across - 0.3, across1: flight.across + 0.3 };
+        for (const piece of plan.furnishings) {
+          if (piece.level !== flight.level + 1 || !FURNISHING[piece.kind].solid || piece.kind === "rail" || piece.lift > 0) continue;
+          if (overlap(footprintOf(piece), probe) > 0) stray.push(`${label} ${piece.kind} over the head of the flight up from ${flight.level}`);
+        }
+        expect(hole.length, `${label} slab pieces over the flight from level ${flight.level}`).toBeGreaterThan(1);
+      }
+      expect(stray.slice(0, 3).join("; "), `${label} furniture at a flight's head`).toBe("");
     }
   });
 });

@@ -7,13 +7,14 @@ import { PREFAB } from "../constants.ts";
 import { BAY_WIDTH, SHOPFRONT } from "./interior-kinds.ts";
 import { drawnHalf } from "./openworld-facade-solids.ts";
 import { openWorldCourse } from "./openworld-course.ts";
+import { ENVELOPE_HEIGHT } from "./openworld-interior-solids.ts";
 import { layOutLots } from "./openworld-lots.ts";
 
 const lots = layOutLots();
 const props = openWorldCourse(lots).props!;
-/** The play area's edge walls are 2 m thick; an envelope piece is a wall's own thickness. */
-const EDGE_WALL_THICKNESS = 2;
-const envelope = props.filter((prop) => prop.prefab === PREFAB.invisibleWall && prop.size![0] < EDGE_WALL_THICKNESS);
+const envelope = props.filter((prop) => prop.prefab === PREFAB.invisibleWall && prop.size![1] === ENVELOPE_HEIGHT);
+/** The street wall on each side of a doorway, a shared party wall, and a share of the merged back wall. */
+const PIECES_PER_PLACE = 4;
 const furnished = lots.places.slice(0, lots.backdropStart).filter((place) => place.interior !== undefined);
 
 /** Whether (x, z) lies inside an envelope piece: size [thickness, height, length], its length along z turned by the yaw. */
@@ -64,7 +65,7 @@ describe("given the open world's course on the real programme", () => {
       const bays = Math.round(place.width / BAY_WIDTH);
       const doors = Array.from({ length: bays }, (_, bay) => SHOPFRONT[place.interior!].map((opening) => ({ centre: opening.centre + (bay - (bays - 1) / 2) * BAY_WIDTH, half: opening.width / 2 }))).flat();
       const wrong: string[] = [];
-      for (let across = -place.width / 2 + 0.1; across < place.width / 2; across += 0.1) {
+      for (let across = -drawnHalf(place.width) + 0.1; across < drawnHalf(place.width) - 0.1; across += 0.1) {
         const open = doors.some((door) => Math.abs(across - door.centre) < door.half - 0.02);
         const shut = !doors.some((door) => Math.abs(across - door.centre) < door.half + 0.02);
         const point = inside(place, across, 0.17);
@@ -80,12 +81,13 @@ describe("given the open world's course on the real programme", () => {
     expect(Math.min(...envelope.map((prop) => prop.size![1])), "shortest envelope piece").toBeGreaterThanOrEqual(tallest);
     expect(PREFABS[PREFAB.invisibleWall].body, "what a car meets").toBe("solid");
     for (const place of furnished) {
-      const back = inside(place, 0, place.depth - 0.17);
+      const back = inside(place, 0, 2 * drawnHalf(place.depth) - 0.17);
       expect(walled(back.x, back.z), `${place.name} back wall`).toBe(true);
     }
   });
 
-  it("when the envelope of every interior is counted, then a house costs about a solid and a wall piece per row, not one per wall", () => {
-    expect(envelope.length, "envelope pieces").toBeLessThanOrEqual(furnished.length * 3);
+  // mutation: sed -i 's/return mergeAlong(mergeAlong(columns, true), false).map(/return columns.map(/' src/game/world/openworld/openworld-interior-solids.ts (every wall of every house its own piece)
+  it("when the envelope of every interior is counted, then a house costs a few pieces (its street wall either side of the door and one shared wall), not one per wall", () => {
+    expect(envelope.length, "envelope pieces").toBeLessThanOrEqual(furnished.length * PIECES_PER_PLACE);
   });
 });

@@ -7,7 +7,7 @@ import type { Lots } from "./openworld-layout.ts";
 type Prop = NonNullable<z.input<typeof TrackSchema>["props"]>[number];
 
 /** An envelope wall piece's height (m): taller than any building, so no car and no walker clears it. */
-const ENVELOPE_HEIGHT = 12;
+export const ENVELOPE_HEIGHT = 12;
 const QUARTER_TURN = Math.PI / 2;
 /** Two columns whose edges are this close (m) touch. */
 const TOUCH = 1e-6;
