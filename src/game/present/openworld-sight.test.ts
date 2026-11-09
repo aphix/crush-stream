@@ -143,6 +143,24 @@ describe("given players' cars and claimed ids", () => {
     expect(() => field.claim(1), "a claim past the capacity").toThrow(RangeError);
   });
 
+  it("when an owner gives its ids back and claims again, then it gets the same ids with fresh clocks, and the field never runs out however often it does", () => {
+    const owners = new SightField([], IDS);
+    owners.update([], 0, []);
+    const cars = owners.claim(4);
+    const interiors = owners.claim(4);
+    const traffic = owners.claim(6);
+    owners.observe(traffic, 0, 0, PERSON_M);
+    owners.update([], 5, []);
+    for (let rebuild = 0; rebuild < IDS; rebuild++) {
+      owners.release(traffic, 6);
+      expect(owners.claim(6), "the traffic's ids after a rebuild").toBe(traffic);
+    }
+    expect(owners.unseenFor(traffic), "a released id's clock").toBe(0);
+    owners.release(cars, 4);
+    expect(owners.claim(2), "a claim that fits where the cars were").toBe(cars);
+    expect([cars, interiors, traffic], "first ids of the three claims").toEqual([0, 4, 8]);
+  });
+
   it("when the field is cleared, then the ids are free again", () => {
     field.clear();
     expect(field.claim(IDS), "all ids after the clear").toBe(0);
