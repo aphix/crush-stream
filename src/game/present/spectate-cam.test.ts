@@ -11,6 +11,7 @@ import { carFrame } from "../vehicle/car-rig.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { BELT_Y } from "./ragdoll-proxy.ts";
 import { eyeProblems } from "./spectate-cam.test-util.ts";
+import { assertSameDigest } from "../vehicle/test-support.ts";
 
 /** The dutch cam's mounts: each wheel well, looking forward and back. */
 const MOUNT_COUNT = carFrame(CAR_STYLES.sedan).wheels.length * 2;
@@ -498,6 +499,15 @@ describe("given a course's solids gathered near a box (the chase eye does it eve
         }
       }
       expect(gathered, "the control: the boxes gather solids").toBeGreaterThan(400);
+    });
+  }
+});
+
+describe("given the props placed once for the file (`propsOf`) and read by the rows above", () => {
+  for (const track of [OVAL, CITY]) {
+    // mutation: sed -i 's|^ *const sight = raceSight(track, propsOf(track));|&  propsOf(track)[0]!.x += 1e-9;|' src/game/present/spectate-cam.test.ts  (a row writes into the shared placed list)
+    it(`when ${track.id}'s props are read again after the rows used them, then they are what a fresh placement gives, bit for bit`, () => {
+      assertSameDigest(propsOf(track), placeProps(track), `${track.id}'s shared props against a fresh placement`);
     });
   }
 });

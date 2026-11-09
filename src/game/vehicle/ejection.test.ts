@@ -6,7 +6,7 @@ import type { ExitPane } from "./car-core.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { BARRIER_HALF } from "../contact/sat.ts";
 import { ejectionVelocity, ejectThreshold, killSpeed, THROW_OUT, type Ejection } from "./ejection.ts";
-import { collide, fleetCar, headOn, worn } from "./ejection.test-util.ts";
+import { classCar, collide, ejectBar, fleetCar, headOn, worn } from "./ejection.test-util.ts";
 import { RANGE } from "../scenes/range.ts";
 import { assignClass, armKill, DEFAULT_REALISM, killClass, killTravel, VEHICLE_CLASS_IDS } from "./vehicle-classes.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -379,5 +379,19 @@ describe("given the hits of the owner's Survival replay staged on a flat field: 
   it("when a sedan taps a parked sedan's tail at 30 km/h, then nobody is thrown", () => {
     const [striker, struck] = collide("rear-end", "sedan", "sedan", 30 / 3.6);
     expect(firstMismatch([striker.thrown, struck.thrown], [false, false])).toBeUndefined();
+  });
+});
+
+describe("given the class bars the matrix reads (`ejectBar`: read once per class, from a new car)", () => {
+  // mutation: sed -i 's/ejectBars.get(cls)/ejectBars.get("sedan")/;s/ejectBars.set(cls, bar)/ejectBars.set("sedan", bar)/' src/game/vehicle/ejection.test-util.ts  (the first class read serves every class)
+  it("when every class's bar is read, a hit is run, and the bars are read again, then each is the bar of a new car of that class", () => {
+    for (const cls of VEHICLE_CLASS_IDS) ejectBar(cls);
+    collide("head-on", "sedan", "monster", 40);
+    for (const cls of VEHICLE_CLASS_IDS) {
+      const car = classCar(cls);
+      const own = ejectThreshold(car, false, false);
+      car.dispose();
+      expect(ejectBar(cls), `${cls}'s bar`).toBe(own);
+    }
   });
 });

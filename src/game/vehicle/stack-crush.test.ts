@@ -222,6 +222,21 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
   });
 });
 
+describe("given the skin writes the rows above skip (`skipSkinWrites`), in the stack they stage", () => {
+  // mutation: sed -i 's/^    this.followContourStrength();$/    this.followContourStrength(); this.deform.massLocal("roof").y -= 1e-9;/' src/game/vehicle/car.ts  (the skin writes into the roof mass: it feeds the sim)
+  it("when a stack of four settles with every car skinned each frame and with the skin skipped, then every roof sinks the same amount", () => {
+    const skinned = stack(4).cars.map(roofSink);
+    const skin = DeformableCar.prototype.updateSkin;
+    DeformableCar.prototype.updateSkin = () => {};
+    try {
+      const skipped = stack(4).cars.map(roofSink);
+      for (const [i, sink] of skipped.entries()) expect(sink, `car ${i}'s roof: skinned ${skinned[i]!.toFixed(6)} m, skipped ${sink.toFixed(6)} m`).toBe(skinned[i]);
+    } finally {
+      DeformableCar.prototype.updateSkin = skin;
+    }
+  });
+});
+
 describe("given one car resting on another car's roof by its belly", () => {
   it("when the pair has settled, then the top car ends every frame of the next 3 s at rest, not one slice of gravity short of it", () => {
     const { cars, w } = stack(2, 60, SEDAN_PAIR);

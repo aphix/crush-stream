@@ -7,6 +7,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { TrackArt } from "./track-art.ts";
+import { assertSameDigest } from "../vehicle/test-support.ts";
 
 /** The mushroom cloud's canvas (px): the one canvas of this size the art paints. */
 const CLOUD_CANVAS = { w: 1024, h: 640 };
@@ -36,13 +37,17 @@ function recordingDocument(t: { onTestFinished(fn: () => void): void }) {
 type Course = { track: Track; placed: Placed[]; drawn: Placed[] };
 let mall: Course | undefined;
 
-/** A fresh art of the Mall; its Track and props are built once for the file (an art only reads them). */
+/** The Mall's Track, built from its shipped course, and its props placed on it. */
+const buildMall = (): Course => {
+  const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
+  return { track, ...placeCourse(track) };
+};
+/** The Mall's Track and props, built once for the file (an art only reads them). */
+const mallCourse = (): Course => (mall ??= buildMall());
+/** A fresh art of the Mall. */
 const mallArt = (): TrackArt => {
-  if (!mall) {
-    const track = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.nationalMall)!);
-    mall = { track, ...placeCourse(track) };
-  }
-  return new TrackArt(mall.track, mall.placed, { look() {} }, mall.drawn);
+  const { track, placed, drawn } = mallCourse();
+  return new TrackArt(track, placed, { look() {} }, drawn);
 };
 const cloudMeshes = (art: TrackArt): THREE.Object3D[] => art.group.children.filter((o) => o.name === "backdrop:mushroom-cloud");
 
@@ -85,5 +90,16 @@ describe("given the National Mall's secret mushroom cloud (a backdrop hidden unt
     vi.advanceTimersByTime(10_000);
     expect(doc.clouds(), "painted again for the third code").toBe(2);
     art.dispose();
+  });
+});
+
+describe("given the Mall's Track and props built once for the file (`mallCourse`) and read by the arts above", () => {
+  // mutation: sed -i 's/^    this.props = this.tumble(placed, mats);$/    placed[0]!.x += 1e-9; drawn[0]!.x += 1e-9; &/' src/game/present/track-art.ts  (an art writes into the shared placed and drawn lists)
+  it("when the Mall is built again after the arts read the shared one, then its placed and drawn props are the shared ones, bit for bit", () => {
+    const shared = mallCourse();
+    const fresh = buildMall();
+    expect(shared.placed.length > 0 && shared.drawn.length > 0, "the control: the Mall has placed and drawn props").toBeTruthy();
+    assertSameDigest(shared.placed, fresh.placed, "the Mall's placed props against a fresh placement");
+    assertSameDigest(shared.drawn, fresh.drawn, "the Mall's drawn props against a fresh placement");
   });
 });

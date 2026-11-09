@@ -58,4 +58,13 @@ describe("given a two-car hit asked for twice with the same arguments", () => {
     expect(Object.isFrozen(first) && Object.isFrozen(first[0]) && Object.isFrozen(first[1]), "the shared run is frozen").toBeTruthy();
     expect(runPair(0, 2 * KPH, "t-bone", BRIEF), "a harder bullet is the first's run").not.toBe(first);
   });
+
+  // mutation: sed -i 's/const \[a, b\] = stagePair(kphA, kphB,/const [a, b] = stagePair(kphA, kphB + 1,/' src/game/contact/crash-scenarios.test-util.ts  (the shared run is staged at another speed than the one asked for)
+  it("when the second asks for a run of its own, then it is a new run with the same numbers for both cars", () => {
+    const own = runPair(0, KPH, "t-bone", { ...BRIEF, fresh: true });
+    const shared = runPair(0, KPH, "t-bone", BRIEF);
+    expect(own, "a fresh run is the shared one").not.toBe(shared);
+    assertSameDigest(own[0], shared[0], "car A of a fresh run of the same hit");
+    assertSameDigest(own[1], shared[1], "car B of a fresh run of the same hit");
+  });
 });
