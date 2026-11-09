@@ -96,6 +96,8 @@ const placement = z
     style: z.string().optional(),
     /** A scenery asset by id (`world/scenery-assets`): `prefab` is then the asset's generic prefab (`assetPrefab`), `scale` multiplies the asset's own size (m), or `size`'s when given (the generic prefab's extents x, y, z as `assetScale` gives them: a decal's width, 1 and length). */
     asset: z.enum(SCENERY_ASSET_IDS).optional(),
+    /** A solid box prop that is a flight of stairs (`world/stairs.ts`): its top falls from its height at its local -x end to the ground at its +x end, in treads. */
+    stairs: z.literal(true).optional(),
   })
   .refine(
     (p) => {
