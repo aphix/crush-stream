@@ -13,6 +13,9 @@
  * It packs the styles whose <style>.png the folder holds and merges them by key into `src/game/present/facade-layers.json`: per style its bays, layer count, each band's height in metres (the picture's own
  * scale), a bare patch of wall (u, v in the floor layer) for the roof slab's sides, and `height`, `roughness`, `neon` where it has those strips. A style whose picture is not in the folder is left as it was.
  *
+ * Every style with an interior (`open`) also goes into `src/game/world/openworld/facade-windows.json`, the window table the interior is cut from: its bays, band metres and, per layer, each window
+ * of the packed picture (a connected run of its window mask) as a [u0, v0, u1, v1] rect of the layer, v up. The facade and the interior then read the windows the picture shows.
+ *
  *   node scripts/pack-facades.mjs <folder with <style>.png> [out folder, default public/facades] [json, default src/game/present/facade-layers.json]
  */
 import { createCanvas, loadImage } from "@napi-rs/canvas";
@@ -29,6 +32,7 @@ const [folder, outArg, jsonArg] = process.argv.slice(2);
 if (folder === undefined) throw new Error("usage: pack-facades.mjs <folder with <style>.png> [out folder] [json]");
 const out = resolve(outArg ?? join(root, "public/facades"));
 const jsonFile = resolve(jsonArg ?? join(root, "src/game/present/facade-layers.json"));
+const windowsFile = join(root, "src/game/world/openworld/facade-windows.json");
 mkdirSync(out, { recursive: true });
 
 /** A face's width (m): `building()` in prefabs.ts lays 11.8 m faces. */
@@ -374,6 +378,40 @@ function writeWebpAlpha(file, width, height, rgb, alpha, quality) {
   return bytes.length;
 }
 
+/** A run of window texels smaller than this, or narrower or shorter than this, is a speck, not a window. */
+const MIN_WINDOW_TEXELS = 30;
+const MIN_WINDOW_SIDE = 3;
+/** Decimal places a window rect's uv is kept to. */
+const UV_PLACES = 4;
+
+/** Each window of a layer's mask (a 4-connected run of texels, no wrap) as its bounding [u0, v0, u1, v1] in the layer, v up, west to east then top to bottom. */
+function windowRects(mask) {
+  const seen = new Uint8Array(LAYER * LAYER);
+  const rects = [];
+  const round = (value) => Math.round(value * 10 ** UV_PLACES) / 10 ** UV_PLACES;
+  for (let start = 0; start < LAYER * LAYER; start++) {
+    if (!mask[start] || seen[start]) continue;
+    const members = [start];
+    seen[start] = 1;
+    let [x0, y0, x1, y1] = [LAYER, LAYER, -1, -1];
+    for (let at = 0; at < members.length; at++) {
+      const p = members[at];
+      const x = p % LAYER;
+      const y = (p - x) / LAYER;
+      [x0, y0, x1, y1] = [Math.min(x0, x), Math.min(y0, y), Math.max(x1, x), Math.max(y1, y)];
+      for (const q of [x > 0 ? p - 1 : -1, x < LAYER - 1 ? p + 1 : -1, y > 0 ? p - LAYER : -1, y < LAYER - 1 ? p + LAYER : -1]) {
+        if (q >= 0 && mask[q] && !seen[q]) {
+          seen[q] = 1;
+          members.push(q);
+        }
+      }
+    }
+    if (members.length < MIN_WINDOW_TEXELS || x1 - x0 + 1 < MIN_WINDOW_SIDE || y1 - y0 + 1 < MIN_WINDOW_SIDE) continue;
+    rects.push([round(x0 / LAYER), round(1 - (y1 + 1) / LAYER), round((x1 + 1) / LAYER), round(1 - y0 / LAYER)]);
+  }
+  return rects;
+}
+
 /** Layers stacked into one strip (floats 0..255, three per texel). */
 function stack(layers, size) {
   const strip = new Float32Array(layers.length * size * size * 3);
@@ -383,6 +421,7 @@ function stack(layers, size) {
 
 const BANDS = ["cornice", "floor", "ground"];
 const metadata = existsSync(jsonFile) ? JSON.parse(readFileSync(jsonFile, "utf8")) : {};
+const windowTable = existsSync(windowsFile) ? JSON.parse(readFileSync(windowsFile, "utf8")) : {};
 for (const [name, spec] of Object.entries(STYLES)) {
   if (!existsSync(join(resolve(folder), `${name}.png`))) continue;
   const picture = await bayPicture(name, spec);
@@ -441,6 +480,8 @@ for (const [name, spec] of Object.entries(STYLES)) {
     ...(spec.neon ? { neon: true } : {}),
     ...(spec.open ? { open: true } : {}),
   };
+  if (spec.open) windowTable[name] = { bays: spec.bays, metres: metadata[name].metres, windows: { floor: windowRects(glows[1].mask), ground: windowRects(glows[2].mask) } };
   console.log(`${name}: ${rgbs.length} layers, albedo ${bytes[0]} B, normal ${bytes[1]} B, glow ${bytes[2]} B${bytes[3] ? `, height ${bytes[3]} B, roughness ${bytes[4]} B` : ""}; windows ${glows.map((g) => g.windows).join("/")}; ${JSON.stringify(metadata[name].metres)}`);
 }
 writeFileSync(jsonFile, `${JSON.stringify(metadata, null, 2)}\n`);
+writeFileSync(windowsFile, `${JSON.stringify(windowTable, null, 2)}\n`);

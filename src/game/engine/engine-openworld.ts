@@ -13,6 +13,10 @@ import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { fillCommuterFeed } from "../ai/civilians/society-commuters.ts";
+import { LAYOUT } from "../world/openworld/openworld-constants.ts";
+import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
+import { buildParkingSpots, spotAt, type ParkingSpots } from "../world/openworld/openworld-parking.ts";
+import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
 import { findWalkerStrike, WalkerStrike } from "../ai/civilians/society-activity.ts";
 import { OpenWorldTraffic, type FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import type { CommuterFeed } from "../ai/openworld-traffic/traffic-sight.ts";
@@ -118,6 +122,8 @@ export class OpenWorldDirector {
   private interiors: InteriorArt | null = null;
   private unhook: (() => void) | null = null;
   private traffic: OpenWorldTraffic | null = null;
+  /** The kerb spaces, known on every peer: a car standing in one has nobody in it (`carIsEmpty`). */
+  private kerb: ParkingSpots | null = null;
   private lights: LightsArt | null = null;
   /** The residents' drives and parked cars, written by the society before each traffic step (host and solo). */
   private feed: CommuterFeed | null = null;
@@ -176,6 +182,11 @@ export class OpenWorldDirector {
     this.hasHeard = true;
     this.clock.hear(hostTime, crowdTime, this.ports.now());
     if (this.crowd !== null && this.crowdKey === seed) this.crowd.hear(events);
+  }
+
+  /** Car `id` (a pose is all that is read) is parked: it stands in a kerb space and no human has it, so no driver is drawn in it. The same on every peer. */
+  carIsEmpty(id: number, car: { readonly group: { readonly position: { readonly x: number; readonly z: number } }; readonly yaw: number }): boolean {
+    return this.kerb !== null && this.ports.traffic?.seated(id) === false && spotAt(this.kerb, car.group.position.x, car.group.position.z, car.yaw) >= 0;
   }
 
   /** What the look-at panel shows, null when the eye rests on nothing. */
@@ -310,6 +321,7 @@ export class OpenWorldDirector {
     const host = this.ports.traffic;
     if (host === undefined) return;
     this.lights = host.makeLights();
+    this.kerb = buildParkingSpots(buildRoadNetwork(openWorldGeometry(LAYOUT)));
     if (client) return;
     const phone = this.ports.tier() === POPULATION_TIER.phone;
     const capacity = this.crowd!.state.capacity;
@@ -325,6 +337,7 @@ export class OpenWorldDirector {
     this.ports.traffic?.setFreeDrivers(null);
     this.traffic?.dispose();
     this.traffic = null;
+    this.kerb = null;
     this.feed = null;
     this.lights?.dispose();
     this.lights = null;

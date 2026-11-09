@@ -41,6 +41,12 @@ function bands(style: FacadeStyle, street: boolean): Band[] {
   return out;
 }
 
+/** The street face's storeys as drawn (block metres): where the first starts, how tall each is and how many. */
+export function streetStoreys(style: FacadeStyle): { start: number; height: number; storeys: number } {
+  const floor = bands(style, true).find((band) => band.layer === LAYER.floor && band.v1 > 0)!;
+  return { start: floor.y0, height: (floor.y1 - floor.y0) / floor.v1, storeys: floor.v1 };
+}
+
 /** A quad on the +z face from x0 to x1 and y0 to y1, its uv running u0 to u1 and v0 to v1 left to right and bottom to top. */
 function quad(x0: number, x1: number, y0: number, y1: number, u: readonly [number, number], v: readonly [number, number]): THREE.BufferGeometry {
   const g = new THREE.PlaneGeometry(x1 - x0, y1 - y0).translate((x0 + x1) / 2, (y0 + y1) / 2, HALF);

@@ -6,7 +6,21 @@ import { blankAiCar, type AiCar } from "../derby-ai.ts";
 import { OpenWorldTraffic } from "./openworld-traffic.ts";
 import { ALL_RED_SECONDS, LEFT_GREEN_SECONDS, STORE_AT, THROUGH_GREEN_SECONDS, YELLOW_SECONDS } from "./traffic-constants.ts";
 import type { TrafficPorts } from "./traffic-ports.ts";
+import { PLACE_KIND, type Place } from "../../world/openworld/walk-graph.ts";
 import type { CommuterFeed } from "./traffic-sight.ts";
+
+/** A home whose door is at (x, z): all a test needs of a place. */
+export function homeAt(x: number, z: number): Place {
+  return { kind: PLACE_KIND.home, name: "Home", doorNode: 0, doorX: x, doorZ: z, yaw: 0, x, z, width: 5.6, depth: 15, storeys: 3, style: "rowbrick", sector: "" };
+}
+
+/** A commuter feed with room for `capacity` rows each, empty. */
+export function emptyFeed(capacity: number): CommuterFeed {
+  return {
+    legs: { count: 0, resident: new Int32Array(capacity), fromPlace: new Int32Array(capacity), toPlace: new Int32Array(capacity), arriveSeconds: new Float64Array(capacity) },
+    parked: { count: 0, resident: new Int32Array(capacity), place: new Int32Array(capacity) },
+  };
+}
 
 /** A car with the figures of a sedan's drive, enough to run traffic against without the physics: forward thrust and drag that settle at a sedan's 55 m/s top, a brake, a turn that needs speed. */
 const THRUST = 3.5;
@@ -154,8 +168,8 @@ type TestSize = { movers: number; kerb: number; patrol?: number };
 export const SMALL_FLEET: TestSize = { movers: 6, kerb: 4 };
 
 /** Traffic on a fake field with the sight field that knows only where the players are. */
-export function makeTraffic(field: FakeField, size: TestSize = SMALL_FLEET, feed: CommuterFeed | null = null): OpenWorldTraffic {
-  return new OpenWorldTraffic([], field.ports, new ProximitySight(field.ports), { ...size, patrol: size.patrol ?? 0 }, feed);
+export function makeTraffic(field: FakeField, size: TestSize = SMALL_FLEET, feed: CommuterFeed | null = null, places: readonly Place[] = []): OpenWorldTraffic {
+  return new OpenWorldTraffic(places, field.ports, new ProximitySight(field.ports), { ...size, patrol: size.patrol ?? 0 }, feed);
 }
 
 /** The crowd clock a test runs traffic on. */
