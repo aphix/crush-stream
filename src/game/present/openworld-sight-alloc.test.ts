@@ -4,11 +4,14 @@ import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-samp
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { mulberry32 } from "../world/placements.ts";
 import { OpenWorldCarLod, type LodCar } from "./openworld-car-lod.ts";
-import { HIDE_GRACE, SightField } from "./openworld-sight.ts";
+import { FACE, HIDE_GRACE, SightField } from "./openworld-sight.ts";
 import { occluder, type Occluder } from "./spectate-cam.ts";
 
 const PEOPLE = 300;
 const CARS = 12;
+/** Interiors asked about through their front a frame: the buildings of the first rows. */
+const INTERIORS = 40;
+const OPENING_TOP_M = 2.7;
 const BUILDING_COLUMNS = 20;
 const BUILDING_ROWS = 10;
 const LOT_PITCH_M = 7;
@@ -38,6 +41,7 @@ const peopleZ = Float64Array.from({ length: PEOPLE }, () => random() * 2 * SPREA
 const cars: LodCar[] = Array.from({ length: CARS }, () => ({ group: { position: { x: (random() - 0.5) * 2 * SPREAD_M, z: random() * 2 * SPREAD_M }, visible: true } }));
 let frames = 0;
 let seenPeople = 0;
+const firstInterior = sight.claim(INTERIORS);
 
 /** One frame: the field reads the camera, every person is observed and every car judged. */
 function frame(): void {
@@ -45,6 +49,10 @@ function frame(): void {
   seenPeople = 0;
   for (let person = 0; person < PEOPLE; person++) if (sight.observe(firstPerson + person, peopleX[person]!, peopleZ[person]!, 0.6)) seenPeople++;
   lod.frame(cars, null, false);
+  for (let interior = 0; interior < INTERIORS; interior++) {
+    const box = buildings[interior]!;
+    sight.recordSighting(firstInterior + interior, sight.seenThroughFace(box.x, box.z, 0, box.hx, box.hz, OPENING_TOP_M, FACE.front));
+  }
 }
 
 function windowPerFrame(): number {
@@ -55,7 +63,7 @@ function windowPerFrame(): number {
   );
 }
 
-describe("given a warmed field of 200 buildings, 300 people observed and 12 cars judged every frame", () => {
+describe("given a warmed field of 200 buildings, 300 people observed, 12 cars judged and 40 interiors asked through their fronts every frame", () => {
   it(`when a window of frames is run, then the field allocates no more than ${BOUND_B} bytes a frame`, () => {
     for (let f = 0; f < WARM_FRAMES; f++) frame();
     const perFrame = untilQuiet(windowPerFrame, BOUND_B);

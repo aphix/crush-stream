@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { HIDE_GRACE, SightField } from "./openworld-sight.ts";
+import { FACE, HIDE_GRACE, SightField } from "./openworld-sight.ts";
 import { occluder } from "./spectate-cam.ts";
 
 const EYE_HEIGHT_M = 1.6;
@@ -148,3 +148,61 @@ describe("given players' cars and claimed ids", () => {
     expect(field.claim(IDS), "all ids after the clear").toBe(0);
   });
 });
+
+/** A shop 20 m wide and 8 m deep, its front (local +x) turned to face the street camera, its front wall 26 m down the street; openings up to 2.7 m. */
+const SHOP = { x: 0, z: 30, yaw: Math.PI / 2, halfDepth: 4, halfWidth: 10 } as const;
+const SHOP_BOX = occluder(SHOP.x, SHOP.z, SHOP.yaw, SHOP.halfDepth, SHOP.halfWidth, false, 0, 10);
+const OPENING_TOP_M = 2.7;
+/** The same shop 80 m down the street, and a wider block standing between it and the street camera. */
+const FAR_SHOP = { ...SHOP, z: 80 } as const;
+const FAR_SHOP_BOX = occluder(FAR_SHOP.x, FAR_SHOP.z, FAR_SHOP.yaw, FAR_SHOP.halfDepth, FAR_SHOP.halfWidth, false, 0, 10);
+const BLOCK_BETWEEN = occluder(0, 40, 0, 15, 4, false, 0, 10);
+
+function seesInto(field: SightField, shop: typeof SHOP | typeof FAR_SHOP, face: (typeof FACE)[keyof typeof FACE]): boolean {
+  return field.seenThroughFace(shop.x, shop.z, shop.yaw, shop.halfDepth, shop.halfWidth, OPENING_TOP_M, face);
+}
+
+describe("given a shop's interior and the street camera in front of its shopfront", () => {
+  const behind = cameraAt(0, EYE_HEIGHT_M, 70, 0, EYE_HEIGHT_M, 0);
+  const inside = cameraAt(0, EYE_HEIGHT_M, 31, 0, EYE_HEIGHT_M, 100);
+  const beside = cameraAt(30, EYE_HEIGHT_M, 30, 0, EYE_HEIGHT_M, 30);
+  const cases = [
+    { it: "when the street camera looks at the shopfront, then the interior is seen through it", cameras: [street], face: FACE.front, expected: true },
+    { it: "when the street camera is asked about the back wall's openings, then the interior is not seen through them", cameras: [street], face: FACE.back, expected: false },
+    { it: "when a camera behind the shop is asked about the shopfront, then the interior is not seen through it", cameras: [behind], face: FACE.front, expected: false },
+    { it: "when a camera behind the shop is asked about the back wall's openings, then the interior is seen through them", cameras: [behind], face: FACE.back, expected: true },
+    { it: "when the camera stands inside the shop looking at its back wall, then the interior is seen", cameras: [inside], face: FACE.front, expected: true },
+    { it: "when a camera beside the shop, behind the line of its front wall, is asked about the shopfront, then the interior is not seen through it", cameras: [beside], face: FACE.front, expected: false },
+  ] as const;
+  for (const testCase of cases) {
+    it(testCase.it, () => {
+      expect(seesInto(fieldSeenBy(testCase.cameras, [SHOP_BOX]), SHOP, testCase.face), "seen through the face").toBe(testCase.expected);
+    });
+  }
+
+  it("when a wider block stands between the street camera and a shop further down, then its interior is not seen, and from a camera past the block it is", () => {
+    expect(seesInto(fieldSeenBy([street], [BLOCK_BETWEEN, FAR_SHOP_BOX]), FAR_SHOP, FACE.front), "seen past the block from the street").toBe(false);
+    const pastTheBlock = cameraAt(0, EYE_HEIGHT_M, 55, 0, EYE_HEIGHT_M, 100);
+    expect(seesInto(fieldSeenBy([pastTheBlock], [BLOCK_BETWEEN, FAR_SHOP_BOX]), FAR_SHOP, FACE.front), "seen from past the block").toBe(true);
+  });
+});
+
+describe("given a shop's interior behind a block, its verdicts recorded once a frame", () => {
+  const interior = 0;
+
+  it("when 2.9 s have passed, then the grace is not up, at 3 s it is, and when a camera past the block sees in, the clock reads 0", () => {
+    const field = new SightField([BLOCK_BETWEEN, FAR_SHOP_BOX], IDS);
+    for (let frame = 0; frame <= 29; frame++) {
+      field.update([street], frame * FRAME_S, []);
+      field.recordSighting(interior, seesInto(field, FAR_SHOP, FACE.front));
+    }
+    expect(field.unseenFor(interior), "seconds unseen at 2.9 s").toBeLessThan(HIDE_GRACE);
+    field.update([street], 3, []);
+    field.recordSighting(interior, seesInto(field, FAR_SHOP, FACE.front));
+    expect(field.unseenFor(interior), "seconds unseen at 3 s").toBeGreaterThanOrEqual(HIDE_GRACE);
+    field.update([cameraAt(0, EYE_HEIGHT_M, 55, 0, EYE_HEIGHT_M, 100)], 3.1, []);
+    expect(field.recordSighting(interior, seesInto(field, FAR_SHOP, FACE.front)), "seen from past the block").toBe(true);
+    expect(field.unseenFor(interior), "seconds unseen once seen").toBe(0);
+  });
+});
+

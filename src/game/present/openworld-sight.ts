@@ -23,6 +23,10 @@ const NEVER_SEEN = -1;
 /** Players a field reads: every seated car, and one walker out of his. */
 const MAX_PLAYERS = MAX_CARS + 1;
 
+/** Which face of a box a query looks through: its local +x (a building's front, the street) or -x (its back). */
+export const FACE = { front: 1, back: -1 } as const;
+type Face = (typeof FACE)[keyof typeof FACE];
+
 /** Where a player is: a `DeformableCar` is one, and so is the walker's torso. */
 export type SightPlayer = { readonly group: { readonly position: { readonly x: number; readonly z: number } } };
 
@@ -62,7 +66,8 @@ export class SightField {
   private readonly eyeZ = new Float64Array(MAX_EYES);
   private readonly planeX = new Float64Array(MAX_EYES * FRUSTUM_PLANES);
   private readonly planeZ = new Float64Array(MAX_EYES * FRUSTUM_PLANES);
-  private readonly planeSlack = new Float64Array(MAX_EYES * FRUSTUM_PLANES);
+  private readonly planeConstant = new Float64Array(MAX_EYES * FRUSTUM_PLANES);
+  private readonly planeUp = new Float64Array(MAX_EYES * FRUSTUM_PLANES);
   private readonly planeSpread = new Float64Array(MAX_EYES * FRUSTUM_PLANES);
   private readonly viewProjection = new THREE.Matrix4();
   private readonly frustum = new THREE.Frustum();
@@ -130,14 +135,44 @@ export class SightField {
   seen(x: number, z: number, radius: number): boolean {
     if (!this.enabled || this.eyeCount === 0) return true;
     for (let eye = 0; eye < this.eyeCount; eye++) {
-      if (this.inFrustum(eye, x, z, radius) && !this.hiddenFrom(eye, x, z, radius)) return true;
+      if (this.inFrustum(eye, x, z, radius, THING_TOP_M) && !this.hiddenFrom(eye, x, z, radius)) return true;
     }
     return false;
   }
 
   /** `seen`, and the id's clock: its first look starts its grace, a sighting restarts it. */
   observe(id: number, x: number, z: number, radius: number): boolean {
-    const seen = this.seen(x, z, radius);
+    return this.recordSighting(id, this.seen(x, z, radius));
+  }
+
+  /**
+   * Whether any eye sees into a box (centre, yaw and half sizes along its local x and z as an `Occluder`'s; a building's front is its local +x) through its
+   * openings on `face`, up to `top` m: the eye stands inside the box, or in front of that face with the face in its frustum and a line to its middle or
+   * either end clear of every other building (the box lies wholly behind its face, so it never blocks a line from in front). What an interior needs: a room behind a wall, or behind another building, is not seen.
+   */
+  seenThroughFace(x: number, z: number, yaw: number, halfDepth: number, halfWidth: number, top: number, face: Face): boolean {
+    if (!this.enabled || this.eyeCount === 0) return true;
+    const cos = Math.cos(yaw);
+    const sin = Math.sin(yaw);
+    const outX = cos * face;
+    const outZ = -sin * face;
+    const middleX = x + outX * halfDepth;
+    const middleZ = z + outZ * halfDepth;
+    for (let eye = 0; eye < this.eyeCount; eye++) {
+      const fromX = this.eyeX[eye]! - x;
+      const fromZ = this.eyeZ[eye]! - z;
+      if (Math.abs(fromX * cos - fromZ * sin) < halfDepth && Math.abs(fromX * sin + fromZ * cos) < halfWidth) return true;
+      if ((this.eyeX[eye]! - middleX) * outX + (this.eyeZ[eye]! - middleZ) * outZ <= 0) continue;
+      if (!this.inFrustum(eye, middleX, middleZ, halfWidth, top)) continue;
+      const acrossX = sin * halfWidth;
+      const acrossZ = cos * halfWidth;
+      if (!this.allBlocked(eye, middleX, middleZ, middleX + acrossX, middleZ + acrossZ, middleX - acrossX, middleZ - acrossZ, top)) return true;
+    }
+    return false;
+  }
+
+  /** The id's clock takes a verdict of its owner's own (`seenThroughFace` of one face or two): its first verdict starts its grace, a sighting restarts it. One call per id a frame. */
+  recordSighting(id: number, seen: boolean): boolean {
     if (seen || this.lastSeen[id]! === NEVER_SEEN) this.lastSeen[id] = this.now;
     return seen;
   }
@@ -177,33 +212,38 @@ export class SightField {
       const at = eye * FRUSTUM_PLANES + plane;
       this.planeX[at] = normal.x;
       this.planeZ[at] = normal.z;
-      this.planeSlack[at] = constant + Math.max(0, normal.y) * THING_TOP_M;
+      this.planeConstant[at] = constant;
+      this.planeUp[at] = Math.max(0, normal.y);
       this.planeSpread[at] = Math.sqrt(normal.x * normal.x + normal.z * normal.z);
     }
   }
 
-  /** The thing's column (radius, 0 to `THING_TOP_M` high) is not wholly outside any of the six planes. */
-  private inFrustum(eye: number, x: number, z: number, radius: number): boolean {
+  /** The column (radius, 0 to `top` m high) is not wholly outside any of the six planes. */
+  private inFrustum(eye: number, x: number, z: number, radius: number, top: number): boolean {
     for (let plane = 0; plane < FRUSTUM_PLANES; plane++) {
       const at = eye * FRUSTUM_PLANES + plane;
-      if (this.planeX[at]! * x + this.planeZ[at]! * z + this.planeSlack[at]! + radius * this.planeSpread[at]! < 0) return false;
+      if (this.planeX[at]! * x + this.planeZ[at]! * z + this.planeConstant[at]! + this.planeUp[at]! * top + radius * this.planeSpread[at]! < 0) return false;
     }
     return true;
   }
 
   /** The line to the column's top through its middle and both sides across the view are all blocked. */
   private hiddenFrom(eye: number, x: number, z: number, radius: number): boolean {
-    const ex = this.eyeX[eye]!;
-    const ey = this.eyeY[eye]!;
-    const ez = this.eyeZ[eye]!;
-    if (!this.rayBlocked(ex, ey, ez, x, THING_TOP_M, z)) return false;
-    const dx = x - ex;
-    const dz = z - ez;
+    const dx = x - this.eyeX[eye]!;
+    const dz = z - this.eyeZ[eye]!;
     const length = Math.sqrt(dx * dx + dz * dz);
     if (length < PARALLEL_M) return false;
     const sideX = (-dz / length) * radius;
     const sideZ = (dx / length) * radius;
-    return this.rayBlocked(ex, ey, ez, x + sideX, THING_TOP_M, z + sideZ) && this.rayBlocked(ex, ey, ez, x - sideX, THING_TOP_M, z - sideZ);
+    return this.allBlocked(eye, x, z, x + sideX, z + sideZ, x - sideX, z - sideZ, THING_TOP_M);
+  }
+
+  /** The lines from the eye to the three points, each at `top` m, are all blocked; the first clear one ends the test. */
+  private allBlocked(eye: number, firstX: number, firstZ: number, secondX: number, secondZ: number, thirdX: number, thirdZ: number, top: number): boolean {
+    const ex = this.eyeX[eye]!;
+    const ey = this.eyeY[eye]!;
+    const ez = this.eyeZ[eye]!;
+    return this.rayBlocked(ex, ey, ez, firstX, top, firstZ) && this.rayBlocked(ex, ey, ez, secondX, top, secondZ) && this.rayBlocked(ex, ey, ez, thirdX, top, thirdZ);
   }
 
   /** Walks the cells under the segment a to b, nearest the eye first, and asks each one's solids. */

@@ -115,7 +115,7 @@ const HOT = {
   "src/game/ai/civilians/society-activity.ts": ["readActivity", "readWalk", "hasDoor", "readOutdoor", "readIndoors", "readSitting", "readFight", "standAtDoor", "companionIsHere", "setClip"],
   "src/game/ai/civilians/society-crime.ts": ["collect", "targetIsThere", "crimeKindOf"],
   "src/game/present/civilian-dress.ts": ["dressOfLook", "writeLinearColour", "scrambleLook", "fieldOf"],
-  "src/game/present/openworld-sight.ts": ["update", "readEye", "seen", "observe", "unseenFor", "reset", "near", "inFrustum", "hiddenFrom", "rayBlocked", "blocks", "narrow", "columnOf", "rowOf"],
+  "src/game/present/openworld-sight.ts": ["update", "readEye", "seen", "observe", "seenThroughFace", "recordSighting", "allBlocked", "unseenFor", "reset", "near", "inFrustum", "hiddenFrom", "rayBlocked", "blocks", "narrow", "columnOf", "rowOf"],
   "src/game/present/openworld-car-lod.ts": ["frame", "judge", "showAll"],
   "src/game/engine/engine-openworld-cull.ts": ["frame"],
   "src/game/present/walker-floor.ts": ["under", "pace", "stand", "solidsHeight"],
