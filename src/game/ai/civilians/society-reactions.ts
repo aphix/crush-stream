@@ -9,14 +9,17 @@ import {
   FIGHT_ANGRY_FACTOR,
   FIGHT_CHANCE,
   FIGHT_FEAR,
+  FIGHT_PLAYER,
   FIGHT_TICKS,
   FIGHT_WANTED_TICKS,
   FLAG,
   FLEE_INSIDE_MINUTES,
   JAIL_TICKS,
+  JAYWALK_CUSTODY_TICKS,
   NEED,
   NEED_COUNT,
   NEVER_TICK,
+  NO_BEARING,
   NO_PLACE,
   PURPOSE,
   REPORT_MINUTES,
@@ -150,20 +153,21 @@ export function reactToCrime(state: CityState, criminal: number, tick: number): 
   witnessAll(state, place, tick, criminal, victim);
 }
 
-/** Puts a fighter at the door nearest the spot for `FIGHT_TICKS`, the other fighter (or -1: a player) noted; two civilians at each other are wanted for assault. */
-function enterFight(state: CityState, resident: number, other: number, anchor: number, spotX: number, spotZ: number, tick: number): void {
+/** Puts a fighter at the door nearest the spot for `FIGHT_TICKS`, facing `bearing`, the other fighter (a civilian, `FIGHT_PLAYER`, or -1: a car) noted; one who fights a civilian or turns on the player is wanted for assault. */
+function enterFight(state: CityState, resident: number, other: number, anchor: number, spotX: number, spotZ: number, tick: number, bearing: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   standOutside(state, resident, tick, PURPOSE.fight, FIGHT_TICKS, anchor);
   state.ints[base + RESIDENT_INT.fightTick] = tick;
   state.ints[base + RESIDENT_INT.fightPartner] = other;
+  state.ints[base + RESIDENT_INT.fightBearing] = bearing;
   state.ints[base + RESIDENT_INT.fightX] = Math.round(spotX * CENTIMETRES_PER_METRE);
   state.ints[base + RESIDENT_INT.fightZ] = Math.round(spotZ * CENTIMETRES_PER_METRE);
-  if (other >= 0) {
+  if (other >= 0 || other === FIGHT_PLAYER) {
     state.ints[base + RESIDENT_INT.flags] |= FLAG.wanted;
     state.ints[base + RESIDENT_INT.wantedUntilTick] = tick + FIGHT_WANTED_TICKS;
   }
   if (other >= 0) noteEvent(state, resident, EVENT_CODE.fought, residentName(state, other), tick);
-  else noteEvent(state, resident, EVENT_CODE.foughtStranger, anchor, tick);
+  else noteEvent(state, resident, other === FIGHT_PLAYER ? EVENT_CODE.foughtWalker : EVENT_CODE.foughtStranger, anchor, tick);
 }
 
 /** Where a resident is at crowd time `seconds`: on their leg, else at their place's door. */
@@ -173,26 +177,29 @@ function spotOf(state: CityState, resident: number, seconds: number): { x: numbe
   return { x: place.doorX, z: place.doorZ };
 }
 
-/** A fight between `victim` and `other` (-1: a player) where the victim stood at `seconds`: both stop for it, snapped to the nearest door; people at doors about see it. */
-export function startFight(state: CityState, victim: number, other: number, seconds: number, tick: number): void {
+/**
+ * A fight between `victim` and `other` (-1: no civilian) where the victim stood at `seconds`: both stop for it, snapped to the nearest door; people at doors about see it. With a `bearing` the other is the human
+ * player who shoved the victim, who turns that way on him.
+ */
+export function startFight(state: CityState, victim: number, other: number, seconds: number, tick: number, bearing = NO_BEARING): void {
   if (!isFreePerson(state, victim) || intAt(state, victim, RESIDENT_INT.fightTick) !== NEVER_TICK) return;
   const spot = spotOf(state, victim, seconds);
   const anchor = nearestPlaceTo(state, spot.x, spot.z, NO_PLACE);
   if (anchor === NO_PLACE) return;
-  const second = other >= 0 && isFreePerson(state, other) && intAt(state, other, RESIDENT_INT.fightTick) === NEVER_TICK ? other : -1;
-  enterFight(state, victim, second, anchor, spot.x, spot.z, tick);
-  if (second >= 0) enterFight(state, second, victim, anchor, spot.x, spot.z, tick);
+  const second = bearing === NO_BEARING && other >= 0 && isFreePerson(state, other) && intAt(state, other, RESIDENT_INT.fightTick) === NEVER_TICK ? other : -1;
+  enterFight(state, victim, bearing !== NO_BEARING ? FIGHT_PLAYER : second, anchor, spot.x, spot.z, tick, bearing);
+  if (second >= 0) enterFight(state, second, victim, anchor, spot.x, spot.z, tick, NO_BEARING);
   raiseFear(state, spot.x, spot.z, FIGHT_FEAR);
   witnessAll(state, anchor, tick, victim, second);
 }
 
-/** A push: the seeded chance that it becomes a fight, small, and several times larger when either is angry. */
-export function applyPush(state: CityState, subject: number, seconds: number, tick: number): void {
+/** A push (by a civilian, a car, or with a `bearing` the human player on foot): the seeded chance that it becomes a fight, small, and several times larger when either civilian is angry. */
+export function applyPush(state: CityState, subject: number, seconds: number, tick: number, bearing: number): void {
   const victim = subject % state.capacity;
   const other = Math.floor(subject / state.capacity) - 1;
   const angry = isAngry(state, victim, tick) || (other >= 0 && isAngry(state, other, tick));
   if (residentDraws(state.seed, victim, STREAM.fight, tickAt(seconds))() >= FIGHT_CHANCE * (angry ? FIGHT_ANGRY_FACTOR : 1)) return;
-  startFight(state, victim, other, seconds, tick);
+  startFight(state, victim, other, seconds, tick, bearing);
 }
 
 /** A civilian run down in front of someone standing at a door: the seeded chance that they take on the driver. */
@@ -216,16 +223,10 @@ export function applyKnockWitness(state: CityState, knocked: number, seconds: nu
   if (residentDraws(state.seed, witness, STREAM.fight, tickAt(seconds))() < chance) startFight(state, witness, -1, seconds, tick);
 }
 
-/** A bust: the wanted (or fighting) resident is taken off the street for `JAIL_TICKS`, then home; crime and fight state clear. Anyone else is left alone and un-hidden. */
-export function applyBust(state: CityState, resident: number, seconds: number): void {
+/** Off the street from `seconds` for `ticks` and then home, the leg and seat given up, a line saying why: a bust's or a jaywalk arrest's custody. */
+function takeIntoCustody(state: CityState, resident: number, seconds: number, ticks: number, code: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   const { ints } = state;
-  const arrestable = (ints[base + RESIDENT_INT.flags]! & FLAG.wanted) !== 0 || ints[base + RESIDENT_INT.fightTick] !== NEVER_TICK;
-  if (ints[base + RESIDENT_INT.alive] === 0 || !arrestable || (ints[base + RESIDENT_INT.flags]! & FLAG.custody) !== 0) {
-    state.hiddenFromTick[resident] = NEVER_TICK;
-    state.hiddenUntilTick[resident] = NEVER_TICK;
-    return;
-  }
   const struck = tickAt(seconds);
   const home = ints[base + RESIDENT_INT.home]!;
   const was = ints[base + RESIDENT_INT.place]!;
@@ -239,16 +240,32 @@ export function applyBust(state: CityState, resident: number, seconds: number): 
   ints[base + RESIDENT_INT.legPurpose] = NEED.rest;
   ints[base + RESIDENT_INT.legReason] = NEED.rest;
   ints[base + RESIDENT_INT.companion] = NO_PLACE;
-  ints[base + RESIDENT_INT.nextDecisionTick] = struck + JAIL_TICKS;
-  ints[base + RESIDENT_INT.flags] = (ints[base + RESIDENT_INT.flags]! | FLAG.custody) & ~FLAG.wanted;
+  ints[base + RESIDENT_INT.nextDecisionTick] = struck + ticks;
+  ints[base + RESIDENT_INT.flags] |= FLAG.custody;
+  for (let need = 0; need < NEED_COUNT; need++) state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.needs + need] = state.scratchNeeds[need]!;
+  noteEvent(state, resident, code, was, struck);
+}
+
+/** A bust: the wanted (or fighting) resident is taken off the street for `JAIL_TICKS`, then home; crime and fight state clear. Anyone else is left alone (the window the event hid them for still runs: an inline step and the worker must hide the same). */
+export function applyBust(state: CityState, resident: number, seconds: number): void {
+  const base = resident * RESIDENT_INT_STRIDE;
+  const { ints } = state;
+  const arrestable = (ints[base + RESIDENT_INT.flags]! & FLAG.wanted) !== 0 || ints[base + RESIDENT_INT.fightTick] !== NEVER_TICK;
+  if (ints[base + RESIDENT_INT.alive] === 0 || !arrestable || (ints[base + RESIDENT_INT.flags]! & FLAG.custody) !== 0) return;
+  ints[base + RESIDENT_INT.flags] &= ~FLAG.wanted;
   ints[base + RESIDENT_INT.wantedUntilTick] = 0;
   ints[base + RESIDENT_INT.crimeTick] = NEVER_TICK;
   ints[base + RESIDENT_INT.crimeKind] = CRIME_KIND.none;
   ints[base + RESIDENT_INT.crimePlace] = NO_PLACE;
   ints[base + RESIDENT_INT.crimeVictim] = NO_PLACE;
   ints[base + RESIDENT_INT.fightTick] = NEVER_TICK;
-  for (let need = 0; need < NEED_COUNT; need++) state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.needs + need] = state.scratchNeeds[need]!;
-  noteEvent(state, resident, EVENT_CODE.arrested, was, struck);
+  takeIntoCustody(state, resident, seconds, JAIL_TICKS, EVENT_CODE.arrested);
+}
+
+/** A jaywalker the police caught: an hour in custody, annoyed. Not someone hurt, held already, dead, or a named resident keeping their stories. */
+export function applyJaywalk(state: CityState, resident: number, seconds: number): void {
+  if (!isFreePerson(state, resident)) return;
+  takeIntoCustody(state, resident, seconds, JAYWALK_CUSTODY_TICKS, EVENT_CODE.jaywalkArrest);
 }
 
 /** The partner of a busted fighter is let go of the fight (their dwell runs out as it was). */

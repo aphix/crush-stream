@@ -4,6 +4,8 @@ import { tickAt } from "./civilian-clock.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
 import { EVENT_KIND, FLAG, NEVER_TICK, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
+import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
+import { historyLines } from "./civilian-mood.ts";
 import { buildFixtureMap, placeNamed } from "./civilian-graph.test-util.ts";
 import { CivilianRemote } from "./civilian-remote.ts";
 import { stateDigest } from "./civilian-run.test-util.ts";
@@ -19,12 +21,18 @@ const bodega = placeNamed(map, PLACE_NAMES.bodega);
 /** Frames of a sixteenth of a crowd second (a power of two: the clock sums exactly), five minutes of them; the host's knock and wreck land at these. */
 const FRAME_SECONDS = 1 / 16;
 const FRAMES = 300 * 16;
+const PLAYER_FIGHT_FRAME = 60 * 16;
+const JAYWALK_FRAME = 70 * 16;
 const KNOCK_FRAME = 100 * 16;
 const FIGHT_FRAME = 120 * 16;
 const BUST_FRAME = 130 * 16;
 const WRECK_FRAME = 150 * 16;
 /** Two generated residents the host raises a fight between, then a bust of the first. */
 const FIGHTER_OFFSETS = [20, 21] as const;
+/** The resident who turns on the player (shoving from the east, a quarter turn in the wire's steps), and the jaywalker the police take in. */
+const PLAYER_FIGHTER_OFFSET = 22;
+const JAYWALKER_OFFSET = 23;
+const EAST = WALKER_BEARING_STEPS / 4;
 
 function noFailure(err: Error): never {
   throw err;
@@ -92,10 +100,13 @@ function openRun(label: string, worker?: typeof CountingWorker | typeof LateWork
   return { label, crowd: newCrowd(map, CROWD_RESIDENTS, CROWD_SEED, remote), remote };
 }
 
-/** The host's log as it was heard by `frame`: the knock, a fight of two residents, the bust of one of them and the wreck, each from its own frame on. */
+/** The host's log as it was heard by `frame`: a fight with the player, a jaywalk arrest, the knock, a fight of two residents, the bust of one of them and the wreck, each from its own frame on. */
 function logAt(frame: number, knocked: number, fighters: readonly number[]): Float64Array {
   const fightSeconds = FIGHT_FRAME * FRAME_SECONDS;
+  const playerFightSeconds = PLAYER_FIGHT_FRAME * FRAME_SECONDS;
   const heard: readonly { from: number; triples: readonly number[] }[] = [
+    { from: PLAYER_FIGHT_FRAME, triples: [EVENT_KIND.fight, fighters[2]!, playerFightSeconds, EVENT_KIND.walker, EAST, playerFightSeconds] },
+    { from: JAYWALK_FRAME, triples: [EVENT_KIND.jaywalk, fighters[3]!, JAYWALK_FRAME * FRAME_SECONDS] },
     { from: KNOCK_FRAME, triples: [EVENT_KIND.knock, knocked, KNOCK_FRAME * FRAME_SECONDS] },
     { from: FIGHT_FRAME, triples: [EVENT_KIND.fight, fighters[0]!, fightSeconds, EVENT_KIND.alongside, fighters[1]!, fightSeconds] },
     { from: BUST_FRAME, triples: [EVENT_KIND.bust, fighters[0]!, BUST_FRAME * FRAME_SECONDS] },
@@ -134,14 +145,14 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, "Worker");
 });
 
-describe("given the same crowd stepped five minutes with the real worker, with none, and with a worker whose answers come late, a knock and a wreck heard at fixed frames", () => {
+describe("given the same crowd stepped five minutes with the real worker, with none, and with a worker whose answers come late, a player's fight, a jaywalk arrest, a knock, a fight, a bust and a wreck heard at fixed frames", () => {
   it("when every frame's poses and society rows are compared, then the three are bit for bit the same, and the events changed the crowd", async () => {
     const alone = openRun("alone");
     const threaded = openRun("worker", CountingWorker);
     const late = openRun("late worker", LateWorker);
     const plain = openRun("no events");
     const knocked = { resident: -1 };
-    const fighters = FIGHTER_OFFSETS.map((offset) => alone.crowd.state.cast.length + offset);
+    const fighters = [...FIGHTER_OFFSETS, PLAYER_FIGHTER_OFFSET, JAYWALKER_OFFSET].map((offset) => alone.crowd.state.cast.length + offset);
     const apart = await runAll([alone, threaded, late], plain, knocked, fighters);
     expect(apart.slice(0, 5), "frames at which a run differed from the main thread's own").toEqual([]);
     expect(alone.remote.usingWorker, "the lone run has no worker").toBe(false);
@@ -153,6 +164,8 @@ describe("given the same crowd stepped five minutes with the real worker, with n
     expect(alone.crowd.state.closedUntilTick[bodega]!, "the bodega is shut").toBeGreaterThan(tickAt(FRAMES * FRAME_SECONDS));
     expect(alone.crowd.state.ints[fighters[0]! * RESIDENT_INT_STRIDE + RESIDENT_INT.flags]! & FLAG.custody, "the busted fighter is in custody").toBe(FLAG.custody);
     expect(alone.crowd.state.ints[fighters[1]! * RESIDENT_INT_STRIDE + RESIDENT_INT.fightTick], "the other fighter's fight ended or was ended").toBe(NEVER_TICK);
+    expect(alone.crowd.state.ints[fighters[2]! * RESIDENT_INT_STRIDE + RESIDENT_INT.fightBearing], "the way the one who turned on the player faced").toBe(EAST);
+    expect(historyLines(alone.crowd.state, fighters[3]!), "the jaywalker's log").toContain("was arrested for crossing against the light");
     expect(look(plain), "control: a crowd that heard nothing is another crowd").not.toBe(look(alone));
   }, 120_000);
 });

@@ -11,11 +11,13 @@ import {
   HOSPITAL_NEEDS,
   HOSPITAL_TICKS,
   JAIL_TICKS,
+  JAYWALK_CUSTODY_TICKS,
   KNOCK_FEAR,
   MECHANIC_LOOK_MINUTES,
   MECHANIC_REACH,
   NEED,
   NEED_COUNT,
+  NO_BEARING,
   NO_PLACE,
   PURPOSE,
   RADIO_BLOCKS,
@@ -34,7 +36,8 @@ import { hypot2 } from "../../kernel/physics-core.js";
 import { legPose } from "./civilian-leg.ts";
 import { EVENT_CODE } from "./civilian-names.ts";
 import { CityState, logHistory, markDirty, residentName, setClosedUntil, setMoodEvent } from "./civilian-state.ts";
-import { applyBust, applyCrime, applyKnockWitness, applyPush, nearestPlaceTo, raiseFear, reactToCrime, releaseFightPartner, startFight } from "./society-reactions.ts";
+import { applyBust, applyCrime, applyJaywalk, applyKnockWitness, applyPush, nearestPlaceTo, raiseFear, reactToCrime, releaseFightPartner, startFight } from "./society-reactions.ts";
+import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { sendResidentTo } from "./civilian-plan.ts";
 import { noteEvent } from "./society-day.ts";
 
@@ -49,36 +52,40 @@ function nextHourTick(tick: number): number {
 /**
  * Takes the host's events (kind, subject, crowd seconds; see `EVENT_KIND`), posted with tick `postTick`, into the queue. A civilian run down or busted changes at their own tick; everyone drawn into an event
  * (witnesses, a fight's two, a crime's victims) changes `EVENT_LEAD_TICKS` after it, and the society at the first hour tick after that: none before the post, so no peer rewinds. A civilian is off the street from the tick of
- * a knock or bust, at once. Subjects out of range are dropped.
+ * a knock, bust or jaywalk arrest, at once (never let back early: the worker and an inline step must hide the same). Subjects out of range are dropped.
  */
 export function queueEvents(state: CityState, postTick: number, events: ArrayLike<number>): void {
   for (let at = 0; at + EVENT_TRIPLE <= events.length; at += EVENT_TRIPLE) {
     const kind = events[at]!;
     const seconds = events[at + 2]!;
     let subject = events[at + 1]!;
+    let bearing = NO_BEARING;
     if (kind === EVENT_KIND.push || kind === EVENT_KIND.fight) {
-      const alongside = at + 2 * EVENT_TRIPLE <= events.length && events[at + EVENT_TRIPLE] === EVENT_KIND.alongside && events[at + EVENT_TRIPLE + 2] === seconds;
-      const other = alongside ? events[at + EVENT_TRIPLE + 1]! : -1;
-      if (alongside) at += EVENT_TRIPLE;
+      const next = at + EVENT_TRIPLE;
+      const party = next + EVENT_TRIPLE <= events.length && events[next + 2] === seconds ? events[next]! : -1;
+      const named = events[next + 1]!;
+      if (party === EVENT_KIND.walker && Number.isInteger(named) && named >= 0 && named < WALKER_BEARING_STEPS) bearing = named;
+      if (party === EVENT_KIND.alongside || party === EVENT_KIND.walker) at += EVENT_TRIPLE;
       if (!subjectInRange(state, EVENT_KIND.knock, subject)) continue;
-      if (other >= 0 && subjectInRange(state, EVENT_KIND.knock, other)) subject += state.capacity * (other + 1);
+      if (party === EVENT_KIND.alongside && subjectInRange(state, EVENT_KIND.knock, named)) subject += state.capacity * (named + 1);
     }
     if (!subjectInRange(state, kind, subject)) continue;
     const happened = tickAt(seconds);
     const reactionTick = Math.max(happened + EVENT_LEAD_TICKS, postTick);
-    state.events.push({ kind, subject, seconds, individualTick: Math.max(happened, postTick), reactionTick, societyTick: nextHourTick(reactionTick), individualDone: false, reactionDone: false });
-    if (kind !== EVENT_KIND.knock && kind !== EVENT_KIND.bust) continue;
+    state.events.push({ kind, subject, seconds, bearing, individualTick: Math.max(happened, postTick), reactionTick, societyTick: nextHourTick(reactionTick), individualDone: false, reactionDone: false });
+    const hiddenTicks = kind === EVENT_KIND.knock ? HOSPITAL_TICKS : kind === EVENT_KIND.bust ? JAIL_TICKS : kind === EVENT_KIND.jaywalk ? JAYWALK_CUSTODY_TICKS : 0;
+    if (hiddenTicks === 0) continue;
     state.hiddenFromTick[subject] = happened;
-    state.hiddenUntilTick[subject] = happened + (kind === EVENT_KIND.knock ? HOSPITAL_TICKS : JAIL_TICKS);
+    state.hiddenUntilTick[subject] = happened + hiddenTicks;
   }
 }
 
-/** A knock's, crime's or bust's subject is a resident, a wreck's a place with a door, a push's or fight's a packed pair of residents (victim + capacity * (other + 1), other -1: a player); another kind (a lone `alongside` too) is dropped. */
+/** A knock's, crime's, bust's or jaywalk arrest's subject is a resident, a wreck's a place with a door, a push's or fight's a packed pair of residents (victim + capacity * (other + 1), other -1: a player); another kind (a lone `alongside` or `walker` too) is dropped. */
 function subjectInRange(state: CityState, kind: number, subject: number): boolean {
   if (!Number.isInteger(subject) || subject < 0) return false;
   if (kind === EVENT_KIND.wreck) return subject < state.index.placeCount && state.index.doorNode[subject]! >= 0;
   if (kind === EVENT_KIND.push || kind === EVENT_KIND.fight) return subject < state.capacity * (state.capacity + 1);
-  return (kind === EVENT_KIND.knock || kind === EVENT_KIND.crime || kind === EVENT_KIND.bust) && subject < state.capacity;
+  return (kind === EVENT_KIND.knock || kind === EVENT_KIND.crime || kind === EVENT_KIND.bust || kind === EVENT_KIND.jaywalk) && subject < state.capacity;
 }
 
 /** The knocked civilian is out of the neighbourhood's streets and in hospital until `HOSPITAL_TICKS` after the knock, then home: their row says so, whatever they were doing. */
@@ -134,6 +141,7 @@ export function applyIndividualEvents(state: CityState, tick: number): void {
     else if (event.kind === EVENT_KIND.wreck) sendMechanicOut(state, event.subject, tick);
     else if (event.kind === EVENT_KIND.crime) applyCrime(state, event.subject, event.seconds, tick);
     else if (event.kind === EVENT_KIND.bust) applyBust(state, event.subject, event.seconds);
+    else if (event.kind === EVENT_KIND.jaywalk) applyJaywalk(state, event.subject, event.seconds);
   }
 }
 
@@ -146,8 +154,8 @@ export function applyReactionEvents(state: CityState, tick: number): void {
     if (event.kind === EVENT_KIND.knock) applyKnockWitness(state, event.subject, event.seconds, tick);
     else if (event.kind === EVENT_KIND.crime) reactToCrime(state, event.subject, tick);
     else if (event.kind === EVENT_KIND.bust) releaseFightPartner(state, event.subject);
-    else if (event.kind === EVENT_KIND.push) applyPush(state, event.subject, event.seconds, tick);
-    else if (event.kind === EVENT_KIND.fight) startFight(state, event.subject % state.capacity, Math.floor(event.subject / state.capacity) - 1, event.seconds, tick);
+    else if (event.kind === EVENT_KIND.push) applyPush(state, event.subject, event.seconds, tick, event.bearing);
+    else if (event.kind === EVENT_KIND.fight) startFight(state, event.subject % state.capacity, Math.floor(event.subject / state.capacity) - 1, event.seconds, tick, event.bearing);
   }
 }
 
