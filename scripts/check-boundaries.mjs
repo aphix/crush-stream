@@ -123,7 +123,7 @@ const HOT = {
   "src/game/ai/civilians/society-activity.ts": ["readActivity", "readWalk", "hasDoor", "readOutdoor", "readIndoors", "readSitting", "readFight", "standAtDoor", "companionIsHere", "setClip", "readFlinch", "readWatcher", "faceHazard", "stepBack", "noticeDelay", "bearingYaw", "swingLandingIn", "findWalkerStrike"],
   "src/game/ai/civilians/society-crime.ts": ["collect", "targetIsThere", "crimeKindOf"],
   "src/game/present/civilian-dress.ts": ["dressOfLook", "writeLinearColour", "scrambleLook", "fieldOf"],
-  "src/game/present/openworld-sight.ts": ["inBox", "playerInside", "update", "readEye", "seen", "observe", "seenThroughFace", "recordSighting", "allBlocked", "unseenFor", "reset", "near", "inFrustum", "hiddenFrom", "rayBlocked", "blocks", "narrow", "columnOf", "rowOf"],
+  "src/game/present/openworld-sight.ts": ["playerInside", "update", "readEye", "seen", "seenAtProbe", "seenMany", "observe", "observeAtProbe", "seenThroughFace", "recordSighting", "allBlocked", "unseenFor", "reset", "near", "nearProbe", "askAbout", "someEyeSees", "inFrustum", "hiddenFrom", "rayBlocked", "blocks", "clipSlab"],
   "src/game/present/openworld-car-lod.ts": ["frame", "judge", "showAll"],
   "src/game/ai/openworld-auto/auto-director.ts": ["step", "cut", "interrupt", "hottest", "interestOf", "pick", "best", "adjusted", "go", "add", "clear"],
   "src/game/ai/openworld-auto/auto-interest.ts": ["activityInterest", "moodInterest", "eventInterest", "copInterest", "driverInterest"],

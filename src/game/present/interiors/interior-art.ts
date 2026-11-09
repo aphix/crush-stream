@@ -39,12 +39,23 @@ type Entry = {
 type SolidsListener = (solids: readonly InteriorSolid[]) => void;
 
 /** What the interiors ask of the open world's sight field. */
-type InteriorSight = Pick<SightField, "claim" | "release" | "seenThroughFace" | "recordSighting" | "unseenFor" | "playerInside" | "hideGrace">;
+type InteriorSight = Pick<SightField, "claim" | "release" | "probe" | "seenThroughFace" | "recordSighting" | "unseenFor" | "playerInside" | "hideGrace">;
 
 /** An interior this frame: neither built anew nor dropped (`kept`), wanted (a player inside, a business's street front in view, or an open street door of it seen within range), or hidden (none of them, for the hide grace). */
 const VIEW = { kept: 0, wanted: 1, hidden: 2 } as const;
 type View = (typeof VIEW)[keyof typeof VIEW];
 const NO_IDS = -1;
+
+/** Points the sight field's probe at the front of `entry`'s footprint, centred at (x, z), up to `top` m: the numbers go in its fields, not through a call, which would box them. */
+function aimAtFront(sight: Pick<SightField, "probe">, entry: { place: Place; halfDepth: number; halfWidth: number }, x: number, z: number, top: number): void {
+  const probe = sight.probe;
+  probe.x = x;
+  probe.z = z;
+  probe.yaw = entry.place.yaw;
+  probe.halfDepth = entry.halfDepth;
+  probe.halfWidth = entry.halfWidth;
+  probe.top = top;
+}
 
 /** Puts `index` among the nearest kept so far (the arrays' length at most, ascending by `distance`), pushing the farthest out when they are full; returns how many are kept now. */
 function keepNearest(indices: Int32Array, distances: Float64Array, count: number, index: number, distance: number): number {
@@ -170,7 +181,8 @@ export class InteriorSet {
       entry.distance = hypot2(place.doorX - eyeX, place.doorZ - eyeZ);
       entry.shopfront = false;
       if (!entry.business || entry.distance >= (entry.detail === null ? INTERIOR_NEAR : INTERIOR_FAR)) continue;
-      if (sight.seenThroughFace(place.x, place.z, place.yaw, entry.halfDepth, entry.halfWidth, SHOP_GROUND_STOREY, FACE.front)) kept = keepNearest(this.shopfrontAt, this.shopfrontDistance, kept, at, entry.distance);
+      aimAtFront(sight, entry, place.x, place.z, SHOP_GROUND_STOREY);
+      if (sight.seenThroughFace(FACE.front)) kept = keepNearest(this.shopfrontAt, this.shopfrontDistance, kept, at, entry.distance);
     }
     for (let rank = 0; rank < kept; rank++) this.entries[this.shopfrontAt[rank]!]!.shopfront = true;
   }
@@ -195,7 +207,8 @@ export class InteriorSet {
   private viewOf(entry: Entry, id: number, distance: number, sight: InteriorSight): View {
     if (distance >= SHELL_NEAR && entry.shell === null && entry.detail === null && entry.glow === null) return VIEW.kept;
     const { place } = entry;
-    const seen = sight.playerInside(place.x, place.z, place.yaw, entry.halfDepth, entry.halfWidth) || entry.shopfront || (distance < SHELL_NEAR && this.openDoorSeen(entry, sight));
+    aimAtFront(sight, entry, place.x, place.z, 0);
+    const seen = sight.playerInside() || entry.shopfront || (distance < SHELL_NEAR && this.openDoorSeen(entry, sight));
     sight.recordSighting(id, seen);
     if (seen) return VIEW.wanted;
     return sight.unseenFor(id) >= sight.hideGrace ? VIEW.hidden : VIEW.kept;
@@ -206,7 +219,9 @@ export class InteriorSet {
     for (let door = entry.firstDoor; door < entry.firstDoor + entry.doorCount; door++) {
       const leaf = this.doors.leaves[door]!;
       if (leaf.face !== DOOR_FACE.street || !this.doors.isOpen(door)) continue;
-      if (sight.seenThroughFace(leaf.boxX, leaf.boxZ, entry.place.yaw, entry.halfDepth, leaf.width / 2, leaf.floorY + leaf.height, FACE.front)) return true;
+      aimAtFront(sight, entry, leaf.boxX, leaf.boxZ, leaf.floorY + leaf.height);
+      sight.probe.halfWidth = leaf.width / 2;
+      if (sight.seenThroughFace(FACE.front)) return true;
     }
     return false;
   }
