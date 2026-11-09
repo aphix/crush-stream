@@ -377,10 +377,9 @@ const CAR_OUT: ClipSpec = {
   ],
 };
 
-/** The phone held at her ear: the fingertip beside the temple (m, her frame: out from the middle line, up, ahead), the other forearm across her waist (rad). */
+/** The phone held at her ear: the fingertip beside the temple (m, her frame: out from the middle line, up, ahead), the other hand held across her waist (m). */
 const EAR = { out: 0.14, up: 1.62, ahead: 0.02 } as const;
-const WAIST_SWING = -0.45;
-const WAIST_ELBOW = -1.5;
+const WAIST_HAND = { out: -0.05, up: 1, ahead: 0.3 } as const;
 
 /** Standing on the phone: the main hand to her ear, the other arm across her waist, a glance at what she is calling about now and then. */
 const PHONE_CALL: ClipSpec = {
@@ -391,8 +390,10 @@ const PHONE_CALL: ClipSpec = {
     hold(arm(MAIN, "handOut"), EAR.out),
     hold(arm(MAIN, "handY"), EAR.up),
     hold(arm(MAIN, "handZ"), EAR.ahead),
-    hold(arm(OTHER, "swing"), WAIST_SWING),
-    hold(arm(OTHER, "elbow"), WAIST_ELBOW),
+    hold(arm(OTHER, "hand"), 1),
+    hold(arm(OTHER, "handOut"), WAIST_HAND.out),
+    hold(arm(OTHER, "handY"), WAIST_HAND.up),
+    hold(arm(OTHER, "handZ"), WAIST_HAND.ahead),
     loop(CHANNEL.headPitch, 4.5, 0, 0.05, 2, 0.14, 3.5, 0.05, 4.5, 0.05),
     loop(CHANNEL.headYaw, 6.1, 0, 0, 2, 0.1, 4, -0.1, 6.1, 0),
     hold(CHANNEL.lookAtPartner, 0.6),
