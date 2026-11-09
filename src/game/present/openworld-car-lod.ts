@@ -78,8 +78,13 @@ export class OpenWorldCarLod {
       return;
     }
     const position = car.group.position;
-    const seen = this.sight.observe(id, position.x, position.z, CAR_RADIUS_M);
-    const needed = seen || car === followed || this.sight.near(position.x, position.z, KEEP_NEAR_M);
+    const probe = this.sight.probe;
+    probe.x = position.x;
+    probe.z = position.z;
+    probe.radius = CAR_RADIUS_M;
+    const seen = this.sight.observeAtProbe(id);
+    probe.radius = KEEP_NEAR_M;
+    const needed = seen || car === followed || this.sight.nearProbe();
     if (hiddenByUs) {
       if (!needed) return;
       car.group.visible = true;

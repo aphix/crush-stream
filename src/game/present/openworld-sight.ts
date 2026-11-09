@@ -27,11 +27,40 @@ const MAX_PLAYERS = MAX_CARS + 1;
 export const FACE = { front: 1, back: -1 } as const;
 type Face = (typeof FACE)[keyof typeof FACE];
 
-/** Whether (px, pz) stands inside the box of centre (x, z), turned by (cos, sin) of its yaw as an `Occluder`, of half sizes `halfDepth` along its local x and `halfWidth` along its local z. */
-function inBox(px: number, pz: number, x: number, z: number, cos: number, sin: number, halfDepth: number, halfWidth: number): boolean {
-  const fromX = px - x;
-  const fromZ = pz - z;
-  return Math.abs(fromX * cos - fromZ * sin) < halfDepth && Math.abs(fromX * sin + fromZ * cos) < halfWidth;
+/** The slots of the query a frame's tests run on: the thing's middle (x, z), its radius across the view, and the height of its top. */
+const QUERY_X = 0;
+const QUERY_Z = 1;
+const QUERY_RADIUS = 2;
+const QUERY_TOP = 3;
+const QUERY_SLOTS = 4;
+/** The slots of a line's walk over the grid (`walk`). */
+const WALK_NEXT_COLUMN = 0;
+const WALK_NEXT_ROW = 1;
+const WALK_COLUMN_EVERY = 2;
+const WALK_ROW_EVERY = 3;
+const WALK_SLOTS = 4;
+/** The t of a crossing a line parallel to a grid line never makes: past any line's end. */
+const NEVER_CROSSES = 1e30;
+/** Lines a thing is tested with: to its middle and to both sides across the view. */
+const LINES = 3;
+/** The slots of the slab a line is clipped to: where it starts along the axis, how far it goes, and the slab's two faces. */
+const SLAB_SLOTS = 4;
+/** Which projection row each of the six frustum planes adds to or takes from the last row (right, left, bottom, top, far, near), and its sign. */
+const PLANE_SIGN = [-1, 1, 1, -1, -1, 1] as const;
+const PLANE_ROW = [0, 0, 1, 1, 2, 2] as const;
+
+/**
+ * What a query is asked with. A number passed to a call that is not inlined is boxed (a heap number a call), so a query is written into this object's fields (which are stored in place) and asked by a call that takes none:
+ * `seenAtProbe`, `seenThroughFace`, `playerInside`. The fields a query reads are named at each.
+ */
+class SightProbe {
+  x = 0;
+  z = 0;
+  radius = 0;
+  yaw = 0;
+  halfDepth = 0;
+  halfWidth = 0;
+  top = 0;
 }
 
 /** Where a player is: a `DeformableCar` is one, and so is the walker's torso. */
@@ -58,8 +87,15 @@ export class SightField {
   private solidTop = new Float64Array(0);
   private stamp = new Int32Array(0);
   private rayStamp = 0;
-  private spanLow = 0;
-  private spanHigh = 1;
+  /** Where a line's span of t stands (its two ends), and the slab a call clips it to: scratch, so the tests pass no numbers. */
+  private readonly span = new Float64Array(2);
+  private readonly slab = new Float64Array(SLAB_SLOTS);
+  /** A line's walk over the grid: the t of its next crossing of a column's edge and of a row's, and the t between two such crossings. Kept here, not in locals that change round a loop: those are boxed, a heap number a step. */
+  private readonly walk = new Float64Array(WALK_SLOTS);
+  private readonly query = new Float64Array(QUERY_SLOTS);
+  private readonly ends = new Float64Array(LINES * 2);
+  /** The input of the zero-boxing queries (`seenAtProbe`, `seenThroughFace`, `playerInside`): the caller writes its fields. */
+  readonly probe = new SightProbe();
   private originX = 0;
   private originZ = 0;
   private columns = 0;
@@ -77,7 +113,6 @@ export class SightField {
   private readonly planeUp = new Float64Array(MAX_EYES * FRUSTUM_PLANES);
   private readonly planeSpread = new Float64Array(MAX_EYES * FRUSTUM_PLANES);
   private readonly viewProjection = new THREE.Matrix4();
-  private readonly frustum = new THREE.Frustum();
 
   private playerCount = 0;
   private readonly playerX = new Float64Array(MAX_PLAYERS);
@@ -172,11 +207,27 @@ export class SightField {
 
   /** Whether any eye sees a thing of `radius` m at (x, z): in its frustum and with some line across it clear of the buildings. No eyes read yet, or `enabled` off: everything is seen. */
   seen(x: number, z: number, radius: number): boolean {
+    const probe = this.probe;
+    probe.x = x;
+    probe.z = z;
+    probe.radius = radius;
+    return this.seenAtProbe();
+  }
+
+  /** `seen` of the probe's `x`, `z` and `radius`: nothing is passed, so nothing is boxed. */
+  seenAtProbe(): boolean {
     if (!this.enabled || this.eyeCount === 0) return true;
-    for (let eye = 0; eye < this.eyeCount; eye++) {
-      if (this.inFrustum(eye, x, z, radius, THING_TOP_M) && !this.hiddenFrom(eye, x, z, radius)) return true;
+    this.askAbout(this.probe.x, this.probe.z, this.probe.radius, THING_TOP_M);
+    return this.someEyeSees();
+  }
+
+  /** `seen` of the `count` things at (`xs[i]`, `zs[i]`), each of `radius` m, into `out[i]` (1 seen, 0 not): the whole crowd in one call. */
+  seenMany(xs: ArrayLike<number>, zs: ArrayLike<number>, count: number, radius: number, out: Uint8Array): void {
+    const everything = !this.enabled || this.eyeCount === 0;
+    for (let thing = 0; thing < count; thing++) {
+      if (!everything) this.askAbout(xs[thing]!, zs[thing]!, radius, THING_TOP_M);
+      out[thing] = everything || this.someEyeSees() ? 1 : 0;
     }
-    return false;
   }
 
   /** `seen`, and the id's clock: its first look starts its grace, a sighting restarts it. */
@@ -184,26 +235,38 @@ export class SightField {
     return this.recordSighting(id, this.seen(x, z, radius));
   }
 
+  /** `observe` of the probe's `x`, `z` and `radius`. */
+  observeAtProbe(id: number): boolean {
+    return this.recordSighting(id, this.seenAtProbe());
+  }
+
   /**
-   * Whether any eye sees into a box (centre, yaw and half sizes along its local x and z as an `Occluder`'s; a building's front is its local +x) through its
-   * openings on `face`, up to `top` m: the eye stands inside the box, or in front of that face with the face in its frustum and a line to its middle or
-   * either end clear of every other building (the box lies wholly behind its face, so it never blocks a line from in front). What an interior needs: a room behind a wall, or behind another building, is not seen.
+   * Whether any eye sees into the box the probe describes (its `x`, `z`, `yaw`, its `halfDepth` along its local x and `halfWidth` along its local z, as an `Occluder`'s; a building's front is its local +x) through its
+   * openings on `face`, up to the probe's `top` m: the eye stands inside the box, or in front of that face with the face in its frustum and a line to its middle or either end clear of every other building
+   * (the box lies wholly behind its face, so it never blocks a line from in front). What an interior needs: a room behind a wall, or behind another building, is not seen.
    */
-  seenThroughFace(x: number, z: number, yaw: number, halfDepth: number, halfWidth: number, top: number, face: Face): boolean {
+  seenThroughFace(face: Face): boolean {
     if (!this.enabled || this.eyeCount === 0) return true;
-    const cos = Math.cos(yaw);
-    const sin = Math.sin(yaw);
+    const probe = this.probe;
+    const cos = Math.cos(probe.yaw);
+    const sin = Math.sin(probe.yaw);
     const outX = cos * face;
     const outZ = -sin * face;
-    const middleX = x + outX * halfDepth;
-    const middleZ = z + outZ * halfDepth;
+    const middleX = probe.x + outX * probe.halfDepth;
+    const middleZ = probe.z + outZ * probe.halfDepth;
+    this.askAbout(middleX, middleZ, probe.halfWidth, probe.top);
+    this.ends[0] = middleX;
+    this.ends[1] = middleZ;
+    this.ends[2] = middleX + sin * probe.halfWidth;
+    this.ends[3] = middleZ + cos * probe.halfWidth;
+    this.ends[4] = middleX - sin * probe.halfWidth;
+    this.ends[5] = middleZ - cos * probe.halfWidth;
     for (let eye = 0; eye < this.eyeCount; eye++) {
-      if (inBox(this.eyeX[eye]!, this.eyeZ[eye]!, x, z, cos, sin, halfDepth, halfWidth)) return true;
+      const fromX = this.eyeX[eye]! - probe.x;
+      const fromZ = this.eyeZ[eye]! - probe.z;
+      if (Math.abs(fromX * cos - fromZ * sin) < probe.halfDepth && Math.abs(fromX * sin + fromZ * cos) < probe.halfWidth) return true;
       if ((this.eyeX[eye]! - middleX) * outX + (this.eyeZ[eye]! - middleZ) * outZ <= 0) continue;
-      if (!this.inFrustum(eye, middleX, middleZ, halfWidth, top)) continue;
-      const acrossX = sin * halfWidth;
-      const acrossZ = cos * halfWidth;
-      if (!this.allBlocked(eye, middleX, middleZ, middleX + acrossX, middleZ + acrossZ, middleX - acrossX, middleZ - acrossZ, top)) return true;
+      if (this.inFrustum(eye) && !this.allBlocked(eye)) return true;
     }
     return false;
   }
@@ -225,17 +288,20 @@ export class SightField {
     this.lastSeen[id] = NEVER_SEEN;
   }
 
-  /** Whether a player's car is within `radius` m of (x, z): what the host keeps simulating. */
-  /** Whether a player (a seated car, or the walker out of his) stands inside the box (centre, yaw and half sizes as `seenThroughFace`'s): someone in a building keeps its interior whatever its doors. */
-  playerInside(x: number, z: number, yaw: number, halfDepth: number, halfWidth: number): boolean {
-    const cos = Math.cos(yaw);
-    const sin = Math.sin(yaw);
+  /** Whether a player (a seated car, or the walker out of his) stands inside the box the probe describes (its `x`, `z`, `yaw`, `halfDepth`, `halfWidth`, as `seenThroughFace`'s): someone in a building keeps its interior whatever its doors. */
+  playerInside(): boolean {
+    const probe = this.probe;
+    const cos = Math.cos(probe.yaw);
+    const sin = Math.sin(probe.yaw);
     for (let player = 0; player < this.playerCount; player++) {
-      if (inBox(this.playerX[player]!, this.playerZ[player]!, x, z, cos, sin, halfDepth, halfWidth)) return true;
+      const fromX = this.playerX[player]! - probe.x;
+      const fromZ = this.playerZ[player]! - probe.z;
+      if (Math.abs(fromX * cos - fromZ * sin) < probe.halfDepth && Math.abs(fromX * sin + fromZ * cos) < probe.halfWidth) return true;
     }
     return false;
   }
 
+  /** Whether a player's car is within `radius` m of (x, z): what the host keeps simulating. */
   near(x: number, z: number, radius: number): boolean {
     const reach = radius * radius;
     for (let player = 0; player < this.playerCount; player++) {
@@ -246,27 +312,58 @@ export class SightField {
     return false;
   }
 
+  /** The eye's position and the six planes of its view, read off its projection and view matrices (the planes' normals' x and z, their offsets, how much each lifts with height, and how wide its normal is flat): nothing is allocated. */
   private readEye(eye: number, camera: THREE.Camera): void {
     camera.updateMatrixWorld();
-    this.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    this.frustum.setFromProjectionMatrix(this.viewProjection);
+    const matrix = this.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements;
     const world = camera.matrixWorld.elements;
     this.eyeX[eye] = world[12]!;
     this.eyeY[eye] = world[13]!;
     this.eyeZ[eye] = world[14]!;
     for (let plane = 0; plane < FRUSTUM_PLANES; plane++) {
-      const { normal, constant } = this.frustum.planes[plane]!;
+      const sign = PLANE_SIGN[plane]!;
+      const row = PLANE_ROW[plane]!;
+      const a = matrix[3]! + sign * matrix[row]!;
+      const b = matrix[7]! + sign * matrix[4 + row]!;
+      const c = matrix[11]! + sign * matrix[8 + row]!;
+      const d = matrix[15]! + sign * matrix[12 + row]!;
+      const length = Math.sqrt(a * a + b * b + c * c);
       const at = eye * FRUSTUM_PLANES + plane;
-      this.planeX[at] = normal.x;
-      this.planeZ[at] = normal.z;
-      this.planeConstant[at] = constant;
-      this.planeUp[at] = Math.max(0, normal.y);
-      this.planeSpread[at] = Math.sqrt(normal.x * normal.x + normal.z * normal.z);
+      this.planeX[at] = a / length;
+      this.planeZ[at] = c / length;
+      this.planeConstant[at] = d / length;
+      this.planeUp[at] = Math.max(0, b / length);
+      this.planeSpread[at] = Math.sqrt(a * a + c * c) / length;
     }
   }
 
-  /** The column (radius, 0 to `top` m high) is not wholly outside any of the six planes. */
-  private inFrustum(eye: number, x: number, z: number, radius: number, top: number): boolean {
+  /** `near` of the probe's `x`, `z` and `radius`. */
+  nearProbe(): boolean {
+    return this.near(this.probe.x, this.probe.z, this.probe.radius);
+  }
+
+  /** The query the next tests run on: a column at (x, z) of `radius` m across the view, 0 to `top` m high. */
+  private askAbout(x: number, z: number, radius: number, top: number): void {
+    this.query[QUERY_X] = x;
+    this.query[QUERY_Z] = z;
+    this.query[QUERY_RADIUS] = radius;
+    this.query[QUERY_TOP] = top;
+  }
+
+  /** Whether some eye has the query's column in its frustum and a clear line to it. */
+  private someEyeSees(): boolean {
+    for (let eye = 0; eye < this.eyeCount; eye++) {
+      if (this.inFrustum(eye) && !this.hiddenFrom(eye)) return true;
+    }
+    return false;
+  }
+
+  /** The query's column is not wholly outside any of the six planes of the eye's view. */
+  private inFrustum(eye: number): boolean {
+    const x = this.query[QUERY_X]!;
+    const z = this.query[QUERY_Z]!;
+    const radius = this.query[QUERY_RADIUS]!;
+    const top = this.query[QUERY_TOP]!;
     for (let plane = 0; plane < FRUSTUM_PLANES; plane++) {
       const at = eye * FRUSTUM_PLANES + plane;
       if (this.planeX[at]! * x + this.planeZ[at]! * z + this.planeConstant[at]! + this.planeUp[at]! * top + radius * this.planeSpread[at]! < 0) return false;
@@ -274,101 +371,135 @@ export class SightField {
     return true;
   }
 
-  /** The line to the column's top through its middle and both sides across the view are all blocked. */
-  private hiddenFrom(eye: number, x: number, z: number, radius: number): boolean {
+  /** The lines to the query's column through its middle and both sides across the view are all blocked. */
+  private hiddenFrom(eye: number): boolean {
+    const x = this.query[QUERY_X]!;
+    const z = this.query[QUERY_Z]!;
     const dx = x - this.eyeX[eye]!;
     const dz = z - this.eyeZ[eye]!;
     const length = Math.sqrt(dx * dx + dz * dz);
     if (length < PARALLEL_M) return false;
-    const sideX = (-dz / length) * radius;
-    const sideZ = (dx / length) * radius;
-    return this.allBlocked(eye, x, z, x + sideX, z + sideZ, x - sideX, z - sideZ, THING_TOP_M);
+    const sideX = (-dz / length) * this.query[QUERY_RADIUS]!;
+    const sideZ = (dx / length) * this.query[QUERY_RADIUS]!;
+    this.ends[0] = x;
+    this.ends[1] = z;
+    this.ends[2] = x + sideX;
+    this.ends[3] = z + sideZ;
+    this.ends[4] = x - sideX;
+    this.ends[5] = z - sideZ;
+    return this.allBlocked(eye);
   }
 
-  /** The lines from the eye to the three points, each at `top` m, are all blocked; the first clear one ends the test. */
-  private allBlocked(eye: number, firstX: number, firstZ: number, secondX: number, secondZ: number, thirdX: number, thirdZ: number, top: number): boolean {
-    const ex = this.eyeX[eye]!;
-    const ey = this.eyeY[eye]!;
-    const ez = this.eyeZ[eye]!;
-    return this.rayBlocked(ex, ey, ez, firstX, top, firstZ) && this.rayBlocked(ex, ey, ez, secondX, top, secondZ) && this.rayBlocked(ex, ey, ez, thirdX, top, thirdZ);
+  /** The lines from the eye to the three ends (`ends`), each at the query's top, are all blocked; the first clear one ends the test. */
+  private allBlocked(eye: number): boolean {
+    for (let end = 0; end < LINES; end++) {
+      if (!this.rayBlocked(eye, end)) return false;
+    }
+    return true;
   }
 
-  /** Walks the cells under the segment a to b, nearest the eye first, and asks each one's solids. */
-  private rayBlocked(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+  /** Walks the cells under the line from the eye to end `end`, nearest the eye first, and asks each one's solids. */
+  private rayBlocked(eye: number, end: number): boolean {
     if (this.solidCount === 0) return false;
-    const dx = bx - ax;
-    const dz = bz - az;
-    this.spanLow = 0;
-    this.spanHigh = 1;
-    if (!this.narrow(ax, dx, this.originX, this.originX + this.columns * CELL_M) || !this.narrow(az, dz, this.originZ, this.originZ + this.rows * CELL_M)) return false;
-    const lo = this.spanLow;
-    const hi = this.spanHigh;
+    const ax = this.eyeX[eye]!;
+    const az = this.eyeZ[eye]!;
+    const dx = this.ends[end * 2]! - ax;
+    const dz = this.ends[end * 2 + 1]! - az;
+    this.span[0] = 0;
+    this.span[1] = 1;
+    this.slab[0] = ax;
+    this.slab[1] = dx;
+    this.slab[2] = this.originX;
+    this.slab[3] = this.originX + this.columns * CELL_M;
+    if (!this.clipSlab()) return false;
+    this.slab[0] = az;
+    this.slab[1] = dz;
+    this.slab[2] = this.originZ;
+    this.slab[3] = this.originZ + this.rows * CELL_M;
+    if (!this.clipSlab()) return false;
+    const lo = this.span[0]!;
+    const hi = this.span[1]!;
     if (++this.rayStamp === RAY_STAMP_LIMIT) {
       this.stamp.fill(0);
       this.rayStamp = 1;
     }
-    let column = this.columnOf(ax + dx * lo);
-    let row = this.rowOf(az + dz * lo);
-    const lastColumn = this.columnOf(ax + dx * hi);
-    const lastRow = this.rowOf(az + dz * hi);
+    let column = Math.min(this.columns - 1, Math.max(0, Math.floor((ax + dx * lo - this.originX) / CELL_M)));
+    let row = Math.min(this.rows - 1, Math.max(0, Math.floor((az + dz * lo - this.originZ) / CELL_M)));
+    const lastColumn = Math.min(this.columns - 1, Math.max(0, Math.floor((ax + dx * hi - this.originX) / CELL_M)));
+    const lastRow = Math.min(this.rows - 1, Math.max(0, Math.floor((az + dz * hi - this.originZ) / CELL_M)));
     const stepColumn = dx > 0 ? 1 : -1;
     const stepRow = dz > 0 ? 1 : -1;
-    const deltaColumn = dx === 0 ? Infinity : CELL_M / Math.abs(dx);
-    const deltaRow = dz === 0 ? Infinity : CELL_M / Math.abs(dz);
-    let nextColumn = dx === 0 ? Infinity : (this.originX + (dx > 0 ? column + 1 : column) * CELL_M - ax) / dx;
-    let nextRow = dz === 0 ? Infinity : (this.originZ + (dz > 0 ? row + 1 : row) * CELL_M - az) / dz;
+    const walk = this.walk;
+    walk[WALK_NEXT_COLUMN] = dx === 0 ? NEVER_CROSSES : (this.originX + (dx > 0 ? column + 1 : column) * CELL_M - ax) / dx;
+    walk[WALK_NEXT_ROW] = dz === 0 ? NEVER_CROSSES : (this.originZ + (dz > 0 ? row + 1 : row) * CELL_M - az) / dz;
+    walk[WALK_COLUMN_EVERY] = dx === 0 ? NEVER_CROSSES : CELL_M / Math.abs(dx);
+    walk[WALK_ROW_EVERY] = dz === 0 ? NEVER_CROSSES : CELL_M / Math.abs(dz);
     for (let guard = this.columns + this.rows + 2; guard > 0; guard--) {
       const cell = row * this.columns + column;
       for (let at = this.cellStart[cell]!; at < this.cellStart[cell + 1]!; at++) {
         const solid = this.cellSolid[at]!;
         if (this.stamp[solid] === this.rayStamp) continue;
         this.stamp[solid] = this.rayStamp;
-        if (this.blocks(solid, ax, ay, az, bx, by, bz)) return true;
+        if (this.blocks(solid, eye, end)) return true;
       }
       if (column === lastColumn && row === lastRow) return false;
-      if (nextColumn < nextRow) {
+      if (walk[WALK_NEXT_COLUMN]! < walk[WALK_NEXT_ROW]!) {
         column += stepColumn;
-        nextColumn += deltaColumn;
+        walk[WALK_NEXT_COLUMN] = walk[WALK_NEXT_COLUMN]! + walk[WALK_COLUMN_EVERY]!;
       } else {
         row += stepRow;
-        nextRow += deltaRow;
+        walk[WALK_NEXT_ROW] = walk[WALK_NEXT_ROW]! + walk[WALK_ROW_EVERY]!;
       }
       if (column < 0 || column >= this.columns || row < 0 || row >= this.rows) return false;
     }
     return false;
   }
 
-  /** Whether the line a to b passes through `solid` at or under its top, neither end standing inside it. */
-  private blocks(solid: number, ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+  /** Whether the line from the eye to end `end` passes through `solid` at or under its top, neither end standing inside it. */
+  private blocks(solid: number, eye: number, end: number): boolean {
     const cos = this.solidCos[solid]!;
     const sin = this.solidSin[solid]!;
     const halfX = this.solidHalfX[solid]!;
     const halfZ = this.solidHalfZ[solid]!;
-    const fromX = ax - this.solidX[solid]!;
-    const fromZ = az - this.solidZ[solid]!;
-    const toX = bx - this.solidX[solid]!;
-    const toZ = bz - this.solidZ[solid]!;
+    const fromX = this.eyeX[eye]! - this.solidX[solid]!;
+    const fromZ = this.eyeZ[eye]! - this.solidZ[solid]!;
+    const toX = this.ends[end * 2]! - this.solidX[solid]!;
+    const toZ = this.ends[end * 2 + 1]! - this.solidZ[solid]!;
     const startX = fromX * cos - fromZ * sin;
     const startZ = fromX * sin + fromZ * cos;
     const endX = toX * cos - toZ * sin;
     const endZ = toX * sin + toZ * cos;
     if (Math.abs(startX) < halfX && Math.abs(startZ) < halfZ) return false;
     if (Math.abs(endX) < halfX && Math.abs(endZ) < halfZ) return false;
-    this.spanLow = 0;
-    this.spanHigh = 1;
-    if (!this.narrow(startX, endX - startX, -halfX, halfX) || !this.narrow(startZ, endZ - startZ, -halfZ, halfZ)) return false;
-    const rise = by - ay;
-    return Math.min(ay + rise * this.spanLow, ay + rise * this.spanHigh) < this.solidTop[solid]!;
+    this.span[0] = 0;
+    this.span[1] = 1;
+    this.slab[0] = startX;
+    this.slab[1] = endX - startX;
+    this.slab[2] = -halfX;
+    this.slab[3] = halfX;
+    if (!this.clipSlab()) return false;
+    this.slab[0] = startZ;
+    this.slab[1] = endZ - startZ;
+    this.slab[2] = -halfZ;
+    this.slab[3] = halfZ;
+    if (!this.clipSlab()) return false;
+    const eyeY = this.eyeY[eye]!;
+    const rise = this.query[QUERY_TOP]! - eyeY;
+    return Math.min(eyeY + rise * this.span[0]!, eyeY + rise * this.span[1]!) < this.solidTop[solid]!;
   }
 
-  /** Cuts the span of t (0 to 1) in which start + move * t lies within [min, max]; false once nothing of the span is left. */
-  private narrow(start: number, move: number, min: number, max: number): boolean {
+  /** Cuts the span of t (0 to 1) in which start + move * t lies within [min, max] (the four in `slab`, as written by the caller); false once nothing of the span is left. */
+  private clipSlab(): boolean {
+    const start = this.slab[0]!;
+    const move = this.slab[1]!;
+    const min = this.slab[2]!;
+    const max = this.slab[3]!;
     if (Math.abs(move) < PARALLEL_M) return start >= min && start <= max;
     const atMin = (min - start) / move;
     const atMax = (max - start) / move;
-    this.spanLow = Math.max(this.spanLow, Math.min(atMin, atMax));
-    this.spanHigh = Math.min(this.spanHigh, Math.max(atMin, atMax));
-    return this.spanLow < this.spanHigh;
+    this.span[0] = Math.max(this.span[0]!, Math.min(atMin, atMax));
+    this.span[1] = Math.min(this.span[1]!, Math.max(atMin, atMax));
+    return this.span[0]! < this.span[1]!;
   }
 
   private columnOf(x: number): number {

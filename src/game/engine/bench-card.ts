@@ -1,3 +1,4 @@
+import { HUD_READOUT } from "../hud/hud-readout.ts";
 import type { CrashHudState } from "../hud/hud-store.ts";
 
 /**
@@ -73,12 +74,6 @@ export function roundCard(value: unknown, decimals?: number): unknown {
   if (typeof value === "object" && value !== null) return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, roundCard(v, DECIMALS[k] ?? decimals)]));
   return value;
 }
-
-/** The HUD state that is not a setting: what the game reads out (the race standings, the derby board, the speeds, the clock) and the piston and door scenes' readouts. A card keeps none of it. */
-const HUD_READOUT = [
-  "race", "derbyBoard", "derbyView", "fleetView", "derbyWinner", "derbyDecided", "derbyTime", "elapsed", "speedA", "speedB", "closingKph",
-  "impactKph", "eta", "fps", "phase", "trackSerial", "nowPlaying", "drift", "boost", "foot", "pistons", "doors", "viewFar", "pixelRatio", "shadowMap",
-] as const satisfies readonly (keyof CrashHudState)[];
 
 /** The HUD as a card carries it: only the keys that are settings and differ from `defaults` (`INITIAL_HUD`); a key that is absent is at its default. */
 export function hudSettings(hud: CrashHudState, defaults: CrashHudState): Partial<CrashHudState> {

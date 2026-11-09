@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import {
   ArrowUp,
   Braces,
@@ -24,6 +24,7 @@ import { ControlsSection } from "@/components/controls-section";
 import { LookRows } from "@/components/hud-look-rows";
 import { Sheet } from "@/components/sheet";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
+import { sameSettings } from "@/game/hud/hud-readout";
 import { captureSubmitShown } from "@/game/hud/submit-rules";
 import { copyText } from "@/lib/clipboard";
 import { sendSubmission, type Parcel } from "@/lib/submissions/status";
@@ -57,7 +58,7 @@ type AccordionId = SectionId | "controls";
  * `Sheet` (right half on a phone on its side, bottom 70 % upright) so a slider's effect shows beside it; the sheet owns Back and the
  * scroll, and Controls is its first section.
  */
-export function HudSections({ onClose, ...props }: HudProps & { onClose?: () => void }) {
+function HudSectionsView({ onClose, ...props }: HudProps & { onClose?: () => void }) {
   const touch = useCoarsePointer();
   // Every section starts closed: the 3D view comes first, settings are a click away.
   const [stored, setStored] = useStoredString(HUD_SECTIONS_KEY, "", "");
@@ -106,6 +107,12 @@ export function HudSections({ onClose, ...props }: HudProps & { onClose?: () => 
     accordion
   );
 }
+
+/** The accordion is rendered again when what it reads changes, not as the sim's readouts do (`HUD_READOUT`); its `onClose` only ever closes the sheet it is in. */
+export const HudSections = memo(
+  HudSectionsView,
+  (before, after) => before.engine === after.engine && before.onlineShown === after.onlineShown && (before.onClose === undefined) === (after.onClose === undefined) && sameSettings(before.state, after.state),
+);
 
 /**
  * One section: its header counts the settings changed from their defaults, and a row of reset chips undoes each on its

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { homeModes, pickScene, sceneInPlay, scenesFor } from "../../components/scene-picks.ts";
+import { CROWD_TIER_SCALE, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { decodeShare, encodeShare } from "../hud/share-url.ts";
 import { HudStore, INITIAL_HUD, type LookAtHud } from "../hud/hud-store.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -104,8 +105,8 @@ describe("given the open world in play on the real engine", () => {
     expect(hud.get().lookAt, "back to nothing").toBe(null);
   });
 
-  it("when no crowd exists, then netplay has no crowd link to send or hear through", () => {
-    expect(engine.net["game"].crowdLink()).toBe(null);
+  it("when the open world is up with its map, then netplay has the crowd's link to send and hear through, on this run's key (a client hears the host's crowd through it before it has one)", () => {
+    expect(engine.net["game"].crowdLink()?.seed, "the link's key: this device's tier above the seed").toBe(POPULATION_TIER.phone * CROWD_TIER_SCALE + LINK_SEED);
   });
 
   it("when the Fleet button is pressed, then race mode and the lobby are left, the HUD flag drops and the sandbox's field is back", () => {
@@ -115,6 +116,7 @@ describe("given the open world in play on the real engine", () => {
     expect(engine["race"].free, "the lobby").toBe(false);
     expect(hud.get().openworld, "the HUD flag").toBe(false);
     expect(engine["carCount"], "the sandbox's cars").toBe(engine["sandboxCars"]);
+    expect(engine.net["game"].crowdLink(), "no crowd link outside the open world").toBe(null);
   });
 
   it("when a room takes the lobby over from the solo scene, then the scene is the room's, still on the city, and the HUD still flags the open world", () => {
