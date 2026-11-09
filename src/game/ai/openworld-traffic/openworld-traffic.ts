@@ -71,7 +71,7 @@ export class OpenWorldTraffic {
     if (patrol > 0) ports.markPolice(first + movers - patrol, patrol);
     this.patrolFrom = first + movers - patrol;
     this.patrolEnd = first + movers;
-    this.wearEverydayBodies();
+    this.wearEverydayBodies(ports);
     for (let id = first; id < first + this.total; id++) ports.putAway(id);
     const sightBase = sight.claim(this.total + 1);
     this.context = {
@@ -174,7 +174,7 @@ export class OpenWorldTraffic {
     const { ports } = this.context;
     if (ports.cars().length < this.first + this.total) {
       ports.ensureCars(this.first + this.total);
-      this.wearEverydayBodies();
+      this.wearEverydayBodies(ports);
     }
     this.movers.step(seconds, dt);
     this.kerb.step(dt, this.feed === null ? null : this.feed.parked);
@@ -186,9 +186,8 @@ export class OpenWorldTraffic {
     this.watchSignals(seconds);
   }
 
-  /** Every pool car but the patrol cruisers (the last `patrol` of the movers) wears an everyday body: one it already wears is kept, a coupe or monster slot's is rebuilt as a seeded pick of `EVERYDAY_BODIES`. */
-  private wearEverydayBodies(): void {
-    const { ports } = this.context;
+  /** Every pool car but the patrol cruisers (the last `patrol` of the movers) wears an everyday body: one it already wears is kept, a coupe or monster slot's is rebuilt as a seeded pick of `EVERYDAY_BODIES`. `ports` is passed in: the constructor calls this before `context` exists. */
+  private wearEverydayBodies(ports: TrafficPorts): void {
     for (let id = this.first; id < this.first + this.total; id++) {
       if (id >= this.patrolFrom && id < this.patrolEnd) continue;
       const style = ports.cars()[id]!.style.id;
