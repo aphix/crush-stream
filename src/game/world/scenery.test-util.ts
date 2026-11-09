@@ -19,17 +19,23 @@ export const REACH_SLACK = 1;
 const proj = blankProjection();
 const memo = new Map<string, Dressed>();
 
-/** `json` placed with the scenery service (its `scenery` block merged with `extra`): the authored props, the solid scenery after them, and the drawn-only. */
-export function dress(json: unknown, extra: object = {}): Dressed {
+/** `json` placed with the scenery service, built anew (its `scenery` block merged with `extra`): the authored props, the solid scenery after them, and the drawn-only. */
+export function dressUncached(json: unknown, extra: object = {}): Dressed {
   const parsed = parseTrack(json);
-  const key = `${parsed.id}/${JSON.stringify(extra)}`;
-  const known = memo.get(key);
-  if (known) return known;
   const track = new Track({ ...parsed, scenery: { ...parsed.scenery, ...extra } });
   const bare = placeCourse(track, SCENERY_ARM.off).placed;
   const course = placeCourse(track);
-  const out = { track, authored: bare, solid: course.placed.slice(bare.length), drawn: course.drawn };
-  memo.set(key, out);
+  return { track, authored: bare, solid: course.placed.slice(bare.length), drawn: course.drawn };
+}
+
+/** `dressUncached`, built once per course and `extra` for the file: every row on it reads the one. */
+export function dress(json: unknown, extra: object = {}): Dressed {
+  const key = `${parseTrack(json).id}/${JSON.stringify(extra)}`;
+  let out = memo.get(key);
+  if (!out) {
+    out = dressUncached(json, extra);
+    memo.set(key, out);
+  }
   return out;
 }
 

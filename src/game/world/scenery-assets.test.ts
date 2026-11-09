@@ -3,13 +3,14 @@ import type { PrefabId } from "./catalog.ts";
 import { BIOME, PREFAB, TRACK_ID } from "./constants.ts";
 import type { Placed } from "./placements.ts";
 import { biomeLookup } from "./scenery.ts";
-import { COURSE_JSON, REACH, REACH_SLACK, dress, dressCopy, footprintDepth, nearOpening, type Dressed } from "./scenery.test-util.ts";
+import { COURSE_JSON, REACH, REACH_SLACK, dress, dressCopy, dressUncached, footprintDepth, nearOpening, type Dressed } from "./scenery.test-util.ts";
 import { SCENERY_ASSETS } from "./scenery-assets/index.ts";
 import { assetPrefab } from "./scenery-assets/pick.ts";
 import { ROAD_DECAL_ASSET, ROAD_DECAL_NAMES, type AssetKind, type SceneryAsset } from "./scenery-assets/types.ts";
 import { parseTrack } from "./track-schema.ts";
 import { blankPoint, type Track } from "./track.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** The least (m) a manhole cover's nearest neighbour is, at the median: one every 90 to 120 m along a road, closer only where two roads meet. */
 const MANHOLE_APART = 50;
@@ -288,6 +289,24 @@ describe("given the generated scenery assets on every course", () => {
     const crosswalks = onRoad(d).filter((p) => idOf(p) === ROAD_DECAL_ASSET.crosswalk);
     expect(crosswalks.length, "crosswalks").toBeGreaterThan(0);
     for (const p of crosswalks) expect(roadFit(d.track, p).other, `crosswalk at (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) from another road`).toBeLessThanOrEqual(CROSSWALK_BY_JUNCTION);
+  });
+
+  /** Every number of a placement list, in one list. */
+  const numbers = (list: readonly Placed[]): number[] => list.flatMap((p) => [p.x, p.y, p.z, p.yaw, p.sx, p.sy, p.sz, p.asset ?? -1]);
+
+  // mutation: sed -i 's/^export function footprintDepth(track: Track, p: Placed): number {$/&\n  p.x += 1e-9;/' src/game/world/scenery.test-util.ts  (a row's read moves the shared placement)
+  it("when a course is dressed again with no memo, then it equals the dressing the rows above read, bit for bit: its props, and the ground height and road depth at them", () => {
+    for (const id of [TRACK_ID.city, TRACK_ID.oval, TRACK_ID.nationalMall]) {
+      const json = COURSE_JSON.find((j) => parseTrack(j).id === id);
+      const shared = dress(json);
+      const fresh = dressUncached(json);
+      for (const part of ["authored", "solid", "drawn"] as const) {
+        assertSameDigest(fresh[part], shared[part], `${id} ${part}`);
+        expect(firstMismatch(numbers(fresh[part]), numbers(shared[part])), `${id} ${part}`).toBeUndefined();
+      }
+      const reads = (d: Dressed): number[] => [...d.solid, ...d.drawn].filter((_, i) => i % 7 === 0).flatMap((p) => [d.track.ground().heightAt(p.x, p.z), footprintDepth(d.track, p)]);
+      expect(firstMismatch(reads(fresh), reads(shared)), `${id}: ground height and road depth`).toBeUndefined();
+    }
   });
 });
 
