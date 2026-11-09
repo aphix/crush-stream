@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CAR_COP, RED_LIGHT_SIGHT } from "./crime-constants.ts";
-import { COP_MODE } from "./foot-cops.ts";
-import { bustedResidents, harness, runFor, type Harness } from "./crime-fixture.test-util.ts";
+import { bustedResidents, harness, runFor, runUntil, type Harness } from "./crime-fixture.test-util.ts";
 
 const RUNNER_RESIDENT = 2;
 const EAST = Math.PI / 2;
@@ -70,11 +69,11 @@ describe("a patrol car comes to a crime", () => {
     run.street!.leaseAt = { x: 60, z: -40, yaw: 0 };
     run.offences.x[1] = 60;
     run.offences.commitCrime(1);
-    runFor(run, 12);
     const { table, cops } = run.scene.foot;
+    runUntil(run, 12, () => cops.onStreet(CAR_COP));
     expect(run.street!.leases, "one car leased").toBe(1);
     expect(run.street!.sirens[0], "with its siren on").toBe(true);
-    expect(cops.mode[CAR_COP], "its cop is out").not.toBe(COP_MODE.off);
+    expect(cops.onStreet(CAR_COP), "its cop is out").toBe(true);
     expect(table.copAt(0, 2), "the case's last cop slot").toBe(CAR_COP);
     expect(run.street!.snaps[0]!.z, "the car stopped on the street short of the door").toBeLessThan(-3);
   });

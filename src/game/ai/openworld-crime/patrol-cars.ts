@@ -110,6 +110,28 @@ export class PatrolCars {
     }
   }
 
+  /**
+   * The pursuit strip's numbers for traffic car `carIndex` (a human's, whose hold is `playerBustSeconds`): how many patrol cars chase it, and the longest unbroken hold they have run on it as a share of the
+   * bust hold (`hold`) and the seconds left of it (`left`): the race's own rule, `BUST`. False, `out` untouched, when none chases it.
+   */
+  chaseOf(carIndex: number, out: { cops: number; hold: number; left: number }): boolean {
+    let cops = 0;
+    let held = 0;
+    let needed = this.playerBustSeconds;
+    for (let slot = 0; slot < MAX_PATROL_CARS; slot++) {
+      if (this.mode[slot] !== PATROL_MODE.pursuing || this.targetCar[slot] !== carIndex) continue;
+      cops++;
+      if (this.heldFor[slot]! < held) continue;
+      held = this.heldFor[slot]!;
+      needed = this.holdNeeded(slot);
+    }
+    if (cops === 0) return false;
+    out.cops = cops;
+    out.hold = Math.min(1, held / needed);
+    out.left = Math.max(0, needed - held);
+    return true;
+  }
+
   /** Whether a leased patrol car on the road within `range` m of (x, z) sees it (`lineOfSight` null: every line is clear). */
   sees(x: number, z: number, range: number, lineOfSight: LineOfSight | null): boolean {
     for (let slot = 0; slot < MAX_PATROL_CARS; slot++) {
@@ -190,16 +212,22 @@ export class PatrolCars {
     else if (this.farFor[slot]! >= CAR_LOST_SECONDS || seconds - this.since[slot]! > CAR_CHASE_GIVE_UP_SECONDS) this.linger(slot, seconds, CAR_LINGER_SECONDS);
   }
 
-  /** A careful chase drives the streets to the kerb nearest where the offender will be, re-aimed every `REDIRECT_SECONDS`; within `CLOSE_PURSUIT_DISTANCE` this driver takes the wheel, and gives it back once the offender is `CHASE_RESUME_DISTANCE` off again. */
+  /**
+   * A careful chase drives the streets to the kerb nearest where the offender will be, re-aimed every `REDIRECT_SECONDS` and at once when the car has come to its space. Parked within `BUST.near` of the offender it
+   * waits (the bust hold runs); come to a stop `CLOSE_PURSUIT_DISTANCE` m or less from one that is not that near (it left the road), this driver takes the wheel for the last metres, and gives it back once the
+   * offender is `CHASE_RESUME_DISTANCE` off.
+   */
   private followStreets(slot: number, offender: AiCar, gap: number, seconds: number): void {
     const handle = this.handle[slot]!;
-    if (this.wheel[slot] === 0 && gap <= CLOSE_PURSUIT_DISTANCE) {
+    const arrived = this.wheel[slot] === 0 && this.ports.arrived(handle);
+    if (arrived && gap <= CLOSE_PURSUIT_DISTANCE && gap > BUST.near) {
       this.wheel[slot] = 1;
       this.ports.setDriver(handle, this.drivers[slot]!);
       return;
     }
+    if (arrived && gap <= BUST.near) return;
     if (this.wheel[slot] === 1 && gap <= CHASE_RESUME_DISTANCE) return;
-    if (seconds < this.redirectAt[slot]! && !this.ports.arrived(handle)) return;
+    if (seconds < this.redirectAt[slot]! && !arrived) return;
     this.redirectAt[slot] = seconds + REDIRECT_SECONDS;
     if (!this.ports.redirect(handle, offender.x + offender.vx * CHASE_LEAD_SECONDS, offender.z + offender.vz * CHASE_LEAD_SECONDS)) return;
     this.wheel[slot] = 0;

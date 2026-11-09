@@ -12,7 +12,7 @@ import { RaceOverlay, RaceStandings, RaceViewToggle, SpectateBar } from "@/compo
 import { BenchEntry } from "@/components/bench-controls";
 import { OnlineEntry } from "@/components/online-entry";
 import { Gauge, RaceReadouts } from "@/components/race-readouts";
-import { RaceStatus } from "@/components/race-status";
+import { BustStatus, RaceStatus } from "@/components/race-status";
 import { SoloExit } from "@/components/race-reel";
 import { PodiumView } from "@/components/race-podium";
 import { DriftLabel, DriftOverlay } from "@/components/drift-charge";
@@ -278,6 +278,7 @@ function DesktopHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
         />
       ) : null}
       {state.race ? <RaceStatus race={state.race} corner={focus} /> : null}
+      {state.bust ? <BustStatus chase={state.bust} corner={focus} /> : null}
       {state.derbyView && !state.derbyWinner ? (
         <div className="pointer-events-none absolute inset-x-0 top-1/3 z-10 flex justify-center px-3 sm:top-1/4">
           <ResetPrompt view={state.derbyView} input={reset} race={false} onTap={tapReset} className="mt-14 sm:mt-0" />
@@ -402,6 +403,7 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
         />
       ) : null}
       {race ? <RaceStatus race={race} corner={false} /> : null}
+      {state.bust ? <BustStatus chase={state.bust} corner={false} /> : null}
       {/* Fullscreen is one tap from every screen (the sheets and race menus cover it, as they cover the rest). */}
       <PhoneFullscreenButton />
 

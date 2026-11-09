@@ -74,6 +74,9 @@ export type SprayTool = { on: boolean; radius: number; colour: number; mirror: b
 /** The trip out of the car as the HUD reads it: `out` while he is on foot, the line under the view (what the control does now, or why it refused), and `refusal`, that why alone while it shows. */
 export type FootHud = { out: boolean; prompt: string | null; refusal: string | null };
 
+/** Police chasing the viewed car as the pursuit strip shows them (`RaceView.chase`): the open world's hold and countdown to a bust, the Survival strip's own. */
+export type ChaseHud = NonNullable<RaceView["chase"]>;
+
 /** The look-at panel's text (`CrashHudState.lookAt`): what the eye is on, as a title (a civilian's name and job, a building's name) and its short lines (needs, mood, recent comings and goings). */
 export type LookAtHud = { title: string; lines: string[] };
 
@@ -206,6 +209,8 @@ export type CrashHudState = {
   foot: FootHud | null;
   /** What the eye is on in the open world, null while it rests on nothing and in every other scene: the look-at panel. */
   lookAt: LookAtHud | null;
+  /** The patrol cars chasing the player's car in the open world and the bust hold they have run (the pursuit strip, as Survival shows it), null while none chases it and in every other scene. */
+  bust: ChaseHud | null;
   boost: number;
   /** The seat's slide while driving, `NO_DRIFT` otherwise: the free-drive boost bar's charge cue (a race and a derby read `RaceView.drift`). */
   drift: DriftView;
@@ -357,6 +362,7 @@ export const INITIAL_HUD: CrashHudState = {
   seat: "global",
   foot: null,
   lookAt: null,
+  bust: null,
   boost: 1,
   drift: NO_DRIFT,
   view: "third",

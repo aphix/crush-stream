@@ -38,6 +38,26 @@ export function PursuitStrip({ chase, size }: { chase: NonNullable<RaceView["cha
   );
 }
 
+/**
+ * The open world's pursuit strip: patrol cars chase the player's car and, while they hold it slow beside one, the bust hold running out: the race's own strip in the race's own places (bottom centre, or the top column under the
+ * start lights on a touch screen). It has no race behind it, so it stands on its own.
+ */
+export function BustStatus({ chase, corner }: { chase: NonNullable<RaceView["chase"]>; corner: boolean }) {
+  const touch = useCoarsePointer();
+  if (touch) {
+    return (
+      <div className={cn("pointer-events-none absolute inset-x-0 hud-top z-10 flex flex-col items-center gap-1", BELOW_LIGHTS)}>
+        <PursuitStrip chase={chase} size="touch" />
+      </div>
+    );
+  }
+  return (
+    <div className={cn("pointer-events-none absolute inset-x-0 z-10 flex justify-center", corner ? "bottom-[7%]" : "bottom-[30%]")}>
+      <PursuitStrip chase={chase} size="desk" />
+    </div>
+  );
+}
+
 /** Distance left on the last lap in `unit`, rounded up to the next 10; null while the banner stays down. */
 function remaining(race: RaceHud, view: RaceView, unit: SpeedUnit): number | null {
   const r = view.racer;

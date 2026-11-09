@@ -8,8 +8,8 @@ const BRAKE_DECELERATION = 9;
 const TOP_SPEED = 30;
 const STEER_RATE = 1.5;
 const STEER_SPEED_REFERENCE = 5;
-/** A traffic trip's pace (m/s) along the fake's streets (x first, then z), and how far short (m, along z) of the point asked for its kerb space stands: across the sidewalk from a door. */
-const TRIP_SPEED = 8;
+/** A traffic trip's pace (m/s: the urgent pace) along the fake's streets (x first, then z), and how far short (m, along z) of the point asked for its kerb space stands by default: across the sidewalk from a door. */
+const TRIP_SPEED = 20;
 const KERB_SPACE_OFFSET = 6;
 
 /** The traffic and the engine's cars as the patrol cars see them, with a point-mass for physics: a car with a driver does what the driver writes, a leased one without drives its trip along the streets (x, then z) to its kerb space, any other keeps its velocity. */
@@ -24,6 +24,8 @@ export class FakeStreet {
   readonly tripX: number[] = [];
   readonly tripZ: number[] = [];
   readonly tripDone: boolean[] = [];
+  /** How far short (m) of a point the next trip's kerb space stands. */
+  kerbOffset = KERB_SPACE_OFFSET;
   readonly redirects: { handle: number; x: number; z: number }[] = [];
   /** Per car: the patrol car (its handle) its driver runs from, -1 when none. */
   readonly evading: number[] = [];
@@ -55,7 +57,7 @@ export class FakeStreet {
     this.leases++;
     const handle = this.addCar(this.leaseAt.x, this.leaseAt.z, this.leaseAt.yaw, 0, -1, false);
     this.tripX[handle] = toX;
-    this.tripZ[handle] = toZ - KERB_SPACE_OFFSET;
+    this.tripZ[handle] = toZ - this.kerbOffset;
     return handle;
   }
 
@@ -67,7 +69,7 @@ export class FakeStreet {
   redirect(handle: number, toX: number, toZ: number): boolean {
     this.redirects.push({ handle, x: toX, z: toZ });
     this.tripX[handle] = toX;
-    this.tripZ[handle] = toZ - KERB_SPACE_OFFSET;
+    this.tripZ[handle] = toZ - this.kerbOffset;
     this.tripDone[handle] = false;
     return true;
   }

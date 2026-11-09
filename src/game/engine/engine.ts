@@ -61,7 +61,7 @@ import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
 import { buildOpenWorldMap } from "../world/openworld/openworld-map.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { homeFrontages } from "../world/openworld/openworld-facade-solids.ts";
-import type { LookAtHud } from "../hud/hud-store.ts";
+import type { ChaseHud, LookAtHud } from "../hud/hud-store.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
@@ -560,6 +560,10 @@ export class CrashEngine extends EngineGarage {
 
   protected override lookAtText(): LookAtHud | null {
     return this.openWorld.lookAt();
+  }
+
+  protected override bustText(): ChaseHud | null {
+    return this.openWorld.bustOf(this.race.self);
   }
 
   protected override get autoCamOn(): boolean {

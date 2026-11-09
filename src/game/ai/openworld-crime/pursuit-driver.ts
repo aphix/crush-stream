@@ -8,7 +8,7 @@ import type { AiCar } from "../derby-ai.ts";
 import type { Obstacles } from "../obstacles.ts";
 import { Pedals } from "../pedals.ts";
 import { arcSpeed, brakeOver, turnRate } from "../race-ai.ts";
-import { AVOID_TURN_COST, AVOID_TURNS, CAR_AVOID_GAP, CAR_AVOID_LOOK, CAR_AVOID_SWATH, CAR_LEAD_SECONDS, CAR_STOP_DECEL, MAX_PATROL_CARS } from "./crime-constants.ts";
+import { AVOID_TURN_COST, AVOID_TURNS, CAR_AVOID_DECEL, CAR_AVOID_GAP, CAR_AVOID_LOOK, CAR_AVOID_SWATH, CAR_LEAD_SECONDS, CAR_STOP_DECEL, HOLD_BRAKE_SPEED, MAX_PATROL_CARS } from "./crime-constants.ts";
 
 const PATROL_CLASS = classStats("sedan");
 const GROUND = SURFACES.asphalt;
@@ -61,7 +61,7 @@ export class PursuitDriver {
     const brake = brakeOver(this.pedals, self.id, speed - wanted);
     if (brake > 0) out.brake = brake;
     else out.throttle = Math.min(1, wanted / PATROL_CLASS.topSpeed);
-    if (stopSpeed === 0 && speed < STANDING_SPEED) out.brake = 1;
+    if (wanted < STANDING_SPEED && speed < HOLD_BRAKE_SPEED) out.brake = 1;
     this.pedals.shape(self.id, out, dt);
     this.backoff.watch(slot, self.x, self.z, dt, out);
   }
@@ -79,7 +79,7 @@ export class PursuitDriver {
       const ahead = dx * forwardX + dz * forwardZ;
       if (ahead <= 0 || ahead > CAR_AVOID_LOOK || Math.abs(dx * forwardZ - dz * forwardX) > CAR_AVOID_SWATH) continue;
       const along = Math.max(0, other.vx * forwardX + other.vz * forwardZ);
-      limit = Math.min(limit, along + Math.sqrt(2 * CAR_STOP_DECEL * Math.max(0, ahead - CAR_AVOID_GAP)));
+      limit = Math.min(limit, along + Math.sqrt(2 * CAR_AVOID_DECEL * Math.max(0, ahead - CAR_AVOID_GAP)));
     }
     return limit;
   }
