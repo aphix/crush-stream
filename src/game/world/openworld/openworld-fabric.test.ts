@@ -2,24 +2,28 @@ import { describe, expect, it } from "vitest";
 import { detCos, detSin } from "../../kernel/physics-core.js";
 import { assertSameDigest } from "../../vehicle/test-support.ts";
 import { PREFAB } from "../constants.ts";
+import { SCENERY_ASSETS } from "../scenery-assets/index.ts";
 import { facadeSolidProps } from "./openworld-facade-solids.ts";
 import { ASSET, FRONTAGE_KITS, FURNITURE_GAP, KIT_SLIDE, LAMP_CLEARANCE, QUARTER_TURN, TREE_CROWN_CLEARANCE } from "./openworld-fabric-constants.ts";
 import { fabricProps } from "./openworld-fabric.ts";
+import { layOutLots } from "./openworld-lots.ts";
+import { buildOpenWorldMap } from "./openworld-map.ts";
 import { allFaces, assetIndex, cornersOf, fabricCourse, inStrip, onFace, roadDepth } from "./openworld-fabric.test-util.ts";
 import { sidesOf, type BlockSide } from "./openworld-sides.ts";
+import { PLACE_KIND } from "./walk-graph.ts";
 
 const { lots, course, track, graph, everything } = fabricCourse();
 const geometry = lots.geometry;
 const faces = allFaces(lots);
 /** The road's own paint: every other asset the fabric lays is furniture beside it. */
-const ROAD_PAINT: readonly string[] = [ASSET.manhole, ASSET.crosswalk, ASSET.drain];
+const ROAD_PAINT: readonly string[] = [ASSET.manhole, ASSET.crosswalk];
 const kit = course.props.filter((prop): prop is typeof prop & { asset: string } => prop.asset !== undefined && !ROAD_PAINT.includes(prop.asset));
 
 /** A decal is on a crossing leg's line within this (m). */
 const ON_LINE = 0.01;
 /** Slack (m) on a decal's coordinates: the walk graph stores float32. */
 const COORDINATE_SLACK = 1e-4;
-/** A loop corner's round is within this (m) of its apex: no sign or drain stands that near one. */
+/** A loop corner's round is within this (m) of its apex: no sign stands that near one. */
 const LOOP_CORNER_REACH = 12;
 
 type Leg = { ax: number; az: number; bx: number; bz: number };
@@ -181,23 +185,26 @@ describe("given the facade kit's solid boxes (stoop steps, bay flanks)", () => {
   });
 });
 
-describe("given the street-name signs and the storm drains at the block corners", () => {
+describe("given the street-name signs at the block corners", () => {
   const signs = kit.filter((prop) => prop.asset === ASSET.nameSign);
-  const drains = course.props.filter((prop) => prop.asset === ASSET.drain);
   const apexes = [-1, 1].flatMap((signX) => [-1, 1].map((signZ) => ({ x: signX * geometry.streetX[geometry.streetX.length - 1]!, z: signZ * geometry.streetZ[geometry.streetZ.length - 1]! })));
 
   // mutation: sed -i 's/if (isLoopCorner(block, signX, signZ, geometry)) continue;//' src/game/world/openworld/openworld-fabric.ts
-  it("when the corners are read, then signs and drains stand at many of them and none within reach of the loop's rounded corners", () => {
+  it("when the corners are read, then signs stand at many of them and none within reach of the loop's rounded corners", () => {
     expect(signs.length, "signs").toBeGreaterThan(10);
-    expect(drains.length, "drains").toBeGreaterThan(10);
-    for (const prop of [...signs, ...drains]) {
-      for (const apex of apexes) expect(Math.hypot(prop.x - apex.x, prop.z - apex.z), `${prop.asset} at ${prop.x.toFixed(1)}, ${prop.z.toFixed(1)} from a loop corner (m)`).toBeGreaterThan(LOOP_CORNER_REACH);
+    for (const sign of signs) {
+      for (const apex of apexes) expect(Math.hypot(sign.x - apex.x, sign.z - apex.z), `sign at ${sign.x.toFixed(1)}, ${sign.z.toFixed(1)} from a loop corner (m)`).toBeGreaterThan(LOOP_CORNER_REACH);
     }
   });
+});
 
-  // mutation: sed -i 's/geometry.sidewalk + DRAIN_PAST_CURB/geometry.sidewalk - DRAIN_PAST_CURB/' src/game/world/openworld/openworld-fabric.ts
-  it("when a drain's four corners are read, then each lies on a road, in the gutter", () => {
-    for (const drain of drains) for (const [x, z] of cornersOf({ ...drain, asset: ASSET.drain })) expect(roadDepth(track, x, z), `drain at ${drain.x.toFixed(1)}, ${drain.z.toFixed(1)}: depth into the road (m)`).toBeGreaterThan(0);
+describe("given the paint on the roads", () => {
+  const paint = everything.filter((prop) => (prop.prefab === PREFAB.assetDecal || prop.prefab === PREFAB.assetTile) && roadDepth(track, prop.x, prop.z) > 0);
+
+  // mutation: sed -i 's/, roadDecals: \[\] }/, roadDecals: ["arrow"] }/' src/game/world/openworld/openworld-course.ts
+  it("when every decal and tile the course places or draws on a road is read, then it is a manhole cover or a marked crossing", () => {
+    const ids = new Set(paint.map((prop) => SCENERY_ASSETS[prop.asset!]!.id));
+    expect([...ids].sort().join(", "), "assets painted on the roads").toBe([ASSET.crosswalk, ASSET.manhole].sort().join(", "));
   });
 });
 
@@ -211,5 +218,28 @@ describe("given the course's road paint and its fabric", () => {
   // mutation: sed -i 's/const random = mulberry32(FABRIC_SEED);/const random = Math.random;/' src/game/world/openworld/openworld-fabric.ts
   it("when the fabric is laid twice, then both are the same street", () => {
     assertSameDigest(fabricProps(lots, graph), fabricProps(lots, graph), "fabric props");
+  });
+});
+
+describe("given the shipped layout", () => {
+  const shipped = layOutLots();
+  const laid = fabricProps(shipped, buildOpenWorldMap(shipped).graph);
+
+  // mutation: sed -i 's/export const FURNITURE_CORNER_CLEAR = 3;/export const FURNITURE_CORNER_CLEAR = 60;/' src/game/world/openworld/openworld-fabric-constants.ts
+  it("when the fabric is laid on it, then every block face has its hydrant and the bus stop its shelter", () => {
+    const missing: string[] = [];
+    for (const block of shipped.blocks) {
+      for (const side of sidesOf(block, shipped.geometry)) {
+        const hydrants = laid.filter((prop) => prop.asset === ASSET.hydrant && inStrip(side, shipped, prop.x, prop.z, 0)).length;
+        if (hydrants !== 1) missing.push(`${hydrants} hydrants on the ${side.side} face of block ${block.column},${block.row}`);
+      }
+    }
+    for (const [index, place] of shipped.places.entries()) {
+      const link = shipped.links.find((candidate) => candidate.place === index);
+      if (place.kind !== PLACE_KIND.transit || index >= shipped.backdropStart || link === undefined || link.side === null) continue;
+      const side = sidesOf(shipped.blocks[link.block]!, shipped.geometry).find((candidate) => candidate.side === link.side)!;
+      if (!laid.some((prop) => prop.asset === ASSET.busShelter && inStrip(side, shipped, prop.x, prop.z, 0))) missing.push(`no shelter at ${place.name} on the ${side.side} face of block ${link.block}`);
+    }
+    expect(missing.join("; "), "faces and stops left without").toBe("");
   });
 });

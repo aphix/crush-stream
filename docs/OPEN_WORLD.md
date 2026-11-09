@@ -113,10 +113,10 @@ The course lays the street's own paint and furniture as props that name scenery 
 - **Crossings.** At the middle of every crossing edge of the walk graph, bars with the traffic across the whole carriageway (the crosswalk decal, as many as cover 11 m at its own pitch). No crosswalk lies anywhere else.
 - **Manholes.** One cover in the middle of every street segment (between two intersections), in the middle of a travel lane, alternating lanes.
 - **Furniture strips.** The 1.2 m strip at the curb of every block face, round the lamps and street trees (each keeps its clearance; nothing stands within 3 m of a face's end): a hydrant per face; per business (a place of kind shop, food, hangout or work with a face) its kit (`FRONTAGE_KITS`: newspaper box, bins, a bench, a café table, bike racks, parking meters), slid up to 4 m along the face to fit; the bus stop first of all (shelter, stop sign, bin).
-- **Corners.** A street-name sign at two opposite corners of each intersection and a storm drain grate in the gutter by the other two; none at the perimeter loop's four rounded corners.
+- **Corners.** A street-name sign at two opposite corners of each intersection; none at the perimeter loop's four rounded corners.
 - **Parked cars.** None are placed by the course: the low-poly parked cars inside the walls are gone, parked cars are real cars (traffic).
 
-Not here yet: trees in pits, utility poles, curb ramps.
+Nothing in the fabric throws: a piece that finds no room is left out, and a row holds the shipped layout to a hydrant on every face and a shelter at the bus stop. Not here yet: trees in pits, utility poles, storm drains, curb ramps.
 
 ## Rowhome facade kit
 
