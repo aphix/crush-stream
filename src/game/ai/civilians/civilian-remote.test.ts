@@ -40,7 +40,7 @@ class SpyWorker extends PageWorker {
   constructor(url: string | URL) {
     super(url);
     SpyWorker.last = this;
-    this.addEventListener("message", (event) => {
+    this.addEventListener("message", () => {
       this.answers++;
       if (this.waiting !== null && this.answers >= this.waiting.count) this.waiting.resolve();
     });
@@ -55,9 +55,9 @@ class SpyWorker extends PageWorker {
   /** Resolves when the worker has sent `count` messages. */
   whenAnswered(count: number): Promise<void> {
     if (this.answers >= count) return Promise.resolve();
-    const { promise, resolve, reject } = Promise.withResolvers<void>();
-    this.waiting = { count, resolve, reject };
-    return promise;
+    return new Promise<void>((resolve, reject) => {
+      this.waiting = { count, resolve, reject };
+    });
   }
 }
 
@@ -165,6 +165,22 @@ describe("given the main thread asks for a tick before the worker has answered i
     expect(answerDigest(remote.take(6)), "tick 6 as the worker's answer was").toBe(answerDigest(theirs[6]!));
     expect(answerDigest(remote.take(8)), "tick 8, with tick 7 computed here on the way").toBe(answerDigest(theirs[8]!));
     expect(remote.traffic.lateAnswers, "late answers after those").toBe(6);
+  });
+});
+
+describe("given the crowd's frame loop advancing the brain a tick at a time", () => {
+  it("when ticks are advanced, then plans go to the worker two seconds (four ticks) ahead, the events with the first of them, and each answer is the one computed alone", () => {
+    usePageWorker(ScriptedWorker);
+    const remote = CivilianRemote.open(noFailure);
+    remote.init(SEED, map, RESIDENTS);
+    const reference = workersAnswers(3);
+    const wreck = [EVENT_KIND.wreck, placeNamed(map, PLACE_NAMES.bodega), 0];
+    expect(answerDigest(remote.advance(0, wreck)), "answer of tick 0").toBe(answerDigest(reference[0]!));
+    for (let tick = 1; tick <= 3; tick++) expect(answerDigest(remote.advance(tick, [])), `answer of tick ${tick}`).toBe(answerDigest(reference[tick]!));
+    const plans = ScriptedWorker.last.posted.flatMap((entry) => (entry.message.kind === "plan" ? [entry.message] : []));
+    expect(firstMismatch(plans.map((plan) => plan.tick), [0, 1, 2, 3, 4, 5, 6, 7]), "ticks planned, in order, four ahead of the last advanced").toBeUndefined();
+    expect(plans[0]!.events.length, "numbers in the first plan's events").toBe(3);
+    expect(plans[1]!.events.length, "numbers in the second plan's events").toBe(0);
   });
 });
 

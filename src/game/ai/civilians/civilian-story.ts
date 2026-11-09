@@ -18,11 +18,11 @@ import type { CityState } from "./civilian-state.ts";
 /** Marks an appointment whose place is the day's block, not one named place. */
 const BLOCK_OF_DAY_PLACE = -2;
 
-export type ResolvedAppointment = { purpose: number; place: number; minuteOfDay: number; weekday: number; dwellMinutes: number };
+type ResolvedAppointment = { purpose: number; place: number; minuteOfDay: number; weekday: number; dwellMinutes: number };
 export type ResolvedMember = { member: CastMember; home: number; workplace: number; appointments: readonly ResolvedAppointment[] };
 
 /** The next appointment a walker is to keep: the leg's purpose, the place, the tick it ends at the place and how long it stays. */
-export type AppointmentSlot = { purpose: number; place: number; arriveTick: number; dwellTicks: number };
+type AppointmentSlot = { purpose: number; place: number; arriveTick: number; dwellTicks: number };
 
 export function newAppointmentSlot(): AppointmentSlot {
   return { purpose: 0, place: NO_PLACE, arriveTick: 0, dwellTicks: 0 };

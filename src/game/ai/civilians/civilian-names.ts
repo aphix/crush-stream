@@ -30,7 +30,7 @@ export function packName(gender: number, firstName: number, familyName: number):
   return (gender << (2 * NAME_BITS)) | (firstName << NAME_BITS) | familyName;
 }
 
-export function firstNameText(gender: number, firstName: number): string {
+function firstNameText(gender: number, firstName: number): string {
   if (firstName >= CAST_NAME_BASE) return CAST[firstName - CAST_NAME_BASE]!.first;
   return (gender === GENDER.female ? FEMALE_NAMES : MALE_NAMES)[firstName]!;
 }
@@ -82,7 +82,8 @@ export function castTitleIndex(member: CastMember): number {
 }
 
 export const MOOD = { fine: 0, happy: 1, proud: 2, sad: 3, busy: 4, exhausted: 5, hurt: 6, afraid: 7, hungry: 8, lonely: 9, restless: 10, angry: 11, annoyed: 12, worried: 13 } as const;
-export const MOOD_WORDS = ["fine", "happy", "proud", "sad", "busy", "exhausted", "hurt", "afraid", "hungry", "lonely", "restless", "angry", "annoyed", "worried"] as const;
+/** The mood words by mood number: the names of `MOOD` in its order. */
+export const MOOD_WORDS = Object.keys(MOOD);
 /** The mood of the need that is over `MOOD_NEED_LEVEL` (NEED order). */
 export const NEED_MOODS = [MOOD.exhausted, MOOD.hungry, MOOD.restless, MOOD.lonely, MOOD.busy, MOOD.restless] as const;
 

@@ -19,7 +19,7 @@ import { castHomesOf, newAppointmentSlot, type ResolvedMember } from "./civilian
 import { PathFinder } from "./walk-path.ts";
 
 /** A host event waiting for its ticks: the civilian it hit (or the place) changes at `individualTick`, the society at `societyTick`. */
-export type PendingEvent = { kind: number; subject: number; seconds: number; individualTick: number; societyTick: number; individualDone: boolean };
+type PendingEvent = { kind: number; subject: number; seconds: number; individualTick: number; societyTick: number; individualDone: boolean };
 
 /** The whole society and crowd of the city as typed arrays; the worker and the main thread each hold one and keep it equal by the same pure steps. */
 export class CityState {

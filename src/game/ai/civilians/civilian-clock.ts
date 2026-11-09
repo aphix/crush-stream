@@ -6,10 +6,6 @@ export function tickAt(seconds: number): number {
   return Math.floor(seconds * DECISION_HZ);
 }
 
-export function secondsAtTick(tick: number): number {
-  return tick / DECISION_HZ;
-}
-
 /** The game hour (0-23) crowd time 0 falls in: drawn from the seed. */
 export function startHourOf(seed: number): number {
   return Math.floor(residentDraws(seed, 0, STREAM.clock, 0)() * HOURS_PER_GAME_DAY);

@@ -1,4 +1,5 @@
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
+import { PLAN_LEAD_TICKS } from "./civilian-constants.ts";
 import { queueEvents } from "./civilian-events.ts";
 import type { CityState } from "./civilian-state.ts";
 import { computeTick } from "./civilian-tick.ts";
@@ -6,13 +7,16 @@ import { answerBuffers, applyAnswer, type FromCivilianWorker, type TickAnswer, t
 import { createCityState } from "./society.ts";
 
 /** What the main thread posted to the worker and heard from it so far, in messages and the bytes of the typed arrays handed over, and the answers that came after the main thread had computed the tick itself. */
-export interface CivilianTraffic {
+interface CivilianTraffic {
   postedMessages: number;
   postedBytes: number;
   heardMessages: number;
   heardBytes: number;
   lateAnswers: number;
 }
+
+/** What a post carries when nothing was heard. */
+const NO_EVENTS: readonly number[] = [];
 
 /** A copy of the map whose typed arrays can be handed to the worker without detaching the main thread's own. */
 function mapForWorker(map: OpenWorldMap): { map: OpenWorldMap; buffers: ArrayBuffer[] } {
@@ -39,6 +43,8 @@ export class CivilianRemote {
   private mirror: CityState | null = null;
   /** Answers heard and not yet applied, by tick. */
   private readonly heard = new Map<number, TickAnswer>();
+  /** The newest tick posted. */
+  private postedThrough = -1;
 
   private constructor(worker: Worker | null, onFail: (err: Error) => void, traffic: CivilianTraffic) {
     this.worker = worker;
@@ -86,8 +92,21 @@ export class CivilianRemote {
     const mirror = this.state;
     if (tick < mirror.nextTick) throw new Error(`civilian tick ${tick} posted after tick ${mirror.nextTick - 1} was taken`);
     queueEvents(mirror, tick, events);
+    this.postedThrough = Math.max(this.postedThrough, tick);
     const sent = Float64Array.from(events);
     this.send({ kind: "plan", tick, events: sent }, [sent.buffer]);
+  }
+
+  /** One tick of the crowd's frame loop: plans are asked for `PLAN_LEAD_TICKS` ahead of `tick` (every tick up to it is posted once, the events heard since with the first of them), then `tick` is taken. */
+  advance(tick: number, events: ArrayLike<number>): TickAnswer {
+    const through = tick + PLAN_LEAD_TICKS;
+    if (events.length > 0 && through <= this.postedThrough) throw new Error(`civilian events heard for tick ${tick}, whose plan was posted already`);
+    let heardWith = events;
+    for (let next = this.postedThrough + 1; next <= through; next++) {
+      this.post(next, heardWith);
+      heardWith = NO_EVENTS;
+    }
+    return this.take(tick);
   }
 
   /** The answer for tick `tick`, applied to `state`: the worker's if it has come, else computed here by the same step. Ticks before it that were not taken are taken first. */

@@ -18,7 +18,7 @@ function decideDue(state: CityState, tick: number): void {
  * Steps the city one tick: events whose own tick has come, at an hour tick the society (events' society side, reopenings, the radio, at a game day's start each resident's day), then the decisions due. A pure function of
  * the state, so the worker and the main thread, stepping the same ticks in order, keep equal states.
  */
-export function stepTick(state: CityState, tick: number): void {
+function stepTick(state: CityState, tick: number): void {
   applyIndividualEvents(state, tick);
   if (isHourTick(tick)) {
     applySocietyEvents(state, tick);

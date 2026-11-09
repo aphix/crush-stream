@@ -47,7 +47,7 @@ import { castHomesOf, resolveCast } from "./civilian-story.ts";
 import { rollNeeds } from "./needs.ts";
 
 /** What a new resident is born, moves in or starts out as: the fields a row is made from. */
-export type ResidentSpec = { species: number; gender: number; firstName: number; familyName: number; birthDay: number; home: number; parent: number; partner: number; flags: number; paceFactor: number };
+type ResidentSpec = { species: number; gender: number; firstName: number; familyName: number; birthDay: number; home: number; parent: number; partner: number; flags: number; paceFactor: number };
 
 /** A row's job: the place (or none) and the title step; the headcounts follow. */
 export function setWork(state: CityState, resident: number, place: number, title: number): void {

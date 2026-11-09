@@ -3,8 +3,8 @@ import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 /** Crowd time runs on one grid: a plan, an event and a society step all land on a tick of 1 / DECISION_HZ crowd seconds. */
 export const DECISION_HZ = 2;
 /** A crowd second is a game minute (owner: 1 game day = 24 real minutes). */
-export const GAME_SECONDS_PER_CROWD_SECOND = 60;
-export const SECONDS_PER_GAME_MINUTE = 60;
+const GAME_SECONDS_PER_CROWD_SECOND = 60;
+const SECONDS_PER_GAME_MINUTE = 60;
 export const MINUTES_PER_GAME_HOUR = 60;
 export const HOURS_PER_GAME_DAY = 24;
 export const MINUTES_PER_GAME_DAY = MINUTES_PER_GAME_HOUR * HOURS_PER_GAME_DAY;
@@ -113,15 +113,15 @@ export const FEAR_AVOID = 4;
 export const AFRAID_FEAR = 0.2;
 /** A wrecked place stays shut this many game days; a family whose stoop was wrecked stays angry this many. */
 export const CLOSED_DAYS = 2;
-export const ANGRY_DAYS = 3;
+const ANGRY_DAYS = 3;
 export const ANGRY_HOLD_TICKS = ANGRY_DAYS * TICKS_PER_GAME_DAY;
 /** A knocked civilian is in hospital this many game days (12 real minutes), then back home. */
-export const HOSPITAL_DAYS = 0.5;
+const HOSPITAL_DAYS = 0.5;
 export const HOSPITAL_TICKS = HOSPITAL_DAYS * TICKS_PER_GAME_DAY;
 /** The needs of someone just out of hospital: tired, hungry, nothing else pressing. */
 export const HOSPITAL_NEEDS = [0.5, 0.6, 0, 0.1, 0.1, 0.1] as const;
 /** How long a street or society event colours a mood (game hours). */
-export const MOOD_HOLD_HOURS = 18;
+const MOOD_HOLD_HOURS = 18;
 export const MOOD_HOLD_TICKS = MOOD_HOLD_HOURS * TICKS_PER_GAME_HOUR;
 /** A need at or over this reads as the mood (hungry, exhausted...). */
 export const MOOD_NEED_LEVEL = 0.75;
@@ -205,21 +205,19 @@ export const MARRY_SHARE = 0.7;
 export const JOB_FIND_CHANCE = 0.5;
 /** A partner is looked for among this many residents from a drawn start. */
 export const PARTNER_SCAN = 64;
-/** A job is looked for in this many drawn places before the whole list is walked. */
-export const JOB_TRIES = 8;
 
 /** Need rise per game hour: a day awake fills rest in 16 h, food in 5, work in 10, social in 9, errand in 22, solitude in 14; each resident's own rate is within +-RATE_SPREAD of it. */
 export const NEED_RATE_PER_HOUR = [1 / 16, 1 / 5, 1 / 10, 1 / 9, 1 / 22, 1 / 14] as const;
 export const RATE_SPREAD = 0.3;
 /** A start need is a draw up to this. */
 export const START_NEED_MAX = 0.5;
-/** Need relief per game minute spent dwelling at a place of each kind (rows: PLACE_KIND order home, work, food, shop, hangout, hide, transit; columns: NEED order): a night's rest at home in 5 h, a meal in 22 min, a shift of 7.5 h, an errand in 12 min, an hour and a bit of company, solitude in 35 min. */
+/** Need relief per game minute spent dwelling at a place of each kind (rows: PLACE_KIND order home, work, food, shop, hangout, hide, transit; columns: NEED order): a night's rest at home in 5 h, a meal in 22 min, a shift of 7.5 h, an errand in 12 min, an hour and a half of company, solitude in 35 min. */
 export const RELIEF_PER_MINUTE = [
   [1 / 300, 0, 0, 0, 0, 1 / 700],
   [0, 0, 1 / 450, 0, 0, 0],
   [0, 1 / 22, 0, 1 / 200, 0, 0],
   [0, 0, 0, 0, 1 / 12, 0],
-  [0, 0, 0, 1 / 80, 0, 0],
+  [0, 0, 0, 1 / 90, 0, 0],
   [1 / 600, 0, 0, 0, 0, 1 / 35],
   [0, 0, 0, 0, 1 / 9, 0],
 ] as const;
@@ -247,8 +245,6 @@ export const DECISION_JITTER = 0.1;
 export const FAVOURITE_CHANCE = 0.5;
 /** First decisions fall within this many ticks of the start. */
 export const INITIAL_SPREAD_TICKS = 240;
-/** Which place kind answers a need (errand: a shop or a bus stop). */
-export const NEED_KINDS = [[PLACE_KIND.home], [PLACE_KIND.food], [PLACE_KIND.work], [PLACE_KIND.hangout], [PLACE_KIND.shop, PLACE_KIND.transit], [PLACE_KIND.hide]] as const;
 /** Place kinds that employ people. */
 export const WORKPLACE_KINDS = [PLACE_KIND.work, PLACE_KIND.food, PLACE_KIND.shop, PLACE_KIND.hangout, PLACE_KIND.transit] as const;
 /** Work is chosen only in the hours from one before a shift starts to four after it (leaving for work late in a shift is not worth it); other hours weigh WORK_OFF_SHIFT. */

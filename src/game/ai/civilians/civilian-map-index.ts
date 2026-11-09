@@ -27,7 +27,7 @@ export type MapIndex = {
 };
 
 /** The block (0-8) a point lies in: the playable square in thirds each way, A1 north-west. */
-export function blockOfPosition(x: number, z: number, halfX: number, halfZ: number): number {
+function blockOfPosition(x: number, z: number, halfX: number, halfZ: number): number {
   const column = Math.min(BLOCK_COLUMNS - 1, Math.max(0, Math.floor(((x + halfX) * BLOCK_COLUMNS) / (2 * halfX))));
   const fromLowZ = Math.min(BLOCK_ROWS - 1, Math.max(0, Math.floor(((z + halfZ) * BLOCK_ROWS) / (2 * halfZ))));
   const row = NORTH_IS_LOW_Z ? fromLowZ : BLOCK_ROWS - 1 - fromLowZ;

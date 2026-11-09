@@ -17,7 +17,6 @@ import {
   MAX_PATH_NODES,
   NEED,
   NEED_COUNT,
-  NEED_KINDS,
   NIGHT_FEAR_WEIGHT,
   NIGHT_FROM_HOUR,
   NIGHT_TO_HOUR,
@@ -48,7 +47,7 @@ function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
 }
 
-export function isOpen(state: CityState, place: number, tick: number): boolean {
+function isOpen(state: CityState, place: number, tick: number): boolean {
   return state.closedUntilTick[place]! <= tick;
 }
 
@@ -141,7 +140,7 @@ function chooseByUtility(state: CityState, resident: number, current: number, ti
   const fearWeight = isNight(hour) ? NIGHT_FEAR_WEIGHT : 1;
   let bestUtility = STAY_UTILITY;
   let bestPlace = NO_PLACE;
-  let bestPurpose = NEED.rest;
+  let bestPurpose: number = NEED.rest;
   for (let need = 0; need < NEED_COUNT; need++) {
     const urgency = state.scratchNeeds[need]!;
     if (urgency <= 0 || (!person && need !== NEED.rest && need !== NEED.solitude)) continue;
@@ -179,7 +178,7 @@ function stayPut(state: CityState, resident: number, tick: number, place: number
 }
 
 /** Plans the walk from where resident `resident` dwells to `destination` and a stay there; false (nothing written) when no walk of the allowed length exists. The needs it keeps are `state.scratchNeeds`. */
-export function planLeg(state: CityState, resident: number, tick: number, destination: number, purpose: number, dwellTicks: number): boolean {
+function planLeg(state: CityState, resident: number, tick: number, destination: number, purpose: number, dwellTicks: number): boolean {
   const base = resident * RESIDENT_INT_STRIDE;
   const floatBase = resident * RESIDENT_FLOAT_STRIDE;
   const current = state.ints[base + RESIDENT_INT.place]!;

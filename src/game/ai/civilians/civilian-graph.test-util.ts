@@ -71,63 +71,90 @@ function nearestStreetNode(x: number, z: number): number {
   return best;
 }
 
+type Edge = { from: number; to: number; crossing: number };
+type Layout = { nodeX: number[]; nodeZ: number[]; edges: Edge[] };
+
+function addStreet(layout: Layout, first: number, second: number, crossing: number): void {
+  layout.edges.push({ from: first, to: second, crossing }, { from: second, to: first, crossing });
+}
+
+function isInterior(column: number, row: number): boolean {
+  return column > 0 && column < STREET_COLUMNS - 1 && row > 0 && row < STREET_Z.length - 1;
+}
+
+/** The sixteen street corners and the streets between them; the streets of the middle ring are zebra crossings. */
+function streetLattice(): Layout {
+  const layout: Layout = { nodeX: [], nodeZ: [], edges: [] };
+  for (const z of STREET_Z) {
+    for (const x of STREET_X) {
+      layout.nodeX.push(x);
+      layout.nodeZ.push(z);
+    }
+  }
+  for (let row = 0; row < STREET_Z.length; row++) {
+    for (let column = 0; column < STREET_COLUMNS; column++) {
+      if (column + 1 < STREET_COLUMNS) addStreet(layout, nodeOf(column, row), nodeOf(column + 1, row), isInterior(column, row) && isInterior(column + 1, row) ? 1 : 0);
+      if (row + 1 < STREET_Z.length) addStreet(layout, nodeOf(column, row), nodeOf(column, row + 1), isInterior(column, row) && isInterior(column, row + 1) ? 1 : 0);
+    }
+  }
+  return layout;
+}
+
+/** A door node at (x, z) joined by a spur to the nearest corner; returns its node id. */
+function addDoor(layout: Layout, x: number, z: number): number {
+  const door = layout.nodeX.length;
+  layout.nodeX.push(x);
+  layout.nodeZ.push(z);
+  addStreet(layout, door, nearestStreetNode(x, z), 0);
+  return door;
+}
+
+function toWalkGraph(layout: Layout): WalkGraph {
+  const { nodeX, nodeZ } = layout;
+  const edges = layout.edges.slice().sort((first, second) => first.from - second.from || first.to - second.to);
+  const edgeStart = new Int32Array(nodeX.length + 1);
+  for (const edge of edges) edgeStart[edge.from + 1]!++;
+  for (let node = 0; node < nodeX.length; node++) edgeStart[node + 1]! += edgeStart[node]!;
+  return {
+    nodeX: Float32Array.from(nodeX),
+    nodeZ: Float32Array.from(nodeZ),
+    edgeStart,
+    edgeTo: Int32Array.from(edges, (edge) => edge.to),
+    edgeLength: Float32Array.from(edges, (edge) => Math.hypot(nodeX[edge.to]! - nodeX[edge.from]!, nodeZ[edge.to]! - nodeZ[edge.from]!)),
+    edgeCrossing: Uint8Array.from(edges, (edge) => edge.crossing),
+  };
+}
+
+function placeSpecs(extraHomes: number): PlaceSpec[] {
+  const specs: PlaceSpec[] = [...NAMED_PLACES, { name: PLACE_NAMES.busStop, kind: PLACE_KIND.transit, block: "B1", sector: "Transport" }];
+  for (const block of BLOCKS) for (let count = 0; count < extraHomes; count++) specs.push({ name: `Rowhome ${block}-${count + 1}`, kind: PLACE_KIND.home, block, sector: "" });
+  return specs;
+}
+
+function placeAt(spec: PlaceSpec, doorNode: number, layout: Layout, spot: { x: number; z: number }): Place {
+  return { kind: spec.kind, name: spec.name, doorNode, doorX: layout.nodeX[doorNode]!, doorZ: layout.nodeZ[doorNode]!, yaw: 0, x: spot.x, z: spot.z, width: spec.width ?? 12, depth: spec.depth ?? 14, storeys: 2, style: "rowbrick", sector: spec.sector };
+}
+
 /**
  * A small hand-built neighbourhood: sixteen street corners in a four by four lattice (crossings on the middle ring), a door spur for every place inside the walls, the places the cast needs by name in their blocks,
  * `extraHomes` plain rowhomes per block on top, a bus stop on the third street's west end as the only portal, and two places beyond the walls with no door on the graph.
  */
 export function buildFixtureMap(extraHomes = 2): OpenWorldMap {
+  const layout = streetLattice();
   const slotsUsed = new Map<string, number>();
-  const specs: PlaceSpec[] = [...NAMED_PLACES, { name: PLACE_NAMES.busStop, kind: PLACE_KIND.transit, block: "B1", sector: "Transport" }];
-  for (const block of BLOCKS) for (let count = 0; count < extraHomes; count++) specs.push({ name: `Rowhome ${block}-${count + 1}`, kind: PLACE_KIND.home, block, sector: "" });
-  const nodeX: number[] = [];
-  const nodeZ: number[] = [];
-  const edges: { from: number; to: number; crossing: number }[] = [];
-  for (const z of STREET_Z) for (const x of STREET_X) (nodeX.push(x), nodeZ.push(z));
-  const addEdge = (first: number, second: number, crossing: number) => edges.push({ from: first, to: second, crossing }, { from: second, to: first, crossing });
-  for (let row = 0; row < STREET_Z.length; row++) {
-    for (let column = 0; column < STREET_COLUMNS; column++) {
-      const interior = (column: number, row: number) => column > 0 && column < STREET_COLUMNS - 1 && row > 0 && row < STREET_Z.length - 1;
-      if (column + 1 < STREET_COLUMNS) addEdge(nodeOf(column, row), nodeOf(column + 1, row), interior(column, row) && interior(column + 1, row) ? 1 : 0);
-      if (row + 1 < STREET_Z.length) addEdge(nodeOf(column, row), nodeOf(column, row + 1), interior(column, row) && interior(column, row + 1) ? 1 : 0);
-    }
-  }
   const places: Place[] = [];
   const portals: number[] = [];
-  for (const spec of specs) {
+  for (const spec of placeSpecs(extraHomes)) {
     const blockIndex = BLOCKS.indexOf(spec.block);
     const slot = slotsUsed.get(spec.block) ?? 0;
     slotsUsed.set(spec.block, slot + 1);
-    const x = BLOCK_CENTRE_X[blockIndex % 3]! + ((slot % 3) - 1) * SLOT_STEP_X;
-    const z = BLOCK_CENTRE_Z[Math.floor(blockIndex / 3)]! + (Math.floor(slot / 3) - 1) * SLOT_STEP_Z;
-    const stopAtCorner = spec.name === PLACE_NAMES.busStop;
-    const door = stopAtCorner ? nodeOf(BUS_STOP_COLUMN, BUS_STOP_ROW) : nodeX.length;
-    if (!stopAtCorner) {
-      nodeX.push(x);
-      nodeZ.push(z);
-      addEdge(door, nearestStreetNode(x, z), 0);
-    } else portals.push(door);
-    places.push({ kind: spec.kind, name: spec.name, doorNode: door, doorX: nodeX[door]!, doorZ: nodeZ[door]!, yaw: 0, x: nodeX[door]!, z: nodeZ[door]!, width: spec.width ?? 12, depth: spec.depth ?? 14, storeys: 2, style: "rowbrick", sector: spec.sector });
-    if (stopAtCorner) places[places.length - 1]!.x = nodeX[door]!;
+    const spot = { x: BLOCK_CENTRE_X[blockIndex % 3]! + ((slot % 3) - 1) * SLOT_STEP_X, z: BLOCK_CENTRE_Z[Math.floor(blockIndex / 3)]! + (Math.floor(slot / 3) - 1) * SLOT_STEP_Z };
+    if (spec.name === PLACE_NAMES.busStop) portals.push(nodeOf(BUS_STOP_COLUMN, BUS_STOP_ROW));
+    const door = spec.name === PLACE_NAMES.busStop ? nodeOf(BUS_STOP_COLUMN, BUS_STOP_ROW) : addDoor(layout, spot.x, spot.z);
+    places.push(placeAt(spec, door, layout, spec.name === PLACE_NAMES.busStop ? { x: layout.nodeX[door]!, z: layout.nodeZ[door]! } : spot));
   }
   for (const backdrop of BACKDROP_PLACES) places.push({ kind: backdrop.kind, name: backdrop.name, doorNode: -1, doorX: backdrop.x, doorZ: backdrop.z, yaw: 0, x: backdrop.x, z: backdrop.z, width: 30, depth: 30, storeys: 6, style: "glassinfill", sector: "Commercial" });
-  edges.sort((first, second) => first.from - second.from || first.to - second.to);
-  const edgeStart = new Int32Array(nodeX.length + 1);
-  for (const edge of edges) edgeStart[edge.from + 1]!++;
-  for (let node = 0; node < nodeX.length; node++) edgeStart[node + 1]! += edgeStart[node]!;
-  return {
-    graph: {
-      nodeX: Float32Array.from(nodeX),
-      nodeZ: Float32Array.from(nodeZ),
-      edgeStart,
-      edgeTo: Int32Array.from(edges, (edge) => edge.to),
-      edgeLength: Float32Array.from(edges, (edge) => Math.hypot(nodeX[edge.to]! - nodeX[edge.from]!, nodeZ[edge.to]! - nodeZ[edge.from]!)),
-      edgeCrossing: Uint8Array.from(edges, (edge) => edge.crossing),
-    },
-    places,
-    portals: Int32Array.from(portals),
-    halfX: HALF_X,
-    halfZ: HALF_Z,
-  };
+  return { graph: toWalkGraph(layout), places, portals: Int32Array.from(portals), halfX: HALF_X, halfZ: HALF_Z };
 }
 
 /** The index of the place called `name` in a map, or a throw naming it. */

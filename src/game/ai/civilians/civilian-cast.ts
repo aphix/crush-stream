@@ -26,7 +26,7 @@ export const PLACE_NAMES = {
 export const BLOCK_OF_DAY = "block of the day";
 
 /** A walk to a place that ends there at the given time: on every day, or only on `weekday` (Monday 0). */
-export type Appointment = { purpose: number; place: string; hour: number; minute: number; weekday: number | null; dwellMinutes: number };
+type Appointment = { purpose: number; place: string; hour: number; minute: number; weekday: number | null; dwellMinutes: number };
 
 export type CastMember = {
   key: string;
@@ -49,6 +49,9 @@ export type CastMember = {
   appointments: readonly Appointment[];
 };
 
+/** Keys the cast names each other by. */
+const KEY = { tamika: "tamika", emeka: "emeka", ngozi: "ngozi" } as const;
+
 const PERSON = { species: SPECIES.person, workplace: null, title: null, description: "", paceFactor: 1, partner: null, parent: null, trait: null, appointments: [] } as const;
 const ANIMAL = { family: "", gender: GENDER.female, age: 3, workplace: null, title: null, paceFactor: 1, partner: null, parent: null, trait: null } as const;
 
@@ -64,18 +67,18 @@ export const CAST: readonly CastMember[] = [
     gender: GENDER.male,
     age: 9,
     home: PLACE_NAMES.brooksHome,
-    parent: "tamika",
+    parent: KEY.tamika,
     appointments: [
       { purpose: PURPOSE.jamalFlyers, place: BLOCK_OF_DAY, hour: 10, minute: 0, weekday: null, dwellMinutes: 25 },
       { purpose: PURPOSE.jamalFlyers, place: BLOCK_OF_DAY, hour: 11, minute: 30, weekday: null, dwellMinutes: 25 },
       { purpose: PURPOSE.jamalFlyers, place: BLOCK_OF_DAY, hour: 13, minute: 0, weekday: null, dwellMinutes: 25 },
     ],
   },
-  { ...PERSON, key: "tamika", first: "Tamika", family: "Brooks", gender: GENDER.female, age: 34, home: PLACE_NAMES.brooksHome },
+  { ...PERSON, key: KEY.tamika, first: "Tamika", family: "Brooks", gender: GENDER.female, age: 34, home: PLACE_NAMES.brooksHome },
   { ...PERSON, key: "dee", first: "Dee", family: "Reyes", gender: GENDER.female, age: 38, home: PLACE_NAMES.deeHome, trait: "radio", appointments: [{ purpose: PURPOSE.deeCoffee, place: PLACE_NAMES.bodega, hour: 23, minute: 0, weekday: null, dwellMinutes: 15 }] },
-  { ...PERSON, key: "emeka", first: "Emeka", family: "Okafor", gender: GENDER.male, age: 44, home: PLACE_NAMES.okaforHome, partner: "ngozi", appointments: [{ purpose: PURPOSE.okaforParty, place: PLACE_NAMES.okaforDeck, hour: 19, minute: 0, weekday: FRIDAY, dwellMinutes: 240 }] },
-  { ...PERSON, key: "ngozi", first: "Ngozi", family: "Okafor", gender: GENDER.female, age: 41, home: PLACE_NAMES.okaforHome, partner: "emeka", appointments: [{ purpose: PURPOSE.okaforParty, place: PLACE_NAMES.okaforDeck, hour: 19, minute: 0, weekday: FRIDAY, dwellMinutes: 240 }] },
-  { ...PERSON, key: "ada", first: "Ada", family: "Okafor", gender: GENDER.female, age: 13, home: PLACE_NAMES.okaforHome, parent: "ngozi", appointments: [{ purpose: PURPOSE.okaforParty, place: PLACE_NAMES.okaforDeck, hour: 19, minute: 30, weekday: FRIDAY, dwellMinutes: 210 }] },
+  { ...PERSON, key: KEY.emeka, first: "Emeka", family: "Okafor", gender: GENDER.male, age: 44, home: PLACE_NAMES.okaforHome, partner: KEY.ngozi, appointments: [{ purpose: PURPOSE.okaforParty, place: PLACE_NAMES.okaforDeck, hour: 19, minute: 0, weekday: FRIDAY, dwellMinutes: 240 }] },
+  { ...PERSON, key: KEY.ngozi, first: "Ngozi", family: "Okafor", gender: GENDER.female, age: 41, home: PLACE_NAMES.okaforHome, partner: KEY.emeka, appointments: [{ purpose: PURPOSE.okaforParty, place: PLACE_NAMES.okaforDeck, hour: 19, minute: 0, weekday: FRIDAY, dwellMinutes: 240 }] },
+  { ...PERSON, key: "ada", first: "Ada", family: "Okafor", gender: GENDER.female, age: 13, home: PLACE_NAMES.okaforHome, parent: KEY.ngozi, appointments: [{ purpose: PURPOSE.okaforParty, place: PLACE_NAMES.okaforDeck, hour: 19, minute: 30, weekday: FRIDAY, dwellMinutes: 210 }] },
   { ...PERSON, key: "vince", first: "Vince", family: "Mack", gender: GENDER.male, age: 52, home: PLACE_NAMES.mackHome, appointments: [{ purpose: PURPOSE.vanRepair, place: PLACE_NAMES.vanAlley, hour: 10, minute: 0, weekday: SATURDAY, dwellMinutes: 150 }] },
   { ...PERSON, key: "hector", first: "Hector", family: "Ramos", gender: GENDER.male, age: 45, home: PLACE_NAMES.ramosHome, workplace: PLACE_NAMES.garage, title: "Mechanic", trait: "mechanic" },
   {

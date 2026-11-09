@@ -132,6 +132,7 @@ export function historyLines(state: CityState, resident: number): string[] {
   return lines;
 }
 
+/** A building's line names this many people, and lists this many visits. */
 const LISTED_NAMES = 4;
 const LISTED_VISITS = 4;
 
@@ -156,7 +157,7 @@ export function buildingLines(state: CityState, place: number, tick: number): { 
       visits.push({ tick: state.ints[line + HISTORY_FIELD.tick]!, text: `${residentNameText(state, resident)} ${PURPOSE_LOG_TEXT[state.ints[line + HISTORY_FIELD.code]! - VISIT_BASE]!} ${entry.name}` });
     }
   }
-  const lines = [KIND_WORDS[entry.kind]!];
+  const lines: string[] = [KIND_WORDS[entry.kind]!];
   if (here.length > 0) lines.push(`${entry.kind === PLACE_KIND.home ? "lives here" : "works here"}: ${namesOf(state, here)}`);
   if (!(state.closedUntilTick[place]! <= tick)) lines.push("closed after a wreck");
   visits.sort((first, second) => second.tick - first.tick);
