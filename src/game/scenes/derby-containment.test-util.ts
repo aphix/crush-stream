@@ -89,7 +89,12 @@ export function bodyRadius(car: DeformableCar): number {
 
 /** One launch flown for its seconds, on the class's one car stood up again. The drawn skin is never read (the cage is), so it is not rebuilt per frame. `readEnergy` false leaves `excess` unread. */
 export function fly(cls: VehicleClassId, launch: Launch, readEnergy = true): Flight {
-  const car = standUp(pooled(cls), cls, launch.x, launch.z, launch.yaw, launch.speed);
+  return flyOn(pooled(cls), cls, launch, readEnergy);
+}
+
+/** One launch flown on `car`, stood up at its start. */
+export function flyOn(car: DeformableCar, cls: VehicleClassId, launch: Launch, readEnergy = true): Flight {
+  standUp(car, cls, launch.x, launch.z, launch.yaw, launch.speed);
   const hits: PropHits = { knock() {}, fx() {}, wall() {} };
   const { world } = arenaWorld([car], hits);
   const flight: Flight = { maxRadius: 0, maxHeightAtWall: 0, finalRadius: 0, excess: -Infinity, excessAt: 0, excessDrive: 0 };
@@ -248,7 +253,7 @@ export function wallCases(): void {
   describe("given a derby car driven flat out at the arena wall", () => {
     for (const cls of VEHICLE_CLASS_IDS) {
       const launches = [...openFloorLaunches(cls), ...acrossLaunches(ACROSS_STRIDE), ...farEntryLaunches(), ...outwardLaunches(cls)];
-      // Mutation (red): sed -i 's/\.\.\.wallBoxes(containmentDepth, containmentHeight),/...wallBoxes(containmentDepth, 0.01),/' src/game/scenes/derby-ground.ts
+      // mutation: sed -i 's/\.\.\.wallBoxes(containmentDepth, containmentHeight),/...wallBoxes(containmentDepth, 0.01),/' src/game/scenes/derby-ground.ts  (a car leaves the arena over the wall: the wall row)
       it(`when the ${cls} is launched from the open ring in every direction, across the arena (every ${ACROSS_STRIDE}th), from each ramp's far entry, its foot and its crest, then no part of it passes the wall's outer face and it ends inside`, () => {
         for (const launch of launches) {
           const flight = fly(cls, launch, false);
@@ -270,7 +275,7 @@ export function sideWedgeCases(): void {
     for (const cls of VEHICLE_CLASS_IDS) {
       let flights: Flight[] | null = null;
       const flown = (): Flight[] => (flights ??= launches.map((l) => fly(cls, l, cls === "monster")));
-      // Mutation (red): sed -i 's/\.\.\.wallBoxes(containmentDepth, containmentHeight),/...wallBoxes(containmentDepth, 0.01),/' src/game/scenes/derby-ground.ts
+      // mutation: sed -i 's/\.\.\.wallBoxes(containmentDepth, containmentHeight),/...wallBoxes(containmentDepth, 0.01),/' src/game/scenes/derby-ground.ts  (a car leaves the arena over the wall: the wedge outer-face row)
       it(`when the ${cls} meets each ramp's two sides, then no part of it passes the wall's outer face and it ends inside`, () => {
         for (const [i, flight] of flown().entries()) {
           expect(flight.maxRadius, `${launches[i]!.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`).toBeLessThan(OUTER_FACE);
