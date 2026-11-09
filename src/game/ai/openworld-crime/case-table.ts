@@ -4,8 +4,8 @@ import { COPS_PER_CASE, MAX_CASES, MAX_HELD, MAX_SUBJECTS, SUBJECTS_PER_CASE } f
 export const CASE_KIND = { crime: 1, fight: 2, jaywalk: 3 } as const;
 /** A fight case warns the fighters, then seizes the ones to arrest. */
 export const CASE_PHASE = { free: 0, open: 1, warning: 2, seizing: 3 } as const;
-/** Where a suspect stands in a case: free slot, still about their day (not yet running), running, hiding, a fighter a cop is closing on, in a cop's hands, or let go. */
-export const SUBJECT_MODE = { free: 0, atLarge: 1, fleeing: 2, hidden: 3, seizing: 4, gripped: 5, spared: 6 } as const;
+/** Where a suspect stands in a case: free slot, still about their day (not yet running), running, hiding, a fighter a cop is closing on, in a cop's hands, let go, or cuffed and led away. */
+export const SUBJECT_MODE = { free: 0, atLarge: 1, fleeing: 2, hidden: 3, seizing: 4, gripped: 5, spared: 6, escorted: 7 } as const;
 
 /** Every case and suspect the law holds, and the residents it keeps out of the drawn crowd: typed arrays sized once. A case owns subject slots `caseIndex * SUBJECTS_PER_CASE` and the next. */
 export class CaseTable {
@@ -16,6 +16,10 @@ export class CaseTable {
   readonly warnUntil = new Float64Array(MAX_CASES);
   /** 1 once a cop at the hiding door has searched (one draw per case). */
   readonly searched = new Uint8Array(MAX_CASES);
+  /** Whether the case's patrol car has come, and where its cop stepped out (a cuffed suspect is led to it). */
+  readonly carHere = new Uint8Array(MAX_CASES);
+  readonly carX = new Float64Array(MAX_CASES);
+  readonly carZ = new Float64Array(MAX_CASES);
   /** Foot cop numbers per case, -1 for none; the last slot is the patrol car's cop. */
   readonly cops = new Int8Array(MAX_CASES * COPS_PER_CASE).fill(-1);
 
@@ -94,6 +98,15 @@ export class CaseTable {
   active(slot: number): boolean {
     const mode = this.mode[slot]!;
     return mode !== SUBJECT_MODE.free && mode !== SUBJECT_MODE.spared;
+  }
+
+  /** Whether a suspect of case `caseIndex` is in a cop's hands or being led away: the arrest runs to its end whatever the society hears meanwhile. */
+  arresting(caseIndex: number): boolean {
+    for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
+      const mode = this.mode[this.slotOf(caseIndex, index)]!;
+      if (mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted) return true;
+    }
+    return false;
   }
 
   /** Keeps `resident` out of the drawn crowd from crowd second `seconds` until their next walk begins; the oldest hold is dropped when full. */

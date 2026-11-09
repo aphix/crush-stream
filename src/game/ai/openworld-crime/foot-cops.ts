@@ -1,11 +1,11 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import type { WalkGraph } from "../../world/openworld/walk-graph.ts";
 import type { PathFinder } from "../civilians/walk-path.ts";
-import { CAR_COP, CAR_COP_BACK_REACH, COP_PATROL_SPEED, COP_REPLAN_STEPS, COP_RUN_SPEED, CRIME_STEP_SECONDS, CRIME_STREAM, FOOT_COP_COUNT, PATROL_COPS, STRAIGHT_APPROACH } from "./crime-constants.ts";
+import { CAR_COP, CAR_COP_BACK_REACH, COP_PATROL_SPEED, COP_REPLAN_STEPS, COP_RUN_SPEED, CRIME_STEP_SECONDS, ESCORT_SPEED, CRIME_STREAM, FOOT_COP_COUNT, PATROL_COPS, STRAIGHT_APPROACH } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
 import type { FootWalkers } from "./foot-walkers.ts";
 
-export const COP_MODE = { patrol: 0, respond: 1, grip: 2, returning: 3, off: 4 } as const;
+export const COP_MODE = { patrol: 0, respond: 1, grip: 2, returning: 3, off: 4, escort: 5 } as const;
 
 /** The foot cops: walkers 0 .. FOOT_COP_COUNT - 1. The ones on patrol wander the sidewalks on seeded turns; a case calls the nearest free ones, who run to what they are aimed at. */
 export class FootCops {
@@ -84,6 +84,14 @@ export class FootCops {
     this.walkers.speed[cop] = 0;
   }
 
+  /** Cop `cop` leads a cuffed suspect at a walk to (x, z). */
+  escort(cop: number, x: number, z: number): void {
+    this.mode[cop] = COP_MODE.escort;
+    this.aimX[cop] = x;
+    this.aimZ[cop] = z;
+    this.walkers.halt(cop);
+  }
+
   /** Cop `cop` runs again for its case. */
   resume(cop: number): void {
     this.mode[cop] = COP_MODE.respond;
@@ -100,12 +108,15 @@ export class FootCops {
         this.patrol(cop);
         break;
       case COP_MODE.respond:
-        this.run(cop, stepIndex);
+        this.run(cop, stepIndex, COP_RUN_SPEED);
+        break;
+      case COP_MODE.escort:
+        this.run(cop, stepIndex, ESCORT_SPEED);
         break;
       case COP_MODE.returning:
         this.aimX[cop] = this.carHomeX;
         this.aimZ[cop] = this.carHomeZ;
-        this.run(cop, stepIndex);
+        this.run(cop, stepIndex, COP_RUN_SPEED);
         if (this.gapTo(cop, this.carHomeX, this.carHomeZ) <= CAR_COP_BACK_REACH) this.mode[cop] = COP_MODE.off;
         break;
       case COP_MODE.grip:
@@ -136,11 +147,11 @@ export class FootCops {
   }
 
   /** Along the sidewalks to the aim's nearest node, replanned a few times a second as the aim moves; the last metres straight. */
-  private run(cop: number, stepIndex: number): void {
+  private run(cop: number, stepIndex: number, speed: number): void {
     const walkers = this.walkers;
     const aimX = this.aimX[cop]!;
     const aimZ = this.aimZ[cop]!;
-    const distance = COP_RUN_SPEED * CRIME_STEP_SECONDS;
+    const distance = speed * CRIME_STEP_SECONDS;
     if (hypot2(walkers.x[cop]! - aimX, walkers.z[cop]! - aimZ) <= STRAIGHT_APPROACH) {
       walkers.halt(cop);
       walkers.moveToward(cop, aimX, aimZ, distance, CRIME_STEP_SECONDS);

@@ -29,7 +29,7 @@ function fightRun(seed: number): Harness {
 describe("a fight brings a cop who ends it", () => {
   it("warns the fighters and arrests only the one who began it when neither keeps attacking", () => {
     const run = fightRun(seedFor(false, false));
-    runFor(run, 10);
+    runFor(run, 12);
     expect(bustedResidents(run), "the instigator, the lower resident of a tie").toBe(String(FIRST_FIGHTER));
     expect(run.busts[0]!.seconds, "after the warning and the cuffs").toBeGreaterThan(4);
     expect(run.busts[0]!.seconds).toBeLessThan(6.5);

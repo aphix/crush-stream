@@ -8,6 +8,7 @@ import { PathFinder } from "../civilians/walk-path.ts";
 import { CASE_KIND, CASE_PHASE, CaseTable, SUBJECT_MODE } from "./case-table.ts";
 import { BUST_REACH, CAR_COP, COP_SIGHT, JAYWALK_GIVE_UP_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIGHT_WARN_REACH, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, RESIST_CHANCE, SEARCH_SECONDS, SUBJECTS_PER_CASE, TAKEDOWN_LIFT, TAKEDOWN_SPEED, TAKEDOWN_TUMBLE, WARN_SECONDS } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
+import { Arrests } from "./arrests.ts";
 import { CrossingWatch } from "./crossing-watch.ts";
 import { Flight } from "./flight.ts";
 import { COP_MODE, FootCops } from "./foot-cops.ts";
@@ -43,6 +44,7 @@ export class FootLaw {
   private readonly lineOfSight: LineOfSight | null;
   private readonly signals: CrossingSignals | null;
   private readonly crossings: CrossingWatch;
+  private readonly arrests: Arrests;
   private readonly walk: Walk = { x: 0, z: 0, dirX: 0, dirZ: 1 };
   private readonly spot: Spot = { x: 0, z: 0 };
   private readonly partnerSpot: Spot = { x: 0, z: 0 };
@@ -63,6 +65,7 @@ export class FootLaw {
     this.lineOfSight = senses.lineOfSight;
     this.signals = senses.signals;
     this.crossings = new CrossingWatch(map.graph);
+    this.arrests = new Arrests(this.walkers, this.cops, this.table, map.graph);
   }
 
   /** The foot walker of subject slot `slot`. */
@@ -121,6 +124,7 @@ export class FootLaw {
       if (this.table.phase[caseIndex] !== CASE_PHASE.free) this.stepCase(caseIndex);
     }
     for (let cop = 0; cop < FOOT_COP_COUNT; cop++) this.cops.step(cop, this.stepIndex);
+    this.arrests.step(this.seconds);
     this.releaseHeld();
   }
 
@@ -129,6 +133,9 @@ export class FootLaw {
     if (this.table.phase[caseIndex] === CASE_PHASE.free) return;
     this.cops.emerge(x, z, caseIndex);
     this.table.setCop(caseIndex, COPS_PER_CASE - 1, CAR_COP);
+    this.table.carHere[caseIndex] = 1;
+    this.table.carX[caseIndex] = x;
+    this.table.carZ[caseIndex] = z;
   }
 
   private poll(): void {
@@ -179,6 +186,7 @@ export class FootLaw {
     table.kind[caseIndex] = kind;
     table.offenceTick[caseIndex] = spell;
     table.searched[caseIndex] = 0;
+    table.carHere[caseIndex] = 0;
     for (let index = 0; index < COPS_PER_CASE; index++) table.setCop(caseIndex, index, -1);
     this.stats.cases++;
   }
@@ -240,7 +248,7 @@ export class FootLaw {
   private stepCase(caseIndex: number): void {
     const { table } = this;
     this.spareKnocked(caseIndex);
-    if (this.offenceCleared(caseIndex)) {
+    if (!table.arresting(caseIndex) && this.offenceCleared(caseIndex)) {
       this.closeCase(caseIndex);
       return;
     }
@@ -472,16 +480,7 @@ export class FootLaw {
   }
 
   private startGrip(slot: number, cop: number): void {
-    const walker = this.walkerOf(slot);
-    this.table.mode[slot] = SUBJECT_MODE.gripped;
-    this.table.since[slot] = this.seconds;
-    this.table.holder[slot] = cop;
-    this.walkers.halt(walker);
-    this.walkers.speed[walker] = 0;
-    this.walkers.face(walker, this.walkers.x[cop]!, this.walkers.z[cop]!);
-    this.cops.grip(cop);
-    this.cops.aimX[cop] = this.walkers.x[walker]!;
-    this.cops.aimZ[cop] = this.walkers.z[walker]!;
+    this.arrests.grip(slot, cop, this.seconds);
   }
 
   /** A fighter thrown to the ground by the cop who reached them: pushed away from the cop, lifted and tumbled. */
@@ -510,7 +509,7 @@ export class FootLaw {
     this.stats.takedowns++;
   }
 
-  /** The cuffs are on: the host raises the bust, every peer lets the suspect go from the street. */
+  /** The cuffs are on: the host raises the bust (a jaywalker's arrest), and the cop leads the suspect away; a fighter thrown down is taken off the street at once. */
   private completeBust(caseIndex: number, slot: number): void {
     const resident = this.table.resident[slot]!;
     const jaywalk = this.table.kind[caseIndex] === CASE_KIND.jaywalk;
@@ -518,6 +517,10 @@ export class FootLaw {
     else this.stats.busts++;
     if (this.authority && jaywalk) this.ports.jaywalked(resident, this.seconds);
     else if (this.authority) this.ports.bust(resident, this.seconds);
+    if (this.table.tookDown[slot] === 0) {
+      this.arrests.escort(caseIndex, slot, this.seconds);
+      return;
+    }
     this.table.hold(resident, this.seconds);
     this.table.free(slot);
   }
@@ -540,7 +543,7 @@ export class FootLaw {
     for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
       const slot = table.slotOf(caseIndex, index);
       const mode = table.mode[slot]!;
-      if (mode === SUBJECT_MODE.fleeing || mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.gripped) table.hold(table.resident[slot]!, this.seconds);
+      if (mode === SUBJECT_MODE.fleeing || mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted) table.hold(table.resident[slot]!, this.seconds);
       table.free(slot);
     }
     for (let index = 0; index < COPS_PER_CASE; index++) {
