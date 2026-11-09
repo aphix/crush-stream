@@ -1,7 +1,8 @@
 import * as THREE from "three";
+import { drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
 import { PLACE_KIND, type Place } from "../world/openworld/walk-graph.ts";
 
-/** A business's sign band on its front face (m): 1 m tall under the first floor over the shop glass, proud enough of the face that its relief never covers it. */
+/** A business's sign band on its drawn front wall (m): 1 m tall under the first floor over the shop glass, proud enough of the wall that its relief never covers it. */
 export const SHOP_SIGN = { bottom: 2.9, height: 1, standoff: 0.1 } as const;
 /** Texels per metre of sign: 96 px for the 1 m band reads at street level and up close. */
 const SIGN_PX_PER_METRE = 96;
@@ -61,13 +62,31 @@ const FALLBACK_EDGE = SAND;
 const FNV_OFFSET = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
 
-/** Where a place's door stands on its front face, `standoff` m out along the face's outward normal (the place's front is local +x of its yaw; north is -z). */
+/** Kept clear at each end of a building's drawn front wall (m): a sign or a name stops short of its corner and of the neighbour's wall. */
+export const FACE_MARGIN = 0.4;
+
+/** A point on a place's front face, `standoff` m out along the face's outward normal (the place's front is local +x of its yaw; north is -z). */
 type FacadeFace = { x: number; z: number; normalX: number; normalZ: number };
 
+/** Where a place's door stands, `standoff` m out from it: a place with no front of its own hangs its name there. */
 export function facadeFace(place: Place, standoff: number): FacadeFace {
   const normalX = Math.cos(place.yaw);
   const normalZ = -Math.sin(place.yaw);
   return { x: place.doorX + normalX * standoff, z: place.doorZ + normalZ * standoff, normalX, normalZ };
+}
+
+/**
+ * The middle of something `width` m wide on a building's drawn front wall (`drawnHalf`: short of the footprint's edges), `standoff` m proud of it: over the door, slid along the wall as far
+ * as it must to stay `FACE_MARGIN` inside both ends (an interior's door stands off the wall's middle, a corner store's toward one end).
+ */
+export function onFrontFace(place: Place, width: number, standoff: number): FacadeFace {
+  const normalX = Math.cos(place.yaw);
+  const normalZ = -Math.sin(place.yaw);
+  const doorAlong = (place.doorX - place.x) * normalZ - (place.doorZ - place.z) * normalX;
+  const reach = Math.max(0, drawnHalf(place.width) - FACE_MARGIN - width / 2);
+  const along = Math.min(reach, Math.max(-reach, doorAlong));
+  const out = drawnHalf(place.depth) + standoff;
+  return { x: place.x + normalZ * along + normalX * out, z: place.z - normalX * along + normalZ * out, normalX, normalZ };
 }
 
 /** A rectangle on a front face: its middle, the face's outward normal, its size (m). */
@@ -78,12 +97,19 @@ export function isBusiness(place: Place): boolean {
   return place.storeys > 0 && place.kind !== PLACE_KIND.home && place.doorNode >= 0;
 }
 
-function cellWidth(place: Place): number {
-  return Math.round(Math.min(place.width, SIGN_MAX_WIDTH) * SIGN_PX_PER_METRE);
+/** The widest a thing on a building's drawn front wall may run (m) to stay `FACE_MARGIN` inside both its ends. */
+export function frontWallRoom(place: Place): number {
+  return 2 * (drawnHalf(place.width) - FACE_MARGIN);
 }
 
-export function shopSignRect(place: Place): FacadeRect {
-  return { ...facadeFace(place, SHOP_SIGN.standoff), y: SHOP_SIGN.bottom + SHOP_SIGN.height / 2, width: cellWidth(place) / SIGN_PX_PER_METRE, height: SHOP_SIGN.height };
+/** Whole texels, rounded down: the sign never grows past the wall it was fitted to. */
+function cellWidth(place: Place): number {
+  return Math.floor(Math.min(frontWallRoom(place), SIGN_MAX_WIDTH) * SIGN_PX_PER_METRE);
+}
+
+function shopSignRect(place: Place): FacadeRect {
+  const width = cellWidth(place) / SIGN_PX_PER_METRE;
+  return { ...onFrontFace(place, width, SHOP_SIGN.standoff), y: SHOP_SIGN.bottom + SHOP_SIGN.height / 2, width, height: SHOP_SIGN.height };
 }
 
 function nameHash(name: string): number {

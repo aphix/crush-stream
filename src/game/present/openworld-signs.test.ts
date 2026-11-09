@@ -1,8 +1,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
+import { drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
+import type { Building } from "../world/openworld/openworld-layout.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { buildOpenWorldMap } from "../world/openworld/openworld-map.ts";
-import { isBusiness, SHOP_SIGN, ShopSigns, shopSignRect } from "./openworld-shop-signs.ts";
+import { FACE_MARGIN, isBusiness, SHOP_SIGN, ShopSigns } from "./openworld-shop-signs.ts";
 import { NAME, nameSpecs, OpenWorldSigns, type SignSight } from "./openworld-signs.ts";
 
 /** A stand-in glyph's width (px): the layout only needs text to have one. */
@@ -13,10 +15,15 @@ const GROUND_STOREY = 3.6;
 const DOOR_TOP = 2.4;
 const FAR_AWAY = 5000;
 const EPSILON = 1e-9;
+/** Float32 vertex positions round by about this much (m) at the city's coordinates. */
+const FLOAT32_SLACK = 1e-4;
+/** A point this near (m) a building's drawn street wall, past the standoff, hangs on it. */
+const ON_FACE = 1e-3;
 const MAX_ATLAS_BYTES = 16 * 2 ** 20;
 const BYTES_PER_TEXEL = 4;
 
-const map = buildOpenWorldMap(layOutLots());
+const lots = layOutLots();
+const map = buildOpenWorldMap(lots);
 const inside = [...map.places.entries()].filter(([, place]) => place.doorNode >= 0 && place.name !== "");
 const painted: string[] = [];
 
@@ -37,6 +44,30 @@ beforeAll(() => {
   Object.assign(globalThis, { document: { createElement: () => ({ width: 0, height: 0, getContext: () => context }) } });
 });
 
+/** A point's offsets (m) from a building's middle: along its street wall and out of it. */
+function offsetsOn(building: Building, x: number, z: number): { along: number; out: number } {
+  const normalX = Math.cos(building.yaw);
+  const normalZ = -Math.sin(building.yaw);
+  const dx = x - building.x;
+  const dz = z - building.z;
+  return { along: dx * normalZ - dz * normalX, out: dx * normalX + dz * normalZ };
+}
+
+/** The building whose drawn street wall, `standoff` m out, the point lies on. */
+function buildingFacing(x: number, z: number, standoff: number): Building | undefined {
+  return lots.buildings.find((building) => {
+    const { along, out } = offsetsOn(building, x, z);
+    return Math.abs(along) <= drawnHalf(building.width) && Math.abs(out - drawnHalf(building.depth) - standoff) < ON_FACE;
+  });
+}
+
+/** Every corner of quad `first` .. `first + 3` lies `FACE_MARGIN` or more inside the ends of `building`'s drawn street wall. */
+function expectInsideFace(building: Building, position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, first: number, what: string): void {
+  for (let vertex = first; vertex < first + 4; vertex++) {
+    expect(Math.abs(offsetsOn(building, position.getX(vertex), position.getZ(vertex)).along), what).toBeLessThanOrEqual(drawnHalf(building.width) - FACE_MARGIN + FLOAT32_SLACK);
+  }
+}
+
 function signsOf(signs: OpenWorldSigns): THREE.Group {
   return signs["names"]!.group;
 }
@@ -56,13 +87,14 @@ describe("given the open world's map", () => {
     expect(fronts.map((spec) => spec.text).join("|")).toBe(inside.map(([, place]) => place.name).join("|"));
   });
 
-  it("when a building's name is placed, then it hangs on the street face over the door: a home's under the ground storey, a business's over its sign band", () => {
+  it("when a building's name is placed, then it hangs on the street face with the door under it: a home's under the ground storey, a business's over its sign band", () => {
     const buildings = fronts.filter((spec) => map.places[spec.place]!.storeys > 0);
     expect(buildings.length).toBeGreaterThan(0);
     for (const spec of buildings) {
       const place = map.places[spec.place]!;
-      expect(Math.abs(spec.x - place.doorX), place.name).toBeLessThan(1e-6);
-      expect(Math.abs(spec.z - place.z), place.name).toBeCloseTo(place.depth / 2 + NAME.standoff, 3);
+      const doorAlong = (place.doorX - spec.x) * spec.normalZ - (place.doorZ - spec.z) * spec.normalX;
+      expect(Math.abs(doorAlong), place.name).toBeLessThanOrEqual(spec.maxWidth / 2);
+      expect(Math.abs(spec.z - place.z), place.name).toBeCloseTo(drawnHalf(place.depth) + NAME.standoff, 3);
       if (isBusiness(place)) expect(spec.y, place.name).toBeGreaterThan(SHOP_SIGN.bottom + SHOP_SIGN.height);
       else {
         expect(spec.y, place.name).toBeGreaterThan(DOOR_TOP);
@@ -127,6 +159,26 @@ describe("given the signage of the open world", () => {
     expect(chunks.length).toBeLessThanOrEqual(chunkColumns * chunkRows);
   });
 
+  it("when the names are drawn, then every name plate on a building's drawn street wall stays FACE_MARGIN inside both ends of that wall", () => {
+    const signs = new OpenWorldSigns(map.places);
+    signs.update(0, 0, true, null);
+    let plates = 0;
+    for (const chunk of signsOf(signs).children) {
+      if (!(chunk instanceof THREE.Mesh)) continue;
+      const position = chunk.geometry.getAttribute("position");
+      const uv = chunk.geometry.getAttribute("uv");
+      for (let first = 0; first < position.count; first += 4) {
+        const flatTint = uv.getX(first) === uv.getX(first + 2) && uv.getY(first) === uv.getY(first + 2);
+        if (!flatTint) continue;
+        const building = buildingFacing((position.getX(first) + position.getX(first + 2)) / 2, (position.getZ(first) + position.getZ(first + 2)) / 2, NAME.standoff);
+        if (building === undefined) continue;
+        plates++;
+        expectInsideFace(building, position, first, `plate at vertex ${first}`);
+      }
+    }
+    expect(plates).toBeGreaterThanOrEqual(nameSpecs(map.places).filter((spec) => map.places[spec.place]!.storeys > 0).length);
+  });
+
   it("when the button goes off and on, then the names hide and show while the shop signs stay", () => {
     const signs = new OpenWorldSigns(map.places);
     signs.update(0, 0, true, null);
@@ -189,13 +241,22 @@ describe("given the shop signs of the open world", () => {
     expect(shop.uvRect(homeIndex)).toBeNull();
   });
 
-  it("when a business's sign is placed, then it is a band over the shop glass on its street face, centred on the door and no wider than the frontage", () => {
-    for (const [, place] of businesses) {
-      const rect = shopSignRect(place);
-      expect(Math.abs(rect.x - place.doorX), place.name).toBeLessThan(1e-6);
-      expect(Math.abs(rect.z - place.z), place.name).toBeCloseTo(place.depth / 2 + SHOP_SIGN.standoff, 3);
-      expect(rect.y - rect.height / 2, place.name).toBeCloseTo(SHOP_SIGN.bottom, 6);
-      expect(rect.width, place.name).toBeLessThanOrEqual(place.width + EPSILON);
+  it("when the signs are drawn, then every business's band hangs over its shop glass on its own building's drawn street wall and stays FACE_MARGIN inside both ends of that wall", () => {
+    const shop = new ShopSigns(map.places);
+    const panels = shop.group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh)!;
+    const position = panels.geometry.getAttribute("position");
+    expect(position.count).toBe(businesses.length * 4);
+    for (let sign = 0; sign < businesses.length; sign++) {
+      const place = businesses[sign]![1];
+      const first = sign * 4;
+      const building = buildingFacing((position.getX(first) + position.getX(first + 2)) / 2, (position.getZ(first) + position.getZ(first + 2)) / 2, SHOP_SIGN.standoff);
+      expect(building, place.name).toBeDefined();
+      expect(Math.abs(building!.x - place.x) + Math.abs(building!.z - place.z), place.name).toBeLessThan(ON_FACE);
+      expectInsideFace(building!, position, first, place.name);
+      for (let vertex = first; vertex < first + 4; vertex++) {
+        expect(position.getY(vertex), place.name).toBeGreaterThanOrEqual(SHOP_SIGN.bottom - FLOAT32_SLACK);
+        expect(position.getY(vertex), place.name).toBeLessThanOrEqual(SHOP_SIGN.bottom + SHOP_SIGN.height + FLOAT32_SLACK);
+      }
     }
   });
 });
