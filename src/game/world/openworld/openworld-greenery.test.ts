@@ -96,14 +96,15 @@ describe("given the open world's street trees", () => {
 });
 
 describe("given the greenery at the rowhomes' fronts", () => {
-  it("when the course is read, then the pots and shrubs are collider-less greenery assets listed after every other prop, at a share of the homes", () => {
+  it("when the course is read, then the pots and shrubs are collider-less greenery assets listed after every prop but the park's trees and boxwood, at a share of the homes", () => {
     expect(greenery.length).toBeGreaterThan(0);
     for (const prop of greenery) {
       const row = SCENERY_ASSETS.find((asset) => asset.id === prop.asset)!;
       expect(row.family, prop.asset).toBe("greenery");
       expect(PREFABS[prop.prefab].body, prop.asset).toBe("none");
     }
-    const tail = courseProps.slice(courseProps.length - greenery.length);
+    const parkCount = parkTrees.length + parkBoxwood.length;
+    const tail = courseProps.slice(courseProps.length - parkCount - greenery.length, courseProps.length - parkCount);
     expect(tail.map((prop) => `${prop.asset}@${keyOf(prop.x, prop.z)}`).join("|")).toBe(greenery.map((prop) => `${prop.asset}@${keyOf(prop.x, prop.z)}`).join("|"));
     const dressed = frontages.filter((frontage) => greeneryAt(frontage, lots.geometry, fabric).length > 0).length;
     expect(dressed / frontages.length).toBeGreaterThanOrEqual(SHARE_OF_HOMES.least);
