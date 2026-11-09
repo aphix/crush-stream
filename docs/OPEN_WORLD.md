@@ -60,7 +60,7 @@ partners of each other) for its length, at most once in `BUMP_COOLDOWN_SECONDS`;
 and every knock, is a `push` event: a triple whose subject is the victim and, after it with the same seconds, an `alongside` triple whose subject is the civilian who pushed, or a `walker` triple whose
 subject is the bearing from the victim's brain spot to the player who shoved (`WALKER_BEARING_STEPS` a turn; the brain turns a fight his way); a car's nudge or a knock has neither: the wire's subject is 16 bits, so a pair is never packed into one. At most one per resident per `PUSH_LOCKOUT_SECONDS`; a knock logs its `knock` first and its push after. The brain rolls the fight from a push; nothing here changes its rows.
 
-**Other host events.** `raiseEvent(kind, subject, seconds?)` puts one more host event in the log and the brain's next plan (a bust, from the cops).
+**Other host events.** `raiseEvent(kind, subject, seconds?)` puts one more host event in the log and the brain's next plan (a bust, from the cops). The crowd itself raises, on the host only: a `danger` (subject: the walk-graph node nearest) for a car at `DANGER_SPEED` heading at a civilian within `DANGER_RANGE` who is still on their feet `DANGER_CONFIRM_SECONDS` on, at most one a resident in `DANGER_LOCKOUT_SECONDS`, and for a car's hard hit on something that is no building's within `CRASH_NODE_REACH` of a street node, at most one in `CRASH_LOCKOUT_SECONDS`; and an `ambulance` (subject: the person) `AMBULANCE_DELAY_SECONDS` after someone is run down, with `onAmbulanceCall(x, z, seconds)` for whoever sends the ambulance (the director gives the traffic's `callAmbulance`).
 
 Cats and dogs live in the brain (they decide, walk and keep a life log) but the crowd shows none until there is animal art: a
 resident of species other than person has `shown = 0` in every pose, so none is drawn and none can be run down.
@@ -173,6 +173,8 @@ The camera key (V, T, C, Y on a pad) steps the driven car's views and, in the op
 ## HUD
 
 The open world's free roam has no session, but the race HUD reads the driven (or followed) car as a race's: `RaceHudLayer.hud` gives it a view with no racer (`roamingView`), so the drive cluster Survival shows (speed, gear, revs, damage, boost, slide) is up and no place, lap, clock or bust strip is; on foot there is no view, so no gauge. The race view and the Full menu toggle (H) work as in a race: the race view hides the menus.
+
+**Alarm and the ambulance** (`society-alarm.ts`): at a knock's, a wreck's or a danger's reaction tick every free person out within `ALARM_SIGHT` of the spot (standing at a door, or walking: not indoors, hurt, held, in a car or a named resident) reacts by their own seeded draw (`ALARM_SHARE`). A row remembers it (`alarmTick`, `alarmX`, `alarmZ`, `alarmVictim`); `readActivity` has them flinch for the recoil clip, a step of `RECOIL_STEP_METRES` back from it and facing it, whoever they are. One at a door then goes in (`ALARM_INDOORS_SHARE`) or looks on (`PURPOSE.lookOn`) for `LOOK_ON_CRASH_MINUTES`, or for `LOOK_ON_DOWNED_MINUTES` for someone down, glancing at them; a walker walks on. At an `ambulance` event's reaction tick the nearest person out at a door within sight (not the one down) is on the phone for `CALL_MINUTES` (`PURPOSE.callAmbulance`, the phone-call clip, glancing at who is down). The one run down is already in hospital in the brain (`HOSPITAL_TICKS`): the ambulance and the person lying in the street are the traffic's and the ragdoll's.
 
 ## Cost
 
