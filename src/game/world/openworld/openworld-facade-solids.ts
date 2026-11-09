@@ -1,6 +1,7 @@
 import { detCos, detSin } from "../../kernel/physics-core.js";
 import { PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
+import { LEVELS } from "./interior-kinds.ts";
 import type { Lots } from "./openworld-layout.ts";
 import { PLACE_KIND, type Place } from "./walk-graph.ts";
 
@@ -72,10 +73,9 @@ const BAY_PLINTH_BAND = 0.15;
 
 type BayFloor = { sill: number; head: number };
 
-/** Every storey's bay window: the raised ground storey (its floor is the door sill), then each floor above. */
-export const BAY_FLOORS: readonly BayFloor[] = Array.from({ length: HOME_LEVELS.storeys }, (_, index): BayFloor => {
-  const level = index === 0 ? STOOP.sill : HOME_LEVELS.ground + (index - 1) * HOME_LEVELS.storey;
-  const sill = level + BAY_SILL_ABOVE_FLOOR;
+/** Every storey's bay window, a sash window over each of the rowhome interior's floors: the raised ground storey (its floor is the door sill), then each floor above. */
+export const BAY_FLOORS: readonly BayFloor[] = LEVELS.rowhome.floors.map((floor): BayFloor => {
+  const sill = floor + BAY_SILL_ABOVE_FLOOR;
   return { sill, head: sill + BAY_WINDOW_HEIGHT };
 });
 
@@ -93,6 +93,21 @@ export const BAY = {
   capSlab: BAY_CAP_SLAB,
   top: BAY_FLOORS[BAY_FLOORS.length - 1]!.head + BAY_CAP_BAND + BAY_CAP_PANEL + BAY_CAP_SLAB,
 } as const;
+
+/** A point of the bay's plan: out from the facade face, across the lot (u). */
+type BayCorner = { out: number; across: number };
+
+/** The bay's outline (flat front, 45-degree sides), pushed `offset` m outward on every edge (0: the kit's walls): wall corner, front corner, front corner, wall corner, from -u to +u. */
+export function bayOutline(offset = 0): readonly BayCorner[] {
+  const half = BAY.front / 2;
+  const mitre = offset * (Math.SQRT2 - 1);
+  return [
+    { out: 0, across: BAY.across - (half + BAY.out) - offset * Math.SQRT2 },
+    { out: BAY.out + offset, across: BAY.across - half - mitre },
+    { out: BAY.out + offset, across: BAY.across + half + mitre },
+    { out: 0, across: BAY.across + half + BAY.out + offset * Math.SQRT2 },
+  ];
+}
 
 /** A rowhome's front as the kit stands it: a point on the drawn facade at the lot's middle, the building's yaw (its front is local +x) and a number that picks the house's accent. */
 export type Frontage = { x: number; z: number; yaw: number; variant: number };
