@@ -45,7 +45,7 @@ per frame on a client:
 
 **Bodies.** Civilians keep a body's width apart (`BODY_GAP`, 0.6 m) without the brain knowing. `CrowdSeparation` (`civilian-separation.ts`) takes the brain's
 spots, pairs the bodies by a hashed grid and relaxes the pairs `SEPARATION_PASSES` times, no body moving more than `MAX_OFFSET` (0.7 m) from the
-brain's spot; a pair closing head on or overtaking also steps to each other's sides (`SIDESTEP_SHARE`), so they pass instead of standing off. It is a
+brain's spot; a pair closing head on or overtaking is moved sideways instead (the side they were already on, so it never flips as they cross), so they pass instead of standing off. It is a
 pure function of the brain's spots at that moment (no history, no allocation): every peer draws the same, and the brain's rows and the twin row never see it.
 `poses.x`/`z` are the drawn spots (the art, the look-at and the ragdoll throw's spawn read them); hits and events read the brain's own spot (`separation.brainX`),
 so a knock never depends on a push. A player on foot is a body that does not give way (`crowd.walkers`, which the director refills each step from the `foot` port);
