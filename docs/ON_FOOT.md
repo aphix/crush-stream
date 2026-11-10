@@ -49,7 +49,7 @@ the `available` of `OnFootHost`). He gets back into his own car only: the one he
 
 **Netplay.** The walker is local presentation: a peer sees the car, parked on its brakes on the host and coasting there while a client's input is idle,
 and never a walker. Nothing on the wire changes (`NET_VERSION` stays), no snapshot or keyframe carries a dummy or a door, and the race recorder and the
-reel keep recording the car's inputs as today. The dummies' world is per browser; `ragdolls.update`'s `authority` still gates only the glass.
+reel keep recording the car's inputs as today. The dummies' world is per browser; `ragdolls.update`'s `authority` still gates only the glass. The law's arrest of him on foot (below) is the host's and the solo player's only: a client's walker is nobody's to judge, and a client sees the host's car.
 
 A scene reset (the HUD's reset, a scene change, a race starting, a loop reset) empties the dummy world and puts him back in the seat; the loop's own
 reset waits while he is out. A race that takes his car from him (he is put to spectating, his car is put away) ends the trip where it stands.
@@ -72,6 +72,16 @@ metre round the spot) is within reach of the door, or the car is on its side or 
 within 1.9 m (`Walk up to your car's driver door`); a press while exiting or entering is ignored. `engine/engine-onfoot.ts` carries out what the flow
 decides: on exit the dummy is placed at the door in the player's own look and facing the car's way and the seat is stepped back (the car is the engine's
 to hold, above); on entry he turns to the car, and after the climb the dummy leaves the pool and the seat takes the wheel (`seat.mode = "drive"`).
+
+### Under arrest
+
+In the open world (host and solo) the police can arrest him on foot ([`OPEN_WORLD`](OPEN_WORLD.md): `PlayerLaw`), and the flow has a fifth phase, `arrested`, entered from any phase he is out in (`OnFootFlow.arrest`) and left only when the law sets him down (`OnFootFlow.released`, to `onFoot`):
+
+```
+onFoot --law: busted--> arrested --law: taken (patrol car)--> arrested, walker gone --law: delivered (x, z, yaw)--> onFoot
+```
+
+`OnFootDirector` carries out the law's four calls (`FootArrestPorts`, wired in `engine.ts`). `arrest`: the phase changes and nothing he presses acts (the press is refused as busy; the seat keys, the reset and the driving keys are swallowed as on foot, so R is not the old instant reset into a car); the prompt reads `Under arrest`. `lead(x, z)`, every law step: his walker walks (`WALK_SPEED`) to where his cop leads him, whatever he presses. `take(carIndex)`: the patrol car has him aboard, so his walker leaves the pool, the orbit's trip view ends and `seat.focus(carIndex)` puts the camera on the patrol car. `deliver(x, z, yaw)`: his own car, repaired, is put on the road nearest the spot (`RaceField.placeNear`, the reset's own placement; its spawn where none is clear), his walker is started at the spot facing `yaw` (the way `beginExit` starts one), the seat follows his car again and the phase is `onFoot`: the controls are his, and the car is a door he can walk to. The car he left stays held where he left it until then (`away`). A scene reset ends the trip as it always does; the law's late calls then find no `arrested` phase and do nothing.
 
 ## The walker: a driven root and a powered ragdoll
 
@@ -213,4 +223,5 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
   stops, cuts), `ragdoll-walker-getup.test.ts` (time to stand from four lying poses, running again within 0.6 s, a car at 4.5 m/s), `walker-camera.test.ts`, `engine-walk-input.test.ts`.
 - The foot-lock and stride lane's rows (`ragdoll-walker-pace.test.ts`: planted-foot slide under 0.1 / 0.1 / 0.2 m/s on average at a walk, run and sprint, red with the lock's stiffness at its floor; the physical thigh's swing 30-45 / 50-70 / 50-70°; `walker-gait.test.ts`: the gait's hip swing in the same ranges, red against the old lift shape and cadence; the knee-step rows, red without the knee's ease; `ragdoll-walker.test.ts`'s car blow, red with a stiff hold and the old velocity-only hit read).
 - The stand-up and turn-about rows: `ragdoll-walker-getup.test.ts` (a figure pushed from in front onto his back, man and woman: he lies, is asked up, rolls over and walks off the way his feet pointed with no stumble, strength never under 0.3; six of the eight cases red against the old 1 MN/m lock and all eight with that lock alone put back) and `ragdoll-walker-pace.test.ts` (a figure runs 9, 10 and 11 feet and the stick is pulled straight back: through the turn and the 3.5 s after he never goes down, sinks under 0.9 m, tips past 35° or stumbles; four of the five cases red against the old lock and swing foot, and the sinking bar red against a swing foot that carries the pelvis at any reach alone).
+- Under arrest: `engine-onfoot-arrest.test.ts` (the real engine on the open world, the law's ports called as the law calls them: no control acts while the law has him, his walker walks where he is led, a patrol car taking him takes his walker and puts the camera on it, set down at the station's door his walker stands there on foot, his car is repaired on the road by it, and he walks to it and drives on), `onfoot-flow.test.ts` (the phase), `ai/openworld-crime/crime-ride.test.ts` (the law's side: led, boarded, taken, set down at the station, walked when there is no car, a cop run down).
 - The rest rows: `engine-onfoot-idle.test.ts` (the real engine, a woman and a man: tap forward 0.2 s, tap sideways 0.5 s, walk 2 s, or walk and reset mid-stride and get out again; let go, and after 1 s at zero input over 3 s no foot steps, no sole rises over 1 cm, no foot drifts over 2 cm and the gait is parked; red on all eight against the clock-driven cycle with no home test: 10 steps in 3 s, soles up to 9 cm, feet 10 cm over the ground) and `walker-gait.test.ts` (a gait walked, run and sprinted then asked to stop stands within 1 / 1 / 1.5 s and never steps again).

@@ -3,7 +3,7 @@ import type { OpenWorldMap, WalkGraph } from "../../world/openworld/walk-graph.t
 import { PLACE_NAMES } from "../../world/openworld/openworld-programme.ts";
 import { ACTIVITY, ACTIVITY_SECONDS, ARREST } from "../civilians/civilian-activity.ts";
 import { CAR_DOOR, carDoorOpenness, type DoorSpot } from "../civilians/civilian-car-door.ts";
-import { CASE_KIND, ESCORT_TO, SUBJECT_MODE, type CaseTable } from "./case-table.ts";
+import { ESCORT_TO, SUBJECT_MODE, type CaseTable } from "./case-table.ts";
 import { BESIDE_COP, BOARD_REACH, CAR_BOARD_SECONDS, COPS_PER_CASE, DOOR_APPROACH, CRIME_STEP_SECONDS, ESCORT_AHEAD_DISTANCE, ESCORT_ARRIVE, ESCORT_MIN_DISTANCE, ESCORT_SECONDS, FOOT_COP_COUNT, STATION_ESCORT_SECONDS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
 import { COP_MODE, type FootCops } from "./foot-cops.ts";
 import type { PatrolCars } from "./patrol-cars.ts";

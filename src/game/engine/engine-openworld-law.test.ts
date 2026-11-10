@@ -132,11 +132,13 @@ describe("given patrol cars chasing the player's car", () => {
 
 describe("given the player on foot in the open world", () => {
   const PLAYER_AT = 120;
+  /** The frames a hold and a few metres of street take: the bust hold (12 s), the cop's run to him and the lead away, at 60 frames a second, with room to spare. */
+  const MAX_ARREST_FRAMES = 60 * 40;
 
-  /** A solo host with the player standing at `PLAYER_AT` along x, a foot cop standing five metres from him, and the crowd stepped once so its log can take a shove. */
-  function playerWithCop() {
+  /** A solo host with the player standing at `PLAYER_AT` along x, a foot cop standing five metres from him, and the crowd stepped once so its log can take a shove; `footArrest` hears his arrest. */
+  function playerWithCop(footArrest = IDLE_FOOT_ARREST) {
     const { director } = directorWith({
-      law: idleLawPorts(),
+      law: { ...idleLawPorts(), footArrest },
       foot: (out) => {
         out.x = PLAYER_AT;
         out.z = PLAYER_AT;
@@ -162,6 +164,23 @@ describe("given the player on foot in the open world", () => {
     const shown = director.bustOf(0);
     expect(shown?.cops, "the strip shows the cops after him").toBeGreaterThanOrEqual(1);
     expect(shown?.hold, "no hold yet").toBe(0);
+  });
+
+  // mutation: sed -i 's/footArrest: extra.footArrest/footArrest: { busted: () => {}, led: () => {}, taken: () => {}, delivered: () => {} }/' src/game/engine/engine-openworld.ts
+  // mutation: sed -i 's/footArrest: ports.footArrest,/footArrest: { busted: () => {}, led: () => {}, taken: () => {}, delivered: () => {} },/' src/game/engine/engine-openworld-law.ts
+  it("when a cop holds him the whole hold, then the engine's ports hear the arrest, his cop leading him, and where he is set down", () => {
+    const heard = { busted: 0, led: 0, delivered: 0 };
+    const { director, crowd } = playerWithCop({
+      busted: () => void heard.busted++,
+      led: () => void heard.led++,
+      taken: () => {},
+      delivered: () => void heard.delivered++,
+    });
+    crowd.raiseEvent(EVENT_KIND.walker, 3);
+    for (let frame = 0; frame < MAX_ARREST_FRAMES && heard.delivered === 0; frame++) director.step(FRAME_SECONDS);
+    expect(heard.busted, "his arrest").toBe(1);
+    expect(heard.led, "the cop led him on the way").toBeGreaterThan(0);
+    expect(heard.delivered, "set down, on a map with no station a few metres on").toBe(1);
   });
 
   // mutation: in src/game/engine/engine-openworld-law.ts feedFoot(), change `this.scene.setFoot(there, ` to `this.scene.setFoot(false, `
