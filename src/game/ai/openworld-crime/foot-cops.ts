@@ -1,7 +1,8 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import type { WalkGraph } from "../../world/openworld/walk-graph.ts";
 import type { PathFinder } from "../civilians/walk-path.ts";
-import { CAR_COP, CAR_COP_BACK_REACH, COP_PATROL_SPEED, COP_REPLAN_STEPS, COP_RUN_SPEED, CRIME_STEP_SECONDS, ESCORT_SPEED, CRIME_STREAM, FOOT_COP_COUNT, PATROL_COPS, STRAIGHT_APPROACH } from "./crime-constants.ts";
+import { CAR_COP, COPS_PER_CASE, CAR_COP_BACK_REACH, COP_PATROL_SPEED, COP_REPLAN_STEPS, COP_RUN_SPEED, CRIME_STEP_SECONDS, ESCORT_SPEED, CRIME_STREAM, FOOT_COP_COUNT, PATROL_COPS, STRAIGHT_APPROACH } from "./crime-constants.ts";
+import type { CaseTable } from "./case-table.ts";
 import { crimeDraw } from "./crime-draw.ts";
 import type { FootWalkers } from "./foot-walkers.ts";
 
@@ -21,6 +22,8 @@ export class FootCops {
   private readonly seed: number;
   private readonly previousNode = new Int32Array(FOOT_COP_COUNT).fill(-1);
   private readonly patrolDraws = new Uint32Array(FOOT_COP_COUNT);
+  /** The gap (m) `nearestOfCase` found. */
+  nearestGap = Infinity;
   private carHomeX = 0;
   private carHomeZ = 0;
   /** Per cop: where his beat starts, and the crowd second a car's knock leaves him off the street until. */
@@ -85,6 +88,21 @@ export class FootCops {
     this.carHomeX = x;
     this.carHomeZ = z;
     this.assign(CAR_COP, caseIndex);
+  }
+
+  /** The cop of case `caseIndex` of `table` nearest (x, z) (the lower number on a tie), its gap left in `nearestGap`; -1 with none on the street. */
+  nearestOfCase(table: CaseTable, caseIndex: number, x: number, z: number): number {
+    let best = -1;
+    this.nearestGap = Infinity;
+    for (let index = 0; index < COPS_PER_CASE; index++) {
+      const cop = table.copAt(caseIndex, index);
+      if (cop < 0 || !this.onStreet(cop)) continue;
+      const gap = this.gapTo(cop, x, z);
+      if (gap >= this.nearestGap) continue;
+      this.nearestGap = gap;
+      best = cop;
+    }
+    return best;
   }
 
   /** Cop `cop` takes hold of whoever it reached: it stands. */
