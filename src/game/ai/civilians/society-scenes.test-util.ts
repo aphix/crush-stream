@@ -43,8 +43,8 @@ export type Scene = {
   after?: (cast: Cast) => void;
 };
 
-export function newCast(hour: number): Cast {
-  const state = createCityState(SEED, societyMap, 60);
+export function newCast(hour: number, map = societyMap): Cast {
+  const state = createCityState(SEED, map, 60);
   const resident = state.cast.length;
   let day = FIRST_DAY;
   while (weekdayOf(state, day) === FRIDAY) day++;

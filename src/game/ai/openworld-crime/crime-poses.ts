@@ -11,7 +11,7 @@ export function newCopPoses(): CrowdPoses {
   return poses;
 }
 
-/** The crowd's poses after the law's say (`share` of the way through the grid step after the last one taken): a suspect running, being cuffed or led away cuffed is where the law has them (acting it), a hider or a fighter thrown down is not drawn, and a resident held off the street stays hidden. Run after the crowd's own step. */
+/** The crowd's poses after the law's say (`share` of the way through the grid step after the last one taken): a suspect running, being cuffed or led away cuffed is where the law has them (acting it), a hider, one driven off in the patrol car or a fighter thrown down is not drawn, and a resident held off the street stays hidden. Run after the crowd's own step. */
 export function overlaySuspects(law: FootLaw, poses: CrowdPoses, share: number): void {
   const { table, walkers } = law;
   for (let at = 0; at < table.heldResident.length; at++) {
@@ -22,7 +22,7 @@ export function overlaySuspects(law: FootLaw, poses: CrowdPoses, share: number):
     const resident = table.resident[slot]!;
     if (resident < 0) continue;
     const mode = table.mode[slot]!;
-    if (mode === SUBJECT_MODE.hidden || (mode === SUBJECT_MODE.gripped && table.tookDown[slot] === 1)) {
+    if (mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.conveyed || (mode === SUBJECT_MODE.gripped && table.tookDown[slot] === 1)) {
       poses.shown[resident] = 0;
       continue;
     }

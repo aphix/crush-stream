@@ -20,6 +20,7 @@ export const PLACE_NAMES = {
   garden: "B3 Community Garden",
   bar: "Mifflin Bar",
   busStop: "Moore Bus Stop",
+  policeStation: "Moore St Police Station",
 } as const;
 
 /** The place of an appointment that is the block of the day's (Jamal's flyers). */
@@ -117,8 +118,8 @@ export const CAST: readonly CastMember[] = [
   },
 ];
 
-/** Places only their own story goes to: no one else picks them as a hangout, a favourite or a job. */
-export const PRIVATE_PLACE_NAMES: readonly string[] = [PLACE_NAMES.okaforDeck];
+/** Places only their own story goes to: no one else picks them as a hangout, a favourite or a job; the police station is only where the arrested are held. */
+export const PRIVATE_PLACE_NAMES: readonly string[] = [PLACE_NAMES.okaforDeck, PLACE_NAMES.policeStation];
 
 /** Places that draw a crowd only at some hours (the court in the afternoon, the garden in the morning); a window may wrap past midnight. */
 export const PLACE_HOURS: readonly { place: string; from: number; to: number }[] = [

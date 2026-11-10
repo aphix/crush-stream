@@ -33,6 +33,7 @@ export const PLACE_NAMES = {
   garden: "B3 Community Garden",
   bar: "Mifflin Bar",
   busStop: "Moore Bus Stop",
+  policeStation: "Moore St Police Station",
 } as const;
 
 export const PARK_NAME = "Moore Park";
@@ -67,6 +68,8 @@ const COFFEE_GRIND: Venue = { ...NARROW_SHOP, name: "Daily Grind Coffee", style:
 const COFFEE_BEAN: Venue = { ...NARROW_SHOP, name: "Bean There Cafe", style: "coffee", kind: PLACE_KIND.food, sector: SECTOR.cafe, hours: [7, 17], interior: "coffee" };
 const INSURANCE: Venue = { ...SHOP, name: "Pennworth Insurance & Realty", style: "office", kind: PLACE_KIND.work, sector: SECTOR.office, hours: [8, 18], interior: "office" };
 const LAW_OFFICE: Venue = { ...SHOP, name: "Lowell & Pratt Law Offices", style: "office", kind: PLACE_KIND.work, sector: SECTOR.office, hours: [8, 18], interior: "office" };
+/** The police station: two lots of a Moore St face, an office's kit, open all hours; private (no one works or visits there but the arrested), and where the law takes them. */
+const POLICE_STATION: Venue = { ...SHOP, name: PLACE_NAMES.policeStation, style: "office", kind: PLACE_KIND.work, sector: SECTOR.police, interior: "office" };
 
 /**
  * Two landmarks from the owner's Philadelphia photographs (`refs/philly/02`): a rough-stone church three lots wide, and a modern four-storey infill two lots wide, white and grey with tall vertical
@@ -98,6 +101,7 @@ export const VENUE_SPOTS: readonly (Spot & { venue: Venue })[] = [
   { row: ROW.B, column: 2, face: "north", at: 12, venue: LAW_OFFICE },
   { row: ROW.A, column: 0, face: "north", at: 6, venue: CHURCH },
   { row: ROW.C, column: 1, face: "south", at: 12, venue: INFILL },
+  { row: ROW.B, column: 2, face: "south", at: 0, venue: POLICE_STATION },
 ];
 
 /**

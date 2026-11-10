@@ -132,7 +132,7 @@ describe("given a patrol car sent across a block of the open world's course", ()
       return leased;
     };
     const arrivals: { x: number; z: number }[] = [];
-    const patrol = new PatrolCars(new TrafficPatrolPorts(traffic, () => {}), { arrived: (_caseIndex, x, z) => void arrivals.push({ x, z }), busted: () => {} }, null, 12, CAREFUL_SEED);
+    const patrol = new PatrolCars(new TrafficPatrolPorts(traffic, () => {}), { arrived: (_caseIndex, x, z) => void arrivals.push({ x, z }), busted: () => {}, delivered: () => {} }, null, 12, CAREFUL_SEED);
     expect(patrol.dispatchToScene(0, spots.x[targetSpot]!, spots.z[targetSpot]!, 0), "a patrol car was leased").toBe(true);
     const index = leased!.index;
     let touched = 0;

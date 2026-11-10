@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { hypot2 } from "../../kernel/physics-core.js";
+import { must } from "../../kernel/must.test-util.ts";
 import { NEVER_TICK } from "../civilians/civilian-constants.ts";
-import { CRIME_HZ, FOOT_COP_COUNT, MAX_SUBJECTS, PATROL_COPS, PATROL_RECENT } from "./crime-constants.ts";
+import { CRIME_HZ, ESCORT_ARRIVE, FOOT_COP_COUNT, MAX_SUBJECTS, PATROL_COPS, PATROL_RECENT } from "./crime-constants.ts";
+import { stationOf } from "./arrests.ts";
 import { FootLaw } from "./foot-law.ts";
 import { FootWalkers } from "./foot-walkers.ts";
 import type { OffenceSource, Spot, Walk } from "./offence-source.ts";
 import { realMap, type RealMap } from "./real-map.test-util.ts";
 
 const real: RealMap = realMap();
+const station = stationOf(real.map);
+must(station, "the real map has its police station");
+const STATION = station;
 const SEEDS = [7, 8, 9];
 /** Ten minutes of the law's grid steps, a new crime at a random door every twenty seconds (the real city has far more). */
 const MINUTES = 10;
@@ -32,6 +38,8 @@ class Scene {
   private readonly spotZ = new Float64Array(RESIDENTS);
   private readonly doors = real.map.places.filter((place) => place.doorNode >= 0);
   private crimes = 0;
+  /** How far (m) the arresting cop stood from the station's door at each arrest the host was asked to raise. */
+  readonly doorGaps: number[] = [];
 
   constructor(seed: number, sight: boolean) {
     const source: OffenceSource = {
@@ -59,13 +67,20 @@ class Scene {
     this.law = new FootLaw(
       real.map,
       source,
-      { bust: (resident) => void (this.wanted[resident] = 0), jaywalked: () => {}, copDown: () => {}, footBusted: () => {} },
-      { opened: () => {}, closed: () => {} },
+      { bust: (resident) => this.raised(resident), jaywalked: () => {}, copDown: () => {}, footBusted: () => {} },
+      { opened: () => {}, closed: () => {}, carry: () => false },
       seed,
       { lineOfSight: sight ? real.sight : null, signals: null, otherCopsSee: null },
       12,
     );
     this.law.authority = true;
+  }
+
+  private raised(resident: number): void {
+    const { table, walkers } = this.law;
+    const cop = table.holder[table.subjectOf[resident]!]!;
+    this.wanted[resident] = 0;
+    this.doorGaps.push(hypot2(walkers.x[cop]! - STATION.x, walkers.z[cop]! - STATION.z));
   }
 
   /** A crime at a door picked by (step, seed). */
@@ -79,7 +94,7 @@ class Scene {
   }
 }
 
-type Tally = { insideSteps: number; mostRevisits: number; cells: number[] };
+type Tally = { insideSteps: number; mostRevisits: number; cells: number[]; doorGaps: number[] };
 
 const tallies = new Map<string, Tally>();
 
@@ -92,7 +107,7 @@ function tally(seed: number, sight: boolean, crimes: boolean): Tally {
   const walkers = scene.law.walkers;
   const last = new Int32Array(WALKERS).fill(-1);
   const visits = Array.from({ length: WALKERS }, () => new Map<number, number>());
-  const out: Tally = { insideSteps: 0, mostRevisits: 0, cells: [] };
+  const out: Tally = { insideSteps: 0, mostRevisits: 0, cells: [], doorGaps: scene.doorGaps };
   const cells = Array.from({ length: PATROL_COPS }, () => new Set<string>());
   for (let step = 1; step <= STEPS; step++) {
     if (crimes && step % CRIME_EVERY_STEPS === 0) scene.commit(step, seed);
@@ -119,9 +134,23 @@ describe("given the real open world and ten minutes of crimes", () => {
     for (const seed of SEEDS) expect(tally(seed, true, true).insideSteps, `walker-steps inside a building (seed ${seed})`).toBe(0);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts constructor, change `new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS, senses.lineOfSight);` to `new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS, null);`
+  // mutation: sed -i 's/this.replanIfAimMoved(cop, aimX, aimZ);/this.walkers.plan(cop, this.finder, this.walkers.nearestSeenNode(aimX, aimZ), this.noFear, 0);/' src/game/ai/openworld-crime/foot-cops.ts
+  // mutation: sed -i 's/new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS, senses.lineOfSight)/new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS, null)/' src/game/ai/openworld-crime/foot-law.ts
   it("when cops chase and arrest, then no walker keeps coming back to one corner", () => {
     for (const seed of SEEDS) expect(tally(seed, true, true).mostRevisits, `most times one corner was entered (seed ${seed})`).toBeLessThanOrEqual(MOST_REVISITS);
+  });
+});
+
+describe("given the real open world with its police station and ten minutes of crimes", () => {
+  // mutation: sed -i 's/to === ESCORT_TO.station ? STATION_ESCORT_SECONDS : ESCORT_SECONDS/ESCORT_SECONDS/' src/game/ai/openworld-crime/arrests.ts
+  it("when cops arrest, then each arrest is raised with the cop at the station's door, wherever the suspect was cuffed", () => {
+    let arrests = 0;
+    for (const seed of SEEDS) {
+      const { doorGaps } = tally(seed, true, true);
+      arrests += doorGaps.length;
+      for (const gap of doorGaps) expect(gap, `cop's distance from the station's door at an arrest (seed ${seed})`).toBeLessThanOrEqual(ESCORT_ARRIVE);
+    }
+    expect(arrests, "arrests raised in the ten minutes, three seeds").toBeGreaterThanOrEqual(3);
   });
 });
 

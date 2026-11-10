@@ -1,4 +1,5 @@
 import { hypot2 } from "../../kernel/physics-core.js";
+import { PLACE_NAMES } from "./civilian-cast.ts";
 import { tickAt } from "./civilian-clock.ts";
 import {
   CENTIMETRES_PER_METRE,
@@ -224,18 +225,18 @@ export function applyKnockWitness(state: CityState, knocked: number, seconds: nu
   if (residentDraws(state.seed, witness, STREAM.fight, tickAt(seconds))() < chance) startFight(state, witness, -1, seconds, tick);
 }
 
-/** Off the street from `seconds` for `ticks` and then home, the leg and seat given up, a line saying why: a bust's or a jaywalk arrest's custody. */
+/** Off the street from `seconds` for `ticks`, the leg and seat given up, a line saying why: a bust's or a jaywalk arrest's custody, held in the police station when the map has one (else at home); let out from its door, they go home. */
 function takeIntoCustody(state: CityState, resident: number, seconds: number, ticks: number, code: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   const { ints } = state;
   const struck = tickAt(seconds);
-  const home = ints[base + RESIDENT_INT.home]!;
+  const held = state.index.placeByName.get(PLACE_NAMES.policeStation) ?? ints[base + RESIDENT_INT.home]!;
   const was = ints[base + RESIDENT_INT.place]!;
   evolveNeeds(state.floats, resident * RESIDENT_FLOAT_STRIDE, ints[base + RESIDENT_INT.departTick]!, ints[base + RESIDENT_INT.arriveTick]!, struck, state.index.kindOf[was]!, state.scratchNeeds);
   releaseSeat(state, resident);
   dropCarLeg(state, resident, struck);
-  ints[base + RESIDENT_INT.fromPlace] = home;
-  ints[base + RESIDENT_INT.place] = home;
+  ints[base + RESIDENT_INT.fromPlace] = held;
+  ints[base + RESIDENT_INT.place] = held;
   ints[base + RESIDENT_INT.departTick] = struck;
   ints[base + RESIDENT_INT.arriveTick] = struck;
   ints[base + RESIDENT_INT.pathCount] = 0;

@@ -370,11 +370,20 @@ function afterInteraction(state: CityState, resident: number, tick: number, row:
   else if (crimeKindOf(row.purpose) !== CRIME_KIND.none) state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.crimeVictim] = partner;
 }
 
+/** A resident let out of custody away from home (the police station) goes home, whatever they would have chosen. */
+function goHomeFromCustody(state: CityState, resident: number, current: number): void {
+  if (current === intAt(state, resident, RESIDENT_INT.home)) return;
+  state.chosenPlace = intAt(state, resident, RESIDENT_INT.home);
+  state.chosenPurpose = NEED.rest;
+  state.chosenRow = -1;
+}
+
 /** Resident `resident`'s decision at the end of a dwell, at `tick`: a named resident's appointment first, else the best need or table row by utility; a leg to the place, or a stay. */
 export function decideResident(state: CityState, resident: number, tick: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   const current = state.ints[base + RESIDENT_INT.place]!;
   const hour = hourOfDay(tick, state.startHour);
+  const letOut = (state.ints[base + RESIDENT_INT.flags]! & FLAG.custody) !== 0;
   evolveNeeds(state.floats, resident * RESIDENT_FLOAT_STRIDE, state.ints[base + RESIDENT_INT.departTick]!, state.ints[base + RESIDENT_INT.arriveTick]!, tick, state.index.kindOf[current]!, state.scratchNeeds);
   noteReturn(state, resident, tick, current);
   endFight(state, resident, tick);
@@ -382,6 +391,7 @@ export function decideResident(state: CityState, resident: number, tick: number)
   if (named && keepAppointment(state, resident, tick, current)) return;
   const draw = residentDraws(state.seed, resident, STREAM.decision, state.ints[base + RESIDENT_INT.decisionCount]!);
   chooseByUtility(state, resident, current, tick, hour, draw);
+  if (letOut) goHomeFromCustody(state, resident, current);
   const purpose = state.chosenPurpose;
   const row = state.chosenRow >= 0 ? INTERACTIONS[state.chosenRow]! : null;
   const walksAway = state.chosenPlace !== NO_PLACE && state.chosenPlace !== current;

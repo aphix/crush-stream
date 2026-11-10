@@ -16,7 +16,7 @@ import {
   RESIDENT_INT_STRIDE,
   SPECIES,
 } from "./civilian-constants.ts";
-import { buildFixtureMap } from "./civilian-graph.test-util.ts";
+import { buildFixtureMap, type PlaceSpec } from "./civilian-graph.test-util.ts";
 import { decideResident } from "./civilian-plan.ts";
 import type { CityState } from "./civilian-state.ts";
 import { walkMetres } from "./society-cars.ts";
@@ -42,10 +42,11 @@ function counterBeside(place: Place): Float32Array {
 /**
  * The fixture neighbourhood with the venues the table sends people to: a coffee shop (three seats, a counter) beside the pizza place, a supermarket and the bodega (counters), the bar with two seats and a counter, and two stoop seats at the head of every home's seats.
  */
-export function buildSocietyMap(): OpenWorldMap {
+export function buildSocietyMap(extraSpecs: readonly PlaceSpec[] = []): OpenWorldMap {
   const base = buildFixtureMap(2, [
     { name: COFFEE_SHOP, kind: PLACE_KIND.food, block: "B1", sector: "Food" },
     { name: SUPERMARKET, kind: PLACE_KIND.shop, block: "B3", sector: "Commercial" },
+    ...extraSpecs,
   ]);
   const places = base.places.map((place): Place => {
     if (place.name === COFFEE_SHOP) return { ...place, interior: "coffee", seats: Float32Array.from(seatsBeside(place, 3, SEAT_TOP)), counter: counterBeside(place) };

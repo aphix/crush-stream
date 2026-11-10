@@ -1,3 +1,4 @@
+import { PLACE_NAMES } from "../../world/openworld/openworld-programme.ts";
 import { PLACE_KIND, type OpenWorldMap, type Place } from "../../world/openworld/walk-graph.ts";
 import { NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { createCrowdPoses, type CrowdPoses } from "../civilians/crowd-poses.ts";
@@ -15,6 +16,8 @@ export const EAST_HIDE = LINE_NODES - 1;
 /** The street between these two corners (x = 60 to 70) is a zebra crossing. */
 export const CROSSING_WEST_NODE = 6;
 export const CROSSING_EAST_NODE = 7;
+/** The corner a fixture's police station (when it has one) has its door at. */
+export const STATION_NODE = 10;
 /** Residents in the fixture society. */
 export const RESIDENTS = 4;
 /** A wanted spell that outlasts every row (ticks). */
@@ -27,8 +30,8 @@ function placeAt(kind: Place["kind"], name: string, node: number): Place {
   return { kind, name, doorNode: node, doorX: x, doorZ: 0, yaw: 0, x, z: 8, width: 8, depth: 8, storeys: 2, style: "rowbrick", sector: "" };
 }
 
-/** One street of thirteen corners in a line with a hiding place at each end and one zebra crossing: the simplest city a flight can be read in. */
-export function lineCity(): OpenWorldMap {
+/** One street of thirteen corners in a line with a hiding place at each end and one zebra crossing, and a police station at `STATION_NODE` when asked: the simplest city a flight can be read in. */
+export function lineCity(withStation = false): OpenWorldMap {
   const nodeX = Float32Array.from({ length: LINE_NODES }, (_, node) => node * NODE_SPACING);
   const nodeZ = new Float32Array(LINE_NODES);
   const edgeStart = new Int32Array(LINE_NODES + 1);
@@ -44,7 +47,9 @@ export function lineCity(): OpenWorldMap {
     edgeStart[node + 1] = edgeTo.length;
   }
   const graph = { nodeX, nodeZ, edgeStart, edgeTo: Int32Array.from(edgeTo), edgeLength: new Float32Array(edgeTo.length).fill(NODE_SPACING), edgeCrossing: Uint8Array.from(crossing) };
-  return { graph, places: [placeAt(PLACE_KIND.hide, "West alley", WEST_HIDE), placeAt(PLACE_KIND.hide, "East alley", EAST_HIDE)], portals: new Int32Array(0), halfX: 120, halfZ: 20 };
+  const places = [placeAt(PLACE_KIND.hide, "West alley", WEST_HIDE), placeAt(PLACE_KIND.hide, "East alley", EAST_HIDE)];
+  if (withStation) places.push(placeAt(PLACE_KIND.work, PLACE_NAMES.policeStation, STATION_NODE));
+  return { graph, places, portals: new Int32Array(0), halfX: 120, halfZ: 20 };
 }
 
 /** The society's rows as the law reads them, set by the row and cleared by the bust the way the brain clears them. */
@@ -180,7 +185,7 @@ export type Harness = {
 /** A building standing across the street between these x (m): it blocks every sight line that passes it. */
 export type Wall = { minX: number; maxX: number };
 
-export type HarnessOptions = { seed?: number; withCars?: boolean; authority?: boolean; wall?: Wall };
+export type HarnessOptions = { seed?: number; withCars?: boolean; authority?: boolean; wall?: Wall; station?: boolean };
 
 /** Sight lines along the line city past `wall`. */
 function sightPast(wall: Wall): LineOfSight {
@@ -212,7 +217,7 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
     playerBustSeconds: 12,
     lineOfSight: options.wall === undefined ? null : sightPast(options.wall),
   };
-  const scene = new CrimeScene(lineCity(), offences, ports, options.seed ?? 7);
+  const scene = new CrimeScene(lineCity(options.station ?? false), offences, ports, options.seed ?? 7);
   for (let cop = 0; cop < FOOT_COP_COUNT - 1; cop++) scene.foot.walkers.place(cop, copX[cop] ?? 0, 0);
   return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, copDowns, footBusts, cars: [], signals, playerBusts, street, now: 0, authority: options.authority ?? true };
 }

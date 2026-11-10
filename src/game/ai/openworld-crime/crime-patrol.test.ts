@@ -25,7 +25,7 @@ const PATROL_CAR_INDEX = 1;
 const SHARE_BAND = 0.1;
 /** The race brake's latch lets a car run this far (m/s) over the speed it wants before it bites (`BRAKE_ON` in race-ai.ts). */
 const BRAKE_LATCH = 1.5;
-const NO_HOOKS = { arrived: () => {}, busted: () => {} };
+const NO_HOOKS = { arrived: () => {}, busted: () => {}, delivered: () => {} };
 /** The first run of a seed is a careful one under this seed, a hothead's under the other. */
 const CAREFUL_SEED = seedWhere((seed) => crimeDraw(seed, CRIME_STREAM.hothead, 0, 0), HOTHEAD_RUN_SHARE, false);
 const HOTHEAD_SEED = seedWhere((seed) => crimeDraw(seed, CRIME_STREAM.hothead, 0, 0), HOTHEAD_RUN_SHARE, true);

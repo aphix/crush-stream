@@ -4,6 +4,7 @@ import { makeWorld } from "../race-world.test-util.ts";
 import { parseTrack } from "../track-schema.ts";
 import { OFF_MENU } from "../tracks/index.ts";
 import { OPENWORLD_ID } from "./openworld-course.ts";
+import { must } from "../../kernel/must.test-util.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
 import { PLACE_NAMES } from "./openworld-programme.ts";
@@ -80,7 +81,7 @@ describe("given the drafted programme's map", () => {
 });
 
 describe("given the programme's businesses on the map", () => {
-  const businesses = playable.filter((place) => place.storeys > 0 && place.kind !== PLACE_KIND.home);
+  const businesses = playable.filter((place) => place.storeys > 0 && place.kind !== PLACE_KIND.home && place.name !== PLACE_NAMES.policeStation);
   const withInterior = (interior: string) => playable.filter((place) => place.interior === interior);
 
   // mutation: sed -i 's/{ row: ROW.A, column: 0, face: "south", at: 9, venue: COFFEE_GRIND },//' src/game/world/openworld/openworld-programme.ts
@@ -129,5 +130,20 @@ describe("given the programme's businesses on the map", () => {
       expect(home.seats!.length / SEAT_STRIDE, `${home.name} seats`).toBe(home.storeys + HOME_SEATS_BEYOND_STOREYS);
     }
     expect(lots.buildings.filter((building) => building.style === "rowbrick" || building.style === "rowpainted").length, "house buildings").toBeGreaterThanOrEqual(homes.length);
+  });
+});
+
+describe("given the police station on the map", () => {
+  const station = playable.find((place) => place.name === PLACE_NAMES.policeStation);
+
+  // mutation: sed -i 's/sector: SECTOR.police, interior: "office"/sector: SECTOR.police/' src/game/world/openworld/openworld-programme.ts
+  it("when the station is read, then it is a two-lot office building with an office interior and a door on the street, open at every hour", () => {
+    must(station, "the station is on the map");
+    expect(station.interior, "its interior").toBe("office");
+    expect(station.style, "its facade").toBe("office");
+    expect(station.sector, "its trade").toBe(SECTOR.police);
+    expect(station.hours, "opening hours (none: always open)").toBeUndefined();
+    expect(station.width, "two lots wide").toBeCloseTo(2 * lots.geometry.lotFrontage, 3);
+    expect(station.doorNode, "a door on the walk graph").toBeGreaterThanOrEqual(0);
   });
 });
