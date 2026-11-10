@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
@@ -28,8 +29,8 @@ const SETTLED_FRAMES = 60;
 const STEADY_FRAMES = 150;
 const YAW_STEADY_RAD = 0.02;
 const STRAIGHT_CAR_BEHIND_M = 6;
-const FRAME_S = 1 / 60;
-const FRAMES_PER_SECOND = 60;
+const FRAME_S = 1 / FRAME_HZ;
+
 /** A body's facing step (rad a frame) that counts as a swing, the most it may be off her way on a straight (rad: she walks 1.4 m/s, her body's own sway is under 0.1) and the most reversals a second a steady walk may have (before: about 4). */
 const SWING_STEP_RAD = 0.02;
 const MOST_OFF_STRAIGHT_RAD = 0.15;
@@ -144,7 +145,7 @@ describe("given the real engine in the open world and the player's car running a
     }
     expect(steady, "frames of a straight walk with a body, measured").toBeGreaterThanOrEqual(STEADY_FRAMES);
     expect(worst, "the most her body's facing is off her way on the straight (rad)").toBeLessThan(MOST_OFF_STRAIGHT_RAD);
-    expect((reversals / steady) * FRAMES_PER_SECOND, "swings left-right reversals a second").toBeLessThan(MOST_REVERSALS_PER_SECOND);
+    expect((reversals / steady) * FRAME_HZ, "swings left-right reversals a second").toBeLessThan(MOST_REVERSALS_PER_SECOND);
   });
 
   // mutation: sed -i 's/      if (this.bodies?.knock(strike) === true) {/      if (false) {/' src/game/engine/engine-openworld.ts
