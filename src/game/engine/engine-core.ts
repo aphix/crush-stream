@@ -600,8 +600,13 @@ export abstract class EngineCore {
     applyCarFinish(car.group, finishForTier(this.cine.tier));
   }
 
-  /** This browser's own car: its netplay seat as a guest, else the player's car 0. */
+  /** The car the player got into on foot and drives instead of his own (`adoptCar`), null while he drives his own. */
+  protected adoptedCar: number | null = null;
+
+  /** This browser's own car: its netplay seat as a guest, else the player's car 0; the car he took in the free roam while he still drives it (he is the same person in it: his look, his spray). */
   protected ownCar(): number {
+    const adopted = this.adoptedCar;
+    if (adopted !== null && this.race?.free === true && this.race.self === adopted) return adopted;
     return this.net.client ? this.net.status().car : 0;
   }
 

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { hypot2 } from "../kernel/physics-core.js";
 import { idleDrive } from "../vehicle/car-drive.ts";
+import { ownLook } from "../present/driver-look.ts";
 import { OnFootRig } from "./engine-onfoot.test-util.ts";
 
 const LINK = "#scene=openworld&seed=beef";
@@ -89,6 +90,26 @@ describe("given the real engine in the open world, its player out of his car wit
     const before = car.group.position.clone();
     rig.hold("KeyW", DRIVE_S);
     expect(hypot2(car.group.position.x - before.x, car.group.position.z - before.z), "he drove it off").toBeGreaterThan(DROVE_OFF_M);
+  });
+
+  // mutation: sed -i 's/    if (adopted !== null && this.race?.free === true && this.race.self === adopted) return adopted;/    void adopted;/' src/game/engine/engine-core.ts
+  it("when he has got into another car, then he is the same person in it: the driver drawn in it and the one thrown from it are his, not the seed's driver of that car", () => {
+    const target = nearestEmptyCar();
+    const ragdolls = rig.engine["ragdolls"];
+    const own = JSON.stringify(ownLook(rig.engine["looks"].mine.person));
+    const before = JSON.stringify(ragdolls.carDriverLook(target, false));
+    expect(before, "before: that car's driver is another person (the check can fail)").not.toBe(own);
+    rig.getOut();
+    rig.walkToDoor(rig.cars()[target]!);
+    rig.press("Enter");
+    rig.run(1);
+    expect(rig.engine["seat"].carIndex, "he is in the other car").toBe(target);
+    expect(JSON.stringify(ragdolls.carDriverLook(target, false)), "the driver drawn in it").toBe(own);
+    const thrown = ragdolls["dressingOf"]({ car: target, cop: false } as Parameters<(typeof ragdolls)["dressingOf"]>[0], null);
+    expect(JSON.stringify(thrown.look), "the driver thrown from it").toBe(own);
+    rig.getOut();
+    rig.run(0.5);
+    expect(JSON.stringify(ragdolls.carDriverLook(target, false)), "and still his once he is out of it").toBe(own);
   });
 
   // mutation: sed -i 's/    if (id < this.first || this.context.humans\[id\] === 1 || car.driverOut !== null) return true;/    if (this.context.humans[id] === 1 || car.driverOut !== null) return true;/' src/game/ai/openworld-traffic/openworld-traffic.ts

@@ -317,7 +317,9 @@ export class CrashEngine extends EngineGarage {
       respawn: () => this.requestRespawn(),
       enterable: (index) => this.race.free && !this.net.client && this.openWorld.canEnter(index),
       adopt: (index) => {
-        if (this.race.adoptCar(index)) this.openWorld.adopt(index);
+        if (!this.race.adoptCar(index)) return;
+        this.adoptedCar = index;
+        this.openWorld.adopt(index);
       },
     });
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
