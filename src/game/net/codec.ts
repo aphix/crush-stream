@@ -84,8 +84,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 52: the open world's hydrant is four circles (outlets, barrel, bonnet, cap) instead of one wide one; a car driving by is no hazard and how a person reacts follows a hidden neuroticism of their look (whether, when, how far, for how long); a walk's mood no longer erases a held one; a chased driver flees; so a peer on 51 would meet a different post and compute a different city from the same log.
 53: the open world's interior envelope walls stand 17.3 m (the tallest lot) instead of 12 m, so a peer on 52 would meet different solids.
 54: venues with a counter give customers without a seat their own standing spots and clerks their own spots (the row's seat field), and someone with no spot is not drawn inside, so a peer on 53 would place people differently.
+55: the host logs each change of the open world's ambulance as a crowd event (`EVENT_KIND.ambulanceStage`), which a client reads to show the medics, so a peer on 54 would never see them.
 */
-export const NET_VERSION = 54;
+export const NET_VERSION = 55;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
