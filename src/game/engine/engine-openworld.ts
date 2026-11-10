@@ -8,10 +8,13 @@ import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { ChaseHud } from "../hud/hud-store.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { SignSight } from "../present/openworld-signs.ts";
-import type { OpenWorldMap, Place } from "../world/openworld/walk-graph.ts";
+import { PLACE_KIND, type OpenWorldMap, type Place } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { gameHourAtMinute, gameMinuteAt, secondsOfGameMinutes, tickAt } from "../ai/civilians/civilian-clock.ts";
 import { MINUTES_PER_GAME_DAY, MINUTES_PER_GAME_HOUR } from "../ai/civilians/civilian-constants.ts";
+import { fillAwakeAtHomes } from "../ai/civilians/society-awake.ts";
+import { ImaginedHouseholds } from "../ai/civilians/society-households.ts";
+import { HomeLights } from "../present/facade-homes.ts";
 import { fillClosedPlaces } from "../ai/civilians/society-hours.ts";
 import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.ts";
@@ -189,6 +192,10 @@ export class OpenWorldDirector {
   private lookAcc = 0;
   /** The game minute the stage's day was last set for (-1: none, or it was left), so the light follows the crowd's clock once a minute. */
   private dayMinute = -1;
+  /** The homes' windows' shares, made with the crowd and stepped each game minute from who is awake at home: drawing only, read off the state this machine's crowd already has. */
+  private homeLights: HomeLights | null = null;
+  private households: ImaginedHouseholds | null = null;
+  private awake = new Uint8Array(0);
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
   private readonly openers: DoorOpeners = { poses: null, walker: null, others: [], closed: null };
   /** The map's places shut now (a wreck, or outside their hours), refilled each frame from the crowd's state for the interiors. */
@@ -391,6 +398,7 @@ export class OpenWorldDirector {
   }
 
   private stopCrowd(): void {
+    this.dropHomeLights();
     if (this.crowd === null) return;
     this.unhook?.();
     this.bodies?.dispose();
@@ -432,6 +440,27 @@ export class OpenWorldDirector {
     if (minute === this.dayMinute) return;
     this.dayMinute = minute;
     this.lightDay(crowd);
+    this.lightHomes(crowd);
+  }
+
+  /** Who is awake at each home now (the residents there, or the imagined household of a home with none) sets how many of its windows light at night (`HomeLights`); a skipped clock settles them at once, as the stage's light jumps. */
+  private lightHomes(crowd: CivilianCrowd, settles = false): void {
+    if (this.homeLights === null || this.households === null) {
+      const homes = this.map!.places.flatMap((place, index) => (place.kind === PLACE_KIND.home ? [{ place: index, x: place.x, z: place.z }] : []));
+      this.homeLights = new HomeLights(homes);
+      this.households = new ImaginedHouseholds(crowd.state);
+      this.awake = new Uint8Array(crowd.state.index.placeCount);
+    }
+    const tick = tickAt(crowd.crowdSeconds);
+    fillAwakeAtHomes(crowd.state, tick, this.awake);
+    this.households.fill(tick, this.awake);
+    this.homeLights.step(this.awake, settles);
+  }
+
+  private dropHomeLights(): void {
+    this.homeLights?.dispose();
+    this.homeLights = null;
+    this.households = null;
   }
 
   private lightDay(crowd: CivilianCrowd): void {
@@ -454,11 +483,13 @@ export class OpenWorldDirector {
     this.seconds = skipTo;
     this.dayMinute = gameMinuteAt(skipTo);
     this.lightDay(crowd);
+    this.lightHomes(crowd, true);
     return true;
   }
 
   /** The course is left: the stage's time of day lights again. */
   private dropDay(): void {
+    this.dropHomeLights();
     if (this.dayMinute < 0) return;
     this.dayMinute = -1;
     this.ports.setDayHour(null);

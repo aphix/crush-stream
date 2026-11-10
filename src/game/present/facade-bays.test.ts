@@ -13,6 +13,7 @@ import { FacadeBays, HOUSE_ACCENTS, KIT_HOUSE_BACK, tintedColorVertex } from "./
 import { ATLAS_SIZE, GLASS_ALPHA_BELOW, KIT_CELL, paintKit, type UvRect } from "./facade-kit-atlas.ts";
 import { HALF } from "./facade-mesh.ts";
 import { FACADE_OPEN_AT, roofLiftAt } from "./facades.ts";
+import { FACADE_HOMES, FACADE_HOMES_FRAME } from "./facade-homes.ts";
 import { shuttersOf, visibleWindowsOf } from "./facade-fittings.ts";
 
 const lots = layOutLots();
@@ -498,6 +499,18 @@ describe("given the panes of the bay windows and the list of built buildings", (
     expect(shader.uniforms.facadeOpenAt, "the list of built buildings").toBe(FACADE_OPEN_AT);
     expect(shader.vertexShader, "the vertex shader's flag").toContain("vKitOpen");
     expect(shader.fragmentShader, "the fragment shader's cut").toContain(`vKitOpen > 0.0 && diffuseColor.a < ${GLASS_ALPHA_BELOW} && facadeCuts(vKitOpen)) discard;`);
+  });
+
+  // mutation: sed -i 's/step(fract(vKitSeed \* 7.3), kitShare) \* step(0.0001, kitShare)/step(fract(vKitSeed * 7.3), 0.60)/' src/game/present/facade-bays.ts
+  it("when the kit's material is compiled, then the bay's windows light by the home's own share read at the building's centre, and none where the share is none", () => {
+    const material = (kit.group.getObjectByName("facade-stoop") as THREE.InstancedMesh).material as THREE.MeshStandardMaterial;
+    const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
+    const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    expect(shader.uniforms.facadeHomes, "the homes' texels").toBe(FACADE_HOMES);
+    expect(shader.uniforms.facadeHomesFrame, "the homes' grid").toBe(FACADE_HOMES_FRAME);
+    expect(shader.vertexShader, "the texel read at the house's centre, not the frontage").toContain("facadeHomeCell = floor((kitHouse - facadeHomesFrame.xy)");
+    expect(shader.fragmentShader, "the house's lit share").toContain("step(fract(vKitSeed * 7.3), kitShare) * step(0.0001, kitShare)");
   });
 
   // mutation: sed -i 's/^export const KIT_HOUSE_BACK = drawnHalf(LAYOUT.houseDepth);/export const KIT_HOUSE_BACK = drawnHalf(LAYOUT.houseDepth) + 0.5;/' src/game/present/facade-bays.ts

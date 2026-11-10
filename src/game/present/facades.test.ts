@@ -15,6 +15,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
+import { FACADE_HOMES, FACADE_HOMES_FRAME } from "./facade-homes.ts";
 import { FACADE, FACADE_GLOW, FACADE_LAYERS, FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, facadeOpenLoop, setDarkFacades, setOpenFacades, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, SLAB_STYLE } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { disposePrefabMaterials, makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
@@ -430,6 +431,21 @@ describe("given a style whose layer data names no relief strips", () => {
       const shops = open || FACADE_LAYERS[style].dark === true;
       expect(shader.uniforms.facadeDarkAt, `${style} list of shut shops`).toBe(shops ? FACADE_DARK_AT : undefined);
       expect(shader.fragmentShader.includes("* (1.0 - vFacadeDark * step(2.0, vFacadeRegion.x)"), `${style} lights its windows by the list`).toBe(shops);
+    }
+  });
+
+  // mutation: sed -i 's/float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow \* ${extras.dark ? "facadeShare" : LIT_SHARE_GLSL})/float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${LIT_SHARE_GLSL})/' src/game/present/facades.ts
+  it("when a style that may hold a household is compiled, then its windows light by the building's own share read from the homes' texels, none at all where the share is none, and a style without them keeps the fixed share", () => {
+    const made = makeFacadeMaterials();
+    for (const style of STYLES) {
+      const shader = compileFacade(made[style]);
+      const homes = FACADE_LAYERS[style].open === true || FACADE_LAYERS[style].dark === true;
+      expect(shader.uniforms.facadeHomes, `${style} homes' texels`).toBe(homes ? FACADE_HOMES : undefined);
+      expect(shader.uniforms.facadeHomesFrame, `${style} homes' grid`).toBe(homes ? FACADE_HOMES_FRAME : undefined);
+      expect(shader.vertexShader.includes("texelFetch(facadeHomes"), `${style} reads the texels per building`).toBe(homes);
+      expect(shader.fragmentShader.includes("facadeGlow * facadeShare)"), `${style} lights by the building's share`).toBe(homes);
+      expect(shader.fragmentShader.includes("step(0.0001, facadeShare)"), `${style} lights nothing at a share of none`).toBe(homes);
+      expect(shader.fragmentShader.includes("facadeGlow * 0.60)"), `${style} keeps the fixed share`).toBe(!homes);
     }
   });
 
