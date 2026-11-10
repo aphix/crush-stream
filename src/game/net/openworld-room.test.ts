@@ -235,6 +235,6 @@ describe("given a room whose host has no crowd", () => {
   it("when the guest has no crowd link yet, then a crowd message from the host is dropped without a throw", () => {
     const s = room({ hostCrowd: hostLink([...FIRST_EVENTS]), guestCrowd: null });
     expect(() => s.step(60)).not.toThrow();
-    expect(NET_VERSION, "the build both speak").toBe(57);
+    expect(NET_VERSION, "the build both speak").toBe(58);
   });
 });

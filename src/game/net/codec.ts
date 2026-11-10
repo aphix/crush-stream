@@ -87,8 +87,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 55: the host logs each change of the open world's ambulance as a crowd event (`EVENT_KIND.ambulanceStage`), which a client reads to show the medics, so a peer on 54 would never see them.
 56: open-world walkers wait for the walk signal at crossings and run to the kerb from danger (RESIDENT_INT grew, the crowd init carries `signals`), a push by a car logs `EVENT_KIND.car` with the bearing to it, mug hours moved and an ambulance is called only by someone in sight, so a peer on 55 would plan different legs.
 57: the midnight radio's static annoys its hearers for 3 game hours, not 18, so they no longer go drinking to forget the next evening; a peer on 56 would plan different legs.
+58: open-world custody is held in the police station (not at home) and a resident let out walks home from it; bust and jaywalk events are raised at the station door, so a peer on 57 would place the held and plan different legs.
 */
-export const NET_VERSION = 57;
+export const NET_VERSION = 58;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
