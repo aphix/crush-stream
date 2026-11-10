@@ -20,9 +20,10 @@ const KEEP_RADIUS = 36;
 const SELECT_SECONDS = 0.25;
 /** A body lagging more than this far (m) behind the crowd's spot for her (blocked by a car, a wall) is let go: she is drawn at her spot again. */
 const LEASH = 3;
-/** Within this far (m) of her spot a body stands, facing as the crowd has her face. */
-const ARRIVED = 0.15;
-/** How hard a body is steered at her spot: the pace (m/s) her crowd speed rises by per metre she lags. */
+/** She is standing when her crowd pace is under this (m/s); her body then stands, facing as she does, once within `STAND_REACH` (m) of her spot, and walks to it from farther. */
+const STILL = 0.15;
+const STAND_REACH = 0.4;
+/** How hard a body is pulled to her spot: the speed (m/s) added toward it per metre it lags. */
 const CATCH_UP = 2.5;
 /** A body is never asked faster than this (m/s): a run. */
 const FASTEST = 3.5;
@@ -166,8 +167,16 @@ export class OpenWorldBodies {
       return;
     }
     this.downFor[body] = 0;
-    if (lag < ARRIVED && poses.speed[civilian]! < ARRIVED) this.host.steer(slot, poses.yaw[civilian]!, 0);
-    else this.host.steer(slot, lag < ARRIVED ? poses.yaw[civilian]! : detAtan2(dx, dz), Math.min(FASTEST, poses.speed[civilian]! + CATCH_UP * lag));
+    const yaw = poses.yaw[civilian]!;
+    const pace = poses.speed[civilian]!;
+    if (pace < STILL && lag < STAND_REACH) {
+      this.host.steer(slot, yaw, 0);
+      return;
+    }
+    // Her own velocity plus a pull toward her spot: the body faces where she goes, and her spot only bends that (a heading taken from the bearing to a spot a hand's breadth away swings with every step).
+    const vx = detSin(yaw) * pace + CATCH_UP * dx;
+    const vz = detCos(yaw) * pace + CATCH_UP * dz;
+    this.host.steer(slot, detAtan2(vx, vz), Math.min(FASTEST, hypot2(vx, vz)));
   }
 
   /** Whether civilian \`civilian\` may have a body: shown, walking or standing about, on the street (not on a stoop, not in a building) and within \`radius\` of the eye. */

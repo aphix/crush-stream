@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
@@ -21,6 +22,19 @@ const RUN_UP_M = 14;
 const RUN_UP_MPS = 13;
 const RUN_S = 3;
 const BODY_WAIT_S = 1;
+/** The straight-walk row: residents tried, frames (a sixtieth of a second) watched for each, frames of a steady yaw before one counts, steady frames needed in all, and how far her yaw may drift to stay steady (rad). */
+const STRAIGHT_TRIES = 40;
+const STRAIGHT_FRAMES = 480;
+const SETTLED_FRAMES = 60;
+const STEADY_FRAMES = 150;
+const YAW_STEADY_RAD = 0.02;
+const STRAIGHT_CAR_BEHIND_M = 6;
+const FRAME_S = 1 / FRAME_HZ;
+
+/** A body's facing step (rad a frame) that counts as a swing, the most it may be off her way on a straight (rad: she walks 1.4 m/s, her body's own sway is under 0.1) and the most reversals a second a steady walk may have (before: about 4). */
+const SWING_STEP_RAD = 0.02;
+const MOST_OFF_STRAIGHT_RAD = 0.15;
+const MOST_REVERSALS_PER_SECOND = 1.5;
 /** The first pool slot a body takes. */
 const FIRST_BODY_SLOT = 4;
 /** A body lying on the street has its torso within this far (m) of the ground. */
@@ -88,6 +102,51 @@ describe("given the real engine in the open world and the player's car running a
     layOnGround(car);
     return true;
   }
+
+  // mutation: sed -i 's/    this.host.steer(slot, detAtan2(vx, vz), Math.min(FASTEST, hypot2(vx, vz)));/    this.host.steer(slot, detAtan2(dx, dz), Math.min(FASTEST, pace + CATCH_UP * lag));/' src/game/engine/openworld-bodies.ts
+  it("when a civilian walks a straight street, then her body faces her way within a few degrees and does not swing left and right with her steps", () => {
+    const crowd = world()["crowd"]!;
+    const car = rig.cars()[0]!;
+    const wrap = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle));
+    let steady = 0;
+    let worst = 0;
+    let reversals = 0;
+    for (let tried = 0, resident = 0; tried < STRAIGHT_TRIES && steady < STEADY_FRAMES; resident = (resident + 1) % crowd.poses.count, tried++) {
+      if (crowd.poses.shown[resident] === 0 || crowd.poses.activity[resident] !== ACTIVITY.none || crowd.poses.speed[resident]! < WALKING_MPS * 2) continue;
+      car.spawnFacing(crowd.poses.x[resident]! - STRAIGHT_CAR_BEHIND_M, crowd.poses.z[resident]!, 0, 0);
+      car.group.position.y = activeGround().heightAt(car.group.position.x, car.group.position.z, 0.5);
+      layOnGround(car);
+      rig.run(BODY_WAIT_S);
+      const slot = world()["bodies"]!.slotOf(resident);
+      if (slot < FIRST_BODY_SLOT) continue;
+      steady = 0;
+      worst = 0;
+      reversals = 0;
+      let previous = ragdolls().walkers[slot]!.facing;
+      let previousSign = 0;
+      let steadySince = crowd.poses.yaw[resident]!;
+      let steadyFor = 0;
+      for (let frame = 0; frame < STRAIGHT_FRAMES && world()["bodies"]!.slotOf(resident) === slot; frame++) {
+        rig.run(FRAME_S);
+        if (Math.abs(wrap(crowd.poses.yaw[resident]! - steadySince)) > YAW_STEADY_RAD) {
+          steadySince = crowd.poses.yaw[resident]!;
+          steadyFor = 0;
+        } else steadyFor++;
+        const facing = ragdolls().walkers[slot]!.facing;
+        const step = wrap(facing - previous);
+        previous = facing;
+        if (steadyFor < SETTLED_FRAMES) continue;
+        steady++;
+        worst = Math.max(worst, Math.abs(wrap(facing - crowd.poses.yaw[resident]!)));
+        const sign = Math.abs(step) > SWING_STEP_RAD ? Math.sign(step) : 0;
+        if (sign !== 0 && previousSign !== 0 && sign !== previousSign) reversals++;
+        if (sign !== 0) previousSign = sign;
+      }
+    }
+    expect(steady, "frames of a straight walk with a body, measured").toBeGreaterThanOrEqual(STEADY_FRAMES);
+    expect(worst, "the most her body's facing is off her way on the straight (rad)").toBeLessThan(MOST_OFF_STRAIGHT_RAD);
+    expect((reversals / steady) * FRAME_HZ, "swings left-right reversals a second").toBeLessThan(MOST_REVERSALS_PER_SECOND);
+  });
 
   // mutation: sed -i 's/      if (this.bodies?.knock(strike) === true) {/      if (false) {/' src/game/engine/engine-openworld.ts
   it("when the car hits her, then her own live body is knocked down and lies outside the car, and no second dummy is thrown for her", () => {
