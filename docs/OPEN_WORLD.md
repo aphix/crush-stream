@@ -273,11 +273,14 @@ her look word give each person a pace (the clip's clock a tenth quicker or slowe
 is quicker and bigger the jumpier the person (`neuroticismOf`: 0.85 to 1.25 times the pace, 0.7 to 1.3 times the size), starts with the hands flung up and the body back, and comes down while she still looks.
 
 **Stoops (`world/openworld/openworld-stoops.ts`).** A walker's height is `CrowdPoses.feetY`. `Stoops` is the height field of the rowhomes' stoops (`STOOP`: five risers of 0.18 m, 0.28 m treads, a 0.5 m landing, 1.6 m wide
-about the door's `DOOR.across`; the door is the sill, 0.9 m): pure in the place, so every peer reads the same, with each riser climbed over 0.14 m so her height follows the treads and does not jump. The door node of a
-home is on the landing and its spur to the sidewalk runs straight out along the stoop (`attachDoors`), so a resident who leaves appears at the sill's height, goes down the steps with her feet on the treads and is at the
-street's height a step past the bottom one; one who comes home does the reverse and is gone at the door. No path point carries a height and the brain and the wire are as they were: the crowd lifts every walker it
-draws and does not lift one the society stands at a seat, a counter or a car (`fixed`), the director lifts the foot cops' poses the same way before they are drawn, and the physical bodies (`openworld-bodies.ts`) keep
-their rule that a civilian above the street is drawn as a posed dummy, so a body hands over to the dummy at the foot of a stoop and takes her back past it. The far figures and the look-at ray read `feetY` too.
+about the door's `DOOR.across`; the door is the sill, 0.9 m; `hasStoop` says which places have one: a rowhome, not the modern infill): pure in the place, so every peer reads the same, with each riser climbed over 0.14 m so
+her height follows the treads and does not jump. The door node of a home is on the landing and its spur to the sidewalk runs straight out along the stoop (`attachDoors`), so a resident who leaves appears at the sill's
+height, goes down the steps with her feet on the treads and is at the street's height a step past the bottom one; one who comes home does the reverse and is gone at the door. No path point carries a height and the
+brain and the wire are as they were. A stoop lifts only a walker whose walk now is its door's spur (`leadsToDoor`, from the nodes `LegPose.from` and `to` the crowd's `fillPoses` reads off the leg): the sidewalk's
+lane, offset toward the facade, runs over the foot of the stoops, and a walker passing along it stays on the street. The crowd lifts those it draws (`liftWalkers`), not one the society stands at a seat, a counter or a
+car (those are placed, not on a leg); cops and medics never use a door, so they are not lifted. The physical bodies (`openworld-bodies.ts`) keep their rule that a civilian above the street is drawn as a posed dummy, so
+a body hands over to the dummy at the foot of a stoop and takes her back past it. The far figures and the look-at ray read `feetY` too. A walker's legs stride as on the flat while her root follows the steps, so her feet
+float or sink a few centimetres on a riser (no stairs gait yet), and a stoop sitter's feet (a fixed seat) rest on the street, not the tread below.
 
 An arrest is two clips a side, set by the law (`ai/openworld-crime/crime-poses.ts`): the suspect is `cuffing` while gripped (her main arm
 taken behind her back, then the other) and `cuffed` after (hands behind her back, head down; walking, her legs stride as the walk does: the

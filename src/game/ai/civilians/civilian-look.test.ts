@@ -103,6 +103,7 @@ describe("given one civilian out on open ground, far from every building", () =>
     expect(titleAt(LOOK_REACH + 1), "beyond the reach").toBeUndefined();
   });
 
+  // mutation: sed -i 's/const toY = poses.feetY\[resident\]! + CHEST_HEIGHT - ray.eyeY;/const toY = CHEST_HEIGHT - ray.eyeY;/' src/game/ai/civilians/civilian-look.ts
   it("when one stands on a stoop's step behind another on the street and the eye is on the one on the step's chest, then the panel names the one on the step", () => {
     const STEP_UP = 0.9;
     const onStep = 1;

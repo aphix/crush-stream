@@ -17,12 +17,13 @@ const HOUSE_YAW = Math.atan2(-EDGE.dirZ, EDGE.dirX);
 const HOUSE: Frontage = { x: START.x - detSin(HOUSE_YAW) * DOOR.across, z: START.z - detCos(HOUSE_YAW) * DOOR.across, yaw: HOUSE_YAW, depth: 10, style: "federal", storeys: 3, variant: 0 };
 const STEP_3 = stoopStepRange(3);
 
-/** A crowd whose resident `person` has left her door at the edge's first node and walks out along it at `PACE`, the stoops in place or not. */
-function leaving(stoops: Stoops | null): { crowd: CivilianCrowd; person: number } {
+/** A crowd whose resident `person` walks along the edge at `PACE` from the first second, the stoops in place or not: out of her door at its first node, or (`coming`) home from the far end to it. */
+function leaving(stoops: Stoops | null, coming = false): { crowd: CivilianCrowd; person: number } {
   const crowd = newCrowd(map);
   const [person] = people(crowd, 1, true) as [number];
   crowd.stoops = stoops;
-  sendAlong(crowd, person, EDGE, EDGE.from, EDGE.to);
+  if (coming) sendAlong(crowd, person, EDGE, EDGE.to, EDGE.from);
+  else sendAlong(crowd, person, EDGE, EDGE.from, EDGE.to);
   return { crowd, person };
 }
 
@@ -34,22 +35,32 @@ function heightAfter(crowd: CivilianCrowd, person: number, metres: number): numb
 }
 
 describe("given a resident who walks out of a rowhome's door along the way its stoop runs", () => {
+  // mutation: sed -i 's/^    this.liftWalkers();$/    void 0;/' src/game/ai/civilians/civilian-crowd.ts
   it("when she leaves, then she is at the sill's height at the door, on a tread's height on each step, and at the street's height past the bottom one", () => {
-    const { crowd, person } = leaving(new Stoops([HOUSE]));
+    const { crowd, person } = leaving(new Stoops([HOUSE], [EDGE.from]));
     expect(heightAfter(crowd, person, 0.1), "at the door").toBeCloseTo(STOOP.sill, 3);
     expect(heightAfter(crowd, person, (STEP_3.near + STEP_3.far) / 2), "on the third step").toBeCloseTo(STEP_3.top, 3);
     expect(heightAfter(crowd, person, STOOP.run - STOOP.tread / 2), "on the bottom step").toBeCloseTo(STOOP.rise, 3);
     expect(heightAfter(crowd, person, STOOP.run + STOOP.tread), "past it").toBe(0);
   });
 
+  // mutation: sed -i 's/    if (stoops === null) return;/    if (stoops === null) { this.poses.feetY.fill(0.5); return; }/' src/game/ai/civilians/civilian-crowd.ts
   it("when there are no stoops, then she is at the street's height all the way", () => {
     const { crowd, person } = leaving(null);
     expect(heightAfter(crowd, person, 0.1)).toBe(0);
     expect(heightAfter(crowd, person, (STEP_3.near + STEP_3.far) / 2)).toBe(0);
   });
 
-  it("when the society stands her at a seat on the steps, then she is not lifted again: her seat's height is her own", () => {
+  // mutation: sed -i 's/return this.doors\[from\] === 1 || this.doors\[to\] === 1;/return true;/' src/game/world/openworld/openworld-stoops.ts
+  it("when she walks over a stoop's steps on a walk that is not its door's spur (the sidewalk's lane in front of it), then she stays at the street's height", () => {
     const { crowd, person } = leaving(new Stoops([HOUSE]));
+    expect(heightAfter(crowd, person, 0.1), "at the door's spot").toBe(0);
+    expect(heightAfter(crowd, person, (STEP_3.near + STEP_3.far) / 2), "over the third step").toBe(0);
+  });
+
+  // mutation: sed -i 's/this.onDoorSpur\[resident\] = 0;/this.onDoorSpur[resident] = 1;/' src/game/ai/civilians/civilian-crowd.ts
+  it("when the society stands her at a seat on the steps, then she is not lifted again: her seat's height is her own", () => {
+    const { crowd, person } = leaving(new Stoops([HOUSE], [EDGE.from]));
     const onStep = (STEP_3.near + STEP_3.far) / 2;
     crowd.activityReader = (state, resident, seconds, out) => {
       readActivity(state, resident, seconds, out);
@@ -66,5 +77,15 @@ describe("given a resident who walks out of a rowhome's door along the way its s
     expect(crowd.poses.shown[person]).toBe(1);
     expect(crowd.poses.feetY[person], "feet at the street under the seat").toBe(0);
     expect(crowd.poses.surfaceY[person], "her seat is the step's top").toBeCloseTo(STEP_3.top, 5);
+  });
+
+  // mutation: sed -i 's/^    this.liftWalkers();$/    void 0;/' src/game/ai/civilians/civilian-crowd.ts
+  it("when she comes home, then she is at the street's height at the foot, on a tread's height on each step going up, and at the sill's height at the door", () => {
+    const { crowd, person } = leaving(new Stoops([HOUSE], [EDGE.from]), true);
+    const fromDoor = (metres: number): number => EDGE.length - metres;
+    expect(heightAfter(crowd, person, fromDoor(STOOP.run + STOOP.tread)), "at the street").toBe(0);
+    expect(heightAfter(crowd, person, fromDoor(STOOP.run - STOOP.tread / 2)), "on the bottom step").toBeCloseTo(STOOP.rise, 3);
+    expect(heightAfter(crowd, person, fromDoor((STEP_3.near + STEP_3.far) / 2)), "on the third step").toBeCloseTo(STEP_3.top, 3);
+    expect(heightAfter(crowd, person, fromDoor(0.1)), "at the door").toBeCloseTo(STOOP.sill, 3);
   });
 });

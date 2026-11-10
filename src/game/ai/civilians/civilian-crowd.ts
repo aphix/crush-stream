@@ -104,7 +104,7 @@ export class CivilianCrowd {
   overlay: CrowdOverlay | null = null;
   /** Where a resident the society has getting into or out of her car stands (the traffic's car, the body style's door): none set, and she is not drawn. Every peer fills the same spot: it is a pure function of the brain's rows and the parking space. */
   driverDoors: DriverDoors | null = null;
-  /** The rowhomes' stoops: a civilian on one is lifted to its step (`feetY`), the same on every peer. None set, the ground is flat. */
+  /** The rowhomes' stoops: a civilian walking out of or into a door on one is lifted to its step (`feetY`), the same on every peer. None set, the ground is flat. */
   stoops: Stoops | null = null;
   /** What the society says each resident is doing: its own reader, set by a test that needs one the brain does not give yet. */
   activityReader: typeof readActivity = readActivity;
@@ -145,6 +145,8 @@ export class CivilianCrowd {
   private readonly ambulanceDue: Float64Array;
   /** Times each one down has been looked for a caller for. */
   private readonly ambulanceTries: Uint8Array;
+  /** 1 for a resident whose walk now is the spur of a stoop's door: the only walkers a stoop lifts. */
+  private readonly onDoorSpur: Uint8Array;
   private readonly ambulanceX: Float32Array;
   private readonly ambulanceZ: Float32Array;
   private lastCrashSeconds = -Infinity;
@@ -168,6 +170,7 @@ export class CivilianCrowd {
     this.dangerUntil = new Float64Array(capacity).fill(-Infinity);
     this.ambulanceDue = new Float64Array(capacity).fill(Infinity);
     this.ambulanceTries = new Uint8Array(capacity);
+    this.onDoorSpur = new Uint8Array(capacity);
     this.ambulanceX = new Float32Array(capacity);
     this.ambulanceZ = new Float32Array(capacity);
     this.crimeDesk = new CrimeDesk(capacity);
@@ -367,6 +370,7 @@ export class CivilianCrowd {
       const intBase = resident * RESIDENT_INT_STRIDE;
       shown[resident] = 0;
       present[resident] = 0;
+      this.onDoorSpur[resident] = 0;
       if (ints[intBase + RESIDENT_INT.species] !== SPECIES.person) continue;
       this.activityReader(state, resident, seconds, reading);
       const walkSpeed = floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!;
@@ -393,6 +397,7 @@ export class CivilianCrowd {
       } else {
         const onLeg = ints[intBase + RESIDENT_INT.pathCount]! > 0 && seconds >= ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ && seconds < ints[intBase + RESIDENT_INT.arriveTick]! / DECISION_HZ;
         if (!onLeg || !legPositionAt(state, resident, seconds, pose)) continue;
+        this.onDoorSpur[resident] = this.stoops !== null && this.stoops.leadsToDoor(pose.from, pose.to) ? 1 : 0;
         brainX[resident] = pose.x;
         brainZ[resident] = pose.z;
         velocityX[resident] = pose.dirX * pose.speed;
@@ -416,13 +421,13 @@ export class CivilianCrowd {
     }
   }
 
-  /** Every civilian who walks (not one the society stands at a seat, a counter or a car) on a stoop stands at the step under her. */
+  /** Every civilian who walks a stoop's door spur stands at the step under her: she leaves her door at the sill's height, goes down to the street, and the reverse coming home. */
   private liftWalkers(): void {
     const stoops = this.stoops;
     if (stoops === null) return;
     const { x, z, feetY, shown } = this.poses;
-    const { fixed } = this.separation;
-    for (let resident = 0; resident < this.separation.capacity; resident++) if (shown[resident] === 1 && fixed[resident] === 0) stoops.liftFeet(x, z, feetY, resident);
+    const { onDoorSpur } = this;
+    for (let resident = 0; resident < this.separation.capacity; resident++) if (shown[resident] === 1 && onDoorSpur[resident] === 1) stoops.liftFeet(x, z, feetY, resident);
   }
 
   /** The drawn spots: the brain's, with the players on foot as bodies that do not give way, pushed apart; then the bumps and pushes the closing pairs make. */

@@ -87,7 +87,7 @@ const HOT = {
   "src/game/present/game-audio.ts": ["frame"],
   "src/game/present/paint-scratch.ts": ["frame", "draw", "touch", "sameStroke", "radiusOf", "growRect", "stamp"],
   "src/game/ai/civilians/civilian-leg.ts": ["legPose", "legPositionAt", "waitedWalk", "evadeAlarm"],
-  "src/game/world/openworld/openworld-stoops.ts": ["liftFeet", "liftAll"],
+  "src/game/world/openworld/openworld-stoops.ts": ["liftFeet", "leadsToDoor"],
   "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "separate", "liftWalkers", "noteContacts", "startBump", "writeActivity", "mayPush", "raisePush", "watchApproach", "raiseDangers", "raiseAmbulanceCalls", "raiseBearingPush", "logPair", "logHostEvent", "appendLog", "queueForBrain", "advanceBrain", "raiseCrimes", "postBatch", "findHits", "hasLooseBody"],
   "src/game/ai/civilians/civilian-look-word.ts": ["lookOf"],
   "src/game/ai/civilians/civilian-separation.ts": ["resolve", "list", "buildPairs", "addPair", "relax", "pushApart", "move"],

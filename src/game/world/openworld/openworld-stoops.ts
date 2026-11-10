@@ -18,8 +18,9 @@ function cellKey(column: number, row: number): number {
 }
 
 /**
- * How high the rowhomes' stoops lift whoever stands on them: from the facade out, five risers of `STOOP.rise` end in the sill at the door, each climbed over a short stretch, so a civilian who leaves her
- * door appears at the sill's height, goes down the steps with her feet following the treads and is at the street's height a step past the bottom one. Pure in the place: every peer reads the same.
+ * How high the rowhomes' stoops lift whoever walks them: from the facade out, five risers of `STOOP.rise` end in the sill at the door, each climbed over a short stretch, so a civilian who leaves her
+ * door appears at the sill's height, goes down the steps with her feet following the treads and is at the street's height a step past the bottom one. Pure in the place: every peer reads the same. A stoop lifts
+ * only the walker on its door's spur (`leadsToDoor`): one who passes along the sidewalk in front of it, the lane's offset taking her over its foot, stays on the street.
  * Lookups allocate nothing: they take the rows they read and write, not numbers.
  */
 export class Stoops {
@@ -28,13 +29,22 @@ export class Stoops {
   private readonly frontZ: Float64Array;
   private readonly cosYaw: Float64Array;
   private readonly sinYaw: Float64Array;
+  private readonly doors: Uint8Array;
 
-  constructor(frontages: readonly Frontage[]) {
+  /** `frontages` are the stoops, `doorNodes` the walk graph's nodes of their doors. */
+  constructor(frontages: readonly Frontage[], doorNodes: readonly number[] = []) {
     this.frontX = Float64Array.from(frontages, (frontage) => frontage.x);
     this.frontZ = Float64Array.from(frontages, (frontage) => frontage.z);
     this.cosYaw = Float64Array.from(frontages, (frontage) => detCos(frontage.yaw));
     this.sinYaw = Float64Array.from(frontages, (frontage) => detSin(frontage.yaw));
+    this.doors = new Uint8Array(doorNodes.reduce((most, node) => Math.max(most, node + 1), 0));
+    for (const node of doorNodes) this.doors[node] = 1;
     for (let house = 0; house < frontages.length; house++) this.register(house);
+  }
+
+  /** Whether the walk from node `from` to node `to` is the spur of a stoop's door (the door is one of its ends): the only walk a stoop lifts. */
+  leadsToDoor(from: number, to: number): boolean {
+    return this.doors[from] === 1 || this.doors[to] === 1;
   }
 
   /** `feetY[at]` = the height of the stoop under (`xs[at]`, `zs[at]`): 0 off every stoop. */
@@ -59,11 +69,6 @@ export class Stoops {
       feetY[at] = lift;
       return;
     }
-  }
-
-  /** Every shown person of `poses` stands at the height of the stoop under her. */
-  liftAll(poses: { count: number; x: Float32Array; z: Float32Array; feetY: Float32Array; shown: Uint8Array }): void {
-    for (let person = 0; person < poses.count; person++) if (poses.shown[person] === 1) this.liftFeet(poses.x, poses.z, poses.feetY, person);
   }
 
   /** House `house` is listed under the cells its stoop's middle and a stoop's reach round it fall in. */
