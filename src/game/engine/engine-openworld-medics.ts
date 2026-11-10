@@ -51,7 +51,7 @@ export function placeMedics(poses: CrowdPoses, atX: number, atZ: number, ambulan
 /** The ambulance's crew at a scene (host and solo only: the traffic is theirs), drawn by the crowd's art over poses of their own. */
 export class OpenWorldMedics {
   readonly poses = createCrowdPoses(MEDICS.count);
-  /** Where the newest ambulance was called to: where the one run down was struck (m). */
+  /** Where the ambulance that is out was called to: where the one run down lies (m). */
   private sceneX = 0;
   private sceneZ = 0;
   private readonly art: MedicArt;
@@ -62,9 +62,8 @@ export class OpenWorldMedics {
     this.poses.look[1] = scrubsLook(true);
   }
 
-  /** A call for someone down at (x, z): the crew go there only when an ambulance was `sent` (none is while one is already out). */
-  call(x: number, z: number, sent: boolean): void {
-    if (!sent) return;
+  /** The ambulance that is out was called to (x, z): the crew kneel there while it loads (calls waiting their turn change nothing). */
+  setScene(x: number, z: number): void {
     this.sceneX = x;
     this.sceneZ = z;
   }

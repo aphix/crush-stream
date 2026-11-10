@@ -31,12 +31,11 @@ describe("given someone run down and an ambulance called for them", () => {
     }
   });
 
-  it("when someone else is run down while the ambulance is loading and no second one is sent, then the medics stay at the first scene", () => {
-    // mutation: sed -i 's/    if (!sent) return;/    void sent;/' src/game/engine/engine-openworld-medics.ts
+  it("when the traffic gives them the scene the ambulance is out on, then the medics kneel at it", () => {
+    // mutation: sed -i 's/    this.sceneX = x;/    this.sceneX = 0;/' src/game/engine/engine-openworld-medics.ts
     const medics = new OpenWorldMedics({ update() {}, dispose() {} });
     const sight = {} as Parameters<OpenWorldMedics["frame"]>[3];
-    medics.call(DOWN.x, DOWN.z, true);
-    medics.call(DOWN.x + 30, DOWN.z + 30, false);
+    medics.setScene(DOWN.x, DOWN.z);
     medics.frame(AMBULANCE.loading, 0, 0, sight, FRAME_DT);
     expect((medics.poses.x[0]! + medics.poses.x[1]!) / 2, "x of the scene they kneel at").toBeCloseTo(DOWN.x, 5);
     expect(medics.poses.z[0], "z of the scene they kneel at").toBeCloseTo(DOWN.z, 5);

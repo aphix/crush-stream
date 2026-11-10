@@ -30,6 +30,8 @@ export type DummyTrace = { slot: number; state: string | null; age: number; x: n
 
 /** The walker's ground patch is built again when he is this far (m) from its middle: half of what it reaches, so he is never near its edge. */
 const WALKER_FOLLOW = PATCH_HALF / 2;
+/** A slot taken for a figure thrown this long ago (sim s) is still his: a later throw restarts a slot's age. */
+const FIGURE_AGE_SLACK = 4;
 
 const _q = new THREE.Quaternion();
 const _qx = new THREE.Quaternion();
@@ -156,7 +158,7 @@ export abstract class RagdollThrower extends RagdollStepper {
    * him for `GRACE` s (none for a part's: he stands clear of its car, and the part must meet him): through the launch a driver's throw
    * takes (the worker's world, this thread's, or waiting for Rapier up to `PENDING_MAX`). `life`: sim s he lies about (default: the pool's).
    */
-  throwFigure(s: FigureStrike, cars: readonly DeformableCar[], look?: DriverLook, life?: number): void {
+  throwFigure(s: FigureStrike, cars: readonly DeformableCar[], look?: DriverLook, life?: number): number {
     this.cars = cars;
     const dress = look ? { cop: false, look } : s.guard >= 0 ? guardDress(s.guard) : { cop: false, look: VIP_LOOK };
     const t = this.figure;
@@ -171,8 +173,20 @@ export abstract class RagdollThrower extends RagdollStepper {
     t.life = life;
     this.pick();
     if (this.mode === "remote") this.launchRemote(t, cars);
-    else if (this.world) this.spawn(t);
+    else if (this.world) return this.spawn(t);
     else this.later(t);
+    return -1;
+  }
+
+  /**
+   * The figure thrown `age` sim s ago into slot `slot` (`throwFigure`'s answer) is taken away, if the slot still holds one that old (within `FIGURE_AGE_SLACK` s: a slot a later throw took is not his). False when it does not,
+   * or the figure was thrown in the worker's world (no slot is known then).
+   */
+  removeFigure(slot: number, age: number): boolean {
+    const d = this.dolls[slot];
+    if (!d?.live || d.driven || Math.abs(d.age - age) > FIGURE_AGE_SLACK) return false;
+    this.despawn(slot);
+    return true;
   }
 
   /** Throw `t` once Rapier is in (`stepWorld`): a copy of it, waiting. */

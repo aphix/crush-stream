@@ -59,7 +59,7 @@ function room() {
       tier: () => POPULATION_TIER.phone,
       cars: () => [car],
       now: () => now / 1000,
-      throwFigure: (strike) => void thrown.push(strike),
+      throwFigure: (strike) => thrown.push(strike) - 1,
     });
     director.startOpenWorld(map);
     return { director, thrown, car };

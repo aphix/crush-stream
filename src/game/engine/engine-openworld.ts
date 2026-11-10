@@ -99,7 +99,9 @@ export type OpenWorldPorts = {
   eye(ray: LookRay): void;
   /** A civilian run down is thrown dressed as the crowd draws them (`look`). */
   /** `life`: sim s the body lies (default: the pool's). */
-  throwFigure(strike: FigureStrike, look: DriverLook, life?: number): void;
+  throwFigure(strike: FigureStrike, look: DriverLook, life?: number): number;
+  /** The figure `throwFigure` put in pool slot `slot`, thrown `age` sim s ago, is taken away (the one the ambulance has loaded); false when the slot no longer holds it. */
+  removeFigure(slot: number, age: number): boolean;
   /** Calls `listener` for every solid a car meets (closing speed, contact point) until the returned function is called. */
   hookWallHits(listener: (closing: number, x: number, z: number) => void): () => void;
   makeArt(capacity: number): CrowdArt;
@@ -140,6 +142,10 @@ export class OpenWorldDirector {
   private interiors: InteriorArt | null = null;
   private unhook: (() => void) | null = null;
   private traffic: OpenWorldTraffic | null = null;
+  /** Per civilian, the pool slot the figure thrown for her lies in (-1: none) and the crowd second it was thrown: the ambulance's loading takes it away (`removeVictim`). */
+  private figureSlot = new Int32Array(0);
+  private figureAt = new Float64Array(0);
+  private readonly sceneScratch = { x: 0, z: 0 };
   /** The civilians near this machine's eye as physical bodies (`OpenWorldBodies`), null where the engine gives no dummies' world. */
   private bodies: OpenWorldBodies | null = null;
   /** The cars' doors, swung with the residents getting into and out of them (where they stand is `crowd.driverDoors`). */
@@ -318,6 +324,7 @@ export class OpenWorldDirector {
     this.frameSigns(this.map);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt, this.bodies?.held ?? null);
     this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
+    if (this.traffic?.ambulanceScene(this.sceneScratch) === true) this.medics?.setScene(this.sceneScratch.x, this.sceneScratch.z);
     this.medics?.frame(this.traffic?.ambulanceState() ?? 0, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.lights?.update(crowd.crowdSeconds);
     this.lookAcc += wallDt;
@@ -391,13 +398,15 @@ export class OpenWorldDirector {
     const tier = Math.floor(key / CROWD_TIER_SCALE);
     const remote = CivilianRemote.open((err) => console.error("Crush Stream civilian worker failed", err));
     this.crowd = new CivilianCrowd(map, key & CROWD_SEED_MASK, POPULATION[tier] ?? POPULATION[0], remote);
-    this.crowd.onAmbulanceCall = (x, z, seconds) => {
-      this.medics?.call(x, z, this.traffic?.callAmbulance(x, z, seconds) === true);
+    this.crowd.onAmbulanceCall = (x, z, seconds, victim) => {
+      this.traffic?.callAmbulance(x, z, seconds, victim);
     };
     this.crowdKey = key;
     this.seconds = 0;
     this.auto = this.makeAuto(this.crowd, key & CROWD_SEED_MASK);
     this.art = this.ports.makeArt(this.crowd.poses.count);
+    this.figureSlot = new Int32Array(this.crowd.poses.count).fill(-1);
+    this.figureAt = new Float64Array(this.crowd.poses.count);
     if (this.ports.bodies !== undefined) this.bodies = new OpenWorldBodies(this.ports.bodies, map.places, this.crowd.poses.count, this.ports.tier() === POPULATION_TIER.phone ? BODY_COUNT.phone : BODY_COUNT.desktop);
     const crowd = this.crowd;
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
@@ -423,6 +432,8 @@ export class OpenWorldDirector {
       parked: { count: 0, resident: new Int32Array(capacity), place: new Int32Array(capacity) },
     };
     this.traffic = new OpenWorldTraffic(map.places, host, this.sight, phone ? { movers: MOVER_CARS.phone, kerb: KERB_CARS.phone, patrol: PATROL_CARS.phone, ambulance: AMBULANCE_CARS.phone } : { movers: MOVER_CARS.desktop, kerb: KERB_CARS.desktop, patrol: PATROL_CARS.desktop, ambulance: AMBULANCE_CARS.desktop }, this.feed);
+    this.traffic.setPeople(this.crowd!.poses);
+    this.traffic.onAmbulanceLoaded((victim) => this.removeVictim(victim));
     host.setFreeDrivers(this.traffic);
   }
 
@@ -473,9 +484,20 @@ export class OpenWorldDirector {
       }
       const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
       dressOfLook(crowd.poses.look[strike.guard]!, look);
-      this.ports.throwFigure(strike, look, DOWNED_LIFE_SECONDS);
+      this.figureSlot[strike.guard] = this.ports.throwFigure(strike, look, DOWNED_LIFE_SECONDS);
+      this.figureAt[strike.guard] = crowd.crowdSeconds;
       this.law?.noteStrike(strike);
     }
+  }
+
+  /** The ambulance has loaded this civilian and is leaving: whatever lies for her (her live body, or the figure thrown for her) goes. */
+  private removeVictim(victim: number): void {
+    if (victim < 0 || this.crowd === null || victim >= this.figureSlot.length) return;
+    if (this.bodies?.remove(victim) === true) return;
+    const slot = this.figureSlot[victim]!;
+    if (slot < 0) return;
+    this.figureSlot[victim] = -1;
+    this.ports.removeFigure(slot, this.crowd.crowdSeconds - this.figureAt[victim]!);
   }
 
   /** The panel keeps the object it had while the text is the same, so the HUD sees no change. */

@@ -7,7 +7,7 @@ import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, nea
 import { buildRoadNetwork, type RoadNetwork } from "../../world/openworld/openworld-roads.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { blankAiCar, type AiCar } from "../derby-ai.ts";
-import { AmbulanceService } from "./ambulance.ts";
+import { AMBULANCE, AmbulanceService } from "./ambulance.ts";
 import { BodySwaps } from "./body-swaps.ts";
 import { KerbCars } from "./kerb-cars.ts";
 import { LEASE, MoverFleet, type DrivenCar } from "./mover-fleet.ts";
@@ -17,7 +17,7 @@ import { EVERYDAY_BODIES, FEED_SECONDS, TRAFFIC_SEED } from "./traffic-constants
 import { TrafficDriver } from "./traffic-driver.ts";
 import { lightPhase } from "./traffic-lights.ts";
 import { CARLESS, heldByHuman, RESIDENT_CAPACITY, STANDING, type TrafficCar, type TrafficContext, type TrafficPorts } from "./traffic-ports.ts";
-import type { CommuterFeed, TrafficSight } from "./traffic-sight.ts";
+import type { CommuterFeed, PeopleField, TrafficSight } from "./traffic-sight.ts";
 
 export type { DrivenCar } from "./mover-fleet.ts";
 
@@ -49,6 +49,7 @@ export class OpenWorldTraffic {
   private readonly movers: MoverFleet;
   private readonly kerb: KerbCars;
   private readonly watch: RedLightWatch;
+  private readonly driver: TrafficDriver;
   private readonly ambulance: AmbulanceService;
   private readonly listeners: RedLightListener[] = [];
   private readonly legKey = new Float64Array(RESIDENT_CAPACITY).fill(-1);
@@ -99,9 +100,15 @@ export class OpenWorldTraffic {
     };
     this.refreshSnaps(ports.cars());
     this.watch = new RedLightWatch(network);
-    this.movers = new MoverFleet(this.context, first, movers, patrol, ambulance, new TrafficDriver(network));
+    this.driver = new TrafficDriver(network);
+    this.movers = new MoverFleet(this.context, first, movers, patrol, ambulance, this.driver);
     this.ambulance = new AmbulanceService(this.context, this.movers);
     this.kerb = new KerbCars(this.context, first + movers, kerb);
+  }
+
+  /** The people on the streets (the crowd's poses): every car stops for one on its way, at a crossing or in the lane; null: none are known. */
+  setPeople(people: PeopleField | null): void {
+    this.driver.people = people;
   }
 
   /** The phase and stage junction `junction` shows at crowd time `seconds` (`lightPhase`). */
@@ -138,9 +145,22 @@ export class OpenWorldTraffic {
     return this.context.taken;
   }
 
-  /** Sends the ambulance to the free space nearest (x, z) (`AmbulanceService`); false when one is out already, the pool has none, or there is no way. */
-  callAmbulance(x: number, z: number, seconds: number): boolean {
-    return this.ambulance.call(nearestFreeSpot(this.parkingSpots, x, z, this.context.taken), seconds);
+  /** Sends the ambulance to the free space nearest (x, z) for `victim` (-1: unknown), or queues the call when one is out (`AmbulanceService`); false when the pool has none, there is no way or the queue is full. */
+  callAmbulance(x: number, z: number, seconds: number, victim = -1): boolean {
+    return this.ambulance.call(x, z, seconds, victim);
+  }
+
+  /** Where the call the ambulance is out on was for (x, z: where the one run down lies) into `out`; false while none is out. */
+  ambulanceScene(out: { x: number; z: number }): boolean {
+    if (this.ambulance.state === AMBULANCE.idle) return false;
+    out.x = this.ambulance.sceneX;
+    out.z = this.ambulance.sceneZ;
+    return true;
+  }
+
+  /** `listener` hears the victim (-1: unknown) of each call when the ambulance has loaded and leaves; one listener (the engine's). */
+  onAmbulanceLoaded(listener: ((victim: number) => void) | null): void {
+    this.ambulance.onLoaded = listener;
   }
 
   /** Whether an ambulance is out, and where (`AMBULANCE`): idle, on its way, loading at the scene, driving off. */

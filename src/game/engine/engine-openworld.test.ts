@@ -48,6 +48,8 @@ class Harness {
   readonly eye = new LookRay();
   readonly thrown: FigureStrike[] = [];
   readonly looks: DriverLook[] = [];
+  /** The figures the ambulance's loading took away (`removeFigure`): the slot asked for and the age given. */
+  readonly removed: { slot: number; age: number }[] = [];
   readonly updates: { poses: CrowdPoses; eyeX: number; sight: CrowdSight; wallDt: number; held: Uint8Array | null }[] = [];
 
   artsMade = 0;
@@ -75,6 +77,11 @@ class Harness {
     throwFigure: (strike, look) => {
       this.thrown.push(strike);
       this.looks.push(look);
+      return this.thrown.length - 1;
+    },
+    removeFigure: (slot, age) => {
+      this.removed.push({ slot, age });
+      return true;
     },
     ...(bodies === null ? {} : { bodies }),
     hookWallHits: (listener) => {
@@ -254,6 +261,58 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     expect(host.knocks.map((knock) => knock.strike.guard), "bodies knocked, by civilian").toContain(resident);
     expect(harness.thrown.map((strike) => strike.guard), "no separate throw of her").not.toContain(resident);
     expect(crowd.poses.shown[resident], "the crowd has her down").toBe(0);
+  });
+
+  // mutation: sed -i 's/    this.ports.removeFigure(slot, this.crowd.crowdSeconds - this.figureAt\[victim\]!);/    void slot;/' src/game/engine/engine-openworld.ts
+  it("when the ambulance has loaded a civilian a car ran down far from the eye, then the figure thrown for her is taken from its slot, by how long ago it was thrown", () => {
+    const harness = hostWithMap();
+    carAtSomeone(harness);
+    const crowd = harness.crowd();
+    const resident = shownResident(crowd);
+    const { car, place } = carAtWalker(crowd, resident, 6, 14);
+    harness.cars = [car];
+    for (let travelled = FRAME; travelled < 2 && harness.thrown.length === 0; travelled += FRAME) {
+      place(travelled);
+      harness.director.step(FRAME);
+    }
+    expect(harness.thrown.map((strike) => strike.guard), "thrown, by civilian").toContain(resident);
+    const thrownAt = crowd.crowdSeconds;
+    for (let frame = 0; frame < 60; frame++) harness.director.step(FRAME);
+    harness.director["removeVictim"](resident);
+    expect(harness.removed.length, "one figure taken away").toBe(1);
+    expect(harness.removed[0]!.slot, "the slot the throw gave").toBe(harness.thrown.findIndex((strike) => strike.guard === resident));
+    expect(harness.removed[0]!.age, "thrown this long ago (s)").toBeCloseTo(crowd.crowdSeconds - thrownAt, 1);
+    harness.director["removeVictim"](resident);
+    expect(harness.removed.length, "taken away once").toBe(1);
+  });
+
+  // mutation: sed -i 's/    if (this.bodies?.remove(victim) === true) return;/    void victim;/' src/game/engine/engine-openworld.ts
+  it("when the ambulance has loaded a civilian whose live body lay, then that body goes and no figure is asked for", () => {
+    const host = new FakeBodyHost();
+    const harness = hostWithMap(host);
+    carAtSomeone(harness);
+    const crowd = harness.crowd();
+    let resident = shownResident(crowd);
+    for (let frames = 0; frames < BODY_WAIT_FRAMES && harness.director["bodies"]!.slotOf(resident) < 0; frames++) {
+      harness.eye.eyeX = crowd.poses.x[resident]!;
+      harness.eye.eyeZ = crowd.poses.z[resident]!;
+      harness.frame();
+      host.advance(FRAME);
+      if (crowd.poses.shown[resident] === 0) resident = shownResident(crowd);
+    }
+    const slot = harness.director["bodies"]!.slotOf(resident);
+    expect(slot, "she has a body").toBeGreaterThanOrEqual(0);
+    const { car, place } = carAtWalker(crowd, resident, 6, 14);
+    harness.cars = [car];
+    for (let travelled = FRAME; travelled < 2 && host.knocks.length === 0; travelled += FRAME) {
+      place(travelled);
+      harness.director.step(FRAME);
+      host.advance(FRAME);
+    }
+    expect(host.knocks.length, "her body was knocked").toBeGreaterThan(0);
+    harness.director["removeVictim"](resident);
+    expect(host.stopped, "her body went").toContain(slot);
+    expect(harness.removed.length, "no figure asked for").toBe(0);
   });
 
   it("when a car hits a building's face at the wreck speed, then the wall hook makes it a wreck event in the log", () => {

@@ -103,8 +103,8 @@ export class CivilianCrowd {
   /** What the society says each resident is doing: its own reader, set by a test that needs one the brain does not give yet. */
   activityReader: typeof readActivity = readActivity;
   private readonly door: DoorSpot = { x: 0, z: 0, yaw: 0, feetY: 0, surfaceY: 0 };
-  /** Called on the host when someone run down has stayed down long enough to call an ambulance for: where they lie and when it was called. */
-  onAmbulanceCall: ((x: number, z: number, seconds: number) => void) | null = null;
+  /** Called on the host when someone run down has stayed down long enough to call an ambulance for: where they lie, when it was called and who they are. */
+  onAmbulanceCall: ((x: number, z: number, seconds: number, victim: number) => void) | null = null;
   readonly walkers = new CrowdWalkers();
   readonly separation: CrowdSeparation;
   private readonly remote: CivilianRemote;
@@ -570,7 +570,7 @@ export class CivilianCrowd {
       if (due > seconds) continue;
       this.ambulanceDue[resident] = Infinity;
       this.logHostEvent(EVENT_KIND.ambulance, resident, due);
-      this.onAmbulanceCall?.(this.ambulanceX[resident]!, this.ambulanceZ[resident]!, due);
+      this.onAmbulanceCall?.(this.ambulanceX[resident]!, this.ambulanceZ[resident]!, due, resident);
     }
   }
 

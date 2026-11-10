@@ -34,6 +34,8 @@ import {
   NOSE_OVERHANG,
   PATH_REACH,
   PATH_SAMPLE_STEP,
+  PERSON_GAP,
+  PERSON_REACH,
   PURSUIT_LONG,
   PURSUIT_SHORT,
   STOP_BRAKE,
@@ -44,6 +46,7 @@ import {
   URGENT_SPEED,
 } from "./traffic-constants.ts";
 import { LIGHT, lightState } from "./traffic-lights.ts";
+import type { PeopleField } from "./traffic-sight.ts";
 import { blankRouteProjection, pointAtArc, projectOnRoute, type TripRoute } from "./trip-route.ts";
 
 /** A route point and the unit direction there. */
@@ -55,6 +58,8 @@ type RoutePoint = { x: number; z: number; tx: number; tz: number };
  */
 export class TrafficDriver {
   private readonly network: RoadNetwork;
+  /** The people on the streets, whom every car stops for; null: none are known (no crowd). */
+  people: PeopleField | null = null;
   private readonly out: DriveInput = idleDrive();
   private readonly pedals = new Pedals();
   private readonly wedge = new Backoff(MAX_CARS);
@@ -231,7 +236,21 @@ export class TrafficDriver {
         const leadSpeed = Math.max(0, other.vx * sample.tx + other.vz * sample.tz);
         return leadSpeed + Math.sqrt(2 * FOLLOW_BRAKE * Math.max(0, ahead - FOLLOW_GAP));
       }
+      if (this.personNear(sample.x, sample.z)) return Math.sqrt(2 * FOLLOW_BRAKE * Math.max(0, ahead - PERSON_GAP));
     }
     return Infinity;
+  }
+
+  /** Whether a shown person stands within `PERSON_REACH` of (x, z). */
+  private personNear(x: number, z: number): boolean {
+    const people = this.people;
+    if (people === null) return false;
+    for (let index = 0; index < people.count; index++) {
+      if (people.shown[index] === 0) continue;
+      const dx = people.x[index]! - x;
+      const dz = people.z[index]! - z;
+      if (Math.abs(dx) <= PERSON_REACH && Math.abs(dz) <= PERSON_REACH && hypot2(dx, dz) <= PERSON_REACH) return true;
+    }
+    return false;
   }
 }

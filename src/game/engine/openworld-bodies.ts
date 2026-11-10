@@ -133,6 +133,14 @@ export class OpenWorldBodies {
     return true;
   }
 
+  /** Civilian `civilian`'s body goes (the ambulance has taken her): true when she had one. */
+  remove(civilian: number): boolean {
+    const body = this.bodyOf[civilian]!;
+    if (body === NOBODY) return false;
+    this.release(body);
+    return true;
+  }
+
   /** Every body goes: the slots are free for the next scene. */
   dispose(): void {
     for (let body = 0; body < this.size; body++) if (this.resident[body]! !== NOBODY) this.release(body);

@@ -7,7 +7,8 @@ import { OpenWorldTraffic, type DrivenCar } from "./openworld-traffic.ts";
 import { fleetStyle } from "../../scenes/fleet.ts";
 import { KERB_CANDIDATES } from "../../world/openworld/openworld-parking.ts";
 import { AMBULANCE } from "./ambulance.ts";
-import { AMBULANCE_COLOUR, AMBULANCE_DEPOT_METRES, AMBULANCE_LOAD_SECONDS, EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
+import { PERSON_GAP } from "./traffic-constants.ts";
+import { AMBULANCE_COLOUR, AMBULANCE_DEPOT_METRES, AMBULANCE_LOAD_SECONDS, AMBULANCE_QUEUE, EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { kerbSpotsNear } from "../../world/openworld/openworld-parking.ts";
 import { residentBody, residentColour, type ResidentCarPose } from "./traffic-look.ts";
@@ -302,6 +303,7 @@ describe("given a traffic car a patrol car chases", () => {
 
 describe("given the open world's ambulance", () => {
   const SCENE = { x: 20, z: -45 };
+  const SECOND_SCENE = { x: -60, z: 40 };
   const FLEET = { movers: 5, kerb: 0, patrol: 1, ambulance: 1 };
 
   function ambulanceWorld(): { field: FakeField; traffic: OpenWorldTraffic; clock: Clock } {
@@ -352,13 +354,52 @@ describe("given the open world's ambulance", () => {
     expect(traffic.callAmbulance(SCENE.x, SCENE.z, clock.seconds), "a new call is taken again").toBe(true);
   });
 
-  // mutation: sed -i 's/    if (this.state !== AMBULANCE.idle || scene < 0) return false;/    if (scene < 0) return false;/' src/game/ai/openworld-traffic/ambulance.ts
-  it("when a second call comes while one is out, or the pool has no ambulance, then it is refused", () => {
-    const { traffic } = ambulanceWorld();
-    expect(traffic.callAmbulance(SCENE.x, SCENE.z, 0), "first").toBe(true);
-    expect(traffic.callAmbulance(SCENE.x + 30, SCENE.z, 0), "second while one is out").toBe(false);
+  it("when the pool has no ambulance, then a call is refused", () => {
     const none = makeTraffic(quietField(), { movers: 3, kerb: 0, patrol: 1, ambulance: 0 });
     expect(none.callAmbulance(SCENE.x, SCENE.z, 0), "a pool with no ambulance").toBe(false);
+  });
+
+  // mutation: sed -i 's/      if (this.queued >= AMBULANCE_QUEUE) return false;/      return false;/' src/game/ai/openworld-traffic/ambulance.ts
+  it("when a second call comes while the ambulance is out, then it waits its turn: the ambulance goes to it after the first has been loaded and left, and the medics' scene follows the call it is out on", () => {
+    const { field, traffic, clock } = ambulanceWorld();
+    const loaded: number[] = [];
+    traffic.onAmbulanceLoaded((victim) => loaded.push(victim));
+    expect(traffic.callAmbulance(SCENE.x, SCENE.z, 0, 11), "first").toBe(true);
+    expect(traffic.callAmbulance(SECOND_SCENE.x, SECOND_SCENE.z, 0, 22), "second while one is out: queued").toBe(true);
+    const scene = { x: 0, z: 0 };
+    expect(traffic.ambulanceScene(scene), "the first call's scene").toBe(true);
+    expect(scene.x, "x of the call it is out on").toBe(SCENE.x);
+    runUntil({ field, traffic, clock }, () => loaded.length === 1);
+    expect(loaded.length, "the first call was loaded").toBe(1);
+    expect(loaded[0], "its victim").toBe(11);
+    runUntil({ field, traffic, clock }, () => loaded.length === 2);
+    expect(loaded[1], "then the second call's victim").toBe(22);
+    expect(traffic.ambulanceScene(scene), "out on the second call").toBe(true);
+    expect(scene.x, "its scene").toBe(SECOND_SCENE.x);
+  });
+
+  // mutation: sed -i 's/      if (this.queued >= AMBULANCE_QUEUE) return false;/      if (false) return false;/' src/game/ai/openworld-traffic/ambulance.ts
+  it("when more calls wait than the queue holds, then the one past it is refused", () => {
+    const { traffic } = ambulanceWorld();
+    expect(traffic.callAmbulance(SCENE.x, SCENE.z, 0), "the one it goes to").toBe(true);
+    for (let waiting = 0; waiting < AMBULANCE_QUEUE; waiting++) expect(traffic.callAmbulance(SCENE.x + 10 + waiting, SCENE.z, 0), `waiting call ${waiting}`).toBe(true);
+    expect(traffic.callAmbulance(SCENE.x + 50, SCENE.z, 0), "past the queue").toBe(false);
+  });
+
+  // mutation: sed -i 's/      this.onLoaded?.(this.victim);/      \/\/ nobody told/' src/game/ai/openworld-traffic/ambulance.ts
+  it("when the ambulance has loaded, then the victim is told once, at the end of the loading time and not before", () => {
+    const { field, traffic, clock } = ambulanceWorld();
+    const told: number[] = [];
+    traffic.onAmbulanceLoaded((victim) => told.push(victim));
+    traffic.callAmbulance(SCENE.x, SCENE.z, 0, 7);
+    runUntil({ field, traffic, clock }, () => traffic.ambulanceState() === AMBULANCE.loading);
+    const arrived = clock.seconds;
+    runSeconds(field, traffic, clock, AMBULANCE_LOAD_SECONDS - 3);
+    expect(told.length, "not told while loading").toBe(0);
+    runSeconds(field, traffic, clock, 5);
+    expect(told.length, "told once at the end").toBe(1);
+    expect(told[0], "of the victim").toBe(7);
+    expect(clock.seconds - arrived, "after the loading time").toBeGreaterThanOrEqual(AMBULANCE_LOAD_SECONDS);
   });
 
   // mutation: sed -i 's/this.kindOf(slot) !== kind) continue;/false) continue;/' src/game/ai/openworld-traffic/mover-fleet.ts
@@ -751,5 +792,38 @@ describe("given a pool the engine built as the fleet's mix, a coupe and a monste
     const field = quietField();
     makeTraffic(field, fleet);
     for (const id of patrolIds) expect(field.rebuilt, `patrol car ${id}`).not.toContain(id);
+  });
+});
+
+describe("given people on the streets and a car of the traffic on its trip", () => {
+  const AHEAD_M = 30;
+  const WAIT_S = 8;
+  const UNDER_WAY_MPS = 2;
+
+  function onTheWay(): { field: FakeField; traffic: OpenWorldTraffic; clock: Clock; car: DrivenCar; people: { count: number; x: Float32Array; z: Float32Array; shown: Uint8Array } } {
+    const field = quietField();
+    const traffic = makeTraffic(field, { movers: 3, kerb: 0 });
+    const car = traffic.spawnDrivenCar(3, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z))!;
+    const people = { count: 1, x: new Float32Array(1), z: new Float32Array(1), shown: new Uint8Array(1) };
+    traffic.setPeople(people);
+    return { field, traffic, clock: new Clock(), car, people };
+  }
+
+  // mutation: sed -i 's/    this.driver.people = people;/    this.driver.people = null;/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when someone steps into its lane ahead, then the car stops short of her and waits, and goes on when she has crossed", () => {
+    const { field, traffic, clock, car, people } = onTheWay();
+    runSeconds(field, traffic, clock, 6);
+    const body = field.cars[car.index]!;
+    expect(body.speed, "it is under way").toBeGreaterThan(3);
+    people.x[0] = body.group.position.x + Math.sin(body.yaw) * AHEAD_M;
+    people.z[0] = body.group.position.z + Math.cos(body.yaw) * AHEAD_M;
+    people.shown[0] = 1;
+    runSeconds(field, traffic, clock, WAIT_S);
+    expect(body.speed, "it waits for her").toBeLessThan(0.3);
+    expect(hypot2(people.x[0]! - body.group.position.x, people.z[0]! - body.group.position.z), "clear of her").toBeGreaterThan(PERSON_GAP - 1);
+    people.shown[0] = 0;
+    // The signal ahead may be red for a while (the clock is early in the cycle): the wait is up to a whole cycle.
+    for (let waited = 0; waited < CYCLE_SECONDS && body.speed < UNDER_WAY_MPS; waited++) runSeconds(field, traffic, clock, 1);
+    expect(body.speed, "it is under way again").toBeGreaterThan(UNDER_WAY_MPS);
   });
 });

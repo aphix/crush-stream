@@ -1,5 +1,6 @@
 import { hypot2 } from "../../kernel/physics-core.js";
-import { AMBULANCE_DEPOT_METRES, AMBULANCE_LOAD_SECONDS } from "./traffic-constants.ts";
+import { nearestFreeSpot } from "../../world/openworld/openworld-parking.ts";
+import { AMBULANCE_DEPOT_METRES, AMBULANCE_LOAD_SECONDS, AMBULANCE_QUEUE } from "./traffic-constants.ts";
 import { LEASE, type DrivenCar, type MoverFleet } from "./mover-fleet.ts";
 import { spotUnseen, type TrafficContext } from "./traffic-ports.ts";
 
@@ -8,13 +9,23 @@ export const AMBULANCE = { idle: 0, coming: 1, loading: 2, leaving: 3 } as const
 type AmbulanceState = (typeof AMBULANCE)[keyof typeof AMBULANCE];
 
 /**
- * The open world's ambulance: one call at a time. `call` sends an ambulance (a white police body with its lights on, leased from the movers) from a space at the edge of the district along the streets to the space nearest the scene,
+ * The open world's ambulance: one call at a time, the others wait their turn (`AMBULANCE_QUEUE`). `call` sends an ambulance (a white police body with its lights on, leased from the movers) from a space at the edge of the district along the streets to the space nearest the scene,
  * where it stands `AMBULANCE_LOAD_SECONDS` with its lights on, then drives to another far space and is put away once it gets there (or at once when no eye sees it and none is near).
  */
 export class AmbulanceService {
   state: AmbulanceState = AMBULANCE.idle;
   /** The space the ambulance stands at while it loads, -1 when none is out. */
   scene = -1;
+  /** Where the call it is out on was for (x, z: where the one run down lies), and who is down there (-1: unknown); meaningless while none is out. */
+  sceneX = 0;
+  sceneZ = 0;
+  victim = -1;
+  /** Called with the victim (-1: unknown) when the ambulance has loaded and is about to leave: whoever holds their body lets it go. */
+  onLoaded: ((victim: number) => void) | null = null;
+  private readonly queueX = new Float64Array(AMBULANCE_QUEUE);
+  private readonly queueZ = new Float64Array(AMBULANCE_QUEUE);
+  private readonly queueVictim = new Int32Array(AMBULANCE_QUEUE);
+  private queued = 0;
   private handle: DrivenCar | null = null;
   private since = 0;
   private readonly context: TrafficContext;
@@ -25,18 +36,45 @@ export class AmbulanceService {
     this.fleet = fleet;
   }
 
-  /** Sends the ambulance to the space `scene` at crowd second `seconds`; false when one is already out, none is in the pool, or there is no way. */
-  call(scene: number, seconds: number): boolean {
-    if (this.state !== AMBULANCE.idle || scene < 0) return false;
+  /**
+   * A call for someone down at (x, z), `victim` (-1: unknown), at crowd second `seconds`: the ambulance goes to the free space nearest, or when one is out already the call waits its turn. False when none is in the pool, there is no way,
+   * or the queue is full.
+   */
+  call(x: number, z: number, seconds: number, victim = -1): boolean {
+    if (this.state !== AMBULANCE.idle) {
+      if (this.queued >= AMBULANCE_QUEUE) return false;
+      this.queueX[this.queued] = x;
+      this.queueZ[this.queued] = z;
+      this.queueVictim[this.queued++] = victim;
+      return true;
+    }
+    return this.start(x, z, seconds, victim);
+  }
+
+  private start(x: number, z: number, seconds: number, victim: number): boolean {
+    const scene = nearestFreeSpot(this.context.spots, x, z, this.context.taken);
+    if (scene < 0) return false;
     const depot = this.farSpot(scene);
     if (depot < 0) return false;
     const handle = this.fleet.spawn(-1, depot, scene, LEASE.ambulance, Infinity);
     if (handle === null) return false;
     this.handle = handle;
     this.scene = scene;
+    this.sceneX = x;
+    this.sceneZ = z;
+    this.victim = victim;
     this.state = AMBULANCE.coming;
     this.since = seconds;
     return true;
+  }
+
+  /** The oldest waiting call goes now if it can; it keeps its turn when it cannot (no car, no space). */
+  private startNext(seconds: number): void {
+    if (this.queued === 0 || !this.start(this.queueX[0]!, this.queueZ[0]!, seconds, this.queueVictim[0]!)) return;
+    this.queueX.copyWithin(0, 1, this.queued);
+    this.queueZ.copyWithin(0, 1, this.queued);
+    this.queueVictim.copyWithin(0, 1, this.queued);
+    this.queued--;
   }
 
   /** The engine's index of the ambulance's car, -1 while none is out. */
@@ -46,7 +84,10 @@ export class AmbulanceService {
 
   step(seconds: number): void {
     const handle = this.handle;
-    if (handle === null) return;
+    if (handle === null) {
+      this.startNext(seconds);
+      return;
+    }
     if (handle.lost) {
       this.end();
     } else if (this.state === AMBULANCE.coming && handle.arrived) {
@@ -55,6 +96,7 @@ export class AmbulanceService {
     } else if (this.state === AMBULANCE.loading && seconds - this.since >= AMBULANCE_LOAD_SECONDS) {
       this.state = AMBULANCE.leaving;
       this.since = seconds;
+      this.onLoaded?.(this.victim);
       if (!this.fleet.redirect(handle, this.farSpot(this.scene))) this.release(handle);
     } else if (this.state === AMBULANCE.leaving && (handle.arrived || this.unseenAndFar(handle))) this.release(handle);
   }
@@ -67,6 +109,7 @@ export class AmbulanceService {
   private end(): void {
     this.handle = null;
     this.scene = -1;
+    this.victim = -1;
     this.state = AMBULANCE.idle;
   }
 

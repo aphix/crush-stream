@@ -162,3 +162,10 @@ export const SWERVE_LEFT = 3.2;
 export const SWERVE_RIGHT = 1;
 /** The lane stays this much (m) more than `LINE_W` clear of the chaser's, as `RaceBrain` keeps it. */
 export const CHASER_MARGIN = 0.9;
+
+/** A person on the route ahead stops a car: she is in its way within this far (m) of a route point (the car's half width, hers and a margin), and it stops this far (m) short of her, its centre to her. */
+export const PERSON_REACH = 2;
+export const PERSON_GAP = 4.5;
+
+/** Calls for the ambulance that wait their turn while it is out: the next goes when it has left; a call past this many is dropped. */
+export const AMBULANCE_QUEUE = 4;

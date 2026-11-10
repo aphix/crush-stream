@@ -5,11 +5,12 @@ import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildParkingSpots } from "../../world/openworld/openworld-parking.ts";
 import { buildRoadNetwork, HEADING, HEADING_COUNT, junctionIndex } from "../../world/openworld/openworld-roads.ts";
 import { blankAiCar } from "../derby-ai.ts";
-import { CRUISE_SPEED, NOSE_OVERHANG } from "./traffic-constants.ts";
+import { hypot2 } from "../../kernel/physics-core.js";
+import { CRUISE_SPEED, NOSE_OVERHANG, PERSON_GAP, PERSON_REACH } from "./traffic-constants.ts";
 import { TrafficDriver } from "./traffic-driver.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { CYCLE_SECONDS, KinematicCar, STEP_SECONDS } from "./traffic-world.test-util.ts";
-import { RoutePlanner, TripRoute } from "./trip-route.ts";
+import { pointAtArc, RoutePlanner, TripRoute } from "./trip-route.ts";
 
 const network = buildRoadNetwork(openWorldGeometry(LAYOUT));
 const spots = buildParkingSpots(network);
@@ -157,5 +158,58 @@ describe("given a car chased by a patrol car behind it", () => {
     };
     expect(Math.abs(steerWith(chaserAt(0, -300))), "a chaser far behind: straight on").toBeLessThan(0.02);
     expect(steerWith(chaserAt(0, -10)), "a chaser dead behind: the nose swings off its line").toBeGreaterThan(0.1);
+  });
+});
+
+describe("given a person standing on the car's way (a crossing, a lane)", () => {
+  const PERSON_AT_ARC_M = 30;
+  const WAIT_S = 20;
+  const STOPPED_MPS = 0.3;
+
+  function personAhead(route: TripRoute): { count: number; x: Float32Array; z: Float32Array; shown: Uint8Array } {
+    const spot = { x: 0, z: 0, tx: 0, tz: 0 };
+    pointAtArc(route, PERSON_AT_ARC_M, 0, spot);
+    return { count: 1, x: Float32Array.of(spot.x), z: Float32Array.of(spot.z), shown: Uint8Array.of(1) };
+  }
+
+  function driveFor(route: TripRoute, car: KinematicCar, seconds: number): void {
+    const snap = blankAiCar(CAR_ID);
+    for (let step = 0; step < seconds / STEP_SECONDS; step++) {
+      car.snapshot(CAR_ID, snap);
+      car.run(driver.think(snap, route, sedan, [snap], timeShowing(LIGHT.green), STEP_SECONDS, false), STEP_SECONDS);
+    }
+  }
+
+  // mutation: sed -i 's/      if (this.personNear(sample.x, sample.z)) return Math.sqrt(2 \* FOLLOW_BRAKE \* Math.max(0, ahead - PERSON_GAP));/      \/\/ no person/' src/game/ai/openworld-traffic/traffic-driver.ts
+  it("when the light is green and she stands in its lane, then the car stops short of her and waits; when she has gone it drives on past where she stood", () => {
+    const { route, car } = newTrip();
+    const person = personAhead(route);
+    driver.people = person;
+    driveFor(route, car, WAIT_S);
+    const gap = hypot2(person.x[0]! - car.group.position.x, person.z[0]! - car.group.position.z);
+    expect(car.speed, "it waits").toBeLessThan(STOPPED_MPS);
+    expect(gap, "its centre this far from her: its nose is clear of her").toBeGreaterThan(PERSON_GAP - 1);
+    expect(gap, "and not stopped far short").toBeLessThan(PERSON_GAP + 4);
+    person.shown[0] = 0;
+    driveFor(route, car, WAIT_S);
+    expect(car.group.position.x, "past where she stood").toBeGreaterThan(person.x[0]! + 2);
+    driver.people = null;
+  });
+
+  // mutation: sed -i 's/  private personNear(x: number, z: number): boolean {/  private personNear(x: number, z: number): boolean {\n    return false;/' src/game/ai/openworld-traffic/traffic-driver.ts
+  it("when she stands on the pavement beside the lane, then the car does not stop for her", () => {
+    const { route, car } = newTrip();
+    const person = personAhead(route);
+    person.z[0] = person.z[0]! + PERSON_REACH + 1;
+    driver.people = person;
+    let slowest = Infinity;
+    const snap = blankAiCar(CAR_ID);
+    for (let step = 0; step < 6 / STEP_SECONDS; step++) {
+      car.snapshot(CAR_ID, snap);
+      car.run(driver.think(snap, route, sedan, [snap], timeShowing(LIGHT.green), STEP_SECONDS, false), STEP_SECONDS);
+      if (car.group.position.x > 5) slowest = Math.min(slowest, car.speed);
+    }
+    expect(slowest, "it did not slow to a stop on the way").toBeGreaterThan(1);
+    driver.people = null;
   });
 });
