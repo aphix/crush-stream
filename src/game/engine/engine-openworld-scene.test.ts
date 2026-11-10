@@ -135,6 +135,8 @@ describe("given the number pad's plus and minus in the open world", () => {
   const lightHour = (): number => engine["stage"]["dayHour"]!;
   const crowdSeconds = (): number => engine["openWorld"].crowdTime();
   const HOURS_PER_DAY = 24;
+  /** A game hour is sixty game minutes, a crowd second each. */
+  const SECONDS_PER_HOUR = 60;
   const EPSILON = 1e-9;
   /** The owner's keys, as the browser names them: the number pad's plus and minus, and H. */
   const NUMPAD_PLUS = "NumpadAdd";
@@ -142,7 +144,7 @@ describe("given the number pad's plus and minus in the open world", () => {
   const KEY_H = "KeyH";
 
   // mutation: sed -i 's/  dayForward: "NumpadAdd",/  dayForward: "NumpadMultiply",/' src/game/engine/engine-keys.ts
-  it("when plus is pressed, then the stage's light stands on the next whole game hour at once and the crowd's clock has not moved; minus goes back an hour, and H still opens the race view and leaves the hour alone", () => {
+  it("when plus is pressed in solo, then the stage's light and the crowd's clock stand on the next whole game hour at once; minus is the hour before, a day on; and H still opens the race view and leaves the hour alone", () => {
     runSeconds(engine, 1.5);
     const before = lightHour();
     const seconds = crowdSeconds();
@@ -150,15 +152,33 @@ describe("given the number pad's plus and minus in the open world", () => {
     pressKey(engine, NUMPAD_PLUS);
     const forward = lightHour();
     expect(((forward - (Math.floor(before) + 1)) % HOURS_PER_DAY + HOURS_PER_DAY) % HOURS_PER_DAY, "the next whole hour").toBeLessThan(EPSILON);
-    expect(crowdSeconds(), "the crowd's clock").toBe(seconds);
+    const skipped = crowdSeconds() - seconds;
+    expect(skipped, "the crowd's clock is on, to the hour's start").toBeGreaterThan(0);
+    expect(skipped, "by under an hour (a crowd second is a game minute)").toBeLessThanOrEqual(SECONDS_PER_HOUR);
     pressKey(engine, NUMPAD_MINUS);
     const back = lightHour();
     expect(((forward - 1 - back) % HOURS_PER_DAY + HOURS_PER_DAY) % HOURS_PER_DAY, "an hour back from a whole hour").toBeLessThan(EPSILON);
+    expect(crowdSeconds() - seconds, "the hour before is a day's other hours on").toBe(skipped + (HOURS_PER_DAY - 1) * SECONDS_PER_HOUR);
     const full = engine["race"].fullUi;
     pressKey(engine, KEY_H);
     expect(engine["race"].fullUi, "H toggles the race view").toBe(!full);
     expect(lightHour(), "H leaves the hour alone").toBe(back);
     pressKey(engine, KEY_H);
     expect(engine["race"].fullUi, "H again").toBe(full);
+  });
+
+  // mutation: sed -i 's/      inRoom: () => this.net.role !== "off",/      inRoom: () => false,/' src/game/engine/engine.ts
+  it("when the engine is in a room, then plus and minus move neither the light nor the crowd's clock", () => {
+    const light = lightHour();
+    const seconds = crowdSeconds();
+    engine.net.role = "host";
+    try {
+      pressKey(engine, NUMPAD_PLUS);
+      pressKey(engine, NUMPAD_MINUS);
+    } finally {
+      engine.net.role = "off";
+    }
+    expect(lightHour(), "the light").toBe(light);
+    expect(crowdSeconds(), "the crowd's clock").toBe(seconds);
   });
 });

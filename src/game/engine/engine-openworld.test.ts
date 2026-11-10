@@ -20,6 +20,7 @@ import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { Sight } from "../present/spectate-cam.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
+import { tickAt } from "../ai/civilians/civilian-clock.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { MEDICS } from "./engine-openworld-medics.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
@@ -43,6 +44,8 @@ class Harness {
   open = true;
   client = false;
   seed = SEED;
+  /** This machine is in a shared room (a host's or a client's). */
+  room = false;
   tier = POPULATION_TIER.phone;
   now = 100;
   cars: DeformableCar[] = [];
@@ -68,6 +71,7 @@ class Harness {
     ...idleOpenWorldPorts(),
     inOpenWorld: () => this.open,
     isClient: () => this.client,
+    inRoom: () => this.room,
     seed: () => this.seed,
     tier: () => this.tier,
     cars: () => this.cars,
@@ -553,51 +557,63 @@ describe("given the open world's stage light following the crowd's clock", () =>
 
   /** The last hour the stage was told, as game minutes of the day. */
   const lastMinutes = (harness: Harness): number => Math.round(harness.dayHours.filter((hour): hour is number => hour !== null).at(-1)! * MINUTES_PER_HOUR);
+  const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
+  const modDay = (minutes: number): number => ((minutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
 
   // mutation: sed -i 's/(direction > 0 ? hour + 1 : now % MINUTES_PER_GAME_HOUR === 0 ? hour - 1 : hour)/(direction > 0 ? hour : now % MINUTES_PER_GAME_HOUR === 0 ? hour - 1 : hour)/' src/game/engine/engine-openworld.ts
-  it("when the light is skipped forward and back, then it lands at once on the next or the previous whole game hour, one stage call each, and the crowd's clock is not touched", () => {
+  // mutation: sed -i 's/^    this.seconds = skipTo;$//' src/game/engine/engine-openworld.ts
+  // mutation: sed -i 's/secondsOfGameMinutes((target - now + MINUTES_PER_GAME_DAY) % MINUTES_PER_GAME_DAY)/secondsOfGameMinutes(target - now)/' src/game/engine/engine-openworld.ts
+  it("when solo skips forward and back, then the crowd's clock lands at once on the next or the previous whole game hour (minus a day on: the society cannot run backwards), its society's tick with it, and the light one stage call each", () => {
     const harness = hostWithMap();
     for (let at = 0; at < framesFor(7.4); at++) harness.frame();
     const crowd = harness.crowd();
-    const seconds = crowd.crowdSeconds;
-    const start = crowd.state.startHour;
-    const calls = harness.dayHours.length;
     const before = lastMinutes(harness);
+    const startSeconds = harness.director.crowdTime();
+    const calls = harness.dayHours.length;
     expect(harness.director.skipDay(1), "a forward skip is taken").toBe(true);
     expect(harness.dayHours.length, "one stage call").toBe(calls + 1);
     const forward = lastMinutes(harness);
     expect(forward % MINUTES_PER_HOUR, "lands on a whole hour").toBe(0);
-    expect(forward - before, "the next hour's start is under an hour ahead").toBeGreaterThan(0);
-    expect(forward - before, "the next hour's start is under an hour ahead").toBeLessThanOrEqual(MINUTES_PER_HOUR);
+    const ahead = modDay(forward - before);
+    expect(ahead, "the next hour's start is under an hour ahead").toBeGreaterThan(0);
+    expect(ahead, "the next hour's start is under an hour ahead").toBeLessThanOrEqual(MINUTES_PER_HOUR);
+    expect(harness.director.crowdTime() - startSeconds, "the crowd's clock is the game minutes on, a crowd second each").toBe(ahead);
+    expect(crowd.state.nextTick, "the society has lived to the new clock").toBe(tickAt(harness.director.crowdTime()));
     expect(harness.director.skipDay(-1), "a back skip is taken").toBe(true);
-    expect(lastMinutes(harness), "from a whole hour, back is the hour before").toBe(forward - MINUTES_PER_HOUR);
+    expect(lastMinutes(harness), "from a whole hour, back is the hour before").toBe(modDay(forward - MINUTES_PER_HOUR));
+    expect(harness.director.crowdTime() - startSeconds, "reached by living the day's other hours").toBe(ahead + MINUTES_PER_DAY - MINUTES_PER_HOUR);
+    expect(crowd.state.nextTick, "the society's tick with it").toBe(tickAt(harness.director.crowdTime()));
     expect(harness.director.skipDay(-1), "again").toBe(true);
-    expect(lastMinutes(harness), "and again").toBe(forward - 2 * MINUTES_PER_HOUR);
+    expect(lastMinutes(harness), "and again").toBe(modDay(forward - 2 * MINUTES_PER_HOUR));
     expect(harness.dayHours.length, "one call a skip").toBe(calls + 3);
-    expect(crowd.crowdSeconds, "the crowd's clock").toBe(seconds);
-    expect(crowd.state.startHour, "the crowd's start hour").toBe(start);
     expect(harness.crowd(), "the same crowd").toBe(crowd);
   });
 
-  // mutation: sed -i 's/    this.dayOffset = (this.dayOffset + target - now) % MINUTES_PER_GAME_DAY;/    this.dayOffset = target - now;/' src/game/engine/engine-openworld.ts
-  it("when a day's skips are made one after another, then twenty-four forward are a whole day round to the same hour, and the minutes after a skip go on from the new hour", () => {
+  // mutation: sed -i 's/^    this.dayMinute = gameMinuteAt(skipTo);$//' src/game/engine/engine-openworld.ts
+  it("when a day's skips are made one after another, then twenty-four forward are a whole day on: the same hour, the clock a day later, and the minutes after a skip go on from the new hour", () => {
     const harness = hostWithMap();
     for (let at = 0; at < framesFor(2.2); at++) harness.frame();
     harness.director.skipDay(1);
     const landed = lastMinutes(harness);
+    const landedSeconds = harness.director.crowdTime();
     for (let skip = 0; skip < 24; skip++) harness.director.skipDay(1);
-    expect(lastMinutes(harness) % (24 * MINUTES_PER_HOUR), "a day of skips lands on the same hour").toBe(landed % (24 * MINUTES_PER_HOUR));
+    expect(lastMinutes(harness), "a day of skips lands on the same hour").toBe(landed);
+    expect(harness.director.crowdTime() - landedSeconds, "a game day of crowd seconds on").toBe(MINUTES_PER_DAY);
     const calls = harness.dayHours.length;
     for (let at = 0; at < framesFor(1.2); at++) harness.frame();
     expect(harness.dayHours.length, "the next game minute calls the stage once").toBe(calls + 1);
-    expect(lastMinutes(harness) - landed, "the light moved on by the game minute, from the skipped hour").toBeGreaterThan(0);
-    expect(lastMinutes(harness) - landed, "the light moved on by the game minute, from the skipped hour").toBeLessThanOrEqual(2);
+    expect(modDay(lastMinutes(harness) - landed), "the light moved on by the game minute, from the skipped hour").toBeGreaterThan(0);
+    expect(modDay(lastMinutes(harness) - landed), "the light moved on by the game minute, from the skipped hour").toBeLessThanOrEqual(2);
   });
 
-  // mutation: sed -i 's/^    this.dayOffset = 0;$/    this.dayOffset = this.dayOffset;/' src/game/engine/engine-openworld.ts
-  it("when a skip is asked with no crowd, or after the open world is left and entered again, then nothing is skipped and the light follows the crowd's own hour", () => {
+  // mutation: sed -i 's/^    this.seconds = 0;$/    this.seconds = this.seconds;/' src/game/engine/engine-openworld.ts
+  // mutation: sed -i 's/if (!this.started || !this.authority) return false;/if (!this.authority) return false;/' src/game/ai/civilians/civilian-crowd.ts
+  it("when a skip is asked with no crowd, or before the crowd has stepped, then nothing is skipped; and after the open world is left and entered again, the new crowd's clock and light are its own", () => {
     const harness = hostWithMap();
     expect(harness.director.skipDay(1), "no crowd yet").toBe(false);
+    harness.director.frame(FRAME);
+    expect(harness.director.skipDay(1), "a crowd that has not stepped").toBe(false);
+    expect(harness.director.crowdTime(), "its clock stands").toBe(0);
     for (let at = 0; at < framesFor(1.5); at++) harness.frame();
     const own = harness.dayHours.at(-1)!;
     harness.director.skipDay(1);
@@ -607,7 +623,31 @@ describe("given the open world's stage light following the crowd's clock", () =>
     harness.open = true;
     harness.director.startOpenWorld(map);
     harness.frame();
+    harness.frame();
     const start = harness.crowd().state.startHour;
     expect(harness.dayHours.at(-1), "the crowd's own hour again").toBeCloseTo(start, 9);
+    expect(harness.director.crowdTime(), "the new crowd's clock began at its first step").toBeCloseTo(FRAME, 9);
+  });
+
+  // mutation: sed -i 's/ || this.ports.inRoom()//' src/game/engine/engine-openworld.ts
+  it("when this machine is in a room, host or client, then neither key skips anything: no stage call, and the crowd's clock and tick stand", () => {
+    const host = hostWithMap();
+    for (let at = 0; at < framesFor(2.2); at++) host.frame();
+    const client = hostWithMap();
+    client.client = true;
+    client.director.hear(SEED, HOST_TIME, 40, new Float64Array(0));
+    client.now += 2;
+    client.frame();
+    for (const harness of [host, client]) {
+      harness.room = true;
+      const calls = harness.dayHours.length;
+      const seconds = harness.director.crowdTime();
+      const tick = harness.crowd().state.nextTick;
+      expect(harness.director.skipDay(1), "plus").toBe(false);
+      expect(harness.director.skipDay(-1), "minus").toBe(false);
+      expect(harness.dayHours.length, "no stage call").toBe(calls);
+      expect(harness.director.crowdTime(), "the clock").toBe(seconds);
+      expect(harness.crowd().state.nextTick, "the society's tick").toBe(tick);
+    }
   });
 });

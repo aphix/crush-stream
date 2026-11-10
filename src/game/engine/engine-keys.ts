@@ -15,7 +15,7 @@ export const SEAT_KEYS = {
   lookBack: "Backquote",
   mouseLook: "Semicolon",
   raceView: "KeyH",
-  /** The open world's light to the previous or next game hour (the number pad's minus and plus; the scene keys are the top row's `-` and `=`). */
+  /** The open world's clock and light to the previous or next game hour, solo only (the number pad's minus and plus; the scene keys are the top row's `-` and `=`). */
   dayBack: "NumpadSubtract",
   dayForward: "NumpadAdd",
   /** The free view's up and down: every letter already has a job, so the page keys (the WASD and arrow keys fly it, Shift is fast). */
