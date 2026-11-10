@@ -6,7 +6,7 @@ import type { BodyHost } from "./openworld-bodies.ts";
 type FakeBody = { slot: number; x: number; z: number; heading: number; speed: number; out: boolean; standing: boolean; held: boolean; look: DriverLook };
 
 /** The dummies' world as the bodies see it, with no physics: a walker moves at the pace it is steered at, and a test sets what it needs of one (knocked down, lagging). */
-export class FakeBodyHost implements BodyHost {
+export class FakeBodyHost {
   capacity = 0;
   readonly bodies = new Map<number, FakeBody>();
   readonly started: { slot: number; x: number; y: number; z: number; yaw: number; vx: number; vz: number }[] = [];

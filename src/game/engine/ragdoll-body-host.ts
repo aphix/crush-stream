@@ -10,7 +10,7 @@ const _at = new THREE.Vector3();
 const _v = new THREE.Vector3();
 
 /** The open world's bodies on the ragdoll pool: the walkers a player on foot and the showcase's figures are (`RagdollSystem.startWalker`), one to a slot past the pool's base slots. */
-export class RagdollBodyHost implements BodyHost {
+export class RagdollBodyHost {
   private readonly ragdolls: () => RagdollSystem;
 
   constructor(ragdolls: () => RagdollSystem) {
