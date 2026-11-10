@@ -60,6 +60,7 @@ describe("an arrest on a map with a police station", () => {
   });
 
   // mutation: sed -i 's/    this.sendOtherCopsBack(caseIndex, cop);//' src/game/ai/openworld-crime/arrests.ts
+  // mutation: sed -i 's/ || this.table.allCaught(caseIndex)) return;/) return;/' src/game/ai/openworld-crime/foot-law.ts
   it("when the cuffs go on with no one left to catch, then the case's other cop goes back to patrol while hers leads her away", () => {
     const run = arrestWithStation();
     const { cops, table } = run.scene.foot;

@@ -288,9 +288,9 @@ export class FootLaw {
     return best;
   }
 
-  /** A jaywalk case keeps the one cop who saw it; the others call the nearest free ones while a suspect is still to be caught. */
+  /** A jaywalk case keeps the one cop who saw it, and a case with every suspect caught calls no more; the others call the nearest free ones. */
   private callCops(caseIndex: number): void {
-    if (this.table.kind[caseIndex] === CASE_KIND.jaywalk || !this.table.hasSuspectToCatch(caseIndex)) return;
+    if (this.table.kind[caseIndex] === CASE_KIND.jaywalk || this.table.allCaught(caseIndex)) return;
     const focus = this.table.slotOf(caseIndex, 0);
     for (let index = 0; index < FOOT_COPS_PER_CASE; index++) {
       if (this.table.copAt(caseIndex, index) >= 0) continue;

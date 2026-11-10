@@ -155,7 +155,7 @@ export class Arrests {
 
   /** The cops of a case whose suspects are all caught go back to patrol, but the one holding her and any other with a suspect in hand. */
   private sendOtherCopsBack(caseIndex: number, holder: number): void {
-    if (this.table.hasSuspectToCatch(caseIndex)) return;
+    if (!this.table.allCaught(caseIndex)) return;
     for (let index = 0; index < COPS_PER_CASE; index++) {
       const cop = this.table.copAt(caseIndex, index);
       if (cop < 0 || cop === holder || this.cops.mode[cop] === COP_MODE.grip || this.cops.mode[cop] === COP_MODE.escort) continue;

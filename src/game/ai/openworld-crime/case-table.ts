@@ -121,13 +121,15 @@ export class CaseTable {
     return false;
   }
 
-  /** Whether a suspect of case `caseIndex` is still to be caught: about their day, running, hiding or being closed on (the cops of a case whose suspects are all caught are not called for it). */
-  hasSuspectToCatch(caseIndex: number): boolean {
+  /** Whether case `caseIndex` has suspects and every one is in a cop's hands or being led or driven away, none left to catch (so its cops are not called for it and the ones not holding anyone go back); a case with no suspect slot taken (the player's) has none to catch and is not. */
+  allCaught(caseIndex: number): boolean {
+    let held = false;
     for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
       const mode = this.mode[this.slotOf(caseIndex, index)]!;
-      if (mode === SUBJECT_MODE.atLarge || mode === SUBJECT_MODE.fleeing || mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.seizing) return true;
+      if (mode === SUBJECT_MODE.atLarge || mode === SUBJECT_MODE.fleeing || mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.seizing) return false;
+      held = held || mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted || mode === SUBJECT_MODE.conveyed;
     }
-    return false;
+    return held;
   }
 
   /** Keeps `resident` out of the drawn crowd from crowd second `seconds` until their next walk begins; the oldest hold is dropped when full. */
