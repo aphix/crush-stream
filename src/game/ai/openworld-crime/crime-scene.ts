@@ -50,7 +50,7 @@ export class CrimeScene {
 
   constructor(map: OpenWorldMap, source: OffenceSource, ports: CrimePorts, seed: number) {
     this.ports = ports;
-    this.law = new FootLaw(map, source, ports, { opened: (caseIndex, x, z) => this.patrol?.dispatchToScene(caseIndex, x, z, this.law.seconds), closed: (caseIndex) => this.patrol?.finishCase(caseIndex, this.law.seconds) }, seed, { lineOfSight: ports.lineOfSight, signals: ports.signals });
+    this.law = new FootLaw(map, source, ports, { opened: (caseIndex, x, z) => this.patrol?.dispatchToScene(caseIndex, x, z, this.law.seconds), closed: (caseIndex) => this.patrol?.finishCase(caseIndex, this.law.seconds) }, seed, { lineOfSight: ports.lineOfSight, signals: ports.signals, otherCopsSee: (x, z, range) => this.patrol?.sees(x, z, range, ports.lineOfSight) ?? false }, ports.playerBustSeconds);
     this.patrol = ports.cars === null ? null : new PatrolCars(ports.cars, { arrived: (caseIndex, x, z) => this.law.carCopArrived(caseIndex, x, z), busted: (resident, carIndex, seconds) => this.bustDriver(resident, carIndex, seconds) }, ports.obstacles, ports.playerBustSeconds, seed);
   }
 
@@ -75,6 +75,7 @@ export class CrimeScene {
   step(crowdSeconds: number, authority: boolean, crowdPoses: CrowdPoses, cars: readonly DeformableCar[]): void {
     this.authority = authority;
     this.law.authority = authority;
+    if (!authority) this.law.player.body.present = false;
     const target = Math.floor(crowdSeconds * CRIME_HZ + GRID_EPSILON);
     if (target - this.law.steps > MAX_STEPS_PER_CALL) this.law.fastForward(target - MAX_STEPS_PER_CALL);
     while (this.law.steps < target) {
@@ -179,6 +180,21 @@ export class CrimeScene {
     if (this.heatKnocks[carIndex]! < HEAT_KNOCKS) return false;
     this.heatKnocks[carIndex] = 0;
     return this.patrol.chase(carIndex, x, z, now);
+  }
+
+  /** The player on foot, from the engine: where he stands, which way he faces and how fast he moves; judged only on the host and the solo player. */
+  setFoot(present: boolean, x: number, z: number, dirX: number, dirZ: number, speed: number): void {
+    this.law.player.set(present, x, z, dirX, dirZ, speed);
+  }
+
+  /** The player on foot shoved a civilian at crowd second `seconds`. */
+  playerShoved(seconds: number): void {
+    this.law.player.shoved(seconds);
+  }
+
+  /** The pursuit strip's numbers for the player on foot: see `PlayerLaw.chaseOf`. */
+  footChaseOf(out: { cops: number; hold: number; left: number }): boolean {
+    return this.law.player.chaseOf(out);
   }
 
   /** The pursuit strip's numbers for car `carIndex`: see `PatrolCars.chaseOf`. */

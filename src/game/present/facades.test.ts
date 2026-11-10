@@ -15,7 +15,7 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
-import { FACADE, FACADE_GLOW, FACADE_LAYERS, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, facadeOpenLoop, setOpenFacades, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, SLAB_STYLE } from "./facades.ts";
+import { FACADE, FACADE_GLOW, FACADE_LAYERS, FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, facadeOpenLoop, setDarkFacades, setOpenFacades, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, SLAB_STYLE } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { disposePrefabMaterials, makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { setReliefDevice, setReliefTier } from "./surface-relief.ts";
@@ -368,6 +368,16 @@ describe("given a style whose layer data names no relief strips", () => {
     }
   });
 
+  // mutation: sed -i 's/ || spec.dark === true//' src/game/present/facades.ts (a supermarket's windows light however shut it is)
+  it("when a shop style with no interior is compiled, then its program is the base facade program plus the list of shut shops, under its own cache key", () => {
+    const made = makeFacadeMaterials();
+    for (const style of ["supermarket", "shops"] as const) {
+      expect(FACADE_LAYERS[style].dark, `${style} is flagged`).toBe(true);
+      expect(made[style].customProgramCacheKey().endsWith("|facade|dark"), `${style} key ${made[style].customProgramCacheKey()}`).toBe(true);
+      expect(compileFacade(made[style]).vertexShader, `${style} vertex`).toContain("facadeDarkAt");
+    }
+  });
+
   // mutation: sed -i 's/  if (extras.open) shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;//' src/game/present/facades.ts
   it("when a style with windows cut in it is compiled, then its vertex shader tells each instance whether its room is built against the shared list, its fragment shader cuts its windows on that, and a style without them knows nothing of it", () => {
     const made = makeFacadeMaterials();
@@ -401,6 +411,31 @@ describe("given a style whose layer data names no relief strips", () => {
     expect(slots[2], "emptied: shut").toBe(0);
   });
 
+  // mutation: sed -i 's/  if (extras.open) shader.uniforms.facadeDarkAt = FACADE_DARK_AT;//' src/game/present/facades.ts; sed -i 's/ \* (1.0 - vFacadeDark \* step(/ * (1.0 - 0.0 * vFacadeDark * step(/' src/game/present/facades.ts
+  it("when a style with windows cut in it is compiled, then its windows light unless its building is on the list of shut shops, in the ground band alone, and a style without them knows nothing of the list", () => {
+    const made = makeFacadeMaterials();
+    for (const style of STYLES) {
+      const shader = compileFacade(made[style]);
+      const open = FACADE_LAYERS[style].open === true;
+      const shops = open || FACADE_LAYERS[style].dark === true;
+      expect(shader.uniforms.facadeDarkAt, `${style} list of shut shops`).toBe(shops ? FACADE_DARK_AT : undefined);
+      expect(shader.fragmentShader.includes("* (1.0 - vFacadeDark * step(2.0, vFacadeRegion.x)"), `${style} lights its windows by the list`).toBe(shops);
+    }
+  });
+
+  // mutation: sed -i 's/    slots\[DARK_SLOT_FLOATS \* slot + 1\] = slot < used ? at\[DARK_SLOT_FLOATS \* slot + 1\]! : OPEN_AT_NOWHERE;/    slots[DARK_SLOT_FLOATS * slot + 1] = at[DARK_SLOT_FLOATS * slot + 1]!;/' src/game/present/facades.ts
+  it("when the shut shops are listed, then the list holds them, at most its capacity of them, and the slots left over are far away", () => {
+    const slots = FACADE_DARK_AT.value;
+    const positions = Float32Array.from({ length: 2 * (FACADE_DARK_MAX + 2) }, (_, at) => at + 1);
+    setDarkFacades(positions, 2);
+    for (let at = 0; at < 4; at++) expect(slots[at], `the first two, float ${at}`).toBe(at + 1);
+    for (let slot = 2; slot < FACADE_DARK_MAX; slot++) expect(Math.abs(slots[2 * slot + 1]!), `unused slot ${slot}`).toBeGreaterThan(1e5);
+    setDarkFacades(positions, FACADE_DARK_MAX + 2);
+    expect(slots[2 * (FACADE_DARK_MAX - 1)], "the last slot").toBe(2 * (FACADE_DARK_MAX - 1) + 1);
+    setDarkFacades(positions, 0);
+    expect(Math.abs(slots[0]!), "emptied").toBeGreaterThan(1e5);
+  });
+
   // mutation: sed -i 's/ \* facadeOpenAt\[i\].z);/);/' src/game/present/facades.ts (a listed building is wholly open the moment it is listed)
   it("when a building's openness is asked of the list, then the loop answers with it: a half open building is half open", () => {
     const loop = facadeOpenLoop("amount", "where");
@@ -410,7 +445,7 @@ describe("given a style whose layer data names no relief strips", () => {
 
   it("when it is compiled, then its program is the base facade program: no relief uniform, no parallax, the base cache key", () => {
     const made = makeFacadeMaterials();
-    for (const style of STYLES.filter((name) => FACADE_LAYERS[name].open !== true)) {
+    for (const style of STYLES.filter((name) => FACADE_LAYERS[name].open !== true && FACADE_LAYERS[name].dark !== true)) {
       const material = made[style];
       const shader = compileFacade(material);
       for (const name of RELIEF_UNIFORMS) expect(shader.uniforms[name], `${style} ${name}`).toBeUndefined();
@@ -572,7 +607,8 @@ describe("given the facade layer data of the styles that were shipped first", ()
   it("when each old style's entry is digested, then it is as shipped", () => {
     for (const [style, digest] of Object.entries(SHIPPED_ENTRY_DIGESTS)) {
       const entry = FACADE_LAYERS[style as FacadeStyle];
-      expect(createHash("sha1").update(JSON.stringify(entry)).digest("hex").slice(0, 10), style).toBe(digest);
+      // the shut-shop flag `dark` was added to two of them after they shipped: every other value is as it was
+      expect(createHash("sha1").update(JSON.stringify(entry, (key, value) => (key === "dark" ? undefined : value))).digest("hex").slice(0, 10), style).toBe(digest);
     }
   });
 });

@@ -1,7 +1,7 @@
 import { COPS_PER_CASE, MAX_CASES, MAX_HELD, MAX_SUBJECTS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
 
-/** A crime or a fight the society holds against someone, or a walk across a crossing against the signal a cop saw (the law's own, no society event). */
-export const CASE_KIND = { crime: 1, fight: 2, jaywalk: 3 } as const;
+/** A crime or a fight the society holds against someone, a walk across a crossing against the signal a cop saw (the law's own, no society event), or the player on foot chased for one (no suspect slot: `PlayerLaw` keeps it). */
+export const CASE_KIND = { crime: 1, fight: 2, jaywalk: 3, player: 4 } as const;
 /** A fight case warns the fighters, then seizes the ones to arrest. */
 export const CASE_PHASE = { free: 0, open: 1, warning: 2, seizing: 3 } as const;
 /** Where a suspect stands in a case: free slot, still about their day (not yet running), running, hiding, a fighter a cop is closing on, in a cop's hands, let go, or cuffed and led away. */
@@ -42,6 +42,9 @@ export class CaseTable {
   readonly handledSpell: Int32Array;
   /** Per resident: the crowd second the walk began on which they were last stopped for jaywalking, so one walk is stopped once. */
   readonly jaywalkWalk: Float64Array;
+  /** Per resident: the wanted spell a witness's call was seen for, and the tick that call ends: the case opens then. */
+  readonly reportSpell: Int32Array;
+  readonly reportDue: Int32Array;
 
   /** Residents kept hidden since a crowd second, until their next walk begins. */
   readonly heldResident = new Int32Array(MAX_HELD).fill(-1);
@@ -52,6 +55,8 @@ export class CaseTable {
     this.subjectOf = new Int32Array(residentCount).fill(-1);
     this.handledSpell = new Int32Array(residentCount).fill(-1);
     this.jaywalkWalk = new Float64Array(residentCount).fill(-1);
+    this.reportSpell = new Int32Array(residentCount).fill(-1);
+    this.reportDue = new Int32Array(residentCount);
   }
 
   freeCase(): number {

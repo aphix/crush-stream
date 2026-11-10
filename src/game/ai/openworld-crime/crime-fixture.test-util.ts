@@ -56,6 +56,8 @@ export class FixtureOffences {
   readonly x = new Float64Array(RESIDENTS);
   readonly present = new Uint8Array(RESIDENTS).fill(1);
   readonly departSeconds = new Float64Array(RESIDENTS);
+  /** The tick each resident's offence is reported by (a witness's call ends then): `NEVER_TICK` while nobody phones it in. */
+  readonly reportedAt = new Int32Array(RESIDENTS).fill(NEVER_TICK);
   /** Which way along the street each resident faces (+1 east, -1 west), and whether a car has run them down. */
   readonly facing = new Float64Array(RESIDENTS).fill(1);
   readonly hurt = new Uint8Array(RESIDENTS);
@@ -104,16 +106,26 @@ export class FixtureOffences {
     this.present[resident] = 0;
   }
 
-  commitCrime(resident: number): void {
+  /** A crime the society holds from now: reported by a witness at once, unless `unreported`. */
+  commitCrime(resident: number, unreported = false): void {
     this.wantedUntil[resident] = FAR_TICK;
+    this.reportedAt[resident] = unreported ? NEVER_TICK : 0;
   }
 
-  startFight(first: number, second: number): void {
+  reportDoneTick(resident: number): number {
+    return this.reportedAt[resident]!;
+  }
+
+  /** A fight between two residents (or with the player: `second` `FIGHT_PLAYER`), reported by a witness at once unless `unreported`. */
+  startFight(first: number, second: number, unreported = false): void {
+    this.reportedAt[first] = unreported ? NEVER_TICK : 0;
+    if (second >= 0) this.reportedAt[second] = unreported ? NEVER_TICK : 0;
     this.wantedUntil[first] = FAR_TICK;
-    this.wantedUntil[second] = FAR_TICK + 1;
     this.fightAt[first] = 0;
-    this.fightAt[second] = 0;
     this.partner[first] = second;
+    if (second < 0) return;
+    this.wantedUntil[second] = FAR_TICK + 1;
+    this.fightAt[second] = 0;
     this.partner[second] = first;
   }
 
@@ -155,6 +167,8 @@ export type Harness = {
   jaywalks: Bust[];
   /** Foot cops the host's hit test ran down (cop number and crowd second), and the engine's cars it tests. */
   copDowns: Bust[];
+  /** The crowd seconds the player on foot was busted at. */
+  footBusts: number[];
   cars: DeformableCar[];
   signals: FixtureSignals;
   playerBusts: number[];
@@ -179,6 +193,7 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
   const busts: Bust[] = [];
   const jaywalks: Bust[] = [];
   const copDowns: Bust[] = [];
+  const footBusts: number[] = [];
   const signals = new FixtureSignals();
   const playerBusts: number[] = [];
   const street = options.withCars ? new FakeStreet() : null;
@@ -189,6 +204,7 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
     },
     jaywalked: (resident, seconds) => void jaywalks.push({ resident, seconds }),
     copDown: (cop, seconds) => void copDowns.push({ resident: cop, seconds }),
+    footBusted: (seconds) => void footBusts.push(seconds),
     signals,
     playerBusted: (carIndex) => void playerBusts.push(carIndex),
     cars: street,
@@ -198,7 +214,7 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
   };
   const scene = new CrimeScene(lineCity(), offences, ports, options.seed ?? 7);
   for (let cop = 0; cop < FOOT_COP_COUNT - 1; cop++) scene.foot.walkers.place(cop, copX[cop] ?? 0, 0);
-  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, copDowns, cars: [], signals, playerBusts, street, now: 0, authority: options.authority ?? true };
+  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, copDowns, footBusts, cars: [], signals, playerBusts, street, now: 0, authority: options.authority ?? true };
 }
 
 /** Runs the harness `seconds` more: each step the crowd's poses are written where the society stands the residents (the crowd's own step), the street's cars drive, then the law steps. */

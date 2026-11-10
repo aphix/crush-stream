@@ -13,6 +13,10 @@ const ATLAS_WIDTH = 2048;
 const CELL_GUTTER = 4;
 const CELL_HEIGHT = SHOP_SIGN.height * SIGN_PX_PER_METRE;
 const ATLAS_ANISOTROPY = 8;
+/** A shut shop's sign, its neon off: the sign's colours at this share of their brightness, still a board to read in daylight. */
+const SHUT_BRIGHTNESS = 0.22;
+const VERTICES_PER_SIGN = 4;
+const COLOUR_FLOATS = 3;
 
 const SIGN_MARGIN = 24;
 const SIGN_NAME_MAX_PX = 56;
@@ -198,6 +202,11 @@ export class ShopSigns {
   private readonly uvRects = new Map<number, readonly [number, number, number, number]>();
   private readonly geometry = new THREE.BufferGeometry();
   private readonly material: THREE.MeshBasicMaterial;
+  /** Per sign, in the order of the panels: its place's index in the map and whether its colours are those of a shut shop now. */
+  private signPlaces = new Int32Array(0);
+  private shut = new Uint8Array(0);
+  private colours: THREE.BufferAttribute | null = null;
+  private colourData = new Float32Array(0);
 
   constructor(places: readonly Place[]) {
     this.group.name = "openworld-shop-signs";
@@ -210,7 +219,7 @@ export class ShopSigns {
     this.texture = new THREE.CanvasTexture(canvas);
     this.texture.colorSpace = THREE.SRGBColorSpace;
     this.texture.anisotropy = ATLAS_ANISOTROPY;
-    this.material = new THREE.MeshBasicMaterial({ map: this.texture, toneMapped: false });
+    this.material = new THREE.MeshBasicMaterial({ map: this.texture, vertexColors: true, toneMapped: false });
     for (const cell of cells) this.uvRects.set(cell.place, [cell.x / canvas.width, 1 - (cell.y + CELL_HEIGHT) / canvas.height, (cell.x + cell.width) / canvas.width, 1 - cell.y / canvas.height]);
     if (cells.length === 0) return;
     this.buildPanels(places, cells);
@@ -242,6 +251,26 @@ export class ShopSigns {
     this.geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     this.geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
     this.geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+    this.colourData = new Float32Array(cells.length * VERTICES_PER_SIGN * COLOUR_FLOATS).fill(1);
+    this.colours = new THREE.BufferAttribute(this.colourData, COLOUR_FLOATS);
+    this.geometry.setAttribute("color", this.colours);
+    this.signPlaces = Int32Array.from(cells, (cell) => cell.place);
+    this.shut = new Uint8Array(cells.length);
+  }
+
+  /** A frame: a sign whose place `closed` (one byte per place of the map, 1 shut) marks shut dims, and lights again when it opens; null: every shop is open. Writes colours only where a shop changed. */
+  update(closed: Uint8Array | null): void {
+    const colours = this.colours;
+    if (colours === null) return;
+    let changed = false;
+    for (let sign = 0; sign < this.signPlaces.length; sign++) {
+      const isShut = closed !== null && closed[this.signPlaces[sign]!] === 1 ? 1 : 0;
+      if (isShut === this.shut[sign]) continue;
+      this.shut[sign] = isShut;
+      this.colourData.fill(isShut === 1 ? SHUT_BRIGHTNESS : 1, sign * VERTICES_PER_SIGN * COLOUR_FLOATS, (sign + 1) * VERTICES_PER_SIGN * COLOUR_FLOATS);
+      changed = true;
+    }
+    if (changed) colours.needsUpdate = true;
   }
 
   dispose(): void {

@@ -9,6 +9,9 @@ import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { residentNameText } from "../ai/civilians/civilian-mood.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { SUBJECT } from "../ai/openworld-auto/auto-director.ts";
+import { AMBULANCE } from "../ai/openworld-traffic/ambulance.ts";
+import { launch, pooledCar } from "../contact/crash-scenarios.test-util.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
@@ -413,5 +416,103 @@ describe("given the Auto camera asked for in the open world", () => {
     expect(harness.director.aimAuto(camera, NO_SOLIDS, FRAME), "framing a subject before anyone is out").toBe(false);
     harness.director.setAuto(false);
     expect(harness.director.autoOn, "Auto after it is switched off").toBe(false);
+  });
+});
+
+describe("given a client hearing the host's ambulance through its event log", () => {
+  const CALLED_CAR = 5;
+  const STATE_STEP = 4;
+
+  /** A client whose host ran a civilian down: the knock and the call are in the log it hears, its car is by, and its clock is past the knock, so the civilian is thrown where he lay. */
+  function knocked() {
+    const harness = hostWithMap();
+    harness.client = true;
+    const host = newCrowd(map, POPULATION[0], SEED);
+    for (let seconds = 1; seconds <= HOST_DAY_SECONDS; seconds++) host.step(seconds, [], true);
+    const seconds = stepUntilShown(host, HOST_DAY_SECONDS);
+    const resident = shownResident(host);
+    harness.cars = [carAtWalker(host, resident, 6, 14).car];
+    const log = [EVENT_KIND.knock, resident, seconds];
+    harness.director.hear(SEED, HOST_TIME, seconds, Float64Array.from(log));
+    harness.director.step(FRAME);
+    harness.frame();
+    harness.now += 2 * INTERP_DELAY;
+    harness.frame();
+    for (let frame = 0; frame < 8 / FRAME; frame++) {
+      harness.now += FRAME;
+      harness.frame();
+    }
+    log.push(EVENT_KIND.ambulance, resident, seconds + 10);
+    return { harness, log, resident, seconds };
+  }
+
+  /** The host's log with an ambulance stage appended: its car and state. */
+  function heardStage(world: ReturnType<typeof knocked>, car: number, state: number): void {
+    world.log.push(EVENT_KIND.ambulanceStage, car * STATE_STEP + state, world.seconds + 20);
+    world.harness.director.hear(SEED, HOST_TIME, world.seconds + 20, Float64Array.from(world.log));
+    world.harness.now += FRAME;
+    world.harness.frame();
+  }
+
+  it("when no stage has been heard, then no ambulance is out and the medics are not drawn", () => {
+    const world = knocked();
+    expect(world.harness.director.ambulanceState(), "state").toBe(0);
+    expect(world.harness.director.ambulanceCar(), "car").toBe(-1);
+    expect(Array.from(world.harness.director["medics"]!.poses.shown), "medics drawn").toEqual([0, 0]);
+  });
+
+  it("when the host's log says its ambulance is on its way, then the client reads that state and car, and the medics are not out yet", () => {
+    const world = knocked();
+    heardStage(world, CALLED_CAR, AMBULANCE.coming);
+    expect(world.harness.director.ambulanceState(), "state").toBe(AMBULANCE.coming);
+    expect(world.harness.director.ambulanceCar(), "car").toBe(CALLED_CAR);
+    expect(world.harness.director["medics"]!.poses.shown[0], "a medic drawn").toBe(0);
+  });
+
+  it("when the log says it is loading, then both medics kneel where the civilian run down lay, and when it says idle, they are gone", () => {
+    const world = knocked();
+    const lay = world.harness.thrown.find((strike) => strike.guard === world.resident)!;
+    expect(lay, "the civilian was thrown on the client").toBeDefined();
+    heardStage(world, CALLED_CAR, AMBULANCE.coming);
+    heardStage(world, CALLED_CAR, AMBULANCE.loading);
+    const poses = world.harness.director["medics"]!.poses;
+    expect(Array.from(poses.shown), "medics drawn").toEqual([1, 1]);
+    expect((poses.x[0]! + poses.x[1]!) / 2, "x they kneel round").toBeCloseTo(lay.x, 4);
+    expect((poses.z[0]! + poses.z[1]!) / 2, "z they kneel round").toBeCloseTo(lay.z, 4);
+    heardStage(world, CALLED_CAR, AMBULANCE.idle);
+    expect(Array.from(poses.shown), "medics drawn after it left").toEqual([0, 0]);
+    expect(world.harness.director.ambulanceCar(), "car after it left").toBe(-1);
+  });
+
+  it("when the Auto camera is up while the host's ambulance is loading, then the client follows the ambulance's car", () => {
+    const world = knocked();
+    const ambulance = pooledCar(1);
+    launch(ambulance, 40, 0, 0, 0, 0);
+    ambulance.setSirens(true);
+    world.harness.cars = [...world.harness.cars, ambulance];
+    heardStage(world, 1, AMBULANCE.coming);
+    heardStage(world, 1, AMBULANCE.loading);
+    world.harness.director.setAuto(true);
+    for (let frame = 0; frame < 2 / FRAME; frame++) {
+      world.harness.now += FRAME;
+      world.harness.frame();
+    }
+    expect(world.harness.director["auto"]!.subject?.kind, "kind of subject followed").toBe(SUBJECT.driver);
+    expect(world.harness.director["auto"]!.subject?.id, "the car followed").toBe(1);
+  });
+
+  it("when the host steps with its own ambulance out, then its state is in the log for every guest", () => {
+    const harness = hostWithMap();
+    harness.frame();
+    harness.frame();
+    const crowd = harness.crowd();
+    const stages = harness.director["stages"];
+    stages.note(crowd, AMBULANCE.coming, CALLED_CAR);
+    stages.note(crowd, AMBULANCE.coming, CALLED_CAR);
+    const log = harness.director.eventLog();
+    let stageEvents = 0;
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) if (log[at] === EVENT_KIND.ambulanceStage) stageEvents++;
+    expect(stageEvents, "stage events after the same stage twice").toBe(1);
+    expect(log[log.length - EVENT_TRIPLE + 1], "its subject: car and state").toBe(CALLED_CAR * STATE_STEP + AMBULANCE.coming);
   });
 });

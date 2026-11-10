@@ -67,7 +67,7 @@ const FACADE_STYLES = Object.keys(FACADE) as FacadeStyle[];
  * One style's layers as `scripts/pack-facades.mjs` packed them: bays across a 11.8 m face, layers in its strips, each band's height (m) and a bare patch of wall (u, v in the floor layer). `height` and `roughness`:
  * the style has those strips too (read only on the relief tier); `neon`: its glow strip's blue is a sign mask lit in the sign's own colour; `open`: the ground layer's albedo alpha is 0 where the interior shows through (a doorway, a shopfront window).
  */
-type LayerSpec = { bays: number; layers: number; metres: { cornice: number; floor: number; ground: number }; plain: readonly number[]; height?: boolean; roughness?: boolean; neon?: boolean; open?: boolean };
+type LayerSpec = { bays: number; layers: number; metres: { cornice: number; floor: number; ground: number }; plain: readonly number[]; height?: boolean; roughness?: boolean; neon?: boolean; dark?: boolean; open?: boolean };
 /** The JSON module's keys are the styles' (a row pins it): its inferred type is only as loose as the file. */
 export const FACADE_LAYERS = layerData as Record<FacadeStyle, LayerSpec>;
 
@@ -119,6 +119,21 @@ const OPEN_AT_RADIUS = 0.05;
 /** The share of an open window's painted glass that is cut away at full opening (the rest stays over the room, as a pane's tint and reflection): about a half, as a glass that is a third to a half clear. */
 const OPEN_WINDOW_CUT = 0.55;
 export const FACADE_OPEN_AT = { value: Float32Array.from({ length: FACADE_OPEN_SLOT_FLOATS * FACADE_OPEN_MAX }, (_, at) => (at % FACADE_OPEN_SLOT_FLOATS === 2 ? 0 : OPEN_AT_NOWHERE)) };
+
+/** The shops shut now (a wreck, or outside their hours): their ground band's windows stay dark at dusk. Up to `FACADE_DARK_MAX` positions (x, z, as the open list's), the unused ones far away; one array every open style's material shares. */
+export const FACADE_DARK_MAX = 16;
+const DARK_SLOT_FLOATS = 2;
+export const FACADE_DARK_AT = { value: new Float32Array(DARK_SLOT_FLOATS * FACADE_DARK_MAX).fill(OPEN_AT_NOWHERE) };
+
+/** The shops at `at` (x, z pairs; at most `FACADE_DARK_MAX` of them) are shut: their ground band's windows do not light. */
+export function setDarkFacades(at: ArrayLike<number>, count: number): void {
+  const slots = FACADE_DARK_AT.value;
+  const used = Math.min(count, FACADE_DARK_MAX);
+  for (let slot = 0; slot < FACADE_DARK_MAX; slot++) {
+    slots[DARK_SLOT_FLOATS * slot] = slot < used ? at[DARK_SLOT_FLOATS * slot]! : OPEN_AT_NOWHERE;
+    slots[DARK_SLOT_FLOATS * slot + 1] = slot < used ? at[DARK_SLOT_FLOATS * slot + 1]! : OPEN_AT_NOWHERE;
+  }
+}
 
 /** The windows of the buildings at `at` (x, z, openness triples; at most `FACADE_OPEN_MAX` of them) are seen through that far; every other building's stay painted. */
 export function setOpenFacades(at: ArrayLike<number>, count: number): void {
@@ -348,6 +363,15 @@ vFacadeOpen = 0.0;
 #ifdef USE_INSTANCING
 ${facadeOpenLoop("vFacadeOpen", "instanceMatrix[3].xz")}
 #endif`;
+/** A style whose shops may be shut: the instance is told whether its building is on the list of shut shops. */
+const FACADE_DARK_VERTEX = /* glsl */ `
+uniform vec2 facadeDarkAt[${FACADE_DARK_MAX}];
+flat varying float vFacadeDark;`;
+const FACADE_DARK_SEED = /* glsl */ `
+vFacadeDark = 0.0;
+#ifdef USE_INSTANCING
+for (int i = 0; i < ${FACADE_DARK_MAX}; i++) vFacadeDark = max(vFacadeDark, 1.0 - step(${OPEN_AT_RADIUS}, distance(instanceMatrix[3].xz, facadeDarkAt[i])));
+#endif`;
 const FACADE_SEED = /* glsl */ `
 vFacadeRegion = ${SURFACE_REGION_ATTRIBUTE}.xy;${FACADE_LIFT}${FACADE_METRES}
 #ifdef USE_INSTANCING
@@ -373,12 +397,12 @@ float facadeRoofKind() {
  * What a style's program adds to the base facade: the relief tier's strips (only where the device can draw relief) and the sign colour of a neon style. A style with none has exactly the base program,
  * the base program's key and its uniforms.
  */
-type Extras = { height: boolean; roughness: boolean; neon: boolean; open: boolean };
+type Extras = { height: boolean; roughness: boolean; neon: boolean; open: boolean; dark: boolean };
 
 function extrasOf(style: FacadeStyle): Extras {
   const spec = FACADE_LAYERS[style];
   const relief = reliefPossible();
-  return { height: relief && spec.height === true, roughness: relief && spec.roughness === true, neon: spec.neon === true, open: spec.open === true };
+  return { height: relief && spec.height === true, roughness: relief && spec.roughness === true, neon: spec.neon === true, open: spec.open === true, dark: spec.open === true || spec.dark === true };
 }
 
 /** Each strip's sampler and the uv varying it is read with, and the layer every read takes (the region's first number). */
@@ -396,7 +420,8 @@ function facadeRead(extras: Extras, strip: keyof typeof FACADE_READS): string {
 const facadeExtraUniforms = (extras: Extras): string =>
   (extras.height ? "uniform highp sampler2DArray facadeHeightMap;\nuniform float facadeReliefDepth;\n" : "") +
   (extras.roughness ? "uniform highp sampler2DArray facadeRoughnessMap;\nuniform float facadeRoughnessMix;\n" : "") +
-  (extras.open ? `flat varying float vFacadeOpen;\n${FACADE_CUT_GLSL}\n` : "");
+  (extras.open ? `flat varying float vFacadeOpen;\n${FACADE_CUT_GLSL}\n` : "") +
+  (extras.dark ? "flat varying float vFacadeDark;\n" : "");
 
 /** The alpha below which a texel is a doorway (always cut), and below which it is a window (cut while its room is built): halfway between the classes the packer writes. */
 const DOORWAY_BELOW = ((FACADE_ALPHA.doorway + FACADE_ALPHA.window) / 2 / 255).toFixed(3);
@@ -468,7 +493,7 @@ const facadeEmissive = (extras: Extras): string => /* glsl */ `
 ${extras.neon ? `vec3 facadeSign = ${facadeRead(extras, "glow")}.rgb;
 vec2 facadeWindow = facadeSign.rg;` : `vec2 facadeWindow = ${facadeRead(extras, "glow")}.rg;`}
 float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${LIT_SHARE.toFixed(2)});
-totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x);${
+totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x)${extras.dark ? ` * (1.0 - vFacadeDark * step(${LAYER.ground}.0, vFacadeRegion.x) * step(vFacadeRegion.x, ${LAYER.ground}.0))` : ""};${
     extras.neon
       ? `
 totalEmissiveRadiance += diffuseColor.rgb / max(max(diffuseColor.r, diffuseColor.g), max(diffuseColor.b, 0.05)) * (smoothstep(0.1, 0.6, facadeSign.b) * smoothstep(0.0, 0.4, facadeGlow) * ${NEON_INTENSITY.toFixed(1)} * step(0.0, vFacadeRegion.x));`
@@ -505,9 +530,10 @@ function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: Styl
     shader.uniforms.facadeRoughnessMix = own.roughnessMix;
   }
   if (extras.open) shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;
+  if (extras.dark) shader.uniforms.facadeDarkAt = FACADE_DARK_AT;
   shader.vertexShader = shader.vertexShader
-    .replace("#include <common>", `#include <common>${FACADE_VERTEX}${extras.open ? FACADE_OPEN_VERTEX : ""}`)
-    .replace("#include <begin_vertex>", `#include <begin_vertex>${FACADE_SEED}${extras.open ? FACADE_OPEN_SEED : ""}`);
+    .replace("#include <common>", `#include <common>${FACADE_VERTEX}${extras.open ? FACADE_OPEN_VERTEX : ""}${extras.dark ? FACADE_DARK_VERTEX : ""}`)
+    .replace("#include <begin_vertex>", `#include <begin_vertex>${FACADE_SEED}${extras.open ? FACADE_OPEN_SEED : ""}${extras.dark ? FACADE_DARK_SEED : ""}`);
   shader.fragmentShader = shader.fragmentShader
     .replace("#include <common>", `#include <common>${FACADE_FRAGMENT}${facadeExtraUniforms(extras)}`)
     .replace("#include <normalmap_pars_fragment>", `#include <normalmap_pars_fragment>${facadeNormalPars(extras)}`)
@@ -535,7 +561,7 @@ function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
     tagHook.call(material, shader, renderer);
     patchFacade(shader, own, roofs, edges, FACADE_LAYERS[style].bays, extras);
   };
-  const variant = `${extras.height ? "|height" : ""}${extras.roughness ? "|roughness" : ""}${extras.neon ? "|neon" : ""}${extras.open ? "|open" : ""}`;
+  const variant = `${extras.height ? "|height" : ""}${extras.roughness ? "|roughness" : ""}${extras.neon ? "|neon" : ""}${extras.open ? "|open" : extras.dark ? "|dark" : ""}`;
   material.customProgramCacheKey = () => `${tagKey.call(material)}|facade${variant}`;
   const { layers } = FACADE_LAYERS[style];
   const stops = [

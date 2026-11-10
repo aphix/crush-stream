@@ -6,10 +6,10 @@ import { FRAME_HZ } from "../../kernel/constants.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { vestibuleSolids, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
-import { FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS } from "../facades.ts";
+import { FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS } from "../facades.ts";
 import { HIDE_GRACE, SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../openworld-sight.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
-import { DOOR_SWING_SECONDS, INTERIOR_DIM, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS } from "./interior-constants.ts";
+import { CLOSED_GLOW, DOOR_SWING_SECONDS, INTERIOR_DIM, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS } from "./interior-constants.ts";
 import { InteriorSet } from "./interior-art.ts";
 import type { DoorOpeners } from "./interior-doors.ts";
 
@@ -44,11 +44,14 @@ const SIDEWALK = 2.5;
 
 /** Openers whose crowd is `civilians` people, hidden until `standAtDoor`, and no walker. */
 type Civilians = DoorOpeners & { poses: CrowdPoses };
+/** The one place of the lone map is shut. */
+const SHUT = new Uint8Array([1]);
+const OPEN = new Uint8Array([0]);
 
 function openers(civilians = 1): Civilians {
   const poses = createCrowdPoses(civilians);
   poses.shown.fill(0);
-  return { poses, walker: null };
+  return { poses, walker: null, others: [], closed: null };
 }
 
 /** Civilian `who` stands just out of a place's door. */
@@ -155,6 +158,20 @@ describe("given the interiors of the open world's map, a coffee shop's door held
     set.update(coffee.doorX + AWAY, coffee.doorZ, FRAME, sight, who);
     set.update(coffee.doorX + AWAY, coffee.doorZ, INTERIOR_LINGER + FRAME, sight, who);
     expect(built(set), "far from everything").toBe(NOTHING_BUILT);
+    set.dispose();
+  });
+
+  // mutation: sed -i 's/      for (let figure = 0; figure < other.count; figure++) if (other.shown\[figure\] === 1/      for (let figure = 0; figure < 0; figure++) if (other.shown[figure] === 1/' src/game/present/interiors/interior-doors.ts
+  it("when no civilian is at a home's door but a foot cop or a medic stands there, then the door opens and the rooms behind it are built", () => {
+    const set = new InteriorSet(loneHouse);
+    const who = openers();
+    const cop = openers();
+    who.others.push(cop.poses);
+    settle(set, house.doorX, house.doorZ, who);
+    expect(built(set), "nobody at the door").toBe(NOTHING_BUILT);
+    standAtDoor(cop, house);
+    settle(set, house.doorX, house.doorZ, who);
+    expect(set.stats().details, "furnished once the cop opens the door").toBe(1);
     set.dispose();
   });
 
@@ -412,5 +429,98 @@ describe("given a coffee shop whose room is built and then released", () => {
     expect((mesh.material as THREE.MeshStandardMaterial).color.r, "the furniture's colour factor").toBe(INTERIOR_DIM);
     expect(INTERIOR_DIM, "less than all of the light").toBeLessThan(1);
     set.dispose();
+  });
+});
+
+describe("given a coffee shop that is shut (wrecked, or outside its hours)", () => {
+  /** The brightest colour channel the lamps and screens draw, over the vertices packed. */
+  function brightest(set: InteriorSet): number {
+    const mesh = set.group.getObjectByName("interior-lights") as THREE.Mesh;
+    const color = mesh.geometry.getAttribute("color").array;
+    let most = 0;
+    for (let at = 0; at < mesh.geometry.drawRange.count * 3; at++) most = Math.max(most, color[at]!);
+    return most;
+  }
+
+  // mutation: sed -i 's/this.locked\[door\] === 0 \&\& this.someoneAt(leaf, near, openers)/this.someoneAt(leaf, near, openers)/' src/game/present/interiors/interior-doors.ts
+  it("when a civilian stands at its street door, then the door stays shut; once it is open again the door swings", () => {
+    const set = new InteriorSet(lone);
+    const who = openers();
+    who.closed = SHUT;
+    standAtDoor(who);
+    const view = scene(set, STREET_EYE, who);
+    view.frames(SWING_FRAMES + 2);
+    expect(set.openDoors(), "doors open while it is shut").toBe(0);
+    who.closed = OPEN;
+    view.frames(SWING_FRAMES + 2);
+    expect(set.openDoors(), "doors open once it is open again").toBe(1);
+    set.dispose();
+  });
+
+  // mutation: sed -i 's/entries\[at\]!.business \&\& this.entries\[at\]!.locked/entries[at]!.business/' src/game/present/interiors/interior-art.ts
+  it("when it is shut, then the facade's list of shut shops holds its building, and drops it once it is open", () => {
+    const darkened = (): boolean => {
+      const slots = FACADE_DARK_AT.value;
+      for (let slot = 0; slot < FACADE_DARK_MAX; slot++) if (Math.abs(slots[2 * slot]! - coffee.x) < 1e-3 && Math.abs(slots[2 * slot + 1]! - coffee.z) < 1e-3) return true;
+      return false;
+    };
+    const set = new InteriorSet(lone);
+    const who = openers();
+    settle(set, coffee.doorX, coffee.doorZ, who, 3);
+    expect(darkened(), "open: not listed").toBe(false);
+    who.closed = SHUT;
+    settle(set, coffee.doorX, coffee.doorZ, who, 3);
+    expect(darkened(), "shut: listed").toBe(true);
+    who.closed = OPEN;
+    settle(set, coffee.doorX, coffee.doorZ, who, 3);
+    expect(darkened(), "open again: dropped").toBe(false);
+    who.closed = SHUT;
+    settle(set, coffee.doorX, coffee.doorZ, who, 3);
+    set.dispose();
+    expect(darkened(), "the course left: nothing listed").toBe(false);
+  });
+
+  // mutation: sed -i 's/      if (closed\[plain.index\] !== 1) continue;/      continue;/' src/game/present/interiors/interior-art.ts
+  it("when a shop with no interior (the pizzeria) is shut, then the facade's list of shut shops holds it, and not while it is open", () => {
+    const pizza = map.places.find((place) => place.name === "Slice Brothers Pizza")!;
+    const closed = new Uint8Array(map.places.length);
+    const listedDark = (): boolean => {
+      const slots = FACADE_DARK_AT.value;
+      for (let slot = 0; slot < FACADE_DARK_MAX; slot++) if (Math.abs(slots[2 * slot]! - pizza.x) < 1e-3 && Math.abs(slots[2 * slot + 1]! - pizza.z) < 1e-3) return true;
+      return false;
+    };
+    const set = new InteriorSet(map);
+    const who = openers();
+    who.closed = closed;
+    settle(set, AWAY, AWAY, who, 2);
+    expect(listedDark(), "open: not listed").toBe(false);
+    closed[map.places.indexOf(pizza)] = 1;
+    settle(set, AWAY, AWAY, who, 2);
+    expect(listedDark(), "shut: listed").toBe(true);
+    set.dispose();
+  });
+
+  // mutation: sed -i 's/export const CLOSED_GLOW = 0.08;/export const CLOSED_GLOW = 1;/' src/game/present/interiors/interior-constants.ts
+  it("when its room is built, then its lamps and screens glow a faint share of their light while it is shut, whether it shut after the room was built or before, and as they were when it opens", () => {
+    const lit = new InteriorSet(lone);
+    settle(lit, coffee.doorX, coffee.doorZ, openers());
+    const bright = brightest(lit);
+    expect(bright, "lit").toBeGreaterThan(0.1);
+    const who = openers();
+    who.closed = SHUT;
+    settle(lit, coffee.doorX, coffee.doorZ, who, 3);
+    expect(brightest(lit), "shut after it was built").toBeCloseTo(bright * CLOSED_GLOW, 5);
+    expect(brightest(lit), "shut after it was built: well under what it was").toBeLessThan(bright / 2);
+    who.closed = OPEN;
+    settle(lit, coffee.doorX, coffee.doorZ, who, 3);
+    expect(brightest(lit), "open again").toBeCloseTo(bright, 5);
+    const shut = new InteriorSet(lone);
+    const closedFirst = openers();
+    closedFirst.closed = SHUT;
+    settle(shut, coffee.doorX, coffee.doorZ, closedFirst);
+    expect(brightest(shut), "shut before it was built").toBeCloseTo(bright * CLOSED_GLOW, 5);
+    expect(brightest(shut), "shut before it was built: well under what it was").toBeLessThan(bright / 2);
+    lit.dispose();
+    shut.dispose();
   });
 });

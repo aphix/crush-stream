@@ -146,11 +146,11 @@ export class OpenWorldScan {
     }
   }
 
-  /** A car in play with a driver: a resident's, or a police car (the patrol's); not a player's own, not put away. */
+  /** A car in play with a driver: a resident's, a police car (the patrol's) or the ambulance (a client has no traffic to name its drivers, but is told its car); not a player's own, not put away. */
   private watchableCar(index: number): boolean {
     const car = this.world.cars()[index];
     if (car === undefined || car.stored || car.vaporized || !car.group.visible || this.world.isPlayerCar(index)) return false;
-    return this.world.residentAt(index) >= 0 || car.style.id === "police";
+    return this.world.residentAt(index) >= 0 || car.style.id === "police" || index === this.world.ambulanceCar();
   }
 
   private personPose(poses: CrowdPoses, index: number, out: AutoPose): boolean {

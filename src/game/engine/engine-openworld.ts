@@ -11,6 +11,7 @@ import type { SignSight } from "../present/openworld-signs.ts";
 import type { OpenWorldMap, Place } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { tickAt } from "../ai/civilians/civilian-clock.ts";
+import { fillClosedPlaces } from "../ai/civilians/society-hours.ts";
 import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.ts";
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
@@ -31,6 +32,8 @@ import type { CrowdLink } from "../net/net-ports.ts";
 import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
 import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
 import { OpenWorldAuto } from "./engine-openworld-auto.ts";
+import { AmbulanceStages, newestCalled } from "./engine-openworld-ambulance.ts";
+import { OpenWorldClientDoors } from "./engine-openworld-door-clips.ts";
 import { OpenWorldCarDoors } from "./engine-openworld-cars.ts";
 import { BODY_COUNT, OpenWorldBodies, type BodyHost } from "./openworld-bodies.ts";
 import { MEDICS, OpenWorldMedics } from "./engine-openworld-medics.ts";
@@ -54,7 +57,7 @@ type CrowdArt = {
 
 /** The signage on the buildings: `update` once a frame. */
 type PlaceSigns = {
-  update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null): void;
+  update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null): void;
   dispose(): void;
 };
 
@@ -73,7 +76,7 @@ type TrafficHostPorts = TrafficPorts & {
 };
 
 /** Who opens the interiors' doors: the drawn crowd and the player's walker, null where there is none. */
-type DoorOpeners = { poses: CrowdPoses | null; walker: FootBody | null };
+type DoorOpeners = { poses: CrowdPoses | null; walker: FootBody | null; others: CrowdPoses[]; closed: Uint8Array | null };
 
 /** The streamed interiors of the map's places: `update` once a frame with the eye and the sight field, `dispose` when the course is left. */
 type InteriorArt = {
@@ -110,7 +113,7 @@ export type OpenWorldPorts = {
   /** The signage of `places`, in the scene. */
   makeSigns(places: readonly Place[]): PlaceSigns;
   /** What the police need of the engine (the course's solids, a busted player, the light bars, sight lines past the buildings); absent: no police. */
-  law?: Pick<LawEnginePorts, "solids" | "playerBusted" | "sirens" | "lineOfSight">;
+  law?: Pick<LawEnginePorts, "solids" | "playerBusted" | "sirens" | "lineOfSight" | "footBusted">;
   /** What culling reads of the engine. */
   cull: OpenWorldCullPorts;
   /** The dummies' world the civilians near a player have bodies in; absent: they are drawn by the crowd's art alone. */
@@ -139,6 +142,16 @@ export class OpenWorldDirector {
   private facades: FacadeArt | null = null;
   private law: OpenWorldLaw | null = null;
   private medics: OpenWorldMedics | null = null;
+  /** Where the ambulance is: noted in the log by the host, read from it by a client (which has no traffic). */
+  private readonly stages = new AmbulanceStages();
+  /** Whether a client has put its medics at the scene of the call it is hearing. */
+  private sceneHeard = false;
+  /** Where each resident was last run down (the strike's spot), for a client's medics to kneel at: the call names the resident, the host's alone knows where he lay. */
+  private knockX = new Float32Array(0);
+  private knockZ = new Float32Array(0);
+  private knockKnown = new Uint8Array(0);
+  /** The driver's doors swung by the clips a client sees (the host's are the sim's: `doors`). */
+  private readonly clientDoors = new OpenWorldClientDoors();
   private interiors: InteriorArt | null = null;
   private unhook: (() => void) | null = null;
   private traffic: OpenWorldTraffic | null = null;
@@ -168,7 +181,9 @@ export class OpenWorldDirector {
   private readonly bustScratch: ChaseHud = { cops: 0, hold: 0, left: 0 };
   private lookAcc = 0;
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
-  private readonly openers: DoorOpeners = { poses: null, walker: null };
+  private readonly openers: DoorOpeners = { poses: null, walker: null, others: [], closed: null };
+  /** The map's places shut now (a wreck, or outside their hours), refilled each frame from the crowd's state for the interiors. */
+  private closedPlaces: Uint8Array | null = null;
   private readonly walkerStrike = new WalkerStrike();
   /** The Auto camera: wanted (`setAuto`) across crowd rebuilds, made with each crowd. */
   private autoWanted = false;
@@ -232,6 +247,16 @@ export class OpenWorldDirector {
     return this.kerb !== null && this.ports.traffic?.seated(id) === false && (spotAt(this.kerb, car.group.position.x, car.group.position.z, car.yaw) >= 0 || this.traffic?.isEmptyCar(id) === true);
   }
 
+  /** Where the ambulance's call is (`AMBULANCE`): the traffic's on the host and solo, the host's as heard on a client. */
+  ambulanceState(): number {
+    return this.traffic?.ambulanceState() ?? this.stages.state;
+  }
+
+  /** The engine's index of the ambulance's car, -1 while none is out. */
+  ambulanceCar(): number {
+    return this.traffic?.ambulanceCar() ?? this.stages.car;
+  }
+
   /** The Auto camera is up: it follows the open world's events and its bubble is the followed subject's. */
   get autoOn(): boolean {
     return this.autoWanted;
@@ -259,7 +284,7 @@ export class OpenWorldDirector {
    * tenth of a second and hundredth of a hold), so the HUD sees no change; null while none chases it.
    */
   bustOf(carIndex: number): ChaseHud | null {
-    if (this.law === null || !this.law.chaseOf(carIndex, this.bustScratch)) {
+    if (this.law === null || !(this.law.chaseOf(carIndex, this.bustScratch) || this.law.footChaseOf(this.bustScratch))) {
       this.bust = null;
       return null;
     }
@@ -287,6 +312,7 @@ export class OpenWorldDirector {
       fillCommuterFeed(this.crowd.state, tickAt(this.seconds), this.feed.legs, this.feed.parked);
       this.doors?.step(this.crowd.poses);
       this.traffic.step(this.seconds, dt);
+      this.stages.note(this.crowd, this.traffic.ambulanceState(), this.traffic.ambulanceCar());
     }
   }
 
@@ -303,8 +329,10 @@ export class OpenWorldDirector {
     this.facades ??= this.ports.makeFacades(this.map);
     if (this.interiors === null && this.ports.makeInteriors !== undefined) this.interiors = this.ports.makeInteriors(this.map);
     this.ports.eye(this.ray);
+    if (this.crowd !== null && this.closedPlaces !== null) fillClosedPlaces(this.crowd.state, tickAt(this.crowd.crowdSeconds), this.closedPlaces);
     if (this.interiors !== null) {
       this.openers.poses = this.crowd?.poses ?? null;
+      this.openers.closed = this.crowd === null ? null : this.closedPlaces;
       this.openers.walker = this.ports.foot(this.foot) ? this.foot : null;
       this.interiors.update(this.ray.eyeX, this.ray.eyeZ, wallDt, this.sight, this.openers);
     }
@@ -319,13 +347,15 @@ export class OpenWorldDirector {
       this.throwStruck(crowd);
       this.bodies?.step(crowd.poses, this.ray.eyeX, this.ray.eyeZ, crowd.crowdSeconds, wallDt);
       this.law?.throwTakedowns();
+      this.hearAmbulance(crowd);
+      this.clientDoors.frame(crowd.poses, this.ports.cars());
     }
     this.ports.eye(this.ray);
     this.frameSigns(this.map);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt, this.bodies?.held ?? null);
     this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     if (this.traffic?.ambulanceScene(this.sceneScratch) === true) this.medics?.setScene(this.sceneScratch.x, this.sceneScratch.z);
-    this.medics?.frame(this.traffic?.ambulanceState() ?? 0, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
+    this.medics?.frame(this.ambulanceState(), this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.lights?.update(crowd.crowdSeconds);
     this.lookAcc += wallDt;
     const cut = this.autoWanted && this.auto !== null && this.auto.step(wallDt);
@@ -353,11 +383,13 @@ export class OpenWorldDirector {
     this.art?.dispose();
     this.law?.dispose();
     this.medics?.dispose();
+    this.clientDoors.release(this.ports.cars());
     this.crowd.dispose();
     this.unhook = null;
     this.art = null;
     this.law = null;
     this.medics = null;
+    this.openers.others = [];
     this.auto = null;
     this.crowd = null;
     this.text = null;
@@ -390,7 +422,7 @@ export class OpenWorldDirector {
   /** The signage is made on the first frame and shows names while the Track debug button is on. */
   private frameSigns(map: OpenWorldMap): void {
     this.signs ??= this.ports.makeSigns(map.places);
-    this.signs.update(this.ray.eyeX, this.ray.eyeZ, this.ports.signsOn(), this.sight);
+    this.signs.update(this.ray.eyeX, this.ray.eyeZ, this.ports.signsOn(), this.sight, this.crowd === null ? null : this.closedPlaces);
   }
 
   private start(map: OpenWorldMap, key: number, client: boolean): void {
@@ -403,6 +435,11 @@ export class OpenWorldDirector {
     };
     this.crowdKey = key;
     this.seconds = 0;
+    this.stages.reset();
+    this.sceneHeard = false;
+    this.knockX = new Float32Array(this.crowd.state.capacity);
+    this.knockZ = new Float32Array(this.crowd.state.capacity);
+    this.knockKnown = new Uint8Array(this.crowd.state.capacity);
     this.auto = this.makeAuto(this.crowd, key & CROWD_SEED_MASK);
     this.art = this.ports.makeArt(this.crowd.poses.count);
     this.figureSlot = new Int32Array(this.crowd.poses.count).fill(-1);
@@ -412,8 +449,10 @@ export class OpenWorldDirector {
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
     this.startTraffic(map, client);
     this.doors = new OpenWorldCarDoors(crowd.state.capacity, crowd.state, () => this.traffic);
+    this.closedPlaces = new Uint8Array(crowd.state.index.placeCount);
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     this.medics = new OpenWorldMedics(this.ports.makeArt(MEDICS.count));
+    this.openers.others = this.law === null ? [this.medics.poses] : [this.law.copPoses, this.medics.poses];
     if (client) crowd.hear(this.heardEvents);
   }
 
@@ -452,7 +491,7 @@ export class OpenWorldDirector {
   private makeLaw(map: OpenWorldMap, crowd: CivilianCrowd, seed: number): OpenWorldLaw | null {
     const extra = this.ports.law;
     if (extra === undefined) return null;
-    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, cars: () => this.ports.cars() }, seed);
+    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, foot: (out) => this.ports.foot(out), footBusted: () => extra.footBusted(), cars: () => this.ports.cars() }, seed);
   }
 
   /** The Auto camera over this crowd: its cars (the traffic's drivers), its foot cops and the viewers' own cars left out. */
@@ -463,8 +502,8 @@ export class OpenWorldDirector {
         cops: () => this.law?.copPoses ?? null,
         residentAt: (carIndex) => this.traffic?.residentOf(carIndex) ?? -1,
         cars: () => this.ports.cars(),
-        ambulanceCar: () => this.traffic?.ambulanceCar() ?? -1,
-        ambulanceState: () => this.traffic?.ambulanceState() ?? 0,
+        ambulanceCar: () => this.ambulanceCar(),
+        ambulanceState: () => this.ambulanceState(),
         isPlayerCar: (carIndex) => this.ports.cull.playerCars().includes(this.ports.cars()[carIndex]!),
       },
       { residents: crowd.poses.count, cops: FOOT_COP_COUNT, cars: MAX_CARS, events: EVENT_LOG_CAPACITY },
@@ -486,6 +525,7 @@ export class OpenWorldDirector {
       dressOfLook(crowd.poses.look[strike.guard]!, look);
       this.figureSlot[strike.guard] = this.ports.throwFigure(strike, look, DOWNED_LIFE_SECONDS);
       this.figureAt[strike.guard] = crowd.crowdSeconds;
+      this.noteKnockSpot(strike.guard, strike.x, strike.z);
       this.law?.noteStrike(strike);
     }
   }
@@ -498,6 +538,32 @@ export class OpenWorldDirector {
     if (slot < 0) return;
     this.figureSlot[victim] = -1;
     this.ports.removeFigure(slot, this.crowd.crowdSeconds - this.figureAt[victim]!);
+  }
+
+  private noteKnockSpot(resident: number, x: number, z: number): void {
+    if (resident < 0 || resident >= this.knockKnown.length) return;
+    this.knockX[resident] = x;
+    this.knockZ[resident] = z;
+    this.knockKnown[resident] = 1;
+  }
+
+  /** A client: the ambulance as the host's log has it, and, when a call comes, the medics put where the person down lay (else beside the ambulance's car). */
+  private hearAmbulance(crowd: CivilianCrowd): void {
+    const log = crowd.eventLog();
+    this.stages.hear(log);
+    if (this.stages.state === 0) {
+      this.sceneHeard = false;
+      return;
+    }
+    if (this.sceneHeard) return;
+    this.sceneHeard = true;
+    const resident = newestCalled(log);
+    if (resident >= 0 && resident < this.knockKnown.length && this.knockKnown[resident] === 1) {
+      this.medics?.call(this.knockX[resident]!, this.knockZ[resident]!, true);
+      return;
+    }
+    const car = this.ports.cars()[this.stages.car];
+    if (car !== undefined) this.medics?.call(car.group.position.x, car.group.position.z, true);
   }
 
   /** The panel keeps the object it had while the text is the same, so the HUD sees no change. */

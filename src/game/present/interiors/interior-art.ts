@@ -3,11 +3,11 @@ import { hypot2 } from "../../kernel/physics-core.js";
 import { SHOP_GROUND_STOREY, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
 import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, planKey, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { drawnHalf } from "../../world/openworld/openworld-facade-solids.ts";
-import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
-import { FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, setOpenFacades } from "../facades.ts";
+import { PLACE_KIND, type OpenWorldMap, type Place } from "../../world/openworld/walk-graph.ts";
+import { FACADE_DARK_MAX, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, setDarkFacades, setOpenFacades } from "../facades.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
-import { DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_DIM, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
+import { CLOSED_GLOW, DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_DIM, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
 import { DoorSet, type DoorOpeners } from "./interior-doors.ts";
 import { NO_SLOT, PackedMesh } from "./interior-pack.ts";
 
@@ -19,9 +19,12 @@ type Solids = (typeof SOLIDS)[keyof typeof SOLIDS];
 type Entry = {
   place: Place;
   plan: InteriorPlan;
+  placeIndex: number;
   business: boolean;
   shopfront: boolean;
   closing: boolean;
+  locked: boolean;
+  dimmed: boolean;
   halfDepth: number;
   halfWidth: number;
   firstDoor: number;
@@ -104,6 +107,11 @@ export class InteriorSet {
   /** The nearest businesses in view and the nearest built buildings the facade lists (entry indices, nearest first), filled each frame. */
   private readonly shopfrontAt = new Int32Array(SHOPFRONT_ROOMS);
   private readonly listedAt = new Int32Array(FACADE_OPEN_MAX);
+  /** The nearest shut businesses (entry indices, nearest first) and their positions, as the facade's dark list takes them. */
+  private readonly darkAt = new Int32Array(FACADE_DARK_MAX);
+  private readonly darkPositions = new Float32Array(2 * FACADE_DARK_MAX);
+  /** The shops with no interior (a supermarket, a pizzeria), by map index and where they stand: they have no rooms to stream, but their windows go dark when they are shut. */
+  private readonly plainShops: { index: number; x: number; z: number }[] = [];
   /** Per entry, in arrays and not in the entries (a double stored in an object may be a new box on every store): its door's distance from the eye this frame, and how long (s) its envelope and its furnishing have been past their far radius. */
   private readonly distance: Float64Array;
   private readonly shellAway: Float64Array;
@@ -118,7 +126,9 @@ export class InteriorSet {
     this.builtAt = new Float32Array(FACADE_OPEN_SLOT_FLOATS * FACADE_OPEN_MAX);
     const plans = new Map<string, InteriorPlan>();
     const leaves: DoorLeaf[] = [];
-    for (const place of map.places) {
+    for (let placeIndex = 0; placeIndex < map.places.length; placeIndex++) {
+      const place = map.places[placeIndex]!;
+      if (place.interior === undefined && place.storeys > 0 && (place.kind === PLACE_KIND.shop || place.kind === PLACE_KIND.food)) this.plainShops.push({ index: placeIndex, x: place.x, z: place.z });
       if (place.interior === undefined || place.doorNode < 0) continue;
       const key = planKey(place);
       let plan = plans.get(key);
@@ -127,7 +137,7 @@ export class InteriorSet {
         plans.set(key, plan);
       }
       const doors = interiorDoors(place, plan);
-      this.entries.push({ place, plan, business: place.interior !== "rowhome", shopfront: false, closing: false, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shellBuilt: false, detailBuilt: false, shellSlot: NO_SLOT, shellGlassSlot: NO_SLOT, detailSlot: NO_SLOT, glowSlot: NO_SLOT, detailGlassSlot: NO_SLOT, solids: SOLIDS.none });
+      this.entries.push({ place, plan, placeIndex, business: place.interior !== "rowhome", shopfront: false, closing: false, locked: false, dimmed: false, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shellBuilt: false, detailBuilt: false, shellSlot: NO_SLOT, shellGlassSlot: NO_SLOT, detailSlot: NO_SLOT, glowSlot: NO_SLOT, detailGlassSlot: NO_SLOT, solids: SOLIDS.none });
       leaves.push(...doors);
     }
     this.distance = new Float64Array(this.entries.length);
@@ -160,6 +170,7 @@ export class InteriorSet {
       entry.closing = false;
       if (this.streamShell(entry, at, view)) this.showVestibules(entry, !entry.shellBuilt);
       this.streamDetail(entry, at, view);
+      this.keepShut(entry, openers.closed);
       const open = entry.shellBuilt && entry.detailBuilt && !entry.closing ? 1 : 0;
       const step = this.seconds[0]! / OPEN_FADE_SECONDS;
       this.openness[at] = open === 1 ? Math.min(1, this.openness[at]! + step) : Math.max(0, this.openness[at]! - step);
@@ -170,6 +181,7 @@ export class InteriorSet {
       }
     }
     this.showBuiltThrough();
+    this.showShutDark(openers.closed);
     if (solidsChanged) this.solidsListener?.(this.heldSolids());
   }
 
@@ -242,6 +254,38 @@ export class InteriorSet {
     return SOLIDS.none;
   }
 
+  /** The nearest shut businesses are listed for the facade: their ground band's windows do not light at dusk. */
+  private showShutDark(closed: Uint8Array | null): void {
+    let count = 0;
+    for (let at = 0; at < this.entries.length; at++) if (this.entries[at]!.business && this.entries[at]!.locked) count = keepNearest(this.darkAt, count, at, this.distance);
+    for (let slot = 0; slot < count; slot++) {
+      const { place } = this.entries[this.darkAt[slot]!]!;
+      this.darkPositions[2 * slot] = place.x;
+      this.darkPositions[2 * slot + 1] = place.z;
+    }
+    for (let shop = 0; shop < this.plainShops.length && count < FACADE_DARK_MAX && closed !== null; shop++) {
+      const plain = this.plainShops[shop]!;
+      if (closed[plain.index] !== 1) continue;
+      this.darkPositions[2 * count] = plain.x;
+      this.darkPositions[2 * count + 1] = plain.z;
+      count++;
+    }
+    setDarkFacades(this.darkPositions, count);
+  }
+
+  /** A shut shop (a wreck, or outside its hours) has its street doors locked and its lamps and screens dimmed; open again, they are as they were. */
+  private keepShut(entry: Entry, closed: Uint8Array | null): void {
+    const shut = closed !== null && closed[entry.placeIndex] === 1;
+    if (shut !== entry.locked) {
+      for (let door = entry.firstDoor; door < entry.firstDoor + entry.doorCount; door++) if (this.doors.leaves[door]!.face === DOOR_FACE.street) this.doors.setLocked(door, shut);
+      entry.locked = shut;
+    }
+    if (entry.glowSlot !== NO_SLOT && shut !== entry.dimmed) {
+      this.glows.scaleColor(entry.glowSlot, shut ? CLOSED_GLOW : 1 / CLOSED_GLOW);
+      entry.dimmed = shut;
+    }
+  }
+
   private showVestibules(entry: Entry, shown: boolean): void {
     for (let door = entry.firstDoor; door < entry.firstDoor + entry.doorCount; door++) this.doors.showVestibule(door, shown);
   }
@@ -300,6 +344,7 @@ export class InteriorSet {
     this.glass.remove(entry.detailGlassSlot);
     entry.detailSlot = NO_SLOT;
     entry.glowSlot = NO_SLOT;
+    entry.dimmed = false;
     entry.detailGlassSlot = NO_SLOT;
     entry.detailBuilt = false;
     return true;
@@ -334,6 +379,7 @@ export class InteriorSet {
     if (this.entries.some((entry) => entry.solids !== SOLIDS.none)) this.solidsListener?.([]);
     for (const packed of [this.shells, this.details, this.glows, this.glass]) packed.dispose();
     setOpenFacades(this.builtAt, 0);
+    setDarkFacades(this.darkPositions, 0);
     this.doors.dispose();
     this.solidMaterial.dispose();
     this.glowMaterial.dispose();

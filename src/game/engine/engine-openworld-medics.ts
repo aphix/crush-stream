@@ -62,7 +62,12 @@ export class OpenWorldMedics {
     this.poses.look[1] = scrubsLook(true);
   }
 
-  /** The ambulance that is out was called to (x, z): the crew kneel there while it loads (calls waiting their turn change nothing). */
+  /** A call for someone down at (x, z): a client's crew go there when the host's log says an ambulance was `sent` (none is while one is already out). */
+  call(x: number, z: number, sent: boolean): void {
+    if (sent) this.setScene(x, z);
+  }
+
+  /** The ambulance that is out was called to (x, z): the crew kneel there while it loads (the host reads it from the traffic; calls waiting their turn change nothing). */
   setScene(x: number, z: number): void {
     this.sceneX = x;
     this.sceneZ = z;
