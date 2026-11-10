@@ -121,7 +121,7 @@ export type OpenWorldPorts = {
   /** The signage of `places`, in the scene. */
   makeSigns(places: readonly Place[]): PlaceSigns;
   /** What the police need of the engine (the course's solids, a busted player, the light bars, sight lines past the buildings); absent: no police. */
-  law?: Pick<LawEnginePorts, "solids" | "playerBusted" | "sirens" | "lineOfSight" | "footBusted">;
+  law?: Pick<LawEnginePorts, "solids" | "playerBusted" | "sirens" | "lineOfSight" | "footArrest">;
   /** What culling reads of the engine. */
   cull: OpenWorldCullPorts;
   /** The dummies' world the civilians near a player have bodies in; absent: they are drawn by the crowd's art alone. */
@@ -578,7 +578,7 @@ export class OpenWorldDirector {
   private makeLaw(map: OpenWorldMap, crowd: CivilianCrowd, seed: number): OpenWorldLaw | null {
     const extra = this.ports.law;
     if (extra === undefined) return null;
-    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, foot: (out) => this.ports.foot(out), footBusted: () => extra.footBusted(), cars: () => this.ports.cars() }, seed);
+    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => this.ports.makeArt(capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, foot: (out) => this.ports.foot(out), footArrest: extra.footArrest, cars: () => this.ports.cars() }, seed);
   }
 
   /** The Auto camera over this crowd: its cars (the traffic's drivers), its foot cops and the viewers' own cars left out. */

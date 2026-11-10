@@ -1,5 +1,5 @@
-/** Where the player is in the get out, walk, get in cycle. */
-export type OnFootPhase = "inCar" | "exiting" | "onFoot" | "entering";
+/** Where the player is in the get out, walk, get in cycle; `arrested`: the law has him (open world), and nothing he presses acts until it sets him down. */
+export type OnFootPhase = "inCar" | "exiting" | "onFoot" | "entering" | "arrested";
 export type OnFootRefusal = "tooFast" | "doorBlocked" | "noCarInReach" | "busy";
 /** What one press or tick changed, for the engine to act on. */
 export type OnFootStep = "none" | "exitStarted" | "standing" | "enterStarted" | "seated" | "refused";
@@ -33,7 +33,7 @@ export class OnFootFlow {
 
   press(sense: OnFootSense): OnFootStep {
     this.refusal = null;
-    if (this.phase === "exiting" || this.phase === "entering") return this.refuse("busy");
+    if (this.phase === "exiting" || this.phase === "entering" || this.phase === "arrested") return this.refuse("busy");
     if (this.phase === "inCar") return this.pressInCar(sense);
     return this.pressOnFoot(sense);
   }
@@ -66,6 +66,20 @@ export class OnFootFlow {
   reset(): void {
     this.phase = "inCar";
     this.car = -1;
+    this.refusal = null;
+    this.seconds = 0;
+  }
+
+  /** The law has him: the car he left or was entering stays the one he may get back into once it sets him down. */
+  arrest(): void {
+    this.phase = "arrested";
+    this.refusal = null;
+    this.seconds = 0;
+  }
+
+  /** The law has set him down: on foot again. */
+  released(): void {
+    this.phase = "onFoot";
     this.refusal = null;
     this.seconds = 0;
   }

@@ -75,6 +75,10 @@ export class TrafficPatrolPorts {
     return to >= 0 && this.traffic.redirect(this.leased[handle]!, to);
   }
 
+  carIndex(handle: number): number {
+    return this.leased[handle]!.index;
+  }
+
   snap(handle: number): AiCar {
     return this.traffic.snaps[this.leased[handle]!.index]!;
   }

@@ -88,6 +88,8 @@ const ENTER_PULL_BACK = 1.35;
 const STRIKE_COOLDOWN = 0.6;
 /** Seconds a refusal stays on the prompt. */
 const REFUSAL_SECONDS = 2;
+/** Led by the law he walks at `WALK_SPEED` (a hair over the cop's escort pace) to where his cop leads him, and stands once within this far (m) of it. */
+const LED_REACH = 0.5;
 
 const REFUSAL_TEXT: Record<OnFootRefusal, string> = {
   tooFast: "Stop the car first",
@@ -136,6 +138,9 @@ export class OnFootDirector {
   private refusalLeft = 0;
   /** Whether his car's door is in reach this frame, for the prompt. */
   private reach = false;
+  /** Where his cop leads him while the law has him on foot (`lead`). */
+  private ledX = 0;
+  private ledZ = 0;
 
   constructor(host: OnFootHost) {
     this.host = host;
@@ -181,6 +186,47 @@ export class OnFootDirector {
     this.framed = false;
     this.refusal = null;
     return true;
+  }
+
+  /** The law has him (open world, host and solo): his walker is led where it takes him and nothing he presses acts until it sets him down (`deliver`). */
+  arrest(): void {
+    if (!this.flow.active) return;
+    this.flow.arrest();
+    this.refusal = null;
+    if (this.host.ragdolls.walkerTorso(_torso)) this.lead(_torso.x, _torso.z);
+  }
+
+  /** His cop leads him to (x, z): his walker walks there until a patrol car takes him. */
+  lead(x: number, z: number): void {
+    this.ledX = x;
+    this.ledZ = z;
+  }
+
+  /** Patrol car `carIndex` has him aboard: his walker is gone from the street and the camera follows the car. */
+  take(carIndex: number): void {
+    if (this.flow.phase !== "arrested") return;
+    this.endView();
+    this.host.ragdolls.stopWalker();
+    this.host.seat.focus(carIndex);
+  }
+
+  /** The law sets him down at (x, z) facing `yaw`: he stands there, his own car brought to the road nearest, and the controls are his again. */
+  deliver(x: number, z: number, yaw: number): void {
+    const { ragdolls, seat } = this.host;
+    if (this.flow.phase !== "arrested") return;
+    const car = this.flow.car;
+    if (!this.host.freshCarNear(car, x, z, yaw)) this.host.respawn();
+    this.endView();
+    ragdolls.stopWalker();
+    const ground = activeGround().heightAt(x, z);
+    _spot.set(x, ground === NO_FLOOR ? 0 : ground, z);
+    seat.focus(car);
+    if (ragdolls.startWalker(_spot, yaw, { cop: false, look: this.host.look() }) >= 0) {
+      this.flow.released();
+      return;
+    }
+    this.reset();
+    seat.mode = "drive";
   }
 
   /** View (V, T, C, the pad's Y, the HUD's camera) on foot: over the shoulder to his eyes and back. Nothing while he climbs in or out. */
@@ -326,6 +372,10 @@ export class OnFootDirector {
     this.refusalLeft = Math.max(0, this.refusalLeft - wallDt);
     if (!flow.active) return;
     const { ragdolls } = this.host;
+    if (flow.phase === "arrested") {
+      this.walkLed();
+      return;
+    }
     if (!ragdolls.walker.active || this.lost()) {
       ragdolls.stopWalker();
       this.reset();
@@ -339,6 +389,20 @@ export class OnFootDirector {
     const car = flow.car;
     this.finish(flow.tick(wallDt), car);
     this.reach = flow.phase === "onFoot" && ragdolls.walkerTorso(_torso) && this.carInReach(this.host.cars()) >= 0;
+  }
+
+  /** In custody on foot (no patrol car has him yet): his walker walks to where his cop leads him, whatever he presses. */
+  private walkLed(): void {
+    const { ragdolls } = this.host;
+    const walker = ragdolls.walker;
+    if (!walker.active || !ragdolls.walkerTorso(_torso)) return;
+    if (hypot2(this.ledX - _torso.x, this.ledZ - _torso.z) < LED_REACH) {
+      walker.command = 0;
+      return;
+    }
+    walker.heading = detAtan2(this.ledX - _torso.x, this.ledZ - _torso.z);
+    walker.command = WALK_SPEED;
+    walker.ask();
   }
 
   /** A car moving fast enough over him (`runsDown`, the lawn guards' and the VIP's rule) throws him with the same launch (`fell`): he goes ragdoll. */
@@ -539,6 +603,7 @@ export class OnFootDirector {
     const refused = this.refusalText();
     if (refused !== null) return refused;
     if (!this.host.available()) return null;
+    if (this.flow.phase === "arrested") return "Under arrest";
     if (this.flow.phase === "onFoot") return this.reach ? "Enter or B: get in" : REFUSAL_TEXT.noCarInReach;
     return this.carAtWheel() !== null ? "Enter or B: get out" : null;
   }

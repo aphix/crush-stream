@@ -3,7 +3,7 @@ import type { OpenWorldMap, WalkGraph } from "../../world/openworld/walk-graph.t
 import { PLACE_NAMES } from "../../world/openworld/openworld-programme.ts";
 import { ACTIVITY, ACTIVITY_SECONDS, ARREST } from "../civilians/civilian-activity.ts";
 import { CAR_DOOR, carDoorOpenness, type DoorSpot } from "../civilians/civilian-car-door.ts";
-import { ESCORT_TO, SUBJECT_MODE, type CaseTable } from "./case-table.ts";
+import { CASE_KIND, ESCORT_TO, SUBJECT_MODE, type CaseTable } from "./case-table.ts";
 import { BESIDE_COP, BOARD_REACH, CAR_BOARD_SECONDS, COPS_PER_CASE, DOOR_APPROACH, CRIME_STEP_SECONDS, ESCORT_AHEAD_DISTANCE, ESCORT_ARRIVE, ESCORT_MIN_DISTANCE, ESCORT_SECONDS, FOOT_COP_COUNT, STATION_ESCORT_SECONDS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
 import { COP_MODE, type FootCops } from "./foot-cops.ts";
 import type { PatrolCars } from "./patrol-cars.ts";
@@ -130,10 +130,15 @@ export class Arrests {
     }
     const arrived = cops.gapTo(cop, cops.aimX[cop]!, cops.aimZ[cop]!) <= ESCORT_ARRIVE;
     if (!arrived && elapsed < (to === ESCORT_TO.station ? STATION_ESCORT_SECONDS : ESCORT_SECONDS)) return;
-    if (to === ESCORT_TO.station && station !== null) this.hooks.raise(caseIndex, slot);
-    table.hold(table.resident[slot]!, seconds);
-    table.free(slot);
-    cops.resume(cop);
+    if ((to === ESCORT_TO.station && station !== null) || table.isPlayerSlot(slot)) this.hooks.raise(caseIndex, slot);
+    this.finishCustody(slot, cop, seconds);
+  }
+
+  /** She is let out of the cop's hands: the crowd keeps her off the street till her next walk, and he runs on for his case. */
+  private finishCustody(slot: number, cop: number, seconds: number): void {
+    this.table.hold(this.table.resident[slot]!, seconds);
+    this.table.free(slot);
+    this.cops.resume(cop);
   }
 
   /** Led to the car's driver's door, which follows the car while it is still coming: at the door, standing, they get in; not there in `CAR_BOARD_SECONDS`, or the car gone, they walk. */
@@ -192,6 +197,11 @@ export class Arrests {
     }
     table.carOf[slot] = -1;
     cars.finishRide(car, seconds);
+    if (mode === SUBJECT_MODE.alighting && table.isPlayerSlot(slot)) {
+      this.hooks.raise(Math.floor(slot / SUBJECTS_PER_CASE), slot);
+      this.finishCustody(slot, cop, seconds);
+      return;
+    }
     this.walkToStation(slot, cop, seconds, station);
   }
 

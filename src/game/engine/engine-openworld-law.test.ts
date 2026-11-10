@@ -6,6 +6,7 @@ import { EVENT_KIND, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "../ai/ci
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { FakeField } from "../ai/openworld-traffic/traffic-world.test-util.ts";
+import { IDLE_FOOT_ARREST } from "../ai/openworld-crime/crime-fixture.test-util.ts";
 import { OpenWorldDirector, type OpenWorldPorts } from "./engine-openworld.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 
@@ -19,7 +20,7 @@ function idleTrafficPorts(): NonNullable<OpenWorldPorts["traffic"]> {
 
 /** The police's engine ports with no course solids, nobody to bust and no light bars. */
 function idleLawPorts(): NonNullable<OpenWorldPorts["law"]> {
-  return { solids: () => null, playerBusted: () => {}, sirens: () => {}, lineOfSight: () => true, footBusted: () => {} };
+  return { solids: () => null, playerBusted: () => {}, sirens: () => {}, lineOfSight: () => true, footArrest: IDLE_FOOT_ARREST };
 }
 
 /** The first person the crowd shows walking (not standing at a place, where the crowd does not move her), or -1. */

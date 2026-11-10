@@ -78,6 +78,15 @@ describe("the patrol cars' cars come from the traffic's pool", () => {
     expect(ports.redirect(slot, 50, 0), "no space near the point").toBe(false);
   });
 
+  // mutation: sed -i 's/    return this.leased\[handle\]!.index;/    return handle;/' src/game/ai/openworld-crime/traffic-patrol-ports.ts
+  it("names a leased car by its place in the engine's list, not by its handle", () => {
+    const { traffic, sirens } = fakeTraffic();
+    const ports = new TrafficPatrolPorts(traffic, sirens);
+    const slot = ports.lease(0, 0);
+    expect(ports.carIndex(slot), "the engine's car").toBe(PATROL_CAR_INDEX);
+    expect(slot, "control: the handle is another number").not.toBe(PATROL_CAR_INDEX);
+  });
+
   it("stops a traffic car through its handle and leaves the player's car alone", () => {
     const { traffic, driven, sirens } = fakeTraffic();
     const ports = new TrafficPatrolPorts(traffic, sirens);

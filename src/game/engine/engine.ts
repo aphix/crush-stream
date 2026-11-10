@@ -493,9 +493,11 @@ export class CrashEngine extends EngineGarage {
       law: {
         solids: () => this.race.courseObstacles(),
         playerBusted: (carIndex) => this.race.resetLobbyCar(carIndex),
-        footBusted: () => {
-          this.onFoot.resetIntoCar();
-          this.race.resetLobbyCar(this.race.self);
+        footArrest: {
+          busted: () => this.onFoot.arrest(),
+          led: (x, z) => this.onFoot.lead(x, z),
+          taken: (carIndex) => this.onFoot.take(carIndex),
+          delivered: (x, z, yaw) => this.onFoot.deliver(x, z, yaw),
         },
         sirens: (id, on) => {
           const car = this.cars[id];

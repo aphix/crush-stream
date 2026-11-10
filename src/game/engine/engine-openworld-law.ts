@@ -8,7 +8,7 @@ import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { CrimeScene } from "../ai/openworld-crime/crime-scene.ts";
 import { COP_LOOK, FACING_SPEED, FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
-import type { LineOfSight } from "../ai/openworld-crime/offence-source.ts";
+import type { FootArrestPorts, LineOfSight } from "../ai/openworld-crime/offence-source.ts";
 import { StateOffenceSource } from "../ai/openworld-crime/state-offence-source.ts";
 import { TrafficPatrolPorts, type TrafficApi } from "../ai/openworld-crime/traffic-patrol-ports.ts";
 import { TrafficSignals } from "../ai/openworld-crime/traffic-signals.ts";
@@ -44,8 +44,8 @@ export type LawEnginePorts = {
   playerBusted(carIndex: number, seconds: number): void;
   /** Where the player on foot stands and how fast he moves (m/s); false while he is in a car. */
   foot(out: { x: number; z: number; velocityX: number; velocityZ: number }): boolean;
-  /** The player on foot was held by a cop for the bust hold: the engine's arrest of him. */
-  footBusted(): void;
+  /** The player on foot was held by a cop for the bust hold: the engine's arrest of him (his walker led to a patrol car and the station, then set down). */
+  footArrest: FootArrestPorts;
   /** The engine's cars, which run the foot cops down as they do civilians. */
   cars(): readonly DeformableCar[];
 };
@@ -77,7 +77,7 @@ export class OpenWorldLaw {
         bust: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.bust, resident, seconds),
         jaywalked: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.jaywalk, resident, seconds),
         copDown: (cop, seconds) => crowd.raiseEvent(EVENT_KIND.copDown, cop, seconds),
-        footBusted: () => ports.footBusted(),
+        footArrest: ports.footArrest,
         // Every peer builds the signals from the layout (the traffic is the host's only), so every peer's cops see the same jaywalkers.
         signals: new TrafficSignals(buildRoadNetwork(openWorldGeometry(LAYOUT))),
         playerBusted: ports.playerBusted, cars: traffic === null ? null : new TrafficPatrolPorts(traffic, ports.sirens), obstacles: ports.solids(), playerBustSeconds: SURVIVAL.bustTime,

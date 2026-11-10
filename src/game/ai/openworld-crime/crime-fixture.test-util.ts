@@ -6,7 +6,7 @@ import { CRIME_HZ, FOOT_COP_COUNT } from "./crime-constants.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import { CrimeScene, type CrimePorts } from "./crime-scene.ts";
 import { FakeStreet } from "./crime-street.test-util.ts";
-import type { LineOfSight, Spot, Walk } from "./offence-source.ts";
+import type { FootArrestPorts, LineOfSight, Spot, Walk } from "./offence-source.ts";
 
 /** Nodes of the line city, 10 m apart from x = 0 to x = 120 on z = 0. */
 export const LINE_NODES = 13;
@@ -172,8 +172,11 @@ export type Harness = {
   jaywalks: Bust[];
   /** Foot cops the host's hit test ran down (cop number and crowd second), and the engine's cars it tests. */
   copDowns: Bust[];
-  /** The crowd seconds the player on foot was busted at. */
+  /** The crowd seconds the player on foot was busted at, where his cop led him on the way, the patrol cars that took him (engine indexes) and where he was set down. */
   footBusts: number[];
+  footLed: Spot[];
+  footTaken: number[];
+  footDelivered: { x: number; z: number; yaw: number }[];
   cars: DeformableCar[];
   signals: FixtureSignals;
   playerBusts: number[];
@@ -199,6 +202,9 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
   const jaywalks: Bust[] = [];
   const copDowns: Bust[] = [];
   const footBusts: number[] = [];
+  const footLed: Spot[] = [];
+  const footTaken: number[] = [];
+  const footDelivered: { x: number; z: number; yaw: number }[] = [];
   const signals = new FixtureSignals();
   const playerBusts: number[] = [];
   const street = options.withCars ? new FakeStreet() : null;
@@ -209,7 +215,12 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
     },
     jaywalked: (resident, seconds) => void jaywalks.push({ resident, seconds }),
     copDown: (cop, seconds) => void copDowns.push({ resident: cop, seconds }),
-    footBusted: (seconds) => void footBusts.push(seconds),
+    footArrest: {
+      busted: (seconds) => void footBusts.push(seconds),
+      led: (x, z) => void footLed.push({ x, z }),
+      taken: (carIndex) => void footTaken.push(carIndex),
+      delivered: (x, z, yaw) => void footDelivered.push({ x, z, yaw }),
+    },
     signals,
     playerBusted: (carIndex) => void playerBusts.push(carIndex),
     cars: street,
@@ -219,8 +230,11 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
   };
   const scene = new CrimeScene(lineCity(options.station ?? false), offences, ports, options.seed ?? 7);
   for (let cop = 0; cop < FOOT_COP_COUNT - 1; cop++) scene.foot.walkers.place(cop, copX[cop] ?? 0, 0);
-  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, copDowns, footBusts, cars: [], signals, playerBusts, street, now: 0, authority: options.authority ?? true };
+  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, copDowns, footBusts, footLed, footTaken, footDelivered, cars: [], signals, playerBusts, street, now: 0, authority: options.authority ?? true };
 }
+
+/** The player's arrest ports for a harness that does not look at them. */
+export const IDLE_FOOT_ARREST: FootArrestPorts = { busted: () => {}, led: () => {}, taken: () => {}, delivered: () => {} };
 
 /** Runs the harness `seconds` more: each step the crowd's poses are written where the society stands the residents (the crowd's own step), the street's cars drive, then the law steps. */
 export function runFor(harnessed: Harness, seconds: number): void {

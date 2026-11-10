@@ -7,6 +7,7 @@ import { stationOf } from "./arrests.ts";
 import { FootLaw } from "./foot-law.ts";
 import { FootWalkers } from "./foot-walkers.ts";
 import type { OffenceSource, Spot, Walk } from "./offence-source.ts";
+import { IDLE_FOOT_ARREST } from "./crime-fixture.test-util.ts";
 import { realMap, type RealMap } from "./real-map.test-util.ts";
 
 const real: RealMap = realMap();
@@ -67,7 +68,7 @@ class Scene {
     this.law = new FootLaw(
       real.map,
       source,
-      { bust: (resident) => this.raised(resident), jaywalked: () => {}, copDown: () => {}, footBusted: () => {} },
+      { bust: (resident) => this.raised(resident), jaywalked: () => {}, copDown: () => {}, footArrest: IDLE_FOOT_ARREST },
       { opened: () => {}, closed: () => {}, cars: () => null },
       seed,
       { lineOfSight: sight ? real.sight : null, signals: null, otherCopsSee: null },

@@ -15,7 +15,7 @@ import { Flight } from "./flight.ts";
 import { COP_MODE, FootCops } from "./foot-cops.ts";
 import type { PatrolCars } from "./patrol-cars.ts";
 import { FootWalkers } from "./foot-walkers.ts";
-import type { CrossingSignals, LawPorts, LawSenses, LineOfSight, OffenceSource, OtherCopsSee, Spot, Walk } from "./offence-source.ts";
+import type { CrossingSignals, FootArrestPorts, LawPorts, LawSenses, LineOfSight, OffenceSource, OtherCopsSee, Spot, Walk } from "./offence-source.ts";
 
 /** What the patrol cars need of the cases: to hear of them, to be let go when their case no longer needs them, and the cars themselves (null: the law is on foot) for the arrested to be driven to the station in. */
 interface LawHooks {
@@ -50,7 +50,8 @@ export class FootLaw {
   private readonly otherCopsSee: OtherCopsSee | null;
   /** The player on foot under the law (host and solo only). */
   readonly player: PlayerLaw;
-  private readonly arrests: Arrests;
+  /** The cuffed's walk to a patrol car and the station: the player's custody (`PlayerLaw`) takes it too. */
+  readonly arrests: Arrests;
   private readonly fights: FightRules;
   private readonly walk: Walk = { x: 0, z: 0, dirX: 0, dirZ: 1 };
   private readonly spot: Spot = { x: 0, z: 0 };
@@ -97,10 +98,14 @@ export class FootLaw {
     return this.copSees(x, z, COP_SIGHT) || (this.otherCopsSee?.(x, z, COP_SIGHT) ?? false);
   }
 
-  /** The player on foot was held by the cops long enough (`PlayerLaw`): the host's arrest of him. */
-  footBusted(): void {
-    this.stats.busts++;
-    if (this.authority) this.ports.footBusted(this.seconds);
+  /** The host's word to the engine about the player on foot in custody (`PlayerLaw`); null on a peer that raises no events. */
+  get arrestPorts(): FootArrestPorts | null {
+    return this.authority ? this.ports.footArrest : null;
+  }
+
+  /** Patrol car `carSlot`'s place in the engine's list of cars, -1 when the law has no cars. */
+  carIndexOf(carSlot: number): number {
+    return this.hooks.cars()?.carIndexOf(carSlot) ?? -1;
   }
 
   /** Whether nothing solid stands between cop `cop`'s eyes and a person at (x, z). */
@@ -511,11 +516,13 @@ export class FootLaw {
     this.table.free(slot);
   }
 
-  /** The host's arrest of the suspect of subject slot `slot`: a jaywalker's or a bust. */
+  /** The host's arrest of the suspect of subject slot `slot`: a jaywalker's or a bust; for the player on foot, the end of his custody. */
   private raiseArrest(caseIndex: number, slot: number): void {
     if (!this.authority) return;
     const resident = this.table.resident[slot]!;
-    if (this.table.kind[caseIndex] === CASE_KIND.jaywalk) this.ports.jaywalked(resident, this.seconds);
+    const kind = this.table.kind[caseIndex];
+    if (kind === CASE_KIND.player) this.player.deliver(slot);
+    else if (kind === CASE_KIND.jaywalk) this.ports.jaywalked(resident, this.seconds);
     else this.ports.bust(resident, this.seconds);
   }
 
@@ -524,9 +531,10 @@ export class FootLaw {
     this.arrests.alight(carSlot, this.seconds);
   }
 
-  /** The suspect walks on: no arrest, nobody kept off the street. */
+  /** The suspect walks on: no arrest, nobody kept off the street. The player on foot is set down where his cop stood with him. */
   private letGo(slot: number): void {
     this.stats.lost++;
+    if (this.table.isPlayerSlot(slot)) this.player.deliver(slot);
     this.table.free(slot);
   }
 

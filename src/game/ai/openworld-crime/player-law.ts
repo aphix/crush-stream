@@ -1,14 +1,13 @@
 import { tickAt } from "../civilians/civilian-clock.ts";
-import { CASE_KIND } from "./case-table.ts";
+import { CASE_KIND, SUBJECT_MODE } from "./case-table.ts";
 import { CRIME_STEP_SECONDS, COPS_PER_CASE, FOOT_HOLD_REACH, FOOT_HOLD_SPEED, PLAYER_CHASE_GIVE_UP_SECONDS } from "./crime-constants.ts";
 import type { CrossingWatch } from "./crossing-watch.ts";
 import type { FootLaw } from "./foot-law.ts";
 import type { CrossingSignals, FootBody, Walk } from "./offence-source.ts";
 
 /**
- * The player on foot under the law, like a resident: crossing against the signal where a cop sees him, shoving someone a cop sees (or who turns on him, reported) makes him wanted: foot cops are called and
- * run at him wherever he goes, and a cop beside him while he stands (or creeps, under `FOOT_HOLD_SPEED`) holds him: the bust hold runs as a driver's does in a car, resets when he moves off, and ends in `footBusted`
- * when it is full. He is not a resident (no row of the society's, no drawing of the law's): his own walker is where he is. Only the peer whose walker it is judges him (`FootBody.present`).
+ * The player on foot under the law, like a resident but with no row or drawing of the law's (his walker is where he is): an offence a cop sees, or a fight he started, sets the foot cops on him, and one beside him while
+ * he stands (or creeps, under `FOOT_HOLD_SPEED`) runs the bust hold as a driver's does. A full hold puts him in that cop's custody (`arrest`). Only the peer whose walker it is judges him (`FootBody.present`).
  */
 export class PlayerLaw {
   readonly body: FootBody = { present: false, x: 0, z: 0, dirX: 0, dirZ: 1, speed: 0 };
@@ -24,6 +23,9 @@ export class PlayerLaw {
   private onCrossing = false;
   private walks = 0;
   private stoppedWalk = -1;
+  /** Whether a cop has him in custody (his case's first subject slot runs `Arrests`), and whether the engine has been told a patrol car has him aboard. */
+  private arrested = false;
+  private taken = false;
 
   constructor(law: FootLaw, crossings: CrossingWatch, signals: CrossingSignals | null, bustSeconds: number) {
     this.law = law;
@@ -83,10 +85,14 @@ export class PlayerLaw {
     this.open(seconds, this.law.cops.nearestFree(body.x, body.z));
   }
 
-  /** One grid step of his chase `caseIndex`: the cops aim where he is, the hold runs while one stands beside him and he is slow, and it ends in the bust, his escape or his getting into a car. */
+  /** One grid step of his chase `caseIndex`: the cops aim where he is and the hold runs while one stands beside him and he is slow; it ends in his arrest, his escape or his getting into a car. In custody: the cop's lead of him. */
   step(caseIndex: number, seconds: number): void {
     const { body } = this;
     const { table, cops } = this.law;
+    if (this.arrested) {
+      this.stepCustody(table.slotOf(caseIndex, 0));
+      return;
+    }
     if (!body.present || seconds - this.since > PLAYER_CHASE_GIVE_UP_SECONDS) {
       this.close();
       return;
@@ -95,22 +101,63 @@ export class PlayerLaw {
     table.spotX[slot] = body.x;
     table.spotZ[slot] = body.z;
     let nearest = Infinity;
+    let nearestCop = -1;
     for (let index = 0; index < COPS_PER_CASE; index++) {
       const cop = table.copAt(caseIndex, index);
       if (cop < 0 || !cops.onStreet(cop)) continue;
       cops.aimX[cop] = body.x;
       cops.aimZ[cop] = body.z;
-      nearest = Math.min(nearest, cops.gapTo(cop, body.x, body.z));
+      const gap = cops.gapTo(cop, body.x, body.z);
+      if (gap >= nearest) continue;
+      nearest = gap;
+      nearestCop = cop;
     }
     this.heldFor = nearest <= FOOT_HOLD_REACH && body.speed < FOOT_HOLD_SPEED ? this.heldFor + CRIME_STEP_SECONDS : 0;
     if (this.heldFor < this.bustSeconds) return;
-    this.law.footBusted();
-    this.close();
+    this.arrest(caseIndex, slot, nearestCop, seconds);
+  }
+
+  /** Held the whole hold by cop `cop`: he leads the player to a patrol car and the station as he leads a suspect, and the engine hears it. */
+  private arrest(caseIndex: number, slot: number, cop: number, seconds: number): void {
+    const { table, stats, arrests, arrestPorts } = this.law;
+    stats.busts++;
+    arrestPorts?.busted(seconds);
+    this.arrested = true;
+    this.heldFor = 0;
+    table.holder[slot] = cop;
+    table.carOf[slot] = -1;
+    table.tookDown[slot] = 0;
+    arrests.escort(caseIndex, slot, seconds);
+  }
+
+  /** Once a grid step in custody: the engine is told where his cop leads him, then that a patrol car has him aboard; the case ends once the law has set him down. */
+  private stepCustody(slot: number): void {
+    const { table, walkers, arrestPorts } = this.law;
+    const mode = table.mode[slot]!;
+    if (mode === SUBJECT_MODE.free) {
+      this.close();
+      return;
+    }
+    if (mode !== SUBJECT_MODE.conveyed) {
+      const walker = this.law.walkerOf(slot);
+      arrestPorts?.led(walkers.x[walker]!, walkers.z[walker]!);
+      return;
+    }
+    if (this.taken) return;
+    this.taken = true;
+    arrestPorts?.taken(this.law.carIndexOf(table.carOf[slot]!));
+  }
+
+  /** His custody is over (the patrol car brought him to the station, the cop walked him to its door, or a car ran the cop down): the engine sets him down where his cop stood with him. */
+  deliver(slot: number): void {
+    const { walkers, arrestPorts } = this.law;
+    const walker = this.law.walkerOf(slot);
+    arrestPorts?.delivered(walkers.x[walker]!, walkers.z[walker]!, walkers.yaw[walker]!);
   }
 
   /** The chase as the pursuit strip shows it: the cops after him and the hold run so far; false with no chase open. */
   chaseOf(out: { cops: number; hold: number; left: number }): boolean {
-    if (this.caseIndex < 0) return false;
+    if (this.caseIndex < 0 || this.arrested) return false;
     const { table, cops } = this.law;
     let count = 0;
     for (let index = 0; index < COPS_PER_CASE; index++) {
@@ -145,6 +192,8 @@ export class PlayerLaw {
     const caseIndex = this.caseIndex;
     this.caseIndex = -1;
     this.heldFor = 0;
+    this.arrested = false;
+    this.taken = false;
     this.law.closeCase(caseIndex);
   }
 }

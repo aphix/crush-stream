@@ -20,6 +20,8 @@ export interface PatrolCarPorts {
   arrived(handle: number): boolean;
   /** Re-plans the leased car's street trip from where it is to the kerb nearest (x, z); false (trip kept) when it cannot. */
   redirect(handle: number, toX: number, toZ: number): boolean;
+  /** The leased car's place in the engine's list of cars. */
+  carIndex(handle: number): number;
   snap(handle: number): AiCar;
   /** The patrol cars the foot cops may have parked of their own (0: none, the pool has no spare). */
   readonly homeCars: number;
@@ -151,6 +153,11 @@ export class PatrolCars {
   isStill(slot: number): boolean {
     const car = this.ports.snap(this.handle[slot]!);
     return hypot2(car.vx, car.vz) < CRAWL;
+  }
+
+  /** Car `slot`'s place in the engine's list of cars. */
+  carIndexOf(slot: number): number {
+    return this.ports.carIndex(this.handle[slot]!);
   }
 
   /** Where a person at car `slot`'s driver's door stands, into `out`. */

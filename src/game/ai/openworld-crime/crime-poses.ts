@@ -72,7 +72,7 @@ export function fillCopPoses(law: FootLaw, poses: CrowdPoses, share: number): vo
   for (let slot = 0; slot < table.mode.length; slot++) {
     const mode = table.mode[slot]!;
     const holder = table.holder[slot]!;
-    if (table.resident[slot]! < 0 || holder < 0 || table.tookDown[slot] === 1) continue;
+    if (holder < 0 || table.tookDown[slot] === 1) continue;
     if (mode === SUBJECT_MODE.gripped) writeArrestActivity(law, slot, ACTIVITY.arresting, poses, holder);
     else if (mode === SUBJECT_MODE.escorted) writeArrestActivity(law, slot, ACTIVITY.escorting, poses, holder);
     else if (mode === SUBJECT_MODE.boarding || mode === SUBJECT_MODE.alighting) writeArrestActivity(law, slot, suspectActivity(mode), poses, holder);

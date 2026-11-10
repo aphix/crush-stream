@@ -104,6 +104,11 @@ export class CaseTable {
     return caseIndex * SUBJECTS_PER_CASE + index;
   }
 
+  /** Whether subject slot `slot` is the player on foot's, held in custody: his case has no resident row. */
+  isPlayerSlot(slot: number): boolean {
+    return this.kind[Math.floor(slot / SUBJECTS_PER_CASE)] === CASE_KIND.player;
+  }
+
   /** Cop slot `index` of case `caseIndex`: the foot cop's number or -1. */
   copAt(caseIndex: number, index: number): number {
     return this.cops[caseIndex * COPS_PER_CASE + index]!;
@@ -139,8 +144,9 @@ export class CaseTable {
     return held;
   }
 
-  /** Keeps `resident` out of the drawn crowd from crowd second `seconds` until their next walk begins; the oldest hold is dropped when full. */
+  /** Keeps `resident` out of the drawn crowd from crowd second `seconds` until their next walk begins; the oldest hold is dropped when full. No one (-1: the player in custody has no row) is kept. */
   hold(resident: number, seconds: number): void {
+    if (resident < 0) return;
     this.heldResident[this.heldNext] = resident;
     this.heldSince[this.heldNext] = seconds;
     this.heldNext = (this.heldNext + 1) % MAX_HELD;

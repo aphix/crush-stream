@@ -42,6 +42,18 @@ export interface OffenceSource {
   reportDoneTick(resident: number): number;
 }
 
+/** What the engine does for the player on foot the cops arrest (host and solo only; called only with authority). */
+export interface FootArrestPorts {
+  /** He was held slow beside a cop long enough, at crowd second `seconds`: the cop has him, and his walker is the cop's to lead. */
+  busted(seconds: number): void;
+  /** Where the cop leads him now: his walker goes there, on the way to a patrol car or to the station. */
+  led(x: number, z: number): void;
+  /** Patrol car `carIndex` (the engine's list) has him aboard: he is off the street. */
+  taken(carIndex: number): void;
+  /** The law sets him down at (x, z) facing `yaw`: at the patrol car's door at the station, or where a cop run down let him go. */
+  delivered(x: number, z: number, yaw: number): void;
+}
+
 /** What the law does to the world: the host's events, called only with authority. */
 export interface LawPorts {
   bust(resident: number, seconds: number): void;
@@ -50,5 +62,5 @@ export interface LawPorts {
   /** Foot cop `cop` run down by a car. */
   copDown(cop: number, seconds: number): void;
   /** The player on foot was held slow beside a cop long enough: his arrest is the engine's. */
-  footBusted(seconds: number): void;
+  footArrest: FootArrestPorts;
 }

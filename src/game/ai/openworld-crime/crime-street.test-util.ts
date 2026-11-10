@@ -93,6 +93,10 @@ export class FakeStreet {
     return true;
   }
 
+  carIndex(handle: number): number {
+    return handle;
+  }
+
   snap(handle: number): AiCar {
     return this.snaps[handle]!;
   }
