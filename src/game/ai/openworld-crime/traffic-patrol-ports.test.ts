@@ -17,6 +17,9 @@ function fakeTraffic() {
   const traffic: TrafficApi = {
     parkingSpots: { count: 5, x: [0, 40, PATROL_START_DISTANCE, 200, 300], z: [0, 0, 0, 0, 0] },
     snaps: [blankAiCar(0), blankAiCar(1), blankAiCar(2)],
+    patrolPool: 2,
+    driverDoorSpotOf: () => false,
+    openDriverDoor: () => undefined,
     nearestSpot: () => 0,
     onRedLightRun: () => () => undefined,
     spawnDrivenCar: (resident, from, to, options) => {

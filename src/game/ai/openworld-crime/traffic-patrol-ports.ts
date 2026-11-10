@@ -1,6 +1,7 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import type { AiCar } from "../derby-ai.ts";
-import { MAX_PATROL_CARS, PATROL_START_DISTANCE } from "./crime-constants.ts";
+import type { DoorSpot } from "../civilians/civilian-car-door.ts";
+import { HOME_CARS, MAX_PATROL_CARS, PATROL_SLOTS, PATROL_START_DISTANCE } from "./crime-constants.ts";
 import type { CarDriver } from "./patrol-cars.ts";
 
 /** A car the traffic leased: its engine index and the driver slot the traffic applies when it is set (null: its own trip driver). */
@@ -10,6 +11,11 @@ export type LeasedCar = { readonly index: number; readonly arrived: boolean; dri
 export type TrafficApi = {
   readonly parkingSpots: { readonly count: number; readonly x: ArrayLike<number>; readonly z: ArrayLike<number> };
   readonly snaps: readonly AiCar[];
+  /** How many pool cars the law may lease. */
+  readonly patrolPool: number;
+  /** Where a person at the driver's door of car `carIndex` stands, into `out`; false for a car not in the field. */
+  driverDoorSpotOf(carIndex: number, out: DoorSpot): boolean;
+  openDriverDoor(carIndex: number, radians: number): void;
   nearestSpot(x: number, z: number): number;
   /** Calls `listener` for every car that runs a red light until the returned function is called. */
   onRedLightRun(listener: (carIndex: number, x: number, z: number, seconds: number) => void): () => void;
@@ -28,12 +34,25 @@ export type TrafficApi = {
 export class TrafficPatrolPorts {
   private readonly traffic: TrafficApi;
   private readonly sirens: (carIndex: number, on: boolean) => void;
-  private readonly leased: (LeasedCar | null)[] = Array.from({ length: MAX_PATROL_CARS }, () => null);
+  private readonly leased: (LeasedCar | null)[] = Array.from({ length: PATROL_SLOTS }, () => null);
 
   /** `sirens` turns car `carIndex` of the engine's list's light bar on or off (a police body's). */
   constructor(traffic: TrafficApi, sirens: (carIndex: number, on: boolean) => void) {
     this.traffic = traffic;
     this.sirens = sirens;
+  }
+
+  /** Cars the foot cops may have of their own: the pool's cars past the ones a case calls. */
+  get homeCars(): number {
+    return Math.max(0, Math.min(HOME_CARS, this.traffic.patrolPool - MAX_PATROL_CARS));
+  }
+
+  doorSpot(handle: number, out: DoorSpot): boolean {
+    return this.traffic.driverDoorSpotOf(this.leased[handle]!.index, out);
+  }
+
+  openDoor(handle: number, radians: number): void {
+    this.traffic.openDriverDoor(this.leased[handle]!.index, radians);
   }
 
   lease(toX: number, toZ: number): number {

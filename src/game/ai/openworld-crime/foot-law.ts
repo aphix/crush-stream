@@ -4,8 +4,8 @@ import type { OpenWorldMap, WalkGraph } from "../../world/openworld/walk-graph.t
 import { tickAt } from "../civilians/civilian-clock.ts";
 import { FIGHT_PLAYER, NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { PathFinder } from "../civilians/walk-path.ts";
-import { CASE_KIND, CASE_PHASE, CaseTable, SUBJECT_MODE } from "./case-table.ts";
-import { BUST_REACH, CAR_COP, COP_DOWN_SECONDS, COP_SIGHT, JAYWALK_GIVE_UP_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, SEARCH_SECONDS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
+import { CASE_KIND, CASE_PHASE, CaseTable, isHeldMode, SUBJECT_MODE } from "./case-table.ts";
+import { BUST_REACH, CAR_COP, COP_DOWN_SECONDS, COP_SIGHT, JAYWALK_GIVE_UP_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, PATROL_COPS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, SEARCH_SECONDS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
 import { Arrests, stationOf } from "./arrests.ts";
 import { FightRules } from "./fight-rules.ts";
@@ -13,14 +13,15 @@ import { CrossingWatch } from "./crossing-watch.ts";
 import { PlayerLaw } from "./player-law.ts";
 import { Flight } from "./flight.ts";
 import { COP_MODE, FootCops } from "./foot-cops.ts";
+import type { PatrolCars } from "./patrol-cars.ts";
 import { FootWalkers } from "./foot-walkers.ts";
 import type { CrossingSignals, LawPorts, LawSenses, LineOfSight, OffenceSource, OtherCopsSee, Spot, Walk } from "./offence-source.ts";
 
-/** What the patrol cars need of the cases: to hear of them, to be let go when their case no longer needs them, and to drive an arrested suspect to the station. */
+/** What the patrol cars need of the cases: to hear of them, to be let go when their case no longer needs them, and the cars themselves (null: the law is on foot) for the arrested to be driven to the station in. */
 interface LawHooks {
   opened(caseIndex: number, x: number, z: number): void;
   closed(caseIndex: number): void;
-  carry(caseIndex: number, x: number, z: number): boolean;
+  cars(): PatrolCars | null;
 }
 
 /**
@@ -73,8 +74,7 @@ export class FootLaw {
     this.player = new PlayerLaw(this, this.crossings, senses.signals, playerBustSeconds);
     this.arrests = new Arrests(this.walkers, this.cops, this.table, map.graph, stationOf(map), {
       raise: (caseIndex, slot) => this.raiseArrest(caseIndex, slot),
-      carFree: (caseIndex) => hooks.closed(caseIndex),
-      carry: (caseIndex, x, z) => hooks.carry(caseIndex, x, z),
+      cars: () => hooks.cars(),
     });
     this.fights = new FightRules(this.table, this.cops, this.walkers, source, seed, this.stats);
   }
@@ -153,7 +153,7 @@ export class FootLaw {
     const { table } = this;
     for (let slot = 0; slot < table.mode.length; slot++) {
       const mode = table.mode[slot]!;
-      if (table.holder[slot] === cop && (mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted)) this.letGo(slot);
+      if (table.holder[slot] === cop && (isHeldMode(mode) && mode !== SUBJECT_MODE.conveyed)) this.letGo(slot);
     }
     for (let caseIndex = 0; caseIndex < table.phase.length; caseIndex++) {
       for (let index = 0; index < COPS_PER_CASE; index++) if (table.copAt(caseIndex, index) === cop) table.setCop(caseIndex, index, -1);
@@ -182,9 +182,21 @@ export class FootLaw {
       if (brawling ? this.openFight(resident, spell) : this.openCrime(resident, spell)) table.handledSpell[resident] = spell;
     }
     if (this.signals !== null) this.watchCrossings(this.signals);
+    this.keepHomeCars();
     this.player.poll(this.seconds);
     for (let caseIndex = 0; caseIndex < table.phase.length; caseIndex++) {
       if (table.phase[caseIndex] !== CASE_PHASE.free) this.callCops(caseIndex);
+    }
+  }
+
+  /** Each patrolling cop has his own patrol car, parked at the kerb nearest his beat's start (leased as the pool allows). */
+  private keepHomeCars(): void {
+    const cars = this.hooks.cars();
+    if (cars === null) return;
+    const { nodeX, nodeZ } = this.graph;
+    for (let cop = 0; cop < PATROL_COPS; cop++) {
+      const node = this.cops.homeNode(cop);
+      cars.keepHome(cop, nodeX[node]!, nodeZ[node]!, this.seconds);
     }
   }
 
@@ -507,16 +519,9 @@ export class FootLaw {
     else this.ports.bust(resident, this.seconds);
   }
 
-  /** Case `caseIndex`'s patrol car has come to the station with its suspects: they are arrested and gone from the street. */
-  carDelivered(caseIndex: number): void {
-    const { table } = this;
-    for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
-      const slot = table.slotOf(caseIndex, index);
-      if (table.mode[slot] !== SUBJECT_MODE.conveyed) continue;
-      this.raiseArrest(caseIndex, slot);
-      table.hold(table.resident[slot]!, this.seconds);
-      table.free(slot);
-    }
+  /** Patrol car `carSlot` has come to the station: its riders get out at its door. */
+  carDelivered(carSlot: number): void {
+    this.arrests.alight(carSlot, this.seconds);
   }
 
   /** The suspect walks on: no arrest, nobody kept off the street. */
@@ -537,7 +542,7 @@ export class FootLaw {
     for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
       const slot = table.slotOf(caseIndex, index);
       const mode = table.mode[slot]!;
-      if (mode === SUBJECT_MODE.fleeing || mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted || mode === SUBJECT_MODE.conveyed) table.hold(table.resident[slot]!, this.seconds);
+      if (mode === SUBJECT_MODE.fleeing || mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.gripped || isHeldMode(mode)) table.hold(table.resident[slot]!, this.seconds);
       table.free(slot);
     }
     for (let index = 0; index < COPS_PER_CASE; index++) {

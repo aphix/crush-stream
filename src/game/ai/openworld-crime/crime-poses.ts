@@ -1,4 +1,4 @@
-import { ACTIVITY, ACTIVITY_OPEN_ENDED } from "../civilians/civilian-activity.ts";
+import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "../civilians/civilian-activity.ts";
 import { createCrowdPoses, type CrowdPoses } from "../civilians/crowd-poses.ts";
 import { SUBJECT_MODE } from "./case-table.ts";
 import { COP_LOOK, FOOT_COP_COUNT, GRIP_SECONDS } from "./crime-constants.ts";
@@ -26,7 +26,7 @@ export function overlaySuspects(law: FootLaw, poses: CrowdPoses, share: number):
       poses.shown[resident] = 0;
       continue;
     }
-    if (mode !== SUBJECT_MODE.fleeing && mode !== SUBJECT_MODE.gripped && mode !== SUBJECT_MODE.escorted) continue;
+    if (mode !== SUBJECT_MODE.fleeing && mode !== SUBJECT_MODE.gripped && mode !== SUBJECT_MODE.escorted && mode !== SUBJECT_MODE.boarding && mode !== SUBJECT_MODE.alighting) continue;
     const walker = law.walkerOf(slot);
     poses.shown[resident] = 1;
     poses.x[resident] = walkers.drawnX(walker, share);
@@ -35,8 +35,16 @@ export function overlaySuspects(law: FootLaw, poses: CrowdPoses, share: number):
     poses.stride[resident] = walkers.drawnStride(walker, share);
     poses.speed[resident] = walkers.speed[walker]!;
     poses.partner[resident] = -1;
-    writeArrestActivity(law, slot, mode === SUBJECT_MODE.gripped ? ACTIVITY.cuffing : mode === SUBJECT_MODE.escorted ? ACTIVITY.cuffed : ACTIVITY.none, poses, resident);
+    writeArrestActivity(law, slot, suspectActivity(mode), poses, resident);
   }
+}
+
+/** What a suspect in `mode` acts: cuffed, being cuffed, getting into the car or out of it. */
+function suspectActivity(mode: number): number {
+  if (mode === SUBJECT_MODE.gripped) return ACTIVITY.cuffing;
+  if (mode === SUBJECT_MODE.escorted) return ACTIVITY.cuffed;
+  if (mode === SUBJECT_MODE.boarding) return ACTIVITY.carIn;
+  return mode === SUBJECT_MODE.alighting ? ACTIVITY.carOut : ACTIVITY.none;
 }
 
 /** Pose `index` acts `activity` on the clock of subject slot `slot`'s phase (the grip, or the walk away): the grip's clips end with the cuffs, the walk's loop. */
@@ -45,7 +53,8 @@ function writeArrestActivity(law: FootLaw, slot: number, activity: number, poses
   const gripping = activity === ACTIVITY.cuffing || activity === ACTIVITY.arresting;
   const clock = activity === ACTIVITY.none ? 0 : law.seconds - law.table.since[slot]!;
   poses.activityClock[index] = clock;
-  poses.activityLeft[index] = gripping ? Math.max(0, GRIP_SECONDS - clock) : ACTIVITY_OPEN_ENDED;
+  const door = activity === ACTIVITY.carIn ? ACTIVITY_SECONDS.carIn : activity === ACTIVITY.carOut ? ACTIVITY_SECONDS.carOut : 0;
+  poses.activityLeft[index] = gripping ? Math.max(0, GRIP_SECONDS - clock) : door > 0 ? Math.max(0, door - clock) : ACTIVITY_OPEN_ENDED;
 }
 
 /** The foot cops' own poses, blended as the suspects': a cop holding a suspect for the cuffs acts the arrest, one leading her away the escort. */
@@ -66,5 +75,6 @@ export function fillCopPoses(law: FootLaw, poses: CrowdPoses, share: number): vo
     if (table.resident[slot]! < 0 || holder < 0 || table.tookDown[slot] === 1) continue;
     if (mode === SUBJECT_MODE.gripped) writeArrestActivity(law, slot, ACTIVITY.arresting, poses, holder);
     else if (mode === SUBJECT_MODE.escorted) writeArrestActivity(law, slot, ACTIVITY.escorting, poses, holder);
+    else if (mode === SUBJECT_MODE.boarding || mode === SUBJECT_MODE.alighting) writeArrestActivity(law, slot, suspectActivity(mode), poses, holder);
   }
 }

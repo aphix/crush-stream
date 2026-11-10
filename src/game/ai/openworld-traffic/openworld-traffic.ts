@@ -1,4 +1,6 @@
 import { hash01 } from "../../kernel/scalar.ts";
+import { CAR_STYLES } from "../../vehicle/car-variants.ts";
+import { carDoorSpot, type DoorSpot } from "../civilians/civilian-car-door.ts";
 import { MAX_CARS } from "../../scenes/fleet.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
@@ -59,6 +61,8 @@ export class OpenWorldTraffic {
   /** The ids of the patrol cruisers, `patrolFrom` up to `patrolEnd`. */
   private readonly patrolFrom: number;
   private readonly patrolEnd: number;
+  /** How many pool cars the law may lease. */
+  readonly patrolPool: number;
   private sinceFeed = 0;
 
   constructor(places: readonly Place[], ports: TrafficPorts, sight: TrafficSight, size: TrafficSize, feed: CommuterFeed | null) {
@@ -74,6 +78,7 @@ export class OpenWorldTraffic {
     const kerb = Math.min(size.kerb, MAX_CARS - first - movers);
     const patrol = Math.min(size.patrol, movers);
     const ambulance = Math.min(size.ambulance, movers - patrol);
+    this.patrolPool = patrol;
     this.first = first;
     this.total = movers + kerb;
     ports.ensureCars(first + this.total);
@@ -207,6 +212,21 @@ export class OpenWorldTraffic {
     if (spot < 0) return false;
     driverDoorPoint(this.parkingSpots, spot, out);
     return true;
+  }
+
+  /** Where a person at the driver's door of car `carIndex` stands as it stands now, into `out`; false for a car that is not in the field. */
+  driverDoorSpotOf(carIndex: number, out: DoorSpot): boolean {
+    const { ports } = this.context;
+    const car = ports.cars()[carIndex];
+    if (car === undefined || car.stored) return false;
+    carDoorSpot(car.group.position.x, car.group.position.z, car.yaw, ports.groundAt(car.group.position.x, car.group.position.z), CAR_STYLES[car.style.id].seats.front, out);
+    out.feetY = ports.groundAt(out.x, out.z);
+    return true;
+  }
+
+  /** Opens the driver's door of car `carIndex` `radians` (0 shuts it). */
+  openDriverDoor(carIndex: number, radians: number): void {
+    this.context.ports.openDoor(carIndex, radians);
   }
 
   /** The nearest kerb space to (x, z) no car holds. -1 when none is. */
