@@ -185,7 +185,7 @@ function stepBack(state: CityState, resident: number, out: ActivityReading): voi
 function readFlinch(state: CityState, resident: number, out: ActivityReading): void {
   if (intAt(state, resident, RESIDENT_INT.alarmTick) === NEVER_TICK) return;
   scratch.flinch = scratch.clock - intAt(state, resident, RESIDENT_INT.alarmTick) / DECISION_HZ - intAt(state, resident, RESIDENT_INT.alarmDelay) / ALARM_DELAY_STEPS_PER_SECOND;
-  if (scratch.flinch < 0 || scratch.flinch >= ACTIVITY_SECONDS.recoil || !legPose(state, resident, scratch.clock, state.pose)) return;
+  if (scratch.flinch < 0 || scratch.flinch >= ACTIVITY_SECONDS.recoil || !legPose(state, resident, scratch.clock, state.pose) || state.pose.evading) return;
   out.placed = true;
   out.x = state.pose.x;
   out.z = state.pose.z;

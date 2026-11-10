@@ -182,25 +182,25 @@ function spotOf(state: CityState, resident: number, seconds: number): { x: numbe
  * A fight between `victim` and `other` (-1: no civilian) where the victim stood at `seconds`: both stop for it, snapped to the nearest door; people at doors about see it. With a `bearing` the other is the human
  * player who shoved the victim, who turns that way on him.
  */
-export function startFight(state: CityState, victim: number, other: number, seconds: number, tick: number, bearing = NO_BEARING): void {
+export function startFight(state: CityState, victim: number, other: number, seconds: number, tick: number, bearing = NO_BEARING, byCar = false): void {
   if (!isFreePerson(state, victim) || intAt(state, victim, RESIDENT_INT.fightTick) !== NEVER_TICK) return;
   const spot = spotOf(state, victim, seconds);
   const anchor = nearestPlaceTo(state, spot.x, spot.z, NO_PLACE);
   if (anchor === NO_PLACE) return;
   const second = bearing === NO_BEARING && other >= 0 && isFreePerson(state, other) && intAt(state, other, RESIDENT_INT.fightTick) === NEVER_TICK ? other : -1;
-  enterFight(state, victim, bearing !== NO_BEARING ? FIGHT_PLAYER : second, anchor, spot.x, spot.z, tick, bearing);
+  enterFight(state, victim, bearing !== NO_BEARING && !byCar ? FIGHT_PLAYER : second, anchor, spot.x, spot.z, tick, bearing);
   if (second >= 0) enterFight(state, second, victim, anchor, spot.x, spot.z, tick, NO_BEARING);
   raiseFear(state, spot.x, spot.z, FIGHT_FEAR);
   witnessAll(state, anchor, tick, victim, second);
 }
 
 /** A push (by a civilian, a car, or with a `bearing` the human player on foot): the seeded chance that it becomes a fight, small, and several times larger when either civilian is angry. */
-export function applyPush(state: CityState, subject: number, seconds: number, tick: number, bearing: number): void {
+export function applyPush(state: CityState, subject: number, seconds: number, tick: number, bearing: number, byCar: boolean): void {
   const victim = subject % state.capacity;
   const other = Math.floor(subject / state.capacity) - 1;
   const angry = isAngry(state, victim, tick) || (other >= 0 && isAngry(state, other, tick));
   if (residentDraws(state.seed, victim, STREAM.fight, tickAt(seconds))() >= FIGHT_CHANCE * (angry ? FIGHT_ANGRY_FACTOR : 1)) return;
-  startFight(state, victim, other, seconds, tick, bearing);
+  startFight(state, victim, other, seconds, tick, bearing, byCar);
 }
 
 /** A civilian run down in front of someone standing at a door: the seeded chance that they take on the driver. */

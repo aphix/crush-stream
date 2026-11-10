@@ -237,7 +237,7 @@ describe("given the worker's module loaded against a scripted scope", () => {
   });
 
   it("when it is told the city and the tick to reach, then it answers each tick in order, handing over every buffer of each answer", async () => {
-    await hear({ kind: "init", seed: SEED, playableResidents: RESIDENTS, map });
+    await hear({ kind: "init", seed: SEED, playableResidents: RESIDENTS, map, signals: false });
     await hear({ kind: "plan", tick: 4, events: Float64Array.of(EVENT_KIND.wreck, placeNamed(map, PLACE_NAMES.bodega), 1) });
     const ticks: number[] = [];
     for (const entry of sent) {

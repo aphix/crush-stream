@@ -21,6 +21,9 @@ export const CRASH_NODE_REACH = 20;
 export const CRASH_LOCKOUT_SECONDS = 4;
 /** Someone run down who is still down this long after (s) has an ambulance called for them. */
 export const AMBULANCE_DELAY_SECONDS = 6;
+/** With no one out at a door to phone, someone down is looked for again every `AMBULANCE_RETRY_SECONDS` (a passer-by who stops), `AMBULANCE_RETRIES` times at most: then they lie there and no ambulance comes. */
+export const AMBULANCE_RETRY_SECONDS = 8;
+export const AMBULANCE_RETRIES = 8;
 /** Sim seconds the body of a civilian run down lies in the street: past the call, the drive and the loading (a thrown figure's default is 10 s). */
 export const DOWNED_LIFE_SECONDS = 120;
 

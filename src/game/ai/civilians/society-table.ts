@@ -66,6 +66,9 @@ export type InteractionRow = {
   dwell: readonly [number, number];
 };
 
+/** Sitting out on the stoop in the evening, and the hours someone is mugged on theirs: a mugger finds a victim only where one sits, so the muggings run from dusk to the last hour that starts a sit. */
+const STOOP_EVENING = [17, 23] as const;
+const MUG_HOURS = [20, 0] as const;
 const CALM_MOODS = moods(MOOD.fine, MOOD.happy, MOOD.proud, MOOD.lonely, MOOD.restless);
 const LOW_MOODS = moods(MOOD.sad, MOOD.angry, MOOD.annoyed, MOOD.worried, MOOD.restless);
 
@@ -74,13 +77,13 @@ export const INTERACTIONS: readonly InteractionRow[] = [
   { name: "morning coffee out of work", purpose: PURPOSE.coffee, jobs: JOB.jobless | JOB.retired, traits: FLAG.coffeeFan, moods: ANY_MOOD, from: FROM.home, hours: [7, 11], need: -1, needLevel: 0, strength: 0.5, target: TARGET.coffee, dwell: [20, 45] },
   { name: "a drink after work", purpose: PURPOSE.drink, jobs: JOB.employed, traits: FLAG.drinker, moods: ANY_MOOD, from: FROM.work, hours: [17, 3], need: NEED.rest, needLevel: TIRED_REST_LEVEL, strength: 0.8, target: TARGET.bar, dwell: [60, 150] },
   { name: "a drink to forget", purpose: PURPOSE.drink, jobs: JOB.adult, traits: 0, moods: LOW_MOODS, from: FROM.anywhere, hours: [16, 3], need: -1, needLevel: 0, strength: 0.6, target: TARGET.bar, dwell: [45, 120] },
-  { name: "sitting out on the stoop in the evening", purpose: PURPOSE.stoopSit, jobs: JOB.adult, traits: 0, moods: CALM_MOODS, from: FROM.home, hours: [17, 21], need: NEED.social, needLevel: 0.25, strength: 0.5, target: TARGET.ownDoor, dwell: [30, 90] },
+  { name: "sitting out on the stoop in the evening", purpose: PURPOSE.stoopSit, jobs: JOB.adult, traits: 0, moods: CALM_MOODS, from: FROM.home, hours: STOOP_EVENING, need: NEED.social, needLevel: 0.25, strength: 0.5, target: TARGET.ownDoor, dwell: [30, 90] },
   { name: "sitting out on the stoop by day", purpose: PURPOSE.stoopSit, jobs: JOB.retired | JOB.jobless, traits: 0, moods: CALM_MOODS, from: FROM.home, hours: [10, 15], need: NEED.social, needLevel: 0.25, strength: 0.5, target: TARGET.ownDoor, dwell: [30, 90] },
   { name: "a chat with a neighbour", purpose: PURPOSE.stoopTalk, jobs: JOB.adult, traits: 0, moods: moods(MOOD.happy, MOOD.lonely, MOOD.fine, MOOD.proud), from: FROM.home, hours: [10, 20], need: NEED.social, needLevel: 0.4, strength: 0.45, target: TARGET.neighbour, dwell: [10, 25] },
   { name: "a row with a neighbour", purpose: PURPOSE.argue, jobs: JOB.adult, traits: 0, moods: moods(MOOD.angry, MOOD.annoyed), from: FROM.home, hours: [8, 22], need: -1, needLevel: 0, strength: 0.9, target: TARGET.neighbour, dwell: [8, 18] },
   { name: "loitering when broke", purpose: PURPOSE.loiter, jobs: JOB.broke, traits: 0, moods: ANY_MOOD, from: FROM.home, hours: [11, 23], need: -1, needLevel: 0, strength: 0.4, target: TARGET.shopDoor, dwell: [30, 120] },
   { name: "lifting from a shop", purpose: PURPOSE.shoplift, jobs: JOB.criminal, traits: 0, moods: ANY_MOOD, from: FROM.anywhere, hours: [10, 19], need: -1, needLevel: 0, strength: 0.9, target: TARGET.shopWithStaff, dwell: [10, 16] },
-  { name: "mugging someone on their stoop", purpose: PURPOSE.mug, jobs: JOB.criminal, traits: 0, moods: ANY_MOOD, from: FROM.anywhere, hours: [20, 5], need: -1, needLevel: 0, strength: 0.9, target: TARGET.stoopSitter, dwell: [10, 16] },
+  { name: "mugging someone on their stoop", purpose: PURPOSE.mug, jobs: JOB.criminal, traits: 0, moods: ANY_MOOD, from: FROM.anywhere, hours: MUG_HOURS, need: -1, needLevel: 0, strength: 0.9, target: TARGET.stoopSitter, dwell: [10, 16] },
   { name: "trying the parked cars", purpose: PURPOSE.breakIn, jobs: JOB.criminal, traits: 0, moods: ANY_MOOD, from: FROM.anywhere, hours: [22, 5], need: -1, needLevel: 0, strength: 0.9, target: TARGET.parkedCar, dwell: [10, 16] },
   { name: "lying low while wanted", purpose: PURPOSE.flee, jobs: JOB.wanted, traits: 0, moods: ANY_MOOD, from: FROM.anywhere, hours: ALL_DAY, need: -1, needLevel: 0, strength: 1.5, target: TARGET.hideout, dwell: [45, 120] },
 ];

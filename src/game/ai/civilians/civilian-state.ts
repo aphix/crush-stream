@@ -18,11 +18,12 @@ import { LegPose } from "./civilian-leg.ts";
 import type { MapIndex } from "./civilian-map-index.ts";
 import { moodHold, packName } from "./civilian-names.ts";
 import { castHomesOf, newAppointmentSlot, type ResolvedMember } from "./civilian-story.ts";
+import type { PedestrianSignals } from "./civilian-signals.ts";
 import { buildVenueIndex, type VenueIndex } from "./society-venues.ts";
 import { PathFinder } from "./walk-path.ts";
 
 /** A host event waiting for its ticks (`bearing`: the way to the player who shoved, `NO_BEARING` for none): the civilian it hit (or the place) changes at `individualTick`, everyone drawn into it at `reactionTick` (`EVENT_LEAD_TICKS` after it, as late as a peer may hear it) and the society at `societyTick`. */
-type PendingEvent = { kind: number; subject: number; seconds: number; bearing: number; individualTick: number; reactionTick: number; societyTick: number; individualDone: boolean; reactionDone: boolean };
+type PendingEvent = { kind: number; subject: number; seconds: number; bearing: number; byCar: boolean; individualTick: number; reactionTick: number; societyTick: number; individualDone: boolean; reactionDone: boolean };
 
 /** The whole society and crowd of the city as typed arrays; the worker and the main thread each hold one and keep it equal by the same pure steps. */
 export class CityState {
@@ -70,6 +71,8 @@ export class CityState {
   readonly scratchPath: Uint16Array;
   /** The path of a trip by car, built here before it replaces the walk's. */
   readonly carPath: Uint16Array;
+  /** The city's lights for its crossings, or none: walkers wait at kerbs only with them. */
+  signals: PedestrianSignals | null = null;
   /** The reaction steps one alarm has given out (1: taken), so that no two people react on one. */
   readonly alarmSlots: Uint8Array;
   readonly scratchNeeds: Float32Array;

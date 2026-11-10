@@ -14,6 +14,8 @@ import {
   BUMP_CLOSING_SPEED,
   BUMP_COOLDOWN_SECONDS,
   AMBULANCE_DELAY_SECONDS,
+  AMBULANCE_RETRIES,
+  AMBULANCE_RETRY_SECONDS,
   BUMP_DISTANCE,
   CAR_NUDGE_GAP,
   CAR_NUDGE_SPEED,
@@ -45,6 +47,7 @@ import type { CivilianRemote } from "./civilian-remote.ts";
 import { CrowdSeparation } from "./civilian-separation.ts";
 import type { CityState } from "./civilian-state.ts";
 import { type ActivityReading, readActivity } from "./society-activity.ts";
+import { ambulanceCaller } from "./society-alarm.ts";
 import { CrimeDesk } from "./society-crime.ts";
 import { CrowdWalkers } from "./crowd-walkers.ts";
 import { createCrowdPoses, type CrowdPoses } from "./crowd-poses.ts";
@@ -137,6 +140,8 @@ export class CivilianCrowd {
   private readonly dangerCar: Int16Array;
   private readonly dangerUntil: Float64Array;
   private readonly ambulanceDue: Float64Array;
+  /** Times each one down has been looked for a caller for. */
+  private readonly ambulanceTries: Uint8Array;
   private readonly ambulanceX: Float32Array;
   private readonly ambulanceZ: Float32Array;
   private lastCrashSeconds = -Infinity;
@@ -145,8 +150,8 @@ export class CivilianCrowd {
   private readonly crimeDesk: CrimeDesk;
   private readonly crimesDue: Int32Array;
 
-  constructor(map: OpenWorldMap, seed: number, playableResidents: number, remote: CivilianRemote) {
-    remote.init(seed, map, playableResidents);
+  constructor(map: OpenWorldMap, seed: number, playableResidents: number, remote: CivilianRemote, signals = false) {
+    remote.init(seed, map, playableResidents, signals);
     this.remote = remote;
     this.map = map;
     const { capacity } = remote.state;
@@ -159,6 +164,7 @@ export class CivilianCrowd {
     this.dangerCar = new Int16Array(capacity);
     this.dangerUntil = new Float64Array(capacity).fill(-Infinity);
     this.ambulanceDue = new Float64Array(capacity).fill(Infinity);
+    this.ambulanceTries = new Uint8Array(capacity);
     this.ambulanceX = new Float32Array(capacity);
     this.ambulanceZ = new Float32Array(capacity);
     this.crimeDesk = new CrimeDesk(capacity);
@@ -370,10 +376,10 @@ export class CivilianCrowd {
         if (!onLeg || !legPositionAt(state, resident, seconds, pose)) continue;
         brainX[resident] = pose.x;
         brainZ[resident] = pose.z;
-        velocityX[resident] = pose.dirX * walkSpeed;
-        velocityZ[resident] = pose.dirZ * walkSpeed;
+        velocityX[resident] = pose.dirX * pose.speed;
+        velocityZ[resident] = pose.dirZ * pose.speed;
         yaw[resident] = pose.yaw;
-        speed[resident] = walkSpeed;
+        speed[resident] = Math.abs(pose.speed);
         stride[resident] = walkSpeed * (seconds - ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ) * STRIDE_RADIANS_PER_METRE;
       }
       shown[resident] = 1;
@@ -436,7 +442,7 @@ export class CivilianCrowd {
       if (!this.authority) continue;
       if (byWalker) {
         if (this.walkers.shoves[second - separation.capacity] === 0) continue;
-        if (distance < WALKER_PUSH_DISTANCE && closing >= WALKER_PUSH_CLOSING_SPEED) this.raiseShove(first, brainX[second]!, brainZ[second]!, seconds);
+        if (distance < WALKER_PUSH_DISTANCE && closing >= WALKER_PUSH_CLOSING_SPEED) this.raiseBearingPush(first, brainX[second]!, brainZ[second]!, seconds, EVENT_KIND.walker);
         continue;
       }
       if (distance >= HARD_DISTANCE || closing < HARD_CLOSING_SPEED) continue;
@@ -484,11 +490,12 @@ export class CivilianCrowd {
   }
 
   /** A player on foot at (`walkerX`, `walkerZ`) shoved `victim`: the push triple, then a `walker` triple of the bearing from the victim's brain spot to him, so the brain tells a shove from a car's nudge and turns the fight his way. */
-  private raiseShove(victim: number, walkerX: number, walkerZ: number, seconds: number): void {
+  /** A push by a body at (x, z) that is not a civilian, logged with the bearing to it (`party`: `EVENT_KIND.walker` for the player on foot, `EVENT_KIND.car` for a car): the one pushed turns on it. */
+  private raiseBearingPush(victim: number, x: number, z: number, seconds: number, party: number): void {
     if (!this.mayPush(victim, NOT_A_CIVILIAN, seconds)) return;
-    const turns = detAtan2(walkerX - this.separation.brainX[victim]!, walkerZ - this.separation.brainZ[victim]!) / (2 * Math.PI);
+    const turns = detAtan2(x - this.separation.brainX[victim]!, z - this.separation.brainZ[victim]!) / (2 * Math.PI);
     this.logHostEvent(EVENT_KIND.push, victim, seconds);
-    this.logHostEvent(EVENT_KIND.walker, Math.round(turns * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1), seconds);
+    this.logHostEvent(party, Math.round(turns * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1), seconds);
   }
 
   /** The victim's triple, then the pusher's `alongside` triple when the pusher is a civilian (a car, or a knock, has none): the wire's subject is 16 bits. */
@@ -530,7 +537,7 @@ export class CivilianCrowd {
         const spotY = ground.heightAt(spotX, spotZ);
         if (near && runsDown(car, spotX, spotZ, spotY)) this.knockDown(resident, seconds, fell(car, carIndex, resident, spotX, spotY, spotZ, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
         else if (loose && looseRunsDown(car, spotX, spotZ, spotY)) this.knockDown(resident, seconds, stood(carIndex, resident, spotX, spotY, spotZ, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
-        else if (near && carSpeed >= CAR_NUDGE_SPEED && carGap(car, spotX, spotZ) < CAR_NUDGE_GAP) this.raisePush(resident, NOT_A_CIVILIAN, seconds);
+        else if (near && carSpeed >= CAR_NUDGE_SPEED && carGap(car, spotX, spotZ) < CAR_NUDGE_GAP) this.raiseBearingPush(resident, carX, carZ, seconds, EVENT_KIND.car);
       }
     }
   }
@@ -566,16 +573,22 @@ export class CivilianCrowd {
   /** Someone run down `AMBULANCE_DELAY_SECONDS` ago is still down: the call is made (it is in the log for every peer) and whoever sends the ambulance hears of it. */
   private raiseAmbulanceCalls(seconds: number): void {
     for (let resident = 0; resident < this.ambulanceDue.length; resident++) {
-      const due = this.ambulanceDue[resident]!;
-      if (due > seconds) continue;
-      this.ambulanceDue[resident] = Infinity;
-      this.logHostEvent(EVENT_KIND.ambulance, resident, due);
-      this.onAmbulanceCall?.(this.ambulanceX[resident]!, this.ambulanceZ[resident]!, due, resident);
+      let due = this.ambulanceDue[resident]!;
+      while (due <= seconds) {
+        if (ambulanceCaller(this.remote.state, resident, tickAt(due)) !== NO_PLACE) {
+          this.logHostEvent(EVENT_KIND.ambulance, resident, due);
+          this.onAmbulanceCall?.(this.ambulanceX[resident]!, this.ambulanceZ[resident]!, due, resident);
+          due = Infinity;
+        } else if (this.ambulanceTries[resident]!++ < AMBULANCE_RETRIES) due += AMBULANCE_RETRY_SECONDS;
+        else due = Infinity;
+      }
+      this.ambulanceDue[resident] = due;
     }
   }
 
   private knockDown(resident: number, seconds: number, strike: FigureStrike): void {
     this.ambulanceDue[resident] = seconds + AMBULANCE_DELAY_SECONDS;
+    this.ambulanceTries[resident] = 0;
     this.ambulanceX[resident] = this.poses.x[resident]!;
     this.ambulanceZ[resident] = this.poses.z[resident]!;
     this.poses.shown[resident] = 0;

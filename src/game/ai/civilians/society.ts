@@ -51,6 +51,7 @@ import { FAMILY_NAMES, FEMALE_NAMES, MALE_NAMES, NAME_NONE, castTitleIndex, jobT
 import { CityState, commitResident, retractResident } from "./civilian-state.ts";
 import { castHomesOf, resolveCast } from "./civilian-story.ts";
 import { rollNeeds } from "./needs.ts";
+import type { PedestrianSignals } from "./civilian-signals.ts";
 import { startingCrime } from "./society-crime.ts";
 
 /** What a new resident is born, moves in or starts out as: the fields a row is made from. */
@@ -270,7 +271,7 @@ function giveStartingCriminals(state: CityState, firstGenerated: number, end: nu
  * The people of the neighbourhood from a seed and the map, at crowd time 0: the named cast (animals too), then `playableResidents` people in all (the cast counts among them) spread
  * over the homes, adults in work at the start in the proportion `EMPLOYMENT_RATE`. Nobody lives, works or goes beyond the walls.
  */
-export function createCityState(seed: number, map: OpenWorldMap, playableResidents: number): CityState {
+export function createCityState(seed: number, map: OpenWorldMap, playableResidents: number, signals: PedestrianSignals | null = null): CityState {
   const index = buildMapIndex(map);
   const cast = resolveCast(index);
   const castHomes = castHomesOf(cast);
@@ -280,6 +281,7 @@ export function createCityState(seed: number, map: OpenWorldMap, playableResiden
   const capacity = cast.length + generated + Math.ceil(generated * GROWTH_HEADROOM) + MIN_SPARE_SLOTS;
   const startWeekday = Math.floor(residentDraws(seed, 0, STREAM.week, 0)() * DAYS_PER_WEEK);
   const state = new CityState(seed, map, index, cast, startHourOf(seed), startWeekday, capacity);
+  state.signals = signals;
   state.targetPopulation = castPeople + generated;
   createCastMembers(state);
   let id = cast.length;

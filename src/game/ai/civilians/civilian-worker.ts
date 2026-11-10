@@ -2,6 +2,7 @@ import { queueEvents } from "./civilian-events.ts";
 import type { CityState } from "./civilian-state.ts";
 import { computeTick } from "./civilian-tick.ts";
 import { answerBuffers, type FromCivilianWorker, type ToCivilianWorker } from "./civilian-wire.ts";
+import { openWorldSignals } from "./civilian-signals.ts";
 import { createCityState } from "./society.ts";
 
 /**
@@ -17,7 +18,7 @@ function post(message: FromCivilianWorker, transfer: ArrayBuffer[] = []): void {
 function hear(message: ToCivilianWorker): void {
   try {
     if (message.kind === "init") {
-      brain.state = createCityState(message.seed, message.map, message.playableResidents);
+      brain.state = createCityState(message.seed, message.map, message.playableResidents, message.signals ? openWorldSignals() : null);
       return;
     }
     const { state } = brain;

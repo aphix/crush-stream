@@ -133,7 +133,15 @@ export const RESIDENT_INT = {
   alarmX: 57,
   alarmZ: 58,
   alarmVictim: 59,
-  history: 60,
+  /** A leg's waits at kerbs for a walk light: how many (0 to `MAX_WAITS`), the path index of the node each is at, and its length in ticks. */
+  waitCount: 60,
+  waitIndex0: 61,
+  waitIndex1: 62,
+  waitIndex2: 63,
+  waitTicks0: 64,
+  waitTicks1: 65,
+  waitTicks2: 66,
+  history: 67,
 } as const;
 /** A row is a whole number of 64-byte cache lines (16 ints), so the hot fields at its start share one. */
 const ROW_ALIGN_INTS = 16;
@@ -150,12 +158,12 @@ export const CAST_TITLE_BASE = 100;
 
 /**
  * Event kinds of the host's input triples (kind, subject, crowd seconds). A knock's subject is the civilian run down; a wreck's the place; a crime's, a bust's and a jaywalk arrest's the resident; a push's and a fight's the
- * victim, followed by a triple of the same seconds naming the other party: `alongside` a civilian, `walker` a human player on foot (its subject his bearing from the victim, in `WALKER_BEARING_STEPS` of a turn); neither: a car.
+ * victim, followed by a triple of the same seconds naming the other party: `alongside` a civilian, `walker` a human player on foot (its subject his bearing from the victim, in `WALKER_BEARING_STEPS` of a turn); `car` a car that nudged them (its subject the bearing to it, in the same steps); none: a car with no bearing.
  * Inside the brain a civilian pair is one subject, victim + capacity * (other + 1). A `copDown` (a car knocked a foot cop down; subject: the cop) is the police's: it rides the log and the brain drops it.
  * An `ambulance` (someone run down has stayed down long enough for a call; subject: them) makes the nearest person out at a door the caller; a `danger` (a crash, or a car heading at someone; subject: the walk-graph node nearest) alarms those who see it.
  * An `ambulanceStage` (the ambulance changed state or car; subject: its car index times 4 plus its state) tells a client where the ambulance is, which it has no traffic to know: it rides the log and the brain drops it.
  */
-export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9, ambulance: 10, danger: 11, ambulanceStage: 12 } as const;
+export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9, ambulance: 10, danger: 11, ambulanceStage: 12, car: 13 } as const;
 /** A fight's bearing that is none (two civilians face each other; a car is not faced). */
 export const NO_BEARING = -1;
 /** `RESIDENT_INT.fightPartner` when the other fighter is a human player on foot (-1 is none, or a car). */
@@ -334,7 +342,7 @@ export const HOUR_WEIGHTS = [
 export const CLOSED_HOURS_WEIGHT = 0.1;
 
 /** Salts of the draw streams (`residentDraws`): one per kind of choice, so adding a draw to one never moves another. */
-export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12, alarm: 13 } as const;
+export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12, alarm: 13, cross: 14 } as const;
 /** Odd multipliers that scramble (seed, resident, salt, index) into a mulberry32 seed. */
 export const MIX_RESIDENT = 0x9e3779b9;
 export const MIX_SALT = 0x85ebca6b;
@@ -443,6 +451,21 @@ export const LOOK_ON_CRASH_MINUTES = 15;
 export const LOOK_ON_DOWNED_MINUTES = 70;
 export const RECOIL_STEP_METRES = 0.5;
 export const RECOIL_CALM_SHARE = 0.4;
+/**
+ * A walker out on a road crossing when a hazard is seen within `EVADE_REACH` m of it does not flinch where it stands: it clears the road to the nearer kerb, at `EVADE_PACE_CALM` times its pace (a hurry) up to `EVADE_PACE_JUMPY`
+ * times (a run) by its neuroticism; if that kerb is ahead it waits there for its schedule to come level, if behind it waits `EVADE_HOLD_SECONDS` for the danger to pass and runs to catch its schedule up, then walks on.
+ */
+export const EVADE_REACH = 30;
+export const EVADE_PACE_CALM = 1.4;
+export const EVADE_PACE_JUMPY = 2.8;
+export const EVADE_HOLD_SECONDS = 2;
+/**
+ * Crossing a road at a signal: a walker waits at the kerb for the walk (the cars of the street they cross red, and still red when they are over), up to `MAX_WAITS` times in a leg, and the leg takes that much longer. Some do not: a
+ * walker goes against the light with the chance `CROSS_DART_BASE` + `CROSS_DART_JUMPY` x their neuroticism, drawn once for each crossing.
+ */
+export const MAX_WAITS = 3;
+export const CROSS_DART_BASE = 0.05;
+export const CROSS_DART_JUMPY = 0.25;
 /**
  * Each person who reacts to one hazard starts a moment after it, on a step of their own (the steps are `ALARM_DELAY_STEPS_PER_SECOND` a second, so no two start on one frame at the draw's 64 Hz): from
  * `ALARM_DELAY_MIN_SECONDS` for the jumpiest to `ALARM_DELAY_MAX_SECONDS` for the calmest, `ALARM_DELAY_JITTER_SHARE` of the span a seeded draw.

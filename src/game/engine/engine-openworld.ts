@@ -429,7 +429,7 @@ export class OpenWorldDirector {
     this.stopCrowd();
     const tier = Math.floor(key / CROWD_TIER_SCALE);
     const remote = CivilianRemote.open((err) => console.error("Crush Stream civilian worker failed", err));
-    this.crowd = new CivilianCrowd(map, key & CROWD_SEED_MASK, POPULATION[tier] ?? POPULATION[0], remote);
+    this.crowd = new CivilianCrowd(map, key & CROWD_SEED_MASK, POPULATION[tier] ?? POPULATION[0], remote, true);
     this.crowd.onAmbulanceCall = (x, z, seconds, victim) => {
       this.traffic?.callAmbulance(x, z, seconds, victim);
     };

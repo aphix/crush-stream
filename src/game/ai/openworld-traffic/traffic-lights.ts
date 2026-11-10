@@ -13,7 +13,8 @@ const STAGE = { green: 0, yellow: 1, allRed: 2 } as const;
 const STAGE_COUNT = 3;
 
 const PHASE_GREEN = [THROUGH_GREEN_SECONDS, LEFT_GREEN_SECONDS, THROUGH_GREEN_SECONDS, LEFT_GREEN_SECONDS] as const;
-const CYCLE_SECONDS = PHASE_GREEN.reduce((sum, green) => sum + green + YELLOW_SECONDS + ALL_RED_SECONDS, 0);
+/** Seconds a junction's four phases take, green, yellow and all red each, before they come round again. */
+export const CYCLE_SECONDS = PHASE_GREEN.reduce((sum, green) => sum + green + YELLOW_SECONDS + ALL_RED_SECONDS, 0);
 
 /** The phase and stage junction `junction` shows at crowd time `seconds`, packed as `phase * STAGE_COUNT + stage`: a pure function of the two, the same on every peer. */
 export function lightPhase(junction: number, seconds: number): number {

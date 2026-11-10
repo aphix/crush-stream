@@ -64,19 +64,21 @@ export function queueEvents(state: CityState, postTick: number, events: ArrayLik
     const seconds = events[at + 2]!;
     let subject = events[at + 1]!;
     let bearing = NO_BEARING;
+    let byCar = false;
     if (kind === EVENT_KIND.push || kind === EVENT_KIND.fight) {
       const next = at + EVENT_TRIPLE;
       const party = next + EVENT_TRIPLE <= events.length && events[next + 2] === seconds ? events[next]! : -1;
       const named = events[next + 1]!;
-      if (party === EVENT_KIND.walker && Number.isInteger(named) && named >= 0 && named < WALKER_BEARING_STEPS) bearing = named;
-      if (party === EVENT_KIND.alongside || party === EVENT_KIND.walker) at += EVENT_TRIPLE;
+      if ((party === EVENT_KIND.walker || party === EVENT_KIND.car) && Number.isInteger(named) && named >= 0 && named < WALKER_BEARING_STEPS) bearing = named;
+      byCar = party === EVENT_KIND.car;
+      if (party === EVENT_KIND.alongside || party === EVENT_KIND.walker || party === EVENT_KIND.car) at += EVENT_TRIPLE;
       if (!subjectInRange(state, EVENT_KIND.knock, subject)) continue;
       if (party === EVENT_KIND.alongside && subjectInRange(state, EVENT_KIND.knock, named)) subject += state.capacity * (named + 1);
     }
     if (!subjectInRange(state, kind, subject)) continue;
     const happened = tickAt(seconds);
     const reactionTick = Math.max(happened + EVENT_LEAD_TICKS, postTick);
-    state.events.push({ kind, subject, seconds, bearing, individualTick: Math.max(happened, postTick), reactionTick, societyTick: nextHourTick(reactionTick), individualDone: false, reactionDone: false });
+    state.events.push({ kind, subject, seconds, bearing, byCar, individualTick: Math.max(happened, postTick), reactionTick, societyTick: nextHourTick(reactionTick), individualDone: false, reactionDone: false });
     const hiddenTicks = kind === EVENT_KIND.knock ? HOSPITAL_TICKS : kind === EVENT_KIND.bust ? JAIL_TICKS : kind === EVENT_KIND.jaywalk ? JAYWALK_CUSTODY_TICKS : 0;
     if (hiddenTicks === 0) continue;
     state.hiddenFromTick[subject] = happened;
@@ -84,7 +86,7 @@ export function queueEvents(state: CityState, postTick: number, events: ArrayLik
   }
 }
 
-/** A knock's, crime's, bust's, jaywalk arrest's or ambulance call's subject is a resident, a wreck's a place with a door, a danger's a walk-graph node, a push's or fight's a packed pair of residents (victim + capacity * (other + 1), other -1: a player); another kind (a lone `alongside` or `walker` too) is dropped. */
+/** A knock's, crime's, bust's, jaywalk arrest's or ambulance call's subject is a resident, a wreck's a place with a door, a danger's a walk-graph node, a push's or fight's a packed pair of residents (victim + capacity * (other + 1), other -1: a player); another kind (a lone `alongside`, `walker` or `car` too) is dropped. */
 function subjectInRange(state: CityState, kind: number, subject: number): boolean {
   if (!Number.isInteger(subject) || subject < 0) return false;
   if (kind === EVENT_KIND.wreck) return subject < state.index.placeCount && state.index.doorNode[subject]! >= 0;
@@ -167,8 +169,8 @@ export function applyReactionEvents(state: CityState, tick: number): void {
     } else if (event.kind === EVENT_KIND.danger) alarmAt(state, state.map.graph.nodeX[event.subject]!, state.map.graph.nodeZ[event.subject]!, tick, NO_PLACE, LOOK_ON_CRASH_MINUTES, ATTENTION_CRASH);
     else if (event.kind === EVENT_KIND.crime) reactToCrime(state, event.subject, tick);
     else if (event.kind === EVENT_KIND.bust) releaseFightPartner(state, event.subject);
-    else if (event.kind === EVENT_KIND.push) applyPush(state, event.subject, event.seconds, tick, event.bearing);
-    else if (event.kind === EVENT_KIND.fight) startFight(state, event.subject % state.capacity, Math.floor(event.subject / state.capacity) - 1, event.seconds, tick, event.bearing);
+    else if (event.kind === EVENT_KIND.push) applyPush(state, event.subject, event.seconds, tick, event.bearing, event.byCar);
+    else if (event.kind === EVENT_KIND.fight) startFight(state, event.subject % state.capacity, Math.floor(event.subject / state.capacity) - 1, event.seconds, tick, event.bearing, event.byCar);
   }
 }
 

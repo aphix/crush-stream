@@ -2,8 +2,9 @@ import { launch, pooledCar } from "../../contact/crash-scenarios.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import type { DeformableCar } from "../../vehicle/car.ts";
-import { EVENT_KIND, EVENT_TRIPLE } from "./civilian-constants.ts";
-import { AMBULANCE_DELAY_SECONDS, CRASH_LOCKOUT_SECONDS, DANGER_CONFIRM_SECONDS, DANGER_LOCKOUT_SECONDS, WRECK_SPEED } from "./civilian-crowd-constants.ts";
+import { tickAt } from "./civilian-clock.ts";
+import { EVENT_KIND, EVENT_TRIPLE, FLAG, NEVER_TICK, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
+import { AMBULANCE_DELAY_SECONDS, AMBULANCE_RETRIES, AMBULANCE_RETRY_SECONDS, CRASH_LOCKOUT_SECONDS, DANGER_CONFIRM_SECONDS, DANGER_LOCKOUT_SECONDS, WRECK_SPEED } from "./civilian-crowd-constants.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "./civilian-crowd.test-util.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
@@ -128,24 +129,62 @@ describe("given a car that is slow, brakes for them, or is heading elsewhere, or
   });
 });
 
-describe("given a car driving straight at a civilian, who is run down", () => {
-  it("when it hits them within the confirming time, then the log holds the knock and no danger, and an ambulance call a few seconds on, for them, at where they lay", () => {
-    const crowd = newCrowd(map);
-    const calls: { x: number; z: number; seconds: number }[] = [];
-    crowd.onAmbulanceCall = (x, z, seconds) => calls.push({ x, z, seconds });
-    let seconds = stepUntilShown(crowd);
-    const resident = shownResident(crowd);
-    const { car, place } = carAtWalker(crowd, resident, CAR_RUN_UP, FAST);
-    let travelled = 0;
-    while (crowd.takeStrikes().length === 0 && travelled < WATCH_SECONDS) {
-      travelled += FRAME_SECONDS;
-      place(travelled);
-      seconds += FRAME_SECONDS;
-      crowd.step(seconds, [car], true);
-      if (triplesOf(crowd, EVENT_KIND.knock).length > 0) break;
+type RunDown = { crowd: CivilianCrowd; resident: number; hitSeconds: number; spotX: number; spotZ: number; calls: { x: number; z: number; seconds: number }[] };
+
+/** A host crowd, a civilian shown and run down by a car driving at them; its ambulance calls collected. */
+function runDown(): RunDown {
+  const crowd = newCrowd(map);
+  const calls: { x: number; z: number; seconds: number }[] = [];
+  crowd.onAmbulanceCall = (x, z, seconds) => calls.push({ x, z, seconds });
+  let seconds = stepUntilShown(crowd);
+  const resident = shownResident(crowd);
+  const { car, place } = carAtWalker(crowd, resident, CAR_RUN_UP, FAST);
+  let travelled = 0;
+  while (crowd.takeStrikes().length === 0 && travelled < WATCH_SECONDS) {
+    travelled += FRAME_SECONDS;
+    place(travelled);
+    seconds += FRAME_SECONDS;
+    crowd.step(seconds, [car], true);
+    if (triplesOf(crowd, EVENT_KIND.knock).length > 0) break;
+  }
+  return { crowd, resident, hitSeconds: seconds, spotX: crowd.poses.x[resident]!, spotZ: crowd.poses.z[resident]!, calls };
+}
+
+/** Puts a living, free civilian (not the one down) out on the stoop at the door nearest the spot, from now, for the rest of the test: someone to phone. */
+function putSomeoneOut(down: RunDown): number {
+  const { state } = down.crowd;
+  let nearest = -1;
+  let nearestGap = Infinity;
+  for (let place = 0; place < state.index.placeCount; place++) {
+    if (state.index.doorNode[place]! < 0) continue;
+    const gap = hypot2(state.map.places[place]!.doorX - down.spotX, state.map.places[place]!.doorZ - down.spotZ);
+    if (gap < nearestGap) {
+      nearestGap = gap;
+      nearest = place;
     }
-    const hitSeconds = seconds;
-    const [spotX, spotZ] = [crowd.poses.x[resident]!, crowd.poses.z[resident]!];
+  }
+  const now = tickAt(down.crowd.crowdSeconds);
+  for (let resident = 0; resident < state.capacity; resident++) {
+    const base = resident * RESIDENT_INT_STRIDE;
+    const free = state.ints[base + RESIDENT_INT.alive] === 1 && state.ints[base + RESIDENT_INT.species] === SPECIES.person && (state.ints[base + RESIDENT_INT.flags]! & (FLAG.cast | FLAG.hurt | FLAG.custody)) === 0;
+    if (!free || resident === down.resident) continue;
+    state.ints[base + RESIDENT_INT.place] = nearest;
+    state.ints[base + RESIDENT_INT.fromPlace] = nearest;
+    state.ints[base + RESIDENT_INT.departTick] = now;
+    state.ints[base + RESIDENT_INT.arriveTick] = now;
+    state.ints[base + RESIDENT_INT.nextDecisionTick] = NEVER_TICK;
+    state.ints[base + RESIDENT_INT.pathCount] = 0;
+    state.ints[base + RESIDENT_INT.legPurpose] = PURPOSE.stoopSit;
+    return resident;
+  }
+  throw new Error("no free civilian to put out");
+}
+
+describe("given a car driving straight at a civilian, who is run down, with someone out on a stoop beside", () => {
+  it("when it hits them within the confirming time, then the log holds the knock and no danger, and an ambulance call a few seconds on, for them, at where they lay", () => {
+    const down = runDown();
+    const { crowd, resident, hitSeconds, spotX, spotZ, calls } = down;
+    putSomeoneOut(down);
     expect(triplesOf(crowd, EVENT_KIND.knock).length, "knocks in the log").toBe(1);
     expect(triplesOf(crowd, EVENT_KIND.danger).length, "danger events in the log").toBe(0);
     crowd.step(hitSeconds + AMBULANCE_DELAY_SECONDS - FRAME_SECONDS, [], true);
@@ -158,6 +197,30 @@ describe("given a car driving straight at a civilian, who is run down", () => {
     expect([calls[0]!.x, calls[0]!.z, calls[0]!.seconds].join("/"), "where they lay and when it was made").toBe([spotX, spotZ, hitSeconds + AMBULANCE_DELAY_SECONDS].join("/"));
     crowd.step(hitSeconds + 3 * AMBULANCE_DELAY_SECONDS, [], true);
     expect(triplesOf(crowd, EVENT_KIND.ambulance).length, "calls in the log long after").toBe(1);
+  });
+});
+
+describe("given a civilian run down with no one about to phone", () => {
+  it("when the delay is up and for the minute after, then no ambulance is called and none is sent: nobody phoned", () => {
+    const { crowd, hitSeconds, calls } = runDown();
+    crowd.step(hitSeconds + AMBULANCE_DELAY_SECONDS, [], true);
+    expect([triplesOf(crowd, EVENT_KIND.ambulance).length, calls.length].join("/"), "calls in the log and made when the delay is up").toBe("0/0");
+    crowd.step(hitSeconds + AMBULANCE_DELAY_SECONDS + (AMBULANCE_RETRIES + 1) * AMBULANCE_RETRY_SECONDS, [], true);
+    expect([triplesOf(crowd, EVENT_KIND.ambulance).length, calls.length].join("/"), "calls in the log and made after every retry").toBe("0/0");
+  });
+
+  it("when someone comes out onto a stoop beside later, then the call is made at the next look for a caller, after the delay, and only once", () => {
+    const down = runDown();
+    const { crowd, hitSeconds, calls } = down;
+    crowd.step(hitSeconds + AMBULANCE_DELAY_SECONDS + AMBULANCE_RETRY_SECONDS + 1, [], true);
+    expect(calls.length, "calls before anyone is out").toBe(0);
+    putSomeoneOut(down);
+    crowd.step(hitSeconds + AMBULANCE_DELAY_SECONDS + 3 * AMBULANCE_RETRY_SECONDS, [], true);
+    expect(calls.length, "calls once someone is out").toBe(1);
+    expect(calls[0]!.seconds, "the call is later than the first look").toBeGreaterThan(hitSeconds + AMBULANCE_DELAY_SECONDS);
+    expect((calls[0]!.seconds - hitSeconds - AMBULANCE_DELAY_SECONDS) % AMBULANCE_RETRY_SECONDS, "the call falls on one of the looks").toBeCloseTo(0, 6);
+    crowd.step(hitSeconds + 10 * AMBULANCE_DELAY_SECONDS + 10 * AMBULANCE_RETRY_SECONDS, [], true);
+    expect(calls.length, "calls long after").toBe(1);
   });
 });
 

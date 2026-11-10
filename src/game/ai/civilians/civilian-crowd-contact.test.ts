@@ -20,6 +20,8 @@ const FLOAT_ERROR = 1e-3;
 /** Past a figure's reach (0.3 m) and inside a car's nudge gap (0.5 m). */
 const NUDGE_OFFSET = 0.4;
 const FAR_OFFSET = 3;
+/** The car drives beside them a metre and a bit off and a frame behind them: its bearing is the left of the street's way to within this many steps of a turn (a few degrees). */
+const CAR_BEARING_SLACK = 12;
 const STRETCH_SECONDS = 600;
 const STRETCH_STEP_SECONDS = 0.25;
 
@@ -163,7 +165,11 @@ describe("given a civilian walking along a street and a car driving beside them 
   it("when the car's side passes within a nudge of them, then it logs a push of them by no civilian and runs no one down", () => {
     const { crowd, walker, struck } = drivePast(NUDGE_OFFSET);
     expect(struck, "run down").toBe(0);
-    expect(onePushByNoCivilian(crowd, walker).bearing, "bearing to a player: none, it was a car").toBe(-1);
+    const push = onePushByNoCivilian(crowd, walker);
+    expect(push.byCar, "the push names a car").toBe(true);
+    const toTheCar = Math.round((Math.atan2(-Math.cos(Math.atan2(EDGE_DIR_X, EDGE_DIR_Z)), Math.sin(Math.atan2(EDGE_DIR_X, EDGE_DIR_Z))) / (2 * Math.PI)) * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1);
+    const off = Math.abs(push.bearing - toTheCar);
+    expect(Math.min(off, WALKER_BEARING_STEPS - off), "steps the bearing is off the way to the car (the walker's left)").toBeLessThanOrEqual(CAR_BEARING_SLACK);
   });
 
   it("when the car keeps its distance, then nothing is logged", () => {
