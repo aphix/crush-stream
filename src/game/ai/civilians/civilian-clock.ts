@@ -21,6 +21,11 @@ export function gameMinuteAt(seconds: number): number {
   return Math.floor((seconds * DECISION_HZ) / TICKS_PER_GAME_MINUTE);
 }
 
+/** The crowd seconds `minutes` game minutes take: `gameMinuteAt`'s inverse. */
+export function secondsOfGameMinutes(minutes: number): number {
+  return (minutes * TICKS_PER_GAME_MINUTE) / DECISION_HZ;
+}
+
 /** The game hour (0 up to 24, with its fraction) that `minute` game minutes past the crowd's start fall at: `hourOfDay`'s whole hours, finer. */
 export function gameHourAtMinute(minute: number, startHour: number): number {
   return (((startHour + minute / MINUTES_PER_GAME_HOUR) % HOURS_PER_GAME_DAY) + HOURS_PER_GAME_DAY) % HOURS_PER_GAME_DAY;

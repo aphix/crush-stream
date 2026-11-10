@@ -220,7 +220,7 @@ export abstract class EngineCore {
   protected cycleAutoCamera(): boolean {
     return false;
   }
-  /** The open world's light skips to the next (1) or the previous (-1) game hour; true when it did. */
+  /** The open world's clock, and its light with it, skips to the next (1) or the previous (-1) game hour; true when it did (solo only: in a room nothing moves). */
   protected skipDay(_direction: 1 | -1): boolean {
     return false;
   }

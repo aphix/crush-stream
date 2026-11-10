@@ -16,6 +16,7 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
   return {
     inOpenWorld: () => true,
     isClient: () => false,
+    inRoom: () => false,
     seed: () => 0,
     tier: () => 0,
     cars: () => [],

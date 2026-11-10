@@ -301,6 +301,21 @@ export class CivilianCrowd {
     this.remote.dispose();
   }
 
+  /**
+   * Solo's time skip: the society lives through the ticks before the one `crowdSeconds` falls in, a tick at a time as the sim steps would (a crime due is raised and posted as it comes), so the next `step` at `crowdSeconds` has one tick left to take.
+   * The skipped time is asked nothing of the cars, the cops or the player: no hit, danger or ambulance call is raised in it. False, and nothing done, for a crowd that is not the authority (a client's, or one not stepped yet).
+   */
+  skipThrough(crowdSeconds: number): boolean {
+    if (!this.authority) return false;
+    const last = tickAt(crowdSeconds) - 1;
+    while (this.advancedThrough < last) {
+      this.advanceBrain(this.advancedThrough + 1);
+      this.postBatch();
+    }
+    this.seconds = crowdSeconds;
+    return true;
+  }
+
   private advanceBrain(tick: number): void {
     while (this.advancedThrough < tick) {
       const next = this.advancedThrough + 1;
