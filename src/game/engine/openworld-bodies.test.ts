@@ -15,6 +15,10 @@ const SIZE = 4;
 /** The first pool slot a body takes: the ones before it are the thrown figures' and the player's. */
 const FIRST_SLOT = 4;
 const LAG_BEYOND_LEASH_M = 5;
+/** A body this far (m) beside and behind her spot, and the most its heading may be off her own (rad): her way is 1.4 m/s and the pull 2.5 per metre, so about 0.2 rad. */
+const SIDE_ERROR_M = 0.1;
+const BEHIND_ERROR_M = 0.2;
+const MOST_OFF_HER_WAY_RAD = 0.35;
 
 /** A civilian at (x, z) walking along +z at 1.4 m/s, on the street, shown. */
 function walker(poses: ReturnType<typeof createCrowdPoses>, civilian: number, x: number, z: number): void {
@@ -74,7 +78,7 @@ describe("given civilians around an eye, and a pool with room for three bodies",
     expect(BODY_COUNT.desktop, "the desktop tier's bodies").toBeGreaterThan(BODY_COUNT.phone);
   });
 
-  // mutation: sed -i 's/    else this.host.steer(slot, lag < ARRIVED ? poses.yaw\[civilian\]! : detAtan2(dx, dz), Math.min(FASTEST, poses.speed\[civilian\]! + CATCH_UP \* lag));/    else this.host.steer(slot, 0, 0);/' src/game/engine/openworld-bodies.ts
+  // mutation: sed -i 's/    this.host.steer(slot, detAtan2(vx, vz), Math.min(FASTEST, hypot2(vx, vz)));/    this.host.steer(slot, 0, 0);/' src/game/engine/openworld-bodies.ts
   it("when her spot moves on, then her body is steered at it, and keeps up with her", () => {
     const { host, poses, bodies, run } = world();
     walker(poses, 0, 2, 0);
@@ -88,6 +92,23 @@ describe("given civilians around an eye, and a pool with room for three bodies",
     const body = host.bodies.get(slot)!;
     expect(Math.abs(body.z - poses.z[0]!), "how far she is ahead of her body (m)").toBeLessThan(0.4);
     expect(bodies.slotOf(0), "still hers").toBe(slot);
+  });
+
+  // mutation: sed -i 's/    this.host.steer(slot, detAtan2(vx, vz), Math.min(FASTEST, hypot2(vx, vz)));/    this.host.steer(slot, detAtan2(dx, dz), Math.min(FASTEST, pace + CATCH_UP * lag));/' src/game/engine/openworld-bodies.ts
+  it("when her body is a hand's breadth beside her spot and a step behind it, then it still faces where she goes (her way plus a small pull), never the bearing to her spot", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    const body = host.bodies.get(slot)!;
+    body.x = poses.x[0]! + SIDE_ERROR_M;
+    body.z = poses.z[0]! - BEHIND_ERROR_M;
+    bodies.step(poses, 0, 0, 10, STEP);
+    expect(Math.abs(body.heading - poses.yaw[0]!), "heading off her way (rad)").toBeLessThan(MOST_OFF_HER_WAY_RAD);
+    body.x = poses.x[0]! - SIDE_ERROR_M;
+    body.z = poses.z[0]! + BEHIND_ERROR_M / 4;
+    bodies.step(poses, 0, 0, 10.1, STEP);
+    expect(Math.abs(body.heading - poses.yaw[0]!), "ahead and to the other side: still facing her way").toBeLessThan(MOST_OFF_HER_WAY_RAD);
   });
 
   // mutation: sed -i 's/^const LEASH = 3;/const LEASH = 300;/' src/game/engine/openworld-bodies.ts
