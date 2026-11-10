@@ -14,7 +14,7 @@ const CAR_START_X = 30;
 describe("a foot cop moves like the people round him", () => {
   // mutation: in src/game/ai/openworld-crime/foot-walkers.ts carry(), change `(speed > 0 ? Math.min(STRIDE_RADIANS_PER_METRE, (2 * Math.PI * RUN_STRIDES_PER_SECOND) / speed) : STRIDE_RADIANS_PER_METRE)` to `STRIDE_RADIANS_PER_METRE`
   it("strides at the civilians' rate at a walk, and no faster than a runner's cadence at a run", () => {
-    const walkers = new FootWalkers(lineCity().graph, 2);
+    const walkers = new FootWalkers(lineCity().graph, 2, null);
     for (let step = 0; step < 10; step++) {
       walkers.carry(0, COP_PATROL_SPEED * CRIME_STEP_SECONDS, CRIME_STEP_SECONDS);
       walkers.carry(1, COP_RUN_SPEED * CRIME_STEP_SECONDS, CRIME_STEP_SECONDS);

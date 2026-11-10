@@ -1,7 +1,7 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import type { WalkGraph } from "../../world/openworld/walk-graph.ts";
 import type { PathFinder } from "../civilians/walk-path.ts";
-import { CAR_COP, COPS_PER_CASE, CAR_COP_BACK_REACH, COP_PATROL_SPEED, COP_REPLAN_STEPS, COP_RUN_SPEED, CRIME_STEP_SECONDS, ESCORT_SPEED, CRIME_STREAM, FOOT_COP_COUNT, PATROL_COPS, STRAIGHT_APPROACH } from "./crime-constants.ts";
+import { CAR_COP, COPS_PER_CASE, CAR_COP_BACK_REACH, COP_PATROL_SPEED, COP_REPLAN_STEPS, COP_RUN_SPEED, CRIME_HZ, CRIME_STEP_SECONDS, ESCORT_SPEED, CRIME_STREAM, FOOT_COP_COUNT, PATROL_COPS, PATROL_LEG_MAX, PATROL_LEG_MIN, PATROL_PAUSE_SECONDS, PATROL_PAUSE_SPAN, PATROL_RECENT, PATROL_TRIES, STRAIGHT_APPROACH } from "./crime-constants.ts";
 import type { CaseTable } from "./case-table.ts";
 import { crimeDraw } from "./crime-draw.ts";
 import type { FootWalkers } from "./foot-walkers.ts";
@@ -20,7 +20,10 @@ export class FootCops {
   private readonly finder: PathFinder;
   private readonly noFear: Float32Array;
   private readonly seed: number;
-  private readonly previousNode = new Int32Array(FOOT_COP_COUNT).fill(-1);
+  /** Per cop: the last corners he walked to, newest over oldest in a ring, and the grid steps he still stands for. */
+  private readonly recent = new Int32Array(FOOT_COP_COUNT * PATROL_RECENT).fill(-1);
+  private readonly recentAt = new Uint8Array(FOOT_COP_COUNT);
+  private readonly pauseLeft = new Uint16Array(FOOT_COP_COUNT);
   private readonly patrolDraws = new Uint32Array(FOOT_COP_COUNT);
   /** The gap (m) `nearestOfCase` found. */
   nearestGap = Infinity;
@@ -179,22 +182,53 @@ export class FootCops {
     this.mode[cop] = COP_MODE.patrol;
   }
 
-  /** The next sidewalk node on a seeded turn, not straight back the way it came unless it must. */
+  /** A beat: walk to a corner a block or two off, stand a moment looking about, and on to another: never back to the last few. */
   private patrol(cop: number): void {
     const walkers = this.walkers;
-    if (!walkers.hasRoute(cop)) {
-      const node = walkers.nearestNode(walkers.x[cop]!, walkers.z[cop]!);
-      const { edgeStart, edgeTo } = this.graph;
-      const degree = edgeStart[node + 1]! - edgeStart[node]!;
-      if (degree === 0) return;
-      const turn = this.patrolDraws[cop]!;
-      this.patrolDraws[cop] = turn + 1;
-      let pick = Math.floor(crimeDraw(this.seed, CRIME_STREAM.patrolTurn, cop, turn) * degree);
-      if (degree > 1 && edgeTo[edgeStart[node]! + pick] === this.previousNode[cop]) pick = (pick + 1) % degree;
-      this.previousNode[cop] = node;
-      walkers.goToNode(cop, edgeTo[edgeStart[node]! + pick]!);
+    if (walkers.hasRoute(cop)) {
+      walkers.advance(cop, COP_PATROL_SPEED * CRIME_STEP_SECONDS, CRIME_STEP_SECONDS);
+      return;
     }
-    walkers.advance(cop, COP_PATROL_SPEED * CRIME_STEP_SECONDS, CRIME_STEP_SECONDS);
+    walkers.speed[cop] = 0;
+    if (this.pauseLeft[cop]! > 0) {
+      this.pauseLeft[cop]!--;
+      return;
+    }
+    const corner = this.nextCorner(cop);
+    if (corner < 0 || !walkers.plan(cop, this.finder, corner, this.noFear, 0)) return;
+    this.remember(cop, corner);
+    const draw = crimeDraw(this.seed, CRIME_STREAM.patrolPause, cop, this.patrolDraws[cop]!++);
+    this.pauseLeft[cop] = Math.ceil((PATROL_PAUSE_SECONDS + PATROL_PAUSE_SPAN * draw) * CRIME_HZ);
+  }
+
+  /** A corner (a node with a way on: no door's spur) `PATROL_LEG_MIN` to `PATROL_LEG_MAX` m from cop `cop` that is not one of his recent ones, by seeded draws; the farthest drawn when none fits, -1 for a graph with none. */
+  private nextCorner(cop: number): number {
+    const { nodeX, nodeZ, edgeStart } = this.graph;
+    const x = this.walkers.x[cop]!;
+    const z = this.walkers.z[cop]!;
+    let fallback = -1;
+    let fallbackGap = -1;
+    for (let attempt = 0; attempt < PATROL_TRIES; attempt++) {
+      const node = Math.min(nodeX.length - 1, Math.floor(crimeDraw(this.seed, CRIME_STREAM.patrolTurn, cop, this.patrolDraws[cop]!++) * nodeX.length));
+      if (edgeStart[node + 1]! - edgeStart[node]! < 2 || this.isRecent(cop, node)) continue;
+      const gap = hypot2(nodeX[node]! - x, nodeZ[node]! - z);
+      if (gap >= PATROL_LEG_MIN && gap <= PATROL_LEG_MAX) return node;
+      if (gap > fallbackGap && gap <= PATROL_LEG_MAX) {
+        fallbackGap = gap;
+        fallback = node;
+      }
+    }
+    return fallback;
+  }
+
+  private isRecent(cop: number, node: number): boolean {
+    for (let at = 0; at < PATROL_RECENT; at++) if (this.recent[cop * PATROL_RECENT + at] === node) return true;
+    return false;
+  }
+
+  private remember(cop: number, node: number): void {
+    this.recent[cop * PATROL_RECENT + this.recentAt[cop]!] = node;
+    this.recentAt[cop] = (this.recentAt[cop]! + 1) % PATROL_RECENT;
   }
 
   /** Along the sidewalks to the aim's nearest node, replanned a few times a second as the aim moves; the last metres straight. */
@@ -203,12 +237,12 @@ export class FootCops {
     const aimX = this.aimX[cop]!;
     const aimZ = this.aimZ[cop]!;
     const distance = speed * CRIME_STEP_SECONDS;
-    if (hypot2(walkers.x[cop]! - aimX, walkers.z[cop]! - aimZ) <= STRAIGHT_APPROACH) {
+    if (hypot2(walkers.x[cop]! - aimX, walkers.z[cop]! - aimZ) <= STRAIGHT_APPROACH && walkers.straightClear(walkers.x[cop]!, walkers.z[cop]!, aimX, aimZ)) {
       walkers.halt(cop);
       walkers.moveToward(cop, aimX, aimZ, distance, CRIME_STEP_SECONDS);
       return;
     }
-    if (!walkers.hasRoute(cop) || (stepIndex + cop) % COP_REPLAN_STEPS === 0) walkers.plan(cop, this.finder, walkers.nearestNode(aimX, aimZ), this.noFear, 0);
+    if (!walkers.hasRoute(cop) || (stepIndex + cop) % COP_REPLAN_STEPS === 0) walkers.plan(cop, this.finder, walkers.nearestSeenNode(aimX, aimZ), this.noFear, 0);
     walkers.advance(cop, distance, CRIME_STEP_SECONDS);
   }
 }

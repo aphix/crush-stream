@@ -28,6 +28,8 @@ export class CaseTable {
   readonly since = new Float64Array(MAX_SUBJECTS);
   readonly fleeSpeed = new Float64Array(MAX_SUBJECTS);
   readonly hideNode = new Int32Array(MAX_SUBJECTS).fill(-1);
+  /** The corner a suspect with no hiding place runs for, kept until reached or a cop is near it (-1: none yet). */
+  readonly fleeNode = new Int32Array(MAX_SUBJECTS).fill(-1);
   /** The cop a suspect is in the hands of. */
   readonly holder = new Int8Array(MAX_SUBJECTS).fill(-1);
   /** A fighter who keeps attacking is taken down; the takedown is thrown once. */
@@ -70,6 +72,7 @@ export class CaseTable {
     this.mode[slot] = SUBJECT_MODE.atLarge;
     this.since[slot] = seconds;
     this.hideNode[slot] = -1;
+    this.fleeNode[slot] = -1;
     this.holder[slot] = -1;
     this.forced[slot] = 0;
     this.tookDown[slot] = 0;

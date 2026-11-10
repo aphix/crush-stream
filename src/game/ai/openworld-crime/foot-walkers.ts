@@ -1,6 +1,7 @@
 import { detAtan2, hypot2 } from "../../kernel/physics-core.js";
 import { wrapPi } from "../../kernel/scalar.ts";
 import type { WalkGraph } from "../../world/openworld/walk-graph.ts";
+import type { LineOfSight } from "./offence-source.ts";
 import { STRIDE_RADIANS_PER_METRE } from "../civilians/civilian-crowd-constants.ts";
 import type { PathFinder } from "../civilians/walk-path.ts";
 import { MAX_ROUTE_NODES, RUN_STRIDES_PER_SECOND } from "./crime-constants.ts";
@@ -18,6 +19,7 @@ export class FootWalkers {
   /** Metres per second over the last advance. */
   readonly speed: Float64Array;
   private readonly graph: WalkGraph;
+  private readonly clear: LineOfSight | null;
   private readonly route: Uint16Array;
   private readonly routeCount: Uint16Array;
   private readonly routeAt: Uint16Array;
@@ -26,8 +28,10 @@ export class FootWalkers {
   private readonly fromYaw: Float64Array;
   private readonly fromStride: Float64Array;
 
-  constructor(graph: WalkGraph, count: number) {
+  /** `clear`: whether a person at one point sees one at another past the buildings (null: open ground): a walker leaves the graph only along a line it holds. */
+  constructor(graph: WalkGraph, count: number, clear: LineOfSight | null) {
     this.graph = graph;
+    this.clear = clear;
     this.x = new Float64Array(count);
     this.z = new Float64Array(count);
     this.yaw = new Float64Array(count);
@@ -98,10 +102,36 @@ export class FootWalkers {
     return best;
   }
 
+  /** Whether nothing solid stands between (ax, az) and (bx, bz): a walker may step straight from one to the other. */
+  straightClear(ax: number, az: number, bx: number, bz: number): boolean {
+    return this.clear === null || this.clear(ax, az, bx, bz);
+  }
+
+  /** The nearest node (the lowest on a tie) a straight step from (x, z) reaches without crossing a building; the plain nearest node when none is in the clear. */
+  nearestSeenNode(x: number, z: number): number {
+    if (this.clear === null) return this.nearestNode(x, z);
+    const { nodeX, nodeZ } = this.graph;
+    let seen = -1;
+    let seenGap = Infinity;
+    let any = 0;
+    let anyGap = Infinity;
+    for (let node = 0; node < nodeX.length; node++) {
+      const gap = hypot2(nodeX[node]! - x, nodeZ[node]! - z);
+      if (gap < anyGap) {
+        anyGap = gap;
+        any = node;
+      }
+      if (gap >= seenGap || !this.clear(x, z, nodeX[node]!, nodeZ[node]!)) continue;
+      seenGap = gap;
+      seen = node;
+    }
+    return seen >= 0 ? seen : any;
+  }
+
   /** Plans the cheapest walk from where `walker` stands to `toNode` under `fear`; false (route cleared) when there is none. */
   plan(walker: number, finder: PathFinder, toNode: number, fear: Float32Array, fearWeight: number): boolean {
     const first = walker * MAX_ROUTE_NODES;
-    const count = finder.find(this.nearestNode(this.x[walker]!, this.z[walker]!), toNode, fear, fearWeight, this.route, first, MAX_ROUTE_NODES);
+    const count = finder.find(this.nearestSeenNode(this.x[walker]!, this.z[walker]!), toNode, fear, fearWeight, this.route, first, MAX_ROUTE_NODES);
     this.routeCount[walker] = count;
     this.routeAt[walker] = count >= 2 && this.startsPastFirst(walker, first) ? 1 : 0;
     return count > 0;
