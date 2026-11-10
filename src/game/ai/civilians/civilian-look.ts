@@ -29,7 +29,7 @@ function residentMet(poses: CrowdPoses, ray: LookRay): Meeting {
   for (let resident = 0; resident < poses.count; resident++) {
     if (poses.shown[resident] === 0) continue;
     const toX = poses.x[resident]! - ray.eyeX;
-    const toY = CHEST_HEIGHT - ray.eyeY;
+    const toY = poses.feetY[resident]! + CHEST_HEIGHT - ray.eyeY;
     const toZ = poses.z[resident]! - ray.eyeZ;
     const along = toX * ray.dirX + toY * ray.dirY + toZ * ray.dirZ;
     if (along <= 0 || along > LOOK_REACH) continue;

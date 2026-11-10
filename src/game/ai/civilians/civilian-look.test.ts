@@ -88,7 +88,7 @@ describe("given one civilian out on open ground, far from every building", () =>
   const crowd = newCrowd(map);
   const resident = 0;
 
-  /** The panel's title with the eye `metres` short of the civilian, looking straight at them. */
+  /** The panel's title with the eye `metres` short of the civilian, looking straight at their chest. */
   function titleAt(metres: number): string | undefined {
     const count = crowd.poses.count;
     const poses = createCrowdPoses(count);
@@ -101,6 +101,24 @@ describe("given one civilian out on open ground, far from every building", () =>
   it("when they are inside the look reach, then the panel names them, and when they are beyond it, then it does not", () => {
     expect(titleAt(LOOK_REACH - 1)?.startsWith(residentNameText(crowd.state, resident)), "inside the reach").toBe(true);
     expect(titleAt(LOOK_REACH + 1), "beyond the reach").toBeUndefined();
+  });
+
+  // mutation: sed -i 's/const toY = poses.feetY\[resident\]! + CHEST_HEIGHT - ray.eyeY;/const toY = CHEST_HEIGHT - ray.eyeY;/' src/game/ai/civilians/civilian-look.ts
+  it("when one stands on a stoop's step behind another on the street and the eye is on the one on the step's chest, then the panel names the one on the step", () => {
+    const STEP_UP = 0.9;
+    const onStep = 1;
+    const onStreet = 2;
+    const metres = LOOK_REACH - 4;
+    const poses = createCrowdPoses(crowd.poses.count);
+    for (const civilian of [onStep, onStreet]) {
+      poses.shown[civilian] = 1;
+      poses.x[civilian] = OPEN_GROUND;
+    }
+    poses.z[onStep] = metres;
+    poses.feetY[onStep] = STEP_UP;
+    poses.z[onStreet] = metres - 2;
+    const title = lookAtOf(crowd.state, poses, 0, aimedAt(eyeAt(OPEN_GROUND, 0), OPEN_GROUND, CHEST_HEIGHT + STEP_UP, metres))?.title;
+    expect(title?.startsWith(residentNameText(crowd.state, onStep))).toBe(true);
   });
 });
 

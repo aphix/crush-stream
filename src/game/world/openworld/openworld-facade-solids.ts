@@ -118,11 +118,16 @@ function variantOf(x: number, z: number): number {
   return Math.imul(Math.round(x * 8) ^ Math.imul(Math.round(z * 8), 0x9e3779b1), 0x85ebca6b) >>> 0;
 }
 
-/** The frontages of the rowhomes among `places` (a home with a rowhome interior: the modern infill has no stoop and no bay): the caller passes only places inside the walls. */
+/** Whether `place` has a stoop and a bay: a home with a rowhome interior (the modern infill has neither). */
+export function hasStoop(place: Place): boolean {
+  return place.kind === PLACE_KIND.home && place.interior === "rowhome";
+}
+
+/** The frontages of the rowhomes among `places`: the caller passes only places inside the walls. */
 export function homeFrontages(places: readonly Place[]): Frontage[] {
   const frontages: Frontage[] = [];
   for (const place of places) {
-    if (place.kind !== PLACE_KIND.home || place.interior !== "rowhome") continue;
+    if (!hasStoop(place)) continue;
     const face = drawnHalf(place.depth);
     frontages.push({ x: place.x + detCos(place.yaw) * face, z: place.z - detSin(place.yaw) * face, yaw: place.yaw, depth: place.depth, style: place.style, storeys: place.storeys, variant: variantOf(place.x, place.z) });
   }

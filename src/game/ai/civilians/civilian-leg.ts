@@ -19,6 +19,9 @@ export class LegPose {
   /** What `evadeAlarm` is given and hands back, as fields: a double passed to a call that is not inlined is boxed. */
   clock = 0;
   walked = 0;
+  /** The nodes of the path she is between, the one she left and the one she walks to. */
+  from = 0;
+  to = 0;
 }
 
 /**
@@ -163,6 +166,8 @@ export function legPose(state: CityState, resident: number, seconds: number, out
   while (step + 2 < count && pathDistance[first + step + 1]! <= walked) step++;
   const from = pathNodes[first + step]!;
   const to = pathNodes[first + Math.min(step + 1, count - 1)]!;
+  out.from = from;
+  out.to = to;
   const spanX = nodeX[to]! - nodeX[from]!;
   const spanZ = nodeZ[to]! - nodeZ[from]!;
   const span = hypot2(spanX, spanZ);

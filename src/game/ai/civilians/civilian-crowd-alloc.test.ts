@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { pooledCar } from "../../contact/crash-scenarios.test-util.ts";
 import { allocatedBytes, untilQuiet } from "../../kernel/alloc-sample.test-util.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
+import { Stoops } from "../../world/openworld/openworld-stoops.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { newCrowd } from "./civilian-crowd.test-util.ts";
@@ -64,6 +65,20 @@ function readKb(between?: () => void): number {
 describe("given a warmed crowd of 300 civilians among eight parked cars", () => {
   it("when it steps frames within a tick, then it allocates nothing of its own (the profiler's own cost is under the bound)", () => {
     expect(untilQuiet(() => readKb(), BOUND_KB), "KB over the run").toBeLessThanOrEqual(BOUND_KB);
+  });
+
+  // mutation: sed -i 's/const x = xs\[at\]!;/(globalThis as { kept?: unknown }).kept = new Float32Array(3); const x = xs[at]!;/' src/game/world/openworld/openworld-stoops.ts
+  it("when every street node is a stoop's door, then walkers cross the steps and the frames still allocate nothing", () => {
+    const { nodeX, nodeZ } = buildFixtureMap(EXTRA_HOMES_PER_BLOCK).graph;
+    const frontages = Array.from(nodeX, (x, node) => ({ x, z: nodeZ[node]!, yaw: 0, depth: 10, style: "federal" as const, storeys: 3, variant: 0 }));
+    crowd.stoops = new Stoops(frontages, Array.from(nodeX, (_, node) => node));
+    const kb = untilQuiet(() => readKb(), BOUND_KB);
+    let lifted = 0;
+    startNextTick();
+    stepWithinTick(MEASURED_FRAMES, () => void (lifted += crowd.poses.feetY.some((feetY) => feetY > 0) ? 1 : 0));
+    crowd.stoops = null;
+    expect(kb, "KB over the run").toBeLessThanOrEqual(BOUND_KB);
+    expect(lifted, "frames with someone on a step").toBeGreaterThan(0);
   });
 
   it("when each frame is followed by a few dozen small objects (the control), then the same read sees them", () => {

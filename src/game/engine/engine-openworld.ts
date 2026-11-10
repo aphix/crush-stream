@@ -24,6 +24,8 @@ import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildParkingSpots, spotAt, type ParkingSpots } from "../world/openworld/openworld-parking.ts";
 import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
 import { findWalkerStrike, WalkerStrike } from "../ai/civilians/society-activity.ts";
+import { hasStoop, homeFrontages } from "../world/openworld/openworld-facade-solids.ts";
+import { Stoops } from "../world/openworld/openworld-stoops.ts";
 import { OpenWorldTraffic, type FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import type { CommuterFeed } from "../ai/openworld-traffic/traffic-sight.ts";
 import { AMBULANCE_CARS, KERB_CARS, MOVER_CARS, PATROL_CARS } from "../ai/openworld-traffic/traffic-constants.ts";
@@ -496,6 +498,8 @@ export class OpenWorldDirector {
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));
     this.startTraffic(map, client);
     this.doors = new OpenWorldCarDoors(crowd.state.capacity, crowd.state, () => this.traffic);
+    const stooped = map.places.filter((place) => place.doorNode >= 0 && hasStoop(place));
+    crowd.stoops = new Stoops(homeFrontages(stooped), Array.from(stooped, (place) => place.doorNode));
     this.closedPlaces = new Uint8Array(crowd.state.index.placeCount);
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     this.medics = new OpenWorldMedics(this.ports.makeArt(MEDICS.count));
