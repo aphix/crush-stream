@@ -3,7 +3,7 @@ import { idleDrive, type DriveInput } from "../../vehicle/car-drive.ts";
 import { BUST, CRAWL } from "../constants.ts";
 import type { AiCar } from "../derby-ai.ts";
 import type { Obstacles } from "../obstacles.ts";
-import { CAREFUL_PURSUIT_SPEED, CHASE_LEAD_SECONDS, CHASE_RESUME_DISTANCE, CLOSE_PURSUIT_DISTANCE, CRIME_STREAM, HOTHEAD_RUN_SHARE, REDIRECT_SECONDS, CAR_STOP_DECEL, CAR_ARRIVE_DISTANCE, CAR_CHASE_GIVE_UP_SECONDS, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS, CAR_STOP_GAP, IMPOUND_SECONDS, MAX_PATROL_CARS, YIELD_DISTANCE } from "./crime-constants.ts";
+import { CAREFUL_PURSUIT_SPEED, CHASE_LEAD_SECONDS, CHASE_RESUME_DISTANCE, CLOSE_PURSUIT_DISTANCE, CONVEY_GIVE_UP_SECONDS, CRIME_STREAM, HOTHEAD_RUN_SHARE, REDIRECT_SECONDS, CAR_STOP_DECEL, CAR_ARRIVE_DISTANCE, CAR_CHASE_GIVE_UP_SECONDS, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS, CAR_STOP_GAP, IMPOUND_SECONDS, MAX_PATROL_CARS, YIELD_DISTANCE } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
 import type { LineOfSight } from "./offence-source.ts";
 import { PursuitDriver } from "./pursuit-driver.ts";
@@ -39,10 +39,12 @@ interface PatrolHooks {
   arrived(caseIndex: number, x: number, z: number): void;
   /** The driver of car `carIndex` was held slow beside a patrol car long enough: `resident` -1 for the player. */
   busted(resident: number, carIndex: number, seconds: number): void;
+  /** The car of case `caseIndex` has come to the station with the suspect it carried. */
+  delivered(caseIndex: number): void;
 }
 
 const YIELD = { none: 0, stopping: 1, refused: 2 } as const;
-const PATROL_MODE = { free: 0, toScene: 1, atScene: 2, pursuing: 3, lingering: 4 } as const;
+const PATROL_MODE = { free: 0, toScene: 1, atScene: 2, pursuing: 3, lingering: 4, toStation: 5 } as const;
 
 /**
  * The law's cars, leased from the traffic's pool. One drives to a scene on foot-case calls, by the streets on the traffic's urgent trip (a hothead's run, `HOTHEAD_RUN_SHARE`, straight at it), and its cop steps out; one chases a car that ran a red light, makes a traffic car it is near pull over,
@@ -103,6 +105,20 @@ export class PatrolCars {
     return true;
   }
 
+  /** The car of case `caseIndex`, stopped at its scene, takes the suspect cuffed aboard to (x, z) along the streets; false (it stays) when it is not there or finds no way. */
+  convey(caseIndex: number, x: number, z: number, seconds: number): boolean {
+    for (let slot = 0; slot < MAX_PATROL_CARS; slot++) {
+      if (this.caseIndex[slot] !== caseIndex || this.mode[slot] !== PATROL_MODE.atScene) continue;
+      if (!this.ports.redirect(this.handle[slot]!, x, z)) return false;
+      this.wheel[slot] = 0;
+      this.ports.setDriver(this.handle[slot]!, null);
+      this.mode[slot] = PATROL_MODE.toStation;
+      this.since[slot] = seconds;
+      return true;
+    }
+    return false;
+  }
+
   /** The foot case is over: its car's siren goes off and it is let go in a while. */
   finishCase(caseIndex: number, seconds: number): void {
     for (let slot = 0; slot < MAX_PATROL_CARS; slot++) {
@@ -152,6 +168,9 @@ export class PatrolCars {
         case PATROL_MODE.pursuing:
           this.stepPursuit(slot, seconds, dt);
           break;
+        case PATROL_MODE.toStation:
+          this.stepToStation(slot, seconds);
+          break;
         case PATROL_MODE.lingering:
           if (seconds >= this.lingerUntil[slot]!) this.letGo(slot);
           break;
@@ -193,6 +212,12 @@ export class PatrolCars {
       this.mode[slot] = PATROL_MODE.atScene;
       this.hooks.arrived(this.caseIndex[slot]!, car.x, car.z);
     } else if (seconds - this.since[slot]! > CAR_CHASE_GIVE_UP_SECONDS) this.linger(slot, seconds, CAR_LINGER_SECONDS);
+  }
+
+  private stepToStation(slot: number, seconds: number): void {
+    if (!this.ports.arrived(this.handle[slot]!) && seconds - this.since[slot]! <= CONVEY_GIVE_UP_SECONDS) return;
+    this.linger(slot, seconds, CAR_LINGER_SECONDS);
+    this.hooks.delivered(this.caseIndex[slot]!);
   }
 
   private stepPursuit(slot: number, seconds: number, dt: number): void {

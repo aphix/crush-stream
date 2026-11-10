@@ -7,7 +7,7 @@ import { PathFinder } from "../civilians/walk-path.ts";
 import { CASE_KIND, CASE_PHASE, CaseTable, SUBJECT_MODE } from "./case-table.ts";
 import { BUST_REACH, CAR_COP, COP_DOWN_SECONDS, COP_SIGHT, JAYWALK_GIVE_UP_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, SEARCH_SECONDS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
-import { Arrests } from "./arrests.ts";
+import { Arrests, stationOf } from "./arrests.ts";
 import { FightRules } from "./fight-rules.ts";
 import { CrossingWatch } from "./crossing-watch.ts";
 import { PlayerLaw } from "./player-law.ts";
@@ -16,15 +16,16 @@ import { COP_MODE, FootCops } from "./foot-cops.ts";
 import { FootWalkers } from "./foot-walkers.ts";
 import type { CrossingSignals, LawPorts, LawSenses, LineOfSight, OffenceSource, OtherCopsSee, Spot, Walk } from "./offence-source.ts";
 
-/** What the patrol cars need to hear of the cases. */
+/** What the patrol cars need of the cases: to hear of them, to be let go when their case no longer needs them, and to drive an arrested suspect to the station. */
 interface LawHooks {
   opened(caseIndex: number, x: number, z: number): void;
   closed(caseIndex: number): void;
+  carry(caseIndex: number, x: number, z: number): boolean;
 }
 
 /**
  * The law on foot. Cops patrol the sidewalks; when the society holds a crime or a fight against someone (`OffenceSource`) the nearest free cops are called, run to the suspect (radio keeps them on
- * the suspect's trail), and a suspect who sees a cop (a clear sight line, not through a building) runs for a hiding place; a cop who reaches one lays hands on them and, the cuffs on, the host's bust event is raised. Fighters get a warning
+ * the suspect's trail), and a suspect who sees a cop (a clear sight line, not through a building) runs for a hiding place; a cop who reaches one lays hands on them and, the cuffs on, takes them to the police station, where the host's bust event is raised. Fighters get a warning
  * and a draw each whether they keep attacking: the ones who do are taken down. A free cop who sees a walker cross against the signal stops and takes them off the street. Nobody a car has run down is arrested. It advances on a fixed grid of crowd time, a pure function of (seed, society rows, clock), so peers agree.
  */
 export class FootLaw {
@@ -70,7 +71,11 @@ export class FootLaw {
     this.crossings = new CrossingWatch(map.graph);
     this.otherCopsSee = senses.otherCopsSee;
     this.player = new PlayerLaw(this, this.crossings, senses.signals, playerBustSeconds);
-    this.arrests = new Arrests(this.walkers, this.cops, this.table, map.graph);
+    this.arrests = new Arrests(this.walkers, this.cops, this.table, map.graph, stationOf(map), {
+      raise: (caseIndex, slot) => this.raiseArrest(caseIndex, slot),
+      carFree: (caseIndex) => hooks.closed(caseIndex),
+      carry: (caseIndex, x, z) => hooks.carry(caseIndex, x, z),
+    });
     this.fights = new FightRules(this.table, this.cops, this.walkers, source, seed, this.stats);
   }
 
@@ -283,9 +288,9 @@ export class FootLaw {
     return best;
   }
 
-  /** A jaywalk case keeps the one cop who saw it; the others call the nearest free ones. */
+  /** A jaywalk case keeps the one cop who saw it, and a case with every suspect caught calls no more; the others call the nearest free ones. */
   private callCops(caseIndex: number): void {
-    if (this.table.kind[caseIndex] === CASE_KIND.jaywalk) return;
+    if (this.table.kind[caseIndex] === CASE_KIND.jaywalk || this.table.allCaught(caseIndex)) return;
     const focus = this.table.slotOf(caseIndex, 0);
     for (let index = 0; index < FOOT_COPS_PER_CASE; index++) {
       if (this.table.copAt(caseIndex, index) >= 0) continue;
@@ -479,20 +484,39 @@ export class FootLaw {
     this.arrests.grip(slot, cop, this.seconds);
   }
 
-  /** The cuffs are on: the host raises the bust (a jaywalker's arrest), and the cop leads the suspect away; a fighter thrown down is taken off the street at once. */
+  /** The cuffs are on: the cop leads the suspect away (a fighter thrown down is taken off the street at once). The host's arrest is raised at the station where the map has one, else here. */
   private completeBust(caseIndex: number, slot: number): void {
     const resident = this.table.resident[slot]!;
-    const jaywalk = this.table.kind[caseIndex] === CASE_KIND.jaywalk;
-    if (jaywalk) this.stats.jaywalkers++;
+    if (this.table.kind[caseIndex] === CASE_KIND.jaywalk) this.stats.jaywalkers++;
     else this.stats.busts++;
-    if (this.authority && jaywalk) this.ports.jaywalked(resident, this.seconds);
-    else if (this.authority) this.ports.bust(resident, this.seconds);
-    if (this.table.tookDown[slot] === 0) {
+    const escorted = this.table.tookDown[slot] === 0;
+    if (!escorted || !this.arrests.endsAtStation) this.raiseArrest(caseIndex, slot);
+    if (escorted) {
       this.arrests.escort(caseIndex, slot, this.seconds);
       return;
     }
     this.table.hold(resident, this.seconds);
     this.table.free(slot);
+  }
+
+  /** The host's arrest of the suspect of subject slot `slot`: a jaywalker's or a bust. */
+  private raiseArrest(caseIndex: number, slot: number): void {
+    if (!this.authority) return;
+    const resident = this.table.resident[slot]!;
+    if (this.table.kind[caseIndex] === CASE_KIND.jaywalk) this.ports.jaywalked(resident, this.seconds);
+    else this.ports.bust(resident, this.seconds);
+  }
+
+  /** Case `caseIndex`'s patrol car has come to the station with its suspects: they are arrested and gone from the street. */
+  carDelivered(caseIndex: number): void {
+    const { table } = this;
+    for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
+      const slot = table.slotOf(caseIndex, index);
+      if (table.mode[slot] !== SUBJECT_MODE.conveyed) continue;
+      this.raiseArrest(caseIndex, slot);
+      table.hold(table.resident[slot]!, this.seconds);
+      table.free(slot);
+    }
   }
 
   /** The suspect walks on: no arrest, nobody kept off the street. */
@@ -513,7 +537,7 @@ export class FootLaw {
     for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
       const slot = table.slotOf(caseIndex, index);
       const mode = table.mode[slot]!;
-      if (mode === SUBJECT_MODE.fleeing || mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted) table.hold(table.resident[slot]!, this.seconds);
+      if (mode === SUBJECT_MODE.fleeing || mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted || mode === SUBJECT_MODE.conveyed) table.hold(table.resident[slot]!, this.seconds);
       table.free(slot);
     }
     for (let index = 0; index < COPS_PER_CASE; index++) {

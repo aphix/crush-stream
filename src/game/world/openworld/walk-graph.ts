@@ -26,6 +26,7 @@ export const SECTOR = {
   transit: "transit",
   residential: "residential",
   worship: "worship",
+  police: "police",
 } as const;
 
 /** Which interior a place has: one builder per kind, all from one shared furniture kit. */

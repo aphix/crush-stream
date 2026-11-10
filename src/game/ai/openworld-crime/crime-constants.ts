@@ -60,7 +60,7 @@ export const CROSSING_ALIGNMENT = 0.7;
 export const JAYWALK_GIVE_UP_SECONDS = 30;
 /** A cop this close (m) lays hands on a suspect: an arm's reach plus a shoulder's width. */
 export const BUST_REACH = 1.6;
-/** Seconds the cuffs take (the cuffing clip's length, so the grip and the clip are one number); the bust is raised when they are on. */
+/** Seconds the cuffs take (the cuffing clip's length, so the grip and the clip are one number); the arrest is raised when she is let out of the cop's hands: at the cuffs on a map with no police station, else at the station. */
 export const GRIP_SECONDS = ACTIVITY_SECONDS.cuffing;
 /** A cuffed suspect is led away at this walk (m/s) for at most this long (s), to the case's patrol car or this far along the street, and is gone from it within this many metres of where the cop leads her. */
 export const ESCORT_SPEED = 1.2;
@@ -69,6 +69,11 @@ export const ESCORT_AHEAD_DISTANCE = 12;
 export const ESCORT_ARRIVE = 2;
 /** Led along the street, she is walked to a corner at least this far (m) from where she was cuffed, so the walk away is seen. */
 export const ESCORT_MIN_DISTANCE = 6;
+/** With a police station: she is led to the case's patrol car for at most this long (s), then walked to the station's door; a walk that has not come to the door in this long (s) ends there anyway. */
+export const CAR_BOARD_SECONDS = 20;
+export const STATION_ESCORT_SECONDS = 300;
+/** A patrol car with a suspect aboard that has not come to the station in this long (s) has brought her anyway. */
+export const CONVEY_GIVE_UP_SECONDS = 90;
 
 /** A cop this close (m) to a fight shouts at it, and the fighters have this many seconds to stop; each one keeps attacking with this chance (a seeded draw of their fight). */
 export const FIGHT_WARN_REACH = 6;

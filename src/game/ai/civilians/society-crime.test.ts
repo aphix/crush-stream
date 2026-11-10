@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
 import { CRIME_KIND, CRIME_LAG_TICKS, EVENT_KIND, EVENT_LEAD_TICKS, FLAG, JAIL_TICKS, NEVER_TICK, NO_PLACE, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, WANTED_TICKS } from "./civilian-constants.ts";
 import { ACTIVITY } from "./civilian-activity.ts";
@@ -13,7 +14,7 @@ import { ActivityReading, readActivity } from "./society-activity.ts";
 import { CrimeDesk, crimePlaceOf, isWanted } from "./society-crime.ts";
 import { expireWanted } from "./society-reactions.ts";
 import { newCast, societyMap, type Cast } from "./society-scenes.test-util.ts";
-import { intAt, placeIn, stageResident } from "./society.test-util.ts";
+import { buildSocietyMap, intAt, placeIn, stageResident } from "./society.test-util.ts";
 
 const NOON = 12;
 const BODEGA = placeIn(societyMap, PLACE_NAMES.bodega);
@@ -146,6 +147,51 @@ describe("given a wanted criminal busted by the police", () => {
     expect(historyLines(state, resident)[0], "the newest line").toBe("was arrested outside Bodega Supreme");
     decideResident(state, resident, bustAt + JAIL_TICKS);
     expect(intAt(state, resident, RESIDENT_INT.flags) & FLAG.custody, "custody flag after the release").toBe(0);
+    expect(historyLines(state, resident), "lines after the release").toContain("was let out of custody");
+  });
+});
+
+const STATION_SPEC = { name: PLACE_NAMES.policeStation, kind: PLACE_KIND.work, block: "B2", sector: "police" };
+const stationCity = buildSocietyMap([STATION_SPEC]);
+const STATION = placeIn(stationCity, PLACE_NAMES.policeStation);
+
+/** The criminal of `crimeScene` on a map with a police station, busted at the tick returned. */
+function bustedInStationCity(): { cast: Cast; bustAt: number } {
+  const cast = newCast(NOON, stationCity);
+  const { state, tick } = cast;
+  state.headcount[BODEGA] = 1;
+  stageResident(state, cast.resident, { place: BODEGA, home: HOME_A1, tick, nextDecision: tick + CRIME_DWELL, flags: FLAG.criminal, purpose: PURPOSE.shoplift });
+  raiseCrime(cast, sinceCrimeDue(cast) + 4);
+  applyIndividualEvents(state, sinceCrimeDue(cast) + 4);
+  const bustAt = sinceCrimeDue(cast) + 8;
+  queueEvents(state, bustAt, [EVENT_KIND.bust, cast.resident, bustAt / 2]);
+  applyIndividualEvents(state, bustAt);
+  return { cast, bustAt };
+}
+
+describe("given a city with a police station and a wanted criminal busted by the police", () => {
+  // mutation: sed -i 's/const held = state.index.placeByName.get(PLACE_NAMES.policeStation) ?? ints\[base + RESIDENT_INT.home\]!;/const held = ints[base + RESIDENT_INT.home]!;/' src/game/ai/civilians/society-reactions.ts
+  it("when the bust's tick comes, then they are held in the police station until the jail time is up, not at home", () => {
+    const { cast, bustAt } = bustedInStationCity();
+    const { state, resident } = cast;
+    expect(intAt(state, resident, RESIDENT_INT.flags) & FLAG.custody, "custody flag").toBe(FLAG.custody);
+    expect(intAt(state, resident, RESIDENT_INT.place), "where they are held").toBe(STATION);
+    expect(intAt(state, resident, RESIDENT_INT.fromPlace), "where they came from").toBe(STATION);
+    expect(intAt(state, resident, RESIDENT_INT.nextDecisionTick), "tick they are let out").toBe(bustAt + JAIL_TICKS);
+    expect(historyLines(state, resident)[0], "the newest line").toBe("was arrested outside Bodega Supreme");
+  });
+
+  // mutation: sed -i 's/  if (letOut) goHomeFromCustody(state, resident, current);//' src/game/ai/civilians/civilian-plan.ts
+  it("when the jail time is up, then they walk home from the station, and are let out with a line saying so", () => {
+    const { cast, bustAt } = bustedInStationCity();
+    const { state, resident } = cast;
+    const letOutAt = bustAt + JAIL_TICKS;
+    decideResident(state, resident, letOutAt);
+    expect(intAt(state, resident, RESIDENT_INT.flags) & FLAG.custody, "custody flag after the release").toBe(0);
+    expect(intAt(state, resident, RESIDENT_INT.fromPlace), "the walk starts at the station").toBe(STATION);
+    expect(intAt(state, resident, RESIDENT_INT.place), "the walk ends at home").toBe(HOME_A1);
+    expect(intAt(state, resident, RESIDENT_INT.departTick), "leaves when let out").toBe(letOutAt);
+    expect(intAt(state, resident, RESIDENT_INT.arriveTick), "a walk, not a jump").toBeGreaterThan(letOutAt);
     expect(historyLines(state, resident), "lines after the release").toContain("was let out of custody");
   });
 });

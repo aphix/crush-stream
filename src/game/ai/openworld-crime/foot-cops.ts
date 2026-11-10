@@ -242,7 +242,14 @@ export class FootCops {
       walkers.moveToward(cop, aimX, aimZ, distance, CRIME_STEP_SECONDS);
       return;
     }
-    if (!walkers.hasRoute(cop) || (stepIndex + cop) % COP_REPLAN_STEPS === 0) walkers.plan(cop, this.finder, walkers.nearestSeenNode(aimX, aimZ), this.noFear, 0);
+    if (!walkers.hasRoute(cop)) walkers.plan(cop, this.finder, walkers.nearestSeenNode(aimX, aimZ), this.noFear, 0);
+    else if ((stepIndex + cop) % COP_REPLAN_STEPS === 0) this.replanIfAimMoved(cop, aimX, aimZ);
     walkers.advance(cop, distance, CRIME_STEP_SECONDS);
+  }
+
+  /** A route under way is kept while it still ends at the aim's node: planned afresh from the nearest node, a walk along a sidewalk past a door's spur would turn back into it and loop. */
+  private replanIfAimMoved(cop: number, aimX: number, aimZ: number): void {
+    const node = this.walkers.nearestSeenNode(aimX, aimZ);
+    if (this.walkers.routeEnd(cop) !== node) this.walkers.plan(cop, this.finder, node, this.noFear, 0);
   }
 }

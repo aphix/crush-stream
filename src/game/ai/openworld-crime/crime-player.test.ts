@@ -32,6 +32,15 @@ describe("the player on foot is a subject of the law", () => {
     expect(before - Math.abs(run.scene.foot.walkers.x[0]! - PLAYER_X), "metres the cop closed on him in two seconds").toBeGreaterThan(5);
   });
 
+  // mutation: sed -i 's/ || this.table.allCaught(caseIndex)) return;/ || true) return;/' src/game/ai/openworld-crime/foot-law.ts
+  it("the nearest free cop joins the first in his chase", () => {
+    const run = onCrossing();
+    runFor(run, 2);
+    const out = strip();
+    expect(run.scene.footChaseOf(out), "a chase is open").toBe(true);
+    expect(out.cops, "cops after him").toBe(2);
+  });
+
   // mutation: in src/game/ai/openworld-crime/player-law.ts poll(), change `if (!this.signals.againstSignal(` to `if (this.signals.againstSignal(`
   it("is left alone when the signal is for him, when a building hides him from the cop, and when he is not on foot", () => {
     const green = onCrossing({ against: false });
