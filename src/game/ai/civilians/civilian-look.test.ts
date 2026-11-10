@@ -88,19 +88,25 @@ describe("given one civilian out on open ground, far from every building", () =>
   const crowd = newCrowd(map);
   const resident = 0;
 
-  /** The panel's title with the eye `metres` short of the civilian, looking straight at them. */
-  function titleAt(metres: number): string | undefined {
+  /** The panel's title with the eye `metres` short of the civilian, who stands `lift` m up (a stoop's step), looking straight at their chest. */
+  function titleAt(metres: number, lift = 0): string | undefined {
     const count = crowd.poses.count;
     const poses = createCrowdPoses(count);
     poses.shown[resident] = 1;
     poses.x[resident] = OPEN_GROUND;
     poses.z[resident] = metres;
-    return lookAtOf(crowd.state, poses, 0, aimedAt(eyeAt(OPEN_GROUND, 0), OPEN_GROUND, CHEST_HEIGHT, metres))?.title;
+    poses.feetY[resident] = lift;
+    return lookAtOf(crowd.state, poses, 0, aimedAt(eyeAt(OPEN_GROUND, 0), OPEN_GROUND, CHEST_HEIGHT + lift, metres))?.title;
   }
 
   it("when they are inside the look reach, then the panel names them, and when they are beyond it, then it does not", () => {
     expect(titleAt(LOOK_REACH - 1)?.startsWith(residentNameText(crowd.state, resident)), "inside the reach").toBe(true);
     expect(titleAt(LOOK_REACH + 1), "beyond the reach").toBeUndefined();
+  });
+
+  it("when they stand on a stoop's step and the eye is on their chest, then the panel names them", () => {
+    const STEP_UP = 0.9;
+    expect(titleAt(LOOK_REACH - 1, STEP_UP)?.startsWith(residentNameText(crowd.state, resident))).toBe(true);
   });
 });
 

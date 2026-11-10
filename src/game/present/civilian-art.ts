@@ -235,7 +235,7 @@ export class CivilianArt {
     matrices[matrixAt + 10] = turnCos;
     matrices[matrixAt + 11] = 0;
     matrices[matrixAt + 12] = poses.x[civilian]!;
-    matrices[matrixAt + 13] = FEET_Y;
+    matrices[matrixAt + 13] = FEET_Y + poses.feetY[civilian]!;
     matrices[matrixAt + 14] = poses.z[civilian]!;
     matrices[matrixAt + 15] = 1;
     for (let channel = 0; channel < FIGURE_FLOATS.COLOUR; channel++) {

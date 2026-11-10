@@ -51,6 +51,7 @@ import { ambulanceCaller } from "./society-alarm.ts";
 import { CrimeDesk } from "./society-crime.ts";
 import { CrowdWalkers } from "./crowd-walkers.ts";
 import { createCrowdPoses, type CrowdPoses } from "./crowd-poses.ts";
+import type { Stoops } from "../../world/openworld/openworld-stoops.ts";
 
 /** Where the driver's door of resident `resident`'s car stands (the spot and facing of a person at it, her feet's height there and her seat top's), filled for activity `code` (`ACTIVITY.carIn` or `carOut`); false when she has no car to be at. */
 export type DriverDoors = (resident: number, code: number, out: DoorSpot) => boolean;
@@ -103,6 +104,8 @@ export class CivilianCrowd {
   overlay: CrowdOverlay | null = null;
   /** Where a resident the society has getting into or out of her car stands (the traffic's car, the body style's door): none set, and she is not drawn. Every peer fills the same spot: it is a pure function of the brain's rows and the parking space. */
   driverDoors: DriverDoors | null = null;
+  /** The rowhomes' stoops: a civilian on one is lifted to its step (`feetY`), the same on every peer. None set, the ground is flat. */
+  stoops: Stoops | null = null;
   /** What the society says each resident is doing: its own reader, set by a test that needs one the brain does not give yet. */
   activityReader: typeof readActivity = readActivity;
   private readonly door: DoorSpot = { x: 0, z: 0, yaw: 0, feetY: 0, surfaceY: 0 };
@@ -194,6 +197,7 @@ export class CivilianCrowd {
     this.fillPoses(crowdSeconds);
     this.separate(crowdSeconds);
     if (this.overlay !== null) this.overlay(this.poses, crowdSeconds, authority);
+    this.liftWalkers();
     if (authority) {
       this.findHits(cars, crowdSeconds);
       this.raiseDangers(crowdSeconds, cars);
@@ -410,6 +414,15 @@ export class CivilianCrowd {
         surfaceY[resident] = reading.surfaceY;
       }
     }
+  }
+
+  /** Every civilian who walks (not one the society stands at a seat, a counter or a car) on a stoop stands at the step under her. */
+  private liftWalkers(): void {
+    const stoops = this.stoops;
+    if (stoops === null) return;
+    const { x, z, feetY, shown } = this.poses;
+    const { fixed } = this.separation;
+    for (let resident = 0; resident < this.separation.capacity; resident++) if (shown[resident] === 1 && fixed[resident] === 0) stoops.liftFeet(x, z, feetY, resident);
   }
 
   /** The drawn spots: the brain's, with the players on foot as bodies that do not give way, pushed apart; then the bumps and pushes the closing pairs make. */
