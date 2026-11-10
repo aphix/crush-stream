@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { CRIME_HZ, FOOT_COP_COUNT, MAX_SUBJECTS, PATROL_COPS, PATROL_RECENT } from "./crime-constants.ts";
 import { FootLaw } from "./foot-law.ts";
+import { FootWalkers } from "./foot-walkers.ts";
 import type { OffenceSource, Spot, Walk } from "./offence-source.ts";
 import { realMap, type RealMap } from "./real-map.test-util.ts";
 
@@ -17,6 +18,10 @@ const WALKERS = FOOT_COP_COUNT + MAX_SUBJECTS;
 const MOST_REVISITS = 8;
 /** The beat covers ground: a patrolling cop walks to this many distinct corners in ten minutes. */
 const LEAST_CORNERS = 18;
+/** Sample points round the walk graph's nodes, each a few metres off one: a corner lot has some whose nearest node is across its wall. */
+const SAMPLES = 2000;
+const NODE_STRIDE = 7;
+const SAMPLE_OFFSET = 5;
 
 /** The society's rows as the law reads them, for the doors of the real map: a crime at a door is wanted until the host's bust. */
 class Scene {
@@ -111,14 +116,28 @@ describe("given the real open world and ten minutes of crimes", () => {
     for (const seed of SEEDS) expect(tally(seed, true, true).insideSteps, `walker-steps inside a building (seed ${seed})`).toBe(0);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-walkers.ts nearestSeenNode(), change `if (gap >= seenGap || !this.clear(x, z, nodeX[node]!, nodeZ[node]!)) continue;` to `if (gap >= seenGap) continue;`
-  it("when the nearest corner to a cop is across a building's corner, then he walks round by the sidewalk to it", () => {
-    for (const seed of SEEDS) expect(tally(seed, true, true).insideSteps, `walker-steps inside a building (seed ${seed})`).toBe(0);
-  });
-
-  // mutation: in src/game/ai/openworld-crime/foot-cops.ts run(), change `walkers.straightClear(walkers.x[cop]!, walkers.z[cop]!, aimX, aimZ)` to `true`
+  // mutation: in src/game/ai/openworld-crime/foot-law.ts constructor, change `new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS, senses.lineOfSight);` to `new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS, null);`
   it("when cops chase and arrest, then no walker keeps coming back to one corner", () => {
     for (const seed of SEEDS) expect(tally(seed, true, true).mostRevisits, `most times one corner was entered (seed ${seed})`).toBeLessThanOrEqual(MOST_REVISITS);
+  });
+});
+
+describe("given a cop standing beside a corner lot of the real map", () => {
+  // mutation: in src/game/ai/openworld-crime/foot-walkers.ts nearestSeenNode(), change `if (gap >= seenGap || !this.clear(x, z, nodeX[node]!, nodeZ[node]!)) continue;` to `if (gap >= seenGap) continue;`
+  it("when the nearest corner is across a building, then the node he walks to is the nearest one he can see", () => {
+    const walkers = new FootWalkers(real.map.graph, 1, real.sight);
+    const { nodeX, nodeZ } = real.map.graph;
+    let across = 0;
+    for (let sample = 0; sample < SAMPLES; sample++) {
+      const node = (sample * NODE_STRIDE) % nodeX.length;
+      const x = nodeX[node]! + SAMPLE_OFFSET * Math.cos(sample);
+      const z = nodeZ[node]! + SAMPLE_OFFSET * Math.sin(sample);
+      if (real.insideBuilding(x, z) || !real.sight(x, z, nodeX[node]!, nodeZ[node]!)) continue;
+      const seen = walkers.nearestSeenNode(x, z);
+      if (seen !== walkers.nearestNode(x, z)) across++;
+      expect(real.sight(x, z, nodeX[seen]!, nodeZ[seen]!), `a clear line from sample ${sample} to its node`).toBe(true);
+    }
+    expect(across, "samples whose nearest node was across a building").toBeGreaterThan(0);
   });
 });
 
