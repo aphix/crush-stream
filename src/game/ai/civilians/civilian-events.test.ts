@@ -6,7 +6,7 @@ import { queueEvents } from "./civilian-events.ts";
 import { buildFixtureMap, costOfWalk, placeNamed } from "./civilian-graph.test-util.ts";
 import { legPositionAt, LegPose } from "./civilian-leg.ts";
 import { historyLines, moodOf } from "./civilian-mood.ts";
-import { MOOD } from "./civilian-names.ts";
+import { EVENT_CODE, MOOD } from "./civilian-names.ts";
 import { runTicks, stateDigest, tickOfHour } from "./civilian-run.test-util.ts";
 import type { CityState } from "./civilian-state.ts";
 import { computeTick } from "./civilian-tick.ts";
@@ -262,5 +262,20 @@ describe("given the pirate radio comes on at midnight", () => {
     }
     expect(heard, "residents of A1 and A2 who heard the static").toBeGreaterThan(3);
     expect(spared, "residents of C3 who heard it").toBe(0);
+  });
+
+  // mutation: sed -i 's/STATIC_HOLD_TICKS : MOOD_HOLD_TICKS;/MOOD_HOLD_TICKS : MOOD_HOLD_TICKS;/' src/game/ai/civilians/civilian-names.ts
+  it("when the night is over, then the static no longer colours anyone's mood: by noon nobody it reached is annoyed by it", () => {
+    const noon = tickOfHour(state, 1, 12);
+    runTicks(state, noon - state.nextTick);
+    let annoyedAtNight = 0;
+    let stillAnnoyed = 0;
+    for (let resident = state.cast.length; resident < state.capacity; resident++) {
+      if (intAt(state, resident, RESIDENT_INT.alive) === 0 || intAt(state, resident, RESIDENT_INT.moodEvent) !== EVENT_CODE.staticComplaint) continue;
+      if (moodOf(state, resident, intAt(state, resident, RESIDENT_INT.moodTick) + 1) === MOOD.annoyed) annoyedAtNight++;
+      if (moodOf(state, resident, state.nextTick - 1) === MOOD.annoyed) stillAnnoyed++;
+    }
+    expect(annoyedAtNight, "residents annoyed just after the static").toBeGreaterThan(3);
+    expect(stillAnnoyed, "of them, still annoyed at noon").toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 import type { PlaceKind } from "../../world/openworld/walk-graph.ts";
 import { CAST, type CastMember } from "./civilian-cast.ts";
-import { ANGRY_HOLD_TICKS, CAST_NAME_BASE, CAST_TITLE_BASE, GENDER, MOOD_HOLD_TICKS } from "./civilian-constants.ts";
+import { ANGRY_HOLD_TICKS, CAST_NAME_BASE, CAST_TITLE_BASE, GENDER, MOOD_HOLD_TICKS, STATIC_HOLD_TICKS } from "./civilian-constants.ts";
 
 /** Names a present-day city's residents are drawn from (the reference's lists, dressed for today). */
 export const FEMALE_NAMES = [
@@ -219,11 +219,12 @@ export const PURPOSE_MOODS = [-1, -1, -1, -1, -1, -1, MOOD.happy, MOOD.angry, MO
 /** What the look-at line says of someone in their car: "driving for {purpose}". */
 export const DRIVING_WORD = "driving";
 
-/** The mood an event leaves (-1 for none), and for how long it holds (a wrecked stoop angers a family for days). */
+/** The mood an event leaves (-1 for none), and for how long it holds (a wrecked stoop angers a family for days; the midnight radio's static only that night). */
 export function moodOfCode(code: number): number {
   return code >= VISIT_BASE ? PURPOSE_MOODS[code - VISIT_BASE]! : EVENT_MOODS[code]!;
 }
 
 export function moodHold(code: number): number {
-  return code === EVENT_CODE.stoopWrecked ? ANGRY_HOLD_TICKS : MOOD_HOLD_TICKS;
+  if (code === EVENT_CODE.stoopWrecked) return ANGRY_HOLD_TICKS;
+  return code === EVENT_CODE.staticComplaint ? STATIC_HOLD_TICKS : MOOD_HOLD_TICKS;
 }

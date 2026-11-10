@@ -205,6 +205,8 @@ export const MECHANIC_LOOK_MINUTES = 25;
 /** The pirate radio comes on at this hour: the houses of the blocks it reaches (A1, A2: block numbers from 0) hear the static. */
 export const RADIO_HOUR = 0;
 export const RADIO_BLOCKS = [0, 1] as const;
+/** The static annoys its hearers for the night (game hours), not into the next evening: 18 h of it each midnight left two blocks annoyed most of the day and sent them drinking to forget. */
+export const STATIC_HOLD_TICKS = 3 * TICKS_PER_GAME_HOUR;
 
 /** The walk: speed (m/s) by species is a person's brisk pace, a cat's trot and a dog's lope, each with +-15 % per resident; lateral offsets of +-1 m keep walkers apart, fading in over the first and last 3 m of a path. */
 export const SPECIES_SPEED = [1.4, 2.2, 2.6] as const;
