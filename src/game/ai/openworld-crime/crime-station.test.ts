@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { must } from "../../kernel/must.test-util.ts";
 import { ACTIVITY } from "../civilians/civilian-activity.ts";
 import { CASE_PHASE, SUBJECT_MODE } from "./case-table.ts";
-import { CAR_LINGER_SECONDS, ESCORT_ARRIVE, ESCORT_SECONDS, ESCORT_SPEED, GRIP_SECONDS } from "./crime-constants.ts";
+import { ACTIVITY_SECONDS } from "../civilians/civilian-activity.ts";
+import { BESIDE_COP, CAR_LINGER_SECONDS, ESCORT_ARRIVE, ESCORT_SECONDS, ESCORT_SPEED, GRIP_SECONDS, MAX_PATROL_CARS, PATROL_COPS } from "./crime-constants.ts";
 import { footX, harness, NODE_SPACING, runFor, runUntil, STATION_NODE, type Harness } from "./crime-fixture.test-util.ts";
+import type { FakeStreet } from "./crime-street.test-util.ts";
 import { COP_MODE } from "./foot-cops.ts";
 
 const CRIMINAL = 1;
@@ -14,6 +16,13 @@ const CROSSING_X = 65;
 /** The station's door on the line city, and the least a cuffed suspect takes to be walked to it (s) from where she is cuffed. */
 const STATION_X = STATION_NODE * NODE_SPACING;
 const walkSeconds = (fromX: number): number => (STATION_X - fromX - ESCORT_ARRIVE) / ESCORT_SPEED;
+
+/** The harness's street, which a row that asks for cars has. */
+function streetOf(run: Harness): FakeStreet {
+  const { street } = run;
+  must(street, "the harness has a street");
+  return street;
+}
 
 /** A crime at x = 20 with a cop standing on it and a police station down the street: the cuffs go on at the first poll. */
 function arrestWithStation(): Harness {
@@ -26,9 +35,7 @@ function arrestWithStation(): Harness {
 /** A crime at x = 60 with a cop standing on it, and a patrol car that reaches the scene before the cuffs are on. */
 function arrestWithCar(): Harness {
   const run = harness([CAR_CRIME_X, 0, 0], { station: true, withCars: true });
-  const { street } = run;
-  must(street, "the harness has a street");
-  street.leaseAt = { x: CAR_CRIME_X, z: -20, yaw: 0 };
+  streetOf(run).leaseAt = { x: CAR_CRIME_X, z: -20, yaw: 0 };
   run.offences.x[CRIMINAL] = CAR_CRIME_X;
   run.offences.commitCrime(CRIMINAL);
   return run;
@@ -88,51 +95,100 @@ describe("an arrest on a map with a police station", () => {
 });
 
 describe("an arrest by a case whose patrol car has come, on a map with a police station", () => {
-  // mutation: sed -i 's/if (arrived \&\& this.hooks.carry(caseIndex, station.x, station.z))/if (false \&\& this.hooks.carry(caseIndex, station.x, station.z))/' src/game/ai/openworld-crime/arrests.ts
-  it("when she is cuffed, then she is led to the car and driven to the station, and the bust is raised when it gets there, sooner than a walk", () => {
+  // mutation: sed -i 's/    if (cops.gapTo(cop, this.door.x, this.door.z) <= BOARD_REACH \&\& cars.isStill(car)) {/    if (false) {/' src/game/ai/openworld-crime/arrests.ts
+  it("when she is cuffed, then she and her cop get into the car at its driver's door, the door swinging with the clip, and are off the street once it is over", () => {
     const run = arrestWithCar();
-    const { street } = run;
-    must(street, "the harness has a street");
-    runUntil(run, 60, () => run.busts.length > 0);
-    expect(run.busts, "busts raised").toHaveLength(1);
-    expect(street.redirects.at(-1)!.x, "the car was sent to the station's door").toBe(STATION_X);
-    expect(street.snaps[0]!.x, "the car is at the station").toBeCloseTo(STATION_X, 0);
-    expect(run.busts[0]!.seconds, "sooner than the walk would take").toBeLessThan(walkSeconds(CAR_CRIME_X));
+    const street = streetOf(run);
+    const { table, cops } = run.scene.foot;
+    runUntil(run, 20, () => table.mode[0] === SUBJECT_MODE.boarding);
+    expect(table.mode[0], "she is getting in").toBe(SUBJECT_MODE.boarding);
+    runFor(run, 1);
+    expect(run.poses.activity[CRIMINAL], "her clip").toBe(ACTIVITY.carIn);
+    expect(run.scene.copPoses.activity[table.holder[0]!], "his clip").toBe(ACTIVITY.carIn);
+    expect(run.poses.x[CRIMINAL], "at the driver's door").toBeCloseTo(street.snaps[0]!.x + street.doorBeside + BESIDE_COP * Math.cos(-Math.PI / 2), 1);
+    expect(street.doorRadians[0], "the door is open").toBeGreaterThan(0);
+    expect(run.busts, "busts raised").toHaveLength(0);
+    runFor(run, ACTIVITY_SECONDS.carIn);
+    expect(table.mode[0], "she is in the car").toBe(SUBJECT_MODE.conveyed);
+    expect(run.poses.shown[CRIMINAL], "off the street").toBe(0);
+    expect(cops.onStreet(table.holder[0]!), "her cop with her").toBe(false);
+    expect(street.doorRadians[0], "the door is shut").toBe(0);
   });
 
-  // mutation: sed -i 's/mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.conveyed ||/mode === SUBJECT_MODE.hidden ||/' src/game/ai/openworld-crime/crime-poses.ts
-  it("when she is in the car on the way, then she is off the street and the bust is not raised yet", () => {
+  // mutation: sed -i 's/    this.ports.setSirens(handle, false);\n    this.mode\[slot\] = PATROL_MODE.toStation;/    this.mode[slot] = PATROL_MODE.toStation;/' src/game/ai/openworld-crime/patrol-cars.ts
+  it("when the car drives to the station, then its siren is off, and there they get out and walk in at the door, where the bust is raised with her cop", () => {
     const run = arrestWithCar();
+    const street = streetOf(run);
     const { table } = run.scene.foot;
     runUntil(run, 60, () => table.mode[0] === SUBJECT_MODE.conveyed);
-    expect(table.mode[0], "she is driven").toBe(SUBJECT_MODE.conveyed);
-    runFor(run, 0.1);
-    expect(run.poses.shown[CRIMINAL], "off the street").toBe(0);
+    expect(street.sirens[0], "siren off on the way").toBe(false);
+    expect(street.redirects.at(-1)!.x, "the car was sent to the station's door").toBe(STATION_X);
+    runUntil(run, 60, () => table.mode[0] === SUBJECT_MODE.alighting);
+    expect(table.mode[0], "she is getting out").toBe(SUBJECT_MODE.alighting);
+    expect(street.snaps[0]!.x, "the car is at the station").toBeCloseTo(STATION_X, 0);
+    runFor(run, 1);
+    expect(run.poses.activity[CRIMINAL], "her clip").toBe(ACTIVITY.carOut);
     expect(run.busts, "busts raised").toHaveLength(0);
+    runUntil(run, 60, () => run.busts.length > 0);
+    expect(run.busts, "busts raised").toHaveLength(1);
+    expect(run.busts[0]!.seconds, "sooner than the whole walk would take").toBeLessThan(walkSeconds(CAR_CRIME_X));
   });
 
-  // mutation: sed -i '/^    this.linger(slot, seconds, CAR_LINGER_SECONDS);$/d' src/game/ai/openworld-crime/patrol-cars.ts
-  it("when the car has brought her, then its siren is on until it gets there, goes off at the station, and it is put away in a few seconds", () => {
+  // mutation: sed -i 's/    if (slot < MAX_PATROL_CARS) {/    if (false) {/' src/game/ai/openworld-crime/patrol-cars.ts
+  it("when the arrest is over, then the case's car is put away in a few seconds", () => {
     const run = arrestWithCar();
-    const { street } = run;
-    must(street, "the harness has a street");
-    runUntil(run, 60, () => run.scene.foot.table.mode[0] === SUBJECT_MODE.conveyed);
-    expect(street.sirens[0], "siren on the way").toBe(true);
+    const street = streetOf(run);
     runUntil(run, 60, () => run.busts.length > 0);
-    expect(street.sirens[0], "siren off at the station").toBe(false);
     expect(street.released, "not put away yet").toHaveLength(0);
     runFor(run, CAR_LINGER_SECONDS + 1);
     expect(street.released, "put away").toContain(0);
   });
 
-  // mutation: sed -i 's/      else this.walkToStation(caseIndex, slot, cop, seconds, station);/      else this.board(caseIndex, slot, cop, seconds);/' src/game/ai/openworld-crime/arrests.ts
+  // mutation: sed -i 's/    if (mode === SUBJECT_MODE.boarding \&\& cars.convey(car, station.x, station.z, seconds)) {/    if (mode === SUBJECT_MODE.boarding) {/' src/game/ai/openworld-crime/arrests.ts
   it("when the car finds no way to the station, then she is walked there instead", () => {
     const run = arrestWithCar();
-    const { street } = run;
-    must(street, "the harness has a street");
+    const street = streetOf(run);
     street.redirect = () => false;
     runUntil(run, 2 * walkSeconds(CAR_CRIME_X), () => run.busts.length > 0);
     expect(run.busts, "busts raised").toHaveLength(1);
     expect(run.busts[0]!.seconds, "after the walk's time at the least").toBeGreaterThan(walkSeconds(CAR_CRIME_X) - ESCORT_SECONDS);
+  });
+});
+
+describe("the foot cops' own patrol cars, on a map with a police station", () => {
+  /** Three cars may be leased for the cops, and any case's car is a long way off: the crime at x = 20 has no car at its scene for a good while. */
+  function homeRun(): Harness {
+    const run = harness([CRIME_X, 0, 0], { station: true, withCars: true });
+    const street = streetOf(run);
+    street.homeCars = 3;
+    street.leaseAt = { x: -300, z: 0, yaw: Math.PI / 2 };
+    return run;
+  }
+
+  // mutation: sed -i 's/      cars.keepHome(cop, nodeX\[node\]!, nodeZ\[node\]!, this.seconds);//' src/game/ai/openworld-crime/foot-law.ts
+  it("when the law starts, then each foot cop has a car of his own, siren off, sent to the kerb by his beat's start", () => {
+    const run = homeRun();
+    const street = streetOf(run);
+    runFor(run, 1);
+    expect(street.leases, "cars leased").toBe(PATROL_COPS);
+    for (let cop = 0; cop < PATROL_COPS; cop++) {
+      expect(street.tripX[cop], `where cop ${cop}'s car is sent`).toBe(run.scene.foot.cops.homeNode(cop) * NODE_SPACING);
+      expect(street.sirens[cop], `cop ${cop}'s siren`).toBeFalsy();
+    }
+  });
+
+  // mutation: sed -i 's/    if (cop >= HOME_CARS || this.mode\[home\] !== PATROL_MODE.parked) return -1;/    return -1;/' src/game/ai/openworld-crime/patrol-cars.ts
+  it("when a cop makes an arrest with no case car at the scene, then his own car is called to him and takes her to the station", () => {
+    const run = homeRun();
+    const street = streetOf(run);
+    run.offences.x[CRIMINAL] = CRIME_X;
+    run.offences.commitCrime(CRIMINAL);
+    const { table } = run.scene.foot;
+    runUntil(run, 40, () => table.mode[0] === SUBJECT_MODE.boarding);
+    expect(table.mode[0], "she is getting in").toBe(SUBJECT_MODE.boarding);
+    expect(table.carOf[0], "a cop's own car (slots after the case cars)").toBeGreaterThanOrEqual(MAX_PATROL_CARS);
+    expect(street.snaps[street.redirects.find((call) => call.x === CRIME_X)?.handle ?? 0]!.x, "the car was called to where they stand").toBeGreaterThan(CRIME_X - 5);
+    runUntil(run, 90, () => run.busts.length > 0);
+    expect(run.busts, "busts raised at the station").toHaveLength(1);
   });
 });

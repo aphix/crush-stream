@@ -70,8 +70,17 @@ export const ESCORT_ARRIVE = 2;
 /** Led along the street, she is walked to a corner at least this far (m) from where she was cuffed, so the walk away is seen. */
 export const ESCORT_MIN_DISTANCE = 6;
 /** With a police station: she is led to the case's patrol car for at most this long (s), then walked to the station's door; a walk that has not come to the door in this long (s) ends there anyway. */
-export const CAR_BOARD_SECONDS = 20;
+export const CAR_BOARD_SECONDS = 30;
 export const STATION_ESCORT_SECONDS = 300;
+/** A cop's car this near (m) to where he cuffed her stays put and she is led to it; one farther is called to the kerb nearest her; a cop and his suspect within this many metres of the car's driver's door get in. */
+export const HOME_CAR_NEAR = 30;
+export const BOARD_REACH = 2;
+/** A cop stopped at the sidewalk's last node walks straight to a car's door this far (m) off: the kerb space and the car's width lie between the sidewalk and its street side. */
+export const DOOR_APPROACH = 10;
+/** A home car that could not be leased (the pool has none) is tried again after this long (s). */
+export const HOME_RETRY_SECONDS = 10;
+/** She gets in and out of the car at the driver's door beside her cop, this far (m) to his side. */
+export const BESIDE_COP = 0.8;
 /** A patrol car with a suspect aboard that has not come to the station in this long (s) has brought her anyway. */
 export const CONVEY_GIVE_UP_SECONDS = 90;
 
@@ -106,6 +115,9 @@ export const TAKEDOWN_TUMBLE = 4;
 
 /** Patrol cars at most; one that comes to a scene stops this far (m) from it and its cop steps out; a car chase is given up after this long (s) or when the runner is this far (m) off for `CAR_LOST_SECONDS`. */
 export const MAX_PATROL_CARS = 2;
+/** Each foot cop has a patrol car of his own, parked at the kerb nearest his beat's start: the cars after the ones a case calls. */
+export const HOME_CARS = PATROL_COPS;
+export const PATROL_SLOTS = MAX_PATROL_CARS + HOME_CARS;
 export const CAR_ARRIVE_DISTANCE = 14;
 export const CAR_CHASE_GIVE_UP_SECONDS = 60;
 export const CAR_LOST_DISTANCE = 220;

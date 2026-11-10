@@ -68,7 +68,7 @@ class Scene {
       real.map,
       source,
       { bust: (resident) => this.raised(resident), jaywalked: () => {}, copDown: () => {}, footBusted: () => {} },
-      { opened: () => {}, closed: () => {}, carry: () => false },
+      { opened: () => {}, closed: () => {}, cars: () => null },
       seed,
       { lineOfSight: sight ? real.sight : null, signals: null, otherCopsSee: null },
       12,

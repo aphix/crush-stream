@@ -5,9 +5,14 @@ export const CASE_KIND = { crime: 1, fight: 2, jaywalk: 3, player: 4 } as const;
 /** A fight case warns the fighters, then seizes the ones to arrest. */
 export const CASE_PHASE = { free: 0, open: 1, warning: 2, seizing: 3 } as const;
 /** Where a suspect stands in a case: free slot, still about their day (not yet running), running, hiding, a fighter a cop is closing on, in a cop's hands, let go, cuffed and led away, or cuffed and driven to the station in the case's patrol car. */
-export const SUBJECT_MODE = { free: 0, atLarge: 1, fleeing: 2, hidden: 3, seizing: 4, gripped: 5, spared: 6, escorted: 7, conveyed: 8 } as const;
+export const SUBJECT_MODE = { free: 0, atLarge: 1, fleeing: 2, hidden: 3, seizing: 4, gripped: 5, spared: 6, escorted: 7, conveyed: 8, boarding: 9, alighting: 10 } as const;
 /** Where a cuffed suspect is led: along the street a few metres (a map with no police station), to the case's patrol car, or on foot to the station's door. */
 export const ESCORT_TO = { street: 0, car: 1, station: 2 } as const;
+
+/** Whether a suspect in `mode` is in a cop's hands, led away, getting into or out of the car, or driven off. */
+export function isHeldMode(mode: number): boolean {
+  return mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted || mode === SUBJECT_MODE.conveyed || mode === SUBJECT_MODE.boarding || mode === SUBJECT_MODE.alighting;
+}
 
 /** Every case and suspect the law holds, and the residents it keeps out of the drawn crowd: typed arrays sized once. A case owns subject slots `caseIndex * SUBJECTS_PER_CASE` and the next. */
 export class CaseTable {
@@ -32,8 +37,9 @@ export class CaseTable {
   readonly hideNode = new Int32Array(MAX_SUBJECTS).fill(-1);
   /** The corner a suspect with no hiding place runs for, kept until reached or a cop is near it (-1: none yet). */
   readonly fleeNode = new Int32Array(MAX_SUBJECTS).fill(-1);
-  /** Where each led-away suspect's cop is leading her (`ESCORT_TO`). */
+  /** Where each led-away suspect's cop is leading her (`ESCORT_TO`), and the patrol car slot she rides in (-1 none). */
   readonly escortTo = new Uint8Array(MAX_SUBJECTS);
+  readonly carOf = new Int8Array(MAX_SUBJECTS).fill(-1);
   /** The cop a suspect is in the hands of. */
   readonly holder = new Int8Array(MAX_SUBJECTS).fill(-1);
   /** A fighter who keeps attacking is taken down; the takedown is thrown once. */
@@ -77,6 +83,7 @@ export class CaseTable {
     this.since[slot] = seconds;
     this.hideNode[slot] = -1;
     this.fleeNode[slot] = -1;
+    this.carOf[slot] = -1;
     this.holder[slot] = -1;
     this.forced[slot] = 0;
     this.tookDown[slot] = 0;
@@ -116,7 +123,7 @@ export class CaseTable {
   arresting(caseIndex: number): boolean {
     for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
       const mode = this.mode[this.slotOf(caseIndex, index)]!;
-      if (mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted || mode === SUBJECT_MODE.conveyed) return true;
+      if (isHeldMode(mode)) return true;
     }
     return false;
   }
@@ -127,7 +134,7 @@ export class CaseTable {
     for (let index = 0; index < SUBJECTS_PER_CASE; index++) {
       const mode = this.mode[this.slotOf(caseIndex, index)]!;
       if (mode === SUBJECT_MODE.atLarge || mode === SUBJECT_MODE.fleeing || mode === SUBJECT_MODE.hidden || mode === SUBJECT_MODE.seizing) return false;
-      held = held || mode === SUBJECT_MODE.gripped || mode === SUBJECT_MODE.escorted || mode === SUBJECT_MODE.conveyed;
+      held = held || isHeldMode(mode);
     }
     return held;
   }

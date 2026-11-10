@@ -3,10 +3,10 @@ import type { CarStyleId } from "../../vehicle/car-variants.ts";
 /** The bodies of everyday traffic and of the cars at the kerb: sedan, hatchback, wagon (the SUV class) and pickup; never a coupe (the muscle class) or a monster truck. Patrol cars are police bodies apart from this. */
 export const EVERYDAY_BODIES: readonly CarStyleId[] = ["sedan", "hatchback", "wagon", "pickup"];
 
-/** Cars that drive the open world's streets (the pool, past the seated cars): desktop 12, phone 6. */
-export const MOVER_CARS = { desktop: 12, phone: 6 } as const;
+/** Cars that drive the open world's streets (the pool, past the seated cars): desktop 15, phone 6. */
+export const MOVER_CARS = { desktop: 15, phone: 6 } as const;
 /** Of the mover cars, the last of these are police cruisers (a light bar), leased only to patrols. */
-export const PATROL_CARS = { desktop: 2, phone: 1 } as const;
+export const PATROL_CARS = { desktop: 5, phone: 1 } as const;
 /** Of the mover cars, just before the patrol cruisers: ambulances (a police body in white with its light bar), leased only to a call. */
 export const AMBULANCE_CARS = { desktop: 1, phone: 1 } as const;
 /** Cars that stand parked as scenery near the players: real cars at the kerb, taken from a second pool that never drives. */

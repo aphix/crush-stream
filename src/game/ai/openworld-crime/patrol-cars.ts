@@ -1,9 +1,10 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import { idleDrive, type DriveInput } from "../../vehicle/car-drive.ts";
 import { BUST, CRAWL } from "../constants.ts";
+import type { DoorSpot } from "../civilians/civilian-car-door.ts";
 import type { AiCar } from "../derby-ai.ts";
 import type { Obstacles } from "../obstacles.ts";
-import { CAREFUL_PURSUIT_SPEED, CHASE_LEAD_SECONDS, CHASE_RESUME_DISTANCE, CLOSE_PURSUIT_DISTANCE, CONVEY_GIVE_UP_SECONDS, CRIME_STREAM, HOTHEAD_RUN_SHARE, REDIRECT_SECONDS, CAR_STOP_DECEL, CAR_ARRIVE_DISTANCE, CAR_CHASE_GIVE_UP_SECONDS, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS, CAR_STOP_GAP, IMPOUND_SECONDS, MAX_PATROL_CARS, YIELD_DISTANCE } from "./crime-constants.ts";
+import { CAREFUL_PURSUIT_SPEED, CHASE_LEAD_SECONDS, CHASE_RESUME_DISTANCE, CLOSE_PURSUIT_DISTANCE, CONVEY_GIVE_UP_SECONDS, CRIME_STREAM, HOME_CAR_NEAR, HOME_CARS, HOME_RETRY_SECONDS, HOTHEAD_RUN_SHARE, REDIRECT_SECONDS, CAR_STOP_DECEL, CAR_ARRIVE_DISTANCE, CAR_CHASE_GIVE_UP_SECONDS, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS, CAR_STOP_GAP, IMPOUND_SECONDS, MAX_PATROL_CARS, PATROL_SLOTS, YIELD_DISTANCE } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
 import type { LineOfSight } from "./offence-source.ts";
 import { PursuitDriver } from "./pursuit-driver.ts";
@@ -20,6 +21,12 @@ export interface PatrolCarPorts {
   /** Re-plans the leased car's street trip from where it is to the kerb nearest (x, z); false (trip kept) when it cannot. */
   redirect(handle: number, toX: number, toZ: number): boolean;
   snap(handle: number): AiCar;
+  /** The patrol cars the foot cops may have parked of their own (0: none, the pool has no spare). */
+  readonly homeCars: number;
+  /** Where a person at the leased car's driver's door stands, into `out`; false when it has none. */
+  doorSpot(handle: number, out: DoorSpot): boolean;
+  /** Opens the leased car's driver's door `radians` (0 shuts it). */
+  openDoor(handle: number, radians: number): void;
   setSirens(handle: number, on: boolean): void;
   setDriver(handle: number, driver: CarDriver | null): void;
   release(handle: number): void;
@@ -39,39 +46,41 @@ interface PatrolHooks {
   arrived(caseIndex: number, x: number, z: number): void;
   /** The driver of car `carIndex` was held slow beside a patrol car long enough: `resident` -1 for the player. */
   busted(resident: number, carIndex: number, seconds: number): void;
-  /** The car of case `caseIndex` has come to the station with the suspect it carried. */
-  delivered(caseIndex: number): void;
+  /** Car slot `slot` has come to the station with the suspects it carried. */
+  delivered(slot: number): void;
 }
 
 const YIELD = { none: 0, stopping: 1, refused: 2 } as const;
-const PATROL_MODE = { free: 0, toScene: 1, atScene: 2, pursuing: 3, lingering: 4, toStation: 5 } as const;
+const PATROL_MODE = { free: 0, toScene: 1, atScene: 2, pursuing: 3, lingering: 4, parked: 5, called: 6, toStation: 7, atStation: 8 } as const;
 
 /**
  * The law's cars, leased from the traffic's pool. One drives to a scene on foot-case calls, by the streets on the traffic's urgent trip (a hothead's run, `HOTHEAD_RUN_SHARE`, straight at it), and its cop steps out; one chases a car that ran a red light, makes a traffic car it is near pull over,
  * and busts its driver by the race rule: held slow (`BUST.kph`) within `BUST.near` of the chasing car for `BUST.time` s, or `playerBustSeconds` for a human (Survival's hold).
  */
 export class PatrolCars {
-  readonly mode = new Uint8Array(MAX_PATROL_CARS);
+  /** Slots 0 .. `MAX_PATROL_CARS` - 1 are the cars a case or a chase calls; the `HOME_CARS` after them are the foot cops' own, one each, parked at the kerb nearest his beat's start. */
+  readonly mode = new Uint8Array(PATROL_SLOTS);
   /** Per car: 1 on a hothead's run. */
-  readonly hothead = new Uint8Array(MAX_PATROL_CARS);
+  readonly hothead = new Uint8Array(PATROL_SLOTS);
   /** Per car: 1 while this driver has the wheel, 0 while the traffic drives the car's trip along the streets. */
-  readonly wheel = new Uint8Array(MAX_PATROL_CARS);
-  private readonly redirectAt = new Float64Array(MAX_PATROL_CARS);
+  readonly wheel = new Uint8Array(PATROL_SLOTS);
+  private readonly redirectAt = new Float64Array(PATROL_SLOTS);
+  private readonly retryAt = new Float64Array(PATROL_SLOTS);
   private readonly ports: PatrolCarPorts;
   private readonly hooks: PatrolHooks;
   private readonly pursuit: PursuitDriver;
   private readonly playerBustSeconds: number;
-  private readonly handle = new Int32Array(MAX_PATROL_CARS).fill(-1);
-  private readonly caseIndex = new Int8Array(MAX_PATROL_CARS).fill(-1);
-  private readonly targetCar = new Int32Array(MAX_PATROL_CARS).fill(-1);
-  private readonly aimX = new Float64Array(MAX_PATROL_CARS);
-  private readonly aimZ = new Float64Array(MAX_PATROL_CARS);
-  private readonly heldFor = new Float64Array(MAX_PATROL_CARS);
-  private readonly farFor = new Float64Array(MAX_PATROL_CARS);
-  private readonly since = new Float64Array(MAX_PATROL_CARS);
-  private readonly lingerUntil = new Float64Array(MAX_PATROL_CARS);
+  private readonly handle = new Int32Array(PATROL_SLOTS).fill(-1);
+  private readonly caseIndex = new Int8Array(PATROL_SLOTS).fill(-1);
+  private readonly targetCar = new Int32Array(PATROL_SLOTS).fill(-1);
+  private readonly aimX = new Float64Array(PATROL_SLOTS);
+  private readonly aimZ = new Float64Array(PATROL_SLOTS);
+  private readonly heldFor = new Float64Array(PATROL_SLOTS);
+  private readonly farFor = new Float64Array(PATROL_SLOTS);
+  private readonly since = new Float64Array(PATROL_SLOTS);
+  private readonly lingerUntil = new Float64Array(PATROL_SLOTS);
   /** Per car: whether it has been asked to pull over yet (`YIELD.none`), is pulling over (`YIELD.stopping`) or cannot be made to (`YIELD.refused`: a human's). */
-  private readonly yieldState = new Uint8Array(MAX_PATROL_CARS);
+  private readonly yieldState = new Uint8Array(PATROL_SLOTS);
   private readonly drivers: readonly CarDriver[];
   private readonly stopDriver: CarDriver;
   private readonly out: DriveInput = idleDrive();
@@ -105,18 +114,75 @@ export class PatrolCars {
     return true;
   }
 
-  /** The car of case `caseIndex`, stopped at its scene, takes the suspect cuffed aboard to (x, z) along the streets; false (it stays) when it is not there or finds no way. */
-  convey(caseIndex: number, x: number, z: number, seconds: number): boolean {
-    for (let slot = 0; slot < MAX_PATROL_CARS; slot++) {
-      if (this.caseIndex[slot] !== caseIndex || this.mode[slot] !== PATROL_MODE.atScene) continue;
-      if (!this.ports.redirect(this.handle[slot]!, x, z)) return false;
-      this.wheel[slot] = 0;
-      this.ports.setDriver(this.handle[slot]!, null);
-      this.mode[slot] = PATROL_MODE.toStation;
-      this.since[slot] = seconds;
-      return true;
+  /** Cop `cop`'s own car, leased once the pool has a spare (looked for again `HOME_RETRY_SECONDS` after a miss) and parked at the kerb nearest (x, z), where his beat starts. */
+  keepHome(cop: number, x: number, z: number, seconds: number): void {
+    const slot = MAX_PATROL_CARS + cop;
+    if (cop >= HOME_CARS || cop >= this.ports.homeCars || this.mode[slot] !== PATROL_MODE.free || seconds < this.retryAt[slot]!) return;
+    const handle = this.ports.lease(x, z);
+    if (handle < 0) {
+      this.retryAt[slot] = seconds + HOME_RETRY_SECONDS;
+      return;
     }
-    return false;
+    this.handle[slot] = handle;
+    this.mode[slot] = PATROL_MODE.parked;
+    this.caseIndex[slot] = -1;
+    this.targetCar[slot] = -1;
+    this.aimX[slot] = x;
+    this.aimZ[slot] = z;
+    this.wheel[slot] = 0;
+    this.ports.setDriver(handle, null);
+  }
+
+  /** The car that takes the arrest of case `caseIndex` by cop `cop` at (x, z): the case's own car at its scene, else the cop's own, called to the kerb nearest (x, z) when it stands over `HOME_CAR_NEAR` m off. Its slot, -1 with none. */
+  carForArrest(caseIndex: number, cop: number, x: number, z: number, seconds: number): number {
+    for (let slot = 0; slot < MAX_PATROL_CARS; slot++) if (this.caseIndex[slot] === caseIndex && this.mode[slot] === PATROL_MODE.atScene) return slot;
+    const home = MAX_PATROL_CARS + cop;
+    if (cop >= HOME_CARS || this.mode[home] !== PATROL_MODE.parked) return -1;
+    const car = this.ports.snap(this.handle[home]!);
+    if (hypot2(car.x - x, car.z - z) > HOME_CAR_NEAR) {
+      if (!this.ports.redirect(this.handle[home]!, x, z)) return -1;
+      this.mode[home] = PATROL_MODE.called;
+      this.since[home] = seconds;
+    }
+    return home;
+  }
+
+  /** Whether car `slot` stands still. */
+  isStill(slot: number): boolean {
+    const car = this.ports.snap(this.handle[slot]!);
+    return hypot2(car.vx, car.vz) < CRAWL;
+  }
+
+  /** Where a person at car `slot`'s driver's door stands, into `out`. */
+  doorSpot(slot: number, out: DoorSpot): boolean {
+    return this.ports.doorSpot(this.handle[slot]!, out);
+  }
+
+  /** Car `slot`'s driver's door stands open `radians`. */
+  openDoor(slot: number, radians: number): void {
+    this.ports.openDoor(this.handle[slot]!, radians);
+  }
+
+  /** Car `slot`, its riders aboard, drives to the kerb nearest (x, z) with its siren off; false (it stays) when it finds no way. */
+  convey(slot: number, x: number, z: number, seconds: number): boolean {
+    const handle = this.handle[slot]!;
+    if (!this.ports.redirect(handle, x, z)) return false;
+    this.wheel[slot] = 0;
+    this.ports.setDriver(handle, null);
+    this.ports.setSirens(handle, false);
+    this.mode[slot] = PATROL_MODE.toStation;
+    this.since[slot] = seconds;
+    return true;
+  }
+
+  /** Car `slot`'s riders are out at the station: a cop's own car goes back to park by his beat, a case's is let go in a while. */
+  finishRide(slot: number, seconds: number): void {
+    if (slot < MAX_PATROL_CARS) {
+      this.linger(slot, seconds, CAR_LINGER_SECONDS);
+      return;
+    }
+    this.mode[slot] = PATROL_MODE.parked;
+    if (this.ports.redirect(this.handle[slot]!, this.aimX[slot]!, this.aimZ[slot]!)) this.mode[slot] = PATROL_MODE.called;
   }
 
   /** The foot case is over: its car's siren goes off and it is let go in a while. */
@@ -150,8 +216,8 @@ export class PatrolCars {
 
   /** Whether a leased patrol car on the road within `range` m of (x, z) sees it (`lineOfSight` null: every line is clear). */
   sees(x: number, z: number, range: number, lineOfSight: LineOfSight | null): boolean {
-    for (let slot = 0; slot < MAX_PATROL_CARS; slot++) {
-      if (this.mode[slot] === PATROL_MODE.free) continue;
+    for (let slot = 0; slot < PATROL_SLOTS; slot++) {
+      if (this.mode[slot] === PATROL_MODE.free || this.mode[slot] === PATROL_MODE.parked || this.mode[slot] === PATROL_MODE.called) continue;
       const car = this.ports.snap(this.handle[slot]!);
       if (hypot2(car.x - x, car.z - z) <= range && (lineOfSight === null || lineOfSight(car.x, car.z, x, z))) return true;
     }
@@ -160,13 +226,16 @@ export class PatrolCars {
 
   /** One grid step: arrivals, the chase's hold and give-up, and letting go of cars whose time is up. */
   step(seconds: number, dt: number): void {
-    for (let slot = 0; slot < MAX_PATROL_CARS; slot++) {
+    for (let slot = 0; slot < PATROL_SLOTS; slot++) {
       switch (this.mode[slot]) {
         case PATROL_MODE.toScene:
           this.stepToScene(slot, seconds);
           break;
         case PATROL_MODE.pursuing:
           this.stepPursuit(slot, seconds, dt);
+          break;
+        case PATROL_MODE.called:
+          if (this.ports.arrived(this.handle[slot]!)) this.mode[slot] = PATROL_MODE.parked;
           break;
         case PATROL_MODE.toStation:
           this.stepToStation(slot, seconds);
@@ -216,8 +285,8 @@ export class PatrolCars {
 
   private stepToStation(slot: number, seconds: number): void {
     if (!this.ports.arrived(this.handle[slot]!) && seconds - this.since[slot]! <= CONVEY_GIVE_UP_SECONDS) return;
-    this.linger(slot, seconds, CAR_LINGER_SECONDS);
-    this.hooks.delivered(this.caseIndex[slot]!);
+    this.mode[slot] = PATROL_MODE.atStation;
+    this.hooks.delivered(slot);
   }
 
   private stepPursuit(slot: number, seconds: number, dt: number): void {

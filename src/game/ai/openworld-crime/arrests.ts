@@ -1,10 +1,12 @@
 import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import type { OpenWorldMap, WalkGraph } from "../../world/openworld/walk-graph.ts";
 import { PLACE_NAMES } from "../../world/openworld/openworld-programme.ts";
-import { ARREST } from "../civilians/civilian-activity.ts";
+import { ACTIVITY, ACTIVITY_SECONDS, ARREST } from "../civilians/civilian-activity.ts";
+import { CAR_DOOR, carDoorOpenness, type DoorSpot } from "../civilians/civilian-car-door.ts";
 import { ESCORT_TO, SUBJECT_MODE, type CaseTable } from "./case-table.ts";
-import { CAR_BOARD_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, ESCORT_AHEAD_DISTANCE, ESCORT_ARRIVE, ESCORT_MIN_DISTANCE, ESCORT_SECONDS, FOOT_COP_COUNT, STATION_ESCORT_SECONDS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
+import { BESIDE_COP, BOARD_REACH, CAR_BOARD_SECONDS, COPS_PER_CASE, DOOR_APPROACH, CRIME_STEP_SECONDS, ESCORT_AHEAD_DISTANCE, ESCORT_ARRIVE, ESCORT_MIN_DISTANCE, ESCORT_SECONDS, FOOT_COP_COUNT, STATION_ESCORT_SECONDS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
 import { COP_MODE, type FootCops } from "./foot-cops.ts";
+import type { PatrolCars } from "./patrol-cars.ts";
 import type { FootWalkers } from "./foot-walkers.ts";
 
 /** The police station's door, where the law takes the arrested. */
@@ -20,10 +22,8 @@ export function stationOf(map: OpenWorldMap): Station | null {
 interface ArrestHooks {
   /** The suspect of subject slot `slot` of case `caseIndex` is at the station: the host's arrest of her. */
   raise(caseIndex: number, slot: number): void;
-  /** Case `caseIndex` has no more use for its patrol car. */
-  carFree(caseIndex: number): void;
-  /** Case `caseIndex`'s patrol car, at the scene, drives to (x, z) with the suspect aboard; false when it cannot. */
-  carry(caseIndex: number, x: number, z: number): boolean;
+  /** The law's patrol cars; null when it has none (a client's). */
+  cars(): PatrolCars | null;
 }
 
 /**
@@ -37,6 +37,7 @@ export class Arrests {
   private readonly graph: WalkGraph;
   private readonly station: Station | null;
   private readonly hooks: ArrestHooks;
+  private readonly door: DoorSpot = { x: 0, z: 0, yaw: 0, feetY: 0, surfaceY: 0 };
 
   constructor(walkers: FootWalkers, cops: FootCops, table: CaseTable, graph: WalkGraph, station: Station | null, hooks: ArrestHooks) {
     this.graph = graph;
@@ -71,9 +72,9 @@ export class Arrests {
     this.cops.aimZ[cop] = walkers.z[walker]!;
   }
 
-  /** The cuffs are on: her cop leads her to the case's patrol car when it has come, else (with a station) to its door, else to the sidewalk node at least `ESCORT_MIN_DISTANCE` m off that is nearest a point `ESCORT_AHEAD_DISTANCE` m ahead of him. */
+  /** The cuffs are on: with a station, her cop leads her to a patrol car (the case's at its scene, else his own, called to them), they get in, he drives her to the station and they walk in at its door (on foot all the way when no car can be had); else he leads her to the sidewalk node at least `ESCORT_MIN_DISTANCE` m off that is nearest a point `ESCORT_AHEAD_DISTANCE` m ahead of him. */
   escort(caseIndex: number, slot: number, seconds: number): void {
-    const { table } = this;
+    const { table, walkers, cops } = this;
     const cop = table.holder[slot]!;
     table.mode[slot] = SUBJECT_MODE.escorted;
     table.since[slot] = seconds;
@@ -82,60 +83,133 @@ export class Arrests {
       return;
     }
     this.sendOtherCopsBack(caseIndex, cop);
-    if (table.carHere[caseIndex] === 1) this.leadTo(slot, cop, ESCORT_TO.car, table.carX[caseIndex]!, table.carZ[caseIndex]!);
-    else this.walkToStation(caseIndex, slot, cop, seconds, this.station);
+    const cars = this.hooks.cars();
+    const car = cars === null ? -1 : cars.carForArrest(caseIndex, cop, walkers.x[cop]!, walkers.z[cop]!, seconds);
+    if (cars === null || car < 0 || !cars.doorSpot(car, this.door)) {
+      this.walkToStation(slot, cop, seconds, this.station);
+      return;
+    }
+    table.carOf[slot] = car;
+    this.leadTo(slot, cop, ESCORT_TO.car, this.door.x, this.door.z);
+    cops.leaveSidewalkFor(cop, DOOR_APPROACH);
   }
 
-  /** Once a grid step, after the cops moved: each led-away suspect walks at her cop's right; where he has led her she is gone from the street and he runs on for the case. */
+  /** Once a grid step, after the cops moved: each led-away suspect walks at her cop's right; where he has led her she is gone from the street (or in the car, or at the station's door) and he runs on for the case. */
   step(seconds: number): void {
-    const { walkers, table } = this;
+    const { table } = this;
     for (let slot = 0; slot < table.mode.length; slot++) {
-      if (table.mode[slot] !== SUBJECT_MODE.escorted) continue;
-      const cop = table.holder[slot]!;
-      const walker = FOOT_COP_COUNT + slot;
-      const yaw = walkers.yaw[cop]!;
-      const cos = detCos(yaw);
-      const sin = detSin(yaw);
-      // Her spot is body (-escortAcross, escortAhead) in the cop's frame.
-      walkers.x[walker] = walkers.x[cop]! - ARREST.escortAcross * cos + ARREST.escortAhead * sin;
-      walkers.z[walker] = walkers.z[cop]! + ARREST.escortAcross * sin + ARREST.escortAhead * cos;
-      walkers.yaw[walker] = yaw;
-      walkers.carry(walker, walkers.speed[cop]! * CRIME_STEP_SECONDS, CRIME_STEP_SECONDS);
-      this.finishEscort(slot, cop, seconds);
+      const mode = table.mode[slot]!;
+      if (mode === SUBJECT_MODE.escorted) this.stepEscort(slot, seconds);
+      else if (mode === SUBJECT_MODE.boarding || mode === SUBJECT_MODE.alighting) this.stepDoor(slot, mode, seconds);
     }
+  }
+
+  private stepEscort(slot: number, seconds: number): void {
+    const { walkers, table } = this;
+    const cop = table.holder[slot]!;
+    const walker = FOOT_COP_COUNT + slot;
+    const yaw = walkers.yaw[cop]!;
+    const cos = detCos(yaw);
+    const sin = detSin(yaw);
+    // Her spot is body (-escortAcross, escortAhead) in the cop's frame.
+    walkers.x[walker] = walkers.x[cop]! - ARREST.escortAcross * cos + ARREST.escortAhead * sin;
+    walkers.z[walker] = walkers.z[cop]! + ARREST.escortAcross * sin + ARREST.escortAhead * cos;
+    walkers.yaw[walker] = yaw;
+    walkers.carry(walker, walkers.speed[cop]! * CRIME_STEP_SECONDS, CRIME_STEP_SECONDS);
+    this.finishEscort(slot, cop, seconds);
   }
 
   private finishEscort(slot: number, cop: number, seconds: number): void {
     const { table, cops, station } = this;
     const caseIndex = Math.floor(slot / SUBJECTS_PER_CASE);
-    const arrived = cops.gapTo(cop, cops.aimX[cop]!, cops.aimZ[cop]!) <= ESCORT_ARRIVE;
     const elapsed = seconds - table.since[slot]!;
     const to = table.escortTo[slot];
     if (to === ESCORT_TO.car) {
-      if (!arrived && elapsed < CAR_BOARD_SECONDS) return;
-      if (station === null) return;
-      if (arrived && this.hooks.carry(caseIndex, station.x, station.z)) this.board(caseIndex, slot, cop, seconds);
-      else this.walkToStation(caseIndex, slot, cop, seconds, station);
+      this.stepToCar(slot, cop, seconds);
       return;
     }
+    const arrived = cops.gapTo(cop, cops.aimX[cop]!, cops.aimZ[cop]!) <= ESCORT_ARRIVE;
     if (!arrived && elapsed < (to === ESCORT_TO.station ? STATION_ESCORT_SECONDS : ESCORT_SECONDS)) return;
-    if (to === ESCORT_TO.station) this.hooks.raise(caseIndex, slot);
+    if (to === ESCORT_TO.station && station !== null) this.hooks.raise(caseIndex, slot);
     table.hold(table.resident[slot]!, seconds);
     table.free(slot);
     cops.resume(cop);
   }
 
-  /** She is in the patrol car, which drives off; her cop goes back to his beat (or his seat in the car). */
-  private board(caseIndex: number, slot: number, cop: number, seconds: number): void {
-    this.table.mode[slot] = SUBJECT_MODE.conveyed;
-    this.table.since[slot] = seconds;
-    this.sendCopBack(caseIndex, cop);
+  /** Led to the car's driver's door, which follows the car while it is still coming: at the door, standing, they get in; not there in `CAR_BOARD_SECONDS`, or the car gone, they walk. */
+  private stepToCar(slot: number, cop: number, seconds: number): void {
+    const { table, cops, station } = this;
+    const cars = this.hooks.cars();
+    const car = table.carOf[slot]!;
+    if (cars === null || station === null || !cars.doorSpot(car, this.door)) {
+      table.carOf[slot] = -1;
+      if (station !== null) this.walkToStation(slot, cop, seconds, station);
+      return;
+    }
+    cops.aimX[cop] = this.door.x;
+    cops.aimZ[cop] = this.door.z;
+    if (cops.gapTo(cop, this.door.x, this.door.z) <= BOARD_REACH && cars.isStill(car)) {
+      this.takeToDoor(slot, cop, seconds, SUBJECT_MODE.boarding);
+      return;
+    }
+    if (seconds - table.since[slot]! < CAR_BOARD_SECONDS) return;
+    table.carOf[slot] = -1;
+    this.walkToStation(slot, cop, seconds, station);
   }
 
-  private walkToStation(caseIndex: number, slot: number, cop: number, seconds: number, station: Station): void {
+  /** The cop and his suspect stand at the car's driver's door (`this.door`, beside each other), doing `mode`'s clip. */
+  private takeToDoor(slot: number, cop: number, seconds: number, mode: number): void {
+    const { table, walkers } = this;
+    const walker = FOOT_COP_COUNT + slot;
+    table.mode[slot] = mode;
+    table.since[slot] = seconds;
+    this.cops.grip(cop);
+    walkers.place(cop, this.door.x, this.door.z);
+    walkers.place(walker, this.door.x + detCos(this.door.yaw) * BESIDE_COP, this.door.z - detSin(this.door.yaw) * BESIDE_COP);
+    walkers.yaw[cop] = this.door.yaw;
+    walkers.yaw[walker] = this.door.yaw;
+    walkers.speed[walker] = 0;
+  }
+
+  /** In or out of the car: the door swings with the clip, and when it is over they are in (off the street, the car driving off) or out (led on to the station's door). */
+  private stepDoor(slot: number, mode: number, seconds: number): void {
+    const { table, cops, station } = this;
+    const cars = this.hooks.cars();
+    const car = table.carOf[slot]!;
+    const cop = table.holder[slot]!;
+    const getting = mode === SUBJECT_MODE.boarding ? "carIn" : "carOut";
+    const clock = seconds - table.since[slot]!;
+    if (cars === null || station === null) return;
+    cars.openDoor(car, CAR_DOOR.openRad * carDoorOpenness(ACTIVITY[getting], clock));
+    if (clock < ACTIVITY_SECONDS[getting]) return;
+    cars.openDoor(car, 0);
+    if (mode === SUBJECT_MODE.boarding && cars.convey(car, station.x, station.z, seconds)) {
+      table.mode[slot] = SUBJECT_MODE.conveyed;
+      table.since[slot] = seconds;
+      cops.ride(cop);
+      this.sendOtherCopsBack(Math.floor(slot / SUBJECTS_PER_CASE), cop);
+      return;
+    }
+    table.carOf[slot] = -1;
+    cars.finishRide(car, seconds);
+    this.walkToStation(slot, cop, seconds, station);
+  }
+
+  /** Car `carSlot` has come to the station: the suspects it carries get out at its door with their cops. */
+  alight(carSlot: number, seconds: number): void {
+    const { table } = this;
+    const cars = this.hooks.cars();
+    if (cars === null) return;
+    for (let slot = 0; slot < table.mode.length; slot++) {
+      if (table.mode[slot] !== SUBJECT_MODE.conveyed || table.carOf[slot] !== carSlot || !cars.doorSpot(carSlot, this.door)) continue;
+      this.takeToDoor(slot, table.holder[slot]!, seconds, SUBJECT_MODE.alighting);
+    }
+  }
+
+  private walkToStation(slot: number, cop: number, seconds: number, station: Station): void {
     this.table.since[slot] = seconds;
+    this.table.mode[slot] = SUBJECT_MODE.escorted;
     this.leadTo(slot, cop, ESCORT_TO.station, station.x, station.z);
-    this.hooks.carFree(caseIndex);
   }
 
   private leadTo(slot: number, cop: number, to: number, x: number, z: number): void {

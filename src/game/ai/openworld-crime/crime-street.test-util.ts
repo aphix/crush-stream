@@ -1,5 +1,6 @@
 import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { blankAiCar, type AiCar } from "../derby-ai.ts";
+import type { DoorSpot } from "../civilians/civilian-car-door.ts";
 import type { CarDriver } from "./patrol-cars.ts";
 
 /** A bare car's pace (m/s2, m/s), and how fast its nose turns at full lock above `STEER_SPEED_REFERENCE` m/s (rad/s). */
@@ -32,6 +33,10 @@ export class FakeStreet {
   /** Where the next leased car appears. */
   leaseAt = { x: 0, z: 0, yaw: 0 };
   leases = 0;
+  /** How many cars the foot cops may have of their own (0: none), how far (m) east of a car its driver's door stands, and the angle each car's door was last opened to. */
+  homeCars = 0;
+  readonly doorRadians: number[] = [];
+  doorBeside = 1.5;
 
   /** Puts a car on the street cruising at `speed` along `yaw`: its index in the engine's list. `resident` -1 is the player's. */
   addCar(x: number, z: number, yaw: number, speed: number, resident: number, traffic: boolean): number {
@@ -59,6 +64,20 @@ export class FakeStreet {
     this.tripX[handle] = toX;
     this.tripZ[handle] = toZ - this.kerbOffset;
     return handle;
+  }
+
+  doorSpot(handle: number, out: DoorSpot): boolean {
+    const car = this.snaps[handle]!;
+    out.x = car.x + this.doorBeside;
+    out.z = car.z;
+    out.yaw = -Math.PI / 2;
+    out.feetY = 0;
+    out.surfaceY = 0.5;
+    return true;
+  }
+
+  openDoor(handle: number, radians: number): void {
+    this.doorRadians[handle] = radians;
   }
 
   arrived(handle: number): boolean {
