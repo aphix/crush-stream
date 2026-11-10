@@ -67,7 +67,7 @@ const FACADE_STYLES = Object.keys(FACADE) as FacadeStyle[];
  * One style's layers as `scripts/pack-facades.mjs` packed them: bays across a 11.8 m face, layers in its strips, each band's height (m) and a bare patch of wall (u, v in the floor layer). `height` and `roughness`:
  * the style has those strips too (read only on the relief tier); `neon`: its glow strip's blue is a sign mask lit in the sign's own colour; `open`: the ground layer's albedo alpha is 0 where the interior shows through (a doorway, a shopfront window).
  */
-type LayerSpec = { bays: number; layers: number; metres: { cornice: number; floor: number; ground: number }; plain: readonly number[]; height?: boolean; roughness?: boolean; neon?: boolean; dark?: boolean; open?: boolean };
+type LayerSpec = { bays: number; layers: number; metres: { cornice: number; floor: number; ground: number }; plain: readonly number[]; height?: boolean; roughness?: boolean; neon?: boolean; dark?: boolean; roomsAbove?: boolean; open?: boolean };
 /** The JSON module's keys are the styles' (a row pins it): its inferred type is only as loose as the file. */
 export const FACADE_LAYERS = layerData as Record<FacadeStyle, LayerSpec>;
 
@@ -397,12 +397,12 @@ float facadeRoofKind() {
  * What a style's program adds to the base facade: the relief tier's strips (only where the device can draw relief) and the sign colour of a neon style. A style with none has exactly the base program,
  * the base program's key and its uniforms.
  */
-type Extras = { height: boolean; roughness: boolean; neon: boolean; open: boolean; dark: boolean };
+type Extras = { height: boolean; roughness: boolean; neon: boolean; open: boolean; dark: boolean; roomsAbove: boolean };
 
 function extrasOf(style: FacadeStyle): Extras {
   const spec = FACADE_LAYERS[style];
   const relief = reliefPossible();
-  return { height: relief && spec.height === true, roughness: relief && spec.roughness === true, neon: spec.neon === true, open: spec.open === true, dark: spec.open === true || spec.dark === true };
+  return { height: relief && spec.height === true, roughness: relief && spec.roughness === true, neon: spec.neon === true, open: spec.open === true, dark: spec.open === true || spec.dark === true, roomsAbove: spec.roomsAbove === true };
 }
 
 /** Each strip's sampler and the uv varying it is read with, and the layer every read takes (the region's first number). */
@@ -480,7 +480,7 @@ vec4 facadeNormalTexel() {
 #endif`;
 const facadeMap = (extras: Extras): string => /* glsl */ `
 #ifdef USE_MAP
-${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "albedo")};${extras.open ? `\nif (diffuseColor.a < ${DOORWAY_BELOW}) discard;\nif (diffuseColor.a < ${WINDOW_BELOW} && vFacadeOpen > 0.0 && ${facadeRead(extras, "glow")}.r > ${WINDOW_PANE_ABOVE} && facadeCuts(vFacadeOpen)) discard;` : ""}
+${extras.height ? "facadeParallax(vFacadeRegion.x);\n" : ""}diffuseColor *= vFacadeRegion.x < 0.0 ? vec4(1.0) : ${facadeRead(extras, "albedo")};${extras.open ? `\nif (diffuseColor.a < ${DOORWAY_BELOW}) discard;\nif (diffuseColor.a < ${WINDOW_BELOW} && vFacadeOpen > 0.0 ${extras.roomsAbove ? "" : `&& vFacadeRegion.x >= ${LAYER.ground}.0 `}&& ${facadeRead(extras, "glow")}.r > ${WINDOW_PANE_ABOVE} && facadeCuts(vFacadeOpen)) discard;` : ""}
 #endif`;
 /** The roughness strip's green sets the surface's roughness where its share is on (the relief tier), in place of the material's one number. */
 const facadeRoughness = (extras: Extras): string => `#include <roughnessmap_fragment>
@@ -561,7 +561,7 @@ function makeFacadeMaterial(style: FacadeStyle): THREE.MeshStandardMaterial {
     tagHook.call(material, shader, renderer);
     patchFacade(shader, own, roofs, edges, FACADE_LAYERS[style].bays, extras);
   };
-  const variant = `${extras.height ? "|height" : ""}${extras.roughness ? "|roughness" : ""}${extras.neon ? "|neon" : ""}${extras.open ? "|open" : extras.dark ? "|dark" : ""}`;
+  const variant = `${extras.height ? "|height" : ""}${extras.roughness ? "|roughness" : ""}${extras.neon ? "|neon" : ""}${extras.open ? "|open" : extras.dark ? "|dark" : ""}${extras.roomsAbove ? "|above" : ""}`;
   material.customProgramCacheKey = () => `${tagKey.call(material)}|facade${variant}`;
   const { layers } = FACADE_LAYERS[style];
   const stops = [

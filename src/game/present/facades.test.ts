@@ -364,7 +364,17 @@ describe("given a style whose layer data names no relief strips", () => {
     for (const style of open) {
       const shader = compileFacade(made[style]);
       expect(shader.fragmentShader, `${style} discards its doorway`).toContain("discard");
-      expect(made[style].customProgramCacheKey().endsWith("|open"), `${style} key ${made[style].customProgramCacheKey()}`).toBe(true);
+      expect(made[style].customProgramCacheKey().endsWith(FACADE_LAYERS[style].roomsAbove === true ? "|open|above" : "|open"), `${style} key ${made[style].customProgramCacheKey()}`).toBe(true);
+    }
+  });
+
+  // mutation: sed -i 's/roomsAbove: spec.roomsAbove === true/roomsAbove: true/' src/game/present/facades.ts (a shop's upper floors open too, to rooms nobody sees)
+  it("when a shop's facade and a house's are compiled, then a shop opens its ground band's windows alone and a house opens every storey's", () => {
+    const made = makeFacadeMaterials();
+    for (const style of STYLES.filter((name) => FACADE_LAYERS[name].open === true)) {
+      const home = style === "rowbrick" || style === "rowpainted";
+      expect(FACADE_LAYERS[style].roomsAbove === true, `${style} has rooms above its ground floor`).toBe(home);
+      expect(compileFacade(made[style]).fragmentShader.includes("vFacadeRegion.x >= 2.0 && "), `${style} cuts only its ground band`).toBe(!home);
     }
   });
 

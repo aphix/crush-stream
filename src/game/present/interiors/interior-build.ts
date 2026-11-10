@@ -3,6 +3,7 @@ import { hypot2 } from "../../kernel/physics-core.js";
 import { stairBoxes, wallBoxes } from "../../world/openworld/interior-draft.ts";
 import { ceilingOver, lookKind, ROOM_LOOK, type Alcove, type Box, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
 import type { Piece } from "../prefab-pieces.ts";
+import { BAY } from "../../world/openworld/openworld-facade-solids.ts";
 import { brick } from "./interior-brick.ts";
 import { furnishingParts } from "./interior-kit.ts";
 
@@ -124,6 +125,22 @@ function alcovePieces(plan: InteriorPlan, look: Look, level: number): Piece[] {
   return out;
 }
 
+/**
+ * The bay's opening in the street wall is as wide as the bay's outline, but its glass is set in from the outline, so it meets the wall's plane short of the opening's edge: the strip between
+ * them (a wedge no wider than a hand) is closed on each side by a return of the wall, from the floor to the glass's head, so the alcove has no crack to see out through.
+ */
+function jambPieces(plan: InteriorPlan, look: Look, level: number): Piece[] {
+  const out: Piece[] = [];
+  for (const alcove of plan.alcoves) {
+    if (alcove.level !== level) continue;
+    for (const corner of [alcove.corners[0]!, alcove.corners[alcove.corners.length - 1]!]) {
+      const edge = BAY.across + Math.sign(corner[1] - BAY.across) * (BAY.width / 2);
+      out.push([upright(plan, [corner[0], edge], corner, alcove.floorY, alcove.head), look.wall]);
+    }
+  }
+  return out;
+}
+
 /** The glass of the windows and bays of the levels `levels` names, a pane a piece. */
 function glassOf(plan: InteriorPlan, levels: (level: number) => boolean): Piece[] {
   const out: Piece[] = [];
@@ -159,13 +176,13 @@ function slabPieces(plan: InteriorPlan, shell: boolean): Piece[] {
 
 /** The ground floor's envelope: what shows through a door from the street, with the glass of its windows and its bay; pieces in the building's own frame (x toward the street, z along its face). */
 export function buildShell(plan: InteriorPlan): { solid: Piece[]; glass: Piece[] } {
-  return { solid: [...wallPieces(plan, true), ...slabPieces(plan, true), ...alcovePieces(plan, lookOf(plan, 0), 0)], glass: glassOf(plan, (level) => level === 0) };
+  return { solid: [...wallPieces(plan, true), ...slabPieces(plan, true), ...alcovePieces(plan, lookOf(plan, 0), 0), ...jambPieces(plan, lookOf(plan, 0), 0)], glass: glassOf(plan, (level) => level === 0) };
 }
 
 /** Everything else: partitions, upper floors, their bays, stairs and the furniture (lit and unlit apart) and the upper floors' glass; pieces in the building's own frame, a list empty when it has none. */
 export function buildDetail(plan: InteriorPlan): { solid: Piece[]; glow: Piece[]; glass: Piece[] } {
   const solid: Piece[] = [...wallPieces(plan, false), ...slabPieces(plan, false)];
-  for (let level = 1; level < plan.floors.length; level++) solid.push(...alcovePieces(plan, lookOf(plan, level), level));
+  for (let level = 1; level < plan.floors.length; level++) solid.push(...alcovePieces(plan, lookOf(plan, level), level), ...jambPieces(plan, lookOf(plan, level), level));
   const glow: Piece[] = [];
   for (const flight of plan.stairs) for (const tread of stairBoxes(flight, plan.floors[flight.level]!)) solid.push([localBox(plan, tread), lookOf(plan, flight.level).wood]);
   for (const piece of plan.furnishings) {

@@ -506,6 +506,7 @@ for (const [name, spec] of Object.entries(STYLES)) {
     ...(spec.neon ? { neon: true } : {}),
     ...(spec.open ? { open: true } : {}),
     ...(spec.dark ? { dark: true } : {}),
+    ...(spec.open?.kind === "rowhome" ? { roomsAbove: true } : {}),
   };
   if (spec.open) windowTable[name] = { bays: spec.bays, windows: { floor: windowRects(glows[1].mask), ground: windowRects(glows[2].mask) } };
   console.log(`${name}: ${rgbs.length} layers, albedo ${bytes[0]} B, normal ${bytes[1]} B, glow ${bytes[2]} B${bytes[3] ? `, height ${bytes[3]} B, roughness ${bytes[4]} B` : ""}; windows ${glows.map((g) => g.windows).join("/")}; ${JSON.stringify(metadata[name].metres)}`);

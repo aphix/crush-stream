@@ -28,6 +28,13 @@ export const PACK_START_VERTICES = { shell: 8192, detail: 32768, glow: 2048, gla
 export const OPEN_FADE_SECONDS = 0.5;
 /** A room's solids are drawn this share of the light they are given: its walls and ceiling are lit by the open sky like a street's, and a lit room read through a window would wash out to white. */
 export const INTERIOR_DIM = 0.6;
+/** A room is lit by its own lamps: its surfaces glow warm at this level whatever the hour (so no room is a black box), and this much more as the night comes on (the facade's shared glow, 0 day to 1 night). */
+export const ROOM_AMBIENT = 0.12;
+export const ROOM_NIGHT = 0.55;
+/** The colour of a room's lamp light (a warm incandescent white). */
+export const ROOM_WARM = [1, 0.86, 0.62] as const;
+/** Lamps and screens show this share of their light in the day, all of it at night. */
+export const LAMP_DAY = 0.4;
 /** A shut shop's lamps and screens glow this share of their light: off but for a faint standby. */
 export const CLOSED_GLOW = 0.08;
 /** How much of the light a window's glass lets through (opacity of the pane drawn). */

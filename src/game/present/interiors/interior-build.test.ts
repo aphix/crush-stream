@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_STOREYS, MIN_STOREYS } from "../../world/openworld/interior-kinds.ts";
 import { planInterior } from "../../world/openworld/interior-plan.ts";
+import { BAY } from "../../world/openworld/openworld-facade-solids.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { painted } from "../prefab-pieces.ts";
@@ -74,5 +75,33 @@ describe("given the bay alcove of a rowhome's rooms", () => {
     expect(onFront.length, "vertices of the sill board along the front pane").toBeGreaterThan(0);
     expect(Math.max(...onFront), "the board's outer edge: the line of the front pane").toBeCloseTo(frontX, 6);
     expect(Math.min(...onFront), "the board's inner edge, back into the room (m)").toBeLessThanOrEqual(frontX - SILL_REACH_MIN);
+  });
+});
+
+describe("given the bay alcove of a rowhome's ground floor", () => {
+  // mutation: sed -i 's/ ...jambPieces(plan, lookOf(plan, 0), 0)\]/]/; s/, ...jambPieces(plan, lookOf(plan, 0), 0)\]/]/' src/game/present/interiors/interior-build.ts (the wedge between the glass and the wall's opening is open)
+  it("when its pieces are read, then a return of the wall closes the strip between the glass's end and the opening's edge, floor to head, on each side", () => {
+    const plan = planInterior({ ...standing, storeys: 2 });
+    const alcove = plan.alcoves.find((candidate) => candidate.level === 0)!;
+    const wallPlaneX = plan.depth / 2;
+    const built = buildShell(plan);
+    const returns = [...built.solid, ...built.glass]
+      .map((piece) => piece[0])
+      .filter((geometry) => geometry.getAttribute("position").count === 4)
+      .map((geometry) => {
+        const position = geometry.getAttribute("position");
+        const ys = [0, 1, 2, 3].map((at) => position.getY(at));
+        const zs = [0, 1, 2, 3].map((at) => position.getZ(at));
+        const flat = [0, 1, 2, 3].every((at) => Math.abs(position.getX(at) - wallPlaneX) < EPSILON);
+        return { flat, y0: Math.min(...ys), y1: Math.max(...ys), z0: Math.min(...zs), z1: Math.max(...zs) };
+      })
+      .filter((quad) => quad.flat && Math.abs(quad.y0 - alcove.floorY) < EPSILON && Math.abs(quad.y1 - alcove.head) < EPSILON);
+    expect(returns.length, "returns of the wall in the plane the glass meets").toBe(2);
+    const mouthEdges = [BAY.across - BAY.width / 2, BAY.across + BAY.width / 2];
+    const glassEnds = [alcove.corners[0]![1], alcove.corners[alcove.corners.length - 1]![1]];
+    for (const quad of returns) {
+      expect(mouthEdges.some((edge) => Math.abs(edge - quad.z0) < EPSILON || Math.abs(edge - quad.z1) < EPSILON), "one end on the opening's edge").toBe(true);
+      expect(glassEnds.some((end) => Math.abs(end - quad.z0) < EPSILON || Math.abs(end - quad.z1) < EPSILON), "the other on the glass's end").toBe(true);
+    }
   });
 });

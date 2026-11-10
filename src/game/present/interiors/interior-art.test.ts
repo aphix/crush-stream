@@ -6,7 +6,7 @@ import { FRAME_HZ } from "../../kernel/constants.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { vestibuleSolids, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
-import { FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS } from "../facades.ts";
+import { FACADE_GLOW, FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS } from "../facades.ts";
 import { HIDE_GRACE, SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../openworld-sight.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { CLOSED_GLOW, DOOR_SWING_SECONDS, INTERIOR_DIM, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS } from "./interior-constants.ts";
@@ -522,5 +522,28 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     expect(brightest(shut), "shut before it was built: well under what it was").toBeLessThan(bright / 2);
     lit.dispose();
     shut.dispose();
+  });
+});
+
+describe("given the materials the interiors are drawn in", () => {
+  const compiled = (material: THREE.Material, base: "standard" | "basic") => {
+    const { vertexShader, fragmentShader } = base === "standard" ? THREE.ShaderLib.standard : THREE.ShaderLib.basic;
+    const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    return shader;
+  };
+
+  // mutation: sed -i 's/ROOM_NIGHT.toFixed(2)} \* facadeGlow/ROOM_NIGHT.toFixed(2)} * 0.0/' src/game/present/interiors/interior-art.ts (a room is as lit at night as at noon)
+  it("when the furniture's and the lamps' materials are compiled, then a room's surfaces and its lamps follow the facade's shared glow, day to night", () => {
+    const set = new InteriorSet(lone);
+    const furniture = set.group.getObjectByName("interior-furniture") as THREE.Mesh;
+    const lamps = set.group.getObjectByName("interior-lights") as THREE.Mesh;
+    const solid = compiled(furniture.material as THREE.Material, "standard");
+    expect(solid.uniforms.facadeGlow, "the shared glow").toBe(FACADE_GLOW);
+    expect(solid.fragmentShader, "surfaces lit warm, more as the night comes").toContain("* facadeGlow);");
+    const lit = compiled(lamps.material as THREE.Material, "basic");
+    expect(lit.uniforms.facadeGlow, "the shared glow").toBe(FACADE_GLOW);
+    expect(lit.fragmentShader, "lamps a share of themselves by day").toContain("mix(0.40, 1.0, facadeGlow)");
+    set.dispose();
   });
 });

@@ -168,7 +168,8 @@
       0.379,
       0.59
     ],
-    "open": true
+    "open": true,
+    "roomsAbove": true
   },
   "rowpainted": {
     "bays": 1,
@@ -182,7 +183,8 @@
       0.52,
       0.918
     ],
-    "open": true
+    "open": true,
+    "roomsAbove": true
   },
   "coffee": {
     "bays": 1,

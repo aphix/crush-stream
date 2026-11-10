@@ -4,10 +4,10 @@ import { SHOP_GROUND_STOREY, type InteriorPlan } from "../../world/openworld/int
 import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, planKey, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { drawnHalf } from "../../world/openworld/openworld-facade-solids.ts";
 import { PLACE_KIND, type OpenWorldMap, type Place } from "../../world/openworld/walk-graph.ts";
-import { FACADE_DARK_MAX, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, setDarkFacades, setOpenFacades } from "../facades.ts";
+import { FACADE_DARK_MAX, FACADE_GLOW, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, setDarkFacades, setOpenFacades } from "../facades.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
-import { CLOSED_GLOW, DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_DIM, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
+import { CLOSED_GLOW, DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_DIM, INTERIOR_LINGER, INTERIOR_NEAR, LAMP_DAY, OPEN_FADE_SECONDS, PACK_START_VERTICES, ROOM_AMBIENT, ROOM_NIGHT, ROOM_WARM, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
 import { DoorSet, type DoorOpeners } from "./interior-doors.ts";
 import { NO_SLOT, PackedMesh } from "./interior-pack.ts";
 
@@ -146,6 +146,20 @@ export class InteriorSet {
     this.openness = new Float64Array(this.entries.length);
     this.doors = new DoorSet(leaves);
     this.group.add(this.doors.group);
+    this.solidMaterial.onBeforeCompile = (shader) => {
+      shader.uniforms.facadeGlow = FACADE_GLOW;
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform float facadeGlow;")
+        .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * vec3(${ROOM_WARM.map((channel) => channel.toFixed(2)).join(", ")}) * (${ROOM_AMBIENT.toFixed(2)} + ${ROOM_NIGHT.toFixed(2)} * facadeGlow);`);
+    };
+    this.solidMaterial.customProgramCacheKey = () => "interior-solid";
+    this.glowMaterial.onBeforeCompile = (shader) => {
+      shader.uniforms.facadeGlow = FACADE_GLOW;
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform float facadeGlow;")
+        .replace("#include <color_fragment>", `#include <color_fragment>\ndiffuseColor.rgb *= mix(${LAMP_DAY.toFixed(2)}, 1.0, facadeGlow);`);
+    };
+    this.glowMaterial.customProgramCacheKey = () => "interior-glow";
     this.shells = this.packed("interior-shells", this.solidMaterial, PACK_START_VERTICES.shell);
     this.details = this.packed("interior-furniture", this.solidMaterial, PACK_START_VERTICES.detail);
     this.glows = this.packed("interior-lights", this.glowMaterial, PACK_START_VERTICES.glow);
