@@ -69,6 +69,8 @@ export class AutoDirector {
   heldFor = 0;
   private holdFor = HOLD_MAX_SECONDS;
   private scanIn = 0;
+  /** The player holds the subject (a pick or a drag): nothing but its going cuts away from it until its hold is up. */
+  private manual = false;
   /** Seconds before a cut that found no subject tries again. */
   private retryIn = 0;
   private seed: number;
@@ -90,6 +92,7 @@ export class AutoDirector {
     this.heldFor = 0;
     this.scanIn = 0;
     this.retryIn = 0;
+    this.manual = false;
     this.recentKind.fill(NONE);
     this.recentId.fill(NONE);
   }
@@ -102,9 +105,23 @@ export class AutoDirector {
     if (this.kind === NONE) return this.retryIn <= 0 && this.cut(scan);
     if (!scan.watchable(this.kind as SubjectKind, this.id)) return this.retryIn <= 0 && this.cut(scan);
     if (this.heldFor >= this.holdFor) return this.cut(scan);
-    if (this.heldFor < HOLD_MIN_SECONDS || this.scanIn > 0) return false;
+    if (this.manual || this.heldFor < HOLD_MIN_SECONDS || this.scanIn > 0) return false;
     this.scanIn = SCAN_SECONDS;
     return this.interrupt(scan);
+  }
+
+  /** The player's pick: the camera goes to this subject now and stays with it, past the interruptions, for `seconds` from the last pick or `hold`. */
+  follow(kind: SubjectKind, id: number, seconds: number): void {
+    this.go(kind, id);
+    this.hold(seconds);
+  }
+
+  /** The player is turning the view round the subject: it is kept for `seconds` more, however many cuts it was due. */
+  hold(seconds: number): void {
+    if (this.kind === NONE) return;
+    this.manual = true;
+    this.heldFor = 0;
+    this.holdFor = seconds;
   }
 
   /** Cut to the best subject there is; false (and a retry in a scan's time) when there is none. */
@@ -206,6 +223,7 @@ export class AutoDirector {
     this.kind = kind;
     this.id = id;
     this.cuts++;
+    this.manual = false;
     this.heldFor = 0;
     this.scanIn = SCAN_SECONDS;
     this.holdFor = HOLD_MIN_SECONDS + (HOLD_MAX_SECONDS - HOLD_MIN_SECONDS) * hash01(this.seed, this.cuts);

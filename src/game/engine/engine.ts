@@ -41,6 +41,7 @@ import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { type AutoOrbit, autoOrbitOf } from "./engine-openworld-auto.ts";
 import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
 import { TrafficLightArt } from "../present/traffic-lights.ts";
 import { wearCarLook } from "../present/car-look.ts";
@@ -597,6 +598,13 @@ export class CrashEngine extends EngineGarage {
   protected override skipDay(direction: 1 | -1): boolean {
     return this.showOpenWorld && this.openWorld.skipDay(direction);
   }
+
+  protected override cycleAutoSubject(dir: 1 | -1): boolean {
+    return this.showOpenWorld && this.openWorld.cycleAuto(dir);
+  }
+
+  /** The orbit the Auto camera hands the view to while the player turns it. */
+  private autoOrbitOfView: AutoOrbit | null = null;
 
   /** In the open world the driven car's last view (the hood's) is followed by Auto, and Auto by the first (the chase). */
   protected override cycleAutoCamera(): boolean {
@@ -1386,10 +1394,12 @@ export class CrashEngine extends EngineGarage {
     // exit's windshield and then frames the dummy, waits for its window to close (the range's own dummy cam rides at once).
     // A drag hands the ride to the orbit around the dummy, the ride's cuts waiting; the ride then picks up from the user's view.
     if (this.onFoot.aim(wallDt)) {
+      // The walker's camera is the player's alone: a ride-along's or the Auto camera's hold on the view ends, or a press of the mouse would take the orbit's pose from the eye and its aim and put it in first person.
+      this.view.frameRide(null);
       this.openWorld.setAuto(false);
       return;
     }
-    if (this.showOpenWorld && this.openWorld.aimAuto(this.camera, this.chaseSight(true), wallDt)) {
+    if (this.showOpenWorld && this.openWorld.aimAuto(this.camera, this.chaseSight(true), wallDt, (this.autoOrbitOfView ??= autoOrbitOf(this.view)))) {
       this.view.setLens(null, false);
       this.view.pos.copy(this.camera.position);
       return;

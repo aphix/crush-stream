@@ -99,6 +99,7 @@ export class ChaseCamera {
   trauma = 0;
   /** User dragged or zoomed since the last reset; cinematics stop re-aiming. */
   userFramed = false;
+  private zooms = 0;
   /** How close (m) the wheel, a pinch and a reset may bring the orbit's eye to `look`: the last shot's (`frameReset`), the walker's on foot. */
   minRadius: number = ORBIT_RADIUS.min;
   /** The orbit's pitch range (rad, positive: the eye above `look`) for a drag, mouse look and the stick: on foot it looks up too. */
@@ -129,10 +130,12 @@ export class ChaseCamera {
   private readonly baseFov: number;
   /** The scene's own lens (deg), when it is not the camera's `baseFov` (the Lab's wider one). */
   private sceneFov: number | null = null;
-  /** The ride-along (a thrown driver's camera) holds the camera: a drag orbits it, whatever the seat. */
+  /** The ride-along (a thrown driver's camera) or the Auto camera frames the shot: a drag or mouse look orbits it, whatever the seat. */
   private ride = false;
   /** Seconds since the last ride drag ended (Infinity: none this ride). */
   private rideIdle = Infinity;
+  /** Mouse look turned the ride's orbit since the last `rideHeld`: a turn of the view like a drag's. */
+  private rideLooked = false;
   private angle = 0;
   private radius = 14;
   private pitch = 0.4;
@@ -253,6 +256,11 @@ export class ChaseCamera {
     return this.radius;
   }
 
+  /** How many times the player has zoomed (the wheel, a pinch): a camera that reads its mode from the zoom asks whether it was he who moved it. */
+  get zoomedTimes(): number {
+    return this.zooms;
+  }
+
   /** The player is looking round: a drag, mouse look or the right stick. */
   get lookingAround(): boolean {
     return this.dragging || this.locked || this.pad.rx !== 0 || this.pad.ry !== 0;
@@ -275,7 +283,9 @@ export class ChaseCamera {
    * from the user's view.
    */
   rideHeld(on: boolean, wallDt: number): boolean {
-    this.rideIdle = !on ? Infinity : this.dragging && this.pointerTravel >= CLICK_PX ? 0 : this.rideIdle + wallDt;
+    const turning = (this.dragging && this.pointerTravel >= CLICK_PX) || this.rideLooked;
+    this.rideLooked = false;
+    this.rideIdle = !on ? Infinity : turning ? 0 : this.rideIdle + wallDt;
     return this.rideIdle < RIDE_PAUSE;
   }
 
@@ -288,6 +298,7 @@ export class ChaseCamera {
     if (!look) return;
     this.rig = "orbit";
     this.fallWatch = false;
+    this.drive.release();
     this.look.copy(look);
   }
 
@@ -717,14 +728,15 @@ export class ChaseCamera {
     this.pitch = THREE.MathUtils.clamp(this.pitch + dy * DRAG_PITCH_PER_PX, this.pitchLow, this.pitchHigh);
   }
 
-  /**
-   * Pointer-lock mouse look: raw movement does what a held drag does (the chase look offset, or the orbit
-   * round a car in the other seats), with no button down. Not on the ride-along, which keeps its own shot.
-   */
+  /** Pointer-lock mouse look: raw movement does what a held drag does (the chase look offset, or the orbit round a car in the other seats, or round what a ride-along or the Auto camera frames), with no button down. */
   lookBy(dx: number, dy: number): void {
     if (this.flying) this.free.lookBy(dx, dy);
     else if (this.rig === "chase") this.drive.nudge(dx, dy);
-    else if (this.rig === "orbit" && this.seat.mode !== "drive" && !this.ride) {
+    else if (this.rig === "orbit" && this.ride) {
+      if (!this.rideLooked && this.rideIdle >= RIDE_PAUSE) this.adoptPose();
+      this.orbitBy(dx, dy);
+      this.rideLooked = true;
+    } else if (this.rig === "orbit" && this.seat.mode !== "drive") {
       this.orbitBy(dx, dy);
       this.userFramed = true;
     }
@@ -740,7 +752,10 @@ export class ChaseCamera {
       this.free.dollyBy(d - this.pinchDist);
       this.panX = middleX;
       this.panY = middleY;
-    } else if (this.pinchDist > 0 && d > 0) this.radius = THREE.MathUtils.clamp((this.radius * this.pinchDist) / d, this.minRadius, ORBIT_RADIUS.max);
+    } else if (this.pinchDist > 0 && d > 0) {
+      this.radius = THREE.MathUtils.clamp((this.radius * this.pinchDist) / d, this.minRadius, ORBIT_RADIUS.max);
+      this.zooms++;
+    }
     this.pinchDist = d;
     this.userFramed = true;
   }
@@ -778,5 +793,6 @@ export class ChaseCamera {
     }
     const scale = Math.exp(e.deltaY * 0.00115);
     this.radius = THREE.MathUtils.clamp(this.radius * scale, this.minRadius, ORBIT_RADIUS.max);
+    this.zooms++;
   };
 }

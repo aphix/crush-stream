@@ -797,7 +797,7 @@ export abstract class EngineInput extends EngineRigs {
     } else if (SEAT_KEYS.camera.includes(e.code)) {
       this.cycleCamera();
     } else if (e.code === SEAT_KEYS.previousCar || e.code === SEAT_KEYS.nextCar) {
-      this.seat.cycle(e.code === SEAT_KEYS.nextCar ? 1 : -1, this.carCount);
+      if (!this.cycleAutoSubject(e.code === SEAT_KEYS.nextCar ? 1 : -1)) this.seat.cycle(e.code === SEAT_KEYS.nextCar ? 1 : -1, this.carCount);
       this.emitHud();
     } else if (e.code === SEAT_KEYS.reset) {
       e.preventDefault();
@@ -863,7 +863,7 @@ export abstract class EngineInput extends EngineRigs {
       return true;
     }
     if (code === SEAT_KEYS.previousCar || code === SEAT_KEYS.nextCar) {
-      this.race.cycle(code === SEAT_KEYS.nextCar ? 1 : -1);
+      if (!this.cycleAutoSubject(code === SEAT_KEYS.nextCar ? 1 : -1)) this.race.cycle(code === SEAT_KEYS.nextCar ? 1 : -1);
       this.emitHud();
       return true;
     }
@@ -927,8 +927,8 @@ export abstract class EngineInput extends EngineRigs {
     const driving = this.seat.mode === "drive";
     if ((hit & (1 << PAD_BUTTON.start)) !== 0) this.togglePlay();
     if ((hit & (1 << PAD_BUTTON.back)) !== 0 && !this.view.leaveFree()) this.seat.esc();
-    if ((hit & (1 << PAD_BUTTON.lb)) !== 0) this.seat.cycle(-1, this.carCount);
-    if ((hit & (1 << PAD_BUTTON.rb)) !== 0) this.seat.cycle(1, this.carCount);
+    if ((hit & (1 << PAD_BUTTON.lb)) !== 0 && !this.cycleAutoSubject(-1)) this.seat.cycle(-1, this.carCount);
+    if ((hit & (1 << PAD_BUTTON.rb)) !== 0 && !this.cycleAutoSubject(1)) this.seat.cycle(1, this.carCount);
     if ((hit & (1 << PAD_BUTTON.north)) !== 0) this.cycleCamera();
     if (driving && (hit & (1 << PAD_BUTTON.down)) !== 0) this.recoverDriven();
     this.emitHud();
@@ -959,8 +959,8 @@ export abstract class EngineInput extends EngineRigs {
     // Through raceCommand: a client may not pause (the host runs the race), so it can't get stuck in a pause it can't leave.
     const backed = press(PAD_BUTTON.back) && this.view.leaveFree();
     if (press(PAD_BUTTON.start) || (press(PAD_BUTTON.back) && !backed)) this.raceCommand({ type: "pause" });
-    if (press(PAD_BUTTON.lb)) this.race.cycle(-1);
-    if (press(PAD_BUTTON.rb)) this.race.cycle(1);
+    if (press(PAD_BUTTON.lb) && !this.cycleAutoSubject(-1)) this.race.cycle(-1);
+    if (press(PAD_BUTTON.rb) && !this.cycleAutoSubject(1)) this.race.cycle(1);
     if (press(PAD_BUTTON.north)) this.cycleCamera();
     this.emitHud();
   }

@@ -22,6 +22,7 @@ import type { Sight } from "../present/spectate-cam.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
 import { tickAt } from "../ai/civilians/civilian-clock.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import type { AutoOrbit } from "./engine-openworld-auto.ts";
 import { MEDICS } from "./engine-openworld-medics.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
@@ -412,6 +413,7 @@ describe("given a look-at panel kept up four times a second", () => {
 
 describe("given the Auto camera asked for in the open world", () => {
   const camera = new THREE.PerspectiveCamera();
+  const NO_ORBIT: AutoOrbit = { held: () => false, aim() {}, orbit() {}, release() {} };
   const NO_SOLIDS: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ: [] };
 
   it("when Auto is switched on, then it is on across the first frame and has no subject to frame yet, and when it is switched off the regular camera keeps the view", () => {
@@ -419,7 +421,7 @@ describe("given the Auto camera asked for in the open world", () => {
     harness.director.setAuto(true);
     harness.frame();
     expect(harness.director.autoOn, "Auto after the first frame").toBe(true);
-    expect(harness.director.aimAuto(camera, NO_SOLIDS, FRAME), "framing a subject before anyone is out").toBe(false);
+    expect(harness.director.aimAuto(camera, NO_SOLIDS, FRAME, NO_ORBIT), "framing a subject before anyone is out").toBe(false);
     harness.director.setAuto(false);
     expect(harness.director.autoOn, "Auto after it is switched off").toBe(false);
   });

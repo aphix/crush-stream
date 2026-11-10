@@ -82,6 +82,7 @@ A tap shorter than one frame still registers (the press is latched until the nex
 | Pause menu | Esc | Start / Back | Pause |
 | Respawn | R | D-pad ↓ | Respawn |
 | Previous / next car while spectating (the entry after the last car is **Auto**: the director picks the car, switching after every 3 camera shots or once nothing has happened to the car for 4 s and something may happen to another; the Standings' Auto row is the same pick) | Q / E | LB / RB | ‹ / › on the Spectating bar |
+| Open world, Auto camera up (View steps to it after the hood view): previous / next person, foot cop or driver (a resident at a wheel, a patrol car, the ambulance when it is out) as when spectating a race: nearest outward from the one on screen, Q undoes E. A mouse drag or mouse look (;) turns the view round the subject, the same for every kind of subject. The camera keeps its subject for 30 s after the last Q / E or turn (the shot picks up from where the view stands 2.5 s after a turn), then Auto cuts on again; the subject going ends the hold at once | Q / E; mouse drag, ; | LB / RB | |
 | Camera view | V / C / T | Y / Triangle | View |
 | Look back from the driven or spectated car | ` | R3 | Rear (hold) |
 | Focus view ↔ full menu (the sandbox hotkeys work only in the full menu) | H | | Full menu / Race view |

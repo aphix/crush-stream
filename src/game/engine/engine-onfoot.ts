@@ -117,6 +117,11 @@ export class OnFootDirector {
   private readonly speed = new Float64Array(1);
   private readonly strike = blankStrike();
   private framed = false;
+  /** The view he has chosen: View and the wheel's (or a pinch's) last notch change it, and nothing else does (`keepZoom`). */
+  private mode: OnFootView = "shoulder";
+  /** The zoom count (`ChaseCamera.zoomedTimes`) and the orbit's distance as the last frame left them: a distance that moved without a zoom is not his. */
+  private zoomsSeen = 0;
+  private zoomKept = 0;
   private blendLeft = 0;
   private readonly follow = new FollowFocus();
   private readonly walkerView = new WalkerView();
@@ -137,9 +142,9 @@ export class OnFootDirector {
     this.sweep = (x, y, z, dx, dy, dz, length) => host.ragdolls.sightClear(x, y, z, dx, dy, dz, length, CAMERA_RADIUS);
   }
 
-  /** The view on foot: his own eyes once the wheel or View has brought the orbit inside the nearest shoulder camera, else over his shoulder. */
+  /** The view on foot: his own eyes once the wheel or View has brought the orbit inside the nearest shoulder camera, else over his shoulder. A drag, a click and every other camera's leavings never change it. */
   get footView(): OnFootView {
-    return this.framed && this.host.view.orbitRadius < SHOULDER_NEAREST ? "first" : "shoulder";
+    return this.framed ? this.mode : "shoulder";
   }
 
   /** On foot in the open world the reset control (R, D-pad down, Respawn; a tap or a hold, as at the wheel) is his: back in a fresh car (`resetIntoCar`). */
@@ -184,7 +189,9 @@ export class OnFootDirector {
     const { view } = this.host;
     const next: OnFootView = this.footView === "first" ? "shoulder" : "first";
     const pitch = Math.max(VIEW_PITCH[next].low, Math.min(VIEW_PITCH[next].high, view.orbitPitch));
+    this.mode = next;
     view.easeOrbit(next === "first" ? FIRST_PERSON_RADIUS : SHOULDER_BOOM, pitch, 1);
+    this.zoomKept = view.orbitRadius;
   }
 
   get active(): boolean {
@@ -416,6 +423,7 @@ export class OnFootDirector {
       return true;
     }
     this.follow.follow(wallDt, _torso.x, _torso.y, _torso.z, walker.loco.speed);
+    this.keepZoom();
     const first = this.footView === "first" && walker.state === "stand";
     const range = VIEW_PITCH[first ? "first" : "shoulder"];
     view.pitchLow = range.low;
@@ -442,6 +450,21 @@ export class OnFootDirector {
     view.pos.copy(camera.position);
     ragdolls.showWalkerHead(!sight.inHead || this.blendLeft > 0);
     return true;
+  }
+
+  /**
+   * The zoom is his: the wheel and a pinch set the view (inside the nearest shoulder camera is his own eyes), View sets it, and nothing else may. A distance the orbit's
+   * pose moved to without a zoom (a hold on the view another camera left, an eased pose) is put back, so no click or drag can put him in first person.
+   */
+  private keepZoom(): void {
+    const { view } = this.host;
+    if (view.zoomedTimes !== this.zoomsSeen) {
+      this.zoomsSeen = view.zoomedTimes;
+      this.mode = view.orbitRadius < SHOULDER_NEAREST ? "first" : "shoulder";
+    } else if (view.orbitRadius !== this.zoomKept) {
+      view.easeOrbit(this.zoomKept, view.orbitPitch, 1);
+    }
+    this.zoomKept = view.orbitRadius;
   }
 
   /** While he climbs in: the orbit's focus moves to the car and the camera draws back round it, his head in view again. */
@@ -483,6 +506,9 @@ export class OnFootDirector {
     view.pitchLow = VIEW_PITCH.shoulder.low;
     view.pitchHigh = VIEW_PITCH.shoulder.high;
     view.easeOrbit(SHOULDER_BOOM, SHOULDER_PITCH, 1);
+    this.mode = "shoulder";
+    this.zoomsSeen = view.zoomedTimes;
+    this.zoomKept = view.orbitRadius;
   }
 
   /** The trip's camera is over: the car's zoom and pitch range and its orbit back as they were, his head drawn again. */

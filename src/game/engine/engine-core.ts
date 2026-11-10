@@ -220,6 +220,10 @@ export abstract class EngineCore {
   protected cycleAutoCamera(): boolean {
     return false;
   }
+  /** Q/E (LB/RB) while the open world's Auto camera is up: the camera goes to the next (1) or the previous (-1) person, foot cop or driver and stays; true when it took the press. */
+  protected cycleAutoSubject(_dir: 1 | -1): boolean {
+    return false;
+  }
   /** The open world's clock, and its light with it, skips to the next (1) or the previous (-1) game hour; true when it did (solo only: in a room nothing moves). */
   protected skipDay(_direction: 1 | -1): boolean {
     return false;

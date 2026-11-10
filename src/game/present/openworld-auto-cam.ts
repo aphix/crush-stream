@@ -37,6 +37,16 @@ export class AutoFollowCam {
     this.clear.reset();
   }
 
+  /** The player's hold on the view ends: the eye and the aim carry on from where the camera and its aim stand, so the shot eases back to its framing and does not cut. */
+  adopt(camera: THREE.Camera, aim: THREE.Vector3): void {
+    this.eye.x.copy(camera.position);
+    this.eye.v.set(0, 0, 0);
+    this.aim.x.copy(aim);
+    this.aim.v.set(0, 0, 0);
+    this.fresh = false;
+    this.clear.reset();
+  }
+
   /** Frames `pose` in `camera`, `dt` s after the last call. */
   update(camera: THREE.PerspectiveCamera, pose: AutoPose, sight: Sight, dt: number): void {
     this.followHeading(pose.yaw, dt);

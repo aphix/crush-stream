@@ -3,6 +3,10 @@ import { CHEST_HEIGHT } from "../civilians/civilian-crowd-constants.ts";
 /** The owner's ask: a subject is held 5 to 10 seconds, and not a second less. */
 export const HOLD_MIN_SECONDS = 5;
 export const HOLD_MAX_SECONDS = 10;
+/** The player picked the subject (Q/E) or is turning the view round it (a drag): Auto does not cut away from it until this long (s) after the last of that. */
+export const MANUAL_HOLD_SECONDS = 30;
+/** The order Q/E walks (the subjects by distance from where the walk began) is kept this long (s) between presses: a press after more asks the world again. */
+export const RING_STALE_SECONDS = 6;
 /** How often the held shot is asked whether something hotter is going on (s): a scan of the crowd is a few hundred reads. */
 export const SCAN_SECONDS = 1;
 /** An event this interesting (0-1) may cut a shot short once it has held `HOLD_MIN_SECONDS`, if it beats what is on screen by `INTERRUPT_MARGIN`. */

@@ -34,7 +34,7 @@ import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
 import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
 import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
-import { OpenWorldAuto } from "./engine-openworld-auto.ts";
+import { type AutoOrbit, OpenWorldAuto } from "./engine-openworld-auto.ts";
 import { AmbulanceStages, newestCalled } from "./engine-openworld-ambulance.ts";
 import { OpenWorldClientDoors } from "./engine-openworld-door-clips.ts";
 import { OpenWorldCarDoors } from "./engine-openworld-cars.ts";
@@ -279,8 +279,13 @@ export class OpenWorldDirector {
   }
 
   /** The Auto camera frames its subject in `camera`; false where it is off or has none (the regular camera keeps the view). */
-  aimAuto(camera: THREE.PerspectiveCamera, sight: Sight, wallDt: number): boolean {
-    return this.autoWanted && this.auto !== null && this.auto.aim(camera, sight, wallDt);
+  aimAuto(camera: THREE.PerspectiveCamera, sight: Sight, wallDt: number, orbit: AutoOrbit): boolean {
+    return this.autoWanted && this.auto !== null && this.auto.aim(camera, sight, wallDt, orbit);
+  }
+
+  /** Q/E while Auto is up: the camera goes to the next or the previous person, foot cop or driver, and stays; false when Auto is off or there is nobody to go to. */
+  cycleAuto(dir: 1 | -1): boolean {
+    return this.autoWanted && this.auto !== null && this.auto.cycle(dir, this.ray.eyeX, this.ray.eyeZ);
   }
 
   /** What the look-at panel shows, null when the eye rests on nothing. */
