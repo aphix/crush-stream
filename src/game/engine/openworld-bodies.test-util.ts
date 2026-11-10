@@ -1,6 +1,5 @@
 import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
-import type { BodyHost } from "./openworld-bodies.ts";
 
 /** One body of the fake world: where it stands, its steering, whether it is out, on its feet and held up. */
 type FakeBody = { slot: number; x: number; z: number; heading: number; speed: number; out: boolean; standing: boolean; held: boolean; look: DriverLook };

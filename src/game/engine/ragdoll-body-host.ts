@@ -4,7 +4,6 @@ import type { DriverLook } from "../present/driver-look.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { BASE_SLOTS } from "../present/ragdoll-config.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
-import type { BodyHost } from "./openworld-bodies.ts";
 
 const _at = new THREE.Vector3();
 const _v = new THREE.Vector3();
