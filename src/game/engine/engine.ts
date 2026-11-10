@@ -293,7 +293,7 @@ export class CrashEngine extends EngineGarage {
     this.smoke = new TireSmokeSystem(this.scene);
     this.ragdolls = new RagdollSystem(this.scene, (i) => this.onThrow(i), (at, frame, inherit) => this.onExit(at, frame, inherit));
     this.ragdolls.poles = this.poles;
-    this.ragdolls.lookOf = (car) => this.looks.of(car, this.ownCar());
+    this.ragdolls.lookOf = (car) => this.looks.of(car, this.drivenCar());
     this.lab.dolls = this.ragdolls;
     this.ragdolls.onPartHit = (car, part, energy, push) => {
       if (this.race.active) this.race.recorder.partHit(car, part, energy, push.x, push.y, push.z);

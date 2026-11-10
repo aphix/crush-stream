@@ -603,11 +603,16 @@ export abstract class EngineCore {
   /** The car the player got into on foot and drives instead of his own (`adoptCar`), null while he drives his own. */
   protected adoptedCar: number | null = null;
 
-  /** This browser's own car: its netplay seat as a guest, else the player's car 0; the car he took in the free roam while he still drives it (he is the same person in it: his look, his spray). */
+  /** This browser's own car: its netplay seat as a guest, else the player's car 0. It wears his car pick and spray (`PlayerLooks`), whatever car he drives. */
   protected ownCar(): number {
+    return this.net.client ? this.net.status().car : 0;
+  }
+
+  /** The car this browser's player drives: his own, or the one he took in the free roam while he still drives it. His person (look, spray) is the driver of that one; the car keeps its own paint. */
+  protected drivenCar(): number {
     const adopted = this.adoptedCar;
     if (adopted !== null && this.race?.free === true && this.race.self === adopted) return adopted;
-    return this.net.client ? this.net.status().car : 0;
+    return this.ownCar();
   }
 
 

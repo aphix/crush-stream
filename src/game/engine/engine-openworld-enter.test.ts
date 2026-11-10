@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { hypot2 } from "../kernel/physics-core.js";
 import { idleDrive } from "../vehicle/car-drive.ts";
+import { NO_CAR_PICK } from "../match/look-data.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { OnFootRig } from "./engine-onfoot.test-util.ts";
 
@@ -110,6 +111,29 @@ describe("given the real engine in the open world, its player out of his car wit
     rig.getOut();
     rig.run(0.5);
     expect(JSON.stringify(ragdolls.carDriverLook(target, false)), "and still his once he is out of it").toBe(own);
+  });
+
+  // mutation: sed -i 's/    const car = this.cars\[this.ownCar()\];/    const car = this.cars[this.drivenCar()];/' src/game/engine/engine-share.ts
+  it("when he has got into a kerb car and his look is restyled, then that car keeps its own body and colour and his own car keeps his paint", () => {
+    const target = nearestEmptyCar();
+    const engine = rig.engine;
+    const picked = 0x336699;
+    engine["looks"].mine.car = { ...NO_CAR_PICK, body: picked };
+    engine["restyle"]();
+    const own = rig.cars()[0]!;
+    expect(own.lookMeshes().bodyPaint.color.getHex(), "his own car wears his pick").toBe(picked);
+    const kerb = rig.cars()[target]!;
+    rig.getOut();
+    rig.walkToDoor(kerb);
+    rig.press("Enter");
+    rig.run(1);
+    expect(engine["seat"].carIndex, "he is in the kerb car").toBe(target);
+    const kerbPaint = kerb.lookMeshes().bodyPaint.color.getHex();
+    const kerbBody = kerb.style.id;
+    engine["restyle"]();
+    expect(kerb.lookMeshes().bodyPaint.color.getHex(), "the kerb car keeps its own colour").toBe(kerbPaint);
+    expect(kerb.style.id, "and its own body").toBe(kerbBody);
+    expect(own.lookMeshes().bodyPaint.color.getHex(), "his own car keeps his paint").toBe(picked);
   });
 
   // mutation: sed -i 's/    if (id < this.first || this.context.humans\[id\] === 1 || car.driverOut !== null) return true;/    if (this.context.humans[id] === 1 || car.driverOut !== null) return true;/' src/game/ai/openworld-traffic/openworld-traffic.ts
