@@ -23,7 +23,7 @@ export function gameMinuteAt(seconds: number): number {
 
 /** The game hour (0 up to 24, with its fraction) that `minute` game minutes past the crowd's start fall at: `hourOfDay`'s whole hours, finer. */
 export function gameHourAtMinute(minute: number, startHour: number): number {
-  return (startHour + minute / MINUTES_PER_GAME_HOUR) % HOURS_PER_GAME_DAY;
+  return (((startHour + minute / MINUTES_PER_GAME_HOUR) % HOURS_PER_GAME_DAY) + HOURS_PER_GAME_DAY) % HOURS_PER_GAME_DAY;
 }
 
 export function hourOfDay(tick: number, startHour: number): number {

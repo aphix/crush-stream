@@ -871,6 +871,7 @@ export abstract class EngineInput extends EngineRigs {
       this.cycleCamera();
       return true;
     }
+    if ((code === SEAT_KEYS.dayBack || code === SEAT_KEYS.dayForward) && this.skipDay(code === SEAT_KEYS.dayForward ? 1 : -1)) return true;
     if (code === SEAT_KEYS.raceView) {
       this.raceCommand({ type: "fullUi", on: !this.race.fullUi });
       return true;

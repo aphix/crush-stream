@@ -11,6 +11,7 @@ import type { SignSight } from "../present/openworld-signs.ts";
 import type { OpenWorldMap, Place } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { gameHourAtMinute, gameMinuteAt, tickAt } from "../ai/civilians/civilian-clock.ts";
+import { MINUTES_PER_GAME_DAY, MINUTES_PER_GAME_HOUR } from "../ai/civilians/civilian-constants.ts";
 import { fillClosedPlaces } from "../ai/civilians/society-hours.ts";
 import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.ts";
@@ -184,6 +185,8 @@ export class OpenWorldDirector {
   private lookAcc = 0;
   /** The game minute the stage's day was last set for (-1: none, or it was left), so the light follows the crowd's clock once a minute. */
   private dayMinute = -1;
+  /** Game minutes the stage's light stands off the crowd's clock (`skipDay`): this machine's drawing only, the crowd's own hour is the sim's and the host's. */
+  private dayOffset = 0;
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
   private readonly openers: DoorOpeners = { poses: null, walker: null, others: [], closed: null };
   /** The map's places shut now (a wreck, or outside their hours), refilled each frame from the crowd's state for the interiors. */
@@ -381,6 +384,7 @@ export class OpenWorldDirector {
   }
 
   private stopCrowd(): void {
+    this.dayOffset = 0;
     if (this.crowd === null) return;
     this.unhook?.();
     this.bodies?.dispose();
@@ -421,11 +425,32 @@ export class OpenWorldDirector {
     const minute = gameMinuteAt(crowd.crowdSeconds);
     if (minute === this.dayMinute) return;
     this.dayMinute = minute;
-    this.ports.setDayHour(gameHourAtMinute(minute, crowd.state.startHour));
+    this.lightDay(crowd);
+  }
+
+  private lightDay(crowd: CivilianCrowd): void {
+    this.ports.setDayHour(gameHourAtMinute(this.dayMinute + this.dayOffset, crowd.state.startHour));
+  }
+
+  /**
+   * The numpad's plus and minus: the light skips to the next whole game hour (1) or back to the start of this one, or the one before when it stands on a whole hour (-1), at once: one call, the stage's one sun hop.
+   * Only the light moves. The crowd's clock is the sim's: it runs on one deterministic tick for the host and every peer, its society cannot be run backwards, and moving it forward would be a replay on the host and a
+   * message to every client; so the people keep their own hour (who is asleep, which shops are open) while the light stands somewhere else, on this machine alone. The offset goes with the crowd.
+   */
+  skipDay(direction: 1 | -1): boolean {
+    const crowd = this.crowd;
+    if (crowd === null || this.dayMinute < 0) return false;
+    const now = Math.round(gameHourAtMinute(this.dayMinute + this.dayOffset, crowd.state.startHour) * MINUTES_PER_GAME_HOUR);
+    const hour = Math.floor(now / MINUTES_PER_GAME_HOUR);
+    const target = (direction > 0 ? hour + 1 : now % MINUTES_PER_GAME_HOUR === 0 ? hour - 1 : hour) * MINUTES_PER_GAME_HOUR;
+    this.dayOffset = (this.dayOffset + target - now) % MINUTES_PER_GAME_DAY;
+    this.lightDay(crowd);
+    return true;
   }
 
   /** The course is left: the stage's time of day lights again. */
   private dropDay(): void {
+    this.dayOffset = 0;
     if (this.dayMinute < 0) return;
     this.dayMinute = -1;
     this.ports.setDayHour(null);

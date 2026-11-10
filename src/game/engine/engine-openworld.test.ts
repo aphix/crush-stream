@@ -550,4 +550,64 @@ describe("given the open world's stage light following the crowd's clock", () =>
     harness.frame();
     expect(harness.dayHours.at(-1), "the hour again once the crowd is back").not.toBeNull();
   });
+
+  /** The last hour the stage was told, as game minutes of the day. */
+  const lastMinutes = (harness: Harness): number => Math.round(harness.dayHours.filter((hour): hour is number => hour !== null).at(-1)! * MINUTES_PER_HOUR);
+
+  // mutation: sed -i 's/(direction > 0 ? hour + 1 : now % MINUTES_PER_GAME_HOUR === 0 ? hour - 1 : hour)/(direction > 0 ? hour : now % MINUTES_PER_GAME_HOUR === 0 ? hour - 1 : hour)/' src/game/engine/engine-openworld.ts
+  it("when the light is skipped forward and back, then it lands at once on the next or the previous whole game hour, one stage call each, and the crowd's clock is not touched", () => {
+    const harness = hostWithMap();
+    for (let at = 0; at < framesFor(7.4); at++) harness.frame();
+    const crowd = harness.crowd();
+    const seconds = crowd.crowdSeconds;
+    const start = crowd.state.startHour;
+    const calls = harness.dayHours.length;
+    const before = lastMinutes(harness);
+    expect(harness.director.skipDay(1), "a forward skip is taken").toBe(true);
+    expect(harness.dayHours.length, "one stage call").toBe(calls + 1);
+    const forward = lastMinutes(harness);
+    expect(forward % MINUTES_PER_HOUR, "lands on a whole hour").toBe(0);
+    expect(forward - before, "the next hour's start is under an hour ahead").toBeGreaterThan(0);
+    expect(forward - before, "the next hour's start is under an hour ahead").toBeLessThanOrEqual(MINUTES_PER_HOUR);
+    expect(harness.director.skipDay(-1), "a back skip is taken").toBe(true);
+    expect(lastMinutes(harness), "from a whole hour, back is the hour before").toBe(forward - MINUTES_PER_HOUR);
+    expect(harness.director.skipDay(-1), "again").toBe(true);
+    expect(lastMinutes(harness), "and again").toBe(forward - 2 * MINUTES_PER_HOUR);
+    expect(harness.dayHours.length, "one call a skip").toBe(calls + 3);
+    expect(crowd.crowdSeconds, "the crowd's clock").toBe(seconds);
+    expect(crowd.state.startHour, "the crowd's start hour").toBe(start);
+    expect(harness.crowd(), "the same crowd").toBe(crowd);
+  });
+
+  // mutation: sed -i 's/    this.dayOffset = (this.dayOffset + target - now) % MINUTES_PER_GAME_DAY;/    this.dayOffset = target - now;/' src/game/engine/engine-openworld.ts
+  it("when a day's skips are made one after another, then twenty-four forward are a whole day round to the same hour, and the minutes after a skip go on from the new hour", () => {
+    const harness = hostWithMap();
+    for (let at = 0; at < framesFor(2.2); at++) harness.frame();
+    harness.director.skipDay(1);
+    const landed = lastMinutes(harness);
+    for (let skip = 0; skip < 24; skip++) harness.director.skipDay(1);
+    expect(lastMinutes(harness) % (24 * MINUTES_PER_HOUR), "a day of skips lands on the same hour").toBe(landed % (24 * MINUTES_PER_HOUR));
+    const calls = harness.dayHours.length;
+    for (let at = 0; at < framesFor(1.2); at++) harness.frame();
+    expect(harness.dayHours.length, "the next game minute calls the stage once").toBe(calls + 1);
+    expect(lastMinutes(harness) - landed, "the light moved on by the game minute, from the skipped hour").toBeGreaterThan(0);
+    expect(lastMinutes(harness) - landed, "the light moved on by the game minute, from the skipped hour").toBeLessThanOrEqual(2);
+  });
+
+  // mutation: sed -i 's/^    this.dayOffset = 0;$/    this.dayOffset = this.dayOffset;/' src/game/engine/engine-openworld.ts
+  it("when a skip is asked with no crowd, or after the open world is left and entered again, then nothing is skipped and the light follows the crowd's own hour", () => {
+    const harness = hostWithMap();
+    expect(harness.director.skipDay(1), "no crowd yet").toBe(false);
+    for (let at = 0; at < framesFor(1.5); at++) harness.frame();
+    const own = harness.dayHours.at(-1)!;
+    harness.director.skipDay(1);
+    expect(harness.dayHours.at(-1), "the skip moved the light").not.toBe(own);
+    harness.open = false;
+    harness.frame();
+    harness.open = true;
+    harness.director.startOpenWorld(map);
+    harness.frame();
+    const start = harness.crowd().state.startHour;
+    expect(harness.dayHours.at(-1), "the crowd's own hour again").toBeCloseTo(start, 9);
+  });
 });
