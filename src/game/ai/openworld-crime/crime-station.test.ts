@@ -95,7 +95,7 @@ describe("an arrest on a map with a police station", () => {
 });
 
 describe("an arrest by a case whose patrol car has come, on a map with a police station", () => {
-  // mutation: sed -i 's/    if (cops.gapTo(cop, this.door.x, this.door.z) <= BOARD_REACH \&\& cars.isStill(car)) {/    if (false) {/' src/game/ai/openworld-crime/arrests.ts
+  // mutation: sed -i 's/<= BOARD_REACH && cars.isStill(car)) {/<= -1) {/' src/game/ai/openworld-crime/arrests.ts
   it("when she is cuffed, then she and her cop get into the car at its driver's door, the door swinging with the clip, and are off the street once it is over", () => {
     const run = arrestWithCar();
     const street = streetOf(run);
@@ -115,7 +115,7 @@ describe("an arrest by a case whose patrol car has come, on a map with a police 
     expect(street.doorRadians[0], "the door is shut").toBe(0);
   });
 
-  // mutation: sed -i 's/    this.ports.setSirens(handle, false);\n    this.mode\[slot\] = PATROL_MODE.toStation;/    this.mode[slot] = PATROL_MODE.toStation;/' src/game/ai/openworld-crime/patrol-cars.ts
+  // mutation: sed -i '/^    this.ports.setSirens(handle, false);$/d' src/game/ai/openworld-crime/patrol-cars.ts
   it("when the car drives to the station, then its siren is off, and there they get out and walk in at the door, where the bust is raised with her cop", () => {
     const run = arrestWithCar();
     const street = streetOf(run);
@@ -144,7 +144,7 @@ describe("an arrest by a case whose patrol car has come, on a map with a police 
     expect(street.released, "put away").toContain(0);
   });
 
-  // mutation: sed -i 's/    if (mode === SUBJECT_MODE.boarding \&\& cars.convey(car, station.x, station.z, seconds)) {/    if (mode === SUBJECT_MODE.boarding) {/' src/game/ai/openworld-crime/arrests.ts
+  // mutation: sed -i 's/    if (mode === SUBJECT_MODE.boarding && cars.convey(car, station.x, station.z, seconds)) {/    if (mode === SUBJECT_MODE.boarding) {/' src/game/ai/openworld-crime/arrests.ts
   it("when the car finds no way to the station, then she is walked there instead", () => {
     const run = arrestWithCar();
     const street = streetOf(run);
