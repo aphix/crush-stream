@@ -591,6 +591,10 @@ export class CrashEngine extends EngineGarage {
     return this.showOpenWorld && this.openWorld.autoOn;
   }
 
+  protected override skipDay(direction: 1 | -1): boolean {
+    return this.showOpenWorld && this.openWorld.skipDay(direction);
+  }
+
   /** In the open world the driven car's last view (the hood's) is followed by Auto, and Auto by the first (the chase). */
   protected override cycleAutoCamera(): boolean {
     if (!this.showOpenWorld || this.seat.mode !== "drive") return false;

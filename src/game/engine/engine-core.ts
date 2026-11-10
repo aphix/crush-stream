@@ -220,6 +220,10 @@ export abstract class EngineCore {
   protected cycleAutoCamera(): boolean {
     return false;
   }
+  /** The open world's light skips to the next (1) or the previous (-1) game hour; true when it did. */
+  protected skipDay(_direction: 1 | -1): boolean {
+    return false;
+  }
   /** The crowd's end of the crowd message (`NetGame.crowdLink`); null until the open world's crowd exists. */
   protected crowdLink(): CrowdLink | null {
     return null;

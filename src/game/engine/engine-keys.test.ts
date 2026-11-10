@@ -25,6 +25,21 @@ describe("given the key tables the engine reads", () => {
   }
 });
 
+describe("given the open world's day keys", () => {
+  // mutation: sed -i 's/  dayForward: "NumpadAdd",/  dayForward: "Minus",/' src/game/engine/engine-keys.ts
+  it("when the day keys are set against the scene keys, the race view and each other, then they are the number pad's, none of them is another job's, and H stays the race view", () => {
+    const dayKeys = [SEAT_KEYS.dayBack, SEAT_KEYS.dayForward];
+    expect(new Set(dayKeys).size, "two keys").toBe(2);
+    for (const code of dayKeys) {
+      expect(code.startsWith("Numpad"), `${code} is on the number pad`).toBe(true);
+      expect(SCENE_KEY_BINDINGS.some((binding) => binding.code === code), `${code} picks a scene`).toBe(false);
+      expect(Object.values(DRIVE_KEYS).flat().includes(code), `${code} drives`).toBe(false);
+      expect(Object.entries(SEAT_KEYS).filter(([, other]) => other === code).length, `${code} is one seat key`).toBe(1);
+    }
+    expect(SEAT_KEYS.raceView, "the race view's key").toBe("KeyH");
+  });
+});
+
 describe("given the real engine in the sandbox", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;

@@ -85,6 +85,7 @@ A tap shorter than one frame still registers (the press is latched until the nex
 | Camera view | V / C / T | Y / Triangle | View |
 | Look back from the driven or spectated car | ` | R3 | Rear (hold) |
 | Focus view ↔ full menu (the sandbox hotkeys work only in the full menu) | H | | Full menu / Race view |
+| Open world: skip the light to the next / the previous game hour (whole hours, at once; the light only, on this machine: the crowd and its shops keep their own hour) | Num + / Num − | | |
 | Menus: move, choose, back, resume | arrows, Enter / Space, Esc, Tab | D-pad / left stick, A, B, Start | tap |
 | Hide / show the results or standings sheet over the highlights reel (hidden: the reel takes the whole view and any menu key or pad button brings the sheet back) | Backspace | Y / Triangle | the tab on the sheet's edge |
 

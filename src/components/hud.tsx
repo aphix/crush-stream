@@ -112,6 +112,7 @@ const CAMERA_KEYS: [string, string][] = [
   [";", "Mouse look (Esc ends it)"],
   ["V", "Camera view (also C, T): chase, far, hood / trackside, wheel, orbit, auto, free fly"],
   ["Free fly · V", "Detached camera: W A S D · Space or PgUp up · Ctrl or PgDn down · Shift fast · wheel speed · drag look · V or Esc back"],
+  ["Open world · Num + / Num −", "Skip the light to the next or the previous game hour, at once (this machine's light only: the crowd keeps its own hour)"],
   ["Showcase · 1 to 9 · 0", "Throw a cone, crate, tyre stack, hay bale, muscle car bumper, monster truck wheel, car wheel, man or woman at the point under the cursor (the number pad too); 0 clears everything thrown"],
 ];
 
