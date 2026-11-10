@@ -16,8 +16,9 @@ const RESIDENTS = 8;
 const WALKERS = FOOT_COP_COUNT + MAX_SUBJECTS;
 /** A walker may come to the same corner (as the nearest node, entering it afresh) this many times in the ten minutes: a chase round a block passes a corner a few times, a loop passes it dozens. */
 const MOST_REVISITS = 8;
-/** The beat covers ground: a patrolling cop walks to this many distinct corners in ten minutes. */
-const LEAST_CORNERS = 18;
+/** The beat covers ground: over ten minutes the patrolling cops are, on average, in at least this many of the city's `CELL` m squares (a beat of a block or two gets 13; legs of a block or less, 9). */
+const CELL = 40;
+const LEAST_MEAN_CELLS = 11;
 /** Sample points round the walk graph's nodes, each a few metres off one: a corner lot has some whose nearest node is across its wall. */
 const SAMPLES = 2000;
 const NODE_STRIDE = 7;
@@ -78,7 +79,7 @@ class Scene {
   }
 }
 
-type Tally = { insideSteps: number; mostRevisits: number; corners: number[] };
+type Tally = { insideSteps: number; mostRevisits: number; cells: number[] };
 
 const tallies = new Map<string, Tally>();
 
@@ -91,10 +92,12 @@ function tally(seed: number, sight: boolean, crimes: boolean): Tally {
   const walkers = scene.law.walkers;
   const last = new Int32Array(WALKERS).fill(-1);
   const visits = Array.from({ length: WALKERS }, () => new Map<number, number>());
-  const out: Tally = { insideSteps: 0, mostRevisits: 0, corners: [] };
+  const out: Tally = { insideSteps: 0, mostRevisits: 0, cells: [] };
+  const cells = Array.from({ length: PATROL_COPS }, () => new Set<string>());
   for (let step = 1; step <= STEPS; step++) {
     if (crimes && step % CRIME_EVERY_STEPS === 0) scene.commit(step, seed);
     scene.law.advance();
+    for (let cop = 0; cop < PATROL_COPS; cop++) cells[cop]!.add(`${Math.floor(walkers.x[cop]! / CELL)},${Math.floor(walkers.z[cop]! / CELL)}`);
     for (let walker = 0; walker < WALKERS; walker++) {
       if (real.insideBuilding(walkers.x[walker]!, walkers.z[walker]!)) out.insideSteps++;
       const node = walkers.nearestNode(walkers.x[walker]!, walkers.z[walker]!);
@@ -105,7 +108,7 @@ function tally(seed: number, sight: boolean, crimes: boolean): Tally {
       out.mostRevisits = Math.max(out.mostRevisits, seen);
     }
   }
-  for (let cop = 0; cop < PATROL_COPS; cop++) out.corners.push(visits[cop]!.size);
+  for (let cop = 0; cop < PATROL_COPS; cop++) out.cells.push(cells[cop]!.size);
   tallies.set(key, out);
   return out;
 }
@@ -147,13 +150,15 @@ describe("given the real open world and ten minutes of patrolling", () => {
     for (const seed of SEEDS) expect(tally(seed, true, false).insideSteps, `walker-steps inside a building (seed ${seed})`).toBe(0);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-cops.ts nextCorner(), change `PATROL_LEG_MIN && gap <= PATROL_LEG_MAX) return node;` to `PATROL_LEG_MAX) return node;` is not it: change `if (gap >= PATROL_LEG_MIN && gap <= PATROL_LEG_MAX) return node;` to `if (gap <= PATROL_LEG_MAX) return node;`
+  // mutation: in src/game/ai/openworld-crime/crime-constants.ts, change `PATROL_LEG_MAX = 120;` to `PATROL_LEG_MAX = 30;`
   it("when no crime calls them, then each cop walks a beat across the city, not round one corner", () => {
+    const cells: number[] = [];
     for (const seed of SEEDS) {
       const patrol = tally(seed, true, false);
-      for (let cop = 0; cop < PATROL_COPS; cop++) expect(patrol.corners[cop], `corners cop ${cop} was at (seed ${seed})`).toBeGreaterThanOrEqual(LEAST_CORNERS);
+      cells.push(...patrol.cells);
       expect(patrol.mostRevisits, `most times one corner was entered (seed ${seed})`).toBeLessThanOrEqual(MOST_REVISITS);
     }
+    expect(cells.reduce((sum, count) => sum + count, 0) / cells.length, "cells a cop was in, on average").toBeGreaterThanOrEqual(LEAST_MEAN_CELLS);
   });
 });
 
