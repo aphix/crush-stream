@@ -146,7 +146,7 @@ export const IMPOUND_SECONDS = 10;
 export const CAR_LINGER_SECONDS = 8;
 
 /** Seeded draw streams: one per kind of choice, so adding one never moves another. */
-export const CRIME_STREAM = { patrolStart: 1, patrolTurn: 2, flee: 3, find: 4, resist: 5, hothead: 6 } as const;
+export const CRIME_STREAM = { patrolStart: 1, patrolTurn: 2, flee: 3, find: 4, resist: 5, hothead: 6, patrolPause: 7, fleeCorner: 8 } as const;
 /** A draw's hash input: the seed's low bits, the stream and the index scaled apart so no two choices share an input. */
 export const DRAW_SEED_MASK = 0xffff;
 export const DRAW_SEED_SCALE = 0.01;
@@ -157,6 +157,19 @@ export const DRAW_INDEX_SCALE = 0.61;
 export const COP_LOOK = POLICE_HASH;
 /** Within this many metres of its aim a cop leaves the sidewalk graph and closes in straight. */
 export const STRAIGHT_APPROACH = 6;
+/** A patrolling cop walks a beat: between sidewalk corners this far apart (m, in a straight line, so the walk is a block or two), then stands this long (s, a seeded draw) looking about. He has a destination of the last few corners he was at ruled out, so he does not loop. */
+export const PATROL_LEG_MIN = 40;
+export const PATROL_LEG_MAX = 120;
+export const PATROL_PAUSE_SECONDS = 3;
+export const PATROL_PAUSE_SPAN = 4;
+export const PATROL_RECENT = 6;
+/** Corners drawn for one leg before the farthest of them is taken. */
+export const PATROL_TRIES = 24;
+/** A fleeing suspect keeps the corner they run for while the nearest cop is at least this far (m) from it; a new corner is at least this far (m) from where they stand. */
+export const FLEE_KEEP_GAP = 15;
+/** A suspect is at the corner they run for within this many metres (a door's reach: the walk graph's accessibility floor). */
+export const FLEE_REACHED = 3;
+export const FLEE_MIN_LEG = 30;
 /** A cop this close (m) to its patrol car gets back in. */
 export const CAR_COP_BACK_REACH = 2;
 /** A flight with no hiding place to run for goes to the street corner farthest from the cops within this many metres. */

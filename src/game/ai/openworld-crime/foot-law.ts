@@ -56,7 +56,7 @@ export class FootLaw {
 
   constructor(map: OpenWorldMap, source: OffenceSource, ports: LawPorts, hooks: LawHooks, seed: number, senses: LawSenses, playerBustSeconds: number) {
     const finder = new PathFinder(map.graph);
-    this.walkers = new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS);
+    this.walkers = new FootWalkers(map.graph, FOOT_COP_COUNT + MAX_SUBJECTS, senses.lineOfSight);
     this.cops = new FootCops(this.walkers, map.graph, finder, seed);
     this.table = new CaseTable(source.residentCount);
     this.flight = new Flight(map, this.walkers, finder, this.table);
