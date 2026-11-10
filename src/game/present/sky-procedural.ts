@@ -89,13 +89,13 @@ vec3 proceduralSky(vec3 d, float el) {
     c = mix(c, cloudCol, cloud);
   }
   c = mix(c, uDiscTint * SUN_DISC, sunDisc(d, uSunDir, SUN_RADIUS) * (1.0 - cloud));
-  if (uStars > 0.5) {
+  if (uStars > 0.0) {
     // One cell in 200 holds a star.
     vec3 cell = floor(d * STAR_CELLS);
     vec3 f = fract(d * STAR_CELLS) - 0.5;
     float r = hash12(cell.xy + cell.z * 131.0);
     float star = step(0.995, r) * (1.0 - smoothstep(0.0, 0.25, length(f))) * (0.6 + 0.4 * sin(uTime * (2.0 + 4.0 * fract(r * 97.0))));
-    c += vec3(star) * smoothstep(0.02, 0.2, d.y) * (1.0 - cloud);
+    c += vec3(star) * smoothstep(0.02, 0.2, d.y) * (1.0 - cloud) * uStars;
   }
   return c;
 }`;

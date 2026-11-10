@@ -10,7 +10,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import type { SignSight } from "../present/openworld-signs.ts";
 import type { OpenWorldMap, Place } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
-import { tickAt } from "../ai/civilians/civilian-clock.ts";
+import { gameHourAtMinute, gameMinuteAt, tickAt } from "../ai/civilians/civilian-clock.ts";
 import { fillClosedPlaces } from "../ai/civilians/society-hours.ts";
 import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.ts";
@@ -120,6 +120,8 @@ export type OpenWorldPorts = {
   bodies?: BodyHost;
   /** The facade kit for the map's homes inside the walls. */
   makeFacades(map: OpenWorldMap): FacadeArt;
+  /** The stage's light follows this game hour (0-24), or the time of day again (null): called once a game minute, never a frame. */
+  setDayHour(hour: number | null): void;
   /** The cars and lights of the open world; a harness without them has a crowd and no traffic. */
   traffic?: TrafficHostPorts;
   /** Absent in a director that draws no interiors (the tests'). */
@@ -180,6 +182,8 @@ export class OpenWorldDirector {
   private bust: ChaseHud | null = null;
   private readonly bustScratch: ChaseHud = { cops: 0, hold: 0, left: 0 };
   private lookAcc = 0;
+  /** The game minute the stage's day was last set for (-1: none, or it was left), so the light follows the crowd's clock once a minute. */
+  private dayMinute = -1;
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
   private readonly openers: DoorOpeners = { poses: null, walker: null, others: [], closed: null };
   /** The map's places shut now (a wreck, or outside their hours), refilled each frame from the crowd's state for the interiors. */
@@ -321,6 +325,7 @@ export class OpenWorldDirector {
     if (this.map === null || !this.ports.inOpenWorld()) {
       this.culling.stop(this.ports.cars());
       this.dropFacades();
+      this.dropDay();
       this.stop();
       this.setAuto(false);
       return;
@@ -357,6 +362,7 @@ export class OpenWorldDirector {
     if (this.traffic?.ambulanceScene(this.sceneScratch) === true) this.medics?.setScene(this.sceneScratch.x, this.sceneScratch.z);
     this.medics?.frame(this.ambulanceState(), this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.lights?.update(crowd.crowdSeconds);
+    this.frameDay(crowd);
     this.lookAcc += wallDt;
     const cut = this.autoWanted && this.auto !== null && this.auto.step(wallDt);
     if (cut || this.lookAcc >= 1 / LOOK_HZ) {
@@ -408,6 +414,21 @@ export class OpenWorldDirector {
     const { walkers } = crowd;
     if (walkers.count === 0 || !findWalkerStrike(crowd.state, this.seconds - dt, this.seconds, walkers.x[0]!, walkers.z[0]!, this.walkerStrike)) return;
     this.ports.strikeWalker(this.walkerStrike.dirX, this.walkerStrike.dirZ);
+  }
+
+  /** The stage's day follows the crowd's clock: one call a game minute (a crowd second), whatever the frame rate. */
+  private frameDay(crowd: CivilianCrowd): void {
+    const minute = gameMinuteAt(crowd.crowdSeconds);
+    if (minute === this.dayMinute) return;
+    this.dayMinute = minute;
+    this.ports.setDayHour(gameHourAtMinute(minute, crowd.state.startHour));
+  }
+
+  /** The course is left: the stage's time of day lights again. */
+  private dropDay(): void {
+    if (this.dayMinute < 0) return;
+    this.dayMinute = -1;
+    this.ports.setDayHour(null);
   }
 
   private dropFacades(): void {

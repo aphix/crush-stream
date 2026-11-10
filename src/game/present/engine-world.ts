@@ -7,6 +7,7 @@ import { MATERIAL_WET, tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { ACORN_LAMP } from "../world/street-kit.ts";
 import { LAMP_POOL } from "./constants.ts";
+import { dayGradeAt, lightElevation, makeDayGrade, sunNeedsHop } from "./day-cycle.ts";
 import { FACADE_GLOW } from "./facades.ts";
 import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, type SkyDetail, type SkyMode } from "./sky-dome.ts";
 import { SANDBOX_SKY } from "./sky-procedural.ts";
@@ -130,11 +131,12 @@ const lampHead = tagMaterial(new THREE.MeshStandardMaterial({
   roughness: 0.4,
 }), MAT.LAMP_LENS);
 /** Fake light pool under each lamp: an additive ground decal, drawn only at night. */
+const LAMP_POOL_OPACITY = 0.55;
 const lampPool = groundMaterial(
   new THREE.MeshBasicMaterial({
     color: 0xffd9a0,
     transparent: true,
-    opacity: 0.55,
+    opacity: LAMP_POOL_OPACITY,
     blending: THREE.AdditiveBlending,
     visible: false,
   }),
@@ -291,12 +293,24 @@ export function sunElevation(time: TimeOfDay | null): number {
   return detAtan2(DEFAULT_SUN_OFFSET.y, Math.sqrt(DEFAULT_SUN_OFFSET.x ** 2 + DEFAULT_SUN_OFFSET.z ** 2));
 }
 
-/** `out` = the offset (m) from the shadow box's centre to the sun for `time`: on `SUN_BEARING`, at the default's height. */
-export function sunOffset(time: TimeOfDay | null, out: THREE.Vector3): THREE.Vector3 {
-  const el = sunElevation(time);
-  const flat = DEFAULT_SUN_OFFSET.y / Math.tan(el);
+/** `out` = the offset (m) from the shadow box's centre to a light at `elevation` (rad): on `SUN_BEARING`, at the default's height. */
+function offsetAt(elevation: number, out: THREE.Vector3): THREE.Vector3 {
+  const flat = DEFAULT_SUN_OFFSET.y / Math.tan(elevation);
   return out.set(detSin(SUN_BEARING) * flat, DEFAULT_SUN_OFFSET.y, -detCos(SUN_BEARING) * flat);
 }
+
+/** `out` = the offset (m) from the shadow box's centre to the sun for `time`: on `SUN_BEARING`, at the default's height. */
+export function sunOffset(time: TimeOfDay | null, out: THREE.Vector3): THREE.Vector3 {
+  return offsetAt(sunElevation(time), out);
+}
+
+/** The light's elevation (rad) at the day's two ends: the sun at noon, the moon through the night (a night's picture's own disc, kept between its limits). */
+const NOON_ELEVATION = sunElevation(TIME_OF_DAY.day);
+const MOON_ELEVATION_AT_NIGHT = sunElevation(TIME_OF_DAY.night);
+/** The street lamps (and what runs by night: the cars' lamps) count as night once they are this far on. */
+const LAMPS_AS_NIGHT = 0.35;
+/** The open world's cloud cover while its day runs, over the sky that follows it. */
+const CYCLE_CLOUD_COVER = 0.45;
 
 /** The palette a course lights with: its own daylight over the default's, and its own sky colour (`sky`, else the daylight's, else the studio's). */
 export function courseDay(light: Daylight | null, sky?: string): Day {
@@ -306,9 +320,17 @@ export function courseDay(light: Daylight | null, sky?: string): Day {
 }
 
 const _night = new THREE.Color();
-/** `out` = the day colour moved `k` of the way to the night one (linear working space). */
-function mixHex(out: THREE.Color, day: number, night: number, k: number): void {
-  out.setHex(day).lerp(_night.setHex(night), k);
+const _sunset = new THREE.Color();
+/** `out` = the day colour moved `warm` of the way to the sunset's, then `k` of the way to the night one (linear working space). */
+function mixHex(out: THREE.Color, day: number, night: number, k: number, sunset = day, warm = 0): void {
+  out.setHex(day);
+  if (warm > 0) out.lerp(_sunset.setHex(sunset), warm);
+  out.lerp(_night.setHex(night), k);
+}
+
+/** A day / sunset / night value (the scalar of `mixHex`): `warm` of the way to the sunset's, then `k` to the night's. */
+function mixScalar(day: number, sunset: number, night: number, warm: number, k: number): number {
+  return THREE.MathUtils.lerp(warm > 0 ? THREE.MathUtils.lerp(day, sunset, warm) : day, night, k);
 }
 
 /**
@@ -357,6 +379,11 @@ export class WorldStage {
   time: TimeOfDay | null = null;
   /** The sandbox's own night setting, kept while a race's time of day overrides it. */
   private nightOutside = false;
+  /** The open world's game hour while its day runs (`setDayHour`), null outside it: its light follows the hour, not the time of day or the night setting. */
+  private dayHour: number | null = null;
+  private readonly grade = makeDayGrade();
+  /** The elevation (rad) the cycle's light stands at now: it moves only when the hour has carried it past `sunNeedsHop`. */
+  private cycleElevation = 0;
   /** The offset (m) from the shadow box's centre to the sun for the time of day (the race director keeps the box on the followed car). */
   readonly sunOffset = DEFAULT_SUN_OFFSET.clone();
   /** The sun's shadow-camera axes (unit; three's lookAt with world up): right = up x offset, up = offset x right. They change with the sun's direction (`setTime`), never per frame. */
@@ -405,17 +432,38 @@ export class WorldStage {
 
   /** Environment-map strength for the current time of day (the studio env loads async). */
   get envIntensity(): number {
-    return THREE.MathUtils.lerp(this.lit.env, NIGHT.env, this.depth) * this.envGain;
+    return mixScalar(this.lit.env, SUNSET.env, NIGHT.env, this.warm, this.depth) * this.envGain;
   }
 
   /** Smoke brightness for the current time of day. */
   get smokeShade(): number {
-    return THREE.MathUtils.lerp(this.lit.smoke, NIGHT.smoke, this.depth);
+    return mixScalar(this.lit.smoke, SUNSET.smoke, NIGHT.smoke, this.warm, this.depth);
   }
 
-  /** How far toward full night the lighting sits: `nightDepth` at night, 0 by day. */
+  /** The time of day whose baked environment the scene reflects: the day's through the whole of the open world's cycle (its strength follows the hour; a night's is never baked in play), else the night's at night. */
+  get envLook(): TimeOfDay {
+    if (this.dayHour === null && this.night) return TIME_OF_DAY.night;
+    return this.time ?? TIME_OF_DAY.day;
+  }
+
+  /** How far toward full night the lighting sits: `nightDepth` at night, 0 by day; in the open world's cycle, the hour's share of it. */
   private get depth(): number {
+    if (this.dayHour !== null) return this.nightDepth * this.grade.night;
     return this.night ? this.nightDepth : 0;
+  }
+
+  /** How far the light has turned toward the sunset's palette: the cycle's dawn and dusk; the sunset's own time of day is that palette outright (`lit`). */
+  private get warm(): number {
+    return this.dayHour !== null ? this.grade.warm : 0;
+  }
+
+  /** How far the street lamps (and the windows, `windows`) are lit: all or nothing at a time of day, the hour's in the cycle. */
+  private get lamps(): number {
+    return this.dayHour !== null ? this.grade.lamps : this.night ? 1 : 0;
+  }
+
+  private get windows(): number {
+    return this.dayHour !== null ? this.grade.night : this.night ? 1 : 0;
   }
 
   /**
@@ -425,7 +473,7 @@ export class WorldStage {
   look(light: Daylight | null, sky?: string): void {
     this.day = courseDay(light, sky);
     if (light?.sunAt) this.sunOffset.fromArray(light.sunAt);
-    else sunOffset(this.time, this.sunOffset);
+    else this.restoreSun();
     this.aimSun();
     this.sun.position.copy(this.sunOffset);
     this.sun.target.position.set(0, 0, 0);
@@ -437,11 +485,13 @@ export class WorldStage {
 
   /** The palette the time of day lights with: sunset's own, else the course's daylight (which night darkens). */
   private get lit(): Day {
-    return this.time === TIME_OF_DAY.sunset ? SUNSET : this.day;
+    return this.dayHour === null && this.time === TIME_OF_DAY.sunset ? SUNSET : this.day;
   }
 
   /** Night lighting on or off. In a race it is the time of day: night, or back to day. */
   setNight(on: boolean): void {
+    // The open world's night is its hour's: no key or setting turns it on or off.
+    if (this.dayHour !== null) return;
     if (this.time !== null) {
       this.setTime(on ? TIME_OF_DAY.night : TIME_OF_DAY.day);
       return;
@@ -457,10 +507,52 @@ export class WorldStage {
   setTime(time: TimeOfDay | null): void {
     if (this.time === null && time !== null) this.nightOutside = this.night;
     this.time = time;
-    this.night = time === null ? this.nightOutside : time === TIME_OF_DAY.night;
-    sunOffset(time, this.sunOffset);
+    if (this.dayHour === null) this.night = time === null ? this.nightOutside : time === TIME_OF_DAY.night;
+    this.restoreSun();
     this.aimSun();
     this.sky.show(time, SUN_BEARING);
+    this.apply();
+  }
+
+  /** The light's place for the time of day, or for the cycle's hour: where `look` and `setTime` put it back. */
+  private restoreSun(): void {
+    if (this.dayHour === null) sunOffset(this.time, this.sunOffset);
+    else offsetAt(this.cycleElevation, this.sunOffset);
+  }
+
+  /**
+   * The open world's day, set from the crowd's clock: the game hour (0-24), or null outside it (the time of day and the night setting light the scene again). The grade (the light's colour and strength, the hemisphere,
+   * the fog and sky, the windows, the lamp heads and their pools) is a few dozen uniform writes and the director may hand it a new hour as seldom as it likes: this moves nothing a frame does not already redraw. The
+   * light's direction is the one thing that costs a look: it moves only when the shadow tip would shift by `SUN_HOP_METRES` (`sunNeedsHop`), and the baked environment is never changed. H and every night key or setting
+   * leave the open world's hour alone (`setNight`).
+   */
+  setDayHour(hour: number | null): void {
+    if (hour === null) {
+      if (this.dayHour === null) return;
+      this.dayHour = null;
+      this.sky.endCycle();
+      this.sky.setProcedural(this.procedural);
+      this.setTime(this.time);
+      this.syncSky();
+      return;
+    }
+    const entering = this.dayHour === null;
+    this.dayHour = hour;
+    const grade = dayGradeAt(hour, this.grade);
+    this.night = grade.lamps >= LAMPS_AS_NIGHT;
+    const target = lightElevation(grade, LOW_SUN, NOON_ELEVATION, MOON_ELEVATION_AT_NIGHT);
+    if (entering) {
+      this.sky.setProcedural(this.procedural ?? CYCLE_CLOUD_COVER);
+      this.cycleElevation = target;
+      offsetAt(target, this.sunOffset);
+      this.aimSun();
+    } else if (sunNeedsHop(this.cycleElevation, target)) {
+      this.cycleElevation = target;
+      offsetAt(target, this.sunOffset);
+      this.aimSun();
+    }
+    this.sky.setCycle(grade.warm, grade.night);
+    if (entering) this.syncSky();
     this.apply();
   }
 
@@ -486,7 +578,7 @@ export class WorldStage {
   }
 
   private syncSky(): void {
-    const detail = skyDetailFor(this.skyMode, this.skyTier, this.procedural !== null);
+    const detail = skyDetailFor(this.skyMode, this.skyTier, this.procedural !== null || this.dayHour !== null);
     if (detail === this.skyDetail) return;
     this.skyDetail = detail;
     this.sky.setDetail(detail);
@@ -548,23 +640,27 @@ export class WorldStage {
     if (!(this.scene.background instanceof THREE.Color)) this.scene.background = new THREE.Color();
     const sky = this.scene.background;
     const day = this.lit;
+    const warm = this.warm;
+    const cycling = this.dayHour !== null;
     // A race's night is its night sky's horizon, not the day's haze darkened; the sandbox's procedural sky is its own horizon.
-    if (this.time === TIME_OF_DAY.night) sky.set(SKY_LOOKS[TIME_OF_DAY.night].horizon);
-    else if (this.time === null && this.skyDetail === "procedural") sky.set(SANDBOX_SKY[this.night ? "night" : "day"].horizon);
-    else mixHex(sky, day.sky, NIGHT.sky, k);
+    if (!cycling && this.time === TIME_OF_DAY.night) sky.set(SKY_LOOKS[TIME_OF_DAY.night].horizon);
+    else if (!cycling && this.time === null && this.skyDetail === "procedural") sky.set(SANDBOX_SKY[this.night ? "night" : "day"].horizon);
+    else mixHex(sky, day.sky, NIGHT.sky, k, SUNSET.sky, warm);
     this.scene.fog?.color.copy(sky);
     this.sky.setHaze(sky);
     this.sky.setNight(this.night);
-    mixHex(this.hemi.color, day.hemi[0], NIGHT.hemi[0], k);
-    this.hemi.intensity = THREE.MathUtils.lerp(day.hemi[1], NIGHT.hemi[1], k);
-    mixHex(this.sun.color, day.sun[0], NIGHT.sun[0], k);
-    this.sun.intensity = THREE.MathUtils.lerp(day.sun[1], NIGHT.sun[1], k);
-    mixHex(this.fill.color, day.fill[0], NIGHT.fill[0], k);
-    this.fill.intensity = THREE.MathUtils.lerp(day.fill[1], NIGHT.fill[1], k);
+    mixHex(this.hemi.color, day.hemi[0], NIGHT.hemi[0], k, SUNSET.hemi[0], warm);
+    this.hemi.intensity = mixScalar(day.hemi[1], SUNSET.hemi[1], NIGHT.hemi[1], warm, k);
+    mixHex(this.sun.color, day.sun[0], NIGHT.sun[0], k, SUNSET.sun[0], warm);
+    this.sun.intensity = mixScalar(day.sun[1], SUNSET.sun[1], NIGHT.sun[1], warm, k);
+    mixHex(this.fill.color, day.fill[0], NIGHT.fill[0], k, SUNSET.fill[0], warm);
+    this.fill.intensity = mixScalar(day.fill[1], SUNSET.fill[1], NIGHT.fill[1], warm, k);
     if (this.scene.environment) this.scene.environmentIntensity = this.envIntensity;
-    lampHead.emissiveIntensity = this.night ? NIGHT.lamp : day.lamp;
-    FACADE_GLOW.value = this.night ? NIGHT.glow : day.glow;
-    lampPool.visible = this.night;
+    const lamps = this.lamps;
+    lampHead.emissiveIntensity = mixScalar(day.lamp, SUNSET.lamp, NIGHT.lamp, warm, lamps);
+    FACADE_GLOW.value = mixScalar(day.glow, SUNSET.glow, NIGHT.glow, warm, this.windows);
+    lampPool.visible = cycling ? lamps > 0 : this.night;
+    lampPool.opacity = LAMP_POOL_OPACITY * (cycling ? lamps : 1);
     // Wet is a satin sheen on the dry albedo, not the old mirror whose glare band lit the ground 35 % over dry: the classed shaders read this one uniform.
     MATERIAL_WET.value = this.wet ? 1 : 0;
     this.groundMat.roughness = GROUND_ROUGHNESS;

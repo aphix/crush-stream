@@ -23,7 +23,7 @@ import { SceneFade } from "../present/scene-fade.ts";
 import { ParkingScene } from "../present/parking-scene.ts";
 import { drawnStyle, type CarStyleId } from "../vehicle/car-variants.ts";
 import { armKill, assignClass, carClass, HANDLING, killClass, STYLE_CLASS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
-import { DRIVER_CARS, TIME_OF_DAY, TIMES_OF_DAY, type DriverCar } from "../match/types.ts";
+import { DRIVER_CARS, TIMES_OF_DAY, type DriverCar } from "../match/types.ts";
 import { WorldStage, makeLamp } from "../present/engine-world.ts";
 import { Cinematics } from "../present/engine-cine.ts";
 import { DaylightEnv } from "../present/daylight-env.ts";
@@ -931,7 +931,7 @@ export abstract class EngineCore {
   /** Once a frame (a compare of two small integers): the environment follows the scene and the time of day, outdoors the sky over the ground, in a studio scene the studio's, under Ultra its own. */
   protected chooseEnvironment(): void {
     if (!this.envMap) return;
-    const look = this.stage.night ? TIME_OF_DAY.night : (this.stage.time ?? TIME_OF_DAY.day);
+    const look = this.stage.envLook;
     const choice = this.cine.tier === "ultra" ? -1 : this.studioScene() ? 0 : 1 + TIMES_OF_DAY.indexOf(look);
     if (choice === this.envChoice) return;
     this.envChoice = choice;

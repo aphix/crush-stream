@@ -443,6 +443,10 @@ export class CrashEngine extends EngineGarage {
           this.race.onWallHit = recorded;
         };
       },
+      setDayHour: (hour) => {
+        this.stage.setDayHour(hour);
+        this.smoke.shade = this.cine.tyreSmoke.shade = this.stage.smokeShade;
+      },
       makeFacades: (map) => {
         const kit = new FacadeBays(homeFrontages(map.places.filter((place) => place.doorNode >= 0)));
         this.scene.add(kit.group);
