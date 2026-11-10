@@ -12,7 +12,6 @@ import { parseTrack } from "../world/track-schema.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, pressKey, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
-import { SEAT_KEYS } from "./engine-keys.ts";
 
 /** The seed a link pins (hex): the crowd of this run. */
 const LINK_SEED = 0xbeef;
@@ -137,6 +136,10 @@ describe("given the number pad's plus and minus in the open world", () => {
   const crowdSeconds = (): number => engine["openWorld"].crowdTime();
   const HOURS_PER_DAY = 24;
   const EPSILON = 1e-9;
+  /** The owner's keys, as the browser names them: the number pad's plus and minus, and H. */
+  const NUMPAD_PLUS = "NumpadAdd";
+  const NUMPAD_MINUS = "NumpadSubtract";
+  const KEY_H = "KeyH";
 
   // mutation: sed -i 's/  dayForward: "NumpadAdd",/  dayForward: "NumpadMultiply",/' src/game/engine/engine-keys.ts
   it("when plus is pressed, then the stage's light stands on the next whole game hour at once and the crowd's clock has not moved; minus goes back an hour, and H still opens the race view and leaves the hour alone", () => {
@@ -144,18 +147,18 @@ describe("given the number pad's plus and minus in the open world", () => {
     const before = lightHour();
     const seconds = crowdSeconds();
     expect(before, "the light follows the crowd's hour").not.toBeNull();
-    pressKey(engine, SEAT_KEYS.dayForward);
+    pressKey(engine, NUMPAD_PLUS);
     const forward = lightHour();
     expect(((forward - (Math.floor(before) + 1)) % HOURS_PER_DAY + HOURS_PER_DAY) % HOURS_PER_DAY, "the next whole hour").toBeLessThan(EPSILON);
     expect(crowdSeconds(), "the crowd's clock").toBe(seconds);
-    pressKey(engine, SEAT_KEYS.dayBack);
+    pressKey(engine, NUMPAD_MINUS);
     const back = lightHour();
     expect(((forward - 1 - back) % HOURS_PER_DAY + HOURS_PER_DAY) % HOURS_PER_DAY, "an hour back from a whole hour").toBeLessThan(EPSILON);
     const full = engine["race"].fullUi;
-    pressKey(engine, SEAT_KEYS.raceView);
+    pressKey(engine, KEY_H);
     expect(engine["race"].fullUi, "H toggles the race view").toBe(!full);
     expect(lightHour(), "H leaves the hour alone").toBe(back);
-    pressKey(engine, SEAT_KEYS.raceView);
+    pressKey(engine, KEY_H);
     expect(engine["race"].fullUi, "H again").toBe(full);
   });
 });
