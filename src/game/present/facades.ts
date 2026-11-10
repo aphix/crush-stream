@@ -5,6 +5,7 @@ import { SURFACE_REGION_ATTRIBUTE, tagMaterial } from "../vehicle/material-class
 import type { PrefabId } from "../world/catalog.ts";
 import { type BiomeId, PREFAB } from "../world/constants.ts";
 import { DEFAULT_STOREYS, FACADE_ALPHA } from "../world/openworld/interior-kinds.ts";
+import { FACADE_HOMES, FACADE_HOMES_FRAME, FACADE_HOMES_VERTEX, facadeHomesSeedGlsl, facadeShareGlsl } from "./facade-homes.ts";
 import layerData from "./facade-layers.json" with { type: "json" };
 import { followRelief, reliefPossible } from "./surface-relief.ts";
 import { flatLayers, loadLayers } from "./texture-array.ts";
@@ -96,6 +97,7 @@ export function roofLiftAt(x: number, z: number): number {
 
 /** The share of a style's windows lit at full night. */
 const LIT_SHARE = 0.6;
+const LIT_SHARE_GLSL = LIT_SHARE.toFixed(2);
 const WINDOW_LIGHT = 0xffb35e;
 const WINDOW_LIGHT_INTENSITY = 1.3;
 /** A neon or LED sign's radiance at full glow (linear colour, over the windows' 1.3): bright enough to bloom, a sign being the night's light source. */
@@ -363,14 +365,15 @@ vFacadeOpen = 0.0;
 #ifdef USE_INSTANCING
 ${facadeOpenLoop("vFacadeOpen", "instanceMatrix[3].xz")}
 #endif`;
-/** A style whose shops may be shut: the instance is told whether its building is on the list of shut shops. */
+/** A style whose shops may be shut: the instance is told whether its building is on the list of shut shops, and which share of its windows its household lights (`facade-homes.ts`). */
 const FACADE_DARK_VERTEX = /* glsl */ `
 uniform vec2 facadeDarkAt[${FACADE_DARK_MAX}];
-flat varying float vFacadeDark;`;
+flat varying float vFacadeDark;${FACADE_HOMES_VERTEX}`;
 const FACADE_DARK_SEED = /* glsl */ `
 vFacadeDark = 0.0;
+vFacadeHome = 0.0;
 #ifdef USE_INSTANCING
-for (int i = 0; i < ${FACADE_DARK_MAX}; i++) vFacadeDark = max(vFacadeDark, 1.0 - step(${OPEN_AT_RADIUS}, distance(instanceMatrix[3].xz, facadeDarkAt[i])));
+for (int i = 0; i < ${FACADE_DARK_MAX}; i++) vFacadeDark = max(vFacadeDark, 1.0 - step(${OPEN_AT_RADIUS}, distance(instanceMatrix[3].xz, facadeDarkAt[i])));${facadeHomesSeedGlsl("instanceMatrix[3].xz")}
 #endif`;
 const FACADE_SEED = /* glsl */ `
 vFacadeRegion = ${SURFACE_REGION_ATTRIBUTE}.xy;${FACADE_LIFT}${FACADE_METRES}
@@ -421,7 +424,7 @@ const facadeExtraUniforms = (extras: Extras): string =>
   (extras.height ? "uniform highp sampler2DArray facadeHeightMap;\nuniform float facadeReliefDepth;\n" : "") +
   (extras.roughness ? "uniform highp sampler2DArray facadeRoughnessMap;\nuniform float facadeRoughnessMix;\n" : "") +
   (extras.open ? `flat varying float vFacadeOpen;\n${FACADE_CUT_GLSL}\n` : "") +
-  (extras.dark ? "flat varying float vFacadeDark;\n" : "");
+  (extras.dark ? "flat varying float vFacadeDark;\nflat varying float vFacadeHome;\n" : "");
 
 /** The alpha below which a texel is a doorway (always cut), and below which it is a window (cut while its room is built): halfway between the classes the packer writes. */
 const DOORWAY_BELOW = ((FACADE_ALPHA.doorway + FACADE_ALPHA.window) / 2 / 255).toFixed(3);
@@ -492,7 +495,7 @@ const facadeEmissive = (extras: Extras): string => /* glsl */ `
 #ifdef USE_EMISSIVEMAP
 ${extras.neon ? `vec3 facadeSign = ${facadeRead(extras, "glow")}.rgb;
 vec2 facadeWindow = facadeSign.rg;` : `vec2 facadeWindow = ${facadeRead(extras, "glow")}.rg;`}
-float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${LIT_SHARE.toFixed(2)});
+${extras.dark ? `float facadeShare = ${facadeShareGlsl(LIT_SHARE_GLSL)};\n` : ""}float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${extras.dark ? "facadeShare" : LIT_SHARE_GLSL})${extras.dark ? " * step(0.0001, facadeShare)" : ""};
 totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x)${extras.dark ? ` * (1.0 - vFacadeDark * step(${LAYER.ground}.0, vFacadeRegion.x) * step(vFacadeRegion.x, ${LAYER.ground}.0))` : ""};${
     extras.neon
       ? `
@@ -530,7 +533,11 @@ function patchFacade(shader: THREE.WebGLProgramParametersWithUniforms, own: Styl
     shader.uniforms.facadeRoughnessMix = own.roughnessMix;
   }
   if (extras.open) shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;
-  if (extras.dark) shader.uniforms.facadeDarkAt = FACADE_DARK_AT;
+  if (extras.dark) {
+    shader.uniforms.facadeDarkAt = FACADE_DARK_AT;
+    shader.uniforms.facadeHomes = FACADE_HOMES;
+    shader.uniforms.facadeHomesFrame = FACADE_HOMES_FRAME;
+  }
   shader.vertexShader = shader.vertexShader
     .replace("#include <common>", `#include <common>${FACADE_VERTEX}${extras.open ? FACADE_OPEN_VERTEX : ""}${extras.dark ? FACADE_DARK_VERTEX : ""}`)
     .replace("#include <begin_vertex>", `#include <begin_vertex>${FACADE_SEED}${extras.open ? FACADE_OPEN_SEED : ""}${extras.dark ? FACADE_DARK_SEED : ""}`);

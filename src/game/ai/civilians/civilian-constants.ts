@@ -344,7 +344,7 @@ export const HOUR_WEIGHTS = [
 export const CLOSED_HOURS_WEIGHT = 0.1;
 
 /** Salts of the draw streams (`residentDraws`): one per kind of choice, so adding a draw to one never moves another. */
-export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12, alarm: 13, cross: 14 } as const;
+export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12, alarm: 13, cross: 14, household: 15 } as const;
 /** Odd multipliers that scramble (seed, resident, salt, index) into a mulberry32 seed. */
 export const MIX_RESIDENT = 0x9e3779b9;
 export const MIX_SALT = 0x85ebca6b;

@@ -9,6 +9,7 @@ import { BRICK_STYLE } from "../world/openworld/openworld-programme.ts";
 import { buildAirconGeometry, buildBayGeometry, buildCondenserGeometry, buildCorniceGeometry, buildDeckGeometry, buildFanlightGeometry, buildRailingGeometry, buildRoofGeometry, buildShutterGeometry, buildStoopGeometry, buildSurroundGeometry, buildWindowBoxGeometry, TINT_ATTRIBUTE } from "./facade-bay-parts.ts";
 import { airconWindowsOf, shuttersOf, visibleWindowsOf } from "./facade-fittings.ts";
 import { windowBoxPlacements, type SillWindow } from "./facade-window-boxes.ts";
+import { FACADE_HOMES, FACADE_HOMES_FRAME, FACADE_HOMES_VERTEX, facadeHomesSeedGlsl, facadeShareGlsl } from "./facade-homes.ts";
 import { GLASS_ALPHA_BELOW, makeKitTextures, type KitTextures } from "./facade-kit-atlas.ts";
 import { FACADE_CUT_GLSL, FACADE_GLOW, FACADE_OPEN_AT, FACADE_OPEN_UNIFORM, facadeOpenLoop, roofLiftAt } from "./facades.ts";
 
@@ -64,13 +65,16 @@ export const KIT_HOUSE_BACK = drawnHalf(LAYOUT.houseDepth);
 /** A house's seed from where it stands, then its windows light once the shared glow passes it (and only a share of houses light them). */
 const KIT_SEED = "fract(dot(instanceMatrix[3].xz, vec2(0.0791, 0.1137)))";
 
+const KIT_HOUSE_POINT = "kitHouse";
+
 /** The seed and the open flag of an instance: where its house stands (its translation, taken back along the kit's out axis to the building's centre) against the list of buildings with their rooms built. */
 const KIT_HOUSE_VERTEX = /* glsl */ `
 vKitOpen = 0.0;
+vFacadeHome = 0.0;
 #ifdef USE_INSTANCING
 vKitSeed = ${KIT_SEED};
-vec2 kitHouse = instanceMatrix[3].xz - normalize(instanceMatrix[2].xz) * ${KIT_HOUSE_BACK.toFixed(4)};
-${facadeOpenLoop("vKitOpen", "kitHouse")}
+vec2 ${KIT_HOUSE_POINT} = instanceMatrix[3].xz - normalize(instanceMatrix[2].xz) * ${KIT_HOUSE_BACK.toFixed(4)};
+${facadeOpenLoop("vKitOpen", KIT_HOUSE_POINT)}${facadeHomesSeedGlsl(KIT_HOUSE_POINT)}
 #else
 vKitSeed = 0.0;
 #endif`;
@@ -88,16 +92,18 @@ function makeKitMaterial(textures: KitTextures): THREE.MeshStandardMaterial {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.facadeGlow = FACADE_GLOW;
     shader.uniforms.facadeOpenAt = FACADE_OPEN_AT;
+    shader.uniforms.facadeHomes = FACADE_HOMES;
+    shader.uniforms.facadeHomesFrame = FACADE_HOMES_FRAME;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\nattribute float ${TINT_ATTRIBUTE};\nvarying float vKitSeed;\nflat varying float vKitOpen;\n${FACADE_OPEN_UNIFORM}`)
+      .replace("#include <common>", `#include <common>\nattribute float ${TINT_ATTRIBUTE};\nvarying float vKitSeed;\nflat varying float vKitOpen;\n${FACADE_OPEN_UNIFORM}${FACADE_HOMES_VERTEX}`)
       .replace("#include <color_vertex>", tintedColorVertex())
       .replace("#include <begin_vertex>", `#include <begin_vertex>\n${KIT_HOUSE_VERTEX}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\nuniform float facadeGlow;\nvarying float vKitSeed;\nflat varying float vKitOpen;${FACADE_CUT_GLSL}`)
+      .replace("#include <common>", `#include <common>\nuniform float facadeGlow;\nvarying float vKitSeed;\nflat varying float vKitOpen;\nflat varying float vFacadeHome;${FACADE_CUT_GLSL}`)
       .replace("#include <map_fragment>", `#include <map_fragment>\nif (vKitOpen > 0.0 && diffuseColor.a < ${GLASS_ALPHA_BELOW} && facadeCuts(vKitOpen)) discard;`)
       .replace(
         "#include <emissivemap_fragment>",
-        `#include <emissivemap_fragment>\ntotalEmissiveRadiance *= smoothstep(vKitSeed * 0.7, vKitSeed * 0.7 + 0.2, facadeGlow) * step(fract(vKitSeed * 7.3), ${WINDOW_LIT_SHARE.toFixed(2)});`,
+        `#include <emissivemap_fragment>\nfloat kitShare = ${facadeShareGlsl(WINDOW_LIT_SHARE.toFixed(2))};\ntotalEmissiveRadiance *= smoothstep(vKitSeed * 0.7, vKitSeed * 0.7 + 0.2, facadeGlow) * step(fract(vKitSeed * 7.3), kitShare) * step(0.0001, kitShare);`,
       );
   };
   material.customProgramCacheKey = () => "facade-kit";

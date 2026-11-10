@@ -3,7 +3,7 @@ import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "../ai/civilians/civilian-crowd.test-util.ts";
-import { EVENT_KIND, EVENT_TRIPLE, FLAG, GENDER, RESIDENT_INT, RESIDENT_INT_STRIDE } from "../ai/civilians/civilian-constants.ts";
+import { EVENT_KIND, EVENT_TRIPLE, FLAG, GENDER, HOURS_PER_GAME_DAY, NEED, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_DAY } from "../ai/civilians/civilian-constants.ts";
 import { CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER, WRECK_SPEED } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
@@ -20,10 +20,16 @@ import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { Sight } from "../present/spectate-cam.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
-import { tickAt } from "../ai/civilians/civilian-clock.ts";
+import { hourOfDay, tickAt } from "../ai/civilians/civilian-clock.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { MEDICS } from "./engine-openworld-medics.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
+import { fillAwakeAtHomes } from "../ai/civilians/society-awake.ts";
+import { ImaginedHouseholds } from "../ai/civilians/society-households.ts";
+import { stageResident } from "../ai/civilians/society.test-util.ts";
+import { FACADE_HOMES, FACADE_HOMES_FRAME, HOME_SHARE_BY_AWAKE, homeCell, texelOfShare } from "../present/facade-homes.ts";
+import { shareOfTexel } from "../present/facade-homes.test-util.ts";
+import { PLACE_KIND } from "../world/openworld/walk-graph.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
 
 const map = buildFixtureMap();
@@ -527,6 +533,12 @@ describe("given the open world's stage light following the crowd's clock", () =>
   /** Frames to run a whole number of crowd seconds (a game minute each) and a little over. */
   const framesFor = (crowdSeconds: number): number => Math.round(crowdSeconds / FRAME);
   const MINUTES_PER_HOUR = 60;
+  /** Crowd seconds (game minutes) a home's share takes to rise to one person's, and to fall from it, with room to spare, and a day's ticks for a dwell that outlasts the row. */
+  const FADE_MINUTES = 8;
+  const NEXT_DAY_TICKS = TICKS_PER_GAME_DAY;
+  /** An hour no imagined household is up (the households' midday), and one nearly every household is. */
+  const QUIET_HOUR = 13;
+  const EVENING_HOUR = 20;
 
   // mutation: sed -i 's/    if (minute === this.dayMinute) return;//' src/game/engine/engine-openworld.ts
   it("when frames pass, then the stage is told the hour once a game minute, not once a frame, and the hour is the crowd's start hour and the minutes since over sixty", () => {
@@ -649,5 +661,111 @@ describe("given the open world's stage light following the crowd's clock", () =>
       expect(harness.director.crowdTime(), "the clock").toBe(seconds);
       expect(harness.crowd().state.nextTick, "the society's tick").toBe(tick);
     }
+  });
+
+  // mutation: sed -i 's/    this.homeLights.step(this.awake, settles);//' src/game/engine/engine-openworld.ts
+  it("when the first game minute is lit, then each home's texel holds the share of the people awake in it, taken from the crowd's own state at that tick, and the shaders' grid is the map's", () => {
+    const harness = hostWithMap();
+    harness.frame();
+    const crowd = harness.crowd();
+    const awake = new Uint8Array(crowd.state.index.placeCount);
+    const tick = tickAt(crowd.crowdSeconds);
+    fillAwakeAtHomes(crowd.state, tick, awake);
+    new ImaginedHouseholds(crowd.state).fill(tick, awake);
+    expect(FACADE_HOMES_FRAME.value.z, "a grid for the map's homes").toBeGreaterThan(1);
+    const data = FACADE_HOMES.value.image.data!;
+    const frame = FACADE_HOMES_FRAME.value;
+    let homes = 0;
+    for (const [index, place] of map.places.entries()) {
+      if (place.kind !== PLACE_KIND.home) continue;
+      homes++;
+      const cell = homeCell(place.x, place.z, frame.x, frame.y);
+      const texel = data[cell.row * frame.z + cell.column]!;
+      expect(texel, `${place.name}'s texel`).toBe(texelOfShare(HOME_SHARE_BY_AWAKE[Math.min(awake[index]!, HOME_SHARE_BY_AWAKE.length - 1)]!));
+    }
+    expect(homes, "homes in the fixture map").toBeGreaterThan(1);
+  });
+
+  // mutation: sed -i 's/    this.homeLights?.dispose();//' src/game/engine/engine-openworld.ts
+  it("when the open world is left, then the shaders' homes grid is empty again and every style reads its fixed share", () => {
+    const harness = hostWithMap();
+    harness.frame();
+    expect(FACADE_HOMES_FRAME.value.z, "a grid while it is up").toBeGreaterThan(1);
+    harness.open = false;
+    harness.frame();
+    expect(FACADE_HOMES_FRAME.value.z, "an empty grid after").toBe(1);
+    expect(FACADE_HOMES.value.image.data![0], "no home in it").toBe(0);
+  });
+
+  /** A city with one person, who is the first home's: the harness's crowd after a game minute and a half, every home some resident's, everyone gone and the clock at an hour when no household is up. `stay` puts the person at a place with a day of dwell there (they are awake unless it is their own home on rest); `toHour` skips the clock on to an hour. */
+  function loneResident() {
+    const harness = hostWithMap();
+    for (let at = 0; at < framesFor(1.5); at++) harness.frame();
+    const crowd = harness.crowd();
+    const state = crowd.state;
+    for (let resident = 0; resident < state.capacity; resident++) state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.alive] = 0;
+    state.occupants.fill(1);
+    const homes = map.places.flatMap((place, index) => (place.kind === PLACE_KIND.home ? [index] : []));
+    const frame = FACADE_HOMES_FRAME.value;
+    const toHour = (hour: number): void => {
+      for (let skips = 0; skips < HOURS_PER_GAME_DAY && hourOfDay(tickAt(harness.director.crowdTime()), state.startHour) !== hour; skips++) harness.director.skipDay(1);
+    };
+    toHour(QUIET_HOUR);
+    return {
+      harness,
+      homes,
+      toHour,
+      lone: homes[0]!,
+      shop: map.places.findIndex((place) => place.kind === PLACE_KIND.shop),
+      shareOf: (place: number): number => {
+        const cell = homeCell(map.places[place]!.x, map.places[place]!.z, frame.x, frame.y);
+        return shareOfTexel(FACADE_HOMES.value.image.data![cell.row * frame.z + cell.column]!);
+      },
+      stay: (place: number): void => {
+        const tick = tickAt(crowd.crowdSeconds);
+        stageResident(state, 0, { place, home: homes[0]!, tick, dwell: 1, nextDecision: tick + NEXT_DAY_TICKS, purpose: NEED.social });
+      },
+      minutes: (count: number): void => {
+        for (let at = 0; at < framesFor(count); at++) harness.frame();
+      },
+    };
+  }
+
+  // mutation: sed -i 's/      const target = HOME_SHARE_BY_AWAKE\[people\]!;/      const target = HOME_SHARE_BY_AWAKE[1]!;/' src/game/present/facade-homes.ts
+  it("when the only person in the city is awake in one home, then that home's windows light over a few game minutes and every other home stays dark, and when they go out it goes dark again", () => {
+    const city = loneResident();
+    city.stay(city.lone);
+    city.minutes(FADE_MINUTES);
+    expect(city.shareOf(city.lone), "the home with one person awake").toBeCloseTo(HOME_SHARE_BY_AWAKE[1]!, 1);
+    for (const other of city.homes.slice(1)) expect(city.shareOf(other), `home ${other} with nobody`).toBe(0);
+    city.stay(city.shop);
+    city.minutes(FADE_MINUTES);
+    expect(city.shareOf(city.lone), "the person has gone out").toBe(0);
+  });
+
+  // mutation: sed -i 's/    this.lightHomes(crowd, true);//' src/game/engine/engine-openworld.ts
+  it("when solo skips the clock to another hour, then each home's windows are at the share of the people awake there at the new hour at once, not eased over minutes from the old hour's", () => {
+    const city = loneResident();
+    city.stay(city.lone);
+    expect(city.harness.director.skipDay(1), "the skip is taken").toBe(true);
+    expect(city.shareOf(city.lone), "the home with one person awake, at once").toBeCloseTo(HOME_SHARE_BY_AWAKE[1]!, 2);
+    for (const other of city.homes.slice(1)) expect(city.shareOf(other), `home ${other} with nobody, at once`).toBe(0);
+  });
+
+  // mutation: sed -i 's/    this.households.fill(tick, this.awake);//' src/game/engine/engine-openworld.ts
+  // mutation: sed -i 's/this.size\[place\] = 1 + /this.size[place] = state.occupants[place] > 0 ? 0 : 1 + /' src/game/ai/civilians/society-households.ts
+  it("when it is eight in the evening and every resident is out, then every home, the homes some resident lives in too, is lit by its household at once, and at midday every one is dark", () => {
+    const city = loneResident();
+    const { state } = city.harness.crowd();
+    const households = new ImaginedHouseholds(state);
+    const awake = new Uint8Array(state.index.placeCount);
+    city.toHour(EVENING_HOUR);
+    households.fill(tickAt(city.harness.director.crowdTime()), awake);
+    const lit = city.homes.filter((place) => awake[place]! > 0);
+    expect(state.occupants[city.lone], "the lone home has a resident, out").toBeGreaterThan(0);
+    expect(lit.length, "homes lit by their households in the evening").toBeGreaterThan(0);
+    for (const place of city.homes) expect(city.shareOf(place), `home ${place} with ${awake[place]} awake`).toBeCloseTo(HOME_SHARE_BY_AWAKE[Math.min(awake[place]!, HOME_SHARE_BY_AWAKE.length - 1)]!, 2);
+    city.toHour(QUIET_HOUR);
+    for (const place of city.homes) expect(city.shareOf(place), `home ${place} at midday`).toBe(0);
   });
 });
