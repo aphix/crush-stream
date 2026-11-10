@@ -18,6 +18,7 @@ import { LegPose } from "./civilian-leg.ts";
 import type { MapIndex } from "./civilian-map-index.ts";
 import { moodHold, packName } from "./civilian-names.ts";
 import { castHomesOf, newAppointmentSlot, type ResolvedMember } from "./civilian-story.ts";
+import type { PedestrianSignals } from "./civilian-signals.ts";
 import { buildVenueIndex, type VenueIndex } from "./society-venues.ts";
 import { PathFinder } from "./walk-path.ts";
 
@@ -70,6 +71,8 @@ export class CityState {
   readonly scratchPath: Uint16Array;
   /** The path of a trip by car, built here before it replaces the walk's. */
   readonly carPath: Uint16Array;
+  /** The city's lights for its crossings, or none: walkers wait at kerbs only with them. */
+  signals: PedestrianSignals | null = null;
   /** The reaction steps one alarm has given out (1: taken), so that no two people react on one. */
   readonly alarmSlots: Uint8Array;
   readonly scratchNeeds: Float32Array;

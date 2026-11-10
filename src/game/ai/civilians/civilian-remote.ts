@@ -4,6 +4,7 @@ import { queueEvents } from "./civilian-events.ts";
 import type { CityState } from "./civilian-state.ts";
 import { computeTick } from "./civilian-tick.ts";
 import { answerBuffers, applyAnswer, type FromCivilianWorker, type TickAnswer, type ToCivilianWorker } from "./civilian-wire.ts";
+import { openWorldSignals } from "./civilian-signals.ts";
 import { createCityState } from "./society.ts";
 
 /** What the main thread posted to the worker and heard from it so far, in messages and the bytes of the typed arrays handed over, and the answers that came after the main thread had computed the tick itself. */
@@ -79,12 +80,12 @@ export class CivilianRemote {
   }
 
   /** Starts the city: builds the mirror and has the worker build its own from the same seed and map. */
-  init(seed: number, map: OpenWorldMap, playableResidents: number): void {
-    this.mirror = createCityState(seed, map, playableResidents);
+  init(seed: number, map: OpenWorldMap, playableResidents: number, signals = false): void {
+    this.mirror = createCityState(seed, map, playableResidents, signals ? openWorldSignals() : null);
     this.heard.clear();
     if (this.worker === null) return;
     const wire = mapForWorker(map);
-    this.send({ kind: "init", seed, playableResidents, map: wire.map }, wire.buffers);
+    this.send({ kind: "init", seed, playableResidents, map: wire.map, signals }, wire.buffers);
   }
 
   /** The events of the crowd time up to tick `tick` (kind, subject, seconds triples) and the order to plan it. Ticks are posted in order, each at least the next to take. */

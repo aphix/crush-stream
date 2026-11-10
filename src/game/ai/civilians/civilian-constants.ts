@@ -133,7 +133,15 @@ export const RESIDENT_INT = {
   alarmX: 57,
   alarmZ: 58,
   alarmVictim: 59,
-  history: 60,
+  /** A leg's waits at kerbs for a walk light: how many (0 to `MAX_WAITS`), the path index of the node each is at, and its length in ticks. */
+  waitCount: 60,
+  waitIndex0: 61,
+  waitIndex1: 62,
+  waitIndex2: 63,
+  waitTicks0: 64,
+  waitTicks1: 65,
+  waitTicks2: 66,
+  history: 67,
 } as const;
 /** A row is a whole number of 64-byte cache lines (16 ints), so the hot fields at its start share one. */
 const ROW_ALIGN_INTS = 16;
@@ -333,7 +341,7 @@ export const HOUR_WEIGHTS = [
 export const CLOSED_HOURS_WEIGHT = 0.1;
 
 /** Salts of the draw streams (`residentDraws`): one per kind of choice, so adding a draw to one never moves another. */
-export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12, alarm: 13 } as const;
+export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12, alarm: 13, cross: 14 } as const;
 /** Odd multipliers that scramble (seed, resident, salt, index) into a mulberry32 seed. */
 export const MIX_RESIDENT = 0x9e3779b9;
 export const MIX_SALT = 0x85ebca6b;
@@ -450,6 +458,13 @@ export const EVADE_REACH = 30;
 export const EVADE_PACE_CALM = 1.4;
 export const EVADE_PACE_JUMPY = 2.8;
 export const EVADE_HOLD_SECONDS = 2;
+/**
+ * Crossing a road at a signal: a walker waits at the kerb for the walk (the cars of the street they cross red, and still red when they are over), up to `MAX_WAITS` times in a leg, and the leg takes that much longer. Some do not: a
+ * walker goes against the light with the chance `CROSS_DART_BASE` + `CROSS_DART_JUMPY` x their neuroticism, drawn once for each crossing.
+ */
+export const MAX_WAITS = 3;
+export const CROSS_DART_BASE = 0.05;
+export const CROSS_DART_JUMPY = 0.25;
 /**
  * Each person who reacts to one hazard starts a moment after it, on a step of their own (the steps are `ALARM_DELAY_STEPS_PER_SECOND` a second, so no two start on one frame at the draw's 64 Hz): from
  * `ALARM_DELAY_MIN_SECONDS` for the jumpiest to `ALARM_DELAY_MAX_SECONDS` for the calmest, `ALARM_DELAY_JITTER_SHARE` of the span a seeded draw.

@@ -150,8 +150,8 @@ export class CivilianCrowd {
   private readonly crimeDesk: CrimeDesk;
   private readonly crimesDue: Int32Array;
 
-  constructor(map: OpenWorldMap, seed: number, playableResidents: number, remote: CivilianRemote) {
-    remote.init(seed, map, playableResidents);
+  constructor(map: OpenWorldMap, seed: number, playableResidents: number, remote: CivilianRemote, signals = false) {
+    remote.init(seed, map, playableResidents, signals);
     this.remote = remote;
     this.map = map;
     const { capacity } = remote.state;

@@ -55,6 +55,7 @@ import { ageOf } from "./society-day.ts";
 import { crimeKindOf } from "./society-crime.ts";
 import { dwellTicksOf, evolveNeeds, needWeight } from "./needs.ts";
 import { carStandsAt, chooseCar, clearDriveLeg, planCarPath, reserveCar, walkMetres } from "./society-cars.ts";
+import { clearWaits, planWaits } from "./society-crossing.ts";
 import { claimSeat, claimStand, releaseSeat } from "./society-seats.ts";
 import { INTERACTIONS, TARGET, considerInteractions, type InteractionRow } from "./society-table.ts";
 import { isCounterVenue, isSeatedVenue } from "./society-venues.ts";
@@ -243,7 +244,8 @@ function planLeg(state: CityState, resident: number, tick: number, destination: 
   if (byCar) metres = measurePath(state, resident);
   const pace = state.floats[floatBase + RESIDENT_FLOAT.pace]!;
   state.floats[floatBase + RESIDENT_FLOAT.speed] = pace * (purpose === PURPOSE.flee ? FLEE_SPEED_FACTOR : 1);
-  const legTicks = byCar ? timeCarLeg(state, resident, tick, owner, stand, destination, metres) : Math.max(1, ticksOf(metres / state.floats[floatBase + RESIDENT_FLOAT.speed]!));
+  clearWaits(state, resident);
+  const legTicks = byCar ? timeCarLeg(state, resident, tick, owner, stand, destination, metres) : Math.max(1, ticksOf(metres / state.floats[floatBase + RESIDENT_FLOAT.speed]!)) + planWaits(state, resident, tick);
   state.ints[base + RESIDENT_INT.fromPlace] = current;
   state.ints[base + RESIDENT_INT.place] = destination;
   state.ints[base + RESIDENT_INT.departTick] = tick;

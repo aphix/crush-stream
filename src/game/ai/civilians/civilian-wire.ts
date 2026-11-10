@@ -8,7 +8,7 @@ import { releaseSeat } from "./society-seats.ts";
  * What the main thread and the brain's Web Worker (`civilian-worker.ts`) say to each other. The main thread posts the map and seed once, then the
  * events of each tick; the worker answers every tick, in order, with the rows that tick changed. Typed arrays travel by transfer both ways.
  */
-export type ToCivilianWorker = { kind: "init"; seed: number; playableResidents: number; map: OpenWorldMap } | { kind: "plan"; tick: number; events: Float64Array };
+export type ToCivilianWorker = { kind: "init"; seed: number; playableResidents: number; map: OpenWorldMap; signals: boolean } | { kind: "plan"; tick: number; events: Float64Array };
 
 /** What one tick changed: the residents whose rows changed with their integer rows, float rows and the path nodes of those on a leg (in row order), the places whose closing changed as (place, closed until tick) pairs, and the whole fear field when it moved (else empty). */
 export type TickAnswer = {
