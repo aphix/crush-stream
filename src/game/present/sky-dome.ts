@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
+import { TIME_OF_DAY, TIMES_OF_DAY, type TimeOfDay } from "../match/types.ts";
 import { loadUprightBitmap } from "./bitmap-loader.ts";
 import type { FxTier } from "./engine-post.ts";
 import { PROCEDURAL_LOOKS, PROCEDURAL_SKY_GLSL, SANDBOX_SKY, type SkyStops } from "./sky-procedural.ts";
@@ -44,6 +44,34 @@ export const SKY_LOOKS: Record<TimeOfDay, SkyLook> = {
   [TIME_OF_DAY.sunset]: { width: 4096, height: 780, horizonRow: 702, disc: { column: 410, row: 657 }, horizon: "#cd877a", mid: "#755291", zenith: "#292761", zenithElevation: 0.55, hazeTop: 0.07 },
   [TIME_OF_DAY.night]: { width: 4096, height: 780, horizonRow: 702, disc: { column: 410, row: 298 }, horizon: "#213151", mid: "#0b1229", zenith: "#050816", zenithElevation: 0.7, hazeTop: 0.07 },
 };
+
+/** A time of day's sky as colours, parsed once: the strip's gradient stops and the procedural sky's clouds, the disc's tint (linear RGB) over them. */
+type CycleLook = { horizon: THREE.Color; mid: THREE.Color; zenith: THREE.Color; cloudLit: THREE.Color; cloudShade: THREE.Color; disc: readonly [number, number, number]; zenithElevation: number; hazeTop: number };
+
+const CYCLE_LOOKS = Object.fromEntries(
+  TIMES_OF_DAY.map((time): [TimeOfDay, CycleLook] => {
+    const strip = SKY_LOOKS[time];
+    const look = PROCEDURAL_LOOKS[time];
+    return [
+      time,
+      {
+        horizon: new THREE.Color(strip.horizon),
+        mid: new THREE.Color(strip.mid),
+        zenith: new THREE.Color(strip.zenith),
+        cloudLit: new THREE.Color(look.cloudLit),
+        cloudShade: new THREE.Color(look.cloudShade),
+        disc: look.discTint,
+        zenithElevation: strip.zenithElevation,
+        hazeTop: strip.hazeTop,
+      },
+    ];
+  }),
+) as Record<TimeOfDay, CycleLook>;
+
+/** `out` = the day's colour `a` moved `warm` of the way to the sunset's `b`, then `night` of the way to the night's `c`. */
+function cycleColour(out: THREE.Color, a: THREE.Color, b: THREE.Color, c: THREE.Color, warm: number, night: number): void {
+  out.copy(a).lerp(b, warm).lerp(c, night);
+}
 
 /** Elevation (rad) of a strip row: square pixels, a full turn across the width. */
 export function rowElevation(look: SkyLook, row: number): number {
@@ -159,6 +187,8 @@ export class SkyDome {
   /** The procedural sky's cloud cover (0-1), null for none; the sandbox's night setting picks its look. */
   private cover: number | null = null;
   private night = false;
+  /** The day cycle's place between the looks (`setCycle`): the weight of the sunset's over the day's, then of the night's over that; null outside a cycle. */
+  private cycle: { warm: number; night: number } | null = null;
   private readonly sunDir = new THREE.Vector3(0, 1, 0);
   private readonly cloudLit = new THREE.Color();
   private readonly cloudShade = new THREE.Color();
@@ -234,6 +264,25 @@ export class SkyDome {
     this.refresh();
   }
 
+  /**
+   * The procedural sky between the day's look and the night's, by way of the sunset's: `warm` (0-1) the weight of the sunset's over the day's, then `night` (0-1) of the night's over that (null: the time of day's own look
+   * again). Uniforms only: no picture is loaded, nothing is rebuilt, so the stage may call it as often as it likes. Stops, clouds, the disc's tint and the stars all follow.
+   */
+  setCycle(warm: number, night: number): void {
+    const cycle = this.cycle ?? { warm, night };
+    cycle.warm = warm;
+    cycle.night = night;
+    this.cycle = cycle;
+    if (this.detail === "procedural") this.showProcedural();
+  }
+
+  /** Leave the day cycle: the time of day's own look is drawn again. */
+  endCycle(): void {
+    if (this.cycle === null) return;
+    this.cycle = null;
+    this.refresh();
+  }
+
   /** The light's offset (any length): the procedural sky's sun or moon stands on its direction. */
   setSun(offset: THREE.Vector3): void {
     this.sunDir.copy(offset).normalize();
@@ -280,6 +329,10 @@ export class SkyDome {
   /** The procedural sky over the race's strip stops (`show`), or over the sandbox's own; the strip is let go. */
   private showProcedural(): void {
     const { time } = this;
+    if (this.cycle !== null) {
+      this.showCycle(this.cycle.warm, this.cycle.night);
+      return;
+    }
     const sandbox = SANDBOX_SKY[this.night ? "night" : "day"];
     if (time === null) this.setStops(sandbox);
     const look = time === null ? sandbox : PROCEDURAL_LOOKS[time];
@@ -289,6 +342,27 @@ export class SkyDome {
     this.cloudShade.set(look.cloudShade);
     this.discTint.fromArray(look.discTint);
     u.uStars!.value = look.stars ? 1 : 0;
+    this.release();
+    this.mesh.visible = true;
+  }
+
+  /** The three looks' stops and clouds as colours, parsed once. */
+  private showCycle(warm: number, night: number): void {
+    const u = this.mat.uniforms;
+    const day = CYCLE_LOOKS[TIME_OF_DAY.day];
+    const sunset = CYCLE_LOOKS[TIME_OF_DAY.sunset];
+    const dark = CYCLE_LOOKS[TIME_OF_DAY.night];
+    const lerp = THREE.MathUtils.lerp;
+    u.zenithEl!.value = lerp(lerp(day.zenithElevation, sunset.zenithElevation, warm), dark.zenithElevation, night);
+    u.hazeTop!.value = lerp(lerp(day.hazeTop, sunset.hazeTop, warm), dark.hazeTop, night);
+    cycleColour(u.horizonColor!.value as THREE.Color, day.horizon, sunset.horizon, dark.horizon, warm, night);
+    cycleColour(u.midColor!.value as THREE.Color, day.mid, sunset.mid, dark.mid, warm, night);
+    cycleColour(u.zenith!.value as THREE.Color, day.zenith, sunset.zenith, dark.zenith, warm, night);
+    cycleColour(this.cloudLit, day.cloudLit, sunset.cloudLit, dark.cloudLit, warm, night);
+    cycleColour(this.cloudShade, day.cloudShade, sunset.cloudShade, dark.cloudShade, warm, night);
+    for (let channel = 0; channel < 3; channel++) this.discTint.setComponent(channel, lerp(lerp(day.disc[channel]!, sunset.disc[channel]!, warm), dark.disc[channel]!, night));
+    u.uCover!.value = this.cover ?? 0;
+    u.uStars!.value = night;
     this.release();
     this.mesh.visible = true;
   }

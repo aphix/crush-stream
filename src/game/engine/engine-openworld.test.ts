@@ -46,6 +46,8 @@ class Harness {
   readonly thrown: FigureStrike[] = [];
   readonly looks: DriverLook[] = [];
   readonly updates: { poses: CrowdPoses; eyeX: number; sight: CrowdSight; wallDt: number }[] = [];
+  /** The game hours the stage's day was set to, null for it being left. */
+  readonly dayHours: (number | null)[] = [];
   artsMade = 0;
   artsDisposed = 0;
   unhooked = 0;
@@ -63,6 +65,7 @@ class Harness {
       return true;
     },
     now: () => this.now,
+    setDayHour: (hour) => void this.dayHours.push(hour),
     eye: (ray) => Object.assign(ray, this.eye),
     throwFigure: (strike, look) => {
       this.thrown.push(strike);
@@ -314,5 +317,38 @@ describe("given the Auto camera asked for in the open world", () => {
     expect(harness.director.aimAuto(camera, NO_SOLIDS, FRAME), "framing a subject before anyone is out").toBe(false);
     harness.director.setAuto(false);
     expect(harness.director.autoOn, "Auto after it is switched off").toBe(false);
+  });
+});
+
+describe("given the open world's stage light following the crowd's clock", () => {
+  /** Frames to run a whole number of crowd seconds (a game minute each) and a little over. */
+  const framesFor = (crowdSeconds: number): number => Math.round(crowdSeconds / FRAME);
+  const MINUTES_PER_HOUR = 60;
+
+  // mutation: sed -i 's/    if (minute === this.dayMinute) return;//' src/game/engine/engine-openworld.ts
+  it("when frames pass, then the stage is told the hour once a game minute, not once a frame, and the hour is the crowd's start hour and the minutes since over sixty", () => {
+    const harness = hostWithMap();
+    const frames = framesFor(5);
+    for (let at = 0; at < frames; at++) harness.frame();
+    const minutes = Math.floor(harness.crowd().crowdSeconds) + 1;
+    expect(harness.dayHours.length, "calls for the frames run").toBe(minutes);
+    expect(harness.dayHours.length, "calls against frames").toBeLessThan(frames / 10);
+    const start = harness.crowd().state.startHour;
+    for (const [minute, hour] of harness.dayHours.entries()) expect(hour, `hour at minute ${minute}`).toBeCloseTo((start + minute / MINUTES_PER_HOUR) % 24, 9);
+  });
+
+  // mutation: sed -i 's/      this.dropDay();\n//' src/game/engine/engine-openworld.ts
+  it("when the open world is left, then the stage gets one null and no more, and comes back to the hour when it is entered again", () => {
+    const harness = hostWithMap();
+    for (let at = 0; at < framesFor(2); at++) harness.frame();
+    const before = harness.dayHours.length;
+    harness.open = false;
+    harness.frame();
+    harness.frame();
+    expect(harness.dayHours.slice(before), "calls after leaving").toEqual([null]);
+    harness.open = true;
+    harness.director.startOpenWorld(map);
+    harness.frame();
+    expect(harness.dayHours.at(-1), "the hour again once the crowd is back").not.toBeNull();
   });
 });
