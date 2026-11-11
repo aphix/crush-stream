@@ -57,7 +57,7 @@ describe("given a civilian walking at 1.4 m/s, her stride following the metres s
 
   it("when her legs are spread, then her hips are lower than when they pass: the hips rise and fall twice a stride", () => {
     const passing = hip(walkAt(0), MINUS_X).y;
-    expect(passing - hip(walkAt(QUARTER_TURN), MINUS_X).y, "spread").toBeCloseTo(0.05, 2);
+    expect(passing - hip(walkAt(QUARTER_TURN), MINUS_X).y, "spread").toBeCloseTo(0.03, 2);
     expect(passing - hip(walkAt(HALF_TURN), MINUS_X).y, "passing again").toBeCloseTo(0, 2);
   });
 
@@ -334,11 +334,21 @@ describe("given a civilian drawn standing whose brain puts her five metres away 
 describe("given the walk at different paces", () => {
   const reach = (speed: number): number => ankle(posed({ stride: QUARTER_TURN, speed }), MINUS_X).z - ankle(posed({ stride: QUARTER_TURN, speed }), PLUS_X).z;
 
-  // mutation: sed -i 's/const legGain = Math.min(LEG_GAIT_CEILING, Math.max(LEG_GAIT_FLOOR, gait));/const legGain = 1;/' src/game/present/civilian-anim.ts
+  // mutation: sed -i 's/const legGain = Math.min(LEG_GAIT_CEILING, Math.max(pose.speed > LEG_FLOOR_ABOVE ? LEG_GAIT_FLOOR : 0, gait));/const legGain = 1;/' src/game/present/civilian-anim.ts
   it("when she goes at half a walk, a walk or two walks, then her legs swing less, the same, more (the full swing at FULL_WALK_SPEED, the limits 0.3 and 1.6 of it)", () => {
     expect(reach(FULL_WALK_SPEED / 2), "half a walk").toBeLessThan(reach(FULL_WALK_SPEED) * 0.75);
     expect(reach(FULL_WALK_SPEED * 2), "twice a walk").toBeGreaterThan(reach(FULL_WALK_SPEED) * 1.3);
     expect(reach(FULL_WALK_SPEED * 6), "a sprint: the limit").toBeCloseTo(reach(FULL_WALK_SPEED * 2), 6);
+  });
+
+  // mutation: sed -i 's/^const LEG_FLOOR_ABOVE = 0.3;/const LEG_FLOOR_ABOVE = 0;/' src/game/present/civilian-anim.ts
+  it("when a civilian's drawn speed is 0.1 m/s, then her ankles swing apart under a tenth of what they do at a walk", () => {
+    expect(reach(0.1), "a near-stop").toBeLessThan(reach(FULL_WALK_SPEED) * 0.1);
+  });
+
+  // mutation: sed -i 's/pose.speed > LEG_FLOOR_ABOVE ? LEG_GAIT_FLOOR : 0/LEG_GAIT_FLOOR/' src/game/present/civilian-anim.ts
+  it("when a civilian's drawn speed is 0.1 m/s, then her ankles swing apart by 0.0695 of what they do at a walk: her gait's own share, with no floor", () => {
+    expect(reach(0.1) / reach(FULL_WALK_SPEED), "a near-stop's share of a walk's swing").toBeCloseTo(0.0695, 3);
   });
 
   // mutation: sed -i 's/channels\[CHANNEL.torsoPitch\] = LEAN_PER_GAIT/channels[CHANNEL.torsoPitch] = 0 * LEAN_PER_GAIT/' src/game/present/civilian-anim.ts

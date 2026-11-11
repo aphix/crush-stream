@@ -83,6 +83,8 @@ const SWALLOWED_BUTTONS = BACK_BUTTON | VIEW_BUTTON | (1 << PAD_BUTTON.lb) | (1 
 const CREEP_SPEED = 0.8;
 /** A push below this (the reader's output, 0 inside its dead zone) does not move him. */
 const WALK_STOP = 0.01;
+/** The keys' direction eases to a new one over about this long (s), so a corner is turned, not snapped. */
+const INTENT_SECONDS = 0.08;
 /** While he climbs into his car the camera draws back by this share of its distance. */
 const ENTER_PULL_BACK = 1.35;
 /** A car that has just run him down does not do it again for this long (s): the launch carries him through its footprint. */
@@ -150,6 +152,10 @@ export class OnFootDirector {
   private doorCar = -1;
   private door = 0;
   private doorTarget = 0;
+  /** The walk direction the keys ask for, eased (`INTENT_SECONDS`); not seeded while he stands still. */
+  private smoothAhead = 0;
+  private smoothSide = 0;
+  private intentSeeded = false;
 
   constructor(host: OnFootHost) {
     this.host = host;
@@ -428,7 +434,7 @@ export class OnFootDirector {
       return;
     }
     if (flow.phase === "onFoot") {
-      if (this.host.available()) this.walk();
+      if (this.host.available()) this.walk(wallDt);
       else ragdolls.walker.command = 0;
       this.runDown();
     } else ragdolls.walker.command = 0;
@@ -474,22 +480,32 @@ export class OnFootDirector {
   }
 
   /** The stick and keys, relative to the camera, into the walker's heading and speed. */
-  private walk(): void {
+  private walk(wallDt: number): void {
     const { camera, view, ragdolls, keys, pad, touch } = this.host;
     const walker = ragdolls.walker;
     const intent = readWalkIntent(keys, pad, touch, this.intent);
     const reach = hypot2(intent.forward, intent.strafe);
     if (reach < WALK_STOP) {
       walker.command = 0;
+      this.intentSeeded = false;
       return;
+    }
+    if (!this.intentSeeded || walker.state !== "stand") {
+      this.smoothAhead = intent.forward;
+      this.smoothSide = intent.strafe;
+      this.intentSeeded = true;
+    } else {
+      const ease = 1 - Math.exp(-wallDt / INTENT_SECONDS);
+      this.smoothAhead += (intent.forward - this.smoothAhead) * ease;
+      this.smoothSide += (intent.strafe - this.smoothSide) * ease;
     }
     let ahead = view.look.x - camera.position.x;
     let side = view.look.z - camera.position.z;
     const along = hypot2(ahead, side) || 1;
     ahead /= along;
     side /= along;
-    const x = ahead * intent.forward - side * intent.strafe;
-    const z = side * intent.forward + ahead * intent.strafe;
+    const x = ahead * this.smoothAhead - side * this.smoothSide;
+    const z = side * this.smoothAhead + ahead * this.smoothSide;
     walker.heading = detAtan2(x, z);
     walker.command = this.pace(intent, reach);
     walker.ask();
@@ -622,6 +638,7 @@ export class OnFootDirector {
 
   /** The trip's camera is over: the car's zoom and pitch range and its orbit back as they were, his head drawn again. */
   private endView(): void {
+    this.intentSeeded = false;
     if (!this.framed) return;
     const { view, ragdolls } = this.host;
     this.framed = false;
