@@ -559,23 +559,59 @@ describe("given the National Mall, whose lawns are painted on a concrete terrain
     { name: "far", mesher: t.chunks.coarse },
   ] as const;
   for (const { name, mesher } of meshes) {
-    it(`when its ${name} mesh is built, then a vertex coloured as grass takes the grass patch's id and one coloured as concrete the concrete terrain's, so the lawn takes no concrete's shine or detail`, () => {
+    // mutation: sed -i '/^    oneClassATriangle(m, fineAt\[c \* 2 + 1\]!, terrainClass);/d' src/game/present/track-ground.ts
+    it(`when its ${name} mesh is built, then a triangle coloured grass at every corner takes the grass patch's id, one coloured concrete at every corner the concrete terrain's, and one on a lawn's edge the lawn's, so the lawn takes no concrete's shine or detail`, () => {
       expect(mesher.cls?.length, "an id per vertex").toBe(mesher.pos.length / 3);
-      const seen = new Set<number>();
-      for (let v = 0; v < mesher.pos.length / 3; v++) {
-        const surface = surfaceAt(mesher, v);
-        if (surface < 0) continue;
-        expect(mesher.cls![v], `vertex ${v} of surface ${SURFACE_IDS[surface]}`).toBe(cellMaterial(surface, t.terrainSurface));
-        seen.add(surface);
+      const grass = SURFACE_IDS.indexOf("grass");
+      const concrete = SURFACE_IDS.indexOf("concrete");
+      const surfaceOf = Array.from({ length: mesher.pos.length / 3 }, (_, v) => surfaceAt(mesher, v));
+      let lawn = 0;
+      let paved = 0;
+      let edge = 0;
+      let wrong = 0;
+      for (let k = 0; k < mesher.idx.length; k += 3) {
+        const corners = [mesher.idx[k]!, mesher.idx[k + 1]!, mesher.idx[k + 2]!];
+        const surfaces = corners.map((v) => surfaceOf[v]!);
+        if (surfaces.some((surface) => surface !== grass && surface !== concrete)) continue;
+        const want = cellMaterial(surfaces.includes(grass) ? grass : concrete, t.terrainSurface);
+        if (corners.some((v) => mesher.cls![v] !== want)) wrong++;
+        if (!surfaces.includes(concrete)) lawn++;
+        else if (!surfaces.includes(grass)) paved++;
+        else edge++;
       }
-      expect(seen.has(SURFACE_IDS.indexOf("grass")), "lawn vertices exist").toBeTruthy();
-      expect(seen.has(SURFACE_IDS.indexOf("concrete")), "concrete vertices exist").toBeTruthy();
+      expect(wrong, "triangles of grass and concrete with another id").toBe(0);
+      expect(lawn, "lawn triangles").toBeGreaterThan(0);
+      expect(paved, "concrete triangles").toBeGreaterThan(0);
+      expect(edge, "lawn-edge triangles").toBeGreaterThan(0);
       expect(cellMaterial(SURFACE_IDS.indexOf("grass"), t.terrainSurface), "a lawn on the concrete terrain is a patch").toBe(MAT.PATCH_GRASS);
       expect(cellMaterial(SURFACE_IDS.indexOf("concrete"), t.terrainSurface), "the bare terrain is the terrain's own").toBe(MAT.TERRAIN_CONCRETE);
       expect(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("grass"), t.terrainSurface)]![1], "the lawn shades as soil").toBe(MAT.SOIL);
       expect(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("concrete"), t.terrainSurface)]![1], "the paved ground shades as concrete").toBe(MAT.CONCRETE);
     });
   }
+});
+
+describe("given the open world, whose park paths and lawns are painted on one terrain mesh", () => {
+  // mutation: sed -i 's/(id === terrainClass ? 0 : MATERIALS\[id\]!\[1\] === MAT.SOIL ? 1 : 2) \* 1000 + id/id/' src/game/present/track-ground.ts
+  it("when its near and far meshes are built, then every triangle's three corners carry one material id, and the triangles at the park path's vertex (20, 0) are shaded as the path's cobble", () => {
+    const t = terrainOf("openworld");
+    const cobble = cellMaterial(SURFACE_IDS.indexOf("cobble"), t.terrainSurface);
+    for (const [name, m] of [["near", t.near], ["far", t.chunks.coarse]] as const) {
+      let mixed = 0;
+      let onPath = 0;
+      let notCobble = 0;
+      for (let k = 0; k < m.idx.length; k += 3) {
+        const corners = [m.idx[k]!, m.idx[k + 1]!, m.idx[k + 2]!];
+        if (m.cls![corners[0]!] !== m.cls![corners[1]!] || m.cls![corners[1]!] !== m.cls![corners[2]!]) mixed++;
+        if (!corners.some((v) => Math.abs(m.pos[v * 3]! - 20) < 1e-3 && Math.abs(m.pos[v * 3 + 2]!) < 1e-3)) continue;
+        onPath++;
+        if (m.cls![corners[0]!] !== cobble) notCobble++;
+      }
+      expect(mixed, `${name}: triangles whose corners differ in id`).toBe(0);
+      if (name === "near") expect(onPath, "near: triangles at (20, 0)").toBeGreaterThan(0);
+      expect(notCobble, `${name}: triangles at (20, 0) not shaded as cobble`).toBe(0);
+    }
+  });
 });
 
 describe("given the cobble surface, drawn as a ribbon and as terrain cells", () => {

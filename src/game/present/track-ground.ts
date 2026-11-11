@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { SURFACE } from "../world/constants.ts";
 import { clamp } from "../kernel/scalar.ts";
-import { MAT } from "../kernel/material-ids.ts";
+import { MAT, MATERIALS } from "../kernel/material-ids.ts";
 import { SURFACE_IDS, type SurfaceId } from "../world/catalog.ts";
 import { TILE } from "./prefabs.ts";
 import { CELL as NODE, type Track, type TrackGround, type TrackPath } from "../world/track.ts";
@@ -330,10 +330,41 @@ function mergeFlatCells(g: TerrainGrid, kinds: Uint8Array, colours: Uint8Array, 
   return { width, depth, covered };
 }
 
+/** The shader reads a triangle's material id from one corner (`flat`), so mixed corners are given the kept id (painted cell over terrain, hard over soil, else higher) through copies of their vertices. */
+function oneClassATriangle(m: Mesher, from: number, terrainClass: number): void {
+  const cls = m.cls!;
+  const rank = (id: number): number => (id === terrainClass ? 0 : MATERIALS[id]![1] === MAT.SOIL ? 1 : 2) * 1000 + id;
+  const copies = new Map<number, number>();
+  for (let t = from; t < m.idx.length; t += 3) {
+    const a = cls[m.idx[t]!]!;
+    const b = cls[m.idx[t + 1]!]!;
+    const c = cls[m.idx[t + 2]!]!;
+    if (a === b && b === c) continue;
+    const keep = rank(a) >= rank(b) ? (rank(a) >= rank(c) ? a : c) : rank(b) >= rank(c) ? b : c;
+    for (let k = t; k < t + 3; k++) {
+      const v = m.idx[k]!;
+      if (cls[v] === keep) continue;
+      const key = v * 1000 + keep;
+      let copy = copies.get(key);
+      if (copy === undefined) {
+        copy = m.pos.length / 3;
+        m.pos.push(m.pos[v * 3]!, m.pos[v * 3 + 1]!, m.pos[v * 3 + 2]!);
+        m.nrm.push(m.nrm[v * 3]!, m.nrm[v * 3 + 1]!, m.nrm[v * 3 + 2]!);
+        m.col.push(m.col[v * 3]!, m.col[v * 3 + 1]!, m.col[v * 3 + 2]!);
+        m.uv.push(m.uv[v * 2]!, m.uv[v * 2 + 1]!);
+        cls.push(keep);
+        copies.set(key, copy);
+      }
+      m.idx[k] = copy;
+    }
+  }
+}
+
 function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m: Mesher; chunks: TerrainChunks } {
   const m = new Mesher(0);
   const g = sampleTerrain(track, ground, index);
   const { x0, z0, bx, bz, per, nx, terrain, tile, h, col } = g;
+  const terrainClass = cellMaterial(terrain, terrain);
   const nz = bz * per + 1;
   const FAR_STEP = FAR_CELL / CELL;
   const kind = blockKinds(g);
@@ -615,7 +646,9 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
     const [bi0, bj0, bi1, bj1] = chunkBlocks(c);
     box.set([x0 + bi0 * BLOCK, z0 + bj0 * BLOCK, x0 + bi1 * BLOCK, z0 + bj1 * BLOCK], c * 4);
     addChunk(m, col, kind, g.fine, nearLayer, c);
+    oneClassATriangle(m, fineAt[c * 2 + 1]!, terrainClass);
     addChunk(coarse, farCol, farKind, farFine, farLayer, c);
+    oneClassATriangle(coarse, coarseAt[c * 2 + 1]!, terrainClass);
   }
   mark(cx * cz);
   addSkirt(m, ground, x0, z0, bx, bz, terrain, tile);
