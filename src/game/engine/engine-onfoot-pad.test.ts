@@ -9,6 +9,8 @@ import { wrapAngle } from "../present/walker-math.ts";
 const noTouch: TouchPad = { x: 0, y: 0, gas: 0, brake: 0, held: 0, tapped: 0 };
 const SETTLE_S = 0.5;
 const CLIMB_S = 1.5;
+/** The fleet's far cars wait this far out on the disc, clear of car 0. */
+const PARKED_AT = 30;
 
 /** A standard-mapping pad with the left stick at (`x`, 0). */
 function stickPad(x: number): PadSource {
@@ -35,6 +37,9 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     rig = await OnFootRig.boot();
     rig.engine["looping"] = false;
     rig.run(FRAME);
+    // The fleet rolls a random crash at boot (a seed from `Math.random`): car 0 may still be at 19 m/s, too fast to leave. Stand every car at rest first.
+    rig.normalTime();
+    for (let i = 0; i < rig.cars().length; i++) rig.place(i, i === 0 ? 0 : PARKED_AT * (i % 2 === 0 ? 1 : -1), i === 0 ? 0 : -PARKED_AT + 4 * i);
     rig.sit(0);
     rig.run(0.2);
   });
