@@ -1,5 +1,5 @@
 import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
-import { blankStrike, fell, looseRunsDown, runsDown, stood, type FigureStrike } from "../../scenes/figure-strike.ts";
+import { blankStrike, fell, felled, looseRunsDown, runsDown, stood, type FigureStrike } from "../../scenes/figure-strike.ts";
 import { LOOSE_BODIES } from "../../vehicle/part-state.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import { CAR_REACH } from "../../scenes/lawn-guard.ts";
@@ -8,7 +8,7 @@ import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import type { DoorSpot } from "./civilian-car-door.ts";
-import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
+import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, NEVER_TICK, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
 import { carGap, comingAt } from "./civilian-contact.ts";
 import {
   BUMP_CLOSING_SPEED,
@@ -46,7 +46,7 @@ import { lookOf } from "./civilian-look-word.ts";
 import type { CivilianRemote } from "./civilian-remote.ts";
 import { CrowdSeparation } from "./civilian-separation.ts";
 import type { CityState } from "./civilian-state.ts";
-import { type ActivityReading, readActivity } from "./society-activity.ts";
+import { type ActivityReading, CivilianBlow, findCivilianBlow, knockoutBlow, readActivity } from "./society-activity.ts";
 import { ambulanceCaller } from "./society-alarm.ts";
 import { CrimeDesk } from "./society-crime.ts";
 import { CrowdWalkers } from "./crowd-walkers.ts";
@@ -135,6 +135,7 @@ export class CivilianCrowd {
   private readonly heardKnockResident = new Int32Array(HEARD_KNOCK_QUEUE);
   private readonly heardKnockSeconds = new Float64Array(HEARD_KNOCK_QUEUE);
   private heardKnocks = 0;
+  private readonly heardKnockBy = new Int32Array(HEARD_KNOCK_QUEUE).fill(-1);
   private readonly bumpSince: Float64Array;
   private readonly bumpPartner: Int32Array;
   private readonly pushedAt: Float64Array;
@@ -154,6 +155,9 @@ export class CivilianCrowd {
   private readonly reading: ActivityReading = { code: ACTIVITY.none, sinceSeconds: 0, leftSeconds: ACTIVITY_OPEN_ENDED, partner: NOT_A_CIVILIAN, surfaceY: 0, placed: false, fixed: false, x: 0, z: 0, yaw: 0 };
   private readonly crimeDesk: CrimeDesk;
   private readonly crimesDue: Int32Array;
+  private readonly blows: Uint8Array;
+  private readonly blowsFight: Int32Array;
+  private readonly blow = new CivilianBlow();
 
   constructor(map: OpenWorldMap, seed: number, playableResidents: number, remote: CivilianRemote, signals = false) {
     remote.init(seed, map, playableResidents, signals);
@@ -175,6 +179,8 @@ export class CivilianCrowd {
     this.ambulanceZ = new Float32Array(capacity);
     this.crimeDesk = new CrimeDesk(capacity);
     this.crimesDue = new Int32Array(capacity);
+    this.blows = new Uint8Array(capacity);
+    this.blowsFight = new Int32Array(capacity).fill(NEVER_TICK);
     this.batch = new Float64Array((capacity + EVENT_LOG_CAPACITY) * EVENT_TRIPLE);
     this.wreckedAt = new Float64Array(map.places.length).fill(-Infinity);
   }
@@ -194,6 +200,7 @@ export class CivilianCrowd {
 
   /** One step at crowd time `crowdSeconds`: every decision tick passed is advanced, the people placed (animals walk in the brain but are not shown until there is art for them), and on the host (`authority`) the cars' hits on them found; a client throws the knocks it heard. */
   step(crowdSeconds: number, cars: readonly DeformableCar[], authority: boolean): void {
+    const before = this.seconds;
     this.authority = authority;
     this.advanceBrain(tickAt(crowdSeconds));
     this.seconds = crowdSeconds;
@@ -205,6 +212,7 @@ export class CivilianCrowd {
     }
     this.liftWalkers();
     if (authority) {
+      this.findPunches(before, crowdSeconds);
       this.findHits(cars, crowdSeconds);
       this.raiseDangers(crowdSeconds, cars);
       this.raiseAmbulanceCalls(crowdSeconds);
@@ -303,6 +311,11 @@ export class CivilianCrowd {
       this.appendLog(kind, subject, seconds);
       if (this.started) this.queueForBrain(kind, subject, seconds);
       if (kind === EVENT_KIND.knock && this.heardKnocks < HEARD_KNOCK_QUEUE && subject >= 0 && subject < this.poses.count) {
+        // A knock that names its striker is followed by her push and an `alongside` triple at the same second.
+        const pushed = at + EVENT_TRIPLE;
+        const alongside = pushed + EVENT_TRIPLE;
+        const named = alongside + EVENT_TRIPLE <= events.length && events[pushed] === EVENT_KIND.push && events[pushed + 1] === subject && events[pushed + 2] === seconds && events[alongside] === EVENT_KIND.alongside && events[alongside + 2] === seconds;
+        this.heardKnockBy[this.heardKnocks] = named ? events[alongside + 1]! : -1;
         this.heardKnockResident[this.heardKnocks] = subject;
         this.heardKnockSeconds[this.heardKnocks++] = seconds;
       }
@@ -598,6 +611,36 @@ export class CivilianCrowd {
     }
   }
 
+  /** Host: the fights' blows that landed since the last step. The blow that reaches its victim's knock-out count fells her as a car's knock does, with the striker named. */
+  private findPunches(fromSeconds: number, toSeconds: number): void {
+    const state = this.remote.state;
+    const blow = this.blow;
+    for (let from = 0; ; ) {
+      const striker = findCivilianBlow(state, fromSeconds, toSeconds, from, blow);
+      if (striker < 0) return;
+      from = striker + 1;
+      const victim = blow.victim;
+      const fightTick = state.ints[victim * RESIDENT_INT_STRIDE + RESIDENT_INT.fightTick]!;
+      if (this.blowsFight[victim] !== fightTick) {
+        this.blowsFight[victim] = fightTick;
+        this.blows[victim] = 0;
+      }
+      this.blows[victim] = this.blows[victim]! + 1;
+      const knockout = knockoutBlow(state.seed, victim, fightTick);
+      if (knockout === 0 || this.blows[victim] !== knockout || this.poses.shown[victim] === 0) continue;
+      this.knockDown(victim, toSeconds, this.felledBy(victim, striker, blankStrike()), striker);
+    }
+  }
+
+  /** `out` as the blow of `striker` felling `victim`: along the line from his drawn spot to hers, from the ground under her. */
+  private felledBy(victim: number, striker: number, out: FigureStrike): FigureStrike {
+    const { x, z } = this.poses;
+    const dx = x[victim]! - x[striker]!;
+    const dz = z[victim]! - z[striker]!;
+    const far = hypot2(dx, dz);
+    return felled(victim, x[victim]!, activeGround().heightAt(x[victim]!, z[victim]!), z[victim]!, far > 0 ? dx / far : 0, far > 0 ? dz / far : 1, out);
+  }
+
   /** Car `carIndex` (velocity (vx, vz), `carSpeed`) coming at the civilian (toX, toZ from it) is noted for `raiseDangers` (`comingAt`: a car driving down the street is not). */
   private watchApproach(resident: number, carIndex: number, toX: number, toZ: number, vx: number, vz: number, carSpeed: number, seconds: number): void {
     if (!comingAt(toX, toZ, vx, vz, carSpeed)) return;
@@ -642,7 +685,7 @@ export class CivilianCrowd {
     }
   }
 
-  private knockDown(resident: number, seconds: number, strike: FigureStrike): void {
+  private knockDown(resident: number, seconds: number, strike: FigureStrike, by = NOT_A_CIVILIAN): void {
     this.ambulanceDue[resident] = seconds + AMBULANCE_DELAY_SECONDS;
     this.ambulanceTries[resident] = 0;
     this.ambulanceX[resident] = this.poses.x[resident]!;
@@ -651,7 +694,7 @@ export class CivilianCrowd {
     this.struck.push(strike);
     this.appendLog(EVENT_KIND.knock, resident, seconds);
     this.queueForBrain(EVENT_KIND.knock, resident, seconds);
-    this.logPush(resident, NOT_A_CIVILIAN, seconds);
+    this.logPush(resident, by, seconds);
   }
 
   /** A knock heard from the host, once this clock reaches its time (the cars are drawn at that time): the civilian is thrown by the car nearest where they were, as that car's own hit would have thrown them. */
@@ -662,11 +705,18 @@ export class CivilianCrowd {
       const resident = this.heardKnockResident[knock]!;
       const at = this.heardKnockSeconds[knock]!;
       if (at > this.seconds) {
+        this.heardKnockBy[waiting] = this.heardKnockBy[knock]!;
         this.heardKnockResident[waiting] = resident;
         this.heardKnockSeconds[waiting++] = at;
         continue;
       }
-      if (this.seconds - at > HEARD_KNOCK_LATE_SECONDS || !legPose(state, resident, at, this.pose)) continue;
+      if (this.seconds - at > HEARD_KNOCK_LATE_SECONDS) continue;
+      const by = this.heardKnockBy[knock]!;
+      if (by >= 0) {
+        this.struck.push(this.felledBy(resident, by, blankStrike()));
+        continue;
+      }
+      if (!legPose(state, resident, at, this.pose)) continue;
       let nearest = -1;
       let nearestDistance = Infinity;
       for (let carIndex = 0; carIndex < cars.length; carIndex++) {

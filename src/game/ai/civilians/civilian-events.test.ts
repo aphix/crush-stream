@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
-import { EVENT_KIND, EVENT_LEAD_TICKS, FLAG, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "./civilian-constants.ts";
-import { queueEvents } from "./civilian-events.ts";
+import { EVENT_KIND, EVENT_LEAD_TICKS, FLAG, NEVER_TICK, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "./civilian-constants.ts";
+import { applyIndividualEvents, applyReactionEvents, queueEvents } from "./civilian-events.ts";
 import { buildFixtureMap, costOfWalk, placeNamed } from "./civilian-graph.test-util.ts";
 import { legPositionAt, LegPose } from "./civilian-leg.ts";
 import { historyLines, moodOf } from "./civilian-mood.ts";
@@ -10,7 +10,9 @@ import { EVENT_CODE, MOOD } from "./civilian-names.ts";
 import { runTicks, stateDigest, tickOfHour } from "./civilian-run.test-util.ts";
 import type { CityState } from "./civilian-state.ts";
 import { computeTick } from "./civilian-tick.ts";
+import { newCast, societyMap } from "./society-scenes.test-util.ts";
 import { createCityState } from "./society.ts";
+import { placeIn, stageResident } from "./society.test-util.ts";
 import { PathFinder } from "./walk-path.ts";
 
 const map = buildFixtureMap();
@@ -277,5 +279,23 @@ describe("given the pirate radio comes on at midnight", () => {
     }
     expect(annoyedAtNight, "residents annoyed just after the static").toBeGreaterThan(3);
     expect(stillAnnoyed, "of them, still annoyed at noon").toBe(0);
+  });
+});
+
+describe("given two civilians in a fight", () => {
+  // mutation: sed -i '/^      releaseFightPartner(state, event.subject);/d' src/game/ai/civilians/civilian-events.ts
+  it("when a knock is applied to one of them, then neither she nor her partner is in a fight any more", () => {
+    const cast = newCast(12);
+    const { state, resident, neighbour } = cast;
+    const home = placeIn(societyMap, "Rowhome A1-1");
+    for (const person of [resident, neighbour]) stageResident(state, person, { place: home, tick: cast.tick });
+    queueEvents(state, cast.tick, [EVENT_KIND.fight, neighbour, cast.tick / 2, EVENT_KIND.alongside, resident, cast.tick / 2]);
+    const fought = cast.tick + EVENT_LEAD_TICKS;
+    applyReactionEvents(state, fought);
+    expect(intAt(state, resident, RESIDENT_INT.fightTick), "control: he is in the fight").not.toBe(NEVER_TICK);
+    queueEvents(state, fought, [EVENT_KIND.knock, neighbour, fought / 2]);
+    applyIndividualEvents(state, fought + EVENT_LEAD_TICKS);
+    expect(intAt(state, neighbour, RESIDENT_INT.fightTick), "the one knocked").toBe(NEVER_TICK);
+    expect(intAt(state, resident, RESIDENT_INT.fightTick), "her partner").toBe(NEVER_TICK);
   });
 });

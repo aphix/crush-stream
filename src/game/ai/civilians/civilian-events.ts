@@ -19,6 +19,7 @@ import {
   MECHANIC_REACH,
   NEED,
   NEED_COUNT,
+  NEVER_TICK,
   NO_BEARING,
   NO_PLACE,
   PURPOSE,
@@ -100,6 +101,8 @@ function knockResident(state: CityState, resident: number, seconds: number, tick
   const base = resident * RESIDENT_INT_STRIDE;
   const { ints } = state;
   if (ints[base + RESIDENT_INT.alive] === 0 || (ints[base + RESIDENT_INT.flags]! & FLAG.hurt) !== 0) return;
+  ints[base + RESIDENT_INT.fightTick] = NEVER_TICK;
+  ints[base + RESIDENT_INT.fightPartner] = NO_PLACE;
   const struck = tickAt(seconds);
   const onLeg = legPose(state, resident, seconds, state.pose);
   dropCarLeg(state, resident, struck);
@@ -145,8 +148,10 @@ export function applyIndividualEvents(state: CityState, tick: number): void {
     const event = state.events[at]!;
     if (event.individualDone || event.individualTick > tick) continue;
     event.individualDone = true;
-    if (event.kind === EVENT_KIND.knock) knockResident(state, event.subject, event.seconds, tick);
-    else if (event.kind === EVENT_KIND.wreck) sendMechanicOut(state, event.subject, tick);
+    if (event.kind === EVENT_KIND.knock) {
+      releaseFightPartner(state, event.subject);
+      knockResident(state, event.subject, event.seconds, tick);
+    } else if (event.kind === EVENT_KIND.wreck) sendMechanicOut(state, event.subject, tick);
     else if (event.kind === EVENT_KIND.crime) applyCrime(state, event.subject, event.seconds, tick);
     else if (event.kind === EVENT_KIND.bust) applyBust(state, event.subject, event.seconds);
     else if (event.kind === EVENT_KIND.jaywalk) applyJaywalk(state, event.subject, event.seconds);

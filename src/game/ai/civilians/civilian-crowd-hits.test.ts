@@ -2,11 +2,12 @@ import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { tickAt } from "./civilian-clock.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
-import { EVENT_KIND, EVENT_TRIPLE, FLAG, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
+import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, FLAG, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import { WRECK_LOCKOUT_SECONDS, WRECK_SPEED } from "./civilian-crowd-constants.ts";
 import { buildFixtureMap, placeNamed } from "./civilian-graph.test-util.ts";
 import { historyLines } from "./civilian-mood.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "./civilian-crowd.test-util.ts";
+import { knockoutBlow } from "./society-activity.ts";
 
 const map = buildFixtureMap();
 const CAR_SPEED = 14;
@@ -107,5 +108,59 @@ describe("given a host crowd and a bodega on the map", () => {
     crowd.step(1 + WRECK_LOCKOUT_SECONDS + 1, [], true);
     crowd.noteWallHit(WRECK_SPEED, faceX, front.z);
     expect(crowd.eventLog().length, "numbers in the log").toBe(6);
+  });
+});
+
+describe("given two civilians of the host's crowd in a fight that ends in a knock-out", () => {
+  /** A host crowd with a fight raised between two free residents whose victim's knock-out blow is not 0; stepped until both are squared up. */
+  function stagedFight() {
+    for (let offset = 20; offset < 60; offset += 2) {
+      const crowd = newCrowd(map);
+      crowd.step(1, [], true);
+      const starter = crowd.state.cast.length + offset;
+      const victim = starter + 1;
+      crowd.raisePair(EVENT_KIND.fight, victim, starter);
+      let seconds = 1;
+      for (let frame = 0; frame < Math.round(4 / FRAME_SECONDS); frame++) crowd.step((seconds += FRAME_SECONDS), [], true);
+      const ints = crowd.state.ints;
+      if (ints[victim * RESIDENT_INT_STRIDE + RESIDENT_INT.fightPartner] !== starter) continue;
+      const fightTick = ints[victim * RESIDENT_INT_STRIDE + RESIDENT_INT.fightTick]!;
+      const blow = knockoutBlow(crowd.state.seed, victim, fightTick);
+      if (blow === 0) continue;
+      return { crowd, starter, victim, seconds, landing: ints[starter * RESIDENT_INT_STRIDE + RESIDENT_INT.arriveTick]! / DECISION_HZ + 0.3 + 1.2 * (blow - 1) };
+    }
+    throw new Error("no pair of the fixture crowd fought to a knock-out");
+  }
+
+  // mutation: sed -i '/^      this.findPunches(before, crowdSeconds);/d' src/game/ai/civilians/civilian-crowd.ts
+  it("when the fight reaches its victim's knock-out blow, then she is hidden, one strike with no car is queued, and the log ends knock, push, alongside her striker", () => {
+    const { crowd, starter, victim, landing } = stagedFight();
+    let seconds = crowd.crowdSeconds;
+    crowd.takeStrikes();
+    while (seconds < landing + 0.1) crowd.step((seconds += FRAME_SECONDS), [], true);
+    expect(crowd.poses.shown[victim], "the victim is hidden").toBe(0);
+    const strikes = crowd.takeStrikes();
+    expect(strikes.length, "strikes queued").toBe(1);
+    expect(strikes[0]!.car, "no car").toBe(-1);
+    const tail = Array.from(crowd.eventLog()).slice(-3 * EVENT_TRIPLE);
+    expect(firstMismatch([tail[0]!, tail[1]!, tail[3]!, tail[4]!, tail[6]!, tail[7]!], [EVENT_KIND.knock, victim, EVENT_KIND.push, victim, EVENT_KIND.alongside, starter]), "the log's last three entries").toBeUndefined();
+  });
+
+  // mutation: sed -i 's/^      if (by >= 0) {/      if (by >= 9e9) {/' src/game/ai/civilians/civilian-crowd.ts
+  it("when a client hears a knock that names a striker, then it throws her along the blow with no car anywhere", () => {
+    const { crowd, starter, victim, landing } = stagedFight();
+    const client = newCrowd(map);
+    client.hear(crowd.eventLog());
+    client.step(landing, [], false);
+    client.takeStrikes();
+    const at = landing + 0.1;
+    client.hear(Float64Array.of(EVENT_KIND.knock, victim, at, EVENT_KIND.push, victim, at, EVENT_KIND.alongside, starter, at));
+    client.step(at + FRAME_SECONDS, [], false);
+    const strikes = client.takeStrikes();
+    expect(strikes.length, "one figure thrown").toBe(1);
+    expect(strikes[0]!.car, "no car").toBe(-1);
+    expect(strikes[0]!.guard, "the victim").toBe(victim);
+    const toVictim = (client.poses.x[victim]! - client.poses.x[starter]!) * strikes[0]!.vx + (client.poses.z[victim]! - client.poses.z[starter]!) * strikes[0]!.vz;
+    expect(toVictim, "thrown away from her striker").toBeGreaterThan(0);
   });
 });

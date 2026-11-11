@@ -106,11 +106,6 @@ export const HIDE_LEAD = 5;
 export const FLEE_GAP_CAP = 200;
 export const FLEE_TRAVEL_WEIGHT = 0.5;
 
-/** A fighter taken down is thrown at this speed (m/s) away from the cop, lifted and tumbled: a tackle, not a car. */
-export const TAKEDOWN_SPEED = 3;
-export const TAKEDOWN_LIFT = 1.5;
-export const TAKEDOWN_TUMBLE = 4;
-
 /** Patrol cars at most; one that comes to a scene stops this far (m) from it and its cop steps out; a car chase is given up after this long (s) or when the runner is this far (m) off for `CAR_LOST_SECONDS`. */
 export const MAX_PATROL_CARS = 2;
 /** Each foot cop has a patrol car of his own, parked at the kerb nearest his beat's start: the cars after the ones a case calls. */

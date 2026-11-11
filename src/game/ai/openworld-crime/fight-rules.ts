@@ -1,8 +1,8 @@
 import { hypot2 } from "../../kernel/physics-core.js";
-import { blankStrike, type FigureStrike } from "../../scenes/figure-strike.ts";
+import { blankStrike, felled, type FigureStrike } from "../../scenes/figure-strike.ts";
 import { activeGround } from "../../world/ground.ts";
 import { CASE_PHASE, SUBJECT_MODE, type CaseTable } from "./case-table.ts";
-import { CRIME_STREAM, FIGHT_WARN_REACH, RESIST_CHANCE, SUBJECTS_PER_CASE, TAKEDOWN_LIFT, TAKEDOWN_SPEED, TAKEDOWN_TUMBLE, WARN_SECONDS } from "./crime-constants.ts";
+import { CRIME_STREAM, FIGHT_WARN_REACH, RESIST_CHANCE, SUBJECTS_PER_CASE, WARN_SECONDS } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
 import type { FootCops } from "./foot-cops.ts";
 import type { FootWalkers } from "./foot-walkers.ts";
@@ -69,20 +69,7 @@ export class FightRules {
     const push = hypot2(x - walkers.x[cop]!, z - walkers.z[cop]!);
     const dirX = push > 0 ? (x - walkers.x[cop]!) / push : 0;
     const dirZ = push > 0 ? (z - walkers.z[cop]!) / push : 1;
-    const strike = blankStrike();
-    strike.guard = table.resident[slot]!;
-    strike.car = -1;
-    strike.x = Math.fround(x);
-    strike.y = Math.fround(activeGround().heightAt(x, z));
-    strike.z = Math.fround(z);
-    strike.faceX = Math.fround(-dirX);
-    strike.faceZ = Math.fround(-dirZ);
-    strike.vx = Math.fround(dirX * TAKEDOWN_SPEED);
-    strike.vy = Math.fround(TAKEDOWN_LIFT);
-    strike.vz = Math.fround(dirZ * TAKEDOWN_SPEED);
-    strike.wx = Math.fround(-dirZ * TAKEDOWN_TUMBLE);
-    strike.wz = Math.fround(dirX * TAKEDOWN_TUMBLE);
-    this.strikes.push(strike);
+    this.strikes.push(felled(table.resident[slot]!, x, activeGround().heightAt(x, z), z, dirX, dirZ, blankStrike()));
     table.tookDown[slot] = 1;
     this.stats.takedowns++;
   }

@@ -164,6 +164,9 @@ whoever pushed: another civilian, a car, or, when a `walker` triple follows, the
 and swings at him: a swing lands half way through its clip, and when the host's walker is within `PLAYER_STRIKE_REACH` of the fighter's spot the director knocks him down the way the
 walker is knocked down already (`findWalkerStrike`, the `strikeWalker` port), with no damage beyond it. A civilian run down may be taken on by a bystander standing at a door.
 `EVENT_KIND.jaywalk` (raised by the police for a walker crossing against the light) holds a free resident `JAYWALK_CUSTODY_TICKS` and sends them home, annoyed.
+In 60 % of fights between two civilians, the starter's blow number 2, 3, 4 or 5 (one seeded draw, `STREAM.punch`, per victim and fight: `knockoutBlow`)
+knocks the other out: the host's `findPunches` fells her as a car's knock does (`knockDown` with the striker named: knock, push, then an `alongside` triple), the striker's fight ends (`releaseFightPartner`), and a client
+throws her along the blow from the drawn spots. She is then in hospital and walks home like anyone knocked down.
 
 A bust, knock or jaywalk arrest hides its resident from the event's tick for its whole window on every peer: the step that applies it never lets them back early, since a mirror
 that only applies the worker's answers never runs that step.
