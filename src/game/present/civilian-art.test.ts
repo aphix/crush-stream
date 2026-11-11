@@ -331,7 +331,7 @@ describe("given the street body", () => {
   });
 
   // mutation: sed -i 's/  const whole = shell.frontPower !== undefined || shell.fine === true;/  const whole = shell.frontPower !== undefined;/' src/game/present/dummy-loft.ts
-  it("when a suit's shirt cuffs are read on it, then they keep their proud rings: collar-white at three heights or more below the chest", () => {
+  it("when a suit's shirt cuffs are read on it, then they keep their proud rings: collar-white at six heights below the chest (the two suited builds' three kept rings each; the coarse loft alone keeps four)", () => {
     const street = streetGeometry();
     const position = street.getAttribute("position");
     const kinds = street.getAttribute(KINDS_ATTRIBUTE);
@@ -339,7 +339,7 @@ describe("given the street body", () => {
     for (const vertex of street.index!.array) {
       if (kinds.getX(vertex) === ROLE.COLLAR && (kinds.getY(vertex) & SUITED) !== 0 && position.getY(vertex) < 1.2) heights.add(Math.round(position.getY(vertex) * 1e4));
     }
-    expect(heights.size, "distinct heights of collar-white at a suited man's cuffs").toBeGreaterThanOrEqual(3);
+    expect(heights.size, "distinct heights of collar-white at a suited man's cuffs").toBeGreaterThanOrEqual(6);
   });
 
   // mutation: sed -i 's/setAttribute(name, attribute);/setAttribute(name, attribute.clone());/' src/game/present/dummy-skin.ts
