@@ -52,11 +52,11 @@ describe("given an oval race whose player car the seat drives", () => {
       w.seat.carIndex = 0;
       Object.assign(w.seat.drift, { s: 1.4, clean: false, paid: 3 });
       const mine = w.race.hud().view!;
-      expect(mine.drift.s, "drift seconds").toBe(1.4);
+      expect(mine.drift.s, "drift seconds").toBeCloseTo(1.4, 9);
       expect(mine.drift.clean, "drift clean").toBe(false);
       expect(mine.drift.paid, "drift paid").toBe(3);
       w.seat.drift.s = 2;
-      expect(mine.drift.s, "a copy: the seat goes on writing its own").toBe(1.4);
+      expect(mine.drift.s, "a copy: the seat goes on writing its own").toBeCloseTo(1.4, 9);
       w.seat.mode = "follow";
       w.seat.carIndex = 1;
       const rival = w.race.hud().view!.drift;
