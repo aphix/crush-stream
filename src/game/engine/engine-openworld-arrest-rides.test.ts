@@ -226,6 +226,7 @@ function lawDirector(client: boolean): OpenWorldDirector {
   if (client) director.hear(5, 1000, 40, new Float64Array(0));
   director.step(FRAME_SECONDS);
   director.frame(FRAME_SECONDS);
+  director.step(FRAME_SECONDS);
   return director;
 }
 

@@ -1,0 +1,13 @@
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i '/      this.hooks.rode(slot, cars.carIndexOf(car));/d' src/game/ai/openworld-crime/arrests.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i '/      this.hooks.alighted(slot, cars.carIndexOf(carSlot));/d' src/game/ai/openworld-crime/arrests.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i 's/this.table.isPlayerSlot(slot) ? ARREST_PLAYER_RESIDENT :/false ? ARREST_PLAYER_RESIDENT :/' src/game/ai/openworld-crime/foot-law.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i '/    this.cops.ride(cop);$/d' src/game/ai/openworld-crime/arrests.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i 's/      if (when > seconds) return;/      if (when > seconds + 1000) return;/' src/game/engine/engine-openworld-arrest-rides.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i 's/      this.handledAtNewest = sameSecond;/      this.handledAtNewest = 0;/' src/game/engine/engine-openworld-arrest-rides.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i 's/    this.cars()\[car\]?.setDoorOpen(DRIVER_SIDE, radians);/    this.cars()[car]?.setDoorOpen(DRIVER_SIDE, 0);/' src/game/engine/engine-openworld-arrest-rides.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i '/private noteRide/{n;d}' src/game/ai/openworld-crime/foot-law.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i 's/ || !this.hooks.cars()?.doorSpot(carIndex, this.door)) return false;/) return false;/' src/game/ai/openworld-crime/arrests.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i 's/  return (kind === EVENT_KIND.knock || kind === EVENT_KIND.crime/  return (kind === EVENT_KIND.arrestRide || kind === EVENT_KIND.arrestAlight || kind === EVENT_KIND.knock || kind === EVENT_KIND.crime/' src/game/ai/civilians/civilian-events.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i 's/      this.law?.hearRides();//' src/game/engine/engine-openworld.ts
+src/game/engine/engine-openworld-arrest-rides.test.ts	sed -i '/    this.crowd.raiseEvent(kind, carIndex, seconds);/d' src/game/engine/engine-openworld-law.ts
+src/game/engine/engine-openworld-law.test.ts	sed -i 's/this.rides = traffic === null ? new ArrestRides/this.rides = traffic !== null ? new ArrestRides/' src/game/engine/engine-openworld-law.ts
