@@ -114,10 +114,11 @@ describe("given a world surface shaded by its material kind (asphalt, soil, wood
     expect(effective(fragment, MAT.PLASTIC, 0.25, 0).share, `rough ${rough}`).toBeGreaterThan(rough + 0.3);
   });
 
-  it("when the albedo darkening is read, then wet soil loses some and wet asphalt none", () => {
+  it("when the albedo darkening is read, then wet soil, asphalt and concrete all lose some, asphalt more than concrete", () => {
     const dark = tableOf(programOf(MAT.SOIL), "MATERIAL_DARK");
     expect(dark[MAT.SOIL]!, "soil").toBeGreaterThan(0.2);
-    expect(dark[MAT.ASPHALT], "asphalt").toBe(0);
+    expect(dark[MAT.ASPHALT], "asphalt").toBe(0.25);
+    expect(dark[MAT.CONCRETE], "concrete").toBe(0.15);
   });
 
   const pavements = [
@@ -151,11 +152,13 @@ function dryAndWet(material: THREE.MeshStandardMaterial) {
   expect(shader.uniforms.materialWet, "reads the shared wet object").toBe(MATERIAL_WET);
   const materialClass = material.userData.materialClass as MaterialId;
   const wetShare = Number(shader.uniforms.materialWetShare?.value);
-  return { dry: effective(shader.fragmentShader, materialClass, material.roughness, 0), wet: effective(shader.fragmentShader, materialClass, material.roughness, wetShare) };
+  const dark = tableOf(shader.fragmentShader, "MATERIAL_DARK")[MATERIALS[materialClass][1]]!;
+  return { dark, dry: effective(shader.fragmentShader, materialClass, material.roughness, 0), wet: effective(shader.fragmentShader, materialClass, material.roughness, wetShare) };
 }
 
 function assertWetter(state: ReturnType<typeof dryAndWet>): void {
-  const { dry, wet } = state;
+  const { dry, wet, dark } = state;
+  expect(dark, "a wet surface loses albedo, so the road darkens as it glosses").toBeGreaterThan(0);
   expect(wet.roughness < dry.roughness - 0.3 && wet.share > dry.share, `roughness ${dry.roughness} -> ${wet.roughness}, share ${dry.share} -> ${wet.share}`).toBeTruthy();
 }
 
