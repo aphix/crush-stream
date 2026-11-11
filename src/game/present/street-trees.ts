@@ -123,6 +123,8 @@ const CARDS: Record<StreetTreeKind, { count: number; edge: number; species: Leaf
 const IVY_CARDS = 5;
 const IVY_EDGE = 0.36;
 const FORWARD = new THREE.Vector3(0, 0, 1);
+/** The shell that card centres are scattered into never shrinks below this share of the lump's radius. */
+const SHELL_FLOOR = 0.35;
 /** Ivy over the pit, a lump spilling toward the curb on the street side (the strip's edge is 0.6 m toward the street). */
 const IVY: readonly Lump[] = [
   [0.12, 0.1, 0.35, 0.28, 0.16, 0.32, 0x2f5a28],
@@ -172,7 +174,7 @@ export function cardPieces(lump: Lump, seed: number, cards: number, edge: number
   const [x, y, z, rx, ry, rz, colour] = lump;
   const random = mulberry32(seed);
   const cells = LEAF_CELLS[species];
-  const shrink = (radius: number): number => Math.max(0.35 * radius, radius - 0.71 * edge);
+  const shrink = (radius: number): number => Math.max(SHELL_FLOOR * radius, radius - 0.71 * edge);
   const tint = new THREE.Color();
   const pieces: Piece[] = [];
   for (let card = 0; card < cards; card++) {
