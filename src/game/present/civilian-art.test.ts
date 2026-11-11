@@ -6,7 +6,7 @@ import { DETAIL_KEEP_M, DETAIL_NEAR_M, DETAIL_SLOTS, FAR_DRAW, FIGURE_FLOATS, NE
 import { dressOfLook } from "./civilian-dress.ts";
 import { drawCalls, emptyPoses, FRAME_SECONDS, IN_SIGHT, posesAlongStreet, posesScattered } from "./civilian-art.test-util.ts";
 import type { DriverLook } from "./driver-look.ts";
-import { ROLE } from "./dummy-rig.ts";
+import { KINDS_ATTRIBUTE, ROLE, SUITED } from "./dummy-rig.ts";
 import { dummyGeometry, streetGeometry } from "./dummy-skin.ts";
 import { blankStance, People, walkStance } from "./people.ts";
 import { PARTS } from "./ragdoll-body.ts";
@@ -328,6 +328,18 @@ describe("given the street body", () => {
   it("when it is built, then it has at most 6000 triangles", () => {
     expect(trianglesOf(streetGeometry()), "street body triangles").toBeLessThanOrEqual(STREET_TRIANGLES);
     expect(trianglesOf(streetGeometry()), "street body triangles").toBeLessThan(trianglesOf(dummyGeometry()));
+  });
+
+  // mutation: sed -i 's/  const whole = shell.frontPower !== undefined || shell.fine === true;/  const whole = shell.frontPower !== undefined;/' src/game/present/dummy-loft.ts
+  it("when a suit's shirt cuffs are read on it, then they keep their proud rings: collar-white at three heights or more below the chest", () => {
+    const street = streetGeometry();
+    const position = street.getAttribute("position");
+    const kinds = street.getAttribute(KINDS_ATTRIBUTE);
+    const heights = new Set<number>();
+    for (const vertex of street.index!.array) {
+      if (kinds.getX(vertex) === ROLE.COLLAR && (kinds.getY(vertex) & SUITED) !== 0 && position.getY(vertex) < 1.2) heights.add(Math.round(position.getY(vertex) * 1e4));
+    }
+    expect(heights.size, "distinct heights of collar-white at a suited man's cuffs").toBeGreaterThanOrEqual(3);
   });
 
   // mutation: sed -i 's/setAttribute(name, attribute);/setAttribute(name, attribute.clone());/' src/game/present/dummy-skin.ts

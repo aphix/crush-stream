@@ -283,14 +283,15 @@ function shirtCuffs(fit: Fit, kinds: number): Shell[] {
     [-1, LEFT_ARM],
     [1, RIGHT_ARM],
   ] as const;
-  return arms.map(([side, upperArm]) =>
-    fitted(fit, armOf(fit, side), [
+  return arms.map(([side, upperArm]) => ({
+    ...fitted(fit, armOf(fit, side), [
       { y: wrist + SHIRT_CUFF_TOP, out: TUCK, role: COLLAR },
       { y: wrist + SHIRT_CUFF_EDGE, out: CUFF_SHOWS, role: COLLAR },
       { y: wrist + SHIRT_CUFF_END, out: CUFF_SHOWS, role: COLLAR },
       { y: wrist + SHIRT_CUFF_END, out: TUCK, role: COLLAR },
     ], { bone: upperArm + 1, kinds, sides: LIMB_SIDES }),
-  );
+    fine: true,
+  }));
 }
 
 /**

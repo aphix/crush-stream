@@ -127,7 +127,9 @@ export type Ring = readonly [y: number, halfWidth: number, halfDepth: number, mi
  */
 type Print = { cell: number; centre: readonly [number, number]; size: readonly [number, number]; along: "z" | "x"; from?: number };
 /** A lofted shell: rings top to bottom around the vertical axis at `x`, riding one `bone` (or, with `shin`, blending from `shin` above the ankle to `bone` below it, as the leg under a shoe does), closed at an end by a pole `top` above the first ring or `bottom` below the last (open when absent). `frontPower` narrows a brim so only the centre of the face half sticks out. */
-export type Shell = { x: number; sides: number; kinds: number; bone: number; shin?: number; rings: readonly Ring[]; top?: number; bottom?: number; frontPower?: number; print?: Print };
+export type Shell = { x: number; sides: number; kinds: number; bone: number; shin?: number; rings: readonly Ring[]; top?: number; bottom?: number; frontPower?: number; print?: Print;
+  /** Keeps every ring and side in the coarse loft: a cuff's few millimetres are its whole look. */
+  fine?: boolean };
 /** A vertex's print (u, v, atlas cell, weight): the slot's face row is cell -1; weight 0 shows no print. */
 export const NO_PRINT = [0, 0, -1, 0] as const;
 
