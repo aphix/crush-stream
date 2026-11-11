@@ -685,7 +685,6 @@ describe("given the open world's stage light following the crowd's clock", () =>
   });
 
   // mutation: sed -i '/setHour(hour: number)/,/^  }/s/ || this.ports.inRoom()//' src/game/engine/engine-openworld.ts
-  // mutation: sed -i '/setHour(hour: number)/,/^  }/s/ || this.dayMinute < 0//' src/game/engine/engine-openworld.ts
   it("when the hour is set in a room, or before the first crowd frame, then it is refused and nothing moves", () => {
     const early = hostWithMap();
     expect(early.director.setHour(18.5), "no crowd yet").toBe(false);
