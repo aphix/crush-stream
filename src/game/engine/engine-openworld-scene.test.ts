@@ -111,11 +111,18 @@ describe("given the open world in play on the real engine", () => {
 
   // mutation: sed -i 's/^      gameMinute: this.gameMinuteText(),/      gameMinute: null,/' src/game/engine/engine-hud.ts
   it("when the open world runs, then the HUD carries its clock as a whole game minute of the day, and no other scene has one", () => {
-    runSeconds(engine, 1);
-    const minute = hud.get().gameMinute;
-    expect(Number.isInteger(minute) && minute! >= 0 && minute! < 1440, `a whole minute of the day: ${minute}`).toBe(true);
-    expect(minute! % 5, "read in steps of five").toBe(0);
-    expect(minute, "the director's clock").toBe(engine["openWorld"].gameMinute());
+    const clockAt = (hour: number): number | null => {
+      engine["openWorld"].setHour(hour);
+      runSeconds(engine, 1);
+      return hud.get().gameMinute;
+    };
+    const day = clockAt(13);
+    expect(day! >= 780 && day! <= 800, `at hour 13 the clock reads 13:00 to 13:20 (minute ${day})`).toBe(true);
+    expect(day! % 5, "read in steps of five").toBe(0);
+    const night = clockAt(21);
+    expect(night! >= 1260 && night! <= 1280, `at hour 21 the clock reads 21:00 to 21:20 (minute ${night})`).toBe(true);
+    expect(night! % 5, "read in steps of five").toBe(0);
+    expect(night, "the director's clock").toBe(engine["openWorld"].gameMinute());
     try {
       pickScene({ current: engine }, sceneInPlay(hud.get()), "fleet");
       runSeconds(engine, 0.1);
