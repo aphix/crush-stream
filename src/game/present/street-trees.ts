@@ -123,7 +123,7 @@ const CARDS: Record<StreetTreeKind, { count: number; edge: number; species: Leaf
 const IVY_CARDS = 5;
 const IVY_EDGE = 0.36;
 const FORWARD = new THREE.Vector3(0, 0, 1);
-/** A card's centres never come nearer a lump's middle than this share of its radius. */
+/** The shell that card centres are scattered into never shrinks below this share of the lump's radius. */
 const SHELL_FLOOR = 0.35;
 /** Ivy over the pit, a lump spilling toward the curb on the street side (the strip's edge is 0.6 m toward the street). */
 const IVY: readonly Lump[] = [

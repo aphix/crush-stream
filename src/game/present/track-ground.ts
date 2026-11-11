@@ -333,7 +333,7 @@ function mergeFlatCells(g: TerrainGrid, kinds: Uint8Array, colours: Uint8Array, 
 /** The shader reads a triangle's material id from one corner (`flat`), so mixed corners are given the kept id (painted cell over terrain, hard over soil, else higher) through copies of their vertices. */
 function oneClassATriangle(m: Mesher, from: number, terrainClass: number): void {
   const cls = m.cls!;
-  const rank = (id: number): number => (id === terrainClass ? 0 : MATERIALS[id]![1] === MAT.SOIL ? 1 : 2) * 1000 + id;
+  const rank = (id: number): number => (id === terrainClass ? 0 : MATERIALS[id]![1] === MATERIALS[MAT.SOIL]![1] ? 1 : 2) * 1000 + id;
   const copies = new Map<number, number>();
   for (let t = from; t < m.idx.length; t += 3) {
     const a = cls[m.idx[t]!]!;

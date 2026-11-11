@@ -19,7 +19,7 @@ const SHAPE: Record<LeafSpecies, { count: number; size: number; lobes: number }>
 /** A cherry's spray has this many green leaves under its petals, each this wide a share of the cell. */
 const CHERRY_LEAVES = 6;
 const CHERRY_LEAF_SIZE = 0.11;
-/** An oval leaf is this share of its length across. */
+/** An oval leaf's half-width as a share of its length. */
 const OVAL_WIDTH = 0.4;
 
 /** Each species' two atlas cells as uv rects `[u0, v0, du, dv]` (v up), the clear gutter left out. */
