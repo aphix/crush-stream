@@ -29,7 +29,7 @@ describe("given a room 10 m deep and 6 m wide with one ceiling lamp at its middl
     expect(baked(room(WINDOW), 4, 0, 0, 1).day).toBeGreaterThan(3 * baked(room(WINDOW), -4, 0, 0, 1).day);
   });
 
-  // mutation: sed -i 's/    if (facing === 0 || blocked(light, level, px, py, pz, lx, ly, lz)) continue;/    if (facing === 0) continue;/' src/game/present/interiors/interior-light.ts
+  // mutation: sed -i 's/    if (facing === 0 || blocked(light, level)) continue;/    if (facing === 0) continue;/' src/game/present/interiors/interior-light.ts
   it("when a wall stands between a corner and the lamp, then that corner gets the ambient only", () => {
     const walled = room({ ...LAMP, boxes: Float32Array.of(-2.1, 0, -3, -1.9, 3, 3, 0), boxCount: 1 });
     expect(baked(walled, -4, 0, 0, 1).lamp).toBeCloseTo(baked(room({}), -4, 0, 0, 1).lamp, 6);
