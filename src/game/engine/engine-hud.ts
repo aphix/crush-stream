@@ -182,6 +182,7 @@ export abstract class EngineHud extends EngineWarm {
       foot: this.onFoot?.hud() ?? null,
       lookAt: this.lookAtText(),
       bust: this.bustText(),
+      gameMinute: this.gameMinuteText(),
       boost: this.seat.boost,
       drift: seatDrift,
       view: this.seat.view,

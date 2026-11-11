@@ -212,6 +212,10 @@ export abstract class EngineCore {
   protected bustText(): ChaseHud | null {
     return null;
   }
+  /** The open world's game minute for the HUD; null where there is none. */
+  protected gameMinuteText(): number | null {
+    return null;
+  }
   /** The open world's Auto camera is the view. */
   protected get autoCamOn(): boolean {
     return false;

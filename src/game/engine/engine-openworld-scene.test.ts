@@ -109,6 +109,22 @@ describe("given the open world in play on the real engine", () => {
     expect(engine.net["game"].crowdLink()?.seed, "the link's key: this device's tier above the seed").toBe(POPULATION_TIER.phone * CROWD_TIER_SCALE + LINK_SEED);
   });
 
+  // mutation: sed -i 's/^      gameMinute: this.gameMinuteText(),/      gameMinute: null,/' src/game/engine/engine-hud.ts
+  it("when the open world runs, then the HUD carries its clock as a whole game minute of the day, and no other scene has one", () => {
+    runSeconds(engine, 1);
+    const minute = hud.get().gameMinute;
+    expect(Number.isInteger(minute) && minute! >= 0 && minute! < 1440, `a whole minute of the day: ${minute}`).toBe(true);
+    expect(minute, "the director's clock").toBe(engine["openWorld"].gameMinute());
+    try {
+      pickScene({ current: engine }, sceneInPlay(hud.get()), "fleet");
+      runSeconds(engine, 0.1);
+      expect(hud.get().gameMinute, "no clock in the fleet").toBe(null);
+    } finally {
+      engine["setScene"]("openworld");
+      runSeconds(engine, 0.1);
+    }
+  });
+
   it("when the Fleet button is pressed, then race mode and the lobby are left, the HUD flag drops and the sandbox's field is back", () => {
     pickScene({ current: engine }, sceneInPlay(hud.get()), "fleet");
     expect(engine["sceneId"], "the scene").toBe("fleet");

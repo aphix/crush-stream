@@ -596,6 +596,10 @@ export class CrashEngine extends EngineGarage {
     return this.openWorld.bustOf(this.race.self);
   }
 
+  protected override gameMinuteText(): number | null {
+    return this.showOpenWorld ? this.openWorld.gameMinute() : null;
+  }
+
   protected override get autoCamOn(): boolean {
     return this.showOpenWorld && this.openWorld.autoOn;
   }

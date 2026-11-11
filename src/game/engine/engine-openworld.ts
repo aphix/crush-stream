@@ -470,6 +470,13 @@ export class OpenWorldDirector {
     this.ports.setDayHour(gameHourAtMinute(this.dayMinute, crowd.state.startHour));
   }
 
+  /** The game clock for the HUD, whole minutes since midnight; null until the crowd's first frame. A client reads the host's clock. */
+  gameMinute(): number | null {
+    const crowd = this.crowd;
+    if (crowd === null || this.dayMinute < 0) return null;
+    return Math.round(gameHourAtMinute(this.dayMinute, crowd.state.startHour) * MINUTES_PER_GAME_HOUR) % MINUTES_PER_GAME_DAY;
+  }
+
   /**
    * The numpad's plus and minus, for QA to see the city at another hour, in solo only: the crowd's clock skips to the next whole game hour (1), or to the start of this one, or the one before when it stands on a whole hour (-1), and the stage's light
    * follows at once (one call, the stage's one sun hop). The society cannot be run backwards, so minus is the hour before a day on (it lives through the hours between, the weekday moving on with them). In a room (host or client) the clock is the
