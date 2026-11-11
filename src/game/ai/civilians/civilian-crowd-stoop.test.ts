@@ -3,6 +3,7 @@ import { detCos, detSin } from "../../kernel/physics-core.js";
 import { DOOR, type Frontage, STOOP, stoopStepRange } from "../../world/openworld/openworld-facade-solids.ts";
 import { Stoops } from "../../world/openworld/openworld-stoops.ts";
 import { ACTIVITY } from "./civilian-activity.ts";
+import { LATERAL_MAX, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE } from "./civilian-constants.ts";
 import { PACE, people, sendAlong, streetEdge } from "./civilian-crowd-contact.test-util.ts";
 import { newCrowd } from "./civilian-crowd.test-util.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
@@ -97,5 +98,61 @@ describe("given a resident who walks out of a rowhome's door along the way its s
     expect(heightAfter(crowd, person, fromDoor(STOOP.run - STOOP.tread / 2)), "on the bottom step").toBeCloseTo(STOOP.rise, 3);
     expect(heightAfter(crowd, person, fromDoor((STEP_3.near + STEP_3.far) / 2)), "on the third step").toBeCloseTo(STEP_3.top, 3);
     expect(heightAfter(crowd, person, fromDoor(0.1)), "at the door").toBeCloseTo(STOOP.sill, 3);
+  });
+});
+
+/** A rowhome whose front faces the edge's lane, 1.5 m out from its facade, its door line meeting the leg's middle. */
+function houseOnTheLane(): Frontage {
+  const mid = EDGE.length / 2;
+  const mx = START.x + EDGE.dirX * mid;
+  const mz = START.z + EDGE.dirZ * mid;
+  return { ...HOUSE, yaw: HOUSE_YAW + Math.PI / 2, x: mx - 1.5 * EDGE.dirZ - DOOR.across * EDGE.dirX, z: mz + 1.5 * EDGE.dirX - DOOR.across * EDGE.dirZ };
+}
+
+/** Her distances out from `house`'s facade at each step while she is level with its stoop, walking the lane at its house side. */
+function outsWhileLevel(house: Frontage, stoops: Stoops | null): number[] {
+  const mid = EDGE.length / 2;
+  const { crowd, person } = leaving(stoops);
+  crowd.state.floats[person * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.lateral] = -LATERAL_MAX;
+  const outs: number[] = [];
+  for (let t = (mid - 1.5) / PACE; t <= (mid + 1.5) / PACE; t += 0.1) {
+    crowd.step(t, [], true);
+    const dx = crowd.poses.x[person]! - house.x;
+    const dz = crowd.poses.z[person]! - house.z;
+    const across = dx * EDGE.dirX + dz * EDGE.dirZ - DOOR.across;
+    if (Math.abs(across) <= STOOP.width / 2) outs.push(dx * EDGE.dirZ - dz * EDGE.dirX);
+  }
+  return outs;
+}
+
+describe("given a rowhome whose stoop runs out across the sidewalk a resident walks", () => {
+  // mutation: sed -i '/^      if (this.laneWalking\[resident\] === 1 \&\& this.stoops !== null) this.stoops.keepOut(x, z, resident);/d' src/game/ai/civilians/civilian-crowd.ts
+  it("when she walks past it on the side of the lane nearest the houses, then she is drawn at least the stoop's run and 0.6 m out from the facade while level with it", () => {
+    const outs = outsWhileLevel(houseOnTheLane(), new Stoops([houseOnTheLane()]));
+    expect(outs.length, "steps at which she was level with the stoop").toBeGreaterThan(3);
+    for (const out of outs) expect(out, "out from the facade").toBeGreaterThanOrEqual(STOOP.run + 0.6 - 1e-4);
+  });
+
+  // mutation: sed -i 's/^      x\[resident\] = separation.drawX\[resident\]!;/      x[resident] = separation.drawX[resident]! + 9;/' src/game/ai/civilians/civilian-crowd.ts
+  it("when the same walk is drawn with no stoops, then she is drawn on the stoop: under its run out from the facade while level with it", () => {
+    const outs = outsWhileLevel(houseOnTheLane(), null);
+    expect(outs.length, "steps at which she was level with the stoop").toBeGreaterThan(3);
+    expect(Math.max(...outs), "her farthest out from the facade").toBeLessThan(STOOP.run);
+  });
+
+  // mutation: sed -i 's/^      const need = STOOP.run + KEEP_CLEAR - Math.max(0, across - STOOP.width \/ 2);/      const need = 0;/' src/game/world/openworld/openworld-stoops.ts
+  it("when a point on a stoop's middle is kept out, then it lands the stoop's run and 0.6 m out from the facade on the same line across; a point 3 m to the side is not moved", () => {
+    const stoops = new Stoops([HOUSE]);
+    const cos = detCos(HOUSE.yaw);
+    const sin = detSin(HOUSE.yaw);
+    const place = (out: number, across: number): [Float32Array, Float32Array] => [Float32Array.of(HOUSE.x + cos * out + sin * across), Float32Array.of(HOUSE.z - sin * out + cos * across)];
+    const read = (xs: Float32Array, zs: Float32Array) => ({ out: (xs[0]! - HOUSE.x) * cos - (zs[0]! - HOUSE.z) * sin, across: (xs[0]! - HOUSE.x) * sin + (zs[0]! - HOUSE.z) * cos });
+    const [x, z] = place(STOOP.run / 2, DOOR.across);
+    stoops.keepOut(x, z, 0);
+    expect(read(x, z).out, "out from the facade").toBeCloseTo(STOOP.run + 0.6, 3);
+    expect(read(x, z).across, "the same line across").toBeCloseTo(DOOR.across, 3);
+    const [sx, sz] = place(STOOP.run / 2, DOOR.across + 3);
+    stoops.keepOut(sx, sz, 0);
+    expect(read(sx, sz).out, "3 m to the side: not moved").toBeCloseTo(STOOP.run / 2, 3);
   });
 });
