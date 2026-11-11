@@ -232,3 +232,22 @@ describe("given a gait at a run", () => {
     expect(range(frames.map((frame) => frame.hipY)) * 100, `pelvis range ${(range(frames.map((frame) => frame.hipY)) * 100).toFixed(1)} cm`).toBeLessThan(6);
   });
 });
+
+describe("given a gait whose root speed jumps", () => {
+  // mutation: sed -i 's/dt \* CADENCE_EASE/dt * 1000/' src/game/present/walker-gait.ts
+  it("when the speed goes from 0 to 3 m/s in one frame, then the cadence moves by at most CADENCE_EASE * dt of the gap", () => {
+    const loco = new Locomotion();
+    const gait = new Gait();
+    loco.reset(0);
+    gait.seed(0, STANDING_TORSO, 0, 0, flat);
+    gait.update(FRAME, loco, flat);
+    const before = gait["cadence"];
+    loco.speed = 3;
+    gait.update(FRAME, loco, flat);
+    const after = gait["cadence"];
+    for (let f = 0; f < 4 * FRAME_HZ; f++) gait.update(FRAME, loco, flat);
+    const gap = gait["cadence"] - before;
+    expect(after - before, `cadence moved ${(after - before).toFixed(3)}`).toBeGreaterThan(0);
+    expect(after - before, `cadence moved ${(after - before).toFixed(3)} of a ${gap.toFixed(3)} gap`).toBeLessThanOrEqual(10 * FRAME * gap * 1.05);
+  });
+});

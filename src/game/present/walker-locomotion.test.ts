@@ -142,3 +142,19 @@ describe("given a walker at each speed", () => {
     expect(sprint >= 0.17 && sprint <= 0.3, `sprint lean ${sprint.toFixed(2)} rad`).toBeTruthy();
   });
 });
+
+describe("given the target speed against the heading error", () => {
+  const target = (e: number) => {
+    const loco = new Locomotion();
+    loco.reset(0);
+    return loco["targetSpeed"](3, e);
+  };
+  // mutation: sed -i 's/return curve + (pivot - curve) \* ((aError - PIVOT_IN) \/ (STOP_IN - PIVOT_IN));/return pivot;/' src/game/present/walker-locomotion.ts
+  it("when the error crosses the pivot and the stop edges, then the target moves by under 0.05 m/s", () => {
+    for (const edge of [1.3, 2.1]) {
+      expect(Math.abs(target(edge + 0.001) - target(edge - 0.001)), `jump at ${edge}`).toBeLessThan(0.05);
+    }
+    expect(Math.abs(target(2.4 + 0.001) - target(2.4 - 0.001)), "jump where the stop is reached").toBeLessThan(0.05);
+    expect(target(2.6)).toBe(0);
+  });
+});

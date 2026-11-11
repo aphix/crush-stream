@@ -86,7 +86,10 @@ export class WalkFloor {
     const cos = detCos(yaw);
     for (let ahead = PACE_LOOK; ahead <= PACE_REACH + PACE_LOOK / 2; ahead += PACE_LOOK) {
       const floor = this.under(x + sin * ahead, z + cos * ahead);
-      if (floor !== NO_FLOOR && Math.abs(floor - this.level) >= STEP_RISE) return STEP_PACE;
+      if (floor !== NO_FLOOR && Math.abs(floor - this.level) >= STEP_RISE) {
+        const far = Math.max(0, Math.min(1, (ahead - PACE_LOOK) / (PACE_REACH - PACE_LOOK)));
+        return Math.min(command, STEP_PACE + (command - STEP_PACE) * far);
+      }
     }
     return command;
   }
