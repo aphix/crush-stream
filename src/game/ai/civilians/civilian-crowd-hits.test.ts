@@ -112,27 +112,28 @@ describe("given a host crowd and a bodega on the map", () => {
 });
 
 describe("given two civilians of the host's crowd in a fight that ends in a knock-out", () => {
-  /** A host crowd with a fight raised between two free residents whose victim's knock-out blow is not 0; stepped until both are squared up. */
-  function stagedFight() {
-    for (let offset = 20; offset < 60; offset += 2) {
+  /** A host crowd with a fight raised between two free residents, stepped to the moment the brain squares them up (the fight starts when the event's lead has passed, before the first blow lands); `knockout`: the pair whose victim's knock-out blow is not 0, else one whose blow is 0. */
+  function stagedFight(knockout = true) {
+    for (let offset = 2; offset < 120; offset += 2) {
       const crowd = newCrowd(map);
       crowd.step(1, [], true);
       const starter = crowd.state.cast.length + offset;
       const victim = starter + 1;
+      if (victim >= crowd.state.capacity) break;
       crowd.raisePair(EVENT_KIND.fight, victim, starter);
-      let seconds = 1;
-      for (let frame = 0; frame < Math.round(4 / FRAME_SECONDS); frame++) crowd.step((seconds += FRAME_SECONDS), [], true);
       const ints = crowd.state.ints;
+      let seconds = 1;
+      while (seconds < 20 && ints[victim * RESIDENT_INT_STRIDE + RESIDENT_INT.fightPartner] !== starter) crowd.step((seconds += FRAME_SECONDS), [], true);
       if (ints[victim * RESIDENT_INT_STRIDE + RESIDENT_INT.fightPartner] !== starter) continue;
       const fightTick = ints[victim * RESIDENT_INT_STRIDE + RESIDENT_INT.fightTick]!;
       const blow = knockoutBlow(crowd.state.seed, victim, fightTick);
-      if (blow === 0) continue;
+      if ((blow !== 0) !== knockout) continue;
       return { crowd, starter, victim, seconds, landing: ints[starter * RESIDENT_INT_STRIDE + RESIDENT_INT.arriveTick]! / DECISION_HZ + 0.3 + 1.2 * (blow - 1) };
     }
-    throw new Error("no pair of the fixture crowd fought to a knock-out");
+    throw new Error("no pair of the fixture crowd fought as asked");
   }
 
-  // mutation: sed -i '/^      this.findPunches(before, crowdSeconds);/d' src/game/ai/civilians/civilian-crowd.ts
+  // mutation: sed -i '/^      this.findPunches();/d' src/game/ai/civilians/civilian-crowd.ts
   it("when the fight reaches its victim's knock-out blow, then she is hidden, one strike with no car is queued, and the log ends knock, push, alongside her striker", () => {
     const { crowd, starter, victim, landing } = stagedFight();
     let seconds = crowd.crowdSeconds;
@@ -144,6 +145,23 @@ describe("given two civilians of the host's crowd in a fight that ends in a knoc
     expect(strikes[0]!.car, "no car").toBe(-1);
     const tail = Array.from(crowd.eventLog()).slice(-3 * EVENT_TRIPLE);
     expect(firstMismatch([tail[0]!, tail[1]!, tail[3]!, tail[4]!, tail[6]!, tail[7]!], [EVENT_KIND.knock, victim, EVENT_KIND.push, victim, EVENT_KIND.alongside, starter]), "the log's last three entries").toBeUndefined();
+  });
+
+  // mutation: sed -i 's/      if (knockout === 0 || this.blows\[victim\] !== knockout || this.poses.shown\[victim\] === 0) continue;/      if (this.poses.shown[victim] === 0) continue;/' src/game/ai/civilians/civilian-crowd.ts
+  it("when a fight whose victim's draw is no knock-out runs its 8 s out, then no strike is queued and the log holds no knock", () => {
+    const { crowd, victim, seconds: squared } = stagedFight(false);
+    let seconds = squared;
+    crowd.takeStrikes();
+    let struck = 0;
+    while (seconds < squared + 9) {
+      crowd.step((seconds += FRAME_SECONDS), [], true);
+      struck += crowd.takeStrikes().length;
+    }
+    let knocks = 0;
+    const log = crowd.eventLog();
+    for (let at = 0; at < log.length; at += EVENT_TRIPLE) if (log[at] === EVENT_KIND.knock && log[at + 1] === victim) knocks++;
+    expect(struck, "strikes queued over the fight").toBe(0);
+    expect(knocks, "knocks logged for the victim").toBe(0);
   });
 
   // mutation: sed -i 's/^      if (by >= 0) {/      if (by >= 9e9) {/' src/game/ai/civilians/civilian-crowd.ts

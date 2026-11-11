@@ -157,6 +157,10 @@ export class CivilianCrowd {
   private readonly crimesDue: Int32Array;
   private readonly blows: Uint8Array;
   private readonly blowsFight: Int32Array;
+  /** Per victim, the blow that knocks her out in the fight `blowsFight` names (0: none), drawn once a fight. */
+  private readonly knockoutAt: Uint8Array;
+  /** The crowd second of the step before this one: where the blows `findPunches` looks for begin. */
+  private blowsFrom = 0;
   private readonly blow = new CivilianBlow();
 
   constructor(map: OpenWorldMap, seed: number, playableResidents: number, remote: CivilianRemote, signals = false) {
@@ -181,6 +185,7 @@ export class CivilianCrowd {
     this.crimesDue = new Int32Array(capacity);
     this.blows = new Uint8Array(capacity);
     this.blowsFight = new Int32Array(capacity).fill(NEVER_TICK);
+    this.knockoutAt = new Uint8Array(capacity);
     this.batch = new Float64Array((capacity + EVENT_LOG_CAPACITY) * EVENT_TRIPLE);
     this.wreckedAt = new Float64Array(map.places.length).fill(-Infinity);
   }
@@ -200,7 +205,7 @@ export class CivilianCrowd {
 
   /** One step at crowd time `crowdSeconds`: every decision tick passed is advanced, the people placed (animals walk in the brain but are not shown until there is art for them), and on the host (`authority`) the cars' hits on them found; a client throws the knocks it heard. */
   step(crowdSeconds: number, cars: readonly DeformableCar[], authority: boolean): void {
-    const before = this.seconds;
+    this.blowsFrom = this.seconds;
     this.authority = authority;
     this.advanceBrain(tickAt(crowdSeconds));
     this.seconds = crowdSeconds;
@@ -212,7 +217,7 @@ export class CivilianCrowd {
     }
     this.liftWalkers();
     if (authority) {
-      this.findPunches(before, crowdSeconds);
+      this.findPunches();
       this.findHits(cars, crowdSeconds);
       this.raiseDangers(crowdSeconds, cars);
       this.raiseAmbulanceCalls(crowdSeconds);
@@ -611,12 +616,12 @@ export class CivilianCrowd {
     }
   }
 
-  /** Host: the fights' blows that landed since the last step. The blow that reaches its victim's knock-out count fells her as a car's knock does, with the striker named. */
-  private findPunches(fromSeconds: number, toSeconds: number): void {
+  /** Host: the fights' blows that landed since the last step (`blowsFrom` to `seconds`; read from fields so the step passes no boxed number). The blow that reaches its victim's knock-out count fells her as a car's knock does, with the striker named. */
+  private findPunches(): void {
     const state = this.remote.state;
     const blow = this.blow;
     for (let from = 0; ; ) {
-      const striker = findCivilianBlow(state, fromSeconds, toSeconds, from, blow);
+      const striker = findCivilianBlow(state, this.blowsFrom, this.seconds, from, blow);
       if (striker < 0) return;
       from = striker + 1;
       const victim = blow.victim;
@@ -624,11 +629,12 @@ export class CivilianCrowd {
       if (this.blowsFight[victim] !== fightTick) {
         this.blowsFight[victim] = fightTick;
         this.blows[victim] = 0;
+        this.knockoutAt[victim] = knockoutBlow(state.seed, victim, fightTick);
       }
       this.blows[victim] = this.blows[victim]! + 1;
-      const knockout = knockoutBlow(state.seed, victim, fightTick);
+      const knockout = this.knockoutAt[victim]!;
       if (knockout === 0 || this.blows[victim] !== knockout || this.poses.shown[victim] === 0) continue;
-      this.knockDown(victim, toSeconds, this.felledBy(victim, striker, blankStrike()), striker);
+      this.knockDown(victim, this.seconds, this.felledBy(victim, striker, blankStrike()), striker);
     }
   }
 
