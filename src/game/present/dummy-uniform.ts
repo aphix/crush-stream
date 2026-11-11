@@ -272,7 +272,7 @@ function jacketSkirt(fit: Fit, kinds: number): Shell[] {
     return fromSide >= FLAP_ANGLES[0] && fromSide <= FLAP_ANGLES[1];
   });
   const band = (y: number, proud: boolean) => ({ y, out: onFlap.map((flap) => skirtOut(y) + (proud && flap ? FLAP_PROUD : FLAP_INSIDE)), role: SHIRT, holds: JACKET_TOP });
-  const flaps = fitted(fit, below, [band(FLAP_TOP, false), band(FLAP_TOP, true), band(FLAP_BOTTOM, true), band(FLAP_BOTTOM, false)], { bone: TORSO, kinds, sides: FLAP_SIDES, axis: [skirt.x, skirt.rings[0]![3]] });
+  const flaps = { ...fitted(fit, below, [band(FLAP_TOP, false), band(FLAP_TOP, true), band(FLAP_BOTTOM, true), band(FLAP_BOTTOM, false)], { bone: TORSO, kinds, sides: FLAP_SIDES, axis: [skirt.x, skirt.rings[0]![3]] }), nearOnly: true };
   return [skirt, flaps];
 }
 
