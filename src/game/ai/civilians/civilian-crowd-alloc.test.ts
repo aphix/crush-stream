@@ -19,6 +19,8 @@ const FRAMES_PER_TICK = 31;
 const WARM_SECONDS = 200;
 const WARM_STEP = 1 / 16;
 const MEASURED_FRAMES = 300;
+/** Decision ticks (20 s of crowd time) the stoop row looks through for a walker on a step. */
+const LIFT_TICKS = 40;
 /** The sampling profiler's own cost is 4-5 KB of a read; a frame that makes one object reads far above this. */
 const BOUND_KB = 8;
 /** Vectors the control makes each frame: far more than the bound's worth. */
@@ -72,14 +74,18 @@ describe("given a warmed crowd of 300 civilians among eight parked cars", () => 
   });
 
   // mutation: sed -i 's/const x = xs\[at\]!;/(globalThis as { kept?: unknown }).kept = new Float32Array(3); const x = xs[at]!;/' src/game/world/openworld/openworld-stoops.ts
+  // mutation: sed -i 's/onSpur\[resident\] === 1) stoops.liftFeet/onSpur[resident] === 2) stoops.liftFeet/' src/game/ai/civilians/civilian-crowd.ts
   it("when every street node is a stoop's door, then walkers cross the steps and the frames still allocate nothing", () => {
     const { nodeX, nodeZ } = buildFixtureMap(EXTRA_HOMES_PER_BLOCK).graph;
     const frontages = Array.from(nodeX, (x, node) => ({ x, z: nodeZ[node]!, yaw: 0, depth: 10, style: "federal" as const, storeys: 3, variant: 0 }));
     crowd.stoops = new Stoops(frontages, Array.from(nodeX, (_, node) => node));
     const kb = untilQuiet(() => readKb(), BOUND_KB);
+    // Ticks at most to look for someone on a step: where the reads left the crowd's clock depends on how many the box needed.
     let lifted = 0;
-    startNextTick();
-    stepWithinTick(MEASURED_FRAMES, () => void (lifted += crowd.poses.feetY.some((feetY) => feetY > 0) ? 1 : 0));
+    for (let tick = 0; tick < LIFT_TICKS && lifted === 0; tick++) {
+      startNextTick();
+      stepWithinTick(FRAMES_PER_TICK, () => void (lifted += crowd.poses.feetY.some((feetY) => feetY > 0) ? 1 : 0));
+    }
     crowd.stoops = null;
     expect(kb, "KB over the run").toBeLessThanOrEqual(BOUND_KB);
     expect(lifted, "frames with someone on a step").toBeGreaterThan(0);
