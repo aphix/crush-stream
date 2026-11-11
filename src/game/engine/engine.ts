@@ -273,7 +273,8 @@ export class CrashEngine extends EngineGarage {
     this.scene.add(this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.seated.mesh, this.coverBatch.group);
     // Under the wheel shadow prisms, shown to the shadow pass alone: the casters cost no camera-pass draw.
     this.wheels.meshes.at(-1)!.add(...this.partBatch.casters);
-    const driverLook = (car: number, cop: boolean) => this.ragdolls.carDriverLook(car, cop);
+    const driverLook = (car: number) => this.ragdolls.carDriverLook(car);
+    const uniform = (car: number, cop: boolean) => this.ragdolls.uniformOn(car, cop);
     // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps, parts and seated drivers.
     this.scene.onBeforeRender = (renderer) => {
       lapPart(PART.matrices);
@@ -283,7 +284,7 @@ export class CrashEngine extends EngineGarage {
       this.lampBatch.sync(drawn);
       this.partBatch.sync(drawn);
       // In the garage the standing dummy beside the car is the driver, and the showcase's cars show their empty cabins: no one sits in the car there. A car its player left on foot has nobody in it either.
-      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook, this.onFoot.away, this.parkedEmpty);
+      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook, uniform, this.onFoot.away, this.parkedEmpty);
       this.coverBatch.sync(drawn);
       lapPart(PART.batches);
     };

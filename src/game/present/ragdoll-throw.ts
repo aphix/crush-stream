@@ -130,7 +130,7 @@ export abstract class RagdollThrower extends RagdollStepper {
     }
     t.car = e.car;
     t.age = 0;
-    t.cop = e.cop;
+    t.cop = this.uniformOn(e.car, e.cop);
     t.rides = rides;
     t.loose = true;
     this.driverThrows[e.car] = { ...t, p: t.p.clone(), q: t.q.clone(), v: t.v.clone(), w: t.w.clone() };

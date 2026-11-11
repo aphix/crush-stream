@@ -303,12 +303,17 @@ export abstract class RagdollPool {
   protected dressingOf(t: Throw, dressed: DriverLook | null): { look: DriverLook; spray: SprayBitmap | null } {
     const given = dressed ?? t.look ?? null;
     if (given) return { look: given, spray: null };
-    return { look: this.carDriverLook(t.car, t.cop), spray: (t.cop ? null : this.lookOf(t.car))?.personSpray ?? null };
+    return { look: this.carDriverLook(t.car), spray: this.lookOf(t.car)?.personSpray ?? null };
   }
 
-  /** Car `car`'s driver as he sits in it and is thrown from it: a player's own look when his car is a player's (`ownLook`, the same in every scene and seed), else the seed's drawn one; a cop wears the uniform over the drawn one. Kept per car while its seed and pick stand (picks are replaced, never mutated): the seated drivers ask every frame. */
-  carDriverLook(car: number, cop: boolean): DriverLook {
-    const person = (cop ? null : this.lookOf(car))?.person ?? null;
+  /** Whether the person in car `car` wears the police uniform: a patrol car's own driver does, a player who took the car does not. */
+  uniformOn(car: number, cop: boolean): boolean {
+    return cop && this.lookOf(car) === null;
+  }
+
+  /** Car `car`'s driver as he sits in it and is thrown from it: a player's own look when his car is a player's (`ownLook`, the same in every scene and seed), else the seed's drawn one. Kept per car while its seed and pick stand (picks are replaced, never mutated): the seated drivers ask every frame. */
+  carDriverLook(car: number): DriverLook {
+    const person = this.lookOf(car)?.person ?? null;
     const kept = this.carLooks.get(car);
     if (kept && kept.seed === this.lookSeed && kept.person === person) return kept.look;
     const look = person ? ownLook(person) : driverLook(this.lookSeed, car);

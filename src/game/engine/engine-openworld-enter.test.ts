@@ -1,5 +1,7 @@
+import * as THREE from "three";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { hypot2 } from "../kernel/physics-core.js";
+import { blankEjection } from "../vehicle/ejection.ts";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { ownLook } from "../present/driver-look.ts";
@@ -98,19 +100,51 @@ describe("given the real engine in the open world, its player out of his car wit
     const target = nearestEmptyCar();
     const ragdolls = rig.engine["ragdolls"];
     const own = JSON.stringify(ownLook(rig.engine["looks"].mine.person));
-    const before = JSON.stringify(ragdolls.carDriverLook(target, false));
+    const before = JSON.stringify(ragdolls.carDriverLook(target));
     expect(before, "before: that car's driver is another person (the check can fail)").not.toBe(own);
     rig.getOut();
     rig.walkToDoor(rig.cars()[target]!);
     rig.press("Enter");
     rig.run(1);
     expect(rig.engine["seat"].carIndex, "he is in the other car").toBe(target);
-    expect(JSON.stringify(ragdolls.carDriverLook(target, false)), "the driver drawn in it").toBe(own);
+    expect(JSON.stringify(ragdolls.carDriverLook(target)), "the driver drawn in it").toBe(own);
     const thrown = ragdolls["dressingOf"]({ car: target, cop: false } as Parameters<(typeof ragdolls)["dressingOf"]>[0], null);
     expect(JSON.stringify(thrown.look), "the driver thrown from it").toBe(own);
     rig.getOut();
     rig.run(0.5);
-    expect(JSON.stringify(ragdolls.carDriverLook(target, false)), "and still his once he is out of it").toBe(own);
+    expect(JSON.stringify(ragdolls.carDriverLook(target)), "and still his once he is out of it").toBe(own);
+  });
+
+  // mutation: sed -i 's/    t.cop = this.uniformOn(e.car, e.cop);/    t.cop = e.cop;/' src/game/present/ragdoll-throw.ts
+  it("when he is thrown from a car whose own driver wears the uniform, then the man thrown wears no uniform and is him", () => {
+    const ragdolls = rig.engine["ragdolls"];
+    const target = rig.engine["seat"].carIndex;
+    const car = rig.cars()[target]!;
+    expect(ragdolls.uniformOn(target, true), "a patrol car he drives: no uniform").toBe(false);
+    expect(ragdolls.uniformOn(target + 1, true), "a patrol car nobody took: its driver's uniform").toBe(true);
+    const e = blankEjection();
+    e.car = target;
+    e.cop = true;
+    e.dir.set(0, 0, 1).applyQuaternion(car.group.quaternion);
+    e.pos.copy(car.group.position).addScaledVector(THREE.Object3D.DEFAULT_UP, 1.3).addScaledVector(e.dir, 0.6);
+    e.quat.copy(car.group.quaternion);
+    e.rel.copy(e.dir).multiplyScalar(3).addScaledVector(THREE.Object3D.DEFAULT_UP, 6);
+    e.carVel.copy(car.velocity);
+    const dressed: { cop: boolean; look: unknown }[] = [];
+    const dressingOf = ragdolls["dressingOf"].bind(ragdolls);
+    ragdolls["dressingOf"] = (t, given) => {
+      const out = dressingOf(t, given);
+      if (t.car === target) dressed.push({ cop: t.cop, look: out.look });
+      return out;
+    };
+    try {
+      ragdolls.launch(e, rig.cars());
+    } finally {
+      ragdolls["dressingOf"] = dressingOf;
+    }
+    expect(dressed.length, "his throw was dressed").toBeGreaterThan(0);
+    expect(dressed[0]!.cop, "no uniform on the man thrown").toBe(false);
+    expect(JSON.stringify(dressed[0]!.look), "the man thrown is him").toBe(JSON.stringify(ownLook(rig.engine["looks"].mine.person)));
   });
 
   // mutation: sed -i 's/    const car = this.cars\[this.ownCar()\];/    const car = this.cars[this.drivenCar()];/' src/game/engine/engine-share.ts
