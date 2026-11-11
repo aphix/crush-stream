@@ -173,7 +173,7 @@ const STANCE_FLAT_SCALE = 1 / Math.asin(STANCE_FLAT);
 /** The shoulders turn this far (rad) against the hips each step, the head half turning back to hold its gaze, the hips fall this far (m) as the legs spread, and the head nods this far (rad) twice a stride. */
 const SHOULDER_TWIST = 0.1;
 const HEAD_COUNTER_TWIST = 0.7;
-const HIP_DROP = 0.05;
+const HIP_DROP = 0.03;
 const HEAD_NOD = 0.02;
 /** An arm swung forward bends its elbow this much more (rad). */
 const ELBOW_FORWARD_BEND = 0.3;
@@ -219,6 +219,8 @@ const target = new THREE.Vector3();
 /** The walk is the full swing at `WALK_SPEED`; a slower or faster pace scales it (`gait` is the pace over that, to `MAX_GAIT`) between these limits. */
 const MAX_GAIT = 2.3;
 const LEG_GAIT_FLOOR = 0.3;
+/** Under this drawn speed (m/s) the leg swing has no floor: a civilian coming to a stop settles her legs. */
+const LEG_FLOOR_ABOVE = 0.3;
 const LEG_GAIT_CEILING = 1.6;
 const ARM_GAIT_FLOOR = 0.3;
 const ARM_GAIT_CEILING = 1.8;
@@ -232,7 +234,7 @@ const WALKING_ABOVE = 0.05;
 /** The stride at `pose.stride` in every limb's channels and the body's counter-turn, bob and nod, on top of the standing channels `fillBase` made; the pace (`pose.speed`) sets how big each is. */
 function fillWalk(pose: ActivityPose): void {
   const gait = Math.min(MAX_GAIT, pose.speed / WALK_SPEED);
-  const legGain = Math.min(LEG_GAIT_CEILING, Math.max(LEG_GAIT_FLOOR, gait));
+  const legGain = Math.min(LEG_GAIT_CEILING, Math.max(pose.speed > LEG_FLOOR_ABOVE ? LEG_GAIT_FLOOR : 0, gait));
   const armGain = Math.min(ARM_GAIT_CEILING, Math.max(ARM_GAIT_FLOOR, gait));
   const kneeGain = KNEE_BEND_FLOOR + (1 - KNEE_BEND_FLOOR) * gait;
   const sine = Math.sin(pose.stride);

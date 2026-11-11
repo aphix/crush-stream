@@ -20,6 +20,8 @@ const KEEP_RADIUS = 36;
 const SELECT_SECONDS = 0.25;
 /** A body lagging more than this far (m) behind the crowd's spot for her (blocked by a car, a wall) is let go: she is drawn at her spot again. */
 const LEASH = 3;
+/** A body that fell or stumbled may be this far (m) behind her spot and still run back to it. */
+const REJOIN_LEASH = 15;
 /** She is standing when her crowd pace is under this (m/s); her body then stands, facing as she does, once within `STAND_REACH` (m) of her spot, and walks to it from farther. */
 const STILL = 0.15;
 const STAND_REACH = 0.4;
@@ -60,6 +62,8 @@ export type BodyHost = {
   holds(slot: number): boolean;
   /** The body in `slot` gets up. */
   getUp(slot: number): void;
+  /** Whether the body in `slot` is on its feet at full strength: not fallen, not staggering. */
+  steady(slot: number): boolean;
   /** A strike lands on the body in `slot`: every part moves as the strike's launch (`FigureStrike`) and it goes limp. */
   knock(slot: number, strike: FigureStrike): void;
   /** The ground's height (m) at (x, z). */
@@ -85,6 +89,8 @@ export class OpenWorldBodies {
   private readonly resident: Int32Array;
   private readonly slot: Int32Array;
   private readonly downFor: Float64Array;
+  /** 1 for a body that fell or stumbled and has not yet rejoined her spot. */
+  private readonly recovering: Uint8Array;
   private readonly struckAt: Float64Array;
   private sinceSelect = SELECT_SECONDS;
   private seconds = 0;
@@ -98,6 +104,7 @@ export class OpenWorldBodies {
     this.resident = new Int32Array(size).fill(NOBODY);
     this.slot = new Int32Array(size).fill(NOBODY);
     this.downFor = new Float64Array(size);
+    this.recovering = new Uint8Array(size);
     this.struckAt = new Float64Array(size).fill(-Infinity);
     host.setCapacity(FIRST_BODY_SLOT + size + LYING_RESERVE);
   }
@@ -156,17 +163,20 @@ export class OpenWorldBodies {
       return;
     }
     if (!this.eligible(poses, civilian, eyeX, eyeZ, KEEP_RADIUS) || !this.host.torso(slot, _torso)) return this.release(body);
-    const dx = poses.x[civilian]! - _torso.x;
-    const dz = poses.z[civilian]! - _torso.z;
-    const lag = hypot2(dx, dz);
-    if (lag > LEASH) return this.release(body);
     if (!this.host.standing(slot)) {
+      this.recovering[body] = 1;
       this.downFor[body] = this.downFor[body]! + dt;
       if (this.downFor[body]! > RELEASE_DOWN) return this.release(body);
       if (this.downFor[body]! > GET_UP_AFTER) this.host.getUp(slot);
       return;
     }
     this.downFor[body] = 0;
+    const dx = poses.x[civilian]! - _torso.x;
+    const dz = poses.z[civilian]! - _torso.z;
+    const lag = hypot2(dx, dz);
+    if (!this.host.steady(slot)) this.recovering[body] = 1;
+    else if (lag <= LEASH) this.recovering[body] = 0;
+    if (lag > (this.recovering[body] === 1 ? REJOIN_LEASH : LEASH)) return this.release(body);
     const yaw = poses.yaw[civilian]!;
     const pace = poses.speed[civilian]!;
     if (pace < STILL && lag < STAND_REACH) {
@@ -231,6 +241,7 @@ export class OpenWorldBodies {
     this.resident[body] = civilian;
     this.slot[body] = started;
     this.downFor[body] = 0;
+    this.recovering[body] = 0;
     this.struckAt[body] = -Infinity;
     this.bodyOf[civilian] = body;
     this.held[civilian] = 1;

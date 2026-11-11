@@ -8,11 +8,11 @@ import { EJECT_ROLL, ejectionVelocity, type Ejection } from "../vehicle/ejection
 import type { DriverLook } from "./driver-look.ts";
 import { VIP_LOOK } from "./dummy-dress.ts";
 import { guardDress, passengerThrow } from "./people.ts";
-import type { FigureStrike } from "../scenes/figure-strike.ts";
+import { FIGURE_KG, knocksDown, type FigureStrike } from "../scenes/figure-strike.ts";
 import type { PropDraw, PropTrace } from "./ragdoll-props.ts";
 import { NO_RELEASE_SCALE, type ReleaseScale } from "./ragdoll-boxes.ts";
 import type { Shape } from "@dimforge/rapier3d-simd";
-import { BASE_SLOTS, SIGHT_GROUPS, thrownGroups } from "./ragdoll-config.ts";
+import { BASE_SLOTS, SIGHT_GROUPS, SLOTS, thrownGroups } from "./ragdoll-config.ts";
 import { ARM, blendPose, MASS, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
 import { strikeAt } from "./ragdoll-hit.ts";
 import type { Solid } from "./ragdoll-solids.ts";
@@ -48,6 +48,13 @@ const NO_MOTION = new THREE.Vector3();
 const _sightAt = { x: 0, y: 0, z: 0 };
 const _sightWay = { x: 0, y: 0, z: 0 };
 const UNTURNED = { x: 0, y: 0, z: 0, w: 1 };
+
+/** Two bodies whose torsos are within this far (m, level) of each other are touching. */
+const BODY_TOUCH = 0.6;
+/** A body is not judged again for this long (s) after a meeting that knocked someone. */
+const BODY_AGAIN = 0.5;
+const _meetPoint = new THREE.Vector3();
+const _meetDir = new THREE.Vector3();
 
 /** A thrown driver's centre of mass from his torso, standing, arms raised (`spawn`'s layout, each part at its own mass): his roll turns about it. */
 const RAISED_COM = PARTS.reduce((sum, p, k) => {
@@ -267,6 +274,57 @@ export abstract class RagdollThrower extends RagdollStepper {
     if (!d?.live) return;
     strikeAt(d.bodies, point, direction, speed);
     this.walkers[slot]!.struck();
+  }
+
+  private meetClock = 0;
+  private readonly metAt = new Float64Array(SLOTS).fill(-Infinity);
+
+  /** Bodies that meet are judged by the one knock law: closing at 2 m/s or more (`knocksDown` for a man's mass), the one being run into is knocked down and the runner staggers; slower, both keep their feet. */
+  protected override meetWalkers(dt: number): void {
+    this.meetClock += dt;
+    const dolls = this.dolls;
+    for (let s = 0; s < dolls.length; s++) this.walkers[s]!.beside = false;
+    for (let a = 0; a < dolls.length; a++) {
+      const da = dolls[a];
+      if (!da?.live) continue;
+      for (let b = a + 1; b < dolls.length; b++) {
+        const db = dolls[b];
+        if (!db?.live) continue;
+        const wa = this.walkers[a]!;
+        const wb = this.walkers[b]!;
+        // A thrown dummy has a walker too, one that holds no doll: only a body some walker holds up is judged.
+        if (!wa.active || !wb.active) continue;
+        const aStands = wa.state === "stand";
+        const bStands = wb.state === "stand";
+        if (!aStands && !bStands) continue;
+        const dx = db.cur[0]! - da.cur[0]!;
+        const dz = db.cur[2]! - da.cur[2]!;
+        const gap = hypot2(dx, dz);
+        if (gap > BODY_TOUCH || gap === 0 || Math.abs(db.cur[1]! - da.cur[1]!) > 1) continue;
+        wa.beside = true;
+        wb.beside = true;
+        if (this.meetClock - this.metAt[a]! < BODY_AGAIN || this.meetClock - this.metAt[b]! < BODY_AGAIN) continue;
+        const nx = dx / gap;
+        const nz = dz / gap;
+        const towardB = aStands ? wa.rootSpeedAlong(nx, nz) : da.vel[0]! * nx + da.vel[2]! * nz;
+        const towardA = bStands ? wb.rootSpeedAlong(-nx, -nz) : -(db.vel[0]! * nx + db.vel[2]! * nz);
+        const closing = towardB + towardA;
+        if (!knocksDown(FIGURE_KG, closing)) continue;
+        this.metAt[a] = this.meetClock;
+        this.metAt[b] = this.meetClock;
+        // The slower of the two toward the other is the one run into (a tie: the higher slot).
+        const struck = towardB < towardA ? a : b;
+        const runner = struck === a ? b : a;
+        const sign = struck === b ? 1 : -1;
+        if (this.walkers[struck]!.state === "stand") {
+          const hit = dolls[struck]!;
+          _meetPoint.set(hit.cur[0]!, hit.cur[1]!, hit.cur[2]!);
+          _meetDir.set(nx * sign, 0.3, nz * sign).normalize();
+          this.strikeWalker(struck, _meetPoint, _meetDir, closing / 2);
+        }
+        this.walkers[runner]!.stagger(0.5);
+      }
+    }
   }
 
   /**

@@ -49,6 +49,7 @@ import { wearCarLook } from "../present/car-look.ts";
 import { TrafficDress } from "./traffic-dress.ts";
 import { RagdollBodyHost } from "./ragdoll-body-host.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
+import { applyCarFinish, finishForTier } from "../vehicle/car-finish.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { LAYOUT } from "../world/openworld/openworld-constants.ts";
@@ -561,7 +562,10 @@ export class CrashEngine extends EngineGarage {
   /** What a traffic car needs each time it is stood on a space (`TrafficDress`). */
   private readonly trafficDress = new TrafficDress<DeformableCar>(
     (car) => this.dressCar(car),
-    (car, colour) => wearCarLook(car, { ...NO_CAR_PICK, body: colour }, null),
+    (car, colour) => {
+      wearCarLook(car, { ...NO_CAR_PICK, body: colour }, null);
+      applyCarFinish(car.group, finishForTier(this.cine.tier));
+    },
   );
 
   private standTrafficCar(car: DeformableCar, x: number, z: number, yaw: number, colour: number | null): void {

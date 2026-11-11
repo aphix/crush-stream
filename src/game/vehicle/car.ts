@@ -274,7 +274,7 @@ export class DeformableCar extends CarParts {
       w.rotation.set(0, 0, 0);
       w.visible = true;
     }
-    this.bodyMat.roughness = 0.42;
+    this.setPaintRoughness(0.42);
     this.group.rotation.set(0, 0, 0);
     this.interior.scale.set(1, 1, 1);
     this.interior.position.set(0, 0, 0);
@@ -346,7 +346,7 @@ export class DeformableCar extends CarParts {
     const rough = Math.min(0.82, 0.42 + impulse * 0.012);
     if (this.crashed && this.deform.massActive) {
       if (!this.deform.rearmHit(localP, localN, impulse, ebs, pair)) return false;
-      this.bodyMat.roughness = Math.max(this.bodyMat.roughness, rough);
+      this.setPaintRoughness(Math.max(this.bodyMat.roughness, rough));
     } else {
       this.crashed = true;
       this.ride(0);
@@ -354,7 +354,7 @@ export class DeformableCar extends CarParts {
       if (rigid) {
         this.deform.unstep(this.flewDt);
       }
-      this.bodyMat.roughness = rough;
+      this.setPaintRoughness(rough);
     }
     this.deform.markMotion();
     this.deform.impulseAt(worldPoint, _in, impulse);

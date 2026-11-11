@@ -61,7 +61,7 @@ const strikeOn = (guard: number): FigureStrike => ({ guard, car: 0, x: 0, y: 0, 
 const HOUSE: Place = { kind: 0, name: "House", doorNode: 1, doorX: 0, doorZ: 3, yaw: 0, x: 0, z: 0, width: 6, depth: 10, storeys: 2, style: "rowbrick", sector: "" };
 
 describe("given civilians around an eye, and a pool with room for three bodies", () => {
-  // mutation: sed -i 's/^const NEAR_RADIUS = 14;/const NEAR_RADIUS = 140;/' src/game/engine/openworld-bodies.ts
+  // mutation: sed -i 's/^const NEAR_RADIUS = 28;/const NEAR_RADIUS = 280;/' src/game/engine/openworld-bodies.ts
   it("when the bodies are given out, then the four nearest within reach each have one (nearest first), in slots past the first four, and no one farther has", () => {
     const { host, poses, bodies, run } = world();
     walker(poses, 0, 9, 0);
@@ -203,6 +203,58 @@ describe("given a civilian a car runs down while her body stands for her", () =>
     host.bodies.get(slot)!.standing = false;
     run(Math.round(9 / STEP));
     expect(host.stopped, "let go after staying down").toContain(slot);
+  });
+
+  // mutation: sed -i 's/^      if (this.downFor\[body\]! > RELEASE_DOWN) return this.release(body);/      return this.release(body);/' src/game/engine/openworld-bodies.ts
+  it("when a body is down while her spot walks on for 3 s, then she is still held, her body is not let go, and it is asked to get up", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    host.stubborn = true;
+    host.bodies.get(slot)!.standing = false;
+    for (let step = 0; step < Math.round(3 / STEP); step++) {
+      poses.z[0] = poses.z[0]! + 1.4 * STEP;
+      run(1);
+    }
+    expect(bodies.held[0], "still held").toBe(1);
+    expect(host.stopped, "not let go").not.toContain(slot);
+    expect(host.gotUp.length, "asked to get up").toBeGreaterThan(0);
+  });
+
+  // mutation: sed -i 's/this.recovering\[body\] === 1 ? REJOIN_LEASH : LEASH/LEASH/' src/game/engine/openworld-bodies.ts
+  it("when a body that fell stands again 5 m behind her spot, then it is not let go and is steered at her spot faster than she walks", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    const body = host.bodies.get(slot)!;
+    body.standing = false;
+    run(2);
+    body.standing = true;
+    poses.z[0] = body.z + 5;
+    run(2);
+    expect(bodies.held[0], "still held").toBe(1);
+    expect(host.stopped, "not let go").not.toContain(slot);
+    expect(body.speed, "steered faster than her walk (m/s)").toBeGreaterThan(1.4);
+  });
+
+  // mutation: sed -i '/^    else if (lag <= LEASH) this.recovering\[body\] = 0;/d' src/game/engine/openworld-bodies.ts
+  it("when she has rejoined her spot and is later 4 m behind it on her feet and steady, then her body is let go as before", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    const body = host.bodies.get(slot)!;
+    body.standing = false;
+    run(2);
+    body.standing = true;
+    run(2);
+    poses.z[0] = poses.z[0]! + 4;
+    run(Math.round(0.5 / STEP));
+    expect(host.stopped, "let go").toContain(slot);
+    expect(host.started.length, "the old body went and a new one was stood for her").toBe(2);
+    expect(host.started[1]!.z, "the new one stands at her spot, not 4 m behind it").toBe(poses.z[0]);
   });
 });
 

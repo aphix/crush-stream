@@ -147,6 +147,30 @@ export function stood(carIndex: number, guard: number, x: number, groundY: numbe
   return out;
 }
 
+/** A fist's knock-down: how fast the struck figure leaves (m/s), how far up, and its tumble (rad/s). */
+const PUNCH_KO_SPEED = 3;
+const PUNCH_KO_LIFT = 1.5;
+const PUNCH_KO_TUMBLE = 4;
+
+/** `out` as the launch of figure `guard` standing at (x, groundY, z) felled by a blow going (dirX, dirZ): no car, thrown along the blow, tumbling over backwards, facing whoever struck. */
+export function felled(guard: number, x: number, groundY: number, z: number, dirX: number, dirZ: number, out: FigureStrike): FigureStrike {
+  out.guard = guard;
+  out.car = -1;
+  out.x = Math.fround(x);
+  out.y = Math.fround(groundY);
+  out.z = Math.fround(z);
+  out.faceX = Math.fround(-dirX);
+  out.faceZ = Math.fround(-dirZ);
+  out.vx = Math.fround(dirX * PUNCH_KO_SPEED);
+  out.vy = Math.fround(PUNCH_KO_LIFT);
+  out.vz = Math.fround(dirZ * PUNCH_KO_SPEED);
+  out.wx = Math.fround(-dirZ * PUNCH_KO_TUMBLE);
+  out.wy = 0;
+  out.wz = Math.fround(dirX * PUNCH_KO_TUMBLE);
+  out.loose = false;
+  return out;
+}
+
 /**
  * `out` as the launch of the figure `car` (slot `carIndex`) just ran down (`runsDown`): at the car's velocity with a lift, a kick to
  * the side of its centre line he stood on and a tumble that grow with its speed, his legs swept ahead and his head left behind.

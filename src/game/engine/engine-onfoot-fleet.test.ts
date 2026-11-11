@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
 /** The fleet's far cars wait this far out on the disc (m), out of the walker's way; the near one stands where he can walk to its door. */
@@ -72,6 +73,84 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     expect(rig.engine["onFoot"].prompt()).toBe("Walk up to your car's driver door");
     rig.getIn();
     expect(rig.engine["seat"].carIndex, "he is in his own car").toBe(0);
+  });
+
+  /** The driver's door's widest angle (rad) over the 54 frames of getting out of car 0; he is out once they are run. */
+  function widestOverGettingOut(): number {
+    const car = rig.cars()[0]!;
+    let widest = 0;
+    rig.press("Enter");
+    for (let f = 0; f < 54; f++) {
+      rig.run(FRAME);
+      widest = Math.max(widest, Math.abs(car.doorAngle(DRIVER_SIDE)));
+    }
+    expect(rig.phase(), "he is out").toBe("onFoot");
+    return widest;
+  }
+
+  // mutation: sed -i 's/^    if (!this.host.openWorld() || !this.host.runsCars()) return;/    if (!this.host.runsCars()) return;/' src/game/engine/engine-onfoot.ts
+  it("when he gets out in the fleet, then his car's door is never written: the walker writes nothing to a car outside the open world (guard)", () => {
+    expect(widestOverGettingOut(), "the door's widest angle (rad)").toBe(0);
+  });
+
+  // mutation: sed -i 's/^    if (!this.host.openWorld() || !this.host.runsCars()) return;/    if (!this.host.runsCars() || this.host.openWorld()) return;/' src/game/engine/engine-onfoot.ts
+  it("when the same trip is made with the host saying it is the open world, then his driver's door swings past 0.5 rad", () => {
+    const host = rig.engine["onFoot"]["host"];
+    const asked = host.openWorld;
+    host.openWorld = () => true;
+    try {
+      expect(widestOverGettingOut(), "the door's widest angle (rad)").toBeGreaterThan(0.5);
+    } finally {
+      host.openWorld = asked;
+      rig.engine["onFoot"].reset();
+      rig.cars()[0]!.setDoorOpen(DRIVER_SIDE, 0);
+    }
+  });
+
+  /** He starts out of car 0 with the host saying it is the open world; 10 frames in (the door part open) a reset ends the trip. `openAfter`: whether the host still says open world after it; `shutByReset`: the reset also shuts the door, as a respawn does. The door's angle (rad) before the reset, just after it, and 0.5 s later. */
+  function doorAcrossReset(openAfter: boolean, shutByReset: boolean): { opened: number; left: number; later: number } {
+    const host = rig.engine["onFoot"]["host"];
+    const asked = host.openWorld;
+    const car = rig.cars()[0]!;
+    host.openWorld = () => true;
+    try {
+      rig.press("Enter");
+      rig.run(10 * FRAME);
+      const opened = Math.abs(car.doorAngle(DRIVER_SIDE));
+      host.openWorld = openAfter ? () => true : asked;
+      rig.engine["onFoot"].reset();
+      if (shutByReset) car.setDoorOpen(DRIVER_SIDE, 0);
+      const left = Math.abs(car.doorAngle(DRIVER_SIDE));
+      rig.run(FRAME);
+      const first = Math.abs(car.doorAngle(DRIVER_SIDE));
+      rig.run(0.5);
+      return { opened, left: shutByReset ? first : left, later: Math.abs(car.doorAngle(DRIVER_SIDE)) };
+    } finally {
+      host.openWorld = asked;
+      rig.engine["onFoot"].reset();
+      car.setDoorOpen(DRIVER_SIDE, 0);
+    }
+  }
+
+  // mutation: sed -i 's/^    if (!this.host.openWorld() || !this.host.runsCars()) {/    if (false) {/' src/game/engine/engine-onfoot.ts
+  it("when a trip that opened his door is ended by a reset in a scene that is not the open world, then the door is not written again", () => {
+    const { opened, left, later } = doorAcrossReset(false, false);
+    expect(opened, "control: the door was open at the reset (rad)").toBeGreaterThan(0.3);
+    expect(later, "the door's angle 0.5 s later (rad)").toBeCloseTo(left, 2);
+  });
+
+  // mutation: sed -i 's/^    if (this.doorTarget === 0) this.door = Math.min(this.door, Math.abs(car.doorAngle(DRIVER_SIDE)));/    void car;/' src/game/engine/engine-onfoot.ts
+  it("when a reset ends the trip in the open world and shuts the door itself, then the swing does not open it again from where it last left it", () => {
+    const { opened, left, later } = doorAcrossReset(true, true);
+    expect(opened, "control: the door was open at the reset (rad)").toBeGreaterThan(0.3);
+    expect(left, "the door's angle a frame after the reset (rad)").toBe(0);
+    expect(later, "the door's angle 0.5 s later (rad)").toBe(0);
+  });
+
+  it("when a reset ends the trip in the open world and leaves the door as it stood, then the door is sent shut", () => {
+    const { opened, later } = doorAcrossReset(true, false);
+    expect(opened, "control: the door was open at the reset (rad)").toBeGreaterThan(0.3);
+    expect(later, "the door's angle 0.5 s later (rad)").toBeLessThan(0.02);
   });
 
   it("when his driver has been thrown out in a crash and the seat is still on the car, then the control offers nothing and does nothing, and with the driver back in it offers to get out", () => {

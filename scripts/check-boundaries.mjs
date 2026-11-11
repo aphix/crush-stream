@@ -45,6 +45,7 @@ const SCENE_GRAPH = /^(Mesh|InstancedMesh|SkinnedMesh|Object3D|Scene|Group|Line|
 // queries they call. Their bodies allocate nothing.
 const HOT = {
   "src/game/present/shop-spill.ts": ["update"],
+  "src/game/engine/engine-onfoot.ts": ["swingDoor"],
   "src/game/engine/engine.ts": ["tickInner", "fixedStep", "scheduleSkins", "flushVisibleSkins", "updateCamera"],
   "src/game/engine/engine-core.ts": ["puffEngine", "fleetClosing", "contactEta"],
   "src/game/engine/engine-scenes.ts": ["stepDerby", "stackLookY"],
@@ -89,7 +90,7 @@ const HOT = {
   "src/game/present/paint-scratch.ts": ["frame", "draw", "touch", "sameStroke", "radiusOf", "growRect", "stamp"],
   "src/game/ai/civilians/civilian-leg.ts": ["legPose", "legPositionAt", "waitedWalk", "evadeAlarm"],
   "src/game/world/openworld/openworld-stoops.ts": ["liftFeet", "leadsToDoor", "keepOut"],
-  "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "separate", "liftWalkers", "keepOverlaidOut", "laneShare", "noteContacts", "startBump", "writeActivity", "mayPush", "raisePush", "watchApproach", "raiseDangers", "raiseAmbulanceCalls", "raiseBearingPush", "logPair", "logHostEvent", "appendLog", "queueForBrain", "advanceBrain", "raiseCrimes", "postBatch", "findHits", "hasLooseBody"],
+  "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "separate", "liftWalkers", "keepOverlaidOut", "laneShare", "noteContacts", "startBump", "writeActivity", "mayPush", "raisePush", "watchApproach", "raiseDangers", "raiseAmbulanceCalls", "raiseBearingPush", "logPair", "logHostEvent", "appendLog", "queueForBrain", "advanceBrain", "raiseCrimes", "postBatch", "findHits", "findPunches", "hasLooseBody"],
   "src/game/ai/civilians/civilian-look-word.ts": ["lookOf"],
   "src/game/ai/civilians/civilian-separation.ts": ["resolve", "list", "buildPairs", "addPair", "relax", "pushApart", "move"],
   "src/game/ai/civilians/civilian-contact.ts": ["carGap", "comingAt"],
@@ -144,6 +145,8 @@ const HOT = {
   "src/game/present/walker-floor.ts": ["under", "pace", "stand", "solidsHeight"],
   "src/game/present/walker-gait.ts": ["restHeight", "clearHeight"],
   "src/game/world/stairs.ts": ["heightAt", "flightHeightAt"],
+  "src/game/present/ragdoll-throw.ts": ["meetWalkers"],
+  "src/game/present/ragdoll-walker.ts": ["stagger", "rootSpeedAlong"],
 };
 const KNOB_CONTEXTS = new Set(["kernel", "world", "deform", "vehicle", "contact", "scenes", "ai"]);
 const MAX_FILE_LINES = 800;

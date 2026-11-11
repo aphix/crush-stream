@@ -5,7 +5,8 @@ import { blankEjection } from "../vehicle/ejection.ts";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { ownLook } from "../present/driver-look.ts";
-import { OnFootRig } from "./engine-onfoot.test-util.ts";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
+import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
 const LINK = "#scene=openworld&seed=beef";
 /** Seconds the traffic needs to stand its first kerb cars (its first passes show every space in reach). */
@@ -218,5 +219,30 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(rig.engine["seat"].carIndex, "he is back in his first car").toBe(0);
     expect(rig.engine["race"].self).toBe(0);
     expect(world().canEnter(target), "the kerb car he left is empty again").toBe(true);
+  });
+
+  // mutation: sed -i '/^    this.swingDoor(wallDt);/d' src/game/engine/engine-onfoot.ts
+  it("when he gets out in the open world, then his driver's door swings open and shuts once he has walked off; when he gets back in, it opens and shuts behind him", () => {
+    const car = rig.cars()[rig.engine["seat"].carIndex]!;
+    const widestOver = (frames: number): number => {
+      let widest = 0;
+      for (let f = 0; f < frames; f++) {
+        rig.run(FRAME);
+        widest = Math.max(widest, Math.abs(car.doorAngle(DRIVER_SIDE)));
+      }
+      return widest;
+    };
+    rig.press("Enter");
+    expect(widestOver(54), "the door's widest angle while he got out (rad)").toBeGreaterThan(0.5);
+    expect(rig.phase(), "he is out").toBe("onFoot");
+    rig.walkTo(rig.beside(car, 6.5, 0), 1, 15);
+    rig.run(1);
+    expect(Math.abs(car.doorAngle(DRIVER_SIDE)), "shut once he has walked off").toBeLessThan(0.02);
+    rig.walkToDoor(car);
+    rig.press("Enter");
+    expect(widestOver(42), "the door's widest angle while he got in").toBeGreaterThan(0.5);
+    rig.run(1);
+    expect(rig.phase(), "he is in").toBe("inCar");
+    expect(Math.abs(car.doorAngle(DRIVER_SIDE)), "shut behind him").toBeLessThan(0.02);
   });
 });
