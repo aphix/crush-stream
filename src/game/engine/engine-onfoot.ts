@@ -384,11 +384,17 @@ export class OnFootDirector {
   /** Once a frame: the door eases to where it is going. It is sent shut once he is seated, once the trip ends any other way, or once he has walked `DOOR_CLOSE_DISTANCE` from it. */
   private swingDoor(wallDt: number): void {
     if (this.doorCar < 0) return;
+    if (!this.host.openWorld() || !this.host.runsCars()) {
+      this.doorCar = -1;
+      return;
+    }
     const car = this.host.cars()[this.doorCar];
     if (!car) {
       this.doorCar = -1;
       return;
     }
+    // A door the crash or a reset moved is eased from where it stands, not from where this swing last left it.
+    if (this.doorTarget === 0) this.door = Math.min(this.door, Math.abs(car.doorAngle(DRIVER_SIDE)));
     const phase = this.flow.phase;
     if (this.doorTarget > 0 && phase !== "exiting" && phase !== "entering") {
       if (phase !== "onFoot") this.doorTarget = 0;
