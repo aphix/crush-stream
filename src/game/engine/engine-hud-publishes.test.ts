@@ -83,7 +83,8 @@ describe("given the real engine in the open world, the HUD subscribed to its sto
 
   it("when a setting changes, then the HUD hears of it", () => {
     const before = notifications;
-    engine.setNight(!hud.get().night);
+    // Wet, not night: the open world's night follows its hour and ignores the night setting.
+    engine.setWet(!hud.get().wet);
     runSeconds(engine, 1);
     expect(notifications - before, "notifications after a setting changed").toBeGreaterThanOrEqual(1);
   });
