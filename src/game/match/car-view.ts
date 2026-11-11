@@ -19,10 +19,10 @@ function carDamage(car: DeformableCar): number {
  * The resolutions a gauge is published at, finer than its display can show (the speed digits are whole km/h or mph; the dial's needle, the damage arc, the nitro bar and its glow move a pixel or so in a step), so the HUD
  * changes, and React renders, only when something on screen does, not on every float the sim writes.
  */
-const SPEED_STEP_KPH = 1;
-const DIAL_STEP = 0.01;
-const BOOSTING_STEP = 0.05;
-const DRIFT_SECONDS_STEP = 0.05;
+const SPEED_STEP_KPH = 1; // steps per km/h
+const DIAL_STEP = 100; // steps per unit
+const BOOSTING_STEP = 20;
+const DRIFT_SECONDS_STEP = 20; // steps per second
 
 /** A cue or a hold (0-1) at the resolution a bar shows. */
 export function gaugeLevel(level: number): number {
