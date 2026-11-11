@@ -173,11 +173,6 @@ export class OpenWorldBodies {
       this.host.steer(slot, yaw, 0);
       return;
     }
-    // Her spot was swerved round a stoop: the body keeps her walk's heading, so it does not turn sideways after a spot that is only drawn round the steps.
-    if (poses.kept[civilian] === 1) {
-      this.host.steer(slot, yaw, pace);
-      return;
-    }
     // Her own velocity plus a pull toward her spot: the body faces where she goes, and her spot only bends that (a heading taken from the bearing to a spot a hand's breadth away swings with every step).
     const vx = detSin(yaw) * pace + CATCH_UP * dx;
     const vz = detCos(yaw) * pace + CATCH_UP * dz;
