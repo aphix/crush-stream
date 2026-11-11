@@ -144,6 +144,8 @@ const HOT = {
   "src/game/present/walker-floor.ts": ["under", "pace", "stand", "solidsHeight"],
   "src/game/present/walker-gait.ts": ["restHeight", "clearHeight"],
   "src/game/world/stairs.ts": ["heightAt", "flightHeightAt"],
+  "src/game/present/ragdoll-throw.ts": ["meetWalkers"],
+  "src/game/present/ragdoll-walker.ts": ["stagger", "rootSpeedAlong"],
 };
 const KNOB_CONTEXTS = new Set(["kernel", "world", "deform", "vehicle", "contact", "scenes", "ai"]);
 const MAX_FILE_LINES = 800;

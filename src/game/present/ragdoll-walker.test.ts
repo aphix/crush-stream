@@ -125,3 +125,50 @@ describe("given a walker asked to go", () => {
     });
   }
 });
+
+describe("given a walker and a man standing still 2 m ahead of him", () => {
+  const STANDER = 0;
+  /** The player walks along +x at `command` toward a man standing at x = 2, for `seconds`. */
+  function meet(command: number, seconds: number): void {
+    system.startWalker(new THREE.Vector3(2, 0, 0), -Math.PI / 2, { cop: false, look: driverLook(1, 0) }, STANDER);
+    frames(system, 1);
+    frames(system, seconds, () => {
+      system.walker.heading = Math.PI / 2;
+      system.walker.command = command;
+      system.walker.ask();
+    });
+  }
+
+  it("when he walks into the man at 1.4 m/s, then after 2 s both are on their feet (guard)", () => {
+    meet(1.4, 2);
+    expect([system.walker.state, system.walkers[STANDER]!.state]).toEqual(["stand", "stand"]);
+  });
+
+  // mutation: sed -i 's/this.loco.yaw, this.command));/this.loco.yaw, 0));/' src/game/present/ragdoll-walker.ts
+  it("when he walks into the man at 1.4 m/s, then he reaches him and pushes him on without felling him: his torso is past x 1.5 and the man's past x 2.1", () => {
+    meet(1.4, 2);
+    expect(system["dolls"][WALKER]!.bodies[0]!.translation().x, "his torso's x").toBeGreaterThan(1.5);
+    expect(system["dolls"][STANDER]!.bodies[0]!.translation().x, "the man's torso's x").toBeGreaterThan(2.1);
+    expect(system.walkers[STANDER]!.state, "the man pushed").toBe("stand");
+  });
+
+  // mutation: sed -i 's/^        if (!knocksDown(FIGURE_KG, closing)) continue;/        continue;/' src/game/present/ragdoll-throw.ts
+  it("when he runs into the man at 3.5 m/s, then the man is knocked down and the runner is on his feet", () => {
+    meet(3.5, 1.2);
+    expect(system.walkers[STANDER]!.state, "the man run into").not.toBe("stand");
+    expect(system.walker.state, "the runner").toBe("stand");
+  });
+});
+
+describe("given a walker standing on a floor 4 m up", () => {
+  // mutation: sed -i 's/height - this.floor.level < FALL_HEIGHT/height < FALL_HEIGHT/' src/game/present/ragdoll-walker.ts
+  it("when his torso is half a metre over that floor, then he is fallen; at 0.9 m over it he is not", () => {
+    const walker = system.walker;
+    const doll = system["dolls"][WALKER]!;
+    walker["floor"].level = 4;
+    walker["decideState"](doll, 1, 4.9, FRAME);
+    expect(walker.state, "0.9 m over his floor").toBe("stand");
+    walker["decideState"](doll, 1, 4.5, FRAME);
+    expect(walker.state, "0.5 m over his floor").toBe("down");
+  });
+});
