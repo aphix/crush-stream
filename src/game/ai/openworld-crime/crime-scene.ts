@@ -11,6 +11,7 @@ import { CRIME_HZ, CRIME_STEP_SECONDS, FOOT_COP_COUNT, GRID_EPSILON, HEARD_COP_D
 import { FootLaw } from "./foot-law.ts";
 import type { CrossingSignals, LawPorts, LineOfSight, OffenceSource } from "./offence-source.ts";
 import { PatrolCars, type PatrolCarPorts } from "./patrol-cars.ts";
+import type { ArrestCars } from "./arrests.ts";
 
 /** What the law needs of the engine. */
 export interface CrimePorts extends LawPorts {
@@ -18,6 +19,8 @@ export interface CrimePorts extends LawPorts {
   playerBusted(carIndex: number, seconds: number): void;
   /** The traffic's cars for the law to lease; null: the law is on foot. */
   cars: PatrolCarPorts | null;
+  /** The cars an arrest rides in when the law has no patrol cars of its own (a client's view of the host's); null: none. */
+  rides: ArrestCars | null;
   /** The course's solids the patrol cars bend round; null: they drive straight at their aim. */
   obstacles: Obstacles | null;
   /** Seconds a human is held slow beside a patrol car before the bust (Survival's hold). */
@@ -50,7 +53,7 @@ export class CrimeScene {
 
   constructor(map: OpenWorldMap, source: OffenceSource, ports: CrimePorts, seed: number) {
     this.ports = ports;
-    this.law = new FootLaw(map, source, ports, { opened: (caseIndex, x, z) => this.patrol?.dispatchToScene(caseIndex, x, z, this.law.seconds), closed: (caseIndex) => this.patrol?.finishCase(caseIndex, this.law.seconds), cars: () => this.patrol }, seed, { lineOfSight: ports.lineOfSight, signals: ports.signals, otherCopsSee: (x, z, range) => this.patrol?.sees(x, z, range, ports.lineOfSight) ?? false }, ports.playerBustSeconds);
+    this.law = new FootLaw(map, source, ports, { opened: (caseIndex, x, z) => this.patrol?.dispatchToScene(caseIndex, x, z, this.law.seconds), closed: (caseIndex) => this.patrol?.finishCase(caseIndex, this.law.seconds), cars: () => this.patrol, rides: () => this.patrol ?? ports.rides }, seed, { lineOfSight: ports.lineOfSight, signals: ports.signals, otherCopsSee: (x, z, range) => this.patrol?.sees(x, z, range, ports.lineOfSight) ?? false }, ports.playerBustSeconds);
     this.patrol = ports.cars === null ? null : new PatrolCars(ports.cars, { arrived: (caseIndex, x, z) => this.law.carCopArrived(caseIndex, x, z), busted: (resident, carIndex, seconds) => this.bustDriver(resident, carIndex, seconds), delivered: (slot) => this.law.carDelivered(slot) }, ports.obstacles, ports.playerBustSeconds, seed);
   }
 

@@ -61,6 +61,10 @@ export interface LawPorts {
   jaywalked(resident: number, seconds: number): void;
   /** Foot cop `cop` run down by a car. */
   copDown(cop: number, seconds: number): void;
+  /** The arrested `resident` (`ARREST_PLAYER_RESIDENT` for the player on foot) and her cop got into patrol car `carIndex` of the engine's list at crowd second `seconds`, and it drives off. */
+  rode(resident: number, carIndex: number, seconds: number): void;
+  /** The patrol car `carIndex` is at the station and the arrested `resident` gets out of it at crowd second `seconds`. */
+  alighted(resident: number, carIndex: number, seconds: number): void;
   /** The player on foot was held slow beside a cop long enough: his arrest is the engine's. */
   footArrest: FootArrestPorts;
 }

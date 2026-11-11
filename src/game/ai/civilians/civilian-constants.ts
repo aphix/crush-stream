@@ -162,8 +162,11 @@ export const CAST_TITLE_BASE = 100;
  * Inside the brain a civilian pair is one subject, victim + capacity * (other + 1). A `copDown` (a car knocked a foot cop down; subject: the cop) is the police's: it rides the log and the brain drops it.
  * An `ambulance` (someone run down has stayed down long enough for a call; subject: them) makes the nearest person out at a door the caller; a `danger` (a crash, or a car heading at someone; subject: the walk-graph node nearest) alarms those who see it.
  * An `ambulanceStage` (the ambulance changed state or car; subject: its car index times 4 plus its state) tells a client where the ambulance is, which it has no traffic to know: it rides the log and the brain drops it.
+ * An `arrestRide` (an arrested resident and her cop got into a patrol car, which now drives off) and an `arrestAlight` (the car is at the station and they get out) are each two triples of the same seconds: the resident, then the engine's index of the car. A client reads them to seat and unseat the pair (its own law has no patrol cars); the player on foot's arrest names `ARREST_PLAYER_RESIDENT`. The brain drops both kinds.
  */
-export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9, ambulance: 10, danger: 11, ambulanceStage: 12, car: 13 } as const;
+export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9, ambulance: 10, danger: 11, ambulanceStage: 12, car: 13, arrestRide: 14, arrestAlight: 15 } as const;
+/** The resident an `arrestRide` or `arrestAlight` names for the player on foot's arrest (the wire's subject is 16 bits: no resident is this). */
+export const ARREST_PLAYER_RESIDENT = 65535;
 /** A fight's bearing that is none (two civilians face each other; a car is not faced). */
 export const NO_BEARING = -1;
 /** `RESIDENT_INT.fightPartner` when the other fighter is a human player on foot (-1 is none, or a car). */

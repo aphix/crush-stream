@@ -53,13 +53,16 @@ describe("given the open world's director", () => {
     const { director } = directorWith({ traffic: idleTrafficPorts(), law: idleLawPorts() });
     expect(director["traffic"], "the traffic is up").not.toBeNull();
     expect(director["law"]!.patrolling, "the law has the traffic's cars").toBe(true);
+    expect(director["law"]!["rides"], "it has the traffic's own, none to hear").toBeNull();
   });
 
   // mutation: in src/game/engine/engine-openworld.ts makeLaw(), change `traffic: () => this.traffic,` to `traffic: () => null,`
-  it("when there is no traffic (a client's director, or a harness without cars), then the police are on foot", () => {
+  // mutation: sed -i 's/this.rides = traffic === null ? new ArrestRides/this.rides = traffic !== null ? new ArrestRides/' src/game/engine/engine-openworld-law.ts
+  it("when there is no traffic (a client's director, or a harness without cars), then the police are on foot until a ride is heard", () => {
     const { director } = directorWith({ law: idleLawPorts() });
     expect(director["law"], "the law is made").not.toBeNull();
     expect(director["law"]!.patrolling, "with no cars to patrol in").toBe(false);
+    expect(director["law"]!["rides"], "the host's cars are its to hear").not.toBeNull();
   });
 
   // mutation: in src/game/engine/engine-openworld.ts makeLaw(), delete the line `if (extra === undefined) return null;`

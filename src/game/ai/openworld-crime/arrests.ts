@@ -18,12 +18,19 @@ export function stationOf(map: OpenWorldMap): Station | null {
   return place === undefined ? null : { x: map.graph.nodeX[place.doorNode]!, z: map.graph.nodeZ[place.doorNode]! };
 }
 
+/** The patrol car side of an arrest: the host's `PatrolCars`, or a client's view of the cars the host has them in (`ArrestRides`). */
+export type ArrestCars = Pick<PatrolCars, "carForArrest" | "doorSpot" | "isStill" | "openDoor" | "convey" | "finishRide" | "carIndexOf">;
+
 /** What an arrest asks of the law around it. */
 interface ArrestHooks {
   /** The suspect of subject slot `slot` of case `caseIndex` is at the station: the host's arrest of her. */
   raise(caseIndex: number, slot: number): void;
-  /** The law's patrol cars; null when it has none (a client's). */
-  cars(): PatrolCars | null;
+  /** The law's cars for an arrest; null when it has none. */
+  cars(): ArrestCars | null;
+  /** The suspect of subject slot `slot` and her cop have got into car `carIndex` of the engine's list, which drives off. */
+  rode(slot: number, carIndex: number): void;
+  /** The car `carIndex` is at the station and the suspect of subject slot `slot` gets out of it. */
+  alighted(slot: number, carIndex: number): void;
 }
 
 /**
@@ -51,6 +58,20 @@ export class Arrests {
   /** Whether an arrest ends at a police station (so the host's arrest is raised there, not at the cuffs). */
   get endsAtStation(): boolean {
     return this.station !== null;
+  }
+
+  /** A client heard the host's pair board car `carIndex`: the suspect `resident`, if she is being led away here, and her cop are in it (off the street) till `alight`. False when she is not led away or the car has no door here. */
+  rideHeard(resident: number, carIndex: number, seconds: number): boolean {
+    const { table } = this;
+    const slot = table.subjectOf[resident] ?? -1;
+    if (slot < 0 || table.mode[slot] !== SUBJECT_MODE.escorted || !this.hooks.cars()?.doorSpot(carIndex, this.door)) return false;
+    table.carOf[slot] = carIndex;
+    table.mode[slot] = SUBJECT_MODE.conveyed;
+    table.since[slot] = seconds;
+    const cop = table.holder[slot]!;
+    this.cops.ride(cop);
+    this.sendOtherCopsBack(Math.floor(slot / SUBJECTS_PER_CASE), cop);
+    return true;
   }
 
   /** Cop `cop` takes hold of the suspect in subject slot `slot`: she turns her back to him and he steps in `ARREST.cuffBehind` behind her. */
@@ -192,6 +213,7 @@ export class Arrests {
       table.mode[slot] = SUBJECT_MODE.conveyed;
       table.since[slot] = seconds;
       cops.ride(cop);
+      this.hooks.rode(slot, cars.carIndexOf(car));
       this.sendOtherCopsBack(Math.floor(slot / SUBJECTS_PER_CASE), cop);
       return;
     }
@@ -213,6 +235,7 @@ export class Arrests {
     for (let slot = 0; slot < table.mode.length; slot++) {
       if (table.mode[slot] !== SUBJECT_MODE.conveyed || table.carOf[slot] !== carSlot || !cars.doorSpot(carSlot, this.door)) continue;
       this.takeToDoor(slot, table.holder[slot]!, seconds, SUBJECT_MODE.alighting);
+      this.hooks.alighted(slot, cars.carIndexOf(carSlot));
     }
   }
 
