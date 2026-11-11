@@ -185,6 +185,23 @@ export function streetTreePieces(skin: StreetTreeSkin): Piece[] {
   return pieces;
 }
 
+/** The tree seen from far: the trunk's bands and the canopy's lumps only (no pit, ivy or limbs), at the same scale as `streetTreePieces`. */
+export function streetTreeFarPieces(skin: StreetTreeSkin): Piece[] {
+  const form = STREET_TREE_FORMS[streetTreeKindOf(skin)];
+  const pieces: Piece[] = [];
+  const top = new THREE.Vector3(form.trunkLean, form.trunkHeight, 0);
+  const bands = form.bark.length;
+  for (let band = 0; band < bands; band++) {
+    const from = top.clone().multiplyScalar(band / bands);
+    const to = top.clone().multiplyScalar((band + 1) / bands);
+    const radius = (share: number): number => form.rootRadius + (form.topRadius - form.rootRadius) * share;
+    pieces.push([rod(from, to, radius(band / bands), radius((band + 1) / bands), TRUNK_SIDES), form.bark[band]!, MAT.TREE_BARK]);
+  }
+  for (const [index, leaves] of form.canopy.entries()) pieces.push([lump(leaves, index), leaves[6], MAT.CONIFER_FOLIAGE]);
+  for (const [geometry] of pieces) geometry.scale(1 / TREE_SCALE, 1 / TREE_SCALE, 1 / TREE_SCALE);
+  return pieces;
+}
+
 /** The street tree a placement's `style` names (its kind, its drawn turn and size), null for any other: a tree of every other course has no style and draws as ever. */
 export function treeOf(p: Pick<Placed, "prefab" | "style">): StreetTree | null {
   return p.prefab === PREFAB.tree ? streetTreeOf(p.style) : null;

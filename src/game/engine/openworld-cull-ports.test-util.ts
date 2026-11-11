@@ -30,7 +30,7 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     signsOn: () => false,
     makeSigns: () => ({ update: () => {}, dispose: () => {} }),
     cull: idleCullPorts(),
-    makeFacades: () => ({ dispose: () => {} }),
+    makeFacades: () => ({ frame: () => {}, stop: () => {}, dispose: () => {} }),
     setDayHour: () => {},
     strikeWalker: () => {},
   };

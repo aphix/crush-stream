@@ -25,6 +25,8 @@ function restMatrix(p: Placed, pose: DrawnPose | null, out: THREE.Matrix4): THRE
  * its own bounds (a scenery asset's group is its kind and family in a wider cell, `assetDrawGroupOf`); each placement at its slot: standing where it was put, a knocked one where the dummies' world has it
  * tumbling (`RagdollSystem.knockProp` moves it, `place`). A course's (`TrackArt`) and the Lab's (`LabArt`) props.
  */
+import type { BandCell } from "./far-band.ts";
+
 export class PropTumble {
   private readonly placed: readonly Placed[];
   /** Per prefab and cell: its parts' meshes. */
@@ -101,6 +103,17 @@ export class PropTumble {
         }),
       );
     }
+  }
+
+  /** The cells holding `prefab`: each one's centre and width, its first part's mesh and its second part's (null when it has one), for `FarBand`. */
+  bandCells(prefab: PrefabId): BandCell[] {
+    const out: BandCell[] = [];
+    for (const [g, group] of this.groups.entries()) {
+      if (group.prefab !== prefab) continue;
+      const meshes = this.meshes[g]!;
+      out.push({ x: group.ix * group.size, z: group.iz * group.size, size: group.size, near: meshes[0]!, far: meshes[1] ?? null });
+    }
+    return out;
   }
 
   /** Draw placement `index` with its base at `base`, turned `q`; its cell's bounds grow to hold it wherever it flies (no allocation). */

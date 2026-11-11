@@ -50,6 +50,7 @@ import { RagdollBodyHost } from "./ragdoll-body-host.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
+import { PREFAB } from "../world/constants.ts";
 import { LAYOUT, OW_DRAW_CELL } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
@@ -91,6 +92,7 @@ import { NetPlay } from "../net/net-play.ts";
 import { RaceDirector } from "./engine-race.ts";
 import { ReelDirector } from "./engine-highlights.ts";
 import { PodiumDirector } from "./engine-podium.ts";
+import { FarBand, KIT_DETAIL_M, TREE_NEAR_M } from "../present/far-band.ts";
 import { TrackArt } from "../present/track-art.ts";
 import { reliefForTier } from "../present/surface-relief.ts";
 import { EngineGarage } from "./engine-garage.ts";
@@ -229,6 +231,8 @@ export class CrashEngine extends EngineGarage {
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
   protected readonly deviceClass: DeviceClass;
+  /** The course art `buildArt` last made: the open world's far bands read its trees. */
+  private courseArt: TrackArt | null = null;
 
   constructor(canvas: HTMLCanvasElement, hudStore: HudStore, veil: HTMLElement) {
     super();
@@ -455,7 +459,20 @@ export class CrashEngine extends EngineGarage {
         const kit = new FacadeBays(homeFrontages(map.places.filter((place) => place.doorNode >= 0)), OW_DRAW_CELL);
         this.scene.add(kit.group);
         this.queueWarm();
-        return kit;
+        const band = this.deviceClass === "desktop" ? "desktop" : "phone";
+        const trees = new FarBand([...(this.courseArt?.props.bandCells(PREFAB.tree) ?? []), ...(this.courseArt?.scenery.bandCells(PREFAB.tree) ?? [])], TREE_NEAR_M[band]);
+        const details = new FarBand(kit.bandCells(), KIT_DETAIL_M[band]);
+        return {
+          frame: (x, z) => {
+            trees.frame(x, z);
+            details.frame(x, z);
+          },
+          stop: () => {
+            trees.stop();
+            details.stop();
+          },
+          dispose: () => kit.dispose(),
+        };
       },
       makeArt: (capacity) => {
         const art = new CivilianArt(this.deviceClass === "desktop" ? NEAR_SLOTS.desktop : NEAR_SLOTS.phone, capacity);
@@ -654,6 +671,7 @@ export class CrashEngine extends EngineGarage {
         this.queueWarm();
         const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, SCENERY_SHARE[this.cine.tier]), reliefForTier(this.cine.tier, this.cine.marks.phone));
         this.ragdolls.setCourse(track, placed, art.props, arm);
+        this.courseArt = art;
         return art;
       },
       markBounds: (minX, minZ, maxX, maxZ) => this.cine.marks.setBounds(minX, minZ, maxX, maxZ),

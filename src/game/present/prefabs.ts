@@ -9,7 +9,7 @@ import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monument
 import { frontBumper, lyingWheel, parkedCar } from "./prefabs-car.ts";
 import { bushParts, flowerParts } from "./prefabs-foliage.ts";
 import { streetKitParts } from "./prefabs-street.ts";
-import { streetTreePieces } from "./street-trees.ts";
+import { streetTreeFarPieces, streetTreePieces } from "./street-trees.ts";
 import { isStreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
 import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMaterials } from "./scenery-assets-art.ts";
 import { PREFAB } from "../world/constants.ts";
@@ -745,7 +745,9 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials, skin: Skin = nu
     case PREFAB.rock:
       return one(rock(), mats.nature);
     case PREFAB.tree:
-      return isStreetTreeSkin(skin) ? one(streetTreePieces(skin), mats.leaves) : one(tree(), mats.nature);
+      return isStreetTreeSkin(skin)
+        ? [...one(streetTreePieces(skin), mats.leaves), { geometry: painted(streetTreeFarPieces(skin)), material: mats.nature, shared: false, shadow: false }]
+        : one(tree(), mats.nature);
     case PREFAB.building:
     case PREFAB.buildingShell:
     case PREFAB.stucco: {
