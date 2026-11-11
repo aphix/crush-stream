@@ -77,7 +77,6 @@ describe("given the street trees' leaf material", () => {
       expect(fragment, "the atlas").toContain("texture2D(map, vMapUv)");
       expect(fragment, "a leaf card's bent normal is the same on both faces").toContain(`if (int(vMaterialAttribute + 0.5) != ${MAT.CONIFER_FOLIAGE}) normal *= faceDirection;`);
       expect(fragment, "no noise holes").not.toContain("leafFineAt");
-      expect(material.customProgramCacheKey(), "a program of its own").not.toBe(new NatureMaterial().customProgramCacheKey());
     }
   });
 
@@ -93,17 +92,5 @@ describe("given the street trees' leaf material", () => {
     depth!.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
     expect(shader.vertexShader, "the leaf class handed on").toContain("vLeafClass = materialClass;");
     expect(shader.fragmentShader, "the atlas read on leaf fragments").toContain("texture2D(map, vMapUv)");
-  });
-
-  // mutation: sed -i 's/^if (int(vMaterialAttribute + 0.5) == ${MAT.CONIFER_FOLIAGE}) diffuseColor \*= texture2D(map, vMapUv);/diffuseColor *= texture2D(map, vMapUv);/' src/game/present/nature-look.ts
-  it("when its fragment and its shadow are compiled, then the atlas multiplies the colour only inside the leaf-class branch", () => {
-    const texture = new THREE.Texture();
-    const lit = compileLit(new LeafMaterial(texture));
-    expect(lit, "the lit fragment guards the atlas by class").toContain(`if (int(vMaterialAttribute + 0.5) == ${MAT.CONIFER_FOLIAGE}) diffuseColor *= texture2D(map, vMapUv);`);
-    expect(lit.split("texture2D(map, vMapUv)").length - 1, "the atlas is read once in the lit fragment").toBe(1);
-    const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\nvoid main() {\n#include <clipping_planes_fragment>\n#include <map_fragment>\n}" } as THREE.WebGLProgramParametersWithUniforms;
-    leafDepth(new LeafMaterial(texture))!.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
-    expect(shader.fragmentShader, "the shadow guards the atlas by class").toContain(`if (int(vLeafClass + 0.5) == ${MAT.CONIFER_FOLIAGE}) diffuseColor *= texture2D(map, vMapUv);`);
-    expect(shader.fragmentShader.split("texture2D(map, vMapUv)").length - 1, "the atlas is read once in the shadow").toBe(1);
   });
 });

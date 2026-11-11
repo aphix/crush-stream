@@ -19,8 +19,6 @@ const SHAPE: Record<LeafSpecies, { count: number; size: number; lobes: number }>
 /** A cherry's spray has this many green leaves under its petals, each this wide a share of the cell. */
 const CHERRY_LEAVES = 6;
 const CHERRY_LEAF_SIZE = 0.11;
-/** An oval leaf's half-width as a share of its length. */
-const OVAL_WIDTH = 0.4;
 
 /** Each species' two atlas cells as uv rects `[u0, v0, du, dv]` (v up), the clear gutter left out. */
 export const LEAF_CELLS: Record<LeafSpecies, readonly (readonly [number, number, number, number])[]> = Object.fromEntries(
@@ -33,7 +31,7 @@ export const LEAF_CELLS: Record<LeafSpecies, readonly (readonly [number, number,
 function leafPath(ctx: CanvasRenderingContext2D, width: number, lobes: number): void {
   ctx.beginPath();
   if (lobes === 0) ctx.arc(0, 0, width / 2, 0, Math.PI * 2);
-  else if (lobes === 1) ctx.ellipse(0, 0, width * OVAL_WIDTH, width / 2, 0, 0, Math.PI * 2);
+  else if (lobes === 1) ctx.ellipse(0, 0, width * 0.4, width / 2, 0, 0, Math.PI * 2);
   else
     for (let point = 0; point < lobes * 2; point++) {
       const radius = point % 2 === 0 ? width / 2 : width * 0.28;
