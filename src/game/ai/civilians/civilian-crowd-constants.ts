@@ -30,6 +30,8 @@ export const DOWNED_LIFE_SECONDS = 120;
 /** A whole walking stride (both feet) covers this many metres: the guards' and the VIP's stride (`people.ts`). */
 const STRIDE_METRES = 1.5;
 export const STRIDE_RADIANS_PER_METRE = (2 * Math.PI) / STRIDE_METRES;
+/** A whole stride a second at most (runners take 170-180 steps a minute): past the civilians' walking stride a faster walker lengthens the stride instead of quickening it. */
+export const RUN_STRIDES_PER_SECOND = 1.45;
 
 /** A civilian's look word (`CrowdPoses.look`, written by the crowd, read by the drawing): a who-hash in bits 0-28, the woman bit (their gender) in 29, the species in 30-31 (`SPECIES` order). */
 export const LOOK = { hashMask: 0x1fffffff, womanShift: 29, speciesShift: 30, salt: 0x2545f491, hashShift: 15 } as const;

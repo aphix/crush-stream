@@ -1,8 +1,10 @@
 import * as THREE from "three";
+import type { Stoops } from "../world/openworld/openworld-stoops.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { DETAIL_KEEP_M, DETAIL_NEAR_M, FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLOATS, FIGURE_FLOATS, NEAR_DRAW, SIGHT_RADIUS, SLOT_KEEP_DISTANCE_SCALE, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
 import { dressOfLook, isPoliceLook, skinOfLook, writeLinearColour } from "./civilian-dress.ts";
 import { civilianFigures, type CivilianFigures } from "./civilian-figure.ts";
+import { WALK_SPEED } from "./walker-locomotion.ts";
 import { PoseSmoothing } from "./civilian-anim-smoothing.ts";
 import { poseCivilian } from "./civilian-pose.ts";
 import type { DriverLook } from "./driver-look.ts";
@@ -20,6 +22,8 @@ const KEEP_SLOT_SQUARED = SLOT_KEEP_DISTANCE_SCALE * SLOT_KEEP_DISTANCE_SCALE;
 const DETAIL_NEAR_SQUARED = DETAIL_NEAR_M * DETAIL_NEAR_M;
 const DETAIL_KEEP_SQUARED = DETAIL_KEEP_M * DETAIL_KEEP_M;
 const SHIRT_AT = 0;
+/** A far figure's gait amplitude is her brain's pace over a walk's, to this most (the near dummies' leg swing stops growing at the same 1.6). */
+const FIGURE_MAX_GAIT = 1.6;
 const TROUSERS_AT = FIGURE_FLOATS.COLOUR;
 const SKIN_AT = FIGURE_FLOATS.COLOUR * 2;
 
@@ -38,6 +42,8 @@ export class CivilianArt {
   private readonly capacity: number;
   /** What keeps a near civilian's pose from snapping when her activity or her walk changes. */
   private readonly smoothing: PoseSmoothing;
+  /** The rowhomes' stoops, set once the crowd has them: a civilian walking a door's spur has her feet on its treads. */
+  stoops: Stoops | null = null;
   private readonly slotCount: number;
   private readonly detailSlots: number;
   private readonly detailChunks: number;
@@ -214,7 +220,7 @@ export class CivilianArt {
       const civilian = this.nearList[k]!;
       const slot = this.slotOf[civilian]!;
       if (this.slotLook[slot] !== poses.look[civilian]) this.dressSlot(slot, poses.look[civilian]!);
-      poseCivilian(this.meshOf(slot), this.indexIn(slot), poses, civilian, this.smoothing);
+      poseCivilian(this.meshOf(slot), this.indexIn(slot), poses, civilian, this.smoothing, this.stoops);
     }
   }
 
@@ -278,7 +284,7 @@ export class CivilianArt {
     }
     const gaitAt = instance * FIGURE_FLOATS.GAIT;
     gaits[gaitAt] = poses.stride[civilian]!;
-    gaits[gaitAt + 1] = poses.speed[civilian]! > 0 ? 1 : 0;
+    gaits[gaitAt + 1] = Math.min(FIGURE_MAX_GAIT, poses.speed[civilian]! / WALK_SPEED);
   }
 }
 

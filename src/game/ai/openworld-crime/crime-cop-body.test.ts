@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { launch, pooledCar } from "../../contact/crash-scenarios.test-util.ts";
-import { STRIDE_RADIANS_PER_METRE } from "../civilians/civilian-crowd-constants.ts";
-import { COP_DOWN_SECONDS, COP_RUN_SPEED, COP_PATROL_SPEED, CRIME_STEP_SECONDS, RUN_STRIDES_PER_SECOND } from "./crime-constants.ts";
+import { RUN_STRIDES_PER_SECOND, STRIDE_RADIANS_PER_METRE } from "../civilians/civilian-crowd-constants.ts";
+import { COP_DOWN_SECONDS, COP_RUN_SPEED, COP_PATROL_SPEED, CRIME_STEP_SECONDS } from "./crime-constants.ts";
 import { COP_MODE } from "./foot-cops.ts";
 import { FootWalkers } from "./foot-walkers.ts";
 import { harness, lineCity, runFor, STEP_SECONDS } from "./crime-fixture.test-util.ts";

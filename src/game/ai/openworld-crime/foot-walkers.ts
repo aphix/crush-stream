@@ -2,9 +2,9 @@ import { detAtan2, hypot2 } from "../../kernel/physics-core.js";
 import { wrapPi } from "../../kernel/scalar.ts";
 import type { WalkGraph } from "../../world/openworld/walk-graph.ts";
 import type { LineOfSight } from "./offence-source.ts";
-import { STRIDE_RADIANS_PER_METRE } from "../civilians/civilian-crowd-constants.ts";
+import { RUN_STRIDES_PER_SECOND, STRIDE_RADIANS_PER_METRE } from "../civilians/civilian-crowd-constants.ts";
 import type { PathFinder } from "../civilians/walk-path.ts";
-import { MAX_ROUTE_NODES, RUN_STRIDES_PER_SECOND } from "./crime-constants.ts";
+import { MAX_ROUTE_NODES } from "./crime-constants.ts";
 
 /**
  * Cops and suspects as struct-of-arrays walkers on the sidewalk graph: one node route each, walked at a pace. Each grid step keeps where it began (`snapshot`), so the

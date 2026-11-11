@@ -6,6 +6,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { NEAR_SLOTS, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
 import { emptyPoses } from "./civilian-art.test-util.ts";
 import { PoseSmoothing } from "./civilian-anim-smoothing.ts";
+import { DOOR, STOOP } from "../world/openworld/openworld-facade-solids.ts";
+import { Stoops } from "../world/openworld/openworld-stoops.ts";
 import { poseCivilian } from "./civilian-pose.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 
@@ -25,9 +27,12 @@ const SEAT_TOP_M = 0.46;
 const poses = emptyPoses(DUMMIES);
 const meshes = Array.from({ length: Math.ceil(DUMMIES / SLOTS_PER_DUMMY_MESH) }, (_, chunk) => new DummyMesh(Math.min(SLOTS_PER_DUMMY_MESH, DUMMIES - chunk * SLOTS_PER_DUMMY_MESH)));
 const smoothing = new PoseSmoothing(DUMMIES);
+/** One rowhome's stoop at the origin facing +x: the odd civilians walk its spur up and down, so `plantOnTreads` solves their legs. */
+const stoops = new Stoops([{ x: 0, z: 0, yaw: 0, depth: 10, style: "federal", storeys: 3, variant: 0 }], [0]);
+const WALK_RATE = 0.05;
 let frames = 0;
 
-/** One frame: every dummy strides, her activity's clock runs, and each takes the next code every `ACTIVITY_FRAMES`, a partner beside her. */
+/** One frame: every dummy moves about, strides, her activity's clock runs, and each takes the next code every `ACTIVITY_FRAMES`, a partner beside her. */
 function frame(): void {
   smoothing.begin(frames + 1, CLOCK_STEP);
   const next = frames % ACTIVITY_FRAMES === 0;
@@ -40,9 +45,13 @@ function frame(): void {
     poses.activityClock[civilian] = poses.activityClock[civilian]! + CLOCK_STEP;
     poses.stride[civilian] = poses.stride[civilian]! + STRIDE_STEP;
     poses.speed[civilian] = civilian % 2;
+    poses.x[civilian] = STOOP.run * (0.5 + 0.5 * Math.sin(frames * WALK_RATE + civilian));
+    poses.z[civilian] = DOOR.across + 0.3 * Math.cos(frames * WALK_RATE + civilian);
+    poses.yaw[civilian] = frames * WALK_RATE + civilian;
+    poses.onSpur[civilian] = civilian % 2;
     poses.partner[civilian] = (civilian + 1) % DUMMIES;
     poses.surfaceY[civilian] = SEAT_TOP_M;
-    poseCivilian(meshes[Math.floor(civilian / SLOTS_PER_DUMMY_MESH)]!, civilian % SLOTS_PER_DUMMY_MESH, poses, civilian, smoothing);
+    poseCivilian(meshes[Math.floor(civilian / SLOTS_PER_DUMMY_MESH)]!, civilian % SLOTS_PER_DUMMY_MESH, poses, civilian, smoothing, stoops);
   }
   frames++;
 }

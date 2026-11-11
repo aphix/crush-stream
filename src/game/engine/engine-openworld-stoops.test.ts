@@ -22,3 +22,22 @@ describe("given the open world's director started on the real map", () => {
     for (const place of doors) expect(stoops!.leadsToDoor(place.doorNode, place.doorNode), place.name).toBe(hasStoop(place));
   });
 });
+
+describe("given the open world's director whose ports make an art that draws feet", () => {
+  // mutation: sed -i 's/^    if (this.art !== null) this.art.stoops = crowd.stoops;$/    void 0;/' src/game/engine/engine-openworld.ts
+  it("when it starts, then the crowd's art is given the crowd's stoops", () => {
+    const arts: { stoops?: unknown; dispose(): void }[] = [];
+    const director = new OpenWorldDirector({
+      ...idleOpenWorldPorts(),
+      makeArt: () => {
+        const art = { update: () => {}, dispose: () => {} };
+        arts.push(art);
+        return art;
+      },
+    });
+    director.startOpenWorld(map);
+    director.frame(FRAME_SECONDS);
+    expect(arts[0]!.stoops, "the first art made is the crowd's").toBe(director["crowd"]!.stoops);
+    expect(arts[0]!.stoops, "and they are there").not.toBeNull();
+  });
+});

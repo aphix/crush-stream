@@ -4,11 +4,17 @@ import { ACTIVITY, ACTIVITY_OPEN_ENDED } from "../ai/civilians/civilian-activity
 import { STRIDE_RADIANS_PER_METRE } from "../ai/civilians/civilian-crowd-constants.ts";
 import { neuroticismOf } from "../ai/civilians/civilian-temperament.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { DOOR, type Frontage, stoopStepRange } from "../world/openworld/openworld-facade-solids.ts";
+import { Stoops } from "../world/openworld/openworld-stoops.ts";
+import { CHANNELS } from "./civilian-anim-channels.ts";
 import type { ActivityPose } from "./civilian-anim.ts";
-import { PoseSmoothing } from "./civilian-anim-smoothing.ts";
-import { ankle, type Capture, clipAt, facing, gap, handTip, HEAD, hip, leaning, MINUS_X, PLUS_X, posed, TIGHT, TORSO } from "./civilian-anim.test-util.ts";
+import { MAX_LAG, MAX_TURN_RATE, PoseSmoothing, TELEPORT } from "./civilian-anim-smoothing.ts";
+import { ankle, type Capture, clipAt, facing, gap, handTip, HEAD, hip, leaning, MINUS_X, PLUS_X, posed, STANDING, TIGHT, TORSO } from "./civilian-anim.test-util.ts";
+import { WALK_SPEED as FULL_WALK_SPEED } from "./walker-locomotion.ts";
 
 const FRAME_SECONDS = 1 / FRAME_HZ;
+/** A 240 Hz display's frame rate: at it the turn-rate cap binds on a sharp corner (at 60 Hz the low-pass alone keeps under it). */
+const FAST_DISPLAY_HZ = 240;
 const WALK_SPEED = 1.4;
 const walkAt = (phase: number): Capture => posed({ stride: phase, speed: WALK_SPEED });
 const HALF_TURN = Math.PI;
@@ -202,5 +208,200 @@ describe("given a flinch from a crash by the calmest and the jumpiest of 256 peo
   it("when the calm one flinches, then her hands rise less than the jumpy one's", () => {
     const hands = (look: number): number => handTip(flinchAt(look, peakClock(look)), PLUS_X).y;
     expect(hands(CALM)).toBeLessThan(hands(JUMPY) - 0.05);
+  });
+});
+
+/** Civilian 0 driven through `frames` frames of `dt` s: each frame the brain's pose is `brain(frame)`, `PoseSmoothing.walk` draws it, and `seen` reads what was drawn. */
+function drive(dt: number, frames: number, brain: (frame: number, pose: ActivityPose) => void, seen: (pose: ActivityPose, frame: number) => void): void {
+  const smoothing = new PoseSmoothing(1);
+  const channels = new Float64Array(CHANNELS);
+  const pose: ActivityPose = { ...STANDING };
+  for (let frame = 0; frame < frames; frame++) {
+    smoothing.begin(frame + 1, dt);
+    brain(frame, pose);
+    smoothing.walk(0, pose);
+    smoothing.apply(0, ACTIVITY.none, 1, channels);
+    seen(pose, frame);
+  }
+}
+
+describe("given a civilian whose brain walks east, then turns a corner to walk north", () => {
+  const DT = 1 / FAST_DISPLAY_HZ;
+  const EAST = Math.PI / 2;
+  const TURN_AT = 120;
+  const brain = (frame: number, pose: ActivityPose): void => {
+    const after = Math.max(0, frame - TURN_AT);
+    pose.x = (Math.min(frame, TURN_AT) * 1.5) * DT;
+    pose.z = after * 1.5 * DT;
+    pose.yaw = frame < TURN_AT ? EAST : 0;
+    pose.speed = 1.5;
+  };
+
+  // mutation: sed -i 's/const reach = MAX_TURN_RATE \* this.frameSeconds;/const reach = 1e9;/' src/game/present/civilian-anim-smoothing.ts
+  it("when she is drawn, then her facing turns at most MAX_TURN_RATE a second, as fast as that at first, and ends facing north", () => {
+    let last = EAST;
+    let fastest = 0;
+    let yaw = EAST;
+    drive(DT, TURN_AT + 240, brain, (pose, frame) => {
+      if (frame > 0) fastest = Math.max(fastest, Math.abs(pose.yaw - last));
+      last = pose.yaw;
+      yaw = pose.yaw;
+    });
+    expect(fastest, "the most she turned in one frame").toBeLessThanOrEqual(MAX_TURN_RATE * DT + 1e-9);
+    expect(fastest, "she turns as fast as she may when the corner is sharp").toBeGreaterThan(MAX_TURN_RATE * DT * 0.99);
+    expect(Math.abs(yaw), "her facing a second after").toBeLessThan(0.01);
+  });
+});
+
+describe("given a civilian who stands and then is set off east at 1.5 m/s by her brain", () => {
+  const DT = FRAME_SECONDS;
+  const STAND_FRAMES = 60;
+  const brain = (speed: number) => (frame: number, pose: ActivityPose) => {
+    const walked = Math.max(0, frame - STAND_FRAMES + 1);
+    pose.x = walked * speed * DT;
+    pose.speed = frame < STAND_FRAMES ? 0 : speed;
+  };
+
+  // mutation: sed -i 's/this.drawnSpeed\[civilian\]! += (metres \/ this.frameSeconds - this.drawnSpeed\[civilian\]!) \* this.posShare;/this.drawnSpeed[civilian] = pose.speed;/' src/game/present/civilian-anim-smoothing.ts
+  it("when she is drawn, then her drawn speed is under 1.5 for the first 0.3 s and has reached it by the end, and she is never over MAX_LAG behind", () => {
+    let fastestEarly = 0;
+    let lag = 0;
+    let finalSpeed = 0;
+    const walk = brain(1.5);
+    drive(DT, STAND_FRAMES + 120, walk, (pose, frame) => {
+      const since = frame - STAND_FRAMES;
+      if (since >= 0 && since < 0.3 / DT) fastestEarly = Math.max(fastestEarly, pose.speed);
+      const brainPose = { ...pose };
+      walk(frame, brainPose);
+      lag = Math.max(lag, brainPose.x - pose.x);
+      finalSpeed = pose.speed;
+    });
+    expect(fastestEarly, "her drawn speed in the first 0.3 s").toBeLessThan(1.5);
+    expect(finalSpeed, "her drawn speed two seconds on").toBeGreaterThan(1.4);
+    expect(lag, "the furthest she is behind (m)").toBeLessThanOrEqual(MAX_LAG);
+  });
+
+  // mutation: sed -i 's/const behind = Math.min(left, MAX_LAG);/const behind = left;/' src/game/present/civilian-anim-smoothing.ts
+  it("when her brain sprints at 4 m/s, then she is never over MAX_LAG behind, and is that far behind at full speed", () => {
+    let lag = 0;
+    const sprint = brain(4);
+    drive(DT, STAND_FRAMES + 120, sprint, (pose, frame) => {
+      const brainPose = { ...pose };
+      sprint(frame, brainPose);
+      lag = Math.max(lag, brainPose.x - pose.x);
+    });
+    expect(lag, "the furthest she is behind (m)").toBeLessThanOrEqual(MAX_LAG + 1e-9);
+    expect(lag, "the furthest she is behind (m)").toBeGreaterThan(MAX_LAG - 0.01);
+  });
+
+  // mutation: sed -i 's/Math.min(STRIDE_RADIANS_PER_METRE, RUN_RADIANS_PER_SECOND \/ (speed + STILL_SPEED))/STRIDE_RADIANS_PER_METRE/' src/game/present/civilian-anim-smoothing.ts
+  it("when her brain sprints, then her stride quickens no faster than a runner's strides a second, and at a walk it goes the civilians' radians a metre", () => {
+    const rate = (speed: number): number => {
+      const marks: number[] = [];
+      const walk = brain(speed);
+      drive(DT, STAND_FRAMES + 180, walk, (pose, frame) => void (frame === STAND_FRAMES + 119 || frame === STAND_FRAMES + 179 ? marks.push(pose.stride) : 0));
+      return marks[1]! - marks[0]!;
+    };
+    expect(rate(4), "radians over the second at a sprint").toBeCloseTo(2 * Math.PI * 1.45, 0);
+    expect(rate(1.5), "radians over the second at a walk").toBeCloseTo(1.5 * STRIDE_RADIANS_PER_METRE, 0);
+  });
+});
+
+describe("given a civilian drawn standing whose brain puts her five metres away in one frame", () => {
+  // mutation: sed -i 's/gap > TELEPORT/gap > 1e9/' src/game/present/civilian-anim-smoothing.ts
+  it("when the next frame is drawn, then she is there at once, facing as the brain says", () => {
+    expect(TELEPORT, "a jump this far is no walk").toBeLessThan(5);
+    let drawn = -1;
+    let facingYaw = -1;
+    drive(
+      FRAME_SECONDS,
+      10,
+      (frame, pose) => {
+        pose.x = frame < 5 ? 0 : 5;
+        pose.yaw = frame < 5 ? 0 : 1;
+      },
+      (pose, frame) => {
+        if (frame !== 5) return;
+        drawn = pose.x;
+        facingYaw = pose.yaw;
+      },
+    );
+    expect(drawn, "drawn x").toBe(5);
+    expect(facingYaw, "drawn facing").toBe(1);
+  });
+});
+
+describe("given the walk at different paces", () => {
+  const reach = (speed: number): number => ankle(posed({ stride: QUARTER_TURN, speed }), MINUS_X).z - ankle(posed({ stride: QUARTER_TURN, speed }), PLUS_X).z;
+
+  // mutation: sed -i 's/const legGain = Math.min(LEG_GAIT_CEILING, Math.max(LEG_GAIT_FLOOR, gait));/const legGain = 1;/' src/game/present/civilian-anim.ts
+  it("when she goes at half a walk, a walk or two walks, then her legs swing less, the same, more (the full swing at FULL_WALK_SPEED, the limits 0.3 and 1.6 of it)", () => {
+    expect(reach(FULL_WALK_SPEED / 2), "half a walk").toBeLessThan(reach(FULL_WALK_SPEED) * 0.75);
+    expect(reach(FULL_WALK_SPEED * 2), "twice a walk").toBeGreaterThan(reach(FULL_WALK_SPEED) * 1.3);
+    expect(reach(FULL_WALK_SPEED * 6), "a sprint: the limit").toBeCloseTo(reach(FULL_WALK_SPEED * 2), 6);
+  });
+
+  // mutation: sed -i 's/channels\[CHANNEL.torsoPitch\] = LEAN_PER_GAIT/channels[CHANNEL.torsoPitch] = 0 * LEAN_PER_GAIT/' src/game/present/civilian-anim.ts
+  it("when she goes at a walk she stands upright, and at two walks she leans into it", () => {
+    expect(Math.abs(leaning(posed({ stride: 1, speed: FULL_WALK_SPEED }), TORSO).z), "at a walk").toBeLessThan(0.01);
+    expect(Math.abs(leaning(posed({ stride: 1, speed: FULL_WALK_SPEED * 2 }), TORSO).z), "at two walks").toBeGreaterThan(0.1);
+  });
+
+  // mutation: sed -i 's/pose.speed > WALKING_ABOVE) fillWalk/pose.speed > 0) fillWalk/' src/game/present/civilian-anim.ts
+  it("when her speed is 0.04 m/s, then she stands: no stride shows", () => {
+    expect(gap(posed({ stride: 1.3, speed: 0.04 }), posed({ stride: 1.3, speed: 0 })).distance, "the most a part moved").toBe(0);
+  });
+
+  /** Every centre and rotation, each times its place in the list, summed in order: it changes with any bit of any one. Taken from the walk before the gait was scaled by pace. */
+  const fingerprint = (body: Capture): number => {
+    let sum = 0;
+    let at = 0;
+    for (let part = 0; part < body.centres.length; part++) {
+      const centre = body.centres[part]!;
+      const turn = body.turns[part]!;
+      for (const value of [centre.x, centre.y, centre.z, turn.x, turn.y, turn.z, turn.w]) sum += value * ++at;
+    }
+    return sum;
+  };
+
+  // mutation: sed -i 's/const kneeGain = KNEE_BEND_FLOOR + (1 - KNEE_BEND_FLOOR) \* gait;/const kneeGain = 0.5;/' src/game/present/civilian-anim.ts
+  it("when she goes at exactly a walk's pace, then she is posed bit for bit as the walk was before the pace scaled it", () => {
+    expect(fingerprint(posed({ stride: 1.3, speed: FULL_WALK_SPEED })), "stride 1.3").toBe(770.0065236694766);
+    expect(fingerprint(posed({ stride: 2.9, speed: FULL_WALK_SPEED })), "stride 2.9").toBe(800.1037109422696);
+  });
+});
+
+describe("given a civilian walking on the third tread of a stoop's steps, up its door's spur", () => {
+  const STEP_3 = stoopStepRange(3);
+  const HOUSE: Frontage = { x: 0, z: 0, yaw: 0, depth: 10, style: "federal", storeys: 3, variant: 0 };
+  const stoops = new Stoops([HOUSE], [0]);
+  const spotX = new Float32Array(1);
+  const spotZ = new Float32Array(1);
+  const spotY = new Float32Array(1);
+  const treadAt = (x: number, z: number): number => {
+    spotX[0] = x;
+    spotZ[0] = z;
+    stoops.liftFeet(spotX, spotZ, spotY, 0);
+    return spotY[0]!;
+  };
+  const onTread = { x: (STEP_3.near + STEP_3.far) / 2, z: DOOR.across, yaw: QUARTER_TURN, speed: FULL_WALK_SPEED };
+
+  // mutation: sed -i 's/^  if (pose.onSpur) plantOnTreads(pose);$/  void 0;/' src/game/present/civilian-anim.ts
+  it("when a foot is planted (its leg straight, the walk's mid-stance), then its ankle stands at that tread's height, to the millimetre, and no further ahead", () => {
+    for (const [side, stride] of [[MINUS_X, HALF_TURN], [PLUS_X, 0]] as const) {
+      const flat = ankle(posed({ ...onTread, stride }), side);
+      const planted = ankle(posed({ ...onTread, stride, onSpur: true, stoops }), side);
+      const tread = treadAt(flat.x, flat.z);
+      expect(tread, `side ${side}: the tread under the foot is a step up`).toBeGreaterThan(0.2);
+      expect(Math.abs(planted.y - flat.y - tread), `side ${side}: how far the ankle is off the tread's height`).toBeLessThan(0.001);
+      expect(Math.abs(planted.x - flat.x) + Math.abs(planted.z - flat.z), `side ${side}: how far the ankle moved along the ground`).toBeLessThan(0.001);
+    }
+  });
+
+  // mutation: sed -i 's/if (pose.onSpur) plantOnTreads/if (true) plantOnTreads/' src/game/present/civilian-anim.ts
+  it("when she walks on level ground (not the spur, or no stoops), then no foot is lifted", () => {
+    const flat = ankle(posed({ ...onTread, stride: HALF_TURN }), MINUS_X);
+    expect(ankle(posed({ ...onTread, stride: HALF_TURN, onSpur: true, stoops: null }), MINUS_X).y, "no stoops").toBe(flat.y);
+    expect(ankle(posed({ ...onTread, stride: HALF_TURN, onSpur: false, stoops }), MINUS_X).y, "not on the spur").toBe(flat.y);
   });
 });

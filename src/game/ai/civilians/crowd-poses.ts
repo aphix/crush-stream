@@ -22,6 +22,8 @@ export type CrowdPoses = {
   partner: Int32Array;
   /** World y her feet stand on (m): the floor, a stoop step. */
   feetY: Float32Array;
+  /** 1 for a resident whose walk now is the spur of a stoop's door: the only walkers a stoop lifts, and whose feet the drawing plants on the treads. */
+  onSpur: Uint8Array;
 };
 
 export function createCrowdPoses(capacity: number): CrowdPoses {
@@ -39,6 +41,7 @@ export function createCrowdPoses(capacity: number): CrowdPoses {
     activityLeft: new Float32Array(capacity).fill(ACTIVITY_OPEN_ENDED),
     partner: new Int32Array(capacity).fill(-1),
     feetY: new Float32Array(capacity),
+    onSpur: new Uint8Array(capacity),
     surfaceY: new Float32Array(capacity),
   };
 }
