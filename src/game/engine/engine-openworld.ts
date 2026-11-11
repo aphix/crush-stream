@@ -370,6 +370,7 @@ export class OpenWorldDirector {
       this.bodies?.step(crowd.poses, this.ray.eyeX, this.ray.eyeZ, crowd.crowdSeconds, wallDt);
       this.law?.throwTakedowns();
       this.hearAmbulance(crowd);
+      this.law?.hearRides();
       this.clientDoors.frame(crowd.poses, this.ports.cars());
     }
     this.ports.eye(this.ray);

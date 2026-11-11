@@ -4,6 +4,7 @@ import { NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { createCrowdPoses, type CrowdPoses } from "../civilians/crowd-poses.ts";
 import { CRIME_HZ, FOOT_COP_COUNT } from "./crime-constants.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
+import type { ArrestCars } from "./arrests.ts";
 import { CrimeScene, type CrimePorts } from "./crime-scene.ts";
 import { FakeStreet } from "./crime-street.test-util.ts";
 import type { FootArrestPorts, LineOfSight, Spot, Walk } from "./offence-source.ts";
@@ -155,6 +156,9 @@ export class FixtureOffences {
 
 export type Bust = { resident: number; seconds: number };
 
+/** The host's word that `resident` and her cop boarded or left patrol car `car` at crowd second `seconds`. */
+export type Ride = { resident: number; car: number; seconds: number };
+
 /** Signals that show every crossing one way: `against` true, a walker on any crossing crosses against them. */
 export class FixtureSignals {
   against = false;
@@ -172,6 +176,9 @@ export type Harness = {
   jaywalks: Bust[];
   /** Foot cops the host's hit test ran down (cop number and crowd second), and the engine's cars it tests. */
   copDowns: Bust[];
+  /** The rides and alightings the host told the engine of. */
+  rodes: Ride[];
+  alighteds: Ride[];
   /** The crowd seconds the player on foot was busted at, where his cop led him on the way, the patrol cars that took him (engine indexes) and where he was set down. */
   footBusts: number[];
   footLed: Spot[];
@@ -188,7 +195,7 @@ export type Harness = {
 /** A building standing across the street between these x (m): it blocks every sight line that passes it. */
 export type Wall = { minX: number; maxX: number };
 
-export type HarnessOptions = { seed?: number; withCars?: boolean; authority?: boolean; wall?: Wall; station?: boolean };
+export type HarnessOptions = { seed?: number; withCars?: boolean; authority?: boolean; wall?: Wall; station?: boolean; rides?: ArrestCars };
 
 /** Sight lines along the line city past `wall`. */
 function sightPast(wall: Wall): LineOfSight {
@@ -201,6 +208,8 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
   const busts: Bust[] = [];
   const jaywalks: Bust[] = [];
   const copDowns: Bust[] = [];
+  const rodes: Ride[] = [];
+  const alighteds: Ride[] = [];
   const footBusts: number[] = [];
   const footLed: Spot[] = [];
   const footTaken: number[] = [];
@@ -215,6 +224,8 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
     },
     jaywalked: (resident, seconds) => void jaywalks.push({ resident, seconds }),
     copDown: (cop, seconds) => void copDowns.push({ resident: cop, seconds }),
+    rode: (resident, car, seconds) => void rodes.push({ resident, car, seconds }),
+    alighted: (resident, car, seconds) => void alighteds.push({ resident, car, seconds }),
     footArrest: {
       busted: (seconds) => void footBusts.push(seconds),
       led: (x, z) => void footLed.push({ x, z }),
@@ -224,13 +235,14 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
     signals,
     playerBusted: (carIndex) => void playerBusts.push(carIndex),
     cars: street,
+    rides: options.rides ?? null,
     obstacles: null,
     playerBustSeconds: 12,
     lineOfSight: options.wall === undefined ? null : sightPast(options.wall),
   };
   const scene = new CrimeScene(lineCity(options.station ?? false), offences, ports, options.seed ?? 7);
   for (let cop = 0; cop < FOOT_COP_COUNT - 1; cop++) scene.foot.walkers.place(cop, copX[cop] ?? 0, 0);
-  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, copDowns, footBusts, footLed, footTaken, footDelivered, cars: [], signals, playerBusts, street, now: 0, authority: options.authority ?? true };
+  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, copDowns, rodes, alighteds, footBusts, footLed, footTaken, footDelivered, cars: [], signals, playerBusts, street, now: 0, authority: options.authority ?? true };
 }
 
 /** The player's arrest ports for a harness that does not look at them. */

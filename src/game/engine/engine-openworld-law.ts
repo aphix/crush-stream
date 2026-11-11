@@ -12,6 +12,7 @@ import type { FootArrestPorts, LineOfSight } from "../ai/openworld-crime/offence
 import { StateOffenceSource } from "../ai/openworld-crime/state-offence-source.ts";
 import { TrafficPatrolPorts, type TrafficApi } from "../ai/openworld-crime/traffic-patrol-ports.ts";
 import { TrafficSignals } from "../ai/openworld-crime/traffic-signals.ts";
+import { ArrestRides } from "./engine-openworld-arrest-rides.ts";
 import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
@@ -60,6 +61,8 @@ export class OpenWorldLaw {
   private readonly ports: LawEnginePorts;
   private readonly art: CopArt;
   private readonly unlisten: (() => void) | null;
+  /** A client's view of the host's patrol cars (it has no traffic); null where the law has the traffic's own. */
+  private readonly rides: ArrestRides | null;
   private readonly body = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
   /** The way he last moved (a unit vector): which way he faces while he stands still. */
   private facingX = 0;
@@ -70,6 +73,7 @@ export class OpenWorldLaw {
     this.crowd = crowd;
     this.ports = ports;
     const traffic = ports.traffic();
+    this.rides = traffic === null ? new ArrestRides(() => ports.cars()) : null;
     this.scene = new CrimeScene(
       map,
       new StateOffenceSource(crowd, map),
@@ -77,10 +81,12 @@ export class OpenWorldLaw {
         bust: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.bust, resident, seconds),
         jaywalked: (resident, seconds) => crowd.raiseEvent(EVENT_KIND.jaywalk, resident, seconds),
         copDown: (cop, seconds) => crowd.raiseEvent(EVENT_KIND.copDown, cop, seconds),
+        rode: (resident, carIndex, seconds) => this.logRide(EVENT_KIND.arrestRide, resident, carIndex, seconds),
+        alighted: (resident, carIndex, seconds) => this.logRide(EVENT_KIND.arrestAlight, resident, carIndex, seconds),
         footArrest: ports.footArrest,
         // Every peer builds the signals from the layout (the traffic is the host's only), so every peer's cops see the same jaywalkers.
         signals: new TrafficSignals(buildRoadNetwork(openWorldGeometry(LAYOUT))),
-        playerBusted: ports.playerBusted, cars: traffic === null ? null : new TrafficPatrolPorts(traffic, ports.sirens), obstacles: ports.solids(), playerBustSeconds: SURVIVAL.bustTime,
+        playerBusted: ports.playerBusted, cars: traffic === null ? null : new TrafficPatrolPorts(traffic, ports.sirens), rides: this.rides, obstacles: ports.solids(), playerBustSeconds: SURVIVAL.bustTime,
         lineOfSight: ports.lineOfSight,
       },
       seed,
@@ -157,6 +163,17 @@ export class OpenWorldLaw {
     for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) {
       if (log[at] === EVENT_KIND.copDown) this.scene.hearCopDown(log[at + 1]!, log[at + 2]!);
     }
+  }
+
+  /** A client, once a frame: the host's patrol car rides and alightings in the crowd's log, which seat and unseat the pairs its own law is walking to the station. */
+  hearRides(): void {
+    this.rides?.hear(this.crowd.eventLog(), this.scene.foot.arrests, this.scene.foot.seconds);
+  }
+
+  /** The host's ride or alighting in the crowd's log: the arrested resident, then the car (two entries of `kind` at one crowd second), which a client pairs. */
+  private logRide(kind: number, resident: number, carIndex: number, seconds: number): void {
+    this.crowd.raiseEvent(kind, resident, seconds);
+    this.crowd.raiseEvent(kind, carIndex, seconds);
   }
 
   /** Draws the foot cops. */

@@ -2,12 +2,12 @@ import { hypot2 } from "../../kernel/physics-core.js";
 import type { FigureStrike } from "../../scenes/figure-strike.ts";
 import type { OpenWorldMap, WalkGraph } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "../civilians/civilian-clock.ts";
-import { FIGHT_PLAYER, NEVER_TICK } from "../civilians/civilian-constants.ts";
+import { ARREST_PLAYER_RESIDENT, FIGHT_PLAYER, NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { PathFinder } from "../civilians/walk-path.ts";
 import { CASE_KIND, CASE_PHASE, CaseTable, isHeldMode, SUBJECT_MODE } from "./case-table.ts";
 import { BUST_REACH, CAR_COP, COP_DOWN_SECONDS, COP_SIGHT, JAYWALK_GIVE_UP_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, PATROL_COPS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, SEARCH_SECONDS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
-import { Arrests, stationOf } from "./arrests.ts";
+import { Arrests, stationOf, type ArrestCars } from "./arrests.ts";
 import { FightRules } from "./fight-rules.ts";
 import { CrossingWatch } from "./crossing-watch.ts";
 import { PlayerLaw } from "./player-law.ts";
@@ -22,6 +22,8 @@ interface LawHooks {
   opened(caseIndex: number, x: number, z: number): void;
   closed(caseIndex: number): void;
   cars(): PatrolCars | null;
+  /** The cars an arrest rides in: the patrol cars, or on a client the host's (`ArrestRides`); null: none. */
+  rides(): ArrestCars | null;
 }
 
 /**
@@ -75,7 +77,9 @@ export class FootLaw {
     this.player = new PlayerLaw(this, this.crossings, senses.signals, playerBustSeconds);
     this.arrests = new Arrests(this.walkers, this.cops, this.table, map.graph, stationOf(map), {
       raise: (caseIndex, slot) => this.raiseArrest(caseIndex, slot),
-      cars: () => hooks.cars(),
+      cars: () => hooks.rides(),
+      rode: (slot, carIndex) => this.noteRide(slot, carIndex, true),
+      alighted: (slot, carIndex) => this.noteRide(slot, carIndex, false),
     });
     this.fights = new FightRules(this.table, this.cops, this.walkers, source, seed, this.stats);
   }
@@ -524,6 +528,14 @@ export class FootLaw {
     if (kind === CASE_KIND.player) this.player.deliver(slot);
     else if (kind === CASE_KIND.jaywalk) this.ports.jaywalked(resident, this.seconds);
     else this.ports.bust(resident, this.seconds);
+  }
+
+  /** The host's word that the arrested of subject slot `slot` and her cop got into (`boarding`) or out of patrol car `carIndex`; the player on foot is named `ARREST_PLAYER_RESIDENT`. */
+  private noteRide(slot: number, carIndex: number, boarding: boolean): void {
+    if (!this.authority) return;
+    const resident = this.table.isPlayerSlot(slot) ? ARREST_PLAYER_RESIDENT : this.table.resident[slot]!;
+    if (boarding) this.ports.rode(resident, carIndex, this.seconds);
+    else this.ports.alighted(resident, carIndex, this.seconds);
   }
 
   /** Patrol car `carSlot` has come to the station: its riders get out at its door. */
