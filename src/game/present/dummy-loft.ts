@@ -76,7 +76,7 @@ export function loft(shell: Shell, mesh: Lofted): void {
     if (shell.rings[r]![0] > shell.rings[r - 1]![0]) throw new RangeError(`a shell's ring at y = ${shell.rings[r]![0]} is above the one before it (rings run top to bottom, else the shell is drawn inside out)`);
   }
   const sides = shell.sides;
-  const whole = shell.frontPower !== undefined;
+  const whole = shell.frontPower !== undefined || shell.fine === true;
   let step = whole ? 1 : Math.max(1, Math.floor(sides / COARSE_SIDES));
   while (sides % step !== 0) step--;
   const last = shell.rings.length - 1;
