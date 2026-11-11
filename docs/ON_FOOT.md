@@ -175,8 +175,10 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
 
 ## Known gaps
 
-- No seat blend or climb: he stands at the door for the 0.6 s entry and then is in the car; he appears at the door on the way out. Outside the open world the
-  door stays shut (it is sim, above), and the player's own driver is never drawn in his car (`driver-look.ts`).
+- No seat blend or climb: he stands at the door for the 0.6 s entry and then is in the car; he appears at the door on the way out. In the open world, on a machine
+  that runs the cars, the driver's door swings open as he gets out or in and shuts behind him (once seated, or once he is 4 m away): it is the car's real door,
+  set as a resident's is. In every other scene the door stays shut (the walker writes nothing to a car), and the player's own driver is never drawn in his car
+  (`driver-look.ts`).
 - His own car's driver door only, no passenger doors, no climbing in a window; another car, even a parked one, is not his to get into. In a minigame
   whose attempt needs the car moving, stepping out ends that attempt as stopping would.
 - The walker walks into car bodies like any dummy (cars are kinematic boxes in the dummy world): walk round to the door.

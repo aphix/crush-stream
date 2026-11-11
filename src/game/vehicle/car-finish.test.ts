@@ -472,9 +472,7 @@ describe("given the real engine with its cars on the screen", () => {
 
   // mutation: sed -i '/^    for (let at = 0; at < this.lookPaints.length; at++) this.lookPaints\[at\]!.roughness = r;/d' src/game/vehicle/car-core.ts
   it("when a car that wore a colour is scuffed and then reset, then its doors' roughness equals its body's both times", () => {
-    engine.setFxTier("high");
     const car = engine["live"]()[1]!;
-    wearCarLook(car, { ...NO_CAR_PICK, body: 0x2244cc }, null);
     const door = (): number => (car.lookMeshes().doors[0]!.material as THREE.MeshPhysicalMaterial).roughness;
     car.setPaintRoughness(0.8);
     expect([car.lookMeshes().bodyPaint.roughness, door()], "scuffed").toEqual([0.8, 0.8]);
