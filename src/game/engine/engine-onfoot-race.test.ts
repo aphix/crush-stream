@@ -61,6 +61,9 @@ describe("given the real engine in a race on the oval, the player at the wheel o
     rig.engine.raceCommand({ type: "resume" });
     expect(race().menuOpen, "and Resume puts him back on foot").toBe(false);
     expect(rig.phase(), "still on foot").toBe("onFoot");
+    // A walker who brushes a car stays on his feet, so he walks round the rival halted beside his door rather than through it.
+    rig.walkTo(rig.beside(own, 5, 8), 1, 45);
+    rig.walkTo(rig.beside(own, 5, -3), 1, 20);
     rig.getIn();
     const progress = row().progress;
     rig.hold("KeyW", 3);
