@@ -36,7 +36,9 @@ the `available` of `OnFootHost`). He gets back into his own car only: the one he
 - The walker writes nothing to a car. Not `driverOut` (that is a thrown-out driver: it rides the netplay snapshot and the highlight keyframes, makes
   the race's judge count the car a wreck and the HUD say DRIVER OUT, and the ejection watch skips the car), not `parked` (every drive call clears it), not
   the driver's door (an unlatched door at an angle is sim: the crash model hits it, and the clips record its hinge). The seated driver is left out of
-  the draw (`SeatedDrivers.sync`'s `away`), and the door stays shut.
+  the draw (`SeatedDrivers.sync`'s `away`). In the open world, on a machine that runs the cars, the driver's door swings open as he gets out or in and shuts
+  behind him (once seated, or once he is 4 m away): it is the car's real door, set as a resident's is. In every other scene the door stays shut (the walker
+  writes nothing to a car).
 - `CrashEngine.fixedStep` holds the car the walker left (`onFoot.away`) with the brake input outside a race, and takes it out of the derby AI's and the
   wreck coast's loops, as it does the car the player drives. In a race the director holds it itself (`RaceHost.afoot`, `RaceDirector.drive`), and the
   rules count it a human's car: `judge` does not call it dead for standing still, `aiDrives` is false so the stall check never asks for its respawn, and
@@ -175,8 +177,8 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
 
 ## Known gaps
 
-- No seat blend or climb: he stands at the door for the 0.6 s entry and then is in the car; he appears at the door on the way out. The door stays shut
-  (it is sim, above), and the player's own driver is never drawn in his car (`driver-look.ts`).
+- No seat blend or climb: he stands at the door for the 0.6 s entry and then is in the car; he appears at the door on the way out. Outside the open world the
+  door stays shut (it is sim, above), and the player's own driver is never drawn in his car (`driver-look.ts`).
 - His own car's driver door only, no passenger doors, no climbing in a window; another car, even a parked one, is not his to get into. In a minigame
   whose attempt needs the car moving, stepping out ends that attempt as stopping would.
 - The walker walks into car bodies like any dummy (cars are kinematic boxes in the dummy world): walk round to the door.

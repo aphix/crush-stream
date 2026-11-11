@@ -126,5 +126,7 @@ function firstWear(car: DeformableCar): Worn {
   for (const paint of [m.bodyPaint, w.hood, w.trunk, w.doors]) {
     applySpray(paint, w.uniforms, REST_FRAME_ATTRIBUTES, "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car-depth");
   }
+  car.adoptPaints([w.hood, w.trunk, w.doors]);
+  car.setPaintRoughness(m.bodyPaint.roughness);
   return w;
 }

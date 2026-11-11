@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
 /** The fleet's far cars wait this far out on the disc (m), out of the walker's way; the near one stands where he can walk to its door. */
@@ -59,6 +60,36 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     const before = own.group.position.z;
     rig.hold("KeyW", 2);
     expect(own.group.position.z - before, `he drove off: ${(own.group.position.z - before).toFixed(1)} m`).toBeGreaterThan(3);
+  });
+
+  /** The driver's door's widest angle (rad) over the 54 frames of getting out of car 0; he is out once they are run. */
+  function widestOverGettingOut(): number {
+    const car = rig.cars()[0]!;
+    let widest = 0;
+    rig.press("Enter");
+    for (let f = 0; f < 54; f++) {
+      rig.run(FRAME);
+      widest = Math.max(widest, Math.abs(car.doorAngle(DRIVER_SIDE)));
+    }
+    expect(rig.phase(), "he is out").toBe("onFoot");
+    return widest;
+  }
+
+  // mutation: sed -i 's/^    if (!this.host.openWorld() || !this.host.runsCars()) return;/    if (!this.host.runsCars()) return;/' src/game/engine/engine-onfoot.ts
+  it("when he gets out in the fleet, then his car's door is never written: the walker writes nothing to a car outside the open world (guard)", () => {
+    expect(widestOverGettingOut(), "the door's widest angle (rad)").toBe(0);
+  });
+
+  // mutation: sed -i 's/^    if (!this.host.openWorld() || !this.host.runsCars()) return;/    if (!this.host.runsCars() || this.host.openWorld()) return;/' src/game/engine/engine-onfoot.ts
+  it("when the same trip is made with the host saying it is the open world, then his driver's door swings past 0.5 rad", () => {
+    const host = rig.engine["onFoot"]["host"];
+    const asked = host.openWorld;
+    host.openWorld = () => true;
+    try {
+      expect(widestOverGettingOut(), "the door's widest angle (rad)").toBeGreaterThan(0.5);
+    } finally {
+      host.openWorld = asked;
+    }
   });
 
   it("when he walks to another car's driver door and presses the control, then he is told it is not his and stays out, and his own car's door lets him in", () => {
