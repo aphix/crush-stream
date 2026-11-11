@@ -362,7 +362,7 @@ describe("given the walk at different paces", () => {
     expect(gap(posed({ stride: 1.3, speed: 0.04 }), posed({ stride: 1.3, speed: 0 })).distance, "the most a part moved").toBe(0);
   });
 
-  /** Every centre and rotation, each times its place in the list, summed in order: it changes with any bit of any one. Taken from the walk before the gait was scaled by pace. */
+  /** Every centre and rotation, each times its place in the list, summed in order: it changes with any bit of any one. Taken from the walk before the gait was scaled by pace, re-pinned when the hips' drop went from 0.05 m to 0.03 m. */
   const fingerprint = (body: Capture): number => {
     let sum = 0;
     let at = 0;
@@ -376,8 +376,8 @@ describe("given the walk at different paces", () => {
 
   // mutation: sed -i 's/const kneeGain = KNEE_BEND_FLOOR + (1 - KNEE_BEND_FLOOR) \* gait;/const kneeGain = 0.5;/' src/game/present/civilian-anim.ts
   it("when she goes at exactly a walk's pace, then she is posed bit for bit as the walk was before the pace scaled it", () => {
-    expect(fingerprint(posed({ stride: 1.3, speed: FULL_WALK_SPEED })), "stride 1.3").toBe(770.0065236694766);
-    expect(fingerprint(posed({ stride: 2.9, speed: FULL_WALK_SPEED })), "stride 2.9").toBe(800.1037109422696);
+    expect(fingerprint(posed({ stride: 1.3, speed: FULL_WALK_SPEED })), "stride 1.3").toBe(779.0310030108496);
+    expect(fingerprint(posed({ stride: 2.9, speed: FULL_WALK_SPEED })), "stride 2.9").toBe(800.6600860899349);
   });
 });
 

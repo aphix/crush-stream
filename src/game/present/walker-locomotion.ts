@@ -19,7 +19,7 @@ const STAND_COMMAND = 0.05;
 /** How fast the acceleration itself may change (m/s³): a start and a stop ease in over about 0.05 s. */
 const JERK = 250;
 /** The speed closes on its target at this rate (1/s) once within reach of it, so it arrives without a kink. */
-const APPROACH = 30;
+const APPROACH = 50;
 /** Under this speed (m/s) with nothing asked he is stopped: the approach alone never reaches 0. */
 const STOP_SNAP = 0.05;
 
