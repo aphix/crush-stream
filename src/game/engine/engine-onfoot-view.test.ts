@@ -160,6 +160,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
 
   // mutation: sed -i '/^    if (e.pointerId === this.dragId || e.pointerId === this.pinchId) this.release(e, true);/d' src/game/present/engine-camera.ts
   it("when a press's release is lost and he presses and drags again, then the view turns by the drag and stays over his shoulder at his boom", () => {
+    rig.getOut();
     rig.run(SETTLE_S);
     const boom = view().orbitRadius;
     pointer("pointerdown", 100, 100);

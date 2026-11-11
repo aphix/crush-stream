@@ -793,12 +793,8 @@ export class ChaseCamera {
     this.dragging = false;
     this.lookDragging = false;
     this.canvas.style.cursor = CURSOR_GRAB;
-    try {
-      this.canvas.releasePointerCapture(e.pointerId);
-    } catch (err) {
-      // The browser refuses a pointer that is not captured: expected, anything else is not.
-      if (!(err instanceof DOMException)) throw err;
-    }
+    // A browser throws for a pointer that is not captured; test canvases may lack the method.
+    if (this.canvas.hasPointerCapture?.(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
     if (this.taking) {
       this.taking = false;
       this.take?.up(e.clientX, e.clientY, e.timeStamp, cancelled);
