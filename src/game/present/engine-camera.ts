@@ -793,12 +793,8 @@ export class ChaseCamera {
     this.dragging = false;
     this.lookDragging = false;
     this.canvas.style.cursor = CURSOR_GRAB;
-    try {
-      this.canvas.releasePointerCapture(e.pointerId);
-    } catch (err) {
-      // NotFoundError: the capture is already gone; anything else is a real fault.
-      if (!(err instanceof DOMException && err.code === DOMException.NOT_FOUND_ERR)) throw err;
-    }
+    // A browser throws for a pointer that is not captured; test canvases may lack the method.
+    if (this.canvas.hasPointerCapture?.(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
     if (this.taking) {
       this.taking = false;
       this.take?.up(e.clientX, e.clientY, e.timeStamp, cancelled);
