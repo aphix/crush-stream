@@ -265,8 +265,6 @@ export const TrackSchema = z
         paint: z.array(paint).default([]),
         /** The race camera's far plane (m): a course whose landmarks stand further off than the default sees them. */
         far: z.number().min(300).max(3000).default(900),
-        /** Width (m) of the draw cells the course's props and scenery assets are grouped in; absent: the default (`DRAW_CELLS`). */
-        drawCell: z.number().min(16).max(512).optional(),
         /** A picture painted on the sky past everything, centred on `bearing` (degrees from −z, the map's north, toward +x): none when absent. */
         backdrop: z
           .object({

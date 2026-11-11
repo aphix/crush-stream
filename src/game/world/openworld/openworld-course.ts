@@ -13,7 +13,6 @@ import {
   LOOP_STRAIGHT_STEP,
   OPENWORLD_BLURB,
   OPENWORLD_ID,
-  OW_DRAW_CELL,
   OPENWORLD_NAME,
   ROUTE_ID,
   SPAWN_FORMATION_BACK,
@@ -194,7 +193,6 @@ export function openWorldCourse(lots: Lots): TrackInput {
     traffic: { count: 0, lanes: [], routes: streetRoutes(geometry) },
     survival: spawnOf(geometry),
     environment: {
-      drawCell: OW_DRAW_CELL,
       sky: COURSE_LOOK.sky,
       fog: COURSE_LOOK.fog,
       terrain: SURFACE.concrete,

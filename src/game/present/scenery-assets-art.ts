@@ -371,12 +371,6 @@ function assetOf(p: Placed): number {
   return p.asset;
 }
 
-/** A sprite's per-instance fit: its width scale across the card and along its second quad (a solid sprite is drawn `1 / core` wider than its collider). */
-export function assetFit(p: Placed): readonly [number, number] {
-  const widen = p.prefab === PREFAB.assetStandee || p.prefab === PREFAB.assetCrossSolid ? 1 / SCENERY_ASSETS[assetOf(p)]!.core : 1;
-  return [p.prefab === PREFAB.assetCrossSolid ? (p.sz * widen) / p.sx : 1, widen];
-}
-
 /**
  * A copy of `geometry` with each of `list`'s placements' (indices into `placed`) cell rect and fit (a tile patch's layer and repeat) as per-instance attributes, in slot order. A solid
  * sprite's collider is its opaque core, so it is drawn `1 / core` wider than the placement's width (a cross-solid's second quad too, whatever its depth).
@@ -388,10 +382,13 @@ export function withAssetAttributes(geometry: THREE.BufferGeometry, placed: read
   const fit = new Float32Array(list.length * FIT_FLOATS);
   for (const [slot, index] of list.entries()) {
     const p = placed[index]!;
-    const [left, top, width, height] = assetCell(assetOf(p)).rect;
+    const asset = assetOf(p);
+    const [left, top, width, height] = assetCell(asset).rect;
     // The atlas rect's origin is the picture's top left, GL's v runs up the picture.
     rect.set([left, 1 - top - height, width, height], slot * RECT_FLOATS);
-    fit.set(assetFit(p), slot * FIT_FLOATS);
+    const widen = p.prefab === PREFAB.assetStandee || p.prefab === PREFAB.assetCrossSolid ? 1 / SCENERY_ASSETS[asset]!.core : 1;
+    fit[slot * FIT_FLOATS] = p.prefab === PREFAB.assetCrossSolid ? (p.sz * widen) / p.sx : 1;
+    fit[slot * FIT_FLOATS + 1] = widen;
   }
   instanced.setAttribute(ASSET_RECT, new THREE.InstancedBufferAttribute(rect, RECT_FLOATS));
   instanced.setAttribute(ASSET_FIT, new THREE.InstancedBufferAttribute(fit, FIT_FLOATS));

@@ -115,8 +115,7 @@ describe("given a plain and a solid asset of one kind and family standing in one
 
 describe("given every kind of asset in two families, a plain and a solid one of each, in several draw cells", () => {
   it("when the placements are built, then there is one mesh per draw group the scenery service counts", () => {
-    // mutation: sed -i 's/: assetDrawGroupOf(pl.asset, pl.x, pl.z, cells.asset);/: "x";/' src/game/present/prop-tumble.ts
-    // (the draw-group row: 1 mesh against 9 groups)
+    // mutation: sed -i 's/: assetDrawGroupOf(pl.asset, pl.x, pl.z);/: `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}`;/' src/game/present/prop-tumble.ts  (the draw-group row: 18 meshes against 9 groups)
     const placed: Placed[] = [];
     for (const kind of SOLID_KINDS) for (const asset of plainAndSolid(kind)) for (let column = 0; column < COLUMNS; column++) placed.push(placementOf(asset, column * COLUMN_SPACING));
     const meshes = tumbleOf(placed);

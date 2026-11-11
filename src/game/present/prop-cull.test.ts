@@ -4,15 +4,11 @@ import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { PREFAB, TRACK_ID } from "../world/constants.ts";
 import { placeCourse, type Placed } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
-import { openWorldCourse } from "../world/openworld/openworld-course.ts";
-import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { blankPoint, Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { PropTumble } from "./prop-tumble.ts";
-import { roofLiftAt } from "./facades.ts";
-import { ASSET_FIT } from "./scenery-assets-art.ts";
 import { TrackArt } from "./track-art.ts";
 
 /** The meshes the draw cells split: the placed props and the course's structures. */
@@ -99,65 +95,5 @@ describe("given a knockable cone standing behind the camera, its draw cell out o
     expect(shows(mesh), "knocked in front of the camera, it draws").toBe(true);
     props.reset();
     expect(shows(mesh), "back on its spot after the reset, its cell is culled again").toBe(false);
-  });
-});
-
-/** The facade shader lifts the vertices at and over this height (block y) with the roof (`FACADE_LIFT`). */
-const ROOF_FROM_Y = 13.9;
-/** Float noise in a sphere test (m). */
-const SPHERE_SLACK = 1e-3;
-
-describe("given a knockable cone in a 64 m draw cell", () => {
-  const plain = new THREE.MeshBasicMaterial();
-  const cone: Placed = { prefab: PREFAB.cone, x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 };
-  const eye = new THREE.PerspectiveCamera(LENS.fov, LENS.aspect, LENS.near, 900);
-  eye.position.set(0, 2, 100);
-  eye.lookAt(0, 1, 200);
-  eye.updateMatrixWorld();
-  const view = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(eye.projectionMatrix, eye.matrixWorldInverse));
-
-  // mutation: sed -i 's/if (was === 1) for/if (was === 3) for/' src/game/present/prop-tumble.ts
-  it("when a car knocks it into the view and the course resets, then its cell's bounds are its standing props' again", () => {
-    const meshes: THREE.InstancedMesh[] = [];
-    const props = new PropTumble([cone], plainMaterials(plain), (mesh) => meshes.push(mesh), undefined, undefined, undefined, { prop: 64, asset: 64 });
-    const mesh = meshes[0]!;
-    mesh.updateMatrixWorld();
-    expect(view.intersectsObject(mesh), "standing behind the camera, its cell is culled").toBe(false);
-    props.place(0, new THREE.Vector3(0, 0.5, 130), new THREE.Quaternion());
-    expect(view.intersectsObject(mesh), "knocked in front of the camera, it draws").toBe(true);
-    props.reset();
-    expect(view.intersectsObject(mesh), "back on its spot after the reset, its cell is culled again").toBe(false);
-  });
-});
-
-describe("given the open world's props drawn in the open world's draw cells", () => {
-  // mutation: sed -i 's/mesh.boundingSphere!.radius += pad;/mesh.boundingSphere!.radius += 0;/' src/game/present/prop-tumble.ts
-  it("when every instance's box is lifted by its roof's lift or widened by its sprite's fit, then it lies inside its mesh's bounding sphere", () => {
-    stubBrowser();
-    const track = new Track(parseTrack(openWorldCourse(layOutLots())));
-    const course = placeCourse(track);
-    const art = new TrackArt(track, course.placed, new WorldStage(new THREE.Scene()), course.drawn);
-    const matrix = new THREE.Matrix4();
-    const corner = new THREE.Vector3();
-    let worst = -Infinity;
-    for (const set of [art.props, art.scenery]) {
-      for (const mesh of set["meshes"].flat()) {
-        const position = mesh.geometry.getAttribute("position");
-        const facade = !Array.isArray(mesh.material) && mesh.material.userData.facadeStyle !== undefined;
-        const fit = mesh.geometry.getAttribute(ASSET_FIT);
-        const sphere = mesh.boundingSphere!;
-        for (let at = 0; at < mesh.count; at++) {
-          mesh.getMatrixAt(at, matrix);
-          const lift = facade ? roofLiftAt(matrix.elements[12]!, matrix.elements[14]!) : 0;
-          for (let v = 0; v < position.count; v++) {
-            const y = position.getY(v);
-            corner.set(position.getX(v) * (fit ? fit.getX(at) : 1), y + (y >= ROOF_FROM_Y ? lift : 0), position.getZ(v) * (fit ? fit.getY(at) : 1)).applyMatrix4(matrix);
-            worst = Math.max(worst, corner.distanceTo(sphere.center) - sphere.radius);
-          }
-        }
-      }
-    }
-    expect(worst, "the worst corner's distance outside its mesh's sphere (m)").toBeLessThanOrEqual(SPHERE_SLACK);
-    art.dispose();
   });
 });

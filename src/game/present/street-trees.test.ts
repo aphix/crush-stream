@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { MAT } from "../kernel/material-ids.ts";
-import { OW_DRAW_CELL, PARK, PARK_BLOCK } from "../world/openworld/openworld-constants.ts";
+import { PARK, PARK_BLOCK } from "../world/openworld/openworld-constants.ts";
 import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { BAY, drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
 import { distanceToPath, faceAt, inClearPath, outOf } from "../world/openworld/openworld-greenery.test-util.ts";
@@ -17,8 +17,7 @@ import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { cyl, painted, type Piece } from "./prefab-pieces.ts";
 import { prefabParts } from "./prefabs.ts";
 import { PropTumble } from "./prop-tumble.ts";
-import { drawCell } from "./track-mesh.ts";
-import { streetTreeFarPieces, streetTreePieces, treeOf } from "./street-trees.ts";
+import { streetTreePieces, treeOf } from "./street-trees.ts";
 
 /** The most a pit may stand proud of the paving (m), and the most of the ivy's height. */
 const PIT_TOP_MAX = 0.1;
@@ -182,8 +181,7 @@ describe("given a street tree's crown", () => {
 });
 
 describe("given the street trees drawn as instances", () => {
-  // mutation: sed -i 's/drawCell(pl.x, pl.z, cells.prop)/drawCell(pl.x, pl.z)/' src/game/present/prop-tumble.ts
-  it("when the course's trees are made into meshes, then each kind in each draw cell is one draw group whatever its facing, and each instance carries its own facing and size", () => {
+  it("when the course's trees are made into meshes, then each kind is one draw group whatever its facing, and each instance carries its own facing and size", () => {
     const meshes: THREE.InstancedMesh[] = [];
     const material = new THREE.MeshBasicMaterial();
     const tumble = new PropTumble(
@@ -193,11 +191,8 @@ describe("given the street trees drawn as instances", () => {
       () => false,
       (tree) => treeOf(tree)?.skin ?? null,
       treeOf,
-      { prop: OW_DRAW_CELL, asset: OW_DRAW_CELL },
     );
-    const groups = new Set(allPlaced.map((tree) => `${treeOf(tree)!.skin}@${drawCell(tree.x, tree.z, OW_DRAW_CELL)}`));
-    expect(groups.size, "draw cells wide enough to split the city").toBeGreaterThan(skins.length);
-    expect(meshes.length, "a near and a far mesh per skin and cell").toBe(groups.size * 2);
+    expect(meshes.length).toBe(skins.length);
     const matrix = new THREE.Matrix4();
     const turn = new THREE.Quaternion();
     const scale = new THREE.Vector3();
@@ -212,27 +207,5 @@ describe("given the street trees drawn as instances", () => {
       expect(scale.x, `size ${index}`).toBeCloseTo(tree.sx * pose.scale, ROTATION_DIGITS);
     }
     expect(new Set(allPlaced.map((tree) => treeOf(tree)!.yaw.toFixed(3))).size).toBeGreaterThan(skins.length);
-  });
-});
-
-describe("given a street tree's far drawing", () => {
-  // mutation: sed -i 's/^export function streetTreeFarPieces(skin: StreetTreeSkin): Piece\[\] {$/&\n  return streetTreePieces(skin);/' src/game/present/street-trees.ts
-  // mutation: sed -i 's/shared: false, shadow: false }\]$/shared: false }]/' src/game/present/prefabs.ts
-  it("when it is read, then it has no pit, ivy or limbs and fewer triangles than the whole tree, and the tree's part 0 is on the leaf material and part 1 on the nature material, casting no shadow", () => {
-    const leaves = new THREE.MeshBasicMaterial();
-    const nature = new THREE.MeshBasicMaterial();
-    const mats = { ...plainMaterials(new THREE.MeshBasicMaterial()), leaves, nature };
-    const count = (pieces: Piece[]): number => pieces.reduce((n, [g]) => n + (g.index ? g.index.count : g.getAttribute("position").count) / 3, 0);
-    for (const skin of skins) {
-      const far = streetTreeFarPieces(skin);
-      expect(far.some(([, , material]) => material === MAT.HAY), `${skin} pit`).toBe(false);
-      expect(far.filter(([, , material]) => material === MAT.CONIFER_FOLIAGE).length, `${skin} lumps only`).toBe(far.filter(([, , material]) => material !== MAT.TREE_BARK).length);
-      expect(count(far), skin).toBeLessThan(count(streetTreePieces(skin)));
-      const parts = prefabParts(PREFAB.tree, mats, skin);
-      expect(parts.length, skin).toBe(2);
-      expect(parts[0]!.material).toBe(leaves);
-      expect(parts[1]!.material).toBe(nature);
-      expect(parts[1]!.shadow).toBe(false);
-    }
   });
 });
