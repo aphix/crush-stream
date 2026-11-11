@@ -262,6 +262,7 @@ export class FacadeBays {
           bucket.push({ frontage, placement });
         }
       }
+      if (buckets.size === 0) buckets.set(0, []);
       for (const stood of buckets.values()) {
         const at0 = stood[0]!.frontage;
         const mesh = new THREE.InstancedMesh(geometry, material, stood.length);
