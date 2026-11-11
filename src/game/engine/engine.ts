@@ -56,7 +56,7 @@ import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
 import { CivilianArt } from "../present/civilian-art.ts";
 import { FacadeBays } from "../present/facade-bays.ts";
 import { InteriorSet } from "../present/interiors/interior-art.ts";
-import { NEAR_SLOTS } from "../present/civilian-art-constants.ts";
+import { DETAIL_SLOTS, NEAR_SLOTS } from "../present/civilian-art-constants.ts";
 import { OpenWorldSigns } from "../present/openworld-signs.ts";
 import { POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { PUNCH_LIFT, PUNCH_SPEED } from "../ai/civilians/civilian-constants.ts";
@@ -458,7 +458,8 @@ export class CrashEngine extends EngineGarage {
         return kit;
       },
       makeArt: (capacity) => {
-        const art = new CivilianArt(this.deviceClass === "desktop" ? NEAR_SLOTS.desktop : NEAR_SLOTS.phone, capacity);
+        const desktop = this.deviceClass === "desktop";
+        const art = new CivilianArt(desktop ? NEAR_SLOTS.desktop : NEAR_SLOTS.phone, capacity, desktop ? DETAIL_SLOTS.desktop : DETAIL_SLOTS.phone);
         this.scene.add(art.group);
         this.queueWarm();
         return art;
