@@ -286,7 +286,7 @@ side (bump, fight) or the civilian's handedness. Looping clips grow their fidget
 civilian, so a bar of sitters does not glance together. No frame allocates (doubles go through `scratch` slots, not arguments: a double passed to a call that is not inlined is boxed on the heap).
 
 The walk is the guards' stride rounded off: the legs swing as a sine flattened toward a triangle so a foot on the ground goes back about as fast as she goes forward (it does not slide: the stride is
-1.5 m of walk to a turn of phase, whatever the speed), the knee bends as the leg passes under her, the shoulders turn 0.1 rad against the hips with the head half turning back, the hips fall 5 cm as the legs
+1.5 m of walk to a turn of phase, whatever the speed), the knee bends as the leg passes under her, the shoulders turn 0.1 rad against the hips with the head half turning back, the hips fall 3 cm as the legs
 spread and the head nods twice a stride. A change of her pose that no stride or key makes (a clip cut off by the brain, a start from standing, a stop) does not snap: `PoseSmoothing` (one per
 `CivilianArt`, per civilian) draws the old pose at once and pays the difference back with a time constant of 0.18 s; a pose that only moves on is drawn exactly, so nothing is delayed or flattened. Bits of
 her look word give each person a pace (the clip's clock a tenth quicker or slower) and an amplitude (an eighth more or less on the lean, the head and the arms); none set is neither. A flinch (`recoil`)
@@ -294,7 +294,7 @@ is quicker and bigger the jumpier the person (`neuroticismOf`: 0.85 to 1.25 time
 
 The walk is drawn smoothed and scaled by pace; none of it reaches the brain or the wire. `PoseSmoothing.walk` draws her spot as the brain's through a low-pass (0.18 s, never over 0.3 m behind, a gap over 2 m taken at once),
 her speed as the metres that drawn spot moves a second, her stride phase on by those metres (a whole stride a second at most past a walk: `RUN_STRIDES_PER_SECOND`, as the foot cops) and her facing turned at most 10 rad/s. `fillWalk` takes
-`gait` = that speed over a walk's 1.5 m/s: leg swing, hip drop and shoulder twist scale by it (0.3 to 1.6), the arms' swing 0.3 to 1.8, the knee bend 0.6 + 0.4 gait, and above a walk she leans in (0.15 rad a unit of gait over 1); she stands below 0.05 m/s.
+`gait` = that speed over a walk's 1.5 m/s: leg swing, hip drop and shoulder twist scale by it (0.3 to 1.6; under 0.3 m/s of drawn speed the 0.3 floor goes, `LEG_FLOOR_ABOVE`, so she settles her legs as she stops), the arms' swing 0.3 to 1.8, the knee bend 0.6 + 0.4 gait, and above a walk she leans in (0.15 rad a unit of gait over 1); she stands below 0.05 m/s.
 A far figure swings by the brain's pace over a walk's, to 1.6. On a stoop's door spur (`CrowdPoses.onSpur`, `CivilianArt.stoops`) `plantOnTreads` solves each leg again so its ankle stands on the tread under it, not on the line through the step.
 
 **Stoops (`world/openworld/openworld-stoops.ts`).** A walker's height is `CrowdPoses.feetY`. `Stoops` is the height field of the rowhomes' stoops (`STOOP`: five risers of 0.18 m, 0.28 m treads, a 0.5 m landing, 1.6 m wide
