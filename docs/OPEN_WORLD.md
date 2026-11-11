@@ -274,6 +274,11 @@ spread and the head nods twice a stride. A change of her pose that no stride or 
 her look word give each person a pace (the clip's clock a tenth quicker or slower) and an amplitude (an eighth more or less on the lean, the head and the arms); none set is neither. A flinch (`recoil`)
 is quicker and bigger the jumpier the person (`neuroticismOf`: 0.85 to 1.25 times the pace, 0.7 to 1.3 times the size), starts with the hands flung up and the body back, and comes down while she still looks.
 
+The walk is drawn smoothed and scaled by pace; none of it reaches the brain or the wire. `PoseSmoothing.walk` draws her spot as the brain's through a low-pass (0.18 s, never over 0.3 m behind, a gap over 2 m taken at once),
+her speed as the metres that drawn spot moves a second, her stride phase on by those metres (a whole stride a second at most past a walk: `RUN_STRIDES_PER_SECOND`, as the foot cops) and her facing turned at most 10 rad/s. `fillWalk` takes
+`gait` = that speed over a walk's 1.5 m/s: leg swing, hip drop and shoulder twist scale by it (0.3 to 1.6), the arms' swing 0.3 to 1.8, the knee bend 0.6 + 0.4 gait, and above a walk she leans in (0.15 rad a unit of gait over 1); she stands below 0.05 m/s.
+A far figure swings by the brain's pace over a walk's, to 1.6. On a stoop's door spur (`CrowdPoses.onSpur`, `CivilianArt.stoops`) `plantOnTreads` solves each leg again so its ankle stands on the tread under it, not on the line through the step.
+
 **Stoops (`world/openworld/openworld-stoops.ts`).** A walker's height is `CrowdPoses.feetY`. `Stoops` is the height field of the rowhomes' stoops (`STOOP`: five risers of 0.18 m, 0.28 m treads, a 0.5 m landing, 1.6 m wide
 about the door's `DOOR.across`; the door is the sill, 0.9 m; `hasStoop` says which places have one: a rowhome, not the modern infill): pure in the place, so every peer reads the same, with each riser climbed over 0.14 m so
 her height follows the treads and does not jump. The door node of a home is on the landing and its spur to the sidewalk runs straight out along the stoop (`attachDoors`), so a resident who leaves appears at the sill's

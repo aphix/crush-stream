@@ -44,6 +44,16 @@ describe("given a resident who walks out of a rowhome's door along the way its s
     expect(heightAfter(crowd, person, STOOP.run + STOOP.tread), "past it").toBe(0);
   });
 
+  // mutation: sed -i 's/leadsToDoor(pose.from, pose.to) ? 1 : 0/leadsToDoor(pose.from, pose.to) ? 0 : 0/' src/game/ai/civilians/civilian-crowd.ts
+  it("when she walks a stoop door's spur the drawing is told (onSpur is 1), and on a walk that is not its spur it is 0", () => {
+    const spur = leaving(new Stoops([HOUSE], [EDGE.from]));
+    heightAfter(spur.crowd, spur.person, (STEP_3.near + STEP_3.far) / 2);
+    expect(spur.crowd.poses.onSpur[spur.person], "on the door's spur").toBe(1);
+    const lane = leaving(new Stoops([HOUSE]));
+    heightAfter(lane.crowd, lane.person, (STEP_3.near + STEP_3.far) / 2);
+    expect(lane.crowd.poses.onSpur[lane.person], "on the sidewalk lane").toBe(0);
+  });
+
   // mutation: sed -i 's/    if (stoops === null) return;/    if (stoops === null) { this.poses.feetY.fill(0.5); return; }/' src/game/ai/civilians/civilian-crowd.ts
   it("when there are no stoops, then she is at the street's height all the way", () => {
     const { crowd, person } = leaving(null);
@@ -58,7 +68,7 @@ describe("given a resident who walks out of a rowhome's door along the way its s
     expect(heightAfter(crowd, person, (STEP_3.near + STEP_3.far) / 2), "over the third step").toBe(0);
   });
 
-  // mutation: sed -i 's/this.onDoorSpur\[resident\] = 0;/this.onDoorSpur[resident] = 1;/' src/game/ai/civilians/civilian-crowd.ts
+  // mutation: sed -i 's/this.poses.onSpur\[resident\] = 0;/this.poses.onSpur[resident] = 1;/' src/game/ai/civilians/civilian-crowd.ts
   it("when the society stands her at a seat on the steps, then she is not lifted again: her seat's height is her own", () => {
     const { crowd, person } = leaving(new Stoops([HOUSE], [EDGE.from]));
     const onStep = (STEP_3.near + STEP_3.far) / 2;

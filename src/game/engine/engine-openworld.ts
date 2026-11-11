@@ -57,6 +57,8 @@ type FootBody = { x: number; z: number; velocityX: number; velocityZ: number };
 
 /** The drawn crowd: `update` once a frame after the crowd's step. */
 type CrowdArt = {
+  /** The stoops the crowd's walkers climb, so a foot on a tread is drawn on it: set once the crowd has them; art that draws no feet leaves it. */
+  stoops?: Stoops | null;
   update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number, held?: Uint8Array | null): void;
   dispose(): void;
 };
@@ -536,6 +538,7 @@ export class OpenWorldDirector {
     this.doors = new OpenWorldCarDoors(crowd.state.capacity, crowd.state, () => this.traffic);
     const stooped = map.places.filter((place) => place.doorNode >= 0 && hasStoop(place));
     crowd.stoops = new Stoops(homeFrontages(stooped), Array.from(stooped, (place) => place.doorNode));
+    if (this.art !== null) this.art.stoops = crowd.stoops;
     this.closedPlaces = new Uint8Array(crowd.state.index.placeCount);
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     this.medics = new OpenWorldMedics(this.ports.makeArt(MEDICS.count));

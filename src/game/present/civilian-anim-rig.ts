@@ -23,6 +23,8 @@ const FOREARM_PART = PARTS[ARM_PARTS.lower[0]];
 const HAND_PAST_FOREARM_BOX = 0.18;
 
 export const HIP_Y = HIP_JOINT[3];
+/** How far (m) each hip joint is from the middle line. */
+export const HIP_X = Math.abs(HIP_JOINT[2]);
 export const SHOULDER_X = Math.abs(SHOULDER_JOINT[2]);
 export const THIGH_LENGTH = HIP_JOINT[3] - KNEE_JOINT[3];
 export const SHIN_LENGTH = KNEE_JOINT[3] - ANKLE_Y;

@@ -11,6 +11,9 @@ import { blankStance, People, walkStance } from "./people.ts";
 import { PARTS } from "./ragdoll-body.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 import { must } from "../kernel/must.test-util.ts";
+import { DOOR, stoopStepRange } from "../world/openworld/openworld-facade-solids.ts";
+import { Stoops } from "../world/openworld/openworld-stoops.ts";
+import { WALK_SPEED } from "./walker-locomotion.ts";
 
 const SCRATCH_LOOK: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
 const shirtOf = (look: number): number => {
@@ -153,7 +156,7 @@ describe("given two civilians in figure range, one walking east and one standing
   poses.x[0] = 60;
   poses.yaw[0] = Math.PI / 2;
   poses.stride[0] = 1.25;
-  poses.speed[0] = 1.4;
+  poses.speed[0] = WALK_SPEED;
   poses.x[1] = 70;
   poses.stride[1] = 2;
   const art = new CivilianArt(0, 2);
@@ -170,6 +173,70 @@ describe("given two civilians in figure range, one walking east and one standing
     expect(gait.getX(0), "walker's phase").toBeCloseTo(1.25, 5);
     expect(gait.getY(0), "walker's swing").toBe(1);
     expect(gait.getY(1), "standing figure's swing").toBe(0);
+  });
+});
+
+describe("given far figures walking at half, at and at three times a walk's pace, and one running past the swing's limit", () => {
+  const poses = emptyPoses(3);
+  for (let civilian = 0; civilian < 3; civilian++) poses.x[civilian] = 60 + civilian;
+  poses.speed[0] = WALK_SPEED / 2;
+  poses.speed[1] = WALK_SPEED * 3;
+  poses.speed[2] = WALK_SPEED;
+  const art = new CivilianArt(0, 3);
+  art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
+  const gait = art.figures.geometry.getAttribute("gait");
+  const instanceAt = (x: number): number => Array.from({ length: art.farDrawn }, (_, instance) => instance).find((instance) => figureX(art, instance) === x) ?? -1;
+
+  // mutation: sed -i 's|Math.min(FIGURE_MAX_GAIT, poses.speed\[civilian\]! / WALK_SPEED)|Math.min(FIGURE_MAX_GAIT, 1)|' src/game/present/civilian-art.ts
+  it("when they are drawn, then each swings by her brain's pace over a walk's, never past 1.6", () => {
+    expect(gait.getY(instanceAt(60)), "half a walk's pace").toBeCloseTo(0.5, 5);
+    expect(gait.getY(instanceAt(61)), "three times the pace: the limit").toBeCloseTo(1.6, 5);
+    expect(gait.getY(instanceAt(62)), "a walk's pace").toBeCloseTo(1, 5);
+  });
+});
+
+describe("given a civilian in dummy range whose brain jumps a metre in one frame", () => {
+  const torsoX = (art: CivilianArt): number => art.dummies[0]!.partPoint(0, 0, new THREE.Vector3(PARTS[0]!.c[0], PARTS[0]!.c[1], PARTS[0]!.c[2]), new THREE.Vector3()).x;
+
+  // mutation: sed -i 's/^  smoothing.walk(civilian, pose);$/  void 0;/' src/game/present/civilian-pose.ts
+  it("when the second frame is drawn, then her dummy has moved only part of the way: the drawn walk closes on the brain's", () => {
+    const poses = emptyPoses(1);
+    poses.x[0] = 5;
+    const art = new CivilianArt(1, 1);
+    art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
+    const first = torsoX(art);
+    poses.x[0] = 6;
+    art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
+    expect(torsoX(art) - first, "metres moved of the one").toBeGreaterThan(0);
+    expect(torsoX(art) - first, "metres moved of the one").toBeLessThan(0.5);
+  });
+});
+
+describe("given a civilian on a stoop's door spur standing on its third tread, a foot on the step", () => {
+  const STEP_3 = stoopStepRange(3);
+  const stoops = new Stoops([{ x: 0, z: 0, yaw: 0, depth: 10, style: "federal", storeys: 3, variant: 0 }], [0]);
+  const SHIN = 7;
+  const ankleOf = (stoopsOf: Stoops | null): THREE.Vector3 => {
+    const poses = emptyPoses(1);
+    poses.x[0] = (STEP_3.near + STEP_3.far) / 2;
+    poses.z[0] = DOOR.across;
+    poses.yaw[0] = Math.PI / 2;
+    poses.stride[0] = Math.PI;
+    poses.speed[0] = WALK_SPEED;
+    poses.onSpur[0] = 1;
+    const art = new CivilianArt(1, 1);
+    art.stoops = stoopsOf;
+    art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
+    const shin = PARTS[SHIN]!;
+    return art.dummies[0]!.partPoint(0, SHIN, new THREE.Vector3(shin.c[0], shin.c[1] - shin.h[1], shin.c[2]), new THREE.Vector3());
+  };
+
+  // mutation: sed -i 's/poses, civilian, this.smoothing, this.stoops);/poses, civilian, this.smoothing, null);/' src/game/present/civilian-art.ts
+  it("when she is drawn, then her ankle stands a tread's height above the street's", () => {
+    const flat = ankleOf(null);
+    const planted = ankleOf(stoops);
+    expect(planted.y - flat.y, "ankle's rise").toBeCloseTo(STEP_3.top, 2);
+    expect(planted.x, "ankle's x").toBeCloseTo(flat.x, 2);
   });
 });
 
@@ -208,8 +275,7 @@ describe("given a civilian walking and a guard walking the same stride at the sa
     poses.x[0] = 4;
     poses.z[0] = -3;
     poses.yaw[0] = 1.1;
-    poses.speed[0] = 1.4;
-    const art = new CivilianArt(1, 1);
+    poses.speed[0] = WALK_SPEED;
     const guards = new People(1);
     const guardMesh = guards.group.children.find((child): child is DummyMesh => child instanceof DummyMesh);
     must(guardMesh, "the guards' people hold a dummy mesh");
@@ -217,6 +283,7 @@ describe("given a civilian walking and a guard walking the same stride at the sa
     const guardPart = new THREE.Vector3();
     for (const stride of STRIDES) {
       poses.stride[0] = stride;
+      const art = new CivilianArt(1, 1);
       art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
       guards.stand(0, 4, 0, -3, 1.1, walkStance(stride, false, blankStance()), false);
       for (let part = 0; part < PARTS.length; part++) {
@@ -230,8 +297,7 @@ describe("given a civilian walking and a guard walking the same stride at the sa
 
   it("when both are posed at the extremes of the stride, then the civilian's thighs reach as far forward and back as the guard's do", () => {
     const poses = emptyPoses(1);
-    poses.speed[0] = 1.4;
-    const art = new CivilianArt(1, 1);
+    poses.speed[0] = WALK_SPEED;
     const guards = new People(1);
     const guardMesh = guards.group.children.find((child): child is DummyMesh => child instanceof DummyMesh);
     must(guardMesh, "the guards' people hold a dummy mesh");
@@ -239,6 +305,7 @@ describe("given a civilian walking and a guard walking the same stride at the sa
     const guardPart = new THREE.Vector3();
     for (const stride of LEG_EXTREMES) {
       poses.stride[0] = stride;
+      const art = new CivilianArt(1, 1);
       art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
       guards.stand(0, 0, 0, 0, 0, walkStance(stride, false, blankStance()), false);
       for (const part of THIGHS) {

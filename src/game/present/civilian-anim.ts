@@ -4,8 +4,10 @@ import { CAR_DOOR, carDoorOpennessOf } from "../ai/civilians/civilian-car-door.t
 import { ARM, armChannel, CHANNEL, CHANNELS, EXPRESSIVE, LEG, legChannel, MIRROR_CHANNEL, MIRROR_SIGN, sideSign } from "./civilian-anim-channels.ts";
 import { CLIPS, type TrackSpec } from "./civilian-anim-clips.ts";
 import type { PoseSmoothing } from "./civilian-anim-smoothing.ts";
-import { FOREARM_LENGTH, HIP_Y, renderRig, setTorsoRotation, SHIN_LENGTH, SHOULDER_X, THIGH_LENGTH, UPPER_ARM_LENGTH, type PoseSink } from "./civilian-anim-rig.ts";
+import { FOREARM_LENGTH, HIP_X, HIP_Y, renderRig, setTorsoRotation, SHIN_LENGTH, SHOULDER_X, THIGH_LENGTH, UPPER_ARM_LENGTH, type PoseSink } from "./civilian-anim-rig.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
+import type { Stoops } from "../world/openworld/openworld-stoops.ts";
+import { WALK_SPEED } from "./walker-locomotion.ts";
 import { POSE_ARM_OUT } from "./civilian-art-constants.ts";
 import { blankStance, walkStance, type Stance } from "./people.ts";
 import { ANKLE_Y, SHOULDER_Y } from "./ragdoll-body.ts";
@@ -32,6 +34,9 @@ export type ActivityPose = {
   variant: number;
   /** How jumpy she is (`neuroticismOf` her look word, 0..1): the flinch's size and pace. */
   nerve: number;
+  /** She walks a stoop's door spur, and the stoops that tell the height of the tread under a foot: her feet stand on the treads (`plantOnTreads`). */
+  onSpur: boolean;
+  stoops: Stoops | null;
 };
 
 const ACTIVITY_NAMES = Object.keys(ACTIVITY) as ActivityName[];
@@ -211,28 +216,46 @@ const channels = new Float64Array(CHANNELS);
 const torsoInverse = new THREE.Quaternion();
 const target = new THREE.Vector3();
 
-/** The stride at `pose.stride` in every limb's channels and the body's counter-turn, bob and nod, on top of the standing channels `fillBase` made. */
+/** The walk is the full swing at `WALK_SPEED`; a slower or faster pace scales it (`gait` is the pace over that, to `MAX_GAIT`) between these limits. */
+const MAX_GAIT = 2.3;
+const LEG_GAIT_FLOOR = 0.3;
+const LEG_GAIT_CEILING = 1.6;
+const ARM_GAIT_FLOOR = 0.3;
+const ARM_GAIT_CEILING = 1.8;
+/** The torso leans forward this much (rad) a unit of gait over a walk's, the gait's excess clamped to `MAX_LEAN_GAIT`; the knee bends `KNEE_BEND_FLOOR` of its swing-through at a stand and the rest with gait. */
+const LEAN_PER_GAIT = 0.15;
+const MAX_LEAN_GAIT = 1.3;
+const KNEE_BEND_FLOOR = 0.6;
+/** She walks above this pace (m/s): under it she stands. */
+const WALKING_ABOVE = 0.05;
+
+/** The stride at `pose.stride` in every limb's channels and the body's counter-turn, bob and nod, on top of the standing channels `fillBase` made; the pace (`pose.speed`) sets how big each is. */
 function fillWalk(pose: ActivityPose): void {
+  const gait = Math.min(MAX_GAIT, pose.speed / WALK_SPEED);
+  const legGain = Math.min(LEG_GAIT_CEILING, Math.max(LEG_GAIT_FLOOR, gait));
+  const armGain = Math.min(ARM_GAIT_CEILING, Math.max(ARM_GAIT_FLOOR, gait));
+  const kneeGain = KNEE_BEND_FLOOR + (1 - KNEE_BEND_FLOOR) * gait;
   const sine = Math.sin(pose.stride);
   const passing = Math.cos(pose.stride);
   const swing = Math.asin(STANCE_FLAT * sine) * STANCE_FLAT_SCALE;
   for (let side = 0; side < 2; side++) {
     const armGait = ARM_GAITS[side]!;
     const arm = armChannel(side, 0);
-    channels[arm + ARM.swing] = armGait.swing * sine;
+    channels[arm + ARM.swing] = armGait.swing * sine * armGain;
     channels[arm + ARM.elbow] = armGait.bendAtRest - ELBOW_FORWARD_BEND * Math.max(0, (-armGait.swing * sine) / Math.abs(armGait.swing));
     const legGait = LEG_GAITS[side]!;
     const leg = legChannel(side, 0);
-    channels[leg + LEG.swing] = legGait.swing * swing;
-    channels[leg + LEG.knee] = KNEE_SWING_BEND * Math.max(0, side === 0 ? passing : -passing);
+    channels[leg + LEG.swing] = legGait.swing * swing * legGain;
+    channels[leg + LEG.knee] = KNEE_SWING_BEND * kneeGain * Math.max(0, side === 0 ? passing : -passing);
   }
-  channels[CHANNEL.torsoTwist] = -SHOULDER_TWIST * sine;
-  channels[CHANNEL.headYaw] = HEAD_COUNTER_TWIST * SHOULDER_TWIST * sine;
-  channels[CHANNEL.pelvisDrop] = HIP_DROP * sine * sine;
+  channels[CHANNEL.torsoTwist] = -SHOULDER_TWIST * sine * legGain;
+  channels[CHANNEL.headYaw] = HEAD_COUNTER_TWIST * SHOULDER_TWIST * sine * legGain;
+  channels[CHANNEL.pelvisDrop] = HIP_DROP * sine * sine * legGain;
+  channels[CHANNEL.torsoPitch] = LEAN_PER_GAIT * Math.min(MAX_LEAN_GAIT, Math.max(0, gait - 1));
   channels[CHANNEL.headPitch] = HEAD_NOD * Math.cos(2 * pose.stride);
 }
 
-/** Standing in every channel, and walking at `pose.stride` when she moves (`pose.speed` above 0). */
+/** Standing in every channel, and walking at `pose.stride` when she moves (`pose.speed` above `WALKING_ABOVE`). */
 function fillBase(pose: ActivityPose): void {
   channels.fill(0);
   for (let side = 0; side < 2; side++) {
@@ -242,7 +265,7 @@ function fillBase(pose: ActivityPose): void {
     channels[arm + ARM.handY] = REST_HAND_Y;
     channels[arm + ARM.handOut] = HAND_TARGET_X;
   }
-  if (pose.speed > 0) fillWalk(pose);
+  if (pose.speed > WALKING_ABOVE) fillWalk(pose);
 }
 
 /** Which of the two mirrorings (0: main limbs on -x, 1: on +x) a clip runs in: her right for a right-sided clip, toward a partner it reacts to, else her handedness. */
@@ -324,6 +347,47 @@ function solveTwoBone(): void {
   scratch[SOLVE_LINE] = Math.atan2(-forward, down);
   scratch[SOLVE_OFFSET] = Math.acos(Math.max(-1, Math.min(1, (upper * upper + reach * reach - lower * lower) / (2 * upper * reach))));
   scratch[SOLVE_BEND] = Math.PI - Math.acos(Math.max(-1, Math.min(1, (upper * upper + lower * lower - reach * reach) / (2 * upper * lower))));
+}
+
+/** The tread heights under a foot: `Stoops.liftFeet` reads a spot out of, and writes its answer into, rows of arrays. */
+const footX = new Float32Array(1);
+const footZ = new Float32Array(1);
+const footY = new Float32Array(1);
+/** A rise under this (m) is not worth a solve. */
+const NEGLIGIBLE_RISE = 1e-4;
+
+/**
+ * On a stoop's spur, each leg's ankle (where the walk put it) stands on the tread under it: the stoops give that tread's height, and the leg is solved again to reach the ankle that much higher (or lower)
+ * than the walk had it, straight ahead of its hip as before. A leg that cannot reach is left as it was.
+ */
+function plantOnTreads(pose: ActivityPose): void {
+  const stoops = pose.stoops;
+  if (stoops === null) return;
+  const sine = Math.sin(pose.yaw);
+  const cosine = Math.cos(pose.yaw);
+  for (let side = 0; side < 2; side++) {
+    const leg = legChannel(side, 0);
+    const upper = channels[leg + LEG.swing]!;
+    const lower = upper + channels[leg + LEG.knee]!;
+    const forward = -(THIGH_LENGTH * Math.sin(upper) + SHIN_LENGTH * Math.sin(lower));
+    const down = THIGH_LENGTH * Math.cos(upper) + SHIN_LENGTH * Math.cos(lower);
+    const ahead = forward + channels[CHANNEL.pelvisForward]!;
+    const across = sideSign(side) * HIP_X + channels[CHANNEL.pelvisSide]!;
+    footX[0] = pose.x + cosine * across + sine * ahead;
+    footZ[0] = pose.z - sine * across + cosine * ahead;
+    stoops.liftFeet(footX, footZ, footY, 0);
+    const rise = footY[0]! - pose.y;
+    if (Math.abs(rise) < NEGLIGIBLE_RISE) continue;
+    const reach = Math.sqrt(forward * forward + (down - rise) * (down - rise));
+    if (reach > THIGH_LENGTH + SHIN_LENGTH || reach < Math.abs(THIGH_LENGTH - SHIN_LENGTH) + NEGLIGIBLE_WEIGHT) continue;
+    scratch[SOLVE_UPPER] = THIGH_LENGTH;
+    scratch[SOLVE_LOWER] = SHIN_LENGTH;
+    scratch[SOLVE_FORWARD] = forward;
+    scratch[SOLVE_DOWN] = down - rise;
+    solveTwoBone();
+    channels[leg + LEG.swing] = scratch[SOLVE_LINE]! - scratch[SOLVE_OFFSET]!;
+    channels[leg + LEG.knee] = scratch[SOLVE_BEND]!;
+  }
 }
 
 /** With `plant`, each leg reaches its ankle to the floor `footZ` ahead of the hip: the knee bends as the pelvis sinks, the feet stay put. */
@@ -435,10 +499,11 @@ export function poseActivity(sink: PoseSink, slot: number, pose: ActivityPose, s
   const code = pose.activity;
   if (code < ACTIVITY_CODES && CLIP_TRACK_COUNT[code]! > 0) applyClip(code, pose);
   seatPelvis(pose);
+  if (pose.onSpur) plantOnTreads(pose);
   solveLegs();
   reachForDoor(pose);
   solveHands();
   lookAtPartner(pose);
-  smoothing?.apply(civilian, pose.activity, pose.speed > 0 ? 1 : 0, channels);
+  smoothing?.apply(civilian, pose.activity, pose.speed > WALKING_ABOVE ? 1 : 0, channels);
   renderRig(sink, slot, pose, channels);
 }

@@ -27,8 +27,6 @@ export const MAX_HELD = 16;
 /** Longest walk (graph nodes) a chase plans: a sidewalk lattice of this city is far shorter. */
 export const MAX_ROUTE_NODES = 64;
 
-/** A whole stride a second at most (runners take 170-180 steps a minute): past the civilians' walking stride a faster walker lengthens the stride instead of quickening it. */
-export const RUN_STRIDES_PER_SECOND = 1.45;
 /** A cop a car runs down is off the street this long (s), then back at his beat's start: long enough that the hit reads, short of leaving the beat empty. */
 export const COP_DOWN_SECONDS = 20;
 /** A cop's knock heard this late (s) or later is history: he goes down, but nobody is thrown. */
