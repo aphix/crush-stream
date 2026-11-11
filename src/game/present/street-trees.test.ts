@@ -183,7 +183,7 @@ describe("given a street tree's crown", () => {
 
 describe("given the street trees drawn as instances", () => {
   // mutation: sed -i 's/drawCell(pl.x, pl.z, cells.prop)/drawCell(pl.x, pl.z)/' src/game/present/prop-tumble.ts
-  it("when the course's trees are made into meshes, then each kind in each 96 m cell is one draw group whatever its facing, and each instance carries its own facing and size", () => {
+  it("when the course's trees are made into meshes, then each kind in each draw cell is one draw group whatever its facing, and each instance carries its own facing and size", () => {
     const meshes: THREE.InstancedMesh[] = [];
     const material = new THREE.MeshBasicMaterial();
     const tumble = new PropTumble(
