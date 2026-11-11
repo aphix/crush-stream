@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
-import { FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLOATS, FIGURE_FLOATS, NEAR_DRAW, SIGHT_RADIUS, SLOT_KEEP_DISTANCE_SCALE, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
+import { DETAIL_KEEP_M, DETAIL_NEAR_M, FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLOATS, FIGURE_FLOATS, NEAR_DRAW, SIGHT_RADIUS, SLOT_KEEP_DISTANCE_SCALE, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
 import { dressOfLook, isPoliceLook, skinOfLook, writeLinearColour } from "./civilian-dress.ts";
 import { civilianFigures, type CivilianFigures } from "./civilian-figure.ts";
 import { PoseSmoothing } from "./civilian-anim-smoothing.ts";
@@ -11,11 +11,14 @@ import { HIDE_GRACE, type SightField } from "./openworld-sight.ts";
 /** What the crowd's drawing asks of the sight field: whether a person is in view. */
 export type CrowdSight = Pick<SightField, "seen">;
 import { DummyMesh } from "./ragdoll-mesh.ts";
+import { dummyGeometry, streetGeometry } from "./dummy-skin.ts";
 
 const NO_SLOT = -1;
 const NEAR_DRAW_SQUARED = NEAR_DRAW * NEAR_DRAW;
 const FAR_DRAW_SQUARED = FAR_DRAW * FAR_DRAW;
 const KEEP_SLOT_SQUARED = SLOT_KEEP_DISTANCE_SCALE * SLOT_KEEP_DISTANCE_SCALE;
+const DETAIL_NEAR_SQUARED = DETAIL_NEAR_M * DETAIL_NEAR_M;
+const DETAIL_KEEP_SQUARED = DETAIL_KEEP_M * DETAIL_KEEP_M;
 const SHIRT_AT = 0;
 const TROUSERS_AT = FIGURE_FLOATS.COLOUR;
 const SKIN_AT = FIGURE_FLOATS.COLOUR * 2;
@@ -36,6 +39,8 @@ export class CivilianArt {
   /** What keeps a near civilian's pose from snapping when her activity or her walk changes. */
   private readonly smoothing: PoseSmoothing;
   private readonly slotCount: number;
+  private readonly detailSlots: number;
+  private readonly detailChunks: number;
   private readonly slotOwner: Int32Array;
   private readonly slotLook: Uint32Array;
   private readonly slotOf: Int32Array;
@@ -55,11 +60,13 @@ export class CivilianArt {
   private readonly figureColours: Float32Array;
   private readonly dress: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false, outfit: 0, shades: false, face: 0 };
 
-  /** `nearSlots` posed dummies at most (a tier's `NEAR_SLOTS`); `capacity` civilians at most, the crowd's size. */
-  constructor(nearSlots: number, capacity: number) {
+  /** `nearSlots` posed dummies at most (a tier's `NEAR_SLOTS`), the first `detailSlots` of them the full body and the rest the street body; `capacity` civilians at most, the crowd's size. */
+  constructor(nearSlots: number, capacity: number, detailSlots = nearSlots) {
     this.capacity = capacity;
     this.smoothing = new PoseSmoothing(capacity);
     this.slotCount = nearSlots;
+    this.detailSlots = Math.min(detailSlots, nearSlots);
+    this.detailChunks = Math.ceil(this.detailSlots / SLOTS_PER_DUMMY_MESH);
     this.slotOwner = new Int32Array(nearSlots).fill(NO_SLOT);
     this.slotLook = new Uint32Array(nearSlots);
     this.slotOf = new Int32Array(capacity).fill(NO_SLOT);
@@ -71,7 +78,7 @@ export class CivilianArt {
     this.figureLook = new Uint32Array(capacity);
     this.figureCached = new Uint8Array(capacity);
     this.figureColours = new Float32Array(capacity * FIGURE_COLOUR_CACHE_FLOATS);
-    this.dummies = Array.from({ length: Math.ceil(nearSlots / SLOTS_PER_DUMMY_MESH) }, (_, chunk) => dummyChunk(Math.min(SLOTS_PER_DUMMY_MESH, nearSlots - chunk * SLOTS_PER_DUMMY_MESH)));
+    this.dummies = [...poolChunks(this.detailSlots, dummyGeometry), ...poolChunks(nearSlots - this.detailSlots, streetGeometry)];
     this.instances = civilianFigures(capacity);
     this.figures = this.instances.mesh;
     this.group.add(...this.dummies, this.figures);
@@ -147,7 +154,7 @@ export class CivilianArt {
     return selected;
   }
 
-  /** Slots of civilians no longer near are freed; each newly near civilian takes a free slot and is dressed in it. */
+  /** Slots of civilians no longer near are freed; each newly near civilian takes a free slot of the pool her distance wants (full body inside `DETAIL_NEAR_M`, kept to `DETAIL_KEEP_M`; else street), the other pool's when that is full, and is dressed in it. A holder in the other pool moves only into a free slot. */
   private assignSlots(poses: CrowdPoses, selected: number): void {
     for (let k = 0; k < selected; k++) this.nearStamp[this.nearList[k]!] = this.stamp;
     for (let slot = 0; slot < this.slotCount; slot++) {
@@ -155,22 +162,48 @@ export class CivilianArt {
       if (owner === NO_SLOT || this.nearStamp[owner] === this.stamp) continue;
       this.slotOwner[slot] = NO_SLOT;
       this.slotOf[owner] = NO_SLOT;
-      this.dummies[Math.floor(slot / SLOTS_PER_DUMMY_MESH)]!.hide(slot % SLOTS_PER_DUMMY_MESH);
+      this.meshOf(slot).hide(this.indexIn(slot));
     }
-    let freeSlot = 0;
     for (let k = 0; k < selected; k++) {
       const civilian = this.nearList[k]!;
-      if (this.slotOf[civilian]! !== NO_SLOT) continue;
-      while (this.slotOwner[freeSlot]! !== NO_SLOT) freeSlot++;
-      this.slotOwner[freeSlot] = civilian;
-      this.slotOf[civilian] = freeSlot;
-      this.dressSlot(freeSlot, poses.look[civilian]!);
+      const held = this.slotOf[civilian]!;
+      const dx = poses.x[civilian]! - this.eyeX;
+      const dz = poses.z[civilian]! - this.eyeZ;
+      const squared = dx * dx + dz * dz;
+      const wantsDetail = squared < DETAIL_NEAR_SQUARED || (held !== NO_SLOT && held < this.detailSlots && squared < DETAIL_KEEP_SQUARED);
+      if (held !== NO_SLOT && held < this.detailSlots === wantsDetail) continue;
+      let slot = this.lowestFree(wantsDetail);
+      if (held === NO_SLOT && slot === NO_SLOT) slot = this.lowestFree(!wantsDetail);
+      if (slot === NO_SLOT) continue;
+      if (held !== NO_SLOT) {
+        this.slotOwner[held] = NO_SLOT;
+        this.meshOf(held).hide(this.indexIn(held));
+      }
+      this.slotOwner[slot] = civilian;
+      this.slotOf[civilian] = slot;
+      this.dressSlot(slot, poses.look[civilian]!);
     }
+  }
+
+  /** The lowest slot no civilian holds in the detail pool (`detail`) or the street pool, or `NO_SLOT`. */
+  private lowestFree(detail: boolean): number {
+    const from = detail ? 0 : this.detailSlots;
+    const to = detail ? this.detailSlots : this.slotCount;
+    for (let slot = from; slot < to; slot++) if (this.slotOwner[slot]! === NO_SLOT) return slot;
+    return NO_SLOT;
+  }
+
+  private meshOf(slot: number): DummyMesh {
+    return this.dummies[slot < this.detailSlots ? Math.floor(slot / SLOTS_PER_DUMMY_MESH) : this.detailChunks + Math.floor((slot - this.detailSlots) / SLOTS_PER_DUMMY_MESH)]!;
+  }
+
+  private indexIn(slot: number): number {
+    return (slot < this.detailSlots ? slot : slot - this.detailSlots) % SLOTS_PER_DUMMY_MESH;
   }
 
   private dressSlot(slot: number, look: number): void {
     dressOfLook(look, this.dress);
-    this.dummies[Math.floor(slot / SLOTS_PER_DUMMY_MESH)]!.dress(slot % SLOTS_PER_DUMMY_MESH, isPoliceLook(look), this.dress);
+    this.meshOf(slot).dress(this.indexIn(slot), isPoliceLook(look), this.dress);
     this.slotLook[slot] = look;
   }
 
@@ -181,7 +214,7 @@ export class CivilianArt {
       const civilian = this.nearList[k]!;
       const slot = this.slotOf[civilian]!;
       if (this.slotLook[slot] !== poses.look[civilian]) this.dressSlot(slot, poses.look[civilian]!);
-      poseCivilian(this.dummies[Math.floor(slot / SLOTS_PER_DUMMY_MESH)]!, slot % SLOTS_PER_DUMMY_MESH, poses, civilian, this.smoothing);
+      poseCivilian(this.meshOf(slot), this.indexIn(slot), poses, civilian, this.smoothing);
     }
   }
 
@@ -249,9 +282,11 @@ export class CivilianArt {
   }
 }
 
-/** A mesh of `slots` posed dummies, none out yet. */
-function dummyChunk(slots: number): DummyMesh {
-  const mesh = new DummyMesh(slots);
-  mesh.castShadow = true;
-  return mesh;
+/** `slots` posed dummies of `geometry` in meshes of at most `SLOTS_PER_DUMMY_MESH`, none out yet. */
+function poolChunks(slots: number, geometry: () => THREE.BufferGeometry): DummyMesh[] {
+  return Array.from({ length: Math.ceil(slots / SLOTS_PER_DUMMY_MESH) }, (_, chunk) => {
+    const mesh = new DummyMesh(Math.min(SLOTS_PER_DUMMY_MESH, slots - chunk * SLOTS_PER_DUMMY_MESH), false, geometry());
+    mesh.castShadow = true;
+    return mesh;
+  });
 }

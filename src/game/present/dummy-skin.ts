@@ -144,17 +144,13 @@ function seatedFlags(): number[] {
 }
 
 /**
- * `dummyGeometry` as a driver shows through the glass: its own attributes (dress, builds and pose rows as they are) under an index of the
- * triangles some seated driver's look wears, off the legs and above the belt, the body's decimated onto its own vertices (`decimate`), the wear's coarse loft.
+ * `dummyGeometry` under a decimated body index (`decimate` onto its own vertices) and the wear's coarse loft, both without the triangles `hidden` names; its attributes are the full body's own.
  */
-function buildSeatedGeometry(): THREE.BufferGeometry {
+function coarseGeometry(hidden: (v: number) => boolean, budget: number): THREE.BufferGeometry {
   const { geometry: full, coarseWear } = dummy();
   const index = full.index!.array;
-  const bones = full.getAttribute(BONES_ATTRIBUTE);
   const kinds = full.getAttribute(KINDS_ATTRIBUTE);
   const rest = full.getAttribute("position");
-  const worn = seatedFlags();
-  const hidden = (v: number) => LEG_BONES.includes(bones.getX(v)) || LEG_BONES.includes(bones.getY(v)) || (bones.getY(v) === TORSO && bones.getX(v) === TORSO && rest.getY(v) < BELT_BOTTOM) || !worn.some((flags) => isDrawn(kinds.getY(v), flags));
   const shown = (triangles: ArrayLike<number>, to: number, into: number[]) => {
     for (let t = 0; t < to; t += 3) if (!hidden(triangles[t]!) && !hidden(triangles[t + 1]!) && !hidden(triangles[t + 2]!)) into.push(triangles[t]!, triangles[t + 1]!, triangles[t + 2]!);
     return into;
@@ -165,13 +161,29 @@ function buildSeatedGeometry(): THREE.BufferGeometry {
   // Weld groups by colour role, from 1: `decimate` pins group 0's nose and tail (a car body's).
   const group = Uint8Array.from(vertices, (v) => kinds.getX(v) + 1);
   const at = Float32Array.from(vertices.flatMap((v) => [rest.getX(v), rest.getY(v), rest.getZ(v)]));
-  const { source, tris } = decimate(at, body.map((v) => local.get(v)!), group, SEATED_BODY_VERTICES);
+  const { source, tris } = decimate(at, body.map((v) => local.get(v)!), group, budget);
   const geometry = new THREE.BufferGeometry();
   for (const [name, attribute] of Object.entries(full.attributes)) geometry.setAttribute(name, attribute);
   geometry.setIndex(shown(coarseWear, coarseWear.length, Array.from(tris, (k) => vertices[source[k]!]!)));
   return geometry;
 }
 
+/** A seated driver's view: off the legs and above the belt, only the triangles some seated driver's look wears. */
+function buildSeatedGeometry(): THREE.BufferGeometry {
+  const { geometry: full } = dummy();
+  const bones = full.getAttribute(BONES_ATTRIBUTE);
+  const kinds = full.getAttribute(KINDS_ATTRIBUTE);
+  const rest = full.getAttribute("position");
+  const worn = seatedFlags();
+  return coarseGeometry((v) => LEG_BONES.includes(bones.getX(v)) || LEG_BONES.includes(bones.getY(v)) || (bones.getY(v) === TORSO && bones.getX(v) === TORSO && rest.getY(v) < BELT_BOTTOM) || !worn.some((flags) => isDrawn(kinds.getY(v), flags)), SEATED_BODY_VERTICES);
+}
+
 /** The seated drivers' body (`SeatedDrivers`), built on first use and shared like `dummyGeometry`, whose attributes it draws. */
 export const seatedGeometry = once(buildSeatedGeometry);
+
+/** The crowd's street body: the whole dummy decimated, legs and all. */
+const STREET_BODY_VERTICES = 1200;
+
+/** The crowd's body past the nearest few (`CivilianArt`), built on first use and shared like `dummyGeometry`, whose attributes it draws. */
+export const streetGeometry = once(() => coarseGeometry(() => false, STREET_BODY_VERTICES));
 

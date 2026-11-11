@@ -6,6 +6,12 @@ export const NEAR_DRAW = 60;
 export const FAR_DRAW = 120;
 /** Posed dummies a tier draws. A slot no civilian holds costs nothing: a mesh draws up to its highest slot in use, and slots fill from the lowest. */
 export const NEAR_SLOTS = { phone: 20, desktop: 64 } as const;
+/** Of those, the slots that draw the full body; the rest draw the street body (`streetGeometry`), which costs a third of the triangles. */
+export const DETAIL_SLOTS = { phone: 4, desktop: 12 } as const;
+/** A civilian inside this distance (m) of the eye wants a full-body slot. */
+export const DETAIL_NEAR_M = 12;
+/** A civilian already in a full-body slot keeps it out to this distance (m), so one at the line does not trade bodies every frame. */
+export const DETAIL_KEEP_M = 15;
 /** A person's size to the sight field (m): the sphere about the chest that must be in view. */
 export const SIGHT_RADIUS = 1;
 /** A civilian holding a dummy counts as this share nearer than it is, so two civilians at the cutoff do not trade dummies (and looks) every frame. */

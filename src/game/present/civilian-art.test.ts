@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { CivilianArt } from "./civilian-art.ts";
-import { FAR_DRAW, FIGURE_FLOATS, NEAR_DRAW, NEAR_SLOTS, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
+import { DETAIL_KEEP_M, DETAIL_NEAR_M, DETAIL_SLOTS, FAR_DRAW, FIGURE_FLOATS, NEAR_DRAW, NEAR_SLOTS, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
 import { dressOfLook } from "./civilian-dress.ts";
 import { drawCalls, emptyPoses, FRAME_SECONDS, IN_SIGHT, posesAlongStreet, posesScattered } from "./civilian-art.test-util.ts";
 import type { DriverLook } from "./driver-look.ts";
 import { ROLE } from "./dummy-rig.ts";
+import { dummyGeometry, streetGeometry } from "./dummy-skin.ts";
 import { blankStance, People, walkStance } from "./people.ts";
 import { PARTS } from "./ragdoll-body.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
@@ -19,6 +20,8 @@ const shirtOf = (look: number): number => {
 };
 /** Inside the near line, so a crowd of any size here fills every dummy slot and has figures over. */
 const CROWD_RADIUS = NEAR_DRAW * 0.75;
+/** The street body's triangle budget (a full body is about 20,890). */
+const STREET_TRIANGLES = 6000;
 const NEAR_STREET = Array.from({ length: 30 }, (_, civilian) => civilian + 1);
 /** x of the figure in instance `instance`. */
 const figureX = (art: CivilianArt, instance: number): number => art.figures.instanceMatrix.array[instance * FIGURE_FLOATS.MATRIX + 12]!;
@@ -248,5 +251,79 @@ describe("given a civilian walking and a guard walking the same stride at the sa
         expect(Math.abs(civilianPart.z - guardPart.z), `part ${part} at stride ${stride}`).toBeLessThan(SAME_REACH);
       }
     }
+  });
+});
+
+describe("given the street body", () => {
+  const trianglesOf = (geometry: THREE.BufferGeometry): number => geometry.index!.count / 3;
+
+  // mutation: sed -i 's/STREET_BODY_VERTICES = 1200/STREET_BODY_VERTICES = 4000/' src/game/present/dummy-skin.ts
+  it("when it is built, then it has at most 6000 triangles", () => {
+    expect(trianglesOf(streetGeometry()), "street body triangles").toBeLessThanOrEqual(STREET_TRIANGLES);
+    expect(trianglesOf(streetGeometry()), "street body triangles").toBeLessThan(trianglesOf(dummyGeometry()));
+  });
+
+  // mutation: sed -i 's/setAttribute(name, attribute);/setAttribute(name, attribute.clone());/' src/game/present/dummy-skin.ts
+  it("when it is built, then its attributes are the full body's own objects", () => {
+    const names = Object.keys(dummyGeometry().attributes);
+    expect(names.length, "attributes").toBeGreaterThan(0);
+    expect(firstMismatch(names.map((name) => (streetGeometry().getAttribute(name) === dummyGeometry().getAttribute(name) ? 1 : 0)), names.map(() => 1)), "shared attributes").toBeUndefined();
+  });
+});
+
+describe("given a crowd of 150 scattered within 30 m of the eye, over the dummy slots", () => {
+  const drawnTriangles = (art: CivilianArt): number => art.dummies.reduce((sum, mesh) => sum + mesh.count * (mesh.geometry.index!.count / 3), 0);
+  const fullTriangles = dummyGeometry().index!.count / 3;
+
+  // mutation: sed -i 's/this.detailSlots = Math.min(detailSlots, nearSlots)/this.detailSlots = nearSlots/' src/game/present/civilian-art.ts
+  it("when the desktop tier draws them, then twelve are full bodies and the rest street bodies", () => {
+    const art = new CivilianArt(NEAR_SLOTS.desktop, 300, DETAIL_SLOTS.desktop);
+    art.update(posesScattered(150, 30, 7), 0, 0, IN_SIGHT, FRAME_SECONDS);
+    expect(art.nearDrawn, "dummies drawn").toBe(NEAR_SLOTS.desktop);
+    expect(drawnTriangles(art), "drawn dummy triangles").toBeLessThanOrEqual(DETAIL_SLOTS.desktop * fullTriangles + (NEAR_SLOTS.desktop - DETAIL_SLOTS.desktop) * STREET_TRIANGLES);
+  });
+
+  // mutation: sed -i 's/this.detailSlots = Math.min(detailSlots, nearSlots)/this.detailSlots = nearSlots/' src/game/present/civilian-art.ts
+  it("when the phone tier draws them, then four are full bodies and the rest street bodies", () => {
+    const art = new CivilianArt(NEAR_SLOTS.phone, 300, DETAIL_SLOTS.phone);
+    art.update(posesScattered(150, 30, 7), 0, 0, IN_SIGHT, FRAME_SECONDS);
+    expect(art.nearDrawn, "dummies drawn").toBe(NEAR_SLOTS.phone);
+    expect(drawnTriangles(art), "drawn dummy triangles").toBeLessThanOrEqual(DETAIL_SLOTS.phone * fullTriangles + (NEAR_SLOTS.phone - DETAIL_SLOTS.phone) * STREET_TRIANGLES);
+  });
+});
+
+describe("given one civilian walking toward the eye on a tier with one full-body slot", () => {
+  const inDetail = (art: CivilianArt): boolean => art.slotOfCivilian(0) === 0;
+  const walkTo = (art: CivilianArt, poses: ReturnType<typeof emptyPoses>, distance: number): void => {
+    poses.x[0] = distance;
+    art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
+  };
+
+  // mutation: sed -i 's/ || (held !== NO_SLOT \&\& held < this.detailSlots \&\& squared < DETAIL_KEEP_SQUARED)//' src/game/present/civilian-art.ts
+  it("when she walks from 20 m to 5 m, then she changes to the full body once and keeps it at 13 m", () => {
+    const art = new CivilianArt(3, 1, 1);
+    const poses = emptyPoses(1);
+    let changes = 0;
+    let before = false;
+    for (let distance = 20; distance >= 5; distance -= 0.5) {
+      walkTo(art, poses, distance);
+      if (inDetail(art) !== before) changes++;
+      before = inDetail(art);
+    }
+    expect(changes, "changes to the full body").toBe(1);
+    expect(inDetail(art), "full body at 5 m").toBe(true);
+    walkTo(art, poses, DETAIL_NEAR_M + 1);
+    expect(inDetail(art), "full body at 13 m").toBe(true);
+    walkTo(art, poses, DETAIL_KEEP_M + 1);
+    expect(inDetail(art), "street body past the keep line").toBe(false);
+  });
+
+  // mutation: sed -i 's/squared < DETAIL_NEAR_SQUARED ||/squared < 0 ||/' src/game/present/civilian-art.ts
+  it("when thirteen civilians are within 12 m of a twelve-slot tier, then twelve hold full-body slots and one a street slot", () => {
+    const art = new CivilianArt(20, 13, 12);
+    art.update(posesAlongStreet(Array.from({ length: 13 }, (_, civilian) => 1 + civilian * 0.5)), 0, 0, IN_SIGHT, FRAME_SECONDS);
+    const slots = Array.from({ length: 13 }, (_, civilian) => art.slotOfCivilian(civilian));
+    expect(slots.filter((slot) => slot >= 0 && slot < 12).length, "full-body slots held").toBe(12);
+    expect(slots.filter((slot) => slot >= 12).length, "street slots held").toBe(1);
   });
 });
