@@ -11,6 +11,8 @@ const CELL = 4;
 const STOOP_MIDDLE = STOOP.run / 2;
 /** The grid's cells are numbered up to half this many each way from the origin (a cell is 4 m: the open world is some hundreds of metres across). */
 const CELL_KEYS = 4096;
+/** A walker on the sidewalk is kept this far (m) beyond a stoop's foot: half a body and the drawn walk's lag. */
+const KEEP_CLEAR = 0.6;
 
 /** The cell `column`, `row` as one number. */
 function cellKey(column: number, row: number): number {
@@ -67,6 +69,26 @@ export class Stoops {
         lift += STOOP.rise * climbed * climbed * (3 - 2 * climbed);
       }
       feetY[at] = lift;
+      return;
+    }
+  }
+
+  /** A sidewalk walker at (`xs[at]`, `zs[at]`) who would stand on a stoop, or within `KEEP_CLEAR` of its foot, is moved straight out from the facade until she is clear. Past the stoop's sides the keep-out narrows at 45 degrees, so she slides round it. */
+  keepOut(xs: Float32Array, zs: Float32Array, at: number): void {
+    const x = xs[at]!;
+    const z = zs[at]!;
+    const houses = this.cells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL)));
+    if (houses === undefined) return;
+    for (let found = 0; found < houses.length; found++) {
+      const house = houses[found]!;
+      const dx = x - this.frontX[house]!;
+      const dz = z - this.frontZ[house]!;
+      const out = dx * this.cosYaw[house]! - dz * this.sinYaw[house]!;
+      const across = Math.abs(dx * this.sinYaw[house]! + dz * this.cosYaw[house]! - DOOR.across);
+      const need = STOOP.run + KEEP_CLEAR - Math.max(0, across - STOOP.width / 2);
+      if (out < -DOOR_DEPTH || out >= need) continue;
+      xs[at] = x + (need - out) * this.cosYaw[house]!;
+      zs[at] = z - (need - out) * this.sinYaw[house]!;
       return;
     }
   }
