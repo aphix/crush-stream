@@ -16,7 +16,7 @@ import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { WorldStage } from "./engine-world.ts";
 import { FACADE_HOMES, FACADE_HOMES_FRAME } from "./facade-homes.ts";
-import { FACADE, FACADE_GLOW, FACADE_LAYERS, FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, facadeOpenLoop, setDarkFacades, setOpenFacades, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, SLAB_STYLE } from "./facades.ts";
+import { FACADE, FACADE_CUT_GLSL, FACADE_GLOW, FACADE_LAYERS, FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, facadeOpenLoop, setDarkFacades, setOpenFacades, facadeDepth, facadeMapUrl, facadeStyle, type FacadeStyle, LAYER, makeFacadeMaterials, placedFacadeStyle, ROOF_LAYER, SLAB_STYLE } from "./facades.ts";
 import type { PrefabMaterials } from "./prefab-pieces.ts";
 import { disposePrefabMaterials, makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { setReliefDevice, setReliefTier } from "./surface-relief.ts";
@@ -400,6 +400,29 @@ describe("given a style whose layer data names no relief strips", () => {
       expect(shader.vertexShader.includes("facadeOpenAt[i].z"), `${style} vertex weighs each listed building by how far open it is`).toBe(open);
       expect(shader.fragmentShader.includes("facadeCuts(vFacadeOpen)"), `${style} fragment`).toBe(open);
       expect(shader.fragmentShader.includes("facadeGlowMap, vec3(vMapUv, vFacadeRegion.x)).r > 0.5"), `${style} cuts the glass of a window, not its frame`).toBe(open);
+    }
+  });
+
+  // mutation: sed -i 's/  return noise < amount \* mix(\${OPEN_WINDOW_CUT.toFixed(2)}, 1.0, facadeGlow);/  return noise < amount * \${OPEN_WINDOW_CUT.toFixed(2)};/' src/game/present/facades.ts
+  it("when the cut of a window's painted glass is read at full opening, then by day half of it is kept over the room and at night none is, and at half opening by night half is cut", () => {
+    const [, share] = /return noise < amount \* mix\(([\d.]+), 1\.0, facadeGlow\);/.exec(FACADE_CUT_GLSL) ?? [];
+    expect(share, "the cut reads its share through the night's mix").toBeDefined();
+    const cut = (amount: number, glow: number): number => Math.min(1, amount * (Number(share) * (1 - glow) + glow));
+    expect(cut(1, 0), "full opening by day: the share the picture keeps").toBe(Number(share));
+    expect(Number(share), "by day some glass is kept").toBeLessThan(1);
+    expect(cut(1, 1), "full opening by night: all of it cut").toBe(1);
+    expect(cut(0.5, 1), "half opening by night").toBe(0.5);
+    expect(cut(0, 1), "shut by night: none cut").toBe(0);
+  });
+
+  // mutation: sed -i 's/  return noise < amount \* mix(\${OPEN_WINDOW_CUT.toFixed(2)}, 1.0, facadeGlow);/  return noise < amount * \${OPEN_WINDOW_CUT.toFixed(2)};/' src/game/present/facades.ts
+  it("when an open style is compiled, then its fragment declares the glow uniform before the cut that reads it, and the cut is whole at night", () => {
+    const made = makeFacadeMaterials();
+    for (const style of STYLES.filter((name) => FACADE_LAYERS[name].open === true)) {
+      const { fragmentShader } = compileFacade(made[style]);
+      expect(fragmentShader, `${style} cuts all the glass at night`).toContain("return noise < amount * mix(0.55, 1.0, facadeGlow);");
+      expect(fragmentShader.indexOf("uniform float facadeGlow;"), `${style} declares the glow`).toBeGreaterThanOrEqual(0);
+      expect(fragmentShader.indexOf("uniform float facadeGlow;"), `${style} declares the glow before the cut`).toBeLessThan(fragmentShader.indexOf("bool facadeCuts"));
     }
   });
 
