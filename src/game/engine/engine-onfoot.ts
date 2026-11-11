@@ -67,21 +67,21 @@ interface OnFootHost {
   adopt(index: number): void;
 }
 
-/** The control that gets him out and in: Enter on the keyboard (`SEAT_KEYS.onFoot`), B (Circle) on the pad. Neither drives, steers or switches a scene. */
-const ON_FOOT_BUTTON = 1 << PAD_BUTTON.east;
+/** The control that gets him out and in: Enter on the keyboard (`SEAT_KEYS.onFoot`), Y (Triangle) on the pad. Neither drives, steers or switches a scene. */
+const ON_FOOT_BUTTON = 1 << PAD_BUTTON.north;
 /** Keys the car's seat uses that mean nothing on foot (and would pause, reset or switch cars under his feet). */
 const SWALLOWED_KEYS: readonly string[] = ["Space", SEAT_KEYS.reset, SEAT_KEYS.stepOut, SEAT_KEYS.previousCar, SEAT_KEYS.nextCar, ...SEAT_KEYS.camera];
 const BACK_BUTTON = 1 << PAD_BUTTON.back;
-/** The pad's View button (Y, Triangle): the drive views in the seat, the on-foot views out of it. */
-const VIEW_BUTTON = 1 << PAD_BUTTON.north;
+/** The pad's View button (B, Circle): the drive views in the seat, the on-foot views out of it. */
+const VIEW_BUTTON = 1 << PAD_BUTTON.east;
 /** The pad's reset (D-pad down, the touch Respawn): in the open world it puts him back in a fresh car (`resetsToCar`). */
 const RESET_BUTTON = 1 << PAD_BUTTON.down;
 const SWALLOWED_BUTTONS = BACK_BUTTON | VIEW_BUTTON | (1 << PAD_BUTTON.lb) | (1 << PAD_BUTTON.rb) | RESET_BUTTON;
 
-/** A stick pushed less than this far does not move him (research: pad dead zone 0.12-0.18); a push beyond it walks from this speed (m/s) up to a run along this curve (research: 1.5-2). */
-const WALK_DEADZONE = 0.15;
+/** The slowest speed (m/s) a push that clears the pad's own dead zone asks for; the pad reader (`gamepad.ts`) owns the one dead zone and curve. */
 const CREEP_SPEED = 0.8;
-const STICK_CURVE = 1.5;
+/** A push below this (the reader's output, 0 inside its dead zone) does not move him. */
+const WALK_STOP = 0.01;
 /** While he climbs into his car the camera draws back by this share of its distance. */
 const ENTER_PULL_BACK = 1.35;
 /** A car that has just run him down does not do it again for this long (s): the launch carries him through its footprint. */
@@ -229,7 +229,7 @@ export class OnFootDirector {
     seat.mode = "drive";
   }
 
-  /** View (V, T, C, the pad's Y, the HUD's camera) on foot: over the shoulder to his eyes and back. Nothing while he climbs in or out. */
+  /** View (V, T, C, the pad's B, the HUD's camera) on foot: over the shoulder to his eyes and back. Nothing while he climbs in or out. */
   cycleView(): void {
     if (this.flow.phase !== "onFoot" || !this.framed) return;
     const { view } = this.host;
@@ -420,12 +420,11 @@ export class OnFootDirector {
     }
   }
 
-  /** The speed (m/s) a push of `reach` (0 to 1) asks for: Boost sprints, the walk control holds a walk, else the push walks from a creep up to a run along `STICK_CURVE`. */
+  /** The speed (m/s) a push of `reach` (0 to 1) asks for: Boost sprints, the walk control holds a walk, else the push walks from a creep up to a run along the reader's curve. */
   private pace(intent: WalkIntent, reach: number): number {
     if (intent.sprint) return SPRINT_SPEED;
     if (intent.walk) return WALK_SPEED;
-    const push = (Math.min(1, reach) - WALK_DEADZONE) / (1 - WALK_DEADZONE);
-    return CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) * push ** STICK_CURVE;
+    return CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) * Math.min(1, reach);
   }
 
   /** The stick and keys, relative to the camera, into the walker's heading and speed. */
@@ -434,7 +433,7 @@ export class OnFootDirector {
     const walker = ragdolls.walker;
     const intent = readWalkIntent(keys, pad, touch, this.intent);
     const reach = hypot2(intent.forward, intent.strafe);
-    if (reach < WALK_DEADZONE) {
+    if (reach < WALK_STOP) {
       walker.command = 0;
       return;
     }
@@ -604,7 +603,7 @@ export class OnFootDirector {
     if (refused !== null) return refused;
     if (!this.host.available()) return null;
     if (this.flow.phase === "arrested") return "Under arrest";
-    if (this.flow.phase === "onFoot") return this.reach ? "Enter or B: get in" : REFUSAL_TEXT.noCarInReach;
-    return this.carAtWheel() !== null ? "Enter or B: get out" : null;
+    if (this.flow.phase === "onFoot") return this.reach ? "Enter or Y: get in" : REFUSAL_TEXT.noCarInReach;
+    return this.carAtWheel() !== null ? "Enter or Y: get out" : null;
   }
 }

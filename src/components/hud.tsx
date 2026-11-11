@@ -121,7 +121,7 @@ function seatHint(state: CrashHudState): { title: string; keys: string } {
   if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad !== null, state.foot.prompt) };
   if (state.race && state.seat === "drive") {
     const keys = state.pad
-      ? "RT gas · LT brake, then reverse · left stick steer · X handbrake · A boost · Y view · R3 look back · D-pad ↓ respawn · hold D-pad ↓ back on the road, damage kept · Start pause"
+      ? "RT gas · LT brake, then reverse · left stick steer · X handbrake · A boost · B view · R3 look back · D-pad ↓ respawn · hold D-pad ↓ back on the road, damage kept · Start pause"
       : "W gas · S brake, then reverse · A/D steer · Space handbrake · Shift boost · V view · ` look back · R respawn · hold R back on the road, damage kept · Esc pause";
     return { title: `Racing · ${CAM_LABEL[state.cam ?? state.view]}`, keys: state.foot?.prompt ? `${keys} · ${state.foot.prompt}` : keys };
   }
@@ -134,7 +134,7 @@ function seatHint(state: CrashHudState): { title: string; keys: string } {
     return {
       title: state.cam ? `Watching · ${CAM_LABEL[state.cam]}` : "Watching",
       keys: state.pad
-        ? "RT, LT or left stick to drive · LB/RB switch car · Y camera · right stick look · R3 look back · Back exit"
+        ? "RT, LT or left stick to drive · LB/RB switch car · B camera · right stick look · R3 look back · Back exit"
         : "W/A/S/D to drive · Q/E switch car · V camera · drag look · ` look back · Esc back",
     };
   }
@@ -574,7 +574,7 @@ function DriveHint({ state, engine }: { state: CrashHudState; engine: HudProps["
         {state.pad ? <span className="hud-label ml-2 text-fg/80">{state.pad} connected</span> : null}
       </p>
       {state.cam ? (
-        <Button variant="ghost" className="hud-ink pointer-events-auto -ml-2 h-8 gap-1.5 px-2 text-fg/80 hover:bg-surface/60 hover:text-fg" aria-label="Camera view" aria-keyshortcuts="V" title={`Camera view · ${state.pad ? "Y" : "V"}`} onMouseDown={(e) => e.preventDefault()} onClick={() => engine.current?.cycleCamera()}>
+        <Button variant="ghost" className="hud-ink pointer-events-auto -ml-2 h-8 gap-1.5 px-2 text-fg/80 hover:bg-surface/60 hover:text-fg" aria-label="Camera view" aria-keyshortcuts="V" title={`Camera view · ${state.pad ? "B" : "V"}`} onMouseDown={(e) => e.preventDefault()} onClick={() => engine.current?.cycleCamera()}>
           <Video />
           <span className="text-xs">View · {CAM_LABEL[state.cam]}</span>
         </Button>

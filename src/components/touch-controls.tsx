@@ -144,7 +144,7 @@ function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
       ) : null}
       {/* View cycles the spectator cam (the whole field's: orbit and free fly); a spectated race car has it on the Spectating bar. */}
       {!race?.spectating ? (
-        <PadButton engine={engine} button={PAD_BUTTON.north} name="view" label="Camera view" caption="View" className={STRIP_BUTTON}>
+        <PadButton engine={engine} button={PAD_BUTTON.east} name="view" label="Camera view" caption="View" className={STRIP_BUTTON}>
           <Video />
         </PadButton>
       ) : null}

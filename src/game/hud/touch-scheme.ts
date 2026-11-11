@@ -114,9 +114,9 @@ export function releaseTouchButton(touch: TouchPad, button: number): void {
   touch.held &= ~(1 << button);
 }
 
-/** The Out / In tap: the pad's B for one poll, never held, so one tap is one get out or get in. */
+/** The Out / In tap: the pad's Y for one poll, never held, so one tap is one get out or get in. */
 export function tapOnFoot(touch: TouchPad): void {
-  touch.tapped |= 1 << PAD_BUTTON.east;
+  touch.tapped |= 1 << PAD_BUTTON.north;
 }
 
 /** How far (a fraction of the disc's radius) the knob must move before the disc reads anything: a resting thumb is not a nudge. */

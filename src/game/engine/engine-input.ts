@@ -929,7 +929,7 @@ export abstract class EngineInput extends EngineRigs {
     if ((hit & (1 << PAD_BUTTON.back)) !== 0 && !this.view.leaveFree()) this.seat.esc();
     if ((hit & (1 << PAD_BUTTON.lb)) !== 0 && !this.cycleAutoSubject(-1)) this.seat.cycle(-1, this.carCount);
     if ((hit & (1 << PAD_BUTTON.rb)) !== 0 && !this.cycleAutoSubject(1)) this.seat.cycle(1, this.carCount);
-    if ((hit & (1 << PAD_BUTTON.north)) !== 0) this.cycleCamera();
+    if ((hit & (1 << PAD_BUTTON.east)) !== 0) this.cycleCamera();
     if (driving && (hit & (1 << PAD_BUTTON.down)) !== 0) this.recoverDriven();
     this.emitHud();
   }
@@ -953,7 +953,7 @@ export abstract class EngineInput extends EngineRigs {
     this.race.holdFill = this.resetHold.fill;
   }
 
-  /** Pad buttons during a race (no menu up): Start / Back pause, LB/RB spectate, Y view, D-pad ↓ respawn. */
+  /** Pad buttons during a race (no menu up): Start / Back pause, LB/RB spectate, B view, D-pad ↓ respawn. */
   private racePad(hit: number): void {
     const press = (b: number) => (hit & (1 << b)) !== 0;
     // Through raceCommand: a client may not pause (the host runs the race), so it can't get stuck in a pause it can't leave.
@@ -961,12 +961,12 @@ export abstract class EngineInput extends EngineRigs {
     if (press(PAD_BUTTON.start) || (press(PAD_BUTTON.back) && !backed)) this.raceCommand({ type: "pause" });
     if (press(PAD_BUTTON.lb) && !this.cycleAutoSubject(-1)) this.race.cycle(-1);
     if (press(PAD_BUTTON.rb) && !this.cycleAutoSubject(1)) this.race.cycle(1);
-    if (press(PAD_BUTTON.north)) this.cycleCamera();
+    if (press(PAD_BUTTON.east)) this.cycleCamera();
     this.emitHud();
   }
 
   /**
-   * View (V / T / Y, the HUD camera button): the on-foot views while the player is out of his car, the driven car's chase view, or the followed car's spectator cam (the rigs' too: the orbit is
+   * View (V / T / B, the HUD camera button): the on-foot views while the player is out of his car, the driven car's chase view, or the followed car's spectator cam (the rigs' too: the orbit is
    * their default), the free view last among them. The whole field has no car to cycle round: View flies free from it and back. The
    * garage has one view, its own orbit round what is being painted.
    */
