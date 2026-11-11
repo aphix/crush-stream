@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
+import { MAT } from "../kernel/material-ids.ts";
 import { PREFAB } from "../world/constants.ts";
 import { LeafMaterial, leafDepth, NatureMaterial, setNatureTier } from "./nature-look.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
@@ -57,33 +58,40 @@ describe("given the material of rocks, trees, palms and bushes", () => {
 
 describe("given the street trees' leaf material", () => {
   const compileLit = (material: THREE.Material): string => {
-    const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\nvoid main() {\n#include <normal_fragment_maps>\n#include <lights_physical_fragment>" } as THREE.WebGLProgramParametersWithUniforms;
+    const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\nvoid main() {\n#include <map_fragment>\n#include <normal_fragment_begin>\n#include <normal_fragment_maps>\n#include <lights_physical_fragment>" } as THREE.WebGLProgramParametersWithUniforms;
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
     return shader.fragmentShader;
   };
 
-  // mutation: sed -i 's/    this.flatShading = false;/    this.flatShading = true;/' src/game/present/nature-look.ts
-  it("when it is made or copied for another draw kind, then it is smooth-shaded and two-sided, keeps the nature look, and cuts the leaves' holes before the lighting reads the colour", () => {
-    for (const material of [new LeafMaterial(), new LeafMaterial().clone()]) {
+  // mutation: sed -i 's/    this.alphaTest = LEAF_ALPHA_TEST;/    this.alphaTest = 0;/' src/game/present/nature-look.ts
+  it("when it is made or copied for another draw kind, then it is smooth-shaded and two-sided, keeps the nature look, and cuts leaf fragments by its atlas's alpha, not by noise", () => {
+    const texture = new THREE.Texture();
+    for (const material of [new LeafMaterial(texture), new LeafMaterial(texture).clone()]) {
       expect(material.flatShading, "smooth").toBe(false);
-      expect(material.side, "two-sided: a hole shows the crown's inside").toBe(THREE.DoubleSide);
+      expect(material.side, "two-sided").toBe(THREE.DoubleSide);
+      expect(material.alphaTest, "cut by the atlas's alpha").toBe(0.45);
+      expect(material.alphaToCoverage, "softened by coverage").toBe(true);
+      expect(material.map, "the atlas travels with the copy").toBe(texture);
       const fragment = compileLit(material);
       expect(fragment, "the nature look").toContain("natureShade");
-      expect(fragment.indexOf("discard;"), "a leafy outline, before lighting").toBeGreaterThan(-1);
-      expect(fragment.indexOf("discard;"), "a leafy outline, before lighting").toBeLessThan(fragment.indexOf("#include <lights_physical_fragment>"));
+      expect(fragment, "the atlas").toContain("texture2D(map, vMapUv)");
+      expect(fragment, "a leaf card's bent normal is the same on both faces").toContain(`if (int(vMaterialAttribute + 0.5) != ${MAT.CONIFER_FOLIAGE}) normal *= faceDirection;`);
+      expect(fragment, "no noise holes").not.toContain("leafFineAt");
       expect(material.customProgramCacheKey(), "a program of its own").not.toBe(new NatureMaterial().customProgramCacheKey());
     }
   });
 
-  // mutation: sed -i 's/  return material instanceof LeafMaterial ? LEAF_DEPTH : null;/  return null;/' src/game/present/nature-look.ts
-  it("when its shadow is drawn, then the leaf material and its copies cast through a depth material that cuts the same holes in leaf fragments, and the nature material casts through the plain one", () => {
+  // mutation: sed -i 's/  if (!(material instanceof LeafMaterial)) return null;/  return null;/' src/game/present/nature-look.ts
+  it("when its shadow is drawn, then the leaf material and its copies cast through a depth material that carries their atlas and cuts leaf fragments by its alpha, and the nature material casts through the plain one", () => {
     expect(leafDepth(new NatureMaterial()), "rocks and old trees").toBeNull();
-    const depth = leafDepth(new LeafMaterial());
-    expect(depth, "a copy for another draw kind").toBe(leafDepth(new LeafMaterial().clone()));
-    const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\nvoid main() {\n#include <clipping_planes_fragment>\n}" } as THREE.WebGLProgramParametersWithUniforms;
+    const texture = new THREE.Texture();
+    const depth = leafDepth(new LeafMaterial(texture));
+    expect(depth, "a copy for another draw kind").toBe(leafDepth(new LeafMaterial(texture).clone()));
+    expect(depth!.map, "its atlas").toBe(texture);
+    expect(depth!.alphaTest, "cut by alpha").toBe(0.45);
+    const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <begin_vertex>", fragmentShader: "#include <common>\nvoid main() {\n#include <clipping_planes_fragment>\n#include <map_fragment>\n}" } as THREE.WebGLProgramParametersWithUniforms;
     depth!.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
-    expect(shader.vertexShader, "the leaf class and world point handed on").toContain("vLeafWorld = (modelMatrix * natureAt).xyz;");
-    expect(shader.fragmentShader, "the leaf holes cut in the shadow").toContain("leafFineAt(leafCellOf(vLeafWorld))");
-    expect(shader.fragmentShader.indexOf("discard;"), "cut after the clipping").toBeGreaterThan(shader.fragmentShader.indexOf("#include <clipping_planes_fragment>"));
+    expect(shader.vertexShader, "the leaf class handed on").toContain("vLeafClass = materialClass;");
+    expect(shader.fragmentShader, "the atlas read on leaf fragments").toContain("texture2D(map, vMapUv)");
   });
 });

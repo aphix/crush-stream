@@ -15,9 +15,10 @@ import type { Placed } from "../world/placements.ts";
 import { TREE_SCALE } from "../world/scenery.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { cyl, painted, type Piece } from "./prefab-pieces.ts";
+import { LEAF_CELLS } from "./leaf-atlas.ts";
 import { prefabParts } from "./prefabs.ts";
 import { PropTumble } from "./prop-tumble.ts";
-import { streetTreePieces, treeOf } from "./street-trees.ts";
+import { cardPieces, streetTreePieces, treeOf } from "./street-trees.ts";
 
 /** The most a pit may stand proud of the paving (m), and the most of the ivy's height. */
 const PIT_TOP_MAX = 0.1;
@@ -158,24 +159,35 @@ describe("given the street trees' drawings", () => {
 });
 
 describe("given a street tree's crown", () => {
-  // mutation: sed -i 's/^  ball.setAttribute("normal", ball.getAttribute("position").clone());$//' src/game/present/street-trees.ts
-  it("when it is built, then it is drawn on the leaf material and every corner of a canopy lump has one normal, whichever face it is on, so the crown shades round", () => {
+  // mutation: sed -i 's/outward.multiplyScalar(0.8).addScaledVector(normal, 0.2 \* facing).normalize();/outward.multiplyScalar(-0.8).addScaledVector(normal, 0.2 * facing).normalize();/' src/game/present/street-trees.ts
+  it("when it is built, then it is drawn on the leaf material, and a lump made into leaf cards is two triangles a card, each reading one atlas cell of its species, every corner's normal pointing out from the lump's middle", () => {
     const leaves = new THREE.MeshBasicMaterial();
     const mats = { ...plainMaterials(new THREE.MeshBasicMaterial()), leaves };
-    for (const skin of skins) {
-      expect(prefabParts(PREFAB.tree, mats, skin)[0]!.material, skin).toBe(leaves);
-      for (const piece of streetTreePieces(skin).filter((p) => p[2] === MAT.CONIFER_FOLIAGE)) {
-        const flat = piece[0].index ? piece[0].toNonIndexed() : piece[0];
-        const position = flat.getAttribute("position");
-        const normal = flat.getAttribute("normal");
-        const seen = new Map<string, number>();
-        for (let at = 0; at < position.count; at++) {
-          const corner = [position.getX(at), position.getY(at), position.getZ(at)].map((v) => v.toFixed(4)).join();
-          const first = seen.get(corner);
-          if (first === undefined) seen.set(corner, at);
-          else expect(normal.getX(at) * normal.getX(first) + normal.getY(at) * normal.getY(first) + normal.getZ(at) * normal.getZ(first), `${skin} corner ${corner}`).toBeCloseTo(1, 5);
-        }
+    for (const skin of skins) expect(prefabParts(PREFAB.tree, mats, skin)[0]!.material, skin).toBe(leaves);
+    const pieces = cardPieces([0, 5, 0, 2, 1.5, 2, 0x336633], 7, 30, 1.2, "linden");
+    expect(pieces.length, "cards").toBe(30);
+    for (const [geometry] of pieces) {
+      expect(geometry.index!.count / 3, "triangles a card").toBe(2);
+      const position = geometry.getAttribute("position");
+      const normal = geometry.getAttribute("normal");
+      const uv = geometry.getAttribute("uv");
+      for (let at = 0; at < position.count; at++) {
+        const [x, y, z] = [position.getX(at), position.getY(at) - 5, position.getZ(at)];
+        const cell = LEAF_CELLS.linden.some(([u0, v0, du, dv]) => uv.getX(at) >= u0 - EPSILON && uv.getX(at) <= u0 + du + EPSILON && uv.getY(at) >= v0 - EPSILON && uv.getY(at) <= v0 + dv + EPSILON);
+        expect(cell, "uv inside one atlas cell of the linden").toBe(true);
+        expect(normal.getX(at) * x + normal.getY(at) * y + normal.getZ(at) * z, "normal points out from the lump's middle").toBeGreaterThan(0);
+        expect((x / 2) ** 2 + (y / 1.5) ** 2 + (z / 2) ** 2, "corner inside the lump").toBeLessThanOrEqual(1.001);
       }
+    }
+  });
+
+  // mutation: sed -i 's/plane: { count: 120, edge: 2.4, species/plane: { count: 400, edge: 2.4, species/' src/game/present/street-trees.ts
+  it("when each kind's tree is built, then it is at most 450 triangles and at least 20 of its pieces are leaf cards", () => {
+    const triangles = (pieces: Piece[]): number => pieces.reduce((n, [g]) => n + (g.index ? g.index.count : g.getAttribute("position").count) / 3, 0);
+    for (const skin of skins) {
+      const pieces = streetTreePieces(skin);
+      expect(triangles(pieces), `${skin} triangles`).toBeLessThanOrEqual(450);
+      expect(pieces.filter((piece) => piece[2] === MAT.CONIFER_FOLIAGE).length, `${skin} leaf cards`).toBeGreaterThanOrEqual(20);
     }
   });
 });
