@@ -30,6 +30,8 @@ const RATE_MAX = 40;
 const SETTLE_CADENCE = 1.6;
 /** How fast (1/s) the cadence follows its target, so a jump in speed does not jump the stride. */
 const CADENCE_EASE = 10;
+/** The cadence (cycles a second) a seeded gait starts easing from. */
+const SEED_CADENCE = 1;
 /** Steps come quicker while he is pushing up to speed: cycles a second more per m/s² of acceleration, and the most (cycles a second). */
 const CADENCE_PER_PUSH = 0.07;
 const CADENCE_MAX = 2.6;
@@ -195,7 +197,7 @@ export class Gait {
     this.pathX = x;
     this.pathZ = z;
     this.twist = this.sway = this.hipRise = this.hop = 0;
-    this.cadence = SETTLE_CADENCE;
+    this.cadence = SEED_CADENCE;
     this.hipY = y - HIP_DROP;
     this.dirX = detSin(yaw);
     this.dirZ = detCos(yaw);

@@ -18,6 +18,8 @@ const PACE_LOOK = 0.2;
 const PACE_REACH = 0.6;
 /** The pace (m/s) he keeps over steps: the gait's two steps in 0.95 s then reach 0.24 m, a stair tread (0.26 to 0.28 m) or less, so each foot lands on its own tread. */
 const STEP_PACE = 0.5;
+/** The step's edge is found to within `PACE_LOOK` / 2^this m, so the pace ramps smoothly as it nears. */
+const EDGE_BISECTIONS = 5;
 /** The torso's centre stands this high (m) over the floor. */
 const TORSO_HEIGHT = PARTS[0].c[1];
 
@@ -85,13 +87,24 @@ export class WalkFloor {
     const sin = detSin(yaw);
     const cos = detCos(yaw);
     for (let ahead = PACE_LOOK; ahead <= PACE_REACH + PACE_LOOK / 2; ahead += PACE_LOOK) {
-      const floor = this.under(x + sin * ahead, z + cos * ahead);
-      if (floor !== NO_FLOOR && Math.abs(floor - this.level) >= STEP_RISE) {
-        const far = Math.max(0, Math.min(1, (ahead - PACE_LOOK) / (PACE_REACH - PACE_LOOK)));
-        return Math.min(command, STEP_PACE + (command - STEP_PACE) * far);
+      if (!this.stepAt(x, z, sin, cos, ahead)) continue;
+      let near = ahead - PACE_LOOK;
+      let far = ahead;
+      for (let i = 0; i < EDGE_BISECTIONS; i++) {
+        const mid = (near + far) / 2;
+        if (this.stepAt(x, z, sin, cos, mid)) far = mid;
+        else near = mid;
       }
+      const share = Math.max(0, Math.min(1, (far - PACE_LOOK) / (PACE_REACH - PACE_LOOK)));
+      return Math.min(command, STEP_PACE + (command - STEP_PACE) * share);
     }
     return command;
+  }
+
+  /** Whether the floor `ahead` m along (`sin`, `cos`) from (`x`, `z`) is a step away from his level. */
+  private stepAt(x: number, z: number, sin: number, cos: number, ahead: number): boolean {
+    const floor = this.under(x + sin * ahead, z + cos * ahead);
+    return floor !== NO_FLOOR && Math.abs(floor - this.level) >= STEP_RISE;
   }
 
   /** The gait has stepped: the higher floor under a planted foot's pivot (`plant` x, y, z per foot) is `level`. */

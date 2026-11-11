@@ -144,17 +144,21 @@ describe("given a walker at each speed", () => {
 });
 
 describe("given the target speed against the heading error", () => {
+  /** The target speed at heading error `e` for a sprint, the error having grown from 0 to it in 1 mrad steps (so the band is the one a turn arrives in). */
   const target = (e: number) => {
     const loco = new Locomotion();
     loco.reset(0);
-    return loco["targetSpeed"](3, e);
+    for (let i = 0; i <= Math.round(e * 1000); i++) loco["pickBand"](i / 1000);
+    return loco["targetSpeed"](SPRINT_SPEED, e);
   };
-  // mutation: sed -i 's/return curve + (pivot - curve) \* ((aError - PIVOT_IN) \/ (STOP_IN - PIVOT_IN));/return pivot;/' src/game/present/walker-locomotion.ts
-  it("when the error crosses the pivot and the stop edges, then the target moves by under 0.05 m/s", () => {
-    for (const edge of [1.3, 2.1]) {
-      expect(Math.abs(target(edge + 0.001) - target(edge - 0.001)), `jump at ${edge}`).toBeLessThan(0.05);
-    }
-    expect(Math.abs(target(2.4 + 0.001) - target(2.4 - 0.001)), "jump where the stop is reached").toBeLessThan(0.05);
+  // mutation: sed -i 's/return curve + (pivot - curve) \* Math.min(1, (aError - PIVOT_IN) \/ PIVOT_RAMP);/return pivot;/' src/game/present/walker-locomotion.ts
+  it("when the error crosses the pivot edge, then the target moves by under 0.05 m/s", () => {
+    expect(Math.abs(target(1.301) - target(1.299)), "jump at the pivot edge").toBeLessThan(0.05);
+  });
+  // mutation: sed -i 's/pivot \* Math.max(0, 1 - (aError - STOP_IN) \/ STOP_FADE)/0/' src/game/present/walker-locomotion.ts
+  it("when the error crosses the stop edge and the fade's end, then the target moves by under 0.05 m/s and is 0 beyond", () => {
+    expect(Math.abs(target(2.101) - target(2.099)), "jump at the stop edge").toBeLessThan(0.05);
+    expect(Math.abs(target(2.401) - target(2.399)), "jump where the fade ends").toBeLessThan(0.05);
     expect(target(2.6)).toBe(0);
   });
 });

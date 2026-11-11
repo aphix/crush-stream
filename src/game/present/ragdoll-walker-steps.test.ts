@@ -218,8 +218,8 @@ describe("given the paced command and a curb ahead", () => {
     const floor = new WalkFloor();
     floor.boxes = [{ x0: -4, x1: 4, z0: 0.6, z1: 4, y0: 0, y1: 0.15 }];
     const paces: number[] = [];
-    for (let z = 0; z <= 0.7; z += 0.01) paces.push(floor.pace(0, z, 0, RUN_SPEED));
-    // mutation: sed -i 's/STEP_PACE + (command - STEP_PACE) \* far/STEP_PACE/' src/game/present/walker-floor.ts
+    for (let z = -0.2; z <= 0.7; z += 0.01) paces.push(floor.pace(0, z, 0, RUN_SPEED));
+    // mutation: sed -i 's/STEP_PACE + (command - STEP_PACE) \* share/STEP_PACE/' src/game/present/walker-floor.ts
     let worst = 0;
     for (let i = 1; i < paces.length; i++) worst = Math.max(worst, Math.abs(paces[i]! - paces[i - 1]!));
     expect(worst, `largest 1 cm step in pace ${worst.toFixed(3)} m/s`).toBeLessThan(0.2);
