@@ -19,6 +19,8 @@ const LAG_BEYOND_LEASH_M = 5;
 const SIDE_ERROR_M = 0.1;
 const BEHIND_ERROR_M = 0.2;
 const MOST_OFF_HER_WAY_RAD = 0.35;
+/** How far (m) beside her spot a body is when the spot has swerved round a stoop. */
+const SWERVE_M = 2;
 
 /** A civilian at (x, z) walking along +z at 1.4 m/s, on the street, shown. */
 function walker(poses: ReturnType<typeof createCrowdPoses>, civilian: number, x: number, z: number): void {
@@ -256,24 +258,31 @@ describe("given a civilian a car runs down while her body stands for her", () =>
   });
 });
 
-describe("given a civilian whose drawn spot the crowd moved to clear a stoop", () => {
-  // mutation: sed -i 's/ || poses.kept\[civilian\] === 1//' src/game/engine/openworld-bodies.ts
-  it("when the bodies are given out, then she has none and the civilian beside her does", () => {
-    const { poses, bodies, run } = world();
-    walker(poses, 0, 2, 0);
-    walker(poses, 1, 3, 0);
-    poses.kept[0] = 1;
-    run(SETTLE_STEPS);
-    expect([bodies.slotOf(0), bodies.held[0]], "kept out of a stoop: drawn by the crowd").toEqual([-1, 0]);
-    expect(bodies.held[1], "the other stands on a body").toBe(1);
+/** The body steered for civilian 0 after her body was put `beside` m to the side of her spot, her spot marked kept (swerved round a stoop). */
+function steeredBeside(beside: number): { heading: number; speed: number; yaw: number } {
+  const { host, poses, bodies, run } = world();
+  walker(poses, 0, 2, 0);
+  run(SETTLE_STEPS);
+  const body = host.bodies.get(bodies.slotOf(0))!;
+  poses.kept[0] = 1;
+  body.x = poses.x[0]! - beside;
+  bodies.step(poses, 0, 0, 10, STEP);
+  return { heading: body.heading, speed: body.speed, yaw: poses.yaw[0]! };
+}
+
+describe("given a civilian whose drawn spot the crowd swerved round a stoop", () => {
+  // mutation: sed -i 's/    const vx = detSin(yaw) \* pace + CATCH_UP \* dx;/    const vx = detSin(yaw) * pace;/' src/game/engine/openworld-bodies.ts
+  it("when her body is 2 m to the side of that spot, then it is steered round toward it: well off her heading, and faster than she walks, so it walks round the steps", () => {
+    const steered = steeredBeside(SWERVE_M);
+    expect(Math.abs(steered.heading - steered.yaw), "heading off hers (rad)").toBeGreaterThan(MOST_OFF_HER_WAY_RAD);
+    expect(steered.speed, "speed (m/s)").toBeGreaterThan(1.4);
   });
 
-  // mutation: sed -i 's/poses.kept\[civilian\] === 1 ||/poses.kept[civilian] === 0 ||/' src/game/engine/openworld-bodies.ts
-  it("when the same civilian is not kept, then she has a body", () => {
-    const { poses, bodies, run } = world();
-    walker(poses, 0, 2, 0);
-    run(SETTLE_STEPS);
-    expect(bodies.held[0]).toBe(1);
+  // mutation: sed -i 's/    const vz = detCos(yaw) \* pace + CATCH_UP \* dz;/    const vz = detCos(yaw) * pace + 1;/' src/game/engine/openworld-bodies.ts
+  it("when her body is on that spot, then it walks with her: her heading and her pace", () => {
+    const steered = steeredBeside(0);
+    expect(steered.heading, "heading").toBeCloseTo(steered.yaw, 5);
+    expect(steered.speed, "pace (m/s)").toBeCloseTo(1.4, 5);
   });
 });
 

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { detCos, detSin } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { DOOR, type Frontage, STOOP, stoopStepRange } from "../../world/openworld/openworld-facade-solids.ts";
 import { Stoops } from "../../world/openworld/openworld-stoops.ts";
 import { ACTIVITY } from "./civilian-activity.ts";
-import { LATERAL_MAX, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE } from "./civilian-constants.ts";
+import { DECISION_HZ, LATERAL_MAX, MAX_PATH_NODES, NEVER_TICK, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import { PACE, people, sendAlong, streetEdge } from "./civilian-crowd-contact.test-util.ts";
-import { newCrowd } from "./civilian-crowd.test-util.ts";
+import { FRAME_SECONDS, newCrowd } from "./civilian-crowd.test-util.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { readActivity } from "./society-activity.ts";
@@ -102,8 +102,7 @@ describe("given a resident who walks out of a rowhome's door along the way its s
 });
 
 /** A rowhome whose front faces the edge's lane, 1.5 m out from its facade, its door line meeting the leg's middle. */
-function houseOnTheLane(): Frontage {
-  const mid = EDGE.length / 2;
+function houseOnTheLane(mid = EDGE.length / 2): Frontage {
   const mx = START.x + EDGE.dirX * mid;
   const mz = START.z + EDGE.dirZ * mid;
   return { ...HOUSE, yaw: HOUSE_YAW + Math.PI / 2, x: mx - 1.5 * EDGE.dirZ - DOOR.across * EDGE.dirX, z: mz + 1.5 * EDGE.dirX - DOOR.across * EDGE.dirZ };
@@ -126,7 +125,7 @@ function outsWhileLevel(house: Frontage, stoops: Stoops | null): number[] {
 }
 
 describe("given a rowhome whose stoop runs out across the sidewalk a resident walks", () => {
-  // mutation: sed -i '/^      if (this.laneWalking\[resident\] === 1 \&\& this.stoops !== null) this.stoops.keepOut(x, z, resident);/d' src/game/ai/civilians/civilian-crowd.ts
+  // mutation: sed -i '/^        this.stoops.keepOut(x, z, resident, this.laneEase\[resident\]!);/d' src/game/ai/civilians/civilian-crowd.ts
   it("when she walks past it on the side of the lane nearest the houses, then she is drawn at least the stoop's run and 0.6 m out from the facade while level with it", () => {
     const outs = outsWhileLevel(houseOnTheLane(), new Stoops([houseOnTheLane()]));
     expect(outs.length, "steps at which she was level with the stoop").toBeGreaterThan(3);
@@ -208,5 +207,70 @@ describe("given a resident whose drawn spot the crowd moves to clear a stoop", (
   // mutation: sed -i 's/^      this.poses.kept\[resident\] = 0;$/      this.poses.kept[resident] = 1;/' src/game/ai/civilians/civilian-crowd.ts
   it("when the same walk has no stoops, then she is never marked kept", () => {
     expect(keptStepsLevel(null)).toBe(0);
+  });
+});
+
+describe("given a resident who comes home up a rowhome's stoop while the law's overlay draws no one", () => {
+  // mutation: sed -i 's/ || (x\[resident\] === drawX\[resident\] \&\& z\[resident\] === drawZ\[resident\])//' src/game/ai/civilians/civilian-crowd.ts
+  it("when she is on the bottom step, then she is lifted by it: only a resident the overlay moved is kept out", () => {
+    const { crowd, person } = leaving(new Stoops([HOUSE], [EDGE.from]), true);
+    crowd.overlay = () => {};
+    crowd.step((EDGE.length - (STOOP.run - STOOP.tread / 2)) / PACE, [], true);
+    expect(crowd.poses.shown[person], "shown on the bottom step").toBe(1);
+    expect(crowd.poses.feetY[person]).toBeCloseTo(STOOP.rise, 3);
+  });
+});
+
+/** A node beside `node` on a street that is not `not`: the other end of a spur that joins the lane there. */
+function neighbourOf(node: number, not: number): number {
+  const { edgeStart, edgeTo, edgeCrossing } = map.graph;
+  for (let edge = edgeStart[node]!; edge < edgeStart[node + 1]!; edge++) if (edgeTo[edge] !== not && edgeCrossing[edge] === 0) return edgeTo[edge]!;
+  throw new Error("the edge's first node has no other street");
+}
+
+/** A resident who walks from a door node (`spur`), 1.5 m of path from the junction, the edge's first node, and on along the edge; a rowhome's stoop 0.5 m along it faces the lane there. Returns how far (m) her drawn spot moves in each frame from 0.5 m before the junction to 2 m past it. */
+function stepsAcrossTheJunction(stoops: boolean): number[] {
+  const spur = neighbourOf(EDGE.from, EDGE.to);
+  const { nodeX, nodeZ } = map.graph;
+  const lead = hypot2(nodeX[EDGE.from]! - nodeX[spur]!, nodeZ[EDGE.from]! - nodeZ[spur]!);
+  const crowd = newCrowd(map);
+  const [person] = people(crowd, 1, true) as [number];
+  const house = houseOnTheLane(0.5);
+  crowd.stoops = stoops ? new Stoops([house], [spur]) : null;
+  const { state } = crowd;
+  const first = person * MAX_PATH_NODES;
+  const intBase = person * RESIDENT_INT_STRIDE;
+  state.pathNodes.set([spur, EDGE.from, EDGE.to], first);
+  state.pathDistance.set([0, lead, lead + EDGE.length], first);
+  state.ints[intBase + RESIDENT_INT.pathCount] = 3;
+  state.ints[intBase + RESIDENT_INT.departTick] = 0;
+  state.ints[intBase + RESIDENT_INT.arriveTick] = Math.ceil(((lead + EDGE.length) / PACE) * DECISION_HZ) + 1;
+  state.ints[intBase + RESIDENT_INT.nextDecisionTick] = NEVER_TICK;
+  state.floats[person * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = PACE;
+  state.floats[person * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.lateral] = 0;
+  const moved: number[] = [];
+  let before: [number, number] | null = null;
+  for (let t = (lead - 0.5) / PACE; t <= (lead + 2) / PACE; t += FRAME_SECONDS) {
+    crowd.step(t, [], true);
+    const here: [number, number] = [crowd.poses.x[person]!, crowd.poses.z[person]!];
+    if (before !== null) moved.push(hypot2(here[0] - before[0], here[1] - before[1]));
+    before = here;
+  }
+  return moved;
+}
+
+describe("given a resident who leaves a rowhome door's spur onto the lane in front of its stoop", () => {
+  // mutation: sed -i 's/^        this.stoops.keepOut(x, z, resident, this.laneEase\[resident\]!);/        this.stoops.keepOut(x, z, resident);/' src/game/ai/civilians/civilian-crowd.ts
+  it("when she is drawn every frame from just before the junction to 2 m past it, then her drawn spot never moves more than 0.2 m in a frame", () => {
+    const moved = stepsAcrossTheJunction(true);
+    expect(moved.length, "frames sampled").toBeGreaterThan(100);
+    expect(Math.max(...moved), "the most her drawn spot moves in one frame (m)").toBeLessThanOrEqual(0.2);
+  });
+
+  // mutation: sed -i 's/^    if (stoops === null) return 1;/    if (stoops !== null) return 1;/' src/game/ai/civilians/civilian-crowd.ts
+  it("when the same walk has no stoops, then her drawn spot moves by her pace in each frame, 0.022 m", () => {
+    const moved = stepsAcrossTheJunction(false);
+    expect(Math.max(...moved), "the most her drawn spot moves in one frame (m)").toBeLessThan(PACE * FRAME_SECONDS * 1.01);
+    expect(Math.min(...moved), "the least").toBeGreaterThan(PACE * FRAME_SECONDS * 0.99);
   });
 });

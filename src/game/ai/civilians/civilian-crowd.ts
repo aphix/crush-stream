@@ -8,7 +8,7 @@ import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import type { DoorSpot } from "./civilian-car-door.ts";
-import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, NEVER_TICK, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
+import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, MAX_PATH_NODES, NEVER_TICK, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
 import { carGap, comingAt } from "./civilian-contact.ts";
 import {
   BUMP_CLOSING_SPEED,
@@ -61,6 +61,8 @@ export type DriverDoors = (resident: number, code: number, out: DoorSpot) => boo
 type CrowdOverlay = (poses: CrowdPoses, crowdSeconds: number, authority: boolean) => void;
 
 /** `CAR_REACH` squared: a civilian within it of a car is tested for a hit (compared squared, no root per car per civilian per frame). */
+/** A lane walker joining the lane from a door's spur (or leaving it for one) is kept out of a stoop in full this far (m) from the junction, and by that share of it nearer. */
+const KEEP_EASE_M = 1;
 const CAR_REACH_SQUARED = CAR_REACH * CAR_REACH;
 const NO_EVENTS: readonly number[] = [];
 const NO_STRIKES: readonly FigureStrike[] = [];
@@ -148,6 +150,8 @@ export class CivilianCrowd {
   private readonly ambulanceTries: Uint8Array;
   /** 1 for a resident walking a leg that is not a door's spur: the ones `Stoops.keepOut` moves. */
   private readonly laneWalking: Uint8Array;
+  /** 0 to 1 per resident: how much of `Stoops.keepOut` her walk now takes (`laneShare`). */
+  private readonly laneEase: Float32Array;
   private readonly ambulanceX: Float32Array;
   private readonly ambulanceZ: Float32Array;
   private lastCrashSeconds = -Infinity;
@@ -179,6 +183,7 @@ export class CivilianCrowd {
     this.ambulanceDue = new Float64Array(capacity).fill(Infinity);
     this.ambulanceTries = new Uint8Array(capacity);
     this.laneWalking = new Uint8Array(capacity);
+    this.laneEase = new Float32Array(capacity);
     this.ambulanceX = new Float32Array(capacity);
     this.ambulanceZ = new Float32Array(capacity);
     this.crimeDesk = new CrimeDesk(capacity);
@@ -225,7 +230,23 @@ export class CivilianCrowd {
     } else this.throwHeardKnocks(cars);
   }
 
-  /** The residents the overlay moved off the spot `separate` drew (the law's suspects, running or led) are kept out of the stoops like the lane's walkers, and no body stands for them: the rest still stand where `separate` left them and are not touched. */
+  /** How far (0 to 1) the keep-out has come in for a lane walker at `pose`: it eases up over `KEEP_EASE_M` m past the junction where she left a door's spur, and down over the last `KEEP_EASE_M` m before the one where she takes a spur to a door; 1 anywhere else. */
+  private laneShare(resident: number, pose: LegPose): number {
+    const stoops = this.stoops;
+    if (stoops === null) return 1;
+    const { pathNodes, ints } = this.state;
+    const { nodeX, nodeZ } = this.state.map.graph;
+    const first = resident * MAX_PATH_NODES;
+    const count = ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.pathCount]!;
+    let step = 0;
+    while (step + 1 < count && pathNodes[first + step] !== pose.from) step++;
+    let share = 1;
+    if (step > 0 && stoops.leadsToDoor(pathNodes[first + step - 1]!, pose.from)) share = ((pose.x - nodeX[pose.from]!) * pose.dirX + (pose.z - nodeZ[pose.from]!) * pose.dirZ) / KEEP_EASE_M;
+    if (step + 2 < count && stoops.leadsToDoor(pose.to, pathNodes[first + step + 2]!)) share = Math.min(share, ((nodeX[pose.to]! - pose.x) * pose.dirX + (nodeZ[pose.to]! - pose.z) * pose.dirZ) / KEEP_EASE_M);
+    return Math.max(0, Math.min(1, share));
+  }
+
+  /** The residents the overlay moved off the spot `separate` drew (the law's suspects, running or led) are kept out of the stoops like the lane's walkers: the rest still stand where `separate` left them and are not touched. */
   private keepOverlaidOut(): void {
     const stoops = this.stoops;
     if (stoops === null) return;
@@ -233,8 +254,10 @@ export class CivilianCrowd {
     const { drawX, drawZ } = this.separation;
     for (let resident = 0; resident < this.separation.capacity; resident++) {
       if (shown[resident] === 0 || (x[resident] === drawX[resident] && z[resident] === drawZ[resident])) continue;
+      const wasX = x[resident]!;
+      const wasZ = z[resident]!;
       stoops.keepOut(x, z, resident);
-      this.poses.kept[resident] = 1;
+      if (x[resident] !== wasX || z[resident] !== wasZ) this.poses.kept[resident] = 1;
     }
   }
 
@@ -435,6 +458,7 @@ export class CivilianCrowd {
         if (!onLeg || !legPositionAt(state, resident, seconds, pose)) continue;
         this.poses.onSpur[resident] = this.stoops !== null && this.stoops.leadsToDoor(pose.from, pose.to) ? 1 : 0;
         this.laneWalking[resident] = this.poses.onSpur[resident] === 1 ? 0 : 1;
+        if (this.laneWalking[resident] === 1) this.laneEase[resident] = this.laneShare(resident, pose);
         brainX[resident] = pose.x;
         brainZ[resident] = pose.z;
         velocityX[resident] = pose.dirX * pose.speed;
@@ -489,7 +513,7 @@ export class CivilianCrowd {
       x[resident] = separation.drawX[resident]!;
       z[resident] = separation.drawZ[resident]!;
       if (this.laneWalking[resident] === 1 && this.stoops !== null) {
-        this.stoops.keepOut(x, z, resident);
+        this.stoops.keepOut(x, z, resident, this.laneEase[resident]!);
         if (x[resident] !== separation.drawX[resident] || z[resident] !== separation.drawZ[resident]) this.poses.kept[resident] = 1;
       }
     }

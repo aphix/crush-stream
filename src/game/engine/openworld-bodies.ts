@@ -191,7 +191,7 @@ export class OpenWorldBodies {
 
   /** Whether civilian \`civilian\` may have a body: shown, walking or standing about, on the street (not on a stoop, not in a building) and within \`radius\` of the eye. */
   private eligible(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number, radius: number): boolean {
-    if (poses.shown[civilian] === 0 || poses.kept[civilian] === 1 || !BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;
+    if (poses.shown[civilian] === 0 || !BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;
     const x = poses.x[civilian]!;
     const z = poses.z[civilian]!;
     if (hypot2(x - eyeX, z - eyeZ) > radius || poses.feetY[civilian]! - this.host.groundAt(x, z) > ON_STREET) return false;
