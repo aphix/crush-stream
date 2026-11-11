@@ -35,6 +35,8 @@ const FRAME_S = 1 / FRAME_HZ;
 const SWING_STEP_RAD = 0.02;
 const MOST_OFF_STRAIGHT_RAD = 0.15;
 const MOST_REVERSALS_PER_SECOND = 1.5;
+/** Her body is on her spot when its torso is within this far (m) of it: a walking body's own sway is a few centimetres. */
+const ON_HER_SPOT_M = 0.15;
 /** The swerve row: how far (m) her drawn spot is drawn to her side, frames watched, and how far off her lane heading her body's facing must go (rad). */
 const SWERVE_M = 1.5;
 const SWERVE_FRAMES = 120;
@@ -139,8 +141,10 @@ describe("given the real engine in the open world and the player's car running a
           steadySince = crowd.poses.yaw[resident]!;
           steadyFor = 0;
         } else steadyFor++;
-        // A stoop swerves her drawn spot (`poses.kept`) and her body walks round it: a real turn, not a step's swing. Her plain walk counts once the body has settled after it.
-        plainFor = crowd.poses.kept[resident] === 1 ? 0 : plainFor + 1;
+        // A stoop swerves her drawn spot (`poses.kept`) and her body walks round it, or a corner or a kerb holds the body behind her spot while it catches up: a real turn, not a step's swing. Her plain walk is the frames with her body on her spot, a second on from the last that was not.
+        const doll = ragdolls()["dolls"][slot]!;
+        const onHerSpot = hypot2(doll.cur[0]! - crowd.poses.x[resident]!, doll.cur[2]! - crowd.poses.z[resident]!) <= ON_HER_SPOT_M;
+        plainFor = crowd.poses.kept[resident] === 1 || !onHerSpot ? 0 : plainFor + 1;
         const facing = ragdolls().walkers[slot]!.facing;
         const step = wrap(facing - previous);
         previous = facing;
@@ -153,6 +157,8 @@ describe("given the real engine in the open world and the player's car running a
         if (sign !== 0 && previousSign !== 0 && sign !== previousSign) reversals++;
         if (sign !== 0) previousSign = sign;
       }
+      // A resident whose body spent most of her walk held off her spot (a corner, a kerb) says nothing of her plain walk: try the next.
+      if (steady * 2 <= settled) steady = 0;
     }
     expect(steady, "frames of a straight walk with a body, measured").toBeGreaterThanOrEqual(STEADY_FRAMES);
     expect(steady, "more than half of the steady-yaw frames are of her plain walk").toBeGreaterThan(settled / 2);

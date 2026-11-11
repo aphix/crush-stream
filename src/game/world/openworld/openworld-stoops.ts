@@ -73,8 +73,10 @@ export class Stoops {
     }
   }
 
-  /** A sidewalk walker at (`xs[at]`, `zs[at]`) who would stand on a stoop, or within `KEEP_CLEAR` of its foot, is moved straight out from the facade until she is clear. Past the stoop's sides the keep-out narrows at 45 degrees, so she slides round it. `share` (0 to 1) is how much of that move is made: a walker joining the lane from a door's spur comes into the keep-out over her first metre, not in one frame. */
-  keepOut(xs: Float32Array, zs: Float32Array, at: number, share = 1): void {
+  /** A sidewalk walker at (`xs[at]`, `zs[at]`) who would stand on a stoop, or within `KEEP_CLEAR` of its foot, is moved straight out from the facade until she is clear. Past the stoop's sides the keep-out narrows at 45 degrees, so she slides round it. `ease[at]` (0 to 1; null: 1) is how much of that move is made: a walker joining the lane from a door's spur comes into the keep-out over her first metre, not in one frame. */
+  keepOut(xs: Float32Array, zs: Float32Array, at: number, ease: Float32Array | null = null): void {
+    // The share is read here, not passed: a number passed to a call that is not inlined is boxed every frame.
+    const share = ease === null ? 1 : ease[at]!;
     const x = xs[at]!;
     const z = zs[at]!;
     const houses = this.cells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL)));

@@ -266,6 +266,7 @@ function steeredBeside(beside: number): { heading: number; speed: number; yaw: n
   const body = host.bodies.get(bodies.slotOf(0))!;
   poses.kept[0] = 1;
   body.x = poses.x[0]! - beside;
+  body.z = poses.z[0]!;
   bodies.step(poses, 0, 0, 10, STEP);
   return { heading: body.heading, speed: body.speed, yaw: poses.yaw[0]! };
 }
