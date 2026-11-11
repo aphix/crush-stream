@@ -199,7 +199,10 @@ export class CivilianCrowd {
     this.seconds = crowdSeconds;
     this.fillPoses(crowdSeconds);
     this.separate(crowdSeconds);
-    if (this.overlay !== null) this.overlay(this.poses, crowdSeconds, authority);
+    if (this.overlay !== null) {
+      this.overlay(this.poses, crowdSeconds, authority);
+      this.keepOverlaidOut();
+    }
     this.liftWalkers();
     if (authority) {
       this.findHits(cars, crowdSeconds);
@@ -207,6 +210,17 @@ export class CivilianCrowd {
       this.raiseAmbulanceCalls(crowdSeconds);
       this.postBatch();
     } else this.throwHeardKnocks(cars);
+  }
+
+  /** The residents the overlay moved off the spot `separate` drew (the law's suspects, running or led) are kept out of the stoops like the lane's walkers: the rest still stand where `separate` left them and are not touched. */
+  private keepOverlaidOut(): void {
+    const stoops = this.stoops;
+    if (stoops === null) return;
+    const { x, z, shown } = this.poses;
+    const { drawX, drawZ } = this.separation;
+    for (let resident = 0; resident < this.separation.capacity; resident++) {
+      if (shown[resident] === 1 && (x[resident] !== drawX[resident] || z[resident] !== drawZ[resident])) stoops.keepOut(x, z, resident);
+    }
   }
 
   /** A solid met by a car closing at `closing` m/s at (x, z): hard enough on a building's footprint, it is a wreck event (the host only). */

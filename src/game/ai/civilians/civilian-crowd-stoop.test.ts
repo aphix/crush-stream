@@ -156,3 +156,28 @@ describe("given a rowhome whose stoop runs out across the sidewalk a resident wa
     expect(read(sx, sz).out, "3 m to the side: not moved").toBeCloseTo(STOOP.run / 2, 3);
   });
 });
+
+/** Her drawn distance out from HOUSE's facade after one step in which the law's overlay draws her at the middle of its stoop. */
+function outAfterOverlayOnStoop(stoops: Stoops | null): number {
+  const { crowd, person } = leaving(stoops);
+  const out = STOOP.run / 2;
+  crowd.overlay = (poses) => {
+    poses.x[person] = HOUSE.x + detCos(HOUSE.yaw) * out + detSin(HOUSE.yaw) * DOOR.across;
+    poses.z[person] = HOUSE.z - detSin(HOUSE.yaw) * out + detCos(HOUSE.yaw) * DOOR.across;
+  };
+  crowd.step(1, [], true);
+  expect(crowd.poses.shown[person], "she is drawn").toBe(1);
+  return (crowd.poses.x[person]! - HOUSE.x) * detCos(HOUSE.yaw) - (crowd.poses.z[person]! - HOUSE.z) * detSin(HOUSE.yaw);
+}
+
+describe("given a resident the law's overlay draws at the middle of a rowhome's stoop", () => {
+  // mutation: sed -i '/^      this.keepOverlaidOut();/d' src/game/ai/civilians/civilian-crowd.ts
+  it("when the crowd takes the overlay, then she is drawn the stoop's run and 0.6 m out from the facade", () => {
+    expect(outAfterOverlayOnStoop(new Stoops([HOUSE]))).toBeCloseTo(STOOP.run + 0.6, 3);
+  });
+
+  // mutation: sed -i 's/^    if (stoops === null) return;$/    if (false as boolean) return;/' src/game/ai/civilians/civilian-crowd.ts
+  it("when the same overlay is drawn with no stoops, then she is drawn where the law put her: half the stoop's run out", () => {
+    expect(outAfterOverlayOnStoop(null)).toBeCloseTo(STOOP.run / 2, 3);
+  });
+});
