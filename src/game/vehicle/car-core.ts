@@ -452,6 +452,20 @@ export abstract class CarCore {
   protected world: THREE.Scene;
   protected onGlass: GlassBurst | null;
   protected bodyMat: THREE.MeshPhysicalMaterial;
+  /** The paints a look gave this car's lids and doors (`wearCarLook`), so one roughness can be written to all its paint. */
+  private lookPaints: readonly THREE.MeshPhysicalMaterial[] = [];
+
+  /** A look's own paints, from now on kept at the body paint's roughness. */
+  adoptPaints(paints: readonly THREE.MeshPhysicalMaterial[]): void {
+    this.lookPaints = paints;
+  }
+
+  /** One roughness for the body's paint and every paint a look gave the car: a scuffed or reset car stays one finish. */
+  setPaintRoughness(r: number): void {
+    this.bodyMat.roughness = r;
+    for (let at = 0; at < this.lookPaints.length; at++) this.lookPaints[at]!.roughness = r;
+  }
+
   /** Each drawn wheel's turn about its axle (rad): a popped wheel leaves at it (`dropWheel`), so the flight block carries it. */
   protected readonly wheelSpin = new Float64Array(4);
   /** Each drawn wheel's rate about its axle (rad/s, forward positive): what turns `wheelSpin`. */

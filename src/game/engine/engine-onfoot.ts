@@ -32,6 +32,7 @@ import {
 import { smoothstep } from "../present/walker-math.ts";
 import type { Sight } from "../present/spectate-cam.ts";
 import { doorBlocked, doorInReach, doorSpot, inPlay } from "./onfoot-doors.ts";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { SEAT_KEYS } from "./engine-keys.ts";
 import { blankWalkIntent, readWalkIntent, type WalkIntent } from "./engine-walk-input.ts";
 
@@ -90,6 +91,10 @@ const STRIKE_COOLDOWN = 0.6;
 const REFUSAL_SECONDS = 2;
 /** Led by the law he walks at `WALK_SPEED` (a hair over the cop's escort pace) to where his cop leads him, and stands once within this far (m) of it. */
 const LED_REACH = 0.5;
+/** In the open world his driver's door swings this wide (rad) at this rate (rad/s) as he gets out or in, and shuts once he is this far (m) from it. */
+const DOOR_OPEN = 1.1;
+const DOOR_RATE = 3.5;
+const DOOR_CLOSE_DISTANCE = 4;
 
 const REFUSAL_TEXT: Record<OnFootRefusal, string> = {
   tooFast: "Stop the car first",
@@ -109,7 +114,7 @@ const _blendAim = new THREE.Vector3();
 /**
  * The player's trip out of his car and back, in any scene that has one: `OnFootFlow` decides what the control does, this carries it out (the walker
  * the ragdoll pool stands up, the seat stepped back, the camera that orbits him) and turns the driving controls into the walker's heading and pace.
- * Presentation only, and the car is never written: the engine reads `away` to treat the car as a driverless one holding its brakes.
+ * Presentation only; the one thing it writes to a car is its driver's door, in the open world (`openDoor`): the engine reads `away` to treat the car as a driverless one holding its brakes.
  */
 export class OnFootDirector {
   readonly flow = new OnFootFlow();
@@ -141,6 +146,10 @@ export class OnFootDirector {
   /** Where his cop leads him while the law has him on foot (`lead`). */
   private ledX = 0;
   private ledZ = 0;
+  /** The car whose driver's door he is swinging (-1: none), how far open it is (rad), and where it is going. */
+  private doorCar = -1;
+  private door = 0;
+  private doorTarget = 0;
 
   constructor(host: OnFootHost) {
     this.host = host;
@@ -346,6 +355,7 @@ export class OnFootDirector {
     }
     seat.esc();
     this.framed = false;
+    this.openDoor(this.flow.car);
   }
 
   private beginEnter(): void {
@@ -358,6 +368,41 @@ export class OnFootDirector {
       this.host.adopt(this.flow.car);
       this.host.seat.focus(this.flow.car);
     }
+    this.openDoor(this.flow.car);
+  }
+
+  /** He starts through car `index`'s driver's door: it swings open from wherever it stands. Only in the open world on a machine that runs the cars, where residents' doors swing by the same call; anywhere else the walker writes nothing to a car. */
+  private openDoor(index: number): void {
+    if (!this.host.openWorld() || !this.host.runsCars()) return;
+    const cars = this.host.cars();
+    if (this.doorCar >= 0 && this.doorCar !== index) cars[this.doorCar]?.setDoorOpen(DRIVER_SIDE, 0);
+    this.doorCar = index;
+    this.door = Math.abs(cars[index]?.doorAngle(DRIVER_SIDE) ?? 0);
+    this.doorTarget = DOOR_OPEN;
+  }
+
+  /** Once a frame: the door eases to where it is going. It is sent shut once he is seated, once the trip ends any other way, or once he has walked `DOOR_CLOSE_DISTANCE` from it. */
+  private swingDoor(wallDt: number): void {
+    if (this.doorCar < 0) return;
+    const car = this.host.cars()[this.doorCar];
+    if (!car) {
+      this.doorCar = -1;
+      return;
+    }
+    const phase = this.flow.phase;
+    if (this.doorTarget > 0 && phase !== "exiting" && phase !== "entering") {
+      if (phase !== "onFoot") this.doorTarget = 0;
+      else if (this.host.ragdolls.walkerTorso(_torso)) {
+        doorSpot(car, _spot);
+        if (hypot2(_spot.x - _torso.x, _spot.z - _torso.z) > DOOR_CLOSE_DISTANCE) this.doorTarget = 0;
+      }
+    }
+    const gap = this.doorTarget - this.door;
+    if (gap !== 0) {
+      this.door += Math.max(-DOOR_RATE * wallDt, Math.min(DOOR_RATE * wallDt, gap));
+      car.setDoorOpen(DRIVER_SIDE, this.door);
+    }
+    if (this.doorTarget === 0 && this.door === 0) this.doorCar = -1;
   }
 
   /** The seat no longer follows his car (a race put him to watching, a scene took it), or his car is gone from play: the trip is over and he is in the seat's follow. */
@@ -368,6 +413,7 @@ export class OnFootDirector {
 
   /** Once per frame, before the ragdoll world steps: the driving controls into the walker's pace, the flow's clock. */
   frame(wallDt: number): void {
+    this.swingDoor(wallDt);
     const flow = this.flow;
     this.refusalLeft = Math.max(0, this.refusalLeft - wallDt);
     if (!flow.active) return;

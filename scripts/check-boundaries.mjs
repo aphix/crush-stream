@@ -45,6 +45,7 @@ const SCENE_GRAPH = /^(Mesh|InstancedMesh|SkinnedMesh|Object3D|Scene|Group|Line|
 // queries they call. Their bodies allocate nothing.
 const HOT = {
   "src/game/present/shop-spill.ts": ["update"],
+  "src/game/engine/engine-onfoot.ts": ["swingDoor"],
   "src/game/engine/engine.ts": ["tickInner", "fixedStep", "scheduleSkins", "flushVisibleSkins", "updateCamera"],
   "src/game/engine/engine-core.ts": ["puffEngine", "fleetClosing", "contactEta"],
   "src/game/engine/engine-scenes.ts": ["stepDerby", "stackLookY"],

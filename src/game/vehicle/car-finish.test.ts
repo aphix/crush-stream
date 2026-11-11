@@ -455,6 +455,30 @@ describe("given the real engine with its cars on the screen", () => {
     const { paints, trims } = finishMaterialsUnder(car.group);
     for (const material of [...paints, ...trims]) expect(material.customProgramCacheKey().includes(FINISH_KEY_MARK), `key ${material.customProgramCacheKey()}`).toBe(false);
   });
+
+  // mutation: sed -i '/^      applyCarFinish(car.group, finishForTier(this.cine.tier));/d' src/game/engine/engine.ts
+  it("when the traffic stands a car in a resident's colour on the high tier, then its hood, boot and doors are finished as its body is, in that colour, and stay so when it is stood again in another", () => {
+    engine.setFxTier("high");
+    const car = engine["live"]()[1]!;
+    for (const colour of [0x2244cc, 0x22cc44]) {
+      engine["standTrafficCar"](car, 4, 4, 0, colour);
+      const { paints } = finishMaterialsUnder(car.group);
+      expect(paints.length, "paints under the car").toBeGreaterThan(1);
+      for (const paint of paints) expect(paint.customProgramCacheKey(), "a paint's program").toContain(FINISH_KEY_MARK);
+      const meshes = car.lookMeshes();
+      for (const panel of [meshes.hood, meshes.trunk, meshes.doors[0]!]) expect((panel.material as THREE.MeshPhysicalMaterial).color.getHex(), "a panel's colour").toBe(meshes.bodyPaint.color.getHex());
+    }
+  });
+
+  // mutation: sed -i '/^    for (let at = 0; at < this.lookPaints.length; at++) this.lookPaints\[at\]!.roughness = r;/d' src/game/vehicle/car-core.ts
+  it("when a car that wore a colour is scuffed and then reset, then its doors' roughness equals its body's both times", () => {
+    const car = engine["live"]()[1]!;
+    const door = (): number => (car.lookMeshes().doors[0]!.material as THREE.MeshPhysicalMaterial).roughness;
+    car.setPaintRoughness(0.8);
+    expect([car.lookMeshes().bodyPaint.roughness, door()], "scuffed").toEqual([0.8, 0.8]);
+    car.setPaintRoughness(0.42);
+    expect([car.lookMeshes().bodyPaint.roughness, door()], "reset").toEqual([0.42, 0.42]);
+  });
 });
 
 /** What the renderer binds for `material` now (`WebGLRenderer.properties`): whether its current program draws the finish, and the finish map in the uniforms it uploads to that program (null: none). */
