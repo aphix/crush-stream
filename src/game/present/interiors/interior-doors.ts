@@ -46,6 +46,8 @@ export class DoorSet {
   private readonly vestibuleMaterial = new THREE.MeshStandardMaterial({ color: VESTIBULE_WALL, roughness: 0.9, side: THREE.BackSide });
   /** The shown civilians near the eye this frame, by index into the poses: grown on the cold path when a crowd is bigger than any before. */
   private nearby = new Int32Array(0);
+  /** Leaves with openness over 0. */
+  private opened = 0;
 
   constructor(leaves: readonly DoorLeaf[]) {
     this.leaves = leaves;
@@ -69,6 +71,7 @@ export class DoorSet {
   /** The doors near the eye swing toward open while someone stands within reach and toward closed while no one does; a door out of range is shut at once. */
   update(eyeX: number, eyeZ: number, dt: number, openers: DoorOpeners): void {
     const near = this.gatherNearby(eyeX, eyeZ, openers);
+    if (this.opened === 0 && near === 0 && openers.walker === null && !this.anyShown(openers.others)) return;
     const step = dt / DOOR_SWING_SECONDS;
     let moved = false;
     for (let door = 0; door < this.leaves.length; door++) {
@@ -79,6 +82,8 @@ export class DoorSet {
       const next = !inRange ? 0 : this.locked[door] === 0 && this.someoneAt(leaf, near, openers) ? Math.min(1, was + step) : Math.max(0, was - step);
       if (next === was) continue;
       this.openness[door] = next;
+      if (was === 0) this.opened++;
+      else if (next === 0) this.opened--;
       this.placeLeaf(door);
       moved = true;
     }
@@ -142,6 +147,14 @@ export class DoorSet {
       if (hypot2(poses.x[person]! - eyeX, poses.z[person]! - eyeZ) <= DOOR_RANGE + DOOR_REACH) this.nearby[count++] = person;
     }
     return count;
+  }
+
+  private anyShown(sets: readonly DoorPoses[]): boolean {
+    for (let set = 0; set < sets.length; set++) {
+      const other = sets[set]!;
+      for (let figure = 0; figure < other.count; figure++) if (other.shown[figure] === 1) return true;
+    }
+    return false;
   }
 
   private someoneAt(leaf: DoorLeaf, near: number, openers: DoorOpeners): boolean {

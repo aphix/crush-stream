@@ -258,10 +258,10 @@ export class ShopSigns {
     this.shut = new Uint8Array(cells.length);
   }
 
-  /** A frame: a sign whose place `closed` (one byte per place of the map, 1 shut) marks shut dims, and lights again when it opens; null: every shop is open. Writes colours only where a shop changed. */
-  update(closed: Uint8Array | null): void {
+  /** A frame: a sign whose place `closed` (one byte per place of the map, 1 shut) marks shut dims, and lights again when it opens; null: every shop is open; `closedChanged` false: `closed` is as it was, nothing to do. Writes colours only where a shop changed. */
+  update(closed: Uint8Array | null, closedChanged = true): void {
     const colours = this.colours;
-    if (colours === null) return;
+    if (colours === null || !closedChanged) return;
     let changed = false;
     for (let sign = 0; sign < this.signPlaces.length; sign++) {
       const isShut = closed !== null && closed[this.signPlaces[sign]!] === 1 ? 1 : 0;
