@@ -161,14 +161,14 @@ export class SeatedDrivers {
   }
 
   /** Pose the drivers of `cars` (world matrices current), dressed as `lookOf` has them; empty slots, thrown drivers, cut cars, car `away` (its driver is out walking) and a car `empty` says is parked hide. */
-  sync(cars: readonly DeformableCar[], lookOf: (car: number, cop: boolean) => DriverLook, away = -1, empty: ((car: number, body: DeformableCar) => boolean) | null = null): void {
+  sync(cars: readonly DeformableCar[], lookOf: (car: number) => DriverLook, uniform: (car: number, cop: boolean) => boolean, away = -1, empty: ((car: number, body: DeformableCar) => boolean) | null = null): void {
     let s = 0;
     for (let c = 0; c < MAX_CARS; c++) {
       const car = cars[c];
       const seat = car?.partSeats[PART_KIND.seatFront];
       if (!car || !seat || c === away || this.cut(car) || !seatedShown(car, seat) || (empty !== null && empty(c, car))) continue;
-      const cop = copDriver(car);
-      const look = lookOf(c, cop);
+      const cop = uniform(c, copDriver(car));
+      const look = lookOf(c);
       // Another car in the slot dresses it afresh, so its bust starts at rest there.
       if (this.carOf[s] !== c || this.cops[s] !== Number(cop) || !sameLook(this.dressed[s] ?? null, look)) {
         this.mesh.dress(s, cop, look);

@@ -16,6 +16,8 @@ import { JOINTS, PARTS } from "./ragdoll-body.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { SeatedDrivers } from "./seated-drivers.ts";
 
+const uniform = (_car: number, cop: boolean): boolean => cop;
+
 /** A seated thigh rests on the cushion: the hip joint stands its half-thickness (`PARTS` 0.075) over the top, give or take the foam. */
 const SIT_HIGH = { min: 0.05, max: 0.1 } as const;
 /** How far (m) a hand may miss its grip on the rim, and the head must stay under the roof line. */
@@ -39,7 +41,7 @@ function seated(style: Style) {
     car.spawn(0, 0, 0);
     car.group.updateMatrixWorld(true);
     const drivers = new SeatedDrivers(() => false);
-    drivers.sync([car], (c) => driverLook(1, c));
+    drivers.sync([car], (c) => driverLook(1, c), uniform);
     s = { car, drivers, toCabin: car.interior.matrixWorld.clone().invert() };
     seatedCars.set(style.id, s);
   }
@@ -113,7 +115,7 @@ describe("given a seated driver in a crushed car", () => {
       car.body.geometry.computeBoundingSphere();
       car.body.geometry.computeBoundingBox();
       const drivers = new SeatedDrivers(() => false);
-      drivers.sync([car], (c) => driverLook(1, c));
+      drivers.sync([car], (c) => driverLook(1, c), uniform);
       const room = headRoom(car, drivers);
       expect(room.least, `the head at ${room.at} stands ${(-room.least * 100).toFixed(1)} cm through the crushed roof`).toBeGreaterThanOrEqual(0);
       drivers.dispose();
@@ -227,18 +229,18 @@ describe("given the seated drivers' batch and one car", () => {
     let glassCut = false;
     const drivers = new SeatedDrivers(() => glassCut);
     const look = (car: number) => driverLook(1, car);
-    drivers.sync([car], look);
+    drivers.sync([car], look, uniform);
     expect(drivers.mesh.count).toBe(1);
     glassCut = true;
-    drivers.sync([car], look);
+    drivers.sync([car], look, uniform);
     expect(drivers.mesh.count, "cut with the glass at mid distance").toBe(0);
     glassCut = false;
     car.driverOut = "windshield";
-    drivers.sync([car], look);
+    drivers.sync([car], look, uniform);
     expect(drivers.mesh.count, "the thrown driver is the ragdoll now").toBe(0);
     car.driverOut = null;
     car.partSeats[PART_KIND.seatFront]!.layers.disable(0);
-    drivers.sync([car], look);
+    drivers.sync([car], look, uniform);
     expect(drivers.mesh.count, "cut with the cabin").toBe(0);
     drivers.dispose();
   });
@@ -255,11 +257,11 @@ describe("given the seated drivers' batch and cars the open world says are parke
     });
     const drivers = new SeatedDrivers(() => false);
     const look = (car: number) => driverLook(1, car);
-    drivers.sync(cars, look, -1, (id) => id === 0);
+    drivers.sync(cars, look, uniform, -1, (id) => id === 0);
     expect(drivers.mesh.count, "the second car's driver alone").toBe(1);
-    drivers.sync(cars, look, -1, () => false);
+    drivers.sync(cars, look, uniform, -1, () => false);
     expect(drivers.mesh.count, "nobody parked").toBe(2);
-    drivers.sync(cars, look);
+    drivers.sync(cars, look, uniform);
     expect(drivers.mesh.count, "no caller: every driver in").toBe(2);
     drivers.dispose();
   });
@@ -275,10 +277,10 @@ describe("given the seated drivers' batch and two cars", () => {
     });
     const drivers = new SeatedDrivers(() => false);
     const look = (car: number) => driverLook(1, car);
-    drivers.sync(cars, look);
+    drivers.sync(cars, look, uniform);
     expect(drivers.mesh.count).toBe(2);
     cars[0]!.driverOut = "windshield";
-    drivers.sync(cars, look);
+    drivers.sync(cars, look, uniform);
     expect(drivers.mesh.count, "the thrown driver's slot is still drawn").toBe(1);
     drivers.dispose();
   });
@@ -294,9 +296,9 @@ describe("given the seated drivers' batch and two cars, one of whose players has
     });
     const drivers = new SeatedDrivers(() => false);
     const look = (car: number) => driverLook(1, car);
-    drivers.sync(cars, look, 0);
+    drivers.sync(cars, look, uniform, 0);
     expect(drivers.mesh.count, "the other car's driver alone").toBe(1);
-    drivers.sync(cars, look);
+    drivers.sync(cars, look, uniform);
     expect(drivers.mesh.count, "both with none named").toBe(2);
     expect(cars[0]!.driverOut, "and nothing is written to the car").toBe(null);
     drivers.dispose();
@@ -311,8 +313,8 @@ describe("given the seated drivers fed by the ragdoll system's driver looks", ()
     const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
     const drivers = new SeatedDrivers(() => false);
     const seen: DriverLook[] = [];
-    const look = (c: number, cop: boolean) => {
-      const l = ragdolls.carDriverLook(c, cop);
+    const look = (c: number) => {
+      const l = ragdolls.carDriverLook(c);
       seen.push(l);
       return l;
     };
@@ -320,13 +322,13 @@ describe("given the seated drivers fed by the ragdoll system's driver looks", ()
     let other = 2;
     while (tag(driverLook(other, 0)) === tag(driverLook(1, 0))) other++;
     ragdolls.lookSeed = 1;
-    drivers.sync([car], look);
-    drivers.sync([car], look);
+    drivers.sync([car], look, uniform);
+    drivers.sync([car], look, uniform);
     expect(seen.length, "each sync asked for the one shown car's look").toBe(2);
     expect(seen[0], "the same look object while nothing changed").toBe(seen[1]);
     expect(tag(seen[0]!), "the look of seed 1").toBe(tag(driverLook(1, 0)));
     ragdolls.lookSeed = other;
-    drivers.sync([car], look);
+    drivers.sync([car], look, uniform);
     expect(seen[2], "a new seed rebuilds the look").not.toBe(seen[0]);
     expect(tag(seen[2]!), "the look of the new seed").toBe(tag(driverLook(other, 0)));
     drivers.dispose();
