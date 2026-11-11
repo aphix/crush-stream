@@ -48,6 +48,8 @@ import { EVENT_LOG_CAPACITY } from "../ai/civilians/civilian-crowd-constants.ts"
 import { MAX_CARS } from "../scenes/fleet.ts";
 
 const NO_EVENTS = new Float64Array(0);
+/** The HUD hears of the clock once every five game minutes, so it does not publish every real second. */
+const CLOCK_STEP_MINUTES = 5;
 /** The pursuit strip prints seconds to a tenth and its meter moves in hundredths: finer changes are not a change. */
 const BUST_LEFT_STEPS = 10;
 const BUST_HOLD_STEPS = 100;
@@ -474,7 +476,8 @@ export class OpenWorldDirector {
   gameMinute(): number | null {
     const crowd = this.crowd;
     if (crowd === null || this.dayMinute < 0) return null;
-    return Math.round(gameHourAtMinute(this.dayMinute, crowd.state.startHour) * MINUTES_PER_GAME_HOUR) % MINUTES_PER_GAME_DAY;
+    const minutes = Math.round(gameHourAtMinute(this.dayMinute, crowd.state.startHour) * MINUTES_PER_GAME_HOUR);
+    return (Math.floor(minutes / CLOCK_STEP_MINUTES) * CLOCK_STEP_MINUTES) % MINUTES_PER_GAME_DAY;
   }
 
   /**
