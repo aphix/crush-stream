@@ -1,7 +1,5 @@
 import { RUN_STRIDES_PER_SECOND, STRIDE_RADIANS_PER_METRE } from "../ai/civilians/civilian-crowd-constants.ts";
 import { neuroticismOf } from "../ai/civilians/civilian-temperament.ts";
-import { hypot2 } from "../kernel/physics-core.js";
-import { wrapPi } from "../kernel/scalar.ts";
 import { CHANNELS } from "./civilian-anim-channels.ts";
 import type { ActivityPose } from "./civilian-anim.ts";
 
@@ -17,6 +15,12 @@ export const MAX_LAG = 0.3;
 export const TELEPORT = 2;
 /** The drawn facing turns at most this fast (rad/s). */
 export const MAX_TURN_RATE = 10;
+/** A whole turn (rad): the angle gap is wrapped inline (`wrapPi`'s floor form), as a double returned from a call that is not inlined is boxed on the heap. */
+const TWO_PI = Math.PI * 2;
+/** A runner's stride phase gains this much a second (rad) at most. */
+const RUN_RADIANS_PER_SECOND = 2 * Math.PI * RUN_STRIDES_PER_SECOND;
+/** Added to a divisor that may be 0 (the pace, a gap): no branch on a double is wanted here, as a ternary that picks a double boxes it on the heap every call. */
+const STILL_SPEED = 1e-9;
 /** The frame a civilian is taken to have last been posed in before she was ever: no frame is one before the next. */
 const NEVER_POSED = -(2 ** 30);
 
@@ -85,7 +89,7 @@ export class PoseSmoothing {
   walk(civilian: number, pose: ActivityPose): void {
     const dx = pose.x - this.drawnX[civilian]!;
     const dz = pose.z - this.drawnZ[civilian]!;
-    const gap = hypot2(dx, dz);
+    const gap = Math.sqrt(dx * dx + dz * dz);
     if (((this.stamp - this.lastStamp[civilian]!) | 0) !== 1 || gap > TELEPORT) {
       this.drawnX[civilian] = pose.x;
       this.drawnZ[civilian] = pose.z;
@@ -95,19 +99,20 @@ export class PoseSmoothing {
       return;
     }
     const left = gap * (1 - this.posShare);
-    const behind = left > MAX_LAG ? MAX_LAG : left;
-    const share = gap > 0 ? 1 - behind / gap : 0;
+    const behind = Math.min(left, MAX_LAG);
+    const share = 1 - behind / (gap + STILL_SPEED);
     const stepX = dx * share;
     const stepZ = dz * share;
     this.drawnX[civilian]! += stepX;
     this.drawnZ[civilian]! += stepZ;
-    const metres = hypot2(stepX, stepZ);
+    const metres = Math.sqrt(stepX * stepX + stepZ * stepZ);
     if (this.frameSeconds > 0) this.drawnSpeed[civilian]! += (metres / this.frameSeconds - this.drawnSpeed[civilian]!) * this.posShare;
     const speed = this.drawnSpeed[civilian]!;
-    this.drawnPhase[civilian]! += metres * (speed > 0 ? Math.min(STRIDE_RADIANS_PER_METRE, (2 * Math.PI * RUN_STRIDES_PER_SECOND) / speed) : STRIDE_RADIANS_PER_METRE);
+    this.drawnPhase[civilian]! += metres * Math.min(STRIDE_RADIANS_PER_METRE, RUN_RADIANS_PER_SECOND / (speed + STILL_SPEED));
     const reach = MAX_TURN_RATE * this.frameSeconds;
-    const turn = wrapPi(pose.yaw - this.drawnYaw[civilian]!) * this.yawShare;
-    this.drawnYaw[civilian]! += turn > reach ? reach : turn < -reach ? -reach : turn;
+    const off = pose.yaw - this.drawnYaw[civilian]!;
+    const turn = (off - TWO_PI * Math.floor((off + Math.PI) / TWO_PI)) * this.yawShare;
+    this.drawnYaw[civilian]! += Math.max(-reach, Math.min(reach, turn));
     pose.x = this.drawnX[civilian]!;
     pose.z = this.drawnZ[civilian]!;
     pose.yaw = this.drawnYaw[civilian]!;

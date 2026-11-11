@@ -281,7 +281,7 @@ describe("given a civilian who stands and then is set off east at 1.5 m/s by her
     expect(lag, "the furthest she is behind (m)").toBeLessThanOrEqual(MAX_LAG);
   });
 
-  // mutation: sed -i 's/const behind = left > MAX_LAG ? MAX_LAG : left;/const behind = left;/' src/game/present/civilian-anim-smoothing.ts
+  // mutation: sed -i 's/const behind = Math.min(left, MAX_LAG);/const behind = left;/' src/game/present/civilian-anim-smoothing.ts
   it("when her brain sprints at 4 m/s, then she is never over MAX_LAG behind, and is that far behind at full speed", () => {
     let lag = 0;
     const sprint = brain(4);
@@ -294,7 +294,7 @@ describe("given a civilian who stands and then is set off east at 1.5 m/s by her
     expect(lag, "the furthest she is behind (m)").toBeGreaterThan(MAX_LAG - 0.01);
   });
 
-  // mutation: sed -i 's/(speed > 0 ? Math.min(STRIDE_RADIANS_PER_METRE, (2 \* Math.PI \* RUN_STRIDES_PER_SECOND) \/ speed) : STRIDE_RADIANS_PER_METRE)/STRIDE_RADIANS_PER_METRE/' src/game/present/civilian-anim-smoothing.ts
+  // mutation: sed -i 's/Math.min(STRIDE_RADIANS_PER_METRE, RUN_RADIANS_PER_SECOND \/ (speed + STILL_SPEED))/STRIDE_RADIANS_PER_METRE/' src/game/present/civilian-anim-smoothing.ts
   it("when her brain sprints, then her stride quickens no faster than a runner's strides a second, and at a walk it goes the civilians' radians a metre", () => {
     const rate = (speed: number): number => {
       const marks: number[] = [];

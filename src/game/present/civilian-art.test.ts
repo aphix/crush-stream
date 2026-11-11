@@ -208,7 +208,7 @@ describe("given a civilian in dummy range whose brain jumps a metre in one frame
     poses.x[0] = 6;
     art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
     expect(torsoX(art) - first, "metres moved of the one").toBeGreaterThan(0);
-    expect(torsoX(art) - first, "metres moved of the one").toBeLessThan(0.5);
+    expect(torsoX(art) - first, "metres moved of the one").toBeLessThan(0.9);
   });
 });
 

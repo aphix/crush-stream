@@ -36,6 +36,7 @@ describe("given the open world's director whose ports make an art that draws fee
       },
     });
     director.startOpenWorld(map);
+    director.frame(FRAME_SECONDS);
     expect(arts[0]!.stoops, "the first art made is the crowd's").toBe(director["crowd"]!.stoops);
     expect(arts[0]!.stoops, "and they are there").not.toBeNull();
   });
