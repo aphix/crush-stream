@@ -166,6 +166,7 @@ crash it recorded. What it takes, each found by the replay straying from the liv
   live placement (`spawnFacing`) resets even an intact car. It once only posed a car intact in the record: city seed 54's
   traffic car, put away and woken in its clip, kept the mirror a brush had folded, the next brush folded it no further, and
   the mirror the live car lost stayed on (7.5 m off by the clip's end; `engine-replay-placed.test.ts`).
+  A put-back car holds the numbers of a new one placed there, to the bit: the last wreck step's yaw inertia, the door motion sample and drive, and the cage with its fit history are wiped by the reset as the rest are (`respawn-identity.test.ts`).
 - **The parts' state as doubles** (26). The netplay part state is float32 on the wire with no rates: a door that a sideswipe
   had left swinging came back at rest, a panel's hinge value rounded, the door-motion sample re-read. A door slows the next
   striker by what it holds (`partContactPair`), so two wrecks one second after a pile-up hit differently (1e-11 m at the
