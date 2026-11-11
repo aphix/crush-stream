@@ -212,6 +212,8 @@ export type CrashHudState = {
   lookAt: LookAtHud | null;
   /** The patrol cars chasing the player's car in the open world and the bust hold they have run (the pursuit strip, as Survival shows it), null while none chases it and in every other scene. */
   bust: ChaseHud | null;
+  /** The open world's clock in whole game minutes since midnight (0 to 1439); null in every other scene and before its first frame. */
+  gameMinute: number | null;
   boost: number;
   /** The seat's slide while driving, `NO_DRIFT` otherwise: the free-drive boost bar's charge cue (a race and a derby read `RaceView.drift`). */
   drift: DriftView;
@@ -364,6 +366,7 @@ export const INITIAL_HUD: CrashHudState = {
   foot: null,
   lookAt: null,
   bust: null,
+  gameMinute: null,
   boost: 1,
   drift: NO_DRIFT,
   view: "third",

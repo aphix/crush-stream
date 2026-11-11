@@ -42,6 +42,7 @@ import { formatSpeed } from "@/game/hud/speed-units";
 import type { RaceCommand } from "@/game/match/types";
 import { benchHoldsCommand } from "@/game/hud/submit-rules";
 import { MinigamePanel } from "@/components/minigame-panel";
+import { GameClock } from "@/components/game-clock";
 import { cn } from "@/lib/utils";
 
 export type HudProps = {
@@ -214,6 +215,7 @@ function DesktopHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
         ) : null}
         {/* The one online entry sits at the top left, under the race title when there is one. The solo clip view returned above; the results reel and bench pages have none. */}
         {onlineShown && state.race?.reel == null ? <OnlineEntry engine={engine} race={state.race} /> : null}
+        <GameClock minute={state.gameMinute} />
       </div>
 
       {state.race ? (
@@ -347,6 +349,7 @@ function PhoneHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
             <OnlineEntry engine={engine} race={race} />
           </div>
         ) : null}
+        <GameClock minute={state.gameMinute} className="self-center" />
       </div>
 
       {/* The scene's panels, one column under the cluster, stopping above the steering slider; the garage's panel docks itself to the bottom of it. */}
