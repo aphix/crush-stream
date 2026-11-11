@@ -82,10 +82,19 @@ describe("given the real engine on a page whose URL says ?draw=max&scale=1.5&sha
     expect(sunShadow(), "max, Ultra on").toBe("4096 48");
     stage.setUltraShadow(0);
     expect(sunShadow(), "max, Ultra off").toBe("4096 48");
+    // The test engine is the `software` class, so a phone: Auto's level is the desktop's only once the stage says desktop.
+    stage.phone = false;
     engine.setShadows("auto");
     stage.setUltraShadow(2048);
     expect(sunShadow(), "auto, Ultra on").toBe("2048 24");
     stage.setUltraShadow(0);
     expect(sunShadow(), "auto, Ultra off").toBe("1024 24");
+    // mutation: sed -i 's/this.phone && this.shadowLevel === SHADOW_LEVELS.auto/false \&\& this.shadowLevel === SHADOW_LEVELS.auto/' src/game/present/engine-world.ts
+    stage.phone = true;
+    engine.setShadows("auto");
+    stage.setUltraShadow(2048);
+    expect(sunShadow(), "phone, auto, Ultra on: Ultra raises the map, the box stays the phone's").toBe("2048 18");
+    stage.setUltraShadow(0);
+    expect(sunShadow(), "phone, auto, Ultra off").toBe("512 18");
   });
 });
