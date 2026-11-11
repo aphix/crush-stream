@@ -146,6 +146,8 @@ export class CivilianCrowd {
   private readonly ambulanceDue: Float64Array;
   /** Times each one down has been looked for a caller for. */
   private readonly ambulanceTries: Uint8Array;
+  /** 1 for a resident walking a leg that is not a door's spur: the ones `Stoops.keepOut` moves. */
+  private readonly laneWalking: Uint8Array;
   private readonly ambulanceX: Float32Array;
   private readonly ambulanceZ: Float32Array;
   private lastCrashSeconds = -Infinity;
@@ -172,6 +174,7 @@ export class CivilianCrowd {
     this.dangerUntil = new Float64Array(capacity).fill(-Infinity);
     this.ambulanceDue = new Float64Array(capacity).fill(Infinity);
     this.ambulanceTries = new Uint8Array(capacity);
+    this.laneWalking = new Uint8Array(capacity);
     this.ambulanceX = new Float32Array(capacity);
     this.ambulanceZ = new Float32Array(capacity);
     this.crimeDesk = new CrimeDesk(capacity);
@@ -203,7 +206,10 @@ export class CivilianCrowd {
     this.seconds = crowdSeconds;
     this.fillPoses(crowdSeconds);
     this.separate(crowdSeconds);
-    if (this.overlay !== null) this.overlay(this.poses, crowdSeconds, authority);
+    if (this.overlay !== null) {
+      this.overlay(this.poses, crowdSeconds, authority);
+      this.keepOverlaidOut();
+    }
     this.liftWalkers();
     if (authority) {
       this.findPunches(before, crowdSeconds);
@@ -212,6 +218,19 @@ export class CivilianCrowd {
       this.raiseAmbulanceCalls(crowdSeconds);
       this.postBatch();
     } else this.throwHeardKnocks(cars);
+  }
+
+  /** The residents the overlay moved off the spot `separate` drew (the law's suspects, running or led) are kept out of the stoops like the lane's walkers, and no body stands for them: the rest still stand where `separate` left them and are not touched. */
+  private keepOverlaidOut(): void {
+    const stoops = this.stoops;
+    if (stoops === null) return;
+    const { x, z, shown } = this.poses;
+    const { drawX, drawZ } = this.separation;
+    for (let resident = 0; resident < this.separation.capacity; resident++) {
+      if (shown[resident] === 0 || (x[resident] === drawX[resident] && z[resident] === drawZ[resident])) continue;
+      stoops.keepOut(x, z, resident);
+      this.poses.kept[resident] = 1;
+    }
   }
 
   /** A solid met by a car closing at `closing` m/s at (x, z): hard enough on a building's footprint, it is a wreck event (the host only). */
@@ -381,6 +400,8 @@ export class CivilianCrowd {
       shown[resident] = 0;
       present[resident] = 0;
       this.poses.onSpur[resident] = 0;
+      this.laneWalking[resident] = 0;
+      this.poses.kept[resident] = 0;
       if (ints[intBase + RESIDENT_INT.species] !== SPECIES.person) continue;
       this.activityReader(state, resident, seconds, reading);
       const walkSpeed = floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!;
@@ -408,6 +429,7 @@ export class CivilianCrowd {
         const onLeg = ints[intBase + RESIDENT_INT.pathCount]! > 0 && seconds >= ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ && seconds < ints[intBase + RESIDENT_INT.arriveTick]! / DECISION_HZ;
         if (!onLeg || !legPositionAt(state, resident, seconds, pose)) continue;
         this.poses.onSpur[resident] = this.stoops !== null && this.stoops.leadsToDoor(pose.from, pose.to) ? 1 : 0;
+        this.laneWalking[resident] = this.poses.onSpur[resident] === 1 ? 0 : 1;
         brainX[resident] = pose.x;
         brainZ[resident] = pose.z;
         velocityX[resident] = pose.dirX * pose.speed;
@@ -461,6 +483,10 @@ export class CivilianCrowd {
       if (shown[resident] === 0) continue;
       x[resident] = separation.drawX[resident]!;
       z[resident] = separation.drawZ[resident]!;
+      if (this.laneWalking[resident] === 1 && this.stoops !== null) {
+        this.stoops.keepOut(x, z, resident);
+        if (x[resident] !== separation.drawX[resident] || z[resident] !== separation.drawZ[resident]) this.poses.kept[resident] = 1;
+      }
     }
     this.noteContacts(seconds);
     this.writeActivity(seconds);

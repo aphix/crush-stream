@@ -12,7 +12,7 @@ export const GAIT = { HIP_L: 0, HIP_R: 1, ROLL_L: 2, ROLL_R: 3, KNEE_L: 4, KNEE_
 /** The gait's numbers at standing, a walk, a run and a sprint, between which it blends linearly (natural-gait research: cadence 100-130 steps/min walking, 150-210 running; stance 60 % walking, 35-50 % running; knee 20° in walking stance, 40°+ running). */
 const SPEED_STOPS = [0, WALK_SPEED, RUN_SPEED, SPRINT_SPEED] as const;
 /** Gait cycles a second (two steps each). */
-const CADENCE = [1.05, 1.05, 1.5, 2.5] as const;
+const CADENCE = [0.6, 1.05, 1.5, 2.5] as const;
 /** The share of the cycle a foot is on the ground: past a half the feet overlap (a walk), under it there is a flight phase (a run). */
 const STANCE = [0.6, 0.585, 0.38, 0.22] as const;
 /** The foot's most lift (m) in swing. */

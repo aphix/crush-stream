@@ -16,6 +16,13 @@ const BRAKE_AT_SPRINT = 10;
 /** Under this command (m/s) he is not asked to move. */
 const STAND_COMMAND = 0.05;
 
+/** How fast the acceleration itself may change (m/s³): a start and a stop ease in over about 0.05 s. */
+const JERK = 250;
+/** The speed closes on its target at this rate (1/s) once within reach of it, so it arrives without a kink. */
+const APPROACH = 30;
+/** Under this speed (m/s) with nothing asked he is stopped: the approach alone never reaches 0. */
+const STOP_SNAP = 0.05;
+
 /** Most sideways acceleration (m/s²) a turn may ask: the turn rate is this over the speed, so a sprint curves wide and a walk turns on the spot. */
 const LATERAL_ACCEL = 10;
 /** Fastest he turns on the spot (rad/s) and how fast his turn rate may change (rad/s²). */
@@ -24,12 +31,13 @@ const TURN_RATE_CHANGE = 60;
 /** The speed (m/s) under which the turn rate is the on-the-spot one. */
 const TURN_SPEED_FLOOR = 1.2;
 
-/** Heading errors (rad) where the turn changes kind, each with its way back out 0.2 rad earlier (hysteresis): past the first he slows to a pivot, past the second he stops and turns. */
+/** Heading errors (rad) where the turn changes kind: past the first he slows to a pivot, past the second he stops and turns. */
 const CURVE_END = 0.52;
 const SLOW_END = 1.3;
 const PIVOT_IN = SLOW_END;
+/** A pivot holds his speed to the pivot's until the error is back under this (rad): a turn does not speed up again before he faces the way. */
+const PIVOT_OUT = PIVOT_IN - 0.2;
 const STOP_IN = 2.1;
-const BAND_HYSTERESIS = 0.2;
 /** Heading error (rad) over which the target speed falls from the pivot's to 0 past `STOP_IN`. */
 const STOP_FADE = 0.3;
 /** Heading error (rad) past `PIVOT_IN` over which the target speed falls from the curve's to the pivot's. */
@@ -49,12 +57,11 @@ const BANK_MAX = 0.45;
 /** The lean and bank follow their targets over this many seconds, so a stick flick does not snap the body. */
 const LEAN_EASE_SECONDS = 0.1;
 
-export type TurnBand = "curve" | "pivot" | "stop";
-
 /**
  * The root's motion on foot: speed along his facing, the facing, and the lean they ask for. A capsule-style controller, not physics: the speed
- * rises and falls at set rates (so he reaches a run in 0.3 s), the facing turns at a rate that falls with speed, and a heading far from the
- * facing slows him first (a curve, a pivot, a stop-and-turn). Nothing allocates.
+ * closes on its target with its acceleration and its jerk capped (so he reaches a run in 0.3 s with no kink), the facing turns at a rate that
+ * falls with speed, and a heading far from the facing slows him first (a curve, a pivot, a stop-and-turn). A pivot, once entered, holds the
+ * pivot's speed until the error is under `PIVOT_OUT`. Nothing allocates.
  */
 export class Locomotion {
   /** The way he faces (rad about the vertical, 0 along +z) and his speed along it (m/s). */
@@ -66,41 +73,39 @@ export class Locomotion {
   /** Forward lean and bank (rad) the body shows. */
   pitch = 0;
   roll = 0;
-  band: TurnBand = "curve";
+  /** A pivot is under way: the heading error has been past `PIVOT_IN` and not yet under `PIVOT_OUT`. */
+  pivoting = false;
 
   reset(yaw: number): void {
     this.yaw = yaw;
     this.speed = this.turnRate = this.accel = this.pitch = this.roll = 0;
-    this.band = "curve";
+    this.pivoting = false;
   }
 
   /** One step of `dt` s toward facing `heading` at `command` m/s. */
   update(dt: number, heading: number, command: number): void {
     const error = wrapAngle(heading - this.yaw);
-    this.pickBand(Math.abs(error));
-    const before = this.speed;
-    this.speed = approachSpeed(this.speed, this.targetSpeed(command, Math.abs(error)), dt);
-    this.accel = (this.speed - before) / dt;
+    if (Math.abs(error) > PIVOT_IN) this.pivoting = true;
+    else if (Math.abs(error) < PIVOT_OUT) this.pivoting = false;
+    const target = this.targetSpeed(command, Math.abs(error));
+    const want = Math.max(-brakeRate(this.speed), Math.min(pushRate(this.speed), APPROACH * (target - this.speed)));
+    this.accel += Math.max(-JERK * dt, Math.min(JERK * dt, want - this.accel));
+    this.speed = Math.max(0, this.speed + this.accel * dt);
+    if (target === 0 && this.speed < STOP_SNAP) {
+      this.speed = 0;
+      this.accel = 0;
+    }
     this.turn(dt, error);
     this.lean(dt);
-  }
-
-  private pickBand(aError: number): void {
-    const stopOut = STOP_IN - BAND_HYSTERESIS;
-    const pivotOut = PIVOT_IN - BAND_HYSTERESIS;
-    if (aError > STOP_IN || (this.band === "stop" && aError > stopOut)) this.band = "stop";
-    else if (aError > PIVOT_IN || (this.band === "pivot" && aError > pivotOut)) this.band = "pivot";
-    else this.band = "curve";
   }
 
   private targetSpeed(command: number, aError: number): number {
     if (command < STAND_COMMAND) return 0;
     const pivot = Math.min(command, PIVOT_SPEED);
-    if (this.band === "stop") return aError > STOP_IN ? pivot * Math.max(0, 1 - (aError - STOP_IN) / STOP_FADE) : 0;
     const slow = Math.max(0, Math.min(1, (aError - CURVE_END) / (SLOW_END - CURVE_END)));
     const curve = command * (1 - SLOW_TURN_LOSS * slow);
-    if (aError <= PIVOT_IN) return this.band === "pivot" ? pivot : curve;
-    return curve + (pivot - curve) * Math.min(1, (aError - PIVOT_IN) / PIVOT_RAMP);
+    const turning = this.pivoting ? pivot : curve + (pivot - curve) * Math.max(0, Math.min(1, (aError - PIVOT_IN) / PIVOT_RAMP));
+    return turning * Math.max(0, Math.min(1, 1 - (aError - STOP_IN) / STOP_FADE));
   }
 
   /** Turn toward the heading at the rate the speed allows, easing the rate so it neither jumps nor overshoots the heading. */
@@ -125,11 +130,13 @@ export class Locomotion {
   }
 }
 
-/** `speed` moved toward `target` (m/s) by one step of `dt` s at the push or brake rate its size allows. */
-function approachSpeed(speed: number, target: number, dt: number): number {
-  const rising = target > speed;
+/** The most he pushes (m/s²) at `speed`. */
+function pushRate(speed: number): number {
+  return speed < RUN_SPEED ? ACCEL_TO_RUN : ACCEL_TO_SPRINT;
+}
+
+/** The most he brakes (m/s²) at `speed`. */
+function brakeRate(speed: number): number {
   const sprintShare = Math.max(0, Math.min(1, (speed - RUN_SPEED) / (SPRINT_SPEED - RUN_SPEED)));
-  const rate = rising ? (speed < RUN_SPEED ? ACCEL_TO_RUN : ACCEL_TO_SPRINT) : BRAKE_AT_RUN + (BRAKE_AT_SPRINT - BRAKE_AT_RUN) * sprintShare;
-  const step = rate * dt;
-  return Math.max(0, speed + Math.max(-step, Math.min(step, target - speed)));
+  return BRAKE_AT_RUN + (BRAKE_AT_SPRINT - BRAKE_AT_RUN) * sprintShare;
 }

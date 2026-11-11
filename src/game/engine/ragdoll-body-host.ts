@@ -49,6 +49,11 @@ export class RagdollBodyHost {
     return this.ragdolls().walkers[slot]!.state === "stand";
   }
 
+  steady(slot: number): boolean {
+    const walker = this.ragdolls().walkers[slot]!;
+    return walker.state === "stand" && walker.strength >= 1;
+  }
+
   holds(slot: number): boolean {
     return this.ragdolls().walkers[slot]?.active === true;
   }
