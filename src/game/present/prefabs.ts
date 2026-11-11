@@ -20,6 +20,7 @@ import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/land
 import { LAMP_POOL } from "./constants.ts";
 import { applyWaterLook } from "./water-look.ts";
 import { LeafMaterial, NatureMaterial } from "./nature-look.ts";
+import { leafAtlas } from "./leaf-atlas.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 
@@ -285,7 +286,7 @@ export function makePrefabMaterials(tex: RaceTextures, fullAssetMaps = false): P
   const materials: PrefabMaterials = {
     plain: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05 }), MAT.GENERIC),
     nature: tagMaterial(new NatureMaterial(), MAT.GENERIC),
-    leaves: tagMaterial(new LeafMaterial(), MAT.GENERIC),
+    leaves: tagMaterial(new LeafMaterial(typeof document === "undefined" ? null : leafAtlas()), MAT.GENERIC),
     concrete: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }), MAT.CONCRETE),
     get paving(): THREE.Material {
       return (lazy.paving ??= paved(tex));

@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { MAT } from "../kernel/material-ids.ts";
 import { PREFAB } from "../world/constants.ts";
-import type { Placed } from "../world/placements.ts";
+import { mulberry32, type Placed } from "../world/placements.ts";
 import { TREE_SCALE } from "../world/scenery.ts";
 import { streetTreeKindOf, streetTreeOf, type StreetKind, type StreetTree, type StreetTreeKind, type StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import { LEAF_CELLS, type LeafSpecies } from "./leaf-atlas.ts";
 import { cyl, type Piece } from "./prefab-pieces.ts";
 
 /** A canopy lump: an ellipsoid's middle and radii (m, in the tree's frame: +x toward its street, y up from the sidewalk) and its leaf colour. */
@@ -109,6 +110,21 @@ const PIT_TOP = 0.04;
 const SOIL = 0x4a3a2c;
 /** A park tree is its street kind grown this much in every length: trunk, limbs and canopy. */
 const PARK_GROWTH = 1.3;
+/** The leaf cards a whole tree of each kind carries, each card's edge (m), and the atlas column it reads. */
+const CARDS: Record<StreetTreeKind, { count: number; edge: number; species: LeafSpecies }> = {
+  plane: { count: 120, edge: 2.4, species: "plane" },
+  linden: { count: 80, edge: 1.7, species: "linden" },
+  young: { count: 28, edge: 1.2, species: "young" },
+  cherry: { count: 72, edge: 1.5, species: "cherry" },
+  parkPlane: { count: 120, edge: 2.4 * PARK_GROWTH, species: "plane" },
+  parkLinden: { count: 80, edge: 1.7 * PARK_GROWTH, species: "linden" },
+};
+/** Each ivy lump at a tree's foot is this many cards of this edge (m), lying flat. */
+const IVY_CARDS = 5;
+const IVY_EDGE = 0.36;
+const FORWARD = new THREE.Vector3(0, 0, 1);
+/** A card's centres never come nearer a lump's middle than this share of its radius. */
+const SHELL_FLOOR = 0.35;
 /** Ivy over the pit, a lump spilling toward the curb on the street side (the strip's edge is 0.6 m toward the street). */
 const IVY: readonly Lump[] = [
   [0.12, 0.1, 0.35, 0.28, 0.16, 0.32, 0x2f5a28],
@@ -141,8 +157,6 @@ const STREET_TREE_FORMS: Readonly<Record<StreetTreeKind, TreeForm>> = {
 
 const TRUNK_SIDES = 8;
 const LIMB_SIDES = 6;
-/** Each lump's icosahedron is turned this much more about y than the last, so no two show their facets alike. */
-const LUMP_TWIST = 1.3;
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -155,22 +169,52 @@ function rod(from: THREE.Vector3, to: THREE.Vector3, rootRadius: number, tipRadi
     .translate(from.x, from.y, from.z);
 }
 
-function lump([x, y, z, rx, ry, rz]: Lump, index: number): THREE.BufferGeometry {
-  const ball = new THREE.IcosahedronGeometry(1, 0);
-  // The unit ball's corners are its own normals: scaled, they are the ellipsoid's, so the lump shades round under `LeafMaterial`.
-  ball.setAttribute("normal", ball.getAttribute("position").clone());
-  return ball
-    .rotateY(index * LUMP_TWIST)
-    .scale(rx, ry, rz)
-    .translate(x, y, z);
+/** A lump of leaves as `cards` square cards of `edge` m, each reading one atlas cell of `species`; they fill the shell, darker inward, normals bent outward; `flat` (ivy) lies level. */
+export function cardPieces(lump: Lump, seed: number, cards: number, edge: number, species: LeafSpecies, flat = false): Piece[] {
+  const [x, y, z, rx, ry, rz, colour] = lump;
+  const random = mulberry32(seed);
+  const cells = LEAF_CELLS[species];
+  const shrink = (radius: number): number => Math.max(SHELL_FLOOR * radius, radius - 0.71 * edge);
+  const tint = new THREE.Color();
+  const pieces: Piece[] = [];
+  for (let card = 0; card < cards; card++) {
+    const up = flat ? 0 : random() * 2 - 1;
+    const turn = random() * Math.PI * 2;
+    const level = Math.sqrt(1 - up * up);
+    const reach = 0.45 + 0.55 * random();
+    const centre = new THREE.Vector3(level * Math.cos(turn) * shrink(rx) * reach, up * shrink(ry) * reach, level * Math.sin(turn) * shrink(rz) * reach);
+    const normal = flat ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(random() * 2 - 1, random() * 2 - 0.4, random() * 2 - 1).normalize();
+    const geometry = new THREE.PlaneGeometry(edge, edge);
+    geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(FORWARD, normal));
+    geometry.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(normal, random() * Math.PI * 2));
+    geometry.translate(centre.x, centre.y, centre.z);
+    const [u0, v0, du, dv] = cells[card % cells.length]!;
+    const mirrored = random() < 0.5;
+    const uv = geometry.getAttribute("uv");
+    for (let corner = 0; corner < uv.count; corner++) uv.setXY(corner, u0 + (mirrored ? 1 - uv.getX(corner) : uv.getX(corner)) * du, v0 + uv.getY(corner) * dv);
+    const position = geometry.getAttribute("position");
+    const normals = geometry.getAttribute("normal");
+    const facing = normal.dot(centre) >= 0 ? 1 : -1;
+    for (let corner = 0; corner < position.count; corner++) {
+      const outward = flat ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(position.getX(corner), position.getY(corner), position.getZ(corner)).normalize();
+      outward.multiplyScalar(0.8).addScaledVector(normal, 0.2 * facing).normalize();
+      normals.setXYZ(corner, outward.x, outward.y, outward.z);
+    }
+    geometry.translate(x, y, z);
+    const shade = (0.62 + 0.38 * reach) * (0.92 + 0.16 * random());
+    pieces.push([geometry, tint.setHex(colour).multiplyScalar(shade).getHex(), MAT.CONIFER_FOLIAGE]);
+  }
+  return pieces;
 }
 
 /** The pieces of the street tree `skin` names, at the scale its prop stands at (`TREE_SCALE`): pit, ivy, trunk in its bark bands, limbs, canopy. */
 export function streetTreePieces(skin: StreetTreeSkin): Piece[] {
-  const form = STREET_TREE_FORMS[streetTreeKindOf(skin)];
+  const kind = streetTreeKindOf(skin);
+  const form = STREET_TREE_FORMS[kind];
+  const kindIndex = Object.keys(STREET_TREE_FORMS).indexOf(kind);
   const { pit } = form;
   const pieces: Piece[] = [[cyl(pit.halfAlong, pit.halfAlong, 0, PIT_TOP, pit.sides).scale(pit.halfAcross / pit.halfAlong, 1, 1), SOIL, MAT.HAY]];
-  for (const [index, ivy] of form.ivy.entries()) pieces.push([lump(ivy, index), ivy[6], MAT.CONIFER_FOLIAGE]);
+  for (const [index, ivy] of form.ivy.entries()) pieces.push(...cardPieces(ivy, 1000 + index, IVY_CARDS, IVY_EDGE, CARDS[kind].species, true));
   const top = new THREE.Vector3(form.trunkLean, form.trunkHeight, 0);
   const bands = form.bark.length;
   for (let band = 0; band < bands; band++) {
@@ -180,7 +224,9 @@ export function streetTreePieces(skin: StreetTreeSkin): Piece[] {
     pieces.push([rod(from, to, radius(band / bands), radius((band + 1) / bands), TRUNK_SIDES), form.bark[band]!, MAT.TREE_BARK]);
   }
   for (const [x, y, z, rootRadius, tipRadius] of form.limbs) pieces.push([rod(top, new THREE.Vector3(x, y, z), rootRadius, tipRadius, LIMB_SIDES), form.bark[bands - 1]!, MAT.TREE_BARK]);
-  for (const [index, leaves] of form.canopy.entries()) pieces.push([lump(leaves, index), leaves[6], MAT.CONIFER_FOLIAGE]);
+  const volume = (lump: Lump): number => lump[3] * lump[4] * lump[5];
+  const whole = form.canopy.reduce((sum, lump) => sum + volume(lump), 0);
+  for (const [index, leaves] of form.canopy.entries()) pieces.push(...cardPieces(leaves, kindIndex * 97 + index + 1, Math.max(1, Math.round((CARDS[kind].count * volume(leaves)) / whole)), CARDS[kind].edge, CARDS[kind].species));
   for (const [geometry] of pieces) geometry.scale(1 / TREE_SCALE, 1 / TREE_SCALE, 1 / TREE_SCALE);
   return pieces;
 }
