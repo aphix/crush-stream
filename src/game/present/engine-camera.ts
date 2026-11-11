@@ -288,7 +288,9 @@ export class ChaseCamera {
    * from the user's view.
    */
   rideHeld(on: boolean, wallDt: number): boolean {
-    const turning = (this.dragging && this.pointerTravel >= CLICK_PX) || this.rideLooked;
+    const padTurn = this.pad.rx !== 0 || this.pad.ry !== 0;
+    if (on && padTurn && !this.rideLooked && this.rideIdle >= RIDE_PAUSE) this.adoptPose();
+    const turning = (this.dragging && this.pointerTravel >= CLICK_PX) || this.rideLooked || padTurn;
     this.rideLooked = false;
     this.rideIdle = !on ? Infinity : turning ? 0 : this.rideIdle + wallDt;
     return this.rideIdle < RIDE_PAUSE;
@@ -764,6 +766,7 @@ export class ChaseCamera {
     }
     this.pinchDist = d;
     this.userFramed = true;
+    if (this.ride) this.rideLooked = true;
   }
 
   private onPointerUp = (e: PointerEvent): void => {
@@ -800,5 +803,6 @@ export class ChaseCamera {
     const scale = Math.exp(e.deltaY * 0.00115);
     this.radius = THREE.MathUtils.clamp(this.radius * scale, this.minRadius, ORBIT_RADIUS.max);
     this.zooms++;
+    if (this.ride) this.rideLooked = true;
   };
 }
