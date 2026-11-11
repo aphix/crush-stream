@@ -30,6 +30,10 @@ const SLOW_END = 1.3;
 const PIVOT_IN = SLOW_END;
 const STOP_IN = 2.1;
 const BAND_HYSTERESIS = 0.2;
+/** Heading error (rad) over which the target speed falls from the pivot's to 0 past `STOP_IN`. */
+const STOP_FADE = 0.3;
+/** Heading error (rad) past `PIVOT_IN` over which the target speed falls from the curve's to the pivot's. */
+const PIVOT_RAMP = 0.2;
 /** A turn between 30° and 75° costs up to this share of the speed; a pivot (75°-120°) runs at this speed (m/s). */
 const SLOW_TURN_LOSS = 0.3;
 const PIVOT_SPEED = 2;
@@ -90,10 +94,13 @@ export class Locomotion {
   }
 
   private targetSpeed(command: number, aError: number): number {
-    if (command < STAND_COMMAND || this.band === "stop") return 0;
-    if (this.band === "pivot") return Math.min(command, PIVOT_SPEED);
+    if (command < STAND_COMMAND) return 0;
+    const pivot = Math.min(command, PIVOT_SPEED);
+    if (this.band === "stop") return aError > STOP_IN ? pivot * Math.max(0, 1 - (aError - STOP_IN) / STOP_FADE) : 0;
     const slow = Math.max(0, Math.min(1, (aError - CURVE_END) / (SLOW_END - CURVE_END)));
-    return command * (1 - SLOW_TURN_LOSS * slow);
+    const curve = command * (1 - SLOW_TURN_LOSS * slow);
+    if (aError <= PIVOT_IN) return this.band === "pivot" ? pivot : curve;
+    return curve + (pivot - curve) * Math.min(1, (aError - PIVOT_IN) / PIVOT_RAMP);
   }
 
   /** Turn toward the heading at the rate the speed allows, easing the rate so it neither jumps nor overshoots the heading. */

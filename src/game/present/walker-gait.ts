@@ -28,6 +28,10 @@ const ELBOW_BASE = [-0.25, -0.3, -1.45, -1.55] as const;
 const RATE_MAX = 40;
 /** Cycles a second while he is not moving but a foot is still to be brought in. */
 const SETTLE_CADENCE = 1.6;
+/** How fast (1/s) the cadence follows its target, so a jump in speed does not jump the stride. */
+const CADENCE_EASE = 10;
+/** The cadence (cycles a second) a seeded gait starts easing from. */
+const SEED_CADENCE = 1;
 /** Steps come quicker while he is pushing up to speed: cycles a second more per m/s² of acceleration, and the most (cycles a second). */
 const CADENCE_PER_PUSH = 0.07;
 const CADENCE_MAX = 2.6;
@@ -193,6 +197,7 @@ export class Gait {
     this.pathX = x;
     this.pathZ = z;
     this.twist = this.sway = this.hipRise = this.hop = 0;
+    this.cadence = SEED_CADENCE;
     this.hipY = y - HIP_DROP;
     this.dirX = detSin(yaw);
     this.dirZ = detCos(yaw);
@@ -258,7 +263,8 @@ export class Gait {
     this.heading(loc.yaw);
     const hipX = this.pathX + this.sway * detCos(loc.yaw);
     const hipZ = this.pathZ - this.sway * detSin(loc.yaw);
-    this.cadence = speed > MOVING_SPEED ? Math.min(CADENCE_MAX, atSpeed(speed, CADENCE) + CADENCE_PER_PUSH * Math.max(0, loc.accel)) : SETTLE_CADENCE;
+    const target = speed > MOVING_SPEED ? Math.min(CADENCE_MAX, atSpeed(speed, CADENCE) + CADENCE_PER_PUSH * Math.max(0, loc.accel)) : SETTLE_CADENCE;
+    this.cadence += (target - this.cadence) * Math.min(1, dt * CADENCE_EASE);
     if (moving) this.phase = (this.phase + this.cadence * dt) % 1;
     for (let f = 0; f < 2; f++) this.stepFoot(f, loc, hipX, hipZ, ground, dt);
     this.rideHeight(dt, speed, hipX, hipZ);
@@ -394,7 +400,7 @@ export class Gait {
   private land(f: number, speed: number, ground: GroundAt): void {
     this.planted[f] = 1;
     this.liftAt[f] = atSpeed(speed, STANCE);
-    this.pitch[f] = rollAt(speed).strike;
+    this.pitch[f] = this.still ? 0 : rollAt(speed).strike;
     this.plantOnHeel(f, ground);
   }
 

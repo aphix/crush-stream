@@ -8,7 +8,7 @@ import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
-import type { FloorBox } from "./walker-floor.ts";
+import { WalkFloor, type FloorBox } from "./walker-floor.ts";
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -210,5 +210,20 @@ describe("given a building's interior floor boxes that are in the world but not 
     expect(end.z, `on the landing: z ${end.z.toFixed(2)}`).toBeGreaterThan(FIRST_Z + 0.26 * 4 + 0.3);
     expect(end.y - top, `standing over the landing: ${(end.y - top).toFixed(2)} m`).toBeGreaterThan(STANDING_MIN);
     expect(end.y - top, `not lifted past standing: ${(end.y - top).toFixed(2)} m`).toBeLessThan(STANDING_MAX);
+  });
+});
+
+describe("given the paced command and a curb ahead", () => {
+  it("when the step comes nearer, then the paced command falls without a jump", () => {
+    const floor = new WalkFloor();
+    floor.boxes = [{ x0: -4, x1: 4, z0: 0.6, z1: 4, y0: 0, y1: 0.15 }];
+    const paces: number[] = [];
+    for (let z = -0.2; z <= 0.7; z += 0.01) paces.push(floor.pace(0, z, 0, RUN_SPEED));
+    // mutation: sed -i 's/STEP_PACE + (command - STEP_PACE) \* share/STEP_PACE/' src/game/present/walker-floor.ts
+    let worst = 0;
+    for (let i = 1; i < paces.length; i++) worst = Math.max(worst, Math.abs(paces[i]! - paces[i - 1]!));
+    expect(worst, `largest 1 cm step in pace ${worst.toFixed(3)} m/s`).toBeLessThan(0.2);
+    expect(paces[0]).toBe(RUN_SPEED);
+    expect(paces[paces.length - 1]).toBeLessThan(RUN_SPEED);
   });
 });
