@@ -210,3 +210,14 @@ describe("given a resident whose drawn spot the crowd moves to clear a stoop", (
     expect(keptStepsLevel(null)).toBe(0);
   });
 });
+
+describe("given a resident who comes home up a rowhome's stoop while the law's overlay draws no one", () => {
+  // mutation: sed -i 's/ || (x\[resident\] === drawX\[resident\] \&\& z\[resident\] === drawZ\[resident\])//' src/game/ai/civilians/civilian-crowd.ts
+  it("when she is on the bottom step, then she is lifted by it: only a resident the overlay moved is kept out", () => {
+    const { crowd, person } = leaving(new Stoops([HOUSE], [EDGE.from]), true);
+    crowd.overlay = () => {};
+    crowd.step((EDGE.length - (STOOP.run - STOOP.tread / 2)) / PACE, [], true);
+    expect(crowd.poses.shown[person], "shown on the bottom step").toBe(1);
+    expect(crowd.poses.feetY[person]).toBeCloseTo(STOOP.rise, 3);
+  });
+});

@@ -173,6 +173,11 @@ export class OpenWorldBodies {
       this.host.steer(slot, yaw, 0);
       return;
     }
+    // Her spot was swerved round a stoop: the body keeps her walk's heading, so it does not turn sideways after a spot that is only drawn round the steps.
+    if (poses.kept[civilian] === 1) {
+      this.host.steer(slot, yaw, pace);
+      return;
+    }
     // Her own velocity plus a pull toward her spot: the body faces where she goes, and her spot only bends that (a heading taken from the bearing to a spot a hand's breadth away swings with every step).
     const vx = detSin(yaw) * pace + CATCH_UP * dx;
     const vz = detCos(yaw) * pace + CATCH_UP * dz;
@@ -181,7 +186,7 @@ export class OpenWorldBodies {
 
   /** Whether civilian \`civilian\` may have a body: shown, walking or standing about, on the street (not on a stoop, not in a building) and within \`radius\` of the eye. */
   private eligible(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number, radius: number): boolean {
-    if (poses.shown[civilian] === 0 || poses.kept[civilian] === 1 || !BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;
+    if (poses.shown[civilian] === 0 || !BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;
     const x = poses.x[civilian]!;
     const z = poses.z[civilian]!;
     if (hypot2(x - eyeX, z - eyeZ) > radius || poses.feetY[civilian]! - this.host.groundAt(x, z) > ON_STREET) return false;
