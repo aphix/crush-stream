@@ -300,7 +300,7 @@ export abstract class RagdollThrower extends RagdollStepper {
         const dx = db.cur[0]! - da.cur[0]!;
         const dz = db.cur[2]! - da.cur[2]!;
         const gap = hypot2(dx, dz);
-        if (gap > BODY_TOUCH || gap < 1e-6 || Math.abs(db.cur[1]! - da.cur[1]!) > 1) continue;
+        if (gap > BODY_TOUCH || gap === 0 || Math.abs(db.cur[1]! - da.cur[1]!) > 1) continue;
         wa.beside = true;
         wb.beside = true;
         if (this.meetClock - this.metAt[a]! < BODY_AGAIN || this.meetClock - this.metAt[b]! < BODY_AGAIN) continue;
