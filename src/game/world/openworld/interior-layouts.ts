@@ -206,6 +206,7 @@ export function layoutCoffee(d: Draft): void {
   for (const across of [-1.65, 1.65]) {
     d.put("counter", 0, 0.55, across, toBack, { width: 1.5, depth: 0.4, height: 1.05 });
     for (const seat of [-0.4, 0.4]) d.put("stool", 0, 1.2, across + seat, toStreet);
+    d.lamp(0, 0.9, across);
   }
   for (const across of [-1.6, 1.6]) {
     d.put("table", 0, 3, across, toStreet);
@@ -242,6 +243,8 @@ export function layoutBar(d: Draft): void {
   const left = -d.half;
   for (const deep of [4.5, 7, 9.5]) d.put("backShelf", 0, deep, left + 0.175, toRight, { width: 2.5 });
   d.put("counter", 0, 7, -3.8, toRight, { width: 7.5, serves: true, serveAt: -3.3 });
+  for (const deep of [4, 5.5, 7, 8.5, 10]) d.lamp(0, deep, -3.8);
+  d.lamp(0, 7, left + 0.6);
   for (let stool = 0; stool < 8; stool++) d.put("stool", 0, 4.3 + stool * 0.85, -3, toLeft);
   for (const deep of [4.6, 7.4]) {
     for (const across of [0.3, 2.5]) {
@@ -275,6 +278,9 @@ const MEETING_SEAT_TO_TABLE = 0.85;
 const OFFICE_FRONT_DESKS = [-4.2, -1.4, 1.4, 4.2] as const;
 const OFFICE_BACK_DESKS = [-3.2, -0.8, 1.6, 4] as const;
 
+/** The office's ceiling lamps over its open floor: this many rows by this many columns. */
+const OFFICE_LAMP_GRID = 3;
+
 /** Lobby with a reception desk and waiting seats, an open plan of eight desks, a glazed-in meeting room and a pantry. */
 export function layoutOffice(d: Draft): void {
   d.put("counter", 0, 3.4, 0, toStreet, { width: 3.6, serves: true });
@@ -284,14 +290,16 @@ export function layoutOffice(d: Draft): void {
   d.put("table", 0, 2, -3.9, toRight, { width: 1, depth: 0.5, height: 0.42 });
   d.put("armchair", 0, 2, d.half - FURNISHING.armchair.depth / 2, toLeft);
   d.put("plant", 0, 0.8, d.half - FURNISHING.plant.width / 2, toStreet);
-  d.lamp(0, 2.5, 0);
+  for (let row = 0; row < OFFICE_LAMP_GRID; row++) {
+    for (let column = 0; column < OFFICE_LAMP_GRID; column++) d.lamp(0, d.front + ((row + 0.5) * (12.1 - d.front)) / OFFICE_LAMP_GRID, -d.half + ((column + 0.5) * 2 * d.half) / OFFICE_LAMP_GRID);
+  }
+  for (const across of [-2.7, 3.4]) d.lamp(0, (12.1 + d.back) / 2, across);
   const stair = serviceStair(d, -1);
   for (const [row, deep] of [7.4, 10].entries()) {
     for (const across of row === 0 ? OFFICE_FRONT_DESKS : OFFICE_BACK_DESKS) {
       d.put("desk", 0, deep, across, toBack);
       d.put("deskChair", 0, deep - 0.75, across, toBack);
     }
-    d.lamp(0, deep, row === 0 ? -2.8 : 2.8);
   }
   d.crossWall(0, 12.1, stair.innerEdge, -1.2, [doorway(-1.8)]);
   d.spineWall(0, -1.2, 12.1, d.back);
@@ -321,6 +329,6 @@ export function layoutStore(d: Draft): void {
   for (const across of [-3.5, -2.7, -1.9, -1.1]) d.put("fridge", 0, d.back - FURNISHING.fridge.depth / 2, across, toStreet);
   d.put("counter", 0, 12.4, 3.2, toStreet, { width: 3.6 });
   d.put("backShelf", 0, d.back - FURNISHING.backShelf.depth / 2, 3.2, toStreet, { width: 3.6 });
-  for (const deep of [3, 7, 11]) d.lamp(0, deep, 0.5);
+  for (const deep of [3, 5, 7, 9, 11]) d.lamp(0, deep, 0.5);
   layoutFlats(d, serviceStair(d, -1));
 }

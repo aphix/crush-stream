@@ -9,7 +9,7 @@ import { vestibuleSolids, type InteriorSolid } from "../../world/openworld/inter
 import { FACADE_GLOW, FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS } from "../facades.ts";
 import { HIDE_GRACE, SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../openworld-sight.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
-import { CLOSED_GLOW, DOOR_SWING_SECONDS, INTERIOR_DIM, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS } from "./interior-constants.ts";
+import { CLOSED_GLOW, DOOR_SWING_SECONDS, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, OPEN_FADE_SECONDS, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS } from "./interior-constants.ts";
 import { InteriorSet } from "./interior-art.ts";
 import type { DoorOpeners } from "./interior-doors.ts";
 
@@ -422,12 +422,25 @@ describe("given a coffee shop whose room is built and then released", () => {
     set.dispose();
   });
 
-  // mutation: sed -i 's/export const INTERIOR_DIM = 0.6;/export const INTERIOR_DIM = 1;/' src/game/present/interiors/interior-constants.ts (a lit room washes out to white)
-  it("when its solids are drawn, then they take a share of the light, not all of it", () => {
+  // mutation: sed -i 's/entry.shellSlot = this.shells.add(built.solid, place.yaw, place.x, place.z, entry.light);/entry.shellSlot = this.shells.add(built.solid, place.yaw, place.x, place.z);/' src/game/present/interiors/interior-art.ts
+  it("when its solids are drawn, then every corner carries its baked light, and the corners do not all carry the same", () => {
     const set = new InteriorSet(lone);
-    const mesh = set.group.getObjectByName("interior-furniture") as THREE.Mesh;
-    expect((mesh.material as THREE.MeshStandardMaterial).color.r, "the furniture's colour factor").toBe(INTERIOR_DIM);
-    expect(INTERIOR_DIM, "less than all of the light").toBeLessThan(1);
+    settle(set, coffee.doorX, coffee.doorZ, openers());
+    const shells = set.group.getObjectByName("interior-shells") as THREE.Mesh;
+    const light = shells.geometry.getAttribute("light").array;
+    let least = Infinity;
+    let most = -Infinity;
+    const floats = shells.geometry.drawRange.count * 4;
+    expect(floats, "the envelope is packed").toBeGreaterThan(0);
+    for (let at = 0; at < floats; at++) {
+      expect(light[at]!, `light float ${at}`).toBeGreaterThanOrEqual(0);
+      expect(light[at]!, `light float ${at}`).toBeLessThanOrEqual(1);
+      if (at % 4 === 0) {
+        least = Math.min(least, light[at]!);
+        most = Math.max(most, light[at]!);
+      }
+    }
+    expect(most - least, "the lamp reds span").toBeGreaterThan(0.1);
     set.dispose();
   });
 });
@@ -523,6 +536,31 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     lit.dispose();
     shut.dispose();
   });
+
+  /** The greatest lamp float (r, g or b of the light stream) over the vertices the envelope packs. */
+  function lampOf(set: InteriorSet): number {
+    const mesh = set.group.getObjectByName("interior-shells") as THREE.Mesh;
+    const light = mesh.geometry.getAttribute("light").array;
+    let most = 0;
+    for (let at = 0; at < mesh.geometry.drawRange.count * 4; at++) if (at % 4 !== 3) most = Math.max(most, light[at]!);
+    return most;
+  }
+
+  // mutation: sed -i '/^      this.shells.scaleLamp(entry.shellSlot, shut ? CLOSED_GLOW : 1 \/ CLOSED_GLOW);/d' src/game/present/interiors/interior-art.ts
+  it("when a place shuts, then its room's baked lamp light dims to the closed share, and comes back when it opens", () => {
+    const set = new InteriorSet(lone);
+    settle(set, coffee.doorX, coffee.doorZ, openers());
+    const bright = lampOf(set);
+    expect(bright, "lit").toBeGreaterThan(0.1);
+    const who = openers();
+    who.closed = SHUT;
+    settle(set, coffee.doorX, coffee.doorZ, who, 3);
+    expect(lampOf(set), "shut").toBeCloseTo(bright * CLOSED_GLOW, 5);
+    who.closed = OPEN;
+    settle(set, coffee.doorX, coffee.doorZ, who, 3);
+    expect(lampOf(set), "open again").toBeCloseTo(bright, 5);
+    set.dispose();
+  });
 });
 
 describe("given the materials the interiors are drawn in", () => {
@@ -533,17 +571,18 @@ describe("given the materials the interiors are drawn in", () => {
     return shader;
   };
 
-  // mutation: sed -i 's/ROOM_NIGHT.toFixed(2)} \* facadeGlow/ROOM_NIGHT.toFixed(2)} * 0.0/' src/game/present/interiors/interior-art.ts (a room is as lit at night as at noon)
-  it("when the furniture's and the lamps' materials are compiled, then a room's surfaces and its lamps follow the facade's shared glow, day to night", () => {
+  // mutation: sed -i 's/diffuseColor.rgb \*= vLight.rgb \* mix(/diffuseColor.rgb *= vec3(1.0) * mix(/' src/game/present/interiors/interior-art.ts
+  it("when the furniture's and the lamps' materials are compiled, then a room's surfaces are unlit by the scene and multiply each corner's colour by its baked lamp light and daylight, scaled by the night, and its lamps follow the shared glow", () => {
     const set = new InteriorSet(lone);
     const furniture = set.group.getObjectByName("interior-furniture") as THREE.Mesh;
     const lamps = set.group.getObjectByName("interior-lights") as THREE.Mesh;
-    const solid = compiled(furniture.material as THREE.Material, "standard");
+    expect(furniture.material instanceof THREE.MeshBasicMaterial, "unlit by the scene").toBe(true);
+    const solid = compiled(furniture.material as THREE.Material, "basic");
     expect(solid.uniforms.facadeGlow, "the shared glow").toBe(FACADE_GLOW);
-    expect(solid.fragmentShader, "surfaces lit warm, more as the night comes").toContain("* facadeGlow);");
+    expect(solid.fragmentShader, "surfaces take their baked light, more as the night comes").toContain("vLight.rgb * mix(0.75, 1.0, facadeGlow)");
     const lit = compiled(lamps.material as THREE.Material, "basic");
     expect(lit.uniforms.facadeGlow, "the shared glow").toBe(FACADE_GLOW);
-    expect(lit.fragmentShader, "lamps a share of themselves by day").toContain("mix(0.40, 1.0, facadeGlow)");
+    expect(lit.fragmentShader, "lamps a share of themselves by day").toContain("mix(0.90, 1.0, facadeGlow)");
     set.dispose();
   });
 });

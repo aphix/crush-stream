@@ -496,7 +496,7 @@ const facadeEmissive = (extras: Extras): string => /* glsl */ `
 ${extras.neon ? `vec3 facadeSign = ${facadeRead(extras, "glow")}.rgb;
 vec2 facadeWindow = facadeSign.rg;` : `vec2 facadeWindow = ${facadeRead(extras, "glow")}.rg;`}
 ${extras.dark ? `float facadeShare = ${facadeShareGlsl(LIT_SHARE_GLSL)};\n` : ""}float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${extras.dark ? "facadeShare" : LIT_SHARE_GLSL})${extras.dark ? " * step(0.0001, facadeShare)" : ""};
-totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x)${extras.dark ? ` * (1.0 - vFacadeDark * step(${LAYER.ground}.0, vFacadeRegion.x) * step(vFacadeRegion.x, ${LAYER.ground}.0))` : ""};${
+totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x)${extras.dark ? ` * (1.0 - vFacadeDark * step(${LAYER.ground}.0, vFacadeRegion.x) * step(vFacadeRegion.x, ${LAYER.ground}.0))` : ""}${extras.open ? ` * (1.0 - vFacadeOpen${extras.roomsAbove ? "" : ` * step(${LAYER.ground}.0, vFacadeRegion.x)`})` : ""};${
     extras.neon
       ? `
 totalEmissiveRadiance += diffuseColor.rgb / max(max(diffuseColor.r, diffuseColor.g), max(diffuseColor.b, 0.05)) * (smoothstep(0.1, 0.6, facadeSign.b) * smoothstep(0.0, 0.4, facadeGlow) * ${NEON_INTENSITY.toFixed(1)} * step(0.0, vFacadeRegion.x));`

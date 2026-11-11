@@ -7,8 +7,9 @@ import { PLACE_KIND, type OpenWorldMap, type Place } from "../../world/openworld
 import { FACADE_DARK_MAX, FACADE_GLOW, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, setDarkFacades, setOpenFacades } from "../facades.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
-import { CLOSED_GLOW, DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_DIM, INTERIOR_LINGER, INTERIOR_NEAR, LAMP_DAY, OPEN_FADE_SECONDS, PACK_START_VERTICES, ROOM_AMBIENT, ROOM_NIGHT, ROOM_WARM, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
+import { CLOSED_GLOW, DAY_SKY_GAIN, DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, LAMP_DAY, LAMP_ROOM_DAY, OPEN_FADE_SECONDS, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
 import { DoorSet, type DoorOpeners } from "./interior-doors.ts";
+import { lightingOf, type RoomLight } from "./interior-light.ts";
 import { NO_SLOT, PackedMesh } from "./interior-pack.ts";
 
 /** What of an interior the physics holds: nothing, the vestibules behind its street doors, or all of it. */
@@ -19,12 +20,15 @@ type Solids = (typeof SOLIDS)[keyof typeof SOLIDS];
 type Entry = {
   place: Place;
   plan: InteriorPlan;
+  light: RoomLight;
   placeIndex: number;
   business: boolean;
   shopfront: boolean;
   closing: boolean;
   locked: boolean;
   dimmed: boolean;
+  /** The shell's lamp light is dimmed (a shut place): kept apart from `dimmed`, since the shell outlives the furniture. */
+  shellDimmed: boolean;
   halfDepth: number;
   halfWidth: number;
   firstDoor: number;
@@ -89,7 +93,7 @@ export class InteriorSet {
   readonly group = new THREE.Group();
   private readonly entries: Entry[] = [];
   private readonly doors: DoorSet;
-  private readonly solidMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, color: new THREE.Color(INTERIOR_DIM, INTERIOR_DIM, INTERIOR_DIM), roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
+  private readonly solidMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
   private readonly glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   private readonly glassMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: GLASS_OPACITY, roughness: 0.05, metalness: 0, side: THREE.DoubleSide, depthWrite: false });
   private readonly shells: PackedMesh;
@@ -125,6 +129,7 @@ export class InteriorSet {
     this.group.name = "interiors";
     this.builtAt = new Float32Array(FACADE_OPEN_SLOT_FLOATS * FACADE_OPEN_MAX);
     const plans = new Map<string, InteriorPlan>();
+    const lights = new Map<string, RoomLight>();
     const leaves: DoorLeaf[] = [];
     for (let placeIndex = 0; placeIndex < map.places.length; placeIndex++) {
       const place = map.places[placeIndex]!;
@@ -135,9 +140,10 @@ export class InteriorSet {
       if (plan === undefined) {
         plan = planInterior(place);
         plans.set(key, plan);
+        lights.set(key, lightingOf(plan));
       }
       const doors = interiorDoors(place, plan);
-      this.entries.push({ place, plan, placeIndex, business: place.interior !== "rowhome", shopfront: false, closing: false, locked: false, dimmed: false, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shellBuilt: false, detailBuilt: false, shellSlot: NO_SLOT, shellGlassSlot: NO_SLOT, detailSlot: NO_SLOT, glowSlot: NO_SLOT, detailGlassSlot: NO_SLOT, solids: SOLIDS.none });
+      this.entries.push({ place, plan, light: lights.get(key)!, placeIndex, business: place.interior !== "rowhome", shopfront: false, closing: false, locked: false, dimmed: false, shellDimmed: false, halfDepth: drawnHalf(place.depth), halfWidth: drawnHalf(place.width), firstDoor: leaves.length, doorCount: doors.length, shellBuilt: false, detailBuilt: false, shellSlot: NO_SLOT, shellGlassSlot: NO_SLOT, detailSlot: NO_SLOT, glowSlot: NO_SLOT, detailGlassSlot: NO_SLOT, solids: SOLIDS.none });
       leaves.push(...doors);
     }
     this.distance = new Float64Array(this.entries.length);
@@ -148,9 +154,12 @@ export class InteriorSet {
     this.group.add(this.doors.group);
     this.solidMaterial.onBeforeCompile = (shader) => {
       shader.uniforms.facadeGlow = FACADE_GLOW;
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nattribute vec4 light;\nvarying vec4 vLight;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvLight = light;");
       shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", "#include <common>\nuniform float facadeGlow;")
-        .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * vec3(${ROOM_WARM.map((channel) => channel.toFixed(2)).join(", ")}) * (${ROOM_AMBIENT.toFixed(2)} + ${ROOM_NIGHT.toFixed(2)} * facadeGlow);`);
+        .replace("#include <common>", "#include <common>\nuniform float facadeGlow;\nvarying vec4 vLight;")
+        .replace("#include <color_fragment>", `#include <color_fragment>\ndiffuseColor.rgb *= vLight.rgb * mix(${LAMP_ROOM_DAY.toFixed(2)}, 1.0, facadeGlow) + vLight.a * ${DAY_SKY_GAIN.toFixed(2)} * (1.0 - 0.92 * facadeGlow);`);
     };
     this.solidMaterial.customProgramCacheKey = () => "interior-solid";
     this.glowMaterial.onBeforeCompile = (shader) => {
@@ -296,7 +305,12 @@ export class InteriorSet {
     }
     if (entry.glowSlot !== NO_SLOT && shut !== entry.dimmed) {
       this.glows.scaleColor(entry.glowSlot, shut ? CLOSED_GLOW : 1 / CLOSED_GLOW);
+      this.details.scaleLamp(entry.detailSlot, shut ? CLOSED_GLOW : 1 / CLOSED_GLOW);
       entry.dimmed = shut;
+    }
+    if (entry.shellSlot !== NO_SLOT && shut !== entry.shellDimmed) {
+      this.shells.scaleLamp(entry.shellSlot, shut ? CLOSED_GLOW : 1 / CLOSED_GLOW);
+      entry.shellDimmed = shut;
     }
   }
 
@@ -311,7 +325,7 @@ export class InteriorSet {
       if (view !== VIEW.wanted || distance >= SHELL_NEAR || this.shellBuilds >= SHELL_BUILDS_PER_FRAME) return false;
       const built = buildShell(entry.plan);
       const { place } = entry;
-      entry.shellSlot = this.shells.add(built.solid, place.yaw, place.x, place.z);
+      entry.shellSlot = this.shells.add(built.solid, place.yaw, place.x, place.z, entry.light);
       entry.shellGlassSlot = this.glass.add(built.glass, place.yaw, place.x, place.z);
       entry.shellBuilt = true;
       this.shellAway[at] = 0;
@@ -329,6 +343,7 @@ export class InteriorSet {
     entry.shellSlot = NO_SLOT;
     entry.shellGlassSlot = NO_SLOT;
     entry.shellBuilt = false;
+    entry.shellDimmed = false;
     return true;
   }
 
@@ -339,7 +354,7 @@ export class InteriorSet {
       if (view !== VIEW.wanted || distance >= INTERIOR_NEAR || this.detailBuilds >= DETAIL_BUILDS_PER_FRAME) return false;
       const built = buildDetail(entry.plan);
       const { place } = entry;
-      entry.detailSlot = this.details.add(built.solid, place.yaw, place.x, place.z);
+      entry.detailSlot = this.details.add(built.solid, place.yaw, place.x, place.z, entry.light, true);
       entry.glowSlot = this.glows.add(built.glow, place.yaw, place.x, place.z);
       entry.detailGlassSlot = this.glass.add(built.glass, place.yaw, place.x, place.z);
       entry.detailBuilt = true;
