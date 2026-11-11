@@ -3,7 +3,7 @@ import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { makeAsphalt, makeJerseyBarrier, makeLamp } from "./engine-world.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
-import { CARHENGE, CHEVRON, COOLING_TOWER, coolingTowerRadius, FENCE, JUNK_CRANE, MARBLE, OBELISK, obeliskHalf, SMOKESTACK, smokestackRadius, STAR_INNER, WRECK, type PrefabId } from "../world/catalog.ts";
+import { CARHENGE, CHEVRON, COOLING_TOWER, coolingTowerRadius, FENCE, JUNK_CRANE, MARBLE, OBELISK, obeliskHalf, PREFABS, SMOKESTACK, smokestackRadius, STAR_INNER, WRECK, type PrefabId } from "../world/catalog.ts";
 import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, type Skin, squareFrustum } from "./prefab-pieces.ts";
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
 import { frontBumper, lyingWheel, parkedCar } from "./prefabs-car.ts";
@@ -545,7 +545,7 @@ function disposeGroup(g: THREE.Group, keep: readonly THREE.Material[] = []): voi
 /**
  * makeLamp fitted to 4.4 m with its arm towards the road (+X) (`acorn`: the acorn lamp at its own size, no arm): the pole in vertex colours, then the
  * head and the night light pool on makeLamp's own shared materials, so the scene's day / night
- * switch lights them with every other lamp.
+ * switch lights them with every other lamp. The acorn lamp stands on the open world's sidewalk slabs, so its pool lies over the slab's top (`PREFABS.sidewalk.size`), as it lies over the ground at a race's lamp.
  */
 function lamp(plain: THREE.Material, acorn = false): PrefabPart[] {
   const g = makeLamp(true, acorn);
@@ -558,7 +558,8 @@ function lamp(plain: THREE.Material, acorn = false): PrefabPart[] {
     if (!(o instanceof THREE.Mesh)) return;
     const m = o.material as THREE.MeshStandardMaterial;
     const geo = (o.geometry as THREE.BufferGeometry).clone().applyMatrix4(o.matrixWorld).applyMatrix4(fit);
-    if (o.name === LAMP_POOL || m.emissive?.getHex()) shared.push({ geometry: geo, material: m, shared: true });
+    if (acorn && o.name === LAMP_POOL) shared.push({ geometry: geo.translate(0, PREFABS[PREFAB.sidewalk].size[1], 0), material: m, shared: true });
+    else if (o.name === LAMP_POOL || m.emissive?.getHex()) shared.push({ geometry: geo, material: m, shared: true });
     else pole.push([geo, m.color.getHex(), MAT.LAMP_POLE]);
   });
   disposeGroup(

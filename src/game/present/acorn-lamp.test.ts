@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
+import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { ACORN_LAMP } from "../world/street-kit.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
@@ -52,5 +53,12 @@ describe("given the acorn lamp the open world stands on its streets and in its p
     const pool = boundsOf(acorn.pool);
     expect((pool.min.x + pool.max.x) / 2, "the pool's middle along x (m)").toBeCloseTo(0, 5);
     expect((pool.min.z + pool.max.z) / 2, "the pool's middle along z (m)").toBeCloseTo(0, 5);
+  });
+
+  // mutation: sed -i 's/geometry: geo.translate(0, PREFABS\[PREFAB.sidewalk\].size\[1\], 0)/geometry: geo/' src/game/present/prefabs.ts
+  it("when the pools are read, then the acorn lamp's lies over the sidewalk slab's top and a race lamp's stays on the ground", () => {
+    const slabTop = PREFABS[PREFAB.sidewalk].size[1];
+    expect(boundsOf(acorn.pool).min.y, "the acorn pool over the slab").toBeGreaterThan(slabTop);
+    expect(boundsOf(arm.pool).max.y, "the race lamp's pool under a slab's height").toBeLessThan(slabTop);
   });
 });
