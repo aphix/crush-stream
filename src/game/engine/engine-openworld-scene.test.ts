@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { homeModes, pickScene, sceneInPlay, scenesFor } from "../../components/scene-picks.ts";
 import { CROWD_TIER_SCALE, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
@@ -180,5 +180,20 @@ describe("given the number pad's plus and minus in the open world", () => {
     }
     expect(lightHour(), "the light").toBe(light);
     expect(crowdSeconds(), "the crowd's clock").toBe(seconds);
+  });
+});
+
+describe("given the open world up on Auto, with no match running", () => {
+  // mutation: sed -i 's/const matching = this.showOpenWorld || (/const matching = (/' src/game/engine/engine-input.ts
+  it("when a frame reaches the render-scale and detail governors, then both are told a match is running, so a phone's pixel ratio can step down", () => {
+    expect(engine["showOpenWorld"], "control: the city is up").toBe(true);
+    expect(engine["autoFx"].auto, "control: Auto is on").toBe(true);
+    const told: boolean[] = [];
+    const scale = vi.spyOn(engine["quality"], "govern").mockImplementation((_a, _b, _c, _d, matching) => (told.push(matching), false));
+    const detail = vi.spyOn(engine["detailGov"], "frame").mockImplementation((_a, _b, _c, _d, _e, matching) => (told.push(matching), null));
+    engine["fxFrame"](0.025, 0);
+    scale.mockRestore();
+    detail.mockRestore();
+    expect(told.join(","), "detail then scale").toBe("true,true");
   });
 });
