@@ -41,6 +41,7 @@ describe("given the stage's time of day and night setting (no cycle)", () => {
   // mutation: sed -i 's/    this.hemi.intensity = mixScalar(day.hemi\[1\], SUNSET.hemi\[1\], NIGHT.hemi\[1\], warm, k);/    this.hemi.intensity = mixScalar(day.hemi[1], SUNSET.hemi[1], NIGHT.hemi[1], warm, 0.5);/' src/game/present/engine-world.ts
   it("when the stage is lit by day and then by night, then its hemisphere, sun and fill are the day's and the night's darkened by the night depth, and the lamp heads and windows are lit at night only", () => {
     const { stage } = newStage();
+    stage.setSkyTier("high");
     const { head, pool } = lampOf();
     expect(stage["hemi"].intensity, "day hemisphere").toBeCloseTo(1.35, 9);
     expect(stage.sun.intensity, "day sun").toBeCloseTo(2.6, 9);

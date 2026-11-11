@@ -252,6 +252,8 @@ export class OpenWorldSigns {
   readonly group = new THREE.Group();
   private readonly shop: ShopSigns;
   private readonly spill: ShopSpill;
+  /** The shopfronts' night light on the pavement: a sibling of `group`, added to the scene beside it (it is light, not signage). */
+  readonly spillGroup: THREE.Group;
   private names: NameLabels | null = null;
   private readonly places: readonly Place[];
 
@@ -262,7 +264,7 @@ export class OpenWorldSigns {
     this.group.add(this.shop.group);
     lampPool.map ??= makePoolTexture();
     this.spill = new ShopSpill(places, lampPool);
-    this.group.add(this.spill.group);
+    this.spillGroup = this.spill.group;
   }
 
   /** A frame: the names shown when `namesOn`, in the chunks within range of the eye that `sight` (when there is one) says are seen; the shop signs of the places `closed` marks shut dimmed. */

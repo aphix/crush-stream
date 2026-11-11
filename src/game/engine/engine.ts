@@ -484,7 +484,7 @@ export class CrashEngine extends EngineGarage {
       signsOn: () => this.showTrackDebug,
       makeSigns: (places) => {
         const signs = new OpenWorldSigns(places);
-        this.scene.add(signs.group);
+        this.scene.add(signs.group, signs.spillGroup);
         return signs;
       },
       cull: {
