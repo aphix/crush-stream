@@ -132,7 +132,9 @@ const lampHead = tagMaterial(new THREE.MeshStandardMaterial({
 }), MAT.LAMP_LENS);
 /** Fake light pool under each lamp: an additive ground decal, drawn only at night. */
 const LAMP_POOL_OPACITY = 0.55;
-const lampPool = groundMaterial(
+/** A lamp pool's brightening where the tier draws no bloom. */
+const NO_BLOOM_POOL_GAIN = 1.4;
+export const lampPool = groundMaterial(
   new THREE.MeshBasicMaterial({
     color: 0xffd9a0,
     transparent: true,
@@ -662,7 +664,8 @@ export class WorldStage {
     lampHead.emissiveIntensity = mixScalar(day.lamp, SUNSET.lamp, NIGHT.lamp, warm, lamps);
     FACADE_GLOW.value = mixScalar(day.glow, SUNSET.glow, NIGHT.glow, warm, this.windows);
     lampPool.visible = cycling ? lamps > 0 : this.night;
-    lampPool.opacity = LAMP_POOL_OPACITY * (cycling ? lamps : 1);
+    // No bloom at these tiers: the ground pool is a lamp's only spill.
+    lampPool.opacity = Math.min(1, LAMP_POOL_OPACITY * (cycling ? lamps : 1) * (this.skyTier === "off" || this.skyTier === "minimal" ? NO_BLOOM_POOL_GAIN : 1));
     // Wet is a satin sheen on the dry albedo, not the old mirror whose glare band lit the ground 35 % over dry: the classed shaders read this one uniform.
     MATERIAL_WET.value = this.wet ? 1 : 0;
     this.groundMat.roughness = GROUND_ROUGHNESS;

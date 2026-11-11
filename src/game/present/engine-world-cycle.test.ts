@@ -42,6 +42,7 @@ describe("given the stage's time of day and night setting (no cycle)", () => {
   // mutation: sed -i 's/    this.hemi.intensity = mixScalar(day.hemi\[1\], SUNSET.hemi\[1\], NIGHT.hemi\[1\], warm, k);/    this.hemi.intensity = mixScalar(day.hemi[1], SUNSET.hemi[1], NIGHT.hemi[1], warm, 0.5);/' src/game/present/engine-world.ts
   it("when the stage is lit by day and then by night, then its hemisphere, sun and fill are the day's and the night's darkened by the night depth, and the lamp heads and windows are lit at night only", () => {
     const { stage } = newStage();
+    stage.setSkyTier("high");
     const { head, pool } = lampOf();
     expect(stage["hemi"].intensity, "day hemisphere").toBeCloseTo(1.35, 9);
     expect(stage.sun.intensity, "day sun").toBeCloseTo(2.6, 9);
@@ -79,6 +80,7 @@ describe("given the open world's cycle set by the game hour", () => {
   // mutation: sed -i 's/    lampPool.opacity = LAMP_POOL_OPACITY \* (cycling ? lamps : 1);/    lampPool.opacity = LAMP_POOL_OPACITY;/' src/game/present/engine-world.ts
   it("when the evening comes hour by hour, then the lamp heads, their pools and the windows come on together with it, ending where the night setting has them", () => {
     const { stage } = newStage();
+    stage.setSkyTier("high");
     const { head, pool } = lampOf();
     stage.setDayHour(12);
     const noonHead = head.emissiveIntensity;
@@ -250,5 +252,24 @@ describe("given the sun's shadow fit on a phone", () => {
     expect(`${edge(desktop)} ${edge(phone)}`, "Auto").toBe("1024 512");
     phone.setShadowLevel(SHADOW_LEVELS.high);
     expect(edge(phone), "High").toBe(2048);
+  });
+});
+
+describe("given a stage at night on a tier with no bloom", () => {
+  /** The lamp pool's opacity at hour `hour` on the sky tier `tier`. */
+  function poolAt(tier: "off" | "minimal" | "low" | "high", hour: number): number {
+    const { stage } = newStage();
+    stage.setSkyTier(tier);
+    stage.setDayHour(hour);
+    return lampOf().pool.opacity;
+  }
+
+  // mutation: sed -i 's/ \* (this.skyTier === "off" || this.skyTier === "minimal" ? NO_BLOOM_POOL_GAIN : 1)//' src/game/present/engine-world.ts
+  it("when the pool is read at minimal and at high, then minimal's is 1.4 times higher, and never over 1", () => {
+    const high = poolAt("high", 0);
+    expect(poolAt("minimal", 0), "minimal").toBeCloseTo(Math.min(1, high * 1.4), 9);
+    expect(poolAt("off", 0), "off").toBeCloseTo(Math.min(1, high * 1.4), 9);
+    expect(poolAt("low", 0), "low is as high").toBeCloseTo(high, 9);
+    for (let hour = 0; hour < HOURS_PER_DAY; hour++) expect(poolAt("minimal", hour), `hour ${hour}`).toBeLessThanOrEqual(1);
   });
 });

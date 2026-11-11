@@ -216,6 +216,10 @@ Per device (desktop or phone, by `deviceClass`):
 |Scenery share|1|0.6|
 |Tree near band / kit detail band|70 m / 90 m|45 m / 60 m|
 
+**Night look.** A lamp's ground pool (`lampPool`, `engine-world.ts`) is 1.4 times brighter (capped at 1) on the `off` and `minimal` FX tiers, which draw no bloom, so the pool is the lamp's only spill. Each shop and eatery
+(`PLACE_KIND.shop`, `food`: 8 places) also throws a flat 3 m deep light quad (`shop-spill.ts`, `ShopSpill`) 1.2 m out from its front face on the lamp pool's material, so it fades in at dusk and is gone by day;
+a shut place's quad is hidden, and `OpenWorldSigns` updates them only when the set of shut places changed.
+
 ## Drawing
 
 `CivilianArt(nearSlots, capacity).update(poses, eyeX, eyeZ, sight, wallDt)`: the nearest `nearSlots` civilians within `NEAR_DRAW` (60 m) are posed dummies

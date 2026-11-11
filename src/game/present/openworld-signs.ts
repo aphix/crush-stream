@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
 import { PLACE_KIND, type Place, type PlaceKind } from "../world/openworld/walk-graph.ts";
 import { drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
+import { lampPool, makePoolTexture } from "./engine-world.ts";
+import { ShopSpill } from "./shop-spill.ts";
 import { facadeFace, frontWallRoom, isBusiness, onFrontFace, ShopSigns, SHOP_SIGN, WHITE } from "./openworld-shop-signs.ts";
 import { drawOutlinedText } from "./track-debug.ts";
 
@@ -249,6 +251,9 @@ class NameLabels {
 export class OpenWorldSigns {
   readonly group = new THREE.Group();
   private readonly shop: ShopSigns;
+  private readonly spill: ShopSpill;
+  /** The shopfronts' night light on the pavement: a sibling of `group`, added to the scene beside it (it is light, not signage). */
+  readonly spillGroup: THREE.Group;
   private names: NameLabels | null = null;
   private readonly places: readonly Place[];
 
@@ -257,11 +262,15 @@ export class OpenWorldSigns {
     this.group.name = "openworld-signs";
     this.shop = new ShopSigns(places);
     this.group.add(this.shop.group);
+    lampPool.map ??= makePoolTexture();
+    this.spill = new ShopSpill(places, lampPool);
+    this.spillGroup = this.spill.group;
   }
 
   /** A frame: the names shown when `namesOn`, in the chunks within range of the eye that `sight` (when there is one) says are seen; the shop signs of the places `closed` marks shut dimmed. */
   update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null, closedChanged = true): void {
     this.shop.update(closed, closedChanged);
+    if (closedChanged) this.spill.update(closed);
     if (namesOn && this.names === null) this.buildNames();
     if (this.names === null) return;
     this.names.group.visible = namesOn;
@@ -275,6 +284,7 @@ export class OpenWorldSigns {
 
   dispose(): void {
     this.shop.dispose();
+    this.spill.dispose();
     this.names?.dispose();
     this.group.removeFromParent();
     this.group.clear();
