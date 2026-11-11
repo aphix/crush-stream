@@ -740,6 +740,25 @@ describe("given kerb cars standing near the local player", () => {
     runSeconds(field, traffic, clock, 5);
     expect(standsAtHerSpace(), "put away after the hold").toBe(false);
   });
+
+  // mutation: sed -i '/^    if (this.movers.hasTripFor(resident)) return false;/d' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when her car is on a trip and her clip starts at an empty unseen space, then no car is brought there and the space stays free", () => {
+    const field = new FakeField();
+    const traffic = makeTraffic(field, { movers: 1, kerb: 4 });
+    field.cars[0]!.stand(0, 0, 0);
+    const clock = new Clock();
+    const RESIDENT = 7;
+    expect(traffic.spawnDrivenCar(RESIDENT, traffic.nearestSpot(HOME.x, HOME.z), traffic.nearestSpot(WORK.x, WORK.z)), "her car leaves on a trip").not.toBeNull();
+    runSeconds(field, traffic, clock, 4);
+    expect(traffic.counts().driving, "control: it is on its trip").toBe(1);
+    const spots = traffic.parkingSpots;
+    let spot = -1;
+    for (let at = 0; at < spots.count; at++) if (spots.stays[at] !== 1 && (spot < 0 || hypot2(spots.x[at]!, spots.z[at]!) > hypot2(spots.x[spot]!, spots.z[spot]!))) spot = at;
+    expect(traffic.carForClip(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "no car stands for her: hers is on the road").toBe(false);
+    runSeconds(field, traffic, clock, 1);
+    expect(field.cars.some((car, id) => id > 0 && !car.stored && hypot2(car.group.position.x - spots.x[spot]!, car.group.position.z - spots.z[spot]!) < KERB_JITTER_SIDE + 0.1), "nothing stands at that space").toBe(false);
+    expect(traffic["context"].taken[spot], "the space stays free").toBe(0);
+  });
 });
 
 describe("given a peer that joins while traffic runs", () => {

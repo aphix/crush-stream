@@ -210,6 +210,7 @@ export class OpenWorldTraffic {
     const own = residentSpot[resident]!;
     if (own === spot && this.carIdOf(resident) >= 0) return true;
     if (own !== spot && (own !== -1 || taken[spot] === 1)) return false;
+    if (this.movers.hasTripFor(resident)) return false;
     if (!this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS)) return false;
     residentSpot[resident] = spot;
     taken[spot] = 1;
