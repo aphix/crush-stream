@@ -74,56 +74,31 @@ function quad(a: Point, b: Point, c: Point, d: Point): THREE.BufferGeometry {
 /** How many cells of `ROOM_CELL` a face `length` m long is cut into. */
 const cellsOf = (length: number): number => Math.max(1, Math.round(length / ROOM_CELL));
 
-/** The corners of a grid cell's two triangles as (s, t) bits, wound to face `u × v`, and wound the other way. */
-const CELL_PLAIN = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1] as const;
-const CELL_FLIPPED = [0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1] as const;
-const CELL_FLOATS = 18;
-
-/** How many cells a grid of `nu` by `nv` has, with `parity` (see `gridFace`). */
-const cellsIn = (nu: number, nv: number, parity: 0 | 1 | null): number => (parity === null ? nu * nv : parity === 0 ? Math.ceil((nu * nv) / 2) : Math.floor((nu * nv) / 2));
-
-/** Writes a grid's triangles into `position` and `normals` from float `at`; the float after the last. */
-function fillGrid(position: Float32Array, normals: Float32Array, at: number, origin: Point, u: Point, v: Point, nu: number, nv: number, normal: Point, parity: 0 | 1 | null): number {
+/**
+ * One flat grid of `nu` by `nv` cells from `origin` along `u` and `v` (m vectors of the whole face), facing `normal`, two triangles a cell, a corner a vertex: the room-facing side of a
+ * floor, ceiling or wall, fine enough for baked light to show. `parity`: only the cells whose (i + j) % 2 equals it (a floor's two shades).
+ */
+function gridFace(origin: Point, u: Point, v: Point, nu: number, nv: number, normal: Point, parity: 0 | 1 | null = null): THREE.BufferGeometry {
   // Wound so the triangles face `normal`.
   const flip = (u[1] * v[2] - u[2] * v[1]) * normal[0] + (u[2] * v[0] - u[0] * v[2]) * normal[1] + (u[0] * v[1] - u[1] * v[0]) * normal[2] < 0;
-  const order = flip ? CELL_FLIPPED : CELL_PLAIN;
-  let written = at;
+  const order = flip ? [0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1] : [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1];
+  const position: number[] = [];
   for (let j = 0; j < nv; j++) {
     for (let i = 0; i < nu; i++) {
       if (parity !== null && (i + j) % 2 !== parity) continue;
       for (let corner = 0; corner < order.length; corner += 2) {
         const s = (i + order[corner]!) / nu;
         const t = (j + order[corner + 1]!) / nv;
-        position[written] = origin[0] + u[0] * s + v[0] * t;
-        position[written + 1] = origin[1] + u[1] * s + v[1] * t;
-        position[written + 2] = origin[2] + u[2] * s + v[2] * t;
-        normals[written] = normal[0];
-        normals[written + 1] = normal[1];
-        normals[written + 2] = normal[2];
-        written += POINT_FLOATS;
+        position.push(origin[0] + u[0] * s + v[0] * t, origin[1] + u[1] * s + v[1] * t, origin[2] + u[2] * s + v[2] * t);
       }
     }
   }
-  return written;
-}
-
-/** A geometry of the triangles in `position` and `normals`. */
-function flatGeometry(position: Float32Array, normals: Float32Array): THREE.BufferGeometry {
+  const normals = new Float32Array(position.length);
+  for (let at = 0; at < normals.length; at += POINT_FLOATS) normals.set(normal, at);
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(position, POINT_FLOATS));
+  geometry.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(position), POINT_FLOATS));
   geometry.setAttribute("normal", new THREE.BufferAttribute(normals, POINT_FLOATS));
   return geometry;
-}
-
-/**
- * One flat grid of `nu` by `nv` cells from `origin` along `u` and `v` (m vectors of the whole face), facing `normal`, two triangles a cell, a corner a vertex: the room-facing side of a
- * floor, ceiling or wall, fine enough for baked light to show. `parity`: only the cells whose (i + j) % 2 equals it (a floor's two shades). Sized up front: a growing array of doubles costs several times the face's own bytes, on every build.
- */
-function gridFace(origin: Point, u: Point, v: Point, nu: number, nv: number, normal: Point, parity: 0 | 1 | null = null): THREE.BufferGeometry {
-  const position = new Float32Array(cellsIn(nu, nv, parity) * CELL_FLOATS);
-  const normals = new Float32Array(position.length);
-  fillGrid(position, normals, 0, origin, u, v, nu, nv, normal, parity);
-  return flatGeometry(position, normals);
 }
 
 /** A colour's channels scaled by `k`. */
@@ -219,9 +194,9 @@ function wallPieces(plan: InteriorPlan, shell: boolean): Piece[] {
     const look = lookOf(plan, wall.level);
     const floorY = plan.floors[wall.level]!;
     const ceilingY = ceilingOver(plan.floors, plan.topCeiling, wall.level);
-    const solids = wallBoxes(wall, floorY, ceilingY);
-    for (const solid of solids) out.push([localBox(plan, solid), look.wall]);
-    out.push(...wallGrids(plan, wall, solids, look.wall), ...trimPieces(plan, wall, solids, floorY, ceilingY));
+    for (const solid of wallBoxes(wall, floorY, ceilingY)) {
+      out.push([localBox(plan, solid), look.wall], ...wallGrids(plan, wall, solid, look.wall), ...trimPieces(plan, wall, solid, floorY, ceilingY));
+    }
   }
   return out;
 }
@@ -232,40 +207,22 @@ const isEnvelope = (wall: Wall): boolean => wall.thick !== PARTITION;
 /** Whether the room lies toward the greater coordinate of an envelope wall's thin axis (deep for a wall that runs across, across for one that runs deep). */
 const roomIsBeyond = (plan: InteriorPlan, wall: Wall): boolean => wall.fixed < (wall.axis === "across" ? plan.depth / 2 : 0);
 
-/** Whether the grid on `box`'s far (`far`) or near long face is made: an envelope wall has only the one toward the room. */
-const gridWanted = (plan: InteriorPlan, wall: Wall, far: boolean): boolean => !isEnvelope(wall) || far === roomIsBeyond(plan, wall);
-
-/** How many cells `box`'s wall grids hold on a face: three rows, along the wall. */
-const wallCells = (wall: Wall, box: Box): number => cellsOf(wall.axis === "across" ? box.across1 - box.across0 : box.deep1 - box.deep0) * 3;
-
-/**
- * The light grids on the long faces of `boxes` (a wall's boxes), `PLATE_LIFT` proud of them, all in one piece (one geometry a wall, not one a face); an envelope wall has only the face toward the room.
- */
-function wallGrids(plan: InteriorPlan, wall: Wall, boxes: readonly Box[], colour: number): Piece[] {
-  let cells = 0;
-  for (const box of boxes) for (let side = 0; side < 2; side++) if (gridWanted(plan, wall, side === 0)) cells += wallCells(wall, box);
-  if (cells === 0) return [];
-  const position = new Float32Array(cells * CELL_FLOATS);
-  const normals = new Float32Array(position.length);
-  let at = 0;
-  for (const box of boxes) {
-    const height = box.y1 - box.y0;
-    for (let side = 0; side < 2; side++) {
-      const far = side === 0;
-      if (!gridWanted(plan, wall, far)) continue;
-      if (wall.axis === "across") {
-        // A wall that runs across: its faces are at deep0 and deep1; local x is depth / 2 - deep, so the far face looks toward -x.
-        const x = plan.depth / 2 - (far ? box.deep1 + PLATE_LIFT : box.deep0 - PLATE_LIFT);
-        const along = box.across1 - box.across0;
-        at = fillGrid(position, normals, at, [x, box.y0, box.across0], [0, 0, along], [0, height, 0], cellsOf(along), 3, [far ? -1 : 1, 0, 0], null);
-      } else {
-        const z = far ? box.across1 + PLATE_LIFT : box.across0 - PLATE_LIFT;
-        const along = box.deep1 - box.deep0;
-        at = fillGrid(position, normals, at, [plan.depth / 2 - box.deep1, box.y0, z], [along, 0, 0], [0, height, 0], cellsOf(along), 3, [0, 0, far ? 1 : -1], null);
-      }
+/** The light grids on `box`'s two long faces, `PLATE_LIFT` proud of it; an envelope wall has only the one toward the room. */
+function wallGrids(plan: InteriorPlan, wall: Wall, box: Box, colour: number): Piece[] {
+  const out: Piece[] = [];
+  const height = box.y1 - box.y0;
+  for (const far of [true, false]) {
+    if (isEnvelope(wall) && far !== roomIsBeyond(plan, wall)) continue;
+    if (wall.axis === "across") {
+      // A wall that runs across: its faces are at deep0 and deep1; local x is depth / 2 - deep, so the far face looks toward -x.
+      const x = plan.depth / 2 - (far ? box.deep1 + PLATE_LIFT : box.deep0 - PLATE_LIFT);
+      out.push([gridFace([x, box.y0, box.across0], [0, 0, box.across1 - box.across0], [0, height, 0], cellsOf(box.across1 - box.across0), 3, [far ? -1 : 1, 0, 0]), colour]);
+    } else {
+      const z = far ? box.across1 + PLATE_LIFT : box.across0 - PLATE_LIFT;
+      out.push([gridFace([plan.depth / 2 - box.deep1, box.y0, z], [box.deep1 - box.deep0, 0, 0], [0, height, 0], cellsOf(box.deep1 - box.deep0), 3, [0, 0, far ? 1 : -1]), colour]);
     }
   }
-  return [[flatGeometry(position, normals), colour]];
+  return out;
 }
 
 /** A skirting and a crown strip stand this proud (m) of the wall, a wainscot or band this proud, and the crown is this high. */
@@ -273,72 +230,24 @@ const TRIM_PROUD = 0.02;
 const BAND_PROUD = 0.01;
 const CROWN_HEIGHT = 0.08;
 
-/** The corners of a box in the building's frame: its low and high x, y, z. */
-const BOX_LOW = new Float64Array(3);
-const BOX_HIGH = new Float64Array(3);
-/** The corners of a face's quad as (b, c) bits, and the order of its two triangles facing out of the face and into it. */
-const QUAD_BITS = [0, 0, 1, 0, 1, 1, 0, 1] as const;
-const QUAD_OUT = [0, 1, 2, 0, 2, 3] as const;
-const QUAD_IN = [0, 3, 2, 0, 2, 1] as const;
-const BOX_FLOATS = 108;
-
-/** The plan boxes `boxes` as the triangles of one geometry (twelve a box), so a run of strips is one piece. */
-function boxesGeometry(plan: InteriorPlan, boxes: readonly Box[]): THREE.BufferGeometry {
-  const position = new Float32Array(boxes.length * BOX_FLOATS);
-  const normals = new Float32Array(position.length);
-  let at = 0;
-  for (const solid of boxes) {
-    BOX_LOW[0] = plan.depth / 2 - solid.deep1;
-    BOX_LOW[1] = solid.y0;
-    BOX_LOW[2] = solid.across0;
-    BOX_HIGH[0] = plan.depth / 2 - solid.deep0;
-    BOX_HIGH[1] = solid.y1;
-    BOX_HIGH[2] = solid.across1;
-    for (let axis = 0; axis < 3; axis++) {
-      const b = (axis + 1) % 3;
-      const c = (axis + 2) % 3;
-      for (let side = 0; side < 2; side++) {
-        const order = side === 1 ? QUAD_OUT : QUAD_IN;
-        for (let corner = 0; corner < order.length; corner++) {
-          const bits = order[corner]! * 2;
-          position[at + axis] = side === 1 ? BOX_HIGH[axis]! : BOX_LOW[axis]!;
-          position[at + b] = QUAD_BITS[bits]! === 1 ? BOX_HIGH[b]! : BOX_LOW[b]!;
-          position[at + c] = QUAD_BITS[bits + 1]! === 1 ? BOX_HIGH[c]! : BOX_LOW[c]!;
-          normals[at + axis] = side === 1 ? 1 : -1;
-          at += POINT_FLOATS;
-        }
-      }
-    }
-  }
-  return flatGeometry(position, normals);
-}
-
-/** `box` cut to heights `y0` to `y1` and grown `proud` m on the sides `near` and `farSide` (0 or 1) of its wall's thin axis, pushed on `into`; nothing when the cut is under 2 cm tall. */
-function pushStrip(into: Box[], wall: Wall, box: Box, y0: number, y1: number, proud: number, near: number, farSide: number): void {
-  const low = Math.max(box.y0, y0);
-  const high = Math.min(box.y1, y1);
-  if (high - low < 0.02) return;
-  into.push(wall.axis === "across" ? { ...box, deep0: box.deep0 - proud * near, deep1: box.deep1 + proud * farSide, y0: low, y1: high } : { ...box, across0: box.across0 - proud * near, across1: box.across1 + proud * farSide, y0: low, y1: high });
-}
-
-/** The trim on a wall's boxes: a skirting and a crown in the room's trim colour on every wall, one piece; a 0.9 m wainscot in a bar (wood) and a coffee shop (accent), a band at 1.1 m in an office and a shop (accent), a home has the skirting and crown only, one piece of its own. An envelope wall's trim stands proud toward the room only. */
-function trimPieces(plan: InteriorPlan, wall: Wall, boxes: readonly Box[], floorY: number, ceilingY: number): Piece[] {
+/** The trim on wall box `box`: a skirting and a crown in the room's trim colour on every wall; a 0.9 m wainscot in a bar (wood) and a coffee shop (accent); a band at 1.1 m in an office and a shop (accent); a home has the skirting and crown only. An envelope wall's trim stands proud toward the room only. */
+function trimPieces(plan: InteriorPlan, wall: Wall, box: Box, floorY: number, ceilingY: number): Piece[] {
   const kind = lookKind(plan.kind, wall.level);
   const look = ROOM_LOOK[kind];
   const near = isEnvelope(wall) && roomIsBeyond(plan, wall) ? 0 : 1;
   const farSide = isEnvelope(wall) && !roomIsBeyond(plan, wall) ? 0 : 1;
-  const trim: Box[] = [];
-  const band: Box[] = [];
-  for (const box of boxes) {
-    pushStrip(trim, wall, box, floorY, floorY + SKIRTING_HEIGHT, TRIM_PROUD, near, farSide);
-    pushStrip(trim, wall, box, ceilingY - CROWN_HEIGHT, ceilingY, TRIM_PROUD, near, farSide);
-    if (kind === "bar" || kind === "coffee") pushStrip(band, wall, box, floorY, floorY + 0.9, BAND_PROUD, near, farSide);
-    else if (kind !== "rowhome") pushStrip(band, wall, box, floorY + 1.1, floorY + 1.25, BAND_PROUD, near, farSide);
-  }
-  const out: Piece[] = [];
-  if (trim.length > 0) out.push([boxesGeometry(plan, trim), look.trim]);
-  if (band.length > 0) out.push([boxesGeometry(plan, band), kind === "bar" ? look.wood : look.accent]);
-  return out;
+  const strip = (y0: number, y1: number, proud: number, colour: number): Piece[] => {
+    const low = Math.max(box.y0, y0);
+    const high = Math.min(box.y1, y1);
+    if (high - low < 0.02) return [];
+    const grown: Box = wall.axis === "across" ? { ...box, deep0: box.deep0 - proud * near, deep1: box.deep1 + proud * farSide, y0: low, y1: high } : { ...box, across0: box.across0 - proud * near, across1: box.across1 + proud * farSide, y0: low, y1: high };
+    return [[localBox(plan, grown), colour]];
+  };
+  return [
+    ...strip(floorY, floorY + SKIRTING_HEIGHT, TRIM_PROUD, look.trim),
+    ...strip(ceilingY - CROWN_HEIGHT, ceilingY, TRIM_PROUD, look.trim),
+    ...(kind === "bar" ? strip(floorY, floorY + 0.9, BAND_PROUD, look.wood) : kind === "coffee" ? strip(floorY, floorY + 0.9, BAND_PROUD, look.accent) : kind === "rowhome" ? [] : strip(floorY + 1.1, floorY + 1.25, BAND_PROUD, look.accent)),
+  ];
 }
 
 /** A slab is its body in the ceiling's colour (the room below's) and, except under the roof, a floor layer on top (the room above's). */

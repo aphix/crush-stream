@@ -34,7 +34,7 @@ export const CLOSED_GLOW = 0.08;
 /** How much of the light a window's glass lets through (opacity of the pane drawn). */
 export const GLASS_OPACITY = 0.22;
 /** The side (m) of a floor, ceiling or wall cell: the grid the baked light is sampled on. */
-export const ROOM_CELL = 0.75;
+export const ROOM_CELL = 1.0;
 /** How much of its lamps' baked light a room shows by day, and the gain on its windows' daylight. */
 export const LAMP_ROOM_DAY = 0.75;
 export const DAY_SKY_GAIN = 1.6;

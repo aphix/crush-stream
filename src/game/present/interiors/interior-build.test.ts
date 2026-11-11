@@ -132,8 +132,8 @@ describe("given the bay alcove of a rowhome's ground floor", () => {
 });
 
 describe("given the shell of a shop", () => {
-  // mutation: sed -i 's/^export const ROOM_CELL = 0.75;/export const ROOM_CELL = 100;/' src/game/present/interiors/interior-constants.ts
-  it("when it is built, then its floor has a vertex at least every 0.8 m along its depth", () => {
+  // mutation: sed -i 's/^export const ROOM_CELL = 1.0;/export const ROOM_CELL = 100;/' src/game/present/interiors/interior-constants.ts
+  it("when it is built, then its floor has a vertex at least every 1.05 m along its depth", () => {
     const shop = lots.places.find((place) => place.interior === "store")!;
     const shopStanding = { ...shop, x: 0, z: 0, yaw: 0 };
     const plan = planInterior(shopStanding);
@@ -142,6 +142,6 @@ describe("given the shell of a shop", () => {
     for (let at = 0; at < p.count; at++) if (Math.abs(p.getY(at) - (plan.floors[0]! + 0.004)) < 1e-3) xs.add(Math.round(p.getX(at) * 1000) / 1000);
     const sorted = [...xs].sort((a, b) => a - b);
     expect(sorted.length, "floor vertices").toBeGreaterThan(2);
-    for (let at = 1; at < sorted.length; at++) expect(sorted[at]! - sorted[at - 1]!, `between x ${sorted[at - 1]} and ${sorted[at]}`).toBeLessThanOrEqual(0.8);
+    for (let at = 1; at < sorted.length; at++) expect(sorted[at]! - sorted[at - 1]!, `between x ${sorted[at - 1]} and ${sorted[at]}`).toBeLessThanOrEqual(1.05);
   });
 });
