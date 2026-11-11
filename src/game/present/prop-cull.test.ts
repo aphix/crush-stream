@@ -130,7 +130,7 @@ describe("given a knockable cone in a 64 m draw cell", () => {
   });
 });
 
-describe("given the open world's props drawn in 96 m cells", () => {
+describe("given the open world's props drawn in the open world's draw cells", () => {
   // mutation: sed -i 's/mesh.boundingSphere!.radius += pad;/mesh.boundingSphere!.radius += 0;/' src/game/present/prop-tumble.ts
   it("when every instance's box is lifted by its roof's lift or widened by its sprite's fit, then it lies inside its mesh's bounding sphere", () => {
     stubBrowser();
