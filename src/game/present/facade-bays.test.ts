@@ -54,6 +54,8 @@ const LOUVRE_SLAT_ROW = 0;
 const LOUVRE_GAP_ROW = 0.1;
 const LOUVRE_CONTRAST_MIN = 40;
 const KIT_DRAWS = 15;
+/** The draw cell width (m) the cut-kit row uses. */
+const KIT_CELL_M = 64;
 const EVERY_HOUSE: readonly string[] = ["facade-stoop", "facade-railing", "facade-cornice", "facade-roof"];
 /** The storey counts houses are built with: a bay stack of each has its own mesh. */
 /** The tints the stoops are made in (marble whites, sandstone, brownstone). */
@@ -232,6 +234,24 @@ describe("given the kit made for the layout's rowhomes", () => {
     }
     few.dispose();
     many.dispose();
+  });
+
+  // mutation: sed -i 's/const key = drawCell(frontage.x, frontage.z, cell);/const key = 0;/' src/game/present/facade-bays.ts
+  it("when the kit is cut into 64 m cells, then every kind keeps its instances, now in more draws than the one-cell kit's", () => {
+    const total = (made: FacadeBays): Map<string, number> => {
+      const sums = new Map<string, number>();
+      for (const mesh of made.group.children) if (mesh instanceof THREE.InstancedMesh) sums.set(mesh.name, (sums.get(mesh.name) ?? 0) + mesh.count);
+      return sums;
+    };
+    const celled = new FacadeBays(frontages, KIT_CELL_M);
+    const one = total(kit);
+    const cut = total(celled);
+    expect(cut.size, "kinds").toBe(one.size);
+    for (const [name, count] of one) expect(cut.get(name), `instances of ${name}`).toBe(count);
+    expect(celled.stats.draws, "draws counted").toBe(celled.group.children.length);
+    expect(celled.stats.draws, "draws against the one-cell kit's").toBeGreaterThan(KIT_DRAWS);
+    expect(celled.stats.triangles, "triangles").toBe(kit.stats.triangles);
+    celled.dispose();
   });
 
   // mutation: sed -i 's/frontage.yaw + Math.PI \/ 2/frontage.yaw/' src/game/present/facade-bays.ts

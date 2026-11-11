@@ -93,6 +93,16 @@ describe("given the real engine booted on #scene=openworld with a seed", () => {
 });
 
 describe("given the open world in play on the real engine", () => {
+  // mutation: sed -i 's/this.treeBandFor(this.courseArt)?.frame(x, z);/this.treeBandFor(null)?.frame(x, z);/' src/game/engine/engine.ts
+  it("when the open world has drawn a frame, then its tree band holds the city's tree cells, each with a near and a far mesh", () => {
+    runSeconds(engine, 0.5);
+    const band = engine["treeBand"];
+    expect(band, "a tree band was made").not.toBeNull();
+    const cells = band!["cells"];
+    expect(cells.length, "the city's trees fall in several 96 m cells").toBeGreaterThan(1);
+    for (const cell of cells) expect(cell.far, "a far mesh").not.toBeNull();
+  });
+
   it("when the eye rests on something, then the HUD carries the panel's text, and nothing again when it rests on nothing", () => {
     expect(hud.get().lookAt, "nothing is looked at before the crowd exists").toBe(null);
     const seen: LookAtHud = { title: "Rosa Kim, 34", lines: ["cook at Sal's Diner", "left home"] };

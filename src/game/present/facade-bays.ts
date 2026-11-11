@@ -12,6 +12,8 @@ import { windowBoxPlacements, type SillWindow } from "./facade-window-boxes.ts";
 import { FACADE_HOMES, FACADE_HOMES_FRAME, FACADE_HOMES_VERTEX, facadeHomesSeedGlsl, facadeShareGlsl } from "./facade-homes.ts";
 import { GLASS_ALPHA_BELOW, makeKitTextures, type KitTextures } from "./facade-kit-atlas.ts";
 import { FACADE_CUT_GLSL, FACADE_GLOW, FACADE_OPEN_AT, FACADE_OPEN_UNIFORM, facadeOpenLoop, roofLiftAt } from "./facades.ts";
+import type { BandCell } from "./far-band.ts";
+import { drawCell } from "./track-mesh.ts";
 
 /**
  * The rowhomes' projecting bay stacks, stoops, iron railings, roofline cornices and what stands on their roofs (chimneys and hatches, on some a condenser or a deck): one instanced mesh per kind across
@@ -118,7 +120,7 @@ function makeRailMaterial(textures: KitTextures): THREE.MeshStandardMaterial {
 type Placement = { across: number; up: number; width: number; height: number; depth: number };
 
 /** One instanced mesh of the kit: its geometry and material, the placements each house gives it (none: the house has none) and its per-instance colour (none: the mesh has no colours). */
-type KitKind = { name: string; geometry: THREE.BufferGeometry; material: THREE.Material; placements: (frontage: Frontage) => readonly Placement[]; colourOf: ((frontage: Frontage) => number) | null };
+type KitKind = { name: string; detail?: true; geometry: THREE.BufferGeometry; material: THREE.Material; placements: (frontage: Frontage) => readonly Placement[]; colourOf: ((frontage: Frontage) => number) | null };
 
 /** The share (of 100) of houses with a condenser on the roof, with a roof deck and with an air-conditioning unit, each from its own bits of the house's variant. */
 const CONDENSER_SHARE = 45;
@@ -199,11 +201,12 @@ function kitKinds(textures: { kit: THREE.Material; rail: THREE.Material }): read
     { name: "surround", geometry: buildSurroundGeometry(), material: textures.kit, placements: (frontage) => (ARCHED_DOOR_STYLES.includes(frontage.style) ? [] : [IN_PLACE]), colourOf: () => WHITE },
     { name: "fanlight", geometry: buildFanlightGeometry(), material: textures.kit, placements: (frontage) => (ARCHED_DOOR_STYLES.includes(frontage.style) ? [IN_PLACE] : []), colourOf: () => WHITE },
     { name: "cornice", geometry: buildCorniceGeometry(), material: textures.kit, placements: (frontage) => [{ ...IN_PLACE, up: homeHeightOf(frontage) - HOME_HEIGHT }], colourOf: (frontage) => accentOf(frontage).cornice },
-    { name: "roof", geometry: buildRoofGeometry(), material: textures.kit, placements: onRoof, colourOf: () => WHITE },
-    { name: "condenser", geometry: buildCondenserGeometry(), material: textures.kit, placements: (frontage) => (inShare(frontage, CONDENSER_BITS, CONDENSER_SHARE) ? onRoof(frontage) : []), colourOf: () => WHITE },
-    { name: "deck", geometry: buildDeckGeometry(), material: textures.kit, placements: (frontage) => (inShare(frontage, DECK_BITS, DECK_SHARE) ? onRoof(frontage) : []), colourOf: () => WHITE },
+    { name: "roof", detail: true, geometry: buildRoofGeometry(), material: textures.kit, placements: onRoof, colourOf: () => WHITE },
+    { name: "condenser", detail: true, geometry: buildCondenserGeometry(), material: textures.kit, placements: (frontage) => (inShare(frontage, CONDENSER_BITS, CONDENSER_SHARE) ? onRoof(frontage) : []), colourOf: () => WHITE },
+    { name: "deck", detail: true, geometry: buildDeckGeometry(), material: textures.kit, placements: (frontage) => (inShare(frontage, DECK_BITS, DECK_SHARE) ? onRoof(frontage) : []), colourOf: () => WHITE },
     {
       name: "shutter",
+      detail: true,
       geometry: buildShutterGeometry(),
       material: textures.kit,
       placements: (frontage) => shuttersFor(frontage.style, frontage.storeys).map((shutter) => ({ across: shutter.across, up: shutter.sill, width: shutter.width, height: shutter.height, depth: 1 })),
@@ -211,6 +214,7 @@ function kitKinds(textures: { kit: THREE.Material; rail: THREE.Material }): read
     },
     {
       name: "aircon",
+      detail: true,
       geometry: buildAirconGeometry(),
       material: textures.kit,
       placements: (frontage) => {
@@ -221,6 +225,7 @@ function kitKinds(textures: { kit: THREE.Material; rail: THREE.Material }): read
     },
     {
       name: "windowBox",
+      detail: true,
       geometry: buildWindowBoxGeometry(),
       material: textures.kit,
       placements: (frontage) => (inShare(frontage, WINDOW_BOX_BITS, WINDOW_BOX_SHARE) ? windowBoxPlacements(boxWindowsFor(frontage.style, frontage.storeys), 1 + ((frontage.variant >>> WINDOW_BOX_STOREY_BITS) % WINDOW_BOX_STOREYS), airconWindow(frontage)) : []),
@@ -234,43 +239,62 @@ export class FacadeBays {
   /** Houses dressed, draw calls and triangles the kit costs. */
   readonly stats: { frontages: number; draws: number; triangles: number };
   private readonly meshes: THREE.InstancedMesh[] = [];
+  private readonly detail: BandCell[] = [];
   private readonly textures = makeKitTextures();
   private readonly kitMaterial = makeKitMaterial(this.textures);
   private readonly railMaterial = makeRailMaterial(this.textures);
 
-  constructor(frontages: readonly Frontage[]) {
+  /** `cell`: the width (m) of the draw cells each kind is split into, so one house's kit draws only near the eye and the sun's shadow box. */
+  constructor(frontages: readonly Frontage[], cell = Number.POSITIVE_INFINITY) {
     const matrix = new THREE.Matrix4();
     const local = new THREE.Matrix4();
     const scale = new THREE.Vector3();
     const position = new THREE.Vector3();
     const colour = new THREE.Color();
     let triangles = 0;
-    for (const { name, geometry, material, placements, colourOf } of kitKinds({ kit: this.kitMaterial, rail: this.railMaterial })) {
-      const stood = frontages.flatMap((frontage) => placements(frontage).map((placement) => ({ frontage, placement })));
-      const mesh = new THREE.InstancedMesh(geometry, material, stood.length);
-      mesh.name = `facade-${name}`;
-      mesh.receiveShadow = true;
-      for (const [at, { frontage, placement }] of stood.entries()) {
-        // The kit's x is the lot's u negated, and its z is out of the facade.
-        local.compose(position.set(-placement.across, placement.up, 0), IDENTITY_TURN, scale.set(placement.width, placement.height, placement.depth));
-        matrix.makeRotationY(frontage.yaw + Math.PI / 2).setPosition(frontage.x, 0, frontage.z).multiply(local);
-        mesh.setMatrixAt(at, matrix);
-        if (colourOf !== null) mesh.setColorAt(at, colour.setHex(colourOf(frontage)));
+    for (const { name, detail, geometry, material, placements, colourOf } of kitKinds({ kit: this.kitMaterial, rail: this.railMaterial })) {
+      const buckets = new Map<number, { frontage: Frontage; placement: Placement }[]>();
+      for (const frontage of frontages) {
+        const key = drawCell(frontage.x, frontage.z, cell);
+        let bucket = buckets.get(key);
+        for (const placement of placements(frontage)) {
+          if (!bucket) buckets.set(key, (bucket = []));
+          bucket.push({ frontage, placement });
+        }
       }
-      mesh.computeBoundingSphere();
-      this.group.add(mesh);
-      this.meshes.push(mesh);
-      triangles += (geometry.getAttribute("position").count / 3) * stood.length;
+      if (buckets.size === 0) buckets.set(0, []);
+      for (const stood of buckets.values()) {
+        const at0 = stood[0]?.frontage;
+        const mesh = new THREE.InstancedMesh(geometry, material, stood.length);
+        mesh.name = `facade-${name}`;
+        mesh.receiveShadow = true;
+        for (const [at, { frontage, placement }] of stood.entries()) {
+          // The kit's x is the lot's u negated, and its z is out of the facade.
+          local.compose(position.set(-placement.across, placement.up, 0), IDENTITY_TURN, scale.set(placement.width, placement.height, placement.depth));
+          matrix.makeRotationY(frontage.yaw + Math.PI / 2).setPosition(frontage.x, 0, frontage.z).multiply(local);
+          mesh.setMatrixAt(at, matrix);
+          if (colourOf !== null) mesh.setColorAt(at, colour.setHex(colourOf(frontage)));
+        }
+        mesh.computeBoundingSphere();
+        this.group.add(mesh);
+        this.meshes.push(mesh);
+        // An empty mesh (a kind no house has) draws nothing: no band cell.
+        if (detail && at0 !== undefined) this.detail.push({ x: Number.isFinite(cell) ? Math.floor(at0.x / cell + 0.5) * cell : 0, z: Number.isFinite(cell) ? Math.floor(at0.z / cell + 0.5) * cell : 0, size: cell, near: mesh, far: null });
+        triangles += (geometry.getAttribute("position").count / 3) * stood.length;
+      }
     }
     this.stats = { frontages: frontages.length, draws: this.meshes.length, triangles };
   }
 
+  /** The cells of the detail kinds (shutters, air-conditioners, condensers, decks, window boxes, roof pieces), for `FarBand`: each shows only near the eye. */
+  bandCells(): readonly BandCell[] {
+    return this.detail;
+  }
+
   dispose(): void {
     this.group.removeFromParent();
-    for (const mesh of this.meshes) {
-      mesh.geometry.dispose();
-      mesh.dispose();
-    }
+    for (const geometry of new Set(this.meshes.map((mesh) => mesh.geometry))) geometry.dispose();
+    for (const mesh of this.meshes) mesh.dispose();
     this.kitMaterial.dispose();
     this.railMaterial.dispose();
     this.textures.albedo.dispose();

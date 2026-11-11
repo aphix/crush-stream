@@ -44,6 +44,7 @@ const SCENE_GRAPH = /^(Mesh|InstancedMesh|SkinnedMesh|Object3D|Scene|Group|Line|
 // Per-frame entry points (the frame flow in docs/ARCHITECTURE.md) and the per-pair/per-slice
 // queries they call. Their bodies allocate nothing.
 const HOT = {
+  "src/game/present/far-band.ts": ["frame"],
   "src/game/engine/engine.ts": ["tickInner", "fixedStep", "scheduleSkins", "flushVisibleSkins", "updateCamera"],
   "src/game/engine/engine-core.ts": ["puffEngine", "fleetClosing", "contactEta"],
   "src/game/engine/engine-scenes.ts": ["stepDerby", "stackLookY"],

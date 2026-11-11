@@ -32,6 +32,7 @@ import { foliageTint } from "./prefabs-foliage.ts";
 import { PARKED_PAINTS } from "./prefabs-car.ts";
 import { assetTint, disposeAssetMaterials, isAssetFamily } from "./scenery-assets-art.ts";
 import { SCENERY_ASSETS } from "../world/scenery-assets/index.ts";
+import { DRAW_CELLS } from "../world/scenery-assets/draw-group.ts";
 import { isStreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
 import { treeOf } from "./street-trees.ts";
 import { backdropMesh, disposeBackdrop, type Backdrop } from "./sky-backdrop.ts";
@@ -87,6 +88,8 @@ export class TrackArt {
   /** The street names printed on the course's street signs' blades, none on a course without. */
   private readonly streetNames: StreetNameBlades | null;
   private readonly track: Track;
+  /** The draw cell widths this course's props and structures are grouped in (`environment.drawCell`). */
+  private readonly cells: { prop: number; asset: number };
   /** The Debug views' "Track" overlay (node indices, checkpoint gates), built the first time it is switched on. */
   private debug: TrackDebug | null = null;
   /** The scenery assets' materials (made as read), disposed with the art even where no mesh wears one. */
@@ -100,6 +103,8 @@ export class TrackArt {
     this.group.name = "track-art";
     this.track = track;
     this.stage = stage;
+    const named = track.json.environment.drawCell;
+    this.cells = named === undefined ? DRAW_CELLS : { prop: named, asset: named };
     stage.look(track.json.environment.light ?? null, track.json.environment.sky);
     this.backdropSpec = track.json.environment.backdrop ?? null;
     if (this.backdropSpec && !this.backdropSpec.secret) this.standBackdrop(this.backdropSpec);
@@ -172,13 +177,13 @@ export class TrackArt {
       }
       if (p.tunnel.includes(1)) addTunnels(tunnels, tunnelLights, p, secs[i]!, ground);
     }
-    for (const g of walls.cellGeometries()) this.add(new THREE.Mesh(g, mats.concrete), { kind: "wall" }, true);
-    for (const g of decks.cellGeometries()) this.add(new THREE.Mesh(g, mats.concrete), { kind: "deck" }, true);
-    for (const cell of pillarCells(pillars)) this.add(new THREE.Mesh(painted(cell), mats.concrete), { kind: "pillar" }, true);
-    for (const g of tunnels.cellGeometries()) this.add(new THREE.Mesh(g, mats.concrete), { kind: "tunnel" }, true);
+    for (const g of walls.cellGeometries(this.cells.prop)) this.add(new THREE.Mesh(g, mats.concrete), { kind: "wall" }, true);
+    for (const g of decks.cellGeometries(this.cells.prop)) this.add(new THREE.Mesh(g, mats.concrete), { kind: "deck" }, true);
+    for (const cell of pillarCells(pillars, this.cells.prop)) this.add(new THREE.Mesh(painted(cell), mats.concrete), { kind: "pillar" }, true);
+    for (const g of tunnels.cellGeometries(this.cells.prop)) this.add(new THREE.Mesh(g, mats.concrete), { kind: "tunnel" }, true);
     if (!tunnelLights.empty) {
       const glow = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      for (const g of tunnelLights.cellGeometries()) this.add(new THREE.Mesh(g, glow), { kind: "tunnel" }, false);
+      for (const g of tunnelLights.cellGeometries(this.cells.prop)) this.add(new THREE.Mesh(g, glow), { kind: "tunnel" }, false);
     }
 
     // Start gantry, built in the line's frame: x = lateral (+ left), y up from the road, z forward.
@@ -242,6 +247,7 @@ export class TrackArt {
       (id, i, out, skin) => this.tint(id, i, out, skin),
       (p) => this.skinOf(p),
       treeOf,
+      this.cells,
     );
   }
 
@@ -392,12 +398,12 @@ export class TrackArt {
   }
 }
 
-function pillarCells(pieces: readonly Piece[]): Piece[][] {
+function pillarCells(pieces: readonly Piece[], size: number): Piece[][] {
   const byCell = new Map<number, Piece[]>();
   for (const piece of pieces) {
     piece[0].computeBoundingSphere();
     const { x, z } = piece[0].boundingSphere!.center;
-    const key = drawCell(x, z);
+    const key = drawCell(x, z, size);
     let cell = byCell.get(key);
     if (!cell) byCell.set(key, (cell = []));
     cell.push(piece);
