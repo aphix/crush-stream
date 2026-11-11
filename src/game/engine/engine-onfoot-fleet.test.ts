@@ -62,6 +62,19 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     expect(own.group.position.z - before, `he drove off: ${(own.group.position.z - before).toFixed(1)} m`).toBeGreaterThan(3);
   });
 
+  it("when he walks to another car's driver door and presses the control, then he is told it is not his and stays out, and his own car's door lets him in", () => {
+    const cars = rig.cars();
+    rig.getOut();
+    rig.walkToDoor(cars[1]!);
+    rig.press("Enter");
+    rig.run(1);
+    expect(rig.phase(), "he is still out").toBe("onFoot");
+    expect(rig.engine["seat"].mode, "the neighbour's wheel is not his").toBe("follow");
+    expect(rig.engine["onFoot"].prompt()).toBe("Walk up to your car's driver door");
+    rig.getIn();
+    expect(rig.engine["seat"].carIndex, "he is in his own car").toBe(0);
+  });
+
   /** The driver's door's widest angle (rad) over the 54 frames of getting out of car 0; he is out once they are run. */
   function widestOverGettingOut(): number {
     const car = rig.cars()[0]!;
@@ -138,19 +151,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     const { opened, later } = doorAcrossReset(true, false);
     expect(opened, "control: the door was open at the reset (rad)").toBeGreaterThan(0.3);
     expect(later, "the door's angle 0.5 s later (rad)").toBeLessThan(0.02);
-  });
-
-  it("when he walks to another car's driver door and presses the control, then he is told it is not his and stays out, and his own car's door lets him in", () => {
-    const cars = rig.cars();
-    rig.getOut();
-    rig.walkToDoor(cars[1]!);
-    rig.press("Enter");
-    rig.run(1);
-    expect(rig.phase(), "he is still out").toBe("onFoot");
-    expect(rig.engine["seat"].mode, "the neighbour's wheel is not his").toBe("follow");
-    expect(rig.engine["onFoot"].prompt()).toBe("Walk up to your car's driver door");
-    rig.getIn();
-    expect(rig.engine["seat"].carIndex, "he is in his own car").toBe(0);
   });
 
   it("when his driver has been thrown out in a crash and the seat is still on the car, then the control offers nothing and does nothing, and with the driver back in it offers to get out", () => {
