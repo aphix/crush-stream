@@ -181,3 +181,32 @@ describe("given a resident the law's overlay draws at the middle of a rowhome's 
     expect(outAfterOverlayOnStoop(null)).toBeCloseTo(STOOP.run / 2, 3);
   });
 });
+
+/** How many steps she is marked kept while level with the stoop of `houseOnTheLane()`, walking the house side of the lane. */
+function keptStepsLevel(stoops: Stoops | null): number {
+  const house = houseOnTheLane();
+  const mid = EDGE.length / 2;
+  const { crowd, person } = leaving(stoops);
+  crowd.state.floats[person * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.lateral] = -LATERAL_MAX;
+  let kept = 0;
+  for (let t = (mid - 1.5) / PACE; t <= (mid + 1.5) / PACE; t += 0.1) {
+    crowd.step(t, [], true);
+    const dx = crowd.poses.x[person]! - house.x;
+    const dz = crowd.poses.z[person]! - house.z;
+    const across = dx * EDGE.dirX + dz * EDGE.dirZ - DOOR.across;
+    if (Math.abs(across) <= STOOP.width / 2) kept += crowd.poses.kept[person]!;
+  }
+  return kept;
+}
+
+describe("given a resident whose drawn spot the crowd moves to clear a stoop", () => {
+  // mutation: sed -i '/^        if (x\[resident\] !== separation.drawX\[resident\] || z\[resident\] !== separation.drawZ\[resident\]) this.poses.kept\[resident\] = 1;/d' src/game/ai/civilians/civilian-crowd.ts
+  it("when she walks level with the stoop, then the crowd marks her kept at those steps", () => {
+    expect(keptStepsLevel(new Stoops([houseOnTheLane()]))).toBeGreaterThan(3);
+  });
+
+  // mutation: sed -i 's/^      this.poses.kept\[resident\] = 0;$/      this.poses.kept[resident] = 1;/' src/game/ai/civilians/civilian-crowd.ts
+  it("when the same walk has no stoops, then she is never marked kept", () => {
+    expect(keptStepsLevel(null)).toBe(0);
+  });
+});

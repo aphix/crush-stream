@@ -212,14 +212,16 @@ export class CivilianCrowd {
     } else this.throwHeardKnocks(cars);
   }
 
-  /** The residents the overlay moved off the spot `separate` drew (the law's suspects, running or led) are kept out of the stoops like the lane's walkers: the rest still stand where `separate` left them and are not touched. */
+  /** The residents the overlay moved off the spot `separate` drew (the law's suspects, running or led) are kept out of the stoops like the lane's walkers, and no body stands for them: the rest still stand where `separate` left them and are not touched. */
   private keepOverlaidOut(): void {
     const stoops = this.stoops;
     if (stoops === null) return;
     const { x, z, shown } = this.poses;
     const { drawX, drawZ } = this.separation;
     for (let resident = 0; resident < this.separation.capacity; resident++) {
-      if (shown[resident] === 1 && (x[resident] !== drawX[resident] || z[resident] !== drawZ[resident])) stoops.keepOut(x, z, resident);
+      if (shown[resident] === 0 || (x[resident] === drawX[resident] && z[resident] === drawZ[resident])) continue;
+      stoops.keepOut(x, z, resident);
+      this.poses.kept[resident] = 1;
     }
   }
 
@@ -386,6 +388,7 @@ export class CivilianCrowd {
       present[resident] = 0;
       this.poses.onSpur[resident] = 0;
       this.laneWalking[resident] = 0;
+      this.poses.kept[resident] = 0;
       if (ints[intBase + RESIDENT_INT.species] !== SPECIES.person) continue;
       this.activityReader(state, resident, seconds, reading);
       const walkSpeed = floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!;
@@ -467,7 +470,10 @@ export class CivilianCrowd {
       if (shown[resident] === 0) continue;
       x[resident] = separation.drawX[resident]!;
       z[resident] = separation.drawZ[resident]!;
-      if (this.laneWalking[resident] === 1 && this.stoops !== null) this.stoops.keepOut(x, z, resident);
+      if (this.laneWalking[resident] === 1 && this.stoops !== null) {
+        this.stoops.keepOut(x, z, resident);
+        if (x[resident] !== separation.drawX[resident] || z[resident] !== separation.drawZ[resident]) this.poses.kept[resident] = 1;
+      }
     }
     this.noteContacts(seconds);
     this.writeActivity(seconds);
