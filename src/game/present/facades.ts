@@ -118,7 +118,7 @@ const OPEN_AT_NOWHERE = 1e6;
 export const FACADE_OPEN_SLOT_FLOATS = 3;
 /** An instance is one of them when its translation lies within this of a listed position (m). */
 const OPEN_AT_RADIUS = 0.05;
-/** The share of an open window's painted glass that is cut away at full opening (the rest stays over the room, as a pane's tint and reflection): about a half, as a glass that is a third to a half clear. */
+/** The share of an open window's painted glass that is cut away at full opening by day (the rest stays over the room, as a pane's tint and reflection): about a half, as a glass that is a third to a half clear. At night all of it is cut (`FACADE_CUT_GLSL`). */
 const OPEN_WINDOW_CUT = 0.55;
 export const FACADE_OPEN_AT = { value: Float32Array.from({ length: FACADE_OPEN_SLOT_FLOATS * FACADE_OPEN_MAX }, (_, at) => (at % FACADE_OPEN_SLOT_FLOATS === 2 ? 0 : OPEN_AT_NOWHERE)) };
 
@@ -349,12 +349,12 @@ export const facadeOpenLoop = (variable: string, point: string): string =>
   `for (int i = 0; i < ${FACADE_OPEN_MAX}; i++) ${variable} = max(${variable}, (1.0 - step(${OPEN_AT_RADIUS}, distance(${point}, facadeOpenAt[i].xy))) * facadeOpenAt[i].z);`;
 /**
  * GLSL for a window cut a fraction `amount` open: a screen-door dither (interleaved gradient noise on the fragment's pixel), so the painted window thins out over the room behind it instead of
- * popping, and at full opening still keeps its share of painted glass (`OPEN_WINDOW_CUT` of it is cut), tinted and reflecting as the picture has it.
+ * popping, and at full opening by day still keeps its share of painted glass (`OPEN_WINDOW_CUT` of it is cut), tinted and reflecting as the picture has it; at night none is kept, so no stipple lies over the lit room.
  */
 export const FACADE_CUT_GLSL = /* glsl */ `
 bool facadeCuts(float amount) {
   float noise = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))));
-  return noise < amount * ${OPEN_WINDOW_CUT.toFixed(2)};
+  return noise < amount * mix(${OPEN_WINDOW_CUT.toFixed(2)}, 1.0, facadeGlow);
 }`;
 /** An open style's instance is told whether its room is built: its translation against the listed positions. */
 const FACADE_OPEN_VERTEX = /* glsl */ `
