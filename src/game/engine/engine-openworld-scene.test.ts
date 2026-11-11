@@ -114,6 +114,7 @@ describe("given the open world in play on the real engine", () => {
     runSeconds(engine, 1);
     const minute = hud.get().gameMinute;
     expect(Number.isInteger(minute) && minute! >= 0 && minute! < 1440, `a whole minute of the day: ${minute}`).toBe(true);
+    expect(minute! % 5, "read in steps of five").toBe(0);
     expect(minute, "the director's clock").toBe(engine["openWorld"].gameMinute());
     try {
       pickScene({ current: engine }, sceneInPlay(hud.get()), "fleet");
