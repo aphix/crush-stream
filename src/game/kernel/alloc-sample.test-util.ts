@@ -1,4 +1,5 @@
 import { Session, type HeapProfiler } from "node:inspector";
+import { detSin } from "./physics-core.js";
 
 /** Mean gap (B) between the sampling heap profiler's samples: a read of a few hundred KB is good to a few percent. */
 const SAMPLE_B = 64;
@@ -64,6 +65,27 @@ export function untilQuiet(read: (attempt: number) => number, bound: number, wai
     } else flat++;
   }
   return reading;
+}
+
+const YARDSTICK_LENGTH = 4096;
+const YARDSTICK_PASSES = 200;
+const YARDSTICK_TRIES = 5;
+
+/**
+ * Microseconds one pass of summing `detSin` over 4,096 doubles takes on this box (the fastest of five timings): a timing row
+ * divides by it, so its bound is a ratio that holds on a slow box as on a fast one.
+ */
+export function yardstickMicros(): number {
+  const values = Float64Array.from({ length: YARDSTICK_LENGTH }, (_, at) => at * 0.001);
+  let fastest = Number.POSITIVE_INFINITY;
+  let sink = 0;
+  for (let attempt = 0; attempt < YARDSTICK_TRIES; attempt++) {
+    const start = performance.now();
+    for (let pass = 0; pass < YARDSTICK_PASSES; pass++) for (let at = 0; at < YARDSTICK_LENGTH; at++) sink += detSin(values[at]!);
+    fastest = Math.min(fastest, performance.now() - start);
+  }
+  if (Number.isNaN(sink)) throw new Error("yardstick: NaN sum");
+  return (fastest * 1000) / YARDSTICK_PASSES;
 }
 
 // The first reads of a process pay for the inspector's own cold code (up to hundreds of KB): taken here, before any row's.

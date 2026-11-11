@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { pooledCar } from "../../contact/crash-scenarios.test-util.ts";
-import { allocatedBytes, untilQuiet } from "../../kernel/alloc-sample.test-util.ts";
+import { allocatedBytes, untilQuiet, yardstickMicros } from "../../kernel/alloc-sample.test-util.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import { Stoops } from "../../world/openworld/openworld-stoops.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
@@ -23,8 +23,12 @@ const MEASURED_FRAMES = 300;
 const BOUND_KB = 8;
 /** Vectors the control makes each frame: far more than the bound's worth. */
 const CONTROL_VECTORS = 200;
-/** Mean microseconds a frame of the crowd's step (placing 300 civilians and testing 8 cars against them) costs on the main thread: measured at 29 us a frame on the dev box, bounded at twice that. */
-const BOUND_MICROS = 58;
+/**
+ * A frame's mean step cost (placing 300 civilians and testing 8 cars against them) over `yardstickMicros()`, so the bound holds
+ * on a slow box as on a fast one. Three reads on the dev box (step us / yardstick us): 60.37 / 60.53, 53.68 / 50.65,
+ * 60.46 / 59.60; the middle ratio 1.014, doubled and rounded up.
+ */
+const BOUND_RATIO = 2.1;
 const TIMED_FRAMES = 4000;
 
 let crowd: CivilianCrowd;
@@ -87,12 +91,15 @@ describe("given a warmed crowd of 300 civilians among eight parked cars", () => 
     expect(readKb(() => Array.from({ length: CONTROL_VECTORS }, makeVectors)), "KB over the run").toBeGreaterThan(BOUND_KB);
   });
 
-  it(`when it steps, then a frame's step costs under ${BOUND_MICROS} us on average`, () => {
+  // mutation: sed -i 's/    this.authority = authority;/    this.authority = authority; for (let spin = 0; spin < 100000; spin++) this.seconds += 1e-30;/' src/game/ai/civilians/civilian-crowd.ts
+  it(`when it steps, then a frame's step costs under ${BOUND_RATIO} yardsticks on average`, () => {
     untilQuiet(() => readKb(), BOUND_KB);
     startNextTick();
     const start = performance.now();
     stepWithinTick(TIMED_FRAMES);
     const micros = ((performance.now() - start) * 1000) / TIMED_FRAMES;
-    expect(micros, "mean us a frame").toBeLessThan(BOUND_MICROS);
+    const yardstick = yardstickMicros();
+    if (process.env["COST_PRINT"] === "1") process.stdout.write(`crowd step ${micros.toFixed(2)} us, yardstick ${yardstick.toFixed(2)} us, ratio ${(micros / yardstick).toFixed(3)}\n`);
+    expect(micros / yardstick, "mean yardsticks a frame").toBeLessThan(BOUND_RATIO);
   });
 });
