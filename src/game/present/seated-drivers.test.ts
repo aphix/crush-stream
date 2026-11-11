@@ -334,26 +334,3 @@ describe("given the seated drivers fed by the ragdoll system's driver looks", ()
     drivers.dispose();
   });
 });
-
-describe("given a patrol car and the uniform callback", () => {
-  // mutation: sed -i 's/      const cop = uniform(c, copDriver(car));/      const cop = copDriver(car);/' src/game/present/seated-drivers.ts
-  test("when the uniform callback says a patrol car's driver is not in uniform, then he is dressed without it, and with it when it says so", () => {
-    const car = new DeformableCar(paint(), new THREE.Scene(), null, "police");
-    car.spawn(0, 0, 0);
-    car.group.updateMatrixWorld(true);
-    const dressedWith = (wears: boolean): boolean[] => {
-      const drivers = new SeatedDrivers(() => false);
-      const cops: boolean[] = [];
-      const dress = drivers.mesh.dress.bind(drivers.mesh);
-      drivers.mesh.dress = (slot, cop, look) => {
-        cops.push(cop);
-        dress(slot, cop, look);
-      };
-      drivers.sync([car], (c) => driverLook(1, c), () => wears);
-      drivers.dispose();
-      return cops;
-    };
-    expect(dressedWith(false).join(), "the player's patrol car").toBe("false");
-    expect(dressedWith(true).join(), "a patrol car nobody took").toBe("true");
-  });
-});

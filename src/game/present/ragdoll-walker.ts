@@ -97,9 +97,9 @@ export class Walker {
     if (this.state === "stand") this.strength = Math.min(this.strength, share);
   }
 
-  /** His root's own speed (m/s) along the level direction (nx, nz): the pace he walks at, not the frame's jitter or the shove of a body he leans on. */
+  /** His root's own speed (m/s) along the level direction (nx, nz). */
   rootSpeedAlong(nx: number, nz: number): number {
-    return this.loco.speed * (detSin(this.loco.yaw) * nx + detCos(this.loco.yaw) * nz);
+    return this.anchorVel[0]! * nx + this.anchorVel[2]! * nz;
   }
 
   /** Seconds since a car struck him (`struck`). */

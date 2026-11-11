@@ -592,7 +592,7 @@ describe("given the National Mall, whose lawns are painted on a concrete terrain
 });
 
 describe("given the open world, whose park paths and lawns are painted on one terrain mesh", () => {
-  // mutation: sed -i 's/(id === terrainClass ? 0 : MATERIALS\[id\]!\[1\] === MATERIALS\[MAT.SOIL\]!\[1\] ? 1 : 2) \* 1000 + id/id/' src/game/present/track-ground.ts
+  // mutation: sed -i 's/(id === terrainClass ? 0 : MATERIALS\[id\]!\[1\] === MAT.SOIL ? 1 : 2) \* 1000 + id/id/' src/game/present/track-ground.ts
   it("when its near and far meshes are built, then every triangle's three corners carry one material id, and the triangles at the park path's vertex (20, 0) are shaded as the path's cobble", () => {
     const t = terrainOf("openworld");
     const cobble = cellMaterial(SURFACE_IDS.indexOf("cobble"), t.terrainSurface);

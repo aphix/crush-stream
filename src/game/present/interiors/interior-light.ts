@@ -33,23 +33,14 @@ const DESK_SCREEN_HEIGHT = 0.9;
 /** A corner this far (m) or less under a floor's top belongs to that floor's level. */
 const LEVEL_SLACK = 0.1;
 
-/** The corner being baked (position, normal) and the vector from it to the fixture tested: scratch the calls below read, so a double is not boxed to cross each call. */
-const C = new Float64Array(9);
-
 /** 0.4 hard against a wall, floor or ceiling, 1 from 0.9 m away: the darkening of corners and edges. */
 function edge(distance: number): number {
   const t = Math.max(0, Math.min(1, distance / 0.9));
   return 0.4 + 0.6 * t * t * (3 - 2 * t);
 }
 
-/** Whether a wall of `level` stands between the corner at p (`C`[0..2]) and the point p + l (`C`[6..8]). */
-function blocked(light: RoomLight, level: number): boolean {
-  const px = C[0]!;
-  const py = C[1]!;
-  const pz = C[2]!;
-  const lx = C[6]!;
-  const ly = C[7]!;
-  const lz = C[8]!;
+/** Whether a wall of `level` stands between the corner at p and the point p + l. */
+function blocked(light: RoomLight, level: number, px: number, py: number, pz: number, lx: number, ly: number, lz: number): boolean {
   for (let box = 0; box < light.boxCount; box++) {
     const o = box * BOX;
     if (light.boxes[o + 6] !== level) continue;
@@ -76,22 +67,6 @@ function blocked(light: RoomLight, level: number): boolean {
 
 /** The light at one corner: lamp r, g, b (0 to 1) and daylight (0 to 1) into `out[at..at+3]`. `furniture`: a corner of a furnishing, shaded toward the floor. */
 export function bakeCorner(light: RoomLight, px: number, py: number, pz: number, nx: number, ny: number, nz: number, furniture: boolean, out: Float32Array, at: number): void {
-  C[0] = px;
-  C[1] = py;
-  C[2] = pz;
-  C[3] = nx;
-  C[4] = ny;
-  C[5] = nz;
-  bake(light, furniture, out, at);
-}
-
-function bake(light: RoomLight, furniture: boolean, out: Float32Array, at: number): void {
-  const px = C[0]!;
-  const py = C[1]!;
-  const pz = C[2]!;
-  const nx = C[3]!;
-  const ny = C[4]!;
-  const nz = C[5]!;
   let level = 0;
   for (let l = 1; l < light.levelCount; l++) if (py >= light.levels[l * 2]! - LEVEL_SLACK) level = l;
   const floorY = light.levels[level * 2]!;
@@ -109,10 +84,7 @@ function bake(light: RoomLight, furniture: boolean, out: Float32Array, at: numbe
     const d = Math.sqrt(d2);
     if (d < 1e-4) continue;
     const facing = Math.max(0, (nx * lx + ny * ly + nz * lz) / d);
-    C[6] = lx;
-    C[7] = ly;
-    C[8] = lz;
-    if (facing === 0 || blocked(light, level)) continue;
+    if (facing === 0 || blocked(light, level, px, py, pz, lx, ly, lz)) continue;
     const gain = (facing * (0.35 + 0.65 * Math.max(0, ly / d))) / (d2 + 0.36);
     r += light.fixtures[o + 3]! * gain;
     g += light.fixtures[o + 4]! * gain;

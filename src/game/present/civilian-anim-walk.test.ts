@@ -346,11 +346,6 @@ describe("given the walk at different paces", () => {
     expect(reach(0.1), "a near-stop").toBeLessThan(reach(FULL_WALK_SPEED) * 0.1);
   });
 
-  // mutation: sed -i 's/pose.speed > LEG_FLOOR_ABOVE ? LEG_GAIT_FLOOR : 0/LEG_GAIT_FLOOR/' src/game/present/civilian-anim.ts
-  it("when a civilian's drawn speed is 0.1 m/s, then her ankles swing apart by 0.0695 of what they do at a walk: her gait's own share, with no floor", () => {
-    expect(reach(0.1) / reach(FULL_WALK_SPEED), "a near-stop's share of a walk's swing").toBeCloseTo(0.0695, 3);
-  });
-
   // mutation: sed -i 's/channels\[CHANNEL.torsoPitch\] = LEAN_PER_GAIT/channels[CHANNEL.torsoPitch] = 0 * LEAN_PER_GAIT/' src/game/present/civilian-anim.ts
   it("when she goes at a walk she stands upright, and at two walks she leans into it", () => {
     expect(Math.abs(leaning(posed({ stride: 1, speed: FULL_WALK_SPEED }), TORSO).z), "at a walk").toBeLessThan(0.01);

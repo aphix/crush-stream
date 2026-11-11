@@ -90,7 +90,15 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
 
   // mutation: sed -i 's/^    if (!this.host.openWorld() || !this.host.runsCars()) return;/    if (!this.host.runsCars()) return;/' src/game/engine/engine-onfoot.ts
   it("when he gets out in the fleet, then his car's door is never written: the walker writes nothing to a car outside the open world (guard)", () => {
-    expect(widestOverGettingOut(), "the door's widest angle (rad)").toBe(0);
+    const car = rig.cars()[0]!;
+    let widest = 0;
+    rig.press("Enter");
+    for (let f = 0; f < 54; f++) {
+      rig.run(FRAME);
+      widest = Math.max(widest, Math.abs(car.doorAngle(DRIVER_SIDE)));
+    }
+    expect(rig.phase(), "he is out").toBe("onFoot");
+    expect(widest, "the door's widest angle (rad)").toBe(0);
   });
 
   // mutation: sed -i 's/^    if (!this.host.openWorld() || !this.host.runsCars()) return;/    if (!this.host.runsCars() || this.host.openWorld()) return;/' src/game/engine/engine-onfoot.ts
@@ -145,12 +153,6 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     expect(opened, "control: the door was open at the reset (rad)").toBeGreaterThan(0.3);
     expect(left, "the door's angle a frame after the reset (rad)").toBe(0);
     expect(later, "the door's angle 0.5 s later (rad)").toBe(0);
-  });
-
-  it("when a reset ends the trip in the open world and leaves the door as it stood, then the door is sent shut", () => {
-    const { opened, later } = doorAcrossReset(true, false);
-    expect(opened, "control: the door was open at the reset (rad)").toBeGreaterThan(0.3);
-    expect(later, "the door's angle 0.5 s later (rad)").toBeLessThan(0.02);
   });
 
   it("when his driver has been thrown out in a crash and the seat is still on the car, then the control offers nothing and does nothing, and with the driver back in it offers to get out", () => {

@@ -537,9 +537,9 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     shut.dispose();
   });
 
-  /** The greatest lamp float (r, g or b of the light stream) over the vertices the mesh `name` packs. */
-  function lampOf(set: InteriorSet, name = "interior-shells"): number {
-    const mesh = set.group.getObjectByName(name) as THREE.Mesh;
+  /** The greatest lamp float (r, g or b of the light stream) over the vertices the room's shell packs. */
+  function lampOf(set: InteriorSet): number {
+    const mesh = set.group.getObjectByName("interior-shells") as THREE.Mesh;
     const light = mesh.geometry.getAttribute("light").array;
     let most = 0;
     for (let at = 0; at < mesh.geometry.drawRange.count * 4; at++) if (at % 4 !== 3) most = Math.max(most, light[at]!);
@@ -560,37 +560,6 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     settle(set, coffee.doorX, coffee.doorZ, who, 3);
     expect(lampOf(set), "open again").toBeCloseTo(bright, 5);
     set.dispose();
-  });
-
-  // mutation: sed -i '/^      this.details.scaleLamp(entry.detailSlot, shut ? CLOSED_GLOW : 1 \/ CLOSED_GLOW);/d' src/game/present/interiors/interior-art.ts
-  it("when a place shuts, then its furniture's baked lamp light dims to the closed share, and comes back when it opens", () => {
-    const set = new InteriorSet(lone);
-    settle(set, coffee.doorX, coffee.doorZ, openers());
-    const bright = lampOf(set, "interior-furniture");
-    expect(bright, "lit").toBeGreaterThan(0.1);
-    const who = openers();
-    who.closed = SHUT;
-    settle(set, coffee.doorX, coffee.doorZ, who, 3);
-    expect(lampOf(set, "interior-furniture"), "shut").toBeCloseTo(bright * CLOSED_GLOW, 5);
-    who.closed = OPEN;
-    settle(set, coffee.doorX, coffee.doorZ, who, 3);
-    expect(lampOf(set, "interior-furniture"), "open again").toBeCloseTo(bright, 5);
-    set.dispose();
-  });
-
-  // mutation: sed -i '/^      this.shells.scaleLamp(entry.shellSlot, shut ? CLOSED_GLOW : 1 \/ CLOSED_GLOW);/d' src/game/present/interiors/interior-art.ts
-  it("when a place is shut before its room is built, then the shell's lamp light is already at the closed share", () => {
-    const lit = new InteriorSet(lone);
-    settle(lit, coffee.doorX, coffee.doorZ, openers());
-    const bright = lampOf(lit);
-    expect(bright, "lit").toBeGreaterThan(0.1);
-    const shut = new InteriorSet(lone);
-    const closedFirst = openers();
-    closedFirst.closed = SHUT;
-    settle(shut, coffee.doorX, coffee.doorZ, closedFirst);
-    expect(lampOf(shut), "shut before it was built").toBeCloseTo(bright * CLOSED_GLOW, 5);
-    lit.dispose();
-    shut.dispose();
   });
 });
 

@@ -92,8 +92,8 @@ gait reached 1.3 / 2.5 m/s, so his root is driven the way a character controller
 (onfoot-active-ragdoll, onfoot-rapier-ragdoll research):
 
 - **The root** (`walker-locomotion.ts`). Speed along his facing closes on its target with its acceleration capped (12 m/s² to a run, 3.5 m/s: 0.3 s, and 4.5 m/s² on to a sprint, 7 m/s: about a second; 14 / 10 m/s² braking: a run stops in
-  0.28 s and 0.5 m, a sprint in 0.6 s and 2 m) and the acceleration itself capped (`JERK` 250 m/s³), so a start and a stop ease in over about 0.05 s and the lean, cadence and foot reach read a smooth acceleration, not a square wave (`APPROACH` 50 /s closes the last of the gap; under `STOP_SNAP` with nothing asked he is stopped). The facing turns at `10 m/s² / speed`, at most 8 rad/s, so a sprint curves wide and a walk turns on the spot, and he leans with his speed and
-  acceleration and banks into a turn (onfoot-direction-change research): the target speed is one continuous curve of the heading error with no bands: a heading under 30° off curves; 30-75° costs up to 30 % of the speed; past 75° it falls to a pivot's 2 m/s; past 120° to a stop and a turn. One latch remains: once the error has passed 75° (`PIVOT_IN`) the target stays the pivot's until the error is back under 63° (`PIVOT_OUT`), so a turn does not speed up again before he faces the way. A sprint turned 90° faces the new way in 0.67 s, 180° in 0.9 s, and is back at speed 0.2 and 0.47 s later. The keys' direction eases to a new one over 0.08 s (`INTENT_SECONDS`), so a corner is turned, not snapped.
+  0.28 s and 0.5 m, a sprint in 0.6 s and 2 m) and the acceleration itself capped (`JERK` 250 m/s³), so a start and a stop ease in over about 0.05 s and the lean, cadence and foot reach read a smooth acceleration, not a square wave (`APPROACH` 30 /s closes the last of the gap; under `STOP_SNAP` with nothing asked he is stopped). The facing turns at `10 m/s² / speed`, at most 8 rad/s, so a sprint curves wide and a walk turns on the spot, and he leans with his speed and
+  acceleration and banks into a turn (onfoot-direction-change research): the target speed is one continuous curve of the heading error with no bands: a heading under 30° off curves; 30-75° costs up to 30 % of the speed; past 75° it falls to a pivot's 2 m/s; past 120° to a stop and a turn. A sprint turned 45° faces the new way in 0.42 s keeping 6.5 m/s; turned 180° it slows to 1.7 m/s and is back at speed 0.25 s after facing. The keys' direction eases to a new one over 0.08 s (`INTENT_SECONDS`), so a corner is turned, not snapped.
 - **The frame holds him.** A kinematic frame follows the gait's torso centre; the torso hangs off it by a joint whose three angular motors (60 kN·m/rad on his feet, 3 kN·m/rad in the get-up) and three linear motors
   (150 kN/m: a planted foot is locked, so the hip must be where the gait put it) hold it, with his weight and the root's push fed forward as a force on the torso. A torso held back more than 0.2 m (a wall) brings the root back to it and caps his speed there.
 - **The gait** (`walker-gait.ts`, `walker-leg.ts`). Feet are set down in the world and stay there (a planted foot's target moves by under 1e-9 m) while the pelvis rides over them, then swing to where it will pass over the
@@ -133,7 +133,7 @@ gait reached 1.3 / 2.5 m/s, so his root is driven the way a character controller
 | Pelvis bob (range) | walk 8 cm, run 11 cm | walk 2.4 cm, run 4.4 cm, sprint 4.0 cm |
 | Planted foot's speed over the ground (mean) | not planted-locked: walk 0.22, run 0.47, sprint 1.06 m/s | walk 0.024, run 0.052, sprint 0.077 m/s |
 | Hip swing, peak to peak (gait target / physical thigh) | walk 54 / run 77 / sprint 96° | walk 44 / 42, run 64 / 61, sprint 65 / 66° (research 30-45 / 50-70) |
-| Turn rate | 4.1 rad/s cap, no speed loss | one curve of the heading error; 90° at a sprint 0.67 s, 180° 0.9 s, no fall (tilt under 26°) |
+| Turn rate | 4.1 rad/s cap, no speed loss | one curve of the heading error, no fall (tilt under 26°) |
 | Get-up (from the first ask) | stomach 2.3 s, back / side 3.0 s | unchanged |
 | Knocked down by a 1200 N·s blow | down at 0.7 s, up at 5.45 s | down at once, up at 4.4 s |
 | Rapier step / frame | 0.039 / 0.34 ms | 0.034 / 0.28 ms |
@@ -175,8 +175,10 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
 
 ## Known gaps
 
-- No seat blend or climb: he stands at the door for the 0.6 s entry and then is in the car; he appears at the door on the way out. Outside the open world the
-  door stays shut (it is sim, above), and the player's own driver is never drawn in his car (`driver-look.ts`).
+- No seat blend or climb: he stands at the door for the 0.6 s entry and then is in the car; he appears at the door on the way out. In the open world, on a machine
+  that runs the cars, the driver's door swings open as he gets out or in and shuts behind him (once seated, or once he is 4 m away): it is the car's real door,
+  set as a resident's is. In every other scene the door stays shut (the walker writes nothing to a car), and the player's own driver is never drawn in his car
+  (`driver-look.ts`).
 - His own car's driver door only, no passenger doors, no climbing in a window; another car, even a parked one, is not his to get into. In a minigame
   whose attempt needs the car moving, stepping out ends that attempt as stopping would.
 - The walker walks into car bodies like any dummy (cars are kinematic boxes in the dummy world): walk round to the door.
@@ -218,7 +220,7 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
   `ragdoll-mesh-pick`, `showcase-walks`.
 - Unmoved by it, and run before and after: `whole-digest`, `replay-fidelity`, the race and derby result rows, the net codec and wire rows.
 - The speed lane's rows, each shown red against a mutant (a 4 m/s² push, no pivot or stop band, a planted foot that rides with the root, an unsmoothed focus and no recenter delay):
-  `walker-locomotion.test.ts` (time to speed, stops, 45 / 90 / 180° cuts at a sprint, hysteresis, lean and bank), `walker-gait.test.ts` (planted feet do not move
+  `walker-locomotion.test.ts` (time to speed, stops, 45 / 90 / 180° cuts at a sprint, the heading-error curve, lean and bank), `walker-gait.test.ts` (planted feet do not move
   by 1e-9 m, flight at a run, joint ranges, pelvis steps), `ragdoll-walker-pace.test.ts` (the physical walker: speed, time to 90 %, drawn-speed steadiness, planted-foot slide,
   stops, cuts), `ragdoll-walker-getup.test.ts` (time to stand from four lying poses, running again within 0.6 s, a car at 4.5 m/s), `walker-camera.test.ts`, `engine-walk-input.test.ts`.
 - The foot-lock and stride lane's rows (`ragdoll-walker-pace.test.ts`: planted-foot slide under 0.1 / 0.1 / 0.2 m/s on average at a walk, run and sprint, red with the lock's stiffness at its floor; the physical thigh's swing 30-45 / 50-70 / 50-70°; `walker-gait.test.ts`: the gait's hip swing in the same ranges, red against the old lift shape and cadence; the knee-step rows, red without the knee's ease; `ragdoll-walker.test.ts`'s car blow, red with a stiff hold and the old velocity-only hit read).

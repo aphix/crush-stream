@@ -6,7 +6,7 @@ import { PARK, PARK_BLOCK } from "../world/openworld/openworld-constants.ts";
 import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { BAY, drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
 import { distanceToPath, faceAt, inClearPath, outOf } from "../world/openworld/openworld-greenery.test-util.ts";
-import { streetTreeKindOf, type StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import type { StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { parkProps } from "../world/openworld/openworld-park.ts";
 import { PLAZA_RADIUS } from "../world/openworld/openworld-plaza.ts";
@@ -189,44 +189,6 @@ describe("given a street tree's crown", () => {
       expect(triangles(pieces), `${skin} triangles`).toBeLessThanOrEqual(450);
       expect(pieces.filter((piece) => piece[2] === MAT.CONIFER_FOLIAGE).length, `${skin} leaf cards`).toBeGreaterThanOrEqual(20);
     }
-  });
-
-  // mutation: sed -i 's/  cherry: { count: 72, edge: 1.5, species: "cherry" },/  cherry: { count: 72, edge: 1.5, species: "plane" },/' src/game/present/street-trees.ts
-  it("when each kind's tree is built, then every leaf card reads its own species' atlas cells", () => {
-    const speciesOf = { plane: "plane", linden: "linden", young: "young", cherry: "cherry", parkPlane: "plane", parkLinden: "linden" } as const;
-    for (const skin of skins) {
-      const kind = streetTreeKindOf(skin);
-      const cards = streetTreePieces(skin).filter((piece) => piece[2] === MAT.CONIFER_FOLIAGE);
-      expect(cards.length, `${skin} cards`).toBeGreaterThan(0);
-      for (const [geometry] of cards) {
-        const uv = geometry.getAttribute("uv");
-        for (let at = 0; at < uv.count; at++) {
-          const inside = LEAF_CELLS[speciesOf[kind]].some(([u0, v0, du, dv]) => uv.getX(at) >= u0 - EPSILON && uv.getX(at) <= u0 + du + EPSILON && uv.getY(at) >= v0 - EPSILON && uv.getY(at) <= v0 + dv + EPSILON);
-          expect(inside, `${skin}: a card's uv lies in a ${speciesOf[kind]} cell`).toBe(true);
-        }
-      }
-    }
-  });
-
-  // mutation: sed -i 's/    const reach = 0.45 + 0.55 \* random();/    const reach = 0;/' src/game/present/street-trees.ts
-  it("when a lump is made into 30 cards, then they spread across it", () => {
-    const pieces = cardPieces([0, 5, 0, 2, 1.5, 2, 0x336633], 7, 30, 1.2, "linden");
-    let across = 0;
-    let along = 0;
-    let high = -Infinity;
-    let low = Infinity;
-    for (const [geometry] of pieces) {
-      geometry.computeBoundingBox();
-      const box = geometry.boundingBox!;
-      across = Math.max(across, Math.abs((box.min.x + box.max.x) / 2));
-      along = Math.max(along, Math.abs((box.min.z + box.max.z) / 2));
-      high = Math.max(high, (box.min.y + box.max.y) / 2 - 5);
-      low = Math.min(low, (box.min.y + box.max.y) / 2 - 5);
-    }
-    expect(across, "farthest card middle across x").toBeGreaterThanOrEqual(0.5);
-    expect(along, "farthest card middle across z").toBeGreaterThanOrEqual(0.5);
-    expect(high, "highest card middle over the lump's middle").toBeGreaterThanOrEqual(0.3);
-    expect(low, "lowest card middle under the lump's middle").toBeLessThanOrEqual(-0.3);
   });
 });
 

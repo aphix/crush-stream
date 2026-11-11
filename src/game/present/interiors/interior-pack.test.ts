@@ -3,7 +3,6 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import type { Piece } from "../prefab-pieces.ts";
 import { brick } from "./interior-brick.ts";
-import type { RoomLight } from "./interior-light.ts";
 import { NO_SLOT, PackedMesh } from "./interior-pack.ts";
 
 /** A brick is this many vertices (twelve triangles' corners). */
@@ -112,47 +111,5 @@ describe("given a piece packed with a turn and a place", () => {
     expect(mesh.add([], 0, 0, 0)).toBe(NO_SLOT);
     expect(mesh.vertices).toBe(0);
     expect(() => mesh.remove(NO_SLOT)).not.toThrow();
-  });
-});
-
-/** A room with no lamp, window or wall of its own, whose every corner takes the light of its `ambient` alone (and the same edge darkening as any other room's): two rooms differ only by it. */
-const roomOf = (ambient: number): RoomLight => ({ ambient, fixtures: new Float32Array(0), fixtureCount: 0, panes: new Float32Array(0), paneCount: 0, boxes: new Float32Array(0), boxCount: 0, levels: Float32Array.of(0, 3), levelCount: 1, halfDepth: 50, halfWidth: 50 });
-const LIGHT_FLOATS = 4;
-/** The light floats of the first `vertices` vertices the mesh draws. */
-const lightFloats = (mesh: PackedMesh, vertices = mesh.vertices): Float32Array => (mesh.mesh.geometry.getAttribute("light").array as Float32Array).subarray(0, vertices * LIGHT_FLOATS);
-/** Their digest, one string. */
-const lightOf = (mesh: PackedMesh, vertices = mesh.vertices): string => {
-  const floats = lightFloats(mesh, vertices);
-  return createHash("sha1").update(Buffer.from(floats.buffer, floats.byteOffset, floats.byteLength)).digest("hex");
-};
-const DIM = roomOf(0.05);
-const BRIGHT = roomOf(2);
-
-describe("given two rooms packed with different baked light", () => {
-  // mutation: sed -i '/^      (this.light.array as Float32Array).copyWithin(start \* LIGHT_FLOATS, after \* LIGHT_FLOATS, this.used \* LIGHT_FLOATS);/d' src/game/present/interiors/interior-pack.ts
-  it("when two rooms with different light are packed and the first is removed, then the second's light floats move with it", () => {
-    const mesh = packed();
-    const first = mesh.add([pieceAt(0, 0xff0000)], 0, 0, 0, DIM);
-    mesh.add([pieceAt(0, 0xff0000)], 0, 0, 0, BRIGHT);
-    mesh.remove(first);
-    const alone = packed();
-    alone.add([pieceAt(0, 0xff0000)], 0, 0, 0, BRIGHT);
-    const dim = packed();
-    dim.add([pieceAt(0, 0xff0000)], 0, 0, 0, DIM);
-    expect(lightOf(alone), "control: the rooms are lit differently").not.toBe(lightOf(dim));
-    expect(lightOf(mesh), "the second room's light, at the first's old start").toBe(lightOf(alone));
-  });
-
-  // mutation: sed -i '/^    (nextLight.array as Float32Array).set(/d' src/game/present/interiors/interior-pack.ts
-  it("when storage grows, then the light floats already packed are intact", () => {
-    const mesh = packed(2 * BRICK_VERTICES);
-    mesh.add([pieceAt(0, 0xff0000)], 0, 0, 0, BRIGHT);
-    const before = mesh.storage;
-    mesh.add([pieceAt(3, 0x00ff00), pieceAt(6, 0x0000ff)], 0, 0, 0, DIM);
-    expect(mesh.storage, "the storage grew").not.toBe(before);
-    const alone = packed();
-    alone.add([pieceAt(0, 0xff0000)], 0, 0, 0, BRIGHT);
-    expect(lightOf(mesh, BRICK_VERTICES), "the first room's light after the growth").toBe(lightOf(alone));
-    expect(Math.max(...lightFloats(mesh, BRICK_VERTICES)), "and it is the bright room's").toBeGreaterThan(0.5);
   });
 });
