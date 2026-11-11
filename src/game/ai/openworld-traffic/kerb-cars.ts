@@ -36,6 +36,8 @@ export class KerbCars {
   private seconds = 0;
   /** Per slot, the resident whose car it stands as (-1: a car that stands for good there): a resident's car is never given up for another's. */
   private readonly residentOfSlot: Int32Array;
+  /** Per slot, the crowd second a clip holds its car until (`bring`): it is not put away before. */
+  private readonly heldUntil: Float64Array;
   private sinceBookkeeping = 0;
   private passes = 0;
 
@@ -51,6 +53,7 @@ export class KerbCars {
     this.spotOfSlot = new Int32Array(size).fill(-1);
     this.wreckedFor = new Float64Array(size);
     this.residentOfSlot = new Int32Array(size).fill(-1);
+    this.heldUntil = new Float64Array(size);
   }
 
   /** Kerb cars standing now. */
@@ -84,6 +87,39 @@ export class KerbCars {
     if (slot < 0) return;
     this.context.ports.putAway(this.first + slot);
     this.vacate(slot);
+  }
+
+  /** Stands a kerb car in empty `spot` as resident `resident`'s for a clip that starts now, held `hold` crowd seconds: a pooled car that stands nowhere, else a spare standing one (`farthestSpare`). False when the space is not empty, an eye sees it, or there is no such car. */
+  bring(spot: number, resident: number, eyeX: number, eyeZ: number, hold: number): boolean {
+    if (this.context.standing[spot] !== STANDING.none || !spotUnseen(this.context, spot)) return false;
+    this.wantedResident = resident;
+    if (!this.show(spot)) {
+      const spare = this.farthestSpare(eyeX, eyeZ);
+      if (spare < 0) return false;
+      this.vacate(spare);
+      if (!this.show(spot)) return false;
+    }
+    this.heldUntil[this.slotOfSpot[spot]!] = this.seconds + hold;
+    return true;
+  }
+
+  /** The standing car a clip may take: one that stands for good (no resident's), with nobody thrown from it and no human's; one no eye sees before one an eye sees, then the farthest from (eyeX, eyeZ). -1 when there is none. */
+  private farthestSpare(eyeX: number, eyeZ: number): number {
+    const { ports, sight } = this.context;
+    let best = -1;
+    let bestDistance = -1;
+    let bestUnseen = false;
+    for (let slot = 0; slot < this.size; slot++) {
+      const car = ports.cars()[this.first + slot];
+      if (this.spotOfSlot[slot]! < 0 || this.residentOfSlot[slot]! >= 0 || car === undefined || car.driverOut !== null || heldByHuman(this.context, this.first + slot)) continue;
+      const unseen = sight.unseenFor(this.context.sightBase + this.context.movers + slot) >= sight.hideGrace;
+      const distance = hypot2(car.group.position.x - eyeX, car.group.position.z - eyeZ);
+      if (best >= 0 && (bestUnseen ? !unseen || distance <= bestDistance : !unseen && distance <= bestDistance)) continue;
+      best = slot;
+      bestDistance = distance;
+      bestUnseen = unseen;
+    }
+    return best;
   }
 
   /** One sim step: the bookkeeping pass when it is due; `parked` lists the residents' cars at kerbs. */
@@ -144,6 +180,7 @@ export class KerbCars {
     sight.observe(sightId, x, z, SIGHT_RADIUS);
     const wrecked = car.driverOut !== null || !car.deform.drivetrainAlive || car.group.matrixWorld.elements[5]! < FLIPPED_UP_Y;
     this.wreckedFor[slot] = wrecked ? this.wreckedFor[slot]! + passDt : 0;
+    if (this.heldUntil[slot]! > this.seconds) return;
     const gone = this.wreckedFor[slot]! > TOW_SECONDS || (!sight.near(x, z, KERB_KEEP) && sight.unseenFor(sightId) >= sight.hideGrace);
     if (!gone) return;
     ports.putAway(id);
@@ -183,6 +220,7 @@ export class KerbCars {
     this.spotOfSlot[slot] = -1;
     this.residentOfSlot[slot] = -1;
     this.wreckedFor[slot] = 0;
+    this.heldUntil[slot] = 0;
   }
 
   /** The nearest space in reach of a player that wants a kerb car and shows none, a resident's car's before a car that stands for good; during the first passes any, else only those no eye sees. -1 when none. */

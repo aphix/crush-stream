@@ -10,7 +10,7 @@ import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildParkingSpots } from "../world/openworld/openworld-parking.ts";
 import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
-import { makeDriverDoors } from "./engine-openworld-doors.ts";
+import { carStandsNear, makeDriverDoors } from "./engine-openworld-doors.ts";
 
 const spots = buildParkingSpots(buildRoadNetwork(openWorldGeometry(LAYOUT)));
 const groundAt = (x: number, z: number): number => 0.01 * x + 0.02 * z;
@@ -44,7 +44,7 @@ function brain() {
 
 describe("given residents with cars parked at two doors' kerbs", () => {
   const state = brain();
-  const doors = makeDriverDoors(PLACES, state, spots, groundAt);
+  const doors = makeDriverDoors(PLACES, state, spots, groundAt, () => true);
 
   it("when a resident is at her driver's door getting in or out, then she stands on its driver's side, out from the seat and behind it, facing the car, her feet on the ground there and her seat top over the car's ground", () => {
     for (const code of [ACTIVITY.carIn, ACTIVITY.carOut]) {
@@ -100,11 +100,40 @@ describe("given residents with cars parked at two doors' kerbs", () => {
   it("when she has no car, or the owner's car has no kerb, then no door spot is made", () => {
     const none = brain();
     none.ints[OWNER * RESIDENT_INT_STRIDE + RESIDENT_INT.carOwner] = NO_PLACE;
-    expect(makeDriverDoors(PLACES, none, spots, groundAt)(OWNER, ACTIVITY.carIn, blankDoor()), "no car").toBe(false);
+    expect(makeDriverDoors(PLACES, none, spots, groundAt, () => true)(OWNER, ACTIVITY.carIn, blankDoor()), "no car").toBe(false);
     const kerbless = brain();
     kerbless.ints[OWNER * RESIDENT_INT_STRIDE + RESIDENT_INT.carTo] = NO_PLACE;
-    const door = makeDriverDoors(PLACES, kerbless, spots, groundAt);
+    const door = makeDriverDoors(PLACES, kerbless, spots, groundAt, () => true);
     expect(door(OWNER, ACTIVITY.carOut, blankDoor()), "no kerb to get out at").toBe(false);
     expect(door(OWNER, ACTIVITY.carIn, blankDoor()), "the kerb before the trip is still there").toBe(true);
+  });
+
+  // mutation: sed -i '/^    if (!carThere(owner, car.x, car.z, car.yaw)) return false;/d' src/game/engine/engine-openworld-doors.ts
+  it("when her car does not stand at its kerb space, then no door spot is made; when it does, the spot is made, and the question was asked for her car's owner at the space's pose", () => {
+    const pose = blankCar();
+    residentCarPose(spots, FIRST_DOOR.doorX, FIRST_DOOR.doorZ, OWNER, groundAt, pose);
+    const asked: number[][] = [];
+    const there = (answer: boolean) => (owner: number, x: number, z: number, yaw: number): boolean => {
+      asked.push([owner, x, z, yaw]);
+      return answer;
+    };
+    expect(makeDriverDoors(PLACES, brain(), spots, groundAt, there(false))(HOUSEMATE, ACTIVITY.carIn, blankDoor()), "no car: no clip").toBe(false);
+    expect(makeDriverDoors(PLACES, brain(), spots, groundAt, there(true))(HOUSEMATE, ACTIVITY.carIn, blankDoor()), "her car is there: a clip").toBe(true);
+    expect(asked, "asked twice").toHaveLength(2);
+    for (const call of asked) {
+      expect(call[0], "for the owner of the car she rides in").toBe(OWNER);
+      expect(call[1], "at its space: x").toBe(pose.x);
+      expect(call[2], "at its space: z").toBe(pose.z);
+      expect(call[3], "at its space: yaw").toBe(pose.yaw);
+    }
+  });
+});
+
+describe("given cars standing in a street", () => {
+  // mutation: sed -i 's/^const CAR_AT_SPOT_M = 2.5;/const CAR_AT_SPOT_M = 25;/' src/game/engine/engine-openworld-doors.ts
+  it("when a space is asked about, then a car within 2.5 m of it stands there and one 3 m off does not", () => {
+    const car = (x: number, z: number) => ({ group: { position: { x, z } } });
+    expect(carStandsNear([car(40, 0), car(12, 0)], 10, 0), "2 m off").toBe(true);
+    expect(carStandsNear([car(40, 0), car(13, 0)], 10, 0), "3 m off").toBe(false);
   });
 });

@@ -5,7 +5,7 @@ import { MAX_CARS } from "../../scenes/fleet.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
-import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, nearestFreeSpot, residentSpotAt, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
+import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, nearestFreeSpot, residentSpotAt, spotAt, type ParkingSpots } from "../../world/openworld/openworld-parking.ts";
 import { buildRoadNetwork, type RoadNetwork } from "../../world/openworld/openworld-roads.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
 import { blankAiCar, type AiCar } from "../derby-ai.ts";
@@ -36,6 +36,9 @@ type RedLightListener = (carIndex: number, x: number, z: number, seconds: number
 
 /** How many cars of each kind the open world has (`MOVER_CARS`, `KERB_CARS`, `PATROL_CARS`, `AMBULANCE_CARS` by device); the patrol cars are the last of the movers, the ambulances just before them. */
 type TrafficSize = { movers: number; kerb: number; patrol: number; ambulance: number };
+
+/** Crowd seconds a clip holds the kerb car brought for it: the clip's 2.5 s and the walk off. */
+const CLIP_HOLD_SECONDS = 4;
 
 /**
  * The open world's cars: real cars of the field that drive its streets (ambient traffic, residents' commutes, patrols), stop at the signals and park in the kerb spaces, and real cars that
@@ -196,6 +199,20 @@ export class OpenWorldTraffic {
     const id = this.carIdOf(resident);
     if (id < 0) return false;
     this.context.ports.openDoor(id, radians);
+    return true;
+  }
+
+  /** Whether resident `resident`'s car stands at the kerb space at (x, z, yaw) for a get-in or get-out clip drawn now: one the traffic holds as hers there, or a kerb car brought to that space if it is empty, hers to take and unseen (`KerbCars.bring`). False: the clip is not drawn. */
+  carForClip(resident: number, x: number, z: number, yaw: number, eyeX: number, eyeZ: number): boolean {
+    const { residentSpot, taken } = this.context;
+    const spot = spotAt(this.parkingSpots, x, z, yaw);
+    if (spot < 0 || resident < 0 || resident >= RESIDENT_CAPACITY) return false;
+    const own = residentSpot[resident]!;
+    if (own === spot && this.carIdOf(resident) >= 0) return true;
+    if (own !== spot && (own !== -1 || taken[spot] === 1)) return false;
+    if (!this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS)) return false;
+    residentSpot[resident] = spot;
+    taken[spot] = 1;
     return true;
   }
 
