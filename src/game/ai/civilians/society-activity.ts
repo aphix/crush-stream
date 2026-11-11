@@ -7,6 +7,9 @@ import {
   DOOR_SPREAD,
   FIGHT_PLAYER,
   FLAG,
+  KNOCKOUT_BLOW_SPAN,
+  KNOCKOUT_MIN_BLOWS,
+  KNOCKOUT_SHARE,
   LATERAL_MAX,
   NEVER_TICK,
   NO_BEARING,
@@ -22,7 +25,9 @@ import {
   RESIDENT_INT_STRIDE,
   SITTER_CHAT_REACH,
   SPECIES,
+  STREAM,
 } from "./civilian-constants.ts";
+import { residentDraws } from "./civilian-draws.ts";
 import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { legPose } from "./civilian-leg.ts";
 import { residentNeuroticism } from "./civilian-temperament.ts";
@@ -415,4 +420,35 @@ export function findWalkerStrike(state: CityState, fromSeconds: number, toSecond
     return true;
   }
   return false;
+}
+
+/** A blow one civilian lands on another in a fight. */
+export class CivilianBlow {
+  striker = -1;
+  victim = -1;
+}
+
+/**
+ * The first fighter at or after `firstResident` whose swing lands on a civilian partner in crowd time (fromSeconds, toSeconds]: his index, with the pair in `out`; -1 when none does.
+ * Only the one who started the fight swings (the lower id of the pair, as `readFight` casts them), so the victim is his partner. Pure in the rows and the times.
+ */
+export function findCivilianBlow(state: CityState, fromSeconds: number, toSeconds: number, firstResident: number, out: CivilianBlow): number {
+  const { ints } = state;
+  for (let resident = firstResident; resident < state.capacity; resident++) {
+    const base = resident * RESIDENT_INT_STRIDE;
+    const partner = ints[base + RESIDENT_INT.fightPartner]!;
+    if (ints[base + RESIDENT_INT.alive] === 0 || partner < 0 || partner <= resident || ints[base + RESIDENT_INT.fightTick] === NEVER_TICK || ints[base + RESIDENT_INT.legPurpose] !== PURPOSE.fight) continue;
+    const landing = swingLandingIn(ints[base + RESIDENT_INT.arriveTick]! / DECISION_HZ, fromSeconds, toSeconds);
+    if (landing < 0 || landing >= ints[base + RESIDENT_INT.nextDecisionTick]! / DECISION_HZ) continue;
+    out.striker = resident;
+    out.victim = partner;
+    return resident;
+  }
+  return -1;
+}
+
+/** Which of a fight's blows, counted on `victim`, knocks her out: 0 for a fight that ends with nobody down. One seeded draw per victim and fight, so every peer agrees. */
+export function knockoutBlow(seed: number, victim: number, fightTick: number): number {
+  const draw = residentDraws(seed, victim, STREAM.punch, fightTick)();
+  return draw >= KNOCKOUT_SHARE ? 0 : KNOCKOUT_MIN_BLOWS + Math.floor((draw / KNOCKOUT_SHARE) * KNOCKOUT_BLOW_SPAN);
 }

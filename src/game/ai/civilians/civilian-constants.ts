@@ -347,7 +347,7 @@ export const HOUR_WEIGHTS = [
 export const CLOSED_HOURS_WEIGHT = 0.1;
 
 /** Salts of the draw streams (`residentDraws`): one per kind of choice, so adding a draw to one never moves another. */
-export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12, alarm: 13, cross: 14, household: 15 } as const;
+export const STREAM = { create: 1, day: 2, decision: 3, arrival: 4, birth: 5, clock: 6, week: 7, block: 8, seat: 9, crime: 10, fight: 11, trait: 12, alarm: 13, cross: 14, household: 15, punch: 16 } as const;
 /** Odd multipliers that scramble (seed, resident, salt, index) into a mulberry32 seed. */
 export const MIX_RESIDENT = 0x9e3779b9;
 export const MIX_SALT = 0x85ebca6b;
@@ -432,6 +432,10 @@ export const YOUNG_AGE_MAX = 25;
 export const FIGHT_CHANCE = 0.12;
 export const FIGHT_ANGRY_FACTOR = 4;
 export const FIGHT_TICKS = 16;
+/** The share of fights that end with someone knocked out, and the blow that does it: one of this many, from this one on. */
+export const KNOCKOUT_SHARE = 0.6;
+export const KNOCKOUT_MIN_BLOWS = 2;
+export const KNOCKOUT_BLOW_SPAN = 4;
 /** A civilian's swing lands on the player within this many metres of the fighter's spot (an arm and a lean), and pushes him at this speed (m/s), lifted by this share of the direction. */
 export const PLAYER_STRIKE_REACH = 1.5;
 export const PUNCH_SPEED = 4;
