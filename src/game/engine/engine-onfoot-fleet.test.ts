@@ -76,7 +76,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
 
   it("when his driver has been thrown out in a crash and the seat is still on the car, then the control offers nothing and does nothing, and with the driver back in it offers to get out", () => {
     const own = rig.cars()[0]!;
-    expect(rig.engine["onFoot"].prompt(), "the driver is in: it is offered").toBe("Enter or B: get out");
+    expect(rig.engine["onFoot"].prompt(), "the driver is in: it is offered").toBe("Enter or Y: get out");
     own.driverOut = "windshield";
     expect(rig.engine["onFoot"].prompt(), "a thrown driver has nobody to get out: nothing is offered").toBe(null);
     expect(rig.engine["onFoot"].hud(), "nor on the HUD: no Out button").toBe(null);
@@ -84,14 +84,14 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     rig.run(1);
     expect(rig.phase(), "and the press does nothing").toBe("inCar");
     own.driverOut = null;
-    expect(rig.engine["onFoot"].prompt(), "the driver back in: offered again").toBe("Enter or B: get out");
+    expect(rig.engine["onFoot"].prompt(), "the driver back in: offered again").toBe("Enter or Y: get out");
   });
 
   it("when the touch Out button is tapped at the wheel, then he gets out once, the tap is spent, the pedal strip's gas walks him, and the same button tapped at his door gets him back in", () => {
     const hud = rig.engine["onFoot"].hud();
     if (!hud) throw new Error("at the wheel the button is Out: no HUD read");
     expect(hud.out, "at the wheel the button is Out: out").toBe(false);
-    expect(hud.prompt, "at the wheel the button is Out: prompt").toBe("Enter or B: get out");
+    expect(hud.prompt, "at the wheel the button is Out: prompt").toBe("Enter or Y: get out");
     expect(hud.refusal, "at the wheel the button is Out: refusal").toBeNull();
     rig.tapOnFoot(1);
     expect(rig.phase(), `he is out (he was told: ${rig.engine["onFoot"].flow.refusal})`).toBe("onFoot");
@@ -131,7 +131,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
   it("when the fleet's own crash loop (seed 4) leaves car 0 stopped with its driver in and another wreck at his door, then Enter tells him there is no room and he stays in", () => {
     const own = rig.stoppedInFleetLoop(LOOP_DRIVER_IN_SEED);
     expect(own.driverOut, "the crash left his driver in").toBe(null);
-    expect(rig.engine["onFoot"].prompt(), "the control is offered").toBe("Enter or B: get out");
+    expect(rig.engine["onFoot"].prompt(), "the control is offered").toBe("Enter or Y: get out");
     rig.press("Enter");
     expect(rig.phase(), "a wreck lies at his door").toBe("inCar");
     expect(rig.engine["onFoot"].prompt(), "and he is told").toBe("No room to open the door");

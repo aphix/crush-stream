@@ -138,9 +138,10 @@ function realView() {
   seat.mode = "drive";
   const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 400);
   camera.position.set(4, 2, 6);
-  const view = new ChaseCamera(camera, canvas, seat, { rx: 0, ry: 0 } as PadState, false, NO_PICK);
+  const pad = { rx: 0, ry: 0 } as PadState;
+  const view = new ChaseCamera(camera, canvas, seat, pad, false, NO_PICK);
   view.attach();
-  return { canvas, camera, view };
+  return { canvas, camera, view, pad };
 }
 
 function pointer(canvas: HTMLCanvasElement, type: "pointerdown" | "pointermove" | "pointerup", x: number, y: number): void {
@@ -174,6 +175,38 @@ describe.each(KINDS)("given the engine's own orbit camera under the Auto camera,
     pointer(canvas, "pointerup", 100 - DRAG_PX, 100);
     run(auto, camera, orbit, RIDE_PAUSE + 2);
     expect(view.rideHeld(true, DT), "the player no longer holds the view").toBe(false);
+  });
+
+  // mutation: sed -i 's/ || this.rideLooked || padTurn;/ || this.rideLooked;/' src/game/present/engine-camera.ts
+  it("when the right stick is held, then the view turns round the subject, and once released for the ride pause the Auto shot is back", () => {
+    const scene = sceneOf(parts);
+    const auto = autoOver(scene);
+    const { camera, view, pad } = realView();
+    const orbit = autoOrbitOf(view);
+    run(auto, camera, orbit, 1);
+    const before = bearing(camera, view.look);
+    pad.rx = 1;
+    run(auto, camera, orbit, 1);
+    const turned = Math.abs(Math.atan2(Math.sin(bearing(camera, view.look) - before), Math.cos(bearing(camera, view.look) - before)));
+    expect(turned, "bearing turned by the stick (rad)").toBeGreaterThan(TURNED_RAD);
+    expect(view.rideHeld(true, DT), "the stick holds the view").toBe(true);
+    pad.rx = 0;
+    run(auto, camera, orbit, RIDE_PAUSE + 2);
+    expect(view.rideHeld(true, DT), "the player no longer holds the view").toBe(false);
+  });
+
+  // mutation: sed -i 's/^    if (this.ride) this.rideLooked = true;$//' src/game/present/engine-camera.ts
+  it("when the wheel turns one notch, then the view is held and the distance changes", () => {
+    const scene = sceneOf(parts);
+    const auto = autoOver(scene);
+    const { canvas, camera, view } = realView();
+    const orbit = autoOrbitOf(view);
+    run(auto, camera, orbit, 1);
+    const before = camera.position.distanceTo(view.look);
+    canvas.dispatchEvent(Object.assign(new Event("wheel"), { deltaY: -200 }));
+    run(auto, camera, orbit, 1);
+    expect(view.rideHeld(true, DT), "the wheel holds the view").toBe(true);
+    expect(camera.position.distanceTo(view.look), "distance to the subject (m)").not.toBeCloseTo(before, 0);
   });
 });
 

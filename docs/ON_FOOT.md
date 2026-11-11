@@ -9,8 +9,8 @@ knocks them over ([The showcase](#the-showcase)).
 
 | Action | Keyboard and mouse | Controller |
 |---|---|---|
-| Get out of your car (driving, stopped or under 3 m/s, driver door clear); get back in (on foot, at your own car's driver door) | Enter | B / Circle |
-| Walk, relative to the camera (stick: slower for a lighter push, 0.8 m/s to a run, past a 0.15 dead zone, curve 1.5) | W A S D, the arrows | left stick |
+| Get out of your car (driving, stopped or under 3 m/s, driver door clear); get back in (on foot, at your own car's driver door) | Enter | Y / Triangle |
+| Walk, relative to the camera (stick: slower for a lighter push, 0.8 m/s to a run, past the pad reader's one 0.15 dead zone and curve 1.7, `gamepad.ts`) | W A S D, the arrows | left stick |
 | Run (a key is a full push, the stick walks up to it) | W A S D, the arrows | left stick pushed all the way |
 | Sprint (7 m/s) | Shift | A / Cross, or RT past halfway |
 | Hold to a walk (1.5 m/s) | Space | X / Square |
@@ -19,8 +19,8 @@ knocks them over ([The showcase](#the-showcase)).
 
 Nothing on foot is a new control: the keys, sticks and buttons that steer, gas, boost and handbrake the car walk, run, sprint and hold to a walk
 (`engine-walk-input.ts` reads the same `DRIVE_KEYS` and `PadState`; its rows pair every walking control with its driving twin).
-Enter and B were free in the driving seat (`SEAT_KEYS.onFoot` in `engine-keys.ts`; `engine-keys.test.ts` keeps it clear of the scene keys).
-While he is out, the seat's own keys (Space, R, Esc, Q, E, V, C, T and the pad's Back, LB, RB, Y and D-pad down) do nothing, so a stray press
+Enter and Y were free in the driving seat (`SEAT_KEYS.onFoot` in `engine-keys.ts`; `engine-keys.test.ts` keeps it clear of the scene keys).
+While he is out, the seat's own keys (Space, R, Esc, Q, E, V, C, T and the pad's Back, LB, RB, B and D-pad down) do nothing, so a stray press
 cannot pause, reset or switch the car under him; Escape and Back still end mouse look and a menu as everywhere.
 
 ## Where it is offered, and why
@@ -153,7 +153,7 @@ work as everywhere, and places the eye itself (`WalkerView`, `walker-camera.ts`)
   is nearer, looking where the orbit looks, up and down to 74°. The pool's mesh draws his head and torso to no camera then (`DummyMesh.viewHidden`: the walker's slot discards
   the fragments of skin riding the torso and head more than other parts), while his shadow keeps them. Down or getting up he is seen over the shoulder again, and it does not
   recentre (the walk follows the view).
-- **View and the wheel**: View (V, C, T, the pad's Y, the HUD's View) cycles the two on foot; at the wheel it cycles the drive views as ever. The wheel zooms the shoulder camera's
+- **View and the wheel**: View (V, C, T, the pad's B, the HUD's View) cycles the two on foot; at the wheel it cycles the drive views as ever. The wheel zooms the shoulder camera's
   boom from 0.8 m (his shoulders' breadth and the ball off his head) out, and one notch nearer, 0.7 m, the wheel's nearest on foot, is his own eyes; zooming out leaves them. The
   car's zoom range, orbit and pitch range are kept when he gets out and given back when he sits down again.
 
@@ -185,7 +185,7 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
   as a car with its brakes on does.
 - The get-up is assisted (above) and does not read the ground's slope or lean on a wall; on a ramp he gets up as on the flat.
 - A thrown driver and a person run down elsewhere still use the old, unmotored dummy.
-- The pad: B is the only control that is free on every pad. A touch screen has the **Out** / **In** tap beside Boost (`CONTROLS.md`); the HUD's prompt line
+- The pad: Y is the only control that is free on every pad. A touch screen has the **Out** / **In** tap beside Boost (`CONTROLS.md`); the HUD's prompt line
   shows only on desktop, and on touch only a refusal's reason shows, beside that tap.
 
 ## What pins it

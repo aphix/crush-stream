@@ -258,7 +258,7 @@ export function SpectateBar({ race, pad, cam, freeHelp, cycles, onCommand, onCam
           </Button>
         ) : null}
         {cam ? (
-          <Button variant="ghost" className="h-10 gap-1.5 px-2 pointer-fine:h-8 pointer-coarse:h-11" aria-label="Camera view" title={`Camera view · ${pad ? "Y" : "V"}`} onMouseDown={keepFocus} onClick={onCam}>
+          <Button variant="ghost" className="h-10 gap-1.5 px-2 pointer-fine:h-8 pointer-coarse:h-11" aria-label="Camera view" title={`Camera view · ${pad ? "B" : "V"}`} onMouseDown={keepFocus} onClick={onCam}>
             <Video />
             <span className="text-xs">{cam}</span>
           </Button>

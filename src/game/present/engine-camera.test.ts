@@ -867,3 +867,41 @@ describe("given the spectator cam cycle with the free view in it", () => {
     expect(Math.abs(camera.position.x - (4 - 20 * pxToMetres)), `x ${camera.position.x}: 20 px of slide left of 4`).toBeLessThan(1e-6);
   });
 });
+
+describe("given the orbit turned by the right stick", () => {
+  const PAD_YAW = 2.2;
+  const held = () => {
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 180);
+    camera.position.set(4, 2, 6);
+    const seat = new DriverSeat();
+    seat.mode = "global";
+    const pad = { rx: 0, ry: 0 } as PadState;
+    const view = new ChaseCamera(camera, fakeCanvas(), seat, pad, false, NO_PICK);
+    view.look.set(3, 0.7, 0);
+    return { view, pad };
+  };
+  /** The yaw (rad) one frame with the stick at `rx` turns the orbit. */
+  const frame = (view: ChaseCamera, pad: PadState, rx: number): number => {
+    pad.rx = rx;
+    const before = view.orbitAngle;
+    view.orbit(DT, 0, false);
+    return Math.abs(view.orbitAngle - before);
+  };
+
+  // mutation: sed -i 's/gain: 1.6 }/gain: 1 }/' src/game/present/engine-camera.ts
+  it("when the stick is held full for 1 s, then the view turns more than 2.2 rad", () => {
+    const { view, pad } = held();
+    let turned = 0;
+    for (let f = 0; f < Math.round(1 / DT); f++) turned += frame(view, pad, 1);
+    expect(turned, `${turned.toFixed(3)} rad in 1 s`).toBeGreaterThan(PAD_YAW);
+    expect(turned, "and not past the ramp's top rate").toBeLessThan(3.5);
+  });
+
+  // mutation: sed -i 's/this.padHold + wallDt) : 0;/this.padHold + wallDt) : this.padHold;/' src/game/present/engine-camera.ts
+  it("when the stick is released and pushed fresh, then the first frame turns at 2.2 rad/s", () => {
+    const { view, pad } = held();
+    for (let f = 0; f < Math.round(1 / DT); f++) frame(view, pad, 1);
+    frame(view, pad, 0);
+    expect(frame(view, pad, 1) / DT).toBeCloseTo(PAD_YAW, 1);
+  });
+});

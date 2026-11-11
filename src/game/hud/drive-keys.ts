@@ -8,7 +8,7 @@
  */
 export function footKeys(pad: boolean, prompt: string | null): string {
   const parts = pad
-    ? ["left stick walk", "A or RT run", "right stick look", "B get in at your car's driver door"]
+    ? ["left stick walk", "A or RT run", "right stick look", "Y get in at your car's driver door"]
     : ["W/A/S/D walk", "Shift run", "drag look", "; mouse look", "Enter get in at your car's driver door"];
   return (prompt === null ? parts : [prompt, ...parts]).join(" · ");
 }
@@ -16,7 +16,7 @@ export function footKeys(pad: boolean, prompt: string | null): string {
 export function driveKeys(pad: boolean, boostable: boolean): string {
   const boost = boostable ? [pad ? "A boost" : "Shift boost"] : [];
   const parts = pad
-    ? ["RT gas", "LT brake, then reverse", "left stick steer", "X handbrake", ...boost, "Y view", "R3 look back", "right stick look", "LB/RB car", "D-pad ↓ recover", "Back watch"]
+    ? ["RT gas", "LT brake, then reverse", "left stick steer", "X handbrake", ...boost, "B view", "R3 look back", "right stick look", "LB/RB car", "D-pad ↓ recover", "Back watch"]
     : ["W gas", "S brake, then reverse", "A/D steer", "Space handbrake", ...boost, "drag look", "V view", "` look back", "R recover", "Esc watch"];
   return parts.join(" · ");
 }

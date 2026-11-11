@@ -9,6 +9,7 @@ import { CHASE, DriveCam, easeFov } from "./drive-cam.ts";
 import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
 import { CineCam, DutchCam, type Occluder, type Sight } from "./spectate-cam.ts";
 import { EyeClear } from "./eye-clear.ts";
+import { smoothstep } from "./walker-math.ts";
 import { DRAG_PITCH_PER_PX, DRAG_YAW_PER_PX, FreeCam, type FreeInput, PAD_PITCH_RATE, PAD_YAW_RATE } from "./free-cam.ts";
 
 /** A followed (not driven) car's camera, cycled by View: the drive chase views, the trackside cinematic, the wheel-well dutch, the free orbit, Auto (`AutoCam` run live) and the free fly (`FreeCam`, detached from every car). A race opens on the chase, everything else on the orbit. */
@@ -31,6 +32,8 @@ const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 const NO_BOXES: readonly Occluder[] = [];
+/** The right stick held past `ring` (as the pad reader hands it over) for `seconds` turns the view up to `gain` times as fast as a push into the ring does. */
+const PAD_RAMP = { ring: 0.9, seconds: 0.6, gain: 1.6 };
 /** `watchFall`: the eye stands this far (m) inside the fleet disc's rim, at shoulder height (m) over the disc. */
 const FALL_EYE_IN = 1.5;
 const FALL_EYE_Y = 1.5;
@@ -124,6 +127,8 @@ export class ChaseCamera {
   /** The view that was on before the free one, `userFramed` as it stood, and whether the next cycle step passes the free view by (`cycleSpec`). */
   private specBeforeFree: SpecView | null = null;
   private userFramedBeforeFree = false;
+  /** Seconds the right stick has been held past `PAD_RAMP.ring`, up to `PAD_RAMP.seconds`. */
+  private padHold = 0;
   private skipFree = false;
   /** What framed the last frame, so a drag knows what to move: the orbit, a chase rig's look, or nothing (cine, dutch). */
   private rig: "orbit" | "chase" | "fixed" = "orbit";
@@ -283,7 +288,9 @@ export class ChaseCamera {
    * from the user's view.
    */
   rideHeld(on: boolean, wallDt: number): boolean {
-    const turning = (this.dragging && this.pointerTravel >= CLICK_PX) || this.rideLooked;
+    const padTurn = this.pad.rx !== 0 || this.pad.ry !== 0;
+    if (on && padTurn && !this.rideLooked && this.rideIdle >= RIDE_PAUSE) this.adoptPose();
+    const turning = (this.dragging && this.pointerTravel >= CLICK_PX) || this.rideLooked || padTurn;
     this.rideLooked = false;
     this.rideIdle = !on ? Infinity : turning ? 0 : this.rideIdle + wallDt;
     return this.rideIdle < RIDE_PAUSE;
@@ -377,8 +384,9 @@ export class ChaseCamera {
     const rx = this.pad.rx;
     const ry = this.pad.ry;
     const padTurn = rx !== 0 || ry !== 0;
+    this.padHold = hypot2(rx, ry) > PAD_RAMP.ring ? Math.min(PAD_RAMP.seconds, this.padHold + wallDt) : 0;
     if (padTurn) {
-      this.angle -= rx * PAD_YAW_RATE * wallDt;
+      this.angle -= rx * PAD_YAW_RATE * (1 + (PAD_RAMP.gain - 1) * smoothstep(this.padHold / PAD_RAMP.seconds)) * wallDt;
       this.pitch = THREE.MathUtils.clamp(this.pitch + ry * PAD_PITCH_RATE * wallDt, this.pitchLow, this.pitchHigh);
       this.userFramed = true;
     }
@@ -758,6 +766,7 @@ export class ChaseCamera {
     }
     this.pinchDist = d;
     this.userFramed = true;
+    if (this.ride) this.rideLooked = true;
   }
 
   private onPointerUp = (e: PointerEvent): void => {
@@ -794,5 +803,6 @@ export class ChaseCamera {
     const scale = Math.exp(e.deltaY * 0.00115);
     this.radius = THREE.MathUtils.clamp(this.radius * scale, this.minRadius, ORBIT_RADIUS.max);
     this.zooms++;
+    if (this.ride) this.rideLooked = true;
   };
 }
