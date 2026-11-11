@@ -58,7 +58,7 @@ const STANDING_HEIGHT = 0.95;
 /** The longest control step (s): a hitch does not turn the motors' targets into a jump. */
 const MAX_DT = 0.05;
 /** The torso may lag the root this far (m) before the root is brought back to it (a wall stops the root with him), and he then runs no faster than he is going plus this (m/s). */
-const LEASH = 0.2;
+const LEASH = 0.08;
 const BLOCKED_MARGIN = 1;
 /** The hold's spring rate (rad/s) on his whole mass: displacement times it is the speed a displaced torso springs back at. */
 const HOLD_RATE = Math.sqrt(HOLD.stiffness / TOTAL_MASS);
@@ -87,6 +87,21 @@ export class Walker {
   state: WalkState = "stand";
   /** 0 limp to 1 at full strength. */
   strength = 1;
+  /** How much of his torso's lag behind the root (m) his own travel explains: it grows as far as the root moves and is never more than the lag itself. */
+  private slack = 0;
+  /** Set each frame by the pool: another body stands within reach of him, so a lean can stagger but not fell him (`meetWalkers` decides). */
+  beside = false;
+
+  /** A shove he stays on his feet through: his strength is at most `share` at once and comes back as after any blow (`RECOVER_SECONDS`). */
+  stagger(share: number): void {
+    if (this.state === "stand") this.strength = Math.min(this.strength, share);
+  }
+
+  /** His root's own speed (m/s) along the level direction (nx, nz): the pace he walks at, not the frame's jitter or the shove of a body he leans on. */
+  rootSpeedAlong(nx: number, nz: number): number {
+    return this.loco.speed * (detSin(this.loco.yaw) * nx + detCos(this.loco.yaw) * nz);
+  }
+
   /** Seconds since a car struck him (`struck`). */
   sinceStruck = Infinity;
   /** The route and stage the get-up is on. */
@@ -224,12 +239,14 @@ export class Walker {
   /**
    * On his feet, his torso moving more than `HIT_SPEED` (m/s) differently from the root that holds it is a blow (the root's own acceleration is no hit, and
    * neither is being held back along his way by a wall): it takes strength in proportion, past `HIT_SPAN` more it knocks him down, and strength comes back
-   * over `RECOVER_SECONDS`.
+   * over `RECOVER_SECONDS`. Lag his own travel explains (`slack`) is no blow, and beside another body a lean cannot fell him.
    */
   private feelHits(doll: Doll, dt: number): void {
     if (this.state !== "stand") return;
     if (this.framesOnFoot++ > 0) {
-      const hit = Math.max(0, this.blowSpeed(doll) - HIT_SPEED * Math.max(1, dt * 60));
+      const own = hypot3(this.anchorVel[0]!, this.anchorVel[1]!, this.anchorVel[2]!);
+      let hit = Math.max(0, this.blowSpeed(doll, own * dt) - HIT_SPEED * Math.max(1, dt * 60));
+      if (this.beside) hit = Math.min(hit, 0.8 * HIT_SPAN);
       if (hit >= HIT_SPAN) {
         this.drop();
         return;
@@ -242,12 +259,19 @@ export class Walker {
   /**
    * How hard (m/s) his torso is moved off the root: its speed relative to the root plus the hold's spring speed for how far it is displaced (a stiff hold takes a
    * blow's speed out of the torso inside a frame and leaves a displacement), less what a wall ahead takes off his way (the torso behind the root along his facing).
+   * `travelled`: how far (m) the root moved this frame; the lag grows forgiven by that much.
    */
-  private blowSpeed(doll: Doll): number {
+  private blowSpeed(doll: Doll, travelled: number): number {
     const held = this.anchorVel;
-    let dx = doll.vel[0]! - held[0]! + HOLD_RATE * (doll.cur[0]! - this.anchorPos[0]!);
-    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * (doll.cur[1]! - this.anchorPos[1]!);
-    let dz = doll.vel[2]! - held[2]! + HOLD_RATE * (doll.cur[2]! - this.anchorPos[2]!);
+    const lx = doll.cur[0]! - this.anchorPos[0]!;
+    const ly = doll.cur[1]! - this.anchorPos[1]!;
+    const lz = doll.cur[2]! - this.anchorPos[2]!;
+    const lag = hypot3(lx, ly, lz);
+    this.slack = Math.min(lag, this.slack + travelled);
+    const keep = lag > 0 ? (lag - this.slack) / lag : 0;
+    let dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx * keep;
+    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;
+    let dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz * keep;
     const sin = detSin(this.loco.yaw);
     const cos = detCos(this.loco.yaw);
     const along = dx * sin + dz * cos;
@@ -260,7 +284,8 @@ export class Walker {
 
   private decideState(doll: Doll, upright: number, height: number, dt: number): void {
     if (this.state === "stand") {
-      if (upright < FALL_UPRIGHT || height < FALL_HEIGHT) this.drop();
+      // On his feet his height is read over the floor under them (`WalkFloor.level`), so a fall on an upper floor is seen as one on the street is.
+      if (upright < FALL_UPRIGHT || height - this.floor.level < FALL_HEIGHT) this.drop();
       return;
     }
     if (this.state === "down") {
@@ -317,6 +342,7 @@ export class Walker {
     this.anchorPos[1] = at.y;
     this.anchorPos[2] = at.z;
     this.anchorVel.fill(0);
+    this.slack = 0;
     this.push.fill(0);
     _point.x = at.x;
     _point.y = at.y;
@@ -490,7 +516,7 @@ export class Walker {
     const handle = this.gimbal!.handle;
     const standing = this.state === "stand";
     const gimbal = standing ? STAND_GIMBAL : GETUP_GIMBAL;
-    const tipped = this.state === "getUp" ? 1 : Math.max(0, Math.min(1, (upright - BALANCE_GONE) / (BALANCE_FULL - BALANCE_GONE)));
+    const tipped = this.state === "getUp" || (standing && this.strength >= 1) ? 1 : Math.max(0, Math.min(1, (upright - BALANCE_GONE) / (BALANCE_FULL - BALANCE_GONE)));
     const k = Math.max(MOTOR_FLOOR, gimbal.stiffness * this.strength * tipped);
     const d = Math.max(MOTOR_FLOOR, gimbal.damping * this.strength * tipped);
     for (let i = 0; i < ANG.length; i++) raw.jointConfigureMotorPosition(handle, ANG[i]!, 0, k, d);

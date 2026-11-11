@@ -72,6 +72,9 @@ export abstract class RagdollStepper extends RagdollPool {
     return false;
   }
 
+  /** Before the walkers are controlled each frame: bodies that meet are judged (`RagdollThrower.meetWalkers`). */
+  protected meetWalkers(_dt: number): void {}
+
   /** A scene's one patch (`setSolids`) is in the world while its ground is the active one, and out when it is not: built on the first frame after the scene is set, which has hidden its posts by then. */
   private keepScenePatch(on: boolean): void {
     if (!on) this.freeScenePatch();
@@ -130,6 +133,7 @@ export abstract class RagdollStepper extends RagdollPool {
       this.step = step;
       world.timestep = step;
     }
+    if (steps > 0) this.meetWalkers(steps * step);
     if (steps > 0) for (let s = 0; s < this.dolls.length; s++) this.walkers[s]!.control(steps * step, this.untangle.carry, s * 3);
     if (steps > 0) {
       const thrown = this.thrownOut();
