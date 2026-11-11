@@ -91,6 +91,7 @@ describe("given the open world director in the open world", () => {
   it("when a place is wrecked mid-minute, then the list is not refilled until the game minute turns", () => {
     const harness = new Harness();
     harness.director.frame(FRAME);
+    harness.director.frame(FRAME);
     const open = harness.updates[harness.updates.length - 1]!.closed!.indexOf(0);
     expect(open, "some place is open at the start").toBeGreaterThanOrEqual(0);
     harness.director["crowd"]!.state.closedUntilTick[open] = WRECKED_FOR_TICKS;
