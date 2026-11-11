@@ -264,7 +264,7 @@ export class FacadeBays {
       }
       if (buckets.size === 0) buckets.set(0, []);
       for (const stood of buckets.values()) {
-        const at0 = stood[0]!.frontage;
+        const at0 = stood[0]?.frontage;
         const mesh = new THREE.InstancedMesh(geometry, material, stood.length);
         mesh.name = `facade-${name}`;
         mesh.receiveShadow = true;
@@ -278,7 +278,8 @@ export class FacadeBays {
         mesh.computeBoundingSphere();
         this.group.add(mesh);
         this.meshes.push(mesh);
-        if (detail) this.detail.push({ x: Number.isFinite(cell) ? Math.floor(at0.x / cell + 0.5) * cell : 0, z: Number.isFinite(cell) ? Math.floor(at0.z / cell + 0.5) * cell : 0, size: cell, near: mesh, far: null });
+        // An empty mesh (a kind no house has) draws nothing: no band cell.
+        if (detail && at0 !== undefined) this.detail.push({ x: Number.isFinite(cell) ? Math.floor(at0.x / cell + 0.5) * cell : 0, z: Number.isFinite(cell) ? Math.floor(at0.z / cell + 0.5) * cell : 0, size: cell, near: mesh, far: null });
         triangles += (geometry.getAttribute("position").count / 3) * stood.length;
       }
     }
