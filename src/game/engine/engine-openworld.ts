@@ -70,13 +70,7 @@ type PlaceSigns = {
 };
 
 /** The rowhomes' bays, stoops, railings and cornices: made with the open world's course, gone when it is left. */
-type FacadeArt = {
-  /** The far bands of the trees and the kit's small pieces, for the eye's place. */
-  frame(eyeX: number, eyeZ: number): void;
-  /** Every near piece shows again. */
-  stop(): void;
-  dispose(): void;
-};
+type FacadeArt = { dispose(): void };
 /** The traffic lights drawn: `update` once a frame with the crowd's clock. */
 type LightsArt = {
   update(seconds: number): void;
@@ -365,8 +359,7 @@ export class OpenWorldDirector {
     this.facades ??= this.ports.makeFacades(this.map);
     if (this.interiors === null && this.ports.makeInteriors !== undefined) this.interiors = this.ports.makeInteriors(this.map);
     this.ports.eye(this.ray);
-    this.facades.frame(this.ray.eyeX, this.ray.eyeZ);
-    this.refillClosed();
+    if (this.crowd !== null && this.closedPlaces !== null) fillClosedPlaces(this.crowd.state, tickAt(this.crowd.crowdSeconds), this.closedPlaces);
     if (this.interiors !== null) {
       this.openers.poses = this.crowd?.poses ?? null;
       this.openers.closed = this.crowd === null ? null : this.closedPlaces;
@@ -407,7 +400,6 @@ export class OpenWorldDirector {
 
   /** The crowd, its drawing, its worker and the signage are gone, and the interiors with them. */
   stop(): void {
-    this.facades?.stop();
     this.stopCrowd();
     this.signs?.dispose();
     this.signs = null;

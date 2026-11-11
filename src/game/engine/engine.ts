@@ -51,7 +51,6 @@ import { RagdollBodyHost } from "./ragdoll-body-host.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
-import { PREFAB } from "../world/constants.ts";
 import { LAYOUT, OW_DRAW_CELL } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
@@ -93,7 +92,6 @@ import { NetPlay } from "../net/net-play.ts";
 import { RaceDirector } from "./engine-race.ts";
 import { ReelDirector } from "./engine-highlights.ts";
 import { PodiumDirector } from "./engine-podium.ts";
-import { FarBand, KIT_DETAIL_M, TREE_NEAR_M } from "../present/far-band.ts";
 import { TrackArt } from "../present/track-art.ts";
 import { reliefForTier } from "../present/surface-relief.ts";
 import { EngineGarage } from "./engine-garage.ts";
@@ -231,11 +229,6 @@ export class CrashEngine extends EngineGarage {
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
   protected readonly deviceClass: DeviceClass;
-  /** The open world's trees' far band, made from `courseArt` the first frame that art stands (and again for a new one); null until then. */
-  private treeBand: FarBand | null = null;
-  private treeBandArt: TrackArt | null = null;
-  /** The course art `buildArt` last made: the open world's far bands read its trees. */
-  private courseArt: TrackArt | null = null;
 
   constructor(canvas: HTMLCanvasElement, hudStore: HudStore, veil: HTMLElement) {
     super();
@@ -464,18 +457,7 @@ export class CrashEngine extends EngineGarage {
         const kit = new FacadeBays(homeFrontages(map.places.filter((place) => place.doorNode >= 0)), OW_DRAW_CELL);
         this.scene.add(kit.group);
         this.queueWarm();
-        const details = new FarBand(kit.bandCells(), KIT_DETAIL_M[this.bandClass]);
-        return {
-          frame: (x, z) => {
-            this.treeBandFor(this.courseArt)?.frame(x, z);
-            details.frame(x, z);
-          },
-          stop: () => {
-            this.treeBand?.stop();
-            details.stop();
-          },
-          dispose: () => kit.dispose(),
-        };
+        return kit;
       },
       makeArt: (capacity) => {
         const desktop = this.deviceClass === "desktop";
@@ -597,21 +579,6 @@ export class CrashEngine extends EngineGarage {
     car.spawnFacing(STORE_AT.x + id * STORE_AT.step, STORE_AT.z, 0, 0);
   }
 
-  /** The far bands' key: the desktop's distances or the phone's. */
-  private get bandClass(): keyof typeof TREE_NEAR_M {
-    return this.deviceClass === "desktop" ? "desktop" : "phone";
-  }
-
-  private treeBandFor(art: TrackArt | null): FarBand | null {
-    if (art !== this.treeBandArt) {
-      this.treeBand?.stop();
-      this.treeBandArt = art;
-      const cells = art === null ? [] : [...art.props.bandCells(PREFAB.tree), ...art.scenery.bandCells(PREFAB.tree)];
-      this.treeBand = art === null ? null : new FarBand(cells, TREE_NEAR_M[this.bandClass]);
-    }
-    return this.treeBand;
-  }
-
   /** The map the open world's crowd lives on (the open world's builder line calls it once). */
   startOpenWorld(map: OpenWorldMap): void {
     this.openWorld.startOpenWorld(map);
@@ -690,7 +657,6 @@ export class CrashEngine extends EngineGarage {
         this.queueWarm();
         const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, sceneryShare(track.id, this.cine.tier, this.deviceClass === "desktop")), reliefForTier(this.cine.tier, this.cine.marks.phone));
         this.ragdolls.setCourse(track, placed, art.props, arm);
-        this.courseArt = art;
         return art;
       },
       markBounds: (minX, minZ, maxX, maxZ) => this.cine.marks.setBounds(minX, minZ, maxX, maxZ),

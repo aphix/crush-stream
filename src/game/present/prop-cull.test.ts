@@ -130,7 +130,7 @@ describe("given a knockable cone in a 64 m draw cell", () => {
   });
 });
 
-describe("given the open world's props drawn in the open world's draw cells", () => {
+describe("given the open world's props drawn in 96 m cells", () => {
   // mutation: sed -i 's/mesh.boundingSphere!.radius += pad;/mesh.boundingSphere!.radius += 0;/' src/game/present/prop-tumble.ts
   it("when every instance's box is lifted by its roof's lift or widened by its sprite's fit, then it lies inside its mesh's bounding sphere", () => {
     stubBrowser();
@@ -142,17 +142,21 @@ describe("given the open world's props drawn in the open world's draw cells", ()
     let worst = -Infinity;
     for (const set of [art.props, art.scenery]) {
       for (const mesh of set["meshes"].flat()) {
-        const position = mesh.geometry.getAttribute("position");
+        mesh.geometry.computeBoundingBox();
+        const box = mesh.geometry.boundingBox!;
         const facade = !Array.isArray(mesh.material) && mesh.material.userData.facadeStyle !== undefined;
         const fit = mesh.geometry.getAttribute(ASSET_FIT);
         const sphere = mesh.boundingSphere!;
         for (let at = 0; at < mesh.count; at++) {
           mesh.getMatrixAt(at, matrix);
           const lift = facade ? roofLiftAt(matrix.elements[12]!, matrix.elements[14]!) : 0;
-          for (let v = 0; v < position.count; v++) {
-            const y = position.getY(v);
-            corner.set(position.getX(v) * (fit ? fit.getX(at) : 1), y + (y >= ROOF_FROM_Y ? lift : 0), position.getZ(v) * (fit ? fit.getY(at) : 1)).applyMatrix4(matrix);
-            worst = Math.max(worst, corner.distanceTo(sphere.center) - sphere.radius);
+          for (const y of [box.min.y, box.max.y]) {
+            for (const x of [box.min.x, box.max.x]) {
+              for (const z of [box.min.z, box.max.z]) {
+                corner.set(x * (fit ? fit.getX(at) : 1), y + (y >= ROOF_FROM_Y ? lift : 0), z * (fit ? fit.getY(at) : 1)).applyMatrix4(matrix);
+                worst = Math.max(worst, corner.distanceTo(sphere.center) - sphere.radius);
+              }
+            }
           }
         }
       }
