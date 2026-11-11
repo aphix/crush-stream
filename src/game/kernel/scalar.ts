@@ -10,9 +10,9 @@ export function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-/** `v` rounded to the nearest multiple of `step`: a reading published at the resolution its display can show changes only when the display does. */
-export function quantize(v: number, step: number): number {
-  return Math.round(v / step) * step;
+/** `v` rounded to the nearest 1/`perUnit` (an integer count per unit, so 1.4 at 20 per unit is exactly 1.4, not 28 x 0.05): a reading published at the resolution its display can show changes only when the display does. */
+export function quantize(v: number, perUnit: number): number {
+  return Math.round(v * perUnit) / perUnit;
 }
 
 /** Angle wrapped into [-π, π) by floor (not the atan2 form: the two differ in the last bits). */
