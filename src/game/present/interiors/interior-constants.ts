@@ -1,3 +1,4 @@
+import type { InteriorKind } from "../../world/openworld/walk-graph.ts";
 import { FACADE_OPEN_MAX } from "../facades.ts";
 
 /** Furniture, partitions, stairs and upper floors are built for an interior whose door is within this of the eye (m), and dropped once it is past `INTERIOR_FAR` for `INTERIOR_LINGER`. */
@@ -23,19 +24,25 @@ export const VESTIBULE_REACH = 3;
 const HOME_OPEN_SLOTS = 6;
 export const SHOPFRONT_ROOMS = FACADE_OPEN_MAX - HOME_OPEN_SLOTS;
 /** Vertices each packed mesh starts with room for (a furnished house is 6k to 16k, an envelope 1k to 2k, a set's lamps and glass a few hundred): it doubles when a build needs more, so its storage stops being made once the busiest street has been driven. */
-export const PACK_START_VERTICES = { shell: 8192, detail: 32768, glow: 2048, glass: 2048 } as const;
+export const PACK_START_VERTICES = { shell: 65536, detail: 32768, glow: 2048, glass: 2048 } as const;
 /** A building's windows open (and shut) over this long (s): the painted glass thins out over the room, and a room is not dropped until its windows have shut again. */
 export const OPEN_FADE_SECONDS = 0.5;
-/** A room's solids are drawn this share of the light they are given: its walls and ceiling are lit by the open sky like a street's, and a lit room read through a window would wash out to white. */
-export const INTERIOR_DIM = 0.6;
-/** A room is lit by its own lamps: its surfaces glow warm at this level whatever the hour (so no room is a black box), and this much more as the night comes on (the facade's shared glow, 0 day to 1 night). */
-export const ROOM_AMBIENT = 0.12;
-export const ROOM_NIGHT = 0.55;
-/** The colour of a room's lamp light (a warm incandescent white). */
-export const ROOM_WARM = [1, 0.86, 0.62] as const;
 /** Lamps and screens show this share of their light in the day, all of it at night. */
-export const LAMP_DAY = 0.4;
+export const LAMP_DAY = 0.9;
 /** A shut shop's lamps and screens glow this share of their light: off but for a faint standby. */
 export const CLOSED_GLOW = 0.08;
 /** How much of the light a window's glass lets through (opacity of the pane drawn). */
 export const GLASS_OPACITY = 0.22;
+/** The side (m) of a floor, ceiling or wall cell: the grid the baked light is sampled on. */
+export const ROOM_CELL = 0.75;
+/** How much of its lamps' baked light a room shows by day, and the gain on its windows' daylight. */
+export const LAMP_ROOM_DAY = 0.75;
+export const DAY_SKY_GAIN = 1.6;
+/** Lamp colour, lamp power and the ambient floor of a room, by kind: a bar is dim and amber, an office bright and cool. */
+export const ROOM_LIGHT: Record<InteriorKind, { color: readonly [number, number, number]; power: number; ambient: number }> = {
+  bar: { color: [1, 0.55, 0.3], power: 7, ambient: 0.04 },
+  coffee: { color: [1, 0.8, 0.52], power: 12, ambient: 0.06 },
+  office: { color: [0.95, 1, 1.05], power: 20, ambient: 0.08 },
+  store: { color: [1, 0.97, 0.9], power: 18, ambient: 0.08 },
+  rowhome: { color: [1, 0.82, 0.55], power: 11, ambient: 0.06 },
+};

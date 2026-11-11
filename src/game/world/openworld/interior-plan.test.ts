@@ -328,3 +328,10 @@ describe("given any interior's furniture and walls at any storey count", () => {
     }
   });
 });
+
+describe("given the plan of an office", () => {
+  // mutation: sed -i 's/^const OFFICE_LAMP_GRID = 3;/const OFFICE_LAMP_GRID = 1;/' src/game/world/openworld/interior-layouts.ts
+  it("when it is laid out, then its ground floor has eleven ceiling lamps: nine over the open floor and one in each back room", () => {
+    for (const storeys of STOREY_COUNTS) expect(planInterior({ ...firstOf("office"), storeys }).furnishings.filter((piece) => piece.kind === "lamp" && piece.level === 0).length, `office of ${storeys} storeys`).toBe(11);
+  });
+});
