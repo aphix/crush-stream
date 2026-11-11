@@ -18,7 +18,7 @@ describe("given a room 10 m deep and 6 m wide with one ceiling lamp at its middl
     expect(baked(room(LAMP), 0, 0, 0, 1).lamp).toBeGreaterThan(2 * baked(room(LAMP), 4, 0, 0, 1).lamp);
   });
 
-  // mutation: sed -i 's|  return 0.55 + 0.45 \* t \* t \* (3 - 2 \* t);|  return 1;|' src/game/present/interiors/interior-light.ts
+  // mutation: sed -i 's|  return 0.4 + 0.6 \* t \* t \* (3 - 2 \* t);|  return 1;|' src/game/present/interiors/interior-light.ts
   it("when a lampless room's floor is baked at a wall and at its middle, then the corner at the wall is under 0.7 of the middle's", () => {
     const dim = room({ ambient: 0.5 });
     expect(baked(dim, 5, 0, 0, 1).lamp).toBeLessThan(0.7 * baked(dim, 0, 0, 0, 1).lamp);

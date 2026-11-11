@@ -36,10 +36,10 @@ const LEVEL_SLACK = 0.1;
 /** The corner being baked (position, normal) and the vector from it to the fixture tested: scratch the calls below read, so a double is not boxed to cross each call. */
 const C = new Float64Array(9);
 
-/** 0.55 hard against a wall, floor or ceiling, 1 from 0.9 m away: the darkening of corners and edges. */
+/** 0.4 hard against a wall, floor or ceiling, 1 from 0.9 m away: the darkening of corners and edges. */
 function edge(distance: number): number {
   const t = Math.max(0, Math.min(1, distance / 0.9));
-  return 0.55 + 0.45 * t * t * (3 - 2 * t);
+  return 0.4 + 0.6 * t * t * (3 - 2 * t);
 }
 
 /** Whether a wall of `level` stands between the corner at p (`C`[0..2]) and the point p + l (`C`[6..8]). */
