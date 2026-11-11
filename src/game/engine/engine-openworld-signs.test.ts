@@ -70,6 +70,22 @@ describe("given the open world director in the open world", () => {
     harness.director.stop();
   });
 
+  // mutation: sed -i 's/out\[place\] = state.closedUntilTick\[place\]! > tick || /out[place] = /' src/game/ai/civilians/society-hours.ts
+  it("when no place is wrecked, then the signage is handed some place as open, and wrecking that place flips exactly its byte", () => {
+    const harness = new Harness();
+    harness.director.frame(FRAME);
+    harness.director.frame(FRAME);
+    const before = Uint8Array.from(harness.updates[harness.updates.length - 1]!.closed!);
+    const open = before.indexOf(0);
+    expect(open, "a place is open").toBeGreaterThanOrEqual(0);
+    harness.director["crowd"]!.state.closedUntilTick[open] = WRECKED_FOR_TICKS;
+    harness.director.frame(FRAME);
+    const after = harness.updates[harness.updates.length - 1]!.closed!;
+    expect(after[open], "the wrecked place").toBe(1);
+    for (let place = 0; place < before.length; place++) if (place !== open) expect(after[place], `place ${place} unchanged`).toBe(before[place]);
+    harness.director.stop();
+  });
+
   it("when the course is left, then the signage is disposed, and it is made again on re-entering", () => {
     const harness = new Harness();
     harness.director.frame(FRAME);
