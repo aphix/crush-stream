@@ -80,6 +80,8 @@ export const ROOF_LAYER = -1;
 export const ROOF_TILE_M = 2.4;
 /** Metres a roof may be raised over the collider's top, picked per building: a taller parapet drawn on the 14 m block, nothing the sim reads. */
 const ROOF_LIFTS = [0, 0, 0.7, 1.4, 2.8];
+/** The highest roof lift (block metres): a facade mesh's bounds must reach this far above its instances. */
+export const FACADE_LIFT_MAX = Math.max(...ROOF_LIFTS);
 /** The per-building hash of `FACADE_LIFT` below, its two weights on the instance's x and z, and the stretch and shift that pick a lift from it. */
 const LIFT_HASH_X = 0.0791;
 const LIFT_HASH_Z = 0.1137;

@@ -50,7 +50,7 @@ import { RagdollBodyHost } from "./ragdoll-body-host.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
-import { LAYOUT } from "../world/openworld/openworld-constants.ts";
+import { LAYOUT, OW_DRAW_CELL } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
 import { CivilianArt } from "../present/civilian-art.ts";
@@ -452,7 +452,7 @@ export class CrashEngine extends EngineGarage {
         this.smoke.shade = this.cine.tyreSmoke.shade = this.stage.smokeShade;
       },
       makeFacades: (map) => {
-        const kit = new FacadeBays(homeFrontages(map.places.filter((place) => place.doorNode >= 0)));
+        const kit = new FacadeBays(homeFrontages(map.places.filter((place) => place.doorNode >= 0)), OW_DRAW_CELL);
         this.scene.add(kit.group);
         this.queueWarm();
         return kit;

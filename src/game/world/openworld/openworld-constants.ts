@@ -1,5 +1,7 @@
 /** The id of the Open World course: its `trackId` and the key `RaceField.load` finds it by. */
 export const OPENWORLD_ID = "openworld";
+/** The width (m) of the Open World's draw cells: the street-level view and the 24 m sun box meet a fraction of the city's instances. */
+export const OW_DRAW_CELL = 96;
 export const OPENWORLD_NAME = "Open World";
 export const OPENWORLD_BLURB = "A city of rowhomes, shops and a park at golden hour, and the people walking to where they are going.";
 
