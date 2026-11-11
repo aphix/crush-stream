@@ -9,7 +9,9 @@ import { wrapAngle } from "../present/walker-math.ts";
 const noTouch: TouchPad = { x: 0, y: 0, gas: 0, brake: 0, held: 0, tapped: 0 };
 const SETTLE_S = 0.5;
 const CLIMB_S = 1.5;
-/** The fleet's far cars wait this far out on the disc, clear of car 0. */
+/** The fleet's crash loop seed that stops car 0 with its driver in and room at its door (the fleet on-foot rows' `LOOP_DRIVER_IN_SEED`). */
+const LOOP_DRIVER_IN_SEED = 4;
+/** The other cars wait this far out on the disc once the crash is over, so no wreck lies at car 0's door. */
 const PARKED_AT = 30;
 
 /** A standard-mapping pad with the left stick at (`x`, 0). */
@@ -37,10 +39,10 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     rig = await OnFootRig.boot();
     rig.engine["looping"] = false;
     rig.run(FRAME);
-    // The fleet rolls a random crash at boot (a seed from `Math.random`): car 0 may still be at 19 m/s, too fast to leave. Stand every car at rest first.
+    // A pinned scene seed rolls the same crash every run, and car 0 is run until it has stopped in it: too fast a car is refused leaving.
+    rig.stoppedInFleetLoop(LOOP_DRIVER_IN_SEED);
     rig.normalTime();
-    for (let i = 0; i < rig.cars().length; i++) rig.place(i, i === 0 ? 0 : PARKED_AT * (i % 2 === 0 ? 1 : -1), i === 0 ? 0 : -PARKED_AT + 4 * i);
-    rig.sit(0);
+    for (let i = 1; i < rig.cars().length; i++) rig.place(i, PARKED_AT * (i % 2 === 0 ? 1 : -1), -PARKED_AT + 4 * i);
     rig.run(0.2);
   });
   afterAll(() => rig.dispose());
