@@ -294,7 +294,7 @@ export abstract class EngineInput extends EngineRigs {
     const gpuMs = this.cine.gpuMs();
     timeTierWork(this.autoFx.auto);
     if (this.autoFx.auto) {
-      const matching = matchTime !== null && matchTime >= 0;
+      const matching = this.showOpenWorld || (matchTime !== null && matchTime >= 0);
       const level = this.detailGov.frame(wallDt * 1000, lost * 1000, this.workMs, this.renderMs, gpuMs, matching);
       if (level !== null) {
         console.info(`Crush Stream detail auto: ${DETAIL_LEVELS[level]!.far} m`);

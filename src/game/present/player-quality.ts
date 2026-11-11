@@ -26,7 +26,9 @@ export interface ShadowLevel {
   readonly reach: number;
 }
 /** Texels of 4.7 cm (Auto), 3.5 cm (High), 2.3 cm (Max); the reach grows with the box so its far edge still casts under a low sun. */
-export const SHADOW_LEVELS: Record<ShadowQuality, ShadowLevel> = {
+export const SHADOW_LEVELS: Record<ShadowQuality | "phone", ShadowLevel> = {
+  /** Auto on a phone: a smaller map and box, since a phone fills fewer pixels. */
+  phone: { map: 512, half: 18, reach: 28 },
   auto: { map: 1024, half: 24, reach: 34 },
   high: { map: 2048, half: 36, reach: 46 },
   max: { map: 4096, half: 48, reach: 58 },

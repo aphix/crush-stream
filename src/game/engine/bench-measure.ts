@@ -55,7 +55,7 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 /** The engine's protected parts the bench times, handed over by `EngineInput.benchParts`. */
 export interface BenchParts {
   renderer: THREE.WebGLRenderer;
-  cine: Pick<Cinematics, "render" | "tier">;
+  cine: Pick<Cinematics, "render" | "tier" | "marks">;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   sun: THREE.DirectionalLight;
@@ -520,7 +520,7 @@ export function settingsOf(parts: BenchParts, hud: Record<string, unknown>, top:
     pixelRatio: renderer.getPixelRatio(),
     deviceRatio: Math.round(devicePixelRatio * 1000) / 1000,
     canvas: `${size.width}x${size.height}`,
-    antialias: renderer.getContext().getContextAttributes()?.antialias === true || sceneSamples(parts.cine.tier, devicePixelRatio) > 0,
+    antialias: renderer.getContext().getContextAttributes()?.antialias === true || sceneSamples(parts.cine.tier, devicePixelRatio, parts.cine.marks.phone) > 0,
     toneMapping: renderer.toneMapping,
     night: hud[SETTING_KEY.night] === true,
     wet: hud[SETTING_KEY.wet] === true,
