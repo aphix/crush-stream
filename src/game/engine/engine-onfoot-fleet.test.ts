@@ -89,6 +89,8 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
       expect(widestOverGettingOut(), "the door's widest angle (rad)").toBeGreaterThan(0.5);
     } finally {
       host.openWorld = asked;
+      rig.engine["onFoot"].reset();
+      rig.cars()[0]!.setDoorOpen(DRIVER_SIDE, 0);
     }
   });
 
@@ -112,6 +114,8 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
       return { opened, left: shutByReset ? first : left, later: Math.abs(car.doorAngle(DRIVER_SIDE)) };
     } finally {
       host.openWorld = asked;
+      rig.engine["onFoot"].reset();
+      car.setDoorOpen(DRIVER_SIDE, 0);
     }
   }
 

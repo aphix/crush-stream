@@ -393,8 +393,6 @@ export class OnFootDirector {
       this.doorCar = -1;
       return;
     }
-    // A door the crash or a reset moved is eased from where it stands, not from where this swing last left it.
-    if (this.doorTarget === 0) this.door = Math.min(this.door, Math.abs(car.doorAngle(DRIVER_SIDE)));
     const phase = this.flow.phase;
     if (this.doorTarget > 0 && phase !== "exiting" && phase !== "entering") {
       if (phase !== "onFoot") this.doorTarget = 0;
@@ -403,6 +401,8 @@ export class OnFootDirector {
         if (hypot2(_spot.x - _torso.x, _spot.z - _torso.z) > DOOR_CLOSE_DISTANCE) this.doorTarget = 0;
       }
     }
+    // A door the crash or a reset moved is eased from where it stands, not from where this swing last left it; read after the trip's end has sent it shut.
+    if (this.doorTarget === 0) this.door = Math.min(this.door, Math.abs(car.doorAngle(DRIVER_SIDE)));
     const gap = this.doorTarget - this.door;
     if (gap !== 0) {
       this.door += Math.max(-DOOR_RATE * wallDt, Math.min(DOOR_RATE * wallDt, gap));
