@@ -342,6 +342,21 @@ describe("given the street body", () => {
     expect(heights.size, "distinct heights of collar-white at a suited man's cuffs").toBeGreaterThanOrEqual(6);
   });
 
+  // mutation: sed -i 's/), nearOnly: true };/) };/' src/game/present/dummy-uniform.ts
+  it("when a suit's hip pocket flaps are looked for on the street body and on the near body, then the near body has their rings (y 0.965 and 0.93) and the street body has none: a coarse hexagon of them stands out of the jacket as two white squares at the waist", () => {
+    const suitedRingsAt = (geometry: THREE.BufferGeometry, y: number): number => {
+      const position = geometry.getAttribute("position");
+      const kinds = geometry.getAttribute(KINDS_ATTRIBUTE);
+      let found = 0;
+      for (const vertex of geometry.index!.array) if ((kinds.getY(vertex) & SUITED) !== 0 && Math.round(position.getY(vertex) * 1e4) === Math.round(y * 1e4)) found++;
+      return found;
+    };
+    for (const y of [0.965, 0.93]) {
+      expect(suitedRingsAt(dummyGeometry(), y), `near body: suited vertices of a flap ring at y ${y}`).toBeGreaterThan(0);
+      expect(suitedRingsAt(streetGeometry(), y), `street body: suited vertices of a flap ring at y ${y}`).toBe(0);
+    }
+  });
+
   // mutation: sed -i 's/setAttribute(name, attribute);/setAttribute(name, attribute.clone());/' src/game/present/dummy-skin.ts
   it("when it is built, then its attributes are the full body's own objects", () => {
     const names = Object.keys(dummyGeometry().attributes);

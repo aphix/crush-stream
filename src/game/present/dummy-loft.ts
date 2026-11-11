@@ -117,7 +117,7 @@ export function loft(shell: Shell, mesh: Lofted): void {
     }
     // A coarse band runs from the last kept ring to the next; a role change keeps both its rings, so a span between two is one role.
     if (keep[r]) upper = top;
-    if (!keep[r + 1]) continue;
+    if (!keep[r + 1] || shell.nearOnly === true) continue;
     for (let k = 0; k < sides; k += step) {
       const [a, b, c, d] = [upper[k]!, upper[(k + step) % sides]!, rings[r + 1]![(k + step) % sides]!, rings[r + 1]![k]!];
       mesh.coarse.push(a, b, d, b, c, d);
