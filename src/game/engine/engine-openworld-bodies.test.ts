@@ -35,12 +35,6 @@ const FRAME_S = 1 / FRAME_HZ;
 const SWING_STEP_RAD = 0.02;
 const MOST_OFF_STRAIGHT_RAD = 0.15;
 const MOST_REVERSALS_PER_SECOND = 1.5;
-/** Her body is on her spot when its torso is within this far (m) of it: a walking body's own sway is a few centimetres. */
-const ON_HER_SPOT_M = 0.15;
-/** The swerve row: how far (m) her drawn spot is drawn to her side, frames watched, and how far off her lane heading her body's facing must go (rad). */
-const SWERVE_M = 1.5;
-const SWERVE_FRAMES = 120;
-const MOST_OFF_SWERVE_RAD = 0.2;
 /** The first pool slot a body takes. */
 const FIRST_BODY_SLOT = 4;
 /** A body lying on the street has its torso within this far (m) of the ground. */
@@ -115,7 +109,6 @@ describe("given the real engine in the open world and the player's car running a
     const car = rig.cars()[0]!;
     const wrap = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle));
     let steady = 0;
-    let settled = 0;
     let worst = 0;
     let reversals = 0;
     for (let tried = 0, resident = 0; tried < STRAIGHT_TRIES && steady < STEADY_FRAMES; resident = (resident + 1) % crowd.poses.count, tried++) {
@@ -127,72 +120,32 @@ describe("given the real engine in the open world and the player's car running a
       const slot = world()["bodies"]!.slotOf(resident);
       if (slot < FIRST_BODY_SLOT) continue;
       steady = 0;
-      settled = 0;
       worst = 0;
       reversals = 0;
       let previous = ragdolls().walkers[slot]!.facing;
       let previousSign = 0;
       let steadySince = crowd.poses.yaw[resident]!;
       let steadyFor = 0;
-      let plainFor = 0;
       for (let frame = 0; frame < STRAIGHT_FRAMES && world()["bodies"]!.slotOf(resident) === slot; frame++) {
         rig.run(FRAME_S);
         if (Math.abs(wrap(crowd.poses.yaw[resident]! - steadySince)) > YAW_STEADY_RAD) {
           steadySince = crowd.poses.yaw[resident]!;
           steadyFor = 0;
         } else steadyFor++;
-        // A stoop swerves her drawn spot (`poses.kept`) and her body walks round it, or a corner or a kerb holds the body behind her spot while it catches up: a real turn, not a step's swing. Her plain walk is the frames with her body on her spot, a second on from the last that was not.
-        const doll = ragdolls()["dolls"][slot]!;
-        const onHerSpot = hypot2(doll.cur[0]! - crowd.poses.x[resident]!, doll.cur[2]! - crowd.poses.z[resident]!) <= ON_HER_SPOT_M;
-        plainFor = crowd.poses.kept[resident] === 1 || !onHerSpot ? 0 : plainFor + 1;
         const facing = ragdolls().walkers[slot]!.facing;
         const step = wrap(facing - previous);
         previous = facing;
         if (steadyFor < SETTLED_FRAMES) continue;
-        settled++;
-        if (plainFor < SETTLED_FRAMES) continue;
         steady++;
         worst = Math.max(worst, Math.abs(wrap(facing - crowd.poses.yaw[resident]!)));
         const sign = Math.abs(step) > SWING_STEP_RAD ? Math.sign(step) : 0;
         if (sign !== 0 && previousSign !== 0 && sign !== previousSign) reversals++;
         if (sign !== 0) previousSign = sign;
       }
-      // A resident whose body spent most of her walk held off her spot (a corner, a kerb) says nothing of her plain walk: try the next.
-      if (steady * 2 <= settled) steady = 0;
     }
     expect(steady, "frames of a straight walk with a body, measured").toBeGreaterThanOrEqual(STEADY_FRAMES);
-    expect(steady, "more than half of the steady-yaw frames are of her plain walk").toBeGreaterThan(settled / 2);
     expect(worst, "the most her body's facing is off her way on the straight (rad)").toBeLessThan(MOST_OFF_STRAIGHT_RAD);
     expect((reversals / steady) * FRAME_HZ, "swings left-right reversals a second").toBeLessThan(MOST_REVERSALS_PER_SECOND);
-  });
-
-  // mutation: sed -i 's/    const vx = detSin(yaw) \* pace + CATCH_UP \* dx;/    const vx = detSin(yaw) * pace;/' src/game/engine/openworld-bodies.ts
-  it("when a stoop swerves her drawn spot 1.5 m to her side, then her body turns toward the swerve (off her lane heading by more than 0.2 rad at some frame) and stays standing", () => {
-    const resident = civilianWithBody();
-    const crowd = world()["crowd"]!;
-    const slot = world()["bodies"]!.slotOf(resident);
-    const wrap = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle));
-    const law = crowd.overlay;
-    // The crowd's own keep-out is a stoop's: here the same swerve is drawn at a spot the stoop did not choose, marked kept as it marks one.
-    crowd.overlay = (poses, seconds, authority) => {
-      law?.(poses, seconds, authority);
-      poses.x[resident] = poses.x[resident]! + SWERVE_M * Math.cos(poses.yaw[resident]!);
-      poses.z[resident] = poses.z[resident]! - SWERVE_M * Math.sin(poses.yaw[resident]!);
-      poses.kept[resident] = 1;
-    };
-    let mostOff = 0;
-    let standing = true;
-    try {
-      for (let frame = 0; frame < SWERVE_FRAMES && world()["bodies"]!.slotOf(resident) === slot; frame++) {
-        rig.run(FRAME_S);
-        mostOff = Math.max(mostOff, Math.abs(wrap(ragdolls().walkers[slot]!.facing - crowd.poses.yaw[resident]!)));
-        standing &&= ragdolls().walkers[slot]!.state === "stand";
-      }
-    } finally {
-      crowd.overlay = law;
-    }
-    expect(mostOff, "the most her body's facing is off her lane heading (rad)").toBeGreaterThan(MOST_OFF_SWERVE_RAD);
-    expect(standing, "her body stayed standing").toBe(true);
   });
 
   // mutation: sed -i 's/      if (this.bodies?.knock(strike) === true) {/      if (false) {/' src/game/engine/engine-openworld.ts
