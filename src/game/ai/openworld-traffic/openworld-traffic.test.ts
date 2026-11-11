@@ -725,6 +725,8 @@ describe("given kerb cars standing near the local player", () => {
     for (let at = 0; at < spots.count; at++) if (spots.stays[at] !== 1 && (spot < 0 || hypot2(spots.x[at]!, spots.z[at]!) > hypot2(spots.x[spot]!, spots.z[spot]!))) spot = at;
     expect(hypot2(spots.x[spot]!, spots.z[spot]!), "control: the space is past KERB_KEEP of the player, where a car nobody holds is put away").toBeGreaterThan(KERB_KEEP);
     expect(traffic.carForClip(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "a car stands for her").toBe(true);
+    // The pool stands a put-away car at another kerb space in the same pass, so her car's id is no mark of it: what stands at her space is.
+    const standsAtHerSpace = (): boolean => field.cars.some((car, id) => id > 0 && !car.stored && hypot2(car.group.position.x - spots.x[spot]!, car.group.position.z - spots.z[spot]!) < KERB_JITTER_SIDE + 0.1);
     let hers = -1;
     for (let id = 1; id < field.cars.length; id++) if (!field.cars[id]!.stored && hypot2(field.cars[id]!.group.position.x - spots.x[spot]!, field.cars[id]!.group.position.z - spots.z[spot]!) < KERB_JITTER_SIDE + 0.1) hers = id;
     expect(hers, "a pool car stands at her space").toBeGreaterThan(0);
@@ -734,9 +736,9 @@ describe("given kerb cars standing near the local player", () => {
     expect(traffic.carForClip(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "asked again: it is there").toBe(true);
     expect(traffic.carForClip(RESIDENT + 1, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "the space is hers: refused to another").toBe(false);
     runSeconds(field, traffic, clock, 1);
-    expect(field.cars[hers]!.stored, "kept through the clip").toBe(false);
+    expect(standsAtHerSpace(), "kept through the clip").toBe(true);
     runSeconds(field, traffic, clock, 5);
-    expect(field.cars[hers]!.stored, "put away after the hold").toBe(true);
+    expect(standsAtHerSpace(), "put away after the hold").toBe(false);
   });
 });
 
