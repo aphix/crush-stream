@@ -486,6 +486,18 @@ export class OpenWorldDirector {
     const now = Math.round(gameHourAtMinute(this.dayMinute, crowd.state.startHour) * MINUTES_PER_GAME_HOUR);
     const hour = Math.floor(now / MINUTES_PER_GAME_HOUR);
     const target = (direction > 0 ? hour + 1 : now % MINUTES_PER_GAME_HOUR === 0 ? hour - 1 : hour) * MINUTES_PER_GAME_HOUR;
+    return this.skipToMinute(crowd, now, target);
+  }
+
+  /** Stills: skips to the next time the game clock reads `hour` (0 minutes ahead when it already does); false in a room or before the first crowd frame. */
+  setHour(hour: number): boolean {
+    const crowd = this.crowd;
+    if (crowd === null || this.dayMinute < 0 || this.ports.inRoom()) return false;
+    const now = Math.round(gameHourAtMinute(this.dayMinute, crowd.state.startHour) * MINUTES_PER_GAME_HOUR);
+    return this.skipToMinute(crowd, now, Math.round(hour * MINUTES_PER_GAME_HOUR) % MINUTES_PER_GAME_DAY);
+  }
+
+  private skipToMinute(crowd: CivilianCrowd, now: number, target: number): boolean {
     const skipTo = this.seconds + secondsOfGameMinutes((target - now + MINUTES_PER_GAME_DAY) % MINUTES_PER_GAME_DAY);
     if (!crowd.skipThrough(skipTo)) return false;
     this.seconds = skipTo;
