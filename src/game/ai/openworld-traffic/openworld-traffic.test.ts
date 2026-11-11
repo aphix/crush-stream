@@ -8,7 +8,7 @@ import { fleetStyle } from "../../scenes/fleet.ts";
 import { KERB_CANDIDATES } from "../../world/openworld/openworld-parking.ts";
 import { AMBULANCE } from "./ambulance.ts";
 import { PERSON_GAP } from "./traffic-constants.ts";
-import { AMBULANCE_COLOUR, AMBULANCE_DEPOT_METRES, AMBULANCE_LOAD_SECONDS, AMBULANCE_QUEUE, EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_REACH } from "./traffic-constants.ts";
+import { AMBULANCE_COLOUR, AMBULANCE_DEPOT_METRES, AMBULANCE_LOAD_SECONDS, AMBULANCE_QUEUE, EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_KEEP, KERB_REACH } from "./traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { kerbSpotsNear } from "../../world/openworld/openworld-parking.ts";
 import { residentBody, residentColour, type ResidentCarPose } from "./traffic-look.ts";
@@ -713,6 +713,30 @@ describe("given kerb cars standing near the local player", () => {
     runSeconds(field, traffic, clock, 2);
     expect(traffic.counts().kerb).toBe(0);
     for (let id = 1; id < field.cars.length; id++) expect(field.cars[id]!.stored, `car ${id} put away`).toBe(true);
+  });
+
+  // mutation: sed -i 's/^const CLIP_HOLD_SECONDS = 4;/const CLIP_HOLD_SECONDS = 0;/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when a resident's clip starts at an empty space no eye sees, then a kerb car stands there in her colour as hers, her door opens, the space is refused to another resident, and the car is kept through the clip though no player is near, then put away", () => {
+    const { field, traffic, clock } = kerbWorld();
+    runSeconds(field, traffic, clock, 4);
+    const spots = traffic.parkingSpots;
+    const RESIDENT = 7;
+    let spot = -1;
+    for (let at = 0; at < spots.count; at++) if (spots.stays[at] !== 1 && (spot < 0 || hypot2(spots.x[at]!, spots.z[at]!) > hypot2(spots.x[spot]!, spots.z[spot]!))) spot = at;
+    expect(hypot2(spots.x[spot]!, spots.z[spot]!), "control: the space is past KERB_KEEP of the player, where a car nobody holds is put away").toBeGreaterThan(KERB_KEEP);
+    expect(traffic.carForClip(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "a car stands for her").toBe(true);
+    let hers = -1;
+    for (let id = 1; id < field.cars.length; id++) if (!field.cars[id]!.stored && hypot2(field.cars[id]!.group.position.x - spots.x[spot]!, field.cars[id]!.group.position.z - spots.z[spot]!) < KERB_JITTER_SIDE + 0.1) hers = id;
+    expect(hers, "a pool car stands at her space").toBeGreaterThan(0);
+    expect(field.colours[hers], "in her colour").toBe(residentColour(RESIDENT));
+    expect(traffic.setCarDoor(RESIDENT, 1), "it is hers: her door is set").toBe(true);
+    expect(field.doors[hers], "her door").toBe(1);
+    expect(traffic.carForClip(RESIDENT, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "asked again: it is there").toBe(true);
+    expect(traffic.carForClip(RESIDENT + 1, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!, 0, 0), "the space is hers: refused to another").toBe(false);
+    runSeconds(field, traffic, clock, 1);
+    expect(field.cars[hers]!.stored, "kept through the clip").toBe(false);
+    runSeconds(field, traffic, clock, 5);
+    expect(field.cars[hers]!.stored, "put away after the hold").toBe(true);
   });
 });
 

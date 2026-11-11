@@ -21,7 +21,7 @@ import { lookAtOf, LookRay, type LookText } from "../ai/civilians/civilian-look.
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { fillCommuterFeed } from "../ai/civilians/society-commuters.ts";
-import { makeDriverDoors, groundUnderCars } from "./engine-openworld-doors.ts";
+import { carStandsNear, makeDriverDoors, groundUnderCars } from "./engine-openworld-doors.ts";
 import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildParkingSpots, spotAt, type ParkingSpots } from "../world/openworld/openworld-parking.ts";
@@ -575,7 +575,7 @@ export class OpenWorldDirector {
     if (host === undefined) return;
     this.lights = host.makeLights();
     this.kerb = buildParkingSpots(buildRoadNetwork(openWorldGeometry(LAYOUT)));
-    this.crowd!.driverDoors = makeDriverDoors(map.places, this.crowd!.state, this.kerb, groundUnderCars);
+    this.crowd!.driverDoors = makeDriverDoors(map.places, this.crowd!.state, this.kerb, groundUnderCars, (owner, x, z, yaw) => (this.traffic !== null ? this.traffic.carForClip(owner, x, z, yaw, this.ray.eyeX, this.ray.eyeZ) : carStandsNear(this.ports.cars(), x, z)));
     if (client) return;
     const phone = this.ports.tier() === POPULATION_TIER.phone;
     const capacity = this.crowd!.state.capacity;
