@@ -249,9 +249,10 @@ describe("given a civilian a car runs down while her body stands for her", () =>
     body.standing = true;
     run(2);
     poses.z[0] = poses.z[0]! + 4;
-    run(2);
+    run(Math.round(0.5 / STEP));
     expect(host.stopped, "let go").toContain(slot);
-    expect(bodies.held[0], "drawn at her spot again").toBe(0);
+    expect(host.started.length, "the old body went and a new one was stood for her").toBe(2);
+    expect(host.started[1]!.z, "the new one stands at her spot, not 4 m behind it").toBe(poses.z[0]);
   });
 });
 
