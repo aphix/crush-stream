@@ -214,7 +214,6 @@ Per device (desktop or phone, by `deviceClass`):
 |Shadow map / box half / reach at Auto|unchanged (1024 / 24 m / 34 m)|512 / 18 m / 28 m|
 |Residents / dummy slots / detail slots|150 / 64 / 12|60 / 20 / 4|
 |Scenery share|1|0.6|
-|Tree near band / kit detail band|70 m / 90 m|45 m / 60 m|
 
 **Night look.** A lamp's ground pool (`lampPool`, `engine-world.ts`) is 1.4 times brighter (capped at 1) on the `off` and `minimal` FX tiers, which draw no bloom, so the pool is the lamp's only spill. Each shop and eatery
 (`PLACE_KIND.shop`, `food`: 8 places) also throws a flat 3 m deep light quad (`shop-spill.ts`, `ShopSpill`) 1.2 m out from its front face on the lamp pool's material, so it fades in at dusk and is gone by day;
