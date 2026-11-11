@@ -665,6 +665,42 @@ describe("given the open world's stage light following the crowd's clock", () =>
     }
   });
 
+  // mutation: sed -i 's/Math.round(hour \* MINUTES_PER_GAME_HOUR) % MINUTES_PER_GAME_DAY/Math.round(hour * MINUTES_PER_GAME_HOUR + 60) % MINUTES_PER_GAME_DAY/' src/game/engine/engine-openworld.ts
+  // mutation: sed -i 's/^    this.seconds = skipTo;$//' src/game/engine/engine-openworld.ts
+  it("when the hour is set, then the light reads that hour, the crowd's clock is the matching minutes on, and setting it again moves nothing", () => {
+    const harness = hostWithMap();
+    for (let at = 0; at < framesFor(7.4); at++) harness.frame();
+    const before = lastMinutes(harness);
+    const startSeconds = harness.director.crowdTime();
+    expect(harness.director.setHour(18.5), "taken").toBe(true);
+    expect(lastMinutes(harness), "the light's last hour").toBe(18.5 * MINUTES_PER_HOUR);
+    const ahead = modDay(18.5 * MINUTES_PER_HOUR - before);
+    expect(harness.director.crowdTime() - startSeconds, "the crowd's clock is those game minutes on").toBe(ahead);
+    const calls = harness.dayHours.length;
+    const seconds = harness.director.crowdTime();
+    expect(harness.director.setHour(18.5), "taken again").toBe(true);
+    expect(harness.director.crowdTime(), "the clock stands").toBe(seconds);
+    expect(lastMinutes(harness), "the light stands").toBe(18.5 * MINUTES_PER_HOUR);
+    expect(harness.dayHours.length - calls, "one stage call at most").toBeLessThanOrEqual(1);
+  });
+
+  // mutation: sed -i '/setHour(hour: number)/,/^  }/s/ || this.ports.inRoom()//' src/game/engine/engine-openworld.ts
+  it("when the hour is set in a room, or before the first crowd frame, then it is refused and nothing moves", () => {
+    const early = hostWithMap();
+    expect(early.director.setHour(18.5), "no crowd yet").toBe(false);
+    early.director.frame(FRAME);
+    expect(early.director.setHour(18.5), "a crowd that has not stepped").toBe(false);
+    expect(early.director.crowdTime(), "its clock stands").toBe(0);
+    const room = hostWithMap();
+    for (let at = 0; at < framesFor(2.2); at++) room.frame();
+    room.room = true;
+    const calls = room.dayHours.length;
+    const seconds = room.director.crowdTime();
+    expect(room.director.setHour(18.5), "in a room").toBe(false);
+    expect(room.dayHours.length, "no stage call").toBe(calls);
+    expect(room.director.crowdTime(), "the clock").toBe(seconds);
+  });
+
   // mutation: sed -i 's/    this.homeLights.step(this.awake, settles);//' src/game/engine/engine-openworld.ts
   it("when the first game minute is lit, then each home's texel holds the share of the people awake in it, taken from the crowd's own state at that tick, and the shaders' grid is the map's", () => {
     const harness = hostWithMap();
