@@ -2,7 +2,7 @@ import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 
 /** One body of the fake world: where it stands, its steering, whether it is out, on its feet and held up. */
-type FakeBody = { slot: number; x: number; z: number; heading: number; speed: number; out: boolean; standing: boolean; held: boolean; look: DriverLook };
+type FakeBody = { slot: number; x: number; z: number; heading: number; speed: number; out: boolean; standing: boolean; steady: boolean; held: boolean; look: DriverLook };
 
 /** The dummies' world as the bodies see it, with no physics: a walker moves at the pace it is steered at, and a test sets what it needs of one (knocked down, lagging). */
 export class FakeBodyHost {
@@ -30,7 +30,7 @@ export class FakeBodyHost {
 
   start(x: number, y: number, z: number, yaw: number, look: DriverLook, slot: number, vx: number, vz: number): number {
     this.started.push({ slot, x, y, z, yaw, vx, vz });
-    this.bodies.set(slot, { slot, x, z, heading: yaw, speed: 0, out: true, standing: true, held: true, look: { ...look } });
+    this.bodies.set(slot, { slot, x, z, heading: yaw, speed: 0, out: true, standing: true, steady: true, held: true, look: { ...look } });
     return slot;
   }
 
@@ -56,6 +56,11 @@ export class FakeBodyHost {
 
   standing(slot: number): boolean {
     return this.bodies.get(slot)!.standing;
+  }
+
+  steady(slot: number): boolean {
+    const body = this.bodies.get(slot)!;
+    return body.standing && body.steady;
   }
 
   holds(slot: number): boolean {
