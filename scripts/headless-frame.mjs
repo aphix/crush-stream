@@ -356,7 +356,11 @@ for (const name of values.smash?.split(",") ?? []) {
   for (const car of engine["live"]()) if (!car.smashGlass(name) && !car["glassPanes"].some((g) => g.name === name)) throw new Error(`--smash ${name}: no such pane on the ${car.style.id}`);
 }
 // `--free`: any scene's camera detaches into the free eye, so a 6-number `--camera` puts it anywhere (a course seen from overhead).
-if (values.free) engine.view.enterFree();
+// The engine ends the free view while a seat drives (the open world's player does), so the seat steps out as one Esc does.
+if (values.free) {
+  if (engine.seat.mode === "drive") engine.seat.esc();
+  engine.view.enterFree();
+}
 // `--no-fog`: the scene's fog off for the shot, so a whole course seen from hundreds of metres up is not drawn in its haze.
 if (values["no-fog"]) engine.scene.fog = null;
 if (camera !== undefined) {
