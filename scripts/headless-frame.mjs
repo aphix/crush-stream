@@ -42,6 +42,7 @@
  * `--race-start` starts the race (a `scene=race` hash) before `--at`'s seconds run, as the race menu's Start does: the field on its course, racing.
  * `--teleport x,z,yaw` stands the hash's race car (car 0) at that spot, facing that yaw (rad, 0 = +z), before `--view` frames it: a shot of any part of any course (`scene=race&track=<id>`).
  * `--bench '?bench=city'` enters the bench page's scene as the card sets it up (`enterBenchScene`: its course, the bench race on its seed) instead of the derby, `--at` sim seconds before the drawn frames; `--parts n` then runs n frames of the bench's own frame loop and adds the JSON's `parts`: the cpu, sim and draw ms a frame and, as the card's `frameParts` and `frameCounts`, each named part's ms (mean, p95) and each counter's mean (docs/PERF_BENCH.md "Where the frame's time goes").
+ * `--hour <0 up to 24>` (open world, solo) skips the city's clock to that game hour after `--at`, people and light together, then settles a framing's seconds; `--phone` answers no fine pointer, so the engine takes the phone device class. Both are in the JSON.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -117,6 +118,8 @@ const { values } = parseArgs({
     uploads: { type: "boolean" },
     bench: { type: "string" },
     parts: { type: "string" },
+    hour: { type: "string" },
+    phone: { type: "boolean" },
   },
 });
 const root = resolve(values.root);
@@ -129,6 +132,7 @@ if (!Number.isInteger(frames) || frames < 1) throw new Error(`--frames ${values.
 if (size === null) throw new Error(`--size ${values.size}: width x height, e.g. 1280x800`);
 if (!(atS >= 0)) throw new Error(`--at ${values.at}: sim seconds, 0 or more`);
 if (camera !== undefined && ((camera.length !== 3 && camera.length !== 6) || !camera.every(Number.isFinite))) throw new Error(`--camera ${values.camera}: radius,pitch,angle[,x,y,z], e.g. 2.4,0.12,2.1`);
+if (values.hour !== undefined && !(Number(values.hour) >= 0 && Number(values.hour) < 24)) throw new Error(`--hour ${values.hour}: game hours, 0 up to 24`);
 const seatView = values.view === undefined ? undefined : SEAT_VIEWS[values.view];
 const landingView = LANDING_VIEWS.includes(values.view) ? JSON.parse(readFileSync(resolve(values["view-camera"] ?? ""), "utf8")) : null;
 if (values.view !== undefined && seatView === undefined && landingView === null) throw new Error(`--view ${values.view}: ${Object.keys(SEAT_VIEWS).join(", ")}, ${LANDING_VIEWS.join(", ")}`);
@@ -208,7 +212,7 @@ Object.assign(globalThis, {
   innerWidth: CSS_W,
   innerHeight: CSS_H,
   // A desktop browser's pointer, so the engine takes the device class a desktop does.
-  matchMedia: (query) => ({ matches: query === "(pointer: fine)", addEventListener() {} }),
+  matchMedia: (query) => ({ matches: !values.phone && query === "(pointer: fine)", addEventListener() {} }),
   // three's file loader builds a `Request` from the page-relative URL, and reports its download with `ProgressEvent`s.
   Request: class extends Request {
     constructor(input, init) {
@@ -310,6 +314,11 @@ if (values.bench !== undefined) {
 }
 engine.advance(atS, { frameDt: FRAME });
 await settle();
+if (values.hour !== undefined) {
+  if (!engine["openWorld"].setHour(Number(values.hour))) throw new Error("--hour: needs the open world (--hash scene=openworld), solo, past its first frame");
+  engine.advance(FRAMING_S, { frameDt: FRAME });
+  await settle();
+}
 for (const name of values.tear?.split(",") ?? []) {
   for (const car of engine["live"]()) {
     const part = car["parts"].find((p) => p.name === name);
@@ -476,7 +485,7 @@ const wheelsPx = shooting?.camera ? wheelMarks(shooting, w, h) : null;
 const boostZoom = values.boost === undefined ? null : { seat: engine.seat.mode, strength: engine.cine.post.radial, boostK: engine.followedCar()?.drive.boostK ?? null, kph: Math.round((engine.followedCar()?.speed ?? 0) * 3.6) };
 engine.dispose();
 const uploaded = values.uploads ? { uploadKBPerFrame: Math.round((uploads.bytes / frames / 1024) * 100) / 100, uploadCallsPerFrame: Math.round((uploads.calls / frames) * 10) / 10, dummiesOut } : {};
-const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, frameMs, ...counts, ...uploaded, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
+const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, hour: values.hour === undefined ? null : Number(values.hour), phone: values.phone === true, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, frameMs, ...counts, ...uploaded, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
 process.stdout.write(`${JSON.stringify({ ...result, boostZoom, parts: partsCard })}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 
