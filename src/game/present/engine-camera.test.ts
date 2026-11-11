@@ -889,12 +889,13 @@ describe("given the orbit turned by the right stick", () => {
   };
 
   // mutation: sed -i 's/gain: 1.6 }/gain: 1 }/' src/game/present/engine-camera.ts
-  it("when the stick is held full for 1 s, then the view turns more than 2.2 rad", () => {
+  it("when the stick is held full for 1 s, then the view turns more than 3 rad (a flat 2.2 rad/s turns 2.2)", () => {
     const { view, pad } = held();
     let turned = 0;
     for (let f = 0; f < Math.round(1 / DT); f++) turned += frame(view, pad, 1);
-    expect(turned, `${turned.toFixed(3)} rad in 1 s`).toBeGreaterThan(PAD_YAW);
-    expect(turned, "and not past the ramp's top rate").toBeLessThan(3.5);
+    // The ramp's own sum over the 60 frames is 3.135 rad (2.2 rad/s rising by smoothstep to 3.52 over 0.6 s); no ramp turns 2.2.
+    expect(turned, `${turned.toFixed(3)} rad in 1 s`).toBeGreaterThan(3.0);
+    expect(turned, "and not past the ramp's top rate").toBeLessThan(3.52);
   });
 
   // mutation: sed -i 's/this.padHold + wallDt) : 0;/this.padHold + wallDt) : this.padHold;/' src/game/present/engine-camera.ts
