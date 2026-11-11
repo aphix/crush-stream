@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { makeRenderer } from "../engine/engine-renderer.ts";
-import { easeFade, FX_TIERS, PostFX } from "./engine-post.ts";
+import { easeFade, FX_TIERS, PostFX, sceneSamples } from "./engine-post.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { BOOST_ZOOM_CAP, BOOST_ZOOM_FULL_RADIUS } from "./boost-zoom.ts";
 
@@ -192,5 +192,14 @@ describe("given the post chain on a headless renderer, on a device of pixel rati
     });
     (globalThis as { devicePixelRatio: number }).devicePixelRatio = 1;
     expect(read.join("; ")).toBe(EDGES);
+  });
+});
+
+describe("given the scene's MSAA samples per device class", () => {
+  // mutation: sed -i 's/  if (phone) return 0;/  if (false) return 0;/' src/game/present/engine-post.ts
+  it("when the device is a phone, then every tier and ratio gets 0 samples; a desktop keeps 4 at high", () => {
+    const phone = FX_TIERS.flatMap((tier) => [1, 2].map((ratio) => sceneSamples(tier, ratio, true)));
+    expect(phone.every((s) => s === 0), `phone samples ${phone.join(",")}`).toBe(true);
+    expect(sceneSamples("high", 2, false), "desktop high").toBe(4);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { PlayerQuality } from "./player-quality.ts";
+import { PlayerQuality, SHADOW_LEVELS } from "./player-quality.ts";
 
 type Host = ConstructorParameters<typeof PlayerQuality>[0];
 
@@ -126,5 +126,12 @@ describe("given a stage whose shadows the knob sets", () => {
     quality.setShadow("max");
     quality.setShadow("auto");
     expect(sent.maps.join(",")).toBe("2048,4096,1024");
+  });
+});
+
+describe("given the shadow levels", () => {
+  // mutation: sed -i 's/phone: { map: 512, half: 18, reach: 28 }/phone: { map: 1024, half: 24, reach: 34 }/' src/game/present/player-quality.ts
+  it("when the phone level is read, then it is a 512 map, an 18 m box and a 28 m reach, under Auto's", () => {
+    expect(SHADOW_LEVELS.phone).toEqual({ map: 512, half: 18, reach: 28 });
   });
 });

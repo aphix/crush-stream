@@ -7,6 +7,7 @@ import { LAMP_POOL } from "./constants.ts";
 import { SUN_HOP_METRES } from "./day-cycle.ts";
 import { makeLamp, sunOffset, WorldStage } from "./engine-world.ts";
 import { FACADE_GLOW } from "./facades.ts";
+import { SHADOW_LEVELS } from "./player-quality.ts";
 import type { SkyDetail } from "./sky-dome.ts";
 
 const HOURS_PER_DAY = 24;
@@ -233,5 +234,21 @@ describe("given the sky in the cycle", () => {
     const fragment = (stage.sky.mesh.material as THREE.ShaderMaterial).fragmentShader;
     expect(fragment, "the stars' guard").toContain("if (uStars > 0.0) {");
     expect(fragment, "the stars' strength").toContain("* uStars;");
+  });
+});
+
+describe("given the sun's shadow fit on a phone", () => {
+  const edge = (stage: WorldStage): number => stage.sun.shadow.mapSize.x;
+
+  // mutation: sed -i 's/this.phone \&\& this.shadowLevel === SHADOW_LEVELS.auto/this.phone \&\& false/' src/game/present/engine-world.ts
+  it("when the Shadows knob is Auto, then a phone's map is 512 and a desktop's 1024; when it is High, then a phone's is 2048", () => {
+    const desktop = newStage().stage;
+    const phone = newStage().stage;
+    phone.phone = true;
+    phone.setShadowLevel(SHADOW_LEVELS.auto);
+    desktop.setShadowLevel(SHADOW_LEVELS.auto);
+    expect(`${edge(desktop)} ${edge(phone)}`, "Auto").toBe("1024 512");
+    phone.setShadowLevel(SHADOW_LEVELS.high);
+    expect(edge(phone), "High").toBe(2048);
   });
 });

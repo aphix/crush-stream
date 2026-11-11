@@ -204,6 +204,17 @@ Measured by a node probe on the fixture neighbourhood (45 places, 8 cars parked 
 The crowd's step allocates nothing between ticks (`civilian-crowd-alloc.test.ts`; its HOT rows are in `scripts/check-boundaries.mjs`).
 A tick, twice a second, allocates what the brain's answer carries.
 
+Per device (desktop or phone, by `deviceClass`):
+
+||Desktop|Phone|
+|---|---|---|
+|Pixel ratio|Auto rungs 1.5 / 1.25 / 1, capped by the device, governed|the same|
+|Scene MSAA|unchanged (4 samples at Low and up)|0|
+|Shadow map / box half / reach at Auto|unchanged (1024 / 24 m / 34 m)|512 / 18 m / 28 m|
+|Residents / dummy slots / detail slots|150 / 64 / 12|60 / 20 / 4|
+|Scenery share|1|0.6|
+|Tree near band / kit detail band|70 m / 90 m|45 m / 60 m|
+
 ## Drawing
 
 `CivilianArt(nearSlots, capacity).update(poses, eyeX, eyeZ, sight, wallDt)`: the nearest `nearSlots` civilians within `NEAR_DRAW` (60 m) are posed dummies

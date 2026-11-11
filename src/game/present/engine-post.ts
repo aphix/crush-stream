@@ -253,7 +253,8 @@ const QUAD_CAMERA = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const SCENE_SAMPLES: Readonly<Record<FxTier, readonly [number, number]>> = { off: [0, 0], minimal: [0, 0], low: [4, 0], high: [4, 4], ultra: [4, 4] };
 
 /** The scene target's MSAA samples at `tier` on a device of pixel ratio `deviceRatio` (`SCENE_SAMPLES`). */
-export function sceneSamples(tier: FxTier, deviceRatio: number): number {
+export function sceneSamples(tier: FxTier, deviceRatio: number, phone: boolean): number {
+  if (phone) return 0;
   return SCENE_SAMPLES[tier][deviceRatio <= 1 ? 0 : 1];
 }
 
@@ -288,6 +289,8 @@ export class PostFX {
   private readonly renderer: THREE.WebGLRenderer;
   /** The device's pixel ratio (`window.devicePixelRatio`, not the Render scale): low draws with MSAA only at 1 (`sceneSamples`). */
   private readonly deviceRatio: number;
+  /** A phone draws the scene with no MSAA at any tier; set by the engine before the first tier. */
+  phone = false;
   /** Read when a submission is sent (`GlErrors`): a switch's passes and paint programs set flags that stay until then. */
   readonly glErrors = new GlErrors();
   /** The low / high tiers' HDR scene target (the warm-up draws into it once). */
@@ -352,7 +355,7 @@ export class PostFX {
     this.composites = { low: composite(TIER.low), high, ultra: high };
     // The tier is `off` until the engine sets one (`setTier` gives the target its samples). Nothing reads the scene's depth after the
     // draw: skip the per-frame MSAA depth resolve.
-    this.sceneRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: sceneSamples("off", deviceRatio), depthBuffer: true, stencilBuffer: false, resolveDepthBuffer: false });
+    this.sceneRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: sceneSamples("off", deviceRatio, false), depthBuffer: true, stencilBuffer: false, resolveDepthBuffer: false });
     for (let i = 0; i < CHAIN; i++) {
       this.mips.push(new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false }));
     }
@@ -373,7 +376,7 @@ export class PostFX {
       this.fade = 0;
       this.grain = DITHER;
     }
-    const samples = sceneSamples(tier, this.deviceRatio);
+    const samples = sceneSamples(tier, this.deviceRatio, this.phone);
     if (this.sceneRT.samples !== samples) {
       this.sceneRT.samples = samples;
       this.sceneRT.dispose();

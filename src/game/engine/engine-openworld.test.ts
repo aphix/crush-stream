@@ -21,6 +21,8 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import type { Sight } from "../present/spectate-cam.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
 import { hourOfDay, tickAt } from "../ai/civilians/civilian-clock.ts";
+import { sceneryShare } from "./scenery-share.ts";
+import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import type { AutoOrbit } from "./engine-openworld-auto.ts";
 import { MEDICS } from "./engine-openworld-medics.ts";
@@ -805,5 +807,12 @@ describe("given the open world's stage light following the crowd's clock", () =>
     for (const place of city.homes) expect(city.shareOf(place), `home ${place} with ${awake[place]} awake`).toBeCloseTo(HOME_SHARE_BY_AWAKE[Math.min(awake[place]!, HOME_SHARE_BY_AWAKE.length - 1)]!, 2);
     city.toHour(QUIET_HOUR);
     for (const place of city.homes) expect(city.shareOf(place), `home ${place} at midday`).toBe(0);
+  });
+});
+
+describe("given the open world's scenery share", () => {
+  // mutation: sed -i 's/(desktop ? 1 : 0.6)/(desktop ? 1 : 1)/' src/game/engine/scenery-share.ts
+  it("when the course is the open world, then the share is 1 on a desktop and 0.6 on a phone whatever the tier; a race keeps its tier's", () => {
+    expect(`${sceneryShare(OPENWORLD_ID, "minimal", true)} ${sceneryShare(OPENWORLD_ID, "minimal", false)} ${sceneryShare("other", "minimal", false)}`).toBe("1 0.6 0.3");
   });
 });

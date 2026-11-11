@@ -23,8 +23,9 @@ import { carClass, damageStage, STYLE_CLASS } from "../vehicle/vehicle-classes.t
 import { makeJerseyBarrier, makePoolTexture } from "../present/engine-world.ts";
 import { Cinematics } from "../present/engine-cine.ts";
 import { setReliefDevice } from "../present/surface-relief.ts";
-import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
+import { FX_TIERS } from "../present/engine-post.ts";
 import { SKY_MODES } from "../present/sky-dome.ts";
+import { sceneryShare } from "./scenery-share.ts";
 import { AutoFx, deviceClass, gpuRenderer, type DeviceClass } from "../present/auto-fx.ts";
 import { PHONE_LEVEL } from "../present/car-detail.ts";
 import { DetailGovernor } from "../present/detail-governor.ts";
@@ -101,7 +102,6 @@ import { firstMassContact } from "./car-contact-scan.ts";
 
 const FIXED = 1 / FRAME_HZ;
 /** Share of a course's drawn-only scenery (`thinScenery`) each effects tier draws: the cheap tiers a third, Low three fifths, High and above all of it. */
-const SCENERY_SHARE: Record<FxTier, number> = { off: 0.3, minimal: 0.3, low: 0.6, high: 1, ultra: 1 };
 /** Deform LoD: sphere around a car — rest half-diagonal 2.5 m plus crumple slack and the
  *  ≈0.9 m the sun throws the roof's shadow, so an off-screen car's shadow is never stale either. */
 const LOD_RADIUS = 3.5;
@@ -327,6 +327,8 @@ export class CrashEngine extends EngineGarage {
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
     this.cine.marks.phone = !desktop;
+    this.cine.post.phone = !desktop;
+    this.stage.phone = !desktop;
     setReliefDevice(desktop);
     this.cine.setTier(fxParam === "ultra" ? "high" : (fxParam ?? INITIAL_HUD.fxTier));
     // `?sky=0|1|auto|on|off` pins the Sky setting for the session (bench A/B).
@@ -653,7 +655,7 @@ export class CrashEngine extends EngineGarage {
       knockProp: (index, car, vx, vy, vz) => this.ragdolls.knockProp(index, car, vx, vy, vz),
       buildArt: (track, placed, drawn, arm) => {
         this.queueWarm();
-        const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, SCENERY_SHARE[this.cine.tier]), reliefForTier(this.cine.tier, this.cine.marks.phone));
+        const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, sceneryShare(track.id, this.cine.tier, this.deviceClass === "desktop")), reliefForTier(this.cine.tier, this.cine.marks.phone));
         this.ragdolls.setCourse(track, placed, art.props, arm);
         return art;
       },

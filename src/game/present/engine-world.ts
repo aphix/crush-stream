@@ -364,6 +364,8 @@ export class WorldStage {
   readonly sun: THREE.DirectionalLight;
   /** The player's Shadows level, and Ultra's map edge while it is on (0: off): the sun's map is the larger, its box the level's. */
   private shadowLevel: ShadowLevel = SHADOW_LEVELS.auto;
+  /** A phone: Auto's shadow level is then `SHADOW_LEVELS.phone`. */
+  phone = false;
   private ultraMap = 0;
   private readonly fill: THREE.DirectionalLight;
   private readonly scene: THREE.Scene;
@@ -614,7 +616,7 @@ export class WorldStage {
 
   private fitShadow(): void {
     const shadow = this.sun.shadow;
-    const level = this.shadowLevel;
+    const level = this.phone && this.shadowLevel === SHADOW_LEVELS.auto ? SHADOW_LEVELS.phone : this.shadowLevel;
     const map = Math.max(level.map, this.ultraMap);
     shadow.mapSize.set(map, map);
     const cam = shadow.camera;
