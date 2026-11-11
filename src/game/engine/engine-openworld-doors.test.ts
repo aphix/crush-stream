@@ -136,4 +136,11 @@ describe("given cars standing in a street", () => {
     expect(carStandsNear([car(40, 0), car(12, 0)], 10, 0), "2 m off").toBe(true);
     expect(carStandsNear([car(40, 0), car(13, 0)], 10, 0), "3 m off").toBe(false);
   });
+
+  // mutation: sed -i 's/hypot2(spot.x - x, spot.z - z)/hypot2(spot.x - x, 0)/' src/game/engine/engine-openworld-doors.ts
+  it("when a car stands 2 m off along z, then it stands there, and 40 m off along z it does not", () => {
+    const car = (x: number, z: number) => ({ group: { position: { x, z } } });
+    expect(carStandsNear([car(10, 2)], 10, 0), "2 m off along z").toBe(true);
+    expect(carStandsNear([car(10, 40)], 10, 0), "40 m off along z").toBe(false);
+  });
 });
