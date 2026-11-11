@@ -46,6 +46,14 @@ class Harness {
   constructor() {
     this.director.startOpenWorld(map);
   }
+
+  /** `count` frames, each after a sim step: the crowd's clock only moves on steps. */
+  run(count: number): void {
+    for (let frame = 0; frame < count; frame++) {
+      this.director.step(FRAME);
+      this.director.frame(FRAME);
+    }
+  }
 }
 
 describe("given the open world director in the open world", () => {
@@ -62,41 +70,41 @@ describe("given the open world director in the open world", () => {
   });
 
   // mutation: sed -i 's/if (minute === this.closedMinute) return;/return;/' src/game/engine/engine-openworld.ts
-  it("when a place is wrecked, then within a game minute the signage is handed it as shut, in a list of a byte for every place of the map, with the change flagged", () => {
+  it("when a place is wrecked, then once the game minute turns the signage is handed it as shut, in a list of a byte for every place of the map, with the change flagged", () => {
     const harness = new Harness();
-    harness.director.frame(FRAME);
+    harness.run(2);
     const state = harness.director["crowd"]!.state;
-    state.closedUntilTick[0] = WRECKED_FOR_TICKS;
+    const open = harness.updates[harness.updates.length - 1]!.closed!.indexOf(0);
+    expect(open, "some place is open at the start").toBeGreaterThanOrEqual(0);
+    state.closedUntilTick[open] = WRECKED_FOR_TICKS;
     const from = harness.updates.length;
-    for (let frame = 0; frame < MINUTE_FRAMES; frame++) harness.director.frame(FRAME);
+    harness.run(MINUTE_FRAMES);
     const seen = harness.updates.slice(from);
     const closed = seen[seen.length - 1]!.closed!;
     expect(closed.length).toBe(state.index.placeCount);
-    expect(closed[0]).toBe(1);
-    expect(seen.some((update) => update.changed)).toBe(true);
+    expect(closed[open]).toBe(1);
+    expect(seen.filter((update) => update.changed).length, "the wreck is flagged once").toBe(1);
     harness.director.stop();
   });
 
   // mutation: sed -i 's/if (sum !== this.closedSum) this.closedChanged = true;/this.closedChanged = true;/' src/game/engine/engine-openworld.ts
-  it("when nothing changes after a refill, then every later frame is handed no change", () => {
+  it("when game minutes turn with nothing changed, then the signage is handed a change for the first refill alone", () => {
     const harness = new Harness();
-    for (let frame = 0; frame < 2 * MINUTE_FRAMES; frame++) harness.director.frame(FRAME);
-    const refills = harness.updates.filter((update) => update.changed).length;
-    expect(refills, "the first refill is the only change").toBeLessThanOrEqual(1);
-    expect(harness.updates[harness.updates.length - 1]!.changed).toBe(false);
+    harness.run(3 * MINUTE_FRAMES);
+    expect(harness.updates.filter((update) => update.changed).length, "the first refill is the only change").toBe(1);
     harness.director.stop();
   });
 
   // mutation: sed -i 's/if (minute === this.closedMinute) return;/this.closedMinute = -1;/' src/game/engine/engine-openworld.ts
   it("when a place is wrecked mid-minute, then the list is not refilled until the game minute turns", () => {
     const harness = new Harness();
-    harness.director.frame(FRAME);
-    harness.director.frame(FRAME);
+    harness.run(2);
     const open = harness.updates[harness.updates.length - 1]!.closed!.indexOf(0);
-    expect(open, "some place is open at the start").toBeGreaterThanOrEqual(0);
     harness.director["crowd"]!.state.closedUntilTick[open] = WRECKED_FOR_TICKS;
-    harness.director.frame(FRAME);
-    expect(harness.updates[harness.updates.length - 1]!.closed![open]).toBe(0);
+    harness.run(1);
+    expect(harness.updates[harness.updates.length - 1]!.closed![open], "still as it was mid-minute").toBe(0);
+    harness.run(MINUTE_FRAMES);
+    expect(harness.updates[harness.updates.length - 1]!.closed![open], "shut once the minute has turned").toBe(1);
     harness.director.stop();
   });
 
