@@ -204,6 +204,27 @@ describe("given a civilian a car runs down while her body stands for her", () =>
   });
 });
 
+describe("given a civilian whose drawn spot the crowd moved to clear a stoop", () => {
+  // mutation: sed -i 's/ || poses.kept\[civilian\] === 1//' src/game/engine/openworld-bodies.ts
+  it("when the bodies are given out, then she has none and the civilian beside her does", () => {
+    const { poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    walker(poses, 1, 3, 0);
+    poses.kept[0] = 1;
+    run(SETTLE_STEPS);
+    expect([bodies.slotOf(0), bodies.held[0]], "kept out of a stoop: drawn by the crowd").toEqual([-1, 0]);
+    expect(bodies.held[1], "the other stands on a body").toBe(1);
+  });
+
+  // mutation: sed -i 's/poses.kept\[civilian\] === 1 ||/poses.kept[civilian] === 0 ||/' src/game/engine/openworld-bodies.ts
+  it("when the same civilian is not kept, then she has a body", () => {
+    const { poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    expect(bodies.held[0]).toBe(1);
+  });
+});
+
 describe("given bodies and the scene is left", () => {
   // mutation: sed -i 's/  dispose(): void {/  dispose(): void {\n    return;/' src/game/engine/openworld-bodies.ts
   it("when the bodies are disposed, then every body goes and no civilian is held", () => {
