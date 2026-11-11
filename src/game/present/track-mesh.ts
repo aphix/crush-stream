@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { clamp } from "../kernel/scalar.ts";
-import { DRAW_CELLS } from "../world/scenery-assets/draw-group.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
 import { MATERIAL_ATTRIBUTE } from "../vehicle/material-class.ts";
 import { MAT, type MaterialId } from "../kernel/material-ids.ts";
@@ -27,12 +26,17 @@ export const KERB_FILL = 6;
 export const DEPTH_INSTANCED = new THREE.MeshDepthMaterial();
 export const DEPTH_INSTANCED_COLOR = new THREE.MeshDepthMaterial();
 export type DrawKind = "plain" | "instanced" | "instancedColour";
+/**
+ * Props and structures draw per square cell this wide (m), each culled by its own bounds in the view and the sun's shadow box. 512 against
+ * 256 on the Mall at 4x CPU: a fifth fewer draw calls, 0.5 ms less render CPU, 5 % more triangles, the same GPU ms.
+ */
+const DRAW_CELL = 512;
 /** A draw cell's key packs its x index over this many z indices (a course spans far fewer). */
 const CELL_KEY_SPAN = 65536;
 
-/** The draw cell (`cell` m wide) holding (x, z), as one number. */
-export function drawCell(x: number, z: number, cell: number = DRAW_CELLS.prop): number {
-  return Math.floor(x / cell + 0.5) * CELL_KEY_SPAN + Math.floor(z / cell + 0.5);
+/** The draw cell holding (x, z), as one number. */
+export function drawCell(x: number, z: number): number {
+  return Math.floor(x / DRAW_CELL + 0.5) * CELL_KEY_SPAN + Math.floor(z / DRAW_CELL + 0.5);
 }
 export const KERB_WIDTH = 1.1;
 /** Start / finish chequer depth (m), centred on s = 0; lines stop short of it. */
@@ -128,8 +132,8 @@ export class Mesher {
     return g;
   }
 
-  /** The triangles as one geometry per draw cell (`cell` m wide) their middle falls in (`drawCell`; normals as set), each with its bounds. */
-  cellGeometries(cell: number = DRAW_CELLS.prop): THREE.BufferGeometry[] {
+  /** The triangles as one geometry per draw cell their middle falls in (`drawCell`; normals as set), each with its bounds. */
+  cellGeometries(): THREE.BufferGeometry[] {
     const p = this.pos;
     const idx = this.idx;
     const byCell = new Map<number, number[]>();
@@ -137,7 +141,7 @@ export class Mesher {
       const a = idx[t]! * 3;
       const b = idx[t + 1]! * 3;
       const c = idx[t + 2]! * 3;
-      const key = drawCell((p[a]! + p[b]! + p[c]!) / 3, (p[a + 2]! + p[b + 2]! + p[c + 2]!) / 3, cell);
+      const key = drawCell((p[a]! + p[b]! + p[c]!) / 3, (p[a + 2]! + p[b + 2]! + p[c + 2]!) / 3);
       let tris = byCell.get(key);
       if (!tris) byCell.set(key, (tris = []));
       tris.push(t);

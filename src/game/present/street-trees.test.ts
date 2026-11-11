@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { MAT } from "../kernel/material-ids.ts";
-import { OW_DRAW_CELL, PARK, PARK_BLOCK } from "../world/openworld/openworld-constants.ts";
+import { PARK, PARK_BLOCK } from "../world/openworld/openworld-constants.ts";
 import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { BAY, drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
 import { distanceToPath, faceAt, inClearPath, outOf } from "../world/openworld/openworld-greenery.test-util.ts";
@@ -17,7 +17,6 @@ import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { cyl, painted, type Piece } from "./prefab-pieces.ts";
 import { prefabParts } from "./prefabs.ts";
 import { PropTumble } from "./prop-tumble.ts";
-import { drawCell } from "./track-mesh.ts";
 import { streetTreePieces, treeOf } from "./street-trees.ts";
 
 /** The most a pit may stand proud of the paving (m), and the most of the ivy's height. */
@@ -182,8 +181,7 @@ describe("given a street tree's crown", () => {
 });
 
 describe("given the street trees drawn as instances", () => {
-  // mutation: sed -i 's/drawCell(pl.x, pl.z, cells.prop)/drawCell(pl.x, pl.z)/' src/game/present/prop-tumble.ts
-  it("when the course's trees are made into meshes, then each kind in each 96 m cell is one draw group whatever its facing, and each instance carries its own facing and size", () => {
+  it("when the course's trees are made into meshes, then each kind is one draw group whatever its facing, and each instance carries its own facing and size", () => {
     const meshes: THREE.InstancedMesh[] = [];
     const material = new THREE.MeshBasicMaterial();
     const tumble = new PropTumble(
@@ -193,11 +191,8 @@ describe("given the street trees drawn as instances", () => {
       () => false,
       (tree) => treeOf(tree)?.skin ?? null,
       treeOf,
-      { prop: OW_DRAW_CELL, asset: OW_DRAW_CELL },
     );
-    const groups = new Set(allPlaced.map((tree) => `${treeOf(tree)!.skin}@${drawCell(tree.x, tree.z, OW_DRAW_CELL)}`));
-    expect(groups.size, "draw cells wide enough to split the city").toBeGreaterThan(skins.length);
-    expect(meshes.length, "one mesh per skin and cell").toBe(groups.size);
+    expect(meshes.length).toBe(skins.length);
     const matrix = new THREE.Matrix4();
     const turn = new THREE.Quaternion();
     const scale = new THREE.Vector3();
