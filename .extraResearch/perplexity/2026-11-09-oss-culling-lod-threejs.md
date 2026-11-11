@@ -1,0 +1,53 @@
+> Question: A browser game written in TypeScript with three.js (WebGL2) and the Rapier physics engine (WASM) has a small open-world city: a few hundred simulated pedestrians with homes, jobs, moods and daily schedules (simulated deterministically on a host and synced to multiplayer peers), about 30 traffic cars on a street graph with traffic lights, police, building interiors, and instanced street props, running on desktops and phones. Which open-source libraries or built-in features exist for three.js scenes to reduce drawing cost in a city (frustum and occlusion culling, level of detail, impostors, batching and instancing helpers, spatial indexes)? For each: what it does, licence, how maintained it is, and measured results where published. Cite sources.
+
+For this game, the biggest gains usually come from combining **three.js’s built-in frustum culling and LOD**, spatially partitioned **`InstancedMesh`**, and a CPU-side spatial index such as **`three-mesh-bvh`**. Occlusion culling and impostors can help, but they generally require more integration work and have fewer consistently published, apples-to-apples benchmarks.
+
+## Feature and library comparison
+
+| Feature/library | What it does | Licence | Maintenance | Published measurements |
+|---|---|---|---|---|
+| **Object frustum culling** (`Object3D.frustumCulled`, default) | Three.js tests an object’s bounding sphere/box against the camera frustum and skips objects outside the view. Use separate objects or chunks; one giant city mesh defeats useful culling. | Three.js: MIT | Core feature, actively maintained with three.js | The cited material documents the feature but does not provide a universal FPS multiplier; results depend on object count, bounds, GPU, and scene layout.[7][10] |
+| **`THREE.LOD`** | Selects high-, medium-, or low-detail meshes according to camera distance. Suitable for buildings, vehicles, pedestrians, and interior/exterior representations. | Three.js: MIT | Core feature, maintained with three.js | Three.js documentation and performance guidance describe reduced vertex and fragment work, but no general benchmark applies across scenes.[7][10] |
+| **`THREE.InstancedMesh`** | Renders many copies sharing geometry and material with one instanced draw path. Good for lamps, signs, windows, trees, barriers, parked cars, and repeated props. | Three.js: MIT | Core feature, maintained with three.js | The cited documentation describes collapsing repeated objects into a single draw call, but gives no universal measured speedup.[7][9] |
+| **Spatially split instancing** | Split instances into tiles, blocks, or sectors rather than one city-wide `InstancedMesh`. This preserves frustum culling at chunk granularity; a single large instanced group may remain visible even when most instances are off-screen. | No separate licence; use three.js MIT | Straightforward engine-side pattern | The cited guidance explicitly notes that `InstancedMesh` culling is typically performed for the group and recommends spatial groups when instances cover a large area.[10] |
+| **`@three.ez/instanced-mesh` / `InstancedMesh2`** | Enhanced instancing with dynamic capacity, per-instance frustum culling, BVH-accelerated raycasting, sorting, per-instance visibility/opacity/uniforms, LOD, shadow LOD, and skinning. Potentially useful for crowds and dense props. | Verify the repository/package licence before shipping; the supplied result identifies the project but does not expose licence text | Appears actively developed: TypeScript/ESM project with tests and performance benchmarks; inspect its current release cadence before adoption | The project includes CPU micro-benchmarks and requires benchmark coverage for culling, sorting, and BVH changes, but the supplied result does not include numeric comparative results.[5] |
+| **`three-mesh-bvh`** | Builds a bounding-volume hierarchy for fast raycasts, collision-style queries, selection, visibility tests, and spatial queries. Useful for picking, police line-of-sight, interior queries, and custom occlusion tests—not a renderer-side occlusion system by itself. | MIT[2][6][8] | Long-standing and actively maintained; current documentation describes it as a continuing spatial-query system.[3] | The supplied results report a benchmark value of “76.83” without enough context to interpret it as FPS, milliseconds, or a standardized comparison, so it should not be used as a performance claim.[6] |
+| **Custom BVH-based occlusion tests** | Use `three-mesh-bvh` or another spatial structure to cast camera-to-object or camera-to-cell rays against coarse city geometry, then hide blocked buildings/props. Best done per building, block, or sector—not per pedestrian. | Depends on implementation; `three-mesh-bvh` portion is MIT | Requires engine maintenance and careful tuning | No reliable general measurement was supplied. Measure CPU ray-query time, number of queries, GPU frame time, and visible draw calls in the target scenes. |
+| **Impostors / billboards** | Replace distant 3D objects with camera-facing cards, baked views, or simplified meshes. Useful for distant pedestrians, cars, rooftop clutter, and building façades. | Varies by implementation. The cited `THREE-Impostors` project is open source, but the supplied result does not state its licence.[1] | The repository exists and was updated in the supplied search result, but its maintenance quality and compatibility should be checked directly before depending on it.[1] | No numerical benchmark was included in the supplied result. Impostor gains are highly content- and resolution-dependent. |
+| **Manual batching / merged geometry** | Merge static meshes with compatible materials into fewer draw calls. Good for static road markings, sidewalks, façade sections, and non-interactive clutter. | No separate licence; normally project code plus three.js MIT | Engine-side technique | No benchmark was supplied. It can reduce CPU draw submission overhead, but excessive merging harms frustum culling, light/material flexibility, and streaming. |
+| **WebGL2 hardware instancing** | The renderer uses WebGL2 instancing underneath `InstancedMesh`, reducing repeated draw submission while keeping per-instance transforms. | Three.js: MIT; WebGL2 is part of the platform | Maintained through three.js and browser implementations | No universal result was supplied; profile draw calls and GPU time on representative desktop and phone devices. |
+| **Scene chunks / sector streaming** | Divide the city into blocks or cells and activate only nearby sectors. Combine this with frustum culling, LOD, and instancing. It also limits AI/render synchronization work even though it is not itself a draw-call optimization. | Project-specific | Project-maintained | No published measurement was supplied. It is particularly appropriate for a small open world because it gives predictable CPU and memory budgets. |
+
+The search material confirms that three.js performs frustum culling automatically, that `InstancedMesh` reduces repeated draw submission, and that LOD reduces vertex and fragment work; it does not provide a single trustworthy benchmark applicable to this game.[7][9][10]
+
+## Recommended architecture for this game
+
+1. **Partition the city into spatial sectors**, such as 32–128 m blocks or street-graph cells. Maintain separate render groups for terrain, buildings, props, traffic, pedestrians, and interiors.
+2. Use **`THREE.LOD` for buildings, cars, and pedestrians**:
+   - Near: animated, fully shaded mesh.
+   - Medium: simplified mesh or reduced animation.
+   - Far: impostor, billboard, or static silhouette.
+3. Use **one instanced group per sector and asset/material class**, not one city-wide group. This is especially important for street props and crowd representations because group-level bounds otherwise remain large.[10]
+4. Use `InstancedMesh` for repeated static assets. Keep interactive pedestrians and traffic in separate pools if they need individual animation, collision, selection, or replication.
+5. Use **`three-mesh-bvh` for raycasts and spatial queries**, including picking, police sight lines, interior hit testing, and coarse custom visibility queries—not as a substitute for normal frustum culling.[2][3]
+6. Add occlusion only after profiling. Prefer **coarse sector/building visibility** using portals, manually authored blockers, or a small number of BVH queries. Per-object occlusion rays for hundreds of pedestrians can move the bottleneck from the GPU to the CPU.
+7. Treat impostors as an art-and-pipeline feature. They are most effective for objects that occupy few pixels and change slowly with viewpoint; animated nearby pedestrians generally need mesh LOD or GPU-friendly animation instead.
+8. Measure on representative devices using:
+   - CPU frame time and render-list construction time.
+   - GPU frame time, draw calls, triangles, and fragment workload.
+   - Visible object/instance counts by sector and LOD.
+   - Occlusion-query or BVH-query time.
+   - Worst-case scenes: dense intersection, many interiors visible, police chase, and rapid camera rotation.
+
+The available sources do not publish sufficiently comparable end-to-end measurements for these options, so adoption should be driven by captures from the game’s actual target phones and desktops rather than generic “X-times faster” claims.
+
+[1] GitHub - AIFanatic/THREE-Impostors: Impostor system from THREE.js (https://github.com/AIFanatic/THREE-Impostors)
+[2] three-mesh-bvh | Snyk (https://security.snyk.io/package/npm/three-mesh-bvh)
+[3] three-mesh-bvh · Docs by gkjohnson (https://gkjohnson.github.io/tools/docs/three-mesh-bvh/)
+[4] Build software better, together (https://github.com/topics/instanced-rendering)
+[5] instanced-mesh/AGENTS.md at master · agargaro ... - GitHub (https://github.com/agargaro/instanced-mesh/blob/master/AGENTS.md)
+[6] Three Mesh BVH (gkjohnson/three-mesh-bvh) | Context7 (https://context7.com/gkjohnson/three-mesh-bvh)
+[7] threejs-notes/threejs/part02-threejs/12-performance-and ... (https://github.com/hoihky/threejs-notes/blob/main/threejs/part02-threejs/12-performance-and-instancing.md)
+[8] npm.io (https://npm.io/package/three-mesh-bvh.md)
+[9] technical-art.md - chrislaupama/threejs-game-studio (https://github.com/chrislaupama/threejs-game-studio/blob/main/references/technical-art.md)
+[10] Three.js-Claude-Skill-Package/skills/source/threejs-errors/threejs-errors-performance/SKILL.md at master · Impertio-Studio/Three.js-Claude-Skill-Package (https://github.com/Impertio-Studio/Three.js-Claude-Skill-Package/blob/master/skills/source/threejs-errors/threejs-errors-performance/SKILL.md)
