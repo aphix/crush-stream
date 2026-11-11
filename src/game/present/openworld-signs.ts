@@ -260,8 +260,8 @@ export class OpenWorldSigns {
   }
 
   /** A frame: the names shown when `namesOn`, in the chunks within range of the eye that `sight` (when there is one) says are seen; the shop signs of the places `closed` marks shut dimmed. */
-  update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null): void {
-    this.shop.update(closed);
+  update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null, closedChanged = true): void {
+    this.shop.update(closed, closedChanged);
     if (namesOn && this.names === null) this.buildNames();
     if (this.names === null) return;
     this.names.group.visible = namesOn;

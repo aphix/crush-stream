@@ -63,7 +63,7 @@ type CrowdArt = {
 
 /** The signage on the buildings: `update` once a frame. */
 type PlaceSigns = {
-  update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null): void;
+  update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null, closedChanged: boolean): void;
   dispose(): void;
 };
 
@@ -206,6 +206,12 @@ export class OpenWorldDirector {
   private readonly openers: DoorOpeners = { poses: null, walker: null, others: [], closed: null };
   /** The map's places shut now (a wreck, or outside their hours), refilled each frame from the crowd's state for the interiors. */
   private closedPlaces: Uint8Array | null = null;
+  /** The game minute `closedPlaces` was last filled at: the hours change no faster, so it is refilled once a minute, not every frame. */
+  private closedMinute = -1;
+  /** Σ (place + 1) of the shut places at the last refill. */
+  private closedSum = 0;
+  /** A refill changed the shut places since the last frame that drew from them; cleared at the end of `frame`. */
+  private closedChanged = false;
   private readonly walkerStrike = new WalkerStrike();
   /** The Auto camera: wanted (`setAuto`) across crowd rebuilds, made with each crowd. */
   private autoWanted = false;
@@ -358,7 +364,7 @@ export class OpenWorldDirector {
     if (this.interiors === null && this.ports.makeInteriors !== undefined) this.interiors = this.ports.makeInteriors(this.map);
     this.ports.eye(this.ray);
     this.facades.frame(this.ray.eyeX, this.ray.eyeZ);
-    if (this.crowd !== null && this.closedPlaces !== null) fillClosedPlaces(this.crowd.state, tickAt(this.crowd.crowdSeconds), this.closedPlaces);
+    this.refillClosed();
     if (this.interiors !== null) {
       this.openers.poses = this.crowd?.poses ?? null;
       this.openers.closed = this.crowd === null ? null : this.closedPlaces;
@@ -387,6 +393,7 @@ export class OpenWorldDirector {
     this.medics?.frame(this.ambulanceState(), this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.lights?.update(crowd.crowdSeconds);
     this.frameDay(crowd);
+    this.closedChanged = false;
     this.lookAcc += wallDt;
     const cut = this.autoWanted && this.auto !== null && this.auto.step(wallDt);
     if (cut || this.lookAcc >= 1 / LOOK_HZ) {
@@ -524,10 +531,24 @@ export class OpenWorldDirector {
     return (this.ports.tier() * CROWD_TIER_SCALE + (this.ports.seed() & CROWD_SEED_MASK)) >>> 0;
   }
 
+  private refillClosed(): void {
+    const crowd = this.crowd;
+    const closed = this.closedPlaces;
+    if (crowd === null || closed === null) return;
+    const minute = gameMinuteAt(crowd.crowdSeconds);
+    if (minute === this.closedMinute) return;
+    this.closedMinute = minute;
+    fillClosedPlaces(crowd.state, tickAt(crowd.crowdSeconds), closed);
+    let sum = 0;
+    for (let place = 0; place < closed.length; place++) sum += (place + 1) * closed[place]!;
+    if (sum !== this.closedSum) this.closedChanged = true;
+    this.closedSum = sum;
+  }
+
   /** The signage is made on the first frame and shows names while the Track debug button is on. */
   private frameSigns(map: OpenWorldMap): void {
     this.signs ??= this.ports.makeSigns(map.places);
-    this.signs.update(this.ray.eyeX, this.ray.eyeZ, this.ports.signsOn(), this.sight, this.crowd === null ? null : this.closedPlaces);
+    this.signs.update(this.ray.eyeX, this.ray.eyeZ, this.ports.signsOn(), this.sight, this.crowd === null ? null : this.closedPlaces, this.closedChanged);
   }
 
   private start(map: OpenWorldMap, key: number, client: boolean): void {
@@ -557,6 +578,9 @@ export class OpenWorldDirector {
     const stooped = map.places.filter((place) => place.doorNode >= 0 && hasStoop(place));
     crowd.stoops = new Stoops(homeFrontages(stooped), Array.from(stooped, (place) => place.doorNode));
     this.closedPlaces = new Uint8Array(crowd.state.index.placeCount);
+    this.closedMinute = -1;
+    this.closedSum = 0;
+    this.closedChanged = false;
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);
     this.medics = new OpenWorldMedics(this.ports.makeArt(MEDICS.count));
     this.openers.others = this.law === null ? [this.medics.poses] : [this.law.copPoses, this.medics.poses];

@@ -442,6 +442,20 @@ describe("given a coffee shop that is shut (wrecked, or outside its hours)", () 
     return most;
   }
 
+  // mutation: sed -i 's/ \&\& openers.walker === null//' src/game/present/interiors/interior-doors.ts
+  it("when the eye idles 100 frames with nobody about and then the walker steps to the street door, then the door swings open", () => {
+    const set = new InteriorSet(lone);
+    const who = openers();
+    const view = scene(set, STREET_EYE, who);
+    view.frames(100);
+    expect(set.openDoors(), "nobody at the door").toBe(0);
+    const at = fromDoor(AT_DOOR);
+    who.walker = { x: at.x, z: at.z };
+    view.frames(SWING_FRAMES + 2);
+    expect(set.openDoors(), "doors open for the walker").toBe(1);
+    set.dispose();
+  });
+
   // mutation: sed -i 's/this.locked\[door\] === 0 \&\& this.someoneAt(leaf, near, openers)/this.someoneAt(leaf, near, openers)/' src/game/present/interiors/interior-doors.ts
   it("when a civilian stands at its street door, then the door stays shut; once it is open again the door swings", () => {
     const set = new InteriorSet(lone);
