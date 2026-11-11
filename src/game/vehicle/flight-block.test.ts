@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { applyDrive, idleDrive, type DriveInput } from "./car-drive.ts";
 import type { DeformableCar } from "./car.ts";
-import { FLIGHT } from "./car-flight.ts";
+import { FLIGHT, FLIGHT_SLEEP } from "./car-flight.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { assertSameNumbers } from "./test-support.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 
@@ -87,10 +88,10 @@ const STEER: DriveInput = { ...IDLE, steer: 1 };
 /** Slices of full steer on the sleeping wreck: they turn its body about 4.6 cm off the spot it fell asleep at (measured), and it sleeps on. */
 const STEER_SLICES = 30;
 
-/** A sedan hit on the nose so it is a wreck, stepped on idle pedals until `until(car)` holds (a failure if it never does within 10 s). */
-function wreckUntil(until: (car: DeformableCar) => boolean): DeformableCar {
+/** A sedan hit on the nose at (`x`, `z`) so it is a wreck, stepped on idle pedals until `until(car)` holds (a failure if it never does within 10 s). */
+function wreckUntil(until: (car: DeformableCar) => boolean, x = 0, z = 0): DeformableCar {
   const car = makeCar("sedan");
-  car.spawnFacing(0, 0, 0, 0);
+  car.spawnFacing(x, z, 0, 0);
   car.group.updateMatrixWorld(true);
   car.updateSkin();
   car.applyImpact(car.group.position.clone().addScaledVector(car.forward, 2.05), car.forward.clone().negate(), 0.5, 0.5);
@@ -133,6 +134,26 @@ describe("given a wreck at rest and a twin rebuilt from its flight block", () =>
     const twin = twinFromFlightBlock(car);
     expect(!twin.asleep, "the twin sleeps early").toBe(true);
     expect(twin.restS).toBe(car.restS);
+  });
+});
+
+/** Where the car's flight block says it fell asleep: `sleepX`, `sleepZ`. */
+function sleepSpot(car: DeformableCar): number[] {
+  const block = new Float64Array(FLIGHT);
+  car.flight(block, 0, false);
+  return [block[FLIGHT_SLEEP]!, block[FLIGHT_SLEEP + 1]!];
+}
+
+describe("given a wreck that fell asleep and the game's respawn (`spawnFacing`: a race or derby respawn, the disc, the recover key) put back on the road", () => {
+  // mutation: sed -i 's/^    this.sleepX = 0;$/    \/\/ sleepX kept/' src/game/vehicle/car.ts  (the respawned car keeps the x it fell asleep at)
+  // mutation: sed -i 's/^    this.sleepZ = 0;$/    \/\/ sleepZ kept/' src/game/vehicle/car.ts  (the respawned car keeps the z it fell asleep at)
+  it("when it is back, then its flight block holds no sleep spot, as a new car's placed there does", () => {
+    const car = wreckUntil((c) => c.asleep, 3, -5);
+    expect(sleepSpot(car).every((v) => Math.abs(v) > 1), "the wreck's sleep spot is away from zero (else the row proves nothing)").toBe(true);
+    car.spawnFacing(3, -5, 0.5, 0);
+    const fresh = makeCar("sedan");
+    fresh.spawnFacing(3, -5, 0.5, 0);
+    expect(firstMismatch(sleepSpot(car), sleepSpot(fresh)), "first differing number of the sleep spot").toBeUndefined();
   });
 });
 

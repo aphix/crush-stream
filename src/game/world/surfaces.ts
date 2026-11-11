@@ -1530,18 +1530,31 @@ function find(s: Surface, q: Float64Array, skip: number, need: number): void {
   offerAll(s, q, skip, need);
 }
 
+/** `offer` over `list[k0..k1)` in order; a patch whose box misses the point is passed over here, as `offer`'s first test would, without the call. */
+function offerListed(s: Surface, list: Int32Array, k0: number, k1: number, q: Float64Array, skip: number, need: number): void {
+  const P = s.p;
+  const x = q[PQ_X]!;
+  const z = q[PQ_Z]!;
+  for (let k = k0; k < k1; k++) {
+    const i = list[k]!;
+    const o = i * P_STRIDE;
+    if (x < P[o + P_MINX]! || x > P[o + P_MAXX]! || z < P[o + P_MINZ]! || z > P[o + P_MAXZ]!) continue;
+    offer(s, i, q, skip, need);
+  }
+}
+
 /** `find` over every candidate patch. */
 function offerAll(s: Surface, q: Float64Array, skip: number, need: number): void {
   if (s.nAlways > 0) {
     if (s.alwaysStale) s.indexAlways();
-    if (s.anx === 0) for (let k = 0; k < s.aNWide; k++) offer(s, s.aWide[k]!, q, skip, need);
+    if (s.anx === 0) offerListed(s, s.aWide, 0, s.aNWide, q, skip, need);
     else {
       const ci = Math.floor(q[PQ_X]! / CELL) - s.ax0;
       const cj = Math.floor(q[PQ_Z]! / CELL) - s.az0;
       if (ci >= 0 && cj >= 0 && ci < s.anx && cj < s.anz) {
         const c = cj * s.anx + ci;
-        for (let k = s.aStart[c]!; k < s.aStart[c + 1]!; k++) offer(s, s.aList[k]!, q, skip, need);
-      } else for (let k = 0; k < s.aNWide; k++) offer(s, s.aWide[k]!, q, skip, need);
+        offerListed(s, s.aList, s.aStart[c]!, s.aStart[c + 1]!, q, skip, need);
+      } else offerListed(s, s.aWide, 0, s.aNWide, q, skip, need);
     }
   }
   offerCell(s, q, skip, need);
@@ -1554,7 +1567,7 @@ function offerCell(s: Surface, q: Float64Array, skip: number, need: number): voi
   const cj = Math.floor(q[PQ_Z]! / CELL) - s.cz0;
   if (ci < 0 || cj < 0 || ci >= s.cnx || cj >= s.cnz) return;
   const c = cj * s.cnx + ci;
-  for (let k = s.cellStart[c]!; k < s.cellStart[c + 1]!; k++) offer(s, s.cellList[k]!, q, skip, need);
+  offerListed(s, s.cellList, s.cellStart[c]!, s.cellStart[c + 1]!, q, skip, need);
 }
 
 /** `out`'s height and normal (`C_H`, `C_NX`..`C_NZ`) at the best candidate: height `-Infinity` and straight up where there is none. */
@@ -1931,7 +1944,7 @@ function seek(q: Float64Array, skip: number, tops: Surface | null, list: Int32Ar
   if (live.statics !== null) find(live.statics, q, skip, NEED_ALL);
   if (GQ.on && GQ.cells.inFree) sharedCells(live.statics);
   if (live.solids !== null) find(live.solids, q, skip, NEED_ALL);
-  if (tops !== null) for (let k = 0; k < count; k++) offer(tops, list[k]!, q, skip, NEED_ALL);
+  if (tops !== null) offerListed(tops, list, 0, count, q, skip, NEED_ALL);
 }
 
 /** The cell-sharing census (`--ground`, `GQ.cells`): the plain cell `find` left its best in (`S_PFU`/`S_PFV`) and whether an earlier seek of this car-slice already read it. */
