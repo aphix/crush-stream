@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { PREFABS } from "../world/catalog.ts";
+import { PREFAB } from "../world/constants.ts";
 import { groundMesh } from "../scenes/ground-stack.ts";
 import { PLACE_KIND, type Place } from "../world/openworld/walk-graph.ts";
 import { onFrontFace } from "./openworld-shop-signs.ts";
@@ -6,9 +8,11 @@ import { onFrontFace } from "./openworld-shop-signs.ts";
 /** How far past a shopfront's width its light spreads along the pavement (m), and how deep it reaches out from the wall (m). */
 const SPILL_EXTRA_WIDTH = 2;
 const SPILL_DEPTH = 3;
-/** The pool's middle stands this far out from the front face (m), and just over the ground. */
+/** The pool's middle stands this far out from the front face (m). */
 const SPILL_OUT = 1.2;
-const SPILL_Y = 0.02;
+/** The street's pavement is slabs (`PREFAB.sidewalk`) whose top is proud of the ground: the pool lies this far (m) over that top, as a decal's lift over what it lies on. */
+const SPILL_LIFT = 0.02;
+const SPILL_Y = PREFABS[PREFAB.sidewalk].size[1] + SPILL_LIFT;
 
 /** The light a lit shop or eatery throws on the pavement at night: one flat quad per place on the lamp pool's own material (so it fades in at dusk and is gone by day), hidden while the place is shut. */
 export class ShopSpill {
