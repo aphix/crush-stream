@@ -126,6 +126,21 @@ describe("given the open world in play on the real engine", () => {
     }
   });
 
+  // mutation: sed -i 's/^      gameMinute: this.gameMinuteText(),/      gameMinute: null,/' src/game/engine/engine-hud.ts
+  it("when the hour is set to 13 and then to 21, then the HUD's clock reads that hour", () => {
+    const clockAt = (hour: number): number | null => {
+      engine["openWorld"].setHour(hour);
+      runSeconds(engine, 1);
+      return hud.get().gameMinute;
+    };
+    const day = clockAt(13);
+    expect(day! >= 780 && day! <= 800, `at hour 13 the clock reads 13:00 to 13:20 (minute ${day})`).toBe(true);
+    expect(day! % 5, "read in steps of five").toBe(0);
+    const night = clockAt(21);
+    expect(night! >= 1260 && night! <= 1280, `at hour 21 the clock reads 21:00 to 21:20 (minute ${night})`).toBe(true);
+    expect(night! % 5, "read in steps of five").toBe(0);
+  });
+
   it("when the Fleet button is pressed, then race mode and the lobby are left, the HUD flag drops and the sandbox's field is back", () => {
     pickScene({ current: engine }, sceneInPlay(hud.get()), "fleet");
     expect(engine["sceneId"], "the scene").toBe("fleet");
