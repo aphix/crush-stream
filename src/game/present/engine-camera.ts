@@ -667,6 +667,8 @@ export class ChaseCamera {
   private onPointerDown = (e: PointerEvent): void => {
     // Mouse look has no clicks: a press must not pick a car at the frozen pointer.
     if (e.button !== 0 || this.locked) return;
+    // The same pointer pressing again means its release was lost (a mouse has one id): end that drag, never pinch.
+    if (e.pointerId === this.dragId || e.pointerId === this.pinchId) this.release(e, true);
     // A second finger on the canvas pinch-zooms (the touch wheel); it never orbits or picks.
     if (this.dragId !== -1) {
       if (this.pinchId !== -1 || this.taking) return;
@@ -709,6 +711,11 @@ export class ChaseCamera {
       return;
     }
     if (e.pointerId !== this.dragId) return;
+    // A mouse moving with no button down has lost its release.
+    if (e.pointerType === "mouse" && e.buttons === 0) {
+      this.release(e, true);
+      return;
+    }
     if (this.taking) {
       this.take?.move(e);
       return;
@@ -770,11 +777,16 @@ export class ChaseCamera {
   }
 
   private onPointerUp = (e: PointerEvent): void => {
-    if (e.pointerId === this.pinchId) {
+    if (e.pointerId === this.pinchId && e.pointerId !== this.dragId) {
       this.pinchId = -1;
       return;
     }
     if (e.pointerId !== this.dragId) return;
+    this.release(e, e.type === "pointercancel");
+  };
+
+  /** The drag's pointer is up: the drag ends, and a take or a click is finished (`cancelled`: finished as nothing). */
+  private release(e: PointerEvent, cancelled: boolean): void {
     this.dragId = -1;
     this.pinchId = -1;
     const click = this.pointerTravel < CLICK_PX;
@@ -783,14 +795,15 @@ export class ChaseCamera {
     this.canvas.style.cursor = CURSOR_GRAB;
     try {
       this.canvas.releasePointerCapture(e.pointerId);
-    } catch {
-      /* already released */
+    } catch (err) {
+      // NotFoundError: the capture is already gone; anything else is a real fault.
+      if (!(err instanceof DOMException && err.code === DOMException.NOT_FOUND_ERR)) throw err;
     }
     if (this.taking) {
       this.taking = false;
-      this.take?.up(e.clientX, e.clientY, e.timeStamp, e.type === "pointercancel");
-    } else if (click && this.pressedCar >= 0) this.picker.choose(this.pressedCar);
-  };
+      this.take?.up(e.clientX, e.clientY, e.timeStamp, cancelled);
+    } else if (!cancelled && click && this.pressedCar >= 0) this.picker.choose(this.pressedCar);
+  }
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();

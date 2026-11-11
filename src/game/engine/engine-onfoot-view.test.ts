@@ -158,6 +158,22 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(onFoot().footView, "a click: still over his shoulder").toBe("shoulder");
   });
 
+  // mutation: sed -i '/^    if (e.pointerId === this.dragId || e.pointerId === this.pinchId) this.release(e, true);/d' src/game/present/engine-camera.ts
+  it("when a press's release is lost and he presses and drags again, then the view turns by the drag and stays over his shoulder at his boom", () => {
+    rig.run(SETTLE_S);
+    const boom = view().orbitRadius;
+    pointer("pointerdown", 100, 100);
+    rig.run(FRAME);
+    const angle = view().orbitAngle;
+    pointer("pointerdown", 400, 100);
+    pointer("pointermove", 400 + DRAG_PX, 100);
+    rig.run(SETTLE_S);
+    expect(angle - view().orbitAngle, "the second drag turned the orbit by its pixels (rad)").toBeCloseTo(DRAG_PX * DRAG_YAW_PER_PX, 3);
+    expect(view().orbitRadius, "the boom after the drag (m): no pinch zoomed it").toBeCloseTo(boom, 6);
+    expect(onFoot().footView, "still over his shoulder").toBe("shoulder");
+    pointer("pointerup", 400 + DRAG_PX, 100);
+  });
+
   // mutation: sed -i -e 's/    return this.framed ? this.mode : "shoulder";/    return this.framed \&\& this.host.view.orbitRadius < SHOULDER_NEAREST ? "first" : "shoulder";/' -e 's/    } else if (view.orbitRadius !== this.zoomKept) {/    } else if (false) {/' src/game/engine/engine-onfoot.ts
   it("when a press lands with the orbit's pose read from a point a hand's width from his eye in a pen of walls, then it stays his shoulder view at his boom, his head drawn and the eye off it", () => {
     rig.getOut();
