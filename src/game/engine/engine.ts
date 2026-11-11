@@ -231,6 +231,9 @@ export class CrashEngine extends EngineGarage {
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
   protected readonly deviceClass: DeviceClass;
+  /** The open world's trees' far band, made from `courseArt` the first frame that art stands (and again for a new one); null until then. */
+  private treeBand: FarBand | null = null;
+  private treeBandArt: TrackArt | null = null;
   /** The course art `buildArt` last made: the open world's far bands read its trees. */
   private courseArt: TrackArt | null = null;
 
@@ -459,16 +462,14 @@ export class CrashEngine extends EngineGarage {
         const kit = new FacadeBays(homeFrontages(map.places.filter((place) => place.doorNode >= 0)), OW_DRAW_CELL);
         this.scene.add(kit.group);
         this.queueWarm();
-        const band = this.deviceClass === "desktop" ? "desktop" : "phone";
-        const trees = new FarBand([...(this.courseArt?.props.bandCells(PREFAB.tree) ?? []), ...(this.courseArt?.scenery.bandCells(PREFAB.tree) ?? [])], TREE_NEAR_M[band]);
-        const details = new FarBand(kit.bandCells(), KIT_DETAIL_M[band]);
+        const details = new FarBand(kit.bandCells(), KIT_DETAIL_M[this.bandClass]);
         return {
           frame: (x, z) => {
-            trees.frame(x, z);
+            this.treeBandFor(this.courseArt)?.frame(x, z);
             details.frame(x, z);
           },
           stop: () => {
-            trees.stop();
+            this.treeBand?.stop();
             details.stop();
           },
           dispose: () => kit.dispose(),
@@ -591,6 +592,21 @@ export class CrashEngine extends EngineGarage {
     car.stored = true;
     car.group.visible = false;
     car.spawnFacing(STORE_AT.x + id * STORE_AT.step, STORE_AT.z, 0, 0);
+  }
+
+  /** The far bands' key: the desktop's distances or the phone's. */
+  private get bandClass(): keyof typeof TREE_NEAR_M {
+    return this.deviceClass === "desktop" ? "desktop" : "phone";
+  }
+
+  private treeBandFor(art: TrackArt | null): FarBand | null {
+    if (art !== this.treeBandArt) {
+      this.treeBand?.stop();
+      this.treeBandArt = art;
+      const cells = art === null ? [] : [...art.props.bandCells(PREFAB.tree), ...art.scenery.bandCells(PREFAB.tree)];
+      this.treeBand = art === null ? null : new FarBand(cells, TREE_NEAR_M[this.bandClass]);
+    }
+    return this.treeBand;
   }
 
   /** The map the open world's crowd lives on (the open world's builder line calls it once). */
