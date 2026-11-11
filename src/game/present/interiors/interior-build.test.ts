@@ -76,6 +76,31 @@ describe("given the bay alcove of a rowhome's rooms", () => {
     expect(Math.max(...onFront), "the board's outer edge: the line of the front pane").toBeCloseTo(frontX, 6);
     expect(Math.min(...onFront), "the board's inner edge, back into the room (m)").toBeLessThanOrEqual(frontX - SILL_REACH_MIN);
   });
+
+  // mutation: sed -i 's/(corner\[0\] === 0 ? \[STREET_SKIN + PLATE_LIFT, corner\[1\]\] : corner)/(corner)/' src/game/present/interiors/interior-build.ts
+  it("when its floor and ceiling plates are read, then each reaches past the wall plane into the room on every storey: no slot at the bay's mouth", () => {
+    for (const storeys of STOREY_COUNTS) {
+      const plan = planInterior({ ...standing, storeys });
+      let read = 0;
+      for (const solid of [buildShell(plan).solid, buildDetail(plan).solid]) {
+        const g = painted(solid);
+        const p = g.getAttribute("position");
+        const n = g.getAttribute("normal");
+        for (const alcove of plan.alcoves) {
+          for (const y of [alcove.floorY + 0.004, alcove.head - 0.004]) {
+            const xs: number[] = [];
+            for (let at = 0; at < p.count; at++) {
+              if (Math.abs(n.getY(at)) > FLAT_NORMAL_Y && Math.abs(p.getY(at) - y) < EPSILON && Math.abs(p.getZ(at) - alcove.corners[0]![1]) < EPSILON) xs.push(p.getX(at));
+            }
+            if (xs.length === 0) continue;
+            read++;
+            expect(Math.min(...xs), `${storeys} storeys, level ${alcove.level}: the plate at y ${y} reaches into the room`).toBeLessThanOrEqual(plan.depth / 2 - 0.02 + EPSILON);
+          }
+        }
+      }
+      expect(read, `${storeys} storeys: plates read`).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe("given the bay alcove of a rowhome's ground floor", () => {

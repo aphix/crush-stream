@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { stairBoxes, wallBoxes } from "../../world/openworld/interior-draft.ts";
-import { ceilingOver, lookKind, ROOM_LOOK, type Alcove, type Box, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
+import { ceilingOver, lookKind, ROOM_LOOK, STREET_SKIN, type Alcove, type Box, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
 import type { Piece } from "../prefab-pieces.ts";
 import { BAY } from "../../world/openworld/openworld-facade-solids.ts";
 import { brick } from "./interior-brick.ts";
@@ -107,7 +107,9 @@ function alcovePieces(plan: InteriorPlan, look: Look, level: number): Piece[] {
   const out: Piece[] = [];
   for (const alcove of plan.alcoves) {
     if (alcove.level !== level) continue;
-    out.push([plate(plan, alcove.corners, alcove.floorY + PLATE_LIFT), look.floor], [plate(plan, alcove.corners, alcove.head - PLATE_LIFT), look.ceiling]);
+    // The bay's floor and ceiling reach past the wall plane to where the room's own slabs begin: no slot at its mouth.
+    const sealed = alcove.corners.map((corner): PlanPoint => (corner[0] === 0 ? [STREET_SKIN + PLATE_LIFT, corner[1]] : corner));
+    out.push([plate(plan, sealed, alcove.floorY + PLATE_LIFT), look.floor], [plate(plan, sealed, alcove.head - PLATE_LIFT), look.ceiling]);
     for (let side = 0; side + 1 < alcove.corners.length; side++) {
       const from = alcove.corners[side]!;
       const to = alcove.corners[side + 1]!;

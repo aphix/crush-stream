@@ -156,11 +156,21 @@ function plate(builder: KitBuilder, y: number, offset: number, up: boolean, cell
 const BELT_LIP = 0.06;
 const SLAB_LIP = 0.1;
 
+/** The top of a band's lip only: the strip between the bay's walls and the band's edge, so nothing covers the room's floor inside. */
+function lipTop(builder: KitBuilder, y: number, lip: number): void {
+  const inner = kitOutline(0);
+  const outer = kitOutline(lip);
+  for (let edge = 0; edge + 1 < inner.length; edge++) {
+    builder.quad([outer[edge]![0], y, outer[edge]![1]], [outer[edge + 1]![0], y, outer[edge + 1]![1]], [inner[edge + 1]![0], y, inner[edge + 1]![1]], [inner[edge]![0], y, inner[edge]![1]], KIT_CELL.stone, TRIM, FIXED);
+  }
+}
+
 /** A projecting band: its wall, its underside and its top. */
-function band(builder: KitBuilder, y0: number, y1: number, lip: number): void {
+function band(builder: KitBuilder, y0: number, y1: number, lip: number, capped = false): void {
   ring(builder, y0, y1, lip, uniform(KIT_CELL.stone), TRIM, FIXED);
   plate(builder, y0, lip, false, KIT_CELL.stone, TRIM);
-  plate(builder, y1, lip, true, KIT_CELL.stone, TRIM);
+  if (capped) plate(builder, y1, lip, true, KIT_CELL.stone, TRIM);
+  else lipTop(builder, y1, lip);
 }
 
 /**
@@ -180,7 +190,7 @@ export function buildBayGeometry(storeys: number): THREE.BufferGeometry {
     band(builder, floor.head, cursor, BELT_LIP);
   }
   ring(builder, cursor, cursor + BAY.capPanel, 0, uniform(KIT_CELL.panel), WHITE, ACCENT);
-  band(builder, cursor + BAY.capPanel, cursor + BAY.capPanel + BAY.capSlab, SLAB_LIP);
+  band(builder, cursor + BAY.capPanel, cursor + BAY.capPanel + BAY.capSlab, SLAB_LIP, true);
   return builder.geometry(true);
 }
 
