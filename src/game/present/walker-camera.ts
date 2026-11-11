@@ -23,6 +23,8 @@ const YAW_TIME = 0.4;
 /** The view comes back behind him after this long (s) without look input while he moves faster than this (m/s). */
 export const RECENTER_DELAY = 1.2;
 const RECENTER_SPEED = 1;
+/** The camera comes round behind him only while his facing is within this (rad) of it: it does not chase a sidestep. */
+const RECENTER_GAP = 0.9;
 
 /** The enter and exit blend (s): the lens, distance and pitch go to the on-foot shot over this long, 0.2-0.4 s in the research. */
 export const BLEND_SECONDS = 0.3;
@@ -229,7 +231,12 @@ export class FollowFocus {
     }
     this.yaw.x = yaw;
     const behind = facing + Math.PI;
-    return wrapAngle(this.yaw.step(yaw + wrapAngle(behind - yaw), YAW_TIME, dt));
+    const gap = Math.abs(wrapAngle(behind - yaw));
+    if (gap > RECENTER_GAP) {
+      this.yaw.v = 0;
+      return yaw;
+    }
+    return wrapAngle(this.yaw.step(yaw + wrapAngle(behind - yaw), YAW_TIME / Math.max(0.3, Math.cos(gap)), dt));
   }
 
   private write(): void {

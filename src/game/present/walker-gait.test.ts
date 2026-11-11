@@ -67,6 +67,32 @@ describe("given a gait over flat ground", () => {
     for (let f = 0; f < 2; f++) expect(range(frames.map((frame) => frame.feet[f * 3 + 2]!)), `foot ${f} travelled with him`).toBeGreaterThan(3 * RUN_SPEED * 0.8);
   });
 
+  // mutation: sed -i 's/const CADENCE = \[0.6, /const CADENCE = [1.05, /' src/game/present/walker-gait.ts
+  it("when he walks at 0.8 m/s, then a step is at least 0.45 m long", () => {
+    const loco = new Locomotion();
+    const gait = new Gait();
+    loco.reset(0);
+    gait.seed(0, STANDING_TORSO, 0, 0, flat);
+    for (let f = 0; f < 3 * FRAME_HZ; f++) {
+      loco.update(FRAME, 0, 0.8);
+      gait.update(FRAME, loco, flat);
+    }
+    expect(loco.speed / (2 * gait["cadence"]), "metres a step").toBeGreaterThanOrEqual(0.45);
+  });
+
+  // mutation: sed -i 's/const CADENCE = \[0.6, /const CADENCE = [0.3, /' src/game/present/walker-gait.ts
+  it("when he walks at 0.8 m/s, then his cadence is 0.84 cycles a second, between the stand's 0.6 and the walk's 1.05", () => {
+    const loco = new Locomotion();
+    const gait = new Gait();
+    loco.reset(0);
+    gait.seed(0, STANDING_TORSO, 0, 0, flat);
+    for (let f = 0; f < 3 * FRAME_HZ; f++) {
+      loco.update(FRAME, 0, 0.8);
+      gait.update(FRAME, loco, flat);
+    }
+    expect(gait["cadence"], "cycles a second").toBeCloseTo(0.84, 3);
+  });
+
   const flightCases: readonly { it: string; command: number; expectedMinFlight: number; expectedMaxFlight: number; expectedMinBoth: number; expectedMaxBoth: number }[] = [
     { it: "when he walks, then one foot is always down and both for a fifth of the time", command: WALK_SPEED, expectedMinFlight: 0, expectedMaxFlight: 0, expectedMinBoth: 0.15, expectedMaxBoth: 0.4 },
     { it: "when he runs, then there is a flight phase (5-25 % of the time) and never both feet down", command: RUN_SPEED, expectedMinFlight: 0.05, expectedMaxFlight: 0.3, expectedMinBoth: 0, expectedMaxBoth: 0.05 },

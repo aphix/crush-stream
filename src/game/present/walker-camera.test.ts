@@ -99,9 +99,9 @@ function recenter(speed: number, looking: boolean, seconds: number, facing = 0, 
 
 describe("given the view left alone while he runs", () => {
   it("when the player has not looked for under 1.2 s, then the view stays where it is, and after it comes back behind him without overshoot", () => {
-    const yaws = recenter(RUN_SPEED, false, 4);
+    const yaws = recenter(RUN_SPEED, false, 4, 0, 2.5);
     const before = yaws.slice(0, Math.floor(RECENTER_DELAY * 60) - 2);
-    expect(before.every((yaw) => yaw === 1.2), "untouched inside the delay").toBeTruthy();
+    expect(before.every((yaw) => yaw === 2.5), "untouched inside the delay").toBeTruthy();
     const behind = Math.PI;
     expect(Math.abs(Math.abs(yaws[yaws.length - 1]!) - behind), `ends behind him: ${yaws[yaws.length - 1]!.toFixed(2)}`).toBeLessThan(0.1);
     let worst = 0;
@@ -110,6 +110,25 @@ describe("given the view left alone while he runs", () => {
       if (stepped < 1) worst = Math.max(worst, Math.abs(yaws[i]!) - behind);
     }
     expect(worst, `overshot behind by ${worst}`).toBeLessThanOrEqual(0.01);
+  });
+
+  // mutation: sed -i 's/^const RECENTER_GAP = 0.9;/const RECENTER_GAP = 9;/' src/game/present/walker-camera.ts
+  it("when he walks sideways to the camera for 4 s without a look, then the camera's yaw does not move", () => {
+    const yaws = recenter(RUN_SPEED, false, 4, 1.2 - Math.PI / 2);
+    expect(yaws.every((yaw) => yaw === 1.2), `yaws from ${yaws[0]} to ${yaws[yaws.length - 1]}`).toBe(true);
+  });
+
+  // mutation: sed -i 's/    if (gap > RECENTER_GAP) {/    if (gap > 0) {/' src/game/present/walker-camera.ts
+  it("when his facing is 0.5 rad off straight away from the view for 4 s without a look, then the camera comes round to 0.5 rad from where it was", () => {
+    const yaws = recenter(RUN_SPEED, false, 4, 1.2 + 0.5 - Math.PI);
+    expect(yaws[yaws.length - 1], "the yaw it ends at").toBeCloseTo(1.7, 3);
+  });
+
+  // mutation: sed -i 's|YAW_TIME / Math.max(0.3, Math.cos(gap))|YAW_TIME|' src/game/present/walker-camera.ts
+  it("when the camera is coming round for 0.5 s, then it has covered 0.73 of a gap of 0.1 rad and 0.57 of a gap of 0.85 rad", () => {
+    const covered = (gap: number): number => (recenter(RUN_SPEED, false, RECENTER_DELAY + 0.5, 1.2 + gap - Math.PI).slice(-1)[0]! - 1.2) / gap;
+    expect(covered(0.1), "a gap of 0.1 rad").toBeCloseTo(0.73, 2);
+    expect(covered(0.85), "a gap of 0.85 rad").toBeCloseTo(0.57, 2);
   });
 
   const holdCases: readonly { it: string; speed: number; looking: boolean }[] = [

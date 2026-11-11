@@ -4,6 +4,7 @@ import { blankPad, PAD_BUTTON, readPad, type PadSource, type TouchPad } from "..
 import { blankWalkIntent, readWalkIntent } from "./engine-walk-input.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
+import { wrapAngle } from "../present/walker-math.ts";
 
 const noTouch: TouchPad = { x: 0, y: 0, gas: 0, brake: 0, held: 0, tapped: 0 };
 const SETTLE_S = 0.5;
@@ -64,5 +65,21 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(rig.engine["onFoot"].footView, "B: his eyes").toBe("first");
     tap(PAD_BUTTON.east);
     expect(rig.engine["onFoot"].footView, "B again: over his shoulder").toBe("shoulder");
+  });
+
+  // mutation: sed -i 's/^const INTENT_SECONDS = 0.08;/const INTENT_SECONDS = 1e-9;/' src/game/engine/engine-onfoot.ts
+  it("when D is pressed while W is held, then his heading has turned by less than 0.6 rad three frames later, and by 0.7 rad or more half a second later", () => {
+    if (rig.phase() !== "onFoot") rig.getOut();
+    rig.engine["keys"].add("KeyW");
+    rig.run(0.5);
+    const start = rig.walker().heading;
+    rig.engine["keys"].add("KeyD");
+    rig.run(3 * FRAME);
+    const early = Math.abs(wrapAngle(rig.walker().heading - start));
+    rig.run(0.5);
+    const late = Math.abs(wrapAngle(rig.walker().heading - start));
+    rig.engine["keys"].clear();
+    expect(early, "three frames after D").toBeLessThan(0.6);
+    expect(late, "half a second after D").toBeGreaterThanOrEqual(0.7);
   });
 });
