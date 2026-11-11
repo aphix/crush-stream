@@ -1,8 +1,0 @@
-src/game/engine/engine-openworld-arrest-rides.test.ts
-src/game/engine/engine-openworld-law.test.ts
-src/game/net/crowd-codec.test.ts
-src/game/net/openworld-room.test.ts
-src/game/ai/openworld-crime/crime-arrest.test.ts
-src/game/ai/openworld-crime/crime-ride.test.ts
-src/game/ai/openworld-crime/crime-station.test.ts
-src/game/ai/openworld-crime/crime-walkways.test.ts
