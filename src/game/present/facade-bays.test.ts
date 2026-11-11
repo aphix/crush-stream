@@ -4,7 +4,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { buildingHeight, DEFAULT_STOREYS, MAX_STOREYS, MIN_STOREYS } from "../world/openworld/interior-kinds.ts";
-import { BAY, bayStackOf, DOOR, BLOCK_FACE_HALF, drawnHalf, homeFrontages, STOOP } from "../world/openworld/openworld-facade-solids.ts";
+import { BAY, bayOutline, bayStackOf, DOOR, BLOCK_FACE_HALF, drawnHalf, homeFrontages, STOOP } from "../world/openworld/openworld-facade-solids.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { BRICK_STYLE } from "../world/openworld/openworld-programme.ts";
 import { PLACE_KIND } from "../world/openworld/walk-graph.ts";
@@ -132,6 +132,36 @@ describe("given the bay stack of a rowhome of each storey count", () => {
         expect(belt.maxZ, `${storeys} storeys: belt projection of floor ${at} against floor 0 (m)`).toBeCloseTo(first.maxZ, 6);
         expect(belt.maxX - belt.minX, `${storeys} storeys: belt of floor ${at} wider than the plinth (m)`).toBeGreaterThanOrEqual(plinth.maxX - plinth.minX - EPSILON);
       }
+    }
+  });
+
+  // mutation: sed -i 's/^  band(builder, BAY.plinthTop, cursor, BELT_LIP);/  band(builder, BAY.plinthTop, cursor, BELT_LIP, true);/' src/game/present/facade-bay-parts.ts
+  it("when the stack is read at the plinth band's top, then no upward face there lies inside the bay's walls, and its lip is six triangles", () => {
+    const plinthBandTop = BAY.plinthTop + BAY.plinthBand;
+    const wall = bayOutline(0).map((c) => [-c.across, c.out] as const).reverse();
+    const wallZ = (x: number): number => {
+      for (let i = 0; i + 1 < wall.length; i++) {
+        const [x0, z0] = wall[i]!;
+        const [x1, z1] = wall[i + 1]!;
+        if (x >= x0 && x <= x1) return z0 + ((z1 - z0) * (x - x0)) / (x1 - x0);
+      }
+      return 0;
+    };
+    for (const { storeys, bay } of stacks) {
+      const p = bay.getAttribute("position");
+      const n = bay.getAttribute("normal");
+      let lip = 0;
+      let inside = 0;
+      for (let at = 0; at + 2 < p.count; at += 3) {
+        if (n.getY(at) <= UPWARD) continue;
+        if ([0, 1, 2].some((k) => Math.abs(p.getY(at + k) - plinthBandTop) > EPSILON)) continue;
+        const x = (p.getX(at) + p.getX(at + 1) + p.getX(at + 2)) / 3;
+        const z = (p.getZ(at) + p.getZ(at + 1) + p.getZ(at + 2)) / 3;
+        lip++;
+        if (z < wallZ(x) - EPSILON) inside++;
+      }
+      expect(inside, `${storeys} storeys: upward triangles inside the walls at the plinth band's top`).toBe(0);
+      expect(lip, `${storeys} storeys: lip triangles`).toBe(6);
     }
   });
 });
