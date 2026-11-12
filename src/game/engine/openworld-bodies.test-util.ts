@@ -49,6 +49,10 @@ export class FakeBodyHost {
     return true;
   }
 
+  path(slot: number, out: { x: number; z: number }): void {
+    this.torso(slot, out);
+  }
+
   steer(slot: number, heading: number, speed: number): void {
     const body = this.bodies.get(slot)!;
     body.heading = heading;
