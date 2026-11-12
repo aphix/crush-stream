@@ -1,5 +1,5 @@
 import { detCos, detSin } from "../../kernel/physics-core.js";
-import { COUNTER_STRIDE } from "../../world/openworld/walk-graph.ts";
+import { COUNTER_STRIDE, SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
 import { NO_PLACE, NO_SEAT, RESIDENT_INT, RESIDENT_INT_STRIDE, STAND_COLUMNS, STAND_ROW_DEPTH, STAND_SPACING, STREAM } from "./civilian-constants.ts";
 import { residentDraws } from "./civilian-draws.ts";
 import type { CityState } from "./civilian-state.ts";
@@ -7,9 +7,11 @@ import type { CityState } from "./civilian-state.ts";
 /** Odd multiplier that scatters resident numbers over the counter's lanes. */
 const LANE_HASH = 2654435761;
 
-/** Gives the resident the first free stoop seat (or indoor seat) at `place` from a drawn start; false when none is free. One holder per seat. */
+/** Gives the resident the first free stoop seat (or indoor seat) at `place` from a drawn start; false when none is free. One holder per seat. An indoor seat higher than the counter's top is in a flat over the shop, not its room: never a customer's. */
 export function claimSeat(state: CityState, resident: number, place: number, stoop: boolean): boolean {
   const { seatBase, seatCount, stoopCount } = state.venues;
+  const { seats, counter } = state.map.places[place]!;
+  const highest = stoop || counter === undefined ? Infinity : counter[3]!;
   const first = stoop ? 0 : stoopCount[place]!;
   const count = stoop ? stoopCount[place]! : seatCount[place]! - stoopCount[place]!;
   if (count <= 0) return false;
@@ -18,7 +20,7 @@ export function claimSeat(state: CityState, resident: number, place: number, sto
   for (let step = 0; step < count; step++) {
     const seat = first + ((start + step) % count);
     const slot = seatBase[place]! + seat;
-    if (state.seatOwner[slot] !== NO_PLACE) continue;
+    if (state.seatOwner[slot] !== NO_PLACE || seats![seat * SEAT_STRIDE + 3]! > highest) continue;
     state.seatOwner[slot] = resident;
     state.ints[row + RESIDENT_INT.seat] = seat;
     return true;

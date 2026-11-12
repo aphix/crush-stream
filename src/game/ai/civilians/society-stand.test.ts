@@ -107,6 +107,20 @@ describe("given more drinkers than the bar has seats and standing spots", () => 
     const held = drinkers.map((resident) => intAt(state, resident, RESIDENT_INT.seat)).filter((spot) => spot !== NO_SEAT);
     expect(new Set(held).size, "different spots held").toBe(held.length);
   });
+
+  // mutation: sed -i '/^  if (spot === NO_SEAT \&\& (intAt(state, resident, RESIDENT_INT.nextDecisionTick)/d' src/game/ai/civilians/society-activity.ts
+  it("when they are drawn in the moment they would buy, then the three who found the room full are not drawn inside: none waits at the counter", () => {
+    const without = drinkers.filter((resident) => intAt(state, resident, RESIDENT_INT.place) === BAR && intAt(state, resident, RESIDENT_INT.seat) === NO_SEAT);
+    expect(without.length, "drinkers without a spot").toBe(3);
+    for (const resident of without) expect(placedAt(state, resident, 1), `where drinker ${resident} without a spot is drawn a second in`).toBeNull();
+  });
+
+  // mutation: sed -i 's/^  if (spot === NO_SEAT \&\& (intAt(state, resident, RESIDENT_INT.nextDecisionTick)/  if ((intAt(state, resident, RESIDENT_INT.nextDecisionTick)/' src/game/ai/civilians/society-activity.ts
+  it("when they are drawn in the moment they buy, then every drinker who holds a standing spot is drawn buying at it, fixed", () => {
+    const standing = drinkers.filter((resident) => intAt(state, resident, RESIDENT_INT.place) === BAR && intAt(state, resident, RESIDENT_INT.seat) >= state.venues.seatCount[BAR]!);
+    expect(standing.length, "drinkers with a standing spot").toBe(STAND_SPOTS);
+    for (const resident of standing) expect([placedAt(state, resident, 1)?.code, reading.fixed].join("/"), `activity and fixed of standing drinker ${resident} a second in`).toBe([ACTIVITY.buy, true].join("/"));
+  });
 });
 
 describe("given four clerks at a coffee shop that has clerk spots", () => {

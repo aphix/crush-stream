@@ -24,9 +24,11 @@ import {
   RESIDENT_FLOAT_STRIDE,
   RESIDENT_INT,
   RESIDENT_INT_STRIDE,
+  SEAT_MIN_DWELL_MINUTES,
   SITTER_CHAT_REACH,
   SPECIES,
   STREAM,
+  TICKS_PER_GAME_MINUTE,
 } from "./civilian-constants.ts";
 import { residentDraws } from "./civilian-draws.ts";
 import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
@@ -283,6 +285,8 @@ function readIndoors(state: CityState, resident: number, place: number, out: Act
     return;
   }
   const hasCounter = state.venues.standCount[place]! > 0;
+  // A stay long enough to hold a spot that holds none found every seat and standing spot taken: the room is full and she is not drawn in it, never stacked at the counter.
+  if (spot === NO_SEAT && (intAt(state, resident, RESIDENT_INT.nextDecisionTick) - intAt(state, resident, RESIDENT_INT.arriveTick)) / TICKS_PER_GAME_MINUTE >= SEAT_MIN_DWELL_MINUTES) return;
   if (hasCounter && scratch.age < ACTIVITY_SECONDS.buy) {
     if (spot !== NO_SEAT && spot >= seatCount[place]!) standAt(state, place, spot, out);
     else {

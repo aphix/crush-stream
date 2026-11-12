@@ -92,8 +92,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 60: the host logs an arrested resident boarding and leaving a patrol car (`EVENT_KIND.arrestRide`, `arrestAlight`), which a client reads to seat and unseat the pair, so an older peer would walk them to the station.
 61: fights can end in a knock-out: a seeded blow count (`STREAM.punch`), a knock that names its striker (an `alongside` triple after its push) and a knocked fighter's partner released, so a peer on 60 would compute a different city from the same log.
 62: a customer is inside a place only within its hours (her stay ends as it shuts, staggered by her number; a walk that reaches it shut has no stay; one still there when it shuts walks home), the bodega is open to midnight, and two civilians fighting on a walk stand along it (each one's own spot and facing in her row), so a peer on 61 would plan and place differently.
+63: a customer never takes a seat in a flat over a shop (one higher than its counter's top), so a peer on 62 would seat her elsewhere.
 */
-export const NET_VERSION = 62;
+export const NET_VERSION = 63;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
