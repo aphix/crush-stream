@@ -258,8 +258,8 @@ describe("given a walker by a stoop", () => {
 
   // mutation: sed -i 's/const tipped = this.state === "getUp" || (standing \&\& this.strength >= 1) ? 1 :/const tipped = this.state === "getUp" ? 1 :/' src/game/present/ragdoll-walker.ts
   it("when he walks along a stoop's foot, across its bottom step, toward -x, then he is on his feet every frame", async () => {
-    const sys = await standingOn(groundWith([]), 2.7);
-    sys.setFixedBoxes(stoopAt(-0.2));
+    const sys = await standingOn(groundWith([]), 3);
+    sys.setFixedBoxes(stoopAt(-0.25));
     expect(staysUp(sys, -Math.PI / 2, 6)).toBe(true);
   });
 
