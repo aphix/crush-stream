@@ -60,6 +60,10 @@ export class RagdollBodyHost {
     return walker.state === "stand" && walker.strength >= 1;
   }
 
+  roped(slot: number): boolean {
+    return this.ragdolls().dollRoped(slot);
+  }
+
   holds(slot: number): boolean {
     return this.ragdolls().walkers[slot]?.active === true;
   }

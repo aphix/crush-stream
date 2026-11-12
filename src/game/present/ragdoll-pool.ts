@@ -54,6 +54,8 @@ export const GRACE = 0.35;
 const SLIDE = 0.12;
 /** The pool slot the player's walker takes: the last of the base pool, so a throw that takes the oldest slot finds him driven and passes him by, and the draw ends after his slot when he is the only one out. */
 export const WALKER_SLOT = BASE_SLOTS - 1;
+/** The pool's drawn dummies: the one `DummyMesh` whose instance is a pool slot (the crowd, the guards and the seated drivers draw theirs on others). */
+export const RAGDOLLS_MESH_NAME = "ragdolls";
 /** Rapier's solver iterations (default 4); no CCD on the parts (it tears the joints: 11–28 cm apart vs 0.9 cm at 8 iterations of 1/120). At 1/960 four hold a joint to 0.1 cm; two kicked one to 125 rad/s. */
 export const ITERATIONS = 4;
 /** Rapier's internal solver passes per iteration (default 1): at the first touch of a 29 m/s throw one pass rose energy 75–325 J in a frame at 1/120 and 26–30 J (1 of 5 runs) at 1/480 and 1/960; two at most 0.6 J over 60 runs (60/144/240 Hz). */
@@ -210,7 +212,7 @@ export abstract class RagdollPool {
     this.onExit = onExit;
     this.mesh = new DummyMesh(SLOTS, true, dummyGeometry(), BASE_SLOTS);
     this.debug = new RagdollDebug(scene, PARTS, JOINTS, SLOTS);
-    this.mesh.name = "ragdolls";
+    this.mesh.name = RAGDOLLS_MESH_NAME;
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
     this.mesh.frustumCulled = false;

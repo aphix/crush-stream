@@ -203,7 +203,7 @@ describe("given a civilian a car runs down while her body stands for her", () =>
     expect(host.stopped, "let go after staying down").toContain(slot);
   });
 
-  // mutation: sed -i 's/^      if (this.downFor\[body\]! > RELEASE_DOWN) return this.release(body);/      return this.release(body);/' src/game/engine/openworld-bodies.ts
+  // mutation: sed -i 's/^      if (this.downFor\[body\]! > RELEASE_DOWN \&\& !this.host.roped(slot)) return this.release(body);/      return this.release(body);/' src/game/engine/openworld-bodies.ts
   it("when a body is down while her spot walks on for 3 s, then she is still held, her body is not let go, and it is asked to get up", () => {
     const { host, poses, bodies, run } = world();
     walker(poses, 0, 2, 0);
@@ -253,6 +253,34 @@ describe("given a civilian a car runs down while her body stands for her", () =>
     expect(host.stopped, "let go").toContain(slot);
     expect(host.started.length, "the old body went and a new one was stood for her").toBe(2);
     expect(host.started[1]!.z, "the new one stands at her spot, not 4 m behind it").toBe(poses.z[0]);
+  });
+
+  // mutation: sed -i 's/ : LEASH) \&\& !this.host.roped(slot)) return/ : LEASH)) return/' src/game/engine/openworld-bodies.ts
+  it("when a cable holds her body and her spot walks 5 m on, then her body is not let go", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    host.ropedSlots.add(slot);
+    host.bodies.get(slot)!.speed = 0;
+    poses.z[0] = poses.z[0]! + 5;
+    run(Math.round(0.5 / STEP));
+    expect(host.stopped, "not let go").not.toContain(slot);
+    expect(bodies.held[0], "still held").toBe(1);
+  });
+
+  // mutation: sed -i 's/ > RELEASE_DOWN \&\& !this.host.roped(slot)) return/ > RELEASE_DOWN) return/' src/game/engine/openworld-bodies.ts
+  it("when a cable holds her body and it stays down 9 s, then it is not let go", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    host.ropedSlots.add(slot);
+    host.stubborn = true;
+    host.bodies.get(slot)!.standing = false;
+    run(Math.round(9 / STEP));
+    expect(host.stopped, "not let go").not.toContain(slot);
+    expect(bodies.held[0], "still held").toBe(1);
   });
 });
 

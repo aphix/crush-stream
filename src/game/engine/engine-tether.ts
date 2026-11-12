@@ -7,6 +7,7 @@ import { AIM, TetherArt, type ReticleView } from "../present/tether-art.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { BOXES_MESH_NAME } from "../present/minigame-art.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
+import { RAGDOLLS_MESH_NAME } from "../present/ragdoll-pool.ts";
 import { ROPE_A, ROPE_FLOATS, ROPE_JOINED, ROPE_LENGTH, ROPE_NONE, ROPE_STATE, type RopeEnd } from "../present/ragdoll-wire.ts";
 import type { TetherHud } from "../hud/hud-store.ts";
 
@@ -246,7 +247,8 @@ export class TetherDirector {
       if (typeof index === "number" && cars[index]?.group === o) car = index;
     }
     if (car !== WORLD) return { car, thing: 0 };
-    if (object instanceof DummyMesh && (hit.instanceId === undefined || hit.instanceId === this.host.self() || !this.host.ropes.dollOut(hit.instanceId))) return undefined;
+    // Only the pool's mesh is drawn by slot: a crowd, guard or seated driver drawn on another `DummyMesh` is no dummy of that world, and the sight line passes her.
+    if (object instanceof DummyMesh && (object.name !== RAGDOLLS_MESH_NAME || hit.instanceId === undefined || hit.instanceId === this.host.self() || !this.host.ropes.dollOut(hit.instanceId))) return undefined;
     const thing = this.thingOf(object, hit.instanceId);
     return thing === 0 ? { car: WORLD, thing } : { car: RAPIER, thing };
   }

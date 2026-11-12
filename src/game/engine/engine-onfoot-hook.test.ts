@@ -1,10 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import * as THREE from "three";
 import { WORLD } from "../contact/tether.ts";
+import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
+import { driverLook } from "../present/driver-look.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
 const LINK = "#scene=openworld&seed=beef";
 /** Seconds the traffic needs to stand its first kerb cars (its first passes show every space in reach). */
 const SETTLE_S = 3;
+/** The pool slot the man he hooks stands in: a base slot no civilian's body takes. */
+const MAN = 0;
 
 // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
 let rig: OnFootRig;
@@ -66,5 +71,42 @@ describe("given the real engine in the open world, its player on foot", () => {
     rig.getIn();
     rig.run(FRAME);
     expect(tethers.count, "at the wheel").toBe(0);
+  });
+
+  // mutation: sed -i 's/    if (doll === undefined || !doll.live) return false;/    if (doll === undefined || !doll.live || doll.driven) return false;/' src/game/present/ragdoll-ropes.ts
+  it("when he hooks a man standing 4 m ahead and then the ground 6 m to his side, then the cable's end stays on the man, and reeling drags him at least 2 m", () => {
+    rig.getOut();
+    rig.press("Digit0");
+    rig.run(0.3);
+    const { engine } = rig;
+    const ragdolls = engine["ragdolls"];
+    const tether = engine.tether;
+    const tethers = engine["world"].tethers;
+    const camera = engine["camera"];
+    const facing = rig.walker().facing;
+    const me = rig.torso();
+    expect(ragdolls.startWalker(new THREE.Vector3(me.x + 4 * detSin(facing), 0, me.z + 4 * detCos(facing)), 0, { cop: false, look: driverLook(1, 0) }, MAN), "the man stands").toBe(MAN);
+    rig.run(1);
+    const man = ragdolls["dolls"][MAN]!;
+    const fireAt = (x: number, y: number, z: number): void => {
+      const eye = rig.torso();
+      camera.position.set(eye.x, eye.y + 1.2, eye.z);
+      camera.lookAt(x, y, z);
+      camera.updateMatrixWorld(true);
+      tether["aim"]();
+      tether["fireDue"] = true;
+      tether["attach"]();
+    };
+    fireAt(man.cur[0]!, man.cur[1]!, man.cur[2]!);
+    fireAt(me.x + 6 * detCos(facing), 0, me.z - 6 * detSin(facing));
+    rig.run(0.5);
+    expect(tethers.count, "the cable is out").toBe(1);
+    let slot = 0;
+    while (!tethers.isAlive(slot)) slot++;
+    const end = tethers.point(slot, 0, new THREE.Vector3());
+    expect(hypot3(end.x - man.cur[0]!, end.y - man.cur[1]!, end.z - man.cur[2]!), "its end from his torso (m)").toBeLessThan(0.7);
+    const from = [man.cur[0]!, man.cur[2]!];
+    rig.hold("BracketRight", 1.5);
+    expect(hypot2(man.cur[0]! - from[0]!, man.cur[2]! - from[1]!), "dragged by the reel (m)").toBeGreaterThanOrEqual(2);
   });
 });
