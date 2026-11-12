@@ -292,6 +292,9 @@ three.debug.onShaderError = (context, program, vertex, fragment) => {
 };
 await engine.ready;
 const readyMs = Math.round(performance.now() - bootAt);
+// The sky's clouds and stars run on the wall clock (`SkyDome`'s `uTime`, from `performance.now()`): pinned, so two runs of one command draw the same sky.
+const skyClock = engine.stage.sky["mat"]?.uniforms.uTime;
+if (skyClock !== undefined) engine.stage.sky["mesh"].onBeforeRender = () => (skyClock.value = 0);
 if (tier === "ultra" && !(await engine.loadUltra())) throw new Error("headless-frame: the Ultra look did not load (see the console)");
 // A pick of Ultra switches once its warm-up has linked the look (`pickUltra`): the promise ends then.
 await engine.setFxTier(tier);
