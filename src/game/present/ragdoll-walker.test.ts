@@ -95,6 +95,29 @@ describe("given a walker standing on open ground", () => {
       expect(fell, "whether he went down").toBe(testCase.expectedOutcome === "standsAfterFalling");
     });
   }
+
+  // mutation: sed -i '/^    this.walkers\[slot\]?.stagger(share);/d' src/game/present/ragdoll-throw.ts
+  it("when a standing walker is blown at 3 m/s on the chest and staggered to half, then his strength reads 0.5 or less at once and he is on his feet a frame later at 0.6 or less", () => {
+    const chest = system["dolls"][WALKER]!.bodies[0]!.translation();
+    system.blowWalker(WALKER, new THREE.Vector3(chest.x, chest.y, chest.z), new THREE.Vector3(0, 0.3, 1).normalize(), 3);
+    system.staggerWalker(WALKER, 0.5);
+    expect(system.walker.strength, "at once").toBeLessThanOrEqual(0.5);
+    frames(system, FRAME);
+    expect(system.walker.state, "a frame later").toBe("stand");
+    expect(system.walker.strength, "a frame later").toBeLessThanOrEqual(0.6);
+  });
+
+  // mutation: sed -i '/^  blowWalker(/,/^  }/{/strikeAt(/d}' src/game/present/ragdoll-throw.ts
+  it("when a standing walker is blown at 3 m/s on the chest, then his torso gains 3 m/s along the blow at once and he is on his feet a frame later", () => {
+    const torso = system["dolls"][WALKER]!.bodies[0]!;
+    const chest = torso.translation();
+    const direction = new THREE.Vector3(0, 0.3, 1).normalize();
+    const before = torso.linvel().z;
+    system.blowWalker(WALKER, new THREE.Vector3(chest.x, chest.y, chest.z), direction, 3);
+    expect(torso.linvel().z, "his torso's speed along +z (m/s)").toBeCloseTo(before + direction.z * 3, 4);
+    frames(system, FRAME);
+    expect(system.walker.state, "a frame later").toBe("stand");
+  });
 });
 
 const walkCases: readonly { it: string; command: number; headingTurn: number; expectedMinSpeed: number; expectedMaxSpeed: number }[] = [

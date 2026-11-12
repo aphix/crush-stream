@@ -59,6 +59,14 @@ describe("given the controls that drive the car", () => {
       expect(driving[testCase.drivingField], `the same control drives ${testCase.drivingField}`).toBe(testCase.drivingValue);
     });
   }
+
+  // mutation: sed -i 's/(!armed \&\& p.rt > Math.max(SPRINT_TRIGGER, touch.gas, -touch.y))/(p.rt > Math.max(SPRINT_TRIGGER, touch.gas, -touch.y))/' src/game/engine/engine-walk-input.ts
+  it("when he is armed, then the right trigger does not sprint and A does; unarmed, the trigger sprints as before", () => {
+    const trigger = { ...blankPad(), connected: true, rt: 1 };
+    expect(readWalkIntent(new Set(), trigger, blankTouch(), blankWalkIntent(), true).sprint, "armed, RT").toBe(false);
+    expect(readWalkIntent(new Set(), { ...blankPad(), connected: true, held: 1 << PAD_BUTTON.south }, blankTouch(), blankWalkIntent(), true).sprint, "armed, A").toBe(true);
+    expect(readWalkIntent(new Set(), trigger, blankTouch(), blankWalkIntent(), false).sprint, "unarmed, RT").toBe(true);
+  });
 });
 
 /** A thumb on foot: `push` is up (+1) / down (-1) on the strip or the disc, `side` right (+1) / left (-1) on the bar, the tilt or the disc; `cap` the strip's Boost cap. */

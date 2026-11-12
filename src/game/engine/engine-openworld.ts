@@ -11,7 +11,7 @@ import type { SignSight } from "../present/openworld-signs.ts";
 import { PLACE_KIND, type OpenWorldMap, type Place } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { gameHourAtMinute, gameMinuteAt, secondsOfGameMinutes, tickAt } from "../ai/civilians/civilian-clock.ts";
-import { MINUTES_PER_GAME_DAY, MINUTES_PER_GAME_HOUR } from "../ai/civilians/civilian-constants.ts";
+import { MINUTES_PER_GAME_DAY, MINUTES_PER_GAME_HOUR, PLAYER_KO_BLOWS, PLAYER_KO_WINDOW, PLAYER_PUNCH_SPEED } from "../ai/civilians/civilian-constants.ts";
 import { fillAwakeAtHomes } from "../ai/civilians/society-awake.ts";
 import { ImaginedHouseholds } from "../ai/civilians/society-households.ts";
 import { HomeLights } from "../present/facade-homes.ts";
@@ -140,6 +140,10 @@ export type OpenWorldPorts = {
   makeInteriors?(map: OpenWorldMap): InteriorArt;
   /** A civilian who turned on this browser's player on foot lands a swing: he takes the walker's knockdown, pushed along (dirX, dirZ). */
   strikeWalker(dirX: number, dirZ: number): void;
+  /** His punch lands where no cop or civilian took it: a knockable prop within reach and arc is knocked. */
+  punchProp(x: number, z: number, dirX: number, dirZ: number): void;
+  /** A civilian's swing lands on him and does not fell him yet: a blow and a stagger, pushed along (dirX, dirZ). */
+  staggerWalker(dirX: number, dirZ: number): void;
 };
 
 /**
@@ -172,6 +176,10 @@ export class OpenWorldDirector {
   /** Per civilian, the pool slot the figure thrown for her lies in (-1: none) and the crowd second it was thrown: the ambulance's loading takes it away (`removeVictim`). */
   private figureSlot = new Int32Array(0);
   private figureAt = new Float64Array(0);
+  private punches = new Uint8Array(0);
+  private punchedAt = new Float64Array(0);
+  private walkerBlows = 0;
+  private walkerBlowAt = -Infinity;
   private readonly sceneScratch = { x: 0, z: 0 };
   /** The civilians near this machine's eye as physical bodies (`OpenWorldBodies`), null where the engine gives no dummies' world. */
   private bodies: OpenWorldBodies | null = null;
@@ -436,7 +444,35 @@ export class OpenWorldDirector {
   private landWalkerStrike(crowd: CivilianCrowd, dt: number): void {
     const { walkers } = crowd;
     if (walkers.count === 0 || !findWalkerStrike(crowd.state, this.seconds - dt, this.seconds, walkers.x[0]!, walkers.z[0]!, this.walkerStrike)) return;
-    this.ports.strikeWalker(this.walkerStrike.dirX, this.walkerStrike.dirZ);
+    if (this.seconds - this.walkerBlowAt > 4) this.walkerBlows = 0;
+    this.walkerBlowAt = this.seconds;
+    this.walkerBlows++;
+    if (this.walkerBlows >= 3) {
+      this.walkerBlows = 0;
+      this.ports.strikeWalker(this.walkerStrike.dirX, this.walkerStrike.dirZ);
+    } else this.ports.staggerWalker(this.walkerStrike.dirX, this.walkerStrike.dirZ);
+  }
+
+  /** An actor's punch lands from (x, z) going (dirX, dirZ), at the authority: the first of a foot cop, a civilian's body, a drawn civilian, a knockable prop within reach and arc takes it. It reads nothing of the local player, so a later plan can call it for a guest. */
+  punch(x: number, z: number, dirX: number, dirZ: number): void {
+    const crowd = this.crowd;
+    if (crowd === null || this.ports.isClient()) return;
+    if (this.law?.punchCop(x, z, dirX, dirZ, this.seconds) === true) return;
+    let c = this.bodies?.punch(x, z, dirX, dirZ, PLAYER_PUNCH_SPEED) ?? -1;
+    if (c < 0) c = crowd.punchTarget(x, z, dirX, dirZ, this.bodies?.held ?? null);
+    if (c < 0) {
+      this.ports.punchProp(x, z, dirX, dirZ);
+      return;
+    }
+    crowd.punched(c, x, z, this.seconds);
+    if (this.seconds - this.punchedAt[c]! > PLAYER_KO_WINDOW) this.punches[c] = 0;
+    this.punchedAt[c] = this.seconds;
+    const knockedOut = ++this.punches[c]! >= PLAYER_KO_BLOWS;
+    if (knockedOut) {
+      this.punches[c] = 0;
+      crowd.knockOut(c, this.seconds, dirX, dirZ);
+    }
+    this.law?.playerStruck(this.seconds, knockedOut);
   }
 
   /** The stage's day follows the crowd's clock: one call a game minute (a crowd second), whatever the frame rate. */
@@ -554,6 +590,10 @@ export class OpenWorldDirector {
     this.art = this.ports.makeArt(this.crowd.poses.count);
     this.figureSlot = new Int32Array(this.crowd.poses.count).fill(-1);
     this.figureAt = new Float64Array(this.crowd.poses.count);
+    this.punches = new Uint8Array(this.crowd.poses.count);
+    this.punchedAt = new Float64Array(this.crowd.poses.count).fill(-Infinity);
+    this.walkerBlows = 0;
+    this.walkerBlowAt = -Infinity;
     if (this.ports.bodies !== undefined) this.bodies = new OpenWorldBodies(this.ports.bodies, map.places, this.crowd.poses.count, this.ports.tier() === POPULATION_TIER.phone ? BODY_COUNT.phone : BODY_COUNT.desktop);
     const crowd = this.crowd;
     this.unhook = this.ports.hookWallHits((closing, x, z) => crowd.noteWallHit(closing, x, z));

@@ -138,6 +138,10 @@ gait reached 1.3 / 2.5 m/s, so his root is driven the way a character controller
 | Knocked down by a 1200 N·s blow | down at 0.7 s, up at 5.45 s | down at once, up at 4.4 s |
 | Rapier step / frame | 0.039 / 0.34 ms | 0.034 / 0.28 ms |
 
+## Fists
+
+On foot in the open world, solo or as a room's host, fire throws a punch (`OnFootArms`, `engine-onfoot-arms.ts`: left click or RT; right button held or LT aims, the camera drawn in over his shoulder and him facing where it looks). A punch reaches 1.4 m in a 120-degree arc about his facing (`punchGap`), one every 0.6 s, and lands 0.18 s after the press (`OpenWorldDirector.punch`). It staggers a civilian or a cop; the third on one civilian inside 10 s knocks her out, and the third on one cop puts him down. A punch on a civilian is a shove to the law; a knock-out, or a punch on a cop, is a fight the law knows of at once. Where no person is in reach, a knockable prop is knocked. A civilian's swings stagger him, and the third inside 4 s puts him down. A guest has no fists yet (`OnFootHost.guest`).
+
 ## The camera
 
 `OnFootDirector.aim` keeps the one `ChaseCamera` orbit (no second camera system) for its yaw, pitch and zoom, so the drag, the right stick, mouse look, the wheel and a pinch

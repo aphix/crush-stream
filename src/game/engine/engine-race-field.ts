@@ -41,6 +41,7 @@ import type { CourseMenu } from "../net/net-ports.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import type { FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import { type RoadSpot, roadSpotNear } from "../world/road-spot.ts";
+import { punchGap } from "../ai/civilians/civilian-contact.ts";
 
 /** The name a clip gives a car that is no racer (traffic, and the cops past it: `entrants` has no row for them). */
 export const TRAFFIC_NAME = "Traffic";
@@ -535,6 +536,24 @@ export abstract class RaceField {
   /** Whether car contact has knocked placed prop `i` off its spot. */
   propKnocked(i: number): boolean {
     return this.knocked[i] === 1;
+  }
+
+  /** The player's punch from (x, z) along (dirX, dirZ): the nearest standing knockable prop in reach and arc is knocked off its spot as a car's hit marks it, and flung along the blow. */
+  punchProp(x: number, z: number, dirX: number, dirZ: number): void {
+    let best = -1;
+    let bestGap = Infinity;
+    for (let k = 0; k < this.colliders.length; k++) {
+      const c = this.colliders[k]!;
+      if (c.body !== "knock" || this.knocked[c.index] === 1) continue;
+      const gap = punchGap(x, z, dirX, dirZ, c.x, c.z);
+      if (gap < 0 || gap >= bestGap) continue;
+      bestGap = gap;
+      best = c.index;
+    }
+    if (best < 0) return;
+    this.knocked[best] = 1;
+    this.recorder.knock(best, -1);
+    this.host.knockProp(best, -1, dirX * 3, 1, dirZ * 3);
   }
 
   /** Where car `k` stands in the lobby: abreast on the course's start anchor like a hosted Survival run's humans (a course without one: its grid). */

@@ -33,5 +33,7 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     makeFacades: () => ({ dispose: () => {} }),
     setDayHour: () => {},
     strikeWalker: () => {},
+    staggerWalker: () => {},
+    punchProp: () => {},
   };
 }

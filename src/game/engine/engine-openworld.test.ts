@@ -3,8 +3,9 @@ import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "../ai/civilians/civilian-crowd.test-util.ts";
-import { EVENT_KIND, EVENT_TRIPLE, FLAG, GENDER, HOURS_PER_GAME_DAY, NEED, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_DAY } from "../ai/civilians/civilian-constants.ts";
-import { CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER, WRECK_SPEED } from "../ai/civilians/civilian-crowd-constants.ts";
+import { CENTIMETRES_PER_METRE, DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, FIGHT_PLAYER, FLAG, GENDER, HOURS_PER_GAME_DAY, NEED, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_DAY } from "../ai/civilians/civilian-constants.ts";
+import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
+import { CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER, WALKER_BEARING_STEPS, WRECK_SPEED } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { residentNameText } from "../ai/civilians/civilian-mood.ts";
@@ -63,6 +64,8 @@ class Harness {
   footAt: { x: number; z: number; velocityX: number; velocityZ: number } | null = null;
   readonly eye = new LookRay();
   readonly thrown: FigureStrike[] = [];
+  readonly strikes: { dirX: number; dirZ: number }[] = [];
+  readonly staggers: { dirX: number; dirZ: number }[] = [];
   readonly looks: DriverLook[] = [];
   /** The figures the ambulance's loading took away (`removeFigure`): the slot asked for and the age given. */
   readonly removed: { slot: number; age: number }[] = [];
@@ -103,6 +106,8 @@ class Harness {
       return true;
     },
     ...(bodies === null ? {} : { bodies }),
+    strikeWalker: (dirX, dirZ) => void this.strikes.push({ dirX, dirZ }),
+    staggerWalker: (dirX, dirZ) => void this.staggers.push({ dirX, dirZ }),
     hookWallHits: (listener) => {
       this.listener = listener;
       return () => void this.unhooked++;
@@ -169,6 +174,47 @@ describe("given the open world's course up and a map given", () => {
   });
 });
 
+/** The harness's crowd stepped until a person is shown, the director's clock brought to the crowd's: that person. */
+function shownOnTheHost(harness: Harness): number {
+  harness.frame();
+  const crowd = harness.crowd();
+  harness.director["seconds"] = stepUntilShown(crowd, crowd.crowdSeconds);
+  return shownResident(crowd);
+}
+
+/** Harness frames until the director's clock reaches `seconds`. */
+function frameUntil(harness: Harness, seconds: number): void {
+  while (harness.director["seconds"] < seconds) harness.frame();
+}
+
+/** A shown resident of the host's crowd turned on the player standing east of her (a fight and a walker's bearing in the log), and the player 1 m east of her fight spot: the crowd second she squares up. */
+function turnedOnHim(harness: Harness): number {
+  const resident = shownOnTheHost(harness);
+  const crowd = harness.crowd();
+  const seconds = harness.director["seconds"];
+  crowd["logHostEvent"](EVENT_KIND.fight, resident, seconds);
+  crowd["logHostEvent"](EVENT_KIND.walker, WALKER_BEARING_STEPS / 4, seconds);
+  crowd["postBatch"]();
+  const ints = crowd.state.ints;
+  const base = resident * RESIDENT_INT_STRIDE;
+  for (let frame = 0; frame < 20 / FRAME && ints[base + RESIDENT_INT.fightPartner] !== FIGHT_PLAYER; frame++) harness.frame();
+  expect(ints[base + RESIDENT_INT.fightPartner], "control: she turned on him").toBe(FIGHT_PLAYER);
+  harness.footAt = { x: ints[base + RESIDENT_INT.fightX]! / CENTIMETRES_PER_METRE + 1, z: ints[base + RESIDENT_INT.fightZ]! / CENTIMETRES_PER_METRE, velocityX: 0, velocityZ: 0 };
+  return ints[base + RESIDENT_INT.arriveTick]! / DECISION_HZ;
+}
+
+/** Whether the crowd's log holds a push of `resident` followed by a walker's bearing. */
+function pushedByWalker(log: Float64Array, resident: number): boolean {
+  for (let at = 0; at + 2 * EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) if (log[at] === EVENT_KIND.push && log[at + 1] === resident && log[at + EVENT_TRIPLE] === EVENT_KIND.walker) return true;
+  return false;
+}
+
+/** The player's punch from a metre short of `resident`'s drawn spot, along +x at her. */
+function punchAt(harness: Harness, resident: number): void {
+  const poses = harness.crowd().poses;
+  harness.director.punch(poses.x[resident]! - 1, poses.z[resident]!, 1, 0);
+}
+
 describe("given the player on foot in the open world", () => {
   it("when the host steps, then the crowd has him as a body at the spot and with the velocity the ragdoll world gives, and when he is in a car again, then it has none", () => {
     const harness = hostWithMap();
@@ -190,6 +236,40 @@ describe("given the player on foot in the open world", () => {
     harness.frame();
     const { walkers } = harness.crowd();
     expect(firstMismatch([walkers.count, walkers.x[0], walkers.velocityX[0]], [1, 5, 2]), "walkers, and his spot and velocity").toBeUndefined();
+  });
+
+  // mutation: sed -i 's/^    if (this.walkerBlows >= 3) {/    if (this.walkerBlows >= 1) {/' src/game/engine/engine-openworld.ts
+  it("when a civilian who turned on him lands two swings inside four seconds, then he is staggered and on his feet; the third puts him down", () => {
+    const harness = hostWithMap();
+    const arrive = turnedOnHim(harness);
+    frameUntil(harness, arrive + 0.4);
+    expect([harness.staggers.length, harness.strikes.length], "after the first swing: staggers, knockdowns").toEqual([1, 0]);
+    frameUntil(harness, arrive + 1.6);
+    expect([harness.staggers.length, harness.strikes.length], "after the second").toEqual([2, 0]);
+    frameUntil(harness, arrive + 2.8);
+    expect(harness.strikes.length, "knockdowns after the third").toBe(1);
+  });
+
+  // mutation: sed -i 's/^export const PLAYER_KO_BLOWS = 3;/export const PLAYER_KO_BLOWS = 99;/' src/game/ai/civilians/civilian-constants.ts
+  it("when he punches a drawn civilian a metre ahead, then a push is logged and she plays the hit clip; the third punch inside ten seconds knocks her out: hidden, thrown, the log ending with a knock", () => {
+    const harness = hostWithMap();
+    const c = shownOnTheHost(harness);
+    const crowd = harness.crowd();
+    punchAt(harness, c);
+    harness.frame();
+    expect(crowd.poses.activity[c], "her clip").toBe(ACTIVITY.hit);
+    expect(pushedByWalker(harness.director.eventLog(), c), "a push by a walker in the log").toBe(true);
+    const thrown = harness.thrown.length;
+    for (let blow = 1; blow < 3; blow++) {
+      punchAt(harness, c);
+      harness.frame();
+    }
+    expect(crowd.poses.shown[c], "shown").toBe(0);
+    expect(harness.thrown.length - thrown, "figures thrown").toBe(1);
+    const log = harness.director.eventLog();
+    let lastKnock = -1;
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) if (log[at] === EVENT_KIND.knock) lastKnock = log[at + 1]!;
+    expect(lastKnock, "the log's last knock").toBe(c);
   });
 });
 

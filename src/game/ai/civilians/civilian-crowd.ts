@@ -9,7 +9,7 @@ import { tickAt } from "./civilian-clock.ts";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import type { DoorSpot } from "./civilian-car-door.ts";
 import { DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, NEVER_TICK, NO_PLACE, PLAN_LEAD_TICKS, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants.ts";
-import { carGap, comingAt } from "./civilian-contact.ts";
+import { carGap, comingAt, punchGap } from "./civilian-contact.ts";
 import {
   BUMP_CLOSING_SPEED,
   BUMP_COOLDOWN_SECONDS,
@@ -137,6 +137,7 @@ export class CivilianCrowd {
   private heardKnocks = 0;
   private readonly heardKnockBy = new Int32Array(HEARD_KNOCK_QUEUE).fill(-1);
   private readonly bumpSince: Float64Array;
+  private readonly hitSince: Float64Array;
   private readonly bumpPartner: Int32Array;
   private readonly pushedAt: Float64Array;
   /** Per resident: when a car was first seen coming at them (-Infinity: none), when they may next be in danger, and when an ambulance is due for them and where they lie (Infinity: none). */
@@ -173,6 +174,7 @@ export class CivilianCrowd {
     this.poses = createCrowdPoses(capacity);
     this.separation = new CrowdSeparation(capacity);
     this.bumpSince = new Float64Array(capacity).fill(-Infinity);
+    this.hitSince = new Float64Array(capacity).fill(-Infinity);
     this.bumpPartner = new Int32Array(capacity).fill(-1);
     this.pushedAt = new Float64Array(capacity).fill(-Infinity);
     this.dangerSince = new Float64Array(capacity).fill(-Infinity);
@@ -538,6 +540,14 @@ export class CivilianCrowd {
     const { shown, activity, activityClock, activityLeft, partner } = this.poses;
     for (let resident = 0; resident < this.separation.capacity; resident++) {
       if (shown[resident] === 0) continue;
+      const hitAge = seconds - this.hitSince[resident]!;
+      if (activity[resident] === ACTIVITY.none && hitAge >= 0 && hitAge < ACTIVITY_SECONDS.hit) {
+        activity[resident] = ACTIVITY.hit;
+        activityClock[resident] = hitAge;
+        activityLeft[resident] = ACTIVITY_SECONDS.hit - hitAge;
+        partner[resident] = NOT_A_CIVILIAN;
+        continue;
+      }
       const age = seconds - this.bumpSince[resident]!;
       if (activity[resident] !== ACTIVITY.none || age < 0 || age >= ACTIVITY_SECONDS.bump) continue;
       activity[resident] = ACTIVITY.bump;
@@ -578,6 +588,37 @@ export class CivilianCrowd {
   private logPair(kind: number, first: number, second: number, seconds: number): void {
     this.logHostEvent(kind, first, seconds);
     if (second !== NOT_A_CIVILIAN) this.logHostEvent(EVENT_KIND.alongside, second, seconds);
+  }
+
+  /** The shown civilian nearest a punch thrown at (x, z) along (dirX, dirZ), within its reach and arc, whom no body stands for (`held`); -1 for none, or without authority. */
+  punchTarget(x: number, z: number, dirX: number, dirZ: number, held: Uint8Array | null): number {
+    if (!this.authority) return -1;
+    const { x: px, z: pz, shown } = this.poses;
+    let nearest = -1;
+    let nearestGap = Infinity;
+    for (let resident = 0; resident < this.separation.capacity; resident++) {
+      if (shown[resident] === 0 || (held !== null && held[resident] === 1)) continue;
+      const gap = punchGap(x, z, dirX, dirZ, px[resident]!, pz[resident]!);
+      if (gap < 0 || gap >= nearestGap) continue;
+      nearestGap = gap;
+      nearest = resident;
+    }
+    return nearest;
+  }
+
+  /** The player's punch from (x, z) landed on `resident`: she may turn on him (the push a walker's bump raises) and plays the hit clip. */
+  punched(resident: number, x: number, z: number, seconds: number): void {
+    if (!this.authority) return;
+    this.raiseBearingPush(resident, x, z, seconds, EVENT_KIND.walker);
+    this.hitSince[resident] = seconds;
+  }
+
+  /** The player's blow fells `resident` (a knock-out): hidden, thrown along (dirX, dirZ), the knock in the log. */
+  knockOut(resident: number, seconds: number, dirX: number, dirZ: number): void {
+    if (!this.authority || this.poses.shown[resident] === 0) return;
+    const x = this.poses.x[resident]!;
+    const z = this.poses.z[resident]!;
+    this.knockDown(resident, seconds, felled(resident, x, activeGround().heightAt(x, z), z, dirX, dirZ, blankStrike()));
   }
 
   private logHostEvent(kind: number, subject: number, seconds: number): void {

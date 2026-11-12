@@ -33,6 +33,9 @@ const HIT_SPAN = 3;
 /** The share of strength a full hit takes, and the seconds strength takes to come back. */
 const HIT_DROP = 0.9;
 const RECOVER_SECONDS = 0.6;
+/** A punch's length (s), and how much stronger (times) his two punching arm motors are for it. */
+const PUNCH_SECONDS = 0.45;
+const PUNCH_STRENGTH = 4;
 /** The balance fades as he tips: full up to this tilt cosine (18°) and gone at the other (50°). */
 const BALANCE_FULL = 0.95;
 const BALANCE_GONE = 0.64;
@@ -124,6 +127,8 @@ export class Walker {
   private getUpFor = 0;
   private stageFor = 0;
   private framesOnFoot = 0;
+  /** Seconds since his punch began; at or past `PUNCH_SECONDS` he is not punching. */
+  private punchFor = PUNCH_SECONDS;
   private forcing = false;
   private groundLast = 0;
   private readonly reference = new Float64Array(4);
@@ -179,6 +184,7 @@ export class Walker {
     this.setAnchor(this.reference);
     this.enterStand(doll, yaw);
     this.strength = 1;
+    this.punchFor = PUNCH_SECONDS;
     this.downFor = this.getUpFor = this.stageFor = this.asking = 0;
     this.sinceStruck = Infinity;
   }
@@ -209,6 +215,14 @@ export class Walker {
     this.strength = 0;
     this.downFor = 0;
     this.asking = 0;
+    this.punchFor = PUNCH_SECONDS;
+  }
+
+  /** He throws a punch with his right arm; false when he cannot (not on his feet, or one is under way). */
+  punch(): boolean {
+    if (this.doll === null || this.state !== "stand" || this.punchFor < PUNCH_SECONDS) return false;
+    this.punchFor = 0;
+    return true;
   }
 
   /** A car struck him (`RagdollSystem.knockWalker` has launched the bodies): he goes limp, and is not struck again for a moment. */
@@ -357,8 +371,24 @@ export class Walker {
     this.getOut(dt, out, at);
     this.loco.update(dt, this.heading, this.floor.pace(this.anchorPos[0]!, this.anchorPos[2]!, this.loco.yaw, this.command));
     this.gait.update(dt, this.loco, this.groundAt, doll.cur, 3);
+    this.punchArm(dt);
     this.floor.stand(this.gait.planted, this.gait.plant);
     this.moveAnchor(dt);
+  }
+
+  /** The punch's arm and elbow targets over the gait's: cocked for 0.12 s, thrown until 0.22 s, then eased back to the gait's by `PUNCH_SECONDS`; their rates are zeroed so the motors do not lead a target that jumps. */
+  private punchArm(dt: number): void {
+    if (this.punchFor >= PUNCH_SECONDS) return;
+    this.punchFor += dt;
+    const targets = this.gait.targets;
+    const cocked = this.punchFor < 0.12;
+    const back = this.punchFor < 0.22 ? 0 : Math.min(1, (this.punchFor - 0.22) / (PUNCH_SECONDS - 0.22));
+    const arm = cocked ? -0.6 : -1.45;
+    const elbow = cocked ? -1.7 : -0.1;
+    targets[GAIT.ARM_R] = arm + (targets[GAIT.ARM_R]! - arm) * back;
+    targets[GAIT.ELBOW_R] = elbow + (targets[GAIT.ELBOW_R]! - elbow) * back;
+    this.gait.rates[GAIT.ARM_R] = 0;
+    this.gait.rates[GAIT.ELBOW_R] = 0;
   }
 
   /**
@@ -536,7 +566,8 @@ export class Walker {
     for (let i = 0; i < MOTORS.length; i++) {
       const row = MOTORS[i]!;
       const target = row.target < 0 ? 0 : targets[row.target]!;
-      const share = row.arm ? limb * grip : limb;
+      const punching = walking && this.punchFor < PUNCH_SECONDS && (row.target === GAIT.ARM_R || row.target === GAIT.ELBOW_R);
+      const share = (row.arm ? limb * grip : limb) * (punching ? PUNCH_STRENGTH : 1);
       const stiffness = walking ? row.walkStiffness : row.stiffness;
       const damping = walking ? row.walkDamping : row.damping;
       const lead = walking && row.target >= 0 ? this.gait.rates[row.target]! : 0;
