@@ -35,6 +35,12 @@ import { checkUploads, uploadCheckAsked } from "./upload-check.ts";
 import { DebrisSystem, SparkSystem, GlassDotSystem, TireSmokeSystem } from "../present/engine-fx.ts";
 import { Fountains } from "./engine-fountains.ts";
 import { GameAudio } from "../present/game-audio.ts";
+import { ShotFx } from "../present/shot-fx.ts";
+import { GUN } from "../present/people.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
+import type { LookRay } from "../ai/civilians/civilian-look.ts";
+import type { CarPick, DollPick } from "./engine-openworld.ts";
 import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { WALKER_SLOT } from "../present/ragdoll-pool.ts";
@@ -114,6 +120,10 @@ const _v = new THREE.Vector3();
 const _footVelocity = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
+const _hand = new THREE.Vector3();
+const _elbow = new THREE.Vector3();
+const _gunRest = new THREE.Vector3();
+const GUN_DOWN = new THREE.Vector3(0, -1, 0);
 const _bn = new THREE.Vector3();
 const _bp = new THREE.Vector3();
 /** No cars: the showcase's set outside its scene. */
@@ -227,6 +237,10 @@ export class CrashEngine extends EngineGarage {
   private readonly shotFx = (contact: THREE.Vector3, normal: THREE.Vector3): void => {
     if (this.witness.sees(contact, FX_REACH.sparks)) this.sparkShower(contact, normal, SHOT_SPARK_IMPULSE);
   };
+  /** The player's muzzle flash and tracers (the guards have their own in `People`). */
+  private readonly playerShots = new ShotFx(1);
+  /** The gun in the player's right hand while a gun is the weapon in hand: the guards' box in their steel. */
+  private readonly handGun = new THREE.Mesh(new THREE.BoxGeometry(GUN.w, GUN.len, GUN.depth), tagMaterial(new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.5, metalness: 0.6 }), MAT.GUN_STEEL));
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
   protected readonly deviceClass: DeviceClass;
@@ -331,6 +345,9 @@ export class CrashEngine extends EngineGarage {
         else if (!this.mouseLook.on) this.toggleMouseLook();
       },
       punchLanded: (x, z, dirX, dirZ) => this.openWorld.punch(x, z, dirX, dirZ),
+      aimRay: (centre, out) => this.aimRay(centre, out),
+      shootRay: (ray, gun) => this.openWorld.shoot(ray, gun),
+      shotFired: (ray, far) => this.shotFired(ray, far),
     });
     this.view.click = () => {
       if (!this.onFoot.armed()) return false;
@@ -370,6 +387,8 @@ export class CrashEngine extends EngineGarage {
     });
     this.impactLight = new THREE.PointLight(0xffc27a, 0, 22, 2);
     this.scene.add(this.impactLight);
+    this.scene.add(this.playerShots.group, this.handGun);
+    this.handGun.visible = false;
     // Four body lamps per car plus at most one lit siren; a phone links the lean pool (`lampPoolFor`). Fixed here, before the programs
     // link: a light-count change relinks every lit shader.
     this.lampLights = new LampLights(this.scene, MAX_CARS * 5, lampPoolFor(desktop, new URLSearchParams(window.location.search).get("lamps")));
@@ -464,6 +483,11 @@ export class CrashEngine extends EngineGarage {
         this.ragdolls.staggerWalker(WALKER_SLOT, 0.5);
       },
       punchProp: (x, z, dirX, dirZ) => this.race.punchProp(x, z, dirX, dirZ),
+      pickDoll: (ray, range, out) => this.pickDoll(ray, range, out),
+      pickCar: (ray, range, out) => this.pickCar(ray, range, out),
+      strikeDoll: (slot, x, y, z, ray, speed) => this.strikeDoll(slot, x, y, z, ray, speed),
+      shotSparks: (x, y, z, ray) => this.shotFx(_p.set(x, y, z), _n.set(-ray.dirX, -ray.dirY, -ray.dirZ)),
+      shootProp: (ray, limit, vx, vz) => this.race.shootProp(ray, limit, vx, vz),
       hookWallHits: (listener) => {
         const recorded = this.race.onWallHit;
         this.race.onWallHit = (i, closing, x, z) => {
@@ -823,6 +847,7 @@ export class CrashEngine extends EngineGarage {
     this.ragdolls.dispose();
     this.lampLights.dispose();
     this.audio.dispose();
+    this.playerShots.dispose();
     this.daylight?.dispose();
     this.envMap?.dispose();
     this.envMap = null;
@@ -872,6 +897,99 @@ export class CrashEngine extends EngineGarage {
   private readonly onArmsMenu = (e: Event): void => {
     if (this.onFoot.armed()) e.preventDefault();
   };
+
+  /** The ray a shot goes along: from the camera through the view's centre (`centre`, or no cursor over the canvas), else through the cursor. */
+  private aimRay(centre: boolean, out: LookRay): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = this.view.hoverX;
+    const y = this.view.hoverY;
+    if (centre || Number.isNaN(x) || Number.isNaN(y) || rect.width < 2 || rect.height < 2) this.ndc.set(0, 0);
+    else this.ndc.set(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.ndc, this.camera);
+    const { origin, direction } = this.raycaster.ray;
+    out.eyeX = origin.x;
+    out.eyeY = origin.y;
+    out.eyeZ = origin.z;
+    out.dirX = direction.x;
+    out.dirY = direction.y;
+    out.dirZ = direction.z;
+  }
+
+  /** The player fired along `ray` and its farthest ray went `far` m: the flash, the tracer, the sound, the law. */
+  private shotFired(ray: LookRay, far: number): void {
+    this.playerShots.fire(0, ray.eyeX + ray.dirX * far, ray.eyeY + ray.dirY * far, ray.eyeZ + ray.dirZ * far);
+    const weapon = this.onFoot.arms.weapon;
+    if (this.audioOn && weapon !== "fists") this.audio.shot(weapon);
+    this.openWorld.shotFired();
+  }
+
+  /** The first dummy of the pool, not his own walker, the ray meets within `range` m. */
+  private pickDoll(ray: LookRay, range: number, out: DollPick): void {
+    out.slot = -1;
+    out.along = Infinity;
+    this.raycaster.set(_p.set(ray.eyeX, ray.eyeY, ray.eyeZ), _n.set(ray.dirX, ray.dirY, ray.dirZ));
+    this.raycaster.far = range;
+    const hits = this.raycaster.intersectObject(this.ragdolls.pickMesh, false);
+    // The raycaster is shared with the car pick and the showcase, which never set `far`.
+    this.raycaster.far = Infinity;
+    for (const hit of hits) {
+      if (hit.instanceId === undefined || hit.instanceId === WALKER_SLOT) continue;
+      out.slot = hit.instanceId;
+      out.x = hit.point.x;
+      out.y = hit.point.y;
+      out.z = hit.point.z;
+      out.along = hit.distance;
+      return;
+    }
+  }
+
+  /** The first live car the ray meets within `range` m, and the glass pane hit (null: the body). */
+  private pickCar(ray: LookRay, range: number, out: CarPick): void {
+    out.car = -1;
+    out.along = Infinity;
+    out.pane = null;
+    this.raycaster.set(_p.set(ray.eyeX, ray.eyeY, ray.eyeZ), _n.set(ray.dirX, ray.dirY, ray.dirZ));
+    this.raycaster.far = range;
+    const cars = this.live();
+    const hits = this.raycaster.intersectObjects(cars.map((car) => car.group), true);
+    this.raycaster.far = Infinity;
+    for (const hit of hits) {
+      for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
+        const index: unknown = o.userData.carIndex;
+        if (typeof index !== "number" || index < 0 || index >= this.carCount) continue;
+        out.car = index;
+        out.x = hit.point.x;
+        out.y = hit.point.y;
+        out.z = hit.point.z;
+        out.along = hit.distance;
+        out.pane = cars[index]!.glassPanes.find((pane) => pane.mesh === hit.object)?.name ?? null;
+        return;
+      }
+    }
+  }
+
+  /** A shot strikes the dummy in pool slot `slot` at (x, y, z) along the ray, as a showcase click strikes one. */
+  private strikeDoll(slot: number, x: number, y: number, z: number, ray: LookRay, speed: number): void {
+    _p.set(x, y, z);
+    _n.set(ray.dirX, ray.dirY, ray.dirZ);
+    // A walker is felled as a showcase click fells one; a dummy already limp takes the blow alone.
+    if (this.ragdolls.walkers[slot]?.active) this.ragdolls.strikeWalker(slot, _p, _n, speed);
+    else this.ragdolls.blowWalker(slot, _p, _n, speed);
+  }
+
+  /** Once a frame: the gun box along the player's right forearm (part 5, the one the ARM_R / ELBOW_R motors drive) and the muzzle the tracers start from; hidden with no gun in hand. */
+  private poseHandGun(): void {
+    const held = this.onFoot.armed() && this.onFoot.arms.weapon !== "fists";
+    this.handGun.visible = held;
+    if (!held) return;
+    const dummies = this.ragdolls.pickMesh;
+    dummies.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
+    dummies.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 1.07, 0), _elbow);
+    _n.copy(_hand).sub(_elbow).normalize();
+    this.handGun.quaternion.setFromUnitVectors(GUN_DOWN, _n);
+    this.handGun.position.copy(_hand).addScaledVector(_n, GUN.len / 2 - 0.04);
+    this.playerShots.setMuzzle(0, _hand.x + _n.x * (GUN.muzzle + GUN.len / 2), _hand.y + _n.y * (GUN.muzzle + GUN.len / 2), _hand.z + _n.z * (GUN.muzzle + GUN.len / 2));
+  }
 
   /**
    * The browser gave the context back: the timer's queries, the PMREM environments (the studio's; Ultra's sky with its handle) and every
@@ -990,6 +1108,8 @@ export class CrashEngine extends EngineGarage {
       lapPart(PART.rest);
       this.debris.update(fxDt);
       this.sparks.update(fxDt);
+      this.playerShots.update(fxDt);
+      this.poseHandGun();
       this.glassDots.update(fxDt);
       armTops(null);
       lapPart(PART.fx);

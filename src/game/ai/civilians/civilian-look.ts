@@ -20,7 +20,7 @@ export class LookRay {
 export type LookText = { title: string; lines: string[] };
 
 /** What the ray meets: its index (resident or place; -1 for nothing) and how far along the ray (m). */
-type Meeting = { index: number; along: number };
+export type Meeting = { index: number; along: number };
 
 /** The shown civilian whose chest the ray passes closest to, within `LOOK_RADIUS` of it and `LOOK_REACH` ahead. */
 function residentMet(poses: CrowdPoses, ray: LookRay): Meeting {
@@ -43,7 +43,7 @@ function residentMet(poses: CrowdPoses, ray: LookRay): Meeting {
 }
 
 /** The building (inside the walls) whose box the ray enters first within `LOOK_REACH`: the slab test in the building's own frame (local x its depth, local z its width), ground to roof. */
-function placeMet(map: OpenWorldMap, ray: LookRay): Meeting {
+export function placeMet(map: OpenWorldMap, ray: LookRay, reach: number = LOOK_REACH): Meeting {
   const met: Meeting = { index: -1, along: Infinity };
   for (let place = 0; place < map.places.length; place++) {
     const entry = map.places[place]!;
@@ -68,11 +68,28 @@ function placeMet(map: OpenWorldMap, ray: LookRay): Meeting {
       enter = Math.max(enter, Math.min(near, far));
       leave = Math.min(leave, Math.max(near, far));
     }
-    if (enter <= 0 || enter >= leave || enter >= met.along || enter > LOOK_REACH) continue;
+    if (enter <= 0 || enter >= leave || enter >= met.along || enter > reach) continue;
     met.index = place;
     met.along = enter;
   }
   return met;
+}
+
+/** The shown figure among the first `count` of `poses`, not marked in `skip`, whose chest the ray passes within `radius` m, the nearest, nearer than `reach` m: its index and the distance along the ray into `out` (index -1, `reach`: none). A bullet's test, as `residentMet` is the look's. Allocates nothing. */
+export function chestMet(poses: Pick<CrowdPoses, "x" | "z" | "feetY" | "shown">, count: number, skip: Uint8Array | null, ray: LookRay, radius: number, reach: number, out: Meeting): Meeting {
+  out.index = -1;
+  out.along = reach;
+  for (let figure = 0; figure < count; figure++) {
+    if (poses.shown[figure] === 0 || (skip !== null && skip[figure] === 1)) continue;
+    const px = poses.x[figure]! - ray.eyeX;
+    const py = poses.feetY[figure]! + CHEST_HEIGHT - ray.eyeY;
+    const pz = poses.z[figure]! - ray.eyeZ;
+    const along = px * ray.dirX + py * ray.dirY + pz * ray.dirZ;
+    if (along <= 0 || along >= out.along || px * px + py * py + pz * pz - along * along > radius * radius) continue;
+    out.index = figure;
+    out.along = along;
+  }
+  return out;
 }
 
 /** The panel's text for what the eye rests on: the civilian in front of it (their line, what they are doing when the line does not say it, and their life log), else the building the ray meets (its kind, who lives or works there, its comings and goings), else nothing; whichever is nearer along the ray. */

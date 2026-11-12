@@ -16,6 +16,7 @@ import type { DriverLook } from "./driver-look.ts";
 import { COP_LOOK, GUARD_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { JOINTS, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
+import { ShotFx } from "./shot-fx.ts";
 
 /** The limbs' joints standing (m, feet at y = 0), off `JOINTS`: shoulders, elbows, hips, knees, each side. */
 const SHOULDER = JOINTS[1]!;
@@ -34,15 +35,7 @@ const FOOT_FOLLOW = 0.5;
 /** The side the gun is held on (index into the limb tables): his right hand. */
 const GUN_SIDE = 0;
 /** A handgun (m): across, along the arm, and how far its muzzle stands past the hand. */
-const GUN = { w: 0.05, len: 0.22, depth: 0.1, muzzle: 0.14 };
-/** How long (s) a muzzle flash and a shot's tracer show (a frame or three at 60 Hz); the most tracers in the air at once. */
-const FLASH_S = 0.05;
-const TRACER_S = 0.07;
-const TRACERS = 24;
-/** A muzzle flash's radius (m) and its colour; a tracer's colour (sRGB). */
-const FLASH_R = 0.14;
-const FLASH_RGB = 0xfff1b8;
-const TRACER_RGB = 0xffcf6a;
+export const GUN = { w: 0.05, len: 0.22, depth: 0.1, muzzle: 0.14 };
 /** Arm and leg swing (rad) at a walk's widest, and the knee's bend on the leg swinging through (guessed, by eye). */
 const LEG_SWING = 0.5;
 const ARM_SWING = 0.4;
@@ -153,36 +146,19 @@ export class People {
   readonly group = new THREE.Group();
   private readonly mesh: DummyMesh;
   private readonly guns: THREE.InstancedMesh;
-  private readonly flashes: THREE.InstancedMesh;
-  private readonly tracers: THREE.LineSegments;
-  private readonly tracerAt = new Float32Array(TRACERS * 6);
-  private readonly tracerAge = new Float32Array(TRACERS).fill(Infinity);
-  private readonly flashAge: Float32Array;
-  private readonly muzzles: Float32Array;
-  private tracerNext = 0;
-  /** Whether a flash or a tracer is still showing: only then are their buffers aged and re-sent. */
-  private firing = false;
+  private readonly shots: ShotFx;
 
   constructor(slots: number) {
+    this.shots = new ShotFx(slots);
     this.mesh = new DummyMesh(slots);
     this.mesh.castShadow = true;
     this.mesh.frustumCulled = false;
     this.guns = new THREE.InstancedMesh(new THREE.BoxGeometry(GUN.w, GUN.len, GUN.depth), tagMaterial(new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.5, metalness: 0.6 }), MAT.GUN_STEEL), slots);
-    this.flashes = new THREE.InstancedMesh(new THREE.OctahedronGeometry(FLASH_R), new THREE.MeshBasicMaterial({ color: FLASH_RGB, toneMapped: false }), slots);
-    for (const m of [this.guns, this.flashes]) {
-      m.frustumCulled = false;
-      for (let i = 0; i < slots; i++) m.setMatrixAt(i, HIDDEN);
-    }
-    this.flashAge = new Float32Array(slots).fill(Infinity);
-    this.muzzles = new Float32Array(slots * 3);
-    const geo = new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(this.tracerAt, 3));
-    this.tracers = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: TRACER_RGB, toneMapped: false, transparent: true, opacity: 0.85 }));
-    this.tracers.frustumCulled = false;
-    this.group.add(this.mesh, this.guns, this.flashes, this.tracers);
+    this.guns.frustumCulled = false;
+    for (let i = 0; i < slots; i++) this.guns.setMatrixAt(i, HIDDEN);
+    this.group.add(this.mesh, this.guns, this.shots.group);
     // Drawn only while someone is out or a shot shows (`update`); the warm-up draws everything hidden too, so its programs link there.
     this.group.visible = false;
-    this.flashes.visible = false;
-    this.tracers.visible = false;
   }
 
   dress(slot: number, cop: boolean, look: DriverLook): void {
@@ -211,25 +187,17 @@ export class People {
     _dir.set(0, -1, 0).applyQuaternion(_gun);
     this.guns.setMatrixAt(slot, _m.compose(_s.copy(_c).addScaledVector(_dir, GUN.len / 2 - 0.04), _gun, _r.set(1, 1, 1)));
     this.guns.instanceMatrix.needsUpdate = true;
-    _s.copy(_c).addScaledVector(_dir, GUN.muzzle + GUN.len / 2).toArray(this.muzzles, slot * 3);
+    _s.copy(_c).addScaledVector(_dir, GUN.muzzle + GUN.len / 2).toArray(this.shots.muzzles, slot * 3);
   }
 
   /** Slot `slot`'s gun fires at (x, y, z): its muzzle flashes and a tracer runs from the muzzle to the point. */
   fire(slot: number, x: number, y: number, z: number): void {
-    this.firing = true;
-    this.flashAge[slot] = 0;
-    const k = this.tracerNext;
-    this.tracerNext = (k + 1) % TRACERS;
-    this.tracerAge[k] = 0;
-    for (let i = 0; i < 3; i++) this.tracerAt[k * 6 + i] = this.muzzles[slot * 3 + i]!;
-    this.tracerAt[k * 6 + 3] = x;
-    this.tracerAt[k * 6 + 4] = y;
-    this.tracerAt[k * 6 + 5] = z;
+    this.shots.fire(slot, x, y, z);
   }
 
   /** Where slot `slot`'s muzzle stood at its last pose. */
   muzzle(slot: number, out: THREE.Vector3): THREE.Vector3 {
-    return out.fromArray(this.muzzles, slot * 3);
+    return out.fromArray(this.shots.muzzles, slot * 3);
   }
 
   hide(slot: number): void {
@@ -239,42 +207,18 @@ export class People {
 
   /** Once per frame after the poses: the flashes and tracers age `dt` s and go out; nothing is drawn while nobody is out and no shot shows. */
   update(dt: number): void {
-    if (this.firing) this.ageShots(dt);
-    this.group.visible = this.mesh.count > 0 || this.firing;
-  }
-
-  private ageShots(dt: number): void {
-    let flashing = false;
-    for (let s = 0; s < this.flashAge.length; s++) {
-      this.flashAge[s] = this.flashAge[s]! + dt;
-      const on = this.flashAge[s]! <= FLASH_S;
-      flashing ||= on;
-      this.flashes.setMatrixAt(s, on ? _m.makeTranslation(this.muzzles[s * 3]!, this.muzzles[s * 3 + 1]!, this.muzzles[s * 3 + 2]!) : HIDDEN);
-    }
-    this.flashes.instanceMatrix.needsUpdate = true;
-    let tracing = false;
-    for (let k = 0; k < TRACERS; k++) {
-      this.tracerAge[k] = this.tracerAge[k]! + dt;
-      if (this.tracerAge[k]! > TRACER_S) this.tracerAt.fill(0, k * 6, k * 6 + 6);
-      else tracing = true;
-    }
-    this.tracers.geometry.getAttribute("position").needsUpdate = true;
-    this.flashes.visible = flashing;
-    this.tracers.visible = tracing;
-    this.firing = flashing || tracing;
+    this.shots.update(dt);
+    this.group.visible = this.mesh.count > 0 || this.shots.firing;
   }
 
   dispose(): void {
     this.group.removeFromParent();
     this.mesh.material.dispose();
     this.mesh.dispose();
-    for (const m of [this.guns, this.flashes]) {
-      m.geometry.dispose();
-      (m.material as THREE.Material).dispose();
-      m.dispose();
-    }
-    this.tracers.geometry.dispose();
-    (this.tracers.material as THREE.Material).dispose();
+    this.guns.geometry.dispose();
+    (this.guns.material as THREE.Material).dispose();
+    this.guns.dispose();
+    this.shots.dispose();
   }
 
   private holster(slot: number): void {

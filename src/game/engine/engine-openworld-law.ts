@@ -6,6 +6,7 @@ import type { ChaseHud } from "../hud/hud-store.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import type { LookRay, Meeting } from "../ai/civilians/civilian-look.ts";
 import { CrimeScene } from "../ai/openworld-crime/crime-scene.ts";
 import { COP_LOOK, FACING_SPEED, FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
 import type { FootArrestPorts, LineOfSight } from "../ai/openworld-crime/offence-source.ts";
@@ -205,6 +206,19 @@ export class OpenWorldLaw {
   playerStruck(seconds: number, grave: boolean): void {
     if (grave) this.scene.playerFought(seconds);
     else this.scene.playerShoved(seconds);
+  }
+
+  copMet(ray: LookRay, radius: number, reach: number, out: Meeting): Meeting {
+    return this.scene.copMet(ray, radius, reach, out);
+  }
+
+  shootCop(cop: number, dirX: number, dirZ: number, seconds: number): void {
+    this.scene.shootCop(cop, dirX, dirZ, seconds);
+  }
+
+  /** A shot was fired: the law knows at once, seen or not. */
+  playerFired(seconds: number): void {
+    this.scene.playerFought(seconds);
   }
 
   dispose(): void {

@@ -49,6 +49,14 @@ A tap shorter than one frame still registers (the press is latched until the nex
 | On foot, the camera: over your right shoulder, its boom pulled in short of walls, a building's rooms and the facades; View cycles it to your own eyes (your head and body out of the way, look round and up with the drag, stick or mouse look) and back. The drive views at the wheel are untouched. The wheel or a pinch zooms the shoulder camera in to 0.8 m from your head, and one notch nearer is your own eyes; zooming out leaves them | V / C / T, scroll | B / Circle | View, pinch |
 | On foot in the open world: left click / RT: punch (fists); right button held / LT: aim (the camera draws in over the shoulder and he faces where it looks; a free mouse is captured while aim is held) | left click, right button held | RT, LT held | |
 
+**On foot in the open world: weapons** (solo or as a room's host; [`ON_FOOT.md`](ON_FOOT.md)):
+
+| Action | Keyboard / mouse | Pad | Touch |
+| --- | --- | --- | --- |
+| Choose a weapon: 1 fists, 2 pistol, 3 shotgun, 4 rifle; LB / RB the one before / after | 1 to 4 | LB / RB | Weapon (next) |
+| Fire: a free cursor fires where it points; a captured mouse or held aim fires at the view's centre. The rifle repeats while fire is held with the mouse captured or aim held | left click | RT | Fire |
+| Aim | right button held | LT held | |
+
 **Pad rumble** (HUD → Driving → Pad rumble, on by default, share key `rumble=0` when off): a connected pad with haptics (`vibrationActuator`, Chromium; Firefox has none, and nothing is sent without a pad) rumbles while you drive. A hit on your car scales by the closing speed the camera's jolt uses (`joltLevel`: nothing under 2 m/s, full at 20 m/s; a tick from the light motor to a 0.4 s thud from both), a landing the drive camera calls hard (`CHASE.landing.fall`) thuds by the fall speed, and a slide buzzes lightly, re-sent every 0.1 s and held back while a hit's or a landing's longer effect plays (`present/rumble.ts`, `GamepadInput.rumble`).
 
 **Boost zoom** (HUD → Playback → Boost zoom, on by default, share key `bzoom=0` when off): while the boost thrust of the car the shot watches is on, a capped radial zoom blur eases in and out of the screen's edges at the high and ultra FX tiers (`present/boost-zoom.ts`; [`CINEMATIC.md`](CINEMATIC.md)). That is your own car, or the one you watch (spectate, follow cam, watch mode, an AI car's boost too), the same car the HUD's gauges show, or the car a reel clip is showing. Free fly and the whole-field view follow no car and draw none.

@@ -5,7 +5,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { blankAiCar, type AiCar } from "../ai/derby-ai.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
-import { NO_FLOOR, setGround } from "../world/ground.ts";
+import { activeGround, NO_FLOOR, setGround } from "../world/ground.ts";
 import type { PropHits } from "../contact/prop-contact.ts";
 import { Campaign } from "../match/campaign.ts";
 import { placeCourse, propColliders, solidsOf, type Placed, type PropCollider } from "../world/placements.ts";
@@ -42,6 +42,7 @@ import type { HighlightClip } from "../match/highlights.ts";
 import type { FreeDrivers } from "../ai/openworld-traffic/openworld-traffic.ts";
 import { type RoadSpot, roadSpotNear } from "../world/road-spot.ts";
 import { punchGap } from "../ai/civilians/civilian-contact.ts";
+import type { LookRay } from "../ai/civilians/civilian-look.ts";
 
 /** The name a clip gives a car that is no racer (traffic, and the cops past it: `entrants` has no row for them). */
 export const TRAFFIC_NAME = "Traffic";
@@ -554,6 +555,30 @@ export abstract class RaceField {
     this.knocked[best] = 1;
     this.recorder.knock(best, -1);
     this.host.knockProp(best, -1, dirX * 3, 1, dirZ * 3);
+  }
+
+  /** A bullet's ray against the standing knockable props: the nearest whose column (0.35 m round, 1.2 m tall) the ray meets nearer than `limit` m is knocked at (vx, 1, vz) as a punch knocks one; how far along the ray it stood, Infinity for none. */
+  shootProp(ray: LookRay, limit: number, vx: number, vz: number): number {
+    const flat = ray.dirX * ray.dirX + ray.dirZ * ray.dirZ;
+    if (flat < 1e-9) return Infinity;
+    let best = -1;
+    let bestAlong = limit;
+    for (let k = 0; k < this.colliders.length; k++) {
+      const c = this.colliders[k]!;
+      if (c.body !== "knock" || this.knocked[c.index] === 1) continue;
+      const along = ((c.x - ray.eyeX) * ray.dirX + (c.z - ray.eyeZ) * ray.dirZ) / flat;
+      if (along <= 0 || along >= bestAlong) continue;
+      if (hypot2(ray.eyeX + ray.dirX * along - c.x, ray.eyeZ + ray.dirZ * along - c.z) > 0.35) continue;
+      const up = ray.eyeY + ray.dirY * along - activeGround().heightAt(c.x, c.z);
+      if (up < 0 || up > 1.2) continue;
+      best = c.index;
+      bestAlong = along;
+    }
+    if (best < 0) return Infinity;
+    this.knocked[best] = 1;
+    this.recorder.knock(best, -1);
+    this.host.knockProp(best, -1, vx, 1, vz);
+    return bestAlong;
   }
 
   /** Where car `k` stands in the lobby: abreast on the course's start anchor like a hosted Survival run's humans (a course without one: its grid). */
