@@ -84,6 +84,20 @@ A tap shorter than one frame still registers (the press is latched until the nex
 | Zoom | scroll | | two-finger pinch |
 | Impact shake: any hit on the followed or driven car shakes the chase, far chase and hood views (the hood at 0.4 of the amount) in every mode, by how hard it hit (none under 2 m/s, full at 20). Debug views → Camera → **Impact**: **Shake strength** (`cam.shake`, 0 is off) and **Gear-change kick** (`cam.shiftKick`: the body's slight pitch at each gear change). Reduced motion never shakes | | | |
 
+## Tether (grappling cable, spike)
+
+A Just Cause-style cable. Aim with the camera's centre: one ray from there hooks the first surface it touches, a car's drawn body (hooked at that exact point of the car), a wall, prop, kerb or the ground (a world point). A ring there is white with nothing hit, green with a surface in reach (80 m of your car, or of the camera in the free view; a small ring marks the exact point), red when the first surface is farther. Your own car and what moves loose (wheels, torn parts, balls, dummies) are passed through. A hint under the ring names the buttons (the mouse first, then the keys; a pad's D-pad) while the tether is on offer.
+
+| Action | Mouse | Keyboard | Controller | Touch |
+|---|---|---|---|---|
+| Hook: at the wheel or following, the first fire ties the target to your car, as long as they stand apart now; fire again aimed at something else and your end moves there (object to object); a third fire starts another cable (two at most, the oldest goes). **In the free view** there is no car of yours: the first fire hooks an object (a ring marks it) and the second a different one, and the cable forms between them | right click: a press that stays within 8 px, and is let go inside a quarter of a second (or any still press while no cable is out) | ' (Quote) | D-pad ↑ | Hook |
+| Reel in while held: the cable shortens at 15 m/s to 3 m, pulling with at most 30 kN, so a light car comes and a heavy one barely moves | hold the right button still for a quarter of a second with a cable out, or hold the middle button | ] (right bracket) | D-pad → (held) | Reel |
+| Cut every cable | middle click (a press shorter than a quarter of a second) | Delete | D-pad ← | Cut |
+
+The mouse uses the right and middle buttons only: the left button orbits the view and picks a car as before, so a drag that orbits never fires, and a right drag does nothing. The browser's context menu stays off the view while the tether is on offer. A taut cable holds its length and a slack one pulls on nothing. A walker cannot be hooked. Nothing here is recorded: a race highlight that holds a step with a cable out is not saved, and a netplay client has no cable (the host's cars are pulled and show no line). The keys are `TETHER_KEYS` in `src/game/engine/engine-keys.ts`, the mouse is `engine/tether-pointer.ts`; the solver is `contact/tether.ts` (`solveTethers`, before the integrate of each slice).
+
+Since the spike's second pass: on a chase camera the ray runs through a point 38 % from the top of the view (the ring is drawn there; first person and the free camera keep the middle). Dummies, knockable props and the High jump's boxes are hooked too: a cable with such an end is a Rapier rope joint (`present/ragdoll-ropes.ts`) in the dummies' world, in the worker or inline, to a kinematic point that follows the other end (a car's point, a world point) or to another body there, so a dummy dangles from a car or two props are tied. The sim does not feel it (the world is cosmetic: the car is not pulled) and it never snaps; cut it with the cut key. The solver runs before each slice's integrate, so a cable fitted to a car at 25 m/s stretches under 2 %. The winch (`WINCH_SPEED` 28 m/s, 55 kN) takes a sedan 40 m out to a wall in about 1.7 s, a monster truck in about 2.2 s; a cable snaps at 140 kN (a sedan yanked at 12 m/s; a swing is 40 kN, a reel at most 55 kN).
+
 ## Racing (no menu open)
 
 | Action | Keyboard | Controller | Touch |

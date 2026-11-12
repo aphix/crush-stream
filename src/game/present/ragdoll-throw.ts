@@ -20,7 +20,7 @@ import { assertFloorBoxes, type FloorBox } from "./walker-floor.ts";
 import { propColliders } from "../world/placements.ts";
 import { flightsOf, NO_STAIRS, StairField } from "../world/stairs.ts";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
-import { DOLL_CAR, DOLL_FLOATS, DOLL_HEADER, DOLL_LIVE, DOLL_RIDES, DOLL_SETTLED, DOLL_STILL, DOLL_VELOCITY, PROP_FLOATS, packBoxes, type ResultMessage } from "./ragdoll-wire.ts";
+import { DOLL_CAR, DOLL_FLOATS, DOLL_HEADER, DOLL_LIVE, DOLL_RIDES, DOLL_SETTLED, DOLL_STILL, DOLL_VELOCITY, PROP_FLOATS, packBoxes, type ResultMessage, type RopeEnd, type RopeMessage } from "./ragdoll-wire.ts";
 import { LIFE, STEP_LOG, type Throw, WALKER_SLOT } from "./ragdoll-pool.ts";
 import { RagdollStepper } from "./ragdoll-step.ts";
 import { PATCH_HALF, STATICS_HALF, terrainColliders } from "./ragdoll-ground.ts";
@@ -515,6 +515,49 @@ export abstract class RagdollThrower extends RagdollStepper {
     return { dummies, props: this.props.outNow() };
   }
 
+  /** Rope commands sent so far: each carries its number, and the world's answer says how many it has heard (`ropeReport.command`). */
+  private ropesSent = 0;
+
+  /** Cable `slot` ties `a` to `b` in the dummies' world, the worker's or this thread's: the number of the command, or -1 when no world is up to hold it. */
+  ropeAttach(slot: number, a: RopeEnd, b: RopeEnd): number {
+    this.pick();
+    return this.ropeCommand({ type: "rope", command: this.ropesSent + 1, slot, a, b });
+  }
+
+  /** Cable `slot`'s rope is cut (-1: every one). */
+  ropeCut(slot: number): void {
+    if (this.mode !== null) this.ropeCommand({ type: "ropeCut", command: this.ropesSent + 1, slot });
+  }
+
+  /** Every rope reels in while `on`. */
+  ropeReel(on: boolean): void {
+    if (this.mode !== null) this.ropeCommand({ type: "ropeReel", command: this.ropesSent + 1, on });
+  }
+
+  private ropeCommand(m: RopeMessage): number {
+    if (this.mode === "remote") this.remote!.rope(m);
+    else if (this.world) this.holdRope(m);
+    else return -1;
+    this.ropesSent = m.command;
+    return m.command;
+  }
+
+  /** A rope command, heard in this thread's world (the worker hears the ones sent to it here too). */
+  holdRope(m: RopeMessage): void {
+    if (m.type === "rope") {
+      this.wake();
+      this.ropes.attach(m.slot, m.a, m.b);
+    } else if (m.type === "ropeCut") this.ropes.cut(m.slot);
+    else this.ropes.reeling = m.on;
+    this.ropeReport.command = m.command;
+    this.ropes.finish(0, this.ropeReport.floats);
+  }
+
+  /** Slot `slot` has a dummy out (a rope may be tied to him). */
+  dollOut(slot: number): boolean {
+    return this.dolls[slot]?.live === true;
+  }
+
   /** Dummies launched from now on lie about until `releaseThrown`, not `LIFE` s (a minigame's score is read while he lies). */
   holdThrown(): void {
     this.thrownLife = Infinity;
@@ -549,9 +592,9 @@ export abstract class RagdollThrower extends RagdollStepper {
     this.hosted = true;
   }
 
-  /** A dummy or a knocked prop is out. */
+  /** A dummy, a knocked prop or a rope is out. */
   get busy(): boolean {
-    return this.live > 0 || this.props.count > 0;
+    return this.live > 0 || this.props.count > 0 || this.ropes.count > 0;
   }
 
   /** How far (0-1) into the next step the last frame's draw is. */
@@ -623,6 +666,8 @@ export abstract class RagdollThrower extends RagdollStepper {
     this.purses?.importPoses(r.purses);
     this.purses?.pose(this.alpha);
     if (r.propsReset) this.tumble?.reset();
+    this.ropeReport.command = r.ropeCommand;
+    this.ropeReport.floats.set(r.ropes);
     for (let k = 0; k < r.props.length; k += PROP_FLOATS) this.tumble?.place(r.props[k]!, _p.fromArray(r.props, k + 1), _q.fromArray(r.props, k + 4));
     for (const ms of r.stepMs) this.stepMs[this.steps++ % STEP_LOG] = ms;
     this.remoteSize.colliders = r.colliders;

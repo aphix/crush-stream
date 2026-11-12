@@ -4,9 +4,9 @@ import { setGround } from "../world/ground.ts";
 import { DRIVE_KEYS } from "../vehicle/drive-input.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, pressKey, stubBrowser } from "./engine-headless.test-util.ts";
-import { SCENE_KEY_BINDINGS, SEAT_KEYS } from "./engine-keys.ts";
+import { SCENE_KEY_BINDINGS, SEAT_KEYS, TETHER_KEYS } from "./engine-keys.ts";
 
-const DRIVING_CODES: string[] = [...Object.values(DRIVE_KEYS).flat(), ...Object.values(SEAT_KEYS).flat()];
+const DRIVING_CODES: string[] = [...Object.values(DRIVE_KEYS).flat(), ...Object.values(SEAT_KEYS).flat(), ...Object.values(TETHER_KEYS)];
 const SEAT_MODES = ["global", "follow", "drive"] as const;
 
 describe("given the key tables the engine reads", () => {

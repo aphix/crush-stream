@@ -3,6 +3,7 @@ import { bleedAfterSlide, DeformableCar } from "../vehicle/car.ts";
 import { StrongestContact, type ContactHit, type JerseyBarrier } from "../scenes/engine-props.ts";
 import { partContactPair } from "../contact/external-contact.ts";
 import { markApproaches, resolveCarPair } from "../contact/pair-contact.ts";
+import { solveTethers, TetherSet } from "../contact/tether.ts";
 import { bandsMeet } from "../contact/cage-outline.ts";
 import { HULL_STRIDE, hullsClear, readHull } from "../contact/hull-gap.ts";
 import type { EjectionWatch } from "../vehicle/ejection.ts";
@@ -72,6 +73,8 @@ export type World = {
   partStirs: number[];
   /** The scene lets a car with nothing in its reach run the step as one slice of the step's whole length (`loneCars`): the race. Off, every car runs the step's slices (a derby bowl and the slab hold a car per slice). */
   lone: boolean;
+  /** The cables between cars and the world (`solveTethers`): empty unless the player fires one. Never recorded: a clip that saw one is not filed (`CrashRecorder.tethered`). */
+  readonly tethers: TetherSet;
   /** The cars the last `stepWorld` ran as lone cars (bit i: `cars[i]`, the first 32): the recorder keeps it (`HighlightClip.lone`), next to `shape`. */
   loners: number;
   /** A recorded `loners` the next `stepWorld` runs to the letter (a highlight replay, with `plan`). */
@@ -94,6 +97,7 @@ export function newWorld(cars: readonly DeformableCar[], barrier: JerseyBarrier 
     strongest: new StrongestContact(),
     beforeSlice: null,
     lone: false,
+    tethers: new TetherSet(),
     loners: 0,
     planLoners: 0,
     pairHit: null,
@@ -301,7 +305,7 @@ export function stepWorld(w: World, dt: number): void {
     slices = contact ? cut : quiet;
     if (dt * hz > slices + 1e-6) slices = Math.min(8, Math.ceil(dt * hz - 1e-6));
     // A lone car's one slice is the step: with every car lone nothing is in contact and the step is the quiet one.
-    if (w.lone && !barrier && slices > 1) {
+    if (w.lone && !barrier && slices > 1 && !w.tethers.sim) {
       mask = loneCars(cars, dt);
       if (allLone(mask, n)) {
         mask = 0;
@@ -338,6 +342,8 @@ export function stepWorld(w: World, dt: number): void {
       continue;
     }
     work[WORK.slices] = work[WORK.slices]! + 1;
+    // Before the integrate, so a cable sees the motion this slice is about to make and holds a car already moving from the first slice.
+    if (w.tethers.count > 0) solveTethers(w.tethers, cars, h);
     w.surfaces.cars = cars;
     w.surfaces.met = w.partTouch;
     w.surfaces.partMet = w.partMet;

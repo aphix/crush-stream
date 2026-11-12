@@ -43,6 +43,7 @@ import type { GameAudio } from "../present/game-audio.ts";
 import { FX_REACH, Witness } from "../present/witness.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import type { OnFootDirector } from "./engine-onfoot.ts";
+import type { TetherDirector } from "./engine-tether.ts";
 import { ChaseCamera } from "../present/engine-camera.ts";
 import { CompactorPress, JerseyBarrier, buildRampBalls, type LampPole, type PredictedHit, type RampBall } from "../scenes/engine-props.ts";
 import type { FleetRamps } from "../scenes/fleet-ramps.ts";
@@ -303,6 +304,8 @@ export abstract class EngineCore {
   protected ragdolls!: RagdollSystem;
   /** The player's trip out of the car and back (the offline fleet's): built after the ragdolls it stands up. */
   protected onFoot!: OnFootDirector;
+  /** The player's grappling cable (aim, fire, retract, cut): the HUD's touch buttons call it. */
+  tether!: TetherDirector;
   protected audio!: GameAudio;
   protected hudAcc = 0;
   protected resizeObs!: ResizeObserver;
@@ -445,6 +448,7 @@ export abstract class EngineCore {
   protected clearLocal(): void {
     clearTransients({ cars: this.cars, poles: this.poles, debris: this.debris, sparks: this.sparks, fountains: this.fountains, glassDots: this.glassDots, smoke: this.smoke, ragdolls: this.ragdolls, rangeRun: this.rangeRun, foliage: this.race.foliage, cine: this.cine });
     this.onFoot?.reset();
+    this.tether?.cut();
   }
 
   /** A scene change, loop, reset or race start: the scene is emptied, the ejection watch forgets its history and netplay clients are told (their snapshots carry `clearGen`). */

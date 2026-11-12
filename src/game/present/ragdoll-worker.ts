@@ -72,10 +72,12 @@ function answer(world: RagdollSystem, seq: number): void {
     stepMs,
     colliders: stats.colliders,
     bodies: stats.bodies,
+    ropes: world.ropeReport.floats.slice(),
+    ropeCommand: world.ropeReport.command,
   };
   spawned.length = 0;
   recorder.restored = false;
-  post(result, [dolls.buffer, purses.buffer, props.buffer, result.wanted.buffer, stepMs.buffer]);
+  post(result, [dolls.buffer, purses.buffer, props.buffer, result.wanted.buffer, stepMs.buffer, result.ropes.buffer]);
 }
 
 function throwDummy(world: RagdollSystem, m: Extract<ToWorker, { type: "throw" }>): void {
@@ -112,6 +114,7 @@ function handle(world: RagdollSystem, m: ToWorker): void {
     world.takeStrikes();
   } else if (m.type === "knock") world.knockProp(m.prop, m.car, m.vx, m.vy, m.vz);
   else if (m.type === "throw") throwDummy(world, m);
+  else if (m.type === "rope" || m.type === "ropeCut" || m.type === "ropeReel") world.holdRope(m);
   else if (m.type === "cage") {
     if (cars[m.slot]?.token !== m.car) cars[m.slot] = new RemoteCar(m.car);
     cars[m.slot]!.setCage(m);

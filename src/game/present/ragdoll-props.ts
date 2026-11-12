@@ -674,6 +674,18 @@ export class PropBodies {
     return NaN;
   }
 
+  /** Knockable prop `i` as a body a rope can tie: one still standing is knocked loose where it is (no velocity, no car's); null for a prop that is not knockable or whose world is not here. */
+  take(i: number): RigidBody | null {
+    if (i < 0 || i >= this.placed.length || PREFABS[this.placed[i]!.prefab].body !== "knock") return null;
+    if (this.state[i] === STAND) this.knock(i, -1, 0, 0, 0);
+    return this.state[i] === OUT ? this.bodies[i]! : null;
+  }
+
+  /** The farthest (m) a point of prop `i`'s own shape lies from its middle. */
+  reachOf(i: number): number {
+    return this.reach[i]!;
+  }
+
   /** Poses after the last step (`cur`) or the one before it, for `pose`'s blend; a sleeping prop's only until it has been read asleep. */
   capture(cur: boolean): void {
     const into = cur ? this.cur : this.prev;

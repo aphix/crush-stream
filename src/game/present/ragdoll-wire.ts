@@ -122,6 +122,25 @@ export function unpackBoxes(packed: Float64Array): FloorBox[] {
   return boxes;
 }
 
+/** One end of a rope (the tether's cable with an end in the dummies' world): a thing held (a dummy's slot, a prop's placement index or a box's index) at a world point on it, a car at a car-frame point, or a world point. */
+export type RopeEnd = { kind: "doll" | "prop" | "box" | "car"; id: number; at: Triple } | { kind: "world"; at: Triple };
+
+/** Every message the tether sends carries the number of the command it is, so an answer says how many the world has heard. */
+export type RopeMessage =
+  | { type: "rope"; command: number; slot: number; a: RopeEnd; b: RopeEnd }
+  | { type: "ropeCut"; command: number; slot: number }
+  | { type: "ropeReel"; command: number; on: boolean };
+
+/** A rope's record in a result, floats: its state (`ROPE_NONE`, `ROPE_PENDING`: told of but not yet joined, `ROPE_JOINED`), end a's world point, end b's, its length (m). */
+export const ROPE_FLOATS = 8;
+export const ROPE_STATE = 0;
+export const ROPE_NONE = 0;
+export const ROPE_PENDING = 1;
+export const ROPE_JOINED = 2;
+export const ROPE_A = 1;
+export const ROPE_B = 4;
+export const ROPE_LENGTH = 7;
+
 export type ToWorker =
   | { type: "course"; json: TrackJson; arm?: SceneryArm }
   | { type: "boxes"; boxes: Float64Array }
@@ -129,6 +148,7 @@ export type ToWorker =
   | { type: "knock"; prop: number; car: number; vx: number; vy: number; vz: number }
   | ThrowMessage
   | CageMessage
+  | RopeMessage
   | FrameMessage;
 
 /** What a body in the dummies' world struck on car `car`: `HIT_PARTS[part]` (a pane a torso struck, a part a prop or carton met), the striker's energy (J) and push (world m/s: its closing velocity along the contact normal). */
@@ -175,6 +195,9 @@ export interface ResultMessage {
   stepMs: Float64Array;
   colliders: number;
   bodies: number;
+  /** `MAX_TETHERS` rope records (`ROPE_FLOATS` each) and the last rope command the world had heard when it wrote them. */
+  ropes: Float32Array;
+  ropeCommand: number;
 }
 
 export type FromWorker = { type: "ready" } | { type: "failed"; message: string } | ResultMessage;

@@ -255,6 +255,8 @@ export class CrashRecorder {
   private owed = -Infinity;
   private throwing = false;
   private closing = false;
+  /** The last step a tether was out in (-1: none this race): the sim a clip replays has no cable, so a clip that holds such a step is not filed. */
+  private tetherStep = -1;
 
   constructor(course: CourseMemory | null = null) {
     this.course = course;
@@ -301,6 +303,12 @@ export class CrashRecorder {
     this.owed = -Infinity;
     this.throwing = false;
     this.closing = false;
+    this.tetherStep = -1;
+  }
+
+  /** A tether is out in the step about to run (`World.tethers`): clips from before it are kept, one that spans it is not filed. */
+  tethered(): void {
+    this.tetherStep = this.step;
   }
 
   /**
@@ -869,7 +877,7 @@ export class CrashRecorder {
     if (slot < 0) return;
     const start = this.keyStep[slot]!;
     const steps = this.step - start;
-    if (steps <= 0) return;
+    if (steps <= 0 || this.tetherStep >= start) return;
     const deform = this.deformGain(c.hitCars);
     const score = clipScore(c.score, deform);
     if (!this.ledger.ranks(score)) return;

@@ -291,4 +291,6 @@ export type Doll = {
   vel: Float32Array;
   /** The player's walker holds his joints and torso (on foot): the pool does not damp, sleep or retire him. */
   driven: boolean;
+  /** Ropes tied to him (`Ropes`): he lies about for as long as any is. */
+  ropes: number;
 };

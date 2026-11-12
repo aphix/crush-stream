@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { COUNT, countPart } from "../kernel/frame-parts.ts";
-import type { PrefabId } from "../world/catalog.ts";
+import { PREFABS, type PrefabId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
 import { assetDrawGroupOf } from "../world/scenery-assets/draw-group.ts";
 import type { DrawnPose, PrefabMaterials, PrefabPart, Skin } from "./prefab-pieces.ts";
@@ -74,6 +74,7 @@ export class PropTumble {
       const partsKey = `${id}:${style ?? ""}`;
       let built = parts.get(partsKey);
       if (!built) parts.set(partsKey, (built = prefabParts(id, mats, style)));
+      const knockOf = Int32Array.from(list, (idx) => (PREFABS[id].body === "knock" ? idx : -1));
       const group = this.meshes.length;
       this.meshes.push(
         built.map((part, pi) => {
@@ -86,6 +87,7 @@ export class PropTumble {
             if (pi === 0 && tint(id, idx, col, style)) mesh.setColorAt(s, col);
           }
           mesh.computeBoundingSphere();
+          mesh.userData.knockOf = knockOf;
           add(mesh, id, part.shared ? part.material : null, part.shadow !== false);
           return mesh;
         }),

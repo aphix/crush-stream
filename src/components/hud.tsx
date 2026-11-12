@@ -19,6 +19,7 @@ import { DriftLabel, DriftOverlay } from "@/components/drift-charge";
 import { RESET_GLOW, ResetPrompt } from "@/components/reset-prompt";
 import { pickScene, sceneInPlay, sceneLabel, scenesFor } from "@/components/scene-picks";
 import { StartLights } from "@/components/start-lights";
+import { TetherHint } from "@/components/tether-hint";
 import { FullscreenButton, MouseLookButton, PhoneFullscreenButton, TouchControls } from "@/components/touch-controls";
 import { ZONE } from "@/components/touch-pedals";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
@@ -300,6 +301,7 @@ function DesktopHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
           <ResetPrompt view={state.derbyView} input={reset} race={false} onTap={tapReset} className="mt-14 sm:mt-0" />
         </div>
       ) : null}
+      <TetherHint state={state} />
     </div>
   );
 }

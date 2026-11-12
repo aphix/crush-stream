@@ -43,6 +43,8 @@ export class RagdollSystem extends RagdollThrower {
 
   /** A new run: no dummies out, every car's driver back in, every knocked prop back on its spot. */
   reset(): void {
+    this.ropes.cut(-1);
+    this.ropeReport.floats.fill(0);
     this.pending.length = 0;
     this.driverThrows.length = 0;
     this.struck.length = 0;

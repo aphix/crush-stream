@@ -94,9 +94,10 @@ export abstract class RagdollStepper extends RagdollPool {
     const sceneOn = this.course !== null && activeGround() === this.course.ground;
     this.props.here(sceneOn);
     this.keepScenePatch(sceneOn);
-    if (this.live === 0 && this.props.count === 0 && this.boxes.asleep()) {
+    if (this.live === 0 && this.props.count === 0 && this.boxes.asleep() && this.ropes.count === 0) {
       this.loose.clear();
       for (let i = 0; i < MAX_CARS; i++) this.proxies.follow(i, null);
+      this.ropes.finish(dt, this.ropeReport.floats);
       this.wanted.fill(0);
       return;
     }
@@ -123,6 +124,7 @@ export abstract class RagdollStepper extends RagdollPool {
     this.proxies.follow(MAX_CARS, barrier);
     this.proxies.teleport = false;
     this.proxies.glassNear(cars, dt);
+    this.ropes.follow(cars);
     // Whole steps out of the accumulator (`STEP` with a dummy out or a knocked prop moving fast, `PROP_STEP` for knocked
     // props alone), each proxy a step further along its frame's path.
     const step = this.live > 0 || !this.boxes.asleep() || this.props.faster(PROP_FAST) ? STEP : PROP_STEP;
@@ -143,6 +145,7 @@ export abstract class RagdollStepper extends RagdollPool {
     for (let j = 1; j <= steps; j++) {
       this.proxies.move(Math.min(1, (j * step - lead) / dt));
       this.loose.move(Math.min(1, (j * step - lead) / dt));
+      this.ropes.move(Math.min(1, (j * step - lead) / dt));
       // One step this frame: the pose before it is the last frame's last (nothing moves a part between steps but a step).
       if (j === steps) {
         for (const d of this.dolls) {
@@ -181,7 +184,7 @@ export abstract class RagdollStepper extends RagdollPool {
       const before = d.age;
       d.age += dt;
       if (before < GRACE && d.age >= GRACE) for (const b of d.bodies) b.collider(0).setCollisionGroups(dollGroups(s));
-      if (d.age > d.life || torsoY(d) < -30 || this.fellOff(d)) {
+      if ((d.age > d.life && d.ropes === 0) || torsoY(d) < -30 || this.fellOff(d)) {
         this.despawn(s);
         continue;
       }
@@ -199,6 +202,7 @@ export abstract class RagdollStepper extends RagdollPool {
     if (!this.hosted) this.purses?.pose(this.alpha);
     this.props.advance(dt, this.step);
     this.props.pose(this.alpha);
+    this.ropes.finish(dt, this.ropeReport.floats);
   }
 
   /** Whether his lowest point has fallen off the active ground's rim (`fellOffRim`): he is put away at once, not 30 m down. */
@@ -214,6 +218,7 @@ export abstract class RagdollStepper extends RagdollPool {
    * barrier is not within `WAKE_NEAR` of one.
    */
   protected dormant(cars: readonly RagCar[], barrier: THREE.Object3D | null, dt: number): boolean {
+    if (this.ropes.count > 0) return false;
     if (this.purses && !this.purses.asleep()) return false;
     if (!this.props.asleep()) return false;
     if (!this.boxes.asleep() || this.loose.moving > 0) return false;

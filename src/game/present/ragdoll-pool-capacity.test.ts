@@ -40,7 +40,7 @@ function answerWith(liveSlot: number): ResultMessage {
     dolls[record + DOLL_HEADER + 7 * k + 6] = 1;
     dolls[record + DOLL_HEADER + 7 * (PARTS.length + k) + 6] = 1;
   }
-  return { type: "result", seq: 0, epoch: 0, dolls, alpha: 1, lastSlot: liveSlot, purses: new Float32Array(BASE_SLOTS * PURSE_BLOCK), props: new Float32Array(0), propsReset: false, spawned: [], hits: [], wanted: new Uint8Array(MAX_CARS), active: true, stepMs: new Float64Array(0), colliders: 0, bodies: 0 };
+  return { type: "result", seq: 0, epoch: 0, dolls, alpha: 1, lastSlot: liveSlot, purses: new Float32Array(BASE_SLOTS * PURSE_BLOCK), props: new Float32Array(0), propsReset: false, spawned: [], hits: [], wanted: new Uint8Array(MAX_CARS), active: true, stepMs: new Float64Array(0), colliders: 0, bodies: 0, ropes: new Float32Array(0), ropeCommand: 0 };
 }
 
 describe("given a ragdoll pool at its default capacity", () => {

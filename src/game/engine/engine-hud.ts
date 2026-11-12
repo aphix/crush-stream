@@ -183,6 +183,7 @@ export abstract class EngineHud extends EngineWarm {
       lookAt: this.lookAtText(),
       bust: this.bustText(),
       gameMinute: this.gameMinuteText(),
+      tether: this.tether?.hud() ?? null,
       boost: this.seat.boost,
       drift: seatDrift,
       view: this.seat.view,
