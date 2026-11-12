@@ -171,4 +171,17 @@ describe("given a walker standing on a floor 4 m up", () => {
     walker["decideState"](doll, 1, 4.5, FRAME);
     expect(walker.state, "0.5 m over his floor").toBe("down");
   });
+
+  // mutation: sed -i 's/height - this.floor.level < FALL_HEIGHT - this.floor.rise/height - this.floor.level < FALL_HEIGHT/' src/game/present/ragdoll-walker.ts
+  it("when one foot is planted a 0.36 m tread up and his torso is 1.1 m over the lower floor, then he is not fallen; with both feet on that tread he is", () => {
+    const walker = system.walker;
+    const doll = system["dolls"][WALKER]!;
+    walker["floor"].level = 0.36;
+    walker["floor"].rise = 0.36;
+    walker["decideState"](doll, 1, 1.1, FRAME);
+    expect(walker.state, "mid-step up the tread").toBe("stand");
+    walker["floor"].rise = 0;
+    walker["decideState"](doll, 1, 1.1, FRAME);
+    expect(walker.state, "both feet on the tread, torso 0.74 m over it").toBe("down");
+  });
 });

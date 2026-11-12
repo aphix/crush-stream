@@ -56,12 +56,17 @@ export class WalkFloor {
   stairs: StairField = NO_STAIRS;
   /** The floor (m) under his planted feet: every read is asked from here. */
   level = 0;
+  /** How far (m) `level` stands over the floor his other foot last stood on: mid-step on a tread, his torso is between the two. */
+  rise = 0;
+  private readonly footFloor = new Float64Array(2);
 
   /** He stands with his torso centre at (`x`, `y`, `z`). */
   reset(x: number, y: number, z: number): void {
     this.level = y - TORSO_HEIGHT;
     const floor = this.under(x, z);
     if (floor !== NO_FLOOR) this.level = floor;
+    this.footFloor.fill(this.level);
+    this.rise = 0;
   }
 
   /** The floor straight under (x, z) for feet at `level`; `NO_FLOOR` where there is none. */
@@ -111,8 +116,14 @@ export class WalkFloor {
   stand(planted: Uint8Array, plant: Float64Array): void {
     let level = NO_FLOOR;
     for (let f = 0; f < 2; f++) {
-      if (planted[f] === 1) level = Math.max(level, this.under(plant[f * 3]!, plant[f * 3 + 2]!));
+      if (planted[f] !== 1) continue;
+      const floor = this.under(plant[f * 3]!, plant[f * 3 + 2]!);
+      if (floor === NO_FLOOR) continue;
+      this.footFloor[f] = floor;
+      level = Math.max(level, floor);
     }
-    if (level !== NO_FLOOR) this.level = level;
+    if (level === NO_FLOOR) return;
+    this.level = level;
+    this.rise = level - Math.min(this.footFloor[0]!, this.footFloor[1]!);
   }
 }

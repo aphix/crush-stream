@@ -284,8 +284,8 @@ export class Walker {
 
   private decideState(doll: Doll, upright: number, height: number, dt: number): void {
     if (this.state === "stand") {
-      // On his feet his height is read over the floor under them (`WalkFloor.level`), so a fall on an upper floor is seen as one on the street is.
-      if (upright < FALL_UPRIGHT || height - this.floor.level < FALL_HEIGHT) this.drop();
+      // On his feet his height is read over the floor under them (`WalkFloor.level`), so a fall on an upper floor is seen as one on the street is; a foot planted a tread up raises that floor before his torso follows (`rise`).
+      if (upright < FALL_UPRIGHT || height - this.floor.level < FALL_HEIGHT - this.floor.rise) this.drop();
       return;
     }
     if (this.state === "down") {
