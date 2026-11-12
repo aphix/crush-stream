@@ -7,6 +7,7 @@ import { PAD_BUTTON } from "../vehicle/gamepad.ts";
 import { activeGround } from "../world/ground.ts";
 import { WEAPONS } from "./engine-onfoot-arms.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
+import type { CarPick } from "./engine-openworld.ts";
 
 const LINK = "#scene=openworld&seed=beef";
 /** Seconds the traffic needs to stand its first kerb cars (its first passes show every space in reach). */
@@ -99,6 +100,41 @@ describe("given the real engine in the open world, its player on foot", () => {
     for (let shot = 0; shot < 8; shot++) rig.engine["openWorld"].shoot(ray, WEAPONS.shotgun);
     expect(car.velocity.x, "the car's speed along the shot (m/s)").toBeGreaterThan(0);
     expect(pane.state, `pane ${pane.name}`).not.toBe("intact");
+  });
+
+  // mutation: sed -i 's/^    this.raycaster.intersectObjects(_carGroups, true, _carHits);/    this.raycaster.intersectObjects(cars.map((car) => car.group), true, _carHits);/' src/game/engine/engine.ts
+  it("when two shots are picked against the cars, then the raycaster is handed one list of every live car's group and one list for its hits, the same lists both times, and the pick names the car and the pane hit", () => {
+    rig.getOut();
+    const torso = rig.torso();
+    rig.place(1, torso.x + 6, torso.z);
+    rig.run(0.5);
+    const car = rig.cars()[1]!;
+    car.group.updateMatrixWorld(true);
+    const eye = new THREE.Vector3(torso.x, torso.y + 0.3, torso.z);
+    const sides = car.glassPanes.filter((pane) => pane.name === "doorL" || pane.name === "doorR");
+    // The middle of the pane's glass: the mesh's own origin sits at its foot, on the door's skin.
+    const at = (pane: (typeof sides)[number]): THREE.Vector3 => {
+      pane.mesh.geometry.computeBoundingBox();
+      return pane.mesh.localToWorld(pane.mesh.geometry.boundingBox!.getCenter(new THREE.Vector3()));
+    };
+    const pane = sides.reduce((near, next) => (at(next).distanceTo(eye) < at(near).distanceTo(eye) ? next : near));
+    const centre = at(pane);
+    const ray = rayFrom(eye.x, eye.y, eye.z, centre.x, centre.y, centre.z);
+    const out: CarPick = { car: -1, x: 0, y: 0, z: 0, along: Infinity, pane: null };
+    const cast = vi.spyOn(rig.engine["raycaster"], "intersectObjects");
+    let calls: typeof cast.mock.calls = [];
+    try {
+      for (let shot = 0; shot < 2; shot++) rig.engine["pickCar"](ray, WEAPONS.shotgun.range, out);
+      calls = [...cast.mock.calls];
+    } finally {
+      cast.mockRestore();
+    }
+    const [first, second] = calls;
+    expect(second![0], "the same list of groups").toBe(first![0]);
+    expect(second![2], "the same list for the hits").toBe(first![2]);
+    expect(first![0].length, "every live car's group").toBe(rig.engine["live"]().length);
+    expect(out.car, "the car picked").toBe(1);
+    expect(out.pane, "the pane picked").toBe(pane.name);
   });
 
   // mutation: sed -i '/^    this.openWorld.shotFired();/d' src/game/engine/engine.ts

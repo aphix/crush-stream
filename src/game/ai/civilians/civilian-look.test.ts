@@ -6,11 +6,12 @@ import { RESIDENT_INT } from "./civilian-constants.ts";
 import { CHEST_HEIGHT, LOOK_REACH } from "./civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
-import { lookAtOf, LookRay } from "./civilian-look.ts";
+import { lookAtOf, LookRay, placeMet } from "./civilian-look.ts";
 import { createCrowdPoses } from "./crowd-poses.ts";
 import { historyLines, residentNameText } from "./civilian-mood.ts";
 import { FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "./civilian-crowd.test-util.ts";
 import { detCos, detSin, hypot3 } from "../../kernel/physics-core.js";
+import { allocatedBytes, untilQuiet } from "../../kernel/alloc-sample.test-util.ts";
 
 const map = buildFixtureMap();
 const EYE_HEIGHT = 1.5;
@@ -141,5 +142,27 @@ describe("given a crowd and the eye aimed at the door of a home", () => {
     expect(lookAtOf(crowd.state, crowd.poses, 0, aimedAt(eye, eye.eyeX + ROOF_RUN, EYE_HEIGHT + ROOF_RISE, eye.eyeZ)), "over the roof").toBeNull();
     const away = aimedAt(eyeAt(house.x - house.depth / 2 - 3, house.z), house.x - 50, EYE_HEIGHT, house.z);
     expect(lookAtOf(crowd.state, crowd.poses, 0, away), "looking away").toBeNull();
+  });
+});
+
+describe("given the eye aimed at the door of a home, asked as a bullet asks", () => {
+  /** Calls a read makes: a call that made one small object would read far above the bound. */
+  const CALLS = 2000;
+  /** The sampling profiler's own cost is 4-5 KB of a read. */
+  const BOUND_BYTES = 8192;
+
+  // mutation: sed -i 's/^  const origin = _origin;/  const origin = [0, 0, 0];/' src/game/ai/civilians/civilian-look.ts
+  it("when the building the ray meets is asked for 2000 times, then each answer names the home and all of them together allocate under 8 KB", () => {
+    const crowd = newCrowd(map);
+    const home = crowd.state.ints[RESIDENT_INT.home]!;
+    const house = map.places[home]!;
+    const ray = aimedAt(eyeAt(house.x - house.depth / 2 - 3, house.z), house.x, EYE_HEIGHT, house.z);
+    const met = { index: -1, along: Infinity };
+    const ask = (): void => {
+      for (let call = 0; call < CALLS; call++) placeMet(map, ray, LOOK_REACH, met);
+    };
+    const bytes = untilQuiet(() => allocatedBytes(ask), BOUND_BYTES);
+    expect(met.index, "the building met").toBe(home);
+    expect(bytes, "bytes allocated by 2000 asks").toBeLessThanOrEqual(BOUND_BYTES);
   });
 });
