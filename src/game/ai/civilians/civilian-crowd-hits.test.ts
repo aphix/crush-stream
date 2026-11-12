@@ -147,6 +147,21 @@ describe("given two civilians of the host's crowd in a fight that ends in a knoc
     expect(firstMismatch([tail[0]!, tail[1]!, tail[3]!, tail[4]!, tail[6]!, tail[7]!], [EVENT_KIND.knock, victim, EVENT_KIND.push, victim, EVENT_KIND.alongside, starter]), "the log's last three entries").toBeUndefined();
   });
 
+  // mutation: sed -i '/^      if (blow.landing <= this.blowsLanded\[victim\]!) continue;/d' src/game/ai/civilians/civilian-crowd.ts
+  it("when the crowd clock runs back and over the window of the fight's first blow ten times, then that one swing counts once: the victim is still shown, no strike is queued, and the log holds no knock", () => {
+    const { crowd, starter, victim } = stagedFight();
+    const arrive = crowd.state.ints[starter * RESIDENT_INT_STRIDE + RESIDENT_INT.arriveTick]! / DECISION_HZ;
+    crowd.takeStrikes();
+    const framesOver = Math.round(0.5 / FRAME_SECONDS);
+    for (let pass = 0; pass < 10; pass++) for (let frame = 0; frame < framesOver; frame++) crowd.step(arrive + 0.1 + frame * FRAME_SECONDS, [], true);
+    expect(crowd.poses.shown[victim], "the victim is still shown").toBe(1);
+    expect(crowd.takeStrikes().length, "strikes queued").toBe(0);
+    const log = crowd.eventLog();
+    let knocks = 0;
+    for (let at = 0; at < log.length; at += EVENT_TRIPLE) if (log[at] === EVENT_KIND.knock && log[at + 1] === victim) knocks++;
+    expect(knocks, "knocks logged for the victim").toBe(0);
+  });
+
   // mutation: sed -i 's/^      if (by >= 0) {/      if (by >= 9e9) {/' src/game/ai/civilians/civilian-crowd.ts
   it("when a client hears a knock that names a striker, then it throws her along the blow with no car anywhere", () => {
     const { crowd, starter, victim, landing } = stagedFight();

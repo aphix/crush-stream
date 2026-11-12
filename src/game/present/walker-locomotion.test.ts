@@ -56,17 +56,17 @@ describe("given a walker standing still", () => {
     });
   }
 
-  // mutation: sed -i 's/^const JERK = 250;/const JERK = 1e9;/' src/game/present/walker-locomotion.ts
+  // mutation: sed -i 's/^const JERK = 175;/const JERK = 1e9;/' src/game/present/walker-locomotion.ts
   it("when he is asked to run from a stand, sampled at 240 Hz for a second, then his acceleration never changes faster than the jerk limit and starts from nothing", () => {
     const SUB = FRAME / 4;
     const loco = new Locomotion();
     loco.reset(0);
     loco.update(SUB, 0, RUN_SPEED);
-    expect(Math.abs(loco.accel), "the first frame's acceleration").toBeLessThanOrEqual(250 * SUB + 1e-9);
+    expect(Math.abs(loco.accel), "the first frame's acceleration").toBeLessThanOrEqual(175 * SUB + 1e-9);
     for (let f = 1; f < 240; f++) {
       const before = loco.accel;
       loco.update(SUB, 0, RUN_SPEED);
-      expect(Math.abs(loco.accel - before) / SUB, `frame ${f}`).toBeLessThanOrEqual(1.05 * 250);
+      expect(Math.abs(loco.accel - before) / SUB, `frame ${f}`).toBeLessThanOrEqual(1.05 * 175);
     }
   });
 

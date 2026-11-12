@@ -157,6 +157,8 @@ export class CivilianCrowd {
   private readonly crimesDue: Int32Array;
   private readonly blows: Uint8Array;
   private readonly blowsFight: Int32Array;
+  /** Per victim, the landing second of the latest swing counted in the fight `blowsFight` names: a swing is counted once however many steps look at its window. */
+  private readonly blowsLanded: Float64Array;
   /** Per victim, the blow that knocks her out in the fight `blowsFight` names (0: none), drawn once a fight. */
   private readonly knockoutAt: Uint8Array;
   /** The crowd second of the step before this one: where the blows `findPunches` looks for begin. */
@@ -186,6 +188,7 @@ export class CivilianCrowd {
     this.blows = new Uint8Array(capacity);
     this.blowsFight = new Int32Array(capacity).fill(NEVER_TICK);
     this.knockoutAt = new Uint8Array(capacity);
+    this.blowsLanded = new Float64Array(capacity).fill(-Infinity);
     this.batch = new Float64Array((capacity + EVENT_LOG_CAPACITY) * EVENT_TRIPLE);
     this.wreckedAt = new Float64Array(map.places.length).fill(-Infinity);
   }
@@ -624,8 +627,11 @@ export class CivilianCrowd {
       if (this.blowsFight[victim] !== fightTick) {
         this.blowsFight[victim] = fightTick;
         this.blows[victim] = 0;
+        this.blowsLanded[victim] = -Infinity;
         this.knockoutAt[victim] = knockoutBlow(state.seed, victim, fightTick);
       }
+      if (blow.landing <= this.blowsLanded[victim]!) continue;
+      this.blowsLanded[victim] = blow.landing;
       this.blows[victim] = this.blows[victim]! + 1;
       const knockout = this.knockoutAt[victim]!;
       if (knockout === 0 || this.blows[victim] !== knockout || this.poses.shown[victim] === 0) continue;

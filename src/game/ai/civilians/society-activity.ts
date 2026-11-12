@@ -426,6 +426,8 @@ export function findWalkerStrike(state: CityState, fromSeconds: number, toSecond
 export class CivilianBlow {
   striker = -1;
   victim = -1;
+  /** Crowd second the swing lands. */
+  landing = 0;
 }
 
 /**
@@ -442,6 +444,7 @@ export function findCivilianBlow(state: CityState, fromSeconds: number, toSecond
     if (landing < 0 || landing >= ints[base + RESIDENT_INT.nextDecisionTick]! / DECISION_HZ) continue;
     out.striker = resident;
     out.victim = partner;
+    out.landing = landing;
     return resident;
   }
   return -1;
