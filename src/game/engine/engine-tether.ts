@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { LookRay, type Meeting } from "../ai/civilians/civilian-look.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { rigidCentre } from "../vehicle/car-air.ts";
 import { MAX_TETHERS } from "../kernel/constants.ts";
@@ -20,9 +21,11 @@ const NEAR_CLIP_M = 0.5;
 /** Where a chase camera's aim passes through its view, as a share of the view's height from the top: above the middle, as a third-person shooter's, since the middle of a chase view meets the ground about 11 m in front of the car. */
 const CHASE_RETICLE_FROM_TOP = 0.38;
 const CHASE_RETICLE_NDC = 1 - 2 * CHASE_RETICLE_FROM_TOP;
+/** A drawn civilian is hooked when her chest axis lies within this far (m) behind the first surface the sight line meets: her own figure's front is that surface. */
+const PERSON_SLACK_M = 0.5;
 
 /** The dummies' world, as the tether talks to it: its ropes, and which dummies are out. */
-type TetherRopes = Pick<RagdollSystem, "ropeAttach" | "ropeCut" | "ropeReel" | "dollOut" | "ropeReport">;
+type TetherRopes = Pick<RagdollSystem, "ropeAttach" | "ropeCut" | "ropeReel" | "dollOut" | "ropeReport" | "torso">;
 
 /** What the director reads of the engine. */
 interface TetherHost {
@@ -45,6 +48,10 @@ interface TetherHost {
   afoot(): boolean;
   /** The dummy pool slot of the player's own walker: the sight line passes through him. */
   self(): number;
+  /** The drawn civilian with no body whose chest the sight line passes nearer than `reach` m, into `out` (index -1: none). */
+  personMet(ray: LookRay, reach: number, out: Meeting): Meeting;
+  /** A body stood now for drawn civilian `civilian`: its dummy slot, -1 when she can have none. */
+  standPerson(civilian: number): number;
 }
 
 /** What the sight line met: a car (its index), the static world, or a thing in the dummies' world (`RAPIER`, and `thing`: its `thingCode`). */
@@ -90,6 +97,12 @@ export class TetherDirector {
   private aimThing = 0;
   private readonly aimAt = new THREE.Vector3();
   private readonly heldWorld = new THREE.Vector3();
+  /** A held dummy's hook point less its torso, so the held marker rides her. */
+  private readonly heldOffset = new THREE.Vector3();
+  /** The drawn civilian with no body the aim would hook (-1: none): a body is stood for her when the fire is made. */
+  private aimPerson = -1;
+  private readonly sight = new LookRay();
+  private readonly personAim: Meeting = { index: -1, along: 0 };
   /** Per cable slot, the number of the rope command that tied it in the dummies' world (0: none there), and whether the winch was last told to reel. */
   private readonly commands: number[] = Array.from({ length: MAX_TETHERS }, () => 0);
   private reelSent = false;
@@ -185,9 +198,14 @@ export class TetherDirector {
     }
   }
 
-  /** Where the held first object is now (its car's drawn pose), or null when none is held. */
+  /** Where the held first object is now (its car's drawn pose, a dummy's torso), or null when none is held. */
   private heldPlace(): THREE.Vector3 | null {
     if (!this.held) return null;
+    if (this.heldCar === RAPIER && thingKind(this.heldThing) === THING.doll) {
+      if (this.host.ropes.torso(thingIndex(this.heldThing), this.heldWorld, null)) return this.heldWorld.add(this.heldOffset);
+      this.held = false;
+      return null;
+    }
     if (this.heldCar === WORLD || this.heldCar === RAPIER) return this.heldWorld.copy(this.heldAt);
     const car = this.host.cars()[this.heldCar];
     if (car === undefined) {
@@ -204,12 +222,29 @@ export class TetherDirector {
     this.view.state = AIM.none;
     this.aimCar = WORLD;
     this.aimThing = 0;
+    this.aimPerson = -1;
     const matrix = this.host.camera.matrixWorld;
     _eye.setFromMatrixPosition(matrix);
     const rise = this.host.chase() ? CHASE_RETICLE_NDC * Math.tan(THREE.MathUtils.degToRad(this.host.camera.getEffectiveFOV()) / 2) : 0;
     this.view.dir.set(0, rise, -1).transformDirection(matrix);
     _origin.copy(cars[player]?.group.position ?? _eye);
-    if (this.firstSurface(cars, player)) this.view.state = this.view.point.distanceTo(_origin) <= TETHER_RANGE ? AIM.valid : AIM.far;
+    const surface = this.firstSurface(cars, player);
+    const sight = this.sight;
+    sight.eyeX = _eye.x;
+    sight.eyeY = _eye.y;
+    sight.eyeZ = _eye.z;
+    sight.dirX = this.view.dir.x;
+    sight.dirY = this.view.dir.y;
+    sight.dirZ = this.view.dir.z;
+    const person = this.host.personMet(sight, surface ? _eye.distanceTo(this.view.point) + PERSON_SLACK_M : SIGHT_M, this.personAim);
+    if (person.index >= 0) {
+      this.aimPerson = person.index;
+      this.aimCar = WORLD;
+      this.aimThing = 0;
+      this.view.point.copy(_eye).addScaledVector(this.view.dir, person.along);
+      this.aimAt.copy(this.view.point);
+    }
+    if (surface || person.index >= 0) this.view.state = this.view.point.distanceTo(_origin) <= TETHER_RANGE ? AIM.valid : AIM.far;
   }
 
   /**
@@ -276,6 +311,14 @@ export class TetherDirector {
   /** A waiting fire. With a player's car: the first hooks the target to it, the second moves the player's end to the new target. Without: the first holds the object, the second ties the two. */
   private attach(): void {
     if (this.view.state !== AIM.valid) return;
+    if (this.aimPerson >= 0) {
+      // A drawn civilian with no body: one is stood for her now, and the fire hooks it.
+      const slot = this.host.standPerson(this.aimPerson);
+      this.aimPerson = -1;
+      if (slot < 0) return;
+      this.aimCar = RAPIER;
+      this.aimThing = thingCode(THING.doll, slot);
+    }
     if (this.host.playerCar() < 0) {
       this.attachFree();
       return;
@@ -301,16 +344,20 @@ export class TetherDirector {
   /** The free camera's fire: an object held already and a different one aimed at make a cable between them; else the aim is held as the first. */
   private attachFree(): void {
     this.pendingSlot = -1;
-    if (!this.held) {
+    const place = this.heldPlace();
+    if (place === null) {
       this.held = true;
       this.heldCar = this.aimCar;
       this.heldThing = this.aimThing;
       this.heldAt.copy(this.aimAt);
+      if (this.aimCar === RAPIER && thingKind(this.aimThing) === THING.doll && this.host.ropes.torso(thingIndex(this.aimThing), _point, null)) this.heldOffset.subVectors(this.aimAt, _point);
       return;
     }
     if (this.sameTarget(this.heldCar, this.heldThing)) return;
     const slot = this.open();
-    this.host.tethers.setEnd(slot, 0, this.heldCar, this.heldAt.x, this.heldAt.y, this.heldAt.z, this.heldThing);
+    // A car's end is a point of its frame; any other is where the held thing is now.
+    const at = this.heldCar >= 0 ? this.heldAt : place;
+    this.host.tethers.setEnd(slot, 0, this.heldCar, at.x, at.y, at.z, this.heldThing);
     this.aimEnd(slot, 1);
     this.tie(slot);
     this.held = false;
