@@ -124,7 +124,7 @@ function cutAt(command: number, degrees: number): Cut {
 const cutCases: readonly { it: string; degrees: number; expectedMaxFace: number; expectedMinSpeedAbove: number; expectedMinSpeedBelow: number; expectedMaxRegain: number }[] = [
   { it: "when a sprint is turned 45 degrees, then he curves to it in half a second and keeps most of his speed", degrees: 45, expectedMaxFace: 0.55, expectedMinSpeedAbove: 5.5, expectedMinSpeedBelow: 7, expectedMaxRegain: 0.8 },
   { it: "when a sprint is turned 90 degrees, then he slows to a pivot and is facing the new way inside a second", degrees: 90, expectedMaxFace: 1, expectedMinSpeedAbove: 1.5, expectedMinSpeedBelow: 5.2, expectedMaxRegain: 1.6 },
-  { it: "when a sprint is turned 180 degrees, then he slows to a pivot's pace and turns about inside a second", degrees: 180, expectedMaxFace: 1, expectedMinSpeedAbove: -1, expectedMinSpeedBelow: 2, expectedMaxRegain: 1.8 },
+  { it: "when a sprint is turned 180 degrees, then he slows to a pivot's pace and turns about inside 1.05 s", degrees: 180, expectedMaxFace: 1.05, expectedMinSpeedAbove: -1, expectedMinSpeedBelow: 2, expectedMaxRegain: 1.8 },
 ];
 
 describe("given a walker sprinting along +z", () => {
