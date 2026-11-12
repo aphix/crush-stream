@@ -182,6 +182,49 @@ describe("given a walker and a man standing still 2 m ahead of him", () => {
     expect(system.walkers[STANDER]!.state, "the man run into").not.toBe("stand");
     expect(system.walker.state, "the runner").toBe("stand");
   });
+
+  /** He runs into the man at 3.5 m/s, a frame at a time, until the man leaves his feet: the man's torso's speed along +x (away from the runner) that frame, and the runner's least strength up to it. */
+  function runInto(): { away: number; runnerLeast: number } {
+    system.startWalker(new THREE.Vector3(2, 0, 0), -Math.PI / 2, { cop: false, look: driverLook(1, 0) }, STANDER);
+    frames(system, 1);
+    let runnerLeast = 1;
+    for (let f = 0; f < 1.2 * FRAME_HZ && system.walkers[STANDER]!.state === "stand"; f++) {
+      frames(system, FRAME, () => {
+        system.walker.heading = Math.PI / 2;
+        system.walker.command = RUN_SPEED;
+        system.walker.ask();
+      });
+      runnerLeast = Math.min(runnerLeast, system.walker.strength);
+    }
+    expect(system.walkers[STANDER]!.state, "control: the man run into left his feet").not.toBe("stand");
+    return { away: system["dolls"][STANDER]!.bodies[0]!.linvel().x, runnerLeast };
+  }
+
+  // mutation: sed -i 's/^        const sign = struck === b ? 1 : -1;/        const sign = struck === b ? -1 : 1;/' src/game/present/ragdoll-throw.ts
+  it("when he runs into the man, then the man is thrown away from him: his torso leaves along +x the frame he goes down", () => {
+    expect(runInto().away, "the man's torso's speed along +x (m/s)").toBeGreaterThan(0.5);
+  });
+
+  // mutation: sed -i 's/^        this.walkers\[runner\]!.stagger(0.5);/        void runner;/' src/game/present/ragdoll-throw.ts
+  it("when he runs into the man and knocks him down, then the runner staggers: his strength falls to a half (and a frame's recovery)", () => {
+    expect(runInto().runnerLeast, "the runner's least strength").toBeLessThanOrEqual(0.55);
+  });
+
+  // mutation: sed -i 's/^      if (this.beside) hit = Math.min(hit, 0.8 \* HIT_SPAN);/      void 0;/' src/game/present/ragdoll-walker.ts
+  it("when his torso is moved off its root as hard as a felling blow, then beside another body he keeps his feet, weakened, and with nobody beside him he falls", () => {
+    frames(system, SETTLE_SECONDS);
+    const walker = system.walker;
+    const doll = system["dolls"][WALKER]!;
+    const fell = (beside: boolean): boolean => {
+      doll.vel[0] = 20;
+      walker.beside = beside;
+      walker["feelHits"](doll, FRAME);
+      return walker.state !== "stand";
+    };
+    expect(fell(true), "beside another body").toBe(false);
+    expect(walker.strength, "beside another body: weakened").toBeLessThan(0.5);
+    expect(fell(false), "with nobody beside him").toBe(true);
+  });
 });
 
 describe("given a walker standing on a floor 4 m up", () => {
