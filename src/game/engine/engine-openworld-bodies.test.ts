@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -35,8 +35,6 @@ const FRAME_S = 1 / FRAME_HZ;
 const SWING_STEP_RAD = 0.02;
 const MOST_OFF_STRAIGHT_RAD = 0.15;
 const MOST_REVERSALS_PER_SECOND = 1.5;
-/** Her body is on her spot when its torso is within this far (m) of it: a walking body's own sway is a few centimetres. */
-const ON_HER_SPOT_M = 0.15;
 /** The first pool slot a body takes. */
 const FIRST_BODY_SLOT = 4;
 /** A body lying on the street has its torso within this far (m) of the ground. */
@@ -86,8 +84,8 @@ describe("given the real engine in the open world and the player's car running a
     const crowd = world()["crowd"]!;
     const yaw = crowd.poses.yaw[resident]!;
     const arrival = RUN_UP_M / Math.max(speed, RUN_UP_MPS);
-    const x = crowd.poses.x[resident]! + detSin(yaw) * crowd.poses.speed[resident]! * arrival;
-    const z = crowd.poses.z[resident]! + detCos(yaw) * crowd.poses.speed[resident]! * arrival;
+    const x = crowd.poses.x[resident]! + Math.sin(yaw) * crowd.poses.speed[resident]! * arrival;
+    const z = crowd.poses.z[resident]! + Math.cos(yaw) * crowd.poses.speed[resident]! * arrival;
     const nearestX = geometry.streetX.reduce((best, line) => (Math.abs(line - x) < Math.abs(best - x) ? line : best));
     const nearestZ = geometry.streetZ.reduce((best, line) => (Math.abs(line - z) < Math.abs(best - z) ? line : best));
     const alongX = Math.abs(nearestZ - z) < Math.abs(nearestX - x);
@@ -109,13 +107,14 @@ describe("given the real engine in the open world and the player's car running a
   it("when a civilian walks a straight street, then her body faces her way within a few degrees and does not swing left and right with her steps", () => {
     const crowd = world()["crowd"]!;
     const car = rig.cars()[0]!;
-    const wrap = (angle: number): number => detAtan2(detSin(angle), detCos(angle));
+    const wrap = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle));
     let steady = 0;
     let worst = 0;
     let reversals = 0;
     for (let tried = 0, resident = 0; tried < STRAIGHT_TRIES && steady < STEADY_FRAMES; resident = (resident + 1) % crowd.poses.count, tried++) {
       if (crowd.poses.shown[resident] === 0 || crowd.poses.activity[resident] !== ACTIVITY.none || crowd.poses.speed[resident]! < WALKING_MPS * 2) continue;
-      car.spawnFacing(crowd.poses.x[resident]! - Math.sin(crowd.poses.yaw[resident]!) * STRAIGHT_CAR_BEHIND_M, crowd.poses.z[resident]! - Math.cos(crowd.poses.yaw[resident]!) * STRAIGHT_CAR_BEHIND_M, crowd.poses.yaw[resident]!, 0);
+      // Behind her along her own heading: a car stood off to one side can sit on her path after a corner and pin her body.
+      car.spawnFacing(crowd.poses.x[resident]! - detSin(crowd.poses.yaw[resident]!) * STRAIGHT_CAR_BEHIND_M, crowd.poses.z[resident]! - detCos(crowd.poses.yaw[resident]!) * STRAIGHT_CAR_BEHIND_M, crowd.poses.yaw[resident]!, 0);
       car.group.position.y = activeGround().heightAt(car.group.position.x, car.group.position.z, 0.5);
       layOnGround(car);
       rig.run(BODY_WAIT_S);
@@ -128,22 +127,20 @@ describe("given the real engine in the open world and the player's car running a
       let previousSign = 0;
       let steadySince = crowd.poses.yaw[resident]!;
       let steadyFor = 0;
-      let plainFor = 0;
+      let sinceMoved = SETTLED_FRAMES;
       for (let frame = 0; frame < STRAIGHT_FRAMES && world()["bodies"]!.slotOf(resident) === slot; frame++) {
         rig.run(FRAME_S);
         if (Math.abs(wrap(crowd.poses.yaw[resident]! - steadySince)) > YAW_STEADY_RAD) {
           steadySince = crowd.poses.yaw[resident]!;
           steadyFor = 0;
         } else steadyFor++;
-        // A stoop moves her drawn spot (`Stoops.keepOut`) and her body walks round it, and a corner or kerb holds the body behind her spot while it catches up: real turns, not a step's swing. Her plain walk is the frames with her spot as the crowd's separation drew it and her body on it, `SETTLED_FRAMES` on from the last frame that was not.
-        const doll = ragdolls()["dolls"][slot]!;
+        // A stoop moves her drawn spot (`Stoops.keepOut`) and her body walks round it: a real turn, not a step's swing, so those frames and the settling after them are not measured.
         const moved = crowd.poses.x[resident] !== crowd["separation"].drawX[resident] || crowd.poses.z[resident] !== crowd["separation"].drawZ[resident];
-        const onHerSpot = hypot2(doll.cur[0]! - crowd.poses.x[resident]!, doll.cur[2]! - crowd.poses.z[resident]!) <= ON_HER_SPOT_M;
-        plainFor = moved || !onHerSpot ? 0 : plainFor + 1;
+        sinceMoved = moved ? 0 : sinceMoved + 1;
         const facing = ragdolls().walkers[slot]!.facing;
         const step = wrap(facing - previous);
         previous = facing;
-        if (steadyFor < SETTLED_FRAMES || plainFor < SETTLED_FRAMES) continue;
+        if (steadyFor < SETTLED_FRAMES || sinceMoved < SETTLED_FRAMES) continue;
         steady++;
         worst = Math.max(worst, Math.abs(wrap(facing - crowd.poses.yaw[resident]!)));
         const sign = Math.abs(step) > SWING_STEP_RAD ? Math.sign(step) : 0;
