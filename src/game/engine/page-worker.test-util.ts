@@ -25,14 +25,18 @@ export class PageWorker {
   onmessage: Listener | null = null;
   onerror: Listener | null = null;
   private readonly listeners = new Map<string, Listener[]>();
-  private readonly thread: Promise<Thread>;
+  private readonly thread: Promise<Thread> | null;
 
   constructor(url: string | URL) {
-    this.thread = PageWorker.start(String(url)).then((thread) => {
-      thread.on("message", (data: unknown) => this.fire("message", { data }));
-      thread.on("error", (err: Error) => this.fire("error", { message: err.message }));
-      return thread;
-    });
+    // A worker that never answers: the dummies stay inline, as with no `Worker`, since a thread can't resolve Rapier and would answer at thread timing.
+    this.thread = String(url).includes("ragdoll-worker") ? null : this.open(String(url));
+  }
+
+  private async open(url: string): Promise<Thread> {
+    const thread = await PageWorker.start(url);
+    thread.on("message", (data: unknown) => this.fire("message", { data }));
+    thread.on("error", (err: Error) => this.fire("error", { message: err.message }));
+    return thread;
   }
 
   private static async start(url: string): Promise<Thread> {
@@ -47,11 +51,11 @@ export class PageWorker {
 
   postMessage(message: unknown, transfer?: ArrayBuffer[] | { transfer?: ArrayBuffer[] }): void {
     const list = Array.isArray(transfer) ? transfer : transfer?.transfer;
-    void this.thread.then((thread) => thread.postMessage(message, list));
+    void this.thread?.then((thread) => thread.postMessage(message, list));
   }
 
   terminate(): void {
-    void this.thread.then((thread) => thread.terminate());
+    void this.thread?.then((thread) => thread.terminate());
   }
 
   private fire(type: "message" | "error", event: { data?: unknown; message?: string }): void {
