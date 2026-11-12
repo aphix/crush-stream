@@ -209,9 +209,24 @@ export class OpenWorldTraffic {
     if (spot < 0 || resident < 0 || resident >= RESIDENT_CAPACITY) return false;
     const own = residentSpot[resident]!;
     if (own === spot && this.carIdOf(resident) >= 0) return true;
-    if (own !== spot && (own !== -1 || taken[spot] === 1)) return false;
+    if (own !== spot && (own === -1 ? taken[spot] === 1 : !this.takeSpot(resident, own, spot))) return false;
     if (this.movers.hasTripFor(resident)) return false;
     if (!this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS)) return false;
+    residentSpot[resident] = spot;
+    taken[spot] = 1;
+    return true;
+  }
+
+  /** Resident `resident`'s claim moves from `own` to `spot`, the space the brain puts her car in: a free space is taken, a space another resident's claim holds is swapped for `own`. Only while no car stands at either, so nothing visibly moves; false otherwise or when `spot` is a trip's reservation. */
+  private takeSpot(resident: number, own: number, spot: number): boolean {
+    const { residentSpot, standing, taken } = this.context;
+    if (standing[own] !== STANDING.none || standing[spot] !== STANDING.none) return false;
+    if (taken[spot] === 1) {
+      let holder = -1;
+      for (let other = 0; other < RESIDENT_CAPACITY && holder < 0; other++) if (residentSpot[other] === spot) holder = other;
+      if (holder < 0) return false;
+      residentSpot[holder] = own;
+    } else taken[own] = 0;
     residentSpot[resident] = spot;
     taken[spot] = 1;
     return true;
