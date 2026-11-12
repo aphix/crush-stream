@@ -3,7 +3,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import type { DriverSeat, SeatView } from "../vehicle/car-drive.ts";
 import type { PadState } from "../vehicle/gamepad.ts";
 import { DISC_RADIUS } from "../world/ground.ts";
-import { detAsin, detAtan2, detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
+import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { AutoCam, type AutoScene } from "./auto-cam.ts";
 import { CHASE, DriveCam, easeFov } from "./drive-cam.ts";
 import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
@@ -329,11 +329,11 @@ export class ChaseCamera {
       this.radius = shot.radius;
       this.pitch = shot.pitch;
       this.angle = soloAngle;
-      const cp = detCos(this.pitch);
+      const cp = Math.cos(this.pitch);
       this.pos.set(
-        this.look.x + detSin(this.angle) * this.radius * cp,
-        this.look.y + this.radius * detSin(this.pitch),
-        this.look.z + detCos(this.angle) * this.radius * cp,
+        this.look.x + Math.sin(this.angle) * this.radius * cp,
+        this.look.y + this.radius * Math.sin(this.pitch),
+        this.look.z + Math.cos(this.angle) * this.radius * cp,
       );
     } else {
       if (cars.length >= 2) {
@@ -355,7 +355,7 @@ export class ChaseCamera {
   kick(carCount: number): void {
     this.trauma = this.reduceMotion ? 0 : Math.min(1, 0.85 * CHASE.shake);
     if (!this.userFramed) {
-      this.angle = detAtan2(this.camera.position.x - this.look.x, this.camera.position.z - this.look.z);
+      this.angle = Math.atan2(this.camera.position.x - this.look.x, this.camera.position.z - this.look.z);
       this.radius = THREE.MathUtils.clamp(this.radius + Math.max(0, carCount - 2) * 0.4, 8, 22);
     }
   }
@@ -394,12 +394,12 @@ export class ChaseCamera {
     }
     if (spinRate > 0 && !this.dragging && !this.locked && !padTurn && !this.reduceMotion) this.angle += spinRate * wallDt;
 
-    const cp = detCos(this.pitch);
-    const sp = detSin(this.pitch);
+    const cp = Math.cos(this.pitch);
+    const sp = Math.sin(this.pitch);
     this.pos.set(
-      this.look.x + detSin(this.angle) * this.radius * cp,
+      this.look.x + Math.sin(this.angle) * this.radius * cp,
       this.look.y + this.radius * sp,
-      this.look.z + detCos(this.angle) * this.radius * cp,
+      this.look.z + Math.cos(this.angle) * this.radius * cp,
     );
     this.pushFromPosts();
     this.keepInRim();
@@ -592,9 +592,9 @@ export class ChaseCamera {
     if (!this.fallWatch) {
       this.fallWatch = true;
       this.drive.release();
-      const a = detAtan2(p.x, p.z);
+      const a = Math.atan2(p.x, p.z);
       const r = DISC_RADIUS - FALL_EYE_IN;
-      this.fallEye.set(detSin(a) * r, FALL_EYE_Y, detCos(a) * r);
+      this.fallEye.set(Math.sin(a) * r, FALL_EYE_Y, Math.cos(a) * r);
       this.camera.getWorldDirection(this.fallAim).multiplyScalar(this.camera.position.distanceTo(p)).add(this.camera.position);
     }
     if (!hold) this.fallAim.lerp(p, 1 - Math.exp(-8 * wallDt));
@@ -610,9 +610,9 @@ export class ChaseCamera {
     // Seconds: the shake runs at 6-9 Hz, a readable jolt (it ran near 100 Hz, which beat against the frame rate as a strobing flicker).
     const t = performance.now() / 1000;
     // Across the view (the Battlefront 2 "orbit" shake, masterclass 40:05): the car near the eye shakes, the road far ahead holds still, and a hit never pulses the eye toward or away from the car.
-    this.camera.translateX(detSin(t * SHAKE_RAD_S[0]) * s * 0.14);
-    this.camera.translateY(detCos(t * SHAKE_RAD_S[1]) * s * 0.09);
-    this.camera.rotateZ(detSin(t * SHAKE_RAD_S[2]) * s * 0.01);
+    this.camera.translateX(Math.sin(t * SHAKE_RAD_S[0]) * s * 0.14);
+    this.camera.translateY(Math.cos(t * SHAKE_RAD_S[1]) * s * 0.09);
+    this.camera.rotateZ(Math.sin(t * SHAKE_RAD_S[2]) * s * 0.01);
   }
 
   /** Orbit angle / radius / pitch from the camera's current place around `look`. */
@@ -620,9 +620,9 @@ export class ChaseCamera {
     const dx = this.camera.position.x - this.look.x;
     const dy = this.camera.position.y - this.look.y;
     const dz = this.camera.position.z - this.look.z;
-    this.angle = detAtan2(dx, dz);
+    this.angle = Math.atan2(dx, dz);
     this.radius = THREE.MathUtils.clamp(hypot3(dx, dy, dz), this.minRadius, ORBIT_RADIUS.max);
-    this.pitch = THREE.MathUtils.clamp(detAsin(THREE.MathUtils.clamp(dy / this.radius, -0.99, 0.99)), this.pitchLow, this.pitchHigh);
+    this.pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(dy / this.radius, -0.99, 0.99)), this.pitchLow, this.pitchHigh);
   }
 
   private placeApproach(cars: readonly DeformableCar[]): void {

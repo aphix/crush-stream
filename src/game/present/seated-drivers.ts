@@ -1,4 +1,3 @@
-import { detAcos, detAsin, detCos } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -131,10 +130,10 @@ function duck(style: BodyStyle, d: number): { lean: number; down: number } {
   if (d <= 0) return _duck;
   const { recline, hip } = driverSeat(style);
   const back = Math.max(style.rearBulkhead.z, style.roofZ[0]) + HEAD.r + ROOF_END_CLEAR;
-  const wall = detAsin(THREE.MathUtils.clamp((hip.z - back) / HEAD.up, 0, 1));
-  const to = Math.min(wall, detAcos(Math.max(-1, detCos(recline) - d / HEAD.up)));
+  const wall = Math.asin(THREE.MathUtils.clamp((hip.z - back) / HEAD.up, 0, 1));
+  const to = Math.min(wall, Math.acos(Math.max(-1, Math.cos(recline) - d / HEAD.up)));
   _duck.lean = Math.max(0, to - recline);
-  _duck.down = d - HEAD.up * (detCos(recline) - detCos(recline + _duck.lean));
+  _duck.down = d - HEAD.up * (Math.cos(recline) - Math.cos(recline + _duck.lean));
   return _duck;
 }
 

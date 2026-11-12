@@ -1,4 +1,4 @@
-import { detAtan2, detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
+import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { PartSeat } from "../vehicle/part-geometry.ts";
@@ -23,7 +23,7 @@ export type Occluder = { x: number; z: number; cos: number; sin: number; hx: num
 
 /** Box local x = (cos yaw, −sin yaw), local z = (sin yaw, cos yaw): the props' and the jersey slab's frame. */
 export function occluder(x: number, z: number, yaw: number, hx: number, hz: number, circle: boolean, y0: number, y1: number): Occluder {
-  return { x, z, cos: detCos(yaw), sin: detSin(yaw), hx, hz, circle, y0, y1 };
+  return { x, z, cos: Math.cos(yaw), sin: Math.sin(yaw), hx, hz, circle, y0, y1 };
 }
 
 /** The cars' solids reach this far (m) under their origin. */
@@ -343,7 +343,7 @@ export const CLEAR = {
 };
 /** Flat sample directions: 30° apart, so a face at least 0.25 m thick within 1.9 m of the spot is always reached. */
 const FLAT = 12;
-const RING = Array.from({ length: FLAT }, (_, i) => [detCos((i * 2 * Math.PI) / FLAT), detSin((i * 2 * Math.PI) / FLAT)] as const);
+const RING = Array.from({ length: FLAT }, (_, i) => [Math.cos((i * 2 * Math.PI) / FLAT), Math.sin((i * 2 * Math.PI) / FLAT)] as const);
 /** What `clearSpot` costs a search budget: its solid tests (about one sight-line sample each). */
 export const CLEAR_COST = FLAT + 3;
 /** What a candidate spot's cheap checks (ground height, solid) cost a search budget, in sight-line samples: measured at about 20 µs each, a search tries up to 160 of them. */
@@ -615,7 +615,7 @@ export class CineCam {
     if (!this.has) return false;
     camera.position.copy(this.eye);
     camera.lookAt(p.x, p.y + CINE.aimUp, p.z);
-    const fov = THREE.MathUtils.clamp(2 * THREE.MathUtils.radToDeg(detAtan2(CINE.frame, this.eye.distanceTo(p))), CINE.fov[0]!, CINE.fov[1]!);
+    const fov = THREE.MathUtils.clamp(2 * THREE.MathUtils.radToDeg(Math.atan2(CINE.frame, this.eye.distanceTo(p))), CINE.fov[0]!, CINE.fov[1]!);
     if (Math.abs(fov - camera.fov) > 0.01) {
       camera.fov = fov;
       camera.updateProjectionMatrix();
