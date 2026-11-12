@@ -39,6 +39,12 @@ export class RagdollBodyHost {
     return true;
   }
 
+  path(slot: number, out: { x: number; z: number }): void {
+    const gait = this.ragdolls().walkers[slot]!.gait;
+    out.x = gait.pathX;
+    out.z = gait.pathZ;
+  }
+
   steer(slot: number, heading: number, speed: number): void {
     const walker = this.ragdolls().walkers[slot]!;
     walker.heading = heading;

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -84,8 +84,8 @@ describe("given the real engine in the open world and the player's car running a
     const crowd = world()["crowd"]!;
     const yaw = crowd.poses.yaw[resident]!;
     const arrival = RUN_UP_M / Math.max(speed, RUN_UP_MPS);
-    const x = crowd.poses.x[resident]! + Math.sin(yaw) * crowd.poses.speed[resident]! * arrival;
-    const z = crowd.poses.z[resident]! + Math.cos(yaw) * crowd.poses.speed[resident]! * arrival;
+    const x = crowd.poses.x[resident]! + detSin(yaw) * crowd.poses.speed[resident]! * arrival;
+    const z = crowd.poses.z[resident]! + detCos(yaw) * crowd.poses.speed[resident]! * arrival;
     const nearestX = geometry.streetX.reduce((best, line) => (Math.abs(line - x) < Math.abs(best - x) ? line : best));
     const nearestZ = geometry.streetZ.reduce((best, line) => (Math.abs(line - z) < Math.abs(best - z) ? line : best));
     const alongX = Math.abs(nearestZ - z) < Math.abs(nearestX - x);
@@ -104,10 +104,11 @@ describe("given the real engine in the open world and the player's car running a
   }
 
   // mutation: sed -i 's/    this.host.steer(slot, detAtan2(vx, vz), Math.min(FASTEST, hypot2(vx, vz)));/    this.host.steer(slot, detAtan2(dx, dz), Math.min(FASTEST, pace + CATCH_UP * lag));/' src/game/engine/openworld-bodies.ts
+  // mutation: sed -i 's/CATCH_UP \* (poses.x\[civilian\]! - _path.x)/CATCH_UP * dx/; s/CATCH_UP \* (poses.z\[civilian\]! - _path.z)/CATCH_UP * dz/' src/game/engine/openworld-bodies.ts
   it("when a civilian walks a straight street, then her body faces her way within a few degrees and does not swing left and right with her steps", () => {
     const crowd = world()["crowd"]!;
     const car = rig.cars()[0]!;
-    const wrap = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle));
+    const wrap = (angle: number): number => detAtan2(detSin(angle), detCos(angle));
     let steady = 0;
     let worst = 0;
     let reversals = 0;

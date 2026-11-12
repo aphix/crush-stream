@@ -54,6 +54,8 @@ export type BodyHost = {
   stop(slot: number): void;
   /** The torso's (x, z) into `out`; false while nobody is out in the slot. */
   torso(slot: number, out: { x: number; z: number }): boolean;
+  /** Where the body in `slot` walks (x, z) into `out`: its torso's path without the step's sway. */
+  path(slot: number, out: { x: number; z: number }): void;
   /** Where the body in `slot` faces (rad) and how fast (m/s) it is asked to go. */
   steer(slot: number, heading: number, speed: number): void;
   /** The body in `slot` is on its feet. */
@@ -71,6 +73,7 @@ export type BodyHost = {
 };
 
 const _torso = { x: 0, z: 0 };
+const _path = { x: 0, z: 0 };
 const _look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
 
 /**
@@ -183,9 +186,10 @@ export class OpenWorldBodies {
       this.host.steer(slot, yaw, 0);
       return;
     }
-    // Her own velocity plus a pull toward her spot: the body faces where she goes, and her spot only bends that (a heading taken from the bearing to a spot a hand's breadth away swings with every step).
-    const vx = detSin(yaw) * pace + CATCH_UP * dx;
-    const vz = detCos(yaw) * pace + CATCH_UP * dz;
+    // Pulled from the walker's path, not the torso: the torso's step sway fed back through the pull swings her facing a few times a second.
+    this.host.path(slot, _path);
+    const vx = detSin(yaw) * pace + CATCH_UP * (poses.x[civilian]! - _path.x);
+    const vz = detCos(yaw) * pace + CATCH_UP * (poses.z[civilian]! - _path.z);
     this.host.steer(slot, detAtan2(vx, vz), Math.min(FASTEST, hypot2(vx, vz)));
   }
 
