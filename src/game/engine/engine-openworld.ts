@@ -503,6 +503,20 @@ export class OpenWorldDirector {
     this.law?.playerStruck(this.seconds, knockedOut);
   }
 
+  /** The drawn civilian with no body whose chest the hook's sight line passes nearer than `reach` m (a bullet's test, `chestMet`), into `out`; none on a client or without bodies. */
+  hookMet(ray: LookRay, reach: number, out: Meeting): Meeting {
+    const crowd = this.crowd;
+    if (crowd !== null && this.bodies !== null && !this.ports.isClient()) return chestMet(crowd.poses, crowd.poses.count, this.bodies.held, ray, SHOT_BODY_RADIUS, reach, out);
+    out.index = -1;
+    out.along = reach;
+    return out;
+  }
+
+  /** The hook takes drawn civilian `civilian`: a body is stood for her now (`OpenWorldBodies.stand`); its pool slot, -1 when none can be. */
+  hookBody(civilian: number): number {
+    return this.crowd === null || this.bodies === null ? -1 : this.bodies.stand(this.crowd.poses, civilian, this.ray.eyeX, this.ray.eyeZ);
+  }
+
   /** One ray of `gun` from an actor, at the authority: the nearest thing along it within the gun's range takes the hit (a prop, a ragdoll, a drawn civilian, a foot cop, a car), unless a wall or the ground is nearer. Returns how far (m) the ray went. It reads nothing of the local player, so a later plan can call it for a guest; on a guest's machine the ray goes its full range and touches nothing. */
   shoot(ray: LookRay, gun: Gun): number {
     const crowd = this.crowd;

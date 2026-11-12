@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { LookRay, Meeting } from "../ai/civilians/civilian-look.ts";
 import * as THREE from "three";
 import { FRAME_HZ, MAX_TETHERS } from "../kernel/constants.ts";
+import { hypot3 } from "../kernel/physics-core.js";
 import { RAPIER, TetherSet, WORLD } from "../contact/tether.ts";
 import { BOXES_MESH_NAME } from "../present/minigame-art.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
@@ -22,27 +24,43 @@ const KNOCKABLE = 7;
 const BESIDE = 10;
 
 type Attached = { slot: number; a: RopeEnd; b: RopeEnd };
+/** No drawn civilian along any sight line. */
+const noPerson = (_ray: LookRay, reach: number, out: Meeting): Meeting => Object.assign(out, { index: -1, along: reach });
 
 /** The dummies' world as the tether sees it: it records the ropes it is asked for. */
-function fakeRopes(dollsOut: readonly number[]) {
+function fakeRopes(dollsOut: number[]) {
   const attached: Attached[] = [];
+  /** Where every dummy out has his torso: as `dummy` puts him, `AHEAD` m ahead, until a row walks him. */
+  const torsoAt = new THREE.Vector3(PARTS[0].c[0], PARTS[0].c[1], PARTS[0].c[2] - AHEAD);
   return {
     attached,
+    torsoAt,
     ropeAttach: (slot: number, a: RopeEnd, b: RopeEnd): number => attached.push({ slot, a, b }),
     ropeCut: () => {},
     ropeReel: () => {},
     dollOut: (slot: number) => dollsOut.includes(slot),
+    torso: (slot: number, out: THREE.Vector3): boolean => dollsOut.includes(slot) && out.copy(torsoAt) === out,
     ropeReport: { command: 0, floats: new Float32Array(MAX_TETHERS * ROPE_FLOATS) },
   };
 }
 
-/** A free camera at the origin, `scene`, and a tether on it: `aimAt(point)` turns the camera, `fire()` is a fire and a frame. */
-function rig(scene: THREE.Scene, dollsOut: readonly number[] = [0], chase = false) {
+/** A drawn civilian with no body whose chest stands `AHEAD` m straight ahead (along -z), and the slot a body stood for her takes. */
+const PERSON = 9;
+const PERSON_SLOT = 5;
+
+/** A free camera at the origin, `scene`, and a tether on it: `aimAt(point)` turns the camera, `fire()` is a fire and a frame. `person`: `PERSON` stands straight ahead. */
+function rig(scene: THREE.Scene, dollsOut: number[] = [0], chase = false, person = false) {
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
   camera.position.set(0, EYE_Y, 0);
   const ropes = fakeRopes(dollsOut);
   const tethers = new TetherSet();
-  const director = new TetherDirector({ tethers, camera, scene, ropes, cars: () => [], movers: () => [], playerCar: () => -1, offered: () => true, chase: () => chase, afoot: () => true, self: () => -1 });
+  const personMet = (ray: LookRay, reach: number, out: Meeting): Meeting => (person && Math.abs(ray.dirX) < 0.01 && reach > AHEAD ? Object.assign(out, { index: PERSON, along: AHEAD }) : noPerson(ray, reach, out));
+  const standPerson = (civilian: number): number => {
+    if (civilian !== PERSON) return -1;
+    dollsOut.push(PERSON_SLOT);
+    return PERSON_SLOT;
+  };
+  const director = new TetherDirector({ tethers, camera, scene, ropes, cars: () => [], movers: () => [], playerCar: () => -1, offered: () => true, chase: () => chase, afoot: () => true, self: () => -1, personMet, standPerson });
   const aimAt = (point: THREE.Vector3): void => {
     camera.lookAt(point);
     scene.updateMatrixWorld(true);
@@ -132,6 +150,42 @@ describe("given the free camera over a dummy standing out, with a wall behind hi
     aimAt(new THREE.Vector3(BESIDE, EYE_Y, -WALL_AHEAD));
     fire();
     expect(ropes.attached.length, "no rope: no dummy of the pool was hooked").toBe(0);
+  });
+});
+
+describe("given the free camera over a dummy standing out, held by a first fire", () => {
+  // mutation: sed -i 's/      if (this.host.ropes.torso(thingIndex(this.heldThing), this.heldWorld, null)) return this.heldWorld.add(this.heldOffset);/      if (this.host.ropes.dollOut(thingIndex(this.heldThing))) return this.heldWorld.copy(this.heldAt);/' src/game/engine/engine-tether.ts
+  it("when he walks 2 m to the side, then the held marker moves 2 m with him, and the second fire ties him where he is now", () => {
+    const scene = new THREE.Scene();
+    const torso = dummy(scene);
+    wall(scene);
+    const { director, aimAt, fire, ropes } = rig(scene);
+    aimAt(torso);
+    fire();
+    const before = director["heldPlace"]()!.clone();
+    ropes.torsoAt.x += 2;
+    const after = director["heldPlace"]()!;
+    expect(hypot3(after.x - before.x - 2, after.y - before.y, after.z - before.z), "the marker from where he took it (m)").toBeLessThan(1e-6);
+    aimAt(new THREE.Vector3(BESIDE, EYE_Y, -WALL_AHEAD));
+    fire();
+    const end = firstEnd(ropes).at;
+    expect(hypot3(end[0] - after.x, end[1] - after.y, end[2] - after.z), "the rope's first end from the marker (m)").toBeLessThan(1e-6);
+  });
+});
+
+describe("given the free camera over a drawn civilian with no body, with a wall behind her", () => {
+  // mutation: sed -i '/^      this.aimPerson = person.index;/d' src/game/engine/engine-tether.ts
+  it("when it fires at her and then at the wall, then a body is stood for her and the cable's first end is that body's dummy at her chest", () => {
+    const scene = new THREE.Scene();
+    wall(scene);
+    const { aimAt, fire, ropes } = rig(scene, [], false, true);
+    aimAt(new THREE.Vector3(0, EYE_Y, -AHEAD));
+    fire();
+    aimAt(new THREE.Vector3(BESIDE, EYE_Y, -WALL_AHEAD));
+    fire();
+    const end = firstEnd(ropes);
+    expect(end.kind === "doll" ? end.id : -1, "the body's slot").toBe(PERSON_SLOT);
+    expect(hypot3(end.at[0], end.at[1] - EYE_Y, end.at[2] + AHEAD), "the hook from her chest (m)").toBeLessThan(1e-3);
   });
 });
 

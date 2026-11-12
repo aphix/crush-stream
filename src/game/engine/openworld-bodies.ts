@@ -33,6 +33,8 @@ const FASTEST = 3.5;
 /** A body down (a bump, a car's nudge the crowd did not judge a knockdown) is asked to get up after this long (s), and let go if it is not up by `RELEASE_DOWN`. */
 const GET_UP_AFTER = 1.5;
 const RELEASE_DOWN = 8;
+/** A body stood for the hook's first fire is kept this long (s) for the second to tie it; then a cable must hold it, or the usual rules let it go. */
+const HOOK_HOLD_SECONDS = 6;
 /** Her feet are on the street when within this far (m) of the ground's height: on a stoop or an interior's floor she is drawn as a posed dummy. */
 const ON_STREET = 0.1;
 /** A footprint grown by this much (m) is a building: no body inside it, where the ragdoll world has no floor of its own. */
@@ -100,6 +102,8 @@ export class OpenWorldBodies {
   /** 1 for a body that fell or stumbled and has not yet rejoined her spot. */
   private readonly recovering: Uint8Array;
   private readonly struckAt: Float64Array;
+  /** Per body, the crowd second the hook's pin on it ends (`stand`). */
+  private readonly hookedUntil: Float64Array;
   private sinceSelect = SELECT_SECONDS;
   private seconds = 0;
 
@@ -114,6 +118,7 @@ export class OpenWorldBodies {
     this.downFor = new Float64Array(size);
     this.recovering = new Uint8Array(size);
     this.struckAt = new Float64Array(size).fill(-Infinity);
+    this.hookedUntil = new Float64Array(size).fill(-Infinity);
     host.setCapacity(FIRST_BODY_SLOT + size + LYING_RESERVE);
   }
 
@@ -146,6 +151,31 @@ export class OpenWorldBodies {
   civilianOf(slot: number): number {
     for (let body = 0; body < this.size; body++) if (this.resident[body]! !== NOBODY && this.slot[body] === slot) return this.resident[body]!;
     return NOBODY;
+  }
+
+  /** The hook takes civilian `civilian` wherever she is: a body is stood for her now and pinned `HOOK_HOLD_SECONDS`; its pool slot, or -1 where she may have none (indoors, at a counter). With every body in use, the farthest from (eyeX, eyeZ) that no cable holds is let go first. */
+  stand(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number): number {
+    if (this.bodyOf[civilian]! === NOBODY) {
+      if (!this.eligible(poses, civilian, eyeX, eyeZ, Infinity)) return NOBODY;
+      if (this.count() === this.size) {
+        let farthest = NOBODY;
+        let farthestDistance = -1;
+        for (let body = 0; body < this.size; body++) {
+          const slot = this.slot[body]!;
+          if (this.host.roped(slot) || !this.host.torso(slot, _torso)) continue;
+          const distance = hypot2(_torso.x - eyeX, _torso.z - eyeZ);
+          if (distance <= farthestDistance) continue;
+          farthestDistance = distance;
+          farthest = body;
+        }
+        if (farthest === NOBODY) return NOBODY;
+        this.release(farthest);
+      }
+      if (!this.give(poses, civilian)) return NOBODY;
+    }
+    const body = this.bodyOf[civilian]!;
+    this.hookedUntil[body] = this.seconds + HOOK_HOLD_SECONDS;
+    return this.slot[body]!;
   }
 
   /** One step of \`dt\` s at crowd second \`seconds\`, after the crowd's: the bodies are steered to their civilians' spots, and the nearest civilians to (eyeX, eyeZ) are given bodies. */
@@ -188,11 +218,13 @@ export class OpenWorldBodies {
       if (this.seconds - this.struckAt[body]! >= LIES_SECONDS) this.release(body);
       return;
     }
-    if (!this.eligible(poses, civilian, eyeX, eyeZ, KEEP_RADIUS) || !this.host.torso(slot, _torso)) return this.release(body);
+    // A body the hook holds (or is about to tie) stays wherever the cable keeps her.
+    const kept = this.host.roped(slot) || this.seconds < this.hookedUntil[body]!;
+    if (!this.eligible(poses, civilian, eyeX, eyeZ, kept ? Infinity : KEEP_RADIUS) || !this.host.torso(slot, _torso)) return this.release(body);
     if (!this.host.standing(slot)) {
       this.recovering[body] = 1;
       this.downFor[body] = this.downFor[body]! + dt;
-      if (this.downFor[body]! > RELEASE_DOWN && !this.host.roped(slot)) return this.release(body);
+      if (this.downFor[body]! > RELEASE_DOWN && !kept) return this.release(body);
       if (this.downFor[body]! > GET_UP_AFTER) this.host.getUp(slot);
       return;
     }
@@ -202,7 +234,7 @@ export class OpenWorldBodies {
     const lag = hypot2(dx, dz);
     if (!this.host.steady(slot)) this.recovering[body] = 1;
     else if (lag <= LEASH) this.recovering[body] = 0;
-    if (lag > (this.recovering[body] === 1 ? REJOIN_LEASH : LEASH) && !this.host.roped(slot)) return this.release(body);
+    if (lag > (this.recovering[body] === 1 ? REJOIN_LEASH : LEASH) && !kept) return this.release(body);
     const yaw = poses.yaw[civilian]!;
     const pace = poses.speed[civilian]!;
     if (pace < STILL && lag < STAND_REACH) {
@@ -269,6 +301,7 @@ export class OpenWorldBodies {
     this.slot[body] = started;
     this.downFor[body] = 0;
     this.recovering[body] = 0;
+    this.hookedUntil[body] = -Infinity;
     this.struckAt[body] = -Infinity;
     this.bodyOf[civilian] = body;
     this.held[civilian] = 1;
