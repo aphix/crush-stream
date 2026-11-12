@@ -73,7 +73,7 @@ export type GarageHud = { car: Record<CarPart, number>; person: DriverLook; pick
 export type SprayTool = { on: boolean; radius: number; colour: number; mirror: boolean };
 
 /** The trip out of the car as the HUD reads it: `out` while he is on foot, the line under the view (what the control does now, or why it refused), and `refusal`, that why alone while it shows. */
-export type FootHud = { out: boolean; prompt: string | null; refusal: string | null };
+export type FootHud = { out: boolean; prompt: string | null; refusal: string | null; /** The weapon in hand on foot in the open world; null where he has none. */ arms: { slot: number; name: string } | null };
 
 /** Police chasing the viewed car as the pursuit strip shows them (`RaceView.chase`): the open world's hold and countdown to a bust, the Survival strip's own. */
 export type ChaseHud = NonNullable<RaceView["chase"]>;

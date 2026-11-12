@@ -1,5 +1,5 @@
 import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { Car, ChevronsUp, CircleParking, DoorOpen, OctagonX, Zap } from "lucide-react";
+import { Car, ChevronsUp, CircleParking, DoorOpen, OctagonX, Repeat, Target, Zap } from "lucide-react";
 import type { HudProps } from "@/components/hud";
 import { Button } from "@/components/ui/button";
 import { PedalStrip } from "@/components/touch-strip";
@@ -122,26 +122,38 @@ function OnFootTap({ engine, foot, mirror, className }: Pick<HudProps, "engine">
   if (foot === null) return null;
   const label = foot.out ? "Get back in the car (tap)" : "Get out and walk (tap)";
   return (
-    <div className="relative">
-      <Button
-        variant="ghost"
-        aria-label={label}
-        title={label}
-        data-touch-control="onfoot"
-        data-keep-idle
-        className={cn(ZONE, "pointer-events-auto touch-none select-none flex-col gap-0.5 px-0 [&_svg]:size-6", className)}
-        onPointerDown={() => {
-          const touch = engine.current?.touch;
-          if (touch) tapOnFoot(touch);
-        }}
-        onContextMenu={(e) => e.preventDefault()}
-      >
-        {foot.out ? <Car /> : <DoorOpen />}
-        <span className="font-display text-[10px] font-semibold uppercase leading-none tracking-wider">{foot.out ? "In" : "Out"}</span>
-      </Button>
-      <p role="status" data-onfoot-refusal className={cn("pointer-events-none absolute bottom-1/2 w-max max-w-40 rounded-md bg-surface/85 px-2 py-1 text-xs leading-tight text-fg", mirror ? "left-full ml-2" : "right-full mr-2", foot.refusal === null && "sr-only")}>
-        {foot.refusal}
-      </p>
+    <div className="flex flex-col items-center gap-2">
+      {foot.arms !== null ? (
+        <PadButton engine={engine} button={PAD_BUTTON.l3} name="fire" label="Fire (hold)" caption="Fire" showCaption className={className}>
+          <Target />
+        </PadButton>
+      ) : null}
+      {foot.arms !== null ? (
+        <PadButton engine={engine} button={PAD_BUTTON.rb} name="weapon" label="Next weapon" caption="Weapon" showCaption className={className}>
+          <Repeat />
+        </PadButton>
+      ) : null}
+      <div className="relative">
+        <Button
+          variant="ghost"
+          aria-label={label}
+          title={label}
+          data-touch-control="onfoot"
+          data-keep-idle
+          className={cn(ZONE, "pointer-events-auto touch-none select-none flex-col gap-0.5 px-0 [&_svg]:size-6", className)}
+          onPointerDown={() => {
+            const touch = engine.current?.touch;
+            if (touch) tapOnFoot(touch);
+          }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {foot.out ? <Car /> : <DoorOpen />}
+          <span className="font-display text-[10px] font-semibold uppercase leading-none tracking-wider">{foot.out ? "In" : "Out"}</span>
+        </Button>
+        <p role="status" data-onfoot-refusal className={cn("pointer-events-none absolute bottom-1/2 w-max max-w-40 rounded-md bg-surface/85 px-2 py-1 text-xs leading-tight text-fg", mirror ? "left-full ml-2" : "right-full mr-2", foot.refusal === null && "sr-only")}>
+          {foot.refusal}
+        </p>
+      </div>
     </div>
   );
 }

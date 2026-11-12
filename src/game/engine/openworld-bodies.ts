@@ -140,6 +140,12 @@ export class OpenWorldBodies {
     return NOBODY;
   }
 
+  /** The civilian the body in pool slot `slot` stands for, or -1. */
+  civilianOf(slot: number): number {
+    for (let body = 0; body < this.size; body++) if (this.resident[body]! !== NOBODY && this.slot[body] === slot) return this.resident[body]!;
+    return NOBODY;
+  }
+
   /** One step of \`dt\` s at crowd second \`seconds\`, after the crowd's: the bodies are steered to their civilians' spots, and the nearest civilians to (eyeX, eyeZ) are given bodies. */
   step(poses: CrowdPoses, eyeX: number, eyeZ: number, seconds: number, dt: number): void {
     this.seconds = seconds;

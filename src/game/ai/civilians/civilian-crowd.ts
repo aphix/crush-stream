@@ -624,6 +624,19 @@ export class CivilianCrowd {
     this.postBatch();
   }
 
+  /** Host: a bullet takes drawn resident `resident`: she is knocked down along it at `speed` m/s, as a car's knock. */
+  shoot(resident: number, seconds: number, dirX: number, dirZ: number, speed: number): void {
+    if (!this.authority || this.poses.shown[resident] === 0) return;
+    const x = this.poses.x[resident]!;
+    const z = this.poses.z[resident]!;
+    const strike = felled(resident, x, activeGround().heightAt(x, z), z, dirX, dirZ, blankStrike());
+    strike.vx = Math.fround(dirX * speed);
+    strike.vz = Math.fround(dirZ * speed);
+    this.knockDown(resident, seconds, strike);
+    // A shot lands between steps: posted now, as `knockOut` posts.
+    this.postBatch();
+  }
+
   private logHostEvent(kind: number, subject: number, seconds: number): void {
     this.appendLog(kind, subject, seconds);
     this.queueForBrain(kind, subject, seconds);

@@ -7,7 +7,7 @@ import { CENTIMETRES_PER_METRE, DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, FIGHT_PLA
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER, WALKER_BEARING_STEPS, WRECK_SPEED } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
-import { LookRay } from "../ai/civilians/civilian-look.ts";
+import { LookRay, placeMet } from "../ai/civilians/civilian-look.ts";
 import { residentNameText } from "../ai/civilians/civilian-mood.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { SUBJECT } from "../ai/openworld-auto/auto-director.ts";
@@ -35,7 +35,8 @@ import { FACADE_HOMES, FACADE_HOMES_FRAME, HOME_SHARE_BY_AWAKE, homeCell, texelO
 import { shareOfTexel } from "../present/facade-homes.test-util.ts";
 import { PLACE_KIND } from "../world/openworld/walk-graph.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
-import { detCos, detSin } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { WEAPONS } from "./engine-onfoot-arms.ts";
 
 const map = buildFixtureMap();
 const SEED = 5;
@@ -279,6 +280,58 @@ describe("given the player on foot in the open world", () => {
     let lastKnock = -1;
     for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) if (log[at] === EVENT_KIND.knock) lastKnock = log[at + 1]!;
     expect(lastKnock, "the log's last knock").toBe(c);
+  });
+
+  // mutation: sed -i 's/^const SHOT_BODY_RADIUS = 0.35;/const SHOT_BODY_RADIUS = 0;/' src/game/engine/engine-openworld.ts
+  it("when a rifle's ray passes a drawn civilian's chest 30 m off, then she is hidden and thrown and the log ends with a knock", () => {
+    const harness = hostWithMap();
+    const c = shownOnTheHost(harness);
+    const crowd = harness.crowd();
+    const poses = crowd.poses;
+    const chest = { x: poses.x[c]!, y: poses.feetY[c]! + 1.3, z: poses.z[c]! };
+    // From open street, 0.1 m to the side of her chest line: the first of eight headings whose 30 m to her meets no building.
+    const ray = new LookRay();
+    for (let k = 0; k < 8; k++) {
+      ray.dirX = detSin((k * Math.PI) / 4);
+      ray.dirY = 0;
+      ray.dirZ = detCos((k * Math.PI) / 4);
+      ray.eyeX = chest.x - ray.dirX * 30 + ray.dirZ * 0.1;
+      ray.eyeY = chest.y;
+      ray.eyeZ = chest.z - ray.dirZ * 30 - ray.dirX * 0.1;
+      if (placeMet(map, ray, 250).along > 31) break;
+    }
+    expect(placeMet(map, ray, 250).along, "control: no building in the way (m)").toBeGreaterThan(31);
+    const thrown = harness.thrown.length;
+    expect(harness.director.shoot(ray, WEAPONS.rifle), "how far the shot went (m)").toBeCloseTo(30, 1);
+    harness.frame();
+    expect(poses.shown[c], "shown").toBe(0);
+    expect(harness.thrown.length - thrown, "figures thrown").toBe(1);
+    const log = harness.director.eventLog();
+    let lastKnock = -1;
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) if (log[at] === EVENT_KIND.knock) lastKnock = log[at + 1]!;
+    expect(lastKnock, "the log's last knock").toBe(c);
+  });
+
+  // mutation: sed -i 's/^    let reach = Math.min(gun.range, placeMet(this.map, ray, gun.range).along);/    let reach = gun.range;/' src/game/engine/engine-openworld.ts
+  it("when a building stands between the ray's eye and a civilian, then the shot stops at the wall and she walks on", () => {
+    const harness = hostWithMap();
+    const c = shownOnTheHost(harness);
+    const poses = harness.crowd().poses;
+    const chest = { x: poses.x[c]!, y: poses.feetY[c]! + 1.3, z: poses.z[c]! };
+    let place = map.places[0]!;
+    for (const entry of map.places) if (entry.doorNode >= 0 && (place.doorNode < 0 || hypot2(entry.x - chest.x, entry.z - chest.z) < hypot2(place.x - chest.x, place.z - chest.z))) place = entry;
+    const away = hypot2(place.x - chest.x, place.z - chest.z);
+    const beyond = away + hypot2(place.depth, place.width) / 2 + 5;
+    const ray = new LookRay();
+    ray.eyeX = chest.x + ((place.x - chest.x) / away) * beyond;
+    ray.eyeY = chest.y;
+    ray.eyeZ = chest.z + ((place.z - chest.z) / away) * beyond;
+    ray.dirX = (chest.x - ray.eyeX) / beyond;
+    ray.dirY = 0;
+    ray.dirZ = (chest.z - ray.eyeZ) / beyond;
+    expect(harness.director.shoot(ray, WEAPONS.rifle), "how far the shot went (m)").toBeLessThan(beyond - 0.5);
+    harness.frame();
+    expect(poses.shown[c], "she is still shown").toBe(1);
   });
 });
 

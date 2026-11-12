@@ -43,6 +43,7 @@ import type { RaceCommand } from "@/game/match/types";
 import { benchHoldsCommand } from "@/game/hud/submit-rules";
 import { MinigamePanel } from "@/components/minigame-panel";
 import { GameClock } from "@/components/game-clock";
+import { Crosshair } from "@/components/crosshair";
 import { cn } from "@/lib/utils";
 
 export type HudProps = {
@@ -119,7 +120,7 @@ const CAMERA_KEYS: [string, string][] = [
 ];
 
 function seatHint(state: CrashHudState): { title: string; keys: string } {
-  if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad !== null, state.foot.prompt) };
+  if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad !== null, state.foot.prompt, state.foot.arms) };
   if (state.race && state.seat === "drive") {
     const keys = state.pad
       ? "RT gas · LT brake, then reverse · left stick steer · X handbrake · A boost · B view · R3 look back · D-pad ↓ respawn · hold D-pad ↓ back on the road, damage kept · Start pause"
@@ -147,6 +148,12 @@ export function Hud({ store, engine, onlineShown }: Omit<HudProps, "state"> & { 
   const state = useSyncExternalStore(store.subscribe, store.get, store.get);
   // Phones and tablets get the thumb controls and the corner layout; a fine pointer keeps the desktop HUD as it was.
   const touch = useCoarsePointer();
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const move = (e: PointerEvent) => setPointer({ x: e.clientX, y: e.clientY });
+    window.addEventListener("pointermove", move);
+    return () => window.removeEventListener("pointermove", move);
+  }, []);
   // What resets the driven car: the connected pad, the thumb pad's button, or R.
   const reset = resetInput(state.pad !== null, touch, state.seat === "drive");
   const raceCommand = (cmd: RaceCommand) => {
@@ -163,7 +170,12 @@ export function Hud({ store, engine, onlineShown }: Omit<HudProps, "state"> & { 
   // Solo view: one clip alone, full screen; the HUD is nothing but its exit.
   if (state.race?.solo != null) return <SoloExit title={state.race.solo} shown={state.race.shown} onCommand={raceCommand} />;
   const shell: HudShell = { hud: { state, engine, onlineShown }, reset, raceCommand, tapReset, focus };
-  return touch ? <PhoneHud {...shell} /> : <DesktopHud {...shell} />;
+  return (
+    <>
+      <Crosshair arms={state.foot?.arms ?? null} x={state.mouseLook || pointer === null ? null : pointer.x} y={state.mouseLook || pointer === null ? null : pointer.y} />
+      {touch ? <PhoneHud {...shell} /> : <DesktopHud {...shell} />}
+    </>
+  );
 }
 
 /** The scene's own panels: rig controls, the Range card and its Mini games pick, the Mini game card, the Lab, the garage and the derby board. Desktop hangs them in the context column, a phone in its left column. */

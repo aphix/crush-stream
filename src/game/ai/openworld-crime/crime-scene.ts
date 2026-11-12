@@ -6,6 +6,7 @@ import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { COP_KO_BLOWS } from "../civilians/civilian-constants.ts";
 import { punchGap } from "../civilians/civilian-contact.ts";
+import { chestMet, type LookRay, type Meeting } from "../civilians/civilian-look.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import type { Obstacles } from "../obstacles.ts";
 import { fillCopPoses, newCopPoses, overlaySuspects } from "./crime-poses.ts";
@@ -169,6 +170,18 @@ export class CrimeScene {
   /** The player on foot started a fight at crowd second `seconds`: the law knows at once. */
   playerFought(seconds: number): void {
     this.law.player.fightKnown(seconds);
+  }
+
+  /** The shown foot cop whose chest the ray passes within `radius` m, nearer than `reach` (`chestMet`). */
+  copMet(ray: LookRay, radius: number, reach: number, out: Meeting): Meeting {
+    return chestMet(this.copPoses, FOOT_COP_COUNT, null, ray, radius, reach, out);
+  }
+
+  /** A bullet takes foot cop `cop`: down as a car's knock puts him, thrown along the shot. Authority only. */
+  shootCop(cop: number, dirX: number, dirZ: number, seconds: number): void {
+    if (!this.authority || this.copPoses.shown[cop] === 0) return;
+    const poses = this.copPoses;
+    this.downCop(cop, felled(cop, poses.x[cop]!, activeGround().heightAt(poses.x[cop]!, poses.z[cop]!), poses.z[cop]!, dirX, dirZ, blankStrike()), seconds);
   }
 
   /** A heard knock whose time this peer's clock has reached: the cop goes down, thrown by the car nearest him when it is fresh (as a heard civilian's knock is). */

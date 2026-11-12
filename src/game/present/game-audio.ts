@@ -17,6 +17,9 @@ const BUS_TAU_S = 0.08;
 const DUCK_TAU_S = 0.1;
 const CRASH_DUCK_TAU_S = 0.02;
 const THUMP_GAIN_PER_IMPULSE = 0.012;
+/** A gunshot's length (s) and each gun's band (Hz). */
+const SHOT_S = 0.09;
+const SHOT_HZ = { pistol: 1800, shotgun: 700, rifle: 2600 } as const;
 /** `?voices=N` (0-8) overrides the engine voice count: the bench knob; 0 is no engine audio. */
 const VOICES_PARAM = "voices";
 const MAX_VOICES = 8;
@@ -219,6 +222,31 @@ export class GameAudio {
     this.motor?.releaseVoices();
   }
 
+  /** A gunshot: one short noise burst through a band-pass, as loud as a hard crash's noise. */
+  shot(kind: keyof typeof SHOT_HZ): void {
+    const context = this.context;
+    if (!context || !this.impactBus) return;
+    const t = context.currentTime;
+    const noise = context.createBufferSource();
+    noise.buffer = this.impactNoiseBuffer(context);
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.001, t);
+    gain.gain.exponentialRampToValueAtTime(0.45, t + IMPACT.noiseAttackS);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + SHOT_S);
+    noise.connect(bandpass(context, SHOT_HZ[kind], IMPACT.noiseQ)).connect(gain).connect(this.impactBus);
+    noise.start(t);
+    noise.stop(t + SHOT_S);
+  }
+
+  private impactNoiseBuffer(context: AudioContext): AudioBuffer {
+    if (!this.impactNoise) {
+      this.impactNoise = context.createBuffer(1, context.sampleRate * (IMPACT.noiseDecayS + 0.05), context.sampleRate);
+      const data = this.impactNoise.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    }
+    return this.impactNoise;
+  }
+
   impact(impulse: number): void {
     const context = this.context;
     if (!context || !this.impactBus) return;
@@ -239,12 +267,7 @@ export class GameAudio {
     thump.stop(t + dur);
 
     const noise = context.createBufferSource();
-    if (!this.impactNoise) {
-      this.impactNoise = context.createBuffer(1, context.sampleRate * (IMPACT.noiseDecayS + 0.05), context.sampleRate);
-      const data = this.impactNoise.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-    }
-    noise.buffer = this.impactNoise;
+    noise.buffer = this.impactNoiseBuffer(context);
     const ng = context.createGain();
     const bp = bandpass(context, IMPACT.noiseHz, IMPACT.noiseQ);
     ng.gain.setValueAtTime(0.001, t);

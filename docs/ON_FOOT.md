@@ -142,6 +142,18 @@ gait reached 1.3 / 2.5 m/s, so his root is driven the way a character controller
 
 On foot in the open world, solo or as a room's host, fire throws a punch (`OnFootArms`, `engine-onfoot-arms.ts`: left click or RT; right button held or LT aims, the camera drawn in over his shoulder and him facing where it looks). A punch reaches 1.4 m in a 120-degree arc about his facing (`punchGap`), one every 0.6 s, and lands 0.18 s after the press (`OpenWorldDirector.punch`). It staggers a civilian or a cop; the third on one civilian inside 10 s knocks her out, and the third on one cop puts him down. A punch on a civilian is a shove to the law; a knock-out, or a punch on a cop, is a fight the law knows of at once. Where no person is in reach, a knockable prop is knocked. A civilian's swings stagger him, and the third inside 4 s puts him down. A guest has no fists yet (`OnFootHost.guest`).
 
+## Guns
+
+The number keys choose the weapon in hand on foot in the open world (`OnFootArms.weapon`; LB / RB step through them): 1 fists, 2 pistol, 3 shotgun, 4 rifle (`WEAPONS`, `engine-onfoot-arms.ts`). A shot is a ray to the first thing it meets and a speed added there, as a click on a showcase dummy is, sized by the gun:
+
+|Gun|Speed a hit adds (m/s)|Range (m)|Rays a shot|Scatter (rad)|Between shots (s)|Held fire repeats|Push on a car (N·s)|Prop knocked at (m/s)|
+|---|---|---|---|---|---|---|---|---|
+|Pistol|6|120|1|0.005|0.25|no|150|5|
+|Shotgun|3.5|40|8|0.04|0.9|no|37.5|8|
+|Rifle|9|250|1|0.0013|0.12|yes|250|7|
+
+The nearest of a knockable prop, a ragdoll, a drawn civilian, a foot cop or a car along the ray takes the shot (`OpenWorldDirector.shoot`), unless a wall or the ground is nearer. A person is knocked down along the shot (a knock, as a car's). A car is pushed along it; a glass pane cracks, then shatters; its body sparks, and its engine dies after 13 to 19 hits on the body (the lawn guards' count). Every shot opens a police chase, seen or not. There is no ammunition. A guest has no guns yet (`OnFootHost.guest`).
+
 ## The camera
 
 `OnFootDirector.aim` keeps the one `ChaseCamera` orbit (no second camera system) for its yaw, pitch and zoom, so the drag, the right stick, mouse look, the wheel and a pinch

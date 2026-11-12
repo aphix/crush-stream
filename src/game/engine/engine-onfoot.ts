@@ -35,7 +35,8 @@ import { doorBlocked, doorInReach, doorSpot, inPlay } from "./onfoot-doors.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { SEAT_KEYS } from "./engine-keys.ts";
 import { blankWalkIntent, readWalkIntent, type WalkIntent } from "./engine-walk-input.ts";
-import { OnFootArms } from "./engine-onfoot-arms.ts";
+import { OnFootArms, STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
+import { LookRay } from "../ai/civilians/civilian-look.ts";
 
 /** What the director needs from the engine: the objects it acts on, and the questions only the engine can answer. */
 interface OnFootHost {
@@ -75,6 +76,12 @@ interface OnFootHost {
   captureMouse(on: boolean): void;
   /** His punch lands from (x, z) along the unit (dirX, dirZ). */
   punchLanded(x: number, z: number, dirX: number, dirZ: number): void;
+  /** The ray a shot goes along, into `out`: from the camera through the view's centre (`centre`), else through the cursor. */
+  aimRay(centre: boolean, out: LookRay): void;
+  /** One ray of `gun` at the authority: how far (m) it went. */
+  shootRay(ray: LookRay, gun: Gun): number;
+  /** A shot of `gun` was fired along `ray` and its farthest ray went `far` m: the flash, the tracer, the sound, the law. */
+  shotFired(ray: LookRay, far: number, gun: Gun): void;
 }
 
 /** The control that gets him out and in: Enter on the keyboard (`SEAT_KEYS.onFoot`), Y (Triangle) on the pad. Neither drives, steers or switches a scene. */
@@ -125,6 +132,33 @@ const _aim = new THREE.Vector3();
 /** The camera's view while it blends in from the car's (`BLEND_SECONDS`). */
 const _blendEye = new THREE.Vector3();
 const _blendAim = new THREE.Vector3();
+const _aimRay = new LookRay();
+const _shotRay = new LookRay();
+
+/** `from` with its direction tilted inside a cone of half-angle `cone` (rad) by the two draws `r1`, `r2` (0 to 1), into `out`. Allocates nothing. */
+function scatter(from: LookRay, cone: number, r1: number, r2: number, out: LookRay): void {
+  out.eyeX = from.eyeX;
+  out.eyeY = from.eyeY;
+  out.eyeZ = from.eyeZ;
+  // u: a level unit vector across the direction (straight up or down: +x); v = direction × u.
+  const flat = Math.sqrt(from.dirX * from.dirX + from.dirZ * from.dirZ);
+  const ux = flat > STRAIGHT_UP ? -from.dirZ / flat : 1;
+  const uz = flat > STRAIGHT_UP ? from.dirX / flat : 0;
+  const vx = from.dirY * uz;
+  const vy = from.dirZ * ux - from.dirX * uz;
+  const vz = -from.dirY * ux;
+  const tilt = cone * Math.sqrt(r1);
+  const spread = detSin(tilt) / detCos(tilt);
+  const c = detCos(2 * Math.PI * r2) * spread;
+  const s = detSin(2 * Math.PI * r2) * spread;
+  const x = from.dirX + c * ux + s * vx;
+  const y = from.dirY + s * vy;
+  const z = from.dirZ + c * uz + s * vz;
+  const n = 1 / Math.sqrt(x * x + y * y + z * z);
+  out.dirX = x * n;
+  out.dirY = y * n;
+  out.dirZ = z * n;
+}
 
 /**
  * The player's trip out of his car and back, in any scene that has one: `OnFootFlow` decides what the control does, this carries it out (the walker
@@ -133,7 +167,7 @@ const _blendAim = new THREE.Vector3();
  */
 export class OnFootDirector {
   readonly flow = new OnFootFlow();
-  readonly arms = new OnFootArms({ armed: () => this.armed(), punch: () => this.punch(), land: () => this.landPunch(), captured: () => this.host.mouseCaptured(), capture: (on) => this.host.captureMouse(on) });
+  readonly arms = new OnFootArms({ armed: () => this.armed(), punch: () => this.punch(), land: () => this.landPunch(), captured: () => this.host.mouseCaptured(), capture: (on) => this.host.captureMouse(on), shoot: (gun) => this.shoot(gun) });
   private readonly host: OnFootHost;
   private readonly intent = blankWalkIntent();
   private readonly sense: OnFootSense = { car: -1, speed: 0, doorBlocked: false };
@@ -200,6 +234,25 @@ export class OnFootDirector {
     const walker = ragdolls.walker;
     if (walker.state !== "stand" || !ragdolls.walkerTorso(_torso)) return;
     this.host.punchLanded(_torso.x, _torso.z, detSin(walker.facing), detCos(walker.facing));
+  }
+
+  /** The shot counter's seeded stream: each ray takes two draws from it. */
+  private shotSeed = 1;
+
+  private draw(): number {
+    this.shotSeed = (Math.imul(this.shotSeed, 1664525) + 1013904223) >>> 0;
+    return this.shotSeed / 4294967296;
+  }
+
+  /** One shot of `gun` along the aim: the view's centre when the mouse is captured, aim is held or he looks through his own eyes, else the cursor's ray. Each ray scatters inside the gun's cone by a seeded draw. Allocates nothing: the rifle calls it eight times a second. */
+  private shoot(gun: Gun): void {
+    this.host.aimRay(this.arms.aiming || this.host.mouseCaptured() || this.footView === "first", _aimRay);
+    let far = 0;
+    for (let ray = 0; ray < gun.rays; ray++) {
+      scatter(_aimRay, gun.cone, this.draw(), this.draw(), _shotRay);
+      far = Math.max(far, this.host.shootRay(_shotRay, gun));
+    }
+    this.host.shotFired(_aimRay, far, gun);
   }
 
   /**
@@ -305,6 +358,7 @@ export class OnFootDirector {
   /** A keydown: true when the director took it (the control, or a seat key that means nothing on foot). */
   key(e: KeyboardEvent): boolean {
     if (!this.host.available()) return false;
+    if (this.armed() && this.arms.key(e.code)) return true;
     if (e.code === SEAT_KEYS.onFoot) {
       e.preventDefault();
       this.press();
@@ -322,6 +376,8 @@ export class OnFootDirector {
   /** The pad buttons that went down this poll: true when none is left for the seat (the control, and on foot the seat's buttons). */
   padPress(pressed: number): boolean {
     if (!this.host.available()) return false;
+    if (this.armed() && (pressed & (1 << PAD_BUTTON.lb)) !== 0) this.arms.cycle(-1);
+    if (this.armed() && (pressed & (1 << PAD_BUTTON.rb)) !== 0) this.arms.cycle(1);
     if ((pressed & ON_FOOT_BUTTON) !== 0) this.press();
     if (this.flow.active && (pressed & VIEW_BUTTON) !== 0) this.cycleView();
     const swallowed = (this.host.racing() ? SWALLOWED_BUTTONS & ~BACK_BUTTON : SWALLOWED_BUTTONS) & (this.resetsToCar ? ~RESET_BUTTON : -1);
@@ -699,7 +755,12 @@ export class OnFootDirector {
   /** The HUD's read of the trip, or null where the control does nothing: the scene does not offer it, or he neither sits at a wheel he may leave nor is out. */
   hud(): FootHud | null {
     if (!this.host.available() || (!this.flow.active && this.carAtWheel() === null)) return null;
-    return { out: this.flow.active, prompt: this.prompt(), refusal: this.refusalText() };
+    return {
+      out: this.flow.active,
+      prompt: this.prompt(),
+      refusal: this.refusalText(),
+      arms: this.arms.hud(),
+    };
   }
 
   /** Why the control just refused, for `REFUSAL_SECONDS`; null otherwise. */

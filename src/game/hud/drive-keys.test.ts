@@ -29,6 +29,12 @@ describe("given the walker's key line", () => {
       expect(footKeys(testCase.pad, testCase.prompt)).toBe(testCase.expectedKeys);
     });
   }
+
+  // mutation: sed -i 's/(slot === arms.slot ? `▸${hint}` : hint)/hint/' src/game/hud/drive-keys.ts
+  it("when he holds the shotgun, then the key line lists the four weapons with the shotgun marked", () => {
+    expect(footKeys(false, null, { slot: 2 })).toContain("1 Fists · 2 Pistol · ▸3 Shotgun · 4 Rifle");
+    expect(footKeys(false, null)).not.toContain("Pistol");
+  });
 });
 
 describe("given the pad button the drive input binds to Boost", () => {

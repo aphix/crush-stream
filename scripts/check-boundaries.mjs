@@ -45,7 +45,8 @@ const SCENE_GRAPH = /^(Mesh|InstancedMesh|SkinnedMesh|Object3D|Scene|Group|Line|
 // queries they call. Their bodies allocate nothing.
 const HOT = {
   "src/game/present/shop-spill.ts": ["update"],
-  "src/game/engine/engine-onfoot.ts": ["swingDoor"],
+  "src/game/present/shot-fx.ts": ["update"],
+  "src/game/engine/engine-onfoot.ts": ["swingDoor", "shoot"],
   "src/game/engine/engine-onfoot-arms.ts": ["pad", "frame"],
   "src/game/engine/engine.ts": ["tickInner", "fixedStep", "scheduleSkins", "flushVisibleSkins", "updateCamera"],
   "src/game/engine/engine-core.ts": ["puffEngine", "fleetClosing", "contactEta"],
@@ -96,7 +97,7 @@ const HOT = {
   "src/game/ai/civilians/civilian-separation.ts": ["resolve", "list", "buildPairs", "addPair", "relax", "pushApart", "move"],
   "src/game/ai/civilians/civilian-contact.ts": ["carGap", "comingAt"],
   "src/game/ai/civilians/crowd-walkers.ts": ["clear", "add", "addBody", "place"],
-  "src/game/engine/engine-openworld.ts": ["step", "frame", "feedWalkers", "landWalkerStrike"],
+  "src/game/engine/engine-openworld.ts": ["step", "frame", "feedWalkers", "landWalkerStrike", "shoot", "shootCar"],
   "src/game/present/civilian-art.ts": ["update", "refreshSight", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
   "src/game/present/openworld-signs.ts": ["update"],
   "src/game/present/openworld-shop-signs.ts": ["update"],

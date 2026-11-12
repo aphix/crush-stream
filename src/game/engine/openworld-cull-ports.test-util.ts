@@ -35,5 +35,10 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     strikeWalker: () => {},
     staggerWalker: () => {},
     punchProp: () => {},
+    pickDoll: () => {},
+    pickCar: () => {},
+    strikeDoll: () => {},
+    shotSparks: () => {},
+    shootProp: () => Infinity,
   };
 }

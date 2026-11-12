@@ -203,12 +203,12 @@ describe("given the National Mall's guard squad, inside the house until the alar
     people.fire(0, 0, 1, 0);
     people.update(FRAME);
     expect(people.group.visible, "the shot shows").toBe(true);
-    expect(people["flashes"].visible && people["tracers"].visible, "flash and tracer both show").toBeTruthy();
+    expect(people["shots"]["flashes"].visible && people["shots"]["tracers"].visible, "flash and tracer both show").toBeTruthy();
     people.update(0.04);
-    expect(!people["flashes"].visible && people["tracers"].visible, "the flash is out, the tracer still runs").toBeTruthy();
+    expect(!people["shots"]["flashes"].visible && people["shots"]["tracers"].visible, "the flash is out, the tracer still runs").toBeTruthy();
     people.update(0.2);
     expect(people.group.visible, "the shot is out").toBe(false);
-    expect(!people["tracers"].visible, "the tracer is out").toBe(true);
+    expect(!people["shots"]["tracers"].visible, "the tracer is out").toBe(true);
   });
 
   /** The squad out and aiming at the parked car, then one shot of guard 0's at it drawn on its own frame: where its tracer ended and the sparks asked for. */
@@ -223,8 +223,8 @@ describe("given the National Mall's guard squad, inside the house until the alar
     const sparked: { at: THREE.Vector3; normal: THREE.Vector3 }[] = [];
     squad.frame(guard, cars, (at, normal) => void sparked.push({ at: at.clone(), normal: normal.clone() }));
     const muzzle = people.muzzle(1, new THREE.Vector3()).clone();
-    const tracer = people["tracerAt"] as Float32Array;
-    const last = ((people["tracerNext"] as number) + 23) % 24;
+    const tracer = people["shots"]["tracerAt"];
+    const last = (people["shots"]["tracerNext"] + 23) % 24;
     return { car, sparked, muzzle, tracerEnd: new THREE.Vector3().fromArray(tracer, last * 6 + 3) };
   }
 
