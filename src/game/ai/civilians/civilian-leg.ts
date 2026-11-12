@@ -94,7 +94,10 @@ function evadeAlarm(state: CityState, resident: number, out: LegPose): void {
   const share = (there - kerbBehind) / (kerbAhead - kerbBehind);
   const hereX = nodeX[from]! + (nodeX[to]! - nodeX[from]!) * share;
   const hereZ = nodeZ[from]! + (nodeZ[to]! - nodeZ[from]!) * share;
-  if (hypot2(hereX - ints[intBase + RESIDENT_INT.alarmX]! / CENTIMETRES_PER_METRE, hereZ - ints[intBase + RESIDENT_INT.alarmZ]! / CENTIMETRES_PER_METRE) > EVADE_REACH) return;
+  const alarmDx = hereX - ints[intBase + RESIDENT_INT.alarmX]! / CENTIMETRES_PER_METRE;
+  const alarmDz = hereZ - ints[intBase + RESIDENT_INT.alarmZ]! / CENTIMETRES_PER_METRE;
+  // Squared and in place: a double handed to `hypot2` is boxed whenever it is not inlined, and this runs every frame for every walker an alarm reaches.
+  if (alarmDx * alarmDx + alarmDz * alarmDz > EVADE_REACH * EVADE_REACH) return;
   const run = pace * (EVADE_PACE_CALM + (EVADE_PACE_JUMPY - EVADE_PACE_CALM) * residentNeuroticism(state, resident));
   if (kerbAhead - there <= there - kerbBehind) {
     const dash = Math.min(kerbAhead, there + run * since);
