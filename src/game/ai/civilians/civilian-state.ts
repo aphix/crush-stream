@@ -47,6 +47,12 @@ export class CityState {
   /** Each resident's leg: node ids, and the metres walked at each from the first. */
   readonly pathNodes: Uint16Array;
   readonly pathDistance: Float32Array;
+  /** Per resident, the heading `legPose` last worked out and its key (from node, to node, backward): a segment's heading is the same every frame, and a call to `detAtan2` boxes its result. */
+  readonly legYawKey: Float64Array;
+  readonly legYaw: Float64Array;
+  /** Per resident, the neuroticism `legPose`'s evading walk last read and the look word it is of (-1: none yet). */
+  readonly jumpyLook: Float64Array;
+  readonly jumpy: Float64Array;
   /** A civilian run down is off the street from their knock's tick to their return (set at once by the event, never by an answer). */
   readonly hiddenFromTick: Int32Array;
   readonly hiddenUntilTick: Int32Array;
@@ -101,6 +107,10 @@ export class CityState {
     this.floats = new Float32Array(capacity * RESIDENT_FLOAT_STRIDE);
     this.pathNodes = new Uint16Array(capacity * MAX_PATH_NODES);
     this.pathDistance = new Float32Array(capacity * MAX_PATH_NODES);
+    this.legYawKey = new Float64Array(capacity);
+    this.legYaw = new Float64Array(capacity);
+    this.jumpyLook = new Float64Array(capacity).fill(-1);
+    this.jumpy = new Float64Array(capacity);
     this.hiddenFromTick = new Int32Array(capacity);
     this.hiddenUntilTick = new Int32Array(capacity);
     this.closedUntilTick = new Int32Array(this.index.placeCount);
