@@ -10,6 +10,7 @@ import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import type { FacadeSkin, FacadeStyle } from "./facades.ts";
 import type { AssetFamily } from "../world/scenery-assets/types.ts";
 import type { StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import type { PARK_LAMP } from "../world/openworld/openworld-park.ts";
 
 /** Materials the prefabs draw with (shared with the track art where it says so). */
 export type PrefabMaterials = {
@@ -32,8 +33,8 @@ export type PrefabMaterials = {
   assets: Readonly<Record<AssetFamily, THREE.Material>>;
 };
 
-/** What a prefab is dressed in: a building's facade style, a scenery asset's family or a street tree's kind (one draw per prefab, skin and draw cell); none for a prefab with one look. */
-export type Skin = FacadeSkin | AssetFamily | StreetTreeSkin | null;
+/** What a prefab is dressed in: a building's facade style, a scenery asset's family, a street tree's kind or a park's lamp (one draw per prefab, skin and draw cell); none for a prefab with one look. */
+export type Skin = FacadeSkin | AssetFamily | StreetTreeSkin | typeof PARK_LAMP | null;
 
 /** A turn (rad) and a size factor a placement is drawn with on top of its own yaw and scale: drawing's only, the placement's collider never reads it. */
 export type DrawnPose = { yaw: number; scale: number };

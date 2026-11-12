@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
+import { PARK_LAMP } from "../world/openworld/openworld-park.ts";
 import { ACORN_LAMP } from "../world/street-kit.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
@@ -35,7 +36,7 @@ describe("given the acorn lamp the open world stands on its streets and in its p
   const acorn = partsOf(PREFAB.acornLamp);
   const arm = partsOf(PREFAB.lamp);
 
-  // mutation: sed -i 's/      return lamp(mats.plain, true);/      return lamp(mats.plain);/' src/game/present/prefabs.ts
+  // mutation: sed -i 's/      return lamp(mats.plain, true, skin !== PARK_LAMP);/      return lamp(mats.plain);/' src/game/present/prefabs.ts
   it("when it is built, then it is a slim post under an acorn globe, ACORN_LAMP tall, with no arm", () => {
     const whole = boundsOf(acorn.pole).clone().union(boundsOf(acorn.globe));
     expect(whole.max.y, "its height (m)").toBeCloseTo(ACORN_LAMP.height, 5);
@@ -60,5 +61,12 @@ describe("given the acorn lamp the open world stands on its streets and in its p
     const slabTop = PREFABS[PREFAB.sidewalk].size[1];
     expect(boundsOf(acorn.pool).min.y, "the acorn pool over the slab").toBeGreaterThan(slabTop);
     expect(boundsOf(arm.pool).max.y, "the race lamp's pool under a slab's height").toBeLessThan(slabTop);
+  });
+
+  // mutation: sed -i 's/      return lamp(mats.plain, true, skin !== PARK_LAMP);/      return lamp(mats.plain, true);/' src/game/present/prefabs.ts
+  it("when a park's lamp is built, then it stands on the ground with no slab, so its pool lies under a slab's height, as a race lamp's does", () => {
+    const park = prefabParts(PREFAB.acornLamp, plainMaterials(new THREE.MeshBasicMaterial()), PARK_LAMP);
+    expect(boundsOf(park[2]!.geometry).max.y, "the park lamp's pool over its foot (m)").toBeLessThan(PREFABS[PREFAB.sidewalk].size[1]);
+    expect(boundsOf(park[0]!.geometry).max.y, "its post as tall as a street's (m)").toBeCloseTo(boundsOf(acorn.pole).max.y, 5);
   });
 });
