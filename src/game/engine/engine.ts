@@ -316,6 +316,7 @@ export class CrashEngine extends EngineGarage {
       sight: () => this.chaseSight(true),
       openWorld: () => this.showOpenWorld,
       runsCars: () => !this.net.client,
+      guest: () => this.net.client,
       freshCarNear: (index, x, z, facing) => this.race.placeNear(index, x, z, facing),
       respawn: () => this.requestRespawn(),
       enterable: (index) => this.race.free && !this.net.client && this.openWorld.canEnter(index),
@@ -324,7 +325,19 @@ export class CrashEngine extends EngineGarage {
         this.adoptedCar = index;
         this.openWorld.adopt(index);
       },
+      mouseCaptured: () => this.mouseLook.on,
+      captureMouse: (on) => {
+        if (!on) this.mouseLook.exit();
+        else if (!this.mouseLook.on) this.toggleMouseLook();
+      },
+      punchLanded: (x, z, dirX, dirZ) => this.openWorld.punch(x, z, dirX, dirZ),
     });
+    this.view.click = () => {
+      if (!this.onFoot.armed()) return false;
+      this.onFoot.arms.press();
+      this.onFoot.arms.release();
+      return true;
+    };
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
@@ -380,6 +393,10 @@ export class CrashEngine extends EngineGarage {
     canvas.addEventListener("webglcontextrestored", this.onContextRestored);
     this.pad.attach(() => this.emitHud());
     this.view.attach();
+    canvas.addEventListener("pointerdown", this.onArmsDown);
+    canvas.addEventListener("pointerup", this.onArmsUp);
+    canvas.addEventListener("pointercancel", this.onArmsUp);
+    canvas.addEventListener("contextmenu", this.onArmsMenu);
     try {
       // Applies the page's `#` as this first reset, so the first run already uses it.
       this.attachShare();
@@ -441,6 +458,12 @@ export class CrashEngine extends EngineGarage {
         if (!this.ragdolls.walkerTorso(_p)) return;
         this.ragdolls.strikeWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
       },
+      staggerWalker: (dirX, dirZ) => {
+        if (!this.ragdolls.walkerTorso(_p)) return;
+        this.ragdolls.blowWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
+        this.ragdolls.staggerWalker(WALKER_SLOT, 0.5);
+      },
+      punchProp: (x, z, dirX, dirZ) => this.race.punchProp(x, z, dirX, dirZ),
       hookWallHits: (listener) => {
         const recorded = this.race.onWallHit;
         this.race.onWallHit = (i, closing, x, z) => {
@@ -776,6 +799,10 @@ export class CrashEngine extends EngineGarage {
     this.detachShare();
     this.net.leave();
     this.view.detach();
+    this.canvas.removeEventListener("pointerdown", this.onArmsDown);
+    this.canvas.removeEventListener("pointerup", this.onArmsUp);
+    this.canvas.removeEventListener("pointercancel", this.onArmsUp);
+    this.canvas.removeEventListener("contextmenu", this.onArmsMenu);
     this.resizeObs.disconnect();
     for (const car of this.cars) car.dispose();
     this.podium.dispose();
@@ -831,6 +858,20 @@ export class CrashEngine extends EngineGarage {
     this.quality.restartAuto();
     this.pace.reset();
   }
+
+  /** Fire and aim on the canvas (`OnFootArms`): the right button held aims; a left press fires at once while the mouse is captured (a free left click is the camera's `click`). */
+  private readonly onArmsDown = (e: PointerEvent): void => {
+    if (!this.onFoot.armed()) return;
+    if (e.button === 2) this.onFoot.arms.aim(true);
+    else if (e.button === 0 && this.mouseLook.on) this.onFoot.arms.press();
+  };
+  private readonly onArmsUp = (e: PointerEvent): void => {
+    if (e.button === 2) this.onFoot.arms.aim(false);
+    else if (e.button === 0) this.onFoot.arms.release();
+  };
+  private readonly onArmsMenu = (e: Event): void => {
+    if (this.onFoot.armed()) e.preventDefault();
+  };
 
   /**
    * The browser gave the context back: the timer's queries, the PMREM environments (the studio's; Ultra's sky with its handle) and every

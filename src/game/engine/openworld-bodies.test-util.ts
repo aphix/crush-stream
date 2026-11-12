@@ -83,6 +83,11 @@ export class FakeBodyHost {
     this.bodies.get(slot)!.standing = false;
   }
 
+  readonly blows: { slot: number; dirX: number; dirY: number; dirZ: number; speed: number }[] = [];
+  blow(slot: number, dirX: number, dirY: number, dirZ: number, speed: number): void {
+    this.blows.push({ slot, dirX, dirY, dirZ, speed });
+  }
+
   groundAt(): number {
     return this.ground;
   }

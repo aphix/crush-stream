@@ -35,6 +35,7 @@ import { doorBlocked, doorInReach, doorSpot, inPlay } from "./onfoot-doors.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { SEAT_KEYS } from "./engine-keys.ts";
 import { blankWalkIntent, readWalkIntent, type WalkIntent } from "./engine-walk-input.ts";
+import { OnFootArms } from "./engine-onfoot-arms.ts";
 
 /** What the director needs from the engine: the objects it acts on, and the questions only the engine can answer. */
 interface OnFootHost {
@@ -66,6 +67,14 @@ interface OnFootHost {
   enterable(index: number): boolean;
   /** He gets into car `index`, not the one he left: it is the car he drives from now on, and the one he left stays where it stands, empty. */
   adopt(index: number): void;
+  /** Whether this machine is a guest in a room (it holds no authority). The one line a later plan replaces to give guests weapons. */
+  guest(): boolean;
+  /** Mouse look (pointer lock) is on. */
+  mouseCaptured(): boolean;
+  /** Turns mouse look on (inside a user gesture) or off. */
+  captureMouse(on: boolean): void;
+  /** His punch lands from (x, z) along the unit (dirX, dirZ). */
+  punchLanded(x: number, z: number, dirX: number, dirZ: number): void;
 }
 
 /** The control that gets him out and in: Enter on the keyboard (`SEAT_KEYS.onFoot`), Y (Triangle) on the pad. Neither drives, steers or switches a scene. */
@@ -97,6 +106,10 @@ const LED_REACH = 0.5;
 const DOOR_OPEN = 1.1;
 const DOOR_RATE = 3.5;
 const DOOR_CLOSE_DISTANCE = 4;
+/** Aiming: the shoulder boom (m), and how far the point it looks from moves to the camera's right (level) and up (m). */
+const AIM_BOOM = 1.6;
+const AIM_SIDE = 0.45;
+const AIM_UP = 0.15;
 
 const REFUSAL_TEXT: Record<OnFootRefusal, string> = {
   tooFast: "Stop the car first",
@@ -120,6 +133,7 @@ const _blendAim = new THREE.Vector3();
  */
 export class OnFootDirector {
   readonly flow = new OnFootFlow();
+  readonly arms = new OnFootArms({ armed: () => this.armed(), punch: () => this.punch(), land: () => this.landPunch(), captured: () => this.host.mouseCaptured(), capture: (on) => this.host.captureMouse(on) });
   private readonly host: OnFootHost;
   private readonly intent = blankWalkIntent();
   private readonly sense: OnFootSense = { car: -1, speed: 0, doorBlocked: false };
@@ -170,6 +184,22 @@ export class OnFootDirector {
   /** On foot in the open world the reset control (R, D-pad down, Respawn; a tap or a hold, as at the wheel) is his: back in a fresh car (`resetIntoCar`). */
   get resetsToCar(): boolean {
     return this.flow.phase === "onFoot" && this.host.openWorld();
+  }
+
+  /** Whether fire, aim and weapons are his: on foot in the open world, solo or as the room's host. */
+  armed(): boolean {
+    return this.host.openWorld() && this.flow.phase === "onFoot" && !this.host.guest();
+  }
+
+  private punch(): boolean {
+    return this.host.ragdolls.walker.punch();
+  }
+
+  private landPunch(): void {
+    const { ragdolls } = this.host;
+    const walker = ragdolls.walker;
+    if (walker.state !== "stand" || !ragdolls.walkerTorso(_torso)) return;
+    this.host.punchLanded(_torso.x, _torso.z, detSin(walker.facing), detCos(walker.facing));
   }
 
   /**
@@ -428,6 +458,8 @@ export class OnFootDirector {
     this.swingDoor(wallDt);
     const flow = this.flow;
     this.refusalLeft = Math.max(0, this.refusalLeft - wallDt);
+    this.arms.pad(this.host.pad, this.host.touch);
+    this.arms.frame(wallDt);
     if (!flow.active) return;
     const { ragdolls } = this.host;
     if (flow.phase === "arrested") {
@@ -489,8 +521,16 @@ export class OnFootDirector {
   private walk(wallDt: number): void {
     const { camera, view, ragdolls, keys, pad, touch } = this.host;
     const walker = ragdolls.walker;
-    const intent = readWalkIntent(keys, pad, touch, this.intent);
+    const intent = readWalkIntent(keys, pad, touch, this.intent, this.armed());
     const reach = hypot2(intent.forward, intent.strafe);
+    if (this.arms.aiming) {
+      // Aiming: he faces where the camera looks and walks forward only, at no more than a walk.
+      walker.heading = detAtan2(view.look.x - camera.position.x, view.look.z - camera.position.z);
+      walker.command = intent.forward > 0.5 ? Math.min(this.pace(intent, reach), WALK_SPEED) : 0;
+      if (reach >= WALK_STOP) walker.ask();
+      this.intentSeeded = false;
+      return;
+    }
     if (reach < WALK_STOP) {
       walker.command = 0;
       this.intentSeeded = false;
@@ -567,6 +607,7 @@ export class OnFootDirector {
     const pitch = Math.max(range.low, Math.min(range.high, view.orbitPitch));
     const sight = this.walkerView;
     if (first) sight.first(_torso.x, _torso.y, _torso.z, view.orbitAngle, pitch, this.sweep, wallDt);
+    else if (this.arms.aiming) sight.shoulder(_torso.x, _torso.y, _torso.z, this.follow.point[0]! + detCos(view.orbitAngle) * AIM_SIDE, this.follow.point[1]! + AIM_UP, this.follow.point[2]! - detSin(view.orbitAngle) * AIM_SIDE, view.orbitAngle, pitch, AIM_BOOM, this.sweep, wallDt);
     else sight.shoulder(_torso.x, _torso.y, _torso.z, this.follow.point[0]!, this.follow.point[1]!, this.follow.point[2]!, view.orbitAngle, pitch, view.orbitRadius, this.sweep, wallDt);
     camera.position.set(sight.eye[0]!, sight.eye[1]!, sight.eye[2]!);
     _aim.set(sight.eye[0]! + sight.ahead[0]! * LOOK_AHEAD, sight.eye[1]! + sight.ahead[1]! * LOOK_AHEAD, sight.eye[2]! + sight.ahead[2]! * LOOK_AHEAD);

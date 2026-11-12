@@ -126,4 +126,19 @@ describe("the player on foot is a subject of the law", () => {
     expect(run.scene.stats.cases, "the police were told").toBeGreaterThanOrEqual(1);
     expect(run.scene.footChaseOf(strip()), "and come for the player too").toBe(true);
   });
+
+  // mutation: sed -i 's/^export const COP_KO_BLOWS = 3;/export const COP_KO_BLOWS = 99;/' src/game/ai/civilians/civilian-constants.ts
+  it("when the player punches a foot cop, then the chase opens at once, and the third punch puts the cop down", () => {
+    const run = harness([59]);
+    run.scene.setFoot(true, 58, 0, 1, 0, 0);
+    runFor(run, 1);
+    expect(run.scene.punchCop(58, 0, 1, 0, run.now), "the first punch lands on the cop").toBe(true);
+    expect(run.scene.footChaseOf(strip()), "the chase is open").toBe(true);
+    for (let blow = 1; blow < 3; blow++) {
+      runFor(run, 0.2);
+      run.scene.punchCop(58, 0, 1, 0, run.now);
+    }
+    expect(run.copDowns, "cops down").toHaveLength(1);
+    expect(run.scene.takeCopStrikes(), "his throw").toHaveLength(1);
+  });
 });

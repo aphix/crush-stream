@@ -276,6 +276,18 @@ export abstract class RagdollThrower extends RagdollStepper {
     this.walkers[slot]!.struck();
   }
 
+  /** A blow that does not fell by itself: the part at `point` is struck as `strikeWalker` strikes it, and the walker keeps his feet. */
+  blowWalker(slot: number, point: THREE.Vector3, direction: THREE.Vector3, speed: number): void {
+    const d = this.dolls[slot];
+    if (!d?.live) return;
+    strikeAt(d.bodies, point, direction, speed);
+  }
+
+  /** The walker in `slot` staggers to at most `share` of his strength (`Walker.stagger`). */
+  staggerWalker(slot: number, share: number): void {
+    this.walkers[slot]?.stagger(share);
+  }
+
   private meetClock = 0;
   private readonly metAt = new Float64Array(SLOTS).fill(-Infinity);
 

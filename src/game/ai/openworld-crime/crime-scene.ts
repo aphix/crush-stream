@@ -1,9 +1,11 @@
 import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
-import { blankStrike, fell, runsDown, type FigureStrike } from "../../scenes/figure-strike.ts";
+import { blankStrike, fell, felled, runsDown, type FigureStrike } from "../../scenes/figure-strike.ts";
 import { CAR_REACH } from "../../scenes/lawn-guard.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
+import { COP_KO_BLOWS } from "../civilians/civilian-constants.ts";
+import { punchGap } from "../civilians/civilian-contact.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import type { Obstacles } from "../obstacles.ts";
 import { fillCopPoses, newCopPoses, overlaySuspects } from "./crime-poses.ts";
@@ -47,6 +49,7 @@ export class CrimeScene {
   /** Per foot cop: the crowd second of the latest knock heard or found (the host's event), and one waiting for this peer's clock (-1 none). */
   private readonly copDownAt = new Float64Array(FOOT_COP_COUNT).fill(-1);
   private readonly copDownDue = new Float64Array(FOOT_COP_COUNT).fill(-1);
+  private readonly copBlows = new Uint8Array(FOOT_COP_COUNT);
   private copStrikes: FigureStrike[] = [];
   /** The share of the grid step after the last one taken that the poses were drawn at. */
   drawShare = 0;
@@ -129,11 +132,43 @@ export class CrimeScene {
   /** Car `carIndex` ran cop `cop` down where he was drawn: thrown by it, down in the law, hidden, and the host's event raised. */
   private runCopDown(cop: number, car: DeformableCar, carIndex: number, groundY: number, seconds: number): void {
     const poses = this.copPoses;
-    this.copStrikes.push(fell(car, carIndex, cop, poses.x[cop]!, groundY, poses.z[cop]!, detSin(poses.yaw[cop]!), detCos(poses.yaw[cop]!), blankStrike()));
+    this.downCop(cop, fell(car, carIndex, cop, poses.x[cop]!, groundY, poses.z[cop]!, detSin(poses.yaw[cop]!), detCos(poses.yaw[cop]!), blankStrike()), seconds);
+  }
+
+  /** Cop `cop` is down at crowd second `seconds`, thrown by `strike`: down in the law, hidden, and the host's event raised. */
+  private downCop(cop: number, strike: FigureStrike, seconds: number): void {
+    this.copStrikes.push(strike);
     this.copDownAt[cop] = seconds;
     this.law.knockCop(cop, seconds);
-    poses.shown[cop] = 0;
+    this.copPoses.shown[cop] = 0;
     this.ports.copDown(cop, seconds);
+  }
+
+  /** The player's punch from (x, z) along (dirX, dirZ): the nearest shown foot cop in reach and arc takes it, the law knows of the fight at once, and his `COP_KO_BLOWS`th blow puts the cop down. False when no cop was hit, or without authority. */
+  punchCop(x: number, z: number, dirX: number, dirZ: number, seconds: number): boolean {
+    if (!this.authority) return false;
+    const poses = this.copPoses;
+    let nearest = -1;
+    let nearestGap = Infinity;
+    for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
+      if (poses.shown[cop] === 0) continue;
+      const gap = punchGap(x, z, dirX, dirZ, poses.x[cop]!, poses.z[cop]!);
+      if (gap < 0 || gap >= nearestGap) continue;
+      nearestGap = gap;
+      nearest = cop;
+    }
+    if (nearest < 0) return false;
+    this.law.player.fightKnown(seconds);
+    if (++this.copBlows[nearest]! >= COP_KO_BLOWS) {
+      this.copBlows[nearest] = 0;
+      this.downCop(nearest, felled(nearest, poses.x[nearest]!, activeGround().heightAt(poses.x[nearest]!, poses.z[nearest]!), poses.z[nearest]!, dirX, dirZ, blankStrike()), seconds);
+    }
+    return true;
+  }
+
+  /** The player on foot started a fight at crowd second `seconds`: the law knows at once. */
+  playerFought(seconds: number): void {
+    this.law.player.fightKnown(seconds);
   }
 
   /** A heard knock whose time this peer's clock has reached: the cop goes down, thrown by the car nearest him when it is fresh (as a heard civilian's knock is). */

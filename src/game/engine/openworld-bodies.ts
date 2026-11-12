@@ -1,6 +1,7 @@
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { DOWNED_LIFE_SECONDS } from "../ai/civilians/civilian-crowd-constants.ts";
+import { punchGap } from "../ai/civilians/civilian-contact.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
@@ -68,6 +69,8 @@ export type BodyHost = {
   steady(slot: number): boolean;
   /** A strike lands on the body in `slot`: every part moves as the strike's launch (`FigureStrike`) and it goes limp. */
   knock(slot: number, strike: FigureStrike): void;
+  /** A blow of `speed` m/s along (dirX, dirY, dirZ) lands on the torso of the body in `slot`, and it staggers instead of falling. */
+  blow(slot: number, dirX: number, dirY: number, dirZ: number, speed: number): void;
   /** The ground's height (m) at (x, z). */
   groundAt(x: number, z: number): number;
 };
@@ -123,6 +126,18 @@ export class OpenWorldBodies {
   slotOf(civilian: number): number {
     const body = this.bodyOf[civilian]!;
     return body === NOBODY ? NOBODY : this.slot[body]!;
+  }
+
+  /** The player's punch from (x, z) along (dirX, dirZ): the first body on its feet in its reach and arc is blown at `speed` and staggered; its civilian, or -1. */
+  punch(x: number, z: number, dirX: number, dirZ: number, speed: number): number {
+    for (let body = 0; body < this.size; body++) {
+      if (this.resident[body]! === NOBODY || this.struckAt[body]! > -Infinity) continue;
+      const slot = this.slot[body]!;
+      if (!this.host.torso(slot, _torso) || punchGap(x, z, dirX, dirZ, _torso.x, _torso.z) < 0) continue;
+      this.host.blow(slot, dirX, 0.3, dirZ, speed);
+      return this.resident[body]!;
+    }
+    return NOBODY;
   }
 
   /** One step of \`dt\` s at crowd second \`seconds\`, after the crowd's: the bodies are steered to their civilians' spots, and the nearest civilians to (eyeX, eyeZ) are given bodies. */

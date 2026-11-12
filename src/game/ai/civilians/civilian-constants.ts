@@ -440,6 +440,16 @@ export const KNOCKOUT_BLOW_SPAN = 4;
 export const PLAYER_STRIKE_REACH = 1.5;
 export const PUNCH_SPEED = 4;
 export const PUNCH_LIFT = 0.3;
+/** The player's punch: its reach (m), the cosine of its half-arc about his facing, the seconds between punches, the seconds from the press to the blow, and the speed (m/s) it gives the body it lands on. */
+export const PLAYER_PUNCH_REACH = 1.4;
+export const PLAYER_PUNCH_ARC = 0.5;
+export const PLAYER_PUNCH_COOLDOWN = 0.6;
+export const PLAYER_PUNCH_LAND = 0.18;
+export const PLAYER_PUNCH_SPEED = 3;
+/** His punches on one civilian (within `PLAYER_KO_WINDOW` s of each other) and on one cop that put them down. */
+export const PLAYER_KO_BLOWS = 3;
+export const PLAYER_KO_WINDOW = 10;
+export const COP_KO_BLOWS = 3;
 /** A jaywalker arrested by the police spends a game hour in custody. */
 export const JAYWALK_CUSTODY_TICKS = TICKS_PER_GAME_HOUR;
 

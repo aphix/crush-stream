@@ -179,6 +179,8 @@ export class ChaseCamera {
    */
   take: { down(x: number, y: number, t: number): boolean; move(e: PointerEvent): void; up(x: number, y: number, t: number, cancel: boolean): void } | null = null;
   private taking = false;
+  /** A left click on the canvas that is a shot (the arms, on foot in the open world): returns true when it took the click. */
+  click: (() => boolean) | null = null;
   /** Where the pointer last moved over the canvas (client px; NaN: not yet): what a key aims at (the showcase's thrown props). */
   hoverX = NaN;
   hoverY = NaN;
@@ -798,7 +800,8 @@ export class ChaseCamera {
     if (this.taking) {
       this.taking = false;
       this.take?.up(e.clientX, e.clientY, e.timeStamp, cancelled);
-    } else if (!cancelled && click && this.pressedCar >= 0) this.picker.choose(this.pressedCar);
+    } else if (!cancelled && click && this.click?.()) return;
+    else if (!cancelled && click && this.pressedCar >= 0) this.picker.choose(this.pressedCar);
   }
 
   private onWheel = (e: WheelEvent): void => {

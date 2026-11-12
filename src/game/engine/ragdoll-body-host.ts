@@ -72,6 +72,13 @@ export class RagdollBodyHost {
     this.ragdolls().knockWalker(strike, slot);
   }
 
+  blow(slot: number, dirX: number, dirY: number, dirZ: number, speed: number): void {
+    const ragdolls = this.ragdolls();
+    if (!ragdolls.torso(slot, _at, null)) return;
+    ragdolls.blowWalker(slot, _at, _v.set(dirX, dirY, dirZ).normalize(), speed);
+    ragdolls.staggerWalker(slot, 0.5);
+  }
+
   groundAt(x: number, z: number): number {
     return activeGround().heightAt(x, z, 0.5);
   }

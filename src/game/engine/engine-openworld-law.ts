@@ -196,6 +196,17 @@ export class OpenWorldLaw {
     if (!strike.loose) this.scene.noteKnock(strike.car, strike.x, strike.z);
   }
 
+  /** The player's punch lands on a foot cop (the scene refuses without authority). */
+  punchCop(x: number, z: number, dirX: number, dirZ: number, seconds: number): boolean {
+    return this.scene.punchCop(x, z, dirX, dirZ, seconds);
+  }
+
+  /** His punch landed on a civilian: the law hears a shove, or (`grave`, a knock-out) knows of the fight at once. */
+  playerStruck(seconds: number, grave: boolean): void {
+    if (grave) this.scene.playerFought(seconds);
+    else this.scene.playerShoved(seconds);
+  }
+
   dispose(): void {
     this.crowd.overlay = null;
     this.unlisten?.();
