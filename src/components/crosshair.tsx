@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-/** The aim on foot with a gun in hand: a small ring at the cursor while the mouse is free, at the view's centre otherwise. Nothing with fists or no weapon. */
+/** The aim on foot with a gun in hand: a small ring at the cursor while the mouse is free, at the view's centre otherwise. Nothing with fists, the hook (its reticle is `TetherArt`'s ring) or no weapon. */
 export function Crosshair({ arms, mouseLook }: { arms: { slot: number; name: string } | null; mouseLook: boolean }) {
-  const shown = arms !== null && arms.slot !== 0;
+  const shown = arms !== null && arms.slot !== 0 && arms.name !== "Hook";
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
   // The cursor is followed only while a ring is drawn: a mouse move elsewhere re-renders nothing.
   useEffect(() => {

@@ -38,7 +38,7 @@ class ScriptedWorker {
 
 /** The answer to frame `seq` of epoch 0: nothing out but a strike of the windshield of car 0 and a dummy still out. */
 function answer(seq: number, hits: ResultMessage["hits"]): ResultMessage {
-  return { type: "result", seq, epoch: 0, dolls: new Float32Array(0), alpha: 0, lastSlot: 0, purses: new Float32Array(0), props: new Float32Array(0), propsReset: false, spawned: [], hits, wanted: new Uint8Array(32), active: true, stepMs: new Float64Array(0), colliders: 0, bodies: 0 };
+  return { type: "result", seq, epoch: 0, dolls: new Float32Array(0), alpha: 0, lastSlot: 0, purses: new Float32Array(0), props: new Float32Array(0), propsReset: false, spawned: [], hits, wanted: new Uint8Array(32), active: true, stepMs: new Float64Array(0), colliders: 0, bodies: 0, ropes: new Float32Array(0), ropeCommand: 0 };
 }
 
 /** Frames posted until the strike in frame 1's answer shows on the car, the answer arriving `arrive` posts after frame 1; -1: not before the sim must have it. */

@@ -19,6 +19,7 @@ import { DriftLabel, DriftOverlay } from "@/components/drift-charge";
 import { RESET_GLOW, ResetPrompt } from "@/components/reset-prompt";
 import { pickScene, sceneInPlay, sceneLabel, scenesFor } from "@/components/scene-picks";
 import { StartLights } from "@/components/start-lights";
+import { TetherHint } from "@/components/tether-hint";
 import { FullscreenButton, MouseLookButton, PhoneFullscreenButton, TouchControls } from "@/components/touch-controls";
 import { ZONE } from "@/components/touch-pedals";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
@@ -120,7 +121,7 @@ const CAMERA_KEYS: [string, string][] = [
 ];
 
 function seatHint(state: CrashHudState): { title: string; keys: string } {
-  if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad !== null, state.foot.prompt, state.foot.arms) };
+  if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad !== null, state.foot.prompt, state.foot.arms, state.tether?.count ?? 0) };
   if (state.race && state.seat === "drive") {
     const keys = state.pad
       ? "RT gas · LT brake, then reverse · left stick steer · X handbrake · A boost · B view · R3 look back · D-pad ↓ respawn · hold D-pad ↓ back on the road, damage kept · Start pause"
@@ -294,6 +295,7 @@ function DesktopHud({ hud, reset, raceCommand, tapReset, focus }: HudShell) {
           <ResetPrompt view={state.derbyView} input={reset} race={false} onTap={tapReset} className="mt-14 sm:mt-0" />
         </div>
       ) : null}
+      <TetherHint state={state} />
     </div>
   );
 }

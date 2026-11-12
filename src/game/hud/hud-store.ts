@@ -81,6 +81,9 @@ export type ChaseHud = NonNullable<RaceView["chase"]>;
 /** The look-at panel's text (`CrashHudState.lookAt`): what the eye is on, as a title (a civilian's name and job, a building's name) and its short lines (needs, mood, recent comings and goings). */
 export type LookAtHud = { title: string; lines: string[] };
 
+/** The tether as the HUD reads it: cables out, whether a second fire is awaited, the aim (`AIM` in `present/tether-art.ts`: 0 nothing, 1 in reach, 2 out of reach), `free`: no car of the player's to cable from (the free camera: two fires hook two objects), and `sight`: how far down the view (0 top, 1 bottom) the aim passes. */
+export type TetherHud = { count: number; pending: boolean; aim: number; free: boolean; sight: number };
+
 export type CrashHudState = {
   playing: boolean;
   looping: boolean;
@@ -214,6 +217,8 @@ export type CrashHudState = {
   bust: ChaseHud | null;
   /** The open world's clock in whole game minutes since midnight (0 to 1439), in steps of five; null in every other scene and before its first frame. */
   gameMinute: number | null;
+  /** The tether (a fire, retract and cut on a touch screen), null where it is not on offer. */
+  tether: TetherHud | null;
   boost: number;
   /** The seat's slide while driving, `NO_DRIFT` otherwise: the free-drive boost bar's charge cue (a race and a derby read `RaceView.drift`). */
   drift: DriftView;
@@ -367,6 +372,7 @@ export const INITIAL_HUD: CrashHudState = {
   lookAt: null,
   bust: null,
   gameMinute: null,
+  tether: null,
   boost: 1,
   drift: NO_DRIFT,
   view: "third",

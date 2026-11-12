@@ -131,6 +131,17 @@ export class BoxPile {
     return this.bodies.length;
   }
 
+  /** Box `i`'s body, or null when there is no such box. */
+  bodyAt(i: number): RigidBody | null {
+    return this.bodies[i] ?? null;
+  }
+
+  /** The farthest (m) a point of box `i` lies from its middle: half its diagonal. */
+  reachOf(i: number): number {
+    const { width, height, depth } = this.placements[i]!;
+    return hypot3(width, height, depth) / 2;
+  }
+
   /** The world is being freed with its bodies: forget them. */
   dispose(): void {
     this.bodies = [];

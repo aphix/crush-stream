@@ -23,6 +23,12 @@ export const SEAT_KEYS = {
   flyDown: "PageDown",
 };
 
+/** The hook's keys (`KeyboardEvent.code`s): retract (held) and cut every cable; fire is the weapon's fire. No scene key may be one of them (`engine-keys.test.ts`). */
+export const TETHER_KEYS = {
+  retract: "BracketRight",
+  cut: "Delete",
+};
+
 /** The scene picks by key: the code, the label the key list shows, and the scene. The same key again goes back to the fleet. */
 export const SCENE_KEY_BINDINGS: readonly { code: string; label: string; scene: SceneId }[] = [
   { code: "Equal", label: "=", scene: "derby" },

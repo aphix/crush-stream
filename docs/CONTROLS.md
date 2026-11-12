@@ -53,7 +53,7 @@ A tap shorter than one frame still registers (the press is latched until the nex
 
 | Action | Keyboard / mouse | Pad | Touch |
 | --- | --- | --- | --- |
-| Choose a weapon: 1 fists, 2 pistol, 3 shotgun, 4 rifle; LB / RB the one before / after | 1 to 4 | LB / RB | Weapon (next) |
+| Choose a weapon: 1 fists, 2 pistol, 3 shotgun, 4 rifle, 0 the hook (Tether, below); LB / RB the one before / after | 1 to 4, 0 | LB / RB | Weapon (next) |
 | Fire: a free cursor fires where it points; a captured mouse or held aim fires at the view's centre. The rifle repeats while fire is held with the mouse captured or aim held | left click | RT | Fire |
 | Aim | right button held | LT held | |
 
@@ -83,6 +83,20 @@ A tap shorter than one frame still registers (the press is latched until the nex
 | Free fly: pan the view with the fingers, fly forward or back along the view | | | two-finger drag, pinch out / in |
 | Zoom | scroll | | two-finger pinch |
 | Impact shake: any hit on the followed or driven car shakes the chase, far chase and hood views (the hood at 0.4 of the amount) in every mode, by how hard it hit (none under 2 m/s, full at 20). Debug views → Camera → **Impact**: **Shake strength** (`cam.shake`, 0 is off) and **Gear-change kick** (`cam.shiftKick`: the body's slight pitch at each gear change). Reduced motion never shakes | | | |
+
+## Tether (the grappling hook, weapon 0)
+
+A Just Cause-style cable, on foot in the open world only, solo or as a room's host: `0` takes the hook in hand (`OnFootArms`; LB / RB step to it). Aim with the camera's centre, also with a free cursor: one ray from there hooks the first surface it touches, a car's drawn body (at that exact point of the car), a ragdoll or body, a knockable prop, a box, or a wall or the ground within 80 m (a world point). A ring there is white with nothing hit, green with a surface in reach (a small ring marks the exact point), red when the first surface is farther. His own walker and what moves loose (wheels, torn parts, balls) are passed through. A hint under the ring names the controls.
+
+| Action | Mouse | Keyboard | Controller | Touch |
+|---|---|---|---|---|
+| Place an end: the first fire holds the thing under the reticle (a ring marks it, and a faint line runs from it to the reticle while the aim is in reach), the second ties it to the thing then under the reticle. Six cables at once; a seventh drops the oldest | left click (fire) | | RT | Fire |
+| Reel every cable in while held: it shortens to 3 m (`WINCH_SPEED` 28 m/s, at most 55 kN) | | ] (right bracket) | D-pad → (held) | Reel |
+| Cut every cable (or let go of a held first end) | middle click | Delete | D-pad ← | Cut |
+
+Cables stay when he changes weapon; they are all cut once he is no longer on foot in the open world (back in a car, or another scene). There is no hook from a car and no right-click hook: the right button aims, as for every weapon. A taut cable holds its length and a slack one pulls on nothing. The walker himself cannot be an end. Nothing here is recorded, and a guest in a room has no hook yet. The keys are `TETHER_KEYS` in `src/game/engine/engine-keys.ts` and `MAX_TETHERS` in `src/game/kernel/constants.ts`; the director is `engine/engine-tether.ts` (`TetherDirector`); the solver is `contact/tether.ts` (`solveTethers`, before the integrate of each slice).
+
+Dummies, knockable props and the High jump's boxes are hooked too: a cable with such an end is a Rapier rope joint (`present/ragdoll-ropes.ts`) in the dummies' world, in the worker or inline, to a kinematic point that follows the other end (a car's point, a world point) or to another body there, so a dummy dangles from a car or two props are tied. The sim does not feel it (the world is cosmetic: the car is not pulled) and it never snaps; cut it with the cut key. The solver runs before each slice's integrate, so a cable fitted to a car at 25 m/s stretches under 2 %. The winch takes a sedan 40 m out to a wall in about 1.7 s, a monster truck in about 2.2 s; a cable snaps at 140 kN (a sedan yanked at 12 m/s; a swing is 40 kN, a reel at most 55 kN).
 
 ## Racing (no menu open)
 

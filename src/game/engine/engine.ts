@@ -74,6 +74,7 @@ import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { homeFrontages } from "../world/openworld/openworld-facade-solids.ts";
 import type { ChaseHud, LookAtHud } from "../hud/hud-store.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
+import { TetherDirector } from "./engine-tether.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
 import { ChaseCamera, centroid, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
@@ -348,6 +349,7 @@ export class CrashEngine extends EngineGarage {
       aimRay: (centre, out) => this.aimRay(centre, out),
       shootRay: (ray, gun) => this.openWorld.shoot(ray, gun),
       shotFired: (ray, far) => this.shotFired(ray, far),
+      hook: () => this.tether.fire(),
     });
     this.view.click = () => {
       if (!this.onFoot.armed()) return false;
@@ -355,6 +357,20 @@ export class CrashEngine extends EngineGarage {
       this.onFoot.arms.release();
       return true;
     };
+    this.tether = new TetherDirector({
+      tethers: this.world.tethers,
+      camera: this.camera,
+      scene: this.scene,
+      ropes: this.ragdolls,
+      movers: () => [this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.coverBatch.group, ...this.balls.map((ball) => ball.mesh)],
+      cars: () => this.live(),
+      playerCar: () => -1,
+      offered: () => this.tetherOffered(),
+      chase: () => false,
+      afoot: () => this.onFoot.armed(),
+      self: () => WALKER_SLOT,
+    });
+    this.scene.add(this.tether.art.group);
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
@@ -838,6 +854,7 @@ export class CrashEngine extends EngineGarage {
     this.looks.dispose();
     this.rivals.dispose();
     for (const batch of [this.wheels, this.lampBatch, this.partBatch, this.seated, this.coverBatch]) batch.dispose();
+    this.tether.dispose();
     this.sparks.dispose();
     this.fountains.dispose();
     this.debris.dispose();
@@ -889,6 +906,7 @@ export class CrashEngine extends EngineGarage {
     if (!this.onFoot.armed()) return;
     if (e.button === 2) this.onFoot.arms.aim(true);
     else if (e.button === 0 && this.mouseLook.on) this.onFoot.arms.press();
+    else if (e.button === 1 && this.onFoot.arms.weapon === "hook") this.tether.cut();
   };
   private readonly onArmsUp = (e: PointerEvent): void => {
     if (e.button === 2) this.onFoot.arms.aim(false);
@@ -925,7 +943,7 @@ export class CrashEngine extends EngineGarage {
   private shotFired(ray: LookRay, far: number): void {
     this.playerShots.fire(0, ray.eyeX + ray.dirX * far, ray.eyeY + ray.dirY * far, ray.eyeZ + ray.dirZ * far);
     const weapon = this.onFoot.arms.weapon;
-    if (this.audioOn && weapon !== "fists") this.audio.shot(weapon);
+    if (this.audioOn && weapon !== "fists" && weapon !== "hook") this.audio.shot(weapon);
     this.openWorld.shotFired();
   }
 
@@ -985,7 +1003,7 @@ export class CrashEngine extends EngineGarage {
 
   /** Once a frame: the gun box along the player's right forearm (part 5, the one the ARM_R / ELBOW_R motors drive) and the muzzle the tracers start from; hidden with no gun in hand. */
   private poseHandGun(): void {
-    const held = this.onFoot.armed() && this.onFoot.arms.weapon !== "fists";
+    const held = this.onFoot.armed() && this.onFoot.arms.weapon !== "fists" && this.onFoot.arms.weapon !== "hook";
     this.handGun.visible = held;
     if (!held) return;
     const dummies = this.ragdolls.pickMesh;
@@ -1198,6 +1216,7 @@ export class CrashEngine extends EngineGarage {
     this.updateCamera(wallDt);
     lapPart(PART.camera);
     this.openWorld.frame(wallDt);
+    this.tether.frame(wallDt);
     lapPart(PART.scenery);
     this.rumbleFrame(this.playing && !held ? wallDt : 0);
     lapPart(PART.rest);
@@ -1368,6 +1387,11 @@ export class CrashEngine extends EngineGarage {
     this.net.sendEject(e);
   }
 
+  /** The hook is on offer: weapon 0 in hand, on foot in the open world, solo or as the room's host. */
+  private tetherOffered(): boolean {
+    return this.onFoot.armed() && this.onFoot.arms.weapon === "hook";
+  }
+
   /** The on-foot control is offered: the game is running a scene with a player's car to leave (not the garage, the lab or the showcase), and no reel, fade, boot warm-up or race menu holds it. Online or off. */
   private onFootOffered(): boolean {
     if (this.highlights.playing || !this.playing || this.warming || this.sceneFade.pending !== null) return false;
@@ -1429,6 +1453,7 @@ export class CrashEngine extends EngineGarage {
     this.ejection.minigame = this.minigameMode !== null;
     w.fine = this.pace.fine;
     lap(w.phases, PHASE.drive);
+    if (w.tethers.sim && this.race.active) this.race.recorder.tethered();
     stepWorld(w, dt);
     // The slab names no car: a hit it took from the watched one, at the step's hardest contact next to that car.
     const watched = this.seat.mode !== "global" ? cars[this.seat.carIndex] : undefined;

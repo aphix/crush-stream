@@ -154,6 +154,10 @@ The number keys choose the weapon in hand on foot in the open world (`OnFootArms
 
 The nearest of a knockable prop, a ragdoll, a drawn civilian, a foot cop or a car along the ray takes the shot (`OpenWorldDirector.shoot`), unless a wall or the ground is nearer. A person is knocked down along the shot (a knock, as a car's). A car is pushed along it; a glass pane cracks, then shatters; its body sparks, and its engine dies after 13 to 19 hits on the body (the lawn guards' count). Every shot opens a police chase, seen or not. There is no ammunition. A guest has no guns yet (`OnFootHost.guest`).
 
+## The hook
+
+`0` takes the grappling hook in hand, weapon 0 of `OnFootArms` (LB / RB step to it), on foot in the open world, solo or as a room's host. Fire with it places an end (`TetherDirector`, `engine-tether.ts`): the first holds the thing under the reticle (a car, a ragdoll or body, a knockable prop, a box, or a point on a wall or the ground within 80 m), the second ties it to the thing then under the reticle. It aims along the view's centre, where `TetherArt` draws its ring, also with a free cursor. `MAX_TETHERS` (6) cables at once; a seventh drops the oldest. `]` held (D-pad right, the touch Reel) reels every cable in; `Delete` (D-pad left, a middle click, the touch Cut) cuts them all. Cables stay when he changes weapon and are cut once he is no longer on foot in the open world. There is no hook from a car, and a guest has none yet (`OnFootHost.guest`). Controls in [`CONTROLS.md`](CONTROLS.md).
+
 ## The camera
 
 `OnFootDirector.aim` keeps the one `ChaseCamera` orbit (no second camera system) for its yaw, pitch and zoom, so the drag, the right stick, mouse look, the wheel and a pinch

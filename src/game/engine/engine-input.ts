@@ -23,7 +23,7 @@ import { loadUltra as fetchUltra } from "../present/ultra/load.ts";
 import { boostPadButton, gameKey } from "../vehicle/drive-input.ts";
 import { MINIGAME_MODE } from "../scenes/minigame-constants.ts";
 import type { SceneId } from "../scenes/scene-id.ts";
-import { SCENE_KEY_SCENES, SEAT_KEYS } from "./engine-keys.ts";
+import { SCENE_KEY_SCENES, SEAT_KEYS, TETHER_KEYS } from "./engine-keys.ts";
 import { MouseLook } from "./mouse-look.ts";
 import { PAD_BUTTON, type TouchPad } from "../vehicle/gamepad.ts";
 import { ResetHold } from "../hud/reset-hold.ts";
@@ -780,6 +780,7 @@ export abstract class EngineInput extends EngineRigs {
     // Every Space keydown, repeats included: an unprevented repeat arms a focused HUD button and the release clicks it.
     if (e.code === "Space") e.preventDefault();
     if (e.repeat) return;
+    if (this.tetherKey(e)) return;
     if (this.onFoot.key(e)) return;
     // The Konami code in a race brings out its course's secret (the keys still do their own jobs).
     if (this.race.active && this.konami.press(e.code)) this.race.revealSecret(this.canvas.parentElement ?? this.canvas);
@@ -883,6 +884,14 @@ export abstract class EngineInput extends EngineRigs {
     return !this.race.fullUi;
   }
 
+  /** The tether's cut key (retract is read held, in `pollInput`): true when `e` was it, kept from the browser. */
+  private tetherKey(e: KeyboardEvent): boolean {
+    if (e.code !== TETHER_KEYS.cut) return false;
+    this.tether.cut();
+    e.preventDefault();
+    return true;
+  }
+
   protected onKeyUp = (e: KeyboardEvent): void => {
     this.keys.delete(e.code);
   };
@@ -904,6 +913,7 @@ export abstract class EngineInput extends EngineRigs {
     if (this.mouseLook.on && (this.race.menuOpen || this.sceneFade.pending !== null || this.sceneId !== this.lookScene)) this.mouseLook.exit();
     // Held, not toggled: Backquote, R3 or the touch button looks back until released.
     this.view.rear = !this.race.menuOpen && (this.keys.has(SEAT_KEYS.lookBack) || (pad.held & (1 << PAD_BUTTON.r3)) !== 0);
+    this.tether.holdReel(this.keys.has(TETHER_KEYS.retract) || (pad.held & (1 << PAD_BUTTON.right)) !== 0);
     // Polled every frame so button edges stay fresh; a race menu reads the pad itself through the HUD.
     if (this.race.menuOpen) {
       this.stepReset(false, false, wallDt);
@@ -914,6 +924,7 @@ export abstract class EngineInput extends EngineRigs {
     if (this.seat.sample(this.keys, pad)) this.emitHud();
     this.minigames.sampleBoost(this.seat.intent.boost, (pad.pressed & BOOST_PAD_MASK) !== 0, this.elapsedWall + wallDt);
     this.stepReset(this.race.active && (!this.onFoot.active || this.onFoot.resetsToCar), (pad.held & (1 << PAD_BUTTON.down)) !== 0, wallDt, (pad.pressed & (1 << PAD_BUTTON.down)) !== 0);
+    if ((pad.pressed & (1 << PAD_BUTTON.left)) !== 0) this.tether.cut();
     const hit = pad.pressed;
     if (hit === 0) return;
     if (this.onFoot.padPress(hit)) {

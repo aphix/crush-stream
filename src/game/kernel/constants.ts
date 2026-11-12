@@ -19,3 +19,10 @@ export const SLICES_PER_STEP = 3;
 export const QUIET_HZ = FINE_HZ / SLICES_PER_STEP;
 /** The display frame the engine's clock and the tests advance with. */
 export const FRAME_HZ = 60;
+
+/** Cables alive at once; the oldest goes for one more. */
+export const MAX_TETHERS = 6;
+/** The winch's reeling speed (m/s), in the sim's cables and the dummies' world's ropes alike: a sedan 40 m out is within 4.5 m of its anchor in about 1.7 s (`tether.test.ts`). */
+export const WINCH_SPEED = 28;
+/** The shortest (m) a winch reels a cable to: a cable already shorter than this is left as it is. */
+export const WINCH_MIN_LENGTH = 3;

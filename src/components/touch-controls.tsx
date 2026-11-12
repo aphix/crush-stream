@@ -6,6 +6,7 @@ import { RESET_GLOW } from "@/components/reset-prompt";
 import { Button } from "@/components/ui/button";
 import { PadButton, TouchPedals, ZONE } from "@/components/touch-pedals";
 import { thumbSideClass } from "@/components/thumb-side";
+import { TetherTouch } from "@/components/touch-tether";
 import { TouchSteer } from "@/components/touch-steer";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { useTouchScheme } from "@/components/use-touch-scheme";
@@ -275,6 +276,7 @@ function DriveControls({ state, engine }: HudProps) {
         />
       ) : null}
       <TopStrip state={state} engine={engine} />
+      <TetherTouch state={state} engine={engine} />
     </>
   );
 }

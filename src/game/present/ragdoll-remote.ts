@@ -26,6 +26,7 @@ import {
   applyHit,
   type FromWorker,
   type ResultMessage,
+  type RopeMessage,
   type ToWorker,
 } from "./ragdoll-wire.ts";
 
@@ -128,6 +129,12 @@ export class RagdollRemote {
   knock(prop: number, car: number, vx: number, vy: number, vz: number): void {
     this.commanded = true;
     this.send({ type: "knock", prop, car, vx, vy, vz });
+  }
+
+  /** A tether command for the ropes in the world (`RagdollThrower.ropeAttach`): the world is answering every frame until they are gone. */
+  rope(m: RopeMessage): void {
+    this.commanded = true;
+    this.send(m);
   }
 
   /** Throw `t`'s dummy in the world; returns the id its answer names it by. The cars near it get their cages with the next frames. */
