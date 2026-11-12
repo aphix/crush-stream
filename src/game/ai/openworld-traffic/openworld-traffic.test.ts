@@ -879,6 +879,67 @@ describe("given kerb cars standing near the local player", () => {
     expect([context.residentSpot[RESIDENT], context.residentSpot[OTHER]].join("/"), "no claim moved").toBe(`${own}/${spot}`);
     expect(carAtSpace(field, traffic, spot), "no car was brought").toBe(-1);
   });
+
+  /** Every kerb car of the pool standing (after 4 s), an empty unseen space far off, and the eye at the first kerb car: its cars' ids nearest the eye first, and a way to make a car seen. */
+  function fullPool() {
+    const { field, traffic, clock } = kerbWorld();
+    runSeconds(field, traffic, clock, 4);
+    const kerb = traffic["kerb"];
+    expect(kerb.shownCount(), "control: every kerb car stands").toBe(kerb.size);
+    const { spot } = twoSpaces(traffic);
+    const eye = field.cars[kerb.first]!.group.position;
+    const eyeX = eye.x;
+    const eyeZ = eye.z;
+    const away = (id: number): number => hypot2(field.cars[id]!.group.position.x - eyeX, field.cars[id]!.group.position.z - eyeZ);
+    const ids = Array.from({ length: kerb.size }, (_, slot) => kerb.first + slot).sort((a, b) => away(a) - away(b));
+    expect(away(ids[ids.length - 1]!) > away(ids[ids.length - 2]!), "control: one car is the farthest").toBe(true);
+    const context = traffic["context"];
+    const seen = new Set<number>();
+    Object.assign(context.sight, { hideGrace: 1, unseenFor: (sightId: number) => (seen.has(sightId) ? 0 : Infinity) });
+    const see = (id: number): void => void seen.add(context.sightBase + context.movers + id - kerb.first);
+    const bring = (): boolean => traffic.carForClip(7, traffic.parkingSpots.x[spot]!, traffic.parkingSpots.z[spot]!, traffic.parkingSpots.yaw[spot]!, eyeX, eyeZ);
+    return { field, traffic, spot, ids, see, bring };
+  }
+
+  // mutation: sed -i 's/^      const distance = hypot2(car.group.position.x - eyeX, car.group.position.z - eyeZ);/      const distance = 0;/' src/game/ai/openworld-traffic/kerb-cars.ts
+  it("when every kerb car stands and a clip needs a car at an empty unseen space, then the spare farthest from the eye is moved there", () => {
+    const { field, traffic, spot, ids, bring } = fullPool();
+    expect(bring(), "a car stands for her").toBe(true);
+    expect(carAtSpace(field, traffic, spot), "the farthest spare").toBe(ids[ids.length - 1]);
+  });
+
+  // mutation: sed -i 's/^      const unseen = sight.unseenFor(this.context.sightBase + this.context.movers + slot) >= sight.hideGrace;/      const unseen = true;/' src/game/ai/openworld-traffic/kerb-cars.ts
+  it("when the farthest spare is seen and the others are not, then the farthest unseen spare is moved, not the seen one", () => {
+    const { field, traffic, spot, ids, see, bring } = fullPool();
+    see(ids[ids.length - 1]!);
+    expect(bring(), "a car stands for her").toBe(true);
+    expect(carAtSpace(field, traffic, spot), "the farthest unseen spare").toBe(ids[ids.length - 2]);
+  });
+
+  // mutation: sed -i 's/ || this.residentOfSlot\[slot\]! >= 0 || car === undefined/ || car === undefined/' src/game/ai/openworld-traffic/kerb-cars.ts
+  it("when the farthest spare stands as a resident's car, then it is never taken: the next farthest is moved", () => {
+    const { field, traffic, spot, ids, bring } = fullPool();
+    const kerb = traffic["kerb"];
+    kerb["residentOfSlot"][ids[ids.length - 1]! - kerb.first] = 5;
+    expect(bring(), "a car stands for her").toBe(true);
+    expect(carAtSpace(field, traffic, spot), "the next farthest").toBe(ids[ids.length - 2]);
+  });
+
+  // mutation: sed -i 's/ || car.driverOut !== null || heldByHuman/ || heldByHuman/' src/game/ai/openworld-traffic/kerb-cars.ts
+  it("when the farthest spare has had its driver thrown from it, then it is never taken: the next farthest is moved", () => {
+    const { field, traffic, spot, ids, bring } = fullPool();
+    Object.assign(field.cars[ids[ids.length - 1]!]!, { driverOut: {} });
+    expect(bring(), "a car stands for her").toBe(true);
+    expect(carAtSpace(field, traffic, spot), "the next farthest").toBe(ids[ids.length - 2]);
+  });
+
+  // mutation: sed -i 's/ || car.driverOut !== null || heldByHuman(this.context, this.first + slot)) continue;/ || car.driverOut !== null) continue;/' src/game/ai/openworld-traffic/kerb-cars.ts
+  it("when the farthest spare is a human's, then it is never taken: the next farthest is moved", () => {
+    const { field, traffic, spot, ids, bring } = fullPool();
+    traffic["context"].humans[ids[ids.length - 1]!] = 1;
+    expect(bring(), "a car stands for her").toBe(true);
+    expect(carAtSpace(field, traffic, spot), "the next farthest").toBe(ids[ids.length - 2]);
+  });
 });
 
 describe("given a peer that joins while traffic runs", () => {
