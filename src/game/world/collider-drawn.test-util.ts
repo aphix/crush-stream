@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { plainMaterials } from "../present/prefab-materials.test-util.ts";
+import { lampPool } from "../present/engine-world.ts";
 import { prefabParts } from "../present/prefabs.ts";
 import type { PrefabId } from "./catalog.ts";
 import { propColliders, type PropCollider } from "./placements.ts";
@@ -172,8 +173,10 @@ export function prefabGap(id: PrefabId, scale: readonly [number, number, number]
   const pieces = propColliders([{ prefab: id, x: 0, y: 0, z: 0, yaw: 0, sx: scale[0], sy: scale[1], sz: scale[2] }]);
   const plain = new THREE.MeshBasicMaterial();
   const mats = plainMaterials(plain);
-  // The art's own geometry: every part but a flat decal on the ground (a lamp's light pool).
-  const parts = prefabParts(id, mats).map((p) => scaled(triangles(p.geometry), scale));
+  // The art's own geometry: every part but a lamp's light pool (on the pool's material: a street lamp's lies over the slab and the road at two heights) and any other flat decal on the ground.
+  const parts = prefabParts(id, mats)
+    .filter((p) => p.material !== lampPool)
+    .map((p) => scaled(triangles(p.geometry), scale));
   const solid = parts.filter((t) => {
     let lo = Infinity;
     let hi = -Infinity;
