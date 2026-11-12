@@ -153,7 +153,7 @@ export class OpenWorldBodies {
     return NOBODY;
   }
 
-  /** The hook takes civilian `civilian` wherever she is: a body is stood for her now and pinned `HOOK_HOLD_SECONDS`; its pool slot, or -1 where she may have none (indoors, at a counter). With every body in use, the farthest from (eyeX, eyeZ) that no cable holds is let go first. */
+  /** The hook takes civilian `civilian` wherever she is: a body is stood for her now and pinned `HOOK_HOLD_SECONDS`; its pool slot, or -1 where she may have none (indoors, at a counter). With every body in use, the farthest from (eyeX, eyeZ) that is on its feet, steady, in step with her and held by no cable or pin is let go first; with none such she gets none. */
   stand(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number): number {
     if (this.bodyOf[civilian]! === NOBODY) {
       if (!this.eligible(poses, civilian, eyeX, eyeZ, Infinity)) return NOBODY;
@@ -163,6 +163,8 @@ export class OpenWorldBodies {
         for (let body = 0; body < this.size; body++) {
           const slot = this.slot[body]!;
           if (this.host.roped(slot) || !this.host.torso(slot, _torso)) continue;
+          // A body lying or catching up is never let go for her: she would vanish and reappear upright at her spot.
+          if (this.recovering[body] === 1 || this.seconds < this.hookedUntil[body]! || !this.host.steady(slot)) continue;
           const distance = hypot2(_torso.x - eyeX, _torso.z - eyeZ);
           if (distance <= farthestDistance) continue;
           farthestDistance = distance;

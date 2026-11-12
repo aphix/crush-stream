@@ -327,6 +327,27 @@ describe("given a civilian 50 m from the eye, past the bodies' reach, whom the h
     walker(poses, SIZE + 1, FAR, 2);
     expect(bodies.stand(poses, SIZE + 1, 0, 0), "every body roped: none for her").toBe(-1);
   });
+
+  // mutation: sed -i '/^          if (this.recovering\[body\] === 1 || this.seconds < this.hookedUntil\[body\]! || !this.host.steady(slot)) continue;/d' src/game/engine/openworld-bodies.ts
+  it("when every body is in use and the farthest is down, then that one stays held and the farthest one on its feet is let go for her; with every other body down or pinned she gets none", () => {
+    const { host, poses, bodies, run } = world();
+    for (let civilian = 1; civilian <= SIZE; civilian++) walker(poses, civilian, civilian, 0);
+    run(SETTLE_STEPS);
+    const down = bodies.slotOf(SIZE);
+    host.stubborn = true;
+    host.bodies.get(down)!.standing = false;
+    run(1);
+    const standing = bodies.slotOf(SIZE - 1);
+    walker(poses, 0, FAR, 0);
+    expect(bodies.stand(poses, 0, 0, 0), "a body for her").toBeGreaterThanOrEqual(0);
+    expect(host.stopped, "the downed body stays").not.toContain(down);
+    expect(bodies.held[SIZE], "and she is still held").toBe(1);
+    expect(host.stopped, "the farthest standing one went").toContain(standing);
+    for (let civilian = 1; civilian < SIZE - 1; civilian++) host.bodies.get(bodies.slotOf(civilian))!.standing = false;
+    run(1);
+    walker(poses, SIZE + 1, FAR, 2);
+    expect(bodies.stand(poses, SIZE + 1, 0, 0), "every other body down or pinned: none for her").toBe(-1);
+  });
 });
 
 describe("given bodies and the scene is left", () => {
