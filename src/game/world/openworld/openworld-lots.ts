@@ -81,8 +81,8 @@ function furnished(layout: Layout, place: Place): Place {
     plan = planInterior(place);
     layout.plans.set(key, plan);
   }
-  const { seats, stoopSeats, counter } = interiorSpots(standing, plan);
-  return { ...standing, ...(seats.length > 0 ? { seats } : {}), ...(stoopSeats > 0 ? { stoopSeats } : {}), ...(counter !== null ? { counter } : {}) };
+  const { seats, stoopSeats, counter, aisle, standRoom } = interiorSpots(standing, plan);
+  return { ...standing, ...(seats.length > 0 ? { seats } : {}), ...(stoopSeats > 0 ? { stoopSeats } : {}), ...(counter !== null ? { counter } : {}), ...(aisle !== null && standRoom !== null ? { aisle, standRoom } : {}) };
 }
 
 /** `Place.openSides` when a side is open, else nothing (the field is absent on a building with neighbours on both sides). */

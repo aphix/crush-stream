@@ -7,6 +7,10 @@ import { applyAnswer } from "./civilian-wire.ts";
 import { createCityState } from "./society.ts";
 import { societyMap } from "./society-scenes.test-util.ts";
 import { intAt } from "./society.test-util.ts";
+import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
+import { layOutLots } from "../../world/openworld/openworld-lots.ts";
+import { SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
+import { claimSeat } from "./society-seats.ts";
 
 const SEED = 5;
 /** A game day and a half in ticks, looked at every thirty. */
@@ -61,5 +65,23 @@ describe("given the neighbourhood living a game day and a half, with seats at th
   it("when a city that only hears the answers has lived the same time, then it holds the same seats", () => {
     expect(ownersDigest(mirror), "digest of who owns which seat").toBe(ownersDigest(state));
     expect(stateDigest(mirror), "digest of the whole state").toBe(stateDigest(state));
+  });
+});
+
+describe("given Kelly's Tap Room on the city's map, whose building has flats over the bar with a sofa each", () => {
+  const map = buildOpenWorldMap(layOutLots());
+  const bar = map.places.findIndex((place) => place.name === "Kelly's Tap Room");
+  const { seats, counter } = map.places[bar]!;
+  const top = counter![3]!;
+  const heights = Array.from({ length: seats!.length / SEAT_STRIDE }, (_, seat) => seats![seat * SEAT_STRIDE + 3]!);
+
+  // mutation: sed -i 's/    if (state.seatOwner\[slot\] !== NO_PLACE || seats!\[seat \* SEAT_STRIDE + 3\]! > highest) continue;/    if (state.seatOwner[slot] !== NO_PLACE) continue;/' src/game/ai/civilians/society-seats.ts
+  it("when forty customers take seats one after another, then every seat in the bar's own room is taken, none in a flat over it, and the rest find none", () => {
+    const state = createCityState(SEED, map, 60);
+    const taken = Array.from({ length: 40 }, (_, resident) => (claimSeat(state, resident, bar, false) ? intAt(state, resident, RESIDENT_INT.seat) : NO_SEAT));
+    const room = heights.filter((height) => height <= top).length;
+    expect(heights.length - room, "control: seats in the flats over the bar").toBeGreaterThan(0);
+    expect(taken.filter((seat) => seat !== NO_SEAT).length, "customers seated").toBe(room);
+    for (const seat of taken) if (seat !== NO_SEAT) expect(heights[seat], `height of seat ${seat} against the counter's top ${top}`).toBeLessThanOrEqual(top);
   });
 });

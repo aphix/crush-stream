@@ -36,7 +36,7 @@ import {
   WRECK_FEAR,
 } from "./civilian-constants.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
-import { legPose } from "./civilian-leg.ts";
+import { legPose, placeNow } from "./civilian-leg.ts";
 import { EVENT_CODE } from "./civilian-names.ts";
 import { CityState, logHistory, markDirty, residentName, setClosedUntil, setMoodEvent } from "./civilian-state.ts";
 import { applyBust, applyCrime, applyJaywalk, applyKnockWitness, applyPush, nearestPlaceTo, raiseFear, reactToCrime, releaseFightPartner, startFight } from "./society-reactions.ts";
@@ -106,8 +106,9 @@ function knockResident(state: CityState, resident: number, seconds: number, tick
   const struck = tickAt(seconds);
   const onLeg = legPose(state, resident, seconds, state.pose);
   dropCarLeg(state, resident, struck);
-  const spotX = onLeg ? state.pose.x : state.index.placeX[ints[base + RESIDENT_INT.place]!]!;
-  const spotZ = onLeg ? state.pose.z : state.index.placeZ[ints[base + RESIDENT_INT.place]!]!;
+  const at = placeNow(state, resident, struck);
+  const spotX = onLeg ? state.pose.x : state.index.placeX[at]!;
+  const spotZ = onLeg ? state.pose.z : state.index.placeZ[at]!;
   const home = ints[base + RESIDENT_INT.home]!;
   ints[base + RESIDENT_INT.knockX] = Math.round(spotX * CENTIMETRES_PER_METRE);
   ints[base + RESIDENT_INT.knockZ] = Math.round(spotZ * CENTIMETRES_PER_METRE);

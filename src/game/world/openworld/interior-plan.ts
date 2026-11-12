@@ -1,9 +1,11 @@
+import { detAtan2 } from "../../kernel/physics-core.js";
+import { CUSTOMER_REACH, planAisle } from "./interior-aisle.ts";
 import { Draft, footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
 import { roomPlaceOf, roomWindows } from "./facade-windows.ts";
 import { layoutBar, layoutCoffee, layoutOffice, layoutRowhome, layoutStore } from "./interior-layouts.ts";
 import { BAY_WIDTH, ceilingOver, FURNISHING, OPENING, PARTITION, SHELL_WALL, SHOPFRONT, STOOP_SEAT_HEIGHT, STOOP_SEAT_OUT, STOOP_SEAT_SPREAD, STREET_SKIN, TURN, type Box, type Furnishing, type InteriorPlan, type Opening, type Turn } from "./interior-kinds.ts";
 import { drawnHalf } from "./openworld-facade-solids.ts";
-import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
+import { AISLE_STRIDE, COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
 
 const LAYOUTS = { rowhome: layoutRowhome, coffee: layoutCoffee, bar: layoutBar, office: layoutOffice, store: layoutStore } as const satisfies Record<InteriorKind, (draft: Draft) => void>;
 
@@ -34,8 +36,7 @@ export function planInterior(place: PlanPlace): InteriorPlan {
 /** A solid in world metres: its plan rectangle's bounds and its heights. */
 export type InteriorSolid = { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number };
 
-/** Where a customer stands to buy, from the counter's front; and where the clerk stands behind it (m). */
-const CUSTOMER_REACH = 0.5;
+/** Where the clerk stands behind the counter (m). */
 const CLERK_REACH = 0.5;
 const HALF_TURN = Math.PI / 2;
 const QUARTER_COS = [1, 0, -1, 0] as const;
@@ -114,8 +115,8 @@ function turnStep(turn: Turn): readonly [number, number] {
   return turn === TURN.front ? [-1, 0] : turn === TURN.back ? [1, 0] : turn === TURN.right ? [0, 1] : [0, -1];
 }
 
-/** What the place's interior publishes: every seat (a rowhome's two stoop seats lead: x, z, yaw, height each) and the customer's and clerk's spots at the counter the plan marks `serves` (null where there is none). */
-type InteriorSpots = { seats: Float32Array; stoopSeats: number; counter: Float32Array | null };
+/** What the place's interior publishes: every seat (a rowhome's two stoop seats lead: x, z, yaw, height each), the customer's and clerk's spots at the counter the plan marks `serves` (null where there is none), and its aisle and standing room (`Place.aisle`, `Place.standRoom`; null where nobody is walked inside). */
+type InteriorSpots = { seats: Float32Array; stoopSeats: number; counter: Float32Array | null; aisle: Float32Array | null; standRoom: Uint16Array | null };
 
 export function interiorSpots(place: Place, plan: InteriorPlan = planOf(place)): InteriorSpots {
   const frame = new Frame(place);
@@ -138,7 +139,11 @@ export function interiorSpots(place: Place, plan: InteriorPlan = planOf(place)):
   }
   const seats = new Float32Array(rows.length * SEAT_STRIDE);
   for (const [at, row] of rows.entries()) seats.set(row, at * SEAT_STRIDE);
-  return { seats, stoopSeats, counter: counterSpots(plan, frame) };
+  const tree = planAisle(plan, doorAcrossOf(plan.kind, place.width));
+  const aisle = tree === null ? null : new Float32Array(tree.deep.length * AISLE_STRIDE);
+  if (tree !== null) for (let node = 0; node < tree.deep.length; node++) aisle!.set([frame.x(tree.deep[node]!, tree.across[node]!), frame.z(tree.deep[node]!, tree.across[node]!), tree.parent[node]!], node * AISLE_STRIDE);
+  if (tree !== null) for (let node = 1; node < tree.deep.length; node++) aisle![node * AISLE_STRIDE + 3] = detAtan2(aisle![tree.parent[node]! * AISLE_STRIDE]! - aisle![node * AISLE_STRIDE]!, aisle![tree.parent[node]! * AISLE_STRIDE + 1]! - aisle![node * AISLE_STRIDE + 1]!);
+  return { seats, stoopSeats, counter: counterSpots(plan, frame), aisle, standRoom: tree === null ? null : Uint16Array.from(tree.room) };
 }
 
 function counterSpots(plan: InteriorPlan, frame: Frame): Float32Array | null {
@@ -187,13 +192,19 @@ export function interiorEnvelope(place: Place): EnvelopeColumn[] {
 
 /** The place's own door: the doorway with the smallest `across` over every frontage bay, as the point on the street face where it stands. */
 export function interiorDoor(kind: InteriorKind, width: number, depth: number, x: number, z: number, yaw: number): { x: number; z: number } {
-  const bays = Math.round(width / BAY_WIDTH);
   const frame = new Frame({ x, z, yaw, depth });
+  const across = doorAcrossOf(kind, width);
+  return { x: frame.x(0, across), z: frame.z(0, across) };
+}
+
+/** Where across the plan the place's own door stands: the doorway with the smallest `across` over every frontage bay. */
+function doorAcrossOf(kind: InteriorKind, width: number): number {
+  const bays = Math.round(width / BAY_WIDTH);
   let across = Infinity;
   for (let bay = 0; bay < bays; bay++) {
     for (const opening of SHOPFRONT[kind]) across = Math.min(across, opening.centre + (bay - (bays - 1) / 2) * BAY_WIDTH);
   }
-  return { x: frame.x(0, across), z: frame.z(0, across) };
+  return across;
 }
 
 /** A door leaf's gap to its jambs and head (m), and how far behind the drawn face its closed leaf stands, inside the wall's thickness. */

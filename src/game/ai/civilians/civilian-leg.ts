@@ -195,3 +195,9 @@ export function legPositionAt(state: CityState, resident: number, seconds: numbe
   if (tick >= state.hiddenFromTick[resident]! && tick < state.hiddenUntilTick[resident]!) return false;
   return legPose(state, resident, seconds, out);
 }
+
+/** The place resident `resident` is in or at, at decision tick `tick`: the one her leg sets out from while she is still walking out of it (before its `departTick`), else her row's place. */
+export function placeNow(state: CityState, resident: number, tick: number): number {
+  const base = resident * RESIDENT_INT_STRIDE;
+  return state.ints[base + RESIDENT_INT.pathCount]! > 0 && tick < state.ints[base + RESIDENT_INT.departTick]! ? state.ints[base + RESIDENT_INT.fromPlace]! : state.ints[base + RESIDENT_INT.place]!;
+}

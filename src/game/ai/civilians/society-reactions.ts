@@ -38,7 +38,7 @@ import {
 } from "./civilian-constants.ts";
 import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { residentDraws } from "./civilian-draws.ts";
-import { legPose } from "./civilian-leg.ts";
+import { legPose, placeNow } from "./civilian-leg.ts";
 import { EVENT_CODE } from "./civilian-names.ts";
 import { sendResidentTo, standOutside } from "./civilian-plan.ts";
 import { markDirty, residentName, type CityState } from "./civilian-state.ts";
@@ -177,7 +177,7 @@ function enterFight(state: CityState, resident: number, other: number, anchor: n
 /** Where a resident is at crowd time `seconds`: on their leg, else at their place's door. */
 function spotOf(state: CityState, resident: number, seconds: number): { x: number; z: number } {
   if (legPose(state, resident, seconds, state.pose)) return { x: state.pose.x, z: state.pose.z };
-  const place = state.map.places[intAt(state, resident, RESIDENT_INT.place)]!;
+  const place = state.map.places[placeNow(state, resident, tickAt(seconds))]!;
   return { x: place.doorX, z: place.doorZ };
 }
 

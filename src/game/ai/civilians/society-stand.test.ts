@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "./civilian-activity.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
 import { BODY_GAP } from "./civilian-crowd-constants.ts";
-import { CLERK_SPOTS, DECISION_HZ, FLAG, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_INT, SPECIES, STAND_SPACING, STAND_SPOTS, TICKS_PER_GAME_DAY, TICKS_PER_GAME_HOUR } from "./civilian-constants.ts";
-import { sendResidentTo } from "./civilian-plan.ts";
+import { DECISION_HZ, EVENT_KIND, EVENT_LEAD_TICKS, FLAG, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY, TICKS_PER_GAME_HOUR } from "./civilian-constants.ts";
+import { decideResident, sendResidentTo, standOutside } from "./civilian-plan.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { FRAME_SECONDS, newCrowd } from "./civilian-crowd.test-util.ts";
 import { stateDigest } from "./civilian-run.test-util.ts";
@@ -13,8 +13,15 @@ import { applyAnswer } from "./civilian-wire.ts";
 import { createCityState } from "./society.ts";
 import { ActivityReading, readActivity } from "./society-activity.ts";
 import { newCast, societyMap, type Cast } from "./society-scenes.test-util.ts";
-import { COFFEE_SHOP, intAt, placeIn, stageResident, withoutOtherCars } from "./society.test-util.ts";
+import { COFFEE_SHOP, intAt, needsWith, placeIn, stageResident, withoutOtherCars } from "./society.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
+import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
+import { layOutLots } from "../../world/openworld/openworld-lots.ts";
+import { CLERK_SPOTS, COUNTER_STRIDE, STAND_SPACING, STAND_SPOTS } from "../../world/openworld/walk-graph.ts";
+import { claimSeat, claimStand, releaseSeat } from "./society-seats.ts";
+import { newAppointmentSlot, nextAppointment } from "./civilian-story.ts";
+import { applyIndividualEvents, queueEvents } from "./civilian-events.ts";
+import { isSeatedVenue } from "./society-venues.ts";
 
 const EVENING = 20;
 const HOME = placeIn(societyMap, "Rowhome B2-1");
@@ -106,6 +113,19 @@ describe("given more drinkers than the bar has seats and standing spots", () => 
     for (const resident of without) expect(placedAt(state, resident, AFTER_BUYING), `where drinker ${resident} without a spot is drawn after buying`).toBeNull();
     const held = drinkers.map((resident) => intAt(state, resident, RESIDENT_INT.seat)).filter((spot) => spot !== NO_SEAT);
     expect(new Set(held).size, "different spots held").toBe(held.length);
+  });
+
+  // mutation: sed -i 's/^  const keeps = state.ints\[base + RESIDENT_INT.place\] === place .*$/  const keeps = false;/' src/game/ai/civilians/civilian-plan.ts
+  it("when the lowest standing spot comes free and every other drinker with a standing spot stays for another round, then each keeps the spot she holds", () => {
+    const tick = intAt(state, drinkers[0]!, RESIDENT_INT.arriveTick) + 4;
+    const standers = drinkers.filter((resident) => intAt(state, resident, RESIDENT_INT.seat) >= state.venues.seatCount[BAR]!).sort((a, b) => intAt(state, a, RESIDENT_INT.seat) - intAt(state, b, RESIDENT_INT.seat));
+    expect(standers.length, "control: drinkers holding a standing spot").toBe(STAND_SPOTS);
+    releaseSeat(state, standers[0]!);
+    for (const resident of standers.slice(1)) {
+      const before = intAt(state, resident, RESIDENT_INT.seat);
+      standOutside(state, resident, tick, PURPOSE.drink, A_DRINKS_TICKS);
+      expect(intAt(state, resident, RESIDENT_INT.seat), `drinker ${resident}'s spot after another round`).toBe(before);
+    }
   });
 });
 
@@ -228,5 +248,238 @@ describe("given the neighbourhood living a game day and a half with seats and co
     let named = 0;
     for (let resident = 0; resident < state.capacity; resident++) if (intAt(state, resident, RESIDENT_INT.seat) !== NO_SEAT && intAt(state, resident, RESIDENT_INT.alive) === 1) named++;
     expect(owned, "slots owned").toBe(named);
+  });
+});
+
+const city = buildOpenWorldMap(layOutLots());
+const KELLYS = placeIn(city, "Kelly's Tap Room");
+/** A drink's stay in a room of the city, in ticks, and the pace (m/s) she walks it. */
+const ROOM_STAY = TICKS_PER_GAME_HOUR;
+const ROOM_PACE = 1.4;
+const ROOM_ARRIVE = 400;
+
+/** Resident `resident` of `state` in at `place` from tick `ROOM_ARRIVE` for `ROOM_STAY`, having walked there; she holds what `claim` gives her. */
+function inRoom(state: CityState, resident: number, place: number, claim: () => boolean): boolean {
+  stageResident(state, resident, { place, tick: ROOM_ARRIVE + ROOM_STAY, dwell: ROOM_STAY, purpose: PURPOSE.drink });
+  state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.fromPlace] = HOME_OF_ROOM;
+  state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = ROOM_PACE;
+  return claim();
+}
+const HOME_OF_ROOM = placeIn(city, city.places.find((place) => place.interior === "rowhome")!.name);
+
+/** Where she is drawn every frame from tick `from` to tick `to`, null where she is not drawn. */
+function drawnBetween(state: CityState, resident: number, from: number, to: number): ({ x: number; z: number; code: number; fixed: boolean } | null)[] {
+  const frames: ({ x: number; z: number; code: number; fixed: boolean } | null)[] = [];
+  for (let frame = 0; frame < (to - from) / DECISION_HZ / FRAME_SECONDS; frame++) {
+    readActivity(state, resident, from / DECISION_HZ + frame * FRAME_SECONDS, reading);
+    frames.push(reading.placed || reading.code !== ACTIVITY.none ? { x: reading.x, z: reading.z, code: reading.code, fixed: reading.fixed } : null);
+  }
+  return frames;
+}
+
+/** Where she is drawn every frame of her stay in a room, null where she is not drawn. */
+const drawnThrough = (state: CityState, resident: number): ({ x: number; z: number; code: number; fixed: boolean } | null)[] => drawnBetween(state, resident, ROOM_ARRIVE, ROOM_ARRIVE + ROOM_STAY);
+
+/** Her stay's frames, then (she sets out home as it ends) those of her walk out and the first second of her leg. */
+function stayAndLeave(state: CityState, resident: number): ({ x: number; z: number; code: number; fixed: boolean } | null)[] {
+  const stay = drawnBetween(state, resident, intAt(state, resident, RESIDENT_INT.arriveTick), intAt(state, resident, RESIDENT_INT.nextDecisionTick));
+  const leave = intAt(state, resident, RESIDENT_INT.nextDecisionTick);
+  expect(sendResidentTo(state, resident, leave, HOME_OF_ROOM, NEED.rest, TICKS_PER_GAME_HOUR), "control: she sets out home").toBe(true);
+  return [...stay, ...drawnBetween(state, resident, leave, intAt(state, resident, RESIDENT_INT.departTick) + DECISION_HZ)];
+}
+
+/** The longest move (m) between two drawn frames in a row. */
+const longestStep = (frames: readonly ({ x: number; z: number } | null)[]): number => Math.max(...frames.slice(1).map((frame, at) => hypot2(frame!.x - frames[at]!.x, frame!.z - frames[at]!.z)));
+
+describe("given a customer at a seat or a standing spot in a bar, a coffee shop and a store of the city, each room with an aisle", () => {
+  // mutation: sed -i 's/^  if (atLane < 0) {/  if (false) {/' src/game/ai/civilians/society-activity.ts
+  it("when she is drawn every frame of her stay and of her leaving, then she starts at the door, sits or stands at her spot, is at the door as her walk sets off, and never moves a metre in a frame", () => {
+    for (const name of ["Kelly's Tap Room", "Daily Grind Coffee", "Bodega Supreme"]) {
+      const place = placeIn(city, name);
+      const state = createCityState(5, city, 60);
+      const resident = state.cast.length;
+      const seated = isSeatedVenue(state.venues.venueOf[place]!);
+      expect(city.places[place]!.aisle, `control: ${name} has an aisle`).toBeDefined();
+      expect(inRoom(state, resident, place, () => (seated ? claimSeat(state, resident, place, false) : claimStand(state, resident, place, false))), `${name}: she holds a seat or spot`).toBe(true);
+      const mid = drawnThrough(state, resident)[(ROOM_STAY / DECISION_HZ / FRAME_SECONDS) >> 1]!;
+      const frames = stayAndLeave(state, resident);
+      const door = city.places[place]!;
+      const setOff = frames.length - 1 / FRAME_SECONDS;
+      expect(frames.every((frame) => frame !== null), `${name}: drawn every frame`).toBe(true);
+      expect(mid.code, `${name}: what she does mid-stay`).toBe(seated ? ACTIVITY.sit : ACTIVITY.idle);
+      expect(hypot2(frames[0]!.x - door.doorX, frames[0]!.z - door.doorZ), `${name}: metres from the door, first frame`).toBeLessThan(1);
+      expect(hypot2(frames[setOff]!.x - door.doorX, frames[setOff]!.z - door.doorZ), `${name}: metres from the door as her walk sets off`).toBeLessThan(1);
+      expect(frames[setOff]!.code, `${name}: the door clip as her walk sets off`).toBe(ACTIVITY.door);
+      expect(longestStep(frames), `${name}: the longest step between frames (m)`).toBeLessThan(1);
+    }
+  });
+
+  // mutation: sed -i 's/^  const keeps = state.ints\[base + RESIDENT_INT.place\] === place .*$/  const keeps = false;/' src/game/ai/civilians/civilian-plan.ts
+  it("when she stays at the bar for another round, then she keeps her seat and is drawn sitting on through the change of round, never walking", () => {
+    const state = createCityState(5, city, 60);
+    const resident = state.cast.length;
+    for (let other = resident + 1; other < resident + 8; other++) claimSeat(state, other, KELLYS, false);
+    inRoom(state, resident, KELLYS, () => claimSeat(state, resident, KELLYS, false));
+    const seat = intAt(state, resident, RESIDENT_INT.seat);
+    const round = ROOM_ARRIVE + ROOM_STAY;
+    const before = drawnBetween(state, resident, round - DECISION_HZ, round);
+    for (let other = resident + 1; other < resident + 8; other++) releaseSeat(state, other);
+    standOutside(state, resident, round, PURPOSE.drink, ROOM_STAY);
+    expect(intAt(state, resident, RESIDENT_INT.seat), "her seat after the round").toBe(seat);
+    const frames = [...before, ...drawnBetween(state, resident, round, round + 2 * DECISION_HZ)];
+    expect(frames.every((frame) => frame?.code === ACTIVITY.sit), "sitting every frame across the round").toBe(true);
+    expect(longestStep(frames), "the longest step between frames (m)").toBe(0);
+  });
+});
+
+describe("given Kelly's Tap Room with every seat and standing spot by its counter taken", () => {
+  const state = createCityState(5, city, 150);
+  const counter = city.places[KELLYS]!.counter!;
+  let next = state.cast.length;
+  while (claimSeat(state, next, KELLYS, false)) next++;
+  for (let spot = 0; spot < STAND_SPOTS; spot++) claimStand(state, next++, KELLYS, false);
+  const roomers: number[] = [];
+  for (;;) {
+    const resident = next++;
+    if (!inRoom(state, resident, KELLYS, () => claimStand(state, resident, KELLYS, false))) break;
+    roomers.push(resident);
+  }
+  const late = next;
+
+  // mutation: sed -i 's/^    standCount\[place\] = counterSpots >= 1 ? STAND_SPOTS + (entry.standRoom?.length ?? 0) : 0;/    standCount[place] = counterSpots >= 1 ? STAND_SPOTS : 0;/' src/game/ai/civilians/society-venues.ts
+  it("when more customers come in, then each takes a spot of her own in the room's standing room, drawn mid-stay standing loose on the customers' side, a metre from the next", () => {
+    expect(roomers.length, "customers in the standing room").toBe(city.places[KELLYS]!.standRoom!.length);
+    const spots = roomers.map((resident) => drawnThrough(state, resident)[(ROOM_STAY / DECISION_HZ / FRAME_SECONDS) >> 1]);
+    for (const spot of spots) {
+      expect([spot?.code, spot?.fixed].join("/"), "what she does mid-stay, and fixed").toBe([ACTIVITY.idle, false].join("/"));
+      const towardCustomers = (spot!.x - counter[COUNTER_STRIDE]!) * (counter[0]! - counter[COUNTER_STRIDE]!) + (spot!.z - counter[COUNTER_STRIDE + 1]!) * (counter[1]! - counter[COUNTER_STRIDE + 1]!);
+      expect(towardCustomers, "on the customers' side of the counter").toBeGreaterThan(0);
+    }
+    expect(nearestPair(spots.map((spot) => spot!)), "metres between the two nearest").toBeGreaterThanOrEqual(0.99);
+  });
+
+  // mutation: sed -i 's/(!withinHours(state, current, tick) || fullBesideHer(state, resident, current))/!withinHours(state, current, tick)/' src/game/ai/civilians/civilian-plan.ts
+  it("when someone at the full bar who holds nothing there decides, wanting nothing but to stay, then she does not stay in it: she sets out home", () => {
+    const resident = late + 1;
+    const tick = ROOM_ARRIVE + ROOM_STAY;
+    stageResident(state, resident, { place: KELLYS, home: HOME_OF_ROOM, tick, dwell: 8, purpose: PURPOSE.drink, needs: needsWith({}) });
+    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.fromPlace] = HOME_OF_ROOM;
+    state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = ROOM_PACE;
+    decideResident(state, resident, tick);
+    expect(intAt(state, resident, RESIDENT_INT.place), "where she is or heads after deciding").toBe(HOME_OF_ROOM);
+  });
+
+  // mutation: sed -i '/^  state.ints\[base + RESIDENT_INT.nextDecisionTick\] = state.ints\[base + RESIDENT_INT.arriveTick\]! + walkIn + BUY_TICKS;/d' src/game/ai/civilians/civilian-plan.ts
+  it("when one more comes in with the standing room full too, then she stays only to walk in and buy, drawn every frame of it, and walks out from the counter as she leaves", () => {
+    stageResident(state, late, { place: HOME_OF_ROOM, tick: ROOM_ARRIVE, purpose: NEED.rest });
+    state.floats[late * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = ROOM_PACE;
+    expect(sendResidentTo(state, late, ROOM_ARRIVE, KELLYS, PURPOSE.drink, ROOM_STAY), "control: she sets out for the bar").toBe(true);
+    expect(intAt(state, late, RESIDENT_INT.seat), "nothing of her own").toBe(NO_SEAT);
+    const stay = intAt(state, late, RESIDENT_INT.nextDecisionTick) - intAt(state, late, RESIDENT_INT.arriveTick);
+    expect(stay, "her stay (ticks): the walk in and the buying").toBeLessThan(10 * DECISION_HZ);
+    const frames = stayAndLeave(state, late);
+    expect(frames.every((frame) => frame !== null), "drawn every frame: never in the room unseen").toBe(true);
+    expect(frames.some((frame) => frame!.code === ACTIVITY.buy), "she buys").toBe(true);
+    expect(longestStep(frames), "the longest step between frames (m)").toBeLessThan(1);
+  });
+});
+
+/** The indoor seat of `place`'s own room farthest from its door: the longest walk out. */
+function farthestSeat(place: number): number {
+  const { seats, counter, doorX, doorZ } = city.places[place]!;
+  let far = -1;
+  for (let seat = 0; seat * 4 < seats!.length; seat++) {
+    if (seats![seat * 4 + 3]! > counter![3]!) continue;
+    if (far < 0 || hypot2(seats![seat * 4]! - doorX, seats![seat * 4 + 1]! - doorZ) > hypot2(seats![far * 4]! - doorX, seats![far * 4 + 1]! - doorZ)) far = seat;
+  }
+  return far;
+}
+
+/** Seats `resident` of `state` in seat `seat` of `place`: the owner table and her row. */
+function seatIn(state: CityState, resident: number, place: number, seat: number): void {
+  state.seatOwner[state.venues.seatBase[place]! + seat] = resident;
+  state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.seat] = seat;
+}
+
+describe("given Dee, a named resident, at the back of Kelly's Tap Room on the evening of her coffee at the bodega", () => {
+  // mutation: sed -i 's/^  return walk < 0 ? walk : walk + walkOutTicks(state, resident, from, leftSpotOf(state, resident, from, tick));/  return walk;/' src/game/ai/civilians/civilian-plan.ts
+  it("when she lives her decisions up to it, then she sets off from her seat after walking out and still reaches the bodega by her appointment's tick", () => {
+    const state = createCityState(5, city, 60);
+    const dee = state.cast.findIndex((member) => member.member.key === "dee");
+    const slot = newAppointmentSlot();
+    expect(nextAppointment(state, dee, TICKS_PER_GAME_DAY, slot), "control: she has an appointment").toBe(true);
+    const home = intAt(state, dee, RESIDENT_INT.home);
+    const sitsDown = slot.arriveTick - 4 * TICKS_PER_GAME_HOUR;
+    stageResident(state, dee, { place: KELLYS, home, tick: sitsDown + 4, dwell: 4, nextDecision: sitsDown + 4, purpose: PURPOSE.drink, flags: FLAG.cast });
+    state.ints[dee * RESIDENT_INT_STRIDE + RESIDENT_INT.fromPlace] = home;
+    state.floats[dee * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = state.floats[dee * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.pace]!;
+    seatIn(state, dee, KELLYS, farthestSeat(KELLYS));
+    let decided = sitsDown + 4;
+    for (let decision = 0; decision < 40 && intAt(state, dee, RESIDENT_INT.legPurpose) !== PURPOSE.deeCoffee; decision++) {
+      decided = intAt(state, dee, RESIDENT_INT.nextDecisionTick);
+      decideResident(state, dee, decided);
+    }
+    expect(intAt(state, dee, RESIDENT_INT.legPurpose), "control: she sets out for her coffee").toBe(PURPOSE.deeCoffee);
+    expect(intAt(state, dee, RESIDENT_INT.fromPlace), "control: from Kelly's").toBe(KELLYS);
+    expect(intAt(state, dee, RESIDENT_INT.departTick) - decided, "control: ticks of her walk out before the leg sets off").toBeGreaterThan(10);
+    expect(intAt(state, dee, RESIDENT_INT.arriveTick), `the tick she reaches the bodega, against her appointment's ${slot.arriveTick}`).toBeLessThanOrEqual(slot.arriveTick);
+  });
+});
+
+describe("given a customer walking out of Kelly's Tap Room toward home", () => {
+  // mutation: sed -i 's/^  const at = placeNow(state, resident, struck);/  const at = ints[base + RESIDENT_INT.place]!;/' src/game/ai/civilians/civilian-events.ts
+  it("when she is knocked down before she reaches the door, then the knock is recorded at Kelly's door, not at her home's", () => {
+    const state = createCityState(5, city, 60);
+    const resident = state.cast.length;
+    inRoom(state, resident, KELLYS, () => claimSeat(state, resident, KELLYS, false));
+    seatIn(state, resident, KELLYS, farthestSeat(KELLYS));
+    const leave = ROOM_ARRIVE + ROOM_STAY;
+    expect(sendResidentTo(state, resident, leave, HOME_OF_ROOM, NEED.rest, TICKS_PER_GAME_HOUR), "control: she sets out home").toBe(true);
+    const knockedAt = leave + 2;
+    expect(intAt(state, resident, RESIDENT_INT.departTick), "control: still walking out when she is knocked").toBeGreaterThan(knockedAt);
+    queueEvents(state, knockedAt, [EVENT_KIND.knock, resident, knockedAt / DECISION_HZ]);
+    applyIndividualEvents(state, knockedAt + EVENT_LEAD_TICKS);
+    const door = city.places[KELLYS]!;
+    const x = intAt(state, resident, RESIDENT_INT.knockX) / 100;
+    const z = intAt(state, resident, RESIDENT_INT.knockZ) / 100;
+    expect(hypot2(x - state.index.placeX[KELLYS]!, z - state.index.placeZ[KELLYS]!), `metres from Kelly's (door ${door.doorX.toFixed(1)}, ${door.doorZ.toFixed(1)}) to where the knock is recorded`).toBeLessThan(1);
+  });
+});
+
+describe("given customers who leave Kelly's Tap Room at the end of a stay cut short", () => {
+  // mutation: sed -i 's/^  if (age < ROOM.walkIn + ROOM.buy + ROOM.walkOn \/ 2) {/  if (age < ROOM.walkIn + ROOM.buy + 9e9) {/' src/game/ai/civilians/civilian-plan.ts
+  it("when one's stay is cut at closing to a few minutes and another's is 20 ticks in a seat at the back, then each walks out from her seat with no jump over a metre", () => {
+    for (const stay of [8 * DECISION_HZ, 20]) {
+      const state = createCityState(5, city, 60);
+      const resident = state.cast.length;
+      stageResident(state, resident, { place: HOME_OF_ROOM, tick: ROOM_ARRIVE, purpose: NEED.rest });
+      state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = ROOM_PACE;
+      expect(sendResidentTo(state, resident, ROOM_ARRIVE, KELLYS, PURPOSE.drink, TICKS_PER_GAME_HOUR), "control: she sets out for the bar").toBe(true);
+      releaseSeat(state, resident);
+      seatIn(state, resident, KELLYS, farthestSeat(KELLYS));
+      state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.nextDecisionTick] = intAt(state, resident, RESIDENT_INT.arriveTick) + stay;
+      const frames = stayAndLeave(state, resident);
+      expect(frames.every((frame) => frame !== null), `stay of ${stay} ticks: drawn every frame`).toBe(true);
+      expect(longestStep(frames), `stay of ${stay} ticks: the longest step between frames (m)`).toBeLessThan(1);
+    }
+  });
+});
+
+describe("given a customer seated at the back of Kelly's Tap Room who steps out to look on", () => {
+  // mutation: sed -i 's/^  const walkOut = here \&\& isOutdoorPurpose(purpose) \&\& purpose !== PURPOSE.fight ? (out >= 0 ? out - tick : walkOutTicks(state, resident, place, left)) : 0;/  const walkOut = 0;/' src/game/ai/civilians/civilian-plan.ts
+  it("when she stands outside its door, then she first stands up and walks out to it, never moving a metre in a frame", () => {
+    const state = createCityState(5, city, 60);
+    const resident = state.cast.length;
+    inRoom(state, resident, KELLYS, () => claimSeat(state, resident, KELLYS, false));
+    releaseSeat(state, resident);
+    seatIn(state, resident, KELLYS, farthestSeat(KELLYS));
+    const tick = ROOM_ARRIVE + ROOM_STAY / 2;
+    const before = drawnBetween(state, resident, tick - DECISION_HZ, tick);
+    standOutside(state, resident, tick, PURPOSE.lookOn, 60);
+    const after = drawnBetween(state, resident, tick, intAt(state, resident, RESIDENT_INT.arriveTick) + DECISION_HZ);
+    const frames = [...before, ...after];
+    expect(before.at(-1)?.code, "control: sitting as she decides").toBe(ACTIVITY.sit);
+    expect(frames.every((frame) => frame !== null), "drawn every frame").toBe(true);
+    expect(longestStep(frames), "the longest step between frames (m)").toBeLessThan(1);
   });
 });

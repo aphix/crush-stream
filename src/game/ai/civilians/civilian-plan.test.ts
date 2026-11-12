@@ -6,13 +6,15 @@ import { hourOfDay } from "./civilian-clock.ts";
 import { DECISION_HZ, FLAG, FRIDAY, HOURS_PER_GAME_DAY, JOB_AGE, MAX_PATH_NODES, NEED, NEED_COUNT, NO_PLACE, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "./civilian-constants.ts";
 import { buildFixtureMap, placeNamed } from "./civilian-graph.test-util.ts";
 import { LegPose, legPose } from "./civilian-leg.ts";
-import { decideResident } from "./civilian-plan.ts";
+import { decideResident, sendResidentTo } from "./civilian-plan.ts";
 import { tickOfHour } from "./civilian-run.test-util.ts";
 import type { CityState } from "./civilian-state.ts";
 import { computeTick } from "./civilian-tick.ts";
 import { createCityState } from "./society.ts";
 import { weekdayOf } from "./civilian-story.ts";
 import { ageOf } from "./society-day.ts";
+import { ActivityReading, readActivity } from "./society-activity.ts";
+import { ACTIVITY } from "./civilian-activity.ts";
 
 const map = buildFixtureMap();
 
@@ -118,6 +120,29 @@ describe("given a resident with company on their mind whose home is by the court
   });
 });
 
+describe("given a resident at the bodega who sets out home", () => {
+  // mutation: sed -i 's/ || isOutdoorPurpose(state.ints\[base + RESIDENT_INT.legPurpose\]!)) state.ints\[base + RESIDENT_INT.flags\] |= FLAG.fromOutside;/) state.ints[base + RESIDENT_INT.flags] |= FLAG.fromOutside;/' src/game/ai/civilians/civilian-plan.ts
+  it("when she had been loitering out at its door, then she is not drawn coming out of it; when she had been in shopping, she is", () => {
+    const bodega = placeNamed(map, PLACE_NAMES.bodega);
+    const codeLeaving = (purpose: number): number => {
+      const state = createCityState(5, map, 60);
+      const resident = adultWhere(state, (candidate) => intAt(state, candidate, RESIDENT_INT.home) !== bodega);
+      const tick = tickOfHour(state, 2, 12);
+      const base = resident * RESIDENT_INT_STRIDE;
+      dwellingWithNeeds(state, resident, bodega, tick, needsOf(NEED.rest));
+      for (const [field, value] of [[RESIDENT_INT.departTick, tick - 40], [RESIDENT_INT.arriveTick, tick - 40], [RESIDENT_INT.nextDecisionTick, tick], [RESIDENT_INT.legPurpose, purpose]] as const) state.ints[base + field] = value;
+      expect(sendResidentTo(state, resident, tick, intAt(state, resident, RESIDENT_INT.home), NEED.rest, 60), "control: a walk home exists").toBe(true);
+      expect(intAt(state, resident, RESIDENT_INT.fromPlace), `control: after ${purpose} she sets out from the bodega`).toBe(bodega);
+      expect(intAt(state, resident, RESIDENT_INT.pathCount), "control: on a walk").toBeGreaterThan(0);
+      const reading = new ActivityReading();
+      readActivity(state, resident, intAt(state, resident, RESIDENT_INT.departTick) / DECISION_HZ + 0.5, reading);
+      return reading.code;
+    };
+    expect(codeLeaving(NEED.errand), "after shopping, half a second out").toBe(ACTIVITY.door);
+    expect(codeLeaving(PURPOSE.loiter), "after loitering at the door, half a second out").not.toBe(ACTIVITY.door);
+  });
+});
+
 describe("given a shop and a workplace that are shut, with nobody afraid of them", () => {
   it("when someone at the shut shop wants an errand, then they leave for another shop, and while it is open they stay", () => {
     const state = createCityState(5, map, 60);
@@ -170,6 +195,32 @@ describe("given a shop and a workplace that are shut, with nobody afraid of them
     expect(weightAt(late.tick + late.walk), "control: shut when her walk ends").toBeLessThan(1);
     expect(late.place, "she sets out for the bodega, as she decided").toBe(bodega);
     expect(late.stay, "ticks she stays in the shut bodega").toBe(0);
+  });
+
+  // mutation: sed -i 's/ \&\& (intAt(state, resident, RESIDENT_INT.flags) \& FLAG.fromOutside) === 0 \&\& hasDoor/ \&\& hasDoor/' src/game/ai/civilians/society-activity.ts
+  it("when she found the bodega shut and sets out again from its door, then she is not drawn coming out of it; one who stayed in at noon is", () => {
+    const bodega = placeNamed(map, PLACE_NAMES.bodega);
+    const codeLeaving = (hour: number, walkBack: (walk: number) => number): number => {
+      const state = createCityState(5, map, 60);
+      for (const shop of state.index.byKind[PLACE_KIND.shop]!) if (shop !== bodega) state.closedUntilTick[shop] = TICKS_PER_GAME_DAY * 10;
+      const resident = adultWhere(state, () => true);
+      state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.favouriteShop] = bodega;
+      const probe = tickOfHour(state, 2, 12);
+      dwellingWithNeeds(state, resident, intAt(state, resident, RESIDENT_INT.home), probe, needsOf(NEED.errand));
+      decideResident(state, resident, probe);
+      const tick = tickOfHour(state, 2, hour) - walkBack(intAt(state, resident, RESIDENT_INT.arriveTick) - probe);
+      dwellingWithNeeds(state, resident, intAt(state, resident, RESIDENT_INT.home), tick, needsOf(NEED.errand));
+      decideResident(state, resident, tick);
+      expect(intAt(state, resident, RESIDENT_INT.place), `control: at ${hour} she heads for the bodega`).toBe(bodega);
+      const leave = intAt(state, resident, RESIDENT_INT.nextDecisionTick);
+      decideResident(state, resident, leave);
+      expect(intAt(state, resident, RESIDENT_INT.fromPlace), "control: her next walk sets out from the bodega").toBe(bodega);
+      const reading = new ActivityReading();
+      readActivity(state, resident, leave / DECISION_HZ + 0.5, reading);
+      return reading.code;
+    };
+    expect(codeLeaving(12, () => 0), "at noon, half a second out").toBe(ACTIVITY.door);
+    expect(codeLeaving(22, (walk) => Math.floor(walk / 2)), "from the shut door, half a second out").not.toBe(ACTIVITY.door);
   });
 
   // mutation: sed -i 's/  const shutIn = guest \&\& home !== NO_PLACE \&\& !withinHours(state, current, tick) \&\&/  const shutIn = false \&\&/' src/game/ai/civilians/civilian-plan.ts

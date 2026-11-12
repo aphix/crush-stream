@@ -58,8 +58,8 @@ export const PURPOSE = {
   lookOn: 30,
   callAmbulance: 31,
 } as const;
-/** What `RESIDENT_INT.flags` holds: in hospital, without a job, hurting, out of work while the workplace is closed, a named resident (no society chances, fixed age); jobless long enough to be broke, a criminal, wanted for an open crime or fight, in custody, a car owner, a coffee fan, a drinker. */
-export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16, broke: 32, criminal: 64, wanted: 128, custody: 256, hasCar: 512, coffeeFan: 1024, drinker: 2048 } as const;
+/** What `RESIDENT_INT.flags` holds: in hospital, without a job, hurting, out of work while the workplace is closed, a named resident (no society chances, fixed age); jobless long enough to be broke, a criminal, wanted for an open crime or fight, in custody, a car owner, a coffee fan, a drinker, set out from outside a door (she found it shut, or stood out at it). */
+export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16, broke: 32, criminal: 64, wanted: 128, custody: 256, hasCar: 512, coffeeFan: 1024, drinker: 2048, fromOutside: 4096 } as const;
 /** A resident's integer row: society fields, then the leg and dwell the crowd walks, then the life log ring (`LOG_LINES` of `HISTORY_FIELDS`). -1 in a place field: none. */
 export const RESIDENT_INT = {
   /** The first 16 are what the crowd reads of every civilian every frame, in the one cache line (64 bytes) a row starts on: keep them together. */
@@ -141,7 +141,9 @@ export const RESIDENT_INT = {
   waitTicks0: 64,
   waitTicks1: 65,
   waitTicks2: 66,
-  history: 67,
+  /** The seat or spot she held where her leg sets out from (`LEFT_LANE`: her buying lane; -1: none): she walks from it to the door before the leg departs. */
+  leftSpot: 67,
+  history: 68,
 } as const;
 /** A row is a whole number of 64-byte cache lines (16 ints), so the hot fields at its start share one. */
 const ROW_ALIGN_INTS = 16;
@@ -395,15 +397,6 @@ export const SITTER_CHAT_REACH = 25;
 export const DOOR_SPREAD = 0.8;
 /** A customer's dwell must be this long (game minutes) to take a seat. */
 export const SEAT_MIN_DWELL_MINUTES = 10;
-/**
- * Standing spots of a venue with a counter, for those who have no seat: `STAND_SPOTS` for customers in rows of `STAND_COLUMNS` along the counter, behind the lane (the counter's customer spot and the places alternately to its right and
- * left `STAND_SPACING` m apart) where those who stop to buy without a spot of their own stand, the first row `STAND_ROW_DEPTH` m back from the lane, the next as far again and `CLERK_SPOTS` for staff along the clerk's spot. They number after the venue's seats in the same owner table: one holder to each.
- */
-export const STAND_SPOTS = 10;
-export const CLERK_SPOTS = 3;
-export const STAND_COLUMNS = 5;
-export const STAND_SPACING = 0.8;
-export const STAND_ROW_DEPTH = 0.8;
 
 /** Crime: a criminal at the crime place commits it this many ticks after arriving; they wait half a game day between crimes and go for one in this share of the decisions that allow it; a crime keeps them wanted a game day, a fight six game hours; custody lasts six game hours and in this share of them they give up crime. */
 export const CRIME_LAG_TICKS = 4;

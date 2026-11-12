@@ -153,7 +153,7 @@ export class CivilianCrowd {
   private readonly ambulanceZ: Float32Array;
   private lastCrashSeconds = -Infinity;
   private lastDangerSeconds = -Infinity;
-  private readonly reading: ActivityReading = { code: ACTIVITY.none, sinceSeconds: 0, leftSeconds: ACTIVITY_OPEN_ENDED, partner: NOT_A_CIVILIAN, surfaceY: 0, placed: false, fixed: false, x: 0, z: 0, yaw: 0 };
+  private readonly reading: ActivityReading = { code: ACTIVITY.none, sinceSeconds: 0, leftSeconds: ACTIVITY_OPEN_ENDED, partner: NOT_A_CIVILIAN, surfaceY: 0, speed: 0, walked: 0, placed: false, fixed: false, x: 0, z: 0, yaw: 0 };
   private readonly crimeDesk: CrimeDesk;
   private readonly crimesDue: Int32Array;
   private readonly blows: Uint8Array;
@@ -431,8 +431,8 @@ export class CivilianCrowd {
         velocityX[resident] = 0;
         velocityZ[resident] = 0;
         yaw[resident] = reading.yaw;
-        speed[resident] = 0;
-        stride[resident] = 0;
+        speed[resident] = reading.speed;
+        stride[resident] = reading.walked * STRIDE_RADIANS_PER_METRE;
       } else {
         const onLeg = ints[intBase + RESIDENT_INT.pathCount]! > 0 && seconds >= ints[intBase + RESIDENT_INT.departTick]! / DECISION_HZ && seconds < ints[intBase + RESIDENT_INT.arriveTick]! / DECISION_HZ;
         if (!onLeg || !legPositionAt(state, resident, seconds, pose)) continue;

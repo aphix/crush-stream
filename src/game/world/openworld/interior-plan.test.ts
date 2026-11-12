@@ -4,7 +4,7 @@ import { BAY_WIDTH, ceilingOver, FURNISHING, HEADROOM, MAX_RISER, MAX_STOREYS, M
 import { DOOR_FACE, interiorDoor, interiorDoors, interiorSolids, interiorSpots, planInterior } from "./interior-plan.ts";
 import { drawnHalf, STOOP } from "./openworld-facade-solids.ts";
 import { layOutLots } from "./openworld-lots.ts";
-import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
+import { AISLE_STRIDE, COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
 import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 
 const lots = layOutLots();
@@ -334,5 +334,30 @@ describe("given the plan of an office", () => {
   // mutation: sed -i 's/^const OFFICE_LAMP_GRID = 3;/const OFFICE_LAMP_GRID = 1;/' src/game/world/openworld/interior-layouts.ts
   it("when it is laid out, then its ground floor has eleven ceiling lamps: nine over the open floor and one in each back room", () => {
     for (const storeys of STOREY_COUNTS) expect(planInterior({ ...firstOf("office"), storeys }).furnishings.filter((piece) => piece.kind === "lamp" && piece.level === 0).length, `office of ${storeys} storeys`).toBe(11);
+  });
+});
+
+describe("given every place of the map with an interior", () => {
+  // mutation: sed -i 's/^const AISLE_CLEAR = 0.35;/const AISLE_CLEAR = 0;/' src/game/world/openworld/interior-aisle.ts
+  it("when its aisle is read, then a business's starts within a metre and a half of its door, every node is half a metre or a diagonal step from the one it is reached from and clear of every solid at body height, and a home has none", () => {
+    for (const place of furnished) {
+      const aisle = place.aisle;
+      if (place.interior === "rowhome") {
+        expect(aisle, `${place.name}: a home's aisle`).toBeUndefined();
+        continue;
+      }
+      expect(aisle, `${place.name}: its aisle`).toBeDefined();
+      const floor = 0.05;
+      const solids = interiorSolids(place).filter((solid) => solid.y1 > floor + 0.1 && solid.y0 < floor + 1.7);
+      expect(hypot2(aisle![0]! - place.doorX, aisle![1]! - place.doorZ), `${place.name}: metres from the door to the aisle's first node`).toBeLessThan(1.5);
+      for (let node = 1; node * AISLE_STRIDE < aisle!.length; node++) {
+        const x = aisle![node * AISLE_STRIDE]!;
+        const z = aisle![node * AISLE_STRIDE + 1]!;
+        const parent = aisle![node * AISLE_STRIDE + 2]!;
+        expect(hypot2(x - aisle![parent * AISLE_STRIDE]!, z - aisle![parent * AISLE_STRIDE + 1]!), `${place.name}: node ${node}'s step`).toBeLessThan(0.71);
+        const inside = solids.find((solid) => x > solid.x0 - 0.3 && x < solid.x1 + 0.3 && z > solid.z0 - 0.3 && z < solid.z1 + 0.3);
+        expect(inside, `${place.name}: node ${node} at ${x.toFixed(2)}, ${z.toFixed(2)} by a solid`).toBeUndefined();
+      }
+    }
   });
 });
