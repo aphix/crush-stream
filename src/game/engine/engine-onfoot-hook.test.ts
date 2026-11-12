@@ -56,8 +56,10 @@ describe("given the real engine in the open world, its player on foot", () => {
     rig.getOut();
     const tethers = rig.engine["world"].tethers;
     const slot = tethers.open();
-    tethers.setEnd(slot, 0, WORLD, 0, 0, 0);
-    tethers.setEnd(slot, 1, WORLD, 0, 0, 5);
+    // The solver drops a cable whose two ends are both the world (nothing to pull): this one runs from his car's middle to a world point 5 m off it.
+    const car = rig.cars()[0]!.group.position;
+    tethers.setEnd(slot, 0, 0, 0, 0, 0);
+    tethers.setEnd(slot, 1, WORLD, car.x, car.y, car.z + 5);
     tethers.fit(slot, rig.cars());
     rig.run(FRAME);
     expect(tethers.count, "on foot: the cable stays").toBe(1);
