@@ -191,8 +191,9 @@ export class OpenWorldLaw {
     return this.scene.chaseOf(carIndex, out);
   }
 
-  /** A civilian a car ran down (the crowd's strike): the third in a minute by one car has a patrol car sent after it. */
+  /** A civilian the crowd ran down (its strike): a suspect of the law's is let go at once, and the third run down in a minute by one car has a patrol car sent after it. */
   noteStrike(strike: FigureStrike): void {
+    this.scene.foot.spare(strike.guard);
     if (!strike.loose) this.scene.noteKnock(strike.car, strike.x, strike.z);
   }
 
