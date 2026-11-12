@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { hypot2 } from "../kernel/physics-core.js";
 import type { AutoPose } from "../ai/openworld-auto/auto-scan.ts";
 import { EyeClear } from "./eye-clear.ts";
 import type { Occluder, Sight } from "./spectate-cam.ts";
@@ -50,8 +50,8 @@ export class AutoFollowCam {
   /** Frames `pose` in `camera`, `dt` s after the last call. */
   update(camera: THREE.PerspectiveCamera, pose: AutoPose, sight: Sight, dt: number): void {
     this.followHeading(pose.yaw, dt);
-    const along = detCos(this.swing);
-    const across = detSin(this.swing);
+    const along = Math.cos(this.swing);
+    const across = Math.sin(this.swing);
     const behindX = this.heading.x * along - this.heading.y * across;
     const behindZ = this.heading.y * along + this.heading.x * across;
     _target.set(pose.x - behindX * pose.back, pose.y + pose.height, pose.z - behindZ * pose.back);
@@ -74,8 +74,8 @@ export class AutoFollowCam {
 
   /** The heading the shot stands behind: the subject's own, low-passed; exactly it on a cut. */
   private followHeading(yaw: number, dt: number): void {
-    const x = detSin(yaw);
-    const z = detCos(yaw);
+    const x = Math.sin(yaw);
+    const z = Math.cos(yaw);
     const k = this.fresh ? 1 : 1 - Math.exp(-dt / HEADING_TAU);
     const hx = this.heading.x + (x - this.heading.x) * k;
     const hz = this.heading.y + (z - this.heading.y) * k;

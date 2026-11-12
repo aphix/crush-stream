@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { detCos, detSin } from "../kernel/physics-core.js";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import type { Occluder } from "./spectate-cam.ts";
 
@@ -249,8 +248,8 @@ export class SightField {
   seenThroughFace(face: Face): boolean {
     if (!this.enabled || this.eyeCount === 0) return true;
     const probe = this.probe;
-    const cos = detCos(probe.yaw);
-    const sin = detSin(probe.yaw);
+    const cos = Math.cos(probe.yaw);
+    const sin = Math.sin(probe.yaw);
     const outX = cos * face;
     const outZ = -sin * face;
     const middleX = probe.x + outX * probe.halfDepth;
@@ -292,8 +291,8 @@ export class SightField {
   /** Whether a player (a seated car, or the walker out of his) stands inside the box the probe describes (its `x`, `z`, `yaw`, `halfDepth`, `halfWidth`, as `seenThroughFace`'s): someone in a building keeps its interior whatever its doors. */
   playerInside(): boolean {
     const probe = this.probe;
-    const cos = detCos(probe.yaw);
-    const sin = detSin(probe.yaw);
+    const cos = Math.cos(probe.yaw);
+    const sin = Math.sin(probe.yaw);
     for (let player = 0; player < this.playerCount; player++) {
       const fromX = this.playerX[player]! - probe.x;
       const fromZ = this.playerZ[player]! - probe.z;

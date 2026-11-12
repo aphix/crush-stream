@@ -12,7 +12,6 @@ import { POSE_ARM_OUT } from "./civilian-art-constants.ts";
 import { blankStance, walkStance, type Stance } from "./people.ts";
 import { ANKLE_Y, SHOULDER_Y } from "./ragdoll-body.ts";
 
-import { detAcos, detAsin, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 /** One civilian's drawing state: where she stands, her walk, and the activity (`ACTIVITY`) she is in. */
 export type ActivityPose = {
   x: number;
@@ -170,7 +169,7 @@ const LOWEST_SEATED_HIP_Y = 0.25;
  * 1.6 times it mid-stance and none at its ends, so it does not slide. The stride's own length (`STRIDE_METRES`) and the legs' swing match: a foot's whole stance stands 0.75 m behind the last.
  */
 const STANCE_FLAT = 0.95;
-const STANCE_FLAT_SCALE = 1 / detAsin(STANCE_FLAT);
+const STANCE_FLAT_SCALE = 1 / Math.asin(STANCE_FLAT);
 /** The shoulders turn this far (rad) against the hips each step, the head half turning back to hold its gaze, the hips fall this far (m) as the legs spread, and the head nods this far (rad) twice a stride. */
 const SHOULDER_TWIST = 0.1;
 const HEAD_COUNTER_TWIST = 0.7;
@@ -238,9 +237,9 @@ function fillWalk(pose: ActivityPose): void {
   const legGain = Math.min(LEG_GAIT_CEILING, Math.max(pose.speed > LEG_FLOOR_ABOVE ? LEG_GAIT_FLOOR : 0, gait));
   const armGain = Math.min(ARM_GAIT_CEILING, Math.max(ARM_GAIT_FLOOR, gait));
   const kneeGain = KNEE_BEND_FLOOR + (1 - KNEE_BEND_FLOOR) * gait;
-  const sine = detSin(pose.stride);
-  const passing = detCos(pose.stride);
-  const swing = detAsin(STANCE_FLAT * sine) * STANCE_FLAT_SCALE;
+  const sine = Math.sin(pose.stride);
+  const passing = Math.cos(pose.stride);
+  const swing = Math.asin(STANCE_FLAT * sine) * STANCE_FLAT_SCALE;
   for (let side = 0; side < 2; side++) {
     const armGait = ARM_GAITS[side]!;
     const arm = armChannel(side, 0);
@@ -255,7 +254,7 @@ function fillWalk(pose: ActivityPose): void {
   channels[CHANNEL.headYaw] = HEAD_COUNTER_TWIST * SHOULDER_TWIST * sine * legGain;
   channels[CHANNEL.pelvisDrop] = HIP_DROP * sine * sine * legGain;
   channels[CHANNEL.torsoPitch] = LEAN_PER_GAIT * Math.min(MAX_LEAN_GAIT, Math.max(0, gait - 1));
-  channels[CHANNEL.headPitch] = HEAD_NOD * detCos(2 * pose.stride);
+  channels[CHANNEL.headPitch] = HEAD_NOD * Math.cos(2 * pose.stride);
 }
 
 /** Standing in every channel, and walking at `pose.stride` when she moves (`pose.speed` above `WALKING_ABOVE`). */
@@ -347,9 +346,9 @@ function solveTwoBone(): void {
   const forward = scratch[SOLVE_FORWARD]!;
   const down = scratch[SOLVE_DOWN]!;
   const reach = Math.min(upper + lower, Math.max(Math.abs(upper - lower) + NEGLIGIBLE_WEIGHT, Math.sqrt(forward * forward + down * down)));
-  scratch[SOLVE_LINE] = detAtan2(-forward, down);
-  scratch[SOLVE_OFFSET] = detAcos(Math.max(-1, Math.min(1, (upper * upper + reach * reach - lower * lower) / (2 * upper * reach))));
-  scratch[SOLVE_BEND] = Math.PI - detAcos(Math.max(-1, Math.min(1, (upper * upper + lower * lower - reach * reach) / (2 * upper * lower))));
+  scratch[SOLVE_LINE] = Math.atan2(-forward, down);
+  scratch[SOLVE_OFFSET] = Math.acos(Math.max(-1, Math.min(1, (upper * upper + reach * reach - lower * lower) / (2 * upper * reach))));
+  scratch[SOLVE_BEND] = Math.PI - Math.acos(Math.max(-1, Math.min(1, (upper * upper + lower * lower - reach * reach) / (2 * upper * lower))));
 }
 
 /** The tread heights under a foot: `Stoops.liftFeet` reads a spot out of, and writes its answer into, rows of arrays. */
@@ -366,14 +365,14 @@ const NEGLIGIBLE_RISE = 1e-4;
 function plantOnTreads(pose: ActivityPose): void {
   const stoops = pose.stoops;
   if (stoops === null) return;
-  const sine = detSin(pose.yaw);
-  const cosine = detCos(pose.yaw);
+  const sine = Math.sin(pose.yaw);
+  const cosine = Math.cos(pose.yaw);
   for (let side = 0; side < 2; side++) {
     const leg = legChannel(side, 0);
     const upper = channels[leg + LEG.swing]!;
     const lower = upper + channels[leg + LEG.knee]!;
-    const forward = -(THIGH_LENGTH * detSin(upper) + SHIN_LENGTH * detSin(lower));
-    const down = THIGH_LENGTH * detCos(upper) + SHIN_LENGTH * detCos(lower);
+    const forward = -(THIGH_LENGTH * Math.sin(upper) + SHIN_LENGTH * Math.sin(lower));
+    const down = THIGH_LENGTH * Math.cos(upper) + SHIN_LENGTH * Math.cos(lower);
     const ahead = forward + channels[CHANNEL.pelvisForward]!;
     const across = sideSign(side) * HIP_X + channels[CHANNEL.pelvisSide]!;
     footX[0] = pose.x + cosine * across + sine * ahead;
@@ -433,7 +432,7 @@ function solveHands(): void {
     const sweepWeight = weight * held * held * (3 - 2 * held);
     channels[arm + ARM.swing] = channels[arm + ARM.swing]! + weight * (scratch[SOLVE_LINE]! + scratch[SOLVE_OFFSET]! - channels[arm + ARM.swing]!);
     channels[arm + ARM.elbow] = channels[arm + ARM.elbow]! + weight * (-scratch[SOLVE_BEND]! - channels[arm + ARM.elbow]!);
-    channels[arm + ARM.sweep] = channels[arm + ARM.sweep]! + sweepWeight * (detAtan2(lateral, target.z) - channels[arm + ARM.sweep]!);
+    channels[arm + ARM.sweep] = channels[arm + ARM.sweep]! + sweepWeight * (Math.atan2(lateral, target.z) - channels[arm + ARM.sweep]!);
     channels[arm + ARM.out] = channels[arm + ARM.out]! * (1 - weight);
     channels[arm + ARM.twist] = channels[arm + ARM.twist]! * (1 - weight);
   }
@@ -449,8 +448,8 @@ const FRONT_ARM = 1 - REAR_ARM;
  */
 function reachForDoorPoint(side: number, point: { across: number; along: number }): void {
   const swing = scratch[REACH_OPENNESS]! * CAR_DOOR.openRad;
-  const cosine = detCos(swing);
-  const sine = detSin(swing);
+  const cosine = Math.cos(swing);
+  const sine = Math.sin(swing);
   const fromHingeAcross = point.across - CAR_DOOR.hinge.across;
   const fromHingeAlong = point.along - CAR_DOOR.hinge.along;
   const swungAcross = CAR_DOOR.hinge.across + fromHingeAcross * cosine - fromHingeAlong * sine;
@@ -459,8 +458,8 @@ function reachForDoorPoint(side: number, point: { across: number; along: number 
   const toCar = CAR_DOOR.outFromSeat - swungAcross - channels[CHANNEL.shiftForward]!;
   const turned = channels[CHANNEL.bodyYaw]!;
   const arm = armChannel(side, 0);
-  channels[arm + ARM.handOut] = sideSign(side) * (toLeft * detCos(turned) - toCar * detSin(turned));
-  channels[arm + ARM.handZ] = toLeft * detSin(turned) + toCar * detCos(turned);
+  channels[arm + ARM.handOut] = sideSign(side) * (toLeft * Math.cos(turned) - toCar * Math.sin(turned));
+  channels[arm + ARM.handZ] = toLeft * Math.sin(turned) + toCar * Math.cos(turned);
   channels[arm + ARM.handY] = scratch[REACH_HEIGHT]!;
   channels[arm + ARM.hand] = Math.max(channels[arm + ARM.hand]!, scratch[REACH_WEIGHT]!);
 }

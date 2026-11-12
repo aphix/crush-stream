@@ -1,4 +1,3 @@
-import { detCos, detSin } from "../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
@@ -46,8 +45,8 @@ function frame(): void {
     poses.activityClock[civilian] = poses.activityClock[civilian]! + CLOCK_STEP;
     poses.stride[civilian] = poses.stride[civilian]! + STRIDE_STEP;
     poses.speed[civilian] = civilian % 2;
-    poses.x[civilian] = STOOP.run * (0.5 + 0.5 * detSin(frames * WALK_RATE + civilian));
-    poses.z[civilian] = DOOR.across + 0.3 * detCos(frames * WALK_RATE + civilian);
+    poses.x[civilian] = STOOP.run * (0.5 + 0.5 * Math.sin(frames * WALK_RATE + civilian));
+    poses.z[civilian] = DOOR.across + 0.3 * Math.cos(frames * WALK_RATE + civilian);
     poses.yaw[civilian] = frames * WALK_RATE + civilian;
     poses.onSpur[civilian] = civilian % 2;
     poses.partner[civilian] = (civilian + 1) % DUMMIES;

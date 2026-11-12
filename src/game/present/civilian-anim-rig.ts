@@ -1,4 +1,3 @@
-import { detCos, detSin } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { ARM, CHANNEL, LEG, armChannel, legChannel } from "./civilian-anim-channels.ts";
 import { POSE_FOOT_FOLLOW } from "./civilian-art-constants.ts";
@@ -106,17 +105,17 @@ const computed = new Float64Array(1);
 
 function setAboutX(into: THREE.Quaternion, source: Float64Array, at: number): void {
   const half = source[at]! * 0.5;
-  into.set(detSin(half), 0, 0, detCos(half));
+  into.set(Math.sin(half), 0, 0, Math.cos(half));
 }
 
 function setAboutY(into: THREE.Quaternion, source: Float64Array, at: number): void {
   const half = source[at]! * 0.5;
-  into.set(0, detSin(half), 0, detCos(half));
+  into.set(0, Math.sin(half), 0, Math.cos(half));
 }
 
 function setAboutZ(into: THREE.Quaternion, source: Float64Array, at: number): void {
   const half = source[at]! * 0.5;
-  into.set(0, 0, detSin(half), detCos(half));
+  into.set(0, 0, Math.sin(half), Math.cos(half));
 }
 
 /** `into` = the torso's turn: a twist about the vertical over a lean forward over a lean toward +x. */
