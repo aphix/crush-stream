@@ -1,4 +1,5 @@
-import { planAisle } from "./interior-aisle.ts";
+import { detAtan2 } from "../../kernel/physics-core.js";
+import { CUSTOMER_REACH, planAisle } from "./interior-aisle.ts";
 import { Draft, footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
 import { roomPlaceOf, roomWindows } from "./facade-windows.ts";
 import { layoutBar, layoutCoffee, layoutOffice, layoutRowhome, layoutStore } from "./interior-layouts.ts";
@@ -35,8 +36,7 @@ export function planInterior(place: PlanPlace): InteriorPlan {
 /** A solid in world metres: its plan rectangle's bounds and its heights. */
 export type InteriorSolid = { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number };
 
-/** Where a customer stands to buy, from the counter's front; and where the clerk stands behind it (m). */
-const CUSTOMER_REACH = 0.5;
+/** Where the clerk stands behind the counter (m). */
 const CLERK_REACH = 0.5;
 const HALF_TURN = Math.PI / 2;
 const QUARTER_COS = [1, 0, -1, 0] as const;
@@ -142,6 +142,7 @@ export function interiorSpots(place: Place, plan: InteriorPlan = planOf(place)):
   const tree = planAisle(plan, doorAcrossOf(plan.kind, place.width));
   const aisle = tree === null ? null : new Float32Array(tree.deep.length * AISLE_STRIDE);
   if (tree !== null) for (let node = 0; node < tree.deep.length; node++) aisle!.set([frame.x(tree.deep[node]!, tree.across[node]!), frame.z(tree.deep[node]!, tree.across[node]!), tree.parent[node]!], node * AISLE_STRIDE);
+  if (tree !== null) for (let node = 1; node < tree.deep.length; node++) aisle![node * AISLE_STRIDE + 3] = detAtan2(aisle![tree.parent[node]! * AISLE_STRIDE]! - aisle![node * AISLE_STRIDE]!, aisle![tree.parent[node]! * AISLE_STRIDE + 1]! - aisle![node * AISLE_STRIDE + 1]!);
   return { seats, stoopSeats, counter: counterSpots(plan, frame), aisle, standRoom: tree === null ? null : Uint16Array.from(tree.room) };
 }
 

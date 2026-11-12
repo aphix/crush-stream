@@ -36,8 +36,17 @@ export type InteriorKind = "rowhome" | "coffee" | "bar" | "office" | "store";
 export const SEAT_STRIDE = 4;
 /** Floats per spot in `Place.counter`: x, z, yaw (as a seat's), counter-top height (world y). */
 export const COUNTER_STRIDE = 4;
-/** Floats per node in `Place.aisle`: x, z (world m), the index of the node it is reached from (-1 for the first). */
-export const AISLE_STRIDE = 3;
+/** Floats per node in `Place.aisle`: x, z (world m), the index of the node it is reached from (-1 for the first), and the heading from it to that node (a walking civilian's yaw; 0 for the first). */
+export const AISLE_STRIDE = 4;
+/**
+ * Standing spots of a venue with a counter, for those who have no seat: `STAND_SPOTS` for customers in rows of `STAND_COLUMNS` along the counter, behind the lane (the counter's customer spot and the places alternately to its right and
+ * left `STAND_SPACING` m apart) where those who stop to buy without a spot of their own stand, the first row `STAND_ROW_DEPTH` m back from the lane, the next as far again and `CLERK_SPOTS` for staff along the clerk's spot. They number after the venue's seats in the same owner table: one holder to each.
+ */
+export const STAND_SPOTS = 10;
+export const CLERK_SPOTS = 3;
+export const STAND_COLUMNS = 5;
+export const STAND_SPACING = 0.8;
+export const STAND_ROW_DEPTH = 0.8;
 
 /** A lot people go to: its door is `doorNode` on the walk graph; `style` names its facade, `sector` its trade. */
 export type Place = {

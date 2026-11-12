@@ -1,6 +1,6 @@
 import { detAtan2, detCos, detSin } from "../../kernel/physics-core.js";
-import { AISLE_STRIDE, COUNTER_STRIDE, SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
-import { NO_PLACE, NO_SEAT, RESIDENT_INT, RESIDENT_INT_STRIDE, STAND_COLUMNS, STAND_ROW_DEPTH, STAND_SPACING, STAND_SPOTS, STREAM } from "./civilian-constants.ts";
+import { AISLE_STRIDE, COUNTER_STRIDE, SEAT_STRIDE, STAND_COLUMNS, STAND_ROW_DEPTH, STAND_SPACING, STAND_SPOTS } from "../../world/openworld/walk-graph.ts";
+import { NO_PLACE, NO_SEAT, RESIDENT_INT, RESIDENT_INT_STRIDE, STREAM } from "./civilian-constants.ts";
 import { residentDraws } from "./civilian-draws.ts";
 import type { CityState } from "./civilian-state.ts";
 

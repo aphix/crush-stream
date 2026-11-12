@@ -1,6 +1,7 @@
 import { COUNTER_STRIDE, PLACE_KIND, SEAT_STRIDE, type InteriorKind, type OpenWorldMap, type Place } from "../../world/openworld/walk-graph.ts";
 import { PLACE_HOURS } from "./civilian-cast.ts";
-import { CLOSED_HOURS_WEIGHT, HOURS_PER_GAME_DAY, PURPOSE, STAND_SPOTS, CLERK_SPOTS } from "./civilian-constants.ts";
+import { CLOSED_HOURS_WEIGHT, HOURS_PER_GAME_DAY, PURPOSE } from "./civilian-constants.ts";
+import { CLERK_SPOTS, STAND_SPOTS } from "../../world/openworld/walk-graph.ts";
 
 /** What a place is to the people who go there: the interaction table and the hours choose by it. */
 export const VENUE = { other: 0, home: 1, office: 2, coffee: 3, bar: 4, diner: 5, shop: 6, supermarket: 7, park: 8, transit: 9 } as const;

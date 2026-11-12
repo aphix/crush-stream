@@ -1,6 +1,7 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import { footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
 import { ceilingOver, TURN, type Box, type InteriorPlan, type Rect } from "./interior-kinds.ts";
+import { STAND_COLUMNS, STAND_ROW_DEPTH, STAND_SPACING, STAND_SPOTS } from "./walk-graph.ts";
 
 /** The aisle's grid: points this far apart (m), each this far clear of a wall or a piece of furniture (a body's half and a little). */
 const AISLE_STEP = 0.5;
@@ -10,9 +11,11 @@ const ROOM_CLEAR = 0.55;
 const ROOM_FROM_DOOR = 1.5;
 /** A standing-room point keeps this far (m) back from the serving counter's front, on the customers' side. */
 const ROOM_FROM_COUNTER = 0.6;
-/** And clear of the block the crowd stands its first customers in by the serving point (five abreast 0.8 m apart, two rows behind the lane), a body's width round it: this far along the counter either side, and this far out from its middle (m). */
-const STAND_BLOCK_HALF = 2.4;
-const STAND_BLOCK_OUT = 3.25;
+/** Where a customer stands to buy, from the counter's front (m). */
+export const CUSTOMER_REACH = 0.5;
+/** Standing room keeps clear of the block of standing spots by the serving point (`STAND_SPOTS` in rows of `STAND_COLUMNS` behind the lane) by a spot's spacing: this far along the counter either side, and this far out from the counter's front (m). */
+const STAND_BLOCK_HALF = ((STAND_COLUMNS - 1) / 2) * STAND_SPACING + STAND_SPACING;
+const STAND_BLOCK_OUT = CUSTOMER_REACH + Math.ceil(STAND_SPOTS / STAND_COLUMNS) * STAND_ROW_DEPTH + STAND_SPACING;
 /** What blocks a body: anything between these heights over the floor (m). */
 const BODY_LOW = 0.1;
 const BODY_HIGH = 1.7;
@@ -111,7 +114,7 @@ export function planAisle(plan: InteriorPlan, doorAcross: number): PlanAisle | n
     if (tree.row[node]! % 2 !== 0 || tree.column[node]! % 2 !== 0 || hypot2(deep - tree.deep[0]!, across - tree.across[0]!) < ROOM_FROM_DOOR) continue;
     if ((deep - counter.deep) * stepDeep + (across - counter.across) * stepAcross < front || !clearOf(boxes, deep, across, ROOM_CLEAR)) continue;
     const along = stepDeep !== 0 ? across - spotAcross : deep - spotDeep;
-    if (Math.abs(along) < STAND_BLOCK_HALF && (deep - counter.deep) * stepDeep + (across - counter.across) * stepAcross < STAND_BLOCK_OUT) continue;
+    if (Math.abs(along) < STAND_BLOCK_HALF && (deep - counter.deep) * stepDeep + (across - counter.across) * stepAcross < counter.depth / 2 + STAND_BLOCK_OUT) continue;
     if (walls.some((box) => crosses(box, deep, across, spotDeep, spotAcross))) continue;
     tree.room.push(node);
   }

@@ -6,6 +6,11 @@ import { Stoops } from "../../world/openworld/openworld-stoops.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { newCrowd } from "./civilian-crowd.test-util.ts";
+import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
+import { layOutLots } from "../../world/openworld/openworld-lots.ts";
+import { gameHourAtMinute, gameMinuteAt, secondsOfGameMinutes } from "./civilian-clock.ts";
+import { MINUTES_PER_GAME_DAY, MINUTES_PER_GAME_HOUR, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
+import { ActivityReading, readActivity } from "./society-activity.ts";
 
 const RESIDENTS = 300;
 /** Homes enough for 300 residents at the brain's household sizes. */
@@ -32,6 +37,9 @@ const CONTROL_VECTORS = 200;
  */
 const BOUND_RATIO = 2.1;
 const TIMED_FRAMES = 4000;
+/** The city's crowd is read at this game hour, after this many crowd seconds of stepping: its bars full, people walking in and out. */
+const CITY_EVENING_HOUR = 23;
+const CITY_WARM_SECONDS = 20;
 
 let crowd: CivilianCrowd;
 let cars: DeformableCar[];
@@ -107,5 +115,53 @@ describe("given a warmed crowd of 300 civilians among eight parked cars", () => 
     const yardstick = yardstickMicros();
     if (process.env["COST_PRINT"] === "1") process.stdout.write(`crowd step ${micros.toFixed(2)} us, yardstick ${yardstick.toFixed(2)} us, ratio ${(micros / yardstick).toFixed(3)}\n`);
     expect(micros / yardstick, "mean yardsticks a frame").toBeLessThan(BOUND_RATIO);
+  });
+});
+
+describe("given 300 civilians of the city's map in its bars, shops and coffee shops late in the evening, whose rooms have aisles", () => {
+  const city = buildOpenWorldMap(layOutLots());
+  const inRooms: number[] = [];
+  const reading = new ActivityReading();
+  let cityCrowd: CivilianCrowd;
+  let at = 0;
+
+  /** One frame's reads of everyone in a room at crowd second `seconds` (a double handed in once a frame, as the crowd hands its own). */
+  function readRooms(seconds: number): number {
+    let walking = 0;
+    for (let index = 0; index < inRooms.length; index++) {
+      readActivity(cityCrowd.state, inRooms[index]!, seconds, reading);
+      if (reading.speed > 0) walking++;
+    }
+    return walking;
+  }
+
+  beforeAll(() => {
+    cityCrowd = newCrowd(city, RESIDENTS);
+    cityCrowd.step(FRAME_SECONDS, [], true);
+    const now = gameHourAtMinute(gameMinuteAt(FRAME_SECONDS), cityCrowd.state.startHour) * MINUTES_PER_GAME_HOUR;
+    at = Math.floor(secondsOfGameMinutes((CITY_EVENING_HOUR * MINUTES_PER_GAME_HOUR - now + MINUTES_PER_GAME_DAY) % MINUTES_PER_GAME_DAY) * 2) / 2;
+    cityCrowd.skipThrough(at);
+    for (let frame = 0; frame < CITY_WARM_SECONDS / WARM_STEP; frame++) cityCrowd.step((at += WARM_STEP), [], true);
+    at = Math.floor(at * 2) / 2 + 0.5;
+    cityCrowd.step(at, [], true);
+    const tick = at * 2;
+    const { ints } = cityCrowd.state;
+    for (let resident = 0; resident < cityCrowd.state.capacity; resident++) {
+      const base = resident * RESIDENT_INT_STRIDE;
+      const leaving = ints[base + RESIDENT_INT.pathCount]! > 0 && tick < ints[base + RESIDENT_INT.departTick]! && city.places[ints[base + RESIDENT_INT.fromPlace]!]?.aisle !== undefined;
+      const staying = city.places[ints[base + RESIDENT_INT.place]!]?.aisle !== undefined && tick >= ints[base + RESIDENT_INT.arriveTick]! && tick < ints[base + RESIDENT_INT.nextDecisionTick]!;
+      if (leaving || staying) inRooms.push(resident);
+    }
+  });
+
+  // mutation: sed -i 's/^  const table = spotTable(state, place);/  const table = spotTable(state, place); (globalThis as { kept?: unknown }).kept = new Float32Array(3);/' src/game/ai/civilians/society-activity.ts
+  it("when everyone in a room is read every frame for 300 frames, walking, buying, sitting and leaving, then the reads allocate nothing (the profiler's own cost is under the bound)", () => {
+    let walking = 0;
+    const kb = untilQuiet(() => allocatedBytes(() => {
+      for (let frame = 0; frame < MEASURED_FRAMES; frame++) walking += readRooms(at + (frame % FRAMES_PER_TICK) * FRAME_SECONDS);
+    }) / 1024, BOUND_KB);
+    expect(inRooms.length, "civilians in rooms").toBeGreaterThan(20);
+    expect(walking, "reads of someone walking in a room").toBeGreaterThan(0);
+    expect(kb, "KB over the run").toBeLessThanOrEqual(BOUND_KB);
   });
 });

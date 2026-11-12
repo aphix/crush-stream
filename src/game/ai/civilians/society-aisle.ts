@@ -1,5 +1,8 @@
-import { detAtan2 } from "../../kernel/physics-core.js";
-import { AISLE_STRIDE } from "../../world/openworld/walk-graph.ts";
+import { AISLE_STRIDE, SEAT_STRIDE, STAND_COLUMNS } from "../../world/openworld/walk-graph.ts";
+import { ACTIVITY_SECONDS } from "./civilian-activity.ts";
+import { DECISION_HZ, NO_SEAT, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE } from "./civilian-constants.ts";
+import type { CityState } from "./civilian-state.ts";
+import { laneOf, SPOT_FLOATS, spotTable, StandSpot } from "./society-seats.ts";
 
 /** Slots of `AISLE_WALK`: the walk's ends and the share of it walked (in), its point, heading, metres walked and length (out), and what the steps below hand each other. */
 export const WALK = { fromX: 0, fromZ: 1, toX: 2, toZ: 3, share: 4, x: 5, z: 6, yaw: 7, walked: 8, length: 9, x0: 10, z0: 11, x1: 12, z1: 13, t: 14, metres: 15 } as const;
@@ -54,19 +57,28 @@ function climb(aisle: Float32Array, node: number, top: number): void {
   AISLE_WALK[WALK.metres] = metres;
 }
 
-/** The walk's point `WALK.t` of the way from (`x0`, `z0`) to (`x1`, `z1`), heading along it. */
+/** The walk's point `WALK.t` of the way from (`x0`, `z0`) to (`x1`, `z1`). */
 function onSegment(): void {
   const x0 = AISLE_WALK[WALK.x0]!;
   const z0 = AISLE_WALK[WALK.z0]!;
-  const dx = AISLE_WALK[WALK.x1]! - x0;
-  const dz = AISLE_WALK[WALK.z1]! - z0;
-  AISLE_WALK[WALK.x] = x0 + dx * AISLE_WALK[WALK.t]!;
-  AISLE_WALK[WALK.z] = z0 + dz * AISLE_WALK[WALK.t]!;
-  // A walk of no length keeps the heading her reading had.
-  if (dx !== 0 || dz !== 0) AISLE_WALK[WALK.yaw] = detAtan2(dx, dz);
+  AISLE_WALK[WALK.x] = x0 + (AISLE_WALK[WALK.x1]! - x0) * AISLE_WALK[WALK.t]!;
+  AISLE_WALK[WALK.z] = z0 + (AISLE_WALK[WALK.z1]! - z0) * AISLE_WALK[WALK.t]!;
 }
 
-/** Where a walk along `aisle` is, `WALK.share` of the way: from its start to the nearest node, through the tree, from the nearest node to its end. Writes its point, heading, metres walked and length. */
+/** The node under `top` on the way down to `node` (`node` itself when it is a child of `top`). */
+function childBelow(aisle: Float32Array, node: number, top: number): number {
+  let at = node;
+  while (aisle[at * AISLE_STRIDE + 2]! !== top) at = aisle[at * AISLE_STRIDE + 2]!;
+  return at;
+}
+
+/** The walk heads along edge `node` -> its parent (`up`) or the other way: the heading stored with the aisle, so no trig a frame. */
+function edgeYaw(aisle: Float32Array, node: number, up: boolean): void {
+  const yaw = aisle[node * AISLE_STRIDE + 3]!;
+  AISLE_WALK[WALK.yaw] = up ? yaw : yaw > 0 ? yaw - Math.PI : yaw + Math.PI;
+}
+
+/** Where a walk along `aisle` is, `WALK.share` of the way: from its start to the nearest node, through the tree, from the nearest node to its end. Writes its point, heading (an edge's; on a free end the edge next to it, else the `WALK.yaw` given), metres walked and length. */
 export function walkAisle(aisle: Float32Array): void {
   const toX = AISLE_WALK[WALK.toX]!;
   const toZ = AISLE_WALK[WALK.toZ]!;
@@ -88,6 +100,8 @@ export function walkAisle(aisle: Float32Array): void {
   AISLE_WALK[WALK.length] = length;
   AISLE_WALK[WALK.walked] = s;
   if (s <= first) {
+    if (a !== top) edgeYaw(aisle, a, true);
+    else if (b !== top) edgeYaw(aisle, childBelow(aisle, b, top), false);
     AISLE_WALK[WALK.x0] = AISLE_WALK[WALK.fromX]!;
     AISLE_WALK[WALK.z0] = AISLE_WALK[WALK.fromZ]!;
     AISLE_WALK[WALK.x1] = aisle[a * AISLE_STRIDE]!;
@@ -100,6 +114,8 @@ export function walkAisle(aisle: Float32Array): void {
     AISLE_WALK[WALK.metres] = first + up + down - s;
     climbTo(aisle, b, true);
   } else {
+    if (b !== top) edgeYaw(aisle, b, false);
+    else if (a !== top) edgeYaw(aisle, childBelow(aisle, a, top), true);
     AISLE_WALK[WALK.x0] = aisle[b * AISLE_STRIDE]!;
     AISLE_WALK[WALK.z0] = aisle[b * AISLE_STRIDE + 1]!;
     AISLE_WALK[WALK.x1] = toX;
@@ -122,6 +138,7 @@ function climbTo(aisle: Float32Array, node: number, descending: boolean): void {
       left -= step;
       continue;
     }
+    edgeYaw(aisle, at, !descending);
     const near = descending ? up : at;
     const far = descending ? at : up;
     AISLE_WALK[WALK.x0] = aisle[near * AISLE_STRIDE]!;
@@ -137,4 +154,62 @@ function climbTo(aisle: Float32Array, node: number, descending: boolean): void {
   AISLE_WALK[WALK.x1] = AISLE_WALK[WALK.x0]!;
   AISLE_WALK[WALK.z1] = AISLE_WALK[WALK.z0]!;
   AISLE_WALK[WALK.t] = 0;
+}
+
+/** An indoor walk takes this many seconds a metre in a straight line, over her pace: an aisle bends round the furniture. */
+export const AISLE_ROUTE = 1.3;
+/** `RESIDENT_INT.leftSpot` of someone who was at her buying lane, not a seat or spot of her own; and of someone who was out at the door. */
+export const LEFT_LANE = -2;
+export const LEFT_DOOR = -3;
+
+/** Where she was in `place` before setting out: `leftSpot` is a seat or owner-table spot of it, or `LEFT_LANE` (her buying lane), into `out`. True for a seat. */
+export function leftSpotAt(state: CityState, resident: number, place: number, leftSpot: number, out: StandSpot): boolean {
+  const table = spotTable(state, place);
+  if (leftSpot === LEFT_LANE) {
+    fromSpotTable(table, laneOf(resident), out);
+    return false;
+  }
+  const own = leftSpot - state.venues.seatCount[place]!;
+  if (own >= 0) {
+    fromSpotTable(table, STAND_COLUMNS + own, out);
+    return false;
+  }
+  const seats = state.map.places[place]!.seats!;
+  out.x = seats[leftSpot * SEAT_STRIDE]!;
+  out.z = seats[leftSpot * SEAT_STRIDE + 1]!;
+  out.yaw = seats[leftSpot * SEAT_STRIDE + 2]!;
+  out.surfaceY = seats[leftSpot * SEAT_STRIDE + 3]!;
+  return true;
+}
+
+/** Spot `index` of a `spotTable` into `to`. */
+export function fromSpotTable(table: Float64Array, index: number, to: StandSpot): void {
+  const at = index * SPOT_FLOATS;
+  to.x = table[at]!;
+  to.z = table[at + 1]!;
+  to.yaw = table[at + 2]!;
+  to.surfaceY = table[at + 3]!;
+}
+
+const leftAt = new StandSpot();
+
+/** Decision ticks she takes to get from `leftSpot` of `place` out to its door (a seat's standing up first), at her walking speed; 0 where the place has no aisle or she held nothing there. The brain delays her leg by it and the reader draws it, so both work it out here. */
+export function walkOutTicks(state: CityState, resident: number, place: number, leftSpot: number): number {
+  const entry = state.map.places[place]!;
+  if (entry.aisle === undefined || leftSpot === NO_SEAT || leftSpot === LEFT_DOOR) return 0;
+  const seat = leftSpotAt(state, resident, place, leftSpot, leftAt);
+  const dx = entry.doorX - leftAt.x;
+  const dz = entry.doorZ - leftAt.z;
+  const seconds = (Math.sqrt(dx * dx + dz * dz) * AISLE_ROUTE) / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]! + (seat ? ACTIVITY_SECONDS.standUp : 0);
+  return Math.ceil(seconds * DECISION_HZ);
+}
+
+/** Decision ticks she takes to walk in from the door of `place` to her buying lane; 0 where it has no aisle. */
+export function walkInTicks(state: CityState, resident: number, place: number): number {
+  const entry = state.map.places[place]!;
+  if (entry.aisle === undefined) return 0;
+  fromSpotTable(spotTable(state, place), laneOf(resident), leftAt);
+  const dx = entry.doorX - leftAt.x;
+  const dz = entry.doorZ - leftAt.z;
+  return Math.ceil(((Math.sqrt(dx * dx + dz * dz) * AISLE_ROUTE) / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!) * DECISION_HZ);
 }

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "./civilian-activity.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
 import { BODY_GAP } from "./civilian-crowd-constants.ts";
-import { CLERK_SPOTS, DECISION_HZ, FLAG, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, STAND_SPACING, STAND_SPOTS, TICKS_PER_GAME_DAY, TICKS_PER_GAME_HOUR } from "./civilian-constants.ts";
-import { sendResidentTo, standOutside } from "./civilian-plan.ts";
+import { DECISION_HZ, FLAG, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY, TICKS_PER_GAME_HOUR } from "./civilian-constants.ts";
+import { decideResident, sendResidentTo, standOutside } from "./civilian-plan.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { FRAME_SECONDS, newCrowd } from "./civilian-crowd.test-util.ts";
 import { stateDigest } from "./civilian-run.test-util.ts";
@@ -13,11 +13,11 @@ import { applyAnswer } from "./civilian-wire.ts";
 import { createCityState } from "./society.ts";
 import { ActivityReading, readActivity } from "./society-activity.ts";
 import { newCast, societyMap, type Cast } from "./society-scenes.test-util.ts";
-import { COFFEE_SHOP, intAt, placeIn, stageResident, withoutOtherCars } from "./society.test-util.ts";
+import { COFFEE_SHOP, intAt, needsWith, placeIn, stageResident, withoutOtherCars } from "./society.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
-import { COUNTER_STRIDE } from "../../world/openworld/walk-graph.ts";
+import { CLERK_SPOTS, COUNTER_STRIDE, STAND_SPACING, STAND_SPOTS } from "../../world/openworld/walk-graph.ts";
 import { claimSeat, claimStand, releaseSeat } from "./society-seats.ts";
 import { isSeatedVenue } from "./society-venues.ts";
 
@@ -265,19 +265,33 @@ function inRoom(state: CityState, resident: number, place: number, claim: () => 
 }
 const HOME_OF_ROOM = placeIn(city, city.places.find((place) => place.interior === "rowhome")!.name);
 
-/** Where she is drawn every frame of her stay in a room, null where she is not drawn. */
-function drawnThrough(state: CityState, resident: number): ({ x: number; z: number; code: number; fixed: boolean } | null)[] {
+/** Where she is drawn every frame from tick `from` to tick `to`, null where she is not drawn. */
+function drawnBetween(state: CityState, resident: number, from: number, to: number): ({ x: number; z: number; code: number; fixed: boolean } | null)[] {
   const frames: ({ x: number; z: number; code: number; fixed: boolean } | null)[] = [];
-  for (let frame = 0; frame < (ROOM_STAY / DECISION_HZ) / FRAME_SECONDS; frame++) {
-    readActivity(state, resident, ROOM_ARRIVE / DECISION_HZ + frame * FRAME_SECONDS, reading);
-    frames.push(reading.placed ? { x: reading.x, z: reading.z, code: reading.code, fixed: reading.fixed } : null);
+  for (let frame = 0; frame < (to - from) / DECISION_HZ / FRAME_SECONDS; frame++) {
+    readActivity(state, resident, from / DECISION_HZ + frame * FRAME_SECONDS, reading);
+    frames.push(reading.placed || reading.code !== ACTIVITY.none ? { x: reading.x, z: reading.z, code: reading.code, fixed: reading.fixed } : null);
   }
   return frames;
 }
 
+/** Where she is drawn every frame of her stay in a room, null where she is not drawn. */
+const drawnThrough = (state: CityState, resident: number): ({ x: number; z: number; code: number; fixed: boolean } | null)[] => drawnBetween(state, resident, ROOM_ARRIVE, ROOM_ARRIVE + ROOM_STAY);
+
+/** Her stay's frames, then (she sets out home as it ends) those of her walk out and the first second of her leg. */
+function stayAndLeave(state: CityState, resident: number): ({ x: number; z: number; code: number; fixed: boolean } | null)[] {
+  const stay = drawnBetween(state, resident, intAt(state, resident, RESIDENT_INT.arriveTick), intAt(state, resident, RESIDENT_INT.nextDecisionTick));
+  const leave = intAt(state, resident, RESIDENT_INT.nextDecisionTick);
+  expect(sendResidentTo(state, resident, leave, HOME_OF_ROOM, NEED.rest, TICKS_PER_GAME_HOUR), "control: she sets out home").toBe(true);
+  return [...stay, ...drawnBetween(state, resident, leave, intAt(state, resident, RESIDENT_INT.departTick) + DECISION_HZ)];
+}
+
+/** The longest move (m) between two drawn frames in a row. */
+const longestStep = (frames: readonly ({ x: number; z: number } | null)[]): number => Math.max(...frames.slice(1).map((frame, at) => hypot2(frame!.x - frames[at]!.x, frame!.z - frames[at]!.z)));
+
 describe("given a customer at a seat or a standing spot in a bar, a coffee shop and a store of the city, each room with an aisle", () => {
   // mutation: sed -i 's/^  if (atLane < 0) {/  if (false) {/' src/game/ai/civilians/society-activity.ts
-  it("when she is drawn every frame of her stay, then she starts at the door, ends at the door, never moves a metre in a frame, and sits or stands at her spot between", () => {
+  it("when she is drawn every frame of her stay and of her leaving, then she starts at the door, sits or stands at her spot, is at the door as her walk sets off, and never moves a metre in a frame", () => {
     for (const name of ["Kelly's Tap Room", "Daily Grind Coffee", "Bodega Supreme"]) {
       const place = placeIn(city, name);
       const state = createCityState(5, city, 60);
@@ -285,15 +299,34 @@ describe("given a customer at a seat or a standing spot in a bar, a coffee shop 
       const seated = isSeatedVenue(state.venues.venueOf[place]!);
       expect(city.places[place]!.aisle, `control: ${name} has an aisle`).toBeDefined();
       expect(inRoom(state, resident, place, () => (seated ? claimSeat(state, resident, place, false) : claimStand(state, resident, place, false))), `${name}: she holds a seat or spot`).toBe(true);
-      const frames = drawnThrough(state, resident);
+      const mid = drawnThrough(state, resident)[(ROOM_STAY / DECISION_HZ / FRAME_SECONDS) >> 1]!;
+      const frames = stayAndLeave(state, resident);
       const door = city.places[place]!;
+      const setOff = frames.length - 1 / FRAME_SECONDS;
       expect(frames.every((frame) => frame !== null), `${name}: drawn every frame`).toBe(true);
+      expect(mid.code, `${name}: what she does mid-stay`).toBe(seated ? ACTIVITY.sit : ACTIVITY.idle);
       expect(hypot2(frames[0]!.x - door.doorX, frames[0]!.z - door.doorZ), `${name}: metres from the door, first frame`).toBeLessThan(1);
-      expect(hypot2(frames.at(-1)!.x - door.doorX, frames.at(-1)!.z - door.doorZ), `${name}: metres from the door, last frame`).toBeLessThan(1);
-      const steps = frames.slice(1).map((frame, at) => hypot2(frame!.x - frames[at]!.x, frame!.z - frames[at]!.z));
-      expect(Math.max(...steps), `${name}: the longest step between frames (m)`).toBeLessThan(1);
-      expect(frames[frames.length >> 1]!.code, `${name}: what she does mid-stay`).toBe(seated ? ACTIVITY.sit : ACTIVITY.idle);
+      expect(hypot2(frames[setOff]!.x - door.doorX, frames[setOff]!.z - door.doorZ), `${name}: metres from the door as her walk sets off`).toBeLessThan(1);
+      expect(frames[setOff]!.code, `${name}: the door clip as her walk sets off`).toBe(ACTIVITY.door);
+      expect(longestStep(frames), `${name}: the longest step between frames (m)`).toBeLessThan(1);
     }
+  });
+
+  // mutation: sed -i 's/^  const keeps = state.ints\[base + RESIDENT_INT.place\] === place .*$/  const keeps = false;/' src/game/ai/civilians/civilian-plan.ts
+  it("when she stays at the bar for another round, then she keeps her seat and is drawn sitting on through the change of round, never walking", () => {
+    const state = createCityState(5, city, 60);
+    const resident = state.cast.length;
+    for (let other = resident + 1; other < resident + 8; other++) claimSeat(state, other, KELLYS, false);
+    inRoom(state, resident, KELLYS, () => claimSeat(state, resident, KELLYS, false));
+    const seat = intAt(state, resident, RESIDENT_INT.seat);
+    const round = ROOM_ARRIVE + ROOM_STAY;
+    const before = drawnBetween(state, resident, round - DECISION_HZ, round);
+    for (let other = resident + 1; other < resident + 8; other++) releaseSeat(state, other);
+    standOutside(state, resident, round, PURPOSE.drink, ROOM_STAY);
+    expect(intAt(state, resident, RESIDENT_INT.seat), "her seat after the round").toBe(seat);
+    const frames = [...before, ...drawnBetween(state, resident, round, round + 2 * DECISION_HZ)];
+    expect(frames.every((frame) => frame?.code === ACTIVITY.sit), "sitting every frame across the round").toBe(true);
+    expect(longestStep(frames), "the longest step between frames (m)").toBe(0);
   });
 });
 
@@ -310,7 +343,6 @@ describe("given Kelly's Tap Room with every seat and standing spot by its counte
     roomers.push(resident);
   }
   const late = next;
-  inRoom(state, late, KELLYS, () => false);
 
   // mutation: sed -i 's/^    standCount\[place\] = counterSpots >= 1 ? STAND_SPOTS + (entry.standRoom?.length ?? 0) : 0;/    standCount[place] = counterSpots >= 1 ? STAND_SPOTS : 0;/' src/game/ai/civilians/society-venues.ts
   it("when more customers come in, then each takes a spot of her own in the room's standing room, drawn mid-stay standing loose on the customers' side, a metre from the next", () => {
@@ -324,15 +356,28 @@ describe("given Kelly's Tap Room with every seat and standing spot by its counte
     expect(nearestPair(spots.map((spot) => spot!)), "metres between the two nearest").toBeGreaterThanOrEqual(0.99);
   });
 
-  // mutation: sed -i 's/ room.target = TARGET.out;$/ room.target = TARGET.loose;/' src/game/ai/civilians/society-activity.ts
-  it("when one more comes in with the standing room full too, then she walks in, buys at the counter and walks out, and is not drawn in the room after", () => {
-    const frames = drawnThrough(state, late);
-    const bought = frames.findIndex((frame) => frame?.code === ACTIVITY.buy);
-    expect(bought, "frame she starts buying").toBeGreaterThan(0);
-    const gone = frames.findIndex((frame, at) => at > bought && frame === null);
-    expect(gone, "frame she is gone").toBeGreaterThan(bought);
-    expect(frames.slice(gone).every((frame) => frame === null), "not drawn after she has gone").toBe(true);
-    const door = city.places[KELLYS]!;
-    expect(hypot2(frames[gone - 1]!.x - door.doorX, frames[gone - 1]!.z - door.doorZ), "metres from the door as she goes").toBeLessThan(1);
+  // mutation: sed -i 's/(!withinHours(state, current, tick) || fullBesideHer(state, resident, current))/!withinHours(state, current, tick)/' src/game/ai/civilians/civilian-plan.ts
+  it("when someone at the full bar who holds nothing there decides, wanting nothing but to stay, then she does not stay in it: she sets out home", () => {
+    const resident = late + 1;
+    const tick = ROOM_ARRIVE + ROOM_STAY;
+    stageResident(state, resident, { place: KELLYS, home: HOME_OF_ROOM, tick, dwell: 8, purpose: PURPOSE.drink, needs: needsWith({}) });
+    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.fromPlace] = HOME_OF_ROOM;
+    state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = ROOM_PACE;
+    decideResident(state, resident, tick);
+    expect(intAt(state, resident, RESIDENT_INT.place), "where she is or heads after deciding").toBe(HOME_OF_ROOM);
+  });
+
+  // mutation: sed -i '/^  state.ints\[base + RESIDENT_INT.nextDecisionTick\] = state.ints\[base + RESIDENT_INT.arriveTick\]! + walkIn + BUY_TICKS;/d' src/game/ai/civilians/civilian-plan.ts
+  it("when one more comes in with the standing room full too, then she stays only to walk in and buy, drawn every frame of it, and walks out from the counter as she leaves", () => {
+    stageResident(state, late, { place: HOME_OF_ROOM, tick: ROOM_ARRIVE, purpose: NEED.rest });
+    state.floats[late * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = ROOM_PACE;
+    expect(sendResidentTo(state, late, ROOM_ARRIVE, KELLYS, PURPOSE.drink, ROOM_STAY), "control: she sets out for the bar").toBe(true);
+    expect(intAt(state, late, RESIDENT_INT.seat), "nothing of her own").toBe(NO_SEAT);
+    const stay = intAt(state, late, RESIDENT_INT.nextDecisionTick) - intAt(state, late, RESIDENT_INT.arriveTick);
+    expect(stay, "her stay (ticks): the walk in and the buying").toBeLessThan(10 * DECISION_HZ);
+    const frames = stayAndLeave(state, late);
+    expect(frames.every((frame) => frame !== null), "drawn every frame: never in the room unseen").toBe(true);
+    expect(frames.some((frame) => frame!.code === ACTIVITY.buy), "she buys").toBe(true);
+    expect(longestStep(frames), "the longest step between frames (m)").toBeLessThan(1);
   });
 });
