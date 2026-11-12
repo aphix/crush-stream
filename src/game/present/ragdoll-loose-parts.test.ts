@@ -250,7 +250,8 @@ describe("given a part lying still on the road", () => {
     expect(deepest, `his deepest corner went ${deepest.toFixed(3)} m into the door (its top at ${top.toFixed(2)} m)`).toBeLessThan(THROUGH_M);
   });
 
-  it(`when the walker walks at ${WALK_SPEED} m/s into a wheel lying on its side in his way, then no corner of him goes over ${THROUGH_M} m into it`, async () => {
+  // mutation: sed -i '/^    walker.floor.parts = this.loose;/d' src/game/present/ragdoll-pool.ts
+  it(`when the walker walks at ${WALK_SPEED} m/s into a wheel lying on its side in his way, then he steps over it on his feet and no corner of him goes over ${THROUGH_M} m into it`, async () => {
     const sys = await standingWalker();
     const wheel = lyingStill("wheel", new THREE.Vector3(0, 0.3, 1.2));
     let deepest = 0;
@@ -264,6 +265,8 @@ describe("given a part lying still on the road", () => {
     }
     const z = sys["dolls"][WALKER]!.bodies[TORSO]!.translation().z;
     expect(deepest, `his deepest corner went ${deepest.toFixed(3)} m into the wheel; his torso ended at z ${z.toFixed(2)}`).toBeLessThan(THROUGH_M);
+    expect(sys.walker.state, "he is on his feet").toBe("stand");
+    expect(z, "his torso ended past the wheel (m along +z)").toBeGreaterThan(2.2);
   });
 });
 

@@ -45,6 +45,9 @@ export function assertFloorBoxes(boxes: readonly FloorBox[]): void {
   }
 }
 
+/** What knows the tops of the loose parts lying still: the top (m) under (x, z) a foot asking from `ask` may step onto, else `NO_FLOOR`. */
+type PartTops = { topUnder(x: number, z: number, ask: number): number };
+
 /**
  * What the walker's feet stand on: the active ground, the course's solids, the flights of stairs and the boxes a building streams in. A
  * top at most `WALK_STEP` over his planted feet is floor; a taller or overhead one is a wall, which the dummy's own colliders stop him at.
@@ -54,6 +57,8 @@ export class WalkFloor {
   boxes: readonly FloorBox[] = NO_BOXES;
   /** The course's flights of stairs: over one, its tread is the floor and the flat box it is placed as is not read. */
   stairs: StairField = NO_STAIRS;
+  /** The loose car parts lying still near him: one's top within a step is floor, so a foot is planted on it and never inside it. */
+  parts: PartTops | null = null;
   /** The floor (m) under his planted feet: every read is asked from here. */
   level = 0;
   /** How far (m) `level` stands over the floor his other foot last stood on: mid-step on a tread, his torso is between the two. */
@@ -83,6 +88,7 @@ export class WalkFloor {
       if (box.y0 > ask || box.y1 > ask + STEP_MAX || box.y1 <= best) continue;
       best = box.y1;
     }
+    if (this.parts !== null) best = Math.max(best, this.parts.topUnder(x, z, ask));
     return best;
   }
 
