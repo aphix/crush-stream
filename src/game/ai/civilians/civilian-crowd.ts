@@ -738,6 +738,8 @@ export class CivilianCrowd {
   /** Someone run down `AMBULANCE_DELAY_SECONDS` ago is still down: the call is made (it is in the log for every peer) and whoever sends the ambulance hears of it. */
   private raiseAmbulanceCalls(seconds: number): void {
     for (let resident = 0; resident < this.ambulanceDue.length; resident++) {
+      // Read only for a row that is due: a loop body V8 has no feedback for keeps `due` tagged, boxing every row's load every frame.
+      if (!(this.ambulanceDue[resident]! <= seconds)) continue;
       let due = this.ambulanceDue[resident]!;
       while (due <= seconds) {
         if (ambulanceCaller(this.remote.state, resident, tickAt(due)) !== NO_PLACE) {

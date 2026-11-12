@@ -1,7 +1,7 @@
 import { detAtan2, hypot2 } from "../../kernel/physics-core.js";
 import { ALARM_DELAY_STEPS_PER_SECOND, CAR_OUT_TICKS, CENTIMETRES_PER_METRE, DECISION_HZ, EVADE_HOLD_SECONDS, EVADE_PACE_CALM, EVADE_PACE_JUMPY, EVADE_REACH, LATERAL_FADE_DISTANCE, MAX_PATH_NODES, NEVER_TICK, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import type { CityState } from "./civilian-state.ts";
-import { residentNeuroticism } from "./civilian-temperament.ts";
+import { noteNeuroticism } from "./civilian-temperament.ts";
 import { isCrossingBetween } from "./society-crossing.ts";
 
 /** Where a walker is and which way it faces (heading 0 = +Z, positive toward +X): the out parameter of the position functions. */
@@ -98,7 +98,8 @@ function evadeAlarm(state: CityState, resident: number, out: LegPose): void {
   const alarmDz = hereZ - ints[intBase + RESIDENT_INT.alarmZ]! / CENTIMETRES_PER_METRE;
   // Squared and in place: a double handed to `hypot2` is boxed whenever it is not inlined, and this runs every frame for every walker an alarm reaches.
   if (alarmDx * alarmDx + alarmDz * alarmDz > EVADE_REACH * EVADE_REACH) return;
-  const run = pace * (EVADE_PACE_CALM + (EVADE_PACE_JUMPY - EVADE_PACE_CALM) * residentNeuroticism(state, resident));
+  noteNeuroticism(state, resident);
+  const run = pace * (EVADE_PACE_CALM + (EVADE_PACE_JUMPY - EVADE_PACE_CALM) * state.jumpy[resident]!);
   if (kerbAhead - there <= there - kerbBehind) {
     const dash = Math.min(kerbAhead, there + run * since);
     if (out.walked >= dash) return;
@@ -127,7 +128,7 @@ function evadeAlarm(state: CityState, resident: number, out: LegPose): void {
 
 /**
  * Writes where resident `resident` stands on its leg at crowd time `seconds` into `out`; false when it is not on a leg then (not yet departed, arrived, no leg, or in the car). A pure function of the row and the time: any frame
- * rate, no state, no allocation. A leg by car is a walk to it, standing at it getting in, the drive (nobody on foot), standing at it getting out and a walk from it; the metres walked are worked out here, not in a helper: a helper
+ * rate, no allocation; its one memo (`legYaw`, a segment's heading) gives the same value whatever was asked before. A leg by car is a walk to it, standing at it getting in, the drive (nobody on foot), standing at it getting out and a walk from it; the metres walked are worked out here, not in a helper: a helper
  * that returns a number boxes it for every civilian every frame.
  */
 export function legPose(state: CityState, resident: number, seconds: number, out: LegPose): boolean {
@@ -179,7 +180,13 @@ export function legPose(state: CityState, resident: number, seconds: number, out
   if (span > 0) {
     out.dirX = spanX / span;
     out.dirZ = spanZ / span;
-    out.yaw = out.speed < 0 ? detAtan2(-out.dirX, -out.dirZ) : detAtan2(out.dirX, out.dirZ);
+    // Key 0 (node 0 to node 0) has no span and is never asked for, so a fresh table holds no stale heading.
+    const key = from * 131072 + to * 2 + (out.speed < 0 ? 1 : 0);
+    if (state.legYawKey[resident] !== key) {
+      state.legYawKey[resident] = key;
+      state.legYaw[resident] = out.speed < 0 ? detAtan2(-out.dirX, -out.dirZ) : detAtan2(out.dirX, out.dirZ);
+    }
+    out.yaw = state.legYaw[resident]!;
   }
   const fade = Math.max(0, Math.min(1, walked / LATERAL_FADE_DISTANCE, (total - walked) / LATERAL_FADE_DISTANCE));
   const offset = floats[floatBase + RESIDENT_FLOAT.lateral]! * fade;

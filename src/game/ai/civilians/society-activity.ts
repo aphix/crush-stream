@@ -1,4 +1,4 @@
-import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2, sinCosAt } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import {
   ALARM_DELAY_STEPS_PER_SECOND,
@@ -31,7 +31,7 @@ import {
 import { residentDraws } from "./civilian-draws.ts";
 import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { legPose } from "./civilian-leg.ts";
-import { residentNeuroticism } from "./civilian-temperament.ts";
+import { noteNeuroticism } from "./civilian-temperament.ts";
 import type { CityState } from "./civilian-state.ts";
 import { SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
 import { buyLaneSpot, StandSpot, standSpotAt } from "./society-seats.ts";
@@ -99,14 +99,31 @@ const scratch = new ReadScratch();
 /** Where `standAt` and the buying lane put someone, before it is copied into the reading. */
 const standing = new StandSpot();
 
+/** Per place: the sine and cosine of its yaw and the yaw facing the street from its door, as `standAtDoor` reads them, worked out once a map: a trig call's result is boxed, and those at doors are read every frame. */
+const DOOR_FACINGS = new WeakMap<object, Float64Array>();
+
+function buildDoorFacings(state: CityState): Float64Array {
+  const { places } = state.map;
+  const table = new Float64Array(places.length * 3);
+  for (let place = 0; place < places.length; place++) {
+    const yaw = places[place]!.yaw;
+    table[place * 3] = detSin(yaw);
+    table[place * 3 + 1] = detCos(yaw);
+    table[place * 3 + 2] = detAtan2(detCos(yaw), -detSin(yaw));
+  }
+  DOOR_FACINGS.set(state.map, table);
+  return table;
+}
+
 /** Standing at a place's door on the street side, spread along the frontage by the resident's own lateral offset, facing the street. */
 function standAtDoor(state: CityState, resident: number, place: number, out: ActivityReading): void {
   const entry = state.map.places[place]!;
+  const facing = DOOR_FACINGS.get(state.map) ?? buildDoorFacings(state);
   const lateral = (state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.lateral]! / LATERAL_MAX) * DOOR_SPREAD;
   out.placed = true;
-  out.x = entry.doorX + detSin(entry.yaw) * lateral;
-  out.z = entry.doorZ + detCos(entry.yaw) * lateral;
-  out.yaw = detAtan2(detCos(entry.yaw), -detSin(entry.yaw));
+  out.x = entry.doorX + facing[place * 3]! * lateral;
+  out.z = entry.doorZ + facing[place * 3 + 1]! * lateral;
+  out.yaw = facing[place * 3 + 2]!;
 }
 
 /** The person they talk with if they are still out at a door in chatting distance at `scratch.tick`, else -1. */
@@ -181,22 +198,28 @@ function faceHazard(state: CityState, resident: number, out: ActivityReading): v
   if (toX !== 0 || toZ !== 0) out.yaw = detAtan2(toX, toZ);
 }
 
+/** The recoil's angle in, its [sin, cos] out (`sinCosAt`: no boxed argument or result, the same bits as `detSin`). */
+const recoilTrig = new Float64Array(2);
+
 /** A flinch, `scratch.flinch` seconds into it: a step back from the hazard, out and back over the recoil clip, `RECOIL_STEP_METRES` at most (the calm take `RECOIL_CALM_SHARE` of it). */
 function stepBack(state: CityState, resident: number, out: ActivityReading): void {
   const toX = intAt(state, resident, RESIDENT_INT.alarmX) / CENTIMETRES_PER_METRE - out.x;
   const toZ = intAt(state, resident, RESIDENT_INT.alarmZ) / CENTIMETRES_PER_METRE - out.z;
   const distance = hypot2(toX, toZ);
   if (distance === 0) return;
-  const step = detSin((Math.PI * scratch.flinch) / ACTIVITY_SECONDS.recoil) * RECOIL_STEP_METRES * (RECOIL_CALM_SHARE + (1 - RECOIL_CALM_SHARE) * residentNeuroticism(state, resident));
+  recoilTrig[0] = (Math.PI * scratch.flinch) / ACTIVITY_SECONDS.recoil;
+  sinCosAt(recoilTrig, 0);
+  noteNeuroticism(state, resident);
+  const step = recoilTrig[0]! * RECOIL_STEP_METRES * (RECOIL_CALM_SHARE + (1 - RECOIL_CALM_SHARE) * state.jumpy[resident]!);
   out.x -= (toX / distance) * step;
   out.z -= (toZ / distance) * step;
 }
 
-/** Someone walking who saw a hazard flinches for the recoil clip's length from the moment they noticed it (the hazard's tick and their own delay), stepping back from it and facing it, then walks on. */
-function readFlinch(state: CityState, resident: number, out: ActivityReading): void {
+/** Someone walking who saw a hazard flinches for the recoil clip's length from the moment they noticed it (the hazard's tick and their own delay), stepping back from it and facing it, then walks on. `seconds` is `scratch.clock` as the caller was handed it: passed on as it came, it is not boxed again for `legPose`. */
+function readFlinch(state: CityState, resident: number, seconds: number, out: ActivityReading): void {
   if (intAt(state, resident, RESIDENT_INT.alarmTick) === NEVER_TICK) return;
   scratch.flinch = scratch.clock - intAt(state, resident, RESIDENT_INT.alarmTick) / DECISION_HZ - intAt(state, resident, RESIDENT_INT.alarmDelay) / ALARM_DELAY_STEPS_PER_SECOND;
-  if (scratch.flinch < 0 || scratch.flinch >= ACTIVITY_SECONDS.recoil || !legPose(state, resident, scratch.clock, state.pose) || state.pose.evading) return;
+  if (scratch.flinch < 0 || scratch.flinch >= ACTIVITY_SECONDS.recoil || !legPose(state, resident, seconds, state.pose) || state.pose.evading) return;
   out.placed = true;
   out.x = state.pose.x;
   out.z = state.pose.z;
@@ -497,7 +520,7 @@ export function readActivity(state: CityState, resident: number, seconds: number
   const arriveTick = ints[base + RESIDENT_INT.arriveTick]!;
   if (ints[base + RESIDENT_INT.pathCount]! > 0 && tick >= ints[base + RESIDENT_INT.departTick]! && tick < arriveTick) {
     readWalk(state, resident, out);
-    if (out.code === ACTIVITY.none) readFlinch(state, resident, out);
+    if (out.code === ACTIVITY.none) readFlinch(state, resident, seconds, out);
     return;
   }
   if (ints[base + RESIDENT_INT.pathCount]! > 0 && tick < ints[base + RESIDENT_INT.departTick]!) {

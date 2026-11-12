@@ -94,6 +94,7 @@ const HOT = {
   "src/game/world/openworld/openworld-stoops.ts": ["liftFeet", "leadsToDoor", "keepOut"],
   "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "separate", "liftWalkers", "keepOverlaidOut", "noteContacts", "startBump", "writeActivity", "mayPush", "raisePush", "watchApproach", "raiseDangers", "raiseAmbulanceCalls", "raiseBearingPush", "logPair", "logHostEvent", "appendLog", "queueForBrain", "advanceBrain", "raiseCrimes", "postBatch", "findHits", "findPunches", "hasLooseBody"],
   "src/game/ai/civilians/civilian-look-word.ts": ["lookOf"],
+  "src/game/ai/civilians/civilian-temperament.ts": ["noteNeuroticism"],
   "src/game/ai/civilians/civilian-look.ts": ["placeMet"],
   "src/game/ai/civilians/civilian-separation.ts": ["resolve", "list", "buildPairs", "addPair", "relax", "pushApart", "move"],
   "src/game/ai/civilians/civilian-contact.ts": ["carGap", "comingAt"],
