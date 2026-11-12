@@ -349,7 +349,8 @@ function readWalk(state: CityState, resident: number, out: ActivityReading): voi
     out.code = ACTIVITY.door;
     out.sinceSeconds = since;
     out.leftSeconds = doorSeconds - since;
-  } else if (toEnd < doorSeconds && to === intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ && hasDoor(state, intAt(state, resident, RESIDENT_INT.place))) {
+  // A walk with no dwell after it ended at a shut door (`planLeg`): she does not go in.
+  } else if (toEnd < doorSeconds && to === intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ && intAt(state, resident, RESIDENT_INT.nextDecisionTick) > intAt(state, resident, RESIDENT_INT.arriveTick) && hasDoor(state, intAt(state, resident, RESIDENT_INT.place))) {
     out.code = ACTIVITY.door;
     out.sinceSeconds = doorSeconds - toEnd;
     out.leftSeconds = toEnd;

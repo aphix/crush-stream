@@ -45,6 +45,7 @@ import {
   STAY_MINUTES,
   STAY_UTILITY,
   STREAM,
+  TICKS_PER_GAME_HOUR,
   TICKS_PER_GAME_MINUTE,
 } from "./civilian-constants.ts";
 import { residentDraws } from "./civilian-draws.ts";
@@ -71,6 +72,25 @@ function isOpen(state: CityState, place: number, tick: number): boolean {
 /** Whether `place` is within its opening hours at `tick`: the reading its sign shows (`fillClosedPlaces`). */
 function withinHours(state: CityState, place: number, tick: number): boolean {
   return state.venues.hourWeight[place * HOURS_PER_GAME_DAY + hourOfDay(tick, state.startHour)]! >= 1;
+}
+
+/** Customers leave a place over its last this many ticks open, each by her number, so they do not all come out of its door at once. */
+const CLOSING_STAGGER_TICKS = 30;
+
+/** Ticks from `tick` until `place` is outside its hours, at most `limit`: how long customer `resident` may stay in it (she leaves a little early, by her number). 0: it is shut now. */
+function ticksOpen(state: CityState, place: number, resident: number, tick: number, limit: number): number {
+  let at = tick;
+  while (at - tick < limit) {
+    if (!withinHours(state, place, at)) return at === tick ? 0 : Math.max(1, at - tick - (resident % CLOSING_STAGGER_TICKS));
+    at += TICKS_PER_GAME_HOUR - ((at + state.startHour * TICKS_PER_GAME_HOUR) % TICKS_PER_GAME_HOUR);
+  }
+  return limit;
+}
+
+/** A stay of `ticks` at `place`, cut to end when it shuts for a `guest` (a customer there, not staff, not at home); a place already shut keeps the whole stay. */
+function stayTicks(state: CityState, place: number, resident: number, guest: boolean, tick: number, ticks: number): number {
+  const open = guest ? ticksOpen(state, place, resident, tick, ticks) : ticks;
+  return open > 0 ? open : ticks;
 }
 
 function isNight(hour: number): boolean {
@@ -214,8 +234,8 @@ function ticksOf(seconds: number): number {
   return Math.ceil(seconds * DECISION_HZ);
 }
 
-/** Where a trip by car puts the ticks: the driver walks to the car at their own pace, gets in (a clip), drives and parks, gets out (a clip), then walks in; the leg's ticks and the car's are written here. Returns the leg's length in ticks, or -1 (nothing written) for a `customer` who would reach a place outside its hours. */
-function timeCarLeg(state: CityState, resident: number, tick: number, owner: number, stand: number, destination: number, metres: number, customer: boolean): number {
+/** Where a trip by car puts the ticks: the driver walks to the car at their own pace, gets in (a clip), drives and parks, gets out (a clip), then walks in; the leg's ticks and the car's are written here. Returns the leg's length in ticks. */
+function timeCarLeg(state: CityState, resident: number, tick: number, owner: number, stand: number, destination: number, metres: number): number {
   const base = resident * RESIDENT_INT_STRIDE;
   const first = resident * MAX_PATH_NODES;
   const pace = state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.pace]!;
@@ -223,15 +243,14 @@ function timeCarLeg(state: CityState, resident: number, tick: number, owner: num
   const toKerb = state.pathDistance[first + state.ints[base + RESIDENT_INT.driveLast]!]!;
   const leaveTick = tick + ticksOf(toCar / pace) + CAR_IN_TICKS;
   const parkTick = leaveTick + ticksOf((toKerb - toCar) / DRIVE_SPEED) + PARK_TICKS;
-  const legTicks = Math.max(1, parkTick + CAR_OUT_TICKS + ticksOf((metres - toKerb) / pace) - tick);
-  if (customer && !withinHours(state, destination, tick + legTicks)) return -1;
   reserveCar(state, resident, owner, stand, destination, leaveTick, parkTick);
-  return legTicks;
+  return Math.max(1, parkTick + CAR_OUT_TICKS + ticksOf((metres - toKerb) / pace) - tick);
 }
 
 /**
  * Plans the walk from where resident `resident` dwells to `destination` and a stay there, by car when one of the household's is free and within a short walk and the trip is long (`chooseCar`): the walk to the car,
- * the drive, the walk in, all one leg of the path. False when no walk of the allowed length exists (nothing written), or when a `customer` would reach a place outside its hours (the caller stays her put). The needs it keeps are `state.scratchNeeds`.
+ * the drive, the walk in, all one leg of the path. False (nothing written) when no walk of the allowed length exists. The needs it keeps are `state.scratchNeeds`.
+ * A `customer`'s stay ends when the place shuts; one who reaches it shut finds the door closed: no seat, no dwell, she decides again there.
  */
 function planLeg(state: CityState, resident: number, tick: number, destination: number, purpose: number, dwellTicks: number, customer = false): boolean {
   const base = resident * RESIDENT_INT_STRIDE;
@@ -252,25 +271,20 @@ function planLeg(state: CityState, resident: number, tick: number, destination: 
   const pace = state.floats[floatBase + RESIDENT_FLOAT.pace]!;
   state.floats[floatBase + RESIDENT_FLOAT.speed] = pace * (purpose === PURPOSE.flee ? FLEE_SPEED_FACTOR : 1);
   clearWaits(state, resident);
-  const legTicks = byCar ? timeCarLeg(state, resident, tick, owner, stand, destination, metres, customer) : Math.max(1, ticksOf(metres / state.floats[floatBase + RESIDENT_FLOAT.speed]!)) + planWaits(state, resident, tick);
-  // A customer goes in only while the place is open: not by a walk that reaches it after it shuts.
-  if (legTicks < 0 || (customer && !withinHours(state, destination, tick + legTicks))) {
-    clearDriveLeg(state, resident);
-    clearWaits(state, resident);
-    return false;
-  }
+  const legTicks = byCar ? timeCarLeg(state, resident, tick, owner, stand, destination, metres) : Math.max(1, ticksOf(metres / state.floats[floatBase + RESIDENT_FLOAT.speed]!)) + planWaits(state, resident, tick);
+  const stay = customer ? ticksOpen(state, destination, resident, tick + legTicks, Math.max(1, dwellTicks)) : Math.max(1, dwellTicks);
   state.ints[base + RESIDENT_INT.fromPlace] = current;
   state.ints[base + RESIDENT_INT.place] = destination;
   state.ints[base + RESIDENT_INT.departTick] = tick;
   state.ints[base + RESIDENT_INT.arriveTick] = tick + legTicks;
-  state.ints[base + RESIDENT_INT.nextDecisionTick] = tick + legTicks + Math.max(1, dwellTicks);
+  state.ints[base + RESIDENT_INT.nextDecisionTick] = tick + legTicks + stay;
   state.ints[base + RESIDENT_INT.legPurpose] = purpose;
   state.ints[base + RESIDENT_INT.companion] = NO_PLACE;
   state.ints[base + RESIDENT_INT.decisionCount]++;
   for (let need = 0; need < NEED_COUNT; need++) state.floats[floatBase + RESIDENT_FLOAT.needs + need] = state.scratchNeeds[need]!;
   logHistory(state, resident, VISIT_BASE + purpose, destination, tick);
   if (PURPOSE_MOODS[purpose]! !== -1) setVisitMood(state, resident, VISIT_BASE + purpose, tick);
-  takeSeat(state, resident, destination, purpose);
+  if (stay > 0) takeSeat(state, resident, destination, purpose);
   markDirty(state, resident);
   return true;
 }
@@ -416,15 +430,18 @@ export function decideResident(state: CityState, resident: number, tick: number)
   else dwell = dwellTicksOf(kind, draw());
   const customer = purpose !== NEED.work && !isOutdoorPurpose(purpose);
   const home = state.ints[base + RESIDENT_INT.home]!;
-  // Outside a place's hours (its sign shows it shut) a customer is not kept inside it: with nowhere else to go she goes home.
-  const shutIn = current !== state.ints[base + RESIDENT_INT.work] && home !== NO_PLACE && home !== current && !withinHours(state, current, tick);
+  const guest = current !== state.ints[base + RESIDENT_INT.work] && current !== home;
+  // Outside a place's hours (its sign shows it shut) a customer is not kept inside it: with nowhere else to go she goes home, unless the walk would make a named resident miss her appointment.
+  const shutIn = guest && home !== NO_PLACE && !withinHours(state, current, tick) && (!named || walkFitsBeforeAppointment(state, resident, tick, current, home));
   if (place !== NO_PLACE && place !== current && planLeg(state, resident, tick, place, purpose, dwell, customer)) {
     if (row !== null) afterInteraction(state, resident, tick, row);
   } else if (!(shutIn && (place !== current || customer) && planLeg(state, resident, tick, home, NEED.rest, dwellTicksOf(PLACE_KIND.home, draw())))) {
-    if (place === NO_PLACE) stayPut(state, resident, tick, current, STAY_MINUTES * TICKS_PER_GAME_MINUTE, NEED.rest);
-    else if (place !== current) stayPut(state, resident, tick, current, dwell, row === null ? purpose : NEED.rest);
-    else {
-      stayPut(state, resident, tick, current, dwell, purpose);
+    if (place === NO_PLACE) stayPut(state, resident, tick, current, stayTicks(state, current, resident, guest, tick, STAY_MINUTES * TICKS_PER_GAME_MINUTE), NEED.rest);
+    else if (place !== current) {
+      const stayFor = row === null ? purpose : NEED.rest;
+      stayPut(state, resident, tick, current, stayTicks(state, current, resident, guest && !isOutdoorPurpose(stayFor), tick, dwell), stayFor);
+    } else {
+      stayPut(state, resident, tick, current, stayTicks(state, current, resident, guest && customer, tick, dwell), purpose);
       if (row !== null) afterInteraction(state, resident, tick, row);
     }
   }
