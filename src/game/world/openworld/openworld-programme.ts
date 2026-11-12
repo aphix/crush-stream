@@ -54,8 +54,7 @@ const SHOPS = "shops";
 const SHOP = { shopGround: true, lots: 2, storeys: 3 } as const;
 const NARROW_SHOP = { shopGround: true, lots: 1, storeys: 3 } as const;
 
-// Open to midnight: Dee buys her coffee here at 23:00 (`civilian-cast.ts`), and a customer goes in only within a place's hours.
-const BODEGA: Venue = { ...SHOP, name: PLACE_NAMES.bodega, style: CORNER_STORE, kind: PLACE_KIND.shop, sector: SECTOR.retail, hours: [6, 0], interior: "store" };
+const BODEGA: Venue = { ...SHOP, name: PLACE_NAMES.bodega, style: CORNER_STORE, kind: PLACE_KIND.shop, sector: SECTOR.retail, hours: [6, 23], interior: "store" };
 const MARTINEZ: Venue = { ...SHOP, name: "Martinez Grocery & Deli", style: CORNER_STORE, kind: PLACE_KIND.shop, sector: SECTOR.retail, hours: [6, 23], interior: "store" };
 const RUIZ: Venue = { ...SHOP, name: "Ruiz Mini Market", style: CORNER_STORE, kind: PLACE_KIND.shop, sector: SECTOR.retail, hours: [7, 22], interior: "store" };
 const SUPERMARKET: Venue = { name: "Moore Fresh Market", style: "supermarket", kind: PLACE_KIND.shop, sector: SECTOR.grocery, lots: 4, shopGround: true, storeys: 2, hours: [7, 22] };

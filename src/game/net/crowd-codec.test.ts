@@ -25,7 +25,7 @@ function eventLog(count: number): Float64Array {
 describe("given the open world's crowd message", () => {
   it("when it is the one this build speaks, then it is type 13 on wire version 43", () => {
     expect(MSG.crowd, "type byte").toBe(13);
-    expect(NET_VERSION, "wire version").toBe(62);
+    expect(NET_VERSION, "wire version").toBe(61);
   });
 
   it("when a clock and an event log are sent, then the guest reads every field back exactly", () => {
