@@ -193,14 +193,14 @@ function fromSpotTable(table: Float64Array, index: number, to: StandSpot): void 
 
 const leftAt = new StandSpot();
 
-/** Decision ticks she takes to get from `leftSpot` of `place` out to its door (a seat's standing up first), at her walking speed; 0 where the place has no aisle or she held nothing there. The brain delays her leg by it and the reader draws it, so both work it out here. */
+/** Decision ticks she takes to get from `leftSpot` of `place` out to its door (a seat's standing up first), at her own pace (not a leg's speed, which a re-plan during the walk out changes); 0 where the place has no aisle or she held nothing there. The brain delays her leg by it and the reader draws it, so both work it out here. */
 export function walkOutTicks(state: CityState, resident: number, place: number, leftSpot: number): number {
   const entry = state.map.places[place]!;
   if (entry.aisle === undefined || leftSpot === NO_SEAT || leftSpot === LEFT_DOOR) return 0;
   const seat = leftSpotAt(state, resident, place, leftSpot, leftAt);
   const dx = entry.doorX - leftAt.x;
   const dz = entry.doorZ - leftAt.z;
-  const seconds = (Math.sqrt(dx * dx + dz * dz) * AISLE_ROUTE) / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]! + (seat ? ACTIVITY_SECONDS.standUp : 0);
+  const seconds = (Math.sqrt(dx * dx + dz * dz) * AISLE_ROUTE) / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.pace]! + (seat ? ACTIVITY_SECONDS.standUp : 0);
   return Math.ceil(seconds * DECISION_HZ);
 }
 
@@ -297,14 +297,24 @@ export function planRoom(state: CityState, resident: number, place: number, work
   return true;
 }
 
-/** The most decision ticks a walk out of `place` to its door can take her: from its farthest aisle point or seat, a seat's standing up first. For timing a leg out of a place before she holds anything in it. */
-export function longestWalkOutTicks(state: CityState, resident: number, place: number): number {
+/** Per place, the farthest (m) any of its aisle points or seats lies from its door: the map's alone, so found once. */
+const FARTHEST = new WeakMap<object, number>();
+
+function farthestFromDoor(state: CityState, place: number): number {
   const entry = state.map.places[place]!;
-  const aisle = entry.aisle;
-  if (aisle === undefined) return 0;
+  const known = FARTHEST.get(entry);
+  if (known !== undefined) return known;
   let far = 0;
+  const aisle = entry.aisle!;
   for (let at = 0; at < aisle.length; at += AISLE_STRIDE) far = Math.max(far, Math.sqrt((aisle[at]! - entry.doorX) ** 2 + (aisle[at + 1]! - entry.doorZ) ** 2));
   const seats = entry.seats;
   if (seats !== undefined) for (let at = 0; at < seats.length; at += SEAT_STRIDE) far = Math.max(far, Math.sqrt((seats[at]! - entry.doorX) ** 2 + (seats[at + 1]! - entry.doorZ) ** 2));
-  return Math.ceil(((far * AISLE_ROUTE) / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]! + ACTIVITY_SECONDS.standUp) * DECISION_HZ);
+  FARTHEST.set(entry, far);
+  return far;
+}
+
+/** The most decision ticks a walk out of `place` to its door can take her: from its farthest aisle point or seat, a seat's standing up first. For timing a leg out of a place before she holds anything in it. */
+export function longestWalkOutTicks(state: CityState, resident: number, place: number): number {
+  if (state.map.places[place]!.aisle === undefined) return 0;
+  return Math.ceil(((farthestFromDoor(state, place) * AISLE_ROUTE) / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.pace]! + ACTIVITY_SECONDS.standUp) * DECISION_HZ);
 }

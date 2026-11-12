@@ -271,7 +271,7 @@ function stayPut(state: CityState, resident: number, tick: number, place: number
   const floatBase = resident * RESIDENT_FLOAT_STRIDE;
   // A customer's another round where she is keeps the seat or spot she holds: she does not move to another each time.
   const here = placeNow(state, resident, tick) === place;
-  const keeps = here && state.ints[base + RESIDENT_INT.work] !== place && state.ints[base + RESIDENT_INT.seat] !== NO_SEAT && !isOutdoorPurpose(purpose);
+  const keeps = here && state.ints[base + RESIDENT_INT.place] === place && state.ints[base + RESIDENT_INT.work] !== place && state.ints[base + RESIDENT_INT.seat] !== NO_SEAT && !isOutdoorPurpose(purpose);
   // Where she was, so a stay that moves her within the room is walked: nothing when she keeps her spot; still walking out, where that walk started.
   const out = walkingOutUntil(state, resident, tick);
   const left = keeps || !here ? NO_SEAT : out >= 0 ? state.ints[base + RESIDENT_INT.leftSpot]! : leftSpotOf(state, resident, place, tick);

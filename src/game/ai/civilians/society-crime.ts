@@ -16,6 +16,7 @@ import {
   YOUNG_AGE_MAX,
 } from "./civilian-constants.ts";
 import { EVENT_CODE, MOOD, moodHold, moodOfCode } from "./civilian-names.ts";
+import { placeNow } from "./civilian-leg.ts";
 import { markDirty, type CityState } from "./civilian-state.ts";
 import { carStandsAt } from "./society-cars.ts";
 import { isOutdoorPurpose } from "./society-venues.ts";
@@ -96,7 +97,7 @@ function targetIsThere(state: CityState, criminal: number, purpose: number, tick
   const place = intAt(state, criminal, RESIDENT_INT.place);
   if (victim < 0 || intAt(state, victim, RESIDENT_INT.alive) === 0) return false;
   if (purpose === PURPOSE.breakIn) return carStandsAt(state, victim, tick) === place;
-  return intAt(state, victim, RESIDENT_INT.place) === place && isOutdoorPurpose(intAt(state, victim, RESIDENT_INT.legPurpose));
+  return placeNow(state, victim, tick) === place && isOutdoorPurpose(intAt(state, victim, RESIDENT_INT.legPurpose));
 }
 
 /** The host's side of crime: lists the criminals whose attempt is due once each, for the host to raise as crime events (the brain commits nothing without one, so a bust can stop it). */

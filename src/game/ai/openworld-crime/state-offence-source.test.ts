@@ -65,3 +65,24 @@ describe("the law reads a witness's call off the society's rows", () => {
     expect(source.reportDoneTick(NEAR_CALLER)).toBe(NEVER_TICK);
   });
 });
+
+describe("given a resident not drawn, still walking out of one place on a leg to another", () => {
+  // mutation: sed -i 's/this.atDoor(placeNow(this.crowd.state, resident, seconds \* DECISION_HZ), out)/this.atDoor(this.int(resident, RESIDENT_INT.place), out)/' src/game/ai/openworld-crime/state-offence-source.ts
+  it("when the law asks where she stands, then before her leg sets off she is at the door of the place she is leaving, and after it at her destination's", () => {
+    const { crowd, ints, source, far } = robbery();
+    const walker = 3;
+    const leaving = 0;
+    setInt(ints, walker, RESIDENT_INT.crimeTick, NEVER_TICK);
+    setInt(ints, walker, RESIDENT_INT.fightTick, NEVER_TICK);
+    setInt(ints, walker, RESIDENT_INT.fromPlace, leaving);
+    setInt(ints, walker, RESIDENT_INT.place, far);
+    setInt(ints, walker, RESIDENT_INT.pathCount, 3);
+    setInt(ints, walker, RESIDENT_INT.departTick, 100);
+    expect(crowd.poses.shown[walker], "control: not drawn").toBe(0);
+    const spot = { x: 0, z: 0 };
+    expect(source.standing(walker, 40, spot), "she stands somewhere while walking out").toBe(true);
+    expect([spot.x, spot.z].join(","), "while walking out: the door she is leaving").toBe([map.places[leaving]!.doorX, map.places[leaving]!.doorZ].join(","));
+    expect(source.standing(walker, 60, spot), "she stands somewhere once on her leg").toBe(true);
+    expect([spot.x, spot.z].join(","), "once her leg has set off: her destination's door").toBe([map.places[far]!.doorX, map.places[far]!.doorZ].join(","));
+  });
+});

@@ -92,7 +92,8 @@ export function isFreePerson(state: CityState, resident: number): boolean {
 export function fleeHome(state: CityState, resident: number, tick: number): void {
   const home = intAt(state, resident, RESIDENT_INT.home);
   const stayIn = FLEE_INSIDE_MINUTES * TICKS_PER_GAME_MINUTE;
-  if (intAt(state, resident, RESIDENT_INT.place) === home) standOutside(state, resident, tick, NEED.rest, stayIn);
+  const at = placeNow(state, resident, tick);
+  if (at === home) standOutside(state, resident, tick, NEED.rest, stayIn, at);
   else sendResidentTo(state, resident, tick, home, PURPOSE.flee, stayIn);
 }
 

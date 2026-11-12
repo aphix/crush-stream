@@ -71,6 +71,24 @@ describe("given a criminal at a shop and the host's desk", () => {
   });
 });
 
+describe("given a mugger at a door and her victim still walking out of it on a leg to the bodega", () => {
+  // mutation: sed -i 's/^  return placeNow(state, victim, tick) === place \&\& isOutdoorPurpose/  return intAt(state, victim, RESIDENT_INT.place) === place \&\& isOutdoorPurpose/' src/game/ai/civilians/society-crime.ts
+  it("when the crime comes due, then the victim counts as at the door she is leaving, and not at the bodega she is walking to", () => {
+    const dueFor = (target: number): number => {
+      const cast = crimeScene();
+      const { state, resident, victim } = cast;
+      const due = sinceCrimeDue(cast);
+      stageResident(state, resident, { place: target, home: HOME_A1, tick: cast.tick, nextDecision: cast.tick + CRIME_DWELL, flags: FLAG.criminal, purpose: PURPOSE.mug });
+      state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.crimeVictim] = victim;
+      stageResident(state, victim, { place: BODEGA, tick: cast.tick, nextDecision: cast.tick + 1000, purpose: PURPOSE.loiter });
+      for (const [field, value] of [[RESIDENT_INT.fromPlace, HOME_A1_NEXT], [RESIDENT_INT.pathCount, 3], [RESIDENT_INT.departTick, due + 10], [RESIDENT_INT.arriveTick, due + 100]] as const) state.ints[victim * RESIDENT_INT_STRIDE + field] = value;
+      return new CrimeDesk(state.capacity).collect(state, due, new Int32Array(state.capacity));
+    };
+    expect(dueFor(HOME_A1_NEXT), "a mugging at the door she is walking out of").toBe(1);
+    expect(dueFor(BODEGA), "a mugging at the bodega she has not reached").toBe(0);
+  });
+});
+
 describe("given the host raises a crime four ticks after it happened", () => {
   const cast = crimeScene();
   const { state, resident } = cast;

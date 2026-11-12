@@ -1,6 +1,7 @@
 import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { CENTIMETRES_PER_METRE, DECISION_HZ, FLAG, NEVER_TICK, NO_PLACE, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, WITNESS_RADIUS } from "../civilians/civilian-constants.ts";
+import { placeNow } from "../civilians/civilian-leg.ts";
 import type { CityState } from "../civilians/civilian-state.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import { crimePlaceOf, isWanted } from "../civilians/society-crime.ts";
@@ -40,7 +41,7 @@ export class StateOffenceSource {
     return this.int(resident, RESIDENT_INT.fightPartner);
   }
 
-  standing(resident: number, _seconds: number, out: Spot): boolean {
+  standing(resident: number, seconds: number, out: Spot): boolean {
     const { poses } = this.crowd;
     if (poses.shown[resident] === 1) {
       out.x = poses.x[resident]!;
@@ -53,7 +54,7 @@ export class StateOffenceSource {
       return true;
     }
     const crimePlace = crimePlaceOf(this.crowd.state, resident);
-    return (crimePlace !== NO_PLACE && this.atDoor(crimePlace, out)) || this.atDoor(this.int(resident, RESIDENT_INT.place), out);
+    return (crimePlace !== NO_PLACE && this.atDoor(crimePlace, out)) || this.atDoor(placeNow(this.crowd.state, resident, seconds * DECISION_HZ), out);
   }
 
   onStreet(resident: number, out: Walk): boolean {
