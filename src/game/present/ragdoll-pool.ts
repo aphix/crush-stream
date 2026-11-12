@@ -247,10 +247,11 @@ export abstract class RagdollPool {
     this.buildFixedBoxes();
   }
 
-  /** Walker `walker` reads the boxes streamed in and the flights of the course. */
+  /** Walker `walker` reads the boxes streamed in, the flights of the course, and the loose parts lying still. */
   protected equipFloor(walker: Walker): void {
     walker.floor.boxes = this.boxList;
     walker.floor.stairs = this.flights;
+    walker.floor.parts = this.loose;
   }
 
   /** The streamed boxes (`boxList`) as fixed colliders in this world, those of the list before out of it; none while Rapier is still loading (`load` builds them). */

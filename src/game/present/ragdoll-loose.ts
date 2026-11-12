@@ -6,10 +6,12 @@ import { LOOSE_BODIES } from "../vehicle/part-state.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { disable, type Rapier } from "../kernel/rapier.ts";
 import { store3d, store4d } from "../kernel/store.ts";
-import { hypot3 } from "../kernel/physics-core.js";
+import { hypot2, hypot3 } from "../kernel/physics-core.js";
+import { NO_FLOOR } from "../world/ground.ts";
+import { STEP_MAX } from "../world/surfaces.ts";
 import { knocksDown } from "../scenes/figure-strike.ts";
 import { carGroups, looseSweepGroups, partGroups } from "./ragdoll-config.ts";
-import type { Doll } from "./ragdoll-body.ts";
+import { type Doll, PARTS } from "./ragdoll-body.ts";
 import { partAt, strikeAt } from "./ragdoll-hit.ts";
 import { type PartHit, WANT_PARTS } from "./ragdoll-wire.ts";
 
@@ -50,6 +52,10 @@ const PART_SEP = 0.03;
 const PART_SKIN = 0.005;
 /** A wheel's collider turned so a cylinder's axis (y) lies along the wheel's own x. */
 const DISK_TURN = new THREE.Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2);
+/** A disk whose axle is within this cosine of upright lies flat: its footprint on the level is its circle. */
+const DISK_FLAT = 0.9;
+/** A foot's half length (m): how far past its middle its toe and heel reach. */
+const FOOT_REACH = PARTS[10].h[2];
 const NO_TURN = { x: 0, y: 0, z: 0, w: 1 };
 const SCRATCH = new Float64Array(MAX_RECORDS * LOOSE_FLOATS);
 /** No loose bodies: the frame of a world with no dummy out has no use for them. */
@@ -302,6 +308,44 @@ export class LooseProxies {
     if (closing >= PART_FLOOR && this.touchAuthority) this.hits.push({ car: Math.floor(this.ids[s]! / LOOSE_BODIES), part: this.part[s]!, energy: 0.5 * body.mass() * closing * closing, x: n.x * closing, y: n.y * closing, z: n.z * closing });
     return true;
   };
+
+  /**
+   * The top (m) of a loose body lying still under (x, z) that a foot asking from `ask` may step onto (at most `STEP_MAX` over it), else `NO_FLOOR`. A foot planted on the
+   * road inside a lying part leaves his joints either side of it, and he is stuck to it. A body's footprint is its extent on the level; a disk lying flat, its circle.
+   */
+  topUnder(x: number, z: number, ask: number): number {
+    const a = this.aim;
+    let best = NO_FLOOR;
+    for (let s = 0; s < MAX_LOOSE; s++) {
+      if (this.on[s] === 0 || this.fast[s] === 1 || this.part[s]! >= 0) continue;
+      if (this.vel[3 * s] !== 0 || this.vel[3 * s + 1] !== 0 || this.vel[3 * s + 2] !== 0) continue;
+      const p = 14 * s + 7;
+      const disk = this.shaped[4 * s] === 1;
+      const hx = this.shaped[4 * s + 1]!;
+      const hy = this.shaped[4 * s + 2]!;
+      const hz = disk ? hy : this.shaped[4 * s + 3]!;
+      const qx = a[p + 3]!;
+      const qy = a[p + 4]!;
+      const qz = a[p + 5]!;
+      const qw = a[p + 6]!;
+      // The rows of the body's turn: how much of each of its own axes lies along the world's x, y and z.
+      const upX = Math.abs(2 * (qx * qy + qz * qw));
+      const top = a[p + 1]! + upX * hx + Math.abs(1 - 2 * (qx * qx + qz * qz)) * hy + Math.abs(2 * (qy * qz - qx * qw)) * hz;
+      if (top > ask + STEP_MAX || top <= best) continue;
+      const dx = x - a[p]!;
+      const dz = z - a[p + 2]!;
+      // The footprint is grown by a foot's half length: a foot whose middle is just off the body would still put its toe in it.
+      if (disk && upX > DISK_FLAT) {
+        if (hypot2(dx, dz) > hy + FOOT_REACH) continue;
+      } else {
+        const reachX = Math.abs(1 - 2 * (qy * qy + qz * qz)) * hx + Math.abs(2 * (qx * qy - qz * qw)) * hy + Math.abs(2 * (qx * qz + qy * qw)) * hz;
+        const reachZ = Math.abs(2 * (qx * qz - qy * qw)) * hx + Math.abs(2 * (qy * qz + qx * qw)) * hy + Math.abs(1 - 2 * (qx * qx + qy * qy)) * hz;
+        if (Math.abs(dx) > reachX + FOOT_REACH || Math.abs(dz) > reachZ + FOOT_REACH) continue;
+      }
+      best = top;
+    }
+    return best;
+  }
 
   /** Slot `s`'s struck dummies that are dead or whose torso is `CLEAR_M` past its `reach`: it may strike them again. */
   private clearOf(s: number, reach: number, dolls: readonly Doll[]): void {
