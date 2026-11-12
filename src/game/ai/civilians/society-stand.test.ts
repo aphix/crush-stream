@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "./civilian-activity.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
 import { BODY_GAP } from "./civilian-crowd-constants.ts";
-import { CLERK_SPOTS, DECISION_HZ, FLAG, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_INT, SPECIES, STAND_SPACING, STAND_SPOTS, TICKS_PER_GAME_DAY, TICKS_PER_GAME_HOUR } from "./civilian-constants.ts";
-import { sendResidentTo } from "./civilian-plan.ts";
+import { CLERK_SPOTS, DECISION_HZ, FLAG, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, STAND_SPACING, STAND_SPOTS, TICKS_PER_GAME_DAY, TICKS_PER_GAME_HOUR } from "./civilian-constants.ts";
+import { sendResidentTo, standOutside } from "./civilian-plan.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { FRAME_SECONDS, newCrowd } from "./civilian-crowd.test-util.ts";
 import { stateDigest } from "./civilian-run.test-util.ts";
@@ -15,6 +15,11 @@ import { ActivityReading, readActivity } from "./society-activity.ts";
 import { newCast, societyMap, type Cast } from "./society-scenes.test-util.ts";
 import { COFFEE_SHOP, intAt, placeIn, stageResident, withoutOtherCars } from "./society.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
+import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
+import { layOutLots } from "../../world/openworld/openworld-lots.ts";
+import { COUNTER_STRIDE } from "../../world/openworld/walk-graph.ts";
+import { claimSeat, claimStand, releaseSeat } from "./society-seats.ts";
+import { isSeatedVenue } from "./society-venues.ts";
 
 const EVENING = 20;
 const HOME = placeIn(societyMap, "Rowhome B2-1");
@@ -108,18 +113,17 @@ describe("given more drinkers than the bar has seats and standing spots", () => 
     expect(new Set(held).size, "different spots held").toBe(held.length);
   });
 
-  // mutation: sed -i '/^  if (spot === NO_SEAT \&\& (intAt(state, resident, RESIDENT_INT.nextDecisionTick)/d' src/game/ai/civilians/society-activity.ts
-  it("when they are drawn in the moment they would buy, then the three who found the room full are not drawn inside: none waits at the counter", () => {
-    const without = drinkers.filter((resident) => intAt(state, resident, RESIDENT_INT.place) === BAR && intAt(state, resident, RESIDENT_INT.seat) === NO_SEAT);
-    expect(without.length, "drinkers without a spot").toBe(3);
-    for (const resident of without) expect(placedAt(state, resident, 1), `where drinker ${resident} without a spot is drawn a second in`).toBeNull();
-  });
-
-  // mutation: sed -i 's/^  if (spot === NO_SEAT \&\& (intAt(state, resident, RESIDENT_INT.nextDecisionTick)/  if ((intAt(state, resident, RESIDENT_INT.nextDecisionTick)/' src/game/ai/civilians/society-activity.ts
-  it("when they are drawn in the moment they buy, then every drinker who holds a standing spot is drawn buying at it, fixed", () => {
-    const standing = drinkers.filter((resident) => intAt(state, resident, RESIDENT_INT.place) === BAR && intAt(state, resident, RESIDENT_INT.seat) >= state.venues.seatCount[BAR]!);
-    expect(standing.length, "drinkers with a standing spot").toBe(STAND_SPOTS);
-    for (const resident of standing) expect([placedAt(state, resident, 1)?.code, reading.fixed].join("/"), `activity and fixed of standing drinker ${resident} a second in`).toBe([ACTIVITY.buy, true].join("/"));
+  // mutation: sed -i 's/^  const keeps = state.ints\[base + RESIDENT_INT.place\] === place .*$/  const keeps = false;/' src/game/ai/civilians/civilian-plan.ts
+  it("when the lowest standing spot comes free and every other drinker with a standing spot stays for another round, then each keeps the spot she holds", () => {
+    const tick = intAt(state, drinkers[0]!, RESIDENT_INT.arriveTick) + 4;
+    const standers = drinkers.filter((resident) => intAt(state, resident, RESIDENT_INT.seat) >= state.venues.seatCount[BAR]!).sort((a, b) => intAt(state, a, RESIDENT_INT.seat) - intAt(state, b, RESIDENT_INT.seat));
+    expect(standers.length, "control: drinkers holding a standing spot").toBe(STAND_SPOTS);
+    releaseSeat(state, standers[0]!);
+    for (const resident of standers.slice(1)) {
+      const before = intAt(state, resident, RESIDENT_INT.seat);
+      standOutside(state, resident, tick, PURPOSE.drink, A_DRINKS_TICKS);
+      expect(intAt(state, resident, RESIDENT_INT.seat), `drinker ${resident}'s spot after another round`).toBe(before);
+    }
   });
 });
 
@@ -242,5 +246,93 @@ describe("given the neighbourhood living a game day and a half with seats and co
     let named = 0;
     for (let resident = 0; resident < state.capacity; resident++) if (intAt(state, resident, RESIDENT_INT.seat) !== NO_SEAT && intAt(state, resident, RESIDENT_INT.alive) === 1) named++;
     expect(owned, "slots owned").toBe(named);
+  });
+});
+
+const city = buildOpenWorldMap(layOutLots());
+const KELLYS = placeIn(city, "Kelly's Tap Room");
+/** A drink's stay in a room of the city, in ticks, and the pace (m/s) she walks it. */
+const ROOM_STAY = TICKS_PER_GAME_HOUR;
+const ROOM_PACE = 1.4;
+const ROOM_ARRIVE = 400;
+
+/** Resident `resident` of `state` in at `place` from tick `ROOM_ARRIVE` for `ROOM_STAY`, having walked there; she holds what `claim` gives her. */
+function inRoom(state: CityState, resident: number, place: number, claim: () => boolean): boolean {
+  stageResident(state, resident, { place, tick: ROOM_ARRIVE + ROOM_STAY, dwell: ROOM_STAY, purpose: PURPOSE.drink });
+  state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.fromPlace] = HOME_OF_ROOM;
+  state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed] = ROOM_PACE;
+  return claim();
+}
+const HOME_OF_ROOM = placeIn(city, city.places.find((place) => place.interior === "rowhome")!.name);
+
+/** Where she is drawn every frame of her stay in a room, null where she is not drawn. */
+function drawnThrough(state: CityState, resident: number): ({ x: number; z: number; code: number; fixed: boolean } | null)[] {
+  const frames: ({ x: number; z: number; code: number; fixed: boolean } | null)[] = [];
+  for (let frame = 0; frame < (ROOM_STAY / DECISION_HZ) / FRAME_SECONDS; frame++) {
+    readActivity(state, resident, ROOM_ARRIVE / DECISION_HZ + frame * FRAME_SECONDS, reading);
+    frames.push(reading.placed ? { x: reading.x, z: reading.z, code: reading.code, fixed: reading.fixed } : null);
+  }
+  return frames;
+}
+
+describe("given a customer at a seat or a standing spot in a bar, a coffee shop and a store of the city, each room with an aisle", () => {
+  // mutation: sed -i 's/^  if (atLane < 0) {/  if (false) {/' src/game/ai/civilians/society-activity.ts
+  it("when she is drawn every frame of her stay, then she starts at the door, ends at the door, never moves a metre in a frame, and sits or stands at her spot between", () => {
+    for (const name of ["Kelly's Tap Room", "Daily Grind Coffee", "Bodega Supreme"]) {
+      const place = placeIn(city, name);
+      const state = createCityState(5, city, 60);
+      const resident = state.cast.length;
+      const seated = isSeatedVenue(state.venues.venueOf[place]!);
+      expect(city.places[place]!.aisle, `control: ${name} has an aisle`).toBeDefined();
+      expect(inRoom(state, resident, place, () => (seated ? claimSeat(state, resident, place, false) : claimStand(state, resident, place, false))), `${name}: she holds a seat or spot`).toBe(true);
+      const frames = drawnThrough(state, resident);
+      const door = city.places[place]!;
+      expect(frames.every((frame) => frame !== null), `${name}: drawn every frame`).toBe(true);
+      expect(hypot2(frames[0]!.x - door.doorX, frames[0]!.z - door.doorZ), `${name}: metres from the door, first frame`).toBeLessThan(1);
+      expect(hypot2(frames.at(-1)!.x - door.doorX, frames.at(-1)!.z - door.doorZ), `${name}: metres from the door, last frame`).toBeLessThan(1);
+      const steps = frames.slice(1).map((frame, at) => hypot2(frame!.x - frames[at]!.x, frame!.z - frames[at]!.z));
+      expect(Math.max(...steps), `${name}: the longest step between frames (m)`).toBeLessThan(1);
+      expect(frames[frames.length >> 1]!.code, `${name}: what she does mid-stay`).toBe(seated ? ACTIVITY.sit : ACTIVITY.idle);
+    }
+  });
+});
+
+describe("given Kelly's Tap Room with every seat and standing spot by its counter taken", () => {
+  const state = createCityState(5, city, 150);
+  const counter = city.places[KELLYS]!.counter!;
+  let next = state.cast.length;
+  while (claimSeat(state, next, KELLYS, false)) next++;
+  for (let spot = 0; spot < STAND_SPOTS; spot++) claimStand(state, next++, KELLYS, false);
+  const roomers: number[] = [];
+  for (;;) {
+    const resident = next++;
+    if (!inRoom(state, resident, KELLYS, () => claimStand(state, resident, KELLYS, false))) break;
+    roomers.push(resident);
+  }
+  const late = next;
+  inRoom(state, late, KELLYS, () => false);
+
+  // mutation: sed -i 's/^    standCount\[place\] = counterSpots >= 1 ? STAND_SPOTS + (entry.standRoom?.length ?? 0) : 0;/    standCount[place] = counterSpots >= 1 ? STAND_SPOTS : 0;/' src/game/ai/civilians/society-venues.ts
+  it("when more customers come in, then each takes a spot of her own in the room's standing room, drawn mid-stay standing loose on the customers' side, a metre from the next", () => {
+    expect(roomers.length, "customers in the standing room").toBe(city.places[KELLYS]!.standRoom!.length);
+    const spots = roomers.map((resident) => drawnThrough(state, resident)[(ROOM_STAY / DECISION_HZ / FRAME_SECONDS) >> 1]);
+    for (const spot of spots) {
+      expect([spot?.code, spot?.fixed].join("/"), "what she does mid-stay, and fixed").toBe([ACTIVITY.idle, false].join("/"));
+      const towardCustomers = (spot!.x - counter[COUNTER_STRIDE]!) * (counter[0]! - counter[COUNTER_STRIDE]!) + (spot!.z - counter[COUNTER_STRIDE + 1]!) * (counter[1]! - counter[COUNTER_STRIDE + 1]!);
+      expect(towardCustomers, "on the customers' side of the counter").toBeGreaterThan(0);
+    }
+    expect(nearestPair(spots.map((spot) => spot!)), "metres between the two nearest").toBeGreaterThanOrEqual(0.99);
+  });
+
+  // mutation: sed -i 's/ room.target = TARGET.out;$/ room.target = TARGET.loose;/' src/game/ai/civilians/society-activity.ts
+  it("when one more comes in with the standing room full too, then she walks in, buys at the counter and walks out, and is not drawn in the room after", () => {
+    const frames = drawnThrough(state, late);
+    const bought = frames.findIndex((frame) => frame?.code === ACTIVITY.buy);
+    expect(bought, "frame she starts buying").toBeGreaterThan(0);
+    const gone = frames.findIndex((frame, at) => at > bought && frame === null);
+    expect(gone, "frame she is gone").toBeGreaterThan(bought);
+    expect(frames.slice(gone).every((frame) => frame === null), "not drawn after she has gone").toBe(true);
+    const door = city.places[KELLYS]!;
+    expect(hypot2(frames[gone - 1]!.x - door.doorX, frames[gone - 1]!.z - door.doorZ), "metres from the door as she goes").toBeLessThan(1);
   });
 });

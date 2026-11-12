@@ -27,6 +27,8 @@ import {
   SEAT_MIN_DWELL_MINUTES,
   SITTER_CHAT_REACH,
   SPECIES,
+  STAND_COLUMNS,
+  STAND_SPOTS,
   STREAM,
   TICKS_PER_GAME_MINUTE,
 } from "./civilian-constants.ts";
@@ -36,7 +38,8 @@ import { legPose } from "./civilian-leg.ts";
 import { residentNeuroticism } from "./civilian-temperament.ts";
 import type { CityState } from "./civilian-state.ts";
 import { SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
-import { buyLaneSpot, StandSpot, standSpotAt } from "./society-seats.ts";
+import { buyLaneSpot, laneOf, SPOT_FLOATS, spotTable, StandSpot, standSpotAt } from "./society-seats.ts";
+import { AISLE_WALK, WALK, walkAisle } from "./society-aisle.ts";
 import { VENUE, isCounterVenue, isOutdoorPurpose } from "./society-venues.ts";
 
 /** What one resident is doing at a crowd time, for the crowd to copy into the drawn poses: `placed` says the brain gives their position (seated, at a counter, standing at a door, fighting) and `x`, `z`, `yaw` hold it; else they are on a leg (or inside) and the leg's pose applies. */
@@ -46,6 +49,9 @@ export class ActivityReading {
   leftSeconds = ACTIVITY_OPEN_ENDED;
   partner = -1;
   surfaceY = 0;
+  /** A placed body walking (inside a room): how fast (m/s) and how far she has walked (m), for her stride. 0 when she stands. */
+  speed = 0;
+  walked = 0;
   placed = false;
   /** A placed body that must not give way (seated, at a counter, fighting): not one standing at a door or flinching, which the crowd keeps a body's width from the next. */
   fixed = false;
@@ -256,12 +262,17 @@ function readOutdoor(state: CityState, resident: number, purpose: number, place:
   out.leftSeconds = scratch.rest;
 }
 
-/** A resident held to `spot` of the owner table of `place` stands there (a customer's at the counter, a clerk's behind it): into `out`, fixed (the spots are a body's width apart). */
-function standAt(state: CityState, place: number, spot: number, out: ActivityReading): void {
+/** Where `spot` of the owner table of `place` is (a customer's standing spot or a clerk's), into `into`. */
+function spotOf(state: CityState, place: number, spot: number, into: StandSpot): void {
   const { seatCount, standCount } = state.venues;
   const own = spot - seatCount[place]!;
   const clerk = own >= standCount[place]!;
-  standSpotAt(state, place, clerk ? own - standCount[place]! : own, clerk, standing);
+  standSpotAt(state, place, clerk ? own - standCount[place]! : own, clerk, into);
+}
+
+/** A resident held to `spot` of the owner table of `place` stands there (a customer's at the counter, a clerk's behind it): into `out`, fixed (the spots are a body's width apart). */
+function standAt(state: CityState, place: number, spot: number, out: ActivityReading): void {
+  spotOf(state, place, spot, standing);
   out.placed = true;
   out.fixed = true;
   out.x = standing.x;
@@ -270,12 +281,192 @@ function standAt(state: CityState, place: number, spot: number, out: ActivityRea
   out.surfaceY = standing.surfaceY;
 }
 
+/** An indoor walk takes this many seconds a metre in a straight line, over her pace: an aisle bends round the furniture. */
+const AISLE_ROUTE = 1.3;
+/** What she ends at in a room: a seat, a standing or clerk's spot by the counter (fixed), a loose spot (her standing room, or the lane for a short stop) the crowd keeps her apart on, or, with every spot taken, out of the door again once she has bought. */
+const TARGET = { seat: 0, spot: 1, loose: 2, out: 3 } as const;
+
+/** A stay in a room with an aisle, as seconds: the walk from the door to where she buys, the buying, the walk on to her target, and the walk out to the door at its end; the walk being read; what she ends at. */
+class RoomScratch {
+  walkIn = 0;
+  buy = 0;
+  walkOn = 0;
+  walkOut = 0;
+  walking = 0;
+  target: number = TARGET.loose;
+}
+
+const room = new RoomScratch();
+/** Where she buys, and where she spends the stay. */
+const lane = new StandSpot();
+const target = new StandSpot();
+const doorway = new StandSpot();
+
+/** Spot `index` of a `spotTable` into `to`. */
+function fromTable(table: Float64Array, index: number, to: StandSpot): void {
+  const at = index * SPOT_FLOATS;
+  to.x = table[at]!;
+  to.z = table[at + 1]!;
+  to.yaw = table[at + 2]!;
+  to.surfaceY = table[at + 3]!;
+}
+
+function copySpot(from: StandSpot, to: StandSpot): void {
+  to.x = from.x;
+  to.z = from.z;
+  to.yaw = from.yaw;
+  to.surfaceY = from.surfaceY;
+}
+
+/** Where a resident in a room buys and ends (`lane`, `target`, `room.target`, `room.buy`): staff at their clerk's spot, a customer at her standing spot by the counter (buying there), or at her seat, her spot of standing room or the lane for a short stop (buying on the lane first). False: she holds nothing to walk to. */
+function roomTarget(state: CityState, resident: number, place: number, worker: boolean, spot: number): boolean {
+  room.buy = worker ? 0 : ACTIVITY_SECONDS.buy;
+  const own = spot - state.venues.seatCount[place]!;
+  const table = spotTable(state, place);
+  if (spot !== NO_SEAT && own >= 0 && (worker || own < STAND_SPOTS || own >= state.venues.standCount[place]!)) {
+    fromTable(table, STAND_COLUMNS + own, target);
+    copySpot(target, lane);
+    room.target = TARGET.spot;
+    return true;
+  }
+  if (worker) return false;
+  fromTable(table, laneOf(resident), lane);
+  room.target = TARGET.loose;
+  if (own >= 0) {
+    fromTable(table, STAND_COLUMNS + own, target);
+    return true;
+  }
+  if (spot !== NO_SEAT) {
+    const seats = state.map.places[place]!.seats!;
+    target.x = seats[spot * SEAT_STRIDE]!;
+    target.z = seats[spot * SEAT_STRIDE + 1]!;
+    room.target = TARGET.seat;
+    return true;
+  }
+  if ((intAt(state, resident, RESIDENT_INT.nextDecisionTick) - intAt(state, resident, RESIDENT_INT.arriveTick)) / TICKS_PER_GAME_MINUTE >= SEAT_MIN_DWELL_MINUTES) room.target = TARGET.out;
+  copySpot(lane, target);
+  return true;
+}
+
+/** The stay's walks at her pace (a straight metre's `AISLE_ROUTE` seconds), squeezed to fit a stay too short for them. */
+function roomTimes(state: CityState, resident: number, place: number): void {
+  const entry = state.map.places[place]!;
+  const perMetre = AISLE_ROUTE / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!;
+  // Math.sqrt inline, not a kernel call: a double returned from a call is boxed, three a civilian a frame.
+  const inX = lane.x - entry.doorX;
+  const inZ = lane.z - entry.doorZ;
+  const onX = target.x - lane.x;
+  const onZ = target.z - lane.z;
+  const outX = entry.doorX - target.x;
+  const outZ = entry.doorZ - target.z;
+  const walkIn = Math.sqrt(inX * inX + inZ * inZ) * perMetre;
+  const walkOn = Math.sqrt(onX * onX + onZ * onZ) * perMetre;
+  const walkOut = Math.sqrt(outX * outX + outZ * outZ) * perMetre;
+  const stay = scratch.age + scratch.rest;
+  room.buy = Math.min(room.buy, stay);
+  const spare = stay - room.buy;
+  const fit = walkIn + walkOn + walkOut > spare ? Math.max(0, spare) / (walkIn + walkOn + walkOut) : 1;
+  room.walkIn = walkIn * fit;
+  room.walkOn = walkOn * fit;
+  room.walkOut = walkOut * fit;
+}
+
+/** She walks the aisle as `AISLE_WALK` asks, over `room.walking` seconds: placed, not fixed, at her pace. */
+function walkRoom(aisle: Float32Array, out: ActivityReading): boolean {
+  walkAisle(aisle);
+  out.placed = true;
+  out.fixed = false;
+  out.code = ACTIVITY.none;
+  out.x = AISLE_WALK[WALK.x]!;
+  out.z = AISLE_WALK[WALK.z]!;
+  out.yaw = AISLE_WALK[WALK.yaw]!;
+  out.speed = AISLE_WALK[WALK.length]! / room.walking;
+  out.walked = AISLE_WALK[WALK.walked]!;
+  return true;
+}
+
+/** Sets `AISLE_WALK`'s walk from `from` to `to`; the caller sets the share walked and `room.walking`. */
+function aimWalk(from: StandSpot, to: StandSpot): void {
+  AISLE_WALK[WALK.fromX] = from.x;
+  AISLE_WALK[WALK.fromZ] = from.z;
+  AISLE_WALK[WALK.toX] = to.x;
+  AISLE_WALK[WALK.toZ] = to.z;
+}
+
+/** A stay in a room with an aisle: walked in from the door to where she buys, on to her seat or spot, and out to the door at its end. False: nothing to draw. */
+function readRoom(state: CityState, resident: number, place: number, worker: boolean, spot: number, out: ActivityReading): boolean {
+  if (!roomTarget(state, resident, place, worker, spot)) return false;
+  roomTimes(state, resident, place);
+  const entry = state.map.places[place]!;
+  const aisle = entry.aisle!;
+  doorway.x = entry.doorX;
+  doorway.z = entry.doorZ;
+  const atLane = scratch.age - room.walkIn;
+  const atTarget = atLane - room.buy;
+  if (atLane < 0) {
+    aimWalk(doorway, lane);
+    AISLE_WALK[WALK.share] = scratch.age / room.walkIn;
+    room.walking = room.walkIn;
+    return walkRoom(aisle, out);
+  }
+  if (atLane < room.buy) return readBuying(out);
+  if (room.target === TARGET.out) {
+    if (atTarget >= room.walkOut) return true;
+    aimWalk(lane, doorway);
+    AISLE_WALK[WALK.share] = atTarget / room.walkOut;
+    room.walking = room.walkOut;
+    return walkRoom(aisle, out);
+  }
+  if (scratch.rest < room.walkOut) {
+    aimWalk(target, doorway);
+    AISLE_WALK[WALK.share] = 1 - scratch.rest / room.walkOut;
+    room.walking = room.walkOut;
+    return walkRoom(aisle, out);
+  }
+  if (atTarget < room.walkOn) {
+    aimWalk(lane, target);
+    AISLE_WALK[WALK.share] = atTarget / room.walkOn;
+    room.walking = room.walkOn;
+    return walkRoom(aisle, out);
+  }
+  scratch.age = atTarget - room.walkOn;
+  scratch.rest -= room.walkOut;
+  if (room.target === TARGET.seat) {
+    readSitting(state, place, spot, out, ACTIVITY.sit);
+    return true;
+  }
+  placeAt(target, room.target === TARGET.spot, out);
+  out.code = ACTIVITY.idle;
+  out.sinceSeconds = scratch.age;
+  out.leftSeconds = scratch.rest;
+  return true;
+}
+
+/** Buying at `lane`: fixed at a spot of her own, loose on the lane. */
+function readBuying(out: ActivityReading): boolean {
+  placeAt(lane, room.target === TARGET.spot, out);
+  out.code = ACTIVITY.buy;
+  out.sinceSeconds = scratch.age - room.walkIn;
+  out.leftSeconds = room.buy - out.sinceSeconds;
+  return true;
+}
+
+function placeAt(spot: StandSpot, fixed: boolean, out: ActivityReading): void {
+  out.placed = true;
+  out.fixed = fixed;
+  out.x = spot.x;
+  out.z = spot.z;
+  out.yaw = spot.yaw;
+  out.surfaceY = spot.surfaceY;
+}
+
 function readIndoors(state: CityState, resident: number, place: number, out: ActivityReading): void {
   const venue = state.venues.venueOf[place]!;
   const worker = intAt(state, resident, RESIDENT_INT.work) === place;
   if (!worker && !isCounterVenue(venue)) return;
   const spot = intAt(state, resident, RESIDENT_INT.seat);
   const { seatCount } = state.venues;
+  if (state.map.places[place]!.aisle !== undefined && readRoom(state, resident, place, worker, spot, out)) return;
   if (worker) {
     if (spot === NO_SEAT) return;
     standAt(state, place, spot, out);
@@ -285,8 +476,6 @@ function readIndoors(state: CityState, resident: number, place: number, out: Act
     return;
   }
   const hasCounter = state.venues.standCount[place]! > 0;
-  // A stay long enough to hold a spot that holds none found every seat and standing spot taken: the room is full and she is not drawn in it, never stacked at the counter.
-  if (spot === NO_SEAT && (intAt(state, resident, RESIDENT_INT.nextDecisionTick) - intAt(state, resident, RESIDENT_INT.arriveTick)) / TICKS_PER_GAME_MINUTE >= SEAT_MIN_DWELL_MINUTES) return;
   if (hasCounter && scratch.age < ACTIVITY_SECONDS.buy) {
     if (spot !== NO_SEAT && spot >= seatCount[place]!) standAt(state, place, spot, out);
     else {
@@ -351,7 +540,7 @@ function readWalk(state: CityState, resident: number, out: ActivityReading): voi
   const since = seconds - from;
   const toEnd = to - seconds;
   if (to - from <= 2 * doorSeconds) return;
-  if (since < doorSeconds && from === intAt(state, resident, RESIDENT_INT.departTick) / DECISION_HZ && hasDoor(state, intAt(state, resident, RESIDENT_INT.fromPlace))) {
+  if (since < doorSeconds && from === intAt(state, resident, RESIDENT_INT.departTick) / DECISION_HZ && (intAt(state, resident, RESIDENT_INT.flags) & FLAG.turnedAway) === 0 && hasDoor(state, intAt(state, resident, RESIDENT_INT.fromPlace))) {
     out.code = ACTIVITY.door;
     out.sinceSeconds = since;
     out.leftSeconds = doorSeconds - since;
@@ -370,6 +559,8 @@ export function readActivity(state: CityState, resident: number, seconds: number
   out.leftSeconds = ACTIVITY_OPEN_ENDED;
   out.partner = -1;
   out.surfaceY = 0;
+  out.speed = 0;
+  out.walked = 0;
   out.placed = false;
   out.fixed = false;
   const { ints } = state;

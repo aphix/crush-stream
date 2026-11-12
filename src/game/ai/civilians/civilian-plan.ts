@@ -28,6 +28,7 @@ import {
   NIGHT_FROM_HOUR,
   NIGHT_TO_HOUR,
   NO_PLACE,
+  NO_SEAT,
   PARTY_FIRST_HOUR,
   PARTY_INVITE_SHARE,
   PARK_TICKS,
@@ -214,7 +215,9 @@ function takeSeat(state: CityState, resident: number, place: number, purpose: nu
 function stayPut(state: CityState, resident: number, tick: number, place: number, dwellTicks: number, purpose: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   const floatBase = resident * RESIDENT_FLOAT_STRIDE;
-  releaseSeat(state, resident);
+  // Another round where she is keeps the seat or spot she holds: she does not move to another each time.
+  const keeps = state.ints[base + RESIDENT_INT.place] === place && state.ints[base + RESIDENT_INT.seat] !== NO_SEAT && !isOutdoorPurpose(purpose);
+  if (!keeps) releaseSeat(state, resident);
   state.ints[base + RESIDENT_INT.fromPlace] = place;
   state.ints[base + RESIDENT_INT.place] = place;
   state.ints[base + RESIDENT_INT.departTick] = tick;
@@ -226,7 +229,7 @@ function stayPut(state: CityState, resident: number, tick: number, place: number
   state.ints[base + RESIDENT_INT.decisionCount]++;
   clearDriveLeg(state, resident);
   for (let need = 0; need < NEED_COUNT; need++) state.floats[floatBase + RESIDENT_FLOAT.needs + need] = state.scratchNeeds[need]!;
-  takeSeat(state, resident, place, purpose);
+  if (!keeps) takeSeat(state, resident, place, purpose);
   markDirty(state, resident);
 }
 
@@ -273,6 +276,9 @@ function planLeg(state: CityState, resident: number, tick: number, destination: 
   clearWaits(state, resident);
   const legTicks = byCar ? timeCarLeg(state, resident, tick, owner, stand, destination, metres) : Math.max(1, ticksOf(metres / state.floats[floatBase + RESIDENT_FLOAT.speed]!)) + planWaits(state, resident, tick);
   const stay = customer ? ticksOpen(state, destination, resident, tick + legTicks, Math.max(1, dwellTicks)) : Math.max(1, dwellTicks);
+  // A leg from a door she found shut (a stay of 0) is not drawn coming out of it.
+  if (state.ints[base + RESIDENT_INT.nextDecisionTick] === state.ints[base + RESIDENT_INT.arriveTick]) state.ints[base + RESIDENT_INT.flags] |= FLAG.turnedAway;
+  else state.ints[base + RESIDENT_INT.flags] &= ~FLAG.turnedAway;
   state.ints[base + RESIDENT_INT.fromPlace] = current;
   state.ints[base + RESIDENT_INT.place] = destination;
   state.ints[base + RESIDENT_INT.departTick] = tick;

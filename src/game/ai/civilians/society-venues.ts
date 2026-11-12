@@ -73,7 +73,7 @@ export type VenueIndex = {
   seatBase: Int32Array;
   seatCount: Uint16Array;
   stoopCount: Uint16Array;
-  /** Standing spots after the seats of a place with a counter: `standCount` for customers, then `clerkCount` for staff (0 without the counter's clerk spot). */
+  /** Standing spots after the seats of a place with a counter: `standCount` for customers (`STAND_SPOTS` by the counter, then the room's `Place.standRoom`), then `clerkCount` for staff (0 without the counter's clerk spot). */
   standCount: Uint8Array;
   clerkCount: Uint8Array;
   /** Every seat and standing spot of every place: the size of the owner table. */
@@ -100,7 +100,7 @@ export function buildVenueIndex(map: OpenWorldMap): VenueIndex {
     seatCount[place] = entry.seats === undefined ? 0 : Math.floor(entry.seats.length / SEAT_STRIDE);
     stoopCount[place] = Math.min(seatCount[place]!, entry.stoopSeats ?? 0);
     const counterSpots = entry.counter === undefined ? 0 : Math.floor(entry.counter.length / COUNTER_STRIDE);
-    standCount[place] = counterSpots >= 1 ? STAND_SPOTS : 0;
+    standCount[place] = counterSpots >= 1 ? STAND_SPOTS + (entry.standRoom?.length ?? 0) : 0;
     clerkCount[place] = counterSpots >= 2 ? CLERK_SPOTS : 0;
     seatTotal += seatCount[place]! + standCount[place]! + clerkCount[place]!;
   }

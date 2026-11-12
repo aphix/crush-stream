@@ -36,6 +36,8 @@ export type InteriorKind = "rowhome" | "coffee" | "bar" | "office" | "store";
 export const SEAT_STRIDE = 4;
 /** Floats per spot in `Place.counter`: x, z, yaw (as a seat's), counter-top height (world y). */
 export const COUNTER_STRIDE = 4;
+/** Floats per node in `Place.aisle`: x, z (world m), the index of the node it is reached from (-1 for the first). */
+export const AISLE_STRIDE = 3;
 
 /** A lot people go to: its door is `doorNode` on the walk graph; `style` names its facade, `sector` its trade. */
 export type Place = {
@@ -59,6 +61,10 @@ export type Place = {
   stoopSeats?: number;
   /** Two spots, `COUNTER_STRIDE` floats each: where a customer stands to buy, then where the clerk stands. */
   counter?: Float32Array;
+  /** The ground-floor room's walkable floor as a tree from just inside the street door (`AISLE_STRIDE` floats a node, the door's first): where a customer walks between the door, the counter and her spot. Absent: nobody is walked inside. */
+  aisle?: Float32Array;
+  /** The `aisle` nodes a customer stands at when every seat and standing spot is taken: on the customers' side of the counter, clear of the furniture, a metre apart. */
+  standRoom?: Uint16Array;
   /** Its building's sides with no building against them (`OPEN_SIDE` bits), whose facade shows windows a room behind must look out of. Absent: none. */
   openSides?: number;
   /** Game hours the place is open, [from, to); `to` below `from` wraps past midnight. Absent: always open. */

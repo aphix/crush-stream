@@ -58,8 +58,8 @@ export const PURPOSE = {
   lookOn: 30,
   callAmbulance: 31,
 } as const;
-/** What `RESIDENT_INT.flags` holds: in hospital, without a job, hurting, out of work while the workplace is closed, a named resident (no society chances, fixed age); jobless long enough to be broke, a criminal, wanted for an open crime or fight, in custody, a car owner, a coffee fan, a drinker. */
-export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16, broke: 32, criminal: 64, wanted: 128, custody: 256, hasCar: 512, coffeeFan: 1024, drinker: 2048 } as const;
+/** What `RESIDENT_INT.flags` holds: in hospital, without a job, hurting, out of work while the workplace is closed, a named resident (no society chances, fixed age); jobless long enough to be broke, a criminal, wanted for an open crime or fight, in custody, a car owner, a coffee fan, a drinker, set out from a door she found shut. */
+export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16, broke: 32, criminal: 64, wanted: 128, custody: 256, hasCar: 512, coffeeFan: 1024, drinker: 2048, turnedAway: 4096 } as const;
 /** A resident's integer row: society fields, then the leg and dwell the crowd walks, then the life log ring (`LOG_LINES` of `HISTORY_FIELDS`). -1 in a place field: none. */
 export const RESIDENT_INT = {
   /** The first 16 are what the crowd reads of every civilian every frame, in the one cache line (64 bytes) a row starts on: keep them together. */
