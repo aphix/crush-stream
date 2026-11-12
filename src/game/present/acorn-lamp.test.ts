@@ -114,6 +114,25 @@ describe("given the acorn lamp the open world stands on its streets and in its p
     }
   });
 
+  // mutation: sed -i 's/^      return lamp(mats.plain);/      return lamp(mats.plain, false, true);/' src/game/present/prefabs.ts
+  it("when a race course's lamp is built, then its pool is the one uncut square it always was: four corners, two triangles, every corner at the pool's height over the ground, its uv the whole picture", () => {
+    const fit = 4.4 / 5.2;
+    const p = arm.pool.getAttribute("position");
+    const uv = arm.pool.getAttribute("uv");
+    expect(p.count, "corners").toBe(4);
+    expect(arm.pool.index!.count / 3, "triangles").toBe(2);
+    const bounds = boundsOf(arm.pool);
+    expect(bounds.max.x - bounds.min.x, "its side along x (m)").toBeCloseTo(9 * fit, 5);
+    expect(bounds.max.z - bounds.min.z, "its side along z (m)").toBeCloseTo(9 * fit, 5);
+    const corners = new Set<string>();
+    for (let at = 0; at < p.count; at++) {
+      expect(p.getY(at), `corner ${at}'s height over the ground (m): makeLamp's 0.025 at the race fit`).toBeCloseTo(0.025 * fit, 6);
+      expect([0, 1].includes(uv.getX(at)) && [0, 1].includes(uv.getY(at)), `corner ${at}'s uv ${uv.getX(at)}, ${uv.getY(at)}: a corner of the picture`).toBe(true);
+      corners.add(`${uv.getX(at)},${uv.getY(at)}`);
+    }
+    expect(corners.size, "the picture's four corners, one each").toBe(4);
+  });
+
   // mutation: sed -i 's/      return lamp(mats.plain, true, skin !== PARK_LAMP);/      return lamp(mats.plain, true);/' src/game/present/prefabs.ts
   it("when a park's lamp is built, then it stands on the ground with no slab, so its pool lies under a slab's height, as a race lamp's does", () => {
     const park = prefabParts(PREFAB.acornLamp, plainMaterials(new THREE.MeshBasicMaterial()), PARK_LAMP);
