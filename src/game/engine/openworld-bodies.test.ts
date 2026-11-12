@@ -350,6 +350,25 @@ describe("given a civilian 50 m from the eye, past the bodies' reach, whom the h
   });
 });
 
+describe("given every body in use and the hook holding the farthest standing one as a first end", () => {
+  // mutation: sed -i 's/if (this.resident\[body\]! !== NOBODY \&\& this.slot\[body\] === slot) this.hookedUntil\[body\] = this.seconds + HOOK_HOLD_SECONDS;/if (false) this.hookedUntil[body] = 0;/' src/game/engine/openworld-bodies.ts
+  it("when the second fire takes a far civilian with no body, then the held body stays and the next farthest standing one makes room", () => {
+    const { host, poses, bodies, run } = world();
+    for (let civilian = 1; civilian <= SIZE; civilian++) walker(poses, civilian, civilian, 0);
+    run(SETTLE_STEPS);
+    const heldSlot = bodies.slotOf(SIZE);
+    const next = bodies.slotOf(SIZE - 1);
+    bodies.pin(heldSlot);
+    walker(poses, 0, 50, 0);
+    const slot = bodies.stand(poses, 0, 0, 0);
+    expect(slot, "a body for her").toBeGreaterThanOrEqual(0);
+    expect(slot, "not the held one's slot").not.toBe(heldSlot);
+    expect(host.stopped, "the held body stays").not.toContain(heldSlot);
+    expect(bodies.slotOf(SIZE), "its civilian keeps it").toBe(heldSlot);
+    expect(host.stopped, "the next farthest went").toContain(next);
+  });
+});
+
 describe("given bodies and the scene is left", () => {
   // mutation: sed -i 's/  dispose(): void {/  dispose(): void {\n    return;/' src/game/engine/openworld-bodies.ts
   it("when the bodies are disposed, then every body goes and no civilian is held", () => {

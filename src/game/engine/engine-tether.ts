@@ -52,6 +52,8 @@ interface TetherHost {
   personMet(ray: LookRay, reach: number, out: Meeting): Meeting;
   /** A body stood now for drawn civilian `civilian`: its dummy slot, -1 when she can have none. */
   standPerson(civilian: number): number;
+  /** The dummy in pool slot `slot` is held as a first end: whatever stands it keeps it until the second fire. */
+  holdDoll(slot: number): void;
 }
 
 /** What the sight line met: a car (its index), the static world, or a thing in the dummies' world (`RAPIER`, and `thing`: its `thingCode`). */
@@ -350,7 +352,10 @@ export class TetherDirector {
       this.heldCar = this.aimCar;
       this.heldThing = this.aimThing;
       this.heldAt.copy(this.aimAt);
-      if (this.aimCar === RAPIER && thingKind(this.aimThing) === THING.doll && this.host.ropes.torso(thingIndex(this.aimThing), _point, null)) this.heldOffset.subVectors(this.aimAt, _point);
+      if (this.aimCar === RAPIER && thingKind(this.aimThing) === THING.doll) {
+        this.host.holdDoll(thingIndex(this.aimThing));
+        if (this.host.ropes.torso(thingIndex(this.aimThing), _point, null)) this.heldOffset.subVectors(this.aimAt, _point);
+      }
       return;
     }
     if (this.sameTarget(this.heldCar, this.heldThing)) return;

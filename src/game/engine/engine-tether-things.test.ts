@@ -35,6 +35,8 @@ function fakeRopes(dollsOut: number[]) {
   return {
     attached,
     torsoAt,
+    /** Slots the director said it holds as a first end. */
+    held: [] as number[],
     ropeAttach: (slot: number, a: RopeEnd, b: RopeEnd): number => attached.push({ slot, a, b }),
     ropeCut: () => {},
     ropeReel: () => {},
@@ -60,7 +62,7 @@ function rig(scene: THREE.Scene, dollsOut: number[] = [0], chase = false, person
     dollsOut.push(PERSON_SLOT);
     return PERSON_SLOT;
   };
-  const director = new TetherDirector({ tethers, camera, scene, ropes, cars: () => [], movers: () => [], playerCar: () => -1, offered: () => true, chase: () => chase, afoot: () => true, self: () => -1, personMet, standPerson });
+  const director = new TetherDirector({ tethers, camera, scene, ropes, cars: () => [], movers: () => [], playerCar: () => -1, offered: () => true, chase: () => chase, afoot: () => true, self: () => -1, personMet, standPerson, holdDoll: (slot: number) => void ropes.held.push(slot) });
   const aimAt = (point: THREE.Vector3): void => {
     camera.lookAt(point);
     scene.updateMatrixWorld(true);
@@ -155,6 +157,7 @@ describe("given the free camera over a dummy standing out, with a wall behind hi
 
 describe("given the free camera over a dummy standing out, held by a first fire", () => {
   // mutation: sed -i 's/      if (this.host.ropes.torso(thingIndex(this.heldThing), this.heldWorld, null)) return this.heldWorld.add(this.heldOffset);/      if (this.host.ropes.dollOut(thingIndex(this.heldThing))) return this.heldWorld.copy(this.heldAt);/' src/game/engine/engine-tether.ts
+  // mutation: sed -i '/^        this.host.holdDoll(thingIndex(this.aimThing));/d' src/game/engine/engine-tether.ts
   it("when he walks 2 m to the side, then the held marker moves 2 m with him, and the second fire ties him where he is now", () => {
     const scene = new THREE.Scene();
     const torso = dummy(scene);
@@ -162,6 +165,7 @@ describe("given the free camera over a dummy standing out, held by a first fire"
     const { director, aimAt, fire, ropes } = rig(scene);
     aimAt(torso);
     fire();
+    expect(ropes.held, "the dummy held is kept for the second fire").toEqual([0]);
     const before = director["heldPlace"]()!.clone();
     ropes.torsoAt.x += 2;
     const after = director["heldPlace"]()!;

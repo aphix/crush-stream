@@ -517,6 +517,11 @@ export class OpenWorldDirector {
     return this.crowd === null || this.bodies === null ? -1 : this.bodies.stand(this.crowd.poses, civilian, this.ray.eyeX, this.ray.eyeZ);
   }
 
+  /** The hook holds the dummy in pool slot `slot` as a first end: a civilian's body there is pinned (`OpenWorldBodies.pin`). */
+  hookPin(slot: number): void {
+    this.bodies?.pin(slot);
+  }
+
   /** One ray of `gun` from an actor, at the authority: the nearest thing along it within the gun's range takes the hit (a prop, a ragdoll, a drawn civilian, a foot cop, a car), unless a wall or the ground is nearer. Returns how far (m) the ray went. It reads nothing of the local player, so a later plan can call it for a guest; on a guest's machine the ray goes its full range and touches nothing. */
   shoot(ray: LookRay, gun: Gun): number {
     const crowd = this.crowd;
