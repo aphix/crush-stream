@@ -3,7 +3,7 @@ import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "../ai/civilians/civilian-crowd.test-util.ts";
-import { CENTIMETRES_PER_METRE, DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, FIGHT_PLAYER, FLAG, GENDER, HOURS_PER_GAME_DAY, NEED, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_DAY } from "../ai/civilians/civilian-constants.ts";
+import { CENTIMETRES_PER_METRE, DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, FIGHT_PLAYER, FLAG, GENDER, HOURS_PER_GAME_DAY, NEED, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "../ai/civilians/civilian-constants.ts";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER, WALKER_BEARING_STEPS, WRECK_SPEED } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
@@ -174,12 +174,21 @@ describe("given the open world's course up and a map given", () => {
   });
 });
 
-/** The harness's crowd stepped until a person is shown, the director's clock brought to the crowd's: that person. */
+/** The harness's crowd stepped until a person is shown, the director's clock brought to the crowd's, then framed until a shown person of no cast walks with nothing of the brain's to do (a cast member is no free person, and a brain clip outranks a hit's): that person. */
 function shownOnTheHost(harness: Harness): number {
   harness.frame();
   const crowd = harness.crowd();
   harness.director["seconds"] = stepUntilShown(crowd, crowd.crowdSeconds);
-  return shownResident(crowd);
+  const { shown, activity } = crowd.poses;
+  const ints = crowd.state.ints;
+  for (let frame = 0; frame < 60 / FRAME; frame++) {
+    for (let resident = 0; resident < crowd.poses.count; resident++) {
+      const base = resident * RESIDENT_INT_STRIDE;
+      if (shown[resident] === 1 && activity[resident] === ACTIVITY.none && ints[base + RESIDENT_INT.species] === SPECIES.person && (ints[base + RESIDENT_INT.flags]! & FLAG.cast) === 0) return resident;
+    }
+    harness.frame();
+  }
+  throw new Error("no free person walked the fixture's streets in a minute");
 }
 
 /** Harness frames until the director's clock reaches `seconds`. */
