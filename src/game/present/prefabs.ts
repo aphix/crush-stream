@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { makeAsphalt, makeJerseyBarrier, makeLamp } from "./engine-world.ts";
@@ -12,6 +13,7 @@ import { streetKitParts } from "./prefabs-street.ts";
 import { streetTreePieces } from "./street-trees.ts";
 import { isStreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
 import { PARK_LAMP } from "../world/openworld/openworld-park.ts";
+import { LAMP_FROM_CURB, LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { assetParts, disposeAssetMaterials, familyOf, isAssetFamily, makeAssetMaterials } from "./scenery-assets-art.ts";
 import { PREFAB } from "../world/constants.ts";
 import { dressPaving } from "./ground-relief.ts";
@@ -547,7 +549,7 @@ function disposeGroup(g: THREE.Group, keep: readonly THREE.Material[] = []): voi
 /**
  * makeLamp fitted to 4.4 m with its arm towards the road (+X) (`acorn`: the acorn lamp at its own size, no arm): the pole in vertex colours, then the
  * head and the night light pool on makeLamp's own shared materials, so the scene's day / night
- * switch lights them with every other lamp. The acorn lamp stands on the open world's sidewalk slabs, so its pool lies over the slab's top (`PREFABS.sidewalk.size`), as it lies over the ground at a race's lamp;
+ * switch lights them with every other lamp. The acorn lamp stands on the open world's sidewalk slabs, so the band of its pool over the slab lies on the slab's top (`slabPool`);
  * `onSlab` false (a park's lamp, on the ground) leaves its pool on the ground.
  */
 function lamp(plain: THREE.Material, acorn = false, onSlab = acorn): PrefabPart[] {
@@ -561,7 +563,7 @@ function lamp(plain: THREE.Material, acorn = false, onSlab = acorn): PrefabPart[
     if (!(o instanceof THREE.Mesh)) return;
     const m = o.material as THREE.MeshStandardMaterial;
     const geo = (o.geometry as THREE.BufferGeometry).clone().applyMatrix4(o.matrixWorld).applyMatrix4(fit);
-    if (onSlab && o.name === LAMP_POOL) shared.push({ geometry: geo.translate(0, PREFABS[PREFAB.sidewalk].size[1], 0), material: m, shared: true });
+    if (onSlab && o.name === LAMP_POOL) shared.push({ geometry: slabPool(geo), material: m, shared: true });
     else if (o.name === LAMP_POOL || m.emissive?.getHex()) shared.push({ geometry: geo, material: m, shared: true });
     else pole.push([geo, m.color.getHex(), MAT.LAMP_POLE]);
   });
@@ -570,6 +572,35 @@ function lamp(plain: THREE.Material, acorn = false, onSlab = acorn): PrefabPart[
     shared.map((p) => p.material),
   );
   return [{ geometry: painted(pole), material: plain, shared: false }, ...shared];
+}
+
+/** A street lamp's pool (the street at +x, the kerb `LAMP_FROM_CURB` out) with only its band over the sidewalk lifted onto the slab: over the road and the lot it lies as a race lamp's, never over a body lying there. */
+function slabPool(pool: THREE.BufferGeometry): THREE.BufferGeometry {
+  const back = LAMP_FROM_CURB - LAYOUT.sidewalk;
+  const bands = [cutX(pool, -Infinity, back), cutX(pool, back, LAMP_FROM_CURB).translate(0, PREFABS[PREFAB.sidewalk].size[1], 0), cutX(pool, LAMP_FROM_CURB, Infinity)];
+  const merged = mergeGeometries(bands)!;
+  for (const band of [pool, ...bands]) band.dispose();
+  return merged;
+}
+
+/** A copy of `quad` (flat, square to the axes) cut to x from `x0` to `x1`: a corner past a cut slides along its edge to it, its uv with it. */
+function cutX(quad: THREE.BufferGeometry, x0: number, x1: number): THREE.BufferGeometry {
+  const cut = quad.clone();
+  const from = quad.getAttribute("position");
+  const uvFrom = quad.getAttribute("uv");
+  const position = cut.getAttribute("position");
+  const uv = cut.getAttribute("uv");
+  for (let at = 0; at < from.count; at++) {
+    const x = from.getX(at);
+    const to = Math.min(x1, Math.max(x0, x));
+    if (to === x) continue;
+    let edge = 0;
+    while (edge === at || Math.abs(from.getZ(edge) - from.getZ(at)) > 1e-6) edge++;
+    const t = (to - from.getX(edge)) / (x - from.getX(edge));
+    position.setX(at, to);
+    uv.setXY(at, uvFrom.getX(edge) + (uvFrom.getX(at) - uvFrom.getX(edge)) * t, uvFrom.getY(edge) + (uvFrom.getY(at) - uvFrom.getY(edge)) * t);
+  }
+  return cut;
 }
 
 function barrierBlock(): Piece[] {

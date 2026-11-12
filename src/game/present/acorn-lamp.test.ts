@@ -4,6 +4,7 @@ import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { PARK_LAMP } from "../world/openworld/openworld-park.ts";
+import { LAMP_FROM_CURB, LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { ACORN_LAMP } from "../world/street-kit.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
@@ -56,11 +57,61 @@ describe("given the acorn lamp the open world stands on its streets and in its p
     expect((pool.min.z + pool.max.z) / 2, "the pool's middle along z (m)").toBeCloseTo(0, 5);
   });
 
-  // mutation: sed -i 's/geometry: geo.translate(0, PREFABS\[PREFAB.sidewalk\].size\[1\], 0)/geometry: geo/' src/game/present/prefabs.ts
-  it("when the pools are read, then the acorn lamp's lies over the sidewalk slab's top and a race lamp's stays on the ground", () => {
+  /** Each triangle of `geometry`: its middle's x and y, its corners' least and greatest y, and its area on the ground (m²). */
+  function triangles(geometry: THREE.BufferGeometry): { x: number; y0: number; y1: number; area: number }[] {
+    const p = geometry.getAttribute("position");
+    const index = geometry.index!.array;
+    const out: { x: number; y0: number; y1: number; area: number }[] = [];
+    for (let at = 0; at < index.length; at += 3) {
+      const [a, b, c] = [index[at]!, index[at + 1]!, index[at + 2]!];
+      const ys = [p.getY(a), p.getY(b), p.getY(c)];
+      const area = Math.abs((p.getX(b) - p.getX(a)) * (p.getZ(c) - p.getZ(a)) - (p.getX(c) - p.getX(a)) * (p.getZ(b) - p.getZ(a))) / 2;
+      out.push({ x: (p.getX(a) + p.getX(b) + p.getX(c)) / 3, y0: Math.min(...ys), y1: Math.max(...ys), area });
+    }
+    return out;
+  }
+
+  // mutation: sed -i 's/geometry: slabPool(geo)/geometry: geo.translate(0, PREFABS[PREFAB.sidewalk].size[1], 0)/' src/game/present/prefabs.ts
+  // mutation: sed -i 's/cutX(pool, back, LAMP_FROM_CURB).translate(0, PREFABS\[PREFAB.sidewalk\].size\[1\], 0)/cutX(pool, back, LAMP_FROM_CURB)/' src/game/present/prefabs.ts
+  it("when the pools are read, then the acorn lamp's lies on the slab's top over its sidewalk and on the ground over the road and the lot, whole, and a race lamp's stays on the ground", () => {
     const slabTop = PREFABS[PREFAB.sidewalk].size[1];
-    expect(boundsOf(acorn.pool).min.y, "the acorn pool over the slab").toBeGreaterThan(slabTop);
+    const back = LAMP_FROM_CURB - LAYOUT.sidewalk;
+    let onSlab = 0;
+    let whole = 0;
+    for (const t of triangles(acorn.pool)) {
+      whole += t.area;
+      if (t.area < SLACK) continue;
+      if (t.x > back && t.x < LAMP_FROM_CURB) {
+        onSlab += t.area;
+        expect(t.y0, `over the sidewalk at x ${t.x.toFixed(2)}: on the slab`).toBeGreaterThan(slabTop);
+      } else expect(t.y1, `over the ${t.x > 0 ? "road" : "lot"} at x ${t.x.toFixed(2)}: under a slab's height`).toBeLessThan(slabTop);
+    }
+    expect(onSlab, "the pool's area over the sidewalk (m²)").toBeCloseTo(LAYOUT.sidewalk * 9, 3);
+    expect(whole, "the pool's whole area (m²)").toBeCloseTo(81, 3);
     expect(boundsOf(arm.pool).max.y, "the race lamp's pool under a slab's height").toBeLessThan(slabTop);
+  });
+
+  // mutation: sed -i '/^    uv.setXY(at, uvFrom/d' src/game/present/prefabs.ts
+  it("when the street pool is cut at the kerb and the lot, then every corner reads the light picture where the whole pool would: its uv the park lamp's uncut pool's at that point", () => {
+    const park = prefabParts(PREFAB.acornLamp, plainMaterials(new THREE.MeshBasicMaterial()), PARK_LAMP)[2]!.geometry;
+    const whole = park.getAttribute("position");
+    const wholeUv = park.getAttribute("uv");
+    const bounds = boundsOf(park);
+    const uvAt = (x: number, z: number): [number, number] => {
+      const corner = (cx: number, cz: number): number => [0, 1, 2, 3].find((at) => Math.abs(whole.getX(at) - cx) < SLACK && Math.abs(whole.getZ(at) - cz) < SLACK)!;
+      const [a, b, c] = [corner(bounds.min.x, bounds.min.z), corner(bounds.max.x, bounds.min.z), corner(bounds.min.x, bounds.max.z)];
+      const s = (x - bounds.min.x) / (bounds.max.x - bounds.min.x);
+      const t = (z - bounds.min.z) / (bounds.max.z - bounds.min.z);
+      return [0, 1].map((k) => wholeUv.getComponent(a, k) + (wholeUv.getComponent(b, k) - wholeUv.getComponent(a, k)) * s + (wholeUv.getComponent(c, k) - wholeUv.getComponent(a, k)) * t) as [number, number];
+    };
+    const p = acorn.pool.getAttribute("position");
+    const uv = acorn.pool.getAttribute("uv");
+    expect(p.count, "three bands of four corners").toBe(12);
+    for (let at = 0; at < p.count; at++) {
+      const [u, v] = uvAt(p.getX(at), p.getZ(at));
+      expect(uv.getX(at), `corner ${at}'s u`).toBeCloseTo(u, 5);
+      expect(uv.getY(at), `corner ${at}'s v`).toBeCloseTo(v, 5);
+    }
   });
 
   // mutation: sed -i 's/      return lamp(mats.plain, true, skin !== PARK_LAMP);/      return lamp(mats.plain, true);/' src/game/present/prefabs.ts
