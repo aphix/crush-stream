@@ -1,18 +1,18 @@
 import { PLAYER_PUNCH_COOLDOWN, PLAYER_PUNCH_LAND } from "../ai/civilians/civilian-constants.ts";
 import { PAD_BUTTON, type PadState, type TouchPad } from "../vehicle/gamepad.ts";
 
-type WeaponId = "fists" | "pistol" | "shotgun" | "rifle";
+type WeaponId = "fists" | "pistol" | "shotgun" | "rifle" | "hook";
 /** A gun: its name, the speed (m/s) a hit adds to the part it lands on (a showcase click is 6), its range (m), rays a shot, the half-angle (rad) they scatter in, seconds between shots, whether a held fire repeats, the push (N·s) a ray gives a car and the speed (m/s) it knocks a prop at. */
 export type Gun = { name: string; speed: number; range: number; rays: number; cone: number; every: number; auto: boolean; kick: number; prop: number };
-export const WEAPONS: Record<Exclude<WeaponId, "fists">, Gun> = {
+export const WEAPONS: Record<Exclude<WeaponId, "fists" | "hook">, Gun> = {
   pistol: { name: "Pistol", speed: 6, range: 120, rays: 1, cone: 0.005, every: 0.25, auto: false, kick: 150, prop: 5 },
   shotgun: { name: "Shotgun", speed: 3.5, range: 40, rays: 8, cone: 0.04, every: 0.9, auto: false, kick: 37.5, prop: 8 },
   rifle: { name: "Rifle", speed: 9, range: 250, rays: 1, cone: 0.0013, every: 0.12, auto: true, kick: 250, prop: 7 },
 };
 /** The weapons in the order LB / RB step through them, the key that takes each, and the name the HUD shows. */
-const WEAPON_ORDER: readonly WeaponId[] = ["fists", "pistol", "shotgun", "rifle"];
-const WEAPON_KEYS: Record<string, WeaponId> = { Digit1: "fists", Digit2: "pistol", Digit3: "shotgun", Digit4: "rifle" };
-const WEAPON_NAMES: Record<WeaponId, string> = { fists: "Fists", pistol: "Pistol", shotgun: "Shotgun", rifle: "Rifle" };
+const WEAPON_ORDER: readonly WeaponId[] = ["fists", "pistol", "shotgun", "rifle", "hook"];
+const WEAPON_KEYS: Record<string, WeaponId> = { Digit1: "fists", Digit2: "pistol", Digit3: "shotgun", Digit4: "rifle", Digit0: "hook" };
+const WEAPON_NAMES: Record<WeaponId, string> = { fists: "Fists", pistol: "Pistol", shotgun: "Shotgun", rifle: "Rifle", hook: "Hook" };
 
 /** A ray whose level part is under this is straight up or down: it has no heading. */
 export const STRAIGHT_UP = 1e-6;
@@ -29,6 +29,8 @@ type ArmsHost = {
   capture(on: boolean): void;
   /** One shot of `gun`, all its rays. */
   shoot(gun: Gun): void;
+  /** Fire with the hook in hand: one end is placed. */
+  hook(): void;
 };
 
 /** A trigger past this is pulled. */
@@ -101,7 +103,7 @@ export class OnFootArms {
       return;
     }
     this.cooldown = Math.max(0, this.cooldown - dt);
-    if (this.firing && this.weapon !== "fists" && WEAPONS[this.weapon].auto && (this.aiming || this.host.captured())) this.fire();
+    if (this.firing && this.weapon !== "fists" && this.weapon !== "hook" && WEAPONS[this.weapon].auto && (this.aiming || this.host.captured())) this.fire();
     if (this.landIn >= 0) {
       this.landIn -= dt;
       if (this.landIn < 0) this.host.land();
@@ -134,6 +136,10 @@ export class OnFootArms {
       if (!this.host.punch()) return;
       this.cooldown = PLAYER_PUNCH_COOLDOWN;
       this.landIn = PLAYER_PUNCH_LAND;
+      return;
+    }
+    if (this.weapon === "hook") {
+      this.host.hook();
       return;
     }
     const gun = WEAPONS[this.weapon];

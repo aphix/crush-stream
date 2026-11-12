@@ -884,11 +884,10 @@ export abstract class EngineInput extends EngineRigs {
     return !this.race.fullUi;
   }
 
-  /** The tether's fire and cut keys (retract is read held, in `pollInput`): true when `e` was one, kept from the browser (the quote key opens Firefox's quick find). */
+  /** The tether's cut key (retract is read held, in `pollInput`): true when `e` was it, kept from the browser. */
   private tetherKey(e: KeyboardEvent): boolean {
-    if (e.code === TETHER_KEYS.fire) this.tether.fire();
-    else if (e.code === TETHER_KEYS.cut) this.tether.cut();
-    else return false;
+    if (e.code !== TETHER_KEYS.cut) return false;
+    this.tether.cut();
     e.preventDefault();
     return true;
   }

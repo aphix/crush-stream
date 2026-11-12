@@ -121,7 +121,7 @@ const CAMERA_KEYS: [string, string][] = [
 ];
 
 function seatHint(state: CrashHudState): { title: string; keys: string } {
-  if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad !== null, state.foot.prompt, state.foot.arms) };
+  if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad !== null, state.foot.prompt, state.foot.arms, state.tether?.count ?? 0) };
   if (state.race && state.seat === "drive") {
     const keys = state.pad
       ? "RT gas · LT brake, then reverse · left stick steer · X handbrake · A boost · B view · R3 look back · D-pad ↓ respawn · hold D-pad ↓ back on the road, damage kept · Start pause"

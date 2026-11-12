@@ -1,5 +1,4 @@
-import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { afterAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
@@ -15,7 +14,7 @@ import { RagdollRemote } from "./ragdoll-remote.ts";
 import { flatSystem, loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { ROPE_FLOATS, ROPE_JOINED, ROPE_LENGTH, ROPE_NONE, ROPE_STATE, type FromWorker, type ResultMessage, type RopeEnd, type ToWorker } from "./ragdoll-wire.ts";
 
-after(() => setGround(null));
+afterAll(() => setGround(null));
 
 const FRAME = 1 / FRAME_HZ;
 const NONE = new THREE.Vector3();
@@ -51,7 +50,7 @@ function record(sys: RagdollSystem, slot = 0): { state: number; length: number }
 
 const torsoZ = (sys: RagdollSystem): number => {
   const at = new THREE.Vector3();
-  assert.ok(sys.torso(0, at, null), "the dummy is out");
+  expect(sys.torso(0, at, null), "the dummy is out").toBeTruthy();
   return at.z;
 };
 
@@ -61,7 +60,7 @@ describe("given a dummy lying 12 m behind a car that drives off at 10 m/s", () =
     const vehicle = makeCar();
     vehicle.group.position.set(0, 0, 12);
     lieDown(sys);
-    if (roped) assert.ok(sys.ropeAttach(0, doll(0, [0, 0.5, 0]), car(0)) > 0, "the world took the rope");
+    if (roped) expect(sys.ropeAttach(0, doll(0, [0, 0.5, 0]), car(0)) > 0, "the world took the rope").toBeTruthy();
     drive(sys, vehicle, 3);
     const z = torsoZ(sys);
     const out = { z, reach: vehicle.group.position.z - z, state: record(sys).state };
@@ -71,14 +70,14 @@ describe("given a dummy lying 12 m behind a car that drives off at 10 m/s", () =
 
   it("when a rope ties him to it, then he is dragged along behind it and stays within the rope's length of its hook", async () => {
     const { z, reach, state } = await dragged(true);
-    assert.equal(state, ROPE_JOINED, "the rope's state");
-    assert.ok(z > 15, `he lies at z ${z.toFixed(1)} m: not dragged`);
-    assert.ok(reach < 12 + 1.5, `he is ${reach.toFixed(1)} m behind the car's hook on a 12 m rope`);
+    expect(state, "the rope's state").toBe(ROPE_JOINED);
+    expect(z > 15, `he lies at z ${z.toFixed(1)} m: not dragged`).toBeTruthy();
+    expect(reach < 12 + 1.5, `he is ${reach.toFixed(1)} m behind the car's hook on a 12 m rope`).toBeTruthy();
   });
 
   it("when no rope ties him to it, then he lies where he fell", async () => {
     const { z } = await dragged(false);
-    assert.ok(Math.abs(z) < 2, `he lies at z ${z.toFixed(1)} m`);
+    expect(Math.abs(z) < 2, `he lies at z ${z.toFixed(1)} m`).toBeTruthy();
   });
 });
 
@@ -86,7 +85,7 @@ describe("given a dummy tied by a rope to a world point 30 m off", () => {
   const reeled = async (reel: boolean): Promise<number> => {
     const sys = await flatSystem();
     lieDown(sys);
-    assert.ok(sys.ropeAttach(0, doll(0, [0, 0.5, 0]), point(0, 1, 30)) > 0, "the world took the rope");
+    expect(sys.ropeAttach(0, doll(0, [0, 0.5, 0]), point(0, 1, 30)) > 0, "the world took the rope").toBeTruthy();
     sys.ropeReel(reel);
     for (let f = 0; f < FRAME_HZ; f++) sys.update(FRAME, [], true, false, null);
     const z = torsoZ(sys);
@@ -96,12 +95,12 @@ describe("given a dummy tied by a rope to a world point 30 m off", () => {
 
   it("when the winch reels for a second, then he has come to within a few metres of the point", async () => {
     const z = await reeled(true);
-    assert.ok(30 - z < WINCH_MIN_LENGTH + 3, `he is ${(30 - z).toFixed(1)} m from the point`);
+    expect(30 - z < WINCH_MIN_LENGTH + 3, `he is ${(30 - z).toFixed(1)} m from the point`).toBeTruthy();
   });
 
   it("when the winch is not held, then he stays where he lies", async () => {
     const z = await reeled(false);
-    assert.ok(Math.abs(z) < 1, `he lies at z ${z.toFixed(1)} m`);
+    expect(Math.abs(z) < 1, `he lies at z ${z.toFixed(1)} m`).toBeTruthy();
   });
 });
 
@@ -116,9 +115,9 @@ describe("given a dummy tied by a rope that is about to leave", () => {
     lieDown(sys);
     sys.ropeAttach(0, doll(0, [0, 0.5, 0]), point(0, 1, 30));
     await afterwards(() => sys["despawn"](0), sys);
-    assert.equal(record(sys).state, ROPE_NONE, "the rope's state");
-    assert.equal(sys["ropes"].count, 0, "ropes out");
-    assert.equal(sys["dolls"][0]!.ropes, 0, "ropes on him");
+    expect(record(sys).state, "the rope's state").toBe(ROPE_NONE);
+    expect(sys["ropes"].count, "ropes out").toBe(0);
+    expect(sys["dolls"][0]!.ropes, "ropes on him").toBe(0);
     sys.dispose();
   });
 
@@ -127,8 +126,8 @@ describe("given a dummy tied by a rope that is about to leave", () => {
     lieDown(sys);
     sys.ropeAttach(0, doll(0, [0, 0.5, 0]), point(0, 1, 30));
     await afterwards(() => sys.ropeCut(0), sys);
-    assert.equal(record(sys).state, ROPE_NONE, "the rope's state");
-    assert.equal(sys.dollOut(0), true, "he is out");
+    expect(record(sys).state, "the rope's state").toBe(ROPE_NONE);
+    expect(sys.dollOut(0), "he is out").toBe(true);
     sys.dispose();
   });
 
@@ -136,7 +135,7 @@ describe("given a dummy tied by a rope that is about to leave", () => {
     const sys = await flatSystem();
     sys.ropeAttach(0, doll(3, [0, 0.5, 0]), point(0, 1, 30));
     sys.update(FRAME, [], true, false, null);
-    assert.equal(record(sys).state, ROPE_NONE, "the rope's state");
+    expect(record(sys).state, "the rope's state").toBe(ROPE_NONE);
     sys.dispose();
   });
 });
@@ -153,11 +152,11 @@ describe("given a dummy who would lie about for 1 s", () => {
   };
 
   it("when a rope holds him, then he is still out after 3 s", async () => {
-    assert.equal(await lives(true), true);
+    expect(await lives(true)).toBe(true);
   });
 
   it("when no rope holds him, then he is put away", async () => {
-    assert.equal(await lives(false), false);
+    expect(await lives(false)).toBe(false);
   });
 });
 
@@ -175,7 +174,7 @@ describe("given a cone standing on a course behind a car that drives off beside 
     const vehicle = makeCar();
     vehicle.group.position.set(CONE_AT + 12, 0, CONE_AT + PASS_BY);
     vehicle.group.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
-    if (roped) assert.ok(sys.ropeAttach(0, { kind: "prop", id: 0, at: [CONE_AT, 0.3, CONE_AT] }, car(0)) > 0, "the world took the rope");
+    if (roped) expect(sys.ropeAttach(0, { kind: "prop", id: 0, at: [CONE_AT, 0.3, CONE_AT] }, car(0)) > 0, "the world took the rope").toBeTruthy();
     for (let f = 0; f < 1.5 * FRAME_HZ; f++) {
       vehicle.group.position.x += DRIVE * FRAME;
       sys.update(FRAME, [vehicle], true, false, null);
@@ -189,13 +188,13 @@ describe("given a cone standing on a course behind a car that drives off beside 
 
   it("when a rope ties it to the car, then it is knocked loose and dragged along behind it", async () => {
     const { x, state } = await coneRun(true);
-    assert.equal(state, ROPE_JOINED, "the rope's state");
-    assert.ok(x > CONE_AT + 5, `the cone is at x ${x.toFixed(1)}`);
+    expect(state, "the rope's state").toBe(ROPE_JOINED);
+    expect(x > CONE_AT + 5, `the cone is at x ${x.toFixed(1)}`).toBeTruthy();
   });
 
   it("when no rope ties it, then it stands where it was put", async () => {
     const { x } = await coneRun(false);
-    assert.ok(x === 0 || Math.abs(x - CONE_AT) < 0.5, `the cone is at x ${x.toFixed(1)}`);
+    expect(x === 0 || Math.abs(x - CONE_AT) < 0.5, `the cone is at x ${x.toFixed(1)}`).toBeTruthy();
   });
 });
 
@@ -206,12 +205,12 @@ describe("given a box and a dummy, each a rope's end", () => {
     sys.update(FRAME, [], true, false, null);
     const vehicle = makeCar();
     vehicle.group.position.set(0, 0, 12);
-    assert.ok(sys.ropeAttach(0, { kind: "box", id: 0, at: [0, 0.5, 0] }, car(0)) > 0, "the world took the rope");
+    expect(sys.ropeAttach(0, { kind: "box", id: 0, at: [0, 0.5, 0] }, car(0)) > 0, "the world took the rope").toBeTruthy();
     drive(sys, vehicle, 2);
     const poses = new Float32Array(7);
     sys.copyBoxPoses(poses);
     sys.dispose();
-    assert.ok(poses[2]! > 8, `the box is at z ${poses[2]!.toFixed(1)}`);
+    expect(poses[2]! > 8, `the box is at z ${poses[2]!.toFixed(1)}`).toBeTruthy();
   });
 
   it("when a dummy is tied to a box 8 m off and the winch reels, then they come together and the rope keeps them within its length", async () => {
@@ -228,8 +227,8 @@ describe("given a box and a dummy, each a rope's end", () => {
     sys.copyBoxPoses(poses);
     const gap = poses[2]! - torsoZ(sys);
     sys.dispose();
-    assert.ok(length > 7 && length < 9.5, `the rope was ${length.toFixed(1)} m`);
-    assert.ok(gap < WINCH_MIN_LENGTH + 2, `the dummy and the box are ${gap.toFixed(1)} m apart`);
+    expect(length > 7 && length < 9.5, `the rope was ${length.toFixed(1)} m`).toBeTruthy();
+    expect(gap < WINCH_MIN_LENGTH + 2, `the dummy and the box are ${gap.toFixed(1)} m apart`).toBeTruthy();
   });
 });
 
@@ -265,16 +264,12 @@ describe("given the dummies' world in a worker", () => {
     sys["mode"] = "remote";
     const a = doll(0, [1, 2, 3]);
     const b = car(0);
-    assert.equal(sys.ropeAttach(1, a, b), 1, "the first command's number");
+    expect(sys.ropeAttach(1, a, b), "the first command's number").toBe(1);
     sys.ropeReel(true);
     sys.ropeCut(1);
     const rope = worker.posted.find((m) => m.type === "rope");
-    assert.ok(rope?.type === "rope" && rope.command === 1 && rope.slot === 1 && rope.a === a && rope.b === b, "the rope command as sent");
-    assert.deepEqual(
-      worker.posted.filter((m) => m.type === "ropeReel" || m.type === "ropeCut").map((m) => m.command),
-      [2, 3],
-      "the winch and the cut are numbered after it",
-    );
+    expect(rope?.type === "rope" && rope.command === 1 && rope.slot === 1 && rope.a === a && rope.b === b, "the rope command as sent").toBeTruthy();
+    expect(worker.posted.filter((m) => m.type === "ropeReel" || m.type === "ropeCut").map((m) => m.command), "the winch and the cut are numbered after it").toEqual([2, 3]);
     const floats = new Float32Array(MAX_TETHERS * ROPE_FLOATS);
     floats[ROPE_FLOATS + ROPE_STATE] = ROPE_JOINED;
     floats[ROPE_FLOATS + ROPE_LENGTH] = 12;
@@ -284,20 +279,20 @@ describe("given the dummies' world in a worker", () => {
     };
     worker.say(answer);
     sys.update(FRAME, [], true, false, null);
-    assert.equal(sys.ropeReport.command, 3, "commands the world has heard");
-    assert.equal(record(sys, 1).state, ROPE_JOINED, "the rope's state");
-    assert.equal(record(sys, 1).length, 12, "the rope's length");
+    expect(sys.ropeReport.command, "commands the world has heard").toBe(3);
+    expect(record(sys, 1).state, "the rope's state").toBe(ROPE_JOINED);
+    expect(record(sys, 1).length, "the rope's length").toBe(12);
     sys.dispose();
     Reflect.deleteProperty(globalThis, "Worker");
   });
 
   it("when the tether talks to a remote, then the frames keep going out while the rope is out", () => {
     Object.assign(globalThis, { Worker: ScriptedWorker });
-    const remote = RagdollRemote.open(() => assert.fail("the worker failed"))!;
+    const remote = RagdollRemote.open(() => expect.fail("the worker failed"))!;
     ScriptedWorker.last.say({ type: "ready" });
     remote.rope({ type: "ropeReel", command: 1, on: true });
     remote.post(FRAME, [makeCar()], true, false, 0, null);
-    assert.ok(ScriptedWorker.last.posted.some((m) => m.type === "frame"), "a frame went out after the command");
+    expect(ScriptedWorker.last.posted.some((m) => m.type === "frame"), "a frame went out after the command").toBeTruthy();
     remote.dispose();
     Reflect.deleteProperty(globalThis, "Worker");
   });

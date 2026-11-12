@@ -82,6 +82,8 @@ interface OnFootHost {
   shootRay(ray: LookRay, gun: Gun): number;
   /** A shot of `gun` was fired along `ray` and its farthest ray went `far` m: the flash, the tracer, the sound, the law. */
   shotFired(ray: LookRay, far: number, gun: Gun): void;
+  /** Fire with the hook in hand. */
+  hook(): void;
 }
 
 /** The control that gets him out and in: Enter on the keyboard (`SEAT_KEYS.onFoot`), Y (Triangle) on the pad. Neither drives, steers or switches a scene. */
@@ -167,7 +169,7 @@ function scatter(from: LookRay, cone: number, r1: number, r2: number, out: LookR
  */
 export class OnFootDirector {
   readonly flow = new OnFootFlow();
-  readonly arms = new OnFootArms({ armed: () => this.armed(), punch: () => this.punch(), land: () => this.landPunch(), captured: () => this.host.mouseCaptured(), capture: (on) => this.host.captureMouse(on), shoot: (gun) => this.shoot(gun) });
+  readonly arms = new OnFootArms({ armed: () => this.armed(), punch: () => this.punch(), land: () => this.landPunch(), captured: () => this.host.mouseCaptured(), capture: (on) => this.host.captureMouse(on), shoot: (gun) => this.shoot(gun), hook: () => this.host.hook() });
   private readonly host: OnFootHost;
   private readonly intent = blankWalkIntent();
   private readonly sense: OnFootSense = { car: -1, speed: 0, doorBlocked: false };

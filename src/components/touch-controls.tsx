@@ -276,7 +276,7 @@ function DriveControls({ state, engine }: HudProps) {
         />
       ) : null}
       <TopStrip state={state} engine={engine} />
-      {canDrive ? <TetherTouch state={state} engine={engine} /> : null}
+      <TetherTouch state={state} engine={engine} />
     </>
   );
 }

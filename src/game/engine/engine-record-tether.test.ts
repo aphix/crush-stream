@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -46,14 +45,14 @@ function clipsOf(tetherFrom: number): number {
 
 describe("given a head-on recorded in a flat field", () => {
   it("when no tether is out, then the crash is filed as a highlight", () => {
-    assert.ok(clipsOf(-1) >= 1, "the head-on did not rank as a highlight");
+    expect(clipsOf(-1) >= 1, "the head-on did not rank as a highlight").toBeTruthy();
   });
 
   it("when a tether is out from before the crash on, then no clip of it is filed", () => {
-    assert.equal(clipsOf(0), 0, "clips filed");
+    expect(clipsOf(0), "clips filed").toBe(0);
   });
 
   it("when a tether first comes out after the crash's clip is already filed, then the clip stays filed", () => {
-    assert.ok(clipsOf(STEPS - 1) >= 1, "a later tether took the clip");
+    expect(clipsOf(STEPS - 1) >= 1, "a later tether took the clip").toBeTruthy();
   });
 });

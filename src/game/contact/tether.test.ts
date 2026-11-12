@@ -1,5 +1,4 @@
-import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { afterAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { makeCar, launch, FREEWHEEL } from "./crash-scenarios.test-util.ts";
 import { R_STRENGTH, ROW, TetherSet, WORLD } from "./tether.ts";
@@ -12,7 +11,7 @@ import { setGround } from "../world/ground.ts";
 import { GRAVITY, QUIET_HZ } from "../kernel/constants.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 
-after(() => setGround(null));
+afterAll(() => setGround(null));
 
 const H = 1 / QUIET_HZ;
 /** Strength (N) no test load reaches: the rows that are not about breaking never snap. */
@@ -99,17 +98,29 @@ describe("given a car running away from a world anchor 10 m behind it at 12 m/s"
 
   it("when its cable is taut, then the cable stretches under 2 % and the car stays within its length", () => {
     const { worst, reach } = stretchOf(true);
-    assert.ok(worst < 0.02, `stretch ${(worst * 100).toFixed(2)} %`);
-    assert.ok(reach < 10.5, `car at ${reach.toFixed(2)} m`);
+    expect(worst < 0.02, `stretch ${(worst * 100).toFixed(2)} %`).toBeTruthy();
+    expect(reach < 10.5, `car at ${reach.toFixed(2)} m`).toBeTruthy();
   });
 
   it("when the cable is fitted to a car already at 25 m/s, then it stretches under 2 % from the first slice on", () => {
     const { worst } = stretchOf(true, 25);
-    assert.ok(worst < 0.02, `stretch ${(worst * 100).toFixed(2)} %`);
+    expect(worst < 0.02, `stretch ${(worst * 100).toFixed(2)} %`).toBeTruthy();
   });
 
   it("when it has no cable, then it runs far past that length", () => {
-    assert.ok(stretchOf(false).reach > 25, "the untethered car stayed near the anchor");
+    expect(stretchOf(false).reach > 25, "the untethered car stayed near the anchor").toBeTruthy();
+  });
+
+  // mutation: sed -i 's/^export const MAX_TETHERS = 6;/export const MAX_TETHERS = 99;/' src/game/kernel/constants.ts
+  it("when a seventh cable is opened, then the oldest is gone and six remain", () => {
+    const set = new TetherSet();
+    for (let cable = 0; cable < 7; cable++) {
+      const slot = set.open();
+      set.setEnd(slot, 0, WORLD, cable, 0, 0);
+      set.setEnd(slot, 1, WORLD, cable, 0, 5);
+      set.fit(slot, []);
+    }
+    expect(set.count).toBe(6);
   });
 });
 
@@ -138,8 +149,8 @@ describe("given a car rolling 8 m/s away from a world anchor 6 m behind it", () 
       worst = Math.max(worst, span(tied, 0) / 8 - 1);
     });
     run(free, 1);
-    assert.ok(worst < 0.005, `stretch ${(worst * 100).toFixed(3)} %`);
-    assert.ok(Math.abs(tied.cars[0]!.group.position.x - free.cars[0]!.group.position.x) > 1, "the short cable changed nothing");
+    expect(worst < 0.005, `stretch ${(worst * 100).toFixed(3)} %`).toBeTruthy();
+    expect(Math.abs(tied.cars[0]!.group.position.x - free.cars[0]!.group.position.x) > 1, "the short cable changed nothing").toBeTruthy();
   });
 });
 
@@ -153,15 +164,15 @@ describe("given a sedan 30 m from a world anchor, its cable as long", () => {
       nearest = Math.min(nearest, span(s, slot));
     });
     s.set.anchor(slot, 0, s.cars, _end);
-    assert.ok(nearest < 6, `nearest ${nearest.toFixed(2)} m`);
-    assert.equal(_end.lengthSq(), 0, "the world anchor stayed where it was fixed");
+    expect(nearest < 6, `nearest ${nearest.toFixed(2)} m`).toBeTruthy();
+    expect(_end.lengthSq(), "the world anchor stayed where it was fixed").toBe(0);
   });
 
   it("when the retract is not held, then the sedan stays where it was", () => {
     const s = stage([[30, 0, EAST, 0, 0]]);
     tieToWorld(s, 0, ORIGIN);
     run(s, 3);
-    assert.ok(Math.abs(s.cars[0]!.group.position.x - 30) < 0.01, `sedan at ${s.cars[0]!.group.position.x.toFixed(3)} m`);
+    expect(Math.abs(s.cars[0]!.group.position.x - 30) < 0.01, `sedan at ${s.cars[0]!.group.position.x.toFixed(3)} m`).toBeTruthy();
   });
 });
 
@@ -180,13 +191,13 @@ describe("given a sedan and a monster truck 30 m apart on one cable", () => {
 
   it("when the retract is held for 1 s, then the light sedan comes at least 1.8 times as far as the heavy truck", () => {
     const { sedan, truck } = travelled(true);
-    assert.ok(truck > 0.3, `the truck moved ${truck.toFixed(2)} m: the retract did nothing`);
-    assert.ok(sedan > 1.8 * truck, `sedan ${sedan.toFixed(2)} m, truck ${truck.toFixed(2)} m`);
+    expect(truck > 0.3, `the truck moved ${truck.toFixed(2)} m: the retract did nothing`).toBeTruthy();
+    expect(sedan > 1.8 * truck, `sedan ${sedan.toFixed(2)} m, truck ${truck.toFixed(2)} m`).toBeTruthy();
   });
 
   it("when the retract is not held, then neither car moves", () => {
     const { sedan, truck } = travelled(false);
-    assert.ok(Math.abs(sedan) < 0.01 && Math.abs(truck) < 0.01, `sedan ${sedan.toFixed(3)} m, truck ${truck.toFixed(3)} m`);
+    expect(Math.abs(sedan) < 0.01 && Math.abs(truck) < 0.01, `sedan ${sedan.toFixed(3)} m, truck ${truck.toFixed(3)} m`).toBeTruthy();
   });
 });
 
@@ -211,12 +222,12 @@ describe("given a car released level with a world anchor 20 m up, 15 m aside, on
   it("when it swings down on the cable, then its speed at the bottom is the free-fall bound within 3 %, never above it", () => {
     const bound = Math.sqrt(2 * GRAVITY * ROPE);
     const { bottomSpeed } = swing(true);
-    assert.ok(bottomSpeed <= bound * 1.03, `bottom speed ${bottomSpeed.toFixed(2)} m/s above the bound ${bound.toFixed(2)}`);
-    assert.ok(bottomSpeed >= bound * 0.9, `bottom speed ${bottomSpeed.toFixed(2)} m/s: the swing lost its energy (bound ${bound.toFixed(2)})`);
+    expect(bottomSpeed <= bound * 1.03, `bottom speed ${bottomSpeed.toFixed(2)} m/s above the bound ${bound.toFixed(2)}`).toBeTruthy();
+    expect(bottomSpeed >= bound * 0.9, `bottom speed ${bottomSpeed.toFixed(2)} m/s: the swing lost its energy (bound ${bound.toFixed(2)})`).toBeTruthy();
   });
 
   it("when it has no cable, then it falls the full height instead", () => {
-    assert.ok(swing(false).lowest < ANCHOR_UP - ROPE - 3, "the untethered car stayed up");
+    expect(swing(false).lowest < ANCHOR_UP - ROPE - 3, "the untethered car stayed up").toBeTruthy();
   });
 });
 
@@ -230,14 +241,14 @@ describe("given a car running away at 15 m/s on a cable that holds 20 kN", () =>
 
   it("when the pull passes what the cable holds, then it snaps and the car runs on past its length", () => {
     const { alive, reach } = afterRun(20_000);
-    assert.equal(alive, 0, "cables alive");
-    assert.ok(reach > 20, `car at ${reach.toFixed(2)} m`);
+    expect(alive, "cables alive").toBe(0);
+    expect(reach > 20, `car at ${reach.toFixed(2)} m`).toBeTruthy();
   });
 
   it("when the cable holds what the car pulls, then it stays and the car stays within its length", () => {
     const { alive, reach } = afterRun(UNBREAKABLE);
-    assert.equal(alive, 1, "cables alive");
-    assert.ok(reach < 10.5, `car at ${reach.toFixed(2)} m`);
+    expect(alive, "cables alive").toBe(1);
+    expect(reach < 10.5, `car at ${reach.toFixed(2)} m`).toBeTruthy();
   });
 });
 
@@ -251,14 +262,14 @@ describe("given a sedan on a cable of the strength a new cable has", () => {
 
   it("when it drives off at 20 m/s, then the yank snaps the cable and it runs on past the cable's length", () => {
     const { alive, reach } = afterRun(20);
-    assert.equal(alive, 0, "cables alive");
-    assert.ok(reach > 20, `car at ${reach.toFixed(2)} m`);
+    expect(alive, "cables alive").toBe(0);
+    expect(reach > 20, `car at ${reach.toFixed(2)} m`).toBeTruthy();
   });
 
   it("when it drives off at 6 m/s, then the cable holds and the car stays within its length", () => {
     const { alive, reach } = afterRun(6);
-    assert.equal(alive, 1, "cables alive");
-    assert.ok(reach < 10.5, `car at ${reach.toFixed(2)} m`);
+    expect(alive, "cables alive").toBe(1);
+    expect(reach < 10.5, `car at ${reach.toFixed(2)} m`).toBeTruthy();
   });
 
   it("when it swings down from level with an anchor 20 m up, then the cable holds the whole swing", () => {
@@ -266,7 +277,7 @@ describe("given a sedan on a cable of the strength a new cable has", () => {
     s.cars[0]!.group.position.y = 20 - s.cars[0]!.frame.centre.y;
     tieToWorld(s, 0, new THREE.Vector3(0, 20, 0), null);
     run(s, 4);
-    assert.equal(s.set.count, 1, "cables alive");
+    expect(s.set.count, "cables alive").toBe(1);
   });
 
   it("when it is reeled in from 40 m, then the cable holds the whole reel", () => {
@@ -274,7 +285,7 @@ describe("given a sedan on a cable of the strength a new cable has", () => {
     tieToWorld(s, 0, ORIGIN, null);
     s.set.reeling = true;
     run(s, 3);
-    assert.equal(s.set.count, 1, "cables alive");
+    expect(s.set.count, "cables alive").toBe(1);
   });
 });
 
@@ -295,13 +306,13 @@ describe("given a car on a cable to a wall 40 m off, the retract held", () => {
 
   it("when the car is a sedan, then it arrives in 1.5 to 2 s", () => {
     const seconds = arrival(false);
-    assert.ok(seconds >= 1.5 && seconds <= 2, `sedan arrived in ${seconds.toFixed(2)} s`);
+    expect(seconds >= 1.5 && seconds <= 2, `sedan arrived in ${seconds.toFixed(2)} s`).toBeTruthy();
   });
 
   it("when the car is a monster truck, then it arrives at least 15 % later than the sedan", () => {
     const sedan = arrival(false);
     const truck = arrival(true);
-    assert.ok(truck >= 1.15 * sedan, `sedan ${sedan.toFixed(2)} s, truck ${truck.toFixed(2)} s`);
+    expect(truck >= 1.15 * sedan, `sedan ${sedan.toFixed(2)} s, truck ${truck.toFixed(2)} s`).toBeTruthy();
   });
 });
 
@@ -335,11 +346,11 @@ describe("given two cars close enough to be in contact and a third far off, the 
   };
 
   it("when no cable is out, then the far car runs the step as a lone car", () => {
-    assert.equal(lonersWith(false), 1 << 2, "the lone mask");
+    expect(lonersWith(false), "the lone mask").toBe(1 << 2);
   });
 
   it("when a cable holds the far car, then no car runs the step as a lone one", () => {
-    assert.equal(lonersWith(true), 0, "the lone mask");
+    expect(lonersWith(true), "the lone mask").toBe(0);
   });
 });
 
@@ -347,8 +358,8 @@ describe("given a full set of cables", () => {
   it("when another is opened, then the oldest is the one dropped", () => {
     const set = new TetherSet();
     const slots = Array.from({ length: MAX_TETHERS + 1 }, () => set.open());
-    assert.equal(set.count, MAX_TETHERS, "cables alive");
-    assert.equal(slots[MAX_TETHERS], slots[0], "the new cable took the oldest one's slot");
-    assert.ok(set.isAlive(slots[1]!), "the newer cable is still out");
+    expect(set.count, "cables alive").toBe(MAX_TETHERS);
+    expect(slots[MAX_TETHERS], "the new cable took the oldest one's slot").toBe(slots[0]);
+    expect(set.isAlive(slots[1]!), "the newer cable is still out").toBeTruthy();
   });
 });

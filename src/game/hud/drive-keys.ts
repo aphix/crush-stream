@@ -2,17 +2,17 @@
  * The driven car's controls as the HUD's key line (" · " separated, outside a race), for the keyboard or a controller. The Long jump's
  * boost control is its bail, which its card names, so the line has no boost there (`boostable` false).
  */
-const WEAPON_KEYS_HINT = ["1 Fists", "2 Pistol", "3 Shotgun", "4 Rifle"] as const;
+const WEAPON_KEYS_HINT = ["1 Fists", "2 Pistol", "3 Shotgun", "4 Rifle", "0 Hook"] as const;
 
 /**
  * The walker's controls as the HUD's key line, behind `prompt` (what the control does now, or why it refused) when there is one: the same keys and
- * sticks that drive the car, and the control that gets him out and in. `arms`: the weapon in hand, marked `▸` on a keyboard; with it on a pad, RT fires and A alone runs.
+ * sticks that drive the car, and the control that gets him out and in. `arms`: the weapon in hand, marked `▸` on a keyboard; with it on a pad, RT fires and A alone runs. `cables`: the hook's cables out, shown on the marked hook.
  */
-export function footKeys(pad: boolean, prompt: string | null, arms: { slot: number } | null = null): string {
+export function footKeys(pad: boolean, prompt: string | null, arms: { slot: number } | null = null, cables = 0): string {
   const parts = pad
     ? ["left stick walk", arms === null ? "A or RT run" : "A run", "right stick look", "Y get in at your car's driver door"]
     : ["W/A/S/D walk", "Shift run", "drag look", "; mouse look", "Enter get in at your car's driver door"];
-  const weapons = arms === null ? [] : pad ? ["LB/RB weapon", "LT aim", "RT fire"] : WEAPON_KEYS_HINT.map((hint, slot) => (slot === arms.slot ? `▸${hint}` : hint));
+  const weapons = arms === null ? [] : pad ? ["LB/RB weapon", "LT aim", "RT fire"] : WEAPON_KEYS_HINT.map((hint, slot) => (slot === arms.slot ? `▸${hint}` : hint)).map((hint) => (hint === "▸0 Hook" ? `▸0 Hook ${cables}/6` : hint));
   const all = [...parts, ...weapons];
   return (prompt === null ? all : [prompt, ...all]).join(" · ");
 }

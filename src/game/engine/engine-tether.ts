@@ -9,7 +9,6 @@ import { BOXES_MESH_NAME } from "../present/minigame-art.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
 import { ROPE_A, ROPE_FLOATS, ROPE_JOINED, ROPE_LENGTH, ROPE_NONE, ROPE_STATE, type RopeEnd } from "../present/ragdoll-wire.ts";
 import type { TetherHud } from "../hud/hud-store.ts";
-import { TetherMouse } from "./tether-pointer.ts";
 
 /** Seconds between two reads of the aim while no fire is waiting: the reticle's colour lags a tenth of a second, and a fire always reads it fresh. */
 const AIM_PERIOD_S = 0.1;
@@ -28,8 +27,6 @@ type TetherRopes = Pick<RagdollSystem, "ropeAttach" | "ropeCut" | "ropeReel" | "
 interface TetherHost {
   readonly tethers: TetherSet;
   readonly camera: THREE.PerspectiveCamera;
-  /** The canvas whose right and middle mouse buttons are the tether's. */
-  readonly canvas: HTMLElement;
   /** The scene whose drawn meshes the sight line meets. */
   readonly scene: THREE.Object3D;
   /** The dummies' world, which holds the cables that have a dummy, a prop or a box for an end. */
@@ -43,6 +40,10 @@ interface TetherHost {
   offered(): boolean;
   /** The camera is a chase camera (not first person, not the free camera): its aim runs through a point above the middle of the view. */
   chase(): boolean;
+  /** The player is on foot in the open world on a machine that holds authority: cables exist only then. */
+  afoot(): boolean;
+  /** The dummy pool slot of the player's own walker: the sight line passes through him. */
+  self(): number;
 }
 
 /** What the sight line met: a car (its index), the static world, or a thing in the dummies' world (`RAPIER`, and `thing`: its `thingCode`). */
@@ -81,7 +82,6 @@ export class TetherDirector {
   private readonly heldAt = new THREE.Vector3();
   private sinceAim = AIM_PERIOD_S;
   private readonly host: TetherHost;
-  private readonly mouse: TetherMouse;
   private readonly raycaster = new THREE.Raycaster();
   private readonly view: ReticleView = { state: AIM.none, dir: new THREE.Vector3(), point: new THREE.Vector3() };
   /** What the aim would hook: a car index, `WORLD` or `RAPIER` (and its thing), a car-frame point for a car, the world point otherwise. */
@@ -95,7 +95,6 @@ export class TetherDirector {
 
   constructor(host: TetherHost) {
     this.host = host;
-    this.mouse = new TetherMouse(host.canvas, { fire: () => this.fire(), cut: () => this.cut(), cabled: () => this.host.tethers.count > 0 || this.held, offered: () => this.ready() });
   }
 
   /** The retract key or button is down (read every poll). */
@@ -127,9 +126,10 @@ export class TetherDirector {
 
   /** Once per drawn frame, after the camera and the cars' drawn poses are set: the retract, the aim, a waiting fire, and the drawing. */
   frame(wallDt: number): void {
+    if (!this.host.afoot() && (this.host.tethers.count > 0 || this.held)) this.cut();
     const { tethers } = this.host;
     const ready = this.ready();
-    tethers.reeling = ready && (this.mouse.reeling(wallDt) || this.reelHeld);
+    tethers.reeling = ready && this.reelHeld;
     this.syncRopes();
     if (this.pendingSlot >= 0 && !tethers.isAlive(this.pendingSlot)) this.pendingSlot = -1;
     if (this.held && this.host.playerCar() >= 0) this.held = false;
@@ -149,7 +149,6 @@ export class TetherDirector {
   }
 
   dispose(): void {
-    this.mouse.dispose();
     this.art.dispose();
   }
 
@@ -247,7 +246,7 @@ export class TetherDirector {
       if (typeof index === "number" && cars[index]?.group === o) car = index;
     }
     if (car !== WORLD) return { car, thing: 0 };
-    if (object instanceof DummyMesh && !(hit.instanceId !== undefined && this.host.ropes.dollOut(hit.instanceId))) return undefined;
+    if (object instanceof DummyMesh && (hit.instanceId === undefined || hit.instanceId === this.host.self() || !this.host.ropes.dollOut(hit.instanceId))) return undefined;
     const thing = this.thingOf(object, hit.instanceId);
     return thing === 0 ? { car: WORLD, thing } : { car: RAPIER, thing };
   }

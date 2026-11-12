@@ -349,6 +349,7 @@ export class CrashEngine extends EngineGarage {
       aimRay: (centre, out) => this.aimRay(centre, out),
       shootRay: (ray, gun) => this.openWorld.shoot(ray, gun),
       shotFired: (ray, far) => this.shotFired(ray, far),
+      hook: () => this.tether.fire(),
     });
     this.view.click = () => {
       if (!this.onFoot.armed()) return false;
@@ -359,14 +360,15 @@ export class CrashEngine extends EngineGarage {
     this.tether = new TetherDirector({
       tethers: this.world.tethers,
       camera: this.camera,
-      canvas: this.canvas,
       scene: this.scene,
       ropes: this.ragdolls,
       movers: () => [this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.coverBatch.group, ...this.balls.map((ball) => ball.mesh)],
       cars: () => this.live(),
-      playerCar: () => this.tetherSource(),
+      playerCar: () => -1,
       offered: () => this.tetherOffered(),
-      chase: () => this.tetherChase(),
+      chase: () => false,
+      afoot: () => this.onFoot.armed(),
+      self: () => WALKER_SLOT,
     });
     this.scene.add(this.tether.art.group);
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
@@ -904,6 +906,7 @@ export class CrashEngine extends EngineGarage {
     if (!this.onFoot.armed()) return;
     if (e.button === 2) this.onFoot.arms.aim(true);
     else if (e.button === 0 && this.mouseLook.on) this.onFoot.arms.press();
+    else if (e.button === 1 && this.onFoot.arms.weapon === "hook") this.tether.cut();
   };
   private readonly onArmsUp = (e: PointerEvent): void => {
     if (e.button === 2) this.onFoot.arms.aim(false);
@@ -940,7 +943,7 @@ export class CrashEngine extends EngineGarage {
   private shotFired(ray: LookRay, far: number): void {
     this.playerShots.fire(0, ray.eyeX + ray.dirX * far, ray.eyeY + ray.dirY * far, ray.eyeZ + ray.dirZ * far);
     const weapon = this.onFoot.arms.weapon;
-    if (this.audioOn && weapon !== "fists") this.audio.shot(weapon);
+    if (this.audioOn && weapon !== "fists" && weapon !== "hook") this.audio.shot(weapon);
     this.openWorld.shotFired();
   }
 
@@ -1000,7 +1003,7 @@ export class CrashEngine extends EngineGarage {
 
   /** Once a frame: the gun box along the player's right forearm (part 5, the one the ARM_R / ELBOW_R motors drive) and the muzzle the tracers start from; hidden with no gun in hand. */
   private poseHandGun(): void {
-    const held = this.onFoot.armed() && this.onFoot.arms.weapon !== "fists";
+    const held = this.onFoot.armed() && this.onFoot.arms.weapon !== "fists" && this.onFoot.arms.weapon !== "hook";
     this.handGun.visible = held;
     if (!held) return;
     const dummies = this.ragdolls.pickMesh;
@@ -1384,21 +1387,9 @@ export class CrashEngine extends EngineGarage {
     this.net.sendEject(e);
   }
 
-  /** The player's cable is on offer: what the walk is, less the walker's own trip and a netplay client's mirrored sim (a client has no cable to draw or solve). */
+  /** The hook is on offer: weapon 0 in hand, on foot in the open world, solo or as the room's host. */
   private tetherOffered(): boolean {
-    return !this.net.client && !this.onFoot.active && this.onFootOffered();
-  }
-
-  /** The car the player's cable starts from: the driven or followed car, else a race's own; -1 when there is none or the free camera is flying (it hooks two objects instead). */
-  private tetherSource(): number {
-    if (this.view.flying) return -1;
-    const index = this.followedCar() ? this.seat.carIndex : this.race.active ? this.race.self : -1;
-    return index >= 0 && index < this.carCount ? index : -1;
-  }
-
-  /** The camera is a chase camera, not the free camera, first person or the field's orbit: the tether's aim passes through a point above the middle of its view. */
-  private tetherChase(): boolean {
-    return !this.view.flying && this.seat.mode !== "global" && this.seat.view !== "first";
+    return this.onFoot.armed() && this.onFoot.arms.weapon === "hook";
   }
 
   /** The on-foot control is offered: the game is running a scene with a player's car to leave (not the garage, the lab or the showcase), and no reel, fade, boot warm-up or race menu holds it. Online or off. */

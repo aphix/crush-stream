@@ -1,10 +1,10 @@
 import type { HudProps } from "@/components/hud";
 
-/** What the tether's hint line says, by what is awaited and which device plays: the mouse first, then the keys; a pad shows its D-pad. */
-function hintText(pending: boolean, free: boolean, pad: boolean): string {
-  if (pad) return pending && free ? "Hook the second object: D-pad ↑  ·  Cut: D-pad ←" : "Hook: D-pad ↑  ·  Reel: D-pad → (hold)  ·  Cut: D-pad ←";
-  if (pending && free) return "Hook the second object: right-click or '  ·  Cut: middle-click or Del";
-  return "Hook: right-click or '  ·  Reel: hold right-click or ]  ·  Cut: middle-click or Del";
+/** What the tether's hint line says, by the cables out, whether a first end is held, and which device plays. */
+function hintText(count: number, pending: boolean, pad: boolean): string {
+  if (pending) return pad ? "RT: tie it to this  ·  D-pad ←: let go" : "Click: tie it to this  ·  Del: let go";
+  if (count === 0) return pad ? "RT: hook the first thing" : "Click: hook the first thing";
+  return pad ? "RT: next cable  ·  D-pad → (hold): reel  ·  D-pad ←: cut" : "Click: next cable  ·  Hold ]: reel  ·  Del: cut";
 }
 
 /** The hint's gap under the reticle, as a share of the view's height. */
@@ -16,7 +16,7 @@ export function TetherHint({ state }: Pick<HudProps, "state">) {
   if (tether === null) return null;
   return (
     <p role="note" data-tether-hint style={{ top: `${(tether.sight + HINT_BELOW_RETICLE) * 100}%` }} className="pointer-events-none absolute inset-x-0 z-10 text-center text-xs text-fg/70 [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
-      {hintText(tether.pending, tether.free, state.pad !== null)}
+      {hintText(tether.count, tether.pending, state.pad !== null)}
     </p>
   );
 }

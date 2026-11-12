@@ -61,6 +61,8 @@ export class TetherArt {
   private readonly reticle: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   private readonly marker: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   private readonly holdMarker: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  /** The cable about to be made: from the held first end to the point the aim would hook. */
+  private readonly preview: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   private readonly ring = ringGeometry();
 
   constructor() {
@@ -81,7 +83,13 @@ export class TetherArt {
       overlay.renderOrder = 999;
       overlay.visible = false;
     }
-    this.group.add(...this.cables, this.reticle, this.marker, this.holdMarker);
+    const previewGeometry = new THREE.BufferGeometry();
+    previewGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+    this.preview = new THREE.Line(previewGeometry, new THREE.LineBasicMaterial({ color: CABLE_SLACK, transparent: true, opacity: 0.5, depthTest: false, toneMapped: false }));
+    this.preview.renderOrder = 999;
+    this.preview.frustumCulled = false;
+    this.preview.visible = false;
+    this.group.add(...this.cables, this.reticle, this.marker, this.holdMarker, this.preview);
   }
 
   /** Draws the cables of `set` between its anchors as the cars stand now (the frame's drawn poses), the reticle when `view` is given, and a ring on `held`, the first object hooked while the second is awaited. */
@@ -89,12 +97,18 @@ export class TetherArt {
     for (let slot = 0; slot < MAX_TETHERS; slot++) this.drawCable(set, slot, cars);
     this.drawReticle(camera, view);
     this.holdMarker.visible = held !== null;
+    this.preview.visible = held !== null && view !== null && view.state === AIM.valid;
     if (held === null) return;
     camera.getWorldPosition(_eye);
     camera.getWorldQuaternion(_turn);
     this.holdMarker.position.copy(held);
     this.holdMarker.quaternion.copy(_turn);
     this.holdMarker.scale.setScalar(_eye.distanceTo(held) * Math.tan(THREE.MathUtils.degToRad(HELD_DEG)));
+    if (view === null || !this.preview.visible) return;
+    const position = this.preview.geometry.getAttribute("position") as THREE.BufferAttribute;
+    position.setXYZ(0, held.x, held.y, held.z);
+    position.setXYZ(1, view.point.x, view.point.y, view.point.z);
+    position.needsUpdate = true;
   }
 
   private drawCable(set: TetherSet, slot: number, cars: readonly DeformableCar[]): void {
@@ -142,5 +156,7 @@ export class TetherArt {
     this.reticle.material.dispose();
     this.holdMarker.material.dispose();
     this.marker.material.dispose();
+    this.preview.geometry.dispose();
+    this.preview.material.dispose();
   }
 }

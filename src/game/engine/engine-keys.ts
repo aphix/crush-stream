@@ -23,12 +23,8 @@ export const SEAT_KEYS = {
   flyDown: "PageDown",
 };
 
-/**
- * The grappling tether's keys (`KeyboardEvent.code`s): fire (hook a target; fire again for a second one), retract (held), cut every cable. Every letter already has a job,
- * so they are punctuation and the Delete key. The pad's are the D-pad's up, right (held) and left. Like the seat keys, no scene key may be one of them (`engine-keys.test.ts`).
- */
+/** The hook's keys (`KeyboardEvent.code`s): retract (held) and cut every cable; fire is the weapon's fire. No scene key may be one of them (`engine-keys.test.ts`). */
 export const TETHER_KEYS = {
-  fire: "Quote",
   retract: "BracketRight",
   cut: "Delete",
 };
