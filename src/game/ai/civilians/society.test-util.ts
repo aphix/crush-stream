@@ -34,9 +34,9 @@ function seatsBeside(place: Place, count: number, height: number): number[] {
   return Array.from({ length: count }, (_, seat) => [place.doorX + 1 + seat, place.doorZ + 1, 0, height]).flat();
 }
 
-/** Where a customer stands, then where a clerk stands, one metre in from the door. */
+/** Where a customer stands, then where a clerk stands, one metre in from the door; the clerk stands clear of the customers' second standing row (1.6 m back from theirs). */
 function counterBeside(place: Place): Float32Array {
-  return Float32Array.from([place.doorX + 1, place.doorZ - 1, 0, COUNTER_TOP, place.doorX + 1, place.doorZ - 3, Math.PI, COUNTER_TOP]);
+  return Float32Array.from([place.doorX + 1, place.doorZ - 1, 0, COUNTER_TOP, place.doorX + 1, place.doorZ - 3.4, Math.PI, COUNTER_TOP]);
 }
 
 /**

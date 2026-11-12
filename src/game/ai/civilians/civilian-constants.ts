@@ -122,7 +122,7 @@ export const RESIDENT_INT = {
   fightPartner: 49,
   fightX: 50,
   fightZ: 51,
-  /** The way a fighter faces, in `WALKER_BEARING_STEPS` of a turn (toward the player who shoved them); `NO_BEARING` for a fight between two civilians or with a car. */
+  /** The way a fighter faces, in `WALKER_BEARING_STEPS` of a turn (toward the player who shoved them; for two civilians, the lane they square up along); `NO_BEARING` with a car, or two civilians met at a door. */
   fightBearing: 52,
   /** The owner's car trip: the place it parks at (-1: none) and the ticks its driver gets in (it leaves) and it is parked (NEVER_TICK: none); the car is away, and nobody else's to take, from the reservation to the park tick. */
   carTo: 53,
@@ -432,6 +432,8 @@ export const YOUNG_AGE_MAX = 25;
 export const FIGHT_CHANCE = 0.12;
 export const FIGHT_ANGRY_FACTOR = 4;
 export const FIGHT_TICKS = 16;
+/** Two civilians fighting stand this far (m) either side of the fight's spot, facing each other. */
+export const FIGHT_HALF_GAP = 0.5;
 /** The share of fights that end with someone knocked out, and the blow that does it: one of this many, from this one on. */
 export const KNOCKOUT_SHARE = 0.6;
 export const KNOCKOUT_MIN_BLOWS = 2;

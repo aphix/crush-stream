@@ -147,8 +147,8 @@ describe("given a shop and a workplace that are shut, with nobody afraid of them
     expect(intAt(state, resident, RESIDENT_INT.place), "place they are at after deciding").not.toBe(work);
   });
 
-  // mutation: sed -i 's/planLeg(state, resident, tick, place, purpose, dwell, customer)/planLeg(state, resident, tick, place, purpose, dwell)/' src/game/ai/civilians/civilian-plan.ts
-  it("when the only open shop is open as she decides but her walk there would end after it shuts, then she does not set out for it; at noon she does", () => {
+  // mutation: sed -i 's/  const stay = customer ? ticksOpen(state, destination, resident, tick + legTicks, Math.max(1, dwellTicks)) : Math.max(1, dwellTicks);/  const stay = Math.max(1, dwellTicks);/' src/game/ai/civilians/civilian-plan.ts
+  it("when the only open shop is open as she decides but her walk there ends after it shuts, then she sets out and finds it shut: no stay there, she decides again at its door; at noon she stays", () => {
     const bodega = placeNamed(map, PLACE_NAMES.bodega);
     const errandAt = (tickOf: (state: CityState) => number) => {
       const state = createCityState(5, map, 60);
@@ -158,18 +158,21 @@ describe("given a shop and a workplace that are shut, with nobody afraid of them
       const tick = tickOf(state);
       dwellingWithNeeds(state, resident, intAt(state, resident, RESIDENT_INT.home), tick, needsOf(NEED.errand));
       decideResident(state, resident, tick);
-      return { state, tick, place: intAt(state, resident, RESIDENT_INT.place), walk: intAt(state, resident, RESIDENT_INT.arriveTick) - tick };
+      const arrive = intAt(state, resident, RESIDENT_INT.arriveTick);
+      return { state, tick, place: intAt(state, resident, RESIDENT_INT.place), walk: arrive - tick, stay: intAt(state, resident, RESIDENT_INT.nextDecisionTick) - arrive };
     };
     const noon = errandAt((state) => tickOfHour(state, 2, 12));
     expect(noon.place, "control: at noon she heads for the bodega").toBe(bodega);
+    expect(noon.stay, "control: at noon she stays there (ticks)").toBeGreaterThan(0);
     const late = errandAt((state) => tickOfHour(state, 2, 22) - Math.floor(noon.walk / 2));
     const weightAt = (tick: number): number => late.state.venues.hourWeight[bodega * HOURS_PER_GAME_DAY + hourOfDay(tick, late.state.startHour)]!;
     expect(weightAt(late.tick), "control: open as she decides").toBe(1);
-    expect(weightAt(late.tick + noon.walk), "control: shut when her walk would end").toBeLessThan(1);
-    expect(late.place, "where she is after deciding, half her walk before closing").not.toBe(bodega);
+    expect(weightAt(late.tick + late.walk), "control: shut when her walk ends").toBeLessThan(1);
+    expect(late.place, "she sets out for the bodega, as she decided").toBe(bodega);
+    expect(late.stay, "ticks she stays in the shut bodega").toBe(0);
   });
 
-  // mutation: sed -i 's/ \&\& home !== current \&\& !withinHours(state, current, tick);/ \&\& home !== current \&\& false;/' src/game/ai/civilians/civilian-plan.ts
+  // mutation: sed -i 's/  const shutIn = guest \&\& home !== NO_PLACE \&\& !withinHours(state, current, tick) \&\&/  const shutIn = false \&\&/' src/game/ai/civilians/civilian-plan.ts
   it("when a customer is at the shop after it has shut and wants nothing pressing, then she walks home rather than staying inside", () => {
     const state = createCityState(5, map, 60);
     const bodega = placeNamed(map, PLACE_NAMES.bodega);

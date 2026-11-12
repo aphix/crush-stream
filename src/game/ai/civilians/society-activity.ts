@@ -5,6 +5,7 @@ import {
   CENTIMETRES_PER_METRE,
   DECISION_HZ,
   DOOR_SPREAD,
+  FIGHT_HALF_GAP,
   FIGHT_PLAYER,
   FLAG,
   KNOCKOUT_BLOW_SPAN,
@@ -56,8 +57,6 @@ const FIGHT_SLOT_SECONDS = 0.6;
 const FIGHT_SLOTS = 4;
 const STARTER_SLOTS = [ACTIVITY.swing, ACTIVITY.block, ACTIVITY.swing, ACTIVITY.block] as const;
 const OTHER_SLOTS = [ACTIVITY.hit, ACTIVITY.swing, ACTIVITY.hit, ACTIVITY.swing] as const;
-/** Two fighters stand this far (m) either side of the spot, facing each other. */
-const FIGHT_HALF_GAP = 0.5;
 /** Quarter turn: fighters face along the x axis. */
 const QUARTER_TURN = Math.PI / 2;
 const FULL_TURN = 2 * Math.PI;
@@ -128,9 +127,12 @@ function readFight(state: CityState, resident: number, out: ActivityReading): vo
   const side = starter ? -1 : 1;
   out.placed = true;
   out.fixed = true;
-  out.x = intAt(state, resident, RESIDENT_INT.fightX) / CENTIMETRES_PER_METRE + (civilianPair ? side * FIGHT_HALF_GAP : 0);
+  const bearing = intAt(state, resident, RESIDENT_INT.fightBearing);
+  // A pair met on a walk stands at its own spots, each facing the other (`startFight`); a pair met at a door is split along x.
+  const split = civilianPair && bearing === NO_BEARING;
+  out.x = intAt(state, resident, RESIDENT_INT.fightX) / CENTIMETRES_PER_METRE + (split ? side * FIGHT_HALF_GAP : 0);
   out.z = intAt(state, resident, RESIDENT_INT.fightZ) / CENTIMETRES_PER_METRE;
-  out.yaw = civilianPair ? -side * QUARTER_TURN : bearingYaw(intAt(state, resident, RESIDENT_INT.fightBearing));
+  out.yaw = split ? -side * QUARTER_TURN : bearingYaw(bearing);
   out.partner = civilianPair ? partner : -1;
   if (!fighting) {
     out.code = ACTIVITY.idle;
@@ -349,7 +351,8 @@ function readWalk(state: CityState, resident: number, out: ActivityReading): voi
     out.code = ACTIVITY.door;
     out.sinceSeconds = since;
     out.leftSeconds = doorSeconds - since;
-  } else if (toEnd < doorSeconds && to === intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ && hasDoor(state, intAt(state, resident, RESIDENT_INT.place))) {
+  // A walk with no dwell after it ended at a shut door (`planLeg`): she does not go in.
+  } else if (toEnd < doorSeconds && to === intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ && intAt(state, resident, RESIDENT_INT.nextDecisionTick) > intAt(state, resident, RESIDENT_INT.arriveTick) && hasDoor(state, intAt(state, resident, RESIDENT_INT.place))) {
     out.code = ACTIVITY.door;
     out.sinceSeconds = doorSeconds - toEnd;
     out.leftSeconds = toEnd;
@@ -422,25 +425,28 @@ export function findWalkerStrike(state: CityState, fromSeconds: number, toSecond
   return false;
 }
 
-/** A blow one civilian lands on another in a fight. */
+/** A blow one civilian lands on another in a fight, and the crowd time `findCivilianBlow` searches: fields, since a double passed to a call that is not inlined is boxed. */
 export class CivilianBlow {
   striker = -1;
   victim = -1;
   /** Crowd second the swing lands. */
   landing = 0;
+  /** The window searched: (fromSeconds, toSeconds]. */
+  fromSeconds = 0;
+  toSeconds = 0;
 }
 
 /**
- * The first fighter at or after `firstResident` whose swing lands on a civilian partner in crowd time (fromSeconds, toSeconds]: his index, with the pair in `out`; -1 when none does.
+ * The first fighter at or after `firstResident` whose swing lands on a civilian partner in crowd time (`out.fromSeconds`, `out.toSeconds`]: his index, with the pair in `out`; -1 when none does.
  * Only the one who started the fight swings (the lower id of the pair, as `readFight` casts them), so the victim is his partner. Pure in the rows and the times.
  */
-export function findCivilianBlow(state: CityState, fromSeconds: number, toSeconds: number, firstResident: number, out: CivilianBlow): number {
+export function findCivilianBlow(state: CityState, firstResident: number, out: CivilianBlow): number {
   const { ints } = state;
   for (let resident = firstResident; resident < state.capacity; resident++) {
     const base = resident * RESIDENT_INT_STRIDE;
     const partner = ints[base + RESIDENT_INT.fightPartner]!;
     if (ints[base + RESIDENT_INT.alive] === 0 || partner < 0 || partner <= resident || ints[base + RESIDENT_INT.fightTick] === NEVER_TICK || ints[base + RESIDENT_INT.legPurpose] !== PURPOSE.fight) continue;
-    const landing = swingLandingIn(ints[base + RESIDENT_INT.arriveTick]! / DECISION_HZ, fromSeconds, toSeconds);
+    const landing = swingLandingIn(ints[base + RESIDENT_INT.arriveTick]! / DECISION_HZ, out.fromSeconds, out.toSeconds);
     if (landing < 0 || landing >= ints[base + RESIDENT_INT.nextDecisionTick]! / DECISION_HZ) continue;
     out.striker = resident;
     out.victim = partner;
