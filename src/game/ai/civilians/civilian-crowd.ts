@@ -611,6 +611,7 @@ export class CivilianCrowd {
     if (!this.authority) return;
     this.raiseBearingPush(resident, x, z, seconds, EVENT_KIND.walker);
     this.hitSince[resident] = seconds;
+    this.postBatch();
   }
 
   /** The player's blow fells `resident` (a knock-out): hidden, thrown along (dirX, dirZ), the knock in the log. */
@@ -619,6 +620,8 @@ export class CivilianCrowd {
     const x = this.poses.x[resident]!;
     const z = this.poses.z[resident]!;
     this.knockDown(resident, seconds, felled(resident, x, activeGround().heightAt(x, z), z, dirX, dirZ, blankStrike()));
+    // A punch lands between steps: posted now, the brain hides her before the next step's poses (as `noteWallHit` posts), not a frame after.
+    this.postBatch();
   }
 
   private logHostEvent(kind: number, subject: number, seconds: number): void {

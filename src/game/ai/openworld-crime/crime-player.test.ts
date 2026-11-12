@@ -132,11 +132,13 @@ describe("the player on foot is a subject of the law", () => {
     const run = harness([59]);
     run.scene.setFoot(true, 58, 0, 1, 0, 0);
     runFor(run, 1);
-    expect(run.scene.punchCop(58, 0, 1, 0, run.now), "the first punch lands on the cop").toBe(true);
+    // The cop walks his beat: each punch is thrown from a metre short of where he is drawn, along +x at him.
+    const punch = (): boolean => run.scene.punchCop(run.scene.copPoses.x[0]! - 1, run.scene.copPoses.z[0]!, 1, 0, run.now);
+    expect(punch(), "the first punch lands on the cop").toBe(true);
     expect(run.scene.footChaseOf(strip()), "the chase is open").toBe(true);
     for (let blow = 1; blow < 3; blow++) {
       runFor(run, 0.2);
-      run.scene.punchCop(58, 0, 1, 0, run.now);
+      punch();
     }
     expect(run.copDowns, "cops down").toHaveLength(1);
     expect(run.scene.takeCopStrikes(), "his throw").toHaveLength(1);
