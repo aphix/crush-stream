@@ -48,7 +48,8 @@ describe("given a figure-8 spectator race on Auto, the spectator in free fly, an
     await runUntil(() => race().recorder.ledger.kept.length > 0);
     engine.raceCommand({ type: "end" });
     await run(FRAME);
-    for (let turns = 0; turns < 200 && !engine["highlights"].hasReel; turns++) await nextTurn();
+    // The reel is packed and unpacked off this thread (about 8 ms, more on a busy box): wait for the reel itself, not for a count of turns, which can pass in less.
+    for (const until = performance.now() + WAIT_S * 1000; !engine["highlights"].hasReel && performance.now() < until; ) await nextTurn();
   });
   afterAll(() => {
     engine.dispose();
