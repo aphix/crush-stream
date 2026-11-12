@@ -236,7 +236,7 @@ export class FollowFocus {
       this.yaw.v = 0;
       return yaw;
     }
-    return wrapAngle(this.yaw.step(yaw + wrapAngle(behind - yaw), YAW_TIME / Math.max(0.3, Math.cos(gap)), dt));
+    return wrapAngle(this.yaw.step(yaw + wrapAngle(behind - yaw), YAW_TIME / Math.max(0.3, detCos(gap)), dt));
   }
 
   private write(): void {
