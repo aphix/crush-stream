@@ -282,6 +282,58 @@ describe("given a civilian a car runs down while her body stands for her", () =>
     expect(host.stopped, "not let go").not.toContain(slot);
     expect(bodies.held[0], "still held").toBe(1);
   });
+
+  // mutation: sed -i 's/^    if (!this.host.steady(slot)) this.recovering\[body\] = 1;/    if (false) this.recovering[body] = 1;/' src/game/engine/openworld-bodies.ts
+  it("when her body staggers on its feet and her spot is 5 m on, then it is not let go: a stumble runs back as a fall does", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    const body = host.bodies.get(slot)!;
+    body.steady = false;
+    poses.z[0] = body.z + 5;
+    run(2);
+    expect(host.stopped, "not let go").not.toContain(slot);
+    expect(bodies.held[0], "still held").toBe(1);
+  });
+
+  // mutation: sed -i 's/^const REJOIN_LEASH = 15;/const REJOIN_LEASH = 150;/' src/game/engine/openworld-bodies.ts
+  it("when a body that fell stands again 14 m behind her spot, then it is kept; 16 m behind, it is let go", () => {
+    for (const [behind, kept] of [[14, true], [16, false]] as const) {
+      const { host, poses, bodies, run } = world();
+      walker(poses, 0, 2, 0);
+      run(SETTLE_STEPS);
+      const slot = bodies.slotOf(0);
+      const body = host.bodies.get(slot)!;
+      body.standing = false;
+      run(2);
+      body.standing = true;
+      poses.z[0] = body.z + behind;
+      run(1);
+      expect(host.stopped.includes(slot), `${behind} m behind: let go`).toBe(!kept);
+    }
+  });
+
+  // mutation: sed -i '/^    this.recovering\[body\] = 0;$/d' src/game/engine/openworld-bodies.ts
+  it("when the body of one who fell is let go and given to another, then the new one is not recovering: 5 m behind her spot before she has rejoined it, it is let go", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const first = bodies.slotOf(0);
+    host.bodies.get(first)!.standing = false;
+    run(2);
+    poses.shown[0] = 0;
+    run(1);
+    expect(host.stopped, "control: the fallen body went").toContain(first);
+    walker(poses, 1, 3, 0);
+    for (let step = 0; step < SETTLE_STEPS && bodies.slotOf(1) < 0; step++) run(1);
+    const slot = bodies.slotOf(1);
+    expect(slot, "control: she has a body").toBeGreaterThanOrEqual(FIRST_SLOT);
+    const stoppedBefore = host.stopped.length;
+    poses.z[1] = poses.z[1]! + 5;
+    run(1);
+    expect(host.stopped.slice(stoppedBefore), "her body is let go (the pool slot is the fallen one's again)").toContain(slot);
+  });
 });
 
 describe("given a civilian 50 m from the eye, past the bodies' reach, whom the hook takes", () => {
