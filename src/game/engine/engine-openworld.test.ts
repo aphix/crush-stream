@@ -7,7 +7,7 @@ import { CENTIMETRES_PER_METRE, DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, FIGHT_PLA
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER, WALKER_BEARING_STEPS, WRECK_SPEED } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
-import { LookRay, placeMet } from "../ai/civilians/civilian-look.ts";
+import { chestMet, LookRay, placeMet } from "../ai/civilians/civilian-look.ts";
 import { residentNameText } from "../ai/civilians/civilian-mood.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { SUBJECT } from "../ai/openworld-auto/auto-director.ts";
@@ -192,6 +192,34 @@ function shownOnTheHost(harness: Harness): number {
   throw new Error("no free person walked the fixture's streets in a minute");
 }
 
+/** A free shown person of the harness's crowd and a ray from `far` m off to 0.1 m beside her chest line (so a chest radius of 0 misses her) along which no building stands within `far` + 1 m and no other shown person is nearer: the first such person, of sixteen headings and then of four pitches down onto her (the fixture's streets end in buildings under 30 m, so a level ray seldom clears them), in that order; framed for up to a minute until one does (a person inside a place's box, as the fixture's lots cover some pavements, is out of reach from the street). */
+function clearShot(harness: Harness, far: number): { resident: number; ray: LookRay } {
+  const crowd = harness.crowd();
+  const { shown, activity, x, z, feetY } = crowd.poses;
+  const ints = crowd.state.ints;
+  const ray = new LookRay();
+  const met = { index: -1, along: 0 };
+  for (let frame = 0; frame < 60 / FRAME; frame++, harness.frame()) {
+    for (let resident = 0; resident < crowd.poses.count; resident++) {
+      const base = resident * RESIDENT_INT_STRIDE;
+      if (shown[resident] !== 1 || activity[resident] !== ACTIVITY.none || ints[base + RESIDENT_INT.species] !== SPECIES.person || (ints[base + RESIDENT_INT.flags]! & FLAG.cast) !== 0) continue;
+      for (let pitch = 0; pitch < 4; pitch++) {
+        for (let k = 0; k < 16; k++) {
+          const level = detCos(pitch * 0.3);
+          ray.dirX = detSin((k * Math.PI) / 8) * level;
+          ray.dirY = -detSin(pitch * 0.3);
+          ray.dirZ = detCos((k * Math.PI) / 8) * level;
+          ray.eyeX = x[resident]! - ray.dirX * far + ray.dirZ * 0.1;
+          ray.eyeY = feetY[resident]! + 1.3 - ray.dirY * far;
+          ray.eyeZ = z[resident]! - ray.dirZ * far - ray.dirX * 0.1;
+          if (placeMet(map, ray, 250).along > far + 1 && chestMet(crowd.poses, crowd.poses.count, null, ray, 0.35, far + 1, met).index === resident) return { resident, ray };
+        }
+      }
+    }
+  }
+  throw new Error(`no free person stood ${far} m down an open line in a minute`);
+}
+
 /** Harness frames until the director's clock reaches `seconds`. */
 function frameUntil(harness: Harness, seconds: number): void {
   while (harness.director["seconds"] < seconds) harness.frame();
@@ -285,21 +313,10 @@ describe("given the player on foot in the open world", () => {
   // mutation: sed -i 's/^const SHOT_BODY_RADIUS = 0.35;/const SHOT_BODY_RADIUS = 0;/' src/game/engine/engine-openworld.ts
   it("when a rifle's ray passes a drawn civilian's chest 30 m off, then she is hidden and thrown and the log ends with a knock", () => {
     const harness = hostWithMap();
-    const c = shownOnTheHost(harness);
+    shownOnTheHost(harness);
+    const { resident: c, ray } = clearShot(harness, 30);
     const crowd = harness.crowd();
     const poses = crowd.poses;
-    const chest = { x: poses.x[c]!, y: poses.feetY[c]! + 1.3, z: poses.z[c]! };
-    // From open street, 0.1 m to the side of her chest line: the first of eight headings whose 30 m to her meets no building.
-    const ray = new LookRay();
-    for (let k = 0; k < 8; k++) {
-      ray.dirX = detSin((k * Math.PI) / 4);
-      ray.dirY = 0;
-      ray.dirZ = detCos((k * Math.PI) / 4);
-      ray.eyeX = chest.x - ray.dirX * 30 + ray.dirZ * 0.1;
-      ray.eyeY = chest.y;
-      ray.eyeZ = chest.z - ray.dirZ * 30 - ray.dirX * 0.1;
-      if (placeMet(map, ray, 250).along > 31) break;
-    }
     expect(placeMet(map, ray, 250).along, "control: no building in the way (m)").toBeGreaterThan(31);
     const thrown = harness.thrown.length;
     expect(harness.director.shoot(ray, WEAPONS.rifle), "how far the shot went (m)").toBeCloseTo(30, 1);

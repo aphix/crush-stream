@@ -903,16 +903,22 @@ export class CrashEngine extends EngineGarage {
     const rect = this.canvas.getBoundingClientRect();
     const x = this.view.hoverX;
     const y = this.view.hoverY;
-    if (centre || Number.isNaN(x) || Number.isNaN(y) || rect.width < 2 || rect.height < 2) this.ndc.set(0, 0);
-    else this.ndc.set(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
-    this.raycaster.setFromCamera(this.ndc, this.camera);
-    const { origin, direction } = this.raycaster.ray;
-    out.eyeX = origin.x;
-    out.eyeY = origin.y;
-    out.eyeZ = origin.z;
-    out.dirX = direction.x;
-    out.dirY = direction.y;
-    out.dirZ = direction.z;
+    if (centre || Number.isNaN(x) || Number.isNaN(y) || rect.width < 2 || rect.height < 2) {
+      // The view's centre is the camera's own forward: no projection is read, so a canvas with no size (no aspect) still aims, and never along NaN.
+      this.camera.getWorldPosition(_p);
+      this.camera.getWorldDirection(_n);
+    } else {
+      this.ndc.set(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+      this.raycaster.setFromCamera(this.ndc, this.camera);
+      _p.copy(this.raycaster.ray.origin);
+      _n.copy(this.raycaster.ray.direction);
+    }
+    out.eyeX = _p.x;
+    out.eyeY = _p.y;
+    out.eyeZ = _p.z;
+    out.dirX = _n.x;
+    out.dirY = _n.y;
+    out.dirZ = _n.z;
   }
 
   /** The player fired along `ray` and its farthest ray went `far` m: the flash, the tracer, the sound, the law. */
