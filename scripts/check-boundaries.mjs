@@ -124,7 +124,7 @@ const HOT = {
   "src/game/ai/openworld-crime/traffic-signals.ts": ["againstSignal", "nearestJunction"],
   "src/game/ai/openworld-traffic/traffic-driver.ts": ["think", "turnLimit", "signalLimit", "boxBlocked", "leadLimit"],
   "src/game/ai/openworld-traffic/mover-fleet.ts": ["step", "inputOf", "tend", "tendParked", "tendDriving", "laneClear"],
-  "src/game/ai/openworld-traffic/openworld-traffic.ts": ["step", "drive", "inputOf", "refreshSnaps", "watchSignals", "carForClip", "takeSpot"],
+  "src/game/ai/openworld-traffic/openworld-traffic.ts": ["step", "drive", "inputOf", "refreshSnaps", "watchSignals", "carForClip", "holderOf", "claimMovable", "moveClaim"],
   "src/game/ai/openworld-traffic/red-light-watch.ts": ["observe", "nearestJunction"],
   "src/game/ai/openworld-traffic/ambulance.ts": ["step"],
   "src/game/ai/openworld-traffic/kerb-cars.ts": ["step", "tend", "findEyes", "nearestWanted", "distanceToEyes", "evictFarthest", "bring", "farthestSpare"],

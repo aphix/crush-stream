@@ -209,27 +209,34 @@ export class OpenWorldTraffic {
     if (spot < 0 || resident < 0 || resident >= RESIDENT_CAPACITY) return false;
     const own = residentSpot[resident]!;
     if (own === spot && this.carIdOf(resident) >= 0) return true;
-    if (own !== spot && (own === -1 ? taken[spot] === 1 : !this.takeSpot(resident, own, spot))) return false;
+    if (own !== spot && (own === -1 ? taken[spot] === 1 : !this.claimMovable(own, spot))) return false;
     if (this.movers.hasTripFor(resident)) return false;
     if (!this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS)) return false;
+    if (own !== spot && own !== -1) this.moveClaim(own, spot);
     residentSpot[resident] = spot;
     taken[spot] = 1;
     return true;
   }
 
-  /** Resident `resident`'s claim moves from `own` to `spot`, the space the brain puts her car in: a free space is taken, a space another resident's claim holds is swapped for `own`. Only while no car stands at either, so nothing visibly moves; false otherwise or when `spot` is a trip's reservation. */
-  private takeSpot(resident: number, own: number, spot: number): boolean {
-    const { residentSpot, standing, taken } = this.context;
+  /** The resident whose claim holds `spot`, -1 when none does. */
+  private holderOf(spot: number): number {
+    const { residentSpot } = this.context;
+    for (let other = 0; other < RESIDENT_CAPACITY; other++) if (residentSpot[other] === spot) return other;
+    return -1;
+  }
+
+  /** Whether a claim at `own` may move to `spot`, the space the brain puts her car in: no car stands at either, so nothing visibly moves, and `spot` is free or another resident's claim holds it (not a trip's reservation). */
+  private claimMovable(own: number, spot: number): boolean {
+    const { standing, taken } = this.context;
     if (standing[own] !== STANDING.none || standing[spot] !== STANDING.none) return false;
-    if (taken[spot] === 1) {
-      let holder = -1;
-      for (let other = 0; other < RESIDENT_CAPACITY && holder < 0; other++) if (residentSpot[other] === spot) holder = other;
-      if (holder < 0) return false;
-      residentSpot[holder] = own;
-    } else taken[own] = 0;
-    residentSpot[resident] = spot;
-    taken[spot] = 1;
-    return true;
+    return taken[spot] === 0 || this.holderOf(spot) >= 0;
+  }
+
+  /** A claim moves from `own` to `spot` (`claimMovable`): a free space is taken and `own` freed, a space another resident's claim holds is swapped for `own`. */
+  private moveClaim(own: number, spot: number): void {
+    const { residentSpot, taken } = this.context;
+    if (taken[spot] === 1) residentSpot[this.holderOf(spot)] = own;
+    else taken[own] = 0;
   }
 
   /** The engine id of the pool car standing in resident `resident`'s space (a kerb car, else the mover parked for him), -1 when none does. */
