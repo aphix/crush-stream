@@ -1,7 +1,3 @@
-/**
- * The driven car's controls as the HUD's key line (" · " separated, outside a race), for the keyboard or a controller. The Long jump's
- * boost control is its bail, which its card names, so the line has no boost there (`boostable` false).
- */
 const WEAPON_KEYS_HINT = ["1 Fists", "2 Pistol", "3 Shotgun", "4 Rifle", "0 Hook"] as const;
 
 /**
@@ -17,6 +13,10 @@ export function footKeys(pad: boolean, prompt: string | null, arms: { slot: numb
   return (prompt === null ? all : [prompt, ...all]).join(" · ");
 }
 
+/**
+ * The driven car's controls as the HUD's key line (" · " separated, outside a race), for the keyboard or a controller. The Long jump's
+ * boost control is its bail, which its card names, so the line has no boost there (`boostable` false).
+ */
 export function driveKeys(pad: boolean, boostable: boolean): string {
   const boost = boostable ? [pad ? "A boost" : "Shift boost"] : [];
   const parts = pad

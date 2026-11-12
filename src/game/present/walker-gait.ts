@@ -152,7 +152,7 @@ export class Gait {
   standing = true;
   /** How far (m) over their spots both planted feet are held, the pelvis riding on them: a hop out of something he stands in (`Walker`). */
   hop = 0;
-  /** Where the root walks (x, z): the torso's centre without the step's sideways sway. */
+  /** Where the root walks (x, z): the torso's centre without the step's sideways sway. Only `Gait` writes them; others read them. */
   pathX = 0;
   pathZ = 0;
   private hipY = 0;

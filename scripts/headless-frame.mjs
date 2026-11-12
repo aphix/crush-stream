@@ -231,7 +231,12 @@ Object.assign(globalThis, {
   // The page's workers on threads; the ragdoll world stays inline, as without one: its answers at thread timing would make two runs differ.
   Worker: class extends PageWorker {
     constructor(url) {
-      if (String(url).includes("ragdoll-worker")) throw new Error("headless-frame: the ragdoll world runs inline");
+      if (String(url).includes("ragdoll-worker")) {
+        // The expected path, not a failure: the engine logs the refusal, so it carries no stack and prints as one line.
+        const inline = new Error("headless-frame: the ragdoll world runs inline");
+        inline.stack = inline.message;
+        throw inline;
+      }
       super(url);
     }
   },

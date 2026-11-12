@@ -204,6 +204,7 @@ export class OpenWorldDirector {
   private walkerBlowAt = -Infinity;
   private readonly pickedDoll: DollPick = { slot: -1, x: 0, y: 0, z: 0, along: Infinity };
   private readonly pickedCar: CarPick = { car: -1, x: 0, y: 0, z: 0, along: Infinity, pane: null };
+  private readonly wallMet: Meeting = { index: -1, along: Infinity };
   private readonly personMet: Meeting = { index: -1, along: Infinity };
   private readonly copShot: Meeting = { index: -1, along: Infinity };
   /** Shots that have landed on each car's body: at the guards' count its engine dies. */
@@ -526,7 +527,7 @@ export class OpenWorldDirector {
   shoot(ray: LookRay, gun: Gun): number {
     const crowd = this.crowd;
     if (crowd === null || this.map === null || this.ports.isClient()) return gun.range;
-    let reach = Math.min(gun.range, placeMet(this.map, ray, gun.range).along);
+    let reach = Math.min(gun.range, placeMet(this.map, ray, gun.range, this.wallMet).along);
     if (ray.dirY < 0) reach = Math.min(reach, (activeGround().heightAt(ray.eyeX, ray.eyeZ) - ray.eyeY) / ray.dirY);
     const flat = hypot2(ray.dirX, ray.dirZ);
     const dirX = flat > STRAIGHT_UP ? ray.dirX / flat : 0;

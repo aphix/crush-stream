@@ -212,7 +212,7 @@ function clearShot(harness: Harness, far: number): { resident: number; ray: Look
           ray.eyeX = x[resident]! - ray.dirX * far + ray.dirZ * 0.1;
           ray.eyeY = feetY[resident]! + 1.3 - ray.dirY * far;
           ray.eyeZ = z[resident]! - ray.dirZ * far - ray.dirX * 0.1;
-          if (placeMet(map, ray, 250).along > far + 1 && chestMet(crowd.poses, crowd.poses.count, null, ray, 0.35, far + 1, met).index === resident) return { resident, ray };
+          if (placeMet(map, ray, 250, { index: -1, along: 0 }).along > far + 1 && chestMet(crowd.poses, crowd.poses.count, null, ray, 0.35, far + 1, met).index === resident) return { resident, ray };
         }
       }
     }
@@ -317,7 +317,7 @@ describe("given the player on foot in the open world", () => {
     const { resident: c, ray } = clearShot(harness, 30);
     const crowd = harness.crowd();
     const poses = crowd.poses;
-    expect(placeMet(map, ray, 250).along, "control: no building in the way (m)").toBeGreaterThan(31);
+    expect(placeMet(map, ray, 250, { index: -1, along: 0 }).along, "control: no building in the way (m)").toBeGreaterThan(31);
     const thrown = harness.thrown.length;
     expect(harness.director.shoot(ray, WEAPONS.rifle), "how far the shot went (m)").toBeCloseTo(30, 1);
     harness.frame();
@@ -329,7 +329,7 @@ describe("given the player on foot in the open world", () => {
     expect(lastKnock, "the log's last knock").toBe(c);
   });
 
-  // mutation: sed -i 's/^    let reach = Math.min(gun.range, placeMet(this.map, ray, gun.range).along);/    let reach = gun.range;/' src/game/engine/engine-openworld.ts
+  // mutation: sed -i 's/^    let reach = Math.min(gun.range, placeMet(this.map, ray, gun.range, this.wallMet).along);/    let reach = gun.range;/' src/game/engine/engine-openworld.ts
   it("when a building stands between the ray's eye and a civilian, then the shot stops at the wall and she walks on", () => {
     const harness = hostWithMap();
     const c = shownOnTheHost(harness);

@@ -127,6 +127,9 @@ const _gunRest = new THREE.Vector3();
 const GUN_DOWN = new THREE.Vector3(0, -1, 0);
 const _bn = new THREE.Vector3();
 const _bp = new THREE.Vector3();
+/** The live cars' groups and the raycaster's hits for a bullet's car pick (`pickCar`): refilled each shot, so a shot allocates no array of its own. */
+const _carGroups: THREE.Object3D[] = [];
+const _carHits: THREE.Intersection[] = [];
 /** No cars: the showcase's set outside its scene. */
 const NO_CARS: readonly DeformableCar[] = [];
 const NO_SOLIDS: readonly Occluder[] = [];
@@ -978,9 +981,13 @@ export class CrashEngine extends EngineGarage {
     this.raycaster.set(_p.set(ray.eyeX, ray.eyeY, ray.eyeZ), _n.set(ray.dirX, ray.dirY, ray.dirZ));
     this.raycaster.far = range;
     const cars = this.live();
-    const hits = this.raycaster.intersectObjects(cars.map((car) => car.group), true);
+    _carGroups.length = cars.length;
+    for (let at = 0; at < cars.length; at++) _carGroups[at] = cars[at]!.group;
+    _carHits.length = 0;
+    this.raycaster.intersectObjects(_carGroups, true, _carHits);
     this.raycaster.far = Infinity;
-    for (const hit of hits) {
+    for (let h = 0; h < _carHits.length && out.car < 0; h++) {
+      const hit = _carHits[h]!;
       for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
         const index: unknown = o.userData.carIndex;
         if (typeof index !== "number" || index < 0 || index >= this.carCount) continue;
@@ -989,10 +996,13 @@ export class CrashEngine extends EngineGarage {
         out.y = hit.point.y;
         out.z = hit.point.z;
         out.along = hit.distance;
-        out.pane = cars[index]!.glassPanes.find((pane) => pane.mesh === hit.object)?.name ?? null;
-        return;
+        const panes = cars[index]!.glassPanes;
+        for (let at = 0; at < panes.length && out.pane === null; at++) if (panes[at]!.mesh === hit.object) out.pane = panes[at]!.name;
+        break;
       }
     }
+    // Hits hold meshes: let them go until the next shot.
+    _carHits.length = 0;
   }
 
   /** A shot strikes the dummy in pool slot `slot` at (x, y, z) along the ray, as a showcase click strikes one. */

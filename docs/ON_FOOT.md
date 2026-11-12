@@ -33,7 +33,7 @@ the `available` of `OnFootHost`). He gets back into his own car only: the one he
 **What the rules see.** Nothing changes for them. A player on foot is a driver with his foot hard on the brake: the car he left stands on its brakes
 (`brake: 1`, the `hold` input a racer waiting on a grid gets) and every rule reads that, not an empty seat.
 
-- The walker writes nothing to a car. Not `driverOut` (that is a thrown-out driver: it rides the netplay snapshot and the highlight keyframes, makes
+- Outside the open world the walker writes nothing to a car. Not `driverOut` (that is a thrown-out driver: it rides the netplay snapshot and the highlight keyframes, makes
   the race's judge count the car a wreck and the HUD say DRIVER OUT, and the ejection watch skips the car), not `parked` (every drive call clears it), not
   the driver's door (an unlatched door at an angle is sim: the crash model hits it, and the clips record its hinge). The seated driver is left out of
   the draw (`SeatedDrivers.sync`'s `away`). In the open world, on a machine that runs the cars, the driver's door swings open as he gets out or in and shuts
@@ -239,7 +239,7 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
   drawn), `drive-keys.test.ts`, and the lane's rows: `onfoot-flow`, `engine-walk-input`, `ragdoll-walker`, `ragdoll-walker-getup`, `ragdoll-hit`,
   `ragdoll-mesh-pick`, `showcase-walks`.
 - Unmoved by it, and run before and after: `whole-digest`, `replay-fidelity`, the race and derby result rows, the net codec and wire rows.
-- The speed lane's rows, each shown red against a mutant (a 4 m/s² push, no pivot or stop band, a planted foot that rides with the root, an unsmoothed focus and no recenter delay):
+- The speed lane's rows, each shown red against a mutant (a 4 m/s² push, a pivot or stop that snaps on at a threshold of the heading error, a planted foot that rides with the root, an unsmoothed focus and no recenter delay):
   `walker-locomotion.test.ts` (time to speed, stops, 45 / 90 / 180° cuts at a sprint, the heading-error curve, lean and bank), `walker-gait.test.ts` (planted feet do not move
   by 1e-9 m, flight at a run, joint ranges, pelvis steps), `ragdoll-walker-pace.test.ts` (the physical walker: speed, time to 90 %, drawn-speed steadiness, planted-foot slide,
   stops, cuts), `ragdoll-walker-getup.test.ts` (time to stand from four lying poses, running again within 0.6 s, a car at 4.5 m/s), `walker-camera.test.ts`, `engine-walk-input.test.ts`.
