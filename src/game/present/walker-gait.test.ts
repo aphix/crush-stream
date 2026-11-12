@@ -1,3 +1,4 @@
+import { detSin, hypot2 } from "../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { Gait, GAIT } from "./walker-gait.ts";
@@ -37,7 +38,7 @@ function plantedSlide(frames: Frame[]): { worst: number; samples: number } {
     for (let f = 0; f < 2; f++) {
       if (!frames[i]!.planted[f] || !frames[i - 1]!.planted[f] || frames[i]!.pivot[f] !== frames[i - 1]!.pivot[f]) continue;
       samples++;
-      worst = Math.max(worst, Math.hypot(frames[i]!.contact[f * 3]! - frames[i - 1]!.contact[f * 3]!, frames[i]!.contact[f * 3 + 2]! - frames[i - 1]!.contact[f * 3 + 2]!));
+      worst = Math.max(worst, hypot2(frames[i]!.contact[f * 3]! - frames[i - 1]!.contact[f * 3]!, frames[i]!.contact[f * 3 + 2]! - frames[i - 1]!.contact[f * 3 + 2]!));
     }
   }
   return { worst, samples };
@@ -228,7 +229,7 @@ describe("given a steady gait", () => {
 });
 
 /** A hand's reach along the way he faces from the pelvis (m, negative: behind it): the upper arm swings back by `shoulder` rad (positive back) and the forearm closes `elbow` rad forward (negative). */
-const handReach = (shoulder: number, elbow: number) => -0.28 * Math.sin(shoulder) + 0.38 * Math.sin(-elbow - shoulder);
+const handReach = (shoulder: number, elbow: number) => -0.28 * detSin(shoulder) + 0.38 * detSin(-elbow - shoulder);
 
 const armCases: readonly { it: string; command: number; expectedMaxRearReach: number; expectedMinOpposite: number }[] = [
   { it: "when he runs, then the back hand ends more than 10 cm behind the pelvis and the hands are on opposite sides of it for over half the cycle", command: RUN_SPEED, expectedMaxRearReach: -0.1, expectedMinOpposite: 0.5 },

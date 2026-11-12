@@ -7,6 +7,7 @@ import { worldGame } from "./net-world-game.test-util.ts";
 import { BETWEEN_ROUNDS_S, RESULTS_HOLD } from "./net-constants.ts";
 import { FRAME_MS, Hub } from "./net-hub.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 
 /**
  * The Havana lobby on the real race stack: a host and a guest, each a `RaceDirector` world (the headless engine minus the renderer),
@@ -88,7 +89,7 @@ describe("given a host and a guest waiting in the Havana lobby", () => {
       for (const [i, car] of w.live().entries()) {
         const { x, z } = car.group.position;
         expect(inHavana(x, z), `${who}'s car ${i} at (${x.toFixed(1)}, ${z.toFixed(1)}) is inside Havana's bounds`).toBeTruthy();
-        expect(Math.hypot(x - start.x, z - start.z), `${who}'s car ${i} stands at the start anchor, not where the fleet left it`).toBeLessThan(12);
+        expect(hypot2(x - start.x, z - start.z), `${who}'s car ${i} stands at the start anchor, not where the fleet left it`).toBeLessThan(12);
       }
     }
     expect(s.hw.race["police"], "no hunters").toBe(null);
@@ -200,7 +201,7 @@ describe("given a host and a guest waiting in the Havana lobby", () => {
 const mall = course("national-mall");
 const mallStart = mall.survival!.start;
 /** Whether car `car` of world `w` stands on the Mall's Survival start anchor, abreast with the others (`humanSlot`: within 16 m of it). */
-const atMallStart = (w: World, car: number): boolean => Math.hypot(w.live()[car]!.group.position.x - mallStart.x, w.live()[car]!.group.position.z - mallStart.z) < 16;
+const atMallStart = (w: World, car: number): boolean => hypot2(w.live()[car]!.group.position.x - mallStart.x, w.live()[car]!.group.position.z - mallStart.z) < 16;
 
 describe("given a host and a guest in the lobby of a private room, Survival chosen as the game", () => {
   it("when the host reads the Survival courses, then it is offered Havana and Washington DC, and a guest cannot pick one", () => {

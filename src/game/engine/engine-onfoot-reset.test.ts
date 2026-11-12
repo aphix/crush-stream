@@ -6,6 +6,7 @@ import { blankPoint, blankProjection, pointOn, projectPath } from "../world/trac
 import { planBlocks } from "../world/openworld/openworld-blocks.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { OnFootRig } from "./engine-onfoot.test-util.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 
 /** The seconds of frames after a press that the reset needs (the tap acts on the release, a frame on). */
 const TAP_S = 0.3;
@@ -78,9 +79,9 @@ describe("given the real engine on the open world, the player's car on the park'
     const road = nearestRoad(own.group.position.x, own.group.position.z);
     expect(road.distance, `on the road: ${road.distance.toFixed(2)} m off its centre line`).toBeLessThan(1);
     const heading = own.group.getWorldDirection(new THREE.Vector3());
-    const across = Math.abs(heading.x * road.tz - heading.z * road.tx) / Math.hypot(heading.x, heading.z);
+    const across = Math.abs(heading.x * road.tz - heading.z * road.tx) / hypot2(heading.x, heading.z);
     expect(across, `facing along the road: ${across.toFixed(2)} of a turn off it`).toBeLessThan(ALONG_MAX);
-    const gone = Math.hypot(own.group.position.x - stood.x, own.group.position.z - stood.z);
+    const gone = hypot2(own.group.position.x - stood.x, own.group.position.z - stood.z);
     expect(gone, `near where he stood: ${gone.toFixed(1)} m, the road was ${distanceToRoad.toFixed(1)} m off`).toBeLessThan(distanceToRoad + SEARCH_REACH_M);
     const colliders = rig.engine["race"]["colliders"];
     const at = own.group.position;
@@ -121,7 +122,7 @@ describe("given the real engine on the open world, the player's car on the park'
     expect(car().driverOut, "the car is driverless").not.toBeNull();
     const eye = rig.engine["camera"].position;
     const him = rig.torso();
-    expect(Math.hypot(eye.x - him.x, eye.z - him.z), "the camera is on him").toBeLessThan(6);
+    expect(hypot2(eye.x - him.x, eye.z - him.z), "the camera is on him").toBeLessThan(6);
     const where = car().group.position.clone();
     rig.getUp();
     expect(car().group.position.distanceTo(where), "the car stayed where it ended up").toBeLessThan(1);

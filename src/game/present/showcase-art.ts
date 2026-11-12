@@ -1,3 +1,4 @@
+import { detAtan2 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { LAB_LIGHT } from "./lab-art.ts";
 import { makeLamp } from "./engine-world.ts";
@@ -226,7 +227,7 @@ export class ShowcaseArt {
   /** The way slot `slot` faces on his mark (rad about the vertical, 0 along +z). */
   yawOf(slot: number): number {
     this.markOf(slot, _mark);
-    return this.figureOf(slot).square ? 0 : Math.atan2(SHOWCASE_EYE.x - _mark.x, SHOWCASE_EYE.z - _mark.z);
+    return this.figureOf(slot).square ? 0 : detAtan2(SHOWCASE_EYE.x - _mark.x, SHOWCASE_EYE.z - _mark.z);
   }
 
   /** Slot `slot` taken off the set (knocked over: the ragdoll world has him now). */

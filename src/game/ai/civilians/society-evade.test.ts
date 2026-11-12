@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detAtan2, detCos, hypot2 } from "../../kernel/physics-core.js";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { ACTIVITY } from "./civilian-activity.ts";
 import {
@@ -153,7 +153,7 @@ describe("given a walker who has gone three tenths of the way over when a hazard
     const during = along(stage, CROSSING, start + back / 2);
     expect(during.walked, "metres along midway back").toBeCloseTo(there - run * (back / 2), 2);
     expect(during.speed, "metres a second").toBeCloseTo(-run, 6);
-    expect(Math.cos(pose.yaw - Math.atan2(-CROSSING.dirX, -CROSSING.dirZ)), "facing back along the crossing (cosine of the angle to it)").toBeGreaterThan(0.999);
+    expect(detCos(pose.yaw - detAtan2(-CROSSING.dirX, -CROSSING.dirZ)), "facing back along the crossing (cosine of the angle to it)").toBeGreaterThan(0.999);
   });
 
   it("when they are back at the kerb, then they wait for the danger to pass, not moving, then hurry forward to meet their schedule, and walk on at their pace", () => {

@@ -14,6 +14,7 @@ import { createCityState } from "./society.ts";
 import { ActivityReading, readActivity } from "./society-activity.ts";
 import { newCast, societyMap, type Cast } from "./society-scenes.test-util.ts";
 import { COFFEE_SHOP, intAt, placeIn, stageResident, withoutOtherCars } from "./society.test-util.ts";
+import { hypot2 } from "../../kernel/physics-core.js";
 
 const EVENING = 20;
 const HOME = placeIn(societyMap, "Rowhome B2-1");
@@ -58,7 +59,7 @@ function placedAt(state: CityState, resident: number, secondsIntoStay: number): 
 
 function nearestPair(spots: readonly { x: number; z: number }[]): number {
   let nearest = Infinity;
-  for (let first = 0; first < spots.length; first++) for (let second = first + 1; second < spots.length; second++) nearest = Math.min(nearest, Math.hypot(spots[first]!.x - spots[second]!.x, spots[first]!.z - spots[second]!.z));
+  for (let first = 0; first < spots.length; first++) for (let second = first + 1; second < spots.length; second++) nearest = Math.min(nearest, hypot2(spots[first]!.x - spots[second]!.x, spots[first]!.z - spots[second]!.z));
   return nearest;
 }
 

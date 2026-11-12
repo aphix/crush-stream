@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detCos, detSin } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { assertSameDigest } from "../../vehicle/test-support.ts";
 import { PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
@@ -52,7 +52,7 @@ function crossingLegs(): Leg[] {
 function distanceToLeg(x: number, z: number, leg: Leg): number {
   const lengthSquared = (leg.bx - leg.ax) ** 2 + (leg.bz - leg.az) ** 2;
   const share = Math.max(0, Math.min(1, ((x - leg.ax) * (leg.bx - leg.ax) + (z - leg.az) * (leg.bz - leg.az)) / lengthSquared));
-  return Math.hypot(x - (leg.ax + share * (leg.bx - leg.ax)), z - (leg.az + share * (leg.bz - leg.az)));
+  return hypot2(x - (leg.ax + share * (leg.bx - leg.ax)), z - (leg.az + share * (leg.bz - leg.az)));
 }
 
 /** The furniture of `piece`'s kind standing in `side`'s strip between `from` and `to` along it. */
@@ -183,7 +183,7 @@ describe("given the street signs at the block corners", () => {
   it("when the corners are read, then signs stand at many of them and none within reach of the loop's rounded corners", () => {
     expect(signs.length, "signs").toBeGreaterThan(10);
     for (const sign of signs) {
-      for (const apex of apexes) expect(Math.hypot(sign.x - apex.x, sign.z - apex.z), `sign at ${sign.x.toFixed(1)}, ${sign.z.toFixed(1)} from a loop corner (m)`).toBeGreaterThan(LOOP_CORNER_REACH);
+      for (const apex of apexes) expect(hypot2(sign.x - apex.x, sign.z - apex.z), `sign at ${sign.x.toFixed(1)}, ${sign.z.toFixed(1)} from a loop corner (m)`).toBeGreaterThan(LOOP_CORNER_REACH);
     }
   });
 
@@ -214,7 +214,7 @@ describe("given the street kit's posts", () => {
       expect(pieces.filter((piece) => piece.body !== "solid").length, `${prefab} pieces that are no solid`).toBe(0);
       // The solid at a post's foot is its pieces together (a hydrant is four circles): from the lowest base to the highest top.
       const unmet = placed.filter((prop) => {
-        const here = pieces.filter((piece) => Math.hypot(piece.x - prop.x, piece.z - prop.z) < COORDINATE_SLACK);
+        const here = pieces.filter((piece) => hypot2(piece.x - prop.x, piece.z - prop.z) < COORDINATE_SLACK);
         return here.length === 0 || Math.max(...here.map((piece) => piece.top)) - Math.min(...here.map((piece) => piece.base)) < BUMPER_HEIGHT;
       });
       expect(unmet.slice(0, 3).map((prop) => `${prop.x.toFixed(1)}, ${prop.z.toFixed(1)}`).join("; "), `${prefab}s with nothing a bumper meets at their foot`).toBe("");
@@ -237,7 +237,7 @@ describe("given the street kit's knockable furniture and its pavilion", () => {
       expect(placed.length, `${prefab} placed`).toBeGreaterThan(0);
       const pieces = colliders.filter((piece) => piece.prefab === prefab);
       expect(pieces.filter((piece) => piece.body !== "knock" || piece.knockSpeed !== PREFABS[prefab].knockSpeed || !(piece.knockSpeed! > 0)).length, `${prefab} pieces that are no knock prop with a speed`).toBe(0);
-      const unmet = placed.filter((prop) => !pieces.some((piece) => Math.hypot(piece.x - prop.x, piece.z - prop.z) < PIECE_REACH));
+      const unmet = placed.filter((prop) => !pieces.some((piece) => hypot2(piece.x - prop.x, piece.z - prop.z) < PIECE_REACH));
       expect(unmet.slice(0, 3).map((prop) => `${prop.x.toFixed(1)}, ${prop.z.toFixed(1)}`).join("; "), `${prefab}s with no collider in place`).toBe("");
     }
   });
@@ -267,7 +267,7 @@ describe("given the street furniture's drawing", () => {
     const walls = course.props.filter((prop) => prop.prefab === PREFAB.invisibleWall && prop.size?.[2] === SHELTER_WALL.length);
     expect(shelters.length, "shelters").toBeGreaterThan(0);
     for (const shelter of shelters) {
-      const behind = walls.filter((wall) => Math.abs(Math.hypot(wall.x - shelter.x, wall.z - shelter.z) - SHELTER_WALL.back) < COORDINATE_SLACK && Math.abs(wall.yaw - shelter.yaw) < COORDINATE_SLACK);
+      const behind = walls.filter((wall) => Math.abs(hypot2(wall.x - shelter.x, wall.z - shelter.z) - SHELTER_WALL.back) < COORDINATE_SLACK && Math.abs(wall.yaw - shelter.yaw) < COORDINATE_SLACK);
       expect(behind.length, `back walls of the shelter at ${shelter.x.toFixed(1)}, ${shelter.z.toFixed(1)}`).toBe(1);
       const out = (shelter.x - behind[0]!.x) * detCos(shelter.yaw) - (shelter.z - behind[0]!.z) * detSin(shelter.yaw);
       expect(out, "the wall stands behind the shelter's open front (m)").toBeCloseTo(SHELTER_WALL.back, 6);

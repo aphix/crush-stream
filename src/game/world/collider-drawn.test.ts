@@ -14,6 +14,7 @@ import { parseTrack } from "./track-schema.ts";
 import { wallColliders } from "./track-sections.ts";
 import { OFF_MENU, TRACKS } from "./tracks/index.ts";
 import { must } from "../kernel/must.test-util.ts";
+import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 
 /**
  * What a car meets is what is drawn, in both directions: a collider standing out of the drawn shape is a wall you hit in the
@@ -139,7 +140,7 @@ describe("given each course's drawn race walls and the wall colliders the cars h
       const near = pieceGrid(pieces, WALL_IN);
       for (let i = 0; i < tris.length; i += 3) {
         let d = Infinity;
-        for (const c of near(tris[i]!, tris[i + 2]!)) if (Math.hypot(c.x - tris[i]!, c.z - tris[i + 2]!) < c.r + WALL_IN) d = Math.min(d, gap(c, tris[i]!, tris[i + 1]!, tris[i + 2]!));
+        for (const c of near(tris[i]!, tris[i + 2]!)) if (hypot2(c.x - tris[i]!, c.z - tris[i + 2]!) < c.r + WALL_IN) d = Math.min(d, gap(c, tris[i]!, tris[i + 1]!, tris[i + 2]!));
         if (d !== Infinity && d > worst.d) worst = { d, at: `(${tris[i]!.toFixed(2)}, ${tris[i + 1]!.toFixed(2)}, ${tris[i + 2]!.toFixed(2)})` };
       }
       expect(worst.d, `a drawn wall vertex at ${worst.at} is ${worst.d.toFixed(3)} m outside every collider`).toBeLessThanOrEqual(WALL_IN);
@@ -148,8 +149,8 @@ describe("given each course's drawn race walls and the wall colliders the cars h
     it(`when points over the faces of the ${course.id} course's wall colliders are measured against the drawn walls, then none stands more than ${WALL_OUT} m off them`, () => {
       let worst = { d: 0, at: "" };
       for (const [j, c] of pieces.entries()) {
-        const sn = Math.sin(c.yaw);
-        const cs = Math.cos(c.yaw);
+        const sn = detSin(c.yaw);
+        const cs = detCos(c.yaw);
         const at = (u: number, w: number, y: number): P3 => [c.x + u * cs + w * sn, y, c.z - u * sn + w * cs];
         // Both faces at three heights and the top's middle, over the piece's two ends and its middle.
         for (const w of [-c.hz, 0, c.hz]) {
@@ -237,8 +238,8 @@ describe("given the colliders the cars meet and the solids the cosmetic Rapier w
         } else {
           must(s instanceof R.Cuboid, `solid ${k} is a box`);
           expect(Math.abs(s.halfExtents.x - c.hx) < SAME && Math.abs(s.halfExtents.y - h) < SAME && Math.abs(s.halfExtents.z - c.hz) < SAME, `solid ${k}: box ${JSON.stringify(s.halfExtents)}, collider ${c.hx} × ${h} × ${c.hz}`).toBeTruthy();
-          const turn = 2 * Math.atan2(desc.rotation.y, desc.rotation.w) - c.yaw;
-          expect(Math.abs(Math.sin(turn)) < 1e-6 && Math.cos(turn) > 0, `solid ${k} is turned ${turn} rad off its collider`).toBeTruthy();
+          const turn = 2 * detAtan2(desc.rotation.y, desc.rotation.w) - c.yaw;
+          expect(Math.abs(detSin(turn)) < 1e-6 && detCos(turn) > 0, `solid ${k} is turned ${turn} rad off its collider`).toBeTruthy();
         }
       }
     });

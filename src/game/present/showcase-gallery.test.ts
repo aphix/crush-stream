@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { PREFAB_IDS, PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
@@ -45,8 +46,8 @@ type Box = { id: string; x0: number; x1: number; z0: number; z1: number };
 /** Placement `p`'s plan box: its size scaled, then turned by its yaw. */
 function footprint(p: Placement): Box {
   const [w, , d] = PREFABS[p.prefab].size;
-  const cos = Math.abs(Math.cos(p.yaw));
-  const sin = Math.abs(Math.sin(p.yaw));
+  const cos = Math.abs(detCos(p.yaw));
+  const sin = Math.abs(detSin(p.yaw));
   const hx = (cos * p.sx * w + sin * p.sz * d) / 2;
   const hz = (sin * p.sx * w + cos * p.sz * d) / 2;
   const id = p.asset === undefined ? p.prefab : SCENERY_ASSETS[p.asset]!.id;
@@ -92,7 +93,7 @@ describe("given the showcase prop gallery", () => {
     const reach = SHOWCASE_RADIUS - RIM_MARGIN;
     for (const b of boxes) {
       expect(b.z0, `${b.id} reaches z ${b.z0}`).toBeGreaterThan(SHOWCASE_EYE.z + MIN_CLEARANCE);
-      for (const x of [b.x0, b.x1]) for (const z of [b.z0, b.z1]) expect(Math.hypot(x, z), `${b.id} corner (${x}, ${z})`).toBeLessThanOrEqual(reach);
+      for (const x of [b.x0, b.x1]) for (const z of [b.z0, b.z1]) expect(hypot2(x, z), `${b.id} corner (${x}, ${z})`).toBeLessThanOrEqual(reach);
     }
   });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
+import { detCos, detSin } from "../kernel/physics-core.js";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { streetSignStyle } from "../world/street-kit.ts";
 import { PREFAB } from "../world/constants.ts";
@@ -60,7 +61,7 @@ describe("given two street signs, one turned, sharing a street", () => {
     for (const [index, placedSign] of signs.entries()) {
       const own = faces.slice(index * FACES_PER_SIGN, (index + 1) * FACES_PER_SIGN);
       // The blade along the sign's own x faces its local z: (sin yaw, cos yaw).
-      const localZ = [Math.sin(placedSign.yaw), Math.cos(placedSign.yaw)] as const;
+      const localZ = [detSin(placedSign.yaw), detCos(placedSign.yaw)] as const;
       for (const face of own) {
         const facesLocalZ = Math.abs(face.normalX * localZ[0] + face.normalZ * localZ[1]) > 1 - SLACK;
         expect(face.name, `the name on a face along local ${facesLocalZ ? "x" : "z"}`).toBe(facesLocalZ ? placedSign.alongX : placedSign.alongZ);

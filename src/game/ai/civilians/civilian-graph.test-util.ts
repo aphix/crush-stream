@@ -1,3 +1,4 @@
+import { hypot2 } from "../../kernel/physics-core.js";
 import { PLACE_KIND, type OpenWorldMap, type Place, type PlaceKind, type WalkGraph } from "../../world/openworld/walk-graph.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
 import { CROSSING_COST, FEAR_COST_FACTOR } from "./civilian-constants.ts";
@@ -62,7 +63,7 @@ function nearestStreetNode(x: number, z: number): number {
   let bestDistance = Infinity;
   for (let row = 0; row < STREET_Z.length; row++) {
     for (let column = 0; column < STREET_COLUMNS; column++) {
-      const distance = Math.hypot(STREET_X[column]! - x, STREET_Z[row]! - z);
+      const distance = hypot2(STREET_X[column]! - x, STREET_Z[row]! - z);
       if (distance >= bestDistance) continue;
       bestDistance = distance;
       best = nodeOf(column, row);
@@ -120,7 +121,7 @@ function toWalkGraph(layout: Layout): WalkGraph {
     nodeZ: Float32Array.from(nodeZ),
     edgeStart,
     edgeTo: Int32Array.from(edges, (edge) => edge.to),
-    edgeLength: Float32Array.from(edges, (edge) => Math.hypot(nodeX[edge.to]! - nodeX[edge.from]!, nodeZ[edge.to]! - nodeZ[edge.from]!)),
+    edgeLength: Float32Array.from(edges, (edge) => hypot2(nodeX[edge.to]! - nodeX[edge.from]!, nodeZ[edge.to]! - nodeZ[edge.from]!)),
     edgeCrossing: Uint8Array.from(edges, (edge) => edge.crossing),
   };
 }

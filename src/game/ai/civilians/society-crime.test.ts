@@ -15,6 +15,7 @@ import { CrimeDesk, crimePlaceOf, isWanted } from "./society-crime.ts";
 import { expireWanted } from "./society-reactions.ts";
 import { newCast, societyMap, type Cast } from "./society-scenes.test-util.ts";
 import { buildSocietyMap, intAt, placeIn, stageResident } from "./society.test-util.ts";
+import { hypot2 } from "../../kernel/physics-core.js";
 
 const NOON = 12;
 const BODEGA = placeIn(societyMap, PLACE_NAMES.bodega);
@@ -284,7 +285,7 @@ describe("given the host raises a fight between two residents at a door", () => 
     expect(first.code, "the starter's activity").toBe(ACTIVITY.swing);
     expect(second.code, "the other's activity").toBe(ACTIVITY.hit);
     expect(first.placed && second.placed, "the brain places both").toBe(true);
-    expect(Math.hypot(first.x - second.x, first.z - second.z), "metres between them").toBeCloseTo(1, 3);
+    expect(hypot2(first.x - second.x, first.z - second.z), "metres between them").toBeCloseTo(1, 3);
   });
 
   it("when one is busted, then the other is let go of the fight", () => {

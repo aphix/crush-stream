@@ -10,6 +10,7 @@ import { lookAtOf, LookRay } from "./civilian-look.ts";
 import { createCrowdPoses } from "./crowd-poses.ts";
 import { historyLines, residentNameText } from "./civilian-mood.ts";
 import { FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "./civilian-crowd.test-util.ts";
+import { detCos, detSin, hypot3 } from "../../kernel/physics-core.js";
 
 const map = buildFixtureMap();
 const EYE_HEIGHT = 1.5;
@@ -21,7 +22,7 @@ const ROOF_RISE = 30;
 const STAND_BACK = 8;
 /** A unit vector from the eye towards the point (x, y, z). */
 function aimedAt(ray: LookRay, x: number, y: number, z: number): LookRay {
-  const length = Math.hypot(x - ray.eyeX, y - ray.eyeY, z - ray.eyeZ);
+  const length = hypot3(x - ray.eyeX, y - ray.eyeY, z - ray.eyeZ);
   ray.dirX = (x - ray.eyeX) / length;
   ray.dirY = (y - ray.eyeY) / length;
   ray.dirZ = (z - ray.eyeZ) / length;
@@ -39,7 +40,7 @@ function eyeAt(x: number, z: number): LookRay {
 /** The eye `STAND_BACK` m behind civilian `resident`, along the way they walk, looking at their chest. */
 function behind(crowd: CivilianCrowd, resident: number): LookRay {
   const { x, z, yaw } = crowd.poses;
-  const ray = eyeAt(x[resident]! - Math.sin(yaw[resident]!) * STAND_BACK, z[resident]! - Math.cos(yaw[resident]!) * STAND_BACK);
+  const ray = eyeAt(x[resident]! - detSin(yaw[resident]!) * STAND_BACK, z[resident]! - detCos(yaw[resident]!) * STAND_BACK);
   return aimedAt(ray, x[resident]!, CHEST_HEIGHT, z[resident]!);
 }
 

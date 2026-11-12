@@ -2,6 +2,7 @@ import type { DriveInput } from "../../vehicle/car-drive.ts";
 import { blankAiCar, type AiCar } from "../derby-ai.ts";
 import type { DoorSpot } from "../civilians/civilian-car-door.ts";
 import type { CarDriver } from "./patrol-cars.ts";
+import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 
 /** A bare car's pace (m/s2, m/s), and how fast its nose turns at full lock above `STEER_SPEED_REFERENCE` m/s (rad/s). */
 const ACCELERATION = 6;
@@ -44,8 +45,8 @@ export class FakeStreet {
     car.x = x;
     car.z = z;
     car.yaw = yaw;
-    car.vx = Math.sin(yaw) * speed;
-    car.vz = Math.cos(yaw) * speed;
+    car.vx = detSin(yaw) * speed;
+    car.vz = detCos(yaw) * speed;
     this.snaps.push(car);
     this.drivers.push(null);
     this.sirens.push(false);
@@ -153,11 +154,11 @@ export class FakeStreet {
   }
 
   private drive(car: AiCar, input: DriveInput, dt: number): void {
-    const speed = Math.hypot(car.vx, car.vz);
+    const speed = hypot2(car.vx, car.vz);
     const next = Math.min(TOP_SPEED, Math.max(0, speed + (Math.max(0, input.throttle) * ACCELERATION - input.brake * BRAKE_DECELERATION) * dt));
     car.yaw += input.steer * STEER_RATE * Math.min(1, speed / STEER_SPEED_REFERENCE) * dt;
-    car.vx = Math.sin(car.yaw) * next;
-    car.vz = Math.cos(car.yaw) * next;
+    car.vx = detSin(car.yaw) * next;
+    car.vz = detCos(car.yaw) * next;
     this.move(car, dt);
   }
 
@@ -173,7 +174,7 @@ export class FakeStreet {
       this.tripDone[index] = true;
       return;
     }
-    car.yaw = Math.abs(dx) > 0.01 ? Math.atan2(Math.sign(dx), 0) : Math.atan2(0, Math.sign(dz));
+    car.yaw = Math.abs(dx) > 0.01 ? detAtan2(Math.sign(dx), 0) : detAtan2(0, Math.sign(dz));
     car.vx = Math.abs(dx) > 0.01 ? (Math.sign(dx) * step) / dt : 0;
     car.vz = Math.abs(dx) > 0.01 ? 0 : (Math.sign(dz) * step) / dt;
     this.move(car, dt);

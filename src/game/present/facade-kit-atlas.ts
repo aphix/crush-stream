@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, detSin, hypot2 } from "../kernel/physics-core.js";
 import { mulberry32 } from "../world/placements.ts";
 
 /** A texture region: u and v run 0..1 over the atlas, v up. */
@@ -185,7 +185,7 @@ function paintLouvre(albedo: Texels, cell: Cell): void {
 
 function paintMarble(albedo: Texels, cell: Cell, random: () => number): void {
   eachTexel(cell, (column, row) => {
-    const vein = Math.abs(Math.sin((column + MARBLE_VEIN_SLOPE * row) * MARBLE_VEIN_FREQ + MARBLE_WOBBLE * Math.sin(row * MARBLE_WOBBLE_FREQ))) > MARBLE_VEIN_THRESHOLD;
+    const vein = Math.abs(detSin((column + MARBLE_VEIN_SLOPE * row) * MARBLE_VEIN_FREQ + MARBLE_WOBBLE * detSin(row * MARBLE_WOBBLE_FREQ))) > MARBLE_VEIN_THRESHOLD;
     const grey = MARBLE_PAINT * (vein ? MARBLE_VEIN_SHADE : 1) * (1 + (random() - 0.5) * 2 * MARBLE_NOISE);
     put(albedo, cell.x + column, cell.y + row, grey, grey, grey);
   });
@@ -198,7 +198,7 @@ function paintFanlight(albedo: Texels, glow: Texels, cell: Cell): void {
     const dx = column + 0.5 - middle;
     const dy = row + 0.5;
     const radius = hypot2(dx, dy) / middle;
-    const sector = (Math.atan2(dy, dx) / Math.PI) * FAN_BARS;
+    const sector = (detAtan2(dy, dx) / Math.PI) * FAN_BARS;
     const bar = Math.abs(sector - Math.round(sector)) < FAN_BAR_HALF * FAN_BARS || Math.abs(radius - FAN_RING_AT) < FAN_RING_HALF || radius > 1;
     const x = cell.x + column;
     const y = cell.y + row;

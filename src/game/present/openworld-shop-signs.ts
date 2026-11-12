@@ -1,3 +1,4 @@
+import { detCos, detSin } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
 import { PLACE_KIND, type Place } from "../world/openworld/walk-graph.ts";
@@ -74,8 +75,8 @@ type FacadeFace = { x: number; z: number; normalX: number; normalZ: number };
 
 /** Where a place's door stands, `standoff` m out from it: a place with no front of its own hangs its name there. */
 export function facadeFace(place: Place, standoff: number): FacadeFace {
-  const normalX = Math.cos(place.yaw);
-  const normalZ = -Math.sin(place.yaw);
+  const normalX = detCos(place.yaw);
+  const normalZ = -detSin(place.yaw);
   return { x: place.doorX + normalX * standoff, z: place.doorZ + normalZ * standoff, normalX, normalZ };
 }
 
@@ -84,8 +85,8 @@ export function facadeFace(place: Place, standoff: number): FacadeFace {
  * as it must to stay `FACE_MARGIN` inside both ends (an interior's door stands off the wall's middle, a corner store's toward one end).
  */
 export function onFrontFace(place: Place, width: number, standoff: number): FacadeFace {
-  const normalX = Math.cos(place.yaw);
-  const normalZ = -Math.sin(place.yaw);
+  const normalX = detCos(place.yaw);
+  const normalZ = -detSin(place.yaw);
   const doorAlong = (place.doorX - place.x) * normalZ - (place.doorZ - place.z) * normalX;
   const reach = Math.max(0, drawnHalf(place.width) - FACE_MARGIN - width / 2);
   const along = Math.min(reach, Math.max(-reach, doorAlong));

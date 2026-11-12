@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { detCos, detSin } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { driverLook } from "../present/driver-look.ts";
 import { WALK_SPEED } from "../present/walker-locomotion.ts";
 import { activeGround, setGround } from "../world/ground.ts";
@@ -46,7 +46,7 @@ describe("given a rowhome of the open world's course on the real engine", () => 
     const outOf = (x: number, z: number) => (x - frontage.x) * cos - (z - frontage.z) * sin;
     const start = new THREE.Vector3(frontage.x + cos * START_OUT_M + sin * DOOR.across, 0, frontage.z - sin * START_OUT_M + cos * DOOR.across);
     start.y = activeGround().heightAt(start.x, start.z);
-    const toward = Math.atan2(-cos, sin);
+    const toward = detAtan2(-cos, sin);
     const ragdolls = engine["ragdolls"];
     expect(ragdolls.startWalker(start, toward, { cop: false, look: driverLook(0, 0) }), "he is out").toBeGreaterThanOrEqual(0);
     runSeconds(engine, 1);

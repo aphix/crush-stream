@@ -1,3 +1,4 @@
+import { detCos, detSin } from "../../kernel/physics-core.js";
 import * as THREE from "three";
 import { uploadRange } from "../engine-fx.ts";
 import type { Piece } from "../prefab-pieces.ts";
@@ -65,8 +66,8 @@ export class PackedMesh {
     if (this.used + count > this.capacity) this.grow(this.used + count);
     const slot = this.takeSlot();
     const start = this.used;
-    const cos = Math.cos(yaw);
-    const sin = Math.sin(yaw);
+    const cos = detCos(yaw);
+    const sin = detSin(yaw);
     let at = start;
     for (let piece = 0; piece < pieces.length; piece++) at = this.write(pieces[piece]!, at, cos, sin, x, z, lighting, furniture);
     this.slotStart[slot] = start;

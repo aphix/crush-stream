@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
+import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { HOLD_MAX_SECONDS } from "../ai/openworld-auto/auto-constants.ts";
 import { SUBJECT, type SubjectKind } from "../ai/openworld-auto/auto-director.ts";
 import { newAutoPose, OpenWorldScan } from "../ai/openworld-auto/auto-scan.ts";
@@ -150,7 +151,7 @@ function pointer(canvas: HTMLCanvasElement, type: "pointerdown" | "pointermove" 
 
 /** The bearing (rad) of the camera round the subject's aim. */
 function bearing(camera: THREE.Camera, look: THREE.Vector3): number {
-  return Math.atan2(camera.position.x - look.x, camera.position.z - look.z);
+  return detAtan2(camera.position.x - look.x, camera.position.z - look.z);
 }
 
 describe.each(KINDS)("given the engine's own orbit camera under the Auto camera, following $it", ({ parts }) => {
@@ -166,7 +167,7 @@ describe.each(KINDS)("given the engine's own orbit camera under the Auto camera,
     pointer(canvas, "pointerdown", 100, 100);
     pointer(canvas, "pointermove", 100 - DRAG_PX, 100);
     run(auto, camera, orbit, 1);
-    const turned = Math.abs(Math.atan2(Math.sin(bearing(camera, view.look) - before), Math.cos(bearing(camera, view.look) - before)));
+    const turned = Math.abs(detAtan2(detSin(bearing(camera, view.look) - before), detCos(bearing(camera, view.look) - before)));
     expect(turned, "bearing turned by a drag (rad)").toBeGreaterThan(TURNED_RAD);
     const held = camera.position.clone();
     scene.shift(10);
@@ -187,7 +188,7 @@ describe.each(KINDS)("given the engine's own orbit camera under the Auto camera,
     const before = bearing(camera, view.look);
     pad.rx = 1;
     run(auto, camera, orbit, 1);
-    const turned = Math.abs(Math.atan2(Math.sin(bearing(camera, view.look) - before), Math.cos(bearing(camera, view.look) - before)));
+    const turned = Math.abs(detAtan2(detSin(bearing(camera, view.look) - before), detCos(bearing(camera, view.look) - before)));
     expect(turned, "bearing turned by the stick (rad)").toBeGreaterThan(TURNED_RAD);
     expect(view.rideHeld(true, DT), "the stick holds the view").toBe(true);
     pad.rx = 0;

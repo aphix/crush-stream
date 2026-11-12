@@ -1,4 +1,4 @@
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { fleetStyle } from "../../scenes/fleet.ts";
 import type { DriveInput } from "../../vehicle/car-drive.ts";
 import type { CarStyleId } from "../../vehicle/car-variants.ts";
@@ -105,8 +105,8 @@ export class KinematicCar {
   run(input: DriveInput, dt: number): void {
     this.speed = Math.max(0, this.speed + (input.throttle * THRUST - this.speed * DRAG - input.brake * BRAKE) * dt);
     this.yaw += input.steer * TURN * (0.35 + 0.65 * Math.min(1, this.speed / 8)) * Math.min(1, this.speed / 2) * dt;
-    this.velocity.x = Math.sin(this.yaw) * this.speed;
-    this.velocity.z = Math.cos(this.yaw) * this.speed;
+    this.velocity.x = detSin(this.yaw) * this.speed;
+    this.velocity.z = detCos(this.yaw) * this.speed;
     this.group.position.x += this.velocity.x * dt;
     this.group.position.z += this.velocity.z * dt;
   }

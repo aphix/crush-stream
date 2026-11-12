@@ -1,3 +1,4 @@
+import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -95,8 +96,8 @@ function verticesOf(skin: StreetTreeSkin): Float32Array {
 function eachVertex(tree: Placed, visit: (x: number, height: number, z: number) => void): void {
   const pose = treeOf(tree)!;
   const flat = verticesOf(pose.skin);
-  const cos = Math.cos(pose.yaw);
-  const sin = Math.sin(pose.yaw);
+  const cos = detCos(pose.yaw);
+  const sin = detSin(pose.yaw);
   const size = TREE_SCALE * pose.scale;
   for (let at = 0; at < flat.length; at += 3) {
     const x = flat[at]! * size;
@@ -120,7 +121,7 @@ describe("given the street trees' drawings", () => {
       else expect(ivy.length, `${skin} ivy`).toBeGreaterThanOrEqual(IVY_LUMPS);
       for (const lump of ivy) {
         const middle = boundsOf(lump).getCenter(new THREE.Vector3());
-        expect(Math.hypot(middle.x, middle.z) * TREE_SCALE, `${skin} ivy reach`).toBeLessThanOrEqual(IVY_REACH);
+        expect(hypot2(middle.x, middle.z) * TREE_SCALE, `${skin} ivy reach`).toBeLessThanOrEqual(IVY_REACH);
       }
       for (const lump of leaves.filter((piece) => !ivy.includes(piece))) expect(boundsOf(lump).min.y * TREE_SCALE, `${skin} canopy`).toBeGreaterThan(CANOPY_FROM);
     }
@@ -149,10 +150,10 @@ describe("given the street trees' drawings", () => {
       eachVertex(tree, (x, height, z) => {
         if (height >= HEADROOM) return;
         for (const path of paths) expect(distanceToPath(path, x, z), `${where} on a path`).toBeGreaterThanOrEqual(PATH_CLEAR);
-        expect(Math.hypot(x - block.centreX, z - block.centreZ), `${where} in the plaza`).toBeGreaterThanOrEqual(PLAZA_RADIUS);
+        expect(hypot2(x - block.centreX, z - block.centreZ), `${where} in the plaza`).toBeGreaterThanOrEqual(PLAZA_RADIUS);
         const onCourt = Math.abs(x - (block.centreX + PARK.courtOffsetX)) < PARK.courtLength / 2 && Math.abs(z - (block.centreZ + PARK.courtOffsetZ)) < PARK.courtWidth / 2;
         expect(onCourt, `${where} on the court`).toBe(false);
-        for (const prop of dressing) expect(Math.hypot(x - prop.x, z - prop.z), `${where} over ${prop.prefab}`).toBeGreaterThanOrEqual(prop.prefab === PREFAB.pavilion ? PAVILION_CLEAR : PROP_CLEAR);
+        for (const prop of dressing) expect(hypot2(x - prop.x, z - prop.z), `${where} over ${prop.prefab}`).toBeGreaterThanOrEqual(prop.prefab === PREFAB.pavilion ? PAVILION_CLEAR : PROP_CLEAR);
       });
     }
   });
@@ -213,9 +214,9 @@ describe("given the street trees drawn as instances", () => {
       const mesh = tumble["meshes"][tumble["cell"][index]!]![0]!;
       mesh.getMatrixAt(tumble["slot"][index]!, matrix);
       matrix.decompose(new THREE.Vector3(), turn, scale);
-      const yaw = 2 * Math.atan2(turn.y, turn.w);
-      expect(Math.cos(yaw), `facing ${index}`).toBeCloseTo(Math.cos(tree.yaw + pose.yaw), ROTATION_DIGITS);
-      expect(Math.sin(yaw), `facing ${index}`).toBeCloseTo(Math.sin(tree.yaw + pose.yaw), ROTATION_DIGITS);
+      const yaw = 2 * detAtan2(turn.y, turn.w);
+      expect(detCos(yaw), `facing ${index}`).toBeCloseTo(detCos(tree.yaw + pose.yaw), ROTATION_DIGITS);
+      expect(detSin(yaw), `facing ${index}`).toBeCloseTo(detSin(tree.yaw + pose.yaw), ROTATION_DIGITS);
       expect(scale.x, `size ${index}`).toBeCloseTo(tree.sx * pose.scale, ROTATION_DIGITS);
     }
     expect(new Set(allPlaced.map((tree) => treeOf(tree)!.yaw.toFixed(3))).size).toBeGreaterThan(skins.length);

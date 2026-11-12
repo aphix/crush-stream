@@ -10,6 +10,7 @@ import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import { WalkFloor, type FloorBox } from "./walker-floor.ts";
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
+import { detCos, detSin } from "../kernel/physics-core.js";
 
 const FRAME = 1 / FRAME_HZ;
 /** Seconds he stands still before a row measures his standing height. */
@@ -284,7 +285,7 @@ describe("given a walker by a stoop", () => {
       const from = torso(sys);
       staysUp(sys, heading, 6);
       const to = torso(sys);
-      const along = (to.x - from.x) * Math.sin(heading) + (to.z - from.z) * Math.cos(heading);
+      const along = (to.x - from.x) * detSin(heading) + (to.z - from.z) * detCos(heading);
       expect(along, `heading ${heading}: metres travelled along it`).toBeGreaterThanOrEqual(least);
       sys.dispose();
       system = null;

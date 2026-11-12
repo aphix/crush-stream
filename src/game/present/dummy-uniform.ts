@@ -5,6 +5,7 @@ import { box, BOX_SIDES, surfaceY, surfaceZ, TUBE_SIDES } from "./dummy-loft.ts"
 import { BUILD, DRESS_SHOES, LEFT_ARM, LEFT_FOOT, LEFT_LEG, POLICE, RIGHT_ARM, RIGHT_FOOT, RIGHT_LEG, ROLE, SUITED, TORSO, UNIFORM, type Decal, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
 import { PRINT_CELL } from "./dummy-texture.ts";
 
+import { detCos, detSin } from "../kernel/physics-core.js";
 /**
  * The uniformed kinds' wear, lofted on each build's own body: the cop's and the guard's duty kit (holster, pouches, badge,
  * shoulder patch, shirt collar, the shirt bloused over the belt), the suits' white collar, tie and jacket skirt, and dress
@@ -186,7 +187,7 @@ function badge(fit: Fit, kinds: number): Shell {
   const [x, y] = BADGE_AT;
   const widest = Math.max(...BADGE_OUTLINE.map(([, halfWidth]) => halfWidth));
   const z = frontOver(fit, [x - widest, x, x + widest], [y + BADGE_OUTLINE[0][0], y + BADGE_OUTLINE[BADGE_OUTLINE.length - 1]![0]]) + BADGE_OUT;
-  const corner = 1 / Math.cos(Math.PI / BOX_SIDES);
+  const corner = 1 / detCos(Math.PI / BOX_SIDES);
   const rings = BADGE_OUTLINE.map(([above, halfWidth]): Ring => [y + above, halfWidth * corner, BADGE_HALF_DEPTH * corner, z, BADGE]);
   const height = BADGE_OUTLINE[0][0] - BADGE_OUTLINE[BADGE_OUTLINE.length - 1]![0];
   return { x, sides: BOX_SIDES, kinds, bone: TORSO, rings, top: 0, bottom: 0, print: { cell: PRINT_CELL.BADGE, centre: [x, y], size: [widest * 2, height], along: "z" } };
@@ -203,13 +204,13 @@ function shoulderPatch(fit: Fit, kinds: number): Shell {
 function collar(fit: Fit, kinds: number, shape: CollarShape): Shell {
   const neck = (i: number) => fit.shoulderWeight[i] === 0 && Math.abs(fit.rest[i * 3]!) <= COLLAR_MAX_X;
   const angles = Array.from({ length: TUBE_SIDES }, (_, k) => ((k + 0.5) * 2 * Math.PI) / TUBE_SIDES);
-  const steps = shape.map(([drop, widen, front, behind]) => ({ y: COLLAR_AT - drop, at: COLLAR_AT, role: COLLAR, out: angles.map((angle) => widen * Math.cos(angle) ** 2 + (Math.sin(angle) > 0 ? front : behind) * Math.sin(angle) ** 2) }));
+  const steps = shape.map(([drop, widen, front, behind]) => ({ y: COLLAR_AT - drop, at: COLLAR_AT, role: COLLAR, out: angles.map((angle) => widen * detCos(angle) ** 2 + (detSin(angle) > 0 ? front : behind) * detSin(angle) ** 2) }));
   return fitted(fit, neck, steps, { bone: TORSO, kinds, sides: TUBE_SIDES });
 }
 
 /** The tie down the chest, each ring resting on the front-most body across its width (a portly chest rounds out either side of the middle). */
 function tie(fit: Fit, kinds: number): Shell {
-  const corner = 1 / Math.cos(Math.PI / BOX_SIDES);
+  const corner = 1 / detCos(Math.PI / BOX_SIDES);
   const rings = TIE_OUTLINE.map(([y, halfWidth]): Ring => [y, halfWidth * corner, TIE_HALF_DEPTH * corner, frontOver(fit, [-halfWidth, 0, halfWidth], [y]) + TIE_OUT, TIE]);
   return { x: 0, sides: BOX_SIDES, kinds, bone: TORSO, rings, bottom: 0 };
 }
@@ -245,7 +246,7 @@ function epaulettes(fit: Fit, kinds: number): Shell[] {
     const top = surfaceY(fit, middle, z);
     if (top > highest) [ridge, highest] = [z, top];
   }
-  const corner = 1 / Math.cos(Math.PI / BOX_SIDES);
+  const corner = 1 / detCos(Math.PI / BOX_SIDES);
   return [-1, 1].map((side): Shell => {
     const rings: Ring[] = [];
     for (let k = 0; k <= EPAULETTE_STEPS; k++) {

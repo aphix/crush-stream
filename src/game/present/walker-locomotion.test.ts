@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { Locomotion, RUN_SPEED, SPRINT_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 
@@ -114,7 +115,7 @@ function cutAt(command: number, degrees: number): Cut {
       cut.worstRoll = Math.abs(loco.roll);
       cut.rollSign = Math.sign(loco.roll);
     }
-    const faced = Math.abs(Math.atan2(Math.sin(loco.yaw - heading), Math.cos(loco.yaw - heading))) < 0.2;
+    const faced = Math.abs(detAtan2(detSin(loco.yaw - heading), detCos(loco.yaw - heading))) < 0.2;
     if (faced && cut.secondsToFace === Infinity) cut.secondsToFace = f * FRAME;
     if (cut.secondsToFace < Infinity && cut.secondsToSpeedAgain === Infinity && loco.speed >= 0.9 * command) cut.secondsToSpeedAgain = f * FRAME;
   }

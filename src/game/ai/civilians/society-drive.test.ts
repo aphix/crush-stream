@@ -35,6 +35,7 @@ import { fillCommuterFeed } from "./society-commuters.ts";
 import { newCast, societyMap, type Cast } from "./society-scenes.test-util.ts";
 import { decideAs, farthestWorkplace, intAt, nearestPlace, nearestWorkplace, needsWith, placeIn, stageResident, withoutOtherCars } from "./society.test-util.ts";
 
+import { hypot2 } from "../../kernel/physics-core.js";
 const MORNING = 8;
 const HOME = placeIn(societyMap, "Rowhome A1-1");
 const SHIFT_NEED = 0.9;
@@ -108,19 +109,19 @@ describe("given a car owner at home whose shift starts at the workplace farthest
     expect(at(depart + 0.01).walking, "on foot as they set out").toBe(true);
     const getting = at(seconds(leave) - 1);
     expect([getting.walking, getting.code].join("/"), "standing at the car, getting in").toBe([true, ACTIVITY.carIn].join("/"));
-    expect(Math.hypot(getting.x - homeCar.x, getting.z - homeCar.z), "metres from the car's node: their lateral offset at most").toBeLessThanOrEqual(LATERAL_MAX + 0.01);
+    expect(hypot2(getting.x - homeCar.x, getting.z - homeCar.z), "metres from the car's node: their lateral offset at most").toBeLessThanOrEqual(LATERAL_MAX + 0.01);
     expect(reading.sinceSeconds, "seconds into getting in").toBeCloseTo(ACTIVITY_SECONDS.carIn - 1, 5);
     const driving = at(seconds(leave + park) / 2);
     expect([driving.walking, driving.code, reading.placed].join("/"), "in the car: nobody on foot").toBe([false, ACTIVITY.none, false].join("/"));
     const out = at(seconds(park) + 1);
     expect([out.walking, out.code].join("/"), "standing at the parked car, getting out").toBe([true, ACTIVITY.carOut].join("/"));
-    expect(Math.hypot(out.x - workCar.x, out.z - workCar.z), "metres from the car's node at work: their lateral offset at most").toBeLessThanOrEqual(LATERAL_MAX + 0.01);
+    expect(hypot2(out.x - workCar.x, out.z - workCar.z), "metres from the car's node at work: their lateral offset at most").toBeLessThanOrEqual(LATERAL_MAX + 0.01);
     expect(reading.sinceSeconds, "seconds into getting out").toBeCloseTo(1, 5);
     const walking = at(seconds(park + CAR_OUT_TICKS) + 1);
     expect([walking.walking, walking.code].join("/"), "walking in").toBe([true, ACTIVITY.none].join("/"));
     const arriving = at(seconds(arrive) - 0.001);
     expect(arriving.walking, "still on their way as they arrive").toBe(true);
-    expect(Math.hypot(arriving.x - door.doorX, arriving.z - door.doorZ), "metres from the door as they arrive").toBeLessThan(0.01);
+    expect(hypot2(arriving.x - door.doorX, arriving.z - door.doorZ), "metres from the door as they arrive").toBeLessThan(0.01);
     expect(at(seconds(arrive)).walking, "on foot once the leg is over").toBe(false);
   });
 

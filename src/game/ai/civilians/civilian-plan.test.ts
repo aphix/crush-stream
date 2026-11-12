@@ -1,3 +1,4 @@
+import { hypot2 } from "../../kernel/physics-core.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
@@ -217,7 +218,7 @@ describe("given a resident whose walk is under way", () => {
     expect(pose.x, "x as they set out").toBeCloseTo(from.doorX, 3);
     expect(pose.z, "z as they set out").toBeCloseTo(from.doorZ, 3);
     expect(legPose(state, walker, arrive - 0.001, pose), "on the walk until it ends").toBe(true);
-    expect(Math.hypot(pose.x - to.doorX, pose.z - to.doorZ), "metres from the door as they arrive").toBeLessThan(0.01);
+    expect(hypot2(pose.x - to.doorX, pose.z - to.doorZ), "metres from the door as they arrive").toBeLessThan(0.01);
     expect(legPose(state, walker, arrive, pose), "on the walk once it ends").toBe(false);
     expect(legPose(state, walker, depart - 0.5, pose), "on the walk before it starts").toBe(false);
   });
@@ -229,7 +230,7 @@ describe("given a resident whose walk is under way", () => {
     let longest = 0;
     for (let sample = 1; sample < 40; sample++) {
       legPose(state, walker, depart + sample * seconds, pose);
-      longest = Math.max(longest, Math.hypot(pose.x - before.x, pose.z - before.z));
+      longest = Math.max(longest, hypot2(pose.x - before.x, pose.z - before.z));
       before.x = pose.x;
       before.z = pose.z;
     }

@@ -26,6 +26,7 @@ import { BAY_WIDTH, DOOR_SURROUND, FACADE_ALPHA, ROWHOME_FLOOR_Y, SHOP_FLOOR_Y, 
 import { drawnHalf } from "../src/game/world/openworld/openworld-facade-solids.ts";
 import { writeWebp } from "./pack-tile-lib.mjs";
 import { blur, downPlane, heightOf, label, morph, roughnessOf, spread } from "./pack-window-lib.mjs";
+import { hypot3 } from "../src/game/kernel/physics-core.js";
 
 const root = join(dirname(new URL(import.meta.url).pathname), "..");
 const [folder, outArg, jsonArg] = process.argv.slice(2);
@@ -280,7 +281,7 @@ function normalOf(rgb, mask, relief) {
       // Tangent space, +v up: the picture's down is -v, so a rise towards the bottom tilts the normal up the picture's y.
       const nx = -gx * relief * 8;
       const ny = gy * relief * 8;
-      const len = Math.hypot(nx, ny, 1);
+      const len = hypot3(nx, ny, 1);
       const o = (y * LAYER + x) * 3;
       normal[o] = ((nx / len) * 0.5 + 0.5) * 255;
       normal[o + 1] = ((ny / len) * 0.5 + 0.5) * 255;

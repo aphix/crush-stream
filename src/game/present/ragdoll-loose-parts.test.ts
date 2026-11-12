@@ -1,3 +1,4 @@
+import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -132,8 +133,8 @@ async function throwAt(kind: Kind, mps: number, y: number, toward = true, walker
     const torso = d.bodies[TORSO]!;
     const v = torso.linvel();
     r.lowestHead = Math.min(r.lowestHead, d.bodies[HEAD]!.translation().y);
-    r.travel = Math.max(r.travel, Math.hypot(torso.translation().x, torso.translation().z));
-    r.fastest = Math.max(r.fastest, Math.hypot(v.x, v.y, v.z));
+    r.travel = Math.max(r.travel, hypot2(torso.translation().x, torso.translation().z));
+    r.fastest = Math.max(r.fastest, hypot3(v.x, v.y, v.z));
     r.airborne = Math.max(r.airborne, Math.min(...d.bodies.map((b) => b.translation().y - PARTS[d.bodies.indexOf(b)]!.h[1])));
   }
   return r;
@@ -155,7 +156,7 @@ function deepestIn(doll: Doll, body: LooseBody, disk: boolean): number {
     for (let c = 0; c < 8; c++) {
       const half = PARTS[k]!.h;
       _p.set(c & 1 ? half[0] : -half[0], c & 2 ? half[1] : -half[1], c & 4 ? half[2] : -half[2]).applyQuaternion(_q).add(t).sub(centre).applyQuaternion(inverse);
-      const depth = disk ? Math.min(h.x - Math.abs(_p.x), h.y - Math.hypot(_p.y, _p.z)) : Math.min(h.x - Math.abs(_p.x), h.y - Math.abs(_p.y), h.z - Math.abs(_p.z));
+      const depth = disk ? Math.min(h.x - Math.abs(_p.x), h.y - hypot2(_p.y, _p.z)) : Math.min(h.x - Math.abs(_p.x), h.y - Math.abs(_p.y), h.z - Math.abs(_p.z));
       deepest = Math.max(deepest, depth);
     }
   }

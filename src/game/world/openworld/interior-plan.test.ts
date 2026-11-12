@@ -5,6 +5,7 @@ import { DOOR_FACE, interiorDoor, interiorDoors, interiorSolids, interiorSpots, 
 import { drawnHalf, STOOP } from "./openworld-facade-solids.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { COUNTER_STRIDE, SEAT_STRIDE, type InteriorKind, type Place } from "./walk-graph.ts";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 
 const lots = layOutLots();
 const furnished = lots.places.filter((place) => place.interior !== undefined);
@@ -72,12 +73,12 @@ describe("given a place's door on the street face", () => {
     for (const place of furnished) {
       const solids = interiorSolids(place);
       const floor = place.interior === "rowhome" ? ROWHOME_FLOOR_Y : 0.05;
-      const inward = { x: -Math.round(Math.cos(place.yaw)), z: Math.round(Math.sin(place.yaw)) };
+      const inward = { x: -Math.round(detCos(place.yaw)), z: Math.round(detSin(place.yaw)) };
       const at = (alongX: number, alongZ: number) => ({ x: place.doorX + inward.x * 0.17 + alongX, z: place.doorZ + inward.z * 0.17 + alongZ });
       const hit = (point: { x: number; z: number }) => solids.some((solid) => point.x > solid.x0 && point.x < solid.x1 && point.z > solid.z0 && point.z < solid.z1 && floor + 1 > solid.y0 && floor + 1 < solid.y1);
       expect(hit(at(0, 0)), `${place.name} door is open`).toBe(false);
       const width = SHOPFRONT[place.interior!][0]!.width;
-      const alongFace = { x: Math.round(Math.abs(Math.sin(place.yaw))), z: Math.round(Math.abs(Math.cos(place.yaw))) };
+      const alongFace = { x: Math.round(Math.abs(detSin(place.yaw))), z: Math.round(Math.abs(detCos(place.yaw))) };
       const beside = [1, -1].some((side) => hit(at(alongFace.x * side * (width / 2 + 0.05), alongFace.z * side * (width / 2 + 0.05))));
       expect(beside, `${place.name} has wall beside its door`).toBe(true);
     }
@@ -86,7 +87,7 @@ describe("given a place's door on the street face", () => {
   it("when the door is derived from the frontage again, then it is the place's own door point", () => {
     for (const place of furnished) {
       const door = interiorDoor(place.interior!, place.width, place.depth, place.x, place.z, place.yaw);
-      expect(Math.hypot(door.x - place.doorX, door.z - place.doorZ), `${place.name} door offset`).toBeLessThan(1e-6);
+      expect(hypot2(door.x - place.doorX, door.z - place.doorZ), `${place.name} door offset`).toBeLessThan(1e-6);
     }
   });
 });
@@ -102,8 +103,8 @@ describe("given every place's doors", () => {
       const back = doors.filter((door) => door.face === DOOR_FACE.back);
       if (street.length !== bays * SHOPFRONT[place.interior!].length) wrong.push(`${place.name}: ${street.length} street doors`);
       if (back.length !== (place.interior === "rowhome" ? 1 : 0)) wrong.push(`${place.name}: ${back.length} back doors`);
-      const outX = Math.cos(place.yaw);
-      const outZ = -Math.sin(place.yaw);
+      const outX = detCos(place.yaw);
+      const outZ = -detSin(place.yaw);
       for (const door of doors) {
         const inward = -door.face * (door.openX * outX + door.openZ * outZ);
         const across = door.closedX * outX + door.closedZ * outZ;
@@ -125,8 +126,8 @@ describe("given every rowhome's stoop", () => {
       for (let seat = 0; seat < home.stoopSeats!; seat++) {
         const dx = home.seats![seat * SEAT_STRIDE]! - home.doorX;
         const dz = home.seats![seat * SEAT_STRIDE + 1]! - home.doorZ;
-        const out = dx * Math.cos(home.yaw) - dz * Math.sin(home.yaw);
-        const along = dx * Math.sin(home.yaw) + dz * Math.cos(home.yaw);
+        const out = dx * detCos(home.yaw) - dz * detSin(home.yaw);
+        const along = dx * detSin(home.yaw) + dz * detCos(home.yaw);
         const height = home.seats![seat * SEAT_STRIDE + 3]!;
         if (Math.abs(along) > STOOP.width / 2 || out <= 0 || out >= STOOP.run || Math.abs(height - 3 * STOOP.rise) > 1e-6) off.push(`${home.name} seat ${seat}: ${along.toFixed(2)} along, ${out.toFixed(2)} out, ${height.toFixed(2)} up`);
       }
@@ -248,8 +249,8 @@ describe("given the stairs of every interior at every storey count", () => {
       if (!closed) open.push(`plan open beside the tread at ${tread.deep0.toFixed(2)}`);
       const front = drawnHalf(home.depth) - middle;
       const across = side + PARTITION / 2;
-      const x = home.x + front * Math.cos(home.yaw) + across * Math.sin(home.yaw);
-      const z = home.z - front * Math.sin(home.yaw) + across * Math.cos(home.yaw);
+      const x = home.x + front * detCos(home.yaw) + across * detSin(home.yaw);
+      const z = home.z - front * detSin(home.yaw) + across * detCos(home.yaw);
       const y = floor + 1.5;
       if (!solids.some((solid) => x > solid.x0 && x < solid.x1 && z > solid.z0 && z < solid.z1 && y > solid.y0 && y < solid.y1)) open.push(`no solid beside the tread at ${tread.deep0.toFixed(2)}`);
     }

@@ -1,3 +1,4 @@
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import { PREFABS } from "../catalog.ts";
 import { PREFAB } from "../constants.ts";
@@ -148,14 +149,14 @@ function extentOf(prop: { asset: string; x: number; z: number; yaw: number; scal
   const width = SCENERY_ASSETS.find((asset) => asset.id === prop.asset)!.size[0] * prop.scale;
   const ends: [number, number, number, number][] = [];
   for (const [dx, dz] of [
-    [Math.sin(prop.yaw), Math.cos(prop.yaw)],
-    [Math.cos(prop.yaw), -Math.sin(prop.yaw)],
+    [detSin(prop.yaw), detCos(prop.yaw)],
+    [detCos(prop.yaw), -detSin(prop.yaw)],
   ] as const) {
     for (const sign of [-1, 1]) {
       const x = prop.x + (sign * width * dx) / 2;
       const z = prop.z + (sign * width * dz) / 2;
-      const out = (x - frontage.x) * Math.cos(frontage.yaw) - (z - frontage.z) * Math.sin(frontage.yaw);
-      const across = (x - frontage.x) * Math.sin(frontage.yaw) + (z - frontage.z) * Math.cos(frontage.yaw);
+      const out = (x - frontage.x) * detCos(frontage.yaw) - (z - frontage.z) * detSin(frontage.yaw);
+      const across = (x - frontage.x) * detSin(frontage.yaw) + (z - frontage.z) * detCos(frontage.yaw);
       ends.push([out, across, x, z]);
     }
   }
@@ -165,8 +166,8 @@ function extentOf(prop: { asset: string; x: number; z: number; yaw: number; scal
 /** Whether a plant's centre lies over a cellar door's footprint (turned as its house: the first extent out of the wall, the third along it). */
 function insideDoor(door: { x: number; z: number; yaw: number }, plant: { x: number; z: number }): boolean {
   const [depth, , span] = PREFABS[PREFAB.cellarDoor].size;
-  const out = (plant.x - door.x) * Math.cos(door.yaw) - (plant.z - door.z) * Math.sin(door.yaw);
-  const across = (plant.x - door.x) * Math.sin(door.yaw) + (plant.z - door.z) * Math.cos(door.yaw);
+  const out = (plant.x - door.x) * detCos(door.yaw) - (plant.z - door.z) * detSin(door.yaw);
+  const across = (plant.x - door.x) * detSin(door.yaw) + (plant.z - door.z) * detCos(door.yaw);
   return Math.abs(out) < depth / 2 && Math.abs(across) < span / 2;
 }
 
@@ -218,13 +219,13 @@ describe("given the park's big trees", () => {
       expect(Math.abs(tree.x - parkBlock.centreX), `${at} edge`).toBeLessThan(lots.geometry.blockLength / 2 - BED_RADIUS);
       expect(Math.abs(tree.z - parkBlock.centreZ), `${at} edge`).toBeLessThan(lots.geometry.blockDepth / 2 - BED_RADIUS);
       expect(nearestPath(tree.x, tree.z), `${at} path`).toBeGreaterThanOrEqual(FENCE_LINE + BED_RADIUS);
-      expect(Math.hypot(tree.x - parkBlock.centreX, tree.z - parkBlock.centreZ), `${at} plaza`).toBeGreaterThanOrEqual(PLAZA_RADIUS + BED_RADIUS);
+      expect(hypot2(tree.x - parkBlock.centreX, tree.z - parkBlock.centreZ), `${at} plaza`).toBeGreaterThanOrEqual(PLAZA_RADIUS + BED_RADIUS);
       expect(inCourtBox(tree.x, tree.z, BED_RADIUS), `${at} court`).toBe(false);
       for (const prop of dressing) {
         const clear = (prop.prefab === PREFAB.pavilion ? PAVILION_CLEAR : PROP_CLEAR) + BED_RADIUS;
-        expect(Math.hypot(tree.x - prop.x, tree.z - prop.z), `${at} ${prop.prefab}`).toBeGreaterThanOrEqual(clear);
+        expect(hypot2(tree.x - prop.x, tree.z - prop.z), `${at} ${prop.prefab}`).toBeGreaterThanOrEqual(clear);
       }
-      for (const other of parkTrees) if (other !== tree) expect(Math.hypot(tree.x - other.x, tree.z - other.z), `${at} beds`).toBeGreaterThanOrEqual(BED_APART);
+      for (const other of parkTrees) if (other !== tree) expect(hypot2(tree.x - other.x, tree.z - other.z), `${at} beds`).toBeGreaterThanOrEqual(BED_APART);
     }
   });
 
@@ -233,13 +234,13 @@ describe("given the park's big trees", () => {
     for (const ball of parkBoxwood) {
       const at = keyOf(ball.x, ball.z);
       expect(PREFABS[ball.prefab].body, at).toBe("none");
-      const ring = Math.min(...parkTrees.map((tree) => Math.hypot(tree.x - ball.x, tree.z - ball.z)));
+      const ring = Math.min(...parkTrees.map((tree) => hypot2(tree.x - ball.x, tree.z - ball.z)));
       expect(ring, `${at} ring`).toBeGreaterThan(RING_RADIUS_BETWEEN[0]);
       expect(ring, `${at} ring`).toBeLessThan(RING_RADIUS_BETWEEN[1]);
       expect(nearestPath(ball.x, ball.z), `${at} path`).toBeGreaterThanOrEqual(FENCE_LINE);
-      expect(Math.hypot(ball.x - parkBlock.centreX, ball.z - parkBlock.centreZ), `${at} plaza`).toBeGreaterThanOrEqual(PLAZA_RADIUS);
+      expect(hypot2(ball.x - parkBlock.centreX, ball.z - parkBlock.centreZ), `${at} plaza`).toBeGreaterThanOrEqual(PLAZA_RADIUS);
       expect(inCourtBox(ball.x, ball.z, 0), `${at} court`).toBe(false);
-      for (const prop of dressing) expect(Math.hypot(ball.x - prop.x, ball.z - prop.z), `${at} ${prop.prefab}`).toBeGreaterThanOrEqual(PROP_CLEAR);
+      for (const prop of dressing) expect(hypot2(ball.x - prop.x, ball.z - prop.z), `${at} ${prop.prefab}`).toBeGreaterThanOrEqual(PROP_CLEAR);
     }
   });
 });

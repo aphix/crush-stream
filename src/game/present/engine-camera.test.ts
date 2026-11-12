@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
+import { detAsin, detAtan2, detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, DriverSeat, idleDrive, type DriveInput, type SeatView } from "../vehicle/car-drive.ts";
 import type { PadState } from "../vehicle/gamepad.ts";
@@ -54,7 +55,7 @@ describe("given the ride-along camera following a thrown driver's dummy", () => 
     const off = camera.position.clone().sub(look);
     expect(view.userFramed).toBe(false);
     // 40 px left turns the bearing by 0.2 rad about the dummy: the eye moves round it, not away from it.
-    expect(Math.abs(Math.atan2(off.x, off.z) - Math.atan2(4, 6)), "the eye turned about the dummy").toBeGreaterThan(0.01);
+    expect(Math.abs(detAtan2(off.x, off.z) - detAtan2(4, 6)), "the eye turned about the dummy").toBeGreaterThan(0.01);
   });
 
   it("when a drag goes far past the limits in the global view, then the eye stops at the orbit's pitch range, above the ground, however far the drag goes", () => {
@@ -65,7 +66,7 @@ describe("given the ride-along camera following a thrown driver's dummy", () => 
       pointer(canvas, "pointermove", 100, 100 + dy);
       for (let f = 0; f < 4 * FRAME_HZ; f++) view.orbit(DT, 0, false);
       const off = camera.position.clone().sub(look);
-      const elev = Math.asin(off.y / off.length());
+      const elev = detAsin(off.y / off.length());
       expect(elev >= 0.079 && elev <= 1.221, `elevation ${elev.toFixed(3)} rad`).toBeTruthy();
       expect(off.y + look.y, "above the ground").toBeGreaterThan(0);
       pointer(canvas, "pointermove", 100, 100);
@@ -139,7 +140,7 @@ describe("given the orbit camera around a ring of lamp posts", () => {
   }
 
   it("when the orbit goes a whole turn at a low eye height, then the eye stays 3 m from every post of the 16 m ring, in steps within twice the plain orbit's", () => {
-    const ring = Array.from({ length: 6 }, (_, i) => ({ intact: true, group: { visible: true, position: new THREE.Vector3(Math.sin((i / 6) * Math.PI * 2) * 16, 0, Math.cos((i / 6) * Math.PI * 2) * 16) } }));
+    const ring = Array.from({ length: 6 }, (_, i) => ({ intact: true, group: { visible: true, position: new THREE.Vector3(detSin((i / 6) * Math.PI * 2) * 16, 0, detCos((i / 6) * Math.PI * 2) * 16) } }));
     const spin = 0.32;
     const turn = (posts: typeof ring): { near: number; step: number } => {
       const { camera, view } = lowOrbit(posts);
@@ -151,7 +152,7 @@ describe("given the orbit camera around a ring of lamp posts", () => {
         view.orbit(DT, spin, false);
         step = Math.max(step, last.distanceTo(camera.position));
         last.copy(camera.position);
-        for (const p of ring) near = Math.min(near, Math.hypot(camera.position.x - p.group.position.x, camera.position.z - p.group.position.z, Math.max(0, camera.position.y - 5.3)));
+        for (const p of ring) near = Math.min(near, hypot3(camera.position.x - p.group.position.x, camera.position.z - p.group.position.z, Math.max(0, camera.position.y - 5.3)));
       }
       return { near, step };
     };
@@ -201,7 +202,7 @@ describe("given the derby's orbit round a car 4 m from the bowl's 38 m wall", ()
       let far = 0;
       for (let f = 0; f < 120 + Math.round((2 * Math.PI) / spin / DT); f++) {
         view.orbit(DT, spin, false);
-        if (f >= 120) far = Math.max(far, Math.hypot(camera.position.x, camera.position.z));
+        if (f >= 120) far = Math.max(far, hypot2(camera.position.x, camera.position.z));
       }
       return far;
     };
@@ -280,7 +281,7 @@ describe("given the chase eye drifting toward a wall along the course", () => {
         const t = n / hz;
         car.group.position.set(0.2 + 0.1 * t, 0, 20 * t);
         car.velocity.set(0.1, 0, 20);
-        car.fwdFlat.set(-Math.sin(0.35), 0, Math.cos(0.35));
+        car.fwdFlat.set(-detSin(0.35), 0, detCos(0.35));
         view.frameSpectate(car, "third", scene, 1 / hz, false);
         out.push(camera.position.clone());
       }
@@ -364,7 +365,7 @@ describe("given the chase camera on a car driven by its own drive", () => {
   /** The car's sideways distance (m) from the camera's centre line, + = the car is to the camera's right. */
   function offCentre(cam: THREE.PerspectiveCamera, car: DeformableCar): number {
     const f = cam.getWorldDirection(new THREE.Vector3());
-    const l = Math.hypot(f.x, f.z);
+    const l = hypot2(f.x, f.z);
     return ((car.group.position.x - cam.position.x) * f.z - (car.group.position.z - cam.position.z) * f.x) / l;
   }
 
@@ -372,7 +373,7 @@ describe("given the chase camera on a car driven by its own drive", () => {
     const r = followed(20, (car) => ({ throttle: Math.min(1, Math.max(0, 0.3 + (20 - car.speed) * 0.5)) }), 3);
     const p = r.car.group.position;
     const dist = PLATFORM_CAMERA.third.dist + Math.min(r.car.speed, 30) * CHASE.pullback;
-    const gap = Math.hypot(r.fine.position.x - (p.x - r.car.fwdFlat.x * dist), r.fine.position.y - (p.y + PLATFORM_CAMERA.third.height), r.fine.position.z - (p.z - r.car.fwdFlat.z * dist));
+    const gap = hypot3(r.fine.position.x - (p.x - r.car.fwdFlat.x * dist), r.fine.position.y - (p.y + PLATFORM_CAMERA.third.height), r.fine.position.z - (p.z - r.car.fwdFlat.z * dist));
     expect(gap, `the eye is ${(gap * 100).toFixed(1)} cm off the chase offset`).toBeLessThan(0.02);
     const rates = r.fine.position.distanceTo(r.coarse.position);
     expect(rates, `${FRAME_HZ} and ${FINE_HZ} Hz eyes are ${(rates * 100).toFixed(2)} cm apart`).toBeLessThan(0.01);
@@ -391,15 +392,15 @@ describe("given the chase camera on a car driven by its own drive", () => {
     assignClass(car, "sedan");
     car.spawnFacing(0, 0, 0, 0);
     const heading = (40 * Math.PI) / 180;
-    car.velocity.set(Math.sin(heading) * 12, 0, Math.cos(heading) * 12);
+    car.velocity.set(detSin(heading) * 12, 0, detCos(heading) * 12);
     const rig = new DriveCam();
     const cam = new THREE.PerspectiveCamera(56, 16 / 9, 0.1, 180);
     for (let t = 0; t < 3; t += DT) rig.update(cam, car, "third", DT, 0, 0);
     const aim = rig["aim"].x;
     const p = car.group.position;
-    const off = (Math.atan2(aim.x - p.x, aim.z - p.z) * 180) / Math.PI;
+    const off = (detAtan2(aim.x - p.x, aim.z - p.z) * 180) / Math.PI;
     expect(Math.abs(off - 40), `the aim leads ${off.toFixed(1)} degrees round, the velocity 40`).toBeLessThan(1);
-    const lead = Math.hypot(aim.x - p.x, aim.z - p.z);
+    const lead = hypot2(aim.x - p.x, aim.z - p.z);
     expect(Math.abs(lead - 12 * CHASE.aheadVel), `the aim leads ${lead.toFixed(2)} m`).toBeLessThan(0.05);
   });
 
@@ -437,7 +438,7 @@ describe("given the chase camera on a car driven by its own drive", () => {
     for (let t = 0; t < 1.5 - 1e-9; t += h) {
       step();
       low = Math.min(low, cam.position.y);
-      roll = Math.max(roll, Math.abs(Math.asin(cam.matrixWorld.elements[1]!)));
+      roll = Math.max(roll, Math.abs(detAsin(cam.matrixWorld.elements[1]!)));
       pitch.push(cam.getWorldDirection(fwd).y);
       after = cam.position.y;
     }
@@ -669,7 +670,7 @@ describe("given the driven car's chase and far chase eye beside a course wall an
     for (const view of ["third", "far"] as const) {
       const free = make(view);
       const held = make(view);
-      for (const r of [free, held]) r.car.fwdFlat.set(-Math.sin(0.5), 0, Math.cos(0.5));
+      for (const r of [free, held]) r.car.fwdFlat.set(-detSin(0.5), 0, detCos(0.5));
       for (let n = 0; n < 180; n++) {
         free.cam.frameDrive(free.car, null, DT, false);
         held.cam.frameDrive(held.car, wall, DT, false);
@@ -723,7 +724,7 @@ describe("given a driven car whose body style seats its own cameras", () => {
         const eye = car.group.localToWorld(new THREE.Vector3(0, own.hood[0], own.hood[1]));
         expect(p.distanceTo(eye), `hood eye ${p.toArray().map((v) => v.toFixed(2))} vs the style's ${eye.toArray().map((v) => v.toFixed(2))}`).toBeLessThan(0.05);
       } else {
-        const [back, up] = [Math.hypot(p.x - g.x, p.z - g.z), p.y - g.y];
+        const [back, up] = [hypot2(p.x - g.x, p.z - g.z), p.y - g.y];
         expect(Math.abs(back - own[view].dist) < 0.3 && Math.abs(up - own[view].height) < 0.3, `${view}: eye ${back.toFixed(2)} m back, ${up.toFixed(2)} m up; the style's ${own[view].dist}, ${own[view].height}`).toBeTruthy();
       }
     }

@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { detCos, detSin } from "../../kernel/physics-core.js";
 import { stubBrowser } from "../../engine/engine-headless.test-util.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "../../present/prefabs.ts";
 import type { PrefabMaterials } from "../../present/prefab-pieces.ts";
@@ -24,14 +25,14 @@ function walled(x: number, z: number): boolean {
     const yaw = prop.yaw ?? 0;
     const dx = x - prop.x;
     const dz = z - prop.z;
-    return Math.abs(dx * Math.cos(yaw) - dz * Math.sin(yaw)) < thickness / 2 && Math.abs(dx * Math.sin(yaw) + dz * Math.cos(yaw)) < length / 2;
+    return Math.abs(dx * detCos(yaw) - dz * detSin(yaw)) < thickness / 2 && Math.abs(dx * detSin(yaw) + dz * detCos(yaw)) < length / 2;
   });
 }
 
 /** The point `across` m along the place's front from its middle and `deep` m in from its drawn street face. */
 function inside(place: (typeof furnished)[number], across: number, deep: number): { x: number; z: number } {
   const front = drawnHalf(place.depth) - deep;
-  return { x: place.x + front * Math.cos(place.yaw) + across * Math.sin(place.yaw), z: place.z - front * Math.sin(place.yaw) + across * Math.cos(place.yaw) };
+  return { x: place.x + front * detCos(place.yaw) + across * detSin(place.yaw), z: place.z - front * detSin(place.yaw) + across * detCos(place.yaw) };
 }
 
 describe("given the open world's course on the real programme", () => {

@@ -1,3 +1,4 @@
+import { hypot2 } from "../../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import { CAR_AVOID_GAP, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS, CAREFUL_PURSUIT_SPEED, CHASE_LEAD_SECONDS, CHASE_RESUME_DISTANCE, CLOSE_PURSUIT_DISTANCE, CRIME_STEP_SECONDS, CRIME_STREAM, HOTHEAD_RUN_SHARE, REDIRECT_SECONDS } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
@@ -82,8 +83,8 @@ describe("closing on a car it chases", () => {
     for (let step = 0; step < 300; step++) {
       runFor(run, CRIME_STEP_SECONDS);
       const patrolCar = street.snaps[PATROL_CAR_INDEX]!;
-      const close = Math.hypot(patrolCar.x - street.snaps[runner]!.x, patrolCar.z - street.snaps[runner]!.z) <= CLOSE_PURSUIT_DISTANCE;
-      if (close && street.drivers[PATROL_CAR_INDEX] !== null) fastestClose = Math.max(fastestClose, Math.hypot(patrolCar.vx, patrolCar.vz));
+      const close = hypot2(patrolCar.x - street.snaps[runner]!.x, patrolCar.z - street.snaps[runner]!.z) <= CLOSE_PURSUIT_DISTANCE;
+      if (close && street.drivers[PATROL_CAR_INDEX] !== null) fastestClose = Math.max(fastestClose, hypot2(patrolCar.vx, patrolCar.vz));
     }
     return fastestClose;
   }
@@ -186,7 +187,7 @@ describe("a patrol car brakes for a car in its way", () => {
     for (let step = 0; step < 400; step++) {
       runFor(run, CRIME_STEP_SECONDS);
       const patrolCar = street.snaps[PATROL_CAR_INDEX]!;
-      closest = Math.min(closest, Math.hypot(street.snaps[blocker]!.x - patrolCar.x, street.snaps[blocker]!.z - patrolCar.z));
+      closest = Math.min(closest, hypot2(street.snaps[blocker]!.x - patrolCar.x, street.snaps[blocker]!.z - patrolCar.z));
     }
     expect(closest, "nearest it came to the car in its way").toBeGreaterThan(CAR_AVOID_GAP - 2);
   });

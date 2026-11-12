@@ -1,6 +1,7 @@
 import { expect } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
+import { detAtan2, hypot2 } from "../kernel/physics-core.js";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { tapOnFoot } from "../hud/touch-scheme.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -165,10 +166,10 @@ export class OnFootRig {
     const look = this.engine["view"].look;
     for (let t = 0; t < limitSeconds; t += BURST_S) {
       const at = this.torso();
-      const gap = Math.hypot(target.x - at.x, target.z - at.z);
+      const gap = hypot2(target.x - at.x, target.z - at.z);
       keys.clear();
       if (gap < within) return;
-      const reach = Math.hypot(look.x - eye.x, look.z - eye.z) || 1;
+      const reach = hypot2(look.x - eye.x, look.z - eye.z) || 1;
       const fx = (look.x - eye.x) / reach;
       const fz = (look.z - eye.z) / reach;
       const ahead = ((target.x - at.x) * fx + (target.z - at.z) * fz) / gap;
@@ -183,7 +184,7 @@ export class OnFootRig {
     const at = this.torso();
     const near: string[] = [];
     for (const [i, car] of this.cars().entries()) {
-      const gap = Math.hypot(car.group.position.x - at.x, car.group.position.z - at.z);
+      const gap = hypot2(car.group.position.x - at.x, car.group.position.z - at.z);
       if (gap < NEAR_REPORT_M) near.push(`car ${i} ${gap.toFixed(1)} m at ${car.group.position.x.toFixed(1)}, ${car.group.position.z.toFixed(1)} going ${car.velocity.length().toFixed(1)} m/s`);
     }
     expect.fail(`he did not reach within ${within} m of (${target.x.toFixed(1)}, ${target.z.toFixed(1)}) in ${limitSeconds} s, he stands at ${at.x.toFixed(1)}, ${at.z.toFixed(1)} (${this.walker().state}); near him: ${near.join("; ") || "no car"}`);
@@ -205,7 +206,7 @@ export class OnFootRig {
     const dx = _forward.x * way;
     const dz = _forward.z * way;
     _spot.set(torso.x + dz * side * OUTWARD_M - dx * runUp, 0, torso.z - dx * side * OUTWARD_M - dz * runUp);
-    hitter.spawnFacing(_spot.x, _spot.z, Math.atan2(dx, dz), mps);
+    hitter.spawnFacing(_spot.x, _spot.z, detAtan2(dx, dz), mps);
     hitter.group.position.y = own.group.position.y;
     hitter.group.updateMatrixWorld(true);
   }

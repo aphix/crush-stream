@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Collider, ColliderDesc, World } from "@dimforge/rapier3d-simd";
 import type { Rapier } from "../kernel/rapier.ts";
-import { hypot2 } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { propColliders, solidsOf, type Placed } from "../world/placements.ts";
 import { KNOCK, P_STRIDE, PRISM, Q_KIND, Q_STRIDE, type Surface } from "../world/surfaces.ts";
 import { PR_BASE, PR_COS, PR_GU, PR_GW, PR_HX, PR_HZ, PR_R, PR_SIN, PR_TOP, PR_WALL, PR_X, PR_YAW, PR_Z, topAt } from "../world/prism.ts";
@@ -133,7 +133,7 @@ function structures(track: Track, out: Solid[]): void {
         const ra = (WL + WR) / 2;
         const rise = Math.min(3, ra * 0.3);
         const pts = [WL, surfY(ground, p, k, WL) - 0.4, WL, top];
-        for (let i = 1; i < ARCH_STEPS; i++) pts.push(c + ra * Math.cos((i / ARCH_STEPS) * Math.PI), top + rise * Math.sin((i / ARCH_STEPS) * Math.PI));
+        for (let i = 1; i < ARCH_STEPS; i++) pts.push(c + ra * detCos((i / ARCH_STEPS) * Math.PI), top + rise * detSin((i / ARCH_STEPS) * Math.PI));
         pts.push(-WR, top, -WR, surfY(ground, p, k, -WR) - 0.4);
         return pts;
       };

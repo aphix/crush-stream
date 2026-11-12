@@ -1,3 +1,4 @@
+import { detCos } from "../../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import { must } from "../../kernel/must.test-util.ts";
 import { ACTIVITY } from "../civilians/civilian-activity.ts";
@@ -105,7 +106,7 @@ describe("an arrest by a case whose patrol car has come, on a map with a police 
     runFor(run, 1);
     expect(run.poses.activity[CRIMINAL], "her clip").toBe(ACTIVITY.carIn);
     expect(run.scene.copPoses.activity[table.holder[0]!], "his clip").toBe(ACTIVITY.carIn);
-    expect(run.poses.x[CRIMINAL], "at the driver's door").toBeCloseTo(street.snaps[0]!.x + street.doorBeside + BESIDE_COP * Math.cos(-Math.PI / 2), 1);
+    expect(run.poses.x[CRIMINAL], "at the driver's door").toBeCloseTo(street.snaps[0]!.x + street.doorBeside + BESIDE_COP * detCos(-Math.PI / 2), 1);
     expect(street.doorRadians[0], "the door is open").toBeGreaterThan(0);
     expect(run.busts, "busts raised").toHaveLength(0);
     runFor(run, ACTIVITY_SECONDS.carIn);

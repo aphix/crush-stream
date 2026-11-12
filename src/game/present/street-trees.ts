@@ -6,6 +6,7 @@ import { TREE_SCALE } from "../world/scenery.ts";
 import { streetTreeKindOf, streetTreeOf, type StreetKind, type StreetTree, type StreetTreeKind, type StreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
 import { LEAF_CELLS, type LeafSpecies } from "./leaf-atlas.ts";
 import { cyl, type Piece } from "./prefab-pieces.ts";
+import { detCos, detSin } from "../kernel/physics-core.js";
 
 /** A canopy lump: an ellipsoid's middle and radii (m, in the tree's frame: +x toward its street, y up from the sidewalk) and its leaf colour. */
 type Lump = readonly [x: number, y: number, z: number, rx: number, ry: number, rz: number, colour: number];
@@ -182,7 +183,7 @@ export function cardPieces(lump: Lump, seed: number, cards: number, edge: number
     const turn = random() * Math.PI * 2;
     const level = Math.sqrt(1 - up * up);
     const reach = 0.45 + 0.55 * random();
-    const centre = new THREE.Vector3(level * Math.cos(turn) * shrink(rx) * reach, up * shrink(ry) * reach, level * Math.sin(turn) * shrink(rz) * reach);
+    const centre = new THREE.Vector3(level * detCos(turn) * shrink(rx) * reach, up * shrink(ry) * reach, level * detSin(turn) * shrink(rz) * reach);
     const normal = flat ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(random() * 2 - 1, random() * 2 - 0.4, random() * 2 - 1).normalize();
     const geometry = new THREE.PlaneGeometry(edge, edge);
     geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(FORWARD, normal));

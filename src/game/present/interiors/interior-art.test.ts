@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
+import { detCos, detSin } from "../../kernel/physics-core.js";
 import { createCrowdPoses, type CrowdPoses } from "../../ai/civilians/crowd-poses.ts";
 import { FRAME_HZ } from "../../kernel/constants.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
@@ -35,7 +36,7 @@ const built = (set: InteriorSet): string => JSON.stringify(set.stats());
 const blind = () => new SightField([], SIGHT_ID_CAPACITY);
 
 /** The point `out` m out of a place's door (the coffee shop's, or another's; negative: in through it). */
-const fromDoor = (out: number, place: Place = coffee): { x: number; z: number } => ({ x: place.doorX + Math.cos(place.yaw) * out, z: place.doorZ - Math.sin(place.yaw) * out });
+const fromDoor = (out: number, place: Place = coffee): { x: number; z: number } => ({ x: place.doorX + detCos(place.yaw) * out, z: place.doorZ - detSin(place.yaw) * out });
 /** A civilian standing just out of the door opens it; one who has gone is hidden. */
 const AT_DOOR = 0.5;
 const STREET_EYE = 30;
@@ -104,8 +105,8 @@ const COPY_STEP = 0.2;
 /** `count` copies of a place, each further from an eye out in front of its door than the one before, the farthest first: the order the set reads them in. */
 function copies(place: Place, count: number): Place[] {
   const shifted = (copy: number): Place => {
-    const x = -Math.cos(place.yaw) * COPY_STEP * copy;
-    const z = Math.sin(place.yaw) * COPY_STEP * copy;
+    const x = -detCos(place.yaw) * COPY_STEP * copy;
+    const z = detSin(place.yaw) * COPY_STEP * copy;
     return { ...place, x: place.x + x, z: place.z + z, doorX: place.doorX + x, doorZ: place.doorZ + z };
   };
   return Array.from({ length: count }, (_, copy) => shifted(copy)).reverse();

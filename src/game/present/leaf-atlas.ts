@@ -1,3 +1,4 @@
+import { detCos, detSin } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { once } from "../kernel/scalar.ts";
 import { mulberry32 } from "../world/placements.ts";
@@ -38,8 +39,8 @@ function leafPath(ctx: CanvasRenderingContext2D, width: number, lobes: number): 
     for (let point = 0; point < lobes * 2; point++) {
       const radius = point % 2 === 0 ? width / 2 : width * 0.28;
       const angle = (point * Math.PI) / lobes;
-      if (point === 0) ctx.moveTo(Math.sin(angle) * radius, -Math.cos(angle) * radius);
-      else ctx.lineTo(Math.sin(angle) * radius, -Math.cos(angle) * radius);
+      if (point === 0) ctx.moveTo(detSin(angle) * radius, -detCos(angle) * radius);
+      else ctx.lineTo(detSin(angle) * radius, -detCos(angle) * radius);
     }
   ctx.closePath();
 }
@@ -58,7 +59,7 @@ function drawSpray(ctx: CanvasRenderingContext2D, x0: number, y0: number, specie
     const angle = random() * Math.PI * 2;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(Math.cos(angle) * reach * 0.8, Math.sin(angle) * reach * 0.8);
+    ctx.lineTo(detCos(angle) * reach * 0.8, detSin(angle) * reach * 0.8);
     ctx.stroke();
   }
   for (let leaf = 0; leaf < under + count; leaf++) {
@@ -69,7 +70,7 @@ function drawSpray(ctx: CanvasRenderingContext2D, x0: number, y0: number, specie
     const out = Math.sqrt(random()) * (reach - width / 2);
     const grey = 150 + Math.floor(random() * 105);
     ctx.save();
-    ctx.translate(Math.cos(angle) * out, Math.sin(angle) * out);
+    ctx.translate(detCos(angle) * out, detSin(angle) * out);
     ctx.rotate(random() * Math.PI * 2);
     ctx.fillStyle = `rgb(${grey},${grey},${grey})`;
     leafPath(ctx, width, shape);

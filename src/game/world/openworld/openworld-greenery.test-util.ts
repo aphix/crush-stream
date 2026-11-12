@@ -1,5 +1,6 @@
 import type { Lots, PathPlan } from "./openworld-layout.ts";
 import { sidesOf, type BlockSide } from "./openworld-sides.ts";
+import { hypot2 } from "../../kernel/physics-core.js";
 
 /** How far (m) the point stands out of block face `side`'s property line toward its street: negative inside the block. */
 export function outOf(side: BlockSide, x: number, z: number): number {
@@ -42,7 +43,7 @@ export function distanceToPath(path: PathPlan, x: number, z: number): number {
     const [bx, bz] = path.points[at]!;
     const length = (bx - ax) ** 2 + (bz - az) ** 2;
     const share = length === 0 ? 0 : Math.min(1, Math.max(0, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / length));
-    least = Math.min(least, Math.hypot(x - (ax + share * (bx - ax)), z - (az + share * (bz - az))));
+    least = Math.min(least, hypot2(x - (ax + share * (bx - ax)), z - (az + share * (bz - az))));
   }
   return least;
 }

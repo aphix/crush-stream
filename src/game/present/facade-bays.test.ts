@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { detCos, detSin } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { afterAll, describe, expect, it } from "vitest";
 import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
@@ -274,7 +274,7 @@ describe("given the kit made for the layout's rowhomes", () => {
       stoops.getMatrixAt(at, matrix);
       front.set(0, 0, 1).transformDirection(matrix);
       place.setFromMatrixPosition(matrix);
-      worst = Math.max(worst, Math.abs(front.x - Math.cos(frontage.yaw)), Math.abs(front.z + Math.sin(frontage.yaw)), Math.abs(place.x - frontage.x), Math.abs(place.z - frontage.z));
+      worst = Math.max(worst, Math.abs(front.x - detCos(frontage.yaw)), Math.abs(front.z + detSin(frontage.yaw)), Math.abs(place.x - frontage.x), Math.abs(place.z - frontage.z));
     }
     expect(frontages.length, "houses read").toBeGreaterThan(100);
     expect(worst, "furthest an instance is from its frontage (m or unit)").toBeLessThan(EPSILON * 10);
@@ -551,7 +551,7 @@ describe("given the panes of the bay windows and the list of built buildings", (
     for (const [at, place] of places.entries()) {
       cornice.getMatrixAt(at, matrix);
       const out = { x: matrix.elements[8]!, z: matrix.elements[10]! };
-      const length = Math.hypot(out.x, out.z);
+      const length = hypot2(out.x, out.z);
       worst = Math.max(worst, Math.abs(matrix.elements[12]! - (out.x / length) * KIT_HOUSE_BACK - place.x), Math.abs(matrix.elements[14]! - (out.z / length) * KIT_HOUSE_BACK - place.z));
       expect(KIT_HOUSE_BACK, `${place.name}: the house's back from its front face (m)`).toBeCloseTo(drawnHalf(place.depth), 9);
     }

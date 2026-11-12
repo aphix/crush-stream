@@ -12,6 +12,7 @@ import {
   BLACK, BLOCK, CHEQUER, FLAT_TOL, KERB_CURV, KERB_FILL, KERB_LIFT, KERB_WIDTH, MARK_LIFT, Mesher, PAVED,
   RED, ROAD_LIFT, ROAD_ON_TERRAIN_SHADE, RoadIndex, sampleAt, SKIRT_RADIUS, cellMaterial, surfaceHex, texClass, WHITE,
 } from "./track-mesh.ts";
+import { detCos, detSin } from "../kernel/physics-core.js";
 
 /** How far (m) past the farthest scatter the terrain extends beyond the track's bounds. */
 const SCATTER_PAD = 40;
@@ -667,8 +668,8 @@ function addSkirt(m: Mesher, ground: TrackGround, x0: number, z0: number, bx: nu
     const rad = inner * Math.pow(SKIRT_RADIUS / inner, r / rings);
     for (let s = 0; s < seg; s++) {
       const a = (s / seg) * Math.PI * 2;
-      const x = cx + Math.sin(a) * rad;
-      const z = cz + Math.cos(a) * rad;
+      const x = cx + detSin(a) * rad;
+      const z = cz + detCos(a) * rad;
       m.v(x, ground.base(x, z) - 0.25, z, surfaceHex(surface), x / tile, z / tile, 1, cellMaterial(surface, surface));
     }
   }

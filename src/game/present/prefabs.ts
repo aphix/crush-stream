@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { makeAsphalt, makeJerseyBarrier, makeLamp } from "./engine-world.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
@@ -183,7 +183,7 @@ function makeMud(): [HTMLCanvasElement, HTMLCanvasElement] {
     const phase = Math.random() * Math.PI * 2;
     const dark = 0.18 + Math.random() * 0.25;
     for (let y = 0; y < S; y += 2) {
-      const x = x0 + amp * Math.sin((2 * Math.PI * turns * y) / S + phase);
+      const x = x0 + amp * detSin((2 * Math.PI * turns * y) / S + phase);
       for (const ox of [-S, 0, S]) {
         ctx.fillStyle = `rgba(20,16,12,${dark})`;
         ctx.fillRect(x + ox - w / 2, y, w, 2);
@@ -521,7 +521,7 @@ function chevron(): Piece[] {
   const { width, height, top, thick } = CHEVRON;
   const { run, rise, stroke, proud, post } = CHEVRON_DRAW;
   const centre = top - height / 2;
-  const slope = Math.atan2(rise, run);
+  const slope = detAtan2(rise, run);
   const arm = (side: 1 | -1): Piece => [new THREE.BoxGeometry(thick, stroke, hypot2(run, rise)).rotateX(-side * slope).translate(0, centre + (side * rise) / 2, 0), C.yellow, MAT.CHEVRON_BOARD];
   return [
     [box(thick - 2 * proud, height, width, 0, centre, 0), C.black, MAT.CHEVRON_BOARD],

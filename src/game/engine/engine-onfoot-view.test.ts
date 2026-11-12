@@ -1,3 +1,4 @@
+import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { WALKER_SLOT } from "../present/ragdoll-pool.ts";
@@ -102,7 +103,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(mesh.viewHidden.value, "his eyes: his head and torso are not drawn").toBe(WALKER_SLOT);
     const torso = rig.torso();
     const eye = rig.engine["camera"].position;
-    const off = Math.hypot(eye.x - torso.x, eye.z - torso.z);
+    const off = hypot2(eye.x - torso.x, eye.z - torso.z);
     expect(off, `the eye is at his head: ${off.toFixed(2)} m off his torso across`).toBeLessThan(EYE_OFF_TORSO_MAX);
     expect(eye.y - torso.y >= EYE_OVER_TORSO_MIN && eye.y - torso.y <= EYE_OVER_TORSO_MAX, `at his eyes' height: ${(eye.y - torso.y).toFixed(2)} m over his torso`).toBeTruthy();
     rig.press("KeyV");
@@ -123,7 +124,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
       rig.run(FRAME);
       const him = rig.torso();
       const eye = rig.engine["camera"].position;
-      const head = Math.hypot(eye.x - him.x, eye.y - (him.y + HEAD_OVER_TORSO), eye.z - him.z);
+      const head = hypot3(eye.x - him.x, eye.y - (him.y + HEAD_OVER_TORSO), eye.z - him.z);
       expect(onFoot().footView, `drag ${step}: still over his shoulder`).toBe("shoulder");
       expect(mesh.viewHidden.value, `drag ${step}: his head is drawn`).toBe(-1);
       expect(head, `drag ${step}: the eye is ${head.toFixed(2)} m from his head`).toBeGreaterThan(HEAD_CLEAR_M);
@@ -190,7 +191,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(view().orbitRadius, "the press took the orbit's pose from the camera and the aim (m)").toBeLessThan(SHOULDER_NEAREST);
     rig.run(SETTLE_S);
     const him = rig.torso();
-    const head = Math.hypot(eye.x - him.x, eye.y - (him.y + HEAD_OVER_TORSO), eye.z - him.z);
+    const head = hypot3(eye.x - him.x, eye.y - (him.y + HEAD_OVER_TORSO), eye.z - him.z);
     expect(onFoot().footView, "a press by the wall: still over his shoulder").toBe("shoulder");
     expect(rig.engine["ragdolls"].pickMesh.viewHidden.value, "his head is drawn").toBe(-1);
     expect(head, `the eye is ${head.toFixed(2)} m from his head`).toBeGreaterThan(HEAD_CLEAR_M);

@@ -1,3 +1,4 @@
+import { hypot2 } from "../kernel/physics-core.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stationOf } from "../ai/openworld-crime/arrests.ts";
@@ -87,8 +88,8 @@ describe("given the real engine on the open world, the player on foot on the par
     busted();
     const target = rig.beside(car(), LED_M, 0);
     law().led(target.x, target.z);
-    for (let t = 0; t < LED_WITHIN_S && Math.hypot(rig.torso().x - target.x, rig.torso().z - target.z) > SET_DOWN_M * 2; t += 0.5) rig.run(0.5);
-    expect(Math.hypot(rig.torso().x - target.x, rig.torso().z - target.z), "he is where he was led").toBeLessThanOrEqual(SET_DOWN_M * 2);
+    for (let t = 0; t < LED_WITHIN_S && hypot2(rig.torso().x - target.x, rig.torso().z - target.z) > SET_DOWN_M * 2; t += 0.5) rig.run(0.5);
+    expect(hypot2(rig.torso().x - target.x, rig.torso().z - target.z), "he is where he was led").toBeLessThanOrEqual(SET_DOWN_M * 2);
     expect(rig.phase(), "still in custody").toBe("arrested");
   });
 
@@ -141,7 +142,7 @@ describe("given the real engine on the open world, the player on foot on the par
       const at = rig.torso();
       expect(rig.phase(), "on foot").toBe("onFoot");
       expect(rig.engine["ragdolls"].walker.active, "his walker is out").toBe(true);
-      expect(Math.hypot(at.x - door().x, at.z - door().z), "at the station's door").toBeLessThan(SET_DOWN_M * 2);
+      expect(hypot2(at.x - door().x, at.z - door().z), "at the station's door").toBeLessThan(SET_DOWN_M * 2);
       expect(seat.carIndex, "the car he may get back into is his own").toBe(0);
       expect(rig.away(), "his own car").toBe(0);
     });
@@ -152,7 +153,7 @@ describe("given the real engine on the open world, the player on foot on the par
       delivered();
       const own = car().group.position;
       expect(car().crashed, "repaired").toBe(false);
-      expect(Math.hypot(own.x - door().x, own.z - door().z), "by the station").toBeLessThan(KERB_WITHIN_M);
+      expect(hypot2(own.x - door().x, own.z - door().z), "by the station").toBeLessThan(KERB_WITHIN_M);
       expect(own.distanceTo(lawnMiddle), "not where it was left").toBeGreaterThan(SET_DOWN_M);
     });
 

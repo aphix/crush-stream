@@ -5,6 +5,7 @@ import { PREFAB } from "../world/constants.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
 
+import { detCos, detSin } from "../kernel/physics-core.js";
 /** The bicycle's frame in the rack's frame (m), as the test reads it from the drawing's plan: the middle plane, the axles' height and their distance from the middle. */
 const LANE = 0.1;
 const AXLE_HEIGHT = 0.34;
@@ -48,7 +49,7 @@ describe("given the bicycle locked to the street's bike rack", () => {
     for (const z of [-AXLE_OFFSET, AXLE_OFFSET]) {
       for (const degrees of [-90, -45, 45, 180]) {
         const turn = (degrees * Math.PI) / 180;
-        const hit = acrossX(AXLE_HEIGHT + PROBE_RADIUS * Math.sin(turn), z + PROBE_RADIUS * Math.cos(turn));
+        const hit = acrossX(AXLE_HEIGHT + PROBE_RADIUS * detSin(turn), z + PROBE_RADIUS * detCos(turn));
         expect(hit, `a hit inside the wheel at z ${z}, ${degrees} degrees round the axle`).toBeNull();
       }
       const tyre = acrossX(AXLE_HEIGHT + 0.31, z);
@@ -103,7 +104,7 @@ describe("given the bicycle locked to the street's bike rack", () => {
     let wasOpaque = alphaAt(SPOKE_CIRCLE, 0) >= OPAQUE;
     for (let step = 1; step <= CIRCLE_SAMPLES; step++) {
       const turn = (step * 2 * Math.PI) / CIRCLE_SAMPLES;
-      const opaque = alphaAt(SPOKE_CIRCLE * Math.cos(turn), SPOKE_CIRCLE * Math.sin(turn)) >= OPAQUE;
+      const opaque = alphaAt(SPOKE_CIRCLE * detCos(turn), SPOKE_CIRCLE * detSin(turn)) >= OPAQUE;
       if (opaque && !wasOpaque) runs++;
       wasOpaque = opaque;
     }

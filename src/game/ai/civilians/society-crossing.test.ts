@@ -13,6 +13,7 @@ import type { CityState } from "./civilian-state.ts";
 import { createCityState } from "./society.ts";
 import { isCrossingBetween } from "./society-crossing.ts";
 import { intAt, stageResident } from "./society.test-util.ts";
+import { hypot2 } from "../../kernel/physics-core.js";
 
 const map = buildFixtureMap();
 const SEED = 5;
@@ -90,18 +91,18 @@ describe("given a walker whose walk crosses a road, and lights that hold them at
     expect([before, pose.waiting, pose.speed.toFixed(3)].join("/"), "on its way to the kerb: on a leg, not waiting, at its pace").toBe([true, false, pace.toFixed(3)].join("/"));
     legPose(state, resident, reach + 0.25, pose);
     const [heldX, heldZ] = [pose.x, pose.z];
-    expect(Math.hypot(heldX - nodeX[kerb]!, heldZ - nodeZ[kerb]!), "metres from the kerb node: their own lateral offset at most").toBeLessThanOrEqual(LATERAL_MAX + 0.01);
+    expect(hypot2(heldX - nodeX[kerb]!, heldZ - nodeZ[kerb]!), "metres from the kerb node: their own lateral offset at most").toBeLessThanOrEqual(LATERAL_MAX + 0.01);
     for (const seconds of [reach + 0.25, reach + held / 2, reach + held - 0.25]) {
       legPose(state, resident, seconds, pose);
       expect([pose.x.toFixed(3), pose.z.toFixed(3), pose.waiting, pose.speed].join("/"), `still where they stood at ${seconds} s`).toBe([heldX.toFixed(3), heldZ.toFixed(3), true, 0].join("/"));
     }
     legPose(state, resident, reach + held + 1, pose);
     expect([pose.waiting, pose.speed.toFixed(3)].join("/"), "across: not waiting, at its pace").toBe([false, pace.toFixed(3)].join("/"));
-    expect(Math.hypot(pose.x - heldX, pose.z - heldZ), "metres it has gone from where it stood a second after the wait").toBeCloseTo(pace, 1);
+    expect(hypot2(pose.x - heldX, pose.z - heldZ), "metres it has gone from where it stood a second after the wait").toBeCloseTo(pace, 1);
     const arrive = intAt(state, resident, RESIDENT_INT.arriveTick) / DECISION_HZ;
     expect(legPose(state, resident, arrive - 0.01, pose), "still on the leg just before its end").toBe(true);
     const door = state.index.doorNode[ACROSS.to]!;
-    expect(Math.hypot(pose.x - nodeX[door]!, pose.z - nodeZ[door]!), "metres from the door just before the leg's end").toBeLessThan(pace * 0.05 + 0.5);
+    expect(hypot2(pose.x - nodeX[door]!, pose.z - nodeZ[door]!), "metres from the door just before the leg's end").toBeLessThan(pace * 0.05 + 0.5);
     expect(intAt(state, resident, RESIDENT_INT.nextDecisionTick) - intAt(state, resident, RESIDENT_INT.arriveTick), "dwell after the leg").toBe(DWELL_TICKS);
     expect(base, "row base").toBeGreaterThanOrEqual(0);
   });

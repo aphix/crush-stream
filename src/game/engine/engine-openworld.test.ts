@@ -34,6 +34,7 @@ import { FACADE_HOMES, FACADE_HOMES_FRAME, HOME_SHARE_BY_AWAKE, homeCell, texelO
 import { shareOfTexel } from "../present/facade-homes.test-util.ts";
 import { PLACE_KIND } from "../world/openworld/walk-graph.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
+import { detCos, detSin } from "../kernel/physics-core.js";
 
 const map = buildFixtureMap();
 const SEED = 5;
@@ -404,11 +405,11 @@ describe("given a look-at panel kept up four times a second", () => {
     const seconds = stepUntilShown(crowd, crowd.crowdSeconds);
     const resident = shownResident(crowd);
     const { x, z, yaw } = crowd.poses;
-    harness.eye.eyeX = x[resident]! - Math.sin(yaw[resident]!) * 8;
-    harness.eye.eyeZ = z[resident]! - Math.cos(yaw[resident]!) * 8;
+    harness.eye.eyeX = x[resident]! - detSin(yaw[resident]!) * 8;
+    harness.eye.eyeZ = z[resident]! - detCos(yaw[resident]!) * 8;
     harness.eye.eyeY = 1.5;
-    harness.eye.dirX = Math.sin(yaw[resident]!);
-    harness.eye.dirZ = Math.cos(yaw[resident]!);
+    harness.eye.dirX = detSin(yaw[resident]!);
+    harness.eye.dirZ = detCos(yaw[resident]!);
     harness.eye.dirY = 0;
     expect(harness.director.lookAt(), "before the period").toBeNull();
     for (let frame = 0; frame < 64 / LOOK_HZ + 1; frame++) harness.director.frame(FRAME);
