@@ -4,6 +4,7 @@ import { PLACE_NAMES } from "./civilian-cast.ts";
 import { BODY_GAP } from "./civilian-crowd-constants.ts";
 import { DECISION_HZ, EVENT_KIND, EVENT_LEAD_TICKS, FLAG, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY, TICKS_PER_GAME_HOUR } from "./civilian-constants.ts";
 import { decideResident, sendResidentTo, standOutside } from "./civilian-plan.ts";
+import { fleeHome } from "./society-reactions.ts";
 import { tickAt } from "./civilian-clock.ts";
 import { FRAME_SECONDS, newCrowd } from "./civilian-crowd.test-util.ts";
 import { stateDigest } from "./civilian-run.test-util.ts";
@@ -443,6 +444,46 @@ describe("given a customer walking out of Kelly's Tap Room toward home", () => {
     const x = intAt(state, resident, RESIDENT_INT.knockX) / 100;
     const z = intAt(state, resident, RESIDENT_INT.knockZ) / 100;
     expect(hypot2(x - state.index.placeX[KELLYS]!, z - state.index.placeZ[KELLYS]!), `metres from Kelly's (door ${door.doorX.toFixed(1)}, ${door.doorZ.toFixed(1)}) to where the knock is recorded`).toBeLessThan(1);
+  });
+});
+
+describe("given a customer at the back of Kelly's Tap Room who has just set out, still walking out of it", () => {
+  /** She sets out from the farthest seat for `destination` at the stay's end; the tick two after, while she still walks out. */
+  function walkingOut(state: CityState, resident: number, destination: number, purpose: number): number {
+    inRoom(state, resident, KELLYS, () => claimSeat(state, resident, KELLYS, false));
+    releaseSeat(state, resident);
+    seatIn(state, resident, KELLYS, farthestSeat(KELLYS));
+    const leave = ROOM_ARRIVE + ROOM_STAY;
+    expect(sendResidentTo(state, resident, leave, destination, purpose, TICKS_PER_GAME_HOUR), "control: she sets out").toBe(true);
+    expect(intAt(state, resident, RESIDENT_INT.departTick), "control: still walking out two ticks on").toBeGreaterThan(leave + 2);
+    return leave + 2;
+  }
+
+  // mutation: sed -i 's/^  const at = placeNow(state, resident, tick);$/  const at = intAt(state, resident, RESIDENT_INT.place);/' src/game/ai/civilians/society-reactions.ts
+  it("when she is told to flee home, then she keeps walking out of the bar to its door and is not inside her home that tick", () => {
+    const state = createCityState(5, city, 60);
+    const resident = state.cast.length;
+    const tick = walkingOut(state, resident, HOME_OF_ROOM, NEED.rest);
+    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.home] = HOME_OF_ROOM;
+    fleeHome(state, resident, tick);
+    expect(intAt(state, resident, RESIDENT_INT.fromPlace), "the place her walk sets out from").toBe(KELLYS);
+    expect(intAt(state, resident, RESIDENT_INT.pathCount), "on a walk home").toBeGreaterThan(0);
+    expect(intAt(state, resident, RESIDENT_INT.departTick), "still walking out that tick").toBeGreaterThan(tick);
+    readActivity(state, resident, tick / DECISION_HZ, reading);
+    expect(reading.placed, "drawn in the bar that tick").toBe(true);
+    expect(hypot2(reading.x - state.index.placeX[KELLYS]!, reading.z - state.index.placeZ[KELLYS]!), "metres from the bar's middle where she is drawn").toBeLessThan(10);
+  });
+
+  // mutation: sed -i 's/here \&\& state.ints\[base + RESIDENT_INT.place\] === place \&\& /here \&\& /' src/game/ai/civilians/civilian-plan.ts
+  it("when a stay at the bar replaces her leg to another bar, then she holds no seat of that other bar under this one", () => {
+    const state = createCityState(5, city, 60);
+    const resident = state.cast.length;
+    const other = placeIn(city, "Mifflin Bar");
+    const tick = walkingOut(state, resident, other, PURPOSE.drink);
+    expect(intAt(state, resident, RESIDENT_INT.seat), "control: she holds a seat at the other bar").not.toBe(NO_SEAT);
+    standOutside(state, resident, tick, PURPOSE.drink, TICKS_PER_GAME_HOUR, KELLYS);
+    const seat = intAt(state, resident, RESIDENT_INT.seat);
+    expect(seat === NO_SEAT || state.seatOwner[state.venues.seatBase[KELLYS]! + seat] === resident, `seat ${seat}: none, or one of Kelly's she owns`).toBe(true);
   });
 });
 
