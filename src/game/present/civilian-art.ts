@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { detCos, detSin } from "../kernel/physics-core.js";
 import type { Stoops } from "../world/openworld/openworld-stoops.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { DETAIL_KEEP_M, DETAIL_NEAR_M, FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLOATS, FIGURE_FLOATS, NEAR_DRAW, SIGHT_RADIUS, SLOT_KEEP_DISTANCE_SCALE, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
@@ -260,8 +259,8 @@ export class CivilianArt {
     const matrixAt = instance * FIGURE_FLOATS.MATRIX;
     const colourAt = instance * FIGURE_FLOATS.COLOUR;
     const cacheAt = civilian * FIGURE_COLOUR_CACHE_FLOATS;
-    const turnCos = detCos(poses.yaw[civilian]!);
-    const turnSin = detSin(poses.yaw[civilian]!);
+    const turnCos = Math.cos(poses.yaw[civilian]!);
+    const turnSin = Math.sin(poses.yaw[civilian]!);
     matrices[matrixAt] = turnCos;
     matrices[matrixAt + 1] = 0;
     matrices[matrixAt + 2] = -turnSin;

@@ -4,7 +4,6 @@ import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-samp
 import { CivilianArt } from "./civilian-art.ts";
 import { NEAR_DRAW, NEAR_SLOTS } from "./civilian-art-constants.ts";
 import { FRAME_SECONDS, IN_SIGHT, posesScattered } from "./civilian-art.test-util.ts";
-import { detCos, detSin } from "../kernel/physics-core.js";
 
 const CIVILIANS = 300;
 /** Frames before the first read: past most of V8's tier-up (cold code runs in the interpreter, where every double is boxed). */
@@ -23,8 +22,8 @@ const art = new CivilianArt(NEAR_SLOTS.desktop, CIVILIANS);
 /** One frame: everyone walks along her yaw and strides; the art draws the crowd. */
 function frame(): void {
   for (let civilian = 0; civilian < CIVILIANS; civilian++) {
-    poses.x[civilian] = poses.x[civilian]! + detSin(poses.yaw[civilian]!) * WALK_STEP;
-    poses.z[civilian] = poses.z[civilian]! + detCos(poses.yaw[civilian]!) * WALK_STEP;
+    poses.x[civilian] = poses.x[civilian]! + Math.sin(poses.yaw[civilian]!) * WALK_STEP;
+    poses.z[civilian] = poses.z[civilian]! + Math.cos(poses.yaw[civilian]!) * WALK_STEP;
     poses.stride[civilian] = poses.stride[civilian]! + STRIDE_STEP;
     if (poses.x[civilian]! * poses.x[civilian]! + poses.z[civilian]! * poses.z[civilian]! > TURN_BACK * TURN_BACK) poses.yaw[civilian] = poses.yaw[civilian]! + Math.PI;
   }
