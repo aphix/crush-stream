@@ -16,10 +16,10 @@ const BRAKE_AT_SPRINT = 10;
 /** Under this command (m/s) he is not asked to move. */
 const STAND_COMMAND = 0.05;
 
-/** How fast the acceleration itself may change (m/s³): a start and a stop ease in over about 0.05 s. */
-const JERK = 250;
-/** The speed closes on its target at this rate (1/s) once within reach of it, so it arrives without a kink; never faster than the whole gap in one step, so a slow frame does not hunt. */
-const APPROACH = 50;
+/** How fast the acceleration itself may change (m/s³): a start and a stop ease in over about 0.07 s. */
+const JERK = 175;
+/** The speed closes on its target at this rate (1/s) once within reach of it, so it arrives without a kink. */
+const APPROACH = 30;
 /** Under this speed (m/s) with nothing asked he is stopped: the approach alone never reaches 0. */
 const STOP_SNAP = 0.05;
 
@@ -80,7 +80,7 @@ export class Locomotion {
   update(dt: number, heading: number, command: number): void {
     const error = wrapAngle(heading - this.yaw);
     const target = this.targetSpeed(command, Math.abs(error));
-    const want = Math.max(-brakeRate(this.speed), Math.min(pushRate(this.speed), Math.min(APPROACH, 1 / dt) * (target - this.speed)));
+    const want = Math.max(-brakeRate(this.speed), Math.min(pushRate(this.speed), APPROACH * (target - this.speed)));
     this.accel += Math.max(-JERK * dt, Math.min(JERK * dt, want - this.accel));
     this.speed = Math.max(0, this.speed + this.accel * dt);
     if (target === 0 && this.speed < STOP_SNAP) {
