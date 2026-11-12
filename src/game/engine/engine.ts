@@ -371,6 +371,7 @@ export class CrashEngine extends EngineGarage {
       self: () => WALKER_SLOT,
       personMet: (ray, reach, out) => this.openWorld.hookMet(ray, reach, out),
       standPerson: (civilian) => this.openWorld.hookBody(civilian),
+      holdDoll: (slot) => this.openWorld.hookPin(slot),
     });
     this.scene.add(this.tether.art.group);
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
