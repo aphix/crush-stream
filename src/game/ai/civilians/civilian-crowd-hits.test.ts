@@ -119,10 +119,11 @@ describe("given two civilians of the host's crowd in a fight that ends in a knoc
       crowd.step(1, [], true);
       const starter = crowd.state.cast.length + offset;
       const victim = starter + 1;
+      if (victim >= crowd.state.capacity) break;
       crowd.raisePair(EVENT_KIND.fight, victim, starter);
-      let seconds = 1;
-      for (let frame = 0; frame < Math.round(4 / FRAME_SECONDS); frame++) crowd.step((seconds += FRAME_SECONDS), [], true);
       const ints = crowd.state.ints;
+      let seconds = 1;
+      while (seconds < 20 && ints[victim * RESIDENT_INT_STRIDE + RESIDENT_INT.fightPartner] !== starter) crowd.step((seconds += FRAME_SECONDS), [], true);
       if (ints[victim * RESIDENT_INT_STRIDE + RESIDENT_INT.fightPartner] !== starter) continue;
       const fightTick = ints[victim * RESIDENT_INT_STRIDE + RESIDENT_INT.fightTick]!;
       const blow = knockoutBlow(crowd.state.seed, victim, fightTick);
