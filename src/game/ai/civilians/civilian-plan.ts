@@ -1,5 +1,5 @@
 import { hypot2 } from "../../kernel/physics-core.js";
-import { PLACE_KIND, SEAT_STRIDE, STAND_SPOTS } from "../../world/openworld/walk-graph.ts";
+import { PLACE_KIND, SEAT_STRIDE } from "../../world/openworld/walk-graph.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
 import { dayOf, hourOfDay } from "./civilian-clock.ts";
 import {
@@ -59,8 +59,9 @@ import { dwellTicksOf, evolveNeeds, needWeight } from "./needs.ts";
 import { carStandsAt, chooseCar, clearDriveLeg, planCarPath, reserveCar, walkMetres } from "./society-cars.ts";
 import { clearWaits, planWaits } from "./society-crossing.ts";
 import { claimSeat, claimStand, releaseSeat } from "./society-seats.ts";
-import { LEFT_DOOR, LEFT_LANE, walkInTicks, walkOutTicks } from "./society-aisle.ts";
+import { AISLE_WALK, LEFT_DOOR, LEFT_LANE, longestWalkOutTicks, planRoom, ROOM, ROOM_END, WALK, walkInTicks, walkOutTicks } from "./society-aisle.ts";
 import { ACTIVITY_SECONDS } from "./civilian-activity.ts";
+import { placeNow } from "./civilian-leg.ts";
 import { INTERACTIONS, TARGET, considerInteractions, type InteractionRow } from "./society-table.ts";
 import { isCounterVenue, isOutdoorPurpose, isSeatedVenue } from "./society-venues.ts";
 
@@ -228,21 +229,37 @@ function fullBesideHer(state: CityState, resident: number, place: number): boole
   return true;
 }
 
-/** Where she is in `place` as she decides: her seat or spot, `LEFT_LANE` for a customer at her buying lane, `LEFT_DOOR` out at its door (or found it shut), else none (no aisle there, not yet in, or not drawn there). */
+/** Where she is in `place` at `tick`, as the reader draws her stay (`planRoom`): her seat or spot, `LEFT_LANE` at her buying lane, `LEFT_DOOR` at (or out at) its door, else none (no aisle there, not in it, or not drawn there). Part way along a walk in the room, the end she is nearer in time. */
 function leftSpotOf(state: CityState, resident: number, place: number, tick: number): number {
   const base = resident * RESIDENT_INT_STRIDE;
   const ints = state.ints;
   if (state.map.places[place]!.aisle === undefined || tick < ints[base + RESIDENT_INT.arriveTick]! || (ints[base + RESIDENT_INT.flags]! & (FLAG.hurt | FLAG.custody)) !== 0) return NO_SEAT;
-  // A stay begun this tick where she was (a reaction rewrote her row) was never drawn: she is still where it says she was.
-  if (ints[base + RESIDENT_INT.arriveTick] === tick && ints[base + RESIDENT_INT.pathCount] === 0 && ints[base + RESIDENT_INT.fromPlace] === place) return ints[base + RESIDENT_INT.leftSpot]!;
   if (ints[base + RESIDENT_INT.nextDecisionTick] === ints[base + RESIDENT_INT.arriveTick] || isOutdoorPurpose(ints[base + RESIDENT_INT.legPurpose]!)) return LEFT_DOOR;
   const held = ints[base + RESIDENT_INT.seat]!;
-  const own = held - state.venues.seatCount[place]!;
-  // A seat or standing room is reached by way of the counter: until she has bought there she is at her lane, not at it.
-  const viaLane = held !== NO_SEAT && ints[base + RESIDENT_INT.work] !== place && (own < 0 || own >= STAND_SPOTS);
-  if (viaLane && ints[base + RESIDENT_INT.pathCount]! > 0 && tick < ints[base + RESIDENT_INT.arriveTick]! + walkInTicks(state, resident, place) + BUY_TICKS) return LEFT_LANE;
-  if (held !== NO_SEAT) return held;
-  return ints[base + RESIDENT_INT.work] !== place && ints[base + RESIDENT_INT.species] === SPECIES.person && isCounterVenue(state.venues.venueOf[place]!) ? LEFT_LANE : NO_SEAT;
+  const worker = ints[base + RESIDENT_INT.work] === place;
+  if (ints[base + RESIDENT_INT.species] !== SPECIES.person || (!worker && !isCounterVenue(state.venues.venueOf[place]!))) return NO_SEAT;
+  AISLE_WALK[WALK.stay] = (ints[base + RESIDENT_INT.nextDecisionTick]! - ints[base + RESIDENT_INT.arriveTick]!) / DECISION_HZ;
+  if (!planRoom(state, resident, place, worker, held)) return NO_SEAT;
+  const age = (tick - ints[base + RESIDENT_INT.arriveTick]!) / DECISION_HZ;
+  if (age < ROOM.walkIn / 2) return LEFT_DOOR;
+  if (age < ROOM.walkIn + ROOM.buy + ROOM.walkOn / 2) {
+    const goesOn = ints[base + RESIDENT_INT.pathCount] === 0 && ints[base + RESIDENT_INT.fromPlace] === place;
+    return goesOn ? ints[base + RESIDENT_INT.leftSpot]! : ROOM.kind === ROOM_END.spot ? held : LEFT_LANE;
+  }
+  return held !== NO_SEAT ? held : LEFT_LANE;
+}
+
+/** The tick she reaches the door of the room she is walking out of at `tick` (a leg's `departTick`, or an outdoor stay's `arriveTick`), or -1 when she is not walking out. */
+function walkingOutUntil(state: CityState, resident: number, tick: number): number {
+  const base = resident * RESIDENT_INT_STRIDE;
+  if (state.ints[base + RESIDENT_INT.pathCount]! > 0) return tick < state.ints[base + RESIDENT_INT.departTick]! ? state.ints[base + RESIDENT_INT.departTick]! : -1;
+  return tick < state.ints[base + RESIDENT_INT.arriveTick]! ? state.ints[base + RESIDENT_INT.arriveTick]! : -1;
+}
+
+/** Ticks from `tick` until she is at `to`'s door having left `from`: her walk out of where she is in it (`walkOutTicks`), then the walk between the doors; -1 when there is no walk. */
+function leaveTicks(state: CityState, resident: number, tick: number, from: number, to: number): number {
+  const walk = walkTicks(state, resident, from, to);
+  return walk < 0 ? walk : walk + walkOutTicks(state, resident, from, leftSpotOf(state, resident, from, tick));
 }
 
 /** A purchase at a counter takes this many decision ticks. */
@@ -253,16 +270,20 @@ function stayPut(state: CityState, resident: number, tick: number, place: number
   const base = resident * RESIDENT_INT_STRIDE;
   const floatBase = resident * RESIDENT_FLOAT_STRIDE;
   // A customer's another round where she is keeps the seat or spot she holds: she does not move to another each time.
-  const keeps = state.ints[base + RESIDENT_INT.place] === place && state.ints[base + RESIDENT_INT.work] !== place && state.ints[base + RESIDENT_INT.seat] !== NO_SEAT && !isOutdoorPurpose(purpose);
-  // Where she was, so a stay that moves her within the room is walked: nothing when she keeps her spot.
-  const left = keeps || state.ints[base + RESIDENT_INT.place] !== place ? NO_SEAT : leftSpotOf(state, resident, place, tick);
+  const here = placeNow(state, resident, tick) === place;
+  const keeps = here && state.ints[base + RESIDENT_INT.work] !== place && state.ints[base + RESIDENT_INT.seat] !== NO_SEAT && !isOutdoorPurpose(purpose);
+  // Where she was, so a stay that moves her within the room is walked: nothing when she keeps her spot; still walking out, where that walk started.
+  const out = walkingOutUntil(state, resident, tick);
+  const left = keeps || !here ? NO_SEAT : out >= 0 ? state.ints[base + RESIDENT_INT.leftSpot]! : leftSpotOf(state, resident, place, tick);
+  // A stay out at the door of the room she is in (a fight aside, which starts where it is raised) begins once she has walked out to it.
+  const walkOut = here && isOutdoorPurpose(purpose) && purpose !== PURPOSE.fight ? (out >= 0 ? out - tick : walkOutTicks(state, resident, place, left)) : 0;
   if (!keeps) releaseSeat(state, resident);
   state.ints[base + RESIDENT_INT.leftSpot] = left;
   state.ints[base + RESIDENT_INT.fromPlace] = place;
   state.ints[base + RESIDENT_INT.place] = place;
   state.ints[base + RESIDENT_INT.departTick] = tick;
-  state.ints[base + RESIDENT_INT.arriveTick] = tick;
-  state.ints[base + RESIDENT_INT.nextDecisionTick] = tick + Math.max(1, dwellTicks);
+  state.ints[base + RESIDENT_INT.arriveTick] = tick + walkOut;
+  state.ints[base + RESIDENT_INT.nextDecisionTick] = tick + walkOut + Math.max(1, dwellTicks);
   state.ints[base + RESIDENT_INT.pathCount] = 0;
   state.ints[base + RESIDENT_INT.legPurpose] = purpose;
   state.ints[base + RESIDENT_INT.companion] = NO_PLACE;
@@ -298,12 +319,14 @@ function timeCarLeg(state: CityState, resident: number, tick: number, owner: num
 function planLeg(state: CityState, resident: number, tick: number, destination: number, purpose: number, dwellTicks: number, customer = false): boolean {
   const base = resident * RESIDENT_INT_STRIDE;
   const floatBase = resident * RESIDENT_FLOAT_STRIDE;
-  const current = state.ints[base + RESIDENT_INT.place]!;
+  const current = placeNow(state, resident, tick);
   const hour = hourOfDay(tick, state.startHour);
   const fearWeight = isNight(hour) ? NIGHT_FEAR_WEIGHT : 1;
   const count = state.finder.find(state.index.doorNode[current]!, state.index.doorNode[destination]!, state.fear, fearWeight, state.pathNodes, resident * MAX_PATH_NODES, MAX_PATH_NODES);
   if (count === 0) return false;
-  const left = leftSpotOf(state, resident, current, tick);
+  // Still walking out of a room (a reaction re-plans her): that walk goes on to the door, and the new leg sets off from it.
+  const out = walkingOutUntil(state, resident, tick);
+  const left = out >= 0 ? state.ints[base + RESIDENT_INT.leftSpot]! : leftSpotOf(state, resident, current, tick);
   releaseSeat(state, resident);
   state.ints[base + RESIDENT_INT.pathCount] = count;
   let metres = measurePath(state, resident);
@@ -316,11 +339,11 @@ function planLeg(state: CityState, resident: number, tick: number, destination: 
   state.floats[floatBase + RESIDENT_FLOAT.speed] = pace * (purpose === PURPOSE.flee ? FLEE_SPEED_FACTOR : 1);
   clearWaits(state, resident);
   // The leg sets off once she has walked out of the room she was in.
-  const start = tick + walkOutTicks(state, resident, current, left);
+  const start = out >= 0 ? out : tick + walkOutTicks(state, resident, current, left);
   const legTicks = byCar ? timeCarLeg(state, resident, start, owner, stand, destination, metres) : Math.max(1, ticksOf(metres / state.floats[floatBase + RESIDENT_FLOAT.speed]!)) + planWaits(state, resident, start);
   const stay = customer ? ticksOpen(state, destination, resident, start + legTicks, Math.max(1, dwellTicks)) : Math.max(1, dwellTicks);
   // A leg from a door she found shut (a stay of 0) or stood outside at is not drawn coming out of it.
-  if (state.ints[base + RESIDENT_INT.nextDecisionTick] === state.ints[base + RESIDENT_INT.arriveTick] || isOutdoorPurpose(state.ints[base + RESIDENT_INT.legPurpose]!)) state.ints[base + RESIDENT_INT.flags] |= FLAG.fromOutside;
+  if (out < 0 && (state.ints[base + RESIDENT_INT.nextDecisionTick] === state.ints[base + RESIDENT_INT.arriveTick] || isOutdoorPurpose(state.ints[base + RESIDENT_INT.legPurpose]!))) state.ints[base + RESIDENT_INT.flags] |= FLAG.fromOutside;
   else state.ints[base + RESIDENT_INT.flags] &= ~FLAG.fromOutside;
   state.ints[base + RESIDENT_INT.leftSpot] = left;
   state.ints[base + RESIDENT_INT.fromPlace] = current;
@@ -357,7 +380,7 @@ export function standOutside(state: CityState, resident: number, tick: number, p
 function keepAppointment(state: CityState, resident: number, tick: number, current: number): boolean {
   const slot = state.appointment;
   if (!nextAppointment(state, resident, Math.max(intAt(state, resident, RESIDENT_INT.storyTick), tick), slot)) return false;
-  const walk = slot.place === current ? 0 : walkTicks(state, resident, current, slot.place);
+  const walk = slot.place === current ? 0 : leaveTicks(state, resident, tick, current, slot.place);
   if (walk < 0 || !isOpen(state, slot.place, tick) || tick < slot.arriveTick - walk - SCHEDULE_SLACK_TICKS) return false;
   state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.storyTick] = slot.arriveTick;
   if (slot.place === current) stayPut(state, resident, tick, current, slot.arriveTick + slot.dwellTicks - tick, slot.purpose);
@@ -369,9 +392,11 @@ function keepAppointment(state: CityState, resident: number, tick: number, curre
 function walkFitsBeforeAppointment(state: CityState, resident: number, tick: number, current: number, destination: number): boolean {
   const slot = state.appointment;
   if (!nextAppointment(state, resident, Math.max(intAt(state, resident, RESIDENT_INT.storyTick), tick), slot)) return true;
-  const there = walkTicks(state, resident, current, destination);
+  const there = leaveTicks(state, resident, tick, current, destination);
   const onward = slot.place === destination ? 0 : walkTicks(state, resident, destination, slot.place);
-  return there < 0 || onward < 0 || tick + there <= slot.arriveTick - onward - SCHEDULE_SLACK_TICKS;
+  // Her spot there is not known yet: the longest walk out of it is allowed for.
+  const outOfIt = slot.place === destination || onward < 0 ? 0 : longestWalkOutTicks(state, resident, destination);
+  return there < 0 || onward < 0 || tick + there <= slot.arriveTick - onward - outOfIt - SCHEDULE_SLACK_TICKS;
 }
 
 /** A named resident does not sleep through their next appointment: the dwell just planned is cut to end in time to walk there. */
@@ -380,7 +405,7 @@ function cutDwellForAppointment(state: CityState, resident: number, tick: number
   const base = resident * RESIDENT_INT_STRIDE;
   if (!nextAppointment(state, resident, Math.max(state.ints[base + RESIDENT_INT.storyTick]!, tick), slot)) return;
   const place = state.ints[base + RESIDENT_INT.place]!;
-  const walk = slot.place === place ? 0 : walkTicks(state, resident, place, slot.place);
+  const walk = slot.place === place ? 0 : leaveTicks(state, resident, state.ints[base + RESIDENT_INT.nextDecisionTick]!, place, slot.place);
   if (walk < 0) return;
   const leaveBy = slot.arriveTick - walk - SCHEDULE_SLACK_TICKS;
   if (leaveBy >= state.ints[base + RESIDENT_INT.nextDecisionTick]!) return;

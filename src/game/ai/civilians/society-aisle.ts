@@ -1,13 +1,13 @@
-import { AISLE_STRIDE, SEAT_STRIDE, STAND_COLUMNS } from "../../world/openworld/walk-graph.ts";
+import { AISLE_STRIDE, SEAT_STRIDE, STAND_COLUMNS, STAND_SPOTS } from "../../world/openworld/walk-graph.ts";
 import { ACTIVITY_SECONDS } from "./civilian-activity.ts";
-import { DECISION_HZ, NO_SEAT, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE } from "./civilian-constants.ts";
+import { DECISION_HZ, NO_SEAT, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import type { CityState } from "./civilian-state.ts";
 import { laneOf, SPOT_FLOATS, spotTable, StandSpot } from "./society-seats.ts";
 
-/** Slots of `AISLE_WALK`: the walk's ends and the share of it walked (in), its point, heading, metres walked and length (out), and what the steps below hand each other. */
-export const WALK = { fromX: 0, fromZ: 1, toX: 2, toZ: 3, share: 4, x: 5, z: 6, yaw: 7, walked: 8, length: 9, x0: 10, z0: 11, x1: 12, z1: 13, t: 14, metres: 15 } as const;
+/** Slots of `AISLE_WALK`: the walk's ends and the share of it walked (in), its point, heading, metres walked and length (out), what the steps below hand each other, and a stay's seconds for `planRoom` (in). */
+export const WALK = { fromX: 0, fromZ: 1, toX: 2, toZ: 3, share: 4, x: 5, z: 6, yaw: 7, walked: 8, length: 9, x0: 10, z0: 11, x1: 12, z1: 13, t: 14, metres: 15, stay: 16 } as const;
 /** The walk being read: a double passed to or returned from a call V8 does not inline is boxed, so they cross here. */
-export const AISLE_WALK = new Float64Array(16);
+export const AISLE_WALK = new Float64Array(17);
 
 /** The aisle node nearest the point in `AISLE_WALK` slots `slot`, `slot + 1`. */
 function nearestNode(aisle: Float32Array, slot: number): number {
@@ -157,7 +157,7 @@ function climbTo(aisle: Float32Array, node: number, descending: boolean): void {
 }
 
 /** An indoor walk takes this many seconds a metre in a straight line, over her pace: an aisle bends round the furniture. */
-export const AISLE_ROUTE = 1.3;
+const AISLE_ROUTE = 1.3;
 /** `RESIDENT_INT.leftSpot` of someone who was at her buying lane, not a seat or spot of her own; and of someone who was out at the door. */
 export const LEFT_LANE = -2;
 export const LEFT_DOOR = -3;
@@ -183,7 +183,7 @@ export function leftSpotAt(state: CityState, resident: number, place: number, le
 }
 
 /** Spot `index` of a `spotTable` into `to`. */
-export function fromSpotTable(table: Float64Array, index: number, to: StandSpot): void {
+function fromSpotTable(table: Float64Array, index: number, to: StandSpot): void {
   const at = index * SPOT_FLOATS;
   to.x = table[at]!;
   to.z = table[at + 1]!;
@@ -212,4 +212,99 @@ export function walkInTicks(state: CityState, resident: number, place: number): 
   const dx = entry.doorX - leftAt.x;
   const dz = entry.doorZ - leftAt.z;
   return Math.ceil(((Math.sqrt(dx * dx + dz * dz) * AISLE_ROUTE) / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!) * DECISION_HZ);
+}
+
+/** What she ends at in a room: a seat, a standing or clerk's spot by the counter (fixed), or a loose spot (her standing room, or the lane for a short stop) the crowd keeps her apart on. */
+export const ROOM_END = { seat: 0, spot: 1, loose: 2 } as const;
+
+/** A stay in a room with an aisle, as `planRoom` lays it out: where her walk in starts (the door, or where she was when the stay goes on from the last one there), where she buys, where she ends and as what; the seconds of the walk in, the buying and the walk on. */
+class RoomPlan {
+  readonly from = new StandSpot();
+  readonly lane = new StandSpot();
+  readonly end = new StandSpot();
+  kind: number = ROOM_END.loose;
+  walkIn = 0;
+  buy = 0;
+  walkOn = 0;
+}
+
+/** The room plan `planRoom` fills: the reader draws a stay by it and the brain finds where she is in it, so both read one timing. */
+export const ROOM = new RoomPlan();
+
+function copySpot(from: StandSpot, to: StandSpot): void {
+  to.x = from.x;
+  to.z = from.z;
+  to.yaw = from.yaw;
+  to.surfaceY = from.surfaceY;
+}
+
+/** Where a resident in a room buys and ends: staff at their clerk's spot, a customer at her standing spot by the counter (buying there), or at her seat, her spot of standing room or the lane for a short stop (buying on the lane first). False: she holds nothing to walk to. */
+function roomEnds(state: CityState, resident: number, place: number, worker: boolean, spot: number): boolean {
+  ROOM.buy = worker ? 0 : ACTIVITY_SECONDS.buy;
+  const own = spot - state.venues.seatCount[place]!;
+  const table = spotTable(state, place);
+  if (spot !== NO_SEAT && own >= 0 && (worker || own < STAND_SPOTS || own >= state.venues.standCount[place]!)) {
+    fromSpotTable(table, STAND_COLUMNS + own, ROOM.end);
+    copySpot(ROOM.end, ROOM.lane);
+    ROOM.kind = ROOM_END.spot;
+    return true;
+  }
+  if (worker) return false;
+  fromSpotTable(table, laneOf(resident), ROOM.lane);
+  ROOM.kind = ROOM_END.loose;
+  if (own >= 0) fromSpotTable(table, STAND_COLUMNS + own, ROOM.end);
+  else if (spot !== NO_SEAT) {
+    leftSpotAt(state, resident, place, spot, ROOM.end);
+    ROOM.kind = ROOM_END.seat;
+  } else copySpot(ROOM.lane, ROOM.end);
+  return true;
+}
+
+/**
+ * `ROOM` for resident `resident`'s stay in `place` holding `spot` (staff: `worker`), `WALK.stay` seconds long: its walks at her pace (a straight metre's `AISLE_ROUTE` seconds), squeezed to fit a stay too short for them.
+ * A stay that goes on from the last one where she is (another round, `RESIDENT_INT.leftSpot`) starts where she was and buys nothing: no walk when she keeps her spot, all of it when she was out at the door. False: nothing to draw.
+ */
+export function planRoom(state: CityState, resident: number, place: number, worker: boolean, spot: number): boolean {
+  if (!roomEnds(state, resident, place, worker, spot)) return false;
+  const base = resident * RESIDENT_INT_STRIDE;
+  const entry = state.map.places[place]!;
+  const left = state.ints[base + RESIDENT_INT.leftSpot]!;
+  const goesOn = state.ints[base + RESIDENT_INT.pathCount] === 0 && state.ints[base + RESIDENT_INT.fromPlace] === place && left !== LEFT_DOOR;
+  if (goesOn) {
+    ROOM.buy = 0;
+    if (left === NO_SEAT) copySpot(ROOM.end, ROOM.lane);
+    else leftSpotAt(state, resident, place, left, ROOM.lane);
+    copySpot(ROOM.lane, ROOM.from);
+  } else {
+    ROOM.from.x = entry.doorX;
+    ROOM.from.z = entry.doorZ;
+    ROOM.from.yaw = ROOM.lane.yaw;
+  }
+  const perMetre = AISLE_ROUTE / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!;
+  // Math.sqrt inline, not a kernel call: a double returned from a call is boxed, two a civilian a frame.
+  const inX = ROOM.lane.x - ROOM.from.x;
+  const inZ = ROOM.lane.z - ROOM.from.z;
+  const onX = ROOM.end.x - ROOM.lane.x;
+  const onZ = ROOM.end.z - ROOM.lane.z;
+  const walkIn = Math.sqrt(inX * inX + inZ * inZ) * perMetre;
+  const walkOn = Math.sqrt(onX * onX + onZ * onZ) * perMetre;
+  const stay = AISLE_WALK[WALK.stay]!;
+  ROOM.buy = Math.min(ROOM.buy, stay);
+  const spare = stay - ROOM.buy;
+  const fit = walkIn + walkOn > spare ? Math.max(0, spare) / (walkIn + walkOn) : 1;
+  ROOM.walkIn = walkIn * fit;
+  ROOM.walkOn = walkOn * fit;
+  return true;
+}
+
+/** The most decision ticks a walk out of `place` to its door can take her: from its farthest aisle point or seat, a seat's standing up first. For timing a leg out of a place before she holds anything in it. */
+export function longestWalkOutTicks(state: CityState, resident: number, place: number): number {
+  const entry = state.map.places[place]!;
+  const aisle = entry.aisle;
+  if (aisle === undefined) return 0;
+  let far = 0;
+  for (let at = 0; at < aisle.length; at += AISLE_STRIDE) far = Math.max(far, Math.sqrt((aisle[at]! - entry.doorX) ** 2 + (aisle[at + 1]! - entry.doorZ) ** 2));
+  const seats = entry.seats;
+  if (seats !== undefined) for (let at = 0; at < seats.length; at += SEAT_STRIDE) far = Math.max(far, Math.sqrt((seats[at]! - entry.doorX) ** 2 + (seats[at + 1]! - entry.doorZ) ** 2));
+  return Math.ceil(((far * AISLE_ROUTE) / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]! + ACTIVITY_SECONDS.standUp) * DECISION_HZ);
 }
