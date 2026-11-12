@@ -367,6 +367,12 @@ export class FootLaw {
     }
   }
 
+  /** The crowd ran down `resident` just now: a suspect of the law's is let go at once, as `spareKnocked` lets her go once the society has her; till then the law would draw her in her cop's hands again and the car would run her down every step. */
+  spare(resident: number): void {
+    const slot = this.table.subjectOf[resident] ?? -1;
+    if (slot >= 0 && this.table.active(slot)) this.letGo(slot);
+  }
+
   private refreshSpots(caseIndex: number): void {
     const { table } = this;
     for (let index = 0; index < SUBJECTS_PER_CASE; index++) {

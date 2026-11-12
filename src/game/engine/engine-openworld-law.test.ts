@@ -9,6 +9,9 @@ import { FakeField } from "../ai/openworld-traffic/traffic-world.test-util.ts";
 import { IDLE_FOOT_ARREST } from "../ai/openworld-crime/crime-fixture.test-util.ts";
 import { OpenWorldDirector, type OpenWorldPorts } from "./engine-openworld.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
+import { CASE_PHASE, SUBJECT_MODE } from "../ai/openworld-crime/case-table.ts";
+import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
+import { blankStrike, stood } from "../scenes/figure-strike.ts";
 
 const map = buildFixtureMap();
 
@@ -88,6 +91,38 @@ describe("given the open world's director", () => {
     director.step(FRAME_SECONDS);
     const apart = hypot2(crowd.poses.x[civilian]! - cops.copPoses.x[0]!, crowd.poses.z[civilian]! - cops.copPoses.z[0]!);
     expect(apart, "pushed apart toward a body's width").toBeGreaterThan(BODY_GAP * 0.75);
+  });
+
+  // mutation: sed -i '/^    this.scene.foot.spare(strike.guard);/d' src/game/engine/engine-openworld-law.ts
+  it("when the crowd runs down a suspect a cop holds, then the law lets her go at once and draws her in his hands no more, so a car on her spot does not run her down again every step", () => {
+    const { director } = directorWith({ law: idleLawPorts() });
+    const crowd: CivilianCrowd = director["crowd"]!;
+    let civilian = walkingCivilian(crowd);
+    for (let frame = 0; frame < 4096 && civilian < 0; frame++) {
+      director.step(FRAME_SECONDS);
+      civilian = walkingCivilian(crowd);
+    }
+    expect(civilian, "a civilian walks").toBeGreaterThanOrEqual(0);
+    const foot = director["law"]!["scene"].foot;
+    const x = crowd.poses.x[civilian]!;
+    const z = crowd.poses.z[civilian]!;
+    const caseIndex = foot.table.freeCase();
+    const slot = foot.table.slotOf(caseIndex, 0);
+    foot.table.phase[caseIndex] = CASE_PHASE.open;
+    foot.table.take(slot, civilian, foot.seconds, x, z);
+    foot.table.mode[slot] = SUBJECT_MODE.gripped;
+    foot.table.holder[slot] = 0;
+    foot.table.setCop(caseIndex, 0, 0);
+    foot.walkers.place(FOOT_COP_COUNT + slot, x, z);
+    foot.walkers.place(0, x + 0.6, z);
+    foot.cops.grip(0);
+    director.step(FRAME_SECONDS);
+    expect(crowd.poses.shown[civilian], "control: the law draws her in his hands").toBe(1);
+    crowd["knockDown"](civilian, crowd.crowdSeconds, stood(-1, civilian, x, 0, z, 0, 1, blankStrike()));
+    director.step(FRAME_SECONDS);
+    director.step(FRAME_SECONDS);
+    expect(foot.table.mode[slot], "let go").toBe(SUBJECT_MODE.free);
+    expect(crowd.poses.shown[civilian], "not drawn standing where she was run down").toBe(0);
   });
 });
 
