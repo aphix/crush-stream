@@ -87,7 +87,11 @@ describe("given the real engine in the open world, its player on foot", () => {
     car.group.updateMatrixWorld(true);
     const eye = new THREE.Vector3(torso.x, torso.y + 0.3, torso.z);
     const sides = car.glassPanes.filter((pane) => pane.name === "doorL" || pane.name === "doorR");
-    const at = (pane: (typeof sides)[number]): THREE.Vector3 => pane.mesh.getWorldPosition(new THREE.Vector3());
+    // The middle of the pane's glass: the mesh's own origin sits at its foot, on the door's skin.
+    const at = (pane: (typeof sides)[number]): THREE.Vector3 => {
+      pane.mesh.geometry.computeBoundingBox();
+      return pane.mesh.localToWorld(pane.mesh.geometry.boundingBox!.getCenter(new THREE.Vector3()));
+    };
     const pane = sides.reduce((near, next) => (at(next).distanceTo(eye) < at(near).distanceTo(eye) ? next : near));
     expect(pane.state, "control: the pane is whole").toBe("intact");
     const centre = at(pane);
@@ -99,6 +103,10 @@ describe("given the real engine in the open world, its player on foot", () => {
 
   // mutation: sed -i '/^    this.openWorld.shotFired();/d' src/game/engine/engine.ts
   it("when he fires any gun, then the police chase opens, seen or not", () => {
+    // 10 m on along the street from where the car stands: getting out where it stands is a walk on a crossing against the signal, a chase of its own.
+    const car = rig.cars()[0]!.group.position;
+    rig.place(0, car.x + 10, car.z);
+    rig.run(0.5);
     rig.getOut();
     const scene = rig.engine["openWorld"]["law"]!["scene"];
     expect(scene.footChaseOf({ cops: 0, hold: 0, left: 0 }), "control: no chase before the shot").toBe(false);
