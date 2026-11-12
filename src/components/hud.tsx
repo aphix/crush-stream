@@ -148,12 +148,6 @@ export function Hud({ store, engine, onlineShown }: Omit<HudProps, "state"> & { 
   const state = useSyncExternalStore(store.subscribe, store.get, store.get);
   // Phones and tablets get the thumb controls and the corner layout; a fine pointer keeps the desktop HUD as it was.
   const touch = useCoarsePointer();
-  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
-  useEffect(() => {
-    const move = (e: PointerEvent) => setPointer({ x: e.clientX, y: e.clientY });
-    window.addEventListener("pointermove", move);
-    return () => window.removeEventListener("pointermove", move);
-  }, []);
   // What resets the driven car: the connected pad, the thumb pad's button, or R.
   const reset = resetInput(state.pad !== null, touch, state.seat === "drive");
   const raceCommand = (cmd: RaceCommand) => {
@@ -172,7 +166,7 @@ export function Hud({ store, engine, onlineShown }: Omit<HudProps, "state"> & { 
   const shell: HudShell = { hud: { state, engine, onlineShown }, reset, raceCommand, tapReset, focus };
   return (
     <>
-      <Crosshair arms={state.foot?.arms ?? null} x={state.mouseLook || pointer === null ? null : pointer.x} y={state.mouseLook || pointer === null ? null : pointer.y} />
+      <Crosshair arms={state.foot?.arms ?? null} mouseLook={state.mouseLook} />
       {touch ? <PhoneHud {...shell} /> : <DesktopHud {...shell} />}
     </>
   );
