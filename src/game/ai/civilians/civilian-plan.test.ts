@@ -121,7 +121,7 @@ describe("given a resident with company on their mind whose home is by the court
 });
 
 describe("given a resident at the bodega who sets out home", () => {
-  // mutation: sed -i 's/ || isOutdoorPurpose(state.ints\[base + RESIDENT_INT.legPurpose\]!)) state.ints\[base + RESIDENT_INT.flags\] |= FLAG.fromOutside;/) state.ints[base + RESIDENT_INT.flags] |= FLAG.fromOutside;/' src/game/ai/civilians/civilian-plan.ts
+  // mutation: sed -i 's/ || isOutdoorPurpose(state.ints\[base + RESIDENT_INT.legPurpose\]!))) state.ints\[base + RESIDENT_INT.flags\] |= FLAG.fromOutside;/)) state.ints[base + RESIDENT_INT.flags] |= FLAG.fromOutside;/' src/game/ai/civilians/civilian-plan.ts
   it("when she had been loitering out at its door, then she is not drawn coming out of it; when she had been in shopping, she is", () => {
     const bodega = placeNamed(map, PLACE_NAMES.bodega);
     const codeLeaving = (purpose: number): number => {

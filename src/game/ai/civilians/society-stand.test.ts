@@ -115,7 +115,7 @@ describe("given more drinkers than the bar has seats and standing spots", () => 
     expect(new Set(held).size, "different spots held").toBe(held.length);
   });
 
-  // mutation: sed -i 's/^  const keeps = state.ints\[base + RESIDENT_INT.place\] === place .*$/  const keeps = false;/' src/game/ai/civilians/civilian-plan.ts
+  // mutation: sed -i 's/^  const keeps = here \&\& state.ints\[base + RESIDENT_INT.work\] !== place .*$/  const keeps = false;/' src/game/ai/civilians/civilian-plan.ts
   it("when the lowest standing spot comes free and every other drinker with a standing spot stays for another round, then each keeps the spot she holds", () => {
     const tick = intAt(state, drinkers[0]!, RESIDENT_INT.arriveTick) + 4;
     const standers = drinkers.filter((resident) => intAt(state, resident, RESIDENT_INT.seat) >= state.venues.seatCount[BAR]!).sort((a, b) => intAt(state, a, RESIDENT_INT.seat) - intAt(state, b, RESIDENT_INT.seat));
@@ -314,7 +314,7 @@ describe("given a customer at a seat or a standing spot in a bar, a coffee shop 
     }
   });
 
-  // mutation: sed -i 's/^  const keeps = state.ints\[base + RESIDENT_INT.place\] === place .*$/  const keeps = false;/' src/game/ai/civilians/civilian-plan.ts
+  // mutation: sed -i 's/^  const keeps = here \&\& state.ints\[base + RESIDENT_INT.work\] !== place .*$/  const keeps = false;/' src/game/ai/civilians/civilian-plan.ts
   it("when she stays at the bar for another round, then she keeps her seat and is drawn sitting on through the change of round, never walking", () => {
     const state = createCityState(5, city, 60);
     const resident = state.cast.length;

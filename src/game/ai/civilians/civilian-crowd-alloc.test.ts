@@ -154,7 +154,7 @@ describe("given 300 civilians of the city's map in its bars, shops and coffee sh
     }
   });
 
-  // mutation: sed -i 's/^  const table = spotTable(state, place);/  const table = spotTable(state, place); (globalThis as { kept?: unknown }).kept = new Float32Array(3);/' src/game/ai/civilians/society-activity.ts
+  // mutation: sed -i 's/^  const table = spotTable(state, place);/  const table = spotTable(state, place); (globalThis as { kept?: unknown }).kept = new Float32Array(3);/' src/game/ai/civilians/society-aisle.ts
   it("when everyone in a room is read every frame for 300 frames, walking, buying, sitting and leaving, then the reads allocate nothing (the profiler's own cost is under the bound)", () => {
     let walking = 0;
     const kb = untilQuiet(() => allocatedBytes(() => {
