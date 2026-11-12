@@ -67,6 +67,8 @@ export type BodyHost = {
   getUp(slot: number): void;
   /** Whether the body in `slot` is on its feet at full strength: not fallen, not staggering. */
   steady(slot: number): boolean;
+  /** A cable holds the body in `slot`: she is held where it holds her, so she is not let go for lying or for lagging her spot. */
+  roped(slot: number): boolean;
   /** A strike lands on the body in `slot`: every part moves as the strike's launch (`FigureStrike`) and it goes limp. */
   knock(slot: number, strike: FigureStrike): void;
   /** A blow of `speed` m/s along (dirX, dirY, dirZ) lands on the torso of the body in `slot`, and it staggers instead of falling. */
@@ -190,7 +192,7 @@ export class OpenWorldBodies {
     if (!this.host.standing(slot)) {
       this.recovering[body] = 1;
       this.downFor[body] = this.downFor[body]! + dt;
-      if (this.downFor[body]! > RELEASE_DOWN) return this.release(body);
+      if (this.downFor[body]! > RELEASE_DOWN && !this.host.roped(slot)) return this.release(body);
       if (this.downFor[body]! > GET_UP_AFTER) this.host.getUp(slot);
       return;
     }
@@ -200,7 +202,7 @@ export class OpenWorldBodies {
     const lag = hypot2(dx, dz);
     if (!this.host.steady(slot)) this.recovering[body] = 1;
     else if (lag <= LEASH) this.recovering[body] = 0;
-    if (lag > (this.recovering[body] === 1 ? REJOIN_LEASH : LEASH)) return this.release(body);
+    if (lag > (this.recovering[body] === 1 ? REJOIN_LEASH : LEASH) && !this.host.roped(slot)) return this.release(body);
     const yaw = poses.yaw[civilian]!;
     const pace = poses.speed[civilian]!;
     if (pace < STILL && lag < STAND_REACH) {

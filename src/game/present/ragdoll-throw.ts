@@ -558,6 +558,11 @@ export abstract class RagdollThrower extends RagdollStepper {
     return this.dolls[slot]?.live === true;
   }
 
+  /** Slot `slot`'s dummy is a cable's end. */
+  dollRoped(slot: number): boolean {
+    return (this.dolls[slot]?.ropes ?? 0) > 0;
+  }
+
   /** Dummies launched from now on lie about until `releaseThrown`, not `LIFE` s (a minigame's score is read while he lies). */
   holdThrown(): void {
     this.thrownLife = Infinity;

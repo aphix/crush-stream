@@ -68,6 +68,12 @@ export class FakeBodyHost {
     return body.standing && body.steady;
   }
 
+  /** Slots a cable holds. */
+  readonly ropedSlots = new Set<number>();
+  roped(slot: number): boolean {
+    return this.ropedSlots.has(slot);
+  }
+
   holds(slot: number): boolean {
     const body = this.bodies.get(slot);
     return body?.out === true && body.held;

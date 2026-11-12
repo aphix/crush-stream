@@ -271,7 +271,7 @@ export class Ropes {
   /** The part of dummy `side.id` nearest `at`, tied at the point of its box nearest `at`. */
   private tieDoll(side: Side, at: THREE.Vector3): boolean {
     const doll = this.dolls[side.id];
-    if (doll === undefined || !doll.live || doll.driven) return false;
+    if (doll === undefined || !doll.live) return false;
     let nearest = Infinity;
     for (let k = 0; k < PARTS.length; k++) {
       const gap = boxGap(inFrame(doll.bodies[k]!, at, _local), PARTS[k]!.h);

@@ -5,6 +5,7 @@ import { RAPIER, TetherSet, WORLD } from "../contact/tether.ts";
 import { BOXES_MESH_NAME } from "../present/minigame-art.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
+import { RAGDOLLS_MESH_NAME } from "../present/ragdoll-pool.ts";
 import { ROPE_FLOATS, ROPE_JOINED, type RopeEnd } from "../present/ragdoll-wire.ts";
 import { TetherDirector } from "./engine-tether.ts";
 
@@ -72,9 +73,10 @@ function cubes(scene: THREE.Scene, name: string): THREE.InstancedMesh {
   return mesh;
 }
 
-/** Dummy slot 0 standing `AHEAD` m ahead; his torso's middle. */
-function dummy(scene: THREE.Scene): THREE.Vector3 {
+/** Dummy slot 0 standing `AHEAD` m ahead, drawn on a mesh named `name` (the pool's by default); his torso's middle. */
+function dummy(scene: THREE.Scene, name = RAGDOLLS_MESH_NAME): THREE.Vector3 {
   const mesh = new DummyMesh(1);
+  mesh.name = name;
   const none = new THREE.Quaternion();
   for (const [k, part] of PARTS.entries()) mesh.pose(0, k, new THREE.Vector3(part.c[0], part.c[1], part.c[2] - AHEAD), none);
   scene.add(mesh);
@@ -117,6 +119,19 @@ describe("given the free camera over a dummy standing out, with a wall behind hi
     expect(tethers.count, "cables out after one fire").toBe(0);
     expect(tethers.isAlive(0)).toBe(false);
     expect(director["heldCar"], "what the first fire holds: the wall, not the dummy").toBe(WORLD);
+  });
+
+  // mutation: sed -i 's/object.name !== RAGDOLLS_MESH_NAME || //' src/game/engine/engine-tether.ts
+  it("when the man is drawn on another dummy mesh (the crowd's) whose instance is a slot out in the pool, then the ray passes through him and the cable's first end is the wall, not that slot's dummy", () => {
+    const scene = new THREE.Scene();
+    const torso = dummy(scene, "crowd");
+    wall(scene);
+    const { aimAt, fire, ropes } = rig(scene);
+    aimAt(torso);
+    fire();
+    aimAt(new THREE.Vector3(BESIDE, EYE_Y, -WALL_AHEAD));
+    fire();
+    expect(ropes.attached.length, "no rope: no dummy of the pool was hooked").toBe(0);
   });
 });
 
