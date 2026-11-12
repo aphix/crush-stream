@@ -44,7 +44,9 @@ const CROSS_CLEAR = 0.6;
 const PAVILION_SHARE = { across: 0.5, down: 0.5 } as const;
 const QUARTER_TURN = Math.PI / 2;
 
-type ParkProp = { prefab: PrefabId; x: number; z: number; yaw: number };
+type ParkProp = { prefab: PrefabId; x: number; z: number; yaw: number; style?: typeof PARK_LAMP };
+/** The style a park's lamp is placed with: it stands on the ground, not on a sidewalk slab, so its light pool lies on the ground (`prefabParts`). */
+export const PARK_LAMP = "park-lamp";
 type ParkPaint = { surface: SurfaceId; poly: [number, number][] };
 
 /** A straight path's middle line: along x (at z `fixed`) or along z (at x `fixed`), from `from` to `to`. */
@@ -142,7 +144,7 @@ function pathSideProps(park: Park, path: Path, props: ParkProp[]): void {
     const side = lamps % 2 === 0 ? 1 : -1;
     const lamp = besidePath(path, along, side * LAMP_OFF);
     if (blocked(park, lamp.x, lamp.z, LAMP_REACH, path)) continue;
-    props.push({ prefab: PREFAB.acornLamp, ...lamp, yaw: facingPath(path, side) });
+    props.push({ prefab: PREFAB.acornLamp, ...lamp, yaw: facingPath(path, side), style: PARK_LAMP });
     lamps++;
   }
 }

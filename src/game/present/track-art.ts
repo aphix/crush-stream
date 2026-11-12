@@ -33,6 +33,7 @@ import { PARKED_PAINTS } from "./prefabs-car.ts";
 import { assetTint, disposeAssetMaterials, isAssetFamily } from "./scenery-assets-art.ts";
 import { SCENERY_ASSETS } from "../world/scenery-assets/index.ts";
 import { isStreetTreeSkin } from "../world/openworld/openworld-greenery.ts";
+import { PARK_LAMP } from "../world/openworld/openworld-park.ts";
 import { treeOf } from "./street-trees.ts";
 import { backdropMesh, disposeBackdrop, type Backdrop } from "./sky-backdrop.ts";
 import { nukeFlash } from "./people.ts";
@@ -245,10 +246,11 @@ export class TrackArt {
     );
   }
 
-  /** A placement's skin: a scenery asset's family, a street tree's kind (a tree whose `style` names one), else a building's facade style. */
+  /** A placement's skin: a scenery asset's family, a street tree's kind (a tree whose `style` names one), a park's lamp, else a building's facade style. */
   private skinOf(p: Placed): Skin {
     if (p.asset !== undefined) return SCENERY_ASSETS[p.asset]!.family;
     if (p.prefab === PREFAB.tree) return treeOf(p)?.skin ?? null;
+    if (p.prefab === PREFAB.acornLamp) return p.style === PARK_LAMP ? PARK_LAMP : null;
     const height = p.sy * PREFABS[p.prefab].size[1];
     const style = placedFacadeStyle(p.prefab, p.style, p.x, p.z, this.biome(p.x, p.z), Math.max(p.sx, p.sz) * PREFABS[p.prefab].size[0], height);
     return style !== null && isOpenStyle(style) ? facadeSkin(style, storeysOfHeight(height, shopGroundOf(style)), this.party.has(p)) : style;
@@ -372,7 +374,7 @@ export class TrackArt {
       out.setRGB(k * (1 + 0.14 * (h2 - 0.5)), k, k * (1 - 0.12 * (h2 - 0.5)), THREE.LinearSRGBColorSpace);
       return true;
     }
-    if (style && !isStreetTreeSkin(style)) {
+    if (style && !isStreetTreeSkin(style) && style !== PARK_LAMP) {
       facadeTint(style, h, out);
       return true;
     }
