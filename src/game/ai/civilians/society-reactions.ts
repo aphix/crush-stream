@@ -1,4 +1,4 @@
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detAtan2, hypot2 } from "../../kernel/physics-core.js";
 import { PLACE_NAMES } from "./civilian-cast.ts";
 import { tickAt } from "./civilian-clock.ts";
 import {
@@ -10,6 +10,7 @@ import {
   FIGHT_ANGRY_FACTOR,
   FIGHT_CHANCE,
   FIGHT_FEAR,
+  FIGHT_HALF_GAP,
   FIGHT_PLAYER,
   FIGHT_TICKS,
   FIGHT_WANTED_TICKS,
@@ -35,6 +36,7 @@ import {
   WANTED_TICKS,
   WITNESS_RADIUS,
 } from "./civilian-constants.ts";
+import { WALKER_BEARING_STEPS } from "./civilian-crowd-constants.ts";
 import { residentDraws } from "./civilian-draws.ts";
 import { legPose } from "./civilian-leg.ts";
 import { EVENT_CODE } from "./civilian-names.ts";
@@ -189,8 +191,16 @@ export function startFight(state: CityState, victim: number, other: number, seco
   const anchor = nearestPlaceTo(state, spot.x, spot.z, NO_PLACE);
   if (anchor === NO_PLACE) return;
   const second = bearing === NO_BEARING && other >= 0 && isFreePerson(state, other) && intAt(state, other, RESIDENT_INT.fightTick) === NEVER_TICK ? other : -1;
-  enterFight(state, victim, bearing !== NO_BEARING && !byCar ? FIGHT_PLAYER : second, anchor, spot.x, spot.z, tick, bearing);
-  if (second >= 0) enterFight(state, second, victim, anchor, spot.x, spot.z, tick, NO_BEARING);
+  // Two civilians square up along the lane she was walking, each at her own spot facing the other, so a passer goes by beside them, never between.
+  const onLane = second >= 0 && legPose(state, victim, seconds, state.pose);
+  const alongX = onLane ? state.pose.dirX * FIGHT_HALF_GAP : 0;
+  const alongZ = onLane ? state.pose.dirZ * FIGHT_HALF_GAP : 0;
+  const lane = onLane ? Math.round((detAtan2(alongX, alongZ) / (2 * Math.PI)) * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1) : NO_BEARING;
+  const back = onLane ? (lane + WALKER_BEARING_STEPS / 2) & (WALKER_BEARING_STEPS - 1) : NO_BEARING;
+  // The lower id starts it and stands behind the spot (`readFight`).
+  const side = victim < second ? -1 : 1;
+  enterFight(state, victim, bearing !== NO_BEARING && !byCar ? FIGHT_PLAYER : second, anchor, spot.x + side * alongX, spot.z + side * alongZ, tick, second < 0 ? bearing : side < 0 ? lane : back);
+  if (second >= 0) enterFight(state, second, victim, anchor, spot.x - side * alongX, spot.z - side * alongZ, tick, side < 0 ? back : lane);
   raiseFear(state, spot.x, spot.z, FIGHT_FEAR);
   witnessAll(state, anchor, tick, victim, second);
 }

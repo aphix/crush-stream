@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
-import { CRIME_KIND, CRIME_LAG_TICKS, EVENT_KIND, EVENT_LEAD_TICKS, FLAG, JAIL_TICKS, NEVER_TICK, NO_PLACE, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, WANTED_TICKS } from "./civilian-constants.ts";
+import { CRIME_KIND, CRIME_LAG_TICKS, EVENT_KIND, EVENT_LEAD_TICKS, FLAG, JAIL_TICKS, NEED, NEVER_TICK, NO_PLACE, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, WANTED_TICKS } from "./civilian-constants.ts";
 import { ACTIVITY } from "./civilian-activity.ts";
 import { applyIndividualEvents, applyReactionEvents, queueEvents } from "./civilian-events.ts";
 import { historyLines, moodOf } from "./civilian-mood.ts";
@@ -9,13 +9,14 @@ import { EVENT_CODE, MOOD } from "./civilian-names.ts";
 import { runTicks, stateDigest } from "./civilian-run.test-util.ts";
 import { computeTick } from "./civilian-tick.ts";
 import { applyAnswer } from "./civilian-wire.ts";
-import { decideResident } from "./civilian-plan.ts";
+import { decideResident, sendResidentTo } from "./civilian-plan.ts";
+import { LegPose, legPose } from "./civilian-leg.ts";
 import { ActivityReading, readActivity } from "./society-activity.ts";
 import { CrimeDesk, crimePlaceOf, isWanted } from "./society-crime.ts";
 import { expireWanted } from "./society-reactions.ts";
 import { newCast, societyMap, type Cast } from "./society-scenes.test-util.ts";
 import { buildSocietyMap, intAt, placeIn, stageResident } from "./society.test-util.ts";
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detCos, hypot2 } from "../../kernel/physics-core.js";
 
 const NOON = 12;
 const BODEGA = placeIn(societyMap, PLACE_NAMES.bodega);
@@ -294,6 +295,31 @@ describe("given the host raises a fight between two residents at a door", () => 
     applyReactionEvents(state, at + EVENT_LEAD_TICKS);
     expect(intAt(state, resident, RESIDENT_INT.flags) & FLAG.custody, "the busted one's custody flag").toBe(FLAG.custody);
     expect(intAt(state, neighbour, RESIDENT_INT.fightTick), "the other's fight tick").toBe(NEVER_TICK);
+  });
+});
+
+describe("given the host raises a fight against a resident on her walk", () => {
+  // mutation: sed -i 's/  const onLane = second >= 0 \&\& legPose(/  const onLane = second < -1 \&\& legPose(/' src/game/ai/civilians/society-reactions.ts
+  it("when they are drawn a moment into it, then the two stand a metre apart along the way she was walking, facing each other, so passers go by beside them", () => {
+    const cast = newCast(NOON);
+    const { state, resident, neighbour } = cast;
+    for (const person of [resident, neighbour]) stageResident(state, person, { place: HOME_A1, tick: cast.tick });
+    expect(sendResidentTo(state, neighbour, cast.tick, placeIn(societyMap, "Perk Up Coffee"), NEED.food, 100), "she sets out").toBe(true);
+    const raised = cast.tick + 20;
+    const pose = new LegPose();
+    expect(legPose(state, neighbour, raised / 2, pose), "control: on her walk when it is raised").toBe(true);
+    expect(Math.abs(pose.dirZ), "control: her way is not along x, where a pair met at a door stands").toBeGreaterThan(0.5);
+    queueEvents(state, raised, [EVENT_KIND.fight, neighbour, raised / 2, EVENT_KIND.alongside, resident, raised / 2]);
+    const at = raised + EVENT_LEAD_TICKS;
+    applyReactionEvents(state, at);
+    const first = new ActivityReading();
+    const second = new ActivityReading();
+    readActivity(state, resident, at / 2 + 0.3, first);
+    readActivity(state, neighbour, at / 2 + 0.3, second);
+    expect(first.code, "control: the starter swings").toBe(ACTIVITY.swing);
+    expect(Math.abs((first.x - second.x) * pose.dirZ - (first.z - second.z) * pose.dirX), "metres between them across her way").toBeLessThan(1e-2);
+    expect(hypot2(first.x - second.x, first.z - second.z), "metres between them").toBeCloseTo(1, 3);
+    expect(detCos(first.yaw - second.yaw), "they face each other").toBeCloseTo(-1, 3);
   });
 });
 

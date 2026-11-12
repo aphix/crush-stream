@@ -671,12 +671,14 @@ export class CivilianCrowd {
     }
   }
 
-  /** Host: the fights' blows that landed since the last step (`blowsFrom` to `seconds`; read from fields so the step passes no boxed number). The blow that reaches its victim's knock-out count fells her as a car's knock does, with the striker named. */
+  /** Host: the fights' blows that landed since the last step (`blowsFrom` to `seconds`, handed over in the blow's fields so no double crosses a call boxed). The blow that reaches its victim's knock-out count fells her as a car's knock does, with the striker named. */
   private findPunches(): void {
     const state = this.remote.state;
     const blow = this.blow;
+    blow.fromSeconds = this.blowsFrom;
+    blow.toSeconds = this.seconds;
     for (let from = 0; ; ) {
-      const striker = findCivilianBlow(state, this.blowsFrom, this.seconds, from, blow);
+      const striker = findCivilianBlow(state, from, blow);
       if (striker < 0) return;
       from = striker + 1;
       const victim = blow.victim;

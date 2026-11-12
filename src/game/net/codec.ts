@@ -91,7 +91,7 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 59: the open world's desktop field has three more sim cars (each foot cop's own patrol car: PATROL_CARS 5, MOVER_CARS 15), so a peer on 58 would build a different field.
 60: the host logs an arrested resident boarding and leaving a patrol car (`EVENT_KIND.arrestRide`, `arrestAlight`), which a client reads to seat and unseat the pair, so an older peer would walk them to the station.
 61: fights can end in a knock-out: a seeded blow count (`STREAM.punch`), a knock that names its striker (an `alongside` triple after its push) and a knocked fighter's partner released, so a peer on 60 would compute a different city from the same log.
-62: a customer is inside a place only within its hours (her stay ends as it shuts, staggered by her number; a walk that reaches it shut has no stay; one still there when it shuts walks home), and the bodega is open to midnight, so a peer on 61 would plan different legs.
+62: a customer is inside a place only within its hours (her stay ends as it shuts, staggered by her number; a walk that reaches it shut has no stay; one still there when it shuts walks home), the bodega is open to midnight, and two civilians fighting on a walk stand along it (each one's own spot and facing in her row), so a peer on 61 would plan and place differently.
 */
 export const NET_VERSION = 62;
 

@@ -23,11 +23,16 @@ describe("given two civilians in a fight", () => {
   it("when its 8 s are searched for blows, then they land only on the one who did not start it, the first 0.3 s after they square up and the next 1.2 s later", () => {
     const { state, starter, victim, arrive } = fight();
     const out = new CivilianBlow();
-    expect(findCivilianBlow(state, arrive + 0.2, arrive + 0.4, 0, out), "the first blow's striker").toBe(starter);
+    const search = (fromSeconds: number, toSeconds: number, first: number): number => {
+      out.fromSeconds = fromSeconds;
+      out.toSeconds = toSeconds;
+      return findCivilianBlow(state, first, out);
+    };
+    expect(search(arrive + 0.2, arrive + 0.4, 0), "the first blow's striker").toBe(starter);
     expect(out.victim, "its victim").toBe(victim);
-    expect(findCivilianBlow(state, arrive + 0.2, arrive + 0.4, victim, out), "searched from the victim on: she lands none").toBe(-1);
-    expect(findCivilianBlow(state, arrive + 0.4, arrive + 1.4, 0, out), "between blows").toBe(-1);
-    expect(findCivilianBlow(state, arrive + 1.4, arrive + 1.6, 0, out), "the second blow").toBe(starter);
+    expect(search(arrive + 0.2, arrive + 0.4, victim), "searched from the victim on: she lands none").toBe(-1);
+    expect(search(arrive + 0.4, arrive + 1.4, 0), "between blows").toBe(-1);
+    expect(search(arrive + 1.4, arrive + 1.6, 0), "the second blow").toBe(starter);
   });
 
   // mutation: sed -i 's/^export const KNOCKOUT_SHARE = 0.6;/export const KNOCKOUT_SHARE = 0;/' src/game/ai/civilians/civilian-constants.ts
