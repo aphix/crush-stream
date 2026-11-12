@@ -1,4 +1,3 @@
-import { detAtan, detSin } from "../kernel/physics-core.js";
 /**
  * The open world's day as a function of the game hour (0 to 24, the crowd's clock): how dark, how warm, whether the street lamps and the windows are lit, and how high the light stands.
  * Pure numbers; `WorldStage.setDayHour` lights the scene from them. The light's direction is moved only when it has drifted far enough to show (`sunNeedsHop`), the rest of the grade on every
@@ -51,7 +50,7 @@ export function dayGradeAt(hour: number, out: DayGrade): DayGrade {
     smooth(h, WARM_MORNING.from, WARM_MORNING.peak) * (1 - smooth(h, WARM_MORNING.peak, WARM_MORNING.to)) +
     smooth(h, WARM_EVENING.from, WARM_EVENING.peak) * (1 - smooth(h, WARM_EVENING.peak, WARM_EVENING.to));
   out.lamps = 1 - smooth(dayShare, LAMPS_ON.from, LAMPS_ON.to);
-  out.sunHeight = h > SUN_UP.rise && h < SUN_UP.set ? detSin((Math.PI * (h - SUN_UP.rise)) / (SUN_UP.set - SUN_UP.rise)) : 0;
+  out.sunHeight = h > SUN_UP.rise && h < SUN_UP.set ? Math.sin((Math.PI * (h - SUN_UP.rise)) / (SUN_UP.set - SUN_UP.rise)) : 0;
   return out;
 }
 
@@ -63,7 +62,7 @@ export function dayGradeAt(hour: number, out: DayGrade): DayGrade {
 export function lightElevation(grade: DayGrade, low: number, noon: number, moon: number): number {
   const sun = low + (noon - low) * grade.sunHeight;
   const length = 1 / Math.tan(sun) + (1 / Math.tan(moon) - 1 / Math.tan(sun)) * grade.night;
-  return detAtan(1 / length);
+  return Math.atan(1 / length);
 }
 
 /**
@@ -77,7 +76,7 @@ export const REFERENCE_HEIGHT = 10.9;
 
 /** The change of elevation (rad) from `applied` that moves the shadow tip by `SUN_HOP_METRES`. */
 export function sunHopTolerance(applied: number): number {
-  const s = detSin(applied);
+  const s = Math.sin(applied);
   return (s * s * SUN_HOP_METRES) / REFERENCE_HEIGHT;
 }
 
