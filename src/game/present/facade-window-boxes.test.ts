@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { afterAll, describe, expect, it } from "vitest";
+import { hypot2 } from "../kernel/physics-core.js";
 import { DOOR, homeFrontages, LOT_WIDTH } from "../world/openworld/openworld-facade-solids.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { buildWindowBoxGeometry } from "./facade-bay-parts.ts";
@@ -93,7 +94,7 @@ describe("given the kit made for the layout's rowhomes", () => {
     expect(units.length, "units").toBeGreaterThan(0);
     for (const box of boxesRead()) {
       for (const unit of units) {
-        const sameWindow = Math.hypot(box.x - unit.x, box.z - unit.z) < SAME_WINDOW_PLAN && Math.abs(box.foot - unit.y) < SAME_WINDOW_HEIGHT;
+        const sameWindow = hypot2(box.x - unit.x, box.z - unit.z) < SAME_WINDOW_PLAN && Math.abs(box.foot - unit.y) < SAME_WINDOW_HEIGHT;
         expect(sameWindow, `box at ${box.x.toFixed(1)},${box.z.toFixed(1)} over a unit`).toBe(false);
       }
     }

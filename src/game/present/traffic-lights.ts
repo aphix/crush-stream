@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { LIGHT, lightPhase, lightState, phaseOfApproach } from "../ai/openworld-traffic/traffic-lights.ts";
 import { HEADING_COUNT, HEADING_DX, HEADING_DZ, HEADING_YAW, rightX, rightZ, type RoadNetwork } from "../world/openworld/openworld-roads.ts";
 import { SIGNAL_POLE } from "../world/openworld/openworld-signal-poles.ts";
+import { detAtan2 } from "../kernel/physics-core.js";
 
 /** The pole stands `SIGNAL_POLE.fromCurb` (m) from the curb, in the sidewalk's furniture strip (the solid a car meets stands there too), and the head hangs this far (m) over the lane side of it. */
 const POLE_FROM_CURB = SIGNAL_POLE.fromCurb;
@@ -187,7 +188,7 @@ export class TrafficLightArt {
         this.lamps.setMatrixAt(index * LAMPS_PER_HEAD + lamp, matrix.compose(position.set(headX + faceX * lampReach, HEAD_HEIGHT + LAMP_Y[lamp]!, headZ + faceZ * lampReach), turn, unit));
       }
       // The plates face the traffic the head faces: a plane's front is +z, turned to (faceX, faceZ).
-      const plateTurn = Math.atan2(faceX, faceZ);
+      const plateTurn = detAtan2(faceX, faceZ);
       turn.setFromAxisAngle(up, plateTurn);
       const onFace = POLE_WIDTH / 2 + REG_SIGN.standoff;
       this.speedSigns.setMatrixAt(index, matrix.compose(position.set(poleX + faceX * onFace, REG_SIGN.speedY, poleZ + faceZ * onFace), turn, unit));

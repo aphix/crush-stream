@@ -1,5 +1,5 @@
 import { launch, pooledCar } from "../../contact/crash-scenarios.test-util.ts";
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import { tickAt } from "./civilian-clock.ts";
@@ -47,8 +47,8 @@ function nearestNodeTo(x: number, z: number): number {
 /** A car `behind` m back along the way `resident` walks and `beside` m to one side, driving the same way at `mps` m/s: `place` puts it where it is `seconds` on. */
 function passingCar(crowd: CivilianCrowd, resident: number, behind: number, beside: number, mps: number, slot: number): { car: DeformableCar; place: (seconds: number) => void } {
   const { x, z, yaw } = crowd.poses;
-  const dirX = Math.sin(yaw[resident]!);
-  const dirZ = Math.cos(yaw[resident]!);
+  const dirX = detSin(yaw[resident]!);
+  const dirZ = detCos(yaw[resident]!);
   const car = pooledCar(slot);
   const startX = x[resident]! - dirX * behind + dirZ * beside;
   const startZ = z[resident]! - dirZ * behind - dirX * beside;

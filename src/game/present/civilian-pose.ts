@@ -1,3 +1,4 @@
+import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { ACTIVITY_OPEN_ENDED } from "../ai/civilians/civilian-activity.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { Stoops } from "../world/openworld/openworld-stoops.ts";
@@ -34,7 +35,7 @@ export function poseCivilian(mesh: DummyMesh, slot: number, poses: CrowdPoses, c
     const dx = poses.x[partner]! - pose.x;
     const dz = poses.z[partner]! - pose.z;
     const yaw = pose.yaw;
-    pose.bearing = Math.atan2(dx * Math.cos(yaw) - dz * Math.sin(yaw), dx * Math.sin(yaw) + dz * Math.cos(yaw));
+    pose.bearing = detAtan2(dx * detCos(yaw) - dz * detSin(yaw), dx * detSin(yaw) + dz * detCos(yaw));
   }
   poseActivity(mesh, slot, pose, smoothing, civilian);
 }

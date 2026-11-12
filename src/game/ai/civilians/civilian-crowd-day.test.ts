@@ -1,3 +1,4 @@
+import { hypot2 } from "../../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "./civilian-activity.ts";
 import { DECISION_HZ, MAX_PATH_NODES, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "./civilian-constants.ts";
@@ -67,7 +68,7 @@ function runDay(): DayReport {
       if (step % SAMPLE_EVERY !== 0) continue;
       const out = whereAt(crowd, resident, step * STEP_SECONDS, probe);
       if (out && sampled.shown[resident] === 1 && sampled.depart[resident] === depart) {
-        const moved = Math.hypot(probe.x - sampled.x[resident]!, probe.z - sampled.z[resident]!);
+        const moved = hypot2(probe.x - sampled.x[resident]!, probe.z - sampled.z[resident]!);
         const seconds = step * STEP_SECONDS;
         const onLeg = state.ints[base + RESIDENT_INT.pathCount]! > 0 && seconds >= depart / DECISION_HZ && seconds < state.ints[base + RESIDENT_INT.arriveTick]! / DECISION_HZ;
         const atCar = poses.activity[resident] === ACTIVITY.carIn || poses.activity[resident] === ACTIVITY.carOut;

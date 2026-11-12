@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { LAYOUT } from "./openworld-constants.ts";
 import { openWorldGeometry } from "./openworld-layout.ts";
 import { buildParkingSpots, driverDoorPoint, KERB_CANDIDATES, kerbSpotsNear, residentSpotAt, spotAt } from "./openworld-parking.ts";
@@ -11,7 +11,7 @@ const spots = buildParkingSpots(network);
 
 /** A space's lane heading as the unit step it faces, from its yaw (yaw 0 faces +z). */
 function facing(spot: number): { x: number; z: number } {
-  return { x: Math.sin(spots.yaw[spot]!), z: Math.cos(spots.yaw[spot]!) };
+  return { x: detSin(spots.yaw[spot]!), z: detCos(spots.yaw[spot]!) };
 }
 
 describe("given the open world's streets as a graph", () => {
@@ -81,8 +81,8 @@ describe("given a car in the open world's streets", () => {
     expect(spotAt(spots, spots.x[spot]! + 0.5, spots.z[spot]! + 0.5, spots.yaw[spot]! + 0.1), "nudged in it").toBe(spot);
     expect(spotAt(spots, spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]! + Math.PI / 2), "across the space").toBe(-1);
     const toLane = network.parkingOffset - network.laneOffset;
-    const leftX = Math.cos(spots.yaw[spot]!);
-    const leftZ = -Math.sin(spots.yaw[spot]!);
+    const leftX = detCos(spots.yaw[spot]!);
+    const leftZ = -detSin(spots.yaw[spot]!);
     expect(spotAt(spots, spots.x[spot]! + leftX * toLane, spots.z[spot]! + leftZ * toLane, spots.yaw[spot]!), "in the travel lane beside it").toBe(-1);
   });
 
@@ -117,8 +117,8 @@ describe("given a car in the open world's streets", () => {
     const door = { x: 0, z: 0 };
     for (let spot = 0; spot < spots.count; spot += 11) {
       driverDoorPoint(spots, spot, door);
-      const forwardX = Math.sin(spots.yaw[spot]!);
-      const forwardZ = Math.cos(spots.yaw[spot]!);
+      const forwardX = detSin(spots.yaw[spot]!);
+      const forwardZ = detCos(spots.yaw[spot]!);
       const side = (door.x - spots.x[spot]!) * forwardZ - (door.z - spots.z[spot]!) * forwardX;
       const ahead = (door.x - spots.x[spot]!) * forwardX + (door.z - spots.z[spot]!) * forwardZ;
       expect(side, `space ${spot}: the door is to the car's left (positive: left of the way)`).toBeGreaterThan(1);

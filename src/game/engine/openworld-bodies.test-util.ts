@@ -1,3 +1,4 @@
+import { detCos, detSin } from "../kernel/physics-core.js";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 
@@ -86,8 +87,8 @@ export class FakeBodyHost {
   advance(dt: number): void {
     for (const body of this.bodies.values()) {
       if (!body.out || !body.standing) continue;
-      body.x += Math.sin(body.heading) * body.speed * dt;
-      body.z += Math.cos(body.heading) * body.speed * dt;
+      body.x += detSin(body.heading) * body.speed * dt;
+      body.z += detCos(body.heading) * body.speed * dt;
     }
   }
 }

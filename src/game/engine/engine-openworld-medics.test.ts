@@ -1,3 +1,4 @@
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { createCrowdPoses } from "../ai/civilians/crowd-poses.ts";
@@ -15,10 +16,10 @@ describe("given someone run down and an ambulance called for them", () => {
     for (let medic = 0; medic < MEDICS.count; medic++) {
       expect(poses.shown[medic], `medic ${medic} drawn`).toBe(1);
       expect(poses.activity[medic], "kneeling").toBe(ACTIVITY.kneel);
-      expect(Math.hypot(poses.x[medic]! - DOWN.x, poses.z[medic]! - DOWN.z), "beside them").toBeCloseTo(MEDICS.beside, 5);
+      expect(hypot2(poses.x[medic]! - DOWN.x, poses.z[medic]! - DOWN.z), "beside them").toBeCloseTo(MEDICS.beside, 5);
       const toX = DOWN.x - poses.x[medic]!;
       const toZ = DOWN.z - poses.z[medic]!;
-      expect(Math.sin(poses.yaw[medic]!) * toX + Math.cos(poses.yaw[medic]!) * toZ, "facing them").toBeCloseTo(MEDICS.beside, 5);
+      expect(detSin(poses.yaw[medic]!) * toX + detCos(poses.yaw[medic]!) * toZ, "facing them").toBeCloseTo(MEDICS.beside, 5);
     }
     expect(Math.sign(poses.x[0]! - DOWN.x), "one each side").toBe(-Math.sign(poses.x[1]! - DOWN.x));
   });

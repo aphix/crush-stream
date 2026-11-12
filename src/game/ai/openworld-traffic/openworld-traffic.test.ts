@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { LAYOUT } from "../../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork, junctionIndex } from "../../world/openworld/openworld-roads.ts";
@@ -860,8 +860,8 @@ describe("given people on the streets and a car of the traffic on its trip", () 
     runSeconds(field, traffic, clock, 6);
     const body = field.cars[car.index]!;
     expect(body.speed, "it is under way").toBeGreaterThan(3);
-    people.x[0] = body.group.position.x + Math.sin(body.yaw) * AHEAD_M;
-    people.z[0] = body.group.position.z + Math.cos(body.yaw) * AHEAD_M;
+    people.x[0] = body.group.position.x + detSin(body.yaw) * AHEAD_M;
+    people.z[0] = body.group.position.z + detCos(body.yaw) * AHEAD_M;
     people.shown[0] = 1;
     runSeconds(field, traffic, clock, WAIT_S);
     expect(body.speed, "it waits for her").toBeLessThan(0.3);

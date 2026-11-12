@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
+import { detCos, detSin } from "../kernel/physics-core.js";
 import { drawnHalf } from "../world/openworld/openworld-facade-solids.ts";
 import type { Building } from "../world/openworld/openworld-layout.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
@@ -48,8 +49,8 @@ beforeAll(() => {
 
 /** A point's offsets (m) from a building's middle: along its street wall and out of it. */
 function offsetsOn(building: Building, x: number, z: number): { along: number; out: number } {
-  const normalX = Math.cos(building.yaw);
-  const normalZ = -Math.sin(building.yaw);
+  const normalX = detCos(building.yaw);
+  const normalZ = -detSin(building.yaw);
   const dx = x - building.x;
   const dz = z - building.z;
   return { along: dx * normalZ - dz * normalX, out: dx * normalX + dz * normalZ };

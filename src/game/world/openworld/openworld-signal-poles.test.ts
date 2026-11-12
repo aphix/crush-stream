@@ -1,3 +1,4 @@
+import { hypot2 } from "../../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../../engine/engine-headless.test-util.ts";
@@ -42,7 +43,7 @@ describe("given the open world's traffic lights", () => {
   it("when the poles are drawn, then a solid of the pole's size stands at every one, and at no other spot", () => {
     expect(drawn.length, "poles drawn").toBeGreaterThan(30);
     expect(solid.length, "solid poles").toBe(drawn.length);
-    for (const spot of drawn) expect(solid.filter((pole) => Math.hypot(pole.x - spot.x, pole.z - spot.z) < SAME_SPOT).length, `solid poles at the drawn one at ${spot.x.toFixed(2)}, ${spot.z.toFixed(2)}`).toBe(1);
+    for (const spot of drawn) expect(solid.filter((pole) => hypot2(pole.x - spot.x, pole.z - spot.z) < SAME_SPOT).length, `solid poles at the drawn one at ${spot.x.toFixed(2)}, ${spot.z.toFixed(2)}`).toBe(1);
   });
 
   // mutation: sed -i 's/...signalPoleProps(buildRoadNetwork(geometry)), //' src/game/world/openworld/openworld-course.ts

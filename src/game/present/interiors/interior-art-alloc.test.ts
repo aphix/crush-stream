@@ -8,6 +8,7 @@ import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import type { InteriorKind, Place } from "../../world/openworld/walk-graph.ts";
 import { SIGHT_ID_CAPACITY, SightField } from "../openworld-sight.ts";
 import { InteriorSet } from "./interior-art.ts";
+import { detCos, detSin } from "../../kernel/physics-core.js";
 
 const map = buildOpenWorldMap(layOutLots());
 /** The kinds of place along the street, in turn: four businesses and a house, so shopfronts and doors both build. */
@@ -44,8 +45,8 @@ const sight = new SightField([], SIGHT_ID_CAPACITY);
 const crowd = createCrowdPoses(PLACES);
 for (let at = 0; at < PLACES; at++) {
   const place = row[at]!;
-  crowd.x[at] = place.doorX + Math.cos(place.yaw) * 0.5;
-  crowd.z[at] = place.doorZ - Math.sin(place.yaw) * 0.5;
+  crowd.x[at] = place.doorX + detCos(place.yaw) * 0.5;
+  crowd.z[at] = place.doorZ - detSin(place.yaw) * 0.5;
   crowd.shown[at] = place.interior === "rowhome" ? 1 : 0;
 }
 const openers = { poses: crowd, walker: null, others: [], closed: null };

@@ -12,6 +12,7 @@ import { layOutLots } from "./openworld-lots.ts";
 import { LANE, LANELESS_BLOCKS } from "./openworld-programme.ts";
 import type { InteriorKind, Place } from "./walk-graph.ts";
 
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 const lots = layOutLots();
 const plans = planBlocks(lots.geometry).playable;
 const furnished = lots.places.filter((place) => place.interior !== undefined && place.doorNode === -1 && lots.places.indexOf(place) < lots.backdropStart);
@@ -94,7 +95,7 @@ describe("given a rowhome's bay stack", () => {
 describe("given the places at the ends of a block's faces", () => {
   const reach = lots.geometry.blockLength / 2;
   /** The block a place stands in (the blocks of a column share their centre's x). */
-  const blockOf = (place: Place) => plans.reduce((best, block) => (Math.hypot(block.centreX - place.x, block.centreZ - place.z) < Math.hypot(best.centreX - place.x, best.centreZ - place.z) ? block : best));
+  const blockOf = (place: Place) => plans.reduce((best, block) => (hypot2(block.centreX - place.x, block.centreZ - place.z) < hypot2(best.centreX - place.x, best.centreZ - place.z) ? block : best));
   /** Whether the place's footprint touches its block's west or east end. */
   const atEnd = (place: Place): boolean => Math.abs(Math.abs(place.x - blockOf(place).centreX) + place.width / 2 - reach) < 1e-6;
   /** The lane lot of a place's block (none in a block without a lane). */
@@ -120,7 +121,7 @@ describe("given the places at the ends of a block's faces", () => {
       if (atEnd(place)) corners++;
       if (besideLane(place)) lanesides++;
       for (const side of sides) {
-        const x = place.x + Math.sin(place.yaw) * (side === OPEN_SIDE.plusAcross ? 1 : -1) * (place.width / 2);
+        const x = place.x + detSin(place.yaw) * (side === OPEN_SIDE.plusAcross ? 1 : -1) * (place.width / 2);
         const lane = laneLotOf(place);
         const onLane = lane !== undefined && (Math.abs(x - lane.lot.x0) < 1e-6 || Math.abs(x - lane.lot.x1) < 1e-6);
         expect(Math.abs(Math.abs(x - blockOf(place).centreX) - reach) < 1e-6 || onLane, `${place.name}: the open side stands on the block's end or the lane's edge`).toBe(true);
@@ -156,7 +157,7 @@ describe("given the window table's bands and the drawn building", () => {
     for (const piece of buildingPieces(style, MAT.BUILDING_WALL, false, storeys)) {
       const normal = piece[0].getAttribute("normal");
       const turned = (face * Math.PI) / 2;
-      if (Math.abs(normal.getX(0) - Math.sin(turned)) > 1e-6 || Math.abs(normal.getZ(0) - Math.cos(turned)) > 1e-6) continue;
+      if (Math.abs(normal.getX(0) - detSin(turned)) > 1e-6 || Math.abs(normal.getZ(0) - detCos(turned)) > 1e-6) continue;
       piece[0].computeBoundingBox();
       const { min, max } = piece[0].boundingBox!;
       if (max.y > 0 && max.y < ROOFLINE + 1e-6 && Math.abs(max.x - min.x) + Math.abs(max.z - min.z) > 1) out.push([min.y, max.y]);

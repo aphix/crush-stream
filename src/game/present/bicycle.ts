@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { detAtan2, hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, detSin, hypot2 } from "../kernel/physics-core.js";
 import { MAT } from "../kernel/material-ids.ts";
 import { once } from "../kernel/scalar.ts";
 import { box, type Piece, type PrefabPart } from "./prefab-pieces.ts";
@@ -115,7 +115,7 @@ const spokeTexture = once((): THREE.DataTexture => {
       const y = (row + 0.5 - half) / half;
       const radius = hypot2(x, y);
       const phase = ((detAtan2(y, x) % step) + step) % step;
-      const offTexels = radius * half * Math.sin(Math.min(phase, step - phase));
+      const offTexels = radius * half * detSin(Math.min(phase, step - phase));
       const onSpoke = radius > HUB && radius < RIM_FROM ? Math.min(1, Math.max(0, 1 - (offTexels - SPOKE_HALF_TEXELS) / SPOKE_SOFT_TEXELS)) : 0;
       const isHub = radius <= HUB;
       const isRim = radius >= RIM_FROM && radius <= 1;

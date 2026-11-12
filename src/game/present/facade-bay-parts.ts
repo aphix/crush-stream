@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { hypot2, hypot3 } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { CORNICE_DEPTH } from "../world/openworld/interior-kinds.ts";
 import { BAY, bayOutline, bayStackOf, DOOR, HOME_HEIGHT, LOT_WIDTH, STOOP, stoopStepRange } from "../world/openworld/openworld-facade-solids.ts";
 import { KIT_CELL, RAIL_SOLID_CELL, type UvRect } from "./facade-kit-atlas.ts";
@@ -251,7 +251,7 @@ const FEDERAL_WHITE = new THREE.Color(0xf2efe6);
 
 /** A point on the fan's circle of radius `radius` at `angle` (0 on the door's +x side, up to PI on its other), in the kit's x and y. */
 function fanPoint(radius: number, angle: number, out: number): Point {
-  return [DOOR_X + radius * Math.cos(angle), DOOR.head + radius * Math.sin(angle), out];
+  return [DOOR_X + radius * detCos(angle), DOOR.head + radius * detSin(angle), out];
 }
 
 /** The half ring over the fan: its front, its outer and its inner wall, a segment at a time. */
@@ -269,7 +269,7 @@ function archRing(builder: KitBuilder, inner: number, outer: number): void {
 /** The fan of glass: a triangle a segment from the springing point, each reading its slice of the fanlight cell (its flat edge along the cell's bottom). */
 function fanGlass(builder: KitBuilder, radius: number): void {
   const cell = KIT_CELL.fanlight;
-  const uvOf = (angle: number): readonly [number, number] => [cell.u0 + (cell.u1 - cell.u0) * (0.5 + 0.5 * Math.cos(angle)), cell.v0 + (cell.v1 - cell.v0) * Math.sin(angle)];
+  const uvOf = (angle: number): readonly [number, number] => [cell.u0 + (cell.u1 - cell.u0) * (0.5 + 0.5 * detCos(angle)), cell.v0 + (cell.v1 - cell.v0) * detSin(angle)];
   for (let segment = 0; segment < FAN_SEGMENTS; segment++) {
     const from = (Math.PI * segment) / FAN_SEGMENTS;
     const to = (Math.PI * (segment + 1)) / FAN_SEGMENTS;

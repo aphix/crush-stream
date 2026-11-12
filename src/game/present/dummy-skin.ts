@@ -11,6 +11,7 @@ import { wearFor } from "./dummy-wear.ts";
 import { bustWeights } from "./dummy-jiggle.ts";
 import { once } from "../kernel/scalar.ts";
 import { decimate } from "../vehicle/cage-mesh.ts";
+import { detAtan2 } from "../kernel/physics-core.js";
 
 /**
  * The dummy's one continuous body: `dummyGeometry` takes the three fitted bodies (one topology, three rest position sets), gives
@@ -60,7 +61,7 @@ function paintBody(fit: Fit): { bones: number[]; roleKind: number[]; print: numb
     if (fit.neckWeight[i] === 1 && role === SKIN) {
       const [, halfDepth, middleZ] = headAt(head, y);
       const frontness = (z - middleZ) / halfDepth;
-      if (y > head.chin + height * scalpHairline(Math.atan2(Math.abs(x), z))) kind = y > head.chin + RIM_AT * height ? HAIR : LOCKS;
+      if (y > head.chin + height * scalpHairline(detAtan2(Math.abs(x), z))) kind = y > head.chin + RIM_AT * height ? HAIR : LOCKS;
       else printed = [0.5 + x / (2 * FACE_HALF_WIDTH), (y - head.chin) / (FACE_SPAN * height), NO_PRINT[2], smooth(FACE_FRONT_FROM, FACE_FRONT_TO, frontness)];
     }
     roleKind.push(kind, EVERY_BUILD);

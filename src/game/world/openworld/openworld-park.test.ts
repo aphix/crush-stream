@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detCos, detSin } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { assertSameDigest } from "../../vehicle/test-support.ts";
 import { PARKED_PREFABS } from "../catalog.ts";
 import { PREFAB, SURFACE } from "../constants.ts";
@@ -59,7 +59,7 @@ describe("given the park's dressing", () => {
       if (prop.prefab === PREFAB.plaza) continue;
       const where = `${prop.prefab} at ${prop.x.toFixed(1)}, ${prop.z.toFixed(1)}`;
       if (Math.abs(prop.x - block.centreX) > geometry.blockLength / 2 || Math.abs(prop.z - block.centreZ) > geometry.blockDepth / 2) wrong.push(`${where} outside the block`);
-      if (Math.hypot(prop.x - block.centreX, prop.z - block.centreZ) < PLAZA_RADIUS) wrong.push(`${where} inside the plaza`);
+      if (hypot2(prop.x - block.centreX, prop.z - block.centreZ) < PLAZA_RADIUS) wrong.push(`${where} inside the plaza`);
       if (prop.x > court.x0 && prop.x < court.x1 && prop.z > court.z0 && prop.z < court.z1) wrong.push(`${where} on the court`);
       if (prop.prefab === PREFAB.bench || prop.prefab === PREFAB.litterBin || prop.prefab === PREFAB.acornLamp || prop.prefab === PREFAB.hoopFence) {
         const onPath = Math.abs(prop.z - block.centreZ) < PATH_HALF || crossXs.some((x) => Math.abs(prop.x - x) < PATH_HALF);

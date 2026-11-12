@@ -19,7 +19,7 @@ import type { Solid } from "./ragdoll-solids.ts";
 import { assertFloorBoxes, type FloorBox } from "./walker-floor.ts";
 import { propColliders } from "../world/placements.ts";
 import { flightsOf, NO_STAIRS, StairField } from "../world/stairs.ts";
-import { hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { DOLL_CAR, DOLL_FLOATS, DOLL_HEADER, DOLL_LIVE, DOLL_RIDES, DOLL_SETTLED, DOLL_STILL, DOLL_VELOCITY, PROP_FLOATS, packBoxes, type ResultMessage } from "./ragdoll-wire.ts";
 import { LIFE, STEP_LOG, type Throw, WALKER_SLOT } from "./ragdoll-pool.ts";
 import { RagdollStepper } from "./ragdoll-step.ts";
@@ -66,8 +66,8 @@ const RAISED_COM = PARTS.reduce((sum, p, k) => {
 function turnToElevation(velocity: THREE.Vector3, elevation: number): void {
   const speed = hypot2(velocity.x, velocity.z);
   if (speed === 0) return;
-  const flat = Math.cos(elevation);
-  velocity.set(velocity.x * flat, speed * Math.sin(elevation), velocity.z * flat);
+  const flat = detCos(elevation);
+  velocity.set(velocity.x * flat, speed * detSin(elevation), velocity.z * flat);
 }
 
 /** The throwing layer: launching drivers, figures and passengers, the walker, knocked props, which world a run uses, and the mirror of the worker's answer. `RagdollSystem` adds the frame and camera on top. */
@@ -106,7 +106,7 @@ export abstract class RagdollThrower extends RagdollStepper {
     const placed = this.spawn(t, WALKER_SLOT, Infinity);
     if (placed < 0) return placed;
     const forward = _p.set(0, 0, 1).applyQuaternion(t.q);
-    this.walkers[placed]!.attach(this.R, this.world, this.dolls[placed]!, Math.atan2(forward.x, forward.z));
+    this.walkers[placed]!.attach(this.R, this.world, this.dolls[placed]!, detAtan2(forward.x, forward.z));
     this.walkers[placed]!.struck();
     this.walkerPatchX = t.p.x;
     this.walkerPatchZ = t.p.z;
@@ -170,7 +170,7 @@ export abstract class RagdollThrower extends RagdollStepper {
     const dress = look ? { cop: false, look } : s.guard >= 0 ? guardDress(s.guard) : { cop: false, look: VIP_LOOK };
     const t = this.figure;
     t.p.set(s.x, s.y + PARTS[0]!.c[1], s.z);
-    t.q.setFromAxisAngle(Y, Math.atan2(s.faceX, s.faceZ));
+    t.q.setFromAxisAngle(Y, detAtan2(s.faceX, s.faceZ));
     t.v.set(s.vx, s.vy, s.vz);
     t.w.set(s.wx, s.wy, s.wz);
     t.car = s.loose ? -1 : s.car;

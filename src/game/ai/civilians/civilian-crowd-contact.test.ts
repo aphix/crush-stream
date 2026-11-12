@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { launch, pooledCar } from "../../contact/crash-scenarios.test-util.ts";
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_SECONDS } from "./civilian-activity.ts";
 import { DECISION_HZ, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import { BODY_GAP, HARD_DISTANCE, MAX_OFFSET, PUSH_LOCKOUT_SECONDS, WALKER_BEARING_STEPS, WALKER_PUSH_DISTANCE } from "./civilian-crowd-constants.ts";
@@ -116,7 +116,7 @@ describe("given a civilian walking along a street and a player on foot standing 
     const { crowd, walker, minDrawnGap, minBrainGap } = walkPast(MIDDLE, true);
     expect(minBrainGap, "closest the brain has them").toBeLessThan(WALKER_PUSH_DISTANCE);
     expect(minDrawnGap, "closest drawn").toBeGreaterThanOrEqual(BODY_GAP - RESIDUAL);
-    const expected = Math.round((Math.atan2(EDGE_DIR_X, EDGE_DIR_Z) / (2 * Math.PI)) * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1);
+    const expected = Math.round((detAtan2(EDGE_DIR_X, EDGE_DIR_Z) / (2 * Math.PI)) * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1);
     const off = Math.abs(onePushByNoCivilian(crowd, walker).bearing - expected);
     expect(Math.min(off, WALKER_BEARING_STEPS - off), "steps the bearing is off the street's way").toBeLessThanOrEqual(1);
   });
@@ -147,9 +147,9 @@ describe("given a civilian walking along a street and a car driving beside them 
     const [walker] = people(crowd, 1) as [number];
     sendAlong(crowd, walker, EDGE, EDGE.from, EDGE.to);
     const car = pooledCar(0);
-    const yaw = Math.atan2(EDGE_DIR_X, EDGE_DIR_Z);
-    const rightX = Math.cos(yaw);
-    const rightZ = -Math.sin(yaw);
+    const yaw = detAtan2(EDGE_DIR_X, EDGE_DIR_Z);
+    const rightX = detCos(yaw);
+    const rightZ = -detSin(yaw);
     const reachRight = car.cage.fields.planBox[1]! + sideways;
     const pose = new LegPose();
     launch(car, 0, 0, yaw, EDGE_DIR_X * PACE, EDGE_DIR_Z * PACE);
@@ -167,7 +167,7 @@ describe("given a civilian walking along a street and a car driving beside them 
     expect(struck, "run down").toBe(0);
     const push = onePushByNoCivilian(crowd, walker);
     expect(push.byCar, "the push names a car").toBe(true);
-    const toTheCar = Math.round((Math.atan2(-Math.cos(Math.atan2(EDGE_DIR_X, EDGE_DIR_Z)), Math.sin(Math.atan2(EDGE_DIR_X, EDGE_DIR_Z))) / (2 * Math.PI)) * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1);
+    const toTheCar = Math.round((detAtan2(-detCos(detAtan2(EDGE_DIR_X, EDGE_DIR_Z)), detSin(detAtan2(EDGE_DIR_X, EDGE_DIR_Z))) / (2 * Math.PI)) * WALKER_BEARING_STEPS) & (WALKER_BEARING_STEPS - 1);
     const off = Math.abs(push.bearing - toTheCar);
     expect(Math.min(off, WALKER_BEARING_STEPS - off), "steps the bearing is off the way to the car (the walker's left)").toBeLessThanOrEqual(CAR_BEARING_SLACK);
   });

@@ -3,6 +3,7 @@ import { Damped, FollowFocus, followFov, PIVOT_OVER_TORSO, RECENTER_DELAY, SHOUL
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
+import { detAtan, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 const FRAME = 1 / FRAME_HZ;
 /** The torso's centre standing (m). */
 const STANDING_TORSO = 1.13;
@@ -48,7 +49,7 @@ function follow(speed: number, bob: number, hertz: number, seconds: number): { h
   for (let f = 0; f < seconds * 60; f++) {
     const t = f * FRAME;
     const z = speed * t;
-    focus.follow(FRAME, 0, STANDING_TORSO + bob * Math.sin(2 * Math.PI * hertz * t), z, speed);
+    focus.follow(FRAME, 0, STANDING_TORSO + bob * detSin(2 * Math.PI * hertz * t), z, speed);
     if (t > seconds / 2) {
       heights.push(focus.point[1]!);
       lag = z - focus.point[2]!;
@@ -79,7 +80,7 @@ describe("given the on-foot camera's focus", () => {
   it("when the camera sits 1.5-2.2 m back over his shoulder with a 66 degree view across, then it matches the research's over-the-shoulder shot", () => {
     expect(SHOULDER_BOOM >= 1.5 && SHOULDER_BOOM <= 2.2, `boom ${SHOULDER_BOOM}`).toBeTruthy();
     const wide = followFov(16 / 9);
-    expect(Math.abs((2 * Math.atan(Math.tan((wide * Math.PI) / 360) * (16 / 9)) * 180) / Math.PI - 66), `vertical ${wide.toFixed(1)} degrees across 16:9`).toBeLessThan(1);
+    expect(Math.abs((2 * detAtan(Math.tan((wide * Math.PI) / 360) * (16 / 9)) * 180) / Math.PI - 66), `vertical ${wide.toFixed(1)} degrees across 16:9`).toBeLessThan(1);
     expect(followFov(0.5), "an upright phone keeps the widest vertical lens").toBe(56);
   });
 });
@@ -144,7 +145,7 @@ describe("given the shoulder camera in a spot where every sweep is blocked at on
     const view = new WalkerView();
     for (let k = 0; k < 12; k++) {
       view.shoulder(0, STANDING_TORSO, 0, 0, STANDING_TORSO + PIVOT_OVER_TORSO, 0, k * TURN_STEP, SHOULDER_PITCH, SHOULDER_BOOM, BLOCKED, FRAME);
-      const head = Math.hypot(view.eye[0]!, view.eye[1]! - (STANDING_TORSO + HEAD_OVER_TORSO), view.eye[2]!);
+      const head = hypot3(view.eye[0]!, view.eye[1]! - (STANDING_TORSO + HEAD_OVER_TORSO), view.eye[2]!);
       expect(head, `turn ${k}: the eye is ${head.toFixed(2)} m from his head`).toBeGreaterThan(HEAD_CLEAR_M);
       expect(view.inHead, `turn ${k}: his head is drawn`).toBe(false);
     }
@@ -155,6 +156,6 @@ describe("given the shoulder camera in a spot where every sweep is blocked at on
     const view = new WalkerView();
     const near = SQUEEZED_BOOM / 2;
     view.shoulder(0, STANDING_TORSO, 0, 0, STANDING_TORSO + PIVOT_OVER_TORSO, 0, 0, 0, near, BLOCKED, FRAME);
-    expect(Math.hypot(view.eye[0]!, view.eye[2]!), "the eye is at the boom asked for, not past it").toBeLessThanOrEqual(near + 1e-6);
+    expect(hypot2(view.eye[0]!, view.eye[2]!), "the eye is at the boom asked for, not past it").toBeLessThanOrEqual(near + 1e-6);
   });
 });

@@ -6,6 +6,7 @@ import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { detAcos, detAtan2, hypot2 } from "../kernel/physics-core.js";
 
 const FRAME = 1 / FRAME_HZ;
 /** The pool slot the walker takes. */
@@ -40,7 +41,7 @@ function readTorso(sys: RagdollSystem) {
   const up = 1 - 2 * (q.x * q.x + q.z * q.z);
   const forwardX = 2 * (q.x * q.z + q.w * q.y);
   const forwardZ = 1 - 2 * (q.x * q.x + q.y * q.y);
-  return { x: p.x, y: p.y, z: p.z, tilt: (Math.acos(Math.max(-1, Math.min(1, up))) * 180) / Math.PI, facing: Math.atan2(forwardX, forwardZ) };
+  return { x: p.x, y: p.y, z: p.z, tilt: (detAcos(Math.max(-1, Math.min(1, up))) * 180) / Math.PI, facing: detAtan2(forwardX, forwardZ) };
 }
 
 function frames(sys: RagdollSystem, seconds: number, each?: () => void): void {
@@ -116,11 +117,11 @@ describe("given a walker asked to go", () => {
         system.walker.ask();
       });
       const to = readTorso(system);
-      const speed = Math.hypot(to.x - from.x, to.z - from.z) / 6;
+      const speed = hypot2(to.x - from.x, to.z - from.z) / 6;
       expect(system.walker.state, "still on his feet").toBe("stand");
       expect(worstTilt, `never tipped far: ${worstTilt.toFixed(1)} deg`).toBeLessThan(25);
       expect(speed >= testCase.expectedMinSpeed && speed <= testCase.expectedMaxSpeed, `speed ${speed.toFixed(2)} m/s within ${testCase.expectedMinSpeed}-${testCase.expectedMaxSpeed}`).toBeTruthy();
-      const bearing = Math.atan2(to.x - from.x, to.z - from.z);
+      const bearing = detAtan2(to.x - from.x, to.z - from.z);
       expect(Math.abs(bearing - testCase.headingTurn), `walked toward ${testCase.headingTurn.toFixed(2)} rad, went ${bearing.toFixed(2)}`).toBeLessThan(0.5);
     });
   }

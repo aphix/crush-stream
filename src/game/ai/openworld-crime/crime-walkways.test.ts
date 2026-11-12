@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { must } from "../../kernel/must.test-util.ts";
 import { NEVER_TICK } from "../civilians/civilian-constants.ts";
 import { CRIME_HZ, ESCORT_ARRIVE, FOOT_COP_COUNT, MAX_SUBJECTS, PATROL_COPS, PATROL_RECENT } from "./crime-constants.ts";
@@ -163,8 +163,8 @@ describe("given a cop standing beside a corner lot of the real map", () => {
     let across = 0;
     for (let sample = 0; sample < SAMPLES; sample++) {
       const node = (sample * NODE_STRIDE) % nodeX.length;
-      const x = nodeX[node]! + SAMPLE_OFFSET * Math.cos(sample);
-      const z = nodeZ[node]! + SAMPLE_OFFSET * Math.sin(sample);
+      const x = nodeX[node]! + SAMPLE_OFFSET * detCos(sample);
+      const z = nodeZ[node]! + SAMPLE_OFFSET * detSin(sample);
       if (real.insideBuilding(x, z) || !real.sight(x, z, nodeX[node]!, nodeZ[node]!)) continue;
       const seen = walkers.nearestSeenNode(x, z);
       if (seen !== walkers.nearestNode(x, z)) across++;

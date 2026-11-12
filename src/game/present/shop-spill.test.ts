@@ -1,3 +1,4 @@
+import { detCos, detSin } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { PREFABS } from "../world/catalog.ts";
@@ -66,8 +67,8 @@ describe("given the open world's shops and eateries", () => {
       const { x, z } = quad.position;
       for (const slab of slabs) {
         const [dx, dz] = [x - slab.x, z - slab.z];
-        const along = dx * Math.cos(slab.yaw) - dz * Math.sin(slab.yaw);
-        const across = dx * Math.sin(slab.yaw) + dz * Math.cos(slab.yaw);
+        const along = dx * detCos(slab.yaw) - dz * detSin(slab.yaw);
+        const across = dx * detSin(slab.yaw) + dz * detCos(slab.yaw);
         if (Math.abs(along) > (length * slab.sx) / 2 || Math.abs(across) > (width * slab.sz) / 2) continue;
         covered++;
         expect(quad.position.y, "over the slab's top").toBeGreaterThan(slab.y + height * slab.sy);

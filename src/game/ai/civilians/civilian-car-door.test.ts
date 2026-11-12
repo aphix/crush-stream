@@ -1,3 +1,4 @@
+import { detCos, detSin } from "../../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import { CAR_DOOR, carDoorSpot, type DoorSpot } from "./civilian-car-door.ts";
 
@@ -21,13 +22,13 @@ describe("given a sedan standing at (10, 20) on ground 0.3 m high", () => {
 
   it.each([0, 1, 2.5, -1.2, Math.PI])("when it faces yaw %f, then she stands the same way round it and faces across its width at it", (carYaw) => {
     const spot = spotOf(carYaw);
-    const facing = [Math.sin(spot.yaw), Math.cos(spot.yaw)];
-    const carRight = [-Math.cos(carYaw), Math.sin(carYaw)];
+    const facing = [detSin(spot.yaw), detCos(spot.yaw)];
+    const carRight = [-detCos(carYaw), detSin(carYaw)];
     expect(facing[0], "facing the car's right, x").toBeCloseTo(carRight[0]!, 6);
     expect(facing[1], "facing the car's right, z").toBeCloseTo(carRight[1]!, 6);
     const out = [spot.x - CAR.x, spot.z - CAR.z];
-    const carLeft = [Math.cos(carYaw), -Math.sin(carYaw)];
-    const carFront = [Math.sin(carYaw), Math.cos(carYaw)];
+    const carLeft = [detCos(carYaw), -detSin(carYaw)];
+    const carFront = [detSin(carYaw), detCos(carYaw)];
     expect(out[0]! * carLeft[0]! + out[1]! * carLeft[1]!, "across the car").toBeCloseTo(SEAT_FRONT[0] + CAR_DOOR.outFromSeat, 6);
     expect(out[0]! * carFront[0]! + out[1]! * carFront[1]!, "along the car").toBeCloseTo(SEAT_FRONT[2] - CAR_DOOR.behindSeat, 6);
   });

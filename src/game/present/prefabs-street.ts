@@ -7,6 +7,7 @@ import { PAVILION, POSTS } from "../world/street-kit.ts";
 import { box, cyl, painted, type Piece, type PrefabMaterials, type PrefabPart } from "./prefab-pieces.ts";
 import { bicyclePieces, spokePart } from "./bicycle.ts";
 import { monumentPieces } from "./prefabs-mall.ts";
+import { detCos, detSin } from "../kernel/physics-core.js";
 
 /**
  * The open world's street kit (`STREET_KIT`): each piece in a few boxes and cylinders, vertex coloured on the plain material, its front (+x) toward the street. Origin at the foot's middle.
@@ -207,7 +208,7 @@ function pavilion(): Piece[] {
   ];
   for (let post = 0; post < posts; post++) {
     const angle = ((post + 0.5) * 2 * Math.PI) / posts;
-    pieces.push([box(2 * postHalf, fasciaBottom - floorHeight, 2 * postHalf, postRing * Math.cos(angle), (floorHeight + fasciaBottom) / 2, postRing * Math.sin(angle)), KIT_COLOUR.pavilionPost, MAT.GANTRY_STEEL]);
+    pieces.push([box(2 * postHalf, fasciaBottom - floorHeight, 2 * postHalf, postRing * detCos(angle), (floorHeight + fasciaBottom) / 2, postRing * detSin(angle)), KIT_COLOUR.pavilionPost, MAT.GANTRY_STEEL]);
   }
   return pieces;
 }

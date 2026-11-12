@@ -1,3 +1,4 @@
+import { detCos, detSin } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { createCrowdPoses, type CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -31,8 +32,8 @@ export function posesScattered(count: number, radius: number, seed: number): Cro
   for (let civilian = 0; civilian < count; civilian++) {
     const angle = random() * Math.PI * 2;
     const distance = Math.sqrt(random()) * radius;
-    poses.x[civilian] = Math.cos(angle) * distance;
-    poses.z[civilian] = Math.sin(angle) * distance;
+    poses.x[civilian] = detCos(angle) * distance;
+    poses.z[civilian] = detSin(angle) * distance;
     poses.yaw[civilian] = random() * Math.PI * 2;
     poses.stride[civilian] = random() * Math.PI * 2;
     poses.speed[civilian] = 1;

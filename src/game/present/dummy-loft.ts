@@ -1,3 +1,4 @@
+import { detCos, detSin } from "../kernel/physics-core.js";
 import { bodyIndex } from "./dummy-bodies.ts";
 import { headAt, type Head } from "./dummy-head.ts";
 import { printAt, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
@@ -46,7 +47,7 @@ export const BOX_SIDES = 4;
 
 /** A box (a lofted square, flat ends) centred (x, y, z) with sizes (width, height, depth): the small features. */
 export function box(x: number, y: number, z: number, [width, height, depth]: readonly [number, number, number], role: number, kinds: number, bone: number): Shell {
-  const corner = 1 / Math.cos(Math.PI / BOX_SIDES);
+  const corner = 1 / detCos(Math.PI / BOX_SIDES);
   const ring = (at: number): Ring => [at, (width / 2) * corner, (depth / 2) * corner, z, role];
   return { x, sides: BOX_SIDES, kinds, bone, rings: [ring(y + height / 2), ring(y - height / 2)], top: 0, bottom: 0 };
 }
@@ -100,10 +101,10 @@ export function loft(shell: Shell, mesh: Lofted): void {
   const rings = shell.rings.map(([y, halfWidth, halfDepth, middleZ, role, frontShare = 1, radii, across = 0]) =>
     Array.from({ length: sides }, (_, k) => {
       const angle = phase + (2 * Math.PI * k) / sides;
-      const toFront = Math.sin(angle);
+      const toFront = detSin(angle);
       const frontScale = toFront > 0 ? (shell.frontPower === undefined ? frontShare : 1 + (frontShare - 1) * toFront ** shell.frontPower) : 1;
       const scale = radii?.[k] ?? 1;
-      return addVertex(y, shell.x + across + scale * halfWidth * Math.cos(angle), middleZ + scale * halfDepth * toFront * frontScale, role);
+      return addVertex(y, shell.x + across + scale * halfWidth * detCos(angle), middleZ + scale * halfDepth * toFront * frontScale, role);
     }),
   );
   let upper = rings[0]!;

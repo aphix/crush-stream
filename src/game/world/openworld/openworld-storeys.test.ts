@@ -4,6 +4,7 @@ import { planBlocks } from "./openworld-blocks.ts";
 import { layOutLots } from "./openworld-lots.ts";
 import { storeysOfFace, walkOfFace } from "./openworld-storeys.ts";
 import { PLACE_KIND } from "./walk-graph.ts";
+import { hypot2 } from "../../kernel/physics-core.js";
 
 const lots = layOutLots();
 const playable = lots.places.slice(0, lots.backdropStart);
@@ -12,7 +13,7 @@ const plans = planBlocks(lots.geometry).playable;
 /** Half a block's length (m): a building at a block's end reaches it. */
 const BLOCK_REACH = lots.geometry.blockLength / 2;
 /** The block a place stands in (the blocks of a column share their centre's x). */
-const blockOf = (place: (typeof playable)[number]) => plans.reduce((best, block) => (Math.hypot(block.centreX - place.x, block.centreZ - place.z) < Math.hypot(best.centreX - place.x, best.centreZ - place.z) ? block : best));
+const blockOf = (place: (typeof playable)[number]) => plans.reduce((best, block) => (hypot2(block.centreX - place.x, block.centreZ - place.z) < hypot2(best.centreX - place.x, best.centreZ - place.z) ? block : best));
 /** Whether the place's footprint touches its block's west or east end (a lane's neighbours have an open side too, and no corner's extra storey). */
 const atBlockEnd = (place: (typeof playable)[number]): boolean => Math.abs(Math.abs(place.x - blockOf(place).centreX) + place.width / 2 - BLOCK_REACH) < SAME;
 /** Rows and columns of the blocks, and lots on a face: the faces the programme lays out. */

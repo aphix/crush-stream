@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detCos, detSin } from "../../kernel/physics-core.js";
+import { detAtan2, detCos, detSin } from "../../kernel/physics-core.js";
 import { DOOR, type Frontage, STOOP, stoopStepRange } from "../../world/openworld/openworld-facade-solids.ts";
 import { Stoops } from "../../world/openworld/openworld-stoops.ts";
 import { ACTIVITY } from "./civilian-activity.ts";
@@ -14,7 +14,7 @@ const map = buildFixtureMap();
 const EDGE = streetEdge(map, 20);
 const START = { x: map.graph.nodeX[EDGE.from]!, z: map.graph.nodeZ[EDGE.from]! };
 /** The house whose door is the edge's first node and whose front looks along it, so a resident sent along the edge walks out of the door and down the stoop. */
-const HOUSE_YAW = Math.atan2(-EDGE.dirZ, EDGE.dirX);
+const HOUSE_YAW = detAtan2(-EDGE.dirZ, EDGE.dirX);
 const HOUSE: Frontage = { x: START.x - detSin(HOUSE_YAW) * DOOR.across, z: START.z - detCos(HOUSE_YAW) * DOOR.across, yaw: HOUSE_YAW, depth: 10, style: "federal", storeys: 3, variant: 0 };
 const STEP_3 = stoopStepRange(3);
 

@@ -1,3 +1,4 @@
+import { hypot2 } from "../../kernel/physics-core.js";
 import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "./civilian-activity.ts";
 import { EVENT_KIND, EVENT_LEAD_TICKS, FIGHT_PLAYER, FLAG, JAYWALK_CUSTODY_TICKS, NEVER_TICK, NO_BEARING, RESIDENT_INT } from "./civilian-constants.ts";
@@ -110,7 +111,7 @@ describe("given a resident who has turned on the player standing east of them", 
     expect(reading.placed, "the brain places them").toBe(true);
     expect(reading.yaw, "the way they face").toBeCloseTo(Math.PI / 2, 5);
     expect(reading.partner, "civilian partner").toBe(-1);
-    expect(Math.hypot(reading.x - spotX, reading.z - spotZ), "metres from their spot").toBeLessThan(0.01);
+    expect(hypot2(reading.x - spotX, reading.z - spotZ), "metres from their spot").toBeLessThan(0.01);
     readActivity(state, resident, arrive + 0.9, reading);
     expect(reading.code, "activity after the first swing").toBe(ACTIVITY.block);
   });

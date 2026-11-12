@@ -49,6 +49,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { detCos, detSin, hypot3 } from "../src/game/kernel/physics-core.js";
 import { makeCanvasElement } from "./headless-canvas.mjs";
 import { loadHeadlessGl, NO_CONTEXT } from "./headless-gl.mjs";
 
@@ -367,7 +368,7 @@ if (camera !== undefined) {
   const [radius, pitch, angle, x = 0, y = 0, z = 0] = camera;
   // The free eye (the showcase's) has no orbit: it is put at radius, pitch and angle about x,y,z, looking at it, and flies from there.
   if (engine.view.flying) {
-    engine["camera"].position.set(x + Math.sin(angle) * radius * Math.cos(pitch), y + radius * Math.sin(pitch), z + Math.cos(angle) * radius * Math.cos(pitch));
+    engine["camera"].position.set(x + detSin(angle) * radius * detCos(pitch), y + radius * detSin(pitch), z + detCos(angle) * radius * detCos(pitch));
     engine["camera"].lookAt(x, y, z);
     engine.view.free.begun = false;
   } else Object.assign(engine.view, { userFramed: true, radius, pitch, angle });
@@ -378,7 +379,7 @@ if (camera !== undefined) {
 const courseBounds = values["no-fog"] ? engine.race["track"]?.bounds : undefined;
 if (courseBounds !== undefined) {
   const eye = engine["camera"].position;
-  const reach = Math.max(...[courseBounds.minX, courseBounds.maxX].flatMap((x) => [courseBounds.minZ, courseBounds.maxZ].map((z) => Math.hypot(eye.x - x, eye.y, eye.z - z))));
+  const reach = Math.max(...[courseBounds.minX, courseBounds.maxX].flatMap((x) => [courseBounds.minZ, courseBounds.maxZ].map((z) => hypot3(eye.x - x, eye.y, eye.z - z))));
   engine["camera"].far = Math.max(engine["camera"].far, reach);
   engine["camera"].near = Math.max(engine["camera"].near, eye.y * NEAR_PER_EYE_HEIGHT);
   engine["camera"].updateProjectionMatrix();

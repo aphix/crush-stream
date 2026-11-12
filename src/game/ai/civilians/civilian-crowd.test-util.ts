@@ -7,6 +7,7 @@ import { RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "./civilian-constants
 import { CivilianRemote } from "./civilian-remote.ts";
 import type { CrowdPoses } from "./crowd-poses.ts";
 
+import { detCos, detSin } from "../../kernel/physics-core.js";
 export const CROWD_SEED = 17;
 export const CROWD_RESIDENTS = 60;
 /** The step of a crowd test's frames: a power of two, so sums of it are exact and two clocks that count the same frames read the same seconds. */
@@ -63,8 +64,8 @@ export function stepUntilShown(crowd: CivilianCrowd, from = 0): number {
 /** A car `behind` metres back along the way civilian `resident` walks, driving at them at `mps` m/s: where it starts and where it is after `seconds` more. */
 export function carAtWalker(crowd: CivilianCrowd, resident: number, behind: number, mps: number, slot = 0): { car: DeformableCar; place: (seconds: number) => void } {
   const { x, z, yaw } = crowd.poses;
-  const dirX = Math.sin(yaw[resident]!);
-  const dirZ = Math.cos(yaw[resident]!);
+  const dirX = detSin(yaw[resident]!);
+  const dirZ = detCos(yaw[resident]!);
   const car = pooledCar(slot);
   const startX = x[resident]! - dirX * behind;
   const startZ = z[resident]! - dirZ * behind;

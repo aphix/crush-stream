@@ -20,6 +20,7 @@ import { OFF_MENU } from "../world/tracks/index.ts";
 import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 
 const WALL_REACH = 8;
 const SEED = 0x1234;
@@ -115,7 +116,7 @@ function worstPoseGap(r: ReturnType<typeof room>): { gap: number; shown: number 
   for (let resident = 0; resident < guestCrowd.poses.count; resident++) {
     if (guestCrowd.poses.shown[resident] === 0) continue;
     shown++;
-    gap = legPositionAt(hostCrowd.state, resident, at, pose) ? Math.max(gap, Math.hypot(pose.x - guestCrowd.separation.brainX[resident]!, pose.z - guestCrowd.separation.brainZ[resident]!)) : Infinity;
+    gap = legPositionAt(hostCrowd.state, resident, at, pose) ? Math.max(gap, hypot2(pose.x - guestCrowd.separation.brainX[resident]!, pose.z - guestCrowd.separation.brainZ[resident]!)) : Infinity;
   }
   return { gap, shown };
 }

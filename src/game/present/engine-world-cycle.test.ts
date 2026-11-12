@@ -1,3 +1,4 @@
+import { detAtan2, hypot2 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -185,7 +186,7 @@ describe("given the cycle's sun", () => {
   it("when the light is read round the clock, then it never stands lower than the sunset's 12 degrees, is the day's 58 degrees at noon and the moon's at night", () => {
     const { stage } = newStage();
     const floor = THREE.MathUtils.degToRad(12);
-    const elevation = (): number => Math.atan2(stage.sunOffset.y, Math.hypot(stage.sunOffset.x, stage.sunOffset.z));
+    const elevation = (): number => detAtan2(stage.sunOffset.y, hypot2(stage.sunOffset.x, stage.sunOffset.z));
     let lowest = Infinity;
     for (let minute = 0; minute <= HOURS_PER_DAY * MINUTES_PER_HOUR; minute++) {
       stage.setDayHour(minute / MINUTES_PER_HOUR);

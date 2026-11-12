@@ -12,6 +12,7 @@ import type { CrowdLink } from "./net-ports.ts";
 import { worldGame } from "./net-world-game.test-util.ts";
 import { voiceGain } from "./voice-range.ts";
 
+import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 /**
  * The open world as a room's game on the real race stack: a host and a guest, each a `RaceDirector` world, linked through netplay
  * as the lobby tests do. The host steps its world; the guest draws the host's snapshots.
@@ -88,10 +89,10 @@ function room({ kind = "openworld", hostCrowd = null, guestCrowd = null, minPlay
 const inCity = (x: number, z: number): boolean => x >= city.bounds.minX && x <= city.bounds.maxX && z >= city.bounds.minZ && z <= city.bounds.maxZ;
 
 type Point = { x: number; y: number; z: number };
-const metresBetween = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+const metresBetween = (a: Point, b: Point): number => hypot3(a.x - b.x, a.y - b.y, a.z - b.z);
 
 /** Car `car` of `world` on the course's start anchor, abreast with the others (`humanSlot`: within 12 m of it). */
-const atStart = (world: World, car: number): boolean => Math.hypot(world.live()[car]!.group.position.x - start.x, world.live()[car]!.group.position.z - start.z) < 12;
+const atStart = (world: World, car: number): boolean => hypot2(world.live()[car]!.group.position.x - start.x, world.live()[car]!.group.position.z - start.z) < 12;
 
 describe("given a host that hosted a room of the open world and a guest that joined", () => {
   it("when they have waited a second, then both worlds are the lobby on the city's course, nobody races or hunts, and every car stands at its start", () => {
@@ -173,7 +174,7 @@ describe("given the proximity voice of a room of the open world", () => {
     expect(world.carPosition(peers[0]!.car), "the voice reads the car the guest draws").toBe(s.gw.live()[0]!.group.position);
     const gains: number[] = [];
     for (const metres of [0, 20, 40]) {
-      s.hw.live()[0]!.spawnFacing(start.x + Math.sin(start.yaw) * metres, start.z + Math.cos(start.yaw) * metres, start.yaw, 0);
+      s.hw.live()[0]!.spawnFacing(start.x + detSin(start.yaw) * metres, start.z + detCos(start.yaw) * metres, start.yaw, 0);
       s.step(30);
       const listener = world.carPosition(s.guest.status().car);
       const speaker = world.carPosition(peers[0]!.car);

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { DOOR_FACE, type DoorLeaf } from "../../world/openworld/interior-plan.ts";
 import { DOOR_RANGE, DOOR_REACH, DOOR_SWING_SECONDS } from "./interior-constants.ts";
 
@@ -123,10 +123,10 @@ export class DoorSet {
   private placeLeaf(door: number): void {
     const leaf = this.leaves[door]!;
     const angle = this.openness[door]! * OPEN_ANGLE;
-    const alongX = leaf.closedX * Math.cos(angle) + leaf.openX * Math.sin(angle);
-    const alongZ = leaf.closedZ * Math.cos(angle) + leaf.openZ * Math.sin(angle);
+    const alongX = leaf.closedX * detCos(angle) + leaf.openX * detSin(angle);
+    const alongZ = leaf.closedZ * detCos(angle) + leaf.openZ * detSin(angle);
     _position.set(leaf.hingeX + (alongX * leaf.width) / 2, leaf.floorY + leaf.height / 2, leaf.hingeZ + (alongZ * leaf.width) / 2);
-    _rotation.setFromAxisAngle(_up, Math.atan2(-alongZ, alongX));
+    _rotation.setFromAxisAngle(_up, detAtan2(-alongZ, alongX));
     _scale.set(leaf.width, leaf.height, LEAF_THICK);
     this.leafMesh.setMatrixAt(door, _matrix.compose(_position, _rotation, _scale));
   }

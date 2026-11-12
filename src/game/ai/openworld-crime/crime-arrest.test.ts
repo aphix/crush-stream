@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ACTIVITY, ARREST } from "../civilians/civilian-activity.ts";
 import { CASE_PHASE } from "./case-table.ts";
 import { harness, runFor } from "./crime-fixture.test-util.ts";
+import { detCos, detSin } from "../../kernel/physics-core.js";
 
 const CRIMINAL = 1;
 
@@ -25,8 +26,8 @@ describe("an arrest is acted", () => {
     expect(run.poses.activityClock[CRIMINAL], "on the grip's clock").toBeGreaterThan(0);
     expect(cops.activity[cop], "he works the cuffs").toBe(ACTIVITY.arresting);
     expect(cops.yaw[cop], "facing her way").toBeCloseTo(yaw, 4);
-    expect(cops.x[cop], "behind her across x").toBeCloseTo(run.poses.x[CRIMINAL]! - Math.sin(yaw) * ARREST.cuffBehind, 3);
-    expect(cops.z[cop], "behind her across z").toBeCloseTo(run.poses.z[CRIMINAL]! - Math.cos(yaw) * ARREST.cuffBehind, 3);
+    expect(cops.x[cop], "behind her across x").toBeCloseTo(run.poses.x[CRIMINAL]! - detSin(yaw) * ARREST.cuffBehind, 3);
+    expect(cops.z[cop], "behind her across z").toBeCloseTo(run.poses.z[CRIMINAL]! - detCos(yaw) * ARREST.cuffBehind, 3);
   });
 
   // mutation: in src/game/ai/openworld-crime/crime-poses.ts writeArrestActivity(), change `activity === ACTIVITY.none ? 0 :` to `!gripping ? 0 :` (the clock check); or in src/game/ai/openworld-crime/foot-law.ts completeBust(), delete the block `if (this.table.tookDown[slot] === 0) { this.arrests.escort(caseIndex, slot, this.seconds); return; }`
@@ -43,8 +44,8 @@ describe("an arrest is acted", () => {
     expect(run.poses.activityClock[CRIMINAL], "hers too").toBeCloseTo(cops.activityClock[cop]!, 4);
     expect(cops.speed[cop], "at a walk").toBeGreaterThan(0);
     expect(run.poses.speed[CRIMINAL], "beside him").toBeCloseTo(cops.speed[cop]!, 4);
-    expect(run.poses.x[CRIMINAL], "at his right and a little ahead, across x").toBeCloseTo(cops.x[cop]! - ARREST.escortAcross * Math.cos(yaw) + ARREST.escortAhead * Math.sin(yaw), 3);
-    expect(run.poses.z[CRIMINAL], "at his right and a little ahead, across z").toBeCloseTo(cops.z[cop]! + ARREST.escortAcross * Math.sin(yaw) + ARREST.escortAhead * Math.cos(yaw), 3);
+    expect(run.poses.x[CRIMINAL], "at his right and a little ahead, across x").toBeCloseTo(cops.x[cop]! - ARREST.escortAcross * detCos(yaw) + ARREST.escortAhead * detSin(yaw), 3);
+    expect(run.poses.z[CRIMINAL], "at his right and a little ahead, across z").toBeCloseTo(cops.z[cop]! + ARREST.escortAcross * detSin(yaw) + ARREST.escortAhead * detCos(yaw), 3);
     runFor(run, 7);
     expect(run.poses.shown[CRIMINAL], "gone from the street").toBe(0);
     expect(run.scene.foot.table.phase[0], "the case is closed").toBe(CASE_PHASE.free);

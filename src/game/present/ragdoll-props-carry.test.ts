@@ -13,6 +13,7 @@ import { square } from "../world/track.test-util.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { GRACE } from "./ragdoll-pool.ts";
 
+import { hypot2 } from "../kernel/physics-core.js";
 const FRAME = 1 / FRAME_HZ;
 /** Where the prop lies and which way the car drives: along +z from 12 m short of it. */
 const PROP_AT = { x: 60, z: 60 };
@@ -53,7 +54,7 @@ async function secondsCarried(prefab: PrefabId, speed: number): Promise<number> 
     sys.update(FRAME, [car], true, false, null);
     if (!knocked || !sys.propAt(0, p, v)) continue;
     const inFootprint = Math.abs(p.z - z) < FOOTPRINT_ALONG && Math.abs(p.x - PROP_AT.x) < FOOTPRINT_ACROSS;
-    if (inFootprint && Math.hypot(v.x, v.z - speed) < WITH_THE_CAR_MPS) frames++;
+    if (inFootprint && hypot2(v.x, v.z - speed) < WITH_THE_CAR_MPS) frames++;
   }
   sys.dispose();
   return frames * FRAME;

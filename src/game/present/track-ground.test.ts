@@ -12,6 +12,7 @@ import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
 import { must } from "../kernel/must.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
+import { hypot2 } from "../kernel/physics-core.js";
 /** A course's terrain as `TrackArt` draws it: the near mesh (chunk after chunk, then the far skirt), the chunks, the road index, and the ground the mesh was cut from with its terrain's surface index. */
 type Terrain = { near: Mesher; chunks: { coarse: Mesher; box: Float32Array; fineAt: Int32Array; coarseAt: Int32Array }; roads: RoadIndex; ground: TrackGround; terrainSurface: number };
 
@@ -439,7 +440,7 @@ describe("given the four-count course's terrain chunks seen from a moving camera
   /** Flat distance from (x, z) to drawn chunk k's nearest point. */
   const gap = (k: number, x: number, z: number) => {
     const b = batch.box;
-    return Math.hypot(Math.max(b[k * 4]! - x, x - b[k * 4 + 2]!, 0), Math.max(b[k * 4 + 1]! - z, z - b[k * 4 + 3]!, 0));
+    return hypot2(Math.max(b[k * 4]! - x, x - b[k * 4 + 2]!, 0), Math.max(b[k * 4 + 1]! - z, z - b[k * 4 + 3]!, 0));
   };
 
   it("when the camera stands on the course, then every chunk whose nearest point lies within 240 m draws near, and every other far", () => {

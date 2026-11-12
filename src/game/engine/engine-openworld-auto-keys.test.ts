@@ -4,6 +4,7 @@ import { SUBJECT, type SubjectKind } from "../ai/openworld-auto/auto-director.ts
 import { newAutoPose } from "../ai/openworld-auto/auto-scan.ts";
 import { RIDE_PAUSE } from "../present/engine-camera.ts";
 import { OnFootRig } from "./engine-onfoot.test-util.ts";
+import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 
 const LINK = "#scene=openworld&seed=beef";
 /** Seconds the crowd and the foot cops need to be out and shown. */
@@ -48,11 +49,11 @@ describe("given the real engine in the open world with the Auto camera on, the p
     const pose = newAutoPose();
     auto()["scan"].poseOf(auto().subject!.kind, auto().subject!.id, pose);
     const eye = rig.engine["camera"].position;
-    return Math.atan2(eye.x - pose.x, eye.z - pose.z);
+    return detAtan2(eye.x - pose.x, eye.z - pose.z);
   }
 
   /** The turn (rad, 0 to pi) between two bearings. */
-  const turnBetween = (from: number, to: number) => Math.abs(Math.atan2(Math.sin(to - from), Math.cos(to - from)));
+  const turnBetween = (from: number, to: number) => Math.abs(detAtan2(detSin(to - from), detCos(to - from)));
 
   const pointer = (type: "pointerdown" | "pointermove" | "pointerup", x: number, y: number) => {
     Object.assign(view()["canvas"], { setPointerCapture() {}, releasePointerCapture() {}, style: {} });

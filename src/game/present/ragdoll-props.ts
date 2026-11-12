@@ -1,4 +1,4 @@
-import { hypot2, hypot3 } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { Collider, ColliderDesc, RigidBody, World } from "@dimforge/rapier3d-simd";
 import type { Rapier } from "../kernel/rapier.ts";
@@ -133,8 +133,8 @@ function footprint(R: Rapier, c: PropCollider, p: Placed, hy: number): ColliderD
   // The piece's offset from the placement, in the yawed frame the body turns in.
   const dx = c.x - p.x;
   const dz = c.z - p.z;
-  const cos = Math.cos(p.yaw);
-  const sin = Math.sin(p.yaw);
+  const cos = detCos(p.yaw);
+  const sin = detSin(p.yaw);
   return desc.setTranslation(dx * cos - dz * sin, (c.base + c.top) / 2 - p.y - hy, dx * sin + dz * cos).setDensity(0);
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detAtan2, hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { PropCollider } from "./placements.ts";
 import { course, COURSE_IDS } from "./race-world.test-util.ts";
 import { type RoadSpot, roadSpotNear } from "./road-spot.ts";
@@ -21,7 +21,7 @@ const spot: RoadSpot = { x: 0, z: 0, y: 0, yaw: 0 };
 const OBSTACLE: PropCollider = { index: 0, prefab: null, body: "solid", x: point.x, z: point.z, yaw: 0, kind: "box", r: 2.1, hx: 1.5, hz: 1.5, mass: 0, base: point.y, top: point.y + 3, ends: 3 };
 
 /** The turn (rad) between two facings, in [0, π]. */
-const turnBetween = (a: number, b: number): number => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+const turnBetween = (a: number, b: number): number => Math.abs(detAtan2(detSin(a - b), detCos(a - b)));
 
 describe("given a point on a course's road", () => {
   it("when the nearest spot is asked for with nothing in the way, then it is the road's point itself, facing the way asked", () => {

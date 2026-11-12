@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { detCos, detSin } from "../../kernel/physics-core.js";
 import { must } from "../../kernel/must.test-util.ts";
 import { ACTIVITY, ACTIVITY_SECONDS } from "../civilians/civilian-activity.ts";
 import { CaseTable, CASE_PHASE, SUBJECT_MODE } from "./case-table.ts";
@@ -90,8 +91,8 @@ describe("given the player on foot held the whole hold beside a cop with a patro
     const last = run.footLed.at(-1)!;
     expect(first.x, "led from where he stood").toBeGreaterThan(PLAYER_X - FOOT_HOLD_REACH * 2);
     expect(first.x, "led from where he stood").toBeLessThan(PLAYER_X + FOOT_HOLD_REACH * 2);
-    expect(last.x, "ends beside the driver's door").toBeCloseTo(car.x + street.doorBeside + BESIDE_COP * Math.cos(DOOR_YAW), 1);
-    expect(last.z, "ends beside the driver's door").toBeCloseTo(car.z - BESIDE_COP * Math.sin(DOOR_YAW), 1);
+    expect(last.x, "ends beside the driver's door").toBeCloseTo(car.x + street.doorBeside + BESIDE_COP * detCos(DOOR_YAW), 1);
+    expect(last.z, "ends beside the driver's door").toBeCloseTo(car.z - BESIDE_COP * detSin(DOOR_YAW), 1);
   });
 
   // mutation: sed -i 's/    if (holder < 0 || table.tookDown\[slot\] === 1) continue;/    if (table.resident[slot]! < 0 || holder < 0 || table.tookDown[slot] === 1) continue;/' src/game/ai/openworld-crime/crime-poses.ts

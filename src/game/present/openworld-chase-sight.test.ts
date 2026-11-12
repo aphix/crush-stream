@@ -15,6 +15,7 @@ import { Track } from "../world/track.ts";
 import { EyeClear } from "./eye-clear.ts";
 import { inside, occluder, raceSight, solid } from "./spectate-cam.ts";
 
+import { detCos, detSin } from "../kernel/physics-core.js";
 /** A car at rest stands its origin a little over the road (tyre squash and suspension): over the top of the 1 m box a crossing's paint once made, under the chase line's first sample through it. */
 const CAR_REST_Y = 0.1;
 /** Height (m) over a crossing's paint asked about: a car's bumper, well under any chase line. */
@@ -34,7 +35,7 @@ const crossings = placed.filter((prop) => GROUND_PAINT_PREFABS.has(prop.prefab) 
 /** The sedan's chase view of a car at (x, z) facing `yaw` (0 faces +z): its aim point and the rig's eye behind and over it. */
 function chaseOf(x: number, z: number, yaw: number) {
   const subject = new THREE.Vector3(x, CAR_REST_Y + chase.aimUp, z);
-  const eye = new THREE.Vector3(x - Math.sin(yaw) * chase.dist, CAR_REST_Y + chase.height, z - Math.cos(yaw) * chase.dist);
+  const eye = new THREE.Vector3(x - detSin(yaw) * chase.dist, CAR_REST_Y + chase.height, z - detCos(yaw) * chase.dist);
   return { subject, eye, rigEye: eye.clone() };
 }
 
@@ -58,8 +59,8 @@ describe("given the open world's course, its crossings painted on the road", () 
   it("when a drawn building stands on the chase line, then the eye still moves off the rig's spot inside it", () => {
     const building = placed.find((prop) => prop.prefab === PREFAB.buildingShell || prop.prefab === PREFAB.building)!;
     const halfDepth = (PREFABS[building.prefab].size[0] * building.sx) / 2;
-    const frontX = Math.cos(building.yaw);
-    const frontZ = -Math.sin(building.yaw);
+    const frontX = detCos(building.yaw);
+    const frontZ = -detSin(building.yaw);
     const carX = building.x + frontX * (halfDepth + FROM_FRONT_M);
     const carZ = building.z + frontZ * (halfDepth + FROM_FRONT_M);
     const subject = new THREE.Vector3(carX, CAR_REST_Y + chase.aimUp, carZ);
