@@ -6,6 +6,7 @@ import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
+import { PlaceFootprints } from "../world/openworld/place-footprints.ts";
 import type { Place } from "../world/openworld/walk-graph.ts";
 
 /** Physical bodies for the civilians near a player, desktop and phone: each costs a ragdoll in the dummies' world (10 parts, their joints and motors) every step. */
@@ -93,7 +94,8 @@ export class OpenWorldBodies {
   /** Per civilian, 1 while a body stands for her: the crowd's art draws none of those. */
   readonly held: Uint8Array;
   private readonly host: BodyHost;
-  private readonly places: readonly Place[];
+  /** The buildings' footprints grown by `BUILDING_MARGIN`: no body stands inside one. */
+  private readonly buildings: PlaceFootprints;
   private readonly size: number;
   private readonly bodyOf: Int16Array;
   private readonly resident: Int32Array;
@@ -109,7 +111,7 @@ export class OpenWorldBodies {
 
   constructor(host: BodyHost, places: readonly Place[], capacity: number, size: number) {
     this.host = host;
-    this.places = places;
+    this.buildings = new PlaceFootprints(places, BUILDING_MARGIN);
     this.size = size;
     this.held = new Uint8Array(capacity);
     this.bodyOf = new Int16Array(capacity).fill(NOBODY);
@@ -261,20 +263,7 @@ export class OpenWorldBodies {
     const x = poses.x[civilian]!;
     const z = poses.z[civilian]!;
     if (hypot2(x - eyeX, z - eyeZ) > radius || poses.feetY[civilian]! - this.host.groundAt(x, z) > ON_STREET) return false;
-    return !this.insideBuilding(x, z);
-  }
-
-  private insideBuilding(x: number, z: number): boolean {
-    for (let place = 0; place < this.places.length; place++) {
-      const entry = this.places[place]!;
-      if (entry.doorNode < 0) continue;
-      const dx = x - entry.x;
-      const dz = z - entry.z;
-      const cos = detCos(entry.yaw);
-      const sin = detSin(entry.yaw);
-      if (Math.abs(dx * cos - dz * sin) < entry.depth / 2 + BUILDING_MARGIN && Math.abs(dx * sin + dz * cos) < entry.width / 2 + BUILDING_MARGIN) return true;
-    }
-    return false;
+    return !this.buildings.inside(poses.x, poses.z, civilian);
   }
 
   /** The nearest eligible civilians without a body take the free ones, nearest first, while there are any. */

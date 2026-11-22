@@ -1,6 +1,6 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import type { BlockRef, Geometry, Lots, PathPlan, Side } from "./openworld-layout.ts";
-import { PLACE_KIND, type OpenWorldMap, type Place, type WalkGraph } from "./walk-graph.ts";
+import { PLACE_KIND, placeRecord, type OpenWorldMap, type Place, type WalkGraph } from "./walk-graph.ts";
 
 /** Two path points closer than this (m) are one node. */
 const SAME_POINT = 1e-3;
@@ -203,6 +203,6 @@ export function buildOpenWorldMap(lots: Lots): OpenWorldMap {
   for (let row = 0; row <= geometry.rows; row++) for (let column = 0; column <= geometry.columns; column++) crossIntersection(builder, geometry, column, row);
   const entrances = geometry.outerPath ? layOuterPath(builder, geometry) : edgeNodes(rings, lots.blocks, geometry);
   const stops = lots.places.flatMap((place, index) => (place.kind === PLACE_KIND.transit && doorNodes[index]! >= 0 ? [doorNodes[index]!] : []));
-  const places: Place[] = lots.places.map((place, index) => ({ ...place, doorNode: doorNodes[index]! }));
+  const places: Place[] = lots.places.map((place, index) => placeRecord(place, doorNodes[index]!));
   return { graph: builder.toGraph(), places, portals: Int32Array.from([...stops, ...entrances]), halfX: geometry.halfX, halfZ: geometry.halfZ };
 }
