@@ -54,6 +54,16 @@ describe("given the Minds setting off", () => {
     expect(workers.length, "workers made").toBe(1);
     expect(workers[0]!.sent[0]?.kind, "its first message").toBe("load");
   });
+
+  // mutation: sed -i 's/    if (row >= 0) this.world.gaze?.attend(/    if (row < 0) this.world.gaze?.attend(/' src/game/present/minds/crowd-minds.ts
+  it("when she is looked at with a car going by 5 m off, then her thought is a look at the car and she turns to it once", () => {
+    const { crowd, resident, gaze } = minds();
+    const attend = vi.spyOn(gaze, "attend");
+    putStimulus(gaze, 0, STIMULUS.car, 3, 4, 1, 0);
+    expect(crowd.lookAt(resident), "her thought").toBe('Thinks "What\'s going on with a car?"');
+    expect(attend, "she turns").toHaveBeenCalledTimes(1);
+    expect(attend.mock.calls[0]!.slice(0, 4), "to the car").toEqual([resident, 3, 0, 4]);
+  });
 });
 
 describe("given the Minds setting on and a resident looked at", () => {

@@ -7,7 +7,7 @@ import { MindsWorld } from "./minds-read.ts";
 
 const HOME = placeIn(societyMap, "Rowhome A1-1");
 
-/** A city at noon with one staged, calm resident at home, every civilian shown at the origin, an empty gaze table and the eye 3 m off. */
+/** A city at noon with one staged, calm resident at home, every civilian shown at the origin and an empty gaze table. */
 export function mindsWorld(): { world: MindsWorld; resident: number; gaze: CrowdGaze } {
   const cast = newCast(12);
   stageResident(cast.state, cast.resident, { place: HOME, tick: cast.tick, needs: needsWith({}) });
@@ -17,8 +17,6 @@ export function mindsWorld(): { world: MindsWorld; resident: number; gaze: Crowd
   world.poses = emptyPoses(cast.state.capacity);
   world.gaze = gaze;
   world.tick = cast.tick;
-  world.eyeX = 3;
-  world.eyeY = 1.6;
   return { world, resident: cast.resident, gaze };
 }
 

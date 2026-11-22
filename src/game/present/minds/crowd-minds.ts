@@ -147,13 +147,10 @@ export class CrowdMinds {
     this.thoughtPurpose[resident] = purpose;
   }
 
-  /** Her look for a thought: at what she looks at, at the eye on her for anything else she has on her mind (she notices being looked at), none to let it go. */
+  /** Her look for a thought: a look at something turns her to it; any other thought leaves her gaze its own. */
   private attendFor(resident: number, thought: Thought, sit: Situation): void {
-    const gaze = this.world.gaze;
-    if (gaze === null || thought.tool === THOUGHT.ignore) return;
     const row = thought.tool === THOUGHT.look_at ? sit.seenRow(thought.arg) : -1;
-    if (row >= 0) gaze.attend(resident, sit.seenX[row]!, sit.seenY[row]!, sit.seenZ[row]!, THOUGHT_HOLD_S, THOUGHT_URGENCY);
-    else gaze.attend(resident, this.world.eyeX, this.world.eyeY, this.world.eyeZ, THOUGHT_HOLD_S, THOUGHT_URGENCY);
+    if (row >= 0) this.world.gaze?.attend(resident, sit.seenX[row]!, sit.seenY[row]!, sit.seenZ[row]!, THOUGHT_HOLD_S, THOUGHT_URGENCY);
   }
 
   /** Puts an ask about `sit` next in line (the newest wins the one free slot) and sends it if the model is idle. */

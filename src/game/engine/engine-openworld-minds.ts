@@ -1,6 +1,6 @@
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { tickAt } from "../ai/civilians/civilian-clock.ts";
-import type { LookRay, LookText, Meeting } from "../ai/civilians/civilian-look.ts";
+import type { LookText, Meeting } from "../ai/civilians/civilian-look.ts";
 import type { CrowdGaze } from "../present/civilian-gaze.ts";
 import { CrowdMinds, type NeedleWorker } from "../present/minds/crowd-minds.ts";
 import { MindsWorld } from "../present/minds/minds-read.ts";
@@ -27,8 +27,8 @@ export class OpenWorldMinds {
     this.minds = new CrowdMinds(capacity, this.world, needleWorker);
   }
 
-  /** A frame of `wallDt` s: the crowd, its gaze and the eye as they are now, and whether Needle may be asked (`on`: the setting, where a worker can run). */
-  frame(crowd: CivilianCrowd, gaze: CrowdGaze | null, ray: LookRay, on: boolean, wallDt: number): void {
+  /** A frame of `wallDt` s: the crowd and its gaze as they are now, and whether Needle may be asked (`on`: the setting, where a worker can run). */
+  frame(crowd: CivilianCrowd, gaze: CrowdGaze | null, on: boolean, wallDt: number): void {
     const world = this.world;
     world.state = crowd.state;
     world.poses = crowd.poses;
@@ -36,9 +36,6 @@ export class OpenWorldMinds {
     world.events = crowd.eventLog();
     world.crowdSeconds = crowd.crowdSeconds;
     world.tick = tickAt(crowd.crowdSeconds);
-    world.eyeX = ray.eyeX;
-    world.eyeY = ray.eyeY;
-    world.eyeZ = ray.eyeZ;
     this.minds.setOn(on && typeof Worker !== "undefined");
     this.minds.frame(wallDt);
   }

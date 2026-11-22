@@ -28,7 +28,7 @@ describe("given a crowd with a civilian shown and the look panel's eye 6 m from 
     ray.dirX = STAND_BACK / length;
     ray.dirY = rise / length;
     ray.dirZ = 0;
-    minds.frame(crowd, null, ray, false, 1 / FRAME_HZ);
+    minds.frame(crowd, null, false, 1 / FRAME_HZ);
     const text = lookAtOf(crowd.state, crowd.poses, tickAt(seconds), ray, minds.shown);
     expect(minds.shown.index, "the panel is about her").toBe(resident);
     const lines = text?.lines.length ?? -1;

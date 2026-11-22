@@ -11,7 +11,7 @@ import type { CrowdGaze } from "../civilian-gaze.ts";
 import { NEWS_MINUTES, type Situation } from "./thought-situation.ts";
 import { THOUGHT, isArgOf } from "./thought-tools.ts";
 
-/** What the Minds read of the open world, refreshed by its owner each frame (one object, no allocation): the brain, the drawn crowd, the gaze, the host's event log, the clock and the eye. */
+/** What the Minds read of the open world, refreshed by its owner each frame (one object, no allocation): the brain, the drawn crowd, the gaze, the host's event log and the clock. */
 export class MindsWorld {
   state: CityState | null = null;
   poses: CrowdPoses | null = null;
@@ -20,9 +20,6 @@ export class MindsWorld {
   tick = 0;
   /** Crowd seconds: one is a game minute. */
   crowdSeconds = 0;
-  eyeX = 0;
-  eyeY = 0;
-  eyeZ = 0;
 }
 
 /** A thought lasts the game hour it was had in: the key of `tick`'s hour since the crowd began. */
