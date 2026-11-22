@@ -7,7 +7,7 @@ import { hypot2 } from "../kernel/physics-core.js";
 import { wrapPiClosed } from "../kernel/scalar.ts";
 import { LANDING, LandingWatch } from "./landing.ts";
 import { Spring, Spring3, type Axes } from "./spring.ts";
-import { EyeClear, STEEPEST } from "./eye-clear.ts";
+import { EyeClear, outOfBody, STEEPEST } from "./eye-clear.ts";
 import type { Occluder, Sight } from "./spectate-cam.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
@@ -17,6 +17,8 @@ const _e = new THREE.Vector3();
 const _zeta: Axes = { lon: 1, lat: 1, up: 1 };
 const _subject = new THREE.Vector3();
 const NO_BOXES: readonly Occluder[] = [];
+/** The chase heading's target turns at most this fast (rad/s): GTA's car camera limits its swing to 0.05 rad a 1/50 s step (.extraResearch/third-person-camera-and-controls.md), so a spin does not whip the view. */
+const HEADING_RATE = 2.5;
 
 export const CHASE = {
   /**
@@ -181,6 +183,8 @@ export class DriveCam {
   private readonly pos = new Spring3();
   private readonly aim = new Spring3();
   private readonly heading = new Spring();
+  /** The heading the spring chases: the car's, turned toward its travel, moving at most `HEADING_RATE`. */
+  private headTo = 0;
   private readonly lookYaw = new Spring();
   private readonly lookPitch = new Spring();
   /** Camera ride on (`RIDE`): the engine sets it from the FX tier and reduced motion before each frame's rig. */
@@ -266,8 +270,10 @@ export class DriveCam {
       this.landS = CHASE.landing.hold;
       this.landFall = fall;
     }
+    if (cut || view === "first") this.headTo = yawT;
+    else this.headTo += THREE.MathUtils.clamp(wrapPiClosed(yawT - this.headTo), -HEADING_RATE * dt, HEADING_RATE * dt);
     if (cut) this.heading.snap(yawT);
-    else this.heading.step(this.heading.x + wrapPiClosed(yawT - this.heading.x), view === "first" ? CHASE.eyeOmega : CHASE.headOmega, dt);
+    else this.heading.step(this.heading.x + wrapPiClosed(this.headTo - this.heading.x), view === "first" ? CHASE.eyeOmega : CHASE.headOmega, dt);
 
     if (rx !== 0 || ry !== 0) {
       this.lookYaw.step(-rx * CHASE.stickYaw, CHASE.stickOmega, dt);
@@ -343,6 +349,7 @@ export class DriveCam {
     camera.position.copy(this.pos.x);
     if (view === "first" || !solids) this.clear.reset();
     else this.clear.apply(solids, solids.cars ?? NO_BOXES, _subject.set(p.x, p.y + chase.aimUp, p.z), camera.position, dt);
+    if (view !== "first") outOfBody(camera.position, car, chase.aimUp);
     camera.lookAt(this.aim.x);
 
     this.rideStep(camera, car, view, dt);

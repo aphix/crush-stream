@@ -1,5 +1,6 @@
 import type * as THREE from "three";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
+import type { DeformableCar } from "../vehicle/car.ts";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { boxEntry, CINE, gather, inside, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { Spring } from "./spring.ts";
@@ -16,10 +17,12 @@ const SWING_STEPS = 12;
 const SWING_BELOW = 2 * FLEET_HALF.z;
 /** After a search that found no turn with room, the next waits this long (s). */
 const SEARCH_RETRY = 0.25;
-/** Rates (1/s) at which a pull-in eases back out and the swing's spring settles on its turn, and the fastest (m/s) the pull-in lets go. */
+/** Rates (1/s) at which a lift over a car eases back down and the swing's spring settles on its turn, and the fastest (m/s) the pull-in lets go. */
 const PULL_OMEGA = 8;
 const SWING_OMEGA = 5;
 const PULL_OUT_SPEED = 4;
+/** A pull-in lets go at this rate (1/s): GTA's 0.92 per 1/50 s step, a 0.24 s time constant (.extraResearch/third-person-camera-and-controls.md). */
+const LET_GO_OMEGA = 1 / 0.24;
 /** The eye never stands more than this much (m) closer than the line needs, however fast the rig's own eye came in. */
 const PULL_LAG_MAX = 3;
 /** A pull-in this short (m) is none. */
@@ -31,6 +34,29 @@ const LIFT_TRIES = 8;
 const LIFT_BISECT = 9;
 
 type Vec3 = { x: number; y: number; z: number };
+
+/** Room (m) a chase eye keeps from its own car's body: GTA's near-plane slack (.extraResearch/third-person-camera-and-controls.md). */
+const BODY_PAD = 0.3;
+
+/**
+ * GTA's `maxAlphaAllowed` (.extraResearch/third-person-camera-and-controls.md): an `eye` inside its own car's box (floor to roof, grown by `BODY_PAD`) turns up
+ * about the pivot `pivotY` over the car's origin to the lowest pitch that clears the roof, or straight up over it when its boom is too short to.
+ */
+export function outOfBody(eye: THREE.Vector3, car: DeformableCar, pivotY: number): void {
+  const p = car.group.position;
+  const half = car.frame.half;
+  const ex = eye.x - p.x;
+  const ez = eye.z - p.z;
+  const cos = car.fwdFlat.z;
+  const sin = car.fwdFlat.x;
+  const top = p.y + 2 * half.y + BODY_PAD;
+  if (eye.y >= top || eye.y < p.y - BODY_PAD || Math.abs(ex * cos - ez * sin) >= half.x + BODY_PAD || Math.abs(ex * sin + ez * cos) >= half.z + BODY_PAD) return;
+  const flat = hypot2(ex, ez);
+  const rise = top - (p.y + pivotY);
+  const boom = hypot2(flat, eye.y - (p.y + pivotY));
+  const k = boom > rise && flat > PULL_NONE ? Math.sqrt(boom * boom - rise * rise) / flat : 1;
+  eye.set(p.x + ex * k, top, p.z + ez * k);
+}
 
 /**
  * Keeps a camera's line of sight to its subject clear of the scene's solids and of the cars' boxes. A car on the line (its box,
@@ -115,7 +141,7 @@ export class EyeClear {
     const turn = this.swing.x;
     const clear = turn === 0 ? straight : this.reach(turn);
     const pulledIn = len - clear;
-    this.pull = pulledIn >= this.pull ? pulledIn : Math.max(pulledIn, this.pull - Math.min(this.pull * (1 - Math.exp(-PULL_OMEGA * dt)), PULL_OUT_SPEED * dt));
+    this.pull = pulledIn >= this.pull ? pulledIn : Math.max(pulledIn, this.pull - Math.min(this.pull * (1 - Math.exp(-LET_GO_OMEGA * dt)), PULL_OUT_SPEED * dt));
     this.pull = Math.min(this.pull, pulledIn + PULL_LAG_MAX);
     if (this.pull < PULL_NONE) this.pull = 0;
     if (this.pull === 0 && turn === 0 && this.lift === 0) return;
