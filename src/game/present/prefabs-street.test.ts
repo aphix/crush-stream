@@ -4,6 +4,9 @@ import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
+import { stubBrowser } from "../engine/engine-headless.test-util.ts";
+import { LAMP_POOL } from "./constants.ts";
+import { makeLamp } from "./engine-world.ts";
 
 /** A sprite card is 2 triangles: a piece with a shape of its own has at least a box's 12. */
 const SHAPE_TRIANGLES_MIN = 12;
@@ -67,4 +70,16 @@ describe("given the open world's street kit", () => {
       expect(bounds.max.y, "top (m)").toBeLessThanOrEqual(up + BOX_SLACK);
     });
   }
+});
+
+describe("given a street lamp's night pool, an additive decal on the ground", () => {
+  // mutation: sed -i 's/^  pool.position.set(0, 0.004, ahead);/  pool.position.set(0, 0.025, ahead);/' src/game/present/engine-world.ts
+  it("when an arm lamp and an acorn lamp are built, then the pool lies within 5 mm of the ground, under a lying body's lowest part, so it does not cut a stripe across one", () => {
+    stubBrowser();
+    for (const acorn of [false, true]) {
+      const pool = makeLamp(true, acorn).getObjectByName(LAMP_POOL) as THREE.Mesh;
+      expect(pool.position.y, `${acorn ? "acorn" : "arm"} lamp's pool height (m)`).toBeLessThanOrEqual(0.005);
+      expect(pool.position.y, `${acorn ? "acorn" : "arm"} lamp's pool height (m)`).toBeGreaterThan(0);
+    }
+  });
 });

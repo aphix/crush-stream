@@ -205,7 +205,8 @@ function addPool(g: THREE.Group, ahead: number): THREE.Group {
   const pool = groundMesh(new THREE.PlaneGeometry(9, 9), lampPool, "decal");
   pool.name = LAMP_POOL;
   pool.rotation.x = -Math.PI / 2;
-  pool.position.set(0, 0.025, ahead);
+  // 4 mm: the decal's depth-slope offset clears the ground; at 25 mm it lit a stripe across a body lying under it.
+  pool.position.set(0, 0.004, ahead);
   g.add(pool);
   return g;
 }
