@@ -22,10 +22,9 @@ export type LookText = { title: string; lines: string[] };
 /** What the ray meets: its index (resident or place; -1 for nothing) and how far along the ray (m). */
 export type Meeting = { index: number; along: number };
 
-/** The shown civilian whose chest the ray passes closest to, within `LOOK_RADIUS` of it and `LOOK_REACH` ahead, into `met`. */
-function residentMet(poses: CrowdPoses, ray: LookRay, met: Meeting): Meeting {
-  met.index = -1;
-  met.along = Infinity;
+/** The shown civilian whose chest the ray passes closest to, within `LOOK_RADIUS` of it and `LOOK_REACH` ahead. */
+function residentMet(poses: CrowdPoses, ray: LookRay): Meeting {
+  const met: Meeting = { index: -1, along: Infinity };
   let bestMiss = LOOK_RADIUS * LOOK_RADIUS;
   for (let resident = 0; resident < poses.count; resident++) {
     if (poses.shown[resident] === 0) continue;
@@ -48,8 +47,7 @@ const _origin = new Float64Array(3);
 const _direction = new Float64Array(3);
 const _low = new Float64Array(3);
 const _high = new Float64Array(3);
-/** The look panel's meetings (`lookAtOf`). */
-const _residentMeeting: Meeting = { index: -1, along: Infinity };
+/** The look panel's building meeting (`lookAtOf`). */
 const _placeMeeting: Meeting = { index: -1, along: Infinity };
 /** Per place of a map: the cosine and sine of its yaw, worked out once a map: a trig call's result is boxed, and a look turns into several buildings. */
 const YAW_TRIG = new WeakMap<object, Float64Array>();
@@ -137,7 +135,7 @@ export function chestMet(poses: Pick<CrowdPoses, "x" | "z" | "feetY" | "shown">,
 
 /** The panel's text for what the eye rests on: the civilian in front of it (their line, what they are doing when the line does not say it, and their life log), else the building the ray meets (its kind, who lives or works there, its comings and goings), else nothing; whichever is nearer along the ray. */
 export function lookAtOf(state: CityState, poses: CrowdPoses, tick: number, ray: LookRay): LookText | null {
-  const resident = residentMet(poses, ray, _residentMeeting);
+  const resident = residentMet(poses, ray);
   const place = placeMet(state.map, ray, LOOK_REACH, _placeMeeting);
   if (resident.index >= 0 && resident.along <= place.along) {
     const doing = activityLine(poses.activity[resident.index]!);

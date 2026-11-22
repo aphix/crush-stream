@@ -59,7 +59,7 @@ describe("given the city's map", () => {
     expect(outside, "control: points on the street").toBeGreaterThan(POINTS / 10);
   });
 
-  // mutation: sed -i 's/^    const frame = this.frame;/    const frame = Array.from(this.frame);/' /home/aphix/worktrees/Perf/src/game/world/openworld/place-footprints.ts
+  // mutation: sed -i 's/^    const frame = this.frame;/    const frame = this.frame.subarray(0);/' /home/aphix/worktrees/Perf/src/game/world/openworld/place-footprints.ts
   it("when the grid is asked 20,000 times, then all of the asks together allocate under 8 KB", () => {
     const grid = new PlaceFootprints(map.places, MARGIN);
     const house = map.places.find((place) => place.doorNode >= 0)!;

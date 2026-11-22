@@ -188,7 +188,7 @@ describe("given the city's own map, its 310 buildings inside the walls", () => {
     expect(bytes, "bytes allocated by 2000 asks").toBeLessThanOrEqual(BOUND_BYTES);
   });
 
-  // mutation: sed -i 's/^  const resident = residentMet(poses, ray, _residentMeeting);/  const resident = residentMet(poses, ray, { index: -1, along: Infinity });/' /home/aphix/worktrees/Perf/src/game/ai/civilians/civilian-look.ts
+  // mutation: sed -i 's/^  const place = placeMet(state.map, ray, LOOK_REACH, _placeMeeting);/  const place = placeMet(state.map, ray, LOOK_REACH, { index: -1, along: Infinity });/' /home/aphix/worktrees/Perf/src/game/ai/civilians/civilian-look.ts
   it("when the panel is asked 2000 times what the eye rests on and it rests on nothing, then the panel is empty and all of the asks together allocate under 8 KB", () => {
     const crowd = newCrowd(map);
     const ray = aimedAt(eyeAt(OPEN_GROUND, 0), OPEN_GROUND, EYE_HEIGHT + ROOF_RISE, ROOF_RUN);
