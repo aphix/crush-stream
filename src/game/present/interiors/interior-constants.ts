@@ -46,3 +46,7 @@ export const ROOM_LIGHT: Record<InteriorKind, { color: readonly [number, number,
   store: { color: [1, 0.97, 0.9], power: 18, ambient: 0.08 },
   rowhome: { color: [1, 0.82, 0.55], power: 11, ambient: 0.06 },
 };
+
+/** The packed meshes of the interiors are named from this (`interior-shells`, `-furniture`, `-lights`, `-glass`): the hook's sight line tells a built room's meshes by it, and looks through its glass. */
+export const INTERIOR_MESH_PREFIX = "interior-";
+export const INTERIOR_GLASS_NAME = `${INTERIOR_MESH_PREFIX}glass`;

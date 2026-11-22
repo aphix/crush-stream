@@ -4,7 +4,7 @@ import type { Sight } from "../present/spectate-cam.ts";
 import type { SightField } from "../present/openworld-sight.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
-import type { FigureStrike } from "../scenes/figure-strike.ts";
+import { blankStrike, stood, type FigureStrike } from "../scenes/figure-strike.ts";
 import type { ChaseHud } from "../hud/hud-store.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { GlassName } from "../vehicle/car-core.ts";
@@ -55,7 +55,7 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import { KILL_HITS_MIN, KILL_HITS_SPREAD } from "../scenes/lawn-guard.ts";
 import { STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
 import { activeGround } from "../world/ground.ts";
-import { hypot2 } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 
 /** A bullet takes a drawn person whose chest it passes within this (m). */
 const SHOT_BODY_RADIUS = 0.35;
@@ -114,11 +114,13 @@ type TrafficHostPorts = TrafficPorts & {
 };
 
 /** Who opens the interiors' doors: the drawn crowd and the player's walker, null where there is none. */
-type DoorOpeners = { poses: CrowdPoses | null; walker: FootBody | null; others: CrowdPoses[]; closed: Uint8Array | null };
+type DoorOpeners = { poses: CrowdPoses | null; walker: FootBody | null; others: CrowdPoses[]; closed: Uint8Array | null; pinned?: { count: number; x: Float32Array; z: Float32Array } };
 
 /** The streamed interiors of the map's places: `update` once a frame with the eye and the sight field, `dispose` when the course is left. */
 type InteriorArt = {
   update(eyeX: number, eyeZ: number, dt: number, sight: SightField, openers: DoorOpeners): void;
+  /** The interior around (x, z) is held whole for the physics now, until the next `update` finds no hooked body in it. */
+  holdFloorAt(x: number, z: number): void;
   dispose(): void;
 };
 /** What the open world needs of the engine. */
@@ -231,6 +233,12 @@ export class OpenWorldDirector {
   private readonly pickedCar: CarPick = { car: -1, x: 0, y: 0, z: 0, along: Infinity, pane: null };
   private readonly wallMet: Meeting = { index: -1, along: Infinity };
   private readonly personMet: Meeting = { index: -1, along: Infinity };
+  private readonly hookOther: Meeting = { index: -1, along: Infinity };
+  /** Per foot cop and per medic the hook took, the pool slot of the dummy thrown for him (-1: none) and the crowd second it was thrown; the dummy goes when he is drawn again (`releaseGotUp`). */
+  private readonly hookedCop = new Int32Array(FOOT_COP_COUNT).fill(-1);
+  private readonly hookedCopAt = new Float64Array(FOOT_COP_COUNT);
+  private readonly hookedMedic = new Int32Array(MEDICS.count).fill(-1);
+  private readonly hookedMedicAt = new Float64Array(MEDICS.count);
   private readonly copShot: Meeting = { index: -1, along: Infinity };
   /** The look-at panel's cars: the one the ray enters and its words. */
   private readonly carLook: CarLook;
@@ -278,7 +286,9 @@ export class OpenWorldDirector {
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
   /** The player on foot as the car panel asks (its own scratch): on foot the seat still follows his car, but the eye is his, not the car's. */
   private readonly lookFoot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
-  private readonly openers: DoorOpeners = { poses: null, walker: null, others: [], closed: null };
+  /** The spots of the bodies the hook holds, for the interiors to keep their floors (`OpenWorldBodies.hookedSpots`). */
+  private readonly pinned = { count: 0, x: new Float32Array(BODY_COUNT.desktop), z: new Float32Array(BODY_COUNT.desktop) };
+  private readonly openers: DoorOpeners = { poses: null, walker: null, others: [], closed: null, pinned: this.pinned };
   /** The map's places shut now (a wreck, or outside their hours), refilled each frame from the crowd's state for the interiors. */
   private closedPlaces: Uint8Array | null = null;
   private readonly walkerStrike = new WalkerStrike();
@@ -427,6 +437,7 @@ export class OpenWorldDirector {
     this.bodies?.step(this.crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.seconds, dt);
     this.landWalkerStrike(this.crowd, dt);
     this.law?.throwTakedowns();
+    this.releaseGotUp();
     if (this.traffic !== null && this.feed !== null) {
       fillCommuterFeed(this.crowd.state, tickAt(this.seconds), this.feed.legs, this.feed.parked);
       this.doors?.step(this.crowd.poses);
@@ -454,6 +465,7 @@ export class OpenWorldDirector {
       this.openers.poses = this.crowd?.poses ?? null;
       this.openers.closed = this.crowd === null ? null : this.closedPlaces;
       this.openers.walker = this.ports.foot(this.foot) ? this.foot : null;
+      this.pinned.count = this.bodies?.hookedSpots(this.pinned.x, this.pinned.z) ?? 0;
       this.interiors.update(this.ray.eyeX, this.ray.eyeZ, wallDt, this.sight, this.openers);
     }
     const client = this.ports.isClient();
@@ -582,18 +594,77 @@ export class OpenWorldDirector {
     this.law?.playerStruck(this.seconds, knockedOut);
   }
 
-  /** The drawn civilian with no body whose chest the hook's sight line passes nearer than `reach` m (a bullet's test, `chestMet`), into `out`; none on a client or without bodies. */
+  /** The drawn person with no body whose chest the hook's sight line passes nearest within `reach` m, into `out`: index below the crowd's size a civilian (a person the hook can stand a body for: no cat or dog, and none while every body is roped, pinned or down), then the foot cops, then the medics. None on a client. */
   hookMet(ray: LookRay, reach: number, out: Meeting): Meeting {
     const crowd = this.crowd;
-    if (crowd !== null && this.bodies !== null && !this.ports.isClient()) return chestMet(crowd.poses, crowd.poses.count, this.bodies.held, ray, SHOT_BODY_RADIUS, reach, out);
     out.index = -1;
     out.along = reach;
+    if (crowd === null || this.bodies === null || this.ports.isClient()) return out;
+    const people = crowd.poses.count;
+    if (this.bodies.canStand(this.ray.eyeX, this.ray.eyeZ)) chestMet(crowd.poses, people, this.bodies.held, ray, SHOT_BODY_RADIUS, reach, out, true);
+    const other = this.hookOther;
+    if (this.law !== null && this.law.copMet(ray, SHOT_BODY_RADIUS, out.along, other).index >= 0) {
+      out.index = people + other.index;
+      out.along = other.along;
+    }
+    if (this.medics !== null && chestMet(this.medics.poses, MEDICS.count, null, ray, SHOT_BODY_RADIUS, out.along, other).index >= 0) {
+      out.index = people + FOOT_COP_COUNT + other.index;
+      out.along = other.along;
+    }
     return out;
   }
 
-  /** The hook takes drawn civilian `civilian`: a body is stood for her now (`OpenWorldBodies.stand`); its pool slot, -1 when none can be. */
-  hookBody(civilian: number): number {
-    return this.crowd === null || this.bodies === null ? -1 : this.bodies.stand(this.crowd.poses, civilian, this.ray.eyeX, this.ray.eyeZ);
+  /** The hook takes the person `hookMet` named: a civilian gets a body at her drawn spot (a suspect is let out of the law's hands); a cop is downed and thrown; a medic is thrown. Its pool slot, -1 when none can be. */
+  hookBody(index: number): number {
+    const crowd = this.crowd;
+    if (crowd === null || this.bodies === null) return -1;
+    const people = crowd.poses.count;
+    if (index >= people + FOOT_COP_COUNT) return this.hookMedic(index - people - FOOT_COP_COUNT);
+    if (index >= people) return this.hookCop(index - people);
+    this.interiors?.holdFloorAt(crowd.poses.x[index]!, crowd.poses.z[index]!);
+    const slot = this.bodies.stand(crowd.poses, index, this.ray.eyeX, this.ray.eyeZ);
+    if (slot >= 0) this.law?.releaseSuspect(index);
+    return slot;
+  }
+
+  private hookCop(cop: number): number {
+    const slot = this.law?.hookCop(cop, this.seconds) ?? -1;
+    if (slot < 0) return slot;
+    this.hookedCop[cop] = slot;
+    this.hookedCopAt[cop] = this.seconds;
+    return slot;
+  }
+
+  /** The dummy thrown for a cop the hook took goes (and its rope with it) once he is up and drawn again; a medic's, once the ambulance has left and he is back in it. Host and solo, once a step. */
+  private releaseGotUp(): void {
+    const law = this.law;
+    const medics = this.medics;
+    for (let cop = 0; law !== null && cop < FOOT_COP_COUNT; cop++) {
+      if (this.hookedCop[cop]! < 0 || law.copPoses.shown[cop] === 0) continue;
+      this.ports.removeFigure(this.hookedCop[cop]!, this.seconds - this.hookedCopAt[cop]!);
+      this.hookedCop[cop] = -1;
+    }
+    for (let medic = 0; medics !== null && medic < MEDICS.count; medic++) {
+      if (this.hookedMedic[medic]! < 0 || medics.isTaken(medic)) continue;
+      this.ports.removeFigure(this.hookedMedic[medic]!, this.seconds - this.hookedMedicAt[medic]!);
+      this.hookedMedic[medic] = -1;
+    }
+  }
+
+  private hookMedic(medic: number): number {
+    const medics = this.medics;
+    if (medics === null || medics.poses.shown[medic] === 0) return -1;
+    const { poses } = medics;
+    const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
+    dressOfLook(poses.look[medic]!, look);
+    const x = poses.x[medic]!;
+    const z = poses.z[medic]!;
+    const slot = this.ports.throwFigure(stood(-1, -1, x, activeGround().heightAt(x, z), z, detSin(poses.yaw[medic]!), detCos(poses.yaw[medic]!), blankStrike()), look);
+    if (slot < 0) return slot;
+    medics.take(medic);
+    this.hookedMedic[medic] = slot;
+    this.hookedMedicAt[medic] = this.seconds;
+    return slot;
   }
 
   /** The hook holds the dummy in pool slot `slot` as a first end: a civilian's body there is pinned (`OpenWorldBodies.pin`). */

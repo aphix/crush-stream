@@ -1,5 +1,5 @@
 import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
-import { blankStrike, fell, felled, runsDown, type FigureStrike } from "../../scenes/figure-strike.ts";
+import { blankStrike, fell, felled, runsDown, stood, type FigureStrike } from "../../scenes/figure-strike.ts";
 import { CAR_REACH } from "../../scenes/lawn-guard.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import { activeGround } from "../../world/ground.ts";
@@ -51,12 +51,17 @@ export class CrimeScene {
   private readonly copDownAt = new Float64Array(FOOT_COP_COUNT).fill(-1);
   private readonly copDownDue = new Float64Array(FOOT_COP_COUNT).fill(-1);
   private readonly copBlows = new Uint8Array(FOOT_COP_COUNT);
+  /** Per resident: the crowd second of the latest hook release heard or found, and one waiting for this peer's clock (-1 none). */
+  private readonly sparedAt: Float64Array;
+  private readonly sparedDue: Float64Array;
   private copStrikes: FigureStrike[] = [];
   /** The share of the grid step after the last one taken that the poses were drawn at. */
   drawShare = 0;
 
   constructor(map: OpenWorldMap, source: OffenceSource, ports: CrimePorts, seed: number) {
     this.ports = ports;
+    this.sparedAt = new Float64Array(source.residentCount).fill(-1);
+    this.sparedDue = new Float64Array(source.residentCount).fill(-1);
     this.law = new FootLaw(map, source, ports, { opened: (caseIndex, x, z) => this.patrol?.dispatchToScene(caseIndex, x, z, this.law.seconds), closed: (caseIndex) => this.patrol?.finishCase(caseIndex, this.law.seconds), cars: () => this.patrol, rides: () => this.patrol ?? ports.rides }, seed, { lineOfSight: ports.lineOfSight, signals: ports.signals, otherCopsSee: (x, z, range) => this.patrol?.sees(x, z, range, ports.lineOfSight) ?? false }, ports.playerBustSeconds);
     this.patrol = ports.cars === null ? null : new PatrolCars(ports.cars, { arrived: (caseIndex, x, z) => this.law.carCopArrived(caseIndex, x, z), busted: (resident, carIndex, seconds) => this.bustDriver(resident, carIndex, seconds), delivered: (slot) => this.law.carDelivered(slot) }, ports.obstacles, ports.playerBustSeconds, seed);
   }
@@ -90,6 +95,7 @@ export class CrimeScene {
       this.patrol?.step(this.law.seconds, CRIME_STEP_SECONDS);
     }
     this.applyDueCopDowns(cars);
+    this.applyDueSpared();
     this.drawShare = Math.min(1, Math.max(0, (crowdSeconds - this.law.seconds) * CRIME_HZ));
     overlaySuspects(this.law, crowdPoses, this.drawShare);
     fillCopPoses(this.law, this.copPoses, this.drawShare);
@@ -101,6 +107,22 @@ export class CrimeScene {
     if (cop < 0 || cop >= FOOT_COP_COUNT || seconds <= this.copDownAt[cop]!) return;
     this.copDownAt[cop] = seconds;
     this.copDownDue[cop] = seconds;
+  }
+
+  /** The host's release of `resident` from the police's hands (the hook took her) at crowd second `seconds`, heard (a client) or its own echoed back: applied once, when this peer's clock reaches it. */
+  hearSpared(resident: number, seconds: number): void {
+    if (resident < 0 || resident >= this.sparedAt.length || seconds <= this.sparedAt[resident]!) return;
+    this.sparedAt[resident] = seconds;
+    this.sparedDue[resident] = seconds;
+  }
+
+  private applyDueSpared(): void {
+    for (let resident = 0; resident < this.sparedDue.length; resident++) {
+      const due = this.sparedDue[resident]!;
+      if (due < 0 || this.law.seconds < due) continue;
+      this.sparedDue[resident] = -1;
+      this.law.spare(resident, due);
+    }
   }
 
   /** The cops run down since the last call (the host's own hits, a client's heard ones): the engine throws them dressed as police. */
@@ -182,6 +204,15 @@ export class CrimeScene {
     if (!this.authority || this.copPoses.shown[cop] === 0) return;
     const poses = this.copPoses;
     this.downCop(cop, felled(cop, poses.x[cop]!, activeGround().heightAt(poses.x[cop]!, poses.z[cop]!), poses.z[cop]!, dirX, dirZ, blankStrike()), seconds);
+  }
+
+  /** The hook takes shown foot cop `cop`: he is downed where he stands, thrown with no speed (he drops at his spot, for a rope to tie to) like any cop put down, so the law knows (his case loses him: a suspect he held is let go and the chase goes on without him) and every peer hears the knock; and the player has fought the law, as a punch on a cop is. False without authority or when he is not shown. */
+  hookCop(cop: number, seconds: number): boolean {
+    const poses = this.copPoses;
+    if (!this.authority || poses.shown[cop] === 0) return false;
+    this.downCop(cop, stood(-1, cop, poses.x[cop]!, activeGround().heightAt(poses.x[cop]!, poses.z[cop]!), poses.z[cop]!, detSin(poses.yaw[cop]!), detCos(poses.yaw[cop]!), blankStrike()), seconds);
+    this.law.player.fightKnown(seconds);
+    return true;
   }
 
   /** A heard knock whose time this peer's clock has reached: the cop goes down, thrown by the car nearest him when it is fresh (as a heard civilian's knock is). */

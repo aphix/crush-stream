@@ -5,7 +5,7 @@ import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "../ai/civilians/civilian-crowd.test-util.ts";
 import { CENTIMETRES_PER_METRE, DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, FIGHT_PLAYER, FLAG, GENDER, HOURS_PER_GAME_DAY, NEED, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "../ai/civilians/civilian-constants.ts";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
-import { CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER, WALKER_BEARING_STEPS, WRECK_SPEED } from "../ai/civilians/civilian-crowd-constants.ts";
+import { ANIMAL_CHEST_HEIGHT, CHEST_HEIGHT, LOOK, CROWD_TIER_SCALE, LOOK_HZ, POPULATION, POPULATION_TIER, WALKER_BEARING_STEPS, WRECK_SPEED } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { chestMet, LookRay, placeMet } from "../ai/civilians/civilian-look.ts";
 import { residentNameText } from "../ai/civilians/civilian-mood.ts";
@@ -30,6 +30,7 @@ import { OpenWorldMinds } from "./engine-openworld-minds.ts";
 import type { AutoOrbit } from "./engine-openworld-auto.ts";
 import { MEDICS } from "./engine-openworld-medics.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
+import { IDLE_FOOT_ARREST } from "../ai/openworld-crime/crime-fixture.test-util.ts";
 import { fillAwakeAtHomes } from "../ai/civilians/society-awake.ts";
 import { ImaginedHouseholds } from "../ai/civilians/society-households.ts";
 import { stageResident } from "../ai/civilians/society.test-util.ts";
@@ -39,6 +40,7 @@ import { PLACE_KIND } from "../world/openworld/walk-graph.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { WEAPONS } from "./engine-onfoot-arms.ts";
+import { COP_DOWN_SECONDS, FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
 
 const map = buildFixtureMap();
 const SEED = 5;
@@ -82,7 +84,7 @@ class Harness {
   readonly director: OpenWorldDirector;
 
   /** `bodies`: the dummies' world the civilians near the eye have bodies in; none: the crowd's art draws them all. */
-  constructor(bodies: FakeBodyHost | null = null) {
+  constructor(bodies: FakeBodyHost | null = null, police = false) {
     this.director = new OpenWorldDirector({
     ...idleOpenWorldPorts(),
     inOpenWorld: () => this.open,
@@ -109,6 +111,7 @@ class Harness {
       return true;
     },
     ...(bodies === null ? {} : { bodies }),
+    ...(police ? { law: { solids: () => null, playerBusted: () => {}, sirens: () => {}, lineOfSight: () => true, footArrest: IDLE_FOOT_ARREST } } : {}),
     strikeWalker: (dirX, dirZ) => void this.strikes.push({ dirX, dirZ }),
     staggerWalker: (dirX, dirZ) => void this.staggers.push({ dirX, dirZ }),
     hookWallHits: (listener) => {
@@ -134,8 +137,8 @@ class Harness {
   }
 }
 
-function hostWithMap(bodies: FakeBodyHost | null = null): Harness {
-  const harness = new Harness(bodies);
+function hostWithMap(bodies: FakeBodyHost | null = null, police = false): Harness {
+  const harness = new Harness(bodies, police);
   harness.director.startOpenWorld(map);
   return harness;
 }
@@ -371,6 +374,187 @@ describe("given the player on foot in the open world", () => {
     expect(harness.director.shoot(ray, WEAPONS.rifle), "how far the shot went (m)").toBeLessThan(beyond - 0.5);
     harness.frame();
     expect(poses.shown[c], "she is still shown").toBe(1);
+  });
+});
+
+describe("given the hook aimed at the drawn people of the open world", () => {
+  /** A ray 5 m short of (x, feetY + chest, z) along +x, at chest height. */
+  function rayAtChest(x: number, feetY: number, z: number): LookRay {
+    const ray = new LookRay();
+    ray.eyeX = x - 5;
+    ray.eyeY = feetY + CHEST_HEIGHT;
+    ray.eyeZ = z;
+    ray.dirX = 1;
+    return ray;
+  }
+
+  /** A solo host with bodies and police, stepped until its crowd shows people: the law has stepped under authority by then. */
+  function hostWithBodies(): Harness {
+    const harness = hostWithMap(new FakeBodyHost(), true);
+    shownOnTheHost(harness);
+    return harness;
+  }
+
+  /** The crowd's knocks of foot cops in the director's log. */
+  function copKnocks(harness: Harness): number[] {
+    const log = harness.director.eventLog();
+    const cops: number[] = [];
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) if (log[at] === EVENT_KIND.copDown) cops.push(log[at + 1]!);
+    return cops;
+  }
+
+  // mutation: sed -i '/^    if (this.law !== null \&\& this.law.copMet(/,/^    }/d' src/game/engine/engine-openworld.ts
+  it("when the sight line passes a foot cop's chest far from any civilian, then the reticle names him, and the fire downs him where he stands, thrown and logged", () => {
+    const harness = hostWithBodies();
+    const people = harness.crowd().poses.count;
+    const cops = harness.director["law"]!.copPoses;
+    cops.shown[2] = 1;
+    cops.x[2] = 5000;
+    cops.z[2] = 5000;
+    const met = { index: -1, along: 0 };
+    harness.director.hookMet(rayAtChest(5000, 0, 5000), 60, met);
+    expect(met.index, "the cop's number past the crowd's").toBe(people + 2);
+    expect(met.along, "how far along the sight line (m)").toBeCloseTo(5, 3);
+    const thrown = harness.thrown.length;
+    expect(harness.director.hookBody(met.index), "the pool slot the throw gave").toBe(thrown);
+    const strike = harness.thrown[thrown]!;
+    expect(strike.guard, "the cop thrown").toBe(2);
+    expect(strike.car, "by no car").toBe(-1);
+    expect(strike.x, "from his spot").toBe(5000);
+    expect(copKnocks(harness), "the knock peers hear").toContain(2);
+  });
+
+  // mutation: sed -i 's/^    if (index >= people) return this.law?.hookCop(index - people, this.seconds) ?? -1;/    if (index >= people) return -1;/' src/game/engine/engine-openworld.ts
+  it("when a cop is hooked, then no body of the civilians' pool is stood for him", () => {
+    const harness = hostWithBodies();
+    const people = harness.crowd().poses.count;
+    const cops = harness.director["law"]!.copPoses;
+    cops.shown[1] = 1;
+    cops.x[1] = 5000;
+    cops.z[1] = 5000;
+    expect(harness.director.hookBody(people + 1), "a slot for the thrown cop").toBeGreaterThanOrEqual(0);
+    expect(harness.director["bodies"]!.count(), "bodies stood for civilians").toBe(0);
+  });
+
+  // mutation: sed -i '/^    if (this.medics !== null \&\& chestMet(/,/^    }/d' src/game/engine/engine-openworld.ts
+  it("when the sight line passes a kneeling medic's chest, then the reticle names him, and the fire throws him where he knelt and he is drawn no more at that scene", () => {
+    const harness = hostWithBodies();
+    const { poses } = harness.director["medics"]!;
+    poses.shown[1] = 1;
+    poses.x[1] = 5000;
+    poses.z[1] = 5000;
+    const people = harness.crowd().poses.count;
+    const met = { index: -1, along: 0 };
+    harness.director.hookMet(rayAtChest(5000, 0, 5000), 60, met);
+    expect(met.index, "the medic's number past the cops'").toBe(people + FOOT_COP_COUNT + 1);
+    const thrown = harness.thrown.length;
+    expect(harness.director.hookBody(met.index), "the pool slot the throw gave").toBe(thrown);
+    expect(harness.thrown[thrown]!.x, "from where he knelt").toBe(5000);
+    expect(harness.director["medics"]!["taken"][1], "taken off his knees").toBe(1);
+  });
+
+  // mutation: sed -i '/^    if (slot >= 0) this.law?.releaseSuspect(index);/d' src/game/engine/engine-openworld.ts
+  it("when the fire takes a civilian, then a body is stood for her and the law is told to let her out of any arrest", () => {
+    const harness = hostWithBodies();
+    const c = shownOnTheHost(harness);
+    const released = vi.spyOn(harness.director["law"]!, "releaseSuspect");
+    expect(harness.director.hookBody(c), "a body for her").toBeGreaterThanOrEqual(0);
+    expect(released).toHaveBeenCalledWith(c);
+  });
+
+  it("when the fire takes a civilian, then the host logs her release from the police for every peer's law", () => {
+    const harness = hostWithBodies();
+    const c = shownOnTheHost(harness);
+    expect(harness.director.hookBody(c), "a body for her").toBeGreaterThanOrEqual(0);
+    const log = harness.director.eventLog();
+    const spared: number[] = [];
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) if (log[at] === EVENT_KIND.spared) spared.push(log[at + 1]!);
+    expect(spared.length, "releases logged").toBe(1);
+    expect(spared[0], "the resident released").toBe(c);
+  });
+
+  it("when the fire takes a civilian, then the interior's floor is held at her drawn spot before her body is stood", () => {
+    const harness = hostWithBodies();
+    const c = shownOnTheHost(harness);
+    const { poses } = harness.crowd();
+    const calls: string[] = [];
+    harness.director["interiors"] = { update: () => {}, holdFloorAt: (x, z) => void calls.push(`floor ${x === poses.x[c] && z === poses.z[c]}`), dispose: () => {} };
+    const bodies = harness.director["bodies"]!;
+    const stand = bodies.stand.bind(bodies);
+    bodies.stand = (...asked) => {
+      calls.push("stand");
+      return stand(...asked);
+    };
+    harness.director.hookBody(c);
+    expect(calls.join(", "), "the order").toBe("floor true, stand");
+  });
+
+  /** A shown civilian with no body, her look word made `species`, and a ray at her chest (a person's, or an animal's own, lower). */
+  function aimedAt(harness: Harness, species: number): { c: number; ray: LookRay } {
+    const c = shownOnTheHost(harness);
+    harness.director["bodies"]!.dispose();
+    const { poses } = harness.crowd();
+    poses.look[c] = ((species << LOOK.speciesShift) | (poses.look[c]! & ((1 << LOOK.speciesShift) - 1))) >>> 0;
+    const chest = species === SPECIES.person ? CHEST_HEIGHT : ANIMAL_CHEST_HEIGHT;
+    return { c, ray: rayAtChest(poses.x[c]!, poses.feetY[c]! + chest - CHEST_HEIGHT, poses.z[c]!) };
+  }
+
+  it("when the sight line passes a cat's or a dog's chest, then the reticle names no one; a person at the same spot is named", () => {
+    const harness = hostWithBodies();
+    const person = aimedAt(harness, SPECIES.person);
+    const met = { index: -1, along: 0 };
+    harness.director.hookMet(person.ray, 60, met);
+    expect(met.index, "control: a person there is named").toBe(person.c);
+    for (const species of [SPECIES.cat, SPECIES.dog]) {
+      const animal = aimedAt(harness, species);
+      harness.director.hookMet(animal.ray, 60, met);
+      expect(met.index, `species ${species}`).toBe(-1);
+    }
+  });
+
+  it("when no body can be stood for her (every one on a cable), then the reticle names no civilian, and names her once one can", () => {
+    const harness = hostWithBodies();
+    const { c, ray } = aimedAt(harness, SPECIES.person);
+    const met = { index: -1, along: 0 };
+    const canStand = vi.spyOn(harness.director["bodies"]!, "canStand").mockReturnValue(false);
+    harness.director.hookMet(ray, 60, met);
+    expect(met.index, "none can be stood").toBe(-1);
+    canStand.mockReturnValue(true);
+    harness.director.hookMet(ray, 60, met);
+    expect(met.index, "one can").toBe(c);
+  });
+
+  it("when a cop the hook took is up again after his time, then the dummy thrown for him goes by its slot and age, and not before", () => {
+    const harness = hostWithBodies();
+    const people = harness.crowd().poses.count;
+    const cops = harness.director["law"]!.copPoses;
+    cops.shown[2] = 1;
+    cops.x[2] = 5000;
+    cops.z[2] = 5000;
+    const slot = harness.director.hookBody(people + 2);
+    expect(slot, "a dummy for him").toBeGreaterThanOrEqual(0);
+    for (let frame = 0; frame < Math.round((COP_DOWN_SECONDS - 5) / FRAME); frame++) harness.frame();
+    expect(harness.removed.length, "still down").toBe(0);
+    for (let frame = 0; frame < Math.round(10 / FRAME); frame++) harness.frame();
+    expect(harness.removed.length, "dummies taken away").toBe(1);
+    expect(harness.removed[0]!.slot, "the dummy thrown for him").toBe(slot);
+    expect(harness.removed[0]!.age, "thrown this long ago (s): his time down").toBeCloseTo(COP_DOWN_SECONDS, 0);
+  });
+
+  it("when a medic the hook took is back in his ambulance (it has left), then the dummy thrown for him goes", () => {
+    const harness = hostWithBodies();
+    const { poses } = harness.director["medics"]!;
+    poses.shown[0] = 1;
+    poses.x[0] = 5000;
+    poses.z[0] = 5000;
+    const people = harness.crowd().poses.count;
+    const slot = harness.director.hookBody(people + FOOT_COP_COUNT);
+    expect(slot, "a dummy for him").toBeGreaterThanOrEqual(0);
+    expect(harness.removed.length, "still there while the ambulance loads").toBe(0);
+    harness.frame();
+    harness.frame();
+    expect(harness.removed.length, "dummies taken away").toBe(1);
+    expect(harness.removed[0]!.slot, "the dummy thrown for him").toBe(slot);
   });
 });
 

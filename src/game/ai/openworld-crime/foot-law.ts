@@ -367,10 +367,10 @@ export class FootLaw {
     }
   }
 
-  /** The crowd ran down `resident` just now: a suspect of the law's is let go at once, as `spareKnocked` lets her go once the society has her; till then the law would draw her in her cop's hands again and the car would run her down every step. */
-  spare(resident: number): void {
+  /** `resident` is let out of the law's hands: a suspect of the law's is let go at once. The crowd ran her down just now (the law would draw her in her cop's hands again and the car would run her down every step), or the hook took her at crowd second `due`: a release older than the case she is in now (a guest hearing the whole log, her since arrested again) frees nobody. */
+  spare(resident: number, due = Infinity): void {
     const slot = this.table.subjectOf[resident] ?? -1;
-    if (slot >= 0 && this.table.active(slot)) this.letGo(slot);
+    if (slot >= 0 && this.table.active(slot) && this.table.openedAt[slot]! <= due) this.letGo(slot);
   }
 
   private refreshSpots(caseIndex: number): void {

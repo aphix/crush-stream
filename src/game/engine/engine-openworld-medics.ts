@@ -55,6 +55,8 @@ export class OpenWorldMedics {
   private sceneX = 0;
   private sceneZ = 0;
   private readonly art: MedicArt;
+  /** 1 for a medic the hook has taken at this scene. */
+  private readonly taken = new Uint8Array(MEDICS.count);
 
   constructor(art: MedicArt) {
     this.art = art;
@@ -73,8 +75,22 @@ export class OpenWorldMedics {
     this.sceneZ = z;
   }
 
+  /** The hook took medic `medic` off his knees: he is drawn no more while the ambulance loads (the hook holds a dummy in his place), and is back at the next one. */
+  take(medic: number): void {
+    this.taken[medic] = 1;
+  }
+
+  /** Whether the hook has him off his knees at this scene. */
+  isTaken(medic: number): boolean {
+    return this.taken[medic] === 1;
+  }
+
   frame(ambulanceState: number, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void {
     placeMedics(this.poses, this.sceneX, this.sceneZ, ambulanceState, wallDt);
+    for (let medic = 0; medic < MEDICS.count; medic++) {
+      if (ambulanceState !== AMBULANCE.loading) this.taken[medic] = 0;
+      else if (this.taken[medic] === 1) this.poses.shown[medic] = 0;
+    }
     this.art.update(this.poses, eyeX, eyeZ, sight, wallDt);
   }
 

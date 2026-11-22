@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { DOWNED_LIFE_SECONDS } from "../ai/civilians/civilian-crowd-constants.ts";
-import { createCrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { createCrowdPoses, type CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { Place } from "../world/openworld/walk-graph.ts";
 import { BODY_COUNT, OpenWorldBodies } from "./openworld-bodies.ts";
@@ -462,6 +462,64 @@ describe("given a civilian standing on a stoop 0.9 m over the street, 50 m from 
   });
 });
 
+describe("given the hook taking a civilian wherever she is drawn, 30 m from the eye", () => {
+  type HookedBody = { slot: number; started: { x: number; y: number; z: number } | undefined; kept: boolean; poses: CrowdPoses };
+
+  /** She stands still at (0, feetY, 0) doing `activity`; the hook takes her, a cable holds the body, and ten seconds run. */
+  function hooked(activity: number, feetY: number, places: readonly Place[] = []): HookedBody {
+    const { host, poses, bodies, run } = world(places);
+    walker(poses, 0, 0, 0);
+    poses.speed[0] = 0;
+    poses.activity[0] = activity;
+    poses.feetY[0] = feetY;
+    const slot = bodies.stand(poses, 0, 0, -30);
+    if (slot >= 0) host.ropedSlots.add(slot);
+    run(Math.round(10 / STEP), 0, -30);
+    return { slot, started: host.started[0], kept: slot >= 0 && !host.stopped.includes(slot), poses };
+  }
+
+  /** Her body stood where she is drawn, feet and all, and the cable kept it. */
+  function expectBodyAtHerFeet(made: HookedBody): void {
+    expect(made.slot, "a body for her").toBeGreaterThanOrEqual(0);
+    expect(made.started?.x, "at her drawn x").toBe(made.poses.x[0]);
+    expect(made.started?.y, "at her drawn feet").toBe(made.poses.feetY[0]);
+    expect(made.started?.z, "at her drawn z").toBe(made.poses.z[0]);
+    expect(made.kept, "kept on the cable").toBe(true);
+  }
+
+  // mutation: sed -i 's/^    if (hooked) return true;/    void hooked;/' src/game/engine/openworld-bodies.ts
+  it("when she buys at a counter indoors, then a body is stood at her drawn feet and the cable keeps it", () => {
+    expectBodyAtHerFeet(hooked(ACTIVITY.buy, 0.9, [HOUSE]));
+  });
+
+  // mutation: sed -i 's/^    if (!hooked \&\& !BODY_ACTIVITY.has(poses.activity\[civilian\]!)) return false;/    if (!BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;/' src/game/engine/openworld-bodies.ts
+  it("when she sits on a bench in the street, then a body is stood at her drawn spot and the cable keeps it", () => {
+    expectBodyAtHerFeet(hooked(ACTIVITY.sit, 0));
+  });
+
+  it("when she is being cuffed by a cop in the street, then a body is stood at her drawn spot and the cable keeps it", () => {
+    expectBodyAtHerFeet(hooked(ACTIVITY.cuffing, 0));
+  });
+
+  it("when she sits out on a stoop, then a body is stood at her drawn feet on the stoop and the cable keeps it", () => {
+    expectBodyAtHerFeet(hooked(ACTIVITY.sitSteps, 0.9));
+  });
+
+  // mutation: sed -i 's/      if (!this.host.roped(slot) \&\& this.seconds >= this.hookedUntil\[body\]!) continue;/      if (!this.host.roped(slot)) continue;/' src/game/engine/openworld-bodies.ts
+  it("when a body is hooked and not yet roped, then its spot is listed for the interiors until the pin ends", () => {
+    const { poses, bodies, run } = world();
+    walker(poses, 0, 7, -3);
+    const xs = new Float32Array(2);
+    const zs = new Float32Array(2);
+    expect(bodies.stand(poses, 0, 0, 0), "a body for her").toBeGreaterThanOrEqual(0);
+    run(1);
+    expect(bodies.hookedSpots(xs, zs), "spots while pinned").toBe(1);
+    expect(xs[0]!, "her body's x (m)").toBeGreaterThan(5);
+    run(Math.round(7 / STEP));
+    expect(bodies.hookedSpots(xs, zs), "spots once the pin ended and no cable holds it").toBe(0);
+  });
+});
+
 describe("given every body in use and the hook holding the farthest standing one as a first end", () => {
   // mutation: sed -i 's/if (this.resident\[body\]! !== NOBODY \&\& this.slot\[body\] === slot) this.hookedUntil\[body\] = this.seconds + HOOK_HOLD_SECONDS;/if (false) this.hookedUntil[body] = 0;/' src/game/engine/openworld-bodies.ts
   it("when the second fire takes a far civilian with no body, then the held body stays and the next farthest standing one makes room", () => {
@@ -478,6 +536,46 @@ describe("given every body in use and the hook holding the farthest standing one
     expect(host.stopped, "the held body stays").not.toContain(heldSlot);
     expect(bodies.slotOf(SIZE), "its civilian keeps it").toBe(heldSlot);
     expect(host.stopped, "the next farthest went").toContain(next);
+  });
+});
+
+describe("given every body in use and each held by a cable", () => {
+  it("when the hook asks whether it can take another civilian, then it cannot, and stands none for her, until one body's cable is cut", () => {
+    const { host, poses, bodies, run } = world();
+    for (let civilian = 1; civilian <= SIZE; civilian++) walker(poses, civilian, civilian, 0);
+    run(SETTLE_STEPS);
+    expect(bodies.canStand(0, 0), "control: with every body free to let go, she can be taken").toBe(true);
+    for (let civilian = 1; civilian <= SIZE; civilian++) host.ropedSlots.add(bodies.slotOf(civilian));
+    walker(poses, 0, 50, 0);
+    expect(bodies.canStand(0, 0), "every body on a cable").toBe(false);
+    expect(bodies.stand(poses, 0, 0, 0), "no body for her").toBe(-1);
+    host.ropedSlots.delete(bodies.slotOf(SIZE));
+    expect(bodies.canStand(0, 0), "one cable cut").toBe(true);
+    expect(bodies.stand(poses, 0, 0, 0), "a body for her").toBeGreaterThanOrEqual(0);
+  });
+
+  it("when every body is pinned by the hook's first fire, then a second civilian cannot be taken", () => {
+    const { poses, bodies, run } = world();
+    for (let civilian = 1; civilian <= SIZE; civilian++) walker(poses, civilian, civilian, 0);
+    run(SETTLE_STEPS);
+    for (let civilian = 1; civilian <= SIZE; civilian++) bodies.pin(bodies.slotOf(civilian));
+    expect(bodies.canStand(0, 0), "all pinned").toBe(false);
+  });
+});
+
+describe("given thrown figures filling every pool slot a body could take", () => {
+  it("when the hook asks whether it can take a civilian, then it cannot, and stands none for her, until a slot is free", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 1, 1, 0);
+    run(SETTLE_STEPS);
+    const body = bodies.slotOf(1);
+    for (let slot = FIRST_SLOT; slot < 12; slot++) if (slot !== body) host.occupied.add(slot);
+    walker(poses, 0, 50, 0);
+    expect(bodies.canStand(0, 0), "a body is free but no slot").toBe(false);
+    expect(bodies.stand(poses, 0, 0, 0), "no body for her").toBe(-1);
+    host.occupied.delete(FIRST_SLOT + 3);
+    expect(bodies.canStand(0, 0), "a slot is free").toBe(true);
+    expect(bodies.stand(poses, 0, 0, 0), "a body for her").toBeGreaterThanOrEqual(0);
   });
 });
 

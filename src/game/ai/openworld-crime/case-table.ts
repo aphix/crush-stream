@@ -33,6 +33,8 @@ export class CaseTable {
   readonly resident = new Int32Array(MAX_SUBJECTS).fill(-1);
   readonly mode = new Uint8Array(MAX_SUBJECTS);
   readonly since = new Float64Array(MAX_SUBJECTS);
+  /** The crowd second each slot was taken for its suspect (`take`) and never changed after: a release older than it is of an earlier case (`FootLaw.spare`), where `since` moves with every change of mode. */
+  readonly openedAt = new Float64Array(MAX_SUBJECTS);
   readonly fleeSpeed = new Float64Array(MAX_SUBJECTS);
   readonly hideNode = new Int32Array(MAX_SUBJECTS).fill(-1);
   /** The corner a suspect with no hiding place runs for, kept until reached or a cop is near it (-1: none yet). */
@@ -81,6 +83,7 @@ export class CaseTable {
     this.resident[slot] = resident;
     this.mode[slot] = SUBJECT_MODE.atLarge;
     this.since[slot] = seconds;
+    this.openedAt[slot] = seconds;
     this.hideNode[slot] = -1;
     this.fleeNode[slot] = -1;
     this.carOf[slot] = -1;

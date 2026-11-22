@@ -117,12 +117,13 @@ export function placeMet(map: OpenWorldMap, ray: LookRay, reach: number, out: Me
   return out;
 }
 
-/** The shown figure among the first `count` of `poses`, not marked in `skip`, whose chest (a cat's or dog's body: `ANIMAL_CHEST_HEIGHT`) the ray passes within `radius` m, the nearest, nearer than `reach` m: its index and the distance along the ray into `out` (index -1, `reach`: none). A bullet's test, as `residentMet` is the look's. Allocates nothing. */
-export function chestMet(poses: Pick<CrowdPoses, "x" | "z" | "feetY" | "shown" | "look">, count: number, skip: Uint8Array | null, ray: LookRay, radius: number, reach: number, out: Meeting): Meeting {
+/** The shown figure among the first `count` of `poses`, not marked in `skip`, whose chest (a cat's or dog's body: `ANIMAL_CHEST_HEIGHT`) the ray passes within `radius` m, the nearest, nearer than `reach` m: its index and the distance along the ray into `out` (index -1, `reach`: none). A bullet's test, as `residentMet` is the look's (`peopleOnly`: a cat or dog is passed, as the hook does). Allocates nothing. */
+export function chestMet(poses: Pick<CrowdPoses, "x" | "z" | "feetY" | "shown" | "look">, count: number, skip: Uint8Array | null, ray: LookRay, radius: number, reach: number, out: Meeting, peopleOnly = false): Meeting {
   out.index = -1;
   out.along = reach;
   for (let figure = 0; figure < count; figure++) {
     if (poses.shown[figure] === 0 || (skip !== null && skip[figure] === 1)) continue;
+    if (peopleOnly && poses.look[figure]! >>> LOOK.speciesShift !== SPECIES.person) continue;
     const px = poses.x[figure]! - ray.eyeX;
     const py = poses.feetY[figure]! + (poses.look[figure]! >>> LOOK.speciesShift === SPECIES.person ? CHEST_HEIGHT : ANIMAL_CHEST_HEIGHT) - ray.eyeY;
     const pz = poses.z[figure]! - ray.eyeZ;

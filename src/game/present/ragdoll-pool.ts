@@ -77,6 +77,11 @@ export interface RagdollStats {
   bodies: number;
 }
 
+/** How willingly a throw takes a dummy's slot: 0 a free one, 1 one a rope holds, 2 one a walker's motors hold up (`driven`). */
+function evictRank(d: Doll): number {
+  return d.driven ? 2 : d.ropes > 0 ? 1 : 0;
+}
+
 /** The dummies' pool layer: Rapier world, the doll, prop, box and proxy state, and what spawns, places and removes a dummy. The stepper, thrower and `RagdollSystem` build on it. */
 export abstract class RagdollPool {
   /** The sandbox's lamp posts: the standing ones are fixed colliders in the run's statics (set by the engine). */
@@ -403,12 +408,13 @@ export abstract class RagdollPool {
     for (let s = slots; s < this.dolls.length; s++) if (this.dolls[s]!.live) this.despawn(s);
   }
 
-  /** The slot a throw takes when none is free: the oldest dummy out that no walker's motors hold up (slot 0 when all are). */
+  /** The slot a throw takes when none is free: the oldest dummy out that no walker's motors hold up and no rope holds (a roped one only when every other is held up too; slot 0 when all are). */
   private oldestSlot(): number {
     let oldest = 0;
     for (let s = 1; s < this.dolls.length && s < this.capacity; s++) {
       const d = this.dolls[s]!;
-      if (!d.driven && (this.dolls[oldest]!.driven || d.age > this.dolls[oldest]!.age)) oldest = s;
+      const kept = this.dolls[oldest]!;
+      if (evictRank(d) < evictRank(kept) || (!d.driven && evictRank(d) === evictRank(kept) && d.age > kept.age)) oldest = s;
     }
     return oldest;
   }

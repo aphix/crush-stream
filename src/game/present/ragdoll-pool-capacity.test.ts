@@ -55,6 +55,17 @@ describe("given a ragdoll pool at its default capacity", () => {
   });
 });
 
+describe("given a full pool of four whose oldest dummy a rope holds", () => {
+  it("when the next throw needs a slot, then it takes the oldest dummy no rope holds, and when every one is roped it takes the oldest", async () => {
+    sys = await flatSystem();
+    for (let n = 0; n < BASE_SLOTS; n++) throwDummy(n);
+    sys["dolls"][0]!.ropes = 1;
+    expect(throwDummy(BASE_SLOTS), "the roped oldest is kept").toBe(1);
+    for (let slot = 0; slot < BASE_SLOTS; slot++) sys["dolls"][slot]!.ropes = 1;
+    expect(throwDummy(BASE_SLOTS + 1), "with every one roped the oldest goes").toBe(0);
+  });
+});
+
 describe("given a ragdoll pool whose capacity is raised to SLOTS", () => {
   it("when dummies are thrown until 32 are out, then a slot is built only when every one built is out, each with the same bodies, and the 33rd takes the oldest's", async () => {
     await poolOf(SLOTS);

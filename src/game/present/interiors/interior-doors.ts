@@ -14,7 +14,12 @@ export type DoorOpeners = {
   others: DoorPoses[];
   /** 1 at the map index of each place that is shut now (a wreck, or outside its hours), null where nothing says. */
   closed: Uint8Array | null;
+  /** Bodies the hook holds, wherever they stand: the interior around each keeps its floor for the physics (`InteriorSet.update`); absent: none. */
+  pinned?: PinnedSpots;
 };
+
+/** `count` spots (x, z of the first `count` entries): a hooked body's feet. */
+export type PinnedSpots = { count: number; x: Float32Array; z: Float32Array };
 
 /** How far a door swings open: a little short of square to the wall, so the leaf stands clear of the jamb it hinges on. */
 const OPEN_ANGLE = 0.47 * Math.PI;

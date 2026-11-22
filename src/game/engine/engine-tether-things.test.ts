@@ -4,8 +4,10 @@ import * as THREE from "three";
 import { FRAME_HZ, MAX_TETHERS } from "../kernel/constants.ts";
 import { hypot3 } from "../kernel/physics-core.js";
 import { RAPIER, TetherSet, WORLD } from "../contact/tether.ts";
+import { ANIMAL_MESH_NAMES } from "../present/animal-figure.ts";
 import { CIVILIAN_FIGURES_NAME } from "../present/civilian-figure.ts";
 import { BOXES_MESH_NAME } from "../present/minigame-art.ts";
+import { INTERIOR_GLASS_NAME, INTERIOR_MESH_PREFIX } from "../present/interiors/interior-constants.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
 import { RAGDOLLS_MESH_NAME } from "../present/ragdoll-pool.ts";
@@ -211,6 +213,77 @@ describe("given the free camera over a civilian drawn far off as one of the crow
     fire();
     const end = firstEnd(ropes);
     expect(end.kind === "doll" ? end.id : -1, "the body's slot").toBe(PERSON_SLOT);
+  });
+});
+
+describe("given the free camera over a cat or a dog, with a wall behind it", () => {
+  it("when the sight line passes through its body, then the aim is on the wall behind it: an animal is no surface to hook", () => {
+    for (const name of [ANIMAL_MESH_NAMES.cat, ANIMAL_MESH_NAMES.dog]) {
+      const scene = new THREE.Scene();
+      wall(scene);
+      cubes(scene, name);
+      const { aimAt, fire, director } = rig(scene);
+      aimAt(new THREE.Vector3(-3, EYE_Y, -AHEAD));
+      fire();
+      expect(director["view"].point.z, `${name}: where the aim lands (m along -z)`).toBeLessThan(-WALL_AHEAD + 1);
+    }
+  });
+});
+
+/** A building's facade `FACADE_AHEAD` m ahead (a box drawn in a facade material), and behind it, when `room` says a room is built, its glass in the window's plane and its shell's wall 0.4 m behind the facade: with a 2 m opening at the middle when `window`, solid when not. */
+const FACADE_AHEAD = 5;
+/** A second building's facade (no room built) stands this far (m) ahead, behind the first and in front of the civilian. */
+const SECOND_AHEAD = 8;
+function building(scene: THREE.Scene, room: boolean, window: boolean, ahead = FACADE_AHEAD): void {
+  const facade = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 0.4), new THREE.MeshBasicMaterial());
+  facade.material.userData.facadeStyle = "rowbrick";
+  facade.position.set(0, 0, -ahead - 0.2);
+  scene.add(facade);
+  if (!room) return;
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial());
+  glass.name = INTERIOR_GLASS_NAME;
+  glass.position.set(0, EYE_Y, -ahead - 0.1);
+  scene.add(glass);
+  const shellBox = (width: number, x: number): void => {
+    const shell = new THREE.Mesh(new THREE.BoxGeometry(width, 10, 0.2), new THREE.MeshBasicMaterial());
+    shell.name = `${INTERIOR_MESH_PREFIX}shells`;
+    shell.position.set(x, 0, -ahead - 0.6);
+    scene.add(shell);
+  };
+  if (window) {
+    shellBox(9, -5.5);
+    shellBox(9, 5.5);
+  } else shellBox(20, 0);
+}
+
+/** The civilian `AHEAD` m ahead, behind the building at `ahead`, fired at straight on: how many bodies the fire stood for her. */
+function bodiesStoodFor(room: boolean, window: boolean, second = false): number {
+  const scene = new THREE.Scene();
+  wall(scene);
+  building(scene, room, window);
+  if (second) building(scene, false, false, SECOND_AHEAD);
+  const stood: number[] = [];
+  const { aimAt, fire } = rig(scene, stood, false, true);
+  aimAt(new THREE.Vector3(0, EYE_Y, -AHEAD));
+  fire();
+  return stood.length;
+}
+
+describe("given a civilian 10 m ahead behind a building's facade 5 m ahead", () => {
+  it("when a built room's window is in the way, then the sight line passes the facade and the glass and the fire stands a body for her", () => {
+    expect(bodiesStoodFor(true, true)).toBe(1);
+  });
+
+  it("when a built room's solid wall is in the way, then her body is not stood: the wall stops the person test", () => {
+    expect(bodiesStoodFor(true, false)).toBe(0);
+  });
+
+  it("when no room is built behind the facade, then her body is not stood: the facade is a wall", () => {
+    expect(bodiesStoodFor(false, false)).toBe(0);
+  });
+
+  it("when the sight line passes a built room's window and goes on into a second building with no room built, then her body behind that second facade is not stood", () => {
+    expect(bodiesStoodFor(true, true, true)).toBe(0);
   });
 });
 

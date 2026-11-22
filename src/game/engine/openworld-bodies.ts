@@ -166,23 +166,12 @@ export class OpenWorldBodies {
     }
   }
 
-  /** The hook takes civilian `civilian` wherever she is: a body is stood for her now and pinned `HOOK_HOLD_SECONDS`; its pool slot, or -1 where she may have none (indoors, at a counter). With every body in use, the farthest from (eyeX, eyeZ) that is on its feet, steady, in step with her and held by no cable or pin is let go first; with none such she gets none. */
+  /** The hook takes civilian `civilian` wherever she is and whatever she does: a body is stood for her at her drawn feet and pinned `HOOK_HOLD_SECONDS`; its pool slot, -1 for no body (not a person, none free). With every body in use the farthest one that can be let go (`farthestToRelease`) is let go first. */
   stand(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number): number {
     if (this.bodyOf[civilian]! === NOBODY) {
       if (!this.eligible(poses, civilian, eyeX, eyeZ, Infinity, true)) return NOBODY;
       if (this.count() === this.size) {
-        let farthest = NOBODY;
-        let farthestDistance = -1;
-        for (let body = 0; body < this.size; body++) {
-          const slot = this.slot[body]!;
-          if (this.host.roped(slot) || !this.host.torso(slot, _torso)) continue;
-          // A body lying or catching up is never let go for her: she would vanish and reappear upright at her spot.
-          if (this.recovering[body] === 1 || this.seconds < this.hookedUntil[body]! || !this.host.steady(slot)) continue;
-          const distance = hypot2(_torso.x - eyeX, _torso.z - eyeZ);
-          if (distance <= farthestDistance) continue;
-          farthestDistance = distance;
-          farthest = body;
-        }
+        const farthest = this.farthestToRelease(eyeX, eyeZ);
         if (farthest === NOBODY) return NOBODY;
         this.release(farthest);
       }
@@ -193,9 +182,50 @@ export class OpenWorldBodies {
     return this.slot[body]!;
   }
 
+  /** Whether the hook could stand a body for a civilian who has none now: a body and a pool slot are free (thrown figures may fill the slots), or a body can be let go for her. When not, her reticle must not light. */
+  canStand(eyeX: number, eyeZ: number): boolean {
+    return this.count() < this.size ? this.nextSlot() >= 0 : this.farthestToRelease(eyeX, eyeZ) !== NOBODY;
+  }
+
+  /** The pool slot a new body takes, -1 when none is free: `give` and `canStand` ask the one question. */
+  private nextSlot(): number {
+    return this.host.freeSlot(FIRST_BODY_SLOT);
+  }
+
+  /** The body farthest from (eyeX, eyeZ) that is on its feet, steady, in step with her and held by no cable or pin (a body lying or catching up is never let go for another: she would vanish and reappear upright at her spot); NOBODY when there is none. */
+  private farthestToRelease(eyeX: number, eyeZ: number): number {
+    let farthest = NOBODY;
+    let farthestDistance = -1;
+    for (let body = 0; body < this.size; body++) {
+      if (this.resident[body]! === NOBODY) continue;
+      const slot = this.slot[body]!;
+      if (this.host.roped(slot) || !this.host.torso(slot, _torso)) continue;
+      if (this.recovering[body] === 1 || this.seconds < this.hookedUntil[body]! || !this.host.steady(slot)) continue;
+      const distance = hypot2(_torso.x - eyeX, _torso.z - eyeZ);
+      if (distance <= farthestDistance) continue;
+      farthestDistance = distance;
+      farthest = body;
+    }
+    return farthest;
+  }
+
   /** The hook holds the body in pool slot `slot` as a cable's first end: it is pinned `HOOK_HOLD_SECONDS` as a body `stand` makes is, so making room never takes it. */
   pin(slot: number): void {
     for (let body = 0; body < this.size; body++) if (this.resident[body]! !== NOBODY && this.slot[body] === slot) this.hookedUntil[body] = this.seconds + HOOK_HOLD_SECONDS;
+  }
+
+  /** Where the bodies the hook holds stand (a first end pinned, or a cable on them): their torsos' x and z into `xs` and `zs`, as many as fit; how many. The interiors keep the floor under each of them (`DoorOpeners.pinned`). */
+  hookedSpots(xs: Float32Array, zs: Float32Array): number {
+    let count = 0;
+    for (let body = 0; body < this.size && count < xs.length; body++) {
+      if (this.resident[body]! === NOBODY) continue;
+      const slot = this.slot[body]!;
+      if (!this.host.roped(slot) && this.seconds >= this.hookedUntil[body]!) continue;
+      if (!this.host.torso(slot, _torso)) continue;
+      xs[count] = _torso.x;
+      zs[count++] = _torso.z;
+    }
+    return count;
   }
 
   /** One step of \`dt\` s at crowd second \`seconds\`, after the crowd's: the bodies are steered to their civilians' spots, and the nearest civilians to (eyeX, eyeZ) are given bodies. */
@@ -279,12 +309,15 @@ export class OpenWorldBodies {
     this.host.steer(slot, detAtan2(vx, vz), Math.min(FASTEST, hypot2(vx, vz)));
   }
 
-  /** Whether civilian `civilian` may have a body: a person (a body is a human dummy) shown, walking or standing about, on the street (not on a stoop; `raised`: the hook's, off it too) and not in a building, within `radius` of the eye. */
-  private eligible(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number, radius: number, raised = false): boolean {
-    if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person || !BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;
+  /** Whether civilian `civilian` may have a body: a person (a body is a human dummy) shown, within `radius` of the eye, and, unless `hooked`, walking or standing about, on the street (not on a stoop) and not in a building. The hook (`hooked`) takes her wherever she is drawn and whatever she does: a counter, a seat, a stoop, a room, an arrest. */
+  private eligible(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number, radius: number, hooked = false): boolean {
+    if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person) return false;
+    if (!hooked && !BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;
     const x = poses.x[civilian]!;
     const z = poses.z[civilian]!;
-    if (hypot2(x - eyeX, z - eyeZ) > radius || (!raised && poses.feetY[civilian]! - this.host.groundAt(x, z) > ON_STREET)) return false;
+    if (hypot2(x - eyeX, z - eyeZ) > radius) return false;
+    if (hooked) return true;
+    if (poses.feetY[civilian]! - this.host.groundAt(x, z) > ON_STREET) return false;
     return !this.buildings.inside(poses.x, poses.z, civilian);
   }
 
@@ -306,7 +339,7 @@ export class OpenWorldBodies {
   private give(poses: CrowdPoses, civilian: number): boolean {
     let body = 0;
     while (this.resident[body]! !== NOBODY) body++;
-    const slot = this.host.freeSlot(FIRST_BODY_SLOT);
+    const slot = this.nextSlot();
     if (slot < 0) return false;
     dressOfLook(poses.look[civilian]!, _look);
     const x = poses.x[civilian]!;

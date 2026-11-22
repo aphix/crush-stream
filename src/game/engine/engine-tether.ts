@@ -6,9 +6,11 @@ import { MAX_TETHERS } from "../kernel/constants.ts";
 import { RAPIER, THING, TETHER_RANGE, thingCode, thingIndex, thingKind, WORLD, type TetherSet } from "../contact/tether.ts";
 import { AIM, TetherArt, type ReticleView } from "../present/tether-art.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
+import { ANIMAL_MESH_NAMES } from "../present/animal-figure.ts";
 import { CIVILIAN_FIGURES_NAME } from "../present/civilian-figure.ts";
 import { BOXES_MESH_NAME } from "../present/minigame-art.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
+import { INTERIOR_GLASS_NAME, INTERIOR_MESH_PREFIX } from "../present/interiors/interior-constants.ts";
 import { RAGDOLLS_MESH_NAME } from "../present/ragdoll-pool.ts";
 import { ROPE_A, ROPE_FLOATS, ROPE_JOINED, ROPE_LENGTH, ROPE_NONE, ROPE_STATE, type RopeEnd } from "../present/ragdoll-wire.ts";
 import type { TetherHud } from "../hud/hud-store.ts";
@@ -24,6 +26,8 @@ const CHASE_RETICLE_FROM_TOP = 0.38;
 const CHASE_RETICLE_NDC = 1 - 2 * CHASE_RETICLE_FROM_TOP;
 /** A drawn civilian is hooked when her chest axis lies within this far (m) behind the first surface the sight line meets: her own figure's front is that surface. */
 const PERSON_SLACK_M = 0.5;
+/** A building's facade is no wall for the person test when a built room's own mesh (its glass in a window's plane, its shell's wall) lies within this far (m) behind it: the room's meshes then decide whether the line goes on (through a window's opening) or stops (a solid wall). */
+const FACADE_WALL_M = 1;
 
 /** The dummies' world, as the tether talks to it: its ropes, and which dummies are out. */
 type TetherRopes = Pick<RagdollSystem, "ropeAttach" | "ropeCut" | "ropeReel" | "dollOut" | "ropeReport" | "torso">;
@@ -73,6 +77,12 @@ function thingEnd(code: number, at: [number, number, number]): RopeEnd {
   return { kind: kind === THING.doll ? "doll" : kind === THING.prop ? "prop" : "box", id: thingIndex(code), at };
 }
 
+/** Whether `object` is drawn in a building facade's material. */
+function isFacade(object: THREE.Object3D): boolean {
+  const material = object instanceof THREE.Mesh ? (object.material as THREE.Material | THREE.Material[]) : null;
+  return material !== null && !Array.isArray(material) && material.userData.facadeStyle !== undefined;
+}
+
 /**
  * The player's side of the tether: the aim from the camera (its middle, or a point above it on a chase camera), the fire, the retract and the cut. With a car of the player's (driven or followed): a first fire hooks the target
  * and ties it to that car, the second moves the player's end to a second target (object to object), a third starts another cable. With none (the free camera): the first fire hooks
@@ -104,6 +114,8 @@ export class TetherDirector {
   private readonly heldOffset = new THREE.Vector3();
   /** The drawn civilian with no body the aim would hook (-1: none): a body is stood for her when the fire is made. */
   private aimPerson = -1;
+  /** How far (m) along the sight line a drawn person may stand to be hooked: past the first surface that is opaque to the person test, by `PERSON_SLACK_M`. */
+  private personReach = SIGHT_M;
   private readonly sight = new LookRay();
   private readonly personAim: Meeting = { index: -1, along: 0 };
   /** Per cable slot, the number of the rope command that tied it in the dummies' world (0: none there), and whether the winch was last told to reel. */
@@ -239,7 +251,7 @@ export class TetherDirector {
     sight.dirX = this.view.dir.x;
     sight.dirY = this.view.dir.y;
     sight.dirZ = this.view.dir.z;
-    const person = this.host.personMet(sight, surface ? _eye.distanceTo(this.view.point) + PERSON_SLACK_M : SIGHT_M, this.personAim);
+    const person = this.host.personMet(sight, this.personReach, this.personAim);
     if (person.index >= 0) {
       this.aimPerson = person.index;
       this.aimCar = WORLD;
@@ -261,17 +273,40 @@ export class TetherDirector {
     this.raycaster.near = NEAR_CLIP_M;
     this.raycaster.far = SIGHT_M;
     const movers = this.host.movers();
+    let found = false;
+    // The person test's own wall: the first surface it cannot see through (a facade with a built room behind it, its glass and its shell's openings aside).
+    let opaque = Infinity;
+    let facadeAt = -1;
+    let roomBehind = false;
     for (const hit of this.raycaster.intersectObject(this.host.scene, true)) {
       const mark = this.markOf(hit, movers, cars);
       if (mark === undefined || (player >= 0 && mark.car === player)) continue;
-      this.view.point.copy(hit.point);
-      this.aimCar = mark.car;
-      this.aimThing = mark.thing;
-      if (mark.car < 0) this.aimAt.copy(hit.point);
-      else this.aimAt.copy(cars[mark.car]!.group.worldToLocal(_point.copy(hit.point)));
-      return true;
+      if (!found) {
+        found = true;
+        this.view.point.copy(hit.point);
+        this.aimCar = mark.car;
+        this.aimThing = mark.thing;
+        if (mark.car < 0) this.aimAt.copy(hit.point);
+        else this.aimAt.copy(cars[mark.car]!.group.worldToLocal(_point.copy(hit.point)));
+      }
+      const room = hit.object.name.startsWith(INTERIOR_MESH_PREFIX) && facadeAt >= 0 && hit.distance - facadeAt <= FACADE_WALL_M;
+      if (facadeAt >= 0 && !roomBehind && !room) {
+        opaque = facadeAt;
+        break;
+      }
+      roomBehind ||= room;
+      if (hit.object.name === INTERIOR_GLASS_NAME) continue;
+      if (isFacade(hit.object)) {
+        facadeAt = hit.distance;
+        roomBehind = false;
+        continue;
+      }
+      opaque = hit.distance;
+      break;
     }
-    return false;
+    if (opaque === Infinity && facadeAt >= 0 && !roomBehind) opaque = facadeAt;
+    this.personReach = opaque === Infinity ? SIGHT_M : opaque + PERSON_SLACK_M;
+    return found;
   }
 
   /** What `hit` is a surface of: a car, a thing of the dummies' world, or the static world; undefined where the sight line passes through (not drawn, not a mesh, a mover, a dummy not out or the tether's own art). */
@@ -285,8 +320,8 @@ export class TetherDirector {
       if (typeof index === "number" && cars[index]?.group === o) car = index;
     }
     if (car !== WORLD) return { car, thing: 0 };
-    // A far figure of the crowd is no surface of the world: the sight line passes her, and the person test hooks her by her chest (a hit on her front had hooked the air where she stood).
-    if (object.name === CIVILIAN_FIGURES_NAME) return undefined;
+    // A far figure of the crowd is no surface of the world: the sight line passes her, and the person test hooks her by her chest (a hit on her front had hooked the air where she stood). A cat or a dog is not hooked at all: the sight line passes them too.
+    if (object.name === CIVILIAN_FIGURES_NAME || object.name === ANIMAL_MESH_NAMES.cat || object.name === ANIMAL_MESH_NAMES.dog) return undefined;
     // Only the pool's mesh is drawn by slot: a crowd, guard or seated driver drawn on another `DummyMesh` is no dummy of that world, and the sight line passes her.
     if (object instanceof DummyMesh && (object.name !== RAGDOLLS_MESH_NAME || hit.instanceId === undefined || hit.instanceId === this.host.self() || !this.host.ropes.dollOut(hit.instanceId))) return undefined;
     const thing = this.thingOf(object, hit.instanceId);
