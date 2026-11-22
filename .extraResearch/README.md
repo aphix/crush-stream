@@ -160,6 +160,13 @@ Treat model-written prose as leads, not facts; cite the listed sources.
 | `perplexity/2026-11-21-webgl-phone-many-characters.md` | Leads: draw calls and shadows over triangles on phones, instancing, DPR caps; generic, project write-ups (performance) |
 | `perplexity/2026-11-22-shadow-map-cost-static-scenes.md` | Cutting the shadow pass when most casters are static: three.js per-light `shadow.autoUpdate`/`needsUpdate` (verified in three's `LightShadow.js` 148-158 and `WebGLShadowMap.js` 170/370; one map per light, so freezing it freezes moving casters too); cached static plus dynamic maps (Unity HDRP, Unreal VSM separate static caching), caster pruning, smaller dynamic regions, Nth-frame updates: leads (performance) |
 | `perplexity/2026-11-21-npc-idle-ambient-behaviours.md` | Leads: weighted interruptible idle actions with cooldowns, randomised durations, phase offsets and staggered decisions; Game AI Pro 3 ch. 35 (ambient interactions, verified) (crowd senses and minds) |
+| `perplexity/2026-11-22-mta-sync-rates-and-authority.md` | Multi Theft Auto's defaults, verified in its wiki: players 100 ms, near pedestrians 500 ms, far 2000 ms, empty vehicles 400 ms, pedestrian syncer distance 100; the answer's 400 ms and 1000 ms are wrong (netplay; write-up `netplay-shared-people-and-guest-acts.md`) |
+| `perplexity/2026-11-22-halo-reach-ragdoll-networking.md` | Halo: Reach (GDC 2011), verified in two summaries of the talk: ragdolls' initial state only, 10 Hz the least, 1 kbit/s a biped in combat, 45 kbit/s to one client; the 10-12 % saving is not verified (netplay) |
+| `perplexity/2026-11-22-fiedler-networked-physics-numbers.md` | Fiedler, verified in his articles: start from the authority's state, smooth only the drawn error (0.95 under 25 cm, 0.85 over 1 m); older rule snap over 2 m, 10 % over 10 cm (netplay) |
+| `perplexity/2026-11-22-sharing-physically-simulated-characters.md` | Leads: events and initial states in place of poses, root-only sync for ragdolls, snapshot buffers (netplay) |
+| `perplexity/2026-11-22-remote-player-shots-on-an-authority.md` | Leads, not verified: rewinding targets to the shooter's time, rewind windows of 200-350 ms; Valve's wiki unreachable (netplay) |
+| `perplexity/2026-11-22-coop-host-hit-authority.md` | Leads: in host-based co-op the host is the final authority on a hit, some let the attacker detect and the host validate; small projects and frameworks only (netplay) |
+| `perplexity/2026-11-22-open-source-city-multiplayer-sync.md` | Leads: SA:COOP, pedSyncer; no rates or code paths in the answer (netplay) |
 
 ## Papers (`papers/`)
 
