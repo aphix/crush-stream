@@ -109,6 +109,18 @@ Concept paper "Sentient World Simulation (SWS): A Continuously Running Model of 
   (the person the player looks at) and event groups; a deterministic picker answers whenever the model is off, loading,
   slow or unsure (the AGA/GARP pattern). Never in the frame loop, never on the wire.
 
+## Ambient behaviour
+
+- Game AI Pro 3, chapter 35, "Ambient Interactions: Improving Believability by Leveraging Rule-Based AI" VERIFIED
+  (gameaipro.com PDF): the environment is marked up with "smart locations" that run small rule scripts over a shared
+  tuple space (a seat predicate plus a reservation predicate, so a seat is taken the moment the action is committed);
+  for a sitting group, a rule designates one random talker, the others' look-at IK targets a random sitting partner, and
+  when the talk action ends the talker is cleared and a new one picked; NPCs nearby may join a running script late.
+- The idle-behaviour answer (`perplexity/2026-11-21-npc-idle-ambient-behaviours.md`, LEAD): weighted, context-filtered
+  choice of short interruptible actions (weight shifts, look at traffic or shop windows, phone, leaning) with per-person
+  cooldowns, randomised durations, per-person phase offsets for looping motion, and decisions staggered across the
+  crowd (about once a second per person) so nobody moves in sync.
+
 ## Sources
 
 - reVC source: github.com/Cai1Hsu/re3 (branch `miami`): `src/peds/Ped.cpp`, `src/peds/PedIK.cpp`.

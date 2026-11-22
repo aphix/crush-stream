@@ -77,6 +77,19 @@ games' C++ (mirrors: github.com/Cai1Hsu/re3, github.com/gibesauce/re3). Everythi
 | Chase camera | eye bounded by the car's box so it never enters the body; yaw toward velocity, rate-limited | GTA SA car camera (VERIFIED) |
 | On-foot start/stop | short ramp up, stop at once on release | GTA (VERIFIED) |
 
+## Follow-up leads (not opened)
+
+- On-foot feel (`perplexity/2026-11-21-onfoot-responsiveness-vs-animation.md`): players call movement "sluggish" or
+  "floaty" when acceleration or braking is slow, "slippery" when the stop is long against the feet, "tank-like" when a
+  turn needs an arc; the published fix is hybrid control (code-driven locomotion, root motion only for committed moves)
+  with cancel windows so input is never blocked by an animation (GDC 2016 motion-matching talks by Clavet and Zadziuk,
+  named, not opened). Around 100 ms of input-to-motion delay is cited as where control starts to feel heavy (a game-feel
+  reference, LEAD).
+- Chase cameras (`perplexity/2026-11-21-arcade-chase-camera.md`): speed-dependent distance and FOV, clamped and smoothed;
+  separate smoothing for position, yaw, distance and FOV; a fallback heading below a small speed so the camera does not
+  spin when stopped; reversing keeps the camera behind the car rather than flipping; a 0.55 m camera clip sphere in the
+  OpenUG2 mod's documentation. LEAD.
+
 ## Sources
 
 - re3/reVC source: github.com/Cai1Hsu/re3 (branch `miami`), files `src/core/Cam.cpp`, `src/core/Camera.cpp`,
