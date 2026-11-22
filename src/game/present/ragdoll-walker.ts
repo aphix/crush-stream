@@ -148,7 +148,7 @@ export class Walker {
   private ray: Ray | null = null;
   /** The floor under (x, z) for a foot; inside a wall, or across one from his root (a banister's far side), the floor his feet stand on. */
   private readonly groundAt = (x: number, z: number): number => {
-    const height = this.floor.wallShare(this.anchorPos[0]!, this.anchorPos[2]!, x, z) < 1 ? NO_FLOOR : this.floor.under(x, z);
+    const height = this.floor.walled(this.anchorPos[0]!, this.anchorPos[2]!, x, z) ? NO_FLOOR : this.floor.under(x, z);
     return height !== NO_FLOOR ? height : this.floor.level;
   };
 
@@ -348,7 +348,7 @@ export class Walker {
     this.framesOnFoot = 0;
     this.hopUp = 0;
     this.floor.reset(at.x, at.y, at.z);
-    // The root first: the gait's floor reads ask from it (`underFoot`).
+    // The root first: the gait's floor reads (`groundAt`, `WalkFloor.walled`) ask from it.
     this.anchorPos[0] = at.x;
     this.anchorPos[1] = at.y;
     this.anchorPos[2] = at.z;

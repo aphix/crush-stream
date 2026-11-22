@@ -108,8 +108,8 @@ const flightCases: readonly { it: string; x: number; heading: number; command: n
   { it: "when he walks up it across to the party wall at 10 degrees, then he keeps his feet and his strength", x: -0.2, heading: 10 * DEG, command: WALK_SPEED },
   // mutation (a sprint ramps as a run on the treads): sed -i 's/^      const top = share < 1 ? Math.min(command, RUN_SPEED) : command;/      const top = command;/' src/game/present/walker-floor.ts
   { it: "when he sprints straight up it beside the party wall, then he keeps his feet and his strength", x: 0.2, heading: 0, command: SPRINT_SPEED },
-  // mutation (a foot across the banister reads the floor beyond it): sed -i 's/this.floor.wallShare(this.anchorPos\[0\]!, this.anchorPos\[2\]!, x, z) < 1 ? NO_FLOOR : this.floor.under(x, z)/this.floor.under(x, z)/' src/game/present/ragdoll-walker.ts
-  // mutation (a foot planted across the banister sets his floor): sed -i 's/^      if (planted\[f\] !== 1 || this.wallShare(fromX, fromZ, plant\[f \* 3\]!, plant\[f \* 3 + 2\]!) < 1) continue;/      if (planted[f] !== 1) continue;/' src/game/present/walker-floor.ts
+  // mutation (a foot across the banister reads the floor beyond it): sed -i 's/this.floor.walled(this.anchorPos\[0\]!, this.anchorPos\[2\]!, x, z) ? NO_FLOOR : this.floor.under(x, z)/this.floor.under(x, z)/' src/game/present/ragdoll-walker.ts
+  // mutation (a foot planted across the banister sets his floor): sed -i 's/^      if (planted\[f\] !== 1 || this.walled(fromX, fromZ, plant\[f \* 3\]!, plant\[f \* 3 + 2\]!)) continue;/      if (planted[f] !== 1) continue;/' src/game/present/walker-floor.ts
   { it: "when he runs up it 10 degrees into the banister, then he keeps his feet and his strength", x: 0, heading: -10 * DEG, command: RUN_SPEED },
 ];
 
