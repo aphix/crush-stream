@@ -199,3 +199,40 @@ describe("given two people talking, one turned 50 degrees from the other, with t
     // mutation: sed -i 's/    if (partner >= 0 \&\& partner < poses.count \&\& poses.shown\[partner\] === 1) {/    if (false) {/' src/game/present/civilian-gaze.ts
   });
 });
+
+describe("given people on a kerb and the player on foot standing 8 m in front of them", () => {
+  // mutation: sed -i 's/s\[SCRATCH.trial\] = NOTICE_FLOOR + (PLAYER_URGENCY - NOTICE_FLOOR) \* s\[SCRATCH.near\]!;/s[SCRATCH.trial] = PLAYER_URGENCY * s[SCRATCH.near]!;/' src/game/present/civilian-gaze-poll.ts
+  it("when 20 s pass, then some of them look at him: 8 m is inside the 10 m at which he is noticed", () => {
+    const poses = kerb(12, 20);
+    const gaze = new CrowdGaze(poses.count);
+    const looked = new Set<number>();
+    drive(gaze, poses, { ...blankSenses(), player: true, playerX: 0, playerY: 1.55, playerZ: 8 }, [], 20, () => {
+      for (let civilian = 0; civilian < poses.count; civilian++) if (gaze.lookKind[civilian] === STIMULUS.player) looked.add(civilian);
+    });
+    expect(looked.size, "people who looked at him").toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("given people standing apart with nothing about them", () => {
+  /** The idle glances they begin in 60 s of frames `dt` long. */
+  function glances(dt: number): number {
+    const poses = kerb(12, 40);
+    const gaze = new CrowdGaze(poses.count);
+    const senses = blankSenses();
+    let begun = 0;
+    for (let frame = 0; frame < Math.round(60 / dt); frame++) {
+      const before = Array.from(gaze.lookKind);
+      gaze.update(poses, dt, senses);
+      for (let civilian = 0; civilian < poses.count; civilian++) if (gaze.lookKind[civilian] === STIMULUS.glance && before[civilian] !== STIMULUS.glance) begun++;
+    }
+    return begun;
+  }
+
+  // mutation: sed -i 's/GLANCE_SHARE \* freedom \* FRAME_HZ \* s\[SCRATCH.frameSeconds\]! \* HASH16/GLANCE_SHARE * freedom * HASH16/' src/game/present/civilian-gaze-poll.ts
+  it("when a minute is played at 60 and at 240 frames a second, then they glance about as often at both: within 25 %", () => {
+    const at60 = glances(FRAME);
+    const at240 = glances(FRAME / 4);
+    expect(at60, "control: glances at 60 Hz").toBeGreaterThan(20);
+    expect(Math.abs(at240 - at60) / at60, `glances: ${at60} at 60 Hz, ${at240} at 240 Hz`).toBeLessThanOrEqual(0.25);
+  });
+});
