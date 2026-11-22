@@ -7,8 +7,9 @@ import type { CrowdPoses } from "../../ai/civilians/crowd-poses.ts";
 import { evolveNeeds, topNeed } from "../../ai/civilians/needs.ts";
 import { EVENT_KINDS } from "../../ai/civilians/resident-spine.ts";
 import { ageOf } from "../../ai/civilians/society-day.ts";
-import { STIMULUS, type CrowdGaze } from "../civilian-gaze.ts";
+import type { CrowdGaze } from "../civilian-gaze.ts";
 import { NEWS_MINUTES, type Situation } from "./thought-situation.ts";
+import { THOUGHT, isArgOf } from "./thought-tools.ts";
 
 /** What the Minds read of the open world, refreshed by its owner each frame (one object, no allocation): the brain, the drawn crowd, the gaze, the host's event log, the clock and the eye. */
 export class MindsWorld {
@@ -34,13 +35,13 @@ const SENSE_METRES = 40;
 /** Remarkable event kinds, one byte per kind (the spine's rows with a remark). */
 const REMARKABLE = Uint8Array.from(Object.values(EVENT_KINDS), (row) => (row.remark === null ? 0 : 1));
 
-/** The stimuli within `SENSE_METRES` of (x, z), into `sit`. */
+/** The lookable stimuli within `SENSE_METRES` of (x, z), into `sit`: a thought looks only at what `look_at` can name. */
 function senseAround(sit: Situation, gaze: CrowdGaze | null, x: number, z: number): void {
   if (gaze === null) return;
   const table = gaze.stimuli;
   for (let row = 0; row < table.count; row++) {
     const kind = table.kind[row]!;
-    if (kind === STIMULUS.none) continue;
+    if (!isArgOf(THOUGHT.look_at, kind)) continue;
     const dx = table.x[row]! - x;
     const dz = table.z[row]! - z;
     const metres = Math.sqrt(dx * dx + dz * dz);

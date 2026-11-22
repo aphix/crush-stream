@@ -1,7 +1,7 @@
 /** What weight loading needs of the browser: fetch, Cache Storage and SHA-256 (the worker's own; a test hands in stand-ins). */
 export type WeightSources = {
   fetch: (url: string) => Promise<Response>;
-  caches: Pick<CacheStorage, "open">;
+  caches: { open: (name: string) => Promise<Pick<Cache, "match" | "put" | "delete">> };
   digest: (bytes: Uint8Array<ArrayBuffer>) => Promise<ArrayBuffer>;
 };
 
