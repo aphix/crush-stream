@@ -27,9 +27,18 @@ const PACE_BRAKE_SHARE = 0.85;
 const EDGE_BISECTIONS = 5;
 /** The torso's centre stands this high (m) over the floor. */
 const TORSO_HEIGHT = PARTS[0].c[1];
+/** His shoulders' half width (m, to an arm's outer face) and their top over his floor: a wall up to his chest (`TORSO_HEIGHT`) within them is in his way, one whose foot is over them is overhead. */
+const SHOULDER_HALF = PARTS[4].c[0] + PARTS[4].h[0];
+const SHOULDER_TOP = PARTS[4].c[1] + PARTS[4].h[1];
+/** A wall that cuts the line across his shoulders this far (m) ahead of his torso's centre, and not the line through it, stands in front of him: the torso's half depth and a hand's breadth. */
+const EDGE_REACH = 0.2;
+/** A wall ahead that a sidestep of at most this much (m) clears is an edge he is caught on (a newel post, a door jamb), not a wall he walks into: under half his shoulders. */
+const EDGE_MOST = 0.25;
 
 const NO_BOXES: readonly FloorBox[] = [];
 const _ask = new Float64Array(PQ_SIZE);
+/** Where a box cuts the line across his shoulders (m across, from -`SHOULDER_HALF` to `SHOULDER_HALF`): `cutsShoulders` writes it. */
+const _cut = new Float64Array(2);
 
 /** The armed solids' floor (the course's props: a low planter, a landing) under (x, z) for a reader asking from `y`; `NO_FLOOR` where none is within reach. */
 function solidsHeight(x: number, z: number, y: number): number {
@@ -39,6 +48,36 @@ function solidsHeight(x: number, z: number, y: number): number {
   _ask[PQ_Z] = z;
   _ask[PQ_Y] = y;
   return heightIn(solids, _ask);
+}
+
+/** Whether `box` cuts the line across his shoulders `along` m ahead of (`x`, `z`) facing (`sin`, `cos`); where it does into `_cut`. */
+function cutsShoulders(box: FloorBox, x: number, z: number, sin: number, cos: number, along: number): boolean {
+  const fromX = x + sin * along - cos * SHOULDER_HALF;
+  const fromZ = z + cos * along + sin * SHOULDER_HALF;
+  const dx = 2 * SHOULDER_HALF * cos;
+  const dz = -2 * SHOULDER_HALF * sin;
+  let near = 0;
+  let far = 1;
+  if (dx === 0) {
+    if (fromX < box.x0 || fromX > box.x1) return false;
+  } else {
+    const a = (box.x0 - fromX) / dx;
+    const b = (box.x1 - fromX) / dx;
+    near = Math.max(near, Math.min(a, b));
+    far = Math.min(far, Math.max(a, b));
+  }
+  if (dz === 0) {
+    if (fromZ < box.z0 || fromZ > box.z1) return false;
+  } else {
+    const a = (box.z0 - fromZ) / dz;
+    const b = (box.z1 - fromZ) / dz;
+    near = Math.max(near, Math.min(a, b));
+    far = Math.min(far, Math.max(a, b));
+  }
+  if (near > far) return false;
+  _cut[0] = SHOULDER_HALF * (2 * near - 1);
+  _cut[1] = SHOULDER_HALF * (2 * far - 1);
+  return true;
 }
 
 /** Throws unless every box is finite with x0 < x1, z0 < z1 and y0 < y1: a non-finite or empty box panics Rapier's broad phase. */
@@ -131,6 +170,27 @@ export class WalkFloor {
     return false;
   }
 
+  /** The sideways shift (m, along (`cos`, -`sin`)) that takes his shoulders at (`x`, `z`), facing (`sin`, `cos`), clear of the walls just ahead, when one no wider than `EDGE_MOST` of him is in his way; 0 otherwise. */
+  edgeAhead(x: number, z: number, sin: number, cos: number): number {
+    const chest = this.level + TORSO_HEIGHT;
+    const overhead = this.level + SHOULDER_TOP;
+    let plus = 0;
+    let minus = 0;
+    const boxes = this.boxes;
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i]!;
+      // A wall that also cuts the line through his centre is beside him (a banister he walks along), not an edge in front of him.
+      if (box.y1 <= chest || box.y0 >= overhead || !cutsShoulders(box, x, z, sin, cos, EDGE_REACH)) continue;
+      const from = _cut[0]!;
+      const to = _cut[1]!;
+      if (cutsShoulders(box, x, z, sin, cos, 0)) continue;
+      plus = Math.max(plus, to + SHOULDER_HALF);
+      minus = Math.max(minus, SHOULDER_HALF - from);
+    }
+    const way = plus <= minus ? plus : -minus;
+    return Math.abs(way) <= EDGE_MOST ? way : 0;
+  }
+
   /**
    * The pace (m/s) he may keep at (`x`, `z`) facing `yaw` when asked for `command`: `STEP_PACE` while a step lies ahead or under him, and on the way to it no faster
    * than he can brake to it by the edge (a run or a sprint that reaches a flight too fast plants its first foot a tread too high, and the flight is a wall to him).
@@ -140,6 +200,8 @@ export class WalkFloor {
     const sin = detSin(yaw);
     const cos = detCos(yaw);
     const brake = PACE_BRAKE_SHARE * brakeRate(command);
+    // Mid-flight his root lags the foot a tread up that sets `level`: the riser under him is a step too, else the next one reads a stride away and he speeds into a skipped tread.
+    if (this.stepAt(x, z, sin, cos, 0)) return STEP_PACE;
     const reach = Math.max(PACE_REACH, PACE_LOOK + (command * command - STEP_PACE * STEP_PACE) / (2 * brake));
     for (let ahead = PACE_LOOK; ahead <= reach + PACE_LOOK / 2; ahead += PACE_LOOK) {
       if (!this.stepAt(x, z, sin, cos, ahead)) continue;
