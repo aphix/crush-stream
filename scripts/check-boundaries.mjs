@@ -44,6 +44,7 @@ const SCENE_GRAPH = /^(Mesh|InstancedMesh|SkinnedMesh|Object3D|Scene|Group|Line|
 // Per-frame entry points (the frame flow in docs/ARCHITECTURE.md) and the per-pair/per-slice
 // queries they call. Their bodies allocate nothing.
 const HOT = {
+  "src/game/net/body-codec.ts": ["clearBodyFrame", "addBodyRecord", "addHidden", "writeBodyFrame", "readBodyFrame", "copyBodyFrame"],
   "src/game/present/shop-spill.ts": ["update"],
   "src/game/present/shot-fx.ts": ["update"],
   "src/game/present/spectate-cam.ts": ["solidAt", "gatherIn"],
