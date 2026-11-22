@@ -1,5 +1,5 @@
-import { detAtan2, detCos, detSin } from "../../kernel/physics-core.js";
-import { AISLE_STRIDE, COUNTER_STRIDE, SEAT_STRIDE, STAND_COLUMNS, STAND_ROW_DEPTH, STAND_SPACING, STAND_SPOTS } from "../../world/openworld/walk-graph.ts";
+import { detAtan2 } from "../../kernel/physics-core.js";
+import { AISLE_STRIDE, COUNTER_STRIDE, SEAT_STRIDE, STAND_COLUMNS, STAND_SPOTS } from "../../world/openworld/walk-graph.ts";
 import { NO_PLACE, NO_SEAT, RESIDENT_INT, RESIDENT_INT_STRIDE, STREAM } from "./civilian-constants.ts";
 import { residentDraws } from "./civilian-draws.ts";
 import type { CityState } from "./civilian-state.ts";
@@ -28,11 +28,6 @@ export function claimSeat(state: CityState, resident: number, place: number, sto
   return false;
 }
 
-/** The nth step of a row of bodies along a line, centred: 0, then 1 to the right, 1 to the left, 2 to the right...; returned in whole steps. */
-function lateralStep(column: number): number {
-  return column === 0 ? 0 : (column & 1) === 1 ? (column + 1) / 2 : -column / 2;
-}
-
 /** Where a standing spot is, into `out`: the owner table's index `index` of `place` (a customer's spot after the seats, then the clerks'), the counter's spots as its base. */
 export class StandSpot {
   x = 0;
@@ -42,23 +37,17 @@ export class StandSpot {
 }
 
 /**
- * Fills `out` with a spot of `place` from its counter's two spots: the clerks' `stand` (when `clerk`), a customer's standing spot `stand` (0 for the first), which are behind the buying lane (row 1 on), or, with `lane`,
- * the buying lane `stand` (0 to `STAND_COLUMNS` - 1) at the counter spot itself. A customer's spot past `STAND_SPOTS` is the room's standing room (`Place.standRoom`).
+ * Fills `out` with a spot of `place` from its published standing spots (`Place.standSpots`): the clerks' `stand` (when `clerk`), a customer's standing spot `stand` (0 for the first), or, with `lane`, the buying lane `stand`
+ * (0 to `STAND_COLUMNS` - 1); customers face the way the counter's customer spot does, clerks the clerk's. A customer's spot past `STAND_SPOTS` is the room's standing room (`Place.standRoom`).
  */
 export function standSpotAt(state: CityState, place: number, stand: number, clerk: boolean, out: StandSpot, lane = false): void {
-  const { counter, aisle, standRoom } = state.map.places[place]!;
+  const { counter, aisle, standRoom, standSpots } = state.map.places[place]!;
   if (!clerk && !lane && stand >= STAND_SPOTS) return roomSpotAt(counter!, aisle!, standRoom![stand - STAND_SPOTS]! * AISLE_STRIDE, out);
+  const pair = 2 * (lane ? stand : clerk ? STAND_COLUMNS + STAND_SPOTS + stand : STAND_COLUMNS + stand);
   const at = clerk ? COUNTER_STRIDE : 0;
-  const yaw = counter![at + 2]!;
-  const forwardX = detSin(yaw);
-  const forwardZ = detCos(yaw);
-  const column = clerk || lane ? stand : stand % STAND_COLUMNS;
-  const row = clerk || lane ? 0 : 1 + Math.floor(stand / STAND_COLUMNS);
-  const side = lateralStep(column) * STAND_SPACING;
-  const back = row * STAND_ROW_DEPTH;
-  out.x = counter![at]! + forwardZ * side - forwardX * back;
-  out.z = counter![at + 1]! - forwardX * side - forwardZ * back;
-  out.yaw = yaw;
+  out.x = standSpots![pair]!;
+  out.z = standSpots![pair + 1]!;
+  out.yaw = counter![at + 2]!;
   out.surfaceY = counter![at + 3]!;
 }
 

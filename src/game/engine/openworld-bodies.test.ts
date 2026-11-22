@@ -169,7 +169,7 @@ describe("given a civilian a car runs down while her body stands for her", () =>
     expect(host.knocks.length, "no second knock").toBe(1);
   });
 
-  // mutation: sed -i 's/      if (this.seconds - this.struckAt\[body\]! >= LIES_SECONDS) this.release(body);/      this.release(body);/' src/game/engine/openworld-bodies.ts
+  // mutation: sed -i 's/      if (this.seconds - this.struckAt\[body\]! >= LIES_SECONDS \&\& !roped) this.release(body);/      this.release(body);/' src/game/engine/openworld-bodies.ts
   it("when she has been run down, then her body lies where it fell for the time a figure does, not let go because the crowd hides her", () => {
     const { host, poses, bodies, run } = world();
     walker(poses, 0, 2, 0);
@@ -399,6 +399,66 @@ describe("given a civilian 50 m from the eye, past the bodies' reach, whom the h
     run(1);
     walker(poses, SIZE + 1, FAR, 2);
     expect(bodies.stand(poses, SIZE + 1, 0, 0), "every other body down or pinned: none for her").toBe(-1);
+  });
+});
+
+describe("given a civilian whose body a cable holds", () => {
+  // mutation: sed -i 's/^      if (!roped) return this.release(body);/      return this.release(body);/' src/game/engine/openworld-bodies.ts
+  it("when the crowd takes her indoors (she is no longer shown), then her body is kept until the cable is cut, then let go", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    host.ropedSlots.add(slot);
+    poses.shown[0] = 0;
+    run(Math.round(5 / STEP));
+    expect(host.stopped, "kept while roped").not.toContain(slot);
+    expect(bodies.held[0], "still held").toBe(1);
+    host.ropedSlots.delete(slot);
+    run(1);
+    expect(host.stopped, "let go once the cable is cut").toContain(slot);
+  });
+
+  // mutation: sed -i 's/ >= LIES_SECONDS \&\& !roped) this.release(body);/ >= LIES_SECONDS) this.release(body);/' src/game/engine/openworld-bodies.ts
+  it("when a car runs her down, then her body lies past a figure's time while the cable holds it, and is let go once it is cut", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    host.ropedSlots.add(slot);
+    bodies.knock(strikeOn(0));
+    run(Math.round((DOWNED_LIFE_SECONDS + 5) / STEP));
+    expect(host.stopped, "kept while roped").not.toContain(slot);
+    host.ropedSlots.delete(slot);
+    run(1);
+    expect(host.stopped, "let go once the cable is cut").toContain(slot);
+  });
+
+  // mutation: sed -i 's/^    if (this.host.roped(this.slot\[body\]!)) this.struckAt\[body\] = this.seconds - LIES_SECONDS;/    if (false) this.struckAt[body] = this.seconds - LIES_SECONDS;/' src/game/engine/openworld-bodies.ts
+  it("when the ambulance takes her, then her body stays on the cable, and goes once the cable is cut", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    host.ropedSlots.add(slot);
+    expect(bodies.remove(0), "she had a body").toBe(true);
+    run(Math.round(2 / STEP));
+    expect(host.stopped, "kept while roped").not.toContain(slot);
+    host.ropedSlots.delete(slot);
+    run(1);
+    expect(host.stopped, "let go once the cable is cut").toContain(slot);
+  });
+});
+
+describe("given a civilian standing on a stoop 0.9 m over the street, 50 m from the eye", () => {
+  // mutation: sed -i 's/eyeX, eyeZ, Infinity, true)) return NOBODY;/eyeX, eyeZ, Infinity)) return NOBODY;/' src/game/engine/openworld-bodies.ts
+  it("when the hook takes her, then a body is stood for her at her feet on the stoop", () => {
+    const { host, poses, bodies } = world();
+    walker(poses, 0, 50, 0);
+    poses.feetY[0] = 0.9;
+    const slot = bodies.stand(poses, 0, 0, 0);
+    expect(slot, "a body stood for her").toBeGreaterThanOrEqual(0);
+    expect(host.started[0]!.y, "at her feet (m)").toBe(poses.feetY[0]);
   });
 });
 

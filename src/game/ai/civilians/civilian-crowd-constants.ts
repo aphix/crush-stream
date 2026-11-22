@@ -71,6 +71,9 @@ export const LOOK_HZ = 4;
 export const BODY_GAP = 0.6;
 /** A drawn civilian stands at most this far (m) from where the brain puts them: lanes already spread walkers by +-1 m, more would put one through a wall or into the road. */
 export const MAX_OFFSET = 0.7;
+/** A drawn spot's offset from the brain's moves at most this fast (m/s), a person's brisk walk (`SPECIES_SPEED`), so a crowded room's pushing apart never jumps (0.7 m flips between frames were seen) more than a walk step a frame; a gap in the crowd clock longer than this (s) snaps it. */
+export const OFFSET_SPEED = 1.4;
+export const OFFSET_SNAP_SECONDS = 0.25;
 /** Passes over the pair list, each moving an overlapping pair apart by half the overlap each: the overlap in a row of three falls to a quarter each pass. */
 export const SEPARATION_PASSES = 8;
 /** Two bodies can end within `BODY_GAP` of each other only if they start within the gap plus what both may move. */

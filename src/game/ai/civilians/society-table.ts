@@ -34,6 +34,7 @@ import type { CityState } from "./civilian-state.ts";
 import { carStandsAt } from "./society-cars.ts";
 import { ageOf } from "./society-day.ts";
 import { VENUE, isHourIn, isOutdoorPurpose } from "./society-venues.ts";
+import { shiftStartOf } from "./society-hours.ts";
 
 /** Who a resident is to the table: bits a row asks for any of. */
 const JOB = { employed: 1, jobless: 2, broke: 4, retired: 8, child: 16, adult: 32, criminal: 64, wanted: 128 } as const;
@@ -133,7 +134,7 @@ function nearestOpenVenue(state: CityState, venue: number, from: number, tick: n
 /** The open coffee shop that adds least walking between where they are and their workplace, when the detour is small and the shift is neither close nor under way. */
 function coffeeOnTheWay(state: CityState, resident: number, current: number, tick: number, hour: number): number {
   const work = intAt(state, resident, RESIDENT_INT.work);
-  const hoursToShift = (intAt(state, resident, RESIDENT_INT.shiftStart) - hour + HOURS_PER_GAME_DAY) % HOURS_PER_GAME_DAY;
+  const hoursToShift = (shiftStartOf(state, resident) - hour + HOURS_PER_GAME_DAY) % HOURS_PER_GAME_DAY;
   if (work === NO_PLACE || hoursToShift < COFFEE_LEAD_HOURS || hoursToShift > HOURS_PER_GAME_DAY - SHIFT_HOURS_AFTER) return NO_PLACE;
   const list = state.venues.byVenue[VENUE.coffee]!;
   const direct = distanceBetween(state, current, work);

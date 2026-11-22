@@ -1,5 +1,5 @@
 import { hypot2 } from "../../kernel/physics-core.js";
-import { BODY_GAP, COINCIDENT_DISTANCE, MAX_OFFSET, MOVING_SPEED, PAIR_RANGE, PAIRS_PER_BODY, SEPARATION_CELLS, SEPARATION_PASSES, WALKER_CAPACITY } from "./civilian-crowd-constants.ts";
+import { BODY_GAP, COINCIDENT_DISTANCE, MAX_OFFSET, MOVING_SPEED, OFFSET_SNAP_SECONDS, OFFSET_SPEED, PAIR_RANGE, PAIRS_PER_BODY, SEPARATION_CELLS, SEPARATION_PASSES, WALKER_CAPACITY } from "./civilian-crowd-constants.ts";
 
 /** The end of a chain of bodies in one grid cell. */
 const NO_BODY = -1;
@@ -20,7 +20,8 @@ function cellSlot(cellX: number, cellZ: number): number {
 /**
  * Keeps the drawn crowd's bodies a body's width apart without touching the brain: `brainX`, `brainZ` and the velocities are written
  * by the crowd, `resolve` leaves every present body's drawn spot in `drawX`, `drawZ` (never more than `MAX_OFFSET` from the brain's).
- * Civilians are bodies 0..capacity-1, the players on foot `capacity`..; a `fixed` body (a walker, a civilian seated or fighting) is never moved. A pure function of what is written: no history.
+ * Civilians are bodies 0..capacity-1, the players on foot `capacity`..; a `fixed` body (a walker, a civilian seated or fighting) is never moved. A pure function of what is written, but for one thing: with the crowd's clock in `now`, a body's offset from the brain's
+ * moves at most `OFFSET_SPEED` a second from what the last resolve drew (NaN: no clock, no history).
  */
 export class CrowdSeparation {
   readonly capacity: number;
@@ -53,6 +54,13 @@ export class CrowdSeparation {
   private readonly cellOfZ: Int32Array;
   /** The shift (x, z) `move` applies, handed over here: a double passed to a call V8 does not inline is boxed, one object a call, every pair, every pass, every frame. */
   private readonly shift = new Float64Array(2);
+  /** The crowd time (s) of this resolve, written by the crowd (NaN: none), and of the last one: arrays, so no double is boxed. */
+  readonly now = Float64Array.of(NaN);
+  private readonly then = Float64Array.of(NaN);
+  /** Per body, its offset from the brain's spot as the last resolve drew it, and whether it was drawn. */
+  private readonly lastOffsetX: Float32Array;
+  private readonly lastOffsetZ: Float32Array;
+  private readonly drawn: Uint8Array;
 
   constructor(capacity: number) {
     this.capacity = capacity;
@@ -78,6 +86,9 @@ export class CrowdSeparation {
     this.cellNext = new Int32Array(bodies);
     this.cellOfX = new Int32Array(bodies);
     this.cellOfZ = new Int32Array(bodies);
+    this.lastOffsetX = new Float32Array(bodies);
+    this.lastOffsetZ = new Float32Array(bodies);
+    this.drawn = new Uint8Array(bodies);
   }
 
   /** Places every present body: the pair list is made from the brain's spots, then relaxed. */
@@ -85,6 +96,42 @@ export class CrowdSeparation {
     const listedCount = this.list();
     this.buildPairs(listedCount);
     this.relax();
+    if (this.ease()) this.relax();
+    this.remember();
+  }
+
+  /**
+   * Each drawn offset moves at most `OFFSET_SPEED` times the crowd time since the last resolve from the offset last drawn (a newly present body, or a gap in the clock, takes its offset whole); true when one
+   * was held back, so the pairs are relaxed again from there: a body keeps the side of a neighbour it had and gives way at a walk, instead of flipping to the other side in one frame.
+   */
+  private ease(): boolean {
+    const elapsed = this.now[0]! - this.then[0]!;
+    this.then[0] = this.now[0]!;
+    if (!(elapsed >= 0 && elapsed <= OFFSET_SNAP_SECONDS)) return false;
+    const reach = OFFSET_SPEED * elapsed;
+    const bodies = this.capacity + WALKER_CAPACITY;
+    let held = false;
+    for (let body = 0; body < bodies; body++) {
+      if (this.present[body] === 0 || this.drawn[body] === 0) continue;
+      const moveX = this.drawX[body]! - this.brainX[body]! - this.lastOffsetX[body]!;
+      const moveZ = this.drawZ[body]! - this.brainZ[body]! - this.lastOffsetZ[body]!;
+      const move = hypot2(moveX, moveZ);
+      if (move <= reach) continue;
+      this.drawX[body] = this.brainX[body]! + this.lastOffsetX[body]! + (moveX * reach) / move;
+      this.drawZ[body] = this.brainZ[body]! + this.lastOffsetZ[body]! + (moveZ * reach) / move;
+      held = true;
+    }
+    return held;
+  }
+
+  /** Each body's drawn offset, for the next resolve's `ease`. */
+  private remember(): void {
+    const bodies = this.capacity + WALKER_CAPACITY;
+    for (let body = 0; body < bodies; body++) {
+      this.drawn[body] = this.present[body]!;
+      this.lastOffsetX[body] = this.drawX[body]! - this.brainX[body]!;
+      this.lastOffsetZ[body] = this.drawZ[body]! - this.brainZ[body]!;
+    }
   }
 
   private list(): number {

@@ -39,8 +39,9 @@ export const COUNTER_STRIDE = 4;
 /** Floats per node in `Place.aisle`: x, z (world m), the index of the node it is reached from (-1 for the first), and the heading from it to that node (a walking civilian's yaw; 0 for the first). */
 export const AISLE_STRIDE = 4;
 /**
- * Standing spots of a venue with a counter, for those who have no seat: `STAND_SPOTS` for customers in rows of `STAND_COLUMNS` along the counter, behind the lane (the counter's customer spot and the places alternately to its right and
- * left `STAND_SPACING` m apart) where those who stop to buy without a spot of their own stand, the first row `STAND_ROW_DEPTH` m back from the lane, the next as far again and `CLERK_SPOTS` for staff along the clerk's spot. They number after the venue's seats in the same owner table: one holder to each.
+ * Standing spots of a venue with a counter (`Place.standSpots`), for those who have no seat: `STAND_COLUMNS` buying lanes where those who stop to buy without a spot of their own stand (along the counter's front, then further back),
+ * `STAND_SPOTS` for customers behind them and `CLERK_SPOTS` for staff along the clerk's side, `STAND_SPACING` m apart in rows `STAND_ROW_DEPTH` m deep, every one clear of the room's walls and furniture. Customers' and clerks' spots number
+ * after the venue's seats in the same owner table: one holder to each.
  */
 export const STAND_SPOTS = 10;
 export const CLERK_SPOTS = 3;
@@ -70,6 +71,8 @@ export type Place = {
   stoopSeats?: number;
   /** Two spots, `COUNTER_STRIDE` floats each: where a customer stands to buy, then where the clerk stands. */
   counter?: Float32Array;
+  /** With a counter: its buying lanes, then customers' standing spots, then clerks' (`counterStandSpots` counts), as world x, z pairs. */
+  standSpots?: Float32Array;
   /** The ground-floor room's walkable floor as a tree from just inside the street door (`AISLE_STRIDE` floats a node, the door's first): where a customer walks between the door, the counter and her spot. Absent: nobody is walked inside. */
   aisle?: Float32Array;
   /** The `aisle` nodes a customer stands at when every seat and standing spot is taken: on the customers' side of the counter, clear of the furniture, a metre apart. */
@@ -105,6 +108,7 @@ export function placeRecord(place: Place, doorNode: number): Place {
     counter: place.counter,
     aisle: place.aisle,
     standRoom: place.standRoom,
+    standSpots: place.standSpots,
     openSides: place.openSides,
     hours: place.hours,
   };

@@ -186,6 +186,9 @@ export type CivilianFigures = {
   uploads: readonly THREE.InstancedBufferAttribute[];
 };
 
+/** The far figures' mesh's name: the hook's sight line passes through it (a figure is hooked by her chest, as a near one is). */
+export const CIVILIAN_FIGURES_NAME = "civilian-figures";
+
 /** `capacity` far figures in one draw, none shown yet. */
 export function civilianFigures(capacity: number): CivilianFigures {
   const geometry = civilianFigureGeometry();
@@ -198,6 +201,7 @@ export function civilianFigures(capacity: number): CivilianFigures {
   mesh.instanceMatrix = matrices.attribute;
   mesh.instanceColor = shirts.attribute;
   geometry.setAttribute(FIGURE_ATTRIBUTE.TROUSERS, trousers.attribute).setAttribute(FIGURE_ATTRIBUTE.SKIN, skins.attribute).setAttribute(FIGURE_ATTRIBUTE.GAIT, gaits.attribute);
+  mesh.name = CIVILIAN_FIGURES_NAME;
   mesh.frustumCulled = false;
   mesh.receiveShadow = true;
   mesh.count = 0;
