@@ -577,10 +577,10 @@ export class OpenWorldDirector {
     this.law?.playerStruck(this.seconds, knockedOut);
   }
 
-  /** The drawn civilian with no body whose chest the hook's sight line passes nearer than `reach` m (a bullet's test, `chestMet`), into `out`; none on a client or without bodies. */
+  /** The drawn civilian with no body, whom a body can be stood for, whose chest the hook's sight line passes nearer than `reach` m (`OpenWorldBodies.hookMet`), into `out`; none on a client or without bodies. */
   hookMet(ray: LookRay, reach: number, out: Meeting): Meeting {
     const crowd = this.crowd;
-    if (crowd !== null && this.bodies !== null && !this.ports.isClient()) return chestMet(crowd.poses, crowd.poses.count, this.bodies.held, ray, SHOT_BODY_RADIUS, reach, out);
+    if (crowd !== null && this.bodies !== null && !this.ports.isClient()) return this.bodies.hookMet(crowd.poses, ray, SHOT_BODY_RADIUS, reach, out);
     out.index = -1;
     out.along = reach;
     return out;

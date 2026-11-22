@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
-import { DOWNED_LIFE_SECONDS } from "../ai/civilians/civilian-crowd-constants.ts";
+import { CHEST_HEIGHT, DOWNED_LIFE_SECONDS } from "../ai/civilians/civilian-crowd-constants.ts";
+import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { createCrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { Place } from "../world/openworld/walk-graph.ts";
@@ -459,6 +460,27 @@ describe("given a civilian standing on a stoop 0.9 m over the street, 50 m from 
     const slot = bodies.stand(poses, 0, 0, 0);
     expect(slot, "a body stood for her").toBeGreaterThanOrEqual(0);
     expect(host.started[0]!.y, "at her feet (m)").toBe(poses.feetY[0]);
+  });
+});
+
+describe("given the hook's sight line passing a civilian indoors, then one at a counter, then one walking the street", () => {
+  // mutation: sed -i 's/      if (out.index < 0 || this.eligible(poses, out.index, 0, 0, Infinity, true)) return out;/      return out;/' src/game/engine/openworld-bodies.ts
+  it("when the hook looks for a person, then it looks past the two it could not stand a body for and lights the walker", () => {
+    const { poses, bodies } = world([HOUSE]);
+    const INDOORS = 0;
+    const AT_COUNTER = 1;
+    const STREET = 2;
+    walker(poses, INDOORS, 0, 0);
+    walker(poses, AT_COUNTER, 0, 10);
+    poses.activity[AT_COUNTER] = ACTIVITY.buy;
+    walker(poses, STREET, 0, 20);
+    const ray = new LookRay();
+    ray.eyeY = CHEST_HEIGHT;
+    ray.eyeZ = -20;
+    const met = bodies.hookMet(poses, ray, 0.35, 100, { index: -1, along: 0 });
+    expect(met.index, "the person the hook lights").toBe(STREET);
+    expect(met.along, "along the sight line (m)").toBeCloseTo(40, 6);
+    expect([bodies.stand(poses, INDOORS, 0, -20), bodies.stand(poses, AT_COUNTER, 0, -20)], "control: no body for the indoor and the counter one").toEqual([-1, -1]);
   });
 });
 
