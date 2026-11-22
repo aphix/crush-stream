@@ -269,6 +269,10 @@ A tick, twice a second, allocates what the brain's answer carries.
 Gaze (`CrowdGaze.update`, a node probe of residents walking within 120 m of a spot with 8 cars driving among them, one with its siren, the player on foot and a crash pulse every 5 s), warm, per frame on the main thread:
 60 residents 4.8 to 6.1 us, 150 residents 11.9 to 14.0 us, 300 residents 24.1 to 29.4 us, 4 to 10 B (bound 16 B: `civilian-art-alloc.test.ts`).
 
+Cats and dogs (`AnimalArt.update`, a node probe of 300 residents walking back and forth within `FAR_DRAW`, all in sight), warm, per frame on
+the main thread: 6 animals 1.5 us, 40 animals 2.8 us (`CivilianArt.update` over the same crowd: 64 to 66 us), 3 B (bound 16 B:
+`animal-art-alloc.test.ts`); two draws, one a species.
+
 Per device (desktop or phone, by `deviceClass`):
 
 ||Desktop|Phone|
