@@ -1,16 +1,31 @@
-import { afterEach, describe, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { detCos } from "../kernel/physics-core.js";
 import { setGround } from "../world/ground.ts";
+import { MAX_RISER, TREAD_RUN } from "../world/openworld/interior-kinds.ts";
 import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { WALKER_SLOT } from "./ragdoll-pool.ts";
-import { PROBE } from "./ragdoll-walker.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import type { FloorBox } from "./walker-floor.ts";
 import { RUN_SPEED, SPRINT_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 
 const FRAME = 1 / FRAME_HZ;
+/** He stands this long (s) before he is asked to move. */
+const SETTLE_SECONDS = 1;
+/** Brushing the world leaves him at least this share of his strength: a stagger takes it to 0.5 or less. */
+const UNSHAKEN = 0.95;
+/** A flight of a rowhome's stairs: risers and treads as its interior builds them, 0.9 m between its party wall and its banister. */
+const FLIGHT_STEPS = 16;
+const FLIGHT_HALF = 0.45;
+const FLIGHT_FOOT_Z = 1;
+/** He starts this far (m) off the flight's middle, toward the side he leans into. */
+const FLIGHT_START_X = 0.2;
+/** A blow across his way (N·s on his chest) that his hold does not take out within a frame: a strike nobody modelled. */
+const SIDE_BLOW = 1200;
+const DEG = Math.PI / 180;
+
 let system: RagdollSystem | null = null;
 afterEach(() => {
   system?.dispose();
@@ -18,83 +33,90 @@ afterEach(() => {
   setGround(null);
 });
 
-async function standing(boxes: FloorBox[], x: number, z: number, yaw: number): Promise<RagdollSystem> {
+/** The walker settled on flat ground at (`x`, 0, `z`) facing +z among the fixed `boxes`. */
+async function standingAmong(boxes: FloorBox[], x: number): Promise<RagdollSystem> {
   const sys = await flatSystem();
   system = sys;
   sys.setFixedBoxes(boxes);
-  sys.startWalker(new THREE.Vector3(x, 0, z), yaw, { cop: false, look: driverLook(0, 0) });
-  for (let f = 0; f < FRAME_HZ; f++) sys.update(FRAME, [], true, true, null);
+  sys.startWalker(new THREE.Vector3(x, 0, 0), 0, { cop: false, look: driverLook(0, 0) });
+  for (let f = 0; f < SETTLE_SECONDS * FRAME_HZ; f++) sys.update(FRAME, [], true, true, null);
   return sys;
 }
 
-function walk(sys: RagdollSystem, heading: number, command: number, seconds: number): { least: number; fell: boolean; z: number } {
-  let least = 1;
-  let fell = false;
+type Walk = { least: number; fell: boolean; z: number };
+
+/** He walks toward `heading` at `command` m/s for `seconds`, the control held: his least strength, whether he went down, and where his torso ends along +z. */
+function walk(sys: RagdollSystem, heading: number, command: number, seconds: number, each?: (frame: number) => void): Walk {
+  const out: Walk = { least: 1, fell: false, z: 0 };
   for (let f = 0; f < Math.round(seconds * FRAME_HZ); f++) {
     sys.walker.heading = heading;
     sys.walker.command = command;
     sys.walker.ask();
+    each?.(f);
     sys.update(FRAME, [], true, true, null);
-    least = Math.min(least, sys.walker.strength);
-    fell ||= sys.walker.state !== "stand";
+    out.least = Math.min(out.least, sys.walker.strength);
+    out.fell ||= sys.walker.state !== "stand";
   }
-  return { least, fell, z: sys["dolls"][WALKER_SLOT]!.bodies[0]!.translation().z };
+  out.z = sys["dolls"][WALKER_SLOT]!.bodies[0]!.translation().z;
+  return out;
 }
 
-describe("probe", () => {
-  for (const deg of [5, 15, 30, 50]) {
-    for (const speed of [WALK_SPEED, RUN_SPEED, SPRINT_SPEED]) {
-      it(`wall ${deg} deg at ${speed}`, async () => {
-        const sys = await standing([{ x0: 0.5, x1: 0.8, z0: -5, z1: 60, y0: 0, y1: 2.5 }], 0, 0, 0);
-        const r = walk(sys, (deg * Math.PI) / 180, speed, 4);
-        console.log(`WALL deg=${deg} speed=${speed} least=${r.least.toFixed(3)} fell=${r.fell} z=${r.z.toFixed(2)}`);
-      });
-    }
-  }
-});
+/** A wall along +z whose face stands at x = 0.5, from the ground to over his head. */
+const WALL: FloorBox = { x0: 0.5, x1: 0.8, z0: -5, z1: 60, y0: 0, y1: 2.5 };
 
-/** An interior flight along +z: 16 treads of 0.19 m by 0.26 m, 0.9 m wide about x = 0, a wall at its +x side and a banister at its -x side. */
+/** The flight along +z about x = 0 from `FLIGHT_FOOT_Z`, its landing after it, its party wall at +x and a banister at -x from before its foot. */
 function flight(): FloorBox[] {
   const boxes: FloorBox[] = [];
-  for (let s = 0; s < 16; s++) boxes.push({ x0: -0.45, x1: 0.45, z0: 1 + 0.26 * s, z1: 1 + 0.26 * (s + 1), y0: 0, y1: 0.19 * (s + 1) });
-  boxes.push({ x0: -0.45, x1: 0.45, z0: 1 + 0.26 * 16, z1: 1 + 0.26 * 16 + 30, y0: 0, y1: 0.19 * 16 });
-  boxes.push({ x0: 0.45, x1: 0.75, z0: -2, z1: 40, y0: 0, y1: 6 });
-  boxes.push({ x0: -0.51, x1: -0.45, z0: -2, z1: 1 + 0.26 * 16, y0: 0, y1: 0.19 * 16 + 1 });
+  const top = FLIGHT_FOOT_Z + TREAD_RUN * FLIGHT_STEPS;
+  for (let s = 0; s < FLIGHT_STEPS; s++) {
+    boxes.push({ x0: -FLIGHT_HALF, x1: FLIGHT_HALF, z0: FLIGHT_FOOT_Z + TREAD_RUN * s, z1: FLIGHT_FOOT_Z + TREAD_RUN * (s + 1), y0: 0, y1: MAX_RISER * (s + 1) });
+  }
+  boxes.push({ x0: -FLIGHT_HALF, x1: FLIGHT_HALF, z0: top, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS });
+  boxes.push({ x0: FLIGHT_HALF, x1: FLIGHT_HALF + 0.3, z0: -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 3 });
+  boxes.push({ x0: -FLIGHT_HALF - 0.06, x1: -FLIGHT_HALF, z0: -2, z1: top, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 1 });
   return boxes;
 }
 
-describe("trace", () => {
-  it("trace -5 walk", async () => {
-    const sys = await standing(flight(), -0.2, 0, 0);
-    PROBE.trace = true;
-    const r = walk(sys, (-5 * Math.PI) / 180, WALK_SPEED, 8);
-    PROBE.trace = false;
-    console.log(`TRACE least=${r.least.toFixed(3)} fell=${r.fell} z=${r.z.toFixed(2)}`);
+describe("given the walker beside a wall on flat ground", () => {
+  // mutation: sed -i 's/^    return Math.min(ahead, stopped);/    return ahead;/' /home/aphix/worktrees/Feel/src/game/present/ragdoll-walker.ts
+  for (const speed of [RUN_SPEED, SPRINT_SPEED]) {
+    it(`when he runs at ${speed} m/s into it at 30 degrees and slides along it, then he keeps his feet and his strength`, async () => {
+      const sys = await standingAmong([WALL], 0);
+      const run = walk(sys, 30 * DEG, speed, 4);
+      expect(run.fell, "he stayed on his feet").toBe(false);
+      expect(run.least, `least strength ${run.least.toFixed(2)}`).toBeGreaterThanOrEqual(UNSHAKEN);
+    });
+  }
+
+  // mutation: sed -i 's/^    return Math.min(ahead, stopped);/    return 0;/' /home/aphix/worktrees/Feel/src/game/present/ragdoll-walker.ts
+  it("when a blow across his way lands on his chest as he walks along it, then he is knocked down", async () => {
+    const sys = await standingAmong([WALL], 0.1);
+    const torso = sys["dolls"][WALKER_SLOT]!.bodies[0]!;
+    const blow = new THREE.Vector3(-SIDE_BLOW, 0, 0);
+    const run = walk(sys, 5 * DEG, WALK_SPEED, 2, (f) => {
+      if (f === FRAME_HZ) torso.applyImpulse(blow, true);
+    });
+    expect(run.fell, "he went down").toBe(true);
   });
 });
 
-describe("probe newel", () => {
-  for (const x of [-0.05, -0.1, -0.15, -0.2, -0.25]) {
-    for (const speed of [WALK_SPEED, RUN_SPEED, SPRINT_SPEED]) {
-      it(`newel x ${x} at ${speed}`, async () => {
-        const sys = await standing([{ x0: -0.6, x1: -0.54, z0: 2, z1: 30, y0: 0, y1: 2.5 }], x - 0.3, 0, 0);
-        PROBE.cause = ""; PROBE.peak = 0; PROBE.worst.fill(0);
-        const r = walk(sys, 0, speed, 5);
-        console.log(`NEWEL x=${x} speed=${speed} least=${r.least.toFixed(3)} fell=${r.fell} z=${r.z.toFixed(2)} cause=${PROBE.cause} worst=${PROBE.worst.map((v) => v.toFixed(2)).join(",")}`);
-      });
-    }
-  }
-});
+const flightCases: readonly { it: string; heading: number; command: number }[] = [
+  { it: "when he runs straight up it, then he keeps his feet and his strength", heading: 0, command: RUN_SPEED },
+  { it: "when he runs up it 5 degrees into the party wall, then he keeps his feet and his strength", heading: 5 * DEG, command: RUN_SPEED },
+  { it: "when he walks up it 5 degrees into the banister, then he keeps his feet and his strength", heading: -5 * DEG, command: WALK_SPEED },
+  { it: "when he walks up it 10 degrees into the banister, then he keeps his feet and his strength", heading: -10 * DEG, command: WALK_SPEED },
+];
 
-describe("probe stairs", () => {
-  for (const deg of [0, 5, 10, 20, -5, -10, -20]) {
-    for (const speed of [WALK_SPEED, RUN_SPEED, SPRINT_SPEED]) {
-      it(`flight ${deg} deg at ${speed}`, async () => {
-        const sys = await standing(flight(), deg >= 0 ? 0.2 : -0.2, 0, 0);
-        PROBE.cause = ""; PROBE.peak = 0; PROBE.worst.fill(0);
-        const r = walk(sys, (deg * Math.PI) / 180, speed, 8);
-        console.log(`FLIGHT deg=${deg} speed=${speed} least=${r.least.toFixed(3)} fell=${r.fell} z=${r.z.toFixed(2)} cause=${PROBE.cause} worst=${PROBE.worst.map((v) => v.toFixed(2)).join(",")}`);
-      });
-    }
+describe("given the walker at the foot of a rowhome's stair flight between its party wall and a banister", () => {
+  // mutation: sed -i 's/^    const dy = Math.max(0, vy + HOLD_RATE \* ly \* keep);/    const dy = vy + HOLD_RATE * ly * keep;/' /home/aphix/worktrees/Feel/src/game/present/ragdoll-walker.ts
+  for (const testCase of flightCases) {
+    it(testCase.it, async () => {
+      const sys = await standingAmong(flight(), testCase.heading < 0 ? -FLIGHT_START_X : FLIGHT_START_X);
+      const start = sys["dolls"][WALKER_SLOT]!.bodies[0]!.translation().z;
+      const climb = walk(sys, testCase.heading, testCase.command, 8);
+      expect(climb.fell, "he stayed on his feet").toBe(false);
+      expect(climb.least, `least strength ${climb.least.toFixed(2)}`).toBeGreaterThanOrEqual(UNSHAKEN);
+      expect(climb.z - start, "he went on up the flight").toBeGreaterThan(FLIGHT_FOOT_Z + TREAD_RUN * 4 * detCos(testCase.heading));
+    });
   }
 });
