@@ -18,6 +18,27 @@ const IDENTITY = new THREE.Matrix4();
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** The tallest texture every WebGL2 device takes (`MAX_TEXTURE_SIZE`'s guaranteed minimum): a sprayed mesh's atlas stays within it. */
 const MAX_ATLAS_SIDE = 2048;
+/** Floats per vertex in the kinds and bones attributes (`dummySkin`'s vec4s), and in a body shape other than the man's (`position`: 3). */
+const VEC4 = 4;
+
+/** A pick's hit: the slot (-1: none), the world point and its distance along the ray (m). */
+type MeshHit = { slot: number; x: number; y: number; z: number; along: number };
+
+/** The shape attribute a slot's build is drawn in. */
+function shapeOf(flags: number): string {
+  return (flags & BUILD.WOMAN) !== 0 ? SHAPE_WOMAN_ATTRIBUTE : (flags & BUILD.PORTLY) !== 0 ? SHAPE_PORTLY_ATTRIBUTE : "position";
+}
+
+function shapeSize(shape: string): number {
+  return shape === "position" ? 3 : VEC4;
+}
+
+/** The float array behind `geometry`'s attribute `name`, which must be a plain one of `size` floats a vertex (so item i starts at i * size). */
+function floatsOf(geometry: THREE.BufferGeometry, name: string, size: number): Float32Array {
+  const attribute = geometry.getAttribute(name);
+  if (!(attribute instanceof THREE.BufferAttribute) || !(attribute.array instanceof Float32Array) || attribute.normalized || attribute.itemSize !== size) throw new Error(`dummy attribute ${name}: not a plain float attribute of ${size}`);
+  return attribute.array;
+}
 
 /**
  * Every dummy in one instanced draw: one continuous body per slot (`dummyGeometry`), skinned in the vertex shader from the slot's ten
@@ -162,15 +183,18 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
 
   /** Vertex `i` of slot `s` as posed now (her bust's lag too) into `out`; false when the slot's build does not draw it. */
   posed(s: number, i: number, out: THREE.Vector3): boolean {
-    const bones = this.geometry.getAttribute(BONES_ATTRIBUTE);
-    const kinds = this.geometry.getAttribute(KINDS_ATTRIBUTE);
-    if (!isDrawn(kinds.getY(i), this.flagsOf(s))) return false;
     const flags = this.flagsOf(s);
-    const shape = (flags & BUILD.WOMAN) !== 0 ? SHAPE_WOMAN_ATTRIBUTE : (flags & BUILD.PORTLY) !== 0 ? SHAPE_PORTLY_ATTRIBUTE : "position";
+    const shape = shapeOf(flags);
+    return this.posedFrom(s, i, flags, floatsOf(this.geometry, shape, shapeSize(shape)), shapeSize(shape), floatsOf(this.geometry, KINDS_ATTRIBUTE, VEC4), floatsOf(this.geometry, BONES_ATTRIBUTE, VEC4), out);
+  }
+
+  /** `posed` over the attributes' own arrays, read raw: three's per-item getters box each double they return when they are not inlined (about 100 B a vertex). */
+  private posedFrom(s: number, i: number, flags: number, shape: Float32Array, size: number, kinds: Float32Array, bones: Float32Array, out: THREE.Vector3): boolean {
+    if (!isDrawn(kinds[i * VEC4 + 1]!, flags)) return false;
     const lag = (s * ROW_TEXELS + ORBS_AT) * 4;
-    _o.fromBufferAttribute(this.geometry.getAttribute(shape), i);
-    _o.addScaledVector(_lag.fromArray(this.rows, lag), kinds.getZ(i)).addScaledVector(_lag.fromArray(this.rows, lag + 4), kinds.getW(i));
-    skinPoint(this.rows, s, bones.getX(i), bones.getY(i), bones.getZ(i), _o, out);
+    _o.set(shape[i * size]!, shape[i * size + 1]!, shape[i * size + 2]!);
+    _o.addScaledVector(_lag.fromArray(this.rows, lag), kinds[i * VEC4 + 2]!).addScaledVector(_lag.fromArray(this.rows, lag + 4), kinds[i * VEC4 + 3]!);
+    skinPoint(this.rows, s, bones[i * VEC4]!, bones[i * VEC4 + 1]!, bones[i * VEC4 + 2]!, _o, out);
     return true;
   }
 
@@ -183,6 +207,30 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     return this.rows[(s * ROW_TEXELS + FLAGS_AT) * 4]!;
   }
 
+  /** Whether `ray` (in the mesh's frame) crosses the sphere slot `s`'s posed body lies within. */
+  private crosses(s: number, ray: THREE.Ray): boolean {
+    const at = s * ROW_TEXELS * 4;
+    _reach.center.set(PARTS[0].c[0], PARTS[0].c[1], PARTS[0].c[2]).applyQuaternion(_q.fromArray(this.rows, at + 4)).add(_o.fromArray(this.rows, at));
+    return ray.intersectsSphere(_reach);
+  }
+
+  /** Slot `s`'s vertices as posed now into the pick's points, and whether the slot draws each (one it does not keeps the point before it). */
+  private skinSlot(s: number): void {
+    const count = this.geometry.getAttribute("position").count;
+    const points = (this.pickPoints ??= new Float32Array(count * 3));
+    const drawn = (this.pickDrawn ??= new Uint8Array(count));
+    const flags = this.flagsOf(s);
+    const name = shapeOf(flags);
+    const size = shapeSize(name);
+    const shape = floatsOf(this.geometry, name, size);
+    const kinds = floatsOf(this.geometry, KINDS_ATTRIBUTE, VEC4);
+    const bones = floatsOf(this.geometry, BONES_ATTRIBUTE, VEC4);
+    for (let i = 0; i < count; i++) {
+      drawn[i] = this.posedFrom(s, i, flags, shape, size, kinds, bones, _o) ? 1 : 0;
+      _o.toArray(points, 3 * i);
+    }
+  }
+
   /**
    * A ray against each slot's body as it is posed now, the triangles the slot draws skinned from its part poses (`posed`): a hand raised, a
    * leg swung or a dummy flung is picked where it is drawn, and a woman or a portly man by her own shape. A slot is skinned only when the ray crosses
@@ -192,19 +240,12 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     _inverse.copy(this.matrixWorld).invert();
     _local.copy(raycaster.ray).applyMatrix4(_inverse);
     const index = this.geometry.index!;
-    const count = this.geometry.getAttribute("position").count;
-    const points = (this.pickPoints ??= new Float32Array(count * 3));
-    const drawn = (this.pickDrawn ??= new Uint8Array(count));
     const cull = this.material.side !== THREE.DoubleSide;
     for (let s = 0; s < this.count; s++) {
-      if (((this.shown >> s) & 1) === 0) continue;
-      const at = s * ROW_TEXELS * 4;
-      _reach.center.set(PARTS[0].c[0], PARTS[0].c[1], PARTS[0].c[2]).applyQuaternion(_q.fromArray(this.rows, at + 4)).add(_o.fromArray(this.rows, at));
-      if (!_local.intersectsSphere(_reach)) continue;
-      for (let i = 0; i < count; i++) {
-        drawn[i] = this.posed(s, i, _o) ? 1 : 0;
-        _o.toArray(points, 3 * i);
-      }
+      if (((this.shown >> s) & 1) === 0 || !this.crosses(s, _local)) continue;
+      this.skinSlot(s);
+      const points = this.pickPoints!;
+      const drawn = this.pickDrawn!;
       for (let t = 0; t < index.count; t += 3) {
         const a = index.getX(t);
         const b = index.getX(t + 1);
@@ -215,6 +256,37 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
         if (distance < raycaster.near || distance > raycaster.far) continue;
         const normal = _vb.clone().sub(_va).cross(_vc.clone().sub(_va)).normalize();
         intersects.push({ distance, point, face: { a, b, c, normal, materialIndex: 0 }, faceIndex: t / 3, instanceId: s, object: this });
+      }
+    }
+  }
+
+  /**
+   * The hit `raycast` sorts first for `ray` (world) between `near` and `far` m among the slots other than `skip`: its slot (-1: none), world point
+   * and distance into `out`. A bullet's pick: no hit list, no sort, no allocation.
+   */
+  nearestHit(ray: THREE.Ray, near: number, far: number, skip: number, out: MeshHit): void {
+    out.slot = -1;
+    out.along = Infinity;
+    _inverse.copy(this.matrixWorld).invert();
+    _local.copy(ray).applyMatrix4(_inverse);
+    const index = this.geometry.index!;
+    const cull = this.material.side !== THREE.DoubleSide;
+    for (let s = 0; s < this.count; s++) {
+      if (s === skip || ((this.shown >> s) & 1) === 0 || !this.crosses(s, _local)) continue;
+      this.skinSlot(s);
+      const points = this.pickPoints!;
+      const drawn = this.pickDrawn!;
+      for (let t = 0; t < index.count; t += 3) {
+        const a = index.getX(t);
+        if (drawn[a] === 0 || _local.intersectTriangle(_va.fromArray(points, 3 * a), _vb.fromArray(points, 3 * index.getX(t + 1)), _vc.fromArray(points, 3 * index.getX(t + 2)), cull, _at) === null) continue;
+        _at.applyMatrix4(this.matrixWorld);
+        const distance = ray.origin.distanceTo(_at);
+        if (distance < near || distance > far || distance >= out.along) continue;
+        out.slot = s;
+        out.x = _at.x;
+        out.y = _at.y;
+        out.z = _at.z;
+        out.along = distance;
       }
     }
   }
