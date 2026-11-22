@@ -1,5 +1,5 @@
 import type * as THREE from "three";
-import { hypot2, hypot3 } from "../kernel/physics-core.js";
+import { hypot2 } from "../kernel/physics-core.js";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { boxHit, CINE, gatherIn, inside, type Occluder, type Sight, solidAt } from "./spectate-cam.ts";
@@ -117,7 +117,11 @@ export class EyeClear {
    * no easing, so the eye depends on where it stands alone.
    */
   apply(s: Sight, boxes: readonly Occluder[], subject: Vec3, eye: THREE.Vector3, dt: number): void {
-    const reachOut = hypot3(eye.x - subject.x, eye.y - subject.y, eye.z - subject.z);
+    // Plain square roots, not the kernel's `hypot3`: its call here boxed a double a frame, and a camera needs no bit-exact length.
+    const ox = eye.x - subject.x;
+    const oy = eye.y - subject.y;
+    const oz = eye.z - subject.z;
+    const reachOut = Math.sqrt(ox * ox + oy * oy + oz * oz);
     if (reachOut < PULL_NONE) return;
     this.sight = s;
     this.boxes = boxes;
@@ -125,14 +129,14 @@ export class EyeClear {
     this.sz = subject.z;
     this.around = reachOut;
     this.near = this.gatherAround(s);
-    this.sy = subject.y;
-    if (!this.clearAbove()) return;
-    const sy = this.sy;
+    const sy = this.clearAbove(subject.y, reachOut);
+    if (sy !== sy) return;
+    this.sy = sy;
     this.rx = eye.x - subject.x;
     this.ry = eye.y - sy;
     this.rz = eye.z - subject.z;
     // A pivot at the subject's own height is the line already measured.
-    const len = sy === subject.y ? reachOut : hypot3(this.rx, this.ry, this.rz);
+    const len = sy === subject.y ? reachOut : Math.sqrt(this.rx * this.rx + this.ry * this.ry + this.rz * this.rz);
     if (len < PULL_NONE) return;
     this.len = len;
     if (len > reachOut) {
@@ -178,10 +182,7 @@ export class EyeClear {
     const c = Math.cos(turn);
     const sn = Math.sin(turn);
     const k = (len - this.pull) / len;
-    // Component writes, not `eye.set`: three doubles into a call V8 does not inline here box.
-    eye.x = this.sx + (this.dx * c + this.dz * sn) * k;
-    eye.y = this.sy + this.dy * k;
-    eye.z = this.sz + (this.dz * c - this.dx * sn) * k;
+    eye.set(this.sx + (this.dx * c + this.dz * sn) * k, this.sy + this.dy * k, this.sz + (this.dz * c - this.dx * sn) * k);
   }
 
   /** The solids within `around` m (flat) of the subject, `CINE.pad` grown (`gatherIn`). */
@@ -196,25 +197,22 @@ export class EyeClear {
   }
 
   /**
-   * The line's pivot into `sy` (holding the subject's y): it stays, or for a subject inside a solid (a car in a ramp or a deck's slab, a look under a
-   * slope) becomes the first height above it that stands clear, so the pull never closes on the subject itself. False: none within `around` m up (the rig's eye stays).
+   * The line's pivot: `y` over the subject, or for a subject inside a solid (a car in a ramp or a deck's slab, a look under a slope) the
+   * first height above it that stands clear, so the pull never closes on the subject itself. NaN: none within `reach` m up (the rig's eye stays).
    */
-  private clearAbove(): boolean {
+  private clearAbove(y: number, reach: number): number {
     const s = this.sight!;
-    const y = this.sy;
     PROBE[PROBE_X] = this.sx;
     PROBE[PROBE_Y] = y;
     PROBE[PROBE_Z] = this.sz;
     PROBE[PROBE_PAD] = 0;
-    if (!solidAt(s, this.near, true)) return true;
+    if (!solidAt(s, this.near, true)) return y;
     PROBE[PROBE_PAD] = CINE.pad;
-    for (let up = CINE.pad; up <= this.around; up += CINE.pad) {
+    for (let up = CINE.pad; up <= reach; up += CINE.pad) {
       PROBE[PROBE_Y] = y + up;
-      if (solidAt(s, this.near, true)) continue;
-      this.sy = y + up;
-      return true;
+      if (!solidAt(s, this.near, true)) return y + up;
     }
-    return false;
+    return NaN;
   }
 
   /** The turn (rad) nearest the rig's, on the side it already turned if equal, with at least `need` m of clear line; else the one with most. */

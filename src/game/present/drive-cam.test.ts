@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { DRIVE } from "../vehicle/car-drive.ts";
 import { CHASE, DriveCam, followBlend, wobbleEnvelope } from "./drive-cam.ts";
@@ -52,7 +53,7 @@ describe("given the chase camera behind a car, once at rest and once at full for
     car.velocity.set(0, 0, speed);
     const cam = new DriveCam();
     const camera = new THREE.PerspectiveCamera(CHASE.fov, 16 / 9, 0.1, 400);
-    for (let f = 0; f < 180; f++) cam.update(camera, car, "third", 1 / 60, 0, 0);
+    for (let f = 0; f < 3 * FRAME_HZ; f++) cam.update(camera, car, "third", 1 / FRAME_HZ, 0, 0);
     cam.nudge(-40, 0);
     return { turn: cam.look, fov: camera.fov };
   }
