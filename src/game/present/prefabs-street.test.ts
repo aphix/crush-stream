@@ -92,7 +92,7 @@ describe("given a street lamp's night pool, an additive decal on the ground", ()
   /** The heights (m) of the drawn pool's corners of `id` that lie past the kerb at x `kerb` (over the road, +x) and short of x `ground` (on plain ground), the cut's own corners left out. */
   const bands = (id: typeof PREFAB.lamp | typeof PREFAB.acornLamp, kerb: number, ground: number): { road: number[]; low: number[] } => {
     stubBrowser();
-    const pool = prefabParts(id, plainMaterials()).find((part) => part.shared && part.material.blending === THREE.AdditiveBlending)!;
+    const pool = prefabParts(id, plainMaterials(new THREE.MeshBasicMaterial())).find((part) => part.shared && part.material.blending === THREE.AdditiveBlending)!;
     const position = pool.geometry.getAttribute("position");
     const road: number[] = [];
     const low: number[] = [];
