@@ -21,8 +21,6 @@ const BOX_SLACK = 1e-5;
 
 /** The plaza is one per course: its two stone rings and statue may take more. */
 const PLAZA_TRIANGLES_MAX = 800;
-/** A race lamp's pole stands at least this far (m) from the road ribbon its arm reaches over (`RACE_LAMP_KERB` in prefabs.ts). */
-const RACE_LAMP_KERB_M = 0.4;
 /** A pool corner this near (m) a band's cut is the cut's own, shared by the bands either side of it. */
 const CUT_SLACK = 1e-4;
 
@@ -103,13 +101,11 @@ describe("given a street lamp's night pool, an additive decal on the ground", ()
     return { road, low };
   };
 
-  // mutation: sed -i 's/cutX(pool, RACE_LAMP_KERB, Infinity).translate(0, ROAD_LIFT, 0)/cutX(pool, RACE_LAMP_KERB, Infinity)/' src/game/present/prefabs.ts
-  it("when a race lamp's pool is drawn, then its band over the road lies above the road ribbons' lift, onto the depth proxy it is tested against, and its band on the ground stays within 5 mm of it", () => {
-    const { road, low } = bands(PREFAB.lamp, RACE_LAMP_KERB_M, RACE_LAMP_KERB_M);
-    expect(road.length, "corners over the road").toBeGreaterThan(0);
-    expect(Math.min(...road), "lowest corner over the road (m)").toBeGreaterThan(ROAD_LIFT);
-    expect(low.length, "corners on the ground").toBeGreaterThan(0);
-    expect(Math.max(...low), "highest corner on the ground (m)").toBeLessThanOrEqual(0.005);
+  // mutation: sed -i 's/geometry: geo.translate(0, ROAD_LIFT, 0), material/geometry: geo, material/' src/game/present/prefabs.ts
+  it("when a race lamp's pool is drawn, then every corner of it lies above the road ribbons' lift, onto the depth proxy it is tested against, whichever side of the lamp a road runs", () => {
+    const { road } = bands(PREFAB.lamp, -Infinity, -Infinity);
+    expect(road.length, "corners of the pool").toBeGreaterThan(0);
+    expect(Math.min(...road), "lowest corner of the pool (m)").toBeGreaterThan(ROAD_LIFT);
   });
 
   // mutation: sed -i 's/cutX(pool, LAMP_FROM_CURB, Infinity).translate(0, ROAD_LIFT, 0)/cutX(pool, LAMP_FROM_CURB, Infinity)/' src/game/present/prefabs.ts
