@@ -166,8 +166,9 @@ What a resident thinks, as the look panel's last line (`Thinks "…"`) and, for 
   its SHA-256 was taken from (`32e9e3a9…`), fetched only when the setting is on and a thought asks, kept in Cache Storage, and refused
   unless it hashes to its SHA-256 (a bad cached copy is dropped and fetched again).
 - **The setting** (`minds`: HUD Playback "Minds", share key `minds`): Auto (null) is on for a desktop at FX high or ultra, off on
-  a phone and on a software rasterizer, decided once as the crowd starts (a frame-rate tier dip later does not switch it); On and Off
-  pin it. While off no worker is made and nothing is fetched.
+  a phone and on a software rasterizer; for a crowd it starts off and turns on for good the first frame that holds (the FX tier boots
+  at minimal and rises after a few seconds; a later dip does not switch it off). On and Off pin it. While off no worker is made and
+  nothing is fetched.
 - **Cost.** `CrowdMinds.frame` allocates at most 16 B a frame (`crowd-minds-alloc.test.ts`); its per-frame names are in the
   boundary check's `HOT` list.
 - **Measured** (this box, node, needle-rs 0.3.1, Needle 2, narrowed tools, 80 new tokens): load 30 ms with the bytes in memory; 30

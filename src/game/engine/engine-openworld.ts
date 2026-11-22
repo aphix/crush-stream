@@ -147,7 +147,7 @@ export type OpenWorldPorts = {
   cull: OpenWorldCullPorts;
   /** The dummies' world the civilians near a player have bodies in; absent: they are drawn by the crowd's art alone. */
   bodies?: BodyHost;
-  /** Whether the Minds' Auto is on, read once when the crowd starts (a tier the frame-rate governor dips later does not switch Needle off mid-walk); absent: off. */
+  /** Whether the Minds' Auto is on now; read each frame until it first says yes, then held for the crowd (the FX tier boots low and rises; a later dip does not switch Needle off mid-walk). Absent: off. */
   mindsAuto?(): boolean;
   /** The facade kit for the map's homes inside the walls. */
   makeFacades(map: OpenWorldMap): FacadeArt;
@@ -225,7 +225,7 @@ export class OpenWorldDirector {
   minds: OpenWorldMinds | null = null;
   /** The HUD's Minds setting (null = Auto), written by the engine each frame: whether Needle may refine thoughts. */
   mindsSetting: boolean | null = null;
-  /** What Auto means for this crowd (`OpenWorldPorts.mindsAuto`, read when it starts). */
+  /** What Auto means for this crowd: off at its start, on from the first frame `OpenWorldPorts.mindsAuto` says so, for good. */
   private mindsAuto = false;
   /** The cars' doors, swung with the residents getting into and out of them (where they stand is `crowd.driverDoors`). */
   private doors: OpenWorldCarDoors | null = null;
@@ -432,6 +432,7 @@ export class OpenWorldDirector {
     this.ports.eye(this.ray);
     this.frameSigns(this.map);
     this.gaze?.frame(crowd.poses, this.ray.eyeX, this.ray.eyeZ, wallDt, this.bodies);
+    if (!this.mindsAuto && this.mindsSetting === null) this.mindsAuto = this.ports.mindsAuto?.() === true;
     this.minds?.frame(crowd, this.gaze?.gaze ?? null, this.mindsSetting ?? this.mindsAuto, wallDt);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt, this.bodies?.held ?? null);
     this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
@@ -727,7 +728,7 @@ export class OpenWorldDirector {
     this.gaze = new OpenWorldGaze(crowd.poses.count, map, { cars: () => this.ports.cars(), foot: (out) => this.ports.foot(out), lineOfSight: this.ports.law?.lineOfSight ?? null });
     if (this.art !== null) this.art.gaze = this.gaze.gaze;
     this.minds = new OpenWorldMinds(crowd.poses.count);
-    this.mindsAuto = this.ports.mindsAuto?.() === true;
+    this.mindsAuto = false;
     const gaze = this.gaze;
     this.unhook = this.ports.hookWallHits((closing, x, z) => {
       crowd.noteWallHit(closing, x, z);

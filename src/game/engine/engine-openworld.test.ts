@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "../ai/civilians/civilian-crowd.test-util.ts";
 import { CENTIMETRES_PER_METRE, DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, FIGHT_PLAYER, FLAG, GENDER, HOURS_PER_GAME_DAY, NEED, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "../ai/civilians/civilian-constants.ts";
@@ -25,6 +25,7 @@ import { hourOfDay, tickAt } from "../ai/civilians/civilian-clock.ts";
 import { sceneryShare } from "./scenery-share.ts";
 import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { OpenWorldMinds } from "./engine-openworld-minds.ts";
 import type { AutoOrbit } from "./engine-openworld-auto.ts";
 import { MEDICS } from "./engine-openworld-medics.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
@@ -155,16 +156,24 @@ describe("given the open world's course up and a map given", () => {
     expect(harness.listener, "wall hits heard").not.toBeNull();
   });
 
-  // mutation: sed -i 's/this.mindsSetting ?? this.mindsAuto, wallDt/this.mindsSetting ?? this.ports.mindsAuto?.() === true, wallDt/' src/game/engine/engine-openworld.ts
-  it("when the Minds are on Auto, then what Auto means is read once as the crowd starts, not each frame: a tier dip later does not switch them off", () => {
+  // mutation: sed -i -e '/^    if (!this.mindsAuto \&\& this.mindsSetting === null) this.mindsAuto = /d' -e 's/^    this.mindsAuto = false;/    this.mindsAuto = this.ports.mindsAuto?.() === true;/' src/game/engine/engine-openworld.ts
+  // mutation: sed -i 's/^    if (!this.mindsAuto \&\& this.mindsSetting === null) this.mindsAuto = /    if (this.mindsSetting === null) this.mindsAuto = /' src/game/engine/engine-openworld.ts
+  it("when the Minds are on Auto and Auto says no for 30 frames (FX booting low), then yes, then no again, then the Minds go on at the first yes and stay on", () => {
     const harness = hostWithMap();
-    let asked = 0;
-    harness.director["ports"].mindsAuto = () => {
-      asked++;
-      return true;
-    };
-    for (let frame = 0; frame < 60; frame++) harness.frame();
-    expect(asked, "times Auto was read").toBe(1);
+    let frames = 0;
+    harness.director["ports"].mindsAuto = () => frames >= 30 && frames < 60;
+    const told: boolean[] = [];
+    const frame = vi.spyOn(OpenWorldMinds.prototype, "frame").mockImplementation((_crowd, _gaze, on) => void told.push(on));
+    try {
+      for (; frames < 90; frames++) harness.frame();
+    } finally {
+      frame.mockRestore();
+    }
+    const firstOn = told.indexOf(true);
+    expect(firstOn, "control: the Minds were told on at some frame").toBeGreaterThan(0);
+    expect(told.slice(0, firstOn).every((on) => !on), "off before Auto first said yes").toBe(true);
+    expect(told.slice(firstOn).every((on) => on), `on from frame ${firstOn} to the last, through Auto's later no`).toBe(true);
+    expect(told.length - firstOn, "frames on").toBeGreaterThan(30);
   });
 
   it("when the map is not given, or the course is not up, then there is no crowd and no link", () => {
