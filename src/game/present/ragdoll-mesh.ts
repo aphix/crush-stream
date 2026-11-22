@@ -3,7 +3,7 @@ import { JEANS, type DriverLook } from "./driver-look.ts";
 import { PARTS } from "./ragdoll-body.ts";
 import { applySpray, BARE_SPRAY, sprayUniforms, type SprayBitmap } from "./spray.ts";
 import { PERSON_SPRAY } from "../match/look-data.ts";
-import { BONES_ATTRIBUTE, BUILD, FLAGS_AT, isDrawn, KINDS_ATTRIBUTE, ORBS_AT, PALETTE_AT, ROW_TEXELS, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, skinPoint } from "./dummy-rig.ts";
+import { BODY_REACH_M, BONES_ATTRIBUTE, BUILD, FLAGS_AT, isDrawn, KINDS_ATTRIBUTE, ORBS_AT, PALETTE_AT, ROW_TEXELS, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, skinPoint } from "./dummy-rig.ts";
 import { dressRow } from "./dummy-dress.ts";
 import { BustSprings } from "./dummy-jiggle.ts";
 import { applyDolls } from "./dummy-shader.ts";
@@ -311,5 +311,5 @@ const _va = new THREE.Vector3();
 const _vb = new THREE.Vector3();
 const _vc = new THREE.Vector3();
 const _at = new THREE.Vector3();
-/** The sphere a posed body lies within, about its torso's centre: the standing feet are 1.11 m below it, a flung limb no farther. */
-const _reach = new THREE.Sphere(new THREE.Vector3(), 1.3);
+/** The sphere a posed body lies within, about its torso's centre. */
+const _reach = new THREE.Sphere(new THREE.Vector3(), BODY_REACH_M);
