@@ -701,12 +701,13 @@ export class CrashEngine extends EngineGarage {
   /** The orbit the Auto camera hands the view to while the player turns it. */
   private autoOrbitOfView: AutoOrbit | null = null;
 
-  /** In the open world the driven car's last view (the hood's) is followed by Auto, and Auto by the first (the chase). */
+  /** In the open world the driven car's last view (the hood's) is followed by Auto, and Auto by the first (the chase); Auto that Q / E brought up from off goes back to the view he had. */
   protected override cycleAutoCamera(): boolean {
     if (!this.showOpenWorld || this.seat.mode !== "drive") return false;
     if (this.openWorld.autoOn) {
+      const spectated = this.openWorld.spectating;
       this.openWorld.setAuto(false);
-      return false;
+      return spectated;
     }
     if (this.seat.view !== "first") return false;
     this.openWorld.setAuto(true);
