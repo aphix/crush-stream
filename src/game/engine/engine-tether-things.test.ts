@@ -232,20 +232,22 @@ describe("given the free camera over a cat or a dog, with a wall behind it", () 
 
 /** A building's facade `FACADE_AHEAD` m ahead (a box drawn in a facade material), and behind it, when `room` says a room is built, its glass in the window's plane and its shell's wall 0.4 m behind the facade: with a 2 m opening at the middle when `window`, solid when not. */
 const FACADE_AHEAD = 5;
-function building(scene: THREE.Scene, room: boolean, window: boolean): void {
+/** A second building's facade (no room built) stands this far (m) ahead, behind the first and in front of the civilian. */
+const SECOND_AHEAD = 8;
+function building(scene: THREE.Scene, room: boolean, window: boolean, ahead = FACADE_AHEAD): void {
   const facade = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 0.4), new THREE.MeshBasicMaterial());
   facade.material.userData.facadeStyle = "rowbrick";
-  facade.position.set(0, 0, -FACADE_AHEAD - 0.2);
+  facade.position.set(0, 0, -ahead - 0.2);
   scene.add(facade);
   if (!room) return;
   const glass = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial());
   glass.name = INTERIOR_GLASS_NAME;
-  glass.position.set(0, EYE_Y, -FACADE_AHEAD - 0.1);
+  glass.position.set(0, EYE_Y, -ahead - 0.1);
   scene.add(glass);
   const shellBox = (width: number, x: number): void => {
     const shell = new THREE.Mesh(new THREE.BoxGeometry(width, 10, 0.2), new THREE.MeshBasicMaterial());
     shell.name = `${INTERIOR_MESH_PREFIX}shells`;
-    shell.position.set(x, 0, -FACADE_AHEAD - 0.6);
+    shell.position.set(x, 0, -ahead - 0.6);
     scene.add(shell);
   };
   if (window) {
@@ -254,11 +256,12 @@ function building(scene: THREE.Scene, room: boolean, window: boolean): void {
   } else shellBox(20, 0);
 }
 
-/** The civilian `AHEAD` m ahead, behind the building at `FACADE_AHEAD`, fired at straight on: how many bodies the fire stood for her. */
-function bodiesStoodFor(room: boolean, window: boolean): number {
+/** The civilian `AHEAD` m ahead, behind the building at `ahead`, fired at straight on: how many bodies the fire stood for her. */
+function bodiesStoodFor(room: boolean, window: boolean, second = false): number {
   const scene = new THREE.Scene();
   wall(scene);
   building(scene, room, window);
+  if (second) building(scene, false, false, SECOND_AHEAD);
   const stood: number[] = [];
   const { aimAt, fire } = rig(scene, stood, false, true);
   aimAt(new THREE.Vector3(0, EYE_Y, -AHEAD));
@@ -277,6 +280,10 @@ describe("given a civilian 10 m ahead behind a building's facade 5 m ahead", () 
 
   it("when no room is built behind the facade, then her body is not stood: the facade is a wall", () => {
     expect(bodiesStoodFor(false, false)).toBe(0);
+  });
+
+  it("when the sight line passes a built room's window and goes on into a second building with no room built, then her body behind that second facade is not stood", () => {
+    expect(bodiesStoodFor(true, true, true)).toBe(0);
   });
 });
 

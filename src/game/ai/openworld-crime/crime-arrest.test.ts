@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY, ARREST } from "../civilians/civilian-activity.ts";
 import { CASE_PHASE, isHeldMode } from "./case-table.ts";
+import { GRIP_SECONDS } from "./crime-constants.ts";
 import { harness, runFor, type HarnessOptions } from "./crime-fixture.test-util.ts";
 import { detCos, detSin } from "../../kernel/physics-core.js";
 
 const CRIMINAL = 1;
+/** The release is logged this long (s) before her grip would complete: inside the last grid step of it. */
+const RELEASE_BEFORE_BUST_S = 0.05;
 
 /** A crime at x = 60 with a cop standing on it: the cuffs go on at the first poll. */
 function arrestRun(options: HarnessOptions = {}) {
@@ -131,6 +134,17 @@ describe("the hook takes a cop making an arrest, and then the suspect he held", 
     runFor(run, 1);
     expect(inHands(run), "let go once the clock reaches it").toBe(false);
     expect(run.scene.stats.lost - lost, "once").toBe(1);
+  });
+
+  it("when the hook takes the suspect just before her grip completes, then she is let go though the bust completes before the law's clock reaches the release", () => {
+    const { run } = cuffing();
+    const { table } = run.scene.foot;
+    const slot = table.subjectOf[CRIMINAL]!;
+    const due = table.since[slot]! + GRIP_SECONDS - RELEASE_BEFORE_BUST_S;
+    expect(due, "control: the release is still to come").toBeGreaterThan(run.now);
+    run.scene.hearSpared(CRIMINAL, due);
+    runFor(run, 1);
+    expect(inHands(run), "she is not led off in cuffs").toBe(false);
   });
 
   it("when a release older than the arrest she is in is heard (a guest hears the whole log), then she is not let go", () => {

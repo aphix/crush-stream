@@ -297,7 +297,8 @@ export class TetherDirector {
       roomBehind ||= room;
       if (hit.object.name === INTERIOR_GLASS_NAME) continue;
       if (isFacade(hit.object)) {
-        if (facadeAt < 0) facadeAt = hit.distance;
+        facadeAt = hit.distance;
+        roomBehind = false;
         continue;
       }
       opaque = hit.distance;
