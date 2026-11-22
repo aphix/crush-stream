@@ -579,6 +579,27 @@ describe("given residents whose cars stand at a place's kerb", () => {
     expect(held[0], "the lower space held").toBe(wanted[0]);
     expect(held[1], "the higher space held").toBe(wanted[1]);
   });
+
+  // mutation: sed -i 's/    if (holder >= 0 \&\& residentSpotAt(this.parkingSpots, target!.doorX, target!.doorZ, holder) !== pick) {/    if (false) {/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when a resident's own space is held by another's claim only as his fallback, then she gets her own space, as the brain draws her, and he moves on; a claim that is its holder's own pick is kept", () => {
+    const field = quietField();
+    const feed = emptyFeed(8);
+    const traffic = makeTraffic(field, { movers: 0, kerb: 0 }, feed, [homeAt(HOME.x, HOME.z)]);
+    const clock = new Clock();
+    const near = new Int32Array(KERB_CANDIDATES);
+    const count = kerbSpotsNear(traffic.parkingSpots, HOME.x, HOME.z, near);
+    expect(count, "control: four spaces by the door").toBe(4);
+    // 1 and 5 both pick near[1]: 1 claims it first, 5 falls back to near[2], which is 2's own pick.
+    feed.parked.count = 3;
+    for (const [at, resident] of [1, 5, 2].entries()) {
+      feed.parked.resident[at] = resident;
+      feed.parked.place[at] = 0;
+    }
+    runSeconds(field, traffic, clock, 1);
+    expect(residentSpace(traffic, 1), "1 keeps his own pick").toBe(near[1]);
+    expect(residentSpace(traffic, 2), "2 has her own pick").toBe(near[2]);
+    expect(residentSpace(traffic, 5), "5 moved on to the next free one").toBe(near[3]);
+  });
 });
 
 describe("given a patrol car on an urgent trip that is sent somewhere else on its way", () => {

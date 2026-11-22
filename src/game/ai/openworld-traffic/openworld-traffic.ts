@@ -208,6 +208,8 @@ export class OpenWorldTraffic {
     const spot = spotAt(this.parkingSpots, x, z, yaw);
     if (spot < 0 || resident < 0 || resident >= RESIDENT_CAPACITY) return false;
     const own = residentSpot[resident]!;
+    // The player took her car: no car of hers stands anywhere (and `CARLESS` is no space to move a claim from).
+    if (own === CARLESS) return false;
     if (own === spot && this.carIdOf(resident) >= 0) return true;
     if (own !== spot && (own === -1 ? taken[spot] === 1 : !this.claimMovable(own, spot))) return false;
     if (this.movers.hasTripFor(resident)) return false;
@@ -461,8 +463,23 @@ export class OpenWorldTraffic {
     return nearestFreeSpot(this.parkingSpots, target.doorX, target.doorZ, taken);
   }
 
-  /** Claims the space `spotFor` finds for a resident's car; -1 when none is free. */
+  /**
+   * Claims the space `spotFor` finds for a resident's car; -1 when none is free. The brain draws her at her own pick (`residentSpotAt`), so where another resident's claim holds that space only as his
+   * fallback (it is not his pick by the same door) and no car stands there, his claim moves on (`spotFor` without it) and hers takes it: nothing visibly moves.
+   */
   private claimFor(resident: number, place: number): number {
+    const target = this.places[place];
+    const { residentSpot, standing, taken } = this.context;
+    const pick = target === undefined ? -1 : residentSpotAt(this.parkingSpots, target.doorX, target.doorZ, resident);
+    const holder = pick >= 0 && taken[pick] === 1 && standing[pick] === STANDING.none ? this.holderOf(pick) : -1;
+    if (holder >= 0 && residentSpotAt(this.parkingSpots, target!.doorX, target!.doorZ, holder) !== pick) {
+      const elsewhere = this.spotFor(holder, place, pick);
+      if (elsewhere >= 0) {
+        residentSpot[holder] = elsewhere;
+        taken[elsewhere] = 1;
+        return pick;
+      }
+    }
     const spot = this.spotFor(resident, place, -1);
     if (spot >= 0) this.context.taken[spot] = 1;
     return spot;
