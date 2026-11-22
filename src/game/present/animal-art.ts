@@ -19,6 +19,9 @@ const POSTURE_TAU = 0.4;
 const ANIMAL_SLOTS = 16;
 /** Animals run down at once, lying where they were struck. */
 const DOWNED_SLOTS = 4;
+/** The instance `write` places next: x, y, z, yaw, stride phase, gait, sit, lie. Scratch the call reads, so no double is boxed to cross it (eight arguments boxed about 3 KB a frame for 32 animals). */
+const PLACE = new Float64Array(8);
+const AT = { x: 0, y: 1, z: 2, yaw: 3, phase: 4, gait: 5, sit: 6, lie: 7 } as const;
 
 /** Coat and accent (paws, muzzle) of each coat (sRGB), in `CAT_COAT` and `DOG_COAT` order: picked to read as the cast's descriptions (an orange cat, a black cat with white socks, a tabby, a tan dog). */
 const CAT_COATS: readonly (readonly [number, number])[] = [
@@ -67,6 +70,8 @@ export class AnimalArt {
   private readonly downedUntil = new Float64Array(DOWNED_SLOTS);
   private downedNext = 0;
   private clock = 0;
+  /** This frame's share of the way a posture eases (`POSTURE_TAU`): a field, so `easePosture` is passed no boxed number. */
+  private ease = 0;
 
   /** For a crowd of `capacity` residents. */
   constructor(capacity: number) {
@@ -101,27 +106,33 @@ export class AnimalArt {
   /** A frame: the animals of `poses` drawn as seen from (`eyeX`, `eyeZ`) by the players `sight` stands for, `wallDt` s after the last. */
   update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void {
     this.clock += wallDt;
-    const ease = 1 - Math.exp(-wallDt / POSTURE_TAU);
+    this.ease = 1 - Math.exp(-wallDt / POSTURE_TAU);
     for (let at = 0; at < this.kinds.length; at++) this.kinds[at]!.drawn = 0;
     const count = Math.min(poses.count, this.unseenSeconds.length);
     for (let resident = 0; resident < count; resident++) {
       const species = poses.look[resident]! >>> LOOK.speciesShift;
       const dx = poses.x[resident]! - eyeX;
       const dz = poses.z[resident]! - eyeZ;
-      if (poses.shown[resident] === 0 || species === SPECIES.person || dx * dx + dz * dz > FAR_DRAW_SQUARED) {
+      if (poses.shown[resident] === 0 || (species !== SPECIES.cat && species !== SPECIES.dog) || dx * dx + dz * dz > FAR_DRAW_SQUARED) {
         this.unseenSeconds[resident] = HIDE_GRACE;
         continue;
       }
       const unseen = sight.seen(poses.x[resident]!, poses.z[resident]!, SIGHT_RADIUS) ? 0 : Math.min(HIDE_GRACE, this.unseenSeconds[resident]! + wallDt);
       this.unseenSeconds[resident] = unseen;
       if (unseen >= HIDE_GRACE) continue;
-      this.easePosture(poses, resident, species, ease);
+      this.easePosture(poses, resident, species);
       const kind = this.kindOf(species);
       if (kind.drawn >= ANIMAL_SLOTS) continue;
       const shape = ANIMAL_SHAPES[species]!;
-      const phase = (poses.stride[resident]! / STRIDE_RADIANS_PER_METRE) * ((2 * Math.PI) / shape.stride);
-      const gait = Math.min(1, poses.speed[resident]! / SPECIES_SPEED[species]!);
-      this.write(kind, poses.look[resident]!, poses.x[resident]!, FEET_Y + poses.feetY[resident]!, poses.z[resident]!, poses.yaw[resident]!, false, phase, gait, this.sit[resident]!, this.lie[resident]!);
+      PLACE[AT.x] = poses.x[resident]!;
+      PLACE[AT.y] = FEET_Y + poses.feetY[resident]!;
+      PLACE[AT.z] = poses.z[resident]!;
+      PLACE[AT.yaw] = poses.yaw[resident]!;
+      PLACE[AT.phase] = (poses.stride[resident]! / STRIDE_RADIANS_PER_METRE) * ((2 * Math.PI) / shape.stride);
+      PLACE[AT.gait] = Math.min(1, poses.speed[resident]! / SPECIES_SPEED[species]!);
+      PLACE[AT.sit] = this.sit[resident]!;
+      PLACE[AT.lie] = this.lie[resident]!;
+      this.write(kind, (poses.look[resident]! & LOOK.hashMask) % kind.coatCount, false);
     }
     this.drawDowned();
     for (let at = 0; at < this.kinds.length; at++) this.finish(this.kinds[at]!);
@@ -141,7 +152,8 @@ export class AnimalArt {
   }
 
   /** Still: sitting, then after `LIE_AFTER_SECONDS` of rest (the crowd's `activityClock`) lying; moving: standing. Eased toward it. */
-  private easePosture(poses: CrowdPoses, resident: number, species: number, ease: number): void {
+  private easePosture(poses: CrowdPoses, resident: number, species: number): void {
+    const ease = this.ease;
     const still = poses.speed[resident]! < STILL_SPEED;
     const lying = still && poses.activityClock[resident]! >= LIE_AFTER_SECONDS[species]!;
     this.sit[resident] = this.sit[resident]! + ((still && !lying ? 1 : 0) - this.sit[resident]!) * ease;
@@ -155,17 +167,25 @@ export class AnimalArt {
       const look = this.downedLook[slot]!;
       const species = look >>> LOOK.speciesShift;
       const kind = this.kindOf(species);
-      this.write(kind, look, this.downedX[slot]!, FEET_Y + ANIMAL_SHAPES[species]!.bodyHalfWidth, this.downedZ[slot]!, this.downedYaw[slot]!, true, 0, 0, 0, 1);
+      PLACE[AT.x] = this.downedX[slot]!;
+      PLACE[AT.y] = FEET_Y + ANIMAL_SHAPES[species]!.bodyHalfWidth;
+      PLACE[AT.z] = this.downedZ[slot]!;
+      PLACE[AT.yaw] = this.downedYaw[slot]!;
+      PLACE[AT.phase] = 0;
+      PLACE[AT.gait] = 0;
+      PLACE[AT.sit] = 0;
+      PLACE[AT.lie] = 1;
+      this.write(kind, (look & LOOK.hashMask) % kind.coatCount, true);
     }
   }
 
-  /** The next instance of `kind` at (x, y, z) facing `yaw` (on its side when `fallen`), in the coat of `look`, in the pose given. */
-  private write(kind: Kind, look: number, x: number, y: number, z: number, yaw: number, fallen: boolean, phase: number, gait: number, sit: number, lie: number): void {
+  /** The next instance of `kind` at `PLACE`'s (x, y, z) facing its yaw (on its side when `fallen`), in coat number `coatAt` (the caller reads it from the look word: a cat's or dog's word has its species bits set, past a small integer, so passing it boxed a number a call), in its pose. */
+  private write(kind: Kind, coatAt: number, fallen: boolean): void {
     const instance = kind.drawn++;
     const { matrices, poses, coats, accents } = kind.figures;
     const m = instance * MATRIX_FLOATS;
-    const cos = Math.cos(yaw);
-    const sin = Math.sin(yaw);
+    const cos = Math.cos(PLACE[AT.yaw]!);
+    const sin = Math.sin(PLACE[AT.yaw]!);
     // Standing: a turn by `yaw` about y. Fallen: then rolled a quarter onto its side (its x axis is the world's up).
     matrices[m] = fallen ? 0 : cos;
     matrices[m + 1] = fallen ? 1 : 0;
@@ -179,16 +199,16 @@ export class AnimalArt {
     matrices[m + 9] = 0;
     matrices[m + 10] = cos;
     matrices[m + 11] = 0;
-    matrices[m + 12] = x;
-    matrices[m + 13] = y;
-    matrices[m + 14] = z;
+    matrices[m + 12] = PLACE[AT.x]!;
+    matrices[m + 13] = PLACE[AT.y]!;
+    matrices[m + 14] = PLACE[AT.z]!;
     matrices[m + 15] = 1;
     const p = instance * POSE_FLOATS;
-    poses[p] = phase;
-    poses[p + 1] = gait;
-    poses[p + 2] = sit;
-    poses[p + 3] = lie;
-    const coat = ((look & LOOK.hashMask) % kind.coatCount) * 2 * COLOUR_FLOATS;
+    poses[p] = PLACE[AT.phase]!;
+    poses[p + 1] = PLACE[AT.gait]!;
+    poses[p + 2] = PLACE[AT.sit]!;
+    poses[p + 3] = PLACE[AT.lie]!;
+    const coat = coatAt * 2 * COLOUR_FLOATS;
     const c = instance * COLOUR_FLOATS;
     for (let channel = 0; channel < COLOUR_FLOATS; channel++) {
       coats[c + channel] = kind.coats[coat + channel]!;

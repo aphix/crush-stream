@@ -26,14 +26,16 @@ for (let resident = 0; resident + 1 < RESIDENTS; resident += ANIMAL_EVERY) {
 const art = new AnimalArt(RESIDENTS);
 let frameAt = 0;
 
-/** One frame: everyone walks along her yaw, stopping now and then; the animals are drawn. */
+/** One frame: everyone walks along her yaw and back again, stopping between, so the crowd stays within the drawing's reach; the animals are drawn. */
 function frame(): void {
-  const walking = Math.floor(frameAt++ / STOP_PERIOD) % 2 === 0;
+  const period = Math.floor(frameAt++ / STOP_PERIOD);
+  const walking = period % 2 === 0;
+  const way = period % 4 === 0 ? WALK_STEP : -WALK_STEP;
   for (let resident = 0; resident < RESIDENTS; resident++) {
     poses.speed[resident] = walking ? 1 : 0;
     if (!walking) continue;
-    poses.x[resident] = poses.x[resident]! + Math.sin(poses.yaw[resident]!) * WALK_STEP;
-    poses.z[resident] = poses.z[resident]! + Math.cos(poses.yaw[resident]!) * WALK_STEP;
+    poses.x[resident] = poses.x[resident]! + Math.sin(poses.yaw[resident]!) * way;
+    poses.z[resident] = poses.z[resident]! + Math.cos(poses.yaw[resident]!) * way;
     poses.stride[resident] = poses.stride[resident]! + STRIDE_STEP;
   }
   art.update(poses, 0, 0, IN_SIGHT, FRAME_SECONDS);
@@ -47,8 +49,8 @@ function windowPerFrame(): number {
   );
 }
 
-describe("given a warmed crowd of 300 with forty cats and dogs walking and stopping", () => {
-  // mutation: sed -i 's/    const ease = 1 - Math.exp(-wallDt \/ POSTURE_TAU);/    const ease = [1 - Math.exp(-wallDt \/ POSTURE_TAU)][0]!;/' /home/aphix/worktrees/Life/src/game/present/animal-art.ts
+describe("given a warmed crowd of 300 with forty cats and dogs walking back and forth and stopping", () => {
+  // mutation: sed -i 's/^      this.write(kind, (poses.look\[resident\]! \& LOOK.hashMask) % kind.coatCount, false);/      this.write(kind, (poses.look[resident]! \& LOOK.hashMask) % kind.coatCount, false, poses.look[resident]!);/' /home/aphix/worktrees/Life/src/game/present/animal-art.ts
   it(`when a window of frames is drawn, then the animals' drawing allocates no more than ${BOUND_B} bytes a frame`, () => {
     for (let f = 0; f < WARM_FRAMES; f++) frame();
     const perFrame = untilQuiet(windowPerFrame, BOUND_B);

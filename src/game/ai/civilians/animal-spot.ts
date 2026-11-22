@@ -1,4 +1,4 @@
-import { detCos, detSin } from "../../kernel/physics-core.js";
+import { sinCosAt } from "../../kernel/physics-core.js";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED } from "./civilian-activity.ts";
 import { DECISION_HZ, FLAG, NO_PLACE, RESIDENT_FLOAT, RESIDENT_FLOAT_STRIDE, RESIDENT_INT, RESIDENT_INT_STRIDE } from "./civilian-constants.ts";
 import { STRIDE_RADIANS_PER_METRE } from "./civilian-crowd-constants.ts";
@@ -15,6 +15,8 @@ const REST_SLOTS = 3;
 /** A resting animal faces the street turned by a whole step of this (rad) either way by its number, so a litter does not stare one way: tuned by feel. */
 const REST_TURN_STEP = 0.3;
 const REST_TURNS = 5;
+/** The door's yaw in, its [sin, cos] out (`sinCosAt`: no boxed argument or result; `detSin`/`detCos` calls here boxed 34 KB over 300 frames of six resting animals). */
+const doorTrig = new Float64Array(2);
 
 /**
  * Animal `resident` at crowd time `seconds`, written into `poses` and the separation's brain spot: walking its leg, or resting out at its place's door (`activityClock`: the seconds it has rested, which the drawing
@@ -44,10 +46,13 @@ export function placeAnimal(state: CityState, resident: number, seconds: number,
     const at = leaving && tick < departTick ? ints[base + RESIDENT_INT.fromPlace]! : ints[base + RESIDENT_INT.place]!;
     const place = at === NO_PLACE ? undefined : state.map.places[at];
     if (place === undefined || place.doorNode < 0) return;
-    const normalX = detCos(place.yaw);
-    const normalZ = -detSin(place.yaw);
+    doorTrig[0] = place.yaw;
+    sinCosAt(doorTrig, 0);
+    const normalX = doorTrig[1]!;
+    const normalZ = -doorTrig[0]!;
     const lateral = ((resident % REST_SLOTS) - (REST_SLOTS - 1) / 2) * REST_SPREAD;
-    poses.yaw[resident] = Math.atan2(normalX, normalZ) + ((resident % REST_TURNS) - (REST_TURNS - 1) / 2) * REST_TURN_STEP;
+    // Facing out along the door's normal (cos yaw, -sin yaw) is the place's yaw turned a quarter.
+    poses.yaw[resident] = place.yaw + Math.PI / 2 + ((resident % REST_TURNS) - (REST_TURNS - 1) / 2) * REST_TURN_STEP;
     poses.speed[resident] = 0;
     poses.stride[resident] = 0;
     poses.activityClock[resident] = tick >= arriveTick ? seconds - arriveTick / DECISION_HZ : 0;

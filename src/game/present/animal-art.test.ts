@@ -62,7 +62,7 @@ function pawOf(part: number, pose: AnimalPose): THREE.Vector3 {
 }
 
 describe("given the open world's cats and dogs on the street", () => {
-  // mutation: sed -i 's/      if (poses.shown\[resident\] === 0 || species === SPECIES.person || dx \* dx + dz \* dz > FAR_DRAW_SQUARED) {/      if (poses.shown[resident] === 0 || dx * dx + dz * dz > FAR_DRAW_SQUARED) {/' /home/aphix/worktrees/Life/src/game/present/animal-art.ts
+  // mutation: sed -i 's/      if (poses.shown\[resident\] === 0 || (species !== SPECIES.cat \&\& species !== SPECIES.dog) || dx \* dx + dz \* dz > FAR_DRAW_SQUARED) {/      if (poses.shown[resident] === 0 || dx * dx + dz * dz > FAR_DRAW_SQUARED) {/' /home/aphix/worktrees/Life/src/game/present/animal-art.ts
   it("when a frame is drawn, then each animal is one instance of its species' one draw, standing at its spot facing its way, and the person is none of them", () => {
     const art = new AnimalArt(SPOTS.length);
     frames(art, streetPoses(), 1);
