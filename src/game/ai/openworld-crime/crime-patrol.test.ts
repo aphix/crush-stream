@@ -4,6 +4,11 @@ import { CAR_AVOID_GAP, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS,
 import { crimeDraw } from "./crime-draw.ts";
 import { harness, runFor, runUntil, seedWhere } from "./crime-fixture.test-util.ts";
 import { PatrolCars } from "./patrol-cars.ts";
+import { PursuitDriver } from "./pursuit-driver.ts";
+import { Obstacles } from "../obstacles.ts";
+import { blankAiCar } from "../derby-ai.ts";
+import { idleDrive } from "../../vehicle/car-drive.ts";
+import type { PropCollider } from "../../world/placements.ts";
 import { FakeStreet } from "./crime-street.test-util.ts";
 
 const RUNS = 200;
@@ -238,5 +243,29 @@ describe("the pursuit strip counts what chases the player's car", () => {
     runFor(run, 30);
     expect(run.playerBusts.join(","), "the player's car busted").toBe(String(player));
     expect(run.scene.chaseOf(player, strip), "the chase is over").toBe(false);
+  });
+});
+
+describe("given a hothead's patrol car at 19 m/s with a street tree 12 m down its line and the scene beyond it", () => {
+  /** A street tree's trunk where a car meets it (the open world's, measured: 0.13 m round, solid to 0.77 m). */
+  const TREE: PropCollider = { index: 0, prefab: "tree", body: "solid", x: 0, z: 12, yaw: 0, kind: "circle", r: 0.13, hx: 0.13, hz: 0.13, mass: 0, base: 0, top: 0.77, ends: 3 };
+  const SPEED = 19;
+
+  // mutation: sed -i 's/, this.solidLimit(self, speed));/);/' /home/aphix/worktrees/OwFix/src/game/ai/openworld-crime/pursuit-driver.ts
+  it("when it drives at the scene, then it brakes for the tree while it turns: a hothead's run met a tree at 19 m/s and threw its driver", () => {
+    const driver = new PursuitDriver(new Obstacles([TREE]));
+    const self = { ...blankAiCar(0), vz: SPEED };
+    const out = idleDrive();
+    driver.drive(0, self, [self], -1, 0, 80, 0, 0, 0, Infinity, 1 / 60, out);
+    expect(out.brake, "the brake").toBeGreaterThan(0);
+    expect(out.throttle, "the throttle").toBe(0);
+  });
+
+  it("when the tree stands 3 m off its line instead, then it keeps its speed (guard)", () => {
+    const driver = new PursuitDriver(new Obstacles([{ ...TREE, x: 3 }]));
+    const self = { ...blankAiCar(0), vz: SPEED };
+    const out = idleDrive();
+    driver.drive(0, self, [self], -1, 0, 80, 0, 0, 0, Infinity, 1 / 60, out);
+    expect(out.brake, "the brake").toBe(0);
   });
 });

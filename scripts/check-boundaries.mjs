@@ -121,7 +121,7 @@ const HOT = {
   "src/game/ai/openworld-crime/crime-poses.ts": ["overlaySuspects", "fillCopPoses", "writeArrestActivity"],
   "src/game/ai/openworld-crime/arrests.ts": ["grip", "escort", "step", "stepEscort", "stepToCar", "stepDoor", "alight", "takeToDoor", "nodeAhead", "finishEscort", "walkToStation", "leadTo", "leadAlongStreet", "sendOtherCopsBack", "sendCopBack"],
   "src/game/ai/openworld-crime/patrol-cars.ts": ["step", "stepToScene", "stepToStation", "stepPursuit", "driveSlot", "followStreets", "convey", "keepHome", "carForArrest", "isStill", "finishRide"],
-  "src/game/ai/openworld-crime/pursuit-driver.ts": ["drive", "openHeading", "carLimit"],
+  "src/game/ai/openworld-crime/pursuit-driver.ts": ["drive", "openHeading", "carLimit", "solidLimit"],
   "src/game/ai/openworld-crime/crossing-watch.ts": ["crossingOf"],
   "src/game/ai/openworld-crime/player-law.ts": ["poll", "step", "shoved", "chaseOf"],
   "src/game/ai/openworld-crime/state-offence-source.ts": ["reportDoneTick", "offenceSpot", "offenceTick"],
