@@ -145,7 +145,7 @@ export class EyeClear {
     this.lift = over >= this.lift ? over : over + (this.lift - over) * Math.exp(-PULL_OMEGA * dt);
     if (this.lift * len < PULL_NONE) this.lift = 0;
     this.liftAsk = this.lift;
-    if (this.lift !== 0 && this.over === 0) this.rh = hypot2(this.rx, this.rz);
+    if (this.lift !== 0 && this.over === 0) this.rigFlat();
     this.aim();
 
     this.need = Math.min(SWING_BELOW, len);
@@ -255,7 +255,7 @@ export class EyeClear {
     if (this.carClear >= len) return;
     this.march();
     if (this.marched < this.carClear) return;
-    this.rh = hypot2(this.rx, this.rz);
+    this.rigFlat();
     const h = this.rh;
     const room = STEEPEST - Math.atan2(this.ry, h);
     if (h < PULL_NONE || room <= 0) return;
@@ -283,6 +283,23 @@ export class EyeClear {
       else lo = mid;
     }
     this.over = hi;
+  }
+
+  /** `rh` = `hypot2(rx, rz)`, its arithmetic step for step (physics-core.js, which is never edited): the kernel's call boxes its two doubles and its answer where V8 does not inline it. */
+  private rigFlat(): void {
+    const x = Math.abs(this.rx);
+    const y = Math.abs(this.rz);
+    let max = 0;
+    if (x > max) max = x;
+    if (y > max) max = y;
+    if (max > Number.MAX_VALUE) this.rh = max;
+    else if (x !== x || y !== y) this.rh = x + y;
+    else if (max === 0) this.rh = 0;
+    else {
+      const a = x / max;
+      const b = y / max;
+      this.rh = Math.sqrt(a * a + b * b) * max;
+    }
   }
 
   /** Sets the eye's line (`dx`, `dy`, `dz`) to the rig's turned up `liftAsk` rad about the subject, toward the vertical. */

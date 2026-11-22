@@ -47,7 +47,7 @@ const HOT = {
   "src/game/present/shop-spill.ts": ["update"],
   "src/game/present/shot-fx.ts": ["update"],
   "src/game/present/spectate-cam.ts": ["solidAt", "gatherIn"],
-  "src/game/present/eye-clear.ts": ["gatherAround", "liftOver", "aim", "chooseSwing"],
+  "src/game/present/eye-clear.ts": ["gatherAround", "liftOver", "aim", "chooseSwing", "rigFlat"],
   "src/game/present/road-grid.ts": ["projectGrid"],
   "src/game/world/track.ts": ["projectPathAt"],
   "src/game/world/path-grid.ts": ["nearestOnPath", "scanCell", "trySegment"],
