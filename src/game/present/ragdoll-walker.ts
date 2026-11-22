@@ -63,8 +63,6 @@ const MAX_DT = 0.05;
 /** The torso may lag the root this far (m) before the root is brought back to it (a wall stops the root with him), and he then runs no faster than he is going plus this (m/s). */
 const LEASH = 0.08;
 const BLOCKED_MARGIN = 1;
-/** Held back by a wall's edge he can clear (`WalkFloor.edgeAhead`), he sidesteps it at this speed (m/s), a shuffle (tuned by feel). */
-const SIDESTEP_SPEED = 1;
 /** The hold's spring rate (rad/s) on his whole mass: displacement times it is the speed a displaced torso springs back at. */
 const HOLD_RATE = Math.sqrt(HOLD.stiffness / TOTAL_MASS);
 /** A hop out goes on at most this far (m, a stride) past the way out to find ground clear of everything to come down on. */
@@ -142,8 +140,6 @@ export class Walker {
   private readonly anchorPos = new Float64Array(3);
   private readonly anchorVel = new Float64Array(3);
   private readonly push = new Float64Array(3);
-  /** The level step (x, z m) `getOut` carried the root by last frame along the ground (0: no carry, or a hop). */
-  private readonly carried = new Float64Array(2);
   /** The hop out of what he stands in (`out`): how high (m; 0: none) his feet rise, and the way (x, z m) still to go over it before they come down. */
   private hopUp = 0;
   private readonly hopWay = new Float64Array(2);
@@ -360,7 +356,6 @@ export class Walker {
     this.anchorVel.fill(0);
     this.slack = 0;
     this.push.fill(0);
-    this.carried.fill(0);
     _point.x = at.x;
     _point.y = at.y;
     _point.z = at.z;
@@ -370,7 +365,7 @@ export class Walker {
 
   /** On his feet: the root's speed and facing follow the controls, the gait follows the root, and the frame moves to where the gait puts his torso. `out` at `at`: `control`'s. */
   private walk(doll: Doll, dt: number, out: ArrayLike<number>, at: number): void {
-    this.holdRootToBody(doll, dt);
+    this.holdRootToBody(doll);
     this.getOut(dt, out, at);
     this.loco.update(dt, this.heading, this.floor.pace(this.anchorPos[0]!, this.anchorPos[2]!, this.loco.yaw, this.command));
     this.gait.update(dt, this.loco, this.groundAt, doll.cur, 3);
@@ -414,7 +409,6 @@ export class Walker {
     }
     let y = 0;
     if (this.hopUp > 0) {
-      this.carried.fill(0);
       x = this.hopWay[0]!;
       z = this.hopWay[1]!;
       const far = hypot2(x, z);
@@ -443,15 +437,6 @@ export class Walker {
       const share = far > 0 ? Math.min(1, pace / far) : 0;
       x *= share;
       z *= share;
-      // A part pressed through a thin solid (a banister) reads its way out flipping as it crosses the middle: a carry under way keeps its way (this frame's length, last frame's direction), so the root does not jerk back and forth.
-      if (x * this.carried[0]! + z * this.carried[1]! < 0) {
-        // The dot is negative only when both steps have length: no zero to divide by.
-        const keep = hypot2(x, z) / hypot2(this.carried[0]!, this.carried[1]!);
-        x = this.carried[0]! * keep;
-        z = this.carried[1]! * keep;
-      }
-      this.carried[0] = x;
-      this.carried[1] = z;
     }
     this.gait.hop += y;
     this.gait.shift(x, z);
@@ -484,27 +469,21 @@ export class Walker {
     return false;
   }
 
-  /** A torso held back by the world (a wall, a car) brings the root back to within `LEASH` of it, and he goes no faster than he is moving; held by an edge he can clear, he sidesteps it. */
-  private holdRootToBody(doll: Doll, dt: number): void {
+  /** A torso held back by the world (a wall, a car) brings the root back to within `LEASH` of it, and he goes no faster than he is moving. */
+  private holdRootToBody(doll: Doll): void {
     const dx = this.anchorPos[0]! - doll.cur[0]!;
     const dz = this.anchorPos[2]! - doll.cur[2]!;
     const slip = hypot2(dx, dz);
     if (slip < LEASH) return;
     const back = (slip - LEASH) / slip;
-    const sin = detSin(this.loco.yaw);
-    const cos = detCos(this.loco.yaw);
-    const edge = this.floor.edgeAhead(doll.cur[0]!, doll.cur[2]!, sin, cos);
-    const aside = Math.max(-SIDESTEP_SPEED * dt, Math.min(SIDESTEP_SPEED * dt, edge));
-    const moveX = -dx * back + aside * cos;
-    const moveZ = -dz * back - aside * sin;
-    this.gait.shift(moveX, moveZ);
-    this.anchorPos[0]! += moveX;
-    this.anchorPos[2]! += moveZ;
+    this.gait.shift(-dx * back, -dz * back);
+    this.anchorPos[0]! -= dx * back;
+    this.anchorPos[2]! -= dz * back;
     _point.x = this.anchorPos[0]!;
     _point.y = this.anchorPos[1]!;
     _point.z = this.anchorPos[2]!;
     this.anchor!.setTranslation(_point, false);
-    const along = doll.vel[0]! * sin + doll.vel[2]! * cos;
+    const along = doll.vel[0]! * detSin(this.loco.yaw) + doll.vel[2]! * detCos(this.loco.yaw);
     this.loco.speed = Math.min(this.loco.speed, Math.max(0, along) + BLOCKED_MARGIN);
   }
 

@@ -183,22 +183,18 @@ describe("given a walker and a man standing still 2 m ahead of him", () => {
     expect(system.walker.state, "the runner").toBe("stand");
   });
 
-  /** He runs into the man at 3.5 m/s, a frame at a time, until the man leaves his feet: the man's torso's speed along +x (away from the runner) that frame, and the runner's least strength up to it, read as the meeting is judged (before the frame's recovery). */
+  /** He runs into the man at 3.5 m/s, a frame at a time, until the man leaves his feet: the man's torso's speed along +x (away from the runner) that frame, and the runner's least strength up to it. */
   function runInto(): { away: number; runnerLeast: number } {
     system.startWalker(new THREE.Vector3(2, 0, 0), -Math.PI / 2, { cop: false, look: driverLook(1, 0) }, STANDER);
     frames(system, 1);
     let runnerLeast = 1;
-    const meet = system["meetWalkers"].bind(system);
-    system["meetWalkers"] = (dt: number) => {
-      meet(dt);
-      runnerLeast = Math.min(runnerLeast, system.walker.strength);
-    };
     for (let f = 0; f < 1.2 * FRAME_HZ && system.walkers[STANDER]!.state === "stand"; f++) {
       frames(system, FRAME, () => {
         system.walker.heading = Math.PI / 2;
         system.walker.command = RUN_SPEED;
         system.walker.ask();
       });
+      runnerLeast = Math.min(runnerLeast, system.walker.strength);
     }
     expect(system.walkers[STANDER]!.state, "control: the man run into left his feet").not.toBe("stand");
     return { away: system["dolls"][STANDER]!.bodies[0]!.linvel().x, runnerLeast };
@@ -210,7 +206,7 @@ describe("given a walker and a man standing still 2 m ahead of him", () => {
   });
 
   // mutation: sed -i 's/^        this.walkers\[runner\]!.stagger(0.5);/        void runner;/' src/game/present/ragdoll-throw.ts
-  it("when he runs into the man and knocks him down, then the runner staggers: his strength falls to a half", () => {
+  it("when he runs into the man and knocks him down, then the runner staggers: his strength falls to a half (and a frame's recovery)", () => {
     expect(runInto().runnerLeast, "the runner's least strength").toBeLessThanOrEqual(0.55);
   });
 
@@ -254,24 +250,5 @@ describe("given a walker standing on a floor 4 m up", () => {
     walker["floor"].rise = 0;
     walker["decideState"](doll, 1, 1.1, FRAME);
     expect(walker.state, "both feet on the tread, torso 0.74 m over it").toBe("down");
-  });
-});
-
-describe("given a walker standing on open ground, a part of him being carried out of something", () => {
-  // mutation: sed -i 's/^        const keep = hypot2(x, z) \/ hypot2(this.carried\[0\]!, this.carried\[1\]!);/        const keep = 1;/' src/game/present/ragdoll-walker.ts
-  it("when the carry runs through a 0.05 s frame and then turns back in quarter frames, then it keeps its way and moves him no more than a walk's step a frame", () => {
-    const walker = system.walker;
-    const gait = walker["gait"];
-    const carry = (dt: number, x: number): number => {
-      const from = gait["pathX"];
-      walker["getOut"](dt, Float64Array.of(x, 0, 0), 0);
-      return gait["pathX"] - from;
-    };
-    expect(carry(0.05, 1), "the hitch's step (m)").toBeCloseTo(WALK_SPEED * 0.05, 6);
-    for (let f = 0; f < 4; f++) {
-      const step = carry(FRAME / 4, -1);
-      expect(step, `frame ${f} after the hitch: still along +x (m)`).toBeGreaterThan(0);
-      expect(step, `frame ${f} after the hitch: no more than a walk's step (m)`).toBeLessThanOrEqual((WALK_SPEED * FRAME) / 4 + 1e-9);
-    }
   });
 });

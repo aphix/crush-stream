@@ -5,11 +5,9 @@ import { setGround } from "../world/ground.ts";
 import { MAX_RISER, TREAD_RUN } from "../world/openworld/interior-kinds.ts";
 import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
-import { PARTS } from "./ragdoll-body.ts";
 import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
-import { Walker } from "./ragdoll-walker.ts";
-import { type FloorBox, WalkFloor } from "./walker-floor.ts";
+import type { FloorBox } from "./walker-floor.ts";
 import { RUN_SPEED, SPRINT_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -24,8 +22,6 @@ const FLIGHT_FOOT_Z = 1;
 /** He climbs for this long (s), and by then is past this many treads: the pace over steps is 0.5 m/s. */
 const CLIMB_SECONDS = 8;
 const CLIMB_TREADS = 12;
-/** Past the newel post he climbs this far (m) in `CLIMB_SECONDS`: held at the post's end he gets 2.5 m, over it about 4.3 m (measured). */
-const NEWEL_CLIMB = 3.7;
 /** A blow across his way (N·s on his chest, twice the walker rows' car hit): a strike nobody modelled, which the hit rule alone fells him for. */
 const SIDE_BLOW = 2400;
 const DEG = Math.PI / 180;
@@ -68,17 +64,16 @@ function walk(sys: RagdollSystem, heading: number, command: number, seconds: num
 /** A wall along +z whose face stands at x = 0.5, from the ground to over his head. */
 const WALL: FloorBox = { x0: 0.5, x1: 0.8, z0: -5, z1: 60, y0: 0, y1: 2.5 };
 
-/** The flight along +z about x = 0 from `FLIGHT_FOOT_Z`, its landing after it, its party wall at +x and a banister at -x from before its foot (`newel`: from its first riser, its end a post there; `mirrored`: the wall at -x and the banister at +x). */
-function flight(newel = false, mirrored = false): FloorBox[] {
+/** The flight along +z about x = 0 from `FLIGHT_FOOT_Z`, its landing after it, its party wall at +x and a banister at -x from before its foot (`newel`: from its first riser, its end a post there). */
+function flight(newel = false): FloorBox[] {
   const boxes: FloorBox[] = [];
   const top = FLIGHT_FOOT_Z + TREAD_RUN * FLIGHT_STEPS;
   for (let s = 0; s < FLIGHT_STEPS; s++) {
     boxes.push({ x0: -FLIGHT_HALF, x1: FLIGHT_HALF, z0: FLIGHT_FOOT_Z + TREAD_RUN * s, z1: FLIGHT_FOOT_Z + TREAD_RUN * (s + 1), y0: 0, y1: MAX_RISER * (s + 1) });
   }
   boxes.push({ x0: -FLIGHT_HALF, x1: FLIGHT_HALF, z0: top, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS });
-  const side = (box: FloorBox): FloorBox => (mirrored ? { ...box, x0: -box.x1, x1: -box.x0 } : box);
-  boxes.push(side({ x0: FLIGHT_HALF, x1: FLIGHT_HALF + 0.3, z0: -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 3 }));
-  boxes.push(side({ x0: -FLIGHT_HALF - 0.06, x1: -FLIGHT_HALF, z0: newel ? FLIGHT_FOOT_Z : -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 1 }));
+  boxes.push({ x0: FLIGHT_HALF, x1: FLIGHT_HALF + 0.3, z0: -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 3 });
+  boxes.push({ x0: -FLIGHT_HALF - 0.06, x1: -FLIGHT_HALF, z0: newel ? FLIGHT_FOOT_Z : -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 1 });
   return boxes;
 }
 
@@ -113,6 +108,8 @@ const flightCases: readonly { it: string; x: number; heading: number; command: n
   { it: "when he walks up it across to the party wall at 10 degrees, then he keeps his feet and his strength", x: -0.2, heading: 10 * DEG, command: WALK_SPEED },
   // mutation (a sprint ramps as a run on the treads): sed -i 's/^      const top = share < 1 ? Math.min(command, RUN_SPEED) : command;/      const top = command;/' src/game/present/walker-floor.ts
   { it: "when he sprints straight up it beside the party wall, then he keeps his feet and his strength", x: 0.2, heading: 0, command: SPRINT_SPEED },
+  // mutation (a foot across the banister reads the floor beyond it): sed -i 's/this.floor.walled(this.anchorPos\[0\]!, this.anchorPos\[2\]!, x, z) ? NO_FLOOR : this.floor.under(x, z)/this.floor.under(x, z)/' src/game/present/ragdoll-walker.ts
+  // mutation (a foot planted across the banister sets his floor): sed -i 's/^      if (planted\[f\] !== 1 || this.walled(fromX, fromZ, plant\[f \* 3\]!, plant\[f \* 3 + 2\]!)) continue;/      if (planted[f] !== 1) continue;/' src/game/present/walker-floor.ts
   { it: "when he runs up it 10 degrees into the banister, then he keeps his feet and his strength", x: 0, heading: -10 * DEG, command: RUN_SPEED },
 ];
 
@@ -129,65 +126,11 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
     });
   }
 
-  // mutation (the post's end holds his shoulder): sed -i 's/^    const aside = Math.max(-SIDESTEP_SPEED \* dt, Math.min(SIDESTEP_SPEED \* dt, edge));/    const aside = 0;/' src/game/present/ragdoll-walker.ts
-  it("when he walks up it 10 degrees into the banister, its end a post at the first riser, then he sidesteps the post, keeps his feet and his strength, and climbs it", async () => {
+  // mutation: sed -i 's/^    return height !== NO_FLOOR ? height : this.floor.level;/    return height !== NO_FLOOR ? height : 0;/' src/game/present/ragdoll-walker.ts
+  it("when he walks up it 10 degrees into the banister, its end a post at the first riser, then he keeps his feet and his strength", async () => {
     const sys = await standingAmong(flight(true), -0.2);
-    const start = sys["dolls"][WALKER_SLOT]!.bodies[0]!.translation().z;
     const climb = walk(sys, -10 * DEG, WALK_SPEED, CLIMB_SECONDS);
     expect(climb.fell, "he stayed on his feet").toBe(false);
     expect(climb.least, `least strength ${climb.least.toFixed(2)}`).toBeGreaterThanOrEqual(UNSHAKEN);
-    expect(climb.z - start, `he went up the flight: ${(climb.z - start).toFixed(2)} m`).toBeGreaterThan(NEWEL_CLIMB);
-  });
-
-  // mutation (a part of him through the banister carries him back and forth across it): sed -i 's/^      if (x \* this.carried\[0\]! + z \* this.carried\[1\]! < 0) {/      if (false) {/' src/game/present/ragdoll-walker.ts
-  it("when he walks 20 degrees into the banister from beside it, past the post at its end and on along its outside, then he keeps his feet and his strength", async () => {
-    const sys = await standingAmong(flight(true), -0.2);
-    const along = walk(sys, -20 * DEG, WALK_SPEED, CLIMB_SECONDS);
-    expect(along.fell, "he stayed on his feet").toBe(false);
-    expect(along.least, `least strength ${along.least.toFixed(2)}`).toBeGreaterThanOrEqual(UNSHAKEN);
-  });
-
-  // mutation (a riser under his lagging root reads a stride away, and he speeds into a skipped tread): sed -i '/^    if (this.stepAt(x, z, sin, cos, 0)) return STEP_PACE;/d' src/game/present/walker-floor.ts
-  it("when he runs up it 10 degrees into the banister from 0.2 m toward the party wall, on the flight as built and on its mirror image, then both ways he keeps his feet and his strength and climbs it", async () => {
-    for (const mirrored of [false, true]) {
-      const sys = await standingAmong(flight(false, mirrored), mirrored ? -0.2 : 0.2);
-      const start = sys["dolls"][WALKER_SLOT]!.bodies[0]!.translation().z;
-      const climb = walk(sys, (mirrored ? 10 : -10) * DEG, RUN_SPEED, CLIMB_SECONDS);
-      const way = mirrored ? "mirrored" : "as built";
-      expect(climb.fell, `${way}: he stayed on his feet`).toBe(false);
-      expect(climb.least, `${way}: least strength ${climb.least.toFixed(2)}`).toBeGreaterThanOrEqual(UNSHAKEN);
-      expect(climb.z - start, `${way}: he went up the flight: ${(climb.z - start).toFixed(2)} m`).toBeGreaterThan(FLIGHT_FOOT_Z + TREAD_RUN * CLIMB_TREADS);
-      sys.dispose();
-      system = null;
-    }
-  });
-});
-
-/** A tread of the flight a step from the landing, and a spot across the banister from the middle of the flight at that tread. */
-const TREAD = FLIGHT_STEPS - 2;
-const TREAD_Z = FLIGHT_FOOT_Z + TREAD_RUN * (TREAD + 0.5);
-const ACROSS_X = -FLIGHT_HALF - 0.25;
-
-describe("given the walker standing on a high tread of the flight, the banister beside him", () => {
-  // mutation (a foot across the banister reads the floor beyond it): sed -i 's/this.floor.walled(this.anchorPos\[0\]!, this.anchorPos\[2\]!, x, z) ? NO_FLOOR : this.floor.under(x, z)/this.floor.under(x, z)/' src/game/present/ragdoll-walker.ts
-  // mutation (no floor reads as the ground's 0): sed -i 's/^    return height !== NO_FLOOR ? height : this.floor.level;/    return height !== NO_FLOOR ? height : 0;/' src/game/present/ragdoll-walker.ts
-  it("when a foot is set across the banister, then it reads the tread he stands on, not the floor below the flight", () => {
-    const walker = new Walker();
-    walker.floor.boxes = flight();
-    walker.floor.reset(0, MAX_RISER * (TREAD + 1) + PARTS[0].c[1], TREAD_Z);
-    walker["anchorPos"][2] = TREAD_Z;
-    expect(walker.floor.level, "control: he stands on the tread").toBeCloseTo(MAX_RISER * (TREAD + 1), 6);
-    expect(walker["groundAt"](ACROSS_X, TREAD_Z), "the floor under a foot across the banister (m)").toBeCloseTo(walker.floor.level, 6);
-  });
-
-  // mutation (a foot planted across the banister sets his floor): sed -i 's/^      if (planted\[f\] !== 1 || this.walled(fromX, fromZ, plant\[f \* 3\]!, plant\[f \* 3 + 2\]!)) continue;/      if (planted[f] !== 1) continue;/' src/game/present/walker-floor.ts
-  it("when one foot is planted across the banister, then his floor stays the tread and he is not read as mid-step (a fall would be missed)", () => {
-    const floor = new WalkFloor();
-    floor.boxes = flight();
-    const tread = MAX_RISER * (TREAD + 1);
-    floor.reset(0, tread + PARTS[0].c[1], TREAD_Z);
-    floor.stand(Uint8Array.of(1, 1), Float64Array.of(0, tread, TREAD_Z, ACROSS_X, 0, TREAD_Z), 0, TREAD_Z);
-    expect(floor.level, "his floor (m)").toBeCloseTo(tread, 6);
-    expect(floor.rise, "how far his floor stands over his other foot's (m)").toBe(0);
   });
 });
