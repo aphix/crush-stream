@@ -79,6 +79,13 @@ type CrowdArt = {
   dispose(): void;
 };
 
+/** The crowd's cats and dogs: `update` once a frame after the crowd's step; `knocked` lays one run down where it was struck. */
+type AnimalDrawing = {
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void;
+  knocked(strike: FigureStrike, look: number): void;
+  dispose(): void;
+};
+
 /** The signage on the buildings: `update` once a frame. */
 type PlaceSigns = {
   update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null): void;
@@ -136,6 +143,8 @@ export type OpenWorldPorts = {
   /** Calls `listener` for every solid a car meets (closing speed, contact point) until the returned function is called. */
   hookWallHits(listener: (closing: number, x: number, z: number) => void): () => void;
   makeArt(capacity: number): CrowdArt;
+  /** The crowd's cats and dogs drawn; absent: they walk unseen (a harness without art). */
+  makeAnimals?(capacity: number): AnimalDrawing;
   /** The Track debug button is on: every place's name is printed on its building. */
   signsOn(): boolean;
   /** The signage of `places`, in the scene. */
@@ -182,6 +191,7 @@ export class OpenWorldDirector {
   private map: OpenWorldMap | null = null;
   private crowd: CivilianCrowd | null = null;
   private art: CrowdArt | null = null;
+  private animals: AnimalDrawing | null = null;
   private signs: PlaceSigns | null = null;
   private facades: FacadeArt | null = null;
   private law: OpenWorldLaw | null = null;
@@ -427,6 +437,7 @@ export class OpenWorldDirector {
     this.ports.eye(this.ray);
     this.frameSigns(this.map);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt, this.bodies?.held ?? null);
+    this.animals?.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     if (this.traffic?.ambulanceScene(this.sceneScratch) === true) this.medics?.setScene(this.sceneScratch.x, this.sceneScratch.z);
     this.medics?.frame(this.ambulanceState(), this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
@@ -464,12 +475,14 @@ export class OpenWorldDirector {
     this.bodies = null;
     this.stopTraffic();
     this.art?.dispose();
+    this.animals?.dispose();
     this.law?.dispose();
     this.medics?.dispose();
     this.clientDoors.release(this.ports.cars());
     this.crowd.dispose();
     this.unhook = null;
     this.art = null;
+    this.animals = null;
     this.law = null;
     this.medics = null;
     this.openers.others = [];
@@ -711,6 +724,7 @@ export class OpenWorldDirector {
     this.knockKnown = new Uint8Array(this.crowd.state.capacity);
     this.auto = this.makeAuto(this.crowd, key & CROWD_SEED_MASK);
     this.art = this.ports.makeArt(this.crowd.poses.count);
+    this.animals = this.ports.makeAnimals?.(this.crowd.poses.count) ?? null;
     this.figureSlot = new Int32Array(this.crowd.poses.count).fill(-1);
     this.figureAt = new Float64Array(this.crowd.poses.count);
     this.punches = new Uint8Array(this.crowd.poses.count);
@@ -793,6 +807,11 @@ export class OpenWorldDirector {
     const strikes = crowd.takeStrikes();
     for (let at = 0; at < strikes.length; at++) {
       const strike = strikes[at]!;
+      if (crowd.isAnimal(strike.guard)) {
+        this.animals?.knocked(strike, crowd.poses.look[strike.guard]!);
+        this.law?.noteStrike(strike);
+        continue;
+      }
       if (this.bodies?.knock(strike) === true) {
         this.law?.noteStrike(strike);
         continue;

@@ -62,6 +62,7 @@ import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildRoadNetwork } from "../world/openworld/openworld-roads.ts";
 import { CivilianArt } from "../present/civilian-art.ts";
+import { AnimalArt } from "../present/animal-art.ts";
 import { FacadeBays } from "../present/facade-bays.ts";
 import { InteriorSet } from "../present/interiors/interior-art.ts";
 import { DETAIL_SLOTS, NEAR_SLOTS } from "../present/civilian-art-constants.ts";
@@ -536,6 +537,12 @@ export class CrashEngine extends EngineGarage {
         this.scene.add(art.group);
         this.queueWarm();
         return art;
+      },
+      makeAnimals: (capacity) => {
+        const animals = new AnimalArt(capacity);
+        this.scene.add(animals.group);
+        this.queueWarm();
+        return animals;
       },
       signsOn: () => this.showTrackDebug,
       makeSigns: (places) => {
