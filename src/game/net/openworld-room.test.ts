@@ -30,7 +30,7 @@ const NEXT_EVENT = [1, 9, 77];
 type HeardCrowd = { seed: number; hostTime: number; crowdTime: number; events: number[] };
 
 function hostLink(log: number[]): CrowdLink {
-  return { seed: CROWD_SEED, crowdTime: () => CROWD_CLOCK, eventLog: () => Float64Array.from(log), hear: () => {} };
+  return { seed: CROWD_SEED, crowdTime: () => CROWD_CLOCK, eventLog: () => Float64Array.from(log), hear: () => {}, writeBodies: () => {}, hearBodies: () => {} };
 }
 
 function guestLink(heard: HeardCrowd[]): CrowdLink {
@@ -39,6 +39,8 @@ function guestLink(heard: HeardCrowd[]): CrowdLink {
     crowdTime: () => 0,
     eventLog: () => new Float64Array(0),
     hear: (seed, hostTime, crowdTime, events) => void heard.push({ seed, hostTime, crowdTime, events: [...events] }),
+    writeBodies: () => {},
+    hearBodies: () => {},
   };
 }
 
@@ -236,6 +238,6 @@ describe("given a room whose host has no crowd", () => {
   it("when the guest has no crowd link yet, then a crowd message from the host is dropped without a throw", () => {
     const s = room({ hostCrowd: hostLink([...FIRST_EVENTS]), guestCrowd: null });
     expect(() => s.step(60)).not.toThrow();
-    expect(NET_VERSION, "the build both speak").toBe(65);
+    expect(NET_VERSION, "the build both speak").toBe(66);
   });
 });

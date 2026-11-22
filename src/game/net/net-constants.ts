@@ -46,3 +46,5 @@ export const HOLD_EVERY_MS = 1000;
 export const REFUSED = 255;
 /** A guest that has heard a bodies frame within this long (s) has a fresh one; with none, the link to the host's people is down and the guest draws from its own crowd, law and medics. */
 export const BODIES_SILENT_S = 1;
+/** The host sends a frame of people (`MSG.bodies`) with every this-many-th snapshot: 15 Hz. */
+export const BODY_EVERY = 2;
