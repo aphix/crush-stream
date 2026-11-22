@@ -2579,6 +2579,8 @@ const _fz = new Float64Array(FOOT);
 /** The span (m) `edgeCross` halves a segment down to: a tread or a belly within 0.1 mm of the edge. At a fixed 1/32 of the span a
  *  tyre leaving the wedge's side read 1.4 mm under its tread there, 0.6 mm more than the ground-fit judge's tread rings. */
 const EDGE_TOL = 1e-4;
+/** The longest segment (m) `edgeCross` and `ridgeCross` read: its two ends are neighbouring sample points of one body, at most a car's length apart (the longest is 4.8 m), so only a body thrown apart by a bad impulse reaches it. */
+const CROSS_MAX_LEN = 100;
 /** The most (m at wheel scale 1) an arc's step can move a ring's height: a ring this far under the highest point cannot set the rise. */
 const ARC_RISE = (RINGS[0]![1] * (Math.PI / 2)) / STEPS;
 
@@ -2610,8 +2612,8 @@ function edgeCrossRead(ax: number, ay: number, az: number, bx: number, by: numbe
   let t0 = 0;
   let t1 = 1;
   const len = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay) + (bz - az) * (bz - az));
-  // An infinite segment halves forever (a NaN one reads nothing and returns): fail at the source rather than hang the frame.
-  if (len === Infinity) nonFinite("a body edge's length", len);
+  // A segment past any body's length is a body thrown apart; past about 1e12 m the halving stalls at a float's last bit and never ends (a NaN segment reads nothing and returns): fail at the source.
+  if (len > CROSS_MAX_LEN) nonFinite("a body edge's length", len);
   while ((t1 - t0) * len > EDGE_TOL) {
     const t = (t0 + t1) / 2;
     let px = ax + (bx - ax) * t;
@@ -2689,8 +2691,8 @@ function ridgeCrossRead(ax: number, ay: number, az: number, bx: number, by: numb
   const dy = by - ay;
   const dz = bz - az;
   const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  // An infinite segment has infinitely many readings (a NaN one has none): fail at the source rather than hang the frame.
-  if (len === Infinity) nonFinite("a body ridge's length", len);
+  // Past the bound it is millions of readings, or infinitely many (a NaN segment has none): fail at the source rather than hang the frame.
+  if (len > CROSS_MAX_LEN) nonFinite("a body ridge's length", len);
   const m = Math.ceil(len / RIDGE_STEP);
   ridgeBest[0] = NONE;
   let at = -1;

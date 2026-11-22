@@ -38,9 +38,9 @@ export function popcount(x: number): number {
   return n;
 }
 
-/** Throws: simulation value `what` read `value`, which no step can go on from. Kept out of the hot callers, which only compare and call it. */
+/** Throws: simulation value `what` read `value` (non-finite, or far past any real body's), which no step can go on from. Kept out of the hot callers, which only compare and call it. */
 export function nonFinite(what: string, value: number): never {
-  throw new Error(`${what} is ${value}: the simulation cannot step on from a non-finite value`);
+  throw new Error(`${what} is ${value}: no simulation step can go on from it`);
 }
 
 /**
