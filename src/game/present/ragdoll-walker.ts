@@ -130,7 +130,6 @@ export class Walker {
   /** Seconds since his punch began; at or past `PUNCH_SECONDS` he is not punching. */
   private punchFor = PUNCH_SECONDS;
   private forcing = false;
-  private groundLast = 0;
   private readonly reference = new Float64Array(4);
   private readonly next = new Float64Array(4);
   private readonly target = new Float64Array(4);
@@ -147,11 +146,10 @@ export class Walker {
   /** How far (m) he has gone on past the way out looking for clear ground to come down on (`HOP_ON`). */
   private hopOn = 0;
   private ray: Ray | null = null;
-  /** The floor under (x, z), the last known one where there is none. */
+  /** The floor under (x, z) for a foot; inside a wall, or across one from his root (a banister's far side), the floor his feet stand on. */
   private readonly groundAt = (x: number, z: number): number => {
-    const height = this.floor.under(x, z);
-    if (height !== NO_FLOOR) this.groundLast = height;
-    return this.groundLast;
+    const height = this.floor.walled(this.anchorPos[0]!, this.anchorPos[2]!, x, z) ? NO_FLOOR : this.floor.under(x, z);
+    return height !== NO_FLOOR ? height : this.floor.level;
   };
 
   get active(): boolean {
@@ -372,7 +370,7 @@ export class Walker {
     this.loco.update(dt, this.heading, this.floor.pace(this.anchorPos[0]!, this.anchorPos[2]!, this.loco.yaw, this.command));
     this.gait.update(dt, this.loco, this.groundAt, doll.cur, 3);
     this.punchArm(dt);
-    this.floor.stand(this.gait.planted, this.gait.plant);
+    this.floor.stand(this.gait.planted, this.gait.plant, this.anchorPos[0]!, this.anchorPos[2]!);
     this.moveAnchor(dt);
   }
 

@@ -18,6 +18,10 @@ const LED_WITHIN_S = 8;
 /** He stands within this far (m) of where the law set him down, and has not moved more than this far (m) in a second of holding the keys he may not use. */
 const SET_DOWN_M = 0.5;
 const STAYS_M = 0.5;
+/** Once set down with a diagonal held, he has turned onto it within this long (s), and his way is then read over this long (s), to within this (rad: 5 degrees, a stride's sway). */
+const TURNED_S = 1;
+const TRAVEL_S = 0.5;
+const DIAGONAL_TOLERANCE = (5 * Math.PI) / 180;
 /** The patrol car stands this far from his own car on the lawn (m). */
 const PATROL_CAR_OFFSET_M = 60;
 /** The car he left is on the road within this far of the station's door (m): `roadSpotNear`'s reach and a road's width. */
@@ -171,7 +175,7 @@ describe("given the real engine on the open world, the player on foot on the par
     });
 
     // mutation: sed -i -e 's/^    const ahead = -detSin(view.orbitAngle);/    const ahead = view.look.x - this.host.camera.position.x;/' -e 's/^    const side = -detCos(view.orbitAngle);/    const side = view.look.z - this.host.camera.position.z;/' src/game/engine/engine-onfoot.ts
-    it("when he is set down with forward and right held and the view held still, then his heading keeps one way off the view's through the camera's blend in from the patrol car", () => {
+    it("when he is set down with forward and right held and the view held still, then his heading keeps one way off the view's through the camera's blend in from the patrol car, and he walks 45 degrees right of where the camera looks", () => {
       busted();
       law().taken(1);
       rig.run(0.3);
@@ -194,12 +198,21 @@ describe("given the real engine on the open world, the player on foot on the par
         offView.push(wrapAngle(rig.walker().heading - detAtan2(-detSin(view.orbitAngle), -detCos(view.orbitAngle))));
       }
       const blended = camera.position.distanceTo(eye);
+      // Turned onto his heading, his torso's way is read over the next half second against the drawn camera's level forward.
+      rig.run(TURNED_S);
+      const from = rig.torso();
+      rig.run(TRAVEL_S);
+      const to = rig.torso();
+      const forward = camera.getWorldDirection(new THREE.Vector3());
+      const ahead = (to.x - from.x) * forward.x + (to.z - from.z) * forward.z;
+      const right = (to.x - from.x) * -forward.z + (to.z - from.z) * forward.x;
       // Let go as a cancel: a click in place would pick the car under the cursor.
       view["onPointerUp"](press("pointercancel"));
       keys.clear();
       expect(rig.phase(), "control: on foot").toBe("onFoot");
       expect(blended, "control: the drawn camera moved through its blend (m)").toBeGreaterThan(0.5);
       expect(Math.max(...offView.map((v) => Math.abs(wrapAngle(v - offView[0]!)))), "heading against the view (rad)").toBeLessThan(1e-6);
+      expect(Math.abs(Math.atan2(right, ahead) - Math.PI / 4), `his way right of the camera's forward: ${((Math.atan2(right, ahead) * 180) / Math.PI).toFixed(1)} degrees`).toBeLessThan(DIAGONAL_TOLERANCE);
     });
   });
 });

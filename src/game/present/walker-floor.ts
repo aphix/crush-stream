@@ -99,6 +99,38 @@ export class WalkFloor {
     return best;
   }
 
+  /** Whether a wall (a box over `WALL_RISE` above his level, not overhead) stands between (`fromX`, `fromZ`) and (`x`, `z`): a foot set there is across it, a banister's far side, where the floor is not his. */
+  walled(fromX: number, fromZ: number, x: number, z: number): boolean {
+    const ask = this.level + ASK_LIFT;
+    const dx = x - fromX;
+    const dz = z - fromZ;
+    const boxes = this.boxes;
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i]!;
+      if (box.y0 > ask || box.y1 <= ask + WALL_RISE) continue;
+      let near = 0;
+      let far = 1;
+      if (dx === 0) {
+        if (fromX < box.x0 || fromX > box.x1) continue;
+      } else {
+        const a = (box.x0 - fromX) / dx;
+        const b = (box.x1 - fromX) / dx;
+        near = Math.max(near, Math.min(a, b));
+        far = Math.min(far, Math.max(a, b));
+      }
+      if (dz === 0) {
+        if (fromZ < box.z0 || fromZ > box.z1) continue;
+      } else {
+        const a = (box.z0 - fromZ) / dz;
+        const b = (box.z1 - fromZ) / dz;
+        near = Math.max(near, Math.min(a, b));
+        far = Math.min(far, Math.max(a, b));
+      }
+      if (near <= far) return true;
+    }
+    return false;
+  }
+
   /**
    * The pace (m/s) he may keep at (`x`, `z`) facing `yaw` when asked for `command`: `STEP_PACE` while a step lies ahead or under him, and on the way to it no faster
    * than he can brake to it by the edge (a run or a sprint that reaches a flight too fast plants its first foot a tread too high, and the flight is a wall to him).
@@ -133,11 +165,11 @@ export class WalkFloor {
     return floor !== NO_FLOOR && Math.abs(floor - this.level) >= STEP_RISE;
   }
 
-  /** The gait has stepped: the higher floor under a planted foot's pivot (`plant` x, y, z per foot) is `level`. */
-  stand(planted: Uint8Array, plant: Float64Array): void {
+  /** The gait has stepped: the higher floor under a planted foot's pivot (`plant` x, y, z per foot) is `level`; a foot across a wall from his root at (`fromX`, `fromZ`) reads none. */
+  stand(planted: Uint8Array, plant: Float64Array, fromX: number, fromZ: number): void {
     let level = NO_FLOOR;
     for (let f = 0; f < 2; f++) {
-      if (planted[f] !== 1) continue;
+      if (planted[f] !== 1 || this.walled(fromX, fromZ, plant[f * 3]!, plant[f * 3 + 2]!)) continue;
       const floor = this.under(plant[f * 3]!, plant[f * 3 + 2]!);
       if (floor === NO_FLOOR) continue;
       this.footFloor[f] = floor;
