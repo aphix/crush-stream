@@ -1,4 +1,5 @@
 import { FRIDAY, GENDER, PURPOSE, SATURDAY, SPECIES } from "./civilian-constants.ts";
+import { CAT_COAT, DOG_COAT } from "./civilian-crowd-constants.ts";
 
 /** The places the cast's stories name; a map that lacks one skips the stories that need it. */
 export const PLACE_NAMES = {
@@ -41,6 +42,8 @@ export type CastMember = {
   title: string | null;
   /** What an animal is called in the look-at line. */
   description: string;
+  /** An animal's coat (`CAT_COAT`, `DOG_COAT`), the colour its description names; null: a person. */
+  coat: number | null;
   /** Pace against its species' own (a fat cat is slow). */
   paceFactor: number;
   partner: string | null;
@@ -53,7 +56,7 @@ export type CastMember = {
 /** Keys the cast names each other by. */
 const KEY = { tamika: "tamika", emeka: "emeka", ngozi: "ngozi" } as const;
 
-const PERSON = { species: SPECIES.person, workplace: null, title: null, description: "", paceFactor: 1, partner: null, parent: null, trait: null, appointments: [] } as const;
+const PERSON = { species: SPECIES.person, workplace: null, title: null, description: "", coat: null, paceFactor: 1, partner: null, parent: null, trait: null, appointments: [] } as const;
 const ANIMAL = { family: "", gender: GENDER.female, age: 3, workplace: null, title: null, paceFactor: 1, partner: null, parent: null, trait: null } as const;
 
 /** Who lives in Moore Park by name, and the small stories they carry out every day or week (owner: recurring stories, fixed by name, beside the seeded residents). */
@@ -88,11 +91,12 @@ export const CAST: readonly CastMember[] = [
     first: "Biscuit",
     species: SPECIES.cat,
     description: "an orange cat",
+    coat: CAT_COAT.orange,
     paceFactor: 0.7,
     home: PLACE_NAMES.vanAlley,
     appointments: [{ purpose: PURPOSE.biscuitSteals, place: PLACE_NAMES.kowalskiYard, hour: 5, minute: 50, weekday: null, dwellMinutes: 12 }],
   },
-  { ...ANIMAL, key: "pepper", first: "Pepper", species: SPECIES.cat, description: "a black cat with white socks", home: PLACE_NAMES.salCoop, appointments: [] },
+  { ...ANIMAL, key: "pepper", first: "Pepper", species: SPECIES.cat, description: "a black cat with white socks", coat: CAT_COAT.socks, home: PLACE_NAMES.salCoop, appointments: [] },
   ...["Tux", "Tilly", "Tank"].map(
     (first): CastMember => ({
       ...ANIMAL,
@@ -100,6 +104,7 @@ export const CAST: readonly CastMember[] = [
       first,
       species: SPECIES.cat,
       description: "a tabby",
+      coat: CAT_COAT.tabby,
       home: PLACE_NAMES.tabbyAlley,
       appointments: [
         { purpose: PURPOSE.tabbyPlay, place: PLACE_NAMES.parkCourt, hour: 15, minute: 0, weekday: null, dwellMinutes: 8 },
@@ -113,6 +118,7 @@ export const CAST: readonly CastMember[] = [
     first: "Duke",
     species: SPECIES.dog,
     description: "the bodega's dog",
+    coat: DOG_COAT.tan,
     home: PLACE_NAMES.bodega,
     appointments: [{ purpose: PURPOSE.dogChase, place: PLACE_NAMES.parkCourt, hour: 15, minute: 8, weekday: null, dwellMinutes: 4 }],
   },
