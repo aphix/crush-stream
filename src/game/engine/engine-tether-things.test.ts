@@ -65,7 +65,7 @@ function rig(scene: THREE.Scene, dollsOut: number[] = [0], chase = false, person
     dollsOut.push(PERSON_SLOT);
     return PERSON_SLOT;
   };
-  const director = new TetherDirector({ tethers, camera, scene, ropes, cars: () => [], movers: () => [], playerCar: () => -1, offered: () => true, chase: () => chase, afoot: () => true, self: () => -1, personMet, standPerson, holdDoll: (slot: number) => void ropes.held.push(slot) });
+  const director = new TetherDirector({ tethers, camera, scene, ropes, cars: () => [], movers: () => [], playerCar: () => -1, offered: () => true, chase: () => chase, afoot: () => true, self: () => -1, actor: () => 0, actorSlot: () => -1, guest: () => false, sendAct: () => {}, personMet, standPerson, holdDoll: (slot: number) => void ropes.held.push(slot) });
   const aimAt = (point: THREE.Vector3): void => {
     camera.lookAt(point);
     scene.updateMatrixWorld(true);
@@ -141,10 +141,10 @@ describe("given the free camera over a dummy standing out, with a wall behind hi
     fire();
     expect(tethers.count, "cables out after one fire").toBe(0);
     expect(tethers.isAlive(0)).toBe(false);
-    expect(director["heldCar"], "what the first fire holds: the wall, not the dummy").toBe(WORLD);
+    expect(director["holds"][0]!.car, "what the first fire holds: the wall, not the dummy").toBe(WORLD);
   });
 
-  // mutation: sed -i 's/object.name !== RAGDOLLS_MESH_NAME || //' src/game/engine/engine-tether.ts
+  // mutation: sed -i 's/object.name !== RAGDOLLS_MESH_NAME || //' src/game/engine/tether-sight.ts
   it("when the man is drawn on another dummy mesh (the crowd's) whose instance is a slot out in the pool, then the ray passes through him and the cable's first end is the wall, not that slot's dummy", () => {
     const scene = new THREE.Scene();
     const torso = dummy(scene, "crowd");
@@ -159,8 +159,8 @@ describe("given the free camera over a dummy standing out, with a wall behind hi
 });
 
 describe("given the free camera over a dummy standing out, held by a first fire", () => {
-  // mutation: sed -i 's/      if (this.host.ropes.torso(thingIndex(this.heldThing), this.heldWorld, null)) return this.heldWorld.add(this.heldOffset);/      if (this.host.ropes.dollOut(thingIndex(this.heldThing))) return this.heldWorld.copy(this.heldAt);/' src/game/engine/engine-tether.ts
-  // mutation: sed -i '/^        this.host.holdDoll(thingIndex(this.aimThing));/d' src/game/engine/engine-tether.ts
+  // mutation: sed -i 's/      if (this.host.ropes.torso(thingIndex(hold.thing), hold.world, null)) return hold.world.add(hold.offset);/      if (this.host.ropes.dollOut(thingIndex(hold.thing))) return hold.world.copy(hold.at);/' src/game/engine/engine-tether.ts
+  // mutation: sed -i '/^        this.host.holdDoll(thingIndex(aim.thing));/d' src/game/engine/engine-tether.ts
   it("when he walks 2 m to the side, then the held marker moves 2 m with him, and the second fire ties him where he is now", () => {
     const scene = new THREE.Scene();
     const torso = dummy(scene);
@@ -181,7 +181,7 @@ describe("given the free camera over a dummy standing out, held by a first fire"
 });
 
 describe("given the free camera over a drawn civilian with no body, with a wall behind her", () => {
-  // mutation: sed -i '/^      this.aimPerson = person.index;/d' src/game/engine/engine-tether.ts
+  // mutation: sed -i '/^      into.person = person.index;/d' src/game/engine/engine-tether.ts
   it("when it fires at her and then at the wall, then a body is stood for her and the cable's first end is that body's dummy at her chest", () => {
     const scene = new THREE.Scene();
     wall(scene);
@@ -225,7 +225,7 @@ describe("given the free camera over a cat or a dog, with a wall behind it", () 
       const { aimAt, fire, director } = rig(scene);
       aimAt(new THREE.Vector3(-3, EYE_Y, -AHEAD));
       fire();
-      expect(director["view"].point.z, `${name}: where the aim lands (m along -z)`).toBeLessThan(-WALL_AHEAD + 1);
+      expect(director["mine"].point.z, `${name}: where the aim lands (m along -z)`).toBeLessThan(-WALL_AHEAD + 1);
     }
   });
 });
@@ -345,7 +345,7 @@ describe("given the free camera over a mesh of two instances, the first of which
     plain.fire();
     plain.aimAt(new THREE.Vector3(0, EYE_Y, -WALL_AHEAD));
     plain.fire();
-    expect(plain.director["heldCar"], "a prop that cannot be knocked is a point of the world").toBe(WORLD);
+    expect(plain.director["holds"][0]!.car, "a prop that cannot be knocked is a point of the world").toBe(WORLD);
     expect(plain.ropes.attached.length, "no rope for a point of the world and a point of the world").toBe(0);
   });
 });
@@ -374,7 +374,7 @@ describe("given a camera over a wall 30 m off", () => {
     const { director, aimAt, fire } = rig(scene, [], chase);
     aimAt(new THREE.Vector3(0, EYE_Y, -WALL_AHEAD));
     fire();
-    return { y: director["view"].point.y, sight: director.hud()?.sight };
+    return { y: director["mine"].point.y, sight: director.hud()?.sight };
   };
 
   it("when it is a chase camera, then the aim runs through a point 38 % from the top of the view and hits the wall higher than the middle does", () => {

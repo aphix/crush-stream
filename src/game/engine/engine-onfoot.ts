@@ -181,6 +181,11 @@ export class OnFootDirector {
     return this.flow.phase === "onFoot" && this.host.openWorld();
   }
 
+  /** On foot in the open world on any machine, guest or not: where the hook's offer starts. */
+  get afootInOpenWorld(): boolean {
+    return this.host.openWorld() && this.flow.phase === "onFoot";
+  }
+
   /** Whether fire, aim and weapons are his: on foot in the open world, solo or as the room's host. */
   armed(): boolean {
     return this.host.openWorld() && this.flow.phase === "onFoot" && !this.host.guest();

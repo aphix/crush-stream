@@ -529,9 +529,9 @@ export abstract class RagdollThrower extends RagdollStepper {
     if (this.mode !== null) this.ropeCommand({ type: "ropeCut", command: this.ropesSent + 1, slot });
   }
 
-  /** Every rope reels in while `on`. */
-  ropeReel(on: boolean): void {
-    if (this.mode !== null) this.ropeCommand({ type: "ropeReel", command: this.ropesSent + 1, on });
+  /** Rope `slot` reels in while `on` (-1: every rope). */
+  ropeReel(on: boolean, slot = -1): void {
+    if (this.mode !== null) this.ropeCommand({ type: "ropeReel", command: this.ropesSent + 1, on, slot });
   }
 
   private ropeCommand(m: RopeMessage): number {
@@ -548,7 +548,7 @@ export abstract class RagdollThrower extends RagdollStepper {
       this.wake();
       this.ropes.attach(m.slot, m.a, m.b);
     } else if (m.type === "ropeCut") this.ropes.cut(m.slot);
-    else this.ropes.reeling = m.on;
+    else this.ropes.reel(m.slot ?? -1, m.on);
     this.ropeReport.command = m.command;
     this.ropes.finish(0, this.ropeReport.floats);
   }

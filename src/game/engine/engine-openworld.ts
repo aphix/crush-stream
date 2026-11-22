@@ -594,14 +594,15 @@ export class OpenWorldDirector {
     this.law?.playerStruck(this.seconds, knockedOut);
   }
 
-  /** The drawn person with no body whose chest the hook's sight line passes nearest within `reach` m, into `out`: index below the crowd's size a civilian (a person the hook can stand a body for: no cat or dog, and none while every body is roped, pinned or down), then the foot cops, then the medics. None on a client. */
+  /** The drawn person with no body whose chest the hook's sight line passes nearest within `reach` m, into `out`: index below the crowd's size a civilian (a person the hook can stand a body for from the ray's eye: no cat or dog, and none while every body is roped, pinned or down), then the foot cops, then the medics. On a client (a guest's reticle) the mirror's poses are met and no body is asked for. */
   hookMet(ray: LookRay, reach: number, out: Meeting): Meeting {
     const crowd = this.crowd;
     out.index = -1;
     out.along = reach;
-    if (crowd === null || this.bodies === null || this.ports.isClient()) return out;
+    const client = this.ports.isClient();
+    if (crowd === null || (this.bodies === null && !client)) return out;
     const people = crowd.poses.count;
-    if (this.bodies.canStand(this.ray.eyeX, this.ray.eyeZ)) chestMet(crowd.poses, people, this.bodies.held, ray, SHOT_BODY_RADIUS, reach, out, true);
+    if (client || this.bodies!.canStand(ray.eyeX, ray.eyeZ)) chestMet(crowd.poses, people, this.bodies?.held ?? null, ray, SHOT_BODY_RADIUS, reach, out, true);
     const other = this.hookOther;
     if (this.law !== null && this.law.copMet(ray, SHOT_BODY_RADIUS, out.along, other).index >= 0) {
       out.index = people + other.index;
@@ -614,15 +615,15 @@ export class OpenWorldDirector {
     return out;
   }
 
-  /** The hook takes the person `hookMet` named: a civilian gets a body at her drawn spot (a suspect is let out of the law's hands); a cop is downed and thrown; a medic is thrown. Its pool slot, -1 when none can be. */
-  hookBody(index: number): number {
+  /** The hook takes the person `hookMet` named for an actor whose eye is at (eyeX, eyeZ): a civilian gets a body at her drawn spot (a suspect is let out of the law's hands); a cop is downed and thrown; a medic is thrown. Its pool slot, -1 when none can be. */
+  hookBody(index: number, eyeX = this.ray.eyeX, eyeZ = this.ray.eyeZ): number {
     const crowd = this.crowd;
     if (crowd === null || this.bodies === null) return -1;
     const people = crowd.poses.count;
     if (index >= people + FOOT_COP_COUNT) return this.hookMedic(index - people - FOOT_COP_COUNT);
     if (index >= people) return this.hookCop(index - people);
     this.interiors?.holdFloorAt(crowd.poses.x[index]!, crowd.poses.z[index]!);
-    const slot = this.bodies.stand(crowd.poses, index, this.ray.eyeX, this.ray.eyeZ);
+    const slot = this.bodies.stand(crowd.poses, index, eyeX, eyeZ);
     if (slot >= 0) this.law?.releaseSuspect(index);
     return slot;
   }

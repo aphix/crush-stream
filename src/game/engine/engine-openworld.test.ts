@@ -524,6 +524,30 @@ describe("given the hook aimed at the drawn people of the open world", () => {
     expect(met.index, "one can").toBe(c);
   });
 
+  it("when an actor's ray is asked about and a body is stood for her, then the pool is asked from that actor's eye, not the local player's", () => {
+    const harness = hostWithBodies();
+    const { c, ray } = aimedAt(harness, SPECIES.person);
+    const canStand = vi.spyOn(harness.director["bodies"]!, "canStand");
+    const stand = vi.spyOn(harness.director["bodies"]!, "stand");
+    harness.director.hookMet(ray, 60, { index: -1, along: 0 });
+    expect(canStand, "asked from the ray's eye").toHaveBeenCalledWith(ray.eyeX, ray.eyeZ);
+    harness.director.hookBody(c, 123, 456);
+    expect(stand.mock.calls[0]![2], "eye x").toBe(123);
+    expect(stand.mock.calls[0]![3], "eye z").toBe(456);
+  });
+
+  it("when a guest's reticle meets a civilian by the crowd mirror's poses, then she is named though no body of its own could be stood; on the host the same ray names no one", () => {
+    const harness = hostWithBodies();
+    const { c, ray } = aimedAt(harness, SPECIES.person);
+    const met = { index: -1, along: 0 };
+    vi.spyOn(harness.director["bodies"]!, "canStand").mockReturnValue(false);
+    harness.director.hookMet(ray, 60, met);
+    expect(met.index, "the host: no body to stand").toBe(-1);
+    harness.client = true;
+    harness.director.hookMet(ray, 60, met);
+    expect(met.index, "a guest: named").toBe(c);
+  });
+
   it("when a cop the hook took is up again after his time, then the dummy thrown for him goes by its slot and age, and not before", () => {
     const harness = hostWithBodies();
     const people = harness.crowd().poses.count;

@@ -46,6 +46,8 @@ class Link {
   armed = false;
   joint: ImpulseJoint | null = null;
   length = 0;
+  /** This rope's own winch reels it in, whatever the all-ropes winch says. */
+  reels = false;
   readonly sides = [new Side(), new Side()] as const;
 }
 
@@ -93,6 +95,12 @@ export class Ropes {
     for (let i = 0; i < 2 * MAX_TETHERS; i++) this.points.push(world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(0, PARKED_Y, 0).setEnabled(false)));
   }
 
+  /** Rope `slot` reels in (or stops); `slot` -1: every rope's winch, as `reeling` is. */
+  reel(slot: number, on: boolean): void {
+    if (slot < 0) this.reeling = on;
+    else this.links[slot]!.reels = on;
+  }
+
   /** Rope `slot` ties `a` to `b`: it is joined at the next `follow`, once the cars it follows have a pose. A rope already in the slot is cut; one with no end in this world, or an end that is gone, leaves the slot empty. */
   attach(slot: number, a: RopeEnd, b: RopeEnd): void {
     this.cut(slot);
@@ -126,6 +134,7 @@ export class Ropes {
     if (link.live) this.count--;
     link.live = false;
     link.armed = false;
+    link.reels = false;
   }
 
   /** The thing `kind` `id` is gone (a dummy put away): every rope on it is cut. */
@@ -185,7 +194,7 @@ export class Ropes {
       }
       this.place(link.sides[0], _world);
       this.place(link.sides[1], _local);
-      if (this.reeling) {
+      if (this.reeling || link.reels) {
         link.length = Math.min(link.length, Math.max(Math.min(WINCH_MIN_LENGTH, link.length), _world.distanceTo(_local) - WINCH_SPEED * dt));
         this.world!.impulseJoints.raw.jointSetLimits(link.joint!.handle, ROPE_AXIS, 0, link.length);
       }

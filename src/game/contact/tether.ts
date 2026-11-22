@@ -30,8 +30,8 @@ export const RAPIER = -2;
 export const THING = { doll: 1, prop: 2, box: 3 } as const;
 const THING_RADIX = 1 << 16;
 
-/** One cable's numbers in `TetherSet.rows`: alive, the two ends' car index, the two ends' coordinates, its length (m), its averaged tension (N), its strength (N) and the two ends' things. */
-export const ROW = 14;
+/** One cable's numbers in `TetherSet.rows`: alive, the two ends' car index, the two ends' coordinates, its length (m), its averaged tension (N), its strength (N), the two ends' things, the actor that fired it (`NO_OWNER`: none) and whether its winch reels. */
+export const ROW = 16;
 const R_ALIVE = 0;
 const R_CAR = 1;
 const R_POS = 3;
@@ -39,6 +39,10 @@ const R_LENGTH = 9;
 const R_TENSION = 10;
 export const R_STRENGTH = 11;
 const R_THING = 12;
+const R_OWNER = 14;
+const R_REEL = 15;
+/** The owner of a cable no actor fired. */
+const NO_OWNER = -1;
 
 /** A thing's `THING` kind and index as the one number `TetherSet.setEnd` keeps, and back. */
 export function thingCode(kind: number, index: number): number {
@@ -58,8 +62,31 @@ export class TetherSet {
   readonly rows = new Float64Array(MAX_TETHERS * ROW);
   /** Cables alive. */
   count = 0;
-  /** The retract is held: every cable reels in. */
-  reeling = false;
+  /** Some cable's winch reels; assigned, every cable's does (the all-cables switch; `setReel` reels one actor's). */
+  get reeling(): boolean {
+    for (let i = 0; i < MAX_TETHERS; i++) if (this.isAlive(i) && this.reels(i)) return true;
+    return false;
+  }
+
+  set reeling(on: boolean) {
+    for (let i = 0; i < MAX_TETHERS; i++) this.rows[i * ROW + R_REEL] = on ? 1 : 0;
+  }
+
+  /** The cable's winch reels it in. */
+  reels(slot: number): boolean {
+    return this.rows[slot * ROW + R_REEL] === 1;
+  }
+
+  /** The winch of every cable `owner` fired reels (or stops). */
+  setReel(owner: number, on: boolean): void {
+    for (let i = 0; i < MAX_TETHERS; i++) if (this.isAlive(i) && this.rows[i * ROW + R_OWNER] === owner) this.rows[i * ROW + R_REEL] = on ? 1 : 0;
+  }
+
+  /** The actor that fired cable `slot` (`NO_OWNER`: none). */
+  owner(slot: number): number {
+    return this.rows[slot * ROW + R_OWNER]!;
+  }
+
   /** The slot a full set gives up next (the oldest). */
   private oldest = 0;
 
@@ -67,8 +94,8 @@ export class TetherSet {
     return this.rows[slot * ROW + R_ALIVE] === 1;
   }
 
-  /** A fresh cable in a free slot (the oldest one's, if the set is full), its ends unset: set both (`setEnd`), then `fit` it. */
-  open(): number {
+  /** A fresh cable in a free slot (the oldest one's, if the set is full), fired by `owner` (an actor's car index), its ends unset: set both (`setEnd`), then `fit` it. */
+  open(owner = NO_OWNER): number {
     let slot = -1;
     for (let i = 0; i < MAX_TETHERS; i++) {
       if (!this.isAlive(i)) {
@@ -84,6 +111,7 @@ export class TetherSet {
     const o = slot * ROW;
     this.rows.fill(0, o, o + ROW);
     this.rows[o + R_ALIVE] = 1;
+    this.rows[o + R_OWNER] = owner;
     this.rows[o + R_STRENGTH] = BREAK_FORCE;
     this.count++;
     return slot;
@@ -288,13 +316,14 @@ function prepare(set: TetherSet, slot: number, cars: readonly DeformableCar[], h
   const inverse = inverseMassAt(a, axis) + inverseMassAt(b, axis);
   if (inverse <= 0) return false;
   // The winch takes up slack at once: it reels from where the ends stand, and never lets the cable out.
-  if (set.reeling) set.rows[o + R_LENGTH] = Math.min(set.rows[o + R_LENGTH]!, Math.max(Math.min(WINCH_MIN_LENGTH, set.rows[o + R_LENGTH]!), span - WINCH_SPEED * h));
+  const reel = set.rows[o + R_REEL] === 1;
+  if (reel) set.rows[o + R_LENGTH] = Math.min(set.rows[o + R_LENGTH]!, Math.max(Math.min(WINCH_MIN_LENGTH, set.rows[o + R_LENGTH]!), span - WINCH_SPEED * h));
   const stretch = span - set.rows[o + R_LENGTH]!;
   const w = slot * W_STRIDE;
   _work[w + W_LIVE] = 1;
   _work[w + W_INVERSE_MASS] = inverse;
-  _work[w + W_ROOM] = set.reeling ? RETRACT_FORCE * h : Infinity;
-  _work[w + W_TARGET] = stretch <= 0 || set.reeling ? -stretch / h : -Math.min((STRETCH_BIAS * stretch) / h, MAX_PULL_IN);
+  _work[w + W_ROOM] = reel ? RETRACT_FORCE * h : Infinity;
+  _work[w + W_TARGET] = stretch <= 0 || reel ? -stretch / h : -Math.min((STRETCH_BIAS * stretch) / h, MAX_PULL_IN);
   return true;
 }
 
