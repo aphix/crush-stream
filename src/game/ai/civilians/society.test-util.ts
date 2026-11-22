@@ -1,4 +1,5 @@
 import { PLACE_KIND, type OpenWorldMap, type Place } from "../../world/openworld/walk-graph.ts";
+import { counterStandSpots } from "../../world/openworld/interior-aisle.ts";
 import { PLACE_NAMES } from "./civilian-cast.ts";
 import { dayOf } from "./civilian-clock.ts";
 import {
@@ -35,9 +36,15 @@ function seatsBeside(place: Place, count: number, height: number): number[] {
   return Array.from({ length: count }, (_, seat) => [place.doorX + 1 + seat, place.doorZ + 1, 0, height]).flat();
 }
 
-/** Where a customer stands, then where a clerk stands, one metre in from the door; the clerk stands clear of the customers' second standing row (1.6 m back from theirs). */
-function counterBeside(place: Place): Float32Array {
-  return Float32Array.from([place.doorX + 1, place.doorZ - 1, 0, COUNTER_TOP, place.doorX + 1, place.doorZ - 3.4, Math.PI, COUNTER_TOP]);
+/** A fixture counter runs this far (m) either side of its serving point: room for the five buying lanes. */
+const COUNTER_HALF = 2;
+
+/** Where a customer stands, then where a clerk stands, one metre in from the door (the clerk clear of the customers' second standing row, 1.6 m back from theirs), and the standing spots by them in an empty room. */
+function counterBeside(place: Place): Pick<Place, "counter" | "standSpots"> {
+  const x = place.doorX + 1;
+  const customer = { x, z: place.doorZ - 1, outX: 0, outZ: -1, alongMin: -COUNTER_HALF, alongMax: COUNTER_HALF };
+  const clerk = { x, z: place.doorZ - 3.4, outX: 0, outZ: 1, alongMin: -COUNTER_HALF, alongMax: COUNTER_HALF };
+  return { counter: Float32Array.from([customer.x, customer.z, 0, COUNTER_TOP, clerk.x, clerk.z, Math.PI, COUNTER_TOP]), standSpots: counterStandSpots(customer, clerk) };
 }
 
 /**
@@ -50,10 +57,10 @@ export function buildSocietyMap(extraSpecs: readonly PlaceSpec[] = []): OpenWorl
     ...extraSpecs,
   ]);
   const places = base.places.map((place): Place => {
-    if (place.name === COFFEE_SHOP) return { ...place, interior: "coffee", seats: Float32Array.from(seatsBeside(place, 3, SEAT_TOP)), counter: counterBeside(place) };
-    if (place.name === PLACE_NAMES.bar) return { ...place, interior: "bar", seats: Float32Array.from(seatsBeside(place, 2, SEAT_TOP)), counter: counterBeside(place) };
-    if (place.name === SUPERMARKET) return { ...place, style: "supermarket", counter: counterBeside(place) };
-    if (place.name === PLACE_NAMES.bodega) return { ...place, interior: "store", counter: counterBeside(place) };
+    if (place.name === COFFEE_SHOP) return { ...place, interior: "coffee", seats: Float32Array.from(seatsBeside(place, 3, SEAT_TOP)), ...counterBeside(place) };
+    if (place.name === PLACE_NAMES.bar) return { ...place, interior: "bar", seats: Float32Array.from(seatsBeside(place, 2, SEAT_TOP)), ...counterBeside(place) };
+    if (place.name === SUPERMARKET) return { ...place, style: "supermarket", ...counterBeside(place) };
+    if (place.name === PLACE_NAMES.bodega) return { ...place, interior: "store", ...counterBeside(place) };
     if (place.kind === PLACE_KIND.home && place.doorNode >= 0) return { ...place, seats: Float32Array.from(seatsBeside(place, 2, STOOP_TOP)), stoopSeats: 2 };
     return place;
   });
