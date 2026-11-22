@@ -46,11 +46,13 @@ describe("given the open world's course, its crossings painted on the road", () 
   });
 
   it("when the player's car stands on a crossing, then the chase eye keeps the chase view's distance and does not close on the cab", () => {
-    // The spawn stood on a crossing until it moved off the zebra; the car now stands on the first crossing, facing the spawn's way.
-    const at = crossings[0]!;
+    // The spawn stood on a crossing until it moved off the zebra; the car now stands on the crossing nearest the spawn, facing the spawn's way.
+    const start = track.survival!.start;
+    const far = (prop: { x: number; z: number }): number => (prop.x - start.x) ** 2 + (prop.z - start.z) ** 2;
+    const at = crossings.reduce((best, prop) => (far(prop) < far(best) ? prop : best));
     const under = crossings.filter((prop) => inside(occluder(prop.x, prop.z, prop.yaw, (PREFABS[prop.prefab].size[0] * prop.sx) / 2, (PREFABS[prop.prefab].size[2] * prop.sz) / 2, false, -1, 1), at.x, 0, at.z, 0));
     expect(under.length, "crossings painted under the car").toBeGreaterThan(0);
-    const { subject, eye, rigEye } = chaseOf(at.x, at.z, track.survival!.start.yaw);
+    const { subject, eye, rigEye } = chaseOf(at.x, at.z, start.yaw);
     new EyeClear().apply(sight, [], subject, eye, Infinity);
     expect(eye.distanceTo(subject), "the eye's distance from the car's aim point").toBeCloseTo(rigEye.distanceTo(subject), 6);
   });
