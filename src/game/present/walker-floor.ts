@@ -99,13 +99,12 @@ export class WalkFloor {
     return best;
   }
 
-  /** The share (0 to 1) of the way from (`fromX`, `fromZ`) to (`x`, `z`) at which it first meets a wall (a box over `WALL_RISE` above his level, not overhead); 1 when it meets none. */
-  wallShare(fromX: number, fromZ: number, x: number, z: number): number {
+  /** Whether a wall (a box over `WALL_RISE` above his level, not overhead) stands between (`fromX`, `fromZ`) and (`x`, `z`): a foot set there is across it, a banister's far side, where the floor is not his. */
+  walled(fromX: number, fromZ: number, x: number, z: number): boolean {
     const ask = this.level + ASK_LIFT;
     const dx = x - fromX;
     const dz = z - fromZ;
     const boxes = this.boxes;
-    let first = 1;
     for (let i = 0; i < boxes.length; i++) {
       const box = boxes[i]!;
       if (box.y0 > ask || box.y1 <= ask + WALL_RISE) continue;
@@ -127,9 +126,9 @@ export class WalkFloor {
         near = Math.max(near, Math.min(a, b));
         far = Math.min(far, Math.max(a, b));
       }
-      if (near <= far) first = Math.min(first, near);
+      if (near < 1 && near <= far) return true;
     }
-    return first;
+    return false;
   }
 
   /**
@@ -170,7 +169,7 @@ export class WalkFloor {
   stand(planted: Uint8Array, plant: Float64Array, fromX: number, fromZ: number): void {
     let level = NO_FLOOR;
     for (let f = 0; f < 2; f++) {
-      if (planted[f] !== 1 || this.wallShare(fromX, fromZ, plant[f * 3]!, plant[f * 3 + 2]!) < 1) continue;
+      if (planted[f] !== 1 || this.walled(fromX, fromZ, plant[f * 3]!, plant[f * 3 + 2]!)) continue;
       const floor = this.under(plant[f * 3]!, plant[f * 3 + 2]!);
       if (floor === NO_FLOOR) continue;
       this.footFloor[f] = floor;

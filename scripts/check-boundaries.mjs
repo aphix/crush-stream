@@ -148,7 +148,7 @@ const HOT = {
   "src/game/engine/engine-openworld-cull.ts": ["frame"],
   "src/game/engine/engine-openworld-ambulance.ts": ["note", "hear", "newestCalled"],
   "src/game/engine/engine-openworld-door-clips.ts": ["frame", "carAt"],
-  "src/game/present/walker-floor.ts": ["under", "pace", "stand", "solidsHeight", "wallShare"],
+  "src/game/present/walker-floor.ts": ["under", "pace", "stand", "solidsHeight", "walled"],
   "src/game/present/walker-gait.ts": ["restHeight", "clearHeight"],
   "src/game/world/stairs.ts": ["heightAt", "flightHeightAt"],
   "src/game/present/ragdoll-throw.ts": ["meetWalkers", "dollRoped"],
