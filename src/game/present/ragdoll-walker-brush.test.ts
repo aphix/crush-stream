@@ -170,11 +170,11 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
 
   /** Each starts 0.2 m from the middle toward the banister, its end a post at the first riser, and heads into it (`mirrored`: the flight's mirror image, the banister at +x). */
   const newelCases: readonly { it: string; x: number; heading: number; command: number; mirrored: boolean }[] = [
-    // mutation (his torso springing up in his own hop over a riser reads as a blow): sed -i '/^    if (this.hopUp > 0) dy = Math.min(0, dy);/d' src/game/present/ragdoll-walker.ts
+    // mutation: sed -i 's/^const HOP_EXPLAINS = 3;/const HOP_EXPLAINS = 0;/' src/game/present/ragdoll-walker.ts
     { it: "when he walks up its mirror image 5 degrees into the banister from beside the post, then he keeps his feet and his strength", x: 0.2, heading: 5 * DEG, command: WALK_SPEED, mirrored: true },
-    // mutation (his torso springing up in his own hop over a riser reads as a blow): sed -i '/^    if (this.hopUp > 0) dy = Math.min(0, dy);/d' src/game/present/ragdoll-walker.ts
+    // mutation: sed -i 's/^const HOP_EXPLAINS = 3;/const HOP_EXPLAINS = 0;/' src/game/present/ragdoll-walker.ts
     { it: "when he runs up it 5 degrees into the banister from beside the post, then he keeps his feet and his strength", x: -0.2, heading: -5 * DEG, command: RUN_SPEED, mirrored: false },
-    // mutation (his torso springing up in his own hop over a riser reads as a blow): sed -i '/^    if (this.hopUp > 0) dy = Math.min(0, dy);/d' src/game/present/ragdoll-walker.ts
+    // mutation: sed -i 's/^const HOP_EXPLAINS = 3;/const HOP_EXPLAINS = 0;/' src/game/present/ragdoll-walker.ts
     { it: "when he sprints up it 5 degrees into the banister from beside the post, then he keeps his feet and his strength", x: -0.2, heading: -5 * DEG, command: SPRINT_SPEED, mirrored: false },
     // mutation (his torso going out along getOut's carry past the post reads as a blow): sed -i 's/^    const carry = hypot2(this.carried\[0\]!, this.carried\[1\]!);/    const carry = 0;/' src/game/present/ragdoll-walker.ts
     { it: "when he sprints 20 degrees into the banister from beside it, past the post at its end and on along its outside, then he keeps his feet and his strength", x: -0.2, heading: -20 * DEG, command: SPRINT_SPEED, mirrored: false },
@@ -215,5 +215,26 @@ describe("given the walker standing on a high tread of the flight, the banister 
     floor.stand(Uint8Array.of(1, 1), Float64Array.of(0, tread, TREAD_Z, ACROSS_X, 0, TREAD_Z), 0, TREAD_Z);
     expect(floor.level, "his floor (m)").toBeCloseTo(tread, 6);
     expect(floor.rise, "how far his floor stands over his other foot's (m)").toBe(0);
+  });
+});
+
+describe("given the walker on his feet, his torso at his root", () => {
+  /** His blow read with his torso moving at `vel` (x, y, z m/s) off a still root, facing +z. */
+  function readWith(walker: Walker, vel: readonly number[]): number {
+    const cur = new Float64Array(3);
+    return walker["blowSpeed"]({ cur, vel: Float64Array.from(vel) } as never, 0);
+  }
+
+  // mutation: sed -i 's/^const CARRY_EXPLAINS = 3;/const CARRY_EXPLAINS = Infinity;/' src/game/present/ragdoll-walker.ts
+  // mutation: sed -i 's/^const HOP_EXPLAINS = 3;/const HOP_EXPLAINS = Infinity;/' src/game/present/ragdoll-walker.ts
+  it("when his torso goes out along a carry at 6 m/s, or up mid-hop at 6 m/s, then it reads as a blow of the speed past what his own step explains; at 1.9 m/s it reads nothing", () => {
+    const walker = new Walker();
+    walker["carried"][0] = -0.05;
+    expect(readWith(walker, [-6, 0, 0]), "out along the carry at 6 m/s").toBeCloseTo(3, 6);
+    expect(readWith(walker, [-1.9, 0, 0]), "out along the carry at 1.9 m/s").toBeCloseTo(0, 6);
+    walker["carried"][0] = 0;
+    walker["hopUp"] = 0.23;
+    expect(readWith(walker, [0, 6, 0]), "up mid-hop at 6 m/s").toBeCloseTo(3, 6);
+    expect(readWith(walker, [0, 1.9, 0]), "up mid-hop at 1.9 m/s").toBeCloseTo(0, 6);
   });
 });

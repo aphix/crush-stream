@@ -65,6 +65,10 @@ const LEASH = 0.08;
 const BLOCKED_MARGIN = 1;
 /** Held back by a wall's edge he can clear (`WalkFloor.edgeAhead`), he sidesteps it at this speed (m/s), a shuffle (tuned by feel). */
 const SIDESTEP_SPEED = 1;
+/** The upward speed (m/s) of his torso past the root that his own hop over a riser explains: 2.0 measured at the most on the flight, and half again for margin. */
+const HOP_EXPLAINS = 3;
+/** The speed (m/s) of his torso out along `getOut`'s carry that his own step out explains: 1.9 measured at the most past a newel post, and half again for margin. */
+const CARRY_EXPLAINS = 3;
 /** The hold's spring rate (rad/s) on his whole mass: displacement times it is the speed a displaced torso springs back at. */
 const HOLD_RATE = Math.sqrt(HOLD.stiffness / TOTAL_MASS);
 /** A hop out goes on at most this far (m, a stride) past the way out to find ground clear of everything to come down on. */
@@ -287,11 +291,11 @@ export class Walker {
     let dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx * keep;
     let dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;
     let dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz * keep;
-    // Mid-hop (`hopUp`) his torso springing up past the root is his own hop, not a blow: only a drop is read.
-    if (this.hopUp > 0) dy = Math.min(0, dy);
-    // A carry under way (`carried`): his torso going out along it is his own step out of what he was caught in, not a blow.
+    // Mid-hop (`hopUp`) his torso springing up past the root is his own hop, not a blow: up to what a hop explains, only a drop is read.
+    if (this.hopUp > 0) dy = dy > 0 ? Math.max(0, dy - HOP_EXPLAINS) : dy;
+    // A carry under way (`carried`): his torso going out along it is his own step out of what he was caught in, not a blow, up to what a step out explains.
     const carry = hypot2(this.carried[0]!, this.carried[1]!);
-    const out = carry > 0 ? Math.max(0, dx * this.carried[0]! + dz * this.carried[1]!) / (carry * carry) : 0;
+    const out = carry > 0 ? Math.min(CARRY_EXPLAINS, Math.max(0, (dx * this.carried[0]! + dz * this.carried[1]!) / carry)) / carry : 0;
     dx -= out * this.carried[0]!;
     dz -= out * this.carried[1]!;
     // A wall ahead takes any amount off his way; any other solid only stops the root's own motion: a change inside the ball whose diameter is that velocity reversed.
