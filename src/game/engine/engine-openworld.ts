@@ -9,6 +9,7 @@ import type { ChaseHud } from "../hud/hud-store.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { GlassName } from "../vehicle/car-core.ts";
 import type { SignSight } from "../present/openworld-signs.ts";
+import { dayGradeAt, makeDayGrade } from "../present/day-cycle.ts";
 import { PLACE_KIND, type OpenWorldMap, type Place } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { gameHourAtMinute, gameMinuteAt, secondsOfGameMinutes, tickAt } from "../ai/civilians/civilian-clock.ts";
@@ -17,12 +18,13 @@ import { fillAwakeAtHomes } from "../ai/civilians/society-awake.ts";
 import { ImaginedHouseholds } from "../ai/civilians/society-households.ts";
 import { HomeLights } from "../present/facade-homes.ts";
 import { fillClosedPlaces } from "../ai/civilians/society-hours.ts";
-import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
+import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, LOOK_REACH, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { chestMet, lookAtOf, LookRay, placeMet, type LookText, type Meeting } from "../ai/civilians/civilian-look.ts";
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { fillCommuterFeed } from "../ai/civilians/society-commuters.ts";
 import { carStandsNear, makeDriverDoors, groundUnderCars } from "./engine-openworld-doors.ts";
+import { CarLook } from "./engine-openworld-car-look.ts";
 import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildParkingSpots, spotAt, type ParkingSpots } from "../world/openworld/openworld-parking.ts";
@@ -81,9 +83,18 @@ type CrowdArt = {
   dispose(): void;
 };
 
+/** The crowd's cats and dogs: `update` once a frame after the crowd's step; `knocked` lays one run down where it was struck. */
+type AnimalDrawing = {
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void;
+  knocked(strike: FigureStrike, look: number): void;
+  dispose(): void;
+};
+
 /** The signage on the buildings: `update` once a frame. */
 type PlaceSigns = {
   update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null): void;
+  /** The day cycle's step: how far into the night (0-1, the day's lamps) the shops' signs glow. */
+  setNight(night: number): void;
   dispose(): void;
 };
 
@@ -124,6 +135,8 @@ export type OpenWorldPorts = {
   cars(): readonly DeformableCar[];
   /** The name of the player in engine car `carIndex` when it is another player's (a seated peer's, in a room), else null. */
   peerName(carIndex: number): string | null;
+  /** The car this browser's player drives, or got out of (the lobby's own); null: none. */
+  ownCar(): DeformableCar | null;
   /** Writes where this browser's player on foot stands and how fast he moves, as the ragdoll world's last step has him (not the blended drawn torso); false while he is in a car. */
   foot(out: FootBody): boolean;
   /** This machine's wall clock (s). */
@@ -138,6 +151,8 @@ export type OpenWorldPorts = {
   /** Calls `listener` for every solid a car meets (closing speed, contact point) until the returned function is called. */
   hookWallHits(listener: (closing: number, x: number, z: number) => void): () => void;
   makeArt(capacity: number): CrowdArt;
+  /** The crowd's cats and dogs drawn; absent: they walk unseen (a harness without art). */
+  makeAnimals?(capacity: number): AnimalDrawing;
   /** The Track debug button is on: every place's name is printed on its building. */
   signsOn(): boolean;
   /** The signage of `places`, in the scene. */
@@ -184,6 +199,7 @@ export class OpenWorldDirector {
   private map: OpenWorldMap | null = null;
   private crowd: CivilianCrowd | null = null;
   private art: CrowdArt | null = null;
+  private animals: AnimalDrawing | null = null;
   private signs: PlaceSigns | null = null;
   private facades: FacadeArt | null = null;
   private law: OpenWorldLaw | null = null;
@@ -213,6 +229,9 @@ export class OpenWorldDirector {
   private readonly wallMet: Meeting = { index: -1, along: Infinity };
   private readonly personMet: Meeting = { index: -1, along: Infinity };
   private readonly copShot: Meeting = { index: -1, along: Infinity };
+  /** The look-at panel's cars: the one the ray enters and its words. */
+  private readonly carLook: CarLook;
+  private readonly carMet: Meeting = { index: -1, along: Infinity };
   /** Shots that have landed on each car's body: at the guards' count its engine dies. */
   private readonly carShots = new Uint8Array(MAX_CARS);
   private readonly sceneScratch = { x: 0, z: 0 };
@@ -241,11 +260,15 @@ export class OpenWorldDirector {
   private lookAcc = 0;
   /** The game minute the stage's day was last set for (-1: none, or it was left), so the light follows the crowd's clock once a minute. */
   private dayMinute = -1;
+  /** The day's grade at the last game minute, for the signs' glow. */
+  private readonly dayGrade = makeDayGrade();
   /** The homes' windows' shares, made with the crowd and stepped each game minute from who is awake at home: drawing only, read off the state this machine's crowd already has. */
   private homeLights: HomeLights | null = null;
   private households: ImaginedHouseholds | null = null;
   private awake = new Uint8Array(0);
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
+  /** The player on foot as the car panel asks (its own scratch): on foot the seat still follows his car, but the eye is his, not the car's. */
+  private readonly lookFoot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
   private readonly openers: DoorOpeners = { poses: null, walker: null, others: [], closed: null };
   /** The map's places shut now (a wreck, or outside their hours), refilled each frame from the crowd's state for the interiors. */
   private closedPlaces: Uint8Array | null = null;
@@ -257,6 +280,7 @@ export class OpenWorldDirector {
   constructor(ports: OpenWorldPorts) {
     this.ports = ports;
     this.culling = new OpenWorldCulling(ports.cull);
+    this.carLook = new CarLook({ cars: () => ports.cars(), playerCars: () => ports.cull.playerCars(), own: () => ports.ownCar(), followed: () => (ports.foot(this.lookFoot) ? null : ports.cull.followed()), traffic: () => this.traffic });
   }
 
   /** The map the crowd lives on; the crowd is made from it on the next frame in the open world. */
@@ -437,6 +461,7 @@ export class OpenWorldDirector {
     this.frameSigns(this.map);
     this.gaze?.frame(crowd.poses, this.ray.eyeX, this.ray.eyeZ, wallDt, this.bodies);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt, this.bodies?.held ?? null);
+    this.animals?.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     if (this.traffic?.ambulanceScene(this.sceneScratch) === true) this.medics?.setScene(this.sceneScratch.x, this.sceneScratch.z);
     this.medics?.frame(this.ambulanceState(), this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
@@ -446,10 +471,17 @@ export class OpenWorldDirector {
     const cut = this.autoWanted && this.auto !== null && this.auto.step(wallDt);
     if (cut || this.lookAcc >= 1 / LOOK_HZ) {
       this.lookAcc = 0;
-      const auto = this.autoWanted && this.auto !== null;
-      const text = auto ? this.auto!.text() : lookAtOf(crowd.state, crowd.poses, tickAt(crowd.crowdSeconds), this.ray);
-      this.text = this.keepIfSame(auto || this.gaze === null ? text : this.gaze.describe(text, crowd.poses, this.map, this.ray));
+      this.text = this.keepIfSame(this.autoWanted && this.auto !== null ? this.auto.text() : this.lookText(crowd));
     }
+  }
+
+  /** What the eye rests on: the car its ray enters, unless a civilian or a building is nearer along it; a person's text ends with what she looks at. */
+  private lookText(crowd: CivilianCrowd): LookText | null {
+    const tick = tickAt(crowd.crowdSeconds);
+    const car = this.carLook.met(this.ray, LOOK_REACH, this.carMet);
+    const seen = lookAtOf(crowd.state, crowd.poses, tick, this.ray, car.along);
+    if (seen !== null) return this.gaze === null || this.map === null ? seen : this.gaze.describe(seen, crowd.poses, this.map, this.ray);
+    return car.index >= 0 ? this.carLook.text(car.index, crowd.state, tick) : null;
   }
 
   /** The crowd, its drawing, its worker and the signage are gone, and the interiors with them. */
@@ -470,12 +502,14 @@ export class OpenWorldDirector {
     this.gaze = null;
     this.stopTraffic();
     this.art?.dispose();
+    this.animals?.dispose();
     this.law?.dispose();
     this.medics?.dispose();
     this.clientDoors.release(this.ports.cars());
     this.crowd.dispose();
     this.unhook = null;
     this.art = null;
+    this.animals = null;
     this.law = null;
     this.medics = null;
     this.openers.others = [];
@@ -633,7 +667,9 @@ export class OpenWorldDirector {
   }
 
   private lightDay(crowd: CivilianCrowd): void {
-    this.ports.setDayHour(gameHourAtMinute(this.dayMinute, crowd.state.startHour));
+    const hour = gameHourAtMinute(this.dayMinute, crowd.state.startHour);
+    this.ports.setDayHour(hour);
+    this.signs?.setNight(dayGradeAt(hour, this.dayGrade).lamps);
   }
 
   /** The game clock for the HUD, whole minutes since midnight; null until the crowd's first frame. A client reads the host's clock. */
@@ -716,6 +752,7 @@ export class OpenWorldDirector {
     this.knockKnown = new Uint8Array(this.crowd.state.capacity);
     this.auto = this.makeAuto(this.crowd, key & CROWD_SEED_MASK);
     this.art = this.ports.makeArt(this.crowd.poses.count);
+    this.animals = this.ports.makeAnimals?.(this.crowd.poses.count) ?? null;
     this.figureSlot = new Int32Array(this.crowd.poses.count).fill(-1);
     this.figureAt = new Float64Array(this.crowd.poses.count);
     this.punches = new Uint8Array(this.crowd.poses.count);
@@ -806,6 +843,11 @@ export class OpenWorldDirector {
     for (let at = 0; at < strikes.length; at++) {
       const strike = strikes[at]!;
       this.gaze?.noteKnock(strike.x, strike.z);
+      if (crowd.isAnimal(strike.guard)) {
+        this.animals?.knocked(strike, crowd.poses.look[strike.guard]!);
+        this.law?.noteStrike(strike);
+        continue;
+      }
       if (this.bodies?.knock(strike) === true) {
         this.law?.noteStrike(strike);
         continue;

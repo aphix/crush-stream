@@ -661,3 +661,20 @@ describe("given the facade layer data of the styles that were shipped first", ()
     }
   });
 });
+
+describe("given the open world's facade styles at night", () => {
+  /** The shop glass's gain over a window's light, as the shader writes it (`SHOP_WINDOW_GAIN` - 1). */
+  const SHOP_GAIN_GLSL = "facadeShop * 0.60";
+
+  // mutation: sed -i 's/  const shopfront = (spec.open === true \&\& !roomsAbove) || (spec.dark === true \&\& spec.open !== true);/  const shopfront = false;/' src/game/present/facades.ts
+  it("when a business's facade is compiled, then its ground band's shop glass lights every pane and brighter, and a rowhome's windows keep their share", () => {
+    const made = makeFacadeMaterials();
+    const businesses: FacadeStyle[] = ["bar", "cornerstore", "coffee", "office", "shops", "supermarket"];
+    for (const style of businesses) {
+      const fragment = compileFacade(made[style]).fragmentShader;
+      expect(fragment, `${style}: every pane of the ground band`).toContain(", 1.0, facadeShop)");
+      expect(fragment, `${style}: the glass's gain`).toContain(SHOP_GAIN_GLSL);
+    }
+    for (const style of ["rowbrick", "rowpainted", "prague"] as const) expect(compileFacade(made[style]).fragmentShader, `${style}: no shop glass`).not.toContain("facadeShop");
+  });
+});

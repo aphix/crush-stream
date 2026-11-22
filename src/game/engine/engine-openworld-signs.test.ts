@@ -11,6 +11,8 @@ const FRAME = 1 / FRAME_HZ;
 const EYE_X = 3;
 /** A wreck closes a place for far longer than a test frame runs (ticks). */
 const WRECKED_FOR_TICKS = 2 ** 30;
+/** The run below lasts three crowd seconds: three game minutes. */
+const GAME_MINUTES_IN_RUN = 3;
 
 /** The director with signage ports that keep what they were asked: the places made from, each frame's eye and button state, and the signage disposed. */
 class Harness {
@@ -19,6 +21,7 @@ class Harness {
   made: (readonly Place[])[] = [];
   updates: { eyeX: number; namesOn: boolean; closed: Uint8Array | null }[] = [];
   disposed = 0;
+  nights: number[] = [];
   readonly director = new OpenWorldDirector({
     ...idleOpenWorldPorts(),
     inOpenWorld: () => this.open,
@@ -35,6 +38,7 @@ class Harness {
       this.made.push(places);
       return {
         update: (eyeX, _eyeZ, namesOn, _sight, closed) => void this.updates.push({ eyeX, namesOn, closed }),
+        setNight: (night) => void this.nights.push(night),
         dispose: () => void this.disposed++,
       };
     },
@@ -97,5 +101,20 @@ describe("given the open world director in the open world", () => {
     expect(harness.made.length).toBe(2);
     harness.director.stop();
     expect(harness.disposed).toBe(2);
+  });
+
+  // mutation: sed -i 's/    this.signs?.setNight(dayGradeAt(hour, this.dayGrade).lamps);/    this.signs?.setNight(0);/' src/game/engine/engine-openworld.ts
+  it("when the clock runs and is set to midnight and to noon, then the signs are told the night once a game minute, never a frame, full at midnight and none at noon", () => {
+    const harness = new Harness();
+    for (let at = 0; at < GAME_MINUTES_IN_RUN * FRAME_HZ; at++) {
+      harness.director.step(FRAME);
+      harness.director.frame(FRAME);
+    }
+    expect(harness.nights.length, "a call a game minute (a crowd second), not a frame").toBeLessThanOrEqual(GAME_MINUTES_IN_RUN + 1);
+    expect(harness.director.setHour(0), "midnight").toBe(true);
+    expect(harness.nights[harness.nights.length - 1], "night at midnight").toBe(1);
+    expect(harness.director.setHour(12), "noon").toBe(true);
+    expect(harness.nights[harness.nights.length - 1], "night at noon").toBe(0);
+    harness.director.stop();
   });
 });

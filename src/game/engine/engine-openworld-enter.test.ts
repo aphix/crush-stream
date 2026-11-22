@@ -245,4 +245,30 @@ describe("given the real engine in the open world, its player out of his car wit
     expect(rig.phase(), "he is in").toBe("inCar");
     expect(Math.abs(car.doorAngle(DRIVER_SIDE)), "shut behind him").toBeLessThan(0.02);
   });
+
+  // mutation: sed -i 's/followed: () => (ports.foot(this.lookFoot) ? null : ports.cull.followed()),/followed: () => ports.cull.followed(),/' src/game/engine/engine-openworld.ts
+  it("when he is on foot beside his own car and looks at it, then the look panel names it his car", () => {
+    rig.getOut();
+    const car = rig.cars()[rig.engine["seat"].carIndex]!;
+    const eye = rig.beside(car, 3, 0);
+    const ray = world()["ray"];
+    ray.eyeX = eye.x;
+    ray.eyeY = car.group.position.y + 1;
+    ray.eyeZ = eye.z;
+    const toX = car.group.position.x - eye.x;
+    const toZ = car.group.position.z - eye.z;
+    const length = hypot2(toX, toZ);
+    ray.dirX = toX / length;
+    ray.dirY = 0;
+    ray.dirZ = toZ / length;
+    // Nobody of the crowd stands in the way: the row reads the car, not whoever walks past.
+    const crowd = world()["crowd"]!;
+    const shown = crowd.poses.shown.slice();
+    crowd.poses.shown.fill(0);
+    try {
+      expect(world()["lookText"](crowd)?.title, "the panel's title").toBe("Your car");
+    } finally {
+      crowd.poses.shown.set(shown);
+    }
+  });
 });

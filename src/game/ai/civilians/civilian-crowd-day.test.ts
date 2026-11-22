@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "./civilian-activity.ts";
 import { DECISION_HZ, MAX_PATH_NODES, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "./civilian-constants.ts";
 import type { CivilianCrowd } from "./civilian-crowd.ts";
+import { LOOK } from "./civilian-crowd-constants.ts";
 import { buildFixtureMap } from "./civilian-graph.test-util.ts";
 import { legPositionAt, LegPose } from "./civilian-leg.ts";
 import { newCrowd } from "./civilian-crowd.test-util.ts";
@@ -18,9 +19,9 @@ const STUCK_LOOKS = 2;
 const MIN_LEGS = 100;
 const MIN_ANIMAL_METRES = 50;
 
-type DayReport = { legs: number; badLegs: string[]; stuck: string[]; metres: Map<number, number>; species: Map<number, number>; animalsDrawn: number };
+type DayReport = { legs: number; badLegs: string[]; stuck: string[]; metres: Map<number, number>; species: Map<number, number>; animalsShown: number; animalsLookedAsPersons: number };
 
-/** Where the crowd has resident `resident` at `seconds`, into `out`: where it draws a civilian, and where an animal walks (the crowd keeps animals but draws none); false when they are not out. */
+/** Where the crowd has resident `resident` at `seconds`, into `out`: where it shows her, else where an animal walks in the brain; false when they are not out. */
 function whereAt(crowd: CivilianCrowd, resident: number, seconds: number, out: LegPose): boolean {
   if (crowd.poses.shown[resident] === 1) {
     out.x = crowd.poses.x[resident]!;
@@ -50,7 +51,7 @@ function runDay(): DayReport {
   const doorsAndPortals = new Set<number>([...state.index.doorNode].filter((node) => node >= 0).concat([...map.portals]));
   const lastDepart = new Int32Array(poses.count).fill(-1);
   const sampled = { x: new Float32Array(poses.count), z: new Float32Array(poses.count), shown: new Uint8Array(poses.count), depart: new Int32Array(poses.count), slow: new Uint8Array(poses.count) };
-  const report: DayReport = { legs: 0, badLegs: [], stuck: [], metres: new Map(), species: new Map(), animalsDrawn: 0 };
+  const report: DayReport = { legs: 0, badLegs: [], stuck: [], metres: new Map(), species: new Map(), animalsShown: 0, animalsLookedAsPersons: 0 };
   const probe = new LegPose();
   for (let step = 1; step * STEP_SECONDS <= DAY_SECONDS; step++) {
     crowd.step(step * STEP_SECONDS, [], true);
@@ -64,7 +65,10 @@ function runDay(): DayReport {
         if (problem !== null) report.badLegs.push(problem);
       }
       const species = state.ints[base + RESIDENT_INT.species]!;
-      if (species !== SPECIES.person && poses.shown[resident] === 1) report.animalsDrawn++;
+      if (species !== SPECIES.person && poses.shown[resident] === 1) {
+        report.animalsShown++;
+        if (poses.look[resident]! >>> LOOK.speciesShift !== species) report.animalsLookedAsPersons++;
+      }
       if (step % SAMPLE_EVERY !== 0) continue;
       const out = whereAt(crowd, resident, step * STEP_SECONDS, probe);
       if (out && sampled.shown[resident] === 1 && sampled.depart[resident] === depart) {
@@ -98,8 +102,10 @@ describe("given the fixture neighbourhood's crowd stepped through one game day",
     expect(day.stuck, "stuck samples").toEqual([]);
   });
 
-  it("when the day is over, then there are cats and dogs among the residents, each kind walked in the brain, and not one was ever drawn as a civilian", () => {
-    expect(day.animalsDrawn, "frames an animal was drawn").toBe(0);
+  // mutation: sed -i '/^        placeAnimal(state, resident, seconds, pose, this.poses, this.separation);/d' src/game/ai/civilians/civilian-crowd.ts
+  it("when the day is over, then there are cats and dogs among the residents, each kind walked in the brain, and shown every frame in its own species' look, never a person's", () => {
+    expect(day.animalsShown, "frames an animal was shown").toBeGreaterThan(0);
+    expect(day.animalsLookedAsPersons, "frames an animal was shown in another species' look").toBe(0);
     for (const species of [SPECIES.cat, SPECIES.dog]) {
       expect(day.species.get(species) ?? 0, `residents of species ${species}`).toBeGreaterThan(0);
       expect(day.metres.get(species) ?? 0, `metres walked by species ${species}`).toBeGreaterThan(MIN_ANIMAL_METRES);

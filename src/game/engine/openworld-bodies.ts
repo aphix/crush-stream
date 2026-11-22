@@ -1,6 +1,7 @@
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
-import { DOWNED_LIFE_SECONDS } from "../ai/civilians/civilian-crowd-constants.ts";
+import { DOWNED_LIFE_SECONDS, LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
+import { SPECIES } from "../ai/civilians/civilian-constants.ts";
 import { punchGap } from "../ai/civilians/civilian-contact.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
@@ -267,9 +268,9 @@ export class OpenWorldBodies {
     this.host.steer(slot, detAtan2(vx, vz), Math.min(FASTEST, hypot2(vx, vz)));
   }
 
-  /** Whether civilian \`civilian\` may have a body: shown, walking or standing about, on the street (not on a stoop, not in a building) and within \`radius\` of the eye. */
+  /** Whether civilian \`civilian\` may have a body: a person (a body is a human dummy) shown, walking or standing about, on the street (not on a stoop, not in a building) and within \`radius\` of the eye. */
   private eligible(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number, radius: number): boolean {
-    if (poses.shown[civilian] === 0 || !BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;
+    if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person || !BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;
     const x = poses.x[civilian]!;
     const z = poses.z[civilian]!;
     if (hypot2(x - eyeX, z - eyeZ) > radius || poses.feetY[civilian]! - this.host.groundAt(x, z) > ON_STREET) return false;

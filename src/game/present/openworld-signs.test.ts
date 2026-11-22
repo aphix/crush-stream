@@ -29,8 +29,17 @@ const lots = layOutLots();
 const map = buildOpenWorldMap(lots);
 const inside = [...map.places.entries()].filter(([, place]) => place.doorNode >= 0 && place.name !== "");
 const painted: string[] = [];
+/** Every stroke colour set on the context, in order. */
+const strokes: string[] = [];
+/** The bloom keeps what is brighter than this (linear, `engine-post.ts` GRADE.threshold). */
+const BLOOM_THRESHOLD = 1.6;
+/** The signs' lightest ink (cream), whose glow at night must bloom. */
+const LIGHT_INK = "#f6ecd0";
+/** The neon tubes of a bar and a corner store. */
+const BAR_NEON = "#ff3fa4";
+const CORNER_NEON = "#39e6ff";
 
-/** A 2D context that measures text by its length and keeps every string drawn. */
+/** A 2D context that measures text by its length and keeps every string drawn and every stroke colour set. */
 const context: object = new Proxy(
   {},
   {
@@ -39,7 +48,10 @@ const context: object = new Proxy(
       if (key === "fillText") return (text: string) => void painted.push(text);
       return () => context;
     },
-    set: () => true,
+    set: (_target, key, value) => {
+      if (key === "strokeStyle") strokes.push(String(value));
+      return true;
+    },
   },
 );
 
@@ -280,6 +292,40 @@ describe("given the shop signs of the open world", () => {
     shop.update(closed);
     shop.update(null);
     expect(Math.min(...brightness(0)), "no list: every shop open").toBe(1);
+  });
+
+  // mutation: sed -i 's/const SIGN_NIGHT_GAIN = 3;/const SIGN_NIGHT_GAIN = 1;/' src/game/present/openworld-shop-signs.ts
+  it("when night falls, then an open sign glows past the bloom's threshold while a shut one stays dim, a drift inside a step writes nothing, and by day it is a plain board again", () => {
+    const shop = new ShopSigns(map.places);
+    const colour = colourOf(shop.group);
+    const closed = new Uint8Array(map.places.length);
+    closed[businesses[0]![0]] = 1;
+    shop.update(closed);
+    shop.setNight(1);
+    shop.update(closed);
+    const lightInk = new THREE.Color(LIGHT_INK).r;
+    expect(colour.getX(4) * lightInk, "an open sign's light ink at night").toBeGreaterThan(BLOOM_THRESHOLD);
+    expect(colour.getX(0), "the shut sign").toBeLessThan(SHUT_BRIGHTNESS_MAX);
+    const night = colour.version;
+    shop.setNight(0.95);
+    shop.update(closed);
+    expect(colour.version, "a drift inside a step").toBe(night);
+    shop.setNight(0);
+    shop.update(closed);
+    expect(colour.getX(4), "by day").toBe(1);
+    expect(colour.getX(4) * lightInk, "by day nothing blooms").toBeLessThan(BLOOM_THRESHOLD);
+  });
+
+  // mutation: sed -i 's/  if (neon !== undefined) drawNeonTube(g, neon, x, y, width);//' src/game/present/openworld-shop-signs.ts
+  it("when the signs are painted, then every bar's carries a pink neon tube and every corner store's (the bodega's) a cyan one, and no other business's does", () => {
+    strokes.length = 0;
+    new ShopSigns(map.places);
+    const bars = businesses.filter(([, place]) => place.style === "bar").length;
+    const corners = businesses.filter(([, place]) => place.style === "cornerstore").length;
+    expect(bars, "bars on the map").toBeGreaterThan(0);
+    expect(corners, "corner stores on the map").toBeGreaterThan(0);
+    expect(strokes.filter((ink) => ink === BAR_NEON).length, "pink tubes").toBe(bars);
+    expect(strokes.filter((ink) => ink === CORNER_NEON).length, "cyan tubes").toBe(corners);
   });
 
   it("when the signage is told a shop is shut, then its shop sign dims", () => {

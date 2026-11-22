@@ -267,6 +267,11 @@ export class OpenWorldSigns {
     this.spillGroup = this.spill.group;
   }
 
+  /** The day cycle's step (never a frame): the open shops' signs glow as `night` (0 by day to 1, the day's lamps) rises. */
+  setNight(night: number): void {
+    this.shop.setNight(night);
+  }
+
   /** A frame: the names shown when `namesOn`, in the chunks within range of the eye that `sight` (when there is one) says are seen; the shop signs of the places `closed` marks shut dimmed. */
   update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null): void {
     this.shop.update(closed);

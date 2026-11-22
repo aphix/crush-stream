@@ -64,12 +64,29 @@ subject is the bearing from the victim's brain spot to the player who shoved (`W
 
 **Other host events.** `raiseEvent(kind, subject, seconds?)` puts one more host event in the log and the brain's next plan (a bust, from the cops). The crowd itself raises, on the host only: a `danger` (subject: the walk-graph node nearest) for a car at `DANGER_SPEED` heading at a civilian within `DANGER_RANGE` who is still on their feet `DANGER_CONFIRM_SECONDS` on, at most one a resident in `DANGER_LOCKOUT_SECONDS`, and for a car's hard hit on something that is no building's within `CRASH_NODE_REACH` of a street node, at most one in `CRASH_LOCKOUT_SECONDS`; and an `ambulance` (subject: the person) `AMBULANCE_DELAY_SECONDS` after someone is run down, with `onAmbulanceCall(x, z, seconds)` for whoever sends the ambulance (the director gives the traffic's `callAmbulance`).
 
-Cats and dogs live in the brain (they decide, walk and keep a life log) but the crowd shows none until there is animal art: a
-resident of species other than person has `shown = 0` in every pose, so none is drawn and none can be run down.
+**Cats and dogs** (`animal-spot.ts`, `present/animal-art.ts`, `present/animal-figure.ts`). They live in the brain (they decide, walk
+and keep a life log) and the crowd shows them: on a leg at the leg's spot, as a person walks; at rest (dwelling) at their place, out on
+the pavement `REST_OUT` in front of its door, a place's animals `REST_SPREAD` apart (`placeAnimal`, pure in the rows and the time, so
+every peer places them alike; `activityClock` is how long they have rested). They are bodies the separation keeps apart (a resting
+one fixed), cars stop for them, and the look-at names them ("Biscuit, an orange cat ..."; the look panel and a bullet meet one at
+`ANIMAL_CHEST_HEIGHT`, not a person's chest). They open no door and turn no head (the gaze skips them, and offers none as a passer-by). They are never bumped, pushed, punched,
+warned of a car or held as a physical body (`CivilianCrowd.isAnimal`); a car runs one down by the host's hit rule (`runsDown`): the
+knock (and its push) is logged and heard like a person's, the brain sends it "to hospital", and nobody calls it an ambulance. No dog
+follows an owner: the brain pairs no animal with a person.
+
+Each species is one instanced draw (`AnimalArt`, `ANIMAL_SLOTS` each): a flat-shaded figure of boxes (body, head, ears, a dog's snout,
+nose, tail, four legs with paws, about 170 triangles) built in code (`ANIMAL_SHAPES`: a domestic cat, a medium dog). The vertex
+shader swings the legs in a trot (diagonal pairs together) by the stride (the crowd's walk phase rescaled to the species' stride),
+sits a still animal on its haunch (the body pitched about the front legs' tops until the haunch meets the ground, the hind legs
+tucked) and, after `LIE_AFTER_SECONDS` of rest, lays it down (legs stretched, belly on the ground), eased over `POSTURE_TAU`;
+`animalPoint` is the same arithmetic in TypeScript for the tests. One run down lies on its side where it was struck for
+`DOWNED_LIFE_SECONDS`. No shadow (the depth pass would draw the unposed figure), as the far figures. Drawn within `FAR_DRAW` while
+the sight field has seen them within `HIDE_GRACE`; the people's art (`CivilianArt`) skips them.
 
 A civilian's **look word** (`LOOK` in `civilian-crowd-constants.ts`) is a hash of who they are (bits 0-28), their gender (bit 29,
-so a drawn Rosa is a woman) and their species (bits 30-31: person, cat, dog). The drawing dresses from it; the species bits are there for the animal art to
-read.
+so a drawn Rosa is a woman) and their species (bits 30-31: person, cat, dog). The drawing dresses from it. An animal's coat is its
+who modulo its species' coats (`CAT_COAT`, `DOG_COAT`); a cast animal's who is its own `coat`, so the orange cat is drawn orange and
+Pepper black with white socks.
 
 **Wrecks.** The cheapest existing signal is the course's solid-prop hit, `RaceField.onWallHit(car, closing, x, z)` (every
 solid a car meets, with its closing speed and contact point). The open world wraps it: a hit at `WRECK_SPEED` or more whose point
@@ -110,8 +127,17 @@ for it. The brain is told of a heard event by posting it with the next plan tick
 `lookAtOf` (`civilian-look.ts`) names what the eye rests on: the shown civilian whose chest the eye's forward ray passes within
 `LOOK_RADIUS`, up to `LOOK_REACH` ahead (their line: name, age, job at workplace, need and place, mood; then their life log), else the
 building whose box the ray enters first (its kind and name, who lives or works there, the latest comings and goings), whichever is
-nearer along the ray. The director recomputes it `LOOK_HZ` times a second and keeps the same object while the text is the same; the
-HUD's look panel shows it, with a last line saying what that person is looking at (`OpenWorldGaze.describe`).
+nearer along the ray. A car comes first when the ray enters its box (bumper to bumper, side to side, ground to roof, in its own frame)
+before either (`CarLook`, `engine-openworld-car-look.ts`; the car the camera rides is passed through while he is in it, not once he is on
+foot): the panel names it "Your car" (this browser's own, `ownCar`), "A player's car" (another's in a room), "Patrol car", "Ambulance", the owner's ("Hector Ramos's car": the traffic's `ownerOf`, the resident it is
+leased to or whose space it stands in, and through a driver's `carOwner` the housemate he drives it for) or "A parked car"; then its
+paint and body ("maroon hatchback": the owner's `residentColour`, else the car's paint, named by the nearest of `COLOUR_NAMES`),
+where it is ("parked by Bodega Supreme since 14:20", "leaving for ... at ...", "driving to ...": the owner's `carPlace`, `carTo`,
+`carLeaveTick`, `carParkTick`), its doors ("unlocked": the player may get in, `isEmptyCar`; "locked"; "someone at the wheel") and its
+condition ("not a scratch", "scuffed", "dented", "badly smashed", "wrecked", and any wheels off, from the gauge's damage arc). A client
+has no traffic, so it names only the paint, body and condition. The director recomputes the text `LOOK_HZ` times a second (the car's
+ray test allocates nothing) and keeps the same object while the text is the same; the HUD's look panel shows it,
+with a last line saying what that person is looking at (`OpenWorldGaze.describe`).
 
 ## Look and gaze (`present/civilian-gaze*.ts`, `engine/engine-openworld-gaze.ts`)
 
@@ -246,6 +272,10 @@ A tick, twice a second, allocates what the brain's answer carries.
 Gaze (`CrowdGaze.update`, a node probe of residents walking within 120 m of a spot with 8 cars driving among them, one with its siren, the player on foot and a crash pulse every 5 s), warm, per frame on the main thread:
 60 residents 4.8 to 6.1 us, 150 residents 11.9 to 14.0 us, 300 residents 24.1 to 29.4 us, 4 to 10 B (bound 16 B: `civilian-art-alloc.test.ts`).
 
+Cats and dogs (`AnimalArt.update`, a node probe of 300 residents walking back and forth within `FAR_DRAW`, all in sight), warm, per frame on
+the main thread: 6 animals 1.5 us, 40 animals 2.8 us (`CivilianArt.update` over the same crowd: 64 to 66 us), 3 B (bound 16 B:
+`animal-art-alloc.test.ts`); two draws, one a species.
+
 Per device (desktop or phone, by `deviceClass`):
 
 ||Desktop|Phone|
@@ -262,7 +292,14 @@ a shot at a car or a dummy keeps the nearest hit without three's hit list (`RayN
 
 **Night look.** A lamp's ground pool (`lampPool`, `engine-world.ts`) is 1.4 times brighter (capped at 1) on the `off` and `minimal` FX tiers, which draw no bloom, so the pool is the lamp's only spill. Each shop and eatery
 (`PLACE_KIND.shop`, `food`: 8 places) also throws a flat 3 m deep light quad (`shop-spill.ts`, `ShopSpill`) 1.2 m out from its front face on the lamp pool's material, so it fades in at dusk and is gone by day;
-a shut place's quad is hidden, and `OpenWorldSigns` updates them only when the set of shut places changed.
+a shut place's quad is hidden, and `OpenWorldSigns` updates them only when the set of shut places changed. The open shops' signs glow:
+each game minute, with the stage's light, the director hands the signs the day's lamps share (`setNight`, never a frame), rounded to
+quarters (`GLOW_STEPS`), and an open sign's colours rise to `SIGN_NIGHT_GAIN` (3) times its board, so its light ink passes the bloom's
+1.6 threshold and blooms on the tiers with bloom while its dark fill does not; by day it is the plain board, a shut one stays dimmed.
+A bar's sign carries a hot-pink neon tube and a corner store's (the bodega's) a cyan one (`NEON_TUBES`, painted in the atlas). A
+business's shop glass (the ground band of a shopfront style: `coffee`, `bar`, `office`, `cornerstore`, `shops`, `supermarket`) lights
+every pane at night, `SHOP_WINDOW_GAIN` (1.6) times a window's light, past the bloom threshold, off where the shop is shut; the bar's
+and the corner store's own neon (`NEON_INTENSITY`) were already there. The glass rides `FACADE_GLOW`, which only the day cycle sets.
 
 ## Drawing
 
@@ -438,9 +475,10 @@ The light's direction is the part a look pays for (the shadow camera's axes, `fa
 | Interaction table, venues, seats, crime, activity | `ai/civilians/society-{table,venues,seats,crime,reactions,activity,commuters}.ts` |
 | The crowd, its constants | `ai/civilians/civilian-crowd.ts`, `civilian-crowd-constants.ts` |
 | Bodies kept apart, the player on foot, a car's brush | `ai/civilians/civilian-separation.ts`, `crowd-walkers.ts`, `civilian-contact.ts` |
-| The look-at | `ai/civilians/civilian-look.ts` |
+| The look-at | `ai/civilians/civilian-look.ts`; its cars `engine/engine-openworld-car-look.ts` |
 | The engine's end: crowd, link, look-at, wall hook | `engine/engine-openworld.ts` (`OpenWorldDirector`, held by `CrashEngine`) |
 | Drawing | `present/civilian-art.ts`, `civilian-dress.ts`, `civilian-pose.ts`, `civilian-figure.ts` |
+| Cats and dogs | placed `ai/civilians/animal-spot.ts`; drawn `present/animal-art.ts`, `animal-figure.ts` |
 | Trees and greenery: street trees, park trees, stoop plants | `world/openworld/openworld-{greenery,park-trees}.ts`, `present/street-trees.ts`, `DrawnPose` in `present/prop-tumble.ts` |
 | Signs: shop signs, names on the buildings | `present/openworld-shop-signs.ts`, `openworld-signs.ts` (the label style from `track-debug.ts`) |
 | Rowhome facade kit | `present/facade-bays.ts`, `facade-bay-parts.ts`, `facade-kit-atlas.ts`; plan and colliders `world/openworld/openworld-facade-solids.ts` |

@@ -1,4 +1,5 @@
-import { ALARM_DELAY_JITTER_SHARE, ALARM_DELAY_MAX_SECONDS, ALARM_DELAY_MIN_SECONDS } from "../ai/civilians/civilian-constants.ts";
+import { ALARM_DELAY_JITTER_SHARE, ALARM_DELAY_MAX_SECONDS, ALARM_DELAY_MIN_SECONDS, SPECIES } from "../ai/civilians/civilian-constants.ts";
+import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { neuroticismOf } from "../ai/civilians/civilian-temperament.ts";
 import {
@@ -168,7 +169,7 @@ export class CrowdGaze {
     if (poses === null) return;
     const count = Math.min(poses.count, this.capacity);
     for (let civilian = 0; civilian < count; civilian++) {
-      if (poses.shown[civilian] === 0) continue;
+      if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person) continue;
       const dx = x - poses.x[civilian]!;
       const dz = z - poses.z[civilian]!;
       const distance = Math.sqrt(dx * dx + dz * dz);
@@ -248,7 +249,8 @@ export class CrowdGaze {
   }
 
   private step(civilian: number, poses: CrowdPoses): void {
-    if (poses.shown[civilian] === 0) {
+    // A cat or a dog has no head the gaze turns: it is forgotten as an unshown person is.
+    if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person) {
       this.forget(civilian);
       return;
     }

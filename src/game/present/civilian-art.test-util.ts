@@ -4,17 +4,20 @@ import { createCrowdPoses, type CrowdPoses } from "../ai/civilians/crowd-poses.t
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { mulberry32 } from "../world/placements.ts";
 import type { CrowdSight } from "./civilian-art.ts";
+import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 
 const LOOK_STEP = 0x9e3779b1;
+/** The look word's two species bits (person 0, cat 1, dog 2). */
+const SPECIES_BITS = 3;
 /** A sight field that sees everyone, and the length of the frame (s) the art is told passed. */
 export const IN_SIGHT: CrowdSight = { seen: () => true };
 export const FRAME_SECONDS = 1 / FRAME_HZ;
 
-/** A crowd of `count` shown civilians at the origin, standing still, each in its own look. */
+/** A crowd of `count` shown civilians at the origin, standing still, each in its own look (every one a person: the species bits are cleared). */
 export function emptyPoses(count: number): CrowdPoses {
   const poses = createCrowdPoses(count);
   poses.shown.fill(1);
-  for (let civilian = 0; civilian < count; civilian++) poses.look[civilian] = Math.imul(civilian + 1, LOOK_STEP) >>> 0;
+  for (let civilian = 0; civilian < count; civilian++) poses.look[civilian] = Math.imul(civilian + 1, LOOK_STEP) & ~(SPECIES_BITS << LOOK.speciesShift);
   return poses;
 }
 

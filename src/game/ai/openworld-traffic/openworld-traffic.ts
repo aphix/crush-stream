@@ -148,6 +148,14 @@ export class OpenWorldTraffic {
     return this.movers.residentAt(carIndex);
   }
 
+  /** The resident engine car `carIndex` is his: leased to him (parked or on a trip), or a kerb car standing in his claimed space; -1 for none (an anonymous car, a patrol's, the player's). */
+  ownerOf(carIndex: number): number {
+    const leased = this.movers.residentAt(carIndex);
+    if (leased >= 0) return leased;
+    const spot = this.kerb.spotOf(carIndex);
+    return spot >= 0 ? this.holderOf(spot) : -1;
+  }
+
   /** Per space, 1 where a car that drives (or is on its way) holds it. */
   get claimedSpots(): Uint8Array {
     return this.context.taken;

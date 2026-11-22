@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import type { Stoops } from "../world/openworld/openworld-stoops.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { SPECIES } from "../ai/civilians/civilian-constants.ts";
+import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import { DETAIL_KEEP_M, DETAIL_NEAR_M, FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLOATS, FIGURE_FLOATS, FIGURE_GAIT, NEAR_DRAW, SIGHT_RADIUS, SLOT_KEEP_DISTANCE_SCALE, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
 import type { CrowdGaze } from "./civilian-gaze.ts";
 import { HEAD_YAW_LIMIT } from "./civilian-gaze-constants.ts";
@@ -124,12 +126,12 @@ export class CivilianArt {
     this.figures.dispose();
   }
 
-  /** Every shown civilian within `FAR_DRAW` is asked of the sight field; one unseen for `HIDE_GRACE` seconds is not drawn, and one out of range must be seen again to come back. */
+  /** Every shown person within `FAR_DRAW` is asked of the sight field (an animal is the animals' art's); one unseen for `HIDE_GRACE` seconds is not drawn, and one out of range must be seen again to come back. */
   private refreshSight(poses: CrowdPoses, count: number, sight: CrowdSight, wallDt: number, held: Uint8Array | null): void {
     for (let civilian = 0; civilian < count; civilian++) {
       const dx = poses.x[civilian]! - this.eyeX;
       const dz = poses.z[civilian]! - this.eyeZ;
-      if (poses.shown[civilian] === 0 || (held !== null && held[civilian] === 1) || dx * dx + dz * dz > FAR_DRAW_SQUARED) {
+      if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person || (held !== null && held[civilian] === 1) || dx * dx + dz * dz > FAR_DRAW_SQUARED) {
         this.unseenSeconds[civilian] = HIDE_GRACE;
         continue;
       }

@@ -42,6 +42,7 @@ import {
   WRECK_SPEED,
 } from "./civilian-crowd-constants.ts";
 import { LegPose, legPose, legPositionAt } from "./civilian-leg.ts";
+import { placeAnimal } from "./animal-spot.ts";
 import { lookOf } from "./civilian-look-word.ts";
 import type { CivilianRemote } from "./civilian-remote.ts";
 import { CrowdSeparation } from "./civilian-separation.ts";
@@ -410,7 +411,10 @@ export class CivilianCrowd {
       present[resident] = 0;
       this.poses.onSpur[resident] = 0;
       this.laneWalking[resident] = 0;
-      if (ints[intBase + RESIDENT_INT.species] !== SPECIES.person) continue;
+      if (ints[intBase + RESIDENT_INT.species] !== SPECIES.person) {
+        placeAnimal(state, resident, seconds, pose, this.poses, this.separation);
+        continue;
+      }
       this.activityReader(state, resident, seconds, reading);
       const walkSpeed = floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.speed]!;
       const atCar = reading.code === ACTIVITY.carIn || reading.code === ACTIVITY.carOut;
@@ -508,7 +512,7 @@ export class CivilianCrowd {
       const first = pairFirst[at]!;
       const second = pairSecond[at]!;
       const byWalker = second >= separation.capacity;
-      if (separation.fixed[first] === 1 || (!byWalker && separation.fixed[second] === 1)) continue;
+      if (separation.fixed[first] === 1 || (!byWalker && separation.fixed[second] === 1) || this.isAnimal(first) || (!byWalker && this.isAnimal(second))) continue;
       if (closing >= BUMP_CLOSING_SPEED) {
         this.startBump(first, byWalker ? NOT_A_CIVILIAN : second, seconds);
         if (!byWalker) this.startBump(second, first, seconds);
@@ -597,7 +601,7 @@ export class CivilianCrowd {
     let nearest = -1;
     let nearestGap = Infinity;
     for (let resident = 0; resident < this.separation.capacity; resident++) {
-      if (shown[resident] === 0 || (held !== null && held[resident] === 1)) continue;
+      if (shown[resident] === 0 || (held !== null && held[resident] === 1) || this.isAnimal(resident)) continue;
       const gap = punchGap(x, z, dirX, dirZ, px[resident]!, pz[resident]!);
       if (gap < 0 || gap >= nearestGap) continue;
       nearestGap = gap;
@@ -658,7 +662,8 @@ export class CivilianCrowd {
         if (shown[resident] === 0) continue;
         const spotX = x[resident]!;
         const spotZ = z[resident]!;
-        if (coming) this.watchApproach(resident, carIndex, spotX - carX, spotZ - carZ, car.velocity.x, car.velocity.z, carSpeed, seconds);
+        const animal = this.isAnimal(resident);
+        if (coming && !animal) this.watchApproach(resident, carIndex, spotX - carX, spotZ - carZ, car.velocity.x, car.velocity.z, carSpeed, seconds);
         const apartX = carX - spotX;
         const apartZ = carZ - spotZ;
         const near = apartX * apartX + apartZ * apartZ <= CAR_REACH_SQUARED;
@@ -666,7 +671,7 @@ export class CivilianCrowd {
         const spotY = ground.heightAt(spotX, spotZ);
         if (near && runsDown(car, spotX, spotZ, spotY)) this.knockDown(resident, seconds, fell(car, carIndex, resident, spotX, spotY, spotZ, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
         else if (loose && looseRunsDown(car, spotX, spotZ, spotY)) this.knockDown(resident, seconds, stood(carIndex, resident, spotX, spotY, spotZ, detSin(yaw[resident]!), detCos(yaw[resident]!), blankStrike()));
-        else if (near && carSpeed >= CAR_NUDGE_SPEED && carGap(car, spotX, spotZ) < CAR_NUDGE_GAP) this.raiseBearingPush(resident, carX, carZ, seconds, EVENT_KIND.car);
+        else if (!animal && near && carSpeed >= CAR_NUDGE_SPEED && carGap(car, spotX, spotZ) < CAR_NUDGE_GAP) this.raiseBearingPush(resident, carX, carZ, seconds, EVENT_KIND.car);
       }
     }
   }
@@ -754,7 +759,8 @@ export class CivilianCrowd {
   }
 
   private knockDown(resident: number, seconds: number, strike: FigureStrike, by = NOT_A_CIVILIAN): void {
-    this.ambulanceDue[resident] = seconds + AMBULANCE_DELAY_SECONDS;
+    // Nobody calls an ambulance for a run-down animal.
+    this.ambulanceDue[resident] = this.isAnimal(resident) ? Infinity : seconds + AMBULANCE_DELAY_SECONDS;
     this.ambulanceTries[resident] = 0;
     this.ambulanceX[resident] = this.poses.x[resident]!;
     this.ambulanceZ[resident] = this.poses.z[resident]!;
@@ -763,6 +769,11 @@ export class CivilianCrowd {
     this.appendLog(EVENT_KIND.knock, resident, seconds);
     this.queueForBrain(EVENT_KIND.knock, resident, seconds);
     this.logPush(resident, by, seconds);
+  }
+
+  /** Whether `resident` is a cat or a dog: shown and run down like a person, never bumped, pushed, punched, warned of a car or sent an ambulance. */
+  isAnimal(resident: number): boolean {
+    return this.remote.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.species] !== SPECIES.person;
   }
 
   /** A knock heard from the host, once this clock reaches its time (the cars are drawn at that time): the civilian is thrown by the car nearest where they were, as that car's own hit would have thrown them. */
