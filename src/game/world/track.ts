@@ -7,7 +7,7 @@ import { parseTrack, type SurvivalSpec, type TrackJson } from "./track-schema.ts
 import { checkPlateaus, paintGrid, raisePlateaus } from "./terrain.ts";
 import { capsuleRow, sameRun } from "./ground-stamp.ts";
 import { RoadCrease } from "./road-crease.ts";
-import { nearestOnPath } from "./path-grid.ts";
+import { nearestOnPath, PATH_POINT } from "./path-grid.ts";
 import { bakeTerrainCells, type TerrainCells, TERRAIN_SPAN } from "./terrain-cells.ts";
 
 /**
@@ -352,6 +352,15 @@ export function pointOn(path: TrackPath, s: number, out: TrackPoint): TrackPoint
 
 /** Nearest centreline point; searches ±WINDOW samples around `hint` (≥ 0), the whole path otherwise or when that lands off the corridor. */
 export function projectPath(path: TrackPath, x: number, z: number, hint: number, out: Projection): Projection {
+  PATH_POINT[0] = x;
+  PATH_POINT[1] = z;
+  return projectPathAt(path, hint, out);
+}
+
+/** `projectPath` from the point in `PATH_POINT` (path-grid.ts), written by the caller. */
+export function projectPathAt(path: TrackPath, hint: number, out: Projection): Projection {
+  const x = PATH_POINT[0]!;
+  const z = PATH_POINT[1]!;
   out.dist2 = Infinity;
   const n = path.count;
   if (hint >= 0 && hint < n) {
@@ -388,7 +397,7 @@ export function projectPath(path: TrackPath, x: number, z: number, hint: number,
     if (out.dist2 <= reach * reach) return out;
     out.dist2 = Infinity;
   }
-  nearestOnPath(path, x, z, out);
+  nearestOnPath(path, out);
   return out;
 }
 

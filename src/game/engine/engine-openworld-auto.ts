@@ -97,6 +97,11 @@ export class OpenWorldAuto {
     this.scan.peersWatched = true;
   }
 
+  /** Whether the subject on screen was picked with Auto off (`pin`). */
+  get pinned(): boolean {
+    return this.manualHold === Infinity;
+  }
+
   /** The subject on screen, null before the first (nothing in the world worth a look yet). */
   get subject(): { kind: SubjectKind; id: number } | null {
     return this.director.kind < 0 ? null : { kind: this.director.kind as SubjectKind, id: this.director.id };

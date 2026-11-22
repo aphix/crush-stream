@@ -1030,11 +1030,11 @@ export function armedSolids(): Surface | null {
 
 /**
  * `offer`'s scratch: the best candidate so far (`S_BEST`..`S_AUX`), the candidate being evaluated (`S_CG0`..`S_CAUX`, its height `S_H`:
- * NaN where it has none), one cell's partials (per cell unit, `S_PU`, `S_PV`, set by `bilSlopes` or `triangleSlopes`), `cellHeight`'s cell fractions in
- * (`S_TU`, `S_TV`) and height out (`S_CH`) and, for a best `plainOffer` found, the point in its grid (`S_PFU`, `S_PFV`; `S_PFU` −1 for
+ * NaN where it has none), one cell's partials (per cell unit, `S_PU`, `S_PV`, set by `bilSlopes` or `triangleSlopes`), `cellHeight`'s and `bil`'s cell fractions in
+ * (`S_TU`, `S_TV`) and heights out (`S_CH`, `S_BIL`) and, for a best `plainOffer` found, the point in its grid (`S_PFU`, `S_PFV`; `S_PFU` −1 for
  * any other best), its node, factor and partials left to `plainRest`.
  */
-const _s = new Float64Array(27);
+const _s = new Float64Array(28);
 const S_BEST = 0;
 const S_PATCH = 1;
 const S_G0 = 2;
@@ -1066,6 +1066,7 @@ const S_SNY = 23;
 const S_SPAN = 24;
 const S_PAST_U = 25;
 const S_PAST_V = 26;
+const S_BIL = 27;
 /** `Surface.plainOne`: read `Surface.plainCells` per index cell. */
 const PLAIN_BY_CELL = -2;
 /** A `Surface.plainCells` entry: the index cell lists patches besides the one always-tested plain grid (`plainOutside`): `find` reads that grid plain, then offers the cell's patches in list order, as `offerAll` does. */
@@ -1076,11 +1077,13 @@ const NEED_HEIGHT = 0;
 const NEED_GRIP = 1;
 const NEED_ALL = 2;
 
-/** Bilinear value of `f` in cell `c` at (fu, fv). */
-function bil(f: Float32Array, c: number, nu: number, fu: number, fv: number): number {
+/** Bilinear value of `f` in cell `c` at the cell fractions (`S_TU`, `S_TV`) into `S_BIL`: no double crosses the call, which would box it where it is not inlined. */
+function bil(f: Float32Array, c: number, nu: number): void {
+  const fu = _s[S_TU];
+  const fv = _s[S_TV];
   const a = f[c]! + (f[c + 1]! - f[c]!) * fu;
   const b = f[c + nu]! + (f[c + nu + 1]! - f[c + nu]!) * fu;
-  return a + (b - a) * fv;
+  _s[S_BIL] = a + (b - a) * fv;
 }
 
 /** `bil`'s partials per cell unit at the cell fractions (`S_TU`, `S_TV`) into `S_PU`, `S_PV`. */
@@ -1153,17 +1156,22 @@ function triangleSlopes(f: Float32Array, a: number, nu: number): void {
  */
 function cellHeight(s: Surface, i: number, ci: number, cj: number, nu: number): void {
   const c = cj * nu + ci;
-  const fu = _s[S_TU];
-  const fv = _s[S_TV];
   const lat = s.lat[i]!;
   if (!creased(lat, c, nu)) {
     const side = s.latticeCells[i]![cj * (nu - 1) + ci];
     if (side === 1 || side === 2) triangleHeight(s.nodes[i]!, drawnCornerIn(s, i, ci, cj, nu, side), nu);
-    else _s[S_CH] = bil(s.nodes[i]!, c, nu, fu, fv);
+    else {
+      bil(s.nodes[i]!, c, nu);
+      _s[S_CH] = _s[S_BIL];
+    }
     return;
   }
-  const k = Math.max(-1, Math.min(1, bil(lat, c, nu, fu, fv)));
-  _s[S_CH] = bil(s.centre[i]!, c, nu, fu, fv) - k * bil(s.drop[i]!, c, nu, fu, fv);
+  bil(lat, c, nu);
+  const k = Math.max(-1, Math.min(1, _s[S_BIL]));
+  bil(s.drop[i]!, c, nu);
+  const drop = _s[S_BIL];
+  bil(s.centre[i]!, c, nu);
+  _s[S_CH] = _s[S_BIL] - k * drop;
 }
 
 /** `cellHeight`'s partials per cell unit into `S_PU`, `S_PV`, at the same cell and fractions. */
@@ -1176,11 +1184,11 @@ function cellSlopes(s: Surface, i: number, ci: number, cj: number, nu: number): 
     else bilSlopes(s.nodes[i]!, c, nu);
     return;
   }
-  const fu = _s[S_TU];
-  const fv = _s[S_TV];
-  const l = bil(lat, c, nu, fu, fv);
+  bil(lat, c, nu);
+  const l = _s[S_BIL];
   const k = Math.max(-1, Math.min(1, l));
-  const drop = bil(s.drop[i]!, c, nu, fu, fv);
+  bil(s.drop[i]!, c, nu);
+  const drop = _s[S_BIL];
   bilSlopes(lat, c, nu);
   const lu = _s[S_PU];
   const lv = _s[S_PV];
@@ -1272,7 +1280,10 @@ function gridAt(s: Surface, i: number, q: Float64Array, need: number): void {
   // Math.round of fv and fu (halves up): the cell's corner plus one where the fraction reaches a half.
   if (need !== NEED_HEIGHT) _s[S_CN] = (cj + (tv >= 0.5 ? 1 : 0)) * nu + ci + (tu >= 0.5 ? 1 : 0);
   const aux = s.auxs[i]!;
-  if (aux.length > 0) _s[S_CAUX] = bil(aux, c, nu, tu, tv);
+  if (aux.length > 0) {
+    bil(aux, c, nu);
+    _s[S_CAUX] = _s[S_BIL];
+  }
   h -= P[o + P_DROP]! * _s[S_CAUX];
   // The surface point's world height: the frame's origin plus its local x, y and z along the axes' y components.
   _s[S_H] = P[o + P_OY]! + P[o + P_AX + 1]! * lu + P[o + P_BX + 1]! * h + P[o + P_CX + 1]! * lv;
@@ -2032,6 +2043,13 @@ export function heightIn(s: Surface, q: Float64Array, grip = false): number {
   const h = look(s, q, grip ? NEED_GRIP : NEED_HEIGHT);
   if (t >= 0) gqLeave(G.heightIn, t);
   return h;
+}
+
+/** `heightIn` (no grip) written over `q[PQ_Y]`, not returned: a caller it is not inlined into boxes no double. */
+export function heightInto(s: Surface, q: Float64Array): void {
+  const t = GQ.on ? gqEnter(G.heightIn) : -1;
+  q[PQ_Y] = look(s, q, NEED_HEIGHT);
+  if (t >= 0) gqLeave(G.heightIn, t);
 }
 
 /** The best candidate over `s` alone into the scratch, working out what `need` asks past its height; returns that height. */

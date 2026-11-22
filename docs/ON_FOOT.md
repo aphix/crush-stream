@@ -166,7 +166,8 @@ the right stick, mouse look, the wheel and a pinch work as everywhere, and place
 
 - **Follow** (the default): the pivot at his head (the focus 0.55 m over his torso's centre, about 1.68 m up, followed critically damped: 0.3 s walking, 0.12 s running, his
   height with 0.35 s), a boom of 1.7 + 2.0 cos(pitch) m (3.7 m level, shorter looking down or up) at 0.22 rad from above, him in the middle across and lower in the frame with
-  his whole body in view: an 80° view across, its vertical held between 48° and 60° (`followFov`).
+  his whole body in view: an 80° view across, its vertical held between 48° and 60° (`followFov`). From a run to a sprint the boom grows by up to 15 % (`sprintBoom`,
+  Pignole's distance growing with forward speed; the share tuned by feel); the aim's shot keeps its own boom.
 - **Over the shoulder**: zooming in moves the pivot out to his right, all 0.5 m of it from a 1.6 m boom in (eased between, so the wheel and a pinch glide through it).
 - **His own eyes**: inside 0.8 m (his shoulders' breadth and the ball off his head), at his head's height over his drawn torso (eased over 0.12 s, so the gait's bob is soft and a
   stair is not lagged), 0.1 m ahead of the head's centre unless a wall is nearer, looking where the orbit looks, up and down to 74°. The pool's mesh draws his head and torso to no

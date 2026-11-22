@@ -360,6 +360,11 @@ export class OpenWorldDirector {
     return this.autoWanted;
   }
 
+  /** Auto is up only because Q / E picked a subject with it off (`OpenWorldAuto.pin`). */
+  get spectating(): boolean {
+    return this.autoWanted && this.auto?.pinned === true;
+  }
+
   setAuto(on: boolean): void {
     if (on === this.autoWanted) return;
     if (on) this.auto?.begin();

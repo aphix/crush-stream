@@ -1,5 +1,5 @@
 import { detAtan, detCos, detSin, hypot3 } from "../kernel/physics-core.js";
-import { RUN_SPEED } from "./walker-locomotion.ts";
+import { RUN_SPEED, SPRINT_SPEED } from "./walker-locomotion.ts";
 import { smoothstep, wrapAngle } from "./walker-math.ts";
 
 /**
@@ -79,6 +79,14 @@ export function boomAt(levelBoom: number, pitch: number): number {
 /** How far (m) the pivot stands to his right at a zoom of `levelBoom`: none at the follow boom, all of `SHOULDER_ACROSS` from the shoulder stop in, eased between. */
 export function acrossAt(levelBoom: number): number {
   return SHOULDER_ACROSS * smoothstep((FOLLOW_BOOM - levelBoom) / (FOLLOW_BOOM - SHOULDER_BOOM));
+}
+
+/** The boom grows by up to this share from a run to a sprint: Pignole's "distance grows with forward speed between two speeds, up to a maximum" (.extraResearch/third-person-camera-and-controls.md); the share tuned by feel. */
+const SPRINT_BOOM_SHARE = 0.15;
+
+/** The boom (m) at his `speed` (m/s) for a boom of `boom` at rest: unchanged up to a run, `SPRINT_BOOM_SHARE` longer at a sprint, eased between. */
+export function sprintBoom(boom: number, speed: number): number {
+  return boom * (1 + SPRINT_BOOM_SHARE * smoothstep((speed - RUN_SPEED) / (SPRINT_SPEED - RUN_SPEED)));
 }
 
 /** How far (m, at most `length`) the camera's ball moves from (x, y, z) along the unit (dx, dy, dz) before it touches a solid (`RagdollSystem.sightClear`). */

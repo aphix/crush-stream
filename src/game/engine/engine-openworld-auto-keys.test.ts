@@ -158,6 +158,20 @@ describe("given the real engine in the open world with the Auto camera on, the p
     expect(seat.mode, "and is still at the wheel").toBe("drive");
   });
 
+  // mutation: sed -i 's/^      return spectated;$/      return false;/' src/game/engine/engine.ts
+  it("when Auto is off, the far chase view up, and E then V are pressed, then the camera is back on his car in the far chase view, Auto off", () => {
+    world().setAuto(false);
+    const seat = rig.engine["seat"];
+    seat.view = "far";
+    rig.run(0.2);
+    rig.press("KeyE");
+    expect(world().autoOn, "control: E with Auto off spectates").toBe(true);
+    rig.press("KeyV");
+    expect(world().autoOn, "V ends the spectate").toBe(false);
+    expect(seat.view, "the view he had before E").toBe("far");
+    expect(seat.mode, "at the wheel").toBe("drive");
+  });
+
   // mutation: sed -i 's/const WALKED: readonly SubjectKind\[\] = \[SUBJECT.civilian, SUBJECT.cop, SUBJECT.driver\];/const WALKED: readonly SubjectKind[] = [SUBJECT.civilian];/' src/game/engine/engine-openworld-auto.ts
   it("when E is pressed once round everybody the world shows, then it has stopped on people and on foot cops", () => {
     cutTo(SUBJECT.civilian, shown(SUBJECT.civilian));

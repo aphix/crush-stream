@@ -3,13 +3,13 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { DRIVE, type SeatView } from "../vehicle/car-drive.ts";
 import { LOAD_FEEL } from "../vehicle/car-load.ts";
 import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
-import { hypot2 } from "../kernel/physics-core.js";
-import { wrapPiClosed } from "../kernel/scalar.ts";
+import { wrapAngle } from "./walker-math.ts";
 import { LANDING, LandingWatch } from "./landing.ts";
 import { Spring, Spring3, type Axes } from "./spring.ts";
 import { EyeClear, LET_GO_OMEGA, outOfBody, STEEPEST } from "./eye-clear.ts";
 import type { Occluder, Sight } from "./spectate-cam.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
+import { heightInto, PQ_SIZE, PQ_X, PQ_Y, PQ_Z } from "../world/surfaces.ts";
 
 const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
@@ -17,6 +17,8 @@ const _e = new THREE.Vector3();
 const _zeta: Axes = { lon: 1, lat: 1, up: 1 };
 const _subject = new THREE.Vector3();
 const NO_BOXES: readonly Occluder[] = [];
+/** The point `eyeFloor` reads and writes: no boxed doubles cross its call (the chase runs it every frame). */
+const _floor = new Float64Array(PQ_SIZE);
 /** The chase heading's target turns at most this fast (rad/s): GTA's car camera limits its swing to 0.05 rad a 1/50 s step (.extraResearch/third-person-camera-and-controls.md), so a spin does not whip the view. */
 const HEADING_RATE = 2.5;
 
@@ -101,13 +103,11 @@ export function wobbleEnvelope(left: number, hold: number, attack: number): numb
   return (t * t * (3 - 2 * t) * left) / hold;
 }
 
-/**
- * The lowest a chase eye may stand (m) at (x, z): `CHASE.floor` over the surface there as the car's feet at height `y` see it
- * (so a deck overhead is no floor, a ramp or a hill is), or over y = 0 where the ground has none.
- */
-function eyeFloor(x: number, z: number, y: number): number {
-  const g = activeGround().heightAt(x, z, y);
-  return (g === NO_FLOOR ? 0 : g) + CHASE.floor;
+/** `_floor[PQ_Y]` becomes the lowest a chase eye may stand at its (x, z): `CHASE.floor` over the surface the car's feet (the y it holds) see, or over y = 0 where there is none. */
+function eyeFloor(): void {
+  heightInto(activeGround(), _floor);
+  const g = _floor[PQ_Y]!;
+  _floor[PQ_Y] = (g === NO_FLOOR ? 0 : g) + CHASE.floor;
 }
 
 /** The debug panel's groups: the talk's three tuning parameters (masterclass 29:27), then what else the chase tunes. */
@@ -207,6 +207,10 @@ export class DriveCam {
   private readonly clear = new EyeClear();
   /** How far (m) `outOfBody` lifts the eye over the line, risen at once and let go over the pull's 0.24 s, so leaving the padded box does not drop the eye in a frame. */
   private bodyLift = 0;
+  /** This frame's `followBlend` (`weighFollow`). */
+  private follow = 0;
+  /** The lens `update` last drew with, as a share of the resting chase lens: a drag turns the look by it, as GTA scales mouse look by FOV / 80 (reVC `Cam.cpp`, .extraResearch/third-person-camera-and-controls.md), so a pixel moves the picture alike at any lens. */
+  private lensShare = 1;
   private readonly lastCarPos = new THREE.Vector3();
 
   /** Look offset from behind the car (rad, + = looking left). */
@@ -214,10 +218,10 @@ export class DriveCam {
     return this.lookYaw.x;
   }
 
-  /** Mouse drag (px): drag right looks right, drag down looks down; eases back after `lookDelay` unless `update` keeps it. */
+  /** Mouse drag (px): drag right looks right, drag down looks down, by `lensShare`; eases back after `lookDelay` unless `update` keeps it. */
   nudge(dx: number, dy: number): void {
-    this.lookYaw.snap(wrapPiClosed(this.lookYaw.x - dx * 0.005));
-    this.lookPitch.snap(THREE.MathUtils.clamp(this.lookPitch.x + dy * 0.004, -0.35, 0.9));
+    this.lookYaw.snap(wrapAngle(this.lookYaw.x - dx * 0.005 * this.lensShare));
+    this.lookPitch.snap(THREE.MathUtils.clamp(this.lookPitch.x + dy * 0.004 * this.lensShare, -0.35, 0.9));
     this.idle = 0;
     this.returnOmega = CHASE.lookOmega;
     this.dragged = true;
@@ -234,8 +238,16 @@ export class DriveCam {
 
   /** Lift `camera`'s eye to `eyeFloor` where it stands (the chase views, after anything that moved it): the push-out, a pull toward a ramp's face. */
   keepAbove(camera: THREE.PerspectiveCamera, car: DeformableCar): void {
-    const f = eyeFloor(camera.position.x, camera.position.z, car.group.position.y);
-    if (camera.position.y < f) camera.position.y = f;
+    _floor[PQ_X] = camera.position.x;
+    _floor[PQ_Z] = camera.position.z;
+    _floor[PQ_Y] = car.group.position.y;
+    eyeFloor();
+    if (camera.position.y < _floor[PQ_Y]!) camera.position.y = _floor[PQ_Y]!;
+  }
+
+  /** `followBlend` at the car's forward speed into `follow`: called apart, since `update` is past V8's inlining budget and a double it got back from a call would be a heap allocation a frame. */
+  private weighFollow(car: DeformableCar): void {
+    this.follow = followBlend(car.velocity.x * car.fwdFlat.x + car.velocity.z * car.fwdFlat.z);
   }
 
   /**
@@ -248,12 +260,13 @@ export class DriveCam {
     const vel = car.velocity;
     const along = vel.x * fwd.x + vel.z * fwd.z;
     // The view looks into a slide as the car gets going, not at a speed: `followBlend` is 0 below `followFrom`, 1 from `followTo`.
-    const follow = followBlend(along);
+    this.weighFollow(car);
+    const follow = this.follow;
     const cams = car.style.camera ?? PLATFORM_CAMERA;
     const chase = view === "far" ? cams.far : cams.third;
     let yawT = Math.atan2(fwd.x, fwd.z);
     if (follow > 0 && view !== "first") {
-      yawT += THREE.MathUtils.clamp(wrapPiClosed(Math.atan2(vel.x, vel.z) - yawT), -0.5, 0.5) * 0.4 * follow;
+      yawT += THREE.MathUtils.clamp(wrapAngle(Math.atan2(vel.x, vel.z) - yawT), -0.5, 0.5) * 0.4 * follow;
     }
 
     const enter = this.car !== car;
@@ -275,9 +288,9 @@ export class DriveCam {
       this.landFall = fall;
     }
     if (cut || view === "first") this.headTo = yawT;
-    else this.headTo += THREE.MathUtils.clamp(wrapPiClosed(yawT - this.headTo), -HEADING_RATE * dt, HEADING_RATE * dt);
+    else this.headTo += THREE.MathUtils.clamp(wrapAngle(yawT - this.headTo), -HEADING_RATE * dt, HEADING_RATE * dt);
     if (cut) this.heading.snap(yawT);
-    else this.heading.step(this.heading.x + wrapPiClosed(this.headTo - this.heading.x), view === "first" ? CHASE.eyeOmega : CHASE.headOmega, dt);
+    else this.heading.step(this.heading.x + wrapAngle(this.headTo - this.heading.x), view === "first" ? CHASE.eyeOmega : CHASE.headOmega, dt);
 
     if (rx !== 0 || ry !== 0) {
       this.lookYaw.step(-rx * CHASE.stickYaw, CHASE.stickOmega, dt);
@@ -305,7 +318,7 @@ export class DriveCam {
       this.aim.snap(_w);
     } else {
       const dist = chase.dist + Math.min(Math.abs(along), 30) * CHASE.pullback;
-      const r = hypot2(dist, chase.height);
+      const r = Math.sqrt(dist * dist + chase.height * chase.height);
       const elev = THREE.MathUtils.clamp(Math.atan2(chase.height, dist) + this.lookPitch.x, 0.02, STEEPEST);
       const flat = r * Math.cos(elev);
       _v.set(p.x - sy * flat, p.y + r * Math.sin(elev), p.z - cy * flat);
@@ -315,7 +328,7 @@ export class DriveCam {
       if (follow > 0) {
         let vx = vel.x * CHASE.aheadVel;
         let vz = vel.z * CHASE.aheadVel;
-        const l = hypot2(vx, vz);
+        const l = Math.sqrt(vx * vx + vz * vz);
         if (l > CHASE.aheadMax) {
           vx *= CHASE.aheadMax / l;
           vz *= CHASE.aheadMax / l;
@@ -342,9 +355,13 @@ export class DriveCam {
       _zeta.lon = calm ? 1 : CHASE.zeta.lon;
       _zeta.lat = calm ? 1 : CHASE.zeta.lat;
       _zeta.up = calm ? 1 : this.landS > 0 ? CHASE.landing.zetaUp : CHASE.zeta.up;
-      this.pos.stepBasis(_v, CHASE.pos, _zeta, CHASE.maxSpeed, dt, fwd.x, fwd.z);
+      this.pos.stepBasis(_v, CHASE.pos, _zeta, CHASE.maxSpeed, dt, fwd);
       this.aim.step(_w, CHASE.aimOmega, dt);
-      const floor = eyeFloor(this.pos.x.x, this.pos.x.z, p.y);
+      _floor[PQ_X] = this.pos.x.x;
+      _floor[PQ_Z] = this.pos.x.z;
+      _floor[PQ_Y] = p.y;
+      eyeFloor();
+      const floor = _floor[PQ_Y]!;
       if (this.pos.x.y < floor) {
         this.pos.x.y = floor;
         if (this.pos.v.y < 0) this.pos.v.y = 0;
@@ -373,6 +390,7 @@ export class DriveCam {
         ? CHASE.fovFirst
         : CHASE.fov + CHASE.fovSpeed * Math.min(1.4, Math.max(0, along) / DRIVE.maxFwd) + CHASE.fovSlide * car.drive.slide;
     easeFov(camera, fov, dt);
+    this.lensShare = camera.fov / CHASE.fov;
   }
 
   /** A landing's wobble: pitch and roll at `wobbleHz`, eased in over `attack` s and fading out linearly over `hold` s of the landing's own clock (not the wall's): `wobbleEnvelope`. */
@@ -393,10 +411,12 @@ export class DriveCam {
       return;
     }
     const s = car.suspension;
-    const fade = Math.max(0, 1 - 20 * hypot2(this.lookYaw.x, this.lookPitch.x));
+    const fade = Math.max(0, 1 - 20 * Math.sqrt(this.lookYaw.x * this.lookYaw.x + this.lookPitch.x * this.lookPitch.x));
     const y = RIDE.heave * s.heave + (view === "first" ? RIDE.lever : -RIDE.lever) * s.pitch;
-    camera.position.y += this.rideY.step(RIDE.drop * Math.tanh(y / RIDE.drop) * fade, RIDE.omega, dt);
-    camera.rotateX(this.rideTilt.step(RIDE.maxTilt * Math.tanh((RIDE.tilt * s.pitch) / RIDE.maxTilt) * fade, RIDE.omega, dt));
+    this.rideY.step(RIDE.drop * Math.tanh(y / RIDE.drop) * fade, RIDE.omega, dt);
+    camera.position.y += this.rideY.x;
+    this.rideTilt.step(RIDE.maxTilt * Math.tanh((RIDE.tilt * s.pitch) / RIDE.maxTilt) * fade, RIDE.omega, dt);
+    camera.rotateX(this.rideTilt.x);
   }
 }
 

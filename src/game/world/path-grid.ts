@@ -70,11 +70,16 @@ function segGrid(path: GridPath): SegGrid {
   return g;
 }
 
+/** Where `nearestOnPath` and `projectPathAt` (track.ts) project from (x, z), written by their caller: no double crosses a call that is not inlined, which would box it. */
+export const PATH_POINT = new Float64Array(2);
+
 /**
- * Nearest point on segment k→k+1 into `out` if closer than out.dist2, or as close with a lower k (the whole-path scan has
+ * Nearest point on segment k→k+1 to the point in `PATH_POINT` into `out` if closer than out.dist2, or as close with a lower k (the whole-path scan has
  * always kept the lowest k of equal distances, and the grid visits segments in cell order).
  */
-function trySegment(path: GridPath, k: number, x: number, z: number, out: GridHit): void {
+function trySegment(path: GridPath, k: number, out: GridHit): void {
+  const x = PATH_POINT[0]!;
+  const z = PATH_POINT[1]!;
   const n = path.count;
   const b = path.closed ? (k + 1) % n : k + 1;
   if (b >= n) return;
@@ -101,26 +106,28 @@ function trySegment(path: GridPath, k: number, x: number, z: number, out: GridHi
   out.lateral = (dx * ez - dz * ex) / Math.sqrt(len2);
 }
 
-function scanCell(path: GridPath, g: SegGrid, c: number, x: number, z: number, out: GridHit): void {
+function scanCell(path: GridPath, g: SegGrid, c: number, out: GridHit): void {
   for (let t = g.start[c]!; t < g.start[c + 1]!; t++) {
     const k = g.items[t]!;
     if (g.seen[k] === g.stamp) continue;
     g.seen[k] = g.stamp;
-    trySegment(path, k, x, z, out);
+    trySegment(path, k, out);
   }
 }
 
 /**
- * The nearest segment of the whole path into `out` (whose `dist2` the caller set to Infinity), found from the cell under
- * (x, z) outward: it stops once the cells searched reach farther in every direction than the best distance. A point far
+ * The nearest segment of the whole path to the point in `PATH_POINT` into `out` (whose `dist2` the caller set to Infinity), found from the cell under
+ * it outward: it stops once the cells searched reach farther in every direction than the best distance. A point far
  * outside the path's box takes the plain scan.
  */
-export function nearestOnPath(path: GridPath, x: number, z: number, out: GridHit): void {
+export function nearestOnPath(path: GridPath, out: GridHit): void {
+  const x = PATH_POINT[0]!;
+  const z = PATH_POINT[1]!;
   const g = segGrid(path);
   const u = (x - g.x0) / GRID_CELL;
   const v = (z - g.z0) / GRID_CELL;
   if (u < -2 || v < -2 || u > g.nx + 2 || v > g.nz + 2) {
-    for (let k = 0; k < path.count; k++) trySegment(path, k, x, z, out);
+    for (let k = 0; k < path.count; k++) trySegment(path, k, out);
     return;
   }
   const ci = Math.min(g.nx - 1, Math.max(0, Math.floor(u)));
@@ -133,10 +140,10 @@ export function nearestOnPath(path: GridPath, x: number, z: number, out: GridHit
     const j1 = cj + r;
     for (let j = Math.max(0, j0); j <= Math.min(g.nz - 1, j1); j++) {
       if (j === j0 || j === j1) {
-        for (let i = Math.max(0, i0); i <= Math.min(g.nx - 1, i1); i++) scanCell(path, g, j * g.nx + i, x, z, out);
+        for (let i = Math.max(0, i0); i <= Math.min(g.nx - 1, i1); i++) scanCell(path, g, j * g.nx + i, out);
       } else {
-        if (i0 >= 0) scanCell(path, g, j * g.nx + i0, x, z, out);
-        if (i1 < g.nx) scanCell(path, g, j * g.nx + i1, x, z, out);
+        if (i0 >= 0) scanCell(path, g, j * g.nx + i0, out);
+        if (i1 < g.nx) scanCell(path, g, j * g.nx + i1, out);
       }
     }
     if (out.dist2 < Infinity) {

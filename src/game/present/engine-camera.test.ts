@@ -513,7 +513,10 @@ describe("given the chase eye's springs", () => {
       const s = new Spring();
       s.x = 1;
       let peak = 0;
-      for (let t = 0; t < 1 - 1e-9; t += h) peak = Math.max(peak, -s.stepDamped(0, 7, zeta, h));
+      for (let t = 0; t < 1 - 1e-9; t += h) {
+        s.stepDamped(0, 7, zeta, h);
+        peak = Math.max(peak, -s.x);
+      }
       return { x: s.x, peak };
     });
     const overshoot = Math.exp((-Math.PI * zeta) / Math.sqrt(1 - zeta * zeta));
@@ -528,7 +531,7 @@ describe("given the chase eye's springs", () => {
     const calm = { lon: 1, lat: 1, up: 1 };
     let fastest = 0;
     for (let t = 0; t < 2; t += DT) {
-      s.stepBasis(target, axes, calm, 3, DT, 0, 1);
+      s.stepBasis(target, axes, calm, 3, DT, { x: 0, z: 1 });
       fastest = Math.max(fastest, s.v.length());
     }
     expect(fastest, `the eye reached ${fastest.toFixed(2)} m/s`).toBeLessThanOrEqual(3 + 1e-9);

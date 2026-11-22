@@ -738,7 +738,7 @@ describe("given the open world's stage light following the crowd's clock", () =>
     for (const [minute, hour] of harness.dayHours.entries()) expect(hour, `hour at minute ${minute}`).toBeCloseTo((start + minute / MINUTES_PER_HOUR) % 24, 9);
   });
 
-  // mutation: sed -i 's/      this.dropDay();\n//' src/game/engine/engine-openworld.ts
+  // mutation: sed -i '/^      this.dropDay();$/d' src/game/engine/engine-openworld.ts
   it("when the open world is left, then the stage gets one null and no more, and comes back to the hour when it is entered again", () => {
     const harness = hostWithMap();
     for (let at = 0; at < framesFor(2); at++) harness.frame();
@@ -805,7 +805,7 @@ describe("given the open world's stage light following the crowd's clock", () =>
   });
 
   // mutation: sed -i 's/^    this.seconds = 0;$/    this.seconds = this.seconds;/' src/game/engine/engine-openworld.ts
-  // mutation: sed -i 's/if (!this.started || !this.authority) return false;/if (!this.authority) return false;/' src/game/ai/civilians/civilian-crowd.ts
+  // mutation: sed -i 's/^    if (!this.authority) return false;$/    if (false) return false;/' src/game/ai/civilians/civilian-crowd.ts
   it("when a skip is asked with no crowd, or before the crowd has stepped, then nothing is skipped; and after the open world is left and entered again, the new crowd's clock and light are its own", () => {
     const harness = hostWithMap();
     expect(harness.director.skipDay(1), "no crowd yet").toBe(false);
