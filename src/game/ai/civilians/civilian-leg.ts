@@ -199,35 +199,40 @@ export function legPose(state: CityState, resident: number, seconds: number, out
   const dirX = spanX / span;
   const dirZ = spanZ / span;
   const before = step > 0 ? pathNodes[first + step - 1]! : from;
-  cornerMiter(nodeX[from]! - nodeX[before]!, nodeZ[from]! - nodeZ[before]!, dirX, dirZ, START_MITER);
+  MITER[0] = nodeX[from]! - nodeX[before]!;
+  MITER[1] = nodeZ[from]! - nodeZ[before]!;
+  MITER[2] = dirX;
+  MITER[3] = dirZ;
+  cornerMiter();
+  const startX = MITER[4]!;
+  const startZ = MITER[5]!;
   const after = step + 2 < count ? pathNodes[first + step + 2]! : to;
-  cornerMiter(dirX, dirZ, nodeX[after]! - nodeX[to]!, nodeZ[after]! - nodeZ[to]!, END_MITER);
-  out.x = nodeX[from]! + spanX * along + offset * (START_MITER.x + (END_MITER.x - START_MITER.x) * along);
-  out.z = nodeZ[from]! + spanZ * along + offset * (START_MITER.z + (END_MITER.z - START_MITER.z) * along);
+  MITER[0] = dirX;
+  MITER[1] = dirZ;
+  MITER[2] = nodeX[after]! - nodeX[to]!;
+  MITER[3] = nodeZ[after]! - nodeZ[to]!;
+  cornerMiter();
+  out.x = nodeX[from]! + spanX * along + offset * (startX + (MITER[4]! - startX) * along);
+  out.z = nodeZ[from]! + spanZ * along + offset * (startZ + (MITER[5]! - startZ) * along);
   return true;
 }
 
-/** Where the offset lines of two segments meet, per metre of offset to the right of the way walked: written to a scratch so no double is boxed. */
-class Miter {
-  x = 0;
-  z = 0;
-}
-const START_MITER = new Miter();
-const END_MITER = new Miter();
+/** The corner `cornerMiter` reads (the way in x, z, the way out x, z) and the miter it writes (x, z), per metre of offset to the right of the way walked: a scratch, so no double is boxed to cross the call. */
+const MITER = new Float64Array(6);
 /** A corner's miter is at most 1 / this of the offset out (2x, at turns sharper than 120 deg): a hairpin's would run off to infinity. Tuned by feel. */
 const MITER_FLOOR = 0.5;
 
-/** The miter at a corner from the way `inX, inZ` (any length; none: straight on) into the way `outX, outZ` (a unit vector unless `in` is), into `into`: the sum of the two right-hand normals over 1 + their dot. */
-function cornerMiter(inX: number, inZ: number, outX: number, outZ: number, into: Miter): void {
-  const inLength = hypot2(inX, inZ);
-  const outLength = hypot2(outX, outZ);
-  const ux = inLength > 0 ? inX / inLength : outX / outLength;
-  const uz = inLength > 0 ? inZ / inLength : outZ / outLength;
-  const vx = outLength > 0 ? outX / outLength : ux;
-  const vz = outLength > 0 ? outZ / outLength : uz;
+/** The miter at a corner from the way in (any length; none: straight on) into the way out (a unit vector unless the way in is), from and into `MITER`: the sum of the two right-hand normals over 1 + their dot. */
+function cornerMiter(): void {
+  const inLength = hypot2(MITER[0]!, MITER[1]!);
+  const outLength = hypot2(MITER[2]!, MITER[3]!);
+  const ux = inLength > 0 ? MITER[0]! / inLength : MITER[2]! / outLength;
+  const uz = inLength > 0 ? MITER[1]! / inLength : MITER[3]! / outLength;
+  const vx = outLength > 0 ? MITER[2]! / outLength : ux;
+  const vz = outLength > 0 ? MITER[3]! / outLength : uz;
   const scale = 1 / Math.max(MITER_FLOOR, 1 + ux * vx + uz * vz);
-  into.x = (uz + vz) * scale;
-  into.z = -(ux + vx) * scale;
+  MITER[4] = (uz + vz) * scale;
+  MITER[5] = -(ux + vx) * scale;
 }
 
 /** `legPose` for a walker the crowd shows: also false while the resident is dead or off the street run down (a knock hides them from its tick on, before any answer says so). */
