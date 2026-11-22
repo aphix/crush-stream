@@ -1,5 +1,5 @@
 import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
-import { blankStrike, fell, felled, runsDown, type FigureStrike } from "../../scenes/figure-strike.ts";
+import { blankStrike, fell, felled, runsDown, stood, type FigureStrike } from "../../scenes/figure-strike.ts";
 import { CAR_REACH } from "../../scenes/lawn-guard.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import { activeGround } from "../../world/ground.ts";
@@ -182,6 +182,15 @@ export class CrimeScene {
     if (!this.authority || this.copPoses.shown[cop] === 0) return;
     const poses = this.copPoses;
     this.downCop(cop, felled(cop, poses.x[cop]!, activeGround().heightAt(poses.x[cop]!, poses.z[cop]!), poses.z[cop]!, dirX, dirZ, blankStrike()), seconds);
+  }
+
+  /** The hook takes shown foot cop `cop`: he is downed where he stands, thrown with no speed (he drops at his spot, for a rope to tie to) like any cop put down, so the law knows (his case loses him: a suspect he held is let go and the chase goes on without him) and every peer hears the knock; and the player has fought the law, as a punch on a cop is. False without authority or when he is not shown. */
+  hookCop(cop: number, seconds: number): boolean {
+    const poses = this.copPoses;
+    if (!this.authority || poses.shown[cop] === 0) return false;
+    this.downCop(cop, stood(-1, cop, poses.x[cop]!, activeGround().heightAt(poses.x[cop]!, poses.z[cop]!), poses.z[cop]!, detSin(poses.yaw[cop]!), detCos(poses.yaw[cop]!), blankStrike()), seconds);
+    this.law.player.fightKnown(seconds);
+    return true;
   }
 
   /** A heard knock whose time this peer's clock has reached: the cop goes down, thrown by the car nearest him when it is fresh (as a heard civilian's knock is). */

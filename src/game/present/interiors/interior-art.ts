@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { hypot2 } from "../../kernel/physics-core.js";
+import { detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { SHOP_GROUND_STOREY, type InteriorPlan } from "../../world/openworld/interior-kinds.ts";
 import { DOOR_FACE, interiorDoors, interiorSolids, planInterior, planKey, vestibuleSolids, type DoorLeaf, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { drawnHalf } from "../../world/openworld/openworld-facade-solids.ts";
@@ -8,13 +8,25 @@ import { FACADE_DARK_MAX, FACADE_GLOW, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS,
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
 import { CLOSED_GLOW, DAY_SKY_GAIN, DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, LAMP_DAY, LAMP_ROOM_DAY, OPEN_FADE_SECONDS, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
-import { DoorSet, type DoorOpeners } from "./interior-doors.ts";
+import { DoorSet, type DoorOpeners, type PinnedSpots } from "./interior-doors.ts";
 import { lightingOf, type RoomLight } from "./interior-light.ts";
 import { NO_SLOT, PackedMesh } from "./interior-pack.ts";
 
 /** What of an interior the physics holds: nothing, the vestibules behind its street doors, or all of it. */
 const SOLIDS = { none: 0, vestibule: 1, full: 2 } as const;
 type Solids = (typeof SOLIDS)[keyof typeof SOLIDS];
+
+/** Whether one of the pinned spots lies within `place`'s footprint (its depth along its own x, its width along z, as `PlaceFootprints` reads it). */
+function holdsPinned(place: Place, pinned: PinnedSpots): boolean {
+  const cos = detCos(place.yaw);
+  const sin = detSin(place.yaw);
+  for (let at = 0; at < pinned.count; at++) {
+    const dx = pinned.x[at]! - place.x;
+    const dz = pinned.z[at]! - place.z;
+    if (Math.abs(dx * cos - dz * sin) < place.depth / 2 && Math.abs(dx * sin + dz * cos) < place.width / 2) return true;
+  }
+  return false;
+}
 
 /** One place with an interior: whether it is a business (not a home), its footprint's half sides (drawn depth, width), its doors in the door set, what is built of it now (whether, and the slot each piece of it holds in its packed mesh), whether its street front is in view this frame (a business within range), and whether it is to be dropped once its windows have shut. */
 type Entry = {
@@ -197,7 +209,7 @@ export class InteriorSet {
       const open = entry.shellBuilt && entry.detailBuilt && !entry.closing ? 1 : 0;
       const step = this.seconds[0]! / OPEN_FADE_SECONDS;
       this.openness[at] = open === 1 ? Math.min(1, this.openness[at]! + step) : Math.max(0, this.openness[at]! - step);
-      const solids = this.solidsOf(entry, at, openers.walker);
+      const solids = this.solidsOf(entry, at, openers.walker, openers.pinned);
       if (solids !== entry.solids) {
         entry.solids = solids;
         solidsChanged = true;
@@ -266,9 +278,10 @@ export class InteriorSet {
     return false;
   }
 
-  /** A built interior within `SOLIDS_NEAR` is held whole; one the player's walker stands at the door of, only its vestibules. */
-  private solidsOf(entry: Entry, at: number, walker: DoorOpeners["walker"]): Solids {
+  /** A built interior within `SOLIDS_NEAR` is held whole, and so is any with a hooked body in it (the hook reaches far past `SOLIDS_NEAR`, and a body with no floor falls through the raised ground floor); one the player's walker stands at the door of, only its vestibules. */
+  private solidsOf(entry: Entry, at: number, walker: DoorOpeners["walker"], pinned: PinnedSpots | undefined): Solids {
     if (entry.shellBuilt && this.distance[at]! < SOLIDS_NEAR) return SOLIDS.full;
+    if (pinned !== undefined && pinned.count > 0 && holdsPinned(entry.place, pinned)) return SOLIDS.full;
     if (walker === null) return SOLIDS.none;
     for (let door = entry.firstDoor; door < entry.firstDoor + entry.doorCount; door++) {
       const leaf = this.doors.leaves[door]!;

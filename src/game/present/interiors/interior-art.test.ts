@@ -8,7 +8,7 @@ import { LOOK } from "../../ai/civilians/civilian-crowd-constants.ts";
 import { FRAME_HZ } from "../../kernel/constants.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
-import { vestibuleSolids, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
+import { interiorSolids, planInterior, vestibuleSolids, type InteriorSolid } from "../../world/openworld/interior-plan.ts";
 import { FACADE_GLOW, FACADE_DARK_AT, FACADE_DARK_MAX, FACADE_OPEN_AT, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS } from "../facades.ts";
 import { HIDE_GRACE, SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../openworld-sight.ts";
 import type { Place } from "../../world/openworld/walk-graph.ts";
@@ -210,6 +210,23 @@ describe("given a house with its door shut and the player's walker on the sidewa
     expect(set.openDoors(), "doors open").toBe(0);
     expect(built(set), "rooms built").toBe(NOTHING_BUILT);
     expect(last(heard), "solids held").toBe(vestibuleSolids(house).length);
+    set.dispose();
+  });
+
+  // mutation: sed -i '/^    if (pinned !== undefined \&\& pinned.count > 0 \&\& holdsPinned(entry.place, pinned)) return SOLIDS.full;/d' src/game/present/interiors/interior-art.ts
+  it("when a hooked body stands in the house with the eye far out of range, then the physics holds the house's solids (its floors), and lets them go when the body is gone", () => {
+    const set = new InteriorSet(loneHouse);
+    const heard = listen(set);
+    const who = openers();
+    const farX = house.doorX + AWAY;
+    settle(set, farX, house.doorZ, who, 2);
+    expect(last(heard), "control: no solids held for an eye this far").toBe(0);
+    who.pinned = { count: 1, x: Float32Array.of(house.x), z: Float32Array.of(house.z) };
+    settle(set, farX, house.doorZ, who, 2);
+    expect(last(heard), "solids held for the body in it").toBe(interiorSolids(house, planInterior(house)).length);
+    who.pinned.count = 0;
+    settle(set, farX, house.doorZ, who, 2);
+    expect(last(heard), "solids let go").toBe(0);
     set.dispose();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY, ARREST } from "../civilians/civilian-activity.ts";
-import { CASE_PHASE } from "./case-table.ts";
+import { CASE_PHASE, isHeldMode } from "./case-table.ts";
 import { harness, runFor } from "./crime-fixture.test-util.ts";
 import { detCos, detSin } from "../../kernel/physics-core.js";
 
@@ -50,5 +50,73 @@ describe("an arrest is acted", () => {
     expect(run.poses.shown[CRIMINAL], "gone from the street").toBe(0);
     expect(run.scene.foot.table.phase[0], "the case is closed").toBe(CASE_PHASE.free);
     expect(cops.activity[cop], "the cop is back to walking").toBe(ACTIVITY.none);
+  });
+});
+
+describe("the hook takes a cop making an arrest, and then the suspect he held", () => {
+  /** An arrest begun (cuffs going on): the cop holding case 0. */
+  function cuffing() {
+    const run = arrestRun();
+    runFor(run, 1);
+    return { run, cop: run.scene.foot.table.holder[0]! };
+  }
+
+  /** Whether the suspect is in a cop's hands (gripped, led, boarding, driven). */
+  function inHands(run: ReturnType<typeof arrestRun>): boolean {
+    const { table } = run.scene.foot;
+    const slot = table.subjectOf[CRIMINAL]!;
+    return slot >= 0 && isHeldMode(table.mode[slot]!);
+  }
+
+  // mutation: sed -i 's/    this.downCop(cop, stood(-1, cop,/    this.copStrikes.push(stood(-1, cop,/' src/game/ai/openworld-crime/crime-scene.ts
+  it("when the hook takes the cop, then he is down where he stood with no speed, every peer hears it, and the suspect he held is let go", () => {
+    const { run, cop } = cuffing();
+    const spot = { x: run.scene.copPoses.x[cop]!, z: run.scene.copPoses.z[cop]! };
+    const lost = run.scene.stats.lost;
+    expect(inHands(run), "control: she is in his hands").toBe(true);
+    expect(run.scene.hookCop(cop, run.now), "taken").toBe(true);
+    expect(run.copDowns.length, "knocks raised for the wire").toBe(1);
+    expect(run.copDowns[0]!.resident, "for this cop").toBe(cop);
+    const strikes = run.scene.takeCopStrikes();
+    expect(strikes.length, "one figure to throw").toBe(1);
+    expect(strikes[0]!.car, "no car struck him").toBe(-1);
+    expect(strikes[0]!.x, "thrown from his x").toBeCloseTo(spot.x, 5);
+    expect(strikes[0]!.z, "thrown from his z").toBeCloseTo(spot.z, 5);
+    expect(Math.abs(strikes[0]!.vx) + Math.abs(strikes[0]!.vy) + Math.abs(strikes[0]!.vz), "his speed (m/s)").toBe(0);
+    expect(run.scene.copPoses.shown[cop], "no longer drawn standing").toBe(0);
+    expect(run.scene.stats.lost - lost, "the suspect he held was let go").toBe(1);
+    expect(inHands(run), "she is in no hands now").toBe(false);
+    runFor(run, 1);
+    expect(inHands(run), "nor a second later: the cop who held her is down").toBe(false);
+  });
+
+  // mutation: sed -i '/^  hookCop(cop: number, seconds: number): boolean {/,/^  }/{/fightKnown/d}' src/game/ai/openworld-crime/crime-scene.ts
+  it("when the hook takes a cop who is only walking his beat, then the player has fought the law: a chase of him opens", () => {
+    const run = harness([59]);
+    run.scene.setFoot(true, 58, 0, 1, 0, 0);
+    runFor(run, 1);
+    expect(run.scene.footChaseOf({ cops: 0, hold: 0, left: 0 }), "control: no chase before the hook").toBe(false);
+    expect(run.scene.hookCop(0, run.now), "taken").toBe(true);
+    expect(run.scene.footChaseOf({ cops: 0, hold: 0, left: 0 }), "the chase is open").toBe(true);
+  });
+
+  // mutation: sed -i 's/^    if (!this.authority || poses.shown\[cop\] === 0) return false;/    if (poses.shown[cop] === 0) return false;/' src/game/ai/openworld-crime/crime-scene.ts
+  it("when a client's scene is asked to hook a cop, then nothing happens", () => {
+    const run = harness([59], { authority: false });
+    runFor(run, 1);
+    expect(run.scene.hookCop(0, run.now), "refused").toBe(false);
+    expect(run.copDowns.length, "no knock raised").toBe(0);
+  });
+
+  it("when the law lets the suspect out of his hands (the hook took her), then the cuffs are off, and the offence still held against her has a cop go after her again", () => {
+    const { run } = cuffing();
+    expect(inHands(run), "control: she is in his hands").toBe(true);
+    const lost = run.scene.stats.lost;
+    run.scene.foot.spare(CRIMINAL);
+    expect(run.scene.stats.lost - lost, "let go").toBe(1);
+    expect(inHands(run), "out of his hands").toBe(false);
+    runFor(run, 5);
+    const { table } = run.scene.foot;
+    expect(table.active(table.subjectOf[CRIMINAL]!), "a case after her again").toBe(true);
   });
 });

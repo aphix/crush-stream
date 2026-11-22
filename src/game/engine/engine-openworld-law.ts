@@ -33,7 +33,8 @@ type CopArt = {
 /** What the law takes from the engine beyond the crowd's own ports. */
 export type LawEnginePorts = {
   makeArt(capacity: number): CopArt;
-  throwFigure(strike: FigureStrike, look: DriverLook): void;
+  /** The pool slot the figure was thrown into, -1 where none is known (the worker's world, or Rapier not up yet). */
+  throwFigure(strike: FigureStrike, look: DriverLook): number;
   /** The open world's traffic, whose pool cars patrol cars are leased from and whose red-light runners the law hears; null: the law is on foot. */
   traffic(): TrafficApi | null;
   /** The course's solids the patrol cars bend round; null: they drive straight. */
@@ -152,10 +153,27 @@ export class OpenWorldLaw {
     }
   }
 
-  private throwDressed(strike: FigureStrike, lookWord: number): void {
+  private throwDressed(strike: FigureStrike, lookWord: number): number {
     const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
     dressOfLook(lookWord, look);
-    this.ports.throwFigure(strike, look);
+    return this.ports.throwFigure(strike, look);
+  }
+
+  /** The hook takes shown foot cop `cop` at crowd second `seconds`: he is downed where he stands (`CrimeScene.hookCop`) and thrown down at once in uniform, so a rope can tie to him; his pool slot, -1 where he is not hookable (not shown, no authority) or no slot is known. */
+  hookCop(cop: number, seconds: number): number {
+    if (!this.scene.hookCop(cop, seconds)) return -1;
+    let slot = -1;
+    const strikes = this.scene.takeCopStrikes();
+    for (let at = 0; at < strikes.length; at++) {
+      const thrown = this.throwDressed(strikes[at]!, COP_LOOK);
+      if (strikes[at]!.guard === cop) slot = thrown;
+    }
+    return slot;
+  }
+
+  /** The hook took suspect `resident` out of the law's hands: the arrest is broken off at once (`FootLaw.spare`), and the law's next poll, finding her still wanted, sends a cop after her. */
+  releaseSuspect(resident: number): void {
+    this.scene.foot.spare(resident);
   }
 
   /** The host's knocks of foot cops in the crowd's event log (heard on a client, its own on the host), for the scene to apply once each. */
