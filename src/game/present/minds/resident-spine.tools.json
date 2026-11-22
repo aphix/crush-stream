@@ -646,6 +646,27 @@
     }
   },
   {
+    "name": "event_spared",
+    "description": "the hook took a suspect out of the police's hands.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
     "name": "event_walker",
     "description": "the player on foot in a push or fight. Applied by ai/civilians/civilian-events.ts#queueEvents.",
     "parameters": {
