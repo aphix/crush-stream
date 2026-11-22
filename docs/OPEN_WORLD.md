@@ -28,6 +28,30 @@ Web Worker both import.
 `CivilianRemote` is the main thread's end: it posts one plan per tick `PLAN_LEAD_TICKS` ahead to the worker and mirrors the city;
 a tick whose answer is not back when due is computed inline by the same step.
 
+## The spine (`ai/civilians/resident-spine.ts`)
+
+One file declares every closed set the brain uses, one row per id, so a reader sees in one place what a resident can do and what
+starts it. The tables, in file order: `MOODS`, `CRIME_KINDS`, `NEEDS` (with the mood a pressing need leaves, `urge`), `PURPOSES` (the
+story, interaction and reaction legs), `ACTIVITIES` (drawn clips and their length), `EVENT_KINDS` (host input events: the bystander's
+word for one, `remark`, and the handlers that apply it, `brain`), `LOG_EVENTS` (the life log's codes and their moods) and `VENUES`
+(what a place is to its visitors: hours, seats, a counter).
+
+- **Order is code.** A row's code is its place in its table (`codesOf`); `LEG_PURPOSES` is the needs followed by the purposes, as a
+  leg's purpose byte reads them. Rows refer to moods and crimes by code (`M.happy`, `C.theft`), never by string.
+- **Derived, not copied.** The old hand-kept tables are built from the rows at load in their old homes, so no importer changed:
+  `NEED`, `PURPOSE`, `EVENT_KIND`, `CRIME_KIND` (`civilian-constants.ts`); `ACTIVITY`, its words and `ACTIVITY_SECONDS`
+  (`civilian-activity.ts`); `MOOD`, the mood and purpose words and moods, `EVENT_CODE`, `VISIT_BASE` (`civilian-names.ts`); `VENUE` and
+  its seated, counter, outdoor and default-hours tables (`society-venues.ts`); `DRIVE_BY_PURPOSE` (`society-cars.ts`);
+  `CRIME_KIND_OF_PURPOSE` (`society-crime.ts`). Byte tables (`flagsOf`) replace `includes` scans.
+- **Launch paths.** Each row's `launch` (or `brain`) names the function that starts it as `path-under-src/game#function`;
+  `resident-spine.test.ts` checks each one exists, and pins every derived table against the literal it replaced.
+- **Bit-identical.** The society is unchanged: 3 seeds × 2 days × 200 residents with knock, crime, wreck, danger, ambulance, fight and
+  bust events, and a 120-person crowd run of 14,400 steps, digest the same before and after the spine. No `REPLAY_VERSION` or
+  `NET_VERSION` change.
+- **As tools.** `scripts/export-resident-tools.mjs` writes the spine as tool-calling JSON (`resident-spine.tools.json`: one
+  `purpose_*`, `activity_*` or `event_*` tool a row, id-sorted) and the Minds' thought tools (`resident-thoughts.tools.json`) beside
+  the Minds; `export-resident-tools.test.mjs` fails while either file differs from a fresh build.
+
 ## The crowd on the main thread (`CivilianCrowd`)
 
 `CivilianCrowd(map, seed, playableResidents, remote)` owns a `CrowdPoses` (what the drawing reads: drawn position, yaw, stride phase,
@@ -111,7 +135,42 @@ for it. The brain is told of a heard event by posting it with the next plan tick
 `LOOK_RADIUS`, up to `LOOK_REACH` ahead (their line: name, age, job at workplace, need and place, mood; then their life log), else the
 building whose box the ray enters first (its kind and name, who lives or works there, the latest comings and goings), whichever is
 nearer along the ray. The director recomputes it `LOOK_HZ` times a second and keeps the same object while the text is the same; the
-HUD's look panel shows it, with a last line saying what that person is looking at (`OpenWorldGaze.describe`).
+HUD's look panel shows it, with a line saying what that person is looking at (`OpenWorldGaze.describe`) and a last line naming her
+thought (`OpenWorldMinds.describe`, see "Minds").
+
+## Minds (`present/minds/`, `engine/engine-openworld-minds.ts`)
+
+What a resident thinks, as the look panel's last line (`Thinks "…"`) and, for a look, a turn of her head through the gaze
+(`CrowdGaze.attend`). Presentation only, on the main thread: nothing reaches the brain, a replay or the wire.
+
+- **Thoughts** (`thought-tools.ts`): five closed tools, `ignore`, `look_at` (a gaze stimulus kind), `worry_about` (a need),
+  `remark_on` (an event kind with a `remark`) and `think_about` (home, work, company, plans), one argument each from a closed list.
+- **The situation** (`minds-read.ts`, `thought-situation.ts`): who she is and how she feels, the hour, where she is off to, her most
+  pressing need, the lookable stimuli within 40 m (at most 4) and the remarkable events of the last game hour (at most 3), in fixed
+  arrays.
+- **The fallback answers at once, always** (`pickFallback`): the strongest of a look (salience falling to half at 10 m), a worry (0.8 ×
+  the need), a remark (0.6, fading over the hour), a plain thought (0.35) or nothing (0.2). A thought lasts the game hour it was had in.
+- **Needle 2 refines, when on.** A single resident's moment is asked of Needle 2 (needle-rs WASM, `NeedleV2Wasm`) in a module
+  worker, one ask in flight and one queued (the newest wins), never from the frame loop. The prompt is one short sentence; the tools
+  sent are narrowed to the arguments that fit the moment. The answer replaces the fallback only when `readCall` reads a whole call
+  naming a thought tool with exactly its one closed argument (zod) and `fitsSituation` agrees; anything else is counted by `VERDICT`
+  and the fallback stands. A call over 15 s ends the worker and backs off 60 s (humm-tauri measured 0.3-6 s a call on desktop and up
+  to about 49 s on a loaded phone: `.extraResearch/crowd-senses-and-gaze.md`). A failed load or a browser without module workers
+  turns Needle off for the session, said once in the console.
+- **Groups stay on the fallback.** A new crash, knock or shot pulse in the gaze table (read at 4 Hz) gathers the shown people within
+  15 m (2-12 of them); their shared thought is the fallback's, and their heads turn one after another (0.15 s a rank plus up to 0.4 s
+  of their own). Needle is not asked for groups: it read "a group of N people" as a group-chat request.
+- **The weights** (`needle-weights.ts`): `needle2.cact` (13,737,807 B) from Cactus Compute's Hugging Face repo, fetched only when the
+  setting is on and a thought asks, kept in Cache Storage, and refused unless it hashes to its SHA-256 (a bad cached copy is dropped
+  and fetched again).
+- **The setting** (`minds`: HUD Playback "Minds", share key `minds`): Auto (null) is on for a desktop at FX high or ultra, off on
+  a phone and on a software rasterizer; On and Off pin it. While off no worker is made and nothing is fetched.
+- **Cost.** `CrowdMinds.frame` allocates at most 16 B a frame (`crowd-minds-alloc.test.ts`); its per-frame names are in the
+  boundary check's `HOT` list.
+- **Measured** (this box, node, needle-rs 0.3.1, Needle 2, narrowed tools, 80 new tokens): load 30 ms with the bytes in memory; 30
+  single asks, median 4661 ms (2803-6243), 11 fit (37 %), 9 malformed, 8 with bad arguments, 2 abstained; 10 group asks, median
+  2251 ms, 3 fit, 6 abstained. `confidence_for` took a median 5451 ms and read near 0 even on fitting picks, so it gates nothing.
+  Needle 3 (35.3 MB) took 6.9-7.6 s and picked the wrong tool in the first smoke: not shipped.
 
 ## Look and gaze (`present/civilian-gaze*.ts`, `engine/engine-openworld-gaze.ts`)
 

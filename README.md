@@ -182,3 +182,7 @@ The papers behind the solver, each with an analysis note and the cross-paper fin
   License), credited in the game's Credits dialog. The source OBJs are not in this repository (the licence covers using them in the game, not
   passing the files on): put them in `assets-src/` to re-bake `src/game/present/dummy-bodies.ts` with `scripts/bake-dummy-bodies.mjs`.
 - Sky, print and rim shaders: functions after [shader-skills](https://github.com/gokayfem/shader-skills), MIT, reimplemented for the dome, the composite pass and the people's material.
+- Residents' thoughts (Minds): [needle-rs](https://github.com/geekgineer/needle-rs) 0.3.1 by Abdalrahman Ibrahim, MIT, an independent
+  re-implementation of [Needle](https://github.com/cactus-compute/needle) by Cactus Compute (Apache-2.0, no code of it shipped); the
+  Needle 2 weights ([Cactus-Compute/needle2](https://huggingface.co/Cactus-Compute/needle2)), MIT, downloaded by the browser when the
+  Minds setting is on and not in this repository. Needle 3 (Apache-2.0) was measured and is not used.
