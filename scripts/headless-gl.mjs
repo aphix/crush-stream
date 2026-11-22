@@ -14,3 +14,15 @@ export async function loadHeadlessGl() {
   if (!existsSync(join(glDir, "dist/webgl.node"))) throw new Error(`@kmamal/gl has no native binary (installs never run its GitHub download). Fetch it once: node ${join(glDir, "scripts/install.mjs")}`);
   return (await import("@kmamal/gl")).default;
 }
+
+/**
+ * A 60 Hz `requestAnimationFrame` stand-in that hands `gl` its frame's commands first, as a page's present does. Without it the frame's GPU work is
+ * only submitted when the next frame's first draw (the sun's shadow pass) needs its target, and that draw's CPU time holds the whole previous frame's GPU time.
+ */
+export function presentingFrames(gl, firstStamp) {
+  let stamp = firstStamp;
+  return (callback) => {
+    gl.flush();
+    setImmediate(() => callback((stamp += 1000 / 60)));
+  };
+}

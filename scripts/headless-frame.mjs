@@ -51,7 +51,7 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { detCos, detSin, hypot3 } from "../src/game/kernel/physics-core.js";
 import { makeCanvasElement } from "./headless-canvas.mjs";
-import { loadHeadlessGl, NO_CONTEXT } from "./headless-gl.mjs";
+import { loadHeadlessGl, NO_CONTEXT, presentingFrames } from "./headless-gl.mjs";
 
 /** Any fixed seed: the same derby field in both trees of a diff. */
 const SEED = 12641919;
@@ -511,8 +511,8 @@ async function benchParts(n) {
   const { frame, newBeat, FRAME_CPU, FRAME_SIM, FRAME_DRAW } = await game("engine/bench-frame.ts");
   const { FrameRecord, partCard } = await game("engine/bench-frames.ts");
   const { frameParts } = await game("kernel/frame-parts.ts");
-  let stamp = 1000;
-  globalThis.requestAnimationFrame = (callback) => void setImmediate(() => callback((stamp += 1000 / 60)));
+  const stamp = 1000;
+  globalThis.requestAnimationFrame = presentingFrames(gl, stamp);
   const parts = engine.benchParts();
   const t = tap(engine.pace, parts);
   const beat = newBeat(parts, stamp, null, 0);
