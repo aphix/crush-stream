@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { humanSlot } from "../match/survival.ts";
 import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { GROUND_PAINT_PREFABS, PREFABS } from "../world/catalog.ts";
@@ -46,12 +45,12 @@ describe("given the open world's course, its crossings painted on the road", () 
     expect(standing.map((prop) => `${prop.x.toFixed(1)},${prop.z.toFixed(1)}`), "crossings a solid stands over").toEqual([]);
   });
 
-  it("when the player's car stands at its spawn on a crossing, then the chase eye keeps the chase view's distance and does not close on the cab", () => {
-    const start = track.survival!.start;
-    const spawn = humanSlot(start, 0);
-    const underSpawn = crossings.filter((prop) => inside(occluder(prop.x, prop.z, prop.yaw, (PREFABS[prop.prefab].size[0] * prop.sx) / 2, (PREFABS[prop.prefab].size[2] * prop.sz) / 2, false, -1, 1), spawn.x, 0, spawn.z, 0));
-    expect(underSpawn.length, "crossings painted under the spawn").toBeGreaterThan(0);
-    const { subject, eye, rigEye } = chaseOf(spawn.x, spawn.z, spawn.yaw);
+  it("when the player's car stands on a crossing, then the chase eye keeps the chase view's distance and does not close on the cab", () => {
+    // The spawn stood on a crossing until it moved off the zebra; the car now stands on the first crossing, facing the spawn's way.
+    const at = crossings[0]!;
+    const under = crossings.filter((prop) => inside(occluder(prop.x, prop.z, prop.yaw, (PREFABS[prop.prefab].size[0] * prop.sx) / 2, (PREFABS[prop.prefab].size[2] * prop.sz) / 2, false, -1, 1), at.x, 0, at.z, 0));
+    expect(under.length, "crossings painted under the car").toBeGreaterThan(0);
+    const { subject, eye, rigEye } = chaseOf(at.x, at.z, track.survival!.start.yaw);
     new EyeClear().apply(sight, [], subject, eye, Infinity);
     expect(eye.distanceTo(subject), "the eye's distance from the car's aim point").toBeCloseTo(rigEye.distanceTo(subject), 6);
   });
