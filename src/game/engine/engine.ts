@@ -1228,6 +1228,7 @@ export class CrashEngine extends EngineGarage {
     lapPart(PART.rest);
     this.updateCamera(wallDt);
     lapPart(PART.camera);
+    this.openWorld.mindsOn = this.mindsWanted();
     this.openWorld.frame(wallDt);
     this.tether.frame(wallDt);
     lapPart(PART.scenery);

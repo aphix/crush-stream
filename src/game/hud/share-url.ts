@@ -127,6 +127,8 @@ const BASE_FIELDS = {
   dots: orNull(num(R.dots.min, R.dots.max, 0)),
   hatch: orNull(num(R.hatch.min, R.hatch.max, 0)),
   rim: orNull(num(R.rim.min, R.rim.max, 0)),
+  // null = Auto (on for a desktop at FX high or ultra); 1 or 0 pins Needle's thoughts on or off.
+  minds: orNull(flag(true)),
   mat: num(R.material.min, R.material.max, D.materialStrength),
   cont: num(R.contour.min, R.contour.max, D.contourStrength),
   candy: num(R.candy.min, R.candy.max, D.candyStrength),

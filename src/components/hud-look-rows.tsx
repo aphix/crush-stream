@@ -1,13 +1,21 @@
 import type { HudProps } from "@/components/hud";
-import { RangeRow } from "@/components/hud-controls";
+import { ChangedDot, RangeRow, SEGMENT, TRACK } from "@/components/hud-controls";
 import { Button } from "@/components/ui/button";
 import { KNOB_RANGES } from "@/game/hud/hud-store";
 import { isChanged } from "@/game/hud/settings-changes";
+import { cn } from "@/lib/utils";
 
 /** `off` for an unset look, else its strength as a percentage. */
 const strengthText = (v: number | null): string => (v === null ? "off" : `${Math.round(v * 100)}%`);
 
-/** The looks under Cel in the Playback section: the procedural sky, the two print looks (post tiers only), the people's rim light, and the material and car contour strengths. */
+/** The Minds row's choices and the setting each sets. */
+const MINDS_CHOICES: readonly (readonly [string, boolean | null])[] = [
+  ["Auto", null],
+  ["On", true],
+  ["Off", false],
+];
+
+/** The looks under Cel in the Playback section: the procedural sky, the two print looks (post tiers only), the people's rim light and minds, and the material and car contour strengths. */
 export function LookRows({ state, engine }: Pick<HudProps, "state" | "engine">) {
   const noPost = state.fxTier === "off" || state.fxTier === "minimal";
   return (
@@ -74,6 +82,27 @@ export function LookRows({ state, engine }: Pick<HudProps, "state" | "engine">) 
         shown={strengthText(state.rimLight)}
         onValue={(v) => engine.current?.setRimLight(v)}
       />
+      <div className="flex items-center gap-2">
+        <span className="hud-label relative w-12 shrink-0" title="Open world residents' thoughts in the look panel, refined by Needle 2 in a worker (a 13.7 MB download on first use)">
+          Minds
+          <ChangedDot on={isChanged(state, "minds")} />
+        </span>
+        <div className={cn(TRACK, "grid-cols-3")} role="group" aria-label="Minds">
+          {MINDS_CHOICES.map(([label, value]) => (
+            <Button
+              key={label}
+              className={SEGMENT}
+              variant={state.minds === value ? "default" : "ghost"}
+              aria-pressed={state.minds === value}
+              aria-label={`Minds ${label}`}
+              title={value === null ? "On for a desktop at FX high or ultra" : undefined}
+              onClick={() => engine.current?.setMinds(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>
       <RangeRow
         label="Materials"
         changed={isChanged(state, "materials")}

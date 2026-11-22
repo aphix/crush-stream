@@ -5,7 +5,7 @@ import { MindsWorld, hourKey, readGroup, readResident } from "./minds-read.ts";
 import { Situation, fitsSituation, pickFallback, situationQuery, situationTools } from "./thought-situation.ts";
 import { THOUGHT, Thought, VERDICT, readCall, thoughtLine } from "./thought-tools.ts";
 
-/** The Needle worker as the Minds talk to it (a `Worker`; a test hands in a stand-in that counts). */
+/** The Needle worker as the Minds talk to it (a `Worker`; a test hands in a stand-in that counts). Its maker returns null where none can start. */
 export type NeedleWorker = {
   postMessage(message: ToNeedle): void;
   terminate(): void;
@@ -67,7 +67,7 @@ export class CrowdMinds {
   /** Milliseconds the worker took to load (-1: not loaded) and its last call took. */
   loadMs = -1;
   lastCallMs = -1;
-  private readonly createWorker: () => NeedleWorker;
+  private readonly createWorker: () => NeedleWorker | null;
   private on = false;
   private worker: NeedleWorker | null = null;
   private ready = false;
@@ -94,7 +94,7 @@ export class CrowdMinds {
   /** The members of the group being gathered. */
   private readonly members = new Int32Array(GROUP_MAX);
 
-  constructor(capacity: number, world: MindsWorld, createWorker: () => NeedleWorker) {
+  constructor(capacity: number, world: MindsWorld, createWorker: () => NeedleWorker | null) {
     this.world = world;
     this.createWorker = createWorker;
     this.thoughtHour = new Int32Array(capacity).fill(NO_HOUR);
@@ -107,6 +107,7 @@ export class CrowdMinds {
 
   /** The Minds setting: off ends the worker and drops what was asked; on lets the next thought ask (nothing loads before then). */
   setOn(on: boolean): void {
+    if (on === this.on) return;
     this.on = on;
     if (on) return;
     this.endWorker();
@@ -175,6 +176,10 @@ export class CrowdMinds {
 
   private startWorker(): void {
     const worker = this.createWorker();
+    if (worker === null) {
+      this.fail("this browser cannot start a module worker");
+      return;
+    }
     this.worker = worker;
     this.ready = false;
     worker.onmessage = (event) => this.hear(event.data);

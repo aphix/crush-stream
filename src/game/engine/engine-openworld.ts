@@ -44,6 +44,7 @@ import { OpenWorldClientDoors } from "./engine-openworld-door-clips.ts";
 import { OpenWorldCarDoors } from "./engine-openworld-cars.ts";
 import { BODY_COUNT, OpenWorldBodies, type BodyHost } from "./openworld-bodies.ts";
 import { OpenWorldGaze } from "./engine-openworld-gaze.ts";
+import { OpenWorldMinds } from "./engine-openworld-minds.ts";
 import type { CrowdGaze } from "../present/civilian-gaze.ts";
 import { MEDICS, OpenWorldMedics } from "./engine-openworld-medics.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
@@ -218,6 +219,10 @@ export class OpenWorldDirector {
   private bodies: OpenWorldBodies | null = null;
   /** Where the drawn crowd looks (`CrowdGaze` inside), made with the crowd: presentation only. */
   gaze: OpenWorldGaze | null = null;
+  /** What the drawn crowd thinks (`CrowdMinds` inside), made with the crowd: presentation only. */
+  minds: OpenWorldMinds | null = null;
+  /** The Minds setting as the engine resolves it (null = auto) each frame: Needle may refine thoughts. */
+  mindsOn = false;
   /** The cars' doors, swung with the residents getting into and out of them (where they stand is `crowd.driverDoors`). */
   private doors: OpenWorldCarDoors | null = null;
   /** The kerb spaces, known on every peer: a car standing in one has nobody in it (`carIsEmpty`). */
@@ -423,6 +428,7 @@ export class OpenWorldDirector {
     this.ports.eye(this.ray);
     this.frameSigns(this.map);
     this.gaze?.frame(crowd.poses, this.ray.eyeX, this.ray.eyeZ, wallDt, this.bodies);
+    this.minds?.frame(crowd, this.gaze?.gaze ?? null, this.ray, this.mindsOn, wallDt);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt, this.bodies?.held ?? null);
     this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     if (this.traffic?.ambulanceScene(this.sceneScratch) === true) this.medics?.setScene(this.sceneScratch.x, this.sceneScratch.z);
@@ -434,8 +440,9 @@ export class OpenWorldDirector {
     if (cut || this.lookAcc >= 1 / LOOK_HZ) {
       this.lookAcc = 0;
       const auto = this.autoWanted && this.auto !== null;
-      const text = auto ? this.auto!.text() : lookAtOf(crowd.state, crowd.poses, tickAt(crowd.crowdSeconds), this.ray);
-      this.text = this.keepIfSame(auto || this.gaze === null ? text : this.gaze.describe(text, crowd.poses, this.map, this.ray));
+      const text = auto ? this.auto!.text() : lookAtOf(crowd.state, crowd.poses, tickAt(crowd.crowdSeconds), this.ray, this.minds?.shown ?? null);
+      const gazed = auto || this.gaze === null ? text : this.gaze.describe(text, crowd.poses, this.map, this.ray);
+      this.text = this.keepIfSame(auto || this.minds === null ? gazed : this.minds.describe(gazed));
     }
   }
 
@@ -455,6 +462,8 @@ export class OpenWorldDirector {
     this.bodies?.dispose();
     this.bodies = null;
     this.gaze = null;
+    this.minds?.dispose();
+    this.minds = null;
     this.stopTraffic();
     this.art?.dispose();
     this.law?.dispose();
@@ -713,6 +722,7 @@ export class OpenWorldDirector {
     const crowd = this.crowd;
     this.gaze = new OpenWorldGaze(crowd.poses.count, map, { cars: () => this.ports.cars(), foot: (out) => this.ports.foot(out), lineOfSight: this.ports.law?.lineOfSight ?? null });
     if (this.art !== null) this.art.gaze = this.gaze.gaze;
+    this.minds = new OpenWorldMinds(crowd.poses.count);
     const gaze = this.gaze;
     this.unhook = this.ports.hookWallHits((closing, x, z) => {
       crowd.noteWallHit(closing, x, z);

@@ -362,6 +362,8 @@ export abstract class EngineCore {
   protected halftone = INITIAL_HUD.halftone;
   protected hatching = INITIAL_HUD.hatching;
   protected rimLight = INITIAL_HUD.rimLight;
+  /** The HUD's Minds (`CrashHudState.minds`): null = Auto. */
+  protected minds = INITIAL_HUD.minds;
   protected materialStrength = INITIAL_HUD.materialStrength;
   protected contourStrength = INITIAL_HUD.contourStrength;
   protected candyStrength = INITIAL_HUD.candyStrength;

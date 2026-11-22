@@ -61,6 +61,7 @@ export abstract class EngineShare extends EngineReel {
       dots: this.halftone,
       hatch: this.hatching,
       rim: this.rimLight,
+      minds: this.minds,
       mat: this.materialStrength,
       cont: this.contourStrength,
       candy: this.candyStrength,
@@ -168,6 +169,7 @@ export abstract class EngineShare extends EngineReel {
       if (differs("dots")) this.setHalftone(t.dots);
       if (differs("hatch")) this.setHatching(t.hatch);
       if (differs("rim")) this.setRimLight(t.rim);
+      if (differs("minds")) this.setMinds(t.minds);
       if (differs("mat")) this.setMaterialStrength(t.mat);
       if (differs("cont")) this.setContourStrength(t.cont);
       if (differs("candy")) this.setCandyStrength(t.candy);
