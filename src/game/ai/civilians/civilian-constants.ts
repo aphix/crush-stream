@@ -259,9 +259,16 @@ export const RETIRE_AGE = 65;
 export const AREA_PER_JOB = 45;
 export const MIN_JOBS = 2;
 export const MAX_JOBS = 80;
-/** Shifts start between these hours (inclusive). */
+/** Shifts are drawn to start between these hours (inclusive); at a place with hours `shiftStartOf` moves one that would run past its close. */
 export const SHIFT_START_MIN = 6;
 export const SHIFT_START_SPAN = 6;
+/** A shift at a place with hours starts at most this long before it shuts: a work dwell (`DWELL_MINUTES` work, 7-9 h) rounded. */
+export const SHIFT_FIT_HOURS = 8;
+/** Staff come in up to this long before the doors open and close up for this long after they shut (game minutes, tuned by feel). */
+export const SHIFT_OPEN_LEAD_MINUTES = 30;
+export const SHIFT_CLOSE_LAG_MINUTES = 30;
+/** Staff do not set out for a shift with less than this left of it (game minutes, tuned by feel). */
+export const SHIFT_LEAST_MINUTES = 60;
 /** A favourite is one of this many nearest places of its kind. */
 export const FAVOURITE_POOL = 3;
 

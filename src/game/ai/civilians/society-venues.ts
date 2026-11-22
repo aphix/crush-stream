@@ -70,6 +70,9 @@ export type VenueIndex = {
   /** Places with a door of each venue. */
   byVenue: readonly Int32Array[];
   hourWeight: Float32Array;
+  /** The hour a place opens (-1: open at all hours) and how many hours it stays open from then: its staff's shifts keep to them. */
+  opensAt: Int8Array;
+  openHours: Uint8Array;
   /** Seats of a place are numbered `seatBase[place]` + seat for the owner table; `seatCount` all of them, `stoopCount` the leading ones that are on the stoop. */
   seatBase: Int32Array;
   seatCount: Uint16Array;
@@ -85,6 +88,8 @@ export function buildVenueIndex(map: OpenWorldMap): VenueIndex {
   const placeCount = map.places.length;
   const venue = new Uint8Array(placeCount);
   const hourWeight = new Float32Array(placeCount * HOURS_PER_GAME_DAY);
+  const opensAt = new Int8Array(placeCount).fill(-1);
+  const openHours = new Uint8Array(placeCount).fill(HOURS_PER_GAME_DAY);
   const seatBase = new Int32Array(placeCount);
   const seatCount = new Uint16Array(placeCount);
   const stoopCount = new Uint16Array(placeCount);
@@ -97,6 +102,10 @@ export function buildVenueIndex(map: OpenWorldMap): VenueIndex {
     venue[place] = venueOf(entry);
     const window = entry.hours ?? byName.get(entry.name) ?? DEFAULT_HOURS[venue[place]!] ?? null;
     for (let hour = 0; hour < HOURS_PER_GAME_DAY; hour++) hourWeight[place * HOURS_PER_GAME_DAY + hour] = window === null || isHourIn(hour, window[0], window[1]) ? 1 : CLOSED_HOURS_WEIGHT;
+    if (window !== null) {
+      opensAt[place] = window[0];
+      openHours[place] = (window[1] - window[0] + HOURS_PER_GAME_DAY) % HOURS_PER_GAME_DAY;
+    }
     seatBase[place] = seatTotal;
     seatCount[place] = entry.seats === undefined ? 0 : Math.floor(entry.seats.length / SEAT_STRIDE);
     stoopCount[place] = Math.min(seatCount[place]!, entry.stoopSeats ?? 0);
@@ -106,5 +115,5 @@ export function buildVenueIndex(map: OpenWorldMap): VenueIndex {
     seatTotal += seatCount[place]! + standCount[place]! + clerkCount[place]!;
   }
   const byVenue = Array.from({ length: VENUE_COUNT }, (_, kind) => Int32Array.from(Array.from({ length: placeCount }, (_, place) => place).filter((place) => venue[place] === kind && map.places[place]!.doorNode >= 0)));
-  return { venueOf: venue, byVenue, hourWeight, seatBase, seatCount, stoopCount, standCount, clerkCount, seatTotal };
+  return { venueOf: venue, byVenue, hourWeight, opensAt, openHours, seatBase, seatCount, stoopCount, standCount, clerkCount, seatTotal };
 }
