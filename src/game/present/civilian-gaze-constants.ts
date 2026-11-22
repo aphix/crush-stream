@@ -13,8 +13,8 @@ export const PULSE_CAPACITY = 16;
 export const POLL_MASK = 7;
 /** No new look is taken for this long after one ends (reVC `ClearLookFlag`, 4000 ms for a ped). */
 export const LOOK_COOLDOWN_S = 4;
-/** A look this urgent ignores the cooldown (tuned by feel: a crash, a car coming at her). */
-export const COOLDOWN_BYPASS = 0.6;
+/** A look this urgent ignores the cooldown (tuned by feel: a fast car within 15 m, a crash, a car coming at her; not an ambient glance or a passer-by). */
+export const COOLDOWN_BYPASS = 0.35;
 /** A new look must beat the current one's urgency by this to cut it short (tuned by feel: heads don't flick between equals). */
 export const PREEMPT_MARGIN = 0.15;
 /** Below this urgency a sensed thing is not looked at (tuned by feel). */

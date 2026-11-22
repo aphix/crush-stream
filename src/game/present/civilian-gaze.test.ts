@@ -5,7 +5,7 @@ import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { mulberry32 } from "../world/placements.ts";
 import { emptyPoses } from "./civilian-art.test-util.ts";
 import { CrowdGaze, STIMULUS } from "./civilian-gaze.ts";
-import { ALIGN_SHIFT, HEAD_YAW_LIMIT, HEAD_YAW_RATE, PITCH_LIMIT, PITCH_RATE, TORSO_RATE, TORSO_YAW_LIMIT } from "./civilian-gaze-constants.ts";
+import { ALIGN_SHIFT, HEAD_LATENCY_S, HEAD_YAW_LIMIT, HEAD_YAW_RATE, PITCH_LIMIT, PITCH_RATE, POLL_MASK, TORSO_RATE, TORSO_YAW_LIMIT } from "./civilian-gaze-constants.ts";
 import { blankSenses, type GazeCar, type GazeSenses } from "./civilian-gaze-table.ts";
 
 const FRAME = 1 / 60;
@@ -53,15 +53,16 @@ describe("given people on a kerb facing the street", () => {
   const PEOPLE = 12;
   const SPAN = 20;
 
-  it("when a car passes fast within a few metres, then every one of them turns to it within a poll and her head's latency of it coming into range", () => {
+  it("when a car passes fast within a few metres, then every one of them turns to it within a poll and her head's latency of it coming within 15 m", () => {
     const poses = kerb(PEOPLE, SPAN);
     const fast = car(-80, 4, 25);
     const times = carLookTimes(poses, [fast], 6);
+    const along15 = Math.sqrt(15 * 15 - 4 * 4);
     for (let civilian = 0; civilian < PEOPLE; civilian++) {
-      // The car is in range (25 m at this speed draws past the notice floor from 20 m) when it is 20 m off her along x.
-      const inRange = (poses.x[civilian]! - 20 - -80) / 25;
+      // From 15 m its pull (0.4) beats a glance, a refusal after one, anything but a crash.
+      const within15 = (poses.x[civilian]! - along15 + 80) / 25;
       expect(times[civilian], `person ${civilian} looked at the fast car`).toBeLessThan(Infinity);
-      expect(times[civilian]! - inRange, `person ${civilian}'s latency (s)`).toBeLessThan(0.35);
+      expect(times[civilian]! - within15, `person ${civilian}'s latency (s)`).toBeLessThan((POLL_MASK + 1) * FRAME + HEAD_LATENCY_S + 2 * FRAME);
     }
     // mutation: sed -i 's/  const fast = Math.min(1, Math.max(0, (speed - CAR_CALM_SPEED) \/ (CAR_FAST_SPEED - CAR_CALM_SPEED))) \* s\[SCRATCH.near\]!;/  const fast = 0;/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze-poll.ts
   });

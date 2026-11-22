@@ -284,17 +284,18 @@ export class CrowdGaze implements LookChooser {
     this.lookUrgency[civilian] = this.pendingUrgency[civilian]!;
   }
 
-  /** Her poll: the best thing to look at, taken when it beats what she does (or her refusal) and, for a thing only seen, a line of sight reaches it. */
+  /** Her poll: the best thing to look at, taken when it beats what she does or is about to (or her refusal) and, for a thing only seen, a line of sight reaches it. */
   private poll(civilian: number, poses: CrowdPoses): void {
-    if (this.pendingLeft[civilian]! >= 0) return;
+    const pending = this.pendingLeft[civilian]! >= 0;
     const current = this.lookKind[civilian]!;
-    const free = current === STIMULUS.none && this.cooldown[civilian]! <= 0;
+    const free = !pending && current === STIMULUS.none && this.cooldown[civilian]! <= 0;
     chooseLook(this, civilian, poses, free ? (poses.partner[civilian]! >= 0 ? PARTNER_GLANCE_FACTOR : 1) : 0);
     const kind = this.candidateKind;
     const source = this.candidateSource;
     if (kind === STIMULUS.none || (kind === current && source >= 0 && source === this.lookSource[civilian])) return;
     const urgency = this.scratch[SCRATCH.urgency]!;
-    const wins = current === STIMULUS.none ? this.cooldown[civilian]! <= 0 || urgency >= COOLDOWN_BYPASS : urgency >= this.lookUrgency[civilian]! + PREEMPT_MARGIN;
+    const held = pending ? this.pendingUrgency[civilian]! : this.lookUrgency[civilian]!;
+    const wins = !pending && current === STIMULUS.none ? this.cooldown[civilian]! <= 0 || urgency >= COOLDOWN_BYPASS : urgency >= held + PREEMPT_MARGIN;
     if (!wins || !this.inSight(kind)) return;
     this.scratch[SCRATCH.hold] = KIND_HOLD_MIN[kind]! + (KIND_HOLD_SPAN[kind]! * hash16(civilian, this.frame ^ SALT.hold)) / HASH16;
     this.scratch[SCRATCH.delay] = HEAD_LATENCY_S;

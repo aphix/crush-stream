@@ -111,7 +111,40 @@ for it. The brain is told of a heard event by posting it with the next plan tick
 `LOOK_RADIUS`, up to `LOOK_REACH` ahead (their line: name, age, job at workplace, need and place, mood; then their life log), else the
 building whose box the ray enters first (its kind and name, who lives or works there, the latest comings and goings), whichever is
 nearer along the ray. The director recomputes it `LOOK_HZ` times a second and keeps the same object while the text is the same; the
-HUD's look panel shows it.
+HUD's look panel shows it, with a last line saying what that person is looking at (`OpenWorldGaze.describe`).
+
+## Look and gaze (`present/civilian-gaze*.ts`, `engine/engine-openworld-gaze.ts`)
+
+People turn their heads to what they sense, the frame they sense it: local presentation on the main thread, never the brain's or the
+wire's (the brain hears of an event 6 s late by design; no `REPLAY_VERSION` or `NET_VERSION` reads it). `OpenWorldGaze` fills the senses
+each frame (the cars, the player on foot, the buildings' `lineOfSight`) and `CrowdGaze.update` runs before the art for every shown
+civilian within `FAR_DRAW` of the eye.
+
+- **The stimulus table** (`GazeStimuli`, `STIMULUS` kinds, 64 rows): the lingering pulses first (crash 8 s, knock 6 s, shot 3 s, someone
+  down 30 s), then the player on foot and every car over 4 m/s or with its siren on. Other code (the Mind lane) reads it and asks for a
+  look with `attend(index, x, y, z, holdSeconds, urgency)`.
+- **Choosing** (`chooseLook`): each person re-chooses every 8 frames, offset by her index (reVC's `(frame + seed) & 7`). A car draws by
+  speed over town pace (9 m/s: nothing; 20 m/s: full) times nearness, or by coming at her (closing over 3 m/s, due within 2 s, its path
+  within the brain's 1.8 m), or by brushing past within 3 m; ordinary driving draws nobody. The player on foot within 10 m in front is
+  noticed on a tenth of polls (always inside 2.5 m); a siren is heard within 60 m; someone down is seen within 15 m. With nothing
+  urgent and no refusal running she may glance at a passer-by ahead or idly at the nearest shop window or sign within 8 m, else at
+  the sky, the street or the ground off to one side (about one glance every 4 s, half that beside a partner). A thing only seen needs
+  a line of sight past 3 m (`LOS_PER_FRAME` tests a frame). Without a look she faces ahead, eyes a little down while walking, or
+  looks at her partner (talk, fight, kneel, a call: the gaze replaces the clips' `lookAtPartner` turn).
+- **Holding**: a look lasts 0.5-4 s by kind, then new looks are refused for 4 s (reVC `ClearLookFlag`) unless one is at least
+  `COOLDOWN_BYPASS` urgent; a new look must beat the current one by `PREEMPT_MARGIN`. The head starts 67 ms after the choice.
+- **Pulses** (`pulse`, Hitman's behaviour zones): a crash (a wall hit over 6 m/s), a knock or a shot turns heads within its radius:
+  each person reacts on a share from 0.6 to 1 by her neuroticism (0.7 of that when it is behind her), after the brain's alarm delay
+  for her (0.1 s for the jumpiest to 1.5 s for the calmest, a fifth of it drawn), so some never look and the rest turn one by one.
+- **Turning**: the whole turn eases critically damped toward the target (peak speed grows with the shift, Andrist 2012), capped at
+  reVC's rates (head yaw 450 deg/s, pitch and torso 240 deg/s); the head takes the turn up to 90 deg from the torso and the torso
+  joins past 63 deg up to 50 deg; pitch within 45 deg, scaled by the cosine of the turn. A per-person head-mover share (75-100 % of
+  the turn, look word bits 26-28) stands in for eyes the painted faces cannot move. A target behind her reach keeps her on the side
+  her head is on, so a partner walking round her does not flip her head across.
+- **Drawn**: a near dummy adds `headYaw`, `headPitch` and `torsoTwist` to the clip's channels before its solves (`applyGaze`); a far
+  figure's head and hair vertices (no swing, pivot at the neck) turn in the vertex shader by the instance's `gait.zw` (two more floats
+  an instance, no more draws); a physical body's neck motors take the turn and nod on top of the gait (`OpenWorldBodies.aimNecks`,
+  within 0.85 / 0.6 rad of the joint's 55 / 45 deg). Foot cops and medics are drawn by their own arts without a gaze.
 
 ## Interactions, crime and seats (`ai/civilians/society-*.ts`)
 
