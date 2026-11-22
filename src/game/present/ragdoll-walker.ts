@@ -148,7 +148,7 @@ export class Walker {
   private ray: Ray | null = null;
   /** The floor under (x, z) for a foot; inside a wall, or across one from his root (a banister's far side), the floor his feet stand on. */
   private readonly groundAt = (x: number, z: number): number => {
-    const height = this.floor.walled(this.anchorPos[0]!, this.anchorPos[2]!, x, z) ? NO_FLOOR : this.floor.under(x, z);
+    const height = this.floor.wallShare(this.anchorPos[0]!, this.anchorPos[2]!, x, z) < 1 ? NO_FLOOR : this.floor.under(x, z);
     return height !== NO_FLOOR ? height : this.floor.level;
   };
 
@@ -270,7 +270,7 @@ export class Walker {
 
   /**
    * How hard (m/s) his torso is moved off the root (its relative speed plus the hold's spring speed for the displacement his travel does not explain), less
-   * what only the fixed world explains: the torso sinking, and a stop of the root's own motion.
+   * what only the fixed world explains: a stop of the root's own motion.
    */
   private blowSpeed(doll: Doll, travelled: number): number {
     const held = this.anchorVel;
@@ -281,8 +281,7 @@ export class Walker {
     this.slack = Math.min(lag, this.slack + travelled);
     const keep = lag > 0 ? (lag - this.slack) / lag : 0;
     const dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx * keep;
-    // Sinking is his weight on a tread or a riser; a fall is `decideState`'s to read.
-    const dy = Math.max(0, doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep);
+    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;
     const dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz * keep;
     // A wall ahead takes any amount off his way; any other solid only stops the root's own motion: a change inside the ball whose diameter is that velocity reversed.
     const sin = detSin(this.loco.yaw);
@@ -349,10 +348,11 @@ export class Walker {
     this.framesOnFoot = 0;
     this.hopUp = 0;
     this.floor.reset(at.x, at.y, at.z);
-    this.gait.seed(at.x, at.y, at.z, yaw, this.groundAt);
+    // The root first: the gait's floor reads ask from it (`underFoot`).
     this.anchorPos[0] = at.x;
     this.anchorPos[1] = at.y;
     this.anchorPos[2] = at.z;
+    this.gait.seed(at.x, at.y, at.z, yaw, this.groundAt);
     this.anchorVel.fill(0);
     this.slack = 0;
     this.push.fill(0);
