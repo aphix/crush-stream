@@ -16,8 +16,18 @@ const CELL_HEIGHT = SHOP_SIGN.height * SIGN_PX_PER_METRE;
 const ATLAS_ANISOTROPY = 8;
 /** A shut shop's sign, its neon off: the sign's colours at this share of their brightness, still a board to read in daylight. */
 const SHUT_BRIGHTNESS = 0.22;
+/** An open shop's sign at full night: its light ink (linear ~0.9) times 3 passes the bloom's 1.6 threshold (`engine-post.ts` GRADE) while the dark fills (linear <= 0.2) stay under it. */
+const SIGN_NIGHT_GAIN = 3;
+/** The night's share is rounded to quarters: a dusk rewrites the signs' colours four times, never a frame's worth of drift. */
+const GLOW_STEPS = 4;
 const VERTICES_PER_SIGN = 4;
 const COLOUR_FLOATS = 3;
+/** A neon tube round the sign of a bar (hot pink) and a corner store (the bodega's cyan), by `Place.style`: the street's night accents in the owner's GTA 6 reference. */
+const NEON_TUBES: Readonly<Record<string, string>> = { bar: "#ff3fa4", cornerstore: "#39e6ff" };
+/** The tube's stroke (px), its inset from the sign's edge (px) and the halo painted round it (px): tuned by feel at the 96 px band. */
+const NEON_TUBE_PX = 5;
+const NEON_INSET_PX = 10;
+const NEON_HALO_PX = 8;
 
 const SIGN_MARGIN = 24;
 const SIGN_NAME_MAX_PX = 56;
@@ -150,6 +160,8 @@ function drawSign(g: CanvasRenderingContext2D, place: Place, x: number, y: numbe
   g.strokeStyle = look.edge;
   g.lineWidth = SIGN_EDGE_PX;
   g.strokeRect(x + SIGN_EDGE_PX, y + SIGN_EDGE_PX, width - 2 * SIGN_EDGE_PX, CELL_HEIGHT - 2 * SIGN_EDGE_PX);
+  const neon = NEON_TUBES[place.style];
+  if (neon !== undefined) drawNeonTube(g, neon, x, y, width);
   const withExtras = look.extras.length > 0 && width >= SIGN_EXTRAS_MIN_WIDTH;
   const textWidth = (withExtras ? width * SIGN_NAME_SHARE : width) - 2 * SIGN_MARGIN;
   g.textAlign = "left";
@@ -170,6 +182,17 @@ function drawSign(g: CanvasRenderingContext2D, place: Place, x: number, y: numbe
   const centreX = (dividerX + x + width) / 2;
   const top = y + (CELL_HEIGHT - look.extras.length * SIGN_EXTRA_LINE) / 2 + SIGN_EXTRA_PX * 0.75;
   for (let line = 0; line < look.extras.length; line++) g.fillText(look.extras[line]!, centreX, top + line * SIGN_EXTRA_LINE, x + width - dividerX - SIGN_MARGIN);
+}
+
+/** A neon tube inset round a sign, with its halo painted in: lit at night by the sign's brightness, a coloured line by day. */
+function drawNeonTube(g: CanvasRenderingContext2D, colour: string, x: number, y: number, width: number): void {
+  g.save();
+  g.strokeStyle = colour;
+  g.lineWidth = NEON_TUBE_PX;
+  g.shadowColor = colour;
+  g.shadowBlur = NEON_HALO_PX;
+  g.strokeRect(x + NEON_INSET_PX, y + NEON_INSET_PX, width - 2 * NEON_INSET_PX, CELL_HEIGHT - 2 * NEON_INSET_PX);
+  g.restore();
 }
 
 type Cell = { place: number; x: number; y: number; width: number };
@@ -203,11 +226,13 @@ export class ShopSigns {
   private readonly uvRects = new Map<number, readonly [number, number, number, number]>();
   private readonly geometry = new THREE.BufferGeometry();
   private readonly material: THREE.MeshBasicMaterial;
-  /** Per sign, in the order of the panels: its place's index in the map and whether its colours are those of a shut shop now. */
+  /** Per sign, in the order of the panels: its place's index in the map and the brightness its colours were last written at. */
   private signPlaces = new Int32Array(0);
-  private shut = new Uint8Array(0);
+  private shine = new Float64Array(0);
   private colours: THREE.BufferAttribute | null = null;
   private colourData = new Float32Array(0);
+  /** An open sign's brightness: 1 by day, up to `SIGN_NIGHT_GAIN` at night (`setNight`). */
+  private open = 1;
 
   constructor(places: readonly Place[]) {
     this.group.name = "openworld-shop-signs";
@@ -256,19 +281,25 @@ export class ShopSigns {
     this.colours = new THREE.BufferAttribute(this.colourData, COLOUR_FLOATS);
     this.geometry.setAttribute("color", this.colours);
     this.signPlaces = Int32Array.from(cells, (cell) => cell.place);
-    this.shut = new Uint8Array(cells.length);
+    this.shine = new Float64Array(cells.length).fill(1);
   }
 
-  /** A frame: a sign whose place `closed` (one byte per place of the map, 1 shut) marks shut dims, and lights again when it opens; null: every shop is open. Writes colours only where a shop changed. */
+  /** The day cycle's step: an open sign shines brighter as `night` (0 by day to 1, the day's lamps) rises, in `GLOW_STEPS` steps; the next `update` writes it. */
+  setNight(night: number): void {
+    this.open = 1 + (SIGN_NIGHT_GAIN - 1) * (Math.round(night * GLOW_STEPS) / GLOW_STEPS);
+  }
+
+  /** A frame: a sign whose place `closed` (one byte per place of the map, 1 shut; null: all open) marks shut dims, an open one shines at the night's brightness. Writes colours only where a sign's brightness changed. */
   update(closed: Uint8Array | null): void {
     const colours = this.colours;
     if (colours === null) return;
+    const open = this.open;
     let changed = false;
     for (let sign = 0; sign < this.signPlaces.length; sign++) {
-      const isShut = closed !== null && closed[this.signPlaces[sign]!] === 1 ? 1 : 0;
-      if (isShut === this.shut[sign]) continue;
-      this.shut[sign] = isShut;
-      this.colourData.fill(isShut === 1 ? SHUT_BRIGHTNESS : 1, sign * VERTICES_PER_SIGN * COLOUR_FLOATS, (sign + 1) * VERTICES_PER_SIGN * COLOUR_FLOATS);
+      const shine = closed !== null && closed[this.signPlaces[sign]!] === 1 ? SHUT_BRIGHTNESS : open;
+      if (shine === this.shine[sign]) continue;
+      this.shine[sign] = shine;
+      this.colourData.fill(shine, sign * VERTICES_PER_SIGN * COLOUR_FLOATS, (sign + 1) * VERTICES_PER_SIGN * COLOUR_FLOATS);
       changed = true;
     }
     if (changed) colours.needsUpdate = true;

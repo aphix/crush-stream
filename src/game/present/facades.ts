@@ -102,6 +102,8 @@ const WINDOW_LIGHT = 0xffb35e;
 const WINDOW_LIGHT_INTENSITY = 1.3;
 /** A neon or LED sign's radiance at full glow (linear colour, over the windows' 1.3): bright enough to bloom, a sign being the night's light source. */
 const NEON_INTENSITY = 2.2;
+/** An open business's shop glass at night: every pane lit and this times a window's radiance, so 1.3 x 1.6 = 2.1 passes the bloom's 1.6 threshold (`engine-post.ts` GRADE) and the glass glows. */
+const SHOP_WINDOW_GAIN = 1.6;
 /** The relief tier's parallax: the metres a wall's deepest recess lies behind its proudest moulding, the steps the view ray takes through it, and the cosine of the grazing angle a view is held to (a flatter one would throw the offset across the wall). */
 const PARALLAX_METRES = 0.3;
 const PARALLAX_STEPS = 8;
@@ -400,12 +402,14 @@ float facadeRoofKind() {
  * What a style's program adds to the base facade: the relief tier's strips (only where the device can draw relief) and the sign colour of a neon style. A style with none has exactly the base program,
  * the base program's key and its uniforms.
  */
-type Extras = { height: boolean; roughness: boolean; neon: boolean; open: boolean; dark: boolean; roomsAbove: boolean };
+type Extras = { height: boolean; roughness: boolean; neon: boolean; open: boolean; dark: boolean; roomsAbove: boolean; shopfront: boolean };
 
 function extrasOf(style: FacadeStyle): Extras {
   const spec = FACADE_LAYERS[style];
   const relief = reliefPossible();
-  return { height: relief && spec.height === true, roughness: relief && spec.roughness === true, neon: spec.neon === true, open: spec.open === true, dark: spec.open === true || spec.dark === true, roomsAbove: spec.roomsAbove === true };
+  const roomsAbove = spec.roomsAbove === true;
+  const shopfront = (spec.open === true && !roomsAbove) || (spec.dark === true && spec.open !== true);
+  return { height: relief && spec.height === true, roughness: relief && spec.roughness === true, neon: spec.neon === true, open: spec.open === true, dark: spec.open === true || spec.dark === true, roomsAbove, shopfront };
 }
 
 /** Each strip's sampler and the uv varying it is read with, and the layer every read takes (the region's first number). */
@@ -495,8 +499,8 @@ const facadeEmissive = (extras: Extras): string => /* glsl */ `
 #ifdef USE_EMISSIVEMAP
 ${extras.neon ? `vec3 facadeSign = ${facadeRead(extras, "glow")}.rgb;
 vec2 facadeWindow = facadeSign.rg;` : `vec2 facadeWindow = ${facadeRead(extras, "glow")}.rg;`}
-${extras.dark ? `float facadeShare = ${facadeShareGlsl(LIT_SHARE_GLSL)};\n` : ""}float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${extras.dark ? "facadeShare" : LIT_SHARE_GLSL})${extras.dark ? " * step(0.0001, facadeShare)" : ""};
-totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x)${extras.dark ? ` * (1.0 - vFacadeDark * step(${LAYER.ground}.0, vFacadeRegion.x) * step(vFacadeRegion.x, ${LAYER.ground}.0))` : ""}${extras.open ? ` * (1.0 - vFacadeOpen${extras.roomsAbove ? "" : ` * step(${LAYER.ground}.0, vFacadeRegion.x)`})` : ""};${
+${extras.dark ? `float facadeShare = ${facadeShareGlsl(LIT_SHARE_GLSL)};\n` : ""}${extras.shopfront ? `float facadeShop = step(${LAYER.ground}.0, vFacadeRegion.x) * step(vFacadeRegion.x, ${LAYER.ground}.0);\nfacadeShare = mix(facadeShare, 1.0, facadeShop);\n` : ""}float facadeOn = step(fract(facadeWindow.g + vFacadeSeed), facadeGlow * ${extras.dark ? "facadeShare" : LIT_SHARE_GLSL})${extras.dark ? " * step(0.0001, facadeShare)" : ""};
+totalEmissiveRadiance *= smoothstep(0.3, 0.7, facadeWindow.r) * facadeOn * step(0.0, vFacadeRegion.x)${extras.shopfront ? ` * (1.0 + facadeShop * ${(SHOP_WINDOW_GAIN - 1).toFixed(2)})` : ""}${extras.dark ? ` * (1.0 - vFacadeDark * step(${LAYER.ground}.0, vFacadeRegion.x) * step(vFacadeRegion.x, ${LAYER.ground}.0))` : ""}${extras.open ? ` * (1.0 - vFacadeOpen${extras.roomsAbove ? "" : ` * step(${LAYER.ground}.0, vFacadeRegion.x)`})` : ""};${
     extras.neon
       ? `
 totalEmissiveRadiance += diffuseColor.rgb / max(max(diffuseColor.r, diffuseColor.g), max(diffuseColor.b, 0.05)) * (smoothstep(0.1, 0.6, facadeSign.b) * smoothstep(0.0, 0.4, facadeGlow) * ${NEON_INTENSITY.toFixed(1)} * step(0.0, vFacadeRegion.x));`

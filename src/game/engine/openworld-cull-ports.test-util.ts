@@ -28,7 +28,7 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     hookWallHits: () => () => {},
     makeArt: () => ({ update: () => {}, dispose: () => {} }),
     signsOn: () => false,
-    makeSigns: () => ({ update: () => {}, dispose: () => {} }),
+    makeSigns: () => ({ update: () => {}, setNight: () => {}, dispose: () => {} }),
     cull: idleCullPorts(),
     makeFacades: () => ({ dispose: () => {} }),
     setDayHour: () => {},

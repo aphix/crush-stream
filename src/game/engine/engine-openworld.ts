@@ -9,6 +9,7 @@ import type { ChaseHud } from "../hud/hud-store.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { GlassName } from "../vehicle/car-core.ts";
 import type { SignSight } from "../present/openworld-signs.ts";
+import { dayGradeAt, makeDayGrade } from "../present/day-cycle.ts";
 import { PLACE_KIND, type OpenWorldMap, type Place } from "../world/openworld/walk-graph.ts";
 import { ClientCrowdClock, CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import { gameHourAtMinute, gameMinuteAt, secondsOfGameMinutes, tickAt } from "../ai/civilians/civilian-clock.ts";
@@ -80,6 +81,8 @@ type CrowdArt = {
 /** The signage on the buildings: `update` once a frame. */
 type PlaceSigns = {
   update(eyeX: number, eyeZ: number, namesOn: boolean, sight: SignSight | null, closed: Uint8Array | null): void;
+  /** The day cycle's step: how far into the night (0-1, the day's lamps) the shops' signs glow. */
+  setNight(night: number): void;
   dispose(): void;
 };
 
@@ -233,6 +236,8 @@ export class OpenWorldDirector {
   private lookAcc = 0;
   /** The game minute the stage's day was last set for (-1: none, or it was left), so the light follows the crowd's clock once a minute. */
   private dayMinute = -1;
+  /** The day's grade at the last game minute, for the signs' glow. */
+  private readonly dayGrade = makeDayGrade();
   /** The homes' windows' shares, made with the crowd and stepped each game minute from who is awake at home: drawing only, read off the state this machine's crowd already has. */
   private homeLights: HomeLights | null = null;
   private households: ImaginedHouseholds | null = null;
@@ -609,7 +614,9 @@ export class OpenWorldDirector {
   }
 
   private lightDay(crowd: CivilianCrowd): void {
-    this.ports.setDayHour(gameHourAtMinute(this.dayMinute, crowd.state.startHour));
+    const hour = gameHourAtMinute(this.dayMinute, crowd.state.startHour);
+    this.ports.setDayHour(hour);
+    this.signs?.setNight(dayGradeAt(hour, this.dayGrade).lamps);
   }
 
   /** The game clock for the HUD, whole minutes since midnight; null until the crowd's first frame. A client reads the host's clock. */
