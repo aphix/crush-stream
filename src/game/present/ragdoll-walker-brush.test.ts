@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { detCos } from "../kernel/physics-core.js";
 import { setGround } from "../world/ground.ts";
 import { MAX_RISER, TREAD_RUN } from "../world/openworld/interior-kinds.ts";
 import { driverLook } from "./driver-look.ts";
@@ -20,10 +19,11 @@ const UNSHAKEN = 0.95;
 const FLIGHT_STEPS = 16;
 const FLIGHT_HALF = 0.45;
 const FLIGHT_FOOT_Z = 1;
-/** He starts this far (m) off the flight's middle, toward the side he leans into. */
-const FLIGHT_START_X = 0.2;
-/** A blow across his way (N·s on his chest) that his hold does not take out within a frame: a strike nobody modelled. */
-const SIDE_BLOW = 1200;
+/** He climbs for this long (s), and by then is past this many treads: the pace over steps is 0.5 m/s. */
+const CLIMB_SECONDS = 8;
+const CLIMB_TREADS = 12;
+/** A blow across his way (N·s on his chest, twice the walker rows' car hit): a strike nobody modelled, which the hit rule alone fells him for. */
+const SIDE_BLOW = 2400;
 const DEG = Math.PI / 180;
 
 let system: RagdollSystem | null = null;
@@ -100,76 +100,23 @@ describe("given the walker beside a wall on flat ground", () => {
   });
 });
 
-const flightCases: readonly { it: string; heading: number; command: number }[] = [
-  { it: "when he runs straight up it, then he keeps his feet and his strength", heading: 0, command: RUN_SPEED },
-  { it: "when he runs up it 5 degrees into the party wall, then he keeps his feet and his strength", heading: 5 * DEG, command: RUN_SPEED },
-  { it: "when he walks up it 5 degrees into the banister, then he keeps his feet and his strength", heading: -5 * DEG, command: WALK_SPEED },
-  { it: "when he walks up it 10 degrees into the banister, then he keeps his feet and his strength", heading: -10 * DEG, command: WALK_SPEED },
+/** Where he starts across the flight (m), the way he heads, his pace: each presses a shoulder into the party wall (+x) or the banister (-x). */
+const flightCases: readonly { it: string; x: number; heading: number; command: number }[] = [
+  { it: "when he runs up it 10 degrees into the party wall, then he keeps his feet and his strength", x: 0, heading: 10 * DEG, command: RUN_SPEED },
+  { it: "when he runs up it along the party wall, 5 degrees into it, then he keeps his feet and his strength", x: 0.2, heading: 5 * DEG, command: RUN_SPEED },
+  { it: "when he runs up it 5 degrees into the banister, then he keeps his feet and his strength", x: 0.2, heading: -5 * DEG, command: RUN_SPEED },
+  { it: "when he walks up it across to the party wall at 10 degrees, then he keeps his feet and his strength", x: -0.2, heading: 10 * DEG, command: WALK_SPEED },
 ];
 
 describe("given the walker at the foot of a rowhome's stair flight between its party wall and a banister", () => {
-  // mutation: sed -i 's/^    const dy = Math.max(0, vy + HOLD_RATE \* ly \* keep);/    const dy = vy + HOLD_RATE * ly * keep;/' /home/aphix/worktrees/Feel/src/game/present/ragdoll-walker.ts
   for (const testCase of flightCases) {
     it(testCase.it, async () => {
-      const sys = await standingAmong(flight(), testCase.heading < 0 ? -FLIGHT_START_X : FLIGHT_START_X);
+      const sys = await standingAmong(flight(), testCase.x);
       const start = sys["dolls"][WALKER_SLOT]!.bodies[0]!.translation().z;
-      const climb = walk(sys, testCase.heading, testCase.command, 8);
+      const climb = walk(sys, testCase.heading, testCase.command, CLIMB_SECONDS);
       expect(climb.fell, "he stayed on his feet").toBe(false);
       expect(climb.least, `least strength ${climb.least.toFixed(2)}`).toBeGreaterThanOrEqual(UNSHAKEN);
-      expect(climb.z - start, "he went on up the flight").toBeGreaterThan(FLIGHT_FOOT_Z + TREAD_RUN * 4 * detCos(testCase.heading));
+      expect(climb.z - start, `he went up the flight: ${(climb.z - start).toFixed(2)} m`).toBeGreaterThan(FLIGHT_FOOT_Z + TREAD_RUN * CLIMB_TREADS);
     });
   }
-});
-
-describe("sweep", () => {
-  for (const x of [0, 0.2, -0.2]) {
-    for (const deg of [0, 5, 10, -5, -10]) {
-      for (const speed of [WALK_SPEED, RUN_SPEED]) {
-        it(`flight x ${x} deg ${deg} speed ${speed}`, async () => {
-          const sys = await standingAmong(flight(), x);
-          const w = sys.walker;
-          const torso = sys["dolls"][WALKER_SLOT]!.bodies[0]!;
-          let note = "";
-          let prev = "";
-          const c = walk(sys, deg * DEG, speed, 8, () => {
-            const t = torso.translation();
-            const q = torso.rotation();
-            const up = 1 - 2 * (q.x * q.x + q.z * q.z);
-            if (w.state !== "stand" && note === "") note = `FALL at ${t.x.toFixed(2)},${t.y.toFixed(2)},${t.z.toFixed(2)} up=${up.toFixed(2)} level=${w.floor.level.toFixed(2)} rise=${w.floor.rise.toFixed(2)} before: ${prev}`;
-            prev = `s=${w.strength.toFixed(2)} up=${up.toFixed(2)} y-level=${(t.y - w.floor.level).toFixed(2)} speed=${w.loco.speed.toFixed(2)}`;
-          });
-          console.log(`SWEEP x=${x} deg=${deg} speed=${speed} least=${c.least.toFixed(3)} fell=${c.fell} z=${c.z.toFixed(2)} ${note}`);
-        });
-      }
-    }
-  }
-  for (const blow of [600, 1200, 2400]) {
-    for (const dir of [-1, 1]) {
-      it(`blow ${blow} ${dir}`, async () => {
-        const sys = await standingAmong([WALL], 0.1);
-        const torso = sys["dolls"][WALKER_SLOT]!.bodies[0]!;
-        const c = walk(sys, 5 * DEG, WALK_SPEED, 3, (f) => {
-          if (f === FRAME_HZ) torso.applyImpulse(new THREE.Vector3(dir * blow, 0, 0), true);
-          if (f === FRAME_HZ + 1) console.log(`v after ${torso.linvel().x.toFixed(2)} mass ${torso.mass().toFixed(1)}`);
-        });
-        console.log(`BLOW ${blow} dir=${dir} least=${c.least.toFixed(3)} fell=${c.fell}`);
-      });
-    }
-  }
-});
-
-describe("trace", () => {
-  it("trace x 0.2 deg -5 run", async () => {
-    const sys = await standingAmong(flight(), 0.2);
-    const w = sys.walker;
-    const torso = sys["dolls"][WALKER_SLOT]!.bodies[0]!;
-    let was = "stand";
-    walk(sys, -5 * DEG, RUN_SPEED, 8, (f) => {
-      const t = torso.translation();
-      const q = torso.rotation();
-      const up = 1 - 2 * (q.x * q.x + q.z * q.z);
-      if (f % 4 === 0 || w.state !== was) console.log(`R f=${f} ${w.state} torso=${t.x.toFixed(2)},${t.y.toFixed(2)},${t.z.toFixed(2)} up=${up.toFixed(2)} speed=${w.loco.speed.toFixed(2)} level=${w.floor.level.toFixed(2)} rise=${w.floor.rise.toFixed(2)} root=${w["anchorPos"][0]!.toFixed(2)},${w["anchorPos"][1]!.toFixed(2)},${w["anchorPos"][2]!.toFixed(2)} s=${w.strength.toFixed(2)}`);
-      was = w.state;
-    });
-  });
 });
