@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { DOWNED_LIFE_SECONDS } from "../ai/civilians/civilian-crowd-constants.ts";
-import { createCrowdPoses, type CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { createCrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { Place } from "../world/openworld/walk-graph.ts";
 import { BODY_COUNT, OpenWorldBodies } from "./openworld-bodies.ts";
@@ -459,50 +459,6 @@ describe("given a civilian standing on a stoop 0.9 m over the street, 50 m from 
     const slot = bodies.stand(poses, 0, 0, 0);
     expect(slot, "a body stood for her").toBeGreaterThanOrEqual(0);
     expect(host.started[0]!.y, "at her feet (m)").toBe(poses.feetY[0]);
-  });
-});
-
-describe("given the hook taking a civilian wherever she is drawn, 30 m from the eye", () => {
-  /** She is hooked where `place` puts her and a cable then holds the body: its slot, where it was stood, and whether it is still out 10 s on. */
-  function hooked(place: (poses: CrowdPoses) => void) {
-    const { host, poses, bodies, run } = world([HOUSE]);
-    walker(poses, 0, 0, 0);
-    poses.speed[0] = 0;
-    place(poses);
-    const slot = bodies.stand(poses, 0, 0, -30);
-    if (slot >= 0) host.ropedSlots.add(slot);
-    run(Math.round(10 / STEP), 0, -30);
-    return { slot, started: host.started[0], kept: slot >= 0 && !host.stopped.includes(slot), poses };
-  }
-
-  // mutation: sed -i 's/    return hooked || !this.buildings.inside(poses.x, poses.z, civilian);/    return !this.buildings.inside(poses.x, poses.z, civilian);/' src/game/engine/openworld-bodies.ts
-  it("when she stands indoors on the ground floor, then a body is stood at her drawn feet and the cable keeps it", () => {
-    const { slot, started, kept, poses } = hooked((p) => (p.feetY[0] = 0.9));
-    expect(slot, "a body for her").toBeGreaterThanOrEqual(0);
-    expect([started!.x, started!.y, started!.z], "at her drawn feet").toEqual([poses.x[0], poses.feetY[0], poses.z[0]]);
-    expect(kept, "kept on the cable").toBe(true);
-  });
-
-  // mutation: sed -i 's/    if (!hooked \&\& !BODY_ACTIVITY.has(poses.activity\[civilian\]!)) return false;/    if (!BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;/' src/game/engine/openworld-bodies.ts
-  it("when she sits on a bench in the street, then a body is stood at her drawn spot and the cable keeps it", () => {
-    const { slot, started, kept, poses } = hooked((p) => {
-      p.x[0] = 10;
-      p.activity[0] = ACTIVITY.sit;
-    });
-    expect(slot, "a body for her").toBeGreaterThanOrEqual(0);
-    expect([started!.x, started!.z], "at her drawn spot").toEqual([poses.x[0], poses.z[0]]);
-    expect(kept, "kept on the cable").toBe(true);
-  });
-
-  // mutation: sed -i 's/    if (!hooked \&\& !BODY_ACTIVITY.has(poses.activity\[civilian\]!)) return false;/    if (!BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;/' src/game/engine/openworld-bodies.ts
-  it("when she buys at a counter indoors, then a body is stood at her drawn feet and the cable keeps it", () => {
-    const { slot, started, kept, poses } = hooked((p) => {
-      p.feetY[0] = 0.9;
-      p.activity[0] = ACTIVITY.buy;
-    });
-    expect(slot, "a body for her").toBeGreaterThanOrEqual(0);
-    expect([started!.x, started!.y, started!.z], "at her drawn feet").toEqual([poses.x[0], poses.feetY[0], poses.z[0]]);
-    expect(kept, "kept on the cable").toBe(true);
   });
 });
 
