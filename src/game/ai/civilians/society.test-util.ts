@@ -15,6 +15,7 @@ import {
   RESIDENT_INT,
   RESIDENT_INT_STRIDE,
   SPECIES,
+  SPECIES_SPEED,
 } from "./civilian-constants.ts";
 import { buildFixtureMap, type PlaceSpec } from "./civilian-graph.test-util.ts";
 import { decideResident } from "./civilian-plan.ts";
@@ -150,6 +151,8 @@ export function stageResident(state: CityState, resident: number, stage: Stage):
     floats[floatBase + RESIDENT_FLOAT.needs + need] = needs[need]!;
     floats[floatBase + RESIDENT_FLOAT.rates + need] = stage.risePerHour?.[need] ?? 0;
   }
+  // A spare slot never had a row: its person walks at a person's pace.
+  if (floats[floatBase + RESIDENT_FLOAT.pace] === 0) floats[floatBase + RESIDENT_FLOAT.pace] = floats[floatBase + RESIDENT_FLOAT.speed] = SPECIES_SPEED[SPECIES.person];
   state.hiddenFromTick[resident] = NEVER_TICK;
   state.hiddenUntilTick[resident] = NEVER_TICK;
 }

@@ -130,13 +130,16 @@ describe("given more drinkers than the bar has seats and standing spots", () => 
   });
 });
 
+/** An hour the coffee shop is open (6 to 15): its staff keep its hours. */
+const COFFEE_HOUR = 10;
+
 describe("given four clerks at a coffee shop that has clerk spots", () => {
-  const cast = newCast(EVENING);
+  const cast = newCast(COFFEE_HOUR);
   const { state } = cast;
   const clerks = [cast.resident, cast.resident + 1, cast.resident + 2, cast.resident + 3];
   withoutOtherCars(state, HOME, clerks);
   for (const clerk of clerks) {
-    stageResident(state, clerk, { place: HOME, home: HOME, work: COFFEE, shiftStart: EVENING, tick: cast.tick });
+    stageResident(state, clerk, { place: HOME, home: HOME, work: COFFEE, shiftStart: COFFEE_HOUR, tick: cast.tick });
     sendResidentTo(state, clerk, cast.tick, COFFEE, NEED.work, A_DRINKS_TICKS);
   }
 
