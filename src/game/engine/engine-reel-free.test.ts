@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { setImmediate as nextTurn } from "node:timers/promises";
+import { must } from "../kernel/must.test-util.ts";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_DEFAULT } from "../ai/constants.ts";
 import { HudStore } from "../hud/hud-store.ts";
@@ -46,10 +46,14 @@ describe("given a figure-8 spectator race on Auto, the spectator in free fly, an
     const cars = engine["live"]();
     stageCrossing(race()["track"]!, cars[1]!, cars[2]!, CROSSING_SPEED);
     await runUntil(() => race().recorder.ledger.kept.length > 0);
+    const started: { reel: Promise<void> | null } = { reel: null };
+    const startReel = engine["startReel"].bind(engine);
+    engine["startReel"] = (clips, since) => (started.reel = startReel(clips, since));
     engine.raceCommand({ type: "end" });
     await run(FRAME);
-    // The reel is packed and unpacked off this thread (about 8 ms, more on a busy box): wait for the reel itself, not for a count of turns, which can pass in less.
-    for (const until = performance.now() + WAIT_S * 1000; !engine["highlights"].hasReel && performance.now() < until; ) await nextTurn();
+    // The reel is packed and unpacked off this thread: wait for the engine's own reel start to settle.
+    must(started.reel, "the race's end started the reel");
+    await started.reel;
   });
   afterAll(() => {
     engine.dispose();

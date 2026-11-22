@@ -38,21 +38,22 @@ export abstract class EngineReel extends EngineInput {
   /** The reel drew last frame (`reelFrame`): the lens frames the part of the view the panels leave free. */
   private reelOn = false;
 
-  /** Race over (host or offline) `since` wall s ago: the reel from the results' first moment. Every peer, this one too, replays the decoded bytes. */
-  protected startReel(clips: readonly HighlightClip[], since: number): void {
+  /** Race over (host or offline) `since` wall s ago: the reel from the results' first moment. Every peer, this one too, replays the decoded bytes. Settles once the reel is set (or dropped: the race moved on, or it failed). */
+  protected async startReel(clips: readonly HighlightClip[], since: number): Promise<void> {
     if (clips.length === 0 || this.net.client) return;
     if (this.race.inCampaign) this.campaignClips.note(clips);
     const lay = carLayout(this.cars[0]!);
     const reel = { seed: (Math.random() * 2 ** 32) >>> 0, clips: [...clips] };
     const startAt = performance.now() / 1000 + RESULTS_DELAY - since;
-    const current = (): boolean => this.race.active && this.race.phase === "finished";
-    void (async () => {
+    try {
       const msg = await packReel(reel, startAt);
-      if (!current()) return;
+      if (!this.race.active || this.race.phase !== "finished") return;
       for (const part of reelParts(msg)) this.net.sendReliable(part);
       const got = await unpackReel(msg, lay);
-      if (current()) this.highlights.play(got.reel, got.startAt);
-    })().catch((err: unknown) => console.error("Crush Stream highlight reel failed", err));
+      if (this.race.active && this.race.phase === "finished") this.highlights.play(got.reel, got.startAt);
+    } catch (err: unknown) {
+      console.error("Crush Stream highlight reel failed", err);
+    }
   }
 
   protected reelCommand(cmd: RaceCommand): boolean {
