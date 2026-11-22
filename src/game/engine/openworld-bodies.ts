@@ -3,7 +3,6 @@ import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { DOWNED_LIFE_SECONDS, LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import { SPECIES } from "../ai/civilians/civilian-constants.ts";
 import { punchGap } from "../ai/civilians/civilian-contact.ts";
-import { chestMet, type LookRay, type Meeting } from "../ai/civilians/civilian-look.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
@@ -98,8 +97,6 @@ export class OpenWorldBodies {
   /** Per civilian, 1 while a body stands for her: the crowd's art draws none of those. */
   readonly held: Uint8Array;
   private readonly host: BodyHost;
-  /** `hookMet`'s skip list: the held, then each figure it looked past. */
-  private readonly hookSkip: Uint8Array;
   /** The buildings' footprints grown by `BUILDING_MARGIN`: no body stands inside one. */
   private readonly buildings: PlaceFootprints;
   private readonly size: number;
@@ -120,7 +117,6 @@ export class OpenWorldBodies {
     this.buildings = new PlaceFootprints(places, BUILDING_MARGIN);
     this.size = size;
     this.held = new Uint8Array(capacity);
-    this.hookSkip = new Uint8Array(capacity);
     this.bodyOf = new Int16Array(capacity).fill(NOBODY);
     this.resident = new Int32Array(size).fill(NOBODY);
     this.slot = new Int32Array(size).fill(NOBODY);
@@ -290,17 +286,6 @@ export class OpenWorldBodies {
     const z = poses.z[civilian]!;
     if (hypot2(x - eyeX, z - eyeZ) > radius || (!raised && poses.feetY[civilian]! - this.host.groundAt(x, z) > ON_STREET)) return false;
     return !this.buildings.inside(poses.x, poses.z, civilian);
-  }
-
-  /** The drawn civilian with no body the hook's sight line meets first (`chestMet`: within `radius` m of her chest, nearer than `reach` m) whom `stand` can give one: one indoors or at a counter, whose body it would refuse, is looked past. */
-  hookMet(poses: CrowdPoses, ray: LookRay, radius: number, reach: number, out: Meeting): Meeting {
-    const skip = this.hookSkip;
-    skip.set(this.held);
-    for (;;) {
-      chestMet(poses, poses.count, skip, ray, radius, reach, out);
-      if (out.index < 0 || this.eligible(poses, out.index, 0, 0, Infinity, true)) return out;
-      skip[out.index] = 1;
-    }
   }
 
   /** The nearest eligible civilians without a body take the free ones, nearest first, while there are any. */

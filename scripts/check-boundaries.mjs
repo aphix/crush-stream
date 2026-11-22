@@ -167,7 +167,7 @@ const HOT = {
   "src/game/world/stairs.ts": ["heightAt", "flightHeightAt"],
   "src/game/present/ragdoll-throw.ts": ["meetWalkers", "dollRoped"],
   "src/game/engine/ragdoll-body-host.ts": ["roped", "torso", "path", "steer", "look", "standing", "steady", "holds", "getUp", "groundAt"],
-  "src/game/engine/openworld-bodies.ts": ["step", "tend", "eligible", "aimNecks", "hookMet"],
+  "src/game/engine/openworld-bodies.ts": ["step", "tend", "eligible", "aimNecks"],
   "src/game/world/openworld/place-footprints.ts": ["inside"],
   "src/game/present/ragdoll-walker.ts": ["stagger", "rootSpeedAlong"],
   "src/game/present/ragdoll-loose.ts": ["topUnder"],
