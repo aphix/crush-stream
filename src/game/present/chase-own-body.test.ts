@@ -74,6 +74,36 @@ describe("given the chase camera on a car in a garage just bigger than it", () =
   }
 });
 
+/** The car drives out of the garage this fast (m/s) for this long (s), short of its far wall, and the eye is watched this long (s) after. */
+const DRIVE_OFF_MPS = 3;
+const DRIVE_OFF_S = 0.8;
+const SETTLE_S = 1.5;
+/** The most the eye may fall (m) in one frame: the 0.24 s let-go sheds under 7 % of the lift a frame (0.06 m measured), where the lift snapping off fell 0.85 m. */
+const STEP_DOWN_MAX_M = 0.1;
+
+describe("given the chase camera lifted over its car's roof in a garage just bigger than it", () => {
+  // mutation: sed -i 's/this.bodyLift \* Math.exp(-LET_GO_OMEGA \* dt)/0/' src/game/present/drive-cam.ts
+  it(`when the car drives off from its back wall, then the eye never drops more than ${STEP_DOWN_MAX_M} m in a frame`, () => {
+    const car = newCar();
+    const sight = garage(car);
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 180);
+    const cam = new DriveCam();
+    cam.nudge(0, LOOK_LOW_PX);
+    let last = NaN;
+    let steepest = 0;
+    for (let f = 0; f * DT < 1 + DRIVE_OFF_S + SETTLE_S; f++) {
+      const t = Math.max(0, f * DT - 1);
+      const moving = t > 0 && t < DRIVE_OFF_S;
+      car.group.position.set(0, 0, DRIVE_OFF_MPS * Math.min(t, DRIVE_OFF_S));
+      car.velocity.set(0, 0, moving ? DRIVE_OFF_MPS : 0);
+      cam.update(camera, car, "third", DT, 0, 0, true, sight);
+      if (f > 0) steepest = Math.max(steepest, last - camera.position.y);
+      last = camera.position.y;
+    }
+    expect(steepest, `the eye's biggest fall in one frame (m): ${steepest.toFixed(3)}`).toBeLessThanOrEqual(STEP_DOWN_MAX_M);
+  });
+});
+
 /** A crash spin's turn rate (rad/s), and the fastest the chase eye may swing round the car in it (rad/s): GTA's 2.5 with the springs' slack. */
 const SPIN_RAD_S = 6;
 const SWING_MAX_RAD_S = 3;

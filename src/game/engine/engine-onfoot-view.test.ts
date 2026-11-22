@@ -121,6 +121,23 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(mesh.viewHidden.value, "the follow again: he is drawn whole").toBe(-1);
   });
 
+  // mutation: sed -i '/^    this.setNear(this.baseNear);$/{x;s/^/x/;/^xx$/{x;d};x}' src/game/engine/onfoot-camera.ts
+  it("when V takes the camera to his eyes, then the near plane comes in under 0.1 m; when a reset puts him back at the wheel from there (no climb in to restore it), it is the car view's near exactly", () => {
+    const camera = rig.engine["camera"];
+    const carNear = camera.near;
+    rig.getOut();
+    rig.run(SETTLE_S);
+    rig.press("KeyV");
+    rig.press("KeyV");
+    rig.run(SETTLE_S);
+    expect(onFoot().footView, "his eyes").toBe("first");
+    expect(camera.near, "the near plane at his eyes (m)").toBeLessThan(0.1);
+    onFoot().reset();
+    rig.sit(0);
+    rig.run(FRAME);
+    expect(camera.near, "the near plane back at the wheel (m)").toBe(carNear);
+  });
+
   // mutation: sed -i 's/    this.boom = letGo(this.boom, stopShort(sweep(ox, py, oz, bx, sp, bz, length), length), dt);/    this.boom = length;/' src/game/present/walker-camera.ts
   it("when the mouse drags the view round him on foot with a wall close on every side, then it stays his follow view at the wheel's boom and the eye never stands in a wall", () => {
     rig.getOut();

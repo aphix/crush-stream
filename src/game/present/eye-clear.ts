@@ -46,7 +46,7 @@ const PULL_OMEGA = 8;
 const SWING_OMEGA = 5;
 const PULL_OUT_SPEED = 4;
 /** A pull-in lets go at this rate (1/s): GTA's 0.92 per 1/50 s step, a 0.24 s time constant (.extraResearch/third-person-camera-and-controls.md). */
-const LET_GO_OMEGA = 1 / 0.24;
+export const LET_GO_OMEGA = 1 / 0.24;
 /** The eye never stands more than this much (m) closer than the line needs, however fast the rig's own eye came in. */
 const PULL_LAG_MAX = 3;
 /** A pull-in this short (m) is none. */

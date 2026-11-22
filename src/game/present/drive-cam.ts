@@ -7,7 +7,7 @@ import { hypot2 } from "../kernel/physics-core.js";
 import { wrapPiClosed } from "../kernel/scalar.ts";
 import { LANDING, LandingWatch } from "./landing.ts";
 import { Spring, Spring3, type Axes } from "./spring.ts";
-import { EyeClear, outOfBody, STEEPEST } from "./eye-clear.ts";
+import { EyeClear, LET_GO_OMEGA, outOfBody, STEEPEST } from "./eye-clear.ts";
 import type { Occluder, Sight } from "./spectate-cam.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 
@@ -205,6 +205,8 @@ export class DriveCam {
   private car: DeformableCar | null = null;
   /** The line of sight to the car kept clear of the scene's solids and the other cars (`update`'s `solids`). */
   private readonly clear = new EyeClear();
+  /** How far (m) `outOfBody` lifts the eye over the line, risen at once and let go over the pull's 0.24 s, so leaving the padded box does not drop the eye in a frame. */
+  private bodyLift = 0;
   private readonly lastCarPos = new THREE.Vector3();
 
   /** Look offset from behind the car (rad, + = looking left). */
@@ -226,6 +228,7 @@ export class DriveCam {
     const was = this.car !== null;
     this.car = null;
     this.clear.reset();
+    this.bodyLift = 0;
     return was;
   }
 
@@ -264,6 +267,7 @@ export class DriveCam {
       this.land.reset();
       this.landS = 0;
       this.clear.reset();
+      this.bodyLift = 0;
     }
     const fall = this.land.step(car, dt);
     if (fall > 0) {
@@ -349,7 +353,12 @@ export class DriveCam {
     camera.position.copy(this.pos.x);
     if (view === "first" || !solids) this.clear.reset();
     else this.clear.apply(solids, solids.cars ?? NO_BOXES, _subject.set(p.x, p.y + chase.aimUp, p.z), camera.position, dt);
-    if (view !== "first") outOfBody(camera.position, car, chase.aimUp);
+    if (view !== "first") {
+      const lineY = camera.position.y;
+      outOfBody(camera.position, car, chase.aimUp);
+      this.bodyLift = Math.max(camera.position.y - lineY, this.bodyLift * Math.exp(-LET_GO_OMEGA * dt));
+      camera.position.y = Math.max(camera.position.y, lineY + this.bodyLift);
+    } else this.bodyLift = 0;
     camera.lookAt(this.aim.x);
 
     this.rideStep(camera, car, view, dt);
