@@ -6,6 +6,7 @@ import { PLATFORM_HALF } from "../vehicle/car-rig.ts";
 import { hypot2 } from "../deform/physics-util.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { nonFinite } from "../kernel/scalar.ts";
 import { OUTLINE_REACH, outlineOf, roundHalfUp, VERTICAL_CLEAR, type CageOutline } from "./cage-outline.ts";
 import { activeGround } from "../world/ground.ts";
 
@@ -35,6 +36,8 @@ export function physicsSlice(dt: number, vmax: number, floor = 1 / FINE_HZ): num
 export function sliceSpeed(cars: readonly DeformableCar[]): number {
   let vmax = 8;
   for (let i = 0; i < cars.length; i++) vmax = Math.max(vmax, hypot2(cars[i]!.velocity.x, cars[i]!.velocity.z));
+  // A NaN speed sizes NaN slices, which the pacer never steps off: the game froze with no error.
+  if (!Number.isFinite(vmax)) nonFinite("the fastest car's speed", vmax);
   return vmax;
 }
 

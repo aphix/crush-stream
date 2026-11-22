@@ -38,6 +38,11 @@ export function popcount(x: number): number {
   return n;
 }
 
+/** Throws: simulation value `what` read `value`, which no step can go on from. Kept out of the hot callers, which only compare and call it. */
+export function nonFinite(what: string, value: number): never {
+  throw new Error(`${what} is ${value}: the simulation cannot step on from a non-finite value`);
+}
+
 /**
  * `make()` on the first call, that same value after: a lazily built shared constant (a texture, a material, a
  * table) that never changes once made, so a second engine or a test sharing it inherits nothing.

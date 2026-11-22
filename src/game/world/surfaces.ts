@@ -6,6 +6,7 @@ import { SURFACE } from "./constants.ts";
 import { exitFace, F_DEPTH, F_NX, F_NZ, F_SIZE, F_TIME, IN_SIDE, IN_TOP, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, topAt } from "./prism.ts"
 import { G, GQ, gqEnter, gqLeave } from "./ground-clock.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
+import { nonFinite } from "../kernel/scalar.ts";
 
 /**
  * The one store of solid surfaces (docs/UNIFIED_CONTACT.md, Stage 1): everything a body can stand on answers one question,
@@ -2609,6 +2610,8 @@ function edgeCrossRead(ax: number, ay: number, az: number, bx: number, by: numbe
   let t0 = 0;
   let t1 = 1;
   const len = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay) + (bz - az) * (bz - az));
+  // An infinite segment halves forever (a NaN one reads nothing and returns): fail at the source rather than hang the frame.
+  if (len === Infinity) nonFinite("a body edge's length", len);
   while ((t1 - t0) * len > EDGE_TOL) {
     const t = (t0 + t1) / 2;
     let px = ax + (bx - ax) * t;
@@ -2686,6 +2689,8 @@ function ridgeCrossRead(ax: number, ay: number, az: number, bx: number, by: numb
   const dy = by - ay;
   const dz = bz - az;
   const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  // An infinite segment has infinitely many readings (a NaN one has none): fail at the source rather than hang the frame.
+  if (len === Infinity) nonFinite("a body ridge's length", len);
   const m = Math.ceil(len / RIDGE_STEP);
   ridgeBest[0] = NONE;
   let at = -1;
