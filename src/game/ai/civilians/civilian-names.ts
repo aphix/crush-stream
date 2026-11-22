@@ -1,7 +1,7 @@
 import type { PlaceKind } from "../../world/openworld/walk-graph.ts";
 import { CAST, type CastMember } from "./civilian-cast.ts";
 import { ANGRY_HOLD_TICKS, CAST_NAME_BASE, CAST_TITLE_BASE, GENDER, MOOD_HOLD_TICKS, STATIC_HOLD_TICKS } from "./civilian-constants.ts";
-import { LEG_PURPOSES, LOG_EVENTS, MOODS, NEEDS, codesOf, moodCode } from "./resident-spine.ts";
+import { LEG_PURPOSES, LOG_EVENTS, MOODS, NEEDS, codesOf } from "./resident-spine.ts";
 
 /** Names a present-day city's residents are drawn from (the reference's lists, dressed for today). */
 export const FEMALE_NAMES = [
@@ -84,9 +84,9 @@ export function castTitleIndex(member: CastMember): number {
 
 export const MOOD = codesOf(MOODS);
 /** The mood words by mood number: the names of `MOOD` in its order. */
-export const MOOD_WORDS: readonly string[] = MOODS.map((row) => row.id);
+export const MOOD_WORDS: readonly string[] = Object.keys(MOODS);
 /** The mood of the need that is over `MOOD_NEED_LEVEL` (NEED order). */
-export const NEED_MOODS: readonly number[] = NEEDS.map((row) => moodCode(row.urge));
+export const NEED_MOODS: readonly number[] = Object.values(NEEDS).map((row) => row.urge);
 
 /** What a place's kind is called in a building's line (PLACE_KIND order). */
 export const KIND_WORDS = ["home", "workplace", "eatery", "shop", "hangout", "hiding place", "bus stop"] as const;
@@ -94,17 +94,17 @@ export const KIND_COUNT = KIND_WORDS.length;
 
 /** The codes of the life log lines and of the events that colour a mood. Codes from `VISIT_BASE` are walks: the base plus the purpose. */
 export const EVENT_CODE = codesOf(LOG_EVENTS);
-export const VISIT_BASE = LOG_EVENTS.length;
+export const VISIT_BASE = Object.keys(LOG_EVENTS).length;
 
 /** Mood each event leaves (EVENT_CODE order). */
-const EVENT_MOODS: readonly number[] = LOG_EVENTS.map((row) => moodCode(row.mood));
+const EVENT_MOODS: readonly number[] = Object.values(LOG_EVENTS).map((row) => row.mood);
 
 /** What a walk is for, in the look-at line ("{label} -> {place}"), by purpose: the needs first, then the stories and the bus. */
 export const PURPOSE_LABELS: readonly string[] = LEG_PURPOSES.map((row) => row.label);
 /** The line a walk leaves in the life log, by purpose; the place follows. */
 export const PURPOSE_LOG_TEXT: readonly string[] = LEG_PURPOSES.map((row) => row.log);
 /** The mood a story's walk leaves, or -1 for none (needs: -1). */
-export const PURPOSE_MOODS: readonly number[] = LEG_PURPOSES.map((row) => moodCode(row.mood));
+export const PURPOSE_MOODS: readonly number[] = LEG_PURPOSES.map((row) => row.mood);
 
 /** What the look-at line says of someone in their car: "driving for {purpose}". */
 export const DRIVING_WORD = "driving";

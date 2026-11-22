@@ -27,7 +27,7 @@ export const LOG_LINES = 8;
 export const HISTORY_FIELD = { code: 0, subject: 1, tick: 2 } as const;
 export const HISTORY_FIELDS = 3;
 export const NEED = codesOf(NEEDS);
-export const NEED_COUNT = NEEDS.length;
+export const NEED_COUNT = Object.keys(NEEDS).length;
 export const GENDER = { female: 0, male: 1 } as const;
 export const SPECIES = { person: 0, cat: 1, dog: 2 } as const;
 /** What a leg is for: a need's number, or one of the stories (`civilian-cast.ts`) or the bus out of the neighbourhood (the spine's rows, coded on from the needs). */

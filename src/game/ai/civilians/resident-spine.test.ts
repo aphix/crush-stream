@@ -4,8 +4,7 @@ import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { ACTIVITY, ACTIVITY_SECONDS, activityLine } from "./civilian-activity.ts";
 import { CRIME_KIND, EVENT_KIND, NEED, NEED_COUNT, PURPOSE } from "./civilian-constants.ts";
 import { EVENT_CODE, MOOD, MOOD_WORDS, NEED_MOODS, PURPOSE_LABELS, PURPOSE_LOG_TEXT, PURPOSE_MOODS, VISIT_BASE, moodOfCode } from "./civilian-names.ts";
-import { ACTIVITIES, CRIME_KINDS, EVENT_KINDS, LEG_PURPOSES, LOG_EVENTS, MOODS, NEEDS, PURPOSES, VENUES, codesOf } from "./resident-spine.ts";
-import { isDrivablePurpose } from "./society-cars.ts";
+import { ACTIVITIES, EVENT_KINDS, LEG_PURPOSES, NEEDS, PURPOSES, VENUES } from "./resident-spine.ts";
 import { crimeKindOf } from "./society-crime.ts";
 import { VENUE, isCounterVenue, isOutdoorPurpose, isSeatedVenue } from "./society-venues.ts";
 
@@ -95,7 +94,7 @@ describe("given the spine's rows, the purpose and venue rules the society applie
 
   it("when a walk ends, then it ends out at a door, takes a car and counts as a crime exactly as the hand-kept tables said", () => {
     expect(firstMismatch(codes.map((purpose) => isOutdoorPurpose(purpose)), codes.map((purpose) => OLD_OUTDOOR_PURPOSES.includes(purpose))), "outdoor by purpose").toBeUndefined();
-    expect(firstMismatch(codes.map((purpose) => isDrivablePurpose(purpose)), codes.map((purpose) => OLD_DRIVABLE_PURPOSES.includes(purpose))), "drivable by purpose").toBeUndefined();
+    expect(firstMismatch(LEG_PURPOSES.map((row) => row.drive), LEG_PURPOSES.map((_, purpose) => OLD_DRIVABLE_PURPOSES.includes(purpose))), "drivable by purpose").toBeUndefined();
     const oldCrime = (purpose: number): number => (purpose === P.shoplift ? 1 : purpose === P.mug ? 2 : purpose === P.breakIn ? 3 : 0);
     expect(firstMismatch(codes.map((purpose) => crimeKindOf(purpose)), codes.map(oldCrime)), "crime kind by purpose").toBeUndefined();
     expect(codes.filter((purpose) => isOutdoorPurpose(purpose)), "outdoor purposes counted").toHaveLength(OLD_OUTDOOR_PURPOSES.length);
@@ -105,23 +104,19 @@ describe("given the spine's rows, the purpose and venue rules the society applie
     const venues = codes.slice(0, 12);
     expect(firstMismatch(venues.map((venue) => isSeatedVenue(venue)), venues.map((venue) => venue === V.coffee || venue === V.bar || venue === V.diner)), "seated venues").toBeUndefined();
     expect(firstMismatch(venues.map((venue) => isCounterVenue(venue)), venues.map((venue) => [V.coffee, V.bar, V.diner, V.shop, V.supermarket].includes(venue))), "counter venues").toBeUndefined();
-    expect(firstMismatch(VENUES.map((row) => (row.hours === null ? "always" : row.hours.join("-"))), OLD_DEFAULT_HOURS.map((hours) => (hours === null ? "always" : hours.join("-")))), "default hours by venue").toBeUndefined();
+    expect(firstMismatch(Object.values(VENUES).map((row) => (row.hours === null ? "always" : row.hours.join("-"))), OLD_DEFAULT_HOURS.map((hours) => (hours === null ? "always" : hours.join("-")))), "default hours by venue").toBeUndefined();
   });
 });
-
-const SPINE_TABLES = { MOODS, CRIME_KINDS, NEEDS, PURPOSES, ACTIVITIES, EVENT_KINDS, LOG_EVENTS, VENUES } as const;
 
 function declares(source: string, name: string): boolean {
   return new RegExp(`(function ${name}\\b|^\\s+(private |protected |static )*${name}\\()`, "m").test(source);
 }
 
 describe("given the spine's tables", () => {
-  it("when each is coded, then every row has its own id", () => {
-    for (const [table, rows] of Object.entries(SPINE_TABLES)) expect(Object.keys(codesOf(rows)), `${table} distinct ids`).toHaveLength(rows.length);
-  });
-
   it("when a row names the code that launches it, then that file declares that function", () => {
-    const launches = [...LEG_PURPOSES, ...ACTIVITIES, ...EVENT_KINDS.map((row) => ({ id: row.id, launch: row.brain }))].flatMap((row) => row.launch.map((launch) => ({ id: row.id, launch })));
+    const rows = [...Object.entries(NEEDS), ...Object.entries(PURPOSES), ...Object.entries(ACTIVITIES)].map(([id, row]) => ({ id, launch: row.launch }));
+    const kinds = Object.entries(EVENT_KINDS).map(([id, row]) => ({ id, launch: row.brain }));
+    const launches = [...rows, ...kinds].flatMap((row) => row.launch.map((launch) => ({ id: row.id, launch })));
     const missing = launches.filter(({ launch }) => {
       const [file, name] = launch.split("#");
       return !declares(readFileSync(new URL(`../../${file}`, import.meta.url), "utf8"), name!);
@@ -131,7 +126,7 @@ describe("given the spine's tables", () => {
   });
 
   it("when the needs are coded, then they are the first purposes and their count is the need count", () => {
-    expect(NEED_COUNT, "need count").toBe(NEEDS.length);
-    expect(LEG_PURPOSES[NEED_COUNT]!.id, "first purpose after the needs").toBe("salPigeons");
+    expect(NEED_COUNT, "need count").toBe(Object.keys(NEEDS).length);
+    expect(LEG_PURPOSES[NEED_COUNT]!.label, "first purpose after the needs").toBe(PURPOSES.salPigeons.label);
   });
 });

@@ -6,7 +6,8 @@ import { LEG_PURPOSES, VENUES, codesOf, flagsOf } from "./resident-spine.ts";
 
 /** What a place is to the people who go there: the interaction table and the hours choose by it. */
 export const VENUE = codesOf(VENUES);
-const VENUE_COUNT = VENUES.length;
+const VENUE_ROWS = Object.values(VENUES);
+const VENUE_COUNT = VENUE_ROWS.length;
 
 const VENUE_OF_INTERIOR: Readonly<Record<InteriorKind, number>> = { rowhome: VENUE.home, coffee: VENUE.coffee, bar: VENUE.bar, office: VENUE.office, store: VENUE.shop };
 /** Exteriors with no interior name their venue by their facade style. */
@@ -36,8 +37,8 @@ function venueOf(place: Place): number {
   }
 }
 
-const SEATED_BY_VENUE = flagsOf(VENUES, (row) => row.seated);
-const COUNTER_BY_VENUE = flagsOf(VENUES, (row) => row.counter);
+const SEATED_BY_VENUE = flagsOf(VENUE_ROWS, (row) => row.seated);
+const COUNTER_BY_VENUE = flagsOf(VENUE_ROWS, (row) => row.counter);
 
 /** Customers of these sit down when a seat is free. */
 export function isSeatedVenue(venue: number): boolean {
@@ -57,7 +58,7 @@ export function isOutdoorPurpose(purpose: number): boolean {
 }
 
 /** Opening hours [from, to) by venue when the map gives none (a window may wrap midnight; none: open at all hours). */
-const DEFAULT_HOURS: readonly (readonly [number, number] | null)[] = VENUES.map((row) => row.hours);
+const DEFAULT_HOURS: readonly (readonly [number, number] | null)[] = VENUE_ROWS.map((row) => row.hours);
 
 /** Whether `hour` falls in [from, to) on a clock that wraps midnight. */
 export function isHourIn(hour: number, from: number, to: number): boolean {

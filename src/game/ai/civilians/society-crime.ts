@@ -36,7 +36,7 @@ export function crimePlaceOf(state: CityState, resident: number): number {
   return intAt(state, resident, RESIDENT_INT.crimeTick) === NEVER_TICK ? NO_PLACE : intAt(state, resident, RESIDENT_INT.crimePlace);
 }
 
-const CRIME_KIND_OF_PURPOSE = Uint8Array.from(LEG_PURPOSES, (row) => CRIME_KIND[row.crime]);
+const CRIME_KIND_OF_PURPOSE = Uint8Array.from(LEG_PURPOSES, (row) => row.crime);
 
 /** The kind of crime a leg's purpose is for, `CRIME_KIND.none` when it is for none. */
 export function crimeKindOf(purpose: number): number {
