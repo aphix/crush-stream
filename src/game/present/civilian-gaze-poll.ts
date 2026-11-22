@@ -1,4 +1,6 @@
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { SPECIES } from "../ai/civilians/civilian-constants.ts";
+import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import {
   ATTRACT_M,
   CAR_BRUSH_M,
@@ -63,7 +65,8 @@ export class CrowdGrid {
   build(poses: CrowdPoses, count: number): void {
     this.head.fill(-1);
     for (let civilian = 0; civilian < count; civilian++) {
-      if (poses.shown[civilian] === 0) continue;
+      // A cat or a dog is never offered as a passer-by to glance at.
+      if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person) continue;
       const key = cellKey(Math.floor(poses.x[civilian]! / CELL_M), Math.floor(poses.z[civilian]! / CELL_M));
       this.next[civilian] = this.head[key]!;
       this.head[key] = civilian;

@@ -103,7 +103,7 @@ describe("given the open world director in the open world", () => {
     expect(harness.disposed).toBe(2);
   });
 
-  // mutation: sed -i 's/    this.signs?.setNight(dayGradeAt(hour, this.dayGrade).lamps);/    this.signs?.setNight(0);/' /home/aphix/worktrees/Life/src/game/engine/engine-openworld.ts
+  // mutation: sed -i 's/    this.signs?.setNight(dayGradeAt(hour, this.dayGrade).lamps);/    this.signs?.setNight(0);/' src/game/engine/engine-openworld.ts
   it("when the clock runs and is set to midnight and to noon, then the signs are told the night once a game minute, never a frame, full at midnight and none at noon", () => {
     const harness = new Harness();
     for (let at = 0; at < GAME_MINUTES_IN_RUN * FRAME_HZ; at++) {

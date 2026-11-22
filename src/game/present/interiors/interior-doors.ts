@@ -2,8 +2,11 @@ import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../../kernel/physics-core.js";
 import { DOOR_FACE, type DoorLeaf } from "../../world/openworld/interior-plan.ts";
 import { DOOR_RANGE, DOOR_REACH, DOOR_SWING_SECONDS } from "./interior-constants.ts";
+import { SPECIES } from "../../ai/civilians/civilian-constants.ts";
+import { LOOK } from "../../ai/civilians/civilian-crowd-constants.ts";
 
-type DoorPoses = { count: number; x: ArrayLike<number>; z: ArrayLike<number>; shown: ArrayLike<number> };
+/** Figures that may open a door: their look words say which are people (`LOOK`; a cat or a dog resting at a door opens none). */
+type DoorPoses = { count: number; x: ArrayLike<number>; z: ArrayLike<number>; shown: ArrayLike<number>; look: ArrayLike<number> };
 /** Who can open a door this frame: the crowd's shown people (null before there is a crowd), the player's walker (null while he is in a car), and the few shown figures drawn apart from the crowd (the foot cops, the medics). */
 export type DoorOpeners = {
   poses: DoorPoses | null;
@@ -131,14 +134,14 @@ export class DoorSet {
     this.leafMesh.setMatrixAt(door, _matrix.compose(_position, _rotation, _scale));
   }
 
-  /** The shown civilians within the doors' range of the eye, into `nearby`; their count. */
+  /** The shown people (not the cats and dogs) within the doors' range of the eye, into `nearby`; their count. */
   private gatherNearby(eyeX: number, eyeZ: number, openers: DoorOpeners): number {
     const poses = openers.poses;
     if (poses === null) return 0;
     if (this.nearby.length < poses.count) this.nearby = new Int32Array(poses.count);
     let count = 0;
     for (let person = 0; person < poses.count; person++) {
-      if (poses.shown[person] === 0) continue;
+      if (poses.shown[person] === 0 || poses.look[person]! >>> LOOK.speciesShift !== SPECIES.person) continue;
       if (hypot2(poses.x[person]! - eyeX, poses.z[person]! - eyeZ) <= DOOR_RANGE + DOOR_REACH) this.nearby[count++] = person;
     }
     return count;

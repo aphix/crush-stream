@@ -63,7 +63,7 @@ function pawOf(part: number, pose: AnimalPose): THREE.Vector3 {
 }
 
 describe("given the open world's cats and dogs on the street", () => {
-  // mutation: sed -i 's/      if (poses.shown\[resident\] === 0 || (species !== SPECIES.cat \&\& species !== SPECIES.dog) || dx \* dx + dz \* dz > FAR_DRAW_SQUARED) {/      if (poses.shown[resident] === 0 || dx * dx + dz * dz > FAR_DRAW_SQUARED) {/' /home/aphix/worktrees/Life/src/game/present/animal-art.ts
+  // mutation: sed -i 's/      if (poses.shown\[resident\] === 0 || (species !== SPECIES.cat \&\& species !== SPECIES.dog) || dx \* dx + dz \* dz > FAR_DRAW_SQUARED) {/      if (poses.shown[resident] === 0 || dx * dx + dz * dz > FAR_DRAW_SQUARED) {/' src/game/present/animal-art.ts
   it("when a frame is drawn, then each animal is one instance of its species' one draw, standing at its spot facing its way, and the person is none of them", () => {
     const art = new AnimalArt(SPOTS.length);
     frames(art, streetPoses(), 1);
@@ -78,7 +78,7 @@ describe("given the open world's cats and dogs on the street", () => {
     }
   });
 
-  // mutation: sed -i 's/      coats\[c + channel\] = kind.coats\[coat + channel\]!;/      coats[c + channel] = kind.coats[channel]!;/' /home/aphix/worktrees/Life/src/game/present/animal-art.ts
+  // mutation: sed -i 's/      coats\[c + channel\] = kind.coats\[coat + channel\]!;/      coats[c + channel] = kind.coats[channel]!;/' src/game/present/animal-art.ts
   it("when a cat's look names its coat, then it is drawn in that coat: the black cat with white socks black with white paws", () => {
     const art = new AnimalArt(SPOTS.length);
     const poses = streetPoses();
@@ -89,7 +89,7 @@ describe("given the open world's cats and dogs on the street", () => {
     expect(Math.min(accents[0]!, accents[1]!, accents[2]!), "white socks").toBeGreaterThan(0.8);
   });
 
-  // mutation: sed -i 's/    this.downedUntil\[slot\] = this.clock + DOWNED_LIFE_SECONDS;/    this.downedUntil[slot] = this.clock;/' /home/aphix/worktrees/Life/src/game/present/animal-art.ts
+  // mutation: sed -i 's/    this.downedUntil\[slot\] = this.clock + DOWNED_LIFE_SECONDS;/    this.downedUntil[slot] = this.clock;/' src/game/present/animal-art.ts
   it("when an animal is run down, then it lies on its side where it was struck until its time is up", () => {
     const art = new AnimalArt(SPOTS.length);
     const poses = streetPoses();
@@ -106,7 +106,7 @@ describe("given the open world's cats and dogs on the street", () => {
 });
 
 describe("given a cat's legs", () => {
-  // mutation: sed -i 's/^export const LEG_SWING = 0.5;/export const LEG_SWING = 0;/' /home/aphix/worktrees/Life/src/game/present/animal-figure.ts
+  // mutation: sed -i 's/^export const LEG_SWING = 0.5;/export const LEG_SWING = 0;/' src/game/present/animal-figure.ts
   it("when it walks, then its diagonal paws swing opposite ways by its stride; when it stands still they rest under it", () => {
     const art = new AnimalArt(SPOTS.length);
     const poses = streetPoses();
@@ -126,7 +126,7 @@ describe("given a cat's legs", () => {
     expect(pawOf(PART.frontLeft, { ...still, sit: 0, lie: 0 }).distanceTo(pawOf(PART.frontLeft, rest)), "the paw at rest").toBeLessThan(EPSILON);
   });
 
-  // mutation: sed -i 's/    const lying = still \&\& poses.activityClock\[resident\]! >= LIE_AFTER_SECONDS\[species\]!;/    const lying = false;/' /home/aphix/worktrees/Life/src/game/present/animal-art.ts
+  // mutation: sed -i 's/    const lying = still \&\& poses.activityClock\[resident\]! >= LIE_AFTER_SECONDS\[species\]!;/    const lying = false;/' src/game/present/animal-art.ts
   it("when it stays still, then it sits on its haunch, and after a while of rest it lies down with its belly to the ground", () => {
     const art = new AnimalArt(SPOTS.length);
     const poses = streetPoses();

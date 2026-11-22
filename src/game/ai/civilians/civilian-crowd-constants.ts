@@ -40,6 +40,8 @@ export const POLICE_HASH = LOOK.hashMask;
 /** An animal's coat is its who-hash modulo its species' coat count (a cast animal's who is its own coat, so the orange cat is drawn orange); the drawing paints them in this order. */
 export const CAT_COAT = { orange: 0, black: 1, socks: 2, tabby: 3, grey: 4, cream: 5 } as const;
 export const DOG_COAT = { tan: 0, black: 1, brown: 2, white: 3 } as const;
+/** The look panel and a bullet meet a cat or a dog at this height (m) over its feet, not a person's chest: between a cat's back and a dog's body (0.24 and 0.3 m up, `ANIMAL_SHAPES`). */
+export const ANIMAL_CHEST_HEIGHT = 0.25;
 /** 2^32: an unsigned 32-bit hash over it is a unit in [0, 1). */
 export const HASH_RANGE = 4294967296;
 

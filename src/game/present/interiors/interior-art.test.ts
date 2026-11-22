@@ -3,6 +3,8 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { detCos, detSin } from "../../kernel/physics-core.js";
 import { createCrowdPoses, type CrowdPoses } from "../../ai/civilians/crowd-poses.ts";
+import { SPECIES } from "../../ai/civilians/civilian-constants.ts";
+import { LOOK } from "../../ai/civilians/civilian-crowd-constants.ts";
 import { FRAME_HZ } from "../../kernel/constants.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
@@ -267,6 +269,22 @@ describe("given a coffee shop with its door shut", () => {
     expect(listed(coffee), "listed once released").toBe(false);
     expect(digest(coffee.seats!), "the seats a sitter is placed at").toBe(seats);
     expect(digest(coffee.counter!), "the counter spots").toBe(counter);
+    set.dispose();
+  });
+
+  // mutation: sed -i 's/      if (poses.shown\[person\] === 0 || poses.look\[person\]! >>> LOOK.speciesShift !== SPECIES.person) continue;/      if (poses.shown[person] === 0) continue;/' src/game/present/interiors/interior-doors.ts
+  it("when a dog rests at its door while the eye sees its built room, then the door stays shut; a person standing there opens it", () => {
+    const set = new InteriorSet(lone);
+    const who = openers();
+    who.poses.look[0] = (SPECIES.dog << LOOK.speciesShift) >>> 0;
+    standAtDoor(who);
+    const view = scene(set, STREET_EYE, who);
+    view.frames(SETTLE_FRAMES);
+    expect(set.stats().details, "the room is built").toBe(1);
+    expect(set.openDoors(), "doors open with a dog at it").toBe(0);
+    who.poses.look[0] = 0;
+    view.frames(SWING_FRAMES);
+    expect(set.openDoors(), "doors open with a person at it").toBe(1);
     set.dispose();
   });
 

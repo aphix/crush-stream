@@ -102,7 +102,7 @@ describe("given the fixture neighbourhood's crowd stepped through one game day",
     expect(day.stuck, "stuck samples").toEqual([]);
   });
 
-  // mutation: sed -i '/^        placeAnimal(state, resident, seconds, pose, this.poses, this.separation);/d' /home/aphix/worktrees/Life/src/game/ai/civilians/civilian-crowd.ts
+  // mutation: sed -i '/^        placeAnimal(state, resident, seconds, pose, this.poses, this.separation);/d' src/game/ai/civilians/civilian-crowd.ts
   it("when the day is over, then there are cats and dogs among the residents, each kind walked in the brain, and shown every frame in its own species' look, never a person's", () => {
     expect(day.animalsShown, "frames an animal was shown").toBeGreaterThan(0);
     expect(day.animalsLookedAsPersons, "frames an animal was shown in another species' look").toBe(0);

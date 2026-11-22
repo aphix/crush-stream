@@ -60,12 +60,12 @@ export type LookCar = {
   deform: { drivetrainHealth: number; wheelsOn: number };
 };
 
-/** What the panel needs of the open world's cars: the field's cars, which ones are players', which one the camera rides, and the traffic (null on a client, which has none). */
+/** What the panel needs of the open world's cars: the field's cars, which ones are players', which one is this browser's own, which one the camera rides, and the traffic (null on a client, which has none). */
 type CarLookWorld = {
   cars(): readonly LookCar[];
   playerCars(): readonly object[];
+  own(): object | null;
   followed(): object | null;
-  inRoom(): boolean;
   traffic(): CarLookTraffic | null;
 };
 
@@ -154,7 +154,8 @@ export class CarLook {
     const car = this.world.cars()[index]!;
     const traffic = this.world.traffic();
     const moving = hypot2(car.velocity.x, car.velocity.z) > MOVING_SPEED;
-    const player = this.world.playerCars().includes(car);
+    const own = car === this.world.own();
+    const player = own || this.world.playerCars().includes(car);
     const ambulance = traffic !== null && traffic.ambulanceCar() === index;
     const patrol = !ambulance && car.style.id === "police";
     const leased = player || traffic === null || state === null ? -1 : traffic.ownerOf(index);
@@ -168,12 +169,13 @@ export class CarLook {
     else lines.push(moving ? "on the move" : "parked");
     if (traffic !== null && !player) lines.push(traffic.isEmptyCar(index) ? "doors: unlocked" : moving ? "doors: someone at the wheel" : "doors: locked");
     lines.push(`condition: ${conditionWords(car)}`);
-    return { title: titleOf(player, this.world.inRoom(), ambulance, patrol, owner, state, moving), lines };
+    return { title: titleOf(own, player, ambulance, patrol, owner, state, moving), lines };
   }
 }
 
-function titleOf(player: boolean, inRoom: boolean, ambulance: boolean, patrol: boolean, owner: number, state: CityState | null, moving: boolean): string {
-  if (player) return inRoom ? "A player's car" : "Your car";
+function titleOf(own: boolean, player: boolean, ambulance: boolean, patrol: boolean, owner: number, state: CityState | null, moving: boolean): string {
+  if (own) return "Your car";
+  if (player) return "A player's car";
   if (ambulance) return "Ambulance";
   if (patrol) return "Patrol car";
   if (owner >= 0 && state !== null) return `${residentNameText(state, owner)}'s car`;

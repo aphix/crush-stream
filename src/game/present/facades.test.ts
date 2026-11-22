@@ -666,7 +666,7 @@ describe("given the open world's facade styles at night", () => {
   /** The shop glass's gain over a window's light, as the shader writes it (`SHOP_WINDOW_GAIN` - 1). */
   const SHOP_GAIN_GLSL = "facadeShop * 0.60";
 
-  // mutation: sed -i 's/  const shopfront = (spec.open === true \&\& !roomsAbove) || (spec.dark === true \&\& spec.open !== true);/  const shopfront = false;/' /home/aphix/worktrees/Life/src/game/present/facades.ts
+  // mutation: sed -i 's/  const shopfront = (spec.open === true \&\& !roomsAbove) || (spec.dark === true \&\& spec.open !== true);/  const shopfront = false;/' src/game/present/facades.ts
   it("when a business's facade is compiled, then its ground band's shop glass lights every pane and brighter, and a rowhome's windows keep their share", () => {
     const made = makeFacadeMaterials();
     const businesses: FacadeStyle[] = ["bar", "cornerstore", "coffee", "office", "shops", "supermarket"];

@@ -50,7 +50,7 @@ function windowPerFrame(): number {
 }
 
 describe("given a warmed crowd of 300 with forty cats and dogs walking back and forth and stopping", () => {
-  // mutation: sed -i 's/^      this.write(kind, (poses.look\[resident\]! \& LOOK.hashMask) % kind.coatCount, false);/      this.write(kind, (poses.look[resident]! \& LOOK.hashMask) % kind.coatCount, false, poses.look[resident]!);/' /home/aphix/worktrees/Life/src/game/present/animal-art.ts
+  // mutation: sed -i 's/^      this.write(kind, (poses.look\[resident\]! \& LOOK.hashMask) % kind.coatCount, false);/      this.write(kind, (poses.look[resident]! \& LOOK.hashMask) % kind.coatCount, false, poses.look[resident]!);/' src/game/present/animal-art.ts
   it(`when a window of frames is drawn, then the animals' drawing allocates no more than ${BOUND_B} bytes a frame`, () => {
     for (let f = 0; f < WARM_FRAMES; f++) frame();
     const perFrame = untilQuiet(windowPerFrame, BOUND_B);

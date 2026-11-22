@@ -68,7 +68,8 @@ subject is the bearing from the victim's brain spot to the player who shoved (`W
 and keep a life log) and the crowd shows them: on a leg at the leg's spot, as a person walks; at rest (dwelling) at their place, out on
 the pavement `REST_OUT` in front of its door, a place's animals `REST_SPREAD` apart (`placeAnimal`, pure in the rows and the time, so
 every peer places them alike; `activityClock` is how long they have rested). They are bodies the separation keeps apart (a resting
-one fixed), cars stop for them, and the look-at names them ("Biscuit, an orange cat ..."). They are never bumped, pushed, punched,
+one fixed), cars stop for them, and the look-at names them ("Biscuit, an orange cat ..."; the look panel and a bullet meet one at
+`ANIMAL_CHEST_HEIGHT`, not a person's chest). They open no door and turn no head (the gaze skips them, and offers none as a passer-by). They are never bumped, pushed, punched,
 warned of a car or held as a physical body (`CivilianCrowd.isAnimal`); a car runs one down by the host's hit rule (`runsDown`): the
 knock (and its push) is logged and heard like a person's, the brain sends it "to hospital", and nobody calls it an ambulance. No dog
 follows an owner: the brain pairs no animal with a person.
@@ -127,8 +128,8 @@ for it. The brain is told of a heard event by posting it with the next plan tick
 `LOOK_RADIUS`, up to `LOOK_REACH` ahead (their line: name, age, job at workplace, need and place, mood; then their life log), else the
 building whose box the ray enters first (its kind and name, who lives or works there, the latest comings and goings), whichever is
 nearer along the ray. A car comes first when the ray enters its box (bumper to bumper, side to side, ground to roof, in its own frame)
-before either (`CarLook`, `engine-openworld-car-look.ts`; the car the camera rides is passed through): the panel names it "Your car"
-(a player's in a room), "Patrol car", "Ambulance", the owner's ("Hector Ramos's car": the traffic's `ownerOf`, the resident it is
+before either (`CarLook`, `engine-openworld-car-look.ts`; the car the camera rides is passed through while he is in it, not once he is on
+foot): the panel names it "Your car" (this browser's own, `ownCar`), "A player's car" (another's in a room), "Patrol car", "Ambulance", the owner's ("Hector Ramos's car": the traffic's `ownerOf`, the resident it is
 leased to or whose space it stands in, and through a driver's `carOwner` the housemate he drives it for) or "A parked car"; then its
 paint and body ("maroon hatchback": the owner's `residentColour`, else the car's paint, named by the nearest of `COLOUR_NAMES`),
 where it is ("parked by Bodega Supreme since 14:20", "leaving for ... at ...", "driving to ...": the owner's `carPlace`, `carTo`,

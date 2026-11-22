@@ -31,9 +31,9 @@ function carOf(style: CarStyleId, x = 0): LookCar {
 }
 
 /** The panel over `cars` with a traffic whose owners are `owners` (car index to resident, -1 none). */
-function lookOver(cars: LookCar[], owners: number[], players: LookCar[] = [], followed: LookCar | null = null): CarLook {
+function lookOver(cars: LookCar[], owners: number[], players: LookCar[] = [], followed: LookCar | null = null, own: LookCar | null = null): CarLook {
   const traffic: CarLookTraffic = { ownerOf: (index) => owners[index] ?? -1, isEmptyCar: () => false, ambulanceCar: () => -1 };
-  return new CarLook({ cars: () => cars, playerCars: () => players, followed: () => followed, inRoom: () => false, traffic: () => traffic });
+  return new CarLook({ cars: () => cars, playerCars: () => players, own: () => own, followed: () => followed, traffic: () => traffic });
 }
 
 function rayAt(x: number): LookRay {
@@ -50,7 +50,7 @@ describe("given the look-at panel over the open world's cars", () => {
   const base = RESIDENT * RESIDENT_INT_STRIDE;
   const meeting = (): Meeting => ({ index: -1, along: REACH });
 
-  // mutation: sed -i 's/  if (owner >= 0 \&\& state !== null) return `${residentNameText(state, owner)}.s car`;//' /home/aphix/worktrees/Life/src/game/engine/engine-openworld-car-look.ts
+  // mutation: sed -i 's/  if (owner >= 0 \&\& state !== null) return `${residentNameText(state, owner)}.s car`;//' src/game/engine/engine-openworld-car-look.ts
   it("when the eye rests on a resident's parked car, then the panel names its owner, its paint and body, and the place it is parked by", () => {
     const home = state.ints[base + RESIDENT_INT.home]!;
     state.ints[base + RESIDENT_INT.carPlace] = home;
@@ -66,16 +66,18 @@ describe("given the look-at panel over the open world's cars", () => {
     expect(text.lines.some((line) => line.startsWith("condition: not a scratch")), "its damage").toBe(true);
   });
 
-  // mutation: sed -i 's/  if (patrol) return "Patrol car";//' /home/aphix/worktrees/Life/src/game/engine/engine-openworld-car-look.ts
+  // mutation: sed -i 's/  if (patrol) return "Patrol car";//' src/game/engine/engine-openworld-car-look.ts
   it("when the eye rests on a cruiser, then the panel says patrol car", () => {
     const look = lookOver([carOf("police")], [-1]);
     expect(look.text(look.met(rayAt(0), REACH, meeting()).index, state, TICK).title).toBe("Patrol car");
   });
 
-  // mutation: sed -i 's/  if (player) return inRoom ? "A player.s car" : "Your car";//' /home/aphix/worktrees/Life/src/game/engine/engine-openworld-car-look.ts
-  it("when the eye rests on the player's car while he is on foot, then the panel says your car; while the camera rides it, the ray passes it", () => {
+  // mutation: sed -i '/^  if (own) return "Your car";/d' src/game/engine/engine-openworld-car-look.ts
+  it("when the eye rests on the player's car while he is on foot, then the panel says your car, and another player's car is a player's; while the camera rides it, the ray passes it", () => {
     const mine = carOf("coupe");
-    expect(lookOver([mine], [-1], [mine]).text(0, state, TICK).title).toBe("Your car");
+    const theirs = carOf("sedan");
+    expect(lookOver([mine], [-1], [mine], null, mine).text(0, state, TICK).title).toBe("Your car");
+    expect(lookOver([theirs], [-1], [mine, theirs], null, mine).text(0, state, TICK).title).toBe("A player's car");
     expect(lookOver([mine], [-1], [mine], mine).met(rayAt(0), REACH, meeting()).index, "the car the camera rides").toBe(-1);
   });
 

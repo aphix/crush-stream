@@ -133,6 +133,8 @@ export type OpenWorldPorts = {
   /** The population tier of this device (`POPULATION_TIER`). */
   tier(): number;
   cars(): readonly DeformableCar[];
+  /** The car this browser's player drives, or got out of (the lobby's own); null: none. */
+  ownCar(): DeformableCar | null;
   /** Writes where this browser's player on foot stands and how fast he moves, as the ragdoll world's last step has him (not the blended drawn torso); false while he is in a car. */
   foot(out: FootBody): boolean;
   /** This machine's wall clock (s). */
@@ -263,6 +265,8 @@ export class OpenWorldDirector {
   private households: ImaginedHouseholds | null = null;
   private awake = new Uint8Array(0);
   private readonly foot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
+  /** The player on foot as the car panel asks (its own scratch): on foot the seat still follows his car, but the eye is his, not the car's. */
+  private readonly lookFoot: FootBody = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
   private readonly openers: DoorOpeners = { poses: null, walker: null, others: [], closed: null };
   /** The map's places shut now (a wreck, or outside their hours), refilled each frame from the crowd's state for the interiors. */
   private closedPlaces: Uint8Array | null = null;
@@ -274,7 +278,7 @@ export class OpenWorldDirector {
   constructor(ports: OpenWorldPorts) {
     this.ports = ports;
     this.culling = new OpenWorldCulling(ports.cull);
-    this.carLook = new CarLook({ cars: () => ports.cars(), playerCars: () => ports.cull.playerCars(), followed: () => ports.cull.followed(), inRoom: () => ports.inRoom(), traffic: () => this.traffic });
+    this.carLook = new CarLook({ cars: () => ports.cars(), playerCars: () => ports.cull.playerCars(), own: () => ports.ownCar(), followed: () => (ports.foot(this.lookFoot) ? null : ports.cull.followed()), traffic: () => this.traffic });
   }
 
   /** The map the crowd lives on; the crowd is made from it on the next frame in the open world. */
