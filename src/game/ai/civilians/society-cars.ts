@@ -12,10 +12,14 @@ import {
   SPECIES,
 } from "./civilian-constants.ts";
 import { markDirty, type CityState } from "./civilian-state.ts";
-import { LEG_PURPOSES } from "./resident-spine.ts";
+import { LEG_PURPOSES, flagsOf } from "./resident-spine.ts";
 
-/** Reasons that take a car (the spine's `drive`): the commute, home, errands, meals, company, a coffee or a drink. The stories, the bus, crime, a fight and hiding go on foot. */
-const DRIVABLE_PURPOSES: readonly number[] = LEG_PURPOSES.flatMap((row, purpose) => (row.drive ? [purpose] : []));
+/** One byte per purpose, 1 for reasons that take a car: the commute, home, errands, meals, company, a coffee or a drink. The stories, the bus, crime, a fight and hiding go on foot. */
+const DRIVE_BY_PURPOSE = flagsOf(LEG_PURPOSES, (row) => row.drive);
+
+export function isDrivablePurpose(purpose: number): boolean {
+  return DRIVE_BY_PURPOSE[purpose] === 1;
+}
 
 function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
@@ -61,7 +65,7 @@ function carIsHandy(state: CityState, owner: number, current: number, tick: numb
 
 /** The owner of the car `resident` takes from `current` to a place `metres` away for `purpose` at `tick`, or none: their own, else a housemate's (the lowest numbered that is free and handy). Only long trips for the purposes that drive. */
 export function chooseCar(state: CityState, resident: number, current: number, purpose: number, metres: number, tick: number): number {
-  if (metres < DRIVE_MIN_METRES || !DRIVABLE_PURPOSES.includes(purpose)) return NO_PLACE;
+  if (metres < DRIVE_MIN_METRES || !isDrivablePurpose(purpose)) return NO_PLACE;
   if ((intAt(state, resident, RESIDENT_INT.flags) & FLAG.hasCar) !== 0 && carIsHandy(state, resident, current, tick)) return resident;
   const home = intAt(state, resident, RESIDENT_INT.home);
   for (let other = 0; other < state.capacity; other++) {
