@@ -163,3 +163,30 @@ describe("given a crowd placed, moved apart and placed again as it was", () => {
     expect(firstMismatch([...separation.drawX, ...separation.drawZ], first), "drawn spots").toBeUndefined();
   });
 });
+
+describe("given two customers standing in a crowded room, one shuffling straight through the other's spot", () => {
+  const FRAME = 1 / 60;
+  /** A walk a frame at 60 frames a second, and a little for Float32 rounding. */
+  const WALK_STEP = 1.4 * FRAME + FLOAT_ERROR;
+  /** She shuffles at this pace (m/s) with no velocity of her own (as a customer edging in a queue): they are pushed straight apart, along a line that turns as she passes. */
+  const SHUFFLE = 0.1;
+
+  // mutation: sed -i 's/^export const OFFSET_SPEED = 1.4;/export const OFFSET_SPEED = 1e9;/' /home/aphix/worktrees/OwFix/src/game/ai/civilians/civilian-crowd-constants.ts
+  it("when each frame is resolved with the crowd's clock, then neither is drawn moving more than a walk step a frame off her own spot as the one passes the other's middle, and they never overlap", () => {
+    const separation = new CrowdSeparation(2);
+    let most = 0;
+    let closest = Infinity;
+    let lastOffsets = [NaN, NaN, NaN, NaN];
+    for (let frame = 0; frame <= 240; frame++) {
+      place(separation, [{ x: 0, z: 0 }, { x: -0.2 + SHUFFLE * frame * FRAME, z: 0.01 }]);
+      separation.now[0] = 10 + frame * FRAME;
+      separation.resolve();
+      const offsets = [0, 1].flatMap((body) => [separation.drawX[body]! - separation.brainX[body]!, separation.drawZ[body]! - separation.brainZ[body]!]);
+      if (frame > 0) for (const body of [0, 1]) most = Math.max(most, hypot2(offsets[2 * body]! - lastOffsets[2 * body]!, offsets[2 * body + 1]! - lastOffsets[2 * body + 1]!));
+      closest = Math.min(closest, gapBetween(separation, 0, 1));
+      lastOffsets = offsets;
+    }
+    expect(most, "the biggest move of a drawn spot off its own between frames (m)").toBeLessThanOrEqual(WALK_STEP);
+    expect(closest, "closest drawn").toBeGreaterThanOrEqual(BODY_GAP - RESIDUAL);
+  });
+});

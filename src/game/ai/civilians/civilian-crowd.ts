@@ -485,6 +485,7 @@ export class CivilianCrowd {
       separation.velocityX[body] = walkers.velocityX[walker]!;
       separation.velocityZ[body] = walkers.velocityZ[walker]!;
     }
+    separation.now[0] = seconds;
     separation.resolve();
     const { x, z, shown } = this.poses;
     for (let resident = 0; resident < separation.capacity; resident++) {
