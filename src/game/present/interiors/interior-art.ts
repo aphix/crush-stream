@@ -413,6 +413,18 @@ export class InteriorSet {
     this.solidsListener = listener;
   }
 
+  /** The interior around (x, z), if any, is held whole at once (the physics has its floors before the caller stands a body there), as `update` holds one a hooked body is in; `update` lets it go again when no body is. */
+  holdFloorAt(x: number, z: number): void {
+    const spot: PinnedSpots = { count: 1, x: Float32Array.of(x), z: Float32Array.of(z) };
+    let changed = false;
+    for (const entry of this.entries) {
+      if (entry.solids === SOLIDS.full || !holdsPinned(entry.place, spot)) continue;
+      entry.solids = SOLIDS.full;
+      changed = true;
+    }
+    if (changed) this.solidsListener?.(this.heldSolids());
+  }
+
   private heldSolids(): InteriorSolid[] {
     return this.entries.flatMap((entry) => (entry.solids === SOLIDS.full ? interiorSolids(entry.place, entry.plan) : entry.solids === SOLIDS.vestibule ? vestibuleSolids(entry.place, entry.plan) : []));
   }

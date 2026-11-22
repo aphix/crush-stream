@@ -80,6 +80,11 @@ export class OpenWorldMedics {
     this.taken[medic] = 1;
   }
 
+  /** Whether the hook has him off his knees at this scene. */
+  isTaken(medic: number): boolean {
+    return this.taken[medic] === 1;
+  }
+
   frame(ambulanceState: number, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void {
     placeMedics(this.poses, this.sceneX, this.sceneZ, ambulanceState, wallDt);
     for (let medic = 0; medic < MEDICS.count; medic++) {

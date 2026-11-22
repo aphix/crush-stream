@@ -140,6 +140,7 @@ export const CAST_TITLE_BASE = 100;
  * An `ambulanceStage` (the ambulance changed state or car; subject: its car index times 4 plus its state) tells a client where the ambulance is, which it has no traffic to know: it rides the log and the brain drops it.
  * An `arrestRide` (an arrested resident and her cop got into a patrol car, which now drives off) and an `arrestAlight` (the car is at the station and they get out) are each two triples of the same seconds: the resident, then the engine's index of the car. A client reads them to seat and unseat the pair (its own law has no patrol cars); the player on foot's arrest names `ARREST_PLAYER_RESIDENT`. The brain drops both kinds.
  */
+/** A `spared` (the hook took a suspect out of the police's hands; subject: the resident) is the police's: every peer's law lets her go at that second, and the brain drops it. */
 export const EVENT_KIND = codesOf(EVENT_KINDS);
 /** The resident an `arrestRide` or `arrestAlight` names for the player on foot's arrest (the wire's subject is 16 bits: no resident is this). */
 export const ARREST_PLAYER_RESIDENT = 65535;

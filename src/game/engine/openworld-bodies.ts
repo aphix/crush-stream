@@ -166,23 +166,12 @@ export class OpenWorldBodies {
     }
   }
 
-  /** The hook takes civilian `civilian` wherever she is and whatever she does: a body is stood for her at her drawn feet and pinned `HOOK_HOLD_SECONDS`; its pool slot, -1 for no body (not a person, none free). With every body in use the farthest one on its feet, steady, in step with her and held by no cable or pin is let go first. */
+  /** The hook takes civilian `civilian` wherever she is and whatever she does: a body is stood for her at her drawn feet and pinned `HOOK_HOLD_SECONDS`; its pool slot, -1 for no body (not a person, none free). With every body in use the farthest one that can be let go (`farthestToRelease`) is let go first. */
   stand(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number): number {
     if (this.bodyOf[civilian]! === NOBODY) {
       if (!this.eligible(poses, civilian, eyeX, eyeZ, Infinity, true)) return NOBODY;
       if (this.count() === this.size) {
-        let farthest = NOBODY;
-        let farthestDistance = -1;
-        for (let body = 0; body < this.size; body++) {
-          const slot = this.slot[body]!;
-          if (this.host.roped(slot) || !this.host.torso(slot, _torso)) continue;
-          // A body lying or catching up is never let go for her: she would vanish and reappear upright at her spot.
-          if (this.recovering[body] === 1 || this.seconds < this.hookedUntil[body]! || !this.host.steady(slot)) continue;
-          const distance = hypot2(_torso.x - eyeX, _torso.z - eyeZ);
-          if (distance <= farthestDistance) continue;
-          farthestDistance = distance;
-          farthest = body;
-        }
+        const farthest = this.farthestToRelease(eyeX, eyeZ);
         if (farthest === NOBODY) return NOBODY;
         this.release(farthest);
       }
@@ -191,6 +180,28 @@ export class OpenWorldBodies {
     const body = this.bodyOf[civilian]!;
     this.hookedUntil[body] = this.seconds + HOOK_HOLD_SECONDS;
     return this.slot[body]!;
+  }
+
+  /** Whether the hook could stand a body for a civilian who has none now: one is free, or one can be let go for her. When not, her reticle must not light. */
+  canStand(eyeX: number, eyeZ: number): boolean {
+    return this.count() < this.size || this.farthestToRelease(eyeX, eyeZ) !== NOBODY;
+  }
+
+  /** The body farthest from (eyeX, eyeZ) that is on its feet, steady, in step with her and held by no cable or pin (a body lying or catching up is never let go for another: she would vanish and reappear upright at her spot); NOBODY when there is none. */
+  private farthestToRelease(eyeX: number, eyeZ: number): number {
+    let farthest = NOBODY;
+    let farthestDistance = -1;
+    for (let body = 0; body < this.size; body++) {
+      if (this.resident[body]! === NOBODY) continue;
+      const slot = this.slot[body]!;
+      if (this.host.roped(slot) || !this.host.torso(slot, _torso)) continue;
+      if (this.recovering[body] === 1 || this.seconds < this.hookedUntil[body]! || !this.host.steady(slot)) continue;
+      const distance = hypot2(_torso.x - eyeX, _torso.z - eyeZ);
+      if (distance <= farthestDistance) continue;
+      farthestDistance = distance;
+      farthest = body;
+    }
+    return farthest;
   }
 
   /** The hook holds the body in pool slot `slot` as a cable's first end: it is pinned `HOOK_HOLD_SECONDS` as a body `stand` makes is, so making room never takes it. */

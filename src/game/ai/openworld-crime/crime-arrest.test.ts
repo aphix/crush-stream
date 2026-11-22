@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY, ARREST } from "../civilians/civilian-activity.ts";
 import { CASE_PHASE, isHeldMode } from "./case-table.ts";
-import { harness, runFor } from "./crime-fixture.test-util.ts";
+import { harness, runFor, type HarnessOptions } from "./crime-fixture.test-util.ts";
 import { detCos, detSin } from "../../kernel/physics-core.js";
 
 const CRIMINAL = 1;
 
 /** A crime at x = 60 with a cop standing on it: the cuffs go on at the first poll. */
-function arrestRun() {
-  const run = harness([60, 0, 0]);
+function arrestRun(options: HarnessOptions = {}) {
+  const run = harness([60, 0, 0], options);
   run.offences.x[CRIMINAL] = 60;
   run.offences.commitCrime(CRIMINAL);
   return run;
@@ -55,8 +55,8 @@ describe("an arrest is acted", () => {
 
 describe("the hook takes a cop making an arrest, and then the suspect he held", () => {
   /** An arrest begun (cuffs going on): the cop holding case 0. */
-  function cuffing() {
-    const run = arrestRun();
+  function cuffing(options: HarnessOptions = {}) {
+    const run = arrestRun(options);
     runFor(run, 1);
     return { run, cop: run.scene.foot.table.holder[0]! };
   }
@@ -118,5 +118,28 @@ describe("the hook takes a cop making an arrest, and then the suspect he held", 
     runFor(run, 5);
     const { table } = run.scene.foot;
     expect(table.active(table.subjectOf[CRIMINAL]!), "a case after her again").toBe(true);
+  });
+
+  it("when a client's law hears the host's release of the suspect, then she is let go at that crowd second and not before, and hearing it twice lets her go once", () => {
+    const { run } = cuffing({ authority: false });
+    expect(inHands(run), "control: the client's law has her in his hands").toBe(true);
+    const lost = run.scene.stats.lost;
+    run.scene.hearSpared(CRIMINAL, run.now + 1);
+    run.scene.hearSpared(CRIMINAL, run.now + 1);
+    runFor(run, 0.5);
+    expect(inHands(run), "not yet: the host's second has not come").toBe(true);
+    runFor(run, 1);
+    expect(inHands(run), "let go once the clock reaches it").toBe(false);
+    expect(run.scene.stats.lost - lost, "once").toBe(1);
+  });
+
+  it("when the host's release is heard again every step (the log is read whole each step), then it is not queued again: a suspect taken in hand after it would be let go every step", () => {
+    const { run } = cuffing();
+    const released = run.now;
+    run.scene.hearSpared(CRIMINAL, released);
+    runFor(run, 0.2);
+    expect(inHands(run), "let go").toBe(false);
+    run.scene.hearSpared(CRIMINAL, released);
+    expect(run.scene["sparedDue"][CRIMINAL], "nothing waits for the clock").toBe(-1);
   });
 });

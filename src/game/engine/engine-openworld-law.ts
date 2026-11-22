@@ -97,6 +97,7 @@ export class OpenWorldLaw {
     this.art = ports.makeArt(FOOT_COP_COUNT);
     crowd.overlay = (poses, crowdSeconds, authority) => {
       this.hearCopDowns();
+      this.hearSpared();
       this.feedFoot();
       this.hearShoves(authority);
       this.scene.step(crowdSeconds, authority, poses, ports.cars());
@@ -171,9 +172,17 @@ export class OpenWorldLaw {
     return slot;
   }
 
-  /** The hook took suspect `resident` out of the law's hands: the arrest is broken off at once (`FootLaw.spare`), and the law's next poll, finding her still wanted, sends a cop after her. */
+  /** The hook took `resident` from the police: the host logs it (`EVENT_KIND.spared`), and every peer's law, this one too, lets her go from the log (`hearSpared`): an arrest is broken off, and the law's next poll, finding her still wanted, sends a cop after her. Nothing on a client. */
   releaseSuspect(resident: number): void {
-    this.scene.foot.spare(resident);
+    this.crowd.raiseEvent(EVENT_KIND.spared, resident, this.crowd.crowdSeconds);
+  }
+
+  /** The host's releases in the crowd's event log, for the scene to apply once each. */
+  private hearSpared(): void {
+    const log = this.crowd.eventLog();
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) {
+      if (log[at] === EVENT_KIND.spared) this.scene.hearSpared(log[at + 1]!, log[at + 2]!);
+    }
   }
 
   /** The host's knocks of foot cops in the crowd's event log (heard on a client, its own on the host), for the scene to apply once each. */

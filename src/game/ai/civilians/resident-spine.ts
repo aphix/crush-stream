@@ -165,6 +165,7 @@ export const EVENT_KINDS = {
   car: { about: "the car that nudged someone in a push", remark: null, brain: SECOND_PARTY },
   arrestRide: { about: "an arrested resident driven off in a patrol car", remark: null, brain: [] },
   arrestAlight: { about: "the patrol car arrived at the station", remark: null, brain: [] },
+  spared: { about: "the hook took a suspect out of the police's hands", remark: null, brain: [] },
 } as const satisfies Readonly<Record<string, EventKindRow>>;
 
 /** The life log's codes and the mood code each leaves; walks are logged from `VISIT_BASE` on, coded after these. */

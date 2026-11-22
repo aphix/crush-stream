@@ -229,6 +229,18 @@ describe("given a house with its door shut and the player's walker on the sidewa
     expect(last(heard), "solids let go").toBe(0);
     set.dispose();
   });
+
+  it("when the floor is asked for at a spot in the house before any update, then the physics has the house's solids at once, and none for a spot outside it", () => {
+    const set = new InteriorSet(loneHouse);
+    const heard = listen(set);
+    const who = openers();
+    settle(set, house.doorX + AWAY, house.doorZ, who, 2);
+    set.holdFloorAt(house.x + 500, house.z);
+    expect(last(heard), "a spot outside any house holds nothing").toBe(0);
+    set.holdFloorAt(house.x, house.z);
+    expect(last(heard), "solids handed over before the next update").toBe(interiorSolids(house, planInterior(house)).length);
+    set.dispose();
+  });
 });
 
 describe("given a civilian opening a house's door", () => {

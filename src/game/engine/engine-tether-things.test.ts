@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { FRAME_HZ, MAX_TETHERS } from "../kernel/constants.ts";
 import { hypot3 } from "../kernel/physics-core.js";
 import { RAPIER, TetherSet, WORLD } from "../contact/tether.ts";
+import { ANIMAL_MESH_NAMES } from "../present/animal-figure.ts";
 import { CIVILIAN_FIGURES_NAME } from "../present/civilian-figure.ts";
 import { BOXES_MESH_NAME } from "../present/minigame-art.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
@@ -211,6 +212,20 @@ describe("given the free camera over a civilian drawn far off as one of the crow
     fire();
     const end = firstEnd(ropes);
     expect(end.kind === "doll" ? end.id : -1, "the body's slot").toBe(PERSON_SLOT);
+  });
+});
+
+describe("given the free camera over a cat or a dog, with a wall behind it", () => {
+  it("when the sight line passes through its body, then the aim is on the wall behind it: an animal is no surface to hook", () => {
+    for (const name of [ANIMAL_MESH_NAMES.cat, ANIMAL_MESH_NAMES.dog]) {
+      const scene = new THREE.Scene();
+      wall(scene);
+      cubes(scene, name);
+      const { aimAt, fire, director } = rig(scene);
+      aimAt(new THREE.Vector3(-3, EYE_Y, -AHEAD));
+      fire();
+      expect(director["view"].point.z, `${name}: where the aim lands (m along -z)`).toBeLessThan(-WALL_AHEAD + 1);
+    }
   });
 });
 

@@ -6,6 +6,7 @@ import { MAX_TETHERS } from "../kernel/constants.ts";
 import { RAPIER, THING, TETHER_RANGE, thingCode, thingIndex, thingKind, WORLD, type TetherSet } from "../contact/tether.ts";
 import { AIM, TetherArt, type ReticleView } from "../present/tether-art.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
+import { ANIMAL_MESH_NAMES } from "../present/animal-figure.ts";
 import { CIVILIAN_FIGURES_NAME } from "../present/civilian-figure.ts";
 import { BOXES_MESH_NAME } from "../present/minigame-art.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
@@ -285,8 +286,8 @@ export class TetherDirector {
       if (typeof index === "number" && cars[index]?.group === o) car = index;
     }
     if (car !== WORLD) return { car, thing: 0 };
-    // A far figure of the crowd is no surface of the world: the sight line passes her, and the person test hooks her by her chest (a hit on her front had hooked the air where she stood).
-    if (object.name === CIVILIAN_FIGURES_NAME) return undefined;
+    // A far figure of the crowd is no surface of the world: the sight line passes her, and the person test hooks her by her chest (a hit on her front had hooked the air where she stood). A cat or a dog is not hooked at all: the sight line passes them too.
+    if (object.name === CIVILIAN_FIGURES_NAME || object.name === ANIMAL_MESH_NAMES.cat || object.name === ANIMAL_MESH_NAMES.dog) return undefined;
     // Only the pool's mesh is drawn by slot: a crowd, guard or seated driver drawn on another `DummyMesh` is no dummy of that world, and the sight line passes her.
     if (object instanceof DummyMesh && (object.name !== RAGDOLLS_MESH_NAME || hit.instanceId === undefined || hit.instanceId === this.host.self() || !this.host.ropes.dollOut(hit.instanceId))) return undefined;
     const thing = this.thingOf(object, hit.instanceId);

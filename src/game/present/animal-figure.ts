@@ -223,6 +223,9 @@ function instanceBuffer(capacity: number, floats: number): { array: Float32Array
   return { array, attribute: new THREE.InstancedBufferAttribute(array, floats).setUsage(THREE.DynamicDrawUsage) };
 }
 
+/** The names of the cats' and dogs' instanced meshes: the hook's sight line passes them, as it passes the crowd's far figures. */
+export const ANIMAL_MESH_NAMES = { cat: "openworld-cats", dog: "openworld-dogs" } as const;
+
 /** `capacity` figures of `species` in one draw, none shown yet. */
 export function animalFigures(species: number, capacity: number): AnimalFigures {
   const geometry = animalGeometry(species);
@@ -233,7 +236,7 @@ export function animalFigures(species: number, capacity: number): AnimalFigures 
   const accents = instanceBuffer(capacity, COLOUR_FLOATS);
   mesh.instanceMatrix = matrices.attribute;
   geometry.setAttribute(ANIMAL_POSE, poses.attribute).setAttribute(ANIMAL_COAT, coats.attribute).setAttribute(ANIMAL_ACCENT, accents.attribute);
-  mesh.name = species === SPECIES.cat ? "openworld-cats" : "openworld-dogs";
+  mesh.name = species === SPECIES.cat ? ANIMAL_MESH_NAMES.cat : ANIMAL_MESH_NAMES.dog;
   mesh.frustumCulled = false;
   // The sun's depth pass would draw the unposed figure (a sitting cat's shadow standing): no shadow, as the far figures.
   mesh.castShadow = false;

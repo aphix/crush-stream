@@ -539,6 +539,30 @@ describe("given every body in use and the hook holding the farthest standing one
   });
 });
 
+describe("given every body in use and each held by a cable", () => {
+  it("when the hook asks whether it can take another civilian, then it cannot, and stands none for her, until one body's cable is cut", () => {
+    const { host, poses, bodies, run } = world();
+    for (let civilian = 1; civilian <= SIZE; civilian++) walker(poses, civilian, civilian, 0);
+    run(SETTLE_STEPS);
+    expect(bodies.canStand(0, 0), "control: with every body free to let go, she can be taken").toBe(true);
+    for (let civilian = 1; civilian <= SIZE; civilian++) host.ropedSlots.add(bodies.slotOf(civilian));
+    walker(poses, 0, 50, 0);
+    expect(bodies.canStand(0, 0), "every body on a cable").toBe(false);
+    expect(bodies.stand(poses, 0, 0, 0), "no body for her").toBe(-1);
+    host.ropedSlots.delete(bodies.slotOf(SIZE));
+    expect(bodies.canStand(0, 0), "one cable cut").toBe(true);
+    expect(bodies.stand(poses, 0, 0, 0), "a body for her").toBeGreaterThanOrEqual(0);
+  });
+
+  it("when every body is pinned by the hook's first fire, then a second civilian cannot be taken", () => {
+    const { poses, bodies, run } = world();
+    for (let civilian = 1; civilian <= SIZE; civilian++) walker(poses, civilian, civilian, 0);
+    run(SETTLE_STEPS);
+    for (let civilian = 1; civilian <= SIZE; civilian++) bodies.pin(bodies.slotOf(civilian));
+    expect(bodies.canStand(0, 0), "all pinned").toBe(false);
+  });
+});
+
 describe("given bodies and the scene is left", () => {
   // mutation: sed -i 's/  dispose(): void {/  dispose(): void {\n    return;/' src/game/engine/openworld-bodies.ts
   it("when the bodies are disposed, then every body goes and no civilian is held", () => {
