@@ -21,6 +21,7 @@ import {
   type OnFootView,
   REST_PITCH,
   SHOULDER_ACROSS,
+  sprintBoom,
   type Sweep,
   THIRD_PITCH,
   VIEW_BOOM,
@@ -137,7 +138,7 @@ export class OnFootCamera {
     const sight = this.walkerView;
     if (first) sight.first(torso.x, torso.y, torso.z, yaw, pitch, this.sweep, wallDt);
     else if (aiming) sight.shoulder(torso.x, torso.y, torso.z, point[0]!, point[1]! + AIM_UP, point[2]!, yaw, pitch, AIM_BOOM, SHOULDER_ACROSS + AIM_SIDE, this.sweep, wallDt);
-    else sight.shoulder(torso.x, torso.y, torso.z, point[0]!, point[1]!, point[2]!, yaw, pitch, boomAt(level, pitch), acrossAt(level), this.sweep, wallDt);
+    else sight.shoulder(torso.x, torso.y, torso.z, point[0]!, point[1]!, point[2]!, yaw, pitch, sprintBoom(boomAt(level, pitch), walker.loco.speed), acrossAt(level), this.sweep, wallDt);
     camera.position.set(sight.eye[0]!, sight.eye[1]!, sight.eye[2]!);
     _aim.set(sight.eye[0]! + sight.ahead[0]! * LOOK_AHEAD, sight.eye[1]! + sight.ahead[1]! * LOOK_AHEAD, sight.eye[2]! + sight.ahead[2]! * LOOK_AHEAD);
     view.look.copy(_aim);

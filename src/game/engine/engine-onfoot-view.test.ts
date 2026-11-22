@@ -1,10 +1,12 @@
-import { hypot2 } from "../kernel/physics-core.js";
+import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { WALKER_SLOT } from "../present/ragdoll-pool.ts";
 import type { FloorBox } from "../present/walker-floor.ts";
 import { DRAG_YAW_PER_PX } from "../present/free-cam.ts";
 import { FIRST_PERSON_RADIUS, SHOULDER_BOOM, SHOULDER_NEAREST } from "../present/walker-camera.ts";
+import { RUN_SPEED, SPRINT_SPEED } from "../present/walker-locomotion.ts";
+import { DRIVE_KEYS } from "../vehicle/drive-input.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
 /** The blend from the car's camera to his (0.3 s) and a frame's slack (s). */
@@ -272,5 +274,29 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     rig.run(SETTLE_S);
     const after = hypot2(eye.x - him.x, eye.z - him.z);
     expect(after, `one notch in from ${held.toFixed(2)} m: ${after.toFixed(2)} m`).toBeLessThan(held * NOTCH_IN_SHARE);
+  });
+
+  // mutation: sed -i 's/sprintBoom(boomAt(level, pitch), walker.loco.speed)/boomAt(level, pitch)/' src/game/engine/onfoot-camera.ts
+  it("when he runs and then sprints with the view left alone, then at the sprint the camera stands 15 % farther from the point it frames than at the run", () => {
+    rig.getOut();
+    rig.run(SETTLE_S);
+    const keys = rig.engine["keys"];
+    const gap = () => {
+      const point = onFoot()["cam"]["follow"].point;
+      const eye = rig.engine["camera"].position;
+      return hypot3(eye.x - point[0]!, eye.y - point[1]!, eye.z - point[2]!);
+    };
+    try {
+      keys.add("KeyW");
+      rig.run(2);
+      expect(rig.walker().loco.speed, "control: he runs (m/s)").toBeCloseTo(RUN_SPEED, 1);
+      const running = gap();
+      keys.add(DRIVE_KEYS.boost[0]!);
+      rig.run(2);
+      expect(rig.walker().loco.speed, "control: he sprints (m/s)").toBeCloseTo(SPRINT_SPEED, 1);
+      expect(gap() / running, `the camera's distance at the sprint over the run's (${running.toFixed(2)} m at the run)`).toBeCloseTo(1.15, 2);
+    } finally {
+      keys.clear();
+    }
   });
 });
