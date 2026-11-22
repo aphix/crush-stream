@@ -31,7 +31,7 @@ const pose: ActivityPose = {
 
 /**
  * Slot `slot` of `mesh` posed as civilian `civilian` of `poses` stands, walks or does her activity: on her feet at her place facing her yaw, her pose not snapping (`smoothing`), her walk drawn smoothed
- * (`PoseSmoothing.walk`), with `stoops` her feet planted on the treads when she walks a stoop's spur, and with `gaze` her head and torso turned where she looks. Allocates nothing.
+ * (`PoseSmoothing.walk`), with `stoops` her feet planted on the treads when she walks a stoop's spur, and with `gaze` her head, torso and eyes turned where she looks. Allocates nothing.
  */
 export function poseCivilian(mesh: DummyMesh, slot: number, poses: CrowdPoses, civilian: number, smoothing: PoseSmoothing, stoops: Stoops | null, gaze: CrowdGaze | null = null): void {
   pose.x = poses.x[civilian]!;
@@ -56,6 +56,7 @@ export function poseCivilian(mesh: DummyMesh, slot: number, poses: CrowdPoses, c
     pose.gazePitch = gaze.headPitch[civilian]!;
     pose.gazeTorso = gaze.torsoTwist[civilian]!;
   }
+  mesh.eyes(slot, gaze === null ? 0 : gaze.eyeYaw[civilian]!, gaze === null ? 0 : gaze.eyePitch[civilian]!);
   const partner = poses.partner[civilian]!;
   pose.hasPartner = partner >= 0 && partner < poses.count;
   if (pose.hasPartner) {

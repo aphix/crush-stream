@@ -8,6 +8,9 @@ import {
   CAR_LOOK_HEIGHT_M,
   COOLDOWN_BYPASS,
   EYE_HEIGHT_M,
+  EYE_PITCH_LIMIT,
+  EYE_RATE,
+  EYE_YAW_LIMIT,
   FACE_HEIGHT_M,
   FOV_COS,
   GAZE_RANGE_M,
@@ -53,6 +56,8 @@ const YAW = 0;
 const PITCH = 1;
 const TORSO = 2;
 const EASED = 3;
+/** The eyes' channels per civilian: the yaw and the pitch (`YAW`, `PITCH`). */
+const EYED = 2;
 const OMEGA = Float64Array.of(HEAD_OMEGA, HEAD_OMEGA, TORSO_OMEGA);
 const RATE = Float64Array.of(HEAD_YAW_RATE, PITCH_RATE, TORSO_RATE);
 /** A frame this long (s) or longer is taken as this long: after a stall heads ease on, they don't jump. */
@@ -91,6 +96,12 @@ export class CrowdGaze {
   readonly headYaw: Float32Array;
   readonly headPitch: Float32Array;
   readonly torsoTwist: Float32Array;
+  /** Her eyes' turn in her head (rad, toward her +x positive) and their pitch (down positive): on a new look they get there first and hold it while the head catches up (Andrist 2012), so they are back near the middle once it has. */
+  readonly eyeYaw: Float32Array;
+  readonly eyePitch: Float32Array;
+  /** Where her eyes point from her facing (yaw, pitch, `EYED` a civilian): moved at the saccade's rate. */
+  private readonly eyeAngle: Float32Array;
+  private readonly eyeGoal = new Float64Array(EYED);
   private readonly lookPoint: Float32Array;
   private readonly holdLeft: Float32Array;
   private readonly lookUrgency: Float32Array;
@@ -140,6 +151,9 @@ export class CrowdGaze {
     this.align = new Float32Array(capacity);
     this.traitLook = new Uint32Array(capacity);
     this.traitKnown = new Uint8Array(capacity);
+    this.eyeYaw = new Float32Array(capacity);
+    this.eyePitch = new Float32Array(capacity);
+    this.eyeAngle = new Float32Array(capacity * EYED);
   }
 
   /** Once a frame, `dt` s after the last, before the crowd is drawn: the table sensed again and every shown civilian near the eye choosing and turning. */
@@ -246,6 +260,7 @@ export class CrowdGaze {
     this.cooldown[civilian] = 0;
     for (let channel = 0; channel < EASED; channel++) this.angle[civilian * EASED + channel] = this.velocity[civilian * EASED + channel] = 0;
     this.headYaw[civilian] = this.headPitch[civilian] = this.torsoTwist[civilian] = 0;
+    this.eyeAngle[civilian * EYED + YAW] = this.eyeAngle[civilian * EYED + PITCH] = this.eyeYaw[civilian] = this.eyePitch[civilian] = 0;
   }
 
   private step(civilian: number, poses: CrowdPoses): void {
@@ -263,6 +278,7 @@ export class CrowdGaze {
     this.aim(civilian, poses);
     this.ease(civilian);
     this.writeOut(civilian);
+    this.moveEyes(civilian, poses);
   }
 
   /** The look waiting to start, the one held and the refusal after it run on by the frame. */
@@ -367,27 +383,57 @@ export class CrowdGaze {
     this.goal[YAW] = 0;
     this.goal[PITCH] = poses.speed[civilian]! > WALKING_ABOVE ? WALK_LOOK_DOWN : 0;
     this.goal[TORSO] = 0;
+    this.eyeGoal[YAW] = 0;
+    this.eyeGoal[PITCH] = this.goal[PITCH]!;
   }
 
-  /** The goal angles toward the scratch's point from her eyes: the turn (wrapped, kept on the side her head is on past her reach, times her head-mover share), the torso's part past `TORSO_JOIN`, the pitch. */
+  /** The goal angles toward the scratch's point: the eyes' whole turn and pitch, the head's share of the turn (her head-mover share, but never short of what her eyes can reach), the torso's part past `TORSO_JOIN`. */
   private goalTowards(civilian: number, poses: CrowdPoses): void {
+    const eye = this.eyeGoal;
+    if (!this.towards(civilian, poses, eye)) {
+      for (let channel = 0; channel < EASED; channel++) this.goal[channel] = this.angle[civilian * EASED + channel]!;
+      eye[YAW] = this.eyeAngle[civilian * EYED + YAW]!;
+      eye[PITCH] = this.eyeAngle[civilian * EYED + PITCH]!;
+      return;
+    }
+    const turn = Math.sign(eye[YAW]!) * Math.max(Math.abs(eye[YAW]!) * this.align[civilian]!, Math.abs(eye[YAW]!) - EYE_YAW_LIMIT);
+    this.goal[YAW] = turn;
+    this.goal[TORSO] = Math.sign(turn) * Math.min(TORSO_YAW_LIMIT, Math.max(0, Math.abs(turn) - TORSO_JOIN));
+    this.goal[PITCH] = eye[PITCH]!;
+  }
+
+  /** The turn (wrapped, kept on the side her head is on past her reach) and pitch from her eyes to the scratch's point into `out`; false when it is too near across the ground to aim at. */
+  private towards(civilian: number, poses: CrowdPoses, out: Float64Array): boolean {
     const s = this.scratch;
     const dx = s[SCRATCH.x]! - poses.x[civilian]!;
     const dz = s[SCRATCH.z]! - poses.z[civilian]!;
     const across = Math.sqrt(dx * dx + dz * dz);
-    if (across < AIM_HELD_M) {
-      for (let channel = 0; channel < EASED; channel++) this.goal[channel] = this.angle[civilian * EASED + channel]!;
-      return;
-    }
+    if (across < AIM_HELD_M) return false;
     const off = Math.atan2(dx, dz) - poses.yaw[civilian]!;
     let turn = off - TWO_PI * Math.floor((off + Math.PI) / TWO_PI);
     const reach = HEAD_YAW_LIMIT + TORSO_YAW_LIMIT;
     if (Math.abs(turn) > reach) turn = this.angle[civilian * EASED + YAW]! >= 0 ? reach : -reach;
-    turn *= this.align[civilian]!;
-    this.goal[YAW] = turn;
-    this.goal[TORSO] = Math.sign(turn) * Math.min(TORSO_YAW_LIMIT, Math.max(0, Math.abs(turn) - TORSO_JOIN));
+    out[YAW] = turn;
     const drop = Math.atan2(poses.feetY[civilian]! + EYE_HEIGHT_M - s[SCRATCH.y]!, across);
-    this.goal[PITCH] = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, drop));
+    out[PITCH] = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, drop));
+    return true;
+  }
+
+  /** Her eyes jump at the saccade's rate to a look starting within the head's latency, else to where the head is going; drawn relative to the head as it is now, so they hold the target while it turns. */
+  private moveEyes(civilian: number, poses: CrowdPoses): void {
+    if (this.pendingLeft[civilian]! >= 0 && this.pendingLeft[civilian]! <= HEAD_LATENCY_S) {
+      const s = this.scratch;
+      for (let axis = 0; axis < 3; axis++) s[SCRATCH.x + axis] = this.pendingPoint[civilian * 3 + axis]!;
+      this.towards(civilian, poses, this.eyeGoal);
+    }
+    const step = EYE_RATE * this.dt;
+    const at = civilian * EYED;
+    for (let channel = 0; channel < EYED; channel++) {
+      const from = this.eyeAngle[at + channel]!;
+      this.eyeAngle[at + channel] = from + Math.max(-step, Math.min(step, this.eyeGoal[channel]! - from));
+    }
+    this.eyeYaw[civilian] = Math.max(-EYE_YAW_LIMIT, Math.min(EYE_YAW_LIMIT, this.eyeAngle[at + YAW]! - this.headYaw[civilian]! - this.torsoTwist[civilian]!));
+    this.eyePitch[civilian] = Math.max(-EYE_PITCH_LIMIT, Math.min(EYE_PITCH_LIMIT, this.eyeAngle[at + PITCH]! - this.headPitch[civilian]!));
   }
 
   /** Each channel one frame along a critically damped ease to its goal (exact for any frame length), its speed and its step capped at the channel's rate. */

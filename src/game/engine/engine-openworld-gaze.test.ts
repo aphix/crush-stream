@@ -3,6 +3,7 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { createCrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import type { CrowdGaze } from "../present/civilian-gaze.ts";
 import { STIMULUS } from "../present/civilian-gaze-constants.ts";
 import { OpenWorldGaze } from "./engine-openworld-gaze.ts";
 
@@ -84,5 +85,57 @@ describe("given two civilians by the look panel's ray: one 4 m up it and 0.6 m t
     expect(gaze.gaze.describe(1), "control: their looks read apart").not.toBe(gaze.gaze.describe(0));
     const met = gaze.describe({ title: "Bea", lines: [] }, poses, map, ray);
     expect(met?.lines[0], "the look line").toBe(gaze.gaze.describe(1));
+  });
+});
+
+describe("given the foot cops drawn by an art of their own beside the crowd's", () => {
+  const COPS = 8;
+  /** The crowd's gaze with the player on foot at (STREET_X, 0), and the cops' art following it; the cops stand on the street from z = `from` every 0.5 m, facing -z toward him. */
+  function copsOn(from: number) {
+    const crowd = createCrowdPoses(CAPACITY);
+    const map = buildFixtureMap();
+    const foot = (out: { x: number; z: number }): boolean => {
+      out.x = STREET_X;
+      out.z = 0;
+      return true;
+    };
+    const gaze = new OpenWorldGaze(CAPACITY, map, { cars: () => [], foot, lineOfSight: null });
+    const art: { gaze?: CrowdGaze | null; update(): void; dispose(): void } = { gaze: null, update: () => {}, dispose: () => {} };
+    const drawn = gaze.follow(art, COPS);
+    const cops = createCrowdPoses(COPS);
+    for (let cop = 0; cop < COPS; cop++) {
+      cops.x[cop] = STREET_X;
+      cops.z[cop] = from + 0.5 * cop;
+      cops.yaw[cop] = Math.PI;
+      cops.shown[cop] = 1;
+    }
+    /** `seconds` of frames: the crowd's gaze, then the cops' art. */
+    const run = (seconds: number): void => {
+      for (let frame = 0; frame < Math.round(seconds * FRAME_HZ); frame++) {
+        gaze.frame(crowd, STREET_X, 0, 1 / FRAME_HZ, null);
+        drawn.update(cops, STREET_X, 0, { seen: () => true }, 1 / FRAME_HZ);
+      }
+    };
+    return { gaze, art, cops, run };
+  }
+
+  // mutation: sed -i '/^    this.gaze.update(poses, wallDt, this.senses);/d' src/game/engine/engine-openworld-gaze.ts
+  it("when the player stands on foot 2 m in front of the nearest of them, then within a second that cop's art turns his head to the player", () => {
+    const { art, run } = copsOn(2);
+    run(1);
+    expect(art.gaze?.lookKind[0], "what the nearest cop looks at").toBe(STIMULUS.player);
+  });
+
+  // mutation: sed -i '/^    for (let at = 0; at < this.followers.length; at++) this.followers\[at\]!.pulse(kind, x, y, z, radius, salience);/d' src/game/engine/engine-openworld-gaze.ts
+  it("when a car crashes 10 m to their side, then some of the cops turn to the crash", () => {
+    const { gaze, art, run } = copsOn(30);
+    run(0.5);
+    gaze.noteWallHit(15, STREET_X + 10, 31);
+    let turned = 0;
+    for (let frame = 0; frame < 3 * FRAME_HZ; frame++) {
+      run(1 / FRAME_HZ);
+      for (let cop = 0; cop < COPS; cop++) if (art.gaze?.lookKind[cop] === STIMULUS.crash) turned |= 1 << cop;
+    }
+    expect(turned, "cops who looked at the crash (a bit each)").toBeGreaterThan(0);
   });
 });

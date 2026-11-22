@@ -2,9 +2,10 @@ import type { LineOfSight } from "../ai/openworld-crime/offence-source.ts";
 import { LOOK_REACH } from "../ai/civilians/civilian-crowd-constants.ts";
 import { placeMet, residentMet, type LookRay, type LookText, type Meeting } from "../ai/civilians/civilian-look.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import type { CrowdSight } from "../present/civilian-art.ts";
 import { CrowdGaze, STIMULUS } from "../present/civilian-gaze.ts";
 import { FACE_HEIGHT_M, KIND_RANGE } from "../present/civilian-gaze-constants.ts";
-import { blankSenses, type GazeCar } from "../present/civilian-gaze-table.ts";
+import { blankSenses, type GazeCar, type GazeSenses } from "../present/civilian-gaze-table.ts";
 import { activeGround } from "../world/ground.ts";
 import { PLACE_KIND, type OpenWorldMap } from "../world/openworld/walk-graph.ts";
 import type { OpenWorldBodies } from "./openworld-bodies.ts";
@@ -26,11 +27,42 @@ type GazePorts = {
   lineOfSight: LineOfSight | null;
 };
 
+/** A crowd art of its own (the foot cops', the medics'): it turns heads where its `gaze` says. */
+type FollowedArt = {
+  gaze?: CrowdGaze | null;
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void;
+  dispose(): void;
+};
+
+/** `art` with a gaze of its own on the crowd's senses, turned on the poses it draws the frame it draws them. */
+class FollowingArt {
+  private readonly art: FollowedArt;
+  private readonly gaze: CrowdGaze;
+  private readonly senses: GazeSenses;
+
+  constructor(art: FollowedArt, gaze: CrowdGaze, senses: GazeSenses) {
+    this.art = art;
+    this.gaze = gaze;
+    this.senses = senses;
+  }
+
+  update(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void {
+    this.gaze.update(poses, wallDt, this.senses);
+    this.art.update(poses, eyeX, eyeZ, sight, wallDt);
+  }
+
+  dispose(): void {
+    this.art.dispose();
+  }
+}
+
 /** The open world's gaze in the engine: the senses filled each frame, the loud things pulsed as they happen, the bodies' necks aimed, and the look panel's gaze line. */
 export class OpenWorldGaze {
   readonly gaze: CrowdGaze;
   private readonly ports: GazePorts;
   private readonly senses = blankSenses();
+  /** The gazes of the arts that `follow` the crowd's senses: pulsed with it. */
+  private readonly followers: CrowdGaze[] = [];
   private readonly foot = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
   private readonly placeMeeting: Meeting = { index: -1, along: 0 };
   private sinceCrash = CRASH_PULSE_GAP_S;
@@ -42,6 +74,15 @@ export class OpenWorldGaze {
     const fronts = map.places.filter((place) => GLANCED_KINDS.has(place.kind));
     const ground = activeGround();
     this.gaze.attractors = Float32Array.from(fronts.flatMap((place) => [place.doorX, ground.heightAt(place.doorX, place.doorZ) + SIGN_Y_M, place.doorZ]));
+  }
+
+  /** `art` (`capacity` figures of their own: the foot cops, the medics) sensing what the crowd senses and turning to the same pulses; draw through the art returned, after `frame`. */
+  follow(art: FollowedArt, capacity: number): FollowingArt {
+    const gaze = new CrowdGaze(capacity);
+    gaze.attractors = this.gaze.attractors;
+    art.gaze = gaze;
+    this.followers.push(gaze);
+    return new FollowingArt(art, gaze, this.senses);
   }
 
   /** A frame of `wallDt` s with the eye at (eyeX, eyeZ): the crowd senses and turns, and the bodies standing for some of them turn their necks with them. */
@@ -57,7 +98,7 @@ export class OpenWorldGaze {
       senses.playerZ = this.foot.z;
     }
     this.gaze.update(poses, wallDt, senses);
-    bodies?.aimNecks(this.gaze.headYaw, this.gaze.torsoTwist, this.gaze.headPitch);
+    bodies?.aimNecks(this.gaze.headYaw, this.gaze.torsoTwist, this.gaze.headPitch, this.gaze.eyeYaw, this.gaze.eyePitch);
     this.sinceCrash += wallDt;
   }
 
@@ -66,18 +107,24 @@ export class OpenWorldGaze {
     if (closing < CRASH_LOOK_SPEED || this.sinceCrash < CRASH_PULSE_GAP_S) return;
     this.sinceCrash = 0;
     const salience = Math.min(1, closing / CRASH_FULL_SPEED);
-    this.gaze.pulse(STIMULUS.crash, x, activeGround().heightAt(x, z) + 1, z, KIND_RANGE[STIMULUS.crash]! * salience, salience);
+    this.pulse(STIMULUS.crash, x, activeGround().heightAt(x, z) + 1, z, KIND_RANGE[STIMULUS.crash]! * salience, salience);
   }
 
   /** Someone was knocked down at (x, z). */
   noteKnock(x: number, z: number): void {
-    this.gaze.pulse(STIMULUS.knock, x, activeGround().heightAt(x, z), z, KIND_RANGE[STIMULUS.knock]!, 1);
+    this.pulse(STIMULUS.knock, x, activeGround().heightAt(x, z), z, KIND_RANGE[STIMULUS.knock]!, 1);
   }
 
   /** The player on foot fired: everyone in earshot looks his way. */
   noteShot(): void {
     if (!this.ports.foot(this.foot)) return;
-    this.gaze.pulse(STIMULUS.gunshot, this.foot.x, activeGround().heightAt(this.foot.x, this.foot.z) + FACE_HEIGHT_M, this.foot.z, KIND_RANGE[STIMULUS.gunshot]!, 1);
+    this.pulse(STIMULUS.gunshot, this.foot.x, activeGround().heightAt(this.foot.x, this.foot.z) + FACE_HEIGHT_M, this.foot.z, KIND_RANGE[STIMULUS.gunshot]!, 1);
+  }
+
+  /** A pulse every gaze hears: the crowd's and its followers'. */
+  private pulse(kind: number, x: number, y: number, z: number, radius: number, salience: number): void {
+    this.gaze.pulse(kind, x, y, z, radius, salience);
+    for (let at = 0; at < this.followers.length; at++) this.followers[at]!.pulse(kind, x, y, z, radius, salience);
   }
 
   /** The look panel's `text` with a last line saying what the person the ray meets is looking at (when the panel is about a person). */

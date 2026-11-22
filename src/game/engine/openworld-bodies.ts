@@ -63,8 +63,8 @@ export type BodyHost = {
   path(slot: number, out: { x: number; z: number }): void;
   /** Where the body in `slot` faces (rad) and how fast (m/s) it is asked to go. */
   steer(slot: number, heading: number, speed: number): void;
-  /** The body in `slot` turns its neck `turn` toward its +x and nods it `nod` down (rad) on top of its gait: where its civilian looks. */
-  look(slot: number, turn: number, nod: number): void;
+  /** The body in `slot` turns its neck `turn` toward its +x and nods it `nod` down (rad) on top of its gait, and turns its eyes in its head by `eyeYaw` and `eyePitch`: where its civilian looks. */
+  look(slot: number, turn: number, nod: number, eyeYaw: number, eyePitch: number): void;
   /** The body in `slot` is on its feet. */
   standing(slot: number): boolean;
   /** The body in `slot` is out and held up by its motors (a walker): not a thrown figure, not gone. */
@@ -158,11 +158,11 @@ export class OpenWorldBodies {
     return NOBODY;
   }
 
-  /** Each body's neck turned where its civilian looks: per civilian, the head's turn from the torso, the torso's (the body's neck takes both) and the nod (`CrowdGaze`). */
-  aimNecks(headYaw: Float32Array, torsoTwist: Float32Array, headPitch: Float32Array): void {
+  /** Each body's neck turned where its civilian looks: per civilian, the head's turn from the torso, the torso's (the body's neck takes both), the nod, and the eyes' turn in the head (`CrowdGaze`). */
+  aimNecks(headYaw: Float32Array, torsoTwist: Float32Array, headPitch: Float32Array, eyeYaw: Float32Array, eyePitch: Float32Array): void {
     for (let body = 0; body < this.size; body++) {
       const civilian = this.resident[body]!;
-      if (civilian !== NOBODY) this.host.look(this.slot[body]!, headYaw[civilian]! + torsoTwist[civilian]!, headPitch[civilian]!);
+      if (civilian !== NOBODY) this.host.look(this.slot[body]!, headYaw[civilian]! + torsoTwist[civilian]!, headPitch[civilian]!, eyeYaw[civilian]!, eyePitch[civilian]!);
     }
   }
 

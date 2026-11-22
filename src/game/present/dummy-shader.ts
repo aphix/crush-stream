@@ -1,6 +1,7 @@
 import type * as THREE from "three";
 import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_NO_PAINT, DECAL_RAISE_STEP, DECAL_W, DECAL_Y, decalMap, FABRIC, FABRIC_CONTRAST, FABRIC_ENV, FABRIC_MAP, FABRIC_MATERIAL, FABRIC_RELIEF, FABRIC_ROUGHNESS, FABRIC_TILE } from "./dummy-cloth.ts";
 import { DRESS_DECALS } from "./dummy-dress.ts";
+import { EYE_U, EYES_AT, FACE_HALF_WIDTH, FACE_SPAN } from "./dummy-head.ts";
 import { CAPPED, CUTS_AT, FLAGS_AT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, OPTIONAL, ORBS_AT, PALETTE_AT, PRINT_ATTRIBUTE, ROLE, ROLES, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE } from "./dummy-rig.ts";
 import { FACE_RELIEF, faceReliefMap, PRINT_CELL, PRINT_CELLS, PRINT_TEXELS, printMap } from "./dummy-texture.ts";
 import { RIM_FRAGMENT, RIM_LIGHT } from "./rim-light.ts";
@@ -129,6 +130,16 @@ vec3 dollCut(int slot, vec3 p, vec4 region, out int pick) {
 /** The fragment's tables and helpers: fabric by pick and by role, and the bump (three's `perturbNormalArb`, from a height's screen slopes). */
 /** The parts (`PARTS`: the torso 0, the head 1) a first-person eye inside the body does not see: `applyDolls`' `viewHidden` slot draws its skin only where it rides other parts more. */
 const VIEW_HIDDEN_LAST_PART = 1;
+/** The eyes' middle row in a face cell's v; the baked pupils sit within 2 texels of it and of `EYE_U` (measured on the atlas). */
+const EYE_V = EYES_AT / FACE_SPAN;
+/** The iris warp's spread (a Gaussian's sigma) across and up a face cell: 3 and 1.5 texels, about half an eye's opening, so the lids barely move. Tuned by feel against the atlas. */
+const EYE_SPREAD_U = 3 / PRINT_TEXELS;
+const EYE_SPREAD_V = 1.5 / PRINT_TEXELS;
+/** Past 3 sigmas (squared) the warp is under 1 % of its shift: the fragment skips it. */
+const EYE_WARP_END = 9;
+/** A human eyeball's radius (m): its iris moves this far times the turn's sine; one scale serves u and v, the face cell's texels being near square on the head. */
+const EYEBALL_RADIUS_M = 0.012;
+const EYE_SHIFT_PER_RAD = EYEBALL_RADIUS_M / (2 * FACE_HALF_WIDTH);
 
 const DOLL_FRAGMENT_COMMON = /* glsl */ `
 uniform sampler2D dolls;
@@ -147,6 +158,14 @@ flat varying int vDollSlot;
 varying float vDollHidden;
 uniform int uViewHidden;
 ${DOLL_CUTS}
+// A face print's (u, v) warped so each iris moves by the slot's eye turn (its orb texels' w), fading out toward the lids, which stay put.
+vec2 dollEyes(vec2 uv, int slot) {
+  vec2 off = vec2((abs(uv.x - 0.5) - ${glslFloat(EYE_U)}) / ${glslFloat(EYE_SPREAD_U)}, (uv.y - ${glslFloat(EYE_V)}) / ${glslFloat(EYE_SPREAD_V)});
+  float spread = dot(off, off);
+  if (spread > ${glslFloat(EYE_WARP_END)}) return uv;
+  vec2 turn = vec2(dollRow(${ORBS_AT}, slot).w, dollRow(${ORBS_AT + 1}, slot).w);
+  return uv - exp(-0.5 * spread) * ${glslFloat(EYE_SHIFT_PER_RAD)} * vec2(turn.x, -turn.y);
+}
 const float DOLL_RELIEF[${FABRIC.NONE}] = float[${FABRIC.NONE}](${FABRIC_RELIEF.map(glslFloat).join(", ")});
 const float DOLL_CONTRAST[${FABRIC.NONE}] = float[${FABRIC.NONE}](${FABRIC_CONTRAST.map(glslFloat).join(", ")});
 const float DOLL_FABRIC_ROUGHNESS[${FABRIC.NONE + 1}] = float[${FABRIC.NONE + 1}](${FABRIC_ROUGHNESS.map(glslFloat).join(", ")});
@@ -231,7 +250,10 @@ float dollEnv = DOLL_ROLE_ENV[dollRoleHere] >= 0.0 ? DOLL_ROLE_ENV[dollRoleHere]
 const PRINT_FRAGMENT = /* glsl */ `
 if (vPrint.w > 0.0) {
   vec2 printUv = clamp(vPrint.xy, ${(0.5 / PRINT_TEXELS).toFixed(5)}, ${(1 - 0.5 / PRINT_TEXELS).toFixed(5)});
-  vec4 ink = texture2D(prints, vec2(printUv.x, (floor(vPrint.z + 0.5) + printUv.y) / ${PRINT_CELLS}.0));
+  float printCell = floor(vPrint.z + 0.5);
+  // The capped man's picture wears dark glasses: nothing of his eyes shows to move.
+  vec2 inkUv = printCell < ${glslFloat(PRINT_CELL.BADGE - 0.5)} && printCell != ${glslFloat(PRINT_CELL.CAP_MAN)} ? dollEyes(printUv, vDollSlot) : printUv;
+  vec4 ink = texture2D(prints, vec2(inkUv.x, (printCell + inkUv.y) / ${PRINT_CELLS}.0));
   diffuseColor.rgb = mix(diffuseColor.rgb, ink.rgb, ink.a * vPrint.w);
   if (vPrint.z < ${glslFloat(PRINT_CELL.BADGE - 0.5)}) dollHeight += ${glslFloat(FACE_RELIEF)} * (texture2D(faceRelief, printUv).r * 2.0 - 1.0) * ink.a * vPrint.w;
 }`;
