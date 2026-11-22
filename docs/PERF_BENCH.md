@@ -118,16 +118,16 @@ The Mall's `placed` list is 4089 props with 12512 colliders (2907 props and 8808
 
 ### Open world: the frame and the picks
 
-`headless-frame.mjs --tier high --hash 'scene=openworld&seed=1' --parts 240` on the RTX 4080 (ANGLE, D3D12), before (main 671efc2cf) and after the dummies' shadow cut (`DOLL_SHADOW_CUT`: a slot whose body lies outside the sun's shadow box skips skinning in the depth pass). The ms are the parts' CPU wall, before → after; two base runs at night read shadow 6.35 and 6.65 ms, so a shift under about 0.4 ms is run noise on this GPU, where vertex work is not the bottleneck.
+`headless-frame.mjs --tier high --hash 'scene=openworld&seed=1' --parts 240` on the RTX 4080 (ANGLE, D3D12), at main 671efc2cf. The ms are the parts' CPU wall; two runs at night read shadow 6.35 and 6.65 ms, so a shift under about 0.4 ms is run noise on this GPU.
 
-| still | calls | triangles | callsMain / callsShadow | shadow ms | main ms | frame ms | PNG, base vs after |
-|---|---|---|---|---|---|---|---|
-| desktop, day | 206 | 881,784 | 155.2 / 47.0 | 4.91 → 4.87 | 5.97 → 5.73 | 37.3 → 43.1 | same hash |
-| desktop, `--hour 21` | 207 | 1,200,811 | 157.6 / 47.0 | 6.35 → 5.95 | 6.55 → 6.18 | 32.3 → 28.1 | differs only inside the base's own run-to-run box |
-| `--phone`, day | 197 | 786,357 | 151 / 45.9 | 4.04 → 4.15 | 5.08 → 5.17 | 33.3 → 32.9 | same hash |
-| `--phone --hour 21` | 199 | 918,065 | 152 / 47 | 6.26 → 5.31 | 7.05 → 5.91 | 23.3 → 22.7 | differs only inside the base's own run-to-run box |
+| still | calls | triangles | callsMain / callsShadow | shadow ms | main ms | frame ms |
+|---|---|---|---|---|---|---|
+| desktop, day | 206 | 881,784 | 155.2 / 47.0 | 4.91 | 5.97 | 37.3 |
+| desktop, `--hour 21` | 207 | 1,200,811 | 157.6 / 47.0 | 6.35 | 6.55 | 32.3 |
+| `--phone`, day | 197 | 786,357 | 151 / 45.9 | 4.04 | 5.08 | 33.3 |
+| `--phone --hour 21` | 199 | 918,065 | 152 / 47 | 6.26 | 7.05 | 23.3 |
 
-Counts, programs (194) and link failures (0) are equal before and after. At night the base differs from itself between runs (69 to 86 pixels: two walking people on the desktop still, x 416-447 and 784-831, y 288-351; one walker's hand at x 1044-1057, y 347-365 on the phone); every pixel where the after still differs from a base run lies inside that box.
+The day stills are the same PNG run to run. At night the still differs from itself between runs (69 to 86 pixels: two walking people on the desktop still, x 416-447 and 784-831, y 288-351; one walker's hand at x 1044-1057, y 347-365 on the phone).
 
 Host-side picks and scans, node probes on the real open-world map (allocation by V8's sampling heap profiler; a first call on a mesh also pays its one-time buffers):
 

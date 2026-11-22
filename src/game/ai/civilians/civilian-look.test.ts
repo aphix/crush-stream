@@ -175,7 +175,7 @@ describe("given the city's own map, its 310 buildings inside the walls", () => {
   const CALLS = 2000;
   const BOUND_BYTES = 8192;
 
-  // mutation: sed -i 's/^    const cos = trig\[place \* 2\]!;/    const cos = detCos(map.places[place]!.yaw);/' /home/aphix/worktrees/Perf/src/game/ai/civilians/civilian-look.ts
+  // mutation: sed -i 's/^    const cos = trig\[place \* 2\]!;/    const cos = detCos(map.places[place]!.yaw);/' src/game/ai/civilians/civilian-look.ts
   it("when the eye 3 m before a building asks 2000 times which building it meets, then each answer names that building and all of them together allocate under 8 KB", () => {
     const house = city.places.find((place) => place.doorNode >= 0)!;
     const ray = aimedAt(eyeAt(house.x - house.depth / 2 - 3, house.z), house.x, EYE_HEIGHT, house.z);
@@ -188,7 +188,7 @@ describe("given the city's own map, its 310 buildings inside the walls", () => {
     expect(bytes, "bytes allocated by 2000 asks").toBeLessThanOrEqual(BOUND_BYTES);
   });
 
-  // mutation: sed -i 's/^  const place = placeMet(state.map, ray, LOOK_REACH, _placeMeeting);/  const place = placeMet(state.map, ray, LOOK_REACH, { index: -1, along: Infinity });/' /home/aphix/worktrees/Perf/src/game/ai/civilians/civilian-look.ts
+  // mutation: sed -i 's/^  const place = placeMet(state.map, ray, LOOK_REACH, _placeMeeting);/  const place = placeMet(state.map, ray, LOOK_REACH, { index: -1, along: Infinity });/' src/game/ai/civilians/civilian-look.ts
   it("when the panel is asked 2000 times what the eye rests on and it rests on nothing, then the panel is empty and all of the asks together allocate under 8 KB", () => {
     const crowd = newCrowd(map);
     const ray = aimedAt(eyeAt(OPEN_GROUND, 0), OPEN_GROUND, EYE_HEIGHT + ROOF_RISE, ROOF_RUN);

@@ -92,7 +92,7 @@ beforeAll(stage);
 afterAll(() => rig.dispose());
 
 describe("given the open world, the player on foot with a kerb car 6 m off and a dummy standing 8 m off", () => {
-  // mutation: sed -i 's/^    if (distance >= this.distance) return;/    if (distance <= this.distance \&\& this.object !== null) return;/' /home/aphix/worktrees/Perf/src/game/engine/ray-nearest.ts
+  // mutation: sed -i 's/^    if (distance >= this.distance) return;/    if (distance <= this.distance \&\& this.object !== null) return;/' src/game/engine/ray-nearest.ts
   it("when 300 seeded shots are picked against the cars, then each pick (car, pane, point, distance) is the one three's raycaster sorts first, and some hit the car, its glass and nothing", () => {
     const next = seeded(7);
     const seen = { car: 0, glass: 0, none: 0 };
@@ -111,7 +111,7 @@ describe("given the open world, the player on foot with a kerb car 6 m off and a
     expect(seen.car && seen.glass && seen.none, `control: body, glass and miss shots ${JSON.stringify(seen)}`).toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's/^        if (distance < near || distance > far || distance >= out.along) continue;/        if (distance < near || distance > far) continue;/' /home/aphix/worktrees/Perf/src/game/present/ragdoll-mesh.ts
+  // mutation: sed -i 's/^        if (distance < near || distance > far || distance >= out.along) continue;/        if (distance < near || distance > far) continue;/' src/game/present/ragdoll-mesh.ts
   it("when 300 seeded shots are picked against the dummies, then each pick (slot, point, distance) is the one three's raycaster sorts first, and some hit him and some miss", () => {
     const next = seeded(11);
     const seen = { hit: 0, none: 0 };
@@ -130,7 +130,7 @@ describe("given the open world, the player on foot with a kerb car 6 m off and a
     expect(seen.hit && seen.none, `control: hits and misses ${JSON.stringify(seen)}`).toBeGreaterThan(0);
   });
 
-  // mutation: sed -i 's/^function plainMesh(object: THREE.Object3D): object is THREE.Mesh {$/&\n  if (object.id >= 0) return false;/' /home/aphix/worktrees/Perf/src/game/engine/ray-nearest.ts
+  // mutation: sed -i 's/^function plainMesh(object: THREE.Object3D): object is THREE.Mesh {$/&\n  if (object.id >= 0) return false;/' src/game/engine/ray-nearest.ts
   it("when 20 shots are picked at the car's middle, then all of them together allocate under 32 KB a shot", () => {
     const ray = rayToward(eye, carMiddle, 0, seeded(1));
     const out: CarPick = { car: -1, x: 0, y: 0, z: 0, along: Infinity, pane: null };

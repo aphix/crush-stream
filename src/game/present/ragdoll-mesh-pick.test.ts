@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { BODY_REACH_M } from "./dummy-rig.ts";
+import { BODY_REACH_M, ORBS_AT } from "./dummy-rig.ts";
 import { posture } from "./dummy-pose.test-util.ts";
 import { PARTS } from "./ragdoll-body.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
@@ -68,7 +68,10 @@ function seeded(seed: number): () => number {
   return () => (state = (Math.imul(state, 1103515245) + 12345) >>> 0) / 4294967296;
 }
 
-/** Slot 0 dressed as `woman` or a man, each part turned at random and pulled up to 0.15 m off its place: blended vertices stretch between bones. */
+/** Her two bust lags (m, rest frame), far past what the springs reach: a pick that left the lag out of a group's reach would miss the bust where it is drawn. */
+const BUST_LAG = [0.2, 0.1, 0.4, -0.2, 0.1, 0.4] as const;
+
+/** Slot 0 dressed as `woman` or a man, each part turned at random and pulled up to 0.15 m off its place: blended vertices stretch between bones; her bust lags `BUST_LAG`. */
 function flung(woman: boolean, next: () => number): DummyMesh {
   const mesh = new DummyMesh(1);
   mesh.dress(0, false, { woman, shirt: 0x2b2d32, pants: 0x223355, hair: 0x2a1d15, hat: null, mustache: false });
@@ -76,6 +79,11 @@ function flung(woman: boolean, next: () => number): DummyMesh {
   for (const [k, part] of PARTS.entries()) {
     const turn = new THREE.Quaternion(next() * 2 - 1, next() * 2 - 1, next() * 2 - 1, next() * 2 - 1).normalize();
     mesh.pose(0, k, new THREE.Vector3(part.c[0] + pull(), part.c[1] + pull(), part.c[2] + pull()), turn);
+  }
+  if (woman) {
+    const rows: Float32Array = mesh["rows"];
+    rows.set(BUST_LAG.slice(0, 3), ORBS_AT * 4);
+    rows.set(BUST_LAG.slice(3), (ORBS_AT + 1) * 4);
   }
   mesh.updateMatrixWorld(true);
   return mesh;
@@ -103,8 +111,9 @@ function wholePick(mesh: DummyMesh, ray: THREE.Ray): number {
   return nearest;
 }
 
-describe("given dummies flung into poses no joint holds, a man and a woman", () => {
-  // mutation: sed -i 's/hit\[g\] = ray.distanceSqToSegment(_va, _vb) <= reach \* reach/hit[g] = ray.distanceSqToPoint(_va) <= reach * reach/' /home/aphix/worktrees/Perf/src/game/present/ragdoll-mesh.ts
+describe("given dummies flung into poses no joint holds, a man and a woman whose bust lags far behind her", () => {
+  // mutation: sed -i 's/hit\[g\] = ray.distanceSqToSegment(_va, _vb) <= reach \* reach/hit[g] = ray.distanceSqToPoint(_va) <= reach * reach/' src/game/present/ragdoll-mesh.ts
+  // mutation: sed -i 's/ + orbA\[g\]! \* lagA + orbB\[g\]! \* lagB//' src/game/present/ragdoll-mesh.ts
   it("when 300 seeded rays are picked at each, then every pick's distance is the one his triangles skinned whole give, and some hit and some miss", () => {
     const next = seeded(7);
     let hits = 0;
@@ -130,8 +139,8 @@ describe("given dummies flung into poses no joint holds, a man and a woman", () 
 });
 
 describe("given a man, a woman and a portly man posed with every joint swung a quarter turn, joints closed", () => {
-  // mutation: sed -i 's/^export const BODY_REACH_M = 1.3;/export const BODY_REACH_M = 1.1;/' /home/aphix/worktrees/Perf/src/game/present/dummy-rig.ts
-  it("when every vertex he draws is read, then it lies within the body's reach of his torso's middle: what the shadow pass's cut and the pick's sphere both rely on", () => {
+  // mutation: sed -i 's/^export const BODY_REACH_M = 1.3;/export const BODY_REACH_M = 1.1;/' src/game/present/dummy-rig.ts
+  it("when every vertex he draws is read, then it lies within the body's reach of his torso's middle: what the pick's sphere relies on", () => {
     const swings = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)].map((axis) => Object.fromEntries(PARTS.map((_, k) => [k, new THREE.Quaternion().setFromAxisAngle(axis, QUARTER)])));
     const at = new THREE.Vector3();
     let read = 0;

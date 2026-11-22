@@ -221,7 +221,6 @@ Per device (desktop or phone, by `deviceClass`):
 The table is as measured: the one render matrix taken (high, desktop and phone, day and night; [`PERF_BENCH.md`](PERF_BENCH.md#open-world-the-frame-and-the-picks)) gives no reading that moves a row, so none changed. Host-side work that ran per step or per shot, now faster and with less garbage:
 a body's "inside a building?" reads an 8 m grid of the footprints (`PlaceFootprints`, built once from `placeRecord`'s one-shape places), the look and gun wall test reads each place's yaw from a per-map table,
 a shot at a car or a dummy keeps the nearest hit without three's hit list (`RayNearest`, `DummyMesh.nearestHit`), and a dummy is skinned only where the ray passes near its bones (`PickGroups`).
-In the sun's shadow pass a dummy whose body lies outside the shadow box skips its skinning (`DOLL_SHADOW_CUT`): the same map, pixel for pixel.
 
 **Night look.** A lamp's ground pool (`lampPool`, `engine-world.ts`) is 1.4 times brighter (capped at 1) on the `off` and `minimal` FX tiers, which draw no bloom, so the pool is the lamp's only spill. Each shop and eatery
 (`PLACE_KIND.shop`, `food`: 8 places) also throws a flat 3 m deep light quad (`shop-spill.ts`, `ShopSpill`) 1.2 m out from its front face on the lamp pool's material, so it fades in at dusk and is gone by day;

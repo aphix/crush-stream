@@ -1,8 +1,7 @@
 import type * as THREE from "three";
 import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_NO_PAINT, DECAL_RAISE_STEP, DECAL_W, DECAL_Y, decalMap, FABRIC, FABRIC_CONTRAST, FABRIC_ENV, FABRIC_MAP, FABRIC_MATERIAL, FABRIC_RELIEF, FABRIC_ROUGHNESS, FABRIC_TILE } from "./dummy-cloth.ts";
 import { DRESS_DECALS } from "./dummy-dress.ts";
-import { PARTS } from "./ragdoll-body.ts";
-import { BODY_REACH_M, CAPPED, CUTS_AT, FLAGS_AT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, OPTIONAL, ORBS_AT, PALETTE_AT, PRINT_ATTRIBUTE, ROLE, ROLES, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, TORSO } from "./dummy-rig.ts";
+import { CAPPED, CUTS_AT, FLAGS_AT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, OPTIONAL, ORBS_AT, PALETTE_AT, PRINT_ATTRIBUTE, ROLE, ROLES, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE } from "./dummy-rig.ts";
 import { FACE_RELIEF, faceReliefMap, PRINT_CELL, PRINT_CELLS, PRINT_TEXELS, printMap } from "./dummy-texture.ts";
 import { RIM_FRAGMENT, RIM_LIGHT } from "./rim-light.ts";
 import { MATERIAL_STRENGTH, MATERIAL_STRENGTH_GLSL } from "../vehicle/material-class.ts";
@@ -99,24 +98,6 @@ const ROLE_METAL: Partial<Record<keyof typeof ROLE, number>> = { BADGE: 1, BUCKL
 const ROLE_ENV: Partial<Record<keyof typeof ROLE, number>> = { BADGE: 1, BUCKLE: 1, EYES: 1, SOLE: 0.25 };
 
 const glslFloat = (value: number): string => value.toFixed(6);
-/**
- * The shadow pass's cut: under an orthographic (the sun's) shadow camera, a slot whose whole body (within `BODY_REACH_M` of its torso's
- * middle) lies outside the camera's box cannot touch the map, so its vertices skip the skinning and collapse to the point an undrawn
- * vertex takes. The map is the same; a dummy out of the shadow box (most of the 60 m crowd round a 24 m box) costs two texel reads a vertex.
- */
-const DOLL_SHADOW_CUT = /* glsl */ `
-bool dollOutsideShadow() {
-  if (projectionMatrix[3][3] != 1.0) return false;
-  vec3 middle = dollTexel(${2 * TORSO}).xyz + dollTurn(dollTexel(${2 * TORSO + 1}), vec3(${PARTS[TORSO]!.c.map(glslFloat).join(", ")}));
-  mat4 toClip = projectionMatrix * modelViewMatrix;
-#ifdef USE_INSTANCING
-  toClip = toClip * instanceMatrix;
-#endif
-  vec3 clip = (toClip * vec4(middle, 1.0)).xyz;
-  vec3 reach = ${glslFloat(BODY_REACH_M)} * vec3(length(vec3(toClip[0][0], toClip[1][0], toClip[2][0])), length(vec3(toClip[0][1], toClip[1][1], toClip[2][1])), length(vec3(toClip[0][2], toClip[1][2], toClip[2][2])));
-  return any(greaterThan(abs(clip), vec3(1.0) + reach));
-}`;
-
 const byRole = (table: Partial<Record<keyof typeof ROLE, number>>, absent: number): number[] =>
   Object.entries(ROLE).sort(([, a], [, b]) => a - b).map(([name]) => table[name as keyof typeof ROLE] ?? absent);
 
@@ -306,8 +287,8 @@ export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: 
     prev.call(material, shader, renderer);
     shader.uniforms.dolls = { value: dolls };
     if (!lit) {
-      shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>\n${DOLL_COMMON}\n${DOLL_SHADOW_CUT}`);
-      shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvec3 dollP = vec3(0.0);\nvec3 dollN = vec3(0.0, 1.0, 0.0);\nif (!dollOutsideShadow()) dollSkin(dollP, dollN);\ntransformed = dollP;");
+      shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>\n${DOLL_COMMON}`);
+      shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\ntransformed = dollP;");
       return;
     }
     Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS }, uRim: RIM_LIGHT, uSkinSss: SKIN_SSS, materialStrength: MATERIAL_STRENGTH, uViewHidden: viewHidden });
