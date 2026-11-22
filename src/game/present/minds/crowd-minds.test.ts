@@ -34,7 +34,7 @@ function asked() {
 afterEach(() => vi.restoreAllMocks());
 
 describe("given the Minds setting off", () => {
-  // mutation: sed -i 's/    if (!this.on || this.broken || /    if (this.broken || /' src/game/present/minds/crowd-minds.ts
+  // mutation: sed -i 's/      if (this.on) this.ask(hour);/      this.ask(hour);/' src/game/present/minds/crowd-minds.ts
   it("when a resident is looked at and a crash pulse lingers beside the crowd for 1000 frames, then the panel has her thought, and no worker is made and nothing is fetched", () => {
     const fetched = vi.spyOn(globalThis, "fetch");
     const { crowd, resident, gaze, workers } = minds();
@@ -95,17 +95,17 @@ describe("given the Minds setting on and a resident looked at", () => {
 
 describe("given a crowd standing together", () => {
   // mutation: sed -i 's/^const STAGGER_STEP_S = 0.15;/const STAGGER_STEP_S = 0;/' src/game/present/minds/crowd-minds.ts
-  it("when a crash pulse appears 2 m away, then within 2.5 s a group of them turn to it one after another, not in one frame, and no worker is made", () => {
+  it("when a crash pulse appears 2 m away, then within 2.5 s a group of them turn to it one after another, the last over a second after the first, and no worker is made", () => {
     const { crowd, gaze, workers } = minds();
     const turned: number[] = [];
     vi.spyOn(gaze, "attend").mockImplementation((index, x, _y, z) => {
       expect([x, z], `${index} turns to the crash`).toEqual([2, 0]);
-      turned.push(Math.round(crowd["seconds"] * FRAME_HZ));
+      turned.push(crowd["seconds"]);
     });
     putStimulus(gaze, 0, STIMULUS.crash, 2, 0, 1, KIND_LIFE[STIMULUS.crash]!);
     for (let frame = 0; frame < 2.5 * FRAME_HZ; frame++) crowd.frame(FRAME);
     expect(turned.length, "heads turned").toBe(12);
-    expect(new Set(turned).size, "frames they turned in").toBeGreaterThan(6);
+    expect(Math.max(...turned) - Math.min(...turned), "seconds from the first head to the last").toBeGreaterThan(1);
     expect(workers.length, "workers made").toBe(0);
   });
 

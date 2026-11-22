@@ -163,7 +163,7 @@ export class CrowdMinds {
   }
 
   private send(): void {
-    if (!this.on || this.broken || this.queued.hour === NO_HOUR || this.flight.hour !== NO_HOUR || this.seconds < this.backoffUntil) return;
+    if (this.broken || this.queued.hour === NO_HOUR || this.flight.hour !== NO_HOUR || this.seconds < this.backoffUntil) return;
     if (this.worker === null) this.startWorker();
     if (!this.ready || this.worker === null) return;
     this.flight.copyFrom(this.queued);
