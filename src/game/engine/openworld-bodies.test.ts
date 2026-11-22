@@ -563,6 +563,22 @@ describe("given every body in use and each held by a cable", () => {
   });
 });
 
+describe("given thrown figures filling every pool slot a body could take", () => {
+  it("when the hook asks whether it can take a civilian, then it cannot, and stands none for her, until a slot is free", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 1, 1, 0);
+    run(SETTLE_STEPS);
+    const body = bodies.slotOf(1);
+    for (let slot = FIRST_SLOT; slot < 12; slot++) if (slot !== body) host.occupied.add(slot);
+    walker(poses, 0, 50, 0);
+    expect(bodies.canStand(0, 0), "a body is free but no slot").toBe(false);
+    expect(bodies.stand(poses, 0, 0, 0), "no body for her").toBe(-1);
+    host.occupied.delete(FIRST_SLOT + 3);
+    expect(bodies.canStand(0, 0), "a slot is free").toBe(true);
+    expect(bodies.stand(poses, 0, 0, 0), "a body for her").toBeGreaterThanOrEqual(0);
+  });
+});
+
 describe("given bodies and the scene is left", () => {
   // mutation: sed -i 's/  dispose(): void {/  dispose(): void {\n    return;/' src/game/engine/openworld-bodies.ts
   it("when the bodies are disposed, then every body goes and no civilian is held", () => {

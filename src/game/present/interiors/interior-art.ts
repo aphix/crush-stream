@@ -7,7 +7,7 @@ import { PLACE_KIND, type OpenWorldMap, type Place } from "../../world/openworld
 import { FACADE_DARK_MAX, FACADE_GLOW, FACADE_OPEN_MAX, FACADE_OPEN_SLOT_FLOATS, setDarkFacades, setOpenFacades } from "../facades.ts";
 import { FACE, type SightField } from "../openworld-sight.ts";
 import { buildDetail, buildShell } from "./interior-build.ts";
-import { CLOSED_GLOW, DAY_SKY_GAIN, DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_LINGER, INTERIOR_NEAR, LAMP_DAY, LAMP_ROOM_DAY, OPEN_FADE_SECONDS, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
+import { CLOSED_GLOW, DAY_SKY_GAIN, DETAIL_BUILDS_PER_FRAME, GLASS_OPACITY, INTERIOR_FAR, INTERIOR_GLASS_NAME, INTERIOR_LINGER, INTERIOR_NEAR, LAMP_DAY, LAMP_ROOM_DAY, OPEN_FADE_SECONDS, PACK_START_VERTICES, SHELL_BUILDS_PER_FRAME, SHELL_FAR, SHELL_NEAR, SHOPFRONT_ROOMS, SOLIDS_NEAR, VESTIBULE_REACH } from "./interior-constants.ts";
 import { DoorSet, type DoorOpeners, type PinnedSpots } from "./interior-doors.ts";
 import { lightingOf, type RoomLight } from "./interior-light.ts";
 import { NO_SLOT, PackedMesh } from "./interior-pack.ts";
@@ -184,7 +184,7 @@ export class InteriorSet {
     this.shells = this.packed("interior-shells", this.solidMaterial, PACK_START_VERTICES.shell);
     this.details = this.packed("interior-furniture", this.solidMaterial, PACK_START_VERTICES.detail);
     this.glows = this.packed("interior-lights", this.glowMaterial, PACK_START_VERTICES.glow);
-    this.glass = this.packed("interior-glass", this.glassMaterial, PACK_START_VERTICES.glass);
+    this.glass = this.packed(INTERIOR_GLASS_NAME, this.glassMaterial, PACK_START_VERTICES.glass);
   }
 
   /** Swing the doors, build what is wanted near the eye, drop what is hidden or left behind, and hand the physics what it holds now. */

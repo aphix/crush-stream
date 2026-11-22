@@ -133,6 +133,16 @@ describe("the hook takes a cop making an arrest, and then the suspect he held", 
     expect(run.scene.stats.lost - lost, "once").toBe(1);
   });
 
+  it("when a release older than the arrest she is in is heard (a guest hears the whole log), then she is not let go", () => {
+    const { run } = cuffing({ authority: false });
+    expect(inHands(run), "control: she is in his hands").toBe(true);
+    const lost = run.scene.stats.lost;
+    run.scene.hearSpared(CRIMINAL, 0);
+    runFor(run, 0.5);
+    expect(inHands(run), "still in his hands").toBe(true);
+    expect(run.scene.stats.lost, "nobody let go").toBe(lost);
+  });
+
   it("when the host's release is heard again every step (the log is read whole each step), then it is not queued again: a suspect taken in hand after it would be let go every step", () => {
     const { run } = cuffing();
     const released = run.now;

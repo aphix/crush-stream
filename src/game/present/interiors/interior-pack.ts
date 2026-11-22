@@ -217,6 +217,8 @@ export class PackedMesh {
       uploadRange(this.light, start * LIGHT_FLOATS, count * LIGHT_FLOATS);
     }
     this.mesh.geometry.setDrawRange(0, this.used);
+    // A ray (the hook's sight line) finds the packed rooms through a bounding sphere made when it first asks: one kept from before this build would miss it. Made again at the next ray, not here.
+    this.mesh.geometry.boundingSphere = null;
     this.mesh.visible = this.used > 0;
   }
 }

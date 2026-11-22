@@ -121,7 +121,7 @@ export class CrimeScene {
       const due = this.sparedDue[resident]!;
       if (due < 0 || this.law.seconds < due) continue;
       this.sparedDue[resident] = -1;
-      this.law.spare(resident);
+      this.law.spare(resident, due);
     }
   }
 

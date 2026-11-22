@@ -11,7 +11,7 @@ import { VENUE, isCounterVenue, isOutdoorPurpose, isSeatedVenue } from "./societ
 // The hand-kept tables the spine replaced, verbatim as they stood before it (main 671efc2cf).
 const OLD_NEED = { rest: 0, food: 1, work: 2, social: 3, errand: 4, solitude: 5 };
 const OLD_PURPOSE = { salPigeons: 6, kowalskiBroom: 7, biscuitSteals: 8, jamalFlyers: 9, deeCoffee: 10, okaforParty: 11, vanRepair: 12, tabbyPlay: 13, dogChase: 14, mechanicOut: 15, partyGuest: 16, busAway: 17, coffee: 18, drink: 19, stoopSit: 20, stoopTalk: 21, argue: 22, loiter: 23, report: 24, flee: 25, shoplift: 26, mug: 27, breakIn: 28, fight: 29, lookOn: 30, callAmbulance: 31 };
-const OLD_EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9, ambulance: 10, danger: 11, ambulanceStage: 12, car: 13, arrestRide: 14, arrestAlight: 15, spared: 16 };
+const OLD_EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9, ambulance: 10, danger: 11, ambulanceStage: 12, car: 13, arrestRide: 14, arrestAlight: 15 };
 const OLD_CRIME_KIND = { none: 0, theft: 1, mugging: 2, breakIn: 3 };
 const OLD_ACTIVITY = { none: 0, idle: 1, talk: 2, buy: 3, door: 4, sitDown: 5, sit: 6, standUp: 7, bump: 8, swing: 9, block: 10, hit: 11, sitSteps: 12, cuffing: 13, cuffed: 14, arresting: 15, escorting: 16, carIn: 17, carOut: 18, phoneCall: 19, kneel: 20, recoil: 21 };
 const OLD_MOOD = { fine: 0, happy: 1, proud: 2, sad: 3, busy: 4, exhausted: 5, hurt: 6, afraid: 7, hungry: 8, lonely: 9, restless: 10, angry: 11, annoyed: 12, worried: 13 };
@@ -48,7 +48,7 @@ function entriesOf(map: Readonly<Record<string, number>>): string[] {
 const codeCases = [
   { it: "when the need codes are derived, then they are the hand-kept ones", derived: "NEED", expected: OLD_NEED },
   { it: "when the purpose codes are derived, then they are the hand-kept ones", derived: "PURPOSE", expected: OLD_PURPOSE },
-  { it: "when the event kinds are derived, then they are the wire's hand-kept ones", derived: "EVENT_KIND", expected: OLD_EVENT_KIND },
+  { it: "when the event kinds are derived, then they are the wire's hand-kept ones", derived: "EVENT_KIND", expected: { ...OLD_EVENT_KIND, spared: 16 } },
   { it: "when the crime kinds are derived, then they are the hand-kept ones", derived: "CRIME_KIND", expected: OLD_CRIME_KIND },
   { it: "when the activity codes are derived, then they are the hand-kept ones", derived: "ACTIVITY", expected: OLD_ACTIVITY },
   { it: "when the mood codes are derived, then they are the hand-kept ones", derived: "MOOD", expected: OLD_MOOD },

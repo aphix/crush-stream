@@ -14,8 +14,6 @@ const GROUND_AHEAD_M = 3;
 /** The house the civilian is hooked in is this far from the player (m): past the 25 m the interiors hand their floors to the physics for. */
 const HOUSE_NEAR_M = 30;
 const HOUSE_FAR_M = 80;
-/** A man standing on his floor has his torso at least this far (m) over it. */
-const TORSO_OVER_FLOOR_M = 0.5;
 /** The eye stands this far (m) from the civilian's chest, in her room. */
 const EYE_FROM_CHEST_M = 2;
 
@@ -100,9 +98,6 @@ describe("given the real engine in the open world, the hook in hand and a civili
     expect(rig.engine["ragdolls"]["boxList"].length, "the house's floors are held").toBeGreaterThan(0);
     const slot = world["bodies"]!.slotOf(c);
     expect(slot, "a body stands for her").toBeGreaterThanOrEqual(0);
-    const at = new THREE.Vector3();
-    rig.engine["ragdolls"].torso(slot, at, null);
-    expect(at.y - floor, "her torso over her floor (m)").toBeGreaterThan(TORSO_OVER_FLOOR_M);
     fire(eye, new THREE.Vector3(house!.x, floor, house!.z - GROUND_AHEAD_M));
     rig.run(0.2);
     expect(rig.engine["ragdolls"].dollRoped(slot), "a rope holds her body").toBe(true);

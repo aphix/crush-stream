@@ -182,9 +182,14 @@ export class OpenWorldBodies {
     return this.slot[body]!;
   }
 
-  /** Whether the hook could stand a body for a civilian who has none now: one is free, or one can be let go for her. When not, her reticle must not light. */
+  /** Whether the hook could stand a body for a civilian who has none now: a body and a pool slot are free (thrown figures may fill the slots), or a body can be let go for her. When not, her reticle must not light. */
   canStand(eyeX: number, eyeZ: number): boolean {
-    return this.count() < this.size || this.farthestToRelease(eyeX, eyeZ) !== NOBODY;
+    return this.count() < this.size ? this.nextSlot() >= 0 : this.farthestToRelease(eyeX, eyeZ) !== NOBODY;
+  }
+
+  /** The pool slot a new body takes, -1 when none is free: `give` and `canStand` ask the one question. */
+  private nextSlot(): number {
+    return this.host.freeSlot(FIRST_BODY_SLOT);
   }
 
   /** The body farthest from (eyeX, eyeZ) that is on its feet, steady, in step with her and held by no cable or pin (a body lying or catching up is never let go for another: she would vanish and reappear upright at her spot); NOBODY when there is none. */
@@ -334,7 +339,7 @@ export class OpenWorldBodies {
   private give(poses: CrowdPoses, civilian: number): boolean {
     let body = 0;
     while (this.resident[body]! !== NOBODY) body++;
-    const slot = this.host.freeSlot(FIRST_BODY_SLOT);
+    const slot = this.nextSlot();
     if (slot < 0) return false;
     dressOfLook(poses.look[civilian]!, _look);
     const x = poses.x[civilian]!;
