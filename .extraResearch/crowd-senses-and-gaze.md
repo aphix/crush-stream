@@ -32,6 +32,9 @@ VERIFIED (read in the primary source), LEAD (an answer said it; not checked), EN
   significantly more realistic than the head-propensity model it was compared with.
 - Eyes lead the head by about 67 +- 22 ms; shifts under about 20 deg are mostly eye; near 30 deg the head takes about a
   third; torso joins for large shifts (LEAD: J Neurophysiol eye-head study; Kleiner et al. 2019, ACM TOCHI VR study).
+- Saccades follow a "main sequence": peak eye speed grows with amplitude, about 400-500 deg/s for a 30 deg shift, so the
+  eyes land in tens of ms (LEAD: Bahill, Clark & Stark 1975, "The main sequence, a tool for studying human eye movements",
+  Mathematical Biosciences 24).
 - At road crossings pedestrians glance at an approaching vehicle a median of 1-2 times, up to 5 (LEAD: Pipkorn et al.
   2024).
 - Crowd gaze papers named but not opened (LEAD): "A Group-Based Approach for Gaze Behavior of Virtual Crowds"

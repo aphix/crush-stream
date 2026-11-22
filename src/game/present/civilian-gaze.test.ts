@@ -307,6 +307,19 @@ describe("given one person standing and something at her eye height 40 degrees t
     expect(gaze.eyeYaw[0], "within their range").toBeLessThanOrEqual(EYE_YAW_LIMIT);
   });
 
+  // mutation: sed -i 's/    const turn = Math.sign(eye\[YAW\]!) \* Math.max(Math.abs(eye\[YAW\]!) \* this.align\[civilian\]!, Math.abs(eye\[YAW\]!) - EYE_YAW_LIMIT);/    const turn = eye[YAW]! * this.align[civilian]!;/' src/game/present/civilian-gaze.ts
+  it("when something 130 degrees round asks more of her eyes than three quarters of the turn leaves them, then her head turns on until her eyes, at their limit, are on it", () => {
+    const bearing = (130 * Math.PI) / 180;
+    const poses = emptyPoses(1);
+    poses.look[0] = 0;
+    const gaze = new CrowdGaze(1);
+    const senses = blankSenses();
+    gaze.attend(0, Math.sin(bearing) * 5, 1.6, Math.cos(bearing) * 5, 5, 1);
+    for (let frame = 0; frame < Math.round(3 / FRAME); frame++) gaze.update(poses, FRAME, senses);
+    expect(turnOf(gaze, 0), "her head (rad)").toBeCloseTo(bearing - EYE_YAW_LIMIT, 2);
+    expect(turnOf(gaze, 0) + gaze.eyeYaw[0]!, "head and eyes together on the thing (rad)").toBeCloseTo(bearing, 2);
+  });
+
   // mutation: sed -i '/^  mesh.eyes(slot, gaze === null ? 0 : gaze.eyeYaw\[civilian\]!, gaze === null ? 0 : gaze.eyePitch\[civilian\]!);/d' src/game/present/civilian-pose.ts
   it("when she is drawn as a near dummy before her head starts, then the dummy's face carries her eyes' turn", () => {
     const { gaze, poses } = asked(Math.floor(HEAD_LATENCY_S / FRAME));

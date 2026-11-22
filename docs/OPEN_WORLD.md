@@ -238,14 +238,14 @@ civilian within `FAR_DRAW` of the eye.
   her head is on, so a partner walking round her does not flip her head across.
 - **Eyes** (`eyeYaw`, `eyePitch`, Andrist 2012): they jump at 500 deg/s to a look starting within the head's 67 ms latency, else
   to where the head is going, and are drawn relative to the head as it is, so they hold the target while it turns and end at the
-  share it did not take; within 30 deg across and 20 up or down. Ahead, they are centred.
+  share it did not take; within 30 deg across and 20 up or down (the head turns on past its share until the eyes reach). Ahead, they are centred.
 - **Drawn**: a near dummy adds `headYaw`, `headPitch` and `torsoTwist` to the clip's channels before its solves (`applyGaze`) and
   carries the eye turn in its pose row (the orb texels' w, `DummyMesh.eyes`): the fragment warps the face print round each pupil
   (`dollEyes`: a Gaussian 3 by 1.5 texels, the iris moved by a 12 mm eyeball's arc), so the lids stay and the iris moves; a far
   figure's eyes stay painted (a 12 m face is about 18 pixels: its iris would move under one). A far
   figure's head and hair vertices (no swing, pivot at the neck) turn in the vertex shader by the instance's `gait.zw` (two more floats
   an instance, no more draws); a physical body's neck motors take the turn and nod on top of the gait (`OpenWorldBodies.aimNecks`,
-  within 0.85 / 0.6 rad of the joint's 55 / 45 deg). Foot cops and medics are drawn by arts that `follow` the crowd's gaze
+  within 0.85 / 0.6 rad of the joint's 55 / 45 deg) and its pool dummy the eye turn. Foot cops and medics are drawn by arts that `follow` the crowd's gaze
   (`OpenWorldGaze.follow`): a `CrowdGaze` of their own on the same senses, turned on their poses the frame they are drawn, and
   pulsed by the same crashes, knocks and shots.
 

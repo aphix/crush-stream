@@ -45,7 +45,7 @@ export const ALIGN_MASK = 7;
 /** The eyes turn in the head no farther than this (rad): Andrist 2012 bounds them by an oculomotor range (`.extraResearch/crowd-senses-and-gaze.md`); 30 deg across and 20 up or down, inside the human 45 (tuned by feel to keep the painted iris inside its eye). */
 export const EYE_YAW_LIMIT = 30 * DEG;
 export const EYE_PITCH_LIMIT = 20 * DEG;
-/** The eyes' top speed (rad/s): a large saccade peaks near 500 deg/s (the saccadic main sequence, a textbook figure the research note does not carry), so a 30 deg shift lands in 60 ms, before the head has started (`HEAD_LATENCY_S`). */
+/** The eyes' top speed (rad/s): a 30 deg saccade peaks near 400-500 deg/s (the main sequence, `.extraResearch/crowd-senses-and-gaze.md`, LEAD), so it lands in about 60 ms, before the head has started (`HEAD_LATENCY_S`). */
 export const EYE_RATE = 500 * DEG;
 
 /** In sight: no further than 90 deg off straight ahead (tuned by feel). */

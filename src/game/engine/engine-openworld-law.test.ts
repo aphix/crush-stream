@@ -12,6 +12,8 @@ import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 import { CASE_PHASE, SUBJECT_MODE } from "../ai/openworld-crime/case-table.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
 import { blankStrike, stood } from "../scenes/figure-strike.ts";
+import { CrowdGaze } from "../present/civilian-gaze.ts";
+import { MEDICS } from "./engine-openworld-medics.ts";
 
 const map = buildFixtureMap();
 
@@ -73,6 +75,35 @@ describe("given the open world's director", () => {
     const { director, arts } = directorWith({});
     expect(director["law"], "no law").toBeNull();
     expect(directorWith({ law: idleLawPorts() }).arts.made - arts.made, "the cops' drawing is one more").toBe(1);
+  });
+
+  /** The director's drawings in the order it makes them (the crowd's, the cops', the medics'), each with the gaze set on it. */
+  function drawings(): { gaze?: CrowdGaze | null }[] {
+    const made: { gaze?: CrowdGaze | null; update(): void; dispose(): void }[] = [];
+    directorWith({
+      law: idleLawPorts(),
+      makeArt: () => {
+        const art = { gaze: null, update: () => {}, dispose: () => {} };
+        made.push(art);
+        return art;
+      },
+    });
+    return made;
+  }
+
+  // mutation: sed -i 's/makeArt: (capacity) => gaze.follow(this.ports.makeArt(capacity), capacity),/makeArt: (capacity) => this.ports.makeArt(capacity),/' src/game/engine/engine-openworld.ts
+  it("when the law is made, then its foot cops' drawing turns their heads by a gaze of their own, one a cop", () => {
+    const [crowd, cops] = drawings();
+    expect(cops?.gaze, "the cops' gaze").toBeInstanceOf(CrowdGaze);
+    expect(cops!.gaze!.capacity, "one a cop").toBe(FOOT_COP_COUNT);
+    expect(cops!.gaze, "not the crowd's").not.toBe(crowd?.gaze);
+  });
+
+  // mutation: sed -i 's/new OpenWorldMedics(gaze.follow(this.ports.makeArt(MEDICS.count), MEDICS.count))/new OpenWorldMedics(this.ports.makeArt(MEDICS.count))/' src/game/engine/engine-openworld.ts
+  it("when the open world starts, then its medics' drawing turns their heads by a gaze of their own, one a medic", () => {
+    const medics = drawings()[2];
+    expect(medics?.gaze, "the medics' gaze").toBeInstanceOf(CrowdGaze);
+    expect(medics!.gaze!.capacity, "one a medic").toBe(MEDICS.count);
   });
 
   // mutation: in src/game/engine/engine-openworld.ts feedWalkers(), delete the line `this.law?.feedCops(crowd.walkers);`

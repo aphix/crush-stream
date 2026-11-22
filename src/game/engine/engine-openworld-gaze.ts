@@ -98,7 +98,7 @@ export class OpenWorldGaze {
       senses.playerZ = this.foot.z;
     }
     this.gaze.update(poses, wallDt, senses);
-    bodies?.aimNecks(this.gaze.headYaw, this.gaze.torsoTwist, this.gaze.headPitch);
+    bodies?.aimNecks(this.gaze.headYaw, this.gaze.torsoTwist, this.gaze.headPitch, this.gaze.eyeYaw, this.gaze.eyePitch);
     this.sinceCrash += wallDt;
   }
 

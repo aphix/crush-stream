@@ -497,7 +497,7 @@ describe("given bodies and the scene is left", () => {
 });
 
 describe("given bodies standing for two civilians whose gaze is turned", () => {
-  // mutation: sed -i '/^      if (civilian !== NOBODY) this.host.look(this.slot\[body\]!, headYaw\[civilian\]! + torsoTwist\[civilian\]!, headPitch\[civilian\]!);/d' src/game/engine/openworld-bodies.ts
+  // mutation: sed -i '/^      if (civilian !== NOBODY) this.host.look(this.slot\[body\]!, headYaw\[civilian\]! + torsoTwist\[civilian\]!, headPitch\[civilian\]!, eyeYaw\[civilian\]!, eyePitch\[civilian\]!);/d' src/game/engine/openworld-bodies.ts
   it("when the necks are aimed, then each body's neck turns by its civilian's head and torso turn together and nods by her pitch, and a civilian with no body turns none", () => {
     const { host, poses, bodies, run } = world();
     walker(poses, 0, 2, 0);
@@ -512,9 +512,26 @@ describe("given bodies standing for two civilians whose gaze is turned", () => {
     headPitch[0] = 0.25;
     headYaw[1] = -0.5;
     headYaw[5] = 1;
-    bodies.aimNecks(headYaw, torsoTwist, headPitch);
+    bodies.aimNecks(headYaw, torsoTwist, headPitch, new Float32Array(CAPACITY), new Float32Array(CAPACITY));
     expect(host.necks.get(bodies.slotOf(0)), "her neck").toEqual({ turn: 0.75, nod: 0.25 });
     expect(host.necks.get(bodies.slotOf(1)), "his neck").toEqual({ turn: -0.5, nod: 0 });
     expect(host.necks.size, "necks turned: the one 40 m off has no body").toBe(2);
+  });
+
+  // mutation: sed -i 's/headPitch\[civilian\]!, eyeYaw\[civilian\]!, eyePitch\[civilian\]!);/headPitch[civilian]!, 0, 0);/' src/game/engine/openworld-bodies.ts
+  it("when the necks are aimed, then each body's eyes turn in its head by its civilian's eye turn: the nearest faces move their eyes too", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    walker(poses, 1, 3, 0);
+    run(SETTLE_STEPS);
+    const eyeYaw = new Float32Array(CAPACITY);
+    const eyePitch = new Float32Array(CAPACITY);
+    eyeYaw[0] = 0.25;
+    eyePitch[0] = -0.125;
+    eyeYaw[1] = -0.5;
+    const still = new Float32Array(CAPACITY);
+    bodies.aimNecks(still, still, still, eyeYaw, eyePitch);
+    expect(host.eyes.get(bodies.slotOf(0)), "her eyes").toEqual({ yaw: 0.25, pitch: -0.125 });
+    expect(host.eyes.get(bodies.slotOf(1)), "his eyes").toEqual({ yaw: -0.5, pitch: 0 });
   });
 });

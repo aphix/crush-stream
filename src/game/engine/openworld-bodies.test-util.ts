@@ -19,11 +19,13 @@ export class FakeBodyHost {
   stubborn = false;
   /** The ground's height (m) everywhere. */
   ground = 0;
-  /** Each slot's last neck look (turn, nod). */
+  /** Each slot's last neck look (turn, nod), and its eyes' turn in the head (yaw, pitch). */
   readonly necks = new Map<number, { turn: number; nod: number }>();
+  readonly eyes = new Map<number, { yaw: number; pitch: number }>();
 
-  look(slot: number, turn: number, nod: number): void {
+  look(slot: number, turn: number, nod: number, eyeYaw: number, eyePitch: number): void {
     this.necks.set(slot, { turn, nod });
+    this.eyes.set(slot, { yaw: eyeYaw, pitch: eyePitch });
   }
 
   setCapacity(slots: number): void {

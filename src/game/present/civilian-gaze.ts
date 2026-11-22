@@ -387,7 +387,7 @@ export class CrowdGaze {
     this.eyeGoal[PITCH] = this.goal[PITCH]!;
   }
 
-  /** The goal angles toward the scratch's point: the eyes' whole turn and pitch, the head's share of the turn (her head-mover share), the torso's part past `TORSO_JOIN`. */
+  /** The goal angles toward the scratch's point: the eyes' whole turn and pitch, the head's share of the turn (her head-mover share, but never short of what her eyes can reach), the torso's part past `TORSO_JOIN`. */
   private goalTowards(civilian: number, poses: CrowdPoses): void {
     const eye = this.eyeGoal;
     if (!this.towards(civilian, poses, eye)) {
@@ -396,7 +396,7 @@ export class CrowdGaze {
       eye[PITCH] = this.eyeAngle[civilian * EYED + PITCH]!;
       return;
     }
-    const turn = eye[YAW]! * this.align[civilian]!;
+    const turn = Math.sign(eye[YAW]!) * Math.max(Math.abs(eye[YAW]!) * this.align[civilian]!, Math.abs(eye[YAW]!) - EYE_YAW_LIMIT);
     this.goal[YAW] = turn;
     this.goal[TORSO] = Math.sign(turn) * Math.min(TORSO_YAW_LIMIT, Math.max(0, Math.abs(turn) - TORSO_JOIN));
     this.goal[PITCH] = eye[PITCH]!;
