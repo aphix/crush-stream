@@ -13,7 +13,9 @@ const RUN_WITHIN_S = 0.35;
 const WALK_WITHIN_S = 0.2;
 const STOP_WITHIN_S = 0.35;
 const STOP_WITHIN_M = 0.55;
-/** A held diagonal is read for this long (s) from the moment he is out: through the camera's blend in, inside the follow camera's recentre delay. */
+/** He runs this long (s) before W is let go: past the 0.35 s ramp and its jerk-limited settling, at a steady run. */
+const STEADY_RUN_S = 1;
+/** A held diagonal is read for this long (s) from the moment he is out: through the camera's blend in, a press held on the view so the follow camera does not recentre. */
 const DIAGONAL_S = 1;
 
 let rig: OnFootRig;
@@ -31,10 +33,11 @@ function secondsUntil(held: readonly string[], done: () => boolean, limit: numbe
   return seconds;
 }
 
-/** From the run the keys ask for, released: the seconds until he stands still and the metres his root went on. */
+/** From a steady run on the keys, released: the seconds until he stands still and the metres his root went on. */
 function stopFromRun(): { seconds: number; metres: number } {
   const walker = rig.walker();
-  secondsUntil(["KeyW"], () => walker.loco.speed >= 0.98 * RUN_SPEED, 1);
+  secondsUntil(["KeyW"], () => false, STEADY_RUN_S);
+  expect(walker.loco.speed, "control: a steady run when W is let go (m/s)").toBeCloseTo(RUN_SPEED, 2);
   let metres = 0;
   const seconds = secondsUntil(
     [],
@@ -108,15 +111,21 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(stop.metres, "metres to a stand").toBeLessThanOrEqual(STOP_WITHIN_M);
   });
 
-  // mutation: sed -i 's/^    const ahead = -detSin(view.orbitAngle);/    const ahead = -detSin(view.orbitAngle) + 0.1 * this.smoothSide;/' /home/aphix/worktrees/Feel/src/game/engine/engine-onfoot.ts
-  it("when he gets out and holds forward and right, then his heading stays the same way off the view's every frame, and constant while the view keeps still", () => {
+  // mutation: sed -i -e 's/^    const ahead = -detSin(view.orbitAngle);/    const ahead = view.look.x - this.host.camera.position.x;/' -e 's/^    const side = -detCos(view.orbitAngle);/    const side = view.look.z - this.host.camera.position.z;/' /home/aphix/worktrees/Feel/src/game/engine/engine-onfoot.ts
+  it("when he gets out and holds forward and right with the view held still, then his heading stays the same way off the view's every frame through the camera's blend in", () => {
     rig.getIn();
     rig.getOut();
     const view = rig.engine["view"];
+    // A press held on the view without moving: the player holds the camera, so the follow camera's recentre waits.
+    Object.assign(view["canvas"], { setPointerCapture() {}, releasePointerCapture() {}, style: {} });
+    const press = (type: string) => Object.assign(new Event(type), { button: 0, pointerId: 1, clientX: 300, clientY: 300 }) as PointerEvent;
+    view["onPointerDown"](press("pointerdown"));
     const yaw = view.orbitAngle;
     const held = headingsAgainstView(DIAGONAL_S);
+    // Let go as a cancel: a click in place would pick the car under the cursor.
+    view["onPointerUp"](press("pointercancel"));
+    expect(view.orbitAngle, "control: the view kept still").toBe(yaw);
     expect(spread(held.view), "heading against the view (rad)").toBeLessThan(1e-6);
-    expect(view.orbitAngle, "the view kept still").toBe(yaw);
     expect(spread(held.world), "world heading (rad)").toBeLessThan(1e-6);
   });
 });
