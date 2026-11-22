@@ -8,7 +8,7 @@ Every claim carries a tag saying where it comes from. Weigh them in this order.
 
 | Tag | Meaning |
 |---|---|
-| **[code]** | REDRIVER2 source at `b2d8857426f815007486def9bd23f9a6007a2c64` (OpenDriver2/REDRIVER2 master, 2026-06-26; local clone `/home/aphix/github/REDRIVER2`, verified identical). Paths are under `src_rebuild/Game/`. Function bodies are tagged `[D] [T]` in the repo = decompiled from the original PSX symbols and tested; `[A]` = added by the REDRIVER2 authors. The Survival flag `gBatterPlayer` is in the original symbol dump (`git show eba0bbff:dump.h`, line 5081, `0xAA218`), so it is original; only `batterTimer` (cop_ai.c:372-393) is a REDRIVER2 addition and does not apply to Survival. |
+| **[code]** | REDRIVER2 source at `b2d8857426f815007486def9bd23f9a6007a2c64` (OpenDriver2/REDRIVER2 master, 2026-06-26; a local clone, verified identical). Paths are under `src_rebuild/Game/`. Function bodies are tagged `[D] [T]` in the repo = decompiled from the original PSX symbols and tested; `[A]` = added by the REDRIVER2 authors. The Survival flag `gBatterPlayer` is in the original symbol dump (`git show eba0bbff:dump.h`, line 5081, `0xAA218`), so it is original; only `batterTimer` (cop_ai.c:372-393) is a REDRIVER2 addition and does not apply to Survival. |
 | **[dev]** | A developer said it (Reflections interview). |
 | **[rev]** | Third-party reverse-engineering notes (NFS Most Wanted encyclopedia, byte-verified by its author). |
 | **[policy]** | Published police policy / training document, as quoted in the saved Perplexity answers (URLs in section 12). |
@@ -374,7 +374,7 @@ Full sanity after any of these: `npm run test:ai-long-run` (the 120 s flat-out p
 ## 12. Sources
 
 Code and primary
-- REDRIVER2 `b2d8857` (local `/home/aphix/github/REDRIVER2`; `git show eba0bbff:dump.h` for the original symbols): `C/cop_ai.c`, `C/civ_ai.c`, `C/mission.c`, `C/glaunch.c`, `C/main.c`, `C/handling.c`, `C/wheelforces.c`, `C/bcollide.c`, `C/felony.c`, `C/felony.h`, `C/pathfind.c`, `C/cars.c`, `dr2types.h`, `dr2limits.h`.
+- REDRIVER2 `b2d8857` (a local clone; `git show eba0bbff:dump.h` for the original symbols): `C/cop_ai.c`, `C/civ_ai.c`, `C/mission.c`, `C/glaunch.c`, `C/main.c`, `C/handling.c`, `C/wheelforces.c`, `C/bcollide.c`, `C/felony.c`, `C/felony.h`, `C/pathfind.c`, `C/cars.c`, `dr2types.h`, `dr2limits.h`.
 - Redriver_ReExtended developer notes (car half-length 375 units): https://github.com/E75/Redriver_ReExtended/blob/main/docs/DEVELOPER_NOTES.md
 - Kikizo, "Driv3r: Interview with Reflections" (Martin Edmondson), 8 Jan 2004: https://games.kikizo.com/news/200401/002.asp
 - Driver Wiki, Driv3r (game modes, "doublespeed"): https://driver.fandom.com/wiki/Driv3r ; Survival (game mode): https://driver.fandom.com/wiki/Survival_(game_mode) (blocked, 403, read only through the saved answer)
