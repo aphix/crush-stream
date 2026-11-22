@@ -3,13 +3,13 @@ import { SPECIES } from "../ai/civilians/civilian-constants.ts";
 
 /**
  * The open world's cats and dogs: one flat-shaded low-poly quadruped per species (boxes for the body, head, ears, tail and four legs with paws), instanced, its legs swung and its body sat or laid down in
- * the vertex shader from a pose per instance. `animalPoint` is the shader's arithmetic in TypeScript, so a test can check what the GPU draws.
+ * the vertex shader from a pose per instance. `animalPoint` (`animal-figure.test-util.ts`) is the shader's arithmetic in TypeScript, so a test can check what the GPU draws.
  */
 
 /** Which part a vertex belongs to: the legs swing and fold about their tops, the rest rides the body. */
 export const PART = { body: 0, head: 1, tail: 2, frontLeft: 3, frontRight: 4, hindLeft: 5, hindRight: 6 } as const;
 /** Which colour a vertex takes: the instance's coat, its accent (paws, muzzle), or the dark of a nose. */
-export const ROLE = { coat: 0, accent: 1, dark: 2 } as const;
+const ROLE = { coat: 0, accent: 1, dark: 2 } as const;
 
 /** A quadruped's build (m): leg length (the hip's height), body, head, ears, snout and tail; `stride` the metres of one whole stride (both pairs of legs) at a walk. */
 export type AnimalShape = {
@@ -39,9 +39,9 @@ export const ANIMAL_SHAPES: Readonly<Record<number, AnimalShape>> = {
 
 /** A leg's swing either way at a full walk (rad), and the folds (rad) that sit the hind legs under the haunch and stretch the legs out lying down: tuned by feel. */
 export const LEG_SWING = 0.5;
-const SIT_HIND_FOLD = -1.4;
-const LIE_FRONT_FOLD = -1.45;
-const LIE_HIND_FOLD = 1.3;
+export const SIT_HIND_FOLD = -1.4;
+export const LIE_FRONT_FOLD = -1.45;
+export const LIE_HIND_FOLD = 1.3;
 /** A paw's height (m): the leg's lowest box, in the accent colour. */
 const PAW_HEIGHT = 0.03;
 const NOSE_HALF = 0.014;
@@ -53,37 +53,16 @@ export function sitPitchOf(shape: AnimalShape): number {
   return Math.asin((shape.leg - shape.legHalf) / (2 * shape.legZ));
 }
 
-/** The instance's pose: walk phase (rad), gait (0 still to 1 a full walk), sit and lie weights (0-1). */
-export type AnimalPose = { phase: number; gait: number; sit: number; lie: number };
-
 const _out = new THREE.Vector3();
 
 /** About the x axis by `angle`, around (y, z) = (`pivotY`, `pivotZ`), in place. */
-function turnAboutX(point: THREE.Vector3, angle: number, pivotY: number, pivotZ: number): void {
+export function turnAboutX(point: THREE.Vector3, angle: number, pivotY: number, pivotZ: number): void {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
   const dy = point.y - pivotY;
   const dz = point.z - pivotZ;
   point.y = pivotY + dy * c - dz * s;
   point.z = pivotZ + dy * s + dz * c;
-}
-
-/** The angle (rad) a leg turns about its top: its swing (the diagonal pairs opposite, a trot), stilled as the animal rests, plus its fold for sitting and lying; 0 for any other part. */
-export function legAngle(part: number, pose: AnimalPose): number {
-  if (part < PART.frontLeft) return 0;
-  const front = part <= PART.frontRight;
-  const diagonal = part === PART.frontLeft || part === PART.hindRight ? 1 : -1;
-  const swing = diagonal * pose.gait * LEG_SWING * Math.sin(pose.phase) * (1 - Math.max(pose.sit, pose.lie));
-  return swing + (front ? pose.lie * LIE_FRONT_FOLD : pose.sit * SIT_HIND_FOLD + pose.lie * LIE_HIND_FOLD);
-}
-
-/** Where the shader puts a vertex at `x, y, z` (the figure's own frame) of `part`, whose leg pivots at (`pivotY`, `pivotZ`), in `pose` for `shape`: into `out`. */
-export function animalPoint(x: number, y: number, z: number, part: number, pivotY: number, pivotZ: number, pose: AnimalPose, shape: AnimalShape, out: THREE.Vector3): THREE.Vector3 {
-  out.set(x, y, z);
-  turnAboutX(out, legAngle(part, pose), pivotY, pivotZ);
-  if (part !== PART.frontLeft && part !== PART.frontRight) turnAboutX(out, -pose.sit * sitPitchOf(shape), shape.leg, shape.legZ);
-  out.y -= pose.lie * (shape.leg - shape.legHalf);
-  return out;
 }
 
 type Box = { x: number; y: number; z: number; hx: number; hy: number; hz: number; part: number; role: number; pivotY?: number; pivotZ?: number; topScale?: number; tilt?: number };
@@ -165,9 +144,9 @@ function animalVertices(shape: AnimalShape): Buffers {
 /** The vertex attribute of each vertex's part, role and leg pivot (y, z). */
 export const ANIMAL_RIG = "animalRig";
 /** The instance attributes: pose (phase, gait, sit, lie), coat and accent colours (linear). */
-export const ANIMAL_POSE = "animalPose";
-export const ANIMAL_COAT = "animalCoat";
-export const ANIMAL_ACCENT = "animalAccent";
+const ANIMAL_POSE = "animalPose";
+const ANIMAL_COAT = "animalCoat";
+const ANIMAL_ACCENT = "animalAccent";
 export const POSE_FLOATS = 4;
 export const COLOUR_FLOATS = 3;
 export const MATRIX_FLOATS = 16;

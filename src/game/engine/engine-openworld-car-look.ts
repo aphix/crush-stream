@@ -1,3 +1,4 @@
+import { hypot2, sinCosAt } from "../kernel/physics-core.js";
 import type { LookRay, LookText, Meeting } from "../ai/civilians/civilian-look.ts";
 import type { CityState } from "../ai/civilians/civilian-state.ts";
 import { hourOfDay } from "../ai/civilians/civilian-clock.ts";
@@ -29,7 +30,9 @@ const STYLE_WORDS: Readonly<Record<CarStyleId, string>> = {
 };
 
 /** Paint colours by name: the residents' car paints (`RESIDENT_CAR_COLOURS`) and the race field's brighter ones; a paint is named by the nearest in sRGB. */
-const COLOUR_NAMES: readonly { hex: number; word: string }[] = [
+/** The words a paint is named by: typed, so a misspelt one fails the typecheck. */
+type ColourWord = "grey" | "silver" | "black" | "white" | "maroon" | "red" | "navy" | "blue" | "green" | "brown" | "slate" | "yellow" | "orange";
+const COLOUR_NAMES: readonly { hex: number; word: ColourWord }[] = [
   { hex: 0x8a8d91, word: "grey" },
   { hex: 0xc4c7cc, word: "silver" },
   { hex: 0x1d1f23, word: "black" },
@@ -58,7 +61,7 @@ export type LookCar = {
 };
 
 /** What the panel needs of the open world's cars: the field's cars, which ones are players', which one the camera rides, and the traffic (null on a client, which has none). */
-export type CarLookWorld = {
+type CarLookWorld = {
   cars(): readonly LookCar[];
   playerCars(): readonly object[];
   followed(): object | null;
@@ -87,7 +90,7 @@ export function colourWord(hex: number): string {
 }
 
 /** The car's state in words: wrecked, else by its damage arc, and its lost wheels. */
-export function conditionWords(car: Pick<LookCar, "crashed" | "deform">): string {
+function conditionWords(car: Pick<LookCar, "crashed" | "deform">): string {
   const wheelsOff = WHEELS - car.deform.wheelsOn;
   const lost = wheelsOff > 0 ? `, ${wheelsOff} wheel${wheelsOff > 1 ? "s" : ""} off` : "";
   if (car.crashed) return `wrecked${lost}`;
@@ -150,7 +153,7 @@ export class CarLook {
   text(index: number, state: CityState | null, tick: number): LookText {
     const car = this.world.cars()[index]!;
     const traffic = this.world.traffic();
-    const moving = Math.hypot(car.velocity.x, car.velocity.z) > MOVING_SPEED;
+    const moving = hypot2(car.velocity.x, car.velocity.z) > MOVING_SPEED;
     const player = this.world.playerCars().includes(car);
     const ambulance = traffic !== null && traffic.ambulanceCar() === index;
     const patrol = !ambulance && car.style.id === "police";
@@ -177,11 +180,16 @@ function titleOf(player: boolean, inRoom: boolean, ambulance: boolean, patrol: b
   return moving ? "A car" : "A parked car";
 }
 
+/** A car's yaw in, its [sin, cos] out (`sinCosAt`: no boxed argument or result). */
+const yawTrig = new Float64Array(2);
+
 /** How far along the ray (m) it enters car `car`'s box (ground to roof, bumper to bumper, side to side, in the car's own frame), -1 when it misses or the box is behind the eye. */
 function rayIntoCar(car: LookCar, ray: LookRay): number {
   const { dims } = car.style;
-  const cos = Math.cos(car.yaw);
-  const sin = Math.sin(car.yaw);
+  yawTrig[0] = car.yaw;
+  sinCosAt(yawTrig, 0);
+  const sin = yawTrig[0]!;
+  const cos = yawTrig[1]!;
   const ox = ray.eyeX - car.group.position.x;
   const oz = ray.eyeZ - car.group.position.z;
   let near = 0;

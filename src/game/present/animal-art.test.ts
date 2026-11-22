@@ -4,7 +4,8 @@ import { SPECIES, SPECIES_SPEED } from "../ai/civilians/civilian-constants.ts";
 import { CAT_COAT, DOWNED_LIFE_SECONDS, LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import { createCrowdPoses, type CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { AnimalArt } from "./animal-art.ts";
-import { ANIMAL_RIG, ANIMAL_SHAPES, animalGeometry, animalPoint, type AnimalPose, PART } from "./animal-figure.ts";
+import { ANIMAL_RIG, ANIMAL_SHAPES, animalGeometry, PART } from "./animal-figure.ts";
+import { animalPoint, type AnimalPose } from "./animal-figure.test-util.ts";
 import { FEET_Y } from "./civilian-art-constants.ts";
 import { FRAME_SECONDS, IN_SIGHT } from "./civilian-art.test-util.ts";
 
@@ -105,7 +106,7 @@ describe("given the open world's cats and dogs on the street", () => {
 });
 
 describe("given a cat's legs", () => {
-  // mutation: sed -i 's/  const swing = diagonal \* pose.gait \* LEG_SWING/  const swing = 0 * pose.gait * LEG_SWING/' /home/aphix/worktrees/Life/src/game/present/animal-figure.ts
+  // mutation: sed -i 's/^export const LEG_SWING = 0.5;/export const LEG_SWING = 0;/' /home/aphix/worktrees/Life/src/game/present/animal-figure.ts
   it("when it walks, then its diagonal paws swing opposite ways by its stride; when it stands still they rest under it", () => {
     const art = new AnimalArt(SPOTS.length);
     const poses = streetPoses();

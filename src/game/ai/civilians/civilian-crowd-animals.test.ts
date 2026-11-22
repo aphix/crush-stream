@@ -56,7 +56,8 @@ describe("given a host crowd with the bodega's dog", () => {
       crowd.step(seconds, [car], true);
       struck.push(...crowd.takeStrikes());
     }
-    expect(struck.map((strike) => strike.guard), "the dog struck").toEqual([dog]);
+    expect(struck.length, "strikes").toBe(1);
+    expect(struck[0]!.guard, "the dog struck").toBe(dog);
     expect(crowd.poses.shown[dog], "hidden").toBe(0);
     expect(loggedPairs(crowd), "the knock logged").toContain(`${EVENT_KIND.knock}:${dog}`);
     expect(crowd["ambulanceDue"][dog], "no ambulance call due for it, whoever is about").toBe(Infinity);
