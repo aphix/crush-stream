@@ -108,9 +108,9 @@ function distanceBetween(state: CityState, from: number, to: number): number {
   return hypot2(placeX[to]! - placeX[from]!, placeZ[to]! - placeZ[from]!);
 }
 
-/** Whether `place` can take resident `resident` setting out from `from` at `tick`: not wrecked, and open now or by the soonest she could be at its door (a place that will still be shut when she gets there is no candidate). */
+/** Whether `place` can take resident `resident` setting out from `from` at `tick`: not wrecked, and within its hours by the soonest she could be at its door (walks take game hours: one open now that will be shut when she gets there is no candidate; the place she is at is judged now). */
 function openOnArrival(state: CityState, resident: number, from: number, place: number, tick: number): boolean {
-  return isOpen(state, place, tick) && (withinHours(state, place, tick) || withinHours(state, place, soonestArrival(state, resident, from, place, tick)));
+  return isOpen(state, place, tick) && withinHours(state, place, soonestArrival(state, resident, from, place, tick));
 }
 
 /** The place of `kind` open to resident `resident` (`openOnArrival`) that serves best from `from` at this hour (its opening hours' weight, falling with distance), or none; ties go to the lower place id. */

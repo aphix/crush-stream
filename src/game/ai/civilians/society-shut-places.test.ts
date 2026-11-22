@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
+import { hypot2 } from "../../kernel/physics-core.js";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
@@ -40,7 +41,7 @@ function supperWith(favourite: (state: CityState) => number): number[] {
 }
 
 describe("given the neighbourhood's grown-ups at home and hungry at supper, when the coffee shops have shut for the day and the diners are open", () => {
-  // mutation: sed -i 's/  return isOpen(state, place, tick) \&\& (withinHours(state, place, tick) || withinHours(state, place, soonestArrival(state, resident, from, place, tick)));/  return isOpen(state, place, tick);/' /home/aphix/worktrees/OwFix/src/game/ai/civilians/civilian-plan.ts
+  // mutation: sed -i 's/  return isOpen(state, place, tick) \&\& withinHours(state, place, soonestArrival(state, resident, from, place, tick));/  return isOpen(state, place, tick);/' src/game/ai/civilians/civilian-plan.ts
   it("when their favourite place to eat is a shut coffee shop, then each goes where they would with no favourite: the shut shop never holds them home", () => {
     const coffee = (state: CityState): number => state.venues.byVenue[VENUE.coffee]![0]!;
     const withShutFavourite = supperWith(coffee);
@@ -50,8 +51,44 @@ describe("given the neighbourhood's grown-ups at home and hungry at supper, when
   });
 });
 
+/** Half past one: a coffee shop that shuts at 15 is open another hour and a half, and the pizza place and the café open to 17 are open too. */
+const AFTERNOON_MINUTES = 13 * 60 + 30;
+/** A place to eat this far (m) off is a walk of about three game hours: it shuts before she could get there. */
+const FAR_FOOD_M = 250;
+const WALK_THERE_TICKS = 3 * 60 * TICKS_PER_GAME_MINUTE;
+
+/** Where every grown resident at home who lives 250 m or more from a place to eat that is open at half past one and shut three hours on sets out for, hungry then on day 2, liking that place (`liked`) or none. */
+function afternoonWith(liked: boolean): { went: number[]; likers: number } {
+  const state = createCityState(7, map, RESIDENTS);
+  const tick = tickOfHour(state, 2, 0) + AFTERNOON_MINUTES * TICKS_PER_GAME_MINUTE;
+  const closing = Array.from(state.index.byKind[PLACE_KIND.food]!).filter((place) => !signShut(state, place, tick) && signShut(state, place, tick + WALK_THERE_TICKS));
+  const went: number[] = [];
+  for (let resident = state.cast.length; resident < state.capacity; resident++) {
+    if (intAt(state, resident, RESIDENT_INT.alive) === 0) continue;
+    const home = intAt(state, resident, RESIDENT_INT.home);
+    let far = NO_PLACE;
+    for (const place of closing) if (hypot2(map.places[place]!.doorX - map.places[home]!.doorX, map.places[place]!.doorZ - map.places[home]!.doorZ) >= FAR_FOOD_M) far = place;
+    if (far === NO_PLACE) continue;
+    stageResident(state, resident, { place: home, home, tick, needs: needsWith({ [NEED.food]: HUNGRY }) });
+    state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.favouriteFood] = liked ? far : NO_PLACE;
+    decideResident(state, resident, tick);
+    went.push(intAt(state, resident, RESIDENT_INT.place));
+  }
+  return { went, likers: went.length };
+}
+
+describe("given the neighbourhood's grown-ups at home and hungry at half past one, each living 250 m or more from a place to eat that is open now and shut three hours on", () => {
+  // mutation: sed -i 's/  return isOpen(state, place, tick) \&\& withinHours(state, place, soonestArrival(state, resident, from, place, tick));/  return isOpen(state, place, tick) \&\& (withinHours(state, place, tick) || withinHours(state, place, soonestArrival(state, resident, from, place, tick)));/' src/game/ai/civilians/civilian-plan.ts
+  it("when it is their favourite, then each goes where they would with no favourite: a place open now that shuts before they could get there is no candidate", () => {
+    const liking = afternoonWith(true);
+    const none = afternoonWith(false);
+    expect(liking.likers, "control: residents who live that far from such a place").toBeGreaterThan(10);
+    expect(firstMismatch(liking.went, none.went), "where each sets out for").toBeUndefined();
+  });
+});
+
 describe("given the neighbourhood living three game days (Jamal hands out flyers on the day's block, its basketball court open only 14-18)", () => {
-  // mutation: sed -i 's/      if (openThrough(state, place, arriveTick, arriveTick + dwellTicks - 1)) return place;/      return place;/' /home/aphix/worktrees/OwFix/src/game/ai/civilians/civilian-story.ts
+  // mutation: sed -i 's/      if (openThrough(state, place, arriveTick, arriveTick + dwellTicks - 1)) return place;/      return place;/' src/game/ai/civilians/civilian-story.ts
   it("when everyone away from home and work with no walk under way is looked at every tick, then nobody stays in a place whose sign reads shut", () => {
     for (const seed of [5, 7, 11]) {
       const state = createCityState(seed, map, RESIDENTS);

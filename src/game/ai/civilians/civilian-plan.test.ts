@@ -205,6 +205,8 @@ describe("given a shop and a workplace that are shut, with nobody afraid of them
       for (const shop of state.index.byKind[PLACE_KIND.shop]!) if (shop !== bodega) state.closedUntilTick[shop] = TICKS_PER_GAME_DAY * 10;
       const resident = adultWhere(state, () => true);
       state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.favouriteShop] = bodega;
+      // She also likes to eat from the bodega (open when she would get there at either hour), so her favourite's draw is taken at both: a diner shut by her arrival at 22 would not take it, and her pick would move.
+      state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.favouriteFood] = bodega;
       const probe = tickOfHour(state, 2, 12);
       dwellingWithNeeds(state, resident, intAt(state, resident, RESIDENT_INT.home), probe, needsOf(NEED.errand));
       decideResident(state, resident, probe);
