@@ -26,6 +26,8 @@ const CLIMB_SECONDS = 8;
 const CLIMB_TREADS = 12;
 /** Past the newel post he climbs this far (m) in `CLIMB_SECONDS`: held at the post's end he gets 2.5 m, over it about 4.3 m (measured). */
 const NEWEL_CLIMB = 3.7;
+/** Walking past the newel post along the banister's outside his torso swings sideways no faster than this (m/s): 1.45 measured; a part through the banister carried back and forth across it throws him at 4.5. */
+const NEWEL_SWAY = 2.5;
 /** A blow across his way (N·s on his chest, twice the walker rows' car hit): a strike nobody modelled, which the hit rule alone fells him for. */
 const SIDE_BLOW = 2400;
 const DEG = Math.PI / 180;
@@ -140,11 +142,15 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
   });
 
   // mutation (a part of him through the banister carries him back and forth across it): sed -i 's/^      if (x \* this.carried\[0\]! + z \* this.carried\[1\]! < 0) {/      if (false) {/' src/game/present/ragdoll-walker.ts
-  it("when he walks 20 degrees into the banister from beside it, past the post at its end and on along its outside, then he keeps his feet and his strength", async () => {
+  it("when he walks 20 degrees into the banister from beside it, past the post at its end and on along its outside, then he keeps his feet and his strength, and his torso is not thrown sideways across the banister", async () => {
     const sys = await standingAmong(flight(true), -0.2);
-    const along = walk(sys, -20 * DEG, WALK_SPEED, CLIMB_SECONDS);
+    let sway = 0;
+    const along = walk(sys, -20 * DEG, WALK_SPEED, CLIMB_SECONDS, () => {
+      sway = Math.max(sway, Math.abs(sys["dolls"][WALKER_SLOT]!.vel[0]!));
+    });
     expect(along.fell, "he stayed on his feet").toBe(false);
     expect(along.least, `least strength ${along.least.toFixed(2)}`).toBeGreaterThanOrEqual(UNSHAKEN);
+    expect(sway, `his torso's fastest sideways speed: ${sway.toFixed(2)} m/s`).toBeLessThan(NEWEL_SWAY);
   });
 
   // mutation (a riser under his lagging root reads a stride away, and he speeds into a skipped tread): sed -i '/^    if (this.stepAt(x, z, sin, cos, 0)) return STEP_PACE;/d' src/game/present/walker-floor.ts
