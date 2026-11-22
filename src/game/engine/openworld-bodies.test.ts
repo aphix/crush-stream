@@ -435,3 +435,26 @@ describe("given bodies and the scene is left", () => {
     expect([bodies.held[0], bodies.held[1]], "held").toEqual([0, 0]);
   });
 });
+
+describe("given bodies standing for two civilians whose gaze is turned", () => {
+  // mutation: sed -i '/^      if (civilian !== NOBODY) this.host.look(this.slot\[body\]!, headYaw\[civilian\]! + torsoTwist\[civilian\]!, headPitch\[civilian\]!);/d' src/game/engine/openworld-bodies.ts
+  it("when the necks are aimed, then each body's neck turns by its civilian's head and torso turn together and nods by her pitch, and a civilian with no body turns none", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    walker(poses, 1, 3, 0);
+    walker(poses, 5, 40, 0);
+    run(SETTLE_STEPS);
+    const headYaw = new Float32Array(CAPACITY);
+    const torsoTwist = new Float32Array(CAPACITY);
+    const headPitch = new Float32Array(CAPACITY);
+    headYaw[0] = 0.5;
+    torsoTwist[0] = 0.25;
+    headPitch[0] = 0.25;
+    headYaw[1] = -0.5;
+    headYaw[5] = 1;
+    bodies.aimNecks(headYaw, torsoTwist, headPitch);
+    expect(host.necks.get(bodies.slotOf(0)), "her neck").toEqual({ turn: 0.75, nod: 0.25 });
+    expect(host.necks.get(bodies.slotOf(1)), "his neck").toEqual({ turn: -0.5, nod: 0 });
+    expect(host.necks.size, "necks turned: the one 40 m off has no body").toBe(2);
+  });
+});

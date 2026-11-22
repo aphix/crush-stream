@@ -3,7 +3,9 @@ import type { Stoops } from "../world/openworld/openworld-stoops.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { SPECIES } from "../ai/civilians/civilian-constants.ts";
 import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
-import { DETAIL_KEEP_M, DETAIL_NEAR_M, FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLOATS, FIGURE_FLOATS, NEAR_DRAW, SIGHT_RADIUS, SLOT_KEEP_DISTANCE_SCALE, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
+import { DETAIL_KEEP_M, DETAIL_NEAR_M, FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLOATS, FIGURE_FLOATS, FIGURE_GAIT, NEAR_DRAW, SIGHT_RADIUS, SLOT_KEEP_DISTANCE_SCALE, SLOTS_PER_DUMMY_MESH } from "./civilian-art-constants.ts";
+import type { CrowdGaze } from "./civilian-gaze.ts";
+import { HEAD_YAW_LIMIT } from "./civilian-gaze-constants.ts";
 import { dressOfLook, isPoliceLook, skinOfLook, writeLinearColour } from "./civilian-dress.ts";
 import { civilianFigures, type CivilianFigures } from "./civilian-figure.ts";
 import { WALK_SPEED } from "./walker-locomotion.ts";
@@ -46,6 +48,8 @@ export class CivilianArt {
   private readonly smoothing: PoseSmoothing;
   /** The rowhomes' stoops, set once the crowd has them: a civilian walking a door's spur has her feet on its treads. */
   stoops: Stoops | null = null;
+  /** Where the crowd looks (`CrowdGaze`, updated before this art), set by its owner: the dummies' heads and torsos and the figures' heads turn with it. Null: heads as the clips have them. */
+  gaze: CrowdGaze | null = null;
   private readonly slotCount: number;
   private readonly detailSlots: number;
   private readonly detailChunks: number;
@@ -222,7 +226,7 @@ export class CivilianArt {
       const civilian = this.nearList[k]!;
       const slot = this.slotOf[civilian]!;
       if (this.slotLook[slot] !== poses.look[civilian]) this.dressSlot(slot, poses.look[civilian]!);
-      poseCivilian(this.meshOf(slot), this.indexIn(slot), poses, civilian, this.smoothing, this.stoops);
+      poseCivilian(this.meshOf(slot), this.indexIn(slot), poses, civilian, this.smoothing, this.stoops, this.gaze);
     }
   }
 
@@ -285,8 +289,11 @@ export class CivilianArt {
       skins[colourAt + channel] = this.figureColours[cacheAt + SKIN_AT + channel]!;
     }
     const gaitAt = instance * FIGURE_FLOATS.GAIT;
-    gaits[gaitAt] = poses.stride[civilian]!;
-    gaits[gaitAt + 1] = Math.min(FIGURE_MAX_GAIT, poses.speed[civilian]! / WALK_SPEED);
+    gaits[gaitAt + FIGURE_GAIT.PHASE] = poses.stride[civilian]!;
+    gaits[gaitAt + FIGURE_GAIT.AMPLITUDE] = Math.min(FIGURE_MAX_GAIT, poses.speed[civilian]! / WALK_SPEED);
+    const gaze = this.gaze;
+    gaits[gaitAt + FIGURE_GAIT.HEAD_YAW] = gaze === null ? 0 : Math.max(-HEAD_YAW_LIMIT, Math.min(HEAD_YAW_LIMIT, gaze.headYaw[civilian]! + gaze.torsoTwist[civilian]!));
+    gaits[gaitAt + FIGURE_GAIT.HEAD_PITCH] = gaze === null ? 0 : gaze.headPitch[civilian]!;
   }
 }
 

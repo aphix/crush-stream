@@ -82,6 +82,9 @@ const MIN_DROP_SHARE = 0.4;
 const TWIST_GAIN = 0.36;
 const NECK_COUNTER_TURN = 0.8;
 const NECK_LEVEL = 0.9;
+/** A look turns the neck at most this far and nods it this far (rad): inside the joint's +-55 and +-45 deg (`ragdoll-joints.ts`), room left for the gait's own counter-turn and levelling. */
+const NECK_LOOK_TURN = 0.85;
+const NECK_LOOK_NOD = 0.6;
 /** Sideways sway (m) toward the stance foot. */
 const SWAY = 0.03;
 /** Arm swing as a share of the opposite thigh's, and the elbow's bend added per rad of swing. */
@@ -148,6 +151,9 @@ export class Gait {
   readonly anchor = new Float64Array(3);
   /** The torso's turn from the facing (rad): the pelvis and shoulders turn against the legs. */
   twist = 0;
+  /** Where his eyes are drawn (a crowd gaze): the neck turns this far toward his +x and nods this far down (rad) on top of the gait, within `NECK_LOOK_TURN` and `NECK_LOOK_NOD`. */
+  lookTurn = 0;
+  lookNod = 0;
   /** Both feet are home and he stands: the cycle is parked. */
   standing = true;
   /** How far (m) over their spots both planted feet are held, the pelvis riding on them: a hop out of something he stands in (`Walker`). */
@@ -517,8 +523,8 @@ export class Gait {
     t[GAIT.ELBOW_R] = Math.max(ELBOW_MOST, elbow + ELBOW_PER_SWING * t[GAIT.ARM_R]!);
     const twistTarget = (TWIST_GAIN * (t[GAIT.HIP_R]! - t[GAIT.HIP_L]!)) / 2;
     this.twist += (twistTarget - this.twist) * Math.min(1, dt * TWIST_EASE);
-    t[GAIT.NECK_TURN] = -NECK_COUNTER_TURN * this.twist;
-    t[GAIT.NECK_NOD] = -NECK_LEVEL * loc.pitch;
+    t[GAIT.NECK_TURN] = -NECK_COUNTER_TURN * this.twist + Math.max(-NECK_LOOK_TURN, Math.min(NECK_LOOK_TURN, this.lookTurn));
+    t[GAIT.NECK_NOD] = -NECK_LEVEL * loc.pitch + Math.max(-NECK_LOOK_NOD, Math.min(NECK_LOOK_NOD, this.lookNod));
     this.swayToStance(dt);
     this.writeRates(dt);
     const r = this.rot;
