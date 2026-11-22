@@ -83,7 +83,7 @@ describe("given the on-foot camera's focus", () => {
     });
   }
 
-  // mutation: sed -i 's/^const FOV_MIN = 48;/const FOV_MIN = 36;/' src/game/present/walker-camera.ts
+  // mutation: sed -i -e 's/^const FOLLOW_HORIZONTAL_FOV = 80;/const FOLLOW_HORIZONTAL_FOV = 66;/' -e 's/^const FOV_MIN = 48;/const FOV_MIN = 36;/' -e 's/^const FOV_MAX = 60;/const FOV_MAX = 56;/' src/game/present/walker-camera.ts
   const framings: readonly { it: string; aspect: number }[] = [
     { it: "when he stands at the default zoom on a wide screen, then his head and feet are in view and he stands in the middle across", aspect: 16 / 9 },
     { it: "when he stands at the default zoom on a 4:3 screen, then his head and feet are in view and he stands in the middle across", aspect: 4 / 3 },
@@ -147,6 +147,8 @@ describe("given the view left alone while a pad's stick runs him", () => {
     expect(yaws.every((yaw) => yaw === 1.2), `yaws from ${yaws[0]} to ${yaws[yaws.length - 1]}`).toBe(true);
   });
 
+  /** A view half a radian off behind him: inside the gap a recentre would close. */
+  const NEAR_BEHIND = Math.PI - 0.5;
   const holdCases: readonly { it: string; speed: number; looking: boolean; byPad: boolean }[] = [
     { it: "when the player keeps looking round, then it never comes back", speed: RUN_SPEED, looking: true, byPad: true },
     { it: "when he is nearly standing, then it never comes back", speed: 0.3, looking: false, byPad: true },
@@ -155,8 +157,8 @@ describe("given the view left alone while a pad's stick runs him", () => {
   ];
   for (const testCase of holdCases) {
     it(testCase.it, () => {
-      const yaws = recenter(testCase.speed, testCase.looking, 5, 0, 1.2, testCase.byPad);
-      expect(yaws.every((yaw) => yaw === 1.2), "the view is where the player left it").toBeTruthy();
+      const yaws = recenter(testCase.speed, testCase.looking, 5, 0, NEAR_BEHIND, testCase.byPad);
+      expect(yaws.every((yaw) => yaw === NEAR_BEHIND), "the view is where the player left it").toBeTruthy();
     });
   }
 });
