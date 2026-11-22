@@ -129,6 +129,26 @@ The Mall's `placed` list is 4089 props with 12512 colliders (2907 props and 8808
 
 The day stills are the same PNG run to run. At night the still differs from itself between runs (69 to 86 pixels: two walking people on the desktop still, x 416-447 and 784-831, y 288-351; one walker's hand at x 1044-1057, y 347-365 on the phone).
 
+**The shadow ms above were mostly the previous frame's GPU time.** Headless GL submits a frame's commands only when something needs them; with no page to present, the next frame's first draw (the sun's pass, whose map the last frame read) waited for the whole previous frame. Measured on the worker at main c61eb8342, open world day: a `gl.finish()` before the pass took 8.0 ms and left the pass 2.45 ms (from 9.6); with every caster's `castShadow` off the wait moved to `main` (shadow 0.77, main 31.5). No caster group is heavy: with the pass timed through a finish (3.8 ms, 1.4 of it with nothing drawn), turning off the dummy pool, the crowd's dummies, the far figures, the cars, the trees or the buildings each saved 0.2 to 0.7 ms. Since then `--parts` frames flush at their end as a page's present does (`presentingFrames`), and the crowd's dummy meshes with nobody out are not drawn (8 empty instanced draws a frame, about 0.2 ms of the pass's CPU by a per-draw probe).
+
+**Readings before and after the frame-end flush are not comparable part by part.** A `--parts` reading taken before commit e89d2a8be has the previous frame's GPU time in `shadow`; from that commit on, the wait lands in whichever part first syncs with the GPU (`main` or `post` when the GPU frame is longer than the CPU work before it: the phone rows' `main` +3 to +5 ms below). An A/B whose one tree is cut before that commit and the other after measures the instrument, not the game.
+
+**The shadow drop in the table below is the instrument, not a gain the player gets.** What the player gets: about 0.2 ms of shadow-pass CPU and about as much in `main` (8 fewer empty dummy draws a frame), and on a phone the shadow keeps its 28 m reach after the sun moves.
+
+Before (c61eb8342) and after (this change), interleaved on the worker; shadow and main ms as mean / p95 / worst; a run-to-run shift of 3 ms in `main` is the worker's load:
+
+| still | shadow before | shadow after | main before | main after | calls (same) |
+|---|---|---|---|---|---|
+| desktop, day | 8.92 / 11.53 / 14.58 | 2.43 / 3.50 / 4.11 | 8.02 / 9.26 / 18.47 | 9.97 / 15.00 / 23.34 | 158.8 / 47.4 |
+| desktop, day (again) | 11.25 / 16.75 / 21.31 | 3.11 / 4.15 / 19.88 | 13.76 / 22.29 / 42.84 | 12.34 / 16.77 / 32.26 | 158.8 / 47.4 |
+| desktop, `--hour 21` | 11.91 / 17.64 / 23.33 | 2.26 / 2.73 / 3.36 | 13.21 / 19.67 / 25.58 | 9.16 / 12.40 / 21.14 | 162.0 / 47.3 |
+| `--phone`, day | 8.65 / 12.17 / 14.96 | 3.11 / 4.98 / 9.82 | 10.81 / 15.73 / 21.59 | 16.14 / 22.48 / 37.66 | 148 / 46 |
+| `--phone --hour 21` | 9.07 / 11.84 / 16.62 | 3.43 / 4.92 / 12.77 | 10.05 / 13.87 / 31.15 | 13.04 / 21.41 / 33.49 | 152 / 47 |
+| City race | 1.12 / 1.60 / 1.93 | 1.03 / 1.44 / 1.91 | 13.47 / 18.40 / 26.96 | 9.84 / 14.41 / 22.51 | 121.2 / 22 |
+| derby | 1.09 / 1.59 / 2.38 | 0.96 / 1.53 / 1.82 | 12.46 / 17.51 / 44.63 | 8.13 / 11.74 / 47.04 | 89.6 / 27.6 |
+
+Where the GPU's frame is longer than the CPU's work between the flush and the main pass, the wait now lands in `main` (the phone rows). Pixels: desktop day, City and derby the same (max 5 on 0.00 %), night max 114 on 0.00 % (the walkers above); the phone stills 1.73 % (day) and 0.64 % (night) lighter, all of it the phone's reach fix (aimSun now refits the box at the phone's 28 m, not Auto's 34 m, after the sun moves; that fix alone: phone day 1.73 %, phone 5 pm 1.60 %, desktop 0.00 %): distant shadows past 28 m at the horizon and the left edge are gone, as on a phone before the sun first moved.
+
 Host-side picks and scans, node probes on the real open-world map (allocation by V8's sampling heap profiler; a first call on a mesh also pays its one-time buffers):
 
 | what | before | after |
@@ -244,7 +264,7 @@ Skinning (`updateSkin`, the WASM kernel) and the ragdoll hand-off run in the fra
 | `matrices` | the draw's start to `Scene.onBeforeRender` | three's scene and camera matrix update |
 | `batches` | the engine's `Scene.onBeforeRender` | the wheel, lamp, part, seated-driver and cover batches' sync |
 | `marks` | `SkidMarks.flush` | the tyre-mark map's stamps |
-| `shadow` | `renderer.shadowMap.render` of the main scene | the shadow pass's CPU submit (not GPU time). Three has no hook around the pass: `tap` wraps that one instance method for the run (put back at its end), and it passes every other scene through untimed, because three calls it from every `renderer.render`, the post passes' blits and the mark map's included |
+| `shadow` | `renderer.shadowMap.render` of the main scene | the shadow pass's CPU submit (not GPU time; it is the frame's first draw, so a GPU still busy with the last frame is waited out here: headless-frame's `--parts` frames flush at their end as a page's present does, `presentingFrames`). Three has no hook around the pass: `tap` wraps that one instance method for the run (put back at its end), and it passes every other scene through untimed, because three calls it from every `renderer.render`, the post passes' blits and the mark map's included |
 | `main` | the rest of the main scene's `renderer.render` | culling and sorting before the shadow pass, the background, the opaque, transmissive and transparent submit after it, the uploads three does at draw (a wear mask's first or whole upload, instance matrices), program links; a GPU that lets the CPU wait (a full queue, a read-back) is waited out here |
 | `post` | after the main scene's draw to the end of `PostFX.render` | the bloom chain's blits (each its own `renderer.render`) and the composite (0 on the Off and Minimal tiers) |
 
