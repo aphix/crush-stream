@@ -6,9 +6,10 @@ import { ATTIRE } from "../present/civilian-art-constants.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { CrowdSight } from "../present/civilian-art.ts";
+import { MEDICS_COUNT } from "./people-index.ts";
 
 /** Paramedics who kneel by the one run down while the ambulance loads: one each side of them, this far off (m). */
-export const MEDICS = { count: 2, beside: 0.7 } as const;
+export const MEDICS = { count: MEDICS_COUNT, beside: 0.7 } as const;
 /** How far the look search runs for a man's and a woman's scrubs before it gives up (every look word dresses the same way each time). */
 const LOOK_SEARCH = 1 << 14;
 

@@ -215,3 +215,25 @@ export function civilianFigures(capacity: number): CivilianFigures {
     uploads: [matrices.attribute, shirts.attribute, trousers.attribute, skins.attribute, gaits.attribute],
   };
 }
+
+/** Instance matrix `at` of `matrices`: the figure with its feet at (x, y, z) facing `yaw`, upright, or `lying` laid flat on its back, its head along `yaw`. */
+export function writeFigureMatrix(matrices: Float32Array, at: number, x: number, y: number, z: number, yaw: number, lying: boolean): void {
+  const turnCos = Math.cos(yaw);
+  const turnSin = Math.sin(yaw);
+  matrices[at] = lying ? -turnCos : turnCos;
+  matrices[at + 1] = 0;
+  matrices[at + 2] = lying ? turnSin : -turnSin;
+  matrices[at + 3] = 0;
+  matrices[at + 4] = lying ? turnSin : 0;
+  matrices[at + 5] = lying ? 0 : 1;
+  matrices[at + 6] = lying ? turnCos : 0;
+  matrices[at + 7] = 0;
+  matrices[at + 8] = lying ? 0 : turnSin;
+  matrices[at + 9] = lying ? 1 : 0;
+  matrices[at + 10] = lying ? 0 : turnCos;
+  matrices[at + 11] = 0;
+  matrices[at + 12] = x;
+  matrices[at + 13] = y;
+  matrices[at + 14] = z;
+  matrices[at + 15] = 1;
+}

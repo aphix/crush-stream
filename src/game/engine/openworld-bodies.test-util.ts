@@ -1,9 +1,11 @@
 import { detCos, detSin } from "../kernel/physics-core.js";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
+import { BODY_POSTURE, type BodyMotion } from "../net/body-codec.ts";
+import { TORSO_ABOVE_FEET } from "./body-follow.ts";
 
 /** One body of the fake world: where it stands, its steering, whether it is out, on its feet and held up. */
-type FakeBody = { slot: number; x: number; z: number; heading: number; speed: number; out: boolean; standing: boolean; steady: boolean; held: boolean; look: DriverLook };
+type FakeBody = { slot: number; x: number; z: number; heading: number; speed: number; out: boolean; standing: boolean; steady: boolean; held: boolean; look: DriverLook; dragX: number; dragZ: number; haulX: number; haulZ: number };
 
 /** The dummies' world as the bodies see it, with no physics: a walker moves at the pace it is steered at, and a test sets what it needs of one (knocked down, lagging). */
 export class FakeBodyHost {
@@ -39,7 +41,7 @@ export class FakeBodyHost {
 
   start(x: number, y: number, z: number, yaw: number, look: DriverLook, slot: number, vx: number, vz: number): number {
     this.started.push({ slot, x, y, z, yaw, vx, vz });
-    this.bodies.set(slot, { slot, x, z, heading: yaw, speed: 0, out: true, standing: true, steady: true, held: true, look: { ...look } });
+    this.bodies.set(slot, { slot, x, z, heading: yaw, speed: 0, out: true, standing: true, steady: true, held: true, look: { ...look }, dragX: 0, dragZ: 0, haulX: 0, haulZ: 0 });
     return slot;
   }
 
@@ -102,16 +104,58 @@ export class FakeBodyHost {
     this.blows.push({ slot, dirX, dirY, dirZ, speed });
   }
 
+  motion(slot: number, out: BodyMotion): boolean {
+    const body = this.bodies.get(slot);
+    if (!body?.out) return false;
+    out.x = body.x;
+    out.y = this.ground + TORSO_ABOVE_FEET;
+    out.z = body.z;
+    out.vx = (body.standing ? detSin(body.heading) * body.speed : body.dragX) + body.haulX;
+    out.vy = 0;
+    out.vz = (body.standing ? detCos(body.heading) * body.speed : body.dragZ) + body.haulZ;
+    out.heading = body.heading;
+    out.posture = body.standing ? BODY_POSTURE.stand : BODY_POSTURE.down;
+    return true;
+  }
+
+  readonly drags: { slot: number; vx: number; vy: number; vz: number }[] = [];
+  drag(slot: number, vx: number, vy: number, vz: number): void {
+    this.drags.push({ slot, vx, vy, vz });
+    const body = this.bodies.get(slot)!;
+    body.dragX = vx;
+    body.dragZ = vz;
+  }
+
+  shift(slot: number, dx: number, _dy: number, dz: number): void {
+    const body = this.bodies.get(slot)!;
+    body.x += dx;
+    body.z += dz;
+  }
+
+  /** A test's cable pulls the body in `slot` at (vx, vz) m/s, whatever it does. */
+  haul(slot: number, vx: number, vz: number): void {
+    const body = this.bodies.get(slot)!;
+    body.haulX = vx;
+    body.haulZ = vz;
+  }
+
+  /** The body in `slot` falls over. */
+  fell(slot: number): void {
+    this.bodies.get(slot)!.standing = false;
+  }
+
   groundAt(): number {
     return this.ground;
   }
 
-  /** Every standing body walks `dt` s at the pace it was steered at. */
+  /** Every body moves `dt` s by what hauls it (`haul`), a standing one also at the pace it was steered at, a lying one also at the speed it is dragged at (`drag`). */
   advance(dt: number): void {
     for (const body of this.bodies.values()) {
-      if (!body.out || !body.standing) continue;
-      body.x += detSin(body.heading) * body.speed * dt;
-      body.z += detCos(body.heading) * body.speed * dt;
+      if (!body.out) continue;
+      body.x += body.haulX * dt;
+      body.z += body.haulZ * dt;
+      body.x += body.standing ? detSin(body.heading) * body.speed * dt : body.dragX * dt;
+      body.z += body.standing ? detCos(body.heading) * body.speed * dt : body.dragZ * dt;
     }
   }
 }

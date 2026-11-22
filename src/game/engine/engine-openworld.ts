@@ -38,6 +38,8 @@ import { AMBULANCE_CARS, KERB_CARS, MOVER_CARS, PATROL_CARS } from "../ai/openwo
 import type { TrafficPorts } from "../ai/openworld-traffic/traffic-ports.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
+import { BODY_KIND, clearBodyFrame, type BodyFrame } from "../net/body-codec.ts";
+import { OpenWorldShared } from "./openworld-shared.ts";
 import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
 import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
 import { type AutoOrbit, OpenWorldAuto } from "./engine-openworld-auto.ts";
@@ -248,6 +250,8 @@ export class OpenWorldDirector {
   private readonly sceneScratch = { x: 0, z: 0 };
   /** The civilians near this machine's eye as physical bodies (`OpenWorldBodies`), null where the engine gives no dummies' world. */
   private bodies: OpenWorldBodies | null = null;
+  /** The host's people as this machine draws them: bodies that follow the frames of `MSG.bodies`, figures laid or stood at the host's places; null where there is no crowd. */
+  private shared: OpenWorldShared | null = null;
   /** Where the drawn crowd looks (`CrowdGaze` inside), made with the crowd: presentation only. */
   gaze: OpenWorldGaze | null = null;
   /** What the drawn crowd thinks (`CrowdMinds` inside), made with the crowd: presentation only. */
@@ -476,6 +480,7 @@ export class OpenWorldDirector {
     if (client) {
       this.feedWalkers(crowd);
       crowd.step(this.clock.crowdSeconds(this.ports.now(), INTERP_DELAY), this.ports.cars(), false);
+      this.shared?.bodyRecords(this.shared.fresh(this.ports.now()) ? this.shared.frame : null, 1 << BODY_KIND.civilian, -1, crowd.crowdSeconds, this.ray.eyeX, this.ray.eyeZ);
       this.throwStruck(crowd);
       this.bodies?.step(crowd.poses, this.ray.eyeX, this.ray.eyeZ, crowd.crowdSeconds, wallDt, this.sight);
       this.law?.throwTakedowns();
@@ -530,6 +535,7 @@ export class OpenWorldDirector {
     this.unhook?.();
     this.bodies?.dispose();
     this.bodies = null;
+    this.shared = null;
     this.gaze = null;
     this.minds?.dispose();
     this.minds = null;
@@ -665,6 +671,17 @@ export class OpenWorldDirector {
     this.hookedMedic[medic] = slot;
     this.hookedMedicAt[medic] = this.seconds;
     return slot;
+  }
+
+  /** Host: `out` is the frame of people its guests are sent (`MSG.bodies`): empty, then the civilians its hook holds. */
+  writeBodies(out: BodyFrame): void {
+    clearBodyFrame(out);
+    if (!this.ports.isClient()) this.bodies?.writeHooked(out);
+  }
+
+  /** Guest: the host's frame of people, heard now. */
+  hearBodies(frame: BodyFrame): void {
+    if (this.ports.isClient()) this.shared?.hear(frame, this.ports.now());
   }
 
   /** The hook holds the dummy in pool slot `slot` as a first end: a civilian's body there is pinned (`OpenWorldBodies.pin`). */
@@ -871,6 +888,14 @@ export class OpenWorldDirector {
     this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK, gaze);
     this.medics = new OpenWorldMedics(gaze.follow(this.ports.makeArt(MEDICS.count), MEDICS.count));
     this.openers.others = this.law === null ? [this.medics.poses] : [this.law.copPoses, this.medics.poses];
+    this.shared = new OpenWorldShared(crowd.poses.count, {
+      bodies: this.bodies,
+      host: this.ports.bodies ?? null,
+      tables: [crowd.poses, null, null, null],
+      sight: this.culling.sight,
+      floors: { holdFloorAt: (x, z) => this.interiors?.holdFloorAt(x, z) },
+      ports: { lookOf: (_kind, id, out) => dressOfLook(crowd.poses.look[id]!, out) },
+    });
     if (client) crowd.hear(this.heardEvents);
   }
 
@@ -946,7 +971,7 @@ export class OpenWorldDirector {
         this.law?.noteStrike(strike);
         continue;
       }
-      if (this.culling.anyoneNear(strike.x, strike.z, this.ray.eyeX, this.ray.eyeZ)) {
+      if (this.shared?.shares(strike.guard) !== true && this.culling.anyoneNear(strike.x, strike.z, this.ray.eyeX, this.ray.eyeZ)) {
         const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
         dressOfLook(crowd.poses.look[strike.guard]!, look);
         this.figureSlot[strike.guard] = this.ports.throwFigure(strike, look, DOWNED_LIFE_SECONDS);

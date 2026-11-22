@@ -3,6 +3,7 @@ import { activeGround } from "../world/ground.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { BASE_SLOTS } from "../present/ragdoll-config.ts";
+import { BODY_POSTURE, type BodyMotion } from "../net/body-codec.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 
 const _at = new THREE.Vector3();
@@ -91,6 +92,23 @@ export class RagdollBodyHost {
     if (!ragdolls.torso(slot, _at, null)) return;
     ragdolls.blowWalker(slot, _at, _v.set(dirX, dirY, dirZ).normalize(), speed);
     ragdolls.staggerWalker(slot, 0.5);
+  }
+
+  motion(slot: number, out: BodyMotion): boolean {
+    const ragdolls = this.ragdolls();
+    if (!ragdolls.dollMotion(slot, out)) return false;
+    const walker = ragdolls.walkers[slot]!;
+    out.heading = walker.active ? walker.facing : 0;
+    out.posture = walker.active && walker.state === "stand" ? BODY_POSTURE.stand : walker.active && walker.state === "getUp" ? BODY_POSTURE.getUp : BODY_POSTURE.down;
+    return true;
+  }
+
+  drag(slot: number, vx: number, vy: number, vz: number): void {
+    this.ragdolls().dragDoll(slot, vx, vy, vz);
+  }
+
+  shift(slot: number, dx: number, dy: number, dz: number): void {
+    this.ragdolls().shiftDoll(slot, dx, dy, dz);
   }
 
   groundAt(x: number, z: number): number {

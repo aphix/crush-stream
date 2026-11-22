@@ -10,6 +10,9 @@ import type { SightField } from "../present/openworld-sight.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import { PlaceFootprints } from "../world/openworld/place-footprints.ts";
 import type { Place } from "../world/openworld/walk-graph.ts";
+import { addBodyRecord, BODY_FLAG, BODY_KIND, type BodyFrame, type BodyMotion } from "../net/body-codec.ts";
+import { CATCH_UP, FASTEST, FOLLOW, followAnchor, SNAP_M, STAND_REACH, STILL, TORSO_ABOVE_FEET } from "./body-follow.ts";
+import { PEOPLE_EXTRA } from "./people-index.ts";
 
 /** Physical bodies for the civilians near a player, desktop and phone: each costs a ragdoll in the dummies' world (10 parts, their joints and motors) every step. */
 export const BODY_COUNT = { desktop: 6, phone: 3 } as const;
@@ -18,21 +21,14 @@ const LYING_RESERVE = 4;
 /** The dummies' pool builds its first slots at load: the last of them is the player's walker, and bodies live past them. */
 const FIRST_BODY_SLOT = 4;
 /** A civilian within this far (m) of an eye takes a body (a car coming at 13 m/s meets her in two seconds from the camera behind it, and a body wants a few ticks to stand), and one that has one keeps it out to `KEEP_RADIUS`, so a civilian on the edge does not flicker between drawn and body. */
-const NEAR_RADIUS = 28;
-const KEEP_RADIUS = 36;
+export const NEAR_RADIUS = 28;
+export const KEEP_RADIUS = 36;
 /** Bodies are chosen this often (s). */
 const SELECT_SECONDS = 0.25;
 /** A body lagging more than this far (m) behind the crowd's spot for her (blocked by a car, a wall) is let go: she is drawn at her spot again. */
-const LEASH = 3;
+const LEASH = SNAP_M;
 /** A body that fell or stumbled may be this far (m) behind her spot and still run back to it. */
 const REJOIN_LEASH = 15;
-/** She is standing when her crowd pace is under this (m/s); her body then stands, facing as she does, once within `STAND_REACH` (m) of her spot, and walks to it from farther. */
-const STILL = 0.15;
-const STAND_REACH = 0.4;
-/** How hard a body is pulled to her spot: the speed (m/s) added toward it per metre it lags. */
-const CATCH_UP = 2.5;
-/** A body is never asked faster than this (m/s): a run. */
-const FASTEST = 3.5;
 /** A body down (a bump, a car's nudge the crowd did not judge a knockdown) is asked to get up after this long (s), and let go if it is not up by `RELEASE_DOWN`. */
 const GET_UP_AFTER = 1.5;
 const RELEASE_DOWN = 8;
@@ -47,6 +43,8 @@ const BODY_ACTIVITY = new Set<number>([ACTIVITY.none, ACTIVITY.idle, ACTIVITY.ta
 const NOBODY = -1;
 /** A body that was struck lies until the crowd's hospital has her (\`DOWNED_LIFE_SECONDS\`). */
 const LIES_SECONDS = DOWNED_LIFE_SECONDS;
+/** The class of a body that follows no record: this machine's own civilian's, the first given up. */
+const OWN_CLASS = 3;
 
 /** What the bodies need of the dummies' world (`RagdollSystem`, through `RagdollBodyHost`): a pool of slots, a walker in each that is held up and steered, and a launch for a strike. */
 export type BodyHost = {
@@ -80,6 +78,12 @@ export type BodyHost = {
   knock(slot: number, strike: FigureStrike): void;
   /** A blow of `speed` m/s along (dirX, dirY, dirZ) lands on the torso of the body in `slot`, and it staggers instead of falling. */
   blow(slot: number, dirX: number, dirY: number, dirZ: number, speed: number): void;
+  /** The body in `slot`'s torso and velocity, its facing and its posture (`BODY_POSTURE`) into `out`; false while nobody is out in the slot. */
+  motion(slot: number, out: BodyMotion): boolean;
+  /** The limp body in `slot` is hauled so its torso moves at (vx, vy, vz) m/s. */
+  drag(slot: number, vx: number, vy: number, vz: number): void;
+  /** Every part of the body in `slot` moves by (dx, dy, dz) m. */
+  shift(slot: number, dx: number, dy: number, dz: number): void;
   /** The ground's height (m) at (x, z). */
   groundAt(x: number, z: number): number;
 };
@@ -87,6 +91,34 @@ export type BodyHost = {
 const _torso = { x: 0, z: 0 };
 const _path = { x: 0, z: 0 };
 const _look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
+const _motion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
+
+/** `to` holds `from`'s look. */
+function copyLook(from: DriverLook, to: DriverLook): void {
+  to.woman = from.woman;
+  to.shirt = from.shirt;
+  to.pants = from.pants;
+  to.hair = from.hair;
+  to.hat = from.hat;
+  to.mustache = from.mustache;
+  to.portly = from.portly;
+  to.outfit = from.outfit;
+  to.shades = from.shades;
+  to.face = from.face;
+  to.tie = from.tie;
+}
+
+/** `to` holds `from`. */
+function copyMotion(from: BodyMotion, to: BodyMotion): void {
+  to.x = from.x;
+  to.y = from.y;
+  to.z = from.z;
+  to.vx = from.vx;
+  to.vy = from.vy;
+  to.vz = from.vz;
+  to.heading = from.heading;
+  to.posture = from.posture;
+}
 
 /**
  * The civilians near a player as physical bodies: the crowd's spot for each is a mark a walker of the dummies' world (the one the player on foot is, and the showcase's figures) is steered to, so
@@ -110,6 +142,12 @@ export class OpenWorldBodies {
   private readonly struckAt: Float64Array;
   /** Per body, the crowd second the hook's pin on it ends (`stand`). */
   private readonly hookedUntil: Float64Array;
+  /** Per body: 1 while it follows a host's record (`aim`), the class that decides who is given up for whom (1 players, 2 other recorded people, 3 this machine's own), the most it is steered (m/s), where the record puts it and the look it was stood in. */
+  private readonly followed: Uint8Array;
+  private readonly classOf: Uint8Array;
+  private readonly cap: Float32Array;
+  private readonly target: BodyMotion[];
+  private readonly looks: DriverLook[];
   private sinceSelect = SELECT_SECONDS;
   private seconds = 0;
 
@@ -118,11 +156,16 @@ export class OpenWorldBodies {
     this.buildings = new PlaceFootprints(places, BUILDING_MARGIN);
     this.size = size;
     this.held = new Uint8Array(capacity);
-    this.bodyOf = new Int16Array(capacity).fill(NOBODY);
+    this.bodyOf = new Int16Array(capacity + PEOPLE_EXTRA).fill(NOBODY);
     this.resident = new Int32Array(size).fill(NOBODY);
     this.slot = new Int32Array(size).fill(NOBODY);
     this.downFor = new Float64Array(size);
     this.recovering = new Uint8Array(size);
+    this.followed = new Uint8Array(size);
+    this.cap = new Float32Array(size);
+    this.classOf = new Uint8Array(size).fill(OWN_CLASS);
+    this.target = Array.from({ length: size }, () => ({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 }));
+    this.looks = Array.from({ length: size }, () => ({ woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false }));
     this.struckAt = new Float64Array(size).fill(-Infinity);
     this.hookedUntil = new Float64Array(size).fill(-Infinity);
     host.setCapacity(FIRST_BODY_SLOT + size + LYING_RESERVE);
@@ -144,7 +187,7 @@ export class OpenWorldBodies {
   /** The player's punch from (x, z) along (dirX, dirZ): the first body on its feet in its reach and arc is blown at `speed` and staggered; its civilian, or -1. */
   punch(x: number, z: number, dirX: number, dirZ: number, speed: number): number {
     for (let body = 0; body < this.size; body++) {
-      if (this.resident[body]! === NOBODY || this.struckAt[body]! > -Infinity) continue;
+      if (this.resident[body]! === NOBODY || this.resident[body]! >= this.held.length || this.struckAt[body]! > -Infinity) continue;
       const slot = this.slot[body]!;
       if (!this.host.torso(slot, _torso) || punchGap(x, z, dirX, dirZ, _torso.x, _torso.z) < 0) continue;
       this.host.blow(slot, dirX, 0.3, dirZ, speed);
@@ -155,7 +198,7 @@ export class OpenWorldBodies {
 
   /** The civilian the body in pool slot `slot` stands for, or -1. */
   civilianOf(slot: number): number {
-    for (let body = 0; body < this.size; body++) if (this.resident[body]! !== NOBODY && this.slot[body] === slot) return this.resident[body]!;
+    for (let body = 0; body < this.size; body++) if (this.resident[body]! !== NOBODY && this.resident[body]! < this.held.length && this.slot[body] === slot) return this.resident[body]!;
     return NOBODY;
   }
 
@@ -163,7 +206,7 @@ export class OpenWorldBodies {
   aimNecks(headYaw: Float32Array, torsoTwist: Float32Array, headPitch: Float32Array, eyeYaw: Float32Array, eyePitch: Float32Array): void {
     for (let body = 0; body < this.size; body++) {
       const civilian = this.resident[body]!;
-      if (civilian !== NOBODY) this.host.look(this.slot[body]!, headYaw[civilian]! + torsoTwist[civilian]!, headPitch[civilian]!, eyeYaw[civilian]!, eyePitch[civilian]!);
+      if (civilian !== NOBODY && civilian < this.held.length) this.host.look(this.slot[body]!, headYaw[civilian]! + torsoTwist[civilian]!, headPitch[civilian]!, eyeYaw[civilian]!, eyePitch[civilian]!);
     }
   }
 
@@ -198,7 +241,7 @@ export class OpenWorldBodies {
     let farthest = NOBODY;
     let farthestDistance = -1;
     for (let body = 0; body < this.size; body++) {
-      if (this.resident[body]! === NOBODY) continue;
+      if (this.resident[body]! === NOBODY || this.followed[body] === 1) continue;
       const slot = this.slot[body]!;
       if (this.host.roped(slot) || !this.host.torso(slot, _torso)) continue;
       if (this.recovering[body] === 1 || this.seconds < this.hookedUntil[body]! || !this.host.steady(slot)) continue;
@@ -221,7 +264,7 @@ export class OpenWorldBodies {
     for (let body = 0; body < this.size && count < xs.length; body++) {
       if (this.resident[body]! === NOBODY) continue;
       const slot = this.slot[body]!;
-      if (!this.host.roped(slot) && this.seconds >= this.hookedUntil[body]!) continue;
+      if (!this.host.roped(slot) && this.seconds >= this.hookedUntil[body]! && !(this.followed[body] === 1 && this.resident[body]! < this.held.length)) continue;
       if (!this.host.torso(slot, _torso)) continue;
       xs[count] = _torso.x;
       zs[count++] = _torso.z;
@@ -263,6 +306,7 @@ export class OpenWorldBodies {
   }
 
   private tend(body: number, poses: CrowdPoses, eyeX: number, eyeZ: number, dt: number): void {
+    if (this.followed[body] === 1) return this.follow(body);
     const civilian = this.resident[body]!;
     const slot = this.slot[body]!;
     // A body a cable holds is hers until the cable is cut, whatever the crowd does with her meanwhile (thrown, lying past her time, gone indoors in the brain).
@@ -327,7 +371,7 @@ export class OpenWorldBodies {
     for (let taken = this.count(); taken < this.size; taken++) {
       let nearest = NOBODY;
       let nearestDistance = NEAR_RADIUS;
-      for (let civilian = 0; civilian < this.bodyOf.length; civilian++) {
+      for (let civilian = 0; civilian < this.held.length; civilian++) {
         if (this.bodyOf[civilian]! !== NOBODY || !this.eligible(poses, civilian, eyeX, eyeZ, nearestDistance)) continue;
         if (sight !== null && !sight.seen(poses.x[civilian]!, poses.z[civilian]!, 1)) continue;
         nearestDistance = hypot2(poses.x[civilian]! - eyeX, poses.z[civilian]! - eyeZ);
@@ -353,23 +397,161 @@ export class OpenWorldBodies {
     const feet = poses.feetY[civilian]! - ground > ON_STREET ? poses.feetY[civilian]! : ground;
     const started = this.host.start(x, feet, z, yaw, _look, slot, detSin(yaw) * speed, detCos(yaw) * speed);
     if (started < 0) return false;
-    this.resident[body] = civilian;
-    this.slot[body] = started;
-    this.downFor[body] = 0;
-    this.recovering[body] = 0;
-    this.hookedUntil[body] = -Infinity;
-    this.struckAt[body] = -Infinity;
-    this.bodyOf[civilian] = body;
-    this.held[civilian] = 1;
+    this.seat(body, civilian, started);
     return true;
   }
 
   private release(body: number): void {
-    const civilian = this.resident[body]!;
     this.host.stop(this.slot[body]!);
-    this.bodyOf[civilian] = NOBODY;
-    this.held[civilian] = 0;
+    this.forget(body);
+  }
+
+  /** Body `body`'s person has it no more: her bookkeeping is cleared (`held` only for a civilian). */
+  private forget(body: number): void {
+    const person = this.resident[body]!;
+    this.bodyOf[person] = NOBODY;
+    if (person < this.held.length) this.held[person] = 0;
     this.resident[body] = NOBODY;
     this.slot[body] = NOBODY;
+    this.followed[body] = 0;
+  }
+
+  /** Body `body` is `person`'s, standing in pool slot `slot`: this machine's own until `takeFor` has it follow a record. */
+  private seat(body: number, person: number, slot: number): void {
+    this.resident[body] = person;
+    this.slot[body] = slot;
+    this.downFor[body] = 0;
+    this.recovering[body] = 0;
+    this.hookedUntil[body] = -Infinity;
+    this.struckAt[body] = -Infinity;
+    this.followed[body] = 0;
+    this.classOf[body] = OWN_CLASS;
+    this.bodyOf[person] = body;
+    if (person < this.held.length) this.held[person] = 1;
+  }
+
+  /** A followed body goes where its record's target says (`followAnchor`); one the record has the walker stood again for is stood at the target in its kept look, and one the world no longer holds goes. */
+  private follow(body: number): void {
+    const slot = this.slot[body]!;
+    if (!this.host.holds(slot) && !this.host.roped(slot)) return this.release(body);
+    if (followAnchor(this.host, slot, this.target[body]!, this.cap[body]!) !== FOLLOW.restand) return;
+    const t = this.target[body]!;
+    this.host.stop(slot);
+    const started = this.host.start(t.x, t.y - TORSO_ABOVE_FEET, t.z, t.heading, this.looks[body]!, slot, t.vx, t.vz);
+    if (started < 0) return this.forget(body);
+    this.slot[body] = started;
+  }
+
+  /** Person `person` (of class `classOf`: 1 players, 2 other recorded people) takes a body at `t`, following her record from now on at most `cap` m/s. With every body in use one of a higher class is given up first (`giveUpFor`). False when she has one, none can be given up, or the world has no slot. */
+  takeFor(person: number, classOf: number, look: DriverLook, t: BodyMotion, cap: number, eyeX: number, eyeZ: number): boolean {
+    if (this.bodyOf[person]! !== NOBODY) return false;
+    if (this.count() === this.size && !this.giveUpFor(classOf, eyeX, eyeZ)) return false;
+    const slot = this.nextSlot();
+    if (slot < 0) return false;
+    const started = this.host.start(t.x, t.y - TORSO_ABOVE_FEET, t.z, t.heading, look, slot, t.vx, t.vz);
+    if (started < 0) return false;
+    let body = 0;
+    while (this.resident[body]! !== NOBODY) body++;
+    this.seat(body, person, started);
+    this.followed[body] = 1;
+    this.classOf[body] = classOf;
+    this.cap[body] = cap;
+    copyLook(look, this.looks[body]!);
+    copyMotion(t, this.target[body]!);
+    return true;
+  }
+
+  /** The body of the highest class number above `classOf` (the farthest from the eye among those) that nothing holds, lies, recovers or has just been struck is let go; whether one was. */
+  private giveUpFor(classOf: number, eyeX: number, eyeZ: number): boolean {
+    let chosen = NOBODY;
+    let chosenDistance = -1;
+    for (let body = 0; body < this.size; body++) {
+      if (this.resident[body]! === NOBODY || this.classOf[body]! <= classOf) continue;
+      const slot = this.slot[body]!;
+      if (this.host.roped(slot) || !this.host.torso(slot, _torso)) continue;
+      if (this.seconds < this.hookedUntil[body]! || this.struckAt[body]! > -Infinity || this.recovering[body] === 1 || !this.host.steady(slot)) continue;
+      const distance = hypot2(_torso.x - eyeX, _torso.z - eyeZ);
+      if (chosen !== NOBODY && (this.classOf[body]! < this.classOf[chosen]! || (this.classOf[body] === this.classOf[chosen] && distance <= chosenDistance))) continue;
+      chosen = body;
+      chosenDistance = distance;
+    }
+    if (chosen === NOBODY) return false;
+    this.release(chosen);
+    return true;
+  }
+
+  /** Person `person`'s body follows target `t` as a body of class `classOf`, at most `cap` m/s. */
+  aim(person: number, t: BodyMotion, classOf: number, cap: number): void {
+    const body = this.bodyOf[person]!;
+    copyMotion(t, this.target[body]!);
+    this.followed[body] = 1;
+    this.classOf[body] = classOf;
+    this.cap[body] = cap;
+  }
+
+  /** The host's frame no longer has `person`: a civilian's body is this machine's own again and runs back to her spot, any other kind's goes. */
+  unfollow(person: number): void {
+    const body = this.bodyOf[person]!;
+    if (body === NOBODY) return;
+    if (person >= this.held.length) return this.release(body);
+    this.followed[body] = 0;
+    this.classOf[body] = OWN_CLASS;
+    this.recovering[body] = 1;
+    this.downFor[body] = 0;
+  }
+
+  /** Whether a body stands for person `person` here. */
+  has(person: number): boolean {
+    return this.bodyOf[person]! !== NOBODY;
+  }
+
+  /** Person `person`'s body's torso (x, z) into `out`; false when she has none. */
+  torsoOf(person: number, out: { x: number; z: number }): boolean {
+    const body = this.bodyOf[person]!;
+    return body !== NOBODY && this.host.torso(this.slot[body]!, out);
+  }
+
+  /** The person the body in pool slot `slot` stands for, -1 for none. */
+  personOfSlot(slot: number): number {
+    for (let body = 0; body < this.size; body++) if (this.resident[body]! !== NOBODY && this.slot[body] === slot) return this.resident[body]!;
+    return NOBODY;
+  }
+
+  /** How many bodies follow a record now. */
+  followedCount(): number {
+    let count = 0;
+    for (let body = 0; body < this.size; body++) if (this.resident[body]! !== NOBODY && this.followed[body] === 1) count++;
+    return count;
+  }
+
+  /** The person of the `at`th followed body (in body order), -1 past the last. */
+  followedPerson(at: number): number {
+    let seen = 0;
+    for (let body = 0; body < this.size; body++) {
+      if (this.resident[body]! === NOBODY || this.followed[body] !== 1) continue;
+      if (seen++ === at) return this.resident[body]!;
+    }
+    return NOBODY;
+  }
+
+  /** Host: a record for each civilian's body that a cable holds or the hook has pinned: its posture, flags, torso, velocity and facing. */
+  writeHooked(out: BodyFrame): void {
+    for (let body = 0; body < this.size; body++) {
+      const civilian = this.resident[body]!;
+      if (civilian === NOBODY || civilian >= this.held.length) continue;
+      const slot = this.slot[body]!;
+      const roped = this.host.roped(slot);
+      const pinned = this.seconds < this.hookedUntil[body]!;
+      if ((!roped && !pinned) || !this.host.motion(slot, _motion)) continue;
+      const at = addBodyRecord(out, BODY_KIND.civilian, civilian, _motion.posture | (roped ? BODY_FLAG.roped : 0) | (pinned ? BODY_FLAG.pinned : 0));
+      if (at < 0) return;
+      out.pos[3 * at] = _motion.x;
+      out.pos[3 * at + 1] = _motion.y;
+      out.pos[3 * at + 2] = _motion.z;
+      out.vel[3 * at] = _motion.vx;
+      out.vel[3 * at + 1] = _motion.vy;
+      out.vel[3 * at + 2] = _motion.vz;
+      out.heading[at] = _motion.heading;
+    }
   }
 }
