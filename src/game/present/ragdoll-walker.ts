@@ -83,6 +83,7 @@ const GIMBAL_AXIS = { x: 0, y: 0, z: 1 };
 /** No axis of the gimbal is locked: only its motors act on the torso. */
 const NO_LOCKED_AXES: number = 0;
 
+export const PROBE = { cause: "", peak: 0, worst: [0, 0, 0, 0, 0, 0], trace: false };
 export class Walker {
   /** Where he is asked to face (rad about the vertical, 0 along +z) and how fast to go (m/s): the engine sets them each frame. */
   heading = 0;
@@ -262,6 +263,7 @@ export class Walker {
       let hit = Math.max(0, this.blowSpeed(doll, own * dt) - HIT_SPEED * Math.max(1, dt * 60));
       if (this.beside) hit = Math.min(hit, 0.8 * HIT_SPAN);
       if (hit >= HIT_SPAN) {
+        PROBE.cause ||= "hit";
         this.drop();
         return;
       }
@@ -283,23 +285,34 @@ export class Walker {
     const lag = hypot3(lx, ly, lz);
     this.slack = Math.min(lag, this.slack + travelled);
     const keep = lag > 0 ? (lag - this.slack) / lag : 0;
-    let dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx * keep;
-    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;
-    let dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz * keep;
+    let vx = doll.vel[0]! - held[0]!;
+    let vy = doll.vel[1]! - held[1]!;
+    let vz = doll.vel[2]! - held[2]!;
+    if (lag > 0) {
+      const back = Math.max(0, Math.min(HOLD_RATE * lag, -(vx * lx + vy * ly + vz * lz) / lag)) / lag;
+      vx += back * lx;
+      vy += back * ly;
+      vz += back * lz;
+    }
+    const dx = vx + HOLD_RATE * lx * keep;
+    const dy = vy + HOLD_RATE * ly * keep;
+    const dz = vz + HOLD_RATE * lz * keep;
     const sin = detSin(this.loco.yaw);
     const cos = detCos(this.loco.yaw);
-    const along = dx * sin + dz * cos;
-    if (along < 0) {
-      dx -= along * sin;
-      dz -= along * cos;
-    }
-    return hypot3(dx, dy, dz);
+    const along = Math.min(0, dx * sin + dz * cos);
+    const ahead = hypot3(dx - along * sin, dy, dz - along * cos);
+    const half = hypot3(held[0]!, held[1]!, held[2]!) / 2;
+    const stopped = Math.max(0, hypot3(dx + held[0]! / 2, dy + held[1]! / 2, dz + held[2]! / 2) - half);
+    const r = Math.min(ahead, stopped);
+    if (r > PROBE.worst[0]!) { PROBE.worst[0] = r; PROBE.worst[1] = dx * cos - dz * sin; PROBE.worst[2] = dy; PROBE.worst[3] = dx * sin + dz * cos; PROBE.worst[4] = HOLD_RATE * lag * keep; PROBE.worst[5] = half * 2; }
+    if (PROBE.trace && r > 0.5) console.log(`T s=${this.strength.toFixed(2)} r=${r.toFixed(2)} ahead=${ahead.toFixed(2)} stop=${stopped.toFixed(2)} side=${(dx * cos - dz * sin).toFixed(2)} dy=${dy.toFixed(2)} al=${(dx * sin + dz * cos).toFixed(2)} vel=${doll.vel[0]!.toFixed(2)},${doll.vel[1]!.toFixed(2)},${doll.vel[2]!.toFixed(2)} held=${held[0]!.toFixed(2)},${held[1]!.toFixed(2)},${held[2]!.toFixed(2)} lag=${lx.toFixed(3)},${ly.toFixed(3)},${lz.toFixed(3)} keep=${keep.toFixed(2)} pos=${doll.cur[0]!.toFixed(2)},${doll.cur[1]!.toFixed(2)},${doll.cur[2]!.toFixed(2)}`);
+    return r;
   }
 
   private decideState(doll: Doll, upright: number, height: number, dt: number): void {
     if (this.state === "stand") {
       // On his feet his height is read over the floor under them (`WalkFloor.level`), so a fall on an upper floor is seen as one on the street is; a foot planted a tread up raises that floor before his torso follows (`rise`).
-      if (upright < FALL_UPRIGHT || height - this.floor.level < FALL_HEIGHT - this.floor.rise) this.drop();
+      if (upright < FALL_UPRIGHT || height - this.floor.level < FALL_HEIGHT - this.floor.rise) { PROBE.cause ||= upright < FALL_UPRIGHT ? "tilt" : "height"; this.drop(); }
       return;
     }
     if (this.state === "down") {
