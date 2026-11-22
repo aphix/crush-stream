@@ -35,10 +35,10 @@ function carIsFree(state: CityState, owner: number, tick: number): boolean {
   return intAt(state, owner, RESIDENT_INT.carTo) === NO_PLACE || tick >= intAt(state, owner, RESIDENT_INT.carParkTick);
 }
 
-/** Metres of the shortest walk (fear ignored) from one place's door to another's, or -1 when there is none. */
-export function walkMetres(state: CityState, from: number, to: number): number {
+/** Metres of the walk from one place's door to another's, or -1 when there is none: the shortest (fear ignored) unless `fear` weighed by `fearWeight` is given, the way a leg's walk is found (`planLeg`). */
+export function walkMetres(state: CityState, from: number, to: number, fear = state.noFear, fearWeight = 1): number {
   const { doorNode } = state.index;
-  const count = state.finder.find(doorNode[from]!, doorNode[to]!, state.noFear, 1, state.scratchPath, 0, MAX_PATH_NODES);
+  const count = state.finder.find(doorNode[from]!, doorNode[to]!, fear, fearWeight, state.scratchPath, 0, MAX_PATH_NODES);
   if (count === 0) return -1;
   const { nodeX, nodeZ } = state.map.graph;
   let metres = 0;

@@ -129,9 +129,9 @@ function soonestArrival(state: CityState, resident: number, from: number, to: nu
   return tick + Math.floor((distanceBetween(state, from, to) / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.pace]!) * DECISION_HZ);
 }
 
-/** Ticks a resident walks from one place's door to another's, or -1 when it cannot. */
-function walkTicks(state: CityState, resident: number, from: number, to: number): number {
-  const metres = walkMetres(state, from, to);
+/** Ticks a resident walks from one place's door to another's setting out at `tick`, along the way the walk is found (`planLeg`: the hour's fear weighed in), or -1 when it cannot. */
+function walkTicks(state: CityState, resident: number, from: number, to: number, tick: number): number {
+  const metres = walkMetres(state, from, to, state.fear, isNight(hourOfDay(tick, state.startHour)) ? NIGHT_FEAR_WEIGHT : 1);
   if (metres < 0) return -1;
   return Math.max(1, Math.ceil((metres / state.floats[resident * RESIDENT_FLOAT_STRIDE + RESIDENT_FLOAT.pace]!) * DECISION_HZ));
 }
@@ -266,7 +266,7 @@ function walkingOutUntil(state: CityState, resident: number, tick: number): numb
 
 /** Ticks from `tick` until she is at `to`'s door having left `from`: her walk out of where she is in it (`walkOutTicks`), then the walk between the doors; -1 when there is no walk. */
 function leaveTicks(state: CityState, resident: number, tick: number, from: number, to: number): number {
-  const walk = walkTicks(state, resident, from, to);
+  const walk = walkTicks(state, resident, from, to, tick);
   return walk < 0 ? walk : walk + walkOutTicks(state, resident, from, leftSpotOf(state, resident, from, tick));
 }
 
@@ -402,7 +402,7 @@ function walkFitsBeforeAppointment(state: CityState, resident: number, tick: num
   const slot = state.appointment;
   if (!nextAppointment(state, resident, Math.max(intAt(state, resident, RESIDENT_INT.storyTick), tick), slot)) return true;
   const there = leaveTicks(state, resident, tick, current, destination);
-  const onward = slot.place === destination ? 0 : walkTicks(state, resident, destination, slot.place);
+  const onward = slot.place === destination ? 0 : walkTicks(state, resident, destination, slot.place, tick + Math.max(0, there));
   // Her spot there is not known yet: the longest walk out of it is allowed for.
   const outOfIt = slot.place === destination || onward < 0 ? 0 : longestWalkOutTicks(state, resident, destination);
   return there < 0 || onward < 0 || tick + there <= slot.arriveTick - onward - outOfIt - SCHEDULE_SLACK_TICKS;
