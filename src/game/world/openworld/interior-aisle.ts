@@ -99,6 +99,9 @@ const SPOT_CLEAR = 0.3;
 /** Rows tried back from the counter, and steps tried along it either side (half a spot's spacing each), before a room is out of floor for its spots. */
 const SPOT_ROWS = 6;
 const SPOT_STEPS = 12;
+/** A blocked spot slides toward the counter in steps this long (m), up to where a body's half-width still clears the counter's front: a clerk's galley behind a counter (Bodega Supreme's 0.64 m to its party wall, Kelly's 0.74 m to its back shelf; measured) is narrower than its nominal spot leaves room for. */
+const SPOT_SLIDE_STEP = 0.02;
+const SPOT_SLIDE = CUSTOMER_REACH - SPOT_CLEAR;
 
 /** The nth step of a row of bodies along a line, centred: 0, then 1 to the right, 1 to the left, 2 to the right...; in whole steps. */
 function lateralStep(column: number): number {
@@ -110,7 +113,7 @@ export type CounterSide = { x: number; z: number; outX: number; outZ: number; al
 
 /**
  * Up to `count` spots on one side of a counter into `into` (x, z pairs), each a spot's spacing from every spot in `into` already, `clear` (off every solid) and `inSight` of the side's spot: rows of half-spacing steps along it
- * from `firstRow` back, nearest first; `alongside` keeps them within the counter's length (a buying lane or a clerk faces the counter).
+ * from `firstRow` back, nearest first, each slid toward the counter (`SPOT_SLIDE`) where its own place is blocked; `alongside` keeps them within the counter's length (a buying lane or a clerk faces the counter).
  */
 function searchSide(side: CounterSide, firstRow: number, count: number, alongside: boolean, into: number[], clear: (x: number, z: number) => boolean, inSight: (x: number, z: number) => boolean): void {
   const target = into.length + 2 * count;
@@ -118,10 +121,16 @@ function searchSide(side: CounterSide, firstRow: number, count: number, alongsid
     for (let step = 0; step <= 2 * SPOT_STEPS && into.length < target; step++) {
       const along = (lateralStep(step) * STAND_SPACING) / 2;
       if (alongside && (along < side.alongMin || along > side.alongMax)) continue;
-      const back = row * STAND_ROW_DEPTH;
-      const x = side.x + side.outX * back - side.outZ * along;
-      const z = side.z + side.outZ * back + side.outX * along;
-      if (!clear(x, z) || !inSight(x, z)) continue;
+      let x = 0;
+      let z = 0;
+      let found = false;
+      for (let slide = 0; slide * SPOT_SLIDE_STEP <= SPOT_SLIDE + 1e-9 && !found; slide++) {
+        const back = row * STAND_ROW_DEPTH - slide * SPOT_SLIDE_STEP;
+        x = side.x + side.outX * back - side.outZ * along;
+        z = side.z + side.outZ * back + side.outX * along;
+        found = clear(x, z) && inSight(x, z);
+      }
+      if (!found) continue;
       let apart = true;
       for (let at = 0; at < into.length && apart; at += 2) apart = hypot2(into[at]! - x, into[at + 1]! - z) >= STAND_SPACING - 1e-6;
       if (apart) into.push(x, z);
