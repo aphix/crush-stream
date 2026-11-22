@@ -49,7 +49,7 @@ beforeAll(async () => {
   stubBrowser();
   globalThis.location.hash = `#scene=openworld&seed=${LINK_SEED.toString(16)}`;
   hud = new HudStore();
-  engine = await bootEngine({ hud });
+  engine = await bootEngine({ hud, device: "desktop" });
   runSeconds(engine, 0.5);
 });
 afterAll(() => {
@@ -161,7 +161,18 @@ describe("given the open world in play on the real engine", () => {
   });
 
   it("when the open world is up with its map, then netplay has the crowd's link to send and hear through, on this run's key (a client hears the host's crowd through it before it has one)", () => {
-    expect(engine.net["game"].crowdLink()?.seed, "the link's key: this device's tier above the seed").toBe(POPULATION_TIER.phone * CROWD_TIER_SCALE + LINK_SEED);
+    expect(engine.net["game"].crowdLink()?.seed, "the link's key: this device's tier above the seed").toBe(POPULATION_TIER.desktop * CROWD_TIER_SCALE + LINK_SEED);
+  });
+
+  // mutation: sed -i 's/^  if (device !== undefined) Object.defineProperty(engine, "deviceClass", { value: device });/  void device;/' src/game/engine/engine-headless.test-util.ts
+  it("when it is booted as a desktop, then it runs the desktop's city: 150 people or more, 5 patrol cruisers and 6 bodies, not the phone's", () => {
+    const world = engine["openWorld"];
+    const { ints, capacity } = world["crowd"]!.state;
+    let people = 0;
+    for (let resident = 0; resident < capacity; resident++) if (ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.species] === SPECIES.person && ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.alive] !== 0) people++;
+    expect(people, "people in the city").toBeGreaterThanOrEqual(150);
+    expect(world["traffic"]!.patrolPool, "patrol cruisers").toBe(5);
+    expect(world["bodies"]!["size"], "bodies").toBe(6);
   });
 
   // mutation: sed -i 's/^      gameMinute: this.gameMinuteText(),/      gameMinute: null,/' src/game/engine/engine-hud.ts

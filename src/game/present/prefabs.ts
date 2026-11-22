@@ -21,6 +21,7 @@ import { buildingPieces, HALF as BLOCK_HALF } from "./facade-mesh.ts";
 import { disposeFacadeMaterials, type FacadeStyle, homeStyle, makeFacadeMaterials, splitFacadeSkin } from "./facades.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
+import { ROAD_LIFT } from "./track-mesh.ts";
 import { applyWaterLook } from "./water-look.ts";
 import { LeafMaterial, NatureMaterial } from "./nature-look.ts";
 import { leafAtlas } from "./leaf-atlas.ts";
@@ -564,6 +565,8 @@ function lamp(plain: THREE.Material, acorn = false, onSlab = acorn): PrefabPart[
     const m = o.material as THREE.MeshStandardMaterial;
     const geo = (o.geometry as THREE.BufferGeometry).clone().applyMatrix4(o.matrixWorld).applyMatrix4(fit);
     if (onSlab && o.name === LAMP_POOL) shared.push({ geometry: slabPool(geo), material: m, shared: true });
+    // A race lamp stands among roads on every side (a figure-8's crossing, a city's cross streets): its whole pool lies on the ribbons' depth proxy it is tested against.
+    else if (!acorn && o.name === LAMP_POOL) shared.push({ geometry: geo.translate(0, ROAD_LIFT, 0), material: m, shared: true });
     else if (o.name === LAMP_POOL || m.emissive?.getHex()) shared.push({ geometry: geo, material: m, shared: true });
     else pole.push([geo, m.color.getHex(), MAT.LAMP_POLE]);
   });
@@ -574,10 +577,10 @@ function lamp(plain: THREE.Material, acorn = false, onSlab = acorn): PrefabPart[
   return [{ geometry: painted(pole), material: plain, shared: false }, ...shared];
 }
 
-/** A street lamp's pool (the street at +x, the kerb `LAMP_FROM_CURB` out) with only its band over the sidewalk lifted onto the slab: over the road and the lot it lies as a race lamp's, never over a body lying there. */
+/** A street lamp's pool (the street at +x, the kerb `LAMP_FROM_CURB` out): its band over the sidewalk lifted onto the slab, its band over the street `ROAD_LIFT` onto the ribbons' depth proxy, and over the lot left low, under a body lying there. */
 function slabPool(pool: THREE.BufferGeometry): THREE.BufferGeometry {
   const back = LAMP_FROM_CURB - LAYOUT.sidewalk;
-  const bands = [cutX(pool, -Infinity, back), cutX(pool, back, LAMP_FROM_CURB).translate(0, PREFABS[PREFAB.sidewalk].size[1], 0), cutX(pool, LAMP_FROM_CURB, Infinity)];
+  const bands = [cutX(pool, -Infinity, back), cutX(pool, back, LAMP_FROM_CURB).translate(0, PREFABS[PREFAB.sidewalk].size[1], 0), cutX(pool, LAMP_FROM_CURB, Infinity).translate(0, ROAD_LIFT, 0)];
   const merged = mergeGeometries(bands)!;
   for (const band of [pool, ...bands]) band.dispose();
   return merged;

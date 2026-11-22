@@ -66,7 +66,7 @@ describe("given a three-course campaign whose every round recorded a head-on", (
     const startReel = engine["startReel"].bind(engine);
     engine["startReel"] = (clips, since) => {
       noted.push(...clips);
-      startReel(clips, since);
+      return startReel(clips, since);
     };
     const highlights = engine["highlights"];
     const viewSaved = highlights.viewSaved.bind(highlights);

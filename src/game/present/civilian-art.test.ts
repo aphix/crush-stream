@@ -7,6 +7,7 @@ import { dressOfLook } from "./civilian-dress.ts";
 import { drawCalls, emptyPoses, FRAME_SECONDS, IN_SIGHT, posesAlongStreet, posesScattered } from "./civilian-art.test-util.ts";
 import type { DriverLook } from "./driver-look.ts";
 import { KINDS_ATTRIBUTE, ROLE, SUITED } from "./dummy-rig.ts";
+import { box, loft, type Lofted } from "./dummy-loft.ts";
 import { dummyGeometry, streetGeometry } from "./dummy-skin.ts";
 import { blankStance, People, walkStance } from "./people.ts";
 import { PARTS } from "./ragdoll-body.ts";
@@ -355,6 +356,18 @@ describe("given the street body", () => {
       expect(suitedRingsAt(dummyGeometry(), y), `near body: suited vertices of a flap ring at y ${y}`).toBeGreaterThan(0);
       expect(suitedRingsAt(streetGeometry(), y), `street body: suited vertices of a flap ring at y ${y}`).toBe(0);
     }
+  });
+
+  // mutation: sed -i 's/^    if (shell.nearOnly !== true) for (let k = 0; k < sides; k += step) mesh.coarse.push(/    for (let k = 0; k < sides; k += step) mesh.coarse.push(/' src/game/present/dummy-loft.ts
+  it("when a capped garment drawn on the near body only is lofted, then the street body gets none of it, its end caps included, and the same garment drawn on both gets its caps", () => {
+    const lofted = (nearOnly: boolean): Lofted => {
+      const mesh: Lofted = { position: [], bones: [], roleKind: [], print: [], index: [], coarse: [] };
+      loft({ ...box(0, 1, 0, [0.3, 0.1, 0.2], ROLE.SHIRT, 0, 0), nearOnly }, mesh);
+      return mesh;
+    };
+    expect(lofted(true).index.length, "near body triangles' corners").toBeGreaterThan(0);
+    expect(lofted(true).coarse.length, "street body triangles' corners").toBe(0);
+    expect(lofted(false).coarse.length, "control: drawn on both, the street body has its caps").toBeGreaterThan(0);
   });
 
   // mutation: sed -i 's/setAttribute(name, attribute);/setAttribute(name, attribute.clone());/' src/game/present/dummy-skin.ts

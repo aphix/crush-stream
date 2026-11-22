@@ -9,6 +9,7 @@ import { newWorld, settleStep, stepWorld } from "./world-step.ts";
 import { PACE_BUDGET_MS, SimPacer } from "./sim-pace.ts";
 import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { sliceSpeed } from "../contact/sat.ts";
 
 const V = 30;
 const SPIN = 1.2;
@@ -493,4 +494,31 @@ describe("given the engine's pacer in a browser whose clock reads only in coarse
       expect(ticked.pace.cut).toBe(exact.pace.cut);
     });
   }
+});
+
+describe("given a car whose velocity has gone NaN or infinite (a bad impulse upstream)", () => {
+  it("when the pacer is handed a NaN speed for three frames, then it runs one step of NaN length and none after, its debt NaN for good: the frozen game the throw below replaces (guard)", () => {
+    const pace = new SimPacer();
+    const slices: number[] = [];
+    for (let frame = 0; frame < 3; frame++) pace.run(1 / FRAME_HZ, 1, NaN, true, Infinity, (h) => slices.push(h));
+    expect(slices.length, "steps over three frames").toBe(1);
+    expect(slices[0], "the one step's length").toBeNaN();
+  });
+
+  // mutation: sed -i '/^  if (!Number.isFinite(vmax)) nonFinite("the fastest car.s speed", vmax);/d' src/game/contact/sat.ts
+  it("when the frame's slice is sized from it, then the game stops with an error naming the speed instead of freezing silently", () => {
+    for (const bad of [NaN, Infinity]) {
+      const car = new DeformableCar(paint(), new THREE.Scene());
+      car.velocity.set(bad, 0, 0);
+      expect(() => sliceSpeed([car]), `velocity ${bad}`).toThrow(/fastest car's speed is/);
+    }
+  });
+
+  it("when every car's velocity is finite, then the slice speed is the fastest car's, never under 8 m/s (guard)", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene());
+    car.velocity.set(30, 0, 40);
+    expect(sliceSpeed([car])).toBe(50);
+    car.velocity.set(1, 0, 0);
+    expect(sliceSpeed([car])).toBe(8);
+  });
 });

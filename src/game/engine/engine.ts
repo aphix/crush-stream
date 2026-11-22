@@ -753,7 +753,7 @@ export class CrashEngine extends EngineGarage {
       markBounds: (minX, minZ, maxX, maxZ) => this.cine.marks.setBounds(minX, minZ, maxX, maxZ),
       // tickInner's wreck-slide rule (`bleedAfterSlide` once the crash clock is past the hit).
       bleeds: () => this.clock.wallSinceImpact > 0.2,
-      reelReady: (clips, since) => this.startReel(clips, since),
+      reelReady: (clips, since) => void this.startReel(clips, since),
       clear: () => this.clearScene(),
       heardMeter: (i) => this.net.heard(i),
       afoot: (i) => this.onFoot.away === i,

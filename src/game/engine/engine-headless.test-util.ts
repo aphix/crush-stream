@@ -81,11 +81,14 @@ export interface BootOptions {
   pacer?: boolean;
   /** Keep three's own `render` once `ready`, so `renderer.info.memory` counts what a frame uploads (the stub swallows every draw by default). */
   draw?: boolean;
+  /** Boot as a desktop (its crowd, cars and bodies), where the stand-in GL makes every engine the `software` class; set before `ready`, so the scene it opens is built for it. Auto stays on `minimal`. */
+  device?: "desktop";
 }
 
 /** The real engine on the stand-ins (call `stubBrowser` first), nothing drawn unless `draw`, `ready` awaited. One per process: a second `CrashEngine` never resolves `ready`. */
-export async function bootEngine({ hud = new HudStore(), canvas = element(), fades = false, pacer = false, draw = false }: BootOptions = {}): Promise<CrashEngine> {
+export async function bootEngine({ hud = new HudStore(), canvas = element(), fades = false, pacer = false, draw = false, device }: BootOptions = {}): Promise<CrashEngine> {
   const engine = new CrashEngine(canvas, hud, element());
+  if (device !== undefined) Object.defineProperty(engine, "deviceClass", { value: device });
   const { render } = engine["renderer"];
   Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
   await engine.ready;

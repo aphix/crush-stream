@@ -14,6 +14,7 @@ import { OPENWORLD_ID, openWorldCourse } from "./openworld-course.ts";
 import { fixtureLots } from "./openworld-lots.test-util.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
 import { parkPaint } from "./openworld-park.ts";
+import { CROSSING_HALF_WIDTH, CROSSING_KERB_SHARE } from "../../ai/openworld-crime/crime-constants.ts";
 
 /** A car is 2 m wide: a wall gap wider than this lets one through. */
 const CAR_WIDTH = 2;
@@ -21,6 +22,9 @@ const CAR_WIDTH = 2;
 const LAMP_SPACING_M = 32;
 const TREE_SPACING_M = 9;
 const TREE_LAMP_CLEARANCE_M = 1.5;
+/** Where a driver gets out (`doorSpot` in engine/onfoot-doors.ts): this far (m) out on the driver's side, this far ahead of the car's middle. */
+const DOOR_OUT_M = 1.75;
+const DOOR_ALONG_M = 0.15;
 
 /** The walls stand on the outer streets' far property line, or on their far curb. */
 const WALL_CASES = [
@@ -196,6 +200,33 @@ for (const wallCase of WALL_CASES) {
         ).toBe(false);
       }
       expect(spawn.formation.length, "cop slots").toBeGreaterThanOrEqual(4);
+    });
+
+    // mutation: sed -i 's/^export const SPAWN_BEHIND_CENTRE = 10.5;/export const SPAWN_BEHIND_CENTRE = 8;/' src/game/world/openworld/openworld-constants.ts
+    it("when the first row of four drivers is seated abreast, then no seat and no driver's door spot stands in a zebra crossing's band, so a driver who gets out is not out on the crossing", () => {
+      must(course.survival, "the course has spawn anchors");
+      const { nodeX, nodeZ, edgeStart, edgeTo, edgeCrossing } = map.graph;
+      let crossings = 0;
+      for (let slot = 0; slot < 4; slot++) {
+        const seat = humanSlot(course.survival.start, slot);
+        const door = { x: seat.x + DOOR_OUT_M * detCos(seat.yaw) + DOOR_ALONG_M * detSin(seat.yaw), z: seat.z - DOOR_OUT_M * detSin(seat.yaw) + DOOR_ALONG_M * detCos(seat.yaw) };
+        for (const [what, spot] of [["seat", seat], ["door", door]] as const) {
+          for (let node = 0; node < nodeX.length; node++) {
+            for (let edge = edgeStart[node]!; edge < edgeStart[node + 1]!; edge++) {
+              if (edgeCrossing[edge] !== 1) continue;
+              const length = hypot2(nodeX[edgeTo[edge]!]! - nodeX[node]!, nodeZ[edgeTo[edge]!]! - nodeZ[node]!);
+              const dirX = (nodeX[edgeTo[edge]!]! - nodeX[node]!) / length;
+              const dirZ = (nodeZ[edgeTo[edge]!]! - nodeZ[node]!) / length;
+              const along = (spot.x - nodeX[node]!) * dirX + (spot.z - nodeZ[node]!) * dirZ;
+              if (along < length * CROSSING_KERB_SHARE || along > length * (1 - CROSSING_KERB_SHARE)) continue;
+              crossings++;
+              const off = Math.abs((spot.x - nodeX[node]!) * dirZ - (spot.z - nodeZ[node]!) * dirX);
+              expect(off, `${what} ${slot} off the crossing from (${nodeX[node]}, ${nodeZ[node]}) (m)`).toBeGreaterThan(CROSSING_HALF_WIDTH);
+            }
+          }
+        }
+      }
+      expect(crossings, "crossings whose length a seat or door lies across").toBeGreaterThan(0);
     });
 
     // mutation: sed -i 's/prefab: dressing.prefab, x: dressing.x, z: dressing.z/prefab: PREFAB.cone, x: dressing.x, z: dressing.z/' src/game/world/openworld/openworld-course.ts

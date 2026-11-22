@@ -135,8 +135,8 @@ describe("given the real engine in the open world and the player's car running a
           steadySince = crowd.poses.yaw[resident]!;
           steadyFor = 0;
         } else steadyFor++;
-        // A stoop moves her drawn spot (`Stoops.keepOut`) and her body walks round it: a real turn, not a step's swing, so those frames and the settling after them are not measured.
-        const moved = crowd.poses.x[resident] !== crowd["separation"].drawX[resident] || crowd.poses.z[resident] !== crowd["separation"].drawZ[resident];
+        // A stoop (`Stoops.keepOut`) or a neighbour (the separation's sidestep) moves her drawn spot off the brain's and her body walks round: a real turn, not a step's swing, so those frames and the settling after them are not measured.
+        const moved = crowd.poses.x[resident] !== crowd["separation"].brainX[resident] || crowd.poses.z[resident] !== crowd["separation"].brainZ[resident];
         sinceMoved = moved ? 0 : sinceMoved + 1;
         const facing = ragdolls().walkers[slot]!.facing;
         const step = wrap(facing - previous);
