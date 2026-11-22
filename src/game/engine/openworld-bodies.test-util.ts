@@ -19,6 +19,12 @@ export class FakeBodyHost {
   stubborn = false;
   /** The ground's height (m) everywhere. */
   ground = 0;
+  /** Each slot's last neck look (turn, nod). */
+  readonly necks = new Map<number, { turn: number; nod: number }>();
+
+  look(slot: number, turn: number, nod: number): void {
+    this.necks.set(slot, { turn, nod });
+  }
 
   setCapacity(slots: number): void {
     this.capacity = slots;

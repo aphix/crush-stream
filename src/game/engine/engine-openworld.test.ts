@@ -15,6 +15,7 @@ import { AMBULANCE } from "../ai/openworld-traffic/ambulance.ts";
 import { launch, pooledCar } from "../contact/crash-scenarios.test-util.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
+import { STIMULUS, type CrowdGaze } from "../present/civilian-gaze.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { CrowdSight } from "../present/civilian-art.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
@@ -974,5 +975,32 @@ describe("given the open world's scenery share", () => {
   // mutation: sed -i 's/(desktop ? 1 : 0.6)/(desktop ? 1 : 1)/' src/game/engine/scenery-share.ts
   it("when the course is the open world, then the share is 1 on a desktop and 0.6 on a phone whatever the tier; a race keeps its tier's", () => {
     expect(`${sceneryShare(OPENWORLD_ID, "minimal", true)} ${sceneryShare(OPENWORLD_ID, "minimal", false)} ${sceneryShare("other", "minimal", false)}`).toBe("1 0.6 0.3");
+  });
+});
+
+describe("given the open world's director, a free person walking, and a car that meets a wall 4 m to her front right", () => {
+  // mutation: sed -i '/^    if (this.art !== null) this.art.gaze = this.gaze.gaze;/d' src/game/engine/engine-openworld.ts
+  it("when the hooked wall hit comes, then the gaze the crowd's art draws looks at the crash and her head turns toward it", () => {
+    const harness = hostWithMap();
+    const resident = shownOnTheHost(harness);
+    const poses = harness.crowd().poses;
+    const gaze = (harness.director["art"] as { gaze?: CrowdGaze | null }).gaze ?? null;
+    expect(gaze, "the art draws the director's gaze").not.toBeNull();
+    const crash = { x: 0, z: 0 };
+    // A crash turns a share of heads (by neuroticism): hit again, half a second apart, until hers turns.
+    for (let hit = 0; hit < 10 && gaze!.lookKind[resident] !== STIMULUS.crash; hit++) {
+      const yaw = poses.yaw[resident]!;
+      crash.x = poses.x[resident]! + 4 * Math.sin(yaw + 0.9);
+      crash.z = poses.z[resident]! + 4 * Math.cos(yaw + 0.9);
+      harness.listener!(15, crash.x, crash.z);
+      for (let frame = 0; frame < 0.6 / FRAME && gaze!.lookKind[resident] !== STIMULUS.crash; frame++) harness.frame();
+    }
+    expect(gaze!.lookKind[resident], "she looks at the crash").toBe(STIMULUS.crash);
+    for (let frame = 0; frame < 0.3 / FRAME; frame++) harness.frame();
+    const off = Math.atan2(crash.x - poses.x[resident]!, crash.z - poses.z[resident]!) - poses.yaw[resident]!;
+    const bearing = Math.atan2(Math.sin(off), Math.cos(off));
+    const turn = gaze!.headYaw[resident]! + gaze!.torsoTwist[resident]!;
+    expect(bearing, "control: the crash is off to her side").toBeGreaterThan(0.3);
+    expect(turn, "her head's turn toward it (rad)").toBeGreaterThan(0.3);
   });
 });

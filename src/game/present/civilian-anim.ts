@@ -9,6 +9,7 @@ import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import type { Stoops } from "../world/openworld/openworld-stoops.ts";
 import { WALK_SPEED } from "./walker-locomotion.ts";
 import { POSE_ARM_OUT } from "./civilian-art-constants.ts";
+import { HEAD_YAW_LIMIT, PITCH_LIMIT } from "./civilian-gaze-constants.ts";
 import { blankStance, walkStance, type Stance } from "./people.ts";
 import { ANKLE_Y, SHOULDER_Y } from "./ragdoll-body.ts";
 
@@ -37,6 +38,11 @@ export type ActivityPose = {
   /** She walks a stoop's door spur, and the stoops that tell the height of the tread under a foot: her feet stand on the treads (`plantOnTreads`). */
   onSpur: boolean;
   stoops: Stoops | null;
+  /** Her gaze (`CrowdGaze`) turns her head, its pitch (down positive) and her torso by these (rad) in place of the clip's turn toward her partner; false: the clip's turn. */
+  gazed: boolean;
+  gazeYaw: number;
+  gazePitch: number;
+  gazeTorso: number;
 };
 
 const ACTIVITY_NAMES = Object.keys(ACTIVITY) as ActivityName[];
@@ -229,7 +235,7 @@ const LEAN_PER_GAIT = 0.15;
 const MAX_LEAN_GAIT = 1.3;
 const KNEE_BEND_FLOOR = 0.6;
 /** She walks above this pace (m/s): under it she stands. */
-const WALKING_ABOVE = 0.05;
+export const WALKING_ABOVE = 0.05;
 
 /** The stride at `pose.stride` in every limb's channels and the body's counter-turn, bob and nod, on top of the standing channels `fillBase` made; the pace (`pose.speed`) sets how big each is. */
 function fillWalk(pose: ActivityPose): void {
@@ -495,6 +501,13 @@ function lookAtPartner(pose: ActivityPose): void {
   channels[CHANNEL.headYaw] = channels[CHANNEL.headYaw]! + channels[CHANNEL.lookAtPartner]! * turn;
 }
 
+/** Her gaze on top of the clip's head and torso (it looks at her partner itself), the head within its limits. */
+function applyGaze(pose: ActivityPose): void {
+  channels[CHANNEL.torsoTwist] = channels[CHANNEL.torsoTwist]! + pose.gazeTorso;
+  channels[CHANNEL.headYaw] = Math.max(-HEAD_YAW_LIMIT, Math.min(HEAD_YAW_LIMIT, channels[CHANNEL.headYaw]! + pose.gazeYaw));
+  channels[CHANNEL.headPitch] = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, channels[CHANNEL.headPitch]! + pose.gazePitch));
+}
+
 /** Slot `slot` of `sink` posed as `pose` says: the walk or stand, with her activity's clip blended over it; with `smoothing`, civilian `civilian`'s pose does not snap when her activity or her walk changes. Allocates nothing. */
 export function poseActivity(sink: PoseSink, slot: number, pose: ActivityPose, smoothing?: PoseSmoothing, civilian = 0): void {
   fillBase(pose);
@@ -502,10 +515,11 @@ export function poseActivity(sink: PoseSink, slot: number, pose: ActivityPose, s
   if (code < ACTIVITY_CODES && CLIP_TRACK_COUNT[code]! > 0) applyClip(code, pose);
   seatPelvis(pose);
   if (pose.onSpur) plantOnTreads(pose);
+  if (pose.gazed) applyGaze(pose);
   solveLegs();
   reachForDoor(pose);
   solveHands();
-  lookAtPartner(pose);
+  if (!pose.gazed) lookAtPartner(pose);
   smoothing?.apply(civilian, pose.activity, pose.speed > WALKING_ABOVE ? 1 : 0, channels);
   renderRig(sink, slot, pose, channels);
 }
