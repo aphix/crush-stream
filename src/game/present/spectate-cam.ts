@@ -411,7 +411,7 @@ export function carsBlock(s: Sight, eye: Vec3, target: Vec3): boolean {
 const _slab = new Float64Array(2);
 
 /** The first `t` in [`from`, `to`] at which (x, y, z) + t (vx, vy, vz) is within `pad` of box `o` (its circle flag ignored); Infinity when none is, or `o` is parked. */
-export function boxEntry(o: Occluder, x: number, y: number, z: number, vx: number, vy: number, vz: number, from: number, to: number, pad: number): number {
+function boxEntry(o: Occluder, x: number, y: number, z: number, vx: number, vy: number, vz: number, from: number, to: number, pad: number): number {
   RAY[RAY_X] = x;
   RAY[RAY_Y] = y;
   RAY[RAY_Z] = z;

@@ -30,7 +30,7 @@ import {
 import { smoothstep } from "../present/walker-math.ts";
 
 /** What the on-foot camera works with. */
-export interface OnFootCameraHost {
+interface OnFootCameraHost {
   ragdolls: RagdollSystem;
   view: ChaseCamera;
   camera: THREE.PerspectiveCamera;

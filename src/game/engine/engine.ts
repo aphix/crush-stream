@@ -475,6 +475,7 @@ export class CrashEngine extends EngineGarage {
       seed: () => this.sceneSeed,
       tier: () => (this.deviceClass !== "desktop" ? POPULATION_TIER.phone : this.cine.tier === "ultra" ? POPULATION_TIER.ultra : POPULATION_TIER.desktop),
       cars: () => this.live(),
+      peerName: (carIndex) => (this.race.racers[carIndex]?.kind === "remote" ? this.race.racers[carIndex]!.name : null),
       foot: (out) => {
         if (!this.ragdolls.torso(WALKER_SLOT, _v, _footVelocity)) return false;
         out.x = _v.x;

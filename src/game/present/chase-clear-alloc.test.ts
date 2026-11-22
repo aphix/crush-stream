@@ -42,7 +42,7 @@ const middleX = building.x + frontX * reach;
 const middleZ = building.z + frontZ * reach;
 const paint = { body: 0x808080, accent: 0x404040, name: "car" };
 const car = new DeformableCar(paint, new THREE.Scene());
-const cars = [car, ...Array.from({ length: PARKED }, (_, k) => new DeformableCar(paint, new THREE.Scene()))];
+const cars = [car, ...Array.from({ length: PARKED }, () => new DeformableCar(paint, new THREE.Scene()))];
 for (let k = 1; k < cars.length; k++) cars[k]!.group.position.set(middleX + 6 * detCos(k), 0, middleZ + 6 * detSin(k));
 const solids = new ChaseSolids(() => {});
 const cam = new DriveCam();

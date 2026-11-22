@@ -581,7 +581,7 @@ describe("given a look-at panel kept up four times a second", () => {
 
 describe("given the Auto camera asked for in the open world", () => {
   const camera = new THREE.PerspectiveCamera();
-  const NO_ORBIT: AutoOrbit = { held: () => false, aim() {}, orbit() {}, release() {} };
+  const NO_ORBIT: AutoOrbit = { held: () => false, aim() {}, orbit() {}, release() {}, lens: () => camera.fov };
   const NO_SOLIDS: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ: [] };
 
   it("when Auto is switched on, then it is on across the first frame and has no subject to frame yet, and when it is switched off the regular camera keeps the view", () => {

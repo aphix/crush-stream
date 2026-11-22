@@ -51,7 +51,7 @@ const HOT = {
   "src/game/engine/engine.ts": ["tickInner", "fixedStep", "scheduleSkins", "flushVisibleSkins", "updateCamera", "pickCar"],
   "src/game/engine/engine-core.ts": ["puffEngine", "fleetClosing", "contactEta"],
   "src/game/engine/engine-scenes.ts": ["stepDerby", "stackLookY"],
-  "src/game/present/engine-camera.ts": ["centroid", "pushFromPosts"],
+  "src/game/present/orbit-shots.ts": ["centroid", "pushFromPosts"],
   "src/game/present/engine-pistons.ts": ["sync"],
   "src/game/engine/world-step.ts": ["stepWorld"],
   "src/game/engine/engine-race.ts": ["drive", "step", "credit", "collide", "courseHit"],

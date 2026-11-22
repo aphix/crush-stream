@@ -17,6 +17,8 @@ export type AutoOrbit = {
   orbit(wallDt: number, sight: Sight): void;
   /** Auto has no subject to frame: the orbit is not the ride's. */
   release(): void;
+  /** The lens (deg) the view eases to, the orbit's and the Auto shot's alike. */
+  lens(): number;
 };
 
 /** The orbit camera as the Auto camera uses it: the ride-along's hold (`rideHeld`), aim (`frameRide`) and orbit, which is also what a drag at a thrown driver's dummy turns. One path for every subject: a person, a foot cop, a car and its driver, the ambulance. */
@@ -26,6 +28,7 @@ export function autoOrbitOf(view: ChaseCamera): AutoOrbit {
     aim: (look) => view.frameRide(look),
     orbit: (wallDt, sight) => view.orbit(wallDt, 0, false, sight),
     release: () => view.frameRide(null),
+    lens: () => view.lens,
   };
 }
 
@@ -54,13 +57,17 @@ export class OpenWorldAuto {
   private framedCuts = -1;
   /** Whether the player held the view last frame (the camera was the orbit's), so this frame's release hands it back where it stands. */
   private wasHeld = false;
-  /** Q/E's walk: the subjects as they stood when it began, nearest the start first, and where in it the camera is. */
+  /** Q/E's walk: the subjects as they stood when it began, other players first (while pinned), then nearest the start first, and where in it the camera is. */
   private readonly ring: AutoCandidates;
   private readonly ringDistance: Float32Array;
+  /** Per walk entry, 1 for another player's car: those come before everyone else. */
+  private readonly ringPeer: Uint8Array;
   private ringCount = 0;
   private ringAt = NO_SUBJECT;
   private ringAge = Infinity;
   private readonly ringPose = newAutoPose();
+  /** How long (s) the player's pick or turn of the view holds the subject. */
+  private manualHold = MANUAL_HOLD_SECONDS;
 
   /** `sizes`: how many residents, foot cops, cars and logged events there can be, which is how many subjects a scan can list. */
   constructor(world: AutoWorld, sizes: { residents: number; cops: number; cars: number; events: number }, seed: number) {
@@ -69,6 +76,7 @@ export class OpenWorldAuto {
     this.director = new AutoDirector(capacity, seed);
     this.ring = new AutoCandidates(capacity);
     this.ringDistance = new Float32Array(capacity);
+    this.ringPeer = new Uint8Array(capacity);
     this.seed = seed;
   }
 
@@ -79,6 +87,14 @@ export class OpenWorldAuto {
     this.wasHeld = false;
     this.ringCount = 0;
     this.ringAge = Infinity;
+    this.manualHold = MANUAL_HOLD_SECONDS;
+    this.scan.peersWatched = false;
+  }
+
+  /** The player picked his subject with Auto off: it is kept until he picks another or it goes, Auto making no cuts of its own; other players' cars are in the walk, first, so a room still watches its players. */
+  pin(): void {
+    this.manualHold = Infinity;
+    this.scan.peersWatched = true;
   }
 
   /** The subject on screen, null before the first (nothing in the world worth a look yet). */
@@ -115,7 +131,7 @@ export class OpenWorldAuto {
     const held = orbit.held(wallDt);
     orbit.aim(_look);
     if (held) {
-      this.director.hold(MANUAL_HOLD_SECONDS);
+      this.director.hold(this.manualHold);
       this.wasHeld = true;
       orbit.orbit(wallDt, sight);
       return true;
@@ -128,13 +144,13 @@ export class OpenWorldAuto {
       this.framedCuts = this.director.cuts;
       this.cam.cut(sideOf(this.seed, this.director.cuts));
     }
-    this.cam.update(camera, this.pose, sight, wallDt);
+    this.cam.update(camera, this.pose, sight, wallDt, orbit.lens());
     return true;
   }
 
   /**
-   * Q/E: the next (`dir` 1) or the previous (-1) person, foot cop or driver in the walk of the subjects by distance from where it began (the subject on screen, else (x, z)), which is kept between presses so a
-   * press back undoes a press on. The camera goes there and the director keeps it (`MANUAL_HOLD_SECONDS`). False when there is nobody to go to.
+   * Q/E: the next (`dir` 1) or the previous (-1) person, foot cop or driver (while `pin`ned, other players' cars first) in the walk of the subjects by distance from where it began (the subject on screen, else (x, z)), which is kept between presses so a
+   * press back undoes a press on. The camera goes there and the director keeps it (`MANUAL_HOLD_SECONDS`, or for good while `pin`ned). False when there is nobody to go to.
    */
   cycle(dir: 1 | -1, x: number, z: number): boolean {
     if (this.ringAge > RING_STALE_SECONDS || this.ringCount === 0 || !this.ringHolds(this.director.kind, this.director.id)) this.buildRing(x, z);
@@ -145,14 +161,14 @@ export class OpenWorldAuto {
       const id = this.ring.id[this.ringAt]!;
       if (kind === this.director.kind && id === this.director.id) continue;
       if (!this.scan.watchable(kind, id)) continue;
-      this.director.follow(kind, id, MANUAL_HOLD_SECONDS);
+      this.director.follow(kind, id, this.manualHold);
       this.ringAge = 0;
       return true;
     }
     return false;
   }
 
-  /** The walk is the subjects now (people, foot cops and drivers), nearest first by distance from the subject on screen, or from (x, z) with none; the subject on screen is its first. */
+  /** The walk is the subjects now: other players' cars while pinned, then people, foot cops and drivers, each part nearest first by distance from the subject on screen, or from (x, z) with none. */
   private buildRing(x: number, z: number): void {
     const table = this.ring;
     table.clear();
@@ -169,16 +185,19 @@ export class OpenWorldAuto {
       const id = table.id[at]!;
       if (!WALKED.includes(kind) || !this.scan.poseOf(kind, id, this.ringPose)) continue;
       const distance = (this.ringPose.x - aroundX) ** 2 + (this.ringPose.z - aroundZ) ** 2;
+      const peer = this.scan.isPeer(kind, id) ? 1 : 0;
       let into = kept++;
-      while (into > 0 && this.ringDistance[into - 1]! > distance) {
+      while (into > 0 && (this.ringPeer[into - 1]! < peer || (this.ringPeer[into - 1] === peer && this.ringDistance[into - 1]! > distance))) {
         table.kind[into] = table.kind[into - 1]!;
         table.id[into] = table.id[into - 1]!;
         this.ringDistance[into] = this.ringDistance[into - 1]!;
+        this.ringPeer[into] = this.ringPeer[into - 1]!;
         into--;
       }
       table.kind[into] = kind;
       table.id[into] = id;
       this.ringDistance[into] = distance;
+      this.ringPeer[into] = peer;
     }
     table.count = kept;
     this.ringCount = kept;
