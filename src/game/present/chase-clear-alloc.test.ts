@@ -70,9 +70,11 @@ function windowPerFrame(within: Within): number {
 describe("given the chase camera on a car circling in front of an open-world building, other cars parked round it", () => {
   const parts = [
     // mutation: sed -i 's/^  let kept = 0;$/  _near.length = 0;\n  let kept = 0;/' src/game/present/spectate-cam.ts
-    { it: "gathering the solids near the eye's line", within: { fn: "gather", file: "spectate-cam.ts" } },
+    { it: "gathering the solids near the eye's line", within: { fn: "gatherIn", file: "spectate-cam.ts" } },
     // mutation: sed -i 's/^    this.carClear = reach;$/    this.carClear = reach;\n    Object.assign(this, { asked: [reach] });/' src/game/present/eye-clear.ts
     { it: "testing the other cars' boxes on the eye's line", within: { fn: "carReach", file: "eye-clear.ts" } },
+    // mutation: sed -i 's/^    heightInto(s.ground, _ground);$/    _ground[PQ_Y] = s.ground.heightAt(x, z, _ground[PQ_Y]!);/' src/game/present/spectate-cam.ts
+    { it: "testing a point of the eye's line against the ground, the road's walls and the solids", within: { fn: "solidAt", file: "spectate-cam.ts" } },
   ] as const;
   for (const part of parts) {
     it(`when a window of frames is run, then ${part.it} allocates no more than ${BOUND_B} bytes a frame`, () => {

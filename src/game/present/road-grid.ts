@@ -1,4 +1,5 @@
-import { blankProjection, projectPath, WINDOW, type Projection, type TrackPath } from "../world/track.ts";
+import { PATH_POINT } from "../world/path-grid.ts";
+import { blankProjection, projectPathAt, WINDOW, type Projection, type TrackPath } from "../world/track.ts";
 
 /** A square grid over the path's bounds: per cell (row-major from `x0`, `z0`), `GRID_HINTS` path samples to project from (-1: unused). */
 export type RoadGrid = { x0: number; z0: number; cols: number; rows: number; hint: Int16Array };
@@ -70,18 +71,20 @@ export function roadGrid(p: TrackPath): RoadGrid {
   return { x0, z0, cols, rows, hint };
 }
 
-/** The nearest road to (x, z) into `out`: from each of the cell's hints' windows, or the whole path where it has none (no `g`: always). */
-export function projectGrid(g: RoadGrid | undefined, p: TrackPath, x: number, z: number, out: Projection): void {
+/** The nearest road to the point in `PATH_POINT` (x, z; written by the caller, so no double crosses the call) into `out`: from each of the cell's hints' windows, or the whole path where it has none (no `g`: always). */
+export function projectGrid(g: RoadGrid | undefined, p: TrackPath, out: Projection): void {
+  const x = PATH_POINT[0]!;
+  const z = PATH_POINT[1]!;
   const c = g ? Math.floor((x - g.x0) / GRID_CELL) : -1;
   const r = g ? Math.floor((z - g.z0) / GRID_CELL) : -1;
   const at = g && c >= 0 && c < g.cols && r >= 0 && r < g.rows ? (r * g.cols + c) * GRID_HINTS : -1;
   if (!g || at < 0 || g.hint[at]! < 0) {
-    projectPath(p, x, z, -1, out);
+    projectPathAt(p, -1, out);
     return;
   }
-  projectPath(p, x, z, g.hint[at]!, out);
+  projectPathAt(p, g.hint[at]!, out);
   for (let h = 1; h < GRID_HINTS && g.hint[at + h]! >= 0; h++) {
-    projectPath(p, x, z, g.hint[at + h]!, _alt);
+    projectPathAt(p, g.hint[at + h]!, _alt);
     if (_alt.dist2 >= out.dist2) continue;
     out.k = _alt.k;
     out.s = _alt.s;

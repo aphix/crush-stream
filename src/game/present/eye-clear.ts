@@ -2,31 +2,8 @@ import type * as THREE from "three";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
-import {
-  boxHit,
-  CINE,
-  gather,
-  inside,
-  type Occluder,
-  PROBE,
-  PROBE_PAD,
-  PROBE_X,
-  PROBE_Y,
-  PROBE_Z,
-  RAY,
-  RAY_FROM,
-  RAY_PAD,
-  RAY_T,
-  RAY_TO,
-  RAY_VX,
-  RAY_VY,
-  RAY_VZ,
-  RAY_X,
-  RAY_Y,
-  RAY_Z,
-  type Sight,
-  solidAt,
-} from "./spectate-cam.ts";
+import { boxHit, CINE, gatherIn, inside, type Occluder, type Sight, solidAt } from "./spectate-cam.ts";
+import { NEAR_BOX, NEAR_PAD, NEAR_X0, NEAR_X1, NEAR_Z0, NEAR_Z1, PROBE, PROBE_PAD, PROBE_X, PROBE_Y, PROBE_Z, RAY, RAY_FROM, RAY_PAD, RAY_T, RAY_TO, RAY_VX, RAY_VY, RAY_VZ, RAY_X, RAY_Y, RAY_Z } from "./sight-scratch.ts";
 import { Spring } from "./spring.ts";
 
 /** Sight-line samples are `STEP` m apart, each `CINE.pad` (half a step) clear of every solid, so a line never slips between two. */
@@ -111,6 +88,13 @@ export class EyeClear {
   private dy = 0;
   private dz = 0;
   private len = 0;
+  /** `liftOver`'s answer, the lift `aim` turns the line up by, the clear length a swing needs and the flat reach `gatherAround` takes (m). */
+  private over = 0;
+  private liftAsk = 0;
+  private need = 0;
+  private around = 0;
+  /** The rig's line's flat length (m), `aim`'s: worked out once a frame where a lift needs it, not once a try. */
+  private rh = 0;
   /** The line `march`, `carReach` and `reach` take (a unit way, a turn) and what they find (m): fields, as a double across a call that is not inlined boxes. */
   private ux = 0;
   private uy = 0;
@@ -139,36 +123,44 @@ export class EyeClear {
     this.boxes = boxes;
     this.sx = subject.x;
     this.sz = subject.z;
-    this.near = gather(s, this.sx - reachOut, this.sz - reachOut, this.sx + reachOut, this.sz + reachOut, CINE.pad);
+    this.around = reachOut;
+    this.near = this.gatherAround(s);
     const sy = this.clearAbove(subject.y, reachOut);
     if (sy !== sy) return;
     this.sy = sy;
     this.rx = eye.x - subject.x;
     this.ry = eye.y - sy;
     this.rz = eye.z - subject.z;
-    const len = hypot3(this.rx, this.ry, this.rz);
+    // A pivot at the subject's own height is the line already measured.
+    const len = sy === subject.y ? reachOut : hypot3(this.rx, this.ry, this.rz);
     if (len < PULL_NONE) return;
     this.len = len;
-    if (len > reachOut) this.near = gather(s, this.sx - len, this.sz - len, this.sx + len, this.sz + len, CINE.pad);
+    if (len > reachOut) {
+      this.around = len;
+      this.near = this.gatherAround(s);
+    }
 
-    const over = this.liftOver();
+    this.liftOver();
+    const over = this.over;
     this.lift = over >= this.lift ? over : over + (this.lift - over) * Math.exp(-PULL_OMEGA * dt);
     if (this.lift * len < PULL_NONE) this.lift = 0;
-    this.aim(this.lift);
+    this.liftAsk = this.lift;
+    if (this.lift !== 0 && this.over === 0) this.rh = hypot2(this.rx, this.rz);
+    this.aim();
 
-    const need = Math.min(SWING_BELOW, len);
+    this.need = Math.min(SWING_BELOW, len);
     this.turnAsk = 0;
     this.reach();
     const straight = this.reached;
     this.cooldown -= dt;
     if (this.swingTo === 0) {
-      if (straight < need && this.cooldown <= 0) this.chooseSwing(need);
+      if (straight < this.need && this.cooldown <= 0) this.chooseSwing();
     } else if (straight >= len) {
       this.swingTo = 0;
     } else if (this.cooldown <= 0) {
       this.turnAsk = this.swingTo;
       this.reach();
-      if (this.reached < need) this.chooseSwing(need);
+      if (this.reached < this.need) this.chooseSwing();
     }
     if (dt === Infinity) this.swing.snap(this.swingTo);
     else this.swing.step(this.swingTo, SWING_OMEGA, dt);
@@ -187,6 +179,17 @@ export class EyeClear {
     const sn = Math.sin(turn);
     const k = (len - this.pull) / len;
     eye.set(this.sx + (this.dx * c + this.dz * sn) * k, this.sy + this.dy * k, this.sz + (this.dz * c - this.dx * sn) * k);
+  }
+
+  /** The solids within `around` m (flat) of the subject, `CINE.pad` grown (`gatherIn`). */
+  private gatherAround(s: Sight): readonly Occluder[] {
+    const r = this.around;
+    NEAR_BOX[NEAR_X0] = this.sx - r;
+    NEAR_BOX[NEAR_Z0] = this.sz - r;
+    NEAR_BOX[NEAR_X1] = this.sx + r;
+    NEAR_BOX[NEAR_Z1] = this.sz + r;
+    NEAR_BOX[NEAR_PAD] = CINE.pad;
+    return gatherIn(s);
   }
 
   /**
@@ -209,7 +212,8 @@ export class EyeClear {
   }
 
   /** The turn (rad) nearest the rig's, on the side it already turned if equal, with at least `need` m of clear line; else the one with most. */
-  private chooseSwing(need: number): void {
+  private chooseSwing(): void {
+    const need = this.need;
     const side = this.swingTo < 0 ? -1 : 1;
     let best = -1;
     let bestTurn = 0;
@@ -236,28 +240,32 @@ export class EyeClear {
   }
 
   /**
-   * The least lift (rad, up to `STEEPEST`) that takes the rig's line over every car on it and clear of the solids too: 0 when
+   * The least lift (rad, up to `STEEPEST`, into `over`) that takes the rig's line over every car on it and clear of the solids too: 0 when
    * no car is on it, a solid stops it nearer the subject than the first car (the walls' rule), or no lift clears it.
    */
-  private liftOver(): number {
-    this.aim(0);
+  private liftOver(): void {
+    this.over = 0;
+    this.liftAsk = 0;
+    this.aim();
     const len = this.len;
     this.ux = this.dx / len;
     this.uy = this.dy / len;
     this.uz = this.dz / len;
     this.carReach();
-    if (this.carClear >= len) return 0;
+    if (this.carClear >= len) return;
     this.march();
-    if (this.marched < this.carClear) return 0;
-    const h = hypot2(this.rx, this.rz);
+    if (this.marched < this.carClear) return;
+    this.rh = hypot2(this.rx, this.rz);
+    const h = this.rh;
     const room = STEEPEST - Math.atan2(this.ry, h);
-    if (h < PULL_NONE || room <= 0) return 0;
+    if (h < PULL_NONE || room <= 0) return;
     let lo = 0;
     let hi = 0;
     this.turnAsk = 0;
     for (let k = 1; k <= LIFT_TRIES; k++) {
       const at = (room * k) / LIFT_TRIES;
-      this.aim(at);
+      this.liftAsk = at;
+      this.aim();
       this.reach();
       if (this.reached >= len) {
         hi = at;
@@ -265,26 +273,28 @@ export class EyeClear {
       }
       lo = at;
     }
-    if (hi === 0) return 0;
+    if (hi === 0) return;
     for (let i = 0; i < LIFT_BISECT; i++) {
       const mid = (lo + hi) / 2;
-      this.aim(mid);
+      this.liftAsk = mid;
+      this.aim();
       this.reach();
       if (this.reached >= len) hi = mid;
       else lo = mid;
     }
-    return hi;
+    this.over = hi;
   }
 
-  /** Sets the eye's line (`dx`, `dy`, `dz`) to the rig's turned up `lift` rad about the subject, toward the vertical. */
-  private aim(lift: number): void {
+  /** Sets the eye's line (`dx`, `dy`, `dz`) to the rig's turned up `liftAsk` rad about the subject, toward the vertical. */
+  private aim(): void {
+    const lift = this.liftAsk;
     if (lift === 0) {
       this.dx = this.rx;
       this.dy = this.ry;
       this.dz = this.rz;
       return;
     }
-    const h = hypot2(this.rx, this.rz);
+    const h = this.rh;
     const up = Math.atan2(this.ry, h) + lift;
     const k = (this.len * Math.cos(up)) / h;
     this.dx = this.rx * k;

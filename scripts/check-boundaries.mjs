@@ -46,6 +46,12 @@ const SCENE_GRAPH = /^(Mesh|InstancedMesh|SkinnedMesh|Object3D|Scene|Group|Line|
 const HOT = {
   "src/game/present/shop-spill.ts": ["update"],
   "src/game/present/shot-fx.ts": ["update"],
+  "src/game/present/spectate-cam.ts": ["solidAt", "gatherIn"],
+  "src/game/present/eye-clear.ts": ["gatherAround", "liftOver", "aim", "chooseSwing"],
+  "src/game/present/road-grid.ts": ["projectGrid"],
+  "src/game/world/track.ts": ["projectPathAt"],
+  "src/game/world/path-grid.ts": ["nearestOnPath", "scanCell", "trySegment"],
+  "src/game/world/surfaces.ts": ["heightInto", "bil", "cellHeight"],
   "src/game/engine/engine-onfoot.ts": ["swingDoor", "shoot"],
   "src/game/engine/engine-onfoot-arms.ts": ["pad", "frame"],
   "src/game/engine/engine.ts": ["tickInner", "fixedStep", "scheduleSkins", "flushVisibleSkins", "updateCamera", "pickCar", "pickDoll"],

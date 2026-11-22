@@ -4,11 +4,14 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { NO_FLOOR, type Ground } from "../world/ground.ts";
 import { GROUND_PAINT_PREFABS, PREFABS } from "../world/catalog.ts";
 import { propColliders, type Placed } from "../world/placements.ts";
+import { PATH_POINT } from "../world/path-grid.ts";
 import { blankPoint, blankProjection, pointOn, projectPath, type Track, type TrackPath } from "../world/track.ts";
 import { projectGrid, roadGrid, type RoadGrid } from "./road-grid.ts";
 import { GANTRY_BEAM, RoadIndex, sampleAt, TUNNEL_GAP, TUNNEL_SIDE } from "./track-mesh.ts";
 import { levelAt, sections } from "../world/track-sections.ts";
+import { heightInto, PQ_SIZE, PQ_X, PQ_Y, PQ_Z } from "../world/surfaces.ts";
 import { pillarPieces } from "./track-structures.ts";
+import { NEAR_BOX, NEAR_PAD, NEAR_X0, NEAR_X1, NEAR_Z0, NEAR_Z1, PROBE, PROBE_PAD, PROBE_X, PROBE_Y, PROBE_Z, RAY, RAY_FROM, RAY_PAD, RAY_T, RAY_TO, RAY_VX, RAY_VY, RAY_VZ, RAY_X, RAY_Y, RAY_Z } from "./sight-scratch.ts";
 import { BELT_Y } from "./ragdoll-proxy.ts";
 
 /**
@@ -162,6 +165,8 @@ export function raceSight(track: Track, placed: readonly Placed[]): Sight {
 const _proj = blankProjection();
 const _pt = blankPoint();
 const _near: Occluder[] = [];
+/** `solidAt`'s ground query: the point goes in and the height comes back in a typed array, so no double is boxed across the call. */
+const _ground = new Float64Array(PQ_SIZE);
 
 /** True when (x, y, z) is within `pad` of a solid. `occ`: the occluders to test (`gather`ed near a sight line). `terrain` false skips the hill / road-bed / deck test (a spot's side samples may stand beside a bank). */
 export function solid(s: Sight, x: number, y: number, z: number, pad: number, occ: readonly Occluder[] = s.occ, terrain = true): boolean {
@@ -172,13 +177,6 @@ export function solid(s: Sight, x: number, y: number, z: number, pad: number, oc
   return solidAt(s, occ, terrain);
 }
 
-/** Where `solidAt` asks, written by its caller: a hot caller hands no doubles across the call, which would box them. */
-export const PROBE = new Float64Array(4);
-export const PROBE_X = 0;
-export const PROBE_Y = 1;
-export const PROBE_Z = 2;
-export const PROBE_PAD = 3;
-
 /** `solid` at the point and clearance in `PROBE`. */
 export function solidAt(s: Sight, occ: readonly Occluder[], terrain: boolean): boolean {
   const x = PROBE[PROBE_X]!;
@@ -186,11 +184,19 @@ export function solidAt(s: Sight, occ: readonly Occluder[], terrain: boolean): b
   const z = PROBE[PROBE_Z]!;
   const pad = PROBE[PROBE_PAD]!;
   // In a hill or a road's bed, or in a bridge deck's slab (the surface within `STEP_UP` over the point).
-  if (terrain && y < s.ground.heightAt(x, z, y + pad) + pad) return true;
+  if (terrain) {
+    _ground[PQ_X] = x;
+    _ground[PQ_Z] = z;
+    _ground[PQ_Y] = y + pad;
+    heightInto(s.ground, _ground);
+    if (y < _ground[PQ_Y]! + pad) return true;
+  }
   if (x * x + z * z > (s.rim - pad) ** 2) return true;
   const p = s.path;
   if (p) {
-    projectGrid(s.grid, p, x, z, _proj);
+    PATH_POINT[0] = x;
+    PATH_POINT[1] = z;
+    projectGrid(s.grid, p, _proj);
     const k = _proj.k;
     const lat = _proj.lateral;
     const left = lat > 0;
@@ -300,10 +306,21 @@ export function hidingSight(s: Sight): Sight {
 
 /** `_near` = the occluders whose footprint, grown by `pad`, can reach the flat box around a→b. */
 export function gather(s: Sight, ax: number, az: number, bx: number, bz: number, pad: number): Occluder[] {
-  const x0 = Math.min(ax, bx);
-  const x1 = Math.max(ax, bx);
-  const z0 = Math.min(az, bz);
-  const z1 = Math.max(az, bz);
+  NEAR_BOX[NEAR_X0] = Math.min(ax, bx);
+  NEAR_BOX[NEAR_X1] = Math.max(ax, bx);
+  NEAR_BOX[NEAR_Z0] = Math.min(az, bz);
+  NEAR_BOX[NEAR_Z1] = Math.max(az, bz);
+  NEAR_BOX[NEAR_PAD] = pad;
+  return gatherIn(s);
+}
+
+/** `gather` over the box and pad in `NEAR_BOX`. */
+export function gatherIn(s: Sight): Occluder[] {
+  const x0 = NEAR_BOX[NEAR_X0]!;
+  const x1 = NEAR_BOX[NEAR_X1]!;
+  const z0 = NEAR_BOX[NEAR_Z0]!;
+  const z1 = NEAR_BOX[NEAR_Z1]!;
+  const pad = NEAR_BOX[NEAR_PAD]!;
   // Index writes and one length at the end: emptying the array first would drop its store, regrown every call.
   let kept = 0;
   const f = s.feet?.occ === s.occ ? s.feet : null;
@@ -424,19 +441,6 @@ function boxEntry(o: Occluder, x: number, y: number, z: number, vx: number, vy: 
   boxHit(o);
   return RAY[RAY_T]!;
 }
-
-/** The line `boxHit` asks about, written by its caller as `PROBE` is; `RAY_T` is its answer. */
-export const RAY = new Float64Array(10);
-export const RAY_X = 0;
-export const RAY_Y = 1;
-export const RAY_Z = 2;
-export const RAY_VX = 3;
-export const RAY_VY = 4;
-export const RAY_VZ = 5;
-export const RAY_FROM = 6;
-export const RAY_TO = 7;
-export const RAY_PAD = 8;
-export const RAY_T = 9;
 
 /** `boxEntry` for the line in `RAY`, its `t` into `RAY[RAY_T]`: true when the line meets the box. */
 export function boxHit(o: Occluder): boolean {
