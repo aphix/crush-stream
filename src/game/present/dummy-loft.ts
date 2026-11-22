@@ -127,7 +127,7 @@ export function loft(shell: Shell, mesh: Lofted): void {
   const close = (ring: number[], at: Ring, poleOffset: number, up: boolean): void => {
     const pole = addVertex(at[0] + poleOffset, shell.x + (at[7] ?? 0), at[3], at[4]);
     for (let k = 0; k < sides; k++) mesh.index.push(pole, up ? ring[(k + 1) % sides]! : ring[k]!, up ? ring[k]! : ring[(k + 1) % sides]!);
-    for (let k = 0; k < sides; k += step) mesh.coarse.push(pole, up ? ring[(k + step) % sides]! : ring[k]!, up ? ring[k]! : ring[(k + step) % sides]!);
+    if (shell.nearOnly !== true) for (let k = 0; k < sides; k += step) mesh.coarse.push(pole, up ? ring[(k + step) % sides]! : ring[k]!, up ? ring[k]! : ring[(k + step) % sides]!);
   };
   if (shell.top !== undefined) close(rings[0]!, shell.rings[0]!, shell.top, true);
   if (shell.bottom !== undefined) close(rings[last]!, shell.rings[last]!, -shell.bottom, false);
