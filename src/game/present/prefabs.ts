@@ -547,6 +547,9 @@ function disposeGroup(g: THREE.Group, keep: readonly THREE.Material[] = []): voi
   });
 }
 
+/** A race course lamp's night pool over the ground (m, before the lamp's fit): where `makeLamp` drew it before its pool was lowered for a body lying on the open world's lots. At the fit it is 21 mm, over the road ribbons' 15 mm `ROAD_LIFT`. */
+const COURSE_POOL_HEIGHT = 0.025;
+
 /**
  * makeLamp fitted to 4.4 m with its arm towards the road (+X) (`acorn`: the acorn lamp at its own size, no arm): the pole in vertex colours, then the
  * head and the night light pool on makeLamp's own shared materials, so the scene's day / night
@@ -565,8 +568,8 @@ function lamp(plain: THREE.Material, acorn = false, onSlab = acorn): PrefabPart[
     const m = o.material as THREE.MeshStandardMaterial;
     const geo = (o.geometry as THREE.BufferGeometry).clone().applyMatrix4(o.matrixWorld).applyMatrix4(fit);
     if (onSlab && o.name === LAMP_POOL) shared.push({ geometry: slabPool(geo), material: m, shared: true });
-    // A race lamp stands among roads on every side (a figure-8's crossing, a city's cross streets): its whole pool lies on the ribbons' depth proxy it is tested against.
-    else if (!acorn && o.name === LAMP_POOL) shared.push({ geometry: geo.translate(0, ROAD_LIFT, 0), material: m, shared: true });
+    // A race lamp stands among roads on every side (a figure-8's crossing, a city's cross streets): its whole pool keeps the height it always had, over the ribbons' depth proxy.
+    else if (!acorn && o.name === LAMP_POOL) shared.push({ geometry: geo.translate(0, COURSE_POOL_HEIGHT * k - geo.getAttribute("position").getY(0), 0), material: m, shared: true });
     else if (o.name === LAMP_POOL || m.emissive?.getHex()) shared.push({ geometry: geo, material: m, shared: true });
     else pole.push([geo, m.color.getHex(), MAT.LAMP_POLE]);
   });
