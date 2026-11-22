@@ -26,10 +26,15 @@ import type { RideFrame } from "./ride-cam.ts";
 import type { Sight } from "./spectate-cam.ts";
 import { applyHit, LAG, type PartHit } from "./ragdoll-wire.ts";
 import { LIFE } from "./ragdoll-pool.ts";
+import { GROUND_ANGULAR, GROUND_LINEAR } from "./ragdoll-body.ts";
 import { NO_LOOSE, recordLoose } from "./ragdoll-loose.ts";
 import { RagdollThrower } from "./ragdoll-throw.ts";
 
 export type { RagdollStats, Throw } from "./ragdoll-pool.ts";
+
+/** The impulse and the place a haul or a shift hands Rapier: scratch, never kept. */
+const _impulse = { x: 0, y: 0, z: 0 };
+const _place = { x: 0, y: 0, z: 0 };
 
 export class RagdollSystem extends RagdollThrower {
   /**
@@ -142,6 +147,62 @@ export class RagdollSystem extends RagdollThrower {
   get latestSettled(): boolean {
     const d = this.dolls[this.lastSlot];
     return d !== undefined && d.live && d.settled;
+  }
+
+  /** The torso of the dummy in `slot` (world) and its velocity (m/s) into `out`; false while nothing lives there. */
+  dollMotion(slot: number, out: { x: number; y: number; z: number; vx: number; vy: number; vz: number }): boolean {
+    const d = this.dolls[slot];
+    if (!d?.live) return false;
+    out.x = d.cur[0]!;
+    out.y = d.cur[1]!;
+    out.z = d.cur[2]!;
+    out.vx = d.vel[0]!;
+    out.vy = d.vel[1]!;
+    out.vz = d.vel[2]!;
+    return true;
+  }
+
+  /** Every part of the dummy in `slot` is pushed so its torso moves at (vx, vy, vz) m/s: a limp body hauled along, woken and damped as one that has just landed. */
+  dragDoll(slot: number, vx: number, vy: number, vz: number): void {
+    const d = this.dolls[slot];
+    if (!d?.live) return;
+    if (d.settled) {
+      for (let k = 0; k < d.bodies.length; k++) {
+        d.bodies[k]!.setLinearDamping(GROUND_LINEAR);
+        d.bodies[k]!.setAngularDamping(GROUND_ANGULAR);
+      }
+      d.settled = false;
+      d.calm = 0;
+    }
+    const dx = vx - d.vel[0]!;
+    const dy = vy - d.vel[1]!;
+    const dz = vz - d.vel[2]!;
+    for (let k = 0; k < d.bodies.length; k++) {
+      const mass = d.bodies[k]!.mass();
+      _impulse.x = dx * mass;
+      _impulse.y = dy * mass;
+      _impulse.z = dz * mass;
+      d.bodies[k]!.applyImpulse(_impulse, true);
+    }
+  }
+
+  /** Every part of the dummy in `slot` moves by (dx, dy, dz) m, its drawn pose with it: it stands where it was, shifted. */
+  shiftDoll(slot: number, dx: number, dy: number, dz: number): void {
+    const d = this.dolls[slot];
+    if (!d?.live) return;
+    for (let k = 0; k < d.bodies.length; k++) {
+      const o = 7 * k;
+      _place.x = d.cur[o]! + dx;
+      _place.y = d.cur[o + 1]! + dy;
+      _place.z = d.cur[o + 2]! + dz;
+      d.bodies[k]!.setTranslation(_place, true);
+      d.cur[o] = _place.x;
+      d.cur[o + 1] = _place.y;
+      d.cur[o + 2] = _place.z;
+      d.prev[o] = d.prev[o]! + dx;
+      d.prev[o + 1] = d.prev[o + 1]! + dy;
+      d.prev[o + 2] = d.prev[o + 2]! + dz;
+    }
   }
 
   /** Place `camera` on the dummies being followed: "none" when none is (the engine's own camera runs), "held" when the user's orbit has it (`RideAlong.frame`; `lead`: s the aim runs ahead of their velocity, the minigames). */

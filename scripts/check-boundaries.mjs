@@ -45,6 +45,7 @@ const SCENE_GRAPH = /^(Mesh|InstancedMesh|SkinnedMesh|Object3D|Scene|Group|Line|
 // queries they call. Their bodies allocate nothing.
 const HOT = {
   "src/game/net/body-codec.ts": ["clearBodyFrame", "addBodyRecord", "addHidden", "writeBodyFrame", "readBodyFrame", "copyBodyFrame"],
+  "src/game/present/engine-ragdoll.ts": ["dollMotion", "dragDoll", "shiftDoll"],
   "src/game/present/shop-spill.ts": ["update"],
   "src/game/present/shot-fx.ts": ["update"],
   "src/game/present/spectate-cam.ts": ["solidAt", "gatherIn"],
