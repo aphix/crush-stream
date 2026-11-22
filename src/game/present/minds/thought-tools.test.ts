@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { STIMULUS } from "../civilian-gaze.ts";
 import { THINK, THOUGHT, Thought, VERDICT, readCall } from "./thought-tools.ts";
 
@@ -12,7 +13,7 @@ describe("given a model's completion", () => {
     pick.tool = THOUGHT.think_about;
     pick.arg = THINK.home;
     expect(readCall(said('{"name":"dance","arguments":{}}'), pick)).toBe(VERDICT.unknownTool);
-    expect([pick.tool, pick.arg], "the pick").toEqual([THOUGHT.think_about, THINK.home]);
+    expect(firstMismatch([pick.tool, pick.arg], [THOUGHT.think_about, THINK.home]), "the pick").toBeUndefined();
   });
 
   // mutation: sed -i 's/  if (arg < 0) return VERDICT.badArgs;//' src/game/present/minds/thought-tools.ts
@@ -42,6 +43,6 @@ describe("given a model's completion", () => {
   it("when it lists two calls and is cut off inside the second, then the first is taken", () => {
     const pick = new Thought();
     expect(readCall(said('[{"name":"look_at","arguments":{"stimulus":"crash"}}, {"name":"remark_on","arguments":{"ev'), pick)).toBe(VERDICT.taken);
-    expect([pick.tool, pick.arg], "the pick").toEqual([THOUGHT.look_at, STIMULUS.crash]);
+    expect(firstMismatch([pick.tool, pick.arg], [THOUGHT.look_at, STIMULUS.crash]), "the pick").toBeUndefined();
   });
 });

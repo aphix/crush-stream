@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { STIMULUS } from "../civilian-gaze.ts";
 import { readResident } from "./minds-read.ts";
 import { mindsWorld, putStimulus } from "./minds.test-util.ts";
@@ -33,7 +34,7 @@ describe("given a resident whose gaze table holds one stimulus where she stands,
   it("when the stimulus is one a thought can look at, then she looks at it", () => {
     for (const kind of LOOKABLE) {
       const { thought } = fallbackWith(kind);
-      expect([thought.tool, thought.arg], `kind ${kind}`).toEqual([THOUGHT.look_at, kind]);
+      expect(firstMismatch([thought.tool, thought.arg], [THOUGHT.look_at, kind]), `kind ${kind}`).toBeUndefined();
     }
   });
 });

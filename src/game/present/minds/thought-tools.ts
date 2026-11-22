@@ -5,7 +5,7 @@ import { LOOK_WORDS } from "../civilian-gaze-constants.ts";
 import { STIMULUS } from "../civilian-gaze.ts";
 
 /** What a resident's mind may turn to: the model's closed tool set, keyed by the tool name the model sees; `arg` names the one argument (none for `ignore`). */
-export const THOUGHTS = {
+const THOUGHTS = {
   ignore: { about: "Carry on: nothing here is worth attention.", arg: null, argAbout: "" },
   look_at: { about: "Look at something nearby.", arg: "stimulus", argAbout: "The thing to look at." },
   worry_about: { about: "Worry about one of their needs.", arg: "need", argAbout: "The need." },
@@ -16,7 +16,7 @@ export const THOUGHTS = {
 export const THOUGHT = codesOf(THOUGHTS);
 
 /** What `think_about` can be about; `line` is the panel's words. */
-export const THINK_ABOUT = {
+const THINK_ABOUT = {
   home: { about: "getting home", line: "Home soon." },
   work: { about: "their work", line: "Work again tomorrow." },
   company: { about: "the person with them", line: "Glad of the company." },
@@ -51,7 +51,7 @@ const ARG_CODES: readonly (readonly number[])[] = [[], LOOKABLE, NEED_IDS.map((_
 const ARG_NAMES: readonly (readonly string[])[] = [[], LOOKABLE.map((kind) => STIMULUS_IDS[kind]!), NEED_IDS, REMARKABLE.map((kind) => EVENT_IDS[kind]!), THINK_IDS];
 
 /** The argument code the model's word names for tool `tool`, or -1 when the word is not one of its values. */
-export function argCodeOf(tool: number, word: string): number {
+function argCodeOf(tool: number, word: string): number {
   const at = ARG_NAMES[tool]!.indexOf(word);
   return at < 0 ? -1 : ARG_CODES[tool]![at]!;
 }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { TICKS_PER_GAME_HOUR } from "../../ai/civilians/civilian-constants.ts";
 import { FRAME_HZ } from "../../kernel/constants.ts";
 import { STIMULUS } from "../civilian-gaze.ts";
@@ -62,7 +63,7 @@ describe("given the Minds setting off", () => {
     putStimulus(gaze, 0, STIMULUS.car, 3, 4, 1, 0);
     expect(crowd.lookAt(resident), "her thought").toBe('Thinks "What\'s going on with a car?"');
     expect(attend, "she turns").toHaveBeenCalledTimes(1);
-    expect(attend.mock.calls[0]!.slice(0, 4), "to the car").toEqual([resident, 3, 0, 4]);
+    expect(firstMismatch(attend.mock.calls[0]!.slice(0, 4), [resident, 3, 0, 4]), "to the car").toBeUndefined();
   });
 });
 
@@ -109,7 +110,7 @@ describe("given a crowd standing together", () => {
     const { crowd, gaze, workers } = minds();
     const turned: number[] = [];
     vi.spyOn(gaze, "attend").mockImplementation((index, x, _y, z) => {
-      expect([x, z], `${index} turns to the crash`).toEqual([2, 0]);
+      expect(firstMismatch([x, z], [2, 0]), `${index} turns to the crash`).toBeUndefined();
       turned.push(crowd["seconds"]);
     });
     putStimulus(gaze, 0, STIMULUS.crash, 2, 0, 1, KIND_LIFE[STIMULUS.crash]!);

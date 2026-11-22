@@ -110,6 +110,10 @@ const HOT = {
   "src/game/present/civilian-gaze-poll.ts": ["cellKey", "build", "passerAhead", "loadSelf", "carTrial", "rowTrial", "takeRow", "considerPasser", "attractorInView", "considerGlance", "chooseLook"],
   "src/game/present/civilian-gaze-table.ts": ["moveRow", "stillRow", "refreshStimuli"],
   "src/game/engine/engine-openworld-gaze.ts": ["frame"],
+  "src/game/engine/engine-openworld-minds.ts": ["frame"],
+  "src/game/present/minds/crowd-minds.ts": ["setOn", "frame", "timeOut", "keep", "fanOut", "schedule", "turnScheduled", "scanPulses", "knownPulse", "notePulse", "groupAround"],
+  "src/game/present/minds/minds-read.ts": ["hearLately", "readGroup"],
+  "src/game/present/minds/thought-situation.ts": ["clear", "see", "lookWeight", "pickFallback"],
   "src/game/ai/civilians/civilian-car-door.ts": ["carDoorOpenness", "carDoorOpennessOf", "carDoorSpot"],
   "src/game/engine/engine-openworld-cars.ts": ["step"],
   "src/game/engine/engine-openworld-doors.ts": ["carStandsNear"],
@@ -505,7 +509,7 @@ const PLATFORM_WORDS = new Set([
   // HTTP / encodings
   "GET", "POST", "PUT", "DELETE", "content-type", "application/json", "accept", "cookie", "set-cookie", "host", "cache-control",
   "no-store", "x-forwarded-host", "Authorization", "origin", "localhost", "utf8", "utf-8", "sha256", "base64", "base64url", "hex",
-  "deflate-raw",
+  "deflate-raw", "SHA-256",
   // language / library vocabulary
   "none", "auto", "hidden", "center", "left", "right", "top", "bottom", "middle", "string", "number", "boolean", "object", "function",
   "undefined", "custom", "default", "id", "name", "type", "value", "key", "width", "height", "length", "min", "max", "step", "on", "off",

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { loadWeights, type WeightSources } from "./needle-weights.ts";
 
 const URL = "https://weights.test/needle2.cact";
@@ -49,7 +50,7 @@ describe("given the Needle weights and their known hash", () => {
   it("when the cached copy does not hash right, then it is dropped, fetched again and the good copy kept", async () => {
     const { given, counts, kept } = sources(BAD, GOOD);
     const got = await loadWeights(given, "bucket", URL, await sha256(GOOD));
-    expect([got.cached, got.bytes.length, counts.deletes, counts.fetches, counts.puts], "cached, bytes, deletes, fetches, puts").toEqual([false, GOOD.length, 1, 1, 1]);
+    expect(firstMismatch([got.cached, got.bytes.length, counts.deletes, counts.fetches, counts.puts], [false, GOOD.length, 1, 1, 1]), "cached, bytes, deletes, fetches, puts").toBeUndefined();
     expect(kept.get(URL)?.length, "the kept copy").toBe(GOOD.length);
   });
 

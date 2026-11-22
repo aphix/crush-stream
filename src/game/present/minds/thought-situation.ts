@@ -2,8 +2,8 @@ import { PURPOSE_LABELS } from "../../ai/civilians/civilian-names.ts";
 import { THINK, THOUGHT, Thought, EVENT_IDS, NEED_IDS, STIMULUS_IDS, isArgOf, thoughtTools } from "./thought-tools.ts";
 
 /** At most this many stimuli and recent events go into a situation (the nearest and freshest); a short list keeps the prompt short. */
-export const SEEN_MAX = 4;
-export const HEARD_MAX = 3;
+const SEEN_MAX = 4;
+const HEARD_MAX = 3;
 
 /**
  * What a resident's mind has to go on at one moment, read from the brain's row, the gaze's stimulus table and the event log, into fixed arrays.
