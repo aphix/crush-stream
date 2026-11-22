@@ -213,7 +213,8 @@ describe("given a shop and a workplace that are shut, with nobody afraid of them
       decideResident(state, resident, tick);
       expect(intAt(state, resident, RESIDENT_INT.place), `control: at ${hour} she heads for the bodega`).toBe(bodega);
       const leave = intAt(state, resident, RESIDENT_INT.nextDecisionTick);
-      decideResident(state, resident, leave);
+      // Her next walk is home, whatever her draws would pick (another round at the bodega is one of them at noon).
+      sendResidentTo(state, resident, leave, intAt(state, resident, RESIDENT_INT.home), NEED.rest, 1);
       expect(intAt(state, resident, RESIDENT_INT.fromPlace), "control: her next walk sets out from the bodega").toBe(bodega);
       const reading = new ActivityReading();
       readActivity(state, resident, leave / DECISION_HZ + 0.5, reading);

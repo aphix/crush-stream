@@ -108,14 +108,19 @@ function distanceBetween(state: CityState, from: number, to: number): number {
   return hypot2(placeX[to]! - placeX[from]!, placeZ[to]! - placeZ[from]!);
 }
 
-/** The open place of `kind` that serves best from `from` at this hour (its opening hours' weight, falling with distance), or none; ties go to the lower place id. */
-function nearestOpen(state: CityState, kind: number, from: number, tick: number, hour: number): number {
+/** Whether `place` can take resident `resident` setting out from `from` at `tick`: not wrecked, and open now or by the soonest she could be at its door (a place that will still be shut when she gets there is no candidate). */
+function openOnArrival(state: CityState, resident: number, from: number, place: number, tick: number): boolean {
+  return isOpen(state, place, tick) && (withinHours(state, place, tick) || withinHours(state, place, soonestArrival(state, resident, from, place, tick)));
+}
+
+/** The place of `kind` open to resident `resident` (`openOnArrival`) that serves best from `from` at this hour (its opening hours' weight, falling with distance), or none; ties go to the lower place id. */
+function nearestOpen(state: CityState, resident: number, kind: number, from: number, tick: number, hour: number): number {
   const list = state.index.byKind[kind]!;
   let best = NO_PLACE;
   let bestScore = 0;
   for (let at = 0; at < list.length; at++) {
     const place = list[at]!;
-    if (!isOpen(state, place, tick)) continue;
+    if (!openOnArrival(state, resident, from, place, tick)) continue;
     const score = state.venues.hourWeight[place * HOURS_PER_GAME_DAY + hour]! / (1 + distanceBetween(state, from, place) / DISTANCE_SCALE);
     if (best !== NO_PLACE && score <= bestScore) continue;
     bestScore = score;
@@ -144,7 +149,7 @@ function candidateFor(state: CityState, resident: number, need: number, current:
   const day = dayOf(tick, state.startHour);
   const adult = person && ageOf(state, resident, day) >= JOB_AGE;
   if (need === NEED.rest) state.chosenPlace = intAt(state, resident, RESIDENT_INT.home);
-  else if (need === NEED.solitude) state.chosenPlace = nearestOpen(state, PLACE_KIND.hide, current, tick, hour);
+  else if (need === NEED.solitude) state.chosenPlace = nearestOpen(state, resident, PLACE_KIND.hide, current, tick, hour);
   else if (need === NEED.work) {
     const work = intAt(state, resident, RESIDENT_INT.work);
     const shift = SHIFT_LEAST_MINUTES * TICKS_PER_GAME_MINUTE;
@@ -162,14 +167,14 @@ function candidateFor(state: CityState, resident: number, need: number, current:
     state.chosenPurpose = PURPOSE.busAway;
   } else {
     const shop = favouriteOrNearest(state, RESIDENT_INT.favouriteShop, PLACE_KIND.shop, resident, current, tick, hour, draw);
-    state.chosenPlace = shop !== NO_PLACE ? shop : nearestOpen(state, PLACE_KIND.transit, current, tick, hour);
+    state.chosenPlace = shop !== NO_PLACE ? shop : nearestOpen(state, resident, PLACE_KIND.transit, current, tick, hour);
   }
 }
 
 function favouriteOrNearest(state: CityState, field: number, kind: number, resident: number, current: number, tick: number, hour: number, draw: () => number): number {
   const favourite = intAt(state, resident, field);
-  if (favourite !== NO_PLACE && isOpen(state, favourite, tick) && draw() < FAVOURITE_CHANCE) return favourite;
-  return nearestOpen(state, kind, current, tick, hour);
+  if (favourite !== NO_PLACE && openOnArrival(state, resident, current, favourite, tick) && draw() < FAVOURITE_CHANCE) return favourite;
+  return nearestOpen(state, resident, kind, current, tick, hour);
 }
 
 /** The place and purpose with the highest utility (urgency x the hour's weight, falling with distance and with fear at the door), a need's or an interaction row's (`society-table.ts`); `state.chosenPlace` is none when nothing beats `STAY_UTILITY`. */

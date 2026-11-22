@@ -1,9 +1,10 @@
 import { BLOCK_OF_DAY, CAST, type CastMember } from "./civilian-cast.ts";
-import { dayOf } from "./civilian-clock.ts";
+import { dayOf, hourOfDay } from "./civilian-clock.ts";
 import {
   BLOCK_COUNT,
   BLOCK_DAY_STEP,
   DAYS_PER_WEEK,
+  HOURS_PER_GAME_DAY,
   MINUTES_PER_GAME_DAY,
   MINUTES_PER_GAME_HOUR,
   NO_PLACE,
@@ -57,11 +58,21 @@ export function blockOfDay(seed: number, day: number): number {
   return (start + day * BLOCK_DAY_STEP) % BLOCK_COUNT;
 }
 
-function placeOnBlockOfDay(state: CityState, day: number, sequence: number): number {
+/** Whether `place` is within its hours from `fromTick` to `toTick`, ends included (both hours read). */
+function openThrough(state: CityState, place: number, fromTick: number, toTick: number): boolean {
+  const { hourWeight } = state.venues;
+  return hourWeight[place * HOURS_PER_GAME_DAY + hourOfDay(fromTick, state.startHour)]! >= 1 && hourWeight[place * HOURS_PER_GAME_DAY + hourOfDay(toTick, state.startHour)]! >= 1;
+}
+
+/** The day's block's place for an appointment `sequence` from `arriveTick` for `dwellTicks`: the `sequence`th, else the next of the block open all that while (a shut one is no place to stand in), else the next block's. */
+function placeOnBlockOfDay(state: CityState, day: number, sequence: number, arriveTick: number, dwellTicks: number): number {
   const block = blockOfDay(state.seed, day);
   for (let step = 0; step < BLOCK_COUNT; step++) {
     const places = state.index.placesOfBlock[(block + step) % BLOCK_COUNT]!;
-    if (places.length > 0) return places[sequence % places.length]!;
+    for (let at = 0; at < places.length; at++) {
+      const place = places[(sequence + at) % places.length]!;
+      if (openThrough(state, place, arriveTick, arriveTick + dwellTicks - 1)) return place;
+    }
   }
   return NO_PLACE;
 }
@@ -84,12 +95,13 @@ export function nextAppointment(state: CityState, resident: number, afterTick: n
       if (appointment.weekday !== -1 && appointment.weekday !== weekday) continue;
       const arriveTick = (day * MINUTES_PER_GAME_DAY + appointment.minuteOfDay) * TICKS_PER_GAME_MINUTE - state.startHour * TICKS_PER_GAME_HOUR;
       if (arriveTick <= afterTick) continue;
-      const place = appointment.place === BLOCK_OF_DAY_PLACE ? placeOnBlockOfDay(state, day, at) : appointment.place;
+      const dwellTicks = appointment.dwellMinutes * TICKS_PER_GAME_MINUTE;
+      const place = appointment.place === BLOCK_OF_DAY_PLACE ? placeOnBlockOfDay(state, day, at, arriveTick, dwellTicks) : appointment.place;
       if (place === NO_PLACE) continue;
       slot.purpose = appointment.purpose;
       slot.place = place;
       slot.arriveTick = arriveTick;
-      slot.dwellTicks = appointment.dwellMinutes * TICKS_PER_GAME_MINUTE;
+      slot.dwellTicks = dwellTicks;
       return true;
     }
   }
