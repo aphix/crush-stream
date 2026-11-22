@@ -65,10 +65,6 @@ const LEASH = 0.08;
 const BLOCKED_MARGIN = 1;
 /** Held back by a wall's edge he can clear (`WalkFloor.edgeAhead`), he sidesteps it at this speed (m/s), a shuffle (tuned by feel). */
 const SIDESTEP_SPEED = 1;
-/** A solid holds his body back (`solidHolds`) when one stands within his shoulders' half width and a hand (m) past his root, at these depths (m) under his torso's centre (chest, hip, knee); a level lag under this (m) is no hold. */
-const SOLID_REACH = 0.35;
-const SOLID_HEIGHTS = [0, 0.35, 0.7] as const;
-const SOLID_LAG = 0.005;
 /** The hold's spring rate (rad/s) on his whole mass: displacement times it is the speed a displaced torso springs back at. */
 const HOLD_RATE = Math.sqrt(HOLD.stiffness / TOTAL_MASS);
 /** A hop out goes on at most this far (m, a stride) past the way out to find ground clear of everything to come down on. */
@@ -152,8 +148,6 @@ export class Walker {
   /** How far (m) he has gone on past the way out looking for clear ground to come down on (`HOP_ON`). */
   private hopOn = 0;
   private ray: Ray | null = null;
-  /** A level ray from his torso toward his root (`solidHolds`). */
-  private sideRay: Ray | null = null;
   /** The floor under (x, z) for a foot; inside a wall, or across one from his root (a banister's far side), the floor his feet stand on. */
   private readonly groundAt = (x: number, z: number): number => {
     const height = this.floor.walled(this.anchorPos[0]!, this.anchorPos[2]!, x, z) ? NO_FLOOR : this.floor.under(x, z);
@@ -184,7 +178,6 @@ export class Walker {
     for (const axis of [...ANG, ...LIN]) raw.jointConfigureMotorModel(this.gimbal.handle, axis, FORCE_BASED);
     this.feet.attach(rapier, world, doll.bodies);
     this.ray = new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
-    this.sideRay = new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
     for (const row of MOTORS) raw.jointConfigureMotorModel(doll.joints[row.joint]!.handle, row.axis, FORCE_BASED);
     this.heading = yaw;
     pitchedQuaternion(this.reference, yaw, 0);
@@ -208,7 +201,7 @@ export class Walker {
     doll.driven = false;
     doll.loose = false;
     this.forcing = false;
-    this.doll = this.world = this.rapier = this.anchor = this.gimbal = this.sideRay = null;
+    this.doll = this.world = this.rapier = this.anchor = this.gimbal = null;
   }
 
   /** The player is asking him to move: a body that has lain long enough gets up. */
@@ -279,56 +272,27 @@ export class Walker {
 
   /**
    * How hard (m/s) his torso is moved off the root (its relative speed plus the hold's spring speed for the displacement his travel does not explain), less
-   * what only the fixed world explains: a stop of the root's own motion. His travel explains lag behind him alone; lag across his way only a solid toward the root does (`solidHolds`).
+   * what only the fixed world explains: a stop of the root's own motion.
    */
   private blowSpeed(doll: Doll, travelled: number): number {
     const held = this.anchorVel;
-    let lx = doll.cur[0]! - this.anchorPos[0]!;
+    const lx = doll.cur[0]! - this.anchorPos[0]!;
     const ly = doll.cur[1]! - this.anchorPos[1]!;
-    let lz = doll.cur[2]! - this.anchorPos[2]!;
+    const lz = doll.cur[2]! - this.anchorPos[2]!;
     const lag = hypot3(lx, ly, lz);
     this.slack = Math.min(lag, this.slack + travelled);
+    const keep = lag > 0 ? (lag - this.slack) / lag : 0;
+    const dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx * keep;
+    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;
+    const dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz * keep;
+    // A wall ahead takes any amount off his way; any other solid only stops the root's own motion: a change inside the ball whose diameter is that velocity reversed.
     const sin = detSin(this.loco.yaw);
     const cos = detCos(this.loco.yaw);
-    const walled = this.solidHolds(doll, lx, lz);
-    const keep = lag > 0 ? (lag - this.slack) / lag : 0;
-    if (walled) {
-      lx *= keep;
-      lz *= keep;
-    } else {
-      const behind = Math.min(this.slack, Math.max(0, -(lx * sin + lz * cos)));
-      lx += behind * sin;
-      lz += behind * cos;
-    }
-    const dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx;
-    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;
-    const dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz;
-    // A wall ahead takes any amount off his way; any other solid only stops the root's own motion: a change inside the ball whose diameter is that velocity reversed.
     const along = Math.min(0, dx * sin + dz * cos);
     const ahead = hypot3(dx - along * sin, dy, dz - along * cos);
-    if (!walled) return ahead;
     const half = hypot3(held[0]!, held[1]!, held[2]!) / 2;
     const stopped = Math.max(0, hypot3(dx + held[0]! / 2, dy + held[1]! / 2, dz + held[2]! / 2) - half);
     return Math.min(ahead, stopped);
-  }
-
-  /** Whether a fixed solid stands toward his root from his torso (level lag (`lx`, `lz`) reversed) within his shoulders' reach, at his chest, hip or knee: what holds his body back while the root goes on. */
-  private solidHolds(doll: Doll, lx: number, lz: number): boolean {
-    const level = hypot2(lx, lz);
-    if (level < SOLID_LAG) return false;
-    const ray = this.sideRay!;
-    ray.dir.x = -lx / level;
-    ray.dir.y = 0;
-    ray.dir.z = -lz / level;
-    ray.origin.x = doll.cur[0]!;
-    ray.origin.z = doll.cur[2]!;
-    const flags = this.rapier!.QueryFilterFlags.ONLY_FIXED | this.rapier!.QueryFilterFlags.EXCLUDE_SENSORS;
-    const groups = doll.bodies[0]!.collider(0).collisionGroups();
-    for (let k = 0; k < SOLID_HEIGHTS.length; k++) {
-      ray.origin.y = doll.cur[1]! - SOLID_HEIGHTS[k]!;
-      if (this.world!.castRay(ray, level + SOLID_REACH, true, flags, groups) !== null) return true;
-    }
-    return false;
   }
 
   private decideState(doll: Doll, upright: number, height: number, dt: number): void {
