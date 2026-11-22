@@ -92,7 +92,7 @@ beforeAll(stage);
 afterAll(() => rig.dispose());
 
 describe("given the open world, the player on foot with a kerb car 6 m off and a dummy standing 8 m off", () => {
-  // mutation: sed -i 's/^    if (distance >= this.distance) return;/    if (distance > this.distance) return;/' /home/aphix/worktrees/Perf/src/game/engine/ray-nearest.ts
+  // mutation: sed -i 's/^    if (distance >= this.distance) return;/    if (distance <= this.distance \&\& this.object !== null) return;/' /home/aphix/worktrees/Perf/src/game/engine/ray-nearest.ts
   it("when 300 seeded shots are picked against the cars, then each pick (car, pane, point, distance) is the one three's raycaster sorts first, and some hit the car, its glass and nothing", () => {
     const next = seeded(7);
     const seen = { car: 0, glass: 0, none: 0 };
