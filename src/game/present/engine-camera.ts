@@ -7,9 +7,11 @@ import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { AutoCam, type AutoScene } from "./auto-cam.ts";
 import { CHASE, DriveCam, easeFov } from "./drive-cam.ts";
 import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
-import { CineCam, DutchCam, type Occluder, type Sight } from "./spectate-cam.ts";
+import { CineCam, type Occluder, type Sight } from "./spectate-cam.ts";
+import { DutchCam } from "./dutch-cam.ts";
 import { EyeClear } from "./eye-clear.ts";
 import { smoothstep } from "./walker-math.ts";
+import { keepInRim, placeApproach, placeBowl, type Post, pushFromPosts } from "./orbit-shots.ts";
 import { DRAG_PITCH_PER_PX, DRAG_YAW_PER_PX, FreeCam, type FreeInput, PAD_PITCH_RATE, PAD_YAW_RATE } from "./free-cam.ts";
 
 /** A followed (not driven) car's camera, cycled by View: the drive chase views, the trackside cinematic, the wheel-well dutch, the free orbit, Auto (`AutoCam` run live) and the free fly (`FreeCam`, detached from every car). A race opens on the chase, everything else on the orbit. */
@@ -23,12 +25,6 @@ const SPEC_VIEWS: readonly SpecView[] = ["third", "far", "first", "cine", "dutch
  */
 export type SpecScene = AutoScene & { fixed(): Sight | null };
 
-/** A lamp post the orbit keeps clear of: it stands from its base up `POST_TOP` m and is thin, so the eye's distance to its axis is what counts. */
-type Post = { intact: boolean; group: { visible: boolean; position: THREE.Vector3 } };
-/** The orbit's target keeps this far (m) from a post's axis; the eye lags the target and cuts the bend short (0.1 m at the idle spin of 0.32 rad/s, measured), so 3.15 holds it 3 m clear. */
-const POST_CLEAR = 3.15;
-const POST_TOP = 5.3;
-const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 const NO_BOXES: readonly Occluder[] = [];
@@ -37,11 +33,6 @@ const PAD_RAMP = { ring: 0.9, seconds: 0.6, gain: 1.6 };
 /** `watchFall`: the eye stands this far (m) inside the fleet disc's rim, at shoulder height (m) over the disc. */
 const FALL_EYE_IN = 1.5;
 const FALL_EYE_Y = 1.5;
-/** The orbit's eye keeps this far (m) inside `ChaseCamera.rim`, the derby bowl's wall. */
-const RIM_EYE_IN = 2;
-/** The derby's opening shot (`placeBowl`): the eye this far (m) from the pack toward the bowl's middle and up over the floor, about 48° down. */
-const BOWL_EYE_BACK = 20;
-const BOWL_EYE_UP = 22;
 /** Seconds after a drag ends that the ride-along's automatic cuts keep waiting. */
 export const RIDE_PAUSE = 2.5;
 /** A pointer that travels less (px) than this is a click, not a drag. */
@@ -56,19 +47,6 @@ const ORBIT_PITCH = { low: 0.08, high: 1.22 } as const;
 export interface CarPicker {
   at(clientX: number, clientY: number): number;
   choose(car: number): void;
-}
-
-/** Mean position of the cars still on the disc (falling and vaporized ones skipped; zero for an empty fleet). */
-export function centroid(out: THREE.Vector3, cars: readonly DeformableCar[]): THREE.Vector3 {
-  out.set(0, 0, 0);
-  let n = 0;
-  for (let i = 0; i < cars.length; i++) {
-    const car = cars[i]!;
-    if (car.falling || car.vaporized) continue;
-    out.add(car.group.position);
-    n++;
-  }
-  return n === 0 ? out : out.multiplyScalar(1 / n);
 }
 
 /** A hit's closing speed (m/s) to shake: none under `from` (a nudge), full at `full` (a head-on at speed). */
@@ -343,8 +321,8 @@ export class ChaseCamera {
       }
       this.approachSide.crossVectors(_w, _up).normalize();
       if (this.approachSide.lengthSq() < 0.1) this.approachSide.set(1, 0, 0);
-      if (this.rim === Infinity) this.placeApproach(cars);
-      else this.placeBowl(cars);
+      if (this.rim === Infinity) placeApproach(this.pos, this.look, this.approachSide, cars);
+      else placeBowl(this.pos, this.look, this.approachSide, this.rim, cars);
     }
     this.camera.position.copy(this.pos);
     this.camera.lookAt(this.look);
@@ -401,8 +379,8 @@ export class ChaseCamera {
       this.look.y + this.radius * sp,
       this.look.z + Math.cos(this.angle) * this.radius * cp,
     );
-    this.pushFromPosts();
-    this.keepInRim();
+    pushFromPosts(this.pos, this.look, this.posts);
+    keepInRim(this.pos, this.rim);
 
     const k = 1 - Math.exp((this.dragging || this.locked || padTurn ? -18 : -5.5) * wallDt);
     // The smoothing runs on the orbit's own eye: last frame's clearing is taken off first and put on again below.
@@ -414,42 +392,6 @@ export class ChaseCamera {
     this.camera.lookAt(this.look);
     if (shake) this.shake(1);
     easeFov(this.camera, this.lens, wallDt);
-  }
-
-  /**
-   * The orbit's target (`pos`) bends along its own radius round each lamp post so the eye keeps `POST_CLEAR` m from the post's
-   * axis (less over its top). One smooth swell, easing out over 3 × `POST_CLEAR` m of orbit either side, so a pass has no kink.
-   * It goes inward (the post behind the eye, out of the shot) unless the post's circle lies more than a quarter of the
-   * clearance inside the orbit's: then outward. No allocation.
-   */
-  private pushFromPosts(): void {
-    const p = this.pos;
-    const ex = p.x - this.look.x;
-    const ez = p.z - this.look.z;
-    const R = hypot2(ex, ez);
-    if (R < 1e-3) return;
-    const ux = ex / R;
-    const uz = ez / R;
-    const posts = this.posts;
-    for (let k = 0; k < posts.length; k++) {
-      const post = posts[k]!;
-      if (!post.intact || !post.group.visible) continue;
-      const q = post.group.position;
-      const h = Math.max(0, p.y - q.y - POST_TOP);
-      if (h >= POST_CLEAR) continue;
-      const c = Math.sqrt(POST_CLEAR * POST_CLEAR - h * h);
-      // The post from `look`: along the eye's radius (on the eye's side) and across it.
-      const px = q.x - this.look.x;
-      const pz = q.z - this.look.z;
-      const s = px * uz - pz * ux;
-      if (px * ux + pz * uz <= 0 || Math.abs(s) >= 3 * c) continue;
-      const swell = 1 - (s * s) / (9 * c * c);
-      // How far the post's circle lies beyond the orbit's (negative: inside it), and the shift that clears it on the chosen side.
-      const gap = hypot2(px, pz) - R;
-      const shift = gap >= -c / 4 ? -Math.max(0, c - gap) : Math.max(0, c + gap);
-      p.x += ux * shift * swell * swell;
-      p.z += uz * shift * swell * swell;
-    }
   }
 
   /**
@@ -623,47 +565,6 @@ export class ChaseCamera {
     this.angle = Math.atan2(dx, dz);
     this.radius = THREE.MathUtils.clamp(hypot3(dx, dy, dz), this.minRadius, ORBIT_RADIUS.max);
     this.pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(dy / this.radius, -0.99, 0.99)), this.pitchLow, this.pitchHigh);
-  }
-
-  private placeApproach(cars: readonly DeformableCar[]): void {
-    const mid = centroid(_v, cars);
-    mid.y = 0.6;
-    if (cars.length >= 2) {
-      _w.copy(cars[1]!.group.position).sub(cars[0]!.group.position);
-    } else {
-      _w.copy(cars[0]?.forward ?? _w.set(0, 0, 1));
-    }
-    const dist = Math.max(_w.length(), 4);
-    if (_w.lengthSq() > 1e-8) _w.normalize();
-    else _w.set(0, 0, 1);
-    const pull = THREE.MathUtils.lerp(16, 11, THREE.MathUtils.clamp(1 - dist / 28, 0, 1)) + Math.max(0, cars.length - 2) * 0.55;
-    this.pos
-      .copy(mid)
-      .addScaledVector(this.approachSide, pull)
-      .addScaledVector(_up, 5.2)
-      .addScaledVector(_w, -1.4);
-    this.look.copy(mid);
-  }
-
-  /** The derby's opening shot: high on the bowl's middle side of the pack, looking down and out at it, the bowl's floor around it. */
-  private placeBowl(cars: readonly DeformableCar[]): void {
-    const mid = centroid(_v, cars);
-    mid.y = 0.6;
-    const r = hypot2(mid.x, mid.z);
-    if (r > 1) _w.set(mid.x / r, 0, mid.z / r);
-    else _w.copy(this.approachSide);
-    this.pos.copy(mid).addScaledVector(_w, -BOWL_EYE_BACK).addScaledVector(_up, BOWL_EYE_UP);
-    this.look.copy(mid);
-    this.keepInRim();
-  }
-
-  /** An eye past `rim` comes in to `RIM_EYE_IN` short of it toward the middle, at its height: inside the round wall, its line to anything inside clears it. */
-  private keepInRim(): void {
-    const r = hypot2(this.pos.x, this.pos.z);
-    const max = this.rim - RIM_EYE_IN;
-    if (r <= max) return;
-    this.pos.x *= max / r;
-    this.pos.z *= max / r;
   }
 
   private onPointerDown = (e: PointerEvent): void => {
