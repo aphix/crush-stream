@@ -15,7 +15,7 @@ const STOP_WITHIN_S = 0.35;
 const STOP_WITHIN_M = 0.55;
 /** He runs this long (s) before W is let go: past the 0.35 s ramp and its jerk-limited settling, at a steady run. */
 const STEADY_RUN_S = 1;
-/** A held diagonal is read for this long (s) from the moment he is out: through the camera's blend in, a press held on the view so the follow camera does not recentre. */
+/** A held diagonal is read for this long (s) from the moment he is out, a press held on the view so the follow camera does not recentre. */
 const DIAGONAL_S = 1;
 
 let rig: OnFootRig;
@@ -111,8 +111,8 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     expect(stop.metres, "metres to a stand").toBeLessThanOrEqual(STOP_WITHIN_M);
   });
 
-  // mutation: sed -i -e 's/^    const ahead = -detSin(view.orbitAngle);/    const ahead = view.look.x - this.host.camera.position.x;/' -e 's/^    const side = -detCos(view.orbitAngle);/    const side = view.look.z - this.host.camera.position.z;/' /home/aphix/worktrees/Feel/src/game/engine/engine-onfoot.ts
-  it("when he gets out and holds forward and right with the view held still, then his heading stays the same way off the view's every frame through the camera's blend in", () => {
+  // mutation: sed -i 's/^      this.smoothSide = intent.strafe;/      this.smoothSide = 0;/' /home/aphix/worktrees/Feel/src/game/engine/engine-onfoot.ts
+  it("when he gets out and holds forward and right from a stand with the view held still, then his heading is that diagonal off the view's from the first frame and never curves", () => {
     rig.getIn();
     rig.getOut();
     const view = rig.engine["view"];

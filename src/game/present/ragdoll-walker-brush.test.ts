@@ -104,9 +104,10 @@ describe("given the walker beside a wall on flat ground", () => {
 const flightCases: readonly { it: string; x: number; heading: number; command: number }[] = [
   { it: "when he runs up it 10 degrees into the party wall, then he keeps his feet and his strength", x: 0, heading: 10 * DEG, command: RUN_SPEED },
   { it: "when he runs up it along the party wall, 5 degrees into it, then he keeps his feet and his strength", x: 0.2, heading: 5 * DEG, command: RUN_SPEED },
+  // mutation (the sinking torso): sed -i 's/^    const dy = Math.max(0, doll.vel\[1\]! - held\[1\]! + HOLD_RATE \* ly \* keep);/    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;/' /home/aphix/worktrees/Feel/src/game/present/ragdoll-walker.ts
   { it: "when he runs up it 5 degrees into the banister, then he keeps his feet and his strength", x: 0.2, heading: -5 * DEG, command: RUN_SPEED },
   { it: "when he walks up it across to the party wall at 10 degrees, then he keeps his feet and his strength", x: -0.2, heading: 10 * DEG, command: WALK_SPEED },
-  // mutation: sed -i 's/^    const dy = Math.max(0, doll.vel\[1\]! - held\[1\]! + HOLD_RATE \* ly \* keep);/    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;/' /home/aphix/worktrees/Feel/src/game/present/ragdoll-walker.ts
+  // mutation (a sprint ramps as a run on the treads): sed -i 's/^      const top = share < 1 ? Math.min(command, RUN_SPEED) : command;/      const top = command;/' /home/aphix/worktrees/Feel/src/game/present/walker-floor.ts
   { it: "when he sprints straight up it beside the party wall, then he keeps his feet and his strength", x: 0.2, heading: 0, command: SPRINT_SPEED },
 ];
 
