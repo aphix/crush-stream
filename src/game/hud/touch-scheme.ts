@@ -5,7 +5,7 @@
  */
 
 import { hypot2 } from "../kernel/physics-core.js";
-import { PAD_BUTTON, PAD_DEAD, type TouchPad } from "../vehicle/gamepad.ts";
+import { PAD_BUTTON, type TouchPad } from "../vehicle/gamepad.ts";
 
 export const TOUCH_SCHEMES = ["stick", "pedals", "autogas", "tilt"] as const;
 export type TouchScheme = (typeof TOUCH_SCHEMES)[number];
@@ -123,22 +123,19 @@ export function tapOnFoot(touch: TouchPad): void {
 const DISC_DEAD = 0.04;
 
 /**
- * The driving disc's reading for a knob offset (`x`, `y`: fractions of its radius), as the pad's stick value. The pad's own stick curve
- * (a deadzone and a power curve, `stickScale`) is made for a controller's sprung stick and swallows a small push of a thumb, so the offset is
- * warped to the stick value that curve turns back into the offset itself: a quarter of the way is a quarter of the gas, the brake, the wheel.
- * Only a resting thumb (`DISC_DEAD`) reads zero.
+ * The driving disc's reading for a knob offset (`x`, `y`: fractions of its radius), as the pad's stick value: the offset itself, so a quarter of the way
+ * is a quarter of the gas, the brake, the wheel. Only a resting thumb (`DISC_DEAD`) reads zero.
  */
 export function discReading(x: number, y: number): { x: number; y: number } {
   const offset = hypot2(x, y);
   if (offset < DISC_DEAD) return { x: 0, y: 0 };
-  const warped = PAD_DEAD.stick + (1 - PAD_DEAD.stick) * Math.pow(Math.min(1, offset), 1 / PAD_DEAD.curve);
-  return { x: (x / offset) * warped, y: (y / offset) * warped };
+  const scale = Math.min(1, offset) / offset;
+  return { x: x * scale, y: y * scale };
 }
 
 /**
  * The steering slider's reading: the finger's offset from the bar's centre as a share of half its length, clamped to -1..1
- * (negative is left, as the pad's stick). Linear on purpose: the pad's own `stickScale` adds the dead zone and the fine-steering
- * curve, so a second set here would double them.
+ * (negative is left, as the pad's stick). Linear: half the bar is half lock.
  */
 export function sliderSteer(offset: number, halfLength: number): number {
   if (halfLength <= 0) return 0;

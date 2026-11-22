@@ -528,15 +528,20 @@ export class OnFootDirector {
     return CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) * Math.min(1, reach);
   }
 
-  /** The stick and keys, relative to the camera, into the walker's heading and speed. */
+  /**
+   * The stick and keys, relative to the view, into the walker's heading and speed. The view's way is the orbit's yaw (the eye stands at (sin, cos) of it behind
+   * him), not the drawn camera's position: that eases in after the climb out, so a held direction read from it would curve with the blend.
+   */
   private walk(wallDt: number): void {
-    const { camera, view, ragdolls, keys, pad, touch } = this.host;
+    const { view, ragdolls, keys, pad, touch } = this.host;
     const walker = ragdolls.walker;
     const intent = readWalkIntent(keys, pad, touch, this.intent, this.armed());
     const reach = hypot2(intent.forward, intent.strafe);
+    const ahead = -detSin(view.orbitAngle);
+    const side = -detCos(view.orbitAngle);
     if (this.arms.aiming) {
       // Aiming: he faces where the camera looks and walks forward only, at no more than a walk.
-      walker.heading = detAtan2(view.look.x - camera.position.x, view.look.z - camera.position.z);
+      walker.heading = detAtan2(ahead, side);
       walker.command = intent.forward > 0.5 ? Math.min(this.pace(intent, reach), WALK_SPEED) : 0;
       if (reach >= WALK_STOP) walker.ask();
       this.intentSeeded = false;
@@ -556,11 +561,6 @@ export class OnFootDirector {
       this.smoothAhead += (intent.forward - this.smoothAhead) * ease;
       this.smoothSide += (intent.strafe - this.smoothSide) * ease;
     }
-    let ahead = view.look.x - camera.position.x;
-    let side = view.look.z - camera.position.z;
-    const along = hypot2(ahead, side) || 1;
-    ahead /= along;
-    side /= along;
     const x = ahead * this.smoothAhead - side * this.smoothSide;
     const z = side * this.smoothAhead + ahead * this.smoothSide;
     walker.heading = detAtan2(x, z);

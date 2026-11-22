@@ -222,11 +222,12 @@ describe("given the touch pedals", () => {
     expect(out.throttle < 0 && out.brake === 0, `standing still reverses: throttle ${out.throttle} brake ${out.brake}`).toBeTruthy();
   });
 
-  it("when the stick steers half right while the gas pedal is down, then the steering is the stick's own scaled value and the gas is full", () => {
+  // mutation: sed -i 's/^  if (Math.abs(t.x) > Math.abs(out.lx)) out.lx = t.x;/  if (Math.abs(t.x) > Math.abs(out.lx)) out.lx = t.x * stickScale(t.x, t.y);/' src/game/vehicle/gamepad.ts
+  it("when the touch stick steers half right while the gas pedal is down, then the steering is the half its scheme wrote (the pad stick's curve is not applied again) and the gas is full", () => {
     const s = blankPad();
     readPad(null, s);
     mergeTouch({ ...resting(), x: 0.5, gas: 1 }, s, 0);
-    expect(Math.abs(s.lx - 0.5 * stickScale(0.5, 0)), `lx ${s.lx}`).toBeLessThan(1e-9);
+    expect(s.lx, `lx ${s.lx}`).toBe(0.5);
     expect(s.rt).toBe(1);
     expect(s.lt).toBe(0);
   });

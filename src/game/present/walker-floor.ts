@@ -3,12 +3,15 @@ import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { NO_STAIRS, type StairField } from "../world/stairs.ts";
 import { armedSolids, heightIn, PQ_SIZE, PQ_X, PQ_Y, PQ_Z, STEP_MAX } from "../world/surfaces.ts";
 import { PARTS } from "./ragdoll-body.ts";
+import { brakeRate, RUN_SPEED } from "./walker-locomotion.ts";
 
 /** A fixed world-axis box that is not in the ground (an interior's slab, stair tread or counter): `y0` its foot, `y1` its top. */
 export type FloorBox = { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number };
 
 /** The tallest step (m) a foot goes up onto, a stair riser or a curb (a person takes 0.30 m without a hand); anything taller is a wall. */
 export const WALK_STEP = 0.3;
+/** A box this much (m) over where his feet ask from is a wall, two treads and more: a foot over it has no floor (the ground under a wall is not his to stand on). */
+const WALL_RISE = 2 * WALK_STEP;
 /** The ground counts a prism top as floor within `STEP_MAX` above the height asked from, so asking this much higher makes that reach `WALK_STEP`. */
 const ASK_LIFT = WALK_STEP - STEP_MAX;
 /** A rise or drop of this much (m) within `PACE_REACH` ahead is a step, not a ramp (an 8° ramp rises 0.09 m in 0.6 m, a curb or riser 0.12 or more). */
@@ -18,6 +21,8 @@ const PACE_LOOK = 0.2;
 const PACE_REACH = 0.6;
 /** The pace (m/s) he keeps over steps: the gait's two steps in 0.95 s then reach 0.24 m, a stair tread (0.26 to 0.28 m) or less, so each foot lands on its own tread. */
 const STEP_PACE = 0.5;
+/** The share of his brake at the pace asked (`brakeRate`) the slowing toward a step plans on, so the jerk-limited brake keeps up with it (tuned by feel). */
+const PACE_BRAKE_SHARE = 0.85;
 /** The step's edge is found to within `PACE_LOOK` / 2^this m, so the pace ramps smoothly as it nears. */
 const EDGE_BISECTIONS = 5;
 /** The torso's centre stands this high (m) over the floor. */
@@ -85,19 +90,59 @@ export class WalkFloor {
     for (let i = 0; i < boxes.length; i++) {
       const box = boxes[i]!;
       if (x < box.x0 || x > box.x1 || z < box.z0 || z > box.z1) continue;
-      if (box.y0 > ask || box.y1 > ask + STEP_MAX || box.y1 <= best) continue;
+      if (box.y0 > ask || box.y1 <= best) continue;
+      if (box.y1 > ask + WALL_RISE) return NO_FLOOR;
+      if (box.y1 > ask + STEP_MAX) continue;
       best = box.y1;
     }
     if (this.parts !== null) best = Math.max(best, this.parts.topUnder(x, z, ask));
     return best;
   }
 
-  /** The pace (m/s) he may keep at (`x`, `z`) facing `yaw` when asked for `command`: `STEP_PACE` while a step lies ahead or under him. */
+  /** The share (0 to 1) of the way from (`fromX`, `fromZ`) to (`x`, `z`) at which it first meets a wall (a box over `WALL_RISE` above his level, not overhead); 1 when it meets none. */
+  wallShare(fromX: number, fromZ: number, x: number, z: number): number {
+    const ask = this.level + ASK_LIFT;
+    const dx = x - fromX;
+    const dz = z - fromZ;
+    const boxes = this.boxes;
+    let first = 1;
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i]!;
+      if (box.y0 > ask || box.y1 <= ask + WALL_RISE) continue;
+      let near = 0;
+      let far = 1;
+      if (dx === 0) {
+        if (fromX < box.x0 || fromX > box.x1) continue;
+      } else {
+        const a = (box.x0 - fromX) / dx;
+        const b = (box.x1 - fromX) / dx;
+        near = Math.max(near, Math.min(a, b));
+        far = Math.min(far, Math.max(a, b));
+      }
+      if (dz === 0) {
+        if (fromZ < box.z0 || fromZ > box.z1) continue;
+      } else {
+        const a = (box.z0 - fromZ) / dz;
+        const b = (box.z1 - fromZ) / dz;
+        near = Math.max(near, Math.min(a, b));
+        far = Math.min(far, Math.max(a, b));
+      }
+      if (near <= far) first = Math.min(first, near);
+    }
+    return first;
+  }
+
+  /**
+   * The pace (m/s) he may keep at (`x`, `z`) facing `yaw` when asked for `command`: `STEP_PACE` while a step lies ahead or under him, and on the way to it no faster
+   * than he can brake to it by the edge (a run or a sprint that reaches a flight too fast plants its first foot a tread too high, and the flight is a wall to him).
+   */
   pace(x: number, z: number, yaw: number, command: number): number {
     if (command <= STEP_PACE) return command;
     const sin = detSin(yaw);
     const cos = detCos(yaw);
-    for (let ahead = PACE_LOOK; ahead <= PACE_REACH + PACE_LOOK / 2; ahead += PACE_LOOK) {
+    const brake = PACE_BRAKE_SHARE * brakeRate(command);
+    const reach = Math.max(PACE_REACH, PACE_LOOK + (command * command - STEP_PACE * STEP_PACE) / (2 * brake));
+    for (let ahead = PACE_LOOK; ahead <= reach + PACE_LOOK / 2; ahead += PACE_LOOK) {
       if (!this.stepAt(x, z, sin, cos, ahead)) continue;
       let near = ahead - PACE_LOOK;
       let far = ahead;
@@ -107,7 +152,10 @@ export class WalkFloor {
         else near = mid;
       }
       const share = Math.max(0, Math.min(1, (far - PACE_LOOK) / (PACE_REACH - PACE_LOOK)));
-      return Math.min(command, STEP_PACE + (command - STEP_PACE) * share);
+      // Within `PACE_REACH` (on a flight: always) a sprint ramps as a run does, or its first stride on the treads would skip one.
+      const top = share < 1 ? Math.min(command, RUN_SPEED) : command;
+      const braking = Math.sqrt(STEP_PACE * STEP_PACE + 2 * brake * Math.max(0, far - PACE_LOOK));
+      return Math.min(command, STEP_PACE + (top - STEP_PACE) * share, braking);
     }
     return command;
   }
@@ -118,11 +166,11 @@ export class WalkFloor {
     return floor !== NO_FLOOR && Math.abs(floor - this.level) >= STEP_RISE;
   }
 
-  /** The gait has stepped: the higher floor under a planted foot's pivot (`plant` x, y, z per foot) is `level`. */
-  stand(planted: Uint8Array, plant: Float64Array): void {
+  /** The gait has stepped: the higher floor under a planted foot's pivot (`plant` x, y, z per foot) is `level`; a foot across a wall from his root at (`fromX`, `fromZ`) reads none. */
+  stand(planted: Uint8Array, plant: Float64Array, fromX: number, fromZ: number): void {
     let level = NO_FLOOR;
     for (let f = 0; f < 2; f++) {
-      if (planted[f] !== 1) continue;
+      if (planted[f] !== 1 || this.wallShare(fromX, fromZ, plant[f * 3]!, plant[f * 3 + 2]!) < 1) continue;
       const floor = this.under(plant[f * 3]!, plant[f * 3 + 2]!);
       if (floor === NO_FLOOR) continue;
       this.footFloor[f] = floor;

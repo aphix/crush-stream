@@ -130,7 +130,6 @@ export class Walker {
   /** Seconds since his punch began; at or past `PUNCH_SECONDS` he is not punching. */
   private punchFor = PUNCH_SECONDS;
   private forcing = false;
-  private groundLast = 0;
   private readonly reference = new Float64Array(4);
   private readonly next = new Float64Array(4);
   private readonly target = new Float64Array(4);
@@ -147,11 +146,10 @@ export class Walker {
   /** How far (m) he has gone on past the way out looking for clear ground to come down on (`HOP_ON`). */
   private hopOn = 0;
   private ray: Ray | null = null;
-  /** The floor under (x, z), the last known one where there is none. */
+  /** The floor under (x, z) for a foot; inside a wall, or across one from his root (a banister's far side), the floor his feet stand on. */
   private readonly groundAt = (x: number, z: number): number => {
-    const height = this.floor.under(x, z);
-    if (height !== NO_FLOOR) this.groundLast = height;
-    return this.groundLast;
+    const height = this.floor.wallShare(this.anchorPos[0]!, this.anchorPos[2]!, x, z) < 1 ? NO_FLOOR : this.floor.under(x, z);
+    return height !== NO_FLOOR ? height : this.floor.level;
   };
 
   get active(): boolean {
@@ -251,8 +249,8 @@ export class Walker {
   }
 
   /**
-   * On his feet, his torso moving more than `HIT_SPEED` (m/s) differently from the root that holds it is a blow (the root's own acceleration is no hit, and
-   * neither is being held back along his way by a wall): it takes strength in proportion, past `HIT_SPAN` more it knocks him down, and strength comes back
+   * On his feet, his torso moving more than `HIT_SPEED` (m/s) differently from the root that holds it is a blow (the root's own acceleration is no hit, nor is a wall, a
+   * stair or a banister holding him: `blowSpeed`): it takes strength in proportion, past `HIT_SPAN` more it knocks him down, and strength comes back
    * over `RECOVER_SECONDS`. Lag his own travel explains (`slack`) is no blow, and beside another body a lean cannot fell him.
    */
   private feelHits(doll: Doll, dt: number): void {
@@ -271,9 +269,8 @@ export class Walker {
   }
 
   /**
-   * How hard (m/s) his torso is moved off the root: its speed relative to the root plus the hold's spring speed for how far it is displaced (a stiff hold takes a
-   * blow's speed out of the torso inside a frame and leaves a displacement), less what a wall ahead takes off his way (the torso behind the root along his facing).
-   * `travelled`: how far (m) the root moved this frame; the lag grows forgiven by that much.
+   * How hard (m/s) his torso is moved off the root (its relative speed plus the hold's spring speed for the displacement his travel does not explain), less
+   * what only the fixed world explains: a stop of the root's own motion.
    */
   private blowSpeed(doll: Doll, travelled: number): number {
     const held = this.anchorVel;
@@ -283,17 +280,17 @@ export class Walker {
     const lag = hypot3(lx, ly, lz);
     this.slack = Math.min(lag, this.slack + travelled);
     const keep = lag > 0 ? (lag - this.slack) / lag : 0;
-    let dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx * keep;
+    const dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx * keep;
     const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;
-    let dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz * keep;
+    const dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz * keep;
+    // A wall ahead takes any amount off his way; any other solid only stops the root's own motion: a change inside the ball whose diameter is that velocity reversed.
     const sin = detSin(this.loco.yaw);
     const cos = detCos(this.loco.yaw);
-    const along = dx * sin + dz * cos;
-    if (along < 0) {
-      dx -= along * sin;
-      dz -= along * cos;
-    }
-    return hypot3(dx, dy, dz);
+    const along = Math.min(0, dx * sin + dz * cos);
+    const ahead = hypot3(dx - along * sin, dy, dz - along * cos);
+    const half = hypot3(held[0]!, held[1]!, held[2]!) / 2;
+    const stopped = Math.max(0, hypot3(dx + held[0]! / 2, dy + held[1]! / 2, dz + held[2]! / 2) - half);
+    return Math.min(ahead, stopped);
   }
 
   private decideState(doll: Doll, upright: number, height: number, dt: number): void {
@@ -351,10 +348,11 @@ export class Walker {
     this.framesOnFoot = 0;
     this.hopUp = 0;
     this.floor.reset(at.x, at.y, at.z);
-    this.gait.seed(at.x, at.y, at.z, yaw, this.groundAt);
+    // The root first: the gait's floor reads ask from it (`underFoot`).
     this.anchorPos[0] = at.x;
     this.anchorPos[1] = at.y;
     this.anchorPos[2] = at.z;
+    this.gait.seed(at.x, at.y, at.z, yaw, this.groundAt);
     this.anchorVel.fill(0);
     this.slack = 0;
     this.push.fill(0);
@@ -372,7 +370,7 @@ export class Walker {
     this.loco.update(dt, this.heading, this.floor.pace(this.anchorPos[0]!, this.anchorPos[2]!, this.loco.yaw, this.command));
     this.gait.update(dt, this.loco, this.groundAt, doll.cur, 3);
     this.punchArm(dt);
-    this.floor.stand(this.gait.planted, this.gait.plant);
+    this.floor.stand(this.gait.planted, this.gait.plant, this.anchorPos[0]!, this.anchorPos[2]!);
     this.moveAnchor(dt);
   }
 

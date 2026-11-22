@@ -7,6 +7,7 @@ import type { Placed } from "../world/placements.ts";
 import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { WALKER_SLOT } from "./ragdoll-pool.ts";
+import { PARTS } from "./ragdoll-body.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import { WalkFloor, type FloorBox } from "./walker-floor.ts";
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
@@ -220,12 +221,24 @@ describe("given the paced command and a curb ahead", () => {
     floor.boxes = [{ x0: -4, x1: 4, z0: 0.6, z1: 4, y0: 0, y1: 0.15 }];
     const paces: number[] = [];
     for (let z = -0.2; z <= 0.7; z += 0.01) paces.push(floor.pace(0, z, 0, RUN_SPEED));
-    // mutation: sed -i 's/STEP_PACE + (command - STEP_PACE) \* share/STEP_PACE/' src/game/present/walker-floor.ts
+    // mutation: sed -i 's/STEP_PACE + (top - STEP_PACE) \* share/STEP_PACE/' src/game/present/walker-floor.ts
     let worst = 0;
     for (let i = 1; i < paces.length; i++) worst = Math.max(worst, Math.abs(paces[i]! - paces[i - 1]!));
     expect(worst, `largest 1 cm step in pace ${worst.toFixed(3)} m/s`).toBeLessThan(0.2);
     expect(paces[0]).toBe(RUN_SPEED);
     expect(paces[paces.length - 1]).toBeLessThan(RUN_SPEED);
+  });
+
+  // mutation: sed -i 's/^      if (box.y1 > ask + WALL_RISE) return NO_FLOOR;/      if (box.y1 > ask + WALL_RISE) continue;/' src/game/present/walker-floor.ts
+  it("when he runs on a landing 30 degrees toward a wall beside it, then the wall is no step: the pace is the run asked for", () => {
+    const floor = new WalkFloor();
+    floor.boxes = [
+      { x0: -0.45, x1: 0.45, z0: 0, z1: 10, y0: 0, y1: 3 },
+      { x0: 0.45, x1: 0.75, z0: -2, z1: 10, y0: 0, y1: 6 },
+    ];
+    floor.reset(0, 3 + PARTS[0].c[1], 5);
+    expect(floor.level, "control: he stands on the landing").toBe(3);
+    expect(floor.pace(0.3, 5, (30 * Math.PI) / 180, RUN_SPEED)).toBe(RUN_SPEED);
   });
 });
 

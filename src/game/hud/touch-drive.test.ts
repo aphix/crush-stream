@@ -5,6 +5,7 @@ import { idleDrive } from "../vehicle/car-drive.ts";
 import { blankPad, mergeTouch, PAD_BUTTON, type TouchPad } from "../vehicle/gamepad.ts";
 import { discReading, pedalsFor, pressTouchButton, pulledDown, releaseTouchButton, schemeLayout, sliderSteer, stripReading, type TouchScheme } from "./touch-scheme.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { TILT, tiltSteer } from "./tilt-steer.ts";
 
 /** Where each thumb is, as the controls read it: the steering thumb (px from the bar's centre, px pulled down), the pedal thumb (strip height 0..1, or a Brake pad). */
 type Thumbs = {
@@ -73,6 +74,10 @@ describe("given a scripted two-thumb drive at speed", () => {
     { it: "when Tilt strip thumb is at the foot while it is turned, then it brakes and keeps turning", thumbs: { scheme: "tilt", tiltSteer: 0.8, stripAt: 0 }, wheel: "right", gas: "none", brake: true, ebrake: false, boost: false, pulls: false },
     { it: "when the Disc is pushed up and right, then it pulls and turns right (unchanged)", thumbs: { scheme: "stick", discPush: { x: 36, y: -36 } }, wheel: "right", gas: "some", brake: false, ebrake: false, boost: false, pulls: true },
     { it: "when the Disc is pushed down and the Handbrake button is held, then it brakes with the e-brake (unchanged)", thumbs: { scheme: "stick", discPush: { x: 0, y: 36 }, handbrakeButton: true }, wheel: "straight", gas: "none", brake: true, ebrake: true, boost: false, pulls: false },
+    { it: "when Pedals steering thumb steers right and pulls down while the strip thumb is at the foot, then two thumbs brake, steer and hold the e-brake at once", thumbs: { scheme: "pedals", steerPx: 60, pullPx: 60, stripAt: 0 }, wheel: "right", gas: "none", brake: true, ebrake: true, boost: false, pulls: false },
+    { it: "when Easy steering thumb steers right and pulls down while the other holds Brake, then two thumbs brake, steer and hold the e-brake at once", thumbs: { scheme: "autogas", steerPx: 60, pullPx: 60, brakePad: true }, wheel: "right", gas: "none", brake: true, ebrake: true, boost: false, pulls: false },
+    { it: "when Tilt is turned right, the left thumb holds the e-brake pad and the strip thumb is at the foot, then two thumbs brake and hold the e-brake while the phone steers", thumbs: { scheme: "tilt", tiltSteer: 0.8, ebrakePad: true, stripAt: 0 }, wheel: "right", gas: "none", brake: true, ebrake: true, boost: false, pulls: false },
+    { it: "when the Disc is pushed down and right and the Handbrake button is held, then two thumbs brake, steer and hold the e-brake at once", thumbs: { scheme: "stick", discPush: { x: 30, y: 20 }, handbrakeButton: true }, wheel: "right", gas: "none", brake: true, ebrake: true, boost: false, pulls: false },
   ] as const satisfies readonly { it: string; thumbs: Thumbs; wheel: "left" | "right" | "straight"; gas: "none" | "some" | "full"; brake: boolean; ebrake: boolean; boost: boolean; pulls: boolean }[];
   for (const testCase of testCases) {
     it(testCase.it, () => {
@@ -85,6 +90,27 @@ describe("given a scripted two-thumb drive at speed", () => {
       expect(out.ebrake, "e-brake").toBe(testCase.ebrake);
       expect(intent.boost, "boost").toBe(testCase.boost);
       expect(out.throttle > 0, `throttle ${out.throttle.toFixed(2)}`).toBe(testCase.pulls);
+    });
+  }
+});
+
+/** Each scheme's steering at half its travel: half the bar, half the tilt past its dead zone to full lock, half the disc's radius. */
+const halfSteer: readonly { it: string; thumbs: Thumbs }[] = [
+  { it: "when Pedals steering thumb is half way along the bar, then the wheel is half lock", thumbs: { scheme: "pedals", steerPx: BAR_HALF_TRAVEL / 2 } },
+  { it: "when Easy steering thumb is half way along the bar, then the wheel is half lock", thumbs: { scheme: "autogas", steerPx: BAR_HALF_TRAVEL / 2 } },
+  {
+    it: "when Tilt is turned half way from its dead zone to full lock, then the wheel is half lock",
+    thumbs: { scheme: "tilt", tiltSteer: tiltSteer(-(TILT.deadZoneDegrees.default + TILT.fullLockDegrees.default) / 2, { fullLockDegrees: TILT.fullLockDegrees.default, deadZoneDegrees: TILT.deadZoneDegrees.default }) },
+  },
+  { it: "when the Disc is pushed half its radius to the side, then the wheel is half lock (unchanged)", thumbs: { scheme: "stick", discPush: { x: -18, y: 0 } } },
+];
+
+describe("given each touch scheme's steering at half its travel", () => {
+  // mutation: sed -i 's/^  if (Math.abs(t.x) > Math.abs(out.lx)) out.lx = t.x;/  if (Math.abs(t.x) > Math.abs(out.lx)) out.lx = t.x * stickScale(t.x, t.y);/' src/game/vehicle/gamepad.ts
+  for (const testCase of halfSteer) {
+    it(testCase.it, () => {
+      const { intent } = driveFor(testCase.thumbs);
+      expect(Math.abs(intent.wheel), `wheel ${intent.wheel.toFixed(3)}`).toBeCloseTo(0.5, 6);
     });
   }
 });
