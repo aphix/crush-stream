@@ -41,7 +41,7 @@ A tap shorter than one frame still registers (the press is latched until the nex
 | Long jump's timed bail (Range → Mini games → Long jump; the boost control above, and in that mode nothing else: the car's own boost is off). Press once as the car meets the barrier: perfect is the best launch, each farther press loses metres smoothly, no press lands mid-field. The card names the control of the device in use ("Press Shift as you hit the barrier", then "Perfect" / "Early 0.12 s" / "Late 0.08 s"). See [`MINIGAMES.md`](MINIGAMES.md) | Shift | A (Xbox, generic pad) / Cross (PlayStation) | Boost |
 | Camera: chase → far chase → hood cam | V / C / T | B / Circle | View |
 | Look back from the car while held; release returns at once | ` (Backquote) | R3 (click the right stick) | Rear (hold) |
-| Look round the car (eases back 0.8 s after release) | mouse drag | right stick | one-finger drag on the view |
+| Look round the car (eases back 0.8 s after release; a drag or mouse look turns it by the lens's share of the resting chase lens, as GTA scales mouse look by its field of view, so at speed or in the hood view, where the lens is wider, a pixel moves the picture as far) | mouse drag | right stick | one-finger drag on the view |
 | Mouse look: look round with no drag (see Following and the camera) | ; (Semicolon) | | |
 | Recover: back on its wheels where it stands, at rest and repaired (derby: only when flipped and still running) | R | D-pad ↓ | Recover (a tap) |
 | Step out: drive → follow → whole field | Esc | Back / View / Create | Exit, then Free (taps) |

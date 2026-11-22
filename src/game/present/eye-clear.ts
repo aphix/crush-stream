@@ -125,9 +125,9 @@ export class EyeClear {
     this.sz = subject.z;
     this.around = reachOut;
     this.near = this.gatherAround(s);
-    const sy = this.clearAbove(subject.y, reachOut);
-    if (sy !== sy) return;
-    this.sy = sy;
+    this.sy = subject.y;
+    if (!this.clearAbove()) return;
+    const sy = this.sy;
     this.rx = eye.x - subject.x;
     this.ry = eye.y - sy;
     this.rz = eye.z - subject.z;
@@ -178,7 +178,10 @@ export class EyeClear {
     const c = Math.cos(turn);
     const sn = Math.sin(turn);
     const k = (len - this.pull) / len;
-    eye.set(this.sx + (this.dx * c + this.dz * sn) * k, this.sy + this.dy * k, this.sz + (this.dz * c - this.dx * sn) * k);
+    // Component writes, not `eye.set`: three doubles into a call V8 does not inline here box.
+    eye.x = this.sx + (this.dx * c + this.dz * sn) * k;
+    eye.y = this.sy + this.dy * k;
+    eye.z = this.sz + (this.dz * c - this.dx * sn) * k;
   }
 
   /** The solids within `around` m (flat) of the subject, `CINE.pad` grown (`gatherIn`). */
@@ -193,22 +196,25 @@ export class EyeClear {
   }
 
   /**
-   * The line's pivot: `y` over the subject, or for a subject inside a solid (a car in a ramp or a deck's slab, a look under a slope) the
-   * first height above it that stands clear, so the pull never closes on the subject itself. NaN: none within `reach` m up (the rig's eye stays).
+   * The line's pivot into `sy` (holding the subject's y): it stays, or for a subject inside a solid (a car in a ramp or a deck's slab, a look under a
+   * slope) becomes the first height above it that stands clear, so the pull never closes on the subject itself. False: none within `around` m up (the rig's eye stays).
    */
-  private clearAbove(y: number, reach: number): number {
+  private clearAbove(): boolean {
     const s = this.sight!;
+    const y = this.sy;
     PROBE[PROBE_X] = this.sx;
     PROBE[PROBE_Y] = y;
     PROBE[PROBE_Z] = this.sz;
     PROBE[PROBE_PAD] = 0;
-    if (!solidAt(s, this.near, true)) return y;
+    if (!solidAt(s, this.near, true)) return true;
     PROBE[PROBE_PAD] = CINE.pad;
-    for (let up = CINE.pad; up <= reach; up += CINE.pad) {
+    for (let up = CINE.pad; up <= this.around; up += CINE.pad) {
       PROBE[PROBE_Y] = y + up;
-      if (!solidAt(s, this.near, true)) return y + up;
+      if (solidAt(s, this.near, true)) continue;
+      this.sy = y + up;
+      return true;
     }
-    return NaN;
+    return false;
   }
 
   /** The turn (rad) nearest the rig's, on the side it already turned if equal, with at least `need` m of clear line; else the one with most. */
