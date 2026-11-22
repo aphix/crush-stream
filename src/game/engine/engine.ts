@@ -1619,7 +1619,8 @@ export class CrashEngine extends EngineGarage {
       this.openWorld.setAuto(false);
       return;
     }
-    if (this.showOpenWorld && this.openWorld.aimAuto(this.camera, this.chaseSight(true), wallDt, (this.autoOrbitOfView ??= autoOrbitOf(this.view)))) {
+    // The chase sight is built only where Auto frames: driving, `frameDrive` builds the frame's one.
+    if (this.showOpenWorld && this.openWorld.autoOn && this.openWorld.aimAuto(this.camera, this.chaseSight(true), wallDt, (this.autoOrbitOfView ??= autoOrbitOf(this.view)))) {
       this.view.setLens(null, false);
       this.view.pos.copy(this.camera.position);
       return;

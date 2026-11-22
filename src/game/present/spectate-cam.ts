@@ -165,6 +165,26 @@ const _near: Occluder[] = [];
 
 /** True when (x, y, z) is within `pad` of a solid. `occ`: the occluders to test (`gather`ed near a sight line). `terrain` false skips the hill / road-bed / deck test (a spot's side samples may stand beside a bank). */
 export function solid(s: Sight, x: number, y: number, z: number, pad: number, occ: readonly Occluder[] = s.occ, terrain = true): boolean {
+  PROBE[PROBE_X] = x;
+  PROBE[PROBE_Y] = y;
+  PROBE[PROBE_Z] = z;
+  PROBE[PROBE_PAD] = pad;
+  return solidAt(s, occ, terrain);
+}
+
+/** Where `solidAt` asks, written by its caller: a hot caller hands no doubles across the call, which would box them. */
+export const PROBE = new Float64Array(4);
+export const PROBE_X = 0;
+export const PROBE_Y = 1;
+export const PROBE_Z = 2;
+export const PROBE_PAD = 3;
+
+/** `solid` at the point and clearance in `PROBE`. */
+export function solidAt(s: Sight, occ: readonly Occluder[], terrain: boolean): boolean {
+  const x = PROBE[PROBE_X]!;
+  const y = PROBE[PROBE_Y]!;
+  const z = PROBE[PROBE_Z]!;
+  const pad = PROBE[PROBE_PAD]!;
   // In a hill or a road's bed, or in a bridge deck's slab (the surface within `STEP_UP` over the point).
   if (terrain && y < s.ground.heightAt(x, z, y + pad) + pad) return true;
   if (x * x + z * z > (s.rim - pad) ** 2) return true;
@@ -181,7 +201,7 @@ export function solid(s: Sight, x: number, y: number, z: number, pad: number, oc
     // In a wall, or low behind it (so a sight line that leaves the corridor under the wall top is blocked).
     if ((left ? p.wallL[k] : p.wallR[k]) && over > -pad && over < 3 && y < road + s.wallTop + pad) return true;
   }
-  for (const o of occ) if (inside(o, x, y, z, pad)) return true;
+  for (let i = 0; i < occ.length; i++) if (inside(occ[i]!, x, y, z, pad)) return true;
   return false;
 }
 
@@ -280,24 +300,29 @@ export function hidingSight(s: Sight): Sight {
 
 /** `_near` = the occluders whose footprint, grown by `pad`, can reach the flat box around a→b. */
 export function gather(s: Sight, ax: number, az: number, bx: number, bz: number, pad: number): Occluder[] {
-  _near.length = 0;
   const x0 = Math.min(ax, bx);
   const x1 = Math.max(ax, bx);
   const z0 = Math.min(az, bz);
   const z1 = Math.max(az, bz);
+  // Index writes and one length at the end: emptying the array first would drop its store, regrown every call.
+  let kept = 0;
   const f = s.feet?.occ === s.occ ? s.feet : null;
   if (f !== null) {
     const { x, z, r } = f;
     for (let i = 0; i < x.length; i++) {
       const e = r[i]! + pad;
-      if (x[i]! + e > x0 && x[i]! - e < x1 && z[i]! + e > z0 && z[i]! - e < z1) _near.push(f.occ[i]!);
+      if (x[i]! + e > x0 && x[i]! - e < x1 && z[i]! + e > z0 && z[i]! - e < z1) _near[kept++] = f.occ[i]!;
     }
+    _near.length = kept;
     return _near;
   }
-  for (const o of s.occ) {
+  const occ = s.occ;
+  for (let i = 0; i < occ.length; i++) {
+    const o = occ[i]!;
     const e = reachOf(o) + pad;
-    if (o.x + e > x0 && o.x - e < x1 && o.z + e > z0 && o.z - e < z1) _near.push(o);
+    if (o.x + e > x0 && o.x - e < x1 && o.z + e > z0 && o.z - e < z1) _near[kept++] = o;
   }
+  _near.length = kept;
   return _near;
 }
 
@@ -387,15 +412,49 @@ const _slab = new Float64Array(2);
 
 /** The first `t` in [`from`, `to`] at which (x, y, z) + t (vx, vy, vz) is within `pad` of box `o` (its circle flag ignored); Infinity when none is, or `o` is parked. */
 export function boxEntry(o: Occluder, x: number, y: number, z: number, vx: number, vy: number, vz: number, from: number, to: number, pad: number): number {
-  if (o.y0 === Infinity) return Infinity;
-  const ex = x - o.x;
-  const ez = z - o.z;
-  _slab[0] = from;
-  _slab[1] = to;
+  RAY[RAY_X] = x;
+  RAY[RAY_Y] = y;
+  RAY[RAY_Z] = z;
+  RAY[RAY_VX] = vx;
+  RAY[RAY_VY] = vy;
+  RAY[RAY_VZ] = vz;
+  RAY[RAY_FROM] = from;
+  RAY[RAY_TO] = to;
+  RAY[RAY_PAD] = pad;
+  boxHit(o);
+  return RAY[RAY_T]!;
+}
+
+/** The line `boxHit` asks about, written by its caller as `PROBE` is; `RAY_T` is its answer. */
+export const RAY = new Float64Array(10);
+export const RAY_X = 0;
+export const RAY_Y = 1;
+export const RAY_Z = 2;
+export const RAY_VX = 3;
+export const RAY_VY = 4;
+export const RAY_VZ = 5;
+export const RAY_FROM = 6;
+export const RAY_TO = 7;
+export const RAY_PAD = 8;
+export const RAY_T = 9;
+
+/** `boxEntry` for the line in `RAY`, its `t` into `RAY[RAY_T]`: true when the line meets the box. */
+export function boxHit(o: Occluder): boolean {
+  RAY[RAY_T] = Infinity;
+  if (o.y0 === Infinity) return false;
+  const pad = RAY[RAY_PAD]!;
+  const vx = RAY[RAY_VX]!;
+  const vz = RAY[RAY_VZ]!;
+  const ex = RAY[RAY_X]! - o.x;
+  const ez = RAY[RAY_Z]! - o.z;
+  _slab[0] = RAY[RAY_FROM]!;
+  _slab[1] = RAY[RAY_TO]!;
   slab(ex * o.cos - ez * o.sin, vx * o.cos - vz * o.sin, o.hx + pad);
   slab(ex * o.sin + ez * o.cos, vx * o.sin + vz * o.cos, o.hz + pad);
-  slab(y - (o.y0 + o.y1) / 2, vy, (o.y1 - o.y0) / 2 + pad);
-  return _slab[0]! <= _slab[1]! ? _slab[0]! : Infinity;
+  slab(RAY[RAY_Y]! - (o.y0 + o.y1) / 2, RAY[RAY_VY]!, (o.y1 - o.y0) / 2 + pad);
+  if (_slab[0]! > _slab[1]!) return false;
+  RAY[RAY_T] = _slab[0]!;
+  return true;
 }
 
 /** Narrows `_slab` (a share of a line, from, to) to where the coordinate `p + t v` lies within ±`half`. */

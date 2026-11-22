@@ -2,7 +2,31 @@ import type * as THREE from "three";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
-import { boxEntry, CINE, gather, inside, solid, type Occluder, type Sight } from "./spectate-cam.ts";
+import {
+  boxHit,
+  CINE,
+  gather,
+  inside,
+  type Occluder,
+  PROBE,
+  PROBE_PAD,
+  PROBE_X,
+  PROBE_Y,
+  PROBE_Z,
+  RAY,
+  RAY_FROM,
+  RAY_PAD,
+  RAY_T,
+  RAY_TO,
+  RAY_VX,
+  RAY_VY,
+  RAY_VZ,
+  RAY_X,
+  RAY_Y,
+  RAY_Z,
+  type Sight,
+  solidAt,
+} from "./spectate-cam.ts";
 import { Spring } from "./spring.ts";
 
 /** Sight-line samples are `STEP` m apart, each `CINE.pad` (half a step) clear of every solid, so a line never slips between two. */
@@ -87,6 +111,14 @@ export class EyeClear {
   private dy = 0;
   private dz = 0;
   private len = 0;
+  /** The line `march`, `carReach` and `reach` take (a unit way, a turn) and what they find (m): fields, as a double across a call that is not inlined boxes. */
+  private ux = 0;
+  private uy = 0;
+  private uz = 0;
+  private turnAsk = 0;
+  private reached = 0;
+  private marched = 0;
+  private carClear = 0;
 
   reset(): void {
     this.pull = 0;
@@ -125,21 +157,27 @@ export class EyeClear {
     this.aim(this.lift);
 
     const need = Math.min(SWING_BELOW, len);
-    const straight = this.reach(0);
+    this.turnAsk = 0;
+    this.reach();
+    const straight = this.reached;
     this.cooldown -= dt;
     if (this.swingTo === 0) {
       if (straight < need && this.cooldown <= 0) this.chooseSwing(need);
     } else if (straight >= len) {
       this.swingTo = 0;
-    } else if (this.cooldown <= 0 && this.reach(this.swingTo) < need) {
-      this.chooseSwing(need);
+    } else if (this.cooldown <= 0) {
+      this.turnAsk = this.swingTo;
+      this.reach();
+      if (this.reached < need) this.chooseSwing(need);
     }
     if (dt === Infinity) this.swing.snap(this.swingTo);
     else this.swing.step(this.swingTo, SWING_OMEGA, dt);
     if (this.swingTo === 0 && Math.abs(this.swing.x) < PULL_NONE && Math.abs(this.swing.v) < PULL_NONE) this.swing.snap(0);
 
     const turn = this.swing.x;
-    const clear = turn === 0 ? straight : this.reach(turn);
+    this.turnAsk = turn;
+    if (turn !== 0) this.reach();
+    const clear = turn === 0 ? straight : this.reached;
     const pulledIn = len - clear;
     this.pull = pulledIn >= this.pull ? pulledIn : Math.max(pulledIn, this.pull - Math.min(this.pull * (1 - Math.exp(-LET_GO_OMEGA * dt)), PULL_OUT_SPEED * dt));
     this.pull = Math.min(this.pull, pulledIn + PULL_LAG_MAX);
@@ -157,8 +195,16 @@ export class EyeClear {
    */
   private clearAbove(y: number, reach: number): number {
     const s = this.sight!;
-    if (!solid(s, this.sx, y, this.sz, 0, this.near)) return y;
-    for (let up = CINE.pad; up <= reach; up += CINE.pad) if (!solid(s, this.sx, y + up, this.sz, CINE.pad, this.near)) return y + up;
+    PROBE[PROBE_X] = this.sx;
+    PROBE[PROBE_Y] = y;
+    PROBE[PROBE_Z] = this.sz;
+    PROBE[PROBE_PAD] = 0;
+    if (!solidAt(s, this.near, true)) return y;
+    PROBE[PROBE_PAD] = CINE.pad;
+    for (let up = CINE.pad; up <= reach; up += CINE.pad) {
+      PROBE[PROBE_Y] = y + up;
+      if (!solidAt(s, this.near, true)) return y + up;
+    }
     return NaN;
   }
 
@@ -168,8 +214,12 @@ export class EyeClear {
     let best = -1;
     let bestTurn = 0;
     for (let k = 1; k <= SWING_STEPS; k++) {
-      const first = this.reach(side * k * SWING_STEP);
-      const second = this.reach(-side * k * SWING_STEP);
+      this.turnAsk = side * k * SWING_STEP;
+      this.reach();
+      const first = this.reached;
+      this.turnAsk = -side * k * SWING_STEP;
+      this.reach();
+      const second = this.reached;
       const turn = (second > first ? -side : side) * k * SWING_STEP;
       const room = Math.max(first, second);
       if (room >= need) {
@@ -192,20 +242,24 @@ export class EyeClear {
   private liftOver(): number {
     this.aim(0);
     const len = this.len;
-    const ux = this.dx / len;
-    const uy = this.dy / len;
-    const uz = this.dz / len;
-    const car = this.carReach(ux, uy, uz);
-    if (car >= len || this.march(ux, uy, uz) < car) return 0;
+    this.ux = this.dx / len;
+    this.uy = this.dy / len;
+    this.uz = this.dz / len;
+    this.carReach();
+    if (this.carClear >= len) return 0;
+    this.march();
+    if (this.marched < this.carClear) return 0;
     const h = hypot2(this.rx, this.rz);
     const room = STEEPEST - Math.atan2(this.ry, h);
     if (h < PULL_NONE || room <= 0) return 0;
     let lo = 0;
     let hi = 0;
+    this.turnAsk = 0;
     for (let k = 1; k <= LIFT_TRIES; k++) {
       const at = (room * k) / LIFT_TRIES;
       this.aim(at);
-      if (this.reach(0) >= len) {
+      this.reach();
+      if (this.reached >= len) {
         hi = at;
         break;
       }
@@ -215,7 +269,8 @@ export class EyeClear {
     for (let i = 0; i < LIFT_BISECT; i++) {
       const mid = (lo + hi) / 2;
       this.aim(mid);
-      if (this.reach(0) >= len) hi = mid;
+      this.reach();
+      if (this.reached >= len) hi = mid;
       else lo = mid;
     }
     return hi;
@@ -237,51 +292,78 @@ export class EyeClear {
     this.dz = this.rz * k;
   }
 
-  /** How far (m, at most `len`) the line from the subject, turned `turn` rad about the vertical, runs clear of every solid and car. */
-  private reach(turn: number): number {
-    const c = Math.cos(turn);
-    const sn = Math.sin(turn);
-    const ux = (this.dx * c + this.dz * sn) / this.len;
-    const uy = this.dy / this.len;
-    const uz = (this.dz * c - this.dx * sn) / this.len;
-    return Math.min(this.march(ux, uy, uz), this.carReach(ux, uy, uz));
+  /** How far (m, at most `len`, into `reached`) the line from the subject, turned `turnAsk` rad about the vertical, runs clear of every solid and car. */
+  private reach(): void {
+    const c = Math.cos(this.turnAsk);
+    const sn = Math.sin(this.turnAsk);
+    this.ux = (this.dx * c + this.dz * sn) / this.len;
+    this.uy = this.dy / this.len;
+    this.uz = (this.dz * c - this.dx * sn) / this.len;
+    this.march();
+    this.carReach();
+    this.reached = Math.min(this.marched, this.carClear);
   }
 
-  /** How far (m, at most `len`) the line from the subject along the unit (`ux`, `uy`, `uz`) runs clear of the scene's solids. */
-  private march(ux: number, uy: number, uz: number): number {
+  /** How far (m, at most `len`, into `marched`) the line from the subject along the unit `u` runs clear of the scene's solids. */
+  private march(): void {
     const s = this.sight!;
+    const ux = this.ux;
+    const uy = this.uy;
+    const uz = this.uz;
+    PROBE[PROBE_PAD] = CINE.pad;
     let lo = 0;
     let d = OWN;
     for (;;) {
       const at = Math.min(d, this.len);
-      if (solid(s, this.sx + ux * at, this.sy + uy * at, this.sz + uz * at, CINE.pad, this.near)) {
+      PROBE[PROBE_X] = this.sx + ux * at;
+      PROBE[PROBE_Y] = this.sy + uy * at;
+      PROBE[PROBE_Z] = this.sz + uz * at;
+      if (solidAt(s, this.near, true)) {
         let hi = at;
         for (let i = 0; i < BISECT; i++) {
           const mid = (lo + hi) / 2;
-          if (solid(s, this.sx + ux * mid, this.sy + uy * mid, this.sz + uz * mid, CINE.pad, this.near)) hi = mid;
+          PROBE[PROBE_X] = this.sx + ux * mid;
+          PROBE[PROBE_Y] = this.sy + uy * mid;
+          PROBE[PROBE_Z] = this.sz + uz * mid;
+          if (solidAt(s, this.near, true)) hi = mid;
           else lo = mid;
         }
-        return lo;
+        this.marched = lo;
+        return;
       }
-      if (at >= this.len) return this.len;
+      if (at >= this.len) {
+        this.marched = this.len;
+        return;
+      }
       lo = at;
       d += STEP;
     }
   }
 
   /**
-   * How far (m, at most `len`) the same line runs before a car: one whose box stands on it past the subject's own part, or within
+   * How far (m, at most `len`, into `carClear`) the line `u` runs before a car: one whose box stands on it past the subject's own part, or within
    * `CINE.pad` of the eye at its end, stops it `CINE.pad` short of the box. A box the line only passes within `CINE.pad` of hides nothing.
    */
-  private carReach(ux: number, uy: number, uz: number): number {
+  private carReach(): void {
     const len = this.len;
     let reach = len;
+    RAY[RAY_X] = this.sx;
+    RAY[RAY_Y] = this.sy;
+    RAY[RAY_Z] = this.sz;
+    RAY[RAY_VX] = this.ux;
+    RAY[RAY_VY] = this.uy;
+    RAY[RAY_VZ] = this.uz;
+    RAY[RAY_TO] = len;
     const boxes = this.boxes;
     for (let i = 0; i < boxes.length; i++) {
       const o = boxes[i]!;
-      if (boxEntry(o, this.sx, this.sy, this.sz, ux, uy, uz, OWN, len, 0) === Infinity && !inside(o, this.sx + ux * len, this.sy + uy * len, this.sz + uz * len, CINE.pad)) continue;
-      reach = Math.min(reach, Math.max(0, boxEntry(o, this.sx, this.sy, this.sz, ux, uy, uz, 0, len, CINE.pad)));
+      RAY[RAY_FROM] = OWN;
+      RAY[RAY_PAD] = 0;
+      if (!boxHit(o) && !inside(o, this.sx + this.ux * len, this.sy + this.uy * len, this.sz + this.uz * len, CINE.pad)) continue;
+      RAY[RAY_FROM] = 0;
+      RAY[RAY_PAD] = CINE.pad;
+      if (boxHit(o)) reach = Math.min(reach, Math.max(0, RAY[RAY_T]!));
     }
-    return reach;
+    this.carClear = reach;
   }
 }
