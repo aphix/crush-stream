@@ -6,7 +6,7 @@ import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
-import { CAMERA_RADIUS, PIVOT_OVER_TORSO, SHOULDER_BOOM, SHOULDER_PITCH, type Sweep, WalkerView } from "./walker-camera.ts";
+import { boomAt, CAMERA_RADIUS, PIVOT_OVER_TORSO, REST_PITCH, SHOULDER_ACROSS, SHOULDER_BOOM, type Sweep, WalkerView } from "./walker-camera.ts";
 import type { FloorBox } from "./walker-floor.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -35,7 +35,7 @@ async function shoulderEye(boxes: readonly FloorBox[]): Promise<THREE.Vector3> {
   expect(sys.walkerTorso(torso), "he is out").toBe(true);
   const sweep: Sweep = (x, y, z, dx, dy, dz, length) => sys.sightClear(x, y, z, dx, dy, dz, length, CAMERA_RADIUS);
   const view = new WalkerView();
-  view.shoulder(torso.x, torso.y, torso.z, torso.x, torso.y + PIVOT_OVER_TORSO, torso.z, BEHIND, SHOULDER_PITCH, SHOULDER_BOOM, sweep, FRAME);
+  view.shoulder(torso.x, torso.y, torso.z, torso.x, torso.y + PIVOT_OVER_TORSO, torso.z, BEHIND, REST_PITCH, boomAt(SHOULDER_BOOM, REST_PITCH), SHOULDER_ACROSS, sweep, FRAME);
   return new THREE.Vector3(view.eye[0], view.eye[1], view.eye[2]);
 }
 

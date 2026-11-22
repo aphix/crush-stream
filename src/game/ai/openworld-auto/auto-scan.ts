@@ -26,6 +26,8 @@ export type AutoWorld = {
   ambulanceState(): number;
   /** Engine car `carIndex` is a viewer's own (a seated player's car), never followed. */
   isPlayerCar(carIndex: number): boolean;
+  /** The name of the player in engine car `carIndex` when it is another player's (a seated peer's, in a room), else null. */
+  peerName(carIndex: number): string | null;
 };
 
 /** Where the camera stands round a subject: its spot on the ground, the way it faces, how fast it moves, and the shot (m behind, over its feet, aimed over them). */
@@ -47,6 +49,14 @@ export class OpenWorldScan {
   constructor(world: AutoWorld, residents: number) {
     this.world = world;
     this.heat = new Float32Array(residents);
+  }
+
+  /** Other players' cars are subjects too: on while the player picks with Q/E (Auto off), so a room still watches its players. */
+  peersWatched = false;
+
+  /** The subject is another player's car, and those are watched. */
+  isPeer(kind: SubjectKind, id: number): boolean {
+    return kind === SUBJECT.driver && this.peersWatched && this.world.peerName(id) !== null;
   }
 
   fill(table: AutoCandidates): void {
@@ -146,10 +156,12 @@ export class OpenWorldScan {
     }
   }
 
-  /** A car in play with a driver: a resident's, a police car (the patrol's) or the ambulance (a client has no traffic to name its drivers, but is told its car); not a player's own, not put away. */
+  /** A car in play with a driver: a resident's, a police car (the patrol's), the ambulance (a client has no traffic to name its drivers, but is told its car), or while `peersWatched` another player's; not the viewer's own, not put away. */
   private watchableCar(index: number): boolean {
     const car = this.world.cars()[index];
-    if (car === undefined || car.stored || car.vaporized || !car.group.visible || this.world.isPlayerCar(index)) return false;
+    if (car === undefined || car.stored || car.vaporized || !car.group.visible) return false;
+    if (this.world.peerName(index) !== null) return this.peersWatched;
+    if (this.world.isPlayerCar(index)) return false;
     return this.world.residentAt(index) >= 0 || car.style.id === "police" || index === this.world.ambulanceCar();
   }
 
@@ -236,6 +248,8 @@ export class OpenWorldScan {
     const car = this.world.cars()[carIndex];
     if (car === undefined) return null;
     const resident = this.world.residentAt(carIndex);
+    const peer = this.world.peerName(carIndex);
+    if (peer !== null) return { title: peer, lines: ["a player, at the wheel"] };
     if (resident >= 0) return { title: civilianLine(crowd.state, resident, tick), lines: ["at the wheel", ...historyLines(crowd.state, resident)] };
     if (carIndex === this.world.ambulanceCar()) return this.ambulanceText();
     return { title: `Patrol car - officer at the wheel`, lines: [car.sirens ? "siren on, answering a call" : "on patrol"] };

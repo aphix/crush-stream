@@ -118,6 +118,8 @@ export type OpenWorldPorts = {
   /** The population tier of this device (`POPULATION_TIER`). */
   tier(): number;
   cars(): readonly DeformableCar[];
+  /** The name of the player in engine car `carIndex` when it is another player's (a seated peer's, in a room), else null. */
+  peerName(carIndex: number): string | null;
   /** Writes where this browser's player on foot stands and how fast he moves, as the ragdoll world's last step has him (not the blended drawn torso); false while he is in a car. */
   foot(out: FootBody): boolean;
   /** This machine's wall clock (s). */
@@ -331,9 +333,20 @@ export class OpenWorldDirector {
     return this.autoWanted && this.auto !== null && this.auto.aim(camera, sight, wallDt, orbit);
   }
 
-  /** Q/E while Auto is up: the camera goes to the next or the previous person, foot cop or driver, and stays; false when Auto is off or there is nobody to go to. */
+  /**
+   * Q/E: the camera goes to the next or the previous person, foot cop or driver, and stays. With Auto off it comes on held to the pick (`pin`): no cuts of
+   * its own, the same orbit and Q/E as with Auto on, and other players' cars first in the walk (a room still watches its players). False when there is nobody to go to.
+   */
   cycleAuto(dir: 1 | -1): boolean {
-    return this.autoWanted && this.auto !== null && this.auto.cycle(dir, this.ray.eyeX, this.ray.eyeZ);
+    if (this.auto === null) return false;
+    const pinning = !this.autoWanted;
+    if (pinning) {
+      this.setAuto(true);
+      this.auto.pin();
+    }
+    if (this.auto.cycle(dir, this.ray.eyeX, this.ray.eyeZ)) return true;
+    if (pinning) this.setAuto(false);
+    return false;
   }
 
   /** What the look-at panel shows, null when the eye rests on nothing. */
@@ -762,6 +775,7 @@ export class OpenWorldDirector {
         ambulanceCar: () => this.ambulanceCar(),
         ambulanceState: () => this.ambulanceState(),
         isPlayerCar: (carIndex) => this.ports.cull.playerCars().includes(this.ports.cars()[carIndex]!),
+        peerName: (carIndex) => this.ports.peerName(carIndex),
       },
       { residents: crowd.poses.count, cops: FOOT_COP_COUNT, cars: MAX_CARS, events: EVENT_LOG_CAPACITY },
       seed,

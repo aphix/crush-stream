@@ -1,12 +1,18 @@
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { Damped, FollowFocus, followFov, PIVOT_OVER_TORSO, RECENTER_DELAY, SHOULDER_BOOM, SHOULDER_PITCH, SQUEEZED_BOOM, type Sweep, WalkerView } from "./walker-camera.ts";
+import { acrossAt, boomAt, Damped, FOLLOW_BOOM, FollowFocus, followFov, PIVOT_OVER_TORSO, RECENTER_DELAY, REST_PITCH, type Sweep, WalkerView } from "./walker-camera.ts";
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
-import { detAtan, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
+import { detSin, hypot3 } from "../kernel/physics-core.js";
 const FRAME = 1 / FRAME_HZ;
 /** The torso's centre standing (m). */
 const STANDING_TORSO = 1.13;
+/** The top of his head over his torso's centre (m: the head box's centre 0.52 m up, 0.12 m to its crown). */
+const HEAD_TOP_OVER_TORSO = 0.64;
+/** 5 % of the view's width, in normalised device units. */
+const CENTRE_NDC = 0.1;
+const OPEN: Sweep = (_x, _y, _z, _dx, _dy, _dz, length) => length;
 
 describe("given a critically damped value", () => {
   const smoothCases: readonly { it: string; smoothTime: number; expectedMaxGapAtOne: number; expectedMaxGapAtTwo: number }[] = [
@@ -59,11 +65,11 @@ function follow(speed: number, bob: number, hertz: number, seconds: number): { h
 }
 
 describe("given the on-foot camera's focus", () => {
-  it("when he runs bobbing 4 cm at 3 Hz, then the focus bobs under a quarter of that and sits at the chest, 1.35-1.55 m up", () => {
+  it("when he runs bobbing 4 cm at 3 Hz, then the focus bobs under a quarter of that and sits at his head, 1.6-1.75 m up", () => {
     const { heightPP, meanHeight } = follow(RUN_SPEED, 0.04, 3, 6);
     expect(heightPP, `focus height spread ${(heightPP * 100).toFixed(2)} cm of an 8 cm bob`).toBeLessThan(0.25 * 0.08);
     expect(heightPP, "the follow is not frozen").toBeGreaterThan(0);
-    expect(meanHeight >= 1.35 && meanHeight <= 1.55, `pivot ${meanHeight.toFixed(2)} m (torso ${STANDING_TORSO} + ${PIVOT_OVER_TORSO})`).toBeTruthy();
+    expect(meanHeight >= 1.6 && meanHeight <= 1.75, `pivot ${meanHeight.toFixed(2)} m (torso ${STANDING_TORSO} + ${PIVOT_OVER_TORSO})`).toBeTruthy();
   });
 
   const lagCases: readonly { it: string; speed: number; expectedMinLag: number; expectedMaxLag: number }[] = [
@@ -77,29 +83,51 @@ describe("given the on-foot camera's focus", () => {
     });
   }
 
-  it("when the camera sits 1.5-2.2 m back over his shoulder with a 66 degree view across, then it matches the research's over-the-shoulder shot", () => {
-    expect(SHOULDER_BOOM >= 1.5 && SHOULDER_BOOM <= 2.2, `boom ${SHOULDER_BOOM}`).toBeTruthy();
-    const wide = followFov(16 / 9);
-    expect(Math.abs((2 * detAtan(Math.tan((wide * Math.PI) / 360) * (16 / 9)) * 180) / Math.PI - 66), `vertical ${wide.toFixed(1)} degrees across 16:9`).toBeLessThan(1);
-    expect(followFov(0.5), "an upright phone keeps the widest vertical lens").toBe(56);
+  // mutation: sed -i -e 's/^const FOLLOW_HORIZONTAL_FOV = 80;/const FOLLOW_HORIZONTAL_FOV = 66;/' -e 's/^const FOV_MIN = 48;/const FOV_MIN = 36;/' -e 's/^const FOV_MAX = 60;/const FOV_MAX = 56;/' src/game/present/walker-camera.ts
+  const framings: readonly { it: string; aspect: number }[] = [
+    { it: "when he stands at the default zoom on a wide screen, then his head and feet are in view and he stands in the middle across", aspect: 16 / 9 },
+    { it: "when he stands at the default zoom on a 4:3 screen, then his head and feet are in view and he stands in the middle across", aspect: 4 / 3 },
+    { it: "when he stands at the default zoom on an upright phone, then his head and feet are in view and he stands in the middle across", aspect: 9 / 16 },
+  ];
+  for (const framing of framings) {
+    it(framing.it, () => {
+      const view = new WalkerView();
+      view.shoulder(0, STANDING_TORSO, 0, 0, STANDING_TORSO + PIVOT_OVER_TORSO, 0, Math.PI, REST_PITCH, boomAt(FOLLOW_BOOM, REST_PITCH), acrossAt(FOLLOW_BOOM), OPEN, FRAME);
+      const camera = new THREE.PerspectiveCamera(followFov(framing.aspect), framing.aspect, 0.1, 100);
+      camera.position.set(view.eye[0]!, view.eye[1]!, view.eye[2]!);
+      camera.lookAt(view.eye[0]! + view.ahead[0]!, view.eye[1]! + view.ahead[1]!, view.eye[2]! + view.ahead[2]!);
+      camera.updateMatrixWorld();
+      const head = new THREE.Vector3(0, STANDING_TORSO + HEAD_TOP_OVER_TORSO, 0).project(camera);
+      const feet = new THREE.Vector3(0, 0, 0).project(camera);
+      expect(Math.abs(head.x), `his head across the view (NDC, 0.1 is 5 % of its width): ${head.x.toFixed(3)}`).toBeLessThanOrEqual(CENTRE_NDC);
+      expect(Math.abs(head.y), `his head's top up the view (NDC): ${head.y.toFixed(3)}`).toBeLessThan(1);
+      expect(Math.abs(feet.y), `his feet down the view (NDC): ${feet.y.toFixed(3)}`).toBeLessThan(1);
+      expect(feet.y, "his feet below his head").toBeLessThan(head.y);
+      expect(head.y, "he stands in the lower part of the view, his head near the middle").toBeLessThan(0.35);
+    });
+  }
+
+  it("when the boom is read at level and looking down, then it is GTA's 3.7 m at level and shorter looking down", () => {
+    expect(boomAt(FOLLOW_BOOM, 0), "level boom (m)").toBeCloseTo(3.7, 6);
+    expect(boomAt(FOLLOW_BOOM, 1), "boom looking down 1 rad (m)").toBeLessThan(3);
   });
 });
 
 /** The yaw after `seconds` of a view left alone (`looking` false) behind a walker facing `facing` at `speed`: every frame's yaw. */
-function recenter(speed: number, looking: boolean, seconds: number, facing = 0, startYaw = 1.2): number[] {
+function recenter(speed: number, looking: boolean, seconds: number, facing = 0, startYaw = 1.2, byPad = true): number[] {
   const focus = new FollowFocus();
   focus.seed(0, STANDING_TORSO, 0);
   const yaws: number[] = [];
   let yaw = startYaw;
   for (let f = 0; f < seconds * 60; f++) {
-    yaw = focus.recenter(FRAME, yaw, facing, speed, looking);
+    yaw = focus.recenter(FRAME, yaw, facing, speed, looking, byPad);
     yaws.push(yaw);
   }
   return yaws;
 }
 
-describe("given the view left alone while he runs", () => {
-  it("when the player has not looked for under 1.2 s, then the view stays where it is, and after it comes back behind him without overshoot", () => {
+describe("given the view left alone while a pad's stick runs him", () => {
+  it("when the player has not looked for under a second, then the view stays where it is, and after it comes back behind him without overshoot", () => {
     const yaws = recenter(RUN_SPEED, false, 4, 0, 2.5);
     const before = yaws.slice(0, Math.floor(RECENTER_DELAY * 60) - 2);
     expect(before.every((yaw) => yaw === 2.5), "untouched inside the delay").toBeTruthy();
@@ -119,43 +147,39 @@ describe("given the view left alone while he runs", () => {
     expect(yaws.every((yaw) => yaw === 1.2), `yaws from ${yaws[0]} to ${yaws[yaws.length - 1]}`).toBe(true);
   });
 
-  const holdCases: readonly { it: string; speed: number; looking: boolean }[] = [
-    { it: "when the player keeps looking round, then it never comes back", speed: RUN_SPEED, looking: true },
-    { it: "when he is nearly standing, then it never comes back", speed: 0.3, looking: false },
+  /** A view half a radian off behind him: inside the gap a recentre would close. */
+  const NEAR_BEHIND = Math.PI - 0.5;
+  const holdCases: readonly { it: string; speed: number; looking: boolean; byPad: boolean }[] = [
+    { it: "when the player keeps looking round, then it never comes back", speed: RUN_SPEED, looking: true, byPad: true },
+    { it: "when he is nearly standing, then it never comes back", speed: 0.3, looking: false, byPad: true },
+    // mutation: sed -i 's/    if (!byPad || this.idle < RECENTER_DELAY/    if (this.idle < RECENTER_DELAY/' src/game/present/walker-camera.ts
+    { it: "when the keys walk him and the mouse turned the view, then it never comes back by itself", speed: RUN_SPEED, looking: false, byPad: false },
   ];
   for (const testCase of holdCases) {
     it(testCase.it, () => {
-      const yaws = recenter(testCase.speed, testCase.looking, 5);
-      expect(yaws.every((yaw) => yaw === 1.2), "the view is where the player left it").toBeTruthy();
+      const yaws = recenter(testCase.speed, testCase.looking, 5, 0, NEAR_BEHIND, testCase.byPad);
+      expect(yaws.every((yaw) => yaw === NEAR_BEHIND), "the view is where the player left it").toBeTruthy();
     });
   }
 });
 
-/** The distance the eye must keep from his head's centre however tight the spot: past the camera's ball and his head's breadth (m). */
-const HEAD_CLEAR_M = 0.45;
 /** His head's centre over his torso's centre (m: the head box at 1.63 m, the torso's at 1.11 m). */
 const HEAD_OVER_TORSO = 0.52;
+/** An eye this near (m) his head's centre sees inside his head and shoulders. */
+const HEAD_INSIDE_M = 0.3;
 /** Turns tried round him in a squeeze (rad, a twelfth of a circle each). */
 const TURN_STEP = Math.PI / 6;
 const BLOCKED: Sweep = () => 0;
 
-describe("given the shoulder camera in a spot where every sweep is blocked at once", () => {
-  // mutation: sed -i 's/^export const SQUEEZED_BOOM = 0.6;/export const SQUEEZED_BOOM = 0;/' src/game/present/walker-camera.ts
-  it("when the view is turned all the way round him, then the eye never comes within a head's reach of his head and is never his own eyes", () => {
+describe("given the camera behind him in a spot where every sweep is blocked at once", () => {
+  // mutation: sed -i 's/^const HEAD_HIDE = 0.4;/const HEAD_HIDE = 0;/' src/game/present/walker-camera.ts
+  it("when the view is turned all the way round him, then the eye pulls in to his head rather than into a wall, and his head and torso are not drawn to it", () => {
     const view = new WalkerView();
     for (let k = 0; k < 12; k++) {
-      view.shoulder(0, STANDING_TORSO, 0, 0, STANDING_TORSO + PIVOT_OVER_TORSO, 0, k * TURN_STEP, SHOULDER_PITCH, SHOULDER_BOOM, BLOCKED, FRAME);
+      view.shoulder(0, STANDING_TORSO, 0, 0, STANDING_TORSO + PIVOT_OVER_TORSO, 0, k * TURN_STEP, REST_PITCH, FOLLOW_BOOM, 0, BLOCKED, FRAME);
       const head = hypot3(view.eye[0]!, view.eye[1]! - (STANDING_TORSO + HEAD_OVER_TORSO), view.eye[2]!);
-      expect(head, `turn ${k}: the eye is ${head.toFixed(2)} m from his head`).toBeGreaterThan(HEAD_CLEAR_M);
-      expect(view.inHead, `turn ${k}: his head is drawn`).toBe(false);
+      expect(head, `turn ${k}: the eye is ${head.toFixed(2)} m from his head`).toBeLessThan(HEAD_INSIDE_M);
+      expect(view.inHead, `turn ${k}: his head is hidden from an eye inside it`).toBe(true);
     }
-    expect(SQUEEZED_BOOM, "the squeeze is a boom a head's reach long").toBeGreaterThan(HEAD_CLEAR_M);
-  });
-
-  it("when the wheel has brought the boom nearer than the squeeze, then the squeeze is no longer than that boom", () => {
-    const view = new WalkerView();
-    const near = SQUEEZED_BOOM / 2;
-    view.shoulder(0, STANDING_TORSO, 0, 0, STANDING_TORSO + PIVOT_OVER_TORSO, 0, 0, 0, near, BLOCKED, FRAME);
-    expect(hypot2(view.eye[0]!, view.eye[2]!), "the eye is at the boom asked for, not past it").toBeLessThanOrEqual(near + 1e-6);
   });
 });

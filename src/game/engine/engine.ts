@@ -77,7 +77,8 @@ import type { CrowdLink } from "../net/net-ports.ts";
 import { TetherDirector } from "./engine-tether.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
-import { ChaseCamera, centroid, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
+import { ChaseCamera, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
+import { centroid } from "../present/orbit-shots.ts";
 import { blankFreeInput, sceneExtent } from "../present/free-cam.ts";
 import { MINIGAME_AIM_LEAD } from "../present/ride-cam.ts";
 import { MINIGAME_MODE, THROW_BOOST } from "../scenes/minigame-constants.ts";
@@ -474,6 +475,7 @@ export class CrashEngine extends EngineGarage {
       seed: () => this.sceneSeed,
       tier: () => (this.deviceClass !== "desktop" ? POPULATION_TIER.phone : this.cine.tier === "ultra" ? POPULATION_TIER.ultra : POPULATION_TIER.desktop),
       cars: () => this.live(),
+      peerName: (carIndex) => (this.race.racers[carIndex]?.kind === "remote" ? this.race.racers[carIndex]!.name : null),
       foot: (out) => {
         if (!this.ragdolls.torso(WALKER_SLOT, _v, _footVelocity)) return false;
         out.x = _v.x;
@@ -1618,7 +1620,8 @@ export class CrashEngine extends EngineGarage {
       this.openWorld.setAuto(false);
       return;
     }
-    if (this.showOpenWorld && this.openWorld.aimAuto(this.camera, this.chaseSight(true), wallDt, (this.autoOrbitOfView ??= autoOrbitOf(this.view)))) {
+    // The chase sight is built only where Auto frames: driving, `frameDrive` builds the frame's one.
+    if (this.showOpenWorld && this.openWorld.autoOn && this.openWorld.aimAuto(this.camera, this.chaseSight(true), wallDt, (this.autoOrbitOfView ??= autoOrbitOf(this.view)))) {
       this.view.setLens(null, false);
       this.view.pos.copy(this.camera.position);
       return;

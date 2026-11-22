@@ -16,8 +16,8 @@ const FRAME_S = 1 / 30;
 
 /** Where a subject stands. */
 type Place = { x: number; z: number };
-/** A car in the scene: where it stands, how fast it drives along +z, whether it is a police body, and whether a resident is at the wheel. */
-type CarSpec = Place & { speed: number; police?: boolean; resident?: boolean };
+/** A car in the scene: where it stands, how fast it drives along +z, whether it is a police body, whether a resident is at the wheel, and the name of the other player driving it. */
+type CarSpec = Place & { speed: number; police?: boolean; resident?: boolean; peer?: string };
 
 /** What a scene has in it: people on the pavement, foot cops (a speed in m/s each), cars, and which car (an index in `cars`) is the ambulance out loading. */
 export type SceneParts = { civilians?: readonly Place[]; cops?: readonly (Place & { speed: number })[]; cars?: readonly CarSpec[]; ambulance?: number };
@@ -80,7 +80,8 @@ export function sceneOf(parts: SceneParts): AutoScene {
     cars: () => cars,
     ambulanceCar: () => ambulance,
     ambulanceState: () => (ambulance < 0 ? AMBULANCE.idle : AMBULANCE.loading),
-    isPlayerCar: () => false,
+    isPlayerCar: (carIndex) => specs[carIndex]?.peer !== undefined,
+    peerName: (carIndex) => specs[carIndex]?.peer ?? null,
   };
   return {
     world,

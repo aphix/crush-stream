@@ -11,7 +11,8 @@ import { buildCar } from "../vehicle/drawn-body.test-util.ts";
 import { CLASSES, VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
 import { FLAT_GROUND, setGround } from "../world/ground.ts";
 import { ShotCam, type Shot } from "./shot-cam.ts";
-import { DutchCam, type Sight } from "./spectate-cam.ts";
+import { DutchCam } from "./dutch-cam.ts";
+import type { Sight } from "./spectate-cam.ts";
 
 /** Open flat ground, nothing standing on it: only the car's own parts can cover a lens. */
 const OPEN: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ: [] };

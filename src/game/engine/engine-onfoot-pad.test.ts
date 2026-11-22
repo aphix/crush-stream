@@ -64,14 +64,16 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
   });
 
   // mutation: sed -i 's/const VIEW_BUTTON = 1 << PAD_BUTTON.east/const VIEW_BUTTON = 1 << PAD_BUTTON.north/' src/game/engine/engine-onfoot.ts
-  it("when he is out and B is pressed, then the on-foot view cycles to his eyes and back, and Y does not cycle it", () => {
+  it("when he is out and B is pressed, then the on-foot view cycles over his shoulder, to his eyes and back to the follow, and Y does not cycle it", () => {
     tap(PAD_BUTTON.north);
     rig.run(SETTLE_S);
-    expect(rig.engine["onFoot"].footView).toBe("shoulder");
+    expect(rig.engine["onFoot"].footView).toBe("follow");
     tap(PAD_BUTTON.east);
-    expect(rig.engine["onFoot"].footView, "B: his eyes").toBe("first");
+    expect(rig.engine["onFoot"].footView, "B: over his shoulder").toBe("shoulder");
     tap(PAD_BUTTON.east);
-    expect(rig.engine["onFoot"].footView, "B again: over his shoulder").toBe("shoulder");
+    expect(rig.engine["onFoot"].footView, "B again: his eyes").toBe("first");
+    tap(PAD_BUTTON.east);
+    expect(rig.engine["onFoot"].footView, "B again: the follow").toBe("follow");
   });
 
   // mutation: sed -i 's/^const INTENT_SECONDS = 0.08;/const INTENT_SECONDS = 1e-9;/' src/game/engine/engine-onfoot.ts

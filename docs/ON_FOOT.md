@@ -160,22 +160,28 @@ The nearest of a knockable prop, a ragdoll, a drawn civilian, a foot cop or a ca
 
 ## The camera
 
-`OnFootDirector.aim` keeps the one `ChaseCamera` orbit (no second camera system) for its yaw, pitch and zoom, so the drag, the right stick, mouse look, the wheel and a pinch
-work as everywhere, and places the eye itself (`WalkerView`, `walker-camera.ts`), per the onfoot-camera research's over-the-shoulder rig:
+`OnFootCamera` (`engine/onfoot-camera.ts`, driven by `OnFootDirector.aim`) keeps the one `ChaseCamera` orbit (no second camera system) for its yaw, pitch and zoom, so the drag,
+the right stick, mouse look, the wheel and a pinch work as everywhere, and places the eye itself (`WalkerView`, `walker-camera.ts`), as GTA's on-foot camera does
+(`.extraResearch/third-person-camera-and-controls.md`):
 
-- **Over the shoulder** (the default): the pivot at the base of his head (the focus, 1.5 m up his chest, followed critically damped: 0.3 s walking, 0.12 s running, his height with
-  0.35 s), 0.5 m out to his right and a 2.2 m boom back at 11°, a 66° view across (`followFov`). A ball of 0.2 m goes from his head (inside him, so clear) to the pivot, out to the
-  shoulder and back along the boom through the dummies' world (`RagdollSystem.sightClear`: the fixed solids and the cars' proxies there, the very walls, rooms
-  (`setFixedBoxes`), facades and stairs he walks among), and the eye stands 2 cm short of the first it touches: pulled in at once, let out over 0.25 s. It comes back behind him
-  after 1.2 s without look input while he moves faster than 1 m/s and his facing is within 0.9 rad of straight away from the view (0.4 s damped yaw, slower the farther round: it does not chase a sidestep). However tight the spot (a pen, a corridor) the boom is held to 0.6 m (`SQUEEZED_BOOM`, past the camera's ball and his head's breadth): the eye stands in the wall rather than in his head, and his
-  head and torso stay drawn, so a drag round him is always the shoulder view. Only View and the wheel's last notch make his own eyes.
-- **His own eyes**: at his head's height over his drawn torso (eased over 0.12 s, so the gait's bob is soft and a stair is not lagged), 0.1 m ahead of the head's centre unless a wall
-  is nearer, looking where the orbit looks, up and down to 74°. The pool's mesh draws his head and torso to no camera then (`DummyMesh.viewHidden`: the walker's slot discards
-  the fragments of skin riding the torso and head more than other parts), while his shadow keeps them. Down or getting up he is seen over the shoulder again, and it does not
-  recentre (the walk follows the view).
-- **View and the wheel**: View (V, C, T, the pad's B, the HUD's View) cycles the two on foot; at the wheel it cycles the drive views as ever. The wheel zooms the shoulder camera's
-  boom from 0.8 m (his shoulders' breadth and the ball off his head) out, and one notch nearer, 0.7 m, the wheel's nearest on foot, is his own eyes; zooming out leaves them. The
-  car's zoom range, orbit and pitch range are kept when he gets out and given back when he sits down again.
+- **Follow** (the default): the pivot at his head (the focus 0.55 m over his torso's centre, about 1.68 m up, followed critically damped: 0.3 s walking, 0.12 s running, his
+  height with 0.35 s), a boom of 1.7 + 2.0 cos(pitch) m (3.7 m level, shorter looking down or up) at 0.22 rad from above, him in the middle across and lower in the frame with
+  his whole body in view: an 80° view across, its vertical held between 48° and 60° (`followFov`).
+- **Over the shoulder**: zooming in moves the pivot out to his right, all 0.5 m of it from a 1.6 m boom in (eased between, so the wheel and a pinch glide through it).
+- **His own eyes**: inside 0.8 m (his shoulders' breadth and the ball off his head), at his head's height over his drawn torso (eased over 0.12 s, so the gait's bob is soft and a
+  stair is not lagged), 0.1 m ahead of the head's centre unless a wall is nearer, looking where the orbit looks, up and down to 74°. The pool's mesh draws his head and torso to no
+  camera then (`DummyMesh.viewHidden`: the walker's slot discards the fragments of skin riding the torso and head more than other parts), while his shadow keeps them. Down or
+  getting up he is seen from behind again.
+- **Walls**: a ball of 0.2 m goes from his head (inside him, so clear) to the pivot, out to the side and back along the boom through the dummies' world
+  (`RagdollSystem.sightClear`: the fixed solids and the cars' proxies there, the very walls, rooms (`setFixedBoxes`), facades and stairs he walks among), and the eye stands 2 cm
+  short of the first it touches: pulled in at once, let out over 0.24 s (GTA's 0.92 per 1/50 s). However tight the spot the eye never stands in a wall: pulled in within 0.4 m of
+  his head it hides his head and torso as his eyes do, and the near plane comes in to the eye's distance from his head less 0.3 m (not under 0.05 m).
+- **Recentre**: only a pad's: while the left stick walks him faster than 1 m/s, 1 s without look input brings the view back behind him when his facing is within 0.9 rad of
+  straight away from it (0.4 s damped yaw, slower the farther round: it does not chase a sidestep). The keys and the mouse never have it come back by itself.
+- **View and the wheel**: View (V, C, T, the pad's B, the HUD's View) steps follow, shoulder, his eyes, and round; at the wheel it cycles the drive views as ever. The wheel
+  (its line and page modes read as the same notch) and a pinch zoom on a level boom from 0.7 m (his eyes) out, the shown boom gliding to it over 0.1 s; a notch in while a wall
+  holds the eye in zooms from where the eye stands, so the wheel has no dead stretch. The car's zoom range, orbit, pitch range and near plane are kept when he gets out and given
+  back when he sits down again.
 
 Stepping out takes the camera from the car's chase over 0.3 s (the eye and the point it looks at blend). While he climbs back in the focus moves to the car and the camera draws
 back round it on the orbit (`FOLLOW_RADIUS` 4.2 m, 35 % further), and sitting down hands over to the car's chase cam.
@@ -212,12 +218,15 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
 
 ## What pins it
 
-- The view mode (shoulder or his eyes) is his choice alone: View, and the wheel's or a pinch's last notch, change it (`OnFootDirector.mode`, read from the orbit's zoom only when the player zoomed: `ChaseCamera.zoomedTimes`), never from the orbit's distance. A distance the orbit moves to without a zoom (a press that adopts its pose from a camera and an aim a hand's width apart, as a pull-in of the boom by a wall makes them near; a hold on the view another camera left) is put back, so no click or drag can put him in his eyes or leave the boom at 0.7 m; the walker's camera also ends a ride-along's or the Auto camera's hold (`frameRide(null)`), which a press of the mouse would otherwise take the orbit's pose from. A drag or a click only turns the orbit (`engine-onfoot-view.test.ts` drives the view's own pointer handlers: the pen row used mouse look, which never presses; the wall row presses with the pose read from a point beside the squeezed eye).
-- The camera: `engine-onfoot-view.test.ts` (the real engine: V at the wheel cycles the drive view, out of the car V goes shoulder, eyes, shoulder and leaves the drive view; in his eyes
-  the camera stands at his head and his slot's head and torso are hidden, over the shoulder they are not; the wheel's nearest on foot is within the shoulder boom, zooming in reaches
-  his eyes and out leaves them, and back at the wheel the car's zoom range is as it was) and `walker-camera-clear.test.ts` (a wall streamed in beside his right shoulder: the eye
-  stands its ball's width off it, where with no wall it would stand inside it) and `walker-camera.test.ts` / `engine-onfoot-view.test.ts` (a drag all the way round him inside a pen of walls 0.45 m
-  away stays the shoulder view: his head drawn, the eye over 0.45 m from it, the wheel's boom unchanged).
+- The view (follow, shoulder or his eyes) is his choice alone: View, and the wheel's or a pinch's zoom, change it (`OnFootCamera.mode`, read from the orbit's zoom only when the player zoomed: `ChaseCamera.zoomedTimes`), never from the orbit's distance. A distance the orbit moves to without a zoom (a press that adopts its pose from a camera and an aim a hand's width apart, as a pull-in of the boom by a wall makes them near; a hold on the view another camera left) is put back, so no click or drag can change the view; the walker's camera also ends a ride-along's or the Auto camera's hold (`frameRide(null)`), which a press of the mouse would otherwise take the orbit's pose from. A drag or a click only turns the orbit (`engine-onfoot-view.test.ts` drives the view's own pointer handlers: the pen row used mouse look, which never presses; the wall row presses with the pose read from a point beside the pulled-in eye).
+- The camera: `engine-onfoot-view.test.ts` (the real engine: V at the wheel cycles the drive view, out of the car V goes follow, shoulder, eyes, follow and leaves the drive view; in his eyes
+  the camera stands at his head and his slot's head and torso are hidden, behind him they are not; the wheel's nearest on foot is within the shoulder boom, zooming in reaches
+  his eyes and out leaves them, and back at the wheel the car's zoom range is as it was; a drag all the way round him in a pen of walls 0.45 m away stays the follow view and never
+  puts the eye in a wall; with a wall 1.5 m behind him one notch in brings the eye in at once), `walker-camera-clear.test.ts` (a wall streamed in beside his right shoulder: the eye
+  stands its ball's width off it, where with no wall it would stand inside it), `walker-camera.test.ts` (the default framing has his head and feet in view and him within 5 % of the
+  middle across on 16:9, 4:3 and an upright phone; the boom is 3.7 m level and shorter looking down; only a pad's view recentres; a squeeze hides his head rather than putting
+  the eye in a wall) and `walker-camera-collision.test.ts` (in a corridor, a doorway and beside a car and a building's corner, turned all the way round at three pitches, the eye
+  never stands in a solid; a wall 1.5 m behind pulls it in the same frame, and it lets go over about 0.24 s).
 
 - `ragdoll-walker-steps.test.ts`: on flat ground with prisms, he climbs a five-tread stoop (0.18 m risers, 0.28 m treads) and walks in through a 1 m door in its wall; crosses a 0.15 m curb slab up and down; walks up a 0.6 m ramp onto its plateau; passes a 1 m doorway with a 0.12 m threshold; is stopped by a tall projecting block (a bay window) at a run with no fall and no vault; climbs a stairs prop (four 0.18 m treads that the ground does not hold) to a landing, and climbs stairs of boxes streamed in with `setFixedBoxes`. `ragdoll-fixed-boxes.test.ts`: a dummy thrown over a streamed floor box lies on it (this thread's world, and the worker's world given the list its message carries), streamed out it falls and 300 frames do not throw, an empty or NaN box throws and changes nothing, boxes set before Rapier loads arrive with it, and the worker is sent each whole list. `walker-gait-flat.test.ts`: on flat ground the gait's whole output over a walk, a turn and a stop is bit for bit what reading the floor under the heel alone gives, and with a 0.18 m step the two differ. `engine-onfoot-park.test.ts`: the real engine on the open world, out in the park, knocked down and up again, then a minute of running about, no step throws.
 

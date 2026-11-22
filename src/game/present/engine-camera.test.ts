@@ -907,3 +907,22 @@ describe("given the orbit turned by the right stick", () => {
     expect(frame(view, pad, 1) / DT).toBeCloseTo(PAD_YAW, 1);
   });
 });
+
+describe("given the orbit at 10 m behind a followed car", () => {
+  // mutation: sed -i 's/  return e.deltaY \* (e.deltaMode === 1 ? WHEEL_LINE_PX : e.deltaMode === 2 ? WHEEL_PAGE_PX : 1);/  return e.deltaY;/' src/game/present/engine-camera.ts
+  it("when the wheel turns one notch in as pixels, as lines and as a page, then each zooms in by the same step", () => {
+    const notches = [
+      { deltaMode: 0, deltaY: -100 },
+      { deltaMode: 1, deltaY: -3 },
+      { deltaMode: 2, deltaY: -1 },
+    ];
+    const steps = notches.map((notch) => {
+      const { canvas, view } = rig("global");
+      view.easeOrbit(10, view.orbitPitch, 1);
+      canvas.dispatchEvent(Object.assign(new Event("wheel"), { ...notch, preventDefault() {} }));
+      return view.orbitRadius / 10;
+    });
+    expect(steps[0], "a pixel notch zooms in").toBeLessThan(0.95);
+    for (let k = 1; k < steps.length; k++) expect(Math.abs(steps[k]! - steps[0]!), `deltaMode ${k} step ${steps[k]!.toFixed(3)} against pixels' ${steps[0]!.toFixed(3)}`).toBeLessThan(0.01);
+  });
+});
