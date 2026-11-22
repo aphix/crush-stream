@@ -37,6 +37,17 @@ const FALL_EYE_Y = 1.5;
 export const RIDE_PAUSE = 2.5;
 /** A pointer that travels less (px) than this is a click, not a drag. */
 const CLICK_PX = 8;
+/** A wheel notch reads 100 px (deltaMode 0, Chrome), 3 lines (deltaMode 1, Firefox's line mode) or 1 page (deltaMode 2): each counts as the same notch. Browser convention, not measured here. */
+const WHEEL_LINE_PX = 100 / 3;
+const WHEEL_PAGE_PX = 100;
+/** The zoom's log change per wheel pixel: a 100 px notch zooms 12 %. Tuned by feel. */
+const WHEEL_ZOOM_PER_PX = 0.00115;
+
+/** A wheel event's vertical turn in pixels, whatever unit the browser reported it in. */
+function wheelPixels(e: WheelEvent): number {
+  return e.deltaY * (e.deltaMode === 1 ? WHEEL_LINE_PX : e.deltaMode === 2 ? WHEEL_PAGE_PX : 1);
+}
+
 const CURSOR_GRAB = "grab";
 /** The orbit's zoom range (m from `look`): the fleet's whole-car framing; the garage's shots come closer (`OrbitShot.minRadius`). */
 export const ORBIT_RADIUS = { min: 4.2, max: 32 } as const;
@@ -708,13 +719,13 @@ export class ChaseCamera {
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
     this.userFramed = true;
+    const px = wheelPixels(e);
     // Free view: the wheel is the flight speed, not a zoom.
     if (this.flying) {
-      this.free.speedBy(e.deltaY);
+      this.free.speedBy(px);
       return;
     }
-    const scale = Math.exp(e.deltaY * 0.00115);
-    this.radius = THREE.MathUtils.clamp(this.radius * scale, this.minRadius, ORBIT_RADIUS.max);
+    this.radius = THREE.MathUtils.clamp(this.radius * Math.exp(px * WHEEL_ZOOM_PER_PX), this.minRadius, ORBIT_RADIUS.max);
     this.zooms++;
     if (this.ride) this.rideLooked = true;
   };
