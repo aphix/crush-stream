@@ -497,11 +497,12 @@ describe("given the engine's pacer in a browser whose clock reads only in coarse
 });
 
 describe("given a car whose velocity has gone NaN or infinite (a bad impulse upstream)", () => {
-  it("when the pacer is handed a NaN speed, then it runs no step at all: the frozen game the throw below replaces (guard)", () => {
+  it("when the pacer is handed a NaN speed for three frames, then it runs one step of NaN length and none after, its debt NaN for good: the frozen game the throw below replaces (guard)", () => {
     const pace = new SimPacer();
-    let steps = 0;
-    pace.run(1 / FRAME_HZ, 1, NaN, true, Infinity, () => steps++);
-    expect(steps).toBe(0);
+    const slices: number[] = [];
+    for (let frame = 0; frame < 3; frame++) pace.run(1 / FRAME_HZ, 1, NaN, true, Infinity, (h) => slices.push(h));
+    expect(slices.length, "steps over three frames").toBe(1);
+    expect(slices[0], "the one step's length").toBeNaN();
   });
 
   // mutation: sed -i '/^  if (!Number.isFinite(vmax)) nonFinite("the fastest car.s speed", vmax);/d' src/game/contact/sat.ts

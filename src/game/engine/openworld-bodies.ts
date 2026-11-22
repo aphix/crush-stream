@@ -166,7 +166,7 @@ export class OpenWorldBodies {
     }
   }
 
-  /** The hook takes civilian `civilian` wherever she is: a body is stood for her now and pinned `HOOK_HOLD_SECONDS`; its pool slot, or -1 where she may have none (indoors, at a counter). With every body in use, the farthest from (eyeX, eyeZ) that is on its feet, steady, in step with her and held by no cable or pin is let go first; with none such she gets none. */
+  /** The hook takes civilian `civilian` wherever she is drawn and whatever she is doing (indoors, at a counter, seated, on a stoop): a body is stood for her now at her drawn feet and pinned `HOOK_HOLD_SECONDS`; its pool slot, or -1 for a figure that is not a shown person. With every body in use, the farthest from (eyeX, eyeZ) that is on its feet, steady, in step with her and held by no cable or pin is let go first; with none such she gets none. */
   stand(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number): number {
     if (this.bodyOf[civilian]! === NOBODY) {
       if (!this.eligible(poses, civilian, eyeX, eyeZ, Infinity, true)) return NOBODY;
@@ -279,13 +279,14 @@ export class OpenWorldBodies {
     this.host.steer(slot, detAtan2(vx, vz), Math.min(FASTEST, hypot2(vx, vz)));
   }
 
-  /** Whether civilian `civilian` may have a body: a person (a body is a human dummy) shown, walking or standing about, on the street (not on a stoop; `raised`: the hook's, off it too) and not in a building, within `radius` of the eye. */
-  private eligible(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number, radius: number, raised = false): boolean {
-    if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person || !BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;
+  /** Whether civilian `civilian` may have a body: a person (a body is a human dummy) shown, walking or standing about, on the street (not on a stoop) and not in a building, within `radius` of the eye. `hooked`: the hook's, which takes any shown person wherever she is drawn and whatever she is doing. */
+  private eligible(poses: CrowdPoses, civilian: number, eyeX: number, eyeZ: number, radius: number, hooked = false): boolean {
+    if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person) return false;
+    if (!hooked && !BODY_ACTIVITY.has(poses.activity[civilian]!)) return false;
     const x = poses.x[civilian]!;
     const z = poses.z[civilian]!;
-    if (hypot2(x - eyeX, z - eyeZ) > radius || (!raised && poses.feetY[civilian]! - this.host.groundAt(x, z) > ON_STREET)) return false;
-    return !this.buildings.inside(poses.x, poses.z, civilian);
+    if (hypot2(x - eyeX, z - eyeZ) > radius || (!hooked && poses.feetY[civilian]! - this.host.groundAt(x, z) > ON_STREET)) return false;
+    return hooked || !this.buildings.inside(poses.x, poses.z, civilian);
   }
 
   /** The nearest eligible civilians without a body take the free ones, nearest first, while there are any. */
