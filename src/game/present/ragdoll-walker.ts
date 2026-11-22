@@ -443,10 +443,12 @@ export class Walker {
       const share = far > 0 ? Math.min(1, pace / far) : 0;
       x *= share;
       z *= share;
-      // A part pressed through a thin solid (a banister) reads its way out flipping as it crosses the middle: a carry under way keeps its way, so the root does not jerk back and forth.
+      // A part pressed through a thin solid (a banister) reads its way out flipping as it crosses the middle: a carry under way keeps its way (this frame's length, last frame's direction), so the root does not jerk back and forth.
       if (x * this.carried[0]! + z * this.carried[1]! < 0) {
-        x = this.carried[0]!;
-        z = this.carried[1]!;
+        // The dot is negative only when both steps have length: no zero to divide by.
+        const keep = hypot2(x, z) / hypot2(this.carried[0]!, this.carried[1]!);
+        x = this.carried[0]! * keep;
+        z = this.carried[1]! * keep;
       }
       this.carried[0] = x;
       this.carried[1] = z;

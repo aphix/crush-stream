@@ -256,3 +256,22 @@ describe("given a walker standing on a floor 4 m up", () => {
     expect(walker.state, "both feet on the tread, torso 0.74 m over it").toBe("down");
   });
 });
+
+describe("given a walker standing on open ground, a part of him being carried out of something", () => {
+  // mutation: sed -i 's/^        const keep = hypot2(x, z) \/ hypot2(this.carried\[0\]!, this.carried\[1\]!);/        const keep = 1;/' src/game/present/ragdoll-walker.ts
+  it("when the carry runs through a 0.05 s frame and then turns back in quarter frames, then it keeps its way and moves him no more than a walk's step a frame", () => {
+    const walker = system.walker;
+    const gait = walker["gait"];
+    const carry = (dt: number, x: number): number => {
+      const from = gait["pathX"];
+      walker["getOut"](dt, Float64Array.of(x, 0, 0), 0);
+      return gait["pathX"] - from;
+    };
+    expect(carry(0.05, 1), "the hitch's step (m)").toBeCloseTo(WALK_SPEED * 0.05, 6);
+    for (let f = 0; f < 4; f++) {
+      const step = carry(FRAME / 4, -1);
+      expect(step, `frame ${f} after the hitch: still along +x (m)`).toBeGreaterThan(0);
+      expect(step, `frame ${f} after the hitch: no more than a walk's step (m)`).toBeLessThanOrEqual((WALK_SPEED * FRAME) / 4 + 1e-9);
+    }
+  });
+});
