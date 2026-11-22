@@ -140,6 +140,8 @@ export class WalkFloor {
     const sin = detSin(yaw);
     const cos = detCos(yaw);
     const brake = PACE_BRAKE_SHARE * brakeRate(command);
+    // Mid-flight his root lags the foot a tread up that sets `level`: the riser under him is a step too, else the next one reads a stride away and he speeds into a skipped tread.
+    if (this.stepAt(x, z, sin, cos, 0)) return STEP_PACE;
     const reach = Math.max(PACE_REACH, PACE_LOOK + (command * command - STEP_PACE * STEP_PACE) / (2 * brake));
     for (let ahead = PACE_LOOK; ahead <= reach + PACE_LOOK / 2; ahead += PACE_LOOK) {
       if (!this.stepAt(x, z, sin, cos, ahead)) continue;
