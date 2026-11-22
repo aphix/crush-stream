@@ -82,9 +82,13 @@ describe("given the city's map", () => {
     const built = buildOpenWorldMap(lots);
     const keys = new Set(built.places.map((place) => Object.keys(place).join(",")));
     expect([...keys], "field orders among the places").toHaveLength(1);
-    const fields = Object.keys(built.places[0]!) as (keyof Place)[];
     for (let place = 0; place < built.places.length; place++) {
-      for (const field of fields) if (field !== "doorNode") expect(built.places[place]![field], `place ${place} ${field}`).toBe(lots.places[place]![field]);
+      const record = built.places[place]!;
+      for (const [field, laid] of Object.entries(lots.places[place]!)) {
+        if (field === "doorNode") continue;
+        expect(Object.hasOwn(record, field), `place ${place} keeps ${field}`).toBe(true);
+        expect(Reflect.get(record, field), `place ${place} ${field}`).toBe(laid);
+      }
     }
   });
 });
