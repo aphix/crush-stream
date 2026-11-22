@@ -49,6 +49,31 @@ export class Situation {
     this.heard = 0;
   }
 
+  /** This situation becomes a copy of `other` (an ask keeps its own, so the next read does not change what the answer is checked against). */
+  copyFrom(other: Situation): void {
+    this.resident = other.resident;
+    this.size = other.size;
+    this.who = other.who;
+    this.feeling = other.feeling;
+    this.hour = other.hour;
+    this.purpose = other.purpose;
+    this.walking = other.walking;
+    this.hasWork = other.hasWork;
+    this.hasCompany = other.hasCompany;
+    this.topNeed = other.topNeed;
+    this.topLevel = other.topLevel;
+    this.seen = other.seen;
+    this.seenKind.set(other.seenKind);
+    this.seenSalience.set(other.seenSalience);
+    this.seenMetres.set(other.seenMetres);
+    this.seenX.set(other.seenX);
+    this.seenY.set(other.seenY);
+    this.seenZ.set(other.seenZ);
+    this.heard = other.heard;
+    this.heardKind.set(other.heardKind);
+    this.heardAge.set(other.heardAge);
+  }
+
   /** Notes a stimulus, keeping the `SEEN_MAX` most salient for their distance. */
   see(kind: number, salience: number, metres: number, x: number, y: number, z: number): void {
     const weight = lookWeight(salience, metres);
@@ -164,7 +189,7 @@ function thinkingOf(sit: Situation): number {
 
 /** The model's prompt for `sit`, one short sentence as Needle reads best (a command-like line, not a story), naming things by the tools' own words. */
 export function situationQuery(sit: Situation): string {
-  const who = sit.resident >= 0 ? `${sit.who}, ${sit.feeling}${sit.purpose >= 0 && sit.walking ? `, on the way to ${PURPOSE_LABELS[sit.purpose]}` : ""}` : `A group of ${sit.size} people`;
+  const who = `${sit.who}, ${sit.feeling}${sit.purpose >= 0 && sit.walking ? `, on the way to ${PURPOSE_LABELS[sit.purpose]}` : ""}`;
   const need = sit.topNeed >= 0 ? `, needs ${NEED_IDS[sit.topNeed]}` : "";
   const around = Array.from({ length: sit.seen }, (_, row) => `a ${STIMULUS_IDS[sit.seenKind[row]!]} ${Math.round(sit.seenMetres[row]!)} m away`);
   const lately = Array.from({ length: sit.heard }, (_, row) => `the ${EVENT_IDS[sit.heardKind[row]!]} ${Math.round(sit.heardAge[row]!)} minutes ago`);

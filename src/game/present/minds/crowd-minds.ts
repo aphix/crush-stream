@@ -1,5 +1,5 @@
-import { HASH16, KIND_LIFE, hash16 } from "../civilian-gaze-constants.ts";
-import { STIMULUS, type CrowdGaze } from "../civilian-gaze.ts";
+import { FACE_HEIGHT_M, HASH16, KIND_LIFE, PULSE_CAPACITY, hash16 } from "../civilian-gaze-constants.ts";
+import { STIMULUS } from "../civilian-gaze.ts";
 import { NEEDLE_WEIGHTS, type FromNeedle, type ToNeedle } from "./minds-protocol.ts";
 import { MindsWorld, hourKey, readGroup, readResident } from "./minds-read.ts";
 import { Situation, fitsSituation, pickFallback, situationQuery, situationTools } from "./thought-situation.ts";
@@ -29,39 +29,32 @@ const STAGGER_STEP_S = 0.15;
 const STAGGER_JITTER_S = 0.4;
 /** The stimulus table is read for new pulses this often (Hz), the look-at panel's own rate. */
 const SCAN_HZ = 4;
+/** A pulse younger than this (s) is new: one scan's interval, plus one more so a pulse born just after a scan is still new at the next. */
+const FRESH_S = 2 / SCAN_HZ;
 /** A pulse of the same kind within this many metres of one already taken is the same pulse. */
 const SAME_PULSE_METRES = 2;
 /** Pulses a group thinks about together. */
 const PULSE_KINDS: readonly number[] = [STIMULUS.crash, STIMULUS.knock, STIMULUS.gunshot];
-const NO_ASK = 0;
-const ASK_ONE = 1;
-const ASK_GROUP = 2;
 const NOT_SCHEDULED = -1;
 const NO_HOUR = -1;
 
-/** One ask of the model: who it is for (a resident or a group's members), the hour it was asked in, and the situation its answer must fit. */
+/** One ask of the model for one resident (`sit.resident`): the hour it was asked in (`NO_HOUR`: no ask) and the situation its answer must fit. */
 class Ask {
-  kind = NO_ASK;
   id = 0;
   hour = NO_HOUR;
   started = 0;
   readonly sit = new Situation();
-  readonly members = new Int32Array(GROUP_MAX);
-  count = 0;
 
   copyFrom(other: Ask): void {
-    this.kind = other.kind;
     this.hour = other.hour;
     this.sit.copyFrom(other.sit);
-    this.members.set(other.members);
-    this.count = other.count;
   }
 }
 
 /**
  * What the residents think, singly when the look-at panel rests on one and together when a pulse (a crash, a knock, a shot) turns a group, as one panel
  * line each and a look on the gaze (`attend`). A cheap deterministic pick answers at once and always; when the Minds setting is on, Needle 2 in a worker
- * is asked once for the same moment and its answer, if it names a thought that fits, replaces the pick. Presentation only: nothing here reaches the brain or the wire.
+ * is asked once for a single resident's moment and its answer, if it names a thought that fits, replaces the pick. A group's thought is the pick alone. Presentation only: nothing here reaches the brain or the wire.
  */
 export class CrowdMinds {
   /** Per resident: the game hour her thought was had in, and the thought (tool, argument, and the purpose a "plans" thought names). */
@@ -92,12 +85,14 @@ export class CrowdMinds {
   private readonly attendAt: Float64Array;
   private readonly attendPoint: Float32Array;
   private scheduled = 0;
-  /** Pulses already taken: kind, spot and when (s). */
-  private readonly pulseKind = new Uint8Array(PULSE_KINDS.length * GROUP_MAX);
-  private readonly pulseX = new Float32Array(PULSE_KINDS.length * GROUP_MAX);
-  private readonly pulseZ = new Float32Array(PULSE_KINDS.length * GROUP_MAX);
-  private readonly pulseAt = new Float64Array(PULSE_KINDS.length * GROUP_MAX).fill(-Infinity);
+  /** Pulses already taken (as many as the gaze table can hold): kind, spot and when (s). */
+  private readonly pulseKind = new Uint8Array(PULSE_CAPACITY);
+  private readonly pulseX = new Float32Array(PULSE_CAPACITY);
+  private readonly pulseZ = new Float32Array(PULSE_CAPACITY);
+  private readonly pulseAt = new Float64Array(PULSE_CAPACITY).fill(-Infinity);
   private pulseNext = 0;
+  /** The members of the group being gathered. */
+  private readonly members = new Int32Array(GROUP_MAX);
 
   constructor(capacity: number, world: MindsWorld, createWorker: () => NeedleWorker) {
     this.world = world;
@@ -115,7 +110,7 @@ export class CrowdMinds {
     this.on = on;
     if (on) return;
     this.endWorker();
-    this.queued.kind = NO_ASK;
+    this.queued.hour = NO_HOUR;
   }
 
   /** The panel's thought line for resident `resident`, whom the eye rests on: her thought this hour, picked now (and the model asked) if she has none yet. */
@@ -128,7 +123,7 @@ export class CrowdMinds {
       pickFallback(this.sit, this.pick);
       this.keep(resident, hour, this.pick, this.sit.purpose);
       this.attendFor(resident, this.pick, this.sit);
-      if (this.on) this.ask(ASK_ONE, hour, this.sit, null, 0);
+      if (this.on) this.ask(hour);
     }
     return thoughtLine(this.thoughtTool[resident]!, this.thoughtArg[resident]!, this.thoughtPurpose[resident]!);
   }
@@ -136,7 +131,7 @@ export class CrowdMinds {
   /** One frame: the scheduled looks whose time has come turn, a call over its budget ends the worker, and the gaze's table is read for new pulses at `SCAN_HZ`. Allocates nothing unless a pulse is new. */
   frame(dt: number): void {
     this.seconds += dt;
-    if (this.flight.kind !== NO_ASK && this.seconds - this.flight.started > ASK_BUDGET_S) this.timeOut();
+    if (this.flight.hour !== NO_HOUR && this.seconds - this.flight.started > ASK_BUDGET_S) this.timeOut();
     if (this.scheduled > 0) this.turnScheduled();
     this.scanAcc += dt;
     if (this.scanAcc < 1 / SCAN_HZ) return;
@@ -160,23 +155,19 @@ export class CrowdMinds {
     else gaze.attend(resident, this.world.eyeX, this.world.eyeY, this.world.eyeZ, THOUGHT_HOLD_S, THOUGHT_URGENCY);
   }
 
-  /** Puts an ask next in line (the newest wins the one free slot) and sends it if the model is idle. */
-  private ask(kind: number, hour: number, sit: Situation, members: Int32Array | null, count: number): void {
-    const next = this.queued;
-    next.kind = kind;
-    next.hour = hour;
-    next.sit.copyFrom(sit);
-    if (members !== null) next.members.set(members.subarray(0, count));
-    next.count = count;
+  /** Puts an ask about `sit` next in line (the newest wins the one free slot) and sends it if the model is idle. */
+  private ask(hour: number): void {
+    this.queued.hour = hour;
+    this.queued.sit.copyFrom(this.sit);
     this.send();
   }
 
   private send(): void {
-    if (!this.on || this.broken || this.queued.kind === NO_ASK || this.flight.kind !== NO_ASK || this.seconds < this.backoffUntil) return;
+    if (!this.on || this.broken || this.queued.hour === NO_HOUR || this.flight.hour !== NO_HOUR || this.seconds < this.backoffUntil) return;
     if (this.worker === null) this.startWorker();
     if (!this.ready || this.worker === null) return;
     this.flight.copyFrom(this.queued);
-    this.queued.kind = NO_ASK;
+    this.queued.hour = NO_HOUR;
     this.flight.id = this.nextId++;
     this.flight.started = this.seconds;
     this.worker.postMessage({ kind: "ask", id: this.flight.id, query: situationQuery(this.flight.sit), tools: situationTools(this.flight.sit) });
@@ -195,7 +186,7 @@ export class CrowdMinds {
     this.worker?.terminate();
     this.worker = null;
     this.ready = false;
-    this.flight.kind = NO_ASK;
+    this.flight.hour = NO_HOUR;
   }
 
   /** The worker could not load or run the model: the fallback answers for the rest of the session, said once in the console. */
@@ -222,13 +213,13 @@ export class CrowdMinds {
       this.send();
       return;
     }
-    if (message.id !== this.flight.id || this.flight.kind === NO_ASK) {
+    if (message.id !== this.flight.id || this.flight.hour === NO_HOUR) {
       this.verdicts[VERDICT.late]!++;
       return;
     }
     this.lastCallMs = message.ms;
     this.take(message.text);
-    this.flight.kind = NO_ASK;
+    this.flight.hour = NO_HOUR;
     this.send();
   }
 
@@ -238,19 +229,15 @@ export class CrowdMinds {
     let verdict = readCall(text, this.pick);
     if (verdict === VERDICT.taken && !fitsSituation(ask.sit, this.pick)) verdict = VERDICT.absent;
     this.verdicts[verdict]!++;
-    if (verdict !== VERDICT.taken) return;
-    if (ask.kind === ASK_ONE) {
-      const resident = ask.sit.resident;
-      if (this.thoughtHour[resident] !== ask.hour) return;
-      this.keep(resident, ask.hour, this.pick, ask.sit.purpose);
-      this.attendFor(resident, this.pick, ask.sit);
-      return;
-    }
-    this.fanOut(ask.members, ask.count, ask.hour, this.pick, ask.sit);
+    const resident = ask.sit.resident;
+    if (verdict !== VERDICT.taken || this.thoughtHour[resident] !== ask.hour) return;
+    this.keep(resident, ask.hour, this.pick, ask.sit.purpose);
+    this.attendFor(resident, this.pick, ask.sit);
   }
 
   /** A group's thought: each member keeps it for the hour and turns in her own time, to the pulse for a look, to the next of them for a remark. */
-  private fanOut(members: Int32Array, count: number, hour: number, thought: Thought, sit: Situation): void {
+  private fanOut(count: number, hour: number, thought: Thought, sit: Situation): void {
+    const members = this.members;
     for (let rank = 0; rank < count; rank++) {
       const resident = members[rank]!;
       this.keep(resident, hour, thought, -1);
@@ -265,7 +252,7 @@ export class CrowdMinds {
     const point = this.attendPoint;
     if (toward >= 0 && poses !== null) {
       point[resident * 3] = poses.x[toward]!;
-      point[resident * 3 + 1] = poses.feetY[toward]! + FACE_UP_M;
+      point[resident * 3 + 1] = poses.feetY[toward]! + FACE_HEIGHT_M;
       point[resident * 3 + 2] = poses.z[toward]!;
     } else {
       point[resident * 3] = sit.seenX[0]!;
@@ -296,15 +283,10 @@ export class CrowdMinds {
     const table = gaze.stimuli;
     for (let row = 0; row < table.count; row++) {
       const kind = table.kind[row]!;
-      if (!PULSE_KINDS.includes(kind) || table.life[row]! < KIND_LIFE[kind]! - 1 / SCAN_HZ - this.scanSlack() || this.knownPulse(kind, table.x[row]!, table.z[row]!)) continue;
+      if (!PULSE_KINDS.includes(kind) || table.life[row]! < KIND_LIFE[kind]! - FRESH_S || this.knownPulse(kind, table.x[row]!, table.z[row]!)) continue;
       this.notePulse(kind, table.x[row]!, table.z[row]!);
-      this.groupAround(gaze, poses, kind, table.salience[row]!, table.x[row]!, table.y[row]!, table.z[row]!);
+      this.groupAround(poses, kind, table.salience[row]!, table.x[row]!, table.y[row]!, table.z[row]!);
     }
-  }
-
-  /** A frame's worth of slack on a pulse's age, so one born just after a scan is still fresh at the next. */
-  private scanSlack(): number {
-    return 1 / SCAN_HZ;
   }
 
   private knownPulse(kind: number, x: number, z: number): boolean {
@@ -326,8 +308,8 @@ export class CrowdMinds {
     this.pulseAt[at] = this.seconds;
   }
 
-  private groupAround(gaze: CrowdGaze, poses: NonNullable<MindsWorld["poses"]>, kind: number, salience: number, x: number, y: number, z: number): void {
-    const members = this.queued.members;
+  private groupAround(poses: NonNullable<MindsWorld["poses"]>, kind: number, salience: number, x: number, y: number, z: number): void {
+    const members = this.members;
     let count = 0;
     let metres = 0;
     for (let resident = 0; resident < poses.count && count < GROUP_MAX; resident++) {
@@ -339,14 +321,9 @@ export class CrowdMinds {
       members[count++] = resident;
       metres += distance;
     }
-    if (count < GROUP_MIN || gaze !== this.world.gaze) return;
-    const hour = hourKey(this.world.tick);
+    if (count < GROUP_MIN) return;
     readGroup(this.sit, this.world, count, kind, salience, metres / count, x, y, z);
     pickFallback(this.sit, this.pick);
-    this.fanOut(members, count, hour, this.pick, this.sit);
-    if (this.on) this.ask(ASK_GROUP, hour, this.sit, members, count);
+    this.fanOut(count, hourKey(this.world.tick), this.pick, this.sit);
   }
 }
-
-/** A face is this far over the feet (m): where a group member looks at the one beside her. */
-const FACE_UP_M = 1.55;

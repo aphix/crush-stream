@@ -99,8 +99,8 @@ export function thoughtLine(tool: number, arg: number, purpose: number): string 
   return LINES[tool]![arg] ?? LINES[THOUGHT.ignore]![0]!;
 }
 
-/** What became of a model's answer: taken, a deliberate "no tool" (`[]`), or rejected and the fallback stands. */
-export const VERDICT = { taken: 0, abstained: 1, malformed: 2, unknownTool: 3, badArgs: 4, absent: 5, unsure: 6, late: 7 } as const;
+/** What became of a model's answer: taken, a deliberate "no tool" (`[]`), rejected (the fallback stands: `absent` names a thought that does not fit the moment), or too late. */
+export const VERDICT = { taken: 0, abstained: 1, malformed: 2, unknownTool: 3, badArgs: 4, absent: 5, late: 6 } as const;
 
 /** A picked thought: a `THOUGHT` tool and its argument code. */
 export class Thought {
