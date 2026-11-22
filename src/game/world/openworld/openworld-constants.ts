@@ -86,8 +86,8 @@ export const COURSE_LOOK = {
 /** Interior street id prefixes. */
 export const ROUTE_ID = { columnStreet: "street-x", rowStreet: "street-z" } as const;
 
-/** Spawn: rows of four abreast across the first interior intersection heading east, one row gap (8 m) behind its centre so three rows stand in the 23 m the parking gaps leave clear, shifted 2 m off the street's middle so four abreast at 4 m span 12 m of the 18.2 m between building faces. */
-export const SPAWN_BEHIND_CENTRE = 8;
+/** Spawn: rows of four abreast across the first interior intersection heading east, 10 m behind its centre so three rows (8 m apart) stand in the 23 m the parking gaps leave clear and none in a zebra crossing's ±1.5 m band (crossings run 7.6 m either side of the centre; 8 m put a driver who got out 0.4 m off one), shifted 2 m off the street's middle so four abreast at 4 m span 12 m of the 18.2 m between building faces. */
+export const SPAWN_BEHIND_CENTRE = 10;
 export const SPAWN_LATERAL_SHIFT = 2;
 /** The cops' formation behind the anchor: two files either side of the lane's middle, 5.5 m apart nose to tail, 11 m back. */
 export const SPAWN_FORMATION_BACK = 11;
