@@ -104,7 +104,6 @@ describe("given the walker beside a wall on flat ground", () => {
 const flightCases: readonly { it: string; x: number; heading: number; command: number }[] = [
   { it: "when he runs up it 10 degrees into the party wall, then he keeps his feet and his strength", x: 0, heading: 10 * DEG, command: RUN_SPEED },
   { it: "when he runs up it along the party wall, 5 degrees into it, then he keeps his feet and his strength", x: 0.2, heading: 5 * DEG, command: RUN_SPEED },
-  // mutation (the sinking torso): sed -i 's/^    const dy = Math.max(0, doll.vel\[1\]! - held\[1\]! + HOLD_RATE \* ly \* keep);/    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;/' src/game/present/ragdoll-walker.ts
   { it: "when he runs up it 5 degrees into the banister, then he keeps his feet and his strength", x: 0.2, heading: -5 * DEG, command: RUN_SPEED },
   { it: "when he walks up it across to the party wall at 10 degrees, then he keeps his feet and his strength", x: -0.2, heading: 10 * DEG, command: WALK_SPEED },
   // mutation (a sprint ramps as a run on the treads): sed -i 's/^      const top = share < 1 ? Math.min(command, RUN_SPEED) : command;/      const top = command;/' src/game/present/walker-floor.ts
@@ -115,7 +114,6 @@ const flightCases: readonly { it: string; x: number; heading: number; command: n
 ];
 
 // mutation (the runs): sed -i 's/^      return Math.min(command, STEP_PACE + (top - STEP_PACE) \* share, braking);/      return Math.min(command, STEP_PACE + (top - STEP_PACE) * share);/' src/game/present/walker-floor.ts
-// mutation (into the banister): sed -i 's/^      if (box.y1 > ask + WALL_RISE) return NO_FLOOR;/      if (box.y1 > ask + WALL_RISE) continue;/' src/game/present/walker-floor.ts
 describe("given the walker at the foot of a rowhome's stair flight between its party wall and a banister", () => {
   for (const testCase of flightCases) {
     it(testCase.it, async () => {
@@ -128,7 +126,7 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
     });
   }
 
-  // mutation: sed -i 's/^    const height = this.floor.walled(this.anchorPos\[0\]!, this.anchorPos\[2\]!, x, z) ? NO_FLOOR : this.floor.under(x, z);/    const height = this.floor.under(x, z);/' src/game/present/ragdoll-walker.ts
+  // mutation: sed -i 's/^    return height !== NO_FLOOR ? height : this.floor.level;/    return height !== NO_FLOOR ? height : 0;/' src/game/present/ragdoll-walker.ts
   it("when he walks up it 10 degrees into the banister, its end a post at the first riser, then he keeps his feet and his strength", async () => {
     const sys = await standingAmong(flight(true), -0.2);
     const climb = walk(sys, -10 * DEG, WALK_SPEED, CLIMB_SECONDS);
