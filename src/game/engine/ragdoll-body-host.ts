@@ -25,7 +25,9 @@ export class RagdollBodyHost {
   }
 
   start(x: number, y: number, z: number, yaw: number, look: DriverLook, slot: number, vx: number, vz: number): number {
-    return this.ragdolls().startWalker(_at.set(x, y, z), yaw, { cop: false, look }, slot, _v.set(vx, 0, vz));
+    const started = this.ragdolls().startWalker(_at.set(x, y, z), yaw, { cop: false, look }, slot, _v.set(vx, 0, vz));
+    if (started >= 0) this.look(started, 0, 0);
+    return started;
   }
 
   stop(slot: number): void {
@@ -49,6 +51,12 @@ export class RagdollBodyHost {
     const walker = this.ragdolls().walkers[slot]!;
     walker.heading = heading;
     walker.command = speed;
+  }
+
+  look(slot: number, turn: number, nod: number): void {
+    const gait = this.ragdolls().walkers[slot]!.gait;
+    gait.lookTurn = turn;
+    gait.lookNod = nod;
   }
 
   standing(slot: number): boolean {

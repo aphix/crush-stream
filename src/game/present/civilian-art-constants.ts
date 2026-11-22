@@ -83,10 +83,12 @@ export const LOOK_SCRAMBLE = { first: 0x7feb352d, second: 0x846ca68b, shiftFirst
 export const FIGURE_ROLE = { SKIN: 0, SHIRT: 1, TROUSERS: 2, DARK: 3 } as const;
 /** The far figure's hair and shoes (sRGB): one dark brown, as at 20 m and more nobody sees them apart. */
 export const FIGURE_DARK = 0x2a1d15;
-/** The far figure's vertex attributes beyond position and normal: role, swing and pivot height (`rig`), the per-instance trousers and skin colours, and the walk's phase and amplitude (`gait`). */
+/** The far figure's vertex attributes beyond position and normal: role, swing and pivot height (`rig`; a head vertex has no swing and its pivot at the neck), the per-instance trousers and skin colours, and `gait`. */
 export const FIGURE_ATTRIBUTE = { RIG: "rig", TROUSERS: "trousers", SKIN: "skin", GAIT: "gait" } as const;
-/** Floats an instance holds in each of those: a mat4, three colours, a phase and an amplitude. */
-export const FIGURE_FLOATS = { MATRIX: 16, COLOUR: 3, GAIT: 2 } as const;
+/** Floats an instance holds in each of those: a mat4, three colours, and the gait's four (`FIGURE_GAIT`). */
+export const FIGURE_FLOATS = { MATRIX: 16, COLOUR: 3, GAIT: 4 } as const;
+/** An instance's `gait` floats: the walk's phase and amplitude, and the head's turn from the body and its pitch (rad, down positive) where she looks. */
+export const FIGURE_GAIT = { PHASE: 0, AMPLITUDE: 1, HEAD_YAW: 2, HEAD_PITCH: 3 } as const;
 /** The hair block's rise down the head from its top (m) and how far it stands off the skull. */
 export const FIGURE_HAIR = { rise: 0.08, margin: 0.01 } as const;
 /** The shoulders' extra half width over the torso box (m): the arms hang from them. */

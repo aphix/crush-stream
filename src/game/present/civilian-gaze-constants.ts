@@ -2,7 +2,6 @@ import { FAR_DRAW } from "./civilian-art-constants.ts";
 
 /** What a person can look at: a stimulus table row's kind, and what her current look is on. Codes are stable (the Mind lane reads them). */
 export const STIMULUS = { none: 0, player: 1, car: 2, siren: 3, crash: 4, knock: 5, gunshot: 6, down: 7, attend: 8, partner: 9, person: 10, glance: 11 } as const;
-export type StimulusKind = (typeof STIMULUS)[keyof typeof STIMULUS];
 const KINDS = 12;
 
 /** Rows in the stimulus table, and how many of them lingering pulses may hold. */
@@ -13,8 +12,8 @@ export const PULSE_CAPACITY = 16;
 export const POLL_MASK = 7;
 /** No new look is taken for this long after one ends (reVC `ClearLookFlag`, 4000 ms for a ped). */
 export const LOOK_COOLDOWN_S = 4;
-/** A look this urgent ignores the cooldown (tuned by feel: a crash, a car coming at her). */
-export const COOLDOWN_BYPASS = 0.6;
+/** A look this urgent ignores the cooldown (tuned by feel: a fast car within 15 m, a crash, a car coming at her; not an ambient glance or a passer-by). */
+export const COOLDOWN_BYPASS = 0.35;
 /** A new look must beat the current one's urgency by this to cut it short (tuned by feel: heads don't flick between equals). */
 export const PREEMPT_MARGIN = 0.15;
 /** Below this urgency a sensed thing is not looked at (tuned by feel). */
@@ -25,7 +24,7 @@ const DEG = Math.PI / 180;
 const REVC_FPS = 30;
 /** Head yaw +-90 deg, pitch +-45 deg, torso yaw +-50 deg (reVC `PedIK.cpp:10-11`). */
 export const HEAD_YAW_LIMIT = 90 * DEG;
-export const PITCH_LIMIT = 45 * DEG;
+export const PITCH_LIMIT = Math.PI / 4;
 export const TORSO_YAW_LIMIT = 50 * DEG;
 /** The torso helps past this head turn (rad): the near rig's comfortable head turn (`LOOK_LIMIT` in civilian-anim.ts). */
 export const TORSO_JOIN = 1.1;
@@ -101,8 +100,6 @@ export const SKY_SHARE = 0.3;
 export const GROUND_SHARE = 0.2;
 /** Walking, the head drops this much (rad, down positive) toward the path ahead (tuned by feel). */
 export const WALK_LOOK_DOWN = 0.08;
-/** She walks above this drawn pace (m/s), the art's own `WALKING_ABOVE`. */
-export const WALKING_ABOVE = 0.05;
 /** A pulse turns a share of heads from this floor to all by neuroticism (the brain's `NEURO_REACT_FLOOR` 0.2 raised: a glance costs less than an alarm), less when it is behind them. */
 export const REACT_FLOOR = 0.6;
 export const HEARD_SHARE = 0.7;
@@ -118,7 +115,7 @@ export const KIND_RANGE = kindTable({ player: 10, car: 25, siren: 60, crash: 40,
 /** Looks last `KIND_HOLD_MIN` + up to `KIND_HOLD_SPAN` s (0.5-4 s: reVC's 500-4000 ms looks). */
 export const KIND_HOLD_MIN = kindTable({ player: 1.2, car: 0.8, siren: 1.5, crash: 2, knock: 2, gunshot: 1, down: 2, person: 0.5, glance: 0.6 });
 export const KIND_HOLD_SPAN = kindTable({ player: 1.8, car: 1.7, siren: 1.5, crash: 2, knock: 2, gunshot: 1.5, down: 2, person: 1, glance: 1.2 });
-/** A pulse lingers in the table this long (s), still drawing looks as it fades (tuned by feel; someone down stays for the brain's ambulance wait). */
+/** A pulse lingers in the table this long (s) for its readers; only someone down still draws the looks of those who come by (tuned by feel: about the brain's ambulance wait). */
 export const KIND_LIFE = kindTable({ crash: 8, knock: 6, gunshot: 3, down: 30 });
 /** Kinds only seen, never heard: the line of sight is asked for them. */
 export const SEEN_ONLY = Uint8Array.from({ length: KINDS }, (_, kind) => (kind === STIMULUS.player || kind === STIMULUS.car || kind === STIMULUS.down || kind === STIMULUS.person ? 1 : 0));
@@ -138,5 +135,5 @@ export function hash16(a: number, b: number): number {
 export const HASH16 = 65536;
 
 /** Slots of a gaze's `scratch` (doubles cross calls through it, never as arguments: a boxed double allocates). */
-export const SCRATCH = { x: 0, y: 1, z: 2, urgency: 3, distance: 4, hold: 5, delay: 6, trial: 7, ownX: 8, ownZ: 9, eyeY: 10, aheadX: 11, aheadZ: 12, dx: 13, dz: 14, near: 15 } as const;
-export const SCRATCH_SLOTS = 16;
+export const SCRATCH = { x: 0, y: 1, z: 2, urgency: 3, distance: 4, hold: 5, delay: 6, trial: 7, ownX: 8, ownZ: 9, eyeY: 10, aheadX: 11, aheadZ: 12, dx: 13, dz: 14, near: 15, frameSeconds: 16 } as const;
+export const SCRATCH_SLOTS = 17;

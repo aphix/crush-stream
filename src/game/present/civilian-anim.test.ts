@@ -176,6 +176,21 @@ describe("given two civilians talking and a loner standing about", () => {
     expect(facing(body, HEAD).x).toBeGreaterThan(0.4);
   });
 
+  // mutation: sed -i 's/  if (pose.gazed) applyGaze(pose);/  if (false) applyGaze(pose);/' src/game/present/civilian-anim.ts
+  it("when her gaze is on something to her -x side while she talks to a partner on her +x side, then her head has turned to -x: what she senses wins over the partner", () => {
+    const body = clipAt("talk", 2, { hasPartner: true, bearing: 0.8, gazed: true, gazeYaw: -1 });
+    expect(facing(body, HEAD).x).toBeLessThan(-0.4);
+  });
+
+  // mutation: sed -i 's/  channels\[CHANNEL.headYaw\] = Math.max(-HEAD_YAW_LIMIT, Math.min(HEAD_YAW_LIMIT, channels\[CHANNEL.headYaw\]! + pose.gazeYaw));/  channels[CHANNEL.headYaw] = channels[CHANNEL.headYaw]! + pose.gazeYaw;/' src/game/present/civilian-anim.ts
+  it("when her gaze asks her head to turn 170 degrees, then it turns no farther than 90: she looks over her shoulder, not behind her", () => {
+    for (const side of [-1, 1]) {
+      const head = facing(clipAt("idle", 0, { gazed: true, gazeYaw: side * ((170 * Math.PI) / 180) }), HEAD);
+      expect(head.z, `side ${side}: not facing behind her`).toBeGreaterThan(-0.1);
+      expect(head.x * side, `side ${side}: turned that way`).toBeGreaterThan(0.9);
+    }
+  });
+
   it("when a loner has stood about a while, then she scratches her head with her main hand", () => {
     const body = clipAt("idle", 10.5);
     expect(handTip(body, PLUS_X).distanceTo(new THREE.Vector3(0.1, 1.66, 0.1))).toBeLessThan(0.04);

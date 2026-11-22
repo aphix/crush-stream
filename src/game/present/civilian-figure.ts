@@ -32,6 +32,11 @@ const FACES = [
 const QUAD_TRIANGLES = [[0, 1, 2], [0, 2, 3]] as const;
 const LEFT_SIDE = 1;
 const SWING_PHASE_AT_WIDEST = Math.PI / 2;
+/** The head and hair turn about the dummy's neck joint (m over the feet). */
+const NECK_Y = JOINTS[0][3];
+/** A vertex is the head's when it does not swing (under `STILL_SWING` rad) and its pivot is over `HEAD_PIVOT_ABOVE` m: the torso's pivot is 0, every limb swings. */
+export const HEAD_PIVOT_ABOVE = 0.5;
+export const STILL_SWING = 1e-6;
 
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
@@ -81,21 +86,22 @@ function addLimbs(into: FigureVertices): void {
   }
 }
 
-/** The torso, head and hair, standing still, then the limbs. */
+/** The torso standing still, the head and hair turning about the neck, then the limbs. */
 function figureVertices(): FigureVertices {
   const into: FigureVertices = { position: [], normal: [], rig: [] };
   const torso = PARTS[0];
   const head = PARTS[1];
   const still = { swing: 0, pivotY: 0 };
+  const turning = { swing: 0, pivotY: NECK_Y };
   addFrustum(into, { x: 0, z: 0, bottomY: torso.c[1] - torso.h[1], topY: torso.c[1] + torso.h[1], bottomHalfX: torso.h[0] - FIGURE_SHOULDER_FLARE, bottomHalfZ: torso.h[2], topHalfX: torso.h[0] + FIGURE_SHOULDER_FLARE, topHalfZ: torso.h[2], role: FIGURE_ROLE.SHIRT, ...still });
-  addFrustum(into, { x: 0, z: 0, bottomY: head.c[1] - head.h[1], topY: head.c[1] + head.h[1], bottomHalfX: head.h[0] * FIGURE_TAPER.head, bottomHalfZ: head.h[2] * FIGURE_TAPER.head, topHalfX: head.h[0], topHalfZ: head.h[2], role: FIGURE_ROLE.SKIN, ...still });
+  addFrustum(into, { x: 0, z: 0, bottomY: head.c[1] - head.h[1], topY: head.c[1] + head.h[1], bottomHalfX: head.h[0] * FIGURE_TAPER.head, bottomHalfZ: head.h[2] * FIGURE_TAPER.head, topHalfX: head.h[0], topHalfZ: head.h[2], role: FIGURE_ROLE.SKIN, ...turning });
   const hairBottom = head.c[1] + head.h[1] - FIGURE_HAIR.rise;
-  addFrustum(into, { x: 0, z: 0, bottomY: hairBottom, topY: head.c[1] + head.h[1] + FIGURE_HAIR.margin, bottomHalfX: head.h[0] + FIGURE_HAIR.margin, bottomHalfZ: head.h[2] + FIGURE_HAIR.margin, topHalfX: head.h[0] + FIGURE_HAIR.margin, topHalfZ: head.h[2] + FIGURE_HAIR.margin, role: FIGURE_ROLE.DARK, ...still });
+  addFrustum(into, { x: 0, z: 0, bottomY: hairBottom, topY: head.c[1] + head.h[1] + FIGURE_HAIR.margin, bottomHalfX: head.h[0] + FIGURE_HAIR.margin, bottomHalfZ: head.h[2] + FIGURE_HAIR.margin, topHalfX: head.h[0] + FIGURE_HAIR.margin, topHalfZ: head.h[2] + FIGURE_HAIR.margin, role: FIGURE_ROLE.DARK, ...turning });
   addLimbs(into);
   return into;
 }
 
-/** The far figure: one flat-shaded low-poly person, its vertices tagged with the role (which colour), the swing (rad at the widest stride) and the pivot height of the limb they belong to. */
+/** The far figure: one flat-shaded low-poly person, its vertices tagged with the role (which colour), the swing (rad at the widest stride) and the pivot height of the limb they belong to (a head vertex: no swing, the neck's height). */
 export function civilianFigureGeometry(): THREE.BufferGeometry {
   const buffers = figureVertices();
   return new THREE.BufferGeometry()
@@ -114,7 +120,16 @@ function darkColourLiteral(): string {
 const SWING_VERTEX = /* glsl */ `
 float swingAngle = ${FIGURE_ATTRIBUTE.RIG}.y * ${FIGURE_ATTRIBUTE.GAIT}.y * sin(${FIGURE_ATTRIBUTE.GAIT}.x);
 float swingCos = cos(swingAngle);
-float swingSin = sin(swingAngle);`;
+float swingSin = sin(swingAngle);
+float figureHead = step(${HEAD_PIVOT_ABOVE.toFixed(2)}, ${FIGURE_ATTRIBUTE.RIG}.z) * (1.0 - step(${STILL_SWING}, abs(${FIGURE_ATTRIBUTE.RIG}.y)));
+vec4 headTurn = vec4(cos(${FIGURE_ATTRIBUTE.GAIT}.z * figureHead), sin(${FIGURE_ATTRIBUTE.GAIT}.z * figureHead), cos(${FIGURE_ATTRIBUTE.GAIT}.w * figureHead), sin(${FIGURE_ATTRIBUTE.GAIT}.w * figureHead));`;
+
+/** `v` nodded by the pitch, then turned by the yaw: `turn` is (cos yaw, sin yaw, cos pitch, sin pitch). The figure's test row mirrors it in TypeScript. */
+const TURN_HEAD_GLSL = /* glsl */ `
+vec3 turnFigureHead(vec3 v, vec4 turn) {
+  vec3 nodded = vec3(v.x, v.y * turn.z - v.z * turn.w, v.y * turn.w + v.z * turn.z);
+  return vec3(nodded.x * turn.x + nodded.z * turn.y, nodded.y, nodded.z * turn.x - nodded.x * turn.y);
+}`;
 
 /** Standard lighting, coloured per vertex role from the instance's shirt (`instanceColor`), trousers and skin, each limb swung about its pivot by the instance's walk phase. */
 function civilianFigureMaterial(): THREE.MeshStandardMaterial {
@@ -127,20 +142,23 @@ function civilianFigureMaterial(): THREE.MeshStandardMaterial {
 attribute vec3 ${FIGURE_ATTRIBUTE.RIG};
 attribute vec3 ${FIGURE_ATTRIBUTE.TROUSERS};
 attribute vec3 ${FIGURE_ATTRIBUTE.SKIN};
-attribute vec2 ${FIGURE_ATTRIBUTE.GAIT};
-varying vec3 vFigureColour;`,
+attribute vec4 ${FIGURE_ATTRIBUTE.GAIT};
+varying vec3 vFigureColour;
+${TURN_HEAD_GLSL}`,
       )
       .replace(
         "#include <beginnormal_vertex>",
         `#include <beginnormal_vertex>
 ${SWING_VERTEX}
-objectNormal = vec3(objectNormal.x, objectNormal.y * swingCos - objectNormal.z * swingSin, objectNormal.z * swingCos + objectNormal.y * swingSin);`,
+objectNormal = turnFigureHead(vec3(objectNormal.x, objectNormal.y * swingCos - objectNormal.z * swingSin, objectNormal.z * swingCos + objectNormal.y * swingSin), headTurn);`,
       )
       .replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>
 float fromPivot = transformed.y - ${FIGURE_ATTRIBUTE.RIG}.z;
 transformed = vec3(transformed.x, ${FIGURE_ATTRIBUTE.RIG}.z + fromPivot * swingCos - transformed.z * swingSin, transformed.z * swingCos + fromPivot * swingSin);
+vec3 figureNeck = vec3(0.0, ${FIGURE_ATTRIBUTE.RIG}.z * figureHead, 0.0);
+transformed = turnFigureHead(transformed - figureNeck, headTurn) + figureNeck;
 vFigureColour = ${FIGURE_ATTRIBUTE.RIG}.x < ${FIGURE_ROLE.SKIN + 0.5} ? ${FIGURE_ATTRIBUTE.SKIN} : ${FIGURE_ATTRIBUTE.RIG}.x < ${FIGURE_ROLE.SHIRT + 0.5} ? instanceColor : ${FIGURE_ATTRIBUTE.RIG}.x < ${FIGURE_ROLE.TROUSERS + 0.5} ? ${FIGURE_ATTRIBUTE.TROUSERS} : ${darkColourLiteral()};`,
       );
     shader.fragmentShader = shader.fragmentShader

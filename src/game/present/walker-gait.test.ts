@@ -279,3 +279,29 @@ describe("given a gait whose root speed jumps", () => {
     expect(moved, `moved ${moved.toFixed(3)} of a ${gap.toFixed(3)} gap`).toBeLessThanOrEqual(10 * FRAME * gap * 1.05);
   });
 });
+
+describe("given a gait standing still whose eyes are drawn to his side (a crowd gaze on a civilian's body)", () => {
+  /** The neck's turn and nod targets (rad) after a second standing with the look (turn, nod). */
+  function neck(turn: number, nod: number): [number, number] {
+    const loco = new Locomotion();
+    const gait = new Gait();
+    loco.reset(0);
+    gait.seed(0, STANDING_TORSO, 0, 0, flat);
+    gait.lookTurn = turn;
+    gait.lookNod = nod;
+    for (let f = 0; f < FRAME_HZ; f++) {
+      loco.update(FRAME, 0, 0);
+      gait.update(FRAME, loco, flat);
+    }
+    return [gait.targets[GAIT.NECK_TURN]!, gait.targets[GAIT.NECK_NOD]!];
+  }
+
+  // mutation: sed -i 's/ + Math.max(-NECK_LOOK_TURN, Math.min(NECK_LOOK_TURN, this.lookTurn));/;/' src/game/present/walker-gait.ts
+  it("when he is asked to look 0.5 rad to his +x and 0.3 down, then his neck turns and nods that much over a standing gait's, and a look past its reach stops at the neck's 0.85 rad", () => {
+    const [turn, nod] = neck(0, 0);
+    const [lookedTurn, lookedNod] = neck(0.5, 0.3);
+    expect(lookedTurn - turn, "turn").toBeCloseTo(0.5, 6);
+    expect(lookedNod - nod, "nod").toBeCloseTo(0.3, 6);
+    expect(neck(3, 0)[0] - turn, "turn past reach").toBeCloseTo(0.85, 6);
+  });
+});

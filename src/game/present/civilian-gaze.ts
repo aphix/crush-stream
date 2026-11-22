@@ -40,13 +40,12 @@ import {
   TORSO_YAW_LIMIT,
   TOUCH_M,
   WALK_LOOK_DOWN,
-  WALKING_ABOVE,
 } from "./civilian-gaze-constants.ts";
-import { chooseLook, CrowdGrid, type LookChooser } from "./civilian-gaze-poll.ts";
+import { WALKING_ABOVE } from "./civilian-anim.ts";
+import { chooseLook, CrowdGrid } from "./civilian-gaze-poll.ts";
 import { addPulse, blankSenses, createStimuli, refreshStimuli, type GazeSenses, type GazeStimuli } from "./civilian-gaze-table.ts";
 
 export { STIMULUS } from "./civilian-gaze-constants.ts";
-export type { GazeCar, GazeSenses, GazeStimuli } from "./civilian-gaze-table.ts";
 
 /** Eased channels per civilian: her whole turn toward the target (rad, toward her +x positive), the head's pitch (down positive), the torso's share of the turn. */
 const YAW = 0;
@@ -73,7 +72,7 @@ const NO_PENDING = -1;
  * The head eases toward the target (critically damped, rate-capped), the torso joining past `TORSO_JOIN`. Outputs, per civilian and relative to her facing:
  * `headYaw` (from the torso), `headPitch` (down positive) and `torsoTwist`. Typed arrays sized at construction; `update` allocates nothing.
  */
-export class CrowdGaze implements LookChooser {
+export class CrowdGaze {
   readonly capacity: number;
   readonly stimuli: GazeStimuli = createStimuli();
   readonly scratch = new Float64Array(SCRATCH_SLOTS);
@@ -147,7 +146,8 @@ export class CrowdGaze implements LookChooser {
     this.dt = Math.min(Math.max(0, dt), LONGEST_FRAME_S);
     this.frame = (this.frame + 1) | 0;
     for (let channel = 0; channel < EASED; channel++) this.decay[channel] = Math.exp(-OMEGA[channel]! * this.dt);
-    this.pulses = refreshStimuli(this.stimuli, this.pulses, senses, this.dt);
+    this.scratch[SCRATCH.frameSeconds] = this.dt;
+    this.pulses = refreshStimuli(this.stimuli, this.pulses, senses, this.scratch);
     const count = Math.min(poses.count, this.capacity);
     this.grid.build(poses, count);
     this.losLeft = LOS_PER_FRAME;
@@ -284,17 +284,18 @@ export class CrowdGaze implements LookChooser {
     this.lookUrgency[civilian] = this.pendingUrgency[civilian]!;
   }
 
-  /** Her poll: the best thing to look at, taken when it beats what she does (or her refusal) and, for a thing only seen, a line of sight reaches it. */
+  /** Her poll: the best thing to look at, taken when it beats what she does or is about to (or her refusal) and, for a thing only seen, a line of sight reaches it. */
   private poll(civilian: number, poses: CrowdPoses): void {
-    if (this.pendingLeft[civilian]! >= 0) return;
+    const pending = this.pendingLeft[civilian]! >= 0;
     const current = this.lookKind[civilian]!;
-    const free = current === STIMULUS.none && this.cooldown[civilian]! <= 0;
+    const free = !pending && current === STIMULUS.none && this.cooldown[civilian]! <= 0;
     chooseLook(this, civilian, poses, free ? (poses.partner[civilian]! >= 0 ? PARTNER_GLANCE_FACTOR : 1) : 0);
     const kind = this.candidateKind;
     const source = this.candidateSource;
     if (kind === STIMULUS.none || (kind === current && source >= 0 && source === this.lookSource[civilian])) return;
     const urgency = this.scratch[SCRATCH.urgency]!;
-    const wins = current === STIMULUS.none ? this.cooldown[civilian]! <= 0 || urgency >= COOLDOWN_BYPASS : urgency >= this.lookUrgency[civilian]! + PREEMPT_MARGIN;
+    const held = pending ? this.pendingUrgency[civilian]! : this.lookUrgency[civilian]!;
+    const wins = !pending && current === STIMULUS.none ? this.cooldown[civilian]! <= 0 || urgency >= COOLDOWN_BYPASS : urgency >= held + PREEMPT_MARGIN;
     if (!wins || !this.inSight(kind)) return;
     this.scratch[SCRATCH.hold] = KIND_HOLD_MIN[kind]! + (KIND_HOLD_SPAN[kind]! * hash16(civilian, this.frame ^ SALT.hold)) / HASH16;
     this.scratch[SCRATCH.delay] = HEAD_LATENCY_S;

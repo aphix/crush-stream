@@ -23,7 +23,6 @@ import {
   GROUND_SHARE,
   HASH16,
   hash16,
-  KIND_LIFE,
   KIND_RANGE,
   PASSER_AHEAD_COS,
   PASSER_M,
@@ -94,7 +93,7 @@ export class CrowdGrid {
 }
 
 /** What choosing a look reads and writes: the table, the grid, the attractors (x, y, z triples), the frame, and the candidate (kind, source; its point, urgency and distance in `scratch`). */
-export type LookChooser = {
+type LookChooser = {
   readonly scratch: Float64Array;
   readonly stimuli: GazeStimuli;
   readonly grid: CrowdGrid;
@@ -151,7 +150,6 @@ function rowTrial(chooser: LookChooser, civilian: number, row: number): void {
   if (kind === STIMULUS.siren) s[SCRATCH.trial] = SIREN_URGENCY * s[SCRATCH.near]!;
   if ((kind === STIMULUS.car && seen) || kind === STIMULUS.siren) carTrial(t, row, s);
   else if (kind === STIMULUS.down && seen) s[SCRATCH.trial] = DOWN_URGENCY * s[SCRATCH.near]!;
-  else if (kind === STIMULUS.crash || kind === STIMULUS.knock || kind === STIMULUS.gunshot) s[SCRATCH.trial] = (t.salience[row]! * s[SCRATCH.near]! * t.life[row]!) / KIND_LIFE[kind]!;
   else if (kind === STIMULUS.player && seen && (distance < PERSONAL_M || hash16(civilian, (chooser.frame >>> 3) ^ SALT.player) < PLAYER_NOTICE_SHARE * HASH16)) s[SCRATCH.trial] = PLAYER_URGENCY * s[SCRATCH.near]!;
 }
 
@@ -167,10 +165,10 @@ function takeRow(chooser: LookChooser, row: number): void {
   s[SCRATCH.z] = t.z[row]!;
 }
 
-/** The candidate becomes a glance at the passer-by nearest ahead, on `PASSER_SHARE` of polls. */
-function considerPasser(chooser: LookChooser, civilian: number, poses: CrowdPoses): void {
+/** The candidate becomes a glance at the passer-by nearest ahead, on `PASSER_SHARE` x `freedom` of polls. */
+function considerPasser(chooser: LookChooser, civilian: number, poses: CrowdPoses, freedom: number): void {
   const s = chooser.scratch;
-  if (s[SCRATCH.urgency]! >= PASSER_URGENCY || hash16(civilian, (chooser.frame >>> 3) ^ SALT.passer) >= PASSER_SHARE * HASH16) return;
+  if (hash16(civilian, (chooser.frame >>> 3) ^ SALT.passer) >= PASSER_SHARE * freedom * HASH16) return;
   const other = chooser.grid.passerAhead(poses, civilian, s);
   if (other < 0) return;
   chooser.candidateKind = STIMULUS.person;
@@ -223,8 +221,8 @@ function considerGlance(chooser: LookChooser, civilian: number, freedom: number)
 }
 
 /**
- * The best thing for civilian `civilian` to look at now (`candidateKind` none: nothing): the most urgent stimulus she senses, else maybe a passer-by ahead, else with
- * `freedom` (0 while a look or its cooldown runs) maybe an idle glance. Allocates nothing.
+ * The best thing for civilian `civilian` to look at now (`candidateKind` none: nothing): the most urgent stimulus she senses, else with `freedom` (0 while a look or its
+ * cooldown runs, less beside a partner) maybe a passer-by ahead or an idle glance. Allocates nothing.
  */
 export function chooseLook(chooser: LookChooser, civilian: number, poses: CrowdPoses, freedom: number): void {
   loadSelf(chooser, civilian, poses);
@@ -233,6 +231,7 @@ export function chooseLook(chooser: LookChooser, civilian: number, poses: CrowdP
     rowTrial(chooser, civilian, row);
     if (s[SCRATCH.trial]! >= NOTICE_FLOOR && s[SCRATCH.trial]! > s[SCRATCH.urgency]!) takeRow(chooser, row);
   }
-  considerPasser(chooser, civilian, poses);
-  if (freedom > 0) considerGlance(chooser, civilian, freedom);
+  if (freedom <= 0 || chooser.candidateKind !== STIMULUS.none) return;
+  considerPasser(chooser, civilian, poses, freedom);
+  considerGlance(chooser, civilian, freedom);
 }

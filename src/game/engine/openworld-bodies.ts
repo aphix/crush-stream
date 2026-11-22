@@ -61,6 +61,8 @@ export type BodyHost = {
   path(slot: number, out: { x: number; z: number }): void;
   /** Where the body in `slot` faces (rad) and how fast (m/s) it is asked to go. */
   steer(slot: number, heading: number, speed: number): void;
+  /** The body in `slot` turns its neck `turn` toward its +x and nods it `nod` down (rad) on top of its gait: where its civilian looks. */
+  look(slot: number, turn: number, nod: number): void;
   /** The body in `slot` is on its feet. */
   standing(slot: number): boolean;
   /** The body in `slot` is out and held up by its motors (a walker): not a thrown figure, not gone. */
@@ -151,6 +153,14 @@ export class OpenWorldBodies {
   civilianOf(slot: number): number {
     for (let body = 0; body < this.size; body++) if (this.resident[body]! !== NOBODY && this.slot[body] === slot) return this.resident[body]!;
     return NOBODY;
+  }
+
+  /** Each body's neck turned where its civilian looks: per civilian, the head's turn from the torso, the torso's (the body's neck takes both) and the nod (`CrowdGaze`). */
+  aimNecks(headYaw: Float32Array, torsoTwist: Float32Array, headPitch: Float32Array): void {
+    for (let body = 0; body < this.size; body++) {
+      const civilian = this.resident[body]!;
+      if (civilian !== NOBODY) this.host.look(this.slot[body]!, headYaw[civilian]! + torsoTwist[civilian]!, headPitch[civilian]!);
+    }
   }
 
   /** The hook takes civilian `civilian` wherever she is: a body is stood for her now and pinned `HOOK_HOLD_SECONDS`; its pool slot, or -1 where she may have none (indoors, at a counter). With every body in use, the farthest from (eyeX, eyeZ) that is on its feet, steady, in step with her and held by no cable or pin is let go first; with none such she gets none. */
