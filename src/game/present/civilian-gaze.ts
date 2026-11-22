@@ -147,7 +147,8 @@ export class CrowdGaze implements LookChooser {
     this.dt = Math.min(Math.max(0, dt), LONGEST_FRAME_S);
     this.frame = (this.frame + 1) | 0;
     for (let channel = 0; channel < EASED; channel++) this.decay[channel] = Math.exp(-OMEGA[channel]! * this.dt);
-    this.pulses = refreshStimuli(this.stimuli, this.pulses, senses, this.dt);
+    this.scratch[SCRATCH.frameSeconds] = this.dt;
+    this.pulses = refreshStimuli(this.stimuli, this.pulses, senses, this.scratch);
     const count = Math.min(poses.count, this.capacity);
     this.grid.build(poses, count);
     this.losLeft = LOS_PER_FRAME;

@@ -25,7 +25,8 @@ art.gaze = gaze;
 /** Cars circling the eye at speeds from town to fast, one with its siren on; the player on foot; a wall along one diagonal hiding half the views. */
 const CARS = 6;
 const CAR_LAP_M = 40;
-const cars = Array.from({ length: CARS }, (_, at) => ({ group: { position: { x: 0, y: 0, z: 0 } }, velocity: { x: 0, z: 0 }, sirens: at === 0 }));
+/** Vectors, as a car's are: a plain object literal's double fields box on every write and the harness would read over the bar itself. */
+const cars = Array.from({ length: CARS }, (_, at) => ({ group: { position: new THREE.Vector3() }, velocity: new THREE.Vector3(), sirens: at === 0 }));
 const senses: GazeSenses = { ...blankSenses(), cars, player: true, playerX: 3, playerY: 1.55, playerZ: 2, lineOfSight: (ax, _az, _bx, bz) => ax + bz > 0 };
 /** A crash pulses this often (frames), so the reactions it schedules are drawn under the read too. */
 const PULSE_FRAMES = 120;
@@ -71,7 +72,7 @@ describe("given a warmed crowd of 300 walking back and forth across the near and
     expect(art.farDrawn, "figures drawn").toBeGreaterThan(0);
     expect(gaze.lookKind.some((kind) => kind !== STIMULUS.none), "someone looks at something").toBe(true);
     expect(perFrame, `${perFrame.toFixed(1)} B a frame > ${BOUND_B} in every window for ${COMPILE_WAIT_S} s: the civilians' gaze or drawing allocates`).toBeLessThanOrEqual(BOUND_B);
-    // mutation: sed -i 's/    this.pulses = refreshStimuli(this.stimuli, this.pulses, senses, this.dt);/    this.pulses = refreshStimuli(this.stimuli, this.pulses, { ...senses }, this.dt);/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze.ts
+    // mutation: sed -i 's/    this.pulses = refreshStimuli(this.stimuli, this.pulses, senses, this.scratch);/    this.pulses = refreshStimuli(this.stimuli, this.pulses, { ...senses }, this.scratch);/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze.ts
   });
 });
 

@@ -1,4 +1,4 @@
-import { CAR_FAST_SPEED, CAR_NOTICE_MIN_SPEED, KIND_LIFE, PULSE_CAPACITY, STIMULUS, STIMULUS_CAPACITY } from "./civilian-gaze-constants.ts";
+import { CAR_FAST_SPEED, CAR_NOTICE_MIN_SPEED, KIND_LIFE, PULSE_CAPACITY, SCRATCH, STIMULUS, STIMULUS_CAPACITY } from "./civilian-gaze-constants.ts";
 
 /**
  * What the crowd can sense this frame, one row each: the lingering pulses first (crash, knock, shot, someone down), then the player on foot and every
@@ -97,11 +97,11 @@ export function addPulse(t: GazeStimuli, pulses: number, kind: number, x: number
   return count;
 }
 
-/** The table for a frame `dt` s after the last: the pulses aged and the spent dropped, then the player and the cars sensed now. Returns the pulse rows kept. */
-export function refreshStimuli(t: GazeStimuli, pulses: number, senses: GazeSenses, dt: number): number {
+/** The table for a frame `scratch[SCRATCH.frameSeconds]` s after the last: the pulses aged and the spent dropped, then the player and the cars sensed now. Returns the pulse rows kept. */
+export function refreshStimuli(t: GazeStimuli, pulses: number, senses: GazeSenses, scratch: Float64Array): number {
   let kept = 0;
   for (let row = 0; row < pulses; row++) {
-    const life = t.life[row]! - dt;
+    const life = t.life[row]! - scratch[SCRATCH.frameSeconds]!;
     if (life <= 0) continue;
     moveRow(t, row, kept);
     t.life[kept] = life;

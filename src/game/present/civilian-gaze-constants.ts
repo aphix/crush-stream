@@ -136,5 +136,5 @@ export function hash16(a: number, b: number): number {
 export const HASH16 = 65536;
 
 /** Slots of a gaze's `scratch` (doubles cross calls through it, never as arguments: a boxed double allocates). */
-export const SCRATCH = { x: 0, y: 1, z: 2, urgency: 3, distance: 4, hold: 5, delay: 6, trial: 7, ownX: 8, ownZ: 9, eyeY: 10, aheadX: 11, aheadZ: 12, dx: 13, dz: 14, near: 15 } as const;
-export const SCRATCH_SLOTS = 16;
+export const SCRATCH = { x: 0, y: 1, z: 2, urgency: 3, distance: 4, hold: 5, delay: 6, trial: 7, ownX: 8, ownZ: 9, eyeY: 10, aheadX: 11, aheadZ: 12, dx: 13, dz: 14, near: 15, frameSeconds: 16 } as const;
+export const SCRATCH_SLOTS = 17;
