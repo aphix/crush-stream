@@ -128,7 +128,7 @@ function pushRate(speed: number): number {
 }
 
 /** The most he brakes (m/s²) at `speed`. */
-function brakeRate(speed: number): number {
+export function brakeRate(speed: number): number {
   const sprintShare = Math.max(0, Math.min(1, (speed - RUN_SPEED) / (SPRINT_SPEED - RUN_SPEED)));
   return BRAKE_AT_RUN + (BRAKE_AT_SPRINT - BRAKE_AT_RUN) * sprintShare;
 }

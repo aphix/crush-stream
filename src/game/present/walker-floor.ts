@@ -3,12 +3,15 @@ import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { NO_STAIRS, type StairField } from "../world/stairs.ts";
 import { armedSolids, heightIn, PQ_SIZE, PQ_X, PQ_Y, PQ_Z, STEP_MAX } from "../world/surfaces.ts";
 import { PARTS } from "./ragdoll-body.ts";
+import { brakeRate } from "./walker-locomotion.ts";
 
 /** A fixed world-axis box that is not in the ground (an interior's slab, stair tread or counter): `y0` its foot, `y1` its top. */
 export type FloorBox = { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number };
 
 /** The tallest step (m) a foot goes up onto, a stair riser or a curb (a person takes 0.30 m without a hand); anything taller is a wall. */
 export const WALK_STEP = 0.3;
+/** A box this much (m) over where his feet ask from is a wall, two treads and more: a foot over it has no floor (the ground under a wall is not his to stand on). */
+const WALL_RISE = 2 * WALK_STEP;
 /** The ground counts a prism top as floor within `STEP_MAX` above the height asked from, so asking this much higher makes that reach `WALK_STEP`. */
 const ASK_LIFT = WALK_STEP - STEP_MAX;
 /** A rise or drop of this much (m) within `PACE_REACH` ahead is a step, not a ramp (an 8° ramp rises 0.09 m in 0.6 m, a curb or riser 0.12 or more). */
@@ -18,6 +21,8 @@ const PACE_LOOK = 0.2;
 const PACE_REACH = 0.6;
 /** The pace (m/s) he keeps over steps: the gait's two steps in 0.95 s then reach 0.24 m, a stair tread (0.26 to 0.28 m) or less, so each foot lands on its own tread. */
 const STEP_PACE = 0.5;
+/** The share of his brake at the pace asked (`brakeRate`) the slowing toward a step plans on, so the jerk-limited brake keeps up with it (tuned by feel). */
+const PACE_BRAKE_SHARE = 0.85;
 /** The step's edge is found to within `PACE_LOOK` / 2^this m, so the pace ramps smoothly as it nears. */
 const EDGE_BISECTIONS = 5;
 /** The torso's centre stands this high (m) over the floor. */
@@ -85,19 +90,26 @@ export class WalkFloor {
     for (let i = 0; i < boxes.length; i++) {
       const box = boxes[i]!;
       if (x < box.x0 || x > box.x1 || z < box.z0 || z > box.z1) continue;
-      if (box.y0 > ask || box.y1 > ask + STEP_MAX || box.y1 <= best) continue;
+      if (box.y0 > ask || box.y1 <= best) continue;
+      if (box.y1 > ask + WALL_RISE) return NO_FLOOR;
+      if (box.y1 > ask + STEP_MAX) continue;
       best = box.y1;
     }
     if (this.parts !== null) best = Math.max(best, this.parts.topUnder(x, z, ask));
     return best;
   }
 
-  /** The pace (m/s) he may keep at (`x`, `z`) facing `yaw` when asked for `command`: `STEP_PACE` while a step lies ahead or under him. */
+  /**
+   * The pace (m/s) he may keep at (`x`, `z`) facing `yaw` when asked for `command`: `STEP_PACE` while a step lies ahead or under him, and on the way to it no faster
+   * than he can brake to it by the edge (a run or a sprint that reaches a flight too fast plants its first foot a tread too high, and the flight is a wall to him).
+   */
   pace(x: number, z: number, yaw: number, command: number): number {
     if (command <= STEP_PACE) return command;
     const sin = detSin(yaw);
     const cos = detCos(yaw);
-    for (let ahead = PACE_LOOK; ahead <= PACE_REACH + PACE_LOOK / 2; ahead += PACE_LOOK) {
+    const brake = PACE_BRAKE_SHARE * brakeRate(command);
+    const reach = Math.max(PACE_REACH, PACE_LOOK + (command * command - STEP_PACE * STEP_PACE) / (2 * brake));
+    for (let ahead = PACE_LOOK; ahead <= reach + PACE_LOOK / 2; ahead += PACE_LOOK) {
       if (!this.stepAt(x, z, sin, cos, ahead)) continue;
       let near = ahead - PACE_LOOK;
       let far = ahead;
@@ -107,7 +119,8 @@ export class WalkFloor {
         else near = mid;
       }
       const share = Math.max(0, Math.min(1, (far - PACE_LOOK) / (PACE_REACH - PACE_LOOK)));
-      return Math.min(command, STEP_PACE + (command - STEP_PACE) * share);
+      const braking = Math.sqrt(STEP_PACE * STEP_PACE + 2 * brake * Math.max(0, far - PACE_LOOK));
+      return Math.min(command, STEP_PACE + (command - STEP_PACE) * share, braking);
     }
     return command;
   }

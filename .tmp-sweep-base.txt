@@ -1,0 +1,37 @@
+SWEEP x=0 deg=0 speed=1.5 least=0.991 fell=false z=4.78
+SWEEP x=0 deg=0 speed=3.5 least=1.000 fell=false z=17.64
+SWEEP x=0 deg=5 speed=1.5 least=1.000 fell=false z=4.89
+SWEEP x=0 deg=5 speed=3.5 least=0.933 fell=false z=11.93
+SWEEP x=0 deg=10 speed=1.5 least=1.000 fell=false z=4.71
+SWEEP x=0 deg=10 speed=3.5 least=0.000 fell=true z=3.06
+SWEEP x=0 deg=-5 speed=1.5 least=1.000 fell=false z=4.62
+SWEEP x=0 deg=-5 speed=3.5 least=0.000 fell=true z=3.21
+SWEEP x=0 deg=-10 speed=1.5 least=1.000 fell=false z=4.66
+SWEEP x=0 deg=-10 speed=3.5 least=0.000 fell=true z=1.56
+SWEEP x=0.2 deg=0 speed=1.5 least=0.994 fell=false z=4.77
+SWEEP x=0.2 deg=0 speed=3.5 least=1.000 fell=false z=15.39
+SWEEP x=0.2 deg=5 speed=1.5 least=0.995 fell=false z=4.78
+SWEEP x=0.2 deg=5 speed=3.5 least=0.923 fell=false z=11.92
+SWEEP x=0.2 deg=10 speed=1.5 least=0.994 fell=false z=4.63
+SWEEP x=0.2 deg=10 speed=3.5 least=0.000 fell=true z=3.09
+SWEEP x=0.2 deg=-5 speed=1.5 least=1.000 fell=false z=4.63
+SWEEP x=0.2 deg=-5 speed=3.5 least=0.000 fell=true z=3.16
+SWEEP x=0.2 deg=-10 speed=1.5 least=1.000 fell=false z=4.66
+SWEEP x=0.2 deg=-10 speed=3.5 least=0.000 fell=true z=1.47
+SWEEP x=-0.2 deg=0 speed=1.5 least=0.992 fell=false z=4.78
+SWEEP x=-0.2 deg=0 speed=3.5 least=1.000 fell=false z=17.22
+SWEEP x=-0.2 deg=5 speed=1.5 least=1.000 fell=false z=4.78
+SWEEP x=-0.2 deg=5 speed=3.5 least=0.913 fell=false z=11.87
+SWEEP x=-0.2 deg=10 speed=1.5 least=0.911 fell=false z=4.66
+SWEEP x=-0.2 deg=10 speed=3.5 least=0.000 fell=true z=3.19
+SWEEP x=-0.2 deg=-5 speed=1.5 least=0.990 fell=false z=4.78
+SWEEP x=-0.2 deg=-5 speed=3.5 least=0.000 fell=true z=3.39
+SWEEP x=-0.2 deg=-10 speed=1.5 least=1.000 fell=false z=4.66
+SWEEP x=-0.2 deg=-10 speed=3.5 least=0.000 fell=true z=3.13
+BLOW 600 dir=-1 least=0.959 fell=false
+BLOW 600 dir=1 least=1.000 fell=false
+BLOW 1200 dir=-1 least=0.299 fell=false
+BLOW 1200 dir=1 least=1.000 fell=false
+BLOW 2400 dir=-1 least=0.000 fell=true
+BLOW 2400 dir=1 least=0.993 fell=false
+ Test Files  1 passed (1)

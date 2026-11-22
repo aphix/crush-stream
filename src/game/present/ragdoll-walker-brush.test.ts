@@ -73,7 +73,7 @@ function flight(): FloorBox[] {
   }
   boxes.push({ x0: -FLIGHT_HALF, x1: FLIGHT_HALF, z0: top, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS });
   boxes.push({ x0: FLIGHT_HALF, x1: FLIGHT_HALF + 0.3, z0: -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 3 });
-  boxes.push({ x0: -FLIGHT_HALF - 0.06, x1: -FLIGHT_HALF, z0: -2, z1: top, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 1 });
+  boxes.push({ x0: -FLIGHT_HALF - 0.06, x1: -FLIGHT_HALF, z0: -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 1 });
   return boxes;
 }
 
@@ -119,4 +119,57 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
       expect(climb.z - start, "he went on up the flight").toBeGreaterThan(FLIGHT_FOOT_Z + TREAD_RUN * 4 * detCos(testCase.heading));
     });
   }
+});
+
+describe("sweep", () => {
+  for (const x of [0, 0.2, -0.2]) {
+    for (const deg of [0, 5, 10, -5, -10]) {
+      for (const speed of [WALK_SPEED, RUN_SPEED]) {
+        it(`flight x ${x} deg ${deg} speed ${speed}`, async () => {
+          const sys = await standingAmong(flight(), x);
+          const w = sys.walker;
+          const torso = sys["dolls"][WALKER_SLOT]!.bodies[0]!;
+          let note = "";
+          let prev = "";
+          const c = walk(sys, deg * DEG, speed, 8, () => {
+            const t = torso.translation();
+            const q = torso.rotation();
+            const up = 1 - 2 * (q.x * q.x + q.z * q.z);
+            if (w.state !== "stand" && note === "") note = `FALL at ${t.x.toFixed(2)},${t.y.toFixed(2)},${t.z.toFixed(2)} up=${up.toFixed(2)} level=${w.floor.level.toFixed(2)} rise=${w.floor.rise.toFixed(2)} before: ${prev}`;
+            prev = `s=${w.strength.toFixed(2)} up=${up.toFixed(2)} y-level=${(t.y - w.floor.level).toFixed(2)} speed=${w.loco.speed.toFixed(2)}`;
+          });
+          console.log(`SWEEP x=${x} deg=${deg} speed=${speed} least=${c.least.toFixed(3)} fell=${c.fell} z=${c.z.toFixed(2)} ${note}`);
+        });
+      }
+    }
+  }
+  for (const blow of [600, 1200, 2400]) {
+    for (const dir of [-1, 1]) {
+      it(`blow ${blow} ${dir}`, async () => {
+        const sys = await standingAmong([WALL], 0.1);
+        const torso = sys["dolls"][WALKER_SLOT]!.bodies[0]!;
+        const c = walk(sys, 5 * DEG, WALK_SPEED, 3, (f) => {
+          if (f === FRAME_HZ) torso.applyImpulse(new THREE.Vector3(dir * blow, 0, 0), true);
+          if (f === FRAME_HZ + 1) console.log(`v after ${torso.linvel().x.toFixed(2)} mass ${torso.mass().toFixed(1)}`);
+        });
+        console.log(`BLOW ${blow} dir=${dir} least=${c.least.toFixed(3)} fell=${c.fell}`);
+      });
+    }
+  }
+});
+
+describe("trace", () => {
+  it("trace x 0.2 deg -5 run", async () => {
+    const sys = await standingAmong(flight(), 0.2);
+    const w = sys.walker;
+    const torso = sys["dolls"][WALKER_SLOT]!.bodies[0]!;
+    let was = "stand";
+    walk(sys, -5 * DEG, RUN_SPEED, 8, (f) => {
+      const t = torso.translation();
+      const q = torso.rotation();
+      const up = 1 - 2 * (q.x * q.x + q.z * q.z);
+      if (f % 4 === 0 || w.state !== was) console.log(`R f=${f} ${w.state} torso=${t.x.toFixed(2)},${t.y.toFixed(2)},${t.z.toFixed(2)} up=${up.toFixed(2)} speed=${w.loco.speed.toFixed(2)} level=${w.floor.level.toFixed(2)} rise=${w.floor.rise.toFixed(2)} root=${w["anchorPos"][0]!.toFixed(2)},${w["anchorPos"][1]!.toFixed(2)},${w["anchorPos"][2]!.toFixed(2)} s=${w.strength.toFixed(2)}`);
+      was = w.state;
+    });
+  });
 });

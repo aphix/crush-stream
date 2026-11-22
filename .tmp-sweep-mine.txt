@@ -1,0 +1,43 @@
+SWEEP x=0 deg=0 speed=1.5 least=1.000 fell=false z=4.78
+SWEEP x=0 deg=0 speed=3.5 least=1.000 fell=false z=17.64
+SWEEP x=0 deg=5 speed=1.5 least=1.000 fell=false z=4.89
+SWEEP x=0 deg=5 speed=3.5 least=1.000 fell=false z=11.92
+SWEEP x=0 deg=10 speed=1.5 least=1.000 fell=false z=4.71
+SWEEP x=0 deg=10 speed=3.5 least=1.000 fell=false z=1.76
+SWEEP x=0 deg=-5 speed=1.5 least=1.000 fell=false z=4.62
+SWEEP x=0 deg=-5 speed=3.5 least=1.000 fell=false z=1.71
+SWEEP x=0 deg=-10 speed=1.5 least=1.000 fell=false z=4.66
+SWEEP x=0 deg=-10 speed=3.5 least=1.000 fell=false z=1.81
+SWEEP x=0.2 deg=0 speed=1.5 least=1.000 fell=false z=4.77
+SWEEP x=0.2 deg=0 speed=3.5 least=1.000 fell=false z=15.39
+SWEEP x=0.2 deg=5 speed=1.5 least=1.000 fell=false z=4.78
+SWEEP x=0.2 deg=5 speed=3.5 least=1.000 fell=false z=11.92
+SWEEP x=0.2 deg=10 speed=1.5 least=1.000 fell=false z=4.63
+SWEEP x=0.2 deg=10 speed=3.5 least=1.000 fell=false z=1.55
+SWEEP x=0.2 deg=-5 speed=1.5 least=1.000 fell=false z=4.63
+SWEEP x=0.2 deg=-5 speed=3.5 least=0.000 fell=true z=1.88
+SWEEP x=0.2 deg=-10 speed=1.5 least=1.000 fell=false z=4.66
+SWEEP x=0.2 deg=-10 speed=3.5 least=1.000 fell=false z=1.89
+SWEEP x=-0.2 deg=0 speed=1.5 least=1.000 fell=false z=4.78
+SWEEP x=-0.2 deg=0 speed=3.5 least=1.000 fell=false z=17.22
+SWEEP x=-0.2 deg=5 speed=1.5 least=1.000 fell=false z=4.78
+SWEEP x=-0.2 deg=5 speed=3.5 least=1.000 fell=false z=11.87
+SWEEP x=-0.2 deg=10 speed=1.5 least=1.000 fell=false z=4.66
+SWEEP x=-0.2 deg=10 speed=3.5 least=1.000 fell=false z=1.74
+SWEEP x=-0.2 deg=-5 speed=1.5 least=1.000 fell=false z=4.78
+SWEEP x=-0.2 deg=-5 speed=3.5 least=0.978 fell=false z=1.85
+SWEEP x=-0.2 deg=-10 speed=1.5 least=1.000 fell=false z=4.66
+SWEEP x=-0.2 deg=-10 speed=3.5 least=1.000 fell=false z=1.76
+v after -0.33 mass 42.8
+BLOW 600 dir=-1 least=1.000 fell=false
+v after -0.27 mass 42.8
+BLOW 600 dir=1 least=1.000 fell=false
+v after -0.45 mass 42.8
+BLOW 1200 dir=-1 least=0.490 fell=false
+v after -0.55 mass 42.8
+BLOW 1200 dir=1 least=1.000 fell=false
+v after -1.02 mass 42.8
+BLOW 2400 dir=-1 least=0.000 fell=true
+v after -1.04 mass 42.8
+BLOW 2400 dir=1 least=0.919 fell=false
+ Test Files  1 passed (1)
