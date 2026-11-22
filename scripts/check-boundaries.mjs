@@ -50,7 +50,7 @@ const HOT = {
   "src/game/engine/engine-onfoot-arms.ts": ["pad", "frame"],
   "src/game/engine/engine.ts": ["tickInner", "fixedStep", "scheduleSkins", "flushVisibleSkins", "updateCamera", "pickCar", "pickDoll"],
   "src/game/engine/ray-nearest.ts": ["find", "visit", "mesh", "triangles", "offer"],
-  "src/game/present/ragdoll-mesh.ts": ["nearestHit", "crosses", "posedFrom"],
+  "src/game/present/ragdoll-mesh.ts": ["nearestHit", "crosses", "posedFrom", "reached"],
   "src/game/engine/engine-core.ts": ["puffEngine", "fleetClosing", "contactEta"],
   "src/game/engine/engine-scenes.ts": ["stepDerby", "stackLookY"],
   "src/game/present/engine-camera.ts": ["centroid", "pushFromPosts"],

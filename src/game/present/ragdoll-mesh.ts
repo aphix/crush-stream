@@ -40,6 +40,100 @@ function floatsOf(geometry: THREE.BufferGeometry, name: string, size: number): F
   return attribute.array;
 }
 
+/** Room (m) the reach test leaves for the float32 points the triangles are tested on. */
+const PICK_SLACK = 1e-3;
+
+/** Each vertex's bone pair (its group), and per group the rest ball its vertices lie in for every build: posed, they lie within that ball's radius of the segment between its centre carried by bone a and by bone b. */
+type PickGroups = {
+  ofVertex: Uint16Array;
+  /** Per triangle, its vertices' one group, or -1 when they span several (then always skinned and tested). */
+  ofTriangle: Int16Array;
+  always: Uint8Array;
+  a: Uint8Array;
+  b: Uint8Array;
+  centre: Float32Array;
+  radius: Float32Array;
+  /** The greatest weight a group's vertices give each bust lag. */
+  orbA: Float32Array;
+  orbB: Float32Array;
+  /** This pick's answer per group: 1 when the ray passes within reach. */
+  hit: Uint8Array;
+};
+
+function pickGroupsOf(geometry: THREE.BufferGeometry): PickGroups {
+  const { ofVertex, a, b } = bonePairs(floatsOf(geometry, BONES_ATTRIBUTE, VEC4));
+  return { ofVertex, ...triangleGroups(geometry.index!, ofVertex), a, b, ...restBalls(geometry, ofVertex, a.length), hit: new Uint8Array(a.length) };
+}
+
+/** Each vertex's group: one per bone pair it blends between. */
+function bonePairs(bones: Float32Array): Pick<PickGroups, "ofVertex" | "a" | "b"> {
+  const count = bones.length / VEC4;
+  const keys = new Map<number, number>();
+  const ofVertex = new Uint16Array(count);
+  const a: number[] = [];
+  const b: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const w = bones[i * VEC4 + 2]!;
+    // A vertex wholly on one bone is that bone's rigidly: a ball, not a capsule.
+    const first = Math.round(bones[i * VEC4 + (w === 1 ? 1 : 0)]!);
+    const second = w === 0 || w === 1 ? first : Math.round(bones[i * VEC4 + 1]!);
+    const key = first * 256 + second;
+    let group = keys.get(key);
+    if (group === undefined) {
+      group = a.length;
+      keys.set(key, group);
+      a.push(first);
+      b.push(second);
+    }
+    ofVertex[i] = group;
+  }
+  return { ofVertex, a: Uint8Array.from(a), b: Uint8Array.from(b) };
+}
+
+/** Per group, the rest ball (centre, radius) its vertices lie in for all three builds, and its greatest bust-lag weights. */
+function restBalls(geometry: THREE.BufferGeometry, ofVertex: Uint16Array, groups: number): Pick<PickGroups, "centre" | "radius" | "orbA" | "orbB"> {
+  const shapes = [floatsOf(geometry, "position", 3), floatsOf(geometry, SHAPE_WOMAN_ATTRIBUTE, VEC4), floatsOf(geometry, SHAPE_PORTLY_ATTRIBUTE, VEC4)] as const;
+  const sizes = [3, VEC4, VEC4] as const;
+  const kinds = floatsOf(geometry, KINDS_ATTRIBUTE, VEC4);
+  const sum = new Float64Array(groups * 4);
+  for (let i = 0; i < ofVertex.length; i++) {
+    const g = ofVertex[i]!;
+    for (let k = 0; k < 3; k++) for (let axis = 0; axis < 3; axis++) sum[g * 4 + axis] += shapes[k][i * sizes[k] + axis]!;
+    sum[g * 4 + 3] += 3;
+  }
+  const centre = new Float32Array(groups * 3);
+  for (let g = 0; g < groups; g++) for (let axis = 0; axis < 3; axis++) centre[g * 3 + axis] = sum[g * 4 + axis]! / sum[g * 4 + 3]!;
+  const radius = new Float32Array(groups);
+  const orbA = new Float32Array(groups);
+  const orbB = new Float32Array(groups);
+  for (let i = 0; i < ofVertex.length; i++) {
+    const g = ofVertex[i]!;
+    for (let k = 0; k < 3; k++) {
+      const at = i * sizes[k];
+      radius[g] = Math.max(radius[g]!, Math.sqrt((shapes[k][at]! - centre[g * 3]!) ** 2 + (shapes[k][at + 1]! - centre[g * 3 + 1]!) ** 2 + (shapes[k][at + 2]! - centre[g * 3 + 2]!) ** 2));
+    }
+    orbA[g] = Math.max(orbA[g]!, Math.abs(kinds[i * VEC4 + 2]!));
+    orbB[g] = Math.max(orbB[g]!, Math.abs(kinds[i * VEC4 + 3]!));
+  }
+  return { centre, radius, orbA, orbB };
+}
+
+/** Each triangle's one group, or -1 with its vertices marked always skinned when they span groups. */
+function triangleGroups(index: THREE.BufferAttribute, ofVertex: Uint16Array): Pick<PickGroups, "ofTriangle" | "always"> {
+  const ofTriangle = new Int16Array(index.count / 3);
+  const always = new Uint8Array(ofVertex.length);
+  for (let t = 0; t < index.count; t += 3) {
+    const g = ofVertex[index.getX(t)]!;
+    if (ofVertex[index.getX(t + 1)] === g && ofVertex[index.getX(t + 2)] === g) {
+      ofTriangle[t / 3] = g;
+      continue;
+    }
+    ofTriangle[t / 3] = -1;
+    for (let k = 0; k < 3; k++) always[index.getX(t + k)] = 1;
+  }
+  return { ofTriangle, always };
+}
+
 /**
  * Every dummy in one instanced draw: one continuous body per slot (`dummyGeometry`), skinned in the vertex shader from the slot's ten
  * part poses (`pose`) and coloured by its look (`dress`); the instance is the slot. The draw ends after the highest slot with a dummy out.
@@ -65,6 +159,7 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
   /** What a pick skins a slot's vertices into, and which of them the slot draws (made at the first pick). */
   private pickPoints: Float32Array | null = null;
   private pickDrawn: Uint8Array | null = null;
+  private pickGroups: PickGroups | null = null;
 
   /**
    * `sprayed`: its slots wear sprays (`spray`: the thrown drivers, the garage's); the course's figures wear none and hold no atlas.
@@ -214,20 +309,40 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     return ray.intersectsSphere(_reach);
   }
 
-  /** Slot `s`'s vertices as posed now into the pick's points, and whether the slot draws each (one it does not keeps the point before it). */
-  private skinSlot(s: number): void {
+  /** Slot `s`'s vertices as posed now into the pick's points, and whether the slot draws each (one it does not keeps the point before it): only the groups `ray` (the mesh's frame) passes within reach of, and the vertices of triangles that span groups. */
+  private skinSlot(s: number, ray: THREE.Ray): PickGroups {
     const count = this.geometry.getAttribute("position").count;
     const points = (this.pickPoints ??= new Float32Array(count * 3));
     const drawn = (this.pickDrawn ??= new Uint8Array(count));
+    const groups = (this.pickGroups ??= pickGroupsOf(this.geometry));
+    this.reached(s, ray, groups);
     const flags = this.flagsOf(s);
     const name = shapeOf(flags);
     const size = shapeSize(name);
     const shape = floatsOf(this.geometry, name, size);
     const kinds = floatsOf(this.geometry, KINDS_ATTRIBUTE, VEC4);
     const bones = floatsOf(this.geometry, BONES_ATTRIBUTE, VEC4);
+    const { ofVertex, always, hit } = groups;
     for (let i = 0; i < count; i++) {
+      if (hit[ofVertex[i]!] === 0 && always[i] === 0) continue;
       drawn[i] = this.posedFrom(s, i, flags, shape, size, kinds, bones, _o) ? 1 : 0;
       _o.toArray(points, 3 * i);
+    }
+    return groups;
+  }
+
+  /** Marks in `groups.hit` the groups of slot `s` whose posed reach `ray` (the mesh's frame) passes within. */
+  private reached(s: number, ray: THREE.Ray, groups: PickGroups): void {
+    const lag = (s * ROW_TEXELS + ORBS_AT) * 4;
+    const lagA = _lag.fromArray(this.rows, lag).length();
+    const lagB = _lag.fromArray(this.rows, lag + 4).length();
+    const { a, b, centre, radius, orbA, orbB, hit } = groups;
+    for (let g = 0; g < hit.length; g++) {
+      _o.fromArray(centre, 3 * g);
+      skinPoint(this.rows, s, a[g]!, a[g]!, 0, _o, _va);
+      skinPoint(this.rows, s, b[g]!, b[g]!, 0, _o, _vb);
+      const reach = radius[g]! + orbA[g]! * lagA + orbB[g]! * lagB + PICK_SLACK;
+      hit[g] = ray.distanceSqToSegment(_va, _vb) <= reach * reach ? 1 : 0;
     }
   }
 
@@ -243,14 +358,15 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     const cull = this.material.side !== THREE.DoubleSide;
     for (let s = 0; s < this.count; s++) {
       if (((this.shown >> s) & 1) === 0 || !this.crosses(s, _local)) continue;
-      this.skinSlot(s);
+      const { ofTriangle, hit } = this.skinSlot(s, _local);
       const points = this.pickPoints!;
       const drawn = this.pickDrawn!;
       for (let t = 0; t < index.count; t += 3) {
+        const g = ofTriangle[t / 3]!;
         const a = index.getX(t);
         const b = index.getX(t + 1);
         const c = index.getX(t + 2);
-        if (drawn[a] === 0 || _local.intersectTriangle(_va.fromArray(points, 3 * a), _vb.fromArray(points, 3 * b), _vc.fromArray(points, 3 * c), cull, _at) === null) continue;
+        if ((g >= 0 && hit[g] === 0) || drawn[a] === 0 || _local.intersectTriangle(_va.fromArray(points, 3 * a), _vb.fromArray(points, 3 * b), _vc.fromArray(points, 3 * c), cull, _at) === null) continue;
         const point = _at.clone().applyMatrix4(this.matrixWorld);
         const distance = raycaster.ray.origin.distanceTo(point);
         if (distance < raycaster.near || distance > raycaster.far) continue;
@@ -273,10 +389,12 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     const cull = this.material.side !== THREE.DoubleSide;
     for (let s = 0; s < this.count; s++) {
       if (s === skip || ((this.shown >> s) & 1) === 0 || !this.crosses(s, _local)) continue;
-      this.skinSlot(s);
+      const { ofTriangle, hit } = this.skinSlot(s, _local);
       const points = this.pickPoints!;
       const drawn = this.pickDrawn!;
       for (let t = 0; t < index.count; t += 3) {
+        const g = ofTriangle[t / 3]!;
+        if (g >= 0 && hit[g] === 0) continue;
         const a = index.getX(t);
         if (drawn[a] === 0 || _local.intersectTriangle(_va.fromArray(points, 3 * a), _vb.fromArray(points, 3 * index.getX(t + 1)), _vc.fromArray(points, 3 * index.getX(t + 2)), cull, _at) === null) continue;
         _at.applyMatrix4(this.matrixWorld);
