@@ -10,7 +10,7 @@ import { AMBULANCE } from "./ambulance.ts";
 import { PERSON_GAP } from "./traffic-constants.ts";
 import { AMBULANCE_COLOUR, AMBULANCE_DEPOT_METRES, AMBULANCE_LOAD_SECONDS, AMBULANCE_QUEUE, EVERYDAY_BODIES, KERB_JITTER_SIDE, KERB_KEEP, KERB_REACH } from "./traffic-constants.ts";
 import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
-import { kerbSpotsNear } from "../../world/openworld/openworld-parking.ts";
+import { kerbSpotsNear, residentSpotAt } from "../../world/openworld/openworld-parking.ts";
 import { residentBody, residentColour, type ResidentCarPose } from "./traffic-look.ts";
 import { spotUnseen } from "./traffic-ports.ts";
 import { Clock, CYCLE_SECONDS, emptyFeed, FakeField, HOLD, homeAt, makeTraffic, ProximitySight, runSeconds, STEP_SECONDS, stepField } from "./traffic-world.test-util.ts";
@@ -580,7 +580,7 @@ describe("given residents whose cars stand at a place's kerb", () => {
     expect(held[1], "the higher space held").toBe(wanted[1]);
   });
 
-  // mutation: sed -i 's/    if (holder >= 0 \&\& residentSpotAt(this.parkingSpots, target!.doorX, target!.doorZ, holder) !== pick) {/    if (false) {/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  // mutation: sed -i 's/    if (holderPlace !== undefined \&\& residentSpotAt(/    if (false \&\& residentSpotAt(/' src/game/ai/openworld-traffic/openworld-traffic.ts
   it("when a resident's own space is held by another's claim only as his fallback, then she gets her own space, as the brain draws her, and he moves on; a claim that is its holder's own pick is kept", () => {
     const field = quietField();
     const feed = emptyFeed(8);
@@ -599,6 +599,41 @@ describe("given residents whose cars stand at a place's kerb", () => {
     expect(residentSpace(traffic, 1), "1 keeps his own pick").toBe(near[1]);
     expect(residentSpace(traffic, 2), "2 has her own pick").toBe(near[2]);
     expect(residentSpace(traffic, 5), "5 moved on to the next free one").toBe(near[3]);
+  });
+
+  // mutation: sed -i 's/residentSpotAt(this.parkingSpots, holderPlace.doorX, holderPlace.doorZ, holder) !== pick/residentSpotAt(this.parkingSpots, target!.doorX, target!.doorZ, holder) !== pick/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when a neighbour next door picks the space a resident holds as his own pick at his own door, then he keeps it: his claim is judged by his door, not hers", () => {
+    const field = quietField();
+    const probe = makeTraffic(field, { movers: 0, kerb: 0 });
+    const spots = probe.parkingSpots;
+    // A door a few metres along from his, and a neighbour there, whose pick is his own pick while his pick by her door is another space.
+    let found: { holder: number; dx: number; dz: number; neighbour: number } | null = null;
+    for (let holder = 0; holder < 8 && found === null; holder++) {
+      const his = residentSpotAt(spots, HOME.x, HOME.z, holder);
+      for (let step = 1; step <= 48 && found === null; step++) {
+        const dx = (step % 2 === 0 ? 1 : -1) * Math.ceil(step / 4) * 1.5 * (step % 4 < 2 ? 1 : 0);
+        const dz = (step % 2 === 0 ? 1 : -1) * Math.ceil(step / 4) * 1.5 * (step % 4 < 2 ? 0 : 1);
+        if (residentSpotAt(spots, HOME.x + dx, HOME.z + dz, holder) === his) continue;
+        for (let neighbour = 0; neighbour < 16 && found === null; neighbour++) if (neighbour !== holder && residentSpotAt(spots, HOME.x + dx, HOME.z + dz, neighbour) === his) found = { holder, dx, dz, neighbour };
+      }
+    }
+    expect(found, "control: adjacent doors whose candidates are shifted").not.toBeNull();
+    const feed = emptyFeed(8);
+    const HOLDER = found!.holder;
+    const traffic = makeTraffic(field, { movers: 0, kerb: 0 }, feed, [homeAt(HOME.x, HOME.z), homeAt(HOME.x + found!.dx, HOME.z + found!.dz)]);
+    const clock = new Clock();
+    feed.parked.count = 1;
+    feed.parked.resident[0] = HOLDER;
+    feed.parked.place[0] = 0;
+    runSeconds(field, traffic, clock, 1);
+    const his = residentSpace(traffic, HOLDER);
+    expect(his, "control: he holds his own pick").toBe(residentSpotAt(spots, HOME.x, HOME.z, HOLDER));
+    feed.parked.count = 2;
+    feed.parked.resident[1] = found!.neighbour;
+    feed.parked.place[1] = 1;
+    runSeconds(field, traffic, clock, 1);
+    expect(residentSpace(traffic, HOLDER), "he keeps his own pick").toBe(his);
+    expect(residentSpace(traffic, found!.neighbour), "she has another space").not.toBe(his);
   });
 });
 
