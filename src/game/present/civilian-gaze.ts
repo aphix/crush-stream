@@ -40,8 +40,8 @@ import {
   TORSO_YAW_LIMIT,
   TOUCH_M,
   WALK_LOOK_DOWN,
-  WALKING_ABOVE,
 } from "./civilian-gaze-constants.ts";
+import { WALKING_ABOVE } from "./civilian-anim.ts";
 import { chooseLook, CrowdGrid, type LookChooser } from "./civilian-gaze-poll.ts";
 import { addPulse, blankSenses, createStimuli, refreshStimuli, type GazeSenses, type GazeStimuli } from "./civilian-gaze-table.ts";
 

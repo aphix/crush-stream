@@ -101,8 +101,6 @@ export const SKY_SHARE = 0.3;
 export const GROUND_SHARE = 0.2;
 /** Walking, the head drops this much (rad, down positive) toward the path ahead (tuned by feel). */
 export const WALK_LOOK_DOWN = 0.08;
-/** She walks above this drawn pace (m/s), the art's own `WALKING_ABOVE`. */
-export const WALKING_ABOVE = 0.05;
 /** A pulse turns a share of heads from this floor to all by neuroticism (the brain's `NEURO_REACT_FLOOR` 0.2 raised: a glance costs less than an alarm), less when it is behind them. */
 export const REACT_FLOOR = 0.6;
 export const HEARD_SHARE = 0.7;
