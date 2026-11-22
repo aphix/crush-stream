@@ -111,6 +111,8 @@ export class CivilianArt {
     const selected = this.selectNearest(poses, count);
     this.assignSlots(poses, selected);
     this.poseDummies(poses, selected, wallDt);
+    // An instanced draw of no instances still costs a program bind and uniform upload in every pass: a chunk with nobody out is skipped.
+    for (let chunk = 0; chunk < this.dummies.length; chunk++) this.dummies[chunk]!.visible = this.dummies[chunk]!.count > 0;
     this.drawFigures(poses, count);
     this.nearDrawn = selected;
   }
