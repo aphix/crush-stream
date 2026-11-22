@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { ALARM_DELAY_MIN_SECONDS } from "../ai/civilians/civilian-constants.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import { mulberry32 } from "../world/placements.ts";
 import { emptyPoses } from "./civilian-art.test-util.ts";
 import { CrowdGaze, STIMULUS } from "./civilian-gaze.ts";
 import { ALIGN_SHIFT, HEAD_LATENCY_S, HEAD_YAW_LIMIT, HEAD_YAW_RATE, PITCH_LIMIT, PITCH_RATE, POLL_MASK, TORSO_RATE, TORSO_YAW_LIMIT } from "./civilian-gaze-constants.ts";
 import { blankSenses, type GazeCar, type GazeSenses } from "./civilian-gaze-table.ts";
 
-const FRAME = 1 / 60;
+const FRAME = 1 / FRAME_HZ;
 const TIGHT = 1e-6;
 /** A look word whose head-mover bits are all set: her head turns the whole way, so where it points is where she looks. */
 const HEAD_MOVER = 7 << ALIGN_SHIFT;

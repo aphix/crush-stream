@@ -93,7 +93,7 @@ export class CrowdGrid {
 }
 
 /** What choosing a look reads and writes: the table, the grid, the attractors (x, y, z triples), the frame, and the candidate (kind, source; its point, urgency and distance in `scratch`). */
-export type LookChooser = {
+type LookChooser = {
   readonly scratch: Float64Array;
   readonly stimuli: GazeStimuli;
   readonly grid: CrowdGrid;

@@ -2,7 +2,6 @@ import { FAR_DRAW } from "./civilian-art-constants.ts";
 
 /** What a person can look at: a stimulus table row's kind, and what her current look is on. Codes are stable (the Mind lane reads them). */
 export const STIMULUS = { none: 0, player: 1, car: 2, siren: 3, crash: 4, knock: 5, gunshot: 6, down: 7, attend: 8, partner: 9, person: 10, glance: 11 } as const;
-export type StimulusKind = (typeof STIMULUS)[keyof typeof STIMULUS];
 const KINDS = 12;
 
 /** Rows in the stimulus table, and how many of them lingering pulses may hold. */
@@ -25,7 +24,7 @@ const DEG = Math.PI / 180;
 const REVC_FPS = 30;
 /** Head yaw +-90 deg, pitch +-45 deg, torso yaw +-50 deg (reVC `PedIK.cpp:10-11`). */
 export const HEAD_YAW_LIMIT = 90 * DEG;
-export const PITCH_LIMIT = 45 * DEG;
+export const PITCH_LIMIT = Math.PI / 4;
 export const TORSO_YAW_LIMIT = 50 * DEG;
 /** The torso helps past this head turn (rad): the near rig's comfortable head turn (`LOOK_LIMIT` in civilian-anim.ts). */
 export const TORSO_JOIN = 1.1;

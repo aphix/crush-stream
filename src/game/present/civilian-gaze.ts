@@ -42,11 +42,10 @@ import {
   WALK_LOOK_DOWN,
 } from "./civilian-gaze-constants.ts";
 import { WALKING_ABOVE } from "./civilian-anim.ts";
-import { chooseLook, CrowdGrid, type LookChooser } from "./civilian-gaze-poll.ts";
+import { chooseLook, CrowdGrid } from "./civilian-gaze-poll.ts";
 import { addPulse, blankSenses, createStimuli, refreshStimuli, type GazeSenses, type GazeStimuli } from "./civilian-gaze-table.ts";
 
 export { STIMULUS } from "./civilian-gaze-constants.ts";
-export type { GazeCar, GazeSenses, GazeStimuli } from "./civilian-gaze-table.ts";
 
 /** Eased channels per civilian: her whole turn toward the target (rad, toward her +x positive), the head's pitch (down positive), the torso's share of the turn. */
 const YAW = 0;
@@ -73,7 +72,7 @@ const NO_PENDING = -1;
  * The head eases toward the target (critically damped, rate-capped), the torso joining past `TORSO_JOIN`. Outputs, per civilian and relative to her facing:
  * `headYaw` (from the torso), `headPitch` (down positive) and `torsoTwist`. Typed arrays sized at construction; `update` allocates nothing.
  */
-export class CrowdGaze implements LookChooser {
+export class CrowdGaze {
   readonly capacity: number;
   readonly stimuli: GazeStimuli = createStimuli();
   readonly scratch = new Float64Array(SCRATCH_SLOTS);

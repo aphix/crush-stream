@@ -241,6 +241,9 @@ Measured by a node probe on the fixture neighbourhood (45 places, 8 cars parked 
 The crowd's step allocates nothing between ticks (`civilian-crowd-alloc.test.ts`; its HOT rows are in `scripts/check-boundaries.mjs`).
 A tick, twice a second, allocates what the brain's answer carries.
 
+Gaze (`CrowdGaze.update`, a node probe of residents walking within 120 m of a spot with 8 cars driving among them, one with its siren, the player on foot and a crash pulse every 5 s), warm, per frame on the main thread:
+60 residents 4.8 to 6.1 us, 150 residents 11.9 to 14.0 us, 300 residents 24.1 to 29.4 us, 4 to 10 B (bound 16 B: `civilian-art-alloc.test.ts`).
+
 Per device (desktop or phone, by `deviceClass`):
 
 ||Desktop|Phone|

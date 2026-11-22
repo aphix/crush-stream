@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FIGURE_ATTRIBUTE } from "./civilian-art-constants.ts";
-import { civilianFigureGeometry, turnFigureHead } from "./civilian-figure.ts";
+import { civilianFigureGeometry, HEAD_PIVOT_ABOVE, STILL_SWING } from "./civilian-figure.ts";
 import { JOINTS } from "./ragdoll-body.ts";
+
+/** The vertex shader's head turn (`TURN_HEAD_GLSL`) in TypeScript, standing still: a head vertex turned about the neck, any other unmoved. */
+function turnFigureHead(position: THREE.Vector3, rigSwing: number, rigPivot: number, yaw: number, pitch: number): THREE.Vector3 {
+  const head = rigPivot >= HEAD_PIVOT_ABOVE && Math.abs(rigSwing) < STILL_SWING ? 1 : 0;
+  const neck = rigPivot * head;
+  const y = position.y - neck;
+  const nodY = y * Math.cos(pitch * head) - position.z * Math.sin(pitch * head);
+  const nodZ = y * Math.sin(pitch * head) + position.z * Math.cos(pitch * head);
+  return position.set(position.x * Math.cos(yaw * head) + nodZ * Math.sin(yaw * head), nodY + neck, nodZ * Math.cos(yaw * head) - position.x * Math.sin(yaw * head));
+}
 
 const HEAD_TURN = 0.9;
 const HEAD_NOD = 0.4;

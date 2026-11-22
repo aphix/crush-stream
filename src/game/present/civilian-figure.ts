@@ -35,8 +35,8 @@ const SWING_PHASE_AT_WIDEST = Math.PI / 2;
 /** The head and hair turn about the dummy's neck joint (m over the feet). */
 const NECK_Y = JOINTS[0][3];
 /** A vertex is the head's when it does not swing (under `STILL_SWING` rad) and its pivot is over `HEAD_PIVOT_ABOVE` m: the torso's pivot is 0, every limb swings. */
-const HEAD_PIVOT_ABOVE = 0.5;
-const STILL_SWING = 1e-6;
+export const HEAD_PIVOT_ABOVE = 0.5;
+export const STILL_SWING = 1e-6;
 
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
@@ -124,25 +124,12 @@ float swingSin = sin(swingAngle);
 float figureHead = step(${HEAD_PIVOT_ABOVE.toFixed(2)}, ${FIGURE_ATTRIBUTE.RIG}.z) * (1.0 - step(${STILL_SWING}, abs(${FIGURE_ATTRIBUTE.RIG}.y)));
 vec4 headTurn = vec4(cos(${FIGURE_ATTRIBUTE.GAIT}.z * figureHead), sin(${FIGURE_ATTRIBUTE.GAIT}.z * figureHead), cos(${FIGURE_ATTRIBUTE.GAIT}.w * figureHead), sin(${FIGURE_ATTRIBUTE.GAIT}.w * figureHead));`;
 
-/** `v` nodded by the pitch, then turned by the yaw: `turn` is (cos yaw, sin yaw, cos pitch, sin pitch). Mirrors `turnFigureHead`. */
+/** `v` nodded by the pitch, then turned by the yaw: `turn` is (cos yaw, sin yaw, cos pitch, sin pitch). The figure's test row mirrors it in TypeScript. */
 const TURN_HEAD_GLSL = /* glsl */ `
 vec3 turnFigureHead(vec3 v, vec4 turn) {
   vec3 nodded = vec3(v.x, v.y * turn.z - v.z * turn.w, v.y * turn.w + v.z * turn.z);
   return vec3(nodded.x * turn.x + nodded.z * turn.y, nodded.y, nodded.z * turn.x - nodded.x * turn.y);
 }`;
-
-/**
- * Where the vertex shader puts a figure vertex at `position` with rig floats (`rigSwing`, `rigPivot`), standing still, for an instance whose head turns `yaw` and nods `pitch` (rad, down positive):
- * a head vertex turned about the neck, any other unmoved. The shader's own head turn, in TypeScript, so a row can check it without a GPU.
- */
-export function turnFigureHead(position: THREE.Vector3, rigSwing: number, rigPivot: number, yaw: number, pitch: number): THREE.Vector3 {
-  const head = rigPivot >= HEAD_PIVOT_ABOVE && Math.abs(rigSwing) < STILL_SWING ? 1 : 0;
-  const neck = rigPivot * head;
-  const y = position.y - neck;
-  const nodY = y * Math.cos(pitch * head) - position.z * Math.sin(pitch * head);
-  const nodZ = y * Math.sin(pitch * head) + position.z * Math.cos(pitch * head);
-  return position.set(position.x * Math.cos(yaw * head) + nodZ * Math.sin(yaw * head), nodY + neck, nodZ * Math.cos(yaw * head) - position.x * Math.sin(yaw * head));
-}
 
 /** Standard lighting, coloured per vertex role from the instance's shirt (`instanceColor`), trousers and skin, each limb swung about its pivot by the instance's walk phase. */
 function civilianFigureMaterial(): THREE.MeshStandardMaterial {

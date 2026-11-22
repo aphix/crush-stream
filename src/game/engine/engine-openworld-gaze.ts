@@ -20,7 +20,7 @@ const SIGN_Y_M = 3.4;
 const GLANCED_KINDS = new Set<number>([PLACE_KIND.work, PLACE_KIND.food, PLACE_KIND.shop, PLACE_KIND.hangout]);
 
 /** What gaze needs of the engine: the cars, the player on foot (false in a car) and the buildings' line of sight (absent: none blocks). */
-export type GazePorts = {
+type GazePorts = {
   cars(): readonly GazeCar[];
   foot(out: { x: number; z: number; velocityX: number; velocityZ: number }): boolean;
   lineOfSight: LineOfSight | null;
