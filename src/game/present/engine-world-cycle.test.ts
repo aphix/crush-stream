@@ -78,6 +78,17 @@ describe("given the open world's cycle set by the game hour", () => {
     for (const [at, value] of bright.entries()) if (at < 4 || at > 6) expect(value, `day value ${at}`).toBeCloseTo(plain[at]!, 6);
   });
 
+  // mutation: sed -i '/^  private aimSun/,/^  }/s/^    this.fitShadow();/    this.sun.shadow.camera.far = this.sunOffset.length() + this.shadowLevel.reach;/' src/game/present/engine-world.ts
+  it("when a phone on Auto shadows sees the sun turn from noon to evening, then the sun's shadow still reaches the phone level's 28 m past the box's centre, not Auto's", () => {
+    const { stage } = newStage();
+    stage.phone = true;
+    stage.setShadowLevel(SHADOW_LEVELS.auto);
+    for (const hour of [12, 17]) {
+      stage.setDayHour(hour);
+      expect(stage.sun.shadow.camera.far - stage.sunOffset.length(), `reach at hour ${hour} (m)`).toBeCloseTo(SHADOW_LEVELS.phone.reach, 9);
+    }
+  });
+
   // mutation: sed -i 's/    lampPool.opacity = LAMP_POOL_OPACITY \* (cycling ? lamps : 1);/    lampPool.opacity = LAMP_POOL_OPACITY;/' src/game/present/engine-world.ts
   it("when the evening comes hour by hour, then the lamp heads, their pools and the windows come on together with it, ending where the night setting has them", () => {
     const { stage } = newStage();

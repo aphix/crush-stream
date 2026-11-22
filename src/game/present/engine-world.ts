@@ -629,13 +629,11 @@ export class WorldStage {
     setSunBias(shadow);
   }
 
-  /** The shadow camera's axes for `sunOffset`, reaching past it. */
+  /** The shadow camera's axes for `sunOffset`, and its box refitted at the level in force (a phone's on Auto). */
   private aimSun(): void {
     this.sunRight.set(0, 1, 0).cross(this.sunOffset).normalize();
     this.sunUp.copy(this.sunOffset).cross(this.sunRight).normalize();
-    const cam = this.sun.shadow.camera;
-    cam.far = this.sunOffset.length() + this.shadowLevel.reach;
-    cam.updateProjectionMatrix();
+    this.fitShadow();
     this.sky.setSun(this.sunOffset);
   }
 
