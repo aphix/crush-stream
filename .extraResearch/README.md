@@ -158,6 +158,7 @@ Treat model-written prose as leads, not facts; cite the listed sources.
 | `perplexity/2026-11-21-open-world-ambient-life.md` | Leads: tiered crowds, spatial activation, time-sliced simulation; mostly academic capacity numbers (crowd senses and minds) |
 | `perplexity/2026-11-21-city-game-crowd-talks.md` | Leads: AC Unity GDC 2015 (40/120/10,000 unverified) and Hitman (verified in the write-up); nothing found for GTA, RDR2, Watch Dogs, Cyberpunk (crowd senses and minds) |
 | `perplexity/2026-11-21-webgl-phone-many-characters.md` | Leads: draw calls and shadows over triangles on phones, instancing, DPR caps; generic, project write-ups (performance) |
+| `perplexity/2026-11-22-shadow-map-cost-static-scenes.md` | Cutting the shadow pass when most casters are static: three.js per-light `shadow.autoUpdate`/`needsUpdate` (verified in three's `LightShadow.js` 148-158 and `WebGLShadowMap.js` 170/370; one map per light, so freezing it freezes moving casters too); cached static plus dynamic maps (Unity HDRP, Unreal VSM separate static caching), caster pruning, smaller dynamic regions, Nth-frame updates: leads (performance) |
 | `perplexity/2026-11-21-npc-idle-ambient-behaviours.md` | Leads: weighted interruptible idle actions with cooldowns, randomised durations, phase offsets and staggered decisions; Game AI Pro 3 ch. 35 (ambient interactions, verified) (crowd senses and minds) |
 
 ## Papers (`papers/`)
