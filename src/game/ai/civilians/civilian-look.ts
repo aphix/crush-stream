@@ -49,6 +49,18 @@ const _low = new Float64Array(3);
 const _high = new Float64Array(3);
 /** The look panel's building meeting (`lookAtOf`). */
 const _placeMeeting: Meeting = { index: -1, along: Infinity };
+/** Per place of a map: the cosine and sine of its yaw, worked out once a map: a trig call's result is boxed, and a look turns into several buildings. */
+const YAW_TRIG = new WeakMap<object, Float64Array>();
+
+function buildYawTrig(places: OpenWorldMap["places"]): Float64Array {
+  const table = new Float64Array(places.length * 2);
+  for (let place = 0; place < places.length; place++) {
+    table[place * 2] = detCos(places[place]!.yaw);
+    table[place * 2 + 1] = detSin(places[place]!.yaw);
+  }
+  YAW_TRIG.set(places, table);
+  return table;
+}
 
 /** The building (inside the walls) whose box the ray enters first within `reach`, into `out` (index -1, along Infinity: none): the slab test in the building's own frame (local x its depth, local z its width), ground to roof. Allocates nothing. */
 export function placeMet(map: OpenWorldMap, ray: LookRay, reach: number, out: Meeting): Meeting {
@@ -59,19 +71,20 @@ export function placeMet(map: OpenWorldMap, ray: LookRay, reach: number, out: Me
   const low = _low;
   const high = _high;
   const flat = ray.dirX * ray.dirX + ray.dirZ * ray.dirZ;
+  const trig = YAW_TRIG.get(map.places) ?? buildYawTrig(map.places);
   for (let place = 0; place < map.places.length; place++) {
     const entry = map.places[place]!;
     if (entry.doorNode < 0) continue;
     const fromX = ray.eyeX - entry.x;
     const fromZ = ray.eyeZ - entry.z;
-    // The ray's level path, within `reach`, never comes within half the building's depth and width of its middle: it cannot enter, so it skips the turn (and its boxed trig).
+    // The ray's level path, within `reach`, never comes within half the building's depth and width of its middle: it cannot enter, so it skips the slab test.
     const nearest = flat > 0 ? Math.max(0, Math.min(reach, -(fromX * ray.dirX + fromZ * ray.dirZ) / flat)) : 0;
     const gapX = fromX + nearest * ray.dirX;
     const gapZ = fromZ + nearest * ray.dirZ;
     const half = (entry.depth + entry.width) / 2;
     if (gapX * gapX + gapZ * gapZ > half * half) continue;
-    const cos = detCos(entry.yaw);
-    const sin = detSin(entry.yaw);
+    const cos = trig[place * 2]!;
+    const sin = trig[place * 2 + 1]!;
     origin[0] = fromX * cos - fromZ * sin;
     origin[1] = ray.eyeY;
     origin[2] = fromX * sin + fromZ * cos;

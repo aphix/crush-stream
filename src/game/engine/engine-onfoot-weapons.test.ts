@@ -8,6 +8,7 @@ import { activeGround } from "../world/ground.ts";
 import { WEAPONS } from "./engine-onfoot-arms.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 import type { CarPick } from "./engine-openworld.ts";
+import { RayNearest } from "./ray-nearest.ts";
 
 const LINK = "#scene=openworld&seed=beef";
 /** Seconds the traffic needs to stand its first kerb cars (its first passes show every space in reach). */
@@ -102,8 +103,8 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(pane.state, `pane ${pane.name}`).not.toBe("intact");
   });
 
-  // mutation: sed -i 's/^    this.raycaster.intersectObjects(_carGroups, true, _carHits);/    this.raycaster.intersectObjects(cars.map((car) => car.group), true, _carHits);/' src/game/engine/engine.ts
-  it("when two shots are picked against the cars, then the raycaster is handed one list of every live car's group and one list for its hits, the same lists both times, and the pick names the car and the pane hit", () => {
+  // mutation: sed -i 's/^    _carHit.find(this.raycaster, _carGroups);/    _carHit.find(this.raycaster, cars.map((car) => car.group));/' src/game/engine/engine.ts
+  it("when two shots are picked against the cars, then the nearest-hit search is handed one list of every live car's group, the same list both times, and the pick names the car and the pane hit", () => {
     rig.getOut();
     const torso = rig.torso();
     rig.place(1, torso.x + 6, torso.z);
@@ -121,7 +122,7 @@ describe("given the real engine in the open world, its player on foot", () => {
     const centre = at(pane);
     const ray = rayFrom(eye.x, eye.y, eye.z, centre.x, centre.y, centre.z);
     const out: CarPick = { car: -1, x: 0, y: 0, z: 0, along: Infinity, pane: null };
-    const cast = vi.spyOn(rig.engine["raycaster"], "intersectObjects");
+    const cast = vi.spyOn(RayNearest.prototype, "find");
     let calls: typeof cast.mock.calls = [];
     try {
       for (let shot = 0; shot < 2; shot++) rig.engine["pickCar"](ray, WEAPONS.shotgun.range, out);
@@ -130,9 +131,8 @@ describe("given the real engine in the open world, its player on foot", () => {
       cast.mockRestore();
     }
     const [first, second] = calls;
-    expect(second![0], "the same list of groups").toBe(first![0]);
-    expect(second![2], "the same list for the hits").toBe(first![2]);
-    expect(first![0].length, "every live car's group").toBe(rig.engine["live"]().length);
+    expect(second![1], "the same list of groups").toBe(first![1]);
+    expect(first![1].length, "every live car's group").toBe(rig.engine["live"]().length);
     expect(out.car, "the car picked").toBe(1);
     expect(out.pane, "the pane picked").toBe(pane.name);
   });

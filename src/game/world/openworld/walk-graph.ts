@@ -80,5 +80,35 @@ export type Place = {
   hours?: readonly [from: number, to: number];
 };
 
+/**
+ * `place` at `doorNode` with every field present (an absent one undefined) in one order: the map's places share one hidden class,
+ * so a hot loop's reads of their numbers stay unboxed (built by conditional spreads they came in nine shapes, and a scan allocated per read).
+ */
+export function placeRecord(place: Place, doorNode: number): Place {
+  return {
+    kind: place.kind,
+    name: place.name,
+    doorNode,
+    doorX: place.doorX,
+    doorZ: place.doorZ,
+    yaw: place.yaw,
+    x: place.x,
+    z: place.z,
+    width: place.width,
+    depth: place.depth,
+    storeys: place.storeys,
+    style: place.style,
+    sector: place.sector,
+    interior: place.interior,
+    seats: place.seats,
+    stoopSeats: place.stoopSeats,
+    counter: place.counter,
+    aisle: place.aisle,
+    standRoom: place.standRoom,
+    openSides: place.openSides,
+    hours: place.hours,
+  };
+}
+
 /** `halfX`, `halfZ`: half the playable area's side along x and along z (m). Places with `doorNode = -1` lie beyond the walls; `portals` are the nodes where their residents enter and leave. */
 export type OpenWorldMap = { graph: WalkGraph; places: readonly Place[]; portals: Int32Array; halfX: number; halfZ: number };

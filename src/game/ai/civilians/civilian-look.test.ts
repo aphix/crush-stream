@@ -12,6 +12,8 @@ import { historyLines, residentNameText } from "./civilian-mood.ts";
 import { FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "./civilian-crowd.test-util.ts";
 import { detCos, detSin, hypot3 } from "../../kernel/physics-core.js";
 import { allocatedBytes, untilQuiet } from "../../kernel/alloc-sample.test-util.ts";
+import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
+import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 
 const map = buildFixtureMap();
 const EYE_HEIGHT = 1.5;
@@ -163,6 +165,39 @@ describe("given the eye aimed at the door of a home, asked as a bullet asks", ()
     };
     const bytes = untilQuiet(() => allocatedBytes(ask), BOUND_BYTES);
     expect(met.index, "the building met").toBe(home);
+    expect(bytes, "bytes allocated by 2000 asks").toBeLessThanOrEqual(BOUND_BYTES);
+  });
+});
+
+describe("given the city's own map, its 310 buildings inside the walls", () => {
+  const city = buildOpenWorldMap(layOutLots());
+  /** Calls a read makes, and the read's bound: the sampling profiler's own cost is 4-5 KB of a read. */
+  const CALLS = 2000;
+  const BOUND_BYTES = 8192;
+
+  // mutation: sed -i 's/^    const cos = trig\[place \* 2\]!;/    const cos = detCos(map.places[place]!.yaw);/' src/game/ai/civilians/civilian-look.ts
+  it("when the eye 3 m before a building asks 2000 times which building it meets, then each answer names that building and all of them together allocate under 8 KB", () => {
+    const house = city.places.find((place) => place.doorNode >= 0)!;
+    const ray = aimedAt(eyeAt(house.x - house.depth / 2 - 3, house.z), house.x, EYE_HEIGHT, house.z);
+    const met = { index: -1, along: Infinity };
+    const ask = (): void => {
+      for (let call = 0; call < CALLS; call++) placeMet(city, ray, LOOK_REACH, met);
+    };
+    const bytes = untilQuiet(() => allocatedBytes(ask), BOUND_BYTES);
+    expect(met.index, "the building met").toBe(city.places.indexOf(house));
+    expect(bytes, "bytes allocated by 2000 asks").toBeLessThanOrEqual(BOUND_BYTES);
+  });
+
+  // mutation: sed -i 's/^  const place = placeMet(state.map, ray, LOOK_REACH, _placeMeeting);/  const place = placeMet(state.map, ray, LOOK_REACH, { index: -1, along: Infinity });/' src/game/ai/civilians/civilian-look.ts
+  it("when the panel is asked 2000 times what the eye rests on and it rests on nothing, then the panel is empty and all of the asks together allocate under 8 KB", () => {
+    const crowd = newCrowd(map);
+    const ray = aimedAt(eyeAt(OPEN_GROUND, 0), OPEN_GROUND, EYE_HEIGHT + ROOF_RISE, ROOF_RUN);
+    let empty = 0;
+    const ask = (): void => {
+      for (let call = 0; call < CALLS; call++) if (lookAtOf(crowd.state, crowd.poses, 0, ray) === null) empty++;
+    };
+    const bytes = untilQuiet(() => allocatedBytes(ask), BOUND_BYTES);
+    expect(empty, "empty panels").toBeGreaterThan(0);
     expect(bytes, "bytes allocated by 2000 asks").toBeLessThanOrEqual(BOUND_BYTES);
   });
 });
