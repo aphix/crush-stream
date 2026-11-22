@@ -142,6 +142,8 @@ export class Walker {
   private readonly anchorPos = new Float64Array(3);
   private readonly anchorVel = new Float64Array(3);
   private readonly push = new Float64Array(3);
+  /** The level step (x, z m) `getOut` carried the root by last frame along the ground (0: no carry, or a hop). */
+  private readonly carried = new Float64Array(2);
   /** The hop out of what he stands in (`out`): how high (m; 0: none) his feet rise, and the way (x, z m) still to go over it before they come down. */
   private hopUp = 0;
   private readonly hopWay = new Float64Array(2);
@@ -358,6 +360,7 @@ export class Walker {
     this.anchorVel.fill(0);
     this.slack = 0;
     this.push.fill(0);
+    this.carried.fill(0);
     _point.x = at.x;
     _point.y = at.y;
     _point.z = at.z;
@@ -411,6 +414,7 @@ export class Walker {
     }
     let y = 0;
     if (this.hopUp > 0) {
+      this.carried.fill(0);
       x = this.hopWay[0]!;
       z = this.hopWay[1]!;
       const far = hypot2(x, z);
@@ -439,6 +443,13 @@ export class Walker {
       const share = far > 0 ? Math.min(1, pace / far) : 0;
       x *= share;
       z *= share;
+      // A part pressed through a thin solid (a banister) reads its way out flipping as it crosses the middle: a carry under way keeps its way, so the root does not jerk back and forth.
+      if (x * this.carried[0]! + z * this.carried[1]! < 0) {
+        x = this.carried[0]!;
+        z = this.carried[1]!;
+      }
+      this.carried[0] = x;
+      this.carried[1] = z;
     }
     this.gait.hop += y;
     this.gait.shift(x, z);
