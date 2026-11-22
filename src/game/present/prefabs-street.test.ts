@@ -7,6 +7,8 @@ import { prefabParts } from "./prefabs.ts";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { makeLamp } from "./engine-world.ts";
+import { ROAD_LIFT } from "./track-mesh.ts";
+import { LAMP_FROM_CURB, LAYOUT } from "../world/openworld/openworld-constants.ts";
 
 /** A sprite card is 2 triangles: a piece with a shape of its own has at least a box's 12. */
 const SHAPE_TRIANGLES_MIN = 12;
@@ -19,6 +21,10 @@ const BOX_SLACK = 1e-5;
 
 /** The plaza is one per course: its two stone rings and statue may take more. */
 const PLAZA_TRIANGLES_MAX = 800;
+/** A race lamp's pole stands at least this far (m) from the road ribbon its arm reaches over (`RACE_LAMP_KERB` in prefabs.ts). */
+const RACE_LAMP_KERB_M = 0.4;
+/** A pool corner this near (m) a band's cut is the cut's own, shared by the bands either side of it. */
+const CUT_SLACK = 1e-4;
 
 const KIT = [
   PREFAB.bench,
@@ -81,5 +87,37 @@ describe("given a street lamp's night pool, an additive decal on the ground", ()
       expect(pool.position.y, `${acorn ? "acorn" : "arm"} lamp's pool height (m)`).toBeLessThanOrEqual(0.005);
       expect(pool.position.y, `${acorn ? "acorn" : "arm"} lamp's pool height (m)`).toBeGreaterThan(0);
     }
+  });
+
+  /** The heights (m) of the drawn pool's corners of `id` that lie past the kerb at x `kerb` (over the road, +x) and short of x `ground` (on plain ground), the cut's own corners left out. */
+  const bands = (id: typeof PREFAB.lamp | typeof PREFAB.acornLamp, kerb: number, ground: number): { road: number[]; low: number[] } => {
+    stubBrowser();
+    const pool = prefabParts(id, plainMaterials()).find((part) => part.shared && part.material.blending === THREE.AdditiveBlending)!;
+    const position = pool.geometry.getAttribute("position");
+    const road: number[] = [];
+    const low: number[] = [];
+    for (let at = 0; at < position.count; at++) {
+      if (position.getX(at) > kerb + CUT_SLACK) road.push(position.getY(at));
+      else if (position.getX(at) < ground - CUT_SLACK) low.push(position.getY(at));
+    }
+    return { road, low };
+  };
+
+  // mutation: sed -i 's/cutX(pool, RACE_LAMP_KERB, Infinity).translate(0, ROAD_LIFT, 0)/cutX(pool, RACE_LAMP_KERB, Infinity)/' src/game/present/prefabs.ts
+  it("when a race lamp's pool is drawn, then its band over the road lies above the road ribbons' lift, onto the depth proxy it is tested against, and its band on the ground stays within 5 mm of it", () => {
+    const { road, low } = bands(PREFAB.lamp, RACE_LAMP_KERB_M, RACE_LAMP_KERB_M);
+    expect(road.length, "corners over the road").toBeGreaterThan(0);
+    expect(Math.min(...road), "lowest corner over the road (m)").toBeGreaterThan(ROAD_LIFT);
+    expect(low.length, "corners on the ground").toBeGreaterThan(0);
+    expect(Math.max(...low), "highest corner on the ground (m)").toBeLessThanOrEqual(0.005);
+  });
+
+  // mutation: sed -i 's/cutX(pool, LAMP_FROM_CURB, Infinity).translate(0, ROAD_LIFT, 0)/cutX(pool, LAMP_FROM_CURB, Infinity)/' src/game/present/prefabs.ts
+  it("when the open world's street lamp's pool is drawn, then its band over the street lies above the road ribbons' lift and its band over the lot stays within 5 mm of the ground", () => {
+    const { road, low } = bands(PREFAB.acornLamp, LAMP_FROM_CURB, LAMP_FROM_CURB - LAYOUT.sidewalk);
+    expect(road.length, "corners over the street").toBeGreaterThan(0);
+    expect(Math.min(...road), "lowest corner over the street (m)").toBeGreaterThan(ROAD_LIFT);
+    expect(low.length, "corners over the lot").toBeGreaterThan(0);
+    expect(Math.max(...low), "highest corner over the lot (m)").toBeLessThanOrEqual(0.005);
   });
 });
