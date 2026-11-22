@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FRAME_HZ } from "../../kernel/constants.ts";
 import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { BODY_GAP, MAX_OFFSET, PAIR_RANGE } from "./civilian-crowd-constants.ts";
@@ -165,7 +166,7 @@ describe("given a crowd placed, moved apart and placed again as it was", () => {
 });
 
 describe("given two customers standing in a crowded room, one shuffling straight through the other's spot", () => {
-  const FRAME = 1 / 60;
+  const FRAME = 1 / FRAME_HZ;
   /** A walk a frame at 60 frames a second, and a little for Float32 rounding. */
   const WALK_STEP = 1.4 * FRAME + FLOAT_ERROR;
   /** She shuffles at this pace (m/s) with no velocity of her own (as a customer edging in a queue): they are pushed straight apart, along a line that turns as she passes. */

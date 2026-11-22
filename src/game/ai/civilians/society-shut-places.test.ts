@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
@@ -45,7 +46,7 @@ describe("given the neighbourhood's grown-ups at home and hungry at supper, when
     const withShutFavourite = supperWith(coffee);
     const withNone = supperWith(() => NO_PLACE);
     expect(withNone.filter((place) => map.places[place]!.kind === PLACE_KIND.food).length, "control: residents who go out to eat with no favourite").toBeGreaterThan(0);
-    expect(withShutFavourite, "where each sets out for").toEqual(withNone);
+    expect(firstMismatch(withShutFavourite, withNone), "where each sets out for").toBeUndefined();
   });
 });
 

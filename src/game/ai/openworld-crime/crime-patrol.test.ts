@@ -1,4 +1,5 @@
 import { hypot2 } from "../../kernel/physics-core.js";
+import { FRAME_HZ } from "../../kernel/constants.ts";
 import { describe, expect, it } from "vitest";
 import { CAR_AVOID_GAP, CAR_LINGER_SECONDS, CAR_LOST_DISTANCE, CAR_LOST_SECONDS, CAREFUL_PURSUIT_SPEED, CHASE_LEAD_SECONDS, CHASE_RESUME_DISTANCE, CLOSE_PURSUIT_DISTANCE, CRIME_STEP_SECONDS, CRIME_STREAM, HOTHEAD_RUN_SHARE, REDIRECT_SECONDS } from "./crime-constants.ts";
 import { crimeDraw } from "./crime-draw.ts";
@@ -256,7 +257,7 @@ describe("given a hothead's patrol car at 19 m/s with a street tree 12 m down it
     const driver = new PursuitDriver(new Obstacles([TREE]));
     const self = { ...blankAiCar(0), vz: SPEED };
     const out = idleDrive();
-    driver.drive(0, self, [self], -1, 0, 80, 0, 0, 0, Infinity, 1 / 60, out);
+    driver.drive(0, self, [self], -1, 0, 80, 0, 0, 0, Infinity, 1 / FRAME_HZ, out);
     expect(out.brake, "the brake").toBeGreaterThan(0);
     expect(out.throttle, "the throttle").toBe(0);
   });
@@ -265,7 +266,7 @@ describe("given a hothead's patrol car at 19 m/s with a street tree 12 m down it
     const driver = new PursuitDriver(new Obstacles([{ ...TREE, x: 3 }]));
     const self = { ...blankAiCar(0), vz: SPEED };
     const out = idleDrive();
-    driver.drive(0, self, [self], -1, 0, 80, 0, 0, 0, Infinity, 1 / 60, out);
+    driver.drive(0, self, [self], -1, 0, 80, 0, 0, 0, Infinity, 1 / FRAME_HZ, out);
     expect(out.brake, "the brake").toBe(0);
   });
 });

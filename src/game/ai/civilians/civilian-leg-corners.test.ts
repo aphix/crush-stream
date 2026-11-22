@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FRAME_HZ } from "../../kernel/constants.ts";
 import { hypot2 } from "../../kernel/physics-core.js";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
@@ -9,7 +10,7 @@ import { createCityState } from "./society.ts";
 import { intAt } from "./society.test-util.ts";
 
 const map = buildOpenWorldMap(layOutLots());
-const FRAME_SECONDS = 1 / 60;
+const FRAME_SECONDS = 1 / FRAME_HZ;
 /** A walk step at 60 frames a second is a few centimetres; a corner of the offset that jumps is the offset itself (up to `LATERAL_MAX` m, 1.4x it at a right angle). This allows four steps of the fastest walker. */
 const MOST_PER_FRAME = 0.1;
 /** The legs set out in the city's first game hour. */
