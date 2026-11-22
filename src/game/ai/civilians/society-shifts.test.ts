@@ -41,7 +41,7 @@ function staffSeen(seed: number): { atWork: number; inShut: string[]; atBar: num
 }
 
 describe("given the neighbourhood's workplaces with opening hours (coffee from 6 to 15, bars from 16 to 3, shops by day) and its working people living two game days", () => {
-  // mutation: sed -i 's/  if (opens < 0) return limit;/  return limit;/' /home/aphix/worktrees/OwFix/src/game/ai/civilians/society-hours.ts (staff keep no hours)
+  // mutation: sed -i 's/  if (opens < 0) return limit;/  return limit;/' src/game/ai/civilians/society-hours.ts (staff keep no hours)
   it("when the staff at work are looked at every quarter hour, then none is in while the sign has read shut for half an hour, and bar staff work the evening", () => {
     let atBar = 0;
     for (const seed of [5, 7]) {

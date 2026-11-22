@@ -90,7 +90,7 @@ const HOT = {
   "src/game/present/motor-tone.ts": ["motorRev", "accelLoad", "motorLoad", "motorRpm", "channelGains"],
   "src/game/present/game-audio.ts": ["frame"],
   "src/game/present/paint-scratch.ts": ["frame", "draw", "touch", "sameStroke", "radiusOf", "growRect", "stamp"],
-  "src/game/ai/civilians/civilian-leg.ts": ["legPose", "legPositionAt", "waitedWalk", "evadeAlarm"],
+  "src/game/ai/civilians/civilian-leg.ts": ["legPose", "legPositionAt", "waitedWalk", "evadeAlarm", "cornerMiter"],
   "src/game/world/openworld/openworld-stoops.ts": ["liftFeet", "leadsToDoor", "keepOut"],
   "src/game/ai/civilians/civilian-crowd.ts": ["step", "fillPoses", "separate", "liftWalkers", "keepOverlaidOut", "noteContacts", "startBump", "writeActivity", "mayPush", "raisePush", "watchApproach", "raiseDangers", "raiseAmbulanceCalls", "raiseBearingPush", "logPair", "logHostEvent", "appendLog", "queueForBrain", "advanceBrain", "raiseCrimes", "postBatch", "findHits", "findPunches", "hasLooseBody"],
   "src/game/ai/civilians/civilian-look-word.ts": ["lookOf"],

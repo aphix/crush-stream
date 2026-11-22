@@ -40,7 +40,7 @@ function deeLateness(feared: boolean): number {
 }
 
 describe("given Dee's 23:00 coffee at the bodega and a night when her usual way there is feared (a wreck on it), so her walk goes round", () => {
-  // mutation: sed -i 's/walkMetres(state, from, to, state.fear, isNight(hourOfDay(tick, state.startHour)) ? NIGHT_FEAR_WEIGHT : 1)/walkMetres(state, from, to)/' /home/aphix/worktrees/OwFix/src/game/ai/civilians/civilian-plan.ts (the estimate ignores fear)
+  // mutation: sed -i 's/walkMetres(state, from, to, state.fear, isNight(hourOfDay(tick, state.startHour)) ? NIGHT_FEAR_WEIGHT : 1)/walkMetres(state, from, to)/' src/game/ai/civilians/civilian-plan.ts (the estimate ignores fear)
   it("when she sets out from a friend's at the far end of the neighbourhood, then she is there by the appointed time, as on a night with no fear", () => {
     expect(deeLateness(false), "control: minutes late with no fear").toBeLessThanOrEqual(0);
     expect(deeLateness(true), "minutes late with her way feared").toBeLessThanOrEqual(0);

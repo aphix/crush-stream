@@ -252,7 +252,7 @@ describe("given a hothead's patrol car at 19 m/s with a street tree 12 m down it
   const TREE: PropCollider = { index: 0, prefab: "tree", body: "solid", x: 0, z: 12, yaw: 0, kind: "circle", r: 0.13, hx: 0.13, hz: 0.13, mass: 0, base: 0, top: 0.77, ends: 3 };
   const SPEED = 19;
 
-  // mutation: sed -i 's/, this.solidLimit(self, speed));/);/' /home/aphix/worktrees/OwFix/src/game/ai/openworld-crime/pursuit-driver.ts
+  // mutation: sed -i 's/, this.solidLimit(self, speed));/);/' src/game/ai/openworld-crime/pursuit-driver.ts
   it("when it drives at the scene, then it brakes for the tree while it turns: a hothead's run met a tree at 19 m/s and threw its driver", () => {
     const driver = new PursuitDriver(new Obstacles([TREE]));
     const self = { ...blankAiCar(0), vz: SPEED };

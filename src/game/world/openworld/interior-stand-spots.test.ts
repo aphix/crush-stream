@@ -49,9 +49,9 @@ function faults(place: Place): string[] {
 describe("given every shop, coffee shop, bar and office of the neighbourhood with a serving counter", () => {
   const served = map.places.filter((place) => place.counter !== undefined);
 
-  // mutation: sed -i 's/    (deep, across) => clearOf(boxes, deep, across, SPOT_CLEAR),/    () => true,/' /home/aphix/worktrees/OwFix/src/game/world/openworld/interior-aisle.ts (spots ignore the furniture and walls)
-  // mutation: sed -i 's/      if (alongside \&\& (along < side.alongMin || along > side.alongMax)) continue;//' /home/aphix/worktrees/OwFix/src/game/world/openworld/interior-aisle.ts (lanes and clerks run past the counter)
-  // mutation: sed -i 's/^const SPOT_SLIDE = CUSTOMER_REACH - SPOT_CLEAR;/const SPOT_SLIDE = 0;/' /home/aphix/worktrees/OwFix/src/game/world/openworld/interior-aisle.ts (the clerks' galleys at Bodega Supreme and Kelly's have no floor: the map does not build)
+  // mutation: sed -i 's/    (deep, across) => clearOf(boxes, deep, across, SPOT_CLEAR),/    () => true,/' src/game/world/openworld/interior-aisle.ts (spots ignore the furniture and walls)
+  // mutation: sed -i 's/      if (alongside \&\& (along < side.alongMin || along > side.alongMax)) continue;//' src/game/world/openworld/interior-aisle.ts (lanes and clerks run past the counter)
+  // mutation: sed -i 's/^const SPOT_SLIDE = CUSTOMER_REACH - SPOT_CLEAR;/const SPOT_SLIDE = 0;/' src/game/world/openworld/interior-aisle.ts (the clerks' galleys at Bodega Supreme and Kelly's have no floor: the map does not build)
   it("when its buying lanes, standing spots and clerks' spots are read, then each is a body's half-width clear of every wall and piece of furniture, off every seat, and the lanes and clerks face the counter", () => {
     expect([...new Set(served.map((place) => place.interior))].sort().join(" "), "control: the kinds with a counter").toBe("bar coffee office store");
     for (const place of served) expect(place.standSpots!.length, `spots of ${place.name}`).toBe(2 * (STAND_COLUMNS + STAND_SPOTS + CLERK_SPOTS));
