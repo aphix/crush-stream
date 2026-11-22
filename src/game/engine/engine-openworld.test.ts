@@ -155,6 +155,18 @@ describe("given the open world's course up and a map given", () => {
     expect(harness.listener, "wall hits heard").not.toBeNull();
   });
 
+  // mutation: sed -i 's/this.mindsSetting ?? this.mindsAuto, wallDt/this.mindsSetting ?? this.ports.mindsAuto?.() === true, wallDt/' src/game/engine/engine-openworld.ts
+  it("when the Minds are on Auto, then what Auto means is read once as the crowd starts, not each frame: a tier dip later does not switch them off", () => {
+    const harness = hostWithMap();
+    let asked = 0;
+    harness.director["ports"].mindsAuto = () => {
+      asked++;
+      return true;
+    };
+    for (let frame = 0; frame < 60; frame++) harness.frame();
+    expect(asked, "times Auto was read").toBe(1);
+  });
+
   it("when the map is not given, or the course is not up, then there is no crowd and no link", () => {
     const noMap = new Harness();
     noMap.frame();

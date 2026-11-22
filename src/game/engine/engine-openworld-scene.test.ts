@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { homeModes, pickScene, sceneInPlay, scenesFor } from "../../components/scene-picks.ts";
-import { CROWD_TIER_SCALE, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
+import { CHEST_HEIGHT, CROWD_TIER_SCALE, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
+import { RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES } from "../ai/civilians/civilian-constants.ts";
 import { decodeShare, encodeShare } from "../hud/share-url.ts";
 import { HudStore, INITIAL_HUD, type LookAtHud } from "../hud/hud-store.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -103,6 +104,60 @@ describe("given the open world in play on the real engine", () => {
     engine["lookAtText"] = () => null;
     runSeconds(engine, 0.5);
     expect(hud.get().lookAt, "back to nothing").toBe(null);
+  });
+
+  // mutation: sed -i '/^    this.openWorld.mindsSetting = this.minds;/d' src/game/engine/engine.ts
+  // mutation: sed -i 's/      this.text = this.keepIfSame(auto || this.minds === null ? gazed : this.minds.describe(gazed));/      this.text = this.keepIfSame(gazed);/' src/game/engine/engine-openworld.ts
+  it("when the eye rests on a resident with Minds off, then her panel ends with her thought and no worker is made; with Minds on, another's panel does too and one worker is made", () => {
+    let made = 0;
+    vi.stubGlobal(
+      "Worker",
+      class {
+        onmessage = null;
+        onerror = null;
+        constructor() {
+          made++;
+        }
+        postMessage(): void {}
+        terminate(): void {}
+      },
+    );
+    const director = engine["openWorld"];
+    const ports = director["ports"];
+    const eye = ports.eye;
+    const crowd = director["crowd"]!;
+    const { x, z, feetY, shown } = crowd.poses;
+    const people: number[] = [];
+    for (let resident = 0; resident < crowd.poses.count && people.length < 2; resident++) {
+      if (shown[resident] === 1 && crowd.state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.species] === SPECIES.person) people.push(resident);
+    }
+    expect(people.length, "control: two people shown").toBe(2);
+    const thoughtOf = (resident: number): string | undefined => {
+      ports.eye = (ray) => {
+        ray.eyeX = x[resident]! - 1.5;
+        ray.eyeY = feetY[resident]! + CHEST_HEIGHT;
+        ray.eyeZ = z[resident]!;
+        ray.dirX = 1;
+        ray.dirY = 0;
+        ray.dirZ = 0;
+      };
+      runSeconds(engine, 0.5);
+      expect(director.minds?.shown.index, "the panel is about her").toBe(resident);
+      return director.lookAt()?.lines.at(-1);
+    };
+    try {
+      engine.setMinds(false);
+      expect(thoughtOf(people[0]!), "off: her panel's last line").toMatch(/^Thinks "/);
+      expect(made, "off: workers made").toBe(0);
+      engine.setMinds(true);
+      expect(thoughtOf(people[1]!), "on: her panel's last line").toMatch(/^Thinks "/);
+      expect(made, "on: workers made").toBe(1);
+    } finally {
+      ports.eye = eye;
+      engine.resetSetting("minds");
+      runSeconds(engine, 0.1);
+      vi.unstubAllGlobals();
+    }
   });
 
   it("when the open world is up with its map, then netplay has the crowd's link to send and hear through, on this run's key (a client hears the host's crowd through it before it has one)", () => {

@@ -13,21 +13,18 @@ function post(message: FromNeedle): void {
 }
 
 async function load(url: string, sha256: string): Promise<void> {
-  const started = performance.now();
   await init();
-  const { bytes, cached } = await loadWeights({ fetch: (at) => fetch(at), caches, digest: (data) => crypto.subtle.digest("SHA-256", data) }, WEIGHTS_CACHE, url, sha256);
+  const bytes = await loadWeights({ fetch: (at) => fetch(at), caches, digest: (data) => crypto.subtle.digest("SHA-256", data) }, WEIGHTS_CACHE, url, sha256);
   const engine = NeedleV2Wasm.load(bytes);
   if (engine === undefined) throw new Error("Needle weights did not load as a Needle 2 model");
   model.engine = engine;
-  post({ kind: "ready", loadMs: performance.now() - started, cached });
+  post({ kind: "ready" });
 }
 
 function ask(id: number, query: string, tools: string): void {
   const { engine } = model;
   if (engine === null) throw new Error("Needle asked before it loaded");
-  const started = performance.now();
-  const text = engine.generate(query, tools, MAX_NEW_TOKENS, 0, 0, true);
-  post({ kind: "answer", id, text, ms: performance.now() - started });
+  post({ kind: "answer", id, text: engine.generate(query, tools, MAX_NEW_TOKENS, 0, 0, true) });
 }
 
 async function hear(message: ToNeedle): Promise<void> {

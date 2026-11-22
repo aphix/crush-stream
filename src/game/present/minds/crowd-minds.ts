@@ -38,15 +38,17 @@ const PULSE_KINDS: readonly number[] = [STIMULUS.crash, STIMULUS.knock, STIMULUS
 const NOT_SCHEDULED = -1;
 const NO_HOUR = -1;
 
-/** One ask of the model for one resident (`sit.resident`): the hour it was asked in (`NO_HOUR`: no ask) and the situation its answer must fit. */
+/** One ask of the model for one resident (`sit.resident`): the hour it was asked in (`NO_HOUR`: no ask), her thought's stamp then, and the situation its answer must fit. */
 class Ask {
   id = 0;
   hour = NO_HOUR;
+  stamp = 0;
   started = 0;
   readonly sit = new Situation();
 
   copyFrom(other: Ask): void {
     this.hour = other.hour;
+    this.stamp = other.stamp;
     this.sit.copyFrom(other.sit);
   }
 }
@@ -64,9 +66,8 @@ export class CrowdMinds {
   readonly thoughtPurpose: Int16Array;
   /** What became of the model's answers, by `VERDICT`. */
   readonly verdicts = new Int32Array(Object.keys(VERDICT).length);
-  /** Milliseconds the worker took to load (-1: not loaded) and its last call took. */
-  loadMs = -1;
-  lastCallMs = -1;
+  /** Per resident, bumped by every thought she is given: an answer asked over an older thought is not taken. */
+  private readonly thoughtStamp: Uint32Array;
   private readonly createWorker: () => NeedleWorker | null;
   private on = false;
   private worker: NeedleWorker | null = null;
@@ -103,6 +104,7 @@ export class CrowdMinds {
     this.thoughtPurpose = new Int16Array(capacity);
     this.attendAt = new Float64Array(capacity).fill(NOT_SCHEDULED);
     this.attendPoint = new Float32Array(capacity * 3);
+    this.thoughtStamp = new Uint32Array(capacity);
   }
 
   /** The Minds setting: off ends the worker and drops what was asked; on lets the next thought ask (nothing loads before then). */
@@ -145,6 +147,7 @@ export class CrowdMinds {
     this.thoughtTool[resident] = thought.tool;
     this.thoughtArg[resident] = thought.arg;
     this.thoughtPurpose[resident] = purpose;
+    this.thoughtStamp[resident]!++;
   }
 
   /** Her look for a thought: a look at something turns her to it; any other thought leaves her gaze its own. */
@@ -156,6 +159,7 @@ export class CrowdMinds {
   /** Puts an ask about `sit` next in line (the newest wins the one free slot) and sends it if the model is idle. */
   private ask(hour: number): void {
     this.queued.hour = hour;
+    this.queued.stamp = this.thoughtStamp[this.sit.resident]!;
     this.queued.sit.copyFrom(this.sit);
     this.send();
   }
@@ -211,7 +215,6 @@ export class CrowdMinds {
     }
     if (message.kind === "ready") {
       this.ready = true;
-      this.loadMs = message.loadMs;
       this.send();
       return;
     }
@@ -219,20 +222,19 @@ export class CrowdMinds {
       this.verdicts[VERDICT.late]!++;
       return;
     }
-    this.lastCallMs = message.ms;
     this.take(message.text);
     this.flight.hour = NO_HOUR;
     this.send();
   }
 
-  /** The model's answer for the ask in flight: kept when it names a thought tool with a closed argument that fits the moment asked about; else the fallback stands. */
+  /** The model's answer for the ask in flight: kept when it names a thought tool with a closed argument that fits the moment asked about, and her thought is still the one it was asked over (a group's may have replaced it since); else the fallback stands. */
   private take(text: string): void {
     const ask = this.flight;
     let verdict = readCall(text, this.pick);
     if (verdict === VERDICT.taken && !fitsSituation(ask.sit, this.pick)) verdict = VERDICT.absent;
     this.verdicts[verdict]!++;
     const resident = ask.sit.resident;
-    if (verdict !== VERDICT.taken || this.thoughtHour[resident] !== ask.hour) return;
+    if (verdict !== VERDICT.taken || this.thoughtStamp[resident] !== ask.stamp) return;
     this.keep(resident, ask.hour, this.pick, ask.sit.purpose);
     this.attendFor(resident, this.pick, ask.sit);
   }

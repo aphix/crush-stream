@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
+import { NEED } from "../../ai/civilians/civilian-constants.ts";
 import { STIMULUS } from "../civilian-gaze.ts";
 import { readResident } from "./minds-read.ts";
 import { mindsWorld, putStimulus } from "./minds.test-util.ts";
@@ -36,5 +37,22 @@ describe("given a resident whose gaze table holds one stimulus where she stands,
       const { thought } = fallbackWith(kind);
       expect(firstMismatch([thought.tool, thought.arg], [THOUGHT.look_at, kind]), `kind ${kind}`).toBeUndefined();
     }
+  });
+});
+
+describe("given a resident whose most pressing need is food", () => {
+  // mutation: sed -i '/^    case THOUGHT.worry_about:/,+1d' src/game/present/minds/thought-situation.ts
+  it("when a worry is checked against her moment, then a worry about food fits and a worry about rest does not", () => {
+    const sit = new Situation();
+    sit.resident = 0;
+    sit.topNeed = NEED.food;
+    sit.topLevel = 0.9;
+    const worry = (need: number): boolean => {
+      const thought = new Thought();
+      thought.tool = THOUGHT.worry_about;
+      thought.arg = need;
+      return fitsSituation(sit, thought);
+    };
+    expect(firstMismatch([worry(NEED.food), worry(NEED.rest)], [true, false]), "food, rest").toBeUndefined();
   });
 });

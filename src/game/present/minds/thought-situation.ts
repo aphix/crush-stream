@@ -135,11 +135,13 @@ const WORK_START_HOUR = 10;
 /** A group may look or remark, or let it go; worrying and plans are one person's. */
 const GROUP_TOOLS: readonly number[] = [THOUGHT.ignore, THOUGHT.look_at, THOUGHT.remark_on];
 
-/** Whether thought `thought` fits `sit`: a look at something present, a remark on something heard, plans while she has some, a group's kind of thought. */
+/** Whether thought `thought` fits `sit`: a worry about her most pressing need, a look at something present, a remark on something heard, plans while she has some, a group's kind of thought. */
 export function fitsSituation(sit: Situation, thought: Thought): boolean {
   if (!isArgOf(thought.tool, thought.arg)) return false;
   if (sit.resident < 0 && !GROUP_TOOLS.includes(thought.tool)) return false;
   switch (thought.tool) {
+    case THOUGHT.worry_about:
+      return thought.arg === sit.topNeed;
     case THOUGHT.look_at:
       return sit.seenRow(thought.arg) >= 0;
     case THOUGHT.remark_on:

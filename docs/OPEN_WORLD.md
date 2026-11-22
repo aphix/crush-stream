@@ -153,18 +153,21 @@ What a resident thinks, as the look panel's last line (`Thinks "…"`) and, for 
 - **Needle 2 refines, when on.** A single resident's moment is asked of Needle 2 (needle-rs WASM, `NeedleV2Wasm`) in a module
   worker, one ask in flight and one queued (the newest wins), never from the frame loop. The prompt is one short sentence; the tools
   sent are narrowed to the arguments that fit the moment. The answer replaces the fallback only when `readCall` reads a whole call
-  naming a thought tool with exactly its one closed argument (zod) and `fitsSituation` agrees; anything else is counted by `VERDICT`
-  and the fallback stands. A call over 15 s ends the worker and backs off 60 s (humm-tauri measured 0.3-6 s a call on desktop and up
-  to about 49 s on a loaded phone: `.extraResearch/crowd-senses-and-gaze.md`). A failed load or a browser without module workers
-  turns Needle off for the session, said once in the console.
+  naming a thought tool with exactly its one closed argument (zod) and `fitsSituation` agrees (a worry only about her most pressing
+  need), and only while her thought is still the one the ask was made over (a group's crash thought since outranks it); anything else
+  is counted by `VERDICT` and the fallback stands. A call over 15 s ends the worker and backs off 60 s (humm-tauri measured 0.3-6 s a
+  call on desktop and up to about 49 s on a loaded phone: `.extraResearch/crowd-senses-and-gaze.md`). A failed load or a browser
+  without module workers turns Needle off for the session, said once in the console. needle-rs finds its `.wasm` by
+  `new URL(…, import.meta.url)`, so Vite does not pre-bundle it (`optimizeDeps.exclude`).
 - **Groups stay on the fallback.** A new crash, knock or shot pulse in the gaze table (read at 4 Hz) gathers the shown people within
   15 m (2-12 of them); their shared thought is the fallback's, and their heads turn one after another (0.15 s a rank plus up to 0.4 s
   of their own). Needle is not asked for groups: it read "a group of N people" as a group-chat request.
-- **The weights** (`needle-weights.ts`): `needle2.cact` (13,737,807 B) from Cactus Compute's Hugging Face repo, fetched only when the
-  setting is on and a thought asks, kept in Cache Storage, and refused unless it hashes to its SHA-256 (a bad cached copy is dropped
-  and fetched again).
+- **The weights** (`needle-weights.ts`): `needle2.cact` (13,737,807 B) from Cactus Compute's Hugging Face repo, pinned to the commit
+  its SHA-256 was taken from (`32e9e3a9…`), fetched only when the setting is on and a thought asks, kept in Cache Storage, and refused
+  unless it hashes to its SHA-256 (a bad cached copy is dropped and fetched again).
 - **The setting** (`minds`: HUD Playback "Minds", share key `minds`): Auto (null) is on for a desktop at FX high or ultra, off on
-  a phone and on a software rasterizer; On and Off pin it. While off no worker is made and nothing is fetched.
+  a phone and on a software rasterizer, decided once as the crowd starts (a frame-rate tier dip later does not switch it); On and Off
+  pin it. While off no worker is made and nothing is fetched.
 - **Cost.** `CrowdMinds.frame` allocates at most 16 B a frame (`crowd-minds-alloc.test.ts`); its per-frame names are in the
   boundary check's `HOT` list.
 - **Measured** (this box, node, needle-rs 0.3.1, Needle 2, narrowed tools, 80 new tokens): load 30 ms with the bytes in memory; 30

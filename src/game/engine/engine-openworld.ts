@@ -147,6 +147,8 @@ export type OpenWorldPorts = {
   cull: OpenWorldCullPorts;
   /** The dummies' world the civilians near a player have bodies in; absent: they are drawn by the crowd's art alone. */
   bodies?: BodyHost;
+  /** Whether the Minds' Auto is on, read once when the crowd starts (a tier the frame-rate governor dips later does not switch Needle off mid-walk); absent: off. */
+  mindsAuto?(): boolean;
   /** The facade kit for the map's homes inside the walls. */
   makeFacades(map: OpenWorldMap): FacadeArt;
   /** The stage's light follows this game hour (0-24), or the time of day again (null): called once a game minute, never a frame. */
@@ -221,8 +223,10 @@ export class OpenWorldDirector {
   gaze: OpenWorldGaze | null = null;
   /** What the drawn crowd thinks (`CrowdMinds` inside), made with the crowd: presentation only. */
   minds: OpenWorldMinds | null = null;
-  /** The Minds setting as the engine resolves it (null = auto) each frame: Needle may refine thoughts. */
-  mindsOn = false;
+  /** The HUD's Minds setting (null = Auto), written by the engine each frame: whether Needle may refine thoughts. */
+  mindsSetting: boolean | null = null;
+  /** What Auto means for this crowd (`OpenWorldPorts.mindsAuto`, read when it starts). */
+  private mindsAuto = false;
   /** The cars' doors, swung with the residents getting into and out of them (where they stand is `crowd.driverDoors`). */
   private doors: OpenWorldCarDoors | null = null;
   /** The kerb spaces, known on every peer: a car standing in one has nobody in it (`carIsEmpty`). */
@@ -428,7 +432,7 @@ export class OpenWorldDirector {
     this.ports.eye(this.ray);
     this.frameSigns(this.map);
     this.gaze?.frame(crowd.poses, this.ray.eyeX, this.ray.eyeZ, wallDt, this.bodies);
-    this.minds?.frame(crowd, this.gaze?.gaze ?? null, this.mindsOn, wallDt);
+    this.minds?.frame(crowd, this.gaze?.gaze ?? null, this.mindsSetting ?? this.mindsAuto, wallDt);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt, this.bodies?.held ?? null);
     this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     if (this.traffic?.ambulanceScene(this.sceneScratch) === true) this.medics?.setScene(this.sceneScratch.x, this.sceneScratch.z);
@@ -723,6 +727,7 @@ export class OpenWorldDirector {
     this.gaze = new OpenWorldGaze(crowd.poses.count, map, { cars: () => this.ports.cars(), foot: (out) => this.ports.foot(out), lineOfSight: this.ports.law?.lineOfSight ?? null });
     if (this.art !== null) this.art.gaze = this.gaze.gaze;
     this.minds = new OpenWorldMinds(crowd.poses.count);
+    this.mindsAuto = this.ports.mindsAuto?.() === true;
     const gaze = this.gaze;
     this.unhook = this.ports.hookWallHits((closing, x, z) => {
       crowd.noteWallHit(closing, x, z);

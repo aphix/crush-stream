@@ -472,6 +472,7 @@ export class CrashEngine extends EngineGarage {
       isClient: () => this.net.client,
       inRoom: () => this.net.role !== "off",
       seed: () => this.sceneSeed,
+      mindsAuto: () => this.mindsAuto(),
       tier: () => (this.deviceClass !== "desktop" ? POPULATION_TIER.phone : this.cine.tier === "ultra" ? POPULATION_TIER.ultra : POPULATION_TIER.desktop),
       cars: () => this.live(),
       foot: (out) => {
@@ -1228,7 +1229,7 @@ export class CrashEngine extends EngineGarage {
     lapPart(PART.rest);
     this.updateCamera(wallDt);
     lapPart(PART.camera);
-    this.openWorld.mindsOn = this.mindsWanted();
+    this.openWorld.mindsSetting = this.minds;
     this.openWorld.frame(wallDt);
     this.tether.frame(wallDt);
     lapPart(PART.scenery);

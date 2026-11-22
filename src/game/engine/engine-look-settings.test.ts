@@ -170,23 +170,24 @@ describe("given the real engine and the look sliders under Cel in the Playback s
     expect(firstMismatch(looks(), [null, null, null]), "Defaults").toBeUndefined();
   });
 
-  // mutation: sed -i 's/    return this.minds ?? (this.deviceClass === "desktop" \&\& finishForTier(this.cine.tier));/    return this.minds ?? finishForTier(this.cine.tier);/' src/game/engine/engine-input.ts
-  // mutation: sed -i 's/(this.deviceClass === "desktop" \&\& finishForTier(this.cine.tier))/(this.deviceClass === "desktop")/' src/game/engine/engine-input.ts
-  it("when Minds is left on Auto, then Needle may think for a desktop at FX high, not at low nor on a phone or a software rasterizer at high; set on or off, the HUD, the changed dot and the share key follow, and its reset puts Auto back", () => {
+  // mutation: sed -i 's/    return this.deviceClass === "desktop" \&\& finishForTier(this.cine.tier);/    return finishForTier(this.cine.tier);/' src/game/engine/engine-input.ts
+  // mutation: sed -i 's/    return this.deviceClass === "desktop" \&\& finishForTier(this.cine.tier);/    return this.deviceClass === "desktop";/' src/game/engine/engine-input.ts
+  it("when Minds is left on Auto, then Auto means on for a desktop at FX high, not at low nor on a phone or a software rasterizer at high; set on or off, the HUD, the changed dot and the share key follow, and its reset puts Auto back", () => {
     // Ultra loads its assets before it is the tier (none in node), so high stands for the finish tiers here.
-    const wanted = (device: string, tier: "low" | "high"): boolean => {
+    const auto = (device: string, tier: "low" | "high"): boolean => {
       engine.setFxTier(tier);
       Object.defineProperty(engine, "deviceClass", { value: device, configurable: true });
-      return engine["mindsWanted"]();
+      return engine["mindsAuto"]();
     };
     const device = engine["deviceClass"];
     try {
-      expect(firstMismatch([wanted("desktop", "high"), wanted("desktop", "low"), wanted("mobile", "high"), wanted("software", "high")], [true, false, false, false]), "Auto: desktop high, low; phone, software at high").toBeUndefined();
+      expect(firstMismatch([auto("desktop", "high"), auto("desktop", "low"), auto("mobile", "high"), auto("software", "high")], [true, false, false, false]), "Auto: desktop high, low; phone, software at high").toBeUndefined();
+      expect(hud.get().minds, "Auto is the default").toBe(null);
       engine.setMinds(false);
-      expect([hud.get().minds, wanted("desktop", "high"), isChanged(hud.get(), "minds")], "off: HUD, wanted, changed").toEqual([false, false, true]);
+      expect([hud.get().minds, isChanged(hud.get(), "minds")], "off: HUD, changed").toEqual([false, true]);
       expect(keyOf("minds").join("&"), "off: the share key").toBe("minds=0");
       engine.setMinds(true);
-      expect([hud.get().minds, wanted("software", "low")], "on: HUD, wanted on a software device").toEqual([true, true]);
+      expect([hud.get().minds, keyOf("minds").join("&")], "on: HUD, share key").toEqual([true, "minds=1"]);
       engine["applyShare"](decodeShare("#minds=0"), false);
       expect(hud.get().minds, "a link pins it off").toBe(false);
       engine.resetSetting("minds");

@@ -38,11 +38,11 @@ function sources(cached: Uint8Array<ArrayBuffer> | null, served: Uint8Array<Arra
 }
 
 describe("given the Needle weights and their known hash", () => {
-  // mutation: sed -i 's/    if (hex(await sources.digest(bytes)) === sha256) return { bytes, cached: true };/    if (hex(await sources.digest(bytes)) === "") return { bytes, cached: true };/' src/game/present/minds/needle-weights.ts
+  // mutation: sed -i 's/    if (hex(await sources.digest(bytes)) === sha256) return bytes;/    if (hex(await sources.digest(bytes)) === "") return bytes;/' src/game/present/minds/needle-weights.ts
   it("when a good copy is cached, then it is used and nothing is fetched", async () => {
     const { given, counts } = sources(GOOD, GOOD);
     const got = await loadWeights(given, "bucket", URL, await sha256(GOOD));
-    expect(got.cached, "from the cache").toBe(true);
+    expect(got.length, "the cached bytes").toBe(GOOD.length);
     expect(counts.fetches, "fetches").toBe(0);
   });
 
@@ -50,7 +50,7 @@ describe("given the Needle weights and their known hash", () => {
   it("when the cached copy does not hash right, then it is dropped, fetched again and the good copy kept", async () => {
     const { given, counts, kept } = sources(BAD, GOOD);
     const got = await loadWeights(given, "bucket", URL, await sha256(GOOD));
-    expect(firstMismatch([got.cached, got.bytes.length, counts.deletes, counts.fetches, counts.puts], [false, GOOD.length, 1, 1, 1]), "cached, bytes, deletes, fetches, puts").toBeUndefined();
+    expect(firstMismatch([got.length, counts.deletes, counts.fetches, counts.puts], [GOOD.length, 1, 1, 1]), "bytes, deletes, fetches, puts").toBeUndefined();
     expect(kept.get(URL)?.length, "the kept copy").toBe(GOOD.length);
   });
 

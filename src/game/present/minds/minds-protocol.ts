@@ -1,9 +1,10 @@
-/** The Needle model the Minds run: Needle 2 through needle-rs (MIT), weights from Cactus Compute's Hugging Face repo (MIT), fetched only when the setting is on. */
+/**
+ * The Needle model the Minds run: Needle 2 through needle-rs (MIT), weights from Cactus Compute's Hugging Face repo (MIT), fetched only when the setting is on.
+ * The URL is pinned to the repo's commit the SHA-256 was taken from, so a later upload cannot change the file under the hash.
+ */
 export const NEEDLE_WEIGHTS = {
-  url: "https://huggingface.co/Cactus-Compute/needle2/resolve/main/needle2.cact",
+  url: "https://huggingface.co/Cactus-Compute/needle2/resolve/32e9e3a93b205f786929697446ae669cf0a84579/needle2.cact",
   sha256: "b43aabfcaf1a6db6acf488076eab71d823c08697c7af4521fc1d174b60ede5ba",
-  /** Measured: the file's size on download (2026-11-21). */
-  bytes: 13_737_807,
 } as const;
 
 /** The Cache Storage bucket the weights are kept in after their first verified download. */
@@ -15,5 +16,5 @@ export const MAX_NEW_TOKENS = 80;
 /** What the main thread asks of the Needle worker. Tools travel with each ask: Needle 2 has no tool prefix to bind, and a moment's tools are narrowed to what is there. */
 export type ToNeedle = { kind: "load"; url: string; sha256: string } | { kind: "ask"; id: number; query: string; tools: string };
 
-/** What the Needle worker answers: loaded (and how long it took, whether the weights came from the cache), failed, or a completion with its time. */
-export type FromNeedle = { kind: "ready"; loadMs: number; cached: boolean } | { kind: "failed"; message: string } | { kind: "answer"; id: number; text: string; ms: number };
+/** What the Needle worker answers: loaded, failed, or a completion of an ask. */
+export type FromNeedle = { kind: "ready" } | { kind: "failed"; message: string } | { kind: "answer"; id: number; text: string };

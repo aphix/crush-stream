@@ -160,7 +160,8 @@ export default defineConfig(({ command, isPreview }) => ({
   resolve: { tsconfigPaths: true },
   // Rapier's wasm-bindgen glue must be one module. Pre-bundled, the chunk kept its own copy (holding the instance) while the `.wasm`'s
   // imports loaded the package's file (no instance, its own object heap): every Rust throw and Rust-to-JS callback failed in dev and left Rapier's sets borrowed.
-  optimizeDeps: { exclude: ["@dimforge/rapier3d-simd"] },
+  // needle-rs (the Minds' worker) finds its `.wasm` with `new URL(…, import.meta.url)`: pre-bundled, that URL points into the deps cache, where no `.wasm` is.
+  optimizeDeps: { exclude: ["@dimforge/rapier3d-simd", "needle-rs"] },
   worker: { format: "es" },
   build: {
     // three.js gets its own vendor chunk (596 kB): it changes only on a three upgrade, so it stays cached across

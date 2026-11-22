@@ -260,15 +260,15 @@ export abstract class EngineInput extends EngineRigs {
     this.emitHud();
   }
 
-  /** The HUD's Minds: true or false pins Needle's thoughts on or off, null is Auto (`mindsWanted`). */
+  /** The HUD's Minds: true or false pins Needle's thoughts on or off, null is Auto (`mindsAuto`). */
   setMinds(value: boolean | null): void {
     this.minds = value;
     this.emitHud();
   }
 
-  /** Whether Needle may refine the residents' thoughts: the setting, else Auto, a desktop at the finish tiers (high, ultra); a phone or a software rasterizer cannot spare a 23 MB model and a core. */
-  protected mindsWanted(): boolean {
-    return this.minds ?? (this.deviceClass === "desktop" && finishForTier(this.cine.tier));
+  /** The Minds' Auto: on for a desktop at the finish tiers (high, ultra); a phone or a software rasterizer cannot spare a 23 MB model and a core. */
+  protected mindsAuto(): boolean {
+    return this.deviceClass === "desktop" && finishForTier(this.cine.tier);
   }
 
   /** The HUD's material strength (0 = old uniform reflections, 1 = default, 2 = twice): every class's reflection cut and grain. */
