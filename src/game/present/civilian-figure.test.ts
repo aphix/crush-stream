@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FIGURE_ATTRIBUTE } from "./civilian-art-constants.ts";
-import { civilianFigureGeometry } from "./civilian-figure.ts";
+import { civilianFigureGeometry, turnFigureHead } from "./civilian-figure.ts";
+import { JOINTS } from "./ragdoll-body.ts";
+
+const HEAD_TURN = 0.9;
+const HEAD_NOD = 0.4;
 
 const VERTICES_PER_PART = 36;
 const TRIANGLE_BUDGET = { min: 100, max: 160 } as const;
@@ -55,5 +59,35 @@ describe("given the far figure", () => {
     }
     expect(still, "vertices of the torso and head").toBe(3 * VERTICES_PER_PART);
     expect(swinging.size, "swing kinds: leg and arm, each way").toBe(4);
+  });
+
+  it("when an instance's head turns and nods (the shader's math), then the head and hair turn about the neck toward her +x and down, and nothing else moves", () => {
+    const rig = geometry.getAttribute(FIGURE_ATTRIBUTE.RIG);
+    const neck = new THREE.Vector3(0, JOINTS[0][3], 0);
+    const before = new THREE.Vector3();
+    const after = new THREE.Vector3();
+    const front = { x: 0, y: 0, yBefore: 0, count: 0 };
+    let turned = 0;
+    for (let vertex = 0; vertex < position.count; vertex++) {
+      before.fromBufferAttribute(position, vertex);
+      turnFigureHead(after.copy(before), rig.getY(vertex), rig.getZ(vertex), HEAD_TURN, HEAD_NOD);
+      const isHead = vertex >= VERTICES_PER_PART && vertex < 3 * VERTICES_PER_PART;
+      if (!isHead) {
+        expect(after.distanceTo(before), `body vertex ${vertex} still`).toBe(0);
+        continue;
+      }
+      if (after.distanceTo(before) > 0.01) turned++;
+      expect(after.distanceTo(neck), `head vertex ${vertex} about the neck`).toBeCloseTo(before.distanceTo(neck), 6);
+      if (before.z > 0) {
+        front.x += after.x;
+        front.y += after.y;
+        front.yBefore += before.y;
+        front.count++;
+      }
+    }
+    expect(turned, "head and hair vertices moved").toBe(2 * VERTICES_PER_PART);
+    expect(front.x / front.count, "the face turned toward her +x").toBeGreaterThan(0.05);
+    expect(front.y / front.count, "the face nodded down").toBeLessThan(front.yBefore / front.count);
+    // mutation: sed -i 's/  const turning = { swing: 0, pivotY: NECK_Y };/  const turning = still;/' /home/aphix/worktrees/Gaze/src/game/present/civilian-figure.ts
   });
 });

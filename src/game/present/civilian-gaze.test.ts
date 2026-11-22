@@ -1,0 +1,184 @@
+import { describe, expect, it } from "vitest";
+import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
+import { ALARM_DELAY_MIN_SECONDS } from "../ai/civilians/civilian-constants.ts";
+import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { mulberry32 } from "../world/placements.ts";
+import { emptyPoses } from "./civilian-art.test-util.ts";
+import { CrowdGaze, STIMULUS } from "./civilian-gaze.ts";
+import { ALIGN_SHIFT, HEAD_YAW_LIMIT, HEAD_YAW_RATE, PITCH_LIMIT, PITCH_RATE, TORSO_RATE, TORSO_YAW_LIMIT } from "./civilian-gaze-constants.ts";
+import { blankSenses, type GazeCar, type GazeSenses } from "./civilian-gaze-table.ts";
+
+const FRAME = 1 / 60;
+const TIGHT = 1e-6;
+/** A look word whose head-mover bits are all set: her head turns the whole way, so where it points is where she looks. */
+const HEAD_MOVER = 7 << ALIGN_SHIFT;
+
+type Car = GazeCar & { group: { position: { x: number; y: number; z: number } }; velocity: { x: number; z: number } };
+
+function car(x: number, z: number, vx: number): Car {
+  return { group: { position: { x, y: 0, z } }, velocity: { x: vx, z: 0 }, sirens: false };
+}
+
+/** `count` people standing on the line z = 0 from x = -span/2 to span/2, facing +z (toward a street along x). */
+function kerb(count: number, span: number): CrowdPoses {
+  const poses = emptyPoses(count);
+  for (let civilian = 0; civilian < count; civilian++) poses.x[civilian] = -span / 2 + (span * civilian) / (count - 1);
+  return poses;
+}
+
+/** Their whole turn toward their +x (rad): the head's from the torso plus the torso's. */
+const turnOf = (gaze: CrowdGaze, civilian: number): number => gaze.headYaw[civilian]! + gaze.torsoTwist[civilian]!;
+
+/** Frames of `seconds` with `cars` driven along their velocity, `each` called after each frame with its time. */
+function drive(gaze: CrowdGaze, poses: CrowdPoses, senses: GazeSenses, cars: readonly Car[], seconds: number, each: (time: number) => void = () => {}): void {
+  for (let frame = 1; frame <= Math.round(seconds / FRAME); frame++) {
+    for (const moving of cars) moving.group.position.x += moving.velocity.x * FRAME;
+    gaze.update(poses, FRAME, senses);
+    each(frame * FRAME);
+  }
+}
+
+/** When each person first looked at a car (s, Infinity: never), as `cars` drive by for `seconds`. */
+function carLookTimes(poses: CrowdPoses, cars: Car[], seconds: number, lineOfSight: GazeSenses["lineOfSight"] = null): number[] {
+  const gaze = new CrowdGaze(poses.count);
+  const senses = { ...blankSenses(), cars, lineOfSight };
+  const first = new Array<number>(poses.count).fill(Infinity);
+  drive(gaze, poses, senses, cars, seconds, (time) => {
+    for (let civilian = 0; civilian < poses.count; civilian++) if (gaze.lookKind[civilian] === STIMULUS.car && first[civilian] === Infinity) first[civilian] = time;
+  });
+  return first;
+}
+
+describe("given people on a kerb facing the street", () => {
+  const PEOPLE = 12;
+  const SPAN = 20;
+
+  it("when a car passes fast within a few metres, then every one of them turns to it within a poll and her head's latency of it coming into range", () => {
+    const poses = kerb(PEOPLE, SPAN);
+    const fast = car(-80, 4, 25);
+    const times = carLookTimes(poses, [fast], 6);
+    for (let civilian = 0; civilian < PEOPLE; civilian++) {
+      // The car is in range (25 m at this speed draws past the notice floor from 20 m) when it is 20 m off her along x.
+      const inRange = (poses.x[civilian]! - 20 - -80) / 25;
+      expect(times[civilian], `person ${civilian} looked at the fast car`).toBeLessThan(Infinity);
+      expect(times[civilian]! - inRange, `person ${civilian}'s latency (s)`).toBeLessThan(0.35);
+    }
+    // mutation: sed -i 's/  const fast = Math.min(1, Math.max(0, (speed - CAR_CALM_SPEED) \/ (CAR_FAST_SPEED - CAR_CALM_SPEED))) \* s\[SCRATCH.near\]!;/  const fast = 0;/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze-poll.ts
+  });
+
+  it("when a car drives by at town speed across the street, then nobody turns to it", () => {
+    const poses = kerb(PEOPLE, SPAN);
+    const times = carLookTimes(poses, [car(-80, 12, 10)], 16);
+    expect(times.filter((time) => time < Infinity), "people who looked at an ordinary car").toEqual([]);
+    // mutation: sed -i 's/^export const CAR_CALM_SPEED = 9;/export const CAR_CALM_SPEED = 0;/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze-constants.ts
+  });
+
+  it("when a fast car passes beyond a wall that hides it from half of them, then only those who can see it turn", () => {
+    const poses = kerb(PEOPLE, SPAN);
+    const wallHidesFrom = (ax: number): boolean => ax <= 0;
+    const times = carLookTimes(poses, [car(-80, 8, 25)], 8, (ax) => !wallHidesFrom(ax));
+    for (let civilian = 0; civilian < PEOPLE; civilian++) {
+      if (poses.x[civilian]! > 0) expect(times[civilian], `person ${civilian} in the open`).toBeLessThan(Infinity);
+      else expect(times[civilian], `person ${civilian} behind the wall`).toBe(Infinity);
+    }
+    // mutation: sed -i 's/    return lineOfSight(s\[SCRATCH.ownX\]!, s\[SCRATCH.ownZ\]!, s\[SCRATCH.x\]!, s\[SCRATCH.z\]!);/    return true;/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze.ts
+  });
+});
+
+describe("given a crowd scattered round a spot, facing every way", () => {
+  const PEOPLE = 80;
+
+  function scattered(): CrowdPoses {
+    const poses = emptyPoses(PEOPLE);
+    const random = mulberry32(5);
+    for (let civilian = 0; civilian < PEOPLE; civilian++) {
+      const angle = random() * Math.PI * 2;
+      const distance = 3 + random() * 25;
+      poses.x[civilian] = Math.cos(angle) * distance;
+      poses.z[civilian] = Math.sin(angle) * distance;
+      poses.yaw[civilian] = random() * Math.PI * 2;
+    }
+    return poses;
+  }
+
+  it("when a crash pulses there, then most heads but not all turn to it, each after her own delay", () => {
+    const poses = scattered();
+    const gaze = new CrowdGaze(PEOPLE);
+    const senses = blankSenses();
+    drive(gaze, poses, senses, [], 0.5);
+    gaze.pulse(STIMULUS.crash, 0, 1, 0, 40, 1);
+    const first = new Array<number>(PEOPLE).fill(Infinity);
+    drive(gaze, poses, senses, [], 3, (time) => {
+      for (let civilian = 0; civilian < PEOPLE; civilian++) if (gaze.lookKind[civilian] === STIMULUS.crash && first[civilian] === Infinity) first[civilian] = time;
+    });
+    const reacted = first.filter((time) => time < Infinity);
+    expect(reacted.length / PEOPLE, "share who looked").toBeGreaterThan(0.5);
+    expect(reacted.length, "some never look").toBeLessThan(PEOPLE);
+    expect(Math.min(...reacted), "the quickest").toBeGreaterThanOrEqual(ALARM_DELAY_MIN_SECONDS - TIGHT);
+    expect(Math.max(...reacted) - Math.min(...reacted), "spread of the reactions (s)").toBeGreaterThan(0.5);
+    expect(new Set(reacted).size, "distinct moments").toBeGreaterThan(reacted.length / 2);
+    // mutation: sed -i 's/      if (hash16(civilian, this.serial ^ SALT.react) >= share \* HASH16) continue;//' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze.ts
+  });
+});
+
+describe("given one person and a look that jumps every 0.3 s to a random point all round her, above and below, at uneven frame lengths", () => {
+  it("when it plays for a minute, then her head stays within its limits and never turns faster than its rates", () => {
+    const poses = emptyPoses(1);
+    const gaze = new CrowdGaze(1);
+    const senses = blankSenses();
+    const random = mulberry32(3);
+    let last = { turn: 0, torso: 0, pitch: 0 };
+    for (let frame = 0, time = 0, next = 0; time < 60; frame++) {
+      const dt = frame % 97 === 0 ? 0.25 : frame % 3 === 0 ? 1 / 30 : FRAME;
+      time += dt;
+      if (time >= next) {
+        next = time + 0.3;
+        const angle = random() * Math.PI * 2;
+        gaze.attend(0, Math.sin(angle) * 5, 1.6 + (random() - 0.5) * 12, Math.cos(angle) * 5, 1, 1);
+      }
+      gaze.update(poses, dt, senses);
+      const step = Math.min(dt, 0.1);
+      const now = { turn: turnOf(gaze, 0), torso: gaze.torsoTwist[0]!, pitch: gaze.headPitch[0]! };
+      expect(Math.abs(gaze.headYaw[0]!), "head yaw").toBeLessThanOrEqual(HEAD_YAW_LIMIT + TIGHT);
+      expect(Math.abs(now.torso), "torso yaw").toBeLessThanOrEqual(TORSO_YAW_LIMIT + TIGHT);
+      expect(Math.abs(now.pitch), "pitch").toBeLessThanOrEqual(PITCH_LIMIT + TIGHT);
+      expect(Math.abs(now.turn - last.turn), `turn step at ${time.toFixed(2)} s`).toBeLessThanOrEqual(HEAD_YAW_RATE * step + TIGHT);
+      expect(Math.abs(now.torso - last.torso), "torso step").toBeLessThanOrEqual(TORSO_RATE * step + TIGHT);
+      expect(Math.abs(now.pitch - last.pitch), "pitch step").toBeLessThanOrEqual((PITCH_RATE + PITCH_LIMIT * HEAD_YAW_RATE) * step + TIGHT);
+      last = now;
+    }
+    // mutation: sed -i 's/      this.angle\[at\] = Math.max(from - rate \* t, Math.min(from + rate \* t, eased));/      this.angle[at] = this.goal[channel]!;/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze.ts
+  });
+});
+
+describe("given two people talking, one turned 50 degrees from the other, with town traffic and passers-by about", () => {
+  it("when a minute passes, then she looks at her partner most of the time", () => {
+    const poses = emptyPoses(8);
+    poses.look[0] = HEAD_MOVER;
+    const bearing = (50 * Math.PI) / 180;
+    poses.x[1] = Math.sin(bearing) * 1.2;
+    poses.z[1] = Math.cos(bearing) * 1.2;
+    poses.yaw[1] = Math.PI + bearing;
+    poses.partner[0] = 1;
+    poses.partner[1] = 0;
+    poses.activity[0] = poses.activity[1] = ACTIVITY.talk;
+    for (let walker = 2; walker < 8; walker++) {
+      poses.x[walker] = -6 + walker;
+      poses.z[walker] = 3;
+      poses.speed[walker] = 1.4;
+      poses.yaw[walker] = Math.PI / 2;
+    }
+    const gaze = new CrowdGaze(8);
+    const traffic = [car(-200, 9, 10), car(-120, 9, 11), car(-40, 9, 9)];
+    let onPartner = 0;
+    let frames = 0;
+    drive(gaze, poses, { ...blankSenses(), cars: traffic, player: true, playerX: 4, playerY: 1.55, playerZ: 6 }, traffic, 60, (time) => {
+      for (let walker = 2; walker < 8; walker++) poses.x[walker] = ((-6 + walker + 1.4 * time + 10) % 20) - 10;
+      if (time < 1) return;
+      frames++;
+      if (Math.abs(turnOf(gaze, 0) - bearing) < 0.15) onPartner++;
+    });
+    expect(onPartner / frames, "share of the minute on her partner").toBeGreaterThan(0.7);
+    // mutation: sed -i 's/    if (partner >= 0 \&\& partner < poses.count \&\& poses.shown\[partner\] === 1) {/    if (false) {/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze.ts
+  });
+});

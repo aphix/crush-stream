@@ -116,7 +116,7 @@ export const KIND_RANGE = kindTable({ player: 10, car: 25, siren: 60, crash: 40,
 /** Looks last `KIND_HOLD_MIN` + up to `KIND_HOLD_SPAN` s (0.5-4 s: reVC's 500-4000 ms looks). */
 export const KIND_HOLD_MIN = kindTable({ player: 1.2, car: 0.8, siren: 1.5, crash: 2, knock: 2, gunshot: 1, down: 2, person: 0.5, glance: 0.6 });
 export const KIND_HOLD_SPAN = kindTable({ player: 1.8, car: 1.7, siren: 1.5, crash: 2, knock: 2, gunshot: 1.5, down: 2, person: 1, glance: 1.2 });
-/** A pulse lingers in the table this long (s), still drawing looks as it fades (tuned by feel; someone down stays for the brain's ambulance wait). */
+/** A pulse lingers in the table this long (s) for its readers; only someone down still draws the looks of those who come by (tuned by feel: about the brain's ambulance wait). */
 export const KIND_LIFE = kindTable({ crash: 8, knock: 6, gunshot: 3, down: 30 });
 /** Kinds only seen, never heard: the line of sight is asked for them. */
 export const SEEN_ONLY = Uint8Array.from({ length: KINDS }, (_, kind) => (kind === STIMULUS.player || kind === STIMULUS.car || kind === STIMULUS.down || kind === STIMULUS.person ? 1 : 0));
