@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
 import type { AutoPose } from "../ai/openworld-auto/auto-scan.ts";
+import { easeFov } from "./drive-cam.ts";
 import { EyeClear } from "./eye-clear.ts";
 import type { Occluder, Sight } from "./spectate-cam.ts";
 import { Spring3 } from "./spring.ts";
@@ -47,8 +48,8 @@ export class AutoFollowCam {
     this.clear.reset();
   }
 
-  /** Frames `pose` in `camera`, `dt` s after the last call. */
-  update(camera: THREE.PerspectiveCamera, pose: AutoPose, sight: Sight, dt: number): void {
+  /** Frames `pose` in `camera`, `dt` s after the last call, its lens easing to `lens` (deg) across cuts as well. */
+  update(camera: THREE.PerspectiveCamera, pose: AutoPose, sight: Sight, dt: number, lens: number): void {
     this.followHeading(pose.yaw, dt);
     const along = Math.cos(this.swing);
     const across = Math.sin(this.swing);
@@ -70,6 +71,7 @@ export class AutoFollowCam {
     this.fresh = false;
     camera.position.copy(_placed);
     camera.lookAt(this.aim.x);
+    easeFov(camera, lens, dt);
   }
 
   /** The heading the shot stands behind: the subject's own, low-passed; exactly it on a cut. */

@@ -1,5 +1,5 @@
 import { detAtan2 } from "../../kernel/physics-core.js";
-import { CUSTOMER_REACH, planAisle } from "./interior-aisle.ts";
+import { CUSTOMER_REACH, planAisle, planStandSpots, type CounterSide } from "./interior-aisle.ts";
 import { Draft, footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
 import { roomPlaceOf, roomWindows } from "./facade-windows.ts";
 import { layoutBar, layoutCoffee, layoutOffice, layoutRowhome, layoutStore } from "./interior-layouts.ts";
@@ -115,8 +115,8 @@ function turnStep(turn: Turn): readonly [number, number] {
   return turn === TURN.front ? [-1, 0] : turn === TURN.back ? [1, 0] : turn === TURN.right ? [0, 1] : [0, -1];
 }
 
-/** What the place's interior publishes: every seat (a rowhome's two stoop seats lead: x, z, yaw, height each), the customer's and clerk's spots at the counter the plan marks `serves` (null where there is none), and its aisle and standing room (`Place.aisle`, `Place.standRoom`; null where nobody is walked inside). */
-type InteriorSpots = { seats: Float32Array; stoopSeats: number; counter: Float32Array | null; aisle: Float32Array | null; standRoom: Uint16Array | null };
+/** What the place's interior publishes: every seat (a rowhome's two stoop seats lead: x, z, yaw, height each), the customer's and clerk's spots at the counter the plan marks `serves` and the standing spots by it (`Place.standSpots`; null where there is none), and its aisle and standing room (`Place.aisle`, `Place.standRoom`; null where nobody is walked inside). */
+type InteriorSpots = { seats: Float32Array; stoopSeats: number; counter: Float32Array | null; standSpots: Float32Array | null; aisle: Float32Array | null; standRoom: Uint16Array | null };
 
 export function interiorSpots(place: Place, plan: InteriorPlan = planOf(place)): InteriorSpots {
   const frame = new Frame(place);
@@ -139,30 +139,42 @@ export function interiorSpots(place: Place, plan: InteriorPlan = planOf(place)):
   }
   const seats = new Float32Array(rows.length * SEAT_STRIDE);
   for (const [at, row] of rows.entries()) seats.set(row, at * SEAT_STRIDE);
-  const tree = planAisle(plan, doorAcrossOf(plan.kind, place.width));
+  const serving = plan.furnishings.find((piece) => piece.serves);
+  const sides = serving === undefined ? null : counterSides(plan, serving);
+  const planStands = sides === null ? new Float32Array(0) : planStandSpots(plan, sides.customer, sides.clerk);
+  const tree = planAisle(plan, doorAcrossOf(plan.kind, place.width), planStands);
   const aisle = tree === null ? null : new Float32Array(tree.deep.length * AISLE_STRIDE);
   if (tree !== null) for (let node = 0; node < tree.deep.length; node++) aisle!.set([frame.x(tree.deep[node]!, tree.across[node]!), frame.z(tree.deep[node]!, tree.across[node]!), tree.parent[node]!], node * AISLE_STRIDE);
   if (tree !== null) for (let node = 1; node < tree.deep.length; node++) aisle![node * AISLE_STRIDE + 3] = detAtan2(aisle![tree.parent[node]! * AISLE_STRIDE]! - aisle![node * AISLE_STRIDE]!, aisle![tree.parent[node]! * AISLE_STRIDE + 1]! - aisle![node * AISLE_STRIDE + 1]!);
-  return { seats, stoopSeats, counter: counterSpots(plan, frame), aisle, standRoom: tree === null ? null : Uint16Array.from(tree.room) };
+  const standSpots = sides === null ? null : new Float32Array(planStands.length);
+  for (let at = 0; standSpots !== null && at < planStands.length; at += 2) standSpots.set([frame.x(planStands[at]!, planStands[at + 1]!), frame.z(planStands[at]!, planStands[at + 1]!)], at);
+  const counter = serving === undefined || sides === null ? null : counterSpots(plan, serving, sides, frame);
+  return { seats, stoopSeats, counter, standSpots, aisle, standRoom: tree === null ? null : Uint16Array.from(tree.room) };
 }
 
-function counterSpots(plan: InteriorPlan, frame: Frame): Float32Array | null {
-  const counter = plan.furnishings.find((piece) => piece.serves);
-  if (counter === undefined) return null;
+/** The serving counter's two sides in plan metres (x deep, z across): the customer's spot at its front and the clerk's at its back, each with the way out from the counter and how far the counter runs along from it. */
+function counterSides(plan: InteriorPlan, counter: Furnishing): { customer: CounterSide; clerk: CounterSide } {
   const [stepDeep, stepAcross] = turnStep(counter.facing);
   const alongDeep = counter.facing === TURN.front || counter.facing === TURN.back;
   const centreDeep = counter.deep + (alongDeep ? 0 : counter.serveAt);
   const centreAcross = counter.across + (alongDeep ? counter.serveAt : 0);
-  const customer = counter.depth / 2 + CUSTOMER_REACH;
-  const clerk = counter.depth / 2 + CLERK_REACH;
+  const lengthDeep = alongDeep ? 0 : counter.width / 2;
+  const lengthAcross = alongDeep ? counter.width / 2 : 0;
+  const side = (reach: number, outDeep: number, outAcross: number): CounterSide => {
+    const x = centreDeep + outDeep * reach;
+    const z = centreAcross + outAcross * reach;
+    const ends = [1, -1].map((end) => -outAcross * (counter.deep + end * lengthDeep - x) + outDeep * (counter.across + end * lengthAcross - z));
+    return { x, z, outX: outDeep, outZ: outAcross, alongMin: Math.min(...ends), alongMax: Math.max(...ends) };
+  };
+  return { customer: side(counter.depth / 2 + CUSTOMER_REACH, stepDeep, stepAcross), clerk: side(counter.depth / 2 + CLERK_REACH, -stepDeep, -stepAcross) };
+}
+
+function counterSpots(plan: InteriorPlan, counter: Furnishing, sides: { customer: CounterSide; clerk: CounterSide }, frame: Frame): Float32Array {
   const top = plan.floors[counter.level]! + counter.height;
-  const customerDeep = centreDeep + stepDeep * customer;
-  const customerAcross = centreAcross + stepAcross * customer;
-  const clerkDeep = centreDeep - stepDeep * clerk;
-  const clerkAcross = centreAcross - stepAcross * clerk;
+  const { customer, clerk } = sides;
   const out = new Float32Array(2 * COUNTER_STRIDE);
-  out.set([frame.x(customerDeep, customerAcross), frame.z(customerDeep, customerAcross), frame.yaw(((counter.facing + 2) % 4) as Turn), top]);
-  out.set([frame.x(clerkDeep, clerkAcross), frame.z(clerkDeep, clerkAcross), frame.yaw(counter.facing), top], COUNTER_STRIDE);
+  out.set([frame.x(customer.x, customer.z), frame.z(customer.x, customer.z), frame.yaw(((counter.facing + 2) % 4) as Turn), top]);
+  out.set([frame.x(clerk.x, clerk.z), frame.z(clerk.x, clerk.z), frame.yaw(counter.facing), top], COUNTER_STRIDE);
   return out;
 }
 

@@ -1,4 +1,5 @@
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import { SPECIES } from "../ai/civilians/civilian-constants.ts";
 import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import {
@@ -150,10 +151,11 @@ function rowTrial(chooser: LookChooser, civilian: number, row: number): void {
   s[SCRATCH.distance] = distance;
   s[SCRATCH.near] = 1 - distance / range;
   const seen = distance < TOUCH_M || dx * s[SCRATCH.aheadX]! + dz * s[SCRATCH.aheadZ]! >= FOV_COS * distance;
-  if (kind === STIMULUS.siren) s[SCRATCH.trial] = SIREN_URGENCY * s[SCRATCH.near]!;
+  // Graded from the notice floor at the kind's range up to its full urgency at her feet, so `KIND_RANGE` is where she first notices it.
+  if (kind === STIMULUS.siren) s[SCRATCH.trial] = NOTICE_FLOOR + (SIREN_URGENCY - NOTICE_FLOOR) * s[SCRATCH.near]!;
   if ((kind === STIMULUS.car && seen) || kind === STIMULUS.siren) carTrial(t, row, s);
-  else if (kind === STIMULUS.down && seen) s[SCRATCH.trial] = DOWN_URGENCY * s[SCRATCH.near]!;
-  else if (kind === STIMULUS.player && seen && (distance < PERSONAL_M || hash16(civilian, (chooser.frame >>> 3) ^ SALT.player) < PLAYER_NOTICE_SHARE * HASH16)) s[SCRATCH.trial] = PLAYER_URGENCY * s[SCRATCH.near]!;
+  else if (kind === STIMULUS.down && seen) s[SCRATCH.trial] = NOTICE_FLOOR + (DOWN_URGENCY - NOTICE_FLOOR) * s[SCRATCH.near]!;
+  else if (kind === STIMULUS.player && seen && (distance < PERSONAL_M || hash16(civilian, (chooser.frame >>> 3) ^ SALT.player) < PLAYER_NOTICE_SHARE * FRAME_HZ * s[SCRATCH.frameSeconds]! * HASH16)) s[SCRATCH.trial] = NOTICE_FLOOR + (PLAYER_URGENCY - NOTICE_FLOOR) * s[SCRATCH.near]!;
 }
 
 /** The candidate becomes a look at row `row` of the table, at urgency `trial`. */
@@ -168,10 +170,10 @@ function takeRow(chooser: LookChooser, row: number): void {
   s[SCRATCH.z] = t.z[row]!;
 }
 
-/** The candidate becomes a glance at the passer-by nearest ahead, on `PASSER_SHARE` x `freedom` of polls. */
+/** The candidate becomes a glance at the passer-by nearest ahead, on `PASSER_SHARE` x `freedom` of polls (the share is a 60 Hz poll's, scaled by the frame so a second holds as many glances at any rate). */
 function considerPasser(chooser: LookChooser, civilian: number, poses: CrowdPoses, freedom: number): void {
   const s = chooser.scratch;
-  if (hash16(civilian, (chooser.frame >>> 3) ^ SALT.passer) >= PASSER_SHARE * freedom * HASH16) return;
+  if (hash16(civilian, (chooser.frame >>> 3) ^ SALT.passer) >= PASSER_SHARE * freedom * FRAME_HZ * s[SCRATCH.frameSeconds]! * HASH16) return;
   const other = chooser.grid.passerAhead(poses, civilian, s);
   if (other < 0) return;
   chooser.candidateKind = STIMULUS.person;
@@ -203,7 +205,7 @@ function attractorInView(chooser: LookChooser): number {
 function considerGlance(chooser: LookChooser, civilian: number, freedom: number): void {
   const s = chooser.scratch;
   const draw = (chooser.frame >>> 3) ^ SALT.glance;
-  if (chooser.candidateKind !== STIMULUS.none || hash16(civilian, draw) >= GLANCE_SHARE * freedom * HASH16) return;
+  if (chooser.candidateKind !== STIMULUS.none || hash16(civilian, draw) >= GLANCE_SHARE * freedom * FRAME_HZ * s[SCRATCH.frameSeconds]! * HASH16) return;
   chooser.candidateKind = STIMULUS.glance;
   chooser.candidateSource = -1;
   s[SCRATCH.urgency] = GLANCE_URGENCY;

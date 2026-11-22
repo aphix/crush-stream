@@ -1,5 +1,6 @@
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { ACTIVITY_SECONDS } from "./civilian-activity.ts";
+import { CRIME_KINDS, EVENT_KINDS, NEEDS, PURPOSES, codesOf } from "./resident-spine.ts";
 
 /** Crowd time runs on one grid: a plan, an event and a society step all land on a tick of 1 / DECISION_HZ crowd seconds. */
 export const DECISION_HZ = 2;
@@ -25,39 +26,12 @@ export const SATURDAY = 5;
 export const LOG_LINES = 8;
 export const HISTORY_FIELD = { code: 0, subject: 1, tick: 2 } as const;
 export const HISTORY_FIELDS = 3;
-export const NEED = { rest: 0, food: 1, work: 2, social: 3, errand: 4, solitude: 5 } as const;
-export const NEED_COUNT = 6;
+export const NEED = codesOf(NEEDS);
+export const NEED_COUNT = Object.keys(NEEDS).length;
 export const GENDER = { female: 0, male: 1 } as const;
 export const SPECIES = { person: 0, cat: 1, dog: 2 } as const;
-/** What a leg is for: a need's number, or one of the stories (`civilian-cast.ts`) or the bus out of the neighbourhood. */
-export const PURPOSE = {
-  salPigeons: 6,
-  kowalskiBroom: 7,
-  biscuitSteals: 8,
-  jamalFlyers: 9,
-  deeCoffee: 10,
-  okaforParty: 11,
-  vanRepair: 12,
-  tabbyPlay: 13,
-  dogChase: 14,
-  mechanicOut: 15,
-  partyGuest: 16,
-  busAway: 17,
-  coffee: 18,
-  drink: 19,
-  stoopSit: 20,
-  stoopTalk: 21,
-  argue: 22,
-  loiter: 23,
-  report: 24,
-  flee: 25,
-  shoplift: 26,
-  mug: 27,
-  breakIn: 28,
-  fight: 29,
-  lookOn: 30,
-  callAmbulance: 31,
-} as const;
+/** What a leg is for: a need's number, or one of the stories (`civilian-cast.ts`) or the bus out of the neighbourhood (the spine's rows, coded on from the needs). */
+export const PURPOSE = codesOf(PURPOSES, NEED_COUNT);
 /** What `RESIDENT_INT.flags` holds: in hospital, without a job, hurting, out of work while the workplace is closed, a named resident (no society chances, fixed age); jobless long enough to be broke, a criminal, wanted for an open crime or fight, in custody, a car owner, a coffee fan, a drinker, set out from outside a door (she found it shut, or stood out at it). */
 export const FLAG = { hurt: 1, jobless: 2, injured: 4, laidOff: 8, cast: 16, broke: 32, criminal: 64, wanted: 128, custody: 256, hasCar: 512, coffeeFan: 1024, drinker: 2048, fromOutside: 4096 } as const;
 /** A resident's integer row: society fields, then the leg and dwell the crowd walks, then the life log ring (`LOG_LINES` of `HISTORY_FIELDS`). -1 in a place field: none. */
@@ -166,7 +140,7 @@ export const CAST_TITLE_BASE = 100;
  * An `ambulanceStage` (the ambulance changed state or car; subject: its car index times 4 plus its state) tells a client where the ambulance is, which it has no traffic to know: it rides the log and the brain drops it.
  * An `arrestRide` (an arrested resident and her cop got into a patrol car, which now drives off) and an `arrestAlight` (the car is at the station and they get out) are each two triples of the same seconds: the resident, then the engine's index of the car. A client reads them to seat and unseat the pair (its own law has no patrol cars); the player on foot's arrest names `ARREST_PLAYER_RESIDENT`. The brain drops both kinds.
  */
-export const EVENT_KIND = { knock: 0, wreck: 1, crime: 2, bust: 3, push: 4, fight: 5, alongside: 6, walker: 7, jaywalk: 8, copDown: 9, ambulance: 10, danger: 11, ambulanceStage: 12, car: 13, arrestRide: 14, arrestAlight: 15 } as const;
+export const EVENT_KIND = codesOf(EVENT_KINDS);
 /** The resident an `arrestRide` or `arrestAlight` names for the player on foot's arrest (the wire's subject is 16 bits: no resident is this). */
 export const ARREST_PLAYER_RESIDENT = 65535;
 /** A fight's bearing that is none (two civilians face each other; a car is not faced). */
@@ -259,9 +233,16 @@ export const RETIRE_AGE = 65;
 export const AREA_PER_JOB = 45;
 export const MIN_JOBS = 2;
 export const MAX_JOBS = 80;
-/** Shifts start between these hours (inclusive). */
+/** Shifts are drawn to start between these hours (inclusive); at a place with hours `shiftStartOf` moves one that would run past its close. */
 export const SHIFT_START_MIN = 6;
 export const SHIFT_START_SPAN = 6;
+/** A shift at a place with hours starts at most this long before it shuts: a work dwell (`DWELL_MINUTES` work, 7-9 h) rounded. */
+export const SHIFT_FIT_HOURS = 8;
+/** Staff come in up to this long before the doors open and close up for this long after they shut (game minutes, tuned by feel). */
+export const SHIFT_OPEN_LEAD_MINUTES = 30;
+export const SHIFT_CLOSE_LAG_MINUTES = 30;
+/** Staff do not set out for a shift with less than this left of it (game minutes, tuned by feel). */
+export const SHIFT_LEAST_MINUTES = 60;
 /** A favourite is one of this many nearest places of its kind. */
 export const FAVOURITE_POOL = 3;
 
@@ -359,7 +340,7 @@ export const MIX_INDEX = 0xc2b2ae35;
 export const CENTIMETRES_PER_METRE = 100;
 
 /** What a crime is, in `RESIDENT_INT.crimeKind` (0 none). */
-export const CRIME_KIND = { none: 0, theft: 1, mugging: 2, breakIn: 3 } as const;
+export const CRIME_KIND = codesOf(CRIME_KINDS);
 export const NO_SEAT = -1;
 
 /**

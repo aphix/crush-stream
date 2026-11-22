@@ -51,6 +51,7 @@ describe("given a share state with every kind of field set", () => {
       dots: 0.5,
       hatch: 0.4,
       rim: 0.6,
+      minds: false,
       squash: KNOB_RANGES.squash.min,
       buckle: 0.9,
       loop: false,

@@ -1,7 +1,8 @@
 import { hypot2 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { CINE, CLEAR_COST, CineCam, DUTCH, DutchCam, EyePull, SightLines, sightLine, solid, type Sight } from "./spectate-cam.ts";
+import { CINE, CLEAR_COST, CineCam, EyePull, SightLines, sightLine, solid, type Sight } from "./spectate-cam.ts";
+import { DUTCH, DutchCam } from "./dutch-cam.ts";
 
 /**
  * The shot director both the results reel (`ReelDirector`, from clip time) and the Auto spectator cam (`AutoCam`, live)

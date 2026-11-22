@@ -1,7 +1,7 @@
 import { hypot2 } from "../../kernel/physics-core.js";
 import { footprintOf, stairBoxes, wallBoxes } from "./interior-draft.ts";
 import { ceilingOver, TURN, type Box, type InteriorPlan, type Rect } from "./interior-kinds.ts";
-import { STAND_COLUMNS, STAND_ROW_DEPTH, STAND_SPACING, STAND_SPOTS } from "./walk-graph.ts";
+import { CLERK_SPOTS, STAND_COLUMNS, STAND_ROW_DEPTH, STAND_SPACING, STAND_SPOTS } from "./walk-graph.ts";
 
 /** The aisle's grid: points this far apart (m), each this far clear of a wall or a piece of furniture (a body's half and a little). */
 const AISLE_STEP = 0.5;
@@ -13,9 +13,6 @@ const ROOM_FROM_DOOR = 1.5;
 const ROOM_FROM_COUNTER = 0.6;
 /** Where a customer stands to buy, from the counter's front (m). */
 export const CUSTOMER_REACH = 0.5;
-/** Standing room keeps clear of the block of standing spots by the serving point (`STAND_SPOTS` in rows of `STAND_COLUMNS` behind the lane) by a spot's spacing: this far along the counter either side, and this far out from the counter's front (m). */
-const STAND_BLOCK_HALF = ((STAND_COLUMNS - 1) / 2) * STAND_SPACING + STAND_SPACING;
-const STAND_BLOCK_OUT = CUSTOMER_REACH + Math.ceil(STAND_SPOTS / STAND_COLUMNS) * STAND_ROW_DEPTH + STAND_SPACING;
 /** What blocks a body: anything between these heights over the floor (m). */
 const BODY_LOW = 0.1;
 const BODY_HIGH = 1.7;
@@ -97,8 +94,78 @@ function grow(plan: InteriorPlan, boxes: readonly Box[], doorAcross: number): Pl
   return out;
 }
 
-/** The plan's aisle, or null where it has no serving counter (nobody is drawn inside it) or no floor at its door. */
-export function planAisle(plan: InteriorPlan, doorAcross: number): PlanAisle | null {
+/** Spots by a counter keep this far (m) off every wall and piece of furniture: a body's half-width (two bodies keep 0.6 m apart). */
+const SPOT_CLEAR = 0.3;
+/** Rows tried back from the counter, and steps tried along it either side (half a spot's spacing each), before a room is out of floor for its spots. */
+const SPOT_ROWS = 6;
+const SPOT_STEPS = 12;
+/** A blocked spot slides toward the counter in steps this long (m), up to where a body's half-width still clears the counter's front: a clerk's galley behind a counter (Bodega Supreme's 0.64 m to its party wall, Kelly's 0.74 m to its back shelf; measured) is narrower than its nominal spot leaves room for. */
+const SPOT_SLIDE_STEP = 0.02;
+const SPOT_SLIDE = CUSTOMER_REACH - SPOT_CLEAR;
+
+/** The nth step of a row of bodies along a line, centred: 0, then 1 to the right, 1 to the left, 2 to the right...; in whole steps. */
+function lateralStep(column: number): number {
+  return column === 0 ? 0 : (column & 1) === 1 ? (column + 1) / 2 : -column / 2;
+}
+
+/** Where a counter's spots are searched from: a spot at its front (or back), the way away from the counter, and how far the counter runs from it each way along (`along` grows toward (-outZ, outX)); 2D, plan or world. */
+export type CounterSide = { x: number; z: number; outX: number; outZ: number; alongMin: number; alongMax: number };
+
+/**
+ * Up to `count` spots on one side of a counter into `into` (x, z pairs), each a spot's spacing from every spot in `into` already, `clear` (off every solid) and `inSight` of the side's spot: rows of half-spacing steps along it
+ * from `firstRow` back, nearest first, each slid toward the counter (`SPOT_SLIDE`) where its own place is blocked; `alongside` keeps them within the counter's length (a buying lane or a clerk faces the counter).
+ */
+function searchSide(side: CounterSide, firstRow: number, count: number, alongside: boolean, into: number[], clear: (x: number, z: number) => boolean, inSight: (x: number, z: number) => boolean): void {
+  const target = into.length + 2 * count;
+  for (let row = firstRow; row < firstRow + SPOT_ROWS && into.length < target; row++) {
+    for (let step = 0; step <= 2 * SPOT_STEPS && into.length < target; step++) {
+      const along = (lateralStep(step) * STAND_SPACING) / 2;
+      if (alongside && (along < side.alongMin || along > side.alongMax)) continue;
+      let x = 0;
+      let z = 0;
+      let found = false;
+      for (let slide = 0; slide * SPOT_SLIDE_STEP <= SPOT_SLIDE + 1e-9 && !found; slide++) {
+        const back = row * STAND_ROW_DEPTH - slide * SPOT_SLIDE_STEP;
+        x = side.x + side.outX * back - side.outZ * along;
+        z = side.z + side.outZ * back + side.outX * along;
+        found = clear(x, z) && inSight(x, z);
+      }
+      if (!found) continue;
+      let apart = true;
+      for (let at = 0; at < into.length && apart; at += 2) apart = hypot2(into[at]! - x, into[at + 1]! - z) >= STAND_SPACING - 1e-6;
+      if (apart) into.push(x, z);
+    }
+  }
+  if (into.length < target) throw new Error(`a counter's room has floor for ${into.length / 2} of its ${target / 2} spots`);
+}
+
+/**
+ * The spots by a serving counter as x, z pairs: `STAND_COLUMNS` buying lanes (along its front within its length, then further back), `STAND_SPOTS` customers' standing spots behind them and `CLERK_SPOTS` clerks' spots along its back,
+ * every one clear and in sight of its side's spot and a spot's spacing from the rest. `clear` and `inSight` are always true in a room with nothing in it.
+ */
+export function counterStandSpots(customer: CounterSide, clerk: CounterSide, clear: (x: number, z: number) => boolean = () => true, inSight: (fromX: number, fromZ: number, x: number, z: number) => boolean = () => true): Float32Array {
+  const customers: number[] = [];
+  const fromCustomer = (x: number, z: number): boolean => inSight(customer.x, customer.z, x, z);
+  searchSide(customer, 0, STAND_COLUMNS, true, customers, clear, fromCustomer);
+  searchSide(customer, 1, STAND_SPOTS, false, customers, clear, fromCustomer);
+  const clerks: number[] = [];
+  searchSide(clerk, 0, CLERK_SPOTS, true, clerks, clear, (x, z) => inSight(clerk.x, clerk.z, x, z));
+  return Float32Array.from([...customers, ...clerks]);
+}
+
+/** `counterStandSpots` in a plan's room, in plan metres (x deep, z across): clear of every wall and piece of furniture at body height by `SPOT_CLEAR`, no wall between a spot and its side's spot. */
+export function planStandSpots(plan: InteriorPlan, customer: CounterSide, clerk: CounterSide): Float32Array {
+  const { walls, all: boxes } = blockers(plan);
+  return counterStandSpots(
+    customer,
+    clerk,
+    (deep, across) => clearOf(boxes, deep, across, SPOT_CLEAR),
+    (fromDeep, fromAcross, deep, across) => !walls.some((box) => crosses(box, deep, across, fromDeep, fromAcross)),
+  );
+}
+
+/** The plan's aisle, or null where it has no serving counter (nobody is drawn inside it) or no floor at its door; its standing room keeps a spot's spacing from the counter's spots (`stands`, plan x, z pairs). */
+export function planAisle(plan: InteriorPlan, doorAcross: number, stands: Float32Array): PlanAisle | null {
   const counter = plan.furnishings.find((piece) => piece.serves);
   if (counter === undefined || plan.kind === "rowhome") return null;
   const { walls, all: boxes } = blockers(plan);
@@ -113,8 +180,9 @@ export function planAisle(plan: InteriorPlan, doorAcross: number): PlanAisle | n
     const across = tree.across[node]!;
     if (tree.row[node]! % 2 !== 0 || tree.column[node]! % 2 !== 0 || hypot2(deep - tree.deep[0]!, across - tree.across[0]!) < ROOM_FROM_DOOR) continue;
     if ((deep - counter.deep) * stepDeep + (across - counter.across) * stepAcross < front || !clearOf(boxes, deep, across, ROOM_CLEAR)) continue;
-    const along = stepDeep !== 0 ? across - spotAcross : deep - spotDeep;
-    if (Math.abs(along) < STAND_BLOCK_HALF && (deep - counter.deep) * stepDeep + (across - counter.across) * stepAcross < counter.depth / 2 + STAND_BLOCK_OUT) continue;
+    let nearSpot = false;
+    for (let at = 0; at < stands.length && !nearSpot; at += 2) nearSpot = hypot2(stands[at]! - deep, stands[at + 1]! - across) < STAND_SPACING;
+    if (nearSpot) continue;
     if (walls.some((box) => crosses(box, deep, across, spotDeep, spotAcross))) continue;
     tree.room.push(node);
   }

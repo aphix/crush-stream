@@ -116,6 +116,29 @@ The Mall's `placed` list is 4089 props with 12512 colliders (2907 props and 8808
 
 **What a card says of it.** `result.dressing` (absent on the Lab and on an older card) is the course's dressing as the step loaded it: `placeMs` (wall ms of `placeCourse`, the call the card's `load:` line spans, before the warm-up sweep's second, warm load; `lastDressing` in `placements.ts`), `authored`, `solid` and `drawn` (prop counts, `drawn` before the effects tier thins it), `drawGroups` (the prefab-by-cell groups the service adds, counted by `addedDrawGroups`, the function `scenery.test.ts` bounds at `DRAWS_MAX`), and at the end of the step `geometries` and `textures` (`renderer.info.memory`; no texture megabytes: no registry sums them, and the art build is not timed anywhere either). `describeBench` prints it as `dressing place Xms solid N drawn N groups N geom N tex N   scenery on|DRAW0|OFF`, and `fetch-submissions --phases` prints the same line. **`?scenery=`** is a bench-only attribution knob with three arms (`SCENERY_ARM`; `SCENERY_QUERY` is read by `benchPlan`, carried by every loop step like `?draw=`, set on the race field by `enterBenchScene` before the course loads, recorded as `settings.scenery`: `on`, `draw0` or `off`; only a `?bench=` page reads it and nothing else does). **`?scenery=0`** (`off`) loads each course's authored props alone: no solid, no drawn scenery, so the sim's prop list, the AI's sight and the cameras differ from the default's (a different race: the diff mixes sim, AI and draw). **`?scenery=draw0`** keeps the authored and solid props exactly as the default places them (the same colliders, the same sim) and drops the drawn-only scenery (`TrackArt.scenery`), so two loops, the default and `draw0`, differ in the drawn-only art alone: the card's `calls`, `triangles`, `cpuMs`, `drawMs` between them are its draw cost (`simMsPerSimS` should not move); the solid props stay drawn, with their meshes, in both. The default against `0` is the whole service. The arm also reaches the dummies' world: `RaceField.load` hands it to `buildArt`, `RagdollSystem.setCourse` posts it in the worker's `course` message (`arm`, absent: `on`) and the worker places the course with `placeProps(track, arm)`, so under `0` the cosmetic Rapier world has no scenery solids either.
 
+### Open world: the frame and the picks
+
+`headless-frame.mjs --tier high --hash 'scene=openworld&seed=1' --parts 240` on the RTX 4080 (ANGLE, D3D12), at main 671efc2cf. The ms are the parts' CPU wall; two runs at night read shadow 6.35 and 6.65 ms, so a shift under about 0.4 ms is run noise on this GPU.
+
+| still | calls | triangles | callsMain / callsShadow | shadow ms | main ms | frame ms |
+|---|---|---|---|---|---|---|
+| desktop, day | 206 | 881,784 | 155.2 / 47.0 | 4.91 | 5.97 | 37.3 |
+| desktop, `--hour 21` | 207 | 1,200,811 | 157.6 / 47.0 | 6.35 | 6.55 | 32.3 |
+| `--phone`, day | 197 | 786,357 | 151 / 45.9 | 4.04 | 5.08 | 33.3 |
+| `--phone --hour 21` | 199 | 918,065 | 152 / 47 | 6.26 | 7.05 | 23.3 |
+
+The day stills are the same PNG run to run. At night the still differs from itself between runs (69 to 86 pixels: two walking people on the desktop still, x 416-447 and 784-831, y 288-351; one walker's hand at x 1044-1057, y 347-365 on the phone).
+
+Host-side picks and scans, node probes on the real open-world map (allocation by V8's sampling heap profiler; a first call on a mesh also pays its one-time buffers):
+
+| what | before | after |
+|---|---|---|
+| a civilian's body: inside a building? (`PlaceFootprints.inside`) | 9.0 us, 16 KB a call | 0.018 us, 0 B |
+| the look and gun wall test (`placeMet`) | 9.9 us, 20.5 KB a call | 3.1 us, 0.3 B |
+| a shot at a car (`pickCar`, `RayNearest`) | 0.37 ms, 271 KB | 0.15 ms, 22 KB |
+| a shot at a dummy (`pickDoll`, `DummyMesh.nearestHit`) | 3.6 ms, 1381 KB | 1.4 ms, 587 KB (first shot) |
+| a shot through one standing man, skinning only the bone groups the ray passes near (`PickGroups`) | 0.49 ms, 20 KB a shot (warm) | 0.15 ms, 16 KB a shot (warm); the first shot on a mesh builds the group table once |
+
 ### The loop in one page: what a step starts from, the wake lock, the per-second page state
 
 `driveLoop` (`bench-loop.ts`) runs every step of the cycle (each map, both arms) in the page the Benchmark entry opened: a page load drops fullscreen and releases a wake lock, and on a phone the screen timing out in the middle of a cycle (it did, at the National Mall) throttles the page. `WakeHold` (`bench-wake.ts`) asks for `navigator.wakeLock.request("screen")` before the first step, asks again whenever the page is shown (the browser drops the lock with a hidden page) and releases it when the loop ends; a browser without the API or one that refuses it holds nothing, logs the refusal, and the card says so. A reload onto a newer build (`auto=1`) is the loop's one navigation.

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { carAtWalker, FRAME_SECONDS, newCrowd, shownResident, stepUntilShown } from "../ai/civilians/civilian-crowd.test-util.ts";
 import { CENTIMETRES_PER_METRE, DECISION_HZ, EVENT_KIND, EVENT_TRIPLE, FIGHT_PLAYER, FLAG, GENDER, HOURS_PER_GAME_DAY, NEED, RESIDENT_INT, RESIDENT_INT_STRIDE, SPECIES, TICKS_PER_GAME_DAY } from "../ai/civilians/civilian-constants.ts";
@@ -15,6 +15,7 @@ import { AMBULANCE } from "../ai/openworld-traffic/ambulance.ts";
 import { launch, pooledCar } from "../contact/crash-scenarios.test-util.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
+import { STIMULUS, type CrowdGaze } from "../present/civilian-gaze.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { CrowdSight } from "../present/civilian-art.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
@@ -25,6 +26,7 @@ import { hourOfDay, tickAt } from "../ai/civilians/civilian-clock.ts";
 import { sceneryShare } from "./scenery-share.ts";
 import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { OpenWorldMinds } from "./engine-openworld-minds.ts";
 import type { AutoOrbit } from "./engine-openworld-auto.ts";
 import { MEDICS } from "./engine-openworld-medics.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
@@ -153,6 +155,26 @@ describe("given the open world's course up and a map given", () => {
     expect(harness.updates[0]!.wallDt, "the frame's seconds").toBe(FRAME);
     expect(harness.director.link()?.seed, "the link's key").toBe(POPULATION_TIER.phone * CROWD_TIER_SCALE + SEED);
     expect(harness.listener, "wall hits heard").not.toBeNull();
+  });
+
+  // mutation: sed -i -e '/^    if (!this.mindsAuto \&\& this.mindsSetting === null) this.mindsAuto = /d' -e 's/^    this.mindsAuto = false;/    this.mindsAuto = this.ports.mindsAuto?.() === true;/' src/game/engine/engine-openworld.ts
+  // mutation: sed -i 's/^    if (!this.mindsAuto \&\& this.mindsSetting === null) this.mindsAuto = /    if (this.mindsSetting === null) this.mindsAuto = /' src/game/engine/engine-openworld.ts
+  it("when the Minds are on Auto and Auto says no for 30 frames (FX booting low), then yes, then no again, then the Minds go on at the first yes and stay on", () => {
+    const harness = hostWithMap();
+    let frames = 0;
+    harness.director["ports"].mindsAuto = () => frames >= 30 && frames < 60;
+    const told: boolean[] = [];
+    const frame = vi.spyOn(OpenWorldMinds.prototype, "frame").mockImplementation((_crowd, _gaze, on) => void told.push(on));
+    try {
+      for (; frames < 90; frames++) harness.frame();
+    } finally {
+      frame.mockRestore();
+    }
+    const firstOn = told.indexOf(true);
+    expect(firstOn, "control: the Minds were told on at some frame").toBeGreaterThan(0);
+    expect(told.slice(0, firstOn).every((on) => !on), "off before Auto first said yes").toBe(true);
+    expect(told.slice(firstOn).every((on) => on), `on from frame ${firstOn} to the last, through Auto's later no`).toBe(true);
+    expect(told.length - firstOn, "frames on").toBeGreaterThan(30);
   });
 
   it("when the map is not given, or the course is not up, then there is no crowd and no link", () => {
@@ -581,7 +603,7 @@ describe("given a look-at panel kept up four times a second", () => {
 
 describe("given the Auto camera asked for in the open world", () => {
   const camera = new THREE.PerspectiveCamera();
-  const NO_ORBIT: AutoOrbit = { held: () => false, aim() {}, orbit() {}, release() {} };
+  const NO_ORBIT: AutoOrbit = { held: () => false, aim() {}, orbit() {}, release() {}, lens: () => camera.fov };
   const NO_SOLIDS: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ: [] };
 
   it("when Auto is switched on, then it is on across the first frame and has no subject to frame yet, and when it is switched off the regular camera keeps the view", () => {
@@ -974,5 +996,32 @@ describe("given the open world's scenery share", () => {
   // mutation: sed -i 's/(desktop ? 1 : 0.6)/(desktop ? 1 : 1)/' src/game/engine/scenery-share.ts
   it("when the course is the open world, then the share is 1 on a desktop and 0.6 on a phone whatever the tier; a race keeps its tier's", () => {
     expect(`${sceneryShare(OPENWORLD_ID, "minimal", true)} ${sceneryShare(OPENWORLD_ID, "minimal", false)} ${sceneryShare("other", "minimal", false)}`).toBe("1 0.6 0.3");
+  });
+});
+
+describe("given the open world's director, a free person walking, and a car that meets a wall 4 m to her front right", () => {
+  // mutation: sed -i '/^    if (this.art !== null) this.art.gaze = this.gaze.gaze;/d' src/game/engine/engine-openworld.ts
+  it("when the hooked wall hit comes, then the gaze the crowd's art draws looks at the crash and her head turns toward it", () => {
+    const harness = hostWithMap();
+    const resident = shownOnTheHost(harness);
+    const poses = harness.crowd().poses;
+    const gaze = (harness.director["art"] as { gaze?: CrowdGaze | null }).gaze ?? null;
+    expect(gaze, "the art draws the director's gaze").not.toBeNull();
+    const crash = { x: 0, z: 0 };
+    // A crash turns a share of heads (by neuroticism): hit again, half a second apart, until hers turns.
+    for (let hit = 0; hit < 10 && gaze!.lookKind[resident] !== STIMULUS.crash; hit++) {
+      const yaw = poses.yaw[resident]!;
+      crash.x = poses.x[resident]! + 4 * Math.sin(yaw + 0.9);
+      crash.z = poses.z[resident]! + 4 * Math.cos(yaw + 0.9);
+      harness.listener!(15, crash.x, crash.z);
+      for (let frame = 0; frame < 0.6 / FRAME && gaze!.lookKind[resident] !== STIMULUS.crash; frame++) harness.frame();
+    }
+    expect(gaze!.lookKind[resident], "she looks at the crash").toBe(STIMULUS.crash);
+    for (let frame = 0; frame < 0.3 / FRAME; frame++) harness.frame();
+    const off = Math.atan2(crash.x - poses.x[resident]!, crash.z - poses.z[resident]!) - poses.yaw[resident]!;
+    const bearing = Math.atan2(Math.sin(off), Math.cos(off));
+    const turn = gaze!.headYaw[resident]! + gaze!.torsoTwist[resident]!;
+    expect(bearing, "control: the crash is off to her side").toBeGreaterThan(0.3);
+    expect(turn, "her head's turn toward it (rad)").toBeGreaterThan(0.3);
   });
 });

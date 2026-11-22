@@ -21,6 +21,8 @@ const LOOK_MAX = 34;
 const REACH_PER_SPEED = 0.8;
 const REACH_MIN = 8;
 const REACH_MAX = 24;
+/** A car slowed for a solid on its line still rolls this fast (m/s), so it can steer round it; a touch at a walking pace throws nobody. Tuned by feel. */
+const SOLID_CREEP = 3;
 /** A car this slow (m/s) that wants to stand still is held on the brake. */
 const STANDING_SPEED = 1;
 
@@ -57,7 +59,7 @@ export class PursuitDriver {
     out.steer = pursuitSteer(alpha, Math.min(leadDistance, clamp(speed * REACH_PER_SPEED, REACH_MIN, REACH_MAX)), speed, turnRate(PATROL_CLASS, speed, GROUND));
     const turnSpeed = arcSpeed(PATROL_CLASS, Math.max(4, leadDistance), Math.min(Math.abs(alpha), Math.PI / 2), GROUND);
     const stopSpeed = stopGap > 0 ? Math.sqrt(2 * CAR_STOP_DECEL * Math.max(0, distance - stopGap)) : Infinity;
-    const wanted = Math.min(turnSpeed, stopSpeed, maxSpeed, this.carLimit(self, others, targetId));
+    const wanted = Math.min(turnSpeed, stopSpeed, maxSpeed, this.carLimit(self, others, targetId), this.solidLimit(self, speed));
     const brake = brakeOver(this.pedals, self.id, speed - wanted);
     if (brake > 0) out.brake = brake;
     else out.throttle = Math.min(1, wanted / PATROL_CLASS.topSpeed);
@@ -82,6 +84,15 @@ export class PursuitDriver {
       limit = Math.min(limit, along + Math.sqrt(2 * CAR_AVOID_DECEL * Math.max(0, ahead - CAR_AVOID_GAP)));
     }
     return limit;
+  }
+
+  /** The speed (m/s) that stops short of the first solid on the line the car is going now: a bend round it (`openHeading`) is not taken at once, so a car at speed with a tree a few metres down its line brakes while it turns (a hothead had met a street tree at 19 m/s and thrown his driver). */
+  private solidLimit(self: AiCar, speed: number): number {
+    const obstacles = this.obstacles;
+    if (obstacles === null) return Infinity;
+    const look = clamp(speed * LOOK_PER_SPEED + LOOK_BASE, LOOK_MIN, LOOK_MAX);
+    const run = obstacles.run(self.x, self.z, self.yaw, look);
+    return run >= look ? Infinity : Math.max(SOLID_CREEP, Math.sqrt(2 * CAR_STOP_DECEL * run));
   }
 
   /** The heading nearest `want` whose way is clear of solids for the next stretch; the one with the longest clear run when none is, each radian of bend costing `AVOID_TURN_COST` m. */

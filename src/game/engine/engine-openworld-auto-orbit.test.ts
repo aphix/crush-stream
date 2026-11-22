@@ -40,6 +40,9 @@ function autoOver(scene: AutoScene): OpenWorldAuto {
   return auto;
 }
 
+/** The lens the view eases to (deg). */
+const LENS_DEG = 50;
+
 /** An orbit camera that notes what it is asked and whether the player holds the view. */
 class RecordedOrbit {
   holding = false;
@@ -59,6 +62,10 @@ class RecordedOrbit {
   }
 
   release(): void {}
+
+  lens(): number {
+    return LENS_DEG;
+  }
 }
 
 function recorded(): RecordedOrbit {
@@ -241,7 +248,7 @@ describe("given the Auto camera asked for the next and the previous subject on a
     return auto.cycle(dir, 0, 0);
   }
 
-  // mutation: sed -i 's/    while (into > 0 \&\& this.ringDistance\[into - 1\]! > distance) {/    while (false) {/' src/game/engine/engine-openworld-auto.ts
+  // mutation: sed -i 's/^      while (into > 0 \&\& .*) {$/      while (false) {/' src/game/engine/engine-openworld-auto.ts
   it("when E is pressed from nowhere, then the camera goes to the nearest and on outward, to a foot cop, a driver, a person, a patrol car and the ambulance, and round to the first again", () => {
     const scene = sceneOf(STREET);
     const auto = new OpenWorldAuto(scene.world, scene.sizes, SEED);
@@ -253,6 +260,27 @@ describe("given the Auto camera asked for the next and the previous subject on a
     }
     const expected = [...WALK, WALK[0]!].map((who) => `${who.kind}:${who.id}`);
     expect(visited.join(" "), "who the presses went to").toBe(expected.join(" "));
+  });
+
+  // mutation: sed -i 's/this.ringPeer\[into - 1\]! < peer || //' src/game/engine/engine-openworld-auto.ts
+  it("when E is pressed with Auto off in a room, then the camera goes first to the other player's car, the farthest, and then from the nearest outward; with Auto on it never goes to him", () => {
+    const scene = sceneOf({ ...STREET, cars: [...STREET.cars!, { x: 60, z: 0, speed: 5, peer: "Rook" }] });
+    const pinned = new OpenWorldAuto(scene.world, scene.sizes, SEED);
+    pinned.begin();
+    pinned.pin();
+    pressed(1, pinned);
+    expect(named(pinned), "the first press with Auto off").toBe(`${SUBJECT.driver}:3`);
+    expect(pinned.text()?.title, "his bubble names him").toBe("Rook");
+    pressed(1, pinned);
+    expect(named(pinned), "the second press").toBe(`${WALK[0]!.kind}:${WALK[0]!.id}`);
+    const auto = new OpenWorldAuto(scene.world, scene.sizes, SEED);
+    auto.begin();
+    const visited: string[] = [];
+    for (let press = 0; press < WALK.length + 1; press++) {
+      pressed(1, auto);
+      visited.push(named(auto));
+    }
+    expect(visited, "Auto on: the walk without him").not.toContain(`${SUBJECT.driver}:3`);
   });
 
   // mutation: sed -i 's/if (this.ringAge > RING_STALE_SECONDS ||/if (true ||/' src/game/engine/engine-openworld-auto.ts
@@ -298,6 +326,24 @@ describe("given the Auto camera asked for the next and the previous subject on a
     expect(named(auto), "the pick after the longest hold of a cut and far into the interruptions' time").toBe(picked);
     run(auto, camera, orbit, 4);
     expect(named(auto), "the subject once the hold is up").not.toBe(picked);
+  });
+
+  // mutation: sed -i 's/^    this.manualHold = Infinity;$/    this.manualHold = MANUAL_HOLD_SECONDS;/' src/game/engine/engine-openworld-auto.ts
+  it("when a subject is picked with Auto off (the pick held for good), then the camera stays on them past the manual hold and a drag still turns round them", () => {
+    const scene = sceneOf(STREET);
+    const auto = new OpenWorldAuto(scene.world, scene.sizes, SEED);
+    auto.begin();
+    auto.pin();
+    const camera = new THREE.PerspectiveCamera();
+    const orbit = recorded();
+    pressed(1, auto);
+    const picked = named(auto);
+    run(auto, camera, orbit, MANUAL_HOLD_S + 4);
+    expect(named(auto), "the pick long after the manual hold").toBe(picked);
+    orbit.holding = true;
+    run(auto, camera, orbit, 1);
+    expect(orbit.orbited, "frames the drag turned the view round them").toBeGreaterThan(0);
+    expect(named(auto), "the pick while the view is turned").toBe(picked);
   });
 
   // mutation: sed -i 's/tried < count; tried++/tried <= count; tried++/' src/game/engine/engine-openworld-auto.ts

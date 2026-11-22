@@ -20,6 +20,7 @@ import { placeNow } from "./civilian-leg.ts";
 import { markDirty, type CityState } from "./civilian-state.ts";
 import { carStandsAt } from "./society-cars.ts";
 import { isOutdoorPurpose } from "./society-venues.ts";
+import { LEG_PURPOSES } from "./resident-spine.ts";
 
 function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
@@ -35,10 +36,7 @@ export function crimePlaceOf(state: CityState, resident: number): number {
   return intAt(state, resident, RESIDENT_INT.crimeTick) === NEVER_TICK ? NO_PLACE : intAt(state, resident, RESIDENT_INT.crimePlace);
 }
 
-const CRIME_KIND_OF_PURPOSE = new Uint8Array(PURPOSE.fight + 1);
-CRIME_KIND_OF_PURPOSE[PURPOSE.shoplift] = CRIME_KIND.theft;
-CRIME_KIND_OF_PURPOSE[PURPOSE.mug] = CRIME_KIND.mugging;
-CRIME_KIND_OF_PURPOSE[PURPOSE.breakIn] = CRIME_KIND.breakIn;
+const CRIME_KIND_OF_PURPOSE = Uint8Array.from(LEG_PURPOSES, (row) => row.crime);
 
 /** The kind of crime a leg's purpose is for, `CRIME_KIND.none` when it is for none. */
 export function crimeKindOf(purpose: number): number {

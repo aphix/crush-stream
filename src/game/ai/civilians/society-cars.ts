@@ -4,19 +4,18 @@ import {
   DRIVE_MIN_METRES,
   FLAG,
   MAX_PATH_NODES,
-  NEED,
   NEVER_TICK,
   NO_INDEX,
   NO_PLACE,
-  PURPOSE,
   RESIDENT_INT,
   RESIDENT_INT_STRIDE,
   SPECIES,
 } from "./civilian-constants.ts";
 import { markDirty, type CityState } from "./civilian-state.ts";
+import { LEG_PURPOSES, flagsOf } from "./resident-spine.ts";
 
-/** Reasons that take a car: the commute, home, errands, meals, company, a coffee or a drink. The stories, the bus, crime, a fight and hiding go on foot. */
-const DRIVABLE_PURPOSES: readonly number[] = [NEED.rest, NEED.food, NEED.work, NEED.social, NEED.errand, PURPOSE.coffee, PURPOSE.drink];
+/** One byte per purpose, 1 for reasons that take a car: the commute, home, errands, meals, company, a coffee or a drink. The stories, the bus, crime, a fight and hiding go on foot. */
+const DRIVE_BY_PURPOSE = flagsOf(LEG_PURPOSES, (row) => row.drive);
 
 function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
@@ -35,10 +34,10 @@ function carIsFree(state: CityState, owner: number, tick: number): boolean {
   return intAt(state, owner, RESIDENT_INT.carTo) === NO_PLACE || tick >= intAt(state, owner, RESIDENT_INT.carParkTick);
 }
 
-/** Metres of the shortest walk (fear ignored) from one place's door to another's, or -1 when there is none. */
-export function walkMetres(state: CityState, from: number, to: number): number {
+/** Metres of the walk from one place's door to another's, or -1 when there is none: the shortest (fear ignored) unless `fear` weighed by `fearWeight` is given, the way a leg's walk is found (`planLeg`). */
+export function walkMetres(state: CityState, from: number, to: number, fear = state.noFear, fearWeight = 1): number {
   const { doorNode } = state.index;
-  const count = state.finder.find(doorNode[from]!, doorNode[to]!, state.noFear, 1, state.scratchPath, 0, MAX_PATH_NODES);
+  const count = state.finder.find(doorNode[from]!, doorNode[to]!, fear, fearWeight, state.scratchPath, 0, MAX_PATH_NODES);
   if (count === 0) return -1;
   const { nodeX, nodeZ } = state.map.graph;
   let metres = 0;
@@ -62,7 +61,7 @@ function carIsHandy(state: CityState, owner: number, current: number, tick: numb
 
 /** The owner of the car `resident` takes from `current` to a place `metres` away for `purpose` at `tick`, or none: their own, else a housemate's (the lowest numbered that is free and handy). Only long trips for the purposes that drive. */
 export function chooseCar(state: CityState, resident: number, current: number, purpose: number, metres: number, tick: number): number {
-  if (metres < DRIVE_MIN_METRES || !DRIVABLE_PURPOSES.includes(purpose)) return NO_PLACE;
+  if (metres < DRIVE_MIN_METRES || DRIVE_BY_PURPOSE[purpose] !== 1) return NO_PLACE;
   if ((intAt(state, resident, RESIDENT_INT.flags) & FLAG.hasCar) !== 0 && carIsHandy(state, resident, current, tick)) return resident;
   const home = intAt(state, resident, RESIDENT_INT.home);
   for (let other = 0; other < state.capacity; other++) {

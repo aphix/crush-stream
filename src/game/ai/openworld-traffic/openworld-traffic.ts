@@ -59,6 +59,8 @@ export class OpenWorldTraffic {
   private readonly listeners: RedLightListener[] = [];
   private readonly legKey = new Float64Array(RESIDENT_CAPACITY).fill(-1);
   private readonly candidates = new Int32Array(KERB_CANDIDATES);
+  /** Per resident, the place whose door her claim was made at (`claimFor`, a trip's end), so a fallback is judged by her own door; -1: a clip's space, the brain's own pick for her, never moved for another. */
+  private readonly claimPlace = new Int32Array(RESIDENT_CAPACITY).fill(-1);
   private readonly first: number;
   private readonly total: number;
   /** The ids of the patrol cruisers, `patrolFrom` up to `patrolEnd`. */
@@ -216,12 +218,15 @@ export class OpenWorldTraffic {
     const spot = spotAt(this.parkingSpots, x, z, yaw);
     if (spot < 0 || resident < 0 || resident >= RESIDENT_CAPACITY) return false;
     const own = residentSpot[resident]!;
+    // The player took her car: no car of hers stands anywhere (and `CARLESS` is no space to move a claim from).
+    if (own === CARLESS) return false;
     if (own === spot && this.carIdOf(resident) >= 0) return true;
     if (own !== spot && (own === -1 ? taken[spot] === 1 : !this.claimMovable(own, spot))) return false;
     if (this.movers.hasTripFor(resident)) return false;
     if (!this.kerb.bring(spot, resident, eyeX, eyeZ, CLIP_HOLD_SECONDS)) return false;
-    if (own !== spot && own !== -1) this.moveClaim(own, spot);
+    if (own !== spot && own !== -1) this.moveClaim(own, spot, resident);
     residentSpot[resident] = spot;
+    this.claimPlace[resident] = -1;
     taken[spot] = 1;
     return true;
   }
@@ -240,11 +245,16 @@ export class OpenWorldTraffic {
     return taken[spot] === 0 || this.holderOf(spot) >= 0;
   }
 
-  /** A claim moves from `own` to `spot` (`claimMovable`): a free space is taken and `own` freed, a space another resident's claim holds is swapped for `own`. */
-  private moveClaim(own: number, spot: number): void {
+  /** `resident`'s claim moves from `own` to `spot` (`claimMovable`): a free space is taken and `own` freed, a space another resident's claim holds is swapped for `own` (and the place it was claimed at). */
+  private moveClaim(own: number, spot: number, resident: number): void {
     const { residentSpot, taken } = this.context;
-    if (taken[spot] === 1) residentSpot[this.holderOf(spot)] = own;
-    else taken[own] = 0;
+    if (taken[spot] === 0) {
+      taken[own] = 0;
+      return;
+    }
+    const holder = this.holderOf(spot);
+    residentSpot[holder] = own;
+    this.claimPlace[holder] = this.claimPlace[resident]!;
   }
 
   /** The engine id of the pool car standing in resident `resident`'s space (a kerb car, else the mover parked for him), -1 when none does. */
@@ -448,6 +458,7 @@ export class OpenWorldTraffic {
       const to = this.spotFor(resident, feed.legs.toPlace[index]!, from);
       if (to < 0 || this.spawnDrivenCar(resident, from, to, { dueSeconds: due }) === null) continue;
       this.legKey[resident] = due;
+      this.claimPlace[resident] = feed.legs.toPlace[index]!;
     }
   }
 
@@ -469,8 +480,25 @@ export class OpenWorldTraffic {
     return nearestFreeSpot(this.parkingSpots, target.doorX, target.doorZ, taken);
   }
 
-  /** Claims the space `spotFor` finds for a resident's car; -1 when none is free. */
+  /**
+   * Claims the space `spotFor` finds for a resident's car at place `place`; -1 when none is free. The brain draws her at her own pick (`residentSpotAt`), so where another resident's claim holds that space only as
+   * his fallback (it is not his pick by the door of the place he claimed it at, `claimPlace`) and no car stands there, his claim moves on (`spotFor` at his place, without it) and hers takes it: nothing visibly moves.
+   */
   private claimFor(resident: number, place: number): number {
+    const target = this.places[place];
+    const { residentSpot, standing, taken } = this.context;
+    this.claimPlace[resident] = place;
+    const pick = target === undefined ? -1 : residentSpotAt(this.parkingSpots, target.doorX, target.doorZ, resident);
+    const holder = pick >= 0 && taken[pick] === 1 && standing[pick] === STANDING.none ? this.holderOf(pick) : -1;
+    const holderPlace = holder >= 0 ? this.places[this.claimPlace[holder]!] : undefined;
+    if (holderPlace !== undefined && residentSpotAt(this.parkingSpots, holderPlace.doorX, holderPlace.doorZ, holder) !== pick) {
+      const elsewhere = this.spotFor(holder, this.claimPlace[holder]!, pick);
+      if (elsewhere >= 0) {
+        residentSpot[holder] = elsewhere;
+        taken[elsewhere] = 1;
+        return pick;
+      }
+    }
     const spot = this.spotFor(resident, place, -1);
     if (spot >= 0) this.context.taken[spot] = 1;
     return spot;

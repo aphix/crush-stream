@@ -1,6 +1,6 @@
 import type { LineOfSight } from "../ai/openworld-crime/offence-source.ts";
-import { LOOK_RADIUS, LOOK_REACH } from "../ai/civilians/civilian-crowd-constants.ts";
-import { chestMet, placeMet, type LookRay, type LookText, type Meeting } from "../ai/civilians/civilian-look.ts";
+import { LOOK_REACH } from "../ai/civilians/civilian-crowd-constants.ts";
+import { placeMet, residentMet, type LookRay, type LookText, type Meeting } from "../ai/civilians/civilian-look.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { CrowdGaze, STIMULUS } from "../present/civilian-gaze.ts";
 import { FACE_HEIGHT_M, KIND_RANGE } from "../present/civilian-gaze-constants.ts";
@@ -32,7 +32,6 @@ export class OpenWorldGaze {
   private readonly ports: GazePorts;
   private readonly senses = blankSenses();
   private readonly foot = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
-  private readonly met: Meeting = { index: -1, along: 0 };
   private readonly placeMeeting: Meeting = { index: -1, along: 0 };
   private sinceCrash = CRASH_PULSE_GAP_S;
 
@@ -84,7 +83,7 @@ export class OpenWorldGaze {
   /** The look panel's `text` with a last line saying what the person the ray meets is looking at (when the panel is about a person). */
   describe(text: LookText | null, poses: CrowdPoses, map: OpenWorldMap, ray: LookRay): LookText | null {
     if (text === null) return null;
-    const resident = chestMet(poses, poses.count, null, ray, LOOK_RADIUS, LOOK_REACH, this.met);
+    const resident = residentMet(poses, ray);
     if (resident.index < 0 || resident.along > placeMet(map, ray, LOOK_REACH, this.placeMeeting).along) return text;
     return { title: text.title, lines: [...text.lines, this.gaze.describe(resident.index)] };
   }

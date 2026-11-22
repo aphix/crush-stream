@@ -51,6 +51,7 @@ function autoOver(crowd: CivilianCrowd | null, fleet: Fleet = { cars: [], reside
     ambulanceCar: () => fleet.ambulance.car,
     ambulanceState: () => fleet.ambulance.state,
     isPlayerCar: (carIndex) => fleet.yours.has(carIndex),
+    peerName: () => null,
   };
   const auto = new OpenWorldAuto(world, { ...SIZES, residents: crowd?.poses.count ?? SIZES.residents }, SEED);
   auto.begin();
@@ -194,7 +195,7 @@ function framed(sight: Sight): { eye: THREE.Vector3; subject: THREE.Vector3; loo
   const camera = new THREE.PerspectiveCamera(50, 1.6, 0.1, 400);
   const cam = new AutoFollowCam();
   cam.cut(0);
-  cam.update(camera, SHOT, sight, FRAME_S);
+  cam.update(camera, SHOT, sight, FRAME_S, camera.fov);
   const subject = new THREE.Vector3(SHOT.x, SHOT.y + SHOT.aimUp, SHOT.z);
   const toSubject = subject.clone().sub(camera.position).normalize();
   return { eye: camera.position.clone(), subject, looksAt: camera.getWorldDirection(new THREE.Vector3()).dot(toSubject) };
@@ -213,5 +214,23 @@ describe("given the Auto camera framing a person facing +z on open ground", () =
     const { eye } = framed({ ...OPEN, occ: [WALL] });
     expect(eye.distanceTo(RIG_EYE), "how far the wall moved the eye (m)").toBeGreaterThan(MOVED_BY_WALL_M);
     expect(inside(WALL, eye.x, eye.y, eye.z, 0), "the eye inside the wall").toBe(false);
+  });
+});
+
+/** The hood view's lens the Auto camera can take the view from, and the scene's it eases to (deg). */
+const HOOD_FOV = 72;
+const SCENE_FOV = 50;
+
+describe("given the Auto camera taking the view from the hood view's wide lens", () => {
+  // mutation: sed -i '/^    easeFov(camera, lens, dt);$/d' src/game/present/openworld-auto-cam.ts
+  it("when it cuts to a person, then the lens eases toward the scene's over the next second, not at once and not never", () => {
+    const camera = new THREE.PerspectiveCamera(HOOD_FOV, 1.6, 0.1, 400);
+    const cam = new AutoFollowCam();
+    cam.cut(0);
+    cam.update(camera, SHOT, OPEN, FRAME_S, SCENE_FOV);
+    expect(camera.fov, "the lens the first frame after the cut (deg)").toBeLessThan(HOOD_FOV);
+    expect(camera.fov, "the lens the first frame after the cut (deg)").toBeGreaterThan(SCENE_FOV + 10);
+    for (let f = 0; f < 2 / FRAME_S; f++) cam.update(camera, SHOT, OPEN, FRAME_S, SCENE_FOV);
+    expect(camera.fov, "the lens two seconds on (deg)").toBeLessThan(SCENE_FOV + 1);
   });
 });

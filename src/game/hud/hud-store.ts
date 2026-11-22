@@ -158,6 +158,8 @@ export type CrashHudState = {
   hatching: number | null;
   /** Rim light on people (0-1 strength); null = off. */
   rimLight: number | null;
+  /** Open world residents' thoughts refined by Needle 2 in a worker (a 13.7 MB download on first use); null = Auto (on for a desktop at FX high or ultra). */
+  minds: boolean | null;
   /** Material classes' strength (0 = the old uniform reflections and no grain, 1 = the default look, up to 2); scales every class's reflection cut and grain. */
   materialStrength: number;
   /** Car contour smoothing (0 = off, 0.25 = the default, one relax pass; 1 = three, 2 = six): how round a car's facets are drawn, intact or crushed; creases and panel edges stay. */
@@ -329,6 +331,7 @@ export const INITIAL_HUD: CrashHudState = {
   halftone: null,
   hatching: null,
   rimLight: null,
+  minds: null,
   materialStrength: 1,
   contourStrength: DEFAULT_CONTOUR_STRENGTH,
   candyStrength: 1,

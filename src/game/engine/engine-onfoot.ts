@@ -12,24 +12,8 @@ import { OnFootFlow, type OnFootRefusal, type OnFootSense, type OnFootStep } fro
 import type { FootHud } from "../hud/hud-store.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { RUN_SPEED, SPRINT_SPEED, WALK_SPEED } from "../present/walker-locomotion.ts";
-import {
-  BLEND_SECONDS,
-  CAMERA_RADIUS,
-  FIRST_PERSON_RADIUS,
-  FOLLOW_PITCH,
-  FOLLOW_RADIUS,
-  FollowFocus,
-  followFov,
-  LOOK_AHEAD,
-  type OnFootView,
-  SHOULDER_BOOM,
-  SHOULDER_NEAREST,
-  SHOULDER_PITCH,
-  type Sweep,
-  VIEW_PITCH,
-  WalkerView,
-} from "../present/walker-camera.ts";
-import { smoothstep } from "../present/walker-math.ts";
+import type { OnFootView } from "../present/walker-camera.ts";
+import { OnFootCamera } from "./onfoot-camera.ts";
 import type { Sight } from "../present/spectate-cam.ts";
 import { doorBlocked, doorInReach, doorSpot, inPlay } from "./onfoot-doors.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
@@ -103,8 +87,6 @@ const CREEP_SPEED = 0.8;
 const WALK_STOP = 0.01;
 /** The keys' direction eases to a new one over about this long (s), so a corner is turned, not snapped. */
 const INTENT_SECONDS = 0.08;
-/** While he climbs into his car the camera draws back by this share of its distance. */
-const ENTER_PULL_BACK = 1.35;
 /** A car that has just run him down does not do it again for this long (s): the launch carries him through its footprint. */
 const STRIKE_COOLDOWN = 0.6;
 /** Seconds a refusal stays on the prompt. */
@@ -115,10 +97,6 @@ const LED_REACH = 0.5;
 const DOOR_OPEN = 1.1;
 const DOOR_RATE = 3.5;
 const DOOR_CLOSE_DISTANCE = 4;
-/** Aiming: the shoulder boom (m), and how far the point it looks from moves to the camera's right (level) and up (m). */
-const AIM_BOOM = 1.6;
-const AIM_SIDE = 0.45;
-const AIM_UP = 0.15;
 
 const REFUSAL_TEXT: Record<OnFootRefusal, string> = {
   tooFast: "Stop the car first",
@@ -130,10 +108,6 @@ const REFUSAL_TEXT: Record<OnFootRefusal, string> = {
 const _torso = new THREE.Vector3();
 const _spot = new THREE.Vector3();
 const _forward = new THREE.Vector3();
-const _aim = new THREE.Vector3();
-/** The camera's view while it blends in from the car's (`BLEND_SECONDS`). */
-const _blendEye = new THREE.Vector3();
-const _blendAim = new THREE.Vector3();
 const _aimRay = new LookRay();
 const _shotRay = new LookRay();
 
@@ -175,22 +149,7 @@ export class OnFootDirector {
   private readonly sense: OnFootSense = { car: -1, speed: 0, doorBlocked: false };
   private readonly speed = new Float64Array(1);
   private readonly strike = blankStrike();
-  private framed = false;
-  /** The view he has chosen: View and the wheel's (or a pinch's) last notch change it, and nothing else does (`keepZoom`). */
-  private mode: OnFootView = "shoulder";
-  /** The zoom count (`ChaseCamera.zoomedTimes`) and the orbit's distance as the last frame left them: a distance that moved without a zoom is not his. */
-  private zoomsSeen = 0;
-  private zoomKept = 0;
-  private blendLeft = 0;
-  private readonly follow = new FollowFocus();
-  private readonly walkerView = new WalkerView();
-  private readonly sweep: Sweep;
-  /** The orbit as the car left it, given back when he sits down again: its zoom range and distance, its pitch range and pitch. */
-  private carMinRadius = 0;
-  private carRadius = 0;
-  private carPitch = 0;
-  private carPitchLow = 0;
-  private carPitchHigh = 0;
+  private readonly cam: OnFootCamera;
   private refusal: OnFootRefusal | null = null;
   private refusalLeft = 0;
   /** Whether his car's door is in reach this frame, for the prompt. */
@@ -209,12 +168,12 @@ export class OnFootDirector {
 
   constructor(host: OnFootHost) {
     this.host = host;
-    this.sweep = (x, y, z, dx, dy, dz, length) => host.ragdolls.sightClear(x, y, z, dx, dy, dz, length, CAMERA_RADIUS);
+    this.cam = new OnFootCamera(host);
   }
 
-  /** The view on foot: his own eyes once the wheel or View has brought the orbit inside the nearest shoulder camera, else over his shoulder. A drag, a click and every other camera's leavings never change it. */
+  /** The view on foot (`OnFootCamera.view`): a drag, a click and every other camera's leavings never change it. */
   get footView(): OnFootView {
-    return this.framed ? this.mode : "shoulder";
+    return this.cam.view;
   }
 
   /** On foot in the open world the reset control (R, D-pad down, Respawn; a tap or a hold, as at the wheel) is his: back in a fresh car (`resetIntoCar`). */
@@ -283,7 +242,7 @@ export class OnFootDirector {
     if (ragdolls.ejectWalker(e, this.host.cars()) < 0) return false;
     this.flow.thrownOut(e.car);
     seat.esc();
-    this.framed = false;
+    this.cam.unframe();
     this.refusal = null;
     return true;
   }
@@ -329,15 +288,9 @@ export class OnFootDirector {
     seat.mode = "drive";
   }
 
-  /** View (V, T, C, the pad's B, the HUD's camera) on foot: over the shoulder to his eyes and back. Nothing while he climbs in or out. */
+  /** View (V, T, C, the pad's B, the HUD's camera) on foot: follow, over his shoulder, his eyes, and round. Nothing while he climbs in or out. */
   cycleView(): void {
-    if (this.flow.phase !== "onFoot" || !this.framed) return;
-    const { view } = this.host;
-    const next: OnFootView = this.footView === "first" ? "shoulder" : "first";
-    const pitch = Math.max(VIEW_PITCH[next].low, Math.min(VIEW_PITCH[next].high, view.orbitPitch));
-    this.mode = next;
-    view.easeOrbit(next === "first" ? FIRST_PERSON_RADIUS : SHOULDER_BOOM, pitch, 1);
-    this.zoomKept = view.orbitRadius;
+    if (this.flow.phase === "onFoot") this.cam.cycle();
   }
 
   get active(): boolean {
@@ -448,7 +401,7 @@ export class OnFootDirector {
       return;
     }
     seat.esc();
-    this.framed = false;
+    this.cam.unframe();
     this.openDoor(this.flow.car);
   }
 
@@ -575,15 +528,20 @@ export class OnFootDirector {
     return CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) * Math.min(1, reach);
   }
 
-  /** The stick and keys, relative to the camera, into the walker's heading and speed. */
+  /**
+   * The stick and keys, relative to the view, into the walker's heading and speed. The view's way is the orbit's yaw (the eye stands at (sin, cos) of it behind
+   * him), not the drawn camera's position: that eases in after the climb out, so a held direction read from it would curve with the blend.
+   */
   private walk(wallDt: number): void {
-    const { camera, view, ragdolls, keys, pad, touch } = this.host;
+    const { view, ragdolls, keys, pad, touch } = this.host;
     const walker = ragdolls.walker;
     const intent = readWalkIntent(keys, pad, touch, this.intent, this.armed());
     const reach = hypot2(intent.forward, intent.strafe);
+    const ahead = -detSin(view.orbitAngle);
+    const side = -detCos(view.orbitAngle);
     if (this.arms.aiming) {
       // Aiming: he faces where the camera looks and walks forward only, at no more than a walk.
-      walker.heading = detAtan2(view.look.x - camera.position.x, view.look.z - camera.position.z);
+      walker.heading = detAtan2(ahead, side);
       walker.command = intent.forward > 0.5 ? Math.min(this.pace(intent, reach), WALK_SPEED) : 0;
       if (reach >= WALK_STOP) walker.ask();
       this.intentSeeded = false;
@@ -603,11 +561,6 @@ export class OnFootDirector {
       this.smoothAhead += (intent.forward - this.smoothAhead) * ease;
       this.smoothSide += (intent.strafe - this.smoothSide) * ease;
     }
-    let ahead = view.look.x - camera.position.x;
-    let side = view.look.z - camera.position.z;
-    const along = hypot2(ahead, side) || 1;
-    ahead /= along;
-    side /= along;
     const x = ahead * this.smoothAhead - side * this.smoothSide;
     const z = side * this.smoothAhead + ahead * this.smoothSide;
     walker.heading = detAtan2(x, z);
@@ -635,123 +588,18 @@ export class OnFootDirector {
     this.reach = false;
   }
 
-  /**
-   * The camera, with the same drag, stick, mouse look and wheel as everywhere: over his right shoulder, its boom pulled in short of every solid of the
-   * dummies' world it would pass through on the way out from his head (walls, a building's streamed boxes, the facades, cars), coming back behind
-   * him after a pause in the look; or, once View or the wheel brings it inside the nearest boom, through his eyes, his head and torso not drawn to it
-   * (and not when a pulled-in boom puts it in his head either). Taking it over from the car blends over `BLEND_SECONDS`; while he climbs back in it draws
-   * back round the car on the orbit. True while it is his.
-   */
+  /** The camera on him (`OnFootCamera`), or drawing back round his car while he climbs in. True while it is his. */
   aim(wallDt: number): boolean {
     if (!this.flow.active || !this.host.ragdolls.walkerTorso(_torso)) return false;
-    const { view, camera, ragdolls } = this.host;
-    const walker = ragdolls.walker;
-    if (!this.framed) this.beginFollow();
-    if (this.flow.phase === "entering") {
-      this.drawBack(wallDt);
-      return true;
-    }
-    this.follow.follow(wallDt, _torso.x, _torso.y, _torso.z, walker.loco.speed);
-    this.keepZoom();
-    const first = this.footView === "first" && walker.state === "stand";
-    const range = VIEW_PITCH[first ? "first" : "shoulder"];
-    view.pitchLow = range.low;
-    view.pitchHigh = range.high;
-    view.look.set(this.follow.point[0]!, this.follow.point[1]!, this.follow.point[2]!);
-    if (!first) view.turnOrbit(this.follow.recenter(wallDt, view.orbitAngle, walker.facing, walker.loco.speed, view.lookingAround));
-    view.setLens(followFov(camera.aspect), false);
-    // The orbit takes the stick, the drag and the mouse look; the eye it places is this one's to replace.
-    view.orbit(wallDt, 0, false, null);
-    const pitch = Math.max(range.low, Math.min(range.high, view.orbitPitch));
-    const sight = this.walkerView;
-    if (first) sight.first(_torso.x, _torso.y, _torso.z, view.orbitAngle, pitch, this.sweep, wallDt);
-    else if (this.arms.aiming) sight.shoulder(_torso.x, _torso.y, _torso.z, this.follow.point[0]! + detCos(view.orbitAngle) * AIM_SIDE, this.follow.point[1]! + AIM_UP, this.follow.point[2]! - detSin(view.orbitAngle) * AIM_SIDE, view.orbitAngle, pitch, AIM_BOOM, this.sweep, wallDt);
-    else sight.shoulder(_torso.x, _torso.y, _torso.z, this.follow.point[0]!, this.follow.point[1]!, this.follow.point[2]!, view.orbitAngle, pitch, view.orbitRadius, this.sweep, wallDt);
-    camera.position.set(sight.eye[0]!, sight.eye[1]!, sight.eye[2]!);
-    _aim.set(sight.eye[0]! + sight.ahead[0]! * LOOK_AHEAD, sight.eye[1]! + sight.ahead[1]! * LOOK_AHEAD, sight.eye[2]! + sight.ahead[2]! * LOOK_AHEAD);
-    view.look.copy(_aim);
-    this.blendLeft = Math.max(0, this.blendLeft - wallDt);
-    if (this.blendLeft > 0) {
-      const share = smoothstep(1 - this.blendLeft / BLEND_SECONDS);
-      camera.position.lerpVectors(_blendEye, camera.position, share);
-      _aim.lerpVectors(_blendAim, _aim, share);
-    }
-    camera.lookAt(_aim);
-    view.pos.copy(camera.position);
-    ragdolls.showWalkerHead(!sight.inHead || this.blendLeft > 0);
+    if (this.flow.phase === "entering") this.cam.drawBack(wallDt, _torso, this.host.cars()[this.flow.car]);
+    else this.cam.aim(wallDt, _torso, this.arms.aiming);
     return true;
   }
 
-  /**
-   * The zoom is his: the wheel and a pinch set the view (inside the nearest shoulder camera is his own eyes), View sets it, and nothing else may. A distance the orbit's
-   * pose moved to without a zoom (a hold on the view another camera left, an eased pose) is put back, so no click or drag can put him in first person.
-   */
-  private keepZoom(): void {
-    const { view } = this.host;
-    if (view.zoomedTimes !== this.zoomsSeen) {
-      this.zoomsSeen = view.zoomedTimes;
-      this.mode = view.orbitRadius < SHOULDER_NEAREST ? "first" : "shoulder";
-    } else if (view.orbitRadius !== this.zoomKept) {
-      view.easeOrbit(this.zoomKept, view.orbitPitch, 1);
-    }
-    this.zoomKept = view.orbitRadius;
-  }
-
-  /** While he climbs in: the orbit's focus moves to the car and the camera draws back round it, his head in view again. */
-  private drawBack(wallDt: number): void {
-    const { view, ragdolls } = this.host;
-    const walker = ragdolls.walker;
-    const car = this.host.cars()[this.flow.car];
-    if (car) _torso.set(car.group.position.x, _torso.y, car.group.position.z);
-    this.follow.follow(wallDt, _torso.x, _torso.y, _torso.z, walker.loco.speed);
-    view.look.set(this.follow.point[0]!, this.follow.point[1]!, this.follow.point[2]!);
-    view.turnOrbit(this.follow.recenter(wallDt, view.orbitAngle, walker.facing, walker.loco.speed, view.lookingAround));
-    view.easeOrbit(FOLLOW_RADIUS * ENTER_PULL_BACK, FOLLOW_PITCH, 1 - Math.exp((-3 * wallDt) / BLEND_SECONDS));
-    view.setLens(null, false);
-    view.orbit(wallDt, 0, true, this.host.sight());
-    ragdolls.showWalkerHead(true);
-  }
-
-  /**
-   * He has just got out: the follow starts on him, the camera's view as the car left it is where the blend starts, and the orbit (its pose adopted
-   * from the car's camera) takes the shoulder camera's boom and pitch and the walker's zoom range; the car's are kept for when he sits down again.
-   */
-  private beginFollow(): void {
-    const { view, camera } = this.host;
-    this.framed = true;
-    this.blendLeft = BLEND_SECONDS;
-    this.follow.seed(_torso.x, _torso.y, _torso.z);
-    this.walkerView.reset();
-    _blendEye.copy(camera.position);
-    camera.getWorldDirection(_forward);
-    _blendAim.copy(camera.position).addScaledVector(_forward, LOOK_AHEAD);
-    this.carMinRadius = view.minRadius;
-    this.carRadius = view.orbitRadius;
-    this.carPitch = view.orbitPitch;
-    this.carPitchLow = view.pitchLow;
-    this.carPitchHigh = view.pitchHigh;
-    view.look.set(this.follow.point[0]!, this.follow.point[1]!, this.follow.point[2]!);
-    view.orbit(0, 0, false, null);
-    view.minRadius = FIRST_PERSON_RADIUS;
-    view.pitchLow = VIEW_PITCH.shoulder.low;
-    view.pitchHigh = VIEW_PITCH.shoulder.high;
-    view.easeOrbit(SHOULDER_BOOM, SHOULDER_PITCH, 1);
-    this.mode = "shoulder";
-    this.zoomsSeen = view.zoomedTimes;
-    this.zoomKept = view.orbitRadius;
-  }
-
-  /** The trip's camera is over: the car's zoom and pitch range and its orbit back as they were, his head drawn again. */
+  /** The trip's camera is over: the car's view back, his head drawn again. */
   private endView(): void {
     this.intentSeeded = false;
-    if (!this.framed) return;
-    const { view, ragdolls } = this.host;
-    this.framed = false;
-    view.minRadius = this.carMinRadius;
-    view.pitchLow = this.carPitchLow;
-    view.pitchHigh = this.carPitchHigh;
-    view.easeOrbit(this.carRadius, this.carPitch, 1);
-    ragdolls.showWalkerHead(true);
+    this.cam.end();
   }
 
   /** The HUD's read of the trip, or null where the control does nothing: the scene does not offer it, or he neither sits at a wheel he may leave nor is out. */

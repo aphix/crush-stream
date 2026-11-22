@@ -48,6 +48,7 @@ import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { RayNearest } from "./ray-nearest.ts";
 import { type AutoOrbit, autoOrbitOf } from "./engine-openworld-auto.ts";
 import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
 import { TrafficLightArt } from "../present/traffic-lights.ts";
@@ -78,7 +79,8 @@ import type { CrowdLink } from "../net/net-ports.ts";
 import { TetherDirector } from "./engine-tether.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
-import { ChaseCamera, centroid, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
+import { ChaseCamera, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
+import { centroid } from "../present/orbit-shots.ts";
 import { blankFreeInput, sceneExtent } from "../present/free-cam.ts";
 import { MINIGAME_AIM_LEAD } from "../present/ride-cam.ts";
 import { MINIGAME_MODE, THROW_BOOST } from "../scenes/minigame-constants.ts";
@@ -128,9 +130,9 @@ const _gunRest = new THREE.Vector3();
 const GUN_DOWN = new THREE.Vector3(0, -1, 0);
 const _bn = new THREE.Vector3();
 const _bp = new THREE.Vector3();
-/** The live cars' groups and the raycaster's hits for a bullet's car pick (`pickCar`): refilled each shot, so a shot allocates no array of its own. */
+/** The live cars' groups and the nearest hit for a bullet's car pick (`pickCar`): refilled each shot, so a shot allocates nothing of its own. */
 const _carGroups: THREE.Object3D[] = [];
-const _carHits: THREE.Intersection[] = [];
+const _carHit = new RayNearest();
 /** No cars: the showcase's set outside its scene. */
 const NO_CARS: readonly DeformableCar[] = [];
 const NO_SOLIDS: readonly Occluder[] = [];
@@ -473,9 +475,11 @@ export class CrashEngine extends EngineGarage {
       isClient: () => this.net.client,
       inRoom: () => this.net.role !== "off",
       seed: () => this.sceneSeed,
+      mindsAuto: () => this.mindsAuto(),
       tier: () => (this.deviceClass !== "desktop" ? POPULATION_TIER.phone : this.cine.tier === "ultra" ? POPULATION_TIER.ultra : POPULATION_TIER.desktop),
       cars: () => this.live(),
-      ownCar: () => this.live()[this.race.self] ?? null,
+      peerName: (carIndex) => (this.race.racers[carIndex]?.kind === "remote" ? this.race.racers[carIndex]!.name : null),
+      ownCar: () => this.live()[this.drivenCar()] ?? null,
       foot: (out) => {
         if (!this.ragdolls.torso(WALKER_SLOT, _v, _footVelocity)) return false;
         out.x = _v.x;
@@ -961,27 +965,17 @@ export class CrashEngine extends EngineGarage {
     this.openWorld.shotFired();
   }
 
-  /** The first dummy of the pool, not his own walker, the ray meets within `range` m. */
+  /** The first dummy of the pool, not his own walker, the ray meets within `range` m (`DummyMesh.nearestHit`: what the raycaster would sort first, with no hit list). */
   private pickDoll(ray: LookRay, range: number, out: DollPick): void {
     out.slot = -1;
     out.along = Infinity;
+    const mesh = this.ragdolls.pickMesh;
+    if (!mesh.layers.test(this.raycaster.layers)) return;
     this.raycaster.set(_p.set(ray.eyeX, ray.eyeY, ray.eyeZ), _n.set(ray.dirX, ray.dirY, ray.dirZ));
-    this.raycaster.far = range;
-    const hits = this.raycaster.intersectObject(this.ragdolls.pickMesh, false);
-    // The raycaster is shared with the car pick and the showcase, which never set `far`.
-    this.raycaster.far = Infinity;
-    for (const hit of hits) {
-      if (hit.instanceId === undefined || hit.instanceId === WALKER_SLOT) continue;
-      out.slot = hit.instanceId;
-      out.x = hit.point.x;
-      out.y = hit.point.y;
-      out.z = hit.point.z;
-      out.along = hit.distance;
-      return;
-    }
+    mesh.nearestHit(this.raycaster.ray, this.raycaster.near, range, WALKER_SLOT, out);
   }
 
-  /** The first live car the ray meets within `range` m, and the glass pane hit (null: the body). */
+  /** The first live car the ray meets within `range` m, and the glass pane hit (null: the body): the hit three's raycaster sorts first (`RayNearest`). */
   private pickCar(ray: LookRay, range: number, out: CarPick): void {
     out.car = -1;
     out.along = Infinity;
@@ -991,26 +985,22 @@ export class CrashEngine extends EngineGarage {
     const cars = this.live();
     _carGroups.length = cars.length;
     for (let at = 0; at < cars.length; at++) _carGroups[at] = cars[at]!.group;
-    _carHits.length = 0;
-    this.raycaster.intersectObjects(_carGroups, true, _carHits);
+    _carHit.find(this.raycaster, _carGroups);
     this.raycaster.far = Infinity;
-    for (let h = 0; h < _carHits.length && out.car < 0; h++) {
-      const hit = _carHits[h]!;
-      for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
-        const index: unknown = o.userData.carIndex;
-        if (typeof index !== "number" || index < 0 || index >= this.carCount) continue;
-        out.car = index;
-        out.x = hit.point.x;
-        out.y = hit.point.y;
-        out.z = hit.point.z;
-        out.along = hit.distance;
-        const panes = cars[index]!.glassPanes;
-        for (let at = 0; at < panes.length && out.pane === null; at++) if (panes[at]!.mesh === hit.object) out.pane = panes[at]!.name;
-        break;
-      }
+    for (let o: THREE.Object3D | null = _carHit.object; o; o = o.parent) {
+      const index: unknown = o.userData.carIndex;
+      if (typeof index !== "number" || index < 0 || index >= this.carCount) continue;
+      out.car = index;
+      out.x = _carHit.point.x;
+      out.y = _carHit.point.y;
+      out.z = _carHit.point.z;
+      out.along = _carHit.distance;
+      const panes = cars[index]!.glassPanes;
+      for (let at = 0; at < panes.length && out.pane === null; at++) if (panes[at]!.mesh === _carHit.object) out.pane = panes[at]!.name;
+      break;
     }
-    // Hits hold meshes: let them go until the next shot.
-    _carHits.length = 0;
+    // The hit holds a mesh: let it go until the next shot.
+    _carHit.release();
   }
 
   /** A shot strikes the dummy in pool slot `slot` at (x, y, z) along the ray, as a showcase click strikes one. */
@@ -1236,6 +1226,7 @@ export class CrashEngine extends EngineGarage {
     lapPart(PART.rest);
     this.updateCamera(wallDt);
     lapPart(PART.camera);
+    this.openWorld.mindsSetting = this.minds;
     this.openWorld.frame(wallDt);
     this.tether.frame(wallDt);
     lapPart(PART.scenery);
@@ -1626,7 +1617,8 @@ export class CrashEngine extends EngineGarage {
       this.openWorld.setAuto(false);
       return;
     }
-    if (this.showOpenWorld && this.openWorld.aimAuto(this.camera, this.chaseSight(true), wallDt, (this.autoOrbitOfView ??= autoOrbitOf(this.view)))) {
+    // The chase sight is built only where Auto frames: driving, `frameDrive` builds the frame's one.
+    if (this.showOpenWorld && this.openWorld.autoOn && this.openWorld.aimAuto(this.camera, this.chaseSight(true), wallDt, (this.autoOrbitOfView ??= autoOrbitOf(this.view)))) {
       this.view.setLens(null, false);
       this.view.pos.copy(this.camera.position);
       return;

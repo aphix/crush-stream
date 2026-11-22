@@ -20,6 +20,7 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     seed: () => 0,
     tier: () => 0,
     cars: () => [],
+    peerName: () => null,
     ownCar: () => null,
     foot: () => false,
     now: () => 0,

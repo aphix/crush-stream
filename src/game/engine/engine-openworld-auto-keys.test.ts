@@ -130,6 +130,34 @@ describe("given the real engine in the open world with the Auto camera on, the p
     expect(seat.mode, "and is still at the wheel").toBe("drive");
   });
 
+  // mutation: sed -i 's/    if (this.auto === null) return false;/    if (this.auto === null || !this.autoWanted) return false;/' src/game/engine/engine-openworld.ts
+  it("when Auto is off and E is pressed, then the camera goes to somebody to spectate, Q and a drag work on them as with Auto on, and the car's seat stays at the wheel", () => {
+    world().setAuto(false);
+    rig.run(0.2);
+    const seat = rig.engine["seat"];
+    const carIndex = seat.carIndex;
+    rig.press("KeyE");
+    expect(world().autoOn, "E with Auto off spectates").toBe(true);
+    const first = subjectText();
+    expect(auto().subject, "somebody is on screen").not.toBeNull();
+    rig.press("KeyE");
+    rig.press("KeyQ");
+    expect(subjectText(), "Q undoes E").toBe(first);
+    rig.run(FRAMED_S);
+    const before = bearing();
+    pointer("pointerdown", 300, 300);
+    pointer("pointermove", 300 - DRAG_PX, 300);
+    let widest = 0;
+    for (let frame = 0; frame < MOUSE_LOOK_FRAMES; frame++) {
+      rig.run(MOUSE_LOOK_FRAME_S);
+      widest = Math.max(widest, turnBetween(before, bearing()));
+    }
+    pointer("pointerup", 300 - DRAG_PX, 300);
+    expect(widest, "the widest the drag turned the camera round them (rad)").toBeGreaterThan(TURNED_RAD);
+    expect(seat.carIndex, "the driven car's seat did not step to another car").toBe(carIndex);
+    expect(seat.mode, "and is still at the wheel").toBe("drive");
+  });
+
   // mutation: sed -i 's/const WALKED: readonly SubjectKind\[\] = \[SUBJECT.civilian, SUBJECT.cop, SUBJECT.driver\];/const WALKED: readonly SubjectKind[] = [SUBJECT.civilian];/' src/game/engine/engine-openworld-auto.ts
   it("when E is pressed once round everybody the world shows, then it has stopped on people and on foot cops", () => {
     cutTo(SUBJECT.civilian, shown(SUBJECT.civilian));

@@ -60,6 +60,8 @@ const LONGEST_FRAME_S = 0.1;
 /** A target nearer than this (m) across the ground keeps her head where it is: the angle to it flips with a hair's move. */
 const AIM_HELD_M = 0.3;
 const TWO_PI = 2 * Math.PI;
+/** The look panel's line per `STIMULUS` kind: "Looking ahead", "Looking around", else "Looking at <what>". */
+const LOOK_LINES = LOOK_WORDS.map((word, kind) => (kind === STIMULUS.none || kind === STIMULUS.glance ? `Looking ${word}` : `Looking at ${word}`));
 /** Salts for a pulse's draws (who reacts, how late) and a look's length. */
 const SALT = { react: 11, jitter: 12, hold: 13 } as const;
 /** Someone knocked down draws looks at this salience while they lie. */
@@ -195,7 +197,7 @@ export class CrowdGaze {
   describe(civilian: number): string {
     const kind = this.lookKind[civilian] ?? STIMULUS.none;
     const partner = this.poses?.partner[civilian] ?? -1;
-    return `Looking at ${LOOK_WORDS[kind === STIMULUS.none && partner >= 0 ? STIMULUS.partner : kind]}`;
+    return LOOK_LINES[kind === STIMULUS.none && partner >= 0 ? STIMULUS.partner : kind]!;
   }
 
   /** Whether civilian `civilian` is on, or about to be on, something at least `urgency` urgent. */
@@ -405,13 +407,13 @@ export class CrowdGaze {
     }
   }
 
-  /** The drawn angles: the head's turn from the torso within its limit, the torso's, and the pitch scaled by the cosine of the turn (reVC `LookInDirection`). */
+  /** The drawn angles: the head's turn from the torso within its limit, the torso's, and the pitch as eased (both rigs nod in the head's own frame, after its turn). */
   private writeOut(civilian: number): void {
     const at = civilian * EASED;
     const turn = this.angle[at + YAW]!;
     const torso = this.angle[at + TORSO]!;
     this.headYaw[civilian] = Math.max(-HEAD_YAW_LIMIT, Math.min(HEAD_YAW_LIMIT, turn - torso));
     this.torsoTwist[civilian] = torso;
-    this.headPitch[civilian] = this.angle[at + PITCH]! * Math.cos(turn);
+    this.headPitch[civilian] = this.angle[at + PITCH]!;
   }
 }

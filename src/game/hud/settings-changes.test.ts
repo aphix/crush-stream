@@ -78,6 +78,7 @@ describe("given the settings menu, where each setting is a group of HUD fields w
       halftone: 0.5,
       hatching: 0.4,
       rimLight: 0.6,
+      minds: false,
       materialStrength: 0.5,
       contourStrength: 1.5,
       candyStrength: 0.5,

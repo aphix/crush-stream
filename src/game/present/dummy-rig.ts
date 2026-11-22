@@ -82,6 +82,8 @@ export const FLAGS_AT = PALETTE_AT + ROLES;
 export const ORBS_AT = FLAGS_AT + 1;
 export const CUTS_AT = ORBS_AT + 2;
 export const ROW_TEXELS = CUTS_AT + 2;
+/** A posed body lies within this distance (m) of its torso's middle: the standing feet are 1.11 m below it, a flung limb no farther. */
+export const BODY_REACH_M = 1.3;
 
 /** `PARTS` indices the skinning and the wear name. */
 export const TORSO = 0;

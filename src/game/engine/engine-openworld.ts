@@ -46,6 +46,7 @@ import { OpenWorldClientDoors } from "./engine-openworld-door-clips.ts";
 import { OpenWorldCarDoors } from "./engine-openworld-cars.ts";
 import { BODY_COUNT, OpenWorldBodies, type BodyHost } from "./openworld-bodies.ts";
 import { OpenWorldGaze } from "./engine-openworld-gaze.ts";
+import { OpenWorldMinds } from "./engine-openworld-minds.ts";
 import type { CrowdGaze } from "../present/civilian-gaze.ts";
 import { MEDICS, OpenWorldMedics } from "./engine-openworld-medics.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
@@ -133,6 +134,8 @@ export type OpenWorldPorts = {
   /** The population tier of this device (`POPULATION_TIER`). */
   tier(): number;
   cars(): readonly DeformableCar[];
+  /** The name of the player in engine car `carIndex` when it is another player's (a seated peer's, in a room), else null. */
+  peerName(carIndex: number): string | null;
   /** The car this browser's player drives, or got out of (the lobby's own); null: none. */
   ownCar(): DeformableCar | null;
   /** Writes where this browser's player on foot stands and how fast he moves, as the ragdoll world's last step has him (not the blended drawn torso); false while he is in a car. */
@@ -161,6 +164,8 @@ export type OpenWorldPorts = {
   cull: OpenWorldCullPorts;
   /** The dummies' world the civilians near a player have bodies in; absent: they are drawn by the crowd's art alone. */
   bodies?: BodyHost;
+  /** Whether the Minds' Auto is on now; read each frame until it first says yes, then held for the crowd (the FX tier boots low and rises; a later dip does not switch Needle off mid-walk). Absent: off. */
+  mindsAuto?(): boolean;
   /** The facade kit for the map's homes inside the walls. */
   makeFacades(map: OpenWorldMap): FacadeArt;
   /** The stage's light follows this game hour (0-24), or the time of day again (null): called once a game minute, never a frame. */
@@ -237,6 +242,12 @@ export class OpenWorldDirector {
   private bodies: OpenWorldBodies | null = null;
   /** Where the drawn crowd looks (`CrowdGaze` inside), made with the crowd: presentation only. */
   gaze: OpenWorldGaze | null = null;
+  /** What the drawn crowd thinks (`CrowdMinds` inside), made with the crowd: presentation only. */
+  minds: OpenWorldMinds | null = null;
+  /** The HUD's Minds setting (null = Auto), written by the engine each frame: whether Needle may refine thoughts. */
+  mindsSetting: boolean | null = null;
+  /** What Auto means for this crowd: off at its start, on from the first frame `OpenWorldPorts.mindsAuto` says so, for good. */
+  private mindsAuto = false;
   /** The cars' doors, swung with the residents getting into and out of them (where they stand is `crowd.driverDoors`). */
   private doors: OpenWorldCarDoors | null = null;
   /** The kerb spaces, known on every peer: a car standing in one has nobody in it (`carIsEmpty`). */
@@ -361,9 +372,20 @@ export class OpenWorldDirector {
     return this.autoWanted && this.auto !== null && this.auto.aim(camera, sight, wallDt, orbit);
   }
 
-  /** Q/E while Auto is up: the camera goes to the next or the previous person, foot cop or driver, and stays; false when Auto is off or there is nobody to go to. */
+  /**
+   * Q/E: the camera goes to the next or the previous person, foot cop or driver, and stays. With Auto off it comes on held to the pick (`pin`): no cuts of
+   * its own, the same orbit and Q/E as with Auto on, and other players' cars first in the walk (a room still watches its players). False when there is nobody to go to.
+   */
   cycleAuto(dir: 1 | -1): boolean {
-    return this.autoWanted && this.auto !== null && this.auto.cycle(dir, this.ray.eyeX, this.ray.eyeZ);
+    if (this.auto === null) return false;
+    const pinning = !this.autoWanted;
+    if (pinning) {
+      this.setAuto(true);
+      this.auto.pin();
+    }
+    if (this.auto.cycle(dir, this.ray.eyeX, this.ray.eyeZ)) return true;
+    if (pinning) this.setAuto(false);
+    return false;
   }
 
   /** What the look-at panel shows, null when the eye rests on nothing. */
@@ -447,6 +469,8 @@ export class OpenWorldDirector {
     this.ports.eye(this.ray);
     this.frameSigns(this.map);
     this.gaze?.frame(crowd.poses, this.ray.eyeX, this.ray.eyeZ, wallDt, this.bodies);
+    if (!this.mindsAuto && this.mindsSetting === null) this.mindsAuto = this.ports.mindsAuto?.() === true;
+    this.minds?.frame(crowd, this.gaze?.gaze ?? null, this.mindsSetting ?? this.mindsAuto, wallDt);
     this.art!.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt, this.bodies?.held ?? null);
     this.animals?.update(crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
     this.law?.frame(this.ray.eyeX, this.ray.eyeZ, this.sight, wallDt);
@@ -462,12 +486,15 @@ export class OpenWorldDirector {
     }
   }
 
-  /** What the eye rests on: the car its ray enters, unless a civilian or a building is nearer along it; a person's text ends with what she looks at. */
+  /** What the eye rests on: the car its ray enters, unless a civilian or a building is nearer along it; a person's text ends with what she looks at and what she thinks. */
   private lookText(crowd: CivilianCrowd): LookText | null {
     const tick = tickAt(crowd.crowdSeconds);
     const car = this.carLook.met(this.ray, LOOK_REACH, this.carMet);
-    const seen = lookAtOf(crowd.state, crowd.poses, tick, this.ray, car.along);
-    if (seen !== null) return this.gaze === null || this.map === null ? seen : this.gaze.describe(seen, crowd.poses, this.map, this.ray);
+    const seen = lookAtOf(crowd.state, crowd.poses, tick, this.ray, car.along, this.minds?.shown ?? null);
+    if (seen !== null) {
+      const gazed = this.gaze === null || this.map === null ? seen : this.gaze.describe(seen, crowd.poses, this.map, this.ray);
+      return this.minds === null ? gazed : this.minds.describe(gazed);
+    }
     return car.index >= 0 ? this.carLook.text(car.index, crowd.state, tick) : null;
   }
 
@@ -487,6 +514,8 @@ export class OpenWorldDirector {
     this.bodies?.dispose();
     this.bodies = null;
     this.gaze = null;
+    this.minds?.dispose();
+    this.minds = null;
     this.stopTraffic();
     this.art?.dispose();
     this.animals?.dispose();
@@ -750,6 +779,8 @@ export class OpenWorldDirector {
     const crowd = this.crowd;
     this.gaze = new OpenWorldGaze(crowd.poses.count, map, { cars: () => this.ports.cars(), foot: (out) => this.ports.foot(out), lineOfSight: this.ports.law?.lineOfSight ?? null });
     if (this.art !== null) this.art.gaze = this.gaze.gaze;
+    this.minds = new OpenWorldMinds(crowd.poses.count);
+    this.mindsAuto = false;
     const gaze = this.gaze;
     this.unhook = this.ports.hookWallHits((closing, x, z) => {
       crowd.noteWallHit(closing, x, z);
@@ -816,6 +847,7 @@ export class OpenWorldDirector {
         ambulanceCar: () => this.ambulanceCar(),
         ambulanceState: () => this.ambulanceState(),
         isPlayerCar: (carIndex) => this.ports.cull.playerCars().includes(this.ports.cars()[carIndex]!),
+        peerName: (carIndex) => this.ports.peerName(carIndex),
       },
       { residents: crowd.poses.count, cops: FOOT_COP_COUNT, cars: MAX_CARS, events: EVENT_LOG_CAPACITY },
       seed,

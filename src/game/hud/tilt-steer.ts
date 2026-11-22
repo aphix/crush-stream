@@ -7,7 +7,7 @@
 export const TILT = {
   /** Wheel angle that is full lock by default. A phone held in two hands turns about 25 degrees comfortably without moving the thumbs. */
   fullLockDegrees: { default: 25, min: 12, max: 45 },
-  /** Hand tremor and the resting angle's drift: the first degrees are ignored. Wreckfest players report their dead zone as the first thing to cut, so the default is small; the pad's own `stickScale` adds its radial dead zone on top. */
+  /** Hand tremor and the resting angle's drift: the first degrees are ignored. Wreckfest players report their dead zone as the first thing to cut, so the default is small; it is the tilt's only one (the pad stick's is not applied to touch). */
   deadZoneDegrees: { default: 2, min: 0, max: 8 },
 } as const;
 

@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { FRAME_HZ, MAX_TETHERS } from "../kernel/constants.ts";
 import { hypot3 } from "../kernel/physics-core.js";
 import { RAPIER, TetherSet, WORLD } from "../contact/tether.ts";
+import { CIVILIAN_FIGURES_NAME } from "../present/civilian-figure.ts";
 import { BOXES_MESH_NAME } from "../present/minigame-art.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
@@ -190,6 +191,26 @@ describe("given the free camera over a drawn civilian with no body, with a wall 
     const end = firstEnd(ropes);
     expect(end.kind === "doll" ? end.id : -1, "the body's slot").toBe(PERSON_SLOT);
     expect(hypot3(end.at[0], end.at[1] - EYE_Y, end.at[2] + AHEAD), "the hook from her chest (m)").toBeLessThan(1e-3);
+  });
+});
+
+describe("given the free camera over a civilian drawn far off as one of the crowd's cheap figures, with a wall behind her", () => {
+  // mutation: sed -i '/^    if (object.name === CIVILIAN_FIGURES_NAME) return undefined;/d' src/game/engine/engine-tether.ts
+  it("when it fires at her and then at the wall, then the sight line passes her figure's front, a body is stood for her and the cable's first end is that body", () => {
+    const scene = new THREE.Scene();
+    wall(scene);
+    // Her figure stands 2 m deep about her chest, so its front is a metre before it: past the person test's slack.
+    const figure = new THREE.InstancedMesh(new THREE.BoxGeometry(0.6, 2, 2), new THREE.MeshBasicMaterial(), 1);
+    figure.name = CIVILIAN_FIGURES_NAME;
+    figure.setMatrixAt(0, new THREE.Matrix4().makeTranslation(0, EYE_Y, -AHEAD));
+    scene.add(figure);
+    const { aimAt, fire, ropes } = rig(scene, [], false, true);
+    aimAt(new THREE.Vector3(0, EYE_Y, -AHEAD));
+    fire();
+    aimAt(new THREE.Vector3(BESIDE, EYE_Y, -WALL_AHEAD));
+    fire();
+    const end = firstEnd(ropes);
+    expect(end.kind === "doll" ? end.id : -1, "the body's slot").toBe(PERSON_SLOT);
   });
 });
 
