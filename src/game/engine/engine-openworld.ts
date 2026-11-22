@@ -18,12 +18,13 @@ import { fillAwakeAtHomes } from "../ai/civilians/society-awake.ts";
 import { ImaginedHouseholds } from "../ai/civilians/society-households.ts";
 import { HomeLights } from "../present/facade-homes.ts";
 import { fillClosedPlaces } from "../ai/civilians/society-hours.ts";
-import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
+import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, LOOK_REACH, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
 import { chestMet, lookAtOf, LookRay, placeMet, type LookText, type Meeting } from "../ai/civilians/civilian-look.ts";
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { fillCommuterFeed } from "../ai/civilians/society-commuters.ts";
 import { carStandsNear, makeDriverDoors, groundUnderCars } from "./engine-openworld-doors.ts";
+import { CarLook } from "./engine-openworld-car-look.ts";
 import { LAYOUT } from "../world/openworld/openworld-constants.ts";
 import { openWorldGeometry } from "../world/openworld/openworld-layout.ts";
 import { buildParkingSpots, spotAt, type ParkingSpots } from "../world/openworld/openworld-parking.ts";
@@ -210,6 +211,9 @@ export class OpenWorldDirector {
   private readonly wallMet: Meeting = { index: -1, along: Infinity };
   private readonly personMet: Meeting = { index: -1, along: Infinity };
   private readonly copShot: Meeting = { index: -1, along: Infinity };
+  /** The look-at panel's cars: the one the ray enters and its words. */
+  private readonly carLook: CarLook;
+  private readonly carMet: Meeting = { index: -1, along: Infinity };
   /** Shots that have landed on each car's body: at the guards' count its engine dies. */
   private readonly carShots = new Uint8Array(MAX_CARS);
   private readonly sceneScratch = { x: 0, z: 0 };
@@ -254,6 +258,7 @@ export class OpenWorldDirector {
   constructor(ports: OpenWorldPorts) {
     this.ports = ports;
     this.culling = new OpenWorldCulling(ports.cull);
+    this.carLook = new CarLook({ cars: () => ports.cars(), playerCars: () => ports.cull.playerCars(), followed: () => ports.cull.followed(), inRoom: () => ports.inRoom(), traffic: () => this.traffic });
   }
 
   /** The map the crowd lives on; the crowd is made from it on the next frame in the open world. */
@@ -431,8 +436,15 @@ export class OpenWorldDirector {
     const cut = this.autoWanted && this.auto !== null && this.auto.step(wallDt);
     if (cut || this.lookAcc >= 1 / LOOK_HZ) {
       this.lookAcc = 0;
-      this.text = this.keepIfSame(this.autoWanted && this.auto !== null ? this.auto.text() : lookAtOf(crowd.state, crowd.poses, tickAt(crowd.crowdSeconds), this.ray));
+      this.text = this.keepIfSame(this.autoWanted && this.auto !== null ? this.auto.text() : this.lookText(crowd));
     }
+  }
+
+  /** What the eye rests on: the car its ray enters, unless a civilian or a building is nearer along it. */
+  private lookText(crowd: CivilianCrowd): LookText | null {
+    const tick = tickAt(crowd.crowdSeconds);
+    const car = this.carLook.met(this.ray, LOOK_REACH, this.carMet);
+    return lookAtOf(crowd.state, crowd.poses, tick, this.ray, car.along) ?? (car.index >= 0 ? this.carLook.text(car.index, crowd.state, tick) : null);
   }
 
   /** The crowd, its drawing, its worker and the signage are gone, and the interiors with them. */

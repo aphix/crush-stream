@@ -22,8 +22,8 @@ export type LookText = { title: string; lines: string[] };
 /** What the ray meets: its index (resident or place; -1 for nothing) and how far along the ray (m). */
 export type Meeting = { index: number; along: number };
 
-/** The shown civilian whose chest the ray passes closest to, within `LOOK_RADIUS` of it and `LOOK_REACH` ahead. */
-function residentMet(poses: CrowdPoses, ray: LookRay): Meeting {
+/** The shown civilian whose chest the ray passes closest to, within `LOOK_RADIUS` of it and `reach` ahead. */
+function residentMet(poses: CrowdPoses, ray: LookRay, reach: number): Meeting {
   const met: Meeting = { index: -1, along: Infinity };
   let bestMiss = LOOK_RADIUS * LOOK_RADIUS;
   for (let resident = 0; resident < poses.count; resident++) {
@@ -32,7 +32,7 @@ function residentMet(poses: CrowdPoses, ray: LookRay): Meeting {
     const toY = poses.feetY[resident]! + CHEST_HEIGHT - ray.eyeY;
     const toZ = poses.z[resident]! - ray.eyeZ;
     const along = toX * ray.dirX + toY * ray.dirY + toZ * ray.dirZ;
-    if (along <= 0 || along > LOOK_REACH) continue;
+    if (along <= 0 || along > reach) continue;
     const miss = toX * toX + toY * toY + toZ * toZ - along * along;
     if (miss >= bestMiss) continue;
     bestMiss = miss;
@@ -120,10 +120,13 @@ export function chestMet(poses: Pick<CrowdPoses, "x" | "z" | "feetY" | "shown">,
   return out;
 }
 
-/** The panel's text for what the eye rests on: the civilian in front of it (their line, what they are doing when the line does not say it, and their life log), else the building the ray meets (its kind, who lives or works there, its comings and goings), else nothing; whichever is nearer along the ray. */
-export function lookAtOf(state: CityState, poses: CrowdPoses, tick: number, ray: LookRay): LookText | null {
-  const resident = residentMet(poses, ray);
-  const place = placeMet(state.map, ray, LOOK_REACH, _placeMeeting);
+/**
+ * The panel's text for what the eye rests on within `reach` m (a car the caller met first cuts it short): the civilian in front of it (their line, what they are doing when the line does not say it, and their life log),
+ * else the building the ray meets (its kind, who lives or works there, its comings and goings), else nothing; whichever is nearer along the ray.
+ */
+export function lookAtOf(state: CityState, poses: CrowdPoses, tick: number, ray: LookRay, reach = LOOK_REACH): LookText | null {
+  const resident = residentMet(poses, ray, reach);
+  const place = placeMet(state.map, ray, reach, _placeMeeting);
   if (resident.index >= 0 && resident.along <= place.along) {
     const doing = activityLine(poses.activity[resident.index]!);
     const history = historyLines(state, resident.index);
