@@ -204,11 +204,12 @@ export class OpenWorldBodies {
     return true;
   }
 
-  /** Civilian `civilian`'s body goes (the ambulance has taken her): true when she had one. */
+  /** Civilian `civilian`'s body goes (the ambulance has taken her): true when she had one. A body a cable holds stays on it, lying out its time, and goes once the cable is cut (`tend`). */
   remove(civilian: number): boolean {
     const body = this.bodyOf[civilian]!;
     if (body === NOBODY) return false;
-    this.release(body);
+    if (this.host.roped(this.slot[body]!)) this.struckAt[body] = this.seconds - LIES_SECONDS;
+    else this.release(body);
     return true;
   }
 

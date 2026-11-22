@@ -433,6 +433,21 @@ describe("given a civilian whose body a cable holds", () => {
     run(1);
     expect(host.stopped, "let go once the cable is cut").toContain(slot);
   });
+
+  // mutation: sed -i 's/^    if (this.host.roped(this.slot\[body\]!)) this.struckAt\[body\] = this.seconds - LIES_SECONDS;/    if (false) this.struckAt[body] = this.seconds - LIES_SECONDS;/' src/game/engine/openworld-bodies.ts
+  it("when the ambulance takes her, then her body stays on the cable, and goes once the cable is cut", () => {
+    const { host, poses, bodies, run } = world();
+    walker(poses, 0, 2, 0);
+    run(SETTLE_STEPS);
+    const slot = bodies.slotOf(0);
+    host.ropedSlots.add(slot);
+    expect(bodies.remove(0), "she had a body").toBe(true);
+    run(Math.round(2 / STEP));
+    expect(host.stopped, "kept while roped").not.toContain(slot);
+    host.ropedSlots.delete(slot);
+    run(1);
+    expect(host.stopped, "let go once the cable is cut").toContain(slot);
+  });
 });
 
 describe("given a civilian standing on a stoop 0.9 m over the street, 50 m from the eye", () => {
