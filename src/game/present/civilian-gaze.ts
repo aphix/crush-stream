@@ -1,5 +1,5 @@
 import { ALARM_DELAY_JITTER_SHARE, ALARM_DELAY_MAX_SECONDS, ALARM_DELAY_MIN_SECONDS, SPECIES } from "../ai/civilians/civilian-constants.ts";
-import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
+import { ANIMAL_CHEST_HEIGHT, LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { neuroticismOf } from "../ai/civilians/civilian-temperament.ts";
 import {
@@ -345,10 +345,10 @@ export class CrowdGaze {
     return true;
   }
 
-  /** The scratch's point is civilian `other`'s face. */
+  /** The scratch's point is civilian `other`'s face (a cat's or dog's body: `ANIMAL_CHEST_HEIGHT`). */
   private atFace(other: number, poses: CrowdPoses): void {
     this.scratch[SCRATCH.x] = poses.x[other]!;
-    this.scratch[SCRATCH.y] = poses.feetY[other]! + FACE_HEIGHT_M;
+    this.scratch[SCRATCH.y] = poses.feetY[other]! + (poses.look[other]! >>> LOOK.speciesShift === SPECIES.person ? FACE_HEIGHT_M : ANIMAL_CHEST_HEIGHT);
     this.scratch[SCRATCH.z] = poses.z[other]!;
   }
 

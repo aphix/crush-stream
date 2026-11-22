@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
-import { ALARM_DELAY_MIN_SECONDS } from "../ai/civilians/civilian-constants.ts";
+import { ALARM_DELAY_MIN_SECONDS, SPECIES } from "../ai/civilians/civilian-constants.ts";
+import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { mulberry32 } from "../world/placements.ts";
@@ -234,5 +235,34 @@ describe("given people standing apart with nothing about them", () => {
     const at240 = glances(FRAME / 4);
     expect(at60, "control: glances at 60 Hz").toBeGreaterThan(20);
     expect(Math.abs(at240 - at60) / at60, `glances: ${at60} at 60 Hz, ${at240} at 240 Hz`).toBeLessThanOrEqual(0.25);
+  });
+});
+
+describe("given a person standing free on a kerb and a dog trotting back and forth along it in front of her", () => {
+  // mutation: sed -i 's/^      if (poses.shown\[civilian\] === 0) continue;$/      if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person) continue;/' src/game/present/civilian-gaze-poll.ts
+  it("when a minute passes, then she glances at the dog, nodding down at it, and the dog looks at nothing", () => {
+    const poses = emptyPoses(2);
+    poses.look[0] = HEAD_MOVER;
+    poses.look[1] = (SPECIES.dog << LOOK.speciesShift) >>> 0;
+    poses.z[1] = 2;
+    poses.speed[1] = 1.5;
+    const gaze = new CrowdGaze(2);
+    let atDog = 0;
+    let nodded = 0;
+    let dogLooked = 0;
+    drive(gaze, poses, blankSenses(), [], 60, (time) => {
+      // Back and forth across her front, 3 m either way.
+      const leg = (1.5 * time) % 12;
+      poses.x[1] = leg < 6 ? leg - 3 : 9 - leg;
+      poses.yaw[1] = leg < 6 ? Math.PI / 2 : -Math.PI / 2;
+      if (gaze.lookKind[0] === STIMULUS.person && gaze.lookSource[0] === 1) {
+        atDog++;
+        if (gaze.headPitch[0]! > 0.2) nodded++;
+      }
+      if (gaze.lookKind[1] !== STIMULUS.none) dogLooked++;
+    });
+    expect(atDog, "frames she looked at the dog").toBeGreaterThan(0);
+    expect(nodded, "frames she nodded down at it").toBeGreaterThan(0);
+    expect(dogLooked, "frames the dog looked at something").toBe(0);
   });
 });

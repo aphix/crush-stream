@@ -97,7 +97,7 @@ and keep a life log) and the crowd shows them: on a leg at the leg's spot, as a 
 the pavement `REST_OUT` in front of its door, a place's animals `REST_SPREAD` apart (`placeAnimal`, pure in the rows and the time, so
 every peer places them alike; `activityClock` is how long they have rested). They are bodies the separation keeps apart (a resting
 one fixed), cars stop for them, and the look-at names them ("Biscuit, an orange cat ..."; the look panel and a bullet meet one at
-`ANIMAL_CHEST_HEIGHT`, not a person's chest). They open no door and turn no head (the gaze skips them, and offers none as a passer-by). They are never bumped, pushed, punched,
+`ANIMAL_CHEST_HEIGHT`, not a person's chest). They open no door and turn no head (the gaze skips them as lookers), but people glance at one passing, at its body. They are never bumped, pushed, punched,
 warned of a car or held as a physical body (`CivilianCrowd.isAnimal`); a car runs one down by the host's hit rule (`runsDown`): the
 knock (and its push) is logged and heard like a person's, the brain sends it "to hospital", and nobody calls it an ambulance. No dog
 follows an owner: the brain pairs no animal with a person.
