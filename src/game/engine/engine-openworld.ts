@@ -434,7 +434,7 @@ export class OpenWorldDirector {
     this.crowd.step(this.seconds, this.ports.cars(), true);
     // The strikes first: a civilian the crowd has just hidden (run down) still has her body, which takes the blow.
     this.throwStruck(this.crowd);
-    this.bodies?.step(this.crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.seconds, dt);
+    this.bodies?.step(this.crowd.poses, this.ray.eyeX, this.ray.eyeZ, this.seconds, dt, this.sight);
     this.landWalkerStrike(this.crowd, dt);
     this.law?.throwTakedowns();
     this.releaseGotUp();
@@ -477,7 +477,7 @@ export class OpenWorldDirector {
       this.feedWalkers(crowd);
       crowd.step(this.clock.crowdSeconds(this.ports.now(), INTERP_DELAY), this.ports.cars(), false);
       this.throwStruck(crowd);
-      this.bodies?.step(crowd.poses, this.ray.eyeX, this.ray.eyeZ, crowd.crowdSeconds, wallDt);
+      this.bodies?.step(crowd.poses, this.ray.eyeX, this.ray.eyeZ, crowd.crowdSeconds, wallDt, this.sight);
       this.law?.throwTakedowns();
       this.hearAmbulance(crowd);
       this.law?.hearRides();

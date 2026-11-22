@@ -3,6 +3,7 @@ import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { DOWNED_LIFE_SECONDS } from "../ai/civilians/civilian-crowd-constants.ts";
 import { createCrowdPoses, type CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
+import type { SightField } from "../present/openworld-sight.ts";
 import type { Place } from "../world/openworld/walk-graph.ts";
 import { BODY_COUNT, OpenWorldBodies } from "./openworld-bodies.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
@@ -31,7 +32,7 @@ function walker(poses: ReturnType<typeof createCrowdPoses>, civilian: number, x:
   poses.feetY[civilian] = 0;
 }
 
-function world(places: readonly Place[] = []) {
+function world(places: readonly Place[] = [], sight: Pick<SightField, "seen"> | null = null) {
   const host = new FakeBodyHost();
   const poses = createCrowdPoses(CAPACITY);
   const bodies = new OpenWorldBodies(host, places, CAPACITY, SIZE);
@@ -44,7 +45,7 @@ function world(places: readonly Place[] = []) {
     run(steps: number, eyeX = 0, eyeZ = 0): void {
       for (let step = 0; step < steps; step++) {
         seconds += STEP;
-        bodies.step(poses, eyeX, eyeZ, seconds, STEP);
+        bodies.step(poses, eyeX, eyeZ, seconds, STEP, sight);
         host.advance(STEP);
       }
     },
@@ -122,6 +123,26 @@ describe("given civilians around an eye, and a pool with room for three bodies",
     expect(host.stopped, "the body went").toContain(slot);
     expect(bodies.slotOf(0), "she has none").toBe(-1);
     expect(bodies.held[0], "and is not held").toBe(0);
+  });
+
+  it("when the nearest civilian stands behind a building the eye cannot see past, then she has no body and the next nearest have; when she steps into view, then within 0.25 s she has one; and when she steps back out of view, then she keeps it", () => {
+    const box = { hidden: true };
+    const sight = { seen: (x: number, z: number): boolean => !(box.hidden && x >= 2 && x <= 4 && z >= -1 && z <= 1) };
+    const { poses, bodies, run } = world([], sight);
+    walker(poses, 0, 3, 0);
+    walker(poses, 1, 6, 0);
+    walker(poses, 2, 9, 0);
+    walker(poses, 3, 11, 0);
+    run(SETTLE_STEPS);
+    expect(bodies.slotOf(0), "the nearest, unseen: no body").toBe(-1);
+    expect([bodies.slotOf(1) >= 0, bodies.slotOf(2) >= 0, bodies.slotOf(3) >= 0], "the next nearest have bodies").toEqual([true, true, true]);
+    box.hidden = false;
+    run(7);
+    expect(bodies.slotOf(0), "in view: a body within 0.25 s").toBeGreaterThanOrEqual(FIRST_SLOT);
+    const slot = bodies.slotOf(0);
+    box.hidden = true;
+    run(SETTLE_STEPS);
+    expect(bodies.slotOf(0), "out of view again: she keeps it").toBe(slot);
   });
 
   // mutation: sed -i 's/    if (poses.shown\[civilian\] === 0 || !BODY_ACTIVITY.has(poses.activity\[civilian\]!)) return false;/    if (poses.shown[civilian] === 0) return false;/' src/game/engine/openworld-bodies.ts

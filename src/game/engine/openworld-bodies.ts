@@ -6,6 +6,7 @@ import { punchGap } from "../ai/civilians/civilian-contact.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
+import type { SightField } from "../present/openworld-sight.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import { PlaceFootprints } from "../world/openworld/place-footprints.ts";
 import type { Place } from "../world/openworld/walk-graph.ts";
@@ -228,14 +229,14 @@ export class OpenWorldBodies {
     return count;
   }
 
-  /** One step of \`dt\` s at crowd second \`seconds\`, after the crowd's: the bodies are steered to their civilians' spots, and the nearest civilians to (eyeX, eyeZ) are given bodies. */
-  step(poses: CrowdPoses, eyeX: number, eyeZ: number, seconds: number, dt: number): void {
+  /** One step of \`dt\` s at crowd second \`seconds\`, after the crowd's: the bodies are steered to their civilians' spots, and the nearest civilians to (eyeX, eyeZ) that `sight` sees (null: all) are given bodies. */
+  step(poses: CrowdPoses, eyeX: number, eyeZ: number, seconds: number, dt: number, sight: Pick<SightField, "seen"> | null = null): void {
     this.seconds = seconds;
     for (let body = 0; body < this.size; body++) if (this.resident[body]! !== NOBODY) this.tend(body, poses, eyeX, eyeZ, dt);
     this.sinceSelect += dt;
     if (this.sinceSelect < SELECT_SECONDS) return;
     this.sinceSelect = 0;
-    this.fill(poses, eyeX, eyeZ);
+    this.fill(poses, eyeX, eyeZ, sight);
   }
 
   /** A civilian run down (the crowd's strike) lands on her live body: true. False when she has none, and the strike is thrown as a figure instead. */
@@ -321,13 +322,14 @@ export class OpenWorldBodies {
     return !this.buildings.inside(poses.x, poses.z, civilian);
   }
 
-  /** The nearest eligible civilians without a body take the free ones, nearest first, while there are any. */
-  private fill(poses: CrowdPoses, eyeX: number, eyeZ: number): void {
+  /** The nearest eligible civilians this machine's eye sees, without a body, take the free ones, nearest first, while there are any. */
+  private fill(poses: CrowdPoses, eyeX: number, eyeZ: number, sight: Pick<SightField, "seen"> | null): void {
     for (let taken = this.count(); taken < this.size; taken++) {
       let nearest = NOBODY;
       let nearestDistance = NEAR_RADIUS;
       for (let civilian = 0; civilian < this.bodyOf.length; civilian++) {
         if (this.bodyOf[civilian]! !== NOBODY || !this.eligible(poses, civilian, eyeX, eyeZ, nearestDistance)) continue;
+        if (sight !== null && !sight.seen(poses.x[civilian]!, poses.z[civilian]!, 1)) continue;
         nearestDistance = hypot2(poses.x[civilian]! - eyeX, poses.z[civilian]! - eyeZ);
         nearest = civilian;
       }
