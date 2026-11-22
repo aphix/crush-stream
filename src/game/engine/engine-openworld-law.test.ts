@@ -51,7 +51,7 @@ function directorWith(extra: Partial<OpenWorldPorts>): { director: OpenWorldDire
 }
 
 describe("given the open world's director", () => {
-  // mutation: in src/game/engine/engine-openworld.ts start(), move `this.startTraffic(map, client);` to after `this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK);`
+  // mutation: in src/game/engine/engine-openworld.ts start(), move `this.startTraffic(map, client);` to after `this.law = this.makeLaw(map, crowd, key & CROWD_SEED_MASK, gaze);`
   it("when the engine gives traffic and law ports, then the police lease their patrol cars from the traffic, which was made before them", () => {
     const { director } = directorWith({ traffic: idleTrafficPorts(), law: idleLawPorts() });
     expect(director["traffic"], "the traffic is up").not.toBeNull();

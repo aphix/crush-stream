@@ -234,12 +234,20 @@ civilian within `FAR_DRAW` of the eye.
 - **Turning**: the whole turn eases critically damped toward the target (peak speed grows with the shift, Andrist 2012), capped at
   reVC's rates (head yaw 450 deg/s, pitch and torso 240 deg/s); the head takes the turn up to 90 deg from the torso and the torso
   joins past 63 deg up to 50 deg; pitch within 45 deg, nodded in the head's own frame after its turn. A per-person head-mover share (75-100 % of
-  the turn, look word bits 26-28) stands in for eyes the painted faces cannot move. A target behind her reach keeps her on the side
+  the turn, look word bits 26-28) leaves the rest to the eyes. A target behind her reach keeps her on the side
   her head is on, so a partner walking round her does not flip her head across.
-- **Drawn**: a near dummy adds `headYaw`, `headPitch` and `torsoTwist` to the clip's channels before its solves (`applyGaze`); a far
+- **Eyes** (`eyeYaw`, `eyePitch`, Andrist 2012): they jump at 500 deg/s to a look starting within the head's 67 ms latency, else
+  to where the head is going, and are drawn relative to the head as it is, so they hold the target while it turns and end at the
+  share it did not take; within 30 deg across and 20 up or down. Ahead, they are centred.
+- **Drawn**: a near dummy adds `headYaw`, `headPitch` and `torsoTwist` to the clip's channels before its solves (`applyGaze`) and
+  carries the eye turn in its pose row (the orb texels' w, `DummyMesh.eyes`): the fragment warps the face print round each pupil
+  (`dollEyes`: a Gaussian 3 by 1.5 texels, the iris moved by a 12 mm eyeball's arc), so the lids stay and the iris moves; a far
+  figure's eyes stay painted (a 12 m face is about 18 pixels: its iris would move under one). A far
   figure's head and hair vertices (no swing, pivot at the neck) turn in the vertex shader by the instance's `gait.zw` (two more floats
   an instance, no more draws); a physical body's neck motors take the turn and nod on top of the gait (`OpenWorldBodies.aimNecks`,
-  within 0.85 / 0.6 rad of the joint's 55 / 45 deg). Foot cops and medics are drawn by their own arts without a gaze.
+  within 0.85 / 0.6 rad of the joint's 55 / 45 deg). Foot cops and medics are drawn by arts that `follow` the crowd's gaze
+  (`OpenWorldGaze.follow`): a `CrowdGaze` of their own on the same senses, turned on their poses the frame they are drawn, and
+  pulsed by the same crashes, knocks and shots.
 
 ## Interactions, crime and seats (`ai/civilians/society-*.ts`)
 

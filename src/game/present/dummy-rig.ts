@@ -74,7 +74,7 @@ export const PRINT_ATTRIBUTE = "print";
 
 /**
  * A slot's row in the pose texture: two texels per bone (translation, rotation), a texel per role colour, the flags (x: flags,
- * y: face row, z and w: the share of `hang` its torso and sleeves, then its trousers, take), the two bust orbs' lag, and the garment cuts.
+ * y: face row, z and w: the share of `hang` its torso and sleeves, then its trousers, take), the two bust orbs' lag (their w: the eyes' turn in the head, yaw then pitch), and the garment cuts.
  */
 const BONES = PARTS.length;
 export const PALETTE_AT = BONES * 2;

@@ -262,6 +262,15 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     this.dolls.needsUpdate = true;
   }
 
+  /** Slot `s`'s eyes turned in its head by `yaw` (toward its +x) and `pitch` (down) rad: the face print's irises shift by them. Hiding or dressing the slot centres them. */
+  eyes(s: number, yaw: number, pitch: number): void {
+    const at = (s * ROW_TEXELS + ORBS_AT) * 4 + 3;
+    if (this.rows[at] === Math.fround(yaw) && this.rows[at + 4] === Math.fround(pitch)) return;
+    this.rows[at] = yaw;
+    this.rows[at + 4] = pitch;
+    this.dolls.needsUpdate = true;
+  }
+
   hide(s: number): void {
     this.shown &= ~(1 << s);
     this.count = 32 - Math.clz32(this.shown);

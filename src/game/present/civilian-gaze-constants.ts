@@ -37,11 +37,16 @@ export const HEAD_OMEGA = 10;
 export const TORSO_OMEGA = 5;
 /** The head starts this long after a look is chosen: the eyes lead the head by about 67 ms (`.extraResearch/crowd-senses-and-gaze.md`, LEAD). */
 export const HEAD_LATENCY_S = 0.067;
-/** Andrist's head alignment: from this share to all of the turn, by the look word's bits; narrow because the dummies' eyes are painted and cannot take the rest. */
+/** Andrist's head alignment: from this share to all of the turn, by the look word's bits; narrow because only the near dummies' eyes move (`EYE_YAW_LIMIT`): a far figure's are painted and cannot take the rest. */
 export const HEAD_ALIGN_MIN = 0.75;
 /** The look word bits that pick it: 26-28 of its hash, which no other trait reads (pace 12-18, amplitude 19-25). */
 export const ALIGN_SHIFT = 26;
 export const ALIGN_MASK = 7;
+/** The eyes turn in the head no farther than this (rad): Andrist 2012 bounds them by an oculomotor range (`.extraResearch/crowd-senses-and-gaze.md`); 30 deg across and 20 up or down, inside the human 45 (tuned by feel to keep the painted iris inside its eye). */
+export const EYE_YAW_LIMIT = 30 * DEG;
+export const EYE_PITCH_LIMIT = 20 * DEG;
+/** The eyes' top speed (rad/s): a large saccade peaks near 500 deg/s (the saccadic main sequence, a textbook figure the research note does not carry), so a 30 deg shift lands in 60 ms, before the head has started (`HEAD_LATENCY_S`). */
+export const EYE_RATE = 500 * DEG;
 
 /** In sight: no further than 90 deg off straight ahead (tuned by feel). */
 export const FOV_COS = 0;
