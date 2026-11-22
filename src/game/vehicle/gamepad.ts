@@ -122,27 +122,25 @@ export function readPad(src: PadSource | null, out: PadState): void {
 }
 
 /**
- * The on-screen controls: the stick in DOM signs (|(x, y)| <= 1; up is gas, down brakes), the pedals (`gas`, `brake`, 0..1:
- * the Easy scheme's automatic gas, the Pedals scheme's two buttons), the buttons held, and `tapped` which keeps a press
- * shorter than a frame.
+ * The on-screen controls: the stick in DOM signs (|(x, y)| <= 1; up is gas, down brakes), already shaped by the scheme that wrote it (the disc's,
+ * the steering bar's or the tilt's own dead zone and curve), the pedals (`gas`, `brake`, 0..1: the Easy scheme's automatic gas, the Pedals
+ * scheme's two buttons), the buttons held, and `tapped` which keeps a press shorter than a frame.
  */
 export type TouchPad = { x: number; y: number; gas: number; brake: number; held: number; tapped: number };
 
 /**
  * OR the touch pad into a polled `out` (`prev` = last poll's held): stick x → left stick (larger magnitude wins),
- * stick up → RT and down → LT so up accelerates, the pedals → RT / LT (the larger of stick and pedal wins, and the pedals
- * never go through the stick's radial deadzone), buttons → held / pressed. Consumes `tapped`.
+ * stick up → RT and down → LT so up accelerates, the pedals → RT / LT (the larger of stick and pedal wins), buttons → held / pressed.
+ * The stick's values pass as they are: the pad stick's dead zone and curve (`stickScale`) are for a sprung stick, and a scheme's own shaping applies once.
+ * Consumes `tapped`.
  */
 export function mergeTouch(t: TouchPad, out: PadState, prev: number): void {
-  const k = stickScale(t.x, t.y);
-  const x = t.x * k;
-  const y = t.y * k;
-  if (Math.abs(x) > Math.abs(out.lx)) out.lx = x;
-  out.rt = Math.max(out.rt, -y, t.gas);
-  out.lt = Math.max(out.lt, y, t.brake);
+  if (Math.abs(t.x) > Math.abs(out.lx)) out.lx = t.x;
+  out.rt = Math.max(out.rt, -t.y, t.gas);
+  out.lt = Math.max(out.lt, t.y, t.brake);
   out.held |= t.held;
   out.pressed = (out.held & ~prev) | t.tapped;
-  if (k !== 0 || t.gas !== 0 || t.brake !== 0 || out.held !== 0 || t.tapped !== 0) out.connected = true;
+  if (t.x !== 0 || t.y !== 0 || t.gas !== 0 || t.brake !== 0 || out.held !== 0 || t.tapped !== 0) out.connected = true;
   t.tapped = 0;
 }
 

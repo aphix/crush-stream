@@ -106,8 +106,12 @@ const flightCases: readonly { it: string; x: number; heading: number; command: n
   { it: "when he runs up it along the party wall, 5 degrees into it, then he keeps his feet and his strength", x: 0.2, heading: 5 * DEG, command: RUN_SPEED },
   { it: "when he runs up it 5 degrees into the banister, then he keeps his feet and his strength", x: 0.2, heading: -5 * DEG, command: RUN_SPEED },
   { it: "when he walks up it across to the party wall at 10 degrees, then he keeps his feet and his strength", x: -0.2, heading: 10 * DEG, command: WALK_SPEED },
+  // mutation: sed -i 's/^    const dy = Math.max(0, doll.vel\[1\]! - held\[1\]! + HOLD_RATE \* ly \* keep);/    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;/' /home/aphix/worktrees/Feel/src/game/present/ragdoll-walker.ts
+  { it: "when he sprints straight up it beside the party wall, then he keeps his feet and his strength", x: 0.2, heading: 0, command: SPRINT_SPEED },
 ];
 
+// mutation (the runs): sed -i 's/^      return Math.min(command, STEP_PACE + (command - STEP_PACE) \* share, braking);/      return Math.min(command, STEP_PACE + (command - STEP_PACE) * share);/' /home/aphix/worktrees/Feel/src/game/present/walker-floor.ts
+// mutation (into the banister): sed -i 's/^      if (box.y1 > ask + WALL_RISE) return NO_FLOOR;/      if (box.y1 > ask + WALL_RISE) continue;/' /home/aphix/worktrees/Feel/src/game/present/walker-floor.ts
 describe("given the walker at the foot of a rowhome's stair flight between its party wall and a banister", () => {
   for (const testCase of flightCases) {
     it(testCase.it, async () => {

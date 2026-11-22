@@ -3,7 +3,7 @@ import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { NO_STAIRS, type StairField } from "../world/stairs.ts";
 import { armedSolids, heightIn, PQ_SIZE, PQ_X, PQ_Y, PQ_Z, STEP_MAX } from "../world/surfaces.ts";
 import { PARTS } from "./ragdoll-body.ts";
-import { brakeRate } from "./walker-locomotion.ts";
+import { brakeRate, RUN_SPEED } from "./walker-locomotion.ts";
 
 /** A fixed world-axis box that is not in the ground (an interior's slab, stair tread or counter): `y0` its foot, `y1` its top. */
 export type FloorBox = { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number };
@@ -119,8 +119,10 @@ export class WalkFloor {
         else near = mid;
       }
       const share = Math.max(0, Math.min(1, (far - PACE_LOOK) / (PACE_REACH - PACE_LOOK)));
+      // Within `PACE_REACH` (on a flight: always) a sprint ramps as a run does, or its first stride on the treads would skip one.
+      const top = share < 1 ? Math.min(command, RUN_SPEED) : command;
       const braking = Math.sqrt(STEP_PACE * STEP_PACE + 2 * brake * Math.max(0, far - PACE_LOOK));
-      return Math.min(command, STEP_PACE + (command - STEP_PACE) * share, braking);
+      return Math.min(command, STEP_PACE + (top - STEP_PACE) * share, braking);
     }
     return command;
   }

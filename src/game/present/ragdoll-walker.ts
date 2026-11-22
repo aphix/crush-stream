@@ -272,7 +272,7 @@ export class Walker {
 
   /**
    * How hard (m/s) his torso is moved off the root (its relative speed plus the hold's spring speed for the displacement his travel does not explain), less
-   * what only the fixed world or his own hold explains: the torso sinking, the hold drawing it back, and a stop of the root's own motion.
+   * what only the fixed world explains: the torso sinking, and a stop of the root's own motion.
    */
   private blowSpeed(doll: Doll, travelled: number): number {
     const held = this.anchorVel;
@@ -282,20 +282,10 @@ export class Walker {
     const lag = hypot3(lx, ly, lz);
     this.slack = Math.min(lag, this.slack + travelled);
     const keep = lag > 0 ? (lag - this.slack) / lag : 0;
-    let vx = doll.vel[0]! - held[0]!;
-    let vy = doll.vel[1]! - held[1]!;
-    let vz = doll.vel[2]! - held[2]!;
-    if (lag > 0) {
-      // Closing on the root no faster than the hold springs it back is the hold at work.
-      const back = Math.max(0, Math.min(HOLD_RATE * lag, -(vx * lx + vy * ly + vz * lz) / lag)) / lag;
-      vx += back * lx;
-      vy += back * ly;
-      vz += back * lz;
-    }
-    const dx = vx + HOLD_RATE * lx * keep;
+    const dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx * keep;
     // Sinking is his weight on a tread or a riser; a fall is `decideState`'s to read.
-    const dy = Math.max(0, vy + HOLD_RATE * ly * keep);
-    const dz = vz + HOLD_RATE * lz * keep;
+    const dy = Math.max(0, doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep);
+    const dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz * keep;
     // A wall ahead takes any amount off his way; any other solid only stops the root's own motion: a change inside the ball whose diameter is that velocity reversed.
     const sin = detSin(this.loco.yaw);
     const cos = detCos(this.loco.yaw);
