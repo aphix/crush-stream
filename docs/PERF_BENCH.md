@@ -131,6 +131,10 @@ The day stills are the same PNG run to run. At night the still differs from itse
 
 **The shadow ms above were mostly the previous frame's GPU time.** Headless GL submits a frame's commands only when something needs them; with no page to present, the next frame's first draw (the sun's pass, whose map the last frame read) waited for the whole previous frame. Measured on the worker at main c61eb8342, open world day: a `gl.finish()` before the pass took 8.0 ms and left the pass 2.45 ms (from 9.6); with every caster's `castShadow` off the wait moved to `main` (shadow 0.77, main 31.5). No caster group is heavy: with the pass timed through a finish (3.8 ms, 1.4 of it with nothing drawn), turning off the dummy pool, the crowd's dummies, the far figures, the cars, the trees or the buildings each saved 0.2 to 0.7 ms. Since then `--parts` frames flush at their end as a page's present does (`presentingFrames`), and the crowd's dummy meshes with nobody out are not drawn (8 empty instanced draws a frame, about 0.2 ms of the pass's CPU by a per-draw probe).
 
+**Readings before and after the frame-end flush are not comparable part by part.** A `--parts` reading taken before commit e89d2a8be has the previous frame's GPU time in `shadow`; from that commit on, the wait lands in whichever part first syncs with the GPU (`main` or `post` when the GPU frame is longer than the CPU work before it: the phone rows' `main` +3 to +5 ms below). An A/B whose one tree is cut before that commit and the other after measures the instrument, not the game.
+
+**The shadow drop in the table below is the instrument, not a gain the player gets.** What the player gets: about 0.2 ms of shadow-pass CPU and about as much in `main` (8 fewer empty dummy draws a frame), and on a phone the shadow keeps its 28 m reach after the sun moves.
+
 Before (c61eb8342) and after (this change), interleaved on the worker; shadow and main ms as mean / p95 / worst; a run-to-run shift of 3 ms in `main` is the worker's load:
 
 | still | shadow before | shadow after | main before | main after | calls (same) |
