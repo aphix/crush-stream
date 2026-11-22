@@ -284,9 +284,16 @@ export class Walker {
     const lag = hypot3(lx, ly, lz);
     this.slack = Math.min(lag, this.slack + travelled);
     const keep = lag > 0 ? (lag - this.slack) / lag : 0;
-    const dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx * keep;
-    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;
-    const dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz * keep;
+    let dx = doll.vel[0]! - held[0]! + HOLD_RATE * lx * keep;
+    let dy = doll.vel[1]! - held[1]! + HOLD_RATE * ly * keep;
+    let dz = doll.vel[2]! - held[2]! + HOLD_RATE * lz * keep;
+    // Mid-hop (`hopUp`) his torso springing up past the root is his own hop, not a blow: only a drop is read.
+    if (this.hopUp > 0) dy = Math.min(0, dy);
+    // A carry under way (`carried`): his torso going out along it is his own step out of what he was caught in, not a blow.
+    const carry = hypot2(this.carried[0]!, this.carried[1]!);
+    const out = carry > 0 ? Math.max(0, dx * this.carried[0]! + dz * this.carried[1]!) / (carry * carry) : 0;
+    dx -= out * this.carried[0]!;
+    dz -= out * this.carried[1]!;
     // A wall ahead takes any amount off his way; any other solid only stops the root's own motion: a change inside the ball whose diameter is that velocity reversed.
     const sin = detSin(this.loco.yaw);
     const cos = detCos(this.loco.yaw);

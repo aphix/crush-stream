@@ -161,6 +161,26 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
       system = null;
     }
   });
+
+  /** Each starts 0.2 m from the middle toward the banister, its end a post at the first riser, and heads into it (`mirrored`: the flight's mirror image, the banister at +x). */
+  const newelCases: readonly { it: string; x: number; heading: number; command: number; mirrored: boolean }[] = [
+    // mutation (his torso springing up in his own hop over a riser reads as a blow): sed -i '/^    if (this.hopUp > 0) dy = Math.min(0, dy);/d' src/game/present/ragdoll-walker.ts
+    { it: "when he walks up its mirror image 5 degrees into the banister from beside the post, then he keeps his feet and his strength", x: 0.2, heading: 5 * DEG, command: WALK_SPEED, mirrored: true },
+    // mutation (his torso springing up in his own hop over a riser reads as a blow): sed -i '/^    if (this.hopUp > 0) dy = Math.min(0, dy);/d' src/game/present/ragdoll-walker.ts
+    { it: "when he runs up it 5 degrees into the banister from beside the post, then he keeps his feet and his strength", x: -0.2, heading: -5 * DEG, command: RUN_SPEED, mirrored: false },
+    // mutation (his torso springing up in his own hop over a riser reads as a blow): sed -i '/^    if (this.hopUp > 0) dy = Math.min(0, dy);/d' src/game/present/ragdoll-walker.ts
+    { it: "when he sprints up it 5 degrees into the banister from beside the post, then he keeps his feet and his strength", x: -0.2, heading: -5 * DEG, command: SPRINT_SPEED, mirrored: false },
+    // mutation (his torso going out along getOut's carry past the post reads as a blow): sed -i 's/^    const carry = hypot2(this.carried\[0\]!, this.carried\[1\]!);/    const carry = 0;/' src/game/present/ragdoll-walker.ts
+    { it: "when he sprints 20 degrees into the banister from beside it, past the post at its end and on along its outside, then he keeps his feet and his strength", x: -0.2, heading: -20 * DEG, command: SPRINT_SPEED, mirrored: false },
+  ];
+  for (const testCase of newelCases) {
+    it(testCase.it, async () => {
+      const sys = await standingAmong(flight(true, testCase.mirrored), testCase.x);
+      const climb = walk(sys, testCase.heading, testCase.command, CLIMB_SECONDS);
+      expect(climb.fell, "he stayed on his feet").toBe(false);
+      expect(climb.least, `least strength ${climb.least.toFixed(2)}`).toBeGreaterThanOrEqual(UNSHAKEN);
+    });
+  }
 });
 
 /** A tread of the flight a step from the landing, and a spot across the banister from the middle of the flight at that tread. */
