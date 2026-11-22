@@ -143,6 +143,13 @@ function hostWithMap(bodies: FakeBodyHost | null = null, police = false): Harnes
   return harness;
 }
 
+/** The eye `away` m east of (x, z), as a player's is when he acts there: a knock farther than the art's range from every eye throws no ragdoll (`OpenWorldCulling.anyoneNear`). One frame, no step: the law's poses stay as set. */
+function eyeNear(harness: Harness, x: number, z: number, away: number): void {
+  harness.eye.eyeX = x + away;
+  harness.eye.eyeZ = z;
+  harness.director.frame(FRAME);
+}
+
 describe("given the open world's course up and a map given", () => {
   it("when the first frame comes, then the crowd is made at the population of the tier, drawn each frame from the eye, and the crowd link carries the tier above the seed", () => {
     const harness = hostWithMap();
@@ -406,6 +413,7 @@ describe("given the hook aimed at the drawn people of the open world", () => {
   // mutation: sed -i '/^    if (this.law !== null \&\& this.law.copMet(/,/^    }/d' src/game/engine/engine-openworld.ts
   it("when the sight line passes a foot cop's chest far from any civilian, then the reticle names him, and the fire downs him where he stands, thrown and logged", () => {
     const harness = hostWithBodies();
+    eyeNear(harness, 5000, 5000, 0);
     const people = harness.crowd().poses.count;
     const cops = harness.director["law"]!.copPoses;
     cops.shown[2] = 1;
@@ -427,6 +435,7 @@ describe("given the hook aimed at the drawn people of the open world", () => {
   // mutation: sed -i 's/^    if (index >= people) return this.law?.hookCop(index - people, this.seconds) ?? -1;/    if (index >= people) return -1;/' src/game/engine/engine-openworld.ts
   it("when a cop is hooked, then no body of the civilians' pool is stood for him", () => {
     const harness = hostWithBodies();
+    eyeNear(harness, 5000, 5000, 0);
     const people = harness.crowd().poses.count;
     const cops = harness.director["law"]!.copPoses;
     cops.shown[1] = 1;
@@ -526,6 +535,7 @@ describe("given the hook aimed at the drawn people of the open world", () => {
 
   it("when a cop the hook took is up again after his time, then the dummy thrown for him goes by its slot and age, and not before", () => {
     const harness = hostWithBodies();
+    eyeNear(harness, 5000, 5000, 0);
     const people = harness.crowd().poses.count;
     const cops = harness.director["law"]!.copPoses;
     cops.shown[2] = 1;
@@ -599,6 +609,7 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     carAtSomeone(harness);
     const crowd = harness.crowd();
     const resident = shownResident(crowd);
+    eyeNear(harness, crowd.poses.x[resident]!, crowd.poses.z[resident]!, 0);
     const { car, place } = carAtWalker(crowd, resident, 6, 14);
     harness.cars = [car];
     for (let travelled = FRAME; travelled < 2 && harness.thrown.length === 0; travelled += FRAME) {
@@ -653,6 +664,7 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     carAtSomeone(harness);
     const crowd = harness.crowd();
     const resident = shownResident(crowd);
+    eyeNear(harness, crowd.poses.x[resident]!, crowd.poses.z[resident]!, 60);
     const { car, place } = carAtWalker(crowd, resident, 6, 14);
     harness.cars = [car];
     for (let travelled = FRAME; travelled < 2 && harness.thrown.length === 0; travelled += FRAME) {
@@ -706,6 +718,41 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     const house = map.places[harness.crowd().state.ints[RESIDENT_INT.home]!]!;
     harness.listener!(WRECK_SPEED, house.x + house.depth / 2 + 0.5, house.z);
     expect(harness.director.eventLog()[0], "kind of the first event").toBe(EVENT_KIND.wreck);
+  });
+});
+
+describe("given a civilian a car is about to run down, with no player's car within 120 m of her", () => {
+  /** A fresh host whose eye is `offset` m east of a shown civilian; a car runs her down. */
+  function runDownWithEyeAt(offset: number): { harness: Harness; resident: number } {
+    const harness = hostWithMap();
+    harness.frame();
+    const crowd = harness.crowd();
+    stepUntilShown(crowd, crowd.crowdSeconds);
+    const resident = shownResident(crowd);
+    harness.eye.eyeX = crowd.poses.x[resident]! + offset;
+    harness.eye.eyeZ = crowd.poses.z[resident]!;
+    harness.frame();
+    expect(crowd.poses.shown[resident], "control: she is still drawn before the car comes").toBe(1);
+    const { car, place } = carAtWalker(crowd, resident, 6, 14);
+    harness.cars = [car];
+    for (let travelled = FRAME; travelled < 2 && crowd.poses.shown[resident] === 1; travelled += FRAME) {
+      place(travelled);
+      harness.director.step(FRAME);
+    }
+    return { harness, resident };
+  }
+
+  it("when the eye is 300 m from her, then no ragdoll is thrown, she is gone from the drawn crowd and the knock is in the log; and when the eye is 50 m from her, then the ragdoll is thrown", () => {
+    const far = runDownWithEyeAt(300);
+    const log = far.harness.director.eventLog();
+    let knocked = false;
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) knocked ||= log[at] === EVENT_KIND.knock && log[at + 1] === far.resident;
+    expect(far.harness.thrown.length, "ragdolls thrown with the eye 300 m off").toBe(0);
+    expect(far.harness.crowd().poses.shown[far.resident], "she is gone from the drawn crowd").toBe(0);
+    expect(knocked, "the knock is in the log").toBe(true);
+    const near = runDownWithEyeAt(50);
+    expect(near.harness.thrown.length, "ragdolls thrown with the eye 50 m off").toBe(1);
+    expect(near.harness.thrown[0]!.guard, "thrown for her").toBe(near.resident);
   });
 });
 

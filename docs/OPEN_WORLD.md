@@ -68,7 +68,8 @@ per frame on a client:
 3. the shown are kept a body apart and their bumps found (below);
 4. with `authority`, every shown person is tested against every car (`runsDown` within `CAR_REACH`, `looseRunsDown` for a car with
    a torn part flying): a hit hides them at once, logs a `knock` event and queues a strike for the ragdoll throw, dressed as the drawn crowd dresses
-   them (`dressOfLook` of their look word, the same dress the near dummy wears).
+   them (`dressOfLook` of their look word, the same dress the near dummy wears). No ragdoll is thrown for a knock farther than 120 m from every
+   player's car, every player on foot and this machine's eye.
 
 **Bodies.** Civilians keep a body's width apart (`BODY_GAP`, 0.6 m) without the brain knowing. `CrowdSeparation` (`civilian-separation.ts`) takes the brain's
 spots, pairs the bodies by a hashed grid and relaxes the pairs `SEPARATION_PASSES` times, no body moving more than `MAX_OFFSET` (0.7 m) from the

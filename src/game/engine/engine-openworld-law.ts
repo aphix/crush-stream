@@ -35,6 +35,8 @@ export type LawEnginePorts = {
   makeArt(capacity: number): CopArt;
   /** The pool slot the figure was thrown into, -1 where none is known (the worker's world, or Rapier not up yet). */
   throwFigure(strike: FigureStrike, look: DriverLook): number;
+  /** Whether a player's car or walker, or this machine's eye, is within the art's range of (x, z): no ragdoll is thrown for a knock nobody could see. */
+  anyoneNear(x: number, z: number): boolean;
   /** The open world's traffic, whose pool cars patrol cars are leased from and whose red-light runners the law hears; null: the law is on foot. */
   traffic(): TrafficApi | null;
   /** The course's solids the patrol cars bend round; null: they drive straight. */
@@ -155,6 +157,7 @@ export class OpenWorldLaw {
   }
 
   private throwDressed(strike: FigureStrike, lookWord: number): number {
+    if (!this.ports.anyoneNear(strike.x, strike.z)) return -1;
     const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
     dressOfLook(lookWord, look);
     return this.ports.throwFigure(strike, look);

@@ -166,7 +166,7 @@ const HOT = {
   "src/game/ai/openworld-auto/auto-interest.ts": ["activityInterest", "moodInterest", "eventInterest", "copInterest", "driverInterest"],
   "src/game/ai/openworld-auto/auto-scan.ts": ["fill", "fillCrowd", "heatFromLog", "warm", "fillCops", "fillDrivers", "watchableCar", "watchable", "personPose", "carPose", "poseOf"],
   "src/game/present/openworld-auto-cam.ts": ["update", "followHeading"],
-  "src/game/engine/engine-openworld-cull.ts": ["frame"],
+  "src/game/engine/engine-openworld-cull.ts": ["frame", "anyoneNear"],
   "src/game/engine/engine-openworld-ambulance.ts": ["note", "hear", "newestCalled"],
   "src/game/engine/engine-openworld-door-clips.ts": ["frame", "carAt"],
   "src/game/present/walker-floor.ts": ["under", "pace", "stand", "solidsHeight", "walled", "edgeAhead", "cutsShoulders"],

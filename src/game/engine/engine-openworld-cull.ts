@@ -1,8 +1,10 @@
 import type * as THREE from "three";
 import type { CarDetail } from "../present/car-detail.ts";
+import { FAR_DRAW } from "../present/civilian-art-constants.ts";
 import { OpenWorldCarLod, type LodCar } from "../present/openworld-car-lod.ts";
 import { SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../present/openworld-sight.ts";
 import type { Occluder } from "../present/spectate-cam.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 
 /** What culling needs of the engine. */
 export type OpenWorldCullPorts = {
@@ -46,6 +48,11 @@ export class OpenWorldCulling {
     this.seconds += wallDt;
     this.sight.update(this.ports.eyes(), this.seconds, this.playersNow());
     this.cars.frame(liveCars, this.ports.followed(), this.ports.replaying());
+  }
+
+  /** Whether any player's car or walker, or this machine's eye, is within `FAR_DRAW` m of (x, z): no art draws a person farther than that from an eye. */
+  anyoneNear(x: number, z: number, eyeX: number, eyeZ: number): boolean {
+    return this.sight.near(x, z, FAR_DRAW) || hypot2(x - eyeX, z - eyeZ) <= FAR_DRAW;
   }
 
   /** The open world is left: hidden cars are drawn again, ids and solids are given back. */
