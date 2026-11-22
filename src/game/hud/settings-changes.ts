@@ -35,6 +35,7 @@ const BASE_SETTINGS = {
   halftone: { section: "playback", label: "Halftone", defaults: { halftone: D.halftone } },
   hatch: { section: "playback", label: "Hatching", defaults: { hatching: D.hatching } },
   rim: { section: "playback", label: "Rim light", defaults: { rimLight: D.rimLight } },
+  minds: { section: "playback", label: "Minds", defaults: { minds: D.minds } },
   materials: { section: "playback", label: "Material strength", defaults: { materialStrength: D.materialStrength } },
   candy: { section: "playback", label: "Candy paint", defaults: { candyStrength: D.candyStrength } },
   contours: { section: "playback", label: "Car contour", defaults: { contourStrength: D.contourStrength } },

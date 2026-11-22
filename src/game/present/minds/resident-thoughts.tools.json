@@ -1,0 +1,111 @@
+[
+  {
+    "name": "ignore",
+    "description": "Carry on: nothing here is worth attention.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "look_at",
+    "description": "Look at something nearby.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "stimulus": {
+          "type": "string",
+          "description": "The thing to look at.",
+          "enum": [
+            "player",
+            "car",
+            "siren",
+            "crash",
+            "knock",
+            "gunshot",
+            "down",
+            "person"
+          ]
+        }
+      },
+      "required": [
+        "stimulus"
+      ]
+    }
+  },
+  {
+    "name": "remark_on",
+    "description": "Talk about news from the neighbourhood.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "event": {
+          "type": "string",
+          "description": "The news.",
+          "enum": [
+            "knock",
+            "wreck",
+            "crime",
+            "bust",
+            "push",
+            "fight",
+            "jaywalk",
+            "copDown",
+            "ambulance",
+            "danger"
+          ]
+        }
+      },
+      "required": [
+        "event"
+      ]
+    }
+  },
+  {
+    "name": "think_about",
+    "description": "Think about home, work, company or plans.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "about": {
+          "type": "string",
+          "description": "The subject.",
+          "enum": [
+            "home",
+            "work",
+            "company",
+            "plans"
+          ]
+        }
+      },
+      "required": [
+        "about"
+      ]
+    }
+  },
+  {
+    "name": "worry_about",
+    "description": "Worry about one of their needs.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "need": {
+          "type": "string",
+          "description": "The need.",
+          "enum": [
+            "rest",
+            "food",
+            "work",
+            "social",
+            "errand",
+            "solitude"
+          ]
+        }
+      },
+      "required": [
+        "need"
+      ]
+    }
+  }
+]

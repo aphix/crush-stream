@@ -1,0 +1,1202 @@
+[
+  {
+    "name": "activity_arresting",
+    "description": "a cop making an arrest (a 1.5 s clip). Read by ai/openworld-crime/crime-poses.ts#fillCopPoses.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_block",
+    "description": "blocking a punch. Read by ai/civilians/society-activity.ts#readFight.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_bump",
+    "description": "bumped into someone (a 0.7 s clip). Read by ai/civilians/civilian-crowd.ts#writeActivity.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_buy",
+    "description": "buying at the counter (a 3.2 s clip). Read by ai/civilians/society-activity.ts#readBuying.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_carIn",
+    "description": "getting into a car (a 2.6 s clip). Read by ai/civilians/society-activity.ts#readWalk.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_carOut",
+    "description": "getting out of a car (a 2.4 s clip). Read by ai/civilians/society-activity.ts#readWalk.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_cuffed",
+    "description": "in handcuffs. Read by ai/openworld-crime/crime-poses.ts#fillCopPoses.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_cuffing",
+    "description": "a cop cuffing a suspect (a 1.5 s clip). Read by ai/openworld-crime/crime-poses.ts#fillCopPoses.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_door",
+    "description": "going through a door (a 1.8 s clip). Read by ai/civilians/society-activity.ts#readWalk.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_escorting",
+    "description": "a cop leading a suspect away. Read by ai/openworld-crime/crime-poses.ts#fillCopPoses.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_hit",
+    "description": "taking a hit (a 0.9 s clip). Read by ai/civilians/society-activity.ts#readFight, ai/civilians/civilian-crowd.ts#writeActivity.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_idle",
+    "description": "standing about. Read by ai/civilians/society-activity.ts#readOutdoor, ai/civilians/society-activity.ts#readIndoors.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_kneel",
+    "description": "a medic kneeling by someone hurt. Read by engine/engine-openworld-medics.ts#placeMedics.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_none",
+    "description": "walking, or standing still. Read by ai/civilians/society-activity.ts#readActivity.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_phoneCall",
+    "description": "phoning for an ambulance. Read by ai/civilians/society-activity.ts#readWatcher.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_recoil",
+    "description": "flinching back from danger (a 0.9 s clip). Read by ai/civilians/society-activity.ts#readFlinch, ai/civilians/society-activity.ts#readWatcher.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_sit",
+    "description": "seated on a chair or a bench. Read by ai/civilians/society-activity.ts#readRoom, ai/civilians/society-activity.ts#readIndoors.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_sitDown",
+    "description": "sitting down (a 1.2 s clip). Read by ai/civilians/society-activity.ts#readSitting.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_sitSteps",
+    "description": "sitting out on the stoop. Read by ai/civilians/society-activity.ts#readOutdoor.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_standUp",
+    "description": "getting up (a 1.1 s clip). Read by ai/civilians/society-activity.ts#readSitting.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_swing",
+    "description": "swinging a punch (a 0.6 s clip). Read by ai/civilians/society-activity.ts#readFight.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "activity_talk",
+    "description": "talking with someone. Read by ai/civilians/society-activity.ts#readOutdoor.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "event_alongside",
+    "description": "the other civilian in a push or fight. Applied by ai/civilians/civilian-events.ts#queueEvents.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_ambulance",
+    "description": "someone down needs an ambulance. Applied by ai/civilians/society-alarm.ts#callAmbulanceFor.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_ambulanceStage",
+    "description": "where the ambulance is.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_arrestAlight",
+    "description": "the patrol car arrived at the station.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_arrestRide",
+    "description": "an arrested resident driven off in a patrol car.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_bust",
+    "description": "the police arrested someone. Applied by ai/civilians/society-reactions.ts#applyBust, ai/civilians/society-reactions.ts#releaseFightPartner.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_car",
+    "description": "the car that nudged someone in a push. Applied by ai/civilians/civilian-events.ts#queueEvents.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_copDown",
+    "description": "a car knocked a cop down.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_crime",
+    "description": "a crime was committed. Applied by ai/civilians/society-reactions.ts#applyCrime, ai/civilians/society-reactions.ts#reactToCrime.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_danger",
+    "description": "a crash or a car heading at someone. Applied by ai/civilians/society-alarm.ts#alarmAt.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_fight",
+    "description": "a fight broke out. Applied by ai/civilians/society-reactions.ts#startFight.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_jaywalk",
+    "description": "the police arrested a jaywalker. Applied by ai/civilians/society-reactions.ts#applyJaywalk.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_knock",
+    "description": "a car ran a civilian down. Applied by ai/civilians/civilian-events.ts#knockResident, ai/civilians/society-reactions.ts#applyKnockWitness, ai/civilians/society-alarm.ts#alarmAtKnock, ai/civilians/civilian-events.ts#applyKnock.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_push",
+    "description": "someone was shoved. Applied by ai/civilians/society-reactions.ts#applyPush.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_walker",
+    "description": "the player on foot in a push or fight. Applied by ai/civilians/civilian-events.ts#queueEvents.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_wreck",
+    "description": "a car crashed into a building. Applied by ai/civilians/civilian-events.ts#sendMechanicOut, ai/civilians/society-alarm.ts#alarmAt, ai/civilians/civilian-events.ts#applyWreck.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "purpose_argue",
+    "description": "a row with a neighbour: has a row with a neighbour (ends standing outdoors, on foot). Launched by ai/civilians/society-table.ts#considerInteractions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_biscuitSteals",
+    "description": "stealing fish: Biscuit the cat steals fish (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#keepAppointment.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_breakIn",
+    "description": "trying the parked cars: tries the parked cars (ends standing outdoors, on foot). Launched by ai/civilians/society-table.ts#considerInteractions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_busAway",
+    "description": "the bus: takes the bus out of the neighbourhood (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#candidateFor.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_callAmbulance",
+    "description": "calling an ambulance: calls an ambulance for someone down (ends standing outdoors, on foot). Launched by ai/civilians/society-alarm.ts#callAmbulanceFor.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_coffee",
+    "description": "a coffee: goes for a coffee (ends at a door, may take the car). Launched by ai/civilians/society-table.ts#considerInteractions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_deeCoffee",
+    "description": "coffee before the broadcast: Dee gets coffee before the broadcast (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#keepAppointment.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_dogChase",
+    "description": "chasing the cats: a dog chases the tabby gang (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#keepAppointment.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_drink",
+    "description": "a drink: goes for a drink (ends at a door, may take the car). Launched by ai/civilians/society-table.ts#considerInteractions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_errand",
+    "description": "an errand: run an errand at a shop (ends at a door, may take the car). Launched by ai/civilians/civilian-plan.ts#chooseByUtility.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_fight",
+    "description": "a fight: gets into a fight in the street (ends standing outdoors, on foot). Launched by ai/civilians/society-reactions.ts#enterFight.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_flee",
+    "description": "getting away: runs home from trouble, or lies low when wanted (ends at a door, on foot). Launched by ai/civilians/society-reactions.ts#fleeHome, ai/civilians/society-table.ts#considerInteractions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_food",
+    "description": "a meal: go out for a meal (ends at a door, may take the car). Launched by ai/civilians/civilian-plan.ts#chooseByUtility.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_jamalFlyers",
+    "description": "looking for Pepper: Jamal puts up flyers for Pepper, a lost cat (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#keepAppointment.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_kowalskiBroom",
+    "description": "chasing the cat off with a broom: Halina Kowalski chases Biscuit the cat off with a broom (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#keepAppointment.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_loiter",
+    "description": "hanging about: hangs about outside a shop (ends standing outdoors, on foot). Launched by ai/civilians/society-table.ts#considerInteractions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_lookOn",
+    "description": "looking on: stands at the door looking at trouble (ends standing outdoors, on foot). Launched by ai/civilians/society-alarm.ts#alarmAt.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_mechanicOut",
+    "description": "looking at the wreck: the mechanic comes out to look at a wreck (ends at a door, on foot). Launched by ai/civilians/civilian-events.ts#sendMechanicOut.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_mug",
+    "description": "looking for someone to mug: looks for someone to mug (ends standing outdoors, on foot). Launched by ai/civilians/society-table.ts#considerInteractions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_okaforParty",
+    "description": "the Friday party: the Okafors' Friday party (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#keepAppointment.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_partyGuest",
+    "description": "the Friday party: a guest goes up to the Friday party (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#candidateFor.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_report",
+    "description": "calling the police: calls the police about a crime seen (ends standing outdoors, on foot). Launched by ai/civilians/society-reactions.ts#witnessAll.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_rest",
+    "description": "rest: go home to rest or sleep (ends at a door, may take the car). Launched by ai/civilians/civilian-plan.ts#chooseByUtility.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_salPigeons",
+    "description": "feeding the pigeons: Sal feeds the pigeons (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#keepAppointment.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_shoplift",
+    "description": "shoplifting: lifts something from a shop (ends at a door, on foot). Launched by ai/civilians/society-table.ts#considerInteractions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_social",
+    "description": "company: go out for company (ends at a door, may take the car). Launched by ai/civilians/civilian-plan.ts#chooseByUtility.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_solitude",
+    "description": "some quiet: go off alone for some quiet (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#chooseByUtility.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_stoopSit",
+    "description": "sitting out on the stoop: sits out on the stoop (ends standing outdoors, on foot). Launched by ai/civilians/society-table.ts#considerInteractions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_stoopTalk",
+    "description": "a chat with a neighbour: stops to chat with a neighbour (ends standing outdoors, on foot). Launched by ai/civilians/society-table.ts#considerInteractions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_tabbyPlay",
+    "description": "a run: the tabby gang runs about (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#keepAppointment.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_vanRepair",
+    "description": "fixing the van: Vince fixes his van, again (ends at a door, on foot). Launched by ai/civilians/civilian-plan.ts#keepAppointment.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  },
+  {
+    "name": "purpose_work",
+    "description": "work: go to work a shift (ends at a door, may take the car). Launched by ai/civilians/civilian-plan.ts#chooseByUtility.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "resident": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        }
+      },
+      "required": [
+        "resident"
+      ]
+    }
+  }
+]

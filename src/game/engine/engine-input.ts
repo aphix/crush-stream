@@ -15,6 +15,7 @@ import { RIM_LIGHT } from "../present/rim-light.ts";
 import { CONTOUR_SMOOTHING } from "../vehicle/normal-smooth.ts";
 import { MATERIAL_STRENGTH } from "../vehicle/material-class.ts";
 import { CANDY_STRENGTH } from "../vehicle/car-candy.ts";
+import { finishForTier } from "../vehicle/car-finish.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
 import type { DrawDistance, RenderScale, ShadowQuality } from "../present/player-quality.ts";
 import { stationIdOrDefault } from "../present/music-manifest.ts";
@@ -257,6 +258,17 @@ export abstract class EngineInput extends EngineRigs {
     this.rimLight = value === null || !Number.isFinite(value) || value <= 0 ? null : Math.min(value, KNOB_RANGES.rim.max);
     RIM_LIGHT.value = this.rimLight ?? 0;
     this.emitHud();
+  }
+
+  /** The HUD's Minds: true or false pins Needle's thoughts on or off, null is Auto (`mindsAuto`). */
+  setMinds(value: boolean | null): void {
+    this.minds = value;
+    this.emitHud();
+  }
+
+  /** The Minds' Auto: on for a desktop at the finish tiers (high, ultra); a phone or a software rasterizer cannot spare a 23 MB model and a core. */
+  protected mindsAuto(): boolean {
+    return this.deviceClass === "desktop" && finishForTier(this.cine.tier);
   }
 
   /** The HUD's material strength (0 = old uniform reflections, 1 = default, 2 = twice): every class's reflection cut and grain. */
@@ -586,6 +598,9 @@ export abstract class EngineInput extends EngineRigs {
         break;
       case "rim":
         this.setRimLight(D.rimLight);
+        break;
+      case "minds":
+        this.setMinds(D.minds);
         break;
       case "materials":
         this.setMaterialStrength(D.materialStrength);

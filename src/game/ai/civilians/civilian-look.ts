@@ -136,12 +136,14 @@ export function chestMet(poses: Pick<CrowdPoses, "x" | "z" | "feetY" | "shown" |
 
 /**
  * The panel's text for what the eye rests on within `reach` m (a car the caller met first cuts it short): the civilian in front of it (their line, what they are doing when the line does not say it, and their life log),
- * else the building the ray meets (its kind, who lives or works there, its comings and goings), else nothing; whichever is nearer along the ray.
+ * else the building the ray meets (its kind, who lives or works there, its comings and goings), else nothing; whichever is nearer along the ray. `shown.index` is the civilian it is about, -1 for none.
  */
-export function lookAtOf(state: CityState, poses: CrowdPoses, tick: number, ray: LookRay, reach = LOOK_REACH): LookText | null {
+export function lookAtOf(state: CityState, poses: CrowdPoses, tick: number, ray: LookRay, reach = LOOK_REACH, shown: Meeting | null = null): LookText | null {
   const resident = residentMet(poses, ray, reach);
   const place = placeMet(state.map, ray, reach, _placeMeeting);
-  if (resident.index >= 0 && resident.along <= place.along) {
+  const about = resident.index >= 0 && resident.along <= place.along;
+  if (shown !== null) shown.index = about ? resident.index : -1;
+  if (about) {
     const doing = activityLine(poses.activity[resident.index]!);
     const history = historyLines(state, resident.index);
     return { title: civilianLine(state, resident.index, tick), lines: doing === null ? history : [doing, ...history] };

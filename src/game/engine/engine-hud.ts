@@ -128,6 +128,7 @@ export abstract class EngineHud extends EngineWarm {
       halftone: this.halftone,
       hatching: this.hatching,
       rimLight: this.rimLight,
+      minds: this.minds,
       materialStrength: this.materialStrength,
       contourStrength: this.contourStrength,
       candyStrength: this.candyStrength,
