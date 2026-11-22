@@ -183,18 +183,22 @@ describe("given a walker and a man standing still 2 m ahead of him", () => {
     expect(system.walker.state, "the runner").toBe("stand");
   });
 
-  /** He runs into the man at 3.5 m/s, a frame at a time, until the man leaves his feet: the man's torso's speed along +x (away from the runner) that frame, and the runner's least strength up to it. */
+  /** He runs into the man at 3.5 m/s, a frame at a time, until the man leaves his feet: the man's torso's speed along +x (away from the runner) that frame, and the runner's least strength up to it, read as the meeting is judged (before the frame's recovery). */
   function runInto(): { away: number; runnerLeast: number } {
     system.startWalker(new THREE.Vector3(2, 0, 0), -Math.PI / 2, { cop: false, look: driverLook(1, 0) }, STANDER);
     frames(system, 1);
     let runnerLeast = 1;
+    const meet = system["meetWalkers"].bind(system);
+    system["meetWalkers"] = (dt: number) => {
+      meet(dt);
+      runnerLeast = Math.min(runnerLeast, system.walker.strength);
+    };
     for (let f = 0; f < 1.2 * FRAME_HZ && system.walkers[STANDER]!.state === "stand"; f++) {
       frames(system, FRAME, () => {
         system.walker.heading = Math.PI / 2;
         system.walker.command = RUN_SPEED;
         system.walker.ask();
       });
-      runnerLeast = Math.min(runnerLeast, system.walker.strength);
     }
     expect(system.walkers[STANDER]!.state, "control: the man run into left his feet").not.toBe("stand");
     return { away: system["dolls"][STANDER]!.bodies[0]!.linvel().x, runnerLeast };
@@ -206,7 +210,7 @@ describe("given a walker and a man standing still 2 m ahead of him", () => {
   });
 
   // mutation: sed -i 's/^        this.walkers\[runner\]!.stagger(0.5);/        void runner;/' src/game/present/ragdoll-throw.ts
-  it("when he runs into the man and knocks him down, then the runner staggers: his strength falls to a half (and a frame's recovery)", () => {
+  it("when he runs into the man and knocks him down, then the runner staggers: his strength falls to a half", () => {
     expect(runInto().runnerLeast, "the runner's least strength").toBeLessThanOrEqual(0.55);
   });
 

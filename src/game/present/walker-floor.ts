@@ -27,7 +27,7 @@ const PACE_BRAKE_SHARE = 0.85;
 const EDGE_BISECTIONS = 5;
 /** The torso's centre stands this high (m) over the floor. */
 const TORSO_HEIGHT = PARTS[0].c[1];
-/** His shoulders' half width (m, to an arm's outer face) and their top over his floor: a wall within them is in his way, one whose foot is higher is overhead. */
+/** His shoulders' half width (m, to an arm's outer face) and their top over his floor: a wall up to his chest (`TORSO_HEIGHT`) within them is in his way, one whose foot is over them is overhead. */
 const SHOULDER_HALF = PARTS[4].c[0] + PARTS[4].h[0];
 const SHOULDER_TOP = PARTS[4].c[1] + PARTS[4].h[1];
 /** A wall that cuts the line across his shoulders this far (m) ahead of his torso's centre, and not the line through it, stands in front of him: the torso's half depth and a hand's breadth. */
@@ -172,7 +172,7 @@ export class WalkFloor {
 
   /** The sideways shift (m, along (`cos`, -`sin`)) that takes his shoulders at (`x`, `z`), facing (`sin`, `cos`), clear of the walls just ahead, when one no wider than `EDGE_MOST` of him is in his way; 0 otherwise. */
   edgeAhead(x: number, z: number, sin: number, cos: number): number {
-    const wall = this.level + ASK_LIFT + WALL_RISE;
+    const chest = this.level + TORSO_HEIGHT;
     const overhead = this.level + SHOULDER_TOP;
     let plus = 0;
     let minus = 0;
@@ -180,7 +180,7 @@ export class WalkFloor {
     for (let i = 0; i < boxes.length; i++) {
       const box = boxes[i]!;
       // A wall that also cuts the line through his centre is beside him (a banister he walks along), not an edge in front of him.
-      if (box.y1 <= wall || box.y0 >= overhead || !cutsShoulders(box, x, z, sin, cos, EDGE_REACH)) continue;
+      if (box.y1 <= chest || box.y0 >= overhead || !cutsShoulders(box, x, z, sin, cos, EDGE_REACH)) continue;
       const from = _cut[0]!;
       const to = _cut[1]!;
       if (cutsShoulders(box, x, z, sin, cos, 0)) continue;

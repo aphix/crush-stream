@@ -64,16 +64,17 @@ function walk(sys: RagdollSystem, heading: number, command: number, seconds: num
 /** A wall along +z whose face stands at x = 0.5, from the ground to over his head. */
 const WALL: FloorBox = { x0: 0.5, x1: 0.8, z0: -5, z1: 60, y0: 0, y1: 2.5 };
 
-/** The flight along +z about x = 0 from `FLIGHT_FOOT_Z`, its landing after it, its party wall at +x and a banister at -x from before its foot (`newel`: from its first riser, its end a post there). */
-function flight(newel = false): FloorBox[] {
+/** The flight along +z about x = 0 from `FLIGHT_FOOT_Z`, its landing after it, its party wall at +x and a banister at -x from before its foot (`newel`: from its first riser, its end a post there; `mirrored`: the wall at -x and the banister at +x). */
+function flight(newel = false, mirrored = false): FloorBox[] {
   const boxes: FloorBox[] = [];
   const top = FLIGHT_FOOT_Z + TREAD_RUN * FLIGHT_STEPS;
   for (let s = 0; s < FLIGHT_STEPS; s++) {
     boxes.push({ x0: -FLIGHT_HALF, x1: FLIGHT_HALF, z0: FLIGHT_FOOT_Z + TREAD_RUN * s, z1: FLIGHT_FOOT_Z + TREAD_RUN * (s + 1), y0: 0, y1: MAX_RISER * (s + 1) });
   }
   boxes.push({ x0: -FLIGHT_HALF, x1: FLIGHT_HALF, z0: top, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS });
-  boxes.push({ x0: FLIGHT_HALF, x1: FLIGHT_HALF + 0.3, z0: -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 3 });
-  boxes.push({ x0: -FLIGHT_HALF - 0.06, x1: -FLIGHT_HALF, z0: newel ? FLIGHT_FOOT_Z : -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 1 });
+  const side = (box: FloorBox): FloorBox => (mirrored ? { ...box, x0: -box.x1, x1: -box.x0 } : box);
+  boxes.push(side({ x0: FLIGHT_HALF, x1: FLIGHT_HALF + 0.3, z0: -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 3 }));
+  boxes.push(side({ x0: -FLIGHT_HALF - 0.06, x1: -FLIGHT_HALF, z0: newel ? FLIGHT_FOOT_Z : -2, z1: top + 30, y0: 0, y1: MAX_RISER * FLIGHT_STEPS + 1 }));
   return boxes;
 }
 
@@ -127,10 +128,28 @@ describe("given the walker at the foot of a rowhome's stair flight between its p
   }
 
   // mutation: sed -i 's/^    return height !== NO_FLOOR ? height : this.floor.level;/    return height !== NO_FLOOR ? height : 0;/' src/game/present/ragdoll-walker.ts
-  it("when he walks up it 10 degrees into the banister, its end a post at the first riser, then he keeps his feet and his strength", async () => {
+  // mutation (the post's end holds his shoulder): sed -i 's/^    const aside = Math.max(-SIDESTEP_SPEED \* dt, Math.min(SIDESTEP_SPEED \* dt, edge));/    const aside = 0;/' src/game/present/ragdoll-walker.ts
+  it("when he walks up it 10 degrees into the banister, its end a post at the first riser, then he sidesteps the post, keeps his feet and his strength, and climbs it", async () => {
     const sys = await standingAmong(flight(true), -0.2);
+    const start = sys["dolls"][WALKER_SLOT]!.bodies[0]!.translation().z;
     const climb = walk(sys, -10 * DEG, WALK_SPEED, CLIMB_SECONDS);
     expect(climb.fell, "he stayed on his feet").toBe(false);
     expect(climb.least, `least strength ${climb.least.toFixed(2)}`).toBeGreaterThanOrEqual(UNSHAKEN);
+    expect(climb.z - start, `he went up the flight: ${(climb.z - start).toFixed(2)} m`).toBeGreaterThan(FLIGHT_FOOT_Z + TREAD_RUN * CLIMB_TREADS);
+  });
+
+  // mutation (a riser under his lagging root reads a stride away, and he speeds into a skipped tread): sed -i '/^    if (this.stepAt(x, z, sin, cos, 0)) return STEP_PACE;/d' src/game/present/walker-floor.ts
+  it("when he runs up it 10 degrees into the banister from 0.2 m toward the party wall, on the flight as built and on its mirror image, then both ways he keeps his feet and his strength and climbs it", async () => {
+    for (const mirrored of [false, true]) {
+      const sys = await standingAmong(flight(false, mirrored), mirrored ? -0.2 : 0.2);
+      const start = sys["dolls"][WALKER_SLOT]!.bodies[0]!.translation().z;
+      const climb = walk(sys, (mirrored ? 10 : -10) * DEG, RUN_SPEED, CLIMB_SECONDS);
+      const way = mirrored ? "mirrored" : "as built";
+      expect(climb.fell, `${way}: he stayed on his feet`).toBe(false);
+      expect(climb.least, `${way}: least strength ${climb.least.toFixed(2)}`).toBeGreaterThanOrEqual(UNSHAKEN);
+      expect(climb.z - start, `${way}: he went up the flight: ${(climb.z - start).toFixed(2)} m`).toBeGreaterThan(FLIGHT_FOOT_Z + TREAD_RUN * CLIMB_TREADS);
+      sys.dispose();
+      system = null;
+    }
   });
 });
