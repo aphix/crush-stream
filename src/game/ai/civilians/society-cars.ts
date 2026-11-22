@@ -4,19 +4,18 @@ import {
   DRIVE_MIN_METRES,
   FLAG,
   MAX_PATH_NODES,
-  NEED,
   NEVER_TICK,
   NO_INDEX,
   NO_PLACE,
-  PURPOSE,
   RESIDENT_INT,
   RESIDENT_INT_STRIDE,
   SPECIES,
 } from "./civilian-constants.ts";
 import { markDirty, type CityState } from "./civilian-state.ts";
+import { LEG_PURPOSES } from "./resident-spine.ts";
 
-/** Reasons that take a car: the commute, home, errands, meals, company, a coffee or a drink. The stories, the bus, crime, a fight and hiding go on foot. */
-const DRIVABLE_PURPOSES: readonly number[] = [NEED.rest, NEED.food, NEED.work, NEED.social, NEED.errand, PURPOSE.coffee, PURPOSE.drink];
+/** Reasons that take a car (the spine's `drive`): the commute, home, errands, meals, company, a coffee or a drink. The stories, the bus, crime, a fight and hiding go on foot. */
+const DRIVABLE_PURPOSES: readonly number[] = LEG_PURPOSES.flatMap((row, purpose) => (row.drive ? [purpose] : []));
 
 function intAt(state: CityState, resident: number, field: number): number {
   return state.ints[resident * RESIDENT_INT_STRIDE + field]!;
