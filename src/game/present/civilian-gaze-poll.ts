@@ -1,7 +1,7 @@
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { SPECIES } from "../ai/civilians/civilian-constants.ts";
-import { LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
+import { ANIMAL_CHEST_HEIGHT, LOOK } from "../ai/civilians/civilian-crowd-constants.ts";
 import {
   ATTRACT_M,
   CAR_BRUSH_M,
@@ -66,8 +66,7 @@ export class CrowdGrid {
   build(poses: CrowdPoses, count: number): void {
     this.head.fill(-1);
     for (let civilian = 0; civilian < count; civilian++) {
-      // A cat or a dog is never offered as a passer-by to glance at.
-      if (poses.shown[civilian] === 0 || poses.look[civilian]! >>> LOOK.speciesShift !== SPECIES.person) continue;
+      if (poses.shown[civilian] === 0) continue;
       const key = cellKey(Math.floor(poses.x[civilian]! / CELL_M), Math.floor(poses.z[civilian]! / CELL_M));
       this.next[civilian] = this.head[key]!;
       this.head[key] = civilian;
@@ -180,7 +179,8 @@ function considerPasser(chooser: LookChooser, civilian: number, poses: CrowdPose
   chooser.candidateSource = other;
   s[SCRATCH.urgency] = PASSER_URGENCY;
   s[SCRATCH.x] = poses.x[other]!;
-  s[SCRATCH.y] = poses.feetY[other]! + FACE_HEIGHT_M;
+  // A passing cat or dog is looked at where it is, at its body, not at a face's height.
+  s[SCRATCH.y] = poses.feetY[other]! + (poses.look[other]! >>> LOOK.speciesShift === SPECIES.person ? FACE_HEIGHT_M : ANIMAL_CHEST_HEIGHT);
   s[SCRATCH.z] = poses.z[other]!;
 }
 
