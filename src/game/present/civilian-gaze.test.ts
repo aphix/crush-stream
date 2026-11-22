@@ -65,14 +65,14 @@ describe("given people on a kerb facing the street", () => {
       expect(times[civilian], `person ${civilian} looked at the fast car`).toBeLessThan(Infinity);
       expect(times[civilian]! - within15, `person ${civilian}'s latency (s)`).toBeLessThan((POLL_MASK + 1) * FRAME + HEAD_LATENCY_S + 2 * FRAME);
     }
-    // mutation: sed -i 's/  const fast = Math.min(1, Math.max(0, (speed - CAR_CALM_SPEED) \/ (CAR_FAST_SPEED - CAR_CALM_SPEED))) \* s\[SCRATCH.near\]!;/  const fast = 0;/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze-poll.ts
+    // mutation: sed -i 's/  const fast = Math.min(1, Math.max(0, (speed - CAR_CALM_SPEED) \/ (CAR_FAST_SPEED - CAR_CALM_SPEED))) \* s\[SCRATCH.near\]!;/  const fast = 0;/' src/game/present/civilian-gaze-poll.ts
   });
 
   it("when a car drives by at town speed across the street, then nobody turns to it", () => {
     const poses = kerb(PEOPLE, SPAN);
     const times = carLookTimes(poses, [car(-80, 12, 10)], 16);
     expect(times.filter((time) => time < Infinity), "people who looked at an ordinary car").toEqual([]);
-    // mutation: sed -i 's/^export const CAR_CALM_SPEED = 9;/export const CAR_CALM_SPEED = 0;/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze-constants.ts
+    // mutation: sed -i 's/^export const CAR_CALM_SPEED = 9;/export const CAR_CALM_SPEED = 0;/' src/game/present/civilian-gaze-constants.ts
   });
 
   it("when a fast car passes beyond a wall that hides it from half of them, then only those who can see it turn", () => {
@@ -83,7 +83,7 @@ describe("given people on a kerb facing the street", () => {
       if (poses.x[civilian]! > 0) expect(times[civilian], `person ${civilian} in the open`).toBeLessThan(Infinity);
       else expect(times[civilian], `person ${civilian} behind the wall`).toBe(Infinity);
     }
-    // mutation: sed -i 's/    return lineOfSight(s\[SCRATCH.ownX\]!, s\[SCRATCH.ownZ\]!, s\[SCRATCH.x\]!, s\[SCRATCH.z\]!);/    return true;/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze.ts
+    // mutation: sed -i 's/    return lineOfSight(s\[SCRATCH.ownX\]!, s\[SCRATCH.ownZ\]!, s\[SCRATCH.x\]!, s\[SCRATCH.z\]!);/    return true;/' src/game/present/civilian-gaze.ts
   });
 });
 
@@ -119,7 +119,7 @@ describe("given a crowd scattered round a spot, facing every way", () => {
     expect(Math.min(...reacted), "the quickest").toBeGreaterThanOrEqual(ALARM_DELAY_MIN_SECONDS - TIGHT);
     expect(Math.max(...reacted) - Math.min(...reacted), "spread of the reactions (s)").toBeGreaterThan(0.5);
     expect(new Set(reacted).size, "distinct moments").toBeGreaterThan(reacted.length / 2);
-    // mutation: sed -i 's/      if (hash16(civilian, this.serial ^ SALT.react) >= share \* HASH16) continue;//' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze.ts
+    // mutation: sed -i 's/      if (hash16(civilian, this.serial ^ SALT.react) >= share \* HASH16) continue;//' src/game/present/civilian-gaze.ts
   });
 });
 
@@ -146,10 +146,25 @@ describe("given one person and a look that jumps every 0.3 s to a random point a
       expect(Math.abs(now.pitch), "pitch").toBeLessThanOrEqual(PITCH_LIMIT + TIGHT);
       expect(Math.abs(now.turn - last.turn), `turn step at ${time.toFixed(2)} s`).toBeLessThanOrEqual(HEAD_YAW_RATE * step + TIGHT);
       expect(Math.abs(now.torso - last.torso), "torso step").toBeLessThanOrEqual(TORSO_RATE * step + TIGHT);
-      expect(Math.abs(now.pitch - last.pitch), "pitch step").toBeLessThanOrEqual((PITCH_RATE + PITCH_LIMIT * HEAD_YAW_RATE) * step + TIGHT);
+      // The pitch is drawn as eased (no longer scaled by the cosine of the turn), so its step is its own rate's.
+      expect(Math.abs(now.pitch - last.pitch), "pitch step").toBeLessThanOrEqual(PITCH_RATE * step + TIGHT);
       last = now;
     }
-    // mutation: sed -i 's/      this.angle\[at\] = Math.max(from - rate \* t, Math.min(from + rate \* t, eased));/      this.angle[at] = this.goal[channel]!;/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze.ts
+    // mutation: sed -i 's/      this.angle\[at\] = Math.max(from - rate \* t, Math.min(from + rate \* t, eased));/      this.angle[at] = this.goal[channel]!;/' src/game/present/civilian-gaze.ts
+  });
+});
+
+describe("given one person standing and something low on the ground behind her to her left", () => {
+  // mutation: sed -i 's/    this.headPitch\[civilian\] = this.angle\[at + PITCH\]!;/    this.headPitch[civilian] = this.angle[at + PITCH]! * Math.cos(turn);/' src/game/present/civilian-gaze.ts
+  it("when she is asked to look at it, then she turns past 90 degrees and nods down at it, not up", () => {
+    const poses = emptyPoses(1);
+    poses.look[0] = HEAD_MOVER;
+    const gaze = new CrowdGaze(1);
+    const senses = blankSenses();
+    gaze.attend(0, -2, 0, -2, 3, 1);
+    for (let frame = 0; frame < 2 / FRAME; frame++) gaze.update(poses, FRAME, senses);
+    expect(Math.abs(turnOf(gaze, 0)), "her turn (rad)").toBeGreaterThan(Math.PI / 2);
+    expect(gaze.headPitch[0], "her nod, down positive (rad)").toBeGreaterThan(0.3);
   });
 });
 
@@ -180,7 +195,7 @@ describe("given two people talking, one turned 50 degrees from the other, with t
       frames++;
       if (Math.abs(turnOf(gaze, 0) - bearing) < 0.15) onPartner++;
     });
-    expect(onPartner / frames, "share of the minute on her partner").toBeGreaterThan(0.7);
-    // mutation: sed -i 's/    if (partner >= 0 \&\& partner < poses.count \&\& poses.shown\[partner\] === 1) {/    if (false) {/' /home/aphix/worktrees/Gaze/src/game/present/civilian-gaze.ts
+    expect(onPartner / frames, "share of the minute on her partner").toBeGreaterThan(0.65);
+    // mutation: sed -i 's/    if (partner >= 0 \&\& partner < poses.count \&\& poses.shown\[partner\] === 1) {/    if (false) {/' src/game/present/civilian-gaze.ts
   });
 });

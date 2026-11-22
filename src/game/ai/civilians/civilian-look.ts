@@ -22,8 +22,8 @@ export type LookText = { title: string; lines: string[] };
 /** What the ray meets: its index (resident or place; -1 for nothing) and how far along the ray (m). */
 export type Meeting = { index: number; along: number };
 
-/** The shown civilian whose chest the ray passes closest to, within `LOOK_RADIUS` of it and `LOOK_REACH` ahead. */
-function residentMet(poses: CrowdPoses, ray: LookRay): Meeting {
+/** The shown civilian whose chest the ray passes closest to, within `LOOK_RADIUS` of it and `LOOK_REACH` ahead: the look panel's person. */
+export function residentMet(poses: CrowdPoses, ray: LookRay): Meeting {
   const met: Meeting = { index: -1, along: Infinity };
   let bestMiss = LOOK_RADIUS * LOOK_RADIUS;
   for (let resident = 0; resident < poses.count; resident++) {

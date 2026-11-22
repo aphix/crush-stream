@@ -59,9 +59,30 @@ describe("given a civilian standing 6 m up a street from the look panel's eye", 
     expect(met?.lines.length, "lines on her panel").toBe(2);
     expect(met?.lines[0], "her own line kept").toBe("Walking");
     expect(met?.lines[1], "what she looks at").toBe(gaze.gaze.describe(0));
-    expect(met?.lines[1], "said as a look").toMatch(/^Looking at /);
+    expect(met?.lines[1], "said as a look").toMatch(/^Looking /);
     ray.dirX = 1;
     ray.dirZ = 0;
     expect(gaze.describe(text, poses, map, ray), "the ray turned off her").toBe(text);
+  });
+});
+
+describe("given two civilians by the look panel's ray: one 4 m up it and 0.6 m to its side, one 8 m up it on its line", () => {
+  // mutation: sed -i -e 's/import { placeMet, residentMet,/import { chestMet, placeMet, residentMet,/' -e 's/    const resident = residentMet(poses, ray);/    const resident = chestMet(poses, poses.count, null, ray, 1, LOOK_REACH, { index: -1, along: 0 });/' src/game/engine/engine-openworld-gaze.ts
+  it("when the panel is about the one on its line (its title is hers, the ray passing closest to her chest), then its look line is hers, not the nearer one's", () => {
+    const { poses, map, gaze } = gazeOn();
+    for (const [civilian, x, z] of [[0, STREET_X + 0.6, 4], [1, STREET_X, 8]] as const) {
+      poses.x[civilian] = x;
+      poses.z[civilian] = z;
+      poses.feetY[civilian] = 0;
+      poses.shown[civilian] = 1;
+    }
+    poses.partner[1] = 0;
+    gaze.frame(poses, STREET_X, 0, 1 / FRAME_HZ, null);
+    const ray = new LookRay();
+    ray.eyeX = STREET_X;
+    ray.eyeY = 1.3;
+    expect(gaze.gaze.describe(1), "control: their looks read apart").not.toBe(gaze.gaze.describe(0));
+    const met = gaze.describe({ title: "Bea", lines: [] }, poses, map, ray);
+    expect(met?.lines[0], "the look line").toBe(gaze.gaze.describe(1));
   });
 });

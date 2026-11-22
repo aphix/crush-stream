@@ -126,9 +126,11 @@ civilian within `FAR_DRAW` of the eye.
 - **Choosing** (`chooseLook`): each person re-chooses every 8 frames, offset by her index (reVC's `(frame + seed) & 7`). A car draws by
   speed over town pace (9 m/s: nothing; 20 m/s: full) times nearness, or by coming at her (closing over 3 m/s, due within 2 s, its path
   within the brain's 1.8 m), or by brushing past within 3 m; ordinary driving draws nobody. The player on foot within 10 m in front is
-  noticed on a tenth of polls (always inside 2.5 m); a siren is heard within 60 m; someone down is seen within 15 m. With nothing
-  urgent and no refusal running she may glance at a passer-by ahead or idly at the nearest shop window or sign within 8 m, else at
-  the sky, the street or the ground off to one side (about one glance every 4 s, half that beside a partner). A thing only seen needs
+  noticed on a tenth of 60 Hz polls (always inside 2.5 m); a siren is heard within 60 m; someone down is seen within 15 m (each drawing
+  from the notice floor at that range to its full urgency at her feet). With nothing urgent and no refusal running she may glance at a
+  passer-by ahead or idly at the nearest shop window or sign within 8 m, else at the sky, the street or the ground off to one side (about
+  one glance every 4 s, half that beside a partner; the per-poll shares are scaled by the frame's length, so any frame rate gives as
+  many a second). A thing only seen needs
   a line of sight past 3 m (`LOS_PER_FRAME` tests a frame). Without a look she faces ahead, eyes a little down while walking, or
   looks at her partner (talk, fight, kneel, a call: the gaze replaces the clips' `lookAtPartner` turn).
 - **Holding**: a look lasts 0.5-4 s by kind, then new looks are refused for 4 s (reVC `ClearLookFlag`) unless one is at least
@@ -138,7 +140,7 @@ civilian within `FAR_DRAW` of the eye.
   for her (0.1 s for the jumpiest to 1.5 s for the calmest, a fifth of it drawn), so some never look and the rest turn one by one.
 - **Turning**: the whole turn eases critically damped toward the target (peak speed grows with the shift, Andrist 2012), capped at
   reVC's rates (head yaw 450 deg/s, pitch and torso 240 deg/s); the head takes the turn up to 90 deg from the torso and the torso
-  joins past 63 deg up to 50 deg; pitch within 45 deg, scaled by the cosine of the turn. A per-person head-mover share (75-100 % of
+  joins past 63 deg up to 50 deg; pitch within 45 deg, nodded in the head's own frame after its turn. A per-person head-mover share (75-100 % of
   the turn, look word bits 26-28) stands in for eyes the painted faces cannot move. A target behind her reach keeps her on the side
   her head is on, so a partner walking round her does not flip her head across.
 - **Drawn**: a near dummy adds `headYaw`, `headPitch` and `torsoTwist` to the clip's channels before its solves (`applyGaze`); a far
