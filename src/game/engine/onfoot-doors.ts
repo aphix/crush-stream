@@ -86,3 +86,9 @@ export function doorBlocked(cars: readonly DeformableCar[], car: DeformableCar, 
   }
   return !groundAround(_local.x, _local.z);
 }
+
+/** The door (x sign) a seat whose own door is at `side` is left by: its own when there is room to step out there; else, when `mayCross` (a front seat with the one beside it empty: he slides across), the other front door when that has room; 0 when neither has. */
+export function exitSide(cars: readonly DeformableCar[], car: DeformableCar, poles: readonly Pole[], side: number, mayCross: boolean): number {
+  if (!doorBlocked(cars, car, poles, side)) return side;
+  return mayCross && !doorBlocked(cars, car, poles, -side) ? -side : 0;
+}

@@ -16,7 +16,7 @@ import type { OnFootView } from "../present/walker-camera.ts";
 import { OnFootCamera } from "./onfoot-camera.ts";
 import type { Sight } from "../present/spectate-cam.ts";
 import { doorBlocked, doorInReach, doorSpot, inPlay } from "./onfoot-doors.ts";
-import { entrySeat, SEAT_DRIVER, seatDoorSide } from "../vehicle/car-seats.ts";
+import { entrySeat, SEAT_DRIVER } from "../vehicle/car-seats.ts";
 import { OnFootRide, type OnFootDesk } from "./engine-onfoot-ride.ts";
 import { SEAT_KEYS } from "./engine-keys.ts";
 import { blankWalkIntent, readWalkIntent, type WalkIntent } from "./engine-walk-input.ts";
@@ -414,11 +414,6 @@ export class OnFootDirector {
     return seat.mode === "drive" && car && car.driverOut === null ? seat.carIndex : -1;
   }
 
-  /** The x sign of the door of the seat he sits in: the driver's unless the seat table puts him elsewhere. */
-  private seatSide(): number {
-    return seatDoorSide(Math.max(SEAT_DRIVER, this.host.desk()?.mySeat() ?? SEAT_DRIVER));
-  }
-
   /** What the flow needs to know: in a seat, the car and whether its door has room; on foot, whether a car's door is in reach. Null while the seat is not his to leave. */
   private senseWorld(): OnFootSense | null {
     const { ragdolls } = this.host;
@@ -430,7 +425,9 @@ export class OnFootDirector {
       if (!car) return null;
       sense.car = index;
       sense.speed = car.velocity.length();
-      sense.doorBlocked = doorBlocked(cars, car, ragdolls.poles, this.seatSide());
+      const desk = this.host.desk();
+      // The seat table names his door (his own side's, or the far one when that has no room); a car it does not list him in is judged by its driver's door, as outside the open world.
+      sense.doorBlocked = desk === null || desk.myCar() < 0 ? doorBlocked(cars, car, ragdolls.poles) : desk.myExitSide() === 0;
       return sense;
     }
     sense.doorBlocked = false;

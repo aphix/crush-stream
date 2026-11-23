@@ -11,6 +11,8 @@ export interface OnFootDesk {
   /** This player's seat (row x 2 + side) and car, -1 when he sits in none. */
   mySeat(): number;
   myCar(): number;
+  /** The door (x sign) he would leave his seat by, 0 when no door has room. */
+  myExitSide(): number;
   /** The car and door he may get in at from `torso`, into `out`. */
   pick(torso: THREE.Vector3, out: DoorPick): boolean;
   askIn(car: number): number;
@@ -83,7 +85,7 @@ export class OnFootRide {
     let result: number;
     if (step === "exitStarted") {
       const seat = desk.mySeat();
-      this.side = seatDoorSide(Math.max(SEAT_DRIVER, seat));
+      this.side = desk.myExitSide() || seatDoorSide(Math.max(SEAT_DRIVER, seat));
       this.passenger = seat > SEAT_DRIVER;
       result = desk.askOut();
     } else result = desk.askIn(car);

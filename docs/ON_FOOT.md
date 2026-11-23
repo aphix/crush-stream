@@ -70,7 +70,9 @@ inCar --press, stopped, door clear--> exiting --0.8 s--> onFoot --press at a dri
 ```
 
 Refusals, each with its prompt: the car is moving over 3 m/s (`Stop the car first`), another car, a lamp post or the edge of the ground (no ground a
-metre round the spot) is within reach of the door, or the car is on its side or roof (`No room to open the door`), his own car's driver door is not
+metre round the spot) is within reach of the door, or the car is on its side or roof (`No room to open the door`; in the open world a front seat whose
+own door has no room is left by the far front door when the seat beside it is empty, as cars parked side by side in a room need: `exitSide`,
+`OpenWorldSeats.exitSideOf`, the one rule for his own machine's prompt, his climb and the host's door swing), his own car's driver door is not
 within 1.9 m (`Walk up to your car's driver door`); a press while exiting or entering is ignored. `engine/engine-onfoot.ts` carries out what the flow
 decides: on exit the dummy is placed at the door in the player's own look and facing the car's way and the seat is stepped back (the car is the engine's
 to hold, above); on entry he turns to the car, and after the climb the dummy leaves the pool and the seat takes the wheel (`seat.mode = "drive"`).

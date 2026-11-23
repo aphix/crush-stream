@@ -30,6 +30,11 @@ export function seatDoorSide(seat: number): number {
   return seat % SEATS_PER_ROW === 0 ? DRIVER_SIDE : -DRIVER_SIDE;
 }
 
+/** The other seat of the front row for a front `seat` (the one he slides across to reach the far door), -1 for a seat of a rear row. */
+export function frontNeighbour(seat: number): number {
+  return seat >= 0 && seat < SEATS_PER_ROW ? seat ^ 1 : -1;
+}
+
 /** The side (0 or 1) the door at x sign `doorSide` belongs to. */
 function doorSideOf(doorSide: number): number {
   return doorSide === DRIVER_SIDE ? 0 : 1;

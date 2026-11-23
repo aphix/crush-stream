@@ -389,3 +389,38 @@ describe("given the room's roster", () => {
     expect(f.table.driverOf(PARKED_SEDAN)).toBe(0);
   });
 });
+
+/** A car parked on the spot outside car 0's driver's door, as a neighbour in a room's line of cars is. */
+function blockDriverDoor(f: Fixture): void {
+  const spot = doorSpot(f.cars[0]!, new THREE.Vector3(), DRIVER_SIDE);
+  const neighbour = f.cars[1]!;
+  neighbour.group.position.set(spot.x, neighbour.group.position.y, spot.z);
+  neighbour.group.updateMatrixWorld(true);
+}
+
+describe("given a driver whose own door has a car parked against it", () => {
+  it("when the seat beside him is empty and he gets out, then he slides across and leaves by the passenger door, which swings open, and his seat is free", () => {
+    const f = fixture();
+    blockDriverDoor(f);
+    expect(f.seats.myExitSide(), "the door he would leave by").toBe(PASSENGER_DOOR);
+    expect(f.seats.getOut(0)).toBe(SEATS_NOTICE.none);
+    expect(f.table.carOf(0), "he sits in no car").toBe(-1);
+    run(f, SWING_OPEN_S);
+    expect(f.cars[0]!.doorAngle(PASSENGER_DOOR), "the passenger door").toBeGreaterThan(WIDE_RAD);
+    expect(f.cars[0]!.doorAngle(DRIVER_SIDE), "the blocked driver's door").toBe(0);
+  });
+
+  it("when a passenger sits beside him, then he cannot slide across: he is refused for want of room and stays at the wheel", () => {
+    const f = fixture();
+    walkUp(f, 1, 0, PASSENGER_DOOR);
+    f.seats.getIn(1, 0);
+    blockDriverDoor(f);
+    expect(f.seats.getOut(0)).toBe(SEATS_NOTICE.doorBlocked);
+    expect(f.table.driverOf(0), "the driver of his car").toBe(0);
+  });
+
+  it("when his own door is clear, then he leaves by it as before", () => {
+    const f = fixture();
+    expect(f.seats.myExitSide(), "the door he would leave by").toBe(DRIVER_SIDE);
+  });
+});

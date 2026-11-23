@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { fillSeat, seatCount, seatDoorSide, SEAT_DRIVER, seatRows } from "../vehicle/car-seats.ts";
+import { fillSeat, frontNeighbour, seatCount, seatDoorSide, SEAT_DRIVER, seatRows } from "../vehicle/car-seats.ts";
 import { ACT } from "../net/act-codec.ts";
 import { MAX_ACTORS, SeatTable } from "../scenes/seat-table.ts";
 import { SEATS_NOTICE } from "../net/seats-codec.ts";
@@ -8,7 +8,7 @@ import { ENTER_MAX_SPEED, EXIT_MAX_SPEED } from "../present/onfoot-flow.ts";
 import type { Pole } from "../present/ragdoll-ground.ts";
 import { DoorSwings } from "./engine-openworld-door-swings.ts";
 import type { ActorPlace } from "./engine-openworld-law.ts";
-import { doorAt, doorBlocked } from "./onfoot-doors.ts";
+import { doorAt, exitSide } from "./onfoot-doors.ts";
 
 /** What asking for a seat came to: done (the table says so now), sent (a guest waits for the host's answer) or refused (`OpenWorldSeats.refusal` says why). */
 export const ASK = { done: 0, sent: 1, refused: 2 } as const;
@@ -85,6 +85,21 @@ export class OpenWorldSeats {
     return this.table.carOf(this.ports.self());
   }
 
+  /** The door (x sign) player `actor` leaves his seat by: its own when it has room, else from a front seat the far front door when the seat beside him is empty and that door has room (he slides across); 0 when he sits in no car or no door has room. */
+  exitSideOf(actor: number): number {
+    const index = this.table.carOf(actor);
+    const body = this.ports.cars()[index];
+    if (body === undefined) return 0;
+    const seat = this.table.seatOf(actor);
+    const beside = frontNeighbour(seat);
+    return exitSide(this.ports.cars(), body, this.ports.poles(), seatDoorSide(seat), beside >= 0 && this.table.holderOf(index, beside) < 0);
+  }
+
+  /** The door this machine's player would leave his seat by (`exitSideOf`). */
+  myExitSide(): number {
+    return this.exitSideOf(this.ports.self());
+  }
+
   /** Whether player `actor` may take a seat of `car`: the driver's seat when nobody holds it and the car is one to take, his own car or the one he last drove, any other seat when a player drives it, and one is free. */
   mayEnter(actor: number, car: number): boolean {
     const cars = this.ports.cars();
@@ -149,14 +164,14 @@ export class OpenWorldSeats {
     body.driverOut = null;
   }
 
-  /** Player `actor` gets out of his seat by the door on its side, which swings open for him. 0, or the `SEATS_NOTICE` that says why not. */
+  /** Player `actor` gets out of his seat by the door `exitSideOf` names (his own side's, or the far front door when his own has no room), which swings open for him. 0, or the `SEATS_NOTICE` that says why not. */
   getOut(actor: number): number {
     const index = this.table.carOf(actor);
     const body = this.ports.cars()[index];
     if (body === undefined) return SEATS_NOTICE.noCar;
-    const side = seatDoorSide(this.table.seatOf(actor));
     if (body.velocity.length() > EXIT_MAX_SPEED) return SEATS_NOTICE.tooFast;
-    if (doorBlocked(this.ports.cars(), body, this.ports.poles(), side)) return SEATS_NOTICE.doorBlocked;
+    const side = this.exitSideOf(actor);
+    if (side === 0) return SEATS_NOTICE.doorBlocked;
     this.table.leave(actor);
     this.swings.open(actor, index, side, true);
     return SEATS_NOTICE.none;
