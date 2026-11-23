@@ -119,8 +119,8 @@ function room() {
   };
   /** An actor's two fires, the first holding what is at `first` and the second tying it to `second`. */
   const tie = (actor: number, first: THREE.Vector3, second: THREE.Vector3): void => {
-    director.fireFor(actor, rayTo(first));
-    director.fireFor(actor, rayTo(second));
+    director.fireFor(actor, rayTo(first), true);
+    director.fireFor(actor, rayTo(second), true);
   };
   /** A real car 5 m ahead the car LOD has taken off the draw (`group.visible` false), with a box standing for its body, as the engine's car index 0. */
   const hideCarAhead = (): void => {
@@ -146,8 +146,8 @@ function slotsOf(tethers: TetherSet, owner: number): number[] {
 describe("given a room with the host and a second actor on foot, a civilian 10 m ahead and a wall 30 m ahead", () => {
   it("when the second actor fires at the civilian and then at the wall, then the host holds her on a cable the second actor owns", () => {
     const { director, tethers, ropes } = room();
-    expect(director.fireFor(GUEST, rayTo(PERSON_POINT)), "the first fire holds her").toBe(true);
-    expect(director.fireFor(GUEST, rayTo(WALL_POINT)), "the second ties her to the wall").toBe(true);
+    expect(director.fireFor(GUEST, rayTo(PERSON_POINT), true), "the first fire holds her").toBe(true);
+    expect(director.fireFor(GUEST, rayTo(WALL_POINT), true), "the second ties her to the wall").toBe(true);
     expect(tethers.count, "cables out").toBe(1);
     expect(tethers.owner(0), "the cable's owner").toBe(GUEST);
     expect(tethers.endCar(0, 0), "the first end is in the dummies' world").toBe(RAPIER);
@@ -166,10 +166,10 @@ describe("given a room with the host and a second actor on foot, a civilian 10 m
 
   it("when the host holds one box and the second actor another, then each ties his own first end to the other box: one cable each", () => {
     const { director, tethers } = room();
-    director.fireFor(HOST, rayTo(BOX_A));
-    director.fireFor(GUEST, rayTo(BOX_B));
-    director.fireFor(HOST, rayTo(BOX_B));
-    director.fireFor(GUEST, rayTo(BOX_A));
+    director.fireFor(HOST, rayTo(BOX_A), true);
+    director.fireFor(GUEST, rayTo(BOX_B), true);
+    director.fireFor(HOST, rayTo(BOX_B), true);
+    director.fireFor(GUEST, rayTo(BOX_A), true);
     expect(slotsOf(tethers, HOST), "the host's cable").toHaveLength(1);
     expect(slotsOf(tethers, GUEST), "the second actor's cable").toHaveLength(1);
     expect(tethers.thing(slotsOf(tethers, HOST)[0]!, 0), "the host's first end is the box he held").not.toBe(tethers.thing(slotsOf(tethers, GUEST)[0]!, 0));
@@ -178,12 +178,12 @@ describe("given a room with the host and a second actor on foot, a civilian 10 m
   it("when the second actor is not on foot, then his fire holds nothing and attaches nothing; on foot, the same ray holds her", () => {
     const { director, tethers, ropes, state } = room();
     state.onFoot.delete(GUEST);
-    expect(director.fireFor(GUEST, rayTo(PERSON_POINT)), "not on foot").toBe(false);
-    expect(director.fireFor(GUEST, rayTo(WALL_POINT)), "not on foot").toBe(false);
+    expect(director.fireFor(GUEST, rayTo(PERSON_POINT), true), "not on foot").toBe(false);
+    expect(director.fireFor(GUEST, rayTo(WALL_POINT), true), "not on foot").toBe(false);
     expect([tethers.count, ropes.attached.length], "cables and ropes").toEqual([0, 0]);
     state.onFoot.add(GUEST);
-    director.fireFor(GUEST, rayTo(PERSON_POINT));
-    director.fireFor(GUEST, rayTo(WALL_POINT));
+    director.fireFor(GUEST, rayTo(PERSON_POINT), true);
+    director.fireFor(GUEST, rayTo(WALL_POINT), true);
     expect(tethers.count, "on foot: the cable is out").toBe(1);
   });
 
@@ -315,7 +315,7 @@ describe("given a guest's machine, the hook in hand and a civilian 10 m ahead", 
 
   it("when he asks the host's functions to carry out a fire for an actor, then nothing is held here", () => {
     const { director, tethers } = guestRoom();
-    expect(director.fireFor(GUEST, rayTo(BOX_A))).toBe(false);
+    expect(director.fireFor(GUEST, rayTo(BOX_A), true)).toBe(false);
     expect(tethers.count).toBe(0);
   });
 });
@@ -326,8 +326,8 @@ describe("given a kerb car the car LOD has taken off the draw, 5 m ahead of a se
   it("when the second actor fires at the car and then at the wall, then the host ties his cable to that car, as his reticle lit it", () => {
     const { director, tethers, hideCarAhead } = room();
     hideCarAhead();
-    expect(director.fireFor(GUEST, rayTo(CAR_POINT)), "the first fire holds the car").toBe(true);
-    expect(director.fireFor(GUEST, rayTo(WALL_POINT)), "the second ties it to the wall").toBe(true);
+    expect(director.fireFor(GUEST, rayTo(CAR_POINT), true), "the first fire holds the car").toBe(true);
+    expect(director.fireFor(GUEST, rayTo(WALL_POINT), true), "the second ties it to the wall").toBe(true);
     expect(tethers.endCar(0, 0), "the first end is car 0").toBe(0);
     expect(tethers.owner(0), "his cable").toBe(GUEST);
   });
@@ -346,14 +346,51 @@ describe("given a kerb car the car LOD has taken off the draw, 5 m ahead of a se
 describe("given a second actor who holds a first end", () => {
   it("when he stops being on foot, is on foot again and fires twice, then his cable joins the two new things only", () => {
     const { director, tethers, state } = room();
-    director.fireFor(GUEST, rayTo(BOX_A));
+    director.fireFor(GUEST, rayTo(BOX_A), true);
     state.onFoot.delete(GUEST);
     director.frame(FRAME);
     state.onFoot.add(GUEST);
-    expect(director.fireFor(GUEST, rayTo(BOX_B)), "the first fire after the trip holds").toBe(true);
+    expect(director.fireFor(GUEST, rayTo(BOX_B), true), "the first fire after the trip holds").toBe(true);
     expect(tethers.count, "nothing is tied to the stale box").toBe(0);
-    expect(director.fireFor(GUEST, rayTo(WALL_POINT)), "the second fire ties").toBe(true);
+    expect(director.fireFor(GUEST, rayTo(WALL_POINT), true), "the second fire ties").toBe(true);
     expect(tethers.count, "one cable").toBe(1);
     expect(tethers.endCar(0, 1), "its second end is the wall").toBe(-1);
+  });
+});
+
+describe("given a second actor whose ray passes a civilian 10 m ahead with a wall 30 m behind her", () => {
+  it("when his own reticle lit no one (flag 0), then his fire holds the wall behind her and stands no body for her", () => {
+    const { director, tethers, ropes } = room();
+    director.fireFor(GUEST, rayTo(PERSON_POINT), false);
+    expect(director["holds"][GUEST]!.car, "the first end is the world").toBe(-1);
+    director.fireFor(GUEST, rayTo(BOX_A), false);
+    expect(tethers.endCar(0, 0), "the cable's first end is the wall").toBe(-1);
+    expect(ropes.attached.every((rope) => rope.a.kind !== "doll" && rope.b.kind !== "doll"), "no rope to a body").toBe(true);
+  });
+
+  it("when his own reticle lit her (flag 1), then his fire holds her", () => {
+    const { director } = room();
+    director.fireFor(GUEST, rayTo(PERSON_POINT), true);
+    expect(director["holds"][GUEST]!.car, "the first end is in the dummies' world").toBe(RAPIER);
+  });
+
+  it("when the host fires with his own hook at her, then she is met whatever the flag says: it judges only another actor", () => {
+    const { director, state } = room();
+    expect(state.onFoot.has(HOST), "control: the host is on foot").toBe(true);
+    director.fireFor(HOST, rayTo(PERSON_POINT), false);
+    expect(director["holds"][HOST]!.car).toBe(RAPIER);
+  });
+});
+
+describe("given a guest's machine with the hook in hand", () => {
+  it("when he fires with his reticle on a civilian, then the act's argument byte is 1; with it on a wall, 0", () => {
+    const { state, fireAt, director } = room();
+    state.guest = true;
+    fireAt(PERSON_POINT);
+    director.frame(FRAME);
+    fireAt(WALL_POINT);
+    expect(state.sent.map((act) => act.kind), "two fires").toHaveLength(2);
+    expect(state.sent[0]!.arg, "on a civilian").toBe(1);
+    expect(state.sent[1]!.arg, "on a wall").toBe(0);
   });
 });

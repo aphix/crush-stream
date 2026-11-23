@@ -133,12 +133,13 @@ export class TetherDirector {
   }
 
   /**
-   * `actor` fires the hook along `ray`: the first fire holds what the ray meets, the second ties it to what the ray then meets. False where nothing was held or tied:
-   * the actor is not on foot, the ray meets nothing in reach, or no body can be stood for the person it meets. A guest holds no cable and does nothing.
+   * `actor` fires the hook along `ray`: the first fire holds what the ray meets, the second ties it to what the ray then meets. `sawPerson` is the act's argument byte: whether the actor's own
+   * reticle lit a person (1) or not (0), which only he can know (his machine has the walls and windows of his own eyes). Another actor's fire meets no person when it is false; this machine's own
+   * player is not judged by it. False where nothing was held or tied: the actor is not on foot, the ray meets nothing in reach, or no body can be stood for the person it meets. A guest holds no cable and does nothing.
    */
-  fireFor(actor: number, ray: LookRay): boolean {
+  fireFor(actor: number, ray: LookRay, sawPerson: boolean): boolean {
     if (this.host.guest() || actor < 0 || actor >= MAX_CARS || !this.onFoot(actor)) return false;
-    this.aimFrom(actor, ray, this.theirs);
+    this.aimFrom(actor, ray, this.theirs, sawPerson || actor === this.host.actor());
     return this.attachFor(actor, this.theirs);
   }
 
@@ -208,7 +209,7 @@ export class TetherDirector {
 
   /** This machine's fire, read as the reticle's aim: a guest sends it to the host, the host carries it out as `fireFor` does for any actor. */
   private attach(): void {
-    if (this.host.guest()) this.sendAct(ACT_HOOK_FIRE);
+    if (this.host.guest()) this.sendAct(ACT_HOOK_FIRE, this.mine.person >= 0 ? 1 : 0);
     else if (this.host.afoot()) this.attachFor(this.host.actor(), this.mine);
   }
 
@@ -257,12 +258,12 @@ export class TetherDirector {
     this.sendAct(on ? ACT_HOOK_REEL_ON : ACT_HOOK_REEL_OFF);
   }
 
-  /** Act `kind` goes to the host along this machine's sight line. */
-  private sendAct(kind: number): void {
+  /** Act `kind` goes to the host along this machine's sight line, `arg` its argument byte. */
+  private sendAct(kind: number, arg = 0): void {
     this.cameraRay();
     this.mine.eye.set(this.sight.eyeX, this.sight.eyeY, this.sight.eyeZ);
     this.mine.dir.set(this.sight.dirX, this.sight.dirY, this.sight.dirZ);
-    this.host.sendAct(kind, 0, this.mine.eye, this.mine.dir);
+    this.host.sendAct(kind, arg, this.mine.eye, this.mine.dir);
   }
 
   /** How far down the view (0 at the top, 1 at the bottom) the aim passes: the middle, or `CHASE_RETICLE_FROM_TOP` on a chase camera. */
@@ -319,8 +320,8 @@ export class TetherDirector {
     return hold === undefined ? null : this.heldPlaceOf(hold);
   }
 
-  /** The aim of `actor`'s sight line `ray` into `into`: the first surface it meets, and the first drawn person within reach of it. */
-  private aimFrom(actor: number, ray: LookRay, into: Aim): void {
+  /** The aim of `actor`'s sight line `ray` into `into`: the first surface it meets, and (`people`) the first drawn person within reach of it. */
+  private aimFrom(actor: number, ray: LookRay, into: Aim, people = true): void {
     const cars = this.host.cars();
     const local = actor === this.host.actor();
     const player = local ? this.host.playerCar() : -1;
@@ -335,7 +336,9 @@ export class TetherDirector {
     into.dir.set(ray.dirX, ray.dirY, ray.dirZ);
     _origin.copy(cars[player]?.group.position ?? into.eye);
     const surface = this.caster.cast(cars, into);
-    const person = this.host.personMet(ray, into.personReach, this.personAim, !local);
+    const person = this.personAim;
+    if (people) this.host.personMet(ray, into.personReach, person, !local);
+    else person.index = -1;
     if (person.index >= 0) {
       into.person = person.index;
       into.car = WORLD;
