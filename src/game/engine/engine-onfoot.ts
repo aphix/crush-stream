@@ -333,7 +333,7 @@ export class OnFootDirector {
     return true;
   }
 
-  /** No walker could be started: the trip is over and he is at the wheel of the car the seat table gives him (his own, or the one he last drove), the view and the wheel on it. */
+  /** No walker could be started: the trip is over and he is at the wheel (a guest asks the host for one) of the car the seat table gives him (his own, or the one he last drove), the view and the wheel on it. */
   private backAtWheel(): void {
     const car = this.host.desk()?.respawnMine() ?? -1;
     this.flow.reset();
@@ -342,6 +342,8 @@ export class OnFootDirector {
     this.reach = false;
     this.ride.reset();
     if (car >= 0) this.ride.take(car, SEAT_DRIVER);
+    // A guest's host unseated him when it let him out and seats nobody on its own: the reset the R key sends has it seat him.
+    else if (this.host.guest()) this.host.respawn();
   }
 
   /** A keydown: true when the director took it (the control, or a seat key that means nothing on foot). */

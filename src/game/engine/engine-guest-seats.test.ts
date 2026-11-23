@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeRace } from "../net/codec.ts";
 import { packSeats, SEATS_NOTICE } from "../net/seats-codec.ts";
 import { SeatTable } from "../scenes/seat-table.ts";
@@ -13,6 +13,8 @@ const TAKEN_CAR = 2;
 const HOST_ID = "host";
 /** The climb out of a car (0.8 s) and a moment. */
 const CLIMB_S = 1.2;
+/** A course of the lobby that is not the open world. */
+const OTHER_COURSE = "havana";
 const REFUSAL_TEXT = "Walk up to a car's door";
 
 // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -86,5 +88,45 @@ describe("given the real engine as a guest in a room of the open world, in car 1
     rig.run(0.3);
     expect(rig.phase(), "he is still on foot").toBe("onFoot");
     expect(rig.engine["onFoot"].hud()?.refusal, "the refusal text shows").toBe(REFUSAL_TEXT);
+  });
+
+});
+
+describe("given the real engine as a guest passenger whose walker cannot be started", () => {
+  it("when the host lets him out, then he asks it for his seat, and after its answer he is at a wheel", () => {
+    hear(packSeats(tableWith([[GUEST_CAR, TAKEN_CAR, 1], [3, TAKEN_CAR, 0]]), SEATS_NOTICE.none));
+    rig.run(0.3);
+    expect(rig.engine["seat"].carIndex, "control: he rides in car 2").toBe(TAKEN_CAR);
+    const asked = vi.spyOn(rig.engine["net"], "requestRespawn");
+    const ragdolls = rig.engine["ragdolls"];
+    const start = ragdolls.startWalker;
+    ragdolls.startWalker = () => -1;
+    try {
+      rig.press("Enter");
+      hear(packSeats(tableWith([[3, TAKEN_CAR, 0]]), SEATS_NOTICE.none));
+      rig.run(0.5);
+    } finally {
+      ragdolls.startWalker = start;
+    }
+    expect(asked, "he asked the host for a seat").toHaveBeenCalledTimes(1);
+    asked.mockRestore();
+    hear(packSeats(tableWith([[3, TAKEN_CAR, 0], [GUEST_CAR, GUEST_CAR, 0]]), SEATS_NOTICE.none));
+    rig.run(0.3);
+    expect(rig.engine["desk"].table.driverOf(GUEST_CAR), "the host seated him").toBe(GUEST_CAR);
+    expect(rig.engine["seat"].carIndex, "the view is on his car").toBe(GUEST_CAR);
+    expect(rig.engine["seat"].mode, "he drives").toBe("drive");
+  });
+});
+
+describe("given the real engine as a guest in a room whose host changes the course", () => {
+  it("when the host's race state then names another course, then he is in drive mode on his own car, not the taken car's number on the new course", () => {
+    hear(packSeats(tableWith([[GUEST_CAR, TAKEN_CAR, 0]]), SEATS_NOTICE.none));
+    rig.run(0.3);
+    expect(rig.engine["seat"].carIndex, "control: he is on the taken car").toBe(TAKEN_CAR);
+    hear(writeRace({ lobby: null, trackId: OTHER_COURSE, look: 0, gate: null, next: null, snap: null }));
+    rig.run(0.3);
+    expect(rig.engine["seat"].carIndex, "his own car").toBe(GUEST_CAR);
+    expect(rig.engine["seat"].mode, "he drives").toBe("drive");
+    expect(rig.engine["drivenCar"](), "the car he drives").toBe(GUEST_CAR);
   });
 });

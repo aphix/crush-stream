@@ -34,6 +34,7 @@ import { readCrowd } from "./crowd-codec.ts";
 import { BodyWire } from "./body-wire.ts";
 import { ActOutbox } from "./act-link.ts";
 import { readSeats } from "./seats-codec.ts";
+import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { Voice } from "./voice.ts";
 import { HELLO_EVERY, HOST_LOST_MS, HOST_WAIT_MS, INTERP_DELAY, MAX_DEAD_ROOMS, RACE_GONE_MS, REFUSED, RING, SEND_HZ } from "./net-constants.ts";
 
@@ -254,7 +255,8 @@ export abstract class NetPlayClient {
       if (s.snap) race.applySnapshot(s.snap, this.car);
       else {
         race.showLobby(s.trackId);
-        if (this.car >= 0) race.seatLobby(this.game.drivenCar());
+        // A car he took exists only in the open world: on another course he is in his own.
+        if (this.car >= 0) race.seatLobby(s.trackId === OPENWORLD_ID ? this.game.drivenCar() : this.car);
       }
     } catch {
       // Malformed race state from the host: keep the last good one.
