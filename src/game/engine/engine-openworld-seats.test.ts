@@ -284,7 +284,7 @@ describe("given a player's own car and the car he last drove", () => {
     expect(f.table.driverOf(1)).toBe(1);
   });
 
-  it("when a player drove a parked car and stepped out, then he may take its wheel again and another player may not", () => {
+  it("when a player drove a parked car and stepped out, then, the traffic port refusing the car, the seats let him take it again and refuse another player", () => {
     const f = fixture();
     walkUp(f, 0, PARKED_SEDAN, DRIVER_SIDE);
     f.seats.getIn(0, PARKED_SEDAN);
