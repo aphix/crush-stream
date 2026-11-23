@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
-import { createCrowdPoses } from "../ai/civilians/crowd-poses.ts";
-import { hypot2 } from "../kernel/physics-core.js";
-import { addBodyRecord, BODY_FLAG, BODY_KIND, BODY_POSTURE, clearBodyFrame, makeBodyFrame } from "../net/body-codec.ts";
+import { createCrowdPoses, type CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { addBodyRecord, addHidden, BODY_FLAG, BODY_KIND, BODY_POSTURE, clearBodyFrame, makeBodyFrame, readBodyFrame, writeBodyFrame, type BodyFrame } from "../net/body-codec.ts";
+import { Reader, Writer } from "../net/codec.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import { TORSO_ABOVE_FEET } from "./body-follow.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
 import { OpenWorldBodies } from "./openworld-bodies.ts";
-import { DRAWN, OpenWorldShared } from "./openworld-shared.ts";
+import { DRAWN, OpenWorldShared, writePoseRows } from "./openworld-shared.ts";
 
 const STEP = 1 / 30;
 const CAPACITY = 8;
@@ -192,5 +193,95 @@ describe("given a guest whose eye is 60 m from the civilian the host's hook hold
     expect(rig.poses.shown[0], "the art draws her").toBe(1);
     expect(Math.abs(rig.poses.x[0]! - host.x), "at the host's place, not her crowd spot (m)").toBeLessThan(CLOSE_M);
     expect(rig.shared.drawnAt(0, { x: 0, z: 0 }), "as a figure").toBe(DRAWN.figure);
+  });
+});
+
+/** The cop's pace (m/s), the frame's age (s) at the guest, and what a centimetre-quantised wire and a facing step allow: the place within a centimetre (m), the facing within 1.4 degrees (rad). */
+const COP_PACE = 1.4;
+const FRAME_AGE_S = 0.1;
+const WIRE_CM = 0.011;
+const FACING_STEP = (1.4 * Math.PI) / 180;
+const HOST_COPS = 4;
+const MEDIC_COUNT = 2;
+const KNEEL_AT = { x: 30, z: -12 };
+
+/** `host` (a table the writer turns into a frame) sent through the wire into a frame a guest reads. */
+function throughWire(host: BodyFrame): BodyFrame {
+  const writer = new Writer(2048);
+  writeBodyFrame(writer, host);
+  const guest = makeBodyFrame();
+  expect(readBodyFrame(writer.done().slice(), new Reader(), guest), "the guest reads the frame").toBe(true);
+  return guest;
+}
+
+/** A table's row `row` shown at (x, z) facing `yaw`, pacing `speed`, acting `activity`. */
+function showRow(table: CrowdPoses, row: number, x: number, z: number, yaw: number, speed: number, activity: number): void {
+  table.shown[row] = 1;
+  table.x[row] = x;
+  table.z[row] = z;
+  table.feetY[row] = 0;
+  table.yaw[row] = yaw;
+  table.speed[row] = speed;
+  table.activity[row] = activity;
+}
+
+describe("given a host whose cop walks at 1.4 m/s with a civilian beside him, both written as pose records, a third civilian hidden, and a guest whose own tables show that cop elsewhere and another cop the host does not show", () => {
+  it("when the guest applies the frame 0.1 s old, then its rows for that cop and that civilian are within 1 cm of the host's place moved 0.14 m along his heading, with the host's facing within 1.4 degrees, its pace and its activity; the other cop is not shown; the hidden civilian is not shown; and a civilian the frame does not name is shown as the guest's crowd left her", () => {
+    const yaw = 0.7;
+    const hostCops = createCrowdPoses(HOST_COPS);
+    const hostCrowd = createCrowdPoses(CAPACITY);
+    showRow(hostCops, 0, 10, 20, yaw, COP_PACE, ACTIVITY.idle);
+    showRow(hostCrowd, 2, 11, 20.5, yaw, COP_PACE, ACTIVITY.kneel);
+    const frame = makeBodyFrame();
+    frame.crowdTime = 50;
+    writePoseRows(frame, BODY_KIND.cop, hostCops, null, 0);
+    writePoseRows(frame, BODY_KIND.civilian, hostCrowd, Int16Array.of(2, 3, -1), 3);
+    addHidden(frame, 3);
+    const heard = throughWire(frame);
+    const guestCops = createCrowdPoses(HOST_COPS);
+    const guestCrowd = createCrowdPoses(CAPACITY);
+    showRow(guestCops, 0, -40, 5, 2, 0, ACTIVITY.none);
+    showRow(guestCops, 1, -42, 5, 2, 0, ACTIVITY.none);
+    showRow(guestCrowd, 2, -40, 6, 2, 0, ACTIVITY.none);
+    showRow(guestCrowd, 3, -41, 6, 2, 0, ACTIVITY.none);
+    showRow(guestCrowd, 5, 77, 88, 1, 0.5, ACTIVITY.none);
+    const shared = new OpenWorldShared(CAPACITY, { bodies: null, host: null, tables: [guestCrowd, null, guestCops, null], sight: { seen: () => true }, floors: null, ports: { lookOf: () => {} } });
+    shared.poseRows(heard, BODY_KIND.civilian, guestCrowd, false, 50 + FRAME_AGE_S, STEP);
+    shared.poseRows(heard, BODY_KIND.cop, guestCops, true, 50 + FRAME_AGE_S, STEP);
+    shared.hide(heard, guestCrowd);
+    const ahead = COP_PACE * FRAME_AGE_S;
+    for (const [table, row, x, z, activity] of [[guestCops, 0, 10, 20, ACTIVITY.idle], [guestCrowd, 2, 11, 20.5, ACTIVITY.kneel]] as const) {
+      expect(table.shown[row], `row ${row} is shown`).toBe(1);
+      expect(Math.abs(table.x[row]! - (x + detSin(yaw) * ahead)), `row ${row}: x (m)`).toBeLessThan(WIRE_CM);
+      expect(Math.abs(table.z[row]! - (z + detCos(yaw) * ahead)), `row ${row}: z (m)`).toBeLessThan(WIRE_CM);
+      expect(Math.abs(table.yaw[row]! - yaw), `row ${row}: facing (rad)`).toBeLessThanOrEqual(FACING_STEP);
+      expect(Math.abs(table.speed[row]! - COP_PACE), `row ${row}: pace (m/s)`).toBeLessThan(WIRE_CM);
+      expect(table.activity[row], `row ${row}: activity`).toBe(activity);
+      expect(table.partner[row], `row ${row}: no partner`).toBe(-1);
+    }
+    expect(guestCops.shown[1], "the cop the host does not show is not shown").toBe(0);
+    expect(guestCrowd.shown[3], "the hidden civilian is not shown").toBe(0);
+    expect([guestCrowd.shown[5], guestCrowd.x[5], guestCrowd.z[5]], "a civilian the frame does not name stays as the guest's crowd left her").toEqual([1, 77, 88]);
+  });
+});
+
+describe("given a guest with medics kneeling at its own scene and a frame whose two medic pose records kneel 30 m away", () => {
+  it("when the guest applies it, then its medics kneel where the host's do; and with a frame that has no medic record, then none is shown", () => {
+    const hostMedics = createCrowdPoses(MEDIC_COUNT);
+    for (let medic = 0; medic < MEDIC_COUNT; medic++) showRow(hostMedics, medic, KNEEL_AT.x + 0.7 * medic, KNEEL_AT.z, 1.5, 0, ACTIVITY.kneel);
+    const frame = makeBodyFrame();
+    frame.crowdTime = 10;
+    writePoseRows(frame, BODY_KIND.medic, hostMedics, null, 0);
+    const guestMedics = createCrowdPoses(MEDIC_COUNT);
+    for (let medic = 0; medic < MEDIC_COUNT; medic++) showRow(guestMedics, medic, 2 * medic, 0, 0, 0, ACTIVITY.kneel);
+    const shared = new OpenWorldShared(CAPACITY, { bodies: null, host: null, tables: [null, null, null, guestMedics], sight: { seen: () => true }, floors: null, ports: { lookOf: () => {} } });
+    shared.poseRows(throughWire(frame), BODY_KIND.medic, guestMedics, true, 10, STEP);
+    for (let medic = 0; medic < MEDIC_COUNT; medic++) {
+      expect(guestMedics.shown[medic], `medic ${medic} is shown`).toBe(1);
+      expect(Math.abs(guestMedics.x[medic]! - (KNEEL_AT.x + 0.7 * medic)) + Math.abs(guestMedics.z[medic]! - KNEEL_AT.z), `medic ${medic}: metres from the host's`).toBeLessThan(WIRE_CM);
+      expect(guestMedics.activity[medic], `medic ${medic} kneels`).toBe(ACTIVITY.kneel);
+    }
+    shared.poseRows(throughWire(makeBodyFrame()), BODY_KIND.medic, guestMedics, true, 11, STEP);
+    expect([guestMedics.shown[0], guestMedics.shown[1]], "with no medic record none is shown").toEqual([0, 0]);
   });
 });

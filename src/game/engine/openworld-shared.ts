@@ -2,7 +2,7 @@ import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
-import { BODY_FRAME_MAX, BODY_KIND, BODY_FLAG, BODY_POSTURE, copyBodyFrame, makeBodyFrame, type BodyFrame, type BodyMotion } from "../net/body-codec.ts";
+import { addBodyRecord, BODY_FRAME_MAX, BODY_KIND, BODY_FLAG, BODY_POSTURE, copyBodyFrame, makeBodyFrame, type BodyFrame, type BodyMotion } from "../net/body-codec.ts";
 import { BODIES_SILENT_S } from "../net/net-constants.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { SightField } from "../present/openworld-sight.ts";
@@ -57,6 +57,8 @@ export class OpenWorldShared {
   private readonly drawnZ: Float32Array;
   /** Per civilian: 1 when the last frame placed had a body record of her. */
   private readonly shared: Uint8Array;
+  /** Per kind and row, the stride phase the pose records' rows walk with. */
+  private readonly strides: Float32Array[];
   /** How many ids each kind has (by `BODY_KIND`): a record naming one past them is a peer's mistake. */
   private readonly idCounts: Uint16Array;
   /** The pose rows the last placing laid flat or wrote as figures (kind, id), to be given back. */
@@ -74,6 +76,7 @@ export class OpenWorldShared {
     this.drawnZ = new Float32Array(capacity + PEOPLE_EXTRA);
     this.shared = new Uint8Array(capacity);
     this.idCounts = Uint16Array.of(capacity, MAX_CARS, FOOT_COP_COUNT, MEDICS_COUNT);
+    this.strides = world.tables.map((table) => new Float32Array(table?.count ?? 0));
   }
 
   /** The host's frame, heard at wall second `now`. */
@@ -118,6 +121,39 @@ export class OpenWorldShared {
   /** Whether the last frame placed had a body record of civilian `civilian`: the host draws her, so this machine throws no ragdoll of its own for her. */
   shares(civilian: number): boolean {
     return this.shared[civilian] === 1;
+  }
+
+  /**
+   * A guest draws the pose records of `kind` in `frame` in `table`: with `whole` every row is hidden first (the table is all the host's), then each record writes its row: shown, the feet at the record's place moved by its velocity for the age
+   * (section 2.4), the facing, the pace, the activity, no partner, upright, and the stride advanced by pace x `wallDt`.
+   */
+  poseRows(frame: BodyFrame, kind: number, table: CrowdPoses, whole: boolean, crowdSeconds: number, wallDt: number): void {
+    if (whole) table.shown.fill(0);
+    const strides = this.strides[kind]!;
+    for (let at = 0; at < frame.count; at++) {
+      const id = frame.id[at]!;
+      if (frame.kind[at] !== kind || (frame.state[at]! & BODY_FLAG.pose) === 0 || id >= table.count) continue;
+      recordTarget(frame, at, crowdSeconds - frame.crowdTime, _target);
+      const pace = hypot2(_target.vx, _target.vz);
+      strides[id] = strides[id]! + pace * wallDt;
+      table.shown[id] = 1;
+      table.x[id] = _target.x;
+      table.z[id] = _target.z;
+      table.feetY[id] = _target.y;
+      table.yaw[id] = _target.heading;
+      table.speed[id] = pace;
+      table.stride[id] = strides[id]!;
+      table.activity[id] = frame.activity[at]!;
+      table.activityClock[id] = frame.activityClock[at]!;
+      table.activityLeft[id] = frame.activityLeft[at]!;
+      table.partner[id] = -1;
+      table.lying[id] = 0;
+    }
+  }
+
+  /** Every civilian the host draws nowhere (its hidden list) is hidden in `table`. */
+  hide(frame: BodyFrame, table: CrowdPoses): void {
+    for (let at = 0; at < frame.hidden; at++) if (frame.hiddenId[at]! < table.count) table.shown[frame.hiddenId[at]!] = 0;
   }
 
   /** The rows laid flat or written last time are given back, and what was drawn by a kind in `kinds` is forgotten. */
@@ -237,5 +273,27 @@ export class OpenWorldShared {
     this.drawnAs[person] = DRAWN.figure;
     this.drawnX[person] = table.x[id]!;
     this.drawnZ[person] = table.z[id]!;
+  }
+}
+
+/** Host: the shown rows of `table` (every row, or only the rows `only[0..onlyCount)` names that are at least 0) as pose records of `kind`: where the feet stand, the velocity along the facing at the pace, the facing and the activity. */
+export function writePoseRows(out: BodyFrame, kind: number, table: CrowdPoses, only: ArrayLike<number> | null, onlyCount: number): void {
+  const rows = only === null ? table.count : onlyCount;
+  for (let k = 0; k < rows; k++) {
+    const row = only === null ? k : only[k]!;
+    if (row < 0 || row >= table.count || table.shown[row] === 0) continue;
+    const at = addBodyRecord(out, kind, row, BODY_FLAG.pose);
+    if (at < 0) return;
+    const yaw = table.yaw[row]!;
+    const speed = table.speed[row]!;
+    out.pos[3 * at] = table.x[row]!;
+    out.pos[3 * at + 1] = table.feetY[row]!;
+    out.pos[3 * at + 2] = table.z[row]!;
+    out.vel[3 * at] = detSin(yaw) * speed;
+    out.vel[3 * at + 2] = detCos(yaw) * speed;
+    out.heading[at] = yaw;
+    out.activity[at] = table.activity[row]!;
+    out.activityClock[at] = table.activityClock[row]!;
+    out.activityLeft[at] = table.activityLeft[row]!;
   }
 }

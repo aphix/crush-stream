@@ -8,7 +8,9 @@ import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { LookRay, Meeting } from "../ai/civilians/civilian-look.ts";
 import { CrimeScene } from "../ai/openworld-crime/crime-scene.ts";
-import { COP_LOOK, FACING_SPEED, FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
+import { COP_LOOK, FACING_SPEED, FOOT_COP_COUNT, MAX_HELD, MAX_SUBJECTS } from "../ai/openworld-crime/crime-constants.ts";
+import { addHidden, BODY_KIND, type BodyFrame } from "../net/body-codec.ts";
+import { writePoseRows, type OpenWorldShared } from "./openworld-shared.ts";
 import type { FootArrestPorts, LineOfSight } from "../ai/openworld-crime/offence-source.ts";
 import { StateOffenceSource } from "../ai/openworld-crime/state-offence-source.ts";
 import { TrafficPatrolPorts, type TrafficApi } from "../ai/openworld-crime/traffic-patrol-ports.ts";
@@ -32,6 +34,10 @@ type CopArt = {
 
 /** What the law takes from the engine beyond the crowd's own ports. */
 export type LawEnginePorts = {
+  /** The open world's shared people (null before the crowd's start): a guest draws the host's cops and people in hand from its frame. */
+  shared(): OpenWorldShared | null;
+  /** The wall clock (s) this machine's frames are heard on. */
+  now(): number;
   makeArt(capacity: number): CopArt;
   /** The pool slot the figure was thrown into, -1 where none is known (the worker's world, or Rapier not up yet). */
   throwFigure(strike: FigureStrike, look: DriverLook): number;
@@ -72,6 +78,8 @@ export class OpenWorldLaw {
   private facingX = 0;
   private facingZ = 1;
   private shoveSeconds = -Infinity;
+  /** The crowd second of the last overlay: the stride of a drawn cop advances by the time since. */
+  private lastOverlay = 0;
 
   constructor(map: OpenWorldMap, crowd: CivilianCrowd, ports: LawEnginePorts, seed: number) {
     this.crowd = crowd;
@@ -102,16 +110,41 @@ export class OpenWorldLaw {
       this.hearSpared();
       this.feedFoot();
       this.hearShoves(authority);
+      const shared = ports.shared();
+      const heard = !authority && shared !== null && shared.fresh(ports.now());
+      this.scene.heardPoses = heard;
       this.scene.step(crowdSeconds, authority, poses, ports.cars());
+      if (heard) {
+        const dt = Math.max(0, crowdSeconds - this.lastOverlay);
+        shared.poseRows(shared.frame, BODY_KIND.civilian, poses, false, crowdSeconds, dt);
+        shared.poseRows(shared.frame, BODY_KIND.cop, this.scene.copPoses, true, crowdSeconds, dt);
+        shared.hide(shared.frame, poses);
+      }
+      this.lastOverlay = crowdSeconds;
     };
   }
 
-  /** Whether the police have the traffic's cars to patrol in (false: they are on foot). */
+  /** Host: the foot cops, the people in their hands and the civilians drawn by nobody written into `out` as pose records and the hidden list (`MSG.bodies`). */
+  writePoses(out: BodyFrame, crowdPoses: CrowdPoses): void {
+    writePoseRows(out, BODY_KIND.cop, this.scene.copPoses, null, 0);
+    const { table } = this.scene.foot;
+    writePoseRows(out, BODY_KIND.civilian, crowdPoses, table.resident, MAX_SUBJECTS);
+    for (let at = 0; at < MAX_SUBJECTS; at++) {
+      const resident = table.resident[at]!;
+      if (resident >= 0 && crowdPoses.shown[resident] === 0) addHidden(out, resident);
+    }
+    for (let at = 0; at < MAX_HELD; at++) {
+      const held = table.heldResident[at]!;
+      if (held >= 0) addHidden(out, held);
+    }
+  }
+
   /** The foot cops' poses, as drawn: where each is, what he is doing. */
   get copPoses(): CrowdPoses {
     return this.scene.copPoses;
   }
 
+  /** Whether the police have the traffic's cars to patrol in (false: they are on foot). */
   get patrolling(): boolean {
     return this.scene.patrolling;
   }
