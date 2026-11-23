@@ -484,15 +484,33 @@ describe("given another player on foot a metre ahead of a puncher", () => {
   });
 });
 
-describe("given a guest running at 7 m/s whose body the host sees 1 m behind him along his run", () => {
-  it("when his act leaves his own torso along his aim, then the host carries it out; a camera line 1.45 m off him that would read 2.4 m from the host's view is not what a guest sends", () => {
+describe("given a guest sprinting along +z whose body the host sees 1.4 m behind him, firing from a gun's tip 0.7 m ahead of his torso", () => {
+  /** The act of a shot from (10 + `across`, 1.3, 20.7) along `dir`, and a rig with the guest at the host's view of him. */
+  const sprintShot = (across: number, dir: { x: number; y: number; z: number }): ReturnType<typeof rig> => {
     const r = rig();
-    r.places.set(GUEST, { ...GUEST_AT, z: GUEST_AT.z - 1 });
-    const act = actAt(ACT.shot, PISTOL_SLOT, 0);
-    act.eyeY = GUEST_AT.y;
+    r.places.set(GUEST, { ...GUEST_AT, z: GUEST_AT.z - 1.4 });
+    const act = actAt(ACT.shot, PISTOL_SLOT, across, dir);
+    act.eyeY = 1.3;
+    act.eyeZ = GUEST_AT.z + 0.7;
     r.acts.hear(GUEST, act);
-    expect(r.shots.length, "rays fired from the act's eye, 1 m ahead of the host's view of him").toBe(1);
-    expect(r.shots[0]!.ray.eyeZ, "the ray starts where the act's eye was (z)").toBeCloseTo(GUEST_AT.z, 9);
+    return r;
+  };
+
+  it("when he fires along his run, then the host carries it out, the ray starting at the tip the act names (z 20.7)", () => {
+    const r = sprintShot(0, { x: 0, y: 0, z: 1 });
+    expect(r.shots.length, "rays fired").toBe(1);
+    expect(r.shots[0]!.ray.eyeZ, "the ray starts at the act's eye (z)").toBeCloseTo(GUEST_AT.z + 0.7, 9);
+  });
+
+  it("when he fires at 90 degrees to his run, then the host carries it out; a line 3 m from the host's view of his torso is refused", () => {
+    expect(sprintShot(0, { x: 1, y: 0, z: 0 }).shots.length, "rays fired at 90 degrees to the run").toBe(1);
+    const off = rig();
+    off.places.set(GUEST, { ...GUEST_AT, z: GUEST_AT.z - 1.4 });
+    const act = actAt(ACT.shot, PISTOL_SLOT, 3, { x: 0, y: 0, z: 1 });
+    act.eyeY = 1;
+    act.eyeZ = GUEST_AT.z - 1.4;
+    off.acts.hear(GUEST, act);
+    expect(off.shots.length, "rays fired along a line 3 m off his torso").toBe(0);
   });
 });
 
