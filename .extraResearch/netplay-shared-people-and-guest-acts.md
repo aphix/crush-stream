@@ -15,7 +15,7 @@ config):
 |---|---|---|
 | `player_sync_interval` | 100 ms | "the time in milliseconds between player sync packets" |
 | `lightweight_sync_interval` | 1500 ms | "between lightweight (player) sync packets" |
-| `ped_sync_interval` | 500 ms | "between ped sync packets when the ped is near the player" |
+| `ped_sync_interval` | 400 ms in the code and the shipped `mtaserver.conf` (the wiki says 500) | "between ped sync packets when the ped is near the player" |
 | `ped_far_sync_interval` | 2000 ms | "when the ped is far away from the player" |
 | `unoccupied_vehicle_sync_interval` | 400 ms | "between unoccupied vehicle sync packets" |
 | `keysync_mouse_sync_interval` | 100 ms | "minimum time in milliseconds between key sync packets due to mouse movement" |
@@ -24,7 +24,7 @@ config):
 | `bullet_sync` | 1 (on) | "can improve the reliability of shots when using certain weapons. However, it uses more bandwidth." |
 | `vehext_percent` / `vehext_ping_limit` | 0 / 150 ms | extrapolation of remote vehicles, "should be considered experimental" |
 
-So that project sends players at 10 Hz, nearby pedestrians at 2 Hz and far ones at 0.5 Hz, and hands a pedestrian or
+So that project sends players at 10 Hz, nearby pedestrians at 2.5 Hz and far ones at 0.5 Hz, and hands a pedestrian or
 an empty vehicle to a nearby player's machine (a "syncer") within a distance limit. The Perplexity answer gave 400 ms
 for pedestrians and 1000 ms for empty vehicles. Correction (same day, from the project's source at commit 68bba17a39,
 `Shared/mods/deathmatch/logic/CTickRateSettings.h`): the code's default is `iPedSync = 400`, so the wiki's 500 ms is
