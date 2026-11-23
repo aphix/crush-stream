@@ -8,7 +8,7 @@ import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { setGround } from "../world/ground.ts";
-import type { ActorPlace } from "./engine-openworld-acts.ts";
+import type { ActorPlace } from "./engine-openworld-law.ts";
 import { ASK, OpenWorldSeats } from "./engine-openworld-seats.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { SeatTable } from "../scenes/seat-table.ts";
@@ -79,7 +79,7 @@ function fixture(): Fixture {
 /** Actor `actor` is on foot at the door at x sign `side` of car `car`. */
 function standAt(f: Fixture, actor: number, car: number, side: number): void {
   const spot = doorSpot(f.cars[car]!, new THREE.Vector3(), side);
-  f.places.set(actor, { x: spot.x, y: spot.y + 1, z: spot.z, heading: 0 });
+  f.places.set(actor, { x: spot.x, y: spot.y + 1, z: spot.z, heading: 0, velocityX: 0, velocityZ: 0 });
 }
 
 /** Actor `actor` is on foot (his seat is free), at the door at x sign `side` of car `car`. */
@@ -245,7 +245,7 @@ describe("given players seated in a car", () => {
   it("when a guest on foot asks for a car, then the ask goes to the host as one get-in act with the car's index and his torso, and no seat changes here", () => {
     const sent: { kind: number; arg: number; x: number }[] = [];
     const f = fixture();
-    const place = { x: 1, y: 1, z: 2, heading: 0 };
+    const place = { x: 1, y: 1, z: 2, heading: 0, velocityX: 0, velocityZ: 0 };
     const guest = new OpenWorldSeats({
       cars: () => f.cars,
       poles: () => [],

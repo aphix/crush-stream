@@ -46,7 +46,7 @@ const SCENE_GRAPH = /^(Mesh|InstancedMesh|SkinnedMesh|Object3D|Scene|Group|Line|
 const HOT = {
   "src/game/net/body-codec.ts": ["clearBodyFrame", "addBodyRecord", "addHidden", "writeBodyFrame", "readBodyFrame", "copyBodyFrame", "writeFoot", "readFoot"],
   "src/game/net/body-wire.ts": ["send", "take", "sendFoot", "takeFoot"],
-  "src/game/engine/openworld-players.ts": ["clearRows", "hearFoot", "step", "strike", "writeRecords", "feed", "away", "obey", "footOut", "sightOf", "refreshLooks", "lookHash"],
+  "src/game/engine/openworld-players.ts": ["clearRows", "hearFoot", "step", "strike", "stagger", "writeRecords", "feed", "away", "obey", "footOut", "sightOf", "refreshLooks", "lookHash", "placeOf"],
   "src/game/engine/onfoot-shared.ts": ["knockOwnWalker", "dragOwnWalker"],
   "src/game/present/engine-ragdoll.ts": ["dollMotion", "dragDoll", "shiftDoll", "spawnOf", "removeDummy"],
   "src/game/present/civilian-figure.ts": ["writeFigureMatrix"],
@@ -125,7 +125,7 @@ const HOT = {
   "src/game/ai/civilians/civilian-separation.ts": ["resolve", "list", "buildPairs", "addPair", "relax", "pushApart", "move", "ease", "remember"],
   "src/game/ai/civilians/civilian-contact.ts": ["carGap", "comingAt"],
   "src/game/ai/civilians/crowd-walkers.ts": ["clear", "add", "addBody", "place"],
-  "src/game/engine/engine-openworld.ts": ["step", "frame", "feedWalkers", "landWalkerStrike", "shoot", "shootCar", "releaseGotUp", "writeBodies", "hearBodies", "hearFoot", "writeFoot", "playerAway", "sightOthers", "cableFrame", "hosted", "meet", "lookAlong", "wallBetween"],
+  "src/game/engine/engine-openworld.ts": ["step", "frame", "feedWalkers", "landWalkerStrike", "shoot", "shootCar", "releaseGotUp", "writeBodies", "hearBodies", "hearFoot", "writeFoot", "playerAway", "sightOthers", "cableFrame", "hosted", "meet", "lookAlong", "wallBetween", "playerPlace", "playerSlot", "hookHeld", "hookCount"],
   "src/game/engine/openworld-cables.ts": ["writeCables", "frame"],
   "src/game/engine/engine-openworld-acts.ts": ["hear", "hearGetIn", "admit", "punchBy", "shootBy", "punchLanded", "shootLocal", "draw", "scatter", "punch", "aimFromMuzzle", "faceTarget", "nearestToTorso", "apartFromTorso"],
   "src/game/present/civilian-art.ts": ["update", "refreshSight", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],

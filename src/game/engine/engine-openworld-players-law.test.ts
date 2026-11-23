@@ -31,8 +31,8 @@ function recordingArrest(heard: { calls: number }): FootArrestPorts {
   return { busted: heardOne, led: heardOne, taken: heardOne, delivered: heardOne };
 }
 
-/** A solo host with two players on foot, the guest standing where the victim is drawn and a foot cop five metres from him; the crowd stepped once so its log can take a shove. */
-function hostWithTwoOnFoot(heard: { calls: number }) {
+/** A solo host with two players on foot, the guest standing where the victim is drawn and a foot cop five metres from him; the crowd stepped once so its log can take a shove. `clearSpot`: whether a clear spot is found for a released player's car; `resets` takes each car sent back to its spawn. */
+function hostWithTwoOnFoot(heard: { calls: number }, clearSpot = true, resets: number[] = []) {
   const places = { guestX: 0, guestZ: 0, guestVelocityX: 0 };
   const director = new OpenWorldDirector({
     ...idleOpenWorldPorts(),
@@ -45,7 +45,8 @@ function hostWithTwoOnFoot(heard: { calls: number }) {
       out.velocityZ = 0;
       return actor <= GUEST;
     },
-    law: { solids: () => null, playerBusted: () => {}, sirens: () => {}, lineOfSight: () => true, footArrest: recordingArrest(heard) },
+    placeCarNear: () => clearSpot,
+    law: { solids: () => null, playerBusted: (car) => void resets.push(car), sirens: () => {}, lineOfSight: () => true, footArrest: recordingArrest(heard) },
   });
   director.startOpenWorld(map);
   director.frame(FRAME_SECONDS);
@@ -112,4 +113,34 @@ describe("given a solo host in the open world with its own player and a guest bo
     expect(scene.footChaseOf(strip(), GUEST), "the cops are still after him").toBe(true);
     expect(playersNamed(crowd, EVENT_KIND.footArrest), "arrests told").toHaveLength(0);
   });
+
+  it("when the guest fires a gun, then the cops are after the guest and not the host's player", () => {
+    const { director, scene } = hostWithTwoOnFoot({ calls: 0 });
+    director.shotFired(GUEST);
+    director.step(FRAME_SECONDS);
+    expect(scene.footChaseOf(strip(), GUEST), "a chase of the guest").toBe(true);
+    expect(scene.footChaseOf(strip(), OWN), "a chase of the host's player").toBe(false);
+  });
+
+  it("when the guest punches the cop beside him, then the cops are after the guest and not the host's player", () => {
+    const { director, scene, places } = hostWithTwoOnFoot({ calls: 0 });
+    scene.foot.walkers.place(0, places.guestX - 1, places.guestZ);
+    director.punch(GUEST, places.guestX, places.guestZ, -1, 0);
+    director.step(FRAME_SECONDS);
+    expect(scene.footChaseOf(strip(), GUEST), "a chase of the guest").toBe(true);
+    expect(scene.footChaseOf(strip(), OWN), "a chase of the host's player").toBe(false);
+  });
+
+  const releaseCases = [
+    { it: "when the guest is released at the station and a clear spot is found for his car there, then his car is not sent back to its spawn", clearSpot: true, expected: [] },
+    { it: "when the guest is released at the station and no clear spot is found for his car, then his car is sent back to its spawn", clearSpot: false, expected: [GUEST] },
+  ] as const;
+  for (const testCase of releaseCases) {
+    it(testCase.it, () => {
+      const resets: number[] = [];
+      const { scene } = hostWithTwoOnFoot({ calls: 0 }, testCase.clearSpot, resets);
+      scene.foot.placeCarOf(GUEST, 0, 0, 0);
+      expect(resets, "cars sent back to their spawn").toEqual(testCase.expected);
+    });
+  }
 });

@@ -31,8 +31,6 @@ type ArmsHost = {
   shoot(gun: Gun): void;
   /** Fire with the hook in hand: one end is placed. */
   hook(): void;
-  /** Whether the hook may be taken in hand: not on a guest's machine, where the host does not yet carry out hook acts. */
-  hooks(): boolean;
 };
 
 /** A trigger past this is pulled. */
@@ -116,16 +114,13 @@ export class OnFootArms {
   key(code: string): boolean {
     const weapon = WEAPON_KEYS[code];
     if (weapon === undefined) return false;
-    if (weapon !== "hook" || this.host.hooks()) this.weapon = weapon;
+    this.weapon = weapon;
     return true;
   }
 
-  /** LB / RB: the weapon before or after the one in hand, wrapping; the hook is skipped where it is not offered. */
+  /** LB / RB: the weapon before or after the one in hand, wrapping. */
   cycle(by: number): void {
-    let at = WEAPON_ORDER.indexOf(this.weapon);
-    do at = (at + by + WEAPON_ORDER.length) % WEAPON_ORDER.length;
-    while (WEAPON_ORDER[at] === "hook" && !this.host.hooks());
-    this.weapon = WEAPON_ORDER[at]!;
+    this.weapon = WEAPON_ORDER[(WEAPON_ORDER.indexOf(this.weapon) + by + WEAPON_ORDER.length) % WEAPON_ORDER.length]!;
   }
 
   /** What the HUD shows of the arms. */

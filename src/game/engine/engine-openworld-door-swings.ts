@@ -3,7 +3,7 @@ import { hypot2 } from "../kernel/physics-core.js";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { MAX_ACTORS } from "../scenes/seat-table.ts";
 import { ENTER_SECONDS } from "../present/onfoot-flow.ts";
-import type { ActorPlace } from "./engine-openworld-acts.ts";
+import type { ActorPlace } from "./engine-openworld-law.ts";
 import { doorSpot } from "./onfoot-doors.ts";
 
 /** A door swings this wide (rad) at this rate (rad/s) as a player gets in or out, and shuts once he is this far (m) from it. */
@@ -17,7 +17,7 @@ const OUT_HOLD_S = 8;
 const NO_CAR = -1;
 
 const _spot = new THREE.Vector3();
-const _place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0 };
+const _place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
 
 /** What the swings need of the engine. */
 type SwingPorts = {

@@ -547,6 +547,12 @@ export class OpenWorldBodies {
     return this.bodyOf[person]! !== NOBODY;
   }
 
+  /** The pool slot of person `person`'s body, -1 when she has none. */
+  slotOfPerson(person: number): number {
+    const body = this.bodyOf[person]!;
+    return body === NOBODY ? NOBODY : this.slot[body]!;
+  }
+
   /** Person `person`'s body's torso (x, z) into `out`; false when she has none. */
   torsoOf(person: number, out: { x: number; z: number }): boolean {
     const body = this.bodyOf[person]!;

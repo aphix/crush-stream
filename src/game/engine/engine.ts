@@ -49,7 +49,8 @@ import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
-import { OpenWorldActs, type ActorPlace } from "./engine-openworld-acts.ts";
+import { OpenWorldActs } from "./engine-openworld-acts.ts";
+import type { ActorPlace } from "./engine-openworld-law.ts";
 import { OpenWorldSeats } from "./engine-openworld-seats.ts";
 import { SeatRiders } from "../present/seat-riders.ts";
 import { SeatTable } from "../scenes/seat-table.ts";
@@ -129,6 +130,7 @@ const LOD_TINY_PX = 20;
 const _lodCenter = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _footVelocity = new THREE.Vector3();
+const _actorSpot: ActorPlace = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
 const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _ownMotion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
@@ -401,13 +403,15 @@ export class CrashEngine extends EngineGarage {
       chase: () => false,
       afoot: () => this.onFoot.afootInOpenWorld,
       self: () => WALKER_SLOT,
-      actor: () => this.seat.carIndex,
-      // Another actor's walker has a pool slot only once the room shares the players' walkers.
-      actorSlot: () => -1,
+      actor: () => this.ownCar(),
+      actorSlot: (actor) => this.openWorld.playerSlot(actor),
+      actorAfoot: (actor) => this.openWorld.playerPlace(actor, _actorSpot),
       guest: () => this.net.client,
+      hostHolds: () => this.openWorld.hookHeld(),
+      hostCables: () => this.openWorld.hookCount(),
       sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir),
       personMet: (ray, reach, out, remote) => this.openWorld.hookMet(ray, reach, out, remote),
-      standPerson: (civilian, eyeX, eyeZ) => this.openWorld.hookBody(civilian, eyeX, eyeZ),
+      standPerson: (civilian, eyeX, eyeZ, actor) => this.openWorld.hookBody(civilian, eyeX, eyeZ, actor),
       holdDoll: (slot) => this.openWorld.hookPin(slot),
     });
     this.scene.add(this.tether.art.group);
@@ -483,6 +487,9 @@ export class CrashEngine extends EngineGarage {
         seatedCar: (actor) => this.desk.table.carOf(actor),
         getIn: (actor, car) => this.desk.getIn(actor, car),
         getOut: (actor) => this.desk.getOut(actor),
+        hookFire: (actor, ray, sawPerson) => void this.tether.fireFor(actor, ray, sawPerson),
+        hookCut: (actor) => this.tether.cutFor(actor),
+        hookReel: (actor, on) => this.tether.reelFor(actor, on),
       },
       this.openWorld,
     );
@@ -559,16 +566,6 @@ export class CrashEngine extends EngineGarage {
         out.velocityZ = _footVelocity.z;
         return true;
       },
-      actorPlace: (actor, out) => {
-        if (!this.ragdolls.torso(WALKER_SLOT, _v, _footVelocity) || actor !== this.ownCar()) return false;
-        out.x = _v.x;
-        out.y = _v.y;
-        out.z = _v.z;
-        out.heading = this.ragdolls.walker.facing;
-        out.velocityX = _footVelocity.x;
-        out.velocityZ = _footVelocity.z;
-        return true;
-      },
       ownActor: () => this.ownCar(),
       placeCarNear: (actor, x, z, yaw) => this.race.placeNear(actor, x, z, yaw),
       now: () => performance.now() / 1000,
@@ -586,11 +583,12 @@ export class CrashEngine extends EngineGarage {
       spawnOf: (slot) => this.ragdolls.spawnOf(slot),
       bodies: this.bodyHost,
       footAnchor: (out) => this.onFoot.flow.active && this.bodyHost.motion(WALKER_SLOT, out),
-      ownCarIndex: () => this.drivenCar(),
+      ownCarIndex: () => this.ownCar(),
       tethers: () => this.world.tethers,
       playerLook: (car) => this.ragdolls.carDriverLook(car),
       knockWalker: (vx, vy, vz) => this.onFoot.knocked(vx, vy, vz),
       dragWalker: (t) => this.onFoot.dragged(t),
+      hookHolds: (actor) => this.tether.holding(actor),
       strikeWalker: (dirX, dirZ) => this.strikeOwnWalker(dirX, dirZ),
       staggerWalker: (dirX, dirZ) => this.staggerOwnWalker(dirX, dirZ),
       actorPlace: (actor, out) => this.actorPlace(actor, out),
@@ -1072,16 +1070,19 @@ export class CrashEngine extends EngineGarage {
     const mesh = this.ragdolls.pickMesh;
     if (!mesh.layers.test(this.raycaster.layers)) return;
     this.raycaster.set(_p.set(ray.eyeX, ray.eyeY, ray.eyeZ), _n.set(ray.dirX, ray.dirY, ray.dirZ));
-    mesh.nearestHit(this.raycaster.ray, this.raycaster.near, range, actor === this.ownCar() ? WALKER_SLOT : -1, out);
+    mesh.nearestHit(this.raycaster.ray, this.raycaster.near, range, actor === this.ownCar() ? WALKER_SLOT : this.openWorld.playerSlot(actor), out);
   }
 
-  /** Where actor `actor` stands on foot: this player from his walker. Other players' places come from their shared bodies, which this machine does not hold yet. */
+  /** Where actor `actor` stands on foot and how he moves: this machine's player from his walker as the ragdoll world's last step has him, every other player as the host has him (`OpenWorldDirector.playerPlace`). */
   private actorPlace(actor: number, out: ActorPlace): boolean {
-    if (actor !== this.ownCar() || !this.onFoot.armed() || !this.ragdolls.walkerTorso(_p)) return false;
-    out.x = _p.x;
-    out.y = _p.y;
-    out.z = _p.z;
+    if (actor !== this.ownCar()) return this.openWorld.playerPlace(actor, out);
+    if (!this.ragdolls.torso(WALKER_SLOT, _v, _footVelocity)) return false;
+    out.x = _v.x;
+    out.y = _v.y;
+    out.z = _v.z;
     out.heading = this.ragdolls.walker.facing;
+    out.velocityX = _footVelocity.x;
+    out.velocityZ = _footVelocity.z;
     return true;
   }
 
@@ -1124,9 +1125,15 @@ export class CrashEngine extends EngineGarage {
     this.ragdolls.staggerWalker(WALKER_SLOT, 0.5);
   }
 
-  /** Another player's punch lands on player `victim`: this player's walker takes it; a body shared from another machine is struck here once such bodies exist. */
+  /** Another player's punch lands on player `victim`. This machine's own walker takes it here; another player's walker is his own machine's, so the blow rides the host's record of him: one that fells him as a strike with its launch, a lighter one as a stagger (`OpenWorldDirector.strikePlayer`, `staggerPlayer`). */
   private strikeActor(victim: number, dirX: number, dirZ: number, knockedOut: boolean): void {
-    if (victim !== this.ownCar()) return;
+    if (victim !== this.ownCar()) {
+      if (knockedOut) {
+        _n.set(dirX, PUNCH_LIFT, dirZ).normalize().multiplyScalar(PUNCH_SPEED);
+        this.openWorld.strikePlayer(victim, _n.x, _n.y, _n.z);
+      } else this.openWorld.staggerPlayer(victim, dirX, dirZ);
+      return;
+    }
     if (knockedOut) this.strikeOwnWalker(dirX, dirZ);
     else this.staggerOwnWalker(dirX, dirZ);
   }

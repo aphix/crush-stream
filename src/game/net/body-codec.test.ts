@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED } from "../ai/civilians/civilian-activity.ts";
 import { Reader, Writer } from "./codec.ts";
-import { addBodyRecord, addHidden, BODY_FLAG, BODY_FRAME_MAX, BODY_KIND, BODY_POSTURE, CABLE_END, clearBodyFrame, copyBodyFrame, HIDDEN_MAX, makeBodyFrame, makeFootRecord, POSTURE_MASK, readBodyFrame, readFoot, writeBodyFrame, writeFoot, type BodyFrame, type FootRecord } from "./body-codec.ts";
+import { addBodyRecord, addHidden, BODY_FLAG, BODY_FRAME_MAX, BODY_KIND, BODY_POSTURE, CABLE_END, clearBodyFrame, copyBodyFrame, HIDDEN_MAX, makeBodyFrame, makeFootRecord, PLAYER_FLAG, POSTURE_MASK, readBodyFrame, readFoot, writeBodyFrame, writeFoot, type BodyFrame, type FootRecord } from "./body-codec.ts";
 
 const CIVILIAN = 17;
 const PLAYER_CAR = 3;
@@ -23,8 +23,10 @@ const PLAYER_RECORD_AT = 32;
 const MEDIC_RECORD_AT = 52;
 const CABLE_COUNT_AT = 72;
 const CABLE_FIRST_END_AT = 73;
-const HIDDEN_COUNT_AT = 94;
-const FRAME_BYTES = 97;
+const HIDDEN_COUNT_AT = 95;
+const FRAME_BYTES = 98;
+/** The actor who fired the sample frame's cable. */
+const CABLE_OWNER = 3;
 const STATE_AT = 3;
 
 function place(frame: BodyFrame, at: number, x: number, y: number, z: number, vx: number, vy: number, vz: number, heading: number): void {
@@ -55,6 +57,7 @@ function sampleFrame(): BodyFrame {
   frame.endId[1] = CIVILIAN;
   frame.cableLength[0] = 12.34;
   frame.cableStrain[0] = 0.5;
+  frame.cableOwner[0] = CABLE_OWNER;
   addHidden(frame, HIDDEN_CIVILIAN);
   return frame;
 }
@@ -76,7 +79,7 @@ describe("given a frame of a standing pinned civilian, a struck player lying, a 
   it("when it is written and read back and copied, then every person's kind, id, posture, flags and activity read back exactly, each place within 1 cm, each velocity within 1 cm/s, each facing within 1.4 degrees, the cable's ends, its length within 1 cm and its strain within 1/255, and the hidden civilian's index exactly", () => {
     const original = sampleFrame();
     const bytes = sent(original);
-    expect(bytes.length, "message length: 12 + 20 x 3 + 1 + 21 x 1 + 1 + 2 x 1").toBe(FRAME_BYTES);
+    expect(bytes.length, "message length: 12 + 20 x 3 + 1 + 22 x 1 + 1 + 2 x 1").toBe(FRAME_BYTES);
     const read = makeBodyFrame();
     expect(readBodyFrame(bytes, new Reader(), read), "the message is taken").toBe(true);
     const copy = makeBodyFrame();
@@ -106,8 +109,18 @@ describe("given a frame of a standing pinned civilian, a struck player lying, a 
     expect(copy.endId[1], "end B id").toBe(CIVILIAN);
     expect(Math.abs(copy.cableLength[0]! - 12.34), "length (m)").toBeLessThanOrEqual(CENTIMETRE);
     expect(Math.abs(copy.cableStrain[0]! - 0.5), "strain").toBeLessThanOrEqual(STRAIN_STEP);
+    expect(copy.cableOwner[0], "the actor who fired it").toBe(CABLE_OWNER);
     expect(copy.hidden, "hidden").toBe(1);
     expect(copy.hiddenId[0], "the hidden civilian").toBe(HIDDEN_CIVILIAN);
+  });
+
+  it("when a standing player's record says a blow staggered him and that he holds a first hook end, then a guest takes the frame and reads both back", () => {
+    const frame = makeBodyFrame();
+    const state = BODY_POSTURE.stand | PLAYER_FLAG.staggered | PLAYER_FLAG.holds;
+    addBodyRecord(frame, BODY_KIND.player, PLAYER_CAR, state);
+    const read = makeBodyFrame();
+    expect(readBodyFrame(sent(frame), new Reader(), read), "the message is taken").toBe(true);
+    expect(read.state[0], "his state").toBe(state);
   });
 
   it("when a place 400 m out is written and read, then it reads 327.67 m: held at the edge, not wrapped", () => {

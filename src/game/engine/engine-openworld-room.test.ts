@@ -19,7 +19,7 @@ import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { OFF_MENU } from "../world/tracks/index.ts";
 import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
-import { OpenWorldActs, type ActorPlace } from "./engine-openworld-acts.ts";
+import { OpenWorldActs } from "./engine-openworld-acts.ts";
 import { ACT } from "../net/act-codec.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 import { detAtan2, hypot2 } from "../kernel/physics-core.js";
@@ -96,7 +96,7 @@ type Drawn = { poses: CrowdPoses | null; held: Uint8Array | null; players: Crowd
 /** A walker on a straight path: where he stood at crowd second `t0`, how fast he moves (m/s) and how he is (`BODY_POSTURE`). */
 type FootPath = { x0: number; z0: number; vx: number; vz: number; t0: number; posture: number };
 type Launch = { vx: number; vy: number; vz: number };
-type Side = { director: OpenWorldDirector; thrown: FigureStrike[]; car: ReturnType<typeof pooledCar>; fake: FakeBodyHost | null; eye: { x: number; z: number }; drawn: Drawn; walk: { path: FootPath | null }; knocks: Launch[]; drags: { x: number; z: number }[]; tethers: TetherSet; cables: RemoteCables; looks: DriverLook[] };
+type Side = { director: OpenWorldDirector; thrown: FigureStrike[]; car: ReturnType<typeof pooledCar>; fake: FakeBodyHost | null; eye: { x: number; z: number }; drawn: Drawn; walk: { path: FootPath | null }; knocks: Launch[]; staggers: { dirX: number; dirZ: number }[]; holding: Set<number>; drags: { x: number; z: number }[]; tethers: TetherSet; cables: RemoteCables; looks: DriverLook[] };
 type RoomOptions = { bodies?: boolean; guests?: 1 | 2 };
 
 /** The host (a room of the open world) and one or two guests, their worlds on the open world's course and their crowds the directors of the engine, linked through netplay. With `bodies` each side has a dummies' world of its own (`FakeBodyHost`), an eye a test moves and an art that keeps the last poses and `held` it was handed. */
@@ -117,6 +117,9 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
     const knocks: Launch[] = [];
     const drags: { x: number; z: number }[] = [];
     const looks: DriverLook[] = [];
+    const staggers: { dirX: number; dirZ: number }[] = [];
+    /** The actors this side's hook has holding a first end. */
+    const holding = new Set<number>();
     const motion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
     const tethers = new TetherSet();
     const director = new OpenWorldDirector({
@@ -142,6 +145,8 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
         knocks.push({ vx, vy, vz });
         return true;
       },
+      staggerWalker: (dirX, dirZ) => void staggers.push({ dirX, dirZ }),
+      hookHolds: (actor) => holding.has(actor),
       dragWalker: (t) => void drags.push({ x: t.x, z: t.z }),
       now: () => now / 1000,
       throwFigure: (strike) => thrown.push(strike) - 1,
@@ -180,25 +185,23 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
           }),
     });
     director.startOpenWorld(map);
-    return { director, thrown, car, fake, eye, drawn, walk, knocks, drags, tethers, cables: new RemoteCables(), looks };
+    return { director, thrown, car, fake, eye, drawn, walk, knocks, staggers, holding, drags, tethers, cables: new RemoteCables(), looks };
   };
   const host = side(false, HOST_CAR_SLOT);
   const guest = side(true, 1);
   const second = guests === 2 ? side(true, 2) : null;
-  const places = new Map<number, ActorPlace>();
   const acts = new OpenWorldActs(
     {
-      actorPlace: (actor, out) => {
-        const place = places.get(actor);
-        if (place) Object.assign(out, place);
-        return place !== undefined;
-      },
+      actorPlace: (actor, out) => host.director.playerPlace(actor, out),
       now: () => now / 1000,
       self: () => HOST_CAR_SLOT,
       guest: () => false,
       face: () => {},
       layGun: () => false,
       sendAct: () => {},
+      hookFire: () => {},
+      hookCut: () => {},
+      hookReel: () => {},
       seatedCar: () => -1,
       getIn: () => 0,
       getOut: () => 0,
@@ -215,7 +218,7 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
   /** The host's body slot a cable holds still: its steering back to her crowd spot is overpowered, as a taut cable overpowers its motors. */
   const still = { slot: -1 };
   return {
-    hub, hostNet, guestNet, secondNet, host, guest, second, still, places,
+    hub, hostNet, guestNet, secondNet, host, guest, second, still,
     /** `n` net frames of 1/30 s: the host's sim steps twice, its crowd with it, then both nets and both crowds' frames. */
     step(n: number): void {
       for (let k = 0; k < n; k++) {
@@ -595,12 +598,18 @@ function knocked(log: Float64Array): number[] {
   return out;
 }
 
-/** The guest punches resident `c`: his act goes over the wire from a metre west of her drawn spot, along +x at her. */
+/** Frames a guest's foot message takes to reach the host (0.2 s), and how far west of her a guest stands to punch (m): inside the punch's 1.4 m reach. */
+const FOOT_HEARD_FRAMES = 6;
+const PUNCH_FROM_M = 0.9;
+
+/** The guest, on foot west of resident `c` on his own machine, punches her: the host knows where he stands from his own foot messages, and his act goes over the wire along the line to her. */
 function guestPunches(r: ReturnType<typeof startedRoom>, c: number): void {
   const { poses } = r.host.director["crowd"]!;
-  const place: ActorPlace = { x: poses.x[c]! - 1, y: 1, z: poses.z[c]!, heading: Math.PI / 2 };
-  r.places.set(1, place);
-  r.guestNet.sendAct(ACT.punch, 0, { x: place.x, y: place.y, z: place.z }, { x: 1, y: 0, z: 0 });
+  const from = { x: poses.x[c]! - PUNCH_FROM_M, z: poses.z[c]! };
+  r.guest.walk.path = { x0: from.x, z0: from.z, vx: 0, vz: 0, t0: r.guest.director.crowdTime(), posture: BODY_POSTURE.stand };
+  r.step(FOOT_HEARD_FRAMES);
+  const gap = hypot2(poses.x[c]! - from.x, poses.z[c]! - from.z);
+  r.guestNet.sendAct(ACT.punch, 0, { x: from.x, y: TORSO_ABOVE_FEET, z: from.z }, { x: (poses.x[c]! - from.x) / gap, y: 0, z: (poses.z[c]! - from.z) / gap });
   r.step(1);
 }
 
@@ -623,5 +632,53 @@ describe("given a host and a guest in a room of the open world, the guest on foo
     expect(firstMismatch(r.host.thrown.map((strike) => strike.guard), [c]), "the host's ragdolls").toBeUndefined();
     expect(firstMismatch(knocked(r.host.director.eventLog()), [c]), "the host's log").toBeUndefined();
     expect(firstMismatch(knocked(r.guest.director.eventLog()), [c]), "the guest's log").toBeUndefined();
+  });
+});
+
+describe("given a host and two guests in an open-world room, the first guest on foot", () => {
+  it("when the host lands a light blow on him from the west, then within 0.3 s his own machine staggers his walker once, eastward, nothing knocks him and the second guest's walker is told nothing; and a second blow 0.6 s later staggers him once more", () => {
+    const r = footRoom();
+    startWalking(r, 0);
+    r.step(30);
+    r.host.director.staggerPlayer(GUEST_CAR, 1, 0);
+    r.step(9);
+    expect(r.guest.staggers.length, "staggers told to his machine").toBe(1);
+    expect(r.guest.staggers[0]!.dirX, "the blow's direction (x)").toBeCloseTo(1, 1);
+    expect(r.guest.knocks.length, "knocks told to his machine").toBe(0);
+    expect(r.second!.staggers.length, "staggers told to the second guest's machine").toBe(0);
+    r.step(9);
+    r.host.director.staggerPlayer(GUEST_CAR, 1, 0);
+    r.step(9);
+    expect(r.guest.staggers.length, "staggers after the second blow").toBe(2);
+  });
+
+  it("when the host's hook holds one cable he fired and has him holding a first end, then his own machine reads one cable of his and an end held, and the second guest's reads none of either", () => {
+    const r = footRoom();
+    startWalking(r, 0);
+    r.step(30);
+    expect([r.guest.director.hookCount(), r.guest.director.hookHeld()], "control: before the hook, his machine reads none").toEqual([0, false]);
+    const cable = r.host.tethers.open(GUEST_CAR);
+    r.host.tethers.setEnd(cable, 0, WORLD, FOOT_AT.x, 0, FOOT_AT.z);
+    r.host.tethers.setEnd(cable, 1, WORLD, FOOT_AT.x + 3, 0, FOOT_AT.z);
+    r.host.holding.add(GUEST_CAR);
+    r.step(FOOT_HEARD_FRAMES);
+    expect([r.guest.director.hookCount(), r.guest.director.hookHeld()], "his own machine: cables of his, an end held").toEqual([1, true]);
+    expect([r.second!.director.hookCount(), r.second!.director.hookHeld()], "the second guest's machine").toEqual([0, false]);
+  });
+
+  it("when the host has stood a body for him, then the host names that body's slot as his, the one his own shots and hook pass, and none for the second guest in his car", () => {
+    const r = room({ bodies: true, guests: 2 });
+    open.push(r.hostNet, r.guestNet, r.secondNet!);
+    r.step(5 * 30);
+    r.host.eye.x = FOOT_AT.x;
+    r.host.eye.z = FOOT_AT.z + HOOK_EYE_M;
+    startWalking(r, 0);
+    r.step(20);
+    const bodies = r.host.director["bodies"]!;
+    const person = personOf(BODY_KIND.player, GUEST_CAR, r.host.director["crowd"]!.poses.count);
+    const slot = r.host.fake!.started.map((start) => start.slot).find((candidate) => bodies.personOfSlot(candidate) === person);
+    expect(slot, "control: the host stood a body for him").toBeDefined();
+    expect(r.host.director.playerSlot(GUEST_CAR), "the slot the host names as his").toBe(slot);
+    expect(r.host.director.playerSlot(2), "the slot named for the second guest").toBe(-1);
   });
 });

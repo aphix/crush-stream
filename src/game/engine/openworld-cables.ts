@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { MAX_TETHERS } from "../kernel/constants.ts";
 import { R_STRENGTH, RAPIER, ROW, TetherSet, THING, thingIndex, thingKind, WORLD } from "../contact/tether.ts";
-import { BODY_KIND, CABLE_END, type BodyFrame, type BodyMotion } from "../net/body-codec.ts";
+import { BODY_KIND, CABLE_END, CABLE_NO_OWNER, type BodyFrame, type BodyMotion } from "../net/body-codec.ts";
 import { TetherArt } from "../present/tether-art.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { activeGround } from "../world/ground.ts";
@@ -20,7 +20,7 @@ function personOfDoll(slot: number, bodies: OpenWorldBodies | null, shared: Open
   return person >= 0 || shared === null ? person : shared.personOfDummy(slot);
 }
 
-/** Host: the cables of `tethers` written into `out` after its records: a car end is the car and its car-frame point, an end on a person's body or dummy is that person (no point), any other end a world point. */
+/** Host: the cables of `tethers` written into `out` after its records: a car end is the car and its car-frame point, an end on a person's body or dummy is that person (no point), any other end a world point; each with the actor who fired it. */
 export function writeCables(out: BodyFrame, tethers: TetherSet, bodies: OpenWorldBodies | null, shared: OpenWorldShared | null, capacity: number): void {
   for (let slot = 0; slot < MAX_TETHERS && out.cables < MAX_TETHERS; slot++) {
     if (!tethers.isAlive(slot)) continue;
@@ -28,6 +28,8 @@ export function writeCables(out: BodyFrame, tethers: TetherSet, bodies: OpenWorl
     for (let end = 0; end < 2; end++) writeEnd(out, tethers, slot, end, 2 * cable + end, bodies, shared, capacity);
     out.cableLength[cable] = tethers.length(slot);
     out.cableStrain[cable] = tethers.tension(slot) / tethers.rows[slot * ROW + R_STRENGTH]!;
+    const owner = tethers.owner(slot);
+    out.cableOwner[cable] = owner < 0 ? CABLE_NO_OWNER : owner;
   }
 }
 

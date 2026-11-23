@@ -108,7 +108,12 @@ export class OpenWorldLaw {
         footChased: (actor, cop, seconds) => crowd.raiseEvent(EVENT_KIND.footChase, playerCopSubject(actor, cop), seconds),
         footArrested: (actor, cop, seconds) => crowd.raiseEvent(EVENT_KIND.footArrest, playerCopSubject(actor, cop), seconds),
         self: () => ports.ownActor(),
-        placeCarNear: (actor, x, z, yaw) => ports.placeCarNear(actor, x, z, yaw),
+        // A released player's car goes near the drop-off, or back to its spawn when no clear spot is found there.
+        placeCarNear: (actor, x, z, yaw) => {
+          const placed = ports.placeCarNear(actor, x, z, yaw);
+          if (!placed) ports.playerBusted(actor, 0);
+          return placed;
+        },
         footArrest: ports.footArrest,
         // Every peer builds the signals from the layout (the traffic is the host's only), so every peer's cops see the same jaywalkers.
         signals: new TrafficSignals(buildRoadNetwork(openWorldGeometry(LAYOUT))),

@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import { afterEach, describe, expect, it } from "vitest";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { type ActorPlace, OpenWorldActs } from "../engine/engine-openworld-acts.ts";
+import { OpenWorldActs } from "../engine/engine-openworld-acts.ts";
+import type { ActorPlace } from "../engine/engine-openworld-law.ts";
 import { OpenWorldSeats } from "../engine/engine-openworld-seats.ts";
 import { doorSpot } from "../engine/onfoot-doors.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { setGround } from "../world/ground.ts";
-import { frame, makeWorld, type World } from "../world/race-world.test-util.ts";
+import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { SeatTable } from "../scenes/seat-table.ts";
 import { ACT } from "./act-codec.ts";
 import { FRAME_MS, Hub } from "./net-hub.test-util.ts";
@@ -55,8 +56,8 @@ function room() {
     sendAct: () => {},
   });
   const acts = new OpenWorldActs(
-    { actorPlace: (actor, out) => (places.has(actor) ? (Object.assign(out, places.get(actor)), true) : false), now: () => now / 1000, self: () => 0, guest: () => false, face: () => {}, muzzle: () => false, sendAct: () => {}, seatedCar: (actor) => seats.table.carOf(actor), getIn: (actor, car) => seats.getIn(actor, car), getOut: (actor) => seats.getOut(actor) },
-    { punch: () => {}, shoot: () => 0, meet: () => 0, shotFired: () => {} },
+    { actorPlace: (actor, out) => (places.has(actor) ? (Object.assign(out, places.get(actor)), true) : false), now: () => now / 1000, self: () => 0, guest: () => false, face: () => {}, layGun: () => false, sendAct: () => {}, seatedCar: (actor) => seats.table.carOf(actor), getIn: (actor, car) => seats.getIn(actor, car), getOut: (actor) => seats.getOut(actor), hookFire: () => {}, hookCut: () => {}, hookReel: () => {} },
+    { punch: () => {}, shoot: () => 0, meet: () => 0, wallBetween: () => false, shotFired: () => {} },
   );
   tables[0] = seats.table;
   const hostGame = worldGame(hostWorld, "Ann", () => null, (actor, act) => acts.hear(actor, act), seats.table).game;
@@ -95,7 +96,7 @@ type Room = ReturnType<typeof room>;
 function asksAtDoor(r: Room, n: number, side: number): void {
   r.tables[0]!.leave(n);
   const spot = doorSpot(r.worlds[0]!.live()[PARKED]!, new THREE.Vector3(), side);
-  r.places.set(n, { x: spot.x, y: spot.y + TORSO_UP, z: spot.z, heading: 0 });
+  r.places.set(n, { x: spot.x, y: spot.y + TORSO_UP, z: spot.z, heading: 0, velocityX: 0, velocityZ: 0 });
   r.guests[n - 1]!.sendAct(ACT.getIn, PARKED, { x: spot.x, y: spot.y + TORSO_UP, z: spot.z }, { x: 0, y: 0, z: 1 });
   r.step(15);
 }
@@ -140,7 +141,7 @@ describe("given a host and two guests in a room of the open world, and a parked 
   it("when a guest far from every door asks to get in, then he is refused: nothing changes on any machine", () => {
     const r = room();
     r.tables[0]!.leave(1);
-    r.places.set(1, { x: 5000, y: 1, z: 5000, heading: 0 });
+    r.places.set(1, { x: 5000, y: 1, z: 5000, heading: 0, velocityX: 0, velocityZ: 0 });
     r.guests[0]!.sendAct(ACT.getIn, PARKED, { x: 5000, y: 1, z: 5000 }, { x: 0, y: 0, z: 1 });
     r.step(15);
     expect(r.tables[0]!.carOf(1), "he sits nowhere").toBe(-1);

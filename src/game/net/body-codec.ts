@@ -9,8 +9,12 @@ export const BODY_POSTURE = { stand: 0, down: 1, getUp: 2 } as const;
 export const POSTURE_MASK = 3;
 /** The other bits of a record's state: a cable holds her, the hook pins her, she is a thrown dummy, a car or shot has just struck her, the record is a pose record (feet, not a torso). */
 export const BODY_FLAG = { roped: 4, pinned: 8, thrown: 16, struck: 32, pose: 64 } as const;
-/** The state bits each kind may carry, by kind: a civilian posture, roped, pinned, thrown, pose; a player posture, roped, struck; a cop and a medic posture, thrown, pose. */
-const STATE_MASK = [95, 39, 83, 83] as const;
+/** A player's record alone carries these: a blow staggered him (its direction in the record's velocity; the bit is a civilian's `pinned`, which nothing reads on a guest), and he holds a first hook end (the one bit no other kind uses: `thrown` is read on every kind). */
+export const PLAYER_FLAG = { staggered: 8, holds: 128 } as const;
+/** A cable nobody fired. */
+export const CABLE_NO_OWNER = 255;
+/** The state bits each kind may carry, by kind: a civilian posture, roped, pinned, thrown, pose; a player posture, roped, staggered, struck, holds; a cop and a medic posture, thrown, pose. */
+const STATE_MASK = [95, 175, 83, 83] as const;
 /** What a cable end is: a car's point in its frame, a point of the world, or a person (this plus her kind). */
 export const CABLE_END = { car: 0, world: 1, person: 2 } as const;
 /** The most records a frame carries: 8 players + 4 foot cops + 2 medics + 8 people in the law's hands + 13 pool slots that are not this machine's walker (4 + 6 + 4 less 1) is 35, the most that exist at once; 40 is the next multiple of 8. */
@@ -18,11 +22,11 @@ export const BODY_FRAME_MAX = 40;
 /** The most hidden civilians a frame carries: 16 held by the hook + 8 in the law's hands, the most that exist at once. */
 export const HIDDEN_MAX = 24;
 
-/** Bytes: the header (type, seq, crowd time, record count), a record, a cable end, a cable (two ends, length, strain) and a hidden entry. */
+/** Bytes: the header (type, seq, crowd time, record count), a record, a cable end, a cable (two ends, length, strain, owner) and a hidden entry. */
 const HEADER_BYTES = 12;
 const RECORD_BYTES = 20;
 const END_BYTES = 9;
-const CABLE_BYTES = 2 * END_BYTES + 3;
+const CABLE_BYTES = 2 * END_BYTES + 4;
 const HIDDEN_BYTES = 2;
 /** Byte offsets in the header and in a record. */
 const CROWD_TIME_AT = 3;
@@ -71,6 +75,8 @@ export type BodyFrame = {
   readonly endPoint: Float32Array;
   readonly cableLength: Float32Array;
   readonly cableStrain: Float32Array;
+  /** Per cable, the actor (car index) who fired it, `CABLE_NO_OWNER` for none. */
+  readonly cableOwner: Uint8Array;
   hidden: number;
   readonly hiddenId: Uint16Array;
 };
@@ -98,6 +104,7 @@ export function makeBodyFrame(): BodyFrame {
     endPoint: new Float32Array(6 * MAX_TETHERS),
     cableLength: new Float32Array(MAX_TETHERS),
     cableStrain: new Float32Array(MAX_TETHERS),
+    cableOwner: new Uint8Array(MAX_TETHERS),
     hidden: 0,
     hiddenId: new Uint16Array(HIDDEN_MAX),
   };
@@ -136,7 +143,7 @@ export function addHidden(out: BodyFrame, civilian: number): boolean {
   return true;
 }
 
-/** `f` as a `MSG.bodies` message: 12 + 20 x records + 1 + 21 x cables + 1 + 2 x hidden bytes. */
+/** `f` as a `MSG.bodies` message: 12 + 20 x records + 1 + 22 x cables + 1 + 2 x hidden bytes. */
 export function writeBodyFrame(w: Writer, f: BodyFrame): void {
   w.u8(MSG.bodies);
   w.u16(f.seq);
@@ -162,6 +169,7 @@ export function writeBodyFrame(w: Writer, f: BodyFrame): void {
     }
     w.u16(Math.max(0, Math.min(WORD_MAX, Math.round(f.cableLength[cable]! * CENTIMETRES))));
     w.u8(Math.round(STRAIN_STEPS * Math.min(1, Math.max(0, f.cableStrain[cable]!))));
+    w.u8(f.cableOwner[cable]!);
   }
   w.u8(f.hidden);
   for (let at = 0; at < f.hidden; at++) w.u16(f.hiddenId[at]!);
@@ -230,6 +238,7 @@ export function readBodyFrame(data: Uint8Array, r: Reader, out: BodyFrame): bool
     }
     out.cableLength[cable] = r.u16() / CENTIMETRES;
     out.cableStrain[cable] = r.u8() / STRAIN_STEPS;
+    out.cableOwner[cable] = r.u8();
   }
   r.off = hiddenAt + 1;
   for (let entry = 0; entry < hidden; entry++) addHidden(out, r.u16());
@@ -264,6 +273,7 @@ export function copyBodyFrame(from: BodyFrame, to: BodyFrame): void {
   for (let cable = 0; cable < from.cables; cable++) {
     to.cableLength[cable] = from.cableLength[cable]!;
     to.cableStrain[cable] = from.cableStrain[cable]!;
+    to.cableOwner[cable] = from.cableOwner[cable]!;
   }
   for (let at = 0; at < from.hidden; at++) to.hiddenId[at] = from.hiddenId[at]!;
 }

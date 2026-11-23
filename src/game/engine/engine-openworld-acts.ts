@@ -7,14 +7,15 @@ import { SEATS_NOTICE } from "../net/seats-codec.ts";
 import { ACT, ACT_KINDS, type Act } from "../net/act-codec.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { gunAt, slotOfGun, STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
-
-/** Where an actor stands on foot: his torso (m) and the way he faces (rad, `atan2(x, z)`). */
-export type ActorPlace = { x: number; y: number; z: number; heading: number };
+import type { ActorPlace } from "./engine-openworld-law.ts";
 
 /** Actors are car indexes. */
 const MAX_ACTORS = MAX_CARS;
 /** A punch's eye is his torso: an act whose eye is farther than this from it (m) is not his. */
 const ACT_EYE_REACH = 4;
+/** The hook is aimed along the camera's sight line: its eye may be the whole boom from him (the orbit's 32 m and a sprint's stretch), and its fires come no faster than this (s). */
+const HOOK_EYE_REACH = 40;
+const HOOK_FIRE_COOLDOWN = 0.2;
 /** The line of a shot must pass within this (m) of the actor's torso. A gun's tip is held out in front of his chest (under 1 m from it), so this bounds that offset: the host sees a guest's body where it was a delay ago (about 1 m behind at a sprint), which the line, running through the body he fired from, does not feel. */
 const SHOT_RAY_REACH = 1.5;
 /** The point of a shot's line the rays start at (the eye, or the line's point nearest his torso when the eye is behind him) must be within this (m) of his torso: the tip's offset plus a sprint's replication lag, so no eye far along his line fires from there. */
@@ -43,7 +44,7 @@ const LCG_MUL = 1664525;
 const LCG_ADD = 1013904223;
 const U32 = 4294967296;
 
-const _place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0 };
+const _place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
 const _aim = new LookRay();
 const _ray = new LookRay();
 const _near = new LookRay();
@@ -57,7 +58,8 @@ type ActResolver = {
   meet(actor: number, ray: LookRay, range: number): number;
   /** Whether a wall of a place stands between the points a and b (m). */
   wallBetween(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean;
-  shotFired(): void;
+  /** Actor `actor` fired a gun: the law hears of him. */
+  shotFired(actor: number): void;
 };
 
 /** What the acts need of the engine. */
@@ -82,6 +84,12 @@ type ActPorts = {
   getIn(actor: number, car: number): number;
   /** Actor `actor` gets out of his seat (`OpenWorldSeats.getOut`): 0, or the `SEATS_NOTICE` that says why not. */
   getOut(actor: number): number;
+  /** Actor `actor` fires the hook along `ray`; `sawPerson`: his own reticle had lit a person (`TetherDirector.fireFor`). */
+  hookFire(actor: number, ray: LookRay, sawPerson: boolean): void;
+  /** Actor `actor` cuts his cables (`TetherDirector.cutFor`). */
+  hookCut(actor: number): void;
+  /** Actor `actor`'s winch reels or stops (`TetherDirector.reelFor`). */
+  hookReel(actor: number, on: boolean): void;
 };
 
 /** What a blow on another player does where his body is (`strikeActor`) and the crowd of actors there are. */
@@ -98,7 +106,7 @@ export class PlayerBlows {
   private readonly ports: PlayerBlowPorts;
   private readonly count = new Uint8Array(MAX_ACTORS);
   private readonly at = new Float64Array(MAX_ACTORS).fill(-Infinity);
-  private readonly place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0 };
+  private readonly place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
 
   constructor(ports: PlayerBlowPorts) {
     this.ports = ports;
@@ -150,6 +158,15 @@ export class OpenWorldActs {
     if (actor < 0 || actor >= MAX_ACTORS) return SEATS_NOTICE.none;
     if (act.kind === ACT.getIn) return this.hearGetIn(actor, act);
     if (act.kind === ACT.getOut) return this.ports.seatedCar(actor) < 0 ? SEATS_NOTICE.noCar : this.ports.getOut(actor);
+    if (act.kind === ACT.hookFire) return this.hearHookFire(actor, act);
+    if (act.kind === ACT.hookCut) {
+      this.ports.hookCut(actor);
+      return SEATS_NOTICE.none;
+    }
+    if (act.kind === ACT.hookReelOn || act.kind === ACT.hookReelOff) {
+      this.ports.hookReel(actor, act.kind === ACT.hookReelOn);
+      return SEATS_NOTICE.none;
+    }
     if (act.kind === ACT.punch) {
       const level = hypot2(act.dirX, act.dirZ);
       if (level < LEVEL_PUNCH || level > 1 + UNIT_SLACK || !this.admit(actor, act, PLAYER_PUNCH_COOLDOWN, 0, ACT_EYE_REACH)) return SEATS_NOTICE.none;
@@ -188,6 +205,20 @@ export class OpenWorldActs {
     return true;
   }
 
+  /** A guest fires the hook along his camera's sight line: his when he is on foot, the eye is within the camera's boom of his torso and the line passes within `SHOT_RAY_REACH` of it, as a shot's must. */
+  private hearHookFire(actor: number, act: Act): number {
+    const length = hypot3(act.dirX, act.dirY, act.dirZ);
+    if (Math.abs(length - 1) > UNIT_SLACK || !this.admit(actor, act, HOOK_FIRE_COOLDOWN, 0, HOOK_EYE_REACH)) return SEATS_NOTICE.none;
+    _aim.eyeX = act.eyeX;
+    _aim.eyeY = act.eyeY;
+    _aim.eyeZ = act.eyeZ;
+    _aim.dirX = act.dirX / length;
+    _aim.dirY = act.dirY / length;
+    _aim.dirZ = act.dirZ / length;
+    if (this.nearestToTorso(_aim) <= SHOT_RAY_REACH) this.ports.hookFire(actor, _aim, act.arg === 1);
+    return SEATS_NOTICE.none;
+  }
+
   /** Actor `actor`, on foot, throws a punch along the unit (dirX, dirZ) from where he stands. */
   punchBy(actor: number, dirX: number, dirZ: number): void {
     if (!this.ports.actorPlace(actor, _place)) return;
@@ -208,7 +239,7 @@ export class OpenWorldActs {
       this.scatter(actor, _near, gun.cone, _ray);
       far = Math.max(far, this.resolver.shoot(actor, _ray, gun));
     }
-    this.resolver.shotFired();
+    this.resolver.shotFired(actor);
     return hypot3(_near.eyeX - aim.eyeX, _near.eyeY - aim.eyeY, _near.eyeZ - aim.eyeZ) + far;
   }
 

@@ -164,12 +164,14 @@ describe("given the real engine on the open world, the player on foot on the par
     });
 
     it("when this machine is a guest's and he is set down, then his car is not moved here (the host places it) and he stands at the door on foot", () => {
+      // He is out of his car before this machine becomes a guest's: a guest's get-out waits for its host, and this row is about the set-down.
+      rig.getOut();
       const net = rig.engine["net"];
       const was = Object.getOwnPropertyDescriptor(net, "role");
       Object.defineProperty(net, "role", { value: "client", configurable: true, writable: true });
       try {
         const left = car().group.position.clone();
-        busted();
+        law().busted(0);
         law().taken(1);
         rig.run(0.3);
         law().delivered(door().x, door().z, Math.PI / 2);

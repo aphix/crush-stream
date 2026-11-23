@@ -4,7 +4,8 @@ import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { hypot3 } from "../kernel/physics-core.js";
 import { ACT, Act } from "../net/act-codec.ts";
 import { WEAPONS } from "./engine-onfoot-arms.ts";
-import { type ActorPlace, OpenWorldActs, PlayerBlows } from "./engine-openworld-acts.ts";
+import { OpenWorldActs, PlayerBlows } from "./engine-openworld-acts.ts";
+import type { ActorPlace } from "./engine-openworld-law.ts";
 
 const HOST = 0;
 const GUEST = 1;
@@ -13,13 +14,14 @@ const PISTOL_SLOT = 1;
 const SHOTGUN_SLOT = 2;
 const RIFLE_SLOT = 3;
 /** The guest's torso, level and facing +z. */
-const GUEST_AT: ActorPlace = { x: 10, y: 1, z: 20, heading: 0 };
+const GUEST_AT: ActorPlace = { x: 10, y: 1, z: 20, heading: 0, velocityX: 0, velocityZ: 0 };
 const SHOT_FROM_EYE = { x: 10, y: 2.3, z: 20 };
 
 type Punch = { actor: number; x: number; z: number; dirX: number; dirZ: number };
 type Shot = { actor: number; ray: LookRay };
 type Sent = { kind: number; arg: number; eyeX: number; eyeY: number; eyeZ: number; dirX: number; dirY: number; dirZ: number };
 type Looked = { ray: LookRay; range: number };
+type HookFire = { actor: number; eyeZ: number; sawPerson: boolean };
 
 /** The host's acts over a stub director: who stands where, the clock, the gun's hand and the walls, and what the director was asked to resolve and the guest sent. */
 function rig(guest = false) {
@@ -34,6 +36,8 @@ function rig(guest = false) {
   const getIns: { actor: number; car: number }[] = [];
   const getOuts: number[] = [];
   const looks: Looked[] = [];
+  /** What the host's hook was asked for: fires, cuts (the actor) and winch changes. */
+  const hooks = { fires: [] as HookFire[], cuts: [] as number[], reels: [] as { actor: number; on: boolean }[] };
   const met = { along: null as number | null };
   const turned: { dx: number; dz: number }[] = [];
   /** The hand the gun is in (null: no gun shown) and how far (m) its tip is from the hand along the barrel; and the z of each wall that stands across the street (a wall is between two points when they lie either side of it). */
@@ -59,6 +63,9 @@ function rig(guest = false) {
         return true;
       },
       sendAct: (kind, arg, eye, dir) => void sent.push({ kind, arg, eyeX: eye.x, eyeY: eye.y, eyeZ: eye.z, dirX: dir.x, dirY: dir.y, dirZ: dir.z }),
+      hookFire: (actor, ray, sawPerson) => void hooks.fires.push({ actor, eyeZ: ray.eyeZ, sawPerson }),
+      hookCut: (actor) => void hooks.cuts.push(actor),
+      hookReel: (actor, on) => void hooks.reels.push({ actor, on }),
       seatedCar: (actor) => seated.get(actor) ?? -1,
       getIn: (actor, car) => {
         getIns.push({ actor, car });
@@ -83,8 +90,43 @@ function rig(guest = false) {
       shotFired: () => void fired.count++,
     },
   );
-  return { acts, places, clock, punches, shots, sent, fired, looks, met, turned, gun, wallsAtZ, seated, getIns, getOuts };
+  return { acts, places, clock, punches, shots, sent, fired, looks, met, turned, gun, wallsAtZ, seated, getIns, getOuts, hooks };
 }
+
+/** A hook act of `kind` whose eye is at (x, 1, z), looking along +z; `arg` 1: his reticle was on a person. */
+function hookAct(kind: number, x: number, z: number, arg = 0): Act {
+  const act = new Act();
+  act.kind = kind;
+  act.arg = arg;
+  act.eyeX = x;
+  act.eyeY = GUEST_AT.y;
+  act.eyeZ = z;
+  act.dirZ = 1;
+  return act;
+}
+
+describe("given a host that hears a guest's hook acts while the guest stands on foot at (10, 1, 20)", () => {
+  const fireCases = [
+    { it: "when he fires along a sight line from 12 m behind him that passes his torso, his reticle on a person, then the host fires his hook along that line and knows he saw a person", x: 10, z: 8, arg: 1, expected: [{ actor: GUEST, eyeZ: 8, sawPerson: true }] },
+    { it: "when his reticle was on no person, then the host fires his hook and knows he saw none", x: 10, z: 8, arg: 0, expected: [{ actor: GUEST, eyeZ: 8, sawPerson: false }] },
+    { it: "when the sight line passes 5 m from his torso, then no hook is fired", x: 15, z: 8, arg: 1, expected: [] },
+    { it: "when the eye is 50 m from his torso, farther than any camera boom, then no hook is fired", x: 10, z: -30, arg: 1, expected: [] },
+  ] as const;
+  for (const testCase of fireCases) {
+    it(testCase.it, () => {
+      const r = rig();
+      r.acts.hear(GUEST, hookAct(ACT.hookFire, testCase.x, testCase.z, testCase.arg));
+      expect(r.hooks.fires, "the hook's fires on the host").toEqual(testCase.expected);
+    });
+  }
+
+  it("when he cuts, reels and stops reeling, then the host cuts his cables and turns his winch on and off", () => {
+    const r = rig();
+    for (const kind of [ACT.hookCut, ACT.hookReelOn, ACT.hookReelOff]) r.acts.hear(GUEST, hookAct(kind, 10, 20));
+    expect(r.hooks.cuts, "actors whose cables were cut").toEqual([GUEST]);
+    expect(r.hooks.reels, "winch changes").toEqual([{ actor: GUEST, on: true }, { actor: GUEST, on: false }]);
+  });
+});
 
 /** An act of `kind` whose eye is `away` m east of the guest's torso (and 1.3 m up for a shot), along `dir`. */
 function actAt(kind: number, arg: number, away: number, dir = { x: 0, y: 0, z: 1 }): Act {
@@ -277,7 +319,7 @@ describe("given a guest's shotgun shot heard by the host", () => {
 describe("given this machine's own player", () => {
   it("when the host's player punches and fires, then it is the host's own punchBy and shootBy for car 0 that carry them out", () => {
     const r = rig();
-    r.places.set(HOST, { x: 1, y: 1, z: 2, heading: 0 });
+    r.places.set(HOST, { x: 1, y: 1, z: 2, heading: 0, velocityX: 0, velocityZ: 0 });
     r.acts.punchLanded(0, 1);
     const far = r.acts.shootLocal(Object.assign(new LookRay(), { dirZ: 1 }), WEAPONS.pistol);
     expect(r.punches.length, "punches").toBe(1);
@@ -457,7 +499,7 @@ describe("given a player whose cursor ray passes 11 m from his torso, the camera
 
 /** Three players on foot at the points `places` names; punches on them noted. */
 function crowdOfPlayers() {
-  const places = new Map<number, ActorPlace>([[HOST, { x: 0, y: 1, z: 0, heading: 0 }], [VICTIM, { x: 0, y: 1, z: 1, heading: 0 }]]);
+  const places = new Map<number, ActorPlace>([[HOST, { x: 0, y: 1, z: 0, heading: 0, velocityX: 0, velocityZ: 0 }], [VICTIM, { x: 0, y: 1, z: 1, heading: 0, velocityX: 0, velocityZ: 0 }]]);
   const struck: { victim: number; knockedOut: boolean }[] = [];
   const blows = new PlayerBlows({
     actorPlace: (actor, out) => {
@@ -489,7 +531,7 @@ describe("given another player on foot a metre ahead of a puncher", () => {
   it("when he stands behind the puncher or out of reach, or is the puncher, then no player takes the punch", () => {
     const { places, struck, blows } = crowdOfPlayers();
     expect(blows.punch(HOST, 0, 0, 0, -1, 0), "punching away from him").toBe(false);
-    places.set(VICTIM, { x: 0, y: 1, z: 3, heading: 0 });
+    places.set(VICTIM, { x: 0, y: 1, z: 3, heading: 0, velocityX: 0, velocityZ: 0 });
     expect(blows.punch(HOST, 0, 0, 0, 1, 0), "punching past reach").toBe(false);
     places.delete(VICTIM);
     expect(blows.punch(HOST, 0, 0, 0, 1, 0), "punching only himself").toBe(false);

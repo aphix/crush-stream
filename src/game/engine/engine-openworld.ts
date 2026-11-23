@@ -38,7 +38,7 @@ import { AMBULANCE_CARS, KERB_CARS, MOVER_CARS, PATROL_CARS } from "../ai/openwo
 import type { TrafficPorts } from "../ai/openworld-traffic/traffic-ports.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
-import { BODY_KIND, clearBodyFrame, makeBodyFrame, type BodyFrame, type BodyMotion, type FootRecord } from "../net/body-codec.ts";
+import { BODY_KIND, clearBodyFrame, makeBodyFrame, PLAYER_FLAG, type BodyFrame, type BodyMotion, type FootRecord } from "../net/body-codec.ts";
 import { OpenWorldShared } from "./openworld-shared.ts";
 import { personOf } from "./people-index.ts";
 import { OpenWorldPlayers } from "./openworld-players.ts";
@@ -61,7 +61,7 @@ import { EVENT_LOG_CAPACITY } from "../ai/civilians/civilian-crowd-constants.ts"
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { KILL_HITS_MIN, KILL_HITS_SPREAD } from "../scenes/lawn-guard.ts";
 import { STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
-import { PlayerBlows, type ActorPlace } from "./engine-openworld-acts.ts";
+import { PlayerBlows } from "./engine-openworld-acts.ts";
 import { activeGround } from "../world/ground.ts";
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 
@@ -204,8 +204,6 @@ export type OpenWorldPorts = {
   staggerWalker(dirX: number, dirZ: number): void;
   /** The first dummy of the ragdoll pool that the ray meets within `range` m, into `out`, skipping the walker of actor `actor` when he is this machine's own player. */
   pickDoll(actor: number, ray: LookRay, range: number, out: DollPick): void;
-  /** Where actor `actor` (a car index) stands on foot, into `out`; false when he is not on foot. This machine's own player from his walker; every other player from the players' bodies. */
-  actorPlace(actor: number, out: ActorPlace): boolean;
   /** Player `victim` takes a punch along (dirX, dirZ); `knockedOut`: it is the blow that fells him. */
   strikeActor(victim: number, dirX: number, dirZ: number, knockedOut: boolean): void;
   /** The first live car the ray meets within `range` m, into `out`. */
@@ -228,6 +226,8 @@ export type OpenWorldPorts = {
   knockWalker(vx: number, vy: number, vz: number): boolean;
   /** The host's cable holds this machine's walker's body at `t`: he follows it. */
   dragWalker(t: BodyMotion): void;
+  /** Whether actor `actor` holds a first hook end on this machine (`TetherDirector.holding`): the host tells his machine so. */
+  hookHolds(actor: number): boolean;
   /** How far along the ray the nearest standing knockable prop nearer than `limit` m is, Infinity for none; nothing is knocked (`RaceField.propMet`). */
   propMet(ray: LookRay, limit: number): number;
 };
@@ -336,7 +336,7 @@ export class OpenWorldDirector {
   private closedPlaces: Uint8Array | null = null;
   private readonly walkerStrike = new WalkerStrike();
   /** Punches on other players. */
-  private readonly players: PlayerBlows;
+  private readonly blows: PlayerBlows;
   /** The Auto camera: wanted (`setAuto`) across crowd rebuilds, made with each crowd. */
   private autoWanted = false;
   private auto: OpenWorldAuto | null = null;
@@ -345,7 +345,7 @@ export class OpenWorldDirector {
     this.ports = ports;
     this.culling = new OpenWorldCulling(ports.cull);
     this.carLook = new CarLook({ cars: () => ports.cars(), playerCars: () => ports.cull.playerCars(), own: () => ports.ownCar(), followed: () => (ports.foot(this.lookFoot) ? null : ports.cull.followed()), traffic: () => this.traffic });
-    this.players = new PlayerBlows(ports);
+    this.blows = new PlayerBlows(ports);
   }
 
   /** The map the crowd lives on; the crowd is made from it on the next frame in the open world. */
@@ -644,10 +644,10 @@ export class OpenWorldDirector {
   punch(actor: number, x: number, z: number, dirX: number, dirZ: number): void {
     const crowd = this.crowd;
     if (crowd === null || this.ports.isClient()) return;
-    if (this.law?.punchCop(x, z, dirX, dirZ, this.seconds) === true) return;
+    if (this.law?.punchCop(x, z, dirX, dirZ, this.seconds, actor) === true) return;
     let c = this.bodies?.punch(x, z, dirX, dirZ, PLAYER_PUNCH_SPEED) ?? -1;
     if (c < 0) c = crowd.punchTarget(x, z, dirX, dirZ, this.bodies?.held ?? null);
-    if (c < 0 && this.players.punch(actor, x, z, dirX, dirZ, this.seconds)) return;
+    if (c < 0 && this.blows.punch(actor, x, z, dirX, dirZ, this.seconds)) return;
     if (c < 0) {
       this.ports.punchProp(x, z, dirX, dirZ);
       return;
@@ -660,7 +660,7 @@ export class OpenWorldDirector {
       this.punches[c] = 0;
       crowd.knockOut(c, this.seconds, dirX, dirZ);
     }
-    this.law?.playerStruck(this.seconds, knockedOut);
+    this.law?.playerStruck(this.seconds, knockedOut, actor);
   }
 
   /** The drawn person with no body whose chest the hook's sight line passes nearest within `reach` m, into `out`: index below the crowd's size a civilian (a person the hook can stand a body for from the ray's eye: no cat or dog, and none while every body is roped, pinned or down), then the foot cops, then the medics. On a client (a guest's reticle) the mirror's poses are met and no body is asked for. `remote`: the ray is another actor's: a person behind the first building's footprint the ray enters is passed, one inside it is met (the host's rooms are built for the host's eyes, so windows cannot decide). */
@@ -708,21 +708,21 @@ export class OpenWorldDirector {
     return along > wall.along && !insidePlace(this.map!, wall.index, x, z);
   }
 
-  /** The hook takes the person `hookMet` named for an actor whose eye is at (eyeX, eyeZ): a civilian gets a body at her drawn spot (a suspect is let out of the law's hands); a cop is downed and thrown; a medic is thrown. Its pool slot, -1 when none can be. */
-  hookBody(index: number, eyeX = this.ray.eyeX, eyeZ = this.ray.eyeZ): number {
+  /** The hook of actor `actor`, whose eye is at (eyeX, eyeZ), takes the person `hookMet` named: a civilian gets a body at her drawn spot (a suspect is let out of the law's hands); a cop is downed and thrown, and the law knows who did it; a medic is thrown. Its pool slot, -1 when none can be. */
+  hookBody(index: number, eyeX = this.ray.eyeX, eyeZ = this.ray.eyeZ, actor = this.ports.ownActor()): number {
     const crowd = this.crowd;
     if (crowd === null || this.bodies === null) return -1;
     const people = crowd.poses.count;
     if (index >= people + FOOT_COP_COUNT) return this.hookMedic(index - people - FOOT_COP_COUNT);
-    if (index >= people) return this.hookCop(index - people);
+    if (index >= people) return this.hookCop(index - people, actor);
     this.interiors?.holdFloorAt(crowd.poses.x[index]!, crowd.poses.z[index]!);
     const slot = this.bodies.stand(crowd.poses, index, eyeX, eyeZ);
     if (slot >= 0) this.law?.releaseSuspect(index);
     return slot;
   }
 
-  private hookCop(cop: number): number {
-    return this.law?.hookCop(cop, this.seconds) ?? -1;
+  private hookCop(cop: number, actor: number): number {
+    return this.law?.hookCop(cop, this.seconds, actor) ?? -1;
   }
 
   /** The dummy thrown for a cop the hook took goes (and its rope with it) once he is up and drawn again; a medic's, once the ambulance has left and he is back in it. Host and solo, once a step. */
@@ -755,11 +755,12 @@ export class OpenWorldDirector {
     return slot;
   }
 
-  /** Host: `out` is the frame of people its guests are sent (`MSG.bodies`): the players on foot (his own walker first), then the civilians its hook holds. */
+  /** Host: `out` is the frame of people its guests are sent (`MSG.bodies`): the players on foot (his own walker first, each marked while he holds a first hook end), then the civilians its hook holds. */
   writeBodies(out: BodyFrame): void {
     clearBodyFrame(out);
     if (this.ports.isClient()) return;
     this.players?.writeRecords(out, this.ports.ownCarIndex(), this.ports.footAnchor(this.ownMotion) ? this.ownMotion : null, this.crowdTime(), this.bodies);
+    for (let at = 0; at < out.count; at++) if (this.ports.hookHolds(out.id[at]!)) out.state[at] = out.state[at]! | PLAYER_FLAG.holds;
     this.law?.writePoses(out, this.crowd!.poses);
     this.medics?.writePoses(out);
     this.bodies?.writeHooked(out);
@@ -801,6 +802,46 @@ export class OpenWorldDirector {
   /** Whether the host's frame has player `car` on foot: his car holds nobody. */
   playerAway(car: number): boolean {
     return this.players?.away(this.seenFrame, car) ?? false;
+  }
+
+  /** Host: where another player (actor `actor`, a car index) stands on foot and how he moves, as his machine last sent it, moved to the host's clock; false while he is in a car or has not been heard. */
+  playerPlace(actor: number, out: ActorPlace): boolean {
+    return this.players?.placeOf(actor, this.seconds, out) ?? false;
+  }
+
+  /** The pool slot of the host's body for player `actor`, -1 while he has none: his own ray passes it. */
+  playerSlot(actor: number): number {
+    const crowd = this.crowd;
+    return crowd === null || this.bodies === null ? -1 : this.bodies.slotOfPerson(personOf(BODY_KIND.player, actor, crowd.poses.count));
+  }
+
+  /** Host: a blow lands on player `victim`: one that fells him launches him at (vx, vy, vz) m/s, and his record carries it to his own machine, which knocks his walker. */
+  strikePlayer(victim: number, vx: number, vy: number, vz: number): void {
+    this.players?.strike(victim, vx, vy, vz, this.crowdTime());
+  }
+
+  /** Host: a blow from direction (dirX, dirZ) that does not fell player `victim`: his record carries it, and his own machine staggers his walker. */
+  staggerPlayer(victim: number, dirX: number, dirZ: number): void {
+    this.players?.stagger(victim, dirX, dirZ, this.crowdTime());
+  }
+
+  /** Guest: whether the host has this machine's player holding a first hook end, by the frame last heard. */
+  hookHeld(): boolean {
+    const frame = this.ports.isClient() ? this.seenFrame : null;
+    if (frame === null) return false;
+    const own = this.ports.ownCarIndex();
+    for (let at = 0; at < frame.count; at++) if (frame.kind[at] === BODY_KIND.player && frame.id[at] === own) return (frame.state[at]! & PLAYER_FLAG.holds) !== 0;
+    return false;
+  }
+
+  /** Guest: how many of the host's cables are this machine's player's, by the frame last heard. */
+  hookCount(): number {
+    const frame = this.ports.isClient() ? this.seenFrame : null;
+    if (frame === null) return 0;
+    const own = this.ports.ownCarIndex();
+    let count = 0;
+    for (let cable = 0; cable < frame.cables; cable++) if (frame.cableOwner[cable] === own) count++;
+    return count;
   }
 
   /** The players on foot the host's frame has, but this machine's own, for the sight field: written into `out` from `from`; the index after the last. */
@@ -902,9 +943,9 @@ export class OpenWorldDirector {
     car.disable();
   }
 
-  /** A gun was fired: the law knows at once, seen or not. Once a shot, not once a ray. */
-  shotFired(): void {
-    this.law?.playerFired(this.seconds);
+  /** Actor `actor` fired a gun: the law knows of him at once, seen or not. Once a shot, not once a ray. */
+  shotFired(actor = this.ports.ownActor()): void {
+    this.law?.playerFired(this.seconds, actor);
     this.gaze?.noteShot();
   }
 

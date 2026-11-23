@@ -9,7 +9,7 @@ import { driverLook } from "../present/driver-look.ts";
 import { WEAPONS } from "./engine-onfoot-arms.ts";
 import { activeGround } from "../world/ground.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
-import type { ActorPlace } from "./engine-openworld-acts.ts";
+import type { ActorPlace } from "./engine-openworld-law.ts";
 
 const LINK = "#scene=openworld&seed=beef";
 const SETTLE_S = 3;
@@ -92,7 +92,7 @@ function guestWithDummies(): { guest: ActorPlace; away: THREE.Vector3; front: nu
   const { torso, away } = hostOnFoot();
   const ground = activeGround().heightAt(torso.x, torso.z);
   const side = new THREE.Vector3(-away.z, 0, away.x);
-  const guest: ActorPlace = { x: torso.x + side.x * 1.5, y: ground + TORSO_UP, z: torso.z + side.z * 1.5, heading: 0 };
+  const guest: ActorPlace = { x: torso.x + side.x * 1.5, y: ground + TORSO_UP, z: torso.z + side.z * 1.5, heading: 0, velocityX: 0, velocityZ: 0 };
   const spot = new THREE.Vector3(guest.x, 0, guest.z);
   const front = dummyAhead(spot, away, 8);
   const back = dummyAhead(spot, away, -6, 1);
@@ -130,7 +130,7 @@ describe("given the host's engine in the open world with a guest on foot near th
 
   it("when two shotgun acts arrive 0.1 s apart, then the law hears one shot, and a third 0.5 s later makes two", () => {
     const { torso, away } = hostOnFoot();
-    const guest: ActorPlace = { x: torso.x + away.x * 3, y: torso.y, z: torso.z + away.z * 3, heading: 0 };
+    const guest: ActorPlace = { x: torso.x + away.x * 3, y: torso.y, z: torso.z + away.z * 3, heading: 0, velocityX: 0, velocityZ: 0 };
     guestStandsAt(guest);
     const fired = vi.spyOn(rig.engine["openWorld"], "shotFired");
     const act = shotFrom(guest, 0, 0, away, SHOTGUN_SLOT);
@@ -147,7 +147,7 @@ describe("given the host's engine in the open world with a guest on foot near th
   it("when the guest's pistol act aims at the host's own walker, then the host's walker is knocked down", () => {
     const { torso, away } = hostOnFoot();
     const ground = activeGround().heightAt(torso.x, torso.z);
-    const guest: ActorPlace = { x: torso.x + away.x * 6, y: ground + TORSO_UP, z: torso.z + away.z * 6, heading: 0 };
+    const guest: ActorPlace = { x: torso.x + away.x * 6, y: ground + TORSO_UP, z: torso.z + away.z * 6, heading: 0, velocityX: 0, velocityZ: 0 };
     guestStandsAt(guest);
     const eye = new THREE.Vector3(guest.x, guest.y + EYE_UP, guest.z);
     const dir = new THREE.Vector3(torso.x, torso.y, torso.z).sub(eye).normalize();
@@ -160,7 +160,7 @@ describe("given the host's engine in the open world with a guest on foot near th
   it("when the guest punches the host's walker three times inside ten seconds, then the first two stagger him and the third knocks him down", () => {
     const { torso, away } = hostOnFoot();
     const ground = activeGround().heightAt(torso.x, torso.z);
-    const guest: ActorPlace = { x: torso.x + away.x, y: ground + TORSO_UP, z: torso.z + away.z, heading: 0 };
+    const guest: ActorPlace = { x: torso.x + away.x, y: ground + TORSO_UP, z: torso.z + away.z, heading: 0, velocityX: 0, velocityZ: 0 };
     guestStandsAt(guest);
     const punch = new Act();
     punch.kind = ACT.punch;

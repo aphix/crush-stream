@@ -5,6 +5,7 @@ import { rigidCentre } from "../vehicle/car-air.ts";
 import { MAX_TETHERS } from "../kernel/constants.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { RAPIER, THING, TETHER_RANGE, thingCode, thingIndex, thingKind, WORLD, type TetherSet } from "../contact/tether.ts";
+import { ACT } from "../net/act-codec.ts";
 import { AIM, TetherArt } from "../present/tether-art.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { Aim, SightCaster, type SightHost } from "./tether-sight.ts";
@@ -16,11 +17,6 @@ const AIM_PERIOD_S = 0.1;
 /** Where a chase camera's aim passes through its view, as a share of the view's height from the top: above the middle, as a third-person shooter's, since the middle of a chase view meets the ground about 11 m in front of the car. */
 const CHASE_RETICLE_FROM_TOP = 0.38;
 const CHASE_RETICLE_NDC = 1 - 2 * CHASE_RETICLE_FROM_TOP;
-/** The hook's act kinds on the wire (`ACT` in `net/act-codec.ts`): a guest sends these in place of acting. */
-const ACT_HOOK_FIRE = 2;
-const ACT_HOOK_CUT = 3;
-const ACT_HOOK_REEL_ON = 4;
-const ACT_HOOK_REEL_OFF = 5;
 
 /** The dummies' world, as the tether talks to it: its ropes, and which dummies are out. */
 type TetherRopes = Pick<RagdollSystem, "ropeAttach" | "ropeCut" | "ropeReel" | "dollOut" | "ropeReport" | "torso">;
@@ -46,16 +42,21 @@ interface TetherHost extends SightHost {
   self(): number;
   /** This machine's player as an actor: his car index. */
   actor(): number;
-  /** The dummy pool slot of another actor's walker, -1 when that actor is not on foot in the open world. */
+  /** The dummy pool slot of another actor's body on this machine, -1 while he has none: his sight line passes it. */
   actorSlot(actor: number): number;
+  /** Whether another actor is on foot in the open world, as this machine (the host) has him. */
+  actorAfoot(actor: number): boolean;
   /** This machine is a guest in a room: it holds no cable, and its fire, cut and reel are acts sent to the host. */
   guest(): boolean;
+  /** Guest: whether the host has this machine's player holding a first end, and how many of the host's cables are his. */
+  hostHolds(): boolean;
+  hostCables(): number;
   /** Sends act `kind` to the host with the sight line it was made along. */
   sendAct(kind: number, arg: number, eye: Triple, dir: Triple): void;
   /** The drawn civilian with no body whose chest the sight line passes nearer than `reach` m, into `out` (index -1: none). `remote`: the ray is another actor's, so buildings are the crowd's footprints and not the host's streamed rooms. */
   personMet(ray: LookRay, reach: number, out: Meeting, remote: boolean): Meeting;
   /** A body stood now for drawn civilian `civilian` by an actor whose eye is at (eyeX, eyeZ): its dummy slot, -1 when she can have none. */
-  standPerson(civilian: number, eyeX: number, eyeZ: number): number;
+  standPerson(civilian: number, eyeX: number, eyeZ: number, actor: number): number;
   /** The dummy in pool slot `slot` is held as a first end: whatever stands it keeps it until the second fire. */
   holdDoll(slot: number): void;
 }
@@ -129,7 +130,7 @@ export class TetherDirector {
   /** This machine's player cuts his cables. */
   cut(): void {
     if (!this.host.guest()) this.cutFor(this.host.actor());
-    else if (this.host.afoot()) this.sendAct(ACT_HOOK_CUT);
+    else if (this.host.afoot()) this.sendAct(ACT.hookCut);
   }
 
   /**
@@ -169,8 +170,15 @@ export class TetherDirector {
   /** The HUD's read of the tether: null while it is not on offer. */
   hud(): TetherHud | null {
     if (!this.ready()) return null;
+    const guest = this.host.guest();
     const hold = this.holds[this.host.actor()];
-    return { count: this.ownCount(), pending: hold !== undefined && (hold.pending >= 0 || hold.held), aim: this.mine.state, free: this.host.playerCar() < 0, sight: this.sightFromTop() };
+    const pending = guest ? this.host.hostHolds() : hold !== undefined && (hold.pending >= 0 || hold.held);
+    return { count: guest ? this.host.hostCables() : this.ownCount(), pending, aim: this.mine.state, free: this.host.playerCar() < 0, sight: this.sightFromTop() };
+  }
+
+  /** Whether `actor` holds a first end, his second fire to come. */
+  holding(actor: number): boolean {
+    return this.holds[actor]?.held === true;
   }
 
   /** Once per drawn frame, after the camera and the cars' drawn poses are set: the retract, the aim, a waiting fire, and the drawing. */
@@ -209,7 +217,7 @@ export class TetherDirector {
 
   /** This machine's fire, read as the reticle's aim: a guest sends it to the host, the host carries it out as `fireFor` does for any actor. */
   private attach(): void {
-    if (this.host.guest()) this.sendAct(ACT_HOOK_FIRE, this.mine.person >= 0 ? 1 : 0);
+    if (this.host.guest()) this.sendAct(ACT.hookFire, this.mine.person >= 0 ? 1 : 0);
     else if (this.host.afoot()) this.attachFor(this.host.actor(), this.mine);
   }
 
@@ -222,9 +230,9 @@ export class TetherDirector {
     this.art.dispose();
   }
 
-  /** Whether `actor` is on foot in the open world: this machine's player by `afoot`, any other by his walker's slot. */
+  /** Whether `actor` is on foot in the open world: this machine's player by `afoot`, any other as the host has him. */
   private onFoot(actor: number): boolean {
-    return actor === this.host.actor() ? this.host.afoot() : this.host.actorSlot(actor) >= 0;
+    return actor === this.host.actor() ? this.host.afoot() : this.host.actorAfoot(actor);
   }
 
   /** Cables alive that this machine's player fired. */
@@ -255,7 +263,7 @@ export class TetherDirector {
   private sendReel(on: boolean): void {
     if (on === this.reelSentAct) return;
     this.reelSentAct = on;
-    this.sendAct(on ? ACT_HOOK_REEL_ON : ACT_HOOK_REEL_OFF);
+    this.sendAct(on ? ACT.hookReelOn : ACT.hookReelOff);
   }
 
   /** Act `kind` goes to the host along this machine's sight line, `arg` its argument byte. */
@@ -364,7 +372,7 @@ export class TetherDirector {
     if (aim.state !== AIM.valid) return false;
     if (aim.person >= 0) {
       // A drawn civilian with no body: one is stood for her now, and the fire hooks it.
-      const slot = this.host.standPerson(aim.person, aim.eye.x, aim.eye.z);
+      const slot = this.host.standPerson(aim.person, aim.eye.x, aim.eye.z, actor);
       aim.person = -1;
       if (slot < 0) return false;
       aim.car = RAPIER;

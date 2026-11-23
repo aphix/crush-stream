@@ -7,7 +7,7 @@ import { SEATS_NOTICE } from "../net/seats-codec.ts";
 import { ENTER_MAX_SPEED, EXIT_MAX_SPEED } from "../present/onfoot-flow.ts";
 import type { Pole } from "../present/ragdoll-ground.ts";
 import { DoorSwings } from "./engine-openworld-door-swings.ts";
-import type { ActorPlace } from "./engine-openworld-acts.ts";
+import type { ActorPlace } from "./engine-openworld-law.ts";
 import { doorAt, doorBlocked } from "./onfoot-doors.ts";
 
 /** What asking for a seat came to: done (the table says so now), sent (a guest waits for the host's answer) or refused (`OpenWorldSeats.refusal` says why). */
@@ -24,7 +24,7 @@ const NEAR_CAR_M = 4.5;
 const NO_CAR = -1;
 
 const _torso = new THREE.Vector3();
-const _place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0 };
+const _place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
 const _speed = new Float64Array(1);
 const _eye = { x: 0, y: 0, z: 0 };
 const _up = { x: 0, y: 1, z: 0 };
