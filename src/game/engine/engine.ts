@@ -380,7 +380,7 @@ export class CrashEngine extends EngineGarage {
       actorSlot: () => -1,
       guest: () => this.net.client,
       sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir),
-      personMet: (ray, reach, out) => this.openWorld.hookMet(ray, reach, out),
+      personMet: (ray, reach, out, remote) => this.openWorld.hookMet(ray, reach, out, remote),
       standPerson: (civilian, eyeX, eyeZ) => this.openWorld.hookBody(civilian, eyeX, eyeZ),
       holdDoll: (slot) => this.openWorld.hookPin(slot),
     });

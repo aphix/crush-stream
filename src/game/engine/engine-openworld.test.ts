@@ -536,16 +536,65 @@ describe("given the hook aimed at the drawn people of the open world", () => {
     expect(stand.mock.calls[0]![3], "eye z").toBe(456);
   });
 
-  it("when a guest's reticle meets a civilian by the crowd mirror's poses, then she is named though no body of its own could be stood; on the host the same ray names no one", () => {
+  it("when a guest's machine aims at a civilian, then it names her from the crowd mirror's poses, since it cannot know the host's body pool; the host with a full pool names no one for the same ray", () => {
     const harness = hostWithBodies();
     const { c, ray } = aimedAt(harness, SPECIES.person);
     const met = { index: -1, along: 0 };
     vi.spyOn(harness.director["bodies"]!, "canStand").mockReturnValue(false);
     harness.director.hookMet(ray, 60, met);
-    expect(met.index, "the host: no body to stand").toBe(-1);
+    expect(met.index, "the host with no body to stand").toBe(-1);
     harness.client = true;
     harness.director.hookMet(ray, 60, met);
-    expect(met.index, "a guest: named").toBe(c);
+    expect(met.index, "a guest's machine").toBe(c);
+  });
+
+  /** One foot cop shown at (x, z) on the ground, the others not: a person for a ray to meet. */
+  function copOnlyAt(harness: Harness, x: number, z: number): number {
+    const cops = harness.director["law"]!.copPoses;
+    cops.shown.fill(0);
+    cops.shown[1] = 1;
+    cops.x[1] = x;
+    cops.z[1] = z;
+    cops.feetY[1] = 0;
+    return harness.crowd().poses.count + 1;
+  }
+
+  /** A building a chest-high ray, level along its own depth axis from 40 m out, enters first: the ray, and the point `behind` m past its middle on the ray's line. */
+  function buildingAhead(): { ray: LookRay; middle: THREE.Vector2; past: (behind: number) => THREE.Vector2 } {
+    for (const [place, entry] of map.places.entries()) {
+      if (entry.doorNode < 0) continue;
+      const dirX = detCos(entry.yaw);
+      const dirZ = -detSin(entry.yaw);
+      const ray = new LookRay();
+      ray.eyeX = entry.x - 40 * dirX;
+      ray.eyeY = CHEST_HEIGHT;
+      ray.eyeZ = entry.z - 40 * dirZ;
+      ray.dirX = dirX;
+      ray.dirZ = dirZ;
+      if (placeMet(map, ray, 300, { index: -1, along: 0 }).index === place) return { ray, middle: new THREE.Vector2(entry.x, entry.z), past: (behind) => new THREE.Vector2(entry.x + behind * dirX, entry.z + behind * dirZ) };
+    }
+    throw new Error("the fixture map has no building a level ray enters first");
+  }
+
+  it("when another actor's ray passes a building and a cop stands 60 m behind it, then he is passed; the same ray as the host's own is not cut by footprints", () => {
+    const harness = hostWithBodies();
+    const { ray, past } = buildingAhead();
+    const behind = past(60);
+    const cop = copOnlyAt(harness, behind.x, behind.y);
+    const met = { index: -1, along: 0 };
+    harness.director.hookMet(ray, 300, met, true);
+    expect(met.index, "another actor, a building in the way").toBe(-1);
+    harness.director.hookMet(ray, 300, met, false);
+    expect(met.index, "the host's own ray").toBe(cop);
+  });
+
+  it("when another actor's ray enters a building and a cop stands in its middle, then he is met", () => {
+    const harness = hostWithBodies();
+    const { ray, middle } = buildingAhead();
+    const cop = copOnlyAt(harness, middle.x, middle.y);
+    const met = { index: -1, along: 0 };
+    harness.director.hookMet(ray, 300, met, true);
+    expect(met.index).toBe(cop);
   });
 
   it("when a cop the hook took is up again after his time, then the dummy thrown for him goes by its slot and age, and not before", () => {

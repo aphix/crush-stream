@@ -19,7 +19,7 @@ import { ImaginedHouseholds } from "../ai/civilians/society-households.ts";
 import { HomeLights } from "../present/facade-homes.ts";
 import { fillClosedPlaces } from "../ai/civilians/society-hours.ts";
 import { CROWD_SEED_MASK, CROWD_TIER_SCALE, DOWNED_LIFE_SECONDS, LOOK_HZ, LOOK_REACH, POPULATION, POPULATION_TIER } from "../ai/civilians/civilian-crowd-constants.ts";
-import { chestMet, lookAtOf, LookRay, placeMet, type LookText, type Meeting } from "../ai/civilians/civilian-look.ts";
+import { chestMet, insidePlace, lookAtOf, LookRay, placeMet, type LookText, type Meeting } from "../ai/civilians/civilian-look.ts";
 import { CivilianRemote } from "../ai/civilians/civilian-remote.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { fillCommuterFeed } from "../ai/civilians/society-commuters.ts";
@@ -594,25 +594,49 @@ export class OpenWorldDirector {
     this.law?.playerStruck(this.seconds, knockedOut);
   }
 
-  /** The drawn person with no body whose chest the hook's sight line passes nearest within `reach` m, into `out`: index below the crowd's size a civilian (a person the hook can stand a body for from the ray's eye: no cat or dog, and none while every body is roped, pinned or down), then the foot cops, then the medics. On a client (a guest's reticle) the mirror's poses are met and no body is asked for. */
-  hookMet(ray: LookRay, reach: number, out: Meeting): Meeting {
+  /** The drawn person with no body whose chest the hook's sight line passes nearest within `reach` m, into `out`: index below the crowd's size a civilian (a person the hook can stand a body for from the ray's eye: no cat or dog, and none while every body is roped, pinned or down), then the foot cops, then the medics. On a client (a guest's reticle) the mirror's poses are met and no body is asked for. `remote`: the ray is another actor's: a person behind the first building's footprint the ray enters is passed, one inside it is met (the host's rooms are built for the host's eyes, so windows cannot decide). */
+  hookMet(ray: LookRay, reach: number, out: Meeting, remote = false): Meeting {
     const crowd = this.crowd;
     out.index = -1;
     out.along = reach;
     const client = this.ports.isClient();
     if (crowd === null || (this.bodies === null && !client)) return out;
     const people = crowd.poses.count;
-    if (client || this.bodies!.canStand(ray.eyeX, ray.eyeZ)) chestMet(crowd.poses, people, this.bodies?.held ?? null, ray, SHOT_BODY_RADIUS, reach, out, true);
+    const wall = this.wallMet;
+    wall.index = -1;
+    wall.along = Infinity;
+    if (remote && this.map !== null) placeMet(this.map, ray, reach, wall);
+    if (client || this.bodies!.canStand(ray.eyeX, ray.eyeZ)) {
+      chestMet(crowd.poses, people, this.bodies?.held ?? null, ray, SHOT_BODY_RADIUS, reach, out, true);
+      if (out.index >= 0 && this.behindWall(crowd.poses.x[out.index]!, crowd.poses.z[out.index]!, out.along)) {
+        chestMet(crowd.poses, people, this.bodies?.held ?? null, ray, SHOT_BODY_RADIUS, wall.along, out, true);
+        if (out.index < 0) out.along = reach;
+      }
+    }
     const other = this.hookOther;
     if (this.law !== null && this.law.copMet(ray, SHOT_BODY_RADIUS, out.along, other).index >= 0) {
-      out.index = people + other.index;
-      out.along = other.along;
+      const cops = this.law.copPoses;
+      if (this.behindWall(cops.x[other.index]!, cops.z[other.index]!, other.along)) this.law.copMet(ray, SHOT_BODY_RADIUS, Math.min(out.along, wall.along), other);
+      if (other.index >= 0) {
+        out.index = people + other.index;
+        out.along = other.along;
+      }
     }
     if (this.medics !== null && chestMet(this.medics.poses, MEDICS.count, null, ray, SHOT_BODY_RADIUS, out.along, other).index >= 0) {
-      out.index = people + FOOT_COP_COUNT + other.index;
-      out.along = other.along;
+      const { poses } = this.medics;
+      if (this.behindWall(poses.x[other.index]!, poses.z[other.index]!, other.along)) chestMet(poses, MEDICS.count, null, ray, SHOT_BODY_RADIUS, Math.min(out.along, wall.along), other);
+      if (other.index >= 0) {
+        out.index = people + FOOT_COP_COUNT + other.index;
+        out.along = other.along;
+      }
     }
     return out;
+  }
+
+  /** Whether a person at (x, z), `along` m down a remote ray, stands behind the first building's footprint the ray enters and not inside it (`wallMet`, set by `hookMet`). */
+  private behindWall(x: number, z: number, along: number): boolean {
+    const wall = this.wallMet;
+    return along > wall.along && !insidePlace(this.map!, wall.index, x, z);
   }
 
   /** The hook takes the person `hookMet` named for an actor whose eye is at (eyeX, eyeZ): a civilian gets a body at her drawn spot (a suspect is let out of the law's hands); a cop is downed and thrown; a medic is thrown. Its pool slot, -1 when none can be. */

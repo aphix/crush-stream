@@ -68,6 +68,8 @@ export class SightCaster {
   /** The aiming actor's walker slot and his own car, which the sight line passes through (-1: none). */
   skipSlot = -1;
   skipCar = -1;
+  /** The actor is not this machine's player: the car LOD hides cars no host eye sees, and rooms are built for the host's eyes only, so his ray meets every car and leaves buildings to their footprints. */
+  remote = false;
 
   constructor(host: SightHost, ignored: THREE.Object3D) {
     this.host = host;
@@ -101,6 +103,11 @@ export class SightCaster {
         if (mark.car < 0) into.at.copy(hit.point);
         else into.at.copy(cars[mark.car]!.group.worldToLocal(_point.copy(hit.point)));
       }
+      if (this.remote) {
+        const bounded = hit.object.name === INTERIOR_GLASS_NAME || hit.object.name.startsWith(INTERIOR_MESH_PREFIX) || isFacade(hit.object);
+        into.personReach = bounded ? SIGHT_M : hit.distance + PERSON_SLACK_M;
+        return true;
+      }
       const room = hit.object.name.startsWith(INTERIOR_MESH_PREFIX) && facadeAt >= 0 && hit.distance - facadeAt <= FACADE_WALL_M;
       if (facadeAt >= 0 && !roomBehind && !room) {
         opaque = facadeAt;
@@ -127,9 +134,10 @@ export class SightCaster {
     if (!(object instanceof THREE.Mesh)) return undefined;
     let car = WORLD;
     for (let o: THREE.Object3D | null = object; o; o = o.parent) {
-      if (!o.visible || o === this.ignored || movers.includes(o)) return undefined;
       const index: unknown = o.userData.carIndex;
-      if (typeof index === "number" && cars[index]?.group === o) car = index;
+      const isCar = typeof index === "number" && cars[index]?.group === o;
+      if ((!o.visible && !(this.remote && isCar)) || o === this.ignored || movers.includes(o)) return undefined;
+      if (isCar) car = index;
     }
     if (car !== WORLD) return { car, thing: 0 };
     // A far figure of the crowd is no surface of the world: the sight line passes her, and the person test hooks her by her chest (a hit on her front had hooked the air where she stood). A cat or a dog is not hooked at all: the sight line passes them too.

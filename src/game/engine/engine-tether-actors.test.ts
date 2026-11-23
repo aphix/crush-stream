@@ -3,6 +3,8 @@ import * as THREE from "three";
 import { LookRay, type Meeting } from "../ai/civilians/civilian-look.ts";
 import { FRAME_HZ, MAX_TETHERS } from "../kernel/constants.ts";
 import { RAPIER, TetherSet } from "../contact/tether.ts";
+import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
 import { BOXES_MESH_NAME } from "../present/minigame-art.ts";
 import { ROPE_FLOATS, type RopeEnd } from "../present/ragdoll-wire.ts";
 import { TetherDirector } from "./engine-tether.ts";
@@ -75,7 +77,7 @@ function room() {
   const dollsOut: number[] = [];
   const ropes = fakeRopes(dollsOut);
   const tethers = new TetherSet();
-  const state = { onFoot: new Set([HOST, GUEST]), guest: false, offered: true, sent: [] as Sent[] };
+  const state = { onFoot: new Set([HOST, GUEST]), guest: false, offered: true, sent: [] as Sent[], cars: [] as DeformableCar[] };
   const personMet = (ray: LookRay, reach: number, out: Meeting): Meeting => {
     const there = Math.abs(ray.dirX) < 0.01 && reach > AHEAD;
     return Object.assign(out, { index: there ? PERSON : -1, along: there ? AHEAD : reach });
@@ -90,7 +92,7 @@ function room() {
     camera,
     scene,
     ropes,
-    cars: () => [],
+    cars: () => state.cars,
     movers: () => [],
     playerCar: () => -1,
     offered: () => state.offered,
@@ -120,7 +122,18 @@ function room() {
     director.fireFor(actor, rayTo(first));
     director.fireFor(actor, rayTo(second));
   };
-  return { director, tethers, ropes, state, tie, aimAt, fireAt };
+  /** A real car 5 m ahead the car LOD has taken off the draw (`group.visible` false), with a box standing for its body, as the engine's car index 0. */
+  const hideCarAhead = (): void => {
+    const car = makeCar();
+    launch(car, 0, -5, 0, 0, 0);
+    car.group.userData.carIndex = 0;
+    car.group.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 4), new THREE.MeshBasicMaterial()));
+    car.group.visible = false;
+    scene.add(car.group);
+    scene.updateMatrixWorld(true);
+    state.cars.push(car);
+  };
+  return { director, tethers, ropes, state, tie, aimAt, fireAt, hideCarAhead };
 }
 
 /** Slots of the live cables `owner` fired. */
@@ -304,5 +317,43 @@ describe("given a guest's machine, the hook in hand and a civilian 10 m ahead", 
     const { director, tethers } = guestRoom();
     expect(director.fireFor(GUEST, rayTo(BOX_A))).toBe(false);
     expect(tethers.count).toBe(0);
+  });
+});
+
+describe("given a kerb car the car LOD has taken off the draw, 5 m ahead of a second actor and of the host, a wall 30 m behind it", () => {
+  const CAR_POINT = new THREE.Vector3(0, 1, -5);
+
+  it("when the second actor fires at the car and then at the wall, then the host ties his cable to that car, as his reticle lit it", () => {
+    const { director, tethers, hideCarAhead } = room();
+    hideCarAhead();
+    expect(director.fireFor(GUEST, rayTo(CAR_POINT)), "the first fire holds the car").toBe(true);
+    expect(director.fireFor(GUEST, rayTo(WALL_POINT)), "the second ties it to the wall").toBe(true);
+    expect(tethers.endCar(0, 0), "the first end is car 0").toBe(0);
+    expect(tethers.owner(0), "his cable").toBe(GUEST);
+  });
+
+  it("when the host fires the same two fires with his own hook, then the hidden car is passed as before: his cable is tied to the civilian behind it, not to the car", () => {
+    const { tethers, state, fireAt, hideCarAhead } = room();
+    hideCarAhead();
+    fireAt(CAR_POINT);
+    fireAt(WALL_POINT);
+    expect(state.cars.length, "control: the car stands").toBe(1);
+    expect(tethers.count, "cables out").toBe(1);
+    expect(tethers.endCar(0, 0), "the first end is in the dummies' world, not car 0").toBe(RAPIER);
+  });
+});
+
+describe("given a second actor who holds a first end", () => {
+  it("when he stops being on foot, is on foot again and fires twice, then his cable joins the two new things only", () => {
+    const { director, tethers, state } = room();
+    director.fireFor(GUEST, rayTo(BOX_A));
+    state.onFoot.delete(GUEST);
+    director.frame(FRAME);
+    state.onFoot.add(GUEST);
+    expect(director.fireFor(GUEST, rayTo(BOX_B)), "the first fire after the trip holds").toBe(true);
+    expect(tethers.count, "nothing is tied to the stale box").toBe(0);
+    expect(director.fireFor(GUEST, rayTo(WALL_POINT)), "the second fire ties").toBe(true);
+    expect(tethers.count, "one cable").toBe(1);
+    expect(tethers.endCar(0, 1), "its second end is the wall").toBe(-1);
   });
 });

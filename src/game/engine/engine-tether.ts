@@ -52,8 +52,8 @@ interface TetherHost extends SightHost {
   guest(): boolean;
   /** Sends act `kind` to the host with the sight line it was made along. */
   sendAct(kind: number, arg: number, eye: Triple, dir: Triple): void;
-  /** The drawn civilian with no body whose chest the sight line passes nearer than `reach` m, into `out` (index -1: none). */
-  personMet(ray: LookRay, reach: number, out: Meeting): Meeting;
+  /** The drawn civilian with no body whose chest the sight line passes nearer than `reach` m, into `out` (index -1: none). `remote`: the ray is another actor's, so buildings are the crowd's footprints and not the host's streamed rooms. */
+  personMet(ray: LookRay, reach: number, out: Meeting, remote: boolean): Meeting;
   /** A body stood now for drawn civilian `civilian` by an actor whose eye is at (eyeX, eyeZ): its dummy slot, -1 when she can have none. */
   standPerson(civilian: number, eyeX: number, eyeZ: number): number;
   /** The dummy in pool slot `slot` is held as a first end: whatever stands it keeps it until the second fire. */
@@ -235,13 +235,17 @@ export class TetherDirector {
     return count;
   }
 
-  /** Every cable of an actor who is no longer on foot is cut, this machine's player included. */
+  /** Every cable and held first end of an actor who is no longer on foot is cut, this machine's player included. */
   private cutOffFoot(local: number): void {
     const { tethers } = this.host;
     for (let slot = 0; slot < MAX_TETHERS; slot++) {
       if (!tethers.isAlive(slot)) continue;
       const owner = tethers.owner(slot);
       if (owner >= 0 && owner !== local && !this.onFoot(owner)) this.cutFor(owner);
+    }
+    for (let actor = 0; actor < MAX_CARS; actor++) {
+      const hold = this.holds[actor]!;
+      if (actor !== local && (hold.held || hold.pending >= 0) && !this.onFoot(actor)) this.cutFor(actor);
     }
     if (!this.host.afoot()) this.cutFor(local);
   }
@@ -322,6 +326,7 @@ export class TetherDirector {
     const player = local ? this.host.playerCar() : -1;
     this.caster.skipSlot = local ? this.host.self() : this.host.actorSlot(actor);
     this.caster.skipCar = player;
+    this.caster.remote = !local;
     into.state = AIM.none;
     into.car = WORLD;
     into.thing = 0;
@@ -330,7 +335,7 @@ export class TetherDirector {
     into.dir.set(ray.dirX, ray.dirY, ray.dirZ);
     _origin.copy(cars[player]?.group.position ?? into.eye);
     const surface = this.caster.cast(cars, into);
-    const person = this.host.personMet(ray, into.personReach, this.personAim);
+    const person = this.host.personMet(ray, into.personReach, this.personAim, !local);
     if (person.index >= 0) {
       into.person = person.index;
       into.car = WORLD;
