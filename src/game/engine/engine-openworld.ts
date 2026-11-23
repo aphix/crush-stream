@@ -197,6 +197,8 @@ export type OpenWorldPorts = {
   shotSparks(x: number, y: number, z: number, ray: LookRay): void;
   /** The ray against the knockable props (`RaceField.shootProp`). */
   shootProp(ray: LookRay, limit: number, vx: number, vz: number): number;
+  /** How far along the ray the nearest standing knockable prop nearer than `limit` m is, Infinity for none; nothing is knocked (`RaceField.propMet`). */
+  propMet(ray: LookRay, limit: number): number;
 };
 
 /**
@@ -250,6 +252,8 @@ export class OpenWorldDirector {
   private readonly carMet: Meeting = { index: -1, along: Infinity };
   /** Shots that have landed on each car's body: at the guards' count its engine dies. */
   private readonly carShots = new Uint8Array(MAX_CARS);
+  /** How far (m) the last `lookAlong` let its ray go: the wall or the ground nearest it, at most the range. */
+  private lookReach = 0;
   private readonly sceneScratch = { x: 0, z: 0 };
   /** The civilians near this machine's eye as physical bodies (`OpenWorldBodies`), null where the engine gives no dummies' world. */
   private bodies: OpenWorldBodies | null = null;
@@ -685,19 +689,13 @@ export class OpenWorldDirector {
   shoot(actor: number, ray: LookRay, gun: Gun): number {
     const crowd = this.crowd;
     if (crowd === null || this.map === null || this.ports.isClient()) return gun.range;
-    let reach = Math.min(gun.range, placeMet(this.map, ray, gun.range, this.wallMet).along);
-    if (ray.dirY < 0) reach = Math.min(reach, (activeGround().heightAt(ray.eyeX, ray.eyeZ) - ray.eyeY) / ray.dirY);
+    const nearest = this.lookAlong(actor, ray, gun.range);
+    const reach = this.lookReach;
+    const person = this.personMet;
+    const cop = this.copShot;
     const flat = hypot2(ray.dirX, ray.dirZ);
     const dirX = flat > STRAIGHT_UP ? ray.dirX / flat : 0;
     const dirZ = flat > STRAIGHT_UP ? ray.dirZ / flat : 1;
-    this.ports.pickDoll(actor, ray, reach, this.pickedDoll);
-    this.ports.pickCar(ray, reach, this.pickedCar);
-    const person = chestMet(crowd.poses, crowd.poses.count, this.bodies?.held ?? null, ray, SHOT_BODY_RADIUS, reach, this.personMet);
-    const cop = this.copShot;
-    cop.index = -1;
-    cop.along = reach;
-    this.law?.copMet(ray, SHOT_BODY_RADIUS, reach, cop);
-    const nearest = Math.min(reach, this.pickedDoll.along, this.pickedCar.along, person.along, cop.along);
     const prop = this.ports.shootProp(ray, nearest, dirX * gun.prop, dirZ * gun.prop);
     if (prop < nearest) return prop;
     if (nearest >= reach) return reach;
@@ -710,6 +708,32 @@ export class OpenWorldDirector {
     else if (cop.along === nearest) this.law?.shootCop(cop.index, dirX, dirZ, this.seconds);
     else this.shootCar(ray, gun);
     return nearest;
+  }
+
+  /** How far (m) along `ray`, within `range`, the nearest wall, the ground, a drawn person, a foot cop, a dummy, a car or a knockable prop is, or `range` when there is none (nothing is struck, so a player's aim can be looked along before he fires). */
+  meet(actor: number, ray: LookRay, range: number): number {
+    if (this.crowd === null || this.map === null) return range;
+    const nearest = this.lookAlong(actor, ray, range);
+    return Math.min(nearest, this.ports.propMet(ray, nearest));
+  }
+
+  /**
+   * Fills the picks (`pickedDoll`, `pickedCar`, `personMet`, `copShot`) of `ray` within `range` m and `lookReach` (how far a wall or the ground lets it go, at most `range`); how far the nearest of
+   * them is, `lookReach` when none. Props are not among them.
+   */
+  private lookAlong(actor: number, ray: LookRay, range: number): number {
+    const crowd = this.crowd!;
+    let reach = Math.min(range, placeMet(this.map!, ray, range, this.wallMet).along);
+    if (ray.dirY < 0) reach = Math.min(reach, (activeGround().heightAt(ray.eyeX, ray.eyeZ) - ray.eyeY) / ray.dirY);
+    this.lookReach = reach;
+    this.ports.pickDoll(actor, ray, reach, this.pickedDoll);
+    this.ports.pickCar(ray, reach, this.pickedCar);
+    const person = chestMet(crowd.poses, crowd.poses.count, this.bodies?.held ?? null, ray, SHOT_BODY_RADIUS, reach, this.personMet);
+    const cop = this.copShot;
+    cop.index = -1;
+    cop.along = reach;
+    this.law?.copMet(ray, SHOT_BODY_RADIUS, reach, cop);
+    return Math.min(reach, this.pickedDoll.along, this.pickedCar.along, person.along, cop.along);
   }
 
   /** A ray lands on the car in `pickedCar`: it is pushed along the shot; a pane cracks, then shatters; the body sparks, and after the guards' count of hits its engine dies. */

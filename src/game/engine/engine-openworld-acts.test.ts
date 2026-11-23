@@ -18,7 +18,8 @@ const SHOT_FROM_EYE = { x: 10, y: 2.3, z: 20 };
 
 type Punch = { actor: number; x: number; z: number; dirX: number; dirZ: number };
 type Shot = { actor: number; ray: LookRay };
-type Sent = { kind: number; arg: number; eyeX: number; dirZ: number };
+type Sent = { kind: number; arg: number; eyeX: number; eyeY: number; eyeZ: number; dirX: number; dirY: number; dirZ: number };
+type Looked = { ray: LookRay; range: number };
 
 /** The host's acts over a stub director: who stands where, the clock, and what the director was asked to resolve and the guest sent. */
 function rig(guest = false) {
@@ -28,6 +29,8 @@ function rig(guest = false) {
   const shots: Shot[] = [];
   const sent: Sent[] = [];
   const fired = { count: 0 };
+  const looks: Looked[] = [];
+  const met = { along: null as number | null };
   const acts = new OpenWorldActs(
     {
       actorPlace: (actor, out) => {
@@ -38,7 +41,7 @@ function rig(guest = false) {
       now: () => clock.now,
       self: () => (guest ? GUEST : HOST),
       guest: () => guest,
-      sendAct: (kind, arg, eye, dir) => void sent.push({ kind, arg, eyeX: eye.x, dirZ: dir.z }),
+      sendAct: (kind, arg, eye, dir) => void sent.push({ kind, arg, eyeX: eye.x, eyeY: eye.y, eyeZ: eye.z, dirX: dir.x, dirY: dir.y, dirZ: dir.z }),
     },
     {
       punch: (actor, x, z, dirX, dirZ) => void punches.push({ actor, x, z, dirX, dirZ }),
@@ -46,10 +49,14 @@ function rig(guest = false) {
         shots.push({ actor, ray: Object.assign(new LookRay(), ray) });
         return 7;
       },
+      meet: (_actor, ray, range) => {
+        looks.push({ ray: Object.assign(new LookRay(), ray), range });
+        return met.along ?? range;
+      },
       shotFired: () => void fired.count++,
     },
   );
-  return { acts, places, clock, punches, shots, sent, fired };
+  return { acts, places, clock, punches, shots, sent, fired, looks, met };
 }
 
 /** An act of `kind` whose eye is `away` m east of the guest's torso (and 1.3 m up for a shot), along `dir`. */
@@ -245,12 +252,90 @@ describe("given this machine's own player", () => {
   it("when a guest's player punches and fires, then both are sent to the host as acts and nothing is carried out on his machine", () => {
     const r = rig(true);
     r.acts.punchLanded(0, 1);
-    const aim = Object.assign(new LookRay(), { eyeX: 3, dirZ: 1 });
+    const aim = Object.assign(new LookRay(), { eyeX: 10, eyeY: 1.3, dirZ: 1 });
     const far = r.acts.shootLocal(aim, WEAPONS.shotgun);
     expect(r.sent.length, "acts sent").toBe(2);
-    expect(firstMismatch(r.sent.flatMap((act) => [act.kind, act.arg, act.eyeX, act.dirZ]), [ACT.punch, 0, 10, 1, ACT.shot, SHOTGUN_SLOT, 3, 1]), "kind, arg, eye x and direction z of each act").toBeUndefined();
+    expect(firstMismatch(r.sent.flatMap((act) => [act.kind, act.arg, act.eyeX, act.dirZ]), [ACT.punch, 0, 10, 1, ACT.shot, SHOTGUN_SLOT, 10, 1]), "kind, arg, eye x and direction z of each act").toBeUndefined();
     expect(far, "the tracer's length (m)").toBeGreaterThan(10);
     expect([r.punches.length, r.shots.length], "carried out locally").toEqual([0, 0]);
+  });
+});
+
+/** A cursor ray from a camera 20 m behind and 20 m aside of the torso at (10, 1, 20), toward a point 5 m off its side; it passes the torso far outside the shot's reach. */
+function cursorRay(): LookRay {
+  const aim = new LookRay();
+  aim.eyeX = 30;
+  aim.eyeY = 3;
+  aim.eyeZ = 0;
+  const length = hypot3(20 - 30, 1.3 - 3, 25 - 0);
+  aim.dirX = -10 / length;
+  aim.dirY = (1.3 - 3) / length;
+  aim.dirZ = 25 / length;
+  return aim;
+}
+
+/** Where a shot at the point `along` m down `aim` from its point nearest the torso leaves from and goes: that nearest point, the unit direction from the torso to the meeting point and its distance (m) from the torso. */
+function towardMeeting(aim: LookRay, along: number): { nearest: { x: number; y: number; z: number }; dir: { x: number; y: number; z: number }; length: number } {
+  const behind = (GUEST_AT.x - aim.eyeX) * aim.dirX + (GUEST_AT.y - aim.eyeY) * aim.dirY + (GUEST_AT.z - aim.eyeZ) * aim.dirZ;
+  const nearest = { x: aim.eyeX + aim.dirX * behind, y: aim.eyeY + aim.dirY * behind, z: aim.eyeZ + aim.dirZ * behind };
+  const x = nearest.x + aim.dirX * along - GUEST_AT.x;
+  const y = nearest.y + aim.dirY * along - GUEST_AT.y;
+  const z = nearest.z + aim.dirZ * along - GUEST_AT.z;
+  const length = hypot3(x, y, z);
+  return { nearest, dir: { x: x / length, y: y / length, z: z / length }, length };
+}
+
+describe("given a player whose cursor ray passes 11 m from his torso, the camera pulled back", () => {
+  const meeting = 12.5;
+
+  it("when the host's own player fires and the ray meets something, then the shot leaves his torso toward that point, and the aim is rewritten to it", () => {
+    const r = rig();
+    r.places.set(HOST, GUEST_AT);
+    r.met.along = meeting;
+    const aim = cursorRay();
+    const expected = towardMeeting(cursorRay(), meeting);
+    r.acts.shootLocal(aim, WEAPONS.pistol);
+    expect(r.looks.length, "looks along the cursor ray").toBe(1);
+    expect(r.looks[0]!.range, "within the gun's range (m)").toBe(WEAPONS.pistol.range);
+    expect(hypot3(r.looks[0]!.ray.eyeX - expected.nearest.x, r.looks[0]!.ray.eyeY - expected.nearest.y, r.looks[0]!.ray.eyeZ - expected.nearest.z), "the look starts at the ray's point nearest his torso (m)").toBeLessThan(1e-9);
+    expect(r.shots.length, "rays fired").toBe(1);
+    expect(hypot3(r.shots[0]!.ray.eyeX - GUEST_AT.x, r.shots[0]!.ray.eyeY - GUEST_AT.y, r.shots[0]!.ray.eyeZ - GUEST_AT.z), "the ray leaves his torso (m)").toBeLessThan(1e-9);
+    expect(angleBetween(r.shots[0]!.ray, Object.assign(new LookRay(), { dirX: expected.dir.x, dirY: expected.dir.y, dirZ: expected.dir.z })), "the ray's angle off the way to the point (rad)").toBeLessThanOrEqual(WEAPONS.pistol.cone + 1e-9);
+    expect(hypot3(aim.dirX - expected.dir.x, aim.dirY - expected.dir.y, aim.dirZ - expected.dir.z), "the aim rewritten to that direction").toBeLessThan(1e-9);
+  });
+
+  it("when a guest fires, then the act sent has its eye at his torso and its direction toward the point the ray met, and nothing is carried out on his machine", () => {
+    const r = rig(true);
+    r.met.along = meeting;
+    const aim = cursorRay();
+    const expected = towardMeeting(cursorRay(), meeting);
+    const far = r.acts.shootLocal(aim, WEAPONS.pistol);
+    expect(r.sent.length, "acts sent").toBe(1);
+    const act = r.sent[0]!;
+    expect(act.kind, "kind").toBe(ACT.shot);
+    expect(hypot3(act.eyeX - GUEST_AT.x, act.eyeY - GUEST_AT.y, act.eyeZ - GUEST_AT.z), "the act's eye from his torso (m)").toBeLessThan(1e-9);
+    expect(hypot3(act.dirX - expected.dir.x, act.dirY - expected.dir.y, act.dirZ - expected.dir.z), "the act's direction off the way to the point").toBeLessThan(1e-9);
+    expect(far, "the tracer runs to the point (m)").toBeCloseTo(expected.length, 9);
+    expect(r.shots.length, "carried out locally").toBe(0);
+  });
+
+  it("when nothing is under the cursor inside the gun's range, then the shot goes from his torso toward the ray's point at that range", () => {
+    const r = rig(true);
+    const expected = towardMeeting(cursorRay(), WEAPONS.rifle.range);
+    const far = r.acts.shootLocal(cursorRay(), WEAPONS.rifle);
+    expect(r.looks[0]!.range, "looked within the gun's range (m)").toBe(WEAPONS.rifle.range);
+    const act = r.sent[0]!;
+    expect(hypot3(act.dirX - expected.dir.x, act.dirY - expected.dir.y, act.dirZ - expected.dir.z), "the act's direction off the way to the ray's point at that range").toBeLessThan(1e-9);
+    expect(far, "the tracer runs that far from the torso (m)").toBeCloseTo(expected.length, 9);
+  });
+
+  it("when the ray passes within the reach of his torso, then nothing is looked along and the aim is as it was", () => {
+    const r = rig(true);
+    const aim = Object.assign(new LookRay(), { eyeX: 10.5, eyeY: 1.3, eyeZ: 0, dirZ: 1 });
+    r.acts.shootLocal(aim, WEAPONS.pistol);
+    expect(r.looks.length, "looks").toBe(0);
+    expect([aim.eyeX, aim.eyeZ], "the aim").toEqual([10.5, 0]);
+    expect(r.sent[0]!.eyeX, "the act's eye").toBe(10.5);
   });
 });
 

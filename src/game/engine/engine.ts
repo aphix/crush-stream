@@ -519,6 +519,7 @@ export class CrashEngine extends EngineGarage {
       strikeDoll: (slot, x, y, z, ray, speed) => this.strikeDoll(slot, x, y, z, ray, speed),
       shotSparks: (x, y, z, ray) => this.shotFx(_p.set(x, y, z), _n.set(-ray.dirX, -ray.dirY, -ray.dirZ)),
       shootProp: (ray, limit, vx, vz) => this.race.shootProp(ray, limit, vx, vz),
+      propMet: (ray, limit) => this.race.propMet(ray, limit),
       hookWallHits: (listener) => {
         const recorded = this.race.onWallHit;
         this.race.onWallHit = (i, closing, x, z) => {

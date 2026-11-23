@@ -21,6 +21,8 @@ const ACT_BACKLOG_S = 0.5;
 const ACT_COOLDOWN_SHARE = 0.9;
 /** A guest does not know what its shot met: its tracer runs this far (m). */
 const GUEST_TRACER_M = 60;
+/** An aim point nearer his torso than this (m) cannot give a direction: the shot keeps its ray. */
+const MIN_AIM_M = 0.05;
 /** A direction the host reads must be a unit vector to within this. */
 const UNIT_SLACK = 0.05;
 /** The level part of a punch's direction must be at least this long. */
@@ -40,6 +42,8 @@ const _near = new LookRay();
 type ActResolver = {
   punch(actor: number, x: number, z: number, dirX: number, dirZ: number): void;
   shoot(actor: number, ray: LookRay, gun: Gun): number;
+  /** How far (m) along `ray`, within `range`, the nearest wall, ground, person, dummy, car or prop is, or `range`; nothing is struck. */
+  meet(actor: number, ray: LookRay, range: number): number;
   shotFired(): void;
 };
 
@@ -164,6 +168,18 @@ export class OpenWorldActs {
    */
   shootBy(actor: number, aim: LookRay, gun: Gun): number {
     if (!this.ports.actorPlace(actor, _place)) return 0;
+    if (this.nearestToTorso(aim) > SHOT_RAY_REACH) return 0;
+    let far = 0;
+    for (let ray = 0; ray < gun.rays; ray++) {
+      this.scatter(actor, _near, gun.cone, _ray);
+      far = Math.max(far, this.resolver.shoot(actor, _ray, gun));
+    }
+    this.resolver.shotFired();
+    return hypot3(_near.eyeX - aim.eyeX, _near.eyeY - aim.eyeY, _near.eyeZ - aim.eyeZ) + far;
+  }
+
+  /** Writes into `_near` the point of the line `aim` nearest the torso in `_place` (not behind the eye) with its direction; how far (m) that point is from the torso. */
+  private nearestToTorso(aim: LookRay): number {
     const behind = Math.max(0, (_place.x - aim.eyeX) * aim.dirX + (_place.y - aim.eyeY) * aim.dirY + (_place.z - aim.eyeZ) * aim.dirZ);
     _near.eyeX = aim.eyeX + aim.dirX * behind;
     _near.eyeY = aim.eyeY + aim.dirY * behind;
@@ -171,14 +187,28 @@ export class OpenWorldActs {
     _near.dirX = aim.dirX;
     _near.dirY = aim.dirY;
     _near.dirZ = aim.dirZ;
-    if (hypot3(_near.eyeX - _place.x, _near.eyeY - _place.y, _near.eyeZ - _place.z) > SHOT_RAY_REACH) return 0;
-    let far = 0;
-    for (let ray = 0; ray < gun.rays; ray++) {
-      this.scatter(actor, _near, gun.cone, _ray);
-      far = Math.max(far, this.resolver.shoot(actor, _ray, gun));
-    }
-    this.resolver.shotFired();
-    return behind + far;
+    return hypot3(_near.eyeX - _place.x, _near.eyeY - _place.y, _near.eyeZ - _place.z);
+  }
+
+  /**
+   * An aim ray that passes farther from his torso (`_place`) than `SHOT_RAY_REACH` (a cursor away from the view's centre, a camera pulled far back) is looked along from its point nearest him, within the gun's range,
+   * and `aim` becomes the ray from his torso to what it met (or to its point at the gun's range): the shot leaves the shooter and goes where the cursor was. How far (m) that is; -1 when `aim` is left as it was.
+   */
+  private leaveFromChest(aim: LookRay, gun: Gun): number {
+    if (this.nearestToTorso(aim) <= SHOT_RAY_REACH) return -1;
+    const met = this.resolver.meet(this.ports.self(), _near, gun.range);
+    const x = _near.eyeX + _near.dirX * met - _place.x;
+    const y = _near.eyeY + _near.dirY * met - _place.y;
+    const z = _near.eyeZ + _near.dirZ * met - _place.z;
+    const length = hypot3(x, y, z);
+    if (length < MIN_AIM_M) return -1;
+    aim.eyeX = _place.x;
+    aim.eyeY = _place.y;
+    aim.eyeZ = _place.z;
+    aim.dirX = x / length;
+    aim.dirY = y / length;
+    aim.dirZ = z / length;
+    return length;
   }
 
   /** This machine's player's punch lands: a guest tells the host, the host carries it out. */
@@ -197,9 +227,11 @@ export class OpenWorldActs {
     this.ports.sendAct(ACT.punch, 0, this.eye, this.dir);
   }
 
-  /** This machine's player fires `gun` along `aim`: a guest tells the host, the host carries it out. How far (m) to draw the tracer. */
+  /** This machine's player fires `gun` along `aim`: a guest tells the host, the host carries it out. `aim` is rewritten to the ray the shot left along (`leaveFromChest`). How far (m) to draw the tracer from `aim`'s eye. */
   shootLocal(aim: LookRay, gun: Gun): number {
-    if (!this.ports.guest()) return this.shootBy(this.ports.self(), aim, gun);
+    const self = this.ports.self();
+    const known = this.ports.actorPlace(self, _place) ? this.leaveFromChest(aim, gun) : -1;
+    if (!this.ports.guest()) return this.shootBy(self, aim, gun);
     this.eye.x = aim.eyeX;
     this.eye.y = aim.eyeY;
     this.eye.z = aim.eyeZ;
@@ -207,7 +239,7 @@ export class OpenWorldActs {
     this.dir.y = aim.dirY;
     this.dir.z = aim.dirZ;
     this.ports.sendAct(ACT.shot, slotOfGun(gun), this.eye, this.dir);
-    return Math.min(gun.range, GUEST_TRACER_M);
+    return known >= 0 ? known : Math.min(gun.range, GUEST_TRACER_M);
   }
 
   private draw(actor: number): number {

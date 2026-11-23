@@ -559,8 +559,26 @@ export abstract class RaceField {
 
   /** A bullet's ray against the standing knockable props: the nearest whose column (0.35 m round, 1.2 m tall) the ray meets nearer than `limit` m is knocked at (vx, 1, vz) as a punch knocks one; how far along the ray it stood, Infinity for none. */
   shootProp(ray: LookRay, limit: number, vx: number, vz: number): number {
+    const best = this.nearestProp(ray, limit);
+    if (best < 0) return Infinity;
+    this.knocked[best] = 1;
+    this.recorder.knock(best, -1);
+    this.host.knockProp(best, -1, vx, 1, vz);
+    return this.propAlong;
+  }
+
+  /** How far along `ray` the nearest standing knockable prop nearer than `limit` m is (`shootProp`'s test), Infinity for none; nothing is knocked. */
+  propMet(ray: LookRay, limit: number): number {
+    return this.nearestProp(ray, limit) < 0 ? Infinity : this.propAlong;
+  }
+
+  /** How far along the last ray `nearestProp` found its prop (m). */
+  private propAlong = 0;
+
+  /** The index of the nearest standing knockable prop whose column the ray meets nearer than `limit` m (its distance in `propAlong`), -1 for none. */
+  private nearestProp(ray: LookRay, limit: number): number {
     const flat = ray.dirX * ray.dirX + ray.dirZ * ray.dirZ;
-    if (flat < 1e-9) return Infinity;
+    if (flat < 1e-9) return -1;
     let best = -1;
     let bestAlong = limit;
     for (let k = 0; k < this.colliders.length; k++) {
@@ -574,11 +592,8 @@ export abstract class RaceField {
       best = c.index;
       bestAlong = along;
     }
-    if (best < 0) return Infinity;
-    this.knocked[best] = 1;
-    this.recorder.knock(best, -1);
-    this.host.knockProp(best, -1, vx, 1, vz);
-    return bestAlong;
+    this.propAlong = bestAlong;
+    return best;
   }
 
   /** Where car `k` stands in the lobby: abreast on the course's start anchor like a hosted Survival run's humans (a course without one: its grid). */

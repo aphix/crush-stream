@@ -3,7 +3,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { hypot2 } from "../kernel/physics-core.js";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { ACT, Act } from "../net/act-codec.ts";
+import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { driverLook } from "../present/driver-look.ts";
+import { WEAPONS } from "./engine-onfoot-arms.ts";
 import { activeGround } from "../world/ground.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 import type { ActorPlace } from "./engine-openworld-acts.ts";
@@ -15,6 +17,8 @@ const PISTOL_SLOT = 1;
 const SHOTGUN_SLOT = 2;
 /** The torso stands this high over the ground, and the guest's eye this much higher (m). */
 const TORSO_UP = 1;
+/** A dummy's chest stands this high over its ground (m). */
+const CHEST_UP = 1.2;
 const EYE_UP = 0.3;
 
 // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -193,5 +197,56 @@ describe("given the host's own player on foot in the open world", () => {
     expect(firstMismatch(shot.mock.calls.map((call) => call[0]), [own]), "actors fired for").toBeUndefined();
     punched.mockRestore();
     shot.mockRestore();
+  });
+});
+
+/** A cursor ray from a camera 20 m behind the torso and 3 m up, at the chest of a dummy 5 m ahead and 10 m to the torso's side; it passes the torso about 7 m off. */
+function cursorOnDummyAside(): { aim: LookRay; dummy: THREE.Vector3; slot: number; torso: THREE.Vector3 } {
+  const { torso, away } = hostOnFoot();
+  const side = new THREE.Vector3(-away.z, 0, away.x);
+  const slot = dummyAhead(new THREE.Vector3(torso.x + side.x * 10, 0, torso.z + side.z * 10), away, 5);
+  const dummy = new THREE.Vector3(torso.x + side.x * 10 + away.x * 5, 0, torso.z + side.z * 10 + away.z * 5);
+  dummy.y = activeGround().heightAt(dummy.x, dummy.z);
+  const eye = new THREE.Vector3(torso.x - away.x * 20, torso.y + 2, torso.z - away.z * 20);
+  const chest = dummy.clone().add(new THREE.Vector3(0, CHEST_UP, 0));
+  const dir = chest.clone().sub(eye).normalize();
+  const aim = new LookRay();
+  Object.assign(aim, { eyeX: eye.x, eyeY: eye.y, eyeZ: eye.z, dirX: dir.x, dirY: dir.y, dirZ: dir.z });
+  const miss = torso.clone().sub(eye).cross(dir).length();
+  expect(miss, "control: how far the cursor ray passes his torso (m)").toBeGreaterThan(5);
+  return { aim, dummy, slot, torso };
+}
+
+describe("given the camera pulled back 20 m and the cursor on a dummy 10 m off to the player's side", () => {
+  it("when the host's own player fires, then the dummy is struck, the shot leaves his torso and the tracer ends on the dummy", () => {
+    const { aim, dummy, slot, torso } = cursorOnDummyAside();
+    expect(rig.engine["ragdolls"].walkers[slot]!.state, "control: the dummy stands").toBe("stand");
+    const far = rig.engine["acts"].shootLocal(aim, WEAPONS.pistol);
+    rig.run(FRAME);
+    expect(rig.engine["ragdolls"].walkers[slot]!.state, "the dummy after the shot").not.toBe("stand");
+    expect(hypot2(aim.eyeX - torso.x, aim.eyeZ - torso.z), "the ray the shot left along starts at his torso (m)").toBeLessThan(0.1);
+    expect(hypot2(aim.eyeX + aim.dirX * far - dummy.x, aim.eyeZ + aim.dirZ * far - dummy.z), "the tracer ends within a body's width of the dummy (m)").toBeLessThan(0.7);
+  });
+
+  it("when a guest fires, then the act sent has its eye at his torso and its direction toward the dummy, and nothing is struck on his machine", () => {
+    const { aim, dummy, slot, torso } = cursorOnDummyAside();
+    const net = rig.engine["net"];
+    const sent = vi.spyOn(net, "sendAct").mockImplementation(() => {});
+    const role = net.role;
+    try {
+      Object.defineProperty(net, "role", { value: "client", configurable: true, writable: true });
+      rig.engine["acts"].shootLocal(aim, WEAPONS.pistol);
+    } finally {
+      Object.defineProperty(net, "role", { value: role, configurable: true, writable: true });
+    }
+    expect(sent, "acts sent").toHaveBeenCalledTimes(1);
+    const [kind, arg, eye, dir] = sent.mock.calls[0]!;
+    sent.mockRestore();
+    const toDummy = new THREE.Vector3(dummy.x - torso.x, dummy.y + CHEST_UP - torso.y, dummy.z - torso.z).normalize();
+    expect(kind, "kind").toBe(ACT.shot);
+    expect(arg, "weapon").toBe(PISTOL_SLOT);
+    expect(hypot2(eye.x - torso.x, eye.z - torso.z), "the act's eye from his torso (m)").toBeLessThan(0.1);
+    expect(dir.x * toDummy.x + dir.y * toDummy.y + dir.z * toDummy.z, "the act's direction against the way to the dummy").toBeGreaterThan(0.99);
+    expect(rig.engine["ragdolls"].walkers[slot]!.state, "the dummy on the guest's machine").toBe("stand");
   });
 });
