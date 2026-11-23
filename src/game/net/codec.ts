@@ -23,7 +23,7 @@ import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
  * driver look with their spray paint (`look-codec.ts`), once per player, reliably; `roster`: the host's peer-to-car table for
  * proximity voice (`roster-codec.ts`), to every guest, reliably, when a seat changes and with every keyframe; `crowd`: the open world's crowd clock and event log (`crowd-codec.ts`), to every guest, reliably, with every keyframe and when an event is added.
  */
-export const MSG = { snapshot: 1, input: 2, hello: 3, assign: 4, race: 5, derby: 6, hold: 7, reel: 8, eject: 9, reelPart: 10, look: 11, roster: 12, crowd: 13 } as const;
+export const MSG = { snapshot: 1, input: 2, hello: 3, assign: 4, race: 5, derby: 6, hold: 7, reel: 8, eject: 9, reelPart: 10, look: 11, roster: 12, crowd: 13, bodies: 14, foot: 15 } as const;
 
 /**
  * Wire format version, carried by hello and assign: peers on different builds (an auto-deploy mid-session)
@@ -95,8 +95,13 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 63: a customer never takes a seat in a flat over a shop (one higher than its counter's top), another round where she is keeps her seat, a leg from outside a door (found shut, or stood out at) is flagged (`FLAG.fromOutside`), a customer who finds every spot taken stays only to buy and is not kept in the full room, and a leg or a stay outside out of a room with an aisle starts once she has walked from her spot to the door at her pace (`RESIDENT_INT.leftSpot`, allowed for in appointments, and while she walks out she is at that place), so a peer on 62 would seat, time and draw her differently.
 64: the open world's cats and dogs are shown (walking their legs, resting at their place's door) and a car runs one down by the host's hit rule (a knock in the log); staff keep their workplace's hours (shifts start inside them, a little before opening and after the close; staff of a closed-up place go home), a named resident's appointment walk is estimated with the hour's night fear as `planLeg` walks it, nobody heads for or waits at a place that will still be shut when they get there (a flyer round skips shut places), standing spots by a counter are searched clear of walls and furniture (`Place.standSpots`), and a walker's lateral offset is mitred through a corner (`cornerMiter`: her drawn spot, which contacts read), so a peer on 63 would separate, plan, time and seat residents differently and compute a different city from the same log.
 65: the hook takes a suspect out of the police's hands and the host logs it (`EVENT_KIND.spared`, the resident), which every peer's law applies at that second, so a peer on 64 would keep her gripped, led or fleeing and compute a different arrest from the same log.
+66: the host sends who its hook holds in `MSG.bodies` (14) at 15 Hz, each one's posture, cable bits, torso, velocity and facing, whom a guest stands a body for or draws as a figure, so a peer on 65 would draw her walking at her crowd spot while the host drags her.
+67: a guest sends its player on foot (`MSG.foot`, 15) and the host relays every player on foot in `MSG.bodies`, struck when its car or shot takes him and roped when its hook holds him, so a peer on 66 would draw no walker, throw its own for cars it draws, and its crowd would walk through him.
+68: `MSG.bodies` carries the host's cables, so a peer on 67 would draw none.
+69: `MSG.bodies` carries the foot cops, the people in their hands and the medics as pose records and the people drawn by nobody, which a guest draws in place of its own law's, so a peer on 68 that joined late would draw its own arrests.
+70: `MSG.bodies` carries everyone lying, getting up or thrown, so a peer on 69 would leave its own ragdolls where they fell and keep them after the host's are gone.
 */
-export const NET_VERSION = 65;
+export const NET_VERSION = 70;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;

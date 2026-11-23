@@ -6,9 +6,12 @@ import { ATTIRE } from "../present/civilian-art-constants.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { CrowdSight } from "../present/civilian-art.ts";
+import { BODY_KIND, type BodyFrame } from "../net/body-codec.ts";
+import { writePoseRows } from "./openworld-shared.ts";
+import { MEDICS_COUNT } from "./people-index.ts";
 
 /** Paramedics who kneel by the one run down while the ambulance loads: one each side of them, this far off (m). */
-export const MEDICS = { count: 2, beside: 0.7 } as const;
+export const MEDICS = { count: MEDICS_COUNT, beside: 0.7 } as const;
 /** How far the look search runs for a man's and a woman's scrubs before it gives up (every look word dresses the same way each time). */
 const LOOK_SEARCH = 1 << 14;
 
@@ -57,6 +60,8 @@ export class OpenWorldMedics {
   private readonly art: MedicArt;
   /** 1 for a medic the hook has taken at this scene. */
   private readonly taken = new Uint8Array(MEDICS.count);
+  /** A guest has the host's medics in a fresh frame of people (`OpenWorldShared.poseRows` writes them): `frame` only draws. */
+  heard = false;
 
   constructor(art: MedicArt) {
     this.art = art;
@@ -85,11 +90,18 @@ export class OpenWorldMedics {
     return this.taken[medic] === 1;
   }
 
+  /** Host: the medics the art draws written into `out` as pose records (`MSG.bodies`). */
+  writePoses(out: BodyFrame): void {
+    writePoseRows(out, BODY_KIND.medic, this.poses, null, 0);
+  }
+
   frame(ambulanceState: number, eyeX: number, eyeZ: number, sight: CrowdSight, wallDt: number): void {
-    placeMedics(this.poses, this.sceneX, this.sceneZ, ambulanceState, wallDt);
-    for (let medic = 0; medic < MEDICS.count; medic++) {
-      if (ambulanceState !== AMBULANCE.loading) this.taken[medic] = 0;
-      else if (this.taken[medic] === 1) this.poses.shown[medic] = 0;
+    if (!this.heard) {
+      placeMedics(this.poses, this.sceneX, this.sceneZ, ambulanceState, wallDt);
+      for (let medic = 0; medic < MEDICS.count; medic++) {
+        if (ambulanceState !== AMBULANCE.loading) this.taken[medic] = 0;
+        else if (this.taken[medic] === 1) this.poses.shown[medic] = 0;
+      }
     }
     this.art.update(this.poses, eyeX, eyeZ, sight, wallDt);
   }

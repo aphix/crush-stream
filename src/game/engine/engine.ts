@@ -55,6 +55,8 @@ import { TrafficLightArt } from "../present/traffic-lights.ts";
 import { wearCarLook } from "../present/car-look.ts";
 import { TrafficDress } from "./traffic-dress.ts";
 import { RagdollBodyHost } from "./ragdoll-body-host.ts";
+import { RemoteCables } from "./openworld-cables.ts";
+import type { BodyMotion } from "../net/body-codec.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { applyCarFinish, finishForTier } from "../vehicle/car-finish.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
@@ -124,6 +126,7 @@ const _v = new THREE.Vector3();
 const _footVelocity = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
+const _ownMotion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
 const _hand = new THREE.Vector3();
 const _elbow = new THREE.Vector3();
 const _gunRest = new THREE.Vector3();
@@ -338,6 +341,7 @@ export class CrashEngine extends EngineGarage {
       openWorld: () => this.showOpenWorld,
       runsCars: () => !this.net.client,
       guest: () => this.net.client,
+      bodyHost: this.bodyHost,
       freshCarNear: (index, x, z, facing) => this.race.placeNear(index, x, z, facing),
       respawn: () => this.requestRespawn(),
       enterable: (index) => this.race.free && !this.net.client && this.openWorld.canEnter(index),
@@ -380,6 +384,7 @@ export class CrashEngine extends EngineGarage {
       holdDoll: (slot) => this.openWorld.hookPin(slot),
     });
     this.scene.add(this.tether.art.group);
+    this.scene.add(this.remoteCables.art.group);
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
@@ -463,8 +468,13 @@ export class CrashEngine extends EngineGarage {
       });
   }
 
-  /** A car of the open world standing in a kerb space has nobody in it (`SeatedDrivers.sync`). */
-  private readonly parkedEmpty = (id: number, car: DeformableCar): boolean => this.openWorld.carIsEmpty(id, car);
+  /** The open world's dummies' world as the bodies see it, shared by the bodies and the walker's host drag. */
+  private readonly bodyHost = new RagdollBodyHost(() => this.ragdolls);
+  /** The host's hook's cables as a guest draws them (`MSG.bodies`): empty on the host and in every scene but a room of the open world. */
+  private readonly remoteCables = new RemoteCables();
+
+  /** A car of the open world standing in a kerb space, or whose player is on foot, has nobody in it (`SeatedDrivers.sync`). */
+  private readonly parkedEmpty = (id: number, car: DeformableCar): boolean => this.openWorld.carIsEmpty(id, car) || this.openWorld.playerAway(id);
 
   private makeOpenWorld(): OpenWorldDirector {
     const eyes = [this.camera];
@@ -499,8 +509,15 @@ export class CrashEngine extends EngineGarage {
         ray.dirZ = _v.z;
       },
       throwFigure: (strike, look, life) => this.ragdolls.throwFigure(strike, this.live(), look, life),
-      removeFigure: (slot, age) => this.ragdolls.removeFigure(slot, age),
-      bodies: new RagdollBodyHost(() => this.ragdolls),
+      removeFigure: (slot, spawn) => this.ragdolls.removeDummy(slot, spawn),
+      spawnOf: (slot) => this.ragdolls.spawnOf(slot),
+      bodies: this.bodyHost,
+      footAnchor: (out) => this.onFoot.flow.active && this.bodyHost.motion(WALKER_SLOT, out),
+      ownCarIndex: () => this.drivenCar(),
+      tethers: () => this.world.tethers,
+      playerLook: (car) => this.ragdolls.carDriverLook(car),
+      knockWalker: (vx, vy, vz) => this.onFoot.knocked(vx, vy, vz),
+      dragWalker: (t) => this.onFoot.dragged(t),
       strikeWalker: (dirX, dirZ) => {
         if (!this.ragdolls.walkerTorso(_p)) return;
         this.ragdolls.strikeWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
@@ -572,6 +589,7 @@ export class CrashEngine extends EngineGarage {
           return playerCars;
         },
         walker: () => (this.ragdolls.walkerTorso(walkerStand.group.position) ? walkerStand : null),
+        others: (out, from) => this.openWorld.sightOthers(out, from),
         detail: () => this.detail,
         followed: () => this.followedCar(),
         replaying: () => this.highlights.playing,
@@ -874,6 +892,7 @@ export class CrashEngine extends EngineGarage {
     this.rivals.dispose();
     for (const batch of [this.wheels, this.lampBatch, this.partBatch, this.seated, this.coverBatch]) batch.dispose();
     this.tether.dispose();
+    this.remoteCables.dispose();
     this.sparks.dispose();
     this.fountains.dispose();
     this.debris.dispose();
@@ -1230,6 +1249,7 @@ export class CrashEngine extends EngineGarage {
     this.openWorld.mindsSetting = this.minds;
     this.openWorld.frame(wallDt);
     this.tether.frame(wallDt);
+    this.remoteCables.frame(this.openWorld.cableFrame(), this.live(), this.camera, this.openWorld.peopleShared, this.openWorld.peopleCapacity, this.onFoot.flow.active && this.bodyHost.motion(WALKER_SLOT, _ownMotion) ? _ownMotion : null, this.drivenCar());
     lapPart(PART.scenery);
     this.rumbleFrame(this.playing && !held ? wallDt : 0);
     lapPart(PART.rest);

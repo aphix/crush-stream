@@ -31,6 +31,7 @@ import { ReelParts } from "./reel-wire.ts";
 import { carLayout } from "./car-pose.ts";
 import { readRoster } from "./roster-codec.ts";
 import { readCrowd } from "./crowd-codec.ts";
+import { BodyWire } from "./body-wire.ts";
 import { Voice } from "./voice.ts";
 import { HELLO_EVERY, HOST_LOST_MS, HOST_WAIT_MS, INTERP_DELAY, MAX_DEAD_ROOMS, RACE_GONE_MS, REFUSED, RING, SEND_HZ } from "./net-constants.ts";
 
@@ -73,6 +74,8 @@ export abstract class NetPlayClient {
   private order = 0;
   private lastSeq = -1;
   private readonly ejects = new EjectQueue();
+  /** The open world's frames of people (`MSG.bodies`): the host's sent through it, a guest's heard through it. */
+  protected readonly bodyWire = new BodyWire();
   private readonly reelIn = new ReelParts();
   /** Smallest seen (local clock − host clock), s: the host time "now" is local − offset. */
   private offset = Infinity;
@@ -166,6 +169,9 @@ export abstract class NetPlayClient {
       const heard = readCrowd(data);
       const link = this.game.crowdLink();
       if (heard && link) link.hear(heard.seed, heard.hostTime, heard.crowdTime, heard.events);
+    } else if (type === MSG.bodies) {
+      const link = this.game.crowdLink();
+      if (link !== null) this.bodyWire.take(data, this.r, link);
     }
   }
 
@@ -212,6 +218,7 @@ export abstract class NetPlayClient {
     this.applied.length = 0;
     this.drawnGen = -1;
     this.ejects.clear();
+    this.bodyWire.forget();
   }
 
   /** The host's race state: race mode on, then its session (or its lobby) adopted. Never stepped here. */
@@ -357,5 +364,7 @@ export abstract class NetPlayClient {
     writeInput(this.w, input, this.resetWanted, input === this.idle ? 0 : seat.boost);
     this.resetWanted = 0;
     t.send(this.w.done(), this.hostId);
+    const link = this.game.crowdLink();
+    if (link !== null) this.bodyWire.sendFoot(link, t, this.w, this.hostId);
   }
 }

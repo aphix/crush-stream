@@ -1,8 +1,10 @@
 import type * as THREE from "three";
 import type { CarDetail } from "../present/car-detail.ts";
+import { FAR_DRAW } from "../present/civilian-art-constants.ts";
 import { OpenWorldCarLod, type LodCar } from "../present/openworld-car-lod.ts";
 import { SIGHT_ID_CAPACITY, SightField, type SightPlayer } from "../present/openworld-sight.ts";
 import type { Occluder } from "../present/spectate-cam.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 
 /** What culling needs of the engine. */
 export type OpenWorldCullPorts = {
@@ -14,6 +16,8 @@ export type OpenWorldCullPorts = {
   playerCars(): readonly LodCar[];
   /** The player's walker while he is out of his car, else null: what he is beside must stay drawn, or he cannot enter it. */
   walker(): SightPlayer | null;
+  /** Every other player on foot, written into `out` from index `from` (a peer's walker as the host's frame has it): the index after the last. */
+  others(out: SightPlayer[], from: number): number;
   detail(): CarDetail;
   /** The car the camera follows, null in a free view. */
   followed(): LodCar | null;
@@ -48,6 +52,11 @@ export class OpenWorldCulling {
     this.cars.frame(liveCars, this.ports.followed(), this.ports.replaying());
   }
 
+  /** Whether any player's car or walker, or this machine's eye, is within `FAR_DRAW` m of (x, z): no art draws a person farther than that from an eye. */
+  anyoneNear(x: number, z: number, eyeX: number, eyeZ: number): boolean {
+    return this.sight.near(x, z, FAR_DRAW) || hypot2(x - eyeX, z - eyeZ) <= FAR_DRAW;
+  }
+
   /** The open world is left: hidden cars are drawn again, ids and solids are given back. */
   stop(liveCars: readonly LodCar[]): void {
     this.cars.stop(liveCars);
@@ -63,6 +72,7 @@ export class OpenWorldCulling {
     for (let at = 0; at < cars.length; at++) this.players[count++] = cars[at]!;
     const walker = this.ports.walker();
     if (walker !== null) this.players[count++] = walker;
+    count = this.ports.others(this.players, count);
     this.players.length = count;
     return this.players;
   }

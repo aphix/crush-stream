@@ -2,9 +2,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { CHEST_HEIGHT } from "../ai/civilians/civilian-crowd-constants.ts";
 import { hypot2 } from "../kernel/physics-core.js";
+import { BODY_KIND } from "../net/body-codec.ts";
 import { planInterior } from "../world/openworld/interior-plan.ts";
 import { activeGround } from "../world/ground.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
+import { personOf } from "./people-index.ts";
 
 const LINK = "#scene=openworld&seed=beef";
 const SETTLE_S = 3;
@@ -63,7 +65,8 @@ describe("given the real engine in the open world, the hook in hand and a foot c
     fire(eye, new THREE.Vector3(torso.x + COP_AHEAD_M, ground + CHEST_HEIGHT, torso.z));
     expect(rig.engine.tether.hud()?.pending, "the first fire holds him").toBe(true);
     expect(cops.shown[0], "he is no longer drawn standing").toBe(0);
-    const slot = rig.engine["openWorld"]["hookedCop"][0]!;
+    const director = rig.engine["openWorld"];
+    const slot = director.peopleShared!.dummy(personOf(BODY_KIND.cop, 0, director.peopleCapacity));
     expect(slot, "a dummy thrown for him").toBeGreaterThanOrEqual(0);
     fire(eye, new THREE.Vector3(torso.x + GROUND_AHEAD_M, ground, torso.z));
     rig.run(0.5);

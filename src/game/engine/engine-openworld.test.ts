@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { makeBodyFrame } from "../net/body-codec.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it, vi } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
@@ -22,6 +23,7 @@ import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { Sight } from "../present/spectate-cam.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
+import { MAX_CARS } from "../scenes/fleet.ts";
 import { hourOfDay, tickAt } from "../ai/civilians/civilian-clock.ts";
 import { sceneryShare } from "./scenery-share.ts";
 import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
@@ -48,8 +50,8 @@ const HOST_TIME = 1000;
 /** A host's crowd has been out this long when it runs a civilian down, so a client's catch-up has a day's morning to replay. */
 const HOST_DAY_SECONDS = 100;
 const FRAME = FRAME_SECONDS;
-/** Drawings a crowd makes: its own, and the ambulance crew's (`MEDICS.count` scrubs, drawn by an art of their own). */
-const ARTS_PER_CROWD = 2;
+/** Drawings a crowd makes: its own, the ambulance crew's (`MEDICS.count` scrubs) and the players on foot's (`MAX_CARS` rows), each drawn by an art of its own. */
+const ARTS_PER_CROWD = 3;
 /** Frames (a thirtieth of a second) the eye follows a civilian until her body stands: she may start in a doorway. */
 const BODY_WAIT_FRAMES = 1800;
 
@@ -72,8 +74,14 @@ class Harness {
   readonly strikes: { dirX: number; dirZ: number }[] = [];
   readonly staggers: { dirX: number; dirZ: number }[] = [];
   readonly looks: DriverLook[] = [];
-  /** The figures the ambulance's loading took away (`removeFigure`): the slot asked for and the age given. */
-  readonly removed: { slot: number; age: number }[] = [];
+  /** The figures the ambulance's loading took away (`removeFigure`): the slot asked for and the spawn given. */
+  readonly removed: { slot: number; spawn: number }[] = [];
+  /** How many figures each slot has held: one per throw, slots are never reused here. */
+  private readonly spawned = new Map<number, number>();
+
+  spawnOf(slot: number): number {
+    return this.spawned.get(slot) ?? 0;
+  }
   readonly updates: { poses: CrowdPoses; eyeX: number; sight: CrowdSight; wallDt: number; held: Uint8Array | null }[] = [];
   /** The game hours the stage's day was set to, null for it being left. */
   readonly dayHours: (number | null)[] = [];
@@ -104,10 +112,12 @@ class Harness {
     throwFigure: (strike, look) => {
       this.thrown.push(strike);
       this.looks.push(look);
+      this.spawned.set(this.thrown.length - 1, 1);
       return this.thrown.length - 1;
     },
-    removeFigure: (slot, age) => {
-      this.removed.push({ slot, age });
+    spawnOf: (slot) => this.spawnOf(slot),
+    removeFigure: (slot, spawn) => {
+      this.removed.push({ slot, spawn });
       return true;
     },
     ...(bodies === null ? {} : { bodies }),
@@ -120,7 +130,7 @@ class Harness {
     },
     makeArt: (capacity) => {
       this.artsMade++;
-      const crewsOwn = capacity === MEDICS.count;
+      const crewsOwn = capacity === MEDICS.count || capacity === MAX_CARS;
       return { update: (poses, eyeX, _eyeZ, sight, wallDt, held) => void (crewsOwn || this.updates.push({ poses, eyeX, sight, wallDt, held: held ?? null })), dispose: () => void this.artsDisposed++ };
     },
     });
@@ -141,6 +151,13 @@ function hostWithMap(bodies: FakeBodyHost | null = null, police = false): Harnes
   const harness = new Harness(bodies, police);
   harness.director.startOpenWorld(map);
   return harness;
+}
+
+/** The eye `away` m east of (x, z), as a player's is when he acts there: a knock farther than the art's range from every eye throws no ragdoll (`OpenWorldCulling.anyoneNear`). One frame, no step: the law's poses stay as set. */
+function eyeNear(harness: Harness, x: number, z: number, away: number): void {
+  harness.eye.eyeX = x + away;
+  harness.eye.eyeZ = z;
+  harness.director.frame(FRAME);
 }
 
 describe("given the open world's course up and a map given", () => {
@@ -406,6 +423,7 @@ describe("given the hook aimed at the drawn people of the open world", () => {
   // mutation: sed -i '/^    if (this.law !== null \&\& this.law.copMet(/,/^    }/d' src/game/engine/engine-openworld.ts
   it("when the sight line passes a foot cop's chest far from any civilian, then the reticle names him, and the fire downs him where he stands, thrown and logged", () => {
     const harness = hostWithBodies();
+    eyeNear(harness, 5000, 5000, 0);
     const people = harness.crowd().poses.count;
     const cops = harness.director["law"]!.copPoses;
     cops.shown[2] = 1;
@@ -427,6 +445,7 @@ describe("given the hook aimed at the drawn people of the open world", () => {
   // mutation: sed -i 's/^    if (index >= people) return this.law?.hookCop(index - people, this.seconds) ?? -1;/    if (index >= people) return -1;/' src/game/engine/engine-openworld.ts
   it("when a cop is hooked, then no body of the civilians' pool is stood for him", () => {
     const harness = hostWithBodies();
+    eyeNear(harness, 5000, 5000, 0);
     const people = harness.crowd().poses.count;
     const cops = harness.director["law"]!.copPoses;
     cops.shown[1] = 1;
@@ -526,6 +545,7 @@ describe("given the hook aimed at the drawn people of the open world", () => {
 
   it("when a cop the hook took is up again after his time, then the dummy thrown for him goes by its slot and age, and not before", () => {
     const harness = hostWithBodies();
+    eyeNear(harness, 5000, 5000, 0);
     const people = harness.crowd().poses.count;
     const cops = harness.director["law"]!.copPoses;
     cops.shown[2] = 1;
@@ -538,7 +558,7 @@ describe("given the hook aimed at the drawn people of the open world", () => {
     for (let frame = 0; frame < Math.round(10 / FRAME); frame++) harness.frame();
     expect(harness.removed.length, "dummies taken away").toBe(1);
     expect(harness.removed[0]!.slot, "the dummy thrown for him").toBe(slot);
-    expect(harness.removed[0]!.age, "thrown this long ago (s): his time down").toBeCloseTo(COP_DOWN_SECONDS, 0);
+    expect(harness.removed[0]!.spawn, "the spawn the throw gave the slot").toBe(harness.spawnOf(slot));
   });
 
   it("when a medic the hook took is back in his ambulance (it has left), then the dummy thrown for him goes", () => {
@@ -599,6 +619,7 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     carAtSomeone(harness);
     const crowd = harness.crowd();
     const resident = shownResident(crowd);
+    eyeNear(harness, crowd.poses.x[resident]!, crowd.poses.z[resident]!, 0);
     const { car, place } = carAtWalker(crowd, resident, 6, 14);
     harness.cars = [car];
     for (let travelled = FRAME; travelled < 2 && harness.thrown.length === 0; travelled += FRAME) {
@@ -653,6 +674,7 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     carAtSomeone(harness);
     const crowd = harness.crowd();
     const resident = shownResident(crowd);
+    eyeNear(harness, crowd.poses.x[resident]!, crowd.poses.z[resident]!, 60);
     const { car, place } = carAtWalker(crowd, resident, 6, 14);
     harness.cars = [car];
     for (let travelled = FRAME; travelled < 2 && harness.thrown.length === 0; travelled += FRAME) {
@@ -665,7 +687,7 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     harness.director["removeVictim"](resident);
     expect(harness.removed.length, "one figure taken away").toBe(1);
     expect(harness.removed[0]!.slot, "the slot the throw gave").toBe(harness.thrown.findIndex((strike) => strike.guard === resident));
-    expect(harness.removed[0]!.age, "thrown this long ago (s)").toBeCloseTo(crowd.crowdSeconds - thrownAt, 1);
+    expect(harness.removed[0]!.spawn, "the spawn the throw gave the slot").toBe(harness.spawnOf(harness.removed[0]!.slot));
     harness.director["removeVictim"](resident);
     expect(harness.removed.length, "taken away once").toBe(1);
   });
@@ -706,6 +728,41 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     const house = map.places[harness.crowd().state.ints[RESIDENT_INT.home]!]!;
     harness.listener!(WRECK_SPEED, house.x + house.depth / 2 + 0.5, house.z);
     expect(harness.director.eventLog()[0], "kind of the first event").toBe(EVENT_KIND.wreck);
+  });
+});
+
+describe("given a civilian a car is about to run down, with no player's car within 120 m of her", () => {
+  /** A fresh host whose eye is `offset` m east of a shown civilian; a car runs her down. */
+  function runDownWithEyeAt(offset: number): { harness: Harness; resident: number } {
+    const harness = hostWithMap();
+    harness.frame();
+    const crowd = harness.crowd();
+    stepUntilShown(crowd, crowd.crowdSeconds);
+    const resident = shownResident(crowd);
+    harness.eye.eyeX = crowd.poses.x[resident]! + offset;
+    harness.eye.eyeZ = crowd.poses.z[resident]!;
+    harness.frame();
+    expect(crowd.poses.shown[resident], "control: she is still drawn before the car comes").toBe(1);
+    const { car, place } = carAtWalker(crowd, resident, 6, 14);
+    harness.cars = [car];
+    for (let travelled = FRAME; travelled < 2 && crowd.poses.shown[resident] === 1; travelled += FRAME) {
+      place(travelled);
+      harness.director.step(FRAME);
+    }
+    return { harness, resident };
+  }
+
+  it("when the eye is 300 m from her, then no ragdoll is thrown, she is gone from the drawn crowd and the knock is in the log; and when the eye is 50 m from her, then the ragdoll is thrown", () => {
+    const far = runDownWithEyeAt(300);
+    const log = far.harness.director.eventLog();
+    let knocked = false;
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) knocked ||= log[at] === EVENT_KIND.knock && log[at + 1] === far.resident;
+    expect(far.harness.thrown.length, "ragdolls thrown with the eye 300 m off").toBe(0);
+    expect(far.harness.crowd().poses.shown[far.resident], "she is gone from the drawn crowd").toBe(0);
+    expect(knocked, "the knock is in the log").toBe(true);
+    const near = runDownWithEyeAt(50);
+    expect(near.harness.thrown.length, "ragdolls thrown with the eye 50 m off").toBe(1);
+    expect(near.harness.thrown[0]!.guard, "thrown for her").toBe(near.resident);
   });
 });
 
@@ -864,6 +921,23 @@ describe("given a client hearing the host's ambulance through its event log", ()
     heardStage(world, CALLED_CAR, AMBULANCE.idle);
     expect(Array.from(poses.shown), "medics drawn after it left").toEqual([0, 0]);
     expect(world.harness.director.ambulanceCar(), "car after it left").toBe(-1);
+  });
+
+  it("when the client hears the call while the host's frames are fresh and the frames then stop for 2 s mid-loading, then its medics kneel where the call was heard; with the frames still fresh they are not drawn by the client", () => {
+    const world = knocked();
+    const lay = world.harness.thrown.find((strike) => strike.guard === world.resident)!;
+    world.harness.director.hearBodies(makeBodyFrame());
+    heardStage(world, CALLED_CAR, AMBULANCE.coming);
+    heardStage(world, CALLED_CAR, AMBULANCE.loading);
+    const poses = world.harness.director["medics"]!.poses;
+    expect(poses.shown[0], "control: while the frames are fresh the host's pose records draw the medics, and it has none").toBe(0);
+    for (let frame = 0; frame < 2 / FRAME; frame++) {
+      world.harness.now += FRAME;
+      world.harness.frame();
+    }
+    expect(poses.shown[0], "a medic kneels").toBe(1);
+    expect((poses.x[0]! + poses.x[1]!) / 2, "x they kneel round").toBeCloseTo(lay.x, 4);
+    expect((poses.z[0]! + poses.z[1]!) / 2, "z they kneel round").toBeCloseTo(lay.z, 4);
   });
 
   it("when the Auto camera is up while the host's ambulance is loading, then the client follows the ambulance's car", () => {

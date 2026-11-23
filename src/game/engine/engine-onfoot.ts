@@ -21,6 +21,9 @@ import { SEAT_KEYS } from "./engine-keys.ts";
 import { blankWalkIntent, readWalkIntent, type WalkIntent } from "./engine-walk-input.ts";
 import { OnFootArms, STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
+import type { BodyMotion } from "../net/body-codec.ts";
+import type { BodyHost } from "./openworld-bodies.ts";
+import { dragOwnWalker, knockOwnWalker, STRIKE_COOLDOWN } from "./onfoot-shared.ts";
 
 /** What the director needs from the engine: the objects it acts on, and the questions only the engine can answer. */
 interface OnFootHost {
@@ -68,6 +71,8 @@ interface OnFootHost {
   shotFired(ray: LookRay, far: number, gun: Gun): void;
   /** Fire with the hook in hand. */
   hook(): void;
+  /** The ragdoll pool as the open world's bodies see it: the host's cable moves his lying walker through it. */
+  bodyHost: BodyHost;
 }
 
 /** The control that gets him out and in: Enter on the keyboard (`SEAT_KEYS.onFoot`), Y (Triangle) on the pad. Neither drives, steers or switches a scene. */
@@ -87,8 +92,6 @@ const CREEP_SPEED = 0.8;
 const WALK_STOP = 0.01;
 /** The keys' direction eases to a new one over about this long (s), so a corner is turned, not snapped. */
 const INTENT_SECONDS = 0.08;
-/** A car that has just run him down does not do it again for this long (s): the launch carries him through its footprint. */
-const STRIKE_COOLDOWN = 0.6;
 /** Seconds a refusal stays on the prompt. */
 const REFUSAL_SECONDS = 2;
 /** Led by the law he walks at `WALK_SPEED` (a hair over the cop's escort pace) to where his cop leads him, and stands once within this far (m) of it. */
@@ -184,6 +187,16 @@ export class OnFootDirector {
   /** Whether fire, aim and weapons are his: on foot in the open world, solo or as the room's host. */
   armed(): boolean {
     return this.host.openWorld() && this.flow.phase === "onFoot" && !this.host.guest();
+  }
+
+  /** A car or shot of the host struck him (`MSG.bodies`, `struck`): he is knocked limp, launched at (vx, vy, vz) m/s; false while that cannot be (not on foot, struck just now). */
+  knocked(vx: number, vy: number, vz: number): boolean {
+    return knockOwnWalker(this.host.ragdolls, this.flow, this.strike, vx, vy, vz);
+  }
+
+  /** The host's cable holds his body at `t` (`MSG.bodies`, `roped`): he is knocked if he stands and follows `t` while he lies. */
+  dragged(t: BodyMotion): void {
+    dragOwnWalker(this.host.bodyHost, this.flow, t, this.strike, this.host.ragdolls);
   }
 
   private punch(): boolean {
@@ -508,6 +521,7 @@ export class OnFootDirector {
 
   /** A car moving fast enough over him (`runsDown`, the lawn guards' and the VIP's rule) throws him with the same launch (`fell`): he goes ragdoll. */
   private runDown(): void {
+    if (this.host.openWorld() && this.host.guest()) return;
     const { ragdolls } = this.host;
     const walker = ragdolls.walker;
     if (walker.sinceStruck < STRIKE_COOLDOWN || !ragdolls.walkerTorso(_torso)) return;

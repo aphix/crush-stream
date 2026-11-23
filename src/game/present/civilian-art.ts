@@ -7,7 +7,7 @@ import { DETAIL_KEEP_M, DETAIL_NEAR_M, FAR_DRAW, FEET_Y, FIGURE_COLOUR_CACHE_FLO
 import type { CrowdGaze } from "./civilian-gaze.ts";
 import { HEAD_YAW_LIMIT } from "./civilian-gaze-constants.ts";
 import { dressOfLook, isPoliceLook, skinOfLook, writeLinearColour } from "./civilian-dress.ts";
-import { civilianFigures, type CivilianFigures } from "./civilian-figure.ts";
+import { civilianFigures, type CivilianFigures, writeFigureMatrix } from "./civilian-figure.ts";
 import { WALK_SPEED } from "./walker-locomotion.ts";
 import { PoseSmoothing } from "./civilian-anim-smoothing.ts";
 import { poseCivilian } from "./civilian-pose.ts";
@@ -50,6 +50,8 @@ export class CivilianArt {
   stoops: Stoops | null = null;
   /** Where the crowd looks (`CrowdGaze`, updated before this art), set by its owner: the dummies' heads and torsos and the figures' heads turn with it. Null: heads as the clips have them. */
   gaze: CrowdGaze | null = null;
+  /** Dresses row `row` into `out` in place of her look word (the players' rows are dressed as their cars' drivers are); null: by the look word. */
+  dressOf: ((row: number, out: DriverLook) => void) | null = null;
   private readonly slotCount: number;
   private readonly detailSlots: number;
   private readonly detailChunks: number;
@@ -149,7 +151,7 @@ export class CivilianArt {
     if (slots === 0) return 0;
     let selected = 0;
     for (let civilian = 0; civilian < count; civilian++) {
-      if (this.visibleStamp[civilian] !== this.stamp) continue;
+      if (this.visibleStamp[civilian] !== this.stamp || poses.lying[civilian] === 1) continue;
       const dx = poses.x[civilian]! - this.eyeX;
       const dz = poses.z[civilian]! - this.eyeZ;
       let key = dx * dx + dz * dz;
@@ -195,7 +197,7 @@ export class CivilianArt {
       }
       this.slotOwner[slot] = civilian;
       this.slotOf[civilian] = slot;
-      this.dressSlot(slot, poses.look[civilian]!);
+      this.dressSlot(slot, poses.look[civilian]!, civilian);
     }
   }
 
@@ -215,8 +217,9 @@ export class CivilianArt {
     return (slot < this.detailSlots ? slot : slot - this.detailSlots) % SLOTS_PER_DUMMY_MESH;
   }
 
-  private dressSlot(slot: number, look: number): void {
-    dressOfLook(look, this.dress);
+  private dressSlot(slot: number, look: number, civilian: number): void {
+    if (this.dressOf === null) dressOfLook(look, this.dress);
+    else this.dressOf(civilian, this.dress);
     this.meshOf(slot).dress(this.indexIn(slot), isPoliceLook(look), this.dress);
     this.slotLook[slot] = look;
   }
@@ -227,7 +230,7 @@ export class CivilianArt {
     for (let k = 0; k < selected; k++) {
       const civilian = this.nearList[k]!;
       const slot = this.slotOf[civilian]!;
-      if (this.slotLook[slot] !== poses.look[civilian]) this.dressSlot(slot, poses.look[civilian]!);
+      if (this.slotLook[slot] !== poses.look[civilian]) this.dressSlot(slot, poses.look[civilian]!, civilian);
       poseCivilian(this.meshOf(slot), this.indexIn(slot), poses, civilian, this.smoothing, this.stoops, this.gaze);
     }
   }
@@ -251,7 +254,8 @@ export class CivilianArt {
 
   /** Civilian `civilian`'s linear shirt, trousers and skin colours made from her look and kept until it changes. */
   private cacheFigureColours(look: number, civilian: number): void {
-    dressOfLook(look, this.dress);
+    if (this.dressOf === null) dressOfLook(look, this.dress);
+    else this.dressOf(civilian, this.dress);
     const at = civilian * FIGURE_COLOUR_CACHE_FLOATS;
     writeLinearColour(this.dress.shirt, this.figureColours, at + SHIRT_AT);
     writeLinearColour(this.dress.pants, this.figureColours, at + TROUSERS_AT);
@@ -267,24 +271,7 @@ export class CivilianArt {
     const matrixAt = instance * FIGURE_FLOATS.MATRIX;
     const colourAt = instance * FIGURE_FLOATS.COLOUR;
     const cacheAt = civilian * FIGURE_COLOUR_CACHE_FLOATS;
-    const turnCos = Math.cos(poses.yaw[civilian]!);
-    const turnSin = Math.sin(poses.yaw[civilian]!);
-    matrices[matrixAt] = turnCos;
-    matrices[matrixAt + 1] = 0;
-    matrices[matrixAt + 2] = -turnSin;
-    matrices[matrixAt + 3] = 0;
-    matrices[matrixAt + 4] = 0;
-    matrices[matrixAt + 5] = 1;
-    matrices[matrixAt + 6] = 0;
-    matrices[matrixAt + 7] = 0;
-    matrices[matrixAt + 8] = turnSin;
-    matrices[matrixAt + 9] = 0;
-    matrices[matrixAt + 10] = turnCos;
-    matrices[matrixAt + 11] = 0;
-    matrices[matrixAt + 12] = poses.x[civilian]!;
-    matrices[matrixAt + 13] = FEET_Y + poses.feetY[civilian]!;
-    matrices[matrixAt + 14] = poses.z[civilian]!;
-    matrices[matrixAt + 15] = 1;
+    writeFigureMatrix(matrices, matrixAt, poses.x[civilian]!, FEET_Y + poses.feetY[civilian]!, poses.z[civilian]!, poses.yaw[civilian]!, poses.lying[civilian] === 1);
     for (let channel = 0; channel < FIGURE_FLOATS.COLOUR; channel++) {
       shirts[colourAt + channel] = this.figureColours[cacheAt + SHIRT_AT + channel]!;
       trousers[colourAt + channel] = this.figureColours[cacheAt + TROUSERS_AT + channel]!;
@@ -292,7 +279,7 @@ export class CivilianArt {
     }
     const gaitAt = instance * FIGURE_FLOATS.GAIT;
     gaits[gaitAt + FIGURE_GAIT.PHASE] = poses.stride[civilian]!;
-    gaits[gaitAt + FIGURE_GAIT.AMPLITUDE] = Math.min(FIGURE_MAX_GAIT, poses.speed[civilian]! / WALK_SPEED);
+    gaits[gaitAt + FIGURE_GAIT.AMPLITUDE] = poses.lying[civilian] === 1 ? 0 : Math.min(FIGURE_MAX_GAIT, poses.speed[civilian]! / WALK_SPEED);
     const gaze = this.gaze;
     gaits[gaitAt + FIGURE_GAIT.HEAD_YAW] = gaze === null ? 0 : Math.max(-HEAD_YAW_LIMIT, Math.min(HEAD_YAW_LIMIT, gaze.headYaw[civilian]! + gaze.torsoTwist[civilian]!));
     gaits[gaitAt + FIGURE_GAIT.HEAD_PITCH] = gaze === null ? 0 : gaze.headPitch[civilian]!;

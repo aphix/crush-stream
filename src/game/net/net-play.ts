@@ -576,6 +576,10 @@ export class NetPlay extends NetPlayClient {
       }
     } else if (type === MSG.look) {
       this.takeGuestLook(from, data);
+    } else if (type === MSG.foot) {
+      const car = this.slots.get(from);
+      const link = this.game.crowdLink();
+      if (car !== undefined && link !== null) this.bodyWire.takeFoot(data, this.r, link, car);
     }
   }
 
@@ -697,7 +701,10 @@ export class NetPlay extends NetPlayClient {
     this.statBytes += this.w.off;
     if (race && (s.keyframe || this.seq % RACE_EVERY === 0)) this.sendRace(race, t, s.keyframe);
     const crowd = this.game.crowdLink();
-    if (crowd) this.sendCrowd(crowd, t, s.keyframe);
+    if (crowd) {
+      this.sendCrowd(crowd, t, s.keyframe);
+      this.statBytes += this.bodyWire.send(crowd, t, this.w, this.seq);
+    }
     const derby = s.keyframe || this.seq % RACE_EVERY === 0 ? this.game.derbyState() : null;
     if (derby) {
       derby.lobby = this.lobbyLeft;

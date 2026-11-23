@@ -159,6 +159,18 @@ export class TetherSet {
     return this.rows[slot * ROW + R_LENGTH]!;
   }
 
+  /** Cable `slot` as the host's frame has it, for drawing only: alive, `length` m long, tension `strain` of a strength of 1. */
+  setDrawn(slot: number, length: number, strain: number): void {
+    const o = slot * ROW;
+    if (this.rows[o + R_ALIVE] !== 1) {
+      this.rows[o + R_ALIVE] = 1;
+      this.count++;
+    }
+    this.rows[o + R_LENGTH] = length;
+    this.rows[o + R_TENSION] = strain;
+    this.rows[o + R_STRENGTH] = 1;
+  }
+
   /** The cable's tension (N), averaged over `BREAK_SMOOTH_S`. */
   tension(slot: number): number {
     return this.rows[slot * ROW + R_TENSION]!;

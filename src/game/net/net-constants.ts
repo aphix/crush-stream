@@ -44,3 +44,9 @@ export const CROWD_EVENT_LOG_MAX = 512;
 export const HOLD_EVERY_MS = 1000;
 /** `MSG.assign` car: the host refuses this peer (another build). */
 export const REFUSED = 255;
+/** A guest that has heard a bodies frame within this long (s) has a fresh one; with none, the link to the host's people is down and the guest draws from its own crowd, law and medics. */
+export const BODIES_SILENT_S = 1;
+/** The host sends a frame of people (`MSG.bodies`) with every this-many-th snapshot: 15 Hz. */
+export const BODY_EVERY = 2;
+/** Half the 16-bit sequence space (messages' `seq`): a sequence this far ahead of the last is behind it. */
+export const HALF_SEQUENCE = 0x8000;

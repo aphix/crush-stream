@@ -44,6 +44,8 @@ export class CrimeScene {
   private readonly patrol: PatrolCars | null;
   private readonly ports: CrimePorts;
   private authority = false;
+  /** A guest has the host's cops and suspects in a fresh frame of people: it draws those (`OpenWorldShared.poseRows`) and not its own law's poses. The law itself still steps. */
+  heardPoses = false;
   /** Per car: the civilians it ran down in the current minute and when that minute began. */
   private readonly heatKnocks = new Uint8Array(HEAT_CARS);
   private readonly heatSince = new Float64Array(HEAT_CARS);
@@ -97,8 +99,10 @@ export class CrimeScene {
     this.applyDueCopDowns(cars);
     this.applyDueSpared();
     this.drawShare = Math.min(1, Math.max(0, (crowdSeconds - this.law.seconds) * CRIME_HZ));
-    overlaySuspects(this.law, crowdPoses, this.drawShare);
-    fillCopPoses(this.law, this.copPoses, this.drawShare);
+    if (!this.heardPoses || authority) {
+      overlaySuspects(this.law, crowdPoses, this.drawShare);
+      fillCopPoses(this.law, this.copPoses, this.drawShare);
+    }
     if (authority) this.findCopHits(cars, crowdSeconds);
   }
 

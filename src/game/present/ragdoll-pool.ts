@@ -132,6 +132,8 @@ export abstract class RagdollPool {
 
   /** The slots built so far (`BASE_SLOTS` at load, then one more whenever every one is live and the capacity allows). */
   protected readonly dolls: Doll[] = [];
+  /** How many dummies each slot has held: the count a table of dummies records, so a slot a later spawn took is told from the one it knew. */
+  protected readonly spawns = new Uint32Array(SLOTS);
   /** The most dummies out at once (`setCapacity`). */
   protected capacity = BASE_SLOTS;
   protected live = 0;
@@ -469,6 +471,7 @@ export abstract class RagdollPool {
     const speed = hypot2(t.v.x, t.v.z);
     this.buildPatch(d, t.p.x + (speed > 0.5 ? (t.v.x / speed) * PATCH_AHEAD : 0), t.p.z + (speed > 0.5 ? (t.v.z / speed) * PATCH_AHEAD : 0), t.p.y);
     d.live = true;
+    this.spawns[slot] = this.spawns[slot]! + 1;
     d.age = 0;
     d.life = life;
     d.still = 0;
