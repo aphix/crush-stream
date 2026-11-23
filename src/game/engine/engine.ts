@@ -338,6 +338,7 @@ export class CrashEngine extends EngineGarage {
       openWorld: () => this.showOpenWorld,
       runsCars: () => !this.net.client,
       guest: () => this.net.client,
+      bodyHost: this.bodyHost,
       freshCarNear: (index, x, z, facing) => this.race.placeNear(index, x, z, facing),
       respawn: () => this.requestRespawn(),
       enterable: (index) => this.race.free && !this.net.client && this.openWorld.canEnter(index),
@@ -463,8 +464,11 @@ export class CrashEngine extends EngineGarage {
       });
   }
 
-  /** A car of the open world standing in a kerb space has nobody in it (`SeatedDrivers.sync`). */
-  private readonly parkedEmpty = (id: number, car: DeformableCar): boolean => this.openWorld.carIsEmpty(id, car);
+  /** The open world's dummies' world as the bodies see it, shared by the bodies and the walker's host drag. */
+  private readonly bodyHost = new RagdollBodyHost(() => this.ragdolls);
+
+  /** A car of the open world standing in a kerb space, or whose player is on foot, has nobody in it (`SeatedDrivers.sync`). */
+  private readonly parkedEmpty = (id: number, car: DeformableCar): boolean => this.openWorld.carIsEmpty(id, car) || this.openWorld.playerAway(id);
 
   private makeOpenWorld(): OpenWorldDirector {
     const eyes = [this.camera];
@@ -500,7 +504,12 @@ export class CrashEngine extends EngineGarage {
       },
       throwFigure: (strike, look, life) => this.ragdolls.throwFigure(strike, this.live(), look, life),
       removeFigure: (slot, age) => this.ragdolls.removeFigure(slot, age),
-      bodies: new RagdollBodyHost(() => this.ragdolls),
+      bodies: this.bodyHost,
+      footAnchor: (out) => this.onFoot.flow.active && this.bodyHost.motion(WALKER_SLOT, out),
+      ownCarIndex: () => this.drivenCar(),
+      playerLook: (car) => this.ragdolls.carDriverLook(car),
+      knockWalker: (vx, vy, vz) => this.onFoot.knocked(vx, vy, vz),
+      dragWalker: (t) => this.onFoot.dragged(t),
       strikeWalker: (dirX, dirZ) => {
         if (!this.ragdolls.walkerTorso(_p)) return;
         this.ragdolls.strikeWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
@@ -572,6 +581,7 @@ export class CrashEngine extends EngineGarage {
           return playerCars;
         },
         walker: () => (this.ragdolls.walkerTorso(walkerStand.group.position) ? walkerStand : null),
+        others: (out, from) => this.openWorld.sightOthers(out, from),
         detail: () => this.detail,
         followed: () => this.followedCar(),
         replaying: () => this.highlights.playing,

@@ -50,6 +50,8 @@ export class CivilianArt {
   stoops: Stoops | null = null;
   /** Where the crowd looks (`CrowdGaze`, updated before this art), set by its owner: the dummies' heads and torsos and the figures' heads turn with it. Null: heads as the clips have them. */
   gaze: CrowdGaze | null = null;
+  /** Dresses row `row` into `out` in place of her look word (the players' rows are dressed as their cars' drivers are); null: by the look word. */
+  dressOf: ((row: number, out: DriverLook) => void) | null = null;
   private readonly slotCount: number;
   private readonly detailSlots: number;
   private readonly detailChunks: number;
@@ -195,7 +197,7 @@ export class CivilianArt {
       }
       this.slotOwner[slot] = civilian;
       this.slotOf[civilian] = slot;
-      this.dressSlot(slot, poses.look[civilian]!);
+      this.dressSlot(slot, poses.look[civilian]!, civilian);
     }
   }
 
@@ -215,8 +217,9 @@ export class CivilianArt {
     return (slot < this.detailSlots ? slot : slot - this.detailSlots) % SLOTS_PER_DUMMY_MESH;
   }
 
-  private dressSlot(slot: number, look: number): void {
-    dressOfLook(look, this.dress);
+  private dressSlot(slot: number, look: number, civilian: number): void {
+    if (this.dressOf === null) dressOfLook(look, this.dress);
+    else this.dressOf(civilian, this.dress);
     this.meshOf(slot).dress(this.indexIn(slot), isPoliceLook(look), this.dress);
     this.slotLook[slot] = look;
   }
@@ -227,7 +230,7 @@ export class CivilianArt {
     for (let k = 0; k < selected; k++) {
       const civilian = this.nearList[k]!;
       const slot = this.slotOf[civilian]!;
-      if (this.slotLook[slot] !== poses.look[civilian]) this.dressSlot(slot, poses.look[civilian]!);
+      if (this.slotLook[slot] !== poses.look[civilian]) this.dressSlot(slot, poses.look[civilian]!, civilian);
       poseCivilian(this.meshOf(slot), this.indexIn(slot), poses, civilian, this.smoothing, this.stoops, this.gaze);
     }
   }
@@ -251,7 +254,8 @@ export class CivilianArt {
 
   /** Civilian `civilian`'s linear shirt, trousers and skin colours made from her look and kept until it changes. */
   private cacheFigureColours(look: number, civilian: number): void {
-    dressOfLook(look, this.dress);
+    if (this.dressOf === null) dressOfLook(look, this.dress);
+    else this.dressOf(civilian, this.dress);
     const at = civilian * FIGURE_COLOUR_CACHE_FLOATS;
     writeLinearColour(this.dress.shirt, this.figureColours, at + SHIRT_AT);
     writeLinearColour(this.dress.pants, this.figureColours, at + TROUSERS_AT);

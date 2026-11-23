@@ -267,3 +267,63 @@ export function copyBodyFrame(from: BodyFrame, to: BodyFrame): void {
   }
   for (let at = 0; at < from.hidden; at++) to.hiddenId[at] = from.hiddenId[at]!;
 }
+
+/** The state byte's bit that says a guest is back in a car: his walker is gone. */
+const FOOT_LEFT = 128;
+/** The foot message's length: type, seq u16, crowd time f64, state, torso i16x3, velocity i16x3, heading. */
+const FOOT_BYTES = 25;
+const FOOT_STATE_AT = 11;
+const FOOT_TORSO_AT = 12;
+const FOOT_HEADING_AT = 24;
+
+/** A guest's walker as his own machine has it (`MSG.foot`): where, how fast, which way and how, at his crowd second `crowdTime`; `left`: he is back in a car. */
+export type FootRecord = BodyMotion & { seq: number; crowdTime: number; left: boolean };
+
+export function makeFootRecord(): FootRecord {
+  return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0, seq: 0, crowdTime: 0, left: false };
+}
+
+/** `f` as a `MSG.foot` message (25 bytes). */
+export function writeFoot(w: Writer, f: FootRecord): void {
+  w.u8(MSG.foot);
+  w.u16(f.seq);
+  w.f64(f.crowdTime);
+  w.u8(f.posture | (f.left ? FOOT_LEFT : 0));
+  _triple[0] = f.x;
+  _triple[1] = f.y;
+  _triple[2] = f.z;
+  w.q16s(_triple, 3, CENTIMETRES);
+  _triple[0] = f.vx;
+  _triple[1] = f.vy;
+  _triple[2] = f.vz;
+  w.q16s(_triple, 3, CENTIMETRES);
+  w.u8(Math.round((((f.heading % TWO_PI) + TWO_PI) % TWO_PI) / RADIANS_PER_HEADING_STEP) & (HEADING_STEPS - 1));
+}
+
+/** Reads a `MSG.foot` message into `out`: false, with `out` untouched, for a bad length, type, posture, state bit or crowd time (untrusted: a peer's). */
+export function readFoot(data: Uint8Array, r: Reader, out: FootRecord): boolean {
+  if (data.length !== FOOT_BYTES || data[0] !== MSG.foot) return false;
+  const state = data[FOOT_STATE_AT]!;
+  if ((state & POSTURE_MASK) > BODY_POSTURE.getUp || (state & ~(POSTURE_MASK | FOOT_LEFT)) !== 0) return false;
+  r.reset(data);
+  r.off = 1;
+  const seq = r.u16();
+  const crowdTime = r.f64();
+  if (!Number.isFinite(crowdTime)) return false;
+  out.seq = seq;
+  out.crowdTime = crowdTime;
+  out.posture = state & POSTURE_MASK;
+  out.left = (state & FOOT_LEFT) !== 0;
+  r.off = FOOT_TORSO_AT;
+  r.q16s(_triple, 3, METRES_PER_STEP);
+  out.x = _triple[0]!;
+  out.y = _triple[1]!;
+  out.z = _triple[2]!;
+  r.q16s(_triple, 3, METRES_PER_STEP);
+  out.vx = _triple[0]!;
+  out.vy = _triple[1]!;
+  out.vz = _triple[2]!;
+  r.off = FOOT_HEADING_AT;
+  out.heading = r.u8() * RADIANS_PER_HEADING_STEP;
+  return true;
+}

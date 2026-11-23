@@ -20,10 +20,19 @@ import { OFF_MENU } from "../world/tracks/index.ts";
 import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
-import { hypot2 } from "../kernel/physics-core.js";
+import { detAtan2, hypot2 } from "../kernel/physics-core.js";
+import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
+import { SPECIES } from "../ai/civilians/civilian-constants.ts";
+import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
+import { BODY_KIND, BODY_POSTURE } from "../net/body-codec.ts";
+import { launch } from "../contact/crash-scenarios.test-util.ts";
+import { personOf } from "./people-index.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
 import { MEDICS } from "./engine-openworld-medics.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
+import type { BodyMotion } from "../net/body-codec.ts";
+import { MAX_CARS } from "../scenes/fleet.ts";
+import { TORSO_ABOVE_FEET } from "./body-follow.ts";
 
 const WALL_REACH = 8;
 const SEED = 0x1234;
@@ -47,9 +56,32 @@ const EYE_AWAY_M = 20;
 const HAUL_MPS = 2;
 const BODY_GAP_M = 0.5;
 const PIN_RUNS_OUT_FRAMES = 12 * 30;
+/** A car's run-up to the walker (m), its speed (m/s), the eye's distance when the hook takes a body (m) and the civilians' drawn spots' tolerance (m). */
+const CAR_RUN_UP_M = 6;
+const CAR_MPS = 10;
+const HOOK_EYE_M = 10;
+const CIVILIAN_SPOT_GAP_M = 0.1;
 
-type Drawn = { poses: CrowdPoses | null; held: Uint8Array | null };
-type Side = { director: OpenWorldDirector; thrown: FigureStrike[]; car: ReturnType<typeof pooledCar>; fake: FakeBodyHost | null; eye: { x: number; z: number }; drawn: Drawn };
+/** The walker on `path` at crowd second `crowdSeconds` into `out`; false for none. */
+function walkerAt(path: FootPath | null, crowdSeconds: number, out: BodyMotion): boolean {
+  if (path === null) return false;
+  const since = crowdSeconds - path.t0;
+  out.x = path.x0 + path.vx * since;
+  out.y = TORSO_ABOVE_FEET;
+  out.z = path.z0 + path.vz * since;
+  out.vx = path.vx;
+  out.vy = 0;
+  out.vz = path.vz;
+  out.heading = detAtan2(path.vx, path.vz);
+  out.posture = path.posture;
+  return true;
+}
+
+type Drawn = { poses: CrowdPoses | null; held: Uint8Array | null; players: CrowdPoses | null };
+/** A walker on a straight path: where he stood at crowd second `t0`, how fast he moves (m/s) and how he is (`BODY_POSTURE`). */
+type FootPath = { x0: number; z0: number; vx: number; vz: number; t0: number; posture: number };
+type Launch = { vx: number; vy: number; vz: number };
+type Side = { director: OpenWorldDirector; thrown: FigureStrike[]; car: ReturnType<typeof pooledCar>; fake: FakeBodyHost | null; eye: { x: number; z: number }; drawn: Drawn; walk: { path: FootPath | null }; knocks: Launch[]; drags: { x: number; z: number }[] };
 type RoomOptions = { bodies?: boolean; guests?: 1 | 2 };
 
 /** The host (a room of the open world) and one or two guests, their worlds on the open world's course and their crowds the directors of the engine, linked through netplay. With `bodies` each side has a dummies' world of its own (`FakeBodyHost`), an eye a test moves and an art that keeps the last poses and `held` it was handed. */
@@ -65,7 +97,11 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
     car.group.position.set(5000, 0, 5000);
     const fake = bodies ? new FakeBodyHost() : null;
     const eye = { x: 0, z: 0 };
-    const drawn: Drawn = { poses: null, held: null };
+    const drawn: Drawn = { poses: null, held: null, players: null };
+    const walk: { path: FootPath | null } = { path: null };
+    const knocks: Launch[] = [];
+    const drags: { x: number; z: number }[] = [];
+    const motion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
     const director = new OpenWorldDirector({
       ...idleOpenWorldPorts(),
       inOpenWorld: () => true,
@@ -73,6 +109,21 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
       seed: () => SEED,
       tier: () => POPULATION_TIER.phone,
       cars: () => [car],
+      ownCarIndex: () => slot,
+      footAnchor: (out) => walkerAt(walk.path, director.crowdTime(), out),
+      foot: (out) => {
+        if (!walkerAt(walk.path, director.crowdTime(), motion)) return false;
+        out.x = motion.x;
+        out.z = motion.z;
+        out.velocityX = motion.vx;
+        out.velocityZ = motion.vz;
+        return true;
+      },
+      knockWalker: (vx, vy, vz) => {
+        knocks.push({ vx, vy, vz });
+        return true;
+      },
+      dragWalker: (t) => void drags.push({ x: t.x, z: t.z }),
       now: () => now / 1000,
       throwFigure: (strike) => thrown.push(strike) - 1,
       eye: (ray) => {
@@ -85,16 +136,18 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
             bodies: fake,
             makeArt: (capacity) => ({
               update: (poses, _eyeX, _eyeZ, _sight, _wallDt, held) => {
-                if (capacity <= MEDICS.count) return;
-                drawn.poses = poses;
-                drawn.held = held ?? null;
+                if (capacity === MAX_CARS) drawn.players = poses;
+                else if (capacity > MEDICS.count) {
+                  drawn.poses = poses;
+                  drawn.held = held ?? null;
+                }
               },
               dispose: () => {},
             }),
           }),
     });
     director.startOpenWorld(map);
-    return { director, thrown, car, fake, eye, drawn };
+    return { director, thrown, car, fake, eye, drawn, walk, knocks, drags };
   };
   const host = side(false, HOST_CAR_SLOT);
   const guest = side(true, 1);
@@ -248,5 +301,161 @@ describe("given a host and a guest in an open-world room, and a civilian in the 
     r.step(2 * 30);
     expect(guestBodies.followedCount(), "no body follows a record with the link cut").toBe(0);
     expect(guestBodies.has(civilian) || r.guest.drawn.held![civilian] === 0, "her body is the guest's own, or the art draws her").toBe(true);
+  });
+});
+
+/** Where the first guest's walker stands for the rows below, how fast the sprint is (m/s), the metres it covers, and how far the eyes stand from him (m). */
+const FOOT_AT = { x: 100, z: 100 };
+const SPRINT_MPS = 7;
+const SPRINT_M = 20;
+const EYES_AWAY_M = 15;
+const DRAWN_GAP_M = 0.5;
+const GUEST_CAR = 1;
+
+/** A room of a host and two guests (cars 1 and 2) that has run a few seconds, every eye `EYES_AWAY_M` from the first guest's walker, no dummies' world: every person on foot is drawn by the pose tables. */
+function footRoom() {
+  const r = room({ guests: 2 });
+  open.push(r.hostNet, r.guestNet, r.secondNet!);
+  r.step(5 * 30);
+  for (const side of [r.host, r.guest, r.second!]) {
+    side.eye.x = FOOT_AT.x;
+    side.eye.z = FOOT_AT.z + EYES_AWAY_M;
+  }
+  return r;
+}
+
+/** The pose table a side draws the players on foot from. */
+function playersOf(side: { director: OpenWorldDirector }): CrowdPoses {
+  return side.director["players"]!.poses;
+}
+
+/** The first guest stands at `FOOT_AT` moving (vx, 0) from now, on his own machine. */
+function startWalking(r: { guest: Side }, vx: number): FootPath {
+  const path = { x0: FOOT_AT.x, z0: FOOT_AT.z, vx, vz: 0, t0: r.guest.director.crowdTime(), posture: BODY_POSTURE.stand };
+  r.guest.walk.path = path;
+  return path;
+}
+
+describe("given a host and two guests in an open-world room, the first guest on foot 15 m from the others", () => {
+  it("when he sprints 20 m at 7 m/s, then the host and the second guest each draw him within 0.5 m of where he was at their own crowd time, neither draws a driver in his car, and nothing moves his own walker; and when he gets back in, then within 0.5 s no machine draws him on foot and his car shows its driver again", () => {
+    const r = footRoom();
+    const path = startWalking(r, SPRINT_MPS);
+    r.step(15);
+    let widest = 0;
+    for (let frames = 0; frames < Math.round((SPRINT_M / SPRINT_MPS) * 30); frames++) {
+      r.step(1);
+      for (const side of [r.host, r.second!]) {
+        const poses = playersOf(side);
+        expect(poses.shown[GUEST_CAR], "he is drawn on foot").toBe(1);
+        widest = Math.max(widest, hypot2(poses.x[GUEST_CAR]! - (path.x0 + path.vx * (side.director.crowdTime() - path.t0)), poses.z[GUEST_CAR]! - path.z0));
+      }
+    }
+    expect(widest, "the widest he is drawn from where he was at the drawing machine's crowd time (m)").toBeLessThan(DRAWN_GAP_M);
+    expect([r.host.director.playerAway(GUEST_CAR), r.second!.director.playerAway(GUEST_CAR)], "neither machine draws a driver in his car").toEqual([true, true]);
+    expect(r.guest.knocks.length + r.guest.drags.length, "nothing moved his own walker").toBe(0);
+    r.guest.walk.path = null;
+    r.step(15);
+    expect([playersOf(r.host).shown[GUEST_CAR], playersOf(r.second!).shown[GUEST_CAR]], "no machine draws him on foot").toEqual([0, 0]);
+    expect([r.host.director.playerAway(GUEST_CAR), r.second!.director.playerAway(GUEST_CAR)], "his car shows its driver again").toEqual([false, false]);
+  });
+
+  it("when the host drives a car through him at 10 m/s, then within 0.3 s his own machine is told once to knock his walker with the host's launch and both other machines lay him down; and when only a car drawn on his own machine touches him, then nothing knocks him", () => {
+    const r = footRoom();
+    startWalking(r, 0);
+    r.step(30);
+    expect(playersOf(r.host).lying[GUEST_CAR], "control: he stands before the car comes").toBe(0);
+    const car = r.host.car;
+    launch(car, FOOT_AT.x - CAR_RUN_UP_M, FOOT_AT.z, Math.PI / 2, CAR_MPS, 0);
+    for (let travelled = 0; travelled < 30 && r.guest.knocks.length === 0; travelled++) {
+      car.group.position.set(FOOT_AT.x - CAR_RUN_UP_M + (CAR_MPS * travelled) / 30, car.group.position.y, FOOT_AT.z);
+      r.step(1);
+    }
+    for (let frames = 0; frames < 9 && playersOf(r.second!).lying[GUEST_CAR] === 0; frames++) r.step(1);
+    expect(r.guest.knocks.length, "his machine is told once").toBe(1);
+    expect(r.guest.knocks[0]!.vx, "with the host's launch (m/s)").toBeCloseTo(r.host.director["players"]!["launch"][3 * GUEST_CAR]!, 1);
+    expect(r.guest.knocks[0]!.vx, "along the car's way").toBeGreaterThan(0);
+    expect([playersOf(r.host).lying[GUEST_CAR], playersOf(r.second!).lying[GUEST_CAR]], "the host and the second guest lay him down").toEqual([1, 1]);
+    car.group.position.set(5000, car.group.position.y, 5000);
+    r.step(2 * 30);
+    expect(r.guest.knocks.length, "told once for the one strike").toBe(1);
+    const own = r.guest.car;
+    launch(own, FOOT_AT.x - CAR_RUN_UP_M, FOOT_AT.z, Math.PI / 2, CAR_MPS, 0);
+    for (let frames = 0; frames < 30; frames++) {
+      own.group.position.set(FOOT_AT.x - CAR_RUN_UP_M + (CAR_MPS * frames) / 30, own.group.position.y, FOOT_AT.z);
+      r.step(1);
+    }
+    expect(r.guest.knocks.length, "a car drawn on his own machine knocks nothing more").toBe(1);
+  });
+
+  it("when the host's hook takes the host's body for him and hauls it 3 m, then his own machine is told to drag his walker to within 0.5 m of where the host's body is", () => {
+    const r = room({ bodies: true, guests: 2 });
+    open.push(r.hostNet, r.guestNet, r.secondNet!);
+    r.step(5 * 30);
+    r.host.eye.x = FOOT_AT.x;
+    r.host.eye.z = FOOT_AT.z + HOOK_EYE_M;
+    startWalking(r, 0);
+    r.step(20);
+    const bodies = r.host.director["bodies"]!;
+    const person = personOf(BODY_KIND.player, GUEST_CAR, r.host.director["crowd"]!.poses.count);
+    const slot = r.host.fake!.started.map((start) => start.slot).find((candidate) => bodies.personOfSlot(candidate) === person);
+    expect(slot, "the host stood a body for him").toBeDefined();
+    r.host.fake!.ropedSlots.add(slot!);
+    r.host.fake!.haul(slot!, 1, 0);
+    r.still.slot = slot!;
+    r.step(3 * 30);
+    const body = r.host.fake!.bodies.get(slot!)!;
+    expect(body.x - FOOT_AT.x, "metres the cable hauled the host's body").toBeGreaterThan(2.5);
+    expect(r.guest.drags.length, "his machine was told to drag his walker").toBeGreaterThan(0);
+    const last = r.guest.drags.at(-1)!;
+    expect(hypot2(last.x - body.x, last.z - body.z), "metres from the host's body to where his walker is dragged (m)").toBeLessThan(DRAWN_GAP_M);
+  });
+
+  it("when he stops beside a standing civilian, then 1 s later the host's and the second guest's drawn spots of her are within 0.1 m of each other", () => {
+    const r = room({ guests: 2 });
+    open.push(r.hostNet, r.guestNet, r.secondNet!);
+    r.step(MORNING_FRAMES);
+    const hostCrowd = r.host.director["crowd"]!;
+    const secondCrowd = r.second!.director["crowd"]!;
+    let civilian = standingCivilian(hostCrowd);
+    for (let frames = 0; frames < MORNING_FRAMES && civilian < 0; frames++) {
+      r.step(1);
+      civilian = standingCivilian(hostCrowd);
+    }
+    expect(civilian, "a standing civilian is out").toBeGreaterThanOrEqual(0);
+    const at = { x: hostCrowd.poses.x[civilian]!, z: hostCrowd.poses.z[civilian]! };
+    r.guest.walk.path = { x0: at.x + 0.2, z0: at.z, vx: 0, vz: 0, t0: r.guest.director.crowdTime(), posture: BODY_POSTURE.stand };
+    r.step(30);
+    const pushed = hypot2(hostCrowd.poses.x[civilian]! - hostCrowd.separation.brainX[civilian]!, hostCrowd.poses.z[civilian]! - hostCrowd.separation.brainZ[civilian]!);
+    expect(pushed, "control: she is pushed off her brain's spot by the man beside her (m)").toBeGreaterThan(0.05);
+    expect(hypot2(hostCrowd.poses.x[civilian]! - secondCrowd.poses.x[civilian]!, hostCrowd.poses.z[civilian]! - secondCrowd.poses.z[civilian]!), "metres between the two machines' drawn spots of her").toBeLessThan(CIVILIAN_SPOT_GAP_M);
+  });
+});
+
+/** The first civilian of `crowd` shown standing about (no pace, no activity), -1 for none. */
+function standingCivilian(crowd: CivilianCrowd): number {
+  for (let civilian = 0; civilian < crowd.poses.count; civilian++) {
+    if (crowd.poses.shown[civilian] === 1 && crowd.poses.speed[civilian] === 0 && crowd.poses.activity[civilian] === ACTIVITY.none && crowd.state.ints[civilian * RESIDENT_INT_STRIDE + RESIDENT_INT.species] === SPECIES.person) return civilian;
+  }
+  return -1;
+}
+
+describe("given a host on foot and a guest", () => {
+  it("when the host walks 10 m, then the guest draws him within 0.5 m", () => {
+    const r = room();
+    open.push(r.hostNet, r.guestNet);
+    r.step(5 * 30);
+    r.guest.eye.x = FOOT_AT.x;
+    r.guest.eye.z = FOOT_AT.z + EYES_AWAY_M;
+    const path: FootPath = { x0: FOOT_AT.x, z0: FOOT_AT.z, vx: 2, vz: 0, t0: r.host.director.crowdTime(), posture: BODY_POSTURE.stand };
+    r.host.walk.path = path;
+    let widest = 0;
+    for (let frames = 0; frames < 5 * 30; frames++) {
+      r.step(1);
+      if (frames < 15) continue;
+      const poses = playersOf(r.guest);
+      expect(poses.shown[0], "the host is drawn on foot").toBe(1);
+      widest = Math.max(widest, hypot2(poses.x[0]! - (path.x0 + path.vx * (r.guest.director.crowdTime() - path.t0)), poses.z[0]! - path.z0));
+    }
+    expect(widest, "the widest he is drawn from where he was at the guest's crowd time (m)").toBeLessThan(DRAWN_GAP_M);
   });
 });

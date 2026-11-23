@@ -576,6 +576,10 @@ export class NetPlay extends NetPlayClient {
       }
     } else if (type === MSG.look) {
       this.takeGuestLook(from, data);
+    } else if (type === MSG.foot) {
+      const car = this.slots.get(from);
+      const link = this.game.crowdLink();
+      if (car !== undefined && link !== null) this.bodyWire.takeFoot(data, this.r, link, car);
     }
   }
 

@@ -364,5 +364,7 @@ export abstract class NetPlayClient {
     writeInput(this.w, input, this.resetWanted, input === this.idle ? 0 : seat.boost);
     this.resetWanted = 0;
     t.send(this.w.done(), this.hostId);
+    const link = this.game.crowdLink();
+    if (link !== null) this.bodyWire.sendFoot(link, t, this.w, this.hostId);
   }
 }

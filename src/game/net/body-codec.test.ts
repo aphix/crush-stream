@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY, ACTIVITY_OPEN_ENDED } from "../ai/civilians/civilian-activity.ts";
 import { Reader, Writer } from "./codec.ts";
-import { addBodyRecord, addHidden, BODY_FLAG, BODY_FRAME_MAX, BODY_KIND, BODY_POSTURE, CABLE_END, clearBodyFrame, copyBodyFrame, HIDDEN_MAX, makeBodyFrame, POSTURE_MASK, readBodyFrame, writeBodyFrame, type BodyFrame } from "./body-codec.ts";
+import { addBodyRecord, addHidden, BODY_FLAG, BODY_FRAME_MAX, BODY_KIND, BODY_POSTURE, CABLE_END, clearBodyFrame, copyBodyFrame, HIDDEN_MAX, makeBodyFrame, makeFootRecord, POSTURE_MASK, readBodyFrame, readFoot, writeBodyFrame, writeFoot, type BodyFrame, type FootRecord } from "./body-codec.ts";
 
 const CIVILIAN = 17;
 const PLAYER_CAR = 3;
@@ -177,3 +177,60 @@ describe("given a bodies message a peer tampered with", () => {
     });
   }
 });
+
+/** The foot message's layout the tampered rows poke at: the state byte's and the crowd time's offsets. */
+const FOOT_STATE_AT = 11;
+const FOOT_CROWD_TIME_AT = 3;
+const FOOT_LENGTH = 25;
+
+function footSample(): FootRecord {
+  const foot = makeFootRecord();
+  foot.seq = 513;
+  foot.crowdTime = 812.5;
+  foot.posture = BODY_POSTURE.getUp;
+  foot.left = true;
+  foot.x = -12.34;
+  foot.y = 1.11;
+  foot.z = 56.78;
+  foot.vx = 6.5;
+  foot.vy = -0.25;
+  foot.vz = 0.01;
+  foot.heading = 2.5;
+  return foot;
+}
+
+function sentFoot(): Uint8Array {
+  const writer = new Writer(64);
+  writeFoot(writer, footSample());
+  return writer.done().slice();
+}
+
+describe("given a foot message", () => {
+  it("when it is written and read back, then posture, the left bit, torso within 1 cm, velocity within 1 cm/s and facing within 1.4 degrees read back; and a message one byte short, with posture 3, with another state bit, or with a crowd time of NaN is refused", () => {
+    const data = sentFoot();
+    const into = makeFootRecord();
+    expect(data.length, "message length").toBe(FOOT_LENGTH);
+    expect(readFoot(data, new Reader(), into), "the message is taken").toBe(true);
+    const sent = footSample();
+    expect(into.seq, "sequence").toBe(sent.seq);
+    expect(into.crowdTime, "crowd time").toBe(sent.crowdTime);
+    expect(into.posture, "posture").toBe(BODY_POSTURE.getUp);
+    expect(into.left, "back in a car").toBe(true);
+    for (const axis of ["x", "y", "z", "vx", "vy", "vz"] as const) expect(Math.abs(into[axis] - sent[axis]), `${axis} (m or m/s)`).toBeLessThanOrEqual(CENTIMETRE);
+    expect(facingGap(into.heading, sent.heading), "facing (rad)").toBeLessThanOrEqual(FACING_TOLERANCE);
+    const tampered = [data.subarray(0, FOOT_LENGTH - 1), withFootByte(FOOT_STATE_AT, 3), withFootByte(FOOT_STATE_AT, BODY_POSTURE.stand | BODY_FLAG.roped), footWithNanTime()];
+    for (const bad of tampered) expect(readFoot(bad, new Reader(), makeFootRecord()), "a tampered foot message").toBe(false);
+  });
+});
+
+function withFootByte(at: number, value: number): Uint8Array {
+  const data = sentFoot();
+  data[at] = value;
+  return data;
+}
+
+function footWithNanTime(): Uint8Array {
+  const data = sentFoot();
+  new DataView(data.buffer).setFloat64(FOOT_CROWD_TIME_AT, Number.NaN, true);
+  return data;
+}

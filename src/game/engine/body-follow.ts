@@ -16,7 +16,7 @@ export const FASTEST = 3.5;
 /** A body this far (m) from its target is not walked to it: it is stood or moved there at once. */
 export const SNAP_M = 3;
 /** A record is read at most this far (s) off the host's moment: the interpolation delay and one lost frame. */
-const BODY_EXTRAPOLATE_S = 0.25;
+export const BODY_EXTRAPOLATE_S = 0.25;
 /** A torso stands this far (m) over its feet. */
 export const TORSO_ABOVE_FEET = PARTS[0].c[1];
 /** What `followAnchor` left to its caller: nothing, or the walker to be stood again at the target. */

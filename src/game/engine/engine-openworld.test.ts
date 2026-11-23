@@ -22,6 +22,7 @@ import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { Sight } from "../present/spectate-cam.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
+import { MAX_CARS } from "../scenes/fleet.ts";
 import { hourOfDay, tickAt } from "../ai/civilians/civilian-clock.ts";
 import { sceneryShare } from "./scenery-share.ts";
 import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
@@ -48,8 +49,8 @@ const HOST_TIME = 1000;
 /** A host's crowd has been out this long when it runs a civilian down, so a client's catch-up has a day's morning to replay. */
 const HOST_DAY_SECONDS = 100;
 const FRAME = FRAME_SECONDS;
-/** Drawings a crowd makes: its own, and the ambulance crew's (`MEDICS.count` scrubs, drawn by an art of their own). */
-const ARTS_PER_CROWD = 2;
+/** Drawings a crowd makes: its own, the ambulance crew's (`MEDICS.count` scrubs) and the players on foot's (`MAX_CARS` rows), each drawn by an art of its own. */
+const ARTS_PER_CROWD = 3;
 /** Frames (a thirtieth of a second) the eye follows a civilian until her body stands: she may start in a doorway. */
 const BODY_WAIT_FRAMES = 1800;
 
@@ -120,7 +121,7 @@ class Harness {
     },
     makeArt: (capacity) => {
       this.artsMade++;
-      const crewsOwn = capacity === MEDICS.count;
+      const crewsOwn = capacity === MEDICS.count || capacity === MAX_CARS;
       return { update: (poses, eyeX, _eyeZ, sight, wallDt, held) => void (crewsOwn || this.updates.push({ poses, eyeX, sight, wallDt, held: held ?? null })), dispose: () => void this.artsDisposed++ };
     },
     });

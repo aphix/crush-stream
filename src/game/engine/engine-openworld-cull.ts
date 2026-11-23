@@ -16,6 +16,8 @@ export type OpenWorldCullPorts = {
   playerCars(): readonly LodCar[];
   /** The player's walker while he is out of his car, else null: what he is beside must stay drawn, or he cannot enter it. */
   walker(): SightPlayer | null;
+  /** Every other player on foot, written into `out` from index `from` (a peer's walker as the host's frame has it): the index after the last. */
+  others(out: SightPlayer[], from: number): number;
   detail(): CarDetail;
   /** The car the camera follows, null in a free view. */
   followed(): LodCar | null;
@@ -70,6 +72,7 @@ export class OpenWorldCulling {
     for (let at = 0; at < cars.length; at++) this.players[count++] = cars[at]!;
     const walker = this.ports.walker();
     if (walker !== null) this.players[count++] = walker;
+    count = this.ports.others(this.players, count);
     this.players.length = count;
     return this.players;
   }

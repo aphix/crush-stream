@@ -26,7 +26,7 @@ function culling() {
   const parked = { group: { position: { x: 0, z: 60 }, visible: true } };
   const cars = [player, parked];
   const onFoot: { walker: SightPlayer | null } = { walker: null };
-  const made = new OpenWorldCulling({ eyes: () => [street], solids: () => course.solids, playerCars: () => [player], walker: () => onFoot.walker, detail: () => detail, followed: () => player, replaying: () => false });
+  const made = new OpenWorldCulling({ eyes: () => [street], solids: () => course.solids, playerCars: () => [player], walker: () => onFoot.walker, others: (_out, from) => from, detail: () => detail, followed: () => player, replaying: () => false });
   return {
     course,
     onFoot,

@@ -7,12 +7,12 @@ import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { dressOfLook } from "../present/civilian-dress.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import type { SightField } from "../present/openworld-sight.ts";
-import type { FigureStrike } from "../scenes/figure-strike.ts";
+import { blankStrike, type FigureStrike } from "../scenes/figure-strike.ts";
 import { PlaceFootprints } from "../world/openworld/place-footprints.ts";
 import type { Place } from "../world/openworld/walk-graph.ts";
 import { addBodyRecord, BODY_FLAG, BODY_KIND, type BodyFrame, type BodyMotion } from "../net/body-codec.ts";
 import { CATCH_UP, FASTEST, FOLLOW, followAnchor, SNAP_M, STAND_REACH, STILL, TORSO_ABOVE_FEET } from "./body-follow.ts";
-import { PEOPLE_EXTRA } from "./people-index.ts";
+import { idOf, kindOf, PEOPLE_EXTRA } from "./people-index.ts";
 
 /** Physical bodies for the civilians near a player, desktop and phone: each costs a ragdoll in the dummies' world (10 parts, their joints and motors) every step. */
 export const BODY_COUNT = { desktop: 6, phone: 3 } as const;
@@ -92,9 +92,10 @@ const _torso = { x: 0, z: 0 };
 const _path = { x: 0, z: 0 };
 const _look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
 const _motion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
+const _strike = blankStrike();
 
 /** `to` holds `from`'s look. */
-function copyLook(from: DriverLook, to: DriverLook): void {
+export function copyLook(from: DriverLook, to: DriverLook): void {
   to.woman = from.woman;
   to.shirt = from.shirt;
   to.pants = from.pants;
@@ -498,6 +499,41 @@ export class OpenWorldBodies {
     this.classOf[body] = OWN_CLASS;
     this.recovering[body] = 1;
     this.downFor[body] = 0;
+  }
+
+  /** Whether a cable of this machine holds person `person`'s body. */
+  ropedPerson(person: number): boolean {
+    const body = this.bodyOf[person]!;
+    return body !== NOBODY && this.host.roped(this.slot[body]!);
+  }
+
+  /** Person `person`'s body, when it stands, is knocked limp at its torso, launched at (vx, vy, vz) m/s. */
+  knockPerson(person: number, vx: number, vy: number, vz: number): void {
+    const body = this.bodyOf[person]!;
+    if (body === NOBODY || !this.host.standing(this.slot[body]!) || !this.host.motion(this.slot[body]!, _motion)) return;
+    _strike.guard = -1;
+    _strike.car = -1;
+    _strike.x = _motion.x;
+    _strike.y = _motion.y;
+    _strike.z = _motion.z;
+    _strike.faceX = detSin(_motion.heading);
+    _strike.faceZ = detCos(_motion.heading);
+    _strike.vx = vx;
+    _strike.vy = vy;
+    _strike.vz = vz;
+    this.host.knock(this.slot[body]!, _strike);
+  }
+
+  /** Person `person`'s body's torso, velocity, facing and posture into `out`; false when she has none. */
+  motionOf(person: number, out: BodyMotion): boolean {
+    const body = this.bodyOf[person]!;
+    return body !== NOBODY && this.host.motion(this.slot[body]!, out);
+  }
+
+  /** The car of the player whose body is in pool slot `slot` (`capacity`: the crowd's residents), -1 for none. */
+  playerOfSlot(slot: number, capacity: number): number {
+    const person = this.personOfSlot(slot);
+    return person === NOBODY || kindOf(person, capacity) !== BODY_KIND.player ? NOBODY : idOf(person, capacity);
   }
 
   /** Whether a body stands for person `person` here. */

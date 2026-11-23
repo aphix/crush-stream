@@ -48,3 +48,5 @@ export const REFUSED = 255;
 export const BODIES_SILENT_S = 1;
 /** The host sends a frame of people (`MSG.bodies`) with every this-many-th snapshot: 15 Hz. */
 export const BODY_EVERY = 2;
+/** Half the 16-bit sequence space (messages' `seq`): a sequence this far ahead of the last is behind it. */
+export const HALF_SEQUENCE = 0x8000;

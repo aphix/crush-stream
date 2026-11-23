@@ -4,7 +4,7 @@ import type { DriveInput, DriverSeat } from "../vehicle/car-drive.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import type { RaceCommand, RaceOptions, RacePhase, RaceSnapshot } from "../match/types.ts";
 import type { CrashPhase } from "../match/phase.ts";
-import type { BodyFrame } from "./body-codec.ts";
+import type { BodyFrame, FootRecord } from "./body-codec.ts";
 import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import type { DerbyNetState, GameKind, LobbyGate } from "./codec.ts";
 import type { Reel } from "../match/highlights.ts";
@@ -68,6 +68,10 @@ export interface CrowdLink {
   writeBodies(out: BodyFrame): void;
   /** Guest: the host's frame of people, newer than any heard before. */
   hearBodies(frame: BodyFrame): void;
+  /** Guest: this player on foot into `out`; true while he is on foot, and for a few calls after he is back in a car (`out.left`). */
+  writeFoot(out: FootRecord): boolean;
+  /** Host: the walker of the guest in car `car`, as his machine last sent it. */
+  hearFoot(car: number, foot: FootRecord): void;
 }
 
 /** The engine as netplay sees it. */

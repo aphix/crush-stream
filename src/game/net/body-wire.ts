@@ -1,18 +1,22 @@
-import { makeBodyFrame, readBodyFrame, writeBodyFrame } from "./body-codec.ts";
+import { makeBodyFrame, makeFootRecord, readBodyFrame, readFoot, writeBodyFrame, writeFoot } from "./body-codec.ts";
 import type { Reader, Writer } from "./codec.ts";
-import { BODY_EVERY } from "./net-constants.ts";
+import { BODY_EVERY, HALF_SEQUENCE } from "./net-constants.ts";
 import type { CrowdLink } from "./net-ports.ts";
 import type { NetTransport } from "./transport.ts";
 
-/** Half the 16-bit sequence space: a sequence this far ahead is behind. */
-const HALF_SEQUENCE = 0x8000;
+/** A guest sends its walker with every this-many-th input packet: 15 Hz. */
+const FOOT_EVERY = 2;
 
-/** The frame of people on the wire (`MSG.bodies`): the host's to its guests every `BODY_EVERY`th snapshot, a guest's from them. */
+/** The frame of people on the wire (`MSG.bodies`): the host's to its guests every `BODY_EVERY`th snapshot, a guest's from them; and a guest's walker (`MSG.foot`) to the host. */
 export class BodyWire {
   readonly out = makeBodyFrame();
   readonly in = makeBodyFrame();
   seq = 0;
   last = -1;
+  readonly footOut = makeFootRecord();
+  readonly footIn = makeFootRecord();
+  footSeq = 0;
+  footTick = 0;
 
   /** Host: the frame for snapshot `snapshotSeq`, when it is one that carries it; the bytes sent. */
   send(link: CrowdLink, t: NetTransport, w: Writer, snapshotSeq: number): number {
@@ -35,8 +39,24 @@ export class BodyWire {
     link.hearBodies(this.in);
   }
 
-  /** The followed host is gone: the next one starts its own sequence. */
+  /** Guest: with every second call, its walker (or that it is back in a car) to the host `to`. */
+  sendFoot(link: CrowdLink, t: NetTransport, w: Writer, to: string | null): void {
+    if (to === null || this.footTick++ % FOOT_EVERY !== 0 || !link.writeFoot(this.footOut)) return;
+    this.footOut.seq = this.footSeq = (this.footSeq + 1) & 0xffff;
+    w.off = 0;
+    writeFoot(w, this.footOut);
+    t.send(w.done(), to);
+  }
+
+  /** Host: a `MSG.foot` message of the guest in car `car`, handed to the link when it is well formed. */
+  takeFoot(data: Uint8Array, r: Reader, link: CrowdLink, car: number): void {
+    if (readFoot(data, r, this.footIn)) link.hearFoot(car, this.footIn);
+  }
+
+  /** The followed host is gone: the next one starts its own sequences. */
   forget(): void {
     this.last = -1;
+    this.footSeq = 0;
+    this.footTick = 0;
   }
 }
