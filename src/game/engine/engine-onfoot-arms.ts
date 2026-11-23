@@ -160,5 +160,9 @@ export function gunAt(slot: number): Gun | null {
 
 /** The weapon slot of `gun` in `WEAPON_ORDER`, -1 for a gun this build does not list. */
 export function slotOfGun(gun: Gun): number {
-  return WEAPON_ORDER.findIndex((weapon) => weapon !== "fists" && weapon !== "hook" && WEAPONS[weapon] === gun);
+  for (let slot = 0; slot < WEAPON_ORDER.length; slot++) {
+    const weapon = WEAPON_ORDER[slot]!;
+    if (weapon !== "fists" && weapon !== "hook" && WEAPONS[weapon] === gun) return slot;
+  }
+  return -1;
 }

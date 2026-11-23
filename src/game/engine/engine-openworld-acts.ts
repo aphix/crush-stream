@@ -2,7 +2,7 @@ import { punchGap } from "../ai/civilians/civilian-contact.ts";
 import { PLAYER_KO_BLOWS, PLAYER_KO_WINDOW, PLAYER_PUNCH_COOLDOWN } from "../ai/civilians/civilian-constants.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
-import { ACT, type Act } from "../net/act-codec.ts";
+import { ACT, ACT_KINDS, type Act } from "../net/act-codec.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { gunAt, slotOfGun, STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
 
@@ -11,9 +11,13 @@ export type ActorPlace = { x: number; y: number; z: number; heading: number };
 
 /** Actors are car indexes. */
 const MAX_ACTORS = MAX_CARS;
-/** The on-foot camera's boom is 3.7 m, so an act whose eye is farther than this from the actor's torso is not his (m). */
+/** A punch's eye is his torso: an act whose eye is farther than this from it (m) is not his. */
 const ACT_EYE_REACH = 4;
-/** Network jitter bunches two honest acts, so the host refuses only acts closer than this share of the cooldown the first one set. */
+/** The aim ray of a shot passes his torso this near (m): the on-foot camera looks at a point 0.55 m over his torso, shifted 0.5 m across by the shoulder and 0.45 m more by the aim (`PIVOT_OVER_TORSO`, `SHOULDER_ACROSS`, `AIM_SIDE`, `AIM_UP`), so at most 1.2 m from it; the margin is for his moving on. A far camera (the wheel's 32 m, a sprint's longer boom) is on this line, so it gains no reach. */
+const SHOT_RAY_REACH = 1.5;
+/** Network jitter bunches honest acts, so an actor's acts of one kind may run this far (s) ahead of the gun's own rate, and no further: a faster stream than the gun's is refused. */
+const ACT_BACKLOG_S = 0.5;
+/** Each act spends this share of its cooldown: a little under the gun's own rate, so honest timing noise is not refused. */
 const ACT_COOLDOWN_SHARE = 0.9;
 /** A guest does not know what its shot met: its tracer runs this far (m). */
 const GUEST_TRACER_M = 60;
@@ -21,7 +25,6 @@ const GUEST_TRACER_M = 60;
 const UNIT_SLACK = 0.05;
 /** The level part of a punch's direction must be at least this long. */
 const LEVEL_PUNCH = 0.9;
-const ACT_KINDS = 8;
 /** Multiplier that gives every actor his own scatter stream; actor 0's stream starts at 1. */
 const STREAM_STEP = 0x9e3779b1;
 const LCG_MUL = 1664525;
@@ -31,6 +34,7 @@ const U32 = 4294967296;
 const _place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0 };
 const _aim = new LookRay();
 const _ray = new LookRay();
+const _near = new LookRay();
 
 /** What the director resolves at the authority for an actor. */
 type ActResolver = {
@@ -103,8 +107,8 @@ export class OpenWorldActs {
   private readonly ports: ActPorts;
   private readonly resolver: ActResolver;
   private readonly streams = new Uint32Array(MAX_ACTORS);
-  private readonly lastAt = new Float64Array(MAX_ACTORS * ACT_KINDS).fill(-Infinity);
-  private readonly lastCooldown = new Float64Array(MAX_ACTORS * ACT_KINDS);
+  /** Per actor and act kind, the time (s) his acts so far have used the gun's rate up to. */
+  private readonly busyUntil = new Float64Array(MAX_ACTORS * ACT_KINDS);
   private readonly eye = { x: 0, y: 0, z: 0 };
   private readonly dir = { x: 0, y: 0, z: 0 };
 
@@ -119,14 +123,14 @@ export class OpenWorldActs {
     if (actor < 0 || actor >= MAX_ACTORS) return;
     if (act.kind === ACT.punch) {
       const level = hypot2(act.dirX, act.dirZ);
-      if (level < LEVEL_PUNCH || level > 1 + UNIT_SLACK || !this.admit(actor, act, PLAYER_PUNCH_COOLDOWN)) return;
+      if (level < LEVEL_PUNCH || level > 1 + UNIT_SLACK || !this.admit(actor, act, PLAYER_PUNCH_COOLDOWN, 0, ACT_EYE_REACH)) return;
       this.punchBy(actor, act.dirX / level, act.dirZ / level);
       return;
     }
     if (act.kind !== ACT.shot) return;
     const gun = gunAt(act.arg);
     const length = hypot3(act.dirX, act.dirY, act.dirZ);
-    if (gun === null || Math.abs(length - 1) > UNIT_SLACK || !this.admit(actor, act, gun.every)) return;
+    if (gun === null || Math.abs(length - 1) > UNIT_SLACK || !this.admit(actor, act, gun.every, ACT_BACKLOG_S, Infinity)) return;
     _aim.eyeX = act.eyeX;
     _aim.eyeY = act.eyeY;
     _aim.eyeZ = act.eyeZ;
@@ -136,16 +140,15 @@ export class OpenWorldActs {
     this.shootBy(actor, _aim, gun);
   }
 
-  /** On foot, an eye within `ACT_EYE_REACH` of his torso, and no earlier act of this kind inside the cooldown it set (0: none). */
-  private admit(actor: number, act: Act, cooldown: number): boolean {
+  /** On foot, the eye within `eyeReach` of his torso, and his acts of this kind no more than `backlog` s ahead of the rate `cooldown` sets (a punch has no backlog: a bunched one is not a second). */
+  private admit(actor: number, act: Act, cooldown: number, backlog: number, eyeReach: number): boolean {
     if (!this.ports.actorPlace(actor, _place)) return false;
-    if (hypot3(act.eyeX - _place.x, act.eyeY - _place.y, act.eyeZ - _place.z) > ACT_EYE_REACH) return false;
-    if (cooldown <= 0) return true;
+    if (hypot3(act.eyeX - _place.x, act.eyeY - _place.y, act.eyeZ - _place.z) > eyeReach) return false;
     const slot = actor * ACT_KINDS + act.kind;
     const now = this.ports.now();
-    if (now - this.lastAt[slot]! < ACT_COOLDOWN_SHARE * this.lastCooldown[slot]!) return false;
-    this.lastAt[slot] = now;
-    this.lastCooldown[slot] = cooldown;
+    const start = Math.max(this.busyUntil[slot]!, now);
+    if (start - now > backlog) return false;
+    this.busyUntil[slot] = start + ACT_COOLDOWN_SHARE * cooldown;
     return true;
   }
 
@@ -155,16 +158,27 @@ export class OpenWorldActs {
     this.resolver.punch(actor, _place.x, _place.z, dirX, dirZ);
   }
 
-  /** Actor `actor`, on foot, fires `gun` along `aim` (the unscattered sight line): each ray scatters by his own seeded stream. How far (m) the farthest ray went. */
+  /**
+   * Actor `actor`, on foot, fires `gun` along `aim`, the unscattered sight line. It is his only if it passes within `SHOT_RAY_REACH` of his torso; the rays start at its point nearest him
+   * (so nothing between a far camera and him is hit), each scattered by his own seeded stream. How far (m) the farthest ray went from `aim`'s eye; 0 when refused.
+   */
   shootBy(actor: number, aim: LookRay, gun: Gun): number {
     if (!this.ports.actorPlace(actor, _place)) return 0;
+    const behind = Math.max(0, (_place.x - aim.eyeX) * aim.dirX + (_place.y - aim.eyeY) * aim.dirY + (_place.z - aim.eyeZ) * aim.dirZ);
+    _near.eyeX = aim.eyeX + aim.dirX * behind;
+    _near.eyeY = aim.eyeY + aim.dirY * behind;
+    _near.eyeZ = aim.eyeZ + aim.dirZ * behind;
+    _near.dirX = aim.dirX;
+    _near.dirY = aim.dirY;
+    _near.dirZ = aim.dirZ;
+    if (hypot3(_near.eyeX - _place.x, _near.eyeY - _place.y, _near.eyeZ - _place.z) > SHOT_RAY_REACH) return 0;
     let far = 0;
     for (let ray = 0; ray < gun.rays; ray++) {
-      this.scatter(actor, aim, gun.cone, _ray);
+      this.scatter(actor, _near, gun.cone, _ray);
       far = Math.max(far, this.resolver.shoot(actor, _ray, gun));
     }
     this.resolver.shotFired();
-    return far;
+    return behind + far;
   }
 
   /** This machine's player's punch lands: a guest tells the host, the host carries it out. */

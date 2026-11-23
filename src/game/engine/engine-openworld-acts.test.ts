@@ -11,6 +11,7 @@ const GUEST = 1;
 const VICTIM = 2;
 const PISTOL_SLOT = 1;
 const SHOTGUN_SLOT = 2;
+const RIFLE_SLOT = 3;
 /** The guest's torso, level and facing +z. */
 const GUEST_AT: ActorPlace = { x: 10, y: 1, z: 20, heading: 0 };
 const SHOT_FROM_EYE = { x: 10, y: 2.3, z: 20 };
@@ -67,23 +68,47 @@ function actAt(kind: number, arg: number, away: number, dir = { x: 0, y: 0, z: 1
 
 describe("given a host that hears a guest's acts while the guest stands on foot at (10, 1, 20)", () => {
   const eyeCases = [
-    { it: "when the guest's punch names an eye 2 m from his torso, then the host throws it as car 1's from his torso along the act's direction", kind: ACT.punch, arg: 0, away: 2, expected: 1 },
-    { it: "when the guest's punch names an eye 10 m from his torso, then nothing is thrown", kind: ACT.punch, arg: 0, away: 10, expected: 0 },
-    { it: "when the guest's shot names an eye 2 m from his torso, then the host fires it", kind: ACT.shot, arg: PISTOL_SLOT, away: 2, expected: 1 },
-    { it: "when the guest's shot names an eye 10 m from his torso, then nothing is fired", kind: ACT.shot, arg: PISTOL_SLOT, away: 10, expected: 0 },
+    { it: "when the guest's punch names an eye 2 m from his torso, then the host throws it as car 1's from his torso along the act's direction", away: 2, expected: 1 },
+    { it: "when the guest's punch names an eye 10 m from his torso, then nothing is thrown", away: 10, expected: 0 },
   ] as const;
   for (const testCase of eyeCases) {
     it(testCase.it, () => {
       const r = rig();
-      r.acts.hear(GUEST, actAt(testCase.kind, testCase.arg, testCase.away));
-      const resolved = testCase.kind === ACT.punch ? r.punches : r.shots;
-      expect(resolved.length, "acts carried out").toBe(testCase.expected);
+      r.acts.hear(GUEST, actAt(ACT.punch, 0, testCase.away));
+      expect(r.punches.length, "punches thrown").toBe(testCase.expected);
       if (testCase.expected === 0) return;
-      const first = testCase.kind === ACT.punch ? r.punches[0]! : r.shots[0]!;
+      const first = r.punches[0]!;
       expect(first.actor, "the actor").toBe(GUEST);
-      if ("x" in first) expect([first.x, first.z, first.dirX, first.dirZ], "from his torso along the act's direction").toEqual([10, 20, 0, 1]);
+      expect([first.x, first.z, first.dirX, first.dirZ], "from his torso along the act's direction").toEqual([10, 20, 0, 1]);
     });
   }
+
+  const rayCases = [
+    { it: "when the guest's shot comes from an eye 30 m behind him along his aim, then it is carried out, from the point on that line nearest his torso", behind: 30, aside: 0, expected: 1 },
+    { it: "when the same ray is moved 10 m sideways, then nothing is fired", behind: 30, aside: 10, expected: 0 },
+    { it: "when the guest's shot passes 0.5 m from his torso, then it is carried out", behind: 0, aside: 0.5, expected: 1 },
+  ] as const;
+  for (const testCase of rayCases) {
+    it(testCase.it, () => {
+      const r = rig();
+      const act = actAt(ACT.shot, PISTOL_SLOT, testCase.aside);
+      act.eyeZ -= testCase.behind;
+      r.acts.hear(GUEST, act);
+      expect(r.shots.length, "rays fired").toBe(testCase.expected);
+      expect(r.fired.count, "shots the law heard").toBe(testCase.expected);
+      if (testCase.expected === 0) return;
+      const ray = r.shots[0]!.ray;
+      expect(ray.eyeZ, "the ray starts level with his torso, not at the far eye").toBeCloseTo(GUEST_AT.z, 6);
+      expect(ray.eyeX, "and on the aim line").toBeCloseTo(act.eyeX, 6);
+    });
+  }
+
+  it("when the shot comes from a far eye, then the distance the host reports runs from that eye, so the guest's tracer ends where the ray did", () => {
+    const r = rig();
+    r.places.set(HOST, GUEST_AT);
+    const aim = Object.assign(new LookRay(), { eyeX: 10, eyeY: 1.3, eyeZ: -10, dirZ: 1 });
+    expect(r.acts.shootBy(HOST, aim, WEAPONS.pistol), "metres from the eye to where the ray ended").toBeCloseTo(30 + 7, 6);
+  });
 
   it("when the guest is not on foot, then his punch and his shot do nothing; on foot again they do", () => {
     const r = rig();
@@ -99,20 +124,58 @@ describe("given a host that hears a guest's acts while the guest stands on foot 
   });
 
   const cooldownCases = [
-    { it: "when two pistol shots come 0.1 s apart, then one is fired", kind: ACT.shot, arg: PISTOL_SLOT, gap: 0.1, expected: 1 },
-    { it: "when two pistol shots come 0.3 s apart, then both are fired", kind: ACT.shot, arg: PISTOL_SLOT, gap: 0.3, expected: 2 },
-    { it: "when two punches come 0.3 s apart, then one is thrown", kind: ACT.punch, arg: 0, gap: 0.3, expected: 1 },
-    { it: "when two punches come 0.6 s apart, then both are thrown", kind: ACT.punch, arg: 0, gap: 0.6, expected: 2 },
+    { it: "when two punches come 0.3 s apart, then one is thrown", gap: 0.3, expected: 1 },
+    { it: "when two punches come 0.6 s apart, then both are thrown", gap: 0.6, expected: 2 },
   ] as const;
   for (const testCase of cooldownCases) {
     it(testCase.it, () => {
       const r = rig();
-      r.acts.hear(GUEST, actAt(testCase.kind, testCase.arg, 0));
+      r.acts.hear(GUEST, actAt(ACT.punch, 0, 0));
       r.clock.now += testCase.gap;
-      r.acts.hear(GUEST, actAt(testCase.kind, testCase.arg, 0));
-      expect(testCase.kind === ACT.punch ? r.punches.length : r.fired.count, "acts carried out").toBe(testCase.expected);
+      r.acts.hear(GUEST, actAt(ACT.punch, 0, 0));
+      expect(r.punches.length, "punches thrown").toBe(testCase.expected);
     });
   }
+
+  const gunGapCases = [
+    { it: "when two shotgun shots come 0.1 s apart, then one is fired", slot: SHOTGUN_SLOT, gap: 0.1, expected: 1 },
+    { it: "when two shotgun shots come 0.9 s apart, then both are fired", slot: SHOTGUN_SLOT, gap: 0.9, expected: 2 },
+  ] as const;
+  for (const testCase of gunGapCases) {
+    it(testCase.it, () => {
+      const r = rig();
+      r.acts.hear(GUEST, actAt(ACT.shot, testCase.slot, 0));
+      r.clock.now += testCase.gap;
+      r.acts.hear(GUEST, actAt(ACT.shot, testCase.slot, 0));
+      expect(r.fired.count, "shots fired").toBe(testCase.expected);
+    });
+  }
+
+  it("when five rifle acts are delivered in one instant after a 0.5 s gap, then all five are carried out; twenty in one instant are cut to the 0.5 s allowance", () => {
+    const bunch = (acts: number): number => {
+      const r = rig();
+      r.clock.now += 0.5;
+      for (let at = 0; at < acts; at++) r.acts.hear(GUEST, actAt(ACT.shot, RIFLE_SLOT, 0));
+      return r.fired.count;
+    };
+    expect(bunch(5), "rifle shots carried out of five").toBe(5);
+    expect(bunch(20), "rifle shots carried out of twenty").toBe(5);
+  });
+
+  it("when rifle acts keep coming twice as fast as the gun fires for two seconds, then about half are carried out, and at the gun's own rate all are", () => {
+    const stream = (every: number): number => {
+      const r = rig();
+      for (let at = 0; at * every < 2; at++) {
+        r.acts.hear(GUEST, actAt(ACT.shot, RIFLE_SLOT, 0));
+        r.clock.now += every;
+      }
+      return r.fired.count;
+    };
+    const fast = stream(0.05);
+    expect(fast, "shots carried out of forty sent").toBeGreaterThan(15);
+    expect(fast, "shots carried out of forty sent").toBeLessThanOrEqual(24);
+    expect(stream(0.12), "shots carried out at the gun's own rate").toBe(17);
+  });
 
   it("when the act is another family's, or its weapon is not a gun, then the host does nothing; a pistol shot beside them is fired", () => {
     const r = rig();
@@ -175,7 +238,7 @@ describe("given this machine's own player", () => {
     expect(r.punches.length, "punches").toBe(1);
     expect(firstMismatch([r.punches[0]!.actor, r.punches[0]!.x, r.punches[0]!.z], [HOST, 1, 2]), "the punch's actor and place").toBeUndefined();
     expect(firstMismatch(r.shots.map((shot) => shot.actor), [HOST]), "the actors the rays were fired for").toBeUndefined();
-    expect(far, "how far the farthest ray went").toBe(7);
+    expect(far, "how far the farthest ray went from the eye at the origin: 2 m to his torso, then the ray's 7 m").toBe(9);
     expect(r.sent.length, "nothing is sent by the host").toBe(0);
   });
 

@@ -4,7 +4,7 @@ import { MSG } from "./codec.ts";
 export const ACT = { punch: 0, shot: 1, hookFire: 2, hookCut: 3, hookReelOn: 4, hookReelOff: 5, getIn: 6, getOut: 7 } as const;
 
 /** Act kinds this build knows: a kind from `ACT_KINDS` on is refused. */
-const ACT_KINDS = 8;
+export const ACT_KINDS = 8;
 
 /** Type byte, sequence (u16), kind (u8), arg (u8), eye (i16 x 3, cm), direction (i16 x 3, times 32767). */
 const ACT_BYTES = 17;
@@ -37,8 +37,8 @@ function fitsEye(m: number): boolean {
 
 /** The `MSG.act` for `act`; null when a value is not finite or the eye is past what 16 bits of centimetres hold, or the kind is unknown (nothing is sent for it). */
 export function packAct(act: Act): Uint8Array<ArrayBuffer> | null {
-  const values = [act.eyeX, act.eyeY, act.eyeZ, act.dirX, act.dirY, act.dirZ];
-  if (!values.every(Number.isFinite) || !Number.isInteger(act.kind) || act.kind < 0 || act.kind >= ACT_KINDS) return null;
+  const finite = Number.isFinite(act.eyeX) && Number.isFinite(act.eyeY) && Number.isFinite(act.eyeZ) && Number.isFinite(act.dirX) && Number.isFinite(act.dirY) && Number.isFinite(act.dirZ);
+  if (!finite || !Number.isInteger(act.kind) || act.kind < 0 || act.kind >= ACT_KINDS) return null;
   if (!fitsEye(act.eyeX) || !fitsEye(act.eyeY) || !fitsEye(act.eyeZ)) return null;
   const out = new Uint8Array(ACT_BYTES);
   const view = new DataView(out.buffer);

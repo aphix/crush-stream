@@ -12,6 +12,7 @@ const LINK = "#scene=openworld&seed=beef";
 const SETTLE_S = 3;
 const GUEST = 1;
 const PISTOL_SLOT = 1;
+const SHOTGUN_SLOT = 2;
 /** The torso stands this high over the ground, and the guest's eye this much higher (m). */
 const TORSO_UP = 1;
 const EYE_UP = 0.3;
@@ -46,14 +47,14 @@ function guestStandsAt(at: ActorPlace): void {
   };
 }
 
-/** A pistol shot act from the guest's eye, `eyeAway` m off where he stands, along the unit (dirX, dirY, dirZ). */
-function shotFrom(at: ActorPlace, eyeAway: number, dir: THREE.Vector3): Act {
+/** A shot act of weapon slot `arg` along the unit `dir`, its eye `back` m behind the guest's torso on that line and `aside` m to its side, 0.3 m over the torso. */
+function shotFrom(at: ActorPlace, back: number, aside: number, dir: THREE.Vector3, arg = PISTOL_SLOT): Act {
   const act = new Act();
   act.kind = ACT.shot;
-  act.arg = PISTOL_SLOT;
-  act.eyeX = at.x + eyeAway;
-  act.eyeY = at.y + EYE_UP;
-  act.eyeZ = at.z;
+  act.arg = arg;
+  act.eyeX = at.x - dir.x * back - dir.z * aside;
+  act.eyeY = at.y + EYE_UP + dir.y * -back;
+  act.eyeZ = at.z - dir.z * back + dir.x * aside;
   act.dirX = dir.x;
   act.dirY = dir.y;
   act.dirZ = dir.z;
@@ -69,45 +70,62 @@ function hostOnFoot(): { torso: THREE.Vector3; away: THREE.Vector3 } {
   return { torso, away: new THREE.Vector3((torso.x - car.x) / gap, 0, (torso.z - car.z) / gap) };
 }
 
-/** A standing dummy `metres` from `from` along `away`; its pool slot. */
-function dummyAhead(from: THREE.Vector3, away: THREE.Vector3, metres: number): number {
+/** A standing dummy `metres` from `from` along `away`, in pool slot `slot`; the slot. */
+function dummyAhead(from: THREE.Vector3, away: THREE.Vector3, metres: number, slot = 0): number {
   const spot = new THREE.Vector3(from.x + away.x * metres, 0, from.z + away.z * metres);
   spot.y = activeGround().heightAt(spot.x, spot.z);
-  const slot = rig.engine["ragdolls"].startWalker(spot, 0, { cop: false, look: driverLook(1, 0) }, 0);
+  rig.engine["ragdolls"].startWalker(spot, 0, { cop: false, look: driverLook(1, 0) }, slot);
   rig.run(1);
   return slot;
 }
 
+/** The guest on foot 1.5 m beside the host's walker, with a dummy 8 m in front of him along `away` and another 6 m behind him; their pool slots. */
+function guestWithDummies(): { guest: ActorPlace; away: THREE.Vector3; front: number; back: number } {
+  const { torso, away } = hostOnFoot();
+  const ground = activeGround().heightAt(torso.x, torso.z);
+  const side = new THREE.Vector3(-away.z, 0, away.x);
+  const guest: ActorPlace = { x: torso.x + side.x * 1.5, y: ground + TORSO_UP, z: torso.z + side.z * 1.5, heading: 0 };
+  const spot = new THREE.Vector3(guest.x, 0, guest.z);
+  const front = dummyAhead(spot, away, 8);
+  const back = dummyAhead(spot, away, -6, 1);
+  guestStandsAt(guest);
+  return { guest, away, front, back };
+}
+
 describe("given the host's engine in the open world with a guest on foot near the host's walker", () => {
-  it("when the guest's pistol act aims at a dummy 8 m ahead of him, then the dummy is launched along the shot, but an act whose eye is 10 m from the guest does nothing", () => {
-    const { torso, away } = hostOnFoot();
-    const ground = activeGround().heightAt(torso.x, torso.z);
-    const side = new THREE.Vector3(-away.z, 0, away.x);
-    const guest: ActorPlace = { x: torso.x + side.x * 1.5, y: ground + TORSO_UP, z: torso.z + side.z * 1.5, heading: 0 };
-    const slot = dummyAhead(new THREE.Vector3(guest.x, 0, guest.z), away, 8);
-    guestStandsAt(guest);
+  it("when the guest's pistol act aims at a dummy 8 m ahead of him from an eye 30 m behind him, then the dummy is launched along the shot and the ray ends at its near side; the same ray moved 10 m sideways does nothing", () => {
+    const { guest, away, front } = guestWithDummies();
     const dir = new THREE.Vector3(away.x, 0, away.z);
-    rig.engine["acts"].hear(GUEST, shotFrom(guest, 10, dir));
+    rig.engine["acts"].hear(GUEST, shotFrom(guest, 30, 10, dir));
     rig.run(FRAME);
-    expect(rig.engine["ragdolls"].walkers[slot]!.state, "the dummy after an act from an eye 10 m off").toBe("stand");
+    expect(rig.engine["ragdolls"].walkers[front]!.state, "the dummy after the ray moved 10 m sideways").toBe("stand");
     const rays = vi.spyOn(rig.engine["openWorld"], "shoot");
     clock.now += 1;
-    rig.engine["acts"].hear(GUEST, shotFrom(guest, 0, dir));
-    expect(rays.mock.results[0]?.value, "how far the guest's ray went: to the dummy's near side, 8 m off (m)").toBeGreaterThan(6.5);
-    expect(rays.mock.results[0]?.value, "how far the guest's ray went (m)").toBeLessThan(8.5);
+    rig.engine["acts"].hear(GUEST, shotFrom(guest, 30, 0, dir));
+    expect(rays.mock.results[0]?.value, "how far the guest's ray went from his torso (m)").toBeGreaterThan(6.5);
+    expect(rays.mock.results[0]?.value, "how far the guest's ray went from his torso (m)").toBeLessThan(8.5);
     rays.mockRestore();
     rig.run(FRAME);
-    const doll = rig.engine["ragdolls"]["dolls"][slot]!;
-    expect(rig.engine["ragdolls"].walkers[slot]!.state, "the dummy after the act from the guest's own eye").not.toBe("stand");
+    const doll = rig.engine["ragdolls"]["dolls"][front]!;
+    expect(rig.engine["ragdolls"].walkers[front]!.state, "the dummy after the act from the far eye").not.toBe("stand");
     expect(doll.vel[0]! * away.x + doll.vel[2]! * away.z, "the dummy's speed along the shot (m/s)").toBeGreaterThanOrEqual(4);
   });
 
-  it("when two pistol acts arrive 0.1 s apart, then the law hears one shot, and a third 0.5 s later makes two", () => {
+  it("when a dummy stands between a far eye and the guest, then the guest's shot does not hit it, and it does hit the dummy in front of him", () => {
+    const { guest, away, front, back } = guestWithDummies();
+    const dir = new THREE.Vector3(away.x, 0, away.z);
+    rig.engine["acts"].hear(GUEST, shotFrom(guest, 30, 0, dir));
+    rig.run(FRAME);
+    expect(rig.engine["ragdolls"].walkers[back]!.state, "the dummy between the eye and him").toBe("stand");
+    expect(rig.engine["ragdolls"].walkers[front]!.state, "the dummy in front of him").not.toBe("stand");
+  });
+
+  it("when two shotgun acts arrive 0.1 s apart, then the law hears one shot, and a third 0.5 s later makes two", () => {
     const { torso, away } = hostOnFoot();
     const guest: ActorPlace = { x: torso.x + away.x * 3, y: torso.y, z: torso.z + away.z * 3, heading: 0 };
     guestStandsAt(guest);
     const fired = vi.spyOn(rig.engine["openWorld"], "shotFired");
-    const act = shotFrom(guest, 0, away);
+    const act = shotFrom(guest, 0, 0, away, SHOTGUN_SLOT);
     rig.engine["acts"].hear(GUEST, act);
     clock.now += 0.1;
     rig.engine["acts"].hear(GUEST, act);
@@ -126,7 +144,7 @@ describe("given the host's engine in the open world with a guest on foot near th
     const eye = new THREE.Vector3(guest.x, guest.y + EYE_UP, guest.z);
     const dir = new THREE.Vector3(torso.x, torso.y, torso.z).sub(eye).normalize();
     expect(rig.walker().state, "control: the host's walker stands").toBe("stand");
-    rig.engine["acts"].hear(GUEST, shotFrom(guest, 0, dir));
+    rig.engine["acts"].hear(GUEST, shotFrom(guest, 0, 0, dir));
     rig.run(FRAME);
     expect(rig.walker().state, "the host's walker after the guest's shot").not.toBe("stand");
   });

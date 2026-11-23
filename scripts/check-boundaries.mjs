@@ -54,7 +54,7 @@ const HOT = {
   "src/game/world/path-grid.ts": ["nearestOnPath", "scanCell", "trySegment"],
   "src/game/world/surfaces.ts": ["heightInto", "bil", "cellHeight"],
   "src/game/engine/engine-onfoot.ts": ["swingDoor", "shoot"],
-  "src/game/engine/engine-onfoot-arms.ts": ["pad", "frame"],
+  "src/game/engine/engine-onfoot-arms.ts": ["pad", "frame", "gunAt", "slotOfGun"],
   "src/game/engine/engine.ts": ["tickInner", "fixedStep", "scheduleSkins", "flushVisibleSkins", "updateCamera", "pickCar", "pickDoll"],
   "src/game/engine/ray-nearest.ts": ["find", "visit", "mesh", "triangles", "offer"],
   "src/game/present/ragdoll-mesh.ts": ["nearestHit", "crosses", "posedFrom", "reached", "eyes"],
