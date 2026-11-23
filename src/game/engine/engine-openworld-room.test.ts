@@ -75,14 +75,14 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
       cars: () => [car],
       now: () => now / 1000,
       throwFigure: (strike) => thrown.push(strike) - 1,
+      eye: (ray) => {
+        ray.eyeX = eye.x;
+        ray.eyeZ = eye.z;
+      },
       ...(fake === null
         ? {}
         : {
             bodies: fake,
-            eye: (ray) => {
-              ray.eyeX = eye.x;
-              ray.eyeZ = eye.z;
-            },
             makeArt: (capacity) => ({
               update: (poses, _eyeX, _eyeZ, _sight, _wallDt, held) => {
                 if (capacity <= MEDICS.count) return;
@@ -181,6 +181,8 @@ describe("given a host and a guest in a room of the open world, each with the en
     const hostCrowd = r.host.director["crowd"]!;
     while (shownResident(hostCrowd) < 0) r.step(1);
     const resident = shownResident(hostCrowd);
+    r.host.eye.x = hostCrowd.poses.x[resident]!;
+    r.host.eye.z = hostCrowd.poses.z[resident]!;
     const { place } = carAtWalker(hostCrowd, resident, 6, 14, HOST_CAR_SLOT);
     for (let travelled = 1 / 30; travelled < 1.5 && r.host.thrown.length === 0; travelled += 1 / 30) {
       place(travelled);
