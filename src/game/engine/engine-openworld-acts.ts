@@ -14,18 +14,22 @@ export type ActorPlace = { x: number; y: number; z: number; heading: number };
 const MAX_ACTORS = MAX_CARS;
 /** A punch's eye is his torso: an act whose eye is farther than this from it (m) is not his. */
 const ACT_EYE_REACH = 4;
-/** The aim ray of a shot, cast from its point nearest the actor's torso, must pass within this (m) of it. A muzzle is held out in front of his chest (under 1 m from it), so this bounds the muzzle's offset plus the replication error: the host sees a guest's body where it was a delay ago, about 1 m at a sprint. */
+/** The line of a shot must pass within this (m) of the actor's torso. A gun's tip is held out in front of his chest (under 1 m from it), so this bounds that offset: the host sees a guest's body where it was a delay ago (about 1 m behind at a sprint), which the line, running through the body he fired from, does not feel. */
 const SHOT_RAY_REACH = 1.5;
+/** The point of a shot's line the rays start at (the eye, or the line's point nearest his torso when the eye is behind him) must be within this (m) of his torso: the tip's offset plus a sprint's replication lag, so no eye far along his line fires from there. */
+const SHOT_ORIGIN_REACH = 3;
 /** Network jitter bunches honest acts, so an actor's acts of one kind may run this far (s) ahead of the gun's own rate, and no further: a faster stream than the gun's is refused. */
 const ACT_BACKLOG_S = 0.5;
 /** A punch has no backlog to absorb jitter, so it spends this share of its cooldown: a little under the rate, so honest timing noise is not refused. A gun spends its whole cooldown: the backlog absorbs the noise and the long-run rate is the gun's. */
 const ACT_PUNCH_SHARE = 0.9;
 /** A guest does not know what its shot met: its tracer runs this far (m). */
 const GUEST_TRACER_M = 60;
-/** A target nearer the muzzle than this (m), or behind it along the aim, is a wall he is pressed against: the shot goes along the aim ray's own direction instead. */
-const MIN_MUZZLE_TARGET_M = 1;
-/** He turns to a target only when it lies farther than this (rad) off his facing, so a shot ahead of him does not stop his run. */
-const FACE_TARGET_FROM_RAD = 0.5;
+/** A target nearer the tip than this (m) gives no direction: the shot keeps its ray. */
+const MIN_TIP_TO_TARGET_M = 0.05;
+/** A target nearer his torso than this (m) is underfoot: he does not turn to it. */
+const NO_TURN_UNDERFOOT_M = 1;
+/** The gun lies on a target at any facing, so he turns to one only when it is farther than this (rad) off his facing: a quarter turn, behind him. */
+const FACE_TARGET_FROM_RAD = Math.PI / 2;
 /** A direction the host reads must be a unit vector to within this. */
 const UNIT_SLACK = 0.05;
 /** The level part of a punch's direction must be at least this long. */
@@ -48,6 +52,8 @@ type ActResolver = {
   shoot(actor: number, ray: LookRay, gun: Gun): number;
   /** How far (m) along `ray`, within `range`, the nearest wall, ground, person, dummy, car or prop is, or `range`; nothing is struck. */
   meet(actor: number, ray: LookRay, range: number): number;
+  /** Whether a wall of a place stands between the points a and b (m). */
+  wallBetween(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean;
   shotFired(): void;
 };
 
@@ -63,8 +69,8 @@ type ActPorts = {
   guest(): boolean;
   /** This machine's player turns toward the level direction (dx, dz): called when it is more than `FACE_TARGET_FROM_RAD` off his facing. */
   face(dx: number, dz: number): void;
-  /** The tip of this machine's player's gun, into `out`; false while no gun is in his hand. */
-  muzzle(out: { x: number; y: number; z: number }): boolean;
+  /** A shot is fired at (x, y, z): the gun in this machine's player's hand is laid from the hand straight at it, and `out` is its tip; false while no gun is in his hand. */
+  layGun(x: number, y: number, z: number, out: { x: number; y: number; z: number }): boolean;
   /** The guest's way to the host: `NetPlay.sendAct`. */
   sendAct(kind: number, arg: number, eye: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }): void;
 };
@@ -171,12 +177,14 @@ export class OpenWorldActs {
   }
 
   /**
-   * Actor `actor`, on foot, fires `gun` along `aim`, the unscattered sight line. It is his only if it passes within `SHOT_RAY_REACH` of his torso; the rays start at its point nearest him
-   * (so nothing between a far camera and him is hit), each scattered by his own seeded stream. How far (m) the farthest ray went from `aim`'s eye; 0 when refused.
+   * Actor `actor`, on foot, fires `gun` along `aim`, the unscattered line of the shot. It is his only if the line passes within `SHOT_RAY_REACH` of his torso, its start (the eye, or the line's point nearest his torso when the eye is behind him) is
+   * within `SHOT_ORIGIN_REACH` of it, and no wall of a place stands between his torso and that start; the rays start there (so nothing between a far camera and him is hit), each scattered by his own seeded stream.
+   * How far (m) the farthest ray went from `aim`'s eye; 0 when refused.
    */
   shootBy(actor: number, aim: LookRay, gun: Gun): number {
     if (!this.ports.actorPlace(actor, _place)) return 0;
-    if (this.nearestToTorso(aim) > SHOT_RAY_REACH) return 0;
+    if (this.nearestToTorso(aim) > SHOT_RAY_REACH || this.apartFromTorso(_near) > SHOT_ORIGIN_REACH) return 0;
+    if (this.resolver.wallBetween(_place.x, _place.y, _place.z, _near.eyeX, _near.eyeY, _near.eyeZ)) return 0;
     let far = 0;
     for (let ray = 0; ray < gun.rays; ray++) {
       this.scatter(actor, _near, gun.cone, _ray);
@@ -186,28 +194,35 @@ export class OpenWorldActs {
     return hypot3(_near.eyeX - aim.eyeX, _near.eyeY - aim.eyeY, _near.eyeZ - aim.eyeZ) + far;
   }
 
-  /** Writes into `_near` the point of the line `aim` nearest the torso in `_place` (not behind the eye) with its direction; how far (m) that point is from the torso. */
+  /** How far (m) the point (`ray`'s eye) is from the torso in `_place`. */
+  private apartFromTorso(ray: LookRay): number {
+    return hypot3(ray.eyeX - _place.x, ray.eyeY - _place.y, ray.eyeZ - _place.z);
+  }
+
+  /** Writes into `_near` the start of `aim` for a cast: its point nearest the torso in `_place`, not behind the eye, with its direction. How far (m) the torso is from the whole line, ahead of the eye or behind it. */
   private nearestToTorso(aim: LookRay): number {
-    const behind = Math.max(0, (_place.x - aim.eyeX) * aim.dirX + (_place.y - aim.eyeY) * aim.dirY + (_place.z - aim.eyeZ) * aim.dirZ);
+    const along = (_place.x - aim.eyeX) * aim.dirX + (_place.y - aim.eyeY) * aim.dirY + (_place.z - aim.eyeZ) * aim.dirZ;
+    const behind = Math.max(0, along);
     _near.eyeX = aim.eyeX + aim.dirX * behind;
     _near.eyeY = aim.eyeY + aim.dirY * behind;
     _near.eyeZ = aim.eyeZ + aim.dirZ * behind;
     _near.dirX = aim.dirX;
     _near.dirY = aim.dirY;
     _near.dirZ = aim.dirZ;
-    return hypot3(_near.eyeX - _place.x, _near.eyeY - _place.y, _near.eyeZ - _place.z);
+    return hypot3(aim.eyeX + aim.dirX * along - _place.x, aim.eyeY + aim.dirY * along - _place.y, aim.eyeZ + aim.dirZ * along - _place.z);
   }
 
-  /** He turns to face the level direction (dx, dz) of a target when it is more than `FACE_TARGET_FROM_RAD` off his facing (`_place`) and not underfoot. */
+  /** He turns to face the level direction (dx, dz) of a target when it is behind him: more than `FACE_TARGET_FROM_RAD` off his facing (`_place`) and not underfoot. */
   private faceTarget(dx: number, dz: number): void {
-    if (hypot2(dx, dz) < MIN_MUZZLE_TARGET_M || Math.abs(wrapAngle(detAtan2(dx, dz) - _place.heading)) <= FACE_TARGET_FROM_RAD) return;
+    if (hypot2(dx, dz) < NO_TURN_UNDERFOOT_M || Math.abs(wrapAngle(detAtan2(dx, dz) - _place.heading)) <= FACE_TARGET_FROM_RAD) return;
     this.ports.face(dx, dz);
   }
 
   /**
-   * Where a shot is aimed is found along the aim ray, looked along from its point nearest his torso (`_near`), within the gun's range: what it first meets, else its point at that range. The shot itself is
-   * the ray from the muzzle (his gun's tip; his torso when no gun is shown) to that point, as a bullet converges on where the camera looks; and he turns to face it (`ports.face`). Where that point is nearer the muzzle than
-   * `MIN_MUZZLE_TARGET_M` or behind it (a wall he is pressed against), the ray keeps the aim's own direction. `aim` becomes that ray. How far (m) from the muzzle it is aimed to go; -1 when that is not known.
+   * Where a shot is aimed is found along the aim ray, looked along from its point nearest his torso (`_near`), within the gun's range: what it first meets, else its point at that range (the target T). The gun is laid from his hand
+   * straight at T (`ports.layGun`), so its barrel, its tip and the bullet's line are one line, and `aim` becomes the ray from that tip to T; he turns to face T when it is behind him. The ray is cast from his torso instead when T is
+   * nearer his torso than the tip is (a point-blank target), or a wall stands between his torso and the tip (he is pressed against it): it starts on his side. With no gun shown his torso is the tip. How far (m) the ray
+   * is aimed to go; -1 when `aim` keeps its direction.
    */
   private aimFromMuzzle(aim: LookRay, gun: Gun): number {
     this.nearestToTorso(aim);
@@ -216,20 +231,18 @@ export class OpenWorldActs {
     const targetY = _near.eyeY + _near.dirY * met;
     const targetZ = _near.eyeZ + _near.dirZ * met;
     this.faceTarget(targetX - _place.x, targetZ - _place.z);
-    if (!this.ports.muzzle(_muzzle)) {
-      _muzzle.x = _place.x;
-      _muzzle.y = _place.y;
-      _muzzle.z = _place.z;
-    }
-    const x = targetX - _muzzle.x;
-    const y = targetY - _muzzle.y;
-    const z = targetZ - _muzzle.z;
+    const laid = this.ports.layGun(targetX, targetY, targetZ, _muzzle);
+    const behindWall = laid && this.resolver.wallBetween(_place.x, _place.y, _place.z, _muzzle.x, _muzzle.y, _muzzle.z);
+    const pointBlank = laid && hypot3(targetX - _place.x, targetY - _place.y, targetZ - _place.z) <= hypot3(_muzzle.x - _place.x, _muzzle.y - _place.y, _muzzle.z - _place.z);
+    const origin = laid && !behindWall && !pointBlank ? _muzzle : _place;
+    const x = targetX - origin.x;
+    const y = targetY - origin.y;
+    const z = targetZ - origin.z;
     const length = hypot3(x, y, z);
-    const ahead = x * aim.dirX + y * aim.dirY + z * aim.dirZ;
-    aim.eyeX = _muzzle.x;
-    aim.eyeY = _muzzle.y;
-    aim.eyeZ = _muzzle.z;
-    if (length < MIN_MUZZLE_TARGET_M || ahead <= 0) return ahead > 0 ? ahead : -1;
+    aim.eyeX = origin.x;
+    aim.eyeY = origin.y;
+    aim.eyeZ = origin.z;
+    if (length < MIN_TIP_TO_TARGET_M) return -1;
     aim.dirX = x / length;
     aim.dirY = y / length;
     aim.dirZ = z / length;

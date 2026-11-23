@@ -40,7 +40,7 @@ import { GUN } from "../present/people.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
-import { HandGuns, pointGun } from "./engine-hand-gun.ts";
+import { HandGuns } from "./engine-hand-gun.ts";
 import type { CarPick, DollPick } from "./engine-openworld.ts";
 import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -128,7 +128,6 @@ const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _hand = new THREE.Vector3();
 const _gunRest = new THREE.Vector3();
-const _barrel = new THREE.Vector3();
 const _muzzle = new THREE.Vector3();
 const _gunAim = new LookRay();
 const _bn = new THREE.Vector3();
@@ -441,7 +440,7 @@ export class CrashEngine extends EngineGarage {
         self: () => this.drivenCar(),
         guest: () => this.net.client,
         face: (dx, dz) => this.onFoot.faceToward(dx, dz),
-        muzzle: (out) => this.gunMuzzle(out),
+        layGun: (x, y, z, out) => this.layGun(x, y, z, out),
         sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir),
       },
       this.openWorld,
@@ -449,7 +448,11 @@ export class CrashEngine extends EngineGarage {
     this.startOpenWorld(buildOpenWorldMap(layOutLots()));
 
     this.resize();
-    this.resizeObs = new ResizeObserver(() => this.resize());
+    this.cacheCanvasRect();
+    this.resizeObs = new ResizeObserver(() => {
+      this.resize();
+      this.cacheCanvasRect();
+    });
     this.resizeObs.observe(canvas.parentElement ?? canvas);
 
     window.addEventListener("keydown", this.onKey);
@@ -953,9 +956,21 @@ export class CrashEngine extends EngineGarage {
     if (this.onFoot.armed()) e.preventDefault();
   };
 
-  /** The ray a shot goes along: from the camera through the view's centre (`centre`, or no cursor over the canvas), else through the cursor. */
-  private aimRay(centre: boolean, out: LookRay): void {
+  /** The canvas's place on the page as of its last resize (`cacheCanvasRect`), so a shot and the gun's pose read no layout. */
+  private readonly canvasRect = { left: 0, top: 0, width: 0, height: 0 };
+
+  /** Reads the canvas's rect once, where its size changes. */
+  private cacheCanvasRect(): void {
     const rect = this.canvas.getBoundingClientRect();
+    this.canvasRect.left = rect.left;
+    this.canvasRect.top = rect.top;
+    this.canvasRect.width = rect.width;
+    this.canvasRect.height = rect.height;
+  }
+
+  /** The ray a shot goes along: from the camera through the view's centre (`centre`, or no cursor over the canvas), else through the cursor. Reads the cached canvas rect. */
+  private aimRay(centre: boolean, out: LookRay): void {
+    const rect = this.canvasRect;
     const x = this.view.hoverX;
     const y = this.view.hoverY;
     if (centre || Number.isNaN(x) || Number.isNaN(y) || rect.width < 2 || rect.height < 2) {
@@ -1060,8 +1075,8 @@ export class CrashEngine extends EngineGarage {
     else this.ragdolls.blowWalker(slot, _p, _n, speed);
   }
 
-  /** Once a frame: the gun laid in the player's right hand (part 5, the one the ARM_R / ELBOW_R motors drive) with its barrel at what his aim is on, and the muzzle the tracers and shots start from; hidden with no gun in hand. */
-  private poseHandGun(): void {
+  /** Once a frame: the gun laid in the player's right hand (part 5, the one the ARM_R / ELBOW_R motors drive) with its barrel at what his aim is on (or on the lay of his last shot while its flash shows), and the tip the tracers start from; hidden with no gun in hand. */
+  private poseHandGun(dt: number): void {
     const arms = this.onFoot.arms;
     const held = this.onFoot.armed() && arms.gunInHand();
     const model = this.handGuns.model(arms.weapon);
@@ -1070,16 +1085,19 @@ export class CrashEngine extends EngineGarage {
     if (!held) return;
     this.ragdolls.pickMesh.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
     this.aimRay(this.onFoot.aimsAtCentre(), _gunAim);
-    pointGun(model, _hand, _gunAim, _barrel, _muzzle);
+    this.handGuns.pose(arms.weapon, _hand, _gunAim, dt, _muzzle);
     this.playerShots.setMuzzle(0, _muzzle.x, _muzzle.y, _muzzle.z);
   }
 
-  /** The tip of the gun in the player's hand as last posed, into `out`; false while no gun is in his hand. */
-  private gunMuzzle(out: { x: number; y: number; z: number }): boolean {
+  /** A shot is fired at (x, y, z): the gun in the player's hand is laid straight at it (`HandGuns.layOn`) and `out` is its tip, where the shot and its tracer start; false while no gun is in his hand. */
+  private layGun(x: number, y: number, z: number, out: { x: number; y: number; z: number }): boolean {
     if (!this.gunPosed) return false;
-    out.x = this.playerShots.muzzles[0]!;
-    out.y = this.playerShots.muzzles[1]!;
-    out.z = this.playerShots.muzzles[2]!;
+    this.ragdolls.pickMesh.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
+    if (!this.handGuns.layOn(this.onFoot.arms.weapon, _hand, x, y, z, _muzzle)) return false;
+    this.playerShots.setMuzzle(0, _muzzle.x, _muzzle.y, _muzzle.z);
+    out.x = _muzzle.x;
+    out.y = _muzzle.y;
+    out.z = _muzzle.z;
     return true;
   }
 
@@ -1201,7 +1219,7 @@ export class CrashEngine extends EngineGarage {
       this.debris.update(fxDt);
       this.sparks.update(fxDt);
       this.playerShots.update(fxDt);
-      this.poseHandGun();
+      this.poseHandGun(fxDt);
       this.glassDots.update(fxDt);
       armTops(null);
       lapPart(PART.fx);

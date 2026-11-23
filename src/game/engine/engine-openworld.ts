@@ -56,10 +56,12 @@ import { KILL_HITS_MIN, KILL_HITS_SPREAD } from "../scenes/lawn-guard.ts";
 import { STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
 import { PlayerBlows, type ActorPlace } from "./engine-openworld-acts.ts";
 import { activeGround } from "../world/ground.ts";
-import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 
 /** A bullet takes a drawn person whose chest it passes within this (m). */
 const SHOT_BODY_RADIUS = 0.35;
+/** Two points nearer than this (m) have no wall between them (`wallBetween`). */
+const NO_WALL_QUERY_M = 1e-6;
 /** What a bullet's ray met in the ragdoll pool: the slot (-1: none), the point, the distance. */
 export type DollPick = { slot: number; x: number; y: number; z: number; along: number };
 /** What a bullet's ray met among the cars: the car (-1: none), the point, the distance, the glass pane hit (null: the body). */
@@ -254,6 +256,8 @@ export class OpenWorldDirector {
   private readonly carShots = new Uint8Array(MAX_CARS);
   /** How far (m) the last `lookAlong` let its ray go: the wall or the ground nearest it, at most the range. */
   private lookReach = 0;
+  /** The ray `wallBetween` casts. */
+  private readonly wallRay = new LookRay();
   private readonly sceneScratch = { x: 0, z: 0 };
   /** The civilians near this machine's eye as physical bodies (`OpenWorldBodies`), null where the engine gives no dummies' world. */
   private bodies: OpenWorldBodies | null = null;
@@ -708,6 +712,21 @@ export class OpenWorldDirector {
     else if (cop.along === nearest) this.law?.shootCop(cop.index, dirX, dirZ, this.seconds);
     else this.shootCar(ray, gun);
     return nearest;
+  }
+
+  /** Whether a wall of a place stands between the points a and b (m): the level ray from a to b meets a footprint nearer than b is. A ray that starts inside a footprint meets no wall of it. */
+  wallBetween(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+    if (this.map === null) return false;
+    const length = hypot3(bx - ax, by - ay, bz - az);
+    if (length < NO_WALL_QUERY_M) return false;
+    const ray = this.wallRay;
+    ray.eyeX = ax;
+    ray.eyeY = ay;
+    ray.eyeZ = az;
+    ray.dirX = (bx - ax) / length;
+    ray.dirY = (by - ay) / length;
+    ray.dirZ = (bz - az) / length;
+    return placeMet(this.map, ray, length, this.wallMet).along < length;
   }
 
   /** How far (m) along `ray`, within `range`, the nearest wall, the ground, a drawn person, a foot cop, a dummy, a car or a knockable prop is, or `range` when there is none (nothing is struck, so a player's aim can be looked along before he fires). */

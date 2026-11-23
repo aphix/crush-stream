@@ -181,8 +181,9 @@ export class OnFootDirector {
     return this.arms.aiming || this.host.mouseCaptured() || this.footView === "first";
   }
 
-  /** He turns to face the level direction (dx, dz) for a shot, and stands while he does. */
+  /** He turns to face the level direction (dx, dz) of a target behind him for a shot, and stands while he does; a turn in progress is not started again by the shots that follow. */
   faceToward(dx: number, dz: number): void {
+    if (this.turnLeft > 0) return;
     this.turnHeading = detAtan2(dx, dz);
     this.turnLeft = FIRE_TURN_S;
   }
