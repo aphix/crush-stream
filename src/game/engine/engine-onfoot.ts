@@ -90,6 +90,8 @@ const CREEP_SPEED = 0.8;
 const WALK_STOP = 0.01;
 /** The keys' direction eases to a new one over about this long (s), so a corner is turned, not snapped. */
 const INTENT_SECONDS = 0.08;
+/** Firing at a target off his facing turns him to it, and holds him turning (not walking) this long (s): his facing turns at most 8 rad/s, so a half turn is done well inside it. */
+const FIRE_TURN_S = 0.6;
 /** A car that has just run him down does not do it again for this long (s): the launch carries him through its footprint. */
 const STRIKE_COOLDOWN = 0.6;
 /** Seconds a refusal stays on the prompt. */
@@ -138,6 +140,9 @@ export class OnFootDirector {
   private smoothAhead = 0;
   private smoothSide = 0;
   private intentSeeded = false;
+  /** The heading he turns to for a shot (`faceToward`), and the seconds that turn still holds him. */
+  private turnHeading = 0;
+  private turnLeft = 0;
 
   constructor(host: OnFootHost) {
     this.host = host;
@@ -171,9 +176,20 @@ export class OnFootDirector {
     this.host.punchLanded(detSin(walker.facing), detCos(walker.facing));
   }
 
-  /** One shot of `gun` along the aim: the view's centre when the mouse is captured, aim is held or he looks through his own eyes, else the cursor's ray. */
+  /** Whether his shots are aimed through the view's centre (the mouse is captured, aim is held or he looks through his own eyes) rather than the cursor. */
+  aimsAtCentre(): boolean {
+    return this.arms.aiming || this.host.mouseCaptured() || this.footView === "first";
+  }
+
+  /** He turns to face the level direction (dx, dz) for a shot, and stands while he does. */
+  faceToward(dx: number, dz: number): void {
+    this.turnHeading = detAtan2(dx, dz);
+    this.turnLeft = FIRE_TURN_S;
+  }
+
+  /** One shot of `gun` along the aim: the view's centre when `aimsAtCentre`, else the cursor's ray. */
   private shoot(gun: Gun): void {
-    this.host.aimRay(this.arms.aiming || this.host.mouseCaptured() || this.footView === "first", _aimRay);
+    this.host.aimRay(this.aimsAtCentre(), _aimRay);
     this.host.shotFired(_aimRay, this.host.shootRay(_aimRay, gun), gun);
   }
 
@@ -415,6 +431,7 @@ export class OnFootDirector {
     this.refusalLeft = Math.max(0, this.refusalLeft - wallDt);
     this.arms.pad(this.host.pad, this.host.touch);
     this.arms.frame(wallDt);
+    this.host.ragdolls.walker.holdGun(this.armed() && this.arms.gunInHand());
     this.settle(wallDt);
     if (!flow.active) {
       this.ride.follow();
@@ -487,6 +504,13 @@ export class OnFootDirector {
     const reach = hypot2(intent.forward, intent.strafe);
     const ahead = -detSin(view.orbitAngle);
     const side = -detCos(view.orbitAngle);
+    this.turnLeft = Math.max(0, this.turnLeft - wallDt);
+    if (this.turnLeft > 0 && !this.arms.aiming) {
+      walker.heading = this.turnHeading;
+      walker.command = 0;
+      this.intentSeeded = false;
+      return;
+    }
     if (this.arms.aiming) {
       // Aiming: he faces where the camera looks and walks forward only, at no more than a walk.
       walker.heading = detAtan2(ahead, side);

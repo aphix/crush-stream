@@ -44,5 +44,6 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     strikeDoll: () => {},
     shotSparks: () => {},
     shootProp: () => Infinity,
+    propMet: () => Infinity,
   };
 }

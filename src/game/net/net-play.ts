@@ -31,6 +31,7 @@ import { packCrowd } from "./crowd-codec.ts";
 import { ActInbox } from "./act-link.ts";
 import { packSeats } from "./seats-codec.ts";
 import { SeatsOutbox } from "./seats-link.ts";
+import type { Act } from "./act-codec.ts";
 import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { ROOM_MAX } from "../../lib/multiplayer/rooms.ts";
 import { fetchRooms, findMatch, matchStage, publicMeta, publicRoomName, WEAK_AI, WEAK_DERBY_FIELD, type MatchDeps } from "./matchmaking.ts";
@@ -105,6 +106,9 @@ export class NetPlay extends NetPlayClient {
   private readonly actsIn = new ActInbox();
   /** Host: tells when the seat table changed since its last message (`MSG.seats`). */
   private readonly seatsOut = new SeatsOutbox();
+  /** The peer whose act `carriesOutAct` is carrying out: a refused one is answered to it alone. */
+  private actFrom = "";
+  private readonly carriesOutAct = (actor: number, act: Act): void => this.refuseAct(this.actFrom, this.game.hearAct(actor, act));
   /** Hidden host: the heartbeat timer telling guests it is only paused. */
   private holdTimer: ReturnType<typeof setInterval> | undefined;
   private readonly out = makeSnapshot();
@@ -587,7 +591,8 @@ export class NetPlay extends NetPlayClient {
       this.takeGuestLook(from, data);
     } else if (type === MSG.act) {
       const car = this.slots.get(from);
-      if (car !== undefined) this.actsIn.take(from, car, data, (actor, act) => this.refuseAct(from, this.game.hearAct(actor, act)));
+      this.actFrom = from;
+      if (car !== undefined) this.actsIn.take(from, car, data, this.carriesOutAct);
     }
   }
 
