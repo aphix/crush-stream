@@ -14,8 +14,8 @@ export type ActorPlace = { x: number; y: number; z: number; heading: number };
 const MAX_ACTORS = MAX_CARS;
 /** A punch's eye is his torso: an act whose eye is farther than this from it (m) is not his. */
 const ACT_EYE_REACH = 4;
-/** The line of a shot must pass within this (m) of the actor's torso: the gun's tip held out in front of his chest (0.8 m) plus the most the host's view of a sprinting guest can lag across a shot to his side (7 m/s x 0.2 s = 1.4 m). Where the shot may start is bounded apart, by `SHOT_ORIGIN_REACH` and the wall test, so this line test only has to cover those two. */
-const SHOT_RAY_REACH = 2.2;
+/** The line of a shot must pass within this (m) of the actor's torso: the gun's tip held out in front of his chest (0.8 m) plus the most the host's view of a sprinting guest can lag across a shot to his side (7 m/s x 0.25 s = 1.75 m, the age the shared bodies extrapolate to: the interpolation delay 0.1 s, a 15 Hz foot message's 0.067 s and 0.05 to 0.15 s of latency make 0.22 to 0.32 s) plus 0.3 m of margin. Where the shot may start is bounded apart, by `SHOT_ORIGIN_REACH` and the wall test, so this line test only has to cover those two. */
+const SHOT_RAY_REACH = 2.9;
 /** The point of a shot's line the rays start at (the eye, or the line's point nearest his torso when the eye is behind him) must be within this (m) of his torso: the tip's offset plus a sprint's replication lag, so no eye far along his line fires from there. */
 const SHOT_ORIGIN_REACH = 3;
 /** Network jitter bunches honest acts, so an actor's acts of one kind may run this far (s) ahead of the gun's own rate, and no further: a faster stream than the gun's is refused. */

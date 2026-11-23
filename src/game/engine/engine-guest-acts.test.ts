@@ -9,7 +9,7 @@ import { driverLook } from "../present/driver-look.ts";
 import { WEAPONS } from "./engine-onfoot-arms.ts";
 import { FLASH_S } from "../present/shot-fx.ts";
 import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
-import { DOOR, homeFrontages, STOOP } from "../world/openworld/openworld-facade-solids.ts";
+import { drawnHalf, hasStoop } from "../world/openworld/openworld-facade-solids.ts";
 import { layOutLots } from "../world/openworld/openworld-lots.ts";
 import { activeGround } from "../world/ground.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
@@ -437,42 +437,93 @@ function standAt(spot: THREE.Vector3, facing: THREE.Vector3): void {
   rig.press("Digit2");
 }
 
-/** A point on a rowhome's drawn facade clear of its stoop and bay, found where a level ray 1.3 m up from 0.5 m out meets the building within 0.7 m; the spot, the facing toward the wall and the wall's out vector. */
-function spotBeforeAWall(): { spot: THREE.Vector3; facing: THREE.Vector3; out: THREE.Vector3 } {
+/** Where he first stands (m from the drawn facade): the footprint stands a little beyond it, and the walker settles a few tenths off where he is put, so `standNearWall` corrects it. */
+const WALL_GAP_M = 0.5;
+/** He is near enough the wall when its footprint is this far (m) from his torso at most: the gun's tip, held out in front of his chest, is then past it. */
+const WALL_NEAR_M = 0.2;
+/** And not inside it: a footprint he stands in is no wall to a ray. */
+const WALL_NOT_INSIDE_M = 0.05;
+/** A level ray from his torso along his facing meets nothing within this (m) when he stands inside the footprint or far from it. */
+const WALL_LOOK_M = 3;
+
+/** The most facades tried: a flat one with clear ground before it is found among the first few. */
+const WALL_CANDIDATES = 12;
+
+/** Points on the flat drawn facades of the city's buildings that have no stoop and no bay (nothing stands out of them for him to be held off by): each point, the facing toward the wall and the wall's out vector; only where a level ray 1.3 m up from `WALL_GAP_M` out meets the building within 0.7 m. */
+function flatWalls(): { base: THREE.Vector3; facing: THREE.Vector3; out: THREE.Vector3 }[] {
   const lots = layOutLots();
-  const fronts = homeFrontages(lots.places.slice(0, lots.backdropStart));
+  const found: { base: THREE.Vector3; facing: THREE.Vector3; out: THREE.Vector3 }[] = [];
   hostOnFoot();
-  for (const front of fronts) {
-    const { out, across } = frontageAxes(front.yaw);
-    for (const slide of [DOOR.across + STOOP.width + 1, DOOR.across - STOOP.width - 1, DOOR.across + STOOP.width + 2.5, DOOR.across - STOOP.width - 2.5]) {
-      const spot = new THREE.Vector3(front.x + out.x * 0.5 + across.x * slide, 0, front.z + out.z * 0.5 + across.z * slide);
-      spot.y = activeGround().heightAt(spot.x, spot.z);
-      const facing = out.clone().multiplyScalar(-1);
-      const ray = Object.assign(new LookRay(), { eyeX: spot.x, eyeY: spot.y + 1.3, eyeZ: spot.z, dirX: facing.x, dirY: 0, dirZ: facing.z });
-      if (rig.engine["openWorld"].meet(rig.engine["drivenCar"](), ray, 3) < 0.7) return { spot, facing, out };
-    }
+  for (const place of lots.places.slice(0, lots.backdropStart)) {
+    if (hasStoop(place) || found.length >= WALL_CANDIDATES) continue;
+    const { out } = frontageAxes(place.yaw);
+    const face = drawnHalf(place.depth);
+    const base = new THREE.Vector3(place.x + out.x * face, 0, place.z + out.z * face);
+    base.y = activeGround().heightAt(base.x, base.z);
+    const facing = out.clone().multiplyScalar(-1);
+    const ray = Object.assign(new LookRay(), { eyeX: base.x + out.x * WALL_GAP_M, eyeY: base.y + 1.3, eyeZ: base.z + out.z * WALL_GAP_M, dirX: facing.x, dirY: 0, dirZ: facing.z });
+    if (rig.engine["openWorld"].meet(rig.engine["drivenCar"](), ray, WALL_LOOK_M) < 0.7) found.push({ base, facing, out });
   }
-  throw new Error("no rowhome wall with clear ground before it");
+  return found;
 }
 
-describe("given the pistol in hand half a metre from a rowhome's wall", () => {
-  it("when he fires at the wall, then the shot ends on the wall and a dummy standing behind it is not struck", () => {
-    const { spot, facing, out } = spotBeforeAWall();
+/** How far (m) the wall's footprint is in front of his torso, a level ray along `facing`; `WALL_LOOK_M` when none is met. */
+function wallAhead(facing: THREE.Vector3): number {
+  const torso = rig.torso();
+  const ray = Object.assign(new LookRay(), { eyeX: torso.x, eyeY: torso.y, eyeZ: torso.z, dirX: facing.x, dirY: 0, dirZ: facing.z });
+  return rig.engine["openWorld"].meet(rig.engine["drivenCar"](), ray, WALL_LOOK_M);
+}
+
+/** He stands facing the wall with its footprint within `WALL_NEAR_M` of his torso and not inside it: put at a gap, read, and moved by what the read says, a few times; the point he was put at. */
+function standNearWall(base: THREE.Vector3, facing: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+  let gap = WALL_GAP_M;
+  const seen: string[] = [];
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const spot = new THREE.Vector3(base.x + out.x * gap, 0, base.z + out.z * gap);
+    spot.y = activeGround().heightAt(spot.x, spot.z);
     backInCar();
     standAt(spot, facing);
+    const ahead = wallAhead(facing);
+    seen.push(`gap ${gap.toFixed(2)} torsoZ-spotZ ${(rig.torso().z - spot.z).toFixed(2)} torsoX-spotX ${(rig.torso().x - spot.x).toFixed(2)} ahead ${ahead.toFixed(2)}`);
+    if (ahead >= WALL_NOT_INSIDE_M && ahead <= WALL_NEAR_M) return spot;
+    gap += ahead >= WALL_LOOK_M ? WALL_LOOK_M / 12 : -(ahead - WALL_NEAR_M / 2);
+  }
+  throw new Error(`he could not be stood a hand from the wall: ${seen.join(" | ")}`);
+}
+
+describe("given the pistol in hand a hand's breadth from a rowhome's wall, the gun's tip past it", () => {
+  it("when he fires at the wall, then the shot ends on the wall and a dummy standing behind it is not struck", () => {
+    let stood: { spot: THREE.Vector3; facing: THREE.Vector3; out: THREE.Vector3 } | null = null;
+    const tried: string[] = [];
+    for (const wall of flatWalls()) {
+      try {
+        stood = { spot: standNearWall(wall.base, wall.facing, wall.out), facing: wall.facing, out: wall.out };
+        break;
+      } catch (error) {
+        tried.push((error as Error).message);
+      }
+    }
+    if (stood === null) throw new Error(`no flat wall he could be stood a hand from: ${tried.join(" || ")}`);
+    const { spot, facing, out } = stood;
     const behind = new THREE.Vector3(spot.x + facing.x * 2.5, 0, spot.z + facing.z * 2.5);
     behind.y = activeGround().heightAt(behind.x, behind.z);
     rig.engine["ragdolls"].startWalker(behind, 0, { cop: false, look: driverLook(1, 0) }, 0);
     rig.run(1);
     const torso = rig.torso();
     const eye = new THREE.Vector3(torso.x + out.x * 1.6, torso.y + 0.9, torso.z + out.z * 1.6);
-    const target = new THREE.Vector3(spot.x + facing.x * 0.4, torso.y + 0.4, spot.z + facing.z * 0.4);
+    const target = new THREE.Vector3(torso.x + facing.x * 0.4, torso.y + 0.4, torso.z + facing.z * 0.4);
     aimThrough(rayFromTo(eye, target));
     rig.run(0.4);
+    const tip = tipNow();
+    expect(wallAhead(facing), "control: the wall's footprint is a hand from his torso (m)").toBeLessThanOrEqual(WALL_NEAR_M);
+    expect(rig.engine["openWorld"].wallBetween(torso.x, torso.y, torso.z, tip.x, tip.y, tip.z), "control: the gun's tip is past the wall (a wall stands between his torso and it)").toBe(true);
+    // Inside the building he does not stay standing (it is no ground for a dummy), so what is read is whether a blow was struck at any dummy.
+    const struck = vi.spyOn(rig.engine as unknown as { strikeDoll: () => void }, "strikeDoll");
     const { went } = firedRay();
     rig.run(FRAME);
     expect(went, "how far the shot went from its start (m): the wall is under 0.7 m away").toBeLessThan(0.7);
-    expect(rig.engine["ragdolls"].walkers[0]!.state, "the dummy behind the wall").toBe("stand");
+    expect(struck, "dummies struck by the shot").not.toHaveBeenCalled();
+    struck.mockRestore();
   });
 
   it("when a dummy stands 0.9 m from the gun's tip in the open, then the shot strikes it", () => {

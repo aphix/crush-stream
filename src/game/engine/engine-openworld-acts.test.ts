@@ -484,11 +484,11 @@ describe("given another player on foot a metre ahead of a puncher", () => {
   });
 });
 
-describe("given a guest sprinting along +z whose body the host sees 1.4 m behind him, firing from a gun's tip 0.7 m ahead of his torso", () => {
+describe("given a guest sprinting along +z whose body the host sees 1.75 m behind him (0.25 s old), firing from a gun's tip 0.7 m ahead of his torso", () => {
   /** The act of a shot from (10 + `across`, 1.3, 20.7) along `dir`, and a rig with the guest at the host's view of him. */
   const sprintShot = (across: number, dir: { x: number; y: number; z: number }): ReturnType<typeof rig> => {
     const r = rig();
-    r.places.set(GUEST, { ...GUEST_AT, z: GUEST_AT.z - 1.4 });
+    r.places.set(GUEST, { ...GUEST_AT, z: GUEST_AT.z - 1.75 });
     const act = actAt(ACT.shot, PISTOL_SLOT, across, dir);
     act.eyeY = 1.3;
     act.eyeZ = GUEST_AT.z + 0.7;
@@ -505,10 +505,10 @@ describe("given a guest sprinting along +z whose body the host sees 1.4 m behind
   it("when he fires at 90 degrees to his run, then the host carries it out; a line 3 m from the host's view of his torso is refused", () => {
     expect(sprintShot(0, { x: 1, y: 0, z: 0 }).shots.length, "rays fired at 90 degrees to the run").toBe(1);
     const off = rig();
-    off.places.set(GUEST, { ...GUEST_AT, z: GUEST_AT.z - 1.4 });
+    off.places.set(GUEST, { ...GUEST_AT, z: GUEST_AT.z - 1.75 });
     const act = actAt(ACT.shot, PISTOL_SLOT, 3, { x: 0, y: 0, z: 1 });
     act.eyeY = 1;
-    act.eyeZ = GUEST_AT.z - 1.4;
+    act.eyeZ = GUEST_AT.z - 1.75;
     off.acts.hear(GUEST, act);
     expect(off.shots.length, "rays fired along a line 3 m off his torso").toBe(0);
   });
