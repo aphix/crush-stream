@@ -14,26 +14,32 @@ const NO_CARS: readonly DeformableCar[] = [];
 const _point = new THREE.Vector3();
 const _spot = { x: 0, z: 0 };
 
-/** Host: the cables of `tethers` written into `out` after its records: a car end is the car and its car-frame point, an end on a person's body is that person (no point), any other end a world point. */
-export function writeCables(out: BodyFrame, tethers: TetherSet, bodies: OpenWorldBodies | null, capacity: number): void {
+/** The person whose body, or else whose dummy, is in pool slot `slot`; -1 for none. */
+function personOfDoll(slot: number, bodies: OpenWorldBodies | null, shared: OpenWorldShared | null): number {
+  const person = bodies === null ? -1 : bodies.personOfSlot(slot);
+  return person >= 0 || shared === null ? person : shared.personOfDummy(slot);
+}
+
+/** Host: the cables of `tethers` written into `out` after its records: a car end is the car and its car-frame point, an end on a person's body or dummy is that person (no point), any other end a world point. */
+export function writeCables(out: BodyFrame, tethers: TetherSet, bodies: OpenWorldBodies | null, shared: OpenWorldShared | null, capacity: number): void {
   for (let slot = 0; slot < MAX_TETHERS && out.cables < MAX_TETHERS; slot++) {
     if (!tethers.isAlive(slot)) continue;
     const cable = out.cables++;
-    for (let end = 0; end < 2; end++) writeEnd(out, tethers, slot, end, 2 * cable + end, bodies, capacity);
+    for (let end = 0; end < 2; end++) writeEnd(out, tethers, slot, end, 2 * cable + end, bodies, shared, capacity);
     out.cableLength[cable] = tethers.length(slot);
     out.cableStrain[cable] = tethers.tension(slot) / tethers.rows[slot * ROW + R_STRENGTH]!;
   }
 }
 
 /** Cable `slot`'s end `end` as frame end `at`. */
-function writeEnd(out: BodyFrame, tethers: TetherSet, slot: number, end: number, at: number, bodies: OpenWorldBodies | null, capacity: number): void {
+function writeEnd(out: BodyFrame, tethers: TetherSet, slot: number, end: number, at: number, bodies: OpenWorldBodies | null, shared: OpenWorldShared | null, capacity: number): void {
   const car = tethers.endCar(slot, end);
   if (car >= 0) {
     tethers.point(slot, end, _point);
     putEnd(out, at, CABLE_END.car, car, _point.x, _point.y, _point.z);
     return;
   }
-  const person = car === RAPIER && thingKind(tethers.thing(slot, end)) === THING.doll && bodies !== null ? bodies.personOfSlot(thingIndex(tethers.thing(slot, end))) : -1;
+  const person = car === RAPIER && thingKind(tethers.thing(slot, end)) === THING.doll ? personOfDoll(thingIndex(tethers.thing(slot, end)), bodies, shared) : -1;
   if (person >= 0) {
     putEnd(out, at, CABLE_END.person + kindOf(person, capacity), idOf(person, capacity), 0, 0, 0);
     return;

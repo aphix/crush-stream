@@ -1,22 +1,31 @@
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import { FOOT_COP_COUNT } from "../ai/openworld-crime/crime-constants.ts";
+import { DOWNED_LIFE_SECONDS } from "../ai/civilians/civilian-crowd-constants.ts";
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { addBodyRecord, BODY_FRAME_MAX, BODY_KIND, BODY_FLAG, BODY_POSTURE, copyBodyFrame, makeBodyFrame, type BodyFrame, type BodyMotion } from "../net/body-codec.ts";
 import { BODIES_SILENT_S } from "../net/net-constants.ts";
 import type { DriverLook } from "../present/driver-look.ts";
+import { SLOTS } from "../present/ragdoll-config.ts";
 import type { SightField } from "../present/openworld-sight.ts";
 import { SPRINT_SPEED } from "../present/walker-locomotion.ts";
+import { blankStrike, stood, type FigureStrike } from "../scenes/figure-strike.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
-import { FASTEST, recordTarget, TORSO_ABOVE_FEET } from "./body-follow.ts";
+import { FASTEST, followAnchor, recordTarget, TORSO_ABOVE_FEET } from "./body-follow.ts";
 import { KEEP_RADIUS, NEAR_RADIUS, type BodyHost, type OpenWorldBodies } from "./openworld-bodies.ts";
-import { kindOf, MEDICS_COUNT, PEOPLE_EXTRA, personOf } from "./people-index.ts";
+import { idOf, kindOf, MEDICS_COUNT, PEOPLE_EXTRA, personOf } from "./people-index.ts";
 
 /** What a person recorded in the host's frame is drawn as on this machine. */
 export const DRAWN = { none: 0, body: 1, dummy: 2, figure: 3 } as const;
 
 /** What the shared people need of the engine: the dress of a person by kind and id. */
-type SharedPorts = { lookOf(kind: number, id: number, out: DriverLook): void };
+type SharedPorts = {
+  lookOf(kind: number, id: number, out: DriverLook): void;
+  /** The pool slot a dummy was thrown into for `strike`, dressed `look`, lying `life` sim s; -1 for none. */
+  throwFigure(strike: FigureStrike, look: DriverLook, life: number): number;
+  /** The dummy in pool slot `slot`, thrown `age` sim s ago, is taken away. */
+  removeFigure(slot: number, age: number): boolean;
+};
 
 /** What the shared people read and write: this machine's bodies and their world, each kind's pose table (null: that kind is not shared yet), what its eye sees, and the interiors whose floors a body stands on. */
 type SharedWorld = {
@@ -35,6 +44,8 @@ const OTHER_CLASS = 2;
 const _target: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
 const _look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
 const _torso = { x: 0, z: 0 };
+const _motion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
+const _strike = blankStrike();
 /** The records to place, nearest the eye first, and how far each is. */
 const _order = new Int16Array(BODY_FRAME_MAX);
 const _distance = new Float32Array(BODY_FRAME_MAX);
@@ -55,8 +66,10 @@ export class OpenWorldShared {
   private readonly drawnAs: Uint8Array;
   private readonly drawnX: Float32Array;
   private readonly drawnZ: Float32Array;
-  /** Per civilian: 1 when the last frame placed had a body record of her. */
-  private readonly shared: Uint8Array;
+  /** Per person, the pool slot of her dummy (-1: none) and the crowd second it was thrown; per pool slot, whose dummy it holds (-1: none). */
+  private readonly dummyOf: Int16Array;
+  private readonly dummyAt: Float64Array;
+  private readonly dummyPerson = new Int32Array(SLOTS).fill(-1);
   /** Per kind and row, the stride phase the pose records' rows walk with. */
   private readonly strides: Float32Array[];
   /** How many ids each kind has (by `BODY_KIND`): a record naming one past them is a peer's mistake. */
@@ -74,7 +87,8 @@ export class OpenWorldShared {
     this.drawnAs = new Uint8Array(capacity + PEOPLE_EXTRA);
     this.drawnX = new Float32Array(capacity + PEOPLE_EXTRA);
     this.drawnZ = new Float32Array(capacity + PEOPLE_EXTRA);
-    this.shared = new Uint8Array(capacity);
+    this.dummyOf = new Int16Array(capacity + PEOPLE_EXTRA).fill(-1);
+    this.dummyAt = new Float64Array(capacity + PEOPLE_EXTRA);
     this.idCounts = Uint16Array.of(capacity, MAX_CARS, FOOT_COP_COUNT, MEDICS_COUNT);
     this.strides = world.tables.map((table) => new Float32Array(table?.count ?? 0));
   }
@@ -103,11 +117,11 @@ export class OpenWorldShared {
     for (let at = 0; at < frame.count; at++) {
       if (!this.placeable(frame, at, kinds, ownCar)) continue;
       this.recordOf[personOf(frame.kind[at]!, frame.id[at]!, this.capacity)] = at;
-      if (frame.kind[at] === BODY_KIND.civilian) this.shared[frame.id[at]!] = 1;
     }
     this.unfollowRecorded(kinds, frame);
     const placed = this.sortByDistance(frame, kinds, ownCar, eyeX, eyeZ);
     for (let k = 0; k < placed; k++) this.place(frame, _order[k]!, crowdSeconds, eyeX, eyeZ);
+    this.reapDummies(frame, kinds, crowdSeconds);
     for (let at = 0; at < frame.count; at++) if (this.placeable(frame, at, kinds, ownCar)) this.recordOf[personOf(frame.kind[at]!, frame.id[at]!, this.capacity)] = -1;
   }
 
@@ -118,10 +132,6 @@ export class OpenWorldShared {
     return this.drawnAs[person]!;
   }
 
-  /** Whether the last frame placed had a body record of civilian `civilian`: the host draws her, so this machine throws no ragdoll of its own for her. */
-  shares(civilian: number): boolean {
-    return this.shared[civilian] === 1;
-  }
 
   /**
    * A guest draws the pose records of `kind` in `frame` in `table`: with `whole` every row is hidden first (the table is all the host's), then each record writes its row: shown, the feet at the record's place moved by its velocity for the age
@@ -164,7 +174,6 @@ export class OpenWorldShared {
       const kind = kindOf(person, this.capacity);
       if (((kinds >> kind) & 1) === 0) continue;
       this.drawnAs[person] = DRAWN.none;
-      if (kind === BODY_KIND.civilian) this.shared[person] = 0;
     }
   }
 
@@ -206,15 +215,22 @@ export class OpenWorldShared {
     return placed;
   }
 
-  /** Record `at`: her body follows it, or she takes a body, or she is a figure at the host's place. */
+  /** Record `at`, by section 2.6 of the plan in order: a dummy follows it, else her body, else a dummy is thrown for a thrown record, else she takes a body, else she is a figure at the host's place. */
   private place(frame: BodyFrame, at: number, crowdSeconds: number, eyeX: number, eyeZ: number): void {
     const kind = frame.kind[at]!;
     const id = frame.id[at]!;
     const person = personOf(kind, id, this.capacity);
     const player = kind === BODY_KIND.player;
     const bodies = this.world.bodies;
+    const thrown = (frame.state[at]! & BODY_FLAG.thrown) !== 0;
     recordTarget(frame, at, crowdSeconds - frame.crowdTime, _target);
     const away = hypot2(_target.x - eyeX, _target.z - eyeZ);
+    const dummy = this.dummyOf[person]!;
+    if (thrown && dummy >= 0 && this.world.host !== null) {
+      followAnchor(this.world.host, dummy, _target, 0);
+      this.drewDummy(person, kind, id, dummy);
+      return;
+    }
     if (bodies !== null && bodies.has(person)) {
       if (away <= KEEP_RADIUS) {
         bodies.aim(person, _target, player ? PLAYER_CLASS : OTHER_CLASS, player ? SPRINT_SPEED : FASTEST);
@@ -222,6 +238,8 @@ export class OpenWorldShared {
         return;
       }
       bodies.unfollow(person);
+    } else if (thrown) {
+      if (this.throwDummy(kind, id, person, away, crowdSeconds)) return;
     } else if (bodies !== null && away <= NEAR_RADIUS && this.world.sight.seen(_target.x, _target.z, 1)) {
       if (kind === BODY_KIND.civilian && this.floorHeld[person] === 0) {
         this.world.floors?.holdFloorAt(_target.x, _target.z);
@@ -244,6 +262,86 @@ export class OpenWorldShared {
       this.drawnZ[person] = _torso.z;
     }
     if (kind !== BODY_KIND.civilian) this.world.tables[kind]!.shown[id] = 0;
+  }
+
+  /** `person` is drawn by her dummy in pool slot `slot`: at its torso when it is out, else at her target; her pose table draws none of her. */
+  private drewDummy(person: number, kind: number, id: number, slot: number): void {
+    this.drawnAs[person] = DRAWN.dummy;
+    const moved = this.world.host!.motion(slot, _motion);
+    this.drawnX[person] = moved ? _motion.x : _target.x;
+    this.drawnZ[person] = moved ? _motion.z : _target.z;
+    const table = this.world.tables[kind];
+    if (table !== null && table !== undefined) table.shown[id] = 0;
+  }
+
+  /** Rule 4: a thrown record within `KEEP_RADIUS` of the eye and seen: a dummy is thrown lying at `_target` and recorded for her; false when it could not be (too far, unseen, no slot). */
+  private throwDummy(kind: number, id: number, person: number, away: number, crowdSeconds: number): boolean {
+    if (this.world.host === null || away > KEEP_RADIUS || !this.world.sight.seen(_target.x, _target.z, 1)) return false;
+    this.world.ports.lookOf(kind, id, _look);
+    const strike = stood(-1, kind === BODY_KIND.civilian ? id : -1, _target.x, _target.y - TORSO_ABOVE_FEET, _target.z, detSin(_target.heading), detCos(_target.heading), _strike);
+    const slot = this.world.ports.throwFigure(strike, _look, DOWNED_LIFE_SECONDS);
+    if (slot < 0) return false;
+    this.threw(person, slot, crowdSeconds);
+    this.drewDummy(person, kind, id, slot);
+    return true;
+  }
+
+  /** Every dummy this machine holds for a person of a kind in `kinds` whose record in `frame` is not a thrown one is removed (its person got up, was taken away, or the host's ragdoll is gone). */
+  private reapDummies(frame: BodyFrame, kinds: number, crowdSeconds: number): void {
+    for (let slot = 0; slot < SLOTS; slot++) {
+      const person = this.dummyPerson[slot]!;
+      if (person < 0 || ((kinds >> kindOf(person, this.capacity)) & 1) === 0) continue;
+      const record = this.recordOf[person]!;
+      if (record < 0 || (frame.state[record]! & BODY_FLAG.thrown) === 0) this.took(person, crowdSeconds);
+    }
+  }
+
+  /** Host: person `person`'s dummy was thrown into pool slot `slot` at crowd second `crowdSeconds` (-1: none was, nothing is recorded). */
+  threw(person: number, slot: number, crowdSeconds: number): void {
+    if (slot < 0) return;
+    const old = this.dummyPerson[slot]!;
+    if (old >= 0 && old !== person) this.dummyOf[old] = -1;
+    this.dummyOf[person] = slot;
+    this.dummyAt[person] = crowdSeconds;
+    this.dummyPerson[slot] = person;
+  }
+
+  /** The pool slot of person `person`'s dummy, -1 for none. */
+  dummy(person: number): number {
+    return this.dummyOf[person]!;
+  }
+
+  /** Person `person`'s dummy is taken away at crowd second `crowdSeconds` (nothing for a person with none). */
+  took(person: number, crowdSeconds: number): void {
+    const slot = this.dummyOf[person]!;
+    if (slot < 0) return;
+    this.world.ports.removeFigure(slot, crowdSeconds - this.dummyAt[person]!);
+    this.dummyPerson[slot] = -1;
+    this.dummyOf[person] = -1;
+  }
+
+  /** The person whose dummy is in pool slot `slot`, -1 for none. */
+  personOfDummy(slot: number): number {
+    return this.dummyPerson[slot] ?? -1;
+  }
+
+  /** Host: every person with a dummy that is still out, written into `out` as a record of her kind and id, lying and thrown. */
+  writeDummies(out: BodyFrame): void {
+    const host = this.world.host;
+    if (host === null) return;
+    for (let slot = 0; slot < SLOTS; slot++) {
+      const person = this.dummyPerson[slot]!;
+      if (person < 0 || !host.motion(slot, _motion)) continue;
+      const at = addBodyRecord(out, kindOf(person, this.capacity), idOf(person, this.capacity), BODY_POSTURE.down | BODY_FLAG.thrown);
+      if (at < 0) return;
+      out.pos[3 * at] = _motion.x;
+      out.pos[3 * at + 1] = _motion.y;
+      out.pos[3 * at + 2] = _motion.z;
+      out.vel[3 * at] = _motion.vx;
+      out.vel[3 * at + 1] = _motion.vy;
+      out.vel[3 * at + 2] = _motion.vz;
+      out.heading[at] = _motion.heading;
+    }
   }
 
   /** `_target` as a row of her kind's pose table: upright at the target while she stands, else laid flat on her back, her head along the heading, so her torso is at the target. */

@@ -40,6 +40,7 @@ import { INTERP_DELAY } from "../net/net-constants.ts";
 import type { CrowdLink } from "../net/net-ports.ts";
 import { BODY_KIND, clearBodyFrame, makeBodyFrame, type BodyFrame, type BodyMotion, type FootRecord } from "../net/body-codec.ts";
 import { OpenWorldShared } from "./openworld-shared.ts";
+import { personOf } from "./people-index.ts";
 import { OpenWorldPlayers } from "./openworld-players.ts";
 import { writeCables } from "./openworld-cables.ts";
 import type { TetherSet } from "../contact/tether.ts";
@@ -242,9 +243,6 @@ export class OpenWorldDirector {
   private interiors: InteriorArt | null = null;
   private unhook: (() => void) | null = null;
   private traffic: OpenWorldTraffic | null = null;
-  /** Per civilian, the pool slot the figure thrown for her lies in (-1: none) and the crowd second it was thrown: the ambulance's loading takes it away (`removeVictim`). */
-  private figureSlot = new Int32Array(0);
-  private figureAt = new Float64Array(0);
   private punches = new Uint8Array(0);
   private punchedAt = new Float64Array(0);
   private walkerBlows = 0;
@@ -254,11 +252,6 @@ export class OpenWorldDirector {
   private readonly wallMet: Meeting = { index: -1, along: Infinity };
   private readonly personMet: Meeting = { index: -1, along: Infinity };
   private readonly hookOther: Meeting = { index: -1, along: Infinity };
-  /** Per foot cop and per medic the hook took, the pool slot of the dummy thrown for him (-1: none) and the crowd second it was thrown; the dummy goes when he is drawn again (`releaseGotUp`). */
-  private readonly hookedCop = new Int32Array(FOOT_COP_COUNT).fill(-1);
-  private readonly hookedCopAt = new Float64Array(FOOT_COP_COUNT);
-  private readonly hookedMedic = new Int32Array(MEDICS.count).fill(-1);
-  private readonly hookedMedicAt = new Float64Array(MEDICS.count);
   private readonly copShot: Meeting = { index: -1, along: Infinity };
   /** The look-at panel's cars: the one the ray enters and its words. */
   private readonly carLook: CarLook;
@@ -510,7 +503,7 @@ export class OpenWorldDirector {
       this.seenFrame = this.shared !== null && this.shared.fresh(this.ports.now()) ? this.shared.frame : null;
       this.medics!.heard = this.seenFrame !== null;
       if (this.seenFrame !== null) this.shared!.poseRows(this.seenFrame, BODY_KIND.medic, this.medics!.poses, true, crowd.crowdSeconds, wallDt);
-      this.shared?.bodyRecords(this.seenFrame, (1 << BODY_KIND.civilian) | (1 << BODY_KIND.player), this.ports.ownCarIndex(), crowd.crowdSeconds, this.ray.eyeX, this.ray.eyeZ);
+      this.shared?.bodyRecords(this.seenFrame, (1 << BODY_KIND.civilian) | (1 << BODY_KIND.player) | (1 << BODY_KIND.cop) | (1 << BODY_KIND.medic), this.ports.ownCarIndex(), crowd.crowdSeconds, this.ray.eyeX, this.ray.eyeZ);
       this.players?.obey(this.seenFrame, this.ports.ownCarIndex(), crowd.crowdSeconds, this.ports);
       this.throwStruck(crowd);
       this.bodies?.step(crowd.poses, this.ray.eyeX, this.ray.eyeZ, crowd.crowdSeconds, wallDt, this.sight);
@@ -678,32 +671,27 @@ export class OpenWorldDirector {
   }
 
   private hookCop(cop: number): number {
-    const slot = this.law?.hookCop(cop, this.seconds) ?? -1;
-    if (slot < 0) return slot;
-    this.hookedCop[cop] = slot;
-    this.hookedCopAt[cop] = this.seconds;
-    return slot;
+    return this.law?.hookCop(cop, this.seconds) ?? -1;
   }
 
   /** The dummy thrown for a cop the hook took goes (and its rope with it) once he is up and drawn again; a medic's, once the ambulance has left and he is back in it. Host and solo, once a step. */
   private releaseGotUp(): void {
     const law = this.law;
     const medics = this.medics;
+    const shared = this.shared;
+    if (shared === null || this.crowd === null) return;
+    const capacity = this.crowd.poses.count;
     for (let cop = 0; law !== null && cop < FOOT_COP_COUNT; cop++) {
-      if (this.hookedCop[cop]! < 0 || law.copPoses.shown[cop] === 0) continue;
-      this.ports.removeFigure(this.hookedCop[cop]!, this.seconds - this.hookedCopAt[cop]!);
-      this.hookedCop[cop] = -1;
+      if (law.copPoses.shown[cop] !== 0) shared.took(personOf(BODY_KIND.cop, cop, capacity), this.crowd.crowdSeconds);
     }
     for (let medic = 0; medics !== null && medic < MEDICS.count; medic++) {
-      if (this.hookedMedic[medic]! < 0 || medics.isTaken(medic)) continue;
-      this.ports.removeFigure(this.hookedMedic[medic]!, this.seconds - this.hookedMedicAt[medic]!);
-      this.hookedMedic[medic] = -1;
+      if (!medics.isTaken(medic)) shared.took(personOf(BODY_KIND.medic, medic, capacity), this.crowd.crowdSeconds);
     }
   }
 
   private hookMedic(medic: number): number {
     const medics = this.medics;
-    if (medics === null || medics.poses.shown[medic] === 0) return -1;
+    if (medics === null || this.shared === null || this.crowd === null || medics.poses.shown[medic] === 0) return -1;
     const { poses } = medics;
     const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
     dressOfLook(poses.look[medic]!, look);
@@ -712,8 +700,7 @@ export class OpenWorldDirector {
     const slot = this.ports.throwFigure(stood(-1, -1, x, activeGround().heightAt(x, z), z, detSin(poses.yaw[medic]!), detCos(poses.yaw[medic]!), blankStrike()), look);
     if (slot < 0) return slot;
     medics.take(medic);
-    this.hookedMedic[medic] = slot;
-    this.hookedMedicAt[medic] = this.seconds;
+    this.shared.threw(personOf(BODY_KIND.medic, medic, this.crowd.poses.count), slot, this.crowd.crowdSeconds);
     return slot;
   }
 
@@ -723,9 +710,11 @@ export class OpenWorldDirector {
     if (this.ports.isClient()) return;
     this.players?.writeRecords(out, this.ports.ownCarIndex(), this.ports.footAnchor(this.ownMotion) ? this.ownMotion : null, this.crowdTime(), this.bodies);
     this.bodies?.writeHooked(out);
+    this.bodies?.writeUnfree(out);
     this.law?.writePoses(out, this.crowd!.poses);
     this.medics?.writePoses(out);
-    writeCables(out, this.ports.tethers(), this.bodies, this.peopleCapacity);
+    this.shared?.writeDummies(out);
+    writeCables(out, this.ports.tethers(), this.bodies, this.shared, this.peopleCapacity);
   }
 
   /** Guest: the host's frame of people as this machine last drew from it (the cables are drawn from it); null on the host and while no frame is fresh. */
@@ -949,8 +938,6 @@ export class OpenWorldDirector {
     this.auto = this.makeAuto(this.crowd, key & CROWD_SEED_MASK);
     this.art = this.ports.makeArt(this.crowd.poses.count);
     this.animals = this.ports.makeAnimals?.(this.crowd.poses.count) ?? null;
-    this.figureSlot = new Int32Array(this.crowd.poses.count).fill(-1);
-    this.figureAt = new Float64Array(this.crowd.poses.count);
     this.punches = new Uint8Array(this.crowd.poses.count);
     this.punchedAt = new Float64Array(this.crowd.poses.count).fill(-Infinity);
     this.walkerBlows = 0;
@@ -985,7 +972,11 @@ export class OpenWorldDirector {
       tables,
       sight: this.culling.sight,
       floors: { holdFloorAt: (x, z) => this.interiors?.holdFloorAt(x, z) },
-      ports: { lookOf: (kind, id, out) => (kind === BODY_KIND.player ? copyLook(this.ports.playerLook(id), out) : dressOfLook(tables[kind]!.look[id]!, out)) },
+      ports: {
+        lookOf: (kind, id, out) => (kind === BODY_KIND.player ? copyLook(this.ports.playerLook(id), out) : dressOfLook(tables[kind]!.look[id]!, out)),
+        throwFigure: (strike, look, life) => this.ports.throwFigure(strike, look, life),
+        removeFigure: (slot, age) => this.ports.removeFigure(slot, age),
+      },
     });
     if (client) crowd.hear(this.heardEvents);
   }
@@ -1025,7 +1016,7 @@ export class OpenWorldDirector {
   private makeLaw(map: OpenWorldMap, crowd: CivilianCrowd, seed: number, gaze: OpenWorldGaze): OpenWorldLaw | null {
     const extra = this.ports.law;
     if (extra === undefined) return null;
-    return new OpenWorldLaw(map, crowd, { shared: () => this.shared, now: () => this.ports.now(), makeArt: (capacity) => gaze.follow(this.ports.makeArt(capacity), capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), anyoneNear: (x, z) => this.culling.anyoneNear(x, z, this.ray.eyeX, this.ray.eyeZ), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, foot: (out) => this.ports.foot(out), footArrest: extra.footArrest, cars: () => this.ports.cars() }, seed);
+    return new OpenWorldLaw(map, crowd, { shared: () => this.shared, now: () => this.ports.now(), threw: (person, slot) => this.shared?.threw(person, slot, this.crowdTime()), makeArt: (capacity) => gaze.follow(this.ports.makeArt(capacity), capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), anyoneNear: (x, z) => this.culling.anyoneNear(x, z, this.ray.eyeX, this.ray.eyeZ), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, foot: (out) => this.ports.foot(out), footArrest: extra.footArrest, cars: () => this.ports.cars() }, seed);
   }
 
   /** The Auto camera over this crowd: its cars (the traffic's drivers), its foot cops and the viewers' own cars left out. */
@@ -1048,6 +1039,11 @@ export class OpenWorldDirector {
     return auto;
   }
 
+  /** Whether this machine is a guest with a fresh frame of the host's people: the host's ragdolls come in its records, and this machine throws none of its own. */
+  private hosted(): boolean {
+    return this.ports.isClient() && this.shared !== null && this.shared.fresh(this.ports.now());
+  }
+
   private throwStruck(crowd: CivilianCrowd): void {
     const strikes = crowd.takeStrikes();
     for (let at = 0; at < strikes.length; at++) {
@@ -1062,25 +1058,21 @@ export class OpenWorldDirector {
         this.law?.noteStrike(strike);
         continue;
       }
-      if (this.shared?.shares(strike.guard) !== true && this.culling.anyoneNear(strike.x, strike.z, this.ray.eyeX, this.ray.eyeZ)) {
+      if (!this.hosted() && this.culling.anyoneNear(strike.x, strike.z, this.ray.eyeX, this.ray.eyeZ)) {
         const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
         dressOfLook(crowd.poses.look[strike.guard]!, look);
-        this.figureSlot[strike.guard] = this.ports.throwFigure(strike, look, DOWNED_LIFE_SECONDS);
-        this.figureAt[strike.guard] = crowd.crowdSeconds;
+        this.shared?.threw(strike.guard, this.ports.throwFigure(strike, look, DOWNED_LIFE_SECONDS), crowd.crowdSeconds);
       }
       this.noteKnockSpot(strike.guard, strike.x, strike.z);
       this.law?.noteStrike(strike);
     }
   }
 
-  /** The ambulance has loaded this civilian and is leaving: whatever lies for her (her live body, or the figure thrown for her) goes. */
+  /** The ambulance has loaded this civilian and is leaving: whatever lies for her (her live body, or the dummy thrown for her) goes. */
   private removeVictim(victim: number): void {
-    if (victim < 0 || this.crowd === null || victim >= this.figureSlot.length) return;
+    if (victim < 0 || this.crowd === null || this.shared === null || victim >= this.crowd.poses.count) return;
     if (this.bodies?.remove(victim) === true) return;
-    const slot = this.figureSlot[victim]!;
-    if (slot < 0) return;
-    this.figureSlot[victim] = -1;
-    this.ports.removeFigure(slot, this.crowd.crowdSeconds - this.figureAt[victim]!);
+    this.shared.took(victim, this.crowd.crowdSeconds);
   }
 
   private noteKnockSpot(resident: number, x: number, z: number): void {

@@ -48,6 +48,10 @@ const lots = fixtureLots(WALL_REACH);
 const map = buildOpenWorldMap(lots);
 const course = openWorldCourse(lots);
 const SIM_STEP = 1 / FRAME_HZ;
+/** The first pool slot the room's fake worlds give a dummy, and how far the host's eye is from a civilian it runs down (m): past the bodies' reach, within the art's. */
+const DUMMY_FIRST_SLOT = 4;
+const HOST_EYE_AWAY_M = 60;
+const DUMMY_LOOK = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
 const HOST_CAR_SLOT = 0;
 /** Net frames (1/30 s) the host's crowd runs before a test looks at it: 150 crowd seconds, civilians are out. */
 const MORNING_FRAMES = 150 * 30;
@@ -154,6 +158,18 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
               },
               dispose: () => {},
             }),
+            throwFigure: (strike) => {
+              thrown.push(strike);
+              const dummy = fake.freeSlot(DUMMY_FIRST_SLOT);
+              if (dummy < 0) return -1;
+              fake.start(strike.x, strike.y, strike.z, 0, DUMMY_LOOK, dummy, 0, 0);
+              fake.fell(dummy);
+              return dummy;
+            },
+            removeFigure: (dummy) => {
+              fake.stop(dummy);
+              return true;
+            },
           }),
     });
     director.startOpenWorld(map);
@@ -494,5 +510,41 @@ describe("given a guest, and a civilian the host's hook ties to a point on the g
     r.host.tethers.release(cable);
     r.step(15);
     expect(cables.count, "cables the guest draws once the host has cut it").toBe(0);
+  });
+});
+
+describe("given a guest 15 m from a civilian whom the host's car runs down", () => {
+  it("when she has come to rest, then the guest has one ragdoll for her within 0.5 m of the host's; and when the host's ragdoll is removed, then within 0.5 s the guest's is gone", () => {
+    const r = room({ bodies: true });
+    open.push(r.hostNet, r.guestNet);
+    r.step(60 + MORNING_FRAMES);
+    const hostCrowd = r.host.director["crowd"]!;
+    while (shownResident(hostCrowd) < 0) r.step(1);
+    const resident = shownResident(hostCrowd);
+    const at = { x: hostCrowd.poses.x[resident]!, z: hostCrowd.poses.z[resident]! };
+    r.host.eye.x = at.x + HOST_EYE_AWAY_M;
+    r.host.eye.z = at.z;
+    r.guest.eye.x = at.x + EYES_AWAY_M;
+    r.guest.eye.z = at.z;
+    const { place } = carAtWalker(hostCrowd, resident, 6, 14, HOST_CAR_SLOT);
+    for (let travelled = 1 / 30; travelled < 1.5 && r.host.thrown.length === 0; travelled += 1 / 30) {
+      place(travelled);
+      r.step(1);
+    }
+    r.step(AFTERMATH_FRAMES);
+    const person = personOf(BODY_KIND.civilian, resident, hostCrowd.poses.count);
+    const hostShared = r.host.director.peopleShared!;
+    const guestShared = r.guest.director.peopleShared!;
+    const hostSlot = hostShared.dummy(person);
+    const guestSlot = guestShared.dummy(person);
+    expect(hostSlot, "the host has a ragdoll for her").toBeGreaterThanOrEqual(0);
+    expect(guestSlot, "the guest has a ragdoll for her").toBeGreaterThanOrEqual(0);
+    expect(r.guest.thrown.length, "the guest threw one").toBe(1);
+    const hostBody = r.host.fake!.bodies.get(hostSlot)!;
+    const guestBody = r.guest.fake!.bodies.get(guestSlot)!;
+    expect(hypot2(guestBody.x - hostBody.x, guestBody.z - hostBody.z), "metres between the two ragdolls").toBeLessThan(BODY_GAP_M);
+    hostShared.took(person, r.host.director.crowdTime());
+    r.step(15);
+    expect([guestShared.dummy(person), guestBody.out], "the guest's ragdoll is gone").toEqual([-1, false]);
   });
 });

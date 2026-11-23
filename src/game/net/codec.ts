@@ -99,8 +99,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 67: a guest sends its player on foot (`MSG.foot`, 15) and the host relays every player on foot in `MSG.bodies`, struck when its car or shot takes him and roped when its hook holds him, so a peer on 66 would draw no walker, throw its own for cars it draws, and its crowd would walk through him.
 68: `MSG.bodies` carries the host's cables, so a peer on 67 would draw none.
 69: `MSG.bodies` carries the foot cops, the people in their hands and the medics as pose records and the people drawn by nobody, which a guest draws in place of its own law's, so a peer on 68 that joined late would draw its own arrests.
+70: `MSG.bodies` carries everyone lying, getting up or thrown, so a peer on 69 would leave its own ragdolls where they fell and keep them after the host's are gone.
 */
-export const NET_VERSION = 69;
+export const NET_VERSION = 70;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 59.7 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;

@@ -5,6 +5,7 @@ import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { addBodyRecord, addHidden, BODY_FLAG, BODY_KIND, BODY_POSTURE, clearBodyFrame, makeBodyFrame, readBodyFrame, writeBodyFrame, type BodyFrame } from "../net/body-codec.ts";
 import { Reader, Writer } from "../net/codec.ts";
 import { INTERP_DELAY } from "../net/net-constants.ts";
+import { personOf } from "./people-index.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import { TORSO_ABOVE_FEET } from "./body-follow.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
@@ -24,6 +25,8 @@ const CLOSE_M = 0.5;
 
 /** A host the record is written from by hand: where one more civilian the host's hook holds stands and how. */
 type HandRecord = { civilian: number; x: number; z: number; posture: number };
+/** Ports of a world that throws no dummies. */
+const NO_DUMMIES = { lookOf: () => {}, throwFigure: () => -1, removeFigure: () => false };
 
 const strikeOn = (guard: number): FigureStrike => ({ guard, car: 0, x: 0, y: 0, z: 0, faceX: 0, faceZ: 1, vx: 0, vy: 0, vz: 8, wx: 0, wy: 0, wz: 0, loose: false });
 
@@ -47,7 +50,7 @@ class Rig {
   constructor(guestBodies: number, eyeAway: number) {
     this.eyeZ = eyeAway;
     this.guestBodies = new OpenWorldBodies(this.guestFake, [], CAPACITY, guestBodies);
-    this.shared = new OpenWorldShared(CAPACITY, { bodies: this.guestBodies, host: this.guestFake, tables: [this.poses, null, null, null], sight: { seen: () => true }, floors: null, ports: { lookOf: (_kind, _id, out) => Object.assign(out, PLAIN_LOOK) } });
+    this.shared = new OpenWorldShared(CAPACITY, { bodies: this.guestBodies, host: this.guestFake, tables: [this.poses, null, null, null], sight: { seen: () => true }, floors: null, ports: { lookOf: (_kind, _id, out) => Object.assign(out, PLAIN_LOOK), throwFigure: () => -1, removeFigure: () => false } });
   }
 
   /** The host steps and writes its frame, the guest hears it, places it and steps. */
@@ -245,7 +248,7 @@ describe("given a host whose cop walks at 1.4 m/s with a civilian beside him, bo
     showRow(guestCrowd, 2, -40, 6, 2, 0, ACTIVITY.none);
     showRow(guestCrowd, 3, -41, 6, 2, 0, ACTIVITY.none);
     showRow(guestCrowd, 5, 77, 88, 1, 0.5, ACTIVITY.none);
-    const shared = new OpenWorldShared(CAPACITY, { bodies: null, host: null, tables: [guestCrowd, null, guestCops, null], sight: { seen: () => true }, floors: null, ports: { lookOf: () => {} } });
+    const shared = new OpenWorldShared(CAPACITY, { bodies: null, host: null, tables: [guestCrowd, null, guestCops, null], sight: { seen: () => true }, floors: null, ports: NO_DUMMIES });
     shared.poseRows(heard, BODY_KIND.civilian, guestCrowd, false, 50 + FRAME_AGE_S, STEP);
     shared.poseRows(heard, BODY_KIND.cop, guestCops, true, 50 + FRAME_AGE_S, STEP);
     shared.hide(heard, guestCrowd);
@@ -274,7 +277,7 @@ describe("given a guest with medics kneeling at its own scene and a frame whose 
     writePoseRows(frame, BODY_KIND.medic, hostMedics, null, 0);
     const guestMedics = createCrowdPoses(MEDIC_COUNT);
     for (let medic = 0; medic < MEDIC_COUNT; medic++) showRow(guestMedics, medic, 2 * medic, 0, 0, 0, ACTIVITY.kneel);
-    const shared = new OpenWorldShared(CAPACITY, { bodies: null, host: null, tables: [null, null, null, guestMedics], sight: { seen: () => true }, floors: null, ports: { lookOf: () => {} } });
+    const shared = new OpenWorldShared(CAPACITY, { bodies: null, host: null, tables: [null, null, null, guestMedics], sight: { seen: () => true }, floors: null, ports: NO_DUMMIES });
     shared.poseRows(throughWire(frame), BODY_KIND.medic, guestMedics, true, 10, STEP);
     for (let medic = 0; medic < MEDIC_COUNT; medic++) {
       expect(guestMedics.shown[medic], `medic ${medic} is shown`).toBe(1);
@@ -283,5 +286,68 @@ describe("given a guest with medics kneeling at its own scene and a frame whose 
     }
     shared.poseRows(throughWire(makeBodyFrame()), BODY_KIND.medic, guestMedics, true, 11, STEP);
     expect([guestMedics.shown[0], guestMedics.shown[1]], "with no medic record none is shown").toEqual([0, 0]);
+  });
+});
+
+/** The pool slots a guest's fake world has free for dummies, the metres a thrown civilian and a thrown cop stand from the guest's eye, and how far the host drags its dummy and how fast (m, m/s). */
+const DUMMY_SLOTS = 12;
+const THROWN_NEAR_M = 10;
+const THROWN_FAR_M = 60;
+const DRAG_M = 2;
+const ALL_KINDS = (1 << BODY_KIND.civilian) | (1 << BODY_KIND.player) | (1 << BODY_KIND.cop) | (1 << BODY_KIND.medic);
+
+/** A host frame of `crowdTime` with a thrown civilian 4 at (civilianX, 0) and a thrown cop 1 at (copX, 0), through the wire; a null leaves that one out. */
+function thrownFrame(crowdTime: number, civilianX: number | null, copX: number | null): BodyFrame {
+  const frame = makeBodyFrame();
+  frame.crowdTime = crowdTime;
+  for (const [kind, id, x] of [[BODY_KIND.civilian, 4, civilianX], [BODY_KIND.cop, 1, copX]] as const) {
+    if (x === null) continue;
+    const at = addBodyRecord(frame, kind, id, BODY_POSTURE.down | BODY_FLAG.thrown);
+    frame.pos.set([x, TORSO_ABOVE_FEET, 0], 3 * at);
+    frame.vel.set([x === civilianX ? HAUL_MPS : 0, 0, 0], 3 * at);
+  }
+  return throughWire(frame);
+}
+
+describe("given a frame with a thrown civilian 10 m from a guest's eye, a thrown cop 60 m from it, and a guest with no ragdoll for either", () => {
+  it("when the guest applies it, then a ragdoll is thrown for the civilian within 0.1 m of the host's place and the cop is drawn by his art laid flat at the host's place; when the host's ragdoll for her is dragged 2 m, then the guest's is within 0.5 m of it a second later; and when the next frame names neither, then the guest's ragdoll is removed and the cop is not drawn lying", () => {
+    const world = new FakeBodyHost();
+    world.setCapacity(DUMMY_SLOTS);
+    const crowd = createCrowdPoses(CAPACITY);
+    const cops = createCrowdPoses(HOST_COPS);
+    const ports = {
+      lookOf: (_kind: number, _id: number, out: typeof PLAIN_LOOK) => void Object.assign(out, PLAIN_LOOK),
+      throwFigure: (strike: FigureStrike) => {
+        const slot = world.freeSlot(0);
+        if (slot < 0) return -1;
+        world.start(strike.x, strike.y, strike.z, 0, PLAIN_LOOK, slot, 0, 0);
+        world.fell(slot);
+        return slot;
+      },
+      removeFigure: (slot: number) => {
+        world.stop(slot);
+        return true;
+      },
+    };
+    const shared = new OpenWorldShared(CAPACITY, { bodies: null, host: world, tables: [crowd, null, cops, null], sight: { seen: () => true }, floors: null, ports });
+    const civilian = personOf(BODY_KIND.civilian, 4, CAPACITY);
+    const cop = personOf(BODY_KIND.cop, 1, CAPACITY);
+    shared.bodyRecords(thrownFrame(5, THROWN_NEAR_M, THROWN_FAR_M), ALL_KINDS, -1, 5, 0, 0);
+    const slot = shared.dummy(civilian);
+    expect(slot, "a ragdoll is thrown for the civilian").toBeGreaterThanOrEqual(0);
+    expect(Math.abs(world.bodies.get(slot)!.x - THROWN_NEAR_M) + Math.abs(world.bodies.get(slot)!.z), "metres from the host's place").toBeLessThan(0.1);
+    expect(shared.dummy(cop), "none is thrown for the cop 60 m off").toBe(-1);
+    expect([cops.shown[1], cops.lying[1]], "the cop's art draws him laid flat").toEqual([1, 1]);
+    expect(Math.abs(cops.x[1]! - THROWN_FAR_M) + Math.abs(cops.z[1]! + TORSO_ABOVE_FEET), "his feet are a torso's height behind the host's place (m off)").toBeLessThan(0.1);
+    for (let step = 1; step <= 1 / STEP; step++) {
+      const t = 5 + step * STEP;
+      shared.bodyRecords(thrownFrame(t, THROWN_NEAR_M + (DRAG_M / (1 / STEP)) * step, THROWN_FAR_M), ALL_KINDS, -1, t, 0, 0);
+      world.advance(STEP);
+    }
+    const dragged = world.bodies.get(slot)!;
+    expect(Math.abs(dragged.x - (THROWN_NEAR_M + DRAG_M)), "metres from the host's dummy a second after it was dragged 2 m").toBeLessThan(CLOSE_M);
+    shared.bodyRecords(thrownFrame(7, null, null), ALL_KINDS, -1, 7, 0, 0);
+    expect([shared.dummy(civilian), dragged.out], "the guest's ragdoll is removed").toEqual([-1, false]);
+    expect(cops.lying[1], "the cop is not drawn lying").toBe(0);
   });
 });

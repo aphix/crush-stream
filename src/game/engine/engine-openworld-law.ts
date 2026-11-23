@@ -11,6 +11,7 @@ import { CrimeScene } from "../ai/openworld-crime/crime-scene.ts";
 import { COP_LOOK, FACING_SPEED, FOOT_COP_COUNT, MAX_HELD, MAX_SUBJECTS } from "../ai/openworld-crime/crime-constants.ts";
 import { addHidden, BODY_KIND, type BodyFrame } from "../net/body-codec.ts";
 import { writePoseRows, type OpenWorldShared } from "./openworld-shared.ts";
+import { personOf } from "./people-index.ts";
 import type { FootArrestPorts, LineOfSight } from "../ai/openworld-crime/offence-source.ts";
 import { StateOffenceSource } from "../ai/openworld-crime/state-offence-source.ts";
 import { TrafficPatrolPorts, type TrafficApi } from "../ai/openworld-crime/traffic-patrol-ports.ts";
@@ -41,6 +42,8 @@ export type LawEnginePorts = {
   makeArt(capacity: number): CopArt;
   /** The pool slot the figure was thrown into, -1 where none is known (the worker's world, or Rapier not up yet). */
   throwFigure(strike: FigureStrike, look: DriverLook): number;
+  /** The dummy in pool slot `slot` was thrown for person `person`: the engine's table of dummies records it. */
+  threw(person: number, slot: number): void;
   /** Whether a player's car or walker, or this machine's eye, is within the art's range of (x, z): no ragdoll is thrown for a knock nobody could see. */
   anyoneNear(x: number, z: number): boolean;
   /** The open world's traffic, whose pool cars patrol cars are leased from and whose red-light runners the law hears; null: the law is on foot. */
@@ -152,9 +155,11 @@ export class OpenWorldLaw {
   /** After the crowd's step (the law advanced and overlaid the crowd's poses inside it, before the cars' hits): throws the fighters it took down, in their own clothes, and the cops run down, in uniform. */
   throwTakedowns(): void {
     const strikes = this.scene.takeStrikes();
-    for (let at = 0; at < strikes.length; at++) this.throwDressed(strikes[at]!, this.crowd.poses.look[strikes[at]!.guard]!);
     const copStrikes = this.scene.takeCopStrikes();
-    for (let at = 0; at < copStrikes.length; at++) this.throwDressed(copStrikes[at]!, COP_LOOK);
+    // A guest with the host's frame throws none: the host's ragdolls come in its records (lists still drained).
+    if (this.scene.heardPoses) return;
+    for (let at = 0; at < strikes.length; at++) this.throwDressed(strikes[at]!, this.crowd.poses.look[strikes[at]!.guard]!, personOf(BODY_KIND.civilian, strikes[at]!.guard, this.crowd.poses.count));
+    for (let at = 0; at < copStrikes.length; at++) this.throwDressed(copStrikes[at]!, COP_LOOK, personOf(BODY_KIND.cop, copStrikes[at]!.guard, this.crowd.poses.count));
   }
 
   /** Before each crowd step: every foot cop on the street is a body the civilians step round (he gives no way and shoves nobody), where he was drawn last. */
@@ -189,11 +194,14 @@ export class OpenWorldLaw {
     }
   }
 
-  private throwDressed(strike: FigureStrike, lookWord: number): number {
+  /** A dummy for `strike` dressed from `lookWord`, reported to the engine as person `person`'s (`LawEnginePorts.threw`); its slot, -1 for none. */
+  private throwDressed(strike: FigureStrike, lookWord: number, person: number): number {
     if (!this.ports.anyoneNear(strike.x, strike.z)) return -1;
     const look: DriverLook = { woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false };
     dressOfLook(lookWord, look);
-    return this.ports.throwFigure(strike, look);
+    const slot = this.ports.throwFigure(strike, look);
+    if (slot >= 0) this.ports.threw(person, slot);
+    return slot;
   }
 
   /** The hook takes shown foot cop `cop` at crowd second `seconds`: he is downed where he stands (`CrimeScene.hookCop`) and thrown down at once in uniform, so a rope can tie to him; his pool slot, -1 where he is not hookable (not shown, no authority) or no slot is known. */
@@ -202,7 +210,7 @@ export class OpenWorldLaw {
     let slot = -1;
     const strikes = this.scene.takeCopStrikes();
     for (let at = 0; at < strikes.length; at++) {
-      const thrown = this.throwDressed(strikes[at]!, COP_LOOK);
+      const thrown = this.throwDressed(strikes[at]!, COP_LOOK, personOf(BODY_KIND.cop, strikes[at]!.guard, this.crowd.poses.count));
       if (strikes[at]!.guard === cop) slot = thrown;
     }
     return slot;

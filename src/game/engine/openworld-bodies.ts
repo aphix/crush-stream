@@ -579,15 +579,33 @@ export class OpenWorldBodies {
       const roped = this.host.roped(slot);
       const pinned = this.seconds < this.hookedUntil[body]!;
       if ((!roped && !pinned) || !this.host.motion(slot, _motion)) continue;
-      const at = addBodyRecord(out, BODY_KIND.civilian, civilian, _motion.posture | (roped ? BODY_FLAG.roped : 0) | (pinned ? BODY_FLAG.pinned : 0));
-      if (at < 0) return;
-      out.pos[3 * at] = _motion.x;
-      out.pos[3 * at + 1] = _motion.y;
-      out.pos[3 * at + 2] = _motion.z;
-      out.vel[3 * at] = _motion.vx;
-      out.vel[3 * at + 1] = _motion.vy;
-      out.vel[3 * at + 2] = _motion.vz;
-      out.heading[at] = _motion.heading;
+      if (!this.putRecord(out, civilian, _motion.posture | (roped ? BODY_FLAG.roped : 0) | (pinned ? BODY_FLAG.pinned : 0))) return;
     }
+  }
+
+  /** Host: a record for every other civilian's body that is struck, recovering or not on its feet, with its posture, so a guest lays and gets her up as the host's does. */
+  writeUnfree(out: BodyFrame): void {
+    for (let body = 0; body < this.size; body++) {
+      const civilian = this.resident[body]!;
+      if (civilian === NOBODY || civilian >= this.held.length || this.followed[body] === 1) continue;
+      const slot = this.slot[body]!;
+      if (this.host.roped(slot) || this.seconds < this.hookedUntil[body]!) continue;
+      if (this.struckAt[body]! === -Infinity && this.recovering[body] === 0 && this.host.standing(slot)) continue;
+      if (!this.host.motion(slot, _motion) || !this.putRecord(out, civilian, _motion.posture)) return;
+    }
+  }
+
+  /** A civilian record of `civilian` in `state` from `_motion`; false when the frame is full. */
+  private putRecord(out: BodyFrame, civilian: number, state: number): boolean {
+    const at = addBodyRecord(out, BODY_KIND.civilian, civilian, state);
+    if (at < 0) return false;
+    out.pos[3 * at] = _motion.x;
+    out.pos[3 * at + 1] = _motion.y;
+    out.pos[3 * at + 2] = _motion.z;
+    out.vel[3 * at] = _motion.vx;
+    out.vel[3 * at + 1] = _motion.vy;
+    out.vel[3 * at + 2] = _motion.vz;
+    out.heading[at] = _motion.heading;
+    return true;
   }
 }
