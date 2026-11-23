@@ -1,7 +1,7 @@
 import { PLAYER_PUNCH_COOLDOWN, PLAYER_PUNCH_LAND } from "../ai/civilians/civilian-constants.ts";
 import { PAD_BUTTON, type PadState, type TouchPad } from "../vehicle/gamepad.ts";
 
-type WeaponId = "fists" | "pistol" | "shotgun" | "rifle" | "hook";
+export type WeaponId = "fists" | "pistol" | "shotgun" | "rifle" | "hook";
 /** A gun: its name, the speed (m/s) a hit adds to the part it lands on (a showcase click is 6), its range (m), rays a shot, the half-angle (rad) they scatter in, seconds between shots, whether a held fire repeats, the push (N·s) a ray gives a car and the speed (m/s) it knocks a prop at. */
 export type Gun = { name: string; speed: number; range: number; rays: number; cone: number; every: number; auto: boolean; kick: number; prop: number };
 export const WEAPONS: Record<Exclude<WeaponId, "fists" | "hook">, Gun> = {
@@ -31,6 +31,8 @@ type ArmsHost = {
   shoot(gun: Gun): void;
   /** Fire with the hook in hand: one end is placed. */
   hook(): void;
+  /** Whether the hook may be taken in hand: not on a guest's machine, where the host does not yet carry out hook acts. */
+  hooks(): boolean;
 };
 
 /** A trigger past this is pulled. */
@@ -114,19 +116,26 @@ export class OnFootArms {
   key(code: string): boolean {
     const weapon = WEAPON_KEYS[code];
     if (weapon === undefined) return false;
-    this.weapon = weapon;
+    if (weapon !== "hook" || this.host.hooks()) this.weapon = weapon;
     return true;
   }
 
-  /** LB / RB: the weapon before or after the one in hand, wrapping. */
+  /** LB / RB: the weapon before or after the one in hand, wrapping; the hook is skipped where it is not offered. */
   cycle(by: number): void {
-    const at = WEAPON_ORDER.indexOf(this.weapon);
-    this.weapon = WEAPON_ORDER[(at + by + WEAPON_ORDER.length) % WEAPON_ORDER.length]!;
+    let at = WEAPON_ORDER.indexOf(this.weapon);
+    do at = (at + by + WEAPON_ORDER.length) % WEAPON_ORDER.length;
+    while (WEAPON_ORDER[at] === "hook" && !this.host.hooks());
+    this.weapon = WEAPON_ORDER[at]!;
   }
 
   /** What the HUD shows of the arms. */
   hud(): { slot: number; name: string } | null {
     return this.host.armed() ? { slot: WEAPON_ORDER.indexOf(this.weapon), name: WEAPON_NAMES[this.weapon] } : null;
+  }
+
+  /** A gun (not fists or the hook) is the weapon in hand. */
+  gunInHand(): boolean {
+    return this.weapon !== "fists" && this.weapon !== "hook";
   }
 
   /** One shot of the weapon in hand. Fists: a punch, when the last one is done. */
@@ -146,4 +155,19 @@ export class OnFootArms {
     this.cooldown = gun.every;
     this.host.shoot(gun);
   }
+}
+
+/** The gun in weapon slot `slot` of `WEAPON_ORDER` (what `MSG.act`'s shot carries as its argument); null for fists, the hook or a slot past the list. */
+export function gunAt(slot: number): Gun | null {
+  const weapon = WEAPON_ORDER[slot];
+  return weapon === undefined || weapon === "fists" || weapon === "hook" ? null : WEAPONS[weapon];
+}
+
+/** The weapon slot of `gun` in `WEAPON_ORDER`, -1 for a gun this build does not list. */
+export function slotOfGun(gun: Gun): number {
+  for (let slot = 0; slot < WEAPON_ORDER.length; slot++) {
+    const weapon = WEAPON_ORDER[slot]!;
+    if (weapon !== "fists" && weapon !== "hook" && WEAPONS[weapon] === gun) return slot;
+  }
+  return -1;
 }

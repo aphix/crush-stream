@@ -36,6 +36,9 @@ const RECOVER_SECONDS = 0.6;
 /** A punch's length (s), and how much stronger (times) his two punching arm motors are for it. */
 const PUNCH_SECONDS = 0.45;
 const PUNCH_STRENGTH = 4;
+/** A gun held out toward its target: his right shoulder and elbow targets (rad) are the thrown punch's, held. A better arm pose replaces `heldArm` and these. */
+const HELD_ARM = -1.45;
+const HELD_ELBOW = -0.1;
 /** The balance fades as he tips: full up to this tilt cosine (18°) and gone at the other (50°). */
 const BALANCE_FULL = 0.95;
 const BALANCE_GONE = 0.64;
@@ -135,6 +138,8 @@ export class Walker {
   private framesOnFoot = 0;
   /** Seconds since his punch began; at or past `PUNCH_SECONDS` he is not punching. */
   private punchFor = PUNCH_SECONDS;
+  /** A gun is in his hand: his right arm is held out (`heldArm`). Set each frame by whoever decides his weapon. */
+  private gunHeld = false;
   private forcing = false;
   private readonly reference = new Float64Array(4);
   private readonly next = new Float64Array(4);
@@ -191,6 +196,7 @@ export class Walker {
     this.enterStand(doll, yaw);
     this.strength = 1;
     this.punchFor = PUNCH_SECONDS;
+    this.gunHeld = false;
     this.downFor = this.getUpFor = this.stageFor = this.asking = 0;
     this.sinceStruck = Infinity;
   }
@@ -229,6 +235,11 @@ export class Walker {
     if (this.doll === null || this.state !== "stand" || this.punchFor < PUNCH_SECONDS) return false;
     this.punchFor = 0;
     return true;
+  }
+
+  /** Whether a gun is in his hand this frame: his right arm is held out toward the target. */
+  holdGun(held: boolean): void {
+    this.gunHeld = held;
   }
 
   /** A car struck him (`RagdollSystem.knockWalker` has launched the bodies): he goes limp, and is not struck again for a moment. */
@@ -385,6 +396,7 @@ export class Walker {
     this.getOut(dt, out, at);
     this.loco.update(dt, this.heading, this.floor.pace(this.anchorPos[0]!, this.anchorPos[2]!, this.loco.yaw, this.command));
     this.gait.update(dt, this.loco, this.groundAt, doll.cur, 3);
+    this.heldArm();
     this.punchArm(dt);
     this.floor.stand(this.gait.planted, this.gait.plant, this.anchorPos[0]!, this.anchorPos[2]!);
     this.moveAnchor(dt);
@@ -401,6 +413,16 @@ export class Walker {
     const elbow = cocked ? -1.7 : -0.1;
     targets[GAIT.ARM_R] = arm + (targets[GAIT.ARM_R]! - arm) * back;
     targets[GAIT.ELBOW_R] = elbow + (targets[GAIT.ELBOW_R]! - elbow) * back;
+    this.gait.rates[GAIT.ARM_R] = 0;
+    this.gait.rates[GAIT.ELBOW_R] = 0;
+  }
+
+  /** The right arm's targets over the gait's while a gun is held, as the punch's thrown pose; a punch in flight takes them over (`punchArm`). Their rates are zeroed so the motors do not lead a target that jumps. */
+  private heldArm(): void {
+    if (!this.gunHeld) return;
+    const targets = this.gait.targets;
+    targets[GAIT.ARM_R] = HELD_ARM;
+    targets[GAIT.ELBOW_R] = HELD_ELBOW;
     this.gait.rates[GAIT.ARM_R] = 0;
     this.gait.rates[GAIT.ELBOW_R] = 0;
   }
@@ -596,8 +618,8 @@ export class Walker {
     for (let i = 0; i < MOTORS.length; i++) {
       const row = MOTORS[i]!;
       const target = row.target < 0 ? 0 : targets[row.target]!;
-      const punching = walking && this.punchFor < PUNCH_SECONDS && (row.target === GAIT.ARM_R || row.target === GAIT.ELBOW_R);
-      const share = (row.arm ? limb * grip : limb) * (punching ? PUNCH_STRENGTH : 1);
+      const armDriven = walking && (this.punchFor < PUNCH_SECONDS || this.gunHeld) && (row.target === GAIT.ARM_R || row.target === GAIT.ELBOW_R);
+      const share = (row.arm ? limb * grip : limb) * (armDriven ? PUNCH_STRENGTH : 1);
       const stiffness = walking ? row.walkStiffness : row.stiffness;
       const damping = walking ? row.walkDamping : row.damping;
       const lead = walking && row.target >= 0 ? this.gait.rates[row.target]! : 0;

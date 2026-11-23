@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 /** How long (s) a muzzle flash and a shot's tracer show (a frame or three at 60 Hz); the most tracers in the air at once. */
-const FLASH_S = 0.05;
+export const FLASH_S = 0.05;
 const TRACER_S = 0.07;
 const TRACERS = 24;
 /** A muzzle flash's radius (m) and its colour; a tracer's colour (sRGB). */

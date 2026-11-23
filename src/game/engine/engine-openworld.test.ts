@@ -46,6 +46,8 @@ import { COP_DOWN_SECONDS, FOOT_COP_COUNT } from "../ai/openworld-crime/crime-co
 
 const map = buildFixtureMap();
 const SEED = 5;
+/** The host's own player's actor (his car index). */
+const PLAYER = 0;
 const HOST_TIME = 1000;
 /** A host's crowd has been out this long when it runs a civilian down, so a client's catch-up has a day's morning to replay. */
 const HOST_DAY_SECONDS = 100;
@@ -302,7 +304,7 @@ function pushedByWalker(log: Float64Array, resident: number): boolean {
 /** The player's punch from a metre short of `resident`'s drawn spot, along +x at her. */
 function punchAt(harness: Harness, resident: number): void {
   const poses = harness.crowd().poses;
-  harness.director.punch(poses.x[resident]! - 1, poses.z[resident]!, 1, 0);
+  harness.director.punch(PLAYER, poses.x[resident]! - 1, poses.z[resident]!, 1, 0);
 }
 
 describe("given the player on foot in the open world", () => {
@@ -371,7 +373,7 @@ describe("given the player on foot in the open world", () => {
     const poses = crowd.poses;
     expect(placeMet(map, ray, 250, { index: -1, along: 0 }).along, "control: no building in the way (m)").toBeGreaterThan(31);
     const thrown = harness.thrown.length;
-    expect(harness.director.shoot(ray, WEAPONS.rifle), "how far the shot went (m)").toBeCloseTo(30, 1);
+    expect(harness.director.shoot(PLAYER, ray, WEAPONS.rifle), "how far the shot went (m)").toBeCloseTo(30, 1);
     harness.frame();
     expect(poses.shown[c], "shown").toBe(0);
     expect(harness.thrown.length - thrown, "figures thrown").toBe(1);
@@ -398,7 +400,7 @@ describe("given the player on foot in the open world", () => {
     ray.dirX = (chest.x - ray.eyeX) / beyond;
     ray.dirY = 0;
     ray.dirZ = (chest.z - ray.eyeZ) / beyond;
-    expect(harness.director.shoot(ray, WEAPONS.rifle), "how far the shot went (m)").toBeLessThan(beyond - 0.5);
+    expect(harness.director.shoot(PLAYER, ray, WEAPONS.rifle), "how far the shot went (m)").toBeLessThan(beyond - 0.5);
     harness.frame();
     expect(poses.shown[c], "she is still shown").toBe(1);
   });

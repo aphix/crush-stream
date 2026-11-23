@@ -39,7 +39,8 @@ import { ShotFx } from "../present/shot-fx.ts";
 import { GUN } from "../present/people.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
-import type { LookRay } from "../ai/civilians/civilian-look.ts";
+import { LookRay } from "../ai/civilians/civilian-look.ts";
+import { HandGuns } from "./engine-hand-gun.ts";
 import type { CarPick, DollPick } from "./engine-openworld.ts";
 import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -48,6 +49,7 @@ import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { OpenWorldActs, type ActorPlace } from "./engine-openworld-acts.ts";
 import { RayNearest } from "./ray-nearest.ts";
 import { type AutoOrbit, autoOrbitOf } from "./engine-openworld-auto.ts";
 import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
@@ -128,9 +130,9 @@ const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _ownMotion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
 const _hand = new THREE.Vector3();
-const _elbow = new THREE.Vector3();
 const _gunRest = new THREE.Vector3();
-const GUN_DOWN = new THREE.Vector3(0, -1, 0);
+const _muzzle = new THREE.Vector3();
+const _gunAim = new LookRay();
 const _bn = new THREE.Vector3();
 const _bp = new THREE.Vector3();
 /** The live cars' groups and the nearest hit for a bullet's car pick (`pickCar`): refilled each shot, so a shot allocates nothing of its own. */
@@ -208,6 +210,7 @@ export class CrashEngine extends EngineGarage {
     dropLooks: () => this.dropLooks(),
     courseMenu: () => this.race.courseMenu(),
     crowdLink: () => this.crowdLink(),
+    hearAct: (actor, act) => this.acts.hear(actor, act),
     seat: this.seat,
   });
   /** The results reel and its solo view. */
@@ -216,6 +219,8 @@ export class CrashEngine extends EngineGarage {
   protected readonly podium: PodiumDirector;
   /** The open world's society and crowd (docs/OPEN_WORLD.md). */
   private readonly openWorld: OpenWorldDirector;
+  /** What every player on foot does at the host, and a guest's way to tell it (`MSG.act`). */
+  private readonly acts: OpenWorldActs;
   readonly pace = new SimPacer(true);
   private readonly blend = new PoseBlend();
   /** What a crashed car nobody drives rolls on: its drive's idle pedals (engine braking, the test world's IDLE). */
@@ -251,6 +256,10 @@ export class CrashEngine extends EngineGarage {
   private readonly playerShots = new ShotFx(1);
   /** The gun in the player's right hand while a gun is the weapon in hand: the guards' box in their steel. */
   private readonly handGun = new THREE.Mesh(new THREE.BoxGeometry(GUN.w, GUN.len, GUN.depth), tagMaterial(new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.5, metalness: 0.6 }), MAT.GUN_STEEL));
+  /** The one source of the held gun's mesh and lengths per weapon (`HandGuns`). */
+  private readonly handGuns = new HandGuns(this.handGun);
+  /** A gun was posed in the player's hand this frame: its muzzle is where a shot leaves from. */
+  private gunPosed = false;
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
   protected readonly deviceClass: DeviceClass;
@@ -355,9 +364,9 @@ export class CrashEngine extends EngineGarage {
         if (!on) this.mouseLook.exit();
         else if (!this.mouseLook.on) this.toggleMouseLook();
       },
-      punchLanded: (x, z, dirX, dirZ) => this.openWorld.punch(x, z, dirX, dirZ),
+      punchLanded: (dirX, dirZ) => this.acts.punchLanded(dirX, dirZ),
       aimRay: (centre, out) => this.aimRay(centre, out),
-      shootRay: (ray, gun) => this.openWorld.shoot(ray, gun),
+      shootRay: (aim, gun) => this.acts.shootLocal(aim, gun),
       shotFired: (ray, far) => this.shotFired(ray, far),
       hook: () => this.tether.fire(),
     });
@@ -434,10 +443,26 @@ export class CrashEngine extends EngineGarage {
     this.highlights = this.makeHighlights();
     this.podium = this.makePodium();
     this.openWorld = this.makeOpenWorld();
+    this.acts = new OpenWorldActs(
+      {
+        actorPlace: (actor, out) => this.actorPlace(actor, out),
+        now: () => performance.now() / 1000,
+        self: () => this.drivenCar(),
+        guest: () => this.net.client,
+        face: (dx, dz) => this.onFoot.faceToward(dx, dz),
+        layGun: (x, y, z, out) => this.layGun(x, y, z, out),
+        sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir),
+      },
+      this.openWorld,
+    );
     this.startOpenWorld(buildOpenWorldMap(layOutLots()));
 
     this.resize();
-    this.resizeObs = new ResizeObserver(() => this.resize());
+    this.cacheCanvasRect();
+    this.resizeObs = new ResizeObserver(() => {
+      this.resize();
+      this.cacheCanvasRect();
+    });
     this.resizeObs.observe(canvas.parentElement ?? canvas);
 
     window.addEventListener("keydown", this.onKey);
@@ -535,21 +560,17 @@ export class CrashEngine extends EngineGarage {
       playerLook: (car) => this.ragdolls.carDriverLook(car),
       knockWalker: (vx, vy, vz) => this.onFoot.knocked(vx, vy, vz),
       dragWalker: (t) => this.onFoot.dragged(t),
-      strikeWalker: (dirX, dirZ) => {
-        if (!this.ragdolls.walkerTorso(_p)) return;
-        this.ragdolls.strikeWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
-      },
-      staggerWalker: (dirX, dirZ) => {
-        if (!this.ragdolls.walkerTorso(_p)) return;
-        this.ragdolls.blowWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
-        this.ragdolls.staggerWalker(WALKER_SLOT, 0.5);
-      },
+      strikeWalker: (dirX, dirZ) => this.strikeOwnWalker(dirX, dirZ),
+      staggerWalker: (dirX, dirZ) => this.staggerOwnWalker(dirX, dirZ),
+      actorPlace: (actor, out) => this.actorPlace(actor, out),
+      strikeActor: (victim, dirX, dirZ, knockedOut) => this.strikeActor(victim, dirX, dirZ, knockedOut),
       punchProp: (x, z, dirX, dirZ) => this.race.punchProp(x, z, dirX, dirZ),
-      pickDoll: (ray, range, out) => this.pickDoll(ray, range, out),
+      pickDoll: (actor, ray, range, out) => this.pickDoll(actor, ray, range, out),
       pickCar: (ray, range, out) => this.pickCar(ray, range, out),
       strikeDoll: (slot, x, y, z, ray, speed) => this.strikeDoll(slot, x, y, z, ray, speed),
       shotSparks: (x, y, z, ray) => this.shotFx(_p.set(x, y, z), _n.set(-ray.dirX, -ray.dirY, -ray.dirZ)),
       shootProp: (ray, limit, vx, vz) => this.race.shootProp(ray, limit, vx, vz),
+      propMet: (ray, limit) => this.race.propMet(ray, limit),
       hookWallHits: (listener) => {
         const recorded = this.race.onWallHit;
         this.race.onWallHit = (i, closing, x, z) => {
@@ -971,9 +992,21 @@ export class CrashEngine extends EngineGarage {
     if (this.onFoot.armed()) e.preventDefault();
   };
 
-  /** The ray a shot goes along: from the camera through the view's centre (`centre`, or no cursor over the canvas), else through the cursor. */
-  private aimRay(centre: boolean, out: LookRay): void {
+  /** The canvas's place on the page as of its last resize (`cacheCanvasRect`), so a shot and the gun's pose read no layout. */
+  private readonly canvasRect = { left: 0, top: 0, width: 0, height: 0 };
+
+  /** Reads the canvas's rect once, where its size changes. */
+  private cacheCanvasRect(): void {
     const rect = this.canvas.getBoundingClientRect();
+    this.canvasRect.left = rect.left;
+    this.canvasRect.top = rect.top;
+    this.canvasRect.width = rect.width;
+    this.canvasRect.height = rect.height;
+  }
+
+  /** The ray a shot goes along: from the camera through the view's centre (`centre`, or no cursor over the canvas), else through the cursor. Reads the cached canvas rect. */
+  private aimRay(centre: boolean, out: LookRay): void {
+    const rect = this.canvasRect;
     const x = this.view.hoverX;
     const y = this.view.hoverY;
     if (centre || Number.isNaN(x) || Number.isNaN(y) || rect.width < 2 || rect.height < 2) {
@@ -994,22 +1027,51 @@ export class CrashEngine extends EngineGarage {
     out.dirZ = _n.z;
   }
 
-  /** The player fired along `ray` and its farthest ray went `far` m: the flash, the tracer, the sound, the law. */
+  /** The player fired along `ray` and its farthest ray went `far` m: the flash, the tracer and the sound (what the shot did is `OpenWorldActs.shootBy`). */
   private shotFired(ray: LookRay, far: number): void {
     this.playerShots.fire(0, ray.eyeX + ray.dirX * far, ray.eyeY + ray.dirY * far, ray.eyeZ + ray.dirZ * far);
     const weapon = this.onFoot.arms.weapon;
     if (this.audioOn && weapon !== "fists" && weapon !== "hook") this.audio.shot(weapon);
-    this.openWorld.shotFired();
   }
 
-  /** The first dummy of the pool, not his own walker, the ray meets within `range` m (`DummyMesh.nearestHit`: what the raycaster would sort first, with no hit list). */
-  private pickDoll(ray: LookRay, range: number, out: DollPick): void {
+  /** The first dummy of the pool the ray meets within `range` m, not the walker of actor `actor` when that is this player (`DummyMesh.nearestHit`: what the raycaster would sort first, with no hit list). */
+  private pickDoll(actor: number, ray: LookRay, range: number, out: DollPick): void {
     out.slot = -1;
     out.along = Infinity;
     const mesh = this.ragdolls.pickMesh;
     if (!mesh.layers.test(this.raycaster.layers)) return;
     this.raycaster.set(_p.set(ray.eyeX, ray.eyeY, ray.eyeZ), _n.set(ray.dirX, ray.dirY, ray.dirZ));
-    mesh.nearestHit(this.raycaster.ray, this.raycaster.near, range, WALKER_SLOT, out);
+    mesh.nearestHit(this.raycaster.ray, this.raycaster.near, range, actor === this.drivenCar() ? WALKER_SLOT : -1, out);
+  }
+
+  /** Where actor `actor` stands on foot: this player from his walker. Other players' places come from their shared bodies, which this machine does not hold yet. */
+  private actorPlace(actor: number, out: ActorPlace): boolean {
+    if (actor !== this.drivenCar() || !this.onFoot.armed() || !this.ragdolls.walkerTorso(_p)) return false;
+    out.x = _p.x;
+    out.y = _p.y;
+    out.z = _p.z;
+    out.heading = this.ragdolls.walker.facing;
+    return true;
+  }
+
+  /** A civilian's swing fells this player's walker, pushed along (dirX, dirZ). */
+  private strikeOwnWalker(dirX: number, dirZ: number): void {
+    if (!this.ragdolls.walkerTorso(_p)) return;
+    this.ragdolls.strikeWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
+  }
+
+  /** A blow and a stagger on this player's walker, pushed along (dirX, dirZ), that does not fell him. */
+  private staggerOwnWalker(dirX: number, dirZ: number): void {
+    if (!this.ragdolls.walkerTorso(_p)) return;
+    this.ragdolls.blowWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
+    this.ragdolls.staggerWalker(WALKER_SLOT, 0.5);
+  }
+
+  /** Another player's punch lands on player `victim`: this player's walker takes it; a body shared from another machine is struck here once such bodies exist. */
+  private strikeActor(victim: number, dirX: number, dirZ: number, knockedOut: boolean): void {
+    if (victim !== this.drivenCar()) return;
+    if (knockedOut) this.strikeOwnWalker(dirX, dirZ);
+    else this.staggerOwnWalker(dirX, dirZ);
   }
 
   /** The first live car the ray meets within `range` m, and the glass pane hit (null: the body): the hit three's raycaster sorts first (`RayNearest`). */
@@ -1049,18 +1111,30 @@ export class CrashEngine extends EngineGarage {
     else this.ragdolls.blowWalker(slot, _p, _n, speed);
   }
 
-  /** Once a frame: the gun box along the player's right forearm (part 5, the one the ARM_R / ELBOW_R motors drive) and the muzzle the tracers start from; hidden with no gun in hand. */
-  private poseHandGun(): void {
-    const held = this.onFoot.armed() && this.onFoot.arms.weapon !== "fists" && this.onFoot.arms.weapon !== "hook";
-    this.handGun.visible = held;
+  /** Once a frame: the gun laid in the player's right hand (part 5, the one the ARM_R / ELBOW_R motors drive) with its barrel at what his aim is on (or on the lay of his last shot while its flash shows), and the tip the tracers start from; hidden with no gun in hand. */
+  private poseHandGun(dt: number): void {
+    const arms = this.onFoot.arms;
+    const held = this.onFoot.armed() && arms.gunInHand();
+    const model = this.handGuns.model(arms.weapon);
+    this.gunPosed = held;
+    model.mesh.visible = held;
     if (!held) return;
-    const dummies = this.ragdolls.pickMesh;
-    dummies.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
-    dummies.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 1.07, 0), _elbow);
-    _n.copy(_hand).sub(_elbow).normalize();
-    this.handGun.quaternion.setFromUnitVectors(GUN_DOWN, _n);
-    this.handGun.position.copy(_hand).addScaledVector(_n, GUN.len / 2 - 0.04);
-    this.playerShots.setMuzzle(0, _hand.x + _n.x * (GUN.muzzle + GUN.len / 2), _hand.y + _n.y * (GUN.muzzle + GUN.len / 2), _hand.z + _n.z * (GUN.muzzle + GUN.len / 2));
+    this.ragdolls.pickMesh.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
+    this.aimRay(this.onFoot.aimsAtCentre(), _gunAim);
+    this.handGuns.pose(arms.weapon, _hand, _gunAim, dt, _muzzle);
+    this.playerShots.setMuzzle(0, _muzzle.x, _muzzle.y, _muzzle.z);
+  }
+
+  /** A shot is fired at (x, y, z): the gun in the player's hand is laid straight at it (`HandGuns.layOn`) and `out` is its tip, where the shot and its tracer start; false while no gun is in his hand. */
+  private layGun(x: number, y: number, z: number, out: { x: number; y: number; z: number }): boolean {
+    if (!this.gunPosed) return false;
+    this.ragdolls.pickMesh.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
+    if (!this.handGuns.layOn(this.onFoot.arms.weapon, _hand, x, y, z, _muzzle)) return false;
+    this.playerShots.setMuzzle(0, _muzzle.x, _muzzle.y, _muzzle.z);
+    out.x = _muzzle.x;
+    out.y = _muzzle.y;
+    out.z = _muzzle.z;
+    return true;
   }
 
   /**
@@ -1181,7 +1255,7 @@ export class CrashEngine extends EngineGarage {
       this.debris.update(fxDt);
       this.sparks.update(fxDt);
       this.playerShots.update(fxDt);
-      this.poseHandGun();
+      this.poseHandGun(fxDt);
       this.glassDots.update(fxDt);
       armTops(null);
       lapPart(PART.fx);

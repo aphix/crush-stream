@@ -70,7 +70,7 @@ describe("given the real engine in the open world, its player on foot", () => {
     const slot = rig.engine["ragdolls"].startWalker(spot, 0, { cop: false, look: driverLook(1, 0) }, 0);
     rig.run(1);
     const eyeY = activeGround().heightAt(torso.x, torso.z) + 1.3;
-    const went = rig.engine["openWorld"].shoot(rayFrom(torso.x, eyeY, torso.z, torso.x + dirX, eyeY, torso.z + dirZ), WEAPONS.pistol);
+    const went = rig.engine["openWorld"].shoot(rig.engine["drivenCar"](), rayFrom(torso.x, eyeY, torso.z, torso.x + dirX, eyeY, torso.z + dirZ), WEAPONS.pistol);
     expect(went, "how far the shot went (m)").toBeGreaterThanOrEqual(7);
     expect(went, "how far the shot went (m)").toBeLessThanOrEqual(9);
     rig.run(FRAME);
@@ -98,7 +98,7 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(pane.state, "control: the pane is whole").toBe("intact");
     const centre = at(pane);
     const ray = rayFrom(eye.x, eye.y, eye.z, centre.x, centre.y, centre.z);
-    for (let shot = 0; shot < 8; shot++) rig.engine["openWorld"].shoot(ray, WEAPONS.shotgun);
+    for (let shot = 0; shot < 8; shot++) rig.engine["openWorld"].shoot(rig.engine["drivenCar"](), ray, WEAPONS.shotgun);
     expect(car.velocity.x, "the car's speed along the shot (m/s)").toBeGreaterThan(0);
     expect(pane.state, `pane ${pane.name}`).not.toBe("intact");
   });
@@ -137,7 +137,7 @@ describe("given the real engine in the open world, its player on foot", () => {
     expect(out.pane, "the pane picked").toBe(pane.name);
   });
 
-  // mutation: sed -i '/^    this.openWorld.shotFired();/d' src/game/engine/engine.ts
+  // mutation: sed -i '/^    this.resolver.shotFired();/d' src/game/engine/engine-openworld-acts.ts
   it("when he fires any gun, then the police chase opens, seen or not", () => {
     // 10 m on along the street from where the car stands: getting out where it stands is a walk on a crossing against the signal, a chase of its own.
     const car = rig.cars()[0]!.group.position;

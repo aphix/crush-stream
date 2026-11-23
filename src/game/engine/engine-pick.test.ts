@@ -118,7 +118,7 @@ describe("given the open world, the player on foot with a kerb car 6 m off and a
     const out: DollPick = { slot: -1, x: 0, y: 0, z: 0, along: Infinity };
     for (let shot = 0; shot < RAYS; shot++) {
       const ray = rayToward(eye, dollMiddle, SCATTER_M.doll, next);
-      rig.engine["pickDoll"](ray, WEAPONS.pistol.range, out);
+      rig.engine["pickDoll"](rig.engine["drivenCar"](), ray, WEAPONS.pistol.range, out);
       const three = dollByThree(ray, WEAPONS.pistol.range);
       expect(out.slot, `shot ${shot}: slot`).toBe(three.slot);
       if (three.slot < 0) seen.none++;

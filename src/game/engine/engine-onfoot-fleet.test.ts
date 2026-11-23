@@ -241,7 +241,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     expect(rig.phase(), "and the press does nothing").toBe("inCar");
   });
 
-  // mutation: sed -i 's/    return this.host.openWorld() \&\& this.flow.phase === "onFoot" \&\& !this.host.guest();/    return this.flow.phase === "onFoot" \&\& !this.host.guest();/' src/game/engine/engine-onfoot.ts
+  // mutation: sed -i 's/    return this.host.openWorld() \&\& this.flow.phase === "onFoot";/    return this.flow.phase === "onFoot";/' src/game/engine/engine-onfoot.ts
   it("when fire is pressed on foot in the fleet, then nothing is thrown: the arms are the open world's", () => {
     rig.getOut();
     rig.engine["onFoot"].arms.press();

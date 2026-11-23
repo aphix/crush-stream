@@ -61,11 +61,14 @@ import { EVENT_LOG_CAPACITY } from "../ai/civilians/civilian-crowd-constants.ts"
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { KILL_HITS_MIN, KILL_HITS_SPREAD } from "../scenes/lawn-guard.ts";
 import { STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
+import { PlayerBlows, type ActorPlace } from "./engine-openworld-acts.ts";
 import { activeGround } from "../world/ground.ts";
-import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 
 /** A bullet takes a drawn person whose chest it passes within this (m). */
 const SHOT_BODY_RADIUS = 0.35;
+/** Two points nearer than this (m) have no wall between them (`wallBetween`). */
+const NO_WALL_QUERY_M = 1e-6;
 /** What a bullet's ray met in the ragdoll pool: the slot (-1: none), the point, the distance. */
 export type DollPick = { slot: number; x: number; y: number; z: number; along: number };
 /** What a bullet's ray met among the cars: the car (-1: none), the point, the distance, the glass pane hit (null: the body). */
@@ -199,8 +202,12 @@ export type OpenWorldPorts = {
   punchProp(x: number, z: number, dirX: number, dirZ: number): void;
   /** A civilian's swing lands on him and does not fell him yet: a blow and a stagger, pushed along (dirX, dirZ). */
   staggerWalker(dirX: number, dirZ: number): void;
-  /** The first dummy of the ragdoll pool, not the player's own walker, that the ray meets within `range` m, into `out`. */
-  pickDoll(ray: LookRay, range: number, out: DollPick): void;
+  /** The first dummy of the ragdoll pool that the ray meets within `range` m, into `out`, skipping the walker of actor `actor` when he is this machine's own player. */
+  pickDoll(actor: number, ray: LookRay, range: number, out: DollPick): void;
+  /** Where actor `actor` (a car index) stands on foot, into `out`; false when he is not on foot. This machine's own player from his walker; every other player from the players' bodies. */
+  actorPlace(actor: number, out: ActorPlace): boolean;
+  /** Player `victim` takes a punch along (dirX, dirZ); `knockedOut`: it is the blow that fells him. */
+  strikeActor(victim: number, dirX: number, dirZ: number, knockedOut: boolean): void;
   /** The first live car the ray meets within `range` m, into `out`. */
   pickCar(ray: LookRay, range: number, out: CarPick): void;
   /** The dummy in pool slot `slot` is struck at (x, y, z) along the ray at `speed` m/s, as a showcase click strikes one. */
@@ -221,6 +228,8 @@ export type OpenWorldPorts = {
   knockWalker(vx: number, vy: number, vz: number): boolean;
   /** The host's cable holds this machine's walker's body at `t`: he follows it. */
   dragWalker(t: BodyMotion): void;
+  /** How far along the ray the nearest standing knockable prop nearer than `limit` m is, Infinity for none; nothing is knocked (`RaceField.propMet`). */
+  propMet(ray: LookRay, limit: number): number;
 };
 
 /**
@@ -266,6 +275,10 @@ export class OpenWorldDirector {
   private readonly carMet: Meeting = { index: -1, along: Infinity };
   /** Shots that have landed on each car's body: at the guards' count its engine dies. */
   private readonly carShots = new Uint8Array(MAX_CARS);
+  /** How far (m) the last `lookAlong` let its ray go: the wall or the ground nearest it, at most the range. */
+  private lookReach = 0;
+  /** The ray `wallBetween` casts. */
+  private readonly wallRay = new LookRay();
   private readonly sceneScratch = { x: 0, z: 0 };
   /** The civilians near this machine's eye as physical bodies (`OpenWorldBodies`), null where the engine gives no dummies' world. */
   private bodies: OpenWorldBodies | null = null;
@@ -322,6 +335,8 @@ export class OpenWorldDirector {
   /** The map's places shut now (a wreck, or outside their hours), refilled each frame from the crowd's state for the interiors. */
   private closedPlaces: Uint8Array | null = null;
   private readonly walkerStrike = new WalkerStrike();
+  /** Punches on other players. */
+  private readonly players: PlayerBlows;
   /** The Auto camera: wanted (`setAuto`) across crowd rebuilds, made with each crowd. */
   private autoWanted = false;
   private auto: OpenWorldAuto | null = null;
@@ -330,6 +345,7 @@ export class OpenWorldDirector {
     this.ports = ports;
     this.culling = new OpenWorldCulling(ports.cull);
     this.carLook = new CarLook({ cars: () => ports.cars(), playerCars: () => ports.cull.playerCars(), own: () => ports.ownCar(), followed: () => (ports.foot(this.lookFoot) ? null : ports.cull.followed()), traffic: () => this.traffic });
+    this.players = new PlayerBlows(ports);
   }
 
   /** The map the crowd lives on; the crowd is made from it on the next frame in the open world. */
@@ -624,13 +640,14 @@ export class OpenWorldDirector {
     } else this.ports.staggerWalker(this.walkerStrike.dirX, this.walkerStrike.dirZ);
   }
 
-  /** An actor's punch lands from (x, z) going (dirX, dirZ), at the authority: the first of a foot cop, a civilian's body, a drawn civilian, a knockable prop within reach and arc takes it. It reads nothing of the local player, so a later plan can call it for a guest. */
-  punch(x: number, z: number, dirX: number, dirZ: number): void {
+  /** Actor `actor`'s punch lands from (x, z) going (dirX, dirZ), at the authority: the first of a foot cop, a civilian's body, a drawn civilian, another player, a knockable prop within reach and arc takes it. */
+  punch(actor: number, x: number, z: number, dirX: number, dirZ: number): void {
     const crowd = this.crowd;
     if (crowd === null || this.ports.isClient()) return;
     if (this.law?.punchCop(x, z, dirX, dirZ, this.seconds) === true) return;
     let c = this.bodies?.punch(x, z, dirX, dirZ, PLAYER_PUNCH_SPEED) ?? -1;
     if (c < 0) c = crowd.punchTarget(x, z, dirX, dirZ, this.bodies?.held ?? null);
+    if (c < 0 && this.players.punch(actor, x, z, dirX, dirZ, this.seconds)) return;
     if (c < 0) {
       this.ports.punchProp(x, z, dirX, dirZ);
       return;
@@ -797,23 +814,17 @@ export class OpenWorldDirector {
     this.bodies?.pin(slot);
   }
 
-  /** One ray of `gun` from an actor, at the authority: the nearest thing along it within the gun's range takes the hit (a prop, a ragdoll, a drawn civilian, a foot cop, a car), unless a wall or the ground is nearer. Returns how far (m) the ray went. It reads nothing of the local player, so a later plan can call it for a guest; on a guest's machine the ray goes its full range and touches nothing. */
-  shoot(ray: LookRay, gun: Gun): number {
+  /** One ray of `gun` from actor `actor`, at the authority: the nearest thing along it within the gun's range takes the hit (a prop, a ragdoll, a drawn civilian, a foot cop, a car), unless a wall or the ground is nearer. Returns how far (m) the ray went; on a guest's machine it goes its full range and touches nothing. */
+  shoot(actor: number, ray: LookRay, gun: Gun): number {
     const crowd = this.crowd;
     if (crowd === null || this.map === null || this.ports.isClient()) return gun.range;
-    let reach = Math.min(gun.range, placeMet(this.map, ray, gun.range, this.wallMet).along);
-    if (ray.dirY < 0) reach = Math.min(reach, (activeGround().heightAt(ray.eyeX, ray.eyeZ) - ray.eyeY) / ray.dirY);
+    const nearest = this.lookAlong(actor, ray, gun.range);
+    const reach = this.lookReach;
+    const person = this.personMet;
+    const cop = this.copShot;
     const flat = hypot2(ray.dirX, ray.dirZ);
     const dirX = flat > STRAIGHT_UP ? ray.dirX / flat : 0;
     const dirZ = flat > STRAIGHT_UP ? ray.dirZ / flat : 1;
-    this.ports.pickDoll(ray, reach, this.pickedDoll);
-    this.ports.pickCar(ray, reach, this.pickedCar);
-    const person = chestMet(crowd.poses, crowd.poses.count, this.bodies?.held ?? null, ray, SHOT_BODY_RADIUS, reach, this.personMet);
-    const cop = this.copShot;
-    cop.index = -1;
-    cop.along = reach;
-    this.law?.copMet(ray, SHOT_BODY_RADIUS, reach, cop);
-    const nearest = Math.min(reach, this.pickedDoll.along, this.pickedCar.along, person.along, cop.along);
     const prop = this.ports.shootProp(ray, nearest, dirX * gun.prop, dirZ * gun.prop);
     if (prop < nearest) return prop;
     if (nearest >= reach) return reach;
@@ -828,6 +839,47 @@ export class OpenWorldDirector {
     else if (cop.along === nearest) this.law?.shootCop(cop.index, dirX, dirZ, this.seconds);
     else this.shootCar(ray, gun);
     return nearest;
+  }
+
+  /** Whether a wall of a place stands between the points a and b (m): the level ray from a to b meets a footprint nearer than b is. A ray that starts inside a footprint meets no wall of it. */
+  wallBetween(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+    if (this.map === null) return false;
+    const length = hypot3(bx - ax, by - ay, bz - az);
+    if (length < NO_WALL_QUERY_M) return false;
+    const ray = this.wallRay;
+    ray.eyeX = ax;
+    ray.eyeY = ay;
+    ray.eyeZ = az;
+    ray.dirX = (bx - ax) / length;
+    ray.dirY = (by - ay) / length;
+    ray.dirZ = (bz - az) / length;
+    return placeMet(this.map, ray, length, this.wallMet).along < length;
+  }
+
+  /** How far (m) along `ray`, within `range`, the nearest wall, the ground, a drawn person, a foot cop, a dummy, a car or a knockable prop is, or `range` when there is none (nothing is struck, so a player's aim can be looked along before he fires). */
+  meet(actor: number, ray: LookRay, range: number): number {
+    if (this.crowd === null || this.map === null) return range;
+    const nearest = this.lookAlong(actor, ray, range);
+    return Math.min(nearest, this.ports.propMet(ray, nearest));
+  }
+
+  /**
+   * Fills the picks (`pickedDoll`, `pickedCar`, `personMet`, `copShot`) of `ray` within `range` m and `lookReach` (how far a wall or the ground lets it go, at most `range`); how far the nearest of
+   * them is, `lookReach` when none. Props are not among them.
+   */
+  private lookAlong(actor: number, ray: LookRay, range: number): number {
+    const crowd = this.crowd!;
+    let reach = Math.min(range, placeMet(this.map!, ray, range, this.wallMet).along);
+    if (ray.dirY < 0) reach = Math.min(reach, (activeGround().heightAt(ray.eyeX, ray.eyeZ) - ray.eyeY) / ray.dirY);
+    this.lookReach = reach;
+    this.ports.pickDoll(actor, ray, reach, this.pickedDoll);
+    this.ports.pickCar(ray, reach, this.pickedCar);
+    const person = chestMet(crowd.poses, crowd.poses.count, this.bodies?.held ?? null, ray, SHOT_BODY_RADIUS, reach, this.personMet);
+    const cop = this.copShot;
+    cop.index = -1;
+    cop.along = reach;
+    this.law?.copMet(ray, SHOT_BODY_RADIUS, reach, cop);
+    return Math.min(reach, this.pickedDoll.along, this.pickedCar.along, person.along, cop.along);
   }
 
   /** A ray lands on the car in `pickedCar`: it is pushed along the shot; a pane cracks, then shatters; the body sparks, and after the guards' count of hits its engine dies. */
