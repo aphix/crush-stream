@@ -29,8 +29,16 @@ import { launch } from "../contact/crash-scenarios.test-util.ts";
 import { personOf } from "./people-index.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
 import { MEDICS } from "./engine-openworld-medics.ts";
+import * as THREE from "three";
+import { RAPIER, THING, thingCode, TetherSet, WORLD } from "../contact/tether.ts";
+import { RemoteCables } from "./openworld-cables.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { BodyMotion } from "../net/body-codec.ts";
+import { DRAWN } from "./openworld-shared.ts";
+
+/** How close a cable's far end is drawn to the host's ground point (m): the wire's centimetre. */
+const CABLE_END_M = 0.01;
+const camera = new THREE.PerspectiveCamera();
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { TORSO_ABOVE_FEET } from "./body-follow.ts";
 
@@ -81,7 +89,7 @@ type Drawn = { poses: CrowdPoses | null; held: Uint8Array | null; players: Crowd
 /** A walker on a straight path: where he stood at crowd second `t0`, how fast he moves (m/s) and how he is (`BODY_POSTURE`). */
 type FootPath = { x0: number; z0: number; vx: number; vz: number; t0: number; posture: number };
 type Launch = { vx: number; vy: number; vz: number };
-type Side = { director: OpenWorldDirector; thrown: FigureStrike[]; car: ReturnType<typeof pooledCar>; fake: FakeBodyHost | null; eye: { x: number; z: number }; drawn: Drawn; walk: { path: FootPath | null }; knocks: Launch[]; drags: { x: number; z: number }[] };
+type Side = { director: OpenWorldDirector; thrown: FigureStrike[]; car: ReturnType<typeof pooledCar>; fake: FakeBodyHost | null; eye: { x: number; z: number }; drawn: Drawn; walk: { path: FootPath | null }; knocks: Launch[]; drags: { x: number; z: number }[]; tethers: TetherSet; cables: RemoteCables };
 type RoomOptions = { bodies?: boolean; guests?: 1 | 2 };
 
 /** The host (a room of the open world) and one or two guests, their worlds on the open world's course and their crowds the directors of the engine, linked through netplay. With `bodies` each side has a dummies' world of its own (`FakeBodyHost`), an eye a test moves and an art that keeps the last poses and `held` it was handed. */
@@ -102,6 +110,7 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
     const knocks: Launch[] = [];
     const drags: { x: number; z: number }[] = [];
     const motion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
+    const tethers = new TetherSet();
     const director = new OpenWorldDirector({
       ...idleOpenWorldPorts(),
       inOpenWorld: () => true,
@@ -109,6 +118,7 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
       seed: () => SEED,
       tier: () => POPULATION_TIER.phone,
       cars: () => [car],
+      tethers: () => tethers,
       ownCarIndex: () => slot,
       footAnchor: (out) => walkerAt(walk.path, director.crowdTime(), out),
       foot: (out) => {
@@ -147,7 +157,7 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
           }),
     });
     director.startOpenWorld(map);
-    return { director, thrown, car, fake, eye, drawn, walk, knocks, drags };
+    return { director, thrown, car, fake, eye, drawn, walk, knocks, drags, tethers, cables: new RemoteCables() };
   };
   const host = side(false, HOST_CAR_SLOT);
   const guest = side(true, 1);
@@ -179,8 +189,10 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
         secondNet?.frame(FRAME_MS / 1000);
         hub.flush();
         guest.director.frame(FRAME_MS / 1000);
+        guest.cables.frame(guest.director.cableFrame(), [guest.car], camera, guest.director.peopleShared, guest.director.peopleCapacity, null, GUEST_CAR);
         guest.fake?.advance(FRAME_MS / 1000);
         second?.director.frame(FRAME_MS / 1000);
+        second?.cables.frame(second.director.cableFrame(), [second.car], camera, second.director.peopleShared, second.director.peopleCapacity, null, 2);
         second?.fake?.advance(FRAME_MS / 1000);
       }
     },
@@ -457,5 +469,30 @@ describe("given a host on foot and a guest", () => {
       widest = Math.max(widest, hypot2(poses.x[0]! - (path.x0 + path.vx * (r.guest.director.crowdTime() - path.t0)), poses.z[0]! - path.z0));
     }
     expect(widest, "the widest he is drawn from where he was at the guest's crowd time (m)").toBeLessThan(DRAWN_GAP_M);
+  });
+});
+
+describe("given a guest, and a civilian the host's hook ties to a point on the ground", () => {
+  it("when the guest draws, then one cable runs from within 0.5 m of where the guest draws her to within 1 cm of the host's ground point; and when the host cuts it, then within 0.5 s the guest draws none", () => {
+    const { r, civilian, slot } = hookedRoom();
+    const hostCrowd = r.host.director["crowd"]!;
+    const ground = { x: hostCrowd.poses.x[civilian]! + 3, y: 0, z: hostCrowd.poses.z[civilian]! };
+    const cable = r.host.tethers.open();
+    r.host.tethers.setEnd(cable, 0, RAPIER, ground.x - 3, 1, ground.z, thingCode(THING.doll, slot));
+    r.host.tethers.setEnd(cable, 1, WORLD, ground.x, ground.y, ground.z);
+    r.host.tethers.setPlace(cable, 0, ground.x - 3, 1, ground.z, 3);
+    r.step(10);
+    const cables = r.guest.cables.set;
+    expect(cables.count, "cables the guest draws").toBe(1);
+    const herAt = { x: 0, z: 0 };
+    expect(r.guest.director.peopleShared!.drawnAt(civilian, herAt), "control: the guest draws her").not.toBe(DRAWN.none);
+    const end = new THREE.Vector3();
+    cables.anchor(0, 0, [], end);
+    expect(hypot2(end.x - herAt.x, end.z - herAt.z), "metres from where the guest draws her to the cable's first end").toBeLessThan(BODY_GAP_M);
+    cables.anchor(0, 1, [], end);
+    expect(hypot2(end.x - ground.x, end.z - ground.z) + Math.abs(end.y - ground.y), "metres from the host's ground point to the cable's other end").toBeLessThan(CABLE_END_M);
+    r.host.tethers.release(cable);
+    r.step(15);
+    expect(cables.count, "cables the guest draws once the host has cut it").toBe(0);
   });
 });

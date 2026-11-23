@@ -41,6 +41,8 @@ import type { CrowdLink } from "../net/net-ports.ts";
 import { BODY_KIND, clearBodyFrame, makeBodyFrame, type BodyFrame, type BodyMotion, type FootRecord } from "../net/body-codec.ts";
 import { OpenWorldShared } from "./openworld-shared.ts";
 import { OpenWorldPlayers } from "./openworld-players.ts";
+import { writeCables } from "./openworld-cables.ts";
+import type { TetherSet } from "../contact/tether.ts";
 import type { SightPlayer } from "../present/openworld-sight.ts";
 import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
 import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
@@ -198,6 +200,8 @@ export type OpenWorldPorts = {
   shotSparks(x: number, y: number, z: number, ray: LookRay): void;
   /** The ray against the knockable props (`RaceField.shootProp`). */
   shootProp(ray: LookRay, limit: number, vx: number, vz: number): number;
+  /** The hook's cables of this machine's world: the host sends them to every guest. */
+  tethers(): TetherSet;
   /** This browser's player on foot as the ragdoll world has him (torso, velocity, facing, posture) into `out`; false while he is in a car. */
   footAnchor(out: BodyMotion): boolean;
   /** The engine index of the car this browser's player drives, or got out of; -1 for none. */
@@ -717,6 +721,21 @@ export class OpenWorldDirector {
     if (this.ports.isClient()) return;
     this.players?.writeRecords(out, this.ports.ownCarIndex(), this.ports.footAnchor(this.ownMotion) ? this.ownMotion : null, this.crowdTime(), this.bodies);
     this.bodies?.writeHooked(out);
+    writeCables(out, this.ports.tethers(), this.bodies, this.peopleCapacity);
+  }
+
+  /** Guest: the host's frame of people as this machine last drew from it (the cables are drawn from it); null on the host and while no frame is fresh. */
+  cableFrame(): BodyFrame | null {
+    return this.ports.isClient() ? this.seenFrame : null;
+  }
+
+  /** The host's people as this machine draws them (null where there is no crowd), and the crowd's size: what a cable's person end is resolved with. */
+  get peopleShared(): OpenWorldShared | null {
+    return this.shared;
+  }
+
+  get peopleCapacity(): number {
+    return this.crowd?.poses.count ?? 0;
   }
 
   /** Guest: the host's frame of people, heard now. */

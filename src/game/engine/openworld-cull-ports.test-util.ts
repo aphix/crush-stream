@@ -1,12 +1,15 @@
 import { CarDetail } from "../present/car-detail.ts";
 import type { OpenWorldCullPorts } from "./engine-openworld-cull.ts";
 import type { OpenWorldPorts } from "./engine-openworld.ts";
+import { TetherSet } from "../contact/tether.ts";
 
 /** Culling ports with no camera and no solids: every thing is seen, so nothing is ever phased out. */
 export function idleCullPorts(): OpenWorldCullPorts {
   const detail = new CarDetail();
   return { eyes: () => [], solids: () => [], playerCars: () => [], walker: () => null, others: (_out, from) => from, detail: () => detail, followed: () => null, replaying: () => false };
 }
+
+const IDLE_TETHERS = new TetherSet();
 
 /**
  * Every director port as a no-op: a solo host in the open world, no cars, nobody on foot, drawing that keeps nothing.
@@ -47,5 +50,6 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     playerLook: () => ({ woman: false, shirt: 0, pants: 0, hair: 0, hat: null, mustache: false }),
     knockWalker: () => false,
     dragWalker: () => {},
+    tethers: () => IDLE_TETHERS,
   };
 }
