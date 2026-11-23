@@ -138,7 +138,6 @@ const _ownMotion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading:
 const NOBODY_SEATED = new SeatTable();
 const _hand = new THREE.Vector3();
 const _gunRest = new THREE.Vector3();
-const _muzzle = new THREE.Vector3();
 const _gunAim = new LookRay();
 const _bn = new THREE.Vector3();
 const _bp = new THREE.Vector3();
@@ -271,7 +270,7 @@ export class CrashEngine extends EngineGarage {
   /** The gun in the player's right hand while a gun is the weapon in hand: the guards' box in their steel. */
   private readonly handGun = new THREE.Mesh(new THREE.BoxGeometry(GUN.w, GUN.len, GUN.depth), tagMaterial(new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.5, metalness: 0.6 }), MAT.GUN_STEEL));
   /** The one source of the held gun's mesh and lengths per weapon (`HandGuns`). */
-  private readonly handGuns = new HandGuns(this.handGun);
+  private readonly handGuns = new HandGuns(this.handGun, this.playerShots.muzzles);
   /** A gun was posed in the player's hand this frame: its muzzle is where a shot leaves from. */
   private gunPosed = false;
 
@@ -1185,19 +1184,19 @@ export class CrashEngine extends EngineGarage {
     if (!held) return;
     this.ragdolls.pickMesh.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
     this.aimRay(this.onFoot.aimsAtCentre(), _gunAim);
-    this.handGuns.pose(arms.weapon, _hand, _gunAim, dt, _muzzle);
-    this.playerShots.setMuzzle(0, _muzzle.x, _muzzle.y, _muzzle.z);
+    this.handGuns.dt = dt;
+    this.handGuns.pose(arms.weapon, _hand, _gunAim);
   }
 
   /** A shot is fired at (x, y, z): the gun in the player's hand is laid straight at it (`HandGuns.layOn`) and `out` is its tip, where the shot and its tracer start; false while no gun is in his hand. */
   private layGun(x: number, y: number, z: number, out: { x: number; y: number; z: number }): boolean {
     if (!this.gunPosed) return false;
     this.ragdolls.pickMesh.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
-    if (!this.handGuns.layOn(this.onFoot.arms.weapon, _hand, x, y, z, _muzzle)) return false;
-    this.playerShots.setMuzzle(0, _muzzle.x, _muzzle.y, _muzzle.z);
-    out.x = _muzzle.x;
-    out.y = _muzzle.y;
-    out.z = _muzzle.z;
+    if (!this.handGuns.layOn(this.onFoot.arms.weapon, _hand, x, y, z)) return false;
+    const muzzles = this.playerShots.muzzles;
+    out.x = muzzles[0]!;
+    out.y = muzzles[1]!;
+    out.z = muzzles[2]!;
     return true;
   }
 
