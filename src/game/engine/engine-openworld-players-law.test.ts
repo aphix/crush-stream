@@ -123,9 +123,9 @@ describe("given a solo host in the open world with its own player and a guest bo
   });
 
   it("when the guest punches the cop beside him, then the cops are after the guest and not the host's player", () => {
-    const { director, scene, places } = hostWithTwoOnFoot({ calls: 0 });
-    scene.foot.walkers.place(0, places.guestX - 1, places.guestZ);
-    director.punch(GUEST, places.guestX, places.guestZ, -1, 0);
+    const { director, scene } = hostWithTwoOnFoot({ calls: 0 });
+    expect(scene.copPoses.shown[0], "control: the cop is out on the street").toBe(1);
+    director.punch(GUEST, scene.copPoses.x[0]! + 1, scene.copPoses.z[0]!, -1, 0);
     director.step(FRAME_SECONDS);
     expect(scene.footChaseOf(strip(), GUEST), "a chase of the guest").toBe(true);
     expect(scene.footChaseOf(strip(), OWN), "a chase of the host's player").toBe(false);
@@ -140,7 +140,7 @@ describe("given a solo host in the open world with its own player and a guest bo
       const resets: number[] = [];
       const { scene } = hostWithTwoOnFoot({ calls: 0 }, testCase.clearSpot, resets);
       scene.foot.placeCarOf(GUEST, 0, 0, 0);
-      expect(resets, "cars sent back to their spawn").toEqual(testCase.expected);
+      expect(firstMismatch(resets, testCase.expected), "cars sent back to their spawn").toBeUndefined();
     });
   }
 });

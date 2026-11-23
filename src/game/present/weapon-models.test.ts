@@ -11,7 +11,7 @@ const GUNS: readonly (readonly [id: GunModelId, least: number, most: number])[] 
 ];
 const MOST_TRIANGLES = 400;
 
-/** What a model's vertices span, how many colours they carry, and how near one of them comes to the muzzle point. */
+/** What a model's vertices span along its barrel (-y, as `x`) and above its grip (+z, as `y`), how many colours they carry, and how near one of them comes to the muzzle point. */
 function read(id: GunModelId) {
   const { geometry, muzzle } = gunModel(id);
   const position = geometry.getAttribute("position");
@@ -23,13 +23,13 @@ function read(id: GunModelId) {
   let nearestToMuzzle = Infinity;
   const colours = new Set<number>();
   for (let v = 0; v < position.count; v++) {
-    const x = position.getX(v);
-    const y = position.getY(v);
+    const x = -position.getY(v);
+    const y = position.getZ(v);
     minX = Math.min(minX, x);
     maxX = Math.max(maxX, x);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
-    nearestToMuzzle = Math.min(nearestToMuzzle, hypot3(x - muzzle[0], y - muzzle[1], position.getZ(v)));
+    nearestToMuzzle = Math.min(nearestToMuzzle, hypot3(x - muzzle[0], y - muzzle[1], position.getX(v)));
     colours.add(Math.round(color.getX(v) * 255) * 65536 + Math.round(color.getY(v) * 255) * 256 + Math.round(color.getZ(v) * 255));
   }
   return { minX, maxX, minY, maxY, nearestToMuzzle, colours: colours.size, triangles: position.count / 3, muzzle };

@@ -36,7 +36,7 @@ import { DebrisSystem, SparkSystem, GlassDotSystem, TireSmokeSystem } from "../p
 import { Fountains } from "./engine-fountains.ts";
 import { GameAudio } from "../present/game-audio.ts";
 import { ShotFx } from "../present/shot-fx.ts";
-import { GUN } from "../present/people.ts";
+import { gunModel } from "../present/weapon-models.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
@@ -267,8 +267,8 @@ export class CrashEngine extends EngineGarage {
   };
   /** The player's muzzle flash and tracers (the guards have their own in `People`). */
   private readonly playerShots = new ShotFx(1);
-  /** The gun in the player's right hand while a gun is the weapon in hand: the guards' box in their steel. */
-  private readonly handGun = new THREE.Mesh(new THREE.BoxGeometry(GUN.w, GUN.len, GUN.depth), tagMaterial(new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.5, metalness: 0.6 }), MAT.GUN_STEEL));
+  /** What the player holds out in his right hand while a gun or the hook's launcher is the weapon in hand: one mesh that wears that weapon's model (`HandGuns.model`), coloured per vertex. */
+  private readonly handGun = new THREE.Mesh(gunModel("pistol").geometry, tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.3 }), MAT.GUN_STEEL));
   /** The one source of the held gun's mesh and lengths per weapon (`HandGuns`). */
   private readonly handGuns = new HandGuns(this.handGun, this.playerShots.muzzles);
   /** A gun was posed in the player's hand this frame: its muzzle is where a shot leaves from. */
@@ -1177,10 +1177,9 @@ export class CrashEngine extends EngineGarage {
   /** Once a frame: the gun laid in the player's right hand (part 5, the one the ARM_R / ELBOW_R motors drive) with its barrel at what his aim is on (or on the lay of his last shot while its flash shows), and the tip the tracers start from; hidden with no gun in hand. */
   private poseHandGun(dt: number): void {
     const arms = this.onFoot.arms;
-    const held = this.onFoot.armed() && arms.gunInHand();
-    const model = this.handGuns.model(arms.weapon);
+    const held = this.onFoot.armed() && arms.heldOut();
     this.gunPosed = held;
-    model.mesh.visible = held;
+    this.handGuns.model(arms.weapon).visible = held;
     if (!held) return;
     this.ragdolls.pickMesh.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
     this.aimRay(this.onFoot.aimsAtCentre(), _gunAim);

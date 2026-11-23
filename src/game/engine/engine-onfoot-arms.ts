@@ -128,9 +128,9 @@ export class OnFootArms {
     return this.host.armed() ? { slot: WEAPON_ORDER.indexOf(this.weapon), name: WEAPON_NAMES[this.weapon] } : null;
   }
 
-  /** A gun (not fists or the hook) is the weapon in hand. */
-  gunInHand(): boolean {
-    return this.weapon !== "fists" && this.weapon !== "hook";
+  /** Something is held out in his hand: a gun or the hook's launcher (not fists). */
+  heldOut(): boolean {
+    return this.weapon !== "fists";
   }
 
   /** One shot of the weapon in hand. Fists: a punch, when the last one is done. */

@@ -21,7 +21,7 @@ import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { OpenWorldActs } from "./engine-openworld-acts.ts";
 import { ACT } from "../net/act-codec.ts";
-import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
+import { idleCullPorts, idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 import { detAtan2, hypot2 } from "../kernel/physics-core.js";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { SPECIES } from "../ai/civilians/civilian-constants.ts";
@@ -124,6 +124,8 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
     const tethers = new TetherSet();
     const director = new OpenWorldDirector({
       ...idleOpenWorldPorts(),
+      // As the engine wires it: the sight field knows the other players on foot, so a knock beside a guest far from the host's eye still throws its ragdoll.
+      cull: { ...idleCullPorts(), others: (out, from) => director.sightOthers(out, from) },
       inOpenWorld: () => true,
       isClient: () => client,
       seed: () => SEED,

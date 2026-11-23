@@ -4,10 +4,10 @@ import * as THREE from "three";
 export type GunModelId = "pistol" | "shotgun" | "rifle" | "hook";
 
 /**
- * A held firearm: one faceted mesh with a colour per vertex, in the hand's frame. The origin is the grip (where the hand closes), +x runs along the barrel to the
- * muzzle, +y is up, z is across. `muzzle` is the barrel's tip in that frame (x along the barrel, y above the grip): the point a shot and its tracer leave from.
+ * A held firearm: one faceted mesh with a colour per vertex, in the frame the hand guns are posed in (`HandGuns`, `People`): the origin is the grip (where the hand closes), the barrel runs down -y to the
+ * muzzle, +z is the gun's top and x is across. `muzzle` is the barrel's tip from the grip: how far along the barrel, and how far above the grip (m): the point a shot and its tracer leave from.
  */
-export type GunModel = { readonly geometry: THREE.BufferGeometry; readonly muzzle: readonly [x: number, y: number] };
+type GunModel = { readonly geometry: THREE.BufferGeometry; readonly muzzle: readonly [along: number, above: number] };
 
 type Point = readonly [x: number, y: number];
 /** One slab of a gun: its colour (sRGB hex), its thickness across (m), its side outline (m), and how far it is turned about the bore (rad). */
@@ -42,8 +42,8 @@ const PRONG: readonly Point[] = [
 const THIRD_TURN = (2 * Math.PI) / 3;
 
 /**
- * Each gun as slabs traced from its side view (the model sheets are in `.bench/newShots/weapons/`), in metres with the barrel along +x. Real lengths: a service
- * pistol about 0.2 m, a pump shotgun and a rifle about 1 m.
+ * Each gun as slabs traced from its side view, in metres with the barrel along +x and +y up (`build` turns them into the hand's frame). Real lengths: a service pistol about 0.2 m, a pump shotgun and a
+ * rifle about 1 m.
  */
 const DESIGNS: Record<GunModelId, Design> = {
   pistol: {
@@ -137,7 +137,7 @@ function slabGeometry(design: Design, [, thick, outline, turn]: Slab): THREE.Buf
   return geometry;
 }
 
-/** The design's slabs as one geometry: positions, flat normals and a colour per vertex. Built once a gun, when it is first asked for. */
+/** The design's slabs as one geometry in the hand's frame (side view x to -y, side view y to +z, across to -x: a turn, so faces keep their winding): positions, flat normals and a colour per vertex. Built once a gun, when it is first asked for. */
 function build(design: Design): GunModel {
   const slabs = design.slabs.map((slab) => slabGeometry(design, slab));
   const vertices = slabs.reduce((sum, slab) => sum + slab.getAttribute("position").count, 0);
@@ -155,6 +155,15 @@ function build(design: Design): GunModel {
     for (let v = at; v < at + count; v++) tint.toArray(color, v * 3);
     at += count;
     slab.dispose();
+  }
+  for (const array of [position, normal]) {
+    for (let v = 0; v < array.length; v += 3) {
+      const along = array[v]!;
+      const above = array[v + 1]!;
+      array[v] = -array[v + 2]!;
+      array[v + 1] = -along;
+      array[v + 2] = above;
+    }
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));

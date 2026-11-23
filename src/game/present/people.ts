@@ -10,6 +10,7 @@ import { driverSeat } from "../vehicle/interior.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
 import type { Ground } from "../world/ground.ts";
+import { gunModel } from "./weapon-models.ts";
 import { insidePolygon } from "../world/terrain.ts";
 import type { GuardSpec } from "../world/track-schema.ts";
 import type { DriverLook } from "./driver-look.ts";
@@ -34,8 +35,6 @@ const FOOT = [10, 11] as const;
 const FOOT_FOLLOW = 0.5;
 /** The side the gun is held on (index into the limb tables): his right hand. */
 const GUN_SIDE = 0;
-/** A handgun (m): across, along the arm, and how far its muzzle stands past the hand. */
-export const GUN = { w: 0.05, len: 0.22, depth: 0.1, muzzle: 0.14 };
 /** Arm and leg swing (rad) at a walk's widest, and the knee's bend on the leg swinging through (guessed, by eye). */
 const LEG_SWING = 0.5;
 const ARM_SWING = 0.4;
@@ -153,7 +152,7 @@ export class People {
     this.mesh = new DummyMesh(slots);
     this.mesh.castShadow = true;
     this.mesh.frustumCulled = false;
-    this.guns = new THREE.InstancedMesh(new THREE.BoxGeometry(GUN.w, GUN.len, GUN.depth), tagMaterial(new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.5, metalness: 0.6 }), MAT.GUN_STEEL), slots);
+    this.guns = new THREE.InstancedMesh(gunModel("pistol").geometry, tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.3 }), MAT.GUN_STEEL), slots);
     this.guns.frustumCulled = false;
     for (let i = 0; i < slots; i++) this.guns.setMatrixAt(i, HIDDEN);
     this.group.add(this.mesh, this.guns, this.shots.group);
@@ -181,13 +180,14 @@ export class People {
       this.limb(slot, root, turn, sign, HIP, KNEE, THIGH[side], SHIN[side], stance.thigh[side]!, stance.knee[side]!, 0, FOOT[side]);
     }
     if (!armed) return this.holster(slot);
-    // The hand at the forearm's far end, the gun along it, its muzzle past the hand.
+    // The hand at the forearm's far end, the handgun's grip in it and its barrel along the forearm, its muzzle past the hand and above the grip.
     this.handAt(root, turn, stance, _c);
     _gun.copy(turn).multiply(_qb.setFromAxisAngle(X, stance.arm[GUN_SIDE]! + stance.elbow[GUN_SIDE]!));
     _dir.set(0, -1, 0).applyQuaternion(_gun);
-    this.guns.setMatrixAt(slot, _m.compose(_s.copy(_c).addScaledVector(_dir, GUN.len / 2 - 0.04), _gun, _r.set(1, 1, 1)));
+    this.guns.setMatrixAt(slot, _m.compose(_c, _gun, _r.set(1, 1, 1)));
     this.guns.instanceMatrix.needsUpdate = true;
-    _s.copy(_c).addScaledVector(_dir, GUN.muzzle + GUN.len / 2).toArray(this.shots.muzzles, slot * 3);
+    const muzzle = gunModel("pistol").muzzle;
+    _s.copy(_c).addScaledVector(_dir, muzzle[0]).addScaledVector(_r.set(0, 0, 1).applyQuaternion(_gun), muzzle[1]).toArray(this.shots.muzzles, slot * 3);
   }
 
   /** Slot `slot`'s gun fires at (x, y, z): its muzzle flashes and a tracer runs from the muzzle to the point. */

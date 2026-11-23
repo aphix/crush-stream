@@ -107,25 +107,44 @@ function hookAct(kind: number, x: number, z: number, arg = 0): Act {
 
 describe("given a host that hears a guest's hook acts while the guest stands on foot at (10, 1, 20)", () => {
   const fireCases = [
-    { it: "when he fires along a sight line from 12 m behind him that passes his torso, his reticle on a person, then the host fires his hook along that line and knows he saw a person", x: 10, z: 8, arg: 1, expected: [{ actor: GUEST, eyeZ: 8, sawPerson: true }] },
-    { it: "when his reticle was on no person, then the host fires his hook and knows he saw none", x: 10, z: 8, arg: 0, expected: [{ actor: GUEST, eyeZ: 8, sawPerson: false }] },
-    { it: "when the sight line passes 5 m from his torso, then no hook is fired", x: 15, z: 8, arg: 1, expected: [] },
-    { it: "when the eye is 50 m from his torso, farther than any camera boom, then no hook is fired", x: 10, z: -30, arg: 1, expected: [] },
+    { it: "when he fires along a sight line from 12 m behind him that passes his torso, his reticle on a person, then the host fires his hook along that line and knows he saw a person", x: 10, z: 8, arg: 1, fires: 1, sawPerson: true },
+    { it: "when his reticle was on no person, then the host fires his hook and knows he saw none", x: 10, z: 8, arg: 0, fires: 1, sawPerson: false },
+    { it: "when the sight line passes 5 m from his torso, then no hook is fired", x: 15, z: 8, arg: 1, fires: 0, sawPerson: false },
+    { it: "when the eye is 50 m from his torso, farther than any camera boom, then no hook is fired", x: 10, z: -30, arg: 1, fires: 0, sawPerson: false },
   ] as const;
   for (const testCase of fireCases) {
     it(testCase.it, () => {
       const r = rig();
       r.acts.hear(GUEST, hookAct(ACT.hookFire, testCase.x, testCase.z, testCase.arg));
-      expect(r.hooks.fires, "the hook's fires on the host").toEqual(testCase.expected);
+      expect(r.hooks.fires.length, "the hook's fires on the host").toBe(testCase.fires);
+      if (testCase.fires === 0) return;
+      const fire = r.hooks.fires[0]!;
+      expect(fire.actor, "the actor whose hook fired").toBe(GUEST);
+      expect(fire.eyeZ, "the line's eye (z)").toBe(testCase.z);
+      expect(fire.sawPerson, "the host knows his reticle was on a person").toBe(testCase.sawPerson);
     });
   }
 
   it("when he cuts, reels and stops reeling, then the host cuts his cables and turns his winch on and off", () => {
     const r = rig();
     for (const kind of [ACT.hookCut, ACT.hookReelOn, ACT.hookReelOff]) r.acts.hear(GUEST, hookAct(kind, 10, 20));
-    expect(r.hooks.cuts, "actors whose cables were cut").toEqual([GUEST]);
-    expect(r.hooks.reels, "winch changes").toEqual([{ actor: GUEST, on: true }, { actor: GUEST, on: false }]);
+    expect(firstMismatch(r.hooks.cuts, [GUEST]), "actors whose cables were cut").toBeUndefined();
+    expect(r.hooks.reels.map((reel) => `${reel.actor}:${reel.on}`).join(" "), "winch changes, actor:on").toBe("1:true 1:false");
   });
+});
+
+describe("given a host that hears a guest's shotgun shot whose line runs east from an eye east of his torso", () => {
+  const originCases = [
+    { it: "when the shot starts 3.6 m from the host's view of his torso (a long gun's tip, 1.4 m out, and a sprint's lag), then it is carried out", away: 3.357, expected: true },
+    { it: "when the shot starts 4.3 m from the host's view of his torso, then nothing is fired", away: 4.099, expected: false },
+  ] as const;
+  for (const testCase of originCases) {
+    it(testCase.it, () => {
+      const r = rig();
+      r.acts.hear(GUEST, actAt(ACT.shot, SHOTGUN_SLOT, testCase.away, { x: 1, y: 0, z: 0 }));
+      expect(r.shots.length > 0, "rays fired").toBe(testCase.expected);
+    });
+  }
 });
 
 /** An act of `kind` whose eye is `away` m east of the guest's torso (and 1.3 m up for a shot), along `dir`. */
