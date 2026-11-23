@@ -24,11 +24,8 @@ import type { SightField } from "../present/openworld-sight.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
 
-/** Where an actor on foot stands (m, the ground's height included) and which way he faces (rad). */
-export type ActorPlace = { x: number; y: number; z: number; heading: number };
-
-/** `lastAt` of an actor who was not on foot at the last feed. */
-const NOT_ON_FOOT = -Infinity;
+/** Where an actor on foot stands (m, the ground's height included), which way he faces (rad) and how he moves (m/s: his walker's own velocity, which the law judges his pace by). */
+export type ActorPlace = { x: number; y: number; z: number; heading: number; velocityX: number; velocityZ: number };
 
 /** The foot cops' drawing: the crowd art over their own poses. */
 type CopArt = {
@@ -55,6 +52,8 @@ export type LawEnginePorts = {
   actorPlace(actor: number, out: ActorPlace): boolean;
   /** The actor (car index) this machine's own player is. */
   ownActor(): number;
+  /** The host puts actor `actor`'s car fresh on the road nearest (x, z), facing `yaw`: where the law sets a released player down. False where there is no clear spot. */
+  placeCarNear(actor: number, x: number, z: number, yaw: number): boolean;
   /** What the engine does for this machine's own player once the cops have him (his walker led to a patrol car and the station, then set down): the host's own, or a guest's by the host's events. */
   footArrest: FootArrestPorts;
   /** The engine's cars, which run the foot cops down as they do civilians. */
@@ -73,12 +72,8 @@ export class OpenWorldLaw {
   private readonly unlisten: (() => void) | null;
   /** A client's view of the host's patrol cars (it has no traffic); null where the law has the traffic's own. */
   private readonly rides: ArrestRides | null;
-  private readonly place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0 };
-  /** Per actor: where he stood and the crowd second of the feed before this one (`NOT_ON_FOOT` while he is not on foot), the pace his last two places give, and the way he last moved (a unit vector): which way he faces while he stands still. */
-  private readonly lastX = new Float64Array(PLAYER_ACTORS);
-  private readonly lastZ = new Float64Array(PLAYER_ACTORS);
-  private readonly lastAt = new Float64Array(PLAYER_ACTORS).fill(NOT_ON_FOOT);
-  private readonly lastSpeed = new Float64Array(PLAYER_ACTORS);
+  private readonly place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
+  /** Per actor, the way he last moved (a unit vector): which way he faces while he stands still. */
   private readonly facingX = new Float64Array(PLAYER_ACTORS);
   private readonly facingZ = new Float64Array(PLAYER_ACTORS).fill(1);
   private shoveSeconds = -Infinity;
@@ -100,6 +95,7 @@ export class OpenWorldLaw {
         footChased: (actor, cop, seconds) => crowd.raiseEvent(EVENT_KIND.footChase, playerCopSubject(actor, cop), seconds),
         footArrested: (actor, cop, seconds) => crowd.raiseEvent(EVENT_KIND.footArrest, playerCopSubject(actor, cop), seconds),
         self: () => ports.ownActor(),
+        placeCarNear: (actor, x, z, yaw) => ports.placeCarNear(actor, x, z, yaw),
         footArrest: ports.footArrest,
         // Every peer builds the signals from the layout (the traffic is the host's only), so every peer's cops see the same jaywalkers.
         signals: new TrafficSignals(buildRoadNetwork(openWorldGeometry(LAYOUT))),
@@ -148,30 +144,17 @@ export class OpenWorldLaw {
     }
   }
 
-  /** Before the law's step: where each actor on foot stands (`actorPlace`) and the pace and facing his last two places give, for the law to judge on the host and to follow the host's events elsewhere. */
+  /** Before the law's step: where each actor on foot stands and moves (`actorPlace`, his walker's own velocity: a displacement over the crowd's step is cut unevenly by the physics slices), for the law to judge on the host and to follow the host's events elsewhere. */
   private feedFoot(): void {
-    const seconds = this.crowd.crowdSeconds;
-    const { place, lastX, lastZ, lastAt, lastSpeed, facingX, facingZ } = this;
+    const { place, facingX, facingZ } = this;
     for (let actor = 0; actor < PLAYER_ACTORS; actor++) {
       const there = this.ports.actorPlace(actor, place);
-      if (!there) {
-        lastAt[actor] = NOT_ON_FOOT;
-        lastSpeed[actor] = 0;
-      } else if (lastAt[actor] === NOT_ON_FOOT || seconds > lastAt[actor]!) {
-        const dx = place.x - lastX[actor]!;
-        const dz = place.z - lastZ[actor]!;
-        const travelled = hypot2(dx, dz);
-        const moved = lastAt[actor] !== NOT_ON_FOOT;
-        lastSpeed[actor] = moved ? travelled / (seconds - lastAt[actor]!) : 0;
-        if (moved && lastSpeed[actor]! > FACING_SPEED) {
-          facingX[actor] = dx / travelled;
-          facingZ[actor] = dz / travelled;
-        }
-        lastX[actor] = place.x;
-        lastZ[actor] = place.z;
-        lastAt[actor] = seconds;
+      const speed = hypot2(place.velocityX, place.velocityZ);
+      if (there && speed > FACING_SPEED) {
+        facingX[actor] = place.velocityX / speed;
+        facingZ[actor] = place.velocityZ / speed;
       }
-      this.scene.setFoot(there, place.x, place.z, facingX[actor]!, facingZ[actor]!, lastSpeed[actor]!, actor);
+      this.scene.setFoot(there, place.x, place.z, facingX[actor]!, facingZ[actor]!, there ? speed : 0, actor);
     }
   }
 

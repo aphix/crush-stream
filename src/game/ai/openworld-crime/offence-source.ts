@@ -71,6 +71,8 @@ export interface LawPorts {
   footArrested(actor: number, cop: number, seconds: number): void;
   /** The actor (car index) this machine's player is: the one whose arrest `footArrest` leads. */
   self(): number;
+  /** The host puts player `actor`'s car fresh on the road nearest (x, z), facing `yaw`, where the law sets him down: a guest's car is the host's to move. False where there is no clear spot. */
+  placeCarNear(actor: number, x: number, z: number, yaw: number): boolean;
   /** What the engine does for this machine's own player once the cops have him: the same calls on the host and on a guest, driven by the host's events and the cop as this machine draws him. */
   footArrest: FootArrestPorts;
 }

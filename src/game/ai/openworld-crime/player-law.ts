@@ -81,14 +81,14 @@ export class PlayerLaw {
   /** He shoved someone at crowd second `seconds`: a cop who sees it comes for him. */
   shoved(seconds: number): void {
     const { body } = this;
-    if (!body.present || this.caseIndex >= 0 || !this.law.copSeesSpot(body.x, body.z)) return;
+    if (!body.present || !this.law.authority || this.caseIndex >= 0 || !this.law.copSeesSpot(body.x, body.z)) return;
     this.open(seconds, this.law.cops.nearestFree(body.x, body.z));
   }
 
   /** A fight he started has been seen or reported: the cops come for him as for the one he fought. */
   fightKnown(seconds: number): void {
     const { body } = this;
-    if (!body.present || this.caseIndex >= 0) return;
+    if (!body.present || !this.law.authority || this.caseIndex >= 0) return;
     this.open(seconds, this.law.cops.nearestFree(body.x, body.z));
   }
 
@@ -124,12 +124,10 @@ export class PlayerLaw {
     this.arrest(caseIndex, slot, nearestCop, seconds);
   }
 
-  /** The host's word that the cops are after him, cop `cop` first: the same chase opens here, from where he stands on this machine. */
+  /** The host's word that the cops are after him, cop `cop` first (-1: none yet, which this peer's own calling fills as the host's does): the same chase opens here, from where he stands on this machine. */
   hearChase(cop: number, seconds: number): void {
-    const { body } = this;
-    const { cops } = this.law;
-    if (!body.present || this.caseIndex >= 0) return;
-    this.open(seconds, cops.isFree(cop) ? cop : cops.nearestFree(body.x, body.z));
+    if (!this.body.present || this.caseIndex >= 0) return;
+    this.open(seconds, this.law.cops.isFree(cop) ? cop : -1);
   }
 
   /** The host's word that cop `cop` has him in custody: the same arrest starts here, the chase opened first when this peer has none. */
@@ -188,11 +186,13 @@ export class PlayerLaw {
     this.engine?.taken(this.law.carIndexOf(table.carOf[slot]!));
   }
 
-  /** His custody is over (the patrol car brought him to the station, the cop walked him to its door, or a car ran the cop down): the engine sets him down where his cop stood with him. */
+  /** His custody is over (the patrol car brought him to the station, the cop walked him to its door, or a car ran the cop down): his machine's engine sets him down where his cop stood with him, and on the host the car of a player who is not its own is put there too. */
   deliver(slot: number): void {
     const { walkers } = this.law;
     const walker = this.law.walkerOf(slot);
-    this.engine?.delivered(walkers.x[walker]!, walkers.z[walker]!, walkers.yaw[walker]!);
+    const { x, z, yaw } = { x: walkers.x[walker]!, z: walkers.z[walker]!, yaw: walkers.yaw[walker]! };
+    this.engine?.delivered(x, z, yaw);
+    this.law.placeCarOf(this.actor, x, z, yaw);
   }
 
   /** The chase as the pursuit strip shows it: the cops after him and the hold run so far; false with no chase open. */

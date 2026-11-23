@@ -7,6 +7,8 @@ const PLAYER_X = 65;
 /** The player's chase of the engine's seconds (Survival's hold for a human), the harness's `playerBustSeconds`. */
 const BUST_SECONDS = 12;
 const BUILDING = { minX: 45, maxX: 55 };
+/** One grid step: the scene learns on its first step whether it is the host's. */
+const LAW_SETTLES_SECONDS = 0.1;
 const RESIDENT = 1;
 
 /** The player on the middle of the crossing between x = 60 and x = 70, facing east, a cop at x = 40 who sees him; the signals against him unless said, standing still unless `speed` says. */
@@ -108,10 +110,12 @@ describe("the player on foot is a subject of the law", () => {
   it("shoving someone a cop sees brings the cops; a shove no cop sees brings none", () => {
     const seen = harness([40, 0, 0]);
     seen.scene.setFoot(true, 50, 0, 1, 0, 0);
+    runFor(seen, LAW_SETTLES_SECONDS);
     seen.scene.playerShoved(0);
     expect(seen.scene.footChaseOf(strip()), "a cop saw the shove").toBe(true);
     const unseen = harness([0, 0, 0]);
     unseen.scene.setFoot(true, 100, 0, 1, 0, 0);
+    runFor(unseen, LAW_SETTLES_SECONDS);
     unseen.scene.playerShoved(0);
     expect(unseen.scene.footChaseOf(strip()), "no cop was near").toBe(false);
   });

@@ -25,6 +25,7 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     foot: () => false,
     actorPlace: () => false,
     ownActor: () => 0,
+    placeCarNear: () => false,
     now: () => 0,
     eye: () => {},
     throwFigure: () => -1,

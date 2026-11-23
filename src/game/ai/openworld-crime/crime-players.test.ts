@@ -165,3 +165,63 @@ describe("given the second player's own machine, a guest's, applying the host's 
     expect(slotOfSecond(peer), "the case is closed").toBe(-1);
   });
 });
+
+/** How far (m) from where the second player stood the law may set him down on this map: his cop leads him a few metres. */
+const SET_DOWN_WITHIN_M = 30;
+
+describe("given the host's arrest of the second player of a room has run to his release", () => {
+  it("when the host sets him down, then it puts the second player's car near where he was set down", () => {
+    const host = hostArrestOfSecond();
+    runUntil(host, STAGE_LIMIT_SECONDS, () => host.placed.length > 0);
+    expect(host.footDelivered, "control: the arrest ran to its end").toHaveLength(0);
+    expect(host.placed, "cars the host placed").toHaveLength(1);
+    expect(host.placed[0]?.actor, "whose car").toBe(SECOND);
+    expect(Math.abs(host.placed[0]!.x - SECOND_AT), "near where he was arrested").toBeLessThan(SET_DOWN_WITHIN_M);
+  });
+
+  it("when the host's own player is the one set down, then its engine places his car and the law places none", () => {
+    const host = harness([COP_AT, 0, 0], { self: SECOND });
+    host.scene.setFoot(true, SECOND_AT, 0, 1, 0, 0, SECOND);
+    runFor(host, LAW_SETTLES_SECONDS);
+    host.scene.playerShoved(host.now, SECOND);
+    runUntil(host, STAGE_LIMIT_SECONDS, () => host.footDelivered.length > 0);
+    expect(host.footDelivered, "his own engine set him down").toHaveLength(1);
+    expect(host.placed, "the law placed no car").toHaveLength(0);
+  });
+
+  it("when a guest's law sets him down, then it places no car: the host does", () => {
+    const host = hostArrestOfSecond();
+    const peer = peerAtHostsSecond(host, SECOND);
+    runUntil(peer, STAGE_LIMIT_SECONDS, () => peer.footDelivered.length > 0);
+    expect(peer.footDelivered, "control: his machine set him down").toHaveLength(1);
+    expect(peer.placed, "cars a guest placed").toHaveLength(0);
+  });
+});
+
+describe("given a player on foot whose shove or fight is told to a law that is not the host's", () => {
+  it("when a peer's law is told of a shove or a fight, then it opens no chase; the host's law does for each", () => {
+    const peer = twoPlayersOnFoot({ authority: false });
+    peer.scene.playerShoved(peer.now, SECOND);
+    peer.scene.playerFought(peer.now, SECOND);
+    expect(peer.scene.footChaseOf(strip(), SECOND), "a peer's chase of him").toBe(false);
+    const host = twoPlayersOnFoot();
+    host.scene.playerFought(host.now, SECOND);
+    expect(host.scene.footChaseOf(strip(), SECOND), "the host's chase after a fight").toBe(true);
+    const shover = twoPlayersOnFoot();
+    shover.scene.playerShoved(shover.now, SECOND);
+    expect(shover.scene.footChaseOf(strip(), SECOND), "the host's chase after a shove").toBe(true);
+  });
+});
+
+describe("given the host's word of a chase with no cop named yet", () => {
+  it("when a peer's law hears it, then it opens the chase with no cop of its own picking and calls one as the host does", () => {
+    const peer = twoPlayersOnFoot({ authority: false });
+    peer.scene.hearFootChase(SECOND, -1, peer.scene.foot.seconds);
+    runFor(peer, LAW_SETTLES_SECONDS);
+    const slot = slotOfSecond(peer);
+    expect(slot, "the chase is open").toBeGreaterThanOrEqual(0);
+    expect(peer.scene.foot.table.copAt(Math.floor(slot / 2), 0), "no cop picked in the hearing").toBe(-1);
+    runFor(peer, 1);
+    expect(peer.scene.foot.table.copAt(Math.floor(slot / 2), 0), "a cop called by the next poll").toBeGreaterThanOrEqual(0);
+  });
+});

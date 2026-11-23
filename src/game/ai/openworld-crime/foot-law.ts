@@ -107,6 +107,11 @@ export class FootLaw {
     return actor === this.ports.self() ? this.ports.footArrest : null;
   }
 
+  /** The host sets player `actor`'s car on the road near where the law set him down, when he is not this machine's own (whose engine places its own car); nothing on a peer. */
+  placeCarOf(actor: number, x: number, z: number, yaw: number): void {
+    if (this.authority && actor !== this.ports.self()) this.ports.placeCarNear(actor, x, z, yaw);
+  }
+
   /** The host's event that the cops were sent after player `actor`, foot cop `cop` first. */
   raiseFootChased(actor: number, cop: number, seconds: number): void {
     if (this.authority) this.ports.footChased(actor, cop, seconds);

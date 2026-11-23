@@ -266,3 +266,46 @@ describe("given the player on foot in the open world", () => {
     expect(director["law"]!["scene"].footChaseOf({ cops: 0, hold: 0, left: 0 }), "nobody on foot").toBe(false);
   });
 });
+
+describe("given the host's own player on foot beside a cop while the crowd is stepped several times for each move of his walker", () => {
+  const START_X = 120;
+  /** A run long enough for a hold of 12 s to have filled after the cop has run to him (s). */
+  const RUN_SECONDS = 40;
+  const CREEP_MPS = 0.6;
+  const WALK_MPS = 3;
+  const CASES = [
+    { it: "when he creeps at 0.6 m/s and the crowd is stepped twice for each move of his walker, then the hold fills and he is busted", pace: CREEP_MPS, slices: 2, expectedBusts: 1 },
+    { it: "when he creeps at 0.6 m/s and the crowd is stepped four times for each move of his walker, then the hold fills and he is busted", pace: CREEP_MPS, slices: 4, expectedBusts: 1 },
+    { it: "when he walks at 3 m/s and the crowd is stepped four times for each move of his walker, then the hold never fills", pace: WALK_MPS, slices: 4, expectedBusts: 0 },
+  ] as const;
+
+  /** The engine hears busts; the walker moves once every `slices` crowd steps at `pace`, and reports that velocity the whole time, as the engine's walker does. */
+  function bustsWhileMoving(pace: number, slices: number): number {
+    const walker = { x: START_X, z: START_X };
+    const heard = { busts: 0 };
+    const { director } = directorWith({
+      law: { ...idleLawPorts(), footArrest: { busted: () => void heard.busts++, led: () => {}, taken: () => {}, delivered: () => {} } },
+      actorPlace: (actor, out) => {
+        out.x = walker.x;
+        out.z = walker.z;
+        out.velocityX = pace;
+        out.velocityZ = 0;
+        return actor === 0;
+      },
+    });
+    director.step(FRAME_SECONDS);
+    director["law"]!["scene"].foot.walkers.place(0, START_X - 5, START_X);
+    director["crowd"]!.raiseEvent(EVENT_KIND.walker, 3);
+    for (let step = 0; step < RUN_SECONDS / FRAME_SECONDS; step++) {
+      if (step % slices === 0) walker.x += pace * FRAME_SECONDS * slices;
+      director.step(FRAME_SECONDS);
+    }
+    return heard.busts;
+  }
+
+  for (const testCase of CASES) {
+    it(testCase.it, () => {
+      expect(bustsWhileMoving(testCase.pace, testCase.slices), "busts the engine heard").toBe(testCase.expectedBusts);
+    });
+  }
+});

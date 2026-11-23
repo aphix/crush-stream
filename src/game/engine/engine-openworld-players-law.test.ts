@@ -33,7 +33,7 @@ function recordingArrest(heard: { calls: number }): FootArrestPorts {
 
 /** A solo host with two players on foot, the guest standing where the victim is drawn and a foot cop five metres from him; the crowd stepped once so its log can take a shove. */
 function hostWithTwoOnFoot(heard: { calls: number }) {
-  const places = { guestX: 0, guestZ: 0 };
+  const places = { guestX: 0, guestZ: 0, guestVelocityX: 0 };
   const director = new OpenWorldDirector({
     ...idleOpenWorldPorts(),
     makeArt: () => ({ update: () => {}, dispose: () => {} }),
@@ -41,6 +41,8 @@ function hostWithTwoOnFoot(heard: { calls: number }) {
     actorPlace: (actor, out) => {
       out.x = actor === OWN ? FAR_M : places.guestX;
       out.z = actor === OWN ? FAR_M : places.guestZ;
+      out.velocityX = actor === OWN ? 0 : places.guestVelocityX;
+      out.velocityZ = 0;
       return actor <= GUEST;
     },
     law: { solids: () => null, playerBusted: () => {}, sirens: () => {}, lineOfSight: () => true, footArrest: recordingArrest(heard) },
@@ -102,6 +104,7 @@ describe("given a solo host in the open world with its own player and a guest bo
   it("when the guest keeps walking at 3 m/s with the cop behind him, then the hold never fills: the chase stays open and no arrest is told", () => {
     const { director, crowd, scene, places } = hostWithTwoOnFoot({ calls: 0 });
     guestShovesVictim(crowd);
+    places.guestVelocityX = GUEST_WALK_MPS;
     for (let frame = 0; frame < WALKING_FRAMES; frame++) {
       places.guestX += GUEST_WALK_MPS * FRAME_SECONDS;
       director.step(FRAME_SECONDS);

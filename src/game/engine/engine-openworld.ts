@@ -146,6 +146,8 @@ export type OpenWorldPorts = {
   actorPlace(actor: number, out: ActorPlace): boolean;
   /** The actor (car index) this browser's player is. */
   ownActor(): number;
+  /** The host puts actor `actor`'s car fresh on the road nearest (x, z), facing `yaw` (`RaceField.placeNear`); false where there is no clear spot. */
+  placeCarNear(actor: number, x: number, z: number, yaw: number): boolean;
   /** This machine's wall clock (s). */
   now(): number;
   /** Writes where the eye is and which way it looks. */
@@ -913,7 +915,7 @@ export class OpenWorldDirector {
   private makeLaw(map: OpenWorldMap, crowd: CivilianCrowd, seed: number, gaze: OpenWorldGaze): OpenWorldLaw | null {
     const extra = this.ports.law;
     if (extra === undefined) return null;
-    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => gaze.follow(this.ports.makeArt(capacity), capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, actorPlace: (actor, out) => this.ports.actorPlace(actor, out), ownActor: () => this.ports.ownActor(), footArrest: extra.footArrest, cars: () => this.ports.cars() }, seed);
+    return new OpenWorldLaw(map, crowd, { makeArt: (capacity) => gaze.follow(this.ports.makeArt(capacity), capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, actorPlace: (actor, out) => this.ports.actorPlace(actor, out), ownActor: () => this.ports.ownActor(), placeCarNear: (actor, x, z, yaw) => this.ports.placeCarNear(actor, x, z, yaw), footArrest: extra.footArrest, cars: () => this.ports.cars() }, seed);
   }
 
   /** The Auto camera over this crowd: its cars (the traffic's drivers), its foot cops and the viewers' own cars left out. */

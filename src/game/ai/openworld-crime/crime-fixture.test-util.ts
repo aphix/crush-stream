@@ -162,6 +162,9 @@ export type Ride = { resident: number; car: number; seconds: number };
 /** The host's word about a player on foot: which actor, which cop, at which crowd second. */
 export type PlayerEvent = { actor: number; cop: number; seconds: number };
 
+/** The host's car for `actor` put near (x, z) facing `yaw`. */
+export type CarPlacing = { actor: number; x: number; z: number; yaw: number };
+
 /** Signals that show every crossing one way: `against` true, a walker on any crossing crosses against them. */
 export class FixtureSignals {
   against = false;
@@ -185,6 +188,8 @@ export type Harness = {
   /** The host's word that the cops were sent after, and that a cop has in custody, a player on foot (actor, cop, crowd second). */
   chased: PlayerEvent[];
   arrested: PlayerEvent[];
+  /** The cars the host was asked to put near where a player was set down. */
+  placed: CarPlacing[];
   /** What the engine was told of the player this machine is (`self`, actor 0 unless the harness says): the crowd seconds he was busted at, where his cop led him on the way, the patrol cars that took him (engine indexes) and where he was set down. */
   footBusts: number[];
   footLed: Spot[];
@@ -222,6 +227,7 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
   const footDelivered: { x: number; z: number; yaw: number }[] = [];
   const chased: PlayerEvent[] = [];
   const arrested: PlayerEvent[] = [];
+  const placed: CarPlacing[] = [];
   const signals = new FixtureSignals();
   const playerBusts: number[] = [];
   const street = options.withCars ? new FakeStreet() : null;
@@ -243,6 +249,10 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
     footChased: (actor, cop, seconds) => void chased.push({ actor, cop, seconds }),
     footArrested: (actor, cop, seconds) => void arrested.push({ actor, cop, seconds }),
     self: () => options.self ?? 0,
+    placeCarNear: (actor, x, z, yaw) => {
+      placed.push({ actor, x, z, yaw });
+      return true;
+    },
     signals,
     playerBusted: (carIndex) => void playerBusts.push(carIndex),
     cars: street,
@@ -253,7 +263,7 @@ export function harness(copX: readonly number[], options: HarnessOptions = {}): 
   };
   const scene = new CrimeScene(lineCity(options.station ?? false), offences, ports, options.seed ?? 7);
   for (let cop = 0; cop < FOOT_COP_COUNT - 1; cop++) scene.foot.walkers.place(cop, copX[cop] ?? 0, 0);
-  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, copDowns, rodes, alighteds, chased, arrested, footBusts, footLed, footTaken, footDelivered, cars: [], signals, playerBusts, street, now: 0, authority: options.authority ?? true };
+  return { scene, offences, poses: createCrowdPoses(RESIDENTS), busts, jaywalks, copDowns, rodes, alighteds, chased, arrested, placed, footBusts, footLed, footTaken, footDelivered, cars: [], signals, playerBusts, street, now: 0, authority: options.authority ?? true };
 }
 
 /** The player's arrest ports for a harness that does not look at them. */
