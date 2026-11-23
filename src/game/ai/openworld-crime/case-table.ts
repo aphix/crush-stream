@@ -1,3 +1,4 @@
+import { actorOfSubject } from "../civilians/civilian-constants.ts";
 import { COPS_PER_CASE, MAX_CASES, MAX_HELD, MAX_SUBJECTS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
 
 /** A crime or a fight the society holds against someone, a walk across a crossing against the signal a cop saw (the law's own, no society event), or the player on foot chased for one (no suspect slot: `PlayerLaw` keeps it). */
@@ -29,6 +30,8 @@ export class CaseTable {
   readonly carZ = new Float64Array(MAX_CASES);
   /** Foot cop numbers per case, -1 for none; the last slot is the patrol car's cop. */
   readonly cops = new Int8Array(MAX_CASES * COPS_PER_CASE).fill(-1);
+  /** The actor (car index) of the player on foot a player case chases (`setActor`). */
+  private readonly actor = new Int8Array(MAX_CASES).fill(-1);
 
   readonly resident = new Int32Array(MAX_SUBJECTS).fill(-1);
   readonly mode = new Uint8Array(MAX_SUBJECTS);
@@ -110,6 +113,31 @@ export class CaseTable {
   /** Whether subject slot `slot` is the player on foot's, held in custody: his case has no resident row. */
   isPlayerSlot(slot: number): boolean {
     return this.kind[Math.floor(slot / SUBJECTS_PER_CASE)] === CASE_KIND.player;
+  }
+
+  /** The actor (car index) of the player on foot whose case `caseIndex` is, -1 for any other case. */
+  actorOfCase(caseIndex: number): number {
+    return this.kind[caseIndex] === CASE_KIND.player ? this.actor[caseIndex]! : -1;
+  }
+
+  /** The actor whose case holds subject slot `slot`, -1 when it is not a player's. */
+  actorOfSlot(slot: number): number {
+    return this.actorOfCase(Math.floor(slot / SUBJECTS_PER_CASE));
+  }
+
+  /** The subject slot a log subject names: a resident's, or a player on foot's (`playerSubject`) first slot while his case is open; -1 for none. */
+  slotOfSubject(subject: number): number {
+    const actor = actorOfSubject(subject);
+    if (actor < 0) return this.subjectOf[subject] ?? -1;
+    for (let caseIndex = 0; caseIndex < MAX_CASES; caseIndex++) {
+      if (this.phase[caseIndex] !== CASE_PHASE.free && this.actorOfCase(caseIndex) === actor) return this.slotOf(caseIndex, 0);
+    }
+    return -1;
+  }
+
+  /** Opens case `caseIndex` as player `actor`'s chase. */
+  setActor(caseIndex: number, actor: number): void {
+    this.actor[caseIndex] = actor;
   }
 
   /** Cop slot `index` of case `caseIndex`: the foot cop's number or -1. */

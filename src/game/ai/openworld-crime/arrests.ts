@@ -60,10 +60,10 @@ export class Arrests {
     return this.station !== null;
   }
 
-  /** A client heard the host's pair board car `carIndex`: the suspect `resident`, if she is being led away here, and her cop are in it (off the street) till `alight`. False when she is not led away or the car has no door here. */
-  rideHeard(resident: number, carIndex: number, seconds: number): boolean {
+  /** A client heard the host's pair board car `carIndex`: the suspect `subject` (a resident, or a player on foot by `playerSubject`), if she is being led away here, and her cop are in it (off the street) till `alight`. False when she is not led away or the car has no door here. */
+  rideHeard(subject: number, carIndex: number, seconds: number): boolean {
     const { table } = this;
-    const slot = table.subjectOf[resident] ?? -1;
+    const slot = table.slotOfSubject(subject);
     if (slot < 0 || table.mode[slot] !== SUBJECT_MODE.escorted || !this.hooks.cars()?.doorSpot(carIndex, this.door)) return false;
     table.carOf[slot] = carIndex;
     table.mode[slot] = SUBJECT_MODE.conveyed;

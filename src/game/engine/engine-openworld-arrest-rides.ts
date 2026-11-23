@@ -60,7 +60,7 @@ export class ArrestRides {
     this.openDoor(car, 0);
   }
 
-  /** Once a frame on a client, with the law's own crowd second `seconds`: the host's ride and alight pairs it has reached and not yet handled. A car this peer lacks, or the player's own arrest, seats nobody. */
+  /** Once a frame on a client, with the law's own crowd second `seconds`: the host's ride and alight pairs it has reached and not yet handled. A car this peer lacks, or an arrest its law is not leading (a player's by `playerSubject` included), seats nobody. */
   hear(log: Float64Array, arrests: Arrests, seconds: number): void {
     let sameSecond = 0;
     for (let at = 0; at + 2 * EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) {

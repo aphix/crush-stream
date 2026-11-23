@@ -48,7 +48,7 @@ function entriesOf(map: Readonly<Record<string, number>>): string[] {
 const codeCases = [
   { it: "when the need codes are derived, then they are the hand-kept ones", derived: "NEED", expected: OLD_NEED },
   { it: "when the purpose codes are derived, then they are the hand-kept ones", derived: "PURPOSE", expected: OLD_PURPOSE },
-  { it: "when the event kinds are derived, then they are the wire's hand-kept ones", derived: "EVENT_KIND", expected: { ...OLD_EVENT_KIND, spared: 16 } },
+  { it: "when the event kinds are derived, then they are the wire's hand-kept ones", derived: "EVENT_KIND", expected: { ...OLD_EVENT_KIND, spared: 16, footChase: 17, footArrest: 18 } },
   { it: "when the crime kinds are derived, then they are the hand-kept ones", derived: "CRIME_KIND", expected: OLD_CRIME_KIND },
   { it: "when the activity codes are derived, then they are the hand-kept ones", derived: "ACTIVITY", expected: OLD_ACTIVITY },
   { it: "when the mood codes are derived, then they are the hand-kept ones", derived: "MOOD", expected: OLD_MOOD },

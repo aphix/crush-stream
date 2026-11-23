@@ -215,6 +215,11 @@ describe("given the player on foot in the open world", () => {
         out.velocityZ = 0;
         return true;
       },
+      actorPlace: (actor, out) => {
+        out.x = PLAYER_AT;
+        out.z = PLAYER_AT;
+        return actor === 0;
+      },
     });
     director.step(FRAME_SECONDS);
     const scene = director["law"]!["scene"];

@@ -42,7 +42,7 @@ export interface OffenceSource {
   reportDoneTick(resident: number): number;
 }
 
-/** What the engine does for the player on foot the cops arrest (host and solo only; called only with authority). */
+/** What the engine does for the player on foot the cops arrest, on the machine whose player he is (the host's own, or a guest's: the host's events and the cop's place as that machine draws him drive it). */
 export interface FootArrestPorts {
   /** He was held slow beside a cop long enough, at crowd second `seconds`: the cop has him, and his walker is the cop's to lead. */
   busted(seconds: number): void;
@@ -61,10 +61,16 @@ export interface LawPorts {
   jaywalked(resident: number, seconds: number): void;
   /** Foot cop `cop` run down by a car. */
   copDown(cop: number, seconds: number): void;
-  /** The arrested `resident` (`ARREST_PLAYER_RESIDENT` for the player on foot) and her cop got into patrol car `carIndex` of the engine's list at crowd second `seconds`, and it drives off. */
+  /** The arrested `resident` (`playerSubject(actor)` for a player on foot) and her cop got into patrol car `carIndex` of the engine's list at crowd second `seconds`, and it drives off. */
   rode(resident: number, carIndex: number, seconds: number): void;
   /** The patrol car `carIndex` is at the station and the arrested `resident` gets out of it at crowd second `seconds`. */
   alighted(resident: number, carIndex: number, seconds: number): void;
-  /** The player on foot was held slow beside a cop long enough: his arrest is the engine's. */
+  /** The cops were sent after player `actor` (a car index) on foot at crowd second `seconds`, foot cop `cop` first (-1: none free yet): the host's event, which every other peer's law opens the same chase from. */
+  footChased(actor: number, cop: number, seconds: number): void;
+  /** Foot cop `cop` has player `actor` on foot in custody at crowd second `seconds`: the host's event, which every other peer's law takes the same arrest from. */
+  footArrested(actor: number, cop: number, seconds: number): void;
+  /** The actor (car index) this machine's player is: the one whose arrest `footArrest` leads. */
+  self(): number;
+  /** What the engine does for this machine's own player once the cops have him: the same calls on the host and on a guest, driven by the host's events and the cop as this machine draws him. */
   footArrest: FootArrestPorts;
 }

@@ -3,7 +3,7 @@ import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
 import { FRAME_SECONDS } from "../ai/civilians/civilian-crowd.test-util.ts";
 import { ACTIVITY, ACTIVITY_SECONDS } from "../ai/civilians/civilian-activity.ts";
-import { ARREST_PLAYER_RESIDENT, EVENT_KIND } from "../ai/civilians/civilian-constants.ts";
+import { EVENT_KIND, playerSubject } from "../ai/civilians/civilian-constants.ts";
 import { queueEvents } from "../ai/civilians/civilian-events.ts";
 import { createCityState } from "../ai/civilians/society.ts";
 import { ESCORT_TO, SUBJECT_MODE } from "../ai/openworld-crime/case-table.ts";
@@ -105,7 +105,7 @@ describe("given the host's arrest of a civilian by a patrol car that has come, o
 });
 
 describe("given the player on foot held by a cop and taken to the station in the cop's own patrol car", () => {
-  // mutation: sed -i 's/this.table.isPlayerSlot(slot) ? ARREST_PLAYER_RESIDENT :/false ? ARREST_PLAYER_RESIDENT :/' src/game/ai/openworld-crime/foot-law.ts
+  // mutation: sed -i 's/this.table.isPlayerSlot(slot) ? playerSubject(this.table.actorOfSlot(slot)) :/false ? playerSubject(this.table.actorOfSlot(slot)) :/' src/game/ai/openworld-crime/foot-law.ts
   it("when the pair has got into the car, then the engine is told of the player's own arrest by the resident no one is", () => {
     const run = harness([40, 0, 0], { station: true, withCars: true });
     const street = streetOf(run);
@@ -114,7 +114,7 @@ describe("given the player on foot held by a cop and taken to the station in the
     run.signals.against = true;
     run.scene.setFoot(true, 65, 0, 1, 0, 0);
     runUntil(run, STAGE_LIMIT_SECONDS, () => run.rodes.length > 0);
-    expect(run.rodes[0]?.resident, "no resident").toBe(ARREST_PLAYER_RESIDENT);
+    expect(run.rodes[0]?.resident, "no resident").toBe(playerSubject(0));
   });
 });
 
@@ -190,7 +190,7 @@ describe("given a client whose own law is walking an arrested civilian to the st
     const { guest, rides } = guestArrest(carAtStation());
     const { table } = guest.scene.foot;
     runUntilLawSecond(guest, rode.seconds);
-    hear(guest, rides, logOf(EVENT_KIND.arrestRide, { ...rode, car: MISSING_CAR }, { ...rode, resident: ARREST_PLAYER_RESIDENT }));
+    hear(guest, rides, logOf(EVENT_KIND.arrestRide, { ...rode, car: MISSING_CAR }, { ...rode, resident: playerSubject(0) }));
     expect(table.mode[0], "still led on foot").toBe(SUBJECT_MODE.escorted);
     expect(table.carOf[0], "in no car").toBe(-1);
   });

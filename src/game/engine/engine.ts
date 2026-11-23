@@ -488,6 +488,15 @@ export class CrashEngine extends EngineGarage {
         out.velocityZ = _footVelocity.z;
         return true;
       },
+      actorPlace: (actor, out) => {
+        if (!this.ragdolls.torso(WALKER_SLOT, _v, null) || actor !== this.ownCar()) return false;
+        out.x = _v.x;
+        out.y = _v.y;
+        out.z = _v.z;
+        out.heading = this.ragdolls.walker.facing;
+        return true;
+      },
+      ownActor: () => this.ownCar(),
       now: () => performance.now() / 1000,
       eye: (ray) => {
         this.camera.getWorldDirection(_v);

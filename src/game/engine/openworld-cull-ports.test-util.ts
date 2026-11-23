@@ -23,6 +23,8 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     peerName: () => null,
     ownCar: () => null,
     foot: () => false,
+    actorPlace: () => false,
+    ownActor: () => 0,
     now: () => 0,
     eye: () => {},
     throwFigure: () => -1,

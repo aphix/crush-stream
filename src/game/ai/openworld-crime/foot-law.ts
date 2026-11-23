@@ -2,7 +2,7 @@ import { hypot2 } from "../../kernel/physics-core.js";
 import type { FigureStrike } from "../../scenes/figure-strike.ts";
 import type { OpenWorldMap, WalkGraph } from "../../world/openworld/walk-graph.ts";
 import { tickAt } from "../civilians/civilian-clock.ts";
-import { ARREST_PLAYER_RESIDENT, FIGHT_PLAYER, NEVER_TICK } from "../civilians/civilian-constants.ts";
+import { FIGHT_PLAYER, NEVER_TICK, PLAYER_ACTORS, playerSubject } from "../civilians/civilian-constants.ts";
 import { PathFinder } from "../civilians/walk-path.ts";
 import { CASE_KIND, CASE_PHASE, CaseTable, isHeldMode, SUBJECT_MODE } from "./case-table.ts";
 import { BUST_REACH, CAR_COP, COP_DOWN_SECONDS, COP_SIGHT, JAYWALK_GIVE_UP_SECONDS, COPS_PER_CASE, CRIME_STEP_SECONDS, CRIME_STREAM, FIND_CHANCE, FLEE_GIVE_UP_SECONDS, FLEE_REPLAN_STEPS, FLEE_SPEED_MIN, FLEE_SPEED_SPAN, FOOT_COP_COUNT, FOOT_COPS_PER_CASE, GRIP_SECONDS, PATROL_COPS, HIDE_ARRIVE, HIDE_SEARCH_REACH, MAX_SUBJECTS, POLL_EVERY_STEPS, SEARCH_SECONDS, SUBJECTS_PER_CASE } from "./crime-constants.ts";
@@ -50,8 +50,8 @@ export class FootLaw {
   private readonly signals: CrossingSignals | null;
   private readonly crossings: CrossingWatch;
   private readonly otherCopsSee: OtherCopsSee | null;
-  /** The player on foot under the law (host and solo only). */
-  readonly player: PlayerLaw;
+  /** The players on foot under the law, one per actor (car index). */
+  readonly players: PlayerLaw[];
   /** The cuffed's walk to a patrol car and the station: the player's custody (`PlayerLaw`) takes it too. */
   readonly arrests: Arrests;
   private readonly fights: FightRules;
@@ -74,7 +74,7 @@ export class FootLaw {
     this.signals = senses.signals;
     this.crossings = new CrossingWatch(map.graph);
     this.otherCopsSee = senses.otherCopsSee;
-    this.player = new PlayerLaw(this, this.crossings, senses.signals, playerBustSeconds);
+    this.players = Array.from({ length: PLAYER_ACTORS }, (_, actor) => new PlayerLaw(this, this.crossings, senses.signals, playerBustSeconds, actor));
     this.arrests = new Arrests(this.walkers, this.cops, this.table, map.graph, stationOf(map), {
       raise: (caseIndex, slot) => this.raiseArrest(caseIndex, slot),
       cars: () => hooks.rides(),
@@ -102,14 +102,44 @@ export class FootLaw {
     return this.copSees(x, z, COP_SIGHT) || (this.otherCopsSee?.(x, z, COP_SIGHT) ?? false);
   }
 
-  /** The host's word to the engine about the player on foot in custody (`PlayerLaw`); null on a peer that raises no events. */
-  get arrestPorts(): FootArrestPorts | null {
-    return this.authority ? this.ports.footArrest : null;
+  /** The engine's calls for player `actor`'s arrest when he is this machine's own player; null for any other. */
+  engineOf(actor: number): FootArrestPorts | null {
+    return actor === this.ports.self() ? this.ports.footArrest : null;
+  }
+
+  /** The host's event that the cops were sent after player `actor`, foot cop `cop` first. */
+  raiseFootChased(actor: number, cop: number, seconds: number): void {
+    if (this.authority) this.ports.footChased(actor, cop, seconds);
+  }
+
+  /** The host's event that foot cop `cop` has player `actor` in custody. */
+  raiseFootArrested(actor: number, cop: number, seconds: number): void {
+    if (this.authority) this.ports.footArrested(actor, cop, seconds);
+  }
+
+  /** The actor on foot nearest (x, z), -1 when none is. */
+  playerNear(x: number, z: number): number {
+    let best = -1;
+    let bestGap = Infinity;
+    for (let actor = 0; actor < PLAYER_ACTORS; actor++) {
+      const { body } = this.players[actor]!;
+      const gap = hypot2(body.x - x, body.z - z);
+      if (!body.present || gap >= bestGap) continue;
+      bestGap = gap;
+      best = actor;
+    }
+    return best;
+  }
+
+  /** A fight a civilian turned on a player for is reported: the police come for the player on foot nearest it as for her. */
+  private fightKnownNear(x: number, z: number): void {
+    const actor = this.playerNear(x, z);
+    if (actor >= 0) this.players[actor]!.fightKnown(this.seconds);
   }
 
   /** Patrol car `carSlot`'s place in the engine's list of cars, -1 when the law has no cars. */
   carIndexOf(carSlot: number): number {
-    return this.hooks.cars()?.carIndexOf(carSlot) ?? -1;
+    return (this.hooks.cars() ?? this.hooks.rides())?.carIndexOf(carSlot) ?? -1;
   }
 
   /** Whether nothing solid stands between cop `cop`'s eyes and a person at (x, z). */
@@ -192,7 +222,7 @@ export class FootLaw {
     }
     if (this.signals !== null) this.watchCrossings(this.signals);
     this.keepHomeCars();
-    this.player.poll(this.seconds);
+    for (let actor = 0; actor < PLAYER_ACTORS; actor++) this.players[actor]!.poll(this.seconds);
     for (let caseIndex = 0; caseIndex < table.phase.length; caseIndex++) {
       if (table.phase[caseIndex] !== CASE_PHASE.free) this.callCops(caseIndex);
     }
@@ -231,7 +261,7 @@ export class FootLaw {
     this.startCase(caseIndex, CASE_KIND.crime, spell);
     this.takeSubject(this.table.slotOf(caseIndex, 0), resident, this.spot);
     this.hooks.opened(caseIndex, this.spot.x, this.spot.z);
-    if (this.source.fightPartner(resident) === FIGHT_PLAYER) this.player.fightKnown(this.seconds);
+    if (this.authority && this.source.fightPartner(resident) === FIGHT_PLAYER) this.fightKnownNear(this.spot.x, this.spot.z);
     return true;
   }
 
@@ -325,7 +355,7 @@ export class FootLaw {
   private stepCase(caseIndex: number): void {
     const { table } = this;
     if (table.kind[caseIndex] === CASE_KIND.player) {
-      this.player.step(caseIndex, this.seconds);
+      this.players[table.actorOfCase(caseIndex)]!.step(caseIndex, this.seconds);
       return;
     }
     this.spareKnocked(caseIndex);
@@ -526,20 +556,20 @@ export class FootLaw {
     this.table.free(slot);
   }
 
-  /** The host's arrest of the suspect of subject slot `slot`: a jaywalker's or a bust; for the player on foot, the end of his custody. */
+  /** The arrest of the suspect of subject slot `slot`: a jaywalker's or a bust (the host's event); for a player on foot, the end of his custody, on every peer. */
   private raiseArrest(caseIndex: number, slot: number): void {
-    if (!this.authority) return;
     const resident = this.table.resident[slot]!;
     const kind = this.table.kind[caseIndex];
-    if (kind === CASE_KIND.player) this.player.deliver(slot);
+    if (kind === CASE_KIND.player) this.players[this.table.actorOfCase(caseIndex)]!.deliver(slot);
+    else if (!this.authority) return;
     else if (kind === CASE_KIND.jaywalk) this.ports.jaywalked(resident, this.seconds);
     else this.ports.bust(resident, this.seconds);
   }
 
-  /** The host's word that the arrested of subject slot `slot` and her cop got into (`boarding`) or out of patrol car `carIndex`; the player on foot is named `ARREST_PLAYER_RESIDENT`. */
+  /** The host's word that the arrested of subject slot `slot` and her cop got into (`boarding`) or out of patrol car `carIndex`; a player on foot is named by `playerSubject`. */
   private noteRide(slot: number, carIndex: number, boarding: boolean): void {
     if (!this.authority) return;
-    const resident = this.table.isPlayerSlot(slot) ? ARREST_PLAYER_RESIDENT : this.table.resident[slot]!;
+    const resident = this.table.isPlayerSlot(slot) ? playerSubject(this.table.actorOfSlot(slot)) : this.table.resident[slot]!;
     if (boarding) this.ports.rode(resident, carIndex, this.seconds);
     else this.ports.alighted(resident, carIndex, this.seconds);
   }
@@ -552,7 +582,7 @@ export class FootLaw {
   /** The suspect walks on: no arrest, nobody kept off the street. The player on foot is set down where his cop stood with him. */
   private letGo(slot: number): void {
     this.stats.lost++;
-    if (this.table.isPlayerSlot(slot)) this.player.deliver(slot);
+    if (this.table.isPlayerSlot(slot)) this.players[this.table.actorOfSlot(slot)]!.deliver(slot);
     this.table.free(slot);
   }
 

@@ -4,13 +4,13 @@ import { CAR_REACH } from "../../scenes/lawn-guard.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import { activeGround } from "../../world/ground.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
-import { COP_KO_BLOWS } from "../civilians/civilian-constants.ts";
+import { COP_KO_BLOWS, PLAYER_ACTORS } from "../civilians/civilian-constants.ts";
 import { punchGap } from "../civilians/civilian-contact.ts";
 import { chestMet, type LookRay, type Meeting } from "../civilians/civilian-look.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import type { Obstacles } from "../obstacles.ts";
 import { fillCopPoses, newCopPoses, overlaySuspects } from "./crime-poses.ts";
-import { CRIME_HZ, CRIME_STEP_SECONDS, FOOT_COP_COUNT, GRID_EPSILON, HEARD_COP_DOWN_LATE_SECONDS, HEAT_CARS, HEAT_KNOCKS, HEAT_SECONDS, MAX_STEPS_PER_CALL, RED_LIGHT_SIGHT } from "./crime-constants.ts";
+import { CRIME_HZ, CRIME_STEP_SECONDS, FOOT_COP_COUNT, GRID_EPSILON, HEARD_COP_DOWN_LATE_SECONDS, HEARD_FOOT_LATE_SECONDS, HEAT_CARS, HEAT_KNOCKS, HEAT_SECONDS, MAX_STEPS_PER_CALL, RED_LIGHT_SIGHT } from "./crime-constants.ts";
 import { FootLaw } from "./foot-law.ts";
 import type { CrossingSignals, LawPorts, LineOfSight, OffenceSource } from "./offence-source.ts";
 import { PatrolCars, type PatrolCarPorts } from "./patrol-cars.ts";
@@ -57,6 +57,13 @@ export class CrimeScene {
   private copStrikes: FigureStrike[] = [];
   /** The share of the grid step after the last one taken that the poses were drawn at. */
   drawShare = 0;
+  /** Per actor: the crowd second of the latest chase and arrest the host told of, and one waiting for this peer's clock (-1 none) with its cop. */
+  private readonly footChaseAt = new Float64Array(PLAYER_ACTORS).fill(-1);
+  private readonly footChaseDue = new Float64Array(PLAYER_ACTORS).fill(-1);
+  private readonly footChaseCop = new Int8Array(PLAYER_ACTORS);
+  private readonly footArrestAt = new Float64Array(PLAYER_ACTORS).fill(-1);
+  private readonly footArrestDue = new Float64Array(PLAYER_ACTORS).fill(-1);
+  private readonly footArrestCop = new Int8Array(PLAYER_ACTORS);
 
   constructor(map: OpenWorldMap, source: OffenceSource, ports: CrimePorts, seed: number) {
     this.ports = ports;
@@ -87,7 +94,6 @@ export class CrimeScene {
   step(crowdSeconds: number, authority: boolean, crowdPoses: CrowdPoses, cars: readonly DeformableCar[]): void {
     this.authority = authority;
     this.law.authority = authority;
-    if (!authority) this.law.player.body.present = false;
     const target = Math.floor(crowdSeconds * CRIME_HZ + GRID_EPSILON);
     if (target - this.law.steps > MAX_STEPS_PER_CALL) this.law.fastForward(target - MAX_STEPS_PER_CALL);
     while (this.law.steps < target) {
@@ -96,6 +102,7 @@ export class CrimeScene {
     }
     this.applyDueCopDowns(cars);
     this.applyDueSpared();
+    this.applyDueFootEvents();
     this.drawShare = Math.min(1, Math.max(0, (crowdSeconds - this.law.seconds) * CRIME_HZ));
     overlaySuspects(this.law, crowdPoses, this.drawShare);
     fillCopPoses(this.law, this.copPoses, this.drawShare);
@@ -122,6 +129,42 @@ export class CrimeScene {
       if (due < 0 || this.law.seconds < due) continue;
       this.sparedDue[resident] = -1;
       this.law.spare(resident, due);
+    }
+  }
+  /** The host's word that the cops are after player `actor`, cop `cop` first, at crowd second `seconds`, heard by a peer: applied once, when this peer's clock reaches it. */
+  hearFootChase(actor: number, cop: number, seconds: number): void {
+    if (!this.hearsFoot(actor, seconds, this.footChaseAt)) return;
+    this.footChaseDue[actor] = seconds;
+    this.footChaseCop[actor] = cop;
+  }
+
+  /** The host's word that cop `cop` has player `actor` in custody at crowd second `seconds`, heard by a peer: applied once, when this peer's clock reaches it. */
+  hearFootArrest(actor: number, cop: number, seconds: number): void {
+    if (!this.hearsFoot(actor, seconds, this.footArrestAt)) return;
+    this.footArrestDue[actor] = seconds;
+    this.footArrestCop[actor] = cop;
+  }
+
+  /** Whether a heard event of `actor` at `seconds` is a new one this peer is not too far past: it is noted in `heardAt` when it is. */
+  private hearsFoot(actor: number, seconds: number, heardAt: Float64Array): boolean {
+    if (actor < 0 || actor >= PLAYER_ACTORS || seconds <= heardAt[actor]! || this.law.seconds - seconds > HEARD_FOOT_LATE_SECONDS) return false;
+    heardAt[actor] = seconds;
+    return true;
+  }
+
+  private applyDueFootEvents(): void {
+    for (let actor = 0; actor < PLAYER_ACTORS; actor++) {
+      const player = this.law.players[actor]!;
+      const chaseDue = this.footChaseDue[actor]!;
+      if (chaseDue >= 0 && this.law.seconds >= chaseDue) {
+        this.footChaseDue[actor] = -1;
+        player.hearChase(this.footChaseCop[actor]!, chaseDue);
+      }
+      const arrestDue = this.footArrestDue[actor]!;
+      if (arrestDue >= 0 && this.law.seconds >= arrestDue) {
+        this.footArrestDue[actor] = -1;
+        player.hearArrest(this.footArrestCop[actor]!, arrestDue);
+      }
     }
   }
 
@@ -167,8 +210,8 @@ export class CrimeScene {
     this.ports.copDown(cop, seconds);
   }
 
-  /** The player's punch from (x, z) along (dirX, dirZ): the nearest shown foot cop in reach and arc takes it, the law knows of the fight at once, and his `COP_KO_BLOWS`th blow puts the cop down. False when no cop was hit, or without authority. */
-  punchCop(x: number, z: number, dirX: number, dirZ: number, seconds: number): boolean {
+  /** Player `actor`'s punch from (x, z) along (dirX, dirZ): the nearest shown foot cop in reach and arc takes it, the law knows of the fight at once, and his `COP_KO_BLOWS`th blow puts the cop down. False when no cop was hit, or without authority. */
+  punchCop(x: number, z: number, dirX: number, dirZ: number, seconds: number, actor = this.ports.self()): boolean {
     if (!this.authority) return false;
     const poses = this.copPoses;
     let nearest = -1;
@@ -181,7 +224,7 @@ export class CrimeScene {
       nearest = cop;
     }
     if (nearest < 0) return false;
-    this.law.player.fightKnown(seconds);
+    this.law.players[actor]?.fightKnown(seconds);
     if (++this.copBlows[nearest]! >= COP_KO_BLOWS) {
       this.copBlows[nearest] = 0;
       this.downCop(nearest, felled(nearest, poses.x[nearest]!, activeGround().heightAt(poses.x[nearest]!, poses.z[nearest]!), poses.z[nearest]!, dirX, dirZ, blankStrike()), seconds);
@@ -190,8 +233,8 @@ export class CrimeScene {
   }
 
   /** The player on foot started a fight at crowd second `seconds`: the law knows at once. */
-  playerFought(seconds: number): void {
-    this.law.player.fightKnown(seconds);
+  playerFought(seconds: number, actor = this.ports.self()): void {
+    this.law.players[actor]?.fightKnown(seconds);
   }
 
   /** The shown foot cop whose chest the ray passes within `radius` m, nearer than `reach` (`chestMet`). */
@@ -207,11 +250,11 @@ export class CrimeScene {
   }
 
   /** The hook takes shown foot cop `cop`: he is downed where he stands, thrown with no speed (he drops at his spot, for a rope to tie to) like any cop put down, so the law knows (his case loses him: a suspect he held is let go and the chase goes on without him) and every peer hears the knock; and the player has fought the law, as a punch on a cop is. False without authority or when he is not shown. */
-  hookCop(cop: number, seconds: number): boolean {
+  hookCop(cop: number, seconds: number, actor = this.ports.self()): boolean {
     const poses = this.copPoses;
     if (!this.authority || poses.shown[cop] === 0) return false;
     this.downCop(cop, stood(-1, cop, poses.x[cop]!, activeGround().heightAt(poses.x[cop]!, poses.z[cop]!), poses.z[cop]!, detSin(poses.yaw[cop]!), detCos(poses.yaw[cop]!), blankStrike()), seconds);
-    this.law.player.fightKnown(seconds);
+    this.law.players[actor]?.fightKnown(seconds);
     return true;
   }
 
@@ -264,19 +307,29 @@ export class CrimeScene {
     return this.patrol.chase(carIndex, x, z, now);
   }
 
-  /** The player on foot, from the engine: where he stands, which way he faces and how fast he moves; judged only on the host and the solo player. */
-  setFoot(present: boolean, x: number, z: number, dirX: number, dirZ: number, speed: number): void {
-    this.law.player.set(present, x, z, dirX, dirZ, speed);
+  /** Player `actor` (a car index; default this machine's own player) on foot, from the engine: where he stands, which way he faces and how fast he moves. Only the host judges him; every peer's copy follows the host's events. */
+  setFoot(present: boolean, x: number, z: number, dirX: number, dirZ: number, speed: number, actor = this.ports.self()): void {
+    this.law.players[actor]?.set(present, x, z, dirX, dirZ, speed);
   }
 
-  /** The player on foot shoved a civilian at crowd second `seconds`. */
-  playerShoved(seconds: number): void {
-    this.law.player.shoved(seconds);
+  /** Player `actor` on foot shoved a civilian at crowd second `seconds`. */
+  playerShoved(seconds: number, actor = this.ports.self()): void {
+    this.law.players[actor]?.shoved(seconds);
   }
 
-  /** The pursuit strip's numbers for the player on foot: see `PlayerLaw.chaseOf`. */
-  footChaseOf(out: { cops: number; hold: number; left: number }): boolean {
-    return this.law.player.chaseOf(out);
+  /** The actor on foot nearest (x, z), -1 when none is. */
+  footActorNear(x: number, z: number): number {
+    return this.law.playerNear(x, z);
+  }
+
+  /** The actor this machine's own player is. */
+  ownActor(): number {
+    return this.ports.self();
+  }
+
+  /** The pursuit strip's numbers for player `actor` on foot: see `PlayerLaw.chaseOf`. */
+  footChaseOf(out: { cops: number; hold: number; left: number }, actor = this.ports.self()): boolean {
+    return this.law.players[actor]?.chaseOf(out) ?? false;
   }
 
   /** The pursuit strip's numbers for car `carIndex`: see `PatrolCars.chaseOf`. */
