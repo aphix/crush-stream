@@ -5,7 +5,7 @@ import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import type { Pole } from "../present/ragdoll-ground.ts";
 
-/** Where he stands to use the driver's door, in the car's frame (m): out past the open door, level with the seat. */
+/** Where he stands to use a door, in the car's frame (m): out past the open door, level with the seat. */
 const SPOT_OUT = 1.75;
 const SPOT_ALONG = 0.15;
 /** How near (m) his torso must be to that spot to get in. */
@@ -19,9 +19,9 @@ const UPRIGHT_MIN = 0.5;
 
 const _local = new THREE.Vector3();
 
-/** The spot outside `car`'s driver door, on the ground, into `out`. */
-export function doorSpot(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
-  out.set(DRIVER_SIDE * SPOT_OUT, 0, SPOT_ALONG).applyQuaternion(car.group.quaternion).add(car.group.position);
+/** The spot outside `car`'s door at x sign `side` (`DRIVER_SIDE` its driver's), on the ground, into `out`. */
+export function doorSpot(car: DeformableCar, out: THREE.Vector3, side = DRIVER_SIDE): THREE.Vector3 {
+  out.set(side * SPOT_OUT, 0, SPOT_ALONG).applyQuaternion(car.group.quaternion).add(car.group.position);
   const ground = activeGround().heightAt(out.x, out.z);
   out.y = ground === NO_FLOOR ? 0 : ground;
   return out;
@@ -41,6 +41,22 @@ export function doorInReach(car: DeformableCar, torso: THREE.Vector3, speed: Flo
   return true;
 }
 
+/** The gap (m) from `torso` to the spot outside `car`'s door at x sign `side`, on the level. */
+function gapToDoor(car: DeformableCar, torso: THREE.Vector3, side: number): number {
+  doorSpot(car, _local, side);
+  return hypot2(_local.x - torso.x, _local.z - torso.z);
+}
+
+/** The x sign of the door of `car` that `torso` is within `DOOR_REACH` of, the nearer one when both are (a car in play), 0 when neither. Its speed (m/s) goes to `speed[0]`. */
+export function doorAt(car: DeformableCar, torso: THREE.Vector3, speed: Float64Array): number {
+  if (!inPlay(car)) return 0;
+  const driver = gapToDoor(car, torso, DRIVER_SIDE);
+  const other = gapToDoor(car, torso, -DRIVER_SIDE);
+  if (driver >= DOOR_REACH && other >= DOOR_REACH) return 0;
+  speed[0] = car.velocity.length();
+  return driver <= other ? DRIVER_SIDE : -DRIVER_SIDE;
+}
+
 /** Is ground under (`x`, `z`) and a metre round it on each side? */
 function groundAround(x: number, z: number): boolean {
   const ground = activeGround();
@@ -53,11 +69,11 @@ function groundAround(x: number, z: number): boolean {
   );
 }
 
-/** Is `car` unfit to step out of: on its side or roof, or the spot outside its driver door another car's middle, a standing lamp post, or without ground round it? */
-export function doorBlocked(cars: readonly DeformableCar[], car: DeformableCar, poles: readonly Pole[]): boolean {
+/** Is `car` unfit to step out of at the door at x sign `side`: on its side or roof, or the spot outside that door another car's middle, a standing lamp post, or without ground round it? */
+export function doorBlocked(cars: readonly DeformableCar[], car: DeformableCar, poles: readonly Pole[], side = DRIVER_SIDE): boolean {
   const q = car.group.quaternion;
   if (1 - 2 * (q.x * q.x + q.z * q.z) < UPRIGHT_MIN) return true;
-  doorSpot(car, _local);
+  doorSpot(car, _local, side);
   for (let i = 0; i < cars.length; i++) {
     const other = cars[i]!;
     if (other === car || !inPlay(other)) continue;

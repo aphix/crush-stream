@@ -81,6 +81,9 @@ function room() {
       self: () => HOST_CAR_SLOT,
       guest: () => false,
       sendAct: () => {},
+      seatedCar: () => -1,
+      getIn: () => 0,
+      getOut: () => 0,
     },
     host.director,
   );

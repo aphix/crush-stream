@@ -32,6 +32,7 @@ import { carLayout } from "./car-pose.ts";
 import { readRoster } from "./roster-codec.ts";
 import { readCrowd } from "./crowd-codec.ts";
 import { ActOutbox } from "./act-link.ts";
+import { readSeats } from "./seats-codec.ts";
 import { Voice } from "./voice.ts";
 import { HELLO_EVERY, HOST_LOST_MS, HOST_WAIT_MS, INTERP_DELAY, MAX_DEAD_ROOMS, RACE_GONE_MS, REFUSED, RING, SEND_HZ } from "./net-constants.ts";
 
@@ -175,7 +176,14 @@ export abstract class NetPlayClient {
       const heard = readCrowd(data);
       const link = this.game.crowdLink();
       if (heard && link) link.hear(heard.seed, heard.hostTime, heard.crowdTime, heard.events);
-    }
+    } else if (type === MSG.seats) this.takeSeats(data);
+  }
+
+  /** The host's seat table (`MSG.seats`) over this machine's copy; its notice byte tells a refused guest why. */
+  private takeSeats(data: Uint8Array): void {
+    const table = this.game.seatTable();
+    const notice = table === null ? -1 : readSeats(data, table);
+    if (notice >= 0) this.game.seatsHeard(notice);
   }
 
   /** The host's highlight reel (`playHostReel`) once its last part is in, its start moved onto this browser's clock by the snapshot offset. */
@@ -358,7 +366,8 @@ export abstract class NetPlayClient {
 
     if (this.car < 0 || this.car >= cars.length || this.hostId === null) return;
     const seat = this.game.seat;
-    const input = seat.mode === "drive" && seat.carIndex === this.car ? seat.input(cars[this.car]!, wallDt) : this.idle;
+    const driven = this.game.drivenCar();
+    const input = seat.mode === "drive" && seat.carIndex === driven && driven < cars.length ? seat.input(cars[driven]!, wallDt) : this.idle;
     this.sendAcc += wallDt;
     if (this.sendAcc < 1 / SEND_HZ) return;
     this.sendAcc = 0;

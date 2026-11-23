@@ -27,6 +27,10 @@ function rig(guest = false) {
   const shots: Shot[] = [];
   const sent: Sent[] = [];
   const fired = { count: 0 };
+  /** The car each seated actor sits in, and the get-ins and get-outs the seats were asked to carry out. */
+  const seated = new Map<number, number>();
+  const getIns: { actor: number; car: number }[] = [];
+  const getOuts: number[] = [];
   const acts = new OpenWorldActs(
     {
       actorPlace: (actor, out) => {
@@ -38,6 +42,15 @@ function rig(guest = false) {
       self: () => (guest ? GUEST : HOST),
       guest: () => guest,
       sendAct: (kind, arg, eye, dir) => void sent.push({ kind, arg, eyeX: eye.x, dirZ: dir.z }),
+      seatedCar: (actor) => seated.get(actor) ?? -1,
+      getIn: (actor, car) => {
+        getIns.push({ actor, car });
+        return 0;
+      },
+      getOut: (actor) => {
+        getOuts.push(actor);
+        return 0;
+      },
     },
     {
       punch: (actor, x, z, dirX, dirZ) => void punches.push({ actor, x, z, dirX, dirZ }),
@@ -48,7 +61,7 @@ function rig(guest = false) {
       shotFired: () => void fired.count++,
     },
   );
-  return { acts, places, clock, punches, shots, sent, fired };
+  return { acts, places, clock, punches, shots, sent, fired, seated, getIns, getOuts };
 }
 
 /** An act of `kind` whose eye is `away` m east of the guest's torso (and 1.3 m up for a shot), along `dir`. */

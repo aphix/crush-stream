@@ -29,6 +29,8 @@ import { readCarPose } from "./car-pose.ts";
 import { packRoster } from "./roster-codec.ts";
 import { packCrowd } from "./crowd-codec.ts";
 import { ActInbox } from "./act-link.ts";
+import { packSeats } from "./seats-codec.ts";
+import { SeatsOutbox } from "./seats-link.ts";
 import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { ROOM_MAX } from "../../lib/multiplayer/rooms.ts";
 import { fetchRooms, findMatch, matchStage, publicMeta, publicRoomName, WEAK_AI, WEAK_DERBY_FIELD, type MatchDeps } from "./matchmaking.ts";
@@ -101,6 +103,8 @@ export class NetPlay extends NetPlayClient {
   private readonly inMeter = new Float64Array(1);
   /** Host: the acts guests send (`MSG.act`), numbered per peer so a replay is dropped. */
   private readonly actsIn = new ActInbox();
+  /** Host: tells when the seat table changed since its last message (`MSG.seats`). */
+  private readonly seatsOut = new SeatsOutbox();
   /** Hidden host: the heartbeat timer telling guests it is only paused. */
   private holdTimer: ReturnType<typeof setInterval> | undefined;
   private readonly out = makeSnapshot();
@@ -407,6 +411,7 @@ export class NetPlay extends NetPlayClient {
     this.car = -1;
     this.slots.clear();
     this.actsIn.clear();
+    this.seatsOut.reset();
     this.meters.fill(-1);
     this.vetted.clear();
     this.looks.clear();
@@ -582,7 +587,7 @@ export class NetPlay extends NetPlayClient {
       this.takeGuestLook(from, data);
     } else if (type === MSG.act) {
       const car = this.slots.get(from);
-      if (car !== undefined) this.actsIn.take(from, car, data, (actor, act) => this.game.hearAct(actor, act));
+      if (car !== undefined) this.actsIn.take(from, car, data, (actor, act) => this.refuseAct(from, this.game.hearAct(actor, act)));
     }
   }
 
@@ -623,6 +628,19 @@ export class NetPlay extends NetPlayClient {
     t.send(packRoster(entries), undefined, true);
   }
 
+  /** Host: who sits where goes to every guest, reliably, when it changed and with every roster message (a guest's reliable channel can open after it is seated). */
+  private publishSeats(t: NetTransport, force: boolean): void {
+    const table = this.game.seatTable();
+    const data = table === null ? null : this.seatsOut.due(table, force);
+    if (data !== null) t.send(data, undefined, true);
+  }
+
+  /** Host: the act of a guest was refused with `notice` (nonzero): the seat table goes to him alone, with the notice that tells him why. */
+  private refuseAct(peer: string, notice: number): void {
+    const table = this.game.seatTable();
+    if (notice !== 0 && table !== null) this.transport?.send(packSeats(table, notice), peer, true);
+  }
+
   /** A peer's input older than `INPUT_STALE_MS` (a stalled link, a hidden tab) turns idle: its car coasts instead of holding the last throttle. */
   private expireInputs(race: NetRace | null): void {
     const now = this.now();
@@ -657,7 +675,9 @@ export class NetPlay extends NetPlayClient {
       left = true;
     }
     if (left) this.syncSeats();
-    if (left || this.rosterDirty || this.seq % KEYFRAME_EVERY === 0) this.publishRoster(t);
+    const roster = left || this.rosterDirty || this.seq % KEYFRAME_EVERY === 0;
+    if (roster) this.publishRoster(t);
+    this.publishSeats(t, roster);
     const cars = this.game.cars();
     if (cars.length === 0) return;
     const L = this.layoutOf(cars[0]!);

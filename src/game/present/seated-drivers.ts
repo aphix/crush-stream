@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { MAX_CARS } from "../scenes/fleet.ts";
+import { MAX_ACTORS } from "../scenes/seat-table.ts";
+import { scootShare, SEAT_DRIVER, seatHip } from "../vehicle/car-seats.ts";
+import type { SeatRiders } from "./seat-riders.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
 import { copDriver } from "../vehicle/ejection.ts";
@@ -137,18 +140,27 @@ function duck(style: BodyStyle, d: number): { lean: number; down: number } {
   return _duck;
 }
 
+/** Slots the draw holds: every car's driver, and a player more for every seat but one (a player holds one seat). */
+const SLOTS = MAX_CARS + MAX_ACTORS;
+/** A rider's slot is keyed from here, above every car index. */
+const RIDER_KEY = MAX_CARS;
+const _hip = { x: 0, y: 0, z: 0 };
+const _from = { x: 0, y: 0, z: 0 };
+const _driver = { x: 0, y: 0, z: 0 };
+const _shift = new THREE.Vector3();
+
 /**
- * Every car's driver, seated in it while he is in: one instanced draw (`DummyMesh` on `seatedGeometry`), the drivers shown packed
+ * Every seated driver and rider, seated while he is in: one instanced draw (`DummyMesh` on `seatedGeometry`), the figures shown packed
  * from slot 0 so the draw ends at the last of them; no shadow (the car's covers him).
  */
 export class SeatedDrivers {
-  readonly mesh = new DummyMesh(MAX_CARS, false, seatedGeometry());
-  /** Slots holding a driver, from 0. */
+  readonly mesh = new DummyMesh(SLOTS, false, seatedGeometry());
+  /** Slots holding a figure, from 0. */
   private drawn = 0;
-  /** Each slot's car (index in the field) and how it is dressed. */
-  private readonly carOf = new Int8Array(MAX_CARS).fill(-1);
-  private readonly dressed: (DriverLook | null)[] = Array.from({ length: MAX_CARS }, () => null);
-  private readonly cops = new Uint8Array(MAX_CARS);
+  /** Each slot's key (a car's index for its driver, `RIDER_KEY` + the actor for a player the seat table holds) and how it is dressed. */
+  private readonly keyOf = new Int8Array(SLOTS).fill(-1);
+  private readonly dressed: (DriverLook | null)[] = Array.from({ length: SLOTS }, () => null);
+  private readonly cops = new Uint8Array(SLOTS);
 
   /** The car's glass is off the camera (`CarDetail.isMid`), so no one sees him there. */
   private readonly cut: (car: DeformableCar) => boolean;
@@ -160,38 +172,67 @@ export class SeatedDrivers {
     this.mesh.receiveShadow = true;
   }
 
-  /** Pose the drivers of `cars` (world matrices current), dressed as `lookOf` has them; empty slots, thrown drivers, cut cars, car `away` (its driver is out walking) and a car `empty` says is parked hide. */
-  sync(cars: readonly DeformableCar[], lookOf: (car: number) => DriverLook, uniform: (car: number, cop: boolean) => boolean, away = -1, empty: ((car: number, body: DeformableCar) => boolean) | null = null): void {
+  /**
+   * Pose the drivers of `cars` (world matrices current), dressed as `lookOf` has them, and the players `riders` seats at their own seats with their own looks; empty slots, thrown drivers,
+   * cut cars, car `away` (its driver is out walking) and a car `empty` says is parked hide.
+   */
+  sync(cars: readonly DeformableCar[], lookOf: (car: number) => DriverLook, uniform: (car: number, cop: boolean) => boolean, away = -1, empty: ((car: number, body: DeformableCar) => boolean) | null = null, riders: SeatRiders | null = null): void {
     let s = 0;
     for (let c = 0; c < MAX_CARS; c++) {
       const car = cars[c];
       const seat = car?.partSeats[PART_KIND.seatFront];
-      if (!car || !seat || c === away || this.cut(car) || !seatedShown(car, seat) || (empty !== null && empty(c, car))) continue;
-      const cop = uniform(c, copDriver(car));
-      const look = lookOf(c);
-      // Another car in the slot dresses it afresh, so its bust starts at rest there.
-      if (this.carOf[s] !== c || this.cops[s] !== Number(cop) || !sameLook(this.dressed[s] ?? null, look)) {
-        this.mesh.dress(s, cop, look);
-        this.carOf[s] = c;
-        this.dressed[s] = look;
-        this.cops[s] = Number(cop);
-      }
-      const pose = seatedPose(car.style);
-      const frame = car.interior.matrixWorld;
-      frame.decompose(_at, _turn, _scale);
-      const place = driverSeat(car.style);
-      const drop = duck(car.style, -car.cabin.roofSink);
-      _lean.setFromAxisAngle(X_AXIS, -drop.lean);
-      // His legs (parts from LEFT_LEG on) are cut from `seatedGeometry`.
-      for (let k = 0; k < LEFT_LEG; k++) {
-        _p.copy(pose.p[k]!).sub(place.hip).applyQuaternion(_lean).add(place.hip);
-        _p.y -= drop.down;
-        this.mesh.pose(s, k, _p.applyMatrix4(frame), _q.copy(_turn).multiply(_lean).multiply(pose.q[k]!));
-      }
-      s++;
+      if (!car || !seat || c === away || (riders !== null && riders.drives(c)) || this.cut(car) || !seatedShown(car, seat) || (empty !== null && empty(c, car))) continue;
+      _shift.set(0, 0, 0);
+      this.figure(s++, c, car, uniform(c, copDriver(car)), lookOf(c), _shift);
+    }
+    for (let r = 0; riders !== null && r < riders.count; r++) {
+      const car = cars[riders.car[r]!];
+      const seat = car?.partSeats[PART_KIND.seatFront];
+      if (!car || !seat || this.cut(car) || !seatedShown(car, seat)) continue;
+      const actor = riders.actor[r]!;
+      this.shift(car, riders.seat[r]!, riders.from[r]!, riders.slid[r]!);
+      this.figure(s++, RIDER_KEY + actor, car, false, riders.lookOf(actor), _shift);
     }
     for (let k = s; k < this.drawn; k++) this.mesh.hide(k);
     this.drawn = s;
+  }
+
+  /** Into `_shift`: how far (car frame) a figure in `seat` sits from the driver's seat, `slid` s into a slide from seat `from` (-1: none). */
+  private shift(car: DeformableCar, seat: number, from: number, slid: number): void {
+    seatHip(car.style, SEAT_DRIVER, _driver);
+    seatHip(car.style, seat, _hip);
+    if (from >= 0) {
+      seatHip(car.style, from, _from);
+      const share = scootShare(slid);
+      _hip.x = _from.x + (_hip.x - _from.x) * share;
+      _hip.y = _from.y + (_hip.y - _from.y) * share;
+      _hip.z = _from.z + (_hip.z - _from.z) * share;
+    }
+    _shift.set(_hip.x - _driver.x, _hip.y - _driver.y, _hip.z - _driver.z);
+  }
+
+  /** Slot `s` holds the figure `key` of `car`, dressed `look` (a `cop` in uniform), sat `shift` (car frame) from the driver's seat. */
+  private figure(s: number, key: number, car: DeformableCar, cop: boolean, look: DriverLook, shift: THREE.Vector3): void {
+    // Another figure in the slot dresses it afresh, so its bust starts at rest there.
+    if (this.keyOf[s] !== key || this.cops[s] !== Number(cop) || !sameLook(this.dressed[s] ?? null, look)) {
+      this.mesh.dress(s, cop, look);
+      this.keyOf[s] = key;
+      this.dressed[s] = look;
+      this.cops[s] = Number(cop);
+    }
+    const pose = seatedPose(car.style);
+    const frame = car.interior.matrixWorld;
+    frame.decompose(_at, _turn, _scale);
+    const place = driverSeat(car.style);
+    const drop = duck(car.style, -car.cabin.roofSink);
+    _lean.setFromAxisAngle(X_AXIS, -drop.lean);
+    // His legs (parts from LEFT_LEG on) are cut from `seatedGeometry`.
+    for (let k = 0; k < LEFT_LEG; k++) {
+      _p.copy(pose.p[k]!).sub(place.hip).applyQuaternion(_lean).add(place.hip);
+      _p.y -= drop.down;
+      _p.add(shift);
+      this.mesh.pose(s, k, _p.applyMatrix4(frame), _q.copy(_turn).multiply(_lean).multiply(pose.q[k]!));
+    }
   }
 
   /** The body geometry is shared (`seatedGeometry`, on `dummyGeometry`'s attributes): only this mesh's material and instance buffers go. */

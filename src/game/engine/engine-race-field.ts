@@ -177,6 +177,16 @@ export abstract class RaceField {
   look = 0;
   /** Cars driven by network peers and their names (netplay host, `setSeats`): `remote` slots in the next field. */
   protected seats: ReadonlyMap<number, string> = new Map();
+  /** The player (an actor) at the wheel of car `car` in the free roam, -1 for none: the open world's seat table. Null: each peer drives the car of its own number. */
+  drivers: ((car: number) => number) | null = null;
+
+  /** The network peer (its car number) whose input drives car `i` in the free roam, -1 for none. */
+  protected peerDriving(i: number): number {
+    if (this.drivers === null) return this.seats.has(i) ? i : -1;
+    const actor = this.drivers(i);
+    return actor >= 0 && this.seats.has(actor) ? actor : -1;
+  }
+
   /** Traffic cars put away by the observer bubble. */
   protected readonly dormant = new Uint8Array(MAX_CARS);
   protected bubbleAcc = 0;

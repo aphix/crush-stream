@@ -202,6 +202,10 @@ triangles a slot draws from its part poses, so a swung arm or a flung leg is pic
 at once. A reset (R) stands everyone up as before. The scene's old self-reset (its parked car, off the rim, left the sim and the Fleet's
 "disc is empty" rule rerolled the scene a few seconds later, standing everybody up) no longer fires there.
 
+## Seats and doors (open world)
+
+A car has two doors and up to four seats (`car-seats.ts`: a front row on every style, a rear row where `BodyStyle.seats.rear` is set, so every style but the pickup; seat = row x 2 + side, side 0 the driver's). `SeatTable` (`scenes/seat-table.ts`) is the one truth of who sits where; the host's `OpenWorldSeats` carries out `getIn(actor, car)` and `getOut(actor)` for every player, the host's own and a solo one included (`OnFootRide` asks it; a guest sends `ACT.getIn` / `ACT.getOut` and waits for `MSG.seats`). The door is the one nearest the actor's torso (`doorAt`, the same test that lights the prompt). `fillSeat` picks the seat; a player not in the front seat beside his door is drawn sitting there and sliding over (`SCOOT_SECONDS`, `SeatRiders`). `DoorSwings` swings the door he used. A passenger stays seated through a crash; a passenger's throttle with the driver's seat empty is a get-in that re-seats him at the wheel. Outside the open world the old path stays: his own car's driver door only, nothing written to a car.
+
 ## Known gaps
 
 - No seat blend or climb: he stands at the door for the 0.6 s entry and then is in the car; he appears at the door on the way out. In the open world, on a machine

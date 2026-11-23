@@ -12,11 +12,11 @@ export interface OnFootSense {
 }
 
 /** A car rolling faster than this (m/s) is not stepped out of or into. */
-const EXIT_MAX_SPEED = 3;
-const ENTER_MAX_SPEED = 3;
+export const EXIT_MAX_SPEED = 3;
+export const ENTER_MAX_SPEED = 3;
 /** How long the climb out and the climb in take (s). */
 const EXIT_SECONDS = 0.8;
-const ENTER_SECONDS = 0.6;
+export const ENTER_SECONDS = 0.6;
 
 /** The get out, walk, get in cycle: one control, four phases, and the refusals that keep it from being pressed at the wrong time. */
 export class OnFootFlow {
@@ -32,10 +32,23 @@ export class OnFootFlow {
   }
 
   press(sense: OnFootSense): OnFootStep {
+    const step = this.judge(sense);
+    if (step === "exitStarted") this.begin("exiting", sense.car, step);
+    else if (step === "enterStarted") this.begin("entering", sense.car, step);
+    return step;
+  }
+
+  /** What a press would do, with nothing begun: a guest asks the host first, and starts the trip (`start`) once the host has answered. */
+  judge(sense: OnFootSense): OnFootStep {
     this.refusal = null;
     if (this.phase === "exiting" || this.phase === "entering" || this.phase === "arrested") return this.refuse("busy");
-    if (this.phase === "inCar") return this.pressInCar(sense);
-    return this.pressOnFoot(sense);
+    if (this.phase === "inCar") return this.judgeInCar(sense);
+    return this.judgeOnFoot(sense);
+  }
+
+  /** Begins the climb out (`exitStarted`) or in (`enterStarted`) that `judge` allowed, of car `car`. */
+  start(step: OnFootStep, car: number): void {
+    this.begin(step === "exitStarted" ? "exiting" : "entering", car, step);
   }
 
   /** `dt` s pass: a climb out or in that has run its course ends. */
@@ -84,16 +97,16 @@ export class OnFootFlow {
     this.seconds = 0;
   }
 
-  private pressInCar(sense: OnFootSense): OnFootStep {
+  private judgeInCar(sense: OnFootSense): OnFootStep {
     if (sense.speed > EXIT_MAX_SPEED) return this.refuse("tooFast");
     if (sense.doorBlocked) return this.refuse("doorBlocked");
-    return this.begin("exiting", sense.car, "exitStarted");
+    return "exitStarted";
   }
 
-  private pressOnFoot(sense: OnFootSense): OnFootStep {
+  private judgeOnFoot(sense: OnFootSense): OnFootStep {
     if (sense.car < 0) return this.refuse("noCarInReach");
     if (sense.speed > ENTER_MAX_SPEED) return this.refuse("tooFast");
-    return this.begin("entering", sense.car, "enterStarted");
+    return "enterStarted";
   }
 
   private begin(phase: OnFootPhase, car: number, step: OnFootStep): OnFootStep {
