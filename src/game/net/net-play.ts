@@ -28,6 +28,7 @@ import { NetPlayClient } from "./net-play-client.ts";
 import { readCarPose } from "./car-pose.ts";
 import { packRoster } from "./roster-codec.ts";
 import { packCrowd } from "./crowd-codec.ts";
+import { ActInbox } from "./act-link.ts";
 import { OPENWORLD_ID } from "../world/openworld/openworld-course.ts";
 import { ROOM_MAX } from "../../lib/multiplayer/rooms.ts";
 import { fetchRooms, findMatch, matchStage, publicMeta, publicRoomName, WEAK_AI, WEAK_DERBY_FIELD, type MatchDeps } from "./matchmaking.ts";
@@ -98,6 +99,8 @@ export class NetPlay extends NetPlayClient {
   private readonly inputAt: number[] = [];
   /** `readInput`'s meter out-slot. */
   private readonly inMeter = new Float64Array(1);
+  /** Host: the acts guests send (`MSG.act`), numbered per peer so a replay is dropped. */
+  private readonly actsIn = new ActInbox();
   /** Hidden host: the heartbeat timer telling guests it is only paused. */
   private holdTimer: ReturnType<typeof setInterval> | undefined;
   private readonly out = makeSnapshot();
@@ -403,6 +406,7 @@ export class NetPlay extends NetPlayClient {
     this.role = "off";
     this.car = -1;
     this.slots.clear();
+    this.actsIn.clear();
     this.meters.fill(-1);
     this.vetted.clear();
     this.looks.clear();
@@ -576,6 +580,9 @@ export class NetPlay extends NetPlayClient {
       }
     } else if (type === MSG.look) {
       this.takeGuestLook(from, data);
+    } else if (type === MSG.act) {
+      const car = this.slots.get(from);
+      if (car !== undefined) this.actsIn.take(from, car, data, (actor, act) => this.game.hearAct(actor, act));
     }
   }
 

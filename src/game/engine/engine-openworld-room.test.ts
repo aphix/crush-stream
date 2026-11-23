@@ -19,6 +19,8 @@ import { openWorldCourse } from "../world/openworld/openworld-course.ts";
 import { OFF_MENU } from "../world/tracks/index.ts";
 import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { OpenWorldActs, type ActorPlace } from "./engine-openworld-acts.ts";
+import { ACT } from "../net/act-codec.ts";
 import { idleOpenWorldPorts } from "./openworld-cull-ports.test-util.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 
@@ -67,13 +69,28 @@ function room() {
   };
   const host = side(false, HOST_CAR_SLOT);
   const guest = side(true, 1);
-  const hostNet = new NetPlay(worldGame(hostWorld, "Ann", () => host.director.link()).game, { connect: hub.connect, now: () => now });
+  const places = new Map<number, ActorPlace>();
+  const acts = new OpenWorldActs(
+    {
+      actorPlace: (actor, out) => {
+        const place = places.get(actor);
+        if (place) Object.assign(out, place);
+        return place !== undefined;
+      },
+      now: () => now / 1000,
+      self: () => HOST_CAR_SLOT,
+      guest: () => false,
+      sendAct: () => {},
+    },
+    host.director,
+  );
+  const hostNet = new NetPlay(worldGame(hostWorld, "Ann", () => host.director.link(), (actor, act) => acts.hear(actor, act)).game, { connect: hub.connect, now: () => now });
   const guestNet = new NetPlay(worldGame(guestWorld, "Zed", () => guest.director.link()).game, { connect: hub.connect, now: () => now });
   hostNet.hostRoom({ kind: "openworld", code: "R", tx: "bc", minPlayers: 1, course: "", playlist: [], autoNext: true });
   guestNet.join("R", "bc");
   const worldClock = { acc: 0 };
   return {
-    hub, hostNet, guestNet, host, guest,
+    hub, hostNet, guestNet, host, guest, places,
     /** `n` net frames of 1/30 s: the host's sim steps twice, its crowd with it, then both nets and both crowds' frames. */
     step(n: number): void {
       for (let k = 0; k < n; k++) {
@@ -150,5 +167,43 @@ describe("given a host and a guest in a room of the open world, each with the en
     const society = r.guest.director["crowd"]!.state;
     expect(society.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.flags]! & FLAG.hurt, "hurt on the guest").toBe(FLAG.hurt);
     expect(historyLines(society, resident)[0], "their log line on the guest").toContain("knocked down");
+  });
+});
+
+/** The civilians the log says were knocked down, in order. */
+function knocked(log: Float64Array): number[] {
+  const out: number[] = [];
+  for (let at = 0; at + 2 < log.length; at += 3) if (log[at] === EVENT_KIND.knock) out.push(log[at + 1]!);
+  return out;
+}
+
+/** The guest punches resident `c`: his act goes over the wire from a metre west of her drawn spot, along +x at her. */
+function guestPunches(r: ReturnType<typeof startedRoom>, c: number): void {
+  const { poses } = r.host.director["crowd"]!;
+  const place: ActorPlace = { x: poses.x[c]! - 1, y: 1, z: poses.z[c]!, heading: Math.PI / 2 };
+  r.places.set(1, place);
+  r.guestNet.sendAct(ACT.punch, 0, { x: place.x, y: place.y, z: place.z }, { x: 1, y: 0, z: 0 });
+  r.step(1);
+}
+
+describe("given a host and a guest in a room of the open world, the guest on foot a metre from a civilian", () => {
+  it("when the guest punches her three times inside ten seconds, then the first two leave her standing and the third knocks her out on the host, with the knock in the guest's log too", () => {
+    const r = startedRoom();
+    r.step(MORNING_FRAMES);
+    const hostCrowd = r.host.director["crowd"]!;
+    while (shownResident(hostCrowd) < 0) r.step(1);
+    const c = shownResident(hostCrowd);
+    for (let blow = 1; blow <= 2; blow++) {
+      guestPunches(r, c);
+      r.step(21);
+    }
+    expect(hostCrowd.poses.shown[c], "she is still standing after two punches").toBe(1);
+    expect(knocked(r.host.director.eventLog()), "knocks on the host after two punches").toHaveLength(0);
+    guestPunches(r, c);
+    r.step(AFTERMATH_FRAMES);
+    expect(hostCrowd.poses.shown[c], "she is hidden after the third").toBe(0);
+    expect(firstMismatch(r.host.thrown.map((strike) => strike.guard), [c]), "the host's ragdolls").toBeUndefined();
+    expect(firstMismatch(knocked(r.host.director.eventLog()), [c]), "the host's log").toBeUndefined();
+    expect(firstMismatch(knocked(r.guest.director.eventLog()), [c]), "the guest's log").toBeUndefined();
   });
 });

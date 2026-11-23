@@ -36,6 +36,8 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     setDayHour: () => {},
     strikeWalker: () => {},
     staggerWalker: () => {},
+    actorPlace: () => false,
+    strikeActor: () => {},
     punchProp: () => {},
     pickDoll: () => {},
     pickCar: () => {},

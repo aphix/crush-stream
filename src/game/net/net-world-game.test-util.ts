@@ -3,9 +3,10 @@ import { NO_CAR_PICK, NO_PERSON_PICK, PERSON_SPRAY, SPRAY_PALETTE } from "../mat
 import { CAR_SPRAY } from "../vehicle/spray-box.ts";
 import type { Ejection } from "../vehicle/ejection.ts";
 import { PHASES, type CrowdLink, type NetGame } from "./net-ports.ts";
+import type { Act } from "./act-codec.ts";
 
 /** The engine's `NetGame` seam over a headless world: what `CrashEngine.net` wires, minus the derby, reels, looks and presentation. `crowd`: the open world's crowd, null while there is none. */
-export function worldGame(w: World, name: string, crowd: () => CrowdLink | null = () => null) {
+export function worldGame(w: World, name: string, crowd: () => CrowdLink | null = () => null, acts: (actor: number, act: Act) => void = () => {}) {
   const log = { cleared: 0, gen: 0 };
   const game: NetGame = {
     cars: () => w.live(),
@@ -57,6 +58,7 @@ export function worldGame(w: World, name: string, crowd: () => CrowdLink | null 
     wearLook: () => {},
     dropLooks: () => {},
     crowdLink: crowd,
+    hearAct: acts,
     seat: w.seat,
   };
   return { game, log };

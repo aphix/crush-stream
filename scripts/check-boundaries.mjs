@@ -110,6 +110,7 @@ const HOT = {
   "src/game/ai/civilians/civilian-contact.ts": ["carGap", "comingAt"],
   "src/game/ai/civilians/crowd-walkers.ts": ["clear", "add", "addBody", "place"],
   "src/game/engine/engine-openworld.ts": ["step", "frame", "feedWalkers", "landWalkerStrike", "shoot", "shootCar", "releaseGotUp"],
+  "src/game/engine/engine-openworld-acts.ts": ["hear", "admit", "punchBy", "shootBy", "punchLanded", "shootLocal", "draw", "scatter", "punch"],
   "src/game/present/civilian-art.ts": ["update", "refreshSight", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
   "src/game/present/animal-art.ts": ["update", "kindOf", "easePosture", "drawDowned", "write", "finish"],
   "src/game/engine/engine-openworld-car-look.ts": ["met", "rayIntoCar"],

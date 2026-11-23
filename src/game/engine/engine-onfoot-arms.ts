@@ -31,6 +31,8 @@ type ArmsHost = {
   shoot(gun: Gun): void;
   /** Fire with the hook in hand: one end is placed. */
   hook(): void;
+  /** Whether the hook may be taken in hand: not on a guest's machine, where the host does not yet carry out hook acts. */
+  hooks(): boolean;
 };
 
 /** A trigger past this is pulled. */
@@ -114,14 +116,16 @@ export class OnFootArms {
   key(code: string): boolean {
     const weapon = WEAPON_KEYS[code];
     if (weapon === undefined) return false;
-    this.weapon = weapon;
+    if (weapon !== "hook" || this.host.hooks()) this.weapon = weapon;
     return true;
   }
 
-  /** LB / RB: the weapon before or after the one in hand, wrapping. */
+  /** LB / RB: the weapon before or after the one in hand, wrapping; the hook is skipped where it is not offered. */
   cycle(by: number): void {
-    const at = WEAPON_ORDER.indexOf(this.weapon);
-    this.weapon = WEAPON_ORDER[(at + by + WEAPON_ORDER.length) % WEAPON_ORDER.length]!;
+    let at = WEAPON_ORDER.indexOf(this.weapon);
+    do at = (at + by + WEAPON_ORDER.length) % WEAPON_ORDER.length;
+    while (WEAPON_ORDER[at] === "hook" && !this.host.hooks());
+    this.weapon = WEAPON_ORDER[at]!;
   }
 
   /** What the HUD shows of the arms. */
@@ -146,4 +150,15 @@ export class OnFootArms {
     this.cooldown = gun.every;
     this.host.shoot(gun);
   }
+}
+
+/** The gun in weapon slot `slot` of `WEAPON_ORDER` (what `MSG.act`'s shot carries as its argument); null for fists, the hook or a slot past the list. */
+export function gunAt(slot: number): Gun | null {
+  const weapon = WEAPON_ORDER[slot];
+  return weapon === undefined || weapon === "fists" || weapon === "hook" ? null : WEAPONS[weapon];
+}
+
+/** The weapon slot of `gun` in `WEAPON_ORDER`, -1 for a gun this build does not list. */
+export function slotOfGun(gun: Gun): number {
+  return WEAPON_ORDER.findIndex((weapon) => weapon !== "fists" && weapon !== "hook" && WEAPONS[weapon] === gun);
 }

@@ -374,6 +374,15 @@ The city (`world/openworld`, course id `openworld`) is a scene (`#scene=openworl
 - **Look-at panel.** `CrashHudState.lookAt` (`{ title, lines }` or null) is what the engine's `lookAtText()` answers; `LookPanel` shows it in the scene panels' column and nothing while it is null.
 - **Wire.** NET 43: `MSG.crowd` and the game kind. REPLAY is unchanged (the crowd is not a recorded trajectory).
 
+### Acts of a guest on foot
+
+A guest on foot punches and shoots as the host's player does, and the host decides what each does to anyone it reaches.
+
+- **`MSG.act`** (16, `act-codec.ts`; reliable, guest → host): 17 bytes: type, seq u16, act kind u8 (`ACT`: 0 punch, 1 shot, 2 hook fire, 3 hook cut, 4 hook reel on, 5 hook reel off, 6 get in, 7 get out), arg u8 (a shot's weapon slot, a get-in's car), eye i16 x 3 (cm), direction i16 x 3 (x 32767). A message of another length, type or an unknown kind is refused; a guest never packs a value that is not finite or whose eye does not fit. The guest sends through `NetPlay.sendAct` (`ActOutbox` numbers each act); the host's `ActInbox` maps the sender's peer to its car, drops an act whose number is not newer than that peer's last (a replay), and hands the rest to `NetGame.hearAct`.
+- **The host's dispatcher** is `OpenWorldActs.hear(actor, act)` (`engine-openworld-acts.ts`). A refused act does nothing: the actor is not on foot (`actorPlace` false), the eye is more than 4 m from his torso (the on-foot camera's boom is 3.7 m), or an act of that kind came closer than 0.9 times the cooldown the last one set (a punch 0.6 s, a gun its own). A punch is thrown by `punchBy(actor, dirX, dirZ)` from the actor's own place and a shot by `shootBy(actor, aim, gun)` from the eye the act names; the host's own player calls the same two. Kinds 2 to 7 belong to other lanes and are refused until their families are wired into `hear`.
+- **A shot's spread** is drawn on the host from a seeded stream per actor, so a replayed act cannot be tried again for a better one. **Where an actor stands** is the engine port `actorPlace(actor, out)`: this machine's own player from his walker; other players from their shared bodies.
+- **Wire.** The act is the only new message; `NET_VERSION` moves with the lane set that completes the feature.
+
 ## Voice
 
 Opt-in proximity voice on the same WebRTC mesh (`src/game/net/voice.ts` `Voice`, `NetPlay.voice`); no new dependency, browser built-ins only.

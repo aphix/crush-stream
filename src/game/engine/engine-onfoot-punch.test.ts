@@ -4,6 +4,7 @@ import { WALKER_SLOT } from "../present/ragdoll-pool.ts";
 import { wrapAngle } from "../present/walker-math.ts";
 import { WALK_SPEED } from "../present/walker-locomotion.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
+import { ACT } from "../net/act-codec.ts";
 
 const LINK = "#scene=openworld&seed=beef";
 /** Seconds the traffic needs to stand its first kerb cars (its first passes show every space in reach). */
@@ -85,21 +86,32 @@ describe("given the real engine in the open world, its player on foot", () => {
     landed.mockRestore();
   });
 
-  // mutation: sed -i 's/    return this.host.openWorld() \&\& this.flow.phase === "onFoot" \&\& !this.host.guest();/    return this.host.openWorld() \&\& this.flow.phase === "onFoot";/' src/game/engine/engine-onfoot.ts
-  it("when a guest in a room presses fire on foot in the open world, then nothing is thrown", () => {
+  // mutation: sed -i 's/^    if (!this.ports.guest()) {/    if (true) {/' src/game/engine/engine-openworld-acts.ts
+  it("when a guest in a room presses fire on foot in the open world, then his fist swings at once, and the punch is sent to the host as an act from his torso along his facing instead of being carried out on his machine", () => {
     rig.getOut();
     const landed = vi.spyOn(rig.engine["openWorld"], "punch");
+    const swung = vi.spyOn(rig.walker(), "punch");
     const net = rig.engine["net"];
+    const sent = vi.spyOn(net, "sendAct").mockImplementation(() => {});
     const role = net.role;
     try {
       Object.defineProperty(net, "role", { value: "client", configurable: true, writable: true });
       fire();
+      expect(swung, "swings the moment fire is pressed").toHaveBeenCalledTimes(1);
       rig.run(0.5);
-      expect(landed, "punches landed").not.toHaveBeenCalled();
-      expect(rig.engine["onFoot"].armed(), "armed").toBe(false);
+      expect(landed, "punches carried out on the guest's machine").not.toHaveBeenCalled();
+      expect(sent, "acts sent").toHaveBeenCalledTimes(1);
+      const [kind, arg, eye, dir] = sent.mock.calls[0]!;
+      const torso = rig.torso();
+      expect(kind, "the act's kind").toBe(ACT.punch);
+      expect(arg, "the act's argument").toBe(0);
+      expect(hypot2(eye.x - torso.x, eye.z - torso.z), "the eye's distance from his torso (m)").toBeLessThan(0.5);
+      expect(hypot2(dir.x - detSin(rig.walker().facing), dir.z - detCos(rig.walker().facing)), "the direction's distance from his facing").toBeLessThan(0.1);
     } finally {
       Object.defineProperty(net, "role", { value: role, configurable: true, writable: true });
       landed.mockRestore();
+      swung.mockRestore();
+      sent.mockRestore();
     }
   });
 

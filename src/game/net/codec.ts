@@ -21,9 +21,10 @@ import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
  * highlight reel (`reel-codec.ts`; the message itself is `MSG.reel`, but on the wire it travels as `reelPart` frames,
  * `reel-wire.ts`), sent once, reliably; `eject`: a driver was thrown out (`writeEject`), reliably; `look`: a player's car and
  * driver look with their spray paint (`look-codec.ts`), once per player, reliably; `roster`: the host's peer-to-car table for
- * proximity voice (`roster-codec.ts`), to every guest, reliably, when a seat changes and with every keyframe; `crowd`: the open world's crowd clock and event log (`crowd-codec.ts`), to every guest, reliably, with every keyframe and when an event is added.
+ * proximity voice (`roster-codec.ts`), to every guest, reliably, when a seat changes and with every keyframe; `crowd`: the open world's crowd clock and event log (`crowd-codec.ts`), to every guest, reliably, with every keyframe and when an event is added;
+ * `act`: a guest on foot did something the host decides (a punch, a shot; `act-codec.ts`), to the host, reliably, 17 bytes.
  */
-export const MSG = { snapshot: 1, input: 2, hello: 3, assign: 4, race: 5, derby: 6, hold: 7, reel: 8, eject: 9, reelPart: 10, look: 11, roster: 12, crowd: 13 } as const;
+export const MSG = { snapshot: 1, input: 2, hello: 3, assign: 4, race: 5, derby: 6, hold: 7, reel: 8, eject: 9, reelPart: 10, look: 11, roster: 12, crowd: 13, act: 16 } as const;
 
 /**
  * Wire format version, carried by hello and assign: peers on different builds (an auto-deploy mid-session)

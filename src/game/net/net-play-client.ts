@@ -31,6 +31,7 @@ import { ReelParts } from "./reel-wire.ts";
 import { carLayout } from "./car-pose.ts";
 import { readRoster } from "./roster-codec.ts";
 import { readCrowd } from "./crowd-codec.ts";
+import { ActOutbox } from "./act-link.ts";
 import { Voice } from "./voice.ts";
 import { HELLO_EVERY, HOST_LOST_MS, HOST_WAIT_MS, INTERP_DELAY, MAX_DEAD_ROOMS, RACE_GONE_MS, REFUSED, RING, SEND_HZ } from "./net-constants.ts";
 
@@ -55,6 +56,7 @@ export abstract class NetPlayClient {
   protected car = -1;
   protected layout: NetLayout | null = null;
   protected readonly w = new Writer();
+  private readonly actsOut = new ActOutbox();
   protected readonly r = new Reader();
   protected sendAcc = 0;
   protected statSnaps = 0;
@@ -133,6 +135,13 @@ export abstract class NetPlayClient {
   /** Client: ask the host to put this peer's car back on the track now with its damage kept (race R held); in the lobby the same as a tap. */
   requestHoldReset(): void {
     this.resetWanted |= this.heardGate ? INPUT_RESET : INPUT_HOLD;
+  }
+
+  /** Client: tell the host what this player did on foot (`MSG.act`, reliable); the host decides what it does. Nothing is sent before a host has seated this peer, or for a value that is not finite or out of range. */
+  sendAct(kind: number, arg: number, eye: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }): void {
+    if (this.hostId === null || this.car < 0) return;
+    const data = this.actsOut.pack(kind, arg, eye, dir);
+    if (data !== null) this.transport?.send(data, this.hostId, true);
   }
 
   /** Joined a private room and heard no host in `HOST_WAIT_MS` of frames: a closed room, or a link to nobody. */

@@ -48,6 +48,7 @@ import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
+import { OpenWorldActs, type ActorPlace } from "./engine-openworld-acts.ts";
 import { RayNearest } from "./ray-nearest.ts";
 import { type AutoOrbit, autoOrbitOf } from "./engine-openworld-auto.ts";
 import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
@@ -205,6 +206,7 @@ export class CrashEngine extends EngineGarage {
     dropLooks: () => this.dropLooks(),
     courseMenu: () => this.race.courseMenu(),
     crowdLink: () => this.crowdLink(),
+    hearAct: (actor, act) => this.acts.hear(actor, act),
     seat: this.seat,
   });
   /** The results reel and its solo view. */
@@ -213,6 +215,8 @@ export class CrashEngine extends EngineGarage {
   protected readonly podium: PodiumDirector;
   /** The open world's society and crowd (docs/OPEN_WORLD.md). */
   private readonly openWorld: OpenWorldDirector;
+  /** What every player on foot does at the host, and a guest's way to tell it (`MSG.act`). */
+  private readonly acts: OpenWorldActs;
   readonly pace = new SimPacer(true);
   private readonly blend = new PoseBlend();
   /** What a crashed car nobody drives rolls on: its drive's idle pedals (engine braking, the test world's IDLE). */
@@ -351,9 +355,9 @@ export class CrashEngine extends EngineGarage {
         if (!on) this.mouseLook.exit();
         else if (!this.mouseLook.on) this.toggleMouseLook();
       },
-      punchLanded: (x, z, dirX, dirZ) => this.openWorld.punch(x, z, dirX, dirZ),
+      punchLanded: (dirX, dirZ) => this.acts.punchLanded(dirX, dirZ),
       aimRay: (centre, out) => this.aimRay(centre, out),
-      shootRay: (ray, gun) => this.openWorld.shoot(ray, gun),
+      shootRay: (aim, gun) => this.acts.shootLocal(aim, gun),
       shotFired: (ray, far) => this.shotFired(ray, far),
       hook: () => this.tether.fire(),
     });
@@ -424,6 +428,10 @@ export class CrashEngine extends EngineGarage {
     this.highlights = this.makeHighlights();
     this.podium = this.makePodium();
     this.openWorld = this.makeOpenWorld();
+    this.acts = new OpenWorldActs(
+      { actorPlace: (actor, out) => this.actorPlace(actor, out), now: () => performance.now() / 1000, self: () => this.drivenCar(), guest: () => this.net.client, sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir) },
+      this.openWorld,
+    );
     this.startOpenWorld(buildOpenWorldMap(layOutLots()));
 
     this.resize();
@@ -501,17 +509,12 @@ export class CrashEngine extends EngineGarage {
       throwFigure: (strike, look, life) => this.ragdolls.throwFigure(strike, this.live(), look, life),
       removeFigure: (slot, age) => this.ragdolls.removeFigure(slot, age),
       bodies: new RagdollBodyHost(() => this.ragdolls),
-      strikeWalker: (dirX, dirZ) => {
-        if (!this.ragdolls.walkerTorso(_p)) return;
-        this.ragdolls.strikeWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
-      },
-      staggerWalker: (dirX, dirZ) => {
-        if (!this.ragdolls.walkerTorso(_p)) return;
-        this.ragdolls.blowWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
-        this.ragdolls.staggerWalker(WALKER_SLOT, 0.5);
-      },
+      strikeWalker: (dirX, dirZ) => this.strikeOwnWalker(dirX, dirZ),
+      staggerWalker: (dirX, dirZ) => this.staggerOwnWalker(dirX, dirZ),
+      actorPlace: (actor, out) => this.actorPlace(actor, out),
+      strikeActor: (victim, dirX, dirZ, knockedOut) => this.strikeActor(victim, dirX, dirZ, knockedOut),
       punchProp: (x, z, dirX, dirZ) => this.race.punchProp(x, z, dirX, dirZ),
-      pickDoll: (ray, range, out) => this.pickDoll(ray, range, out),
+      pickDoll: (actor, ray, range, out) => this.pickDoll(actor, ray, range, out),
       pickCar: (ray, range, out) => this.pickCar(ray, range, out),
       strikeDoll: (slot, x, y, z, ray, speed) => this.strikeDoll(slot, x, y, z, ray, speed),
       shotSparks: (x, y, z, ray) => this.shotFx(_p.set(x, y, z), _n.set(-ray.dirX, -ray.dirY, -ray.dirZ)),
@@ -958,22 +961,51 @@ export class CrashEngine extends EngineGarage {
     out.dirZ = _n.z;
   }
 
-  /** The player fired along `ray` and its farthest ray went `far` m: the flash, the tracer, the sound, the law. */
+  /** The player fired along `ray` and its farthest ray went `far` m: the flash, the tracer and the sound (what the shot did is `OpenWorldActs.shootBy`). */
   private shotFired(ray: LookRay, far: number): void {
     this.playerShots.fire(0, ray.eyeX + ray.dirX * far, ray.eyeY + ray.dirY * far, ray.eyeZ + ray.dirZ * far);
     const weapon = this.onFoot.arms.weapon;
     if (this.audioOn && weapon !== "fists" && weapon !== "hook") this.audio.shot(weapon);
-    this.openWorld.shotFired();
   }
 
-  /** The first dummy of the pool, not his own walker, the ray meets within `range` m (`DummyMesh.nearestHit`: what the raycaster would sort first, with no hit list). */
-  private pickDoll(ray: LookRay, range: number, out: DollPick): void {
+  /** The first dummy of the pool the ray meets within `range` m, not the walker of actor `actor` when that is this player (`DummyMesh.nearestHit`: what the raycaster would sort first, with no hit list). */
+  private pickDoll(actor: number, ray: LookRay, range: number, out: DollPick): void {
     out.slot = -1;
     out.along = Infinity;
     const mesh = this.ragdolls.pickMesh;
     if (!mesh.layers.test(this.raycaster.layers)) return;
     this.raycaster.set(_p.set(ray.eyeX, ray.eyeY, ray.eyeZ), _n.set(ray.dirX, ray.dirY, ray.dirZ));
-    mesh.nearestHit(this.raycaster.ray, this.raycaster.near, range, WALKER_SLOT, out);
+    mesh.nearestHit(this.raycaster.ray, this.raycaster.near, range, actor === this.drivenCar() ? WALKER_SLOT : -1, out);
+  }
+
+  /** Where actor `actor` stands on foot: this player from his walker. Other players' places come from their shared bodies, which this machine does not hold yet. */
+  private actorPlace(actor: number, out: ActorPlace): boolean {
+    if (actor !== this.drivenCar() || !this.onFoot.armed() || !this.ragdolls.walkerTorso(_p)) return false;
+    out.x = _p.x;
+    out.y = _p.y;
+    out.z = _p.z;
+    out.heading = this.ragdolls.walker.facing;
+    return true;
+  }
+
+  /** A civilian's swing fells this player's walker, pushed along (dirX, dirZ). */
+  private strikeOwnWalker(dirX: number, dirZ: number): void {
+    if (!this.ragdolls.walkerTorso(_p)) return;
+    this.ragdolls.strikeWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
+  }
+
+  /** A blow and a stagger on this player's walker, pushed along (dirX, dirZ), that does not fell him. */
+  private staggerOwnWalker(dirX: number, dirZ: number): void {
+    if (!this.ragdolls.walkerTorso(_p)) return;
+    this.ragdolls.blowWalker(WALKER_SLOT, _p, _n.set(dirX, PUNCH_LIFT, dirZ).normalize(), PUNCH_SPEED);
+    this.ragdolls.staggerWalker(WALKER_SLOT, 0.5);
+  }
+
+  /** Another player's punch lands on player `victim`: this player's walker takes it; a body shared from another machine is struck here once such bodies exist. */
+  private strikeActor(victim: number, dirX: number, dirZ: number, knockedOut: boolean): void {
+    if (victim !== this.drivenCar()) return;
+    if (knockedOut) this.strikeOwnWalker(dirX, dirZ);
+    else this.staggerOwnWalker(dirX, dirZ);
   }
 
   /** The first live car the ray meets within `range` m, and the glass pane hit (null: the body): the hit three's raycaster sorts first (`RayNearest`). */

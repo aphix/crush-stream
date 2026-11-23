@@ -49,7 +49,7 @@ A tap shorter than one frame still registers (the press is latched until the nex
 | On foot, the camera: behind you as GTA frames it, you in the middle and your whole body in view, its boom pulled in short of walls, a building's rooms, the facades and cars (never into one; pulled close it hides your head); View steps it over your right shoulder, to your own eyes (your head and body out of the way, look round and up with the drag, stick or mouse look) and back. The drive views at the wheel are untouched. The wheel or a pinch glides the same way, in to your eyes inside 0.8 m and out again; a drag, a click or mouse look never changes the view. Only a pad's view swings back behind you, 1 s after you stop turning it | V / C / T, scroll | B / Circle | View, pinch |
 | On foot in the open world: left click / RT: punch (fists); right button held / LT: aim (the camera draws in over the shoulder and he faces where it looks; a free mouse is captured while aim is held) | left click, right button held | RT, LT held | |
 
-**On foot in the open world: weapons** (solo or as a room's host; [`ON_FOOT.md`](ON_FOOT.md)):
+**On foot in the open world: weapons** (solo, as a room's host or as a guest, whose fists and guns the host carries out; the hook is not a guest's yet; [`ON_FOOT.md`](ON_FOOT.md)):
 
 | Action | Keyboard / mouse | Pad | Touch |
 | --- | --- | --- | --- |

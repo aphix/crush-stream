@@ -202,6 +202,7 @@ function fakeGame(raceApplied?: number[], playerName = "") {
       survival: [{ id: "havana", name: "Havana", blurb: "" }],
     }),
     crowdLink: () => null,
+    hearAct: () => {},
   };
 }
 

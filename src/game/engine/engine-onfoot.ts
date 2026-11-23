@@ -19,7 +19,7 @@ import { doorBlocked, doorInReach, doorSpot, inPlay } from "./onfoot-doors.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { SEAT_KEYS } from "./engine-keys.ts";
 import { blankWalkIntent, readWalkIntent, type WalkIntent } from "./engine-walk-input.ts";
-import { OnFootArms, STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
+import { OnFootArms, type Gun } from "./engine-onfoot-arms.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 
 /** What the director needs from the engine: the objects it acts on, and the questions only the engine can answer. */
@@ -52,18 +52,18 @@ interface OnFootHost {
   enterable(index: number): boolean;
   /** He gets into car `index`, not the one he left: it is the car he drives from now on, and the one he left stays where it stands, empty. */
   adopt(index: number): void;
-  /** Whether this machine is a guest in a room (it holds no authority). The one line a later plan replaces to give guests weapons. */
+  /** Whether this machine is a guest in a room (it holds no authority): it sends what it does to the host, and has no hook yet. */
   guest(): boolean;
   /** Mouse look (pointer lock) is on. */
   mouseCaptured(): boolean;
   /** Turns mouse look on (inside a user gesture) or off. */
   captureMouse(on: boolean): void;
-  /** His punch lands from (x, z) along the unit (dirX, dirZ). */
-  punchLanded(x: number, z: number, dirX: number, dirZ: number): void;
+  /** His punch lands along the unit (dirX, dirZ): the host carries it out, a guest tells the host. */
+  punchLanded(dirX: number, dirZ: number): void;
   /** The ray a shot goes along, into `out`: from the camera through the view's centre (`centre`), else through the cursor. */
   aimRay(centre: boolean, out: LookRay): void;
-  /** One ray of `gun` at the authority: how far (m) it went. */
-  shootRay(ray: LookRay, gun: Gun): number;
+  /** One shot of `gun` along `aim`, the unscattered sight line: the host resolves it, a guest tells the host. How far (m) the tracer runs. */
+  shootRay(aim: LookRay, gun: Gun): number;
   /** A shot of `gun` was fired along `ray` and its farthest ray went `far` m: the flash, the tracer, the sound, the law. */
   shotFired(ray: LookRay, far: number, gun: Gun): void;
   /** Fire with the hook in hand. */
@@ -109,32 +109,6 @@ const _torso = new THREE.Vector3();
 const _spot = new THREE.Vector3();
 const _forward = new THREE.Vector3();
 const _aimRay = new LookRay();
-const _shotRay = new LookRay();
-
-/** `from` with its direction tilted inside a cone of half-angle `cone` (rad) by the two draws `r1`, `r2` (0 to 1), into `out`. Allocates nothing. */
-function scatter(from: LookRay, cone: number, r1: number, r2: number, out: LookRay): void {
-  out.eyeX = from.eyeX;
-  out.eyeY = from.eyeY;
-  out.eyeZ = from.eyeZ;
-  // u: a level unit vector across the direction (straight up or down: +x); v = direction × u.
-  const flat = Math.sqrt(from.dirX * from.dirX + from.dirZ * from.dirZ);
-  const ux = flat > STRAIGHT_UP ? -from.dirZ / flat : 1;
-  const uz = flat > STRAIGHT_UP ? from.dirX / flat : 0;
-  const vx = from.dirY * uz;
-  const vy = from.dirZ * ux - from.dirX * uz;
-  const vz = -from.dirY * ux;
-  const tilt = cone * Math.sqrt(r1);
-  const spread = detSin(tilt) / detCos(tilt);
-  const c = detCos(2 * Math.PI * r2) * spread;
-  const s = detSin(2 * Math.PI * r2) * spread;
-  const x = from.dirX + c * ux + s * vx;
-  const y = from.dirY + s * vy;
-  const z = from.dirZ + c * uz + s * vz;
-  const n = 1 / Math.sqrt(x * x + y * y + z * z);
-  out.dirX = x * n;
-  out.dirY = y * n;
-  out.dirZ = z * n;
-}
 
 /**
  * The player's trip out of his car and back, in any scene that has one: `OnFootFlow` decides what the control does, this carries it out (the walker
@@ -143,7 +117,7 @@ function scatter(from: LookRay, cone: number, r1: number, r2: number, out: LookR
  */
 export class OnFootDirector {
   readonly flow = new OnFootFlow();
-  readonly arms = new OnFootArms({ armed: () => this.armed(), punch: () => this.punch(), land: () => this.landPunch(), captured: () => this.host.mouseCaptured(), capture: (on) => this.host.captureMouse(on), shoot: (gun) => this.shoot(gun), hook: () => this.host.hook() });
+  readonly arms = new OnFootArms({ armed: () => this.armed(), punch: () => this.punch(), land: () => this.landPunch(), captured: () => this.host.mouseCaptured(), capture: (on) => this.host.captureMouse(on), shoot: (gun) => this.shoot(gun), hook: () => this.host.hook(), hooks: () => !this.host.guest() });
   private readonly host: OnFootHost;
   private readonly intent = blankWalkIntent();
   private readonly sense: OnFootSense = { car: -1, speed: 0, doorBlocked: false };
@@ -181,9 +155,9 @@ export class OnFootDirector {
     return this.flow.phase === "onFoot" && this.host.openWorld();
   }
 
-  /** Whether fire, aim and weapons are his: on foot in the open world, solo or as the room's host. */
+  /** Whether fire, aim and weapons are his: on foot in the open world, as a guest too. */
   armed(): boolean {
-    return this.host.openWorld() && this.flow.phase === "onFoot" && !this.host.guest();
+    return this.host.openWorld() && this.flow.phase === "onFoot";
   }
 
   private punch(): boolean {
@@ -194,26 +168,13 @@ export class OnFootDirector {
     const { ragdolls } = this.host;
     const walker = ragdolls.walker;
     if (walker.state !== "stand" || !ragdolls.walkerTorso(_torso)) return;
-    this.host.punchLanded(_torso.x, _torso.z, detSin(walker.facing), detCos(walker.facing));
+    this.host.punchLanded(detSin(walker.facing), detCos(walker.facing));
   }
 
-  /** The shot counter's seeded stream: each ray takes two draws from it. */
-  private shotSeed = 1;
-
-  private draw(): number {
-    this.shotSeed = (Math.imul(this.shotSeed, 1664525) + 1013904223) >>> 0;
-    return this.shotSeed / 4294967296;
-  }
-
-  /** One shot of `gun` along the aim: the view's centre when the mouse is captured, aim is held or he looks through his own eyes, else the cursor's ray. Each ray scatters inside the gun's cone by a seeded draw. Allocates nothing: the rifle calls it eight times a second. */
+  /** One shot of `gun` along the aim: the view's centre when the mouse is captured, aim is held or he looks through his own eyes, else the cursor's ray. */
   private shoot(gun: Gun): void {
     this.host.aimRay(this.arms.aiming || this.host.mouseCaptured() || this.footView === "first", _aimRay);
-    let far = 0;
-    for (let ray = 0; ray < gun.rays; ray++) {
-      scatter(_aimRay, gun.cone, this.draw(), this.draw(), _shotRay);
-      far = Math.max(far, this.host.shootRay(_shotRay, gun));
-    }
-    this.host.shotFired(_aimRay, far, gun);
+    this.host.shotFired(_aimRay, this.host.shootRay(_aimRay, gun), gun);
   }
 
   /**
