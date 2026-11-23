@@ -80,6 +80,8 @@ function room() {
       now: () => now / 1000,
       self: () => HOST_CAR_SLOT,
       guest: () => false,
+      face: () => {},
+      muzzle: () => false,
       sendAct: () => {},
     },
     host.director,

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { hypot2 } from "../kernel/physics-core.js";
+import { hypot2, hypot3 } from "../kernel/physics-core.js";
+import { wrapAngle } from "../present/walker-math.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { ACT, Act } from "../net/act-codec.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
@@ -38,7 +39,10 @@ beforeEach(() => {
   clock.now += 10;
   rig.engine["acts"]["ports"].now = () => clock.now;
 });
-afterEach(() => Reflect.deleteProperty(rig.engine, "actorPlace"));
+afterEach(() => {
+  Reflect.deleteProperty(rig.engine, "actorPlace");
+  Reflect.deleteProperty(rig.engine, "aimRay");
+});
 afterAll(() => rig.dispose());
 
 /** The guest is on foot at `at` (his torso): the host's place for car 1, the way the players' bodies will answer it. */
@@ -248,5 +252,96 @@ describe("given the camera pulled back 20 m and the cursor on a dummy 10 m off t
     expect(hypot2(eye.x - torso.x, eye.z - torso.z), "the act's eye from his torso (m)").toBeLessThan(0.1);
     expect(dir.x * toDummy.x + dir.y * toDummy.y + dir.z * toDummy.z, "the act's direction against the way to the dummy").toBeGreaterThan(0.99);
     expect(rig.engine["ragdolls"].walkers[slot]!.state, "the dummy on the guest's machine").toBe("stand");
+  });
+});
+
+/** The player's engine aims through `ray` (the camera's centre dot) until the next row: the pose and the shot both ask for it. */
+function aimThrough(ray: LookRay): void {
+  rig.engine["aimRay"] = (_centre, out) => void Object.assign(out, ray);
+}
+
+/** A ray from `eye` at `target`. */
+function rayFromTo(eye: THREE.Vector3, target: THREE.Vector3): LookRay {
+  const dir = target.clone().sub(eye).normalize();
+  return Object.assign(new LookRay(), { eyeX: eye.x, eyeY: eye.y, eyeZ: eye.z, dirX: dir.x, dirY: dir.y, dirZ: dir.z });
+}
+
+/** The pistol in the host's player's hand, he on foot facing `facing`, the camera `back` m behind him and `up` m over his torso with its centre dot on `target`: the engine posed for 0.4 s. */
+function pistolAimedAt(target: (torso: THREE.Vector3, facing: THREE.Vector3) => THREE.Vector3, back: number, up: number): { torso: THREE.Vector3; facing: THREE.Vector3; aim: LookRay } {
+  const { torso } = hostOnFoot();
+  const turned = rig.walker().facing;
+  const facing = new THREE.Vector3(Math.sin(turned), 0, Math.cos(turned));
+  const aim = rayFromTo(new THREE.Vector3(torso.x - facing.x * back, torso.y + up, torso.z - facing.z * back), target(torso, facing));
+  rig.press("Digit2");
+  aimThrough(aim);
+  rig.run(0.4);
+  return { torso, facing, aim };
+}
+
+/** The ray the pistol's next shot hands the director, copied, and how far (m) the director says it went. */
+function firedRay(): { ray: LookRay; went: number } {
+  const shoot = vi.spyOn(rig.engine["openWorld"], "shoot");
+  rig.engine["onFoot"].arms.press();
+  rig.engine["onFoot"].arms.release();
+  const ray = Object.assign(new LookRay(), shoot.mock.calls[0]![1]);
+  const went = shoot.mock.results[0]!.value as number;
+  shoot.mockRestore();
+  return { ray, went };
+}
+
+describe("given the pistol in hand on foot, the camera just behind and over him and its centre dot on a dummy 15 m ahead", () => {
+  it("when he fires, then the barrel and the fired ray agree within 2 degrees, the muzzle stands in front of his chest above his waist, the ray starts at it, and the dummy is struck", () => {
+    const { torso, facing, aim } = pistolAimedAt((from, f) => {
+      const dummy = new THREE.Vector3(from.x + f.x * 15, 0, from.z + f.z * 15);
+      dummy.y = activeGround().heightAt(dummy.x, dummy.z);
+      dummyAhead(from, f, 15);
+      return dummy.add(new THREE.Vector3(0, CHEST_UP, 0));
+    }, 1.6, 0.9);
+    const ground = activeGround().heightAt(torso.x, torso.z);
+    const muzzle = rig.engine["playerShots"].muzzles;
+    const barrel = new THREE.Vector3(0, -1, 0).applyQuaternion(rig.engine["handGun"].quaternion);
+    const { ray } = firedRay();
+    rig.run(FRAME);
+    expect(Math.acos(Math.min(1, barrel.x * ray.dirX + barrel.y * ray.dirY + barrel.z * ray.dirZ)), "the angle between the barrel and the fired ray (rad)").toBeLessThan((2 * Math.PI) / 180);
+    expect((muzzle[0]! - torso.x) * facing.x + (muzzle[2]! - torso.z) * facing.z, "the muzzle's distance ahead of his chest (m)").toBeGreaterThan(0.2);
+    expect(muzzle[1]! - ground, "the muzzle's height over the ground: above his waist (m)").toBeGreaterThan(1);
+    expect(hypot3(ray.eyeX - muzzle[0]!, ray.eyeY - muzzle[1]!, ray.eyeZ - muzzle[2]!), "the ray's start from the muzzle, which has moved a frame since (m)").toBeLessThan(0.02);
+    expect(hypot3(aim.eyeX - ray.eyeX, aim.eyeY - ray.eyeY, aim.eyeZ - ray.eyeZ), "the ray does not start at the camera (m)").toBeGreaterThan(1);
+    expect(rig.engine["ragdolls"].walkers[0]!.state, "the dummy after the shot").not.toBe("stand");
+  });
+
+  it("when a car stands between his muzzle and the dummy and the camera sees over it, then the car takes the shot and the dummy stands", () => {
+    const { torso, aim } = pistolAimedAt((from, f) => {
+      const dummy = new THREE.Vector3(from.x + f.x * 15, 0, from.z + f.z * 15);
+      dummy.y = activeGround().heightAt(dummy.x, dummy.z);
+      dummyAhead(from, f, 15);
+      rig.place(1, from.x + f.x * 6, from.z + f.z * 6);
+      return dummy.add(new THREE.Vector3(0, CHEST_UP, 0));
+    }, 1.6, 1.4);
+    rig.run(0.5);
+    const car = rig.cars()[1]!;
+    const shotAt = (): number => hypot2(torso.x - car.group.position.x, torso.z - car.group.position.z);
+    expect(rig.engine["openWorld"].meet(rig.engine["drivenCar"](), aim, 120), "control: the camera's ray goes over the car and meets the dummy (m)").toBeGreaterThan(15);
+    const { went } = firedRay();
+    rig.run(FRAME);
+    expect(went, "how far the shot went: to the car 6 m ahead, not to the dummy 15 m ahead (m)").toBeLessThan(shotAt() + 1);
+    expect(went, "how far the shot went (m)").toBeGreaterThan(3);
+    expect(rig.engine["ragdolls"].walkers[0]!.state, "the dummy behind the car").toBe("stand");
+    expect(shotAt(), "control: the car stands between").toBeLessThan(8);
+  });
+
+  it("when the centre dot is on a dummy behind him and he fires, then his heading turns toward it within half a second", () => {
+    pistolAimedAt((from, f) => {
+      const dummy = new THREE.Vector3(from.x - f.x * 10, 0, from.z - f.z * 10);
+      dummy.y = activeGround().heightAt(dummy.x, dummy.z);
+      dummyAhead(from, f, -10);
+      return dummy.add(new THREE.Vector3(0, CHEST_UP, 0));
+    }, -3, 2.2);
+    const bearing = Math.atan2(-Math.sin(rig.walker().facing), -Math.cos(rig.walker().facing));
+    expect(Math.abs(wrapAngle(rig.walker().facing - bearing)), "control: he faces away from the dummy (rad)").toBeGreaterThan(2);
+    firedRay();
+    rig.run(0.5);
+    expect(Math.abs(wrapAngle(rig.walker().heading - bearing)), "his heading off the dummy's bearing (rad)").toBeLessThan(0.1);
+    expect(Math.abs(wrapAngle(rig.walker().facing - bearing)), "his facing off the dummy's bearing after half a second (rad)").toBeLessThan(0.6);
   });
 });

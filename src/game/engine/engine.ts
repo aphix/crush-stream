@@ -39,7 +39,8 @@ import { ShotFx } from "../present/shot-fx.ts";
 import { GUN } from "../present/people.ts";
 import { tagMaterial } from "../vehicle/material-class.ts";
 import { MAT } from "../kernel/material-ids.ts";
-import type { LookRay } from "../ai/civilians/civilian-look.ts";
+import { LookRay } from "../ai/civilians/civilian-look.ts";
+import { HandGuns, pointGun } from "./engine-hand-gun.ts";
 import type { CarPick, DollPick } from "./engine-openworld.ts";
 import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -126,9 +127,10 @@ const _footVelocity = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _hand = new THREE.Vector3();
-const _elbow = new THREE.Vector3();
 const _gunRest = new THREE.Vector3();
-const GUN_DOWN = new THREE.Vector3(0, -1, 0);
+const _barrel = new THREE.Vector3();
+const _muzzle = new THREE.Vector3();
+const _gunAim = new LookRay();
 const _bn = new THREE.Vector3();
 const _bp = new THREE.Vector3();
 /** The live cars' groups and the nearest hit for a bullet's car pick (`pickCar`): refilled each shot, so a shot allocates nothing of its own. */
@@ -252,6 +254,10 @@ export class CrashEngine extends EngineGarage {
   private readonly playerShots = new ShotFx(1);
   /** The gun in the player's right hand while a gun is the weapon in hand: the guards' box in their steel. */
   private readonly handGun = new THREE.Mesh(new THREE.BoxGeometry(GUN.w, GUN.len, GUN.depth), tagMaterial(new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.5, metalness: 0.6 }), MAT.GUN_STEEL));
+  /** The one source of the held gun's mesh and lengths per weapon (`HandGuns`). */
+  private readonly handGuns = new HandGuns(this.handGun);
+  /** A gun was posed in the player's hand this frame: its muzzle is where a shot leaves from. */
+  private gunPosed = false;
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
   protected readonly deviceClass: DeviceClass;
@@ -429,7 +435,15 @@ export class CrashEngine extends EngineGarage {
     this.podium = this.makePodium();
     this.openWorld = this.makeOpenWorld();
     this.acts = new OpenWorldActs(
-      { actorPlace: (actor, out) => this.actorPlace(actor, out), now: () => performance.now() / 1000, self: () => this.drivenCar(), guest: () => this.net.client, sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir) },
+      {
+        actorPlace: (actor, out) => this.actorPlace(actor, out),
+        now: () => performance.now() / 1000,
+        self: () => this.drivenCar(),
+        guest: () => this.net.client,
+        face: (dx, dz) => this.onFoot.faceToward(dx, dz),
+        muzzle: (out) => this.gunMuzzle(out),
+        sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir),
+      },
       this.openWorld,
     );
     this.startOpenWorld(buildOpenWorldMap(layOutLots()));
@@ -1046,18 +1060,27 @@ export class CrashEngine extends EngineGarage {
     else this.ragdolls.blowWalker(slot, _p, _n, speed);
   }
 
-  /** Once a frame: the gun box along the player's right forearm (part 5, the one the ARM_R / ELBOW_R motors drive) and the muzzle the tracers start from; hidden with no gun in hand. */
+  /** Once a frame: the gun laid in the player's right hand (part 5, the one the ARM_R / ELBOW_R motors drive) with its barrel at what his aim is on, and the muzzle the tracers and shots start from; hidden with no gun in hand. */
   private poseHandGun(): void {
-    const held = this.onFoot.armed() && this.onFoot.arms.weapon !== "fists" && this.onFoot.arms.weapon !== "hook";
-    this.handGun.visible = held;
+    const arms = this.onFoot.arms;
+    const held = this.onFoot.armed() && arms.gunInHand();
+    const model = this.handGuns.model(arms.weapon);
+    this.gunPosed = held;
+    model.mesh.visible = held;
     if (!held) return;
-    const dummies = this.ragdolls.pickMesh;
-    dummies.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
-    dummies.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 1.07, 0), _elbow);
-    _n.copy(_hand).sub(_elbow).normalize();
-    this.handGun.quaternion.setFromUnitVectors(GUN_DOWN, _n);
-    this.handGun.position.copy(_hand).addScaledVector(_n, GUN.len / 2 - 0.04);
-    this.playerShots.setMuzzle(0, _hand.x + _n.x * (GUN.muzzle + GUN.len / 2), _hand.y + _n.y * (GUN.muzzle + GUN.len / 2), _hand.z + _n.z * (GUN.muzzle + GUN.len / 2));
+    this.ragdolls.pickMesh.partPoint(WALKER_SLOT, 5, _gunRest.set(0.24, 0.79, 0), _hand);
+    this.aimRay(this.onFoot.aimsAtCentre(), _gunAim);
+    pointGun(model, _hand, _gunAim, _barrel, _muzzle);
+    this.playerShots.setMuzzle(0, _muzzle.x, _muzzle.y, _muzzle.z);
+  }
+
+  /** The tip of the gun in the player's hand as last posed, into `out`; false while no gun is in his hand. */
+  private gunMuzzle(out: { x: number; y: number; z: number }): boolean {
+    if (!this.gunPosed) return false;
+    out.x = this.playerShots.muzzles[0]!;
+    out.y = this.playerShots.muzzles[1]!;
+    out.z = this.playerShots.muzzles[2]!;
+    return true;
   }
 
   /**

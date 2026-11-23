@@ -31,6 +31,8 @@ function rig(guest = false) {
   const fired = { count: 0 };
   const looks: Looked[] = [];
   const met = { along: null as number | null };
+  const turned: { dx: number; dz: number }[] = [];
+  const gun = { muzzle: null as { x: number; y: number; z: number } | null };
   const acts = new OpenWorldActs(
     {
       actorPlace: (actor, out) => {
@@ -41,6 +43,11 @@ function rig(guest = false) {
       now: () => clock.now,
       self: () => (guest ? GUEST : HOST),
       guest: () => guest,
+      face: (dx, dz) => void turned.push({ dx, dz }),
+      muzzle: (out) => {
+        if (gun.muzzle !== null) Object.assign(out, gun.muzzle);
+        return gun.muzzle !== null;
+      },
       sendAct: (kind, arg, eye, dir) => void sent.push({ kind, arg, eyeX: eye.x, eyeY: eye.y, eyeZ: eye.z, dirX: dir.x, dirY: dir.y, dirZ: dir.z }),
     },
     {
@@ -56,7 +63,7 @@ function rig(guest = false) {
       shotFired: () => void fired.count++,
     },
   );
-  return { acts, places, clock, punches, shots, sent, fired, looks, met };
+  return { acts, places, clock, punches, shots, sent, fired, looks, met, turned, gun };
 }
 
 /** An act of `kind` whose eye is `away` m east of the guest's torso (and 1.3 m up for a shot), along `dir`. */
@@ -169,7 +176,7 @@ describe("given a host that hears a guest's acts while the guest stands on foot 
     expect(bunch(20), "rifle shots carried out of twenty").toBe(5);
   });
 
-  it("when rifle acts keep coming twice as fast as the gun fires for two seconds, then about half are carried out, and at the gun's own rate all are", () => {
+  it("when rifle acts keep coming twice as fast as the gun fires for two seconds, then they are cut to the gun's count plus the 0.5 s backlog, and at the gun's own rate all are carried out", () => {
     const stream = (every: number): number => {
       const r = rig();
       for (let at = 0; at * every < 2; at++) {
@@ -180,8 +187,19 @@ describe("given a host that hears a guest's acts while the guest stands on foot 
     };
     const fast = stream(0.05);
     expect(fast, "shots carried out of forty sent").toBeGreaterThan(15);
-    expect(fast, "shots carried out of forty sent").toBeLessThanOrEqual(24);
+    expect(fast, "no more than two seconds of the gun's fire and a half second's backlog").toBeLessThanOrEqual(Math.ceil((2 + 0.5) / WEAPONS.rifle.every));
     expect(stream(0.12), "shots carried out at the gun's own rate").toBe(17);
+  });
+
+  it("when rifle acts arrive at the gun's own rate with 0.05 s of jitter either way, then every one is carried out", () => {
+    const r = rig();
+    let sent = 0;
+    for (let at = 0; at * WEAPONS.rifle.every < 2; at++) {
+      r.acts.hear(GUEST, actAt(ACT.shot, RIFLE_SLOT, 0));
+      sent++;
+      r.clock.now += WEAPONS.rifle.every + (at % 2 === 0 ? -0.05 : 0.05);
+    }
+    expect(r.fired.count, `shots carried out of ${sent} sent`).toBe(sent);
   });
 
   it("when the act is another family's, or its weapon is not a gun, then the host does nothing; a pistol shot beside them is fired", () => {
@@ -245,7 +263,7 @@ describe("given this machine's own player", () => {
     expect(r.punches.length, "punches").toBe(1);
     expect(firstMismatch([r.punches[0]!.actor, r.punches[0]!.x, r.punches[0]!.z], [HOST, 1, 2]), "the punch's actor and place").toBeUndefined();
     expect(firstMismatch(r.shots.map((shot) => shot.actor), [HOST]), "the actors the rays were fired for").toBeUndefined();
-    expect(far, "how far the farthest ray went from the eye at the origin: 2 m to his torso, then the ray's 7 m").toBe(9);
+    expect(far, "how far the farthest ray went from the muzzle, which with no gun shown is his torso: the shot now leaves it (m)").toBe(7);
     expect(r.sent.length, "nothing is sent by the host").toBe(0);
   });
 
@@ -255,7 +273,7 @@ describe("given this machine's own player", () => {
     const aim = Object.assign(new LookRay(), { eyeX: 10, eyeY: 1.3, dirZ: 1 });
     const far = r.acts.shootLocal(aim, WEAPONS.shotgun);
     expect(r.sent.length, "acts sent").toBe(2);
-    expect(firstMismatch(r.sent.flatMap((act) => [act.kind, act.arg, act.eyeX, act.dirZ]), [ACT.punch, 0, 10, 1, ACT.shot, SHOTGUN_SLOT, 10, 1]), "kind, arg, eye x and direction z of each act").toBeUndefined();
+    expect(firstMismatch(r.sent.flatMap((act) => [act.kind, act.arg, act.eyeX, act.dirZ]), [ACT.punch, 0, 10, 1, ACT.shot, SHOTGUN_SLOT, 10, 1], 1e-3), "kind, arg, eye x and direction z of each act").toBeUndefined();
     expect(far, "the tracer's length (m)").toBeGreaterThan(10);
     expect([r.punches.length, r.shots.length], "carried out locally").toEqual([0, 0]);
   });
@@ -329,13 +347,76 @@ describe("given a player whose cursor ray passes 11 m from his torso, the camera
     expect(far, "the tracer runs that far from the torso (m)").toBeCloseTo(expected.length, 9);
   });
 
-  it("when the ray passes within the reach of his torso, then nothing is looked along and the aim is as it was", () => {
+  /** The aim ray's point nearest the torso (10, 1, 20) is (10.5, 1.4, 20); the muzzle stands in front of him and beside it. */
+  const muzzleAt = { x: 10.4, y: 1.4, z: 20.6 };
+  const aimPastTorso = (): LookRay => Object.assign(new LookRay(), { eyeX: 10.5, eyeY: 1.4, eyeZ: 0, dirZ: 1 });
+
+  it("when the host's own player fires with a gun in hand, then the ray fired starts at his muzzle and goes to what the aim ray met, within the gun's cone", () => {
+    const r = rig();
+    r.places.set(HOST, GUEST_AT);
+    r.gun.muzzle = muzzleAt;
+    r.met.along = 15;
+    const target = { x: 10.5, y: 1.4, z: 35 };
+    const toTarget = hypot3(target.x - muzzleAt.x, target.y - muzzleAt.y, target.z - muzzleAt.z);
+    const sight = Object.assign(new LookRay(), { dirX: (target.x - muzzleAt.x) / toTarget, dirY: (target.y - muzzleAt.y) / toTarget, dirZ: (target.z - muzzleAt.z) / toTarget });
+    r.acts.shootLocal(aimPastTorso(), WEAPONS.pistol);
+    expect(r.shots.length, "rays fired").toBe(1);
+    const ray = r.shots[0]!.ray;
+    expect(hypot3(ray.eyeX - muzzleAt.x, ray.eyeY - muzzleAt.y, ray.eyeZ - muzzleAt.z), "the ray's start from the muzzle (m)").toBeLessThan(1e-9);
+    expect(angleBetween(ray, sight), "the ray's angle off the way to what the aim met (rad)").toBeLessThanOrEqual(WEAPONS.pistol.cone + 1e-9);
+  });
+
+  const closeCases = [
+    { it: "when what the aim met is 0.2 m from the muzzle (he is pressed against a wall), then the shot goes along the aim ray's own direction from the muzzle", along: 0.3, muzzleZ: 20.1 },
+    { it: "when what the aim met is behind the muzzle along the aim, then the shot goes along the aim ray's own direction from the muzzle", along: 0.3, muzzleZ: 20.6 },
+  ] as const;
+  for (const testCase of closeCases) {
+    it(testCase.it, () => {
+      const r = rig(true);
+      r.gun.muzzle = { ...muzzleAt, z: testCase.muzzleZ };
+      r.met.along = testCase.along;
+      r.acts.shootLocal(aimPastTorso(), WEAPONS.pistol);
+      const act = r.sent[0]!;
+      expect(hypot3(act.eyeX - muzzleAt.x, act.eyeY - muzzleAt.y, act.eyeZ - testCase.muzzleZ), "the act's eye from the muzzle (m)").toBeLessThan(1e-9);
+      expect([act.dirX, act.dirY, act.dirZ], "the act's direction: the aim's own").toEqual([0, 0, 1]);
+    });
+  }
+
+  it("when a guest fires with a gun in hand, then the act's eye is his muzzle and its direction is toward what his aim ray met", () => {
     const r = rig(true);
-    const aim = Object.assign(new LookRay(), { eyeX: 10.5, eyeY: 1.3, eyeZ: 0, dirZ: 1 });
+    r.gun.muzzle = muzzleAt;
+    r.met.along = 15;
+    r.acts.shootLocal(aimPastTorso(), WEAPONS.pistol);
+    const act = r.sent[0]!;
+    const toTarget = hypot3(10.5 - muzzleAt.x, 1.4 - muzzleAt.y, 35 - muzzleAt.z);
+    expect(hypot3(act.eyeX - muzzleAt.x, act.eyeY - muzzleAt.y, act.eyeZ - muzzleAt.z), "the act's eye from the muzzle (m)").toBeLessThan(1e-9);
+    expect(hypot3(act.dirX - (10.5 - muzzleAt.x) / toTarget, act.dirY - (1.4 - muzzleAt.y) / toTarget, act.dirZ - (35 - muzzleAt.z) / toTarget), "the act's direction off the way to the target").toBeLessThan(1e-9);
+  });
+
+  it("when the target is behind him, then he is turned to it; when it is ahead of him, he is not", () => {
+    const behind = rig();
+    behind.places.set(HOST, GUEST_AT);
+    behind.met.along = 30;
+    behind.acts.shootLocal(Object.assign(new LookRay(), { eyeX: 10, eyeY: 1.3, eyeZ: 40, dirZ: -1 }), WEAPONS.pistol);
+    expect(behind.turned.length, "turns for a target 10 m behind him").toBe(1);
+    expect(behind.turned[0]!.dz, "toward it (level z)").toBeLessThan(-5);
+    const ahead = rig();
+    ahead.places.set(HOST, GUEST_AT);
+    ahead.met.along = 15;
+    ahead.acts.shootLocal(aimPastTorso(), WEAPONS.pistol);
+    expect(ahead.turned.length, "turns for a target ahead of him").toBe(0);
+  });
+
+  it("when a guest's centred shot has the camera line 1.2 m off his torso, then it is looked along all the same, and the act sent has its eye at his torso and its direction toward what the centre ray met", () => {
+    const r = rig(true);
+    r.met.along = 15;
+    const aim = Object.assign(new LookRay(), { eyeX: 11.2, eyeY: 1, eyeZ: 0, dirZ: 1 });
+    const expected = towardMeeting(aim, 15);
     r.acts.shootLocal(aim, WEAPONS.pistol);
-    expect(r.looks.length, "looks").toBe(0);
-    expect([aim.eyeX, aim.eyeZ], "the aim").toEqual([10.5, 0]);
-    expect(r.sent[0]!.eyeX, "the act's eye").toBe(10.5);
+    expect(r.looks.length, "looks along the centre ray").toBe(1);
+    const act = r.sent[0]!;
+    expect(hypot3(act.eyeX - GUEST_AT.x, act.eyeY - GUEST_AT.y, act.eyeZ - GUEST_AT.z), "the act's eye from his torso (m)").toBeLessThan(1e-9);
+    expect(hypot3(act.dirX - expected.dir.x, act.dirY - expected.dir.y, act.dirZ - expected.dir.z), "the act's direction off the way to what the ray met").toBeLessThan(1e-9);
   });
 });
 
@@ -378,5 +459,17 @@ describe("given another player on foot a metre ahead of a puncher", () => {
     places.delete(VICTIM);
     expect(blows.punch(HOST, 0, 0, 0, 1, 0), "punching only himself").toBe(false);
     expect(struck.length, "blows landed").toBe(0);
+  });
+});
+
+describe("given a guest running at 7 m/s whose body the host sees 1 m behind him along his run", () => {
+  it("when his act leaves his own torso along his aim, then the host carries it out; a camera line 1.45 m off him that would read 2.4 m from the host's view is not what a guest sends", () => {
+    const r = rig();
+    r.places.set(GUEST, { ...GUEST_AT, z: GUEST_AT.z - 1 });
+    const act = actAt(ACT.shot, PISTOL_SLOT, 0);
+    act.eyeY = GUEST_AT.y;
+    r.acts.hear(GUEST, act);
+    expect(r.shots.length, "rays fired from the act's eye, 1 m ahead of the host's view of him").toBe(1);
+    expect(r.shots[0]!.ray.eyeZ, "the ray starts where the act's eye was (z)").toBeCloseTo(GUEST_AT.z, 9);
   });
 });

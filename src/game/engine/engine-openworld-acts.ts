@@ -1,7 +1,8 @@
 import { punchGap } from "../ai/civilians/civilian-contact.ts";
 import { PLAYER_KO_BLOWS, PLAYER_KO_WINDOW, PLAYER_PUNCH_COOLDOWN } from "../ai/civilians/civilian-constants.ts";
 import { LookRay } from "../ai/civilians/civilian-look.ts";
-import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
+import { wrapAngle } from "../present/walker-math.ts";
 import { ACT, ACT_KINDS, type Act } from "../net/act-codec.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { gunAt, slotOfGun, STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
@@ -13,16 +14,18 @@ export type ActorPlace = { x: number; y: number; z: number; heading: number };
 const MAX_ACTORS = MAX_CARS;
 /** A punch's eye is his torso: an act whose eye is farther than this from it (m) is not his. */
 const ACT_EYE_REACH = 4;
-/** The aim ray of a shot passes his torso this near (m): the on-foot camera looks at a point 0.55 m over his torso, shifted 0.5 m across by the shoulder and 0.45 m more by the aim (`PIVOT_OVER_TORSO`, `SHOULDER_ACROSS`, `AIM_SIDE`, `AIM_UP`), so at most 1.2 m from it; the margin is for his moving on. A far camera (the wheel's 32 m, a sprint's longer boom) is on this line, so it gains no reach. */
+/** The aim ray of a shot, cast from its point nearest the actor's torso, must pass within this (m) of it. A muzzle is held out in front of his chest (under 1 m from it), so this bounds the muzzle's offset plus the replication error: the host sees a guest's body where it was a delay ago, about 1 m at a sprint. */
 const SHOT_RAY_REACH = 1.5;
 /** Network jitter bunches honest acts, so an actor's acts of one kind may run this far (s) ahead of the gun's own rate, and no further: a faster stream than the gun's is refused. */
 const ACT_BACKLOG_S = 0.5;
-/** Each act spends this share of its cooldown: a little under the gun's own rate, so honest timing noise is not refused. */
-const ACT_COOLDOWN_SHARE = 0.9;
+/** A punch has no backlog to absorb jitter, so it spends this share of its cooldown: a little under the rate, so honest timing noise is not refused. A gun spends its whole cooldown: the backlog absorbs the noise and the long-run rate is the gun's. */
+const ACT_PUNCH_SHARE = 0.9;
 /** A guest does not know what its shot met: its tracer runs this far (m). */
 const GUEST_TRACER_M = 60;
-/** An aim point nearer his torso than this (m) cannot give a direction: the shot keeps its ray. */
-const MIN_AIM_M = 0.05;
+/** A target nearer the muzzle than this (m), or behind it along the aim, is a wall he is pressed against: the shot goes along the aim ray's own direction instead. */
+const MIN_MUZZLE_TARGET_M = 1;
+/** He turns to a target only when it lies farther than this (rad) off his facing, so a shot ahead of him does not stop his run. */
+const FACE_TARGET_FROM_RAD = 0.5;
 /** A direction the host reads must be a unit vector to within this. */
 const UNIT_SLACK = 0.05;
 /** The level part of a punch's direction must be at least this long. */
@@ -37,6 +40,7 @@ const _place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0 };
 const _aim = new LookRay();
 const _ray = new LookRay();
 const _near = new LookRay();
+const _muzzle = { x: 0, y: 0, z: 0 };
 
 /** What the director resolves at the authority for an actor. */
 type ActResolver = {
@@ -57,6 +61,10 @@ type ActPorts = {
   self(): number;
   /** This machine is a guest: it sends its acts to the host instead of resolving them. */
   guest(): boolean;
+  /** This machine's player turns toward the level direction (dx, dz): called when it is more than `FACE_TARGET_FROM_RAD` off his facing. */
+  face(dx: number, dz: number): void;
+  /** The tip of this machine's player's gun, into `out`; false while no gun is in his hand. */
+  muzzle(out: { x: number; y: number; z: number }): boolean;
   /** The guest's way to the host: `NetPlay.sendAct`. */
   sendAct(kind: number, arg: number, eye: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }): void;
 };
@@ -152,7 +160,7 @@ export class OpenWorldActs {
     const now = this.ports.now();
     const start = Math.max(this.busyUntil[slot]!, now);
     if (start - now > backlog) return false;
-    this.busyUntil[slot] = start + ACT_COOLDOWN_SHARE * cooldown;
+    this.busyUntil[slot] = start + (backlog > 0 ? 1 : ACT_PUNCH_SHARE) * cooldown;
     return true;
   }
 
@@ -190,21 +198,38 @@ export class OpenWorldActs {
     return hypot3(_near.eyeX - _place.x, _near.eyeY - _place.y, _near.eyeZ - _place.z);
   }
 
+  /** He turns to face the level direction (dx, dz) of a target when it is more than `FACE_TARGET_FROM_RAD` off his facing (`_place`) and not underfoot. */
+  private faceTarget(dx: number, dz: number): void {
+    if (hypot2(dx, dz) < MIN_MUZZLE_TARGET_M || Math.abs(wrapAngle(detAtan2(dx, dz) - _place.heading)) <= FACE_TARGET_FROM_RAD) return;
+    this.ports.face(dx, dz);
+  }
+
   /**
-   * An aim ray that passes farther from his torso (`_place`) than `SHOT_RAY_REACH` (a cursor away from the view's centre, a camera pulled far back) is looked along from its point nearest him, within the gun's range,
-   * and `aim` becomes the ray from his torso to what it met (or to its point at the gun's range): the shot leaves the shooter and goes where the cursor was. How far (m) that is; -1 when `aim` is left as it was.
+   * Where a shot is aimed is found along the aim ray, looked along from its point nearest his torso (`_near`), within the gun's range: what it first meets, else its point at that range. The shot itself is
+   * the ray from the muzzle (his gun's tip; his torso when no gun is shown) to that point, as a bullet converges on where the camera looks; and he turns to face it (`ports.face`). Where that point is nearer the muzzle than
+   * `MIN_MUZZLE_TARGET_M` or behind it (a wall he is pressed against), the ray keeps the aim's own direction. `aim` becomes that ray. How far (m) from the muzzle it is aimed to go; -1 when that is not known.
    */
-  private leaveFromChest(aim: LookRay, gun: Gun): number {
-    if (this.nearestToTorso(aim) <= SHOT_RAY_REACH) return -1;
+  private aimFromMuzzle(aim: LookRay, gun: Gun): number {
+    this.nearestToTorso(aim);
     const met = this.resolver.meet(this.ports.self(), _near, gun.range);
-    const x = _near.eyeX + _near.dirX * met - _place.x;
-    const y = _near.eyeY + _near.dirY * met - _place.y;
-    const z = _near.eyeZ + _near.dirZ * met - _place.z;
+    const targetX = _near.eyeX + _near.dirX * met;
+    const targetY = _near.eyeY + _near.dirY * met;
+    const targetZ = _near.eyeZ + _near.dirZ * met;
+    this.faceTarget(targetX - _place.x, targetZ - _place.z);
+    if (!this.ports.muzzle(_muzzle)) {
+      _muzzle.x = _place.x;
+      _muzzle.y = _place.y;
+      _muzzle.z = _place.z;
+    }
+    const x = targetX - _muzzle.x;
+    const y = targetY - _muzzle.y;
+    const z = targetZ - _muzzle.z;
     const length = hypot3(x, y, z);
-    if (length < MIN_AIM_M) return -1;
-    aim.eyeX = _place.x;
-    aim.eyeY = _place.y;
-    aim.eyeZ = _place.z;
+    const ahead = x * aim.dirX + y * aim.dirY + z * aim.dirZ;
+    aim.eyeX = _muzzle.x;
+    aim.eyeY = _muzzle.y;
+    aim.eyeZ = _muzzle.z;
+    if (length < MIN_MUZZLE_TARGET_M || ahead <= 0) return ahead > 0 ? ahead : -1;
     aim.dirX = x / length;
     aim.dirY = y / length;
     aim.dirZ = z / length;
@@ -227,10 +252,10 @@ export class OpenWorldActs {
     this.ports.sendAct(ACT.punch, 0, this.eye, this.dir);
   }
 
-  /** This machine's player fires `gun` along `aim`: a guest tells the host, the host carries it out. `aim` is rewritten to the ray the shot left along (`leaveFromChest`). How far (m) to draw the tracer from `aim`'s eye. */
+  /** This machine's player fires `gun` along `aim`: a guest tells the host, the host carries it out. `aim` is rewritten to the ray the shot leaves along (`aimFromMuzzle`). How far (m) to draw the tracer from `aim`'s eye. */
   shootLocal(aim: LookRay, gun: Gun): number {
     const self = this.ports.self();
-    const known = this.ports.actorPlace(self, _place) ? this.leaveFromChest(aim, gun) : -1;
+    const known = this.ports.actorPlace(self, _place) ? this.aimFromMuzzle(aim, gun) : -1;
     if (!this.ports.guest()) return this.shootBy(self, aim, gun);
     this.eye.x = aim.eyeX;
     this.eye.y = aim.eyeY;

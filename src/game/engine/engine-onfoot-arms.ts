@@ -1,7 +1,7 @@
 import { PLAYER_PUNCH_COOLDOWN, PLAYER_PUNCH_LAND } from "../ai/civilians/civilian-constants.ts";
 import { PAD_BUTTON, type PadState, type TouchPad } from "../vehicle/gamepad.ts";
 
-type WeaponId = "fists" | "pistol" | "shotgun" | "rifle" | "hook";
+export type WeaponId = "fists" | "pistol" | "shotgun" | "rifle" | "hook";
 /** A gun: its name, the speed (m/s) a hit adds to the part it lands on (a showcase click is 6), its range (m), rays a shot, the half-angle (rad) they scatter in, seconds between shots, whether a held fire repeats, the push (N·s) a ray gives a car and the speed (m/s) it knocks a prop at. */
 export type Gun = { name: string; speed: number; range: number; rays: number; cone: number; every: number; auto: boolean; kick: number; prop: number };
 export const WEAPONS: Record<Exclude<WeaponId, "fists" | "hook">, Gun> = {
@@ -131,6 +131,11 @@ export class OnFootArms {
   /** What the HUD shows of the arms. */
   hud(): { slot: number; name: string } | null {
     return this.host.armed() ? { slot: WEAPON_ORDER.indexOf(this.weapon), name: WEAPON_NAMES[this.weapon] } : null;
+  }
+
+  /** A gun (not fists or the hook) is the weapon in hand. */
+  gunInHand(): boolean {
+    return this.weapon !== "fists" && this.weapon !== "hook";
   }
 
   /** One shot of the weapon in hand. Fists: a punch, when the last one is done. */
