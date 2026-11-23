@@ -45,6 +45,8 @@ export const FOOT_HOLD_REACH = 3;
 export const FOOT_HOLD_SPEED = 1;
 /** A chase of the player on foot that has not held him this long (s) since it began is given up: he got away. */
 export const PLAYER_CHASE_GIVE_UP_SECONDS = 45;
+/** A chase or arrest of a player the host told of this long (s) or more after it happened is history: a peer joining late opens none of it. */
+export const HEARD_FOOT_LATE_SECONDS = PLAYER_CHASE_GIVE_UP_SECONDS;
 /** The player on foot faces the way he last moved at over this speed (m/s); standing still he keeps his last facing. */
 export const FACING_SPEED = 0.3;
 /** A person's eyes stand this high (m) over the ground: a sight line between two people runs at this height, over railings and parked cars, not through a building. */

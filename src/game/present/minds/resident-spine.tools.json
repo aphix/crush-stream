@@ -583,6 +583,48 @@
     }
   },
   {
+    "name": "event_footArrest",
+    "description": "a cop has a player on foot in custody.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "event_footChase",
+    "description": "the cops were sent after a player on foot.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "integer",
+          "description": "The resident's index in the city."
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Crowd seconds (a game minute each) when it happens."
+        }
+      },
+      "required": [
+        "subject",
+        "seconds"
+      ]
+    }
+  },
+  {
     "name": "event_jaywalk",
     "description": "the police arrested a jaywalker. Applied by ai/civilians/society-reactions.ts#applyJaywalk.",
     "parameters": {

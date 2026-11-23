@@ -50,8 +50,8 @@ the `available` of `OnFootHost`). He gets back into his own car only: the one he
 - A race's pause (Esc, Start) and a minigame's own keys stay theirs; R and the other seat keys do nothing on foot, as ever.
 
 **Netplay.** The walker is local presentation: a peer sees the car, parked on its brakes on the host and coasting there while a client's input is idle,
-and never a walker. Nothing on the wire changes (`NET_VERSION` stays), no snapshot or keyframe carries a dummy or a door, and the race recorder and the
-reel keep recording the car's inputs as today. The dummies' world is per browser; `ragdolls.update`'s `authority` still gates only the glass. The law's arrest of him on foot (below) is the host's and the solo player's only: a client's walker is nobody's to judge, and a client sees the host's car.
+and never a walker. The walker itself rides no message, no snapshot or keyframe carries a dummy or a door, and the race recorder and the
+reel keep recording the car's inputs as today. The dummies' world is per browser; `ragdolls.update`'s `authority` still gates only the glass. The law's arrest of him on foot (below) is the host's decision for every player on foot, its own or a guest's: the host's chase and arrest of a player reach every peer as events of the crowd's log, and the arrested player's own machine leads him through custody.
 
 A scene reset (the HUD's reset, a scene change, a race starting, a loop reset) empties the dummy world and puts him back in the seat; the loop's own
 reset waits while he is out. A race that takes his car from him (he is put to spectating, his car is put away) ends the trip where it stands.
@@ -77,7 +77,7 @@ to hold, above); on entry he turns to the car, and after the climb the dummy lea
 
 ### Under arrest
 
-In the open world (host and solo) the police can arrest him on foot ([`OPEN_WORLD`](OPEN_WORLD.md): `PlayerLaw`), and the flow has a fifth phase, `arrested`, entered from any phase he is out in (`OnFootFlow.arrest`) and left only when the law sets him down (`OnFootFlow.released`, to `onFoot`):
+In the open world the police can arrest any player on foot, the host's own or a guest's, by the same rules ([`OPEN_WORLD`](OPEN_WORLD.md): `PlayerLaw`, one for each player, by his car index), and the flow has a fifth phase, `arrested`, entered from any phase he is out in (`OnFootFlow.arrest`) and left only when the law sets him down (`OnFootFlow.released`, to `onFoot`). The host decides the arrest and logs it; the machine whose player it is runs this flow from its own law, driven by the host's events and the cop as that machine draws him:
 
 ```
 onFoot --law: busted--> arrested --law: taken (patrol car)--> arrested, walker gone --law: delivered (x, z, yaw)--> onFoot

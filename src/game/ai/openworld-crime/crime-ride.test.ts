@@ -56,7 +56,7 @@ function untilDelivered(run: Harness, seconds = STAGE_LIMIT_SECONDS): void {
 }
 
 describe("given the player on foot held the whole hold beside a cop with a patrol car of his own, on a map with a police station", () => {
-  // mutation: sed -i 's/    arrestPorts?.busted(seconds);//' src/game/ai/openworld-crime/player-law.ts
+  // mutation: sed -i 's/    this.engine?.busted(seconds);//' src/game/ai/openworld-crime/player-law.ts
   it("when the hold is full, then the engine is told once and his cop leads him away, no longer on patrol", () => {
     const run = standingBeforeCop({ station: true, homeCars: 3 });
     untilBusted(run);
@@ -79,7 +79,7 @@ describe("given the player on foot held the whole hold beside a cop with a patro
     expect(run.scene.footChaseOf(strip), "no strip in custody").toBe(false);
   });
 
-  // mutation: sed -i 's/      arrestPorts?.led(walkers.x\[walker\]!, walkers.z\[walker\]!);//' src/game/ai/openworld-crime/player-law.ts
+  // mutation: sed -i 's/      this.engine?.led(walkers.x\[walker\]!, walkers.z\[walker\]!);//' src/game/ai/openworld-crime/player-law.ts
   it("when his cop leads him to the car, then the engine is told each step where, from beside the cop to the car's driver's door", () => {
     const run = standingBeforeCop({ station: true, homeCars: 3 });
     untilBusted(run);
@@ -109,7 +109,7 @@ describe("given the player on foot held the whole hold beside a cop with a patro
 });
 
 describe("given the player on foot and his cop who have just got into the cop's patrol car", () => {
-  // mutation: sed -i 's/    arrestPorts?.taken(this.law.carIndexOf(table.carOf\[slot\]!));//' src/game/ai/openworld-crime/player-law.ts
+  // mutation: sed -i 's/    this.engine?.taken(this.law.carIndexOf(table.carOf\[slot\]!));//' src/game/ai/openworld-crime/player-law.ts
   it("when the clip is over, then the engine is told which car has him, once, and the cop is off the street with the case still open", () => {
     const run = standingBeforeCop({ station: true, homeCars: 3 });
     untilBusted(run);
@@ -127,7 +127,7 @@ describe("given the player on foot and his cop who have just got into the cop's 
 });
 
 describe("given the patrol car that has the player on foot, come to the station", () => {
-  // mutation: sed -i 's/if (kind === CASE_KIND.player) this.player.deliver(slot);/if (false) this.player.deliver(slot);/' src/game/ai/openworld-crime/foot-law.ts
+  // mutation: sed -i 's/if (kind === CASE_KIND.player) this.players\[this.table.actorOfCase(caseIndex)\]!.deliver(slot);/if (false) this.players[this.table.actorOfCase(caseIndex)]!.deliver(slot);/' src/game/ai/openworld-crime/foot-law.ts
   it("when they have got out, then he is set down once beside the car's door at the station, with no bust of a resident, the case closed and his cop back on patrol", () => {
     const run = standingBeforeCop({ station: true, homeCars: 3 });
     untilBusted(run);
@@ -175,7 +175,7 @@ describe("given the player on foot held by a cop on a map with no police station
 });
 
 describe("given the player on foot being led away by his cop", () => {
-  // mutation: sed -i '/^    if (this.table.isPlayerSlot(slot)) this.player.deliver(slot);$/d' src/game/ai/openworld-crime/foot-law.ts
+  // mutation: sed -i '/^    if (this.table.isPlayerSlot(slot)) this.players\[this.table.actorOfSlot(slot)\]!.deliver(slot);$/d' src/game/ai/openworld-crime/foot-law.ts
   it("when a car runs his cop down on the way, then he is set down where he stood with the cop and the case closes", () => {
     const run = standingBeforeCop({ station: true, homeCars: 0 });
     untilBusted(run);

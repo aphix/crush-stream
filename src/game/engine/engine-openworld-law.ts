@@ -1,5 +1,5 @@
 import type { Obstacles } from "../ai/obstacles.ts";
-import { EVENT_KIND, EVENT_TRIPLE } from "../ai/civilians/civilian-constants.ts";
+import { actorOfCopSubject, copOfCopSubject, EVENT_KIND, EVENT_TRIPLE, PLAYER_ACTORS, playerCopSubject } from "../ai/civilians/civilian-constants.ts";
 import type { CrowdWalkers } from "../ai/civilians/crowd-walkers.ts";
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { ChaseHud } from "../hud/hud-store.ts";
@@ -26,6 +26,9 @@ import type { DriverLook } from "../present/driver-look.ts";
 import type { SightField } from "../present/openworld-sight.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { OpenWorldMap } from "../world/openworld/walk-graph.ts";
+
+/** Where an actor on foot stands (m, the ground's height included), which way he faces (rad) and how he moves (m/s: his walker's own velocity, which the law judges his pace by). */
+export type ActorPlace = { x: number; y: number; z: number; heading: number; velocityX: number; velocityZ: number };
 
 /** The foot cops' drawing: the crowd art over their own poses. */
 type CopArt = {
@@ -56,9 +59,13 @@ export type LawEnginePorts = {
   sirens(carIndex: number, on: boolean): void;
   /** The human's car was held slow by a patrol car for Survival's bust hold. */
   playerBusted(carIndex: number, seconds: number): void;
-  /** Where the player on foot stands and how fast he moves (m/s); false while he is in a car. */
-  foot(out: { x: number; z: number; velocityX: number; velocityZ: number }): boolean;
-  /** The player on foot was held by a cop for the bust hold: the engine's arrest of him (his walker led to a patrol car and the station, then set down). */
+  /** Where actor `actor` (a car index) stands on foot into `out`; false while he is in a car, or is not known on this machine. */
+  actorPlace(actor: number, out: ActorPlace): boolean;
+  /** The actor (car index) this machine's own player is. */
+  ownActor(): number;
+  /** The host puts actor `actor`'s car fresh on the road nearest (x, z), facing `yaw`: where the law sets a released player down. False where there is no clear spot. */
+  placeCarNear(actor: number, x: number, z: number, yaw: number): boolean;
+  /** What the engine does for this machine's own player once the cops have him (his walker led to a patrol car and the station, then set down): the host's own, or a guest's by the host's events. */
   footArrest: FootArrestPorts;
   /** The engine's cars, which run the foot cops down as they do civilians. */
   cars(): readonly DeformableCar[];
@@ -76,10 +83,10 @@ export class OpenWorldLaw {
   private readonly unlisten: (() => void) | null;
   /** A client's view of the host's patrol cars (it has no traffic); null where the law has the traffic's own. */
   private readonly rides: ArrestRides | null;
-  private readonly body = { x: 0, z: 0, velocityX: 0, velocityZ: 0 };
-  /** The way he last moved (a unit vector): which way he faces while he stands still. */
-  private facingX = 0;
-  private facingZ = 1;
+  private readonly place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
+  /** Per actor, the way he last moved (a unit vector): which way he faces while he stands still. */
+  private readonly facingX = new Float64Array(PLAYER_ACTORS);
+  private readonly facingZ = new Float64Array(PLAYER_ACTORS).fill(1);
   private shoveSeconds = -Infinity;
   /** The crowd second of the last overlay: the stride of a drawn cop advances by the time since. */
   private lastOverlay = 0;
@@ -98,6 +105,10 @@ export class OpenWorldLaw {
         copDown: (cop, seconds) => crowd.raiseEvent(EVENT_KIND.copDown, cop, seconds),
         rode: (resident, carIndex, seconds) => this.logRide(EVENT_KIND.arrestRide, resident, carIndex, seconds),
         alighted: (resident, carIndex, seconds) => this.logRide(EVENT_KIND.arrestAlight, resident, carIndex, seconds),
+        footChased: (actor, cop, seconds) => crowd.raiseEvent(EVENT_KIND.footChase, playerCopSubject(actor, cop), seconds),
+        footArrested: (actor, cop, seconds) => crowd.raiseEvent(EVENT_KIND.footArrest, playerCopSubject(actor, cop), seconds),
+        self: () => ports.ownActor(),
+        placeCarNear: (actor, x, z, yaw) => ports.placeCarNear(actor, x, z, yaw),
         footArrest: ports.footArrest,
         // Every peer builds the signals from the layout (the traffic is the host's only), so every peer's cops see the same jaywalkers.
         signals: new TrafficSignals(buildRoadNetwork(openWorldGeometry(LAYOUT))),
@@ -111,6 +122,7 @@ export class OpenWorldLaw {
     crowd.overlay = (poses, crowdSeconds, authority) => {
       this.hearCopDowns();
       this.hearSpared();
+      this.hearFootEvents(authority);
       this.feedFoot();
       this.hearShoves(authority);
       const shared = ports.shared();
@@ -172,25 +184,48 @@ export class OpenWorldLaw {
     }
   }
 
-  /** Before the law's step: where the player on foot is, for it to judge (the host's and the solo player's only: a client's walker is nobody's to judge here). */
+  /** Before the law's step: where each actor on foot stands and moves (`actorPlace`, his walker's own velocity: a displacement over the crowd's step is cut unevenly by the physics slices), for the law to judge on the host and to follow the host's events elsewhere. */
   private feedFoot(): void {
-    const body = this.body;
-    const there = this.ports.foot(body);
-    const speed = hypot2(body.velocityX, body.velocityZ);
-    if (speed > FACING_SPEED) {
-      this.facingX = body.velocityX / speed;
-      this.facingZ = body.velocityZ / speed;
+    const { place, facingX, facingZ } = this;
+    for (let actor = 0; actor < PLAYER_ACTORS; actor++) {
+      const there = this.ports.actorPlace(actor, place);
+      const speed = hypot2(place.velocityX, place.velocityZ);
+      if (there && speed > FACING_SPEED) {
+        facingX[actor] = place.velocityX / speed;
+        facingZ[actor] = place.velocityZ / speed;
+      }
+      this.scene.setFoot(there, place.x, place.z, facingX[actor]!, facingZ[actor]!, there ? speed : 0, actor);
     }
-    this.scene.setFoot(there, body.x, body.z, this.facingX, this.facingZ, speed);
   }
 
-  /** The crowd's log's shoves by the player on foot (a `walker` triple follows the push it belongs to) since the last one this law answered: a cop who sees one comes for him. */
+  /** The crowd's log's shoves by players on foot (a `walker` triple follows the push it belongs to) since the last one this law answered: a cop who sees one comes for the one who shoved. */
   private hearShoves(authority: boolean): void {
     const log = this.crowd.eventLog();
     for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) {
       if (log[at] !== EVENT_KIND.walker || log[at + 2]! <= this.shoveSeconds) continue;
       this.shoveSeconds = log[at + 2]!;
-      if (authority) this.scene.playerShoved(this.shoveSeconds);
+      if (authority) this.scene.playerShoved(this.shoveSeconds, this.shoverOf(log, at));
+    }
+  }
+
+  /** The actor who shoved the civilian the push before the `walker` triple at `at` names: the one on foot nearest her, else this machine's own. */
+  private shoverOf(log: Float64Array, at: number): number {
+    const poses = this.crowd.poses;
+    const victim = at >= EVENT_TRIPLE && log[at - EVENT_TRIPLE] === EVENT_KIND.push ? log[at - EVENT_TRIPLE + 1]! : -1;
+    const near = victim >= 0 && victim < poses.count ? this.scene.footActorNear(poses.x[victim]!, poses.z[victim]!) : -1;
+    return near >= 0 ? near : this.scene.ownActor();
+  }
+
+  /** The host's chases and arrests of players on foot in the crowd's event log, for the scene of every peer but the host to apply once each. */
+  private hearFootEvents(authority: boolean): void {
+    if (authority) return;
+    const log = this.crowd.eventLog();
+    for (let at = 0; at + EVENT_TRIPLE <= log.length; at += EVENT_TRIPLE) {
+      const kind = log[at]!;
+      if (kind !== EVENT_KIND.footChase && kind !== EVENT_KIND.footArrest) continue;
+      const subject = log[at + 1]!;
+      if (kind === EVENT_KIND.footChase) this.scene.hearFootChase(actorOfCopSubject(subject), copOfCopSubject(subject), log[at + 2]!);
+      else this.scene.hearFootArrest(actorOfCopSubject(subject), copOfCopSubject(subject), log[at + 2]!);
     }
   }
 
@@ -204,9 +239,9 @@ export class OpenWorldLaw {
     return slot;
   }
 
-  /** The hook takes shown foot cop `cop` at crowd second `seconds`: he is downed where he stands (`CrimeScene.hookCop`) and thrown down at once in uniform, so a rope can tie to him; his pool slot, -1 where he is not hookable (not shown, no authority) or no slot is known. */
-  hookCop(cop: number, seconds: number): number {
-    if (!this.scene.hookCop(cop, seconds)) return -1;
+  /** Player `actor` takes shown foot cop `cop` with the hook at crowd second `seconds`: he is downed where he stands (`CrimeScene.hookCop`) and thrown down at once in uniform, so a rope can tie to him; his pool slot, -1 where he is not hookable (not shown, no authority) or no slot is known. */
+  hookCop(cop: number, seconds: number, actor = this.ports.ownActor()): number {
+    if (!this.scene.hookCop(cop, seconds, actor)) return -1;
     let slot = -1;
     const strikes = this.scene.takeCopStrikes();
     for (let at = 0; at < strikes.length; at++) {
@@ -253,9 +288,9 @@ export class OpenWorldLaw {
     this.art.update(this.scene.copPoses, eyeX, eyeZ, sight, wallDt);
   }
 
-  /** The pursuit strip's numbers for the player on foot into `out`: see `PlayerLaw.chaseOf`. */
-  footChaseOf(out: ChaseHud): boolean {
-    return this.scene.footChaseOf(out);
+  /** The pursuit strip's numbers for player `actor` on foot into `out`: see `PlayerLaw.chaseOf`. */
+  footChaseOf(out: ChaseHud, actor = this.ports.ownActor()): boolean {
+    return this.scene.footChaseOf(out, actor);
   }
 
   /** The pursuit strip's numbers for car `carIndex` into `out`: see `PatrolCars.chaseOf`. */
@@ -269,15 +304,15 @@ export class OpenWorldLaw {
     if (!strike.loose) this.scene.noteKnock(strike.car, strike.x, strike.z);
   }
 
-  /** The player's punch lands on a foot cop (the scene refuses without authority). */
-  punchCop(x: number, z: number, dirX: number, dirZ: number, seconds: number): boolean {
-    return this.scene.punchCop(x, z, dirX, dirZ, seconds);
+  /** Player `actor`'s punch lands on a foot cop (the scene refuses without authority). */
+  punchCop(x: number, z: number, dirX: number, dirZ: number, seconds: number, actor = this.ports.ownActor()): boolean {
+    return this.scene.punchCop(x, z, dirX, dirZ, seconds, actor);
   }
 
-  /** His punch landed on a civilian: the law hears a shove, or (`grave`, a knock-out) knows of the fight at once. */
-  playerStruck(seconds: number, grave: boolean): void {
-    if (grave) this.scene.playerFought(seconds);
-    else this.scene.playerShoved(seconds);
+  /** Player `actor`'s punch landed on a civilian: the law hears a shove, or (`grave`, a knock-out) knows of the fight at once. */
+  playerStruck(seconds: number, grave: boolean, actor = this.ports.ownActor()): void {
+    if (grave) this.scene.playerFought(seconds, actor);
+    else this.scene.playerShoved(seconds, actor);
   }
 
   copMet(ray: LookRay, radius: number, reach: number, out: Meeting): Meeting {
@@ -288,9 +323,9 @@ export class OpenWorldLaw {
     this.scene.shootCop(cop, dirX, dirZ, seconds);
   }
 
-  /** A shot was fired: the law knows at once, seen or not. */
-  playerFired(seconds: number): void {
-    this.scene.playerFought(seconds);
+  /** Player `actor`'s shot was fired: the law knows at once, seen or not. */
+  playerFired(seconds: number, actor = this.ports.ownActor()): void {
+    this.scene.playerFought(seconds, actor);
   }
 
   dispose(): void {

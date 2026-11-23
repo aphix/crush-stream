@@ -141,9 +141,38 @@ export const CAST_TITLE_BASE = 100;
  * An `arrestRide` (an arrested resident and her cop got into a patrol car, which now drives off) and an `arrestAlight` (the car is at the station and they get out) are each two triples of the same seconds: the resident, then the engine's index of the car. A client reads them to seat and unseat the pair (its own law has no patrol cars); the player on foot's arrest names `ARREST_PLAYER_RESIDENT`. The brain drops both kinds.
  */
 /** A `spared` (the hook took a suspect out of the police's hands; subject: the resident) is the police's: every peer's law lets her go at that second, and the brain drops it. */
+/** A `footChase` (the cops were sent after a player on foot) and a `footArrest` (a cop has a player on foot in custody) name the player and the cop in one subject (`playerCopSubject`); every peer's law opens the chase and the arrest of that player at that second, the machine whose player it is leads him through it, and the brain drops both. */
 export const EVENT_KIND = codesOf(EVENT_KINDS);
-/** The resident an `arrestRide` or `arrestAlight` names for the player on foot's arrest (the wire's subject is 16 bits: no resident is this). */
-export const ARREST_PLAYER_RESIDENT = 65535;
+/** The subject of actor 0's arrest in a ride or alighting (the wire's subject is 16 bits: no resident is this); actor `n`'s is `n` below it. */
+const ARREST_PLAYER_RESIDENT = 65535;
+/** Players on foot the law tracks at once: one actor (a car index) for each seat of a room. */
+export const PLAYER_ACTORS = 8;
+/** The subject naming actor `actor`'s arrest in an `arrestRide` or `arrestAlight`. */
+export function playerSubject(actor: number): number {
+  return ARREST_PLAYER_RESIDENT - actor;
+}
+/** The actor a ride's or alighting's subject names, -1 for a resident's. */
+export function actorOfSubject(subject: number): number {
+  const actor = ARREST_PLAYER_RESIDENT - subject;
+  return actor >= 0 && actor < PLAYER_ACTORS ? actor : -1;
+}
+/** Cop numbers a `footChase` or `footArrest` subject can carry, beside the actor. */
+const PLAYER_COP_STRIDE = 8;
+/** Where those subjects start counting down from: below every actor's `playerSubject`. */
+const PLAYER_COP_TOP = ARREST_PLAYER_RESIDENT - PLAYER_ACTORS;
+/** The subject of a `footChase` or `footArrest`: actor `actor` and foot cop `cop` (-1: no cop is named). */
+export function playerCopSubject(actor: number, cop: number): number {
+  return PLAYER_COP_TOP - actor * PLAYER_COP_STRIDE - (cop + 1);
+}
+/** The actor a `footChase` or `footArrest` subject names, -1 when it names none. */
+export function actorOfCopSubject(subject: number): number {
+  const offset = PLAYER_COP_TOP - subject;
+  return offset >= 0 && offset < PLAYER_ACTORS * PLAYER_COP_STRIDE ? Math.floor(offset / PLAYER_COP_STRIDE) : -1;
+}
+/** The cop a `footChase` or `footArrest` subject names, -1 for none. */
+export function copOfCopSubject(subject: number): number {
+  return ((PLAYER_COP_TOP - subject) % PLAYER_COP_STRIDE) - 1;
+}
 /** A fight's bearing that is none (two civilians face each other; a car is not faced). */
 export const NO_BEARING = -1;
 /** `RESIDENT_INT.fightPartner` when the other fighter is a human player on foot (-1 is none, or a car). */

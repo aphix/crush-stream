@@ -163,6 +163,26 @@ describe("given the real engine on the open world, the player on foot on the par
       expect(own.distanceTo(lawnMiddle), "not where it was left").toBeGreaterThan(SET_DOWN_M);
     });
 
+    it("when this machine is a guest's and he is set down, then his car is not moved here (the host places it) and he stands at the door on foot", () => {
+      const net = rig.engine["net"];
+      const was = Object.getOwnPropertyDescriptor(net, "role");
+      Object.defineProperty(net, "role", { value: "client", configurable: true, writable: true });
+      try {
+        const left = car().group.position.clone();
+        busted();
+        law().taken(1);
+        rig.run(0.3);
+        law().delivered(door().x, door().z, Math.PI / 2);
+        rig.run(0.5);
+        expect(car().group.position.distanceTo(left), "his car stays where it was (m)").toBeLessThan(SET_DOWN_M);
+        expect(rig.phase(), "on foot").toBe("onFoot");
+        expect(hypot2(rig.torso().x - door().x, rig.torso().z - door().z), "at the station's door").toBeLessThan(SET_DOWN_M * 2);
+      } finally {
+        if (was === undefined) Reflect.deleteProperty(net, "role");
+        else Object.defineProperty(net, "role", was);
+      }
+    });
+
     // mutation: sed -i 's/      this.flow.released();//' src/game/engine/engine-onfoot.ts
     it("when he is set down, then the controls are his again: he walks, and he gets back into his car", () => {
       delivered();

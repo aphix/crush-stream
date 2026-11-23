@@ -7,6 +7,8 @@ const PLAYER_X = 65;
 /** The player's chase of the engine's seconds (Survival's hold for a human), the harness's `playerBustSeconds`. */
 const BUST_SECONDS = 12;
 const BUILDING = { minX: 45, maxX: 55 };
+/** One grid step: the scene learns on its first step whether it is the host's. */
+const LAW_SETTLES_SECONDS = 0.1;
 const RESIDENT = 1;
 
 /** The player on the middle of the crossing between x = 60 and x = 70, facing east, a cop at x = 40 who sees him; the signals against him unless said, standing still unless `speed` says. */
@@ -20,7 +22,7 @@ function onCrossing(options: HarnessOptions & { speed?: number; against?: boolea
 const strip = () => ({ cops: 0, hold: 0, left: 0 });
 
 describe("the player on foot is a subject of the law", () => {
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts poll(), delete the line `this.player.poll(this.seconds);`
+  // mutation: in src/game/ai/openworld-crime/foot-law.ts poll(), delete the line `for (let actor = 0; actor < PLAYER_ACTORS; actor++) this.players[actor]!.poll(this.seconds);`
   it("crossing against the signal where a cop sees him, a chase of him opens and the cops run at him", () => {
     const run = onCrossing();
     runFor(run, 1);
@@ -55,7 +57,7 @@ describe("the player on foot is a subject of the law", () => {
     expect(driving.scene.footChaseOf(strip()), "he is in a car").toBe(false);
   });
 
-  // mutation: in src/game/ai/openworld-crime/crime-scene.ts step(), delete the line `if (!authority) this.law.player.body.present = false;`
+  // mutation: in src/game/ai/openworld-crime/player-law.ts poll(), change `if (!body.present || !this.law.authority) return;` to `if (!body.present) return;`
   it("a client judges nobody's walker: only the host and the solo player do", () => {
     const run = onCrossing({ authority: false });
     runFor(run, 3);
@@ -108,15 +110,17 @@ describe("the player on foot is a subject of the law", () => {
   it("shoving someone a cop sees brings the cops; a shove no cop sees brings none", () => {
     const seen = harness([40, 0, 0]);
     seen.scene.setFoot(true, 50, 0, 1, 0, 0);
+    runFor(seen, LAW_SETTLES_SECONDS);
     seen.scene.playerShoved(0);
     expect(seen.scene.footChaseOf(strip()), "a cop saw the shove").toBe(true);
     const unseen = harness([0, 0, 0]);
     unseen.scene.setFoot(true, 100, 0, 1, 0, 0);
+    runFor(unseen, LAW_SETTLES_SECONDS);
     unseen.scene.playerShoved(0);
     expect(unseen.scene.footChaseOf(strip()), "no cop was near").toBe(false);
   });
 
-  // mutation: in src/game/ai/openworld-crime/foot-law.ts openCrime(), delete the line `if (this.source.fightPartner(resident) === FIGHT_PLAYER) this.player.fightKnown(this.seconds);`
+  // mutation: in src/game/ai/openworld-crime/foot-law.ts openCrime(), delete the line `if (this.authority && this.source.fightPartner(resident) === FIGHT_PLAYER) this.fightKnownNear(this.spot.x, this.spot.z);`
   it("a fight he started, once the police are told of it, is a chase of him as of the civilian who turned on him", () => {
     const run = harness([0, 0, 0]);
     run.offences.x[RESIDENT] = 60;

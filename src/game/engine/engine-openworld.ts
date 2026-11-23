@@ -45,7 +45,7 @@ import { OpenWorldPlayers } from "./openworld-players.ts";
 import { writeCables } from "./openworld-cables.ts";
 import type { TetherSet } from "../contact/tether.ts";
 import type { SightPlayer } from "../present/openworld-sight.ts";
-import { OpenWorldLaw, type LawEnginePorts } from "./engine-openworld-law.ts";
+import { OpenWorldLaw, type ActorPlace, type LawEnginePorts } from "./engine-openworld-law.ts";
 import { OpenWorldCulling, type OpenWorldCullPorts } from "./engine-openworld-cull.ts";
 import { type AutoOrbit, OpenWorldAuto } from "./engine-openworld-auto.ts";
 import { AmbulanceStages, newestCalled } from "./engine-openworld-ambulance.ts";
@@ -151,6 +151,12 @@ export type OpenWorldPorts = {
   ownCar(): DeformableCar | null;
   /** Writes where this browser's player on foot stands and how fast he moves, as the ragdoll world's last step has him (not the blended drawn torso); false while he is in a car. */
   foot(out: FootBody): boolean;
+  /** Writes where actor `actor` (a car index; the host's own player and each guest's) stands on foot and which way he faces, the way a walker is shared; false while he is in a car or is not known on this machine. */
+  actorPlace(actor: number, out: ActorPlace): boolean;
+  /** The actor (car index) this browser's player is. */
+  ownActor(): number;
+  /** The host puts actor `actor`'s car fresh on the road nearest (x, z), facing `yaw` (`RaceField.placeNear`); false where there is no clear spot. */
+  placeCarNear(actor: number, x: number, z: number, yaw: number): boolean;
   /** This machine's wall clock (s). */
   now(): number;
   /** Writes where the eye is and which way it looks. */
@@ -1045,7 +1051,7 @@ export class OpenWorldDirector {
   private makeLaw(map: OpenWorldMap, crowd: CivilianCrowd, seed: number, gaze: OpenWorldGaze): OpenWorldLaw | null {
     const extra = this.ports.law;
     if (extra === undefined) return null;
-    return new OpenWorldLaw(map, crowd, { shared: () => this.shared, now: () => this.ports.now(), threw: (person, slot) => this.shared?.threw(person, slot), makeArt: (capacity) => gaze.follow(this.ports.makeArt(capacity), capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), anyoneNear: (x, z) => this.culling.anyoneNear(x, z, this.ray.eyeX, this.ray.eyeZ), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, foot: (out) => this.ports.foot(out), footArrest: extra.footArrest, cars: () => this.ports.cars() }, seed);
+    return new OpenWorldLaw(map, crowd, { shared: () => this.shared, now: () => this.ports.now(), threw: (person, slot) => this.shared?.threw(person, slot), makeArt: (capacity) => gaze.follow(this.ports.makeArt(capacity), capacity), throwFigure: (strike, look) => this.ports.throwFigure(strike, look), anyoneNear: (x, z) => this.culling.anyoneNear(x, z, this.ray.eyeX, this.ray.eyeZ), traffic: () => this.traffic, solids: () => extra.solids(), playerBusted: (carIndex, seconds) => extra.playerBusted(carIndex, seconds), sirens: (carIndex, on) => extra.sirens(carIndex, on), lineOfSight: extra.lineOfSight, actorPlace: (actor, out) => this.ports.actorPlace(actor, out), ownActor: () => this.ports.ownActor(), placeCarNear: (actor, x, z, yaw) => this.ports.placeCarNear(actor, x, z, yaw), footArrest: extra.footArrest, cars: () => this.ports.cars() }, seed);
   }
 
   /** The Auto camera over this crowd: its cars (the traffic's drivers), its foot cops and the viewers' own cars left out. */

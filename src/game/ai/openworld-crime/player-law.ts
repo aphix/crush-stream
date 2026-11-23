@@ -3,11 +3,11 @@ import { CASE_KIND, SUBJECT_MODE } from "./case-table.ts";
 import { CRIME_STEP_SECONDS, COPS_PER_CASE, FOOT_HOLD_REACH, FOOT_HOLD_SPEED, PLAYER_CHASE_GIVE_UP_SECONDS } from "./crime-constants.ts";
 import type { CrossingWatch } from "./crossing-watch.ts";
 import type { FootLaw } from "./foot-law.ts";
-import type { CrossingSignals, FootBody, Walk } from "./offence-source.ts";
+import type { CrossingSignals, FootArrestPorts, FootBody, Walk } from "./offence-source.ts";
 
 /**
- * The player on foot under the law, like a resident but with no row or drawing of the law's (his walker is where he is): an offence a cop sees, or a fight he started, sets the foot cops on him, and one beside him while
- * he stands (or creeps, under `FOOT_HOLD_SPEED`) runs the bust hold as a driver's does. A full hold puts him in that cop's custody (`arrest`). Only the peer whose walker it is judges him (`FootBody.present`).
+ * One player on foot (actor `actor`, a car index) under the law, like a resident but with no row or drawing of the law's (his walker is where he is). An offence a cop sees sets the foot cops on him, and a cop beside him while he stands
+ * (or creeps, under `FOOT_HOLD_SPEED`) runs the bust hold. Only the host judges and raises the events; every peer's copy opens and leads the same chase and arrest from them, and the engine hears it on his own machine only.
  */
 export class PlayerLaw {
   readonly body: FootBody = { present: false, x: 0, z: 0, dirX: 0, dirZ: 1, speed: 0 };
@@ -15,6 +15,7 @@ export class PlayerLaw {
   private readonly crossings: CrossingWatch;
   private readonly signals: CrossingSignals | null;
   private readonly bustSeconds: number;
+  private readonly actor: number;
   private readonly walk: Walk = { x: 0, z: 0, dirX: 0, dirZ: 1 };
   private caseIndex = -1;
   private since = 0;
@@ -27,8 +28,9 @@ export class PlayerLaw {
   private arrested = false;
   private taken = false;
 
-  constructor(law: FootLaw, crossings: CrossingWatch, signals: CrossingSignals | null, bustSeconds: number) {
+  constructor(law: FootLaw, crossings: CrossingWatch, signals: CrossingSignals | null, bustSeconds: number, actor: number) {
     this.law = law;
+    this.actor = actor;
     this.crossings = crossings;
     this.signals = signals;
     this.bustSeconds = bustSeconds;
@@ -45,6 +47,11 @@ export class PlayerLaw {
     body.speed = speed;
   }
 
+  /** The engine's calls for his arrest: his own machine's only. */
+  private get engine(): FootArrestPorts | null {
+    return this.law.engineOf(this.actor);
+  }
+
   /** Whether a chase of him is open. */
   get chasing(): boolean {
     return this.caseIndex >= 0;
@@ -53,7 +60,7 @@ export class PlayerLaw {
   /** Twice a second: a walk across a crossing against the signal a free cop sees is an offence; so is the walk that began since he left the last one. */
   poll(seconds: number): void {
     const { body } = this;
-    if (!body.present) return;
+    if (!body.present || !this.law.authority) return;
     this.walk.x = body.x;
     this.walk.z = body.z;
     this.walk.dirX = body.dirX;
@@ -74,14 +81,14 @@ export class PlayerLaw {
   /** He shoved someone at crowd second `seconds`: a cop who sees it comes for him. */
   shoved(seconds: number): void {
     const { body } = this;
-    if (!body.present || this.caseIndex >= 0 || !this.law.copSeesSpot(body.x, body.z)) return;
+    if (!body.present || !this.law.authority || this.caseIndex >= 0 || !this.law.copSeesSpot(body.x, body.z)) return;
     this.open(seconds, this.law.cops.nearestFree(body.x, body.z));
   }
 
   /** A fight he started has been seen or reported: the cops come for him as for the one he fought. */
   fightKnown(seconds: number): void {
     const { body } = this;
-    if (!body.present || this.caseIndex >= 0) return;
+    if (!body.present || !this.law.authority || this.caseIndex >= 0) return;
     this.open(seconds, this.law.cops.nearestFree(body.x, body.z));
   }
 
@@ -113,15 +120,46 @@ export class PlayerLaw {
       nearestCop = cop;
     }
     this.heldFor = nearest <= FOOT_HOLD_REACH && body.speed < FOOT_HOLD_SPEED ? this.heldFor + CRIME_STEP_SECONDS : 0;
-    if (this.heldFor < this.bustSeconds) return;
+    if (this.heldFor < this.bustSeconds || !this.law.authority) return;
     this.arrest(caseIndex, slot, nearestCop, seconds);
+  }
+
+  /** The host's word that the cops are after him, cop `cop` first (-1: none yet, which this peer's own calling fills as the host's does): the same chase opens here, from where he stands on this machine. */
+  hearChase(cop: number, seconds: number): void {
+    if (!this.body.present || this.caseIndex >= 0) return;
+    this.open(seconds, this.law.cops.isFree(cop) ? cop : -1);
+  }
+
+  /** The host's word that cop `cop` has him in custody: the same arrest starts here, the chase opened first when this peer has none. */
+  hearArrest(cop: number, seconds: number): void {
+    const { body } = this;
+    const { table, cops } = this.law;
+    if (this.arrested || (this.caseIndex < 0 && (!body.present || !this.open(seconds, cop)))) return;
+    const holder = this.enlist(cop) ? cop : cops.nearestOfCase(table, this.caseIndex, body.x, body.z);
+    if (holder >= 0) this.arrest(this.caseIndex, table.slotOf(this.caseIndex, 0), holder, seconds);
+  }
+
+  /** Whether cop `cop` is, or has just been made, one of the cops of his chase. */
+  private enlist(cop: number): boolean {
+    const { table, cops } = this.law;
+    if (cop < 0 || !cops.onStreet(cop)) return false;
+    if (cops.caseOf[cop] === this.caseIndex) return true;
+    if (!cops.isFree(cop)) return false;
+    for (let index = 0; index < COPS_PER_CASE - 1; index++) {
+      if (table.copAt(this.caseIndex, index) >= 0) continue;
+      cops.assign(cop, this.caseIndex);
+      table.setCop(this.caseIndex, index, cop);
+      return true;
+    }
+    return false;
   }
 
   /** Held the whole hold by cop `cop`: he leads the player to a patrol car and the station as he leads a suspect, and the engine hears it. */
   private arrest(caseIndex: number, slot: number, cop: number, seconds: number): void {
-    const { table, stats, arrests, arrestPorts } = this.law;
+    const { table, stats, arrests } = this.law;
     stats.busts++;
-    arrestPorts?.busted(seconds);
+    this.law.raiseFootArrested(this.actor, cop, seconds);
+    this.engine?.busted(seconds);
     this.arrested = true;
     this.heldFor = 0;
     table.holder[slot] = cop;
@@ -132,7 +170,7 @@ export class PlayerLaw {
 
   /** Once a grid step in custody: the engine is told where his cop leads him, then that a patrol car has him aboard; the case ends once the law has set him down. */
   private stepCustody(slot: number): void {
-    const { table, walkers, arrestPorts } = this.law;
+    const { table, walkers } = this.law;
     const mode = table.mode[slot]!;
     if (mode === SUBJECT_MODE.free) {
       this.close();
@@ -140,19 +178,21 @@ export class PlayerLaw {
     }
     if (mode !== SUBJECT_MODE.conveyed) {
       const walker = this.law.walkerOf(slot);
-      arrestPorts?.led(walkers.x[walker]!, walkers.z[walker]!);
+      this.engine?.led(walkers.x[walker]!, walkers.z[walker]!);
       return;
     }
     if (this.taken) return;
     this.taken = true;
-    arrestPorts?.taken(this.law.carIndexOf(table.carOf[slot]!));
+    this.engine?.taken(this.law.carIndexOf(table.carOf[slot]!));
   }
 
-  /** His custody is over (the patrol car brought him to the station, the cop walked him to its door, or a car ran the cop down): the engine sets him down where his cop stood with him. */
+  /** His custody is over (the patrol car brought him to the station, the cop walked him to its door, or a car ran the cop down): his machine's engine sets him down where his cop stood with him, and on the host the car of a player who is not its own is put there too. */
   deliver(slot: number): void {
-    const { walkers, arrestPorts } = this.law;
+    const { walkers } = this.law;
     const walker = this.law.walkerOf(slot);
-    arrestPorts?.delivered(walkers.x[walker]!, walkers.z[walker]!, walkers.yaw[walker]!);
+    const { x, z, yaw } = { x: walkers.x[walker]!, z: walkers.z[walker]!, yaw: walkers.yaw[walker]! };
+    this.engine?.delivered(x, z, yaw);
+    this.law.placeCarOf(this.actor, x, z, yaw);
   }
 
   /** The chase as the pursuit strip shows it: the cops after him and the hold run so far; false with no chase open. */
@@ -176,6 +216,7 @@ export class PlayerLaw {
     if (caseIndex < 0) return false;
     const { table, cops } = this.law;
     const slot = table.slotOf(caseIndex, 0);
+    table.setActor(caseIndex, this.actor);
     table.spotX[slot] = this.body.x;
     table.spotZ[slot] = this.body.z;
     this.caseIndex = caseIndex;
@@ -185,6 +226,7 @@ export class PlayerLaw {
       cops.assign(cop, caseIndex);
       table.setCop(caseIndex, 0, cop);
     }
+    this.law.raiseFootChased(this.actor, cop, seconds);
     return true;
   }
 

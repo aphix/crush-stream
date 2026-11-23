@@ -292,7 +292,7 @@ export class OnFootDirector {
     const { ragdolls, seat } = this.host;
     if (this.flow.phase !== "arrested") return;
     const car = this.flow.car;
-    if (!this.host.freshCarNear(car, x, z, yaw)) this.host.respawn();
+    if (this.host.runsCars() && !this.host.freshCarNear(car, x, z, yaw)) this.host.respawn();
     this.endView();
     ragdolls.stopWalker();
     const ground = activeGround().heightAt(x, z);

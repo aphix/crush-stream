@@ -55,13 +55,18 @@ export class FootCops {
     let best = -1;
     let bestGap = Infinity;
     for (let cop = 0; cop < FOOT_COP_COUNT; cop++) {
-      if (this.mode[cop] !== COP_MODE.patrol || this.caseOf[cop] !== -1) continue;
+      if (!this.isFree(cop)) continue;
       const gap = hypot2(this.walkers.x[cop]! - x, this.walkers.z[cop]! - z);
       if (gap >= bestGap) continue;
       bestGap = gap;
       best = cop;
     }
     return best;
+  }
+
+  /** Whether cop `cop` is on patrol with no case: one a chase may call. */
+  isFree(cop: number): boolean {
+    return cop >= 0 && cop < FOOT_COP_COUNT && this.mode[cop] === COP_MODE.patrol && this.caseOf[cop] === -1;
   }
 
   /** Cop `cop` answers case `caseIndex`. */

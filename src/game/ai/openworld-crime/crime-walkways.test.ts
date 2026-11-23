@@ -68,7 +68,7 @@ class Scene {
     this.law = new FootLaw(
       real.map,
       source,
-      { bust: (resident) => this.raised(resident), jaywalked: () => {}, copDown: () => {}, rode: () => {}, alighted: () => {}, footArrest: IDLE_FOOT_ARREST },
+      { bust: (resident) => this.raised(resident), jaywalked: () => {}, copDown: () => {}, rode: () => {}, alighted: () => {}, footChased: () => {}, footArrested: () => {}, self: () => 0, placeCarNear: () => false, footArrest: IDLE_FOOT_ARREST },
       { opened: () => {}, closed: () => {}, cars: () => null, rides: () => null },
       seed,
       { lineOfSight: sight ? real.sight : null, signals: null, otherCopsSee: null },

@@ -106,6 +106,12 @@ class Harness {
       Object.assign(out, this.footAt);
       return true;
     },
+    actorPlace: (actor, out) => {
+      if (actor !== 0 || this.footAt === null) return false;
+      out.x = this.footAt.x;
+      out.z = this.footAt.z;
+      return true;
+    },
     now: () => this.now,
     setDayHour: (hour) => void this.dayHours.push(hour),
     eye: (ray) => Object.assign(ray, this.eye),
