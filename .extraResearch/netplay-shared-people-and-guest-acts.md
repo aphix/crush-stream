@@ -26,7 +26,10 @@ config):
 
 So that project sends players at 10 Hz, nearby pedestrians at 2 Hz and far ones at 0.5 Hz, and hands a pedestrian or
 an empty vehicle to a nearby player's machine (a "syncer") within a distance limit. The Perplexity answer gave 400 ms
-for pedestrians and 1000 ms for empty vehicles: both wrong against the wiki.
+for pedestrians and 1000 ms for empty vehicles. Correction (same day, from the project's source at commit 68bba17a39,
+`Shared/mods/deathmatch/logic/CTickRateSettings.h`): the code's default is `iPedSync = 400`, so the wiki's 500 ms is
+out of date and the answer's 400 ms was right; 1000 ms for empty vehicles is wrong against both (400). The follow-up
+write-up is `netplay-guest-acts-seats-hooks-and-law.md`.
 
 ### 1.2 Halo: Reach (GDC 2011, "I Shot You First", David Aldridge), from two written summaries of the talk
 

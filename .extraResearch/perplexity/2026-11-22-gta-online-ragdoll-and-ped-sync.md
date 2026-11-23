@@ -1,0 +1,24 @@
+> Question: What has been published or reverse-engineered about how Grand Theft Auto V Online and Red Dead Online share pedestrians and physically animated (ragdolling) characters between players' machines: ownership, what state is sent, and how a remote machine shows a character being knocked down, dragged or thrown? Cite sources.
+
+Public reverse-engineering evidence supports a **distributed, per-entity simulation model**, but does not appear to document Rockstar’s exact GTA Online or Red Dead Online packet formats.
+
+- A networked pedestrian is generally simulated by one client—the entity’s current **network owner**—rather than fully simulated independently by every machine. The owner sends synchronization data; the server maintains a state copy, routes updates, and can migrate ownership when the owner leaves relevance or disconnects.[1][2]
+- In the documented OneSync model for GTA-derived networking, ownership is an entity property, not necessarily a permanent player property. Ownership can move between clients, and a server-created entity may initially have no client owner before being assigned to a nearby client.[1][2]
+- Public technical discussions indicate that the transmitted state is selective rather than a complete physics replay. Commonly exposed synchronized fields include identity, transform, heading, model, health, vehicle relationships, and other entity state; the owner’s simulation is not reproduced identically on every machine.[1][8]
+- The available evidence does **not** establish that GTA Online or Red Dead Online sends every ragdoll bone, constraint, collision contact, and physics impulse. Reports from FiveM—whose networking is related to GTA V but is not Rockstar’s retail implementation—show that ragdoll state can desynchronize, slide, or change behavior when ownership changes.[4][9]
+- Consequently, when a remote player knocks down, drags, or throws a pedestrian, the receiving machine most plausibly receives a replicated combination of **entity ownership/state, root transform or motion, animation/ragdoll-related flags, and possibly velocity or damage information**, then locally creates the visible result through its own animation and physics systems. It is not demonstrated publicly that the remote machine receives a deterministic, frame-by-frame physical solution.
+- For dragging or throwing, the likely visual mechanism is therefore: the owner simulates the interaction; remote clients receive intermittent authoritative corrections and state transitions; each remote client interpolates or locally simulates enough animation/physics to display the body. Differences in collision, timing, and correction can produce visibly different knockdowns or ragdolls between players.
+- Rockstar’s patch notes confirm that ambient occupants can enter ragdoll states in Red Dead Online, but do not disclose the networking representation or ownership rules.[10]
+
+The strongest defensible conclusion is: **one client owns and simulates the pedestrian at a time; the network distributes compact state and ownership updates; remote machines reconstruct the knockdown or ragdoll locally rather than receiving a complete shared physics history.** The exact Rockstar fields, tick rates, authority rules for ambient NPCs, and whether impulses or bone poses are replicated remain undocumented in the publicly available material cited here.
+
+[1] fivem-skills/skills/fivem-development/references/onesync-entities.md at main · aggus19/fivem-skills (https://github.com/aggus19/fivem-skills/blob/main/skills/fivem-development/references/onesync-entities.md)
+[2] State bags, OneSync and entity ownership | fivemad Docs (https://fivemad.com/nl/docs/development/state-bags-onesync)
+[3] Ragdoll body dragging in co-op, Hitman style. Sounds simple. It ... (https://www.linkedin.com/posts/aslashcev_ragdoll-body-dragging-in-co-op-hitman-style-activity-7493977065965162496-deRd)
+[4] Networked peds ragdoll and play injured animation when ... (https://github.com/citizenfx/fivem/issues/2986)
+[5] GTA 5 Ragdoll Glitch Explained: Why NPCs Go Haywire | 6cheats (https://www.6cheats.com/en/guides/gta-5-ragdoll-glitch-explained)
+[6] Migrating from Other GTAV Multiplayer Platforms (https://docs.fivem.net/docs/scripting-manual/migrating-from-other-platforms/)
+[7] Can we not ragdoll? (https://www.reddit.com/r/gtaonline/comments/2kg8ee/can_we_not_ragdoll/)
+[8] First step to sync your own Peds! (https://rage.mp/forums/topic/4806-first-step-to-sync-your-own-peds/)
+[9] Ragdolls are not synced with the server (even when not a dead player) · Issue #2436 · citizenfx/fivem (https://github.com/citizenfx/fivem/issues/2436)
+[10] Red Dead Redemption 2 Title Update 1.09 Notes (PS4 / Xbox ... (https://support.rockstargames.com/articles/6XLmD65fhWzs67WCok5hud/red-dead-redemption-2-title-update-1-09-notes-ps4-xbox-one)
