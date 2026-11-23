@@ -617,9 +617,9 @@ export abstract class EngineCore {
   /** The car the player got into on foot and drives instead of his own (`adoptCar`), null while he drives his own. */
   protected adoptedCar: number | null = null;
 
-  /** This browser's own car: its netplay seat as a guest, else the player's car 0. It wears his car pick and spray (`PlayerLooks`), whatever car he drives. */
+  /** This browser's own car: its netplay seat as a guest, else the player's car 0. It wears his car pick and spray (`PlayerLooks`), whatever car he drives. Read many times a frame: `NetPlay.ownCar` is a field, `status()` builds an object. */
   protected ownCar(): number {
-    return this.net.client ? this.net.status().car : 0;
+    return this.net.client ? this.net.ownCar : 0;
   }
 
   /** The car this browser's player drives: his own, or the one he took in the free roam while he still drives it. His person (look, spray) is the driver of that one; the car keeps its own paint. */

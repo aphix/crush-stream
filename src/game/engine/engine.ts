@@ -131,6 +131,7 @@ const _lodCenter = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _footVelocity = new THREE.Vector3();
 const _actorSpot: ActorPlace = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
+const _actorMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
 const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _ownMotion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
@@ -1072,16 +1073,16 @@ export class CrashEngine extends EngineGarage {
     mesh.nearestHit(this.raycaster.ray, this.raycaster.near, range, actor === this.ownCar() ? WALKER_SLOT : this.openWorld.playerSlot(actor), out);
   }
 
-  /** Where actor `actor` stands on foot and how he moves: this machine's player from his walker as the ragdoll world's last step has him, every other player as the host has him (`OpenWorldDirector.playerPlace`). */
+  /** Where actor `actor` stands on foot and how he moves: this machine's player from his walker as the ragdoll world's last step has him (`dollMotion`: the kept torso and velocity, nothing made), every other player as the host has him (`OpenWorldDirector.playerPlace`). */
   private actorPlace(actor: number, out: ActorPlace): boolean {
     if (actor !== this.ownCar()) return this.openWorld.playerPlace(actor, out);
-    if (!this.ragdolls.torso(WALKER_SLOT, _v, _footVelocity)) return false;
-    out.x = _v.x;
-    out.y = _v.y;
-    out.z = _v.z;
+    if (!this.onFoot.flow.active || !this.ragdolls.dollMotion(WALKER_SLOT, _actorMotion)) return false;
+    out.x = _actorMotion.x;
+    out.y = _actorMotion.y;
+    out.z = _actorMotion.z;
     out.heading = this.ragdolls.walker.facing;
-    out.velocityX = _footVelocity.x;
-    out.velocityZ = _footVelocity.z;
+    out.velocityX = _actorMotion.vx;
+    out.velocityZ = _actorMotion.vz;
     return true;
   }
 

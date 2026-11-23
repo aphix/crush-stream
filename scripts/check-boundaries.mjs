@@ -127,7 +127,7 @@ const HOT = {
   "src/game/ai/civilians/crowd-walkers.ts": ["clear", "add", "addBody", "place"],
   "src/game/engine/engine-openworld.ts": ["step", "frame", "feedWalkers", "landWalkerStrike", "shoot", "shootCar", "releaseGotUp", "writeBodies", "hearBodies", "hearFoot", "writeFoot", "playerAway", "sightOthers", "cableFrame", "hosted", "meet", "lookAlong", "wallBetween", "playerPlace", "playerSlot", "hookHeld", "hookCount"],
   "src/game/engine/openworld-cables.ts": ["writeCables", "frame"],
-  "src/game/engine/engine-openworld-acts.ts": ["hear", "hearGetIn", "admit", "punchBy", "shootBy", "punchLanded", "shootLocal", "draw", "scatter", "punch", "aimFromMuzzle", "faceTarget", "nearestToTorso", "apartFromTorso"],
+  "src/game/engine/engine-openworld-acts.ts": ["hear", "hearGetIn", "hearHookFire", "admit", "punchBy", "shootBy", "punchLanded", "shootLocal", "draw", "scatter", "punch", "aimFromMuzzle", "faceTarget", "nearestToTorso", "apartFromTorso"],
   "src/game/present/civilian-art.ts": ["update", "refreshSight", "selectNearest", "assignSlots", "dressSlot", "poseDummies", "drawFigures", "cacheFigureColours", "writeFigure"],
   "src/game/present/animal-art.ts": ["update", "kindOf", "easePosture", "drawDowned", "write", "finish"],
   "src/game/engine/engine-openworld-car-look.ts": ["met", "rayIntoCar"],

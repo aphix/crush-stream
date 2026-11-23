@@ -463,6 +463,11 @@ export class NetPlay extends NetPlayClient {
     }
   }
 
+  /** This machine's car in the room: its player's identity. A field read, for callers that ask every frame (`status()` builds its answer anew). */
+  get ownCar(): number {
+    return this.car;
+  }
+
   status(): NetStatus {
     const client = this.role === "client";
     return {

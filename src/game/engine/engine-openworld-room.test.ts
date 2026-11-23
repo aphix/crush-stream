@@ -654,7 +654,23 @@ describe("given a host and two guests in an open-world room, the first guest on 
     expect(r.guest.staggers.length, "staggers after the second blow").toBe(2);
   });
 
-  it("when the host's hook holds one cable he fired and has him holding a first end, then his own machine reads one cable of his and an end held, and the second guest's reads none of either", () => {
+  it("when he sprints east at 7 m/s and the host lands a light blow on him from the north, then his own machine staggers his walker once, southward, and the second guest goes on drawing him within 0.5 m of where he was at its own crowd time", () => {
+    const r = footRoom();
+    const path = startWalking(r, SPRINT_MPS);
+    r.step(15);
+    r.host.director.staggerPlayer(GUEST_CAR, 0, -1);
+    let widest = 0;
+    for (let frames = 0; frames < 12; frames++) {
+      r.step(1);
+      const poses = playersOf(r.second!);
+      widest = Math.max(widest, hypot2(poses.x[GUEST_CAR]! - (path.x0 + path.vx * (r.second!.director.crowdTime() - path.t0)), poses.z[GUEST_CAR]! - path.z0));
+    }
+    expect(r.guest.staggers.length, "staggers told to his machine").toBe(1);
+    expect(r.guest.staggers[0]!.dirZ, "the blow's direction (z)").toBeCloseTo(-1, 1);
+    expect(widest, "the widest the second guest draws him from where he was at its crowd time (m)").toBeLessThan(DRAWN_GAP_M);
+  });
+
+  it("when the host's hook holds one cable he fired and has him holding a first end, then his own machine reads one cable of his and an end held, and the second guest's reads none of either; and when his link to the host stalls for 1.5 s, then his machine still reads the host's last word", () => {
     const r = footRoom();
     startWalking(r, 0);
     r.step(30);
@@ -666,6 +682,9 @@ describe("given a host and two guests in an open-world room, the first guest on 
     r.step(FOOT_HEARD_FRAMES);
     expect([r.guest.director.hookCount(), r.guest.director.hookHeld()], "his own machine: cables of his, an end held").toEqual([1, true]);
     expect([r.second!.director.hookCount(), r.second!.director.hookHeld()], "the second guest's machine").toEqual([0, false]);
+    r.hub.setCut(r.hostNet["transport"]!.selfId, r.guestNet["transport"]!.selfId, true);
+    r.step(45);
+    expect([r.guest.director.hookCount(), r.guest.director.hookHeld()], "his own machine 1.5 s into a stalled link").toEqual([1, true]);
   });
 
   it("when the host has stood a body for him, then the host names that body's slot as his, the one his own shots and hook pass, and none for the second guest in his car", () => {

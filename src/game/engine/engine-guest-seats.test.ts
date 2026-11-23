@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 import { writeRace } from "../net/codec.ts";
 import { packSeats, SEATS_NOTICE } from "../net/seats-codec.ts";
 import { SeatTable } from "../scenes/seat-table.ts";
@@ -128,5 +129,21 @@ describe("given the real engine as a guest in a room whose host changes the cour
     expect(rig.engine["seat"].carIndex, "his own car").toBe(GUEST_CAR);
     expect(rig.engine["seat"].mode, "he drives").toBe("drive");
     expect(rig.engine["drivenCar"](), "the car he drives").toBe(GUEST_CAR);
+  });
+});
+
+describe("given the real engine as a guest, asked where every player stands as the law asks each crowd step", () => {
+  /** Crowd steps asked, and the bound (bytes): the sampling profiler's own cost is 4-5 KB of a read. */
+  const STEPS = 600;
+  const BOUND_BYTES = 8192;
+
+  it("when all 8 players' places are asked for 600 steps, then all of it allocates under 8 KB: which car is his own is a field read, not a status built each time", () => {
+    const place = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
+    expect(rig.engine["ownCar"](), "control: this machine is the guest in car 1").toBe(GUEST_CAR);
+    const ask = (): void => {
+      for (let step = 0; step < STEPS; step++) for (let actor = 0; actor < 8; actor++) rig.engine["actorPlace"](actor, place);
+    };
+    const bytes = untilQuiet(() => allocatedBytes(ask), BOUND_BYTES);
+    expect(bytes, "bytes allocated by 600 steps of asking").toBeLessThanOrEqual(BOUND_BYTES);
   });
 });

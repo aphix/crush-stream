@@ -555,6 +555,17 @@ describe("given a gun in the player's hand", () => {
     const bytes = untilQuiet(() => allocatedBytes(pose), BOUND_BYTES);
     expect(bytes, "bytes allocated by 600 posed frames").toBeLessThanOrEqual(BOUND_BYTES);
   });
+
+  it("when the law asks where he stands on foot, 8 players a crowd step for 600 steps, then all of it allocates under 8 KB", () => {
+    pistolAimedAt((from, f) => new THREE.Vector3(from.x + f.x * 15, activeGround().heightAt(from.x + f.x * 15, from.z + f.z * 15) + CHEST_UP, from.z + f.z * 15), 1.6, 0.9);
+    const place = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
+    expect(rig.engine["actorPlace"](0, place), "control: he is on foot and has a place").toBe(true);
+    const ask = (): void => {
+      for (let step = 0; step < FRAMES; step++) for (let actor = 0; actor < 8; actor++) rig.engine["actorPlace"](actor, place);
+    };
+    const bytes = untilQuiet(() => allocatedBytes(ask), BOUND_BYTES);
+    expect(bytes, "bytes allocated by 600 steps of asking").toBeLessThanOrEqual(BOUND_BYTES);
+  });
 });
 
 describe("given him running with the rifle and its fire held, the centre dot 45 degrees off his run", () => {

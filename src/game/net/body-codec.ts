@@ -9,7 +9,7 @@ export const BODY_POSTURE = { stand: 0, down: 1, getUp: 2 } as const;
 export const POSTURE_MASK = 3;
 /** The other bits of a record's state: a cable holds her, the hook pins her, she is a thrown dummy, a car or shot has just struck her, the record is a pose record (feet, not a torso). */
 export const BODY_FLAG = { roped: 4, pinned: 8, thrown: 16, struck: 32, pose: 64 } as const;
-/** A player's record alone carries these: a blow staggered him (its direction in the record's velocity; the bit is a civilian's `pinned`, which nothing reads on a guest), and he holds a first hook end (the one bit no other kind uses: `thrown` is read on every kind). */
+/** A player's record alone carries these: a blow staggered him (the blow's bearing rides the record's activity clock, which nothing else reads on a player; the bit is a civilian's `pinned`, which nothing reads on a guest), and he holds a first hook end (the one bit no other kind uses: `thrown` is read on every kind). */
 export const PLAYER_FLAG = { staggered: 8, holds: 128 } as const;
 /** A cable nobody fired. */
 export const CABLE_NO_OWNER = 255;

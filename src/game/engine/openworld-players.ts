@@ -1,6 +1,6 @@
 import { createCrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { CrowdWalkers } from "../ai/civilians/crowd-walkers.ts";
-import { detCos, detSin } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { addBodyRecord, BODY_FLAG, BODY_KIND, BODY_POSTURE, PLAYER_FLAG, type BodyFrame, type BodyMotion, type FootRecord } from "../net/body-codec.ts";
 import { BODIES_SILENT_S, HALF_SEQUENCE } from "../net/net-constants.ts";
 import type { DriverLook } from "../present/driver-look.ts";
@@ -18,6 +18,8 @@ import { personOf } from "./people-index.ts";
 const STRUCK_HOLD_S = 1;
 /** How long (s) a blow that does not fell him stays on a player's record: four 15 Hz frames, and shorter than a punch's cooldown, so each blow is one stagger. */
 const STAGGER_HOLD_S = 0.3;
+/** A staggered player's record carries the blow's bearing in its activity clock, which nothing else reads on a player: a whole turn is this many seconds of that clock (its byte holds tenths up to 25.4 s: 254 steps a turn). */
+const BEARING_CLOCK_S = 25.4;
 /** After he is back in a car his machine tells the host so this many times. */
 const LEFT_CALLS = 3;
 /** Where a look word's epoch counter goes: a new walker's look word is one no other row has, so the art dresses the row again. */
@@ -61,7 +63,7 @@ export class OpenWorldPlayers {
   private readonly launch = new Float32Array(3 * MAX_CARS);
   private readonly applied = new Uint8Array(MAX_CARS);
   private readonly staggerUntil = new Float64Array(MAX_CARS).fill(-Infinity);
-  private readonly staggerDir = new Float32Array(2 * MAX_CARS);
+  private readonly staggerBearing = new Float32Array(MAX_CARS);
   private readonly staggered = new Uint8Array(MAX_CARS);
   private readonly epoch = new Uint16Array(MAX_CARS);
   /** Per row, the hash of the look its look word was last made from. */
@@ -178,14 +180,14 @@ export class OpenWorldPlayers {
     this.struckUntil[car] = crowdSeconds + STRUCK_HOLD_S;
   }
 
-  /** Host: a blow that does not fell him lands on player `car` at crowd second `crowdSeconds`, from direction (dirX, dirZ). */
+  /** Host: a blow that does not fell him lands on player `car` at crowd second `crowdSeconds`, going (dirX, dirZ). */
   stagger(car: number, dirX: number, dirZ: number, crowdSeconds: number): void {
-    this.staggerDir[2 * car] = dirX;
-    this.staggerDir[2 * car + 1] = dirZ;
+    const bearing = detAtan2(dirX, dirZ);
+    this.staggerBearing[car] = bearing < 0 ? bearing + 2 * Math.PI : bearing;
     this.staggerUntil[car] = crowdSeconds + STAGGER_HOLD_S;
   }
 
-  /** Host: the players on foot written into `out`: first the host's own walker (`own`, null while he is in a car), then each other present player: from the body of his a cable holds (roped), else his record moved to the host's clock, struck while a strike's hold runs, staggered while a lighter blow's does. */
+  /** Host: the players on foot written into `out`: first the host's own walker (`own`, null while he is in a car), then each other present player: from the body of his a cable holds (roped), else his record moved to the host's clock, struck while a strike's hold runs, staggered (the blow's bearing in the record's activity clock, his own velocity kept) while a lighter blow's does. */
   writeRecords(out: BodyFrame, ownCar: number, own: BodyMotion | null, crowdSeconds: number, bodies: OpenWorldBodies | null): void {
     if (own !== null) this.copyRecord(out, ownCar, own, own.posture);
     for (let car = 0; car < MAX_CARS; car++) {
@@ -205,20 +207,18 @@ export class OpenWorldPlayers {
         _place.vx = this.launch[3 * car]!;
         _place.vy = this.launch[3 * car + 1]!;
         _place.vz = this.launch[3 * car + 2]!;
-      } else if (crowdSeconds < this.staggerUntil[car]!) {
-        state |= PLAYER_FLAG.staggered;
-        _place.vx = this.staggerDir[2 * car]!;
-        _place.vy = 0;
-        _place.vz = this.staggerDir[2 * car + 1]!;
       }
-      this.copyRecord(out, car, _place, state);
+      const at = this.copyRecord(out, car, _place, state);
+      if (at < 0 || (state & BODY_FLAG.struck) !== 0 || crowdSeconds >= this.staggerUntil[car]!) continue;
+      out.state[at] = state | PLAYER_FLAG.staggered;
+      out.activityClock[at] = (this.staggerBearing[car]! / (2 * Math.PI)) * BEARING_CLOCK_S;
     }
   }
 
-  /** A player record of car `car` with `state`, its place, velocity and facing from `m`, added to `out`. */
-  private copyRecord(out: BodyFrame, car: number, m: BodyMotion, state: number): void {
+  /** A player record of car `car` with `state`, its place, velocity and facing from `m`, added to `out`; its index, -1 when the frame is full. */
+  private copyRecord(out: BodyFrame, car: number, m: BodyMotion, state: number): number {
     const at = addBodyRecord(out, BODY_KIND.player, car, state);
-    if (at < 0) return;
+    if (at < 0) return at;
     out.pos[3 * at] = m.x;
     out.pos[3 * at + 1] = m.y;
     out.pos[3 * at + 2] = m.z;
@@ -226,6 +226,7 @@ export class OpenWorldPlayers {
     out.vel[3 * at + 1] = m.vy;
     out.vel[3 * at + 2] = m.vz;
     out.heading[at] = m.heading;
+    return at;
   }
 
   /** Every machine, before the crowd steps: every player of `frame` but car `ownCar` is a body the crowd steps round, never a shove. */
@@ -256,7 +257,8 @@ export class OpenWorldPlayers {
       if ((state & PLAYER_FLAG.staggered) === 0) this.staggered[ownCar] = 0;
       else if (this.staggered[ownCar] === 0) {
         this.staggered[ownCar] = 1;
-        ports.staggerWalker(frame.vel[3 * at]!, frame.vel[3 * at + 2]!);
+        const bearing = (frame.activityClock[at]! / BEARING_CLOCK_S) * 2 * Math.PI;
+        ports.staggerWalker(detSin(bearing), detCos(bearing));
       }
       if ((state & BODY_FLAG.roped) === 0) return;
       recordTarget(frame, at, crowdSeconds - frame.crowdTime, _target);

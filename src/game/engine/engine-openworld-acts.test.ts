@@ -111,6 +111,8 @@ describe("given a host that hears a guest's hook acts while the guest stands on 
     { it: "when his reticle was on no person, then the host fires his hook and knows he saw none", x: 10, z: 8, arg: 0, fires: 1, sawPerson: false },
     { it: "when the sight line passes 5 m from his torso, then no hook is fired", x: 15, z: 8, arg: 1, fires: 0, sawPerson: false },
     { it: "when the eye is 50 m from his torso, farther than any camera boom, then no hook is fired", x: 10, z: -30, arg: 1, fires: 0, sawPerson: false },
+    { it: "when the eye is 2 m ahead of the host's view of his torso (he sprints; the host sees him late), then the host fires his hook", x: 10, z: 22, arg: 1, fires: 1, sawPerson: true },
+    { it: "when the eye is 20 m ahead of him along the line, where no camera of his is, then no hook is fired", x: 10, z: 40, arg: 1, fires: 0, sawPerson: false },
   ] as const;
   for (const testCase of fireCases) {
     it(testCase.it, () => {

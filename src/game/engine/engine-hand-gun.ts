@@ -33,10 +33,12 @@ export class HandGuns {
   private lz = 0;
   private holdLeft = 0;
   private easeLeft = 0;
-  /** The barrel that puts a point on the bore's line (`toward`). */
+  /** The barrel that puts a point on the bore's line, and the side (x, z) of the direction to that point (`toward`): the gun keeps that side when its tipped barrel passes straight down. */
   private tx = 0;
   private ty = -1;
   private tz = 0;
+  private sideX = 1;
+  private sideZ = 0;
   /** The frame's seconds, set before `pose` (a double handed across a call is boxed; a field is written in place). */
   dt = 0;
   /** The tip's row of the flash set (x, y, z), written in place by every pose and lay. */
@@ -75,6 +77,8 @@ export class HandGuns {
     const level = Math.sqrt(ux * ux + uz * uz);
     const sx = level < LEVEL_MIN ? 1 : -uz / level;
     const sz = level < LEVEL_MIN ? 0 : ux / level;
+    this.sideX = sx;
+    this.sideZ = sz;
     const tip = Math.min(1, this.above / length);
     const keep = Math.sqrt(1 - tip * tip);
     this.tx = keep * ux - tip * (-sz * uy);
@@ -88,8 +92,9 @@ export class HandGuns {
     const mesh = this.model(weapon);
     const { bx, by, bz } = this;
     const level = Math.sqrt(bx * bx + bz * bz);
-    const sx = level < LEVEL_MIN ? 1 : -bz / level;
-    const sz = level < LEVEL_MIN ? 0 : bx / level;
+    const flip = level >= LEVEL_MIN && -bz * this.sideX + bx * this.sideZ < 0 ? -1 : 1;
+    const sx = level < LEVEL_MIN ? this.sideX : (flip * -bz) / level;
+    const sz = level < LEVEL_MIN ? this.sideZ : (flip * bx) / level;
     const upX = -sz * by;
     const upY = sz * bx - sx * bz;
     const upZ = sx * by;

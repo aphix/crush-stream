@@ -825,18 +825,18 @@ export class OpenWorldDirector {
     this.players?.stagger(victim, dirX, dirZ, this.crowdTime());
   }
 
-  /** Guest: whether the host has this machine's player holding a first hook end, by the frame last heard. */
+  /** Guest: whether the host has this machine's player holding a first hook end, by the frame last heard, however old: the HUD keeps the host's last word through a stall of the link. */
   hookHeld(): boolean {
-    const frame = this.ports.isClient() ? this.seenFrame : null;
+    const frame = this.ports.isClient() ? (this.shared?.frame ?? null) : null;
     if (frame === null) return false;
     const own = this.ports.ownCarIndex();
     for (let at = 0; at < frame.count; at++) if (frame.kind[at] === BODY_KIND.player && frame.id[at] === own) return (frame.state[at]! & PLAYER_FLAG.holds) !== 0;
     return false;
   }
 
-  /** Guest: how many of the host's cables are this machine's player's, by the frame last heard. */
+  /** Guest: how many of the host's cables are this machine's player's, by the frame last heard, however old. */
   hookCount(): number {
-    const frame = this.ports.isClient() ? this.seenFrame : null;
+    const frame = this.ports.isClient() ? (this.shared?.frame ?? null) : null;
     if (frame === null) return 0;
     const own = this.ports.ownCarIndex();
     let count = 0;
