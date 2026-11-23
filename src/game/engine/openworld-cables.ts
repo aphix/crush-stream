@@ -93,6 +93,7 @@ export class RemoteCables {
 
   /** End `end` of `slot` on the person of kind `kind` and id `id`: where this machine draws her; false when it draws her nowhere. */
   private setPersonEnd(slot: number, end: number, kind: number, id: number, shared: OpenWorldShared, capacity: number, own: BodyMotion | null, ownCar: number): boolean {
+    if (!shared.knows(kind, id)) return false;
     if (kind === BODY_KIND.player && id === ownCar) {
       if (own === null) return false;
       this.set.setEnd(slot, end, WORLD, own.x, own.y, own.z);

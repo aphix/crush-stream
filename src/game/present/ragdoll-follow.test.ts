@@ -93,3 +93,25 @@ describe("given a walker knocked limp that has lain still for 2 s", () => {
     for (let k = 0; k < bodies.length; k++) expect(Math.abs(cur[PART_FLOATS * k + 2]! - zBefore[k]! - SHIFT_M), `part ${k}: drawn pose a frame later (m off the shift)`).toBeLessThan(0.001);
   });
 });
+
+/** The torso's speed along x (m/s) one world step after `calls` haul calls at `HAUL_SPEED`, on a body that lay still. */
+async function speedAfterCalls(calls: number): Promise<number> {
+  const sys = await lyingWalker();
+  for (let call = 0; call < calls; call++) sys.dragDoll(WALKER_SLOT, HAUL_SPEED, 0, 0);
+  frames(sys, FRAME);
+  const speed = motionOf(sys).vx;
+  sys.dispose();
+  return speed;
+}
+
+/** How far (m/s) a speed may differ from the one-call speed: the hauls are one and the same push. */
+const SAME_PUSH_MPS = 0.05;
+
+describe("given a limp walker that lay still, hauled at 2 m/s by one, two and four calls before the world's next step", () => {
+  it("when each has been stepped once, then the two and four calls leave the torso at the one call's speed, and that speed is the haul's", async () => {
+    const one = await speedAfterCalls(1);
+    expect(one, "control: one call gets the body going at about the haul's speed (m/s)").toBeGreaterThan(HAUL_SPEED / 2);
+    expect(Math.abs((await speedAfterCalls(2)) - one), "two calls: speed off the one call's (m/s)").toBeLessThan(SAME_PUSH_MPS);
+    expect(Math.abs((await speedAfterCalls(4)) - one), "four calls: speed off the one call's (m/s)").toBeLessThan(SAME_PUSH_MPS);
+  });
+});

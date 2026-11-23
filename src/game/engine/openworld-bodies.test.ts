@@ -135,7 +135,7 @@ describe("given civilians around an eye, and a pool with room for three bodies",
     walker(poses, 3, 11, 0);
     run(SETTLE_STEPS);
     expect(bodies.slotOf(0), "the nearest, unseen: no body").toBe(-1);
-    expect([bodies.slotOf(1) >= 0, bodies.slotOf(2) >= 0, bodies.slotOf(3) >= 0], "the next nearest have bodies").toEqual([true, true, true]);
+    for (const next of [1, 2, 3]) expect(bodies.slotOf(next), `civilian ${next}, a next nearest, has a body`).toBeGreaterThanOrEqual(FIRST_SLOT);
     box.hidden = false;
     run(7);
     expect(bodies.slotOf(0), "in view: a body within 0.25 s").toBeGreaterThanOrEqual(FIRST_SLOT);

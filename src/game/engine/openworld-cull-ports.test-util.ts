@@ -30,6 +30,7 @@ export function idleOpenWorldPorts(): OpenWorldPorts {
     eye: () => {},
     throwFigure: () => -1,
     removeFigure: () => false,
+    spawnOf: () => 0,
     hookWallHits: () => () => {},
     makeArt: () => ({ update: () => {}, dispose: () => {} }),
     signsOn: () => false,

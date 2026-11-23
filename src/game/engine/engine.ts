@@ -509,7 +509,8 @@ export class CrashEngine extends EngineGarage {
         ray.dirZ = _v.z;
       },
       throwFigure: (strike, look, life) => this.ragdolls.throwFigure(strike, this.live(), look, life),
-      removeFigure: (slot, age) => this.ragdolls.removeFigure(slot, age),
+      removeFigure: (slot, spawn) => this.ragdolls.removeDummy(slot, spawn),
+      spawnOf: (slot) => this.ragdolls.spawnOf(slot),
       bodies: this.bodyHost,
       footAnchor: (out) => this.onFoot.flow.active && this.bodyHost.motion(WALKER_SLOT, out),
       ownCarIndex: () => this.drivenCar(),

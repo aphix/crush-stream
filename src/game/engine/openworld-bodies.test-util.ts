@@ -39,8 +39,16 @@ export class FakeBodyHost {
     return -1;
   }
 
+  /** How many bodies each slot has held (`spawnOf`): a slot's identity, as the real pool's spawn count is. */
+  private readonly spawned = new Map<number, number>();
+
+  spawnOf(slot: number): number {
+    return this.spawned.get(slot) ?? 0;
+  }
+
   start(x: number, y: number, z: number, yaw: number, look: DriverLook, slot: number, vx: number, vz: number): number {
     this.started.push({ slot, x, y, z, yaw, vx, vz });
+    this.spawned.set(slot, this.spawnOf(slot) + 1);
     this.bodies.set(slot, { slot, x, z, heading: yaw, speed: 0, out: true, standing: true, steady: true, held: true, look: { ...look }, dragX: 0, dragZ: 0, haulX: 0, haulZ: 0 });
     return slot;
   }

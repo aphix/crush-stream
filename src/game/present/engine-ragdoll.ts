@@ -184,6 +184,23 @@ export class RagdollSystem extends RagdollThrower {
       _impulse.z = dz * mass;
       d.bodies[k]!.applyImpulse(_impulse, true);
     }
+    // The world steps once a frame: a second call before then must see this one's target, not the old speed, and add nothing.
+    d.vel[0] = vx;
+    d.vel[1] = vy;
+    d.vel[2] = vz;
+  }
+
+  /** How many dummies slot `slot` has held. */
+  spawnOf(slot: number): number {
+    return this.spawns[slot] ?? 0;
+  }
+
+  /** The dummy in `slot` is taken away when it is still the `spawn`th the slot held (one a later spawn replaced is not touched, whatever the clocks say); whether it was. */
+  removeDummy(slot: number, spawn: number): boolean {
+    const d = this.dolls[slot];
+    if (!d?.live || d.driven || this.spawns[slot] !== spawn) return false;
+    this.despawn(slot);
+    return true;
   }
 
   /** Every part of the dummy in `slot` moves by (dx, dy, dz) m, its drawn pose with it: it stands where it was, shifted. */

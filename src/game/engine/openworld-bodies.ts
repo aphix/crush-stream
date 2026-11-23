@@ -501,6 +501,12 @@ export class OpenWorldBodies {
     this.downFor[body] = 0;
   }
 
+  /** Person `person`'s body, followed or this machine's own, is let go whole: its dummy-world slot is freed and she has none (the host's record has her past `KEEP_RADIUS`, drawn as a figure). */
+  releasePerson(person: number): void {
+    const body = this.bodyOf[person]!;
+    if (body !== NOBODY) this.release(body);
+  }
+
   /** Whether a cable of this machine holds person `person`'s body. */
   ropedPerson(person: number): boolean {
     const body = this.bodyOf[person]!;

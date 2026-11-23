@@ -26,7 +26,7 @@ const CLOSE_M = 0.5;
 /** A host the record is written from by hand: where one more civilian the host's hook holds stands and how. */
 type HandRecord = { civilian: number; x: number; z: number; posture: number };
 /** Ports of a world that throws no dummies. */
-const NO_DUMMIES = { lookOf: () => {}, throwFigure: () => -1, removeFigure: () => false };
+const NO_DUMMIES = { lookOf: () => {}, throwFigure: () => -1, removeFigure: () => false, spawnOf: () => 0 };
 
 const strikeOn = (guard: number): FigureStrike => ({ guard, car: 0, x: 0, y: 0, z: 0, faceX: 0, faceZ: 1, vx: 0, vy: 0, vz: 8, wx: 0, wy: 0, wz: 0, loose: false });
 
@@ -50,7 +50,7 @@ class Rig {
   constructor(guestBodies: number, eyeAway: number) {
     this.eyeZ = eyeAway;
     this.guestBodies = new OpenWorldBodies(this.guestFake, [], CAPACITY, guestBodies);
-    this.shared = new OpenWorldShared(CAPACITY, { bodies: this.guestBodies, host: this.guestFake, tables: [this.poses, null, null, null], sight: { seen: () => true }, floors: null, ports: { lookOf: (_kind, _id, out) => Object.assign(out, PLAIN_LOOK), throwFigure: () => -1, removeFigure: () => false } });
+    this.shared = new OpenWorldShared(CAPACITY, { bodies: this.guestBodies, host: this.guestFake, tables: [this.poses, null, null, null], sight: { seen: () => true }, floors: null, ports: { lookOf: (_kind, _id, out) => Object.assign(out, PLAIN_LOOK), throwFigure: () => -1, removeFigure: () => false, spawnOf: () => 0 } });
   }
 
   /** The host steps and writes its frame, the guest hears it, places it and steps. */
@@ -309,26 +309,33 @@ function thrownFrame(crowdTime: number, civilianX: number | null, copX: number |
   return throughWire(frame);
 }
 
+/** The ports a guest's or a host's engine gives its shared people over a fake ragdoll world: a throw lies a body down at the strike's place in the first free slot, a removal is refused for a slot a later body took. */
+function worldPorts(world: FakeBodyHost) {
+  return {
+    lookOf: (_kind: number, _id: number, out: typeof PLAIN_LOOK) => void Object.assign(out, PLAIN_LOOK),
+    throwFigure: (strike: FigureStrike) => {
+      const slot = world.freeSlot(0);
+      if (slot < 0) return -1;
+      world.start(strike.x, strike.y, strike.z, 0, PLAIN_LOOK, slot, 0, 0);
+      world.fell(slot);
+      return slot;
+    },
+    removeFigure: (slot: number, spawn: number) => {
+      if (world.spawnOf(slot) !== spawn) return false;
+      world.stop(slot);
+      return true;
+    },
+    spawnOf: (slot: number) => world.spawnOf(slot),
+  };
+}
+
 describe("given a frame with a thrown civilian 10 m from a guest's eye, a thrown cop 60 m from it, and a guest with no ragdoll for either", () => {
   it("when the guest applies it, then a ragdoll is thrown for the civilian within 0.1 m of the host's place and the cop is drawn by his art laid flat at the host's place; when the host's ragdoll for her is dragged 2 m, then the guest's is within 0.5 m of it a second later; and when the next frame names neither, then the guest's ragdoll is removed and the cop is not drawn lying", () => {
     const world = new FakeBodyHost();
     world.setCapacity(DUMMY_SLOTS);
     const crowd = createCrowdPoses(CAPACITY);
     const cops = createCrowdPoses(HOST_COPS);
-    const ports = {
-      lookOf: (_kind: number, _id: number, out: typeof PLAIN_LOOK) => void Object.assign(out, PLAIN_LOOK),
-      throwFigure: (strike: FigureStrike) => {
-        const slot = world.freeSlot(0);
-        if (slot < 0) return -1;
-        world.start(strike.x, strike.y, strike.z, 0, PLAIN_LOOK, slot, 0, 0);
-        world.fell(slot);
-        return slot;
-      },
-      removeFigure: (slot: number) => {
-        world.stop(slot);
-        return true;
-      },
-    };
+    const ports = worldPorts(world);
     const shared = new OpenWorldShared(CAPACITY, { bodies: null, host: world, tables: [crowd, null, cops, null], sight: { seen: () => true }, floors: null, ports });
     const civilian = personOf(BODY_KIND.civilian, 4, CAPACITY);
     const cop = personOf(BODY_KIND.cop, 1, CAPACITY);
@@ -349,5 +356,72 @@ describe("given a frame with a thrown civilian 10 m from a guest's eye, a thrown
     shared.bodyRecords(thrownFrame(7, null, null), ALL_KINDS, -1, 7, 0, 0);
     expect([shared.dummy(civilian), dragged.out], "the guest's ragdoll is removed").toEqual([-1, false]);
     expect(cops.lying[1], "the cop is not drawn lying").toBe(0);
+  });
+});
+
+/** A cop's dummy lying in slot `FIRST_SLOT` of a host's world, recorded in its table of dummies. */
+const FIRST_SLOT = 4;
+
+/** A host's world with its bodies and table of dummies over one crowd, the world's ports given the spawn counter of its slots. */
+function hostWithTable() {
+  const world = new FakeBodyHost();
+  world.setCapacity(DUMMY_SLOTS);
+  const poses = createCrowdPoses(CAPACITY);
+  const bodies = new OpenWorldBodies(world, [], CAPACITY, HOST_BODIES);
+  const ports = worldPorts(world);
+  const shared = new OpenWorldShared(CAPACITY, { bodies, host: world, tables: [poses, null, null, null], sight: { seen: () => true }, floors: null, ports });
+  const cop = personOf(BODY_KIND.cop, 0, CAPACITY);
+  world.start(30, 0, 30, 0, PLAIN_LOOK, FIRST_SLOT, 0, 0);
+  world.fell(FIRST_SLOT);
+  shared.threw(cop, FIRST_SLOT);
+  return { world, poses, bodies, shared, cop };
+}
+
+describe("given a foot cop's dummy that has despawned and a civilian whose body now holds the slot it lay in", () => {
+  it("when the host writes its frame, then it has one record, of a civilian, and it is herself; and while the dummy lies, it is written as the cop", () => {
+    const { world, poses, bodies, shared, cop } = hostWithTable();
+    const lying = makeBodyFrame();
+    shared.writeDummies(lying);
+    expect(lying.kind[0], "while his dummy lies it is written, as the cop").toBe(BODY_KIND.cop);
+    world.stop(FIRST_SLOT);
+    showRow(poses, 2, 5, 5, 0, 0, ACTIVITY.none);
+    expect(bodies.stand(poses, 2, 5, 5), "control: she took the slot his dummy lay in").toBe(FIRST_SLOT);
+    const frame = makeBodyFrame();
+    bodies.writeHooked(frame);
+    shared.writeDummies(frame);
+    expect(frame.count, "records").toBe(1);
+    expect(frame.kind[0], "the record is of a civilian").toBe(BODY_KIND.civilian);
+    expect(frame.id[0], "of herself").toBe(2);
+    expect(shared.dummy(cop), "he has no dummy").toBe(-1);
+  });
+
+  it("when the cop is thrown again into another slot, then his first slot names nobody and the table writes one record for him", () => {
+    const { world, shared, cop } = hostWithTable();
+    world.start(31, 0, 31, 0, PLAIN_LOOK, FIRST_SLOT + 1, 0, 0);
+    world.fell(FIRST_SLOT + 1);
+    shared.threw(cop, FIRST_SLOT + 1);
+    const frame = makeBodyFrame();
+    shared.writeDummies(frame);
+    expect(shared.personOfDummy(FIRST_SLOT), "his first slot").toBe(-1);
+    expect(shared.personOfDummy(FIRST_SLOT + 1), "his second slot").toBe(cop);
+    expect(frame.count, "records written for him").toBe(1);
+  });
+});
+
+describe("given a guest whose ragdoll clock is 6 s behind its crowd clock, and a ragdoll it threw for a civilian the host had thrown", () => {
+  it("when the host's record ends, then the guest's ragdoll is taken away, and when a thrown record for her comes later, then exactly one ragdoll is out for her", () => {
+    const world = new FakeBodyHost();
+    world.setCapacity(DUMMY_SLOTS);
+    const ports = worldPorts(world);
+    const shared = new OpenWorldShared(CAPACITY, { bodies: null, host: world, tables: [createCrowdPoses(CAPACITY), null, createCrowdPoses(HOST_COPS), null], sight: { seen: () => true }, floors: null, ports });
+    const civilian = personOf(BODY_KIND.civilian, 4, CAPACITY);
+    shared.bodyRecords(thrownFrame(100, THROWN_NEAR_M, null), ALL_KINDS, -1, 100, 0, 0);
+    const first = shared.dummy(civilian);
+    expect(first, "control: a ragdoll is thrown for her").toBeGreaterThanOrEqual(0);
+    shared.bodyRecords(thrownFrame(106, null, null), ALL_KINDS, -1, 106, 0, 0);
+    expect(world.bodies.get(first)!.out, "the host's record has ended: her ragdoll is out no more").toBe(false);
+    expect(shared.dummy(civilian), "and is not recorded").toBe(-1);
+    shared.bodyRecords(thrownFrame(107, THROWN_NEAR_M, null), ALL_KINDS, -1, 107, 0, 0);
+    expect(Array.from(world.bodies.values()).filter((body) => body.out).length, "ragdolls out for her").toBe(1);
   });
 });

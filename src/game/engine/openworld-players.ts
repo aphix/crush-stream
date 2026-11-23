@@ -3,6 +3,7 @@ import type { CrowdWalkers } from "../ai/civilians/crowd-walkers.ts";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import { addBodyRecord, BODY_FLAG, BODY_KIND, BODY_POSTURE, type BodyFrame, type BodyMotion, type FootRecord } from "../net/body-codec.ts";
 import { BODIES_SILENT_S, HALF_SEQUENCE } from "../net/net-constants.ts";
+import type { DriverLook } from "../present/driver-look.ts";
 import type { SightPlayer } from "../present/openworld-sight.ts";
 import { blankStrike, fell, runsDown } from "../scenes/figure-strike.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
@@ -24,6 +25,21 @@ const _place: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, 
 const _target: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
 const _strike = blankStrike();
 
+/** A look as one number: each field mixed in, an absent one as -1, so two looks that differ in any field hash apart (to the degree a 32-bit hash can). */
+function lookHash(look: DriverLook): number {
+  let h = look.woman ? 1 : 0;
+  h = (Math.imul(h, 31) + look.shirt) | 0;
+  h = (Math.imul(h, 31) + look.pants) | 0;
+  h = (Math.imul(h, 31) + look.hair) | 0;
+  h = (Math.imul(h, 31) + (look.hat ?? -1)) | 0;
+  h = (Math.imul(h, 31) + (look.mustache ? 1 : 0)) | 0;
+  h = (Math.imul(h, 31) + (look.portly === true ? 1 : 0)) | 0;
+  h = (Math.imul(h, 31) + (look.outfit ?? -1)) | 0;
+  h = (Math.imul(h, 31) + (look.shades === true ? 1 : 0)) | 0;
+  h = (Math.imul(h, 31) + (look.face ?? -1)) | 0;
+  return (Math.imul(h, 31) + (look.tie ?? -1)) | 0;
+}
+
 /** What a guest's own walker is told (`obey`): the engine's ports to knock it and to drag it. */
 type OwnWalkerPorts = { knockWalker(vx: number, vy: number, vz: number): boolean; dragWalker(t: BodyMotion): void };
 
@@ -43,6 +59,8 @@ export class OpenWorldPlayers {
   private readonly launch = new Float32Array(3 * MAX_CARS);
   private readonly applied = new Uint8Array(MAX_CARS);
   private readonly epoch = new Uint16Array(MAX_CARS);
+  /** Per row, the hash of the look its look word was last made from. */
+  private readonly lookHash = new Int32Array(MAX_CARS);
   /** The calls left in which this machine's player, back in a car, tells the host so. */
   private leftCalls = 0;
   /** One sight-field player a car: where its walker is drawn. */
@@ -84,6 +102,18 @@ export class OpenWorldPlayers {
     this.present[car] = 1;
     this.epoch[car] = this.epoch[car]! + 1;
     this.poses.look[car] = (1 + car + EPOCH_STEP * this.epoch[car]!) >>> 0;
+  }
+
+  /** Every machine, once a frame, after the rows are written: a shown player row whose car's look (`source.playerLook`) is not the one it was last dressed from gets a new look word, so the art dresses it again. A look that arrives after his first record, or a car slot a leaver's seat passed to another, changes the dress. */
+  refreshLooks(source: { playerLook(car: number): DriverLook }): void {
+    for (let car = 0; car < MAX_CARS; car++) {
+      if (this.poses.shown[car] === 0) continue;
+      const hash = lookHash(source.playerLook(car));
+      if (hash === this.lookHash[car]) continue;
+      this.lookHash[car] = hash;
+      this.epoch[car] = this.epoch[car]! + 1;
+      this.poses.look[car] = (1 + car + EPOCH_STEP * this.epoch[car]!) >>> 0;
+    }
   }
 
   /** Player `car`'s walker moved by its velocity as far as the host's clock is from his (at most `BODY_EXTRAPOLATE_S` either way) into `_place`. */

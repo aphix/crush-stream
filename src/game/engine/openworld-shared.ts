@@ -23,8 +23,10 @@ type SharedPorts = {
   lookOf(kind: number, id: number, out: DriverLook): void;
   /** The pool slot a dummy was thrown into for `strike`, dressed `look`, lying `life` sim s; -1 for none. */
   throwFigure(strike: FigureStrike, look: DriverLook, life: number): number;
-  /** The dummy in pool slot `slot`, thrown `age` sim s ago, is taken away. */
-  removeFigure(slot: number, age: number): boolean;
+  /** The dummy in pool slot `slot`, whose `spawnOf` was `spawn` when it was thrown, is taken away; a slot a later dummy took is left alone. */
+  removeFigure(slot: number, spawn: number): boolean;
+  /** How many dummies pool slot `slot` has held: the identity of the one in it, with the slot. */
+  spawnOf(slot: number): number;
 };
 
 /** What the shared people read and write: this machine's bodies and their world, each kind's pose table (null: that kind is not shared yet), what its eye sees, and the interiors whose floors a body stands on. */
@@ -66,9 +68,9 @@ export class OpenWorldShared {
   private readonly drawnAs: Uint8Array;
   private readonly drawnX: Float32Array;
   private readonly drawnZ: Float32Array;
-  /** Per person, the pool slot of her dummy (-1: none) and the crowd second it was thrown; per pool slot, whose dummy it holds (-1: none). */
+  /** Per person, the pool slot of her dummy (-1: none) and the slot's spawn count when it was thrown (`spawnOf`); per pool slot, whose dummy it holds (-1: none). */
   private readonly dummyOf: Int16Array;
-  private readonly dummyAt: Float64Array;
+  private readonly dummySpawn: Uint32Array;
   private readonly dummyPerson = new Int32Array(SLOTS).fill(-1);
   /** Per kind and row, the stride phase the pose records' rows walk with. */
   private readonly strides: Float32Array[];
@@ -88,7 +90,7 @@ export class OpenWorldShared {
     this.drawnX = new Float32Array(capacity + PEOPLE_EXTRA);
     this.drawnZ = new Float32Array(capacity + PEOPLE_EXTRA);
     this.dummyOf = new Int16Array(capacity + PEOPLE_EXTRA).fill(-1);
-    this.dummyAt = new Float64Array(capacity + PEOPLE_EXTRA);
+    this.dummySpawn = new Uint32Array(capacity + PEOPLE_EXTRA);
     this.idCounts = Uint16Array.of(capacity, MAX_CARS, FOOT_COP_COUNT, MEDICS_COUNT);
     this.strides = world.tables.map((table) => new Float32Array(table?.count ?? 0));
   }
@@ -121,7 +123,7 @@ export class OpenWorldShared {
     this.unfollowRecorded(kinds, frame);
     const placed = this.sortByDistance(frame, kinds, ownCar, eyeX, eyeZ);
     for (let k = 0; k < placed; k++) this.place(frame, _order[k]!, crowdSeconds, eyeX, eyeZ);
-    this.reapDummies(frame, kinds, crowdSeconds);
+    this.reapDummies(frame, kinds);
     for (let at = 0; at < frame.count; at++) if (this.placeable(frame, at, kinds, ownCar)) this.recordOf[personOf(frame.kind[at]!, frame.id[at]!, this.capacity)] = -1;
   }
 
@@ -225,7 +227,7 @@ export class OpenWorldShared {
     const thrown = (frame.state[at]! & BODY_FLAG.thrown) !== 0;
     recordTarget(frame, at, crowdSeconds - frame.crowdTime, _target);
     const away = hypot2(_target.x - eyeX, _target.z - eyeZ);
-    const dummy = this.dummyOf[person]!;
+    const dummy = this.dummy(person);
     if (thrown && dummy >= 0 && this.world.host !== null) {
       followAnchor(this.world.host, dummy, _target, 0);
       this.drewDummy(person, kind, id, dummy);
@@ -237,9 +239,9 @@ export class OpenWorldShared {
         this.drewBody(person, kind, id);
         return;
       }
-      bodies.unfollow(person);
+      bodies.releasePerson(person);
     } else if (thrown) {
-      if (this.throwDummy(kind, id, person, away, crowdSeconds)) return;
+      if (this.throwDummy(kind, id, person, away)) return;
     } else if (bodies !== null && away <= NEAR_RADIUS && this.world.sight.seen(_target.x, _target.z, 1)) {
       if (kind === BODY_KIND.civilian && this.floorHeld[person] === 0) {
         this.world.floors?.holdFloorAt(_target.x, _target.z);
@@ -275,54 +277,71 @@ export class OpenWorldShared {
   }
 
   /** Rule 4: a thrown record within `KEEP_RADIUS` of the eye and seen: a dummy is thrown lying at `_target` and recorded for her; false when it could not be (too far, unseen, no slot). */
-  private throwDummy(kind: number, id: number, person: number, away: number, crowdSeconds: number): boolean {
+  private throwDummy(kind: number, id: number, person: number, away: number): boolean {
     if (this.world.host === null || away > KEEP_RADIUS || !this.world.sight.seen(_target.x, _target.z, 1)) return false;
     this.world.ports.lookOf(kind, id, _look);
     const strike = stood(-1, kind === BODY_KIND.civilian ? id : -1, _target.x, _target.y - TORSO_ABOVE_FEET, _target.z, detSin(_target.heading), detCos(_target.heading), _strike);
     const slot = this.world.ports.throwFigure(strike, _look, DOWNED_LIFE_SECONDS);
     if (slot < 0) return false;
-    this.threw(person, slot, crowdSeconds);
+    this.threw(person, slot);
     this.drewDummy(person, kind, id, slot);
     return true;
   }
 
   /** Every dummy this machine holds for a person of a kind in `kinds` whose record in `frame` is not a thrown one is removed (its person got up, was taken away, or the host's ragdoll is gone). */
-  private reapDummies(frame: BodyFrame, kinds: number, crowdSeconds: number): void {
+  private reapDummies(frame: BodyFrame, kinds: number): void {
     for (let slot = 0; slot < SLOTS; slot++) {
       const person = this.dummyPerson[slot]!;
       if (person < 0 || ((kinds >> kindOf(person, this.capacity)) & 1) === 0) continue;
       const record = this.recordOf[person]!;
-      if (record < 0 || (frame.state[record]! & BODY_FLAG.thrown) === 0) this.took(person, crowdSeconds);
+      if (record < 0 || (frame.state[record]! & BODY_FLAG.thrown) === 0) this.took(person);
     }
   }
 
-  /** Host: person `person`'s dummy was thrown into pool slot `slot` at crowd second `crowdSeconds` (-1: none was, nothing is recorded). */
-  threw(person: number, slot: number, crowdSeconds: number): void {
-    if (slot < 0) return;
-    const old = this.dummyPerson[slot]!;
-    if (old >= 0 && old !== person) this.dummyOf[old] = -1;
-    this.dummyOf[person] = slot;
-    this.dummyAt[person] = crowdSeconds;
-    this.dummyPerson[slot] = person;
+  /** Whether person `person`'s entry names a slot a later dummy has taken: the slot's spawn count is not the one recorded when hers was thrown. */
+  private stale(person: number): boolean {
+    return this.world.ports.spawnOf(this.dummyOf[person]!) !== this.dummySpawn[person];
   }
 
-  /** The pool slot of person `person`'s dummy, -1 for none. */
-  dummy(person: number): number {
-    return this.dummyOf[person]!;
-  }
-
-  /** Person `person`'s dummy is taken away at crowd second `crowdSeconds` (nothing for a person with none). */
-  took(person: number, crowdSeconds: number): void {
+  /** Person `person` has no entry: her slot's is cleared with hers. */
+  private forgetDummy(person: number): void {
     const slot = this.dummyOf[person]!;
-    if (slot < 0) return;
-    this.world.ports.removeFigure(slot, crowdSeconds - this.dummyAt[person]!);
-    this.dummyPerson[slot] = -1;
+    if (slot >= 0) this.dummyPerson[slot] = -1;
     this.dummyOf[person] = -1;
   }
 
-  /** The person whose dummy is in pool slot `slot`, -1 for none. */
+  /** Person `person`'s dummy was thrown into pool slot `slot` (-1: none was, nothing is recorded). Her earlier slot, and the entry of whoever the slot was last recorded for, are cleared: one person never owns two, one slot never names two. */
+  threw(person: number, slot: number): void {
+    if (slot < 0) return;
+    this.forgetDummy(person);
+    const old = this.dummyPerson[slot]!;
+    if (old >= 0) this.dummyOf[old] = -1;
+    this.dummyOf[person] = slot;
+    this.dummySpawn[person] = this.world.ports.spawnOf(slot);
+    this.dummyPerson[slot] = person;
+  }
+
+  /** The pool slot of person `person`'s dummy, -1 for none (an entry whose slot a later dummy has taken is none, and is cleared). */
+  dummy(person: number): number {
+    const slot = this.dummyOf[person]!;
+    if (slot < 0 || !this.stale(person)) return slot;
+    this.forgetDummy(person);
+    return -1;
+  }
+
+  /** Person `person`'s dummy is taken away, by its slot and spawn: a slot a later dummy has taken is not touched (nothing for a person with none). */
+  took(person: number): void {
+    const slot = this.dummy(person);
+    if (slot < 0) return;
+    const spawn = this.dummySpawn[person]!;
+    this.forgetDummy(person);
+    this.world.ports.removeFigure(slot, spawn);
+  }
+
+  /** The person whose dummy is in pool slot `slot`, -1 for none (a stale entry is none, and is cleared). */
   personOfDummy(slot: number): number {
-    return this.dummyPerson[slot] ?? -1;
+    const person = this.dummyPerson[slot] ?? -1;
+    return person >= 0 && this.dummy(person) === slot ? person : -1;
   }
 
   /** Host: every person with a dummy that is still out, written into `out` as a record of her kind and id, lying and thrown. */
@@ -330,7 +349,7 @@ export class OpenWorldShared {
     const host = this.world.host;
     if (host === null) return;
     for (let slot = 0; slot < SLOTS; slot++) {
-      const person = this.dummyPerson[slot]!;
+      const person = this.personOfDummy(slot);
       if (person < 0 || !host.motion(slot, _motion)) continue;
       const at = addBodyRecord(out, kindOf(person, this.capacity), idOf(person, this.capacity), BODY_POSTURE.down | BODY_FLAG.thrown);
       if (at < 0) return;
@@ -342,6 +361,11 @@ export class OpenWorldShared {
       out.vel[3 * at + 2] = _motion.vz;
       out.heading[at] = _motion.heading;
     }
+  }
+
+  /** Whether a person of kind `kind` and id `id` exists in this build: a cable that names one past that is a peer's mistake. */
+  knows(kind: number, id: number): boolean {
+    return kind <= BODY_KIND.medic && id < this.idCounts[kind]!;
   }
 
   /** `_target` as a row of her kind's pose table: upright at the target while she stands, else laid flat on her back, her head along the heading, so her torso is at the target. */

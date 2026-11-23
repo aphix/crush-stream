@@ -50,7 +50,7 @@ function sampleFrame(): BodyFrame {
   frame.cables = 1;
   frame.endKind[0] = CABLE_END.car;
   frame.endId[0] = CAR_ENDED_CABLE;
-  frame.endPoint.set([0.5, 0.3, -1.1], 0);
+  frame.endPoint.set([0.5, 0.3, -1.1, -2.25, 4.5, 0.75], 0);
   frame.endKind[1] = CABLE_END.person + BODY_KIND.civilian;
   frame.endId[1] = CIVILIAN;
   frame.cableLength[0] = 12.34;
@@ -101,8 +101,7 @@ describe("given a frame of a standing pinned civilian, a struck player lying, a 
     expect(copy.cables, "cables").toBe(1);
     expect(copy.endKind[0], "end A kind").toBe(CABLE_END.car);
     expect(copy.endId[0], "end A id").toBe(CAR_ENDED_CABLE);
-    expect(copy.endPoint[1], "end A point y (m)").toBeCloseTo(0.3, 2);
-    expect(copy.endPoint[2], "end A point z (m)").toBeCloseTo(-1.1, 2);
+    for (let axis = 0; axis < 6; axis++) expect(Math.abs(copy.endPoint[axis]! - original.endPoint[axis]!), `cable end point, axis ${axis} (m)`).toBeLessThanOrEqual(CENTIMETRE);
     expect(copy.endKind[1], "end B kind: a civilian").toBe(CABLE_END.person + BODY_KIND.civilian);
     expect(copy.endId[1], "end B id").toBe(CIVILIAN);
     expect(Math.abs(copy.cableLength[0]! - 12.34), "length (m)").toBeLessThanOrEqual(CENTIMETRE);

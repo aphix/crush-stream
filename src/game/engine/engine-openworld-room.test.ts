@@ -34,6 +34,7 @@ import { RAPIER, THING, thingCode, TetherSet, WORLD } from "../contact/tether.ts
 import { RemoteCables } from "./openworld-cables.ts";
 import type { CrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { BodyMotion } from "../net/body-codec.ts";
+import type { DriverLook } from "../present/driver-look.ts";
 import { DRAWN } from "./openworld-shared.ts";
 
 /** How close a cable's far end is drawn to the host's ground point (m): the wire's centimetre. */
@@ -93,7 +94,7 @@ type Drawn = { poses: CrowdPoses | null; held: Uint8Array | null; players: Crowd
 /** A walker on a straight path: where he stood at crowd second `t0`, how fast he moves (m/s) and how he is (`BODY_POSTURE`). */
 type FootPath = { x0: number; z0: number; vx: number; vz: number; t0: number; posture: number };
 type Launch = { vx: number; vy: number; vz: number };
-type Side = { director: OpenWorldDirector; thrown: FigureStrike[]; car: ReturnType<typeof pooledCar>; fake: FakeBodyHost | null; eye: { x: number; z: number }; drawn: Drawn; walk: { path: FootPath | null }; knocks: Launch[]; drags: { x: number; z: number }[]; tethers: TetherSet; cables: RemoteCables };
+type Side = { director: OpenWorldDirector; thrown: FigureStrike[]; car: ReturnType<typeof pooledCar>; fake: FakeBodyHost | null; eye: { x: number; z: number }; drawn: Drawn; walk: { path: FootPath | null }; knocks: Launch[]; drags: { x: number; z: number }[]; tethers: TetherSet; cables: RemoteCables; looks: DriverLook[] };
 type RoomOptions = { bodies?: boolean; guests?: 1 | 2 };
 
 /** The host (a room of the open world) and one or two guests, their worlds on the open world's course and their crowds the directors of the engine, linked through netplay. With `bodies` each side has a dummies' world of its own (`FakeBodyHost`), an eye a test moves and an art that keeps the last poses and `held` it was handed. */
@@ -113,6 +114,7 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
     const walk: { path: FootPath | null } = { path: null };
     const knocks: Launch[] = [];
     const drags: { x: number; z: number }[] = [];
+    const looks: DriverLook[] = [];
     const motion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
     const tethers = new TetherSet();
     const director = new OpenWorldDirector({
@@ -133,6 +135,7 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
         out.velocityZ = motion.vz;
         return true;
       },
+      playerLook: (car) => looks[car] ?? DUMMY_LOOK,
       knockWalker: (vx, vy, vz) => {
         knocks.push({ vx, vy, vz });
         return true;
@@ -166,14 +169,16 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
               fake.fell(dummy);
               return dummy;
             },
-            removeFigure: (dummy) => {
+            removeFigure: (dummy, spawn) => {
+              if (fake.spawnOf(dummy) !== spawn) return false;
               fake.stop(dummy);
               return true;
             },
+            spawnOf: (dummy) => fake.spawnOf(dummy),
           }),
     });
     director.startOpenWorld(map);
-    return { director, thrown, car, fake, eye, drawn, walk, knocks, drags, tethers, cables: new RemoteCables() };
+    return { director, thrown, car, fake, eye, drawn, walk, knocks, drags, tethers, cables: new RemoteCables(), looks };
   };
   const host = side(false, HOST_CAR_SLOT);
   const guest = side(true, 1);
@@ -415,6 +420,18 @@ describe("given a host and two guests in an open-world room, the first guest on 
     expect(r.guest.knocks.length, "a car drawn on his own machine knocks nothing more").toBe(1);
   });
 
+  it("when a look for him arrives after his first body record, then the second guest's player row gets a new look word; and while no look changes, the word stays", () => {
+    const r = footRoom();
+    startWalking(r, 0);
+    r.step(30);
+    const word = playersOf(r.second!).look[GUEST_CAR]!;
+    r.step(30);
+    expect(playersOf(r.second!).look[GUEST_CAR], "no look has changed: the same word").toBe(word);
+    r.second!.looks[GUEST_CAR] = { woman: true, shirt: 3, pants: 2, hair: 1, hat: null, mustache: false };
+    r.step(2);
+    expect(playersOf(r.second!).look[GUEST_CAR], "his look arrived: a new word").not.toBe(word);
+  });
+
   it("when the host's hook takes the host's body for him and hauls it 3 m, then his own machine is told to drag his walker to within 0.5 m of where the host's body is", () => {
     const r = room({ bodies: true, guests: 2 });
     open.push(r.hostNet, r.guestNet, r.secondNet!);
@@ -543,7 +560,7 @@ describe("given a guest 15 m from a civilian whom the host's car runs down", () 
     const hostBody = r.host.fake!.bodies.get(hostSlot)!;
     const guestBody = r.guest.fake!.bodies.get(guestSlot)!;
     expect(hypot2(guestBody.x - hostBody.x, guestBody.z - hostBody.z), "metres between the two ragdolls").toBeLessThan(BODY_GAP_M);
-    hostShared.took(person, r.host.director.crowdTime());
+    hostShared.took(person);
     r.step(15);
     expect([guestShared.dummy(person), guestBody.out], "the guest's ragdoll is gone").toEqual([-1, false]);
   });

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { makeBodyFrame } from "../net/body-codec.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { describe, expect, it, vi } from "vitest";
 import { buildFixtureMap } from "../ai/civilians/civilian-graph.test-util.ts";
@@ -73,8 +74,14 @@ class Harness {
   readonly strikes: { dirX: number; dirZ: number }[] = [];
   readonly staggers: { dirX: number; dirZ: number }[] = [];
   readonly looks: DriverLook[] = [];
-  /** The figures the ambulance's loading took away (`removeFigure`): the slot asked for and the age given. */
-  readonly removed: { slot: number; age: number }[] = [];
+  /** The figures the ambulance's loading took away (`removeFigure`): the slot asked for and the spawn given. */
+  readonly removed: { slot: number; spawn: number }[] = [];
+  /** How many figures each slot has held: one per throw, slots are never reused here. */
+  private readonly spawned = new Map<number, number>();
+
+  spawnOf(slot: number): number {
+    return this.spawned.get(slot) ?? 0;
+  }
   readonly updates: { poses: CrowdPoses; eyeX: number; sight: CrowdSight; wallDt: number; held: Uint8Array | null }[] = [];
   /** The game hours the stage's day was set to, null for it being left. */
   readonly dayHours: (number | null)[] = [];
@@ -105,10 +112,12 @@ class Harness {
     throwFigure: (strike, look) => {
       this.thrown.push(strike);
       this.looks.push(look);
+      this.spawned.set(this.thrown.length - 1, 1);
       return this.thrown.length - 1;
     },
-    removeFigure: (slot, age) => {
-      this.removed.push({ slot, age });
+    spawnOf: (slot) => this.spawnOf(slot),
+    removeFigure: (slot, spawn) => {
+      this.removed.push({ slot, spawn });
       return true;
     },
     ...(bodies === null ? {} : { bodies }),
@@ -549,7 +558,7 @@ describe("given the hook aimed at the drawn people of the open world", () => {
     for (let frame = 0; frame < Math.round(10 / FRAME); frame++) harness.frame();
     expect(harness.removed.length, "dummies taken away").toBe(1);
     expect(harness.removed[0]!.slot, "the dummy thrown for him").toBe(slot);
-    expect(harness.removed[0]!.age, "thrown this long ago (s): his time down").toBeCloseTo(COP_DOWN_SECONDS, 0);
+    expect(harness.removed[0]!.spawn, "the spawn the throw gave the slot").toBe(harness.spawnOf(slot));
   });
 
   it("when a medic the hook took is back in his ambulance (it has left), then the dummy thrown for him goes", () => {
@@ -678,7 +687,7 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
     harness.director["removeVictim"](resident);
     expect(harness.removed.length, "one figure taken away").toBe(1);
     expect(harness.removed[0]!.slot, "the slot the throw gave").toBe(harness.thrown.findIndex((strike) => strike.guard === resident));
-    expect(harness.removed[0]!.age, "thrown this long ago (s)").toBeCloseTo(crowd.crowdSeconds - thrownAt, 1);
+    expect(harness.removed[0]!.spawn, "the spawn the throw gave the slot").toBe(harness.spawnOf(harness.removed[0]!.slot));
     harness.director["removeVictim"](resident);
     expect(harness.removed.length, "taken away once").toBe(1);
   });
@@ -912,6 +921,23 @@ describe("given a client hearing the host's ambulance through its event log", ()
     heardStage(world, CALLED_CAR, AMBULANCE.idle);
     expect(Array.from(poses.shown), "medics drawn after it left").toEqual([0, 0]);
     expect(world.harness.director.ambulanceCar(), "car after it left").toBe(-1);
+  });
+
+  it("when the client hears the call while the host's frames are fresh and the frames then stop for 2 s mid-loading, then its medics kneel where the call was heard; with the frames still fresh they are not drawn by the client", () => {
+    const world = knocked();
+    const lay = world.harness.thrown.find((strike) => strike.guard === world.resident)!;
+    world.harness.director.hearBodies(makeBodyFrame());
+    heardStage(world, CALLED_CAR, AMBULANCE.coming);
+    heardStage(world, CALLED_CAR, AMBULANCE.loading);
+    const poses = world.harness.director["medics"]!.poses;
+    expect(poses.shown[0], "control: while the frames are fresh the host's pose records draw the medics, and it has none").toBe(0);
+    for (let frame = 0; frame < 2 / FRAME; frame++) {
+      world.harness.now += FRAME;
+      world.harness.frame();
+    }
+    expect(poses.shown[0], "a medic kneels").toBe(1);
+    expect((poses.x[0]! + poses.x[1]!) / 2, "x they kneel round").toBeCloseTo(lay.x, 4);
+    expect((poses.z[0]! + poses.z[1]!) / 2, "z they kneel round").toBeCloseTo(lay.z, 4);
   });
 
   it("when the Auto camera is up while the host's ambulance is loading, then the client follows the ambulance's car", () => {
