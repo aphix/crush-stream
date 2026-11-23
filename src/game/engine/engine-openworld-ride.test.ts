@@ -20,6 +20,8 @@ const DROVE_OFF_M = 3;
 const BESIDE_DOOR_M = 1.5;
 /** How far (m) out from his own car's door a parked car is set. */
 const SIDE_M = 5;
+/** How far (m) out from his driver's door a neighbour stands in a room's line of cars: inside the door's 2.6 m clearance, its body clear of his. */
+const NEIGHBOUR_OUT_M = 1.5;
 /** The player's own actor, and another player's. */
 const HOST = 0;
 const OTHER = 1;
@@ -140,6 +142,20 @@ describe("given the real engine in the open world, its player on foot with an em
     const door = doorSpot(car, new THREE.Vector3(), PASSENGER_DOOR);
     expect(hypot2(rig.torso().x - door.x, rig.torso().z - door.z), "beside his door (m)").toBeLessThan(BESIDE_DOOR_M);
     expect(rig.away(), "the car is another's: not his to hold on its brakes").toBe(-1);
+  });
+
+  it("when a car stands parked against his driver's door and he presses Enter at the wheel, then he is not refused: the passenger door (not the driver's) swings and he stands on foot beside the passenger door", () => {
+    const own = rig.cars()[0]!;
+    const at = rig.beside(own, NEIGHBOUR_OUT_M, 0);
+    rig.place(parkedCar(), at.x, at.z);
+    rig.run(FRAME);
+    rig.press("Enter");
+    const [driver, passenger] = widest(own, 60);
+    expect(rig.phase(), `he is out (he was told: ${rig.engine["onFoot"].flow.refusal})`).toBe("onFoot");
+    expect(passenger, "the passenger door's widest (rad)").toBeGreaterThan(WIDE_RAD);
+    expect(driver, "the driver's door's widest (rad)").toBeLessThan(SHUT_RAD);
+    const door = doorSpot(own, new THREE.Vector3(), PASSENGER_DOOR);
+    expect(hypot2(rig.torso().x - door.x, rig.torso().z - door.z), "metres from the passenger door's spot to where he stands").toBeLessThan(BESIDE_DOOR_M);
   });
 
   it("when the driver of the car he rides in gets out and he presses the throttle, then he slides into the driver's seat and his keys drive it", () => {
