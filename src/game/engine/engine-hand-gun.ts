@@ -39,6 +39,9 @@ export class HandGuns {
   private tz = 0;
   private sideX = 1;
   private sideZ = 0;
+  /** The side of the last shot's lay: the gun keeps it while that lay is held and eased, whatever side the aim point has. */
+  private laySideX = 1;
+  private laySideZ = 0;
   /** The frame's seconds, set before `pose` (a double handed across a call is boxed; a field is written in place). */
   dt = 0;
   /** The tip's row of the flash set (x, y, z), written in place by every pose and lay. */
@@ -122,7 +125,12 @@ export class HandGuns {
     const dt = this.dt;
     this.model(weapon);
     const along = (hand.x - aim.eyeX) * aim.dirX + (hand.y - aim.eyeY) * aim.dirY + (hand.z - aim.eyeZ) * aim.dirZ + GUN_AIM_M;
+    const laid = this.holdLeft > 0 || this.easeLeft > 0;
     this.toward(hand, aim.eyeX + aim.dirX * along, aim.eyeY + aim.dirY * along, aim.eyeZ + aim.dirZ * along);
+    if (laid) {
+      this.sideX = this.laySideX;
+      this.sideZ = this.laySideZ;
+    }
     if (this.holdLeft > 0) {
       this.holdLeft -= dt;
       this.bx = this.lx;
@@ -156,6 +164,8 @@ export class HandGuns {
     this.lx = this.bx;
     this.ly = this.by;
     this.lz = this.bz;
+    this.laySideX = this.sideX;
+    this.laySideZ = this.sideZ;
     this.holdLeft = FLASH_S;
     this.easeLeft = GUN_EASE_S;
     this.place(weapon, hand);

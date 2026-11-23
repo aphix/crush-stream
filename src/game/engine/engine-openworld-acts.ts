@@ -16,8 +16,8 @@ const ACT_EYE_REACH = 4;
 /** The hook is aimed along the camera's sight line: its eye may be the whole boom from him (the orbit's 32 m and a sprint's stretch), and its fires come no faster than this (s). */
 const HOOK_EYE_REACH = 40;
 const HOOK_FIRE_COOLDOWN = 0.2;
-/** A camera is behind him or at his head: an eye farther ahead of his torso along its sight line than this (m) is no camera of his (his head's 0.3 m plus a sprint's lag at the oldest view of him, 7 m/s x 0.32 s = 2.24 m). */
-const HOOK_EYE_AHEAD = 2.5;
+/** A camera is behind him or at his head: an eye farther ahead of his torso along its sight line than this (m) is no camera of his (his head's 0.3 m plus a sprint's lag at the oldest view of him, 7 m/s x 0.32 s = 2.24 m, rounded up). An eye ahead of him at all must have no wall between it and his torso: a camera behind him is not asked, for it may stand over a roof, where the footprint test would call a wall. */
+const HOOK_EYE_AHEAD = 2.6;
 /** The line of a shot must pass within this (m) of the actor's torso: the gun's tip held out in front of his chest (0.8 m) plus the most the host's view of a sprinting guest can lag across a shot to his side (7 m/s x 0.25 s = 1.75 m, the age the shared bodies extrapolate to: the interpolation delay 0.1 s, a 15 Hz foot message's 0.067 s and 0.05 to 0.15 s of latency make 0.22 to 0.32 s) plus 0.3 m of margin. Where the shot may start is bounded apart, by `SHOT_ORIGIN_REACH` and the wall test, so this line test only has to cover those two. */
 const SHOT_RAY_REACH = 2.9;
 /** The point of a shot's line the rays start at (the eye, or the line's point nearest his torso when the eye is behind him) must be within this (m) of his torso: the farthest tip (the shotgun's, 0.7 m past a hand held 0.7 m out: 1.4 m) plus a sprint's lag at the oldest view of him (7 m/s x 0.32 s = 2.24 m) plus 0.3 m of margin, so no eye far along his line fires from there. */
@@ -218,7 +218,8 @@ export class OpenWorldActs {
     _aim.dirY = act.dirY / length;
     _aim.dirZ = act.dirZ / length;
     const ahead = (act.eyeX - _place.x) * _aim.dirX + (act.eyeY - _place.y) * _aim.dirY + (act.eyeZ - _place.z) * _aim.dirZ;
-    if (ahead <= HOOK_EYE_AHEAD && this.nearestToTorso(_aim) <= SHOT_RAY_REACH) this.ports.hookFire(actor, _aim, act.arg === 1);
+    if (ahead > HOOK_EYE_AHEAD || (ahead > 0 && this.resolver.wallBetween(_place.x, _place.y, _place.z, act.eyeX, act.eyeY, act.eyeZ))) return SEATS_NOTICE.none;
+    if (this.nearestToTorso(_aim) <= SHOT_RAY_REACH) this.ports.hookFire(actor, _aim, act.arg === 1);
     return SEATS_NOTICE.none;
   }
 

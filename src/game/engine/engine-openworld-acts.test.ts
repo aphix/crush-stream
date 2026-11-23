@@ -127,6 +127,19 @@ describe("given a host that hears a guest's hook acts while the guest stands on 
     });
   }
 
+  const wallCases = [
+    { it: "when the eye is 2 m ahead of him and a wall stands between it and his torso (he is pressed to a facade), then no hook is fired", eyeZ: 22, wallZ: 21, fires: 0 },
+    { it: "when the eye is 12 m behind him and a wall's footprint lies between (a camera over a roof), then the host still fires his hook", eyeZ: 8, wallZ: 15, fires: 1 },
+  ] as const;
+  for (const testCase of wallCases) {
+    it(testCase.it, () => {
+      const r = rig();
+      r.wallsAtZ.push(testCase.wallZ);
+      r.acts.hear(GUEST, hookAct(ACT.hookFire, 10, testCase.eyeZ, 1));
+      expect(r.hooks.fires.length, "the hook's fires on the host").toBe(testCase.fires);
+    });
+  }
+
   it("when he cuts, reels and stops reeling, then the host cuts his cables and turns his winch on and off", () => {
     const r = rig();
     for (const kind of [ACT.hookCut, ACT.hookReelOn, ACT.hookReelOff]) r.acts.hear(GUEST, hookAct(kind, 10, 20));
