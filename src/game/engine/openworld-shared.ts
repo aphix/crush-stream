@@ -298,9 +298,10 @@ export class OpenWorldShared {
     }
   }
 
-  /** Whether person `person`'s entry names a slot a later dummy has taken: the slot's spawn count is not the one recorded when hers was thrown. */
+  /** Whether person `person`'s entry names a slot that is no longer hers: a later dummy has taken it (the slot's spawn count is not the one recorded when hers was thrown), or nothing lives in it (hers despawned, or fell off the world). */
   private stale(person: number): boolean {
-    return this.world.ports.spawnOf(this.dummyOf[person]!) !== this.dummySpawn[person];
+    const slot = this.dummyOf[person]!;
+    return this.world.ports.spawnOf(slot) !== this.dummySpawn[person] || (this.world.host !== null && !this.world.host.motion(slot, _motion));
   }
 
   /** Person `person` has no entry: her slot's is cleared with hers. */

@@ -425,3 +425,22 @@ describe("given a guest whose ragdoll clock is 6 s behind its crowd clock, and a
     expect(Array.from(world.bodies.values()).filter((body) => body.out).length, "ragdolls out for her").toBe(1);
   });
 });
+
+describe("given a guest whose ragdoll for a civilian fell off the world while the host's record for her is still a thrown one", () => {
+  it("when the next frame is applied, then she is drawn by a new ragdoll at the host's place, and the one that fell is not followed", () => {
+    const world = new FakeBodyHost();
+    world.setCapacity(DUMMY_SLOTS);
+    const crowd = createCrowdPoses(CAPACITY);
+    const shared = new OpenWorldShared(CAPACITY, { bodies: null, host: world, tables: [crowd, null, createCrowdPoses(HOST_COPS), null], sight: { seen: () => true }, floors: null, ports: worldPorts(world) });
+    const civilian = personOf(BODY_KIND.civilian, 4, CAPACITY);
+    shared.bodyRecords(thrownFrame(10, THROWN_NEAR_M, null), ALL_KINDS, -1, 10, 0, 0);
+    const lost = shared.dummy(civilian);
+    expect(lost, "control: a ragdoll is thrown for her").toBeGreaterThanOrEqual(0);
+    world.stop(lost);
+    shared.bodyRecords(thrownFrame(10 + STEP, THROWN_NEAR_M, null), ALL_KINDS, -1, 10 + STEP, 0, 0);
+    const fresh = shared.dummy(civilian);
+    expect(fresh, "a ragdoll is out for her again").toBeGreaterThanOrEqual(0);
+    expect(world.bodies.get(fresh)!.out, "and it lies").toBe(true);
+    expect(world.started.length, "two were thrown in all").toBe(2);
+  });
+});

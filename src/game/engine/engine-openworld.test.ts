@@ -112,12 +112,16 @@ class Harness {
     throwFigure: (strike, look) => {
       this.thrown.push(strike);
       this.looks.push(look);
-      this.spawned.set(this.thrown.length - 1, 1);
-      return this.thrown.length - 1;
+      const slot = this.thrown.length - 1;
+      this.spawned.set(slot, 1);
+      // With a dummies' world the figure lies in it, as the real pool's does: the table of dummies asks that world whether it is still out.
+      bodies?.start(strike.x, strike.y, strike.z, 0, look, slot, 0, 0);
+      return slot;
     },
     spawnOf: (slot) => this.spawnOf(slot),
     removeFigure: (slot, spawn) => {
       this.removed.push({ slot, spawn });
+      bodies?.stop(slot);
       return true;
     },
     ...(bodies === null ? {} : { bodies }),
@@ -543,7 +547,7 @@ describe("given the hook aimed at the drawn people of the open world", () => {
     expect(met.index, "one can").toBe(c);
   });
 
-  it("when a cop the hook took is up again after his time, then the dummy thrown for him goes by its slot and age, and not before", () => {
+  it("when a cop the hook took is up again after his time, then the dummy thrown for him is the one taken away, and not before", () => {
     const harness = hostWithBodies();
     eyeNear(harness, 5000, 5000, 0);
     const people = harness.crowd().poses.count;
@@ -669,7 +673,7 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
   });
 
   // mutation: sed -i 's/    this.ports.removeFigure(slot, this.crowd.crowdSeconds - this.figureAt\[victim\]!);/    void slot;/' src/game/engine/engine-openworld.ts
-  it("when the ambulance has loaded a civilian a car ran down far from the eye, then the figure thrown for her is taken from its slot, by how long ago it was thrown", () => {
+  it("when the ambulance has loaded a civilian a car ran down far from the eye, then the figure thrown for her is the one taken away, from its slot", () => {
     const harness = hostWithMap();
     carAtSomeone(harness);
     const crowd = harness.crowd();
@@ -682,7 +686,6 @@ describe("given a car on the host driving at a civilian, and a building hit", ()
       harness.director.step(FRAME);
     }
     expect(harness.thrown.map((strike) => strike.guard), "thrown, by civilian").toContain(resident);
-    const thrownAt = crowd.crowdSeconds;
     for (let frame = 0; frame < 60; frame++) harness.director.step(FRAME);
     harness.director["removeVictim"](resident);
     expect(harness.removed.length, "one figure taken away").toBe(1);
