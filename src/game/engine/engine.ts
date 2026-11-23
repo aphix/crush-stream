@@ -50,6 +50,9 @@ import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { OpenWorldDirector } from "./engine-openworld.ts";
 import { OpenWorldActs, type ActorPlace } from "./engine-openworld-acts.ts";
+import { OpenWorldSeats } from "./engine-openworld-seats.ts";
+import { SeatRiders } from "../present/seat-riders.ts";
+import { SeatTable } from "../scenes/seat-table.ts";
 import { RayNearest } from "./ray-nearest.ts";
 import { type AutoOrbit, autoOrbitOf } from "./engine-openworld-auto.ts";
 import { STORE_AT } from "../ai/openworld-traffic/traffic-constants.ts";
@@ -129,6 +132,8 @@ const _footVelocity = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _ownMotion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
+/** The seat table of every scene but the open world: nobody sits in it. */
+const NOBODY_SEATED = new SeatTable();
 const _hand = new THREE.Vector3();
 const _gunRest = new THREE.Vector3();
 const _muzzle = new THREE.Vector3();
@@ -173,7 +178,7 @@ export class CrashEngine extends EngineGarage {
       this.setRace(true, survival, lobby);
       this.emitHud();
     },
-    resetLobbyCar: (i) => this.race.resetLobbyCar(i),
+    resetLobbyCar: (i) => this.race.resetLobbyCar(this.resetCarOf(i)),
     resetLobbyScene: () => this.randomizeAndReset(),
     exitRace: () => {
       if (!this.race.active) return;
@@ -202,7 +207,7 @@ export class CrashEngine extends EngineGarage {
     playReel: (reel, startAt) => this.highlights.play(reel, startAt),
     reelPlaying: () => this.highlights.playing,
     launchEjection: (e) => {
-      if (e.car !== this.onFoot.away && !this.onFoot.takeEjected(e)) this.ragdolls.launch(e, this.live());
+      if (e.car !== this.awayCar() && !this.onFoot.takeEjected(e)) this.ragdolls.launch(e, this.live());
     },
     meterOf: (i) => this.meterOf(i),
     playerLook: () => this.playerLook(),
@@ -211,6 +216,9 @@ export class CrashEngine extends EngineGarage {
     courseMenu: () => this.race.courseMenu(),
     crowdLink: () => this.crowdLink(),
     hearAct: (actor, act) => this.acts.hear(actor, act),
+    seatTable: () => (this.showOpenWorld ? this.desk.table : null),
+    seatsHeard: (notice) => this.desk.heardNotice(notice),
+    drivenCar: () => this.drivenCar(),
     seat: this.seat,
   });
   /** The results reel and its solo view. */
@@ -221,6 +229,10 @@ export class CrashEngine extends EngineGarage {
   private readonly openWorld: OpenWorldDirector;
   /** What every player on foot does at the host, and a guest's way to tell it (`MSG.act`). */
   private readonly acts: OpenWorldActs;
+  /** Who sits where in the open world: the seat table and the functions that get a player in and out of a car (`MSG.seats`). */
+  private readonly desk: OpenWorldSeats;
+  /** The seated players as drawn (`SeatedDrivers`). */
+  private readonly riders: SeatRiders;
   readonly pace = new SimPacer(true);
   private readonly blend = new PoseBlend();
   /** What a crashed car nobody drives rolls on: its drive's idle pedals (engine braking, the test world's IDLE). */
@@ -318,7 +330,7 @@ export class CrashEngine extends EngineGarage {
       this.lampBatch.sync(drawn);
       this.partBatch.sync(drawn);
       // In the garage the standing dummy beside the car is the driver, and the showcase's cars show their empty cabins: no one sits in the car there. A car its player left on foot has nobody in it either.
-      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook, uniform, this.onFoot.away, this.parkedEmpty);
+      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook, uniform, this.awayCar(), this.parkedEmpty, this.riders);
       this.coverBatch.sync(drawn);
       lapPart(PART.batches);
     };
@@ -329,7 +341,9 @@ export class CrashEngine extends EngineGarage {
     this.smoke = new TireSmokeSystem(this.scene);
     this.ragdolls = new RagdollSystem(this.scene, (i) => this.onThrow(i), (at, frame, inherit) => this.onExit(at, frame, inherit));
     this.ragdolls.poles = this.poles;
-    this.ragdolls.lookOf = (car) => this.looks.of(car, this.drivenCar());
+    this.ragdolls.lookOf = (car) => this.looks.of(this.driverActor(car), this.ownCar());
+    this.ragdolls.actorLookOf = (actor) => this.looks.of(actor, this.ownCar());
+    this.riders = new SeatRiders((actor) => this.ragdolls.riderLook(actor));
     this.lab.dolls = this.ragdolls;
     this.ragdolls.onPartHit = (car, part, energy, push) => {
       if (this.race.active) this.race.recorder.partHit(car, part, energy, push.x, push.y, push.z);
@@ -353,12 +367,11 @@ export class CrashEngine extends EngineGarage {
       bodyHost: this.bodyHost,
       freshCarNear: (index, x, z, facing) => this.race.placeNear(index, x, z, facing),
       respawn: () => this.requestRespawn(),
-      enterable: (index) => this.race.free && !this.net.client && this.openWorld.canEnter(index),
       adopt: (index) => {
-        if (!this.race.adoptCar(index)) return;
-        this.adoptedCar = index;
-        this.openWorld.adopt(index);
+        if (this.race.adoptCar(index)) this.adoptedCar = index;
       },
+      desk: () => (this.showOpenWorld ? this.desk : null),
+      sitDown: (seat) => this.riders.sitDown(this.ownCar(), seat),
       mouseCaptured: () => this.mouseLook.on,
       captureMouse: (on) => {
         if (!on) this.mouseLook.exit();
@@ -440,18 +453,36 @@ export class CrashEngine extends EngineGarage {
     groundMaterial(this.lampLights.pools.material as THREE.Material, GROUND_LEVEL.decal);
     this.lampLights.pools.renderOrder = levelOrder(GROUND_LEVEL.decal);
     this.race = this.makeRace();
+    this.race.drivers = (car) => this.driverActor(car);
     this.highlights = this.makeHighlights();
     this.podium = this.makePodium();
     this.openWorld = this.makeOpenWorld();
+    this.desk = new OpenWorldSeats({
+      cars: () => this.live(),
+      poles: () => this.poles,
+      place: (actor, out) => this.actorPlace(actor, out),
+      active: () => this.showOpenWorld,
+      peer: (actor) => this.netSeats.has(actor),
+      self: () => this.ownCar(),
+      guest: () => this.net.client,
+      canTake: (car) => this.canTakeCar(car),
+      taken: (car) => this.openWorld.adopt(car),
+      gas: () => this.seat.intent.gas,
+      now: () => performance.now() / 1000,
+      sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir),
+    });
     this.acts = new OpenWorldActs(
       {
         actorPlace: (actor, out) => this.actorPlace(actor, out),
         now: () => performance.now() / 1000,
-        self: () => this.drivenCar(),
+        self: () => this.ownCar(),
         guest: () => this.net.client,
         face: (dx, dz) => this.onFoot.faceToward(dx, dz),
         layGun: (x, y, z, out) => this.layGun(x, y, z, out),
         sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir),
+        seatedCar: (actor) => this.desk.table.carOf(actor),
+        getIn: (actor, car) => this.desk.getIn(actor, car),
+        getOut: (actor) => this.desk.getOut(actor),
       },
       this.openWorld,
     );
@@ -655,7 +686,7 @@ export class CrashEngine extends EngineGarage {
       traffic: {
         cars: () => this.live(),
         ensureCars: (count) => this.ensureCars(count),
-        seated: (id) => id === this.race.self || this.netSeats.has(id),
+        seated: (id) => id === this.race.self || this.netSeats.has(id) || this.desk.table.takenMask(id) !== 0,
         place: (id, x, z, yaw, colour) => this.standTrafficCar(this.live()[id]!, x, z, yaw, colour),
         putAway: (id) => this.storeTrafficCar(this.live()[id]!, id),
         markPolice: (from, count) => this.setPolice(from, count),
@@ -812,7 +843,7 @@ export class CrashEngine extends EngineGarage {
       reelReady: (clips, since) => void this.startReel(clips, since),
       clear: () => this.clearScene(),
       heardMeter: (i) => this.net.heard(i),
-      afoot: (i) => this.onFoot.away === i,
+      afoot: (i) => this.awayCar() === i,
     });
   }
 
@@ -1041,17 +1072,43 @@ export class CrashEngine extends EngineGarage {
     const mesh = this.ragdolls.pickMesh;
     if (!mesh.layers.test(this.raycaster.layers)) return;
     this.raycaster.set(_p.set(ray.eyeX, ray.eyeY, ray.eyeZ), _n.set(ray.dirX, ray.dirY, ray.dirZ));
-    mesh.nearestHit(this.raycaster.ray, this.raycaster.near, range, actor === this.drivenCar() ? WALKER_SLOT : -1, out);
+    mesh.nearestHit(this.raycaster.ray, this.raycaster.near, range, actor === this.ownCar() ? WALKER_SLOT : -1, out);
   }
 
   /** Where actor `actor` stands on foot: this player from his walker. Other players' places come from their shared bodies, which this machine does not hold yet. */
   private actorPlace(actor: number, out: ActorPlace): boolean {
-    if (actor !== this.drivenCar() || !this.onFoot.armed() || !this.ragdolls.walkerTorso(_p)) return false;
+    if (actor !== this.ownCar() || !this.onFoot.armed() || !this.ragdolls.walkerTorso(_p)) return false;
     out.x = _p.x;
     out.y = _p.y;
     out.z = _p.z;
     out.heading = this.ragdolls.walker.facing;
     return true;
+  }
+
+  /** The car its player left on foot, unless another player has the wheel of it now. */
+  private awayCar(): number {
+    const away = this.onFoot.away;
+    return away >= 0 && this.desk.table.driverOf(away) < 0 ? away : -1;
+  }
+
+  /** Whether car `car` has nobody in it that this player may take: the traffic says so for the host and solo; a guest, who has no traffic, takes the car he drives or left and a car standing parked, and the host has the last word. */
+  private canTakeCar(car: number): boolean {
+    if (!this.net.client) return this.openWorld.canEnter(car);
+    const body = this.live()[car];
+    return car === this.drivenCar() || (body !== undefined && this.openWorld.carIsEmpty(car, body));
+  }
+
+  /** The player at the wheel of car `car`: who the seat table says in the open world (the car this player drove and left is still his), else (a lobby, a race) the player whose own car it is. */
+  private driverActor(car: number): number {
+    if (!this.showOpenWorld) return car;
+    const driver = this.desk.table.driverOf(car);
+    return driver >= 0 || car !== this.drivenCar() ? driver : this.ownCar();
+  }
+
+  /** The car a reset of actor `actor` puts back at its spawn: the one he drives in the open world, his own elsewhere. */
+  private resetCarOf(actor: number): number {
+    const car = this.showOpenWorld ? this.desk.respawned(actor) : -1;
+    return car >= 0 ? car : actor;
   }
 
   /** A civilian's swing fells this player's walker, pushed along (dirX, dirZ). */
@@ -1069,7 +1126,7 @@ export class CrashEngine extends EngineGarage {
 
   /** Another player's punch lands on player `victim`: this player's walker takes it; a body shared from another machine is struck here once such bodies exist. */
   private strikeActor(victim: number, dirX: number, dirZ: number, knockedOut: boolean): void {
-    if (victim !== this.drivenCar()) return;
+    if (victim !== this.ownCar()) return;
     if (knockedOut) this.strikeOwnWalker(dirX, dirZ);
     else this.staggerOwnWalker(dirX, dirZ);
   }
@@ -1268,7 +1325,9 @@ export class CrashEngine extends EngineGarage {
       const sandbox = !this.race.active && !this.derbyMode;
       // Who the drivers look like: the clip on screen's race, else this race's, this derby round's, or this run's scene seed.
       this.ragdolls.lookSeed = this.highlights.look ?? (this.race.active ? this.race.look : this.derbyMode ? this.derbyRound : this.sceneSeed);
+      this.desk.frame(wallDt);
       this.onFoot.frame(wallDt);
+      this.riders.refresh(this.showOpenWorld ? this.desk.table : NOBODY_SEATED, wallDt, this.onFoot.active ? this.ownCar() : -1);
       if (this.showShowcase) this.showcase!.step(wallDt);
       // The busts jiggle at the presented rate: the eased slow-mo and warp (smooth), or the reel's own step against the wall (a clip's speed).
       const rate = presentedRate(reelDt, wallDt, this.clock.timeScale, this.cine.timeWarp);
@@ -1505,7 +1564,8 @@ export class CrashEngine extends EngineGarage {
 
   /** A driver thrown out: his dummy flies (`release`: a minigame's boost), the minigame knows he is out, the race recorder and the netplay peers hear of it. */
   private throwDriver(e: Ejection, cars: readonly DeformableCar[], release?: ReleaseScale): void {
-    if (e.car !== this.onFoot.away && !this.onFoot.takeEjected(e)) this.ragdolls.launch(e, cars, true, release);
+    if (e.car !== this.awayCar() && !this.onFoot.takeEjected(e)) this.ragdolls.launch(e, cars, true, release);
+    this.desk.driverEjected(e.car);
     if (this.minigameMode !== null) this.minigames.noteThrown();
     if (this.race.active) this.race.recorder.eject(e);
     this.net.sendEject(e);
@@ -1534,7 +1594,8 @@ export class CrashEngine extends EngineGarage {
       if (this.seat.selfRight(car.group.matrixWorld.elements[5]!, car.velocity.length(), dt)) this.recoverDriven();
     }
     // The player on foot has left his car with its brakes on (the race director holds it in a race; the other scenes here).
-    const away = !this.race.active && this.onFoot.away < cars.length && cars[this.onFoot.away]?.deform.drivetrainAlive ? this.onFoot.away : -1;
+    const left = this.awayCar();
+    const away = !this.race.active && left >= 0 && left < cars.length && cars[left]?.deform.drivetrainAlive ? left : -1;
     if (away >= 0) applyDrive(cars[away]!, this.standHold, dt);
     this.net.drive(cars, dt, driven);
     if (this.derbyMode && this.derby.winnerId == null) {

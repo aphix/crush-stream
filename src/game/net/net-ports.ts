@@ -11,6 +11,7 @@ import type { Reel } from "../match/highlights.ts";
 import type { NetPeer } from "./transport.ts";
 import type { LookData } from "./look-codec.ts";
 import type { Act } from "./act-codec.ts";
+import type { SeatTable } from "../scenes/seat-table.ts";
 
 /** The race director as netplay sees it (`CrashEngine.race`, while race mode is on; the engine's `RaceDirector` fits it structurally). */
 export interface NetRace {
@@ -142,8 +143,14 @@ export interface NetGame {
   courseMenu(): CourseMenu;
   /** The open world's crowd, null until it exists (and in every other game). */
   crowdLink(): CrowdLink | null;
-  /** Host: guest car `actor` did `act` on foot (`MSG.act`, already read and numbered): the engine checks it and carries it out, or refuses it. */
-  hearAct(actor: number, act: Act): void;
+  /** Host: guest car `actor` did `act` (`MSG.act`, already read and numbered): the engine checks it and carries it out, or refuses it. The `SEATS_NOTICE` that tells a refused get-in or get-out why (0 for none). */
+  hearAct(actor: number, act: Act): number;
+  /** The seat table this machine holds (the host's own, or a guest's copy of it), null outside the open world. */
+  seatTable(): SeatTable | null;
+  /** Client: the host's `MSG.seats` was read into the table; `notice` is its refusal byte (0 for none). */
+  seatsHeard(notice: number): void;
+  /** The car this browser's player drives: his own, or the one he took on foot. */
+  drivenCar(): number;
   readonly seat: DriverSeat;
 }
 

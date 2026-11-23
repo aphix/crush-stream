@@ -4,9 +4,10 @@ import { CAR_SPRAY } from "../vehicle/spray-box.ts";
 import type { Ejection } from "../vehicle/ejection.ts";
 import { PHASES, type CrowdLink, type NetGame } from "./net-ports.ts";
 import type { Act } from "./act-codec.ts";
+import type { SeatTable } from "../scenes/seat-table.ts";
 
 /** The engine's `NetGame` seam over a headless world: what `CrashEngine.net` wires, minus the derby, reels, looks and presentation. `crowd`: the open world's crowd, null while there is none. */
-export function worldGame(w: World, name: string, crowd: () => CrowdLink | null = () => null, acts: (actor: number, act: Act) => void = () => {}) {
+export function worldGame(w: World, name: string, crowd: () => CrowdLink | null = () => null, acts: (actor: number, act: Act) => number = () => 0, seats: SeatTable | null = null) {
   const log = { cleared: 0, gen: 0 };
   const game: NetGame = {
     cars: () => w.live(),
@@ -59,6 +60,9 @@ export function worldGame(w: World, name: string, crowd: () => CrowdLink | null 
     dropLooks: () => {},
     crowdLink: crowd,
     hearAct: acts,
+    seatTable: () => seats,
+    seatsHeard: () => {},
+    drivenCar: () => w.race.self,
     seat: w.seat,
   };
   return { game, log };

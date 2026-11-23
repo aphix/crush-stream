@@ -199,6 +199,9 @@ function room({ bodies = false, guests = 1 }: RoomOptions = {}) {
       face: () => {},
       layGun: () => false,
       sendAct: () => {},
+      seatedCar: () => -1,
+      getIn: () => 0,
+      getOut: () => 0,
     },
     host.director,
   );

@@ -103,6 +103,9 @@ export abstract class RagdollPool {
   lookOf: (car: number) => { person: PersonPick; personSpray: SprayBitmap } | null = () => null;
   /** Each car's driver look as `carDriverLook` last built it, with what it was built from. */
   protected readonly carLooks = new Map<number, { seed: number; person: PersonPick | null; look: DriverLook }>();
+  /** The look of the player who is actor `actor` (this browser's, or a netplay peer's), null for none: how a seated player is dressed (`riderLook`). */
+  actorLookOf: (actor: number) => { person: PersonPick; personSpray: SprayBitmap } | null = () => null;
+  protected readonly riderLooks = new Map<number, { seed: number; person: PersonPick | null; look: DriverLook }>();
   protected purses: Purses | null = null;
   /** The course's or the scene's knockable props: standing fixed on their spots, knocked ones tumbling (`knockProp`); a car's front meets one over its lower box's height. */
   protected readonly props = new PropBodies(knockedGroups, FIXED_GROUPS, GRACE, PROP_BAND_LOW, PROP_BAND_HIGH, (cx, cz, y, half) => this.patchAt(cx, cz, y, half));
@@ -334,6 +337,16 @@ export abstract class RagdollPool {
     if (kept && kept.seed === this.lookSeed && kept.person === person) return kept.look;
     const look = person ? ownLook(person) : driverLook(this.lookSeed, car);
     this.carLooks.set(car, { seed: this.lookSeed, person, look });
+    return look;
+  }
+
+  /** Player `actor` as he sits in any seat of a car: his own look (`ownLook`, from `actorLookOf`), else the seed's drawn one for his number. Kept while its seed and pick stand. */
+  riderLook(actor: number): DriverLook {
+    const person = this.actorLookOf(actor)?.person ?? null;
+    const kept = this.riderLooks.get(actor);
+    if (kept && kept.seed === this.lookSeed && kept.person === person) return kept.look;
+    const look = person ? ownLook(person) : driverLook(this.lookSeed, actor);
+    this.riderLooks.set(actor, { seed: this.lookSeed, person, look });
     return look;
   }
 

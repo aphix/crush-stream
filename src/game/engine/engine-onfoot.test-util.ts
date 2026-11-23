@@ -10,6 +10,7 @@ import type { Walker } from "../present/ragdoll-walker.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, pressKey, stubBrowser } from "./engine-headless.test-util.ts";
 import { doorSpot } from "./onfoot-doors.ts";
+import { DRIVER_SIDE } from "../vehicle/constants.ts";
 
 export const FRAME = 1 / FRAME_HZ;
 /** The climb out and the climb in (`OnFootFlow`), plus a frame's slack (s). */
@@ -96,10 +97,14 @@ export class OnFootRig {
     return this.engine["onFoot"].away;
   }
 
-  /** The seat takes car `index` at the wheel. */
+  /** The seat takes car `index` at the wheel; in the open world the seat table has him there too. */
   sit(index: number): void {
     this.engine["seat"].focus(index);
     this.engine["seat"].mode = "drive";
+    const table = this.engine["desk"].table;
+    table.leave(0);
+    table.leave(table.driverOf(index));
+    table.sit(0, index, 0);
   }
 
   /** Car `index` at rest at (x, z) facing +z, and drawn: a car an earlier row drove off the disc was vaporized and hidden, which `spawnFacing` alone does not undo. */
@@ -220,9 +225,9 @@ export class OnFootRig {
     expect(walker.state, `he is up: ${walker.state}`).toBe("stand");
   }
 
-  /** Walks to `car`'s driver door by a point out from it, so he does not walk into the body. */
-  walkToDoor(car: DeformableCar): void {
-    const door = doorSpot(car, new THREE.Vector3());
+  /** Walks to `car`'s door at x sign `side` (the driver's by default) by a point out from it, so he does not walk into the body. */
+  walkToDoor(car: DeformableCar, side = DRIVER_SIDE): void {
+    const door = doorSpot(car, new THREE.Vector3(), side);
     const outside = door.clone().sub(car.group.position).setY(0).normalize().multiplyScalar(APPROACH_M).add(door);
     this.walkTo(outside, 1, WALK_BACK_LIMIT_S);
     this.walkTo(door, 1.3, 10);

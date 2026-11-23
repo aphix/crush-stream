@@ -16,7 +16,8 @@ import type { OnFootView } from "../present/walker-camera.ts";
 import { OnFootCamera } from "./onfoot-camera.ts";
 import type { Sight } from "../present/spectate-cam.ts";
 import { doorBlocked, doorInReach, doorSpot, inPlay } from "./onfoot-doors.ts";
-import { DRIVER_SIDE } from "../vehicle/constants.ts";
+import { entrySeat, SEAT_DRIVER, seatDoorSide } from "../vehicle/car-seats.ts";
+import { OnFootRide, type OnFootDesk } from "./engine-onfoot-ride.ts";
 import { SEAT_KEYS } from "./engine-keys.ts";
 import { blankWalkIntent, readWalkIntent, type WalkIntent } from "./engine-walk-input.ts";
 import { OnFootArms, type Gun } from "./engine-onfoot-arms.ts";
@@ -51,10 +52,12 @@ interface OnFootHost {
   freshCarNear(index: number, x: number, z: number, facing: number): boolean;
   /** The reset a driver has (R): his car back at its spawn, repaired; a client asks the host. */
   respawn(): void;
-  /** Car `index`, not the one he left, has nobody in it and he may get into it (the open world's free roam, on a machine that runs the cars). */
-  enterable(index: number): boolean;
-  /** He gets into car `index`, not the one he left: it is the car he drives from now on, and the one he left stays where it stands, empty. */
+  /** He sits in car `index` now, the one he drives from here: this browser's own car (`RaceDirector.adoptCar`) and the seat's. */
   adopt(index: number): void;
+  /** The seats of the open world, null in every other scene: who sits where, and asking for a seat or to leave one. */
+  desk(): OnFootDesk | null;
+  /** Player (this browser's actor) `actor` sat down in seat `seat`, beside his door: the figure drawn in the car slides from it to his own. */
+  sitDown(seat: number): void;
   /** Whether this machine is a guest in a room (it holds no authority): it sends what it does to the host, and has no hook yet. */
   guest(): boolean;
   /** Mouse look (pointer lock) is on. */
@@ -98,10 +101,8 @@ const FIRE_TURN_S = 0.6;
 const REFUSAL_SECONDS = 2;
 /** Led by the law he walks at `WALK_SPEED` (a hair over the cop's escort pace) to where his cop leads him, and stands once within this far (m) of it. */
 const LED_REACH = 0.5;
-/** In the open world his driver's door swings this wide (rad) at this rate (rad/s) as he gets out or in, and shuts once he is this far (m) from it. */
-const DOOR_OPEN = 1.1;
-const DOOR_RATE = 3.5;
-const DOOR_CLOSE_DISTANCE = 4;
+/** The open world's refusal for a car with no seat he may take, any door of it. */
+const OW_NO_CAR_TEXT = "Walk up to a car's door";
 
 const REFUSAL_TEXT: Record<OnFootRefusal, string> = {
   tooFast: "Stop the car first",
@@ -136,10 +137,8 @@ export class OnFootDirector {
   /** Where his cop leads him while the law has him on foot (`lead`). */
   private ledX = 0;
   private ledZ = 0;
-  /** The car whose driver's door he is swinging (-1: none), how far open it is (rad), and where it is going. */
-  private doorCar = -1;
-  private door = 0;
-  private doorTarget = 0;
+  /** The seats side of his trip: the door, a passenger's seat, what he waits for the host to answer (`OnFootRide`). */
+  private readonly ride: OnFootRide;
   /** The walk direction the keys ask for, eased (`INTENT_SECONDS`); not seeded while he stands still. */
   private smoothAhead = 0;
   private smoothSide = 0;
@@ -151,6 +150,7 @@ export class OnFootDirector {
   constructor(host: OnFootHost) {
     this.host = host;
     this.cam = new OnFootCamera(host);
+    this.ride = new OnFootRide({ seat: host.seat, desk: () => host.desk(), adopt: (index) => host.adopt(index) });
   }
 
   /** The view on foot (`OnFootCamera.view`): a drag, a click and every other camera's leavings never change it. */
@@ -158,9 +158,9 @@ export class OnFootDirector {
     return this.cam.view;
   }
 
-  /** On foot in the open world the reset control (R, D-pad down, Respawn; a tap or a hold, as at the wheel) is his: back in a fresh car (`resetIntoCar`). */
+  /** On foot in the open world the reset control (R, D-pad down, Respawn; a tap or a hold, as at the wheel) is his: back in a fresh car (`resetIntoCar`); not after a ride in another's car. */
   get resetsToCar(): boolean {
-    return this.flow.phase === "onFoot" && this.host.openWorld();
+    return this.flow.phase === "onFoot" && this.host.openWorld() && !this.ride.passenger;
   }
 
   /** On foot in the open world on any machine, guest or not: where the hook's offer starts. */
@@ -218,7 +218,8 @@ export class OnFootDirector {
    */
   resetIntoCar(): void {
     const { ragdolls, seat } = this.host;
-    const car = this.flow.car;
+    const driven = this.host.desk()?.respawnMine() ?? -1;
+    const car = driven >= 0 ? driven : this.flow.car;
     const out = ragdolls.walkerTorso(_torso);
     const placed = out && this.host.runsCars() && this.host.freshCarNear(car, _torso.x, _torso.z, ragdolls.walker.facing);
     ragdolls.stopWalker();
@@ -293,17 +294,54 @@ export class OnFootDirector {
     return this.flow.active;
   }
 
-  /** The index of the car he left and may get back into (his own, and only his own) while he is out or climbing in or out; -1 while he is in the seat. */
+  /** The index of the car he drove and left, which he may get back into, while he is out or climbing in or out; -1 while he is in a seat, and on a passenger's trip (that car is another's). */
   get away(): number {
-    return this.flow.active ? this.flow.car : -1;
+    return this.flow.active && !this.ride.passenger ? this.flow.car : -1;
   }
 
-  /** Back in the seat, nothing out: a scene reset has emptied the world. */
+  /**
+   * Back in the seat, nothing out: a scene reset has emptied the world. In the open world the seat table has him at his own wheel again; a passenger caught
+   * mid-climb out stands on foot at his door instead (`standAtDoor`), or at the wheel of his own car where no walker can be started.
+   */
   reset(): void {
+    const desk = this.host.desk();
+    desk?.tripEnded();
+    if (this.ride.passenger && this.flow.phase === "exiting" && desk?.myCar() === -1) {
+      if (this.standAtDoor()) return;
+      this.backAtWheel();
+      return;
+    }
+    if (!this.ride.passenger) desk?.respawnMine();
     this.flow.reset();
     this.endView();
     this.refusal = null;
     this.reach = false;
+    this.ride.reset();
+  }
+
+  /** His climb out was cut short: he stands on foot at the door he was leaving by, his walker started. False where no walker can be started. */
+  private standAtDoor(): boolean {
+    const car = this.host.cars()[this.flow.car];
+    if (!car) return false;
+    car.group.getWorldDirection(_forward);
+    doorSpot(car, _spot, this.ride.side);
+    if (this.host.ragdolls.startWalker(_spot, detAtan2(_forward.x, _forward.z), { cop: false, look: this.host.look() }) < 0) return false;
+    this.flow.released();
+    this.refusal = null;
+    this.reach = false;
+    this.cam.unframe();
+    return true;
+  }
+
+  /** No walker could be started: the trip is over and he is at the wheel of the car the seat table gives him (his own, or the one he last drove), the view and the wheel on it. */
+  private backAtWheel(): void {
+    const car = this.host.desk()?.respawnMine() ?? -1;
+    this.flow.reset();
+    this.endView();
+    this.refusal = null;
+    this.reach = false;
+    this.ride.reset();
+    if (car >= 0) this.ride.take(car, SEAT_DRIVER);
   }
 
   /** A keydown: true when the director took it (the control, or a seat key that means nothing on foot). */
@@ -335,123 +373,103 @@ export class OnFootDirector {
     return (pressed & ON_FOOT_BUTTON) !== 0 || (this.flow.active && (pressed & swallowed) !== 0);
   }
 
-  /** The control was pressed: ask the flow, carry out what it allows, remember what it refused. */
+  /** The control was pressed: judge it, ask the seats (the host's, for a guest) and carry out what they allow, remember what was refused. */
   private press(): void {
     const sense = this.senseWorld();
-    if (sense === null) return;
-    const step = this.flow.press(sense);
+    if (sense === null || this.ride.waiting) return;
+    const step = this.flow.judge(sense);
     if (step === "refused") {
-      this.refusal = this.flow.refusal;
-      this.refusalLeft = REFUSAL_SECONDS;
+      this.refuseFor(this.flow.refusal);
+      return;
+    }
+    const asked = this.ride.ask(step, sense.car);
+    if (asked === "refused") {
+      this.refuseFor(this.ride.refusal);
       return;
     }
     this.refusal = null;
+    if (asked === "begin") this.begin(step, sense.car);
+  }
+
+  private refuseFor(why: OnFootRefusal | null): void {
+    this.refusal = why;
+    this.refusalLeft = REFUSAL_SECONDS;
+  }
+
+  /** The seats agreed: the climb out (`exitStarted`) or in of car `car` starts. */
+  private begin(step: OnFootStep, car: number): void {
+    this.flow.start(step, car);
     if (step === "exitStarted") this.beginExit();
-    else if (step === "enterStarted") this.beginEnter();
+    else this.beginEnter();
   }
 
-  /** The car he sits in and may leave: the seat is driving it and its driver is still in it (a thrown-out one has nobody to get out). Null otherwise. */
-  private carAtWheel(): DeformableCar | null {
+  /** The index of the car he sits in and may leave: at the driver's seat the one the seat drives while its driver is still in it (a thrown-out one has nobody to get out), at any other the one the seat table gives him. -1 otherwise. */
+  private seatedIndex(): number {
     const { seat } = this.host;
+    const desk = this.host.desk();
+    if (desk !== null && desk.myCar() >= 0) return desk.myCar();
     const car = this.host.cars()[seat.carIndex];
-    return seat.mode === "drive" && car && car.driverOut === null ? car : null;
+    return seat.mode === "drive" && car && car.driverOut === null ? seat.carIndex : -1;
   }
 
-  /** What the flow needs to know: in the driving seat, the car and whether its door has room; on foot, whether his car is in reach. Null while the seat is not his to leave. */
+  /** The x sign of the door of the seat he sits in: the driver's unless the seat table puts him elsewhere. */
+  private seatSide(): number {
+    return seatDoorSide(Math.max(SEAT_DRIVER, this.host.desk()?.mySeat() ?? SEAT_DRIVER));
+  }
+
+  /** What the flow needs to know: in a seat, the car and whether its door has room; on foot, whether a car's door is in reach. Null while the seat is not his to leave. */
   private senseWorld(): OnFootSense | null {
-    const { seat, ragdolls } = this.host;
+    const { ragdolls } = this.host;
     const cars = this.host.cars();
     const sense = this.sense;
     if (this.flow.phase === "inCar") {
-      const car = this.carAtWheel();
-      if (car === null) return null;
-      sense.car = seat.carIndex;
+      const index = this.seatedIndex();
+      const car = cars[index];
+      if (!car) return null;
+      sense.car = index;
       sense.speed = car.velocity.length();
-      sense.doorBlocked = doorBlocked(cars, car, ragdolls.poles);
+      sense.doorBlocked = doorBlocked(cars, car, ragdolls.poles, this.seatSide());
       return sense;
     }
     sense.doorBlocked = false;
-    const car = cars[this.flow.car];
-    if (!car || !ragdolls.walkerTorso(_torso)) return null;
+    if (!ragdolls.walkerTorso(_torso) || (this.host.desk() === null && !cars[this.flow.car])) return null;
     sense.car = this.carInReach(cars);
     sense.speed = sense.car < 0 ? 0 : this.speed[0]!;
     return sense;
   }
 
-  /** The car whose driver door he is at (torso in `_torso`): his own first, else an empty one the engine offers; -1 when none. Its speed goes to `speed[0]`. */
+  /** The car whose door he is at (torso in `_torso`; the door goes to `ride.side`): in the open world any car with a seat he may take, elsewhere only his own; -1 when none. Its speed goes to `speed[0]`. */
   private carInReach(cars: readonly DeformableCar[]): number {
-    if (doorInReach(cars[this.flow.car]!, _torso, this.speed)) return this.flow.car;
-    for (let index = 0; index < cars.length; index++) {
-      if (index !== this.flow.car && this.host.enterable(index) && doorInReach(cars[index]!, _torso, this.speed)) return index;
-    }
-    return -1;
+    if (this.host.desk() !== null) return this.ride.reach(_torso, this.speed);
+    return doorInReach(cars[this.flow.car]!, _torso, this.speed) ? this.flow.car : -1;
   }
 
   private beginExit(): void {
     const { ragdolls, seat } = this.host;
     const car = this.host.cars()[this.flow.car]!;
     car.group.getWorldDirection(_forward);
-    doorSpot(car, _spot);
+    doorSpot(car, _spot, this.ride.side);
     if (ragdolls.startWalker(_spot, detAtan2(_forward.x, _forward.z), { cop: false, look: this.host.look() }) < 0) {
-      this.flow.reset();
+      this.backAtWheel();
       return;
     }
-    seat.esc();
+    if (!this.ride.passenger) seat.esc();
     this.cam.unframe();
-    this.openDoor(this.flow.car);
   }
 
   private beginEnter(): void {
-    const { ragdolls } = this.host;
+    const { ragdolls, seat } = this.host;
     const car = this.host.cars()[this.flow.car]!;
     ragdolls.walker.command = 0;
     if (ragdolls.walkerTorso(_torso)) ragdolls.walker.heading = detAtan2(car.group.position.x - _torso.x, car.group.position.z - _torso.z);
+    this.ride.passenger = this.ride.seatedAsPassenger();
     // A car that is not the one he left: the seat and the engine follow him to it now, so the one he left is empty from here.
-    if (this.host.seat.carIndex !== this.flow.car) {
+    if (this.ride.passenger) seat.focus(this.flow.car);
+    else {
       this.host.adopt(this.flow.car);
-      this.host.seat.focus(this.flow.car);
+      if (seat.carIndex !== this.flow.car) seat.focus(this.flow.car);
     }
-    this.openDoor(this.flow.car);
-  }
-
-  /** He starts through car `index`'s driver's door: it swings open from wherever it stands. Only in the open world on a machine that runs the cars, where residents' doors swing by the same call; anywhere else the walker writes nothing to a car. */
-  private openDoor(index: number): void {
-    if (!this.host.openWorld() || !this.host.runsCars()) return;
-    const cars = this.host.cars();
-    if (this.doorCar >= 0 && this.doorCar !== index) cars[this.doorCar]?.setDoorOpen(DRIVER_SIDE, 0);
-    this.doorCar = index;
-    this.door = Math.abs(cars[index]?.doorAngle(DRIVER_SIDE) ?? 0);
-    this.doorTarget = DOOR_OPEN;
-  }
-
-  /** Once a frame: the door eases to where it is going. It is sent shut once he is seated, once the trip ends any other way, or once he has walked `DOOR_CLOSE_DISTANCE` from it. */
-  private swingDoor(wallDt: number): void {
-    if (this.doorCar < 0) return;
-    if (!this.host.openWorld() || !this.host.runsCars()) {
-      this.doorCar = -1;
-      return;
-    }
-    const car = this.host.cars()[this.doorCar];
-    if (!car) {
-      this.doorCar = -1;
-      return;
-    }
-    const phase = this.flow.phase;
-    if (this.doorTarget > 0 && phase !== "exiting" && phase !== "entering") {
-      if (phase !== "onFoot") this.doorTarget = 0;
-      else if (this.host.ragdolls.walkerTorso(_torso)) {
-        doorSpot(car, _spot);
-        if (hypot2(_spot.x - _torso.x, _spot.z - _torso.z) > DOOR_CLOSE_DISTANCE) this.doorTarget = 0;
-      }
-    }
-    // A door the crash or a reset moved is eased from where it stands, not from where this swing last left it; read after the trip's end has sent it shut.
-    if (this.doorTarget === 0) this.door = Math.min(this.door, Math.abs(car.doorAngle(DRIVER_SIDE)));
-    const gap = this.doorTarget - this.door;
-    if (gap !== 0) {
-      this.door += Math.max(-DOOR_RATE * wallDt, Math.min(DOOR_RATE * wallDt, gap));
-      car.setDoorOpen(DRIVER_SIDE, this.door);
-    }
-    if (this.doorTarget === 0 && this.door === 0) this.doorCar = -1;
+    if (this.host.desk() !== null) this.host.sitDown(entrySeat(this.ride.side));
   }
 
   /** The seat no longer follows his car (a race put him to watching, a scene took it), or his car is gone from play: the trip is over and he is in the seat's follow. */
@@ -462,13 +480,16 @@ export class OnFootDirector {
 
   /** Once per frame, before the ragdoll world steps: the driving controls into the walker's pace, the flow's clock. */
   frame(wallDt: number): void {
-    this.swingDoor(wallDt);
     const flow = this.flow;
     this.refusalLeft = Math.max(0, this.refusalLeft - wallDt);
     this.arms.pad(this.host.pad, this.host.touch);
     this.arms.frame(wallDt);
     this.host.ragdolls.walker.holdGun(this.armed() && this.arms.gunInHand());
-    if (!flow.active) return;
+    this.settle(wallDt);
+    if (!flow.active) {
+      this.ride.follow();
+      return;
+    }
     const { ragdolls } = this.host;
     if (flow.phase === "arrested") {
       this.walkLed();
@@ -582,15 +603,23 @@ export class OnFootDirector {
     const { ragdolls, seat } = this.host;
     this.endView();
     ragdolls.stopWalker();
-    // Back in a car his driver was thrown out of: he is its driver again. A client's car is the host's to say, so for him it is the reset a driver has.
+    // Back in a car his driver was thrown out of: he is its driver again. In the open world the seat table has seated him (`OpenWorldSeats.getIn` made it driven again); a client's car elsewhere is the host's to say, so for him it is the reset a driver has.
     const car = this.host.cars()[index];
-    if (car && car.driverOut !== null) {
+    if (!this.ride.passenger && car && car.driverOut !== null && this.host.desk() === null) {
       if (this.host.runsCars()) car.driverOut = null;
       else this.host.respawn();
     }
     seat.focus(index);
-    seat.mode = "drive";
+    if (!this.ride.passenger) seat.mode = "drive";
     this.reach = false;
+    this.ride.reset();
+  }
+
+  /** A guest waits for the host: begins what its answer allows, or shows why it was refused. */
+  private settle(wallDt: number): void {
+    const step = this.ride.settle(wallDt);
+    if (step === "refused") this.refuseFor(this.ride.refusal);
+    else if (step !== "none") this.begin(step, this.ride.car);
   }
 
   /** The camera on him (`OnFootCamera`), or drawing back round his car while he climbs in. True while it is his. */
@@ -609,7 +638,7 @@ export class OnFootDirector {
 
   /** The HUD's read of the trip, or null where the control does nothing: the scene does not offer it, or he neither sits at a wheel he may leave nor is out. */
   hud(): FootHud | null {
-    if (!this.host.available() || (!this.flow.active && this.carAtWheel() === null)) return null;
+    if (!this.host.available() || (!this.flow.active && this.seatedIndex() < 0)) return null;
     return {
       out: this.flow.active,
       prompt: this.prompt(),
@@ -620,7 +649,13 @@ export class OnFootDirector {
 
   /** Why the control just refused, for `REFUSAL_SECONDS`; null otherwise. */
   private refusalText(): string | null {
-    return this.refusalLeft > 0 && this.refusal !== null && this.refusal !== "busy" ? REFUSAL_TEXT[this.refusal] : null;
+    if (this.refusalLeft <= 0 || this.refusal === null || this.refusal === "busy") return null;
+    return this.refusal === "noCarInReach" ? this.noCarText() : REFUSAL_TEXT[this.refusal];
+  }
+
+  /** What he is told when no car's door is in reach: his own car's driver's door in the other scenes, any car's door in the open world. */
+  private noCarText(): string {
+    return this.host.desk() !== null ? OW_NO_CAR_TEXT : REFUSAL_TEXT.noCarInReach;
   }
 
   /** The line under the view: what the control does here, or why it just refused. Null when there is nothing to say. */
@@ -629,7 +664,7 @@ export class OnFootDirector {
     if (refused !== null) return refused;
     if (!this.host.available()) return null;
     if (this.flow.phase === "arrested") return "Under arrest";
-    if (this.flow.phase === "onFoot") return this.reach ? "Enter or Y: get in" : REFUSAL_TEXT.noCarInReach;
-    return this.carAtWheel() !== null ? "Enter or Y: get out" : null;
+    if (this.flow.phase === "onFoot") return this.reach ? "Enter or Y: get in" : this.noCarText();
+    return this.seatedIndex() >= 0 ? "Enter or Y: get out" : null;
   }
 }

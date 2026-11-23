@@ -117,7 +117,10 @@ function room() {
   const hostWorld = makeWorld();
   const guestWorld = makeWorld();
   const heard: Heard[] = [];
-  const hostGame = worldGame(hostWorld, "Ann", () => null, (actor, act) => void heard.push({ actor, kind: act.kind, arg: act.arg, eyeX: act.eyeX })).game;
+  const hostGame = worldGame(hostWorld, "Ann", () => null, (actor, act) => {
+    heard.push({ actor, kind: act.kind, arg: act.arg, eyeX: act.eyeX });
+    return 0;
+  }).game;
   const host = new NetPlay(hostGame, { connect: hub.connect, now: () => now });
   const guest = new NetPlay(worldGame(guestWorld, "Zed").game, { connect: hub.connect, now: () => now });
   open.push(host, guest);

@@ -3,6 +3,7 @@ import { PLAYER_KO_BLOWS, PLAYER_KO_WINDOW, PLAYER_PUNCH_COOLDOWN } from "../ai/
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { detAtan2, detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { wrapAngle } from "../present/walker-math.ts";
+import { SEATS_NOTICE } from "../net/seats-codec.ts";
 import { ACT, ACT_KINDS, type Act } from "../net/act-codec.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { gunAt, slotOfGun, STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
@@ -34,6 +35,8 @@ const FACE_TARGET_FROM_RAD = Math.PI / 2;
 const UNIT_SLACK = 0.05;
 /** The level part of a punch's direction must be at least this long. */
 const LEVEL_PUNCH = 0.9;
+/** Two honest get-in acts from one actor come no closer than this (s): he cannot cross a car's door and ask again sooner. */
+const GET_IN_COOLDOWN = 0.5;
 /** Multiplier that gives every actor his own scatter stream; actor 0's stream starts at 1. */
 const STREAM_STEP = 0x9e3779b1;
 const LCG_MUL = 1664525;
@@ -73,6 +76,12 @@ type ActPorts = {
   layGun(x: number, y: number, z: number, out: { x: number; y: number; z: number }): boolean;
   /** The guest's way to the host: `NetPlay.sendAct`. */
   sendAct(kind: number, arg: number, eye: { x: number; y: number; z: number }, dir: { x: number; y: number; z: number }): void;
+  /** The car actor `actor` sits in (the seat table), -1 when none. */
+  seatedCar(actor: number): number;
+  /** Actor `actor`, on foot, gets in car `car` (`OpenWorldSeats.getIn`): 0, or the `SEATS_NOTICE` that says why not. */
+  getIn(actor: number, car: number): number;
+  /** Actor `actor` gets out of his seat (`OpenWorldSeats.getOut`): 0, or the `SEATS_NOTICE` that says why not. */
+  getOut(actor: number): number;
 };
 
 /** What a blow on another player does where his body is (`strikeActor`) and the crowd of actors there are. */
@@ -136,19 +145,21 @@ export class OpenWorldActs {
     for (let actor = 0; actor < MAX_ACTORS; actor++) this.streams[actor] = (Math.imul(actor, STREAM_STEP) + 1) >>> 0;
   }
 
-  /** A guest's act reached the host: carried out when it could be real, else refused and nothing happens. */
-  hear(actor: number, act: Act): void {
-    if (actor < 0 || actor >= MAX_ACTORS) return;
+  /** A guest's act reached the host: carried out when it could be real, else refused and nothing happens. The `SEATS_NOTICE` a refused get-in or get-out tells the guest (0 for anything else). */
+  hear(actor: number, act: Act): number {
+    if (actor < 0 || actor >= MAX_ACTORS) return SEATS_NOTICE.none;
+    if (act.kind === ACT.getIn) return this.hearGetIn(actor, act);
+    if (act.kind === ACT.getOut) return this.ports.seatedCar(actor) < 0 ? SEATS_NOTICE.noCar : this.ports.getOut(actor);
     if (act.kind === ACT.punch) {
       const level = hypot2(act.dirX, act.dirZ);
-      if (level < LEVEL_PUNCH || level > 1 + UNIT_SLACK || !this.admit(actor, act, PLAYER_PUNCH_COOLDOWN, 0, ACT_EYE_REACH)) return;
+      if (level < LEVEL_PUNCH || level > 1 + UNIT_SLACK || !this.admit(actor, act, PLAYER_PUNCH_COOLDOWN, 0, ACT_EYE_REACH)) return SEATS_NOTICE.none;
       this.punchBy(actor, act.dirX / level, act.dirZ / level);
-      return;
+      return SEATS_NOTICE.none;
     }
-    if (act.kind !== ACT.shot) return;
+    if (act.kind !== ACT.shot) return SEATS_NOTICE.none;
     const gun = gunAt(act.arg);
     const length = hypot3(act.dirX, act.dirY, act.dirZ);
-    if (gun === null || Math.abs(length - 1) > UNIT_SLACK || !this.admit(actor, act, gun.every, ACT_BACKLOG_S, Infinity)) return;
+    if (gun === null || Math.abs(length - 1) > UNIT_SLACK || !this.admit(actor, act, gun.every, ACT_BACKLOG_S, Infinity)) return SEATS_NOTICE.none;
     _aim.eyeX = act.eyeX;
     _aim.eyeY = act.eyeY;
     _aim.eyeZ = act.eyeZ;
@@ -156,6 +167,13 @@ export class OpenWorldActs {
     _aim.dirY = act.dirY / length;
     _aim.dirZ = act.dirZ / length;
     this.shootBy(actor, _aim, gun);
+    return SEATS_NOTICE.none;
+  }
+
+  /** A guest asks to get in car `act.arg`: one already sitting in it is re-seated by the fill rule, one on foot must pass `admit` (on foot, eye at his torso) and then gets in at the door nearest him. */
+  private hearGetIn(actor: number, act: Act): number {
+    if (this.ports.seatedCar(actor) !== act.arg && !this.admit(actor, act, GET_IN_COOLDOWN, 0, ACT_EYE_REACH)) return SEATS_NOTICE.noCar;
+    return this.ports.getIn(actor, act.arg);
   }
 
   /** On foot, the eye within `eyeReach` of his torso, and his acts of this kind no more than `backlog` s ahead of the rate `cooldown` sets (a punch has no backlog: a bunched one is not a second). */
