@@ -648,7 +648,7 @@ export class CrashEngine extends EngineGarage {
       traffic: {
         cars: () => this.live(),
         ensureCars: (count) => this.ensureCars(count),
-        seated: (id) => this.desk.table.takenMask(id) !== 0,
+        seated: (id) => id === this.race.self || this.netSeats.has(id) || this.desk.table.takenMask(id) !== 0,
         place: (id, x, z, yaw, colour) => this.standTrafficCar(this.live()[id]!, x, z, yaw, colour),
         putAway: (id) => this.storeTrafficCar(this.live()[id]!, id),
         markPolice: (from, count) => this.setPolice(from, count),

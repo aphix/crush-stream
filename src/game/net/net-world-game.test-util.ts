@@ -62,7 +62,7 @@ export function worldGame(w: World, name: string, crowd: () => CrowdLink | null 
     hearAct: acts,
     seatTable: () => seats,
     seatsHeard: () => {},
-    drivenCar: () => w.seat.carIndex,
+    drivenCar: () => w.race.self,
     seat: w.seat,
   };
   return { game, log };

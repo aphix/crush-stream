@@ -247,7 +247,7 @@ export abstract class NetPlayClient {
       if (s.snap) race.applySnapshot(s.snap, this.car);
       else {
         race.showLobby(s.trackId);
-        if (this.car >= 0) race.seatLobby(this.car);
+        if (this.car >= 0) race.seatLobby(this.game.drivenCar());
       }
     } catch {
       // Malformed race state from the host: keep the last good one.

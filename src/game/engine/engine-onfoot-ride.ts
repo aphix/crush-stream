@@ -19,6 +19,8 @@ export interface OnFootDesk {
   takeNotice(): number;
   /** His reset (R) seats him at the wheel of his car again; the car, -1 for none. */
   respawnMine(): number;
+  /** His trip ended (a reset, a failed climb): the door he swung is let go. */
+  tripEnded(): void;
 }
 
 /** What the ride needs of the director's host. */

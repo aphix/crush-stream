@@ -42,7 +42,7 @@ interface Fixture {
   cars: DeformableCar[];
   places: Map<number, ActorPlace>;
   taken: number[];
-  state: { self: number; peers: Set<number>; parked: Set<number>; gas: number; now: number };
+  state: { self: number; peers: Set<number>; parked: Set<number>; gas: number; now: number; active: boolean };
   seats: OpenWorldSeats;
   table: SeatTable;
 }
@@ -52,7 +52,7 @@ function fixture(): Fixture {
   const cars = STYLES.map((id, i) => carAt(id, i * SPACING_M));
   const places = new Map<number, ActorPlace>();
   const taken: number[] = [];
-  const state = { self: 0, peers: new Set([0, 1, 2, 3]), parked: new Set([PARKED_SEDAN, PARKED_PICKUP]), gas: 0, now: 0 };
+  const state = { self: 0, peers: new Set([0, 1, 2, 3]), parked: new Set([PARKED_SEDAN, PARKED_PICKUP]), gas: 0, now: 0, active: true };
   const seats = new OpenWorldSeats({
     cars: () => cars,
     poles: () => [],
@@ -61,7 +61,7 @@ function fixture(): Fixture {
       if (place) Object.assign(out, place);
       return place !== undefined;
     },
-    active: () => true,
+    active: () => state.active,
     peer: (actor) => state.peers.has(actor),
     self: () => state.self,
     guest: () => false,
@@ -269,6 +269,98 @@ describe("given players seated in a car", () => {
     expect(sent[0]!.arg, "of that car").toBe(PARKED_SEDAN);
     expect(sent[0]!.x, "from his torso").toBe(1);
     expect(guest.table.count, "nobody sits here until the host says").toBe(0);
+  });
+});
+
+describe("given a player's own car and the car he last drove", () => {
+  it("when guest 1 is on foot beside his car (a car the traffic never offers), then the host at its driver's door is refused the wheel and guest 1 himself gets it", () => {
+    const f = fixture();
+    walkUp(f, 1, 1, DRIVER_SIDE);
+    standAt(f, 0, 1, DRIVER_SIDE);
+    f.table.leave(0);
+    expect(f.seats.getIn(0, 1), "the host").toBe(SEATS_NOTICE.noCar);
+    expect(f.table.carOf(0), "he sits nowhere").toBe(-1);
+    expect(f.seats.getIn(1, 1), "its owner").toBe(SEATS_NOTICE.none);
+    expect(f.table.driverOf(1)).toBe(1);
+  });
+
+  it("when a player drove a parked car and stepped out, then he may take its wheel again and another player may not", () => {
+    const f = fixture();
+    walkUp(f, 0, PARKED_SEDAN, DRIVER_SIDE);
+    f.seats.getIn(0, PARKED_SEDAN);
+    f.seats.getOut(0);
+    f.state.parked.delete(PARKED_SEDAN);
+    walkUp(f, 2, PARKED_SEDAN, DRIVER_SIDE);
+    standAt(f, 0, PARKED_SEDAN, DRIVER_SIDE);
+    expect(f.seats.getIn(2, PARKED_SEDAN), "another player").toBe(SEATS_NOTICE.noCar);
+    expect(f.seats.getIn(0, PARKED_SEDAN), "the one who drove it").toBe(SEATS_NOTICE.none);
+  });
+});
+
+describe("given a car whose driver was thrown out", () => {
+  it("when a player gets in at its wheel, then the car is driven again", () => {
+    const f = fixture();
+    f.cars[PARKED_SEDAN]!.driverOut = "windshield";
+    walkUp(f, 1, PARKED_SEDAN, DRIVER_SIDE);
+    expect(f.seats.getIn(1, PARKED_SEDAN)).toBe(SEATS_NOTICE.none);
+    expect(f.cars[PARKED_SEDAN]!.driverOut, "nobody is out of it now").toBeNull();
+  });
+
+  it("when its passenger presses the throttle with the driver's seat empty, then he is at the wheel and the car is driven again", () => {
+    const f = fixture();
+    walkUp(f, 1, 0, PASSENGER_DOOR);
+    f.seats.getIn(1, 0);
+    f.seats.getOut(0);
+    f.cars[0]!.driverOut = "windshield";
+    f.state.self = 1;
+    f.state.gas = 1;
+    f.state.now = 5;
+    run(f, FRAME_S * 2);
+    expect(f.table.driverOf(0), "at the wheel").toBe(1);
+    expect(f.cars[0]!.driverOut, "driven again").toBeNull();
+  });
+});
+
+describe("given a swing begun in the open world", () => {
+  it("when the open world is left and entered again with the cars reset, then the swing writes no door of the new session", () => {
+    const f = fixture();
+    walkUp(f, 0, PARKED_SEDAN, PASSENGER_DOOR);
+    f.seats.getIn(0, PARKED_SEDAN);
+    run(f, FRAME_S * 3);
+    expect(f.cars[PARKED_SEDAN]!.doorAngle(PASSENGER_DOOR), "control: the door has begun to open").toBeGreaterThan(0);
+    f.state.active = false;
+    run(f, FRAME_S);
+    f.cars[PARKED_SEDAN]!.setDoorOpen(PASSENGER_DOOR, 0);
+    f.state.active = true;
+    run(f, 1);
+    expect(f.cars[PARKED_SEDAN]!.doorAngle(PASSENGER_DOOR), "the new session's door").toBe(0);
+  });
+
+  it("when a passenger's climb out is cut short by a reset that shuts the door itself, then the door stays shut", () => {
+    const f = fixture();
+    walkUp(f, 1, 0, PASSENGER_DOOR);
+    f.seats.getIn(1, 0);
+    run(f, 2);
+    f.state.self = 1;
+    f.seats.getOut(1);
+    run(f, FRAME_S * 3);
+    expect(f.cars[0]!.doorAngle(PASSENGER_DOOR), "control: the door has begun to open").toBeGreaterThan(0);
+    f.seats.tripEnded();
+    f.cars[0]!.setDoorOpen(PASSENGER_DOOR, 0);
+    run(f, 1);
+    expect(f.cars[0]!.doorAngle(PASSENGER_DOOR)).toBe(0);
+  });
+});
+
+describe("given a player on foot whose last-driven car is taken", () => {
+  it("when he presses reset, then he sits at the wheel of his own car instead", () => {
+    const f = fixture();
+    walkUp(f, 0, PARKED_SEDAN, DRIVER_SIDE);
+    f.seats.getIn(0, PARKED_SEDAN);
+    f.seats.getOut(0);
+    f.table.sit(2, PARKED_SEDAN, 0);
+    expect(f.seats.respawned(0), "the car to put back").toBe(0);
+    expect(f.table.driverOf(0)).toBe(0);
   });
 });
 

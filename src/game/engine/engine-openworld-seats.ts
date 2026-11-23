@@ -85,14 +85,14 @@ export class OpenWorldSeats {
     return this.table.carOf(this.ports.self());
   }
 
-  /** Whether player `actor` may take a seat of `car`: the driver's seat when nobody holds it and the car is one to take, any other seat when a player drives it, and one is free. */
+  /** Whether player `actor` may take a seat of `car`: the driver's seat when nobody holds it and the car is one to take, his own car or the one he last drove, any other seat when a player drives it, and one is free. */
   mayEnter(actor: number, car: number): boolean {
     const cars = this.ports.cars();
     const body = cars[car];
     if (body === undefined || this.table.carOf(actor) >= 0) return false;
     const taken = this.table.takenMask(car);
     if (taken === (1 << seatCount(body.style)) - 1) return false;
-    return this.table.driverOf(car) >= 0 || (taken === 0 && this.ports.canTake(car));
+    return this.table.driverOf(car) >= 0 || (taken === 0 && (car === actor || car === this.lastDriven[actor] || this.ports.canTake(car)));
   }
 
   /** The car and door this machine's player standing at `torso` may get in at, into `out`: the same door test that `getIn` uses, lighting the prompt. */
@@ -128,7 +128,7 @@ export class OpenWorldSeats {
     if (_speed[0]! > ENTER_MAX_SPEED) return SEATS_NOTICE.tooFast;
     const seat = fillSeat(seatRows(body.style), this.table.takenMask(car), side);
     if (seat < 0 || !this.table.sit(actor, car, seat)) return SEATS_NOTICE.noCar;
-    if (seat === SEAT_DRIVER) this.drives(actor, car);
+    if (seat === SEAT_DRIVER) this.drives(actor, car, body);
     this.swings.open(actor, car, side, false);
     return SEATS_NOTICE.none;
   }
@@ -138,14 +138,15 @@ export class OpenWorldSeats {
     const taken = this.table.takenMask(car) & ~(1 << old);
     const seat = fillSeat(seatRows(body.style), taken, seatDoorSide(old));
     if (seat !== old) this.table.sit(actor, car, seat);
-    if (seat === SEAT_DRIVER) this.lastDriven[actor] = car;
+    if (seat === SEAT_DRIVER) this.drives(actor, car, body);
     return SEATS_NOTICE.none;
   }
 
-  /** Actor `actor` took the driver's seat of `car`: it is his for good when it was not his own, and the one his reset puts him in. */
-  private drives(actor: number, car: number): void {
+  /** Actor `actor` took the driver's seat of `car`: it is his for good when it was not his own, the one his reset puts him in, and driven again if its driver had been thrown out. */
+  private drives(actor: number, car: number, body: DeformableCar): void {
     if (car !== actor) this.ports.taken(car);
     this.lastDriven[actor] = car;
+    body.driverOut = null;
   }
 
   /** Player `actor` gets out of his seat by the door on its side, which swings open for him. 0, or the `SEATS_NOTICE` that says why not. */
@@ -167,13 +168,19 @@ export class OpenWorldSeats {
     if (actor >= 0) this.table.leave(actor);
   }
 
-  /** Actor `actor`'s reset (R): he sits at the wheel of his car again if it is free; the car to put back at its spawn, -1 for none. */
+  /** Actor `actor`'s reset (R): he sits at the wheel of the car he last drove if it is free, else of his own; the car to put back at its spawn, -1 for none. */
   respawned(actor: number): number {
     const seated = this.table.carOf(actor);
     if (seated >= 0) return this.table.seatOf(actor) === SEAT_DRIVER ? seated : NO_CAR;
-    const car = this.lastDriven[actor] !== NO_CAR ? this.lastDriven[actor]! : actor;
-    if (this.ports.cars()[car] === undefined || !this.table.sit(actor, car, SEAT_DRIVER)) return NO_CAR;
+    const last = this.lastDriven[actor]!;
+    const car = last !== NO_CAR && this.ports.cars()[last] !== undefined && this.table.sit(actor, last, SEAT_DRIVER) ? last : actor;
+    if (car === actor && (this.ports.cars()[car] === undefined || !this.table.sit(actor, car, SEAT_DRIVER))) return NO_CAR;
     return car;
+  }
+
+  /** This machine's player's trip ended without its climb (a reset, a climb that could not start): the door he swung is let go. */
+  tripEnded(): void {
+    this.swings.release(this.ports.self());
   }
 
   /** This machine's player's reset (R): the host and solo seat him at the wheel of his car again; a guest asks the host by his reset request, so nothing here. */
@@ -242,6 +249,7 @@ export class OpenWorldSeats {
 
   /** Everyone is gone (the open world was left or began again). */
   private reset(): void {
+    this.swings.clear();
     this.table.clear();
     this.known.fill(0);
     this.lastDriven.fill(NO_CAR);

@@ -58,6 +58,16 @@ export class DoorSwings {
     this.held[actor] = 0;
   }
 
+  /** Actor `actor`'s trip is over: his door is sent shut from wherever it stands (it is never opened further). */
+  release(actor: number): void {
+    if (this.car[actor] !== NO_CAR) this.target[actor] = 0;
+  }
+
+  /** Every swing is forgotten: the open world was left, and the next session's cars are not this one's. */
+  clear(): void {
+    this.car.fill(NO_CAR);
+  }
+
   /** Once a frame: each door eases to where it is going. */
   frame(wallDt: number): void {
     const cars = this.ports.cars();

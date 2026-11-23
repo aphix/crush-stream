@@ -280,14 +280,49 @@ export class OnFootDirector {
     return this.flow.active && !this.ride.passenger ? this.flow.car : -1;
   }
 
-  /** Back in the seat, nothing out: a scene reset has emptied the world. In the open world the seat table has him at his own wheel again. */
+  /**
+   * Back in the seat, nothing out: a scene reset has emptied the world. In the open world the seat table has him at his own wheel again; a passenger caught
+   * mid-climb out stands on foot at his door instead (`standAtDoor`), or at the wheel of his own car where no walker can be started.
+   */
   reset(): void {
-    if (!this.ride.passenger) this.host.desk()?.respawnMine();
+    const desk = this.host.desk();
+    desk?.tripEnded();
+    if (this.ride.passenger && this.flow.phase === "exiting" && desk?.myCar() === -1) {
+      if (this.standAtDoor()) return;
+      this.backAtWheel();
+      return;
+    }
+    if (!this.ride.passenger) desk?.respawnMine();
     this.flow.reset();
     this.endView();
     this.refusal = null;
     this.reach = false;
     this.ride.reset();
+  }
+
+  /** His climb out was cut short: he stands on foot at the door he was leaving by, his walker started. False where no walker can be started. */
+  private standAtDoor(): boolean {
+    const car = this.host.cars()[this.flow.car];
+    if (!car) return false;
+    car.group.getWorldDirection(_forward);
+    doorSpot(car, _spot, this.ride.side);
+    if (this.host.ragdolls.startWalker(_spot, detAtan2(_forward.x, _forward.z), { cop: false, look: this.host.look() }) < 0) return false;
+    this.flow.released();
+    this.refusal = null;
+    this.reach = false;
+    this.cam.unframe();
+    return true;
+  }
+
+  /** No walker could be started: the trip is over and he is at the wheel of the car the seat table gives him (his own, or the one he last drove), the view and the wheel on it. */
+  private backAtWheel(): void {
+    const car = this.host.desk()?.respawnMine() ?? -1;
+    this.flow.reset();
+    this.endView();
+    this.refusal = null;
+    this.reach = false;
+    this.ride.reset();
+    if (car >= 0) this.ride.take(car, SEAT_DRIVER);
   }
 
   /** A keydown: true when the director took it (the control, or a seat key that means nothing on foot). */
@@ -353,7 +388,7 @@ export class OnFootDirector {
   private seatedIndex(): number {
     const { seat } = this.host;
     const desk = this.host.desk();
-    if (desk !== null && desk.myCar() >= 0 && desk.mySeat() > SEAT_DRIVER) return desk.myCar();
+    if (desk !== null && desk.myCar() >= 0) return desk.myCar();
     const car = this.host.cars()[seat.carIndex];
     return seat.mode === "drive" && car && car.driverOut === null ? seat.carIndex : -1;
   }
@@ -396,8 +431,7 @@ export class OnFootDirector {
     car.group.getWorldDirection(_forward);
     doorSpot(car, _spot, this.ride.side);
     if (ragdolls.startWalker(_spot, detAtan2(_forward.x, _forward.z), { cop: false, look: this.host.look() }) < 0) {
-      this.flow.reset();
-      this.host.desk()?.respawnMine();
+      this.backAtWheel();
       return;
     }
     if (!this.ride.passenger) seat.esc();
@@ -549,9 +583,9 @@ export class OnFootDirector {
     const { ragdolls, seat } = this.host;
     this.endView();
     ragdolls.stopWalker();
-    // Back in a car his driver was thrown out of: he is its driver again. A client's car is the host's to say, so for him it is the reset a driver has.
+    // Back in a car his driver was thrown out of: he is its driver again. In the open world the seat table has seated him (`OpenWorldSeats.getIn` made it driven again); a client's car elsewhere is the host's to say, so for him it is the reset a driver has.
     const car = this.host.cars()[index];
-    if (!this.ride.passenger && car && car.driverOut !== null) {
+    if (!this.ride.passenger && car && car.driverOut !== null && this.host.desk() === null) {
       if (this.host.runsCars()) car.driverOut = null;
       else this.host.respawn();
     }
