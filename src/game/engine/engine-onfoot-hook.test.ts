@@ -56,11 +56,11 @@ describe("given the real engine in the open world, its player on foot", () => {
     fired.mockRestore();
   });
 
-  // mutation: sed -i '/^    if (!this.host.afoot() \&\& (this.host.tethers.count > 0 || this.held)) this.cut();/d' src/game/engine/engine-tether.ts
+  // mutation: sed -i '/^    if (!this.host.afoot()) this.cutFor(local);/d' src/game/engine/engine-tether.ts
   it("when he gets back into his car with a cable out, then no cable is left", () => {
     rig.getOut();
     const tethers = rig.engine["world"].tethers;
-    const slot = tethers.open();
+    const slot = tethers.open(rig.engine["seat"].carIndex);
     // The solver drops a cable whose two ends are both the world (nothing to pull): this one runs from his car's middle to a world point 5 m off it.
     const car = rig.cars()[0]!.group.position;
     tethers.setEnd(slot, 0, 0, 0, 0, 0);

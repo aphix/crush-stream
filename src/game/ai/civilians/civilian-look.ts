@@ -117,6 +117,17 @@ export function placeMet(map: OpenWorldMap, ray: LookRay, reach: number, out: Me
   return out;
 }
 
+/** Whether the level point (x, z) lies inside the footprint of place `place` of the map (the box `placeMet` enters). Allocates nothing. */
+export function insidePlace(map: OpenWorldMap, place: number, x: number, z: number): boolean {
+  const entry = map.places[place]!;
+  const trig = YAW_TRIG.get(map.places) ?? buildYawTrig(map.places);
+  const fromX = x - entry.x;
+  const fromZ = z - entry.z;
+  const across = fromX * trig[place * 2]! - fromZ * trig[place * 2 + 1]!;
+  const along = fromX * trig[place * 2 + 1]! + fromZ * trig[place * 2]!;
+  return Math.abs(across) <= entry.depth / 2 && Math.abs(along) <= entry.width / 2;
+}
+
 /** The shown figure among the first `count` of `poses`, not marked in `skip`, whose chest (a cat's or dog's body: `ANIMAL_CHEST_HEIGHT`) the ray passes within `radius` m, the nearest, nearer than `reach` m: its index and the distance along the ray into `out` (index -1, `reach`: none). A bullet's test, as `residentMet` is the look's (`peopleOnly`: a cat or dog is passed, as the hook does). Allocates nothing. */
 export function chestMet(poses: Pick<CrowdPoses, "x" | "z" | "feetY" | "shown" | "look">, count: number, skip: Uint8Array | null, ray: LookRay, radius: number, reach: number, out: Meeting, peopleOnly = false): Meeting {
   out.index = -1;

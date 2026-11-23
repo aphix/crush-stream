@@ -377,10 +377,15 @@ export class CrashEngine extends EngineGarage {
       playerCar: () => -1,
       offered: () => this.tetherOffered(),
       chase: () => false,
-      afoot: () => this.onFoot.armed(),
+      afoot: () => this.onFoot.afootInOpenWorld,
       self: () => WALKER_SLOT,
-      personMet: (ray, reach, out) => this.openWorld.hookMet(ray, reach, out),
-      standPerson: (civilian) => this.openWorld.hookBody(civilian),
+      actor: () => this.seat.carIndex,
+      // Another actor's walker has a pool slot only once the room shares the players' walkers.
+      actorSlot: () => -1,
+      guest: () => this.net.client,
+      sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir),
+      personMet: (ray, reach, out, remote) => this.openWorld.hookMet(ray, reach, out, remote),
+      standPerson: (civilian, eyeX, eyeZ) => this.openWorld.hookBody(civilian, eyeX, eyeZ),
       holdDoll: (slot) => this.openWorld.hookPin(slot),
     });
     this.scene.add(this.tether.art.group);
@@ -1420,9 +1425,9 @@ export class CrashEngine extends EngineGarage {
     this.net.sendEject(e);
   }
 
-  /** The hook is on offer: weapon 0 in hand, on foot in the open world, solo or as the room's host. */
+  /** The hook is on offer: weapon 0 in hand, on foot in the open world, on any machine (a guest sends its fire as an act). */
   private tetherOffered(): boolean {
-    return this.onFoot.armed() && this.onFoot.arms.weapon === "hook";
+    return this.onFoot.afootInOpenWorld && this.onFoot.arms.weapon === "hook";
   }
 
   /** The on-foot control is offered: the game is running a scene with a player's car to leave (not the garage, the lab or the showcase), and no reel, fade, boot warm-up or race menu holds it. Online or off. */

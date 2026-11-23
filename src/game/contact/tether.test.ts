@@ -34,8 +34,8 @@ function stage(placements: readonly (readonly [number, number, number, number, n
 }
 
 /** A cable from the world point `at` to car `car`'s centre of mass, as long as they stand apart now. */
-function tieToWorld(s: Staged, car: number, at: THREE.Vector3, strength: number | null = UNBREAKABLE): number {
-  const slot = s.set.open();
+function tieToWorld(s: Staged, car: number, at: THREE.Vector3, strength: number | null = UNBREAKABLE, owner = -1): number {
+  const slot = s.set.open(owner);
   const centre = s.cars[car]!.frame.centre;
   s.set.setEnd(slot, 0, WORLD, at.x, at.y, at.z);
   s.set.setEnd(slot, 1, car, centre.x, centre.y, centre.z);
@@ -361,5 +361,41 @@ describe("given a full set of cables", () => {
     expect(set.count, "cables alive").toBe(MAX_TETHERS);
     expect(slots[MAX_TETHERS], "the new cable took the oldest one's slot").toBe(slots[0]);
     expect(set.isAlive(slots[1]!), "the newer cable is still out").toBeTruthy();
+  });
+});
+
+describe("given two cars 30 m from their own world anchors, each on a cable fired by a different actor", () => {
+  const NORTH = 40;
+  const twoCables = (): { s: Staged; first: number; second: number } => {
+    const s = stage([
+      [30, 0, EAST, 0, 0],
+      [30, NORTH, EAST, 0, 0],
+    ]);
+    const first = tieToWorld(s, 0, ORIGIN, UNBREAKABLE, 0);
+    const second = tieToWorld(s, 1, new THREE.Vector3(0, 0, NORTH), UNBREAKABLE, 3);
+    return { s, first, second };
+  };
+
+  it("when the second actor's winch reels for 3 s, then his car comes within 6 m of its anchor and the first actor's car has not moved", () => {
+    const { s, first, second } = twoCables();
+    s.set.setReel(3, true);
+    run(s, 3);
+    expect(span(s, second), "the reeling actor's cable (m)").toBeLessThan(6);
+    expect(span(s, first), "the other actor's cable (m)").toBeGreaterThan(29.9);
+    expect(s.cars[0]!.group.position.x, "the other actor's car stays where it stood (m)").toBeGreaterThan(29.9);
+  });
+
+  it("when the first actor's winch reels for 3 s, then his car comes within 6 m and the second actor's car has not moved", () => {
+    const { s, first, second } = twoCables();
+    s.set.setReel(0, true);
+    run(s, 3);
+    expect(span(s, first), "the reeling actor's cable (m)").toBeLessThan(6);
+    expect(span(s, second), "the other actor's cable (m)").toBeGreaterThan(29.9);
+  });
+
+  it("when the cables are read, then each names the actor that fired it", () => {
+    const { s, first, second } = twoCables();
+    expect(s.set.owner(first), "the first cable's owner").toBe(0);
+    expect(s.set.owner(second), "the second cable's owner").toBe(3);
   });
 });

@@ -129,7 +129,7 @@ export type RopeEnd = { kind: "doll" | "prop" | "box" | "car"; id: number; at: T
 export type RopeMessage =
   | { type: "rope"; command: number; slot: number; a: RopeEnd; b: RopeEnd }
   | { type: "ropeCut"; command: number; slot: number }
-  | { type: "ropeReel"; command: number; on: boolean };
+  | { type: "ropeReel"; command: number; on: boolean; /** The rope that reels (absent or -1: every rope's winch). */ slot?: number };
 
 /** A rope's record in a result, floats: its state (`ROPE_NONE`, `ROPE_PENDING`: told of but not yet joined, `ROPE_JOINED`), end a's world point, end b's, its length (m). */
 export const ROPE_FLOATS = 8;
