@@ -6,6 +6,16 @@ export const SEATS_NOTICE = { none: 0, noCar: 1, tooFast: 2, doorBlocked: 3 } as
 /** Notice values this build knows. */
 const NOTICES = 4;
 
+/** The `arg` byte of a guest's get-out act: the door he will climb out by, 1 the door at x sign +1, 2 the one at -1 (0: he names none). */
+export function exitDoorArg(side: number): number {
+  return side > 0 ? 1 : side < 0 ? 2 : 0;
+}
+
+/** The door (x sign) a get-out act's `arg` names; 0 for none or a value this build does not know (untrusted: a peer's). */
+export function exitDoorOf(arg: number): number {
+  return arg === 1 ? 1 : arg === 2 ? -1 : 0;
+}
+
 /** Type byte, count byte, then per seated actor: actor, car, seat (row x 2 + side); then the notice byte. */
 const HEAD_BYTES = 2;
 const ENTRY_BYTES = 3;

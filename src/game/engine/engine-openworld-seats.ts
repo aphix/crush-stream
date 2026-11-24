@@ -3,12 +3,12 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { fillSeat, frontNeighbour, seatCount, seatDoorSide, SEAT_DRIVER, seatRows } from "../vehicle/car-seats.ts";
 import { ACT } from "../net/act-codec.ts";
 import { MAX_ACTORS, SeatTable } from "../scenes/seat-table.ts";
-import { SEATS_NOTICE } from "../net/seats-codec.ts";
+import { exitDoorArg, SEATS_NOTICE } from "../net/seats-codec.ts";
 import { ENTER_MAX_SPEED, EXIT_MAX_SPEED } from "../present/onfoot-flow.ts";
 import type { Pole } from "../present/ragdoll-ground.ts";
 import { DoorSwings } from "./engine-openworld-door-swings.ts";
 import type { ActorPlace } from "./engine-openworld-law.ts";
-import { doorAt, exitSide } from "./onfoot-doors.ts";
+import { doorAt, doorBlocked, exitSide } from "./onfoot-doors.ts";
 
 /** What asking for a seat came to: done (the table says so now), sent (a guest waits for the host's answer) or refused (`OpenWorldSeats.refusal` says why). */
 export const ASK = { done: 0, sent: 1, refused: 2 } as const;
@@ -85,14 +85,20 @@ export class OpenWorldSeats {
     return this.table.carOf(this.ports.self());
   }
 
-  /** The door (x sign) player `actor` leaves his seat by: its own when it has room, else from a front seat the far front door when the seat beside him is empty and that door has room (he slides across); 0 when he sits in no car or no door has room. */
-  exitSideOf(actor: number): number {
+  /**
+   * The door (x sign) player `actor` leaves his seat by: its own when it has room, else from a front seat the far front door when the seat beside him is empty and that door has room (he slides across); 0 when he sits in no car or no door has room.
+   * `wanted`: the door a guest's machine chose and climbs out by (its x sign): that door or none, so the door the host swings is the one he comes out of.
+   */
+  exitSideOf(actor: number, wanted = 0): number {
     const index = this.table.carOf(actor);
     const body = this.ports.cars()[index];
     if (body === undefined) return 0;
     const seat = this.table.seatOf(actor);
     const beside = frontNeighbour(seat);
-    return exitSide(this.ports.cars(), body, this.ports.poles(), seatDoorSide(seat), beside >= 0 && this.table.holderOf(index, beside) < 0);
+    const own = seatDoorSide(seat);
+    const mayCross = beside >= 0 && this.table.holderOf(index, beside) < 0;
+    if (wanted === 0) return exitSide(this.ports.cars(), body, this.ports.poles(), own, mayCross);
+    return (wanted === own || (wanted === -own && mayCross)) && !doorBlocked(this.ports.cars(), body, this.ports.poles(), wanted) ? wanted : 0;
   }
 
   /** The door this machine's player would leave his seat by (`exitSideOf`). */
@@ -164,13 +170,13 @@ export class OpenWorldSeats {
     body.driverOut = null;
   }
 
-  /** Player `actor` gets out of his seat by the door `exitSideOf` names (his own side's, or the far front door when his own has no room), which swings open for him. 0, or the `SEATS_NOTICE` that says why not. */
-  getOut(actor: number): number {
+  /** Player `actor` gets out of his seat by the door `exitSideOf` names (his own side's, or the far front door when his own has no room; `wanted`: the one door a guest named), which swings open for him. 0, or the `SEATS_NOTICE` that says why not. */
+  getOut(actor: number, wanted = 0): number {
     const index = this.table.carOf(actor);
     const body = this.ports.cars()[index];
     if (body === undefined) return SEATS_NOTICE.noCar;
     if (body.velocity.length() > EXIT_MAX_SPEED) return SEATS_NOTICE.tooFast;
-    const side = this.exitSideOf(actor);
+    const side = this.exitSideOf(actor, wanted);
     if (side === 0) return SEATS_NOTICE.doorBlocked;
     this.table.leave(actor);
     this.swings.open(actor, index, side, true);
@@ -218,12 +224,14 @@ export class OpenWorldSeats {
     return this.refuse(this.getIn(this.ports.self(), car));
   }
 
-  /** This machine's player asks to get out of his seat: carried out here by the host and solo, sent to the host by a guest. */
+  /** This machine's player asks to get out of his seat: carried out here by the host and solo. A guest sends the host the door he will climb out by (`exitDoorArg`), and is refused here when his own machine finds no door with room. */
   askOut(): number {
     if (this.ports.guest()) {
       const body = this.ports.cars()[this.myCar()];
       if (body === undefined) return this.refuse(SEATS_NOTICE.noCar);
-      this.ports.sendAct(ACT.getOut, 0, body.group.position, _up);
+      const side = this.myExitSide();
+      if (side === 0) return this.refuse(SEATS_NOTICE.doorBlocked);
+      this.ports.sendAct(ACT.getOut, exitDoorArg(side), body.group.position, _up);
       return ASK.sent;
     }
     return this.refuse(this.getOut(this.ports.self()));

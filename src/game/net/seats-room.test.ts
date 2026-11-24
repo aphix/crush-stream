@@ -13,7 +13,7 @@ import { ACT } from "./act-codec.ts";
 import { FRAME_MS, Hub } from "./net-hub.test-util.ts";
 import { NetPlay } from "./net-play.ts";
 import { worldGame } from "./net-world-game.test-util.ts";
-import { packSeats, SEATS_NOTICE } from "./seats-codec.ts";
+import { exitDoorArg, packSeats, SEATS_NOTICE } from "./seats-codec.ts";
 
 const PARKED = 3;
 const PASSENGER_DOOR = -DRIVER_SIDE;
@@ -21,6 +21,10 @@ const TORSO_UP = 1;
 /** Net frames (1/30 s) the host's grace for a peer that left runs, and a car driven this long must have moved this far (m). */
 const GRACE_FRAMES = 360;
 const DROVE_M = 3;
+/** Net frames a door needs to shut again behind him (3.3 s) and to swing wide (0.4 s), and the angle (rad) that counts as wide. */
+const SHUT_FRAMES = 100;
+const OPEN_FRAMES = 12;
+const WIDE_RAD = 0.5;
 
 const open: NetPlay[] = [];
 afterEach(() => {
@@ -56,7 +60,7 @@ function room() {
     sendAct: () => {},
   });
   const acts = new OpenWorldActs(
-    { actorPlace: (actor, out) => (places.has(actor) ? (Object.assign(out, places.get(actor)), true) : false), now: () => now / 1000, self: () => 0, guest: () => false, face: () => {}, layGun: () => false, sendAct: () => {}, seatedCar: (actor) => seats.table.carOf(actor), getIn: (actor, car) => seats.getIn(actor, car), getOut: (actor) => seats.getOut(actor), hookFire: () => {}, hookCut: () => {}, hookReel: () => {} },
+    { actorPlace: (actor, out) => (places.has(actor) ? (Object.assign(out, places.get(actor)), true) : false), now: () => now / 1000, self: () => 0, guest: () => false, face: () => {}, layGun: () => false, sendAct: () => {}, seatedCar: (actor) => seats.table.carOf(actor), getIn: (actor, car) => seats.getIn(actor, car), getOut: (actor, door) => seats.getOut(actor, door), hookFire: () => {}, hookCut: () => {}, hookReel: () => {} },
     { punch: () => {}, shoot: () => 0, meet: () => 0, wallBetween: () => false, shotFired: () => {} },
   );
   tables[0] = seats.table;
@@ -146,5 +150,19 @@ describe("given a host and two guests in a room of the open world, and a parked 
     r.step(15);
     expect(r.tables[0]!.carOf(1), "he sits nowhere").toBe(-1);
     expect(r.tables[1]!.carOf(1), "nor on his machine").toBe(-1);
+  });
+
+  it("when a guest at the wheel of the parked car asks to get out by its passenger door, then the host swings that door and not the driver's, and every machine sees his seat free", () => {
+    const r = room();
+    asksAtDoor(r, 1, DRIVER_SIDE);
+    const car = r.worlds[0]!.live()[PARKED]!;
+    r.step(SHUT_FRAMES);
+    expect(car.doorAngle(DRIVER_SIDE), "control: the door he got in by has shut").toBe(0);
+    r.guests[0]!.sendAct(ACT.getOut, exitDoorArg(PASSENGER_DOOR), car.group.position, { x: 0, y: 1, z: 0 });
+    r.step(OPEN_FRAMES);
+    expect(r.tables[0]!.carOf(1), "the host's table: he sits in no car").toBe(-1);
+    expect(agree(r), "the guests' copies").toBe(true);
+    expect(car.doorAngle(PASSENGER_DOOR), "the passenger door (rad)").toBeGreaterThan(WIDE_RAD);
+    expect(car.doorAngle(DRIVER_SIDE), "the driver's door (rad)").toBe(0);
   });
 });

@@ -3,7 +3,7 @@ import { PLAYER_KO_BLOWS, PLAYER_KO_WINDOW, PLAYER_PUNCH_COOLDOWN } from "../ai/
 import { LookRay } from "../ai/civilians/civilian-look.ts";
 import { detAtan2, detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { wrapAngle } from "../present/walker-math.ts";
-import { SEATS_NOTICE } from "../net/seats-codec.ts";
+import { exitDoorOf, SEATS_NOTICE } from "../net/seats-codec.ts";
 import { ACT, ACT_KINDS, type Act } from "../net/act-codec.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { gunAt, slotOfGun, STRAIGHT_UP, type Gun } from "./engine-onfoot-arms.ts";
@@ -84,8 +84,8 @@ type ActPorts = {
   seatedCar(actor: number): number;
   /** Actor `actor`, on foot, gets in car `car` (`OpenWorldSeats.getIn`): 0, or the `SEATS_NOTICE` that says why not. */
   getIn(actor: number, car: number): number;
-  /** Actor `actor` gets out of his seat (`OpenWorldSeats.getOut`): 0, or the `SEATS_NOTICE` that says why not. */
-  getOut(actor: number): number;
+  /** Actor `actor` gets out of his seat by the door at x sign `door` (0: the one the host finds) (`OpenWorldSeats.getOut`): 0, or the `SEATS_NOTICE` that says why not. */
+  getOut(actor: number, door: number): number;
   /** Actor `actor` fires the hook along `ray`; `sawPerson`: his own reticle had lit a person (`TetherDirector.fireFor`). */
   hookFire(actor: number, ray: LookRay, sawPerson: boolean): void;
   /** Actor `actor` cuts his cables (`TetherDirector.cutFor`). */
@@ -159,7 +159,7 @@ export class OpenWorldActs {
   hear(actor: number, act: Act): number {
     if (actor < 0 || actor >= MAX_ACTORS) return SEATS_NOTICE.none;
     if (act.kind === ACT.getIn) return this.hearGetIn(actor, act);
-    if (act.kind === ACT.getOut) return this.ports.seatedCar(actor) < 0 ? SEATS_NOTICE.noCar : this.ports.getOut(actor);
+    if (act.kind === ACT.getOut) return this.ports.seatedCar(actor) < 0 ? SEATS_NOTICE.noCar : this.ports.getOut(actor, exitDoorOf(act.arg));
     if (act.kind === ACT.hookFire) return this.hearHookFire(actor, act);
     if (act.kind === ACT.hookCut) {
       this.ports.hookCut(actor);

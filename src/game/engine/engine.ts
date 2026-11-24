@@ -486,7 +486,7 @@ export class CrashEngine extends EngineGarage {
         sendAct: (kind, arg, eye, dir) => this.net.sendAct(kind, arg, eye, dir),
         seatedCar: (actor) => this.desk.table.carOf(actor),
         getIn: (actor, car) => this.desk.getIn(actor, car),
-        getOut: (actor) => this.desk.getOut(actor),
+        getOut: (actor, door) => this.desk.getOut(actor, door),
         hookFire: (actor, ray, sawPerson) => void this.tether.fireFor(actor, ray, sawPerson),
         hookCut: (actor) => this.tether.cutFor(actor),
         hookReel: (actor, on) => this.tether.reelFor(actor, on),

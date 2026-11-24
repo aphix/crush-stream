@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { afterEach, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { ACT } from "../net/act-codec.ts";
-import { SEATS_NOTICE } from "../net/seats-codec.ts";
+import { exitDoorOf, SEATS_NOTICE } from "../net/seats-codec.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
@@ -422,5 +422,81 @@ describe("given a driver whose own door has a car parked against it", () => {
   it("when his own door is clear, then he leaves by it as before", () => {
     const f = fixture();
     expect(f.seats.myExitSide(), "the door he would leave by").toBe(DRIVER_SIDE);
+  });
+
+  it("when a guest's act names the passenger door and both doors are clear, then he leaves by the door he named: it swings open and his own stays shut", () => {
+    const f = fixture();
+    expect(f.seats.getOut(0, PASSENGER_DOOR)).toBe(SEATS_NOTICE.none);
+    run(f, SWING_OPEN_S);
+    expect(f.cars[0]!.doorAngle(PASSENGER_DOOR), "the passenger door").toBeGreaterThan(WIDE_RAD);
+    expect(f.cars[0]!.doorAngle(DRIVER_SIDE), "the driver's door").toBe(0);
+  });
+
+  it("when the door a guest's act names has a car against it, then he is refused for want of room and stays at the wheel, though his other door is clear", () => {
+    const f = fixture();
+    blockDriverDoor(f);
+    expect(f.seats.getOut(0, DRIVER_SIDE)).toBe(SEATS_NOTICE.doorBlocked);
+    expect(f.table.driverOf(0), "the driver of his car").toBe(0);
+  });
+
+  it("when a guest's act names the far door with a passenger sitting beside him, then he is refused: he cannot slide across", () => {
+    const f = fixture();
+    walkUp(f, 1, 0, PASSENGER_DOOR);
+    f.seats.getIn(1, 0);
+    expect(f.seats.getOut(0, PASSENGER_DOOR)).toBe(SEATS_NOTICE.doorBlocked);
+    expect(f.table.driverOf(0), "the driver of his car").toBe(0);
+  });
+});
+
+describe("given a guest at the wheel of his own car", () => {
+  /** A guest's seats (actor 1, seated at the wheel of car 1) over `f`'s cars, and the acts it sends. */
+  function guestSeats(f: Fixture): { guest: OpenWorldSeats; sent: { kind: number; arg: number }[] } {
+    const sent: { kind: number; arg: number }[] = [];
+    const guest = new OpenWorldSeats({
+      cars: () => f.cars,
+      poles: () => [],
+      place: () => false,
+      active: () => true,
+      peer: () => false,
+      self: () => 1,
+      guest: () => true,
+      canTake: () => true,
+      taken: () => expect.fail("a guest takes no car"),
+      gas: () => 0,
+      now: () => 0,
+      sendAct: (kind, arg) => void sent.push({ kind, arg }),
+    });
+    guest.table.sit(1, 1, 0);
+    return { guest, sent };
+  }
+
+  it("when he asks to get out with his own door clear, then one get-out act goes to the host naming that door", () => {
+    const { guest, sent } = guestSeats(fixture());
+    expect(guest.askOut(), "he waits for the host").toBe(ASK.sent);
+    expect(sent.length, "one act").toBe(1);
+    expect(sent[0]!.kind, "a get-out").toBe(ACT.getOut);
+    expect(exitDoorOf(sent[0]!.arg), "the door it names").toBe(DRIVER_SIDE);
+  });
+
+  it("when a car stands against his own door, then the act names the passenger door he will slide across to", () => {
+    const f = fixture();
+    const spot = doorSpot(f.cars[1]!, new THREE.Vector3(), DRIVER_SIDE);
+    f.cars[2]!.group.position.set(spot.x, f.cars[2]!.group.position.y, spot.z);
+    const { guest, sent } = guestSeats(f);
+    guest.askOut();
+    expect(sent.length, "one act").toBe(1);
+    expect(exitDoorOf(sent[0]!.arg), "the door it names").toBe(PASSENGER_DOOR);
+  });
+
+  it("when cars stand against both his doors, then he is refused on his own machine and nothing is sent", () => {
+    const f = fixture();
+    for (const [car, side] of [[2, DRIVER_SIDE], [3, PASSENGER_DOOR]] as const) {
+      const spot = doorSpot(f.cars[1]!, new THREE.Vector3(), side);
+      f.cars[car]!.group.position.set(spot.x, f.cars[car]!.group.position.y, spot.z);
+    }
+    const { guest, sent } = guestSeats(f);
+    expect(guest.askOut(), "refused").toBe(ASK.refused);
+    expect(guest.takeNotice(), "for want of room").toBe(SEATS_NOTICE.doorBlocked);
+    expect(sent.length, "acts sent").toBe(0);
   });
 });
