@@ -32,6 +32,8 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
 
   beforeAll(async () => {
     rig = await OnFootRig.boot();
+    // The fleet boots with a random scene seed: logged so a red run names it.
+    console.log("fleet scene seed", rig.engine["sceneSeed"]);
     rig.engine["looping"] = false;
     rig.run(FRAME);
   });
@@ -78,7 +80,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
       expect(thrown, "throws by the first car").toHaveBeenCalledTimes(1);
       rig.run(LIES_S);
       expect(rig.walker().state, "he still lies when the second car comes").not.toBe("stand");
-      // Another car than the first: a car sent through him twice leaves the ragdoll world's proxy of it so stale that it blocks the next row's walk.
+      // Car 2, not car 1: with car 1 sent twice the next row's walk to car 1's door was seen to stop short of it; the cause is not yet found.
       rig.runDownBy(rig.cars()[2]!, own);
       rig.run(SECOND_PASS_S);
       expect(thrown, "throws after the second car reached him").toHaveBeenCalledTimes(1);
