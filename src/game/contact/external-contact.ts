@@ -360,7 +360,11 @@ export function takeRow(car: DeformableCar, rows: Float64Array, o: number, vx: n
   return (dvx * nx + dvz * nz) * rows[o + BODY_M]!;
 }
 
-/** Every dynamic mass of `car` takes the rigid motion of the row at `o` of `rows` (its velocity and spin about its centre): momentum and angular momentum kept, the internal motion gone. */
+/**
+ * Every dynamic mass of `car` takes the rigid motion of the row at `o` of `rows` (its velocity and spin about its centre) and the body's own roll and pitch
+ * about their centroid: momentum and angular momentum kept, the internal motion gone. The carry turns the masses with the body's whole spin, so a mass
+ * left without its roll and pitch part spun against the body and its drift was frozen as crush.
+ */
 export function moveAsOneBody(car: DeformableCar, rows: Float64Array, o: number): void {
   if (!car.deform.massActive) return;
   const vx = rows[o + BODY_VX]!;
@@ -371,10 +375,24 @@ export function moveAsOneBody(car: DeformableCar, rows: Float64Array, o: number)
   car.velocity.x = vx;
   car.velocity.z = vz;
   car.angular.y = w;
-  for (const q of car.deform.masses) {
+  const wx = car.angular.x;
+  const wz = car.angular.z;
+  const masses = car.deform.masses;
+  let heights = 0;
+  let weight = 0;
+  for (let i = 0; i < masses.length; i++) {
+    const q = masses[i]!;
     if (!q.dynamic) continue;
-    q.vel.x = vx + w * (q.world.z - cz);
-    q.vel.z = vz - w * (q.world.x - cx);
+    heights += q.mass * q.world.y;
+    weight += q.mass;
+  }
+  const cy = heights / weight;
+  for (let i = 0; i < masses.length; i++) {
+    const q = masses[i]!;
+    if (!q.dynamic) continue;
+    const ry = q.world.y - cy;
+    q.vel.x = vx + w * (q.world.z - cz) - wz * ry;
+    q.vel.z = vz - w * (q.world.x - cx) + wx * ry;
   }
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { launch, makeCar } from "./crash-scenarios.test-util.ts";
-import { carRow, makeBox, solidFace, strikeCar } from "./external-contact.ts";
+import { carRow, makeBox, moveAsOneBody, solidFace, strikeCar } from "./external-contact.ts";
 import { resolveCarPair } from "./pair-contact.ts";
 import { outlineOf, OUTLINE_REACH } from "./cage-outline.ts";
 import { BODY_SIZE, BODY_VX, BODY_W } from "./body-contact.ts";
@@ -24,6 +24,8 @@ const H = 1 / FINE_HZ;
 
 /** The tumble (rad/s) of the truck-wreck capture's pickup as Titanium, Petrol and Ink met it in the air: roll and pitch, no yaw. */
 const TUMBLE = new THREE.Vector3(4, 0, -5);
+/** The pickup's lean (rad) at the time: on its side, 43° over. */
+const LEAN = 0.75;
 /** How far (rad/s) a rigid wreck's yaw reading may be from its rigid motion's: the float noise of the sums. */
 const RIGID = 1e-6;
 
@@ -97,6 +99,24 @@ function tumblingWreck(lean: number, spin: THREE.Vector3): { car: DeformableCar;
 }
 
 describe("given a sedan wreck tumbling in roll and pitch as one rigid body", () => {
+  it("when a rigid contact leaves it one body, then every mass moves with the body's whole spin, its roll and pitch too", () => {
+    const { car, centre, rows } = tumblingWreck(0, TUMBLE);
+    moveAsOneBody(car, rows, 0);
+    let worst = 0;
+    let at = "";
+    for (const m of car.deform.masses.filter((q) => q.dynamic)) {
+      const rigid = new THREE.Vector3().crossVectors(car.angular, m.world.clone().sub(centre)).add(car.velocity);
+      const off = Math.hypot(m.vel.x - rigid.x, m.vel.z - rigid.z);
+      if (off > worst) [worst, at] = [off, m.name];
+    }
+    expect(worst, `${at} moves ${worst.toFixed(3)} m/s in plan against the body's rigid motion (spin ${car.angular.toArray().map((v) => v.toFixed(2)).join(", ")} rad/s)`).toBeLessThanOrEqual(RIGID);
+  });
+
+  it("when it leans on its side and a pair reads it as one body, then the row's yaw spin is the body's own, none of its roll and pitch", () => {
+    const { rows } = tumblingWreck(LEAN, TUMBLE);
+    expect(Math.abs(rows[BODY_W]! - TUMBLE.y), `the row spins at ${rows[BODY_W]!.toFixed(3)} rad/s about the vertical, the body at ${TUMBLE.y}`).toBeLessThanOrEqual(RIGID);
+  });
+
   it("when only its masses moving one way across a face are driving, then the row closes on the face at their own mean plan speed, their roll and pitch speed kept", () => {
     const { car } = tumblingWreck(0, TUMBLE);
     const rows = new Float64Array(2 * BODY_SIZE);
@@ -104,5 +124,28 @@ describe("given a sedan wreck tumbling in roll and pitch as one rigid body", () 
     const driving = car.deform.masses.filter((m) => m.dynamic && m.vel.x < 0);
     const closing = driving.reduce((s, m) => s + m.mass * m.vel.x, 0) / driving.reduce((s, m) => s + m.mass, 0);
     expect(Math.abs(rows[BODY_VX]! - closing), `the row closes at ${rows[BODY_VX]!.toFixed(3)} m/s, its ${driving.length} driving masses at ${closing.toFixed(3)}`).toBeLessThanOrEqual(RIGID);
+  });
+
+  it("when a leaning wreck pitched, yawing and rolling at 1 rad/s is read as one body and left one body, then its linear and angular momentum on all three axes and its kinetic energy are kept", () => {
+    const { car, centre, rows } = tumblingWreck(LEAN, new THREE.Vector3(1, 1, 1));
+    const masses = car.deform.masses.filter((m) => m.dynamic);
+    const read = (): { p: THREE.Vector3; l: THREE.Vector3; ke: number } => {
+      const p = new THREE.Vector3();
+      const l = new THREE.Vector3();
+      let ke = 0;
+      for (const m of masses) {
+        p.addScaledVector(m.vel, m.mass);
+        l.add(new THREE.Vector3().crossVectors(m.world.clone().sub(centre), m.vel).multiplyScalar(m.mass));
+        ke += 0.5 * m.mass * m.vel.lengthSq();
+      }
+      return { p, l, ke };
+    };
+    const before = read();
+    moveAsOneBody(car, rows, 0);
+    const after = read();
+    const moved = (a: THREE.Vector3, b: THREE.Vector3): string => `${a.toArray().map((v, k) => (v - b.getComponent(k)).toFixed(3)).join(", ")}`;
+    expect(after.p.distanceTo(before.p), `linear momentum moved (${moved(after.p, before.p)}) N·s`).toBeLessThanOrEqual(KEPT);
+    expect(after.l.distanceTo(before.l), `angular momentum about the centroid moved (${moved(after.l, before.l)}) N·m·s`).toBeLessThanOrEqual(KEPT);
+    expect(after.ke - before.ke, `the masses' kinetic energy changed by ${(after.ke - before.ke).toFixed(3)} J`).toBeLessThanOrEqual(KEPT);
   });
 });
