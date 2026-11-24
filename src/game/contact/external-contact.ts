@@ -279,6 +279,7 @@ const result = new Float64Array(OUT_SIZE);
  * the face is the structure still driving into it (a nose held on it is at rest, out of the face's impulse's reach): the row's velocity
  * is the mean of the masses moving into the face faster than `faceVn` along the normal, referred back to the centre by the body's spin
  * (else a spinning rigid wreck closes on its partner by its own turn every slice). With none driving, or no wreck, it is every mass.
+ * The body's own roll and pitch are taken out of the masses' motion first: on a leaning wreck they have a plan part a yaw fit reads as spin.
  */
 export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: number, nz: number, faceVn: number): void {
   const masses = car.deform.masses;
@@ -288,7 +289,9 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
   let cz = 0;
   let px = 0;
   let pz = 0;
+  let cy = 0;
   let drivingMass = 0;
+  let drivingPY = 0;
   let drivingPX = 0;
   let drivingPZ = 0;
   let drivingX = 0;
@@ -299,6 +302,7 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
     mass += m.mass;
     cx += m.mass * m.world.x;
     cz += m.mass * m.world.z;
+    cy += m.mass * m.world.y;
     px += m.mass * m.vel.x;
     pz += m.mass * m.vel.z;
     if (m.vel.x * nx + m.vel.z * nz < faceVn) {
@@ -307,10 +311,14 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
       drivingZ += m.mass * m.vel.z;
       drivingPX += m.mass * m.world.x;
       drivingPZ += m.mass * m.world.z;
+      drivingPY += m.mass * m.world.y;
     }
   }
   cx /= mass;
   cz /= mass;
+  cy /= mass;
+  const wx = live ? car.angular.x : 0;
+  const wz = live ? car.angular.z : 0;
   const meanX = live ? px / mass : car.velocity.x;
   const meanZ = live ? pz / mass : car.velocity.z;
   let inertia = 0;
@@ -320,8 +328,9 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
     if (live && !m.dynamic) continue;
     const rx = m.world.x - cx;
     const rz = m.world.z - cz;
+    const ry = m.world.y - cy;
     inertia += m.mass * (rx * rx + rz * rz);
-    spin += m.mass * (rz * (m.vel.x - meanX) - rx * (m.vel.z - meanZ));
+    spin += m.mass * (rz * (m.vel.x - meanX + wz * ry) - rx * (m.vel.z - meanZ - wx * ry));
   }
   const driving = live && drivingMass > 0;
   out[o + BODY_M] = mass;
@@ -331,8 +340,9 @@ export function carRow(out: Float64Array, o: number, car: DeformableCar, nx: num
   const w = live ? spin / inertia : car.angular.y;
   // The driving masses' mean velocity is the body's at their centroid: referred to the centre, a rigid spinning wreck presents no closing of its own.
   const lever = driving ? drivingMass : 1;
-  out[o + BODY_VX] = driving ? drivingX / drivingMass - w * (drivingPZ / lever - cz) : meanX;
-  out[o + BODY_VZ] = driving ? drivingZ / drivingMass + w * (drivingPX / lever - cx) : meanZ;
+  const dy = drivingPY / lever - cy;
+  out[o + BODY_VX] = driving ? drivingX / drivingMass - w * (drivingPZ / lever - cz) + wz * dy : meanX;
+  out[o + BODY_VZ] = driving ? drivingZ / drivingMass + w * (drivingPX / lever - cx) - wx * dy : meanZ;
   out[o + BODY_W] = w;
   out[o + BODY_HARD] = 1;
 }
