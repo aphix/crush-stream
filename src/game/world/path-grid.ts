@@ -20,6 +20,19 @@ type GridHit = { k: number; s: number; lateral: number; dist2: number; cx: numbe
 /** Cell (m) of the grid: about 16 segments of a straight road a cell. */
 const GRID_CELL = 16;
 
+/** The longest segment (m) of a path, the wrapping one included on a closed one: how far a segment reaches from its first sample. */
+export function longestSegment(path: GridPath): number {
+  const n = path.count;
+  let longest2 = 0;
+  for (let k = 0; k < (path.closed ? n : n - 1); k++) {
+    const b = k + 1 === n ? 0 : k + 1;
+    const ex = path.x[b]! - path.x[k]!;
+    const ez = path.z[b]! - path.z[k]!;
+    longest2 = Math.max(longest2, ex * ex + ez * ez);
+  }
+  return Math.sqrt(longest2);
+}
+
 /** A path's segments by cell (CSR: `items[start[c]..start[c + 1]]` are the segments whose bounding box touches cell c). */
 type SegGrid = { x0: number; z0: number; nx: number; nz: number; start: Int32Array; items: Int32Array; seen: Int32Array; stamp: number };
 const segGrids = new WeakMap<GridPath, SegGrid>();

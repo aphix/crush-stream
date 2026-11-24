@@ -101,6 +101,40 @@ for (const json of [...TRACKS, ...OFF_MENU]) {
       }
       expect(queries).toBeGreaterThanOrEqual(3000);
     });
+
+    it("when points are projected with the hint at or within 30 samples of the true nearest, then every path answers exactly as the plain scans do: the pruned samples held no nearer segment", () => {
+      const track = new Track(json);
+      const rand = mulberry32(34);
+      const b = track.bounds;
+      const want = blankProjection();
+      const got = blankProjection();
+      const truth = blankProjection();
+      let queries = 0;
+      const perPath = Math.max(1500, Math.ceil(3000 / track.paths().length));
+      for (const p of track.paths()) {
+        for (let i = 0; i < perPath; i++) {
+          let x: number;
+          let z: number;
+          if (rand() < 0.6) {
+            const k = Math.floor(rand() * p.count);
+            const lat = (rand() * 2 - 1) * (rand() < 0.5 ? 30 : 120);
+            x = p.x[k]! + p.tz[k]! * lat;
+            z = p.z[k]! - p.tx[k]! * lat;
+          } else {
+            x = b.minX - 80 + rand() * (b.maxX - b.minX + 160);
+            z = b.minZ - 80 + rand() * (b.maxZ - b.minZ + 160);
+          }
+          scan(p, x, z, -1, truth);
+          const off = rand() < 0.3 ? 0 : Math.round((rand() * 2 - 1) * 30);
+          const hint = p.closed ? (((truth.k + off) % p.count) + p.count) % p.count : Math.max(0, Math.min(p.count - 1, truth.k + off));
+          scan(p, x, z, hint, want);
+          projectPath(p, x, z, hint, got);
+          queries++;
+          expect(same(want, got), `(${x.toFixed(3)}, ${z.toFixed(3)}) hint ${hint}: want ${JSON.stringify(want)} got ${JSON.stringify(got)}`).toBeTruthy();
+        }
+      }
+      expect(queries).toBeGreaterThanOrEqual(3000);
+    });
   });
 }
 

@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_CONTEST_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_TURN_IDX } from "./constants.ts";
+import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_CONTEST_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_RISK_IDX, GUARD_RIVALS_IDX, GUARD_STEER_NEED_IDX, GUARD_TURN_IDX } from "./constants.ts";
 import { guardContact } from "./contact-guard.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { ARM_CLOSING } from "../contact/constants.ts";
+import { mulberry32 } from "../world/placements.ts";
 
 /** A car at (`x`, `z`) doing `speed` m/s along +z (`dir` 1) or −z (−1). */
 function car(id: number, x: number, z: number, speed: number, dir: 1 | -1 = 1): AiCar {
@@ -274,5 +275,71 @@ describe("given a clean driver whose plan creeps straight at a stopped car 3 m a
       }
       expect(met, `${crawl} m/s: met it at ${met.toFixed(2)} m/s (-1: never)`).toBeLessThanOrEqual(ARM_CLOSING);
     }
+  });
+});
+
+describe("given a field of 32 cars in a 70 m patch (crawlers, stopped cars, a dead one, police past `count`, one with an id the per-car cache does not cover), every car guarded in turn as a step does, for four steps in which the cars' velocities and noses change", () => {
+  const FIELD = 32;
+  const COUNT = 28;
+  const RIVALS = 16;
+
+  /** The plan "full throttle" guarded for `self` against `cars`: the three pedals, the handbrake and the guard's held state. `fresh`: the cache is first filled for another `lead`, so every car it reads is worked out afresh. */
+  function answer(self: AiCar, cars: AiCar[], lead: number, fresh: boolean): number[] {
+    const tune = new Float64Array(GUARD_COUNT);
+    tune[GUARD_BRAKE_IDX] = 20;
+    tune[GUARD_LEAD_IDX] = lead;
+    tune[GUARD_TURN_IDX] = 1.5;
+    tune[GUARD_RISK_IDX] = 0.5;
+    tune[GUARD_RIVALS_IDX] = RIVALS;
+    tune[GUARD_CONTEST_IDX] = 0.8;
+    const spare = new Uint8Array(FIELD);
+    if (fresh) {
+      const other = Float64Array.from(tune);
+      other[GUARD_LEAD_IDX] = lead + 1;
+      guardContact(self, cars, COUNT, spare, other, { ...idleDrive(), throttle: 1 });
+    }
+    const out: DriveInput = { ...idleDrive(), throttle: 1 };
+    guardContact(self, cars, COUNT, spare, tune, out);
+    return [out.throttle, out.brake, out.steer, out.ebrake ? 1 : 0, tune[GUARD_PUSH_IDX]!, tune[GUARD_NEED_IDX]!, tune[GUARD_STEER_NEED_IDX]!];
+  }
+
+  // The cache is read by every guarded call after the first of a step: a stale key (a velocity or nose that moved) would answer with the step before's numbers.
+  it("when each car's guard is read through the per-car cache and then again with every car worked out afresh, then the pedals, handbrake and held state of all 32 cars agree to the bit at each step, and some car is steered or braked", () => {
+    const rand = mulberry32(5);
+    const cars: AiCar[] = [];
+    for (let id = 0; id < FIELD; id++) cars.push({ ...blankAiCar(id === FIELD - 1 ? 300 : id), x: rand() * 70, z: rand() * 70, yaw: rand() * 6.28 - 3.14 });
+    cars[7]!.alive = false;
+    let reacted = 0;
+    for (let step = 0; step < 4; step++) {
+      for (let id = 0; id < FIELD; id++) {
+        const c = cars[id]!;
+        // Every fourth car stays stopped and every fourth crawls at a fixed velocity, only their noses turning (a cache keyed without the yaw would keep a step-old direction); the third kind keeps velocity and nose after the first step (only `lead` changes); the rest move afresh.
+        const kind = id % 4;
+        const heading = rand() * 6.28 - 3.14;
+        const speed = 3 + rand() * 30;
+        if (kind === 0 || kind === 1) {
+          c.vx = kind === 0 ? 0 : 0.05;
+          c.vz = 0;
+          c.yaw = rand() * 6.28 - 3.14;
+        } else if (kind !== 2 || step === 0) {
+          c.vx = speed * Math.sin(heading);
+          c.vz = speed * Math.cos(heading);
+          c.yaw = heading;
+        }
+        c.x += rand() * 4 - 2;
+        c.z += rand() * 4 - 2;
+      }
+      cars[3]!.vx = -0;
+      cars[3]!.vz = 20;
+      // The lead changes at the last step only: the earlier ones keep every cache key but the stopped cars' noses, which the yaw alone tells.
+      const lead = step < 3 ? 11 : 14;
+      const cached = cars.map((self) => answer(self, cars, lead, false));
+      const fresh = cars.map((self) => answer(self, cars, lead, true));
+      for (let id = 0; id < FIELD; id++) {
+        expect(firstMismatch(cached[id]!, fresh[id]!), `step ${step}, car ${id}: cached against afresh`).toBeUndefined();
+        if (cached[id]![1]! > 0 || cached[id]![2]! !== 0) reacted++;
+      }
+    }
+    expect(reacted, "guard answers that moved the plan").toBeGreaterThan(20);
   });
 });
