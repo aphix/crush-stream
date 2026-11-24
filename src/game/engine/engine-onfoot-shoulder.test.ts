@@ -11,6 +11,8 @@ const ONFOOT_BLEND_S = 0.5;
 const EASED_S = 1.5;
 /** The climb into the car (`OnFootFlow`) and a frame's slack (s). */
 const CLIMB_IN_S = 0.7;
+/** In first person a gun leaves the eye where it was: a centimetre. */
+const FIRST_PERSON_SAME_M = 0.01;
 /** How far (m) the eye stands to the camera's right of his middle with a gun in hand in the follow view, and how near that may be read. */
 const ARMED_ACROSS_M = 0.7;
 const ACROSS_SLACK_M = 0.02;
@@ -140,7 +142,7 @@ describe("given the real engine in the open world, its player on foot in the fol
     expect(hi, "the eye's farthest right (m)").toBeLessThanOrEqual(ARMED_ACROSS_M + OVERSHOOT_M);
   });
 
-  it("when he climbs back into his car with a gun in hand, then the eye moves no more a frame than it does climbing in with fists", () => {
+  it("when he climbs back into his car with a gun in hand, then the eye moves no more a frame than it does climbing in with fists, and once he is out again with fists it is centred", () => {
     const climbIn = (key: string): number => {
       outWith(key);
       rig.run(EASED_S);
@@ -154,6 +156,22 @@ describe("given the real engine in the open world, its player on foot in the fol
     };
     const fists = climbIn("Digit1");
     expect(climbIn("Digit2"), `the eye's widest step climbing in with a gun (m), fists: ${fists.toFixed(3)}`).toBeLessThanOrEqual(fists + SHOULDER_STEP_M);
+    rig.getOut();
+    rig.run(EASED_S);
+    expect(Math.abs(eyeAcross()), "out again with fists: the eye's offset to the right (m)").toBeLessThanOrEqual(ACROSS_SLACK_M);
+  });
+
+  it("when he is in first person and takes a gun, then the eye stands where it did with fists, to a centimetre", () => {
+    rig.getOut();
+    rig.run(ONFOOT_BLEND_S);
+    rig.press("KeyV");
+    rig.press("KeyV");
+    rig.run(EASED_S);
+    const fists = camera().position.clone().sub(rig.torso());
+    rig.press("Digit2");
+    rig.run(EASED_S);
+    const gun = camera().position.clone().sub(rig.torso());
+    expect(gun.distanceTo(fists), "how far the eye moved with the gun (m)").toBeLessThanOrEqual(FIRST_PERSON_SAME_M);
   });
 
   it("when aim is held from the shoulder view and then let go, then the eye moves continuously and the shoulder's offset is the aim's start", () => {

@@ -30,8 +30,6 @@ const WALL_BEHIND_M = 1.5;
 const NOTCH_IN_SHARE = 0.95;
 /** How far (m) from his eye a stale aim stands: nearer than the orbit's nearest boom, so the adopted pose is clamped to it. */
 const HAND_WIDTH_M = 0.3;
-/** How far (m) the eye may drift while he stands still: a hair of settling. */
-const STILL_M = 0.01;
 
 describe("given the real engine in the fleet, its player at the wheel of car 0", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -300,15 +298,5 @@ describe("given the real engine in the fleet, its player at the wheel of car 0",
     } finally {
       keys.clear();
     }
-  });
-
-  it("when a gun is in his hand in the fleet, then the camera stays where it stood with fists: the shoulder is the open world's", () => {
-    rig.getOut();
-    rig.run(SETTLE_S);
-    const eye = rig.engine["camera"].position;
-    const fists = eye.clone();
-    onFoot().arms.weapon = "pistol";
-    rig.run(SETTLE_S);
-    expect(eye.distanceTo(fists), "how far the eye moved (m)").toBeLessThan(STILL_M);
   });
 });

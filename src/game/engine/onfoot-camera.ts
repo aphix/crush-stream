@@ -46,7 +46,7 @@ const AIM_SIDE = 0.45;
 const AIM_UP = 0.15;
 /** The aim's pivot stands this far (m) to the camera's right: the shoulder stop's and the aim's extra. */
 const AIM_ACROSS = SHOULDER_ACROSS + AIM_SIDE;
-/** A gun or the hook in hand in the follow view: the pivot stands this far (m) right and up of his head, so the centre ray clears his shoulders (0.29 m off his middle) by 0.4 m. Right is the top of the 0.45-0.7 m an over-the-shoulder camera stands out; up tuned by feel. */
+/** A gun or the hook in hand in the follow view: the pivot stands this far (m) right and up of his head, so the centre ray clears his shoulders (0.29 m off his middle) by 0.4 m. Right is the top of the 0.45-0.7 m an over-the-shoulder camera stands out (.extraResearch/third-person-camera-and-controls.md, via `SHOULDER_ACROSS` in walker-camera.ts); up tuned by feel. */
 const ARMED_ACROSS = 0.7;
 const ARMED_UP = 0.1;
 /** The armed shoulder and the aim ease in and out over this long (s), critically damped, so they never overshoot. Tuned by feel, near the 0.3 s car blend. */
