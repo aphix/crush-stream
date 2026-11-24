@@ -116,11 +116,11 @@ describe("given a rock placed leaning 0.2 rad, and one upright", () => {
   });
 });
 
-describe("given a far cluster rock and a near one of the same prefab in the same cell", () => {
-  it("when their meshes are made, then the far one is a mesh of its own that casts no shadow and the near one still casts", () => {
-    const rock = (far?: true): Placed => ({ prefab: PREFAB.rock, x: 3, y: 1, z: -2, yaw: 0, sx: 1, sy: 1, sz: 1, ...(far === undefined ? {} : { far }) });
+describe("given a far cluster rock and a near one of the same prefab in the same cell, and a far rock two cells away", () => {
+  it("when their meshes are made, then the far rocks share one mesh that casts no shadow wherever they stand, and the near one still casts", () => {
+    const rock = (x: number, far?: true): Placed => ({ prefab: PREFAB.rock, x, y: 1, z: -2, yaw: 0, sx: 1, sy: 1, sz: 1, ...(far === undefined ? {} : { far }) });
     const made: { count: number; cast: boolean }[] = [];
-    new PropTumble([rock(), rock(true), rock(true)], plainMaterials(new THREE.MeshBasicMaterial()), (mesh, _id, _shared, cast) => made.push({ count: mesh.count, cast }));
+    new PropTumble([rock(3), rock(3, true), rock(1500, true)], plainMaterials(new THREE.MeshBasicMaterial()), (mesh, _id, _shared, cast) => made.push({ count: mesh.count, cast }));
     expect(made.length, "meshes: near and far").toBe(2);
     expect([made[0]!.count, made[0]!.cast], "the near rock's mesh").toEqual([1, true]);
     expect([made[1]!.count, made[1]!.cast], "the far rocks' mesh").toEqual([2, false]);

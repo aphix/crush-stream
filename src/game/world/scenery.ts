@@ -11,7 +11,7 @@ import { ROAD_DECAL, ROAD_DECAL_ASSET, type RoadDecalName } from "./scenery-asse
 import { OCC_PAD, Occupancy, SEG_COVERED, blankNear, buildField, crossGap, hashString, mix, nearest, unit, type Near, type RoadField } from "./scenery-field.ts";
 import type { Track, TrackPath } from "./track.ts";
 import { NO_FLOOR } from "./ground.ts";
-import { CLUSTER_CLEAR, layClusters, type ClusterWorld, type Look } from "./scenery-clusters.ts";
+import { CLUSTER_CLEAR, clusterable, layClusters, type ClusterWorld, type Look } from "./scenery-clusters.ts";
 
 /**
  * The scenery service: dresses a course from its geometry alone, deterministically, with no per-course editing. `placeScenery` reads the
@@ -187,8 +187,6 @@ type Ctx = {
   /** The far clusters' members and their meta, joined to `drawn` last so no earlier index moves. */
   far: Placed[];
   farMeta: Meta[];
-  /** The draw groups the drawn list holds before the clusters: a far member stands only in one of them. */
-  farGroups: Set<string>;
   lots: Lot[];
   /** The road paint laid, each with the one biome it is limited to (null: wherever its row stands). */
   roadDecals: { name: RoadDecalName; only: BiomeId | null }[];
@@ -223,7 +221,6 @@ function newCtx(track: Track, base: readonly Placed[]): Ctx {
     drawnMeta: [],
     far: [],
     farMeta: [],
-    farGroups: new Set(),
     lots: [],
     roadDecals: spec?.roadDecals?.map((name) => ({ name, only: null })) ?? [{ name: DEFAULT_ROAD_DECAL, only: BIOME.city }],
   };
@@ -346,7 +343,6 @@ function stand(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw
   if (y === null) return false;
   const p: Placed = { prefab, x, y, z, yaw, sx, sy, sz };
   if (asset !== undefined) p.asset = asset;
-  if (look && !c.farGroups.has(drawGroupOf(p))) return false;
   if (core === undefined) c.occ.add(x, z, detCos(yaw), detSin(yaw), hx, hz);
   if (look) {
     p.y -= look.sink * size[1] * sy + detSin(look.lean) * Math.max(hx, hz);
@@ -1002,11 +998,10 @@ function assets(c: Ctx): void {
   lotAssets(c);
 }
 
-/** Rule 3, far: clumps of plants and rocks beyond a car's reach (`scenery-clusters.ts`), laid after every other rule so no placement before them moves. A member stands only in a prefab-and-cell the finished drawn list (after `kept`) already holds, which bounds the draws of the far meshes (their own, since they cast no shadow). */
+/** Rule 3, far: clumps of plants and rocks beyond a car's reach (`scenery-clusters.ts`), laid after every other rule so no placement before them moves. Their draw group is one a far kind for the whole course (they cast no shadow, so they cannot share the near props' meshes). */
 function clusters(c: Ctx): void {
   const density = c.density[RULE_VERGE]!;
-  if (density <= 0) return;
-  c.farGroups = new Set(kept(c, c.drawn, c.drawnMeta).map(drawGroupOf));
+  if (density <= 0 || c.off[RULE_VERGE]) return;
   const world: ClusterWorld = {
     field: c.field,
     near: c.near,
@@ -1030,6 +1025,7 @@ function clusters(c: Ctx): void {
       c.farMeta.length = to;
     },
   };
+  if (!clusterable(world)) return;
   layClusters(world, density);
 }
 
@@ -1077,8 +1073,8 @@ export function thinScenery(drawn: readonly Placed[], keep: number, far = keep >
   return drawn.filter((p) => p.prefab === PREFAB.sidewalk || (p.far ? far : unit(mix(Math.round(p.x * 16), Math.round(p.z * 16))) < keep));
 }
 
-/** A prop's draw group, which `TrackArt` draws as one instanced mesh: its prefab in a 512 m cell, an asset's `assetDrawGroupOf`; a far cluster member's is its own (it casts no shadow, so it cannot share a mesh that does). */
-export const drawGroupOf = (p: Placed): string => (p.asset === undefined ? `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}${p.far ? ":far" : ""}` : assetDrawGroupOf(p.asset, p.x, p.z));
+/** A prop's draw group, which `TrackArt` draws as one instanced mesh: its prefab in a 512 m cell, an asset's `assetDrawGroupOf`; a far cluster member's is its prefab for the whole course (it casts no shadow, so it cannot share a mesh that does, and the budget keeps its triangles few). */
+export const drawGroupOf = (p: Placed): string => (p.far ? `${p.prefab}:far` : p.asset === undefined ? `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}` : assetDrawGroupOf(p.asset, p.x, p.z));
 
 /** The draw groups the service adds to the authored props' (`authored`): the solid props' groups none of them stands in (they join its meshes), plus the drawn-only ones' (each group its own draw). */
 export function addedDrawGroups(authored: readonly Placed[], solid: readonly Placed[], drawn: readonly Placed[]): number {

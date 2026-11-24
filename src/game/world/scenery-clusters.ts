@@ -117,7 +117,7 @@ function clusterCell(w: ClusterWorld, salt: number, density: number, far: FarFie
 }
 
 /** Whether any biome the course holds has a clump table: a city's or the open world's has none, and nothing of the far work is worth doing there. */
-function clusterable(w: ClusterWorld): boolean {
+export function clusterable(w: ClusterWorld): boolean {
   if (w.zones.some((zone) => CLUSTERS[zone.biome] !== undefined)) return true;
   if (w.course !== null) return CLUSTERS[w.course] !== undefined;
   for (let s = 0; s < w.field.biome.length; s++) if (CLUSTERS[BIOME_IDS[w.field.biome[s]!]!] !== undefined) return true;
@@ -136,9 +136,8 @@ function withinBudget(w: ClusterWorld, clumps: readonly Clump[]): void {
   w.keep(flags);
 }
 
-/** The far clusters over the course's sweep grown by `CLUSTER_OUTER`: every lattice cell once, by its own hash alone (the course's and the rule's), then the clumps that fit the course's triangle budget. */
+/** The far clusters over the course's sweep grown by `CLUSTER_OUTER`: every lattice cell once, by its own hash alone (the course's and the rule's), then the clumps that fit the course's triangle budget. Callers ask `clusterable` first. */
 export function layClusters(w: ClusterWorld, density: number): void {
-  if (!clusterable(w)) return;
   const box = w.sweepBox(CLUSTER_OUTER);
   const salt = mix(w.seed, hashString("cluster"));
   const far = buildFarField(w.field, box, FAR_CELL);

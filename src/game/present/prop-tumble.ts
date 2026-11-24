@@ -61,7 +61,7 @@ export class PropTumble {
     this.poses = placed.map(drawnPose);
     const byCell = new Map<string, number[]>();
     for (const [idx, pl] of placed.entries()) {
-      const key = pl.asset === undefined ? `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}${pl.far ? "!far" : ""}` : assetDrawGroupOf(pl.asset, pl.x, pl.z);
+      const key = pl.far ? `${pl.prefab}:${styleOf(pl) ?? ""}!far` : pl.asset === undefined ? `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}` : assetDrawGroupOf(pl.asset, pl.x, pl.z);
       let list = byCell.get(key);
       if (!list) byCell.set(key, (list = []));
       list.push(idx);
