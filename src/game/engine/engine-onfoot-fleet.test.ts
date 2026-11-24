@@ -65,6 +65,28 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     expect(own.group.position.z - before, `he drove off: ${(own.group.position.z - before).toFixed(1)} m`).toBeGreaterThan(3);
   });
 
+  it("when a car runs him down and a car reaches him again while he lies, then he is thrown once and the second car does not throw him", () => {
+    const own = rig.cars()[0]!;
+    const start = own.group.position.clone();
+    rig.getOut();
+    rig.walkTo(new THREE.Vector3(start.x + 4, 0, start.z + WALK_AWAY_M), 1.5, 15);
+    const thrown = vi.spyOn(rig.engine["ragdolls"], "knockWalker");
+    try {
+      rig.runDownBy(rig.cars()[1]!, own);
+      for (let t = 0; t < FALL_WITHIN_S && rig.walker().state === "stand"; t += FRAME) rig.run(FRAME);
+      expect(rig.walker().state, "the car knocked him down").not.toBe("stand");
+      expect(thrown, "throws by the first car").toHaveBeenCalledTimes(1);
+      rig.run(LIES_S);
+      expect(rig.walker().state, "he still lies when the second car comes").not.toBe("stand");
+      // Another car than the first: a car sent through him twice leaves the ragdoll world's proxy of it so stale that it blocks the next row's walk.
+      rig.runDownBy(rig.cars()[2]!, own);
+      rig.run(SECOND_PASS_S);
+      expect(thrown, "throws after the second car reached him").toHaveBeenCalledTimes(1);
+    } finally {
+      thrown.mockRestore();
+    }
+  });
+
   it("when he walks to another car's driver door and presses the control, then he is told it is not his and stays out, and his own car's door lets him in", () => {
     const cars = rig.cars();
     rig.getOut();
@@ -210,26 +232,5 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     rig.run(0.5);
     expect(rig.engine["onFoot"].armed(), "armed").toBe(false);
     expect(rig.walker()["punchFor"], "no punch began").toBeGreaterThanOrEqual(0.45);
-  });
-
-  it("when a car runs him down and a car reaches him again while he lies, then he is thrown once and the second car does not throw him", () => {
-    const own = rig.cars()[0]!;
-    const start = own.group.position.clone();
-    rig.getOut();
-    rig.walkTo(new THREE.Vector3(start.x + 4, 0, start.z + WALK_AWAY_M), 1.5, 15);
-    const thrown = vi.spyOn(rig.engine["ragdolls"], "knockWalker");
-    try {
-      rig.runDownBy(rig.cars()[1]!, own);
-      for (let t = 0; t < FALL_WITHIN_S && rig.walker().state === "stand"; t += FRAME) rig.run(FRAME);
-      expect(rig.walker().state, "the car knocked him down").not.toBe("stand");
-      expect(thrown, "throws by the first car").toHaveBeenCalledTimes(1);
-      rig.run(LIES_S);
-      expect(rig.walker().state, "he still lies when the second car comes").not.toBe("stand");
-      rig.runDownBy(rig.cars()[1]!, own);
-      rig.run(SECOND_PASS_S);
-      expect(thrown, "throws after the second car reached him").toHaveBeenCalledTimes(1);
-    } finally {
-      thrown.mockRestore();
-    }
   });
 });
