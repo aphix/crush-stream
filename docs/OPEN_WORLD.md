@@ -508,6 +508,10 @@ Real cars of the field drive the streets, stop at signals and park in the kerb s
 - **Red-light runs** (`red-light-watch.ts`): `onRedLightRun(listener)` (host and solo) fires once per car per crossing of a stop bar against its signal, for every car, the player's included.
 - **Engine** (`engine-openworld.ts`, `engine-race.ts`): `RaceDirector.freeDrivers` drives the lobby's cars no human does (null: they stand on their brakes as ever).
 
+## Where players start
+
+A room holds 12 players, each at the wheel of a car. The course names all 12 seats (`survival.seats`, built by `spawnOf` in `openworld-course.ts`; the start anchor is seat 0): rows of two abreast (`SPAWN_ABREAST`, `SPAWN_SEAT_GAP` 4.5 m apart), heading east on the first interior east-west street, `SPAWN_BEHIND_CENTRE` behind its first intersection and `SPAWN_ROW_STEP` between rows, running back down the street. Every car stands on the carriageway, short of the intersection's box and of the zebra crossings' bands, and both front doors of every car have the 2.6 m clear of the next car's middle that `onfoot-doors.ts` asks, so a player who gets out at the start is neither on a crossing nor blocked by his neighbour, and does not start a jaywalk chase. `humanSlot` gives a course's own seats where it names them and the abreast rule (Survival's) beyond; the cops' formation stands behind the last row.
+
 ## Interiors (`world/openworld/interior-*`, `present/interiors`)
 
 Five interiors (`Place.interior`: rowhome, coffee, bar, office, store) are built from one furniture kit. The **plan** (`planInterior`, pure, the same on every peer) lists walls with openings, floor and ceiling slabs, stairs and furniture in plan metres (`deep` from the street wall, `across` along the face), laid inside the building prop's drawn walls (`drawnHalf`: they stand short of the footprint, under the roof slab's overhang) a skin short of them on every side, so no interior wall covers the facade's picture; a place's door point is on the drawn front wall; the same plan gives

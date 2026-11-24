@@ -17,8 +17,10 @@ export const SURVIVAL = {
 
 const LANES = [0, 1, -1, 2] as const;
 
-/** Where human `k` (0-based, in the order the run seats them) starts, given the course's start anchor (yaw 0 faces +z). */
-export function humanSlot(start: { x: number; z: number; yaw: number }, k: number): { x: number; z: number; yaw: number } {
+/** Where human `k` (0-based, in the order the run seats them) starts, given the course's start anchor (yaw 0 faces +z). A course's own `seats` list wins for the seats it names; seats past its end fall back to the abreast rule. */
+export function humanSlot(start: { x: number; z: number; yaw: number }, k: number, seats: readonly { x: number; z: number; yaw: number }[] | null = null): { x: number; z: number; yaw: number } {
+  const own = seats?.[k];
+  if (own !== undefined) return own;
   const ahead = Math.floor(k / LANES.length) * SURVIVAL.rowGap;
   const lateral = LANES[k % LANES.length]! * SURVIVAL.humanGap;
   const fx = detSin(start.yaw);

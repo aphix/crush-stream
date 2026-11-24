@@ -86,11 +86,19 @@ export const COURSE_LOOK = {
 /** Interior street id prefixes. */
 export const ROUTE_ID = { columnStreet: "street-x", rowStreet: "street-z" } as const;
 
-/** Spawn: rows of four abreast across the first interior intersection heading east, 10.5 m behind its centre so the first row's seats and driver doors stand 1.25 m clear of every zebra crossing's ±1.5 m band (crossings 7.6 m either side of the centre; at 8 m a door stood on one) and its last car's tail 1.2 m short of the first parking space; further rows (8 m apart) reach into the intersection. Shifted 2 m off the street's middle so four abreast at 4 m span 12 m of the 18.2 m between building faces. */
-export const SPAWN_BEHIND_CENTRE = 10.5;
+/** Spawn: 12 seats (a room's most) in rows of two abreast heading east, back into the first interior east-west street from its first intersection: the first row's nose, 2.45 m ahead of its centre, stands 0.45 m short of the zebra crossings' bands (crossings 7.6 m behind the centre, ±1.5 m). Shifted 2 m off the street's middle so a pair at 4.5 m spans 6.5 m of the 11 m carriageway. */
+export const SPAWN_BEHIND_CENTRE = 12;
 export const SPAWN_LATERAL_SHIFT = 2;
-/** The cops' formation behind the anchor: two files either side of the lane's middle, 5.5 m apart nose to tail, 11 m back. */
-export const SPAWN_FORMATION_BACK = 11;
+/** Seats in the start formation: the most a room holds. */
+export const SPAWN_SEATS = 12;
+/** Cars abreast: the road holds two with both front doors free (a door needs 2.6 m clear of the next car's middle: `CAR_CLEARANCE` in engine/onfoot-doors.ts; three would put the outer doors past the curb). */
+export const SPAWN_ABREAST = 2;
+/** Distance (m) between abreast cars' middles: the door's 1.75 m out and the 2.6 m clearance, with a margin. */
+export const SPAWN_SEAT_GAP = 4.5;
+/** Distance (m) between rows' middles, nose to tail: a long car (4.9 m) and a margin. */
+export const SPAWN_ROW_STEP = 5.5;
+/** The cops' formation behind the last row: two files either side of the lane's middle, 5.5 m apart nose to tail. */
+export const SPAWN_FORMATION_BACK = 33;
 export const SPAWN_FORMATION_STEP = 5.5;
 export const SPAWN_FORMATION_LATERAL = 1.5;
 export const SPAWN_FORMATION_COUNT = 5;

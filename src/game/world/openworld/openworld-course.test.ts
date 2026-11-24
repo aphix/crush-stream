@@ -9,7 +9,7 @@ import { PREFAB, SURFACE } from "../constants.ts";
 import { placeCourse } from "../placements.ts";
 import { Track, blankProjection, projectPath } from "../track.ts";
 import { parseTrack } from "../track-schema.ts";
-import { LAMP_FROM_CURB, LAYOUT, PARK, WALL_THICKNESS } from "./openworld-constants.ts";
+import { LAMP_FROM_CURB, LAYOUT, PARK, SPAWN_LATERAL_SHIFT, WALL_THICKNESS } from "./openworld-constants.ts";
 import { OPENWORLD_ID, openWorldCourse } from "./openworld-course.ts";
 import { fixtureLots } from "./openworld-lots.test-util.ts";
 import { buildOpenWorldMap } from "./openworld-map.ts";
@@ -25,6 +25,15 @@ const TREE_LAMP_CLEARANCE_M = 1.5;
 /** Where a driver gets out (`doorSpot` in engine/onfoot-doors.ts): this far (m) out on the driver's side, this far ahead of the car's middle. */
 const DOOR_OUT_M = 1.75;
 const DOOR_ALONG_M = 0.15;
+/** The longest style's half length (m): `FLEET_HALF.footHalfL` in vehicle/car-rig.ts. */
+const CAR_HALF_LENGTH_M = 2.445;
+/** A door's swing box reaches this far (m) out from the car's middle and this far (m) either side of the door's spot along the car. */
+const DOOR_BOX_OUT_M = 2;
+const DOOR_BOX_HALF_ALONG_M = 1;
+/** Another car's middle nearer than this (m) to a door's spot blocks it (`CAR_CLEARANCE` in engine/onfoot-doors.ts). */
+const CAR_CLEARANCE_M = 2.6;
+/** The seats a full room starts in. */
+const ROOM_SEATS = 12;
 
 /** The walls stand on the outer streets' far property line, or on their far curb. */
 const WALL_CASES = [
@@ -187,46 +196,113 @@ for (const wallCase of WALL_CASES) {
       expect(parked.length, "parked cars inside the walls").toBe(0);
     });
 
-    // mutation: sed -i 's/const z = geometry.streetZ\[1\]! + SPAWN_LATERAL_SHIFT;/const z = geometry.streetZ[0]! + SPAWN_LATERAL_SHIFT;/' src/game/world/openworld/openworld-course.ts
-    it("when four drivers are seated abreast, then each stands in the first interior east-west street's width and not inside a building", () => {
+    /** The seats a 12-player room starts in, as `humanSlot` hands them out. */
+    const seatsOf = (): { x: number; z: number; yaw: number }[] => {
       must(course.survival, "the course has spawn anchors");
-      const spawn = course.survival;
-      for (let slot = 0; slot < 4; slot++) {
-        const seat = humanSlot(spawn.start, slot);
+      return Array.from({ length: ROOM_SEATS }, (_, slot) => humanSlot(course.survival!.start, slot, course.survival!.seats));
+    };
+    /** A box (m) on the ground in the world frame. */
+    type Box = { x0: number; x1: number; z0: number; z1: number };
+    /** The box of a car at `seat` spanning `along` (forward, m) by `out` (toward its driver's side, m), both from its middle: the corners rotated by its yaw. */
+    const boxAt = (seat: { x: number; z: number; yaw: number }, alongFrom: number, alongTo: number, outFrom: number, outTo: number): Box => {
+      const xs: number[] = [];
+      const zs: number[] = [];
+      for (const along of [alongFrom, alongTo]) {
+        for (const out of [outFrom, outTo]) {
+          xs.push(seat.x + along * detSin(seat.yaw) + out * detCos(seat.yaw));
+          zs.push(seat.z + along * detCos(seat.yaw) - out * detSin(seat.yaw));
+        }
+      }
+      return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+    };
+    /** A car's footprint, and the swing boxes of its two front doors (the driver's, then the passenger's). */
+    const carBoxes = (seat: { x: number; z: number; yaw: number }): { footprint: Box; doors: Box[] } => ({
+      footprint: boxAt(seat, -CAR_HALF_LENGTH_M, CAR_HALF_LENGTH_M, -CAR_WIDTH / 2, CAR_WIDTH / 2),
+      doors: [boxAt(seat, DOOR_ALONG_M - DOOR_BOX_HALF_ALONG_M, DOOR_ALONG_M + DOOR_BOX_HALF_ALONG_M, CAR_WIDTH / 2, DOOR_BOX_OUT_M), boxAt(seat, DOOR_ALONG_M - DOOR_BOX_HALF_ALONG_M, DOOR_ALONG_M + DOOR_BOX_HALF_ALONG_M, -DOOR_BOX_OUT_M, -CAR_WIDTH / 2)],
+    });
+    const overlaps = (a: Box, b: Box): boolean => a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a.z1;
+    /** The zebra crossings' bands as world boxes (their arms run along an axis). */
+    const crossingBands = (): Box[] => {
+      const { nodeX, nodeZ, edgeStart, edgeTo, edgeCrossing } = map.graph;
+      const bands: Box[] = [];
+      for (let node = 0; node < nodeX.length; node++) {
+        for (let edge = edgeStart[node]!; edge < edgeStart[node + 1]!; edge++) {
+          if (edgeCrossing[edge] !== 1) continue;
+          const length = hypot2(nodeX[edgeTo[edge]!]! - nodeX[node]!, nodeZ[edgeTo[edge]!]! - nodeZ[node]!);
+          const dirX = (nodeX[edgeTo[edge]!]! - nodeX[node]!) / length;
+          const dirZ = (nodeZ[edgeTo[edge]!]! - nodeZ[node]!) / length;
+          const xs: number[] = [];
+          const zs: number[] = [];
+          for (const along of [length * CROSSING_KERB_SHARE, length * (1 - CROSSING_KERB_SHARE)]) {
+            for (const off of [-CROSSING_HALF_WIDTH, CROSSING_HALF_WIDTH]) {
+              xs.push(nodeX[node]! + dirX * along + dirZ * off);
+              zs.push(nodeZ[node]! + dirZ * along - dirX * off);
+            }
+          }
+          bands.push({ x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) });
+        }
+      }
+      return bands;
+    };
+
+    // mutation: sed -i 's/const z = geometry.streetZ\[1\]! + SPAWN_LATERAL_SHIFT;/const z = geometry.streetZ[0]! + SPAWN_LATERAL_SHIFT;/' src/game/world/openworld/openworld-course.ts
+    it("when a room's twelve drivers are seated, then each stands in the first interior east-west street's width, not inside a building, and the first seat is the start anchor heading east", () => {
+      const seats = seatsOf();
+      for (let slot = 0; slot < ROOM_SEATS; slot++) {
+        const seat = seats[slot]!;
         expect(Math.abs(seat.z - geometry.streetZ[1]!), `seat ${slot} off the street's middle (m)`).toBeLessThan(geometry.faceToFace / 2);
         expect(
           buildings.some((prop) => insideFootprint(prop, seat.x, seat.z)),
           `seat ${slot} inside a building`,
         ).toBe(false);
       }
-      expect(spawn.formation.length, "cop slots").toBeGreaterThanOrEqual(4);
+      expect(seats[0]!.z, "seat 0 on the street's middle shifted off it (m)").toBe(geometry.streetZ[1]! + SPAWN_LATERAL_SHIFT);
+      expect(seats[0]!.yaw, "seat 0 heading east").toBe(Math.PI / 2);
+      expect(course.survival!.formation.length, "cop slots").toBeGreaterThanOrEqual(4);
     });
 
-    // mutation: sed -i 's/^export const SPAWN_BEHIND_CENTRE = 10.5;/export const SPAWN_BEHIND_CENTRE = 8;/' src/game/world/openworld/openworld-constants.ts
-    it("when the first row of four drivers is seated abreast, then no seat and no driver's door spot stands in a zebra crossing's band, so a driver who gets out is not out on the crossing", () => {
-      must(course.survival, "the course has spawn anchors");
-      const { nodeX, nodeZ, edgeStart, edgeTo, edgeCrossing } = map.graph;
-      let crossings = 0;
-      for (let slot = 0; slot < 4; slot++) {
-        const seat = humanSlot(course.survival.start, slot);
-        const door = { x: seat.x + DOOR_OUT_M * detCos(seat.yaw) + DOOR_ALONG_M * detSin(seat.yaw), z: seat.z - DOOR_OUT_M * detSin(seat.yaw) + DOOR_ALONG_M * detCos(seat.yaw) };
-        for (const [what, spot] of [["seat", seat], ["door", door]] as const) {
-          for (let node = 0; node < nodeX.length; node++) {
-            for (let edge = edgeStart[node]!; edge < edgeStart[node + 1]!; edge++) {
-              if (edgeCrossing[edge] !== 1) continue;
-              const length = hypot2(nodeX[edgeTo[edge]!]! - nodeX[node]!, nodeZ[edgeTo[edge]!]! - nodeZ[node]!);
-              const dirX = (nodeX[edgeTo[edge]!]! - nodeX[node]!) / length;
-              const dirZ = (nodeZ[edgeTo[edge]!]! - nodeZ[node]!) / length;
-              const along = (spot.x - nodeX[node]!) * dirX + (spot.z - nodeZ[node]!) * dirZ;
-              if (along < length * CROSSING_KERB_SHARE || along > length * (1 - CROSSING_KERB_SHARE)) continue;
-              crossings++;
-              const off = Math.abs((spot.x - nodeX[node]!) * dirZ - (spot.z - nodeZ[node]!) * dirX);
-              expect(off, `${what} ${slot} off the crossing from (${nodeX[node]}, ${nodeZ[node]}) (m)`).toBeGreaterThan(CROSSING_HALF_WIDTH);
-            }
+    it("when a room's twelve cars stand at the start, then each car's footprint and both its front doors' swing boxes lie on the street between the intersections, outside every intersection box and every zebra crossing's band", () => {
+      const roadHalf = geometry.carriageway / 2;
+      const bands = crossingBands();
+      let nearestToBand = Infinity;
+      for (const [slot, seat] of seatsOf().entries()) {
+        const { footprint, doors } = carBoxes(seat);
+        for (const [what, box] of [["footprint", footprint], ["driver's door", doors[0]!], ["passenger's door", doors[1]!]] as const) {
+          expect(box.z0 >= geometry.streetZ[1]! - roadHalf && box.z1 <= geometry.streetZ[1]! + roadHalf, `seat ${slot}'s ${what} across the street`).toBe(true);
+          expect(box.x0 >= geometry.streetX[0]! + roadHalf && box.x1 <= geometry.streetX[1]! - roadHalf, `seat ${slot}'s ${what} along the street, between the intersection boxes`).toBe(true);
+          let intersections = 0;
+          for (const x of geometry.streetX) for (const z of geometry.streetZ) if (overlaps(box, { x0: x - roadHalf, x1: x + roadHalf, z0: z - roadHalf, z1: z + roadHalf })) intersections++;
+          expect(intersections, `seat ${slot}'s ${what}: intersection boxes it overlaps`).toBe(0);
+          let crossings = 0;
+          for (const band of bands) {
+            if (overlaps(box, band)) crossings++;
+            if (what === "footprint") nearestToBand = Math.min(nearestToBand, Math.max(band.x0 - box.x1, box.x0 - band.x1, band.z0 - box.z1, box.z0 - band.z1));
           }
+          expect(crossings, `seat ${slot}'s ${what}: crossing bands it overlaps`).toBe(0);
         }
       }
-      expect(crossings, "crossings whose length a seat or door lies across").toBeGreaterThan(0);
+      expect(nearestToBand, "control: the first row stands within a metre of a crossing's band, so the bands were read").toBeLessThan(1);
+    });
+
+    it("when a room's twelve cars stand at the start, then no two cars' footprints or door boxes overlap, and no door's spot is within 2.6 m of another car's middle", () => {
+      const seats = seatsOf();
+      const boxes = seats.map(carBoxes);
+      for (let a = 0; a < ROOM_SEATS; a++) {
+        for (let b = a + 1; b < ROOM_SEATS; b++) {
+          const first = [boxes[a]!.footprint, ...boxes[a]!.doors];
+          const second = [boxes[b]!.footprint, ...boxes[b]!.doors];
+          let touching = 0;
+          for (const one of first) for (const other of second) if (overlaps(one, other)) touching++;
+          expect(touching, `seats ${a} and ${b}: footprint and door boxes that overlap`).toBe(0);
+        }
+        for (const out of [DOOR_OUT_M, -DOOR_OUT_M]) {
+          const spotX = seats[a]!.x + out * detCos(seats[a]!.yaw) + DOOR_ALONG_M * detSin(seats[a]!.yaw);
+          const spotZ = seats[a]!.z - out * detSin(seats[a]!.yaw) + DOOR_ALONG_M * detCos(seats[a]!.yaw);
+          let nearest = Infinity;
+          for (let b = 0; b < ROOM_SEATS; b++) if (b !== a) nearest = Math.min(nearest, hypot2(seats[b]!.x - spotX, seats[b]!.z - spotZ));
+          expect(nearest, `seat ${a}'s door at ${out} m: the nearest other car's middle (m)`).toBeGreaterThanOrEqual(CAR_CLEARANCE_M);
+        }
+      }
     });
 
     // mutation: sed -i 's/prefab: dressing.prefab, x: dressing.x, z: dressing.z/prefab: PREFAB.cone, x: dressing.x, z: dressing.z/' src/game/world/openworld/openworld-course.ts
