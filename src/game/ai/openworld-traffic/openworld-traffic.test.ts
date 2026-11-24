@@ -13,6 +13,8 @@ import { LIGHT, lightState, SIGNAL_PHASE } from "./traffic-lights.ts";
 import { kerbSpotsNear, residentSpotAt } from "../../world/openworld/openworld-parking.ts";
 import { residentBody, residentColour, type ResidentCarPose } from "./traffic-look.ts";
 import { spotUnseen } from "./traffic-ports.ts";
+import { spawnSeats } from "../../world/openworld/openworld-spawn.ts";
+import { maskSeatSpaces } from "./spawn-mask.ts";
 import { Clock, CYCLE_SECONDS, emptyFeed, FakeField, HOLD, homeAt, makeTraffic, ProximitySight, runSeconds, STEP_SECONDS, stepField } from "./traffic-world.test-util.ts";
 
 const FAR = 1500;
@@ -515,9 +517,9 @@ describe("given residents whose cars show at the kerb and drive off, over a minu
     feed.parked.count = 1;
     feed.parked.resident[0] = mismatched;
     feed.parked.place[0] = 0;
-    const traffic = new OpenWorldTraffic([homeAt(KERB_HOME.x, KERB_HOME.z)], field.ports, new SeenSight(field.ports), { movers: 0, kerb: 2, patrol: 0, ambulance: 0 }, feed);
+    const traffic = new OpenWorldTraffic([homeAt(HOME.x, HOME.z)], field.ports, new SeenSight(field.ports), { movers: 0, kerb: 2, patrol: 0, ambulance: 0 }, feed);
     const base = field.rebuilt.length;
-    field.cars[0]!.stand(KERB_HOME.x, KERB_HOME.z + 10, 0);
+    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
     runSeconds(field, traffic, new Clock(), 3);
     expect(residentSpace(traffic, mismatched), "his car has a space").toBeGreaterThanOrEqual(0);
     expect(traffic.counts().kerb, "kerb cars stand").toBeGreaterThan(0);
@@ -534,7 +536,7 @@ describe("given a resident's car leased for a drive whose rider is due at the fa
     field.cars[0]!.stand(playerAt.x, playerAt.z, 0);
     const traffic = makeTraffic(field, { movers: 3, kerb: 0 });
     const to = traffic.nearestSpot(WORK.x, WORK.z);
-    const car = traffic.spawnDrivenCar(7, traffic.nearestSpot(KERB_HOME.x, KERB_HOME.z), to, { dueSeconds: DUE_SECONDS })!;
+    const car = traffic.spawnDrivenCar(7, traffic.nearestSpot(HOME.x, HOME.z), to, { dueSeconds: DUE_SECONDS })!;
     expect(car, "a car was leased").not.toBeNull();
     return { field, traffic, clock: new Clock(), car, to };
   }
@@ -553,7 +555,7 @@ describe("given a resident's car leased for a drive whose rider is due at the fa
   // mutation: sed -i 's/ \&\& this.unseenAndFar(slot, car)) this.standInSpace(slot);/) this.standInSpace(slot);/' src/game/ai/openworld-traffic/mover-fleet.ts
   it("when a player's car is near it at that second, then the car is not moved: it drives on and parks when it gets there", () => {
     const { field, traffic, clock, car } = dueCar(FAR_AWAY);
-    field.cars[0]!.stand(KERB_HOME.x, KERB_HOME.z + 10, 0);
+    field.cars[0]!.stand(HOME.x, HOME.z + 10, 0);
     runSeconds(field, traffic, clock, DUE_SECONDS + 1);
     expect(car.arrived, "still on the road at the second").toBe(false);
   });
@@ -574,14 +576,17 @@ describe("given residents whose cars stand at a place's kerb", () => {
     runSeconds(field, traffic, clock, 1);
     const near = new Int32Array(KERB_CANDIDATES);
     const count = kerbSpotsNear(traffic.parkingSpots, KERB_HOME.x, KERB_HOME.z, near);
-    // The spaces beside the start formation are held for good (`maskedSpaces`); the rows count the residents' own.
-    const claims = traffic["context"].residentSpot;
-    const held = Array.from(traffic.claimedSpots.keys()).filter((spot) => traffic.claimedSpots[spot] === 1 && (claims[1] === spot || claims[2] === spot));
+    // The spaces beside the start formation are held for good (`maskedSpaces`): every held space is one of those or one of the two wanted.
+    const masked = new Uint8Array(traffic.parkingSpots.count);
+    maskSeatSpaces(traffic.parkingSpots, spawnSeats(openWorldGeometry(LAYOUT)), masked);
+    const held = Array.from(traffic.claimedSpots.keys()).filter((spot) => traffic.claimedSpots[spot] === 1);
+    const unmasked = held.filter((spot) => masked[spot] === 0);
     const wanted = [near[1 % count]!, near[2 % count]!].sort((a, b) => a - b);
-    held.sort((a, b) => a - b);
-    expect(held.length, "spaces held").toBe(2);
-    expect(held[0], "the lower space held").toBe(wanted[0]);
-    expect(held[1], "the higher space held").toBe(wanted[1]);
+    unmasked.sort((a, b) => a - b);
+    expect(held.length, "spaces held: the two and the masked").toBe(2 + traffic.maskedSpaces);
+    expect(unmasked.length, "spaces held that are not masked").toBe(2);
+    expect(unmasked[0], "the lower space held").toBe(wanted[0]);
+    expect(unmasked[1], "the higher space held").toBe(wanted[1]);
   });
 
   // mutation: sed -i 's/    if (holderPlace !== undefined \&\& residentSpotAt(/    if (false \&\& residentSpotAt(/' src/game/ai/openworld-traffic/openworld-traffic.ts
