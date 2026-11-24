@@ -59,7 +59,7 @@ export function blockOfDay(seed: number, day: number): number {
 }
 
 /** Whether `place` is within its hours from `fromTick` to `toTick`, ends included (both hours read). */
-export function openThrough(state: CityState, place: number, fromTick: number, toTick: number): boolean {
+function openThrough(state: CityState, place: number, fromTick: number, toTick: number): boolean {
   const { hourWeight } = state.venues;
   return hourWeight[place * HOURS_PER_GAME_DAY + hourOfDay(fromTick, state.startHour)]! >= 1 && hourWeight[place * HOURS_PER_GAME_DAY + hourOfDay(toTick, state.startHour)]! >= 1;
 }

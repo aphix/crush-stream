@@ -5,7 +5,7 @@ import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
 import { PLACE_KIND } from "../../world/openworld/walk-graph.ts";
 import { hourOfDay } from "./civilian-clock.ts";
-import { DECISION_HZ, EVENT_KIND, FLAG, HOURS_PER_GAME_DAY, NEED, NO_PLACE, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_DAY, TICKS_PER_GAME_HOUR, TICKS_PER_GAME_MINUTE } from "./civilian-constants.ts";
+import { DECISION_HZ, EVENT_KIND, FLAG, HOURS_PER_GAME_DAY, NEED, NO_PLACE, NO_SEAT, PURPOSE, RESIDENT_INT, RESIDENT_INT_STRIDE, TICKS_PER_GAME_DAY, TICKS_PER_GAME_HOUR, TICKS_PER_GAME_MINUTE } from "./civilian-constants.ts";
 import { queueEvents } from "./civilian-events.ts";
 import { decideResident } from "./civilian-plan.ts";
 import { runTicks, tickOfHour } from "./civilian-run.test-util.ts";
@@ -185,6 +185,7 @@ describe("given a customer and a clerk settled in the bodega at noon on day 2 fo
     expect(after.state.closedUntilTick[after.bodega], "control: the bodega is wrecked now").toBeGreaterThan(0);
     expect(intAt(after.state, after.customer, RESIDENT_INT.place), "where the customer is bound").not.toBe(after.bodega);
     expect(intAt(after.state, after.clerk, RESIDENT_INT.place), "where the laid-off clerk is bound").not.toBe(after.bodega);
+    expect(intAt(after.state, after.clerk, RESIDENT_INT.flags) & FLAG.laidOff, "the clerk is laid off").toBe(FLAG.laidOff);
   });
 });
 
@@ -231,18 +232,20 @@ describe("given Dee, a named resident whose home is the one farthest on foot fro
     expect(intAt(state, dee, RESIDENT_INT.pathCount), "nodes on a walk").toBe(0);
   });
 
-  it("when the bodega's hours are cut to end before her coffee and she is at home deciding at 22:30, then she does not set out for it; with its hours as they are she does", () => {
-    const { state, dee, bodega, home } = city();
-    const tick = tickOfHour(state, 1, 22) + 30 * TICKS_PER_GAME_MINUTE;
-    deeDecides(home, tick);
-    expect(intAt(state, dee, RESIDENT_INT.place), "control: with its hours as they are she sets out for the coffee").toBe(bodega);
-    const hours = state.venues.hourWeight.slice(bodega * HOURS_PER_GAME_DAY, (bodega + 1) * HOURS_PER_GAME_DAY);
-    state.venues.hourWeight[bodega * HOURS_PER_GAME_DAY + 23] = 0;
-    try {
-      deeDecides(home, tick);
-      expect(intAt(state, dee, RESIDENT_INT.place), "with the bodega shut by the time she would be there").not.toBe(bodega);
-    } finally {
-      state.venues.hourWeight.set(hours, bodega * HOURS_PER_GAME_DAY);
+  // mutation: sed -i 's/^  if (isOutdoorPurpose(purpose)) return;/  void purpose;/' src/game/ai/civilians/civilian-plan.ts
+  it("when she waits at the door of a shut coffee shop with seats, then she holds no seat inside it", () => {
+    const { state, dee } = city();
+    const tick = tickOfHour(state, 1, 20);
+    const shutCoffee = state.venues.byVenue[VENUE.coffee]!.filter((place) => map.places[place]!.doorNode >= 0 && signShut(state, place, tick));
+    expect(shutCoffee.length, "control: coffee shops are shut at 20:00").toBeGreaterThan(0);
+    let waited = 0;
+    for (const place of shutCoffee) {
+      if (place === city().home) continue;
+      deeDecides(place, tick);
+      if (intAt(state, dee, RESIDENT_INT.legPurpose) !== PURPOSE.loiter) continue;
+      waited++;
+      expect(intAt(state, dee, RESIDENT_INT.seat), `her seat in ${map.places[place]!.name}`).toBe(NO_SEAT);
     }
+    expect(waited, "control: she waits at a shut coffee shop's door").toBeGreaterThan(0);
   });
 });

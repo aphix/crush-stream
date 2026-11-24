@@ -53,7 +53,7 @@ import {
 import { residentDraws } from "./civilian-draws.ts";
 import { EVENT_CODE, PURPOSE_MOODS, VISIT_BASE } from "./civilian-names.ts";
 import { CityState, logHistory, markDirty, measurePath, setMoodEvent, setVisitMood } from "./civilian-state.ts";
-import { nextAppointment, openThrough, weekdayOf } from "./civilian-story.ts";
+import { nextAppointment, weekdayOf } from "./civilian-story.ts";
 import { ageOf } from "./society-day.ts";
 import { crimeKindOf } from "./society-crime.ts";
 import { dwellTicksOf, evolveNeeds, needWeight } from "./needs.ts";
@@ -208,13 +208,15 @@ function chooseByUtility(state: CityState, resident: number, current: number, ti
   considerInteractions(state, resident, current, tick, hour, bestUtility, draw);
 }
 
-/** A customer takes a free seat at a coffee shop, bar or diner for a dwell worth sitting through, else a standing spot of their own at a counter; staff take a clerk's spot; someone sitting out takes a stoop seat. */
+/** A customer takes a free seat at a coffee shop, bar or diner for a dwell worth sitting through, else a standing spot of their own at a counter; staff take a clerk's spot; someone sitting out takes a stoop seat; someone standing at a door in the street takes nothing. */
 function takeSeat(state: CityState, resident: number, place: number, purpose: number): void {
   const base = resident * RESIDENT_INT_STRIDE;
   if (purpose === PURPOSE.stoopSit) {
     claimSeat(state, resident, place, true);
     return;
   }
+  // Standing at a door in the street (loitering, a row, a fight, looking on, waiting out a shut place) holds nothing inside: a seat, a spot or a clerk's spot stays free for someone in the room.
+  if (isOutdoorPurpose(purpose)) return;
   const dwellMinutes = (state.ints[base + RESIDENT_INT.nextDecisionTick]! - state.ints[base + RESIDENT_INT.arriveTick]!) / TICKS_PER_GAME_MINUTE;
   if (state.ints[base + RESIDENT_INT.species] !== SPECIES.person) return;
   if (state.ints[base + RESIDENT_INT.work] === place) {
@@ -395,7 +397,7 @@ function keepAppointment(state: CityState, resident: number, tick: number, curre
   const slot = state.appointment;
   if (!nextAppointment(state, resident, Math.max(intAt(state, resident, RESIDENT_INT.storyTick), tick), slot)) return false;
   const walk = slot.place === current ? 0 : leaveTicks(state, resident, tick, current, slot.place);
-  if (walk < 0 || !isOpen(state, slot.place, tick) || !openThrough(state, slot.place, slot.arriveTick, slot.arriveTick + slot.dwellTicks - 1) || tick < slot.arriveTick - walk - SCHEDULE_SLACK_TICKS) return false;
+  if (walk < 0 || !isOpen(state, slot.place, tick) || tick < slot.arriveTick - walk - SCHEDULE_SLACK_TICKS) return false;
   state.ints[resident * RESIDENT_INT_STRIDE + RESIDENT_INT.storyTick] = slot.arriveTick;
   if (slot.place === current) stayPut(state, resident, tick, current, slot.arriveTick + slot.dwellTicks - tick, slot.purpose);
   else if (!planLeg(state, resident, tick, slot.place, slot.purpose, slot.dwellTicks)) return false;
