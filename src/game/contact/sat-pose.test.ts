@@ -237,20 +237,25 @@ describe("given two sedans, one standing with its keel a little into the other's
     expect(reads[0]![1], `without the rule the ${KEEL_INTO[0]! * 100} cm graze reads ${reads[0]![1].toFixed(3)} m: the rule is what the row pins`).toBeGreaterThan(0.5);
   });
 
-  it("when its flank edge is over the roof, then the contact check reads no contact at a lattice step less 1 cm and the overlap at a step plus 1 cm, whichever car is asked first", () => {
-    const reads = KEEL_INTO.map((into) => {
+  // The keel is set by the lower car's crown, which is not under the flank 0.9 m over: at 4 and 6 cm into it no column of the one shares more than a
+  // lattice step with the other's (the graze-free oracle reads none), and the 0.65-0.75 m the contact check read there came from the outline's band
+  // taking a column's height 15 cm inboard to its edge.
+  it("when its flank edge is over the roof, then the contact check reads contact exactly where the graze-free overlap does, 4 to 12 cm into, deep where it reads one, whichever car is asked first", () => {
+    const off: string[] = [];
+    for (const into of [...KEEL_INTO, 0.08, 0.1, 0.12]) {
       lower.spawnFacing(0, 0, 0, 0);
       lower.group.position.y = 0;
       lower.refreshBasis();
       upper.spawnFacing(ROOF_SHIFT, 0, 0, 0);
       upper.group.position.y = crownY(lower) - keelY(upper) - into;
       upper.refreshBasis();
-      return [satCars(upper, lower, normal, contact, 0), satCars(lower, upper, normal, contact, 0)] as const;
-    });
-    expect(reads[0]![0], `${KEEL_INTO[0]! * 100} cm into, upper first: SAT ${reads[0]![0]?.toFixed(3)}`).toBe(null);
-    expect(reads[0]![1], `${KEEL_INTO[0]! * 100} cm into, lower first: SAT ${reads[0]![1]?.toFixed(3)}`).toBe(null);
-    expect((reads[1]![0] ?? 0), `${KEEL_INTO[1]! * 100} cm into, upper first: SAT ${reads[1]![0]?.toFixed(3)}`).toBeGreaterThan(0.5);
-    expect(reads[1]![1], "the two orders read the same depth").toBe(reads[1]![0]);
+      const overlap = Math.max(cageDepthIn(upper, lower, true), cageDepthIn(lower, upper, true));
+      const first = satCars(upper, lower, normal, contact, 0);
+      const second = satCars(lower, upper, normal, contact, 0);
+      const agrees = overlap === 0 ? first === null : (first ?? 0) > 0.5;
+      if (!agrees || second !== first) off.push(`${(into * 100).toFixed(0)} cm into: oracle ${overlap.toFixed(3)}, SAT ${first?.toFixed(3)} / ${second?.toFixed(3)}`);
+    }
+    expect(off.length, `the contact check against the graze-free overlap: ${off.join(" | ")}`).toBe(0);
   });
 });
 

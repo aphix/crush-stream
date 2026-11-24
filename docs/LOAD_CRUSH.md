@@ -100,6 +100,9 @@ What holds a column up, in the shared car-on-car rule:
 
 - **The cages' heights** (`contact/cage-outline.ts` `bandsMeet`, `contact/sat.ts` `satCars`): a car whose body spans heights that overlap
   the car under it by no more than `VERTICAL_CLEAR` is on it, not beside it: the cage's top in the store carries it and the plan SAT does not push it.
+  An outline node's band (the ±3-node window's heights) counts only where some column of its own in that window shares more than `VERTICAL_CLEAR`
+  with the other car's column where it stands (`bandGrazes`): a wagon's rear shoulder edge read its roof's 1.43 m from 15 cm inboard, and a car
+  standing on that roof read it as a side contact (0.75 m at 6 cm into the roof, where the graze-free overlap is 0).
 - **`restsOn`** is set by touching a top, pressed or not (`CarSurfaces.touch`).
 - **One-sided ground**: a car's ground is a car below it (origin height), never one above.
 - **Lifted bodies**: others stand on the drawn roof (the class lift is on the top surface).
