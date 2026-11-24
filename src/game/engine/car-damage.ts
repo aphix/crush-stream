@@ -58,6 +58,7 @@ export class CarDamage {
     car.crashed = this.crashed;
     if ((f.deform.flags & 1) !== 0) car.deform.armMasses(car.group, car.velocity, car.angular);
     car.writeNetState(f.deform, f.parts);
+    car.deform.adoptHubPlaces();
     car.deform.squash = this.squash;
     car.deform.buckle = this.buckle;
     car.deform.setMode(this.mode);

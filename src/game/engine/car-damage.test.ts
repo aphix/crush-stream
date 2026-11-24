@@ -59,6 +59,7 @@ function placeKeepingBefore(car: DeformableCar): void {
   car.crashed = crashed;
   if ((f.deform.flags & 1) !== 0) car.deform.armMasses(car.group, car.velocity, car.angular);
   car.writeNetState(f.deform, f.parts);
+  car.deform.adoptHubPlaces();
   car.deform.squash = squash;
   car.deform.buckle = buckle;
   car.deform.setMode(mode);
@@ -220,9 +221,11 @@ describe("given a front hub a deep crush carried 0.15 m inboard, as the host's n
     guest.spawnFacing(0, 0, 0, 0);
     f.deform.flags |= DEEP_FLAG;
     guest.writeNetState(f.deform, f.parts);
+    guest.deform.adoptHubPlaces();
     expect(wheelTravelX(guest), "the wheel's place with the flag on (m)").toBeCloseTo(-HUB_IN_M, 6);
     f.deform.flags &= ~DEEP_FLAG;
     guest.writeNetState(f.deform, f.parts);
+    guest.deform.adoptHubPlaces();
     expect(wheelTravelX(guest), "the wheel's place once the flag clears (m)").toBeCloseTo(-HUB_IN_M, 6);
   });
 

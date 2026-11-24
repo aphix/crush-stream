@@ -37,6 +37,9 @@ function sameRest(a: Float32Array, b: Float32Array): boolean {
   return true;
 }
 
+/** How far (m) a net local may stand off its mass's rest and still be rest: the wire's float32 against a double rest, 6e-8 at a metre (`adoptHubPlaces`). */
+const NET_LOCAL_NOISE = 1e-6;
+
 /** `simState`: `v` into `buf` at `o`, or with `write` from it; returns the next offset. */
 function simVec(buf: Float64Array, o: number, v: THREE.Vector3, write: boolean): number {
   if (write) v.set(buf[o]!, buf[o + 1]!, buf[o + 2]!);
@@ -832,11 +835,22 @@ export class StreamedDeformation extends DeformSolve {
       m.popped = (src.popped & (1 << i)) !== 0;
       m.world.copy(m.local).applyMatrix4(group.matrixWorld);
       m.vel.set(0, 0, 0);
-      // The host holds an unpopped hub's local at rest + its shove (a deep crush records its travel as the shove), so the place a crush left it is in the net state without a field of its own.
-      if (m.hub && !m.popped) {
-        m.shoveX = m.local.x - m.rest.x;
-        m.shoveZ = m.local.z - m.rest.z;
-      }
+    }
+  }
+
+  /**
+   * After `writeNetState` on a car that stands from the host's state alone (a guest's, a held reset's): each unpopped hub's place is the net local's offset from rest, as the host holds a hub's local at
+   * rest + its shove (a deep crush records its travel as the shove), so the place a crush left it is in the net state without a field of its own. Not for a replay's keyframe restore: the net local is
+   * a float32, its offset from a double rest is never the live shove's bits (a hub that was never shoved read 1e-8), and `simState` restores the shove exactly.
+   */
+  adoptHubPlaces(): void {
+    for (let i = 0; i < this.masses.length; i++) {
+      const m = this.masses[i]!;
+      if (!m.hub || m.popped) continue;
+      const dx = m.local.x - m.rest.x;
+      const dz = m.local.z - m.rest.z;
+      m.shoveX = Math.abs(dx) > NET_LOCAL_NOISE ? dx : 0;
+      m.shoveZ = Math.abs(dz) > NET_LOCAL_NOISE ? dz : 0;
     }
   }
 }
