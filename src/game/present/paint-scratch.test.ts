@@ -15,7 +15,7 @@ import { bootEngine, runSeconds, stubBrowser } from "../engine/engine-headless.t
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { applyScratch, CREASE_FAR, CREASE_NEAR, DENT_FLOOR, DENT_REBUILD_S, DENT_SETTLE_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
+import { applyScratch, blurFace, CREASE_FAR, CREASE_NEAR, DENT_FLOOR, DENT_REBUILD_S, DENT_SETTLE_S, PaintScratches, SCRATCH_TIER } from "./paint-scratch.ts";
 import { channelTexels, cloneOfFinished, sampledScratch, scraped, stubGpu, UNPACK_ROW_LENGTH, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
@@ -625,5 +625,60 @@ describe("given the real engine with its cars on the screen", () => {
     runSeconds(engine, 1 / FRAME_HZ);
     expect(engine["autoFx"].auto, "the control: the tier is picked").toBe(false);
     expect(tierWorkStart(), "the tier-work clock with the tier picked").toBe(0);
+  });
+});
+
+/** Blob corners (face texels) and the rect (x0, y0, x1, y1) the blur is run over, for the blur row's cases. */
+type BlurCase = { name: string; blobs: readonly { x: number; y: number }[]; rect: readonly [number, number, number, number] };
+const FACE_W = CAR_SPRAY.faces[SPRAY_FACE.left]![2]!;
+const FACE_H = CAR_SPRAY.faces[SPRAY_FACE.left]![3]!;
+const BLUR_CASES: readonly BlurCase[] = [
+  { name: "one blob mid-face", blobs: [{ x: FACE_W >> 1, y: FACE_H / 3 }], rect: [0, 0, FACE_W - 1, FACE_H - 1] },
+  { name: "a blob at the face's corner", blobs: [{ x: 0, y: 0 }], rect: [0, 0, FACE_W - 1, FACE_H - 1] },
+  { name: "two blobs far apart in one column", blobs: [{ x: 100, y: 2 }, { x: 100, y: 50 }], rect: [0, 0, FACE_W - 1, FACE_H - 1] },
+  { name: "a blob in a rect the face clips (x0 above 0)", blobs: [{ x: 100, y: 20 }], rect: [60, 10, 180, 40] },
+];
+
+/** The left flank with a 4 by 3 blob of depth at each of `blobs`' corners; `pass` starts as NaN so a row the blur never wrote stays NaN. */
+function blobbedFlank(blobs: BlurCase["blobs"]): { src: Float32Array; pass: Float32Array; box: readonly number[] } {
+  const box = CAR_SPRAY.faces[SPRAY_FACE.left]!;
+  const src = new Float32Array(CAR_SPRAY.w * CAR_SPRAY.h);
+  for (const blob of blobs) for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 4; dx++) src[(box[1]! + Math.floor(blob.y) + dy) * CAR_SPRAY.w + box[0]! + blob.x + dx] = 0.01 * (1 + dx + dy);
+  return { src, pass: new Float32Array(src.length).fill(NaN), box };
+}
+
+/** How many texels of the flank's face `pass` holds a value for (the blur wrote them). */
+function passWritten(pass: Float32Array, box: readonly number[]): number {
+  let written = 0;
+  for (let y = 0; y < box[3]!; y++) for (let x = 0; x < box[2]!; x++) if (!Number.isNaN(pass[(box[1]! + y) * CAR_SPRAY.w + box[0]! + x]!)) written++;
+  return written;
+}
+
+/** The blurred texels of every blob in `out` that differ from the whole face blurred tap by tap, as a count. */
+function blobTexelsOff(out: Float32Array, want: Float32Array, box: readonly number[], blobs: BlurCase["blobs"]): number {
+  let off = 0;
+  for (const blob of blobs) {
+    for (let dy = 0; dy < 3; dy++) {
+      for (let dx = 0; dx < 4; dx++) {
+        const y = Math.floor(blob.y) + dy;
+        if (out[(box[1]! + y) * CAR_SPRAY.w + box[0]! + blob.x + dx] !== want[y * box[2]! + blob.x + dx]) off++;
+      }
+    }
+  }
+  return off;
+}
+
+describe("given a dent's depth map blurred over a rect that holds a few small blobs", () => {
+  it.each(BLUR_CASES)("when $name is blurred at both crease widths, then every blob texel equals the whole face blurred tap by tap, and the row pass leaves the rows beyond the blobs' reach unwritten", ({ blobs, rect }) => {
+    for (const sigma of [CREASE_NEAR, CREASE_FAR]) {
+      const { src, pass, box } = blobbedFlank(blobs);
+      const kernel = gaussianOf(sigma);
+      const out = new Float32Array(src.length);
+      blurFace(out, src, pass, box, Int32Array.from(rect), 0, kernel);
+      const reach = (kernel.length - 1) >> 1;
+      expect(blobTexelsOff(out, faceBlur(src, SPRAY_FACE.left, kernel), box, blobs), `sigma ${sigma}: blob texels that differ`).toBe(0);
+      expect(out.some((v) => v > 0), `sigma ${sigma}: the control: the blur wrote something`).toBe(true);
+      expect(passWritten(pass, box), `sigma ${sigma}: texels of the row pass written`).toBeLessThanOrEqual(blobs.length * (2 * reach + 3) * (rect[2] - rect[0] + 1));
+    }
   });
 });

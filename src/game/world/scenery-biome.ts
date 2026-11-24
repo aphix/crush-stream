@@ -61,6 +61,25 @@ export const VERGE: Partial<Record<BiomeId, VergeSpec>> = {
 export const VERGE_REACH = 70;
 export const VERGE_CHANCE_MAX = 0.16;
 
+/** Rule 3's far clusters, per biome: the share of its lattice cells (`CLUSTER_CELL`) that hold one at full strength, and what a clump is made of (a city has none: its far ground is concrete). */
+export const CLUSTERS: Partial<Record<BiomeId, { chance: number; kinds: Kinds }>> = {
+  park: { chance: 0.7, kinds: [[PREFAB.tree, 0.5], [PREFAB.bush, 0.3], [PREFAB.rock, 0.1], [PREFAB.flowers, 0.1]] },
+  circuit: { chance: 0.55, kinds: [[PREFAB.tree, 0.45], [PREFAB.bush, 0.45], [PREFAB.rock, 0.1]] },
+  dirt: { chance: 0.65, kinds: [[PREFAB.rock, 0.4], [PREFAB.tree, 0.25], [PREFAB.bush, 0.35]] },
+  desert: { chance: 0.5, kinds: [[PREFAB.rock, 0.45], [PREFAB.palm, 0.1], [PREFAB.bush, 0.45]] },
+};
+/** The largest of those chances, so the lattice sweep can skip a cell early. */
+export const CLUSTER_CHANCE_MAX = Math.max(...Object.values(CLUSTERS).map((spec) => spec.chance));
+
+/** What a far cluster member of a kind may look like: its size factor on the prefab (a clump's biggest takes the top, the rest the range under it), the most it leans (rad), the share of its height it may sink (rocks sit in the ground, never on it) and the triangles of its drawn prefab (counted from `prefabParts`; a row in `nature-look.test.ts` holds the count). */
+export const CLUSTER_LOOK: Partial<Record<PrefabId, { size: readonly [number, number]; lean: number; sink: readonly [number, number]; triangles: number }>> = {
+  [PREFAB.tree]: { size: [0.9, 2.1], lean: 0.07, sink: [0, 0.02], triangles: 34 },
+  [PREFAB.bush]: { size: [0.9, 2.4], lean: 0.12, sink: [0, 0.1], triangles: 60 },
+  [PREFAB.rock]: { size: [0.6, 2.6], lean: 0.18, sink: [0.08, 0.22], triangles: 80 },
+  [PREFAB.palm]: { size: [0.9, 1.5], lean: 0.1, sink: [0, 0], triangles: 120 },
+  [PREFAB.flowers]: { size: [1, 2.5], lean: 0.05, sink: [0, 0], triangles: 172 },
+};
+
 /**
  * Rule 2, the lamps: metres between lamps along a road in each biome. A city's follows its frontage (`bayLamps`); beyond town
  * the spacing grows with openness, to a desert's 72 m, about what the fog leaves of a lamp.

@@ -84,6 +84,8 @@ interface RaceHost {
   knockProp(index: number, car: number, vx: number, vy: number, vz: number): void;
   /** The course's art (null headless: rules, AI, contacts and physics run without it), and the dummies' world dressed under the same bench scenery `arm`. */
   buildArt(track: Track, placed: readonly Placed[], drawn: readonly Placed[], arm: SceneryArm): TrackArt | null;
+  /** Whether the art built for course `trackId` will draw the far scenery clumps (a desktop at the full scenery share): the load lays them only then. */
+  drawsFar(trackId: string): boolean;
   /** Re-target the tyre-mark map to the course's bounds (headless: nothing to draw). */
   markBounds(minX: number, minZ: number, maxX: number, maxZ: number): void;
   /** The engine's wreck-slide rule is on (`settleStep`'s `bleed`): a highlight replays with the same. */
@@ -676,7 +678,7 @@ export abstract class RaceField {
       this.tracks.set(trackId, tr);
     }
     this.track = tr;
-    const course = placeCourse(tr, this.scenery);
+    const course = placeCourse(tr, this.scenery, this.host.drawsFar(tr.id));
     this.placed = course.placed;
     this.colliders = propColliders(this.placed);
     this.walls = wallColliders(tr);

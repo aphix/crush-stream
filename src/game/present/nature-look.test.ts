@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { MAT } from "../kernel/material-ids.ts";
 import { PREFAB } from "../world/constants.ts";
+import type { Placed } from "../world/placements.ts";
 import { LeafMaterial, leafDepth, NatureMaterial, setNatureTier } from "./nature-look.ts";
 import { plainMaterials } from "./prefab-materials.test-util.ts";
 import { prefabParts } from "./prefabs.ts";
+import { PropTumble } from "./prop-tumble.ts";
+import { CLUSTER_LOOK } from "../world/scenery-biome.ts";
+import type { PrefabId } from "../world/catalog.ts";
 
 /** The shader three hands `onBeforeCompile`, cut to the chunk anchors the patch replaces. */
 function compile(material: THREE.Material): THREE.WebGLProgramParametersWithUniforms {
@@ -92,5 +96,45 @@ describe("given the street trees' leaf material", () => {
     depth!.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
     expect(shader.vertexShader, "the leaf class handed on").toContain("vLeafClass = materialClass;");
     expect(shader.fragmentShader, "the atlas read on leaf fragments").toContain("texture2D(map, vMapUv)");
+  });
+});
+
+describe("given a rock placed leaning 0.2 rad, and one upright", () => {
+  it("when their instance matrices are read, then the leaning rock's up axis is 0.2 rad off vertical and the upright one's is vertical", () => {
+    const rock = (lean?: number): Placed => ({ prefab: PREFAB.rock, x: 3, y: 1, z: -2, yaw: 0.7, sx: 1.5, sy: 2, sz: 1, ...(lean === undefined ? {} : { lean }) });
+    const meshes: THREE.InstancedMesh[] = [];
+    new PropTumble([rock(0.2), rock()], plainMaterials(new THREE.MeshBasicMaterial()), (mesh) => meshes.push(mesh));
+    const matrix = new THREE.Matrix4();
+    const tilt: number[] = [];
+    for (const slot of [0, 1]) {
+      meshes[0]!.getMatrixAt(slot, matrix);
+      const up = new THREE.Vector3(0, 1, 0).transformDirection(matrix);
+      tilt.push(Math.acos(Math.min(1, up.y)));
+    }
+    expect(tilt[0]!, "the leaning rock").toBeCloseTo(0.2, 6);
+    expect(tilt[1]!, "the upright rock").toBeCloseTo(0, 6);
+  });
+});
+
+describe("given a far cluster rock and a near one of the same prefab in the same cell, and a far rock two cells away", () => {
+  it("when their meshes are made, then the far rocks share one mesh that casts no shadow wherever they stand, and the near one still casts", () => {
+    const rock = (x: number, far?: true): Placed => ({ prefab: PREFAB.rock, x, y: 1, z: -2, yaw: 0, sx: 1, sy: 1, sz: 1, ...(far === undefined ? {} : { far }) });
+    const made: { count: number; cast: boolean }[] = [];
+    new PropTumble([rock(3), rock(3, true), rock(1500, true)], plainMaterials(new THREE.MeshBasicMaterial()), (mesh, _id, _shared, cast) => made.push({ count: mesh.count, cast }));
+    expect(made.length, "meshes: near and far").toBe(2);
+    expect([made[0]!.count, made[0]!.cast], "the near rock's mesh").toEqual([1, true]);
+    expect([made[1]!.count, made[1]!.cast], "the far rocks' mesh").toEqual([2, false]);
+  });
+});
+
+describe("given the kinds a far cluster is made of", () => {
+  it("when each kind's drawn prefab is counted, then its triangles are the number the clump budget spends on it", () => {
+    const [plain, nature] = [new THREE.MeshBasicMaterial(), new THREE.MeshBasicMaterial()];
+    const mats = { ...plainMaterials(plain), nature };
+    const triangles = (geometry: THREE.BufferGeometry): number => (geometry.index ? geometry.index.count : geometry.getAttribute("position").count) / 3;
+    for (const [id, look] of Object.entries(CLUSTER_LOOK)) {
+      const counted = prefabParts(id as PrefabId, mats).reduce((sum, part) => sum + triangles(part.geometry), 0);
+      expect(counted, id).toBe(look.triangles);
+    }
   });
 });

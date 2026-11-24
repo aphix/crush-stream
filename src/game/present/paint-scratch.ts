@@ -1119,11 +1119,16 @@ function creaseFace(data: Uint8Array, depths: Float32Array, blurs: Blurs, rects:
   }
 }
 
+/** Per column of the rect `blurFace` blurs, the first and last row of `src` above 0. */
+const colFirst = new Int32Array(SIDE);
+const colLast = new Int32Array(SIDE);
+const NO_ROW = 1 << 20;
+
 /**
  * `src` blurred by `kernel` (rows into `pass`, then columns) into `out` over `rects`' rect at `o` on face `box`, the face's edge texels
  * standing in past it: a blur never reads a neighbouring face's paint. `out` is written only where `src` is above 0 (all `creaseFace` reads).
  */
-function blurFace(out: Float32Array, src: Float32Array, pass: Float32Array, box: readonly number[], rects: Int32Array, o: number, kernel: Float32Array): void {
+export function blurFace(out: Float32Array, src: Float32Array, pass: Float32Array, box: readonly number[], rects: Int32Array, o: number, kernel: Float32Array): void {
   const r = (kernel.length - 1) >> 1;
   const base = box[1]! * SIDE + box[0]!;
   const w = box[2]! - 1;
@@ -1132,11 +1137,25 @@ function blurFace(out: Float32Array, src: Float32Array, pass: Float32Array, box:
   const x1 = rects[o + 2]!;
   const y0 = rects[o + 1]!;
   const y1 = rects[o + 3]!;
-  // `src` is never negative and 0 off the rect (`dent` clears it, `fillTriangle` grows the rect): a tap off the rect adds an exact +0,
-  // so each sum skips those (unless the face's edge, clamped, stands in) and the rows off the rect, which blur to 0, are never read.
+  for (let x = x0; x <= x1; x++) {
+    colFirst[x] = NO_ROW;
+    colLast[x] = -NO_ROW;
+  }
   for (let y = y0; y <= y1; y++) {
     const row = base + y * SIDE;
     for (let x = x0; x <= x1; x++) {
+      if (src[row + x]! <= 0) continue;
+      if (colFirst[x] === NO_ROW) colFirst[x] = y;
+      colLast[x] = y;
+    }
+  }
+  // `src` is never negative and 0 off the rect (`dent` clears it, `fillTriangle` grows the rect): a tap off the rect adds an exact +0,
+  // so each sum skips those (unless the face's edge, clamped, stands in) and the rows off the rect, which blur to 0, are never read.
+  // The column pass reads a column's `pass` only within `r` rows of its texels above 0 (the edge rows stand in past it), so only those rows are blurred.
+  for (let y = y0; y <= y1; y++) {
+    const row = base + y * SIDE;
+    for (let x = x0; x <= x1; x++) {
+      if (y < colFirst[x]! - r || y > colLast[x]! + r) continue;
       const from = x0 === 0 ? -r : Math.max(-r, x0 - x);
       const to = x1 === w ? r : Math.min(r, x1 - x);
       let sum = 0;

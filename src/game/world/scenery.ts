@@ -11,6 +11,7 @@ import { ROAD_DECAL, ROAD_DECAL_ASSET, type RoadDecalName } from "./scenery-asse
 import { OCC_PAD, Occupancy, SEG_COVERED, blankNear, buildField, crossGap, hashString, mix, nearest, unit, type Near, type RoadField } from "./scenery-field.ts";
 import type { Track, TrackPath } from "./track.ts";
 import { NO_FLOOR } from "./ground.ts";
+import { CLUSTER_CLEAR, clusterable, layClusters, type ClusterWorld, type Look } from "./scenery-clusters.ts";
 
 /**
  * The scenery service: dresses a course from its geometry alone, deterministically, with no per-course editing. `placeScenery` reads the
@@ -183,6 +184,9 @@ type Ctx = {
   solidMeta: Meta[];
   drawn: Placed[];
   drawnMeta: Meta[];
+  /** The far clusters' members and their meta, joined to `drawn` last so no earlier index moves. */
+  far: Placed[];
+  farMeta: Meta[];
   lots: Lot[];
   /** The road paint laid, each with the one biome it is limited to (null: wherever its row stands). */
   roadDecals: { name: RoadDecalName; only: BiomeId | null }[];
@@ -215,6 +219,8 @@ function newCtx(track: Track, base: readonly Placed[]): Ctx {
     solidMeta: [],
     drawn: [],
     drawnMeta: [],
+    far: [],
+    farMeta: [],
     lots: [],
     roadDecals: spec?.roadDecals?.map((name) => ({ name, only: null })) ?? [{ name: DEFAULT_ROAD_DECAL, only: BIOME.city }],
   };
@@ -321,10 +327,11 @@ function crowded(c: Ctx, x: number, z: number, yaw: number, hx: number, hz: numb
   return false;
 }
 
-/** `place` at scales (`sx`, `sy`, `sz`), as an asset's own size is (`asset`: its index in `SCENERY_ASSETS`, none for a built-in prefab). */
-function stand(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw: number, sx: number, sy: number, sz: number, core?: number, asset?: number): boolean {
+/** `place` at scales (`sx`, `sy`, `sz`), as an asset's own size is (`asset`: its index in `SCENERY_ASSETS`, none for a built-in prefab). A `look` makes it a far cluster member: drawn only, and never within `CLUSTER_CLEAR` of a car's reach. */
+function stand(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw: number, sx: number, sy: number, sz: number, core?: number, asset?: number, look?: Look): boolean {
   const near = nearest(c.field, x, z, c.near);
   if (near.seg >= 0 && (c.field.flags[near.seg]! & SEG_COVERED) !== 0) return false;
+  if (look && near.openGap < SOLID_REACH + CLUSTER_CLEAR) return false;
   const size = PREFABS[prefab].size;
   const hx = (size[0] * sx) / 2;
   const hz = (size[2] * sz) / 2;
@@ -334,9 +341,17 @@ function stand(c: Ctx, rule: number, prefab: PrefabId, x: number, z: number, yaw
   if (near.gap < r + ROAD_STANDOFF || (core === undefined ? crowded(c, x, z, yaw, hx, hz, margin) : c.occ.hits(x, z, core, margin))) return false;
   const y = standAt(c, x, z);
   if (y === null) return false;
-  if (core === undefined) c.occ.add(x, z, detCos(yaw), detSin(yaw), hx, hz);
   const p: Placed = { prefab, x, y, z, yaw, sx, sy, sz };
   if (asset !== undefined) p.asset = asset;
+  if (core === undefined) c.occ.add(x, z, detCos(yaw), detSin(yaw), hx, hz);
+  if (look) {
+    p.y -= look.sink * size[1] * sy + detSin(look.lean) * Math.max(hx, hz);
+    p.lean = look.lean;
+    p.far = true;
+    c.far.push(p);
+    c.farMeta.push({ rule, dc: near.dc });
+    return true;
+  }
   record(c, PREFABS[prefab].body !== "none" && near.openGap < SOLID_REACH, p, rule, near.dc);
   return true;
 }
@@ -983,6 +998,37 @@ function assets(c: Ctx): void {
   lotAssets(c);
 }
 
+/** Rule 3, far: clumps of plants and rocks beyond a car's reach (`scenery-clusters.ts`), laid after every other rule so no placement before them moves. Their draw group is one a far kind for the whole course (they cast no shadow, so they cannot share the near props' meshes). */
+function clusters(c: Ctx): void {
+  const density = c.density[RULE_VERGE]!;
+  if (density <= 0 || c.off[RULE_VERGE]) return;
+  const world: ClusterWorld = {
+    field: c.field,
+    near: c.near,
+    seed: c.seed,
+    sweepBox: (reach) => sweepBox(c, reach),
+    dressable: (x, z) => dressable(c, x, z),
+    biomeAt: (x, z, seg) => biomeAt(c, x, z, seg),
+    stand: (prefab, x, z, yaw, sx, sy, sz, look) => stand(c, RULE_VERGE, prefab, x, z, yaw, sx, sy, sz, undefined, undefined, look),
+    course: c.course,
+    zones: c.zones,
+    count: () => c.far.length,
+    keep: (flags) => {
+      let to = 0;
+      for (let n = 0; n < c.far.length; n++) {
+        if (flags[n] === 0) continue;
+        c.far[to] = c.far[n]!;
+        c.farMeta[to] = c.farMeta[n]!;
+        to++;
+      }
+      c.far.length = to;
+      c.farMeta.length = to;
+    },
+  };
+  if (!clusterable(world)) return;
+  layClusters(world, density);
+}
+
 /** `list` less what the course's `scenery` block takes out: switched-off rules, `noGen` ground, and anything nearer a centreline than `clear`. */
 function kept(c: Ctx, list: readonly Placed[], meta: readonly Meta[]): Placed[] {
   const out: Placed[] = [];
@@ -997,9 +1043,9 @@ function kept(c: Ctx, list: readonly Placed[], meta: readonly Meta[]): Placed[] 
 
 /**
  * What the course's geometry says to add to `base` (`placeProps`'s hand props, `along` rows, scatter and chevrons, in order): the
- * solid props to append to it, and the drawn-only ones. Pure in (track, base).
+ * solid props to append to it, and the drawn-only ones. Pure in (track, base, far). `far`: the far clusters are laid (only where the art that draws them will be built: a phone, the ragdoll worker and the bench's no-scenery arms leave them out).
  */
-export function placeScenery(track: Track, base: readonly Placed[]): Scenery {
+export function placeScenery(track: Track, base: readonly Placed[], far = false): Scenery {
   const c = newCtx(track, base);
   if (c.course === BIOME.none && c.zones.length === 0) return { solid: [], drawn: [] };
   sidewalks(c);
@@ -1010,19 +1056,25 @@ export function placeScenery(track: Track, base: readonly Placed[]): Scenery {
   verge(c);
   islands(c);
   assets(c);
+  if (far) clusters(c);
+  for (let n = 0; n < c.far.length; n++) {
+    c.drawn.push(c.far[n]!);
+    c.drawnMeta.push(c.farMeta[n]!);
+  }
   return { solid: kept(c, c.solid, c.solidMeta), drawn: kept(c, c.drawn, c.drawnMeta) };
 }
 
 /**
  * The share `keep` (0 to 1) of `drawn` a lower effects tier draws, by a hash of each prop's spot: every lower share is a subset of the
  * higher. The sidewalk slabs always stay: they abut to make one apron, and thinned they read as dotted tiles (the owner saw it at Auto).
+ * The far clusters are for a device that draws the full share and has room for them (`far`: a phone's frame has none).
  */
-export function thinScenery(drawn: readonly Placed[], keep: number): Placed[] {
-  return drawn.filter((p) => p.prefab === PREFAB.sidewalk || unit(mix(Math.round(p.x * 16), Math.round(p.z * 16))) < keep);
+export function thinScenery(drawn: readonly Placed[], keep: number, far = keep >= 1): Placed[] {
+  return drawn.filter((p) => p.prefab === PREFAB.sidewalk || (p.far ? far : unit(mix(Math.round(p.x * 16), Math.round(p.z * 16))) < keep));
 }
 
-/** A prop's draw group, which `TrackArt` draws as one instanced mesh: its prefab in a 512 m cell, an asset's `assetDrawGroupOf`. */
-export const drawGroupOf = (p: Placed): string => (p.asset === undefined ? `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}` : assetDrawGroupOf(p.asset, p.x, p.z));
+/** A prop's draw group, which `TrackArt` draws as one instanced mesh: its prefab in a 512 m cell, an asset's `assetDrawGroupOf`; a far cluster member's is its prefab for the whole course (it casts no shadow, so it cannot share a mesh that does, and the budget keeps its triangles few). */
+export const drawGroupOf = (p: Placed): string => (p.far ? `${p.prefab}:far` : p.asset === undefined ? `${p.prefab}@${Math.floor(p.x / 512 + 0.5)},${Math.floor(p.z / 512 + 0.5)}` : assetDrawGroupOf(p.asset, p.x, p.z));
 
 /** The draw groups the service adds to the authored props' (`authored`): the solid props' groups none of them stands in (they join its meshes), plus the drawn-only ones' (each group its own draw). */
 export function addedDrawGroups(authored: readonly Placed[], solid: readonly Placed[], drawn: readonly Placed[]): number {

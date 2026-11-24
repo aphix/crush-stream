@@ -207,6 +207,48 @@ export function crossGap(f: RoadField, pi: number, k: number, x: number, z: numb
   return gap;
 }
 
+/** Where `nearest` finds no road (past `FIELD_CELL`): the centreline distance (m) and segment of the road nearest each cell of a coarse grid. */
+export type FarField = { x0: number; z0: number; cell: number; nx: number; nz: number; dist: Float32Array; seg: Int32Array };
+
+/** The four neighbours one chamfer sweep reads: their offset and the step's length in cells. */
+const NEIGHBOURS = [[-1, 0, 1], [-1, -1, Math.SQRT2], [0, -1, 1], [1, -1, Math.SQRT2]] as const;
+
+/** The grid over `box` (x0, x1, z0, z1): road cells at zero, then a two-sweep chamfer distance carrying each cell's nearest segment. Accurate to about a cell, which is all a far band's outer edge needs. */
+export function buildFarField(f: RoadField, box: readonly [number, number, number, number], cell: number): FarField {
+  const [x0, x1, z0, z1] = box;
+  const nx = Math.ceil((x1 - x0) / cell) + 1;
+  const nz = Math.ceil((z1 - z0) / cell) + 1;
+  const dist = new Float32Array(nx * nz).fill(Infinity);
+  const seg = new Int32Array(nx * nz).fill(-1);
+  for (let s = 0; s < f.len.length; s++) {
+    const steps = Math.max(1, Math.ceil(f.len[s]! / (cell / 2)));
+    for (let n = 0; n <= steps; n++) {
+      const i = Math.floor((f.ax[s]! + (f.ex[s]! * n) / steps - x0) / cell);
+      const j = Math.floor((f.az[s]! + (f.ez[s]! * n) / steps - z0) / cell);
+      if (i < 0 || j < 0 || i >= nx || j >= nz) continue;
+      dist[j * nx + i] = 0;
+      seg[j * nx + i] = s;
+    }
+  }
+  const relax = (i: number, j: number, di: number, dj: number, w: number): void => {
+    const a = (j + dj) * nx + i + di;
+    if (i + di < 0 || i + di >= nx || j + dj < 0 || j + dj >= nz || dist[a]! + w >= dist[j * nx + i]!) return;
+    dist[j * nx + i] = dist[a]! + w;
+    seg[j * nx + i] = seg[a]!;
+  };
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) for (const [di, dj, w] of NEIGHBOURS) relax(i, j, di, dj, w);
+  for (let j = nz - 1; j >= 0; j--) for (let i = nx - 1; i >= 0; i--) for (const [di, dj, w] of NEIGHBOURS) relax(i, j, -di, -dj, w);
+  for (let n = 0; n < dist.length; n++) dist[n] = dist[n]! * cell;
+  return { x0, z0, cell, nx, nz, dist, seg };
+}
+
+/** The cell holding (x, z), or -1 past the grid. */
+export function farCell(g: FarField, x: number, z: number): number {
+  const i = Math.floor((x - g.x0) / g.cell);
+  const j = Math.floor((z - g.z0) / g.cell);
+  return i < 0 || j < 0 || i >= g.nx || j >= g.nz ? -1 : j * g.nx + i;
+}
+
 /** Footprints (oriented boxes: centre, yaw's cosine and sine, half extents) in a cell grid: a candidate circle is clear when it overlaps none. */
 export class Occupancy {
   private readonly cells = new Map<number, number[]>();

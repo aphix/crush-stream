@@ -19,21 +19,25 @@ export const REACH_SLACK = 1;
 const proj = blankProjection();
 const memo = new Map<string, Dressed>();
 
-/** `json` placed with the scenery service, built anew (its `scenery` block merged with `extra`): the authored props, the solid scenery after them, and the drawn-only. */
-export function dressUncached(json: unknown, extra: object = {}): Dressed {
+/** `json` placed with the scenery service, built anew (its `scenery` block merged with `extra`; `far`: with the far clusters, as a desktop's load asks): the authored props, the solid scenery after them, and the drawn-only. */
+export function dressUncached(json: unknown, extra: object = {}, far = false): Dressed {
   const parsed = parseTrack(json);
   const track = new Track({ ...parsed, scenery: { ...parsed.scenery, ...extra } });
   const bare = placeCourse(track, SCENERY_ARM.off).placed;
-  const course = placeCourse(track);
+  const course = placeCourse(track, SCENERY_ARM.on, far);
   return { track, authored: bare, solid: course.placed.slice(bare.length), drawn: course.drawn };
 }
 
-/** `dressUncached`, built once per course and `extra` for the file: every row on it reads the one. */
-export function dress(json: unknown, extra: object = {}): Dressed {
-  const key = `${parseTrack(json).id}/${JSON.stringify(extra)}`;
+/** `dressUncached`, built once per course, `extra` and `far` for the file: every row on it reads the one. A far dressing stands on the track of the near one (a course's ground is the heavy part). */
+export function dress(json: unknown, extra: object = {}, far = false): Dressed {
+  const key = `${parseTrack(json).id}/${JSON.stringify(extra)}/${far}`;
   let out = memo.get(key);
   if (!out) {
-    out = dressUncached(json, extra);
+    if (far) {
+      const near = dress(json, extra);
+      const course = placeCourse(near.track, SCENERY_ARM.on, true);
+      out = { track: near.track, authored: near.authored, solid: course.placed.slice(near.authored.length), drawn: course.drawn };
+    } else out = dressUncached(json, extra);
     memo.set(key, out);
   }
   return out;

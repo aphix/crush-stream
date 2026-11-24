@@ -9,14 +9,18 @@ import { prefabParts } from "./prefabs.ts";
 import { drawCell } from "./track-mesh.ts";
 
 const _up = new THREE.Vector3(0, 1, 0);
+const _along = new THREE.Vector3(0, 0, 1);
 const _q = new THREE.Quaternion();
+const _lean = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
-/** Placement `p`'s standing matrix into `out`, turned and sized by its drawn `pose` when it has one. */
+/** Placement `p`'s standing matrix into `out`, turned and sized by its drawn `pose` when it has one, then tipped `lean` about its own z (a far cluster member's tilt). */
 function restMatrix(p: Placed, pose: DrawnPose | null, out: THREE.Matrix4): THREE.Matrix4 {
-  if (pose === null) return out.compose(_p.set(p.x, p.y, p.z), _q.setFromAxisAngle(_up, p.yaw), _s.set(p.sx, p.sy, p.sz));
-  return out.compose(_p.set(p.x, p.y, p.z), _q.setFromAxisAngle(_up, p.yaw + pose.yaw), _s.set(p.sx * pose.scale, p.sy * pose.scale, p.sz * pose.scale));
+  _q.setFromAxisAngle(_up, pose === null ? p.yaw : p.yaw + pose.yaw);
+  if (p.lean) _q.multiply(_lean.setFromAxisAngle(_along, p.lean));
+  const scale = pose === null ? 1 : pose.scale;
+  return out.compose(_p.set(p.x, p.y, p.z), _q, _s.set(p.sx * scale, p.sy * scale, p.sz * scale));
 }
 
 /**
@@ -57,7 +61,7 @@ export class PropTumble {
     this.poses = placed.map(drawnPose);
     const byCell = new Map<string, number[]>();
     for (const [idx, pl] of placed.entries()) {
-      const key = pl.asset === undefined ? `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}` : assetDrawGroupOf(pl.asset, pl.x, pl.z);
+      const key = pl.far ? `${pl.prefab}:${styleOf(pl) ?? ""}!far` : pl.asset === undefined ? `${pl.prefab}:${styleOf(pl) ?? ""}@${drawCell(pl.x, pl.z)}` : assetDrawGroupOf(pl.asset, pl.x, pl.z);
       let list = byCell.get(key);
       if (!list) byCell.set(key, (list = []));
       list.push(idx);
@@ -88,7 +92,7 @@ export class PropTumble {
           }
           mesh.computeBoundingSphere();
           mesh.userData.knockOf = knockOf;
-          add(mesh, id, part.shared ? part.material : null, part.shadow !== false);
+          add(mesh, id, part.shared ? part.material : null, part.shadow !== false && first.far !== true);
           return mesh;
         }),
       );

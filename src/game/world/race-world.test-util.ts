@@ -158,6 +158,7 @@ export function makeWorld(survivalCourse?: unknown): World {
     hit: () => {},
     knockProp: (index, car, vx, vy, vz) => w.onKnock?.(index, car, vx, vy, vz),
     buildArt: () => null,
+    drawsFar: () => false,
     markBounds: () => {},
     bleeds: () => false,
     reelReady: () => {},

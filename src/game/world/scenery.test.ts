@@ -3,6 +3,7 @@ import { PARKED_PREFABS, PREFABS } from "./catalog.ts";
 import { BIOME, PREFAB, TRACK_ID } from "./constants.ts";
 import { placeProps, type Placed } from "./placements.ts";
 import { addedDrawGroups, biomeLookup, drawGroupOf, thinScenery } from "./scenery.ts";
+import { buildFarField, buildField, farCell } from "./scenery-field.ts";
 import { COURSE_JSON, FLAT, REACH, REACH_SLACK, centreDistance, dress, dressCopy, intrusion, keyOf, nearOpening, overlap, seamGap } from "./scenery.test-util.ts";
 import { parseTrack } from "./track-schema.ts";
 import { Track, blankPoint } from "./track.ts";
@@ -265,5 +266,24 @@ describe("given the scenery's cost on every course", () => {
       for (const p of [...d.solid, ...d.drawn]) cells.set(drawGroupOf(p), (cells.get(drawGroupOf(p)) ?? 0) + 1);
       for (const [key, n] of cells) expect(n, `${d.track.id} ${key}`).toBeLessThanOrEqual(PER_CELL_MAX);
     }
+  });
+});
+
+describe("given the coarse road grid of the oval", () => {
+  it("when its distance is read over the ground round the course, then each reading is within two cells of the true centreline distance", () => {
+    const { track } = dress(OVAL);
+    const CELL = 24;
+    const b = track.bounds;
+    const grid = buildFarField(buildField(track), [b.minX - 300, b.maxX + 300, b.minZ - 300, b.maxZ + 300], CELL);
+    let read = 0;
+    for (let x = b.minX - 290; x < b.maxX + 290; x += 37) {
+      for (let z = b.minZ - 290; z < b.maxZ + 290; z += 37) {
+        const dist = grid.dist[farCell(grid, x, z)]!;
+        if (dist > 250) continue;
+        read++;
+        expect(Math.abs(dist - centreDistance(track, x, z)), `(${x.toFixed(0)}, ${z.toFixed(0)}) read ${dist.toFixed(0)}`).toBeLessThanOrEqual(2 * CELL);
+      }
+    }
+    expect(read, "points read").toBeGreaterThan(100);
   });
 });

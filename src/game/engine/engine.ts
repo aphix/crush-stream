@@ -748,6 +748,12 @@ export class CrashEngine extends EngineGarage {
     },
   );
 
+  /** Whether course `trackId`'s art draws the far scenery clumps: a desktop at the full scenery share. A phone, and the course's load for the ragdoll worker, leave them out. */
+  private drawsFar(trackId: string): boolean {
+    const desktop = this.deviceClass === "desktop";
+    return desktop && sceneryShare(trackId, this.cine.tier, desktop) >= 1;
+  }
+
   private standTrafficCar(car: DeformableCar, x: number, z: number, yaw: number, colour: number | null): void {
     car.stored = false;
     car.group.visible = true;
@@ -845,10 +851,11 @@ export class CrashEngine extends EngineGarage {
       knockProp: (index, car, vx, vy, vz) => this.ragdolls.knockProp(index, car, vx, vy, vz),
       buildArt: (track, placed, drawn, arm) => {
         this.queueWarm();
-        const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, sceneryShare(track.id, this.cine.tier, this.deviceClass === "desktop")), reliefForTier(this.cine.tier, this.cine.marks.phone));
+        const art = new TrackArt(track, placed, this.stage, thinScenery(drawn, sceneryShare(track.id, this.cine.tier, this.deviceClass === "desktop"), this.drawsFar(track.id)), reliefForTier(this.cine.tier, this.cine.marks.phone));
         this.ragdolls.setCourse(track, placed, art.props, arm);
         return art;
       },
+      drawsFar: (trackId) => this.drawsFar(trackId),
       markBounds: (minX, minZ, maxX, maxZ) => this.cine.marks.setBounds(minX, minZ, maxX, maxZ),
       // tickInner's wreck-slide rule (`bleedAfterSlide` once the crash clock is past the hit).
       bleeds: () => this.clock.wallSinceImpact > 0.2,

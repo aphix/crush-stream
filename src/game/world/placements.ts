@@ -19,8 +19,8 @@ import { blankPoint, blankProjection, blankSegment, pointOn, projectPath, segmen
  * take the heading and copies on the left the heading + π: their fronts face the road.
  */
 
-/** A placed prefab: ground point, yaw (rad, +Z forward at 0), scale factors on `PREFABS[prefab].size`. A scenery asset's generic prefab is unit size and its `asset` indexes `SCENERY_ASSETS`: the scale is then the asset's own size (m). */
-export type Placed = { prefab: PrefabId; x: number; y: number; z: number; yaw: number; sx: number; sy: number; sz: number; asset?: number; style?: string; stairs?: true };
+/** A placed prefab: ground point, yaw (rad, +Z forward at 0), scale factors on `PREFABS[prefab].size`. A scenery asset's generic prefab is unit size and its `asset` indexes `SCENERY_ASSETS`: the scale is then the asset's own size (m). `far` marks a drawn-only cluster member the cheaper effects tiers leave out; `lean` tips it that far (rad) from upright about its local z. */
+export type Placed = { prefab: PrefabId; x: number; y: number; z: number; yaw: number; sx: number; sy: number; sz: number; asset?: number; style?: string; stairs?: true; far?: true; lean?: number };
 
 /**
  * Footprint of a solid / knock placement, or of a piece of a course wall (`wallColliders`). Box half-extents (`hx`, `hz`)
@@ -344,13 +344,13 @@ export const lastDressing: { course: string; placeMs: number; authored: number; 
  * Every prop of the course in index order: the authored props (`placeAuthored`), then the scenery service's solid ones (`placeScenery`:
  * a car can reach them, so they have colliders and go last, behind the chevrons, and no authored index moves), and apart from them
  * the drawn-only scenery, which has no index and no collider. `arm` is the bench's scenery A/B (`SCENERY_ARM`): `off` places the authored props alone, `draw0` the
- * authored and solid props as `on` does (the same colliders, so the same sim) and no drawn-only scenery.
+ * authored and solid props as `on` does (the same colliders, so the same sim) and no drawn-only scenery. `far`: the far clusters of the drawn list are laid, for the one caller whose art draws them.
  */
-export function placeCourse(track: Track, arm: SceneryArm = SCENERY_ARM.on): { placed: Placed[]; drawn: Placed[] } {
+export function placeCourse(track: Track, arm: SceneryArm = SCENERY_ARM.on, far = false): { placed: Placed[]; drawn: Placed[] } {
   const start = performance.now();
   const placed = placeAuthored(track);
   const authored = placed.length;
-  const { solid, drawn } = arm === SCENERY_ARM.off ? { solid: [], drawn: [] } : placeScenery(track, placed);
+  const { solid, drawn } = arm === SCENERY_ARM.off ? { solid: [], drawn: [] } : placeScenery(track, placed, far && arm === SCENERY_ARM.on);
   for (const p of solid) placed.push(p);
   const drawnKept = arm === SCENERY_ARM.on ? drawn : [];
   Object.assign(lastDressing, { course: track.id, placeMs: performance.now() - start, authored, placed, drawn: drawnKept });
