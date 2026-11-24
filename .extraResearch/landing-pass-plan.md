@@ -169,6 +169,10 @@ Still open, each a lane of its own when memory allows:
   speed 0 (`engine-openworld-named.ts` `personAt`); `net/codec.ts`'s `MSG` comment omits `bodies` and `foot`; the office
   meeting-room chairs no aisle reaches (nothing walks to them); a medic is never named by a guest's hook; medics are not
   seen by traffic; `LooseBatch`'s rows were never seen red (before it merges).
+- **Owed by this landing: a split.** `docs/CODING_STANDARDS.md` says a file over 600 lines must be modularized, and this pass
+  added five lines to one that was already past it (`ai/civilians/civilian-crowd.ts`, 860 to 865: the thrown-from-a-stoop
+  height). `engine/engine-onfoot.ts` stands at 669 as on `main`. A split now would need another gate; it is a lane of its own
+  after the landing.
 - **Not looked at:** a shot at a dummy's first-use cost (`pickDoll` builds 0.6 MB of tables on a mesh's first shot; no row
   bounds a warm shot); 21 of 22 open-world engine test files boot phone-class (60 residents, 1 cruiser, 3 bodies), so arrest
   rides with the cops' own cars are exercised by one file only; Needle's worker path in a production build, never run in a
