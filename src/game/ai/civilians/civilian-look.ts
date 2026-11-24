@@ -1,5 +1,6 @@
 import { detCos, detSin } from "../../kernel/physics-core.js";
-import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
+import { DOOR } from "../../world/openworld/openworld-facade-solids.ts";
+import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
 import { ANIMAL_CHEST_HEIGHT, CHEST_HEIGHT, LOOK, LOOK_RADIUS, LOOK_REACH, STOREY_HEIGHT } from "./civilian-crowd-constants.ts";
 import { SPECIES } from "./civilian-constants.ts";
 import { activityLine } from "./civilian-activity.ts";
@@ -63,8 +64,27 @@ function buildYawTrig(places: OpenWorldMap["places"]): Float64Array {
   return table;
 }
 
-/** The building (inside the walls) whose box the ray enters first within `reach`, into `out` (index -1, along Infinity: none): the slab test in the building's own frame (local x its depth, local z its width), ground to roof. Allocates nothing. */
-export function placeMet(map: OpenWorldMap, ray: LookRay, reach: number, out: Meeting): Meeting {
+/** A point this near (m) a building's street face is on it. */
+const FACE_SLACK = 0.01;
+
+/**
+ * Whether the point `at` m along the ray (in the building's own frame: `_origin`, `_direction`) lies in the street door's opening of `entry`, whose yaw's cosine and sine are given: on the street face
+ * (local x = depth / 2), within the door's half-width of the door's line across it, and between the door's sill (a rowhome's stands on its stoop) and its head. Only a building with rooms has one.
+ */
+function inDoorway(entry: Place, cos: number, sin: number, at: number): boolean {
+  if (entry.interior === undefined || Math.abs(_origin[0]! + _direction[0]! * at - entry.depth / 2) > FACE_SLACK) return false;
+  const sill = entry.interior === "rowhome" ? DOOR.sill : 0;
+  const y = _origin[1]! + _direction[1]! * at;
+  const across = _origin[2]! + _direction[2]! * at - ((entry.doorX - entry.x) * sin + (entry.doorZ - entry.z) * cos);
+  return y >= sill && y <= sill + DOOR.head - DOOR.sill && Math.abs(across) <= DOOR.halfWidth;
+}
+
+/**
+ * The building (inside the walls) whose box the ray enters first within `reach`, into `out` (index -1, along Infinity: none): the slab test in the building's own frame (local x its depth, local z its width), ground to roof.
+ * A look passes out of the building its eye is in (its windows). `shot`: a bullet's test, where walls are solid from both sides: a ray that starts inside a building meets the wall it leaves by, and a ray through a
+ * street door's opening (`inDoorway`) passes: out into the street, or in to the wall it then leaves by. Allocates nothing.
+ */
+export function placeMet(map: OpenWorldMap, ray: LookRay, reach: number, out: Meeting, shot = false): Meeting {
   out.index = -1;
   out.along = Infinity;
   const origin = _origin;
@@ -110,9 +130,15 @@ export function placeMet(map: OpenWorldMap, ray: LookRay, reach: number, out: Me
       enter = Math.max(enter, Math.min(near, far));
       leave = Math.min(leave, Math.max(near, far));
     }
-    if (enter <= 0 || enter >= leave || enter >= out.along || enter > reach) continue;
+    if (enter >= leave) continue;
+    let hit = enter;
+    if (enter <= 0) {
+      if (!shot || inDoorway(entry, cos, sin, leave)) continue;
+      hit = leave;
+    } else if (shot && inDoorway(entry, cos, sin, enter)) hit = leave;
+    if (hit >= out.along || hit > reach) continue;
     out.index = place;
-    out.along = enter;
+    out.along = hit;
   }
   return out;
 }

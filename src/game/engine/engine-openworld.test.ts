@@ -404,6 +404,27 @@ describe("given the player on foot in the open world", () => {
     harness.frame();
     expect(poses.shown[c], "she is still shown").toBe(1);
   });
+
+  it("when a rifle is fired from the middle of a building at its wall, with open ground beyond, then the shot goes no farther than the wall", () => {
+    const harness = hostWithMap();
+    harness.frame();
+    /** A level ray from the middle of `entry` toward its street face (local x +). */
+    const outward = (entry: (typeof map.places)[number]): LookRay => {
+      const ray = new LookRay();
+      ray.eyeX = entry.x;
+      ray.eyeY = 1.3;
+      ray.eyeZ = entry.z;
+      ray.dirX = detCos(entry.yaw);
+      ray.dirY = 0;
+      ray.dirZ = -detSin(entry.yaw);
+      return ray;
+    };
+    // The fixture's boxes crowd each other: the building is one with no other box within 5 m past its street wall, so only its own wall can stop the shot there.
+    const index = map.places.findIndex((entry) => entry.doorNode >= 0 && placeMet(map, outward(entry), entry.depth / 2 + 5, { index: -1, along: 0 }).index < 0);
+    expect(index, "control: a building with open ground past its street wall").toBeGreaterThanOrEqual(0);
+    const place = map.places[index]!;
+    expect(harness.director.shoot(PLAYER, outward(place), WEAPONS.rifle), "how far the shot went (m)").toBeLessThanOrEqual(place.depth / 2 + 0.01);
+  });
 });
 
 describe("given the hook aimed at the drawn people of the open world", () => {

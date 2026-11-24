@@ -121,7 +121,7 @@ const HOT = {
   "src/game/ai/civilians/animal-spot.ts": ["placeAnimal"],
   "src/game/ai/civilians/civilian-look-word.ts": ["lookOf"],
   "src/game/ai/civilians/civilian-temperament.ts": ["noteNeuroticism"],
-  "src/game/ai/civilians/civilian-look.ts": ["placeMet"],
+  "src/game/ai/civilians/civilian-look.ts": ["placeMet", "inDoorway"],
   "src/game/ai/civilians/civilian-separation.ts": ["resolve", "list", "buildPairs", "addPair", "relax", "pushApart", "move", "ease", "remember"],
   "src/game/ai/civilians/civilian-contact.ts": ["carGap", "comingAt"],
   "src/game/ai/civilians/crowd-walkers.ts": ["clear", "add", "addBody", "place"],

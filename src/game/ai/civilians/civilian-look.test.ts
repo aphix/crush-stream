@@ -200,4 +200,41 @@ describe("given the city's own map, its 310 buildings inside the walls", () => {
     expect(empty, "empty panels").toBeGreaterThan(0);
     expect(bytes, "bytes allocated by 2000 asks").toBeLessThanOrEqual(BOUND_BYTES);
   });
+
+  /** A shop of the city: its index, the line across its street face its door stands on (m, in its own frame), and a ray whose eye is at (deep, across) of that frame (deep +: toward the street face) aimed level at (toDeep, toAcross). */
+  const shopIndex = city.places.findIndex((place) => place.interior === "store");
+  const shop = city.places[shopIndex]!;
+  const doorAcross = (shop.doorX - shop.x) * detSin(shop.yaw) + (shop.doorZ - shop.z) * detCos(shop.yaw);
+  /** Metres beside the door: a point of the street wall well clear of the door's opening. */
+  const BESIDE_DOOR = 2;
+  /** Metres out in the street, before the shop's face. */
+  const IN_STREET = 3;
+  function shopRay(deep: number, across: number, toDeep: number, toAcross: number): LookRay {
+    const cos = detCos(shop.yaw);
+    const sin = detSin(shop.yaw);
+    const ray = eyeAt(shop.x + deep * cos + across * sin, shop.z - deep * sin + across * cos);
+    return aimedAt(ray, shop.x + toDeep * cos + toAcross * sin, EYE_HEIGHT, shop.z - toDeep * sin + toAcross * cos);
+  }
+
+  it("when a bullet's ray starts in the middle of a shop aimed at its street wall beside the door, then it meets that shop's wall half the shop's depth on, and a look's ray from there passes out of the shop", () => {
+    const ray = shopRay(0, doorAcross + BESIDE_DOOR, shop.depth, doorAcross + BESIDE_DOOR);
+    const bullet = placeMet(city, ray, LOOK_REACH, { index: -1, along: Infinity }, true);
+    expect(bullet.index, "the building the bullet meets").toBe(shopIndex);
+    expect(bullet.along, "how far on (m)").toBeCloseTo(shop.depth / 2, 3);
+    expect(placeMet(city, ray, LOOK_REACH, { index: -1, along: Infinity }).index, "the building the look meets").not.toBe(shopIndex);
+  });
+
+  it("when a bullet's ray starts in a shop aimed out through its street door, then it meets no wall of the shop", () => {
+    const ray = shopRay(0, doorAcross, shop.depth, doorAcross);
+    expect(placeMet(city, ray, LOOK_REACH, { index: -1, along: Infinity }, true).index, "the building the bullet meets").not.toBe(shopIndex);
+  });
+
+  it("when a bullet's ray from the street goes in through a shop's street door, then it meets the shop's back wall, and one beside the door meets the street face", () => {
+    const through = placeMet(city, shopRay(shop.depth / 2 + IN_STREET, doorAcross, -shop.depth, doorAcross), LOOK_REACH, { index: -1, along: Infinity }, true);
+    expect(through.index, "through the door: the building met").toBe(shopIndex);
+    expect(through.along, "through the door: how far on (m)").toBeCloseTo(IN_STREET + shop.depth, 3);
+    const beside = placeMet(city, shopRay(shop.depth / 2 + IN_STREET, doorAcross + BESIDE_DOOR, -shop.depth, doorAcross + BESIDE_DOOR), LOOK_REACH, { index: -1, along: Infinity }, true);
+    expect(beside.index, "beside the door: the building met").toBe(shopIndex);
+    expect(beside.along, "beside the door: how far on (m)").toBeCloseTo(IN_STREET, 3);
+  });
 });

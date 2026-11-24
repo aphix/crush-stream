@@ -674,7 +674,7 @@ export class OpenWorldDirector {
     const wall = this.wallMet;
     wall.index = -1;
     wall.along = Infinity;
-    if (remote && this.map !== null) placeMet(this.map, ray, reach, wall);
+    if (remote && this.map !== null) placeMet(this.map, ray, reach, wall, true);
     if (client || this.bodies!.canStand(ray.eyeX, ray.eyeZ)) {
       chestMet(crowd.poses, people, this.bodies?.held ?? null, ray, SHOT_BODY_RADIUS, reach, out, true);
       if (out.index >= 0 && this.behindWall(crowd.poses.x[out.index]!, crowd.poses.z[out.index]!, out.along)) {
@@ -882,7 +882,7 @@ export class OpenWorldDirector {
     return nearest;
   }
 
-  /** Whether a wall of a place stands between the points a and b (m): the level ray from a to b meets a footprint nearer than b is. A ray that starts inside a footprint meets no wall of it. */
+  /** Whether a wall of a place stands between the points a and b (m): the ray from a to b meets a footprint's wall nearer than b is, from outside or from inside it (`placeMet` as a bullet asks); a street door's opening is no wall. */
   wallBetween(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
     if (this.map === null) return false;
     const length = hypot3(bx - ax, by - ay, bz - az);
@@ -894,7 +894,7 @@ export class OpenWorldDirector {
     ray.dirX = (bx - ax) / length;
     ray.dirY = (by - ay) / length;
     ray.dirZ = (bz - az) / length;
-    return placeMet(this.map, ray, length, this.wallMet).along < length;
+    return placeMet(this.map, ray, length, this.wallMet, true).along < length;
   }
 
   /** How far (m) along `ray`, within `range`, the nearest wall, the ground, a drawn person, a foot cop, a dummy, a car or a knockable prop is, or `range` when there is none (nothing is struck, so a player's aim can be looked along before he fires). */
@@ -910,7 +910,7 @@ export class OpenWorldDirector {
    */
   private lookAlong(actor: number, ray: LookRay, range: number): number {
     const crowd = this.crowd!;
-    let reach = Math.min(range, placeMet(this.map!, ray, range, this.wallMet).along);
+    let reach = Math.min(range, placeMet(this.map!, ray, range, this.wallMet, true).along);
     if (ray.dirY < 0) reach = Math.min(reach, (activeGround().heightAt(ray.eyeX, ray.eyeZ) - ray.eyeY) / ray.dirY);
     this.lookReach = reach;
     this.ports.pickDoll(actor, ray, reach, this.pickedDoll);
