@@ -59,13 +59,14 @@ class CageTables {
 const placed = new WeakMap<CageStyle, CageTables>();
 
 /** The style's block with its views over the memory's current buffer, placed on first use. */
-function tablesOf(k: SkinKernel, style: CageStyle, f: CageFields): CageTables {
+function tablesOf(k: SkinKernel, style: CageStyle): CageTables {
   const hit = placed.get(style);
   if (hit !== undefined) {
     if (hit.buf !== k.ex.memory.buffer) hit.bind(k.ex.memory.buffer);
     return hit;
   }
   const openLength = OPEN_MAX * 4;
+  const cageVertices = style.vertexCount + style.sillCount + style.interiorCount;
   const { nu, nv, tris, triGroup } = style;
   const nodes = nu * nv;
   const line = Math.max(nu, nv);
@@ -78,9 +79,9 @@ function tablesOf(k: SkinKernel, style: CageStyle, f: CageFields): CageTables {
   const off: Record<Blocks, number> = {
     tris: place(tris.byteLength),
     triGroup: place(triGroup.byteLength),
-    pos: place(f.pos.byteLength),
-    rawY: place(f.rawY.byteLength),
-    panelOn: place(f.panelOn.byteLength),
+    pos: place(cageVertices * 3 * 8),
+    rawY: place(cageVertices * 8),
+    panelOn: place(style.panelCount),
     open: place(openLength * 8),
     params: place(PARAMS * 8),
     res: place(RESULT * 8),
@@ -102,7 +103,7 @@ function tablesOf(k: SkinKernel, style: CageStyle, f: CageFields): CageTables {
   const bytes = new Uint8Array(k.ex.memory.buffer);
   bytes.set(new Uint8Array(tris.buffer, tris.byteOffset, tris.byteLength), at.tris);
   bytes.set(triGroup, at.triGroup);
-  const t = new CageTables(at, { pos: f.pos.length, open: openLength, nodes, panels: f.panelOn.length });
+  const t = new CageTables(at, { pos: cageVertices * 3, open: openLength, nodes, panels: style.panelCount });
   t.bind(k.ex.memory.buffer);
   placed.set(style, t);
   return t;
@@ -115,7 +116,7 @@ function tablesOf(k: SkinKernel, style: CageStyle, f: CageFields): CageTables {
 export function rasteriseInKernel(style: CageStyle, f: CageFields, panelOn: Uint8Array, opens: number, open: Float64Array, margin: number, lidMargin: number, cutY: number, cutX: number, cutZ: number): boolean {
   const k = skinKernel();
   if (k === null) return false;
-  const t = tablesOf(k, style, f);
+  const t = tablesOf(k, style);
   t.pos.set(f.pos);
   t.rawY.set(f.rawY);
   t.panelOn.set(panelOn);
@@ -142,7 +143,7 @@ export function rasteriseInKernel(style: CageStyle, f: CageFields, panelOn: Uint
 export function planFieldInKernel(style: CageStyle, f: CageFields): boolean {
   const k = skinKernel();
   if (k === null) return false;
-  const t = tablesOf(k, style, f);
+  const t = tablesOf(k, style);
   t.covered.set(f.covered);
   const a = t.at;
   k.ex.plan_field(style.nu, style.nv, style.step, a.covered, a.plan, a.toCovered, a.toUncovered, a.lf, a.ld, a.lz, a.lv);

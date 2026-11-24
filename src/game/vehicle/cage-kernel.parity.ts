@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { IMPRINT_NONE } from "../deform/load-crush.ts";
 import { skinKernel } from "../deform/skin-kernel.ts";
 import { loadSkinKernelForTest } from "../deform/skin-kernel.test-util.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
@@ -82,17 +83,48 @@ function inputsOf(): Input[] {
       for (let seed = 1; seed <= 3; seed++) inputs.push({ ...base, label: `${label}, panels off ${seed}`, panelOn: panelsOff(f.panelOn, seed * 7919, 0.3) });
     }
   }
+  // Inputs no fit makes: a NaN height, an infinite plan position and negative zeros, on a pristine sedan's triangles.
+  const sedan = new CageRig(carInState("untouched", "sedan", STYLE_CLASS.sedan));
+  sedan.refit(true);
+  const f = sedan.cage.fields;
+  const style = sedan.cage.style;
+  const cut = [IMPRINT_NONE, 0, 0] as const;
+  const firstVertex = style.tris[0]!;
+  const secondVertex = style.tris[1]!;
+  const odd = (label: string, change: (pos: Float64Array, rawY: Float64Array) => void): void => {
+    const input: Input = { style, label, pos: f.pos.slice(), rawY: f.rawY.slice(), panelOn: f.panelOn.slice(), cut };
+    change(input.pos, input.rawY);
+    inputs.push(input);
+  };
+  odd("a NaN height", (_, rawY) => (rawY[firstVertex] = NaN));
+  odd("an infinite x", (pos) => (pos[secondVertex * 3] = Infinity));
+  odd("a negative infinite z", (pos) => (pos[firstVertex * 3 + 2] = -Infinity));
+  odd("negative zeros", (pos, rawY) => {
+    pos[firstVertex * 3] = -0;
+    pos[secondVertex * 3 + 2] = -0;
+    rawY[secondVertex] = -0;
+  });
   return inputs;
 }
 
+/**
+ * `a`'s bytes as words: equal words are equal bits, a negative zero included. Every NaN reads as one: JS leaves a NaN's sign and payload to
+ * the engine (two stores of the same NaN in one run came out with different signs), so only inputs a fit never makes can tell them apart.
+ */
+function bitsOf(a: Float32Array | Float64Array): Uint32Array {
+  const copy = a.slice();
+  for (let i = 0; i < copy.length; i++) if (Number.isNaN(copy[i]!)) copy[i] = NaN;
+  return new Uint32Array(copy.buffer, copy.byteOffset, copy.byteLength >> 2);
+}
+
 function agree(label: string, got: Output, want: Output): void {
-  expect(firstMismatch(got.top, want.top), `${label}: top`).toBeUndefined();
-  expect(firstMismatch(got.bottom, want.bottom), `${label}: bottom`).toBeUndefined();
+  expect(firstMismatch(bitsOf(got.top), bitsOf(want.top)), `${label}: top`).toBeUndefined();
+  expect(firstMismatch(bitsOf(got.bottom), bitsOf(want.bottom)), `${label}: bottom`).toBeUndefined();
   expect(firstMismatch(got.covered, want.covered), `${label}: covered`).toBeUndefined();
   expect(firstMismatch(got.part, want.part), `${label}: part`).toBeUndefined();
-  expect(firstMismatch(got.plan, want.plan), `${label}: plan`).toBeUndefined();
-  expect(firstMismatch(got.planBox, want.planBox), `${label}: planBox`).toBeUndefined();
-  expect(Object.is(got.heightMax, want.heightMax), `${label}: heightMax ${got.heightMax} against ${want.heightMax}`).toBe(true);
+  expect(firstMismatch(bitsOf(got.plan), bitsOf(want.plan)), `${label}: plan`).toBeUndefined();
+  expect(firstMismatch(bitsOf(got.planBox), bitsOf(want.planBox)), `${label}: planBox`).toBeUndefined();
+  expect(firstMismatch(bitsOf(Float64Array.of(got.heightMax)), bitsOf(Float64Array.of(want.heightMax))), `${label}: heightMax ${got.heightMax} against ${want.heightMax}`).toBeUndefined();
 }
 
 describe("given every car style's cage fitted at rest and after crushes", () => {
@@ -103,16 +135,17 @@ describe("given every car style's cage fitted at rest and after crushes", () => 
     const jsOutputs = inputs.map(run);
     const jsMasks = styles.map(maskPlans);
     expect(
-      jsOutputs.filter((out, k) => k % 5 === 1 && firstMismatch(out.covered, jsOutputs[k - 1]!.covered) !== undefined).length,
+      inputs.filter((input, k) => input.label.endsWith(", glass gone") && firstMismatch(jsOutputs[k]!.covered, jsOutputs[k - 1]!.covered) !== undefined).length,
       "control: a car's glass gone changes what it covers (the openings are read)",
     ).toBeGreaterThan(0);
 
     await loadSkinKernelForTest();
     expect(skinKernel(), "the kernel leg runs with the kernel").not.toBeNull();
-    for (const [k, input] of inputs.entries()) agree(input.label, run(input), jsOutputs[k]!);
+    // Each style's first kernel call is its plan field over fields with no vertices, as a plan field asked first would be.
     for (const [s, style] of styles.entries()) {
       const masks = maskPlans(style);
-      for (const [m, plan] of masks.entries()) expect(firstMismatch(plan, jsMasks[s]![m]!), `style ${s}, mask ${m}: plan`).toBeUndefined();
+      for (const [m, plan] of masks.entries()) expect(firstMismatch(bitsOf(plan), bitsOf(jsMasks[s]![m]!)), `style ${s}, mask ${m}: plan`).toBeUndefined();
     }
+    for (const [k, input] of inputs.entries()) agree(input.label, run(input), jsOutputs[k]!);
   });
 });
