@@ -8,7 +8,8 @@ import { ENTER_MAX_SPEED, EXIT_MAX_SPEED } from "../present/onfoot-flow.ts";
 import type { Pole } from "../present/ragdoll-ground.ts";
 import { DoorSwings } from "./engine-openworld-door-swings.ts";
 import type { ActorPlace } from "./engine-openworld-law.ts";
-import { doorAt, doorBlocked, exitSide } from "./onfoot-doors.ts";
+import { hypot2 } from "../kernel/physics-core.js";
+import { doorAt, doorBlocked, doorSpot, exitSide } from "./onfoot-doors.ts";
 
 /** What asking for a seat came to: done (the table says so now), sent (a guest waits for the host's answer) or refused (`OpenWorldSeats.refusal` says why). */
 export const ASK = { done: 0, sent: 1, refused: 2 } as const;
@@ -24,6 +25,7 @@ const NEAR_CAR_M = 4.5;
 const NO_CAR = -1;
 
 const _torso = new THREE.Vector3();
+const _spot = new THREE.Vector3();
 const _place: ActorPlace = { x: 0, y: 0, z: 0, heading: 0, velocityX: 0, velocityZ: 0 };
 const _speed = new Float64Array(1);
 const _eye = { x: 0, y: 0, z: 0 };
@@ -116,21 +118,25 @@ export class OpenWorldSeats {
     return this.table.driverOf(car) >= 0 || (taken === 0 && (car === actor || car === this.lastDriven[actor] || this.ports.canTake(car)));
   }
 
-  /** The car and door this machine's player standing at `torso` may get in at, into `out`: the same door test that `getIn` uses, lighting the prompt. */
+  /** The car and door this machine's player standing at `torso` may get in at, into `out`: the same door test that `getIn` uses, lighting the prompt. With doors of several cars in reach (a room's cars stand side by side, a door of each a metre from the next) it is the door nearest him. */
   pick(torso: THREE.Vector3, out: DoorPick): boolean {
     const cars = this.ports.cars();
     const actor = this.ports.self();
+    let nearest = Infinity;
     for (let car = 0; car < cars.length; car++) {
       const body = cars[car]!;
       if (Math.abs(body.group.position.x - torso.x) > NEAR_CAR_M || Math.abs(body.group.position.z - torso.z) > NEAR_CAR_M || !this.mayEnter(actor, car)) continue;
       const side = doorAt(body, torso, _speed);
       if (side === 0) continue;
+      doorSpot(body, _spot, side);
+      const gap = hypot2(_spot.x - torso.x, _spot.z - torso.z);
+      if (gap >= nearest) continue;
+      nearest = gap;
       out.car = car;
       out.side = side;
       out.speed = _speed[0]!;
-      return true;
     }
-    return false;
+    return nearest < Infinity;
   }
 
   /**

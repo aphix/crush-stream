@@ -448,6 +448,27 @@ describe("given a driver whose own door has a car parked against it", () => {
   });
 });
 
+describe("given two players' cars side by side as a room starts them, 4.5 m apart", () => {
+  /** The gap (m) between two cars of a room's start row. */
+  const ROW_GAP_M = 4.5;
+
+  it("when the second player stands on foot at his own driver's door, a metre from the first car's passenger door, then the door offered him is his own car's", () => {
+    const f = fixture();
+    const second = f.cars[1]!;
+    second.group.position.x = f.cars[0]!.group.position.x + PASSENGER_DOOR * ROW_GAP_M;
+    second.group.updateMatrixWorld(true);
+    walkUp(f, 1, 1, DRIVER_SIDE);
+    f.state.self = 1;
+    const spot = doorSpot(second, new THREE.Vector3(), DRIVER_SIDE);
+    const other = doorSpot(f.cars[0]!, new THREE.Vector3(), PASSENGER_DOOR);
+    expect(spot.distanceTo(other), "control: the first car's passenger door is in his reach too (m)").toBeLessThan(1.9);
+    const pick = { car: -1, side: 0, speed: 0 };
+    expect(f.seats.pick(new THREE.Vector3(spot.x, spot.y + 1, spot.z), pick), "a door is in reach").toBe(true);
+    expect(pick.car, "the car offered").toBe(1);
+    expect(pick.side, "its door").toBe(DRIVER_SIDE);
+  });
+});
+
 describe("given a guest at the wheel of his own car", () => {
   /** A guest's seats (actor 1, seated at the wheel of car 1) over `f`'s cars, and the acts it sends. */
   function guestSeats(f: Fixture): { guest: OpenWorldSeats; sent: { kind: number; arg: number }[] } {
