@@ -1,4 +1,9 @@
+import { GRAVITY } from "../kernel/constants.ts";
+
 /** Quantities several deform files share. */
+
+/** The spin (rad/s) under which a wreck is at rest: a slice's gravity at rest, as the vehicle's rest test counts it. The rules for a wreck settling on its wheels (the frame's tilt, the planted hubs' ride of the seat step) act only under it. */
+export const REST_SPIN = GRAVITY / 60;
 
 /** A wreck whose spin inertia about its centroid (Σ m·r², kg·m²) is below this has no turn to hold or resist. */
 export const MIN_INERTIA = 1e-9;

@@ -35,6 +35,19 @@ const REPEAT_KPH = 33;
 const TWO_HITS_KPH = REPEAT_KPH * Math.SQRT2;
 const THREE_HITS_KPH = REPEAT_KPH * Math.sqrt(3);
 
+/** The hubs of a monster that has hit the jersey slab at `kph` and ended inside it, each with where. */
+function monsterHubsInSlab(kph: number): string[] {
+  const car = new DeformableCar(paint(), new THREE.Scene(), null, "monster");
+  car.deform.setMode("shape");
+  runWall(kph, 1, "front", { car });
+  const inside: string[] = [];
+  for (const name of ["hubFL", "hubFR", "hubRL", "hubRR"]) {
+    const at = mass(car.deform, name).world;
+    if (!(Math.abs(at.x) >= BARRIER_HALF.x || Math.abs(at.z) >= BARRIER_HALF.z || at.y >= BARRIER_TOP)) inside.push(`${name} at (${at.x.toFixed(2)}, ${at.y.toFixed(2)}, ${at.z.toFixed(2)})`);
+  }
+  return inside;
+}
+
 describe("given a car driving front-first into a rigid wall in shape deform mode, at either crumple-zone setting (0.4, or the calibrated 0.32)", () => {
   it("when it hits at 20, 25, 30, 35, 40 or 43 km/h, then the engine block stays on its mounts for as long as the nose has not packed against it", () => {
     for (const squash of SQUASHES) {
@@ -97,13 +110,12 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
   // car stood on its nose with its front hubs inside the slab; it leaves by the side the car stands on, so the slab tears the tyres off
   // and the truck goes over it.
   it("when a monster hits the slab at 48 km/h, then none of its hubs ends inside the slab", () => {
-    const car = new DeformableCar(paint(), new THREE.Scene(), null, "monster");
-    car.deform.setMode("shape");
-    runWall(48, 1, "front", { car });
-    for (const name of ["hubFL", "hubFR", "hubRL", "hubRR"]) {
-      const at = mass(car.deform, name).world;
-      expect(Math.abs(at.x) >= BARRIER_HALF.x || Math.abs(at.z) >= BARRIER_HALF.z || at.y >= BARRIER_TOP, `${name} at (${at.x.toFixed(2)}, ${at.y.toFixed(2)}, ${at.z.toFixed(2)}) inside the slab`).toBeTruthy();
-    }
+    expect(monsterHubsInSlab(48).join(" | "), "hubs inside the slab").toBe("");
+  });
+
+  // The truck goes over the slab at these speeds too, its front tyres ending on top of it: a rule for a wreck settling on its wheels acting on one in flight left them inside.
+  it("when a monster hits the slab at 42, 46, 50 and 54 km/h, then none of its hubs ends inside the slab", () => {
+    for (const kph of [42, 46, 50, 54]) expect(monsterHubsInSlab(kph).join(" | "), `hubs inside the slab at ${kph} km/h`).toBe("");
   });
 });
 

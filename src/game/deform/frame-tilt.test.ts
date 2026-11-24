@@ -94,4 +94,15 @@ describe("given a quiet wreck whose masses lean against its level frame", () => 
     for (let i = 0; i < TILT_CALLS; i++) s.d.followGroup(s.group, s.vel, s.omega, STEP);
     expect(Math.abs(s.group.rotation.x - planted), "the pitch the lean added to the frame (rad)").toBeLessThan(1e-6);
   });
+
+  it("when the same lean comes while the wreck is still turning at 1 rad/s, then the frame keeps its pose: a wreck in flight is not settling on its wheels", () => {
+    const s = levelWreck();
+    for (let i = 0; i < QUIET_S * FINE_HZ + 1; i++) stepWreck(s, STEP);
+    expect(s.d.quietTime(), "the wreck has been quiet").toBeGreaterThan(0.05);
+    lean(s);
+    s.omega.set(1, 0, 0);
+    for (let i = 0; i < TILT_CALLS; i++) s.d.followGroup(s.group, s.vel, s.omega, STEP);
+    expect(Math.abs(s.group.rotation.x), "the frame's pitch (rad)").toBeLessThan(1e-6);
+    expect(noseLift(s), "the nose's lift over its rest in the frame (m)").toBeGreaterThan(LEAN);
+  });
 });
