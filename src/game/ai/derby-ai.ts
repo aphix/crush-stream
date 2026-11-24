@@ -161,6 +161,9 @@ export class DerbyBrain {
   private readonly recover = new Float64Array(MAX_CARS);
   private readonly recoverThrottle = new Float64Array(MAX_CARS);
   private readonly recoverSteer = new Float64Array(MAX_CARS);
+  /** The fastest the car has gone in its current escape, and seconds left lifted off after an escape that never got it rolling. */
+  private readonly escapeTop = new Float64Array(MAX_CARS);
+  private readonly restFor = new Float64Array(MAX_CARS);
   private readonly tighten = new Float64Array(MAX_CARS);
   private readonly mode = new Uint8Array(MAX_CARS);
   private readonly lastThrottle = new Float64Array(MAX_CARS);
@@ -210,6 +213,8 @@ export class DerbyBrain {
     this.recover.fill(0);
     this.recoverThrottle.fill(0);
     this.recoverSteer.fill(0);
+    this.escapeTop.fill(0);
+    this.restFor.fill(0);
     this.tighten.fill(0);
     this.mode.fill(MODE_REV);
     this.lastThrottle.fill(0);
@@ -324,6 +329,7 @@ export class DerbyBrain {
       this.setTarget(i, -1);
       this.lastThrottle[i] = 0;
       this.recover[i] = 0;
+      this.restFor[i] = 0;
       this.moveFor[i] = 0;
       return out;
     }
@@ -333,13 +339,28 @@ export class DerbyBrain {
     this.age[i]! += dt;
 
     // L0 — unstick.
+    if (this.restFor[i]! > 0) {
+      this.restFor[i]! -= dt;
+      this.lastThrottle[i] = 0;
+      this.tactic[i] = T_UNSTICK;
+      return out;
+    }
     if (this.recover[i]! > 0) {
       this.recover[i]! -= dt;
+      this.escapeTop[i] = Math.max(this.escapeTop[i]!, speed);
       out.throttle = this.recoverThrottle[i]!;
       out.steer = this.recoverSteer[i]!;
       this.lastThrottle[i] = 0;
       this.tactic[i] = T_UNSTICK;
-      if (this.recover[i]! <= 0) this.rescoreIn[i] = 0;
+      if (this.recover[i]! <= 0) {
+        this.rescoreIn[i] = 0;
+        // Neither the wedged gear nor the escape's moved it (a front-driven wreck with its front wheels off the ground): pressing on only
+        // rocks it in place, so it lifts off as long again, and the next wedge still counts as straight after this escape (`again`).
+        if (this.escapeTop[i]! < STUCK_SPEED) {
+          this.restFor[i] = escapeTime(p);
+          this.freedAt[i] = this.age[i]! + this.restFor[i]!;
+        }
+      }
       return out;
     }
     // Wedged (no motion) or grinding a shove against the target: back off for a run-up.
@@ -790,10 +811,16 @@ export class DerbyBrain {
     const again = this.age[i]! - this.freedAt[i]! < 1.5;
     const prev = this.recoverThrottle[i]!;
     this.recoverThrottle[i] = again && prev !== 0 ? -prev : this.lastThrottle[i]! > 0 ? -0.95 : 0.95;
-    this.recover[i] = 0.55 + p.patience * 0.5;
+    this.recover[i] = escapeTime(p);
+    this.escapeTop[i] = 0;
     this.freedAt[i] = this.age[i]! + this.recover[i]!;
     this.stuck[i] = 0;
   }
+}
+
+/** Seconds a driver's escape from a wedge runs (`beginRecovery`). */
+function escapeTime(p: Personality): number {
+  return 0.55 + p.patience * 0.5;
 }
 
 const _aim = { x: 0, z: 0 };

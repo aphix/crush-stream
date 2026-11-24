@@ -129,7 +129,8 @@ the glass texture's opacity so the taller pane stays easy to see through.
 
 What the AI does not know: it steers by the ring radius (`DerbyBrain.radius` = `DERBY_RADIUS`) and its stuck recovery, not by the containers, rails, pads, tyre
 berms, the table-top or the ramps. Cars can be wedged against a container or rail and recover by the existing stuck rule; an obstacle-aware aim (steer round a prism, treat a rise as a
-ramp) would be the next step.
+ramp) would be the next step. An escape that never gets the car rolling (a front-driven wreck with one front wheel torn off and the other hanging, beached on a ramp's foot) means
+neither gear moves it: the driver lifts off for as long as the escape ran, then tries again, rather than rocking on the throttle in place.
 
 ## Validation (10 cars, default slider, real stack, headless)
 

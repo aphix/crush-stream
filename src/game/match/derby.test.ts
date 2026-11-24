@@ -117,6 +117,26 @@ describe("given a derby car wedged 3 m from a foe that sits across its path", ()
   });
 });
 
+describe("given a front-driven wreck that moves in neither gear (its front-left wheel torn off, the front-right hanging) on a ramp's foot, 3.4 m from a stopped wreck", () => {
+  it("when it drives for 12 s, then it never holds the throttle without moving for 3 s: an escape that never gets it rolling makes it lift off", () => {
+    // Derby seed 6's car 2 (arcade knobs, 20 s): no driven wheel on the ground, so its traction is 0 in either gear.
+    const match = new DerbyMatch();
+    match.begin([{ id: 0, name: "me" }, { id: 1, name: "foe" }], { start: 0 });
+    const me = aiCar(0, { x: 35.15, z: -8.67, yaw: 1.893, vz: 0, crashed: true });
+    const foe = aiCar(1, { x: 34.38, z: -11.96, yaw: -0.168, vz: 0, crashed: true });
+    const h = 1 / FRAME_HZ;
+    let wedged = 0;
+    let worst = 0;
+    for (let t = 0; t < 12; t += h) {
+      const throttle = match.think(me, [me, foe], h).throttle;
+      match.step(h, [{ id: 0, name: "me", alive: true, x: me.x, z: me.z }, { id: 1, name: "foe", alive: true, x: foe.x, z: foe.z }]);
+      wedged = Math.abs(throttle) > 0.3 ? wedged + h : 0;
+      worst = Math.max(worst, wedged);
+    }
+    expect(worst, `held the throttle without moving for ${worst.toFixed(2)} s`).toBeLessThan(3);
+  });
+});
+
 describe("given derby drivers built from their ids in two matches", () => {
   it("when the drivers are built, then driver 7 is the same driver both times, and across ten ids some flank each way and some launch at once while others hold back", () => {
     assertSameDigest(personality(7), personality(7), "driver 7 in two matches");
