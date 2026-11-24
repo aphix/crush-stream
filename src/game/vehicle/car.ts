@@ -701,12 +701,13 @@ export class DeformableCar extends CarParts {
       if (this.deform.skinnedThisFrame) this.skinPanels();
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
     }
-    // A hold that re-lifted the skin on a frame it was not written rewrote the normals round the tyres flat: drawn round again, as a written skin is.
+    // A hold that re-lifted the skin on a frame it was not written rewrote the normals round the tyres flat: drawn round again, as a written skin is,
+    // on a near car only (a far one is drawn at strength 0 and is skinned and rounded when it comes near: `setNearView`).
     const heldRewrote = this.holdRewroteNormals();
     if (this.deform.skinnedThisFrame) {
       this.smoothDrawnSkin();
       if (this.panelsFollow) this.poseOpenShells();
-    } else if (heldRewrote) this.smoothDrawnSkin();
+    } else if (heldRewrote && this.nearView) this.smoothDrawnSkin();
     if (this.panelsFollow) this.followGlass();
     if (this.hullHelper?.visible) this.updateHullHelper();
     this.settleCasters();
@@ -754,7 +755,7 @@ export class DeformableCar extends CarParts {
   protected override layOwedHold(): void {
     this.bodyTyres?.settle();
     if (!this.hoodOff()) this.hoodTyres?.settle();
-    if (this.holdRewroteNormals()) this.smoothDrawnSkin();
+    if (this.holdRewroteNormals() && this.nearView) this.smoothDrawnSkin();
   }
 
   /** Whether either tyre hold rewrote normals since this was last asked. */
