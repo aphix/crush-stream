@@ -20,10 +20,11 @@ type Point = { x: number; y: number; z: number };
 /** The host's acts over a stub director that puts every named thing at `stands` (null: nowhere) and has a wall wherever `wallZ` says. */
 function rig() {
   const clock = { now: 100 };
-  const stands = { at: null as Point | null, speed: 0 };
+  const stands = { at: null as Point | null, speed: 0, driven: true, slack: 0.35 };
   const wallZ: number[] = [];
   const asked: number[][] = [];
   const shots: LookRay[] = [];
+  const ranges: (number | undefined)[] = [];
   const hooks: { ray: LookRay; sawPerson: boolean }[] = [];
   const acts = new OpenWorldActs(
     {
@@ -43,19 +44,19 @@ function rig() {
     },
     {
       punch: () => {},
-      shoot: (_actor, ray) => (shots.push(Object.assign(new LookRay(), ray)), 7),
+      shoot: (_actor, ray, _gun, range) => (shots.push(Object.assign(new LookRay(), ray)), ranges.push(range), 7),
       meet: () => 0,
       wallBetween: (_ax, _ay, az, _bx, _by, bz) => wallZ.some((wall) => (az - wall) * (bz - wall) < 0),
       placeNamed: (kind, id, ox, oy, oz, out) => {
         asked.push([kind, id, ox, oy, oz]);
         if (stands.at === null) return false;
-        Object.assign(out, stands.at, { speed: stands.speed });
+        Object.assign(out, stands.at, { speed: stands.speed, driven: stands.driven, slack: stands.slack });
         return true;
       },
       shotFired: () => {},
     },
   );
-  return { acts, stands, wallZ, asked, shots, hooks };
+  return { acts, stands, wallZ, asked, shots, ranges, hooks };
 }
 
 /** A shot (or a hook fire) from the guest's eye along +z that names thing `kind` `id` hit at (0, 1, 0) from its origin. */
@@ -160,17 +161,37 @@ describe("given a host that hears a guest's shot naming a car, and then a shotgu
     expect(firstMismatch(dirOf(r.shots[1]!), STRAIGHT, AIM_TOLERANCE), "a player: the ray's direction").toBeUndefined();
   });
 
-  it("when a car moving at 60 m/s, a boosted player car, now stands 30 m off the sent line, then the shot is aimed at it; a parked car 20 m off the line is refused", () => {
+  it("when a car moving at 60 m/s, a boosted player car, now stands 30 m off the sent line, then the shot is aimed at it; a parked car 4 m off the line is refused", () => {
     const r = rig();
     const fast = { x: 40, y: 1.3, z: 35 };
     r.stands.at = fast;
     r.stands.speed = 60;
     r.acts.hear(GUEST, actNaming(ACT.shot, NAMED.car, CAR_ID));
     expect(firstMismatch(dirOf(r.shots[0]!), toward(fast), AIM_TOLERANCE), "the fast car: the ray's direction").toBeUndefined();
-    r.stands.at = { x: 30, y: 1.3, z: 35 };
+    r.stands.at = { x: 14, y: 1.3, z: 35 };
     r.stands.speed = 0;
+    r.stands.driven = false;
     r.acts.hear(GUEST, actNaming(ACT.shot, NAMED.car, CAR_ID));
     expect(firstMismatch(dirOf(r.shots[1]!), STRAIGHT, AIM_TOLERANCE), "the parked car: the ray's direction").toBeUndefined();
+  });
+
+  it("when a car with a driver pulling away from rest now stands 6 m off the sent line, then the shot is aimed at it", () => {
+    const r = rig();
+    const at = { x: 16, y: 1.3, z: 35 };
+    r.stands.at = at;
+    r.acts.hear(GUEST, actNaming(ACT.shot, NAMED.car, CAR_ID));
+    expect(firstMismatch(dirOf(r.shots[0]!), toward(at), AIM_TOLERANCE), "the ray's direction").toBeUndefined();
+  });
+
+  it("when a shot is re-aimed at a named person 15 m away, then its rays fly no farther than 0.35 m past her; a shot that keeps the sent line flies the gun's range", () => {
+    const r = rig();
+    const at = { x: 10, y: 1.3, z: 35 };
+    r.stands.at = at;
+    r.acts.hear(GUEST, actNaming(ACT.shot, NAMED.civilian, PERSON_ID));
+    expect(r.ranges[0], "the range of a re-aimed ray (m)").toBeCloseTo(15 + 0.35, 3);
+    r.stands.at = null;
+    r.acts.hear(GUEST, actNaming(ACT.shot, NAMED.civilian, PERSON_ID));
+    expect(r.ranges[1], "the range of a ray along the sent line (m)").toBe(WEAPONS.pistol.range);
   });
 
   it("when a civilian standing still is named 3.9 m off the sent line, then the shot goes along the sent line", () => {

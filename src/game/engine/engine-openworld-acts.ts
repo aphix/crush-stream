@@ -54,13 +54,13 @@ const _aim = new LookRay();
 const _ray = new LookRay();
 const _near = new LookRay();
 const _muzzle = { x: 0, y: 0, z: 0 };
-const _at: Placed = { x: 0, y: 0, z: 0, speed: 0 };
+const _at: Placed = { x: 0, y: 0, z: 0, speed: 0, driven: true, slack: 0 };
 const _named: Named = { kind: NAMED.nothing, id: 0, x: 0, y: 0, z: 0 };
 
 /** What the director resolves at the authority for an actor. */
 type ActResolver = {
   punch(actor: number, x: number, z: number, dirX: number, dirZ: number): void;
-  shoot(actor: number, ray: LookRay, gun: Gun): number;
+  shoot(actor: number, ray: LookRay, gun: Gun, range?: number): number;
   /** How far (m) along `ray`, within `range`, the nearest wall, ground, person, dummy, car or prop is, or `range`; nothing is struck. `name`, when given, is filled with what that was (`NamedThings.name`). */
   meet(actor: number, ray: LookRay, range: number, name?: Named | null): number;
   /** The world point of named thing (`kind`, `id`) plus its hit offset as this machine has it now, into `out`; false when it is not there. */
@@ -240,7 +240,7 @@ export class OpenWorldActs {
     if (named.kind === NAMED.nothing || !namedFits(named.kind, named.x, named.y, named.z) || !this.resolver.placeNamed(named.kind, named.id, named.x, named.y, named.z, _at)) return null;
     const along = Math.max(0, (_at.x - line.eyeX) * line.dirX + (_at.y - line.eyeY) * line.dirY + (_at.z - line.eyeZ) * line.dirZ);
     const gap = hypot3(line.eyeX + line.dirX * along - _at.x, line.eyeY + line.dirY * along - _at.y, line.eyeZ + line.dirZ * along - _at.z);
-    return gap <= namedReach(named.kind, _at.speed) ? _at : null;
+    return gap <= namedReach(named.kind, _at.speed, _at.driven) ? _at : null;
   }
 
   /** `ray`'s direction turned from its eye toward `at`; kept when `at` is on the eye. */
@@ -264,15 +264,18 @@ export class OpenWorldActs {
    * `at`: the point a thing the guest named stands at now (`namedPoint`): the rays are aimed at it when it is within the gun's range and no wall of a place stands between the start and it.
    * How far (m) the farthest ray went from `aim`'s eye; 0 when refused.
    */
-  shootBy(actor: number, aim: LookRay, gun: Gun, at: { x: number; y: number; z: number } | null = null): number {
+  shootBy(actor: number, aim: LookRay, gun: Gun, at: Placed | null = null): number {
     if (!this.ports.actorPlace(actor, _place)) return 0;
     if (this.nearestToTorso(aim) > SHOT_RAY_REACH || this.apartFromTorso(_near) > SHOT_ORIGIN_REACH) return 0;
     if (this.resolver.wallBetween(_place.x, _place.y, _place.z, _near.eyeX, _near.eyeY, _near.eyeZ)) return 0;
-    if (at !== null && hypot3(at.x - _near.eyeX, at.y - _near.eyeY, at.z - _near.eyeZ) <= gun.range && !this.resolver.wallBetween(_near.eyeX, _near.eyeY, _near.eyeZ, at.x, at.y, at.z)) this.lay(_near, at);
+    const toPoint = at === null ? Infinity : hypot3(at.x - _near.eyeX, at.y - _near.eyeY, at.z - _near.eyeZ);
+    const aimedAtPoint = at !== null && toPoint <= gun.range && !this.resolver.wallBetween(_near.eyeX, _near.eyeY, _near.eyeZ, at.x, at.y, at.z);
+    if (aimedAtPoint) this.lay(_near, at);
+    const range = aimedAtPoint ? Math.min(gun.range, toPoint + at.slack) : gun.range;
     let far = 0;
     for (let ray = 0; ray < gun.rays; ray++) {
       this.scatter(actor, _near, gun.cone, _ray);
-      far = Math.max(far, this.resolver.shoot(actor, _ray, gun));
+      far = Math.max(far, this.resolver.shoot(actor, _ray, gun, range));
     }
     this.resolver.shotFired(actor);
     return hypot3(_near.eyeX - aim.eyeX, _near.eyeY - aim.eyeY, _near.eyeZ - aim.eyeZ) + far;

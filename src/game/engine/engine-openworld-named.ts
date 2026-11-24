@@ -27,9 +27,12 @@ const CAR_REACH_M = 4;
 const CAR_SIZE_M = 2.5;
 /** The host holds a named car's offset to the car's own box grown by this much (m) on each axis. */
 const CAR_BOX_SLACK_M = 0.3;
+/** A shot re-aimed at a named thing flies this far past the point (m): a car's box holds air over the hood, a person's chest is 0.35 m round. */
+const CAR_SLACK_M = 0.5;
+const PERSON_SLACK_M = 0.35;
 
-/** A named thing as the host places it: the world point and the thing's own speed (m/s). */
-export type Placed = { x: number; y: number; z: number; speed: number };
+/** A named thing as the host places it: the world point, the thing's own speed (m/s), whether it can speed up (a driver, or a person), and how far past the point a shot aimed at it may fly (m). */
+export type Placed = { x: number; y: number; z: number; speed: number; driven: boolean; slack: number };
 
 const _spot = { x: 0, z: 0, speed: 0 };
 const _motion: BodyMotion = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 };
@@ -44,16 +47,16 @@ export function namedFits(kind: number, x: number, y: number, z: number): boolea
   return kind !== NAMED.nothing && hypot2(x, z) <= PERSON_RADIUS_M && y >= PERSON_LOW_M && y <= PERSON_TOP_M;
 }
 
-/** Whether the offset (x, y, z) in `car`'s frame lies in its own box: its half extents about its centre, and `CAR_BOX_SLACK_M`. */
+/** Whether the offset (x, y, z) in `car`'s frame lies in its own body box: `CAR_BOX_SLACK_M` past its half extents about the box's middle, which is on the ground under the origin's level: x and z at the origin, y at the half height (`car-rig.ts`: the origin is on the ground under the body's middle; the frame's `centre` is the centre of mass, not the box's). */
 function inCarBox(car: DeformableCar, x: number, y: number, z: number): boolean {
-  const { half, centre } = car.frame;
-  return Math.abs(x - centre.x) <= half.x + CAR_BOX_SLACK_M && Math.abs(y - centre.y) <= half.y + CAR_BOX_SLACK_M && Math.abs(z - centre.z) <= half.z + CAR_BOX_SLACK_M;
+  const { half } = car.frame;
+  return Math.abs(x) <= half.x + CAR_BOX_SLACK_M && Math.abs(y - half.y) <= half.y + CAR_BOX_SLACK_M && Math.abs(z) <= half.z + CAR_BOX_SLACK_M;
 }
 
-/** How far (m) a named thing may stand from the line a guest aimed along: what it moves in the oldest honest view at its own present `speed` and the most it can have gained, and its size. */
-export function namedReach(kind: number, speed: number): number {
+/** How far (m) a named thing may stand from the line a guest aimed along: what it moves in the oldest honest view at its own present `speed`, what it can have gained if it has a driver (`driven`: a person always has), and its size. */
+export function namedReach(kind: number, speed: number, driven: boolean): number {
   const car = kind === NAMED.car;
-  const gained = 0.5 * (car ? CAR_ACCEL : PERSON_ACCEL) * NAMED_AGE_S * NAMED_AGE_S;
+  const gained = driven ? 0.5 * (car ? CAR_ACCEL : PERSON_ACCEL) * NAMED_AGE_S * NAMED_AGE_S : 0;
   return speed * NAMED_AGE_S + gained + (car ? CAR_SIZE_M : PERSON_RADIUS_M);
 }
 
@@ -70,6 +73,10 @@ type NamedWorld = {
   ownFoot(out: typeof _foot): boolean;
   playerPlace(actor: number, out: typeof _place): boolean;
   cars(): readonly DeformableCar[];
+  /** Whether car `id` has nobody in it: the traffic parks it, or it stands at a kerb. */
+  carEmpty(id: number, car: DeformableCar): boolean;
+  /** How fast the host has seen player `actor` move, from where his records put him (not the speed he reports). */
+  playerSpeed(actor: number): number;
   doll: Pick & { slot: number };
   car: Pick & { car: number };
   person: { along: number; index: number };
@@ -189,6 +196,8 @@ export class NamedThings {
       out.y = _v.y;
       out.z = _v.z;
       out.speed = hypot3(car.velocity.x, car.velocity.y, car.velocity.z);
+      out.driven = !world.carEmpty(id, car);
+      out.slack = CAR_SLACK_M;
       return true;
     }
     const table = world.crowd();
@@ -198,7 +207,9 @@ export class NamedThings {
     out.x = _spot.x + ox;
     out.y = activeGround().heightAt(_spot.x, _spot.z) + oy;
     out.z = _spot.z + oz;
-    out.speed = _spot.speed;
+    out.speed = kind === NAMED.player && id !== world.ownCar() ? world.playerSpeed(id) : _spot.speed;
+    out.driven = true;
+    out.slack = PERSON_SLACK_M;
     return true;
   }
 }
