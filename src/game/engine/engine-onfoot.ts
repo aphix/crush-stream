@@ -625,7 +625,7 @@ export class OnFootDirector {
   aim(wallDt: number): boolean {
     if (!this.flow.active || !this.host.ragdolls.walkerTorso(_torso)) return false;
     if (this.flow.phase === "entering") this.cam.drawBack(wallDt, _torso, this.host.cars()[this.flow.car]);
-    else this.cam.aim(wallDt, _torso, this.arms.aiming);
+    else this.cam.aim(wallDt, _torso, this.arms.aiming, this.armed() && this.arms.heldOut());
     return true;
   }
 

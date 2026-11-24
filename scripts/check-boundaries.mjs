@@ -63,6 +63,7 @@ const HOT = {
   "src/game/world/path-grid.ts": ["nearestOnPath", "scanCell", "trySegment"],
   "src/game/world/surfaces.ts": ["heightInto", "bil", "cellHeight"],
   "src/game/engine/engine-onfoot.ts": ["shoot", "knocked", "dragged", "settle", "aimsAtCentre", "faceToward"],
+  "src/game/engine/onfoot-camera.ts": ["aim", "drawBack"],
   "src/game/engine/engine-onfoot-ride.ts": ["reach", "settle", "follow"],
   "src/game/engine/engine-openworld-seats.ts": ["frame", "seatRoster", "pick", "mayEnter", "exitSideOf", "myExitSide"],
   "src/game/engine/engine-openworld-door-swings.ts": ["frame", "shouldShut"],
