@@ -404,6 +404,7 @@ export class TyreSkin {
   /** The skin as last written, which every hold starts from. */
   private readonly written: Float32Array;
   private hasWritten = false;
+  private normalsRewritten = false;
   /** Whether the last hold moved any drawn point: until one does, the drawn skin is `written` as it stands, and nothing need be put back, re-shaded or re-uploaded. */
   private held = false;
   /** A hold made with `defer` found only a wheel move: `heldAt` took the pose, the lift waits for `settle` with that hold's `owedOut` and `owedWheels`. */
@@ -708,6 +709,14 @@ export class TyreSkin {
     if (!held && (fresh || !wasHeld)) return;
     attr.needsUpdate = true;
     computeNormalsNear(this.mesh.geometry, this.near, changed);
+    this.normalsRewritten = true;
+  }
+
+  /** Whether a lift laid since the last ask rewrote normals on the mesh (flat ones, where the drawn skin had its contour-smoothed or rest ones): the owner draws them round again. Clears itself. */
+  takeNormalsRewritten(): boolean {
+    const rewritten = this.normalsRewritten;
+    this.normalsRewritten = false;
+    return rewritten;
   }
 
   /** How much of its hold a gone wheel keeps at its last `seat` (mesh frame): whole in its arch, none once its hub is `LEAVE_FADE` tyre radii off it. */

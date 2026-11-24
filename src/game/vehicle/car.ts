@@ -701,10 +701,13 @@ export class DeformableCar extends CarParts {
       if (this.deform.skinnedThisFrame) this.skinPanels();
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
     }
+    // A hold that re-lifted the skin on a frame it was not written rewrote the normals round the tyres flat: drawn round again, as a written skin is,
+    // on a near car only (a far one is drawn at strength 0 and is skinned and rounded when it comes near: `setNearView`).
+    const heldRewrote = this.holdRewroteNormals();
     if (this.deform.skinnedThisFrame) {
       this.smoothDrawnSkin();
       if (this.panelsFollow) this.poseOpenShells();
-    }
+    } else if (heldRewrote && this.nearView) this.smoothDrawnSkin();
     if (this.panelsFollow) this.followGlass();
     if (this.hullHelper?.visible) this.updateHullHelper();
     this.settleCasters();
@@ -752,6 +755,14 @@ export class DeformableCar extends CarParts {
   protected override layOwedHold(): void {
     this.bodyTyres?.settle();
     if (!this.hoodOff()) this.hoodTyres?.settle();
+    if (this.holdRewroteNormals() && this.nearView) this.smoothDrawnSkin();
+  }
+
+  /** Whether either tyre hold rewrote normals since this was last asked. */
+  private holdRewroteNormals(): boolean {
+    const body = this.bodyTyres?.takeNormalsRewritten() ?? false;
+    const hood = this.hoodTyres?.takeNormalsRewritten() ?? false;
+    return body || hood;
   }
 
   /** Whether a hinged panel's shell is posed on the drawn body skin each frame (`poseParts`), so the skin it reads must be held. */
@@ -809,6 +820,8 @@ export class DeformableCar extends CarParts {
 
   /** The body, bonnet, boot lid and door skins, just skinned and held off the tyres, drawn round: the vertices the crush moved pulled toward their neighbours' (`smoothNormals`), the rest at their baked rest normals. A lid or door that is off the car keeps its own. */
   private smoothDrawnSkin(): void {
+    // Drawn round now, whatever a hold rewrote before this is redone with it.
+    this.holdRewroteNormals();
     const strength = this.nearView ? smoothingNow() : 0;
     smoothNormals(this.body.geometry, this.deform.restSkin, strength, this.drawnRest("body"));
     if (!this.panelsFollow) return;
