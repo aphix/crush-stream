@@ -359,6 +359,8 @@ export class OpenWorldDirector {
       ownFoot: (out) => ports.foot(out),
       playerPlace: (actor, out) => this.playerPlace(actor, out),
       cars: () => ports.cars(),
+      carEmpty: (id, car) => this.carIsEmpty(id, car),
+      playerSpeed: (actor) => this.players?.seenSpeedOf(actor) ?? 0,
       doll: this.pickedDoll,
       car: this.pickedCar,
       person: this.personMet,
@@ -874,10 +876,10 @@ export class OpenWorldDirector {
   }
 
   /** One ray of `gun` from actor `actor`, at the authority: the nearest thing along it within the gun's range takes the hit (a prop, a ragdoll, a drawn civilian, a foot cop, a car), unless a wall or the ground is nearer. Returns how far (m) the ray went; on a guest's machine it goes its full range and touches nothing. */
-  shoot(actor: number, ray: LookRay, gun: Gun): number {
+  shoot(actor: number, ray: LookRay, gun: Gun, range = gun.range): number {
     const crowd = this.crowd;
     if (crowd === null || this.map === null || this.ports.isClient()) return gun.range;
-    const nearest = this.lookAlong(actor, ray, gun.range);
+    const nearest = this.lookAlong(actor, ray, range);
     const reach = this.lookReach;
     const person = this.personMet;
     const cop = this.copShot;

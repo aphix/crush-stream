@@ -1,6 +1,7 @@
 import { createCrowdPoses } from "../ai/civilians/crowd-poses.ts";
 import type { CrowdWalkers } from "../ai/civilians/crowd-walkers.ts";
-import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
+import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
+import { SPRINT_SPEED } from "../present/walker-locomotion.ts";
 import { addBodyRecord, BODY_FLAG, BODY_KIND, BODY_POSTURE, PLAYER_FLAG, type BodyFrame, type BodyMotion, type FootRecord } from "../net/body-codec.ts";
 import { BODIES_SILENT_S, HALF_SEQUENCE } from "../net/net-constants.ts";
 import type { DriverLook } from "../present/driver-look.ts";
@@ -47,6 +48,10 @@ function lookHash(look: DriverLook): number {
 /** What a guest's own walker is told (`obey`): the engine's ports to knock it, to stagger it and to drag it. */
 type OwnWalkerPorts = { knockWalker(vx: number, vy: number, vz: number): boolean; staggerWalker(dirX: number, dirZ: number): void; dragWalker(t: BodyMotion): void };
 
+/** Two records closer in crowd time than this (s) give no speed, and a speed seen is capped at twice a sprint (m/s): a record that jumps is a teleport, not a run. */
+const MIN_SEEN_S = 0.01;
+const SEEN_SPEED_MAX = 2 * SPRINT_SPEED;
+
 /**
  * The players on foot as the host has them, in a room of the open world: each guest's walker as his own machine sent it (`MSG.foot`), tested here against the host's cars and shots, written into the frame
  * every machine reads (`writeRecords`), and drawn from a pose table of its own. A guest's walker is his machine's; only what hits or holds him comes back to it (`obey`).
@@ -57,6 +62,7 @@ export class OpenWorldPlayers {
   private readonly motion: BodyMotion[] = Array.from({ length: MAX_CARS }, () => ({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, posture: 0 }));
   private readonly crowdTime = new Float64Array(MAX_CARS);
   private readonly seq = new Int32Array(MAX_CARS).fill(-1);
+  private readonly seenSpeed = new Float32Array(MAX_CARS);
   private readonly heardAt = new Float64Array(MAX_CARS).fill(-Infinity);
   private readonly struckAt = new Float64Array(MAX_CARS).fill(-Infinity);
   private readonly struckUntil = new Float64Array(MAX_CARS).fill(-Infinity);
@@ -95,6 +101,8 @@ export class OpenWorldPlayers {
       return;
     }
     const m = this.motion[car]!;
+    const since = now - this.heardAt[car]!;
+    this.seenSpeed[car] = this.present[car] === 1 && since > MIN_SEEN_S ? Math.min(SEEN_SPEED_MAX, hypot2(foot.x - m.x, foot.z - m.z) / since) : 0;
     m.x = foot.x;
     m.y = foot.y;
     m.z = foot.z;
@@ -132,6 +140,11 @@ export class OpenWorldPlayers {
     _place.y = m.y + m.vy * reach;
     _place.z = m.z + m.vz * reach;
     _place.heading = m.heading;
+  }
+
+  /** Host: how fast player `car` has moved between his last two records, as the host saw it (m/s), 0 for a player not present. A guest that reports a speed that is not his own does not change it. */
+  seenSpeedOf(car: number): number {
+    return car >= 0 && car < MAX_CARS && this.present[car] === 1 ? this.seenSpeed[car]! : 0;
   }
 
   /** Host: where player `car` stands on foot at the host's clock and how he moves, into `out`; false while he is in a car or has not been heard. */

@@ -53,8 +53,8 @@ const SHOOTER_AWAY_M = 15;
 /** A target runs along its line for this long (s) before the shot, and the shot comes this long into it. */
 const RUN_S = 1.5;
 const COLUMN = { radius: 0.3, height: 1.8 };
-/** The height of a car's centre over its origin (m), and the lag (s) the guest's picture of a target may have behind the host's: the interpolation delay and the link, 0.2 to 0.4 s. */
-const CAR_CENTRE_Y = pooledCar(0).frame.centre.y;
+/** The height of a car's body box's middle over its origin (m), and the lag (s) the guest's picture of a target may have behind the host's: the interpolation delay and the link, 0.2 to 0.4 s. */
+const CAR_CENTRE_Y = pooledCar(0).frame.half.y;
 const MIN_LAG_S = 0.2;
 const MAX_LAG_S = 0.4;
 /** Net frames the host takes to hear a guest's foot message over the slowed link, and the eye's height over the torso (m). */
@@ -66,6 +66,10 @@ const MAX_SEARCH_FRAMES = 6000;
 const PISTOL_SLOT = 1;
 /** A car this far (m) past the open ground's middle is 40 m from the shooter, past what a car can have moved in the oldest honest view. */
 const MODIFIED_CAR_AWAY_M = 25;
+/** The roof row: how far past the parked car the person stands (m), how far over its roof the named point is (m), and the height of the person the line aims at (m, under the dummy's 1.8). */
+const BEHIND_CAR_M = 3;
+const AIR_ABOVE_ROOF_M = 0.2;
+const PERSON_TOP_HIT_M = 1.7;
 /** The hook rows: the run-up of the sprint (m), the camera's height over the torso (m), how far behind the torso the camera's ray starts (m: the focus's lag 0.84 and the pivot's 0.7 across the way he runs), and the two bounds (m) the host's line test lies between. */
 const SPRINT_RUN_UP_M = 30;
 const CAMERA_UP_M = 0.65;
@@ -119,10 +123,10 @@ function hitCar(ray: LookRay, car: DeformableCar, range: number, out: { along: n
   car.group.updateMatrixWorld(true);
   const eye = car.group.worldToLocal(new THREE.Vector3(ray.eyeX, ray.eyeY, ray.eyeZ));
   const dir = new THREE.Vector3(ray.dirX, ray.dirY, ray.dirZ).applyQuaternion(car.group.quaternion.clone().invert());
-  const { half, centre } = car.frame;
+  const { half } = car.frame;
   let near = 0;
   let far = range;
-  for (const [from, along, low, high] of [[eye.x, dir.x, centre.x - half.x, centre.x + half.x], [eye.y, dir.y, centre.y - half.y, centre.y + half.y], [eye.z, dir.z, centre.z - half.z, centre.z + half.z]] as const) {
+  for (const [from, along, low, high] of [[eye.x, dir.x, -half.x, half.x], [eye.y, dir.y, 0, 2 * half.y], [eye.z, dir.z, -half.z, half.z]] as const) {
     if (Math.abs(along) < 1e-9) {
       if (from < low || from > high) return;
       continue;
@@ -506,6 +510,24 @@ describe("given a guest 15 m from the open ground a car crosses at 20 m/s, over 
     r.nets[1]!.sendAct(ACT.shot, PISTOL_SLOT, from, { x: honest.dirX, y: honest.dirY, z: honest.dirZ }, name);
     r.step(SHOT_GAP_FRAMES);
     expect(r.host.sparks.count, "hits on the car from a line aimed at it").toBe(1);
+  });
+
+  it("when a modified client names a parked car with a point in the air above its roof, on the line to a person standing 3 m past it, then the shot flies no farther than that point and the person is not hit", () => {
+    const r = started(false);
+    const from = eyeAt(OPEN_AT.x, OPEN_AT.z + SHOOTER_AWAY_M);
+    standAt(r, "guest", from.x, from.z);
+    for (const side of [r.host, r.guest]) placeCar(side.car, OPEN_AT.x, OPEN_AT.z, 0);
+    r.host.walk.path = { x0: OPEN_AT.x, z0: OPEN_AT.z - BEHIND_CAR_M, vx: 0, vz: 0, t0: r.host.director.crowdTime() };
+    r.step(HEAR_FRAMES);
+    const top = 2 * r.host.car.frame.half.y;
+    const name = Object.assign(new Named(), { kind: NAMED.car, id: 0, x: 0, y: top + AIR_ABOVE_ROOF_M, z: 0 });
+    const aim = rayTo(from, { x: OPEN_AT.x, y: PERSON_TOP_HIT_M, z: OPEN_AT.z - BEHIND_CAR_M });
+    r.nets[1]!.sendAct(ACT.shot, PISTOL_SLOT, from, { x: aim.dirX, y: aim.dirY, z: aim.dirZ }, name);
+    r.step(SHOT_GAP_FRAMES);
+    expect(r.host.struck.length, "hits on the person past the car").toBe(0);
+    r.nets[1]!.sendAct(ACT.shot, PISTOL_SLOT, from, { x: aim.dirX, y: aim.dirY, z: aim.dirZ }, null);
+    r.step(SHOT_GAP_FRAMES);
+    expect(r.host.struck.length, "control: the same line, naming nothing, hits her").toBe(1);
   });
 });
 
