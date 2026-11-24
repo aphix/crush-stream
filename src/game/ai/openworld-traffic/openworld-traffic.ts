@@ -1,3 +1,4 @@
+import { hypot2 } from "../../kernel/physics-core.js";
 import { hash01 } from "../../kernel/scalar.ts";
 import { CAR_STYLES } from "../../vehicle/car-variants.ts";
 import { carDoorSpot, type DoorSpot } from "../civilians/civilian-car-door.ts";
@@ -41,6 +42,8 @@ type TrafficSize = { movers: number; kerb: number; patrol: number; ambulance: nu
 
 /** Crowd seconds a clip holds the kerb car brought for it: the clip's 2.5 s and the walk off. */
 const CLIP_HOLD_SECONDS = 4;
+/** A car within this far (m) of a kerb space's middle occupies it (a lease put there would stand on it). */
+const SPACE_OCCUPIED_M = 2.5;
 
 /**
  * The open world's cars: real cars of the field that drive its streets (ambient traffic, residents' commutes, patrols), stop at the signals and park in the kerb spaces, and real cars that
@@ -311,9 +314,16 @@ export class OpenWorldTraffic {
     return nearestFreeSpot(this.parkingSpots, x, z, this.context.taken);
   }
 
-  /** Whether no car stands at kerb space `spot` and none holds it (a resident's claim, a trip's end): a car put there stands on nothing. */
+  /** Whether nothing stands at kerb space `spot` and none holds it (a resident's claim, a trip's end): no pool car, and no other car of the field either (a player's, a guest's, a wreck). Once a lease, not per step. */
   spotIsFree(spot: number): boolean {
-    return this.context.standing[spot] === STANDING.none && this.context.taken[spot] === 0;
+    if (this.context.standing[spot] !== STANDING.none || this.context.taken[spot] !== 0) return false;
+    const spots = this.parkingSpots;
+    const cars = this.context.ports.cars();
+    for (let id = 0; id < cars.length; id++) {
+      const car = cars[id]!;
+      if (!car.stored && hypot2(car.group.position.x - spots.x[spot]!, car.group.position.z - spots.z[spot]!) <= SPACE_OCCUPIED_M) return false;
+    }
+    return true;
   }
 
   /**

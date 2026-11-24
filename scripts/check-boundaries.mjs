@@ -155,7 +155,7 @@ const HOT = {
   "src/game/present/minds/thought-situation.ts": ["clear", "see", "lookWeight", "pickFallback"],
   "src/game/ai/civilians/civilian-car-door.ts": ["carDoorOpenness", "carDoorOpennessOf", "carDoorSpot"],
   "src/game/engine/engine-openworld-cars.ts": ["step"],
-  "src/game/engine/engine-openworld-doors.ts": ["carStandsNear", "clientCarSpot"],
+  "src/game/engine/engine-openworld-doors.ts": ["carStandsNear", "clientCarSpot", "isDoorSpace"],
   "src/game/present/civilian-anim-rig.ts": ["renderRig", "renderArm", "renderLeg", "placePart", "setAboutX", "setAboutY", "setAboutZ", "setTorsoRotation", "setLimbRotation"],
   "src/game/ai/openworld-crime/fight-rules.ts": ["step", "copNearFight", "instigatorSlot"],
   "src/game/ai/openworld-crime/foot-law.ts": ["advance", "poll", "stepCase", "stepSubject", "stepAtLarge", "stepFleeing", "stepHidden", "stepSeizing", "aimCops", "refreshSpots", "offenceCleared", "callCops", "releaseHeld", "caseCopSees", "sees", "watchCrossings", "copWhoSees", "spareKnocked", "letGo", "witnessed", "raiseArrest", "carDelivered", "keepHomeCars"],

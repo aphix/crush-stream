@@ -109,7 +109,7 @@ describe("given residents with cars parked at two doors' kerbs", () => {
     expect(door(OWNER, ACTIVITY.carIn, blankDoor()), "the kerb before the trip is still there").toBe(true);
   });
 
-  // mutation: sed -i '/^    if (!carThere(owner, car.x, car.z, car.yaw, car)) return false;/d' src/game/engine/engine-openworld-doors.ts
+  // mutation: sed -i '/^    if (!carThere(owner, car, door)) return false;/d' src/game/engine/engine-openworld-doors.ts
   it("when her car does not stand at its kerb space, then no door spot is made; when it does, the spot is made, and the question was asked for her car's owner at the space's pose", () => {
     const pose = blankCar();
     residentCarPose(spots, FIRST_DOOR.doorX, FIRST_DOOR.doorZ, OWNER, groundAt, pose);
@@ -144,6 +144,17 @@ describe("given residents with cars parked at two doors' kerbs", () => {
     expect(hypot2(door.x - spots.x[other]!, door.z - spots.z[other]!), "she is at the car's door, past the car's middle by no more than a door's reach (m)").toBeLessThanOrEqual(NEAR_CAR);
     expect(hypot2(door.x - spots.x[other]!, door.z - spots.z[other]!), "nearer the moved car than the pick's").toBeLessThan(hypot2(door.x - pick.x, door.z - pick.z));
   });
+
+  it("when the answer moves her car to a space that is not one of the four by her door, then no door spot is made", () => {
+    const four = new Int32Array(KERB_CANDIDATES);
+    const count = kerbSpotsNear(spots, FIRST_DOOR.doorX, FIRST_DOOR.doorZ, four);
+    const outside = Array.from({ length: spots.count }, (_, spot) => spot).find((spot) => !four.subarray(0, count).includes(spot) && spots.stays[spot] !== 1)!;
+    const there = (owner: number, at: ResidentCarPose): boolean => {
+      carPoseAtSpot(spots, outside, owner, groundAt, at);
+      return true;
+    };
+    expect(makeDriverDoors(PLACES, brain(), spots, groundAt, there)(OWNER, ACTIVITY.carIn, blankDoor()), "no clip").toBe(false);
+  });
 });
 
 describe("given cars standing in a street", () => {
@@ -171,9 +182,9 @@ describe("given a client reading the host's cars, her car standing in a space be
   const beside = Array.from(near.subarray(0, nearCount)).find((spot) => spot !== pickSpot)!;
   const hers = residentBody(OWNER);
   const another = EVERYDAY_BODIES.find((body) => body !== hers)!;
-  type HostCar = { group: { position: { x: number; z: number } }; style: { id: typeof hers }; yaw: number };
+  type HostCar = { group: { position: { x: number; z: number } }; style: { id: typeof hers }; yaw: number; stored: boolean; velocity: { x: number; z: number } };
   /** A host car of body `body` standing in space `spot`. */
-  const standing = (spot: number, body: typeof hers): HostCar => ({ group: { position: { x: spots.x[spot]!, z: spots.z[spot]! } }, style: { id: body }, yaw: spots.yaw[spot]! });
+  const standing = (spot: number, body: typeof hers): HostCar => ({ group: { position: { x: spots.x[spot]!, z: spots.z[spot]! } }, style: { id: body }, yaw: spots.yaw[spot]!, stored: false, velocity: { x: 0, z: 0 } });
   const asked = (cars: HostCar[]): number => clientCarSpot(cars, spots, OWNER, FIRST_DOOR, { ...pick });
 
   it("when her car stands in the pick, then that is the space, whatever stands beside it", () => {
@@ -191,5 +202,10 @@ describe("given a client reading the host's cars, her car standing in a space be
   it("when her body stands in a space that is not one of the four by the door, then no clip is drawn", () => {
     const elsewhere = Array.from({ length: spots.count }, (_, spot) => spot).find((spot) => !near.subarray(0, nearCount).includes(spot) && spots.stays[spot] !== 1)!;
     expect(asked([standing(pickSpot, another), standing(elsewhere, hers)]), "her car is not by the door").toBe(-1);
+  });
+
+  it("when a car of her body drives past a space by the door at speed, or is put away there, then it is not her car", () => {
+    expect(asked([standing(pickSpot, another), { ...standing(beside, hers), velocity: { x: 9, z: 0 } }]), "driving past").toBe(-1);
+    expect(asked([standing(pickSpot, another), { ...standing(beside, hers), stored: true }]), "put away").toBe(-1);
   });
 });

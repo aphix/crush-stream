@@ -952,6 +952,17 @@ describe("given kerb cars standing near the local player", () => {
     expect(carAtSpace(field, traffic, own), "her own car, not another").toBe(hers);
   });
 
+  // mutation: sed -i 's/ <= SPACE_OCCUPIED_M) return false;/ <= -1) return false;/' src/game/ai/openworld-traffic/openworld-traffic.ts
+  it("when the player's own car is parked in a kerb space, then that space is not free for a lease, and the next one is", () => {
+    const { field, traffic } = kerbWorld();
+    const { spot, own } = twoSpaces(traffic);
+    const spots = traffic.parkingSpots;
+    expect(traffic.spotIsFree(spot), "control: empty before").toBe(true);
+    field.cars[0]!.stand(spots.x[spot]!, spots.z[spot]!, spots.yaw[spot]!);
+    expect(traffic.spotIsFree(spot), "the player's car is in it").toBe(false);
+    expect(traffic.spotIsFree(own), "another space is free").toBe(true);
+  });
+
   describe("given two residents of one place whose picks are one space", () => {
     /** Residents 1 and 5 pick the same of the four spaces by their door: 1 holds it, and 5's car has taken another. */
     function collidingResidents() {
