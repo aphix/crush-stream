@@ -231,14 +231,14 @@ export class CivilianCrowd {
     } else this.throwHeardKnocks(cars);
   }
 
-  /** The residents the overlay moved off the spot `separate` drew (the law's suspects, running or led) are kept out of the stoops like the lane's walkers: the rest still stand where `separate` left them and are not touched. */
+  /** The residents the overlay moved off the spot `separate` drew (the law's suspects, running or led) are kept out of the stoops like the lane's walkers, unless the overlay marked them `onSpur` (the law's walkers, on the graph: lifted, not moved): the rest still stand where `separate` left them and are not touched. */
   private keepOverlaidOut(): void {
     const stoops = this.stoops;
     if (stoops === null) return;
-    const { x, z, shown } = this.poses;
+    const { x, z, shown, onSpur } = this.poses;
     const { drawX, drawZ } = this.separation;
     for (let resident = 0; resident < this.separation.capacity; resident++) {
-      if (shown[resident] === 0 || (x[resident] === drawX[resident] && z[resident] === drawZ[resident])) continue;
+      if (shown[resident] === 0 || onSpur[resident] === 1 || (x[resident] === drawX[resident] && z[resident] === drawZ[resident])) continue;
       stoops.keepOut(x, z, resident);
     }
   }

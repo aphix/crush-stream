@@ -22,7 +22,7 @@ export type CrowdPoses = {
   partner: Int32Array;
   /** World y her feet stand on (m): the floor, a stoop step. */
   feetY: Float32Array;
-  /** 1 for a resident whose walk now is the spur of a stoop's door: the only walkers a stoop lifts, and whose feet the drawing plants on the treads. */
+  /** 1 for a resident whose walk now is the spur of a stoop's door, or whom the law draws on the walk graph (where only a door's spur meets a stoop): the only walkers a stoop lifts, whom the crowd does not move off a stoop, and whose feet the drawing plants on the treads. */
   onSpur: Uint8Array;
   /** 1: drawn laid flat on its back, its feet at (x, feetY, z), head along yaw (a person the host has down, with no ragdoll on this machine). */
   lying: Uint8Array;

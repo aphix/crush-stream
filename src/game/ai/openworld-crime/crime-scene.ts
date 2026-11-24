@@ -3,13 +3,14 @@ import { blankStrike, fell, felled, runsDown, stood, type FigureStrike } from ".
 import { CAR_REACH } from "../../scenes/lawn-guard.ts";
 import type { DeformableCar } from "../../vehicle/car.ts";
 import { activeGround } from "../../world/ground.ts";
+import type { Stoops } from "../../world/openworld/openworld-stoops.ts";
 import type { OpenWorldMap } from "../../world/openworld/walk-graph.ts";
 import { COP_KO_BLOWS, PLAYER_ACTORS } from "../civilians/civilian-constants.ts";
 import { punchGap } from "../civilians/civilian-contact.ts";
 import { chestMet, type LookRay, type Meeting } from "../civilians/civilian-look.ts";
 import type { CrowdPoses } from "../civilians/crowd-poses.ts";
 import type { Obstacles } from "../obstacles.ts";
-import { fillCopPoses, newCopPoses, overlaySuspects } from "./crime-poses.ts";
+import { fillCopPoses, liftHeard, newCopPoses, overlaySuspects } from "./crime-poses.ts";
 import { CRIME_HZ, CRIME_STEP_SECONDS, FOOT_COP_COUNT, GRID_EPSILON, HEARD_COP_DOWN_LATE_SECONDS, HEARD_FOOT_LATE_SECONDS, HEAT_CARS, HEAT_KNOCKS, HEAT_SECONDS, MAX_STEPS_PER_CALL, RED_LIGHT_SIGHT } from "./crime-constants.ts";
 import { FootLaw } from "./foot-law.ts";
 import type { CrossingSignals, LawPorts, LineOfSight, OffenceSource } from "./offence-source.ts";
@@ -46,6 +47,8 @@ export class CrimeScene {
   private authority = false;
   /** A guest has the host's cops and suspects in a fresh frame of people: it draws those (`OpenWorldShared.poseRows`) and not its own law's poses. The law itself still steps. */
   heardPoses = false;
+  /** The rowhomes' stoops, which lift the cops and the suspects the law draws to the step under them: none (the street's height) until the engine gives the crowd's. */
+  stoops: Stoops | null = null;
   /** Per car: the civilians it ran down in the current minute and when that minute began. */
   private readonly heatKnocks = new Uint8Array(HEAT_CARS);
   private readonly heatSince = new Float64Array(HEAT_CARS);
@@ -107,10 +110,21 @@ export class CrimeScene {
     this.applyDueFootEvents();
     this.drawShare = Math.min(1, Math.max(0, (crowdSeconds - this.law.seconds) * CRIME_HZ));
     if (!this.heardPoses || authority) {
-      overlaySuspects(this.law, crowdPoses, this.drawShare);
-      fillCopPoses(this.law, this.copPoses, this.drawShare);
+      overlaySuspects(this.law, crowdPoses, this.drawShare, this.stoops);
+      fillCopPoses(this.law, this.copPoses, this.drawShare, this.stoops);
     }
     if (authority) this.findCopHits(cars, crowdSeconds);
+  }
+
+  /** A guest drew the host's poses over `crowdPoses` and `copPoses` (`heardPoses`): the law's people stand at the height of the stoop under them as on the host. */
+  liftHeard(crowdPoses: CrowdPoses): void {
+    liftHeard(this.law, crowdPoses, this.copPoses, this.stoops);
+  }
+
+  /** The height the ground and the stoop under foot cop `cop` give his feet: where a throw of him starts. */
+  private copGround(cop: number): number {
+    const poses = this.copPoses;
+    return activeGround().heightAt(poses.x[cop]!, poses.z[cop]!) + poses.feetY[cop]!;
   }
 
   /** The host's knock of foot cop `cop` at crowd second `seconds`, heard (a client) or its own echoed back: applied once, when this peer's clock reaches it. */
@@ -231,7 +245,7 @@ export class CrimeScene {
     this.law.players[actor]?.fightKnown(seconds);
     if (++this.copBlows[nearest]! >= COP_KO_BLOWS) {
       this.copBlows[nearest] = 0;
-      this.downCop(nearest, felled(nearest, poses.x[nearest]!, activeGround().heightAt(poses.x[nearest]!, poses.z[nearest]!), poses.z[nearest]!, dirX, dirZ, blankStrike()), seconds);
+      this.downCop(nearest, felled(nearest, poses.x[nearest]!, this.copGround(nearest), poses.z[nearest]!, dirX, dirZ, blankStrike()), seconds);
     }
     return true;
   }
@@ -250,14 +264,14 @@ export class CrimeScene {
   shootCop(cop: number, dirX: number, dirZ: number, seconds: number): void {
     if (!this.authority || this.copPoses.shown[cop] === 0) return;
     const poses = this.copPoses;
-    this.downCop(cop, felled(cop, poses.x[cop]!, activeGround().heightAt(poses.x[cop]!, poses.z[cop]!), poses.z[cop]!, dirX, dirZ, blankStrike()), seconds);
+    this.downCop(cop, felled(cop, poses.x[cop]!, this.copGround(cop), poses.z[cop]!, dirX, dirZ, blankStrike()), seconds);
   }
 
   /** The hook takes shown foot cop `cop`: he is downed where he stands, thrown with no speed (he drops at his spot, for a rope to tie to) like any cop put down, so the law knows (his case loses him: a suspect he held is let go and the chase goes on without him) and every peer hears the knock; and the player has fought the law, as a punch on a cop is. False without authority or when he is not shown. */
   hookCop(cop: number, seconds: number, actor = this.ports.self()): boolean {
     const poses = this.copPoses;
     if (!this.authority || poses.shown[cop] === 0) return false;
-    this.downCop(cop, stood(-1, cop, poses.x[cop]!, activeGround().heightAt(poses.x[cop]!, poses.z[cop]!), poses.z[cop]!, detSin(poses.yaw[cop]!), detCos(poses.yaw[cop]!), blankStrike()), seconds);
+    this.downCop(cop, stood(-1, cop, poses.x[cop]!, this.copGround(cop), poses.z[cop]!, detSin(poses.yaw[cop]!), detCos(poses.yaw[cop]!), blankStrike()), seconds);
     this.law.players[actor]?.fightKnown(seconds);
     return true;
   }
