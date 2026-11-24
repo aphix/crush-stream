@@ -162,19 +162,25 @@ in `~/crash-wt/triage/` (`verdict-*.json|txt`, `show/<sha>.txt`). Before a port,
   the drawn dummy crosses the car's skin in 12 of 20 frames); 087a6eb89 (a class-balance bench, a measuring tool).
 - **Waiting for the owner's ruling (simulation laws):** fb1e68a99 and cee15a306 (one crush impulse law); 415b7fd49 and
   9e0711faf (shape-match balanced goals); 4d3cbff17 (strided wreck points); 1bc2980b5 and 8abb29c17 (cage decimation, parked).
+  And a finding of this pass (lane Sweep, `move-as-one-body.test.ts`, a `todoRow` with the numbers): **a rigid exchange can
+  add kinetic energy to a tumbling wreck.** A sedan pitched 45 or 75 degrees nose up and rolling at 3 rad/s, struck rigidly
+  by a fixed face at 0.3 to 0.5 m/s, gains 1.7 to 36 J (2223 to 2247 J; 3562 to 3598 J): the exchange changes the yaw rate
+  about the vertical axis while roll and pitch are kept, and for a tilted body those are coupled through its inertia. Upright
+  and side-lying wrecks never gain. About 1 % in a rare pose; the cure is the exchange solving the body's full spin, a law
+  change.
 - **Not ported, by record:** 22bc56801 (position lift) and 336a48d44 (contact guard speed cap), rejected; `ow/detmath` (kernel
   trig in people's posing: 17,870 B a frame against 0); `play/Shadow` and `play/ShadowAB` (worse on the phone and in the derby);
   6aa88e0c6 (needs balanced goals `main` lacks).
 
 ## 6. Sequence
 
-1. Merge order for what is reviewed: ContactRows (review: merge), then DeformSeat (its `rideCage` needs ContactRows' port of
-   4ec0e6601), then one re-derivation of the crash digests (`whole-digest.test.ts`, `car-smooth.test.ts`) with the reason
-   per change, then `REPLAY_VERSION` entries 252 onward (seven from ContactRows, two from DeformSeat). CarsSeePlayers and
-   ShutPlaces after their last review round; `NET_VERSION` 73 once, for BarRoom and ShutPlaces together, with both pins.
-2. The MonsterSlab lane (section 3), then the sweep lane and KerbClaims (section 4).
-3. On the worker, when humm-tauri says yes: the three speed measurements (section 3); CarsSeePlayers' hunt for the fleet
-   file's red seed (`engine-onfoot-fleet.test.ts` boots with a random scene seed: the likely cause of its one red run).
+1. Done: the nine merges of section 3, `NET_VERSION` 73 (both pins), `REPLAY_VERSION` 252 and 253.
+2. HubRules (the two reds), reviewed, merged; then ONE re-derivation of the crash digests (`whole-digest.test.ts`,
+   `car-smooth.test.ts`) with the reason per change, and REPLAY 254. Sweep (reviewed: merge) and KerbClaims as they report.
+3. On the worker, when humm-tauri says yes: the three speed measurements (section 3); the hunt for the fleet file's red seed
+   (`engine-onfoot-fleet.test.ts` boots with a random scene seed, as every `OnFootRig.boot()` file does: the likely cause of
+   its one red run; then pin the seed in the test util and reset the pacer in `beforeEach`).
 4. CageWasm and LooseBatch merge only if faster; the skin stack after CageWasm.
 5. The gate over the union, the landing, the Windows mount.
-6. Ask the owner: the simulation-law ports and the two gameplay ports (section 5); the three race reds.
+6. Ask the owner: the simulation-law ports, the energy finding and the two gameplay ports (section 5); the three race reds;
+   the far clumps' cost (section 3).
