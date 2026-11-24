@@ -1,3 +1,4 @@
+import { OPEN_MAX, planFieldInKernel, rasteriseInKernel } from "./cage-kernel.ts";
 import type { CageFields, CageStyle } from "./car-cage.ts";
 
 /** A node this far (in steps) outside a triangle still takes its height (clamped to the triangle's), so an edge never leaves a gap. */
@@ -47,8 +48,6 @@ function inOpening(n: number, x: number, z: number, margin: number): boolean {
   return false;
 }
 
-/** The most gone glass panes a cage reads openings for (a car has a windscreen and a rear screen). */
-const OPEN_MAX = 4;
 const _open = new Float64Array(OPEN_MAX * 4);
 
 /** A node exactly a reach from a triangle is out of its reach on both sides of the mirror plane: float error in a node's x must not let one side read it (m). */
@@ -71,14 +70,15 @@ export function rasterise(style: CageStyle, f: CageFields, panelOn: Uint8Array, 
   const bottom = f.bottom;
   const covered = f.covered;
   const part = f.part;
-  top.fill(NaN);
-  bottom.fill(NaN);
-  covered.fill(0);
-  part.fill(0);
   const lidMargin = LID_EXPAND * step;
   const margin = EXPAND * step;
   const interiorGroup = style.panelCount + 1;
   const opens = gonePanes(style, f, panelOn);
+  if (rasteriseInKernel(style, f, panelOn, opens, _open, margin, lidMargin, cutY, cutX, cutZ)) return;
+  top.fill(NaN);
+  bottom.fill(NaN);
+  covered.fill(0);
+  part.fill(0);
   let heightMax = 0;
   let xMin = Infinity;
   let xMax = -Infinity;
@@ -256,7 +256,7 @@ function transformRows(nu: number, g: Float64Array, s: typeof scratch, j0: numbe
  * pristine fields compute it once for all its cars.
  */
 export function planFieldOf(style: CageStyle, f: CageFields): Float32Array {
-  if (f.planFresh) return f.plan;
+  if (f.planFresh || planFieldInKernel(style, f)) return f.plan;
   const { nu, nv, step } = style;
   const n = nu * nv;
   if (scratch.n < n) {
