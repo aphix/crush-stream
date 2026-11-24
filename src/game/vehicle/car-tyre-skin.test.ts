@@ -656,3 +656,22 @@ describe("given a sedan wreck driven in a slalom whose tyre holds are deferred w
     assertSameNumbers(shellOf(lazy, side), shellOf(every, side), "the torn shell");
   });
 });
+
+/** How far (m) a crush carried the front-right hub inboard: past a tyre's width, so no point that rested over the tyre at its rest seat rests over it where it is drawn. */
+const HUB_CARRIED_IN_M = 0.5;
+
+describe("given a pickup wreck whose front-right hub a crush carried 0.5 m inboard", () => {
+  it("when the skin is held with that seat, then a point that rested over the tyre at its rest seat is held by the tyre no longer", () => {
+    const car = buildCar("pickup", "truck");
+    const skin = new TyreSkin(car.frame, car["body"] as THREE.Mesh, car.deform.restSkin, true);
+    const lift = CLASSES[carClass(car)].lift;
+    car.group.updateMatrixWorld(true);
+    skin.hold(car.group, car.wheels, 0, lift, true);
+    const heldAtRest = skin["overAt"][FRONT_RIGHT_WHEEL]!.length;
+    expect(heldAtRest, "fixture: points rest over the tyre at its rest seat").toBeGreaterThan(0);
+    const seats = new Float64Array(8);
+    seats[FRONT_RIGHT_WHEEL * 2] = -HUB_CARRIED_IN_M;
+    skin.hold(car.group, car.wheels, 0, lift, true, [], false, seats);
+    expect(skin["overAt"][FRONT_RIGHT_WHEEL]!.length, "points held over the tyre at its drawn seat").toBeLessThan(heldAtRest);
+  });
+});

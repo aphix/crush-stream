@@ -10,6 +10,7 @@ import { physicsSlice } from "../contact/sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { HUB_PIN_MAX } from "./constants.ts";
+import { hypot2 } from "./physics-util.ts";
 
 /**
  * `seatHubs` frees the wheels of a wreck that is about to plant at no more than HUB_SLIP m/s off the body. The body a
@@ -19,6 +20,10 @@ import { HUB_PIN_MAX } from "./constants.ts";
 class Seat extends StreamedDeformation {
   seat(): void {
     this.seatHubs();
+  }
+
+  clamp(group: THREE.Object3D): void {
+    this.clampLocal(group);
   }
 
   ride(vx: number, vz: number, w: number): void {
@@ -362,5 +367,31 @@ describe("given a wreck quiet past 0.2 s and upright, its planted hub dragged 1 
     expect(stretch(far), `the hub stands ${stretch(far).toFixed(3)} m off its pin after ${TETHER_CLAMPS} clamps`).toBeLessThanOrEqual(HUB_PIN_MAX + 1e-6);
     expect(stretch(far), `the hub was drawn in past the bound: ${stretch(far).toFixed(3)} m off its pin`).toBeGreaterThanOrEqual(HUB_PIN_MAX - 1e-3);
     expect(near!.world.distanceTo(nearBefore), "a hub within the bound was moved").toBe(0);
+  });
+});
+
+/** How far (m) the squeeze's deep crush carried a hub in plan (the cage yielding), how far (m) it coasted on after the crush was over (the derby's lying wreck: 0.25 m in 0.26 s). */
+const HUB_CARRIED_M = 0.15;
+const HUB_COASTED_M = 0.2;
+/** How far (m) a hub may stand from where the crush left it once its frame is read again: float noise. */
+const HUB_KEPT_M = 1e-6;
+
+describe("given a wreck after a squeeze's deep crush is over, one hub coasted 0.2 m off where the crush left it", () => {
+  it("when its frame is clamped, then the hub is back where the crush left it: what a deep crush carried a hub is its place once the crush is over", () => {
+    const d = wreck();
+    const group = new THREE.Group();
+    group.updateMatrixWorld();
+    const hub = d.masses.find((q) => q.hub && !q.popped)!;
+    d.bidirectional = true;
+    d.deepCrush = true;
+    hub.local.x += HUB_CARRIED_M;
+    d.clamp(group);
+    const left = hub.local.clone();
+    d.bidirectional = false;
+    d.deepCrush = false;
+    hub.local.x += HUB_COASTED_M;
+    d.clamp(group);
+    const off = hypot2(hub.local.x - left.x, hub.local.z - left.z);
+    expect(off, `the hub stands ${off.toFixed(3)} m in plan off where the deep crush left it`).toBeLessThanOrEqual(HUB_KEPT_M);
   });
 });

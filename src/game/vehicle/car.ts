@@ -794,9 +794,10 @@ export class DeformableCar extends CarParts {
     for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
     const lift = CLASSES[carClass(this)].lift;
     const defer = !skinWritten && this.holdDeferred && !this.shellsReadSkin();
-    this.bodyTyres.hold(this.group, this.wheels, gone, lift, skinWritten, undefined, defer);
+    const seats = this.deform.massActive ? this.suspension.hubPlace : null;
+    this.bodyTyres.hold(this.group, this.wheels, gone, lift, skinWritten, undefined, defer, seats);
     this.underHood ??= this.partSeats.filter((s) => s.kind === PART_KIND.interior || s.kind === PART_KIND.engineBay);
-    if (!this.hoodOff()) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten, this.underHood, defer);
+    if (!this.hoodOff()) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten, this.underHood, defer, seats);
   }
 
   /** The skins were rewritten outside `updateSkin` (a reset, a net or replay state): the tyre holds start their next hold from them. */

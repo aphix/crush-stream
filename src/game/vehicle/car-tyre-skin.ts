@@ -50,6 +50,8 @@ const REST_SLACK = 1e-3;
 const HELD_ELEMENTS = [0, 1, 2, 12, 13, 14] as const;
 /** How far (m, and in unit rotation components) a wheel or a part under the skin may move from where the last lift read it before the lift is found again: the sag pass lifts up to twice a shortfall, so a millimetre drew the skin 3.3 mm off a hold found every frame (bar 2 mm). */
 const WHEEL_SLACK = 5e-4;
+/** How far (m) a wreck's drawn hub seat may travel from where its over-set was found before it is found again: a third of the 3 cm gap the body paint keeps, while a crush carrying a hub 2 mm a frame finds it again every few frames, not each. */
+const SEAT_STEP = 0.01;
 /** How far (m) the skin stands over a part under it (`liftOverParts`): the 5 mm the drawn skin keeps over a tyre. */
 const PART_CLEAR = 0.005;
 /** A part's top is read at its highest vertex in each plan cell this wide (m): a skin over the part clears every vertex of the cell to within its tilt over 5 cm. */
@@ -401,8 +403,8 @@ export class TyreSkin {
   private readonly sagFirst: Int32Array[] = [];
   /** What the kernel's sag pass reads and writes of this skin (`TyreSagArena.sagPass`). */
   private readonly sagSkin: SagSkin;
-  /** The class lift, hub shift and wheel scale `over` was found for. */
-  private readonly overFor = new Float64Array(3).fill(NaN);
+  /** The class lift, hub shift and wheel scale `over` was found for, then per wheel the seat travel (x, z) it was found at. */
+  private readonly overFor = new Float64Array(3 + 4 * 2).fill(NaN);
   /** Per wheel, its axle and hub in the mesh's frame at the last hold. */
   private readonly heldAt = new Float64Array(4 * HELD_ELEMENTS.length).fill(NaN);
   /** The skin as last written, which every hold starts from. */
@@ -500,25 +502,34 @@ export class TyreSkin {
     return skinKernel();
   }
 
-  /** The vertices resting over each tyre: the class's lift, hub shift and wheel scale change what that is. True when they were found again. */
-  private findOver(group: THREE.Object3D, wheels: readonly THREE.Object3D[], lift: number): boolean {
+  /**
+   * The vertices resting over each tyre where its wheel is seated: the class's lift, hub shift and wheel scale change what that is, and so does a wreck's hub travel off its rest seat
+   * (`seats`, x and z per wheel, null: none), past `SEAT_STEP`. True when any was found again.
+   */
+  private findOver(group: THREE.Object3D, wheels: readonly THREE.Object3D[], lift: number, seats: ArrayLike<number> | null): boolean {
     const hubs = wheels[0]!.parent!;
     const hubShift = hubs === group ? 0 : hubs.position.y;
     const scale = wheels[0]!.scale.x;
     const f = this.overFor;
-    if (f[0] === lift && f[1] === hubShift && f[2] === scale) return false;
-    f[0] = lift;
-    f[1] = hubShift;
-    f[2] = scale;
-    this.liftable.fill(0);
-    this.mesh.updateMatrix();
-    _mesh.makeTranslation(0, this.mesh.parent === group ? 0 : lift, 0).multiply(this.mesh.matrix).invert();
-    _a[0] = 1;
-    _a[1] = 0;
-    _a[2] = 0;
+    const all = f[0] !== lift || f[1] !== hubShift || f[2] !== scale;
+    let found = false;
     for (let w = 0; w < wheels.length; w++) {
+      const sx = seats ? seats[w * 2]! : 0;
+      const sz = seats ? seats[w * 2 + 1]! : 0;
+      const at = 3 + w * 2;
+      if (!all && hypot2(sx - f[at]!, sz - f[at + 1]!) <= SEAT_STEP) continue;
+      f[at] = sx;
+      f[at + 1] = sz;
+      if (!found) {
+        this.mesh.updateMatrix();
+        _mesh.makeTranslation(0, this.mesh.parent === group ? 0 : lift, 0).multiply(this.mesh.matrix).invert();
+        _a[0] = 1;
+        _a[1] = 0;
+        _a[2] = 0;
+      }
+      found = true;
       const hub = this.frame.wheels[w]!;
-      _hub.set(hub[0], hub[1] + hubShift, hub[2]).applyMatrix4(_mesh);
+      _hub.set(hub[0] + sx, hub[1] + hubShift, hub[2] + sz).applyMatrix4(_mesh);
       _h[0] = _hub.x;
       _h[1] = _hub.y;
       _h[2] = _hub.z;
@@ -528,6 +539,7 @@ export class TyreSkin {
         const c = clearOver(this.frame.rig.tyre, this.rest, i, _h, _a, scale, 0);
         const restsOver = c >= -REST_SLACK && c < REACH;
         over[i / 3] = restsOver ? c : NaN;
+        this.liftable[i / 3]! &= ~(1 << w);
         if (restsOver) {
           this.liftable[i / 3]! |= 1 << w;
           resting.push(i / 3);
@@ -539,7 +551,10 @@ export class TyreSkin {
       this.sagRead[w] = new Float32Array(this.overTris[w].length);
       this.sagFirst[w] = firstCorners(this.overTris[w], this.edges.weld, this.lift.length);
     }
-    return true;
+    f[0] = lift;
+    f[1] = hubShift;
+    f[2] = scale;
+    return found;
   }
 
   /** The corners of the mesh's triangles that have a point in `over` (not NaN). */
@@ -561,9 +576,9 @@ export class TyreSkin {
     return this.owed;
   }
 
-  /** Holds the skin over each tyre of `wheels` not in `gone` (bit i: wheel i is the world's) and, fading as it leaves (`leaveShare`), over a gone one at its last seat; and over `under` (parts drawn under it, those whose `showIf` holds). `skinWritten`: the mesh's positions were just written from the cage. `defer`: the mesh is not drawn this frame, so a lift only a wheel's move asks waits for `settle`. */
-  hold(group: THREE.Object3D, wheels: readonly THREE.Object3D[], gone: number, lift: number, skinWritten: boolean, under: readonly PartSeat[] = [], defer = false): void {
-    const overFound = this.findOver(group, wheels, lift);
+  /** Holds the skin over each tyre of `wheels` not in `gone` (bit i: wheel i is the world's) and, fading as it leaves (`leaveShare`), over a gone one at its last seat; and over `under` (parts drawn under it, those whose `showIf` holds). `skinWritten`: the mesh's positions were just written from the cage. `defer`: the mesh is not drawn this frame, so a lift only a wheel's move asks waits for `settle`. `seats`: a wreck's hub travel off the rest seats (x, z per wheel, `DeformState.hubTravel`), where its drawn wheels stand; null: on them. */
+  hold(group: THREE.Object3D, wheels: readonly THREE.Object3D[], gone: number, lift: number, skinWritten: boolean, under: readonly PartSeat[] = [], defer = false, seats: ArrayLike<number> | null = null): void {
+    const overFound = this.findOver(group, wheels, lift, seats);
     matrixIn(group, this.mesh, _mesh).invert();
     let wheelMoved = false;
     // Bit w: wheel w's hold has ended (gone and left its seat).

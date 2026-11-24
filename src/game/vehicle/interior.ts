@@ -12,6 +12,7 @@ import { AXLE_HALF_SPAN, CRASH_BAR_HALF, FRAME_RAIL_LENGTH, FRAME_RAIL_Z, REF_BA
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 import { activeGround, groundTopOver, NO_FLOOR } from "../world/ground.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
+import { HUBS } from "./car-air-body.ts";
 
 /** Gap (m) between a seated head's top and the roof line over it (the roof skin, the headliner its inner face). */
 const HEAD_CLEAR = 0.05;
@@ -127,6 +128,10 @@ function benchDepth(bench: THREE.BufferGeometry, [y, z]: readonly [number, numbe
 
 const _bay = new THREE.Vector3();
 const _mass = new THREE.Vector3();
+/** The four hubs' travel (x, z each, `DeformState.hubTravel`) this fit. */
+const _travel = new Float64Array(8);
+/** The narrowest (m, half) the hubs may squeeze a bay or bar to: a box of no width has no matrix to invert. */
+const MIN_HALF = 0.01;
 const _corner = new THREE.Vector3();
 const _seatWorld = new THREE.Matrix4();
 const _parentInverse = new THREE.Matrix4();
@@ -224,8 +229,11 @@ export class CarCabin {
   /** The bay's rear and front at rest (m, car z), and each of `under`'s z drift this frame. */
   private readonly bayZ: readonly [rear: number, front: number];
   private readonly driftZ = new Float64Array(3);
-  /** How far (m) each of `under` may ride its masses sideways before its side meets a wheel's inner face. */
-  private readonly roomX: Float64Array;
+  /** How far (m) out the wheels' inner faces stand at rest, each side. */
+  private readonly wellsIn: number;
+  /** Each of `under`'s half width (m) and x scale as fitted at rest. */
+  private readonly half: Float64Array;
+  private readonly restScaleX: Float64Array;
 
   constructor(style: BodyStyle, seats: readonly PartSeat[], group: THREE.Object3D) {
     const of = (kind: number) => seats.filter((s) => s.kind === kind);
@@ -275,14 +283,15 @@ export class CarCabin {
     bars[1]!.rotation.set(0, Math.PI, 0);
     const barHalf = Math.min(CRASH_BAR_HALF, wellsIn);
     for (const bar of bars) bar.scale.x = barHalf / CRASH_BAR_HALF;
-    // ponytail: the wheels' rest faces; a hub the crush carries inboard is not followed.
-    this.roomX = Float64Array.of(wellsIn - bayHalf, wellsIn - barHalf, wellsIn - barHalf);
+    this.wellsIn = wellsIn;
+    this.half = Float64Array.of(bayHalf, barHalf, barHalf);
     bars[0]!.updateMatrix();
     bars[1]!.updateMatrix();
     group.add(this.pose, bay!, ...bars);
 
     this.under = [bay!, ...bars];
     this.rests = this.under.map((s) => s.position.clone());
+    this.restScaleX = Float64Array.from(this.under, (s) => s.scale.x);
     const rig = frame.rig.masses;
     const restOf = (name: MassName): readonly [MassName, THREE.Vector3] => [name, new THREE.Vector3(...rig.find((m) => m.name === name)!.rest)];
     this.massRest = (["engineL", "engineR", "bumperFL", "bumperFR", "bumperRL", "bumperRR"] as const).map(restOf);
@@ -304,9 +313,13 @@ export class CarCabin {
    * its bumper's, none sideways into a wheel: once a frame on a crashed car, at rest without (`deform` null). On a wreck each then rests on the ground under it.
    */
   fit(deform: StreamedDeformation | null): void {
+    // A wreck's wheels stand where its hubs travelled (`hubTravel`, as `Suspension` seats them): the bay and bars keep off those, narrowing where the hubs leave less room.
+    if (deform?.massActive) for (let i = 0; i < 4; i++) deform.hubTravel(HUBS[i]!, _travel, i * 2);
+    else _travel.fill(0);
     for (let k = 0; k < this.under.length; k++) {
       const seat = this.under[k]!;
       seat.position.copy(this.rests[k]!);
+      seat.scale.x = this.restScaleX[k]!;
       this.driftZ[k] = 0;
       if (deform === null) continue;
       const [l, lRest] = this.massRest[2 * k]!;
@@ -314,7 +327,12 @@ export class CarCabin {
       _bay.copy(deform.massLocal(l)).sub(lRest);
       _mass.copy(deform.massLocal(r)).sub(rRest);
       seat.position.add(_bay.add(_mass).multiplyScalar(0.5));
-      seat.position.x = THREE.MathUtils.clamp(seat.position.x, -this.roomX[k]!, this.roomX[k]!);
+      const wheel = k === 2 ? 2 : 0;
+      const left = -this.wellsIn + _travel[wheel * 2]!;
+      const right = this.wellsIn + _travel[wheel * 2 + 2]!;
+      const half = Math.max(MIN_HALF, Math.min(this.half[k]!, (right - left) * 0.5));
+      seat.scale.x *= half / this.half[k]!;
+      seat.position.x = THREE.MathUtils.clamp(seat.position.x, left + half, Math.max(left + half, right - half));
       this.driftZ[k] = _bay.z;
     }
     const [zRear, zFront] = this.bayZ;

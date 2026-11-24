@@ -10,6 +10,7 @@ import { warmCrashPath } from "../engine/world-step.ts";
 import { stepWreck, type WreckRig } from "./physics-util.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** ~50 km/h NCAP-style rigid barrier. */
 const FRONTAL_MPS = 14;
@@ -877,6 +878,28 @@ forModes("given a car whose wheels stay on until a hard enough hit knocks them o
     s.d.followGroup(s.group, s.vel, s.omega, DT);
     expect(h.popped).toBe(false);
     expect(Math.abs(h.local.z - h.rest.z), "deepCrush pinned the hub anyway").toBeGreaterThan(0.04);
+  });
+
+  it("when a deep crush is on and the front-left hub is given a 1.5 m/s slide across the car with nothing pushing it, then over 0.2 s it stands within 3 cm of where the same crush without the slide leaves it against the masses its beams join: it rides the yielding cage, not a slide of its own", () => {
+    // The hub's plan travel off the mean travel of the cage masses its beams join, after 0.2 s of a deep crush with `slide` (m/s, across the car) given to the hub.
+    const offCage = (slide: number): THREE.Vector2 => {
+      const s = spawn(0);
+      s.d.deepCrush = true;
+      s.d.bidirectional = true;
+      const h = mass(s.d, "hubFL");
+      const joined = s.d["massBeams"][h.index]!.map((b) => s.d["beams"][b]!).map((b) => s.d.masses[b.a === h.index ? b.b : b.a]!).filter((m) => !m.hub);
+      must(joined.length > 0, "fixture: the hub's beams join cage masses");
+      const hub0 = h.local.clone();
+      const cage0 = joined.map((m) => m.local.clone());
+      h.vel.x += slide;
+      for (let i = 0; i < 0.2 / DT; i++) stepWreck(s, DT);
+      const cage = new THREE.Vector3();
+      for (let k = 0; k < joined.length; k++) cage.add(joined[k]!.local).sub(cage0[k]!);
+      cage.divideScalar(joined.length);
+      return new THREE.Vector2(h.local.x - hub0.x - cage.x, h.local.z - hub0.z - cage.z);
+    };
+    const off = offCage(1.5).distanceTo(offCage(0));
+    expect(off, `the slide carried the hub ${(off * 1000).toFixed(0)} mm off its cage`).toBeLessThanOrEqual(0.03);
   });
 
   it("when a deep-squeezed car 26 m from the world origin steps its structure for 0.5 s with nothing pushing it, then its cabin folds down in the car frame and stays within 6 cm of where it stood (the fold aims in the car frame, not at the world origin)", () => {

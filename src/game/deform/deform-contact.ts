@@ -14,6 +14,7 @@ import { detSin, detCos, detAtan2, sinCosAt } from "../kernel/physics-core.js";
 import { CONTACT_REF_SLICE, MIN_IMPACT_ZONE, MIN_INERTIA, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { seatTilt, TILT_SEAT_QUIET, TILT_SEAT_TIME } from "./frame-tilt.ts";
+import { rideCage } from "./hub-ride.ts";
 import { EPICENTER } from "./epicenter.ts";
 
 /** Engine slack (m) a hit too slow to pack the nose still allows (mounts, not crush).
@@ -51,6 +52,8 @@ const _fit = new BodyFit();
 const _sc = new Float64Array(6);
 /** `moveRelative`'s per-mass mark: 1 for a mass that is not moving relative to the body this step (static, or settled to rest). */
 const _settled = { mark: new Uint8Array(64) };
+/** `rideCage`'s momentum (x, z) taken off the hubs a deep crush frees. */
+const _ride = new Float64Array(2);
 /** `markMotion`'s mass motion (x, y, z, spin) and `takeMotion`'s: a mark is always taken on the same car before another car's mark. */
 const _marked = new Float64Array(4);
 const _motionNow = new Float64Array(4);
@@ -183,6 +186,12 @@ export abstract class DeformContact extends DeformState {
     let lx = 0;
     let ly = 0;
     let lz = 0;
+    if (this.deepCrush) {
+      _ride.fill(0);
+      rideCage(ms, this.beams, this.massBeams, v, w, centre, _ride);
+      lx = _ride[0]!;
+      lz = _ride[1]!;
+    }
     for (let i = 0; i < ms.length; i++) {
       const m = ms[i]!;
       settledMark[i] = 1;
