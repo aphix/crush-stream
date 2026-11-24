@@ -8,7 +8,7 @@ import { makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { fleetClass, fleetStyle, slotType, type CarType } from "./fleet.ts";
 import { armKill, assignClass, carClass, HANDLING, killClass, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
-import { placeDrop, StackRig, stackLoads, type StackConfig } from "./stack-rig.ts";
+import { dropGap, placeDrop, StackRig, stackLoads, type StackConfig } from "./stack-rig.ts";
 import { runStack } from "./stack-run.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -80,6 +80,8 @@ const OWNER_S = 1 + (OWNER.cars - 1) * OWNER.gap + 8;
 /** The scene's defaults (`STACK_DEFAULTS`), 4 s after the last drop. */
 const DEFAULTS: StackConfig = { cars: 4, drop: 0.02, gap: 8 };
 const DEFAULTS_S = 1 + 3 * 8 + 4;
+/** How far (m) a drop may start off its height: well under the 25 mm a wagon's front tyres started inside the roof when set by its keel. */
+const DROP_SLACK = 1e-3;
 
 describe("given the owner's drops (11 cars, 0.15 m, one a second), run for 8 s after the last", () => {
   // The sedan column held on main (bar: no car leaves it by 0.1 m). The fleet column's worst car leaves by 0.10 m, at the bar (11 cars,
@@ -176,8 +178,8 @@ const REPEAT_LIFTS = [0, 0.0005, 0.001] as const;
  * it by a slice of landing and coast. Truck and monster read far above the rest: their column keeps creeping down at 2-17 cm/s after the
  * landing (truck for 0.2 s, monster for 1 s) with a roof yielding, then halts within one frame, and where it halts decides the bottom
  * roof (truck 135-150 mm, monster 176-196): open defects, their bars pin today's spread and a todoRow below holds each to 7 mm. SUV's bar (24 mm since the hood fold, which took its five-start spread from 9.8 to 15.9 mm) covers a landing scatter (third roof
- * 58.8 vs 66.2 mm) with a second open defect (a todoRow below): its top three cars slide 7.7-10.3 cm from their set-down spot in the first 0.4 s
- * (every other class under 7 cm; sedan 3.7-6.6). Re-stage a bar only with its five-start number re-measured.
+ * 58.8 vs 66.2 mm); its top three cars slide under 7 cm from their set-down spot in the first 0.4 s now (a row below; 7.7 cm when each drop was set by its
+ * keel). Re-stage a bar only with its five-start number re-measured.
  */
 const REPEAT_BARS: Record<string, { barMm: number; fiveStartMm: number }> = {
   sedan: { barMm: 12, fiveStartMm: 8.0 },
@@ -232,28 +234,38 @@ describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), each
     );
   }
 
-  todoRow(
-    `when the SUV column's top three cars are each set down, then each slides under ${SLIDE_MAX_M * 100} cm from its spot in the next ${SLIDE_S} s`,
-    "after the plan: find why the SUV's top three cars slide 7.7-10.3 cm along the roof they landed on in the first 0.4 s (every other class under 7 cm; docs/LOAD_CRUSH.md)",
-    () => {
-      const suv = DRIVER_CARS.find((c) => c.id === "suv")!;
-      const setDown: THREE.Vector3[] = [];
-      const left: number[] = [];
-      let slide = 0;
-      column(DEFAULTS, { selected: suv }, DEFAULTS_S, (cars, dropped) => {
-        for (let i = 1; i < dropped; i++) {
-          if (setDown[i] === undefined) {
-            setDown[i] = cars[i]!.group.position.clone();
-            left[i] = Math.round(SLIDE_S * FRAME_HZ);
-          } else if (left[i]! > 0) {
-            left[i]!--;
-            slide = Math.max(slide, Math.hypot(cars[i]!.group.position.x - setDown[i]!.x, cars[i]!.group.position.z - setDown[i]!.z));
-          }
+  it(`when the SUV column's top three cars are each set down, then each slides under ${SLIDE_MAX_M * 100} cm from its spot in the next ${SLIDE_S} s`, () => {
+    const suv = DRIVER_CARS.find((c) => c.id === "suv")!;
+    const setDown: THREE.Vector3[] = [];
+    const left: number[] = [];
+    let slide = 0;
+    column(DEFAULTS, { selected: suv }, DEFAULTS_S, (cars, dropped) => {
+      for (let i = 1; i < dropped; i++) {
+        if (setDown[i] === undefined) {
+          setDown[i] = cars[i]!.group.position.clone();
+          left[i] = Math.round(SLIDE_S * FRAME_HZ);
+        } else if (left[i]! > 0) {
+          left[i]!--;
+          slide = Math.max(slide, Math.hypot(cars[i]!.group.position.x - setDown[i]!.x, cars[i]!.group.position.z - setDown[i]!.z));
         }
-      });
-      expect(slide, `a car slid ${(slide * 100).toFixed(1)} cm`).toBeLessThan(SLIDE_MAX_M);
-    },
-  );
+      }
+    });
+    expect(slide, `a car slid ${(slide * 100).toFixed(1)} cm`).toBeLessThan(SLIDE_MAX_M);
+  });
+});
+
+describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), each car read as it is placed", () => {
+  it("when each car type the player can pick is dropped, then every car starts the drop's 0.02 m clear of the roofs under it, keel and tyres alike, and no more", () => {
+    const off: string[] = [];
+    for (const type of DRIVER_CARS) {
+      const { cars, rig } = makeColumn(DEFAULTS, { selected: type });
+      const gaps: number[] = [];
+      runStack(cars, rig, makeWorld(cars, false, false), 1 + (DEFAULTS.cars - 1) * DEFAULTS.gap + FRAME_S, { placed: () => gaps.push(dropGap(cars, rig.dropped - 1)) });
+      expect(gaps.length, `${type.label}: drops placed`).toBe(DEFAULTS.cars - 1);
+      if (gaps.some((g) => Math.abs(g - DEFAULTS.drop) > DROP_SLACK)) off.push(`${type.label} ${gaps.map((g) => (g * 1000).toFixed(1)).join("/")}`);
+    }
+    expect(off.length, `drops starting off ${DEFAULTS.drop * 1000} mm over the roofs under them (mm): ${off.join(" | ")}`).toBe(0);
+  });
 });
 
 describe("given the owner's drops (11 cars, 0.15 m, one a second) of the mixed fleet", () => {

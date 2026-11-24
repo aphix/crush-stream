@@ -134,8 +134,9 @@ What holds a column up, in the shared car-on-car rule:
 ## The Stack scene
 
 The **Stack** scene (`/`, `scenes/stack-rig.ts`) drops cars one at a time onto a base car: the first after 1 s, then one
-every **gap** seconds (sim time), each from **drop** m over the roof of the stack below it (the roof of the car's own body
-style, 0.13 m belly room), standing over the middle of that roof (`roofSupport`: every style's roof sits behind its belly
+every **gap** seconds (sim time), each falling **drop** m before it first meets the stack below it (`dropGap`: its keel over
+the highest roof under it, or a tyre over the roof under that tyre, whichever is less: a turned SUV's front tyres reach 45 mm
+under its keel, and set by its keel they started 18-39 mm inside the roof), standing over the middle of that roof (`roofSupport`: every style's roof sits behind its belly
 pan) and turned 180° from the car below, so the column zigzags about 0.5 m instead of walking off. After the last car's
 gap it restarts through the shared clear path (with Loop on). The three
 sliders (cars 2–20, drop 0.02–2 m, gap 1–20 s) default to 4 / 0.02 m / 8 s, live in the share URL (`scars` / `sdrop` /
