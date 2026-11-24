@@ -386,10 +386,12 @@ function strikerRow(box: ContactBox): void {
 /**
  * The one momentum exchange of a striker and a car at the face's deepest hull point (`_p`, normal `_n` into the car), at the most
  * `maxJ` of normal impulse (the crush force over the slice; 0 only reads the equivalent barrier speed). Plastic: the rebound of a
- * light touch is `wallBounce`'s. Returns the momentum the striker gave back to the caller.
+ * light touch is `wallBounce`'s. A rigid exchange (`maxJ` infinite) reads the whole body (every mass), as the pair's does. Returns the
+ * momentum the striker gave back to the caller.
  */
 function exchange(car: DeformableCar, box: ContactBox, depth: number, maxJ: number): number {
-  carRow(rows, 0, car, _n.x, _n.z, box.vx * _n.x + box.vz * _n.z);
+  const faceVn = maxJ === Infinity ? Infinity : box.vx * _n.x + box.vz * _n.z;
+  carRow(rows, 0, car, _n.x, _n.z, faceVn);
   strikerRow(box);
   contact[CT_X] = pressure.x;
   contact[CT_Z] = pressure.z;
@@ -404,7 +406,7 @@ function exchange(car: DeformableCar, box: ContactBox, depth: number, maxJ: numb
   const w = rows[BODY_W]!;
   const j = bodyContact(rows, 0, STRIKER, contact, result);
   if (j === 0) return 0;
-  const taken = takeRow(car, rows, 0, vx, vz, w, _n.x, _n.z, box.vx * _n.x + box.vz * _n.z);
+  const taken = takeRow(car, rows, 0, vx, vz, w, _n.x, _n.z, faceVn);
   if (maxJ === Infinity) moveAsOneBody(car, rows, 0);
   return car.deform.massActive ? taken : j;
 }
