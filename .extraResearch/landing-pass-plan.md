@@ -86,16 +86,20 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
     run, all 14 shards at 9641f9303 (77 minutes here; logs in `~/crash-wt/landing/gate-9641f9303/`):
     - App shards 1 to 4 and 6 to 8: green. Shard 5: one red, `ai/civilians/civilian-crowd-alloc.test.ts` "a frame's step
       costs under 2.1 yardsticks on average" (2.48). Measured on the quiet box after the gate: eight interleaved pairs,
-      `main` median 1.776, union 1.754; ten runs at each society merge: medians 1.68 to 1.90 with single readings up to 2.57
-      on every head, the one before the society lanes included. The crowd's step is not slower; the row sits at 1.7 of a 2.1
-      bar and spikes under load. The shard is run again to clear it; the row's fragility (its yardstick is timed after the
-      frames, not between them) is on the leftover list.
+      `main` median 1.776 (1.64 to 1.80), union 1.754 (1.50 to 2.83: one reading over the bar); ten runs at each merge of the
+      open-world lanes: medians 1.68 to 1.90; readings over the bar at BarRoom's merge (2.57) and ShutPlaces' (2.15, 2.46),
+      none before them (highest 2.09) and none at the final head in that set (highest 2.08). The medians say the crowd's
+      step is not slower; whether the society lanes added an occasional slow frame is not ruled out. The shard passed whole
+      on its second run. The row's fragility (its yardstick is timed after the frames, not between them) and a measurement
+      of the step's spread are on the leftover list.
     - Long shards 2, 4, 5: green. 3 and 6: the three accepted race reds (`race-start` rally and razor-shelf, `race-contact`
       breaker-yard), nothing else.
     - Long shard 1: `engine/reel-view-city.ai-long-run.ts`, two rows, one moment: in the staged city clip "Wall hit,
       63 km/h" the crash cam frames the first impact with a wall or building on the line to it. Green on `main` and up to
-      ffb3e7a27; red from the at-rest gates (335a1d6fc) on. Lane ReelView has it (the camera's clear-line rule, not the
-      simulation). The landing waits for it.
+      ffb3e7a27 (no retry in the config: each a single run); red from the at-rest gates (335a1d6fc) on. Lane ReelView is
+      measuring the eye, the impact point and what stands on the line; whether the camera or the simulation is at fault is
+      not known yet. The landing waits for it.
+    - The GL file (`scripts/detail-spec-aa.test.mjs`, `DISPLAY=:0`): green at 9641f9303.
 - **Tried and taken out again: ed1e8b655** (a solid's top scrapes the body it stops: friction on `standOnTop`). Main's hand
   port was reviewed "merge" and merged, and then turned `scenes/derby-containment-wedge.test.ts` red: the truck driven at the
   north ramp's -x side wedge, 30° off square, ended at 38.03 m, outside the arena wall's inner face at 38 m (it comes down on
