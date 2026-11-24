@@ -1,4 +1,5 @@
 import { detCos, detSin } from "../../kernel/physics-core.js";
+import { BAY_WIDTH, SHOPFRONT } from "../../world/openworld/interior-kinds.ts";
 import { DOOR } from "../../world/openworld/openworld-facade-solids.ts";
 import type { OpenWorldMap, Place } from "../../world/openworld/walk-graph.ts";
 import { ANIMAL_CHEST_HEIGHT, CHEST_HEIGHT, LOOK, LOOK_RADIUS, LOOK_REACH, STOREY_HEIGHT } from "./civilian-crowd-constants.ts";
@@ -68,15 +69,26 @@ function buildYawTrig(places: OpenWorldMap["places"]): Float64Array {
 const FACE_SLACK = 0.01;
 
 /**
- * Whether the point `at` m along the ray (in the building's own frame: `_origin`, `_direction`) lies in the street door's opening of `entry`, whose yaw's cosine and sine are given: on the street face
- * (local x = depth / 2), within the door's half-width of the door's line across it, and between the door's sill (a rowhome's stands on its stoop) and its head. Only a building with rooms has one.
+ * Whether the point `at` m along the ray (in the building's own frame: `_origin`, `_direction`) lies in a street doorway of `entry`: on the street face (local x = depth / 2), within a doorway's
+ * width of its centre across the face, and between its sill and its top. The doorways are the ones the facade and the room are cut with (`SHOPFRONT`: one set a frontage bay, by the kind of room;
+ * a rowhome's sill is its stoop's landing). Only a building with rooms has any.
  */
-function inDoorway(entry: Place, cos: number, sin: number, at: number): boolean {
+function inDoorway(entry: Place, at: number): boolean {
   if (entry.interior === undefined || Math.abs(_origin[0]! + _direction[0]! * at - entry.depth / 2) > FACE_SLACK) return false;
   const sill = entry.interior === "rowhome" ? DOOR.sill : 0;
-  const y = _origin[1]! + _direction[1]! * at;
-  const across = _origin[2]! + _direction[2]! * at - ((entry.doorX - entry.x) * sin + (entry.doorZ - entry.z) * cos);
-  return y >= sill && y <= sill + DOOR.head - DOOR.sill && Math.abs(across) <= DOOR.halfWidth;
+  const y = _origin[1]! + _direction[1]! * at - sill;
+  if (y < 0) return false;
+  const across = _origin[2]! + _direction[2]! * at;
+  const doorways = SHOPFRONT[entry.interior];
+  const bays = Math.max(1, Math.round(entry.width / BAY_WIDTH));
+  for (let bay = 0; bay < bays; bay++) {
+    const bayCentre = (bay - (bays - 1) / 2) * BAY_WIDTH;
+    for (let door = 0; door < doorways.length; door++) {
+      const opening = doorways[door]!;
+      if (y <= opening.top && Math.abs(across - bayCentre - opening.centre) <= opening.width / 2) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -133,9 +145,9 @@ export function placeMet(map: OpenWorldMap, ray: LookRay, reach: number, out: Me
     if (enter >= leave) continue;
     let hit = enter;
     if (enter <= 0) {
-      if (!shot || inDoorway(entry, cos, sin, leave)) continue;
+      if (!shot || inDoorway(entry, leave)) continue;
       hit = leave;
-    } else if (shot && inDoorway(entry, cos, sin, enter)) hit = leave;
+    } else if (shot && inDoorway(entry, enter)) hit = leave;
     if (hit >= out.along || hit > reach) continue;
     out.index = place;
     out.along = hit;

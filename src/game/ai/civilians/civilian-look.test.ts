@@ -14,6 +14,8 @@ import { detCos, detSin, hypot3 } from "../../kernel/physics-core.js";
 import { allocatedBytes, untilQuiet } from "../../kernel/alloc-sample.test-util.ts";
 import { buildOpenWorldMap } from "../../world/openworld/openworld-map.ts";
 import { layOutLots } from "../../world/openworld/openworld-lots.ts";
+import { BAY_WIDTH } from "../../world/openworld/interior-kinds.ts";
+import { DOOR } from "../../world/openworld/openworld-facade-solids.ts";
 
 const map = buildFixtureMap();
 const EYE_HEIGHT = 1.5;
@@ -236,5 +238,55 @@ describe("given the city's own map, its 310 buildings inside the walls", () => {
     const beside = placeMet(city, shopRay(shop.depth / 2 + IN_STREET, doorAcross + BESIDE_DOOR, -shop.depth, doorAcross + BESIDE_DOOR), LOOK_REACH, { index: -1, along: Infinity }, true);
     expect(beside.index, "beside the door: the building met").toBe(shopIndex);
     expect(beside.along, "beside the door: how far on (m)").toBeCloseTo(IN_STREET, 3);
+  });
+
+  /** The building a bullet meets when fired level from the middle of place `index`, `across` m along its face from its middle, `up` m over the ground, toward its street face. */
+  function shotOutOf(index: number, across: number, up: number): { index: number; along: number } {
+    const place = city.places[index]!;
+    const cos = detCos(place.yaw);
+    const sin = detSin(place.yaw);
+    const ray = new LookRay();
+    ray.eyeX = place.x + across * sin;
+    ray.eyeY = up;
+    ray.eyeZ = place.z + across * cos;
+    ray.dirX = cos;
+    ray.dirY = 0;
+    ray.dirZ = -sin;
+    return placeMet(city, ray, LOOK_REACH, { index: -1, along: Infinity }, true);
+  }
+  /** Where place `index`'s door node stands across its face (m from its middle). */
+  const doorLineOf = (index: number): number => {
+    const place = city.places[index]!;
+    return (place.doorX - place.x) * detSin(place.yaw) + (place.doorZ - place.z) * detCos(place.yaw);
+  };
+  /** A chest's height over a room's floor (m). */
+  const CHEST_UP = 1;
+
+  for (const kind of ["rowhome", "coffee", "bar", "office", "store"] as const) {
+    it(`when a bullet's ray leaves a ${kind} along its door's line at chest height over its floor, then it meets no wall of it, and ${BESIDE_DOOR} m to the side it meets the street wall`, () => {
+      const index = city.places.findIndex((place) => place.interior === kind);
+      const up = (kind === "rowhome" ? DOOR.sill : 0) + CHEST_UP;
+      expect(shotOutOf(index, doorLineOf(index), up).index, "through the door: the building met").not.toBe(index);
+      // A rowhome's door stands near its right party wall: the wall beside it is to the left.
+      const beside = shotOutOf(index, doorLineOf(index) - BESIDE_DOOR, up);
+      expect(beside.index, "beside the door: the building met").toBe(index);
+      expect(beside.along, "beside the door: how far on (m)").toBeCloseTo(city.places[index]!.depth / 2, 3);
+    });
+  }
+
+  it("when a bullet's ray leaves an office 0.7 m off its door's line, then it passes (an office's door is 1.5 m wide), and 0.9 m off it meets the wall", () => {
+    const index = city.places.findIndex((place) => place.interior === "office");
+    expect(shotOutOf(index, doorLineOf(index) + 0.7, CHEST_UP).index, "0.7 m off: the building met").not.toBe(index);
+    expect(shotOutOf(index, doorLineOf(index) + 0.9, CHEST_UP).index, "0.9 m off: the building met").toBe(index);
+  });
+
+  it("when a bullet's ray leaves a shop two bays wide along its second bay's door line, then it passes: every bay has its doorway", () => {
+    expect(Math.round(shop.width / BAY_WIDTH), "control: the shop's bays").toBe(2);
+    expect(shotOutOf(shopIndex, doorAcross + BAY_WIDTH, CHEST_UP).index, "the building met").not.toBe(shopIndex);
+  });
+
+  it("when a bullet's ray leaves a bar over its door's top, then it meets the wall", () => {
+    const index = city.places.findIndex((place) => place.interior === "bar");
+    expect(shotOutOf(index, doorLineOf(index), 2.5).index, "the building met").toBe(index);
   });
 });
