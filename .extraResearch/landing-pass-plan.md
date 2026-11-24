@@ -61,10 +61,16 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 ## 3. State
 
 - `main` = Windows mount = GitHub = 5989b47a0 (NET 72, REPLAY 249).
-- `play/union` (`~/worktrees/land`, 70 commits past `main`, NET 73, REPLAY 253), not yet gated. Merged, each reviewed (its
-  later commits too), static checks clean and its own test files green on the union: PerfPath, SmallCuts, CopStoops,
-  GuestEdge, BarRoom, ContactRows, DeformSeat, ShutPlaces, CarsSeePlayers; their worktrees are removed. Under them: ae0007683
-  (a derby driver that cannot get rolling lifts off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251).
+- `play/union` (`~/worktrees/land`, NET 73, REPLAY 254), not yet gated. Merged, each reviewed (its later commits too), static
+  checks clean and its own test files green on the union: PerfPath, SmallCuts, CopStoops, GuestEdge, BarRoom, ContactRows,
+  DeformSeat, ShutPlaces, CarsSeePlayers, Sweep, and TopScrape (Main's hand port of ed1e8b655: a solid's top scrapes the body
+  it stops; REPLAY 254); their worktrees are removed. Under them: ae0007683 (a derby driver that cannot get rolling lifts
+  off, REPLAY 250) and the seven picks of `lane-hub-creep4` (REPLAY 251).
+- Main's own runs over the union, one capped process at a time on this box (the worker is not ours yet): `src/game/contact`
+  and `src/game/deform` whole: green but the four digests; the GL rows green; `engine/prop-height.test.ts` had a row red
+  since the ContactRows merge (the staged wreck's settle now ends facing the other way; `place` squares it to the prism's
+  yaw: fixed, 3559cfaf3). `src/game/scenes`, then `vehicle`, `engine` and the rest follow the same way until the worker
+  takes the gate.
 - **Red on the union, owed before the gate** (lane HubRules has both):
   - `vehicle/barrier.test.ts` "when a monster hits the slab at 48 km/h, then none of its hubs ends inside the slab" (green on
     `main`; red since the hub-creep picks; hubFL ends at (0.06, 0.14, -1.19)). DeformSeat's probe: `holdHubVelocity`
@@ -75,7 +81,8 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
   - If the creep rows, the monster row and the column row cannot all hold, the lane reports the smallest set of hub commits
     to take out and Main decides.
   - After it: the crash digests (`whole-digest.test.ts` four rows, `car-smooth.test.ts` seven) are re-derived ONCE with the
-    reason per change (hub creep, the seven contact rules, the tilt and the hub ride, HubRules' fix), and REPLAY 254.
+    reason per change (hub creep, the seven contact rules, the tilt and the hub ride, the top's friction, HubRules' fix), and
+    REPLAY 255 for HubRules' fix.
 - Reviews are kept in `~/crash-wt/landing/reviews/<Lane>-review.json`. A lane's commits written after its review get a reviewer
   too, before the gate.
 - Speed measurements owed (the worker, a quiet hour, humm-tauri's yes still awaited): PerfPath, CageWasm, LooseBatch (a
@@ -87,7 +94,6 @@ full suite; mail when our agent count changes by two or more. Nothing is ever ru
 |---|---|---|
 |HubRules|the two reds above, at the rule that is wrong in principle, with margin shown; or the conflict report|working|
 |KerbClaims|a resident's clip drawn where her car stands (it was never drawn while her car stood at a fallback space); a patrol car's start space (measure: leased onto an occupied space, or a cruiser at urgent pace hitting traffic)|working|
-|Sweep|five review leftovers: a guest's throw of a cop it never heard a record for; the far kinds row per course; whether a rigid exchange adds energy to a leaning, rolling wreck (a row, or a todo with the joules); two doc lines; the twin row hearing its danger and ambulance events|working|
 |LooseBatch|torn car parts in one draw batch, only where the browser has `WEBGL_multi_draw`|reviewed twice, ready (c930818e5); NOT merged: waits for the browser measurement, dropped if no gain|
 |CageWasm|the cage raster and plan field in the Rust kernel, bit-equal to the JS|reviewed, bit-equal by construction (69a0f7d3d); NOT merged: waits for the speed measurement (`bench.mjs strip-crash`, base against head), dropped if not faster. The skin stack (section 5) waits on it|
 
