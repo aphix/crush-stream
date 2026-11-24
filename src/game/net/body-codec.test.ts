@@ -339,3 +339,41 @@ describe("given the people frame and the foot message every machine writes each 
     expect(footBytes, "bytes allocated by 600 foot messages").toBeLessThanOrEqual(BOUND_BYTES);
   });
 });
+
+describe("given the people frame and the foot message every machine reads each net frame", () => {
+  /** Messages of each kind a loop reads, the loops run before a read (cold code boxes every double), and the slack (bytes) over the `DataView` each read makes in `Reader.reset`. */
+  const MESSAGES = 600;
+  const WARM_LOOPS = 400;
+  const SLACK_BYTES = 4096;
+
+  it("when 600 people frames and 600 foot messages are read, then they allocate no more than the DataView each read makes, as measured, plus 4 KB", () => {
+    const frame = sampleFrame();
+    const holder = addBodyRecord(frame, BODY_KIND.player, PLAYER_CAR + 1, BODY_POSTURE.stand | PLAYER_FLAG.holds);
+    frame.arms[holder] = packArms(4, 9);
+    const frameBytes = sent(frame);
+    const footBytes = sentFoot();
+    const reader = new Reader();
+    const into = makeBodyFrame();
+    const intoFoot = makeFootRecord();
+    const resets = (): void => {
+      for (let message = 0; message < MESSAGES; message++) {
+        reader.reset(frameBytes);
+        reader.reset(footBytes);
+      }
+    };
+    const reads = (): void => {
+      for (let message = 0; message < MESSAGES; message++) {
+        readBodyFrame(frameBytes, reader, into);
+        readFoot(footBytes, reader, intoFoot);
+      }
+    };
+    for (let warm = 0; warm < WARM_LOOPS; warm++) {
+      resets();
+      reads();
+    }
+    const bound = allocatedBytes(resets) + SLACK_BYTES;
+    const read = untilQuiet(() => allocatedBytes(reads), bound);
+    expect(into.arms[1], "control: the frame was read").toBe(packArms(2, 17));
+    expect(read, `bytes allocated by ${2 * MESSAGES} reads (the resets alone, plus 4 KB, are ${bound})`).toBeLessThanOrEqual(bound);
+  });
+});

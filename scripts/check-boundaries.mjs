@@ -44,7 +44,7 @@ const SCENE_GRAPH = /^(Mesh|InstancedMesh|SkinnedMesh|Object3D|Scene|Group|Line|
 // Per-frame entry points (the frame flow in docs/ARCHITECTURE.md) and the per-pair/per-slice
 // queries they call. Their bodies allocate nothing.
 const HOT = {
-  "src/game/net/body-codec.ts": ["clearBodyFrame", "addBodyRecord", "addHidden", "writeBodyFrame", "readBodyFrame", "copyBodyFrame", "writeFoot", "readFoot"],
+  "src/game/net/body-codec.ts": ["clearBodyFrame", "addBodyRecord", "addHidden", "writeBodyFrame", "readBodyFrame", "copyBodyFrame", "writeFoot", "readFoot", "recordBytes", "recordIsSound", "packArms", "weaponOfArms", "shotsOfArms"],
   "src/game/net/body-wire.ts": ["send", "take", "sendFoot", "takeFoot"],
   "src/game/engine/openworld-players.ts": ["clearRows", "hearFoot", "step", "strike", "stagger", "writeRecords", "feed", "away", "obey", "footOut", "sightOf", "refreshLooks", "lookHash", "placeOf", "setOwnWeapon", "noteShot", "readArms", "holdAt"],
   "src/game/engine/onfoot-shared.ts": ["knockOwnWalker", "dragOwnWalker"],
@@ -69,7 +69,7 @@ const HOT = {
   "src/game/engine/onfoot-doors.ts": ["doorAt", "gapToDoor", "exitSide", "doorBlocked"],
   "src/game/present/seat-riders.ts": ["refresh", "begin", "drives"],
   "src/game/present/seated-drivers.ts": ["sync", "figure", "shift"],
-  "src/game/engine/engine-onfoot-arms.ts": ["pad", "frame", "gunAt", "slotOfGun"],
+  "src/game/engine/engine-onfoot-arms.ts": ["pad", "frame", "gunAt", "slotOfGun", "slotOfWeapon", "weaponAt"],
   "src/game/engine/engine.ts": ["tickInner", "fixedStep", "scheduleSkins", "flushVisibleSkins", "updateCamera", "pickCar", "pickDoll", "poseHandGun", "layGun", "aimRay", "bodyHand", "raiseBodyArm"],
   "src/game/engine/engine-hand-gun.ts": ["model", "pose", "layOn", "layOnRow", "keepLay", "place", "toward"],
   "src/game/engine/ray-nearest.ts": ["find", "visit", "mesh", "triangles", "offer"],

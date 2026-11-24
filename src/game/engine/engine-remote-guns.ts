@@ -12,6 +12,8 @@ import type { OpenWorldPlayers } from "./openworld-players.ts";
 
 /** A shot is heard this far (m) from its muzzle: as far as a pistol reaches, past which street noise covers it. */
 const SHOT_HEARD_M = WEAPONS.pistol.range;
+/** A change of a player's shot counter is drawn as a shot only when this share of his weapon's interval (`Gun.every`) has passed since his last drawn one: a modified guest cannot make a machine flash and sound every frame, and the 15 Hz frames' jitter (a frame of 67 ms against the rifle's 120 ms) still passes an honest stream. */
+const SHOT_SPACING = 0.9;
 /** A figure's right hand from its torso: the rig's right-arm rest point (0.24 m out, 0.79 m up), the gun held 0.3 m ahead of it (tuned by feel). */
 const HAND_SIDE_M = 0.24;
 const HAND_UP_M = 0.79 - TORSO_ABOVE_FEET;
@@ -35,6 +37,8 @@ export class RemoteGuns {
   private readonly guns: (HandGuns | null)[] = Array.from({ length: MAX_CARS }, () => null);
   /** Per player, the shot counter last seen (-1: not seen yet, so a first record fires nothing). */
   private readonly counted = new Int8Array(MAX_CARS).fill(-1);
+  /** Per player, the seconds since the last shot drawn for him: a counter change is a shot only after `SHOT_SPACING` of his weapon's interval. */
+  private readonly since = new Float32Array(MAX_CARS).fill(Infinity);
   private readonly material: THREE.Mesh["material"];
   /** The frame's seconds and the listener's eye (x, z), set before `frame` (a double handed across a call is boxed; a field is written in place). */
   dt = 0;
@@ -72,6 +76,7 @@ export class RemoteGuns {
       const mesh = this.meshes[car] ?? null;
       if (arms === null || arms.armsSeen[car] === 0) {
         this.counted[car] = -1;
+        this.since[car] = Infinity;
         if (mesh !== null && mesh.visible) {
           mesh.visible = false;
           this.raise(car, false);
@@ -82,6 +87,7 @@ export class RemoteGuns {
       const weapon = weaponAt(arms.armsWeapon[car]!);
       const held = weapon !== "fists" && place.posture === BODY_POSTURE.stand;
       this.raise(car, held);
+      this.since[car] = this.since[car]! + this.dt;
       const fired = this.counted[car] !== -1 && this.counted[car] !== arms.armsShots[car]!;
       this.counted[car] = arms.armsShots[car]!;
       if (!held) {
@@ -99,7 +105,8 @@ export class RemoteGuns {
       _aim.dirZ = _forearm.z;
       guns.dt = this.dt;
       guns.pose(weapon, _hand, _aim);
-      if (!fired || weapon === "hook" || !guns.layOnRow(weapon, _hand, arms.armsFar, 3 * car)) continue;
+      if (!fired || weapon === "hook" || this.since[car]! < SHOT_SPACING * WEAPONS[weapon].every || !guns.layOnRow(weapon, _hand, arms.armsFar, 3 * car)) continue;
+      this.since[car] = 0;
       this.shots.fireFrom(car, arms.armsFar, 3 * car);
       const muzzles = this.shots.muzzles;
       const dx = muzzles[3 * car]! - this.eyeX;

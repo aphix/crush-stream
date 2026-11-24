@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { hypot3 } from "../kernel/physics-core.js";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { BODY_POSTURE, WEAPON_SLOTS } from "../net/body-codec.ts";
-import { weaponAt } from "./engine-onfoot-arms.ts";
+import { BODY_POSTURE, SHOT_COUNT_MASK, WEAPON_SLOTS } from "../net/body-codec.ts";
+import { WEAPONS, weaponAt } from "./engine-onfoot-arms.ts";
 import { RemoteGuns } from "./engine-remote-guns.ts";
 import { OpenWorldPlayers } from "./openworld-players.ts";
 
@@ -31,12 +31,12 @@ function tableWith(slot: number, posture: number = BODY_POSTURE.stand): OpenWorl
   return table;
 }
 
-function gunsWith(hand: THREE.Vector3 | null, raised: boolean[] = []): RemoteGuns {
+function gunsWith(hand: THREE.Vector3 | null, raised: boolean[] = [], heard: string[] = []): RemoteGuns {
   const guns = new RemoteGuns(
     new THREE.MeshBasicMaterial(),
     (_car, at, forearm) => hand !== null && at.copy(hand) === at && forearm.copy(FOREARM) === forearm,
     (_car, held) => void raised.push(held),
-    () => {},
+    (weapon) => void heard.push(weapon),
   );
   guns.dt = FRAME_S;
   return guns;
@@ -95,5 +95,41 @@ describe("given another player on foot in a table the host's frame filled", () =
     expect(mesh.visible, "lying").toBe(false);
     guns.frame(tableWith(PISTOL_SLOT));
     expect(mesh.visible, "standing with the pistol").toBe(true);
+  });
+});
+
+/** The rifle's interval between shots (s), from the arms' table. */
+const RIFLE_EVERY_S = WEAPONS.rifle.every;
+/** Shots drawn from a counter that steps every 1/60 s for a second (the first frame's, then one every 7 frames), and from an honest stream (one every 0.12 s, the first at 0.12): the rifle fires 8.3 a second. */
+const MOST_IN_A_SECOND = 9;
+const HONEST_IN_A_SECOND = 8;
+
+describe("given a record whose shot counter the table reads every drawn frame, the rifle in his hand", () => {
+  /** Shots drawn in `seconds` of frames, the counter stepping when `steps(seconds so far, frames so far)` says so. */
+  function drawnIn(seconds: number, steps: (time: number, frame: number) => boolean): number {
+    const heard: string[] = [];
+    const guns = gunsWith(null, [], heard);
+    const table = tableWith(RIFLE_SLOT);
+    guns.frame(table);
+    for (let frame = 1; frame <= Math.round(seconds * FRAME_HZ); frame++) {
+      if (steps(frame * FRAME_S, frame)) table.armsShots[PLAYER] = (table.armsShots[PLAYER]! + 1) & SHOT_COUNT_MASK;
+      guns.frame(table);
+    }
+    return heard.length;
+  }
+
+  it("when the counter steps every frame for a second, then no more flashes are drawn than the rifle can fire in a second: 8 or 9, not 60", () => {
+    const drawn = drawnIn(1, () => true);
+    expect(drawn, "shots drawn: the first frame's, then one every 7 frames (0.117 s, past 0.9 of the rifle's 0.12 s)").toBe(MOST_IN_A_SECOND);
+  });
+
+  it("when the counter steps at the rifle's own rate for a second, then every shot is drawn", () => {
+    let next = RIFLE_EVERY_S;
+    const drawn = drawnIn(1, (time) => {
+      if (time < next) return false;
+      next += RIFLE_EVERY_S;
+      return true;
+    });
+    expect(drawn, "shots drawn").toBe(HONEST_IN_A_SECOND);
   });
 });

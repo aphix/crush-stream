@@ -26,7 +26,7 @@ import { detAtan2, hypot2 } from "../kernel/physics-core.js";
 import { ACTIVITY } from "../ai/civilians/civilian-activity.ts";
 import { SPECIES } from "../ai/civilians/civilian-constants.ts";
 import type { CivilianCrowd } from "../ai/civilians/civilian-crowd.ts";
-import { BODY_KIND, BODY_POSTURE } from "../net/body-codec.ts";
+import { BODY_KIND, BODY_POSTURE, SHOT_COUNT_MASK } from "../net/body-codec.ts";
 import { launch } from "../contact/crash-scenarios.test-util.ts";
 import { personOf } from "./people-index.ts";
 import { FakeBodyHost } from "./openworld-bodies.test-util.ts";
@@ -720,6 +720,10 @@ const MUZZLE_REACH_M = 1.5;
 const HEARD_FAR_M = 200;
 const SHOTGUN_SLOT = 2;
 const RIFLE_SLOT = 3;
+/** A frame this long (s) clears the rifle's spacing between drawn shots, so each step of the counter in the allocation row is drawn. */
+const FIRE_STEP_S = 0.2;
+/** Draw frames (a second at 1/60 s each) that clear the shotgun's 0.9 s between drawn shots, between two shots of the first row. */
+const SPACED_FRAMES = 60;
 /** The 600-frame loops run before the allocation row reads: cold code boxes every double, and V8 optimizes the drawing only after some hundred thousand frames. */
 const WARM_LOOPS = 200;
 
@@ -774,7 +778,7 @@ describe("given a host and two guests in an open-world room, all on foot, each d
     const end = Array.from(shots["tracerAt"].subarray(6 * k + 3, 6 * k + 6));
     expect(Math.max(Math.abs(end[0]! - FAR_END.x), Math.abs(end[1]! - FAR_END.y), Math.abs(end[2]! - FAR_END.z)), "metres from the tracer's end to his shot's far end").toBeLessThanOrEqual(0.01);
     expect(hypot2(shots["tracerAt"][6 * k]! - FOOT_AT.x, shots["tracerAt"][6 * k + 2]! - FOOT_AT.z), "metres from the tracer's start to his torso").toBeLessThanOrEqual(MUZZLE_REACH_M);
-    for (let frames = 0; frames < 6; frames++) {
+    for (let frames = 0; frames < SPACED_FRAMES; frames++) {
       r.step(1);
       draw();
     }
@@ -823,8 +827,9 @@ describe("given a host and two guests in an open-world room, all on foot, each d
   it("when a player fires every frame for 600 frames, then drawing his gun, flash and tracer allocates under 8 KB", () => {
     const r = footRoom();
     r.host.walk.path = { x0: FOOT_AT.x, z0: FOOT_AT.z, vx: 0, vz: 0, t0: r.host.director.crowdTime(), posture: BODY_POSTURE.stand };
-    const guns = new RemoteGuns(new THREE.MeshBasicMaterial(), () => false, () => {}, () => {});
-    guns.dt = SIM_STEP;
+    let drawn = 0;
+    const guns = new RemoteGuns(new THREE.MeshBasicMaterial(), () => false, () => {}, () => void drawn++);
+    guns.dt = FIRE_STEP_S;
     guns.eyeX = r.guest.eye.x;
     guns.eyeZ = r.guest.eye.z;
     const draw = (): void => guns.frame(r.guest.director.playerArms);
@@ -832,17 +837,23 @@ describe("given a host and two guests in an open-world room, all on foot, each d
     r.step(15);
     draw();
     const table = r.guest.director.playerArms!;
+    const seen = r.guest.director["seenFrame"]!;
     expect(table.armsWeapon[HOST_CAR_SLOT], "control: the guest has the rifle").toBe(RIFLE_SLOT);
-    for (const [axis, value] of [FAR_END.x, FAR_END.y, FAR_END.z].entries()) table.armsFar[3 * HOST_CAR_SLOT + axis] = value;
+    let stepped = 0;
     const fire = (): void => {
       for (let frame = 0; frame < 600; frame++) {
-        table.armsShots[HOST_CAR_SLOT] = (table.armsShots[HOST_CAR_SLOT]! + 1) & 31;
+        table.readArms(seen, GUEST_CAR, 1000);
+        table.armsShots[HOST_CAR_SLOT] = ++stepped & SHOT_COUNT_MASK;
+        table.armsFar[3 * HOST_CAR_SLOT] = FAR_END.x;
+        table.armsFar[3 * HOST_CAR_SLOT + 1] = FAR_END.y;
+        table.armsFar[3 * HOST_CAR_SLOT + 2] = FAR_END.z;
         draw();
       }
     };
     for (let warm = 0; warm < WARM_LOOPS; warm++) fire();
+    const before = drawn;
     const bytes = untilQuiet(() => allocatedBytes(fire), 8192);
-    expect(guns["shots"].firing, "control: the gun fired").toBe(true);
-    expect(bytes, "bytes allocated by 600 frames of firing").toBeLessThanOrEqual(8192);
+    expect(drawn, "control: every frame's step was drawn as a shot").toBeGreaterThan(before);
+    expect(bytes, "bytes allocated by 600 frames of reading the frame and drawing a shot each").toBeLessThanOrEqual(8192);
   });
 });

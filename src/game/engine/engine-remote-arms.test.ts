@@ -6,6 +6,7 @@ import { WALKER_SLOT } from "../present/ragdoll-pool.ts";
 import { activeGround } from "../world/ground.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 import { OpenWorldPlayers } from "./openworld-players.ts";
+import { BODY_KIND, makeBodyFrame, SHOT_COUNT_MASK, shotsOfArms, weaponOfArms } from "../net/body-codec.ts";
 
 const LINK = "#scene=openworld&seed=beef";
 const SETTLE_S = 3;
@@ -123,5 +124,54 @@ describe("given the host's rifle shot on a guest's machine, 20 m ahead and 0.4 m
       tip.copy(vertex).add(muzzle);
     }
     expect(tip.distanceTo(muzzle), "metres from the drawn tip to the flash").toBeLessThanOrEqual(TIP_GAP_M);
+  });
+});
+
+/** The pistol's weapon slot, the metres a drawn tracer's end may stand from the far end the frame carries, and how far (m) another player's drawn gun may stand from his body's hand. */
+const PISTOL_SLOT = 1;
+const FAR_END_GAP_M = 0.01;
+const GRIP_GAP_M = 0.05;
+/** A tracer lives this long (s): the freshest is the one with the least age. */
+const TRACER_LIFE_S = 0.07;
+
+describe("given the host on foot in the real engine, the frame he writes for his guests", () => {
+  /** The host's own record in the frame `writeBodies` fills now: the arms byte and the far end of his latest shot. */
+  function ownRecord(): { weapon: number; shots: number; far: THREE.Vector3 } {
+    const frame = makeBodyFrame();
+    rig.engine["openWorld"].writeBodies(frame);
+    const own = rig.engine["ownCar"]();
+    for (let at = 0; at < frame.count; at++) {
+      if (frame.kind[at] !== BODY_KIND.player || frame.id[at] !== own) continue;
+      return { weapon: weaponOfArms(frame.arms[at]!), shots: shotsOfArms(frame.arms[at]!), far: new THREE.Vector3().fromArray(frame.armsFar, 3 * at) };
+    }
+    throw new Error("the host's own record is not in the frame he writes");
+  }
+
+  it("when he takes the pistol (2) and fires once, then his own record names weapon slot 1 with one more shot and the far end his own tracer was drawn to", () => {
+    rig.press("Digit2");
+    rig.run(ARM_SETTLE_S);
+    const before = ownRecord();
+    expect(before.weapon, "the weapon slot in his record with the pistol in hand").toBe(PISTOL_SLOT);
+    rig.engine["onFoot"].arms.press();
+    rig.engine["onFoot"].arms.release();
+    const after = ownRecord();
+    expect(after.shots, "his shot counter after one shot").toBe((before.shots + 1) & SHOT_COUNT_MASK);
+    const tracers = rig.engine["playerShots"];
+    let fresh = 0;
+    for (let k = 1; k < tracers["tracerAge"].length; k++) if (tracers["tracerAge"][k]! < tracers["tracerAge"][fresh]!) fresh = k;
+    expect(tracers["tracerAge"][fresh], "control: a tracer was drawn just now").toBeLessThan(TRACER_LIFE_S);
+    const drawn = new THREE.Vector3().fromArray(tracers["tracerAt"], 6 * fresh + 3);
+    expect(drawn.distanceTo(after.far), "metres from the tracer's end to the far end in his record").toBeLessThanOrEqual(FAR_END_GAP_M);
+  });
+
+  it("when the engine reads another car's player with the pistol, then its remote gun shows a mesh at his body's hand", () => {
+    otherHolds(PISTOL_SLOT);
+    rig.run(ARM_SETTLE_S);
+    const hand = new THREE.Vector3();
+    expect(rig.engine["bodyHand"](OTHER_CAR, hand, new THREE.Vector3()), "control: a body carries him").toBe(true);
+    const mesh = rig.engine["remoteGuns"]["meshes"][OTHER_CAR];
+    expect(mesh?.visible, "his gun is drawn").toBe(true);
+    const e = mesh!.matrix.elements;
+    expect(hypot3(e[12]! - hand.x, e[13]! - hand.y, e[14]! - hand.z), "metres from his body's hand to the grip").toBeLessThanOrEqual(GRIP_GAP_M);
   });
 });
