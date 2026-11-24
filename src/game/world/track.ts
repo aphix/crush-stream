@@ -7,7 +7,7 @@ import { parseTrack, type SurvivalSpec, type TrackJson } from "./track-schema.ts
 import { checkPlateaus, paintGrid, raisePlateaus } from "./terrain.ts";
 import { capsuleRow, sameRun } from "./ground-stamp.ts";
 import { RoadCrease } from "./road-crease.ts";
-import { nearestOnPath, PATH_POINT } from "./path-grid.ts";
+import { longestSegment, nearestOnPath, PATH_POINT } from "./path-grid.ts";
 import { bakeTerrainCells, type TerrainCells, TERRAIN_SPAN } from "./terrain-cells.ts";
 
 /**
@@ -21,6 +21,8 @@ import { bakeTerrainCells, type TerrainCells, TERRAIN_SPAN } from "./terrain-cel
 const STEP = 1;
 /** Projection search half-window (samples) around a hint. */
 export const WINDOW = 24;
+/** `projectPath` skips a sample further than the best distance plus the longest segment, widened by this much (relative) to cover rounding. */
+const PRUNE_MARGIN = 1e-6;
 /** Beyond the wall line the ground eases back to the base terrain over this (m). */
 const BLEND = 24;
 /**
@@ -69,6 +71,8 @@ export type TrackPath = {
   dish: Float64Array;
   /** Signed curvature (1/m), > 0 turns left. */
   curv: Float64Array;
+  /** Longest segment (m) between two samples, the wrapping one included on a closed path: how far a segment reaches from its first sample. */
+  maxSegment: number;
   runL: Float64Array;
   runR: Float64Array;
   wallL: Uint8Array;
@@ -210,6 +214,7 @@ function samplePath(pts: THREE.Vector3[], closed: boolean, attrs: NodeAttrs): { 
     runSurface: new Uint8Array(n),
     deck: new Uint8Array(n),
     tunnel: new Uint8Array(n),
+    maxSegment: 0,
   };
   const param = new Float64Array(n);
   const p = new THREE.Vector3();
@@ -253,6 +258,7 @@ function samplePath(pts: THREE.Vector3[], closed: boolean, attrs: NodeAttrs): { 
     const dh = wrapPi(detAtan2(path.tx[b]!, path.tz[b]!) - detAtan2(path.tx[a]!, path.tz[a]!));
     path.curv[k] = b === a ? 0 : dh / (ds * (b > a ? b - a : b + n - a));
   }
+  path.maxSegment = longestSegment(path);
   return { path, param };
 }
 
@@ -368,17 +374,36 @@ export function projectPathAt(path: TrackPath, hint: number, out: Projection): P
     const closed = path.closed;
     const segs = closed ? n : n - 1;
     let k = closed ? (((hint - WINDOW) % n) + n) % n : hint - WINDOW;
+    const maxSegment = path.maxSegment;
+    // The hint's own segment bounds the answer: a sample further from the query than `cut` cannot start a nearer segment.
+    let bound = Infinity;
+    if (closed || hint < n - 1) {
+      const hb = hint + 1 === n ? 0 : hint + 1;
+      const hex = path.x[hb]! - path.x[hint]!;
+      const hez = path.z[hb]! - path.z[hint]!;
+      const hlen2 = hex * hex + hez * hez || 1e-12;
+      const hnum = (x - path.x[hint]!) * hex + (z - path.z[hint]!) * hez;
+      const hf = hnum <= 0 ? 0 : hnum >= hlen2 ? 1 : hnum / hlen2;
+      const hdx = x - (path.x[hint]! + hex * hf);
+      const hdz = z - (path.z[hint]! + hez * hf);
+      bound = hdx * hdx + hdz * hdz;
+    }
+    let reachCut = Math.sqrt(bound) + maxSegment;
+    let cut = reachCut * reachCut * (1 + PRUNE_MARGIN) + PRUNE_MARGIN;
     for (let d = -WINDOW; d <= WINDOW; d++, k++) {
       if (closed) {
         if (k >= n) k -= n;
       } else if (k < 0 || k >= n - 1) continue;
-      const b = k + 1 === n ? 0 : k + 1;
       const ax = path.x[k]!;
       const az = path.z[k]!;
+      const qx = x - ax;
+      const qz = z - az;
+      if (qx * qx + qz * qz > cut) continue;
+      const b = k + 1 === n ? 0 : k + 1;
       const ex = path.x[b]! - ax;
       const ez = path.z[b]! - az;
       const len2 = ex * ex + ez * ez || 1e-12;
-      const num = (x - ax) * ex + (z - az) * ez;
+      const num = qx * ex + qz * ez;
       const f = num <= 0 ? 0 : num >= len2 ? 1 : num / len2;
       const cx = ax + ex * f;
       const cz = az + ez * f;
@@ -386,6 +411,11 @@ export function projectPathAt(path: TrackPath, hint: number, out: Projection): P
       const dz = z - cz;
       const d2 = dx * dx + dz * dz;
       if (d2 >= out.dist2) continue;
+      if (d2 < bound) {
+        bound = d2;
+        reachCut = Math.sqrt(d2) + maxSegment;
+        cut = reachCut * reachCut * (1 + PRUNE_MARGIN) + PRUNE_MARGIN;
+      }
       out.dist2 = d2;
       out.k = k;
       out.s = ((k + f) / segs) * path.length;
