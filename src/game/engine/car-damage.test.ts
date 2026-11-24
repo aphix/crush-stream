@@ -4,7 +4,7 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { PART_STATE, LOOSE_STATE_MAX } from "../vehicle/part-state.ts";
 import { STROKE_BYTES } from "../vehicle/paint-scrapes.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { assertSameDigest } from "../vehicle/test-support.ts";
+import { assertSameDigest, mass } from "../vehicle/test-support.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { makeCarFrame } from "../net/codec.ts";
@@ -184,5 +184,51 @@ describe("given two identical racers crashed in a slalom, one that no camera see
       return drawnOf(shown);
     });
     for (const [i, part] of ["body", "bonnet"].entries()) expect(firstMismatch(hidden![i], held![i]!), `the hidden finisher's podium ${part} against its twin's`).toBeUndefined();
+  });
+});
+
+/** How far (m) a squeeze's deep crush carried a car's front-left hub inboard (the host's shove records it). */
+const HUB_IN_M = 0.15;
+/** `DeformNetState.flags` bit 4: the host's last bake ran with a deep crush on. */
+const DEEP_FLAG = 4;
+
+/** A car whose front-left hub stands `HUB_IN_M` inboard on its pin, as a host's clamp leaves it once the crush is over. */
+function carriedHubCar(scene: THREE.Scene): DeformableCar {
+  const car = new DeformableCar({ body: 0x808080, accent: 0, name: "carried" }, scene, null, fleetStyle(0));
+  car.spawnFacing(0, 0, 0, 0);
+  const hub = mass(car.deform, "hubFL");
+  hub.shoveX = -HUB_IN_M;
+  hub.local.x = hub.rest.x - HUB_IN_M;
+  return car;
+}
+
+/** Where (m, along x) the car's front-left wheel stands off its rest seat. */
+function wheelTravelX(car: DeformableCar): number {
+  const out = new Float64Array(2);
+  car.deform.hubTravel("hubFL", out, 0);
+  return out[0]!;
+}
+
+describe("given a front hub a deep crush carried 0.15 m inboard, as the host's net state holds it", () => {
+  it("when a guest car is written from it, then its wheel stands where the host's does, with the deep-crush flag on and again once the flag clears", () => {
+    const scene = new THREE.Scene();
+    const host = carriedHubCar(scene);
+    const f = makeCarFrame(carLayout(host));
+    host.deform.readNetState(f.deform);
+    host.readPartNetState(f.parts);
+    const guest = new DeformableCar({ body: 0x808080, accent: 0, name: "guest" }, scene, null, fleetStyle(0));
+    guest.spawnFacing(0, 0, 0, 0);
+    f.deform.flags |= DEEP_FLAG;
+    guest.writeNetState(f.deform, f.parts);
+    expect(wheelTravelX(guest), "the wheel's place with the flag on (m)").toBeCloseTo(-HUB_IN_M, 6);
+    f.deform.flags &= ~DEEP_FLAG;
+    guest.writeNetState(f.deform, f.parts);
+    expect(wheelTravelX(guest), "the wheel's place once the flag clears (m)").toBeCloseTo(-HUB_IN_M, 6);
+  });
+
+  it("when the car's damage is read and laid on it again after a respawn (a held reset, the podium), then its wheel stands where it stood", () => {
+    const car = carriedHubCar(new THREE.Scene());
+    placeKeepingNow(car);
+    expect(wheelTravelX(car), "the wheel's place after the lay (m)").toBeCloseTo(-HUB_IN_M, 6);
   });
 });
