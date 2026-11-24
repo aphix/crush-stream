@@ -214,7 +214,7 @@ export class OpenWorldActs {
     return true;
   }
 
-  /** A guest fires the hook along his camera's sight line: his when he is on foot, the eye is within the camera's boom of his torso and not ahead of him along the line (a camera is behind him or at his head; an eye out in front would reach past him and past walls), and the line passes within `SHOT_RAY_REACH` of his torso, as a shot's must. */
+  /** A guest fires the hook along his camera's sight line: his when he is on foot, the eye is within the camera's boom of his torso and not ahead of him along the line (a camera is behind him or at his head; an eye out in front would reach past him and past walls), and the line passes within `HOOK_RAY_REACH` of his torso. A person the act names is where the line is turned to when no wall stands between the camera's eye, which the hook is cast from, and her: a camera over his shoulder sees round a corner his torso does not. */
   private hearHookFire(actor: number, act: Act): number {
     const length = hypot3(act.dirX, act.dirY, act.dirZ);
     if (Math.abs(length - 1) > UNIT_SLACK || !this.admit(actor, act, HOOK_FIRE_COOLDOWN, 0, HOOK_EYE_REACH)) return SEATS_NOTICE.none;
@@ -230,7 +230,7 @@ export class OpenWorldActs {
     const kind = act.named.kind;
     const person = kind === NAMED.civilian || kind === NAMED.cop || kind === NAMED.player;
     const at = person ? this.namedPoint(act.named, _aim) : null;
-    if (at !== null && !this.resolver.wallBetween(_place.x, _place.y, _place.z, at.x, at.y, at.z)) this.lay(_aim, at);
+    if (at !== null && !this.resolver.wallBetween(act.eyeX, act.eyeY, act.eyeZ, at.x, at.y, at.z)) this.lay(_aim, at);
     this.ports.hookFire(actor, _aim, person);
     return SEATS_NOTICE.none;
   }
@@ -309,7 +309,8 @@ export class OpenWorldActs {
    * Where a shot is aimed is found along the aim ray, looked along from its point nearest his torso (`_near`), within the gun's range: what it first meets, else its point at that range (the target T). The gun is laid from his hand
    * straight at T (`ports.layGun`), so its barrel, its tip and the bullet's line are one line, and `aim` becomes the ray from that tip to T; he turns to face T when it is behind him. The ray is cast from his torso instead when T is
    * nearer his torso than the tip is (a point-blank target), or a wall stands between his torso and the tip (he is pressed against it): it starts on his side. With no gun shown his torso is the tip. How far (m) the ray
-   * is aimed to go; -1 when `aim` keeps its direction.
+   * is aimed to go; -1 when `aim` keeps its direction. A guest draws his own tracer and tells the others its far end, so for him it is how far the tip's line goes before it first meets anything on his machine, and a target
+   * his camera saw round a wall the tip cannot see past is not named: the host would shoot the wall.
    */
   private aimFromMuzzle(aim: LookRay, gun: Gun): number {
     this.nearestToTorso(aim);
@@ -333,7 +334,9 @@ export class OpenWorldActs {
     aim.dirX = x / length;
     aim.dirY = y / length;
     aim.dirZ = z / length;
-    return length;
+    if (!this.ports.guest()) return length;
+    if (this.resolver.wallBetween(origin.x, origin.y, origin.z, targetX, targetY, targetZ)) _named.kind = NAMED.nothing;
+    return Math.min(length, this.resolver.meet(this.ports.self(), aim, length, null));
   }
 
   /** This machine's player's punch lands: a guest tells the host, the host carries it out. */

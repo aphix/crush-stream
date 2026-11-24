@@ -48,8 +48,8 @@ function lookHash(look: DriverLook): number {
 /** What a guest's own walker is told (`obey`): the engine's ports to knock it, to stagger it and to drag it. */
 type OwnWalkerPorts = { knockWalker(vx: number, vy: number, vz: number): boolean; staggerWalker(dirX: number, dirZ: number): void; dragWalker(t: BodyMotion): void };
 
-/** Two records closer in crowd time than this (s) give no speed, and a speed seen is capped at twice a sprint (m/s): a record that jumps is a teleport, not a run. */
-const MIN_SEEN_S = 0.01;
+/** A guest's speed is seen over the ground between two of his records at least this far apart (s) on the host's clock: about the age of the view a shot at him was aimed in, and long enough that two messages bunched by the link, or one sent twice, do not read as a man standing still. A speed seen is capped at twice a sprint (m/s): a record that jumps is a teleport, not a run. */
+const SEEN_BASE_S = 0.25;
 const SEEN_SPEED_MAX = 2 * SPRINT_SPEED;
 
 /**
@@ -63,6 +63,10 @@ export class OpenWorldPlayers {
   private readonly crowdTime = new Float64Array(MAX_CARS);
   private readonly seq = new Int32Array(MAX_CARS).fill(-1);
   private readonly seenSpeed = new Float32Array(MAX_CARS);
+  /** Per guest, the record his seen speed is measured from: where it put him and the host's wall second it was heard. */
+  private readonly baseX = new Float32Array(MAX_CARS);
+  private readonly baseZ = new Float32Array(MAX_CARS);
+  private readonly baseAt = new Float64Array(MAX_CARS);
   private readonly heardAt = new Float64Array(MAX_CARS).fill(-Infinity);
   private readonly struckAt = new Float64Array(MAX_CARS).fill(-Infinity);
   private readonly struckUntil = new Float64Array(MAX_CARS).fill(-Infinity);
@@ -114,8 +118,13 @@ export class OpenWorldPlayers {
       return;
     }
     const m = this.motion[car]!;
-    const since = now - this.heardAt[car]!;
-    this.seenSpeed[car] = this.present[car] === 1 && since > MIN_SEEN_S ? Math.min(SEEN_SPEED_MAX, hypot2(foot.x - m.x, foot.z - m.z) / since) : 0;
+    const since = now - this.baseAt[car]!;
+    if (this.present[car] !== 1 || since >= SEEN_BASE_S) {
+      this.seenSpeed[car] = this.present[car] === 1 ? Math.min(SEEN_SPEED_MAX, hypot2(foot.x - this.baseX[car]!, foot.z - this.baseZ[car]!) / since) : 0;
+      this.baseX[car] = foot.x;
+      this.baseZ[car] = foot.z;
+      this.baseAt[car] = now;
+    }
     m.x = foot.x;
     m.y = foot.y;
     m.z = foot.z;
@@ -159,7 +168,7 @@ export class OpenWorldPlayers {
     _place.heading = m.heading;
   }
 
-  /** Host: how fast player `car` has moved between his last two records, as the host saw it (m/s), 0 for a player not present. A guest that reports a speed that is not his own does not change it. */
+  /** Host: how fast player `car` has moved over the ground between two of his records `SEEN_BASE_S` apart, as the host saw it (m/s), 0 for a player not present or heard for less than that. A guest that reports a speed that is not his own, or sends a record twice, does not change it. */
   seenSpeedOf(car: number): number {
     return car >= 0 && car < MAX_CARS && this.present[car] === 1 ? this.seenSpeed[car]! : 0;
   }

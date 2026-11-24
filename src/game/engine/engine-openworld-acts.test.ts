@@ -82,7 +82,9 @@ function rig(guest = false) {
         shots.push({ actor, ray: Object.assign(new LookRay(), ray) });
         return 7;
       },
-      meet: (_actor, ray, range) => {
+      // A guest looks twice: along his aim ray, to find and name the target, and then (with no name asked) along the tip's line to it, for his own tracer. That second look meets nothing before the target here.
+      meet: (_actor, ray, range, named) => {
+        if (guest && (named === null || named === undefined)) return range;
         looks.push({ ray: Object.assign(new LookRay(), ray), range });
         return met.along ?? range;
       },
